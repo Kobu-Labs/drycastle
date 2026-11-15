@@ -1,13 +1,13 @@
 """A top-down picture of the ground detail of one parcel (Pillow), for judging the look without the game.
 
-    uv run python -m drycastle_pipeline.detail_preview [--parcel P-0637] [--area village] [--out DIR]
+    uv run python -m drycastle_pipeline.detail_preview [--parcel P-0637] [--out DIR]
                                                        [--work DIR] [--px-per-m 28] [--zoom 70]
 
 writes ``<out>/detail_<parcel>.png`` (the parcel, or the busiest 40 m square of a big one) and
 ``detail_<parcel>_zoom.png`` (the busiest 14 m square, at ``--zoom`` pixels per metre) into ``out/detail`` by
 default: terrain colour, the patches with their real library textures, the clutter drawn from its real meshes
 (``detail_meshes``, seen from above, shaded by facing), then buildings, fences and trees, a scale bar and a
-legend. ``--work`` reads another work directory (a copy of the area's, for experiments).
+legend. ``--work`` reads another work directory (a copy of the map's, for experiments).
 """
 
 import argparse
@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from drycastle_pipeline.assets import ASSETS_DIR
 from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.config import REPO_ROOT, area_paths
+from drycastle_pipeline.config import REPO_ROOT, map_paths
 from drycastle_pipeline.detail import CLUTTER_KINDS, DetailResult, ParcelContext, run_parcel
 from drycastle_pipeline.detail_meshes import clutter_meshes, tint_rgb
 from drycastle_pipeline.rules import load_section
@@ -235,9 +235,8 @@ def densest_box(res: DetailResult, size: float, bounds) -> tuple[float, float, f
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description="Top-down picture of the ground detail of one parcel.")
     ap.add_argument("--parcel", default="P-0637")
-    ap.add_argument("--area", default="village")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    ap.add_argument("--work", type=Path, default=None, help="work directory (default: the area's)")
+    ap.add_argument("--work", type=Path, default=None, help="work directory (default: the map's)")
     ap.add_argument("--window", type=float, default=40.0, help="side of the square shown of a parcel bigger than this, metres")
     ap.add_argument("--px-per-m", type=float, default=28.0)
     ap.add_argument("--zoom", type=float, default=70.0, help="pixels per metre of the close-up")
@@ -247,10 +246,10 @@ def main(argv: list[str] | None = None) -> None:
     if a.kinds:
         print(kinds_sheet(a.out))
         return
-    paths = area_paths(a.area)
-    ctx, res = run_parcel(a.parcel, a.work or paths.work, area=a.area, with_meadow=a.meadow)
-    cfg = load_section("detail", area=a.area)
-    bcfg, tcfg = {}, load_section("props", area=a.area)["trees"]
+    paths = map_paths()
+    ctx, res = run_parcel(a.parcel, a.work or paths.work, with_meadow=a.meadow)
+    cfg = load_section("detail")
+    bcfg, tcfg = {}, load_section("props")["trees"]
     a.out.mkdir(parents=True, exist_ok=True)
     minx, miny, maxx, maxy = ctx.polygon.bounds
     box = (minx - 2, miny - 2, maxx + 2, maxy + 2)

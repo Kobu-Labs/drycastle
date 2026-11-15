@@ -39,16 +39,43 @@ public static class DoorGunRules
     {
         var arc = def.YawArcDeg * Deg2Rad;
         yaw = Math.Clamp(FlightMath.Wrap(yaw), -arc, arc);
-        pitch = Math.Clamp(pitch, def.MinPitchDeg * Deg2Rad, def.MaxPitchDeg * Deg2Rad);
+        pitch = Math.Clamp(pitch, MinPitch(def, yaw), def.MaxPitchDeg * Deg2Rad);
         var inVehicle = FlightMath.Rotate(HitMath.Forward(yaw, pitch), def.OutwardYawDeg * Deg2Rad, 0, 0);
         return new DoorGunAim(yaw, pitch, Vector3.Normalize(FlightMath.Rotate(inVehicle, carYaw, carPitch, carRoll)));
     }
 
-    /// <summary>The gun's pivot in the world.</summary>
+    /// <summary>
+    /// The lowest the gun goes at a mount yaw (radians): <see cref="VehicleDoorGunDef.MinPitchDeg"/>, raised inside the guard (the riders in front
+    /// of a ring gun) and coming down to it again over the blend, so the barrel rides up over them as it swings past and never drops into them.
+    /// </summary>
+    public static float MinPitch(VehicleDoorGunDef def, float yaw)
+    {
+        var low = def.MinPitchDeg * Deg2Rad;
+        if (def.GuardArcDeg <= 0) return low;
+        // the mount's yaw is from its rest direction; the guard is given in the vehicle's frame
+        var off = MathF.Abs(FlightMath.Wrap(yaw + (def.OutwardYawDeg - def.GuardYawDeg) * Deg2Rad)) / Deg2Rad;
+        var guard = def.GuardMinPitchDeg * Deg2Rad;
+        if (off <= def.GuardArcDeg) return guard;
+        if (def.GuardBlendDeg <= 0 || off >= def.GuardArcDeg + def.GuardBlendDeg) return low;
+        return guard + (low - guard) * (off - def.GuardArcDeg) / def.GuardBlendDeg;
+    }
+
+    /// <summary>The mount's yaw axis at the height of the gun, in the world: the pintle's top, or the centre of a ring.</summary>
     public static Vector3 Pivot(VehicleDoorGunDef def, Vector3 carPos, float carYaw, float carPitch, float carRoll) =>
         carPos + FlightMath.Rotate(new Vector3(def.Pivot[0], def.Pivot[1], def.Pivot[2]), carYaw, carPitch, carRoll);
 
-    /// <summary>The muzzle: the pivot plus the barrel along the aim. The rounds leave here.</summary>
+    /// <summary>
+    /// The gun's own pivot in the world, where it pitches and the barrel starts from. On a pintle that is <see cref="Pivot"/>; on a ring
+    /// (<see cref="VehicleDoorGunDef.RingRadius"/>) it rides the ring, out from the centre on the side the gun points.
+    /// </summary>
+    public static Vector3 GunPivot(VehicleDoorGunDef def, Vector3 carPos, float carYaw, float carPitch, float carRoll, in DoorGunAim aim)
+    {
+        var centre = new Vector3(def.Pivot[0], def.Pivot[1], def.Pivot[2]);
+        if (def.RingRadius > 0) centre += FlightMath.Rotate(new Vector3(0, 0, -def.RingRadius), aim.Yaw + def.OutwardYawDeg * Deg2Rad, 0, 0);
+        return carPos + FlightMath.Rotate(centre, carYaw, carPitch, carRoll);
+    }
+
+    /// <summary>The muzzle: the gun's pivot plus the barrel along the aim. The rounds leave here.</summary>
     public static Vector3 Muzzle(VehicleDoorGunDef def, Vector3 pivot, in DoorGunAim aim) => pivot + aim.Direction * def.MuzzleLength;
 
     /// <summary>The gunner's eye: <see cref="VehicleDoorGunDef.Eye"/> in the gun's frame (the gun turned by the aim, on the tilted vehicle), from the pivot.</summary>

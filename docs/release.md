@@ -29,10 +29,12 @@ The server address is not baked into the client: players type it on the connect 
 
 Merging a PR into the **`release`** branch (open it as `main` -> `release`) runs `.github/workflows/release.yml`:
 
-1. **build**: tests, Windows and Linux game zips, the server export with the map named in `map-version.txt`.
+1. **build**: tests, Windows, Linux and macOS game zips, the server export with the map named in `map-version.txt`.
 2. **deploy** (environment `production`): backs up the database on the VPS (`/opt/drycastle/backups/pre-deploy-<sha>.sql`, last 10 kept), then runs `deploy/deploy.sh`
    (rsync plus `docker compose up --wait`; the job fails if the server does not become healthy, and then nothing is published).
-3. **publish**: creates release `v0.<run>` with the game zips and `manifest.json`; the launcher picks it up as the stable channel.
+3. **publish**: creates release `v0.<run>` with the game zips, `manifest.json` and the tactical map render; the launcher picks it up as the stable channel.
+
+A side job, **tactical-map**, renders the map named in `map-version.txt` from straight above (viewer `--topdown`, `godot/viewer/Viewer.TopDown.cs`; software GL under xvfb, 1 m per pixel) into `tactical-map.png` (transparent outside the map) and `tactical-map.png.json` (`origin_x`, `origin_z` = ground x and z of the north-west corner, `width_px`, `height_px`, `metres_per_px`; north is -z). Publish attaches both to the release. It is best effort: if it fails the release still goes out without them. Locally: `make tactical-map` (`TOPDOWN_MPP=2` for a smaller picture). The viewer has no water surface, so water shows as its ground colour. The game reads its own copy: `make map-package` (so `scripts/publish-map.sh`) renders `tactical-map.png` + `.json` at 2 m/px into the map folder, hence into `map.zip`, and `MapBase` lays it over the terrain colours: everywhere it has pixels for the full-screen tactical map, inside the parcels only for the minimap (`TACTICAL_MAP_SKIP=1` leaves it out). A map without it, or with an unreadable one, shows the terrain colours as before. The release attachment is only for looking at.
 
 Clients only learn about the new version after the server is live. Nothing else publishes release assets (a manual run on another branch publishes a `dev-<run>` prerelease without deploying).
 
@@ -48,10 +50,23 @@ git push origin main:release       # first run creates the branch (and deploys);
 Optional hardening: required reviewers on the `production` environment (Settings > Environments), and a branch rule on `release` that requires a pull request.
 Rollback: re-run the workflow on an older commit of `release`, or restore a backup (see "Backups" below).
 
+## Release checklist (the usual path)
+
+1. `make shooter-test` green; everything committed on `main`.
+2. Map changed (`make map`): `scripts/publish-map.sh`, commit `map-version.txt`.
+3. `assets-private/` changed (or first time): `SSH_OPTS="-i ~/.ssh/drycastle-vps -o IdentitiesOnly=yes" scripts/publish-private-pack.sh root@159.195.244.164`,
+   commit `private-pack.json` (see `docs/launcher.md`, "The private asset pack"). The VPS firewall (host and provider) must allow **TCP 27080**.
+   The password is in `assets-private/pack-password.txt`; send it to the players.
+4. Launcher changed: `git tag launcher-vX.Y.Z && git push origin launcher-vX.Y.Z`; players download the new launcher zip once.
+5. **`make release-check`** (`scripts/check_release_assets.py`): compares the local map, the pack built now and the launcher code with what is published,
+   and exits 1 naming what to republish (steps 2-4). CI cannot check this (the map and the pack come from gitignored data). Run it last, right before the PR.
+6. PR `main` -> `release`, merge: tests, builds, server deploy (restarts the server, which then reads the uploaded `assets-private/`), publish.
+Order matters: pack and map before the release (its manifest names them), launcher tag before or with it.
+
 ## Cutting a release (manual path)
 
 1. Make sure `main` is green: `make shooter-test` (and `make test` for the pipeline if the map changed).
-2. Build the full map if it changed: `make map AREA=village`. Every export bundles `out/village/map` as `map/` next to the binary (override with `SHOOTER_PKG_MAP=<dir>`), and `make shooter-export` stops if it is missing. The server and the clients must run the **same map build**, which the bundling guarantees as long as you deploy the server from the same export.
+2. Build the full map if it changed: `make map`. Every export bundles `out/village/map` as `map/` next to the binary (override with `SHOOTER_PKG_MAP=<dir>`), and `make shooter-export` stops if it is missing. The server and the clients must run the **same map build**, which the bundling guarantees as long as you deploy the server from the same export.
 3. Build the client package: `make shooter-package`.
    Output: `out/shooter/drycastle-windows.zip`, containing the exe, `.pck`, .NET data, `assets/`, `map/`, `README.txt`
    (from `docs/player-readme.txt`). `make shooter-export` also produces the Linux client and server in `out/shooter/`.

@@ -83,10 +83,14 @@ public sealed partial class FlightProbe : CharacterBody3D, IFlightWorld
         return !TestMove(xf, Vector3.Zero, null, 0.001f, true);
     }
 
-    /// <summary>The map's flyable rectangle: the box around every parcel (the pipeline's parcels cover the whole map). No map: no edge.</summary>
+    /// <summary>
+    /// The map's rectangle (the helicopter's flyable one, the Raids' extent): the box around the whole terrain, so a helicopter goes wherever a
+    /// player on foot can. A map without terrain: the box around its parcels. No map: no edge.
+    /// </summary>
     public static FlightBounds MapBounds(Drycastle.MapLoader.MapLoader? map)
     {
         if (map == null) return FlightBounds.None;
+        if (map.TerrainBox is { } t) return new FlightBounds(t.Position.X, t.End.X, t.Position.Z, t.End.Z);
         float minX = float.PositiveInfinity, maxX = float.NegativeInfinity, minZ = float.PositiveInfinity, maxZ = float.NegativeInfinity;
         foreach (var p in map.Parcels.Values)
         {

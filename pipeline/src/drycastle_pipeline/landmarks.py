@@ -187,7 +187,7 @@ GLASS, DOOR, STONE, IRON = "#2b2f38", "#3a2a22", "#8a8680", "#3d3d44"
 def church_solids(detail: bool = True) -> _Solids:
     S = _Solids()
     y, w, rf, sp = (hex_to_rgb(c) for c in (YELLOW, WHITE, ROOF, SPIRE))
-    pl, gl, dr, st, ir = (hex_to_rgb(c) for c in (PLINTH, GLASS, DOOR, STONE, IRON))
+    pl, gl, st, ir = (hex_to_rgb(c) for c in (PLINTH, GLASS, STONE, IRON))
     cu = 0.985  # centre line of the nave, tower and porch
     nx0, nx1 = -2.88, 4.86  # nave
     z_eave, z_ridge = 7.4, 10.9
@@ -196,26 +196,24 @@ def church_solids(detail: bool = True) -> _Solids:
         S.box(x0, x1, y0, y1, 0.0, z1, y)
         S.box(x0 - 0.03, x1 + 0.03, y0 - 0.03, y1 + 0.03, 0.0, 0.6, pl)
 
-    # nave and its gabled roof
-    block(nx0, nx1, -7.3, 14.0, z_eave)
+    # nave (hollow: walls, floor, gallery, pews, see church_interior) and its gabled roof
+    from drycastle_pipeline.church_interior import AISLES, build_shell
+
+    build_shell(S, detail, y, pl)
     S.gable(nx0, nx1, -7.3, 14.0, z_eave, z_ridge, rf, y, oh=0.35)
-    # side aisles with lean-to roofs, rear apse and sacristy
-    for x0, x1, y0, y1, inner_left in (
-        (-5.87, nx0, -5.13, 10.76, False),
-        (nx1, 8.38, -7.31, 11.39, True),
-    ):
-        block(x0, x1, y0, y1, 4.1)
-        if inner_left:
-            S.shed(x0, x1 + 0.35, y0 - 0.2, y1 + 0.2, 5.2, 4.2, 0.2, rf)
-        else:
-            S.shed(x0 - 0.35, x1, y0 - 0.2, y1 + 0.2, 4.2, 5.2, 0.2, rf)
-    block(-1.28, 4.96, -14.25, -7.3, 5.2)
+    # side aisles (hollow, see church_interior) under lean-to roofs, rear apse and sacristy
+    for aisle in AISLES:
+        xa, xb, za, zb = aisle.shed
+        S.shed(xa, xb, aisle.v0 - 0.2, aisle.v1 + 0.2, za, zb, 0.2, rf)
     S.gable(-1.28, 4.96, -14.25, -7.3, 5.2, 7.6, rf, y, oh=0.3)
-    block(-8.17, -1.28, -12.08, -5.13, 3.8)
-    S.gable(-8.17, -1.28, -12.08, -5.13, 3.8, 5.6, rf, y, oh=0.3)
+    # sacristy: stops at the nave wall, with a flat-roofed link to the apse
+    block(-8.17, nx0, -12.08, -5.13, 3.8)
+    S.gable(-8.17, nx0, -12.08, -5.13, 3.8, 5.6, rf, y, oh=0.3)
+    block(nx0, -1.28, -12.08, -7.3, 3.8)
+    S.box(nx0, -1.28, -12.08, -7.3, 3.8, 4.0, rf)
     # porch: floor slab, four white columns, roof slab on a white entablature
     S.box(nx0 - 0.1, nx1 + 0.1, 14.0, 16.6, 0.0, 0.25, st)
-    for dx in (-3.5, -1.2, 1.2, 3.5):
+    for dx in (-3.5, -1.7, 1.7, 3.5):  # the middle pair stands clear of the doorway
         S.box(cu + dx - 0.2, cu + dx + 0.2, 16.0, 16.4, 0.25, 3.3, w)
     S.box(nx0 - 0.15, nx1 + 0.15, 13.9, 16.7, 3.3, 3.7, w)
     S.shed(nx0 - 0.25, nx1 + 0.25, 13.9, 16.9, 3.95, 3.95, 0.25, rf)
@@ -250,11 +248,8 @@ def church_solids(detail: bool = True) -> _Solids:
         return S
 
     # windows, doors and louvres (flat decals on the walls)
-    S.plate("front", 14.0, cu, _rect(1.5, 0.25, 2.5), 0.06, dr)  # double door
-    S.plate(
-        "front", 14.0, cu, _arch(1.3, 4.5, 6.2, 0.7), 0.04, w
-    )  # arched window with a white frame
-    S.plate("front", 14.0, cu, _arch(0.9, 4.6, 6.0, 0.45), 0.08, gl)
+    # (the arched window above the door and the nave's clerestory and aisle windows are real openings with glass panes,
+    # see church_interior; the round pediment window, the tower windows and the louvres have nothing behind them)
     S.plate("front", 14.0, cu, _disc(0.62, 9.0), 0.04, w)  # round window in the pediment
     S.plate("front", 14.0, cu, _disc(0.42, 9.0), 0.08, gl)
     S.plate("front", ty1, cu, _rect(0.9, 9.7, 11.3), 0.04, w)  # small tower window
@@ -265,14 +260,6 @@ def church_solids(detail: bool = True) -> _Solids:
     mid = (ty0 + ty1) / 2
     S.plate("left", tx0, mid, _rect(0.75, z_belfry + 0.5, z_cornice - 0.3), 0.06, gl)
     S.plate("right", tx1, mid, _rect(0.75, z_belfry + 0.5, z_cornice - 0.3), 0.06, gl)
-    for k in range(7):  # arched windows in the nave walls above the aisle roofs
-        v = -5.0 + 2.5 * k
-        S.plate("left", nx0, v, _arch(0.8, 5.6, 6.7, 0.55), 0.06, gl)
-        S.plate("right", nx1, v, _arch(0.8, 5.6, 6.7, 0.55), 0.06, gl)
-    for k in range(5):  # aisle walls: arched windows on one side, round windows on the other
-        v = -3.0 + 3.0 * k
-        S.plate("left", -5.87, v, _arch(0.7, 1.4, 2.8, 0.5), 0.06, gl)
-        S.plate("right", 8.38, v, _disc(0.35, 2.4), 0.06, gl)
     return S
 
 

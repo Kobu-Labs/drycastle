@@ -2,6 +2,9 @@ using System.Numerics;
 
 namespace Drycastle.ShooterCore;
 
+/// <summary>Where one loadout streak stands in one life (server). Progress: kills to go. Earned: held until used. Used: spent for this life (it may still be running; see <see cref="KillstreakUse.UseState"/>).</summary>
+public enum StreakHold { Progress, Earned, Used }
+
 /// <summary>
 /// Server-side killstreak rules (ticket #118): the Streak counter per life, the three loadout streaks earned at their kill
 /// thresholds, activation (one held streak per request, in loadout order), duration and end, and the point-of-view
@@ -25,15 +28,39 @@ public sealed class KillstreakService
     /// <summary>A reward granted to an owner: the streak, and the older reward it replaced (null when a slot was free).</summary>
     public sealed record RewardGrant(string StreakId, string? Replaced);
 
+    /// <summary>
+    /// A loadout streak's life: earned at its threshold, used once, and only a death or a round reset starts it over. (A care package reward is not here: it is in
+    /// <see cref="Life.Rewards"/> until used.) The use itself (running, ended) is <see cref="KillstreakUse.UseState"/>.
+    /// </summary>
+    public static readonly StateMachineSpec<StreakHold> HoldSpec = StateMachineSpec<StreakHold>.Define(
+            "Killstreak.Hold", "One loadout streak in one life: kills to go, earned and held, used.", StreakHold.Progress)
+        .Allow(StreakHold.Progress, StreakHold.Earned)
+        .Allow(StreakHold.Earned, StreakHold.Used, StreakHold.Progress)
+        .Allow(StreakHold.Used, StreakHold.Progress)
+        .Note(StreakHold.Progress, "Not earned: the Streak counter is below the threshold (the start of every life).")
+        .Note(StreakHold.Earned, "Threshold reached (StreakEarned sent): held until the owner uses it.")
+        .Note(StreakHold.Used, "Activation accepted (StreakUsed sent): spent for this life, whether it still runs or has ended. Only a death or a round reset brings it back to Progress.")
+        .Build();
+
     sealed class Life
     {
         public readonly string[] Loadout = new string[Slots];
         public float CostReduction;
         public int Kills;
-        public readonly HashSet<string> Earned = new();
-        public readonly HashSet<string> Used = new();
+        readonly Dictionary<string, StateMachine<StreakHold>> _holds = new();
         /// <summary>Held reward streaks, oldest first.</summary>
         public readonly List<string> Rewards = new();
+
+        public StreakHold HoldOf(string id) => _holds.TryGetValue(id, out var m) ? m.Current : StreakHold.Progress;
+
+        public StateMachine<StreakHold> Hold(string id)
+        {
+            if (!_holds.TryGetValue(id, out var m)) _holds[id] = m = new StateMachine<StreakHold>(HoldSpec);
+            return m;
+        }
+
+        /// <summary>Death or round reset: every streak is back to Progress.</summary>
+        public void ClearHolds() { foreach (var m in _holds.Values) m.Enter(StreakHold.Progress); }
     }
 
     readonly KillstreakFile _data;
@@ -88,9 +115,9 @@ public sealed class KillstreakService
         life.Kills++;
         foreach (var id in life.Loadout)
         {
-            if (id == "" || life.Earned.Contains(id) || _data.Find(id) is not { } def) continue;
+            if (id == "" || life.HoldOf(id) != StreakHold.Progress || _data.Find(id) is not { } def) continue;
             if (life.Kills < Threshold(def, life)) continue;
-            life.Earned.Add(id);
+            life.Hold(id).Enter(StreakHold.Earned);
             _send(killer, EventKind.StreakEarned, KillstreakEvents.EncodeEarned(id, life.Kills));
         }
     }
@@ -123,8 +150,7 @@ public sealed class KillstreakService
         EndAllFor(owner, KillstreakEndReason.OwnerDied);
         if (!_lives.TryGetValue(owner, out var life)) return;
         life.Kills = 0;
-        life.Earned.Clear();
-        life.Used.Clear();
+        life.ClearHolds();
         life.Rewards.Clear();
     }
 
@@ -144,8 +170,7 @@ public sealed class KillstreakService
         foreach (var life in _lives.Values)
         {
             life.Kills = 0;
-            life.Earned.Clear();
-            life.Used.Clear();
+            life.ClearHolds();
             life.Rewards.Clear();
         }
     }
@@ -159,10 +184,10 @@ public sealed class KillstreakService
         if (!_lives.TryGetValue(owner, out var life)) return false;
         foreach (var id in life.Loadout)
         {
-            if (id == "" || !life.Earned.Contains(id) || life.Used.Contains(id)) continue;
+            if (id == "" || life.HoldOf(id) != StreakHold.Earned) continue;
             if (_data.Find(id) is not { } def) continue;
             if (ActiveCount(owner, id) >= def.MaxActive) continue;
-            if (Start(def, owner, now, position, () => life.Used.Add(id))) return true;
+            if (Start(def, owner, now, position, () => life.Hold(id).Enter(StreakHold.Used))) return true;
         }
         foreach (var id in life.Rewards.ToList())
         {
@@ -188,6 +213,9 @@ public sealed class KillstreakService
 
     /// <summary>The sandbox streak the owner holds, or null.</summary>
     public string? SandboxHeldOf(ushort owner) => _sandboxHeld.TryGetValue(owner, out var id) ? id : null;
+
+    /// <summary>Sandbox ended for the owner (an admin turned it off): the held slot empties.</summary>
+    public void SandboxRelease(ushort owner) => _sandboxHeld.Remove(owner);
 
     /// <summary>Uses the owner's held sandbox streak now (it stays held: repeat uses are unlimited). False when nothing is held.</summary>
     public bool SandboxActivateHeld(ushort owner, double now, Vector3 position) =>
@@ -235,8 +263,11 @@ public sealed class KillstreakService
     public IReadOnlyList<string> Held(ushort owner)
     {
         if (!_lives.TryGetValue(owner, out var life)) return Array.Empty<string>();
-        return life.Loadout.Where(id => id != "" && life.Earned.Contains(id) && !life.Used.Contains(id)).ToList();
+        return life.Loadout.Where(id => id != "" && life.HoldOf(id) == StreakHold.Earned).ToList();
     }
+
+    /// <summary>Where a loadout streak stands in the owner's life (Progress for an owner with no life armed or an id that is not in the loadout).</summary>
+    public StreakHold HoldOf(ushort owner, string streakId) => _lives.TryGetValue(owner, out var life) ? life.HoldOf(streakId) : StreakHold.Progress;
 
     /// <summary>Open instances of one streak for one owner.</summary>
     public int ActiveCount(ushort owner, string streakId) => _active.Count(u => u.Owner == owner && u.StreakId == streakId && u.IsOpen);
@@ -261,8 +292,10 @@ public sealed class KillstreakService
         if (!accepted)
         {
             _active.Remove(use);
+            use.MarkRefused();
             return false;
         }
+        use.MarkOpen();
         consume();
         _send(owner, EventKind.StreakUsed, KillstreakEvents.EncodeUsed(def.Id));
         if (!use.IsOpen) Complete(use); // ended during Activate: its end follows its use
@@ -273,8 +306,7 @@ public sealed class KillstreakService
     internal void Finish(KillstreakUse use, KillstreakEndReason reason)
     {
         if (!use.IsOpen) return;
-        use.IsOpen = false;
-        use.EndReason = reason;
+        use.Close(reason);
         if (ReferenceEquals(use, _activating)) return;
         Complete(use);
     }

@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "_note": "The announcement's voice chain (the loudspeaker's badness), shared by the offline bake (scripts/make_rozhlas.py) and the server's live feed (RozhlasFeed, ffmpeg subprocess), so a hijacker's voice is degraded exactly like the announcement. Both build the ffmpeg filter chain from THIS file only: each 'chain' entry is one filter, in order, with {name} replaced by the literal text of params[name] (numbers keep the spelling written here) and {taps} by three echo delays in ms, each picked at random inside its echo_taps_ms range (once per baked variant, once per live phase). Edit the values or the order here, nowhere else. noise (hiss under the voice) is baked only: the live feed requires it to be 0.",
+  "params": {
+    "low": 500,
+    "high": 2200,
+    "rate": 5000,
+    "bits": 6,
+    "crush_mix": 0.7,
+    "gain_db": 18,
+    "clip": 0.15,
+    "wobble_hz": 6.0,
+    "wobble_depth": 0.15,
+    "pump_hz": 3.0,
+    "pump_depth": 0.4,
+    "noise": 0.0,
+    "level_db": -5.5
+  },
+  "echo_taps_ms": [[220, 320], [420, 520], [560, 700]],
+  "chain": [
+    "highpass=f={low}",
+    "lowpass=f={high}",
+    "volume={gain_db}dB",
+    "asoftclip=type=hard:threshold={clip}",
+    "aresample={rate}",
+    "acrusher=bits={bits}:mix={crush_mix}",
+    "vibrato=f={wobble_hz}:d={wobble_depth}",
+    "tremolo=f={pump_hz}:d={pump_depth}",
+    "aecho=0.7:0.7:{taps}:0.3|0.2|0.12",
+    "alimiter=limit=0.9:level=0",
+    "volume={level_db}dB"
+  ]
+}

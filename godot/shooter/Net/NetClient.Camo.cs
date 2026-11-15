@@ -16,6 +16,9 @@ public partial class NetClient
     /// <summary>The latest look per player id.</summary>
     public readonly Dictionary<ushort, CamoSpec> Appearances = new();
 
+    /// <summary>The local player's own Camouflage as the server last announced it, or null before that (the Equipment screen's figure).</summary>
+    public CamoSpec? OwnLook => Appearances.TryGetValue(_myId, out var look) ? look : null;
+
     /// <summary>Fired when a player's look arrives or changes (including this player's own).</summary>
     public event Action<ushort, CamoSpec>? AppearanceChanged;
 
@@ -37,7 +40,7 @@ public partial class NetClient
         Appearances[a.PlayerId] = a.Spec;
         if (_remotes.TryGetValue(a.PlayerId, out var r) && r.View != null) r.View.SetCamo(a.Spec, CamoData);
         foreach (var (id, c) in _corpses) // a look that arrives after the corpse spawned (#203)
-            if (WorldEntities.Entities.TryGetValue(id, out var e) && e.State.Owner == a.PlayerId) c.View.SetCamo(a.Spec, CamoData);
+            if (WorldEntities.Entities.TryGetValue(id, out var e) && e.State.Owner == a.PlayerId) c.View?.SetCamo(a.Spec, CamoData);
         AppearanceChanged?.Invoke(a.PlayerId, a.Spec);
     }
 }

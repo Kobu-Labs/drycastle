@@ -24,16 +24,13 @@ EDITS = {
                 "type": "wire",
                 "gaps": [{"at": [OX + 40, OY + 70], "width_m": 3.0}],
             },
-            "trees": {"count": 12, "seed_offset": 2},
             "objects": [{"id": "car-1", "asset": "prim:box", "position": [OX + 50, OY + 50]}],
         },
-        "P-0002": {"trees": {"density_per_1000m2": 6}},
         "P-0006": {"fence": {"mode": "none"}},
     },
     # P-0001 and P-0002 share a boundary: the group fence runs on the outer edge only.
     "groups": {"G-0001": {"parcels": ["P-0001", "P-0002"], "fence": {"mode": "custom"}}},
 }
-RULES_CAP = "props:\n  fences: {probability: 1.0}\n  trees: {max_per_chunk: 12}\n"
 RULES_NOCAP = "props:\n  fences: {probability: 1.0}\n"
 
 
@@ -49,7 +46,7 @@ def write(tmp_path, name, text):
 
 
 def full_run(work, edits_path, rules_path):
-    run_props(work, rules_path, area="slice", edits_path=edits_path)
+    run_props(work, rules_path, edits_path=edits_path)
     props = json.loads((work / "props.json").read_text())
     objects = json.loads((work / "objects.json").read_text())["objects"]
     return props["fences"], props["trees"], objects
@@ -57,7 +54,7 @@ def full_run(work, edits_path, rules_path):
 
 def fragment(work, edits_path, rules_path, parcels=(), groups=()):
     return parcel_run.run_parcel_run(
-        work, "slice", list(parcels), list(groups), edits_path, rules_path
+        work, list(parcels), list(groups), edits_path, rules_path
     )
 
 
@@ -74,7 +71,7 @@ CASES = [
 
 
 @pytest.mark.parametrize("edits_doc", [NO_EDITS, EDITS], ids=["no-edits", "edits"])
-@pytest.mark.parametrize("rules_text", [RULES_NOCAP, RULES_CAP], ids=["no-cap", "cap"])
+@pytest.mark.parametrize("rules_text", [RULES_NOCAP], ids=["rules"])
 @pytest.mark.parametrize(("parcels", "groups"), CASES)
 def test_fragment_equals_share_of_full_run(ws, tmp_path, edits_doc, rules_text, parcels, groups):
     if groups and not edits_doc.get("groups"):
@@ -85,21 +82,19 @@ def test_fragment_equals_share_of_full_run(ws, tmp_path, edits_doc, rules_text, 
     got = fragment(ws, edits_path, rules_path, parcels, groups)
     ids = set(got["parcels"])
     assert got["fences"] == [s for s in fences if s["parcel"] in ids]
-    assert got["trees"] == [t for t in trees if t["parcel"] in ids]
+    assert got["trees"] == []  # trees come from the orthophoto, not from parcels: only a full props run places them
     assert got["objects"] == [o for o in objects if o["parcel"] in ids]
     assert got["format_version"] == 1
     assert set(got["timing_s"]) == {"load", "compute", "total"}
 
 
 def test_cases_are_not_vacuous(ws, tmp_path):
-    """The fixtures produce fences, trees, a de-duplicated shared boundary and an active cap."""
-    edits_path = write(tmp_path, "edits.json", NO_EDITS)
-    capped = full_run(ws, edits_path, write(tmp_path, "cap.yaml", RULES_CAP))
-    free = full_run(ws, edits_path, write(tmp_path, "free.yaml", RULES_NOCAP))
-    assert capped[0] and free[1]
-    assert len(capped[1]) < len(free[1])  # the cap dropped trees
-    got = fragment(ws, edits_path, write(tmp_path, "cap.yaml", RULES_CAP), ["P-0005"])
-    assert got["trees"] and len(got["trees"]) < len([t for t in free[1] if t["parcel"] == "P-0005"])
+    """The fixtures produce fences and objects, a de-duplicated shared boundary and (from the orthophoto) trees."""
+    edits_path = write(tmp_path, "edits.json", EDITS)
+    fences, trees, objects = full_run(ws, edits_path, write(tmp_path, "free.yaml", RULES_NOCAP))
+    assert fences and trees and objects
+    got = fragment(ws, edits_path, write(tmp_path, "free.yaml", RULES_NOCAP), ["P-0005"])
+    assert got["trees"] == []
 
 
 def test_group_member_pulls_in_the_whole_group(ws, tmp_path):
@@ -128,7 +123,7 @@ def test_unknown_targets_are_rejected(ws, tmp_path):
 
 
 def test_cli_writes_json_and_leaves_work_files_alone(ws, tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(parcel_run, "area_paths", lambda area: SimpleNamespace(work=ws))
+    monkeypatch.setattr(parcel_run, "map_paths", lambda *_a, **_k: SimpleNamespace(work=ws))
     edits_path = write(tmp_path, "edits.json", EDITS)
 
     def digests():
@@ -148,7 +143,7 @@ def test_cli_writes_json_and_leaves_work_files_alone(ws, tmp_path, monkeypatch, 
 
 
 def test_cli_errors(ws, tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(parcel_run, "area_paths", lambda area: SimpleNamespace(work=ws))
+    monkeypatch.setattr(parcel_run, "map_paths", lambda *_a, **_k: SimpleNamespace(work=ws))
     assert cli.main(["parcel-run"]) == 2
     assert cli.main(["parcel-run", "--parcel", "P-9999"]) == 1
     assert "P-9999" in capsys.readouterr().err
@@ -171,7 +166,7 @@ def test_glb_nodes_match_the_export_per_parcel_nodes(tmp_path):
     work = full["work"]
     edits_path = write(tmp_path, "edits.json", EDITS)
     rules_path = write(tmp_path, "rules.yaml", RULES_NOCAP)
-    run_props(work, rules_path, area="slice", edits_path=edits_path)
+    run_props(work, rules_path, edits_path=edits_path)
     manifest = run_export(work, tmp_path / "map", full["raw"], rules_path, full["overrides"])
     exported = {
         c["file"]: trimesh.load(tmp_path / "map" / c["file"], force="scene")
@@ -187,7 +182,7 @@ def test_glb_nodes_match_the_export_per_parcel_nodes(tmp_path):
     for pid in targets:
         glb = tmp_path / f"{pid}.glb"
         frag = parcel_run.run_parcel_run(
-            work, "slice", [pid], [], edits_path, rules_path, glb_path=glb
+            work, [pid], [], edits_path, rules_path, glb_path=glb
         )
         assert frag["glb"] == str(glb) and frag["replaces"] == frag["parcels"]
         scene = trimesh.load(glb, force="scene")
@@ -208,18 +203,19 @@ def test_glb_nodes_match_the_export_per_parcel_nodes(tmp_path):
 def test_glb_of_a_parcel_without_props_still_names_it_in_replaces(ws, tmp_path):
     import trimesh
 
-    edits_path = write(tmp_path, "e.json", {**NO_EDITS, "parcels": {"P-0001": {"fence": {"mode": "none"}, "trees": {"count": 0}}}})
+    # P-0003 is village ground: its fence is switched off
+    edits_path = write(tmp_path, "e.json", {**NO_EDITS, "parcels": {"P-0003": {"fence": {"mode": "none"}}}})
     rules_path = write(tmp_path, "r.yaml", RULES_NOCAP)
     glb = tmp_path / "out" / "x.glb"
-    frag = parcel_run.run_parcel_run(ws, "slice", ["P-0001"], [], edits_path, rules_path, glb_path=glb)
-    assert frag["replaces"] == ["P-0001"] and frag["fences"] == [] and frag["trees"] == []
+    frag = parcel_run.run_parcel_run(ws, ["P-0003"], [], edits_path, rules_path, glb_path=glb)
+    assert frag["replaces"] == ["P-0003"] and frag["fences"] == [] and frag["trees"] == []
     assert not trimesh.load(glb, force="scene").graph.nodes_geometry
 
 
 def test_cli_glb_option_and_group_expansion(ws, tmp_path, monkeypatch, capsys):
     import trimesh
 
-    monkeypatch.setattr(parcel_run, "area_paths", lambda area: SimpleNamespace(work=ws))
+    monkeypatch.setattr(parcel_run, "map_paths", lambda *_a, **_k: SimpleNamespace(work=ws))
     edits_path = write(tmp_path, "edits.json", EDITS)
     glb = tmp_path / "g.glb"
     argv = ["parcel-run", "--group", "G-0001", "--edits", str(edits_path), "--glb", str(glb)]

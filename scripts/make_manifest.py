@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """Write manifest.json for a game release (read by the launcher).
 
-make_manifest.py --repo R --tag T --channel stable|dev --commit SHA --protocol N --windows-zip W.zip --linux-zip L.zip --map-tag map-X --map-json map.json --out manifest.json
+make_manifest.py --repo R --tag T --channel stable|dev --commit SHA --protocol N --windows-zip W.zip --linux-zip L.zip --macos-zip M.zip --map-tag map-X --map-json map.json [--pack-json private-pack.json] --out manifest.json
+
+--pack-json: the private asset pack entry written by scripts/publish-private-pack.sh (its URL is the game host, never GitHub; the file is
+encrypted, so the manifest carries nothing secret). Left out, or the file missing: the release has no pack.
 """
 import argparse, hashlib, json, os
 
 ap = argparse.ArgumentParser()
-for a in ("repo", "tag", "channel", "commit", "windows-zip", "linux-zip", "map-tag", "map-json", "out"):
+for a in ("repo", "tag", "channel", "commit", "windows-zip", "linux-zip", "macos-zip", "map-tag", "map-json", "out"):
     ap.add_argument("--" + a, required=True)
 ap.add_argument("--protocol", type=int, required=True)
+ap.add_argument("--pack-json", default="")
 a = ap.parse_args()
 
 def build(path, exe):
@@ -27,8 +31,12 @@ manifest = {
     "platforms": {
         "windows": build(getattr(a, "windows_zip"), "drycastle-shooter.exe"),
         "linux": build(getattr(a, "linux_zip"), "drycastle-shooter.x86_64"),
+        # the .app bundle's executable; assets/ and map/ sit next to the .app (GamePaths.cs)
+        "macos": build(getattr(a, "macos_zip"), "Drycastle Shooter.app/Contents/MacOS/Drycastle Shooter"),
     },
     "map": {"id": a.map_tag, "file": {"name": m["name"], "url": f"{base}/{a.map_tag}/{m['name']}", "sha256": m["sha256"], "size": m["size"]}},
 }
+if a.pack_json and os.path.isfile(a.pack_json):
+    manifest["pack"] = json.load(open(a.pack_json))
 json.dump(manifest, open(a.out, "w"), indent=2)
 print(json.dumps(manifest, indent=2))

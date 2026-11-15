@@ -29,7 +29,7 @@ public partial class NetServer
         // The first surface from above: the ground, or a roof where the ray meets one first. Steep faces are rejected.
         float? GroundY(float x, float z)
         {
-            var hit = space.IntersectRay(PhysicsRayQueryParameters3D.Create(new Vector3(x, top, z), new Vector3(x, bottom, z), CollisionLayers.World));
+            var hit = space.PerfRay(PhysicsRayQueryParameters3D.Create(new Vector3(x, top, z), new Vector3(x, bottom, z), CollisionLayers.World));
             if (hit.Count == 0) return null;
             var normal = (Vector3)hit["normal"];
             return normal.Y >= 0.7f ? ((Vector3)hit["position"]).Y : null;
@@ -39,10 +39,6 @@ public partial class NetServer
         _match.SetTargets(spots);
         GD.Print($"server: planted {spots.Count}/{n} target dummies (rings {string.Join("/", TargetPlacement.RingsMetres)} m; cover and wall spots not generated)");
     }
-
-    /// <summary>Living dummies as hit targets (hitscan, pellets, explosions, the vehicle gun and the turret all read these).</summary>
-    IEnumerable<HitTarget> TargetHitTargets() =>
-        _match.Targets.All.Where(d => d.Alive).Select(d => new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
 
     /// <summary>Dummies for the UAV: visible to the enemy pings like anyone, with the default visibility.</summary>
     IEnumerable<UavContact> TargetUavContacts() =>

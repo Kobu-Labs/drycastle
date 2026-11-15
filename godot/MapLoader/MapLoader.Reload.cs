@@ -17,7 +17,7 @@ public sealed partial class MapLoader
     /// <summary>
     /// Swap the buildings of a loaded chunk for those in a re-exported chunk file: every parcel_&lt;ID&gt;_visual,
     /// parcel_&lt;ID&gt;_collision and window_* node of the chunk is freed and replaced by the file's. Everything else
-    /// baked into the chunk (terrain, roads, fences, trees, regions) stays as loaded. A parcel replaced with
+    /// baked into the chunk (terrain, roads, fences, trees, patches) stays as loaded. A parcel replaced with
     /// <see cref="ReplaceParcel"/> stays replaced. Returns the number of parcels that have a building afterwards.
     /// Throws when the chunk was never loaded or the file cannot be read; the chunk is then unchanged.
     /// </summary>

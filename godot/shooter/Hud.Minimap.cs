@@ -9,6 +9,20 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class Hud
 {
+    Minimap _minimap = null!;
+    /// <summary>What the minimap and the tactical map both show; the one place the match feeds (through <see cref="Minimap"/>'s setters).</summary>
+    readonly MapMarkers _mapMarkers = new();
+
+    /// <summary>The HUD's minimap: build it with the map, set the player each frame, feed enemy pings. The tactical map shares its data.</summary>
+    public Minimap Minimap => _minimap;
+
+    /// <summary>Minimap placement in the HUD: top-left, under the control hint line.</summary>
+    void BuildMinimap()
+    {
+        _minimap = Place(new Minimap(_mapMarkers), 0, 0, ShooterTheme.Margin, ShooterTheme.Margin + 32, 224, 224);
+        _root.AddChild(_minimap);
+    }
+
     void ApplyMinimapSettings()
     {
         var s = Settings.MinimapSize;

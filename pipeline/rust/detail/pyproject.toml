@@ -1,0 +1,12 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "drycastle_detail"
+version = "0.1.0"
+description = "Rust engine of the Drycastle ground-detail stage"
+requires-python = ">=3.13"
+
+[tool.maturin]
+module-name = "drycastle_detail"

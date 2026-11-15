@@ -98,7 +98,7 @@ public partial class NetClient
     void RenderAircraft(double delta)
     {
         if (_lastTick == 0) return;
-        var rt = _lastTick + (Time.GetTicksMsec() / 1000.0 - _lastArrival) * Wire.TickRate - InterpDelayTicks;
+        var rt = RenderTickNow();
         ushort mineId = 0;
         foreach (var (id, v) in _aircraft)
         {

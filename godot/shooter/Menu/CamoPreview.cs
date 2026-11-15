@@ -10,7 +10,7 @@ namespace Drycastle.Shooter;
 /// frames the whole figure or the head (<see cref="Frame"/>: the face paint cannot be judged from four metres away). The prone
 /// toggle lays the figure down with the same pose remote players use (<see cref="CharacterView.SetStance"/>).
 /// </summary>
-public sealed class CamoPreview
+public sealed partial class CamoPreview
 {
     /// <summary>Degrees the turntable moves per pixel dragged and per arrow key press.</summary>
     public const float DegPerPixel = 0.6f, DegPerKey = 15f;
@@ -23,12 +23,14 @@ public sealed class CamoPreview
     public enum Framing { Body, Head }
     static readonly Vector3 BodyTarget = new(0, 0.95f, 0), HeadTarget = new(0, PlayerHitBox.ModelHeadHeight * PlayerHitBox.DrawScale, 0), ProneTarget = new(0, 0.35f, 0);
     const float BodyDistance = 3.3f, HeadDistance = 1.25f;
+    /// <summary>The head close-up's distance while a headgear Item is worn: the Bigfoot head is a good deal bigger than the head it covers.</summary>
+    const float HeadDistanceWorn = 1.7f;
 
     /// <summary>The control to add to the menu. Its size is the preview's size.</summary>
     public readonly Control Root;
     readonly Node3D _turntable = new();
     readonly Camera3D _camera;
-    readonly Control _overlay;
+    readonly DropOverlay _overlay;
     readonly CharacterView? _view;
     float _turn, _zoom = 1f;
     Framing _framing = Framing.Body;
@@ -66,7 +68,7 @@ public sealed class CamoPreview
         // one framed panel: the viewport fills it, and a transparent overlay on top takes the drag, the wheel and the keys
         var frame = new PanelContainer { ThemeTypeVariation = "HudPanel", CustomMinimumSize = size, FocusMode = Control.FocusModeEnum.None };
         frame.AddChild(container);
-        _overlay = new Control { MouseFilter = Control.MouseFilterEnum.Stop, FocusMode = Control.FocusModeEnum.All, MouseDefaultCursorShape = Control.CursorShape.Move };
+        _overlay = new DropOverlay { MouseFilter = Control.MouseFilterEnum.Stop, FocusMode = Control.FocusModeEnum.All, MouseDefaultCursorShape = Control.CursorShape.Move };
         _overlay.GuiInput += OnGuiInput;
         // the keyboard focus is shown the same way as on every other control: the accent ring
         var ring = new Panel { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
@@ -80,8 +82,39 @@ public sealed class CamoPreview
     /// <summary>The control that takes the keyboard focus (for focus neighbours and tooltips).</summary>
     public Control FocusTarget => _overlay;
 
+    /// <summary>
+    /// Whether the figure takes the keyboard focus (the arrows turn it, + and - zoom). The Equipment screen (#268) gives the arrows to its cells and
+    /// turns the figure with the mouse only, so it switches this off.
+    /// </summary>
+    public bool Focusable
+    {
+        get => _overlay.FocusMode != Control.FocusModeEnum.None;
+        set => _overlay.FocusMode = value ? Control.FocusModeEnum.All : Control.FocusModeEnum.None;
+    }
+
+    /// <summary>
+    /// Makes the figure a drop target (#268: an Item dragged on the avatar is put on): <paramref name="accepts"/> says whether the dragged data is valid, and
+    /// <paramref name="dropped"/> gets it when it is released here. While a valid drag is under way the figure is outlined with the drop target box.
+    /// </summary>
+    public void SetDropTarget(Func<Variant, bool> accepts, Action<Variant> dropped)
+    {
+        _overlay.Accepts = accepts;
+        _overlay.Dropped = dropped;
+    }
+
     /// <summary>Shows a look. A look that camo.json rejects leaves the previous one on screen.</summary>
     public void Show(CamoSpec spec, CamoFile data) => _view?.SetCamo(spec, data);
+
+    /// <summary>
+    /// Shows <paramref name="item"/> worn in <paramref name="slot"/>, or nothing with null (#266), replacing what the figure wore there. An Item that does
+    /// not belong to the slot is not drawn. A headgear Item replaces the helmet (hidden while it is on) and rides the head in every pose;
+    /// <see cref="Frame"/> with <see cref="Framing.Head"/> shows it close up. Safe to call again with what the player wears now: the same Item changes nothing.
+    /// </summary>
+    public void ShowWorn(EquipSlot slot, ItemDef? item)
+    {
+        _view?.SetWorn(slot, item);
+        if (_framing == Framing.Head) MoveCamera(); // the head close-up steps back for a big headgear Item
+    }
 
     public void SetProne(bool prone)
     {
@@ -128,7 +161,9 @@ public sealed class CamoPreview
 
     /// <summary>Where the current framing wants the camera. Lying prone there is no head-height close-up: the whole figure is framed.</summary>
     (Vector3 Target, float Distance) Wanted() =>
-        _prone ? (ProneTarget, BodyDistance) : _framing == Framing.Head ? (HeadTarget, HeadDistance) : (BodyTarget, BodyDistance);
+        _prone ? (ProneTarget, BodyDistance)
+        : _framing == Framing.Head ? (HeadTarget, _view?.WornIn(EquipSlot.Headgear) != null ? HeadDistanceWorn : HeadDistance)
+        : (BodyTarget, BodyDistance);
 
     void MoveCamera()
     {
@@ -160,7 +195,7 @@ public sealed class CamoPreview
                 _overlay.AcceptEvent();
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }:
-                _overlay.GrabFocus();
+                if (_overlay.FocusMode != Control.FocusModeEnum.None) _overlay.GrabFocus();
                 break;
             case InputEventMouseMotion m when (m.ButtonMask & MouseButtonMask.Left) != 0:
                 Turn(m.Relative.X * DegPerPixel);
@@ -178,6 +213,37 @@ public sealed class CamoPreview
                 ResetView();
                 _overlay.AcceptEvent();
                 break;
+        }
+    }
+
+    /// <summary>The control over the figure: it takes the drag, the wheel and the keys, and optionally a dropped Item.</summary>
+    sealed partial class DropOverlay : Control
+    {
+        public Func<Variant, bool>? Accepts;
+        public Action<Variant>? Dropped;
+        bool _hint;
+
+        public override bool _CanDropData(Vector2 atPosition, Variant data) => Accepts?.Invoke(data) == true;
+
+        public override void _DropData(Vector2 atPosition, Variant data) => Dropped?.Invoke(data);
+
+        public override void _Notification(int what)
+        {
+            switch ((long)what)
+            {
+                case NotificationDragBegin:
+                    _hint = Accepts?.Invoke(GetViewport().GuiGetDragData()) == true;
+                    QueueRedraw();
+                    break;
+                case NotificationDragEnd:
+                    if (_hint) { _hint = false; QueueRedraw(); }
+                    break;
+            }
+        }
+
+        public override void _Draw()
+        {
+            if (_hint) DrawStyleBox(GetThemeStylebox("target_frame", "ItemCell"), new Rect2(Vector2.Zero, Size));
         }
     }
 }

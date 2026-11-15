@@ -10,7 +10,7 @@ public static class Strings
 {
     static readonly (string Key, string Text)[] Table =
     {
-        ("hud.health", "HEALTH"), ("hud.low", "LOW"), ("hud.air", "AIR"),
+        ("hud.health", "HEALTH"),
         ("hud.stance.stand", "Standing"), ("hud.stance.crouch", "Crouched"), ("hud.stance.prone", "Prone"),
         ("hud.reloading", "RELOADING"), ("hud.ammo.reserve", "/ {0}"), ("hud.ammo.none", "-"),
         ("hud.timer.waiting", "--:--"), ("hud.phase.waiting", "Waiting for players"), ("hud.phase.ending", "Round over"),
@@ -25,25 +25,35 @@ public static class Strings
         ("hud.hint.released", "Mouse released. Close the menu to resume"),
         ("hud.seats.title", "Seat {0}: {1}"), ("hud.seats.hint", "{0}-{1}  Switch seat"),
         ("hud.seat.driver", "Driver"), ("hud.seat.gunner", "Gunner"), ("hud.seat.passenger", "Passenger"),
-        ("hud.vehicle.speed", "{0} km/h"), ("hud.flak.ammo", "FLAK  {0} / {1}"), ("hud.flak.reload", "FLAK  RELOADING"), ("weapon.flak", "Flak"), ("hud.vehicle.enter", "{0}  Enter car"), ("hud.vehicle.exit", "{0}  Exit car     Space  Handbrake"),
+        ("hud.vehicle.speed", "{0} km/h"), ("hud.flak.ammo", "FLAK  {0} / {1}"), ("hud.flak.reload", "FLAK  RELOADING"), ("weapon.flak", "Flak"), ("weapon.burn", "Burning"), ("status.blessed", "BLESSED"), ("status.cursed", "CURSED"), ("status.burning", "BURNING"), ("toast.status.blessed", "A blessing watches over you: it will save you from one lethal hit"), ("toast.status.cursed", "You are cursed: your bullets set enemies ablaze"), ("toast.status.saved", "The blessing saved your life"), ("hud.vehicle.enter", "{0}  Enter car"), ("hud.vehicle.exit", "{0}  Exit car     Space  Handbrake"),
+        ("hud.rozhlas.hint", "You are at the radio set.   Hold {0} to talk"), ("hud.rozhlas.onair", "ON AIR"), ("hud.rozhlas.take", "Hold {0}  sit at the radio set"),
         ("hud.vehicle.view.cockpit", "{0}  Cockpit view"), ("hud.vehicle.view.chase", "{0}  Chase view"),
         ("hud.seat.pilot", "Pilot"), ("hud.flight.enter", "{0}  Board helicopter"), ("hud.flight.readout", "{0} km/h  ALT {1}"),
         ("hud.flight.spool", "Rotor starting     {0}  Exit"), ("hud.flight.takeoff", "{0}  Take off     {1}  Exit"),
         ("hud.flight.fly", "{0}  Climb     {1}  Descend     {2}  Exit"), ("hud.flight.edge", "Edge of the map: turn back"),
         ("hud.doorgun.ammo", "MG  {0} / {1}"), ("hud.doorgun.reload", "MG  RELOADING"), ("hud.doorgun.prompt", "{0}  Fire     {1}  Reload     {2}  Exit"),
+        ("hud.seat.armed", "Armed passenger"), ("hud.transport.enter", "{0}  Board transport"), ("hud.transport.drive", "{0}  Exit     {1}  Handbrake"), ("hud.transport.afloat", "{0}  Exit"),
+        ("hud.armedseat.prompt", "{0}  Fire     {1}  Reload     Mouse wheel  Weapon     {2}  Exit"),
         ("score.title", "Scoreboard"), ("score.ending", "Round over: {0} wins"), ("score.ending.tie", "Round over: {0} win"),
         ("score.col.player", "Player"), ("score.col.kills", "K"), ("score.col.deaths", "D"), ("score.col.ping", "Ping"),
         ("score.you", "{0} (you)"), ("score.hint.hold", "Hold Tab to show this"), ("score.hint.next", "A new round starts soon"),
         ("score.ping", "{0} ms"),
         ("hud.score.team", "Team {0}   You {1} : {2} Enemy"), ("score.team.tag", "[{0}] {1}"), ("score.ending.team", "Round over: team {0} wins"),
+        ("score.team.mine", "Your team {0}: {1}"), ("score.team.enemy", "Enemy team {0}: {1}"), ("score.team.other", "Team {0}: {1}"),
+        ("score.team.none", "No team"), ("score.empty", "No players"),
         ("weapon.pistol", "M1911"), ("weapon.ak47", "AK-47"), ("weapon.bazooka", "Bazooka"), ("weapon.knife", "Knife"), ("weapon.sniper", "Sniper"), ("weapon.glock17", "Glock 17"), ("weapon.deagle", "Desert Eagle"), ("weapon.m82", "Barrett M82"), ("weapon.awm", "AWM"), ("weapon.svd", "Dragunov SVD"),
-        ("hud.breath.ready", "Breath: hold {0}"), ("hud.breath.held", "Breath held"), ("hud.breath.exhaled", "Breath out, steadying"), ("hud.breath.empty", "Breath empty, refilling"),
-        ("weapon.fall", "Fall"), ("weapon.drown", "Drowned"), ("weapon.void", "Void"), ("weapon.debug", "Debug"), ("weapon.vehicle", "Car"), ("weapon.vehicle_gun", "Mounted MG"), ("weapon.moab", "MOAB"), ("moab.inbound", "MOAB inbound {0}"), ("moab.blast", "MOAB by {0}"), ("moab.cancelled", "MOAB cancelled"), ("weapon.turret", "Turret"), ("feed.roadkill", "Roadkill"), ("weapon.unknown", "?"),
+        ("hud.breath.ready", "Hold {0} to steady"), ("hud.hunt.line", "{0} m   |   {1}"), ("hud.hunt.line.head", "{0} m   |   {1}   |   HEAD"), ("hud.binoculars.range", "{0} m"), ("hud.binoculars.none", "---"), ("hud.binoculars.hint", "{0}: lower"), ("bind.binoculars", "Binoculars (raise / lower)"), ("hud.scope.zero", "ZERO {0} m   |   dot = {1} mil   |   scroll: zero"),
+        ("weapon.fall", "Fall"), ("weapon.bigfoot", "Bigfoot"), ("weapon.gang", "Gang member"), ("weapon.void", "Void"), ("weapon.debug", "Debug"), ("weapon.vehicle", "Car"), ("weapon.vehicle_gun", "Mounted MG"), ("weapon.moab", "MOAB"), ("moab.inbound", "MOAB inbound {0}"), ("moab.blast", "MOAB by {0}"), ("moab.cancelled", "MOAB cancelled"), ("weapon.turret", "Turret"), ("feed.roadkill", "Roadkill"), ("weapon.unknown", "?"),
         ("player.unknown", "Player {0}"),
         ("hud.corpse.hold", "Hold {0}  take {1} as primary     Tap {0}  choose slot"), ("hud.corpse.tap", "Tap {0}  take {1}"),
+        ("hud.corpse.hold.item", "Hold {0}  take {1} as primary     Tap {0}  choose slot or put on {2}"), ("hud.corpse.tap.item", "Tap {0}  take {1} or put on {2}"),
+        ("hud.corpse.hold.items", "Hold {0}  take {1} as primary     Tap {0}  choose slot or an item"), ("hud.corpse.tap.items", "Tap {0}  take {1} or an item"),
+        ("hud.corpse.giant.item", "Tap {0}  put on {1}"), ("hud.corpse.giant.items", "Tap {0}  take an item"),
+        ("item.bigfoot_head", "Bigfoot head"), ("item.gold_chain", "Gold chain"), ("toast.item.crumbled", "The item crumbles in your hands"), ("toast.item.bagfull", "Your bag is full"), ("hud.ground.take", "{0}  Pick up {1}"),
         ("hud.crate.hold", "Hold {0}  open care package"), ("hud.crate.opening", "Opening..."),
+        ("hud.loot.hold", "Hold {0}  send the {1} back"), ("loot.tire", "tire"), ("loot.pet", "pet"), ("loot.dish", "satellite dish"), ("loot.connector", "connector"),
         ("toast.streak.granted", "Care package: {0} is ready. Press {1} to use it."), ("toast.streak.replaced", "Care package: {0} is ready and replaced {1}. Press {2} to use it."),
-        ("corpse.title", "Take {0}"), ("corpse.option", "{0}  {1}"), ("corpse.primary", "Replace primary: {0}"), ("corpse.secondary", "Replace secondary: {0}"),
+        ("corpse.title", "Take {0}"), ("corpse.title.with_items", "Take {0} or an item"), ("corpse.title.items", "Take an item"), ("corpse.option", "{0}  {1}"), ("corpse.primary", "Replace primary: {0}"), ("corpse.secondary", "Replace secondary: {0}"),
         ("corpse.cancel", "{0}  Cancel"),
         ("hud.turret.valid", "Turret: {0} or fire to place     {1} cancel"), ("hud.turret.invalid", "Turret: aim at flat ground within reach     {1} cancel"),
         ("gunship.title", "GUNSHIP"), ("gunship.zoom", "{0}x"), ("gunship.ammo", "AMMO UNLIMITED"), ("gunship.hint","{0}  Fire     {1}  Zoom     {2}  Next weapon"),
@@ -94,12 +104,12 @@ public static class Strings
         ("access.colour", "Colour-blind safe colours"), ("access.colour.help", "Uses a blue and orange pair instead of green and red for health, hits and warnings."),
         ("controls.reset", "Reset to defaults"), ("controls.reset.done", "Controls reset to their defaults."), ("controls.press", "Press a key... (Esc cancels)"),
         ("controls.help", "Select a control, then press the new key or mouse button. A key another control uses swaps the two. Esc is reserved for Back and Pause."),
-        ("controls.swapped", "{0} was used by {1}. They swapped: {1} is now {2}."),
+        ("controls.swapped", "{0} was used by {1}. They swapped: {1} is now {2}."), ("controls.swapped.many", "{0} was used by {1}. They swapped: those are now {2}."),
         ("bind.mouse", "Mouse {0}"),
         ("bind.move_forward", "Move forward"), ("bind.move_back", "Move back"), ("bind.move_left", "Move left"), ("bind.move_right", "Move right"),
         ("bind.jump", "Jump / helicopter climb"), ("bind.sprint", "Sprint"), ("bind.crouch", "Crouch / helicopter descend"), ("bind.prone", "Prone"), ("bind.fire", "Fire"), ("bind.reload", "Reload"),
         ("bind.interact", "Interact"), ("bind.scoreboard", "Scoreboard (hold)"),
-        ("bind.slot_1", "Weapon slot 1 / vehicle seat 1"), ("bind.slot_2", "Weapon slot 2 / vehicle seat 2"), ("bind.slot_3", "Weapon slot 3 / vehicle seat 3"), ("bind.slot_4", "Weapon slot 4 / vehicle seat 4"), ("bind.slot_5", "Weapon slot 5"), ("bind.zoom", "Scope zoom"), ("bind.headlights", "Vehicle headlights"), ("bind.vehicle_view", "Vehicle view (chase / cockpit)"), ("bind.killstreak", "Use killstreak"),
+        ("bind.slot_1", "Weapon slot 1 / vehicle seat 1"), ("bind.slot_2", "Weapon slot 2 / vehicle seat 2"), ("bind.slot_3", "Weapon slot 3 / vehicle seat 3"), ("bind.slot_4", "Weapon slot 4 / vehicle seat 4"), ("bind.slot_5", "Weapon slot 5"), ("bind.zoom", "Scope zoom"), ("bind.headlights", "Vehicle headlights"), ("bind.vehicle_view", "Vehicle view (chase / cockpit)"), ("bind.rozhlas_talk", "Talk on the rozhlas (hold, set holder)"), ("bind.killstreak", "Use killstreak"), ("bind.inventory", "Equipment screen (toggle)"),
         ("weapon.m4a1", "M4A1"), ("weapon.aug", "AUG"), ("weapon.g36", "G36"), ("weapon.rpk", "RPK"), ("weapon.m249", "M249"), ("weapon.m60", "M60"), ("weapon.pkm", "PKM"),
         ("weapon.mp5", "MP5"), ("weapon.ump45", "UMP45"), ("weapon.p90", "P90"), ("weapon.remington870", "Remington 870"), ("weapon.spas12", "SPAS-12"), ("weapon.benelli_m4", "Benelli M4"), ("weapon.aa12", "AA-12"),
         ("streak.uav", "UAV"), ("streak.attack_missile", "Attack missile"), ("streak.turret", "Turret"), ("streak.care_package", "Care package"),
@@ -172,7 +182,7 @@ public static class Strings
         ("camo.inert.face_off", "Face paint is off. Raise Coverage to paint the face; the other controls then apply."),
         ("camo.inert.no_headgear", "This body has no helmet, so Headgear does not apply."),
         ("camo.randomize", "Randomize"), ("camo.reset", "Reset to default"), ("camo.undo", "Undo"), ("camo.redo", "Redo"), ("camo.copy", "Copy share code"), ("camo.paste", "Paste share code"),
-        ("camo.revert", "Revert"), ("camo.apply", "Apply"), ("camo.saving", "Saving..."),
+        ("camo.revert", "Revert"), ("camo.apply", "Apply"), ("camo.saving", "Saving..."), ("camo.err.noanswer", "The server did not confirm the save. Check your connection, then press Apply again."),
         ("camo.saved", "Saved on this loadout."), ("camo.unsaved", "Unsaved changes. Apply saves them to this loadout."),
         ("camo.toast.saved", "Slot {0} camouflage saved"), ("camo.toast.copied", "Share code copied to the clipboard"),
         ("camo.toast.pasted", "Share code applied (not saved yet)"), ("camo.paste.failed", "Could not apply the share code: {0}"),
@@ -182,7 +192,7 @@ public static class Strings
         ("progress.levelup", "Level {0} reached"),
         ("xp.title", "Match XP"), ("xp.total", "Total: {0} XP"), ("xp.level", "Level {0}"), ("xp.line", "{0}   +{1} XP"),
         ("xp.reason.Kill", "Kill"), ("xp.reason.Headshot", "Headshot"), ("xp.reason.Roadkill", "Roadkill"), ("xp.reason.Assist", "Assist"),
-        ("xp.reason.StreakKill", "Killstreak kill"), ("xp.reason.MatchWin", "Match win"), ("xp.reason.MatchTop3", "Top three finish"),
+        ("xp.reason.StreakKill", "Killstreak kill"), ("xp.reason.MatchWin", "Match win"), ("xp.reason.MatchTop3", "Top three finish"), ("xp.reason.EventWin", "Event won"), ("xp.reason.GangKill", "Gang member"),
         ("weapon.attack_missile", "Attack Missile"),
         ("pov.title", "ATTACK MISSILE"), ("pov.alt", "ALT {0} m"), ("pov.time", "TIME {0} s"), ("pov.eta", "IMPACT ~{0} s"), ("pov.hint", "Mouse: steer the missile. It turns at a limited rate. Your body stays where it is."),
         ("toast.info", "Info:"), ("toast.warn", "Notice:"), ("toast.error", "Problem:"),
@@ -199,6 +209,9 @@ public static class Strings
         foreach (var (k, v) in Hud2Strings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in SandboxStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in ChatStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in TacticalMapStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in IntelStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in MassStrings.Table) tr.AddMessage(k, v);
         TranslationServer.AddTranslation(tr);
         TranslationServer.SetLocale("en");
     }

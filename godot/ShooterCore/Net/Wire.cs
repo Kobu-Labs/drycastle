@@ -42,6 +42,14 @@ public enum EventKind : byte
     StreakEnded = 19,
     /// <summary>Server to the owner: a care package granted a reward streak, and the older reward it replaced if the slots were full (<see cref="KillstreakEvents"/>).</summary>
     StreakGranted = 23,
+    /// <summary>Client to server: the zero dialled on a weapon with bullet drop (<see cref="BulletDrop.EncodeZero"/>: u8 weapon index, u16 metres).</summary>
+    SetZero = 24,
+    /// <summary>Server to the shooter: a sniper rifle killed a wild animal, with where the bullet entered its body (<see cref="HuntShot"/>); the client shows the hit diagram.</summary>
+    HuntShot = 25,
+    /// <summary>Client to server: the player raised or lowered the binoculars (<see cref="Binoculars.EncodeRaise"/>: u8).</summary>
+    RaiseBinoculars = 26,
+    /// <summary>Server to everyone but that player, and to a joiner for each player who has them up: a player's binoculars are up or down (<see cref="Binoculars.EncodeRaised"/>: u16 player id, u8); the client poses the character.</summary>
+    BinocularsRaised = 27,
     /// <summary>Client to server: take a corpse's weapon into a hotbar position (<see cref="CorpseCodec"/>).</summary>
     PickUpCorpse = 20,
     /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
@@ -88,6 +96,8 @@ public enum EventKind : byte
     SandboxHeld = 154,
     /// <summary>Server to the owner: why a sandbox action was refused (a short English line, shown as a toast).</summary>
     SandboxNotice = 155,
+    /// <summary>Client to server: teleport to a ground point picked on the tactical map, sandbox owners only (f32 x, f32 z; <see cref="SandboxEvents"/>).</summary>
+    SandboxTeleportTo = 156,
     /// <summary>Server to the flak gunner only: magazine, reserve and reload seconds left (<see cref="FlakCodec"/>). Kinds 160-169 belong to the vehicle turrets.</summary>
     FlakStatus = 160,
     /// <summary>Client to server: move to another seat of the vehicle the player sits in (u8 seat index, <see cref="SeatCodec"/>).</summary>
@@ -106,12 +116,73 @@ public enum EventKind : byte
     ChatStatus = 182,
     /// <summary>Server to everyone: an admin changed the day clock (<see cref="ClockChange"/>).</summary>
     ClockSet = 183,
+    /// <summary>Retired in v42 and never sent: the loudspeaker is server-owned now (<see cref="RozhlasState"/>); /event rozhlas starts a detour broadcast on the server.</summary>
+    RozhlasStart = 184,
+    /// <summary>Server to everyone, and to a joiner while the loudspeaker is not Idle: the village loudspeaker's phase (<see cref="RozhlasCodec"/>: u8 <see cref="RozhlasPhase"/>, u8 broadcast variant or 255, f32 seconds into the audio, f32 seconds left in the phase). Sent on every phase change; a client plays the variant from that offset. Kinds 186-189 belong to the loudspeaker.</summary>
+    RozhlasState = 186,
+    /// <summary>Server to everyone: who holds the rozhlas set, the mic at the dictation table (<see cref="RozhlasSetCodec">u16 player id</see>, 0 when nobody, then the table's position). Sent when a hijack begins and on every change of holder, and to a joiner during a hijack; the holder's own client opens its mic on it.</summary>
+    RozhlasSet = 187,
+    /// <summary>Server to everyone, and to a joiner when the door is open: the Obecny Urad's door opened (1) or closed (0), one byte (<see cref="UradDoorCodec"/>). Open exactly while a detour broadcast is on (OnAir or Hijacked); kinds 186-189 belong to the loudspeaker.</summary>
+    UradDoor = 188,
+    /// <summary>Server to everyone, and to a joiner: the events announced now (<see cref="IntelBoard"/>, <see cref="IntelCodec"/>), and which one is being announced this moment. The intel screen draws it.</summary>
+    IntelSync = 185,
+    /// <summary>Client to server: take the item at a position of a corpse's list (u16 corpse id, u8 index, <see cref="ItemEvents"/>). Kinds 190-199 belong to items and equipment.</summary>
+    PickUpCorpseItem = 190,
+    /// <summary>Server to everyone: the items a corpse carries (u16 corpse id, u8 count, then u8 item and u8 pickups each), when it spawns with some and when they change; to a joiner for each corpse that carries any (<see cref="ItemEvents"/>).</summary>
+    CorpseItems = 191,
+    /// <summary>Server to the owner: what they wear and what is in their bag, each with its pickup count (<see cref="ItemEvents"/>). Sent when either changes, and on join.</summary>
+    Equipment = 192,
+    /// <summary>Server to one player: a notice about an item, as a reason (u8 <see cref="ItemNoticeKind"/>); the client words it ("The item crumbles in your hands").</summary>
+    ItemNotice = 193,
+    /// <summary>Server to everyone but the wearer: what a player wears (u16 player id, then one u8 per equipment slot, 0 none), when it changes and, to a joiner, for each player who wears something (<see cref="ItemEvents"/>). Clients draw it on that player's character.</summary>
+    WornItems = 194,
+    /// <summary>Server to everyone: a player's statuses (<see cref="StatusCodec"/>: u16 id, u8 status mask, u8 flags with burning), when they change and, to a joiner, for each player who has any. Kinds 210-219 belong to statuses.</summary>
+    StatusState = 220,
+    /// <summary>Server to everyone: a blessing saved a player from a lethal hit (<see cref="StatusCodec"/>: u16 id); the client flashes gold.</summary>
+    BlessingSaved = 221,
+    /// <summary>Client to server: put the item in a bag cell on, in its slot (u8 cell, <see cref="ItemEvents"/>). Kinds 200-209 belong to the bag and the ground items (#267).</summary>
+    EquipItem = 200,
+    /// <summary>Client to server: take off what is worn in a slot, into the bag (u8 slot, <see cref="ItemEvents"/>).</summary>
+    UnequipItem = 201,
+    /// <summary>Client to server: drop a worn or bagged item on the ground (u8 <see cref="ItemHome"/>, u8 slot or cell, <see cref="ItemEvents"/>).</summary>
+    DropItem = 202,
+    /// <summary>Client to server: take an item lying on the ground (u16 ground item id, <see cref="ItemEvents"/>).</summary>
+    TakeGroundItem = 203,
+    /// <summary>Server to everyone: a one-shot effect of the Bigfoot (u8 <see cref="BigfootFxKind"/>, a point, a u16 id and a u8, <see cref="BigfootFxCodec"/>): the roar, the stomp's telegraph and shockwave, a thrown log, a thrown vehicle (so its driver's client stops predicting it), a grab and a launch. Kinds 230-239 belong to the Bigfoot (#264).</summary>
+    BigfootFx = 230,
+    /// <summary>Server to everyone, and to a joiner while it lasts: the footprints that lead to the Bigfoot's corpse (u8 count, then 14 bytes each, <see cref="BigfootTrail"/>); a count of 0 clears them.</summary>
+    BigfootTrail = 231,
+    /// <summary>Server to everyone: a Gang member says a line (u16 world entity id, u8 line number, <see cref="GangVoiceCodec"/>); the client plays the line modulo the recordings it has, at the member, to <c>audio.voice_range_m</c>. 237 is kept free for this ticket.</summary>
+    ThiefVoice = 236,
+    /// <summary>Server to everyone, and to a joiner when the doors are open: the church doors opened (1) or closed (0), one byte (<see cref="ChurchDoorCodec"/>, ADR 0019). Kinds 210-219 belong to the church.</summary>
+    ChurchDoor = 210,
+    /// <summary>Server to everyone, and to a joiner: the Holy Mass as it is now (<see cref="MassStateMsg"/>, <see cref="MassCodec"/>): phase, chant on or off, the pastor's kills, where the chant is, and once at the start the bells. Kinds 210-219 belong to the Holy Mass.</summary>
+    MassState = 213,
+    /// <summary>Server to one player: whether a free seat is in reach (the prompt) or they sit, and the way the seat faces (<see cref="MassSeatMsg"/>). The client does not predict its body while seated.</summary>
+    MassSeat = 214,
+    /// <summary>Server to one player: they are blessed and were put at the church door; the payload is the yaw they now face (f32). The client turns and shows the text.</summary>
+    MassBlessing = 215,
+    /// <summary>Server to everyone: the demon throws a fireball (<see cref="DemonCodec"/>: u16 ball id, f32 x3 origin, f32 x3 launch velocity). Clients fly the arc themselves (gravity from holy_mass_demon.json). Kinds 210-219 belong to the Holy Mass.</summary>
+    DemonFireball = 216,
+    /// <summary>Server to everyone: a fireball ended (<see cref="DemonCodec"/>: u16 ball id, f32 x3 position, u8 flags: 1 hit a player, 2 fizzled out in the air). The client bursts it there.</summary>
+    DemonImpact = 217,
+    /// <summary>Server to one player: the demon died and they hit it, so they carry the devil's curse (no payload). The client shows "You feel cursed".</summary>
+    DemonCursed = 218,
+    /// <summary>Server to everyone: the demon begins to breathe fire at a player (<see cref="DemonCodec.EncodeFlame"/>: u16 player id). Clients aim the stream from its mouth at that player after the windup in holy_mass_demon.json.</summary>
+    DemonFlame = 222,
+    /// <summary>Server to everyone, and to a joiner while one runs: the demon's pounce changed stage (<see cref="DemonCodec.EncodePounce"/>: u16 victim id, u8 stage 0 aborted, 1 wind, 2 pinned, 3 released, f32 yaw the pinned victim lies at). The victim's client locks its camera on the demon, then lies under it; the body is held by the server like a seat.</summary>
+    DemonPounce = 223,
+    /// <summary>Server to everyone: a one-shot effect of the Thieves event (<see cref="ThievesFxCodec"/>: u8 <see cref="ThievesFxKind"/>, a point, a u16 id): the Raid van's honk, a Thief's electrocution. Kinds 232-239 belong to the Thieves event.</summary>
+    ThievesFx = 232,
+    /// <summary>Server to everyone, and to a joiner: the satellite dishes taken so far (<see cref="DishCodec"/>: the whole set of object ids, also when it is empty after a round reset). The client hides those objects' nodes.</summary>
+    DishTaken = 233,
 }
 
 public abstract record ReliableMsg;
 /// <summary>Client to server, first message after connecting. Token is the client-generated player token (ADR 0003); empty = guest.</summary>
 /// <summary>Flags are <see cref="HelloFlags"/> bits (v10). A v9 hello has none and decodes as 0.</summary>
-public sealed record HelloMsg(byte Version, string Name, string Token = "", byte Flags = 0) : ReliableMsg;
+/// <summary>MapHash (v25): the map build's identity (MapLoader.BuildHash); the server refuses a different one by name. 0 when unknown.</summary>
+public sealed record HelloMsg(byte Version, string Name, string Token = "", byte Flags = 0, ulong MapHash = 0) : ReliableMsg;
 
 /// <summary>Bits of <see cref="HelloMsg.Flags"/>.</summary>
 public static class HelloFlags
@@ -143,10 +214,10 @@ public sealed record SaveCamoMsg(int Slot, CamoSpec Spec) : ReliableMsg;
 public sealed record ErrorMsg(string Reason) : ReliableMsg;
 
 /// <summary>
-/// Wire format (little-endian). Channel 0 is reliable (control + events), channel 1 is unreliable-sequenced (input, snapshots).
+/// Wire format (little-endian). Channel 0 is reliable (control + events), channel 1 is unreliable-sequenced (input, snapshots), channel 2 is unreliable (effects, <see cref="IsEffect"/>).
 ///
 /// ch0 messages: u8 type, then
-///   Hello(1):   u8 version, u8 nameLen, name utf8, u8 tokenLen, token utf8, u8 flags (v10, see HelloFlags)
+///   Hello(1):   u8 version, u8 nameLen, name utf8, u8 tokenLen, token utf8, u8 flags (v10, see HelloFlags), u64 mapHash (v25)
 ///   Welcome(2): u8 version, u16 playerId, u8 tickRate, u32 serverTick, u16 startMinute, u32 dayLengthMs, u8 frozen
 ///   Join(3):    u16 playerId, u8 nameLen, name utf8
 ///   Leave(4):   u16 playerId
@@ -160,7 +231,7 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 ///   Profile(6) also ends with: u8 camoCount, camoCount * CamoSpec (one per slot, #141)
 ///   Strings are u8 length + utf8 (clamped to 255 bytes). Hello also carries u8 tokenLen, token after the name.
 /// ch1 client to server, Input(11): u8 count (1..3, newest last), u32 snapTick (the newest snapshot tick the client has
-///   committed, or NoTick; the server's baseline for the next deltas), then count inputs of 12 bytes:
+///   committed, or NoTick; the server's baseline for the next deltas), u32 worldTick (the same for the world channel), then count inputs of 12 bytes:
 ///   u16 seq, i8 mx, i8 my, u16 yaw, i16 pitch, u16 buttons, u8 slot, u8 flags (bit 0: aim)
 ///   when bit 0 is set, 12 more bytes follow the input: i32 aimX, i32 aimY, i32 aimZ (Quant.Pos units, #161)
 /// ch1 server to client, Snapshot(20): u32 tick, u16 ackSeq, u32 baseTick (NoTick: the packet is part of a full set),
@@ -173,17 +244,60 @@ public sealed record ErrorMsg(string Reason) : ReliableMsg;
 ///     Status(8):   u8 health, u8 state, u8 weapon
 ///     Remove(128): no fields; the entity left since the baseline
 ///   Unchanged entities are omitted; a keyframe (all of the above, absolute) is sent for entities new to the baseline.
-/// ch1 server to client, WorldSnapshot(21): world entities (turrets, missiles, ...), see <see cref="WorldReplica"/> and <see cref="WorldCodec"/>.
+/// ch1 server to client, WorldSnapshot(21): u32 tick, u32 baseTick (the world tick the client acknowledged, NoTick: a full set),
+///   u8 index, u8 total, u8 count, then count records, see <see cref="WorldSnapshotEncoder"/>. Same rules as Snapshot: every packet
+///   of a tick has the same baseline, and the client commits the tick only when all of its packets have arrived. Unchanged world
+///   entities are omitted; there are no periodic keyframes.
 /// </summary>
 public static class Wire
 {
-    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-155 (sandbox status, grant, action, state, held streak and notice, #156); v11: GunshipStatus is weapon and zoom only (2 bytes; ammo and heat are gone, #157); v12: the gunship FX is coalesced per tick (event kinds 121-123 replace the per-round Shot, ImpactFx and Ac130Blast of the gunships, #159), and the Explosion carries its blast radius (a gunship rocket's is 8 m); v13: GunshipShots carries each tracer's speed and length (#160); v14: the camo spec grows from 30 to 33 bytes (codec 2: body, skin tone, headgear); v15: an input carries the gunner's aim, a ground point (flags byte, 12 more bytes when set), so the rounds land on the reticle (#161); v16: a gunship rocket flies at its own speed (killstreaks.json projectile_speed_mps) and lives out its range, so clients animate it at its Launch velocity's speed, not the bazooka's 40 m/s; v17: entity snapshots are deltas against the client's acknowledged tick (the inputs carry the snapshot tick, the snapshot carries its baseline and set position, removals are records), so a lost packet no longer leaves an entity wrong until a keyframe; v19: the flak truck, entity type 4 (a turret's aim record, <see cref="FlakRecord"/>), event kind 160 (the gunner's ammo), and aircraft carry their hit points (world state hp, percent) and can be destroyed; v20: seat switching in vehicles, event kinds 161 (a rider asks for another seat) and 162 (who sits in each seat, to the riders); v21: the utility helicopter (ADR 0006), entity type 5 (a flying vehicle's velocity, pitch, roll and rotor, <see cref="FlightRecord"/>), a turret aim record for its door gun, and the pilot's inputs step the helicopter one for one (the snapshot's ack is the helicopter's too); v22: glass panes (ADR 0007), event kinds 170 (a pane's hit points) and 171 (the panes of a scope, for a joiner, a new round and a returned vehicle); v23: chat and admin commands, event kinds 180 (a line or command from a player), 181 (a chat log line), 182 (admin flag and spawnable vehicles for a joiner) and 183 (the day clock changed live).</summary>
-    public const byte ProtocolVersion = 23;
+    /// <summary>Bumped when the wire layout changes (v2: hello carries the player token, profile and loadout messages; v3: welcome carries the day/night clock; v4: camo; v5: camo per loadout; v6: killstreak, aircraft, turret, missile, care package, corpse and MOAB event kinds and world entity types, so a v5 client cannot show them; v7: target dummies, entity type 3 and event kind 140; v8: loadout autosave, rename, copy and reset (event kinds 130-132, SaveLoadout carries name and seq); v9: care package rewards a random killstreak (event kind 23 StreakGranted replaces the retired PerkGained, kind 51); v10: hello flags (sandbox request), event kinds 150-155 (sandbox status, grant, action, state, held streak and notice, #156); v11: GunshipStatus is weapon and zoom only (2 bytes; ammo and heat are gone, #157); v12: the gunship FX is coalesced per tick (event kinds 121-123 replace the per-round Shot, ImpactFx and Ac130Blast of the gunships, #159), and the Explosion carries its blast radius (a gunship rocket's is 8 m); v13: GunshipShots carries each tracer's speed and length (#160); v14: the camo spec grows from 30 to 33 bytes (codec 2: body, skin tone, headgear); v15: an input carries the gunner's aim, a ground point (flags byte, 12 more bytes when set), so the rounds land on the reticle (#161); v16: a gunship rocket flies at its own speed (killstreaks.json projectile_speed_mps) and lives out its range, so clients animate it at its Launch velocity's speed, not the bazooka's 40 m/s; v17: entity snapshots are deltas against the client's acknowledged tick (the inputs carry the snapshot tick, the snapshot carries its baseline and set position, removals are records), so a lost packet no longer leaves an entity wrong until a keyframe; v19: the flak truck, entity type 4 (a turret's aim record, <see cref="FlakRecord"/>), event kind 160 (the gunner's ammo), and aircraft carry their hit points (world state hp, percent) and can be destroyed; v20: seat switching in vehicles, event kinds 161 (a rider asks for another seat) and 162 (who sits in each seat, to the riders); v21: the utility helicopter (ADR 0006), entity type 5 (a flying vehicle's velocity, pitch, roll and rotor, <see cref="FlightRecord"/>), a turret aim record for its door gun, and the pilot's inputs step the helicopter one for one (the snapshot's ack is the helicopter's too); v22: glass panes (ADR 0007), event kinds 170 (a pane's hit points) and 171 (the panes of a scope, for a joiner, a new round and a returned vehicle); v23: chat and admin commands, event kinds 180 (a line or command from a player), 181 (a chat log line), 182 (admin flag and spawnable vehicles for a joiner) and 183 (the day clock changed live).; v24: the amphibious transport (ADR 0010, 0011, 0012), entity type 6 (a driven vehicle's speeds, the slope it stands on, its steering and whether it floats, <see cref="DriveRecord"/>), the driver's inputs step it one for one as the pilot's do the helicopter, a turret aim record for its ring gun, and a rider in an armed seat fires their own weapons, so the server answers a seated player's Fire, Reload and weapon switch; v25: the lossy effects (Shot, PelletFan, ImpactFx, gunship tracers and impacts) ride channel 2 unreliable, so a lost one cannot stall Hit, Kill or Death (A-03), the hello carries the map build hash and a different build is refused by name (E-06), and an empty tick sends no packet except every third tick, the heartbeat that carries the input ack (A-05); v26: the world channel is acknowledged too (A-01): inputs carry a world ack (u32 worldTick after the snapshot tick), world snapshots carry their baseline tick, index and total, unchanged world entities are omitted and the 30-tick keyframe is gone, and a world tick commits only when all of its packets have arrived; v27: event kind 184 (RozhlasStart, /event rozhlas starts the village loudspeaker for everyone); v28: items and equipment, event kinds 190 (a client takes the item a corpse carries), 191 (the item a corpse carries), 192 (what a player wears, to them) and 193 (a notice about an item, "the item crumbles"), and a headshot on a player who wears a headshot-immune item is a body hit; v29: event kind 185 (IntelSync, the announced events for the intel screen and the announcement, /event intel); v30: event kind 194 (WornItems, what each player wears, to everyone but the wearer and to a joiner, so worn items are drawn on remote players); v31: the bag, multi-item corpses and ground items (ADR 0018, #267): event kind 190 names which item of a corpse to take, 191 lists all the items of a corpse with their pickups, 192 carries the pickup counts and the bag, 193 can say the bag is full, kinds 200-203 (equip, unequip, drop, take a ground item) and world entity type 2 (an item on the ground); v32: citizens for the Holy Mass, world entity type 51 (the owner field is the look, the state byte a <see cref="CitizenState"/>); v33: event kind 210 (ChurchDoor, the church doors open or closed, ADR 0019); v36: the Holy Mass demon, world entity type 52 (state byte a <see cref="DemonState"/>, hp byte the share of hits left, owner field the packed surface normal, yaw and pitch the way it faces) and event kinds 216-218; v37: the demon roars, leaps and breathes fire (states 6-9, event kind 222); v40: the demon pounces (states 10-12, event kind 223 DemonPounce); v41: the Bigfoot event (#264), world entity types 60 (the Bigfoot: its act, phase and enrage in the state byte, the player it holds in the owner field, the hit count left in percent in the hp byte) and 61 (a log it throws), event kinds 230 (BigfootFx, its one-shot effects) and 231 (BigfootTrail, the footprints to its corpse), the special weapon id 241 (its damage in the kill feed), and a corpse owned by 60000 is the Bigfoot's; v42: the village loudspeaker (rozhlas) is server-owned: event kind 186 (RozhlasState, phase Idle/OnAir/Hijacked with the broadcast variant and offset, <see cref="RozhlasPhase"/>) replaces 184 (RozhlasStart, retired), and clients no longer schedule it from their own clocks; v42 also adds the live feed: a 4th ENet channel (<see cref="ChanRozhlasFeed"/>, so <see cref="Channels"/> is 4) that carries <see cref="TRozhlasFeed"/> frames (u16 seq, one Opus packet), server to every client, unreliable; v42 also adds the set holder: event kind 187 (RozhlasSet, who is on the mic) and <see cref="TRozhlasMic"/> 228, the holder's upstream voice frames on the same channel (client to server, same frame layout); v42 also adds the Urad door: event kind 188 (UradDoor, the Obecny Urad's door open or closed, one byte, <see cref="UradDoorCodec"/>).</summary>
+    // The latest versions, newest first (older ones are in the summary above):
+    //   v51 animal states 8-9 Thrown, Down (run over by a vehicle); the animal state is 4 bits, its hit toggle bit 4
+    //   v50 pets as Loot (animal state 7 Carried; Gang member states 17-18 HopIn, HopOut)
+    //   v49 Gang member states 19-22 Shocked, Falling, Down, GetUp (the pole electrocution); ThievesFx kind 1 Shock (the id is the member's entity)
+    //   v48 event 233 DishTaken (the set of satellite dishes taken, object ids)
+    //   v47 Loot (world entity 56 lying Loot: state byte the LootKind, owner field the origin id's low bits; vehicle record health bits 2-5 the wheels taken; Gang member states 9-16 Seek, Approach, Steal, Haul, Load, ClimbUp, WorkAloft, ClimbDown; the van's song number in owner field bits 10-14)
+    //   v46 Gang member speaker flag (hp byte bit 6), event 236 ThiefVoice
+    //   v45 the Neck equipment slot (EquipSlot 1: the Equipment event and a corpse's items now carry two worn slots), items.json gold_chain, corpse owner 60001 (the Gang boss's)
+    //   v44 the Thieves event's Raid van (world entity 55: owner field the door open in thousandths + a left-door bit, state byte a RaidVanState, hp byte Loot loaded + damage stage; gang member state 8 Board; event 232 ThievesFx, the honk)
+    //   v43 the Thieves event's Gang members (world entity 57 since the merge with wildlife, whose Flock is 54: owner field the look, state byte a GangMemberState, hp byte kind + alive + carried Loot; special weapon 240, XP reason GangKill)
+    //   v42 the rozhlas live feed (a 4th ENet channel, ChanRozhlasFeed, carrying TRozhlasFeed 229 frames: u16 seq + Opus), server-owned rozhlas (event 186, 184 retired), the rozhlas set holder (event 187, upstream mic frames TRozhlasMic 228), the Urad door (event 188)
+    //   v41 the Bigfoot (world entities 60 and 61, events 230 and 231, special weapon 241)
+    //   v40 the demon pounces (demon states 10-12, event 223)
+    //   v39 citizen state 7 (fleeing)
+    //   v38 sandbox map teleport (156)
+    //   v37 demon roar, leap and flame (demon states 6-9, event 222)
+    //   v36 the demon (world entity 52, events 216-218)
+    //   v35 Holy Mass (213-215, citizen roles and states)
+    //   v34 player statuses (220, 221)
+    //   v33 church door
+    //   v52 bullet drop of the sniper rifles: the zero dial (event 24, client to server); the hit diagram of a hunted animal (event 25)
+    //   v54 the Raid van's owner field: door in 63rds (bits 0-5), song bits 6-10, crew sitting inside bits 11-14, left door bit 15 (was door in thousandths, song bits 10-14)
+    //   v53 the binoculars seen by the others (events 26 and 27); event 25 names the hit shape it was tested against (pose, frame) and the head
+    //   v55 world interest (ADR 0025): world record flag FDormant 64 (the entity left this client's interest, no fields); animals, flocks and poop outside 800 m are not sent
+    public const byte ProtocolVersion = 55;
+    /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
+    public static ulong Fnv1a64(ReadOnlySpan<byte> data)
+    {
+        var h = 14695981039346656037UL;
+        foreach (var b in data) { h ^= b; h *= 1099511628211UL; }
+        return h;
+    }
     /// <summary>"No tick": the snapshot tick of an input before the first commit, and the baseline of a full set.</summary>
     public const uint NoTick = uint.MaxValue;
     public const byte TickRate = 30;
-    public const int ChanReliable = 0, ChanData = 1, Channels = 2;
-    public const int KeyEvery = 30;
+    /// <summary>Channel 0 reliable ordered (control, state events), 1 unreliable-sequenced (inputs, snapshots), 2 unreliable effects (<see cref="IsEffect"/>, A-03), 3 the rozhlas live feed (unreliable, server to client only, <see cref="RozhlasFeedWire"/>).</summary>
+    public const int ChanReliable = 0, ChanData = 1, ChanEffects = 2, ChanRozhlasFeed = 3, Channels = 4;
+
+    /// <summary>
+    /// Effects that may be lost: a missing one costs a tracer, a puff or a flash, never state. They ride <see cref="ChanEffects"/> unreliable,
+    /// so a lost datagram cannot hold back the reliable channel (head-of-line blocking, A-03). Hit, Kill, Death, Explosion, Launch, the
+    /// gunship blasts (their hit markers) and every other event stay reliable. The client dispatches by the first byte, not the channel.
+    /// </summary>
+    public static bool IsEffect(EventKind kind) => kind is EventKind.Shot or EventKind.PelletFan or EventKind.ImpactFx or EventKind.GunshipShots or EventKind.GunshipImpacts;
+    /// <summary>An entity tick with nothing to say sends no packet, except every this many ticks: the heartbeat carries the input ack (A-05).</summary>
+    public const int EmptyTickHeartbeat = 3;
     public const int MaxInputsPerPacket = 3;
     public const int MaxNameBytes = 24;
     public const int MaxTokenBytes = 64;
@@ -195,9 +309,15 @@ public static class Wire
 
     public const byte THello = 1, TWelcome = 2, TJoin = 3, TLeave = 4, TEvent = 5, TProfile = 6, TSaveLoadout = 7, TSelectSlot = 8, TError = 9, TSaveCamo = 10;
     public const byte TInput = 11, TSnapshot = 20, TWorldSnapshot = 21;
+    /// <summary>First byte of a live-feed frame on <see cref="ChanRozhlasFeed"/> (u8 kind, u16 seq, Opus packet; <see cref="RozhlasFeedWire"/>).</summary>
+    public const byte TRozhlasFeed = 229;
+    /// <summary>First byte of an upstream mic frame on <see cref="ChanRozhlasFeed"/>, client to server only (u8 kind, u16 seq, Opus packet; <see cref="RozhlasMicWire"/>). The server keeps it only from the rozhlas set's holder while the mic is hijacked.</summary>
+    public const byte TRozhlasMic = 228;
     public const byte FPosAbs = 1, FPosDelta = 2, FRot = 4, FStatus = 8, FHp = 16;
     /// <summary>Entity snapshot record flag: the entity is gone since the baseline (no fields follow).</summary>
     public const byte FRemove = 128;
+    /// <summary>World record flag: the entity is alive but outside this client's interest (<see cref="WorldInterest"/>); no fields follow, the client hides it until a keyframe shows it again.</summary>
+    public const byte FDormant = 64;
     /// <summary>Flags that make a snapshot record a keyframe (world entities; players and vehicles use the same three).</summary>
     public const byte FKey = FPosAbs | FRot | FStatus;
 
@@ -266,7 +386,11 @@ public static class Wire
         Span<byte> t = stackalloc byte[4];
         switch (m)
         {
-            case HelloMsg h: o.Add(THello); o.Add(h.Version); WriteName(o, h.Name); WriteStr(o, Fit(h.Token, MaxTokenBytes)); o.Add(h.Flags); break;
+            case HelloMsg h:
+                o.Add(THello); o.Add(h.Version); WriteName(o, h.Name); WriteStr(o, Fit(h.Token, MaxTokenBytes)); o.Add(h.Flags);
+                Span<byte> hash = stackalloc byte[8];
+                BinaryPrimitives.WriteUInt64LittleEndian(hash, h.MapHash); o.AddRange(hash.ToArray());
+                break;
             case WelcomeMsg w:
                 o.Add(TWelcome); o.Add(w.Version);
                 BinaryPrimitives.WriteUInt16LittleEndian(t, w.PlayerId); o.AddRange(t[..2].ToArray());
@@ -334,7 +458,8 @@ public static class Wire
                     var token = "";
                     if (p < d.Length) { int tl = d[p]; token = Encoding.UTF8.GetString(d.Slice(p + 1, tl)); p += 1 + tl; }
                     var flags = p < d.Length ? d[p] : (byte)0;
-                    return new HelloMsg(d[1], name, token, flags);
+                    var mapHash = p + 9 <= d.Length ? BinaryPrimitives.ReadUInt64LittleEndian(d[(p + 1)..]) : 0UL; // v25 and later
+                    return new HelloMsg(d[1], name, token, flags, mapHash);
                 }
                 case TWelcome:
                     return new WelcomeMsg(d[1], BinaryPrimitives.ReadUInt16LittleEndian(d[2..]), d[4], BinaryPrimitives.ReadUInt32LittleEndian(d[5..]),
@@ -381,7 +506,7 @@ public static class Wire
     }
 
     /// <summary>Encode the newest inputs (up to 3, oldest first) as one packet. An input with an aim adds <see cref="AimBytes"/>.</summary>
-    public static byte[] EncodeInputs(ReadOnlySpan<NetInput> inputs, uint snapTick = NoTick)
+    public static byte[] EncodeInputs(ReadOnlySpan<NetInput> inputs, uint snapTick = NoTick, uint worldTick = NoTick)
     {
         var n = Math.Min(inputs.Length, MaxInputsPerPacket);
         var size = InputHeaderBytes;
@@ -389,6 +514,7 @@ public static class Wire
         var b = new byte[size];
         b[0] = TInput; b[1] = (byte)n;
         BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(2), snapTick);
+        BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(6), worldTick);
         var at = InputHeaderBytes;
         for (var i = 0; i < n; i++)
         {
@@ -415,20 +541,21 @@ public static class Wire
 
     static int InputSize(in NetInput x) => InputBytes + (x.HasAim ? AimBytes : 0);
 
-    /// <summary>type, count, snapshot tick u32.</summary>
-    public const int InputHeaderBytes = 6;
+    /// <summary>type, count, snapshot tick u32, world tick u32.</summary>
+    public const int InputHeaderBytes = 10;
 
     /// <summary>
-    /// Decodes a packet of inputs (the newest up to 3 in order) and the snapshot tick it acknowledges. False when the packet
+    /// Decodes a packet of inputs (the newest up to 3 in order) and the entity and world ticks it acknowledges. False when the packet
     /// is malformed or truncated.
     /// </summary>
-    public static bool TryDecodeInputs(ReadOnlySpan<byte> d, List<NetInput> into, out uint snapTick)
+    public static bool TryDecodeInputs(ReadOnlySpan<byte> d, List<NetInput> into, out uint snapTick, out uint worldTick)
     {
-        snapTick = NoTick;
+        snapTick = NoTick; worldTick = NoTick;
         if (d.Length < InputHeaderBytes || d[0] != TInput) return false;
         int n = d[1];
         if (n < 1 || n > MaxInputsPerPacket) return false;
         snapTick = BinaryPrimitives.ReadUInt32LittleEndian(d[2..]);
+        worldTick = BinaryPrimitives.ReadUInt32LittleEndian(d[6..]);
         var at = InputHeaderBytes;
         for (var i = 0; i < n; i++)
         {

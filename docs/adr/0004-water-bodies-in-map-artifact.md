@@ -1,5 +1,7 @@
 # Water bodies: a water.json per map, flat surface and bed per water parcel
 
+**Status: partly superseded by ADR 0023.** The swim, submerge and breath parts of this record, and the flat bed (one depth per body), are replaced by ADR 0023: the player floats at the surface and does not dive, and depth comes from a per-body depth grid with the terrain carved to it. The file format, the per-parcel bodies and the networking note below still hold.
+
 Decided for Shooter v2 (swimming and submerging, issue #138). Extends the map artifact of the base map; does not change the networking layer (ADR 0002).
 
 **Format.** The base map gains an optional file `water.json` (listed under `files.water` in `manifest.json`). It holds one body per parcel of kind `water`, each with the parcel polygon and two heights: a flat surface (the median terrain height along the shoreline) and a flat bed (the lowest terrain height inside). `water.json` carries its own `version` (1). Adding the file is additive: maps without it, or older readers, treat the map as dry.

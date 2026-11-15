@@ -72,22 +72,55 @@ public class StanceTests
         Ticks(ref s, new MoveInput(), 1);                       // key up
         Ticks(ref s, new MoveInput { Buttons = MoveButtons.Prone }, 1); // key down: toggle off
         Assert.False(s.ProneLatched);
-        Ticks(ref s, new MoveInput(), 20);                      // 0.67 s: still lying down
+        Ticks(ref s, new MoveInput(), 10);                      // 0.37 s: still lying down
         Assert.Equal(Stance.Prone, s.Stance);
-        Ticks(ref s, new MoveInput(), 15);                      // 1.17 s: crouched, the stand-up is still going
+        Ticks(ref s, new MoveInput(), 6);                       // 0.57 s: crouched, the stand-up is still going
         Assert.Equal(Stance.Crouch, s.Stance);
-        Ticks(ref s, new MoveInput(), 15);                      // 1.67 s: standing
+        Ticks(ref s, new MoveInput(), 7);                       // 0.80 s: standing
         Assert.Equal(Stance.Stand, s.Stance);
     }
 
     [Fact]
-    public void CrawlSpeedIs1Point2AndSprintIsRefused()
+    public void CrawlSpeedIs1Point2AndSprintIsRefusedWhileStillLow()
     {
         var s = Settled(Stance.Prone);
         Ticks(ref s, new MoveInput { MoveY = 1, Buttons = MoveButtons.Prone }, 30);
         Assert.Equal(1.2f, HSpeed(s), 2);
-        Ticks(ref s, new MoveInput { MoveY = 1, Buttons = MoveButtons.Prone | MoveButtons.Sprint }, 30);
-        Assert.Equal(1.2f, HSpeed(s), 2);
+        Ticks(ref s, new MoveInput { MoveY = 1, Buttons = MoveButtons.Sprint }, 5); // standing up, not yet sprinting
+        Assert.True(HSpeed(s) < 2f);
+    }
+
+    [Fact]
+    public void SprintFromCrouchStandsUpEvenWithCrouchHeldThenSprints()
+    {
+        var s = Settled(Stance.Crouch);
+        var sprint = new MoveInput { MoveY = 1, Buttons = MoveButtons.Crouch | MoveButtons.Sprint };
+        Ticks(ref s, sprint, 20);
+        Assert.Equal(Stance.Stand, s.Stance);
+        Ticks(ref s, sprint, 10);
+        Assert.Equal(MoveConsts.SprintSpeed, HSpeed(s), 2);
+    }
+
+    [Fact]
+    public void SprintFromProneClearsTheLatchAndStandsUpThroughCrouch()
+    {
+        var s = Settled(Stance.Prone);
+        var sprint = new MoveInput { MoveY = 1, Buttons = MoveButtons.Sprint };
+        Ticks(ref s, sprint, 1);
+        Assert.False(s.ProneLatched);
+        Ticks(ref s, sprint, 60);
+        Assert.Equal(Stance.Stand, s.Stance);
+        Ticks(ref s, sprint, 10);
+        Assert.Equal(MoveConsts.SprintSpeed, HSpeed(s), 2);
+    }
+
+    [Fact]
+    public void SprintWithoutForwardDoesNotStandUp()
+    {
+        var s = Settled(Stance.Prone);
+        Ticks(ref s, new MoveInput { Buttons = MoveButtons.Sprint }, 60);
+        Assert.True(s.ProneLatched);
+        Assert.Equal(Stance.Prone, s.Stance);
     }
 
     [Fact]

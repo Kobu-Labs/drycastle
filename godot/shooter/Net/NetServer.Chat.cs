@@ -20,7 +20,7 @@ public partial class NetServer
 
     bool IsAdmin(Client c) => !c.IsBot && (AdminAll || (c.Token.Length > 0 && AdminTokens.Contains(c.Token)));
 
-    ChatContext ChatCtx(Client c) => new(IsAdmin(c), Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>());
+    ChatContext ChatCtx(Client c) => new(IsAdmin(c), Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList());
 
     /// <summary>Join: tells the client if it is an admin and which vehicles it may name.</summary>
     void SendChatStatus(Client c)
@@ -60,7 +60,15 @@ public partial class NetServer
             case "help": ChatHelp(c, args); break;
             case "bots": ChatBots(c, args); break;
             case "spawn": ChatSpawn(c, args[0]); break;
+            case "sandbox": ChatSandbox(c, args); break;
+            case "give": ChatGive(c, args); break;
             case "time": ChatTimeCommand(c, args); break;
+            case "restart": ChatRestart(c, args); break;
+            case "event": ChatEvent(c, args); break;
+            case "citizens": ChatCitizens(c, args); break;
+            case "church": ChatChurch(c, args); break;
+            case "rozhlas": ChatRozhlas(c, args); break;
+            case "status": ChatStatus(c, args); break;
         }
         GD.Print($"server: {c.Name} #{c.Id} ran {text}");
     }
@@ -106,6 +114,86 @@ public partial class NetServer
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { ChatTo(c, ChatLineKind.Error, "You must be alive to spawn a vehicle."); return; }
         if (TrySpawnVehicle(c, (byte)kind, AdminVehicleCap) is { } why) { ChatTo(c, ChatLineKind.Error, why); return; }
         ChatTo(c, ChatLineKind.Info, $"Spawned a {id} in front of you.");
+    }
+
+    /// <summary>A human player by name (spaces ignored) or "#id", or null.</summary>
+    Client? FindHuman(string who)
+    {
+        var humans = _byId.Values.Where(o => !o.IsBot && o.Joined).ToList();
+        return who.StartsWith('#') && ushort.TryParse(who.AsSpan(1), out var id)
+            ? humans.FirstOrDefault(o => o.Id == id)
+            : humans.FirstOrDefault(o => o.Name.Replace(" ", "").Equals(who, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>"/give item [player]": a new item, with no pickups counted, goes on the player (the admin without a name) if its slot is empty, else into their bag. Both full refuses it. A living player only.</summary>
+    void ChatGive(Client c, IReadOnlyList<string> args)
+    {
+        var index = Items.IndexOf(args[0]);
+        if (index < 0) { ChatTo(c, ChatLineKind.Error, $"Unknown item '{args[0]}'."); return; }
+        var target = args.Count > 1 ? FindHuman(args[1]) : c;
+        if (target == null) { ChatTo(c, ChatLineKind.Error, $"No player '{args[1]}'. Use the name without spaces, or #id."); return; }
+        if (_match.Get(target.Id)?.Life != PlayerLife.Alive) { ChatTo(c, ChatLineKind.Error, $"{target.Name} is not alive."); return; }
+        var def = Items.Items[index];
+        var placed = ItemRules.Place(Items, new ItemStack(index), target.Worn, target.Bag, swap: false, out _);
+        if (placed == ItemPlace.NoRoom)
+        {
+            ChatTo(c, ChatLineKind.Error, target == c ? $"The {def.Name} does not fit: your slot and bag are full." : $"The {def.Name} does not fit: {target.Name}'s slot and bag are full.");
+            return;
+        }
+        SendEquipment(target);
+        var worn = placed == ItemPlace.Worn;
+        ChatTo(c, ChatLineKind.Info, target == c ? $"You {(worn ? "wear" : "carry")} the {def.Name} now." : $"{target.Name} {(worn ? "wears" : "carries")} the {def.Name} now.");
+        if (target != c) ChatTo(target, ChatLineKind.Info, $"{c.Name} gave you the {def.Name}.");
+    }
+
+    /// <summary>"/sandbox player [on|off]": a human by name (spaces ignored) or "#id". Without a state it flips.</summary>
+    void ChatSandbox(Client c, IReadOnlyList<string> args)
+    {
+        if (!AllowSandbox) { ChatTo(c, ChatLineKind.Error, "Sandbox mode is not allowed on this server (--allow-sandbox is off)."); return; }
+        var who = args[0];
+        var target = FindHuman(who);
+        if (target == null) { ChatTo(c, ChatLineKind.Error, $"No player '{who}'. Use the name without spaces, or #id."); return; }
+        var on = args.Count > 1 ? args[1] == "on" : !target.Sandbox;
+        if (target.Sandbox == on) { ChatTo(c, ChatLineKind.Info, $"{target.Name} is already {(on ? "in" : "out of")} sandbox mode."); return; }
+        SetSandbox(target, on);
+        ChatToAll(ChatLineKind.System, "", $"{c.Name} turned sandbox mode {(on ? "on" : "off")} for {target.Name}.");
+    }
+
+    /// <summary>"/restart [ffa|tdm]": a new round now, in the current mode or the named one. Everyone is told which.</summary>
+    void ChatRestart(Client c, IReadOnlyList<string> args)
+    {
+        var mode = args.Count > 0 ? (args[0] == "tdm" ? MatchMode.TeamDeathmatch : MatchMode.FreeForAll) : _match.Mode;
+        var changed = mode != _match.Mode;
+        _match.Restart(mode);
+        var name = mode == MatchMode.TeamDeathmatch ? "team deathmatch" : "free-for-all";
+        ChatToAll(ChatLineKind.System, "", changed ? $"{c.Name} restarted the round in {name}." : $"{c.Name} restarted the round.");
+        GD.Print($"server: round restarted by {c.Name} #{c.Id}, mode {name}");
+    }
+
+    /// <summary>
+    /// "/event rozhlas": starts a detour broadcast of the village loudspeaker now (<see cref="ChatEventRozhlas"/>). "/event intel [clear]": the test announcement (<see cref="ChatIntel"/>).
+    /// "/event bigfoot", "mass" and "thieves" start that kind through the handler table (<see cref="InitEvents"/>); "/event current end" concludes the running
+    /// event as a win (for testing) and "/event current cancel" removes it with no reward, by its kind (<see cref="ChatCurrentEvent"/>). Everyone is told who did.
+    /// </summary>
+    void ChatEvent(Client c, IReadOnlyList<string> args)
+    {
+        var action = args.Count > 1 ? args[1] : "";
+        var allowed = args[0] switch { "intel" => "clear", "current" => "end or cancel", _ => "" }; // the parser only lets known events and actions through; whether they belong together is checked here
+        if (args[0] == "current") { ChatCurrentEvent(c, action); return; }
+        if (action != "" && (args[0] != "intel" || action != "clear"))
+        {
+            ChatTo(c, ChatLineKind.Error, allowed == "" ? $"/event {args[0]} takes no action." : $"/event {args[0]} takes {allowed}.");
+            return;
+        }
+        switch (args[0])
+        {
+            case "rozhlas":
+                ChatEventRozhlas(c);
+                break;
+            case "intel": ChatIntel(c, action == "clear"); break;
+            case "demon": ChatDemon(c); break;
+            default: _eventHandlers.Start(args[0], c); break; // bigfoot, mass, thieves: the kinds of the handler table
+        }
     }
 
     void ChatTimeCommand(Client c, IReadOnlyList<string> args)

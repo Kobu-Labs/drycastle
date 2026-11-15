@@ -189,14 +189,27 @@ public sealed class VehicleSeat
     }
 }
 
+/// <summary>Whether a vehicle gun can fire. The machine is <see cref="VehicleGun.Spec"/>.</summary>
+public enum VehicleGunState : byte { Ready, Reloading }
+
 /// <summary>A vehicle gun's magazine, reserve and reload. Hitscan rounds are resolved by the server; this only says when a round leaves the barrel.</summary>
 public sealed class VehicleGun
 {
+    /// <summary>A reload starts on request (not when full, empty of reserve or already reloading) or when a trigger pull finds the magazine empty, and ends on the first <see cref="TryFire"/> after its time.</summary>
+    public static readonly StateMachineSpec<VehicleGunState> Spec = StateMachineSpec<VehicleGunState>.Define("Vehicle.Gun", "A vehicle gun: ready to fire, or reloading.", VehicleGunState.Ready)
+        .Allow(VehicleGunState.Ready, VehicleGunState.Reloading)
+        .Allow(VehicleGunState.Reloading, VehicleGunState.Ready)
+        .Note(VehicleGunState.Ready, "Fires one round per FireInterval while the trigger is held and the magazine has one.")
+        .Note(VehicleGunState.Reloading, "No rounds until the reload time is over; the magazine is topped up from the reserve when it ends. The end is noticed by the next trigger update, not by a timer.")
+        .Build();
+
+    readonly StateMachine<VehicleGunState> _state = new(Spec);
     public VehicleGunDef Def { get; }
     public int Magazine { get; private set; }
     public int Reserve { get; private set; }
     double _nextShot;
-    double _reloadDone = -1;
+    /// <summary>When the running reload ends (the server's absolute clock); only meaningful while reloading.</summary>
+    double _reloadDone;
 
     public VehicleGun(VehicleGunDef def)
     {
@@ -205,16 +218,17 @@ public sealed class VehicleGun
         Reserve = def.Reserve;
     }
 
-    public bool Reloading => _reloadDone >= 0;
+    public bool Reloading => _state.Is(VehicleGunState.Reloading);
 
     /// <summary>Seconds of reload left at <paramref name="now"/> (0 when not reloading).</summary>
-    public float ReloadRemaining(double now) => _reloadDone >= 0 ? (float)Math.Max(0, _reloadDone - now) : 0f;
+    public float ReloadRemaining(double now) => Reloading ? (float)Math.Max(0, _reloadDone - now) : 0f;
 
     /// <summary>Starts a reload: not when full, empty of reserve or already reloading.</summary>
     public bool TryReload(double now)
     {
         if (Reloading || Magazine == Def.Magazine || Reserve == 0) return false;
         _reloadDone = now + Def.ReloadTime;
+        _state.Enter(VehicleGunState.Reloading);
         return true;
     }
 
@@ -224,10 +238,11 @@ public sealed class VehicleGun
     /// </summary>
     public bool TryFire(double now, bool trigger)
     {
-        if (_reloadDone >= 0 && now >= _reloadDone)
+        if (Reloading && now >= _reloadDone)
         {
             var take = Math.Min(Def.Magazine - Magazine, Reserve);
-            Magazine += take; Reserve -= take; _reloadDone = -1;
+            Magazine += take; Reserve -= take;
+            _state.Enter(VehicleGunState.Ready);
         }
         if (!trigger || Reloading || now < _nextShot) return false;
         if (Magazine == 0) { TryReload(now); return false; }
@@ -237,7 +252,7 @@ public sealed class VehicleGun
     }
 }
 
-/// <summary>Counts seconds a vehicle has stood empty; fires once when it reaches the return time.</summary>
+/// <summary>Counts seconds a vehicle has stood empty and away from its origin; fires once when it reaches the return time. A count-up beside the vehicle's life (<see cref="VehicleLifecycle"/>), reset by any return.</summary>
 public sealed class AbandonTimer
 {
     public float Empty { get; private set; }
@@ -279,13 +294,14 @@ public static class VehicleRecord
 {
     public const ushort FirstId = 0x4000;
 
-    /// <summary>Health byte bit 0x80: headlights on (one bit, see <see cref="Headlights"/>). Bits 0..1 are the damage stage.</summary>
-    public const byte LightsBit = 0x80, StageMask = 0x03;
+    /// <summary>Health byte bit 0x80: headlights on (one bit, see <see cref="Headlights"/>). Bits 0..1 are the damage stage, bits 2..5 the wheels the Thieves have taken (<see cref="WheelsMask"/>), bit 6 is free.</summary>
+    public const byte LightsBit = 0x80, StageMask = 0x03, WheelsMask = 0x3C;
+    const int WheelsShift = 2;
 
-    /// <summary>The Health byte of a vehicle record carries the damage stage (0..3) and the headlights bit; a destroyed vehicle is State Dead.</summary>
-    public static EntityRecord Make(ushort id, Vector3 pos, float yaw, ushort driver, byte colourAndKind, int stage = 0, bool destroyed = false, bool lights = false)
+    /// <summary>The Health byte of a vehicle record carries the damage stage (0..3), the wheels taken (bit per wheel: front left, front right, back left, back right) and the headlights bit; a destroyed vehicle is State Dead.</summary>
+    public static EntityRecord Make(ushort id, Vector3 pos, float yaw, ushort driver, byte colourAndKind, int stage = 0, bool destroyed = false, bool lights = false, byte wheelsOff = 0)
     {
-        var health = (stage & StageMask) | (lights ? LightsBit : 0);
+        var health = (stage & StageMask) | ((wheelsOff & 0xF) << WheelsShift) | (lights ? LightsBit : 0);
         var r = EntityRecord.Make(id, EntityType.Vehicle, pos, yaw, 0, health, destroyed ? EntityState.Dead : driver != 0 ? EntityState.InVehicle : EntityState.Alive, colourAndKind);
         r.Pitch = unchecked((short)driver);
         return r;
@@ -297,6 +313,8 @@ public static class VehicleRecord
     public static ushort Driver(in EntityRecord r) => unchecked((ushort)r.Pitch);
     public static int Stage(in EntityRecord r) => r.Health & StageMask;
     public static bool Lights(in EntityRecord r) => (r.Health & LightsBit) != 0;
+    /// <summary>The wheels taken, one bit each (0 front left, 1 front right, 2 back left, 3 back right).</summary>
+    public static byte Wheels(in EntityRecord r) => (byte)((r.Health & WheelsMask) >> WheelsShift);
     public static byte Colour(in EntityRecord r) => (byte)(r.Weapon & 0xF);
     public static int Kind(in EntityRecord r) => r.Weapon >> 4;
 }
@@ -334,8 +352,7 @@ public static class CarModel
     /// Longitudinal: acceleration to top speed, boosted near a standstill (<see cref="VehicleHandling.LaunchBoost"/>) (reverse capped by the handling), brake against travel, coast when idle.
     /// Lateral: yaw rate is speed / <see cref="TurnRadiusAt"/>, so it is zero when standing still, tight at walking pace and
     /// only moderately wider at top speed; the actual yaw rate chases that target at a limited slew rate.
-    /// <paramref name="onWater"/> is set while the vehicle floats: an amphibious then drives at its water speed, and a boat has its drive
-    /// (with planing); a boat not on water has none and coasts to a stop at its land deceleration.
+    /// <paramref name="onWater"/> is set while the vehicle floats: an amphibious then drives at its water speed.
     /// </summary>
     public static void Step(ref CarState s, VehicleDef def, float throttle, float steer, bool handbrake, float dt, bool onWater = false)
     {
@@ -344,18 +361,9 @@ public static class CarModel
         var top = def.TopSpeed;
         var accel = def.Acceleration;
         var coast = h.CoastDecel;
-        if (def.Medium == VehicleMedium.Boat && !onWater)
-        {
-            // a boat has no drive on land: it coasts to a stop at its land deceleration
-            throttle = 0; handbrake = false; coast = def.LandDecel;
-        }
-        else if (onWater && def.Medium == VehicleMedium.Amphibious)
+        if (onWater && def.Medium == VehicleMedium.Amphibious)
         {
             top = def.WaterTopSpeed; accel = def.WaterAcceleration;
-        }
-        else if (onWater && def.Medium == VehicleMedium.Boat && def.PlaningSpeed > 0 && MathF.Abs(v) < def.PlaningSpeed)
-        {
-            accel *= 0.5f; // below the planing speed the hull pushes water aside: half the thrust until it lifts onto the plane
         }
         // the launch boost: more thrust near a standstill, fading to the plain acceleration at h.LaunchSpeed (either direction of travel)
         accel *= 1f + (h.LaunchBoost - 1f) * MathF.Max(0f, 1f - MathF.Abs(v) / MathF.Max(0.1f, h.LaunchSpeed));

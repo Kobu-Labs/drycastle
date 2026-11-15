@@ -261,8 +261,8 @@ public partial class SettingsScreen : MenuScreen
         var swapped = _draft.Keys.Assign(action, b);
         EndCapture();
         Changed();
-        if (swapped != null)
-            Shell.Toast(Strings.F("controls.swapped", InputBindings.Name(b), Strings.T(InputBindings.LabelKey(swapped)), InputBindings.Name(_draft.Keys.Get(swapped))), ToastKind.Warn);
+        if (swapped.Count > 0) // every action that moved is named: two that share a key (vehicle view, rozhlas talk) move together
+            Shell.Toast(Strings.F(swapped.Count == 1 ? "controls.swapped" : "controls.swapped.many", InputBindings.Name(b), string.Join(", ", swapped.Select(a => Strings.T(InputBindings.LabelKey(a)))), InputBindings.Name(_draft.Keys.Get(swapped[0]))), ToastKind.Warn);
         return true;
     }
 
@@ -289,11 +289,11 @@ public partial class SettingsScreen : MenuScreen
     public override void Back()
     {
         if (_capturing != null) { EndCapture(); return; }
-        if (!Dirty) { Shell.Pop(); return; }
+        if (!Dirty) { Shell.Pop(this); return; }
         Shell.Push(new DialogScreen(Strings.T("settings.unsaved.title"), Strings.T("settings.unsaved.body"), new[]
         {
-            new DialogScreen.Choice(Strings.T("settings.apply"), () => { Apply(); Shell.Pop(); }, "MenuPrimary"),
-            new DialogScreen.Choice(Strings.T("settings.discard"), () => { Revert(); Shell.Pop(); }, "MenuDanger"),
+            new DialogScreen.Choice(Strings.T("settings.apply"), () => { Apply(); Shell.Pop(this); }, "MenuPrimary"),
+            new DialogScreen.Choice(Strings.T("settings.discard"), () => { Revert(); Shell.Pop(this); }, "MenuDanger"),
         }, focus: 0));
     }
 

@@ -26,6 +26,23 @@ public partial class NetServer
         GD.Print(answer.Granted ? $"server: {c.Name} #{c.Id} sandbox mode on" : $"server: {c.Name} #{c.Id} sandbox refused (--allow-sandbox is off)");
     }
 
+    /// <summary>
+    /// An admin turns sandbox mode on or off for a joined player (#156). The player gets the status notice, everyone the name tag
+    /// change; unlimited ammo is live at once, the whole hotbar from the next spawn (the loadout is applied at every spawn).
+    /// </summary>
+    void SetSandbox(Client c, bool on)
+    {
+        c.Sandbox = on;
+        _match.SetSandbox(c.Id, on);
+        if (c.W != null) c.W.Unlimited = on;
+        if (!on) _streaks.SandboxRelease(c.Id);
+        Send(c, new EventMsg((byte)EventKind.SandboxStatus, SandboxEvents.EncodeStatus(new SandboxAnswer(on, on ? SandboxRules.GrantedReason : SandboxRules.RevokedReason))));
+        BroadcastEvent(EventKind.SandboxState, SandboxEvents.EncodeState(c.Id, on));
+        SendSandboxHeld(c); // off: the held slot is empty, the client clears it
+        if (c.W != null) SendAmmo(c);
+        GD.Print($"server: {c.Name} #{c.Id} sandbox mode {(on ? "on" : "off")} by an admin");
+    }
+
     /// <summary>Scores (XP, stats, the score) count for every player except a sandbox one. Unknown ids count as normal.</summary>
     bool Scores(ushort id) => _match.Get(id) is not { Sandbox: true } && !IsBot(id); // a bot earns no XP and has no stats (#214)
 
@@ -122,6 +139,26 @@ public partial class NetServer
         BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(c.Id, s, 0)));
     }
 
+    /// <summary>
+    /// Teleport to a point picked on the tactical map (middle click): onto the highest surface there (a roof when the point is on a building),
+    /// out of any vehicle. Same wire event as a spawn. Refused outside the map or where there is nothing to stand on.
+    /// </summary>
+    void OnSandboxTeleportTo(Client c, byte[] payload)
+    {
+        if (!c.Sandbox || SandboxEvents.DecodeTeleportTo(payload) is not { } at) return;
+        if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { SandboxNote(c, "Sandbox actions work while alive."); return; }
+        var q = PhysicsRayQueryParameters3D.Create(new Vector3(at.X, 2000f, at.Z), new Vector3(at.X, -500f, at.Z), CollisionLayers.World);
+        var hit = World.GetWorld3D().DirectSpaceState.PerfRay(q);
+        if (hit.Count == 0) { SandboxNote(c, "Nothing to stand on there."); return; }
+        var p = hit["position"].AsVector3();
+        if (c.Car != null) LeaveSeat(c, false);
+        c.Body.Teleport(new Vector3(p.X, p.Y + 0.1f, p.Z));
+        c.Inputs.Clear();
+        var s = new System.Numerics.Vector3(p.X, p.Y, p.Z);
+        _match.SetPosition(c.Id, s);
+        BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(c.Id, s, 0)));
+    }
+
     /// <summary>Sandbox vehicles per server run. Spawned cars are never removed, so an uncapped count would eventually wrap the vehicle id (T3-016).</summary>
     const int SandboxVehicleCap = 8, AdminVehicleCap = 32;
     int _sandboxVehicles;
@@ -158,7 +195,7 @@ public partial class NetServer
             FlightWater = Water, FlightBounds = MapFlightBounds,
         };
         World.AddChild(car);
-        foreach (var cl in _byId.Values) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); }
+        foreach (var cl in _byId.Values) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); car.DriveWorld?.Ignore(cl.Body); }
         _cars.Add(car);
         GD.Print($"server: {c.Name} #{c.Id} spawned a {def.Id}");
         return null;

@@ -16,7 +16,9 @@ public partial class NetServer
 
     /// <summary>The attitude a door gun's arc turns with: the helicopter's; a land vehicle's yaw alone.</summary>
     static (float Yaw, float Pitch, float Roll) AttitudeOf(ServerCar car) =>
-        car.Flies ? (car.Flight.Yaw, car.Flight.Pitch, car.Flight.Roll) : (car.State.Yaw, 0f, 0f);
+        car.Flies ? (car.Flight.Yaw, car.Flight.Pitch, car.Flight.Roll)
+        : car.Drives ? (car.Drive.Yaw, car.Drive.Pitch, car.Drive.Roll) // a driven vehicle lies on the slope it stands on
+        : (car.State.Yaw, 0f, 0f);
 
     /// <summary>The door gun's record for the snapshot: the mount's yaw and the gun's pitch against the vehicle, and the gunner's id. With nobody at it, the gun stays where it was left.</summary>
     EntityRecord DoorGunRecordOf(ServerCar car)
@@ -51,8 +53,9 @@ public partial class NetServer
     /// </summary>
     void FireDoorGun(Client c, ServerCar car, VehicleDoorGunDef def, VehicleGunDef gun, DoorGunAim aim)
     {
+        _vehicleView = ViewOf(VehicleBackOf(c), c.LifeStart); // the other vehicles, where the gunner's screen showed them (B-02)
         var (yaw, pitch, roll) = AttitudeOf(car);
-        var muzzle = DoorGunRules.Muzzle(def, DoorGunRules.Pivot(def, N(car.GlobalPosition), yaw, pitch, roll), aim);
+        var muzzle = DoorGunRules.Muzzle(def, DoorGunRules.GunPivot(def, N(car.GlobalPosition), yaw, pitch, roll, aim), aim);
         var d = HitMath.SpreadDirection(aim.ViewYaw, aim.ViewPitch, gun.SpreadDegrees, _rng);
         var from = new Vector3(muzzle.X, muzzle.Y, muzzle.Z);
         var dir = new Vector3(d.X, d.Y, d.Z);
@@ -71,5 +74,6 @@ public partial class NetServer
         else if (shotCar == null && wall <= gun.Range) BulletPuff(N(end)); // dust where the round meets the ground or a wall
         if (hit == null && wall <= gun.Range) ShotGlass(shotCar, from, dir, wall, gun.Damage);
         DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, _ => gun.Damage);
+        _vehicleView = null;
     }
 }

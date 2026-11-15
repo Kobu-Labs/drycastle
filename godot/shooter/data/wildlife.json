@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  // Wildlife: wild animals (GLOSSARY "Wildlife") that stand in the zones of their species' kind (zone kinds deer, boar, ...; rules.yaml zones,
+  // baked into the map's candidate points, zone_points.json). Each round starts with "count" of each species, at random habitat points; nothing replaces one that is
+  // shot. A species with no habitat point in the map gets none. "max_animals" caps all wildlife at once; wildlife, pets, poop and everything else share
+  // the world's entity cap (512). Species are ids of animals.json that flee (a pet is placed by pets.json).
+  // A species with "herd" gathers into herds of min..max animals: they start within spread_m of one habitat point, wander about the herd's centre,
+  // the centre drifts within range_m of that point every move_min_seconds..move_max_seconds (defaults 30..90) while calm, and when one animal
+  // takes fright the whole herd runs from the same spot. A count not a multiple of the herd size ends in a smaller herd. No "herd": solitary.
+  "max_animals": 160,
+  "species": [
+    { "id": "doe", "count": 12, "herd": { "min": 3, "max": 6, "spread_m": 12, "range_m": 60 } },
+    { "id": "stag", "count": 6, "herd": { "min": 2, "max": 4, "spread_m": 12, "range_m": 60 } },
+    { "id": "deer", "count": 60, "herd": { "min": 3, "max": 9, "spread_m": 15, "range_m": 80 } },
+    { "id": "moose", "count": 4 },
+    { "id": "boar", "count": 12, "herd": { "min": 3, "max": 5, "spread_m": 8, "range_m": 40 } },
+    { "id": "bear", "count": 4 },
+    { "id": "fox", "count": 8 },
+    { "id": "wolf", "count": 6, "herd": { "min": 2, "max": 4, "spread_m": 10, "range_m": 80 } },
+    { "id": "rabbit", "count": 20, "herd": { "min": 3, "max": 6, "spread_m": 6, "range_m": 25 } },
+    { "id": "raccoon", "count": 8 },
+    { "id": "skunk", "count": 6 }
+  ],
+  // Bird flocks: flying boids, cosmetic (not animals: no hit points, cannot be shot). Each flock is one world entity that flies a tour of waypoints
+  // within range_m of its habitat point (the ground attribute value "wildlife:<id>", like a species) at altitude_min_m..altitude_max_m above the ground and
+  // scatters from a player or moving vehicle within scatter_radius_m; the birds are boids every client flies around it (the "boids" numbers: defaults
+  // shown in BoidRules); they flow round aircraft (the gunship aircraft and flying vehicles) and never fly through one. "model" is a GLB of assets/ or assets-private/ (a small wedge when it is missing); model_yaw_deg turns it to face forward.
+  "flocks": [
+    { "id": "crow", "name": "Crows", "model": "animal-kit/bird.glb", "scale": 1, "model_yaw_deg": 180,
+      "flocks": 15, "birds_min": 24, "birds_max": 48, "altitude_min_m": 18, "altitude_max_m": 40, "range_m": 200, "speed_mps": 7, "scatter_radius_m": 30 }
+  ]
+}

@@ -8,6 +8,10 @@ namespace Drycastle.Shooter;
 /// hold and tap of the interact key, and the chooser. Holding the key takes the corpse's weapon into the primary position
 /// (<see cref="CorpseRules.PrimaryPos"/>); a tap opens <see cref="CorpseChooser"/> to pick the primary or the secondary.
 /// The server validates reach and slot; the hotbar it sends back (<see cref="EventKind.Hotbar"/>) is the one that counts.
+/// A corpse that carries items (<see cref="EventKind.CorpseItems"/>, up to eight; issues #261, #269) adds a row of item cells to the chooser, one for each
+/// of them: taking an item is a separate action from taking the weapon (a click or Enter on its cell, <see cref="RequestTakeCorpseItem"/>), and the cell
+/// leaves the list when the server sends the corpse's next list. Holding the key still takes the weapon only. The prompt names the item only when there is
+/// exactly one, and nothing else for several.
 /// </summary>
 public partial class NetClient
 {
@@ -17,7 +21,10 @@ public partial class NetClient
     sealed class CorpseView
     {
         public Node3D Node = null!;
-        public CharacterView View = null!;
+        /// <summary>The character that lies there; null for the giant (<see cref="Giant"/>).</summary>
+        public CharacterView? View;
+        /// <summary>The Bigfoot's corpse (issue #264): the giant's model in its death pose, no character, no weapon to take.</summary>
+        public bool Giant;
         public string Weapon = "";
         /// <summary>The ragdoll: the spin, limb flail and settling of a body thrown by a blast or a car.</summary>
         public readonly RagdollTumble Tumble = new();
@@ -29,11 +36,14 @@ public partial class NetClient
     CorpseChooser _chooser = null!;
     /// <summary>The corpse within reach, from the last render (null when none, or when the player cannot take one).</summary>
     ushort? _near;
-    double _useHeld;
-    bool _useWas, _holdSent;
+    InteractKey _useKey; // the interact key's press and release, one reading per tick
+    InteractHold _corpseHold; // the hold for the primary position: counts only while the corpse owns the key and offers a weapon to replace it
 
     /// <summary>True while the corpse chooser is up; the hotbar keys and wheel belong to it then.</summary>
     bool ChooserOpen => _chooser.IsOpen;
+
+    /// <summary>The chooser shows a list of Items: the mouse is released for it (the shell asks). A chooser with only the weapon rows keeps the mouse captured.</summary>
+    public bool ChooserFreesMouse => _chooser.HasItems;
 
     /// <summary>Called once from <see cref="_Ready"/>: registers the corpse type, follows the corpse entities and builds the chooser.</summary>
     void InitCorpses()
@@ -42,13 +52,21 @@ public partial class NetClient
         WorldEntities.Spawned += OnCorpseSpawned;
         WorldEntities.Despawned += OnCorpseDespawned;
         _chooser = new CorpseChooser();
-        _chooser.Picked += pos => { if (_chooser.IsOpen) SendPickUp(_chooser.Corpse, pos); _chooser.Close(); };
+        _chooser.Picked += pos =>
+        {
+            if (_chooser.IsOpen) SendPickUp(_chooser.Corpse, pos);
+            _chooser.Close();
+        };
+        _chooser.ItemPicked += index => { if (_chooser.IsOpen) RequestTakeCorpseItem(_chooser.Corpse, index); }; // the cell leaves with the server's next list
+        CorpseItemsChanged += ShowGiantHead;
+        CorpseItemsChanged += corpse => { if (_chooser.IsOpen && _chooser.Corpse == corpse) _chooser.SetItems(ChooserItems(corpse)); };
         AddChild(_chooser);
     }
 
     void OnCorpseSpawned(WorldReplica.Entity e)
     {
         if (e.Type != CorpseRules.TypeId) return;
+        if (e.State.Owner == BigfootRules.TargetId) { _corpses[e.Id] = MakeGiantCorpse(e); return; }
         var node = new Node3D { Name = $"Corpse{e.Id}" };
         var view = CharacterView.Make();
         if (Appearances.TryGetValue(e.State.Owner, out var look)) view.SetCamo(look, CamoData); // the dead player's look (#203)
@@ -56,10 +74,12 @@ public partial class NetClient
         node.AddChild(view);
         Owned.AddChild(node);
         _corpses[e.Id] = new CorpseView { Node = node, View = view };
+        DressCorpse(e.Id); // the item the corpse carries, when its event came first (#266)
     }
 
     void OnCorpseDespawned(ushort id)
     {
+        _corpseItems.Remove(id);
         if (!_corpses.Remove(id, out var v)) return;
         v.Node.QueueFree();
         if (_chooser.IsOpen && _chooser.Corpse == id) _chooser.Close();
@@ -74,6 +94,8 @@ public partial class NetClient
             var s = e.State;
             var p = s.Position;
             var at = new Vector3(p.X, p.Y, p.Z);
+            if (v.Giant) { v.Feet = at; v.Node.GlobalPosition = at; v.Node.Basis = new Basis(Vector3.Up, s.YawRad); continue; }
+            var view = v.View!;
             var flying = s.PitchRad > CorpseRules.FlightPitch * 0.5f; // a thrown body (blast, car): the server flies it, we turn it and flail its limbs
             var t = v.Tumble;
             var wasThrown = t.Thrown;
@@ -81,10 +103,10 @@ public partial class NetClient
             var weapon = WeaponId(s.State);
             if (t.Thrown)
             {
-                if (!wasThrown || weapon != v.Weapon) { v.Weapon = weapon; v.View.ShowThrown(weapon); }
-                v.View.SetRagdoll(true, t.Amount, t.AtRest);
+                if (!wasThrown || weapon != v.Weapon) { v.Weapon = weapon; view.ShowThrown(weapon); }
+                view.SetRagdoll(true, t.Amount, t.AtRest);
             }
-            else if (weapon != v.Weapon) { v.Weapon = weapon; v.View.ShowCorpse(weapon); }
+            else if (weapon != v.Weapon) { v.Weapon = weapon; view.ShowCorpse(weapon); }
             v.Feet = at;
             v.Node.GlobalPosition = at + Vector3.Up * t.PivotHeight;
             v.Node.Basis = t.BasisFor(s.YawRad);
@@ -114,9 +136,15 @@ public partial class NetClient
     /// <summary>The corpse prompt in reach (hidden while the chooser is up); null otherwise.</summary>
     string? CorpsePrompt()
     {
-        if (_near is not { } id || ChooserOpen || CorpseWeapon(id) is not { } w) return null;
+        if (_near is not { } id || !InteractArbiter.CorpseShowsPrompt(_crateNear != null, _groundNear != null, _groundNearest, true, ChooserOpen)) return null;
         var key = InputBindings.Name("interact");
-        return CorpseRules.CanReplace(w, CorpseRules.PrimaryPos)
+        if (IsItemOnlyCorpse(id)) // the Bigfoot's and the Gang boss's corpse have no weapon to take, only what they carry (#264, Thieves 10)
+            return CorpseItems(id).Count switch { 0 => null, 1 => Strings.F("hud.corpse.giant.item", key, ItemName(CorpseItem(id)!)), _ => Strings.F("hud.corpse.giant.items", key) };
+        if (CorpseWeapon(id) is not { } w) return null;
+        var hold = CorpseRules.CanReplace(w, CorpseRules.PrimaryPos);
+        if (CorpseItems(id).Count > 1) return Strings.F(hold ? "hud.corpse.hold.items" : "hud.corpse.tap.items", key, WeaponName(w.Id)); // a list: its own chooser names them
+        if (CorpseItem(id) is { } item) return Strings.F(hold ? "hud.corpse.hold.item" : "hud.corpse.tap.item", key, WeaponName(w.Id), ItemName(item));
+        return hold
             ? Strings.F("hud.corpse.hold", key, WeaponName(w.Id))
             : Strings.F("hud.corpse.tap", key, WeaponName(w.Id));
     }
@@ -129,31 +157,43 @@ public partial class NetClient
     {
         var use = Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("interact");
         if (ChooserOpen && (Dead || _driving || _near != _chooser.Corpse)) _chooser.Close();
-        if (use && !_useWas) { _useHeld = 0; _holdSent = false; }
-        if (use) _useHeld += dt;
-        var near = _crateNear != null ? null : _near; // a care package in reach owns the key (ticket #143)
-        if (use && !_holdSent && !ChooserOpen && near is { } id && _useHeld >= CorpseHoldSeconds && CorpseWeapon(id) is { } w
-            && CorpseRules.CanReplace(w, CorpseRules.PrimaryPos))
+        var (_, released) = _useKey.Step(use);
+        var near = KeyOwner == InteractOwner.Corpse ? _near : null; // a care package in reach owns the key (ticket #143), and so does a ground item nearer than the corpse (#267)
+        var holdWeapon = !ChooserOpen && near is { } hid && CorpseWeapon(hid) is { } hw && CorpseRules.CanReplace(hw, CorpseRules.PrimaryPos);
+        var wasSent = _corpseHold.Sent;
+        if (_corpseHold.Tick(use, holdWeapon, dt, CorpseHoldSeconds)) SendPickUp(near!.Value, CorpseRules.PrimaryPos);
+        if (released && !wasSent && !ChooserOpen && near is { } tap)
         {
-            SendPickUp(id, CorpseRules.PrimaryPos);
-            _holdSent = true;
+            if (IsItemOnlyCorpse(tap)) OpenChooser(tap, null);
+            else if (CorpseWeapon(tap) is { } tw) OpenChooser(tap, tw);
         }
-        if (!use && _useWas && !_holdSent && !ChooserOpen && near is { } tap && CorpseWeapon(tap) is { } tw)
-            OpenChooser(tap, tw);
-        _useWas = use;
     }
 
-    void OpenChooser(ushort corpse, WeaponDef weapon)
+    /// <summary>The corpse's Items as the chooser's cells, in the server's order.</summary>
+    List<ChooserItem> ChooserItems(ushort corpse) =>
+        CorpseItems(corpse).Select(h => new ChooserItem(h, ItemIcon(h.Def), ItemName(h.Def))).ToList();
+
+    /// <summary>A corpse that offers no weapon, only its Items: the giant's, and the Gang boss's with the Gold chain (owner <see cref="ThievesReward.ChainCorpseOwner"/>, drawn as a body like any other).</summary>
+    bool IsItemOnlyCorpse(ushort corpse) =>
+        IsGiantCorpse(corpse) || WorldEntities.Entities.TryGetValue(corpse, out var e) && e.State.Owner == ThievesReward.ChainCorpseOwner;
+
+    /// <summary>Opens the chooser at a corpse. <paramref name="weapon"/> is null for a corpse that offers no weapon (<see cref="IsItemOnlyCorpse"/>): the Items are all it offers.</summary>
+    void OpenChooser(ushort corpse, WeaponDef? weapon)
     {
         var options = new List<(int Pos, string Text)>();
         foreach (var pos in new[] { CorpseRules.PrimaryPos, CorpseRules.SecondaryPos })
         {
-            if (!CorpseRules.CanReplace(weapon, pos) || pos >= _hotbar.Length) continue;
+            if (weapon == null || !CorpseRules.CanReplace(weapon, pos) || pos >= _hotbar.Length) continue;
             var current = WeaponName(Weapons!.Weapons[_hotbar[pos]].Id);
             options.Add((pos, Strings.F(pos == CorpseRules.PrimaryPos ? "corpse.primary" : "corpse.secondary", current)));
         }
-        if (options.Count == 0) return;
-        _chooser.Open(corpse, Strings.F("corpse.title", WeaponName(weapon.Id)), options);
+        var items = ChooserItems(corpse);
+        if (options.Count == 0 && items.Count == 0) return;
+        var title = options.Count == 0 // nothing of the weapon can be taken: the Items are the offer
+            ? Strings.T("corpse.title.items") // each Item's name stands in its row
+            : items.Count == 0 ? Strings.F("corpse.title", WeaponName(weapon!.Id))
+            : Strings.F("corpse.title.with_items", WeaponName(weapon!.Id));
+        _chooser.Open(corpse, title, options, items);
     }
 
     void SendPickUp(ushort corpse, int pos) =>

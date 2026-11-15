@@ -101,7 +101,7 @@ public class ServerCore
         {
             p.Step(dt, Tick);
             if (p.Position.Y < BMin.Y + 5)
-            {   // walked off the edge of the slice: out-of-bounds respawn, like a game would do
+            {   // walked off the edge of the map: out-of-bounds respawn, like a game would do
                 p.Position = RandomSpawn(); p.Velocity = Vector3.Zero; Respawns++;
             }
         }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Publishes the current village map as its own release (map-YYYYMMDD-<hash>) and points the game at it (map-version.txt).
-# Run after `make map AREA=village`. Commit map-version.txt afterwards; the next push to main ships it to players.
+# Run after `make map`. Commit map-version.txt afterwards; the next push to main ships it to players.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 make map-package

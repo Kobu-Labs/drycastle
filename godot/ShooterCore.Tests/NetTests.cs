@@ -42,7 +42,7 @@ public class NetTests
             src.Add(NetInput.From((ushort)(65534 + i), new MoveInput { MoveX = -1, MoveY = 0.5f, Yaw = -1.2f, Buttons = MoveButtons.Jump | MoveButtons.Use }, 0.4f, 3));
         var pkt = Wire.EncodeInputs(src.ToArray());
         var got = new List<NetInput>();
-        Assert.True(Wire.TryDecodeInputs(pkt, got, out _));
+        Assert.True(Wire.TryDecodeInputs(pkt, got, out _, out _));
         Assert.Equal(3, got.Count);
         Assert.Equal(src[2].Seq, got[0].Seq);
         Assert.Equal(src[4].Seq, got[2].Seq);
@@ -52,17 +52,39 @@ public class NetTests
         Assert.True(m.Has(MoveButtons.Use));
         Assert.Equal(3, got[2].Slot);
         Assert.Equal(0.4f, Quant.Pitch(got[2].Pitch), 3);
-        Assert.False(Wire.TryDecodeInputs(pkt.AsSpan(0, 5), got, out _));
+        Assert.False(Wire.TryDecodeInputs(pkt.AsSpan(0, 5), got, out _, out _));
     }
 
     [Fact]
     public void InputsCarryTheSnapshotTickTheyAcknowledge()
     {
         var pkt = Wire.EncodeInputs(new[] { NetInput.From(7, new MoveInput { SpeedScale = 1 }, 0f, 0) }, 4321u);
-        Assert.True(Wire.TryDecodeInputs(pkt, new List<NetInput>(), out var snap));
+        Assert.True(Wire.TryDecodeInputs(pkt, new List<NetInput>(), out var snap, out _));
         Assert.Equal(4321u, snap);
-        Assert.True(Wire.TryDecodeInputs(Wire.EncodeInputs(new[] { NetInput.From(8, new MoveInput(), 0f, 0) }), new List<NetInput>(), out var none));
+        Assert.True(Wire.TryDecodeInputs(Wire.EncodeInputs(new[] { NetInput.From(8, new MoveInput(), 0f, 0) }), new List<NetInput>(), out var none, out _));
         Assert.Equal(Wire.NoTick, none);
+    }
+
+    [Fact]
+    public void InputsCarryTheWorldTickTheyAcknowledgeNextToTheEntityTick()
+    {
+        var input = new[] { NetInput.From(7, new MoveInput { SpeedScale = 1 }, 0f, 0) };
+        var pkt = Wire.EncodeInputs(input, 4321u, 99u);
+        Assert.Equal(Wire.InputHeaderBytes + Wire.InputBytes, pkt.Length); // the header grew by the world ack, nothing else changed
+        Assert.True(Wire.TryDecodeInputs(pkt, new List<NetInput>(), out var snap, out var world));
+        Assert.Equal(4321u, snap);
+        Assert.Equal(99u, world);
+
+        // the entity ack alone: the world ack is NoTick
+        Assert.True(Wire.TryDecodeInputs(Wire.EncodeInputs(input, 4321u), new List<NetInput>(), out var s2, out var w2));
+        Assert.Equal(4321u, s2);
+        Assert.Equal(Wire.NoTick, w2);
+
+        // a truncated header is refused, and the inputs that follow still decode after a full header
+        Assert.False(Wire.TryDecodeInputs(pkt.AsSpan(0, 9), new List<NetInput>(), out _, out _));
+        var got = new List<NetInput>();
+        Assert.True(Wire.TryDecodeInputs(pkt, got, out _, out _));
+        Assert.Equal(input[0], got[0]);
     }
 
     [Fact]

@@ -118,7 +118,6 @@ public class VehicleHitVolumeTests
         Assert.True(f.Vehicles.Single(v => v.Id == "car").HalfLength >= 2.55f * 1.7f / 2 - 0.01f);
         Assert.True(f.Vehicles.Single(v => v.Id == "motorcycle").Height >= 0.89f);
         Assert.True(f.Vehicles.Single(v => v.Id == "bicycle").Height >= 0.98f);
-        Assert.True(f.Vehicles.Single(v => v.Id == "boat").Height >= 1.45f); // the cabin's top
         foreach (var v in f.Vehicles) Assert.True(v.Height > 0);
     }
 

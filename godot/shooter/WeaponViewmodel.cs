@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.ShooterCore;
 
 namespace Drycastle.Shooter;
 
@@ -44,6 +45,18 @@ public sealed partial class WeaponViewmodel : Node3D
     /// <summary>0 = hip, 1 = fully aimed (eased, so the HUD can fade the crosshair with it).</summary>
     public float AimAmount => _aim;
 
+    /// <summary>
+    /// What the body is doing this frame, asked once per frame (#259). Left unset (or inactive) the gun keeps still, as it did before the motion.
+    /// The aim is filled in here; the caller fills the rest.
+    /// </summary>
+    public Func<ViewmodelInput>? Context { get; set; }
+
+    /// <summary>Told each frame how far the eye is to be lowered (the camera part of the landing dip), metres.</summary>
+    public Action<float>? CameraDrop { get; set; }
+
+    /// <summary>Walk bob, look lag, landing dip, sprint pose, strafe lean and idle breath (pure, see <see cref="ViewmodelMotion"/>).</summary>
+    public ViewmodelMotion Motion { get; } = new();
+
     public override void _Ready() { Position = HipPosition; }
 
     /// <summary>Visual kick for one shot: <paramref name="degrees"/> of climb (already scaled by ADS and crouch) pushes the gun up and back, then it settles.</summary>
@@ -55,7 +68,12 @@ public sealed partial class WeaponViewmodel : Node3D
         if (_aim != target) _aim = Mathf.MoveToward(Mathf.Lerp(_aim, target, 1f - Mathf.Exp(-AdsRate * (float)delta)), target, 0.002f);
         _kick = Mathf.MoveToward(_kick, 0, KickRecover * (float)delta);
         var sight = Current is { } n && n.HasMeta(WeaponFx.SightHeightMeta) ? (float)n.GetMeta(WeaponFx.SightHeightMeta) : 0.1f;
-        Position = HipPosition.Lerp(new Vector3(0, -sight, AdsDepth), _aim) + new Vector3(0, 0.01f, 0.04f) * _kick;
-        Rotation = new Vector3(KickTilt * _kick, 0, 0);
+        var input = Context?.Invoke() ?? default;
+        input.Aim = _aim;
+        Motion.Step((float)delta, input);
+        CameraDrop?.Invoke(Motion.CameraDrop);
+        var m = Motion.Position; var r = Motion.Rotation;
+        Position = HipPosition.Lerp(new Vector3(0, -sight, AdsDepth), _aim) + new Vector3(0, 0.01f, 0.04f) * _kick + new Vector3(m.X, m.Y, m.Z);
+        Rotation = new Vector3(KickTilt * _kick + r.X, r.Y, r.Z);
     }
 }

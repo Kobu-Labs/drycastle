@@ -15,6 +15,16 @@ public sealed record MapRef(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("file")] FileRef File);
 
+/// <summary>
+/// The private asset pack (paid models and sounds): optional, encrypted with the pack password (<see cref="PackCrypto"/>) and served from the
+/// game's own host, never from GitHub. <c>File</c> describes the encrypted download; <c>PlainSha256</c> is the zip inside, which proves the password.
+/// </summary>
+public sealed record PackRef(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("file")] FileRef File,
+    [property: JsonPropertyName("plain_sha256")] string PlainSha256,
+    [property: JsonPropertyName("iterations")] int Iterations = PackCrypto.DefaultIterations);
+
 /// <summary>One platform's game build inside manifest.json.</summary>
 public sealed record PlatformBuild(
     [property: JsonPropertyName("exe")] string Exe,
@@ -28,13 +38,14 @@ public sealed record Manifest(
     [property: JsonPropertyName("commit")] string Commit,
     [property: JsonPropertyName("protocol")] int Protocol,
     [property: JsonPropertyName("map")] MapRef Map,
-    [property: JsonPropertyName("platforms")] Dictionary<string, PlatformBuild>? Platforms = null)
+    [property: JsonPropertyName("platforms")] Dictionary<string, PlatformBuild>? Platforms = null,
+    [property: JsonPropertyName("pack")] PackRef? Pack = null)
 {
     public const int SupportedSchema = 2;
-    public const string Windows = "windows", Linux = "linux";
+    public const string Windows = "windows", Linux = "linux", MacOs = "macos";
 
     /// <summary>The platform this launcher runs on, or null when no game build exists for it.</summary>
-    public static string? CurrentPlatform() => OperatingSystem.IsWindows() ? Windows : OperatingSystem.IsLinux() ? Linux : null;
+    public static string? CurrentPlatform() => OperatingSystem.IsWindows() ? Windows : OperatingSystem.IsLinux() ? Linux : OperatingSystem.IsMacOS() ? MacOs : null;
 
     /// <summary>The game archive for the chosen platform (set by <see cref="Parse"/>).</summary>
     [JsonIgnore] public FileRef Game { get; init; } = null!;
@@ -48,12 +59,15 @@ public sealed record Manifest(
         if (raw.Schema > SupportedSchema) throw new FormatException($"manifest schema {raw.Schema} is newer than this launcher supports ({SupportedSchema}); update the launcher");
         if (raw.Platforms is null || !raw.Platforms.TryGetValue(platform, out var build) || build is null)
             throw new FormatException($"this release has no {platform} build");
-        var m = new Manifest(raw.Schema, raw.Version, raw.Channel, raw.Commit, raw.Protocol, raw.Map, raw.Platforms) { Game = build.Game, Exe = build.Exe ?? "" };
+        var m = new Manifest(raw.Schema, raw.Version, raw.Channel, raw.Commit, raw.Protocol, raw.Map, raw.Platforms, raw.Pack) { Game = build.Game, Exe = build.Exe ?? "" };
         if (string.IsNullOrWhiteSpace(m.Version) || m.Game is null || m.Map is null || m.Map.File is null || string.IsNullOrWhiteSpace(m.Exe))
             throw new FormatException("manifest is missing required fields");
         foreach (var f in new[] { m.Game, m.Map.File })
             if (f is null || string.IsNullOrWhiteSpace(f.Url) || string.IsNullOrWhiteSpace(f.Sha256) || string.IsNullOrWhiteSpace(f.Name) || f.Size < 0)
                 throw new FormatException("manifest file entry is incomplete");
+        if (m.Pack is { } p && (string.IsNullOrWhiteSpace(p.Id) || p.File is null || string.IsNullOrWhiteSpace(p.File.Url) || string.IsNullOrWhiteSpace(p.File.Sha256)
+            || string.IsNullOrWhiteSpace(p.File.Name) || p.File.Size < 0 || string.IsNullOrWhiteSpace(p.PlainSha256) || p.Iterations < 1))
+            throw new FormatException("manifest asset pack entry is incomplete");
         if (m.Exe.Contains("..") || Path.IsPathRooted(m.Exe)) throw new FormatException("manifest exe path is not relative");
         return m;
     }
@@ -65,4 +79,5 @@ public sealed record InstalledState(
     [property: JsonPropertyName("mapId")] string MapId,
     [property: JsonPropertyName("exe")] string Exe,
     [property: JsonPropertyName("channel")] string Channel,
-    [property: JsonPropertyName("protocol")] int Protocol);
+    [property: JsonPropertyName("protocol")] int Protocol,
+    [property: JsonPropertyName("packId")] string? PackId = null);

@@ -14,13 +14,29 @@ namespace Drycastle.ShooterCore;
 /// </summary>
 public sealed class BreathState
 {
-    /// <summary>Sway multiplier while the breath is held (steady).</summary>
-    public const float SteadyFactor = 0.3f;
+    /// <summary>Sway multiplier while the breath is held: none, the scope is still (and the shot has no aim error).</summary>
+    public const float SteadyFactor = 0f;
     /// <summary>Sway multiplier right after a forced exhale (heavy sway).</summary>
     public const float ExhaledFactor = 2.5f;
 
     public enum BreathPhase { Ready, Holding, Exhaled }
 
+    /// <summary>
+    /// Ready is the base: not holding, the meter refills. A tick may pass through two phases (Ready -> Holding -> Exhaled when the meter empties in it, and on to Ready
+    /// at once when the weapon has no recovery time). Not scoped (or no breath budget) is Ready from anywhere. The clock stays on <see cref="RecoverRemaining"/>
+    /// (double arithmetic, stepped identically by client prediction and server), not on the machine.
+    /// </summary>
+    public static readonly StateMachineSpec<BreathPhase> Spec = StateMachineSpec<BreathPhase>.Define(
+            "Breath.Phase", "Sniper breath hold: ready, holding (steady aim, the meter drains), forced exhale (heavy sway, cannot hold).", BreathPhase.Ready)
+        .Allow(BreathPhase.Ready, BreathPhase.Holding)
+        .Allow(BreathPhase.Holding, BreathPhase.Ready, BreathPhase.Exhaled)
+        .Allow(BreathPhase.Exhaled, BreathPhase.Ready)
+        .Note(BreathPhase.Ready, "Not holding: the meter refills. Also the phase whenever the weapon is not scoped or has no breath hold.")
+        .Note(BreathPhase.Holding, "The breath key is down, scoped, meter above 0 and not latched by a forced exhale: no sway, the meter drains.")
+        .Note(BreathPhase.Exhaled, "The meter ran out: sway x2.5 for breath_recover_seconds, the breath cannot be held; the key must be released before the next hold.")
+        .Build();
+
+    readonly StateMachine<BreathPhase> _fsm = new(Spec);
     readonly ulong _seed;
     double _last = double.NaN;
     int _shot;
@@ -29,7 +45,7 @@ public sealed class BreathState
 
     public BreathState(ulong seed) { _seed = seed; }
 
-    public BreathPhase Phase { get; private set; }
+    public BreathPhase Phase => _fsm.Current;
     /// <summary>Breath left as a fraction of the (perk-scaled) budget, 0..1. Meaningless when the weapon has no breath hold.</summary>
     public float Meter { get; private set; } = 1f;
     /// <summary>Seconds of forced-exhale recovery left (only while <see cref="Phase"/> is Exhaled).</summary>
@@ -37,7 +53,7 @@ public sealed class BreathState
 
     public void Reset()
     {
-        Phase = BreathPhase.Ready; Meter = 1f; RecoverRemaining = 0; _last = double.NaN; _shot = 0; _needsRelease = false;
+        _fsm.Reset(BreathPhase.Ready); Meter = 1f; RecoverRemaining = 0; _last = double.NaN; _shot = 0; _needsRelease = false;
     }
 
     /// <summary>
@@ -54,7 +70,7 @@ public sealed class BreathState
         if (budget <= 0 || !scoped)
         {
             // no breath to hold (not a scope weapon) or not scoped: nothing is held and the meter refills
-            Phase = BreathPhase.Ready;
+            _fsm.Enter(BreathPhase.Ready);
             if (budget > 0) Meter = Math.Min(1f, Meter + (float)(dt / budget));
             RecoverRemaining = 0;
             _needsRelease = false;
@@ -64,26 +80,26 @@ public sealed class BreathState
         if (Phase == BreathPhase.Exhaled)
         {
             RecoverRemaining = (float)Math.Max(0, RecoverRemaining - dt);
-            if (RecoverRemaining <= 0) Phase = BreathPhase.Ready;
+            if (RecoverRemaining <= 0) _fsm.Enter(BreathPhase.Ready);
             return;
         }
 
         if (breathKey && Meter > 0 && !_needsRelease)
         {
-            Phase = BreathPhase.Holding;
+            _fsm.Enter(BreathPhase.Holding);
             Meter = (float)Math.Max(0, Meter - dt / budget);
             if (Meter <= 0)
             {
                 Meter = 0;
-                Phase = BreathPhase.Exhaled;
+                _fsm.Enter(BreathPhase.Exhaled);
                 RecoverRemaining = weapon.BreathRecoverSeconds;
                 _needsRelease = true;
-                if (RecoverRemaining <= 0) Phase = BreathPhase.Ready;
+                if (RecoverRemaining <= 0) _fsm.Enter(BreathPhase.Ready);
             }
             return;
         }
 
-        Phase = BreathPhase.Ready;
+        _fsm.Enter(BreathPhase.Ready);
         Meter = Math.Min(1f, Meter + (float)(dt / budget));
     }
 

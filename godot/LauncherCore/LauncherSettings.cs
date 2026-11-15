@@ -9,6 +9,8 @@ public sealed class LauncherSettings
     public bool AutoUpdate { get; set; } = true;
     /// <summary>UI scale in percent (75-150).</summary>
     public int UiScale { get; set; } = 100;
+    /// <summary>The password of the private asset pack (given to players by the host); empty = play without the pack.</summary>
+    public string PackPassword { get; set; } = "";
 
     public static LauncherSettings Load(string root)
     {
@@ -17,6 +19,7 @@ public sealed class LauncherSettings
             var s = JsonSerializer.Deserialize<LauncherSettings>(File.ReadAllText(Path.Combine(root, "settings.json"))) ?? new();
             s.UiScale = Math.Clamp(s.UiScale, 75, 150);
             s.Channel = Channels.Normalize(s.Channel);
+            s.PackPassword = (s.PackPassword ?? "").Trim();
             return s;
         }
         catch { return new(); }

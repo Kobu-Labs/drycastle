@@ -71,6 +71,22 @@ public sealed class ControlSession
 /// </summary>
 public sealed class KillstreakUse
 {
+    /// <summary>Where one instance is. Activating: inside <see cref="IKillstreak.Activate"/> (an End there is completed once it returns). Open: running. Refused: Activate said no; the service dropped it and nothing ends it (still "open" to <see cref="IsOpen"/>, as before). Ended: over, with an <see cref="EndReason"/>.</summary>
+    public enum UseState { Activating, Open, Refused, Ended }
+
+    /// <summary>Activating -> Open when accepted, or Refused when not; any of them ends (an End during Activate included).</summary>
+    public static readonly StateMachineSpec<UseState> Spec = StateMachineSpec<UseState>.Define(
+            "Killstreak.Use", "One activation of a killstreak: inside Activate, running, ended; or refused and dropped.", UseState.Activating)
+        .Allow(UseState.Activating, UseState.Open, UseState.Refused, UseState.Ended)
+        .Allow(UseState.Open, UseState.Ended)
+        .Allow(UseState.Refused, UseState.Ended)
+        .Note(UseState.Activating, "The service called the implementation's Activate and has not heard back. A use that ends here is completed (event, callbacks) after Activate returns, once StreakUsed went out.")
+        .Note(UseState.Open, "Accepted and running until its duration, its own End, its owner's death or leaving, a round reset, or its aircraft's destruction.")
+        .Note(UseState.Refused, "Activate returned false: dropped by the service, the streak stays held. Never ended by the framework.")
+        .Note(UseState.Ended, "Over: EndReason is set, StreakEnded sent, callbacks run.")
+        .Build();
+
+    readonly StateMachine<UseState> _state = new(Spec);
     readonly KillstreakService _service;
     readonly List<Action<KillstreakEndReason>> _onEnded = new();
 
@@ -86,10 +102,11 @@ public sealed class KillstreakUse
     public Vector3 Position { get; }
     /// <summary>The match clock (seconds) when the streak was used.</summary>
     public double StartedAt { get; }
+    public UseState State => _state.Current;
     /// <summary>False once the instance has ended.</summary>
-    public bool IsOpen { get; internal set; } = true;
+    public bool IsOpen => !_state.Is(UseState.Ended);
     /// <summary>The end reason, once <see cref="IsOpen"/> is false.</summary>
-    public KillstreakEndReason? EndReason { get; internal set; }
+    public KillstreakEndReason? EndReason { get; private set; }
     /// <summary>The owner's control session when this instance has taken control, else null.</summary>
     public ControlSession? Control { get; internal set; }
     /// <summary>The world entity this instance flies or places, when it told the service (<see cref="BindEntity"/>) or took control of it. Used to end the instance when the entity is destroyed.</summary>
@@ -110,6 +127,10 @@ public sealed class KillstreakUse
 
     /// <summary>Writes a line to the server log, tagged with the streak and owner.</summary>
     public void Log(string message) => _service.Log($"killstreak {StreakId} (player {Owner}): {message}");
+
+    internal void MarkOpen() { if (_state.Is(UseState.Activating)) _state.Enter(UseState.Open); }
+    internal void MarkRefused() { if (_state.Is(UseState.Activating)) _state.Enter(UseState.Refused); }
+    internal void Close(KillstreakEndReason reason) { EndReason = reason; _state.Enter(UseState.Ended); }
 
     internal void RaiseEnded() { foreach (var cb in _onEnded) cb(EndReason ?? KillstreakEndReason.Finished); }
 }

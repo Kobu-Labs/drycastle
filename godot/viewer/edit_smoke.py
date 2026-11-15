@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Hot reload smoke test (`make viewer-edit-smoke`).
 
-Exports a fresh slice map into a scratch directory (a copy of data/work plus a small objects.json, so
+Exports a fresh map into a scratch directory (a copy of data/village/work plus a small objects.json, so
 nothing under data/ or out/ is touched), prepares a series of edits files, starts the viewer headless
 with `--watch --edits <scratch edits.json>` and lets the viewer drive and assert the run
 (`--edit-smoke`, see ViewerEditSmoke.cs). Exits with the viewer's exit code.
 
-    python3 godot/viewer/edit_smoke.py [--dir DIR] [--godot PATH] [--area slice]
+    python3 godot/viewer/edit_smoke.py [--dir DIR] [--godot PATH]
 """
 
 import argparse
@@ -66,7 +66,7 @@ def find_fenced_parcel(parcels: list[dict], scratch: Path, edits: Path) -> tuple
         if p["kind"] != "building_plot":
             continue
         out = scratch / "probe.json"
-        r = uv("parcel-run", "--area", "slice", "--parcel", p["id"], "--edits", str(edits), "--out", str(out))
+        r = uv("parcel-run", "--parcel", p["id"], "--edits", str(edits), "--out", str(out))
         if r.returncode != 0:
             continue
         fragment = json.loads(out.read_text())
@@ -74,7 +74,7 @@ def find_fenced_parcel(parcels: list[dict], scratch: Path, edits: Path) -> tuple
                     if ((s["a"][0] - s["b"][0]) ** 2 + (s["a"][1] - s["b"][1]) ** 2) ** 0.5 >= 2.0]
         if sections:
             return p, max(sections, key=lambda s: (s["a"][0] - s["b"][0]) ** 2 + (s["a"][1] - s["b"][1]) ** 2)
-    sys.exit("edit smoke: no parcel with a fence found in the slice")
+    sys.exit("edit smoke: no parcel with a fence found in the map")
 
 
 def main() -> int:
@@ -90,7 +90,7 @@ def main() -> int:
     work = scratch / "work"
     if work.exists():
         shutil.rmtree(work)
-    shutil.copytree(REPO / "data" / "work", work)
+    shutil.copytree(REPO / "data" / "village" / "work", work)
     parcels_doc = json.loads((work / "parcels.json").read_text())
     origin = parcels_doc["origin_epsg5514"]
     parcels = parcels_doc["parcels"]
@@ -131,7 +131,7 @@ def main() -> int:
     ]
     (work / "objects.json").write_text(json.dumps({"format_version": 1, "objects": baked}, indent=1))
 
-    r = uv("export", "--area", "slice", "--out", str(scratch / "map"), "--work", str(work))
+    r = uv("export", "--out", str(scratch / "map"), "--work", str(work))
     print(r.stdout.strip())
     if r.returncode != 0:
         print(r.stderr)
@@ -140,8 +140,8 @@ def main() -> int:
     def absolute(pt: tuple[float, float]) -> list[float]:
         return [round(pt[0] + origin[0], 3), round(pt[1] + origin[1], 3)]
 
-    def step(trees: dict, obj_pos: tuple[float, float] | None) -> dict:
-        entry: dict = {"fence": {"mode": "none"}, "trees": trees}
+    def step(obj_pos: tuple[float, float] | None) -> dict:
+        entry: dict = {"fence": {"mode": "none"}}
         if obj_pos:
             entry["objects"] = [{"id": "smoke-sedan", "asset": "pack:kenney-car-kit/sedan",
                                  "position": absolute(obj_pos), "rotation_deg": 30}]
@@ -150,10 +150,10 @@ def main() -> int:
     steps = scratch / "steps"
     steps.mkdir(exist_ok=True)
     files = {
-        "1": json.dumps(step({"count": 5}, p1)),
-        "2": json.dumps(step({"count": 5, "seed_offset": 1}, p2)),
+        "1": json.dumps(step(p1)),
+        "2": json.dumps(step(p2)),
         "broken": '{"version": 1, "parcels": {"' + fid + '": {"fence": ',
-        "3": json.dumps(step({"count": 0}, None)),
+        "3": json.dumps(step(None)),
         "4": json.dumps(empty),
     }
     for name, text in files.items():
@@ -172,7 +172,7 @@ def main() -> int:
         print(build.stdout[-2000:])
         return 1
     cmd = [args.godot, "--headless", "--path", str(REPO / "godot/viewer"), "--",
-           "--map", str(scratch / "map"), "--seed", args.seed, "--area", "slice",
+           "--map", str(scratch / "map"), "--seed", args.seed,
            "--edits", str(edits), "--state", str(scratch / "editor-state.json"),
            "--edit-smoke", "--edit-smoke-plan", str(scratch / "plan.json")]
     return subprocess.run(cmd).returncode

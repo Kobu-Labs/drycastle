@@ -1,8 +1,8 @@
-"""Fetch stage: download raw source data for the slice into ``data/raw/`` with a disk cache."""
+"""Fetch stage: download raw source data for the map into ``data/village/raw/`` with a disk cache."""
 
 import json
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import pairwise
 from pathlib import Path
 
@@ -12,15 +12,19 @@ from rasterio.merge import merge
 
 from drycastle_pipeline.cache import Source, fetch_cached, write_manifest
 from drycastle_pipeline.config import (
-    DEFAULT_AREA,
     DEFAULT_CONFIG,
     DEFAULT_RAW_DIR,
     ConfigError,
-    SliceConfig,
-    area_paths,
-    load_slice_config,
+    MapConfig,
+    load_map_config,
+    map_paths,
 )
-from drycastle_pipeline.geo import METRIC_CRS, Bbox, centroid_of_geometry, compute_bbox
+from drycastle_pipeline.geo import (
+    METRIC_CRS,
+    Bbox,
+    bbox_of_polygon,
+    centroid_of_geometry,
+)
 from drycastle_pipeline.http import HttpError, PoliteClient
 
 OVERPASS_URLS = [
@@ -33,6 +37,7 @@ PARCEL_TYPE = "cp:CP.CadastralParcel"
 DMR_COVERAGE = "el__EL.GridCoverage"
 OVERPASS_TIMEOUT_S = 90
 WFS_PAGE = 5000  # features per WFS request; more pages are requested only when a page is full
+OSM_TILE_M = 1500  # an Overpass query covers at most about this many metres per side, else pieces
 DMR_TILE_M = 1000  # a DMR WCS request covers at most this many metres per side, else tiles
 
 OSM = Source(
@@ -102,6 +107,43 @@ def _overpass(client: PoliteClient, query: str) -> tuple[bytes, str]:
     if "elements" not in payload or "remark" in payload:
         raise HttpError(f"Overpass reported a problem: {payload.get('remark', 'no elements')}")
     return resp.content, url
+
+
+def osm_boxes(bbox: Bbox, tile_m: int = OSM_TILE_M) -> list[Bbox]:
+    """The box cut into pieces of at most about ``tile_m`` metres a side (one piece when it fits).
+
+    Big queries make the shared Overpass servers time out (HTTP 504). The pieces are equal steps
+    in degrees; only their WGS84 edges are meaningful (the metric fields stay those of the whole).
+    """
+    nx = max(1, math.ceil((bbox.max_e - bbox.min_e) / tile_m))
+    ny = max(1, math.ceil((bbox.max_n - bbox.min_n) / tile_m))
+    if nx == ny == 1:
+        return [bbox]
+    lons = [bbox.west + (bbox.east - bbox.west) * i / nx for i in range(nx + 1)]
+    lats = [bbox.south + (bbox.north - bbox.south) * j / ny for j in range(ny + 1)]
+    return [
+        replace(bbox, west=lons[i], east=lons[i + 1], south=lats[j], north=lats[j + 1])
+        for j in range(ny)
+        for i in range(nx)
+    ]
+
+
+_ELEMENT_ORDER = {"node": 0, "way": 1, "relation": 2}
+
+
+def merge_osm(bodies: list[bytes]) -> bytes:
+    """One Overpass response from several: elements once each (an object on a seam comes back from
+    both pieces, identical), sorted by type and id so the result does not depend on the pieces."""
+    docs = [json.loads(b) for b in bodies]
+    seen: dict[tuple[str, int], dict] = {}
+    for doc in docs:
+        for el in doc["elements"]:
+            seen.setdefault((el["type"], el["id"]), el)
+    merged = {k: v for k, v in docs[0].items() if k != "elements"}
+    merged["elements"] = [
+        seen[k] for k in sorted(seen, key=lambda k: (_ELEMENT_ORDER.get(k[0], 3), k[1]))
+    ]
+    return json.dumps(merged, separators=(",", ":"), sort_keys=True).encode()
 
 
 def dmr_params(bbox: Bbox) -> dict:
@@ -197,9 +239,9 @@ def _parcels_paged(client: PoliteClient, params: dict) -> tuple[bytes, str]:
 
 
 def _resolve_centre(
-    client: PoliteClient, raw_dir: Path, cfg: SliceConfig, force: bool
+    client: PoliteClient, raw_dir: Path, cfg: MapConfig, force: bool
 ) -> tuple[float, float]:
-    path = raw_dir / "slice_centre.json"
+    path = raw_dir / "centre.json"
     query = way_query(cfg.osm_way)
 
     def fetch() -> tuple[bytes, str]:
@@ -219,17 +261,15 @@ def _wcs(client: PoliteClient, params: dict) -> tuple[bytes, str]:
     return resp.content, url
 
 
-def write_area(
-    raw_dir: Path, area: str, cfg: SliceConfig, lon: float, lat: float, bbox: Bbox
-) -> None:
+def write_area(raw_dir: Path, cfg: MapConfig, lon: float, lat: float, bbox: Bbox) -> None:
     """Record the fetched area (used later to tell which registry entries it covers)."""
     doc = {
-        "area": area,
         "lon": lon,
         "lat": lat,
-        "radius_m": cfg.radius_m,
         "margin_m": cfg.margin_m,
         "bbox_wgs84": [bbox.west, bbox.south, bbox.east, bbox.north],
+        # the outline everything is clipped to (absolute EPSG:5514)
+        "polygon_epsg5514": [[x, y] for x, y in cfg.polygon],
     }
     (raw_dir / "area.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 
@@ -240,28 +280,43 @@ def _record(result: FetchResult, path: Path, downloaded: bool) -> None:
 
 
 def run_fetch(
-    cfg: SliceConfig,
+    cfg: MapConfig,
     raw_dir: Path = DEFAULT_RAW_DIR,
     *,
     force: bool = False,
     client: PoliteClient | None = None,
-    area: str = DEFAULT_AREA,
 ) -> FetchResult:
     client = client or PoliteClient()
     raw_dir.mkdir(parents=True, exist_ok=True)
     result = FetchResult()
 
     lon, lat = _resolve_centre(client, raw_dir, cfg, force)
-    bbox = compute_bbox(lon, lat, cfg.radius_m, cfg.margin_m)
-    write_area(raw_dir, area, cfg, lon, lat, bbox)
+    bbox = bbox_of_polygon(cfg.polygon, cfg.margin_m)
+    write_area(raw_dir, cfg, lon, lat, bbox)
 
-    query = osm_query(bbox)
+    boxes = osm_boxes(bbox)
     path = raw_dir / "osm.json"
-    _record(
-        result,
-        path,
-        fetch_cached(path, OSM, {"query": query}, lambda: _overpass(client, query), force=force),
-    )
+    if len(boxes) == 1:
+        query = osm_query(bbox)
+        request = {"query": query}
+        fetch_osm = lambda: _overpass(client, query)
+    else:
+        queries = [osm_query(b) for b in boxes]
+        request = {"queries": queries}
+
+        def fetch_osm() -> tuple[bytes, str]:
+            # piece by piece, each cached on its own: a failed run resumes where it stopped
+            bodies, url = [], OVERPASS_URLS[0]
+            for i, query in enumerate(queries):
+                tpath = raw_dir / "osm_tiles" / f"tile_{i}.json"
+                fetch_cached(
+                    tpath, OSM, {"query": query},
+                    lambda query=query: _overpass(client, query), force=force,
+                )
+                bodies.append(tpath.read_bytes())
+            return merge_osm(bodies), url
+
+    _record(result, path, fetch_cached(path, OSM, request, fetch_osm, force=force))
 
     params = {**parcel_params(), "bbox": bbox.wfs}
 
@@ -315,13 +370,12 @@ def run(
     force: bool = False,
     config_path: Path = DEFAULT_CONFIG,
     raw_dir: Path | None = None,
-    area: str = DEFAULT_AREA,
     **_options: object,
 ) -> int:
-    raw_dir = raw_dir or area_paths(area).raw
+    raw_dir = raw_dir or map_paths().raw
     try:
-        cfg = load_slice_config(config_path, area)
-        result = run_fetch(cfg, raw_dir, force=force, area=area)
+        cfg = load_map_config(config_path)
+        result = run_fetch(cfg, raw_dir, force=force)
     except (ConfigError, HttpError) as exc:
         print(f"fetch: error: {exc}")
         return 1

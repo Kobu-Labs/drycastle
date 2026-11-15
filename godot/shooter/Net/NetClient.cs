@@ -13,7 +13,9 @@ namespace Drycastle.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue); }
+    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc, WadeAcc; public double RippleDue; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
+        /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the driven vehicle and seat this player was last matched to (<see cref="SeatRiders"/>).</summary>
+        public float ShownYaw, ShownPitch; public bool Binoculars; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -57,8 +59,16 @@ public partial class NetClient : Node
     /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
     public readonly ClientMatchState Match = new();
     public bool Dead { get; private set; }
+
+    /// <summary>
+    /// The mode flags (dead, in a vehicle, at a turret, steering the missile, held by the Mass, the demon or the Bigfoot) as one value to ask named questions of
+    /// (<see cref="ClientModeInputs"/>); build it where it is used, it is a few bools. <c>InArmedSeat</c> is only ever true while driving (<see cref="MySeat"/> needs it).
+    /// </summary>
+    ClientModeInputs Mode => new(Dead, _driving, _gunship != null, _controlling, _massSeated, _pinned, _heldByBigfoot, _pRising, _myState == EntityState.InVehicle, _driving && InArmedSeat);
     /// <summary>weapons.json: hotbar order and the per-weapon movement speed multiplier used by prediction.</summary>
     public WeaponsFile Weapons = null!;
+    /// <summary>match.json as the client shipped it: the gunfire blips' radius, lifetime and rate limit (null: no blips, e.g. headless bots).</summary>
+    public MatchConfig? BlipConfig;
     /// <summary>Weapons smoke role: "a" (shoots) or "b" (stands still and counts hits); empty = none.</summary>
     public string WeaponsBot = "";
     /// <summary>Bazooka smoke role ("a"/"b"); WeaponsBot carries the same letter so the shared bot plumbing runs.</summary>
@@ -85,7 +95,12 @@ public partial class NetClient : Node
     ENetPacketPeer? _peer;
     Player? _me;
     ushort _myId;
-    bool _welcomed, _gotSelf;
+    /// <summary>The link to the server (Client.Link): connecting, welcomed, spawned (own snapshot applied), failed, left. Replaces the old welcomed/gotSelf/done flags.</summary>
+    readonly StateMachine<LinkPhase> _link = new(ConnectionPhases.Link);
+    /// <summary>A welcome was received at some point (it stays true after a failure or a leave: the perf and telemetry output still flush, and Fail tells the menu whether the match was joined).</summary>
+    bool _welcomed;
+    bool OwnSpawned => _link.Is(LinkPhase.Spawned);
+    bool LinkEnded => _link.Current.IsEnded();
     ushort _seq;
     readonly List<Pending> _pending = new();
     readonly SnapshotDecoder _dec = new();
@@ -95,11 +110,12 @@ public partial class NetClient : Node
     readonly Dictionary<ushort, Remote> _remotes = new();
     uint _lastTick;
     double _lastArrival;
-    double _elapsed, _connectElapsed;
+    /// <summary>The render clock of the remote entities (A-06): a filtered estimate of the server's tick, which never runs backwards.</summary>
+    readonly RenderClock _clock = new();
+    double _elapsed;
     int _recon, _snaps;
     float _maxErr;
     NVec3 _meMin = new(float.MaxValue), _meMax = new(float.MinValue);
-    bool _done;
     // match smoke
     double _spawnAt, _fireStart, _spawnProtection = 99;
     EntityState _myState;
@@ -111,12 +127,21 @@ public partial class NetClient : Node
     {
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
         InitCorpses();
+        InitGroundItems();
         InitCarePackages();
         InitMissile();
         InitTurrets();
+        InitAnimals();
+        InitFlocks();
+        InitPoop();
+        InitBigfoot();
+        InitCitizens();
+        InitThieves();
+        InitDemon();
         InitAircraft();
         InitFlak();
         InitSeats();
+        InitMatchEdges();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
         _peer = _conn.ConnectToHost(Host, Port, Wire.Channels, 0);
@@ -126,6 +151,7 @@ public partial class NetClient : Node
 
     public override void _ExitTree()
     {
+        TelemetryClose();
         _conn.Destroy();
         FreeOwned(); // also when the client leaves without Teardown
     }
@@ -138,15 +164,17 @@ public partial class NetClient : Node
     /// <summary>Leaves the server and removes everything this client put into the world (back to the main menu).</summary>
     public void Teardown()
     {
-        _done = true;
+        _link.Enter(LinkPhase.Left);
+        TelemetryClose();
         SfxTeardown();
+        RozhlasSetReset(); // the mic is shut
         if (_peer != null) { _peer.PeerDisconnect(); _conn.Flush(); _peer = null; }
         foreach (var r in _remotes.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         _remotes.Clear();
         foreach (var r in _rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         _rockets.Clear();
         foreach (var v in _cars.Values) if (GodotObject.IsInstanceValid(v.Node)) v.Node.QueueFree();
-        _cars.Clear(); _flights.Clear(); _pilot = null; // the probe is under Owned and goes with it
+        _cars.Clear(); _flights.Clear(); _pilot = null; _drives.Clear(); _drive = null; // the probes are under Owned and go with them
         GlassTeardown();
         if (_me != null && GodotObject.IsInstanceValid(_me)) _me.QueueFree();
         _me = null;
@@ -159,6 +187,9 @@ public partial class NetClient : Node
         if (_owned != null && GodotObject.IsInstanceValid(_owned)) _owned.QueueFree();
         _owned = null;
         _missiles.Clear();
+        _animals.Clear(); // the nodes are under Owned
+        _poops.Clear();
+        _citizens.Clear();
         _impacts = null; Array.Clear(_impactNext);
         _rings = null; _ringNext = 0; _ringMesh = null;
         _dust = null; _dustNext = 0;
@@ -168,10 +199,11 @@ public partial class NetClient : Node
     void Fail(string why)
     {
         GD.PrintErr($"client: {why}");
-        if (OnFailed != null) { var joined = _welcomed; _done = true; OnFailed(why, joined); return; }
-        if (Bot) { GD.Print("SHOOTER_NET_CLIENT_FAIL"); GetTree().Quit(2); }
-        else GetTree().Quit(2);
-        _done = true;
+        var joined = _welcomed;
+        _link.Enter(LinkPhase.Failed);
+        if (OnFailed != null) { OnFailed(why, joined); return; }
+        if (Bot) GD.Print("SHOOTER_NET_CLIENT_FAIL");
+        GetTree().Quit(2);
     }
 
     void Tx(ENetPacketPeer peer, int chan, byte[] data, int flags)
@@ -198,21 +230,32 @@ public partial class NetClient : Node
 
     public override void _Process(double delta)
     {
+        TelemetryFrame(delta);
+        PerfClientFrame(delta);
         if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
-        if (_done) return;
+        if (LinkEnded) return;
+        UpdateMapCursor();
         Poll();
-        if (!_welcomed)
+        if (_link.Is(LinkPhase.Connecting))
         {
-            _connectElapsed += delta;
-            if (_connectElapsed > 10) Fail("connect timeout");
+            _link.Tick((float)delta);
+            if (_link.Elapsed > ConnectionPhases.ConnectTimeoutSeconds) Fail("connect timeout");
             return;
         }
         PumpAutosave(); // loadout saves whose debounce ran out go out here, whichever screen is open (#145)
         RenderRemotes();
         if (PoseDemo && !_poseDemoDone && _me != null) SpawnPoseDemo();
         RenderCorpses();
+        RenderGroundItems();
         RenderCarePackages();
         RenderTurrets();
+        RenderAnimals();
+        RenderFlocks(delta);
+        RenderBigfoot();
+        RenderCitizens();
+        RenderGang(delta);
+        RenderDemon();
+        UpdatePounce(delta);
         RenderCars();
         RenderAircraft(delta);
         RenderRockets();
@@ -220,8 +263,11 @@ public partial class NetClient : Node
         RenderMissilePov();
         RenderWater();
         UpdateViewmodel();
+        UpdateDemonQuake(delta);
         UpdateShake(delta);
+        FadeOwnCorrection(delta);
         UpdateHud();
+        RozhlasMicFrame(); // the set holder's mic and the ON AIR cue
     }
 
     void Poll()
@@ -235,11 +281,11 @@ public partial class NetClient : Node
             switch (ev)
             {
                 case ENetConnection.EventType.Connect:
-                    Tx(peer, Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName, Token, SandboxRequested ? HelloFlags.Sandbox : (byte)0)), (int)ENetPacketPeer.FlagReliable);
+                    Tx(peer, Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName, Token, SandboxRequested ? HelloFlags.Sandbox : (byte)0, Map?.BuildHash ?? 0)), (int)ENetPacketPeer.FlagReliable);
                     _conn.Flush();
                     break;
                 case ENetConnection.EventType.Disconnect:
-                    if (!_done) Fail(_rejectReason ?? "server disconnected");
+                    if (!LinkEnded) Fail(_rejectReason ?? "server disconnected");
                     return;
                 case ENetConnection.EventType.Receive:
                     while (peer.GetAvailablePacketCount() > 0) OnPacket(peer.GetPacket());
@@ -254,6 +300,7 @@ public partial class NetClient : Node
         if (d[0] < Wire.TInput) OnReliable(Wire.DecodeReliable(d));
         else if (d[0] == Wire.TSnapshot) OnSnapshot(d);
         else if (d[0] == Wire.TWorldSnapshot) WorldEntities.Apply(d);
+        else if (d[0] == Wire.TRozhlasFeed && RozhlasFeedWire.TryDecode(d, out var feedSeq, out var feedOpus)) { RozhlasFeedPlayer.Current?.Push(feedSeq, feedOpus); BotFeedFrame(feedOpus); } // the live rozhlas feed (silent when headless)
     }
 
     void OnReliable(ReliableMsg? m)
@@ -261,11 +308,12 @@ public partial class NetClient : Node
         switch (m)
         {
             case WelcomeMsg w:
-                _myId = w.PlayerId; _welcomed = true;
+                _myId = w.PlayerId; _welcomed = true; _link.Enter(LinkPhase.Welcomed);
+                RozhlasSetReset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
                 DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
                 _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders };
                 World.AddChild(_me);
-                if (!Bot && ShotFx.Enabled) { _viewmodel = new WeaponViewmodel(); _me.Camera.AddChild(_viewmodel); }
+                if (!Bot && ShotFx.Enabled) { _viewmodel = MakeViewmodel(); _me.Camera.AddChild(_viewmodel); }
                 if (WeaponsBot != "" || CarBot != "" || FxDemo.StartsWith("vehicle:")) NetServer.AddArenaColliders(World);
                 if (Bot) _me.InputOverride = new MoveInput { SpeedScale = 1 };
                 HudWelcome();
@@ -286,17 +334,31 @@ public partial class NetClient : Node
             case LeaveMsg l:
                 _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
                 if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
+                ForgetWorn(l.PlayerId); _binocularsBy.Remove(l.PlayerId);
+                ForgetStatus(l.PlayerId);
                 break;
             case EventMsg e:
                 if ((EventKind)e.Kind == EventKind.TargetRoster) OnTargetRoster(e.Payload); // target dummies' names (#148)
                 OnSandboxEvent((EventKind)e.Kind, e.Payload); // sandbox answer (#156)
                 OnChatEvent((EventKind)e.Kind, e.Payload); // chat lines, the admin flag, the day clock
+                OnStatusEvent((EventKind)e.Kind, e.Payload); // statuses: blessing, curse, burning
+                OnItemEvent((EventKind)e.Kind, e.Payload); // what the player wears, what a corpse carries, an item crumbling
+                OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
+                OnThiefAudioEvent((EventKind)e.Kind, e.Payload); // a Gang member says a line (ticket 09)
+                OnBigfootEvent((EventKind)e.Kind, e.Payload); // the Bigfoot's effects and the footprints to its corpse (#264)
+                OnThievesEvent((EventKind)e.Kind, e.Payload); // the Raid vans' honk
+                OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
+                OnRozhlasEvent((EventKind)e.Kind, e.Payload); // the village loudspeaker's phase, broadcast and offset
+                OnUradDoorEvent((EventKind)e.Kind, e.Payload); // the Obecny Urad's door
+                OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
+                OnDemonEvent((EventKind)e.Kind, e.Payload); // the demon: fireballs, the curse
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 OnProgressionEvent((EventKind)e.Kind, e.Payload);
                 UavEvent((EventKind)e.Kind, e.Payload);
                 OnAppearanceEvent((EventKind)e.Kind, e.Payload);
                 WorldEntities.OnEvent((EventKind)e.Kind, e.Payload);
+                PerfClientEvent((EventKind)e.Kind, e.Payload);
                 EventReceived?.Invoke((EventKind)e.Kind, e.Payload);
                 break;
         }
@@ -310,8 +372,6 @@ public partial class NetClient : Node
         switch (kind)
         {
             case EventKind.MatchState:
-                SfxPhase(Match.Phase);
-                if (Match.Restarts != _hudRestarts) { _hudRestarts = Match.Restarts; _hud?.ClearKills(); }
                 _hud?.SetTeams(Match);
                 _hud?.SetMatch(Match.Phase, Match.TimeRemaining(Now), Match.Rows, Match.Winners, Match.NameOf);
                 break;
@@ -328,16 +388,16 @@ public partial class NetClient : Node
                 {
                     ApplySpawnLoadout(); // the hotbar and perk the server applied at this spawn
                     _wantSlot = StartSlot();
-                    Dead = false; _gotSelf = false; _pending.Clear(); // the next snapshot carries the spawn position
+                    Dead = false; if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
                     _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
-                    _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId);
+                    _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId); _breathCues.Reset(); _zero.Reset(); ClearPredictedReload(); _pNextFire = 0;
                 }
                 break;
             case EventKind.Death:
                 var d = Match.LatestDeath!;
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 SfxDeath(d);
-                if (d.Victim == _myId) { Dead = true; _deaths++; _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay); _hud?.SetProtection(0); OnStreakDeath(); }
+                if (d.Victim == _myId) { Dead = true; _deaths++; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay); _hud?.SetProtection(0); OnStreakDeath(); }
                 break;
         }
     }
@@ -350,9 +410,12 @@ public partial class NetClient : Node
         if (_me == null || !_dec.Apply(d, out var h)) return;
         if (_lastTick != 0 && h.Tick < _lastTick) return;
         LossOnSnapshot(h);
+        PerfClientSnapshot();
+        TelemetrySnapshot(h.Tick);
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
+        _clock.OnSnapshot(h.Tick, _lastArrival);
         DayNightCycle.Current?.SetServerTick(h.Tick);
-        foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); cg.Solid?.QueueFree(); _flights.Remove(id); } }
+        foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); cg.Solid?.QueueFree(); _flights.Remove(id); _drives.Remove(id); } }
         foreach (var (id, rec) in _dec.States)
         {
             if (id == _myId) { OnSelf(rec, h.Ack); continue; }
@@ -360,13 +423,15 @@ public partial class NetClient : Node
             if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
             if (rec.Type == EntityType.Turret) { OnTurretState(rec, h.Tick); continue; }
             if (rec.Type == EntityType.Flight) { OnFlightState(rec, h.Tick); continue; }
+            if (rec.Type == EntityType.Drive) { OnDriveState(rec, h.Tick); continue; }
             if (rec.Type is not (EntityType.Player or EntityType.Target)) continue;
-            if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); _remotes[id] = r; }
+            if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); _remotes[id] = r; SyncStatusFx(id); }
             r.State = rec.State; r.Stance = rec.Stance; r.Slot = rec.Weapon;
             r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
         }
         UpdatePiloting(h.Ack); // the helicopter this player flies is predicted, and reconciled here (ADR 0006)
+        UpdateDriving(h.Ack);  // and so is the amphibious transport this player drives (ADR 0010)
         LossAfterSnapshot(h);
     }
 
@@ -405,6 +470,7 @@ public partial class NetClient : Node
         var node = new Node3D { Name = $"Remote{id}" };
         var view = CharacterView.Make();
         if (Appearances.TryGetValue(id, out var look)) view.SetCamo(look, CamoData); // the look may arrive before the first snapshot (#140)
+        DressPlayer(view, id); // what they wear (#266), likewise
         node.AddChild(view);
         node.AddChild(new Label3D
         {
@@ -415,16 +481,17 @@ public partial class NetClient : Node
             PixelSize = 0.005f, NoDepthTest = true,
         });
         World.AddChild(node);
-        return new Remote { Node = node, View = view };
+        return new Remote { Node = node, View = view, Binoculars = _binocularsBy.Contains(id) };
     }
 
     void OnSelf(EntityRecord rec, ushort ack)
     {
         var sp = rec.Position;
-        if (!_gotSelf)
+        if (!OwnSpawned)
         {
-            _gotSelf = true;
+            _link.Enter(LinkPhase.Spawned);
             _me!.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y });
+            _viewFix = Vector3.Zero;
             return;
         }
         _me!.Health = rec.Health;
@@ -433,11 +500,13 @@ public partial class NetClient : Node
         if (inCar != _driving)
         {
             // entering or leaving a car: no prediction while driving; on exit take the server's position (the free side) as is
-            _driving = inCar; _pending.Clear(); _me.InVehicle = inCar;
-            if (!inCar) { _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); _me.EndChase(_carYaw); ClearSeats(); }
+            _driving = inCar; _pending.Clear(); _reconcile = null; _me.InVehicle = inCar;
+            if (!inCar) { _reconcile = null; _viewFix = Vector3.Zero; _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); _me.EndChase(_carYaw); ClearSeats(); }
             return;
         }
-        if (_driving || _controlling || _gunship != null) { _pending.Clear(); return; }
+        if (Mode.HeldOnFoot) { _pending.Clear(); _reconcile = null; _viewFix = Vector3.Zero; _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); return; } // in the Bigfoot's hand: the body is where the server puts it, nothing is predicted (#264)
+        if (Mode.ServerHoldsBody) { _pending.Clear(); _reconcile = null; _me.SetState(new MoveState { Position = sp, OnFloor = true, FallPeakY = sp.Y }); return; } // seated at the Mass or pinned by the demon: the server holds the body, take its place as is
+        if (Mode.SkipsReconcile) { _pending.Clear(); return; }
         if (rec.State == EntityState.Protected) _sawProtected = true;
         if (rec.State == EntityState.Alive && _fireStart > 0 && !_earlyCounted && Now - _fireStart < 0.6 && _fireStart - _spawnAt < _spawnProtection - 1.0) { _earlyEnds++; _earlyCounted = true; }
         var idx = _pending.FindIndex(p => p.Input.Seq == ack);
@@ -445,29 +514,91 @@ public partial class NetClient : Node
         var predicted = _pending[idx].After;
         var err = (predicted.Position - sp).Length();
         _maxErr = MathF.Max(_maxErr, err);
+        PerfPredErr(err, predicted.Position - sp);
+        LastNearRemote = NearRemotePlayer(sp);
+        LastVertical = MathF.Abs(predicted.Position.Y - sp.Y) > 0.5f * err; // the error is mostly up or down (steps, slopes, jumps, landings)
         LossOnPredictionError(err);
+        TelemetryPredictionError(err);
         _pending.RemoveRange(0, idx + 1);
-        if (err <= ReconcileEpsilon) return;
+        if (err <= ReconcileEpsilon)
+        {
+            // a newer ack agrees with the prediction: a reconcile still waiting for the next physics tick (from an older snapshot) is stale, and replaying it
+            // would restart from that older server position while the inputs after this ack are already gone (code review finding)
+            _reconcile = null;
+            return;
+        }
         _recon++;
         // server position wins; our own velocity/floor state for that tick is the best available guess for the rest
         var s = predicted;
         s.Position = sp;
         if (err > SnapDistance) { s.Velocity = default; _pending.Clear(); }
-        _me.SetState(s);
+        // C-02: the replay is run by ReplayReconcile in the next physics tick, not here. This runs in _Process, where
+        // Godot's MoveAndSlide uses the frame delta (60 Hz) instead of the physics delta (30 Hz): every replayed step
+        // moved half a tick, and the next comparison was off by exactly that (8.9 cm, always ahead).
+        _reconcile = s;
+    }
+
+    /// <summary>Set by the last acked comparison: whether another living player stood within 1 m of the body then (I-rubber-banding telemetry).</summary>
+    bool LastNearRemote, LastVertical;
+
+    bool NearRemotePlayer(NVec3 at)
+    {
+        foreach (var r in _remotes.Values)
+        {
+            if (r.State == EntityState.Dead || r.Node == null) continue;
+            var d = new Vector2(r.LastPos.X - at.X, r.LastPos.Z - at.Z);
+            if (d.LengthSquared() < 1f) return true;
+        }
+        return false;
+    }
+
+    /// <summary>A reconcile from a snapshot, waiting for the next physics tick (see <see cref="OnSelf"/>).</summary>
+    MoveState? _reconcile;
+
+    /// <summary>Puts the body at the server's position and replays the unacked inputs, in a physics tick so the steps match the server's.</summary>
+    void ReplayReconcile()
+    {
+        if (_reconcile is not { } s) return;
+        _reconcile = null;
+        var before = _me!.State.Position; // where the eye was drawn: the predicted present
+        if (_me.IsOnFloor() != s.OnFloor) _rub.FloorFlagMismatch++; // measurement: a replay that would start with the wrong floor flag without SetStateForReplay
+        _me.SetStateForReplay(s); // the body's floor flag must match the state's before the first replayed step (I-rubber-banding round 2)
         for (var i = 0; i < _pending.Count; i++)
         {
             _me.Simulate(_pending[i].Input.ToMove(SpeedFor(_pending[i].Input.Slot)), 1f / Wire.TickRate);
             _pending[i].After = _me.State;
         }
+        // I-rubber-banding: the state moved by the correction; the eye keeps drawing the old place and glides over (FadeOwnCorrection).
+        // A respawn or teleport (beyond SnapDistance) is not a correction to glide over.
+        var moved = before - _me.State.Position;
+        _viewFix = moved.Length() <= SnapDistance ? _viewFix + ToVec(moved) : Vector3.Zero;
+    }
+
+    /// <summary>The part of an on-foot correction still to be drawn (metres, world), faded out over a few frames (see <see cref="ReplayReconcile"/>).</summary>
+    Vector3 _viewFix;
+
+    static Vector3 ToVec(System.Numerics.Vector3 v) => new(v.X, v.Y, v.Z);
+
+    /// <summary>Fades the drawn part of the last on-foot correction, once per frame, at the same rate as the vehicles' corrections.</summary>
+    void FadeOwnCorrection(double delta)
+    {
+        if (_me == null) return;
+        _viewFix *= Mathf.Exp(-CorrectionFade * (float)delta);
+        if (_viewFix.LengthSquared() < 1e-6f) _viewFix = Vector3.Zero; // under a millimetre: done
+        _me.ViewOffset = _viewFix + _heldSwing; // in the Bigfoot's hand the eye swings with the hand (#264)
+        _me.ViewRoll = _heldRoll;
     }
 
     public override void _PhysicsProcess(double delta)
     {
-        if (_done || !_welcomed || _me == null || _peer == null) return;
+        if (LinkEnded || !_welcomed || _me == null || _peer == null) return;
         _elapsed += delta;
+        BotChatTick();
         if (Bot && LossBot != "") { if (_elapsed >= BotSeconds) LossFail("timeout: round never reached its end"); }
         else if (Bot && _elapsed >= BotSeconds) { if (CarBot != "") CarResult(false, "timeout"); else if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
-        if (!_gotSelf) return; // wait for our spawn position
+        if (!OwnSpawned) return; // wait for our spawn position
+        ReplayReconcile(); // C-02: a snapshot's reconcile replays here, with the physics step (see OnSelf)
+        ReplayDriveReconcile(); // and so does a predicted vehicle's (ADR 0010, ADR 0014)
         var dt = (float)delta;
         MoveInput mi;
         if (Bot && MatchBot != "")
@@ -485,7 +616,14 @@ public partial class NetClient : Node
         }
         else if (Bot && LossBot != "") mi = LossBotStep();
         else if (Bot && CarBot != "") mi = CarBotStep();
+        else if (Bot && CarLoop) mi = CarLoopStep();
         else if (Bot && WeaponsBot != "") mi = WeaponsBotStep();
+        else if (Bot && _botStand)
+        {
+            // at the dictation table (--bot-chat "/rozhlas goto"): stand still and hold E until the set is ours
+            var use = !HoldsRozhlasSet ? MoveButtons.Use : MoveButtons.None;
+            mi = new MoveInput { Buttons = use, SpeedScale = 1 };
+        }
         else if (Bot)
         {
             // scripted walk: forward, changing heading every 1.5 s, a jump now and then
@@ -496,7 +634,7 @@ public partial class NetClient : Node
             mi = new MoveInput { MoveY = 1, Yaw = yaw, Buttons = jump, SpeedScale = 1 };
         }
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
-        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickCorpses(dt); TickCarePackages(dt); }
+        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); TickLootReturn(dt); }
         FxDemoInput(ref mi);
         _aimHeld = mi.Has(MoveButtons.Aim);
         TickRecoil(mi);
@@ -505,35 +643,45 @@ public partial class NetClient : Node
         var sentPitch = GunnerLook(ref mi); // at the turret the aim is sent (ground-stabilised, #160), and the player's own look is left alone
         if (_gunship == null) _me.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? _wantSlot : 0), GunnerAim);
-        if (!_driving && !_controlling && _gunship == null) { _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
+        // C-03: a dead body does not move on the server (its input is zero and it is skipped), so it is not predicted either; else each snapshot snapped it back
+        if (Mode.BodyIsPredicted) { if (!Dead) _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         PredictFlight(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
+        PredictDrive(ni, dt);  // and so does the driver of an amphibious transport
         _pending.Add(new Pending { Input = ni, After = _me.State });
         if (_pending.Count > 120) _pending.RemoveAt(0);
         var recent = new NetInput[Math.Min(3, _pending.Count)];
         for (var i = 0; i < recent.Length; i++) recent[i] = _pending[_pending.Count - recent.Length + i].Input;
-        Tx(_peer, Wire.ChanData, Wire.EncodeInputs(recent, _dec.AckTick), 0); // the inputs name the snapshot tick they follow (the server's delta baseline)
+        Tx(_peer, Wire.ChanData, Wire.EncodeInputs(recent, _dec.AckTick, WorldEntities.AckTick), 0); // the inputs name the entity and world ticks they follow (the server's delta baselines)
         _conn.Flush();
         var p = _me.State.Position;
         _meMin = NVec3.Min(_meMin, p); _meMax = NVec3.Max(_meMax, p);
     }
 
+    /// <summary>The fractional server tick the remote entities are drawn at this frame (see <see cref="RenderClock"/>).</summary>
+    double RenderTickNow() => _clock.RenderTick(Time.GetTicksMsec() / 1000.0, InterpDelayTicks);
+
     void RenderRemotes()
     {
         if (_lastTick == 0) return;
-        var rt = _lastTick + (Time.GetTicksMsec() / 1000.0 - _lastArrival) * Wire.TickRate - InterpDelayTicks;
+        var rt = RenderTickNow();
         var dt = (float)GetProcessDeltaTime();
+        var drawn = 0;
         foreach (var (id, r) in _remotes)
             if (r.Buf.At(rt) is { } s)
             {
+                drawn++;
                 var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 var dead = r.State == EntityState.Dead;
+                r.ShownYaw = s.Yaw; r.ShownPitch = s.Pitch;
                 TumbleRemote(r, at, s.Yaw, dead && TargetDummies.IsDummyId(id), dt);
+                PounceLieRemote(id, r, at); // the one the demon has pinned lies on its back
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
                 r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && CorpseOf(id)); // riders are drawn in their seat (the server puts the body there), seated rather than standing
-                r.View?.SetStance(r.State == EntityState.InVehicle ? Stance.Crouch : r.Stance);
+                r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
                 AnimateRemote(r, s.Pos);
                 UpdateNameTag(id, r);
             }
+        _rub.AddRender(rt, _lastTick, drawn);
     }
 
     /// <summary>
@@ -571,7 +719,7 @@ public partial class NetClient : Node
         var slot = Ammo?.Slot ?? _wantSlot;
         var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
         _viewmodel.Show(id);
-        _viewmodel.Visible = !Dead && !_driving && !_controlling && _gunship == null && _myState != EntityState.InVehicle && _me is not { ZoomFov: > 0 };
+        _viewmodel.Visible = Mode.ShowsViewmodel && _me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
     }
 
     /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
@@ -591,6 +739,7 @@ public partial class NetClient : Node
         }
         r.LastPos = p; r.LastT = now;
         var weaponId = Weapons != null && r.Slot >= 1 && r.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[r.Slot - 1].Id : "";
+        r.View?.SetBinoculars(r.Binoculars);
         r.View?.Apply(r.Speed, now < r.FireUntil, r.State == EntityState.Dead, weaponId);
     }
 
@@ -673,8 +822,8 @@ public partial class NetClient : Node
 
     void MatchResult(bool ok, string why)
     {
-        if (_done) return;
-        _done = true;
+        if (LinkEnded) return;
+        _link.Enter(LinkPhase.Left);
         if (!ok) GD.PrintErr($"client {PlayerName}: match smoke failure: {why}");
         GD.Print(ok ? "SHOOTER_MATCH_CLIENT_OK" : "SHOOTER_MATCH_CLIENT_FAIL");
         GetTree().Quit(ok ? 0 : 2);
@@ -682,7 +831,8 @@ public partial class NetClient : Node
 
     void FinishBot()
     {
-        _done = true;
+        _link.Enter(LinkPhase.Left);
+        BotFeedReport();
         var own = new Vector2(_meMax.X - _meMin.X, _meMax.Z - _meMin.Z).Length();
         var seen = _remotes.Count;
         var best = 0f;
@@ -706,21 +856,23 @@ public partial class NetClient : Node
     void ApplyScope()
     {
         if (_me == null || _gunship != null) return; // at a turret the zoom is the gunship's
-        if (_driving || _controlling || _myState == EntityState.InVehicle)
+        if (Mode.ScopeSuppressed)
         {
             // seated (roof/door gun, turret, any seat) or steering a missile: the held weapon's scope and iron-sight zoom stay off (#241)
             _me.ZoomFov = 0f; _me.IronSightZoom = false;
             if (_viewmodel != null) _viewmodel.Aiming = false;
+            LowerBinoculars();
             return;
         }
+        if (TickBinoculars()) return; // raised binoculars are the zoom: no scope, no iron sights
         var slot = Ammo?.Slot ?? _wantSlot;
         var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
-        var on = zoom > 0 && !Dead && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
+        var on = zoom > 0 && !Dead && !_pinned && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
         _me.ZoomFov = on ? zoom : 0f;
         // iron sights: any non-scoped, non-melee weapon while zoom is held
         var kind = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Kind : WeaponKind.Melee;
         if (_viewmodel != null)
-            _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead
+            _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && (!_driving && _myState != EntityState.InVehicle || InArmedSeat)
                 && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
         _me.IronSightZoom = _viewmodel is { Aiming: true };
     }
@@ -736,7 +888,7 @@ public partial class NetClient : Node
 
     void ReadSlotKeys()
     {
-        if (Dead || _driving || Input.MouseMode != Input.MouseModeEnum.Captured || ChooserOpen) return; // seated, the number keys are the seats' (HandleSeatInput)
+        if (!Mode.HotbarKeysLive || Input.MouseMode != Input.MouseModeEnum.Captured || ChooserOpen) return; // seated, the number keys are the seats' (HandleSeatInput)
         for (var k = 0; k < Math.Min(5, _hotbar.Length); k++)
             if (Input.IsActionPressed($"slot_{k + 1}")) _wantSlot = _hotbar[k] + 1;
     }
@@ -744,12 +896,16 @@ public partial class NetClient : Node
     public override void _UnhandledInput(InputEvent e)
     {
         if (HandleChatInput(e)) return; // T or "/": the chat box
+        if (HandleMapInput(e)) return; // M: the tactical map
+        if (HandleEquipmentInput(e)) return; // F: the Equipment screen (#268)
         if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
         if (HandleSeatInput(e)) return; // a number key while seated takes that seat
         if (HandleViewInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
+        if (HandleBinocularsInput(e)) return; // B: the binoculars from the bag
         if (Bot || Weapons == null || Dead || ChooserOpen || Input.MouseMode != Input.MouseModeEnum.Captured) return;
         if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {
+            if (DialZero(b.ButtonIndex == MouseButton.WheelUp ? 1 : -1)) return; // a scope with bullet drop is up: the wheel is its zero dial
             _wantSlot = CycleSlot(_wantSlot, b.ButtonIndex == MouseButton.WheelDown ? 1 : -1);
         }
     }
@@ -765,9 +921,11 @@ public partial class NetClient : Node
                 HudAmmo();
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
+                GunfireBlip(sh.Shooter, sh.Weapon, sh.Origin);
                 if (!OnDoorGunShot(sh)) OnShot(sh); // a door gun's round leaves its muzzle on the model
                 break;
             case EventKind.PelletFan when WeaponCodec.DecodePelletFan(payload) is { } pf:
+                GunfireBlip(pf.Shooter, pf.Weapon, pf.Origin);
                 OnPelletFan(pf);
                 break;
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
@@ -824,6 +982,9 @@ public partial class NetClient : Node
                 break;
             case EventKind.GlassSync when GlassCodec.DecodeSync(payload) is { } gsync:
                 OnGlassSync(gsync);
+                break;
+            case EventKind.HuntShot when HuntShot.Decode(payload) is { } hs:
+                HudHuntShot(hs);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 if (KeepEventLogs) _hitLog.Add((Now, h));

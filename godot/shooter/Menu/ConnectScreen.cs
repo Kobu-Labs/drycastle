@@ -9,9 +9,7 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class ConnectScreen : MenuScreen
 {
-    const double ProbeTimeout = 6.0;
-
-    enum State { Form, Connecting, Error }
+    const double ProbeTimeout = ConnectFlow.ProbeTimeout;
 
     readonly Action<string, int, string> _go;
     readonly string? _initialError;
@@ -21,17 +19,20 @@ public partial class ConnectScreen : MenuScreen
     VBoxContainer _form = null!, _connecting = null!, _error = null!, _recentBox = null!;
     Label _connectingText = null!, _errorText = null!, _errorHelp = null!;
     ProgressBar _wait = null!;
-    State _state = State.Form;
+    readonly ConnectFlow _flow = new();
     RecentServers _recent = RecentServers.Parse(GameSettings.LoadConnect("recent", ""));
     string _target = "";
     ConnectCheck _check;
 
     ENetConnection? _conn;
     ENetPacketPeer? _peer;
-    double _elapsed;
     bool _touched;
 
-    public ConnectScreen(Action<string, int, string> go, string? initialError = null) { _go = go; _initialError = initialError; }
+    public ConnectScreen(Action<string, int, string> go, string? initialError = null)
+    {
+        _go = go; _initialError = initialError;
+        _flow.LeftConnecting += StopProbe; // the one place a probe is released when an attempt ends (success and closing the screen are the other two exits)
+    }
 
     protected override Control Build()
     {
@@ -79,7 +80,7 @@ public partial class ConnectScreen : MenuScreen
         _error.AddChild(_errorText); _error.AddChild(_errorHelp);
         _error.AddChild(Ui.Gap(ShooterTheme.Space));
         var er = Ui.HBox();
-        er.AddChild(Ui.Btn(Strings.T("dialog.back"), () => SetState(State.Form), null, 160));
+        er.AddChild(Ui.Btn(Strings.T("dialog.back"), () => { _flow.ToForm(); Draw(); }, null, 160));
         er.AddChild(Ui.Fill());
         _retry = Ui.Btn(Strings.T("connect.retry"), TryConnect, "MenuPrimary", 200);
         er.AddChild(_retry);
@@ -90,7 +91,7 @@ public partial class ConnectScreen : MenuScreen
         card.AddChild(root);
         RebuildRecent();
         Validate();
-        SetState(State.Form);
+        Draw();
         if (_initialError != null) ShowError(_initialError, "connect.err.help.generic");
         return card;
     }
@@ -166,17 +167,18 @@ public partial class ConnectScreen : MenuScreen
         GameSettings.SaveConnect("name", _name.Text.Trim()); GameSettings.SaveConnect("recent", _recent.Serialize());
     }
 
-    protected override Control? FirstFocusTarget() => _state switch
+    protected override Control? FirstFocusTarget() => _flow.State switch
     {
-        State.Form => _addr.Text.Length == 0 || !_check.Ok ? _addr : _connect,
-        State.Error => _retry,
+        ConnectState.Form => _addr.Text.Length == 0 || !_check.Ok ? _addr : _connect,
+        ConnectState.Error => _retry,
         _ => null,
     };
 
-    void SetState(State s)
+    /// <summary>Shows the panel of the flow's current state.</summary>
+    void Draw()
     {
-        _state = s;
-        _form.Visible = s == State.Form; _connecting.Visible = s == State.Connecting; _error.Visible = s == State.Error;
+        var s = _flow.State;
+        _form.Visible = s == ConnectState.Form; _connecting.Visible = s == ConnectState.Connecting; _error.Visible = s == ConnectState.Error;
         Card?.ResetSize();
         if (IsInsideTree()) FocusFirst();
     }
@@ -184,23 +186,24 @@ public partial class ConnectScreen : MenuScreen
     void TryConnect()
     {
         Validate();
-        if (!_check.Ok || _state == State.Connecting) { if (_state == State.Form) _addr.GrabFocus(); return; }
+        if (!_check.Ok || _flow.Is(ConnectState.Connecting)) { if (_flow.Is(ConnectState.Form)) _addr.GrabFocus(); return; }
         _target = RecentServers.Format(_check.Host, _check.Port);
         _connectingText.Text = Strings.F("connect.connecting", _target);
-        _elapsed = 0; _wait.Value = 0;
-        SetState(State.Connecting);
+        _wait.Value = 0;
+        _flow.Begin();
+        Draw();
         Probe();
     }
 
     void Probe()
     {
-        StopProbe();
         _conn = new ENetConnection();
         if (_conn.CreateHost(1, Wire.Channels, 0, 0) != Error.Ok) { ShowError(Strings.T("connect.err.local"), "connect.err.help.local"); return; }
         _peer = _conn.ConnectToHost(_check.Host, _check.Port, Wire.Channels, 0);
         if (_peer == null) ShowError(Strings.F("connect.err.resolve", _check.Host), "connect.err.help.resolve");
     }
 
+    /// <summary>Releases the probe's sockets. Safe to call when there is none.</summary>
     void StopProbe()
     {
         if (_peer != null && _conn != null) { _peer.PeerDisconnect(); _conn.Flush(); }
@@ -210,8 +213,9 @@ public partial class ConnectScreen : MenuScreen
 
     public override void _Process(double delta)
     {
-        if (_state != State.Connecting || _conn == null) return;
-        _elapsed += delta; _wait.Value = Math.Min(_elapsed, ProbeTimeout);
+        if (!_flow.Is(ConnectState.Connecting) || _conn == null) return;
+        var timedOut = _flow.Tick(delta);
+        _wait.Value = Math.Min(_flow.Elapsed, ProbeTimeout);
         for (var guard = 0; guard < 64; guard++)
         {
             var r = _conn.Service(0);
@@ -220,7 +224,7 @@ public partial class ConnectScreen : MenuScreen
             if (ev == ENetConnection.EventType.Connect) { Succeed(); return; }
             if (ev == ENetConnection.EventType.Disconnect) { ShowError(Strings.F("connect.err.refused", _target), "connect.err.help.refused"); return; }
         }
-        if (_elapsed >= ProbeTimeout) ShowError(Strings.F("connect.err.timeout", _target, (int)ProbeTimeout), "connect.err.help.timeout");
+        if (timedOut) ShowError(Strings.F("connect.err.timeout", _target, (int)ProbeTimeout), "connect.err.help.timeout");
     }
 
     void Succeed()
@@ -233,20 +237,19 @@ public partial class ConnectScreen : MenuScreen
 
     public void ShowError(string what, string helpKey)
     {
-        StopProbe();
+        _flow.Fail(); // leaving Connecting releases the probe
         _errorText.Text = Strings.T("connect.err.mark") + " " + what;
         _errorHelp.Text = Strings.T(helpKey);
-        SetState(State.Error);
+        Draw();
     }
 
     /// <summary>Esc: cancel a connection attempt, leave the error state for the form, or leave the screen.</summary>
     public override void Back()
     {
-        switch (_state)
+        switch (_flow.Back())
         {
-            case State.Connecting: StopProbe(); SetState(State.Form); break;
-            case State.Error: SetState(State.Form); break;
-            default: Shell.Pop(); break;
+            case ConnectBack.CancelAttempt: case ConnectBack.LeaveError: Draw(); break;
+            default: Shell.Pop(this); break;
         }
     }
 

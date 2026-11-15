@@ -13,14 +13,15 @@ public partial class NetServer
 {
     Shelters? _shelters;
 
-    /// <summary>The bunker rooms of the map. Empty without a map or a bunkers.json; a broken file is logged and counts as none.</summary>
+    /// <summary>The bunker rooms of the map and the church's. Empty without a map or a bunkers.json; a broken file is logged and counts as none.</summary>
     Shelters MapShelters
     {
         get
         {
             if (_shelters != null) return _shelters;
-            _shelters = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"server: {m}; bunkers give no shelter from blasts and no ladders"));
-            if (_shelters.Rooms.Count > 0) GD.Print($"server: {_shelters.Rooms.Count} bunker rooms shelter from blasts");
+            _shelters = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"server: {m}; bunkers give no shelter from blasts and no ladders"))
+                .WithChurch(MapChurch); // the nave and the chancel shelter like a bunker room (ADR 0019)
+            if (_shelters.Rooms.Count > 0) GD.Print($"server: {_shelters.Rooms.Count} bunker and church rooms shelter from blasts");
             return _shelters;
         }
     }

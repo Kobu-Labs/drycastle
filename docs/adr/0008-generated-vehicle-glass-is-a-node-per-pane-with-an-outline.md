@@ -16,3 +16,5 @@ Decided for issue #243 (follow-up to shatterable glass, PR #240). **Supersedes t
 - The bus windscreen is three panes (front and the two wrapped corners), so the bus has 18 panes. The limit per vehicle is 24 instead of 16.
 - Only convex outlines are supported (the cut and the shader clip against half-planes). A concave pane is declared as several panes.
 - Not changed: the crack overlay and the fragments are still flat quads in the pane's plane, and a door leaf's overlay stays at the closed position if the leaf is open.
+
+**Note (ADR 0013, B-02, issue #257): the outline is tested at the rewound pose.** A shot is tested against a pane's outline in the frame of the vehicle where it stood at the shooter's view tick (see ADR 0007's note), so a pane is where the shooter saw it. The `glass_N` node and the outline are unchanged.

@@ -12,11 +12,13 @@ namespace Drycastle.Shooter;
 public static class VehicleCollider
 {
     /// <summary>The box as a child of <paramref name="parent"/> (which must be in the tree). It does not move with the parent: <see cref="Place"/> puts it in the world.</summary>
-    public static StaticBody3D Make(Node parent, VehicleDef def)
+    public static StaticBody3D Make(Node parent, VehicleDef def) => Make(parent, def.HalfWidth, def.HalfLength, def.Height);
+
+    /// <summary>A box of these half sizes and this height (ground to the top): the vehicle's hit volume, or the Raid van's (ADR 0021).</summary>
+    public static StaticBody3D Make(Node parent, float halfWidth, float halfLength, float height)
     {
-        var hw = def.HalfWidth; var hl = def.HalfLength; var h = def.Height; // the hit volume, as ServerCar
         var body = new StaticBody3D { CollisionLayer = CollisionLayers.VehicleSolid, CollisionMask = 0, Name = "VehicleCollider", TopLevel = true };
-        body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(hw * 2, h, hl * 2) }, Position = new Vector3(0, h / 2, 0) });
+        body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(halfWidth * 2, height, halfLength * 2) }, Position = new Vector3(0, height / 2, 0) });
         parent.AddChild(body);
         return body;
     }

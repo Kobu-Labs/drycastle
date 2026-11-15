@@ -52,8 +52,10 @@ def make_lamps(
     """Lamp positions, sorted by place and numbered ``L-0001``...
 
     ``osm_lamps`` are GeoJSON point features (local metres, ``osm_id`` property). ``cfg`` is the
-    ``lamps`` section of rules.yaml.
+    ``lamps`` section of rules.yaml; with ``enabled`` false there are no lamps at all (OSM lamps included).
     """
+    if not cfg.get("enabled", True):
+        return []
     clear = float(cfg["building_clearance_m"])
     bzone = _zone([footprint_polygon(b["footprint"]).buffer(clear) for b in buildings])
     avoid = set(cfg["avoid_kinds"])

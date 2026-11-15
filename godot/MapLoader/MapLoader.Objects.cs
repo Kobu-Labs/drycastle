@@ -15,11 +15,10 @@ public sealed class PlacedObject
     public float RotationDeg { get; init; }
     public float Scale { get; init; } = 1f;
     public string? Colour { get; init; }
-    /// <summary>Parcel containing the object (null: outside every parcel).</summary>
+    /// <summary>Parcel containing the object (null: outside every parcel). An object belongs to no parcel; this is where it happens to stand.</summary>
     public string? Parcel { get; init; }
-    /// <summary>Parcel entry that lists the object; the removal group. Falls back to Parcel.</summary>
-    public string? Owner { get; init; }
-    public string Group => Owner ?? Parcel ?? NoParcelGroup;
+    /// <summary>The group node the object sits in (and is removed with): its containing parcel, else <see cref="NoParcelGroup"/>.</summary>
+    public string Group => Parcel ?? NoParcelGroup;
     public const string NoParcelGroup = "_none";
 }
 
@@ -32,7 +31,9 @@ public sealed record FragmentResult(IReadOnlyList<string> Replaced, int Objects,
 // Placed objects, the dynamic per-parcel props swap (parcel-run fragments) and their bookkeeping.
 public sealed partial class MapLoader
 {
-    sealed record AssetEntry(string File, Vector3 Size, string Category, string Name, List<(string kind, int tier, Vector3 local)> Seats, List<Vector3> Lights,
+    /// <summary><c>Root</c> is the folder <c>File</c> is relative to (null = the asset library). <c>Prefab</c>: a model of a private pack that brings its own
+    /// collision bodies and wears the pack's materials (see MapLoader.Prefabs.cs).</summary>
+    sealed record AssetEntry(string File, string? Root, bool Prefab, Vector3 Size, string Category, string Name, List<(string kind, int tier, Vector3 local)> Seats, List<Vector3> Lights,
         List<Drycastle.ShooterCore.AssetSolid> Solids);
 
     string _mapDir = "";
@@ -66,6 +67,48 @@ public sealed partial class MapLoader
             if (_assetManifest == null) ReadAssetManifest();
             return _assetManifest!.Select(kv => new AssetInfo(kv.Key, kv.Value.Category, kv.Value.Name, kv.Value.Size)).ToList();
         }
+    }
+
+    /// <summary>How a placed object stands in map space (Godot axes): its origin, its turn about the vertical axis (degrees, Godot's Y rotation) and its scale.</summary>
+    public readonly record struct ObjectPose(string Id, Vector3 Position, float YawDeg, float Scale);
+
+    /// <summary>
+    /// The first placed object of an asset (the lowest object id, ordinal) and where it stands now; null when none is placed. From the
+    /// object's own node transform, which comes from objects.json (position, rotation, scale, terrain height), never from the model.
+    /// </summary>
+    public ObjectPose? FirstObjectOfAsset(string asset)
+    {
+        foreach (var (id, node) in _objectNodes.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            if (!GodotObject.IsInstanceValid(node) || !_objectAssets.TryGetValue(id, out var a) || a != asset) continue;
+            var x = node.Basis.X; // the turn from the axis, not from Euler angles, which fold a turn past 90 degrees into the other axes
+            return new ObjectPose(id, node.Position, Mathf.RadToDeg(MathF.Atan2(-x.Z, x.X)), x.Length());
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Opens parts of a placed object's model: every node of the object named in <paramref name="names"/> (a door of a prefab) is
+    /// hidden and its collision bodies stop colliding. Returns how many nodes it found: none for an object that has no such part
+    /// (a placeholder box, a headless load without the model).
+    /// </summary>
+    public int OpenObjectParts(string objectId, IEnumerable<string> names)
+    {
+        if (!_objectNodes.TryGetValue(objectId, out var root) || !GodotObject.IsInstanceValid(root)) return 0;
+        GeometryChanged();
+        var wanted = names.ToHashSet(StringComparer.Ordinal);
+        var found = 0;
+        foreach (var part in Descendants(root).Where(d => wanted.Contains(d.Name.ToString())).ToList())
+        {
+            found++;
+            if (part is Node3D n3) n3.Visible = false;
+            foreach (var body in new[] { part }.Concat(Descendants(part)).OfType<CollisionObject3D>())
+            {
+                body.CollisionLayer = 0;
+                body.CollisionMask = 0;
+            }
+        }
+        return found;
     }
 
     /// <summary>A fresh copy of an asset's scene (not in the tree; the caller frees it); null when unknown or unloadable.</summary>
@@ -130,7 +173,6 @@ public sealed partial class MapLoader
                 Scale = o.TryGetProperty("scale", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetSingle() : 1f,
                 Colour = o.TryGetProperty("colour", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null,
                 Parcel = o.TryGetProperty("parcel", out var pa) && pa.ValueKind == JsonValueKind.String ? pa.GetString() : null,
-                Owner = o.TryGetProperty("owner", out var ow) && ow.ValueKind == JsonValueKind.String ? ow.GetString() : null,
             });
         }
         return list;
@@ -228,16 +270,16 @@ public sealed partial class MapLoader
     }
 
     /// <summary>
-    /// Instant path for placed objects (no pipeline run): drop every object listed under the given parcels
-    /// (<see cref="PlacedObject.Owner"/>) and instance <paramref name="objects"/> in their place, with the same
-    /// node names and ownership as <see cref="ApplyFragment"/>, so a later fragment swap stays consistent. An object
-    /// whose id exists under another owner is moved (its node is replaced), never duplicated.
+    /// Instant path for placed objects (no pipeline run): drop the objects with the ids in <paramref name="removed"/> and
+    /// instance <paramref name="upserts"/>, with the same node names and grouping as <see cref="ApplyFragment"/>, so a
+    /// later fragment swap stays consistent. An object whose id is already placed (it moved, turned, changed asset or
+    /// colour, or now stands in another parcel) has its node replaced, never duplicated.
     /// </summary>
-    public int ApplyObjects(IEnumerable<string> parcels, IEnumerable<PlacedObject> objects)
+    public int ApplyObjectChanges(IEnumerable<string> removed, IEnumerable<PlacedObject> upserts)
     {
-        foreach (var id in parcels) RemoveGroupObjects(id);
+        foreach (var id in removed) RemoveObject(id);
         var n = 0;
-        foreach (var o in objects) { AddObject(o); n++; }
+        foreach (var o in upserts) { AddObject(o); n++; }
         if (_cables.Count > 0) RebuildCables(); // poles may have moved, come or gone
         return n;
     }
@@ -289,15 +331,29 @@ public sealed partial class MapLoader
             Warn($"assets manifest not found (assets dir: {dir ?? "none"}); pack: objects use placeholders");
             return;
         }
+        ReadAssetEntries(path, null);
+        // private (paid) packs: a folder beside assets/ with its own manifest, written by scripts/private_pack_glb.gd; absent on a machine without them
+        var privDir = System.Environment.GetEnvironmentVariable("DRYCASTLE_ASSETS_PRIVATE") is { Length: > 0 } env
+            ? env
+            : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(dir!)) ?? "", "assets-private");
+        var priv = Path.Combine(privDir, "manifest.json");
+        if (File.Exists(priv)) ReadAssetEntries(priv, privDir);
+    }
+
+    /// <summary>Reads a manifest; <paramref name="root"/> is the folder its "file" paths are relative to (null = the asset library).</summary>
+    void ReadAssetEntries(string path, string? root)
+    {
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
         foreach (var a in doc.RootElement.GetProperty("assets").EnumerateArray())
         {
             var file = a.TryGetProperty("file", out var f) && f.ValueKind == JsonValueKind.String ? f.GetString()! : "";
+            var prefab = a.TryGetProperty("prefab", out var pf) && pf.ValueKind == JsonValueKind.True;
             var sz = a.GetProperty("size_m");
             var id = a.GetProperty("id").GetString()!;
+            if (_assetManifest!.ContainsKey(id)) continue; // the public library wins
             var cat = a.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString()! : "other";
             var name = a.TryGetProperty("name", out var nm) && nm.ValueKind == JsonValueKind.String ? nm.GetString()! : id;
-            _assetManifest[id] = new AssetEntry(file, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name, ParseSeats(a), ParseLights(a),
+            _assetManifest[id] = new AssetEntry(file, root, prefab, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name, ParseSeats(a), ParseLights(a),
                 Drycastle.ShooterCore.ObjectColliders.ParseSolids(a));
         }
     }
@@ -312,10 +368,22 @@ public sealed partial class MapLoader
 
         Node3D? scene = null;
         string? path = null;
+        if (entry is { Prefab: true, Root: not null })
+        {
+            // a private pack prefab: a GLB beside the game with its own collision bodies, wearing the pack's shared materials
+            path = Path.Combine(entry.Root, entry.File);
+            if (!File.Exists(path))
+                WarnNoPrivatePack(entry.Root);
+            else
+                try { scene = LoadPrefab(path); }
+                catch (Exception e) { Warn($"object asset '{asset}': {e.Message}; using a placeholder box"); }
+            _assetTemplates[asset] = scene;
+            return scene;
+        }
         if (asset.StartsWith("prim:"))
             path = Path.Combine(_mapDir, "prims", asset["prim:".Length..] + ".glb");
-        else if (asset.StartsWith("pack:") && entry != null && entry.File != "" && AssetsDir != null)
-            path = Path.Combine(AssetsDir, entry.File);
+        else if (asset.StartsWith("pack:") && entry != null && entry.File != "" && (entry.Root ?? AssetsDir) is { } assetRoot)
+            path = Path.Combine(assetRoot, entry.File);
         if (path == null)
             Warn($"object asset '{asset}' is unknown (not in the assets manifest); using a placeholder box");
         else if (!File.Exists(path))

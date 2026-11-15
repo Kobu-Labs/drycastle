@@ -1,0 +1,11 @@
+{
+  "id": "6668a0f57d5c",
+  "plain_sha256": "6668a0f57d5cb6b73630e426dca5f4407a45cde252a4ef45020a36eb594997da",
+  "iterations": 600000,
+  "file": {
+    "name": "assets-private-6668a0f57d5c.zip.enc",
+    "url": "http://159.195.244.164:27080/assets-private-6668a0f57d5c.zip.enc",
+    "sha256": "f4d142121b661c8c40860d45827d48831478e7cb191b85d5946cfd750a014680",
+    "size": 126410496
+  }
+}

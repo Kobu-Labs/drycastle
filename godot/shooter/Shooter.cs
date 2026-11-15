@@ -1,13 +1,14 @@
 using Godot;
 using Drycastle.ShooterCore;
+using WaterSurfaces = Drycastle.MapLoader.WaterSurfaces;
 
 namespace Drycastle.Shooter;
 
 /// <summary>
 /// Shooter entry point. Args after "--":
 ///   --role server|client      (default client; the server is for --headless)
-///   --map DIR                 map folder (else DRYCASTLE_MAP, else ../../out/map relative to the project)
-///   --connect HOST[:PORT] --name NAME   join a server (default port 27015); --headless-bot [--bot-seconds N] scripts a walk
+///   --map DIR                 map folder (else DRYCASTLE_MAP, else ../../out/village/map relative to the project)
+///   --connect HOST[:PORT] --name NAME   join a server (default port 27015); --headless-bot [--bot-seconds N] scripts a walk; --bot-chat "3:/event rozhlas;6:/rozhlas feedtest" sends chat lines at those seconds and reports the rozhlas feed it received
 ///   --port N                  server listen port (default 27015); --quit-after SECONDS ends the server with a verdict
 ///   --net-sim latency_ms=50,jitter_ms=5,loss=0.03   server and client: delay every outgoing packet, drop that share of the unreliable ones (see NetSim.cs)
 ///   --loss-test N [--loss-measure S] [--loss-out DIR]   server: loss/latency test round for N bots (use with --match-set min_players=N); --loss-bot walker|shooter on the bots (make shooter-loss-test)
@@ -19,6 +20,10 @@ namespace Drycastle.Shooter;
 ///   --admin-token T[,T...]    server: player tokens (the player_token in the client's settings file) whose owners may use chat commands: /bots, /spawn, /time
 ///   --bots N                  server: N bots (0-64) play while at least one human is in the match (#214); they walk to the nearest player and shoot what they see, earn and grant no XP
 ///   --nav-cache DIR           server: where the bots' baked navigation tiles are kept (default navcache in the Godot user data folder); baked once per map version
+///   --perf-out DIR            server: write per-phase tick timings and counters to DIR/server-ticks.csv (perf investigation, measurement only)
+///   --loss-bot streaker       client (perf investigation): with --sandbox, grants and activates the killstreaks of --perf-streaks a,b,c every --perf-streak-period s, and spawns the vehicle indices of --perf-vehicles i,j every 5 periods
+///   --perf-lagcomp            server: with --perf-out, log every hitscan shot against present and rewound positions (hit_used is what the server did)
+///   --no-lagcomp              server: shots resolve against present player positions, as before lag compensation (ADR 0013); the A/B baseline
 ///   --cluster-spawns          server: keep one dense cluster of spawn points (dev aid: players and bots meet at once instead of crossing the village)
 ///   --sandbox                 client: ask the server for sandbox mode (also DRYCASTLE_SANDBOX=1); the server may refuse
 ///   --dev-ui                  client: show the dev-only UI (the Advanced section of the connect screen); debug builds always show it
@@ -31,9 +36,11 @@ namespace Drycastle.Shooter;
 ///   --bazooka-bot a|b         client: scripted bazooka smoke role (a shoots, b is the target)
 ///   --weapons-bot a|b         client: scripted weapons smoke role (a shoots, b stands still)
 ///   --menu-shots DIR          render main menu, connect (empty, error), settings tabs, pause, loading and a dialog at 1280x720 and 3840x2160 into DIR as PNGs, then exit (needs a display)
+///   --intel-shots DIR         render the intel screen's content (no events, one, under way, a test event, several) at the 3.0 m and 1.6 m screens' texture sizes into DIR as PNGs, then exit (needs a display)
 ///   --offline                 client: skip the menus and walk the map locally (the old dev view)
 ///   (client with a display and none of the smoke flags starts at the main menu; --connect host:port --name N joins straight away)
 ///   --model-shots DIR         render the remote character animations and the first-person weapon viewmodels into DIR as PNGs, then exit (needs a display)
+///   --demon-shots DIR         render the demon's head with the mouth shut, half open and wide into DIR as PNGs, then exit (needs a display and the private pack)
 ///   --hud-shots DIR           render the HUD with fake data at 1280x720 and 3840x2160 into DIR as PNGs, then exit (needs a display)
 ///   --smoke-move              client only: scripted movement check on the map collision (SHOOTER_SMOKE_MOVE_OK, exit 0; else exit 2)
 ///   --smoke                   load everything, print SHOOTER_SMOKE_OK and exit 0 (exit 2 on failure)
@@ -54,12 +61,37 @@ public partial class Shooter : Node3D
     Drycastle.ShooterServer.Persistence.IProgressionStore? _progression;
     bool _smoke;
     bool _smokeMove;
+    /// <summary>Where the application is (see <see cref="AppFlow"/>); every change goes through <see cref="EnterPhase"/>.</summary>
+    readonly StateMachine<AppPhase> _phase = new(AppFlow.Spec);
     readonly Random _rng = new();
     GameData _data = null!;
     int _frames;
 
+    void EnterPhase(AppPhase next) => _phase.Enter(next);
+
+    /// <summary>Startup failed: quit with 2 and make sure a smoke run cannot still print its OK line.</summary>
+    void FailStartup(Exception e)
+    {
+        GD.PrintErr($"startup failed: {e.Message}");
+        GetTree().Quit(2);
+        EnterPhase(AppPhase.Failed);
+    }
+
+    // Client frame cap: VSync already limits to the refresh rate; this stops VSync-off from pegging the GPU, and idles in the background.
+    const int FocusedFps = 120, UnfocusedFps = 20;
+    bool _capFps;
+
+    public override void _Notification(int what)
+    {
+        if (!_capFps) return;
+        if (what == NotificationApplicationFocusOut) Engine.MaxFps = UnfocusedFps;
+        else if (what == NotificationApplicationFocusIn) Engine.MaxFps = FocusedFps;
+    }
+
     public override void _Ready()
     {
+        // an undeclared state-machine transition is taken anyway (a rare bad edge must not end a match) but is logged, so the spec in docs/state-machines.md can be corrected
+        StateMachineDiagnostics.Report = msg => GD.PrintErr("state machine: " + msg);
         var cfg = Config.Parse(OS.GetCmdlineUserArgs());
         var role = cfg.Str("role", "client");
         _smoke = cfg.Flag("smoke");
@@ -70,24 +102,26 @@ public partial class Shooter : Node3D
         if (cfg.Str("model-shots") != "") { _ = ModelShots.Run(this, cfg.Str("model-shots")); return; }
         if (cfg.Str("hud-shots") != "") { _ = HudShots.Run(this, cfg.Str("hud-shots")); return; }
         if (cfg.Str("menu-shots") != "") { _ = MenuShots.Run(this, cfg.Str("menu-shots")); return; }
+        if (cfg.Str("demon-shots") != "") { _ = DemonShots.Run(this, cfg.Str("demon-shots")); return; }
+        if (cfg.Str("intel-shots") != "") { _ = IntelShots.Run(this, cfg.Str("intel-shots")); return; }
         if (role == "client")
         {
+            if (!_smoke && !_smokeMove && DisplayServer.GetName() != "headless") { _capFps = true; Engine.MaxFps = FocusedFps; }
             try { GD.Print($"sounds: {Sfx.Init(this).SoundCount} events, table and files ok"); }
             catch (Exception e)
             {
-                GD.PrintErr($"startup failed: {e.Message}");
-                GetTree().Quit(2);
-                _smoke = false;
-                _frames = int.MinValue;
+                FailStartup(e);
                 return;
             }
         }
-        if (role == "client" && !_smoke && !_smokeMove && !cfg.Flag("offline") && !cfg.Flag("headless-bot") && DisplayServer.GetName() != "headless")
+        if (role == "client" && !_smoke && !_smokeMove && !cfg.Flag("move-parity") && !cfg.Flag("offline") && !cfg.Flag("headless-bot") && DisplayServer.GetName() != "headless")
         {
             GameSettings.RestoreWindowSize();
+            EnterPhase(AppPhase.Menu);
             StartMenus(cfg);
             return;
         }
+        EnterPhase(AppPhase.Direct);
         try
         {
             if (role is not ("server" or "client")) throw new InvalidOperationException($"unknown role {role} (server|client)");
@@ -95,6 +129,7 @@ public partial class Shooter : Node3D
             GD.Print($"data: {data.Weapons.Weapons.Count} weapons, score goal {data.Match.ScoreGoal}, {data.Vehicles.Vehicles.Count} vehicle types");
             LoadMap(cfg);
             if (role == "server" && cfg.Flag("nav-spike")) { BuildNavSpike(cfg); return; }
+            if (role == "server" && cfg.Flag("perf-micro")) { BuildPerfMicro(cfg); return; } // perf investigation: micro-benchmarks on the real map, then quit
             if (role == "server" && !_smoke)
             {
                 SetReadyMarker(false);
@@ -108,10 +143,7 @@ public partial class Shooter : Node3D
         }
         catch (Exception e)
         {
-            GD.PrintErr($"startup failed: {e.Message}");
-            GetTree().Quit(2);
-            _smoke = false;
-            _frames = int.MinValue;
+            FailStartup(e);
         }
     }
 
@@ -139,7 +171,7 @@ public partial class Shooter : Node3D
     public override void _Process(double delta)
     {
         // let a few frames run so physics and the scene tree settle before a smoke exit
-        if (_smoke && ++_frames >= 3)
+        if (_smoke && !_phase.Is(AppPhase.Failed) && ++_frames >= 3)
         {
             GD.Print("SHOOTER_SMOKE_OK");
             GetTree().Quit(0);
@@ -158,8 +190,8 @@ public partial class Shooter : Node3D
         _shell = new UiShell
         {
             PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks)),
-            WantsFreeMouse = () => _client is { Dead: true } or { ChatOpen: true }, // the respawn screen and the chat box release the mouse (buttons to click, keys to type)
-            BackHandler = () => _client?.CloseChat() ?? false, // Esc closes the chat box before it opens Pause
+            WantsFreeMouse = () => _client is { WantsFreeMouse: true }, // MouseOwners: the respawn screen, the chat box, the Equipment screen, the tactical map (click to set the waypoint) and the corpse chooser's item list release the mouse (buttons to click, keys to type, cells to drag or click)
+            BackHandler = () => (_client?.CloseChat() ?? false) || (_client?.CloseEquipment() ?? false) || (_client?.CloseTacticalMap() ?? false), // Esc closes the chat box, then the Equipment screen, then the tactical map, before it opens Pause
         };
         AddChild(_shell);
         GD.Print("SHOOTER_MENU role=client");
@@ -182,11 +214,22 @@ public partial class Shooter : Node3D
     /// <summary>The camouflage customiser for one loadout slot (-1: the active one), from the main menu or the loadout editor (#141).</summary>
     CustomizationScreen NewCustomization(int slot) => new(() => _client, () => _data ??= LoadData(), slot);
 
+    ulong _lastStepFrameMs;
+
+    /// <summary>
+    /// Sets the bar, and lets two frames draw only when the work since the last drawn frame has used up a frame's budget.
+    /// Waiting two frames after every step made the load frame-bound (718 steps x 2 frames x 16.7 ms = 24 s of a 26 s join at 60 Hz)
+    /// while the work itself is about 5 s.
+    /// </summary>
     async Task Step(LoadingScreen ld, string key, float f)
     {
         ld.Set(key, f);
+        if (Time.GetTicksMsec() - _lastStepFrameMs < StepBudgetMs) return;
         for (var i = 0; i < 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        _lastStepFrameMs = Time.GetTicksMsec();
     }
+
+    const ulong StepBudgetMs = 12;
 
     /// <summary>
     /// Parses the held-weapon, character and vehicle models and loads the shaders a match would otherwise load on first use
@@ -197,6 +240,12 @@ public partial class Shooter : Node3D
         var steps = new List<Action>();
         foreach (var f in WeaponFx.ModelFiles) { var file = f; steps.Add(() => ModelLib.Warm(file)); }
         steps.Add(() => ModelLib.Warm(CharacterView.DefaultModel));
+        foreach (var item in _data!.Items.Items)
+        {
+            if (item.Model == "") continue;
+            var model = item.Model;
+            steps.Add(() => ModelLib.Warm(model)); // a worn item (#266) is on screen the moment someone puts it on
+        }
         foreach (var v in _data!.Vehicles.Vehicles)
         {
             if (v.Model == "") continue;
@@ -204,7 +253,7 @@ public partial class Shooter : Node3D
             steps.Add(() => CarFx.Warm(model));
         }
         steps.Add(GlassFx.Load);
-        foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, UnderwaterView.ShaderPath, DayNightCycle.SkyShaderPath })
+        foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, DayNightCycle.SkyShaderPath })
         {
             var path = sh;
             steps.Add(() => GD.Load<Shader>(path));
@@ -218,10 +267,11 @@ public partial class Shooter : Node3D
 
     async Task BeginGame(string host, int port, string name)
     {
+        EnterPhase(AppPhase.Loading);
         var ld = new LoadingScreen($"{host}:{port}");
         _shell.SetGameActive(false);
         _shell.Reset(ld);
-        string? failure = null;
+        JoinResult result;
         try
         {
             await Step(ld, "loading.data", 0.05f);
@@ -237,17 +287,17 @@ public partial class Shooter : Node3D
             await Step(ld, "loading.world", 0.75f);
             if (!_worldLit) { AddLightAndSky(); _worldLit = true; }
             await Step(ld, "loading.connect", 0.85f);
-            var done = new TaskCompletionSource<string?>();
-            ld.AllowCancel(() => done.TrySetResult("")); // empty failure = the player cancelled
+            var done = new TaskCompletionSource<JoinResult>();
+            ld.AllowCancel(() => done.TrySetResult(JoinResult.Cancelled));
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
-                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
-                OnWelcomed = () => done.TrySetResult(null),
+                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, BlipConfig = _data.Match, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
+                OnWelcomed = () => done.TrySetResult(JoinResult.Welcomed),
             };
             client.OnFailed = (why, joined) =>
             {
-                if (!joined) done.TrySetResult(Strings.F("connect.err.join", $"{host}:{port}", why));
+                if (!joined) done.TrySetResult(JoinResult.Failed(Strings.F("connect.err.join", $"{host}:{port}", why)));
                 else if (_client == client) LeaveMatch(Strings.F("connect.err.lost", $"{host}:{port}", why));
             };
             client.OpenLoadouts = () => _shell.Push(NewLoadouts());
@@ -257,22 +307,25 @@ public partial class Shooter : Node3D
             client.SandboxNoticed += text => _shell.Toast(text, ToastKind.Warn);
             client.OpenSandbox = () => _shell.Push(new SandboxScreen(client, () => _data ??= LoadData()));
             AddChild(client);
-            failure = await done.Task;
+            result = await done.Task;
         }
         catch (Exception e)
         {
-            failure = e.Message;
+            result = JoinResult.Failed(e.Message);
             GD.PrintErr($"start failed: {e.Message}");
         }
-        if (failure != null)
+        if (!_phase.Is(AppPhase.Loading)) return; // the connection dropped while we waited: LeaveMatch already put the menu back
+        if (result.Outcome != JoinOutcome.Welcomed)
         {
             DropClient();
+            EnterPhase(AppPhase.Menu);
             ShowMain();
-            _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n), failure.Length == 0 ? null : failure));
+            _shell.Push(new ConnectScreen((h, p, n) => _ = BeginGame(h, p, n), result.ErrorForScreen)); // a cancel shows the bare form
             return;
         }
         ld.Set("loading.ready", 1f);
         Sfx.MenuMusic(false);
+        EnterPhase(AppPhase.Game);
         _shell.SetGameActive(true);
         _shell.Reset();
         GD.Print("SHOOTER_GAME_STARTED");
@@ -291,6 +344,7 @@ public partial class Shooter : Node3D
     {
         var lostEdits = _client is { } c && Enumerable.Range(0, Loadout.SlotCount).Any(c.Autosave.HasUnconfirmed);
         DropClient();
+        EnterPhase(AppPhase.Menu);
         _shell.SetGameActive(false);
         ShowMain();
         var text = error == null ? Strings.T("disconnect.done") : error + " " + Strings.T("connect.err.help.lost");
@@ -303,7 +357,12 @@ public partial class Shooter : Node3D
         static string Read(string f) =>
             Godot.FileAccess.Open($"res://data/{f}", Godot.FileAccess.ModeFlags.Read)?.GetAsText()
             ?? throw new DataFileException($"{f}: cannot open ({Godot.FileAccess.GetOpenError()})");
-        return GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"));
+        var data = GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"), Read("animals.json"), Read("items.json"), Read("holy_mass.json"), Read("holy_mass_demon.json"), Read("bigfoot.json"), Read("pets.json"), Read("wildlife.json"), Read("thieves.json"));
+        // the hit shapes of the wild species: the free packs' in the data folder, the paid packs' in the private asset folder (both optional)
+        if (Godot.FileAccess.FileExists("res://data/animal_shapes.json")) data.Shapes = AnimalShapes.Parse(Read("animal_shapes.json"));
+        var privateShapes = System.IO.Path.Combine(GamePaths.PrivateAssets(), "animal-shapes.json");
+        if (System.IO.File.Exists(privateShapes)) data.Shapes.Merge(AnimalShapes.Load(privateShapes));
+        return data;
     }
 
     void LoadMap(Config cfg) { foreach (var _ in LoadMapSteps(cfg)) { } }
@@ -317,11 +376,20 @@ public partial class Shooter : Node3D
         _map.CollisionOnly = cfg.Str("role", "client") == "server"; // the server never draws the map
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Water.Empty : Drycastle.ShooterCore.Water.Parse(_map.WaterJson);
+        WaterSurfaces.ReduceMotion = () => GameSettings.Current.ReduceMotion;
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
+        IntelScreen.OpenEntrance(_map); // the hangar's small door, so the intel room can be entered (client and server alike)
+        if (ChurchProps.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } churchProps) AddChild(churchProps); // pews, altar: Synty models, boxes on the server too
+        if (!_map.CollisionOnly && ChurchDecor.Create(Path.GetFullPath(dir)) is { } churchDecor) AddChild(churchDecor); // the cross and the interior lights (client only)
+        if (!_map.CollisionOnly && ChurchPaintings.Create(Path.GetFullPath(dir)) is { } churchPaintings) AddChild(churchPaintings); // the wall paintings, hellish once the demon is in (client only)
+        if (ChurchDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } churchDoors) AddChild(churchDoors); // closed doors in the doorway, solid on the server too (ADR 0019)
+        if (UradProps.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } uradProps) AddChild(uradProps); // desks, chairs: Synty models, boxes on the server too
+        if (UradDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } uradDoor) AddChild(uradDoor); // the Obecny Urad's door: shut unless a rozhlas detour is open, solid on the server too
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {
             var bunkers = Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));
             if (bunkers.Rooms.Count > 0) AddChild(new BunkerLights { Shelters = bunkers });
+            if (IntelScreen.Create(bunkers, _map) is { } intel) AddChild(intel); // the base's wall screen, on the hangar floor (or in the command post of the fallback bunker)
         }
         var s = _map.Stats;
         // Lamps are solid, so the server gets the same pole colliders as the client (map 0.5.0+; none on older maps).
@@ -335,6 +403,8 @@ public partial class Shooter : Node3D
                 PoleHeads = poleLamps.Select(l => (l.Position, l.YawDeg)).ToList(),
                 CollisionOnly = _map.CollisionOnly,
             });
+        if (!_map.CollisionOnly) AddChild(new Rozhlas { Speakers = _map.MegaphoneSpeakers() }); // the megaphone poles
+        if (!_map.CollisionOnly) AddChild(new RozhlasFeedPlayer { Speakers = _map.MegaphoneSpeakers() }); // the live feed (a hijacker's voice) from the same poles
         GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} pole_lamps={poleLamps.Count} load={s.LoadSeconds:F2}s");
     }
 
@@ -381,7 +451,7 @@ public partial class Shooter : Node3D
             RoadSpawns = _map.SpawnPoints.Where(sp => sp.Kind == "road").OrderBy(sp => sp.Highway is "path" or "footway" or "steps" or "track" ? 1 : 0)
                 .Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             CarSmoke = cfg.Flag("car-smoke"), BlastSmoke = cfg.Flag("blast-smoke"), SmokeKind = cfg.Str("car-kind", "car"),
-            Weapons = _data.Weapons, WeaponsSmoke = cfg.Flag("weapons-smoke"), BazookaSmoke = cfg.Flag("bazooka-smoke"),
+            Weapons = _data.Weapons, Items = _data.Items, HolyMass = _data.HolyMass, Demon = _data.Demon, BigfootData = _data.Bigfoot, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, PetsData = _data.Pets, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, WeaponsSmoke = cfg.Flag("weapons-smoke"), BazookaSmoke = cfg.Flag("bazooka-smoke"),
             MatchSmoke = cfg.Flag("match-smoke"), DebugCommands = cfg.Flag("debug-cmds") || cfg.Flag("match-smoke"),
             Clock = ServerClock(cfg),
             Port = int.TryParse(cfg.Str("port", "27015"), out var port) ? port : 27015,
@@ -396,6 +466,7 @@ public partial class Shooter : Node3D
             AdminTokens = new HashSet<string>(cfg.Str("admin-token").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.OrdinalIgnoreCase),
             Bots = int.TryParse(cfg.Str("bots", "0"), out var bots) ? Math.Clamp(bots, 0, NetServer.MaxBots) : 0,
             ClusterSpawns = cfg.Flag("cluster-spawns"),
+            PerfOut = cfg.Str("perf-out"), PerfLagComp = cfg.Flag("perf-lagcomp"), NoLagComp = cfg.Flag("no-lagcomp"),
             MapDir = Path.GetFullPath(GamePaths.Map(cfg.Str("map", ""))),
             NavCacheDir = cfg.Str("nav-cache", Path.Combine(OS.GetUserDataDir(), "navcache")),
         };
@@ -491,10 +562,10 @@ public partial class Shooter : Node3D
         AddChild(new NetClient
         {
             World = this, Host = host, Port = port, PlayerName = cfg.Str("name", "player"), Bot = bot, KillY = killY, SandboxRequested = SandboxAsked(cfg),
-            BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6,
-            Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"),
+            BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6, BotChat = cfg.Str("bot-chat"),
+            Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"), PerfStreaks = cfg.Str("perf-streaks"), PerfOut = cfg.Str("perf-out"), PerfStreakPeriod = double.TryParse(cfg.Str("perf-streak-period", "2"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var psp) ? psp : 2, PerfVehicles = cfg.Str("perf-vehicles"),
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
-            FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), BazookaBot = cfg.Str("bazooka-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, Map = _map,
+            FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), CarLoop = cfg.Flag("car-loop"), CarLoopSeconds = double.TryParse(cfg.Str("car-loop-seconds", "120"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var cls) ? cls : 120, BazookaBot = cfg.Str("bazooka-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, Map = _map,
         });
     }
 
@@ -502,7 +573,6 @@ public partial class Shooter : Node3D
     void AddLightAndSky()
     {
         AddChild(new DayNightCycle { LocalClock = _data.Environment.ToClock(), MinAmbient = _data.Environment.MinAmbient });
-        AddChild(new UnderwaterView { Water = _water });
     }
 
     /// <summary>Client view: light, sky and the first-person player at a random spawn point.</summary>
@@ -515,6 +585,8 @@ public partial class Shooter : Node3D
         var spawn = RandomSpawn();
         player.Teleport(spawn + Vector3.Up * 0.1f);
         if (_smokeMove) AddChild(new SmokeMove { Player = player, Spawn = spawn });
+        if (_cfg.Flag("move-parity")) AddChild(new MoveParity { Player = player, Spawn = spawn, Steps = int.Parse(_cfg.Str("move-parity-steps", "900")), Seed = int.Parse(_cfg.Str("move-parity-seed", "20261113")), Production = _cfg.Flag("move-parity-production") }); // replay parity probe (I-rubber-banding round 2), headless
+        if (_cfg.Flag("perf-route")) BuildPerfRoute(_cfg, player); // perf investigation: scripted camera route, frame stats, quit
     }
 }
 

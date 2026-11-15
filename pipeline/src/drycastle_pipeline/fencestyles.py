@@ -65,7 +65,7 @@ COLUMN_STYLES: dict[str, ColumnStyle] = {
 
 FENCE_STYLES: dict[str, FenceStyle] = {
     "picket": FenceStyle("sheet", "picket", "wood_post", post_spacing_m=2.0),
-    "wire": FenceStyle("sheet", "wire", "metal_post", rail=True, post_spacing_m=2.5),
+    "wire": FenceStyle("sheet", "wire", "metal_post", post_spacing_m=2.5),
     "brick_red": FenceStyle("wall", "brick_red", "brick_red", cap="#b9b3a7"),
     "brick_white": FenceStyle("wall", "brick_white", "brick_white", cap="#a9a397"),
     "stone_wall": FenceStyle("wall", "stone", "stone", cap="#77726a"),

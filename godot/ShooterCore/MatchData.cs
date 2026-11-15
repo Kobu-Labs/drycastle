@@ -25,6 +25,13 @@ public class MatchConfig : IVersioned
     /// <summary>Team deathmatch only: the team kill total that ends the round (a team shares the goal, so it is higher than <see cref="ScoreGoal"/>).</summary>
     public int TeamScoreGoal { get; set; } = 75;
 
+    /// <summary>Gunfire blips (GLOSSARY): an enemy's shot within this many metres of the local player shows on the minimap and tactical map.</summary>
+    public float GunfireBlipRadius { get; set; } = 150f;
+    /// <summary>How long a gunfire blip lasts, fading, in seconds.</summary>
+    public float GunfireBlipSeconds { get; set; } = 1.5f;
+    /// <summary>One blip per shooter per this many seconds, so automatic fire does not flood the map.</summary>
+    public float GunfireBlipInterval { get; set; } = 0.25f;
+
     /// <summary><see cref="Mode"/> as an enum; an unknown name is a data error, not a silent fall back to FFA.</summary>
     public MatchMode ParsedMode() => Mode.Trim().ToLowerInvariant() switch
     {

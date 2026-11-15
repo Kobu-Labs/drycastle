@@ -1,6 +1,6 @@
 namespace Drycastle.ShooterCore;
 
-public enum ChatArgKind { Int, Choice, Time }
+public enum ChatArgKind { Int, Choice, Time, Player, IntOrChoice }
 
 /// <summary>One argument of a chat command. <see cref="Min"/> and <see cref="Max"/> bound an <see cref="ChatArgKind.Int"/>.</summary>
 public sealed record ChatArg(string Name, ChatArgKind Kind, bool Required = true, int Min = 0, int Max = 0);
@@ -12,8 +12,11 @@ public sealed record ChatCommand(string Name, string Summary, IReadOnlyList<Chat
     public string Usage => "/" + Name + string.Concat(Args.Select(a => a.Required ? $" <{a.Name}>" : $" [{a.Name}]"));
 }
 
-/// <summary>What the chat needs to know about the viewer and the server to complete and validate: admin rights and the vehicle ids (vehicles.json) the server can spawn.</summary>
-public sealed record ChatContext(bool IsAdmin, IReadOnlyList<string> Vehicles);
+/// <summary>What the chat needs to know about the viewer and the server to complete and validate: admin rights, the vehicle ids (vehicles.json) the server can spawn and the item ids (items.json) /give takes.</summary>
+public sealed record ChatContext(bool IsAdmin, IReadOnlyList<string> Vehicles, IReadOnlyList<string>? ItemIds = null)
+{
+    public IReadOnlyList<string> Items => ItemIds ?? Array.Empty<string>();
+}
 
 /// <summary>A command line that parsed: the command and its normalised (lower case) arguments, or the reason it did not.</summary>
 public sealed record ChatParse(ChatCommand? Command, IReadOnlyList<string> Args, string? Error)
@@ -73,11 +76,22 @@ public static class ChatCommands
     /// <summary>Most bots a server takes (they need no peer slot, so this is apart from the player limit).</summary>
     public const int MaxBots = 64;
 
+    /// <summary>Most citizens one /citizens asks for (the data's max_count may be lower).</summary>
+    public const int MaxCitizens = 200;
+
     public static readonly IReadOnlyList<ChatCommand> All = new ChatCommand[]
     {
         new("help", "List the commands, or explain one", new[] { new ChatArg("command", ChatArgKind.Choice, false) }, AdminOnly: false),
         new("bots", "Set how many bots play, or show the count. Takes effect at once", new[] { new ChatArg("count", ChatArgKind.Int, false, 0, MaxBots) }),
         new("spawn", "Spawn a vehicle in front of you", new[] { new ChatArg("vehicle", ChatArgKind.Choice) }),
+        new("sandbox", "Turn sandbox mode on or off for a player (name or #id), or flip it", new[] { new ChatArg("player", ChatArgKind.Player), new ChatArg("state", ChatArgKind.Choice, false) }),
+        new("give", "Give an item to a player (name or #id), or to yourself. It is worn if the slot is empty, else it goes in the bag", new[] { new ChatArg("item", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
+        new("restart", "Restart the round now, optionally in another mode (ffa or tdm)", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
+        new("event", "Trigger a village event now", new[] { new ChatArg("event", ChatArgKind.Choice), new ChatArg("action", ChatArgKind.Choice, false) }),
+        new("citizens", "Send citizens to the church to sit on its pews (a number), or remove them all (clear)", new[] { new ChatArg("count", ChatArgKind.IntOrChoice, true, 1, MaxCitizens) }),
+        new("church", "TEST: open or close the church doors, or show whether they are open", new[] { new ChatArg("action", ChatArgKind.Choice, false) }),
+        new("rozhlas", "TEST: kill the rozhlas announcer now (hijack the mic for 3 minutes), take or release the set, or show the loudspeaker's phase", new[] { new ChatArg("action", ChatArgKind.Choice, false) }),
+        new("status", "Give a player (name or #id), or yourself, the divine blessing or the devil's curse, or clear their statuses", new[] { new ChatArg("status", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
     };
 
@@ -95,6 +109,29 @@ public static class ChatCommands
             ChatArgKind.Time => ChatTime.Presets.Select(p => (p.Name, ChatTime.Format(p.Minute)))
                 .Concat(new[] { ("freeze", "stop the clock"), ("resume", "let it run") }).ToList(),
             ChatArgKind.Choice when cmd.Name == "spawn" => ctx.Vehicles.Select(v => (v, "")).ToList(),
+            ChatArgKind.Choice when cmd.Name == "give" => ctx.Items.Select(i => (i, "")).ToList(),
+            ChatArgKind.Choice when cmd.Name == "sandbox" => new[] { ("on", "godmode, unlimited ammo, no score"), ("off", "back to normal play") },
+            ChatArgKind.Choice when cmd.Name == "status" => new[] { ("bless", "one lethal hit is negated"), ("curse", "your bullets set victims ablaze"), ("clear", "take every status away") },
+            ChatArgKind.Choice when cmd.Name == "restart"=> new[] { ("ffa", "free-for-all, everyone alone"), ("tdm", "team deathmatch, two teams") },
+            ChatArgKind.Choice when cmd.Name == "event" && argIndex == 0 => new[]
+            {
+                ("bigfoot", "start the Bigfoot event: it spawns, hunts the players and drops its head when it falls"),
+                ("rozhlas", "a detour broadcast of the village loudspeaker, for everyone, now (as a scheduled one: the mic is live)"),
+                ("intel", "TEST: announce a made-up event and put it on the intel screen at the base"),
+                ("mass", "the Holy Mass: the bells ring, the village walks to the church, the pastor leads the Mass"),
+                ("thieves", "the Thieves event: Raids of thieves drive into the village in vans to steal Loot (cannot be lost)"),
+                ("demon", "TEST: the pastor turns into the demon now; stand in the church to fight it"),
+                ("current", "the running event (with end)"),
+            },
+            ChatArgKind.Choice when cmd.Name == "event" => new[]
+            {
+                ("clear", "take the test event off the intel screen again (with intel)"),
+                ("end", "conclude the running event as if it was completed (with current)"),
+                ("cancel", "remove the running event with no reward (with current; the Holy Mass cannot be cancelled)"),
+            },
+            ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },
+            ChatArgKind.Choice when cmd.Name == "rozhlas" => new[] { ("hijack", "the announcement cuts and the mic stays live for 3 minutes (only while a detour broadcast is on air)"), ("take", "TEST: hold the set yourself (stands in for holding E at the dictation table; only while hijacked)"), ("release", "TEST: let the set holder go"), ("goto", "TEST: stand at the dictation table (where E takes the set during a hijack)"), ("feedtest", "TEST: push a few seconds of test voice and a shot through the live feed (ffmpeg voice chain, 2 s delay) to every megaphone"), ("combattest", "TEST: push a shot, a blast and a death sound through the live feed, wherever you stand") },
+            ChatArgKind.IntOrChoice when cmd.Name == "citizens" => new[] { ("clear", "remove every citizen") },
             ChatArgKind.Choice when cmd.Name == "help" => Visible(ctx).Select(c => (c.Name, c.Summary)).ToList(),
             _ => Array.Empty<(string, string)>(),
         };
@@ -116,6 +153,8 @@ public static class ChatCommands
                     return null;
                 }
                 return n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            case ChatArgKind.IntOrChoice when token.Length > 0 && token.All(char.IsAsciiDigit):
+                goto case ChatArgKind.Int;
             case ChatArgKind.Time:
                 if (ChatTime.Parse(token) == null)
                 {
@@ -123,6 +162,8 @@ public static class ChatCommands
                     return null;
                 }
                 return token.ToLowerInvariant();
+            case ChatArgKind.Player:
+                return token; // a name or #id: only the server knows who is connected
             default:
                 var hit = Choices(cmd, i, ctx).FirstOrDefault(c => c.Value.Equals(token, StringComparison.OrdinalIgnoreCase));
                 if (hit.Value == null) { error = $"Unknown {arg.Name} '{token}'."; return null; }
@@ -194,12 +235,14 @@ public static class ChatCommands
         var help = arg.Kind switch
         {
             ChatArgKind.Int => $"{arg.Name}: a whole number from {arg.Min} to {arg.Max}",
+            ChatArgKind.IntOrChoice => $"{arg.Name}: a whole number from {arg.Min} to {arg.Max}, or clear",
             ChatArgKind.Time => $"{arg.Name}: HH:MM, a word, freeze or resume",
+            ChatArgKind.Player => $"{arg.Name}: a player's name (no spaces) or #id from the scoreboard",
             _ => $"{arg.Name}",
         } + (arg.Required ? "" : " (optional)");
 
         string? err = null;
-        if (current != "" && suggestions.Count == 0 || (arg.Kind == ChatArgKind.Int && current != ""))
+        if (current != "" && suggestions.Count == 0 || (arg.Kind == ChatArgKind.Int && current != "") || (arg.Kind == ChatArgKind.IntOrChoice && current.Length > 0 && current.All(char.IsAsciiDigit)))
             if (Validate(cmd, argIndex, current, ctx, out var e) == null) err = e;
         return new ChatHint(cmd.Usage, cmd.Summary, help, suggestions, from, err);
     }

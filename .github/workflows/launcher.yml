@@ -23,4 +23,4 @@ jobs:
         run: |
           tag="${GITHUB_REF_NAME}"; [[ "$GITHUB_REF" == refs/tags/launcher-v* ]] || tag="launcher-manual-${GITHUB_RUN_NUMBER}"
           # prerelease so GitHub "latest" (what the launcher asks for stable game builds) never points at a launcher release
-          gh release create "$tag" --prerelease --target "$GITHUB_SHA" --title "Launcher $tag" --notes "Install once; it keeps the game updated. Windows may show SmartScreen: More info, Run anyway. Linux: unzip, chmod +x, run." out/launcher/drycastle-launcher-windows.zip out/launcher/drycastle-launcher-linux.zip
+          gh release create "$tag" --prerelease --target "$GITHUB_SHA" --title "Launcher $tag" --notes "Install once; it keeps the game updated. Windows may show SmartScreen: More info, Run anyway. Linux: unzip, chmod +x, run. macOS: unzip, then see README.txt (the app is unsigned, so Gatekeeper needs one approval)." out/launcher/drycastle-launcher-windows.zip out/launcher/drycastle-launcher-linux.zip out/launcher/drycastle-launcher-macos.zip

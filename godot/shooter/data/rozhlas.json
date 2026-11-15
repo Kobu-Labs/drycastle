@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "_note": "The village loudspeaker. files are relative to assets/ and baked by scripts/make_rozhlas.py (song, muffled announcement, clear OPAKUJEM, announcement again); the game stays silent until they exist. One broadcast every period_s seconds at a moment derived from the slot number; the SERVER decides when (its own clock) and tells the clients. lengths_s (one per file, written by scripts/make_rozhlas.py) lets the headless server know how long each lasts; default_length_s is used when one is missing. It is one shared recording, not one per speaker: the level depends only on the distance to the nearest speaker (full level within reference_distance, rolloff_db quieter per doubling beyond it, silent past max_distance) and its low-pass falls from near_cutoff_hz to far_cutoff_hz over the same range (duller with distance).",
+  "files": ["drycastle-rozhlas/rozhlas_1.ogg"],
+  "lengths_s": [175.56],
+  "default_length_s": 180,
+  "period_s": 600,
+  "volume_db": 0,
+  "reference_distance": 6,
+  "rolloff_db": 3,
+  "max_distance": 450,
+  "near_cutoff_hz": 8000,
+  "far_cutoff_hz": 1200
+}

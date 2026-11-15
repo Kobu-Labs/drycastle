@@ -3,7 +3,8 @@
 Status: all tickets of "Map: Shooter v2" (#104) are closed, most of them "resolved in part". This page is the entry point:
 what the game now has, where the numbers live, the wire protocol, and what is still open. Server operation (flags,
 database, firewall) is in `docs/shooter-server.md`. Terms are defined in `GLOSSARY.md`; the decisions are in
-`docs/adr/0003` (persistence and identity) and `docs/adr/0004` (water bodies in the map artifact).
+`docs/adr/0003` (persistence and identity), `docs/adr/0004` (water bodies in the map artifact, partly superseded) and
+`docs/adr/0023` (surface-only swimming and the per-body depth grid).
 
 Nothing in this document was checked by running the game. The unit tests in `godot/ShooterCore.Tests` cover the shared
 simulation, the data files and the wire codecs; the Godot scenes, shaders and HUD layouts are compiled but unseen.
@@ -20,7 +21,7 @@ simulation, the data files and the wire codecs; the Godot scenes, shaders and HU
   loadout item, so players cannot select it; see section 9. Smoke arenas and `--debug-cmds` servers keep every weapon on
   the hotbar (`LoadoutHotbar.All`).
 - Corpses (#130): a killed player leaves a corpse holding its primary. Walking onto it and pressing E swaps the corpse's
-  weapon into the primary or the secondary position.
+  weapon into the primary or the secondary position. A corpse also carries the item its player wore (section 7b).
 - Loadout autosave, rename, copy and reset (#145). Each loadout has a name (1-24 characters, trimmed, `LoadoutRules.ValidateName`,
   default "Class 1" .. "Class 5"). The editor saves on its own after a pause: every `SaveLoadout` carries a client sequence
   number (`seq`), and the server answers each one with a `LoadoutAck` event so the client can match answers. Copy (`CopyLoadout`)
@@ -48,6 +49,19 @@ Mechanics added in v2:
   (#112). Pump and shell reloads are flags on the weapon.
 - Snipers have a scope (`scope_fov`) and breath hold (`breath_hold_seconds`, `breath_recover_seconds`). Zoom levels
   beyond one are not implemented (#113).
+- The breath hold has no meter: an inhale, a heartbeat under 40 % of the breath (faster and louder to the end) and a loud
+  exhale when it is forced out (`BreathCues`; sounds by `scripts/make_breath_sounds.py`).
+- Sniper bullets drop (`muzzle_velocity`, `zero_distance`; `BulletDrop`): the server resolves the shot at once along a
+  curve of 25 m pieces, each against the rewound targets (ADR 0013 holds). The mouse wheel while scoped dials the zero in
+  10 m steps (event 24, `SetZero`); the scope shows the zero and mil-dots at true angles. A bot's shots do not drop.
+- Hit diagram: a sniper kill of a wild animal sends the shooter event 25 (`HuntShot`: species, where the bullet entered the
+  body box, distance, weapon); the HUD shows the species' side view (`scripts/make_animal_silhouettes.py`) with the entry
+  marked. A bullet tests a wild animal against its hit shape (`AnimalShapes`, `animal_shapes.json` baked by
+  `scripts/make_animal_shapes.py`: the outline per pose in 5 cm cells, the eating pose by time), else its body box
+  (`hit_box`, `hit_box_ahead`); no longer the scaled capsule. The diagram draws that same shape.
+- Binoculars: a bag item (`binoculars` in items.json, `/give binoculars`), key B. Zoom and a distance readout measured on
+  the client (`NetClient.Binoculars.cs`). Only up/down travels (events 26 `RaiseBinoculars`, 27 `BinocularsRaised`), so
+  the others see the pair held at the face (`ArmsReadyPose.Binoculars`, `CharacterView.SetBinoculars`).
 - Iron sights (hold zoom) ease the gun to centre and fade the crosshair; the sniper keeps its scope (commit bda2271).
 - Bullet holes (64-decal ring buffer, fade after 15 s) and sparks oriented along the surface normal on hitscan hits (commit 189b6bf).
 
@@ -106,7 +120,7 @@ Data: `godot/shooter/data/perks.json`. One perk per loadout. The modifier is rea
 | Swift Swap | 5 | weapon swap speed x1.5 | yes |
 | Tank Hunter | 8 | damage dealt to vehicles x1.25 | yes |
 | Hot Streak | 12 | every killstreak threshold lowered by 1 kill (never below 1) | yes |
-| Steady Lung | 15 | breath hold time x1.5 | yes, but not in water (#138) |
+| Steady Lung | 15 | breath hold time x1.5 | yes |
 | Ghost | 20 | UAV visibility x0 (enemy UAV pings do not show you) | yes |
 
 Perk numbers are the first set from the brief (#115), not tuned by play. Two of them scale with the streak they are
@@ -273,8 +287,8 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 
 ## 7. Vehicles and the world
 
-- Vehicles (`vehicles.json`): car, motorcycle, bicycle (v1), war jeep and quad bike (#131), boat and amphibious transport
-  (#132). Handling was reworked in #134 (max speed, turn radius, braking, hp). Headlights and tail lights come from the
+- Vehicles (`vehicles.json`): car, motorcycle, bicycle (v1), war jeep and quad bike (#131), and the amphibious transport
+  (#132; a boat type was shipped with it and later removed). Handling was reworked in #134 (max speed, turn radius, braking, hp). Headlights and tail lights come from the
   optional `lights` block (#137).
 - Seat switch: while seated in any vehicle the number keys (the `slot_1` to `slot_4` actions, rebindable) take that seat, and a seat
   schematic shows the seats (bottom right). Client request: event kind 161 (u8 seat index); the server answers the riders with kind 162 (who
@@ -284,8 +298,13 @@ one match and level 20 after about six good matches. No telemetry exists yet.
   from the rear where its engine is. It is boarded like a car, within 3 m of its centre, so along the middle of either side (the middle door is there),
   not at the front door. Its doors are separate model nodes that nothing moves yet.
 - Utility helicopter (ADR 0006): the flown vehicle (`utility_helicopter`, medium `air`), see "Utility helicopter" below.
-- Water bodies (#138, #142): the pipeline writes `water.json` into the map artifact; the server and clients swim, submerge
-  and hold breath (HUD "AIR"). Surfaces, underwater tint and splashes are client-side and not yet compiled by Godot.
+- Amphibious transport (ADR 0010, 0011, 0012): an open three-seat vehicle with its own driving model on land and water, an armed seat and a
+  ring gun, and riders the hull does not cover (`amphibious`, medium `amphibious`), see "Amphibious transport" below.
+- Water bodies (#138, #142): the pipeline writes `water.json` into the map artifact; the server and clients float and swim at
+  the surface in deep water (ADR 0023: no diving, no breath, no drowning), wade in shallow water and splash on entry.
+  Surfaces and splashes are client-side and not yet compiled by Godot.
+- Zone points: `zone_points.json` holds baked candidate points inside the zones of each kind the server needs (Bigfoot, the wild species). The server asks `NetServer.PickEventSpawn("bigfoot")` for a random one, or gets
+  `null` when none exists (`docs/pipeline.md`, "Zones"). No client use.
 - Day/night (#135): one server clock, `environment.json` (start time 08:00, day length 24 minutes by default). The sun,
   moon, sky shader and ambient light follow it. Street lamps (#136) light up at night from `lamps.json`.
 - Sentry turret, attack missile, MOAB, care packages and aircraft are world entities (section 9).
@@ -362,9 +381,211 @@ as the driver of every other vehicle is: to stop the pilot, destroy the helicopt
   does not stop a car. The helicopter stops against what it hits and slides along it; the speed a surface takes in one tick is the impact,
   and the crash damage rules apply to it (`crash_min_speed_loss`, `crash_damage_per_speed`: full speed into a wall is about a third of its
   hit points). A touchdown under power is always under the threshold. The tail boom and the blade tips beyond the disc do not collide, and
-  it does not collide with players or other vehicles (no vehicle does) or run anyone over.
+  it does not collide with players or run anyone over. It does bump other vehicles (see "Vehicle against vehicle" in `docs/vehicle-collision-and-entering.md`).
 - *Water.* The surface is a floor: it does not sink. While the skids are in a water body it loses `water_damage_per_second` (60) hit points
   a second, and it can lift out again. The cushion treats the surface as ground.
+
+### Amphibious transport
+
+Two spawn on the map (`spawn_count` 2, near a shore where there is one) and it is in the sandbox vehicle list. The model is generated
+(`scripts/make_amphibious_model.py`): a boat-shaped hull on four wheels, no roof, no doors, low sides, a propeller under the stern. Three seats
+(it had four): the driver front left, an armed seat beside them, and a gunner standing in a ring over the rear. The driver's client predicts it
+and the server corrects it (ADR 0010); everyone else, its riders included, sees it interpolated.
+
+**Controls** (the rebindable movement actions; nothing new to bind):
+
+| Input | On its wheels | Afloat |
+|---|---|---|
+| W / S (`move_forward`, `move_back`) | Accelerate / brake, then reverse | Ahead / astern (there is no brake: astern is how it stops) |
+| A / D (`move_left`, `move_right`) | Steer (ramped: a tap is a small correction) | Helm: lazy, and it turns from rest under power |
+| Space (`jump`) | Handbrake: stops it and lets the tail slide | Nothing |
+| Mouse | Looks round the vehicle; the camera swings round with it on its own | The same |
+| E (`interact`), 1-3 (`slot_1`..), H | Get out, switch seat, headlights, as in every vehicle | The same |
+
+**Driving** is `DriveModel` (pure, in ShooterCore), not the car model the other vehicles share. On land it pulls hard from a standstill and eases
+off towards top speed, the brake bites at once, and the steering sets a circle that widens with speed and is held to what the tyres grip, so it
+is quick at low speed and calm at top speed. In a water body it floats (wherever the water over the ground is at least `float_depth` deep; the
+village's ponds are only 0.2 to 0.9 m deep in the terrain, so depth decides no more than that) and handles like a boat: thrust against a drag that grows
+with the square of the speed, a lazy helm, a stern that swings out, sideways speed the water takes away slowly. Going in fast, that same drag
+checks it hard, and the hull drops to its waterline on a spring and comes up again; coming out, the wheels haul it up the bank over a few
+ticks. It lies on the slope under its four wheels; a ledge higher than `step_height` under a wheel is a wall, a drop deeper than `snap_down`
+puts it in the air. Walls, trunks and buildings stop the hull box, which is swept half a metre clear of the ground. It does not collide with
+players or other vehicles (no vehicle does); it runs people over on land only.
+
+**Handling** is all in `vehicles.json`: `top_speed`, `acceleration`, `brake`, `turn_radius`, `high_speed_radius_factor`, `water_top_speed`,
+`water_acceleration`, and the `drive` block (`land`, `water`, `body`, `camera`; each key's summary in `VehicleDriveDef` and its parts says what
+turning it up does). `dotnet test ShooterCore.Tests --filter "DriveTests.The_feel_in_numbers" --logger "console;verbosity=detailed"` prints the
+resulting times and distances without the game; `DriveTests` holds the limits. With the shipped numbers:
+
+| | Land | Water |
+|---|---|---|
+| Top speed | 22 m/s (79 km/h), reverse 6.6 m/s | 7 m/s (25 km/h), astern about 5 m/s |
+| To 10 m/s / 90 % of top | 1.7 s / 5.2 s | (never 10) / 4.6 s |
+| Stop from top speed | brake 27 m in 2.4 s; coasting 109 m | full astern 9 m in 3.1 s; lifting off it still does 3.8 m/s after 2 s |
+| Circle | 6 m at 3 m/s, 9 m at 8 m/s, 57 m at top speed (the grip limit) | 12 m at 5.4 m/s, sliding 18 degrees off its heading |
+| Going in at top speed | | checked at up to 17 m/s², 12.5 m/s a second after the splash |
+
+**What is drawn** (client only; nothing but the drive record and the players' own records is on the wire). The body's weight is `DriveBody`
+(pure, tested): on its wheels the tail squats under throttle, the nose dives under braking and the body leans out of a turn, over wheels that
+stay on the ground; afloat the bow rises under power, the hull heels out of a turn and bobs, harder just after it has gone in, settling to a
+gentle bob at rest. The wheels roll with the speed and the front pair steer, the propeller turns in the water, a wake trails from the stern
+and spray flies from the bow in proportion to the speed (off with reduce motion), it goes in with a splash, and damage smoke comes from the
+engine in the stern (`hood`). The driver's camera is the helicopter's spring camera (`drive.camera`), and it swings round with the vehicle
+(`turn_follow`, `turn_response`), because here the keys steer. Riders are drawn on their seats on the drawn body, so they lean and bob with it
+and stay aboard the vehicle its driver sees in the present; they sit (the crouch pose), the gunner stands, and they do not walk. A rider who
+aims (the armed seat, the ring gun) faces where they aim and their weapon is pitched to it.
+
+**Armed seat** (seat 2, ADR 0011). Its rider keeps their own loadout and fights with it from the seat, in first person: fire, reload, aim and
+scope, recoil and breath as on foot, the weapon in the view, ordinary kills with that weapon. It is a property of the seat (`"armed": true`),
+so the bus's passengers stay unarmed.
+
+- *Changing weapon:* the mouse wheel, as on foot. The number keys stay the seat switch, as in every seat of every vehicle.
+- *How far round:* the seat's `aim` arc, in the vehicle's frame: from 60 degrees left of the nose round the right side to 150 degrees, 40
+  down, 70 up. The view is held inside it. Not across the driver, not back through the gunner.
+- *Spread:* the vehicle's speed widens it as the rider's own speed does on foot: nothing at a standstill, the weapon's whole movement spread
+  at `spread_full_speed` (16 m/s). The seat gives no stance bonus. The crosshair shows it.
+- *The knife:* as on foot, from the seat, against anyone in reach who is not aboard.
+
+**Ring gun** (seat 3). The vehicle gun and door gun rules (`gun`, `door_gun`; the helicopter's belt and the jeep's round), on a ring: the gun
+rides `ring_radius` out from the ring's centre and swings round the gunner, who stands there and turns with it. The gunner's view aims it, all
+the way round, 35 down and 55 up; within `guard_arc_deg` (50) of the nose it goes no lower than `guard_min_pitch_deg` (-4), coming down to the
+full depression over the next `guard_blend_deg` (20), so the barrel rides up over the two in front (`AmphibiousTransportTests` sweeps every aim
+against their bodies and the hull). Its camera is at the model's sight, its aim reaches every client as a turret record, the tracer leaves the
+drawn muzzle, the barrel recoils and the muzzle flashes, and the gunner's ammo is event 160: all as the door gun's. Kill-feed weapon
+"Mounted MG".
+
+*Who can be shot in their seat.* All three (ADR 0012): each seat is `"exposed": true`. A bullet, a pellet, a rocket or a killstreak round that
+reaches a rider's body hits that rider and not the hull, and the hull takes nothing from it; one that misses them hits the hull. The hit box
+is the hull only, 1.2 m high, so the riders stand out of it and are the drawn figures: seated ones as tall as a crouch, the gunner standing.
+Riders of one vehicle never hit each other, and their own hull is not in their way. A rider who dies frees their seat; if it was the driver,
+the vehicle coasts to a stop. Blast was already unprotected for every vehicle (a splash reaches every body in range, through hulls) and is
+unchanged; when the vehicle blows up, everyone aboard dies with it.
+
+**Decisions on the edges.**
+
+- *The flak truck and the helicopter.* Their gunner's exposure is unchanged, including that the jeep's roof gun and the killstreak guns do not
+  reach them through the hull; those weapons do reach the transport's riders. One to unify later, if wanted.
+- *A rider's own rocket.* It passes their vehicle's hull and spares their fellow riders, direct hit and blast, while the shooter still rides
+  it. The shooter takes their own blast as on foot, and so does the vehicle.
+- *Shallow water.* In a pond shallower than its draft it still floats; its wheels are drawn under the bed.
+- *No driver.* It is stepped hands off every tick and coasts, on land or water. A driver whose inputs stop arriving for 6 ticks is driven the
+  same way until they resume.
+
+## 7b. Items and equipment (#261)
+
+The weapons are the hotbar, what a player wears is **Equipment**, one item per equipment slot, and what is carried unworn is the **Bag**, six cells
+(GLOSSARY). Today there is one slot, headgear, and one item, the Bigfoot head. Decisions: ADR 0016 and, for the bag, multi-item corpses and ground
+items, ADR 0018 (#267, protocol 31).
+
+- **Data.** `items.json` (`ItemsFile`, `ShooterCore/Items`): `id`, `name`, `slot` (`headgear`), `pickup_limit` (leave out for no limit) and the
+  effects as plain fields (`headshot_immune`). An item travels on the wire as its position in the list plus one, so new items are appended. A new
+  event item is a line in the file, plus a field only when it has a new kind of effect.
+- **Bigfoot head.** Worn in place of a helmet. A headshot on its wearer is resolved as a body hit (`HitTarget.HeadGuarded`, read by `HitMath.Raycast`):
+  the weapon's body damage, no headshot multiplier, hit marker, kill-cause or bonus XP, for hitscan and shotgun pellets alike. Rockets, blasts
+  and the vehicle guns never had a headshot. What a player wears is state, not pose: lag compensation (ADR 0013) rewinds where they stood, not this.
+- **Death and the corpse.** At death everything worn and bagged comes off and the corpse carries it (`Corpse.Items`, up to 7: the worn items, then
+  the bag), with the pickups already counted, so the player respawns bare headed with an empty bag. The corpse keeps its weapon as before; the two are
+  separate takes. The items live as long as the corpse (120 s). The corpse cap evicts the oldest thing without an item first.
+- **Taking it (#269).** Tap the interact key at a corpse that carries items: the chooser (`CorpseChooser`) shows, under the weapon rows (keys 1 and 2), one
+  cell for each item (`ItemCell`, the same cell as the Equipment screen: icon, pickup pips, name tooltip). A click or Enter on a cell takes that item
+  (`RequestTakeCorpseItem` by index): into its empty slot, else the bag, else it swaps with what is worn (the corpse keeps what was worn). The cell leaves the
+  list when the server's next list for the corpse arrives; an item taken as often as it may be crumbles, the cell goes and the toast "The item crumbles in your
+  hands" shows. The arrows move between the cells and the chooser stays open for the next one; with nothing left (and no weapon row) it closes, Esc cancels.
+  A chooser with a list releases the mouse; one with only the weapon rows is keyboard only as before. A corpse with no items shows no list. Holding the key
+  still takes the weapon only. The prompt names the item only for a corpse that carries exactly one ("... or put on X"), and says "an item" for several.
+  Same conditions as the weapon: alive, on foot, in reach.
+- **The bag and the moves (#267).** `Bag` holds six `ItemStack`s. `RequestEquip(cell)` wears a bagged item (what was worn goes into that cell),
+  `RequestUnequip(slot)` puts the worn item in the first empty cell (refused with "Your bag is full" when there is none), `RequestDropWorn` and
+  `RequestDropBagged` put an item on the ground. None of them counts a pickup; the server validates each and answers with an `Equipment` event.
+  `ItemRules` (pure, `ShooterCore/Items/Equipment.cs`) holds the rules and `BagTests` the tests.
+- **Ground items.** A dropped item lands at the terrain height under the player's feet (no throw), or under the vehicle they ride, any seat, a
+  helicopter in the air too. It is a world entity (type 2, `GroundItem`: state byte = item, hp byte = pickups) drawn as the item's own model
+  (`NetClient.MakeGroundItemVisual`: `items.json` `model`, laid on the ground by its lowest point; an item with no model keeps a small gold placeholder block). Tap the interact key within reach: "E  Pick up X". It goes into its empty
+  slot, else the bag; with both full nothing is taken or counted ("Your bag is full"). Each take counts one pickup (the dropper's too); an item at its
+  limit crumbles. It expires after 120 s and shares the corpse cap.
+- **The pickup limit.** The Bigfoot head has `pickup_limit` 3. Every take counts on the item, which keeps its count when it drops again on the next
+  corpse, so it can be taken three times over its whole life. The next attempt removes it from the corpse, gives the taker nothing, and shows the
+  toast "The item crumbles in your hands". Other items set their own limit or none (no limit: it never crumbles).
+- **What lasts.** Nothing is stored (ADR 0003's profile is untouched). A death drops everything on the corpse; leaving the match loses it; a new round
+  keeps it on the player (the round's corpses and ground items, and any item on them, go); a reconnect starts bare.
+- **HUD.** Nothing on the HUD shows Items (the "Headgear / name" chip beside the health bar is gone): what is worn and carried is the Equipment screen's.
+- **The Equipment screen (#268).** F (rebindable action `inventory`, default F, saved with the other controls) opens it; F and Esc close it. A non-pausing
+  overlay in the HUD like the tactical map (`EquipmentScreen`, `Hud.Equipment.cs`): the mouse is released, the movement keys still work
+  (`Player.MoveWithFreeMouse`: move, jump, sprint, crouch, prone), firing and the other keys do not. It opens on foot and in a vehicle seat, never in a turret or
+  missile view, and closes on death, at the end of the match and when a menu or the corpse chooser opens. No title, labels, buttons or explanation text.
+  The figure (`CamoPreview`, the player's Camouflage, worn Items drawn) is in the middle, the headgear slot above its head (an empty slot shows the ghost
+  of its type), the bag as three columns of two on the right, one glyph-only hint row (F, Enter, Delete; the pad's Y, A, X on a gamepad) under the figure.
+  A cell (`ItemCell`) is an icon with its pickup pips (a pip per allowed pickup, filled for the ones used; none for an item with no limit) and a name-only
+  tooltip on hover or focus. Controls: click or Enter on a worn item takes it off into the first free bag cell (with a full bag the cell shakes, the error
+  sound plays and the toast says so, and nothing is sent), on a bagged item puts it on, swapping what was worn into its cell; drag between the bag, a slot and
+  the figure (valid targets highlight, the others dim; a worn item dropped on a bag cell goes to the first free one); drag out of the panel or press Delete to
+  drop on the ground (no confirm: picking it up again costs a pickup); the arrows move focus; the head slot, hovered or focused, frames the figure's head. Every
+  move is a request (`RequestEquip` and the others); the cells redraw only on the server's next Equipment event, and further requests wait for it (at most 0.6 s).
+  Rules and focus order are pure (`ShooterCore/Items/EquipmentScreenLogic.cs`, `EquipmentScreenTests`).
+- **Drawn on the character (#266).** `items.json` `model` names the item's model (`assets/`, authored in the slot's frame: metres, facing -Z, for headgear
+  the origin is the middle of the head). `CharacterView.SetWorn(slot, item)` (`CharacterView.Worn.cs`) hangs it on the head bone, so it follows every
+  clip, stance, the prone roll and the ragdoll, and hides what it replaces: the helmet and the hair, the head's foliage and the face paint. The same call
+  dresses remote players (from event 194), the local player's seat view, a corpse that carries the item (from event 191: gone again once taken or crumbled)
+  and the menu figure (`CamoPreview.ShowWorn(slot, item)`). The Bigfoot head is `scripts/make_bigfoot_head_model.py` (a faceted ape-like head, 1142
+  triangles, about 30 % bigger than the head it covers). An item without a model is worn but not drawn.
+- **Icons.** `IconRegistry` has `IconKind.Item`: `ui/icons/items/<id>.png` (128x128, a render of `model` from `tools/render_icons.gd`); an item without a
+  file shows `item_fallback.png` (a plain box glyph from `make_icons.py`), not the crossed placeholder.
+- **Granting it for tests.** An admin's `/give <item> [player]` gives a fresh item (no pickups counted) to a living player, or to the admin: worn when the slot is empty, else in the bag; refused when both are full.
+- **Wire (protocol 30).** Event kind 194 `WornItems` (server to everyone but the wearer: u16 player id, then the slots as in 192; sent whenever 192 is, and
+  to a joiner for each player who wears something). A client keeps the slots by player id, dresses the character when it exists or is made, and forgets
+  the player on leave. Pickup counts never leave the server.
+- **Wire (protocol 31).** Event kinds 190 `PickUpCorpseItem` (client to server: u16 corpse, u8 index in its list), 191 `CorpseItems` (server to everyone:
+  u16 corpse, u8 count, then u8 item and u8 pickups each; sent when a corpse that carries items spawns, when its list changes, and to a joiner for each
+  corpse that carries any), 192 `Equipment` (server to the owner: u8 slot count and the slots, u8 cell count and the bag cells, each u8 item and u8
+  pickups), 193 `ItemNotice` (server to one player: u8 reason, 1 = crumbled, 2 = bag full), and the requests 200 `EquipItem` (u8 cell), 201 `UnequipItem`
+  (u8 slot), 202 `DropItem` (u8 worn or bag, u8 slot or cell) and 203 `TakeGroundItem` (u16 world entity id). World entity type 2 is the ground item.
+  Codecs: `ItemEvents`.
+
+## 7c. Events and the Bigfoot (#264)
+
+An **Event** (GLOSSARY) is a short happening with a challenge and a reward. The lifecycle is `EventRun` / `EventBook` (`ShooterCore/Events/EventRun.cs`): active, then won or
+despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: `NetServer.Bigfoot.cs`; client: `NetClient.Bigfoot.cs`; the fight itself is
+`ShooterCore/Events/Bigfoot.cs` (a plain class, tested with a fake world in `BigfootTests`). Every number is in `data/bigfoot.json` (`BigfootFile`).
+
+- **Starting and ending.** An admin's `/event bigfoot` spawns it at a random baked point of an area with `event spawn: bigfoot` (`PickEventSpawn`, #263). A map with no such
+  area (the village has none until one is drawn) gets the dev fallback: `fallback_spawn` metres from a random living player, said to the admin and in the log as a FALLBACK.
+  `/event current end` kills it (a win, for testing), `/event current cancel` removes it with no reward. The first version announces nothing but a system chat line:
+  it does not use the intel board (`AnnounceIntel` is the one call that would).
+- **A world entity, not a bot** (wire type 60). The state byte is the act (`BigfootAct`, bits 0-3), a bit that flips on every hit that did not kill, the phase (bits 5-6) and
+  the enrage (bit 7); the owner field is the player it holds; the hp byte is the hit count left in percent. The client draws the placeholder giant
+  (`quaternius-giant/giant.glb`, `assets/quaternius-giant/NOTICE.txt`) and picks the clip from the act. Idle, Walk, Run, Death and HitRecieve map directly; every attack
+  reuses the Attack clip stretched over the wind-up, plus a procedural lean, rise and wobble of the whole figure (`MoveBigfoot`). The model and the sounds are placeholders
+  (`BigfootSounds` names the sounds the game already has).
+- **Hit count, not hit points.** It dies after `hits.per_player` x participants hits (participants: living players within `participant_radius_m`; the number only goes
+  up while it fights). Shots reach it through the normal pipeline: it is a `HitTarget` (id `BigfootRules.TargetId` 60000) with `Scale` 2, a player capsule twice as tall
+  and as wide, its head guarded (a headshot is a body hit), in `LiveTargets` and, rewound by its own `PoseRing`, in `RewoundTargets` (ADR 0013). `Deal` hands a hit on that
+  id to `DealBigfoot`, which weighs it by its source (`BigfootRules.SourceOf`): a bullet or pellet fan 1, an explosive (a rocket, the attack missile, the MOAB)
+  `explosive_weight`, a vehicle weapon (roof gun, flak, door gun, the aircraft's guns) `vehicle_weapon_weight`, ramming and a vehicle's blast nothing. The shooter gets the Hit event, so the marker shows.
+- **Phases** at 30 % and 60 % of the count, enrage at 85 %: (1) it chases and hurls logs (`TrunkEntity`, wire type 61, an arc aimed ahead of the target, 2-5 damage to the first
+  player it crosses); (2) adds the stomp (a wind-up with a sound, then a `Shockwave` ring that hurts and knocks back each grounded player once; a jump avoids it) and the vehicle
+  throw; (3) adds the grab, a hold with a flail, and a launch at the nearest other player (`Player.AddImpulse` on a ballistic solution) or in a random direction.
+- **The vehicle throw.** A ground vehicle within `contact_m` of it is thrown after a wind-up on a closed-form arc (`VehicleThrow`) to a random spot `min`-`max` metres away that has
+  ground. `ServerCar.Thrown`: the server places the vehicle and its riders each tick (`StepThrownVehicle`), ignores the driver's inputs (and exits, and seat weapons) and skips crash
+  damage, run-over and vehicle contacts for it; it lands exactly where aimed and settles. Nothing aboard takes damage. The driver's client stops predicting that vehicle from the
+  throw event (`BigfootFx` VehicleThrow) until a moment after it lands and draws it from the snapshots. Helicopters are not thrown.
+- **The held player.** The server puts the body at the hand every tick (`Client.HeldUntilTick`) and reads but ignores the input. The client sees its own id in the Bigfoot's owner field
+  and stops predicting (`_heldByBigfoot`: no simulation, no reconcile, the body is the snapshot's). A launched player's fall damage is replaced by the brain's landing damage
+  (2-5) for `launch_grace_seconds`, and the other players the flyer passes within `launch_hit_radius_m` of take 2-5 once each.
+- **Movement and collision.** It ignores the navmesh: a straight line towards the nearest living player (kept `retarget_seconds`), the ground by a ray from above, trees skipped.
+  **Trees are ignored, buildings are solid**: a trunk collider is recognised by the surface meta "wood" (`IsTreeHit`), anything else of the world layer blocks it and it
+  steers round (`BigfootBlocked`, two rays).
+- **Wipe and despawn.** When the last participant dies or leaves the game it heals to full and waits where it stands, until a player is within `wake_radius_m` (or shoots it). With no
+  living player within `despawn_radius_m` for `despawn_minutes` it despawns with no reward.
+- **The reward.** At the kill: the chat line "Event won: ...", XP (`levels.json` awards `event_win`, `XpReason.EventWin`, to everyone credited), the death clip. `death_seconds`
+  later the body is gone and `SpawnBigfootReward` plans footsteps (`BigfootTrail.Plan`, about 120 m over ground, meandering) from where it fell to a corpse that carries the
+  Bigfoot head through the ordinary corpse item path (ADR 0016, 0018). The corpse is owned by id 60000, which is how a client knows to draw the giant lying in its death pose; its
+  weapon is the knife, which nobody can take into a hotbar position, so the chooser offers only the item. Corpse and footsteps last `corpse_seconds` (900 s).
+- **Wire (protocol 32).** World entity types 60 (the Bigfoot, hp byte) and 61 (a log); event kind 210 `BigfootFx` (server to everyone: u8 `BigfootFxKind`, i32 x, y, z, u16 id,
+  u8 extra; the roar, the stomp telegraph and shockwave, a log's release, a vehicle thrown or landed (id, flight in tenths of a second), a grab, a launch, the death), 211
+  `BigfootTrail` (u8 count, then i32 x, y, z and u16 yaw each; 0 clears; to a joiner while it lasts); special weapon id 242 (the kill feed names damage from it), `XpReason.EventWin`.
+  Codecs: `BigfootFxCodec`, `BigfootTrail`.
+- **Not verified in a running game** (no one has run this): the model's scale and facing (measured and assumed from the import), the climbing and sliding on real terrain and round
+  real buildings, the feel of every number in `bigfoot.json`, the throw and the hold on a real client (the prediction hand-off), the footprints on slopes, the sounds.
 
 ## 8. Known gaps (collected from the closed tickets)
 
@@ -372,12 +593,13 @@ Not built:
 - XP gain toasts (kill, headshot, roadkill, streak kill). The server sends only `LevelUp` and the round summary; a per-kill
   XP event is needed (#143). Left open here (not trivial: a new wire event).
 - Perk icon. The HUD shows the perk as a text label (#143); there is no icon asset.
-- HUD XP bar; minimap size, opacity and zoom as settings (#119, #143). Enemy minimap dots are fed only by UAV pings (#121).
+- HUD XP bar; minimap size, opacity and zoom as settings (#119, #143). Enemy minimap dots are fed by UAV pings (#121) and gunfire blips: an enemy's gun shot within `gunfire_blip_radius` (match.json, 150 m) shows a fading diamond for `gunfire_blip_seconds` (1.5 s), one per shooter per `gunfire_blip_interval` (0.25 s). No wire event of its own: every client already receives each Shot and PelletFan with the shooter and origin (rules in `GunfireBlipRules`, tracker `GunfireBlips`). Knife, streak weapons and vehicle guns do not blip; Ghost does not hide it; no protocol bump.
 - Scope zoom levels above 1 (#113). Sniper sway reduction (#139): `sway_amount` is read but never applied.
 - Concealment wired into the tick, name tags and kill cam; suit visible in first person; tufts do not follow limbs (#140, #141).
-- Water: water surface mesh, underwater fog and muffling, bubbles, light shafts, remote swim animation, splash on entry
-  for predicted shots (#138, #142). Holes in water bodies are not cut out of the surface (an island in a lake is covered).
-- Boats and amphibious vehicles are server-only visually (primitive boxes, no CC0 model in `assets/manifest.json`).
+- Water: water surface mesh, bubbles, light shafts, remote swim animation, splash on entry for predicted shots (#138, #142).
+  The surface is one-sided and flat (waves are per pixel); it takes depth from the `water.json` depth grid, so a
+  version 1 map (no grid) has no fade at the bank. The full-screen underwater view and
+  the SFX muffling were removed with diving (ADR 0023).
 - Turret: the knife can hit a turret through a wall; the owner leaving leaves the turret firing (kills still credit the
   departed id) (#123).
 - Aircraft: no way out of a turret or gunship except the streak's own end (#125, #126); the owner's body stays shootable
@@ -385,14 +607,12 @@ Not built:
 - MOAB: no killcam (none exists in the repo), no MOAB sound (#129).
 - Corpse pickup and the care package crate both use E; holding E on a corpse under a falling crate can take the corpse
   first (#124).
-- Steady Lung does not apply in water (#138).
 - Care package (#151): the reward streaks are not shown in the loadout tracker (only the toast names them). The corpse
   pickup hold still uses its own prompt, not `RadialProgress`. The ring, the toast icon and the crate despawn on open were
   not checked in the running game (the brief forbade it).
 
 Not verified (compiled, not run; the brief for these tickets forbade running the game):
-- Shaders: `water_surface.gdshader` and `underwater.gdshader` (shore fade uses `hint_depth_texture`, which needs the Forward+
-  or Mobile renderer; the project uses the default renderer), `sky_daynight.gdshader`, `camo_suit.gdshader`,
+- Shaders: `water_surface.gdshader` (compiles on Forward+; its look is not checked in the game), `sky_daynight.gdshader`, `camo_suit.gdshader`,
   `camo_tuft.gdshader`, `gunship_thermal.gdshader`. The first real compile is the first check.
 - Layout, scenes and HUD positions: streak panel, minimap texture size, XP strip, breath bar, care package prompt, gunship
   overlay, the aircraft overlays. Visual fit of the jeep and quad models.
@@ -423,13 +643,26 @@ usage are listed above the input. A command that cannot be valid is shown with t
 Commands are for admins. The dev server (`make shooter-server`) passes `--admin-all`, so every player is one (`ADMIN=0` turns it off); never pass it on a release server. Otherwise start the server with `--admin-token TOKEN[,TOKEN...]`, where a token is the `player_token` in the `[connect]` section of the client's settings file (Godot user data
 folder, `shooter_settings.cfg`). They run on the server, so they work live: `/bots N` (0 to 64) changes the roster on the next tick (the first time bots are wanted after a start with none, the navigation is
 baked once, and the server pauses for that, the admin is told); `/spawn vehicle` puts a vehicle in front of the admin (up to 32 a run, shared with the sandbox's 8; spawned vehicles are not removed);
-`/time HH:MM|dawn|morning|noon|dusk|night|midnight|freeze|resume` sets the day clock and sends it to every client at once (event 183). `/help [command]` lists them for anyone.
+`/time HH:MM|dawn|morning|noon|dusk|night|midnight|freeze|resume` sets the day clock and sends it to every client at once (event 183); `/event bigfoot` starts the Bigfoot event, `/event current end` concludes the running event as a win and `/event current cancel` removes it with no reward (section 7c); `/restart [ffa|tdm]` starts a fresh round now (scores, lives and world entities reset), in the current match mode or, with an argument, in that one (the teams are regrouped, everyone is told; the mode reaches clients in the next scoreboard). `/event rozhlas` starts the village loudspeaker broadcast on every client now (event 184, no payload; each client starts its own copy at once and the scheduled broadcast waits until it ends); `/event intel [clear]` announces a made-up test event (section 8c; `clear` takes it off again); `/give <item> [player]` puts an item of `items.json` on a living player (by name or `#id`) or on the admin, a fresh one with no pickups counted, replacing what was worn in its slot (section 7b); `/help [command]` lists them for anyone.
 The grammar, completion and history are pure code in `ShooterCore/Chat` (`ChatCommands`, `ChatCompleter`, `ChatHistory`) with tests in `ChatTests`; `NetServer.Chat.cs` runs the commands, `ChatBox.cs` draws the window.
+
+## 8c. Event announcements and the intel room (#262, ADR 0017)
+
+An event is announced in two places: to everyone, by a toast, a chat line and the Rozhlas broadcast saying that suspicious activity was detected and to report to the base (naming its grid reference), and at the base, where the intel screen says what it is. The announcement never says what the event is. Neither part knows anything about events beyond one record, `IntelEvent` (`ShooterCore/Intel/IntelBoard.cs`): `Id`, `Kind` (picks the emblem; "generic" and "creature" exist), `Name` (40 characters), `StartsAt`, `Description` (240), `Risks` (up to 5 of 48), an optional `Where` (ground x, z) and a `Test` flag. The event lifecycle (a later ticket) is the only thing that has to call `NetServer.AnnounceIntel(event)` when it announces one and `WithdrawIntel(id)` when it is over; the server keeps them on an `IntelBoard`, at most 6, soonest first.
+
+The board goes to every client whole in event kind 185 (`IntelSync`, `IntelCodec`): at each change, and to a joiner (without an announcement). Start times travel as seconds left, so clients need no common clock. When the message names an event as being announced, each client shows the toast and plays Rozhlas. Until real events exist, the admin's `/event intel` puts an event named "TEST ALERT" (begins in 2 minutes, stays 10 more, at the admin's position, tagged "not a real event" on the screen) on the board; `/event intel clear` takes it off, and it goes by itself when its time is up.
+
+The intel room is the floor of the military hangar: the first placed object of `data/intel.json` `base_asset` (`pack:synty-military/SM_Bld_Hangar_01`; `MapLoader.FirstObjectOfAsset`, lowest object id). `room` in that file lays the screen out in the object's own frame (`floor_m`, `at` [x, z], `facing`, `bottom_m`, `width_m`, `height_m`), and `IntelRoom.Place` (`ShooterCore/Intel`) turns it into a world anchor from the object's position, turn and scale in objects.json, never from the model, so it is the same for a player who has only the placeholder box. The screen is on the -z end wall, on the door panel x 0 to 4.56 (inner face z = -16.006), facing the +z end; the prefab's doors are solid, so `room.open_parts` (`SM_Bld_Hangar_Door_Small_01`, the small door of the +z end) is hidden and stops colliding (`IntelScreen.OpenEntrance`, `MapLoader.OpenObjectParts`, client and server). A map without such an object uses the command post of `base_bunker` (the wall the pipeline reserves, `bunkers.json` `intel`; `docs/pipeline.md`); with neither there is no intel room. The game draws the screen (`IntelScreen`, content in `IntelScreenView`) only within `view_range_m` of the camera. With several events the screen shows each for `rotate_seconds` in turn. `make shooter-intel-shots` renders the content with made-up events for review.
 
 ## 9. Wire protocol
 
-Protocol version: **23** (`Wire.ProtocolVersion`, whose summary lists every bump). The hello carries it; a mismatch is refused with a message naming both
-versions. Version 23 (chat and admin commands): event kinds 180 (a line or command from a player), 181 (a chat log line), 182 (admin flag and spawnable vehicles for a joiner) and 183 (the day clock changed live). Version 21 (the utility helicopter, ADR 0006): snapshot entity type 5 (Flight: a flying vehicle's velocity, pitch, roll, rotor speed and
+(This section was written at version 24; the later bumps are in the summary on `Wire.ProtocolVersion`. Version 29 added event kind 185, `IntelSync`, section 8c; version 30 added kind 194, `WornItems`, section 7b; version 32 the Bigfoot event, section 7c.)
+
+Protocol version: **24** (`Wire.ProtocolVersion`, whose summary lists every bump). The hello carries it; a mismatch is refused with a message naming both
+versions. Version 24 (the amphibious transport, ADR 0010 to 0012): snapshot entity type 6 (Drive: a driven vehicle's speeds along and across its
+heading and vertically, the slope it stands on, its steering, throttle and flags, `DriveRecord`, ids from 0x5000), the driver's inputs step it
+one for one as the pilot's do the helicopter, a turret record for its ring gun, and the server answers a seated player's Fire, Reload and weapon
+change when their seat is armed (no new fields for that; the bump is the behaviour change). Version 23 (chat and admin commands): event kinds 180 (a line or command from a player), 181 (a chat log line), 182 (admin flag and spawnable vehicles for a joiner) and 183 (the day clock changed live). Version 21 (the utility helicopter, ADR 0006): snapshot entity type 5 (Flight: a flying vehicle's velocity, pitch, roll, rotor speed and
 flags, `FlightRecord`, ids from 0x6000), and the pilot's inputs step the helicopter one for one, so the snapshot's input acknowledgement is the
 helicopter's too. Versions 17 to 20: delta snapshots against the acknowledged tick (17), the flak truck's turret record and aircraft hit points
 (19), seat switching (20). Version 16 (gunship rocket flight): a gunship rocket flies at its own `projectile_speed_mps` and lives out its range, and
@@ -474,6 +707,17 @@ Event kinds (`EventKind`, one byte in the event message):
 | | | 131 | ResetLoadout (client to server) |
 | | | 132 | LoadoutAck (server to the editing player) |
 | | | 140 | TargetRoster (server to one player on join, kinds 140-149) |
+| | | 190 | PickUpCorpseItem (client to server, kinds 190-199 are items and equipment, #261) |
+| | | 191 | CorpseItems (server to everyone, and to a joiner) |
+| | | 192 | Equipment (server to the owner: worn and bag) |
+| | | 193 | ItemNotice (server to one player) |
+| | | 194 | WornItems (server to everyone but the wearer, and to a joiner, #266) |
+| | | 200 | EquipItem (client to server, kinds 200-209 are the bag and ground items, #267) |
+| | | 201 | UnequipItem (client to server) |
+| | | 202 | DropItem (client to server) |
+| | | 203 | TakeGroundItem (client to server) |
+| | | 210 | BigfootFx (server to everyone: the Bigfoot's one-shot effects, kinds 210-219 are the events, #264) |
+| | | 211 | BigfootTrail (server to everyone, and to a joiner: the footprints to its corpse) |
 
 Message tags (`Wire.T*`): Hello 1, Welcome 2, Join 3, Leave 4, Event 5, Profile 6, SaveLoadout 7, SelectSlot 8, Error 9,
 SaveCamo 10, Input 11, Snapshot 20, WorldSnapshot 21. SaveLoadout is slot, six item strings, name (string), seq (u32 LE).
@@ -482,15 +726,15 @@ Special weapon ids (kill-feed `weapon` byte, `SpecialWeapons`): Ac130 244, Helpe
 Missile 248, Moab 249, VehicleGun 250, Vehicle 252, Debug 253, Void 254, Fall 255, Drown 251. Killstreak ids (`StreakWeapons`)
 are 244-249.
 
-World entity types (`WorldEntityRegistry`, one byte per entity): corpse 1, attack missile 10, turret 20, care package 30,
-aircraft 40. Players and vehicles keep their own snapshot code.
+World entity types (`WorldEntityRegistry`, one byte per entity): corpse 1, ground item 2, attack missile 10, turret 20, care package 30,
+aircraft 40, animal 50, Bigfoot 60, its log 61. Players and vehicles keep their own snapshot code.
 
 Move buttons (`MoveButtons`, bits in the input message): Jump 1, Sprint 2, Crouch 4, Fire 8, Aim 16, Reload 32, Use 64,
 Switch 128, Headlights 256, Prone 512, Killstreak 1024.
 
 Snapshot entity types (`EntityType`, one byte in a snapshot entry): Player 0, Projectile 1, Vehicle 2, Target 3 (the target
 dummies, #148: planned on the ground, Defeat pose when down), Turret 4 (the aim of a vehicle's gun, `FlakRecord`), Flight 5 (a flying
-vehicle's velocity and attitude, `FlightRecord`).
+vehicle's velocity and attitude, `FlightRecord`), Drive 6 (a driven vehicle's speeds, slope, steering and whether it floats, `DriveRecord`).
 
 Entity state (`EntityState`, one byte): Alive 0, Protected 1, InVehicle 2, Dead 3.
 
@@ -500,7 +744,7 @@ Database migrations (`godot/ShooterServer.Persistence/migrations`, applied in or
 stats, weapon_kills), 0002 roadkills, 0003 camo, 0004 loadout camo, 0005 loadout name (`loadouts.name`, empty for rows
 from before #145; the server gives those "Class N" on load).
 
-Data file versions: weapons 2, every other file 1.
+Data file versions: weapons 2, every other file 1 (`items.json` and `bigfoot.json` included).
 
 ## 10. Open design questions
 

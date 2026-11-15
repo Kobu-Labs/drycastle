@@ -12,7 +12,9 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class NetServer
 {
-    void FirePellets(Client c, Vector3 eye, float yaw, float pitch, WeaponDef w, byte weaponIdx, float cone)
+    /// <param name="aimed">The targets the fan can hit (null: every live one). A rider firing from an armed seat passes everyone not aboard their vehicle.</param>
+    /// <param name="seatCar">The vehicle the shooter rides, whose hull is not in the pellets' way (null on foot).</param>
+    void FirePellets(Client c, Vector3 eye, float yaw, float pitch, WeaponDef w, byte weaponIdx, float cone, List<HitTarget>? aimed = null, ServerCar? seatCar = null)
     {
         var aim = HitMath.Forward(yaw, pitch);
         var seed = (uint)_rng.Next();
@@ -20,27 +22,27 @@ public partial class NetServer
         var range = w.Range > 0 ? w.Range : MaxShotRange;
 
         // world and vehicle stops per pellet (one physics ray each; player bodies are excluded)
-        var targets = LiveTargets();
+        var targets = aimed ?? LiveTargets();
         var walls = new List<float>(dirs.Length);
         var cars = new List<ServerCar?>(dirs.Length);
         var dirsG = new List<Vector3>(dirs.Length);
         var crossedBy = new List<List<GlassCross>?>(dirs.Length); // the panes each pellet went through (null: none)
-        var exposed = new List<HitTarget?>(dirs.Length); // a pellet that stopped on a vehicle with its gunner in the open may reach him (GunnerCover)
+        var exposed = new List<ExposedRiders?>(dirs.Length); // a pellet that stopped on a vehicle with riders in the open may reach one of them (GunnerCover)
         var pastHull = new List<float>(dirs.Length);
         foreach (var d in dirs)
         {
             var g = new Vector3(d.X, d.Y, d.Z);
             List<GlassCross>? crossed = null;
-            walls.Add(BulletHit(eye, g, range, out var car, ref crossed));
+            walls.Add(BulletHit(eye, g, range, out var car, ref crossed, seatCar));
             crossedBy.Add(crossed);
             cars.Add(car);
             dirsG.Add(g);
-            var (gunner, past) = ExposedGunnerBehind(car, eye, g, range, targets);
+            var (gunner, past) = ExposedGunnerBehind(car, eye, g, range, targets, skip: seatCar);
             exposed.Add(gunner);
             pastHull.Add(past);
         }
 
-        var totals = HitMath.ResolvePellets(w, N(eye), dirs, range, walls, targets, c.Id, exposed, pastHull);
+        var totals = HitMath.ResolvePelletsPastHulls(w, N(eye), dirs, range, walls, targets, c.Id, exposed, pastHull);
         BroadcastEvent(EventKind.PelletFan, WeaponCodec.Encode(new PelletFanMsg(c.Id, weaponIdx, N(eye), aim, seed, cone)));
         foreach (var (id, t) in totals) Deal(c.Id, weaponIdx, id, t.Damage, t.Head, false);
 

@@ -1,0 +1,13 @@
+# Copy to map.local.yaml (gitignored) and fill in your own values.
+# The map is the ground inside a polygon around one OSM way. Fetched to data/village/raw, built in
+# data/village/work, exported to out/village/map. The parcel registry (registry/parcels.registry.json)
+# is committed.
+osm_way: 1234567890   # placeholder: OSM way id whose centroid is the origin of the local frame
+margin_m: 25          # extra metres fetched around the outline, then dropped (default 25)
+# The map outline: absolute S-JTSK (EPSG:5514) metres [x, y], at least 3 points, no need to repeat
+# the first, a simple polygon. Only what touches it is kept. The osm_way centre stays the origin of
+# the local frame, so coordinates do not move when the outline changes.
+polygon:
+  - [-589500.0, -1250500.0]
+  - [-588000.0, -1250500.0]
+  - [-588000.0, -1249000.0]

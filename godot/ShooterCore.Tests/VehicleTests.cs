@@ -129,7 +129,8 @@ public class VehicleTests
     public void EveryMotorisedTypePullsAwayHardFromAStandstill()
     {
         // the launch boost: the first two seconds matter most, so each engine type is at 10 m/s (36 km/h) within 2 s of full throttle
-        foreach (var def in Shipped().Vehicles.Where(v => v.Id is "car" or "jeep" or "quad" or "motorcycle" or "amphibious"))
+        // (the amphibious transport is not stepped by the car model: DriveTests holds the same two seconds for it)
+        foreach (var def in Shipped().Vehicles.Where(v => v.Id is "car" or "jeep" or "quad" or "motorcycle"))
         {
             var s = new CarState(); var t = 0f;
             while (s.Speed < 10f && t < 5f) { CarModel.Step(ref s, def, 1, 0, false, 1f / 60); t += 1f / 60; }
@@ -192,7 +193,7 @@ public class VehicleTests
     {
         var f = Shipped(); var car = f.Vehicles[0]; var moto = f.Vehicles[1]; var bike = f.Vehicles[2];
         Assert.True(car.TopSpeed > moto.TopSpeed && moto.TopSpeed > bike.TopSpeed, "bikes never outrun the car");
-        Assert.InRange(car.TopSpeed * 3.6f, 150f, 170f);    // about 160 km/h on the small map
+        Assert.InRange(car.TopSpeed * 3.6f, 150f, 170f);    // about 160 km/h
         Assert.InRange(moto.TopSpeed * 3.6f, 110f, 150f);
         Assert.InRange(bike.TopSpeed * 3.6f, 25f, 35f);     // a bicycle: 25 to 35 km/h
         Assert.True(moto.Acceleration > car.Acceleration && car.Acceleration > bike.Acceleration);

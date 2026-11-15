@@ -31,6 +31,8 @@ public partial class NetClient
         public FlightPrediction Predict = null!;
         /// <summary>What a correction moved the picture by, faded out over a few frames so the helicopter does not jump.</summary>
         public Vector3 Smooth;
+        /// <summary>What a correction turned the picture by (yaw x, pitch y, roll z; radians), faded out the same way (I-rubber-banding).</summary>
+        public Vector3 AngleFix;
         public FlightState Shown;
     }
 
@@ -64,6 +66,7 @@ public partial class NetClient
             foreach (var v in _cars.Values)
                 if (v.Driver == _myId && !v.Destroyed && FlightDef(v) != null) { mine = v; break; }
         if (mine == null || !_flights.TryGetValue(mine.Id, out var fv) || !_dec.States.TryGetValue(mine.Id, out var vehicle)) { StopPiloting(); return; }
+        if (CarThrown(mine.Id)) { StopPiloting(); return; } // in the Bigfoot's hands or thrown: the server places it and ignores the pilot, so it is drawn from the snapshots
         var server = FlightRecord.State(vehicle, fv.Rec);
         if (_pilot == null || _pilot.CarId != mine.Id)
         {
@@ -78,10 +81,15 @@ public partial class NetClient
             return;
         }
         var before = _pilot.Predict.State.Position;
+        var yawBefore = _pilot.Predict.State.Yaw;
+        var attBefore = new Vector3(_pilot.Predict.State.Yaw, _pilot.Predict.State.Pitch, _pilot.Predict.State.Roll);
         if (!_pilot.Predict.Reconcile(ack, server, 1f / Wire.TickRate)) return;
         _flightCorrections++;
         var moved = before - _pilot.Predict.State.Position;
+        _rub.AddVehicle(moved.Length(), FlightMath.Wrap(_pilot.Predict.State.Yaw - yawBefore));
         _pilot.Smooth += new Vector3(moved.X, moved.Y, moved.Z);
+        _pilot.AngleFix += AngleDelta(attBefore, _pilot.Predict.State.Yaw, _pilot.Predict.State.Pitch, _pilot.Predict.State.Roll);
+        TelemetryFlightCorrection(new Vector3(moved.X, moved.Y, moved.Z).Length());
     }
 
     void StopPiloting()
@@ -92,7 +100,7 @@ public partial class NetClient
     }
 
     /// <summary>The pilot's controls of one input, as the server will read them: hands off while a killstreak has the keys.</summary>
-    FlightInput PilotInput(in NetInput ni) => FlightInput.FromNet(ni, handsOff: _controlling || _gunship != null);
+    FlightInput PilotInput(in NetInput ni) => FlightInput.FromNet(ni, handsOff: Mode.RemoteViewOwnsScreen);
 
     /// <summary>On the input tick: the prediction steps with the input that was just sent.</summary>
     void PredictFlight(in NetInput ni, float dt)
@@ -116,10 +124,13 @@ public partial class NetClient
                 var now = NetInput.From(0, _me.Sample(), 0, 0);
                 FlightModel.Step(ref s, _pilot.Def, PilotInput(now), ahead / Wire.TickRate, _pilot.Probe);
             }
-            _pilot.Shown = s;
             _pilot.Smooth *= Mathf.Exp(-CorrectionFade * dt);
             if (_pilot.Smooth.LengthSquared() > 400f) _pilot.Smooth = Vector3.Zero; // a teleport (a return to its origin), not a correction: do not glide there
             p = new Vector3(s.Position.X, s.Position.Y, s.Position.Z) + _pilot.Smooth;
+            _pilot.AngleFix *= Mathf.Exp(-CorrectionFade * dt);
+            if (_pilot.AngleFix.LengthSquared() < 1e-8f) _pilot.AngleFix = Vector3.Zero;
+            s.Yaw += _pilot.AngleFix.X; s.Pitch += _pilot.AngleFix.Y; s.Roll += _pilot.AngleFix.Z; // a correction's turn, faded out (not in the predictor's state)
+            _pilot.Shown = s;
             rot = new Vector3(s.Pitch, s.Yaw, s.Roll);
             return;
         }

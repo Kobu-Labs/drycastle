@@ -1,4 +1,4 @@
-"""Rules stage: heights, roofs and colours for every building -> ``data/work/buildings.json``.
+"""Rules stage: heights, roofs and colours for every building -> ``data/village/work/buildings.json``.
 
 Order of precedence (see ``config/rules.yaml``): overrides.yaml > OSM tags > building type class >
 footprint-area class. Colours and the few random choices come from a generator seeded with
@@ -20,7 +20,7 @@ from shapely.affinity import rotate
 from shapely.geometry import MultiPolygon, Polygon, shape
 from shapely.geometry.polygon import orient
 
-from drycastle_pipeline.config import DEFAULT_AREA, PIPELINE_DIR, area_paths
+from drycastle_pipeline.config import PIPELINE_DIR, map_paths
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.rules import DEFAULT_RULES
 
@@ -37,6 +37,7 @@ OVERRIDE_FIELDS = (
     "roof_colour",
     "model",
     "model_axis",
+    "remove",
 )
 _COLOUR = re.compile(r"^#[0-9a-fA-F]{6}$")
 _NUMBER = re.compile(r"^\s*(-?\d+(?:[.,]\d+)?)\s*(m)?\s*$")
@@ -124,6 +125,8 @@ def load_overrides(path: Path = DEFAULT_OVERRIDES) -> dict[str, dict]:
         for name, value in fields.items():
             if name not in OVERRIDE_FIELDS:
                 raise RulesError(f"overrides: {key}: unknown field {name}")
+            if name == "remove" and not isinstance(value, bool):
+                raise RulesError(f"overrides: {key}: remove must be true or false")
             if name == "roof_height_m" and not (isinstance(value, int | float) and value > 0):
                 raise RulesError(f"overrides: {key}: roof_height_m must be a positive number")
             if name == "roof" and value not in ROOFS:
@@ -370,6 +373,8 @@ def build_buildings(
                 if key in overrides:
                     merged.update(overrides[key])
                     used.add(key)
+            if merged.pop("remove", False):
+                continue  # replaced by a placed object (a hangar from a pack): no mesh, no collider, no interior
             out.append(
                 derive_building(
                     bid, parcel["id"], shape(f["geometry"]), f["properties"]["tags"], rules, merged
@@ -388,9 +393,9 @@ def write_buildings(work_dir: Path, result: BuildingsResult) -> Path:
 
 
 def run(
-    force: bool = False, report: bool = False, area: str = DEFAULT_AREA, **_options: object
+    force: bool = False, report: bool = False, **_options: object
 ) -> int:
-    work_dir = area_paths(area).work
+    work_dir = map_paths().work
     try:
         result = build_buildings(work_dir)
     except FileNotFoundError as exc:

@@ -8,9 +8,18 @@ public partial class NetClient
 {
     Hud? _hud;
     readonly SpreadEstimator _spread = new();
-    int _hudRestarts;
     /// <summary>The aim button of the last input tick; the crosshair spread uses it as the server uses the input's Aim bit.</summary>
     bool _aimHeld;
+
+    /// <summary>
+    /// The match's phase edges, detected once in <see cref="ClientMatchState"/> and handed to the views that react to them: the round sounds, and the kill feed
+    /// that a restarted round (the end screen's end, or an admin's restart mid-round) empties.
+    /// </summary>
+    void InitMatchEdges()
+    {
+        Match.PhaseChanged += SfxPhase;
+        Match.RoundRestarted += () => _hud?.ClearKills();
+    }
 
     WeaponDef? CurrentWeapon => Ammo is { } a && Weapons != null && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1] : null;
 
@@ -19,17 +28,22 @@ public partial class NetClient
     {
         if (CurrentWeapon is not { } w) return 0f;
         var own = HitMath.OwnSpread(w, _spread.Degrees(w, Now));
+        // in an armed seat the vehicle's speed is what widens it (the server's rule for a shot from the seat)
+        if (InArmedSeat && MySeat() is { } m) return SeatAimRules.ShotSpread(own, w, _aimHeld, RideSpeed(m.Car, DriveOf(m.Car)), m.Seat);
         return _me is { } me ? HitMath.ShotSpread(own, w, me.State, _aimHeld) : own;
     }
 
     void HudWelcome()
     {
         if (!ShotFx.Enabled || _hud != null) return; // headless runs have no HUD
-        _hud = new Hud { MyId = _myId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => _me is { ZoomFov: > 0 }, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Spread = CrosshairSpread };
+        _hud = new Hud { MyId = _myId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => _me is { ZoomFov: > 0 } && !_binoculars, Binoculars = BinocularsView, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Scope = ScopeView, Spread = CrosshairSpread };
         AddChild(_hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
+        _hud.TacticalMapTeleport = OnMapTeleport;
         _hud.SetSandbox(SandboxGranted, SandboxHeldStreak, SandboxTakesDamage); // the SANDBOX badge (#156)
         WireLoadoutHud(_hud);
+        _hud.AttachEquipment(this); // F (#268)
         _hud.Minimap.Build(Map); // once per connection; the texture comes from the map's parcels and roads (ticket #119)
+        _hud.PrewarmTacticalMap(GetViewport().GetVisibleRect().Size); // the full-screen map's picture is made on a worker meanwhile
     }
 
     /// <summary>The loaded map (set by the host): the minimap's texture source.</summary>
@@ -55,6 +69,45 @@ public partial class NetClient
         _hud.SetAmmo(Math.Max(1, HotbarPos(a.Slot) + 1), w.MagazineSize == 0 ? -1 : mag, reserve, all, a.ReloadRemaining, w.ReloadTime);
     }
 
+    readonly Dictionary<string, Texture2D?> _silhouettes = new();
+
+    /// <summary>
+    /// A species' side view for the hit diagram: <c>res://ui/icons/animals/&lt;id&gt;.png</c> (the free packs' models, in the repository), else
+    /// <c>animal-silhouettes/&lt;id&gt;.png</c> of the private asset folder (the paid packs'); null when it has neither (the diagram draws a plain body).
+    /// Both are baked by <c>scripts/make_animal_silhouettes.py</c>. Loaded once per species.
+    /// </summary>
+    Texture2D? Silhouette(string speciesId)
+    {
+        if (_silhouettes.TryGetValue(speciesId, out var known)) return known;
+        Texture2D? tex = null;
+        var res = $"{IconRegistry.Root}animals/{speciesId}.png";
+        if (ResourceLoader.Exists(res)) tex = GD.Load<Texture2D>(res);
+        else
+        {
+            var file = System.IO.Path.Combine(GamePaths.PrivateAssets(), "animal-silhouettes", speciesId + ".png");
+            if (System.IO.File.Exists(file) && Image.LoadFromFile(file) is { } img) tex = ImageTexture.CreateFromImage(img);
+        }
+        return _silhouettes[speciesId] = tex;
+    }
+
+    /// <summary>The hit diagram of an animal this player just killed with a sniper rifle.</summary>
+    void HudHuntShot(HuntShotMsg m)
+    {
+        if (_hud == null || m.Species >= AnimalData.Animals.Count) return;
+        var def = AnimalData.Animals[m.Species];
+        var weapon = Weapons != null && m.Weapon < Weapons.Weapons.Count ? WeaponName(Weapons.Weapons[m.Weapon].Id) : "";
+        // always the look's one standing picture, whatever the animal was doing: the hit is moved from the shape the server tested the bullet
+        // against (the pose it was in) onto the standing shape, head to head and body to body. Without shapes: the species' baked picture
+        var key = def.ShapeKey(m.Variant);
+        var standing = AnimalShapes.Frame(key, AnimalPose.Idle, 0);
+        var (along, height) = (m.Along, m.Height);
+        if (standing != null && m.Pose != HuntShot.NoShape && AnimalShapes.Frame(key, (AnimalPose)m.Pose, m.Frame) is { } hitOn)
+            (along, height) = hitOn.MapOnto(standing, m.Along, m.Height, m.Head);
+        else if (m.Pose == HuntShot.NoShape) standing = null; // tested against the body box: its picture, by the box
+        var line = Strings.F(m.Head ? "hud.hunt.line.head" : "hud.hunt.line", m.DistanceM, weapon);
+        _hud.ShowHuntShot(def.Name.ToUpperInvariant(), standing, standing == null ? Silhouette(def.Id) : null, along, height, line);
+    }
+
     void HudHit(HitMsg h)
     {
         // a gunner's hit marker is the turret overlay's while the HUD is hidden (ticket #152); the hit event reaches it either way
@@ -66,16 +119,34 @@ public partial class NetClient
             var me = _me.GlobalPosition; var src = r.Node.GlobalPosition;
             _hud.Damage(HudLogic.DamageAngle(me.X, me.Z, _me.Yaw, src.X, src.Z));
         }
+        else if (h.Victim == _myId && GangRules.IsHitId(h.Attacker) && _me != null && NearestGangMember(_me.GlobalPosition) is { } member)
+            _hud.Damage(HudLogic.DamageAngle(_me.GlobalPosition.X, _me.GlobalPosition.Z, _me.Yaw, member.X, member.Z)); // a blow of a Gang member: the marker points at the nearest one
+        else if (h.Victim == _myId && RaidVanRules.IsHitId(h.Attacker) && _me != null && NearestVan(_me.GlobalPosition) is { } van)
+            _hud.Damage(HudLogic.DamageAngle(_me.GlobalPosition.X, _me.GlobalPosition.Z, _me.Yaw, van.X, van.Z)); // a Raid van ran into the player: the marker points at the nearest van
+        else if (h.Victim == _myId && h.Attacker == BigfootRules.TargetId && _me != null && _bigfoots.Values.FirstOrDefault() is { } giant)
+        {
+            var me = _me.GlobalPosition; var src = giant.Node.GlobalPosition; // the Bigfoot's logs, shockwave and launch: the marker points at it (#264)
+            _hud.Damage(HudLogic.DamageAngle(me.X, me.Z, _me.Yaw, src.X, src.Z));
+        }
     }
 
     readonly List<Vector2> _friendDots = new();
 
     void UpdateHud()
     {
-        _hud?.SetControlMode(_gunship != null || _controlling); // one mode switch: a turret or the missile owns the screen (ticket #152)
+        _hud?.SetControlMode(Mode.RemoteViewOwnsScreen); // one mode switch: a turret or the missile owns the screen (ticket #152)
         _hud?.SetHealth(Mathf.CeilToInt(_me?.Health ?? 100));
+        _hud?.CoverCrosshair(_chooser.IsOpen);
+        if (_me != null) _me.MoveWithFreeMouse = (_hud?.EquipmentOpen ?? false) || (_hud?.TacticalMapOpen ?? false); // the Equipment screen and the tactical map free the mouse, not the legs (#268)
+        if (_hud is { EquipmentOpen: true } or { TacticalMapOpen: true })
+        {
+            var overlays = _hud.Overlays(MenuOpen?.Invoke() == true, ChooserOpen); // a menu or the corpse chooser takes the screen from the Equipment screen, a menu from the map
+            if (_hud.EquipmentOpen && OverlayArbiter.YieldsToMenu(Overlay.Equipment, overlays)) _hud.CloseEquipment();
+            if (_hud.TacticalMapOpen && OverlayArbiter.YieldsToMenu(Overlay.TacticalMap, overlays)) _hud.CloseTacticalMap();
+        }
         UavTick();
-        if (_me != null) _hud?.SetBreath(Breath.AirLeft(_me.State), _me.HeadUnder);
+        if (_me != null) RozhlasFeedPlayer.Current?.SetListener(_me.GlobalPosition);
+        if (_me != null) Rozhlas.Current?.SetListener(_me.GlobalPosition); // the loudspeaker is heard where the player is, not where a vehicle's orbiting camera is
         if (_me != null && _hud != null)
         {
             var g = _me.GlobalPosition;

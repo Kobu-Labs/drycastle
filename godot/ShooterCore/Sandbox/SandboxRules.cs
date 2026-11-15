@@ -12,6 +12,7 @@ public readonly record struct SandboxAnswer(bool Granted, string Reason);
 public static class SandboxRules
 {
     public const string GrantedReason = "Sandbox mode on: godmode, unlimited ammo, every killstreak. No XP, stats or score.";
+    public const string RevokedReason = "An admin turned sandbox mode off. Playing normally.";
     public const string RefusedReason = "Sandbox mode is not allowed on this server. Playing normally.";
 
     /// <summary>The answer to a hello: no answer (no notice) unless the client asked; then granted only if the server allows it.</summary>
@@ -42,6 +43,24 @@ public enum SandboxAction : byte
 /// <summary>Payloads of the sandbox events (kinds 150-155).</summary>
 public static class SandboxEvents
 {
+    /// <summary>SandboxTeleportTo: f32 ground x, f32 ground z.</summary>
+    public static byte[] EncodeTeleportTo(float x, float z)
+    {
+        var o = new byte[8];
+        System.Buffers.Binary.BinaryPrimitives.WriteSingleLittleEndian(o, x);
+        System.Buffers.Binary.BinaryPrimitives.WriteSingleLittleEndian(o.AsSpan(4), z);
+        return o;
+    }
+
+    /// <summary>Null for a short payload or a value that is not a finite number.</summary>
+    public static (float X, float Z)? DecodeTeleportTo(ReadOnlySpan<byte> d)
+    {
+        if (d.Length < 8) return null;
+        var x = System.Buffers.Binary.BinaryPrimitives.ReadSingleLittleEndian(d);
+        var z = System.Buffers.Binary.BinaryPrimitives.ReadSingleLittleEndian(d[4..]);
+        return float.IsFinite(x) && float.IsFinite(z) ? (x, z) : null;
+    }
+
     public static byte[] EncodeAction(SandboxAction action, byte arg = 0) => new[] { (byte)action, arg };
 
     public static (SandboxAction Action, byte Arg)? DecodeAction(ReadOnlySpan<byte> d) =>

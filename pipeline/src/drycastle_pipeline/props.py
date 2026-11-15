@@ -1,7 +1,7 @@
-"""Props stage: fences, trees and spawn candidates -> ``data/work/props.json`` and ``spawns.json``.
+"""Props stage: fences, trees (from the orthophoto only) and spawn candidates -> ``data/village/work/props.json`` and ``spawns.json``.
 
 Hand edits (``config/edits.json``, see ``edits.py``) are applied here too: fence modes and groups,
-tree density or count overrides, and placed objects, which are written to ``objects.json``.
+and placed objects, which are written to ``objects.json``.
 
 Everything random is drawn from ``random.Random`` seeded with sha256 of ``<parcel id>:<purpose>``
 (never Python's ``hash()``), so identical input gives identical output. Only places inside the
@@ -22,9 +22,10 @@ from shapely.geometry import LineString, MultiLineString, Point, Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, nearest_points, unary_union
 
+from drycastle_pipeline import zones as zone_kinds
 from drycastle_pipeline.assets import load_manifest, validate_asset_ref
 from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import DEFAULT_AREA, area_paths
+from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.edits import (
     DEFAULT_EDITS,
     WIRE_ASSET_PREFIXES,
@@ -32,9 +33,10 @@ from drycastle_pipeline.edits import (
     EditsError,
     FenceSpec,
     load_edits,
-    region_ring,
+    polygon_ring,
     resolve_fence,
 )
+from drycastle_pipeline.ground import ground_types, ground_units
 from drycastle_pipeline.lamps import make_lamps, read_osm_lamps, write_lamps
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.roads import edge_lines
@@ -44,6 +46,8 @@ from drycastle_pipeline.terrain import Terrain, load_terrain
 PROPS_FORMAT_VERSION = 1
 SPAWNS_FORMAT_VERSION = 1
 OBJECTS_FORMAT_VERSION = 1
+FENCES_FORMAT_VERSION = 1
+FENCES_AXES = "local metres, x east, y north, z up (elevation of the ground at each end); height_m above that"
 _MIN_PIECE_M = 0.5
 
 
@@ -106,7 +110,6 @@ def make_fences(
     cfg: dict,
     specs: dict[str, FenceSpec] | None = None,
     groups: dict[str, list[str]] | None = None,
-    road_polys: list[BaseGeometry] | None = None,
 ) -> list[dict]:
     """Fence sections along parcel boundaries: dicts with parcel, a, b (x, y) and za, zb (z).
 
@@ -116,8 +119,8 @@ def make_fences(
     settings and the seeded roll keyed by the group ID. Custom sections carry their own
     ``type``, ``height_m``, ``thickness_m`` and ``colour`` (and ``column`` when the edit names one).
 
-    ``road_polys`` replaces the road parcels taken from ``parcels`` for the gate-gap logic (the
-    per-parcel run passes only the road parcels near its targets).
+    The gate gap of a rule fence is on the boundary that faces a road: within ``gate_road_within_m`` of a
+    carriageway of ``graph``.
     """
     specs = specs or {}
     polys = {p["id"]: shape(p["polygon"]) for p in parcels}
@@ -141,12 +144,7 @@ def make_fences(
     if zone is not None:
         avoid.append(zone)
     avoid_geom = unary_union(avoid) if avoid else None
-    road_parcels = (
-        road_polys
-        if road_polys is not None
-        else [polys[p["id"]] for p in parcels if p["kind"] == "road"]
-    )
-    road_union = unary_union(road_parcels).buffer(0.5) if road_parcels else None
+    road_union = road_zone(graph, float(cfg["gate_road_within_m"]))
     gate = float(cfg["gate_gap_m"])
     done = None  # union of boundaries already fenced (buffered a little)
     sections: list[dict] = []
@@ -217,57 +215,145 @@ def make_fences(
     return sections
 
 
+def fences_doc(sections: list[dict], groups: dict[str, list[str]], cfg: dict) -> dict:
+    """The ``fences.json`` document: every fence section as the game needs it (ground-plan segment, heights, owner).
+
+    ``sections`` is :func:`make_fences`' output, ``groups`` the valid property groups (group ID -> member parcel IDs),
+    ``cfg`` the rules' ``props.fences``. ``height_m`` and ``type`` are the effective values (the section's own, else the
+    rules'; ``type`` is null for the plain box). ``group`` is the property group of the owning parcel, or null.
+    """
+    member_of = {pid: gid for gid, pids in groups.items() for pid in pids}
+    return {
+        "version": FENCES_FORMAT_VERSION,
+        "axes": FENCES_AXES,
+        "fences": [
+            {
+                "parcel": s["parcel"],
+                "group": member_of.get(s["parcel"]),
+                "a": s["a"],
+                "b": s["b"],
+                "za": s["za"],
+                "zb": s["zb"],
+                "height_m": float(s.get("height_m", cfg["height_m"])),
+                "type": s.get("type", cfg.get("type")),
+            }
+            for s in sections
+        ],
+    }
+
+
 # --- trees ----------------------------------------------------------------------------------
 
 
-def shore_candidates(water: BaseGeometry, cfg: dict) -> list[tuple[float, float]]:
-    """Tree positions in rows along the water's edge: ``cfg["rows"]`` (offset from the shore, share kept), ``spacing_m`` apart.
+CANOPY_CELL_PX = 42  # the canopy mask is planted cell by cell (about 25 m at the photo's 0.6 m per pixel)
 
-    Seeded per candidate, so the same water gives the same points whichever parcels are generated.
+
+def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[float, float] | None) -> list[dict]:
+    """Every tree, planted from the orthophoto detector (``make ortho-trees``).
+
+    * each standalone tree of ``trees.json`` is planted where the detector found it, its size following the crown
+      radius (``scale = 2 r / canopy_m``, kept within 0.8-3), unless its trunk would stand on a road;
+    * the canopy mask (``canopy.png``) is planted so that the forest looks closed from above, as in the photo:
+      ``ortho.canopy_per_1000m2`` trees per 1000 m2 of mask at least ``ortho.canopy_min_spacing_m`` apart, each with a
+      crown ``ortho.canopy_crown_scale`` times the normal one (the rules' own forest density is far too thin for
+      that). Seeded per 25 m cell; never on a building, road, placed object or water.
+
+    The photo does not resolve single crowns in a forest, so the canopy trunks are random within the detected extent.
     """
-    pts: list[tuple[float, float]] = []
-    spacing = float(cfg["spacing_m"])
-    for r, row in enumerate(cfg["rows"]):
-        grown = water.buffer(float(row["offset_m"]))
-        parts = sorted(getattr(grown, "geoms", [grown]), key=lambda g: g.bounds)
-        for k, part in enumerate(parts):
-            for ring in (part.exterior, *part.interiors):
-                n = int(ring.length // spacing)
-                for i in range(n):
-                    rng = seeded(f"shore:{r}:{k}:{i}")
-                    if rng.random() >= float(row["keep"]):
-                        continue
-                    at = ring.interpolate((i + rng.uniform(-0.3, 0.3)) * ring.length / n)
-                    x, y = at.x + rng.uniform(-0.8, 0.8), at.y + rng.uniform(-0.8, 0.8)
-                    if not water.contains(Point(x, y)):
-                        pts.append((x, y))
-    return pts
+    from PIL import Image
+
+    if origin is None:
+        raise ValueError("trees from the orthophoto need the frame origin (parcels.json origin_epsg5514)")
+    ortho_dir = Path(cfg["ortho_dir"])
+    doc = json.loads((ortho_dir / "trees.json").read_text())
+    Image.MAX_IMAGE_PIXELS = None
+    mask = np.asarray(Image.open(ortho_dir / doc["canopy"]["file"]).convert("L")) > 0
+    minx, _, _, maxy = doc["canopy"]["bounds_epsg5514"]
+    res = float(doc["canopy"]["pixel_m"])
+    ox, oy = origin
+    ocfg = cfg.get("ortho", {})
+    spacing = float(ocfg.get("canopy_min_spacing_m", 4.0))
+    canopy_m = float(cfg["canopy_m"])
+    shapely.prepare(terrain.coverage)
+    road = zones[1]  # (building, road, object, water)
+
+    trees: list[dict] = []
+    grid: dict[tuple[int, int], list[tuple[float, float]]] = {}
+
+    def free(x: float, y: float) -> bool:
+        gx, gy = int(x // spacing), int(y // spacing)
+        return not any(
+            math.hypot(x - a, y - b) < spacing
+            for i in (gx - 1, gx, gx + 1)
+            for j in (gy - 1, gy, gy + 1)
+            for a, b in grid.get((i, j), ())
+        )
+
+    def add(x: float, y: float) -> None:
+        grid.setdefault((int(x // spacing), int(y // spacing)), []).append((x, y))
+
+    for t in doc["standalone"]:
+        x, y = float(t["x"]), float(t["y"])
+        if not shapely.contains_xy(terrain.coverage, x, y):
+            continue
+        if road is not None and shapely.contains_xy(road, x, y):  # a trunk on a carriageway (roadside trees the photo puts on the road)
+            continue
+        scale = min(3.0, max(0.8, 2.0 * float(t["radius_m"]) / canopy_m))
+        trees.append(tree(x, y, seeded(f"ortho:{t['x']}:{t['y']}"), None, False, "ortho", scale))
+        add(x, y)
+
+    density = float(ocfg.get("canopy_per_1000m2", 25.0))
+    crown_lo, crown_hi = (float(v) for v in ocfg.get("canopy_crown_scale", (1.7, 2.5)))
+    h, w = mask.shape
+    for r0 in range(0, h, CANOPY_CELL_PX):
+        for c0 in range(0, w, CANOPY_CELL_PX):
+            cell = mask[r0 : r0 + CANOPY_CELL_PX, c0 : c0 + CANOPY_CELL_PX]
+            n = int(cell.sum())
+            if n == 0:
+                continue
+            rng = seeded(f"ortho:canopy:{r0}:{c0}")
+            expected = density * n * res * res / 1000.0
+            count = int(expected) + (rng.random() < expected % 1)
+            x_lo, y_hi = minx + c0 * res - ox, maxy - r0 * res - oy  # the cell's north-west corner, local metres
+            size = CANOPY_CELL_PX * res
+            placed = 0
+            for _ in range(count * 100):
+                if placed >= count:
+                    break
+                x, y = x_lo + rng.random() * size, y_hi - rng.random() * size
+                row, col = int((y_hi - y) / res), int((x - x_lo) / res)
+                if row >= cell.shape[0] or col >= cell.shape[1] or not cell[row, col]:
+                    continue
+                if not shapely.contains_xy(terrain.coverage, x, y):
+                    continue
+                if any(g is not None and shapely.contains_xy(g, x, y) for g in zones):
+                    continue
+                if not free(x, y):
+                    continue
+                add(x, y)
+                trees.append(tree(x, y, rng, None, True, "ortho-canopy", crown_lo + (crown_hi - crown_lo) * rng.random()))
+                placed += 1
+    return trees
 
 
 def make_trees(
-    parcels: list[dict],
     buildings: list[dict],
     graph: dict,
-    osm_trees: list[dict],
     terrain: Terrain,
     cfg: dict,
-    overrides: dict[str, dict] | None = None,
     objects: list[tuple[float, float]] | None = None,
-    only: set[str] | None = None,
-    include_osm: bool = True,
     water: BaseGeometry | None = None,
+    origin: tuple[float, float] | None = None,
 ) -> list[dict]:
-    """OSM trees plus seeded rule-based trees in parcels (gardens, forests, ...).
+    """Every tree of the map: planted from the orthophoto detector (:func:`ortho_trees`, ``make ortho-trees``).
 
-    ``only`` limits the rule-based trees to those parcel IDs (each parcel's trees depend only on
-    its own seed and the context geometry); ``include_osm=False`` leaves the OSM trees out.
-
-    ``overrides`` maps a parcel ID to its edited trees (``density_per_1000m2`` or ``count``, and
-    ``seed_offset``). ``objects`` are placed object positions (local metres) that trees keep
-    ``object_clearance_m`` away from. ``water`` (local metres) is where the water regions lie: rule-based trees get
-    no trunk in it (their crowns may overhang it from the bank), and ``cfg["shore"]`` adds rows of trees along
-    its edge (see :func:`shore_candidates`).
+    There is no other source: no OSM trees, no per-parcel density, no shore rows. ``cfg["ortho_dir"]`` is the folder
+    of the detector's output (``trees.json`` and the canopy mask); without it there are no trees. ``origin`` is the
+    frame origin (EPSG:5514; without it there are no trees). ``objects`` are placed object positions (local metres) that trees keep
+    ``object_clearance_m`` away from; ``water`` (local metres) is where the water patches lie: no trunk in it.
     """
+    if origin is None or not (Path(cfg["ortho_dir"]) / "trees.json").is_file():
+        return []
     bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
     bzone = unary_union(bpolys).buffer(float(cfg["building_clearance_m"])) if bpolys else None
     rzone = road_zone(graph, float(cfg["road_clearance_m"]))
@@ -280,9 +366,8 @@ def make_trees(
     for g in (bzone, rzone, ozone, water):
         if g is not None:
             shapely.prepare(g)
-    trees: list[dict] = []
 
-    def tree(x, y, rng, parcel, forest, src):
+    def tree(x, y, rng, parcel, forest, src, scale=None):
         shape_ = "cone" if forest and rng.random() < 0.6 else "box"
         palette = cfg["forest_canopy_colours"] if forest else cfg["canopy_colours"]
         return {
@@ -291,92 +376,13 @@ def make_trees(
             "x": _r3(x),
             "y": _r3(y),
             "z": _r3(terrain.surface(np.array([x]), np.array([y]))[0]),
-            "scale": round(0.8 + 0.45 * rng.random(), 3),
+            "scale": round(0.8 + 0.45 * rng.random(), 3) if scale is None else round(scale, 3),
             "rot": round(rng.random() * math.pi / 2, 3),
             "shape": shape_,
             "colour": palette[rng.randrange(len(palette))],
         }
 
-    for f in sorted(osm_trees if include_osm else [], key=lambda f: f["properties"]["osm_id"]):
-        x, y = f["geometry"]["coordinates"][:2]
-        if terrain.coverage.contains(Point(x, y)):
-            trees.append(
-                tree(x, y, seeded(f"{f['properties']['osm_id']}:tree"), None, False, "osm")
-            )
-
-    density = cfg["density_per_1000m2"]
-    spacing = float(cfg["min_spacing_m"])
-    shore_pts = (
-        shore_candidates(water, cfg["shore"]) if water is not None and cfg.get("shore", {}).get("rows") else None
-    )
-    shore_arr = np.array(shore_pts, float).reshape(-1, 2) if shore_pts else None
-    if shore_arr is None:
-        shore_pts = None
-    for p in sorted(parcels, key=lambda p: p["id"]):
-        if only is not None and p["id"] not in only:
-            continue
-        ov = (overrides or {}).get(p["id"])
-        seed_key = f"{p['id']}:trees"
-        fixed: int | None = None
-        if ov is None:
-            rate = float(density.get(p["kind"], 0.0))
-        else:
-            rate = float(ov.get("density_per_1000m2", 0.0))
-            fixed = ov.get("count")
-            if int(ov.get("seed_offset", 0)):
-                seed_key += f":{int(ov['seed_offset'])}"
-        shore_here = shore_pts is not None
-        if fixed is None and rate <= 0 and not shore_here:
-            continue
-        poly = shape(p["polygon"])
-        inner = poly.buffer(-float(cfg["parcel_edge_clearance_m"]))
-        if inner.is_empty:
-            continue
-        shapely.prepare(inner)
-        rng = seeded(seed_key)
-        if fixed is None and rate <= 0:
-            count = 0
-        elif fixed is not None:
-            count = int(fixed)
-        else:
-            expected = rate * poly.area / 1000.0
-            count = int(expected) + (rng.random() < expected % 1)
-        minx, miny, maxx, maxy = inner.bounds
-        placed: list[tuple[float, float]] = []
-        for _ in range(count * 40 if count else 0):
-            if len(placed) >= count:
-                break
-            x, y = rng.uniform(minx, maxx), rng.uniform(miny, maxy)
-            if not shapely.contains_xy(inner, x, y) or not shapely.contains_xy(
-                terrain.coverage, x, y
-            ):
-                continue
-            if bzone is not None and shapely.contains_xy(bzone, x, y):
-                continue
-            if rzone is not None and shapely.contains_xy(rzone, x, y):
-                continue
-            if ozone is not None and shapely.contains_xy(ozone, x, y):
-                continue
-            if water is not None and shapely.contains_xy(water, x, y):
-                continue
-            if any(math.hypot(x - a, y - b) < spacing for a, b in placed):
-                continue
-            placed.append((x, y))
-        if shore_here:
-            srng = seeded(f"{p['id']}:shore")
-            near = (shore_arr[:, 0] >= minx) & (shore_arr[:, 0] <= maxx) & (shore_arr[:, 1] >= miny) & (shore_arr[:, 1] <= maxy)
-            for x, y in shore_arr[near]:
-                x, y = float(x), float(y)
-                if not shapely.contains_xy(inner, x, y) or not shapely.contains_xy(terrain.coverage, x, y):
-                    continue
-                if any(g is not None and shapely.contains_xy(g, x, y) for g in (bzone, rzone, ozone, water)):
-                    continue
-                if any(math.hypot(x - a, y - b) < spacing for a, b in placed):
-                    continue
-                placed.append((x, y))
-        for x, y in placed:
-            trees.append(tree(x, y, rng, p["id"], p["kind"] == "forest", "rule"))
-    return trees
+    return ortho_trees(tree, terrain, (bzone, rzone, ozone, water), cfg, origin)
 
 
 # --- spawns ---------------------------------------------------------------------------------
@@ -391,8 +397,14 @@ def make_spawns(
     cfg: dict,
     road_cfg: dict,
     chunk_m: float,
+    zone_units: list[dict] | None = None,
+    rule_units: dict[str, dict] | None = None,
 ) -> list[dict]:
-    """A seeded subset of candidate points on roads and open ground, away from buildings."""
+    """A seeded subset of candidate points on roads and open ground, away from buildings.
+
+    Open ground is the parcels and ground areas of the kinds ``cfg["ground_kinds"]``, and ``zone_units``: parts of ground
+    areas inside a drawn ``player_spawn`` zone (``zones.drawn_spawn_units``), whatever their kind. ``rule_units``
+    (``zones.rule_spawn_units``) replace the ground areas that a cut of the rule zone touches, by id."""
     bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
     mind = float(cfg["min_building_distance_m"])
     bzone = unary_union(bpolys).buffer(mind) if bpolys else None
@@ -441,9 +453,18 @@ def make_spawns(
                     }
                 )
     ground_pool: list[dict] = []
-    for p, poly in parcel_polys:
-        if p["kind"] not in cfg["ground_kinds"]:
-            continue
+    spawn_ground = [(p, poly) for p, poly in parcel_polys if p["kind"] in cfg["ground_kinds"]]
+    if rule_units:
+        cut_ground = []
+        for p, poly in spawn_ground:
+            unit = rule_units.get(p["id"])
+            if unit is None:
+                cut_ground.append((p, poly))
+            elif unit["polygon"] is not None:
+                cut_ground.append((unit, shape(unit["polygon"])))
+        spawn_ground = cut_ground
+    spawn_ground += [(u, shape(u["polygon"])) for u in zone_units or []]
+    for p, poly in spawn_ground:
         inner = poly.buffer(-1.5)
         if inner.is_empty:
             continue
@@ -490,7 +511,7 @@ def make_spawns(
 
 
 def cap_trees(trees: list[dict], chunk_m: float, limit: int) -> list[dict]:
-    """Keep at most ``limit`` rule-based trees per chunk (OSM trees always stay); 0 = no cap.
+    """Keep at most ``limit`` planted canopy trees per chunk (the single trees the detector found always stay); 0 = no cap.
 
     Which trees go is decided by a hash of position, so it is stable and spread over the chunk.
     """
@@ -498,7 +519,7 @@ def cap_trees(trees: list[dict], chunk_m: float, limit: int) -> list[dict]:
         return trees
     by_chunk: dict[tuple[int, int], list[dict]] = {}
     for tr in trees:
-        if tr["src"] == "rule":
+        if tr["src"] == "ortho-canopy":
             by_chunk.setdefault(tuple(chunk_of(tr["x"], tr["y"], chunk_m)), []).append(tr)
     drop: set[int] = set()
     for members in by_chunk.values():
@@ -517,12 +538,10 @@ class EditPlan:
 
     specs: dict[str, FenceSpec] = field(default_factory=dict)  # gaps in local metres
     groups: dict[str, list[str]] = field(default_factory=dict)  # valid member parcels only
-    tree_overrides: dict[str, dict] = field(default_factory=dict)
     objects: list[dict] = field(default_factory=list)  # objects.json entries, sorted by id
     cables: list[dict] = field(default_factory=list)  # {"id", "from", "to"} between placed poles and connectors, by id
-    object_owner: dict[str, str] = field(default_factory=dict)  # object id -> parcel listing it
     warnings: list[str] = field(default_factory=list)
-    water_regions: list[tuple[Polygon, float]] = field(default_factory=list)  # (outline in local metres, water_y)
+    water_patches: list[tuple[Polygon, float]] = field(default_factory=list)  # (outline in local metres, water_y)
 
 
 def _local_xy(x: float, y: float, origin: list[float] | None) -> tuple[float, float]:
@@ -536,28 +555,34 @@ def plan_edits(
 ) -> EditPlan:
     """Resolve the edits against this run's parcels.
 
-    Entries for parcels that no longer exist (parcel entries, group members, objects) are skipped
-    with a warning. An object outside every parcel, or outside the parcel it is listed under, is
-    still placed, with a warning; its ``parcel`` is the parcel containing it, or null. A cable is
+    Entries for parcels that no longer exist (parcel entries, group members) are skipped with a
+    warning (not a parcel's ``fence: none`` or a group with no fence, which have nothing to skip). Every object is placed: an object belongs to no parcel and only needs its position (so a
+    pole on a road, or on land a dropped parcel left as ground, is as normal as a car in a yard); its
+    ``parcel`` in objects.json is the parcel containing it, or null. A cable is
     kept when both its ends are placed utility poles or house connectors, else skipped with a warning.
     """
     plan = EditPlan()
     polys = {p["id"]: shape(p["polygon"]) for p in parcels}
     for gid in sorted(edits.groups):
         members = []
+        # a group with no fence of its own loses nothing with a member that is gone: no warning then
+        fenced = (edits.groups[gid].get("fence") or {}).get("mode", "none") != "none"
         for pid in edits.groups[gid].get("parcels", []):
             if pid in polys:
                 members.append(pid)
-            else:
+            elif fenced:
                 plan.warnings.append(f"groups.{gid}: parcel {pid} not found; skipped")
         if members:
             plan.groups[gid] = sorted(members)
-        else:
+        elif fenced:
             plan.warnings.append(f"groups.{gid}: no member parcels left; group skipped")
     member_group = {pid: gid for gid, pids in plan.groups.items() for pid in pids}
     for pid in sorted(edits.parcels):
         if pid not in polys:
-            plan.warnings.append(f"parcels.{pid}: parcel not found; entry skipped")
+            # "no fence" on a parcel that is gone loses nothing: no warning (the entry applies again if the parcel comes back)
+            kept = [k for k in ("fence",) if k in edits.parcels[pid] and edits.parcels[pid][k].get("mode") != "none"]
+            if kept:
+                plan.warnings.append(f"parcels.{pid}: parcel not found; {', '.join(kept)} skipped")
     for pid in sorted(polys):
         entry = edits.parcels.get(pid, {})
         group_fence = edits.groups[member_group[pid]].get("fence") if pid in member_group else None
@@ -565,36 +590,22 @@ def plan_edits(
             spec = resolve_fence(entry.get("fence"), group_fence)
             gaps = tuple((*_local_xy(x, y, origin), w) for x, y, w in spec.gaps)
             plan.specs[pid] = replace(spec, gaps=gaps)
-        if "trees" in entry:
-            plan.tree_overrides[pid] = entry["trees"]
-    for pid in sorted(edits.parcels):
-        if pid not in polys:
-            continue
-        for obj in edits.parcels[pid].get("objects", []):
-            lx, ly = _local_xy(*obj["position"], origin)
-            hits = sorted(q for q, g in polys.items() if g.covers(Point(lx, ly)))
-            inside = hits[0] if hits else None
-            if inside is None:
-                plan.warnings.append(f"objects {obj['id']}: outside every parcel; placed anyway")
-            elif inside != pid:
-                plan.warnings.append(
-                    f"objects {obj['id']}: outside its parcel {pid} (inside {inside}); placed anyway"
-                )
-            plan.object_owner[obj["id"]] = pid
-            plan.objects.append(
-                {
-                    "id": obj["id"],
-                    "asset": obj["asset"],
-                    "position": [_r3(lx), _r3(ly)],
-                    "z": obj.get("z"),
-                    "rotation_deg": float(obj.get("rotation_deg", 0)),
-                    "scale": float(obj.get("scale", 1)),
-                    "colour": obj.get("colour"),
-                    "parcel": inside,
-                    "owner": pid,  # the parcel entry that lists it (may differ from "parcel")
-                    "chunk": chunk_of(lx, ly, chunk_m),
-                }
-            )
+    for obj in edits.objects:
+        lx, ly = _local_xy(*obj["position"], origin)
+        hits = sorted(q for q, g in polys.items() if g.covers(Point(lx, ly)))
+        plan.objects.append(
+            {
+                "id": obj["id"],
+                "asset": obj["asset"],
+                "position": [_r3(lx), _r3(ly)],
+                "z": obj.get("z"),
+                "rotation_deg": float(obj.get("rotation_deg", 0)),
+                "scale": float(obj.get("scale", 1)),
+                "colour": obj.get("colour"),
+                "parcel": hits[0] if hits else None,
+                "chunk": chunk_of(lx, ly, chunk_m),
+            }
+        )
     plan.objects.sort(key=lambda o: o["id"])
     assets = {o["id"]: o["asset"] for o in plan.objects}
     for cid in sorted(edits.cables):
@@ -608,19 +619,19 @@ def plan_edits(
             plan.warnings.append(f"cables.{cid}: {'; '.join(bad)}; cable skipped")
         else:
             plan.cables.append({"id": cid, "from": cable["from"], "to": cable["to"]})
-    plan.water_regions = [
-        (Polygon([_local_xy(x, y, origin) for x, y in region_ring(r["polygon"])]), float(r["water_y"]))
-        for _, r in sorted(edits.regions.items())
+    plan.water_patches = [
+        (Polygon([_local_xy(x, y, origin) for x, y in polygon_ring(r["polygon"])]), float(r["water_y"]))
+        for _, r in sorted(edits.ground_patches.items())
         if "water_y" in r
     ]
     return plan
 
 
 def water_zone(plan: EditPlan, terrain: Terrain) -> BaseGeometry | None:
-    """Where the water regions of the plan really lie (see :func:`water.wet_area`), or None without any."""
+    """Where the water patches of the plan really lie (see :func:`water.wet_area`), or None without any."""
     from drycastle_pipeline.water import wet_area
 
-    zones = [wet_area(outline, terrain, level) for outline, level in plan.water_regions]
+    zones = [wet_area(outline, terrain, level) for outline, level in plan.water_patches]
     zones = [z for z in zones if not z.is_empty]
     return unary_union(zones) if zones else None
 
@@ -646,50 +657,71 @@ def unknown_asset_warnings(objects: list[dict]) -> list[str]:
 def run_props(
     work_dir: Path = DEFAULT_WORK_DIR,
     rules_path: Path = DEFAULT_RULES,
-    area: str | None = None,
     edits_path: Path = DEFAULT_EDITS,
 ) -> dict:
     terrain, _ = load_terrain(work_dir)
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     parcels = parcels_doc["parcels"]
+    ground = ground_units(parcels_doc)  # spawns are by the kind of ground: parcels and ground areas
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     graph = json.loads((work_dir / "roads.json").read_text())
-    osm_trees = json.loads((work_dir / "normalised" / "trees.geojson").read_text())["features"]
-    fcfg = load_section("props", rules_path, area)
+    fcfg = load_section("props", rules_path)
+    scfg = load_section("spawns", rules_path)
+    zrules = zone_kinds.rules(load_section("zones", rules_path))
+    zone_kinds.check_ground_types(zrules, ground_types(rules_path, edits_path))
+    spawn_where = zrules.get(zone_kinds.PLAYER_SPAWN, {}).get("where_ground")
+    scfg["ground_kinds"] = sorted(set(scfg["ground_kinds"]) | set(spawn_where or []))  # the rule zone of player_spawn
     chunk_m = float(parcels_doc["chunk_size_m"])
-    plan = plan_edits(load_edits(edits_path), parcels, parcels_doc.get("origin_epsg5514"), chunk_m)
+    edits = load_edits(edits_path)
+    plan = plan_edits(edits, parcels, parcels_doc.get("origin_epsg5514"), chunk_m)
+    origin = parcels_doc.get("origin_epsg5514")
+    cuts = zone_kinds.zone_cuts(edits.zone_cuts, origin) if edits.zone_cuts and origin else {}
+    drawn_spawn = (
+        zone_kinds.drawn_spawn_units(parcels_doc, zone_kinds.drawn_zones(edits.zones, origin), spawn_where, cuts)
+        if edits.zones and origin
+        else []
+    )
+    rule_units = zone_kinds.rule_spawn_units(parcels_doc, spawn_where, cuts)
     for warning in plan.warnings + unknown_asset_warnings(plan.objects):
         print(f"props: warning: {warning}", file=sys.stderr)
     fences = make_fences(
         parcels, buildings, graph, terrain, fcfg["fences"], specs=plan.specs, groups=plan.groups
     )
+    tree_cfg = {**fcfg["trees"], "ortho_dir": str(work_dir.parent / "ortho")}
+    if not (Path(tree_cfg["ortho_dir"]) / "trees.json").is_file():
+        print(f"props: warning: no orthophoto trees in {tree_cfg['ortho_dir']} (run make ortho-trees); the map has no trees",
+              file=sys.stderr)
+    elif not parcels_doc.get("origin_epsg5514"):
+        print("props: warning: parcels.json has no origin_epsg5514, so the orthophoto trees cannot be placed; the map has no trees",
+              file=sys.stderr)
     trees = make_trees(
-        parcels,
         buildings,
         graph,
-        osm_trees,
         terrain,
-        fcfg["trees"],
-        overrides=plan.tree_overrides,
+        tree_cfg,
         objects=[(o["position"][0], o["position"][1]) for o in plan.objects],
         water=water_zone(plan, terrain),
+        origin=tuple(parcels_doc["origin_epsg5514"]) if parcels_doc.get("origin_epsg5514") else None,
     )
     trees = cap_trees(trees, chunk_m, int(fcfg["trees"]["max_per_chunk"]))
     spawns = make_spawns(
-        parcels,
+        ground,
         buildings,
         graph,
         trees,
         terrain,
-        load_section("spawns", rules_path, area),
+        scfg,
         load_section("roads", rules_path),
         float(parcels_doc["chunk_size_m"]),
+        zone_units=drawn_spawn,
+        rule_units=rule_units,
     )
     objects_doc = {"format_version": OBJECTS_FORMAT_VERSION, "objects": plan.objects}
     if plan.cables:  # the wires between placed utility poles; the game strings them (docs/utility-poles.md)
         objects_doc["cables"] = plan.cables
     (work_dir / "objects.json").write_text(json.dumps(objects_doc, indent=1, sort_keys=True) + "\n")
     props = {"version": PROPS_FORMAT_VERSION, "fences": fences, "trees": trees}
+    (work_dir / "fences.json").write_text(json.dumps(fences_doc(fences, plan.groups, fcfg["fences"]), indent=1, sort_keys=True) + "\n")
     spawn_doc = {
         "version": SPAWNS_FORMAT_VERSION,
         "axes": "local metres, x east, y north, z up (elevation)",
@@ -698,7 +730,7 @@ def run_props(
     }
     for name, doc in (("props.json", props), ("spawns.json", spawn_doc)):
         (work_dir / name).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-    lamps_cfg = load_section("lamps", rules_path, area)
+    lamps_cfg = load_section("lamps", rules_path)
     lamps = make_lamps(
         parcels,
         buildings,
@@ -720,13 +752,12 @@ def run_props(
 
 def run(
     force: bool = False,
-    area: str = DEFAULT_AREA,
     edits: str | None = None,
     **_options: object,
 ) -> int:
     edits_path = Path(edits) if edits else DEFAULT_EDITS
     try:
-        counts = run_props(area_paths(area).work, area=area, edits_path=edits_path)
+        counts = run_props(map_paths().work, edits_path=edits_path)
     except FileNotFoundError as exc:
         print(f"props: error: missing input {Path(str(exc.filename)).name}; run earlier stages")
         return 1

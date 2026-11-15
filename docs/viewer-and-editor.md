@@ -8,7 +8,7 @@ Details for `godot/viewer/`. Setup and the make targets are in the [README](../R
 (namespace `Drycastle.MapLoader`) and lets you walk around in first person.
 
 Map folder: `--map <dir>` after Godot's own args, else the env var `DRYCASTLE_MAP`, else
-`../../out/map` relative to `godot/viewer`. With make: `make viewer MAP=/path/to/out/map`.
+`../../out/village/map` relative to `godot/viewer`. With make: `make viewer` (MAP defaults to `out/village/map`; override with `MAP=/path/to/map`).
 
 - Controls: WASD, mouse look, Space jump, Shift sprint, Escape frees or recaptures the mouse,
   R replaces the nearest parcel with a magenta test cube (`test_cube.tscn`) and restores it on the
@@ -34,17 +34,21 @@ stage from `pipeline/config/edits.json`; `files.objects` in `manifest.json`) and
 flat-colour GLB per `prim:` primitive (`prims` in the manifest; same axes as the chunk files, standing on
 y = 0). The loader instances every object: `pack:<pack>/<model>` from `assets/manifest.json` (`file`,
 resolved against the assets directory), `prim:<name>` from `<map>/prims`. Each object is a node
-`Objects/objects_<parcel>/object_<id>` with position (x east, z = -north, y = `z` or the terrain height
+`Objects/objects_<parcel>/object_<id>` (`<parcel>` is the parcel it stands in, `_none` on ground that is no
+parcel: an object belongs to no parcel, it is only a position) with position (x east, z = -north, y = `z` or the terrain height
 under it when `z` is null), `rotation_deg` counter-clockwise seen from above, uniform `scale` and an optional
 `colour` (material override). Unknown or missing assets give a warning and a magenta placeholder box.
 Objects have no collision in v1.
 
-Regions (`regions` in `edits.json`, schema in `pipeline/src/drycastle_pipeline/edits.py`) are baked into the
-chunk files as `region_<ID>` nodes (flat colour, no collision) and rebuilt for hot reload by
-`region-run --region ID --glb PATH`, whose JSON summary has `replaces` (the baked `region_<ID>` nodes to hide)
-and a GLB with one `region_<ID>` node per region in the chunk frame. `EditsFile` keeps `regions` as read and writes
-them canonically (the key is omitted while empty); `ObjectEdits.ValidateDocument` mirrors the schema. The editor UI
-for drawing regions is a separate piece of work.
+Ground patches (`ground_patches` in `edits.json`: `{GP-NNNN: {type, polygon, water_y?}}`, schema in `pipeline/src/drycastle_pipeline/edits.py`,
+ADR 0022) are baked into the chunk files as `patch_<ID>` nodes (flat colour = the type's first terrain colour, no collision; patches of a
+water type have none) and rebuilt for hot reload by `patch-run --patch ID --glb PATH`, whose JSON summary has `replaces` (the baked
+`patch_<ID>` nodes to hide) and a GLB with one `patch_<ID>` node per patch in the chunk frame (`MapLoader.ApplyPatches`; `patches.json`
+feeds the minimap). Zones (`zones`: `{Z-NNNN: {kind, polygon}}`) have no paint and no hot reload: a zone edit changes nothing in the
+viewer's world, the build turns zones into candidate points. `EditsFile` keeps both keys as read and writes them canonically (omitted
+while empty); `ObjectEdits.ValidateDocument` mirrors the schema (a `regions` key is unknown; a patch needs an existing, not deleted
+type and a `water_y` exactly when the type is water; a zone's kind must be in the map's `zone_kinds` when the map lists them). The
+editor UI is the Ground tool (patches) and the Zones tool, below.
 
 Assets directory: `--assets DIR`, else env `DRYCASTLE_ASSETS`, else `<repo>/assets`.
 
@@ -57,12 +61,11 @@ objects. `AssetsDir`, `ObjectNodes`, `DynamicProps`, `Warnings` are exposed.
 Hot reload: `make viewer` with `--watch` (`godot --path godot/viewer -- --watch`; off by default, so normal
 viewing and headless servers are unaffected):
 
-- `--edits PATH` the edits file (default `pipeline/config/edits.json`), `--area slice|village` (default: from
-  the map version), `--state PATH` (default `out/editor-state.json`), env `DRYCASTLE_UV` (the `uv` executable).
+- `--edits PATH` the edits file (default `pipeline/config/edits.json`), `--state PATH` (default `out/editor-state.json`), env `DRYCASTLE_UV` (the `uv` executable).
 - The file is polled twice a second. The state at startup is assumed to be what the map was built with.
   A change is diffed per parcel and per group (a group change affects all its members and the other way
   round), and only those parcels are regenerated with
-  `uv run python -m drycastle_pipeline parcel-run --area A --parcel ... --edits <snapshot> --glb ... --out ...`
+  `uv run python -m drycastle_pipeline parcel-run --parcel ... --edits <snapshot> --glb ... --out ...`
   in the `pipeline` directory (0.3 to 0.9 s) in a subprocess; edits that arrive during a run are coalesced into
   the next one. The viewer prints `edits applied: <ids> in <ms> ms`. A half-written or invalid file is ignored
   until it changes again, a failed `parcel-run` only prints its error. Writers must replace the file atomically
@@ -74,24 +77,40 @@ viewing and headless servers are unaffected):
   chunk whose hash differs from what is loaded gets its building nodes (`parcel_<ID>_visual`,
   `parcel_<ID>_collision`, `window_*`) swapped with `MapLoader.ReloadChunkBuildings`, one chunk per frame. The
   viewer prints `map reloaded: buildings of N chunk(s) ...`, the editor shows it in the status line. So after
-  changing a building: `make rules export AREA=...`, no restart. Not reloaded: everything else baked into a chunk
-  (terrain, roads; fences, trees and regions keep following the edits file). A re-export with different parcels
+  changing a building: `make rules export`, no restart. Not reloaded: everything else baked into a chunk
+  (terrain, roads; fences, trees and ground patches keep following the edits file). A re-export with different parcels
   or a new chunk is not swapped in; the viewer says to restart.
 - `editor-state.json` (written at most once a second while watching, an ignored build output):
   `{"camera": {"x": east, "y": north, "z": elevation, "yaw_deg": view direction counter-clockwise from east},
-  "format_version": 1, "selected": [], "sketch": {...}}`; x and y are in the map frame (local metres). `selected` is the list of
-  selected parcel IDs while the editor mode is on (empty otherwise). `sketch` holds the marks of the Sketch tool in
-  absolute S-JTSK metres: `{"lines": [{"closed": false, "id": "L1", "points": [[x, y], ...]}], "next_line": 1,
-  "next_point": 1, "points": [{"id": "A", "x": .., "y": ..}]}` (see "Sketch tool"); a sketch change is written within a frame.
-- `make viewer-edit-smoke` exports a fresh slice map and a work-directory copy into a scratch directory
+  "format_version": 1, "selected": []}`; x and y are in the map frame (local metres). `selected` is the list of
+  selected parcel IDs while the editor mode is on (empty otherwise).
+- `sketch.json` (next to `editor-state.json`, written within a frame of every sketch change, also an ignored build output) holds
+  the marks of the Sketch tool in absolute S-JTSK metres, and is the one file the editor and the MCP server both write:
+  `{"format_version": 1, "version": 7, "sketches": ["ROAD"], "next_line": 1, "next_point": 1,
+  "lines": [{"closed": false, "id": "L1", "points": [[x, y], ...], "sketch": "ROAD"}],
+  "points": [{"id": "A", "sketch": "ROAD", "x": .., "y": ..}]}` (see "Sketch tool"). `version` goes up on every write; the editor
+  checks the file four times a second and takes a version it did not write over as one undo step. A sketch an older editor kept in
+  `editor-state.json` is moved to the sketch `DEFAULT` the first time.
+- `make viewer-edit-smoke` exports a fresh map and a work-directory copy into a scratch directory
   (`SMOKE_DIR=...`, default a temp dir), starts the viewer headless with `--watch`, writes edits files during the
   run and checks objects, swapped props, colliders, replacement without leaks and survival of a broken file.
-- `make viewer-regions-smoke` does the same for regions: exports a slice map with three regions, then recolours,
-  reshapes, adds and removes regions through the watcher (alone and together with a parcel edit in one file
-  change) and checks that only those regions are swapped (`region-run --glb`, `MapLoader.ApplyRegions`; a region
-  split over chunk files is swapped completely), that repeated swaps do not grow the node count and that a broken
-  file changes nothing.
+- `make viewer-patches-smoke` does the same for ground patches: exports a map with three patches (each colour is a ground
+  type of its own, `paint_<rrggbb>`), then retypes, reshapes, adds and removes patches through the watcher (alone and together
+  with a parcel edit in one file change) and checks that only those patches are swapped (`patch-run --glb`,
+  `MapLoader.ApplyPatches`; a patch split over chunk files is swapped completely), that repeated swaps do not grow the node
+  count and that a broken file changes nothing. (`ViewerPatchesSmoke.cs`, `patches_smoke.py`; not run when it was last changed.)
   `parcel-run`/`export` take `--work DIR` and `export` takes `--out DIR` for such experiments.
+
+### Water
+
+The viewer and the editor draw the map's water (`water.json`) with the same surfaces as the shooter: a flat mesh per body,
+low-poly look: a colour that deepens smoothly with the depth and a hard foam strip at the bank (from the body's depth grid in `water.json`,
+as a texture, not from the depth buffer), real waves on a 2.5 m triangle grid, shaded flat, lit by the scene's sun
+(`MapLoader/Water/`: `WaterSurfaces`, `WaterPalettes`, and the shader `water_surface.gdshader`, embedded in the MapLoader assembly so both Godot projects
+use one file). It is read once at load: after changing a water patch (`water_y`, `max_depth`) or anything that moves
+the bed, re-export and restart the viewer. The terrain carve is not hot reloaded, and neither is the surface. A water
+patch's colour is painted on the carved bed (there is no flat mesh at the surface any more), so with no water drawn
+(old viewer, headless) it shows as a sunken patch.
 
 ### Ground clutter (near-only)
 
@@ -129,17 +148,16 @@ unless `MapLoader.SetClutterFocus(position)` is called each frame. A map without
 
 The first visible part of the world map editor: `--editor` starts the viewer in editor mode (it implies
 `--watch`); F2 toggles between walk mode (unchanged) and editor mode. Needs `uv` for the hot reload.
+The View page has an **Aerial photo** layer (O) to edit by eye; it is a download for reference only, see `docs/ortho.md`.
 
 ```sh
-# slice, against the default edits file (pipeline/config/edits.json)
+# against the default edits file (pipeline/config/edits.json)
 dotnet build godot/viewer/viewer.csproj
-godot --path godot/viewer -- --editor --map out/map --area slice
-# village
-godot --path godot/viewer -- --editor --map out/village/map --area village
+godot --path godot/viewer -- --editor --map out/village/map
 ```
 
 Options: `--edits PATH` (default `pipeline/config/edits.json`), `--state PATH` (default `out/editor-state.json`),
-`--area slice|village`, plus the usual `--map`, `--seed`, `--assets`.
+plus the usual `--map`, `--seed`, `--assets`.
 
 | Key | Action |
 | --- | --- |
@@ -151,6 +169,8 @@ Options: `--edits PATH` (default `pipeline/config/edits.json`), `--state PATH` (
 | Shift + left click | add or remove that parcel in the selection |
 | G | create a property group (`G-NNNN`) from 2+ selected parcels |
 | T | snap to a top-down view above the cursor; again restores the previous camera |
+| B | floor plan of the selected parcel: its buildings hidden, wall lines and a 1 m grid shown; again restores them |
+| (Street View) | `streetview_follow.py` moves the character to where a Chrome Street View tab is; in the top-down view (T) a red point marks the spot below it, see `docs/streetview.md` |
 | Esc | stop placing / deselect the object / clear the parcel selection (in that order) |
 | Ctrl+Z, Ctrl+Y (Ctrl+Shift+Z) | undo / redo the saves made in this session (see Objects and undo) |
 
@@ -159,7 +179,7 @@ Hovering shows `P-0415 garden` (and `[G-0007]` when grouped) at the cursor. Outl
 outlines only when one of its members is hovered or selected, and then as one shape (edges shared by two members are
 not drawn). The right-hand panel shows the
 selection (ID, kind, area, cadastral reference, group), a collapsible Group section with the buttons Group
-selected, Add selected to group, Remove from group, Merge groups and Dissolve group, the Fence and Trees sections (below) and
+selected, Add selected to group, Remove from group, Merge groups and Dissolve group, the Fence section (below) and
 the Objects section (palette, selected object, undo; see Objects and undo). The bottom line shows messages (`saved`, `regenerating P-0004...`, `applied in 480 ms`, errors) and the key hints.
 
 Merge groups (button, or `G` when the marked parcels touch any group) puts all parcels of those groups, plus any marked ungrouped parcels, into one new group (so a group plus a loose parcel also works) (highest id + 1) and removes the old ones. The fence is the one the groups share, else the first group's (by id; the status line says so); parcel-level fence edits stay on the parcels. It is one undo step, and `EditsFile.MergeGroups` follows the same rules as the MCP server's `merge_groups`.
@@ -172,11 +192,11 @@ newline), so both writers give byte-identical files; `pipeline/tests/fixtures/ed
 for that. A parcel is in at most one group; `G` refuses (status line) when a selected parcel is already in one.
 The watcher then regenerates the affected parcels (the fence runs along a group's outer edge) by itself.
 
-### Fence and Trees panel, Apply and gates
+### Fence panel, Apply and gates
 
-The panel header names the **target**: `P-0084` (one parcel), `3 parcels` (several loose parcels; Fence and Trees
-apply to every one, labelled `applies to N parcels`) or `G-0001 (3 parcels)`. A selection that is exactly one
-property group's members targets the group: Fence goes to the group entry, Trees to each member parcel. With one
+The panel header names the **target**: `P-0084` (one parcel), `3 parcels` (several loose parcels; Fence
+applies to every one) or `G-0001 (3 parcels)`. A selection that is exactly one
+property group's members targets the group: Fence goes to the group entry. With one
 grouped parcel selected, `Edit: whole group | this parcel` chooses (default group); "this parcel" writes the
 parcel's own fence override, which wins field by field over the group's.
 
@@ -196,22 +216,21 @@ parcel's own fence override, which wins field by field over the group's.
   drag gives 3 m. A cyan ribbon with two posts previews it, release adds the gate (`at` in absolute S-JTSK
   metres, to 1 mm), Esc cancels. Existing gates are orange markers; `gate N` in the list selects (magenta), its
   width spin changes it, `delete` removes it.
-* **Trees**: `rules (default)` | `density` (per 1000 m2) | `count`; the rules value for the parcel kind is shown
-  greyed. `seed offset` and `Reroll` (adds 1; from the rules it first switches to density with the rules' value,
-  because a seed alone is not expressible in `edits.json`). `Reset to rules` removes the `trees` entry.
+* **Trees are not edited per parcel** (the Trees tool, `set_trees` and the `trees` key of `edits.json` were removed):
+  the orthophoto detector (`docs/ortho.md`) is the only source of trees. To add one by hand, place a tree object
+  (`pack:kenney-city-kit-suburban/tree-large` or `tree-small`) with the Objects tool.
 * **Apply**: changes are pending per target (`* unsaved changes` under the header, `N unsaved targets` at the
   bottom; selecting something else keeps them). `Apply` (button, or Enter when no text field has focus) reloads
   `edits.json`, writes every pending target in one atomic save in the canonical format and drops what became empty
   (a parcel entry with nothing left disappears, so resetting returns the file to its original bytes); the watcher
   then regenerates and the status line shows `saved`, `regenerating ...`, `applied in N ms`. `Revert` discards the
-  current target's pending changes, `Revert all` all of them. Pending values replace the target's fence/trees
+  current target's pending changes, `Revert all` all of them. Pending values replace the target's fence
   entry as a whole, so an external change to that same entry made meanwhile is overwritten on Apply.
 
-`make viewer-panel-smoke` (`SMOKE_DIR=...`, `SHOTS=dir` for two windowed screenshots of the panel) drives the panel
+`make viewer-panel-smoke` (`SMOKE_DIR=...`, `SHOTS=dir` for a windowed screenshot of the panel) drives the panel
 API headless on a scratch export: exact file contents after each Apply, the Python validator on every saved file,
 group and multi-parcel edits, pending state across selections, gates (on the boundary within 1 cm, widths, a gap
-that really cuts the fence collider), fence none removing colliders through the watcher, reroll changing the
-regenerated trees, and reset restoring the original bytes.
+that really cuts the fence collider), fence none removing colliders through the watcher, and reset restoring the original bytes.
 
 ### Objects and undo
 
@@ -220,10 +239,11 @@ The Objects section holds Undo / Redo buttons, the **selected object** (below) a
 fence, other; groups start collapsed), plus a filter box (name, id or category; groups without a match hide,
 the others open).
 
-* **Placing**: choosing an asset arms placement. A semi-transparent cyan **ghost** (red when the point is in no
-  parcel) follows the cursor on the ground, snapped to 0.5 m in absolute S-JTSK metres, or free while Ctrl is held.
-  `R` / `Shift+R` rotate the ghost +-15 degrees, a left click places it (appended to the `objects` of the parcel
-  under the point; refused with a status message when there is none), and placement stays armed. Esc or a right
+* **Placing**: choosing an asset arms placement. A semi-transparent cyan **ghost** follows the cursor on the
+  ground, snapped to 0.5 m in absolute S-JTSK metres, or free while Ctrl is held. Any ground will do, a parcel is
+  not needed (a pole beside a road is placed like a car in a yard).
+  `R` / `Shift+R` rotate the ghost +-15 degrees, a left click places it (appended to the top-level `objects` list
+  of `edits.json`, which is written sorted by id), and placement stays armed. Esc or a right
   click without a look drag disarms. New ids are `o-0001`, `o-0002`, ... (one above the highest `o-NNNN` in the file;
   other id forms in the file are left alone). A placed entry is `id`, `asset`, `position` [x, y] (3 decimals),
   `rotation_deg`; `scale` and `colour` appear only when set, `z` never (the terrain height is used).
@@ -233,26 +253,27 @@ the others open).
   grid, Ctrl = free; the grab point keeps its offset), drag the ring to rotate (15 degree steps, Ctrl = free,
   angle counter-clockwise from east like `rotation_deg`). Arrow keys nudge 0.5 m in the camera's screen directions
   (snapped to the map axes) while the mouse is over the viewport; `Delete` removes, `Ctrl+D` duplicates 1 m east
-  and selects the copy, `R` / `Shift+R` rotate the selected object by 15 degrees. Moving an object over a parcel
-  boundary re-homes it to the parcel it is in now (its entry moves to that parcel's `objects`); a move to a point
-  in no parcel is refused and the object snaps back.
+  and selects the copy, `R` / `Shift+R` rotate the selected object by 15 degrees. An object may be moved anywhere:
+  across a parcel boundary or onto ground that is no parcel (only its position changes; the inspector names the
+  parcel it stands in, if any).
 * **Fields**: asset (read-only), `x` / `y` in S-JTSK metres (3 decimals), `rotation`, `scale` (> 0), a `colour`
   with a `set` box (committed when the picker closes), [Duplicate], [Delete]. Each committed edit is one save.
 * **One gesture, one save**: place, drag end, field commit, nudge, delete and duplicate each reload the file,
   apply, validate with the Python validator's rules (`ObjectEdits.ValidateDocument`, it never writes a file
   `edits.validate` rejects), and write it atomically in the canonical format.
-* **Instant objects**: when the watcher sees that, for the changed parcels, only the `objects` entries changed (no
-  fence, trees or group change), it does not run `parcel-run`: `MapLoader.ApplyObjects` re-instances those parcels'
-  objects straight from the file (S-JTSK minus `origin_epsg5514`, terrain height when `z` is absent), with the
-  same node names (`objects_<parcel>/object_<id>`) and ownership as a fragment, so a later fragment swap stays
-  consistent. The editor calls it right after saving (`EditsWatcher.NotifySaved`, about 1 to 3 ms from reading the
+* **Instant objects**: when the watcher sees that only placed objects changed (no fence or group changed, no
+  ground patch; zones do not count), it does not run `parcel-run`: `MapLoader.ApplyObjectChanges` removes the objects that are gone and
+  re-instances the ones that are new or differ, straight from the file (S-JTSK minus `origin_epsg5514`, terrain height
+  when `z` is absent), with the same node names (`objects_<parcel>/object_<id>`) and grouping as a fragment, so a
+  later fragment swap stays consistent. The same happens for the objects of a save that also needs a run. The editor calls it right after saving (`EditsWatcher.NotifySaved`, about 1 to 3 ms from reading the
   file to the nodes being in the tree); an external writer (MCP, a text editor) is picked up by the poll (at most
   0.5 s). The watcher recognises its own write: the new state is the applied state, so nothing runs twice. Mixed
   changes still go through `parcel-run`. Generated trees avoid placed objects, so a tree under a new object
-  only disappears at the next regeneration of that parcel (a fence or trees Apply, or a restart).
+  only disappears at the next regeneration of that parcel (a fence Apply, or a restart).
 * **Session undo/redo**: `Ctrl+Z`, `Ctrl+Y` / `Ctrl+Shift+Z` (or the buttons) undo and redo every save the
-  editor made since it opened: objects, group operations, Apply of fence and trees. Each save records the before
-  and after content of the top-level entries it touched (`parcels.<ID>`, `groups.<ID>`, absent included). Undo
+  editor made since it opened: objects, group operations, Apply of fence. Each save records the before
+  and after content of the top-level entries it touched (`groups.<ID>`, `parcels.<ID>.fence`, each object by id,
+  absent included). Undo
   reloads the file from disk, writes the before-entries back (absent deletes the entry), validates and saves; the
   watcher (or the instant path) applies the effect. **Entries somebody else changed in the meantime are
   overwritten only if this operation touched them**; everything else in the file stays. A new edit clears the
@@ -263,22 +284,22 @@ the others open).
 a scratch export, through the editor APIs and key events: the palette against the manifest, the exact text of
 `edits.json` after each of 26 saves (checked again with `edits.validate`, `dump_text` and `plan_edits`), no
 `parcel-run` for object edits (the watcher counts them: `RunCount`, `InstantCount`), scene nodes against the file,
-objects still right after a group and a fence Apply, drag and rotate with snapping, cross-parcel re-homing,
-refusals, field edits, nudge, duplicate, delete, undo and redo of the whole sequence byte for byte, the 200 cap and
+objects still right after a group and a fence Apply, drag and rotate with snapping, moves across parcels and onto
+ground that is no parcel, refusals, field edits, nudge, duplicate, delete, undo and redo of the whole sequence byte for byte, the 200 cap and
 the latency. Screenshot options: `--shot-object ID --shot-arm ASSET --shot-ghost X,Y --shot-ghost-rot DEG
 --shot-filter TEXT --shot-open car,pot` next to the `--editor-shot` ones.
 
-Classes: `EditorMode` (camera, picking, selection, outlines, UI, group operations; `EditorMode.Edit.cs`: the Fence and Trees panel, pending state, gate tool; `EditorMode.Objects.cs`: palette, ghost, gizmo, object gestures; `EditorMode.Undo.cs`: session undo), `ObjectEdits` (object entries, ids, C# validator), `EditModel` (drafts, schema, applying pending changes), `EditsFile` (reader,
+Classes: `EditorMode` (camera, picking, selection, outlines, UI, group operations; `EditorMode.Edit.cs`: the Fence panel, pending state, gate tool; `EditorMode.Objects.cs`: palette, ghost, gizmo, object gestures; `EditorMode.Undo.cs`: session undo), `ObjectEdits` (object entries, ids, C# validator), `EditModel` (drafts, schema, applying pending changes), `EditsFile` (reader,
 canonical writer and group operations for edits.json), `ParcelInfo` (now with `Rings`, `Bounds`, `AreaM2`, `Group`
 and `Contains`) and `ParcelIndex` / `MapLoader.ParcelAt(x, z)` (grid index over the parcel boxes; about 5 us per
 lookup).
 
-`make viewer-editor-smoke` (`SMOKE_DIR=...` for the scratch directory) exports a slice map into a scratch dir,
+`make viewer-editor-smoke` (`SMOKE_DIR=...` for the scratch directory) exports a map into a scratch dir,
 starts the viewer headless with `--editor-smoke` and drives the editor through its API: F2 round trip, top-down
 snap, picking, selection, outlines (shared edges not drawn), creating and dissolving a group, saved file content
 checked byte for byte against `dump_edits`, `editor-state.json`. Screenshots of the editor mode (windowed, needs a
 GPU): `godot --path godot/viewer -- --map DIR --edits FILE --state FILE --editor-shot out.png --select P-0003
---shot-at P-0003 [--hover P-0005] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-reroll] [--shot-focus X,Y --shot-dist D]`
+--shot-at P-0003 [--hover P-0005] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-focus X,Y --shot-dist D]`
 (`--shot-edits` writes that edits file first and waits for the regenerated parcels).
 
 
@@ -298,10 +319,15 @@ renders (the name is the tooltip), and adds the cables.
 * **Planning** (`P`): left click where poles should stand, right click (no drag) a house wall or roof to connect it;
   a point clicked again is removed, Backspace removes the last, Esc leaves plan mode (the plan is kept in memory).
   What will be built is drawn while planning (`PolePlanner.cs`): cyan posts with their crossarm, cyan links, red for
-  a span over 70 m or a house more than 40 m from every pole. `Build poles` (Enter) places a pole at every point,
+  a house with no pole to go to. There is no limit on how far apart two poles may be (the planner is flat, height plays
+  no part). `Build poles` (Enter) places a pole at every point,
   strings the cables and connects the houses in one save (one undo step) and says what it skipped. Links follow the
-  roads of `roads.json`: a point is joined to the next point along the road graph, through junctions, loops left out;
-  a point over 25 m from every road joins its nearest neighbours. The pole follows from its place: three links or
+  roads of `roads.json`: each point belongs to its nearest road and to one side of it, and the poles of one side are a
+  **stream**: each is joined to the next along the road, so a street with poles on both sides gets two lines that run
+  along each side, not a zigzag. The ends of a stream are joined, through junctions, to the nearest stream of the next
+  road, loops left out. Where the two streams of a road face each other a wire also crosses the road (between poles
+  that stand across from each other, at most one per 80 m of road, `PolePlanner.CrossEveryM`). A point over 25 m from
+  every road joins its nearest neighbours; a house connects to its nearest pole. The pole follows from its place: three links or
   more a junction pole, a line end or a turn over 30 degrees a twin pole, off-road or on a track or path a field
   pole, a megaphone pole about every 150 m of plain street, else a lamp or plain pole. Planned poles are turned:
   crossarm across the line, lamp over the road. Existing poles are ignored.
@@ -331,10 +357,17 @@ There is no headless smoke for this tool yet.
 
 ### Sketch tool
 
-Rail icon 9. Temporary marks on the ground that a prompt can name ("plant trees inside L1", "a lamp at A"), read by the
-MCP server's `get_sketch`. One sketch holds any number of **points** (`A`, `B`, ... `Z`, `AA`, ...) and **lines** (`L1`,
-`L2`, ...); every mark shows its name as a tag in the 3D view, in every tool. The marks are not map content: nothing is
-written to `edits.json`. They live in `editor-state.json` (`sketch`), so they survive a viewer restart, until cleared.
+Rail icon 9. Temporary marks on the ground that a prompt can name ("plant trees inside L1", "a lamp at A", "everything in
+sketch ROAD"), read by the MCP server's `get_sketch`. Marks are grouped in named **sketches** (`ROAD`, `FENCE_PLAN`, ...; several
+at once); a sketch holds any number of **points** (`A`, `B`, ... `Z`, `AA`, ...) and **lines** (`L1`, `L2`, ...), whose names are
+unique across all sketches. Every mark shows its name as a tag in the 3D view, in every tool (with the sketch in front,
+`ROAD · L1`, when there are several). The marks are not map content: nothing is written to `edits.json`. They live in
+`sketch.json`, so they survive a viewer restart, until cleared. Claude draws into the same sketches through the MCP server
+(`sketch_add_point`, `sketch_add_line`, `sketch_add_road`): they appear within a second as one undo step.
+
+- **Sketches**: the Sketch panel's picker chooses the active sketch, the one new marks go into (a first mark makes `DEFAULT`);
+  selecting a mark makes its sketch active. New makes an empty sketch, Rename and Delete act on the active one (names are 1 to 24
+  letters, digits, `_` or `-`, unique ignoring case; Enter applies, Esc cancels; Delete asks first). Every one is an undo step.
 
 - `P` / `L` (or the two buttons) choose what a click makes. **Point**: each LMB (or `C`, the spot under the cursor, the
   screen centre when the cursor is over the panel) marks a point. **Line**: LMB or `C` adds corners (0.5 m grid, Ctrl
@@ -342,17 +375,89 @@ written to `edits.json`. They live in `editor-state.json` (`sketch`), so they su
   it (3+ corners, refused with the reason when the outline would cross itself). A closed line means the ground inside.
   Enter with one corner makes a point. Backspace or Ctrl+Z takes the last corner back; a ghost shows the next mark.
 - Click a mark's handle or its row in the panel, or step with `[` `]`, to select it; `Del` deletes it. "Clear the
-  sketch" removes all marks (asks first) and the names start again at `A` and `L1`.
+  sketch" removes the marks of the active sketch (asks first; the sketch stays) and the names start again at `A` and `L1`
+  once no mark is left.
 - Every sketch change (a new mark, a delete, a clear) is one step on the editor's undo stack, in order with the saves:
   Ctrl+Z / Ctrl+Y. Esc steps back one level: the line being drawn, the selection, the tool.
-- Checked by the build and by the `get_sketch` tests on the state file format only; there is no headless smoke for the
-  tool yet.
+- Checked by the build and by the MCP server's sketch tests on the file format only; there is no headless smoke for the
+  tool yet (the picker, the naming row and the reload from `sketch.json` are not covered).
 
-### Regions tool
+### Ground tool
 
-Rail icon 6. `N` starts a shape, LMB or `C` adds corners (0.5 m grid, Ctrl free), Enter closes it, the colour is chosen
-(picker or `#rrggbb`) and Enter creates the region: one save, one undo step. Select a region by clicking it or its row in the panel;
-drag corners, `[` `]` plus arrows, recolour, `Del` (asks first). Invalid shapes are refused before commit with the reason in the panel
-(a red preview outline while drawing or dragging). `Ctrl+P` opens a command palette. Esc steps back one level. Details and the
-keyboard walkthrough: `docs/regions-ui-notes.md`. `make viewer-region-editor-smoke` drives all of it headless and compares every saved
-`edits.json` with the Python writer's text.
+Rail icon 4 (`Ground`). One page, top to bottom: the ground map switch, the ground types, the ground patches, a New type row and the
+form of the selected type. Ground is terrain only (ADR 0022): every point of the map has exactly one ground type and a type is its
+colours, detail recipe and whether it is water; what a place means in play (Bigfoot, deer, player spawn) is a zone (Zones tool, below).
+
+**Ground types.** Lists every ground type of the map (swatch of the first colour; name, what it does, and a tag when you edited it, made
+it, or deleted it) and edits one at a time. The form ticks the **attributes** the type carries (ADR 0022 catalog): **Appearance**
+(Terrain colours: swatch, picker, `#rrggbb` field, add up to 6, remove; Detail recipe: dropdown, with "Advanced detail settings", the
+effective `detail` overlay as read-only text plus number fields for furrow probability, headland keep and tone patches per ha, from the
+one table `GroundTypeEdits.DetailFields`) and **Water** (water body: a patch of it needs a water level). A type with only colours is plain
+paint: a colour you want that no type has is a ground type of your own. A type that takes OSM land or is made by a rule cannot untick its
+last appearance or water attribute (the checkbox is disabled with the reason as tooltip); OSM values (comma lists for `landuse` and
+`natural`; read only for a rule type). Buttons: New type (name field, Create: one green shade and the field recipe; or Duplicate selected,
+which copies the attributes but not the OSM tags), Reset to rules (removes your override, also brings a deleted type back), Delete (asks
+first; disabled for the default type, the dike and a type some patch uses, with the reason). Ticking or unticking Water on a type a patch
+uses is refused with the reason (each patch of a water type needs its water level, a land type refuses one). Rename does not exist:
+names are IDs (a disabled button explains it). `edits.json` `ground_types` lays over `rules.yaml`; a type's attributes may only be
+`colours`, `recipe`, `detail`, `water` (`spawns`, `event_spawn`, `wildlife` are unknown). A banner says a type change shows after the next
+full map build (`make map`).
+
+**Ground map** (`EditorMode.GroundMap.cs`): while the tool is open every ground area is drawn on the terrain in its type's colour
+(parcels.json `ground_areas`, as of the last build, plus the hand-drawn patches, shown before the next build). Selecting a type
+brightens its areas (white edge) and dims the rest; the list rows say "N areas, X ha" (or "none on the map"); hovering the ground names the
+patch or type under the cursor, clicking selects it (click the same type or empty ground to deselect). `M` or the "Show areas on the map"
+checkbox toggles it (remembered in `editor_ui.cfg`). Built one type per frame with a progress line; a map built before `ground_areas`
+says to build it again.
+
+**Ground patches** (`EditorMode.Patches.cs`, the polygon machinery of `EditorMode.Shapes.cs` shared with the Zones tool). A patch is a
+hand-drawn polygon of exactly one ground type, plus a water level when the type is water; where patches overlap the higher ID wins.
+Select a type, then **Draw patch of this type** (`N`): LMB or `C` adds corners (0.5 m grid, Ctrl free), Enter closes the shape and
+creates `GP-NNNN` (one save, one undo step; clicking the first corner closes too). A water type asks for the water level first (a row
+with a number field, starting at the terrain height under the shape; Enter creates, Esc goes back to the corners). Select a patch by
+clicking it in the world or its row (this selects its type too); drag its corners, `[` `]` plus arrows, change its type in the form
+(a water type gets a starting water level, a land type loses it), edit the water level, `Del` (asks first); each is one save and one undo
+step. Invalid shapes are refused before commit with the reason in the panel (a red preview outline while drawing or dragging). Until
+`make map` the world shows a patch as paint in its type's first terrain colour (`patch-run` through the watcher) and the ground map
+shows it as an area of its type; grass, trees and water come with the build. Details and the keyboard walkthrough:
+`docs/patches-zones-ui-notes.md`.
+
+Keys: `4` opens, Tab reaches the list, `N` draws a patch, `Shift+N` the New type name field, `M` the ground map, `Del` deletes the patch
+or type last selected (asks), Ctrl+Z undoes, Esc steps back (a field, the drawing, the patch, the type, the tool); `Ctrl+P` lists tools,
+actions, types, patch IDs and zone IDs. A map without `ground_types` in its `parcels.json` shows an explanation to build it again.
+
+### Zones tool
+
+Rail icon 6 (`Zones`, `zone` icon). A zone is a hand-drawn polygon of exactly one zone kind (`zones` in `edits.json`, `Z-NNNN`); it marks
+what the area means in play and never changes the ground; zones overlap freely and add up. The kinds are a fixed catalog in code
+(`pipeline/.../zones.py`), listed in the map's `parcels.json` `zone_kinds` (name, label, group, tint, `where_ground`): `bigfoot`,
+`player_spawn` and one per wild species. The page lists them (swatch = the tint, label, how many zones are drawn of it, and `rule: forest,
+meadow` for a kind that also applies by rule wherever those ground types lie, with nothing to draw); pick one, **Draw zone of this kind**
+(`N`): corners as for patches, Enter creates `Z-NNNN` (one save, one undo step; no extra step). Select a zone by clicking it or its row
+(this selects its kind), drag corners, `[` `]` plus arrows, change its kind in the form, `Del` (asks first).
+
+**Zone overlay** (`M`, or the checkbox; remembered in `editor_ui.cfg`; same key and name as the ground map, only while the tool is open):
+every zone is drawn translucent on the terrain in its kind's tint with a thin edge. **A selected kind is shown alone**, also with the
+overlay off: the other kinds are not drawn, hovered or clicked, and its zones get moving bands of tint and white (still with reduce
+motion) so they read on ground of their own colour; `Esc` deselects the kind and shows all again;
+**rule zones** (the baked ground areas of a kind's `where_ground` types) are drawn lighter and the hover text says "rule zone". Hover names
+the zones and rule kinds under the cursor, a click selects the topmost drawn zone (where zones overlap the selected kind's wins, then the
+higher ID); a click on a rule zone selects its kind and says it is by rule. Built one kind per frame with a progress line. Zones have no
+paint and no hot reload; nothing is saved by the overlay. A map built before `zone_kinds` shows a red note to build it again and the Draw
+action says why it is disabled.
+
+**Mass delete**: mark zones with the tick of a list row, `Ctrl`+click on the map, `X` for the selected zone, or **Mark all** (the
+selected kind's zones, or every zone); marked zones are outlined in red and counted in the HUD. **Delete N marked zones** (`Shift+Del`)
+asks first, naming counts per kind, then removes them in one save = one undo step (drawn zones leave `zones`, rule zones get a
+`zone_cuts` entry each). Marks are not saved.
+
+Esc steps back: the drawing, the zone, the kind, the tool. Notes, states and the keyboard walkthrough: `docs/patches-zones-ui-notes.md`.
+`make viewer-shape-editor-smoke` drives the patch and zone gestures headless and compares every saved `edits.json` with the Python writer's
+text (needs a pipeline that exports `zone_kinds`).
+
+**Floor plan.** `B` (also View > Layers and `Ctrl+P`) hides the buildings of the one selected parcel and shows their plan on the
+ground: the wall lines (a horizontal cut 1.2 m above the ground, so recessed doors and windows show), over a 1 m grid on the
+Sketch tool's grid with a stronger line every 5 m. It is for sketching an interior: the ground under a building was always
+clickable, this makes it visible. One parcel at a time; it stays on while you select marks or other parcels, `B` again brings the
+building back. A view only: nothing is saved to the map, the collision stays, walk mode shows the building, and the parcel is
+remembered (`editor_ui.cfg`). There is no headless smoke for it yet.

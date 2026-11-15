@@ -2,6 +2,20 @@ using Godot;
 
 namespace Drycastle.MapLoader;
 
+/// <summary>
+/// One ground type of the map as the last build wrote it (parcels.json `ground_types`): <paramref name="Colour"/> is its
+/// first terrain colour, <paramref name="RulesJson"/> its entry of rules.yaml (null for a type the user made, <paramref name="Custom"/>),
+/// which the editor lays the current edits.json over. <paramref name="Legacy"/>: a map built before ground types could be
+/// edited, with only the name and colour.
+/// </summary>
+public sealed record MapGroundType(string Name, string Colour, bool Custom, string? RulesJson, bool Legacy);
+
+/// <summary>A zone kind of the catalog (parcels.json `zone_kinds`): <paramref name="Tint"/> is its "#rrggbb" overlay colour, <paramref name="WhereGround"/> the ground types it applies to by rule (null: drawn only).</summary>
+public sealed record ZoneKindInfo(string Name, string Label, string Group, string Tint, IReadOnlyList<string>? WhereGround);
+
+/// <summary>A ground area of the base map (parcels.json `ground_areas`): land of one ground type that is no property. Rings in ground (x, z) metres, outer first then holes (even-odd).</summary>
+public sealed record GroundAreaInfo(string Id, string Kind, IReadOnlyList<Vector2[]> Rings, float AreaM2);
+
 /// <summary>A parcel of the base map (from parcels.json).</summary>
 public sealed class ParcelInfo
 {
@@ -47,7 +61,7 @@ public sealed class ParcelInfo
         return inside;
     }
 
-    internal static float RingArea(Vector2[] ring)
+    public static float RingArea(Vector2[] ring)
     {
         double s = 0;
         for (int i = 0, j = ring.Length - 1; i < ring.Length; j = i++)
@@ -128,13 +142,10 @@ public sealed class EditDefaults
     public string FenceColour { get; init; } = "";
     public double FenceProbability { get; init; }
     public IReadOnlyList<string> FenceKinds { get; init; } = Array.Empty<string>();
-    /// <summary>Trees per 1000 m2 by parcel kind (kinds not listed get none).</summary>
-    public IReadOnlyDictionary<string, double> TreeDensity { get; init; } = new Dictionary<string, double>();
 
     internal static EditDefaults Read(System.Text.Json.JsonElement e)
     {
         var f = e.GetProperty("fence");
-        var t = e.GetProperty("trees");
         return new EditDefaults
         {
             FenceHeight = f.GetProperty("height_m").GetDouble(),
@@ -142,7 +153,6 @@ public sealed class EditDefaults
             FenceColour = f.GetProperty("colour").GetString() ?? "",
             FenceProbability = f.GetProperty("probability").GetDouble(),
             FenceKinds = f.GetProperty("kinds").EnumerateArray().Select(k => k.GetString()!).ToList(),
-            TreeDensity = t.GetProperty("density_per_1000m2").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetDouble()),
         };
     }
 }

@@ -52,7 +52,7 @@ public partial class DialogScreen : MenuScreen
         row.AddChild(Ui.Fill());
         foreach (var c in _choices)
         {
-            var b = Ui.Btn(c.Text, () => { Shell.Pop(); c.Run(); }, c.Variation, 160);
+            var b = Ui.Btn(c.Text, () => { if (Shell.Pop(this)) c.Run(); }, c.Variation, 160); // already closed (Esc or the timer got there first): run nothing
             _buttons.Add(b); row.AddChild(b);
         }
         if (_cancelText != null)
@@ -67,7 +67,8 @@ public partial class DialogScreen : MenuScreen
 
     protected override Control? FirstFocusTarget() => _buttons.Count == 0 ? null : _buttons[Math.Min(_focus, _buttons.Count - 1)];
 
-    public override void Back() { Shell.Pop(); if (_auto > 0) _autoRun?.Invoke(); else _onCancel?.Invoke(); }
+    /// <summary>Esc, Cancel, or the auto-timer running out. Runs once: a second close of the same dialog (Esc in the frame the timer fires) finds it gone and does nothing.</summary>
+    public override void Back() { if (!Shell.Pop(this)) return; if (_auto > 0) _autoRun?.Invoke(); else _onCancel?.Invoke(); }
 
     public override void _Process(double delta)
     {
@@ -146,7 +147,7 @@ public partial class PauseScreen : MenuScreen
     }
 
     protected override Control? FirstFocusTarget() => _first;
-    public override void Back() { Shell.Pop(); _resume(); }
+    public override void Back() { if (Shell.Pop(this)) _resume(); }
 }
 
 public partial class LoadingScreen : MenuScreen

@@ -1,20 +1,18 @@
-"""Per-parcel run: fences and trees of some parcels only, as a JSON fragment (for the editor).
+"""Per-parcel run: fences and objects of some parcels only, as a JSON fragment (for the editor).
 
-``python -m drycastle_pipeline parcel-run --area village --parcel P-0412 [--group G-0001]``
+``python -m drycastle_pipeline parcel-run --parcel P-0412 [--group G-0001]``
 loads the work files, applies ``edits.json`` exactly like the props stage and regenerates only the
-fences and trees of the target parcels. Nothing under ``data/`` is written. The result equals the
+fences and objects of the target parcels. Nothing under ``data/`` is written. The result equals the
 target parcels' share of the full props stage (``props.json`` / ``objects.json``):
 
 * **Fences** are processed in parcel ID order and each parcel skips what neighbours with a lower ID
   already fenced (``done`` in :func:`props.make_fences`). So the run processes the targets plus,
   transitively, every lower-ID parcel whose boundary is within :data:`NEIGHBOUR_M` of one of them,
   and every member of a group a processed parcel belongs to (the perimeter needs all members). Only
-  buildings, road edges and road parcels near that set are given to ``make_fences``.
-* **Trees** of a parcel depend only on its own seed and the buildings, roads and placed objects
-  around it (the whole parcel: a tree rejected or accepted anywhere shifts the seeded stream). The
-  per-chunk cap (:func:`props.cap_trees`) also depends on the rule trees of every
-  other parcel in the same chunk, so when the cap is on, those parcels' trees are generated too,
-  for the chunks that contain target trees.
+  buildings and road edges near that set are given to ``make_fences``.
+* **Trees** are not part of a run: they come from the orthophoto (:func:`props.ortho_trees`), not from
+  parcels, so the fragment's ``trees`` is empty and a full props run places them (and keeps them clear of
+  placed objects).
 """
 
 import json
@@ -28,17 +26,13 @@ from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
 
 from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import DEFAULT_AREA, area_paths
+from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
 from drycastle_pipeline.props import (
     EditPlan,
-    cap_trees,
-    chunk_of,
     make_fences,
-    make_trees,
     plan_edits,
     unknown_asset_warnings,
-    water_zone,
 )
 from drycastle_pipeline.roads import edge_lines
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
@@ -48,7 +42,6 @@ FRAGMENT_FORMAT_VERSION = 1
 # Parcels whose boundaries are closer than this can influence each other's fence de-duplication
 # (``done`` is buffered by 0.3 m); the margin is generous.
 NEIGHBOUR_M = 0.5
-_ROAD_UNION_M = 1.0  # road parcels within this of a parcel matter for its gate gap (buffer 0.5)
 _MARGIN_M = 1.0
 
 
@@ -141,14 +134,6 @@ class _Context:
         )
 
 
-def _tree_context(ctx: _Context, geoms: list[BaseGeometry], tcfg: dict) -> tuple:
-    return ctx.around(
-        geoms,
-        float(tcfg["building_clearance_m"]) + _MARGIN_M,
-        float(tcfg["road_clearance_m"]) + _MARGIN_M,
-    )
-
-
 def compute_fragment(
     parcels_doc: dict,
     buildings: list[dict],
@@ -161,7 +146,6 @@ def compute_fragment(
 ) -> dict:
     """Fences, trees and objects of ``targets`` (already expanded); see the module docstring."""
     parcels = parcels_doc["parcels"]
-    chunk_m = float(parcels_doc["chunk_size_m"])
     order = sorted(p["id"] for p in parcels)
     by_id = {p["id"]: p for p in parcels}
     polys = {pid: shape(by_id[pid]["polygon"]) for pid in order}
@@ -179,12 +163,8 @@ def compute_fragment(
             float(fcfg["fences"]["building_clearance_m"]),
         )
         + _MARGIN_M,
-        float(fcfg["fences"]["road_clearance_m"]) + _MARGIN_M,
+        max(float(fcfg["fences"]["road_clearance_m"]), float(fcfg["fences"]["gate_road_within_m"])) + _MARGIN_M,
     )
-    road_ids: set[str] = set()
-    for g in closure_polys:
-        road_ids |= {order[i] for i in _near(tree, g, _ROAD_UNION_M)}
-    road_polys = [polys[pid] for pid in sorted(road_ids) if by_id[pid]["kind"] == "road"]
     in_closure = set(closure)
     groups = {gid: pids for gid, pids in plan.groups.items() if in_closure.intersection(pids)}
     fences = make_fences(
@@ -195,53 +175,12 @@ def compute_fragment(
         fcfg["fences"],
         specs=plan.specs,
         groups=groups,
-        road_polys=road_polys,
     )
     fences = [s for s in fences if s["parcel"] in target_set]
 
-    # trees
-    tcfg = fcfg["trees"]
-    objects_xy = [(o["position"][0], o["position"][1]) for o in plan.objects]
+    trees: list[dict] = []  # trees come from the orthophoto only: not per parcel, a full props run places them
 
-    water = water_zone(plan, terrain)
-
-    def trees_of(ids: set[str], geoms: list[BaseGeometry]) -> list[dict]:
-        t_buildings, t_graph = _tree_context(ctx, geoms, tcfg)
-        return make_trees(
-            [by_id[pid] for pid in sorted(ids)],
-            t_buildings,
-            t_graph,
-            [],
-            terrain,
-            tcfg,
-            overrides=plan.tree_overrides,
-            objects=objects_xy,
-            only=ids,
-            include_osm=False,
-            water=water,
-        )
-
-    trees = trees_of(target_set, [polys[pid] for pid in targets])
-    limit = int(tcfg["max_per_chunk"])
-    if limit > 0 and trees:
-        chunks = {tuple(chunk_of(t["x"], t["y"], chunk_m)) for t in trees}
-        rects = [
-            shapely.box(cx * chunk_m, cy * chunk_m, (cx + 1) * chunk_m, (cy + 1) * chunk_m)
-            for cx, cy in sorted(chunks)
-        ]
-        others: set[str] = set()
-        for rect in rects:
-            others |= {order[i] for i in tree.query(rect, predicate="intersects")}
-        others -= target_set
-        trees = trees + trees_of(others, [polys[pid] for pid in sorted(others)])
-        trees = cap_trees(trees, chunk_m, limit)
-    trees = [t for t in trees if t["parcel"] in target_set]
-
-    objects = [
-        o
-        for o in plan.objects
-        if o["parcel"] in target_set or plan.object_owner.get(o["id"]) in target_set
-    ]
+    objects = [o for o in plan.objects if o["parcel"] in target_set]
     return {"fences": fences, "trees": trees, "objects": objects}
 
 
@@ -273,7 +212,6 @@ def write_glb(path: Path, fragment: dict, fcfg: dict) -> None:
 
 def run_parcel_run(
     work_dir: Path,
-    area: str,
     parcels: list[str],
     groups: list[str],
     edits_path: Path = DEFAULT_EDITS,
@@ -285,7 +223,7 @@ def run_parcel_run(
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     graph = json.loads((work_dir / "roads.json").read_text())
-    fcfg = load_section("props", rules_path, area)
+    fcfg = load_section("props", rules_path)
     plan = plan_edits(
         load_edits(edits_path),
         parcels_doc["parcels"],
@@ -319,7 +257,6 @@ def run_parcel_run(
 def run(
     parcels: list[str],
     groups: list[str] | None = None,
-    area: str = DEFAULT_AREA,
     edits: str | None = None,
     out: str | None = None,
     glb: str | None = None,
@@ -332,7 +269,7 @@ def run(
     edits_path = Path(edits) if edits else DEFAULT_EDITS
     try:
         fragment = run_parcel_run(
-            Path(work) if work else area_paths(area).work, area, parcels, groups, edits_path,
+            Path(work) if work else map_paths().work, parcels, groups, edits_path,
             glb_path=Path(glb) if glb else None,
         )
     except FileNotFoundError as exc:

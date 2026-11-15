@@ -22,6 +22,15 @@ public static class ShooterTheme
     /// <summary>Opacity of a form row whose control is disabled (the customiser's inert rows): dimmed, still readable.</summary>
     public const float DisabledAlpha = 0.45f;
 
+    // item cells (Equipment screen, corpse chooser): the cell, the icon in it, the pickup pips under the icon, the figure in the Equipment screen
+    public const int Cell = 10 * Space, CellIcon = 7 * Space, CellGap = Space + Space / 2, Pip = Space;
+    public const int AvatarWidth = 45 * Space, AvatarHeight = 60 * Space;
+    /// <summary>Seconds a refused cell shakes, how far it moves (pixels at the reference size) and how many swings it makes.</summary>
+    public const float ShakeSeconds = 0.3f;
+    public const int ShakeReach = Space / 2, ShakeSwings = 3;
+    /// <summary>The drag preview's opacity and the opacity of a cell that is the source of a drag or cannot take the item being dragged.</summary>
+    public const float DragPreviewAlpha = 0.85f, DragDimAlpha = 0.45f;
+
     // text sizes (five); body text is 20 and nothing is under 16 at 1080p
     public const int FontSmall = 16, FontBody = 20, FontHead = 24, FontBig = 32, FontDisplay = 48;
 
@@ -31,6 +40,8 @@ public static class ShooterTheme
     public static readonly Color Active = new(0.10f, 0.34f, 0.48f, 0.92f);
     public static readonly Color Line = new(0.45f, 0.49f, 0.58f);
     public static readonly Color Text = new(0.96f, 0.97f, 0.98f);
+    /// <summary>Gold of the divine blessing (the screen flash).</summary>
+    public static readonly Color Blessing = new(1f, 0.84f, 0.35f);
     public static readonly Color Dim = new(0.76f, 0.79f, 0.85f);
     public static readonly Color Accent = new(StatePalette.Accent.R, StatePalette.Accent.G, StatePalette.Accent.B);
     public static readonly Color Hover = new(0.19f, 0.23f, 0.31f, 0.95f);
@@ -49,6 +60,26 @@ public static class ShooterTheme
     static Color From(StatePalette.Rgb c) => new(c.R, c.G, c.B);
     public static readonly Color Outline = new(0f, 0f, 0f, 0.85f);
     public static readonly Color Scrim = new(0f, 0f, 0f, 0.60f);
+
+    // tactical map sheet (the M map): a dark olive margin, a faint paper wash and light ink over muted terrain
+    public static readonly Color MapPaper = new(0.10f, 0.12f, 0.09f, 0.94f);
+    public static readonly Color MapGround = new(0.20f, 0.23f, 0.19f);
+    public static readonly Color MapWash = new(0.80f, 0.76f, 0.60f, 0.10f);
+    public static readonly Color MapGrid = new(0.94f, 0.95f, 0.84f, 0.40f);
+    public static readonly Color MapFrame = new(0.82f, 0.84f, 0.70f);
+    public static readonly Color MapRoadCasing = new(0.07f, 0.08f, 0.06f, 0.85f);
+    /// <summary>The waypoint's ink in the world and on the maps: a light green (friendly, as in other shooters), never on a dark plate; its text is outlined instead.</summary>
+    public static readonly Color Waypoint = new(0.70f, 1.00f, 0.66f);
+    public const int MapGutter = 28;
+    public const float MapFadeSeconds = 0.15f;
+
+    // the intel screen at the base (a world-space screen, see IntelScreen): near-black olive glass, pale green ink, hazard amber is the Warn token.
+    // Ink on glass is about 9:1, the borders about 4:1
+    public static readonly Color IntelGlass = new(0.035f, 0.05f, 0.04f);
+    public static readonly Color IntelCard = new(0.07f, 0.10f, 0.07f);
+    public static readonly Color IntelInk = new(0.82f, 0.93f, 0.76f);
+    public static readonly Color IntelDim = new(0.60f, 0.72f, 0.56f);
+    public static readonly Color IntelLine = new(0.38f, 0.50f, 0.34f);
 
     public static StyleBoxFlat Box(Color bg, int pad = Space, Color? border = null, int borderWidth = Border, int radius = Radius)
     {
@@ -130,6 +161,23 @@ public static class ShooterTheme
         t.SetColor("font_outline_color", "ChatInput", Outline);
         t.SetConstant("outline_size", "ChatInput", 4);
 
+        // the intel screen: no outline on the text (it sits on opaque glass), the same five sizes
+        IntelVariation(t, "IntelSmall", FontSmall, IntelDim);
+        IntelVariation(t, "IntelBody", FontBody, IntelInk);
+        IntelVariation(t, "IntelHead", FontHead, IntelInk);
+        IntelVariation(t, "IntelBig", FontBig, IntelInk);
+        IntelVariation(t, "IntelWarn", FontHead, Warn);
+        PanelVariation(t, "IntelGlass", Box(IntelGlass, Space, IntelLine, BorderStrong, 0));
+        PanelVariation(t, "IntelChip", Box(IntelCard, Space / 2, IntelLine, Border, 0));
+        PanelVariation(t, "IntelTab", Box(Colors.Transparent, Space / 4, null, 0, 0));
+        PanelVariation(t, "IntelTabActive", Box(IntelCard, Space / 4, IntelInk, 2, 0));
+        PanelVariation(t, "IntelTag", Box(new Color(Warn, 0.16f), Space / 2, Warn, 2, 0));
+        t.SetTypeVariation("IntelFlow", "HFlowContainer");
+        t.SetConstant("h_separation", "IntelFlow", Space);
+        t.SetConstant("v_separation", "IntelFlow", Space);
+
+        ItemCellStyles(t);
+
         t.SetStylebox("background", "ProgressBar", Box(new Color(0, 0, 0, 0.55f), 0, Line));
         Bar(t, "HealthBar", Good);
         Bar(t, "HealthBarLow", Danger);
@@ -138,6 +186,36 @@ public static class ShooterTheme
         Bar(t, "StatBarSaved", Dim);     // loadout editor: the saved item's stat, for comparison
         t.SetFontSize("font_size", "ProgressBar", FontSmall);
         Menu(t);
+    }
+
+    /// <summary>
+    /// The item cell (the Equipment screen's slots and bag, the corpse chooser's list): every state has its own box. Hover, pressed and the valid drop
+    /// target change the border width and the fill, not only the colour; the cell that is the source of a drag, or cannot take the dragged item, is dimmed.
+    /// The pips (pickups used of the limit: filled for used, hollow for left, the warn colour when the next take makes the item crumble) and the ghost
+    /// icon of an empty slot take their colours from here too.
+    /// </summary>
+    static void ItemCellStyles(Theme t)
+    {
+        const string c = "ItemCell";
+        t.SetStylebox("normal", c, Box(Raised, 0, Line));
+        t.SetStylebox("hover", c, Box(Hover, 0, Accent));
+        t.SetStylebox("pressed", c, Box(Active, 0, Accent, BorderStrong));
+        t.SetStylebox("disabled", c, Box(Surface, 0, new Color(Line, 0.4f)));
+        t.SetStylebox("drag", c, Box(Surface, 0, Dim));
+        t.SetStylebox("target", c, Box(Active, 0, Good, BorderStrong));
+        t.SetStylebox("focus", c, Ring(0));
+        var frame = new StyleBoxFlat { DrawCenter = false, BorderColor = Good };
+        frame.SetBorderWidthAll(BorderStrong);
+        frame.SetCornerRadiusAll(Radius);
+        t.SetStylebox("target_frame", c, frame); // a valid drop target that is not a cell (the avatar): outlined, not filled, so the figure stays visible
+        t.SetColor("pip_used", c, Accent);
+        t.SetColor("pip_last", c, Warn);
+        t.SetColor("pip_left", c, Dim);
+        t.SetColor("ghost", c, new Color(Dim, 0.55f));
+        t.SetConstant("pip_size", c, Pip);
+        t.SetConstant("icon_size", c, CellIcon);
+        PanelVariation(t, "ItemTip", Box(Raised with { A = 0.97f }, Space, Line));
+        PanelVariation(t, "KeyCap", Box(Raised, Space / 2, Line));
     }
 
     static StyleBoxFlat Ring(int pad = Space * 1) => new StyleBoxFlat { DrawCenter = false, BorderColor = Accent }.With(b => { b.SetBorderWidthAll(BorderStrong); b.SetCornerRadiusAll(Radius); b.SetContentMarginAll(pad); });
@@ -244,6 +322,12 @@ public static class ShooterTheme
         t.SetTypeVariation(name, "Label");
         t.SetFontSize("font_size", name, size);
         t.SetColor("font_color", name, color);
+    }
+
+    static void IntelVariation(Theme t, string name, int size, Color color)
+    {
+        Variation(t, name, size, color);
+        t.SetConstant("outline_size", name, 0);
     }
 
     static void PanelVariation(Theme t, string name, StyleBox box)

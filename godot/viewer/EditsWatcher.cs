@@ -13,12 +13,13 @@ using Godot;
 /// file per parcel and per group against the last applied state, regenerates the changed parcels with
 /// a `uv run ... parcel-run` subprocess (never blocking the main thread) and swaps the result into the
 /// map with MapLoader.ApplyFragment. Edits arriving during a run are coalesced into the next run.
-/// Regions (hand-drawn colour shapes) are diffed the same way: an added, recoloured, reshaped or removed region
-/// (plus the regions overlapping it) is regenerated with `region-run --glb` and swapped in with
-/// MapLoader.ApplyRegions. Parcel and region work of one file change run one after the other in one run and are
-/// applied together, or not at all when either subprocess fails.
+/// Ground patches (hand-drawn ground, `ground_patches`) are diffed the same way: an added, retyped, reshaped or removed patch
+/// (plus the patches overlapping it, and the patches of a type whose `ground_types` entry changed) is regenerated with
+/// `patch-run --glb` and swapped in with MapLoader.ApplyPatches. Parcel and patch work of one file change run one after the other
+/// in one run and are applied together, or not at all when either subprocess fails. Zones have no paint and no run: a zone edit
+/// changes nothing here.
 /// A file that cannot be parsed (half-written) is ignored until it changes again; a failed run only
-/// prints the error. Also writes editor-state.json (camera, selection, sketch) at most once a second.
+/// prints the error. Also writes editor-state.json (camera, selection) at most once a second.
 /// The state at start is assumed to be what the map was built with, so nothing runs at startup.
 /// A re-exported map (its buildings) is reloaded too, see EditsWatcher.Map.cs.
 /// </summary>
@@ -26,11 +27,10 @@ public partial class EditsWatcher : Node
 {
     public const double PollSeconds = 0.5;
     public const double StateSeconds = 1.0;
-    /// <summary>A parcel-run or region-run that takes longer is killed (with its children) and reported as failed.</summary>
+    /// <summary>A parcel-run or patch-run that takes longer is killed (with its children) and reported as failed.</summary>
     public const int RunTimeoutSeconds = 120;
 
     public string EditsPath { get; init; } = "";
-    public string Area { get; init; } = "slice";
     public string PipelineDir { get; init; } = "";
     public string StatePath { get; init; } = "";
     public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
@@ -40,10 +40,7 @@ public partial class EditsWatcher : Node
     /// <summary>Selected parcel ids for editor-state.json (the editor mode); null writes an empty selection.</summary>
     public Func<IReadOnlyCollection<string>>? SelectionProvider { get; init; }
 
-    /// <summary>The editor's sketch as the JSON value of `sketch` in editor-state.json (EditorMode.SketchJson); null writes an empty sketch.</summary>
-    public Func<string>? SketchProvider { get; init; }
-
-    /// <summary>Write editor-state.json on the next frame instead of waiting for the once-a-second tick (the sketch changed).</summary>
+    /// <summary>Write editor-state.json on the next frame instead of waiting for the once-a-second tick.</summary>
     public void StateSoon() => _stateT = StateSeconds;
 
     /// <summary>Raised on the main thread when a parcel-run starts: the parcel ids.</summary>
@@ -61,15 +58,15 @@ public partial class EditsWatcher : Node
     public int AppliedCount { get; private set; }
     /// <summary>Number of objects-only updates done in process (no subprocess).</summary>
     public int InstantCount { get; private set; }
-    /// <summary>Number of runs started (each a parcel-run, a region-run or both). Stays flat while only placed objects change.</summary>
+    /// <summary>Number of runs started (each a parcel-run, a patch-run or both). Stays flat while only placed objects change.</summary>
     public int RunCount => _runCounter;
     public double LastInstantMs { get; private set; }
-    /// <summary>Number of parcel-run subprocesses started (RunCount counts runs, which may also be region-only).</summary>
+    /// <summary>Number of parcel-run subprocesses started (RunCount counts runs, which may also be patch-only).</summary>
     public int ParcelRunCount { get; private set; }
-    /// <summary>Number of region-run subprocesses started.</summary>
-    public int RegionRunCount => _regionRunCounter;
-    /// <summary>Region ids replaced by the last applied run (empty when it had no region work).</summary>
-    public IReadOnlyList<string> LastRegionsReplaced { get; private set; } = Array.Empty<string>();
+    /// <summary>Number of patch-run subprocesses started.</summary>
+    public int PatchRunCount => _patchRunCounter;
+    /// <summary>Patch ids replaced by the last applied run (empty when it had no patch work).</summary>
+    public IReadOnlyList<string> LastPatchesReplaced { get; private set; } = Array.Empty<string>();
     public int FailedCount { get; private set; }
     public int ParseFailedCount { get; private set; }
     public bool Busy => _run != null;
@@ -77,8 +74,9 @@ public partial class EditsWatcher : Node
 
     sealed record Snapshot(
         string Text, Dictionary<string, string> Parcels, Dictionary<string, string> Groups,
-        Dictionary<string, List<string>> Members, Dictionary<string, string> NoObjects,
-        Dictionary<string, string> Regions, Dictionary<string, (double X0, double Y0, double X1, double Y1)> RegionBoxes,
+        Dictionary<string, List<string>> Members, Dictionary<string, string> Objects,
+        Dictionary<string, string> Patches, Dictionary<string, (double X0, double Y0, double X1, double Y1)> PatchBoxes,
+        Dictionary<string, string> PatchTypes, Dictionary<string, string> GroundTypes,
         string CablesText, List<Drycastle.MapLoader.CableSpec> Cables);
 
     sealed class Run
@@ -86,19 +84,19 @@ public partial class EditsWatcher : Node
         public Task<(int code, string err, string tool)> Task = null!;
         public Snapshot Snap = null!;
         public List<string> Ids = new();
-        public List<string> RegionIds = new();
-        public string Fragment = "", Glb = "", Edits = "", RegionSummary = "", RegionGlb = "";
+        public List<string> PatchIds = new();
+        public string Fragment = "", Glb = "", Edits = "", PatchSummary = "", PatchGlb = "";
         public long StartedMs, DetectedMs;
         public Process? Process;
     }
 
-    Snapshot _applied = new("", new(), new(), new(), new(), new(), new(), "", new());
+    Snapshot _applied = new("", new(), new(), new(), new(), new(), new(), new(), new(), "", new());
     (DateTime mtime, long len) _seen, _parsedStat;
     double _pollT, _stateT;
     bool _dirty;
     long _dirtySinceMs;
     Run? _run;
-    int _runCounter, _regionRunCounter;
+    int _runCounter, _patchRunCounter;
     string _tmpDir = "";
     string _lastState = "";
 
@@ -115,7 +113,7 @@ public partial class EditsWatcher : Node
             if (snap!.CablesText != CablesText(Map.Cables)) Map.SetCables(snap.Cables);
         }
         else GD.PushWarning($"edits watcher: initial {EditsPath} unreadable ({err}); starting from empty edits");
-        GD.Print($"watching {EditsPath} (area {Area})");
+        GD.Print($"watching {EditsPath}");
         StartMapWatch();
     }
 
@@ -209,14 +207,17 @@ public partial class EditsWatcher : Node
             var parcels = new Dictionary<string, string>();
             var groups = new Dictionary<string, string>();
             var members = new Dictionary<string, List<string>>();
-            var noObjects = new Dictionary<string, string>();
+            var objects = new Dictionary<string, string>(); // object id -> its canonical text: an object belongs to no parcel
+            foreach (var o in EnumerateObjects(doc.RootElement))
+                if (o.ValueKind == JsonValueKind.Object && o.TryGetProperty("id", out var oid) && oid.ValueKind == JsonValueKind.String)
+                    objects[oid.GetString()!] = Canon(o);
             if (doc.RootElement.TryGetProperty("parcels", out var p) && p.ValueKind == JsonValueKind.Object)
                 foreach (var kv in p.EnumerateObject())
                 {
-                    parcels[kv.Name] = Canon(kv.Value);
+                    // without a (legacy) "objects" list, so a parcel entry changes only when its fence does
                     var sbn = new StringBuilder();
                     CanonTo(kv.Value, sbn, "objects");
-                    noObjects[kv.Name] = sbn.ToString();
+                    parcels[kv.Name] = sbn.ToString();
                 }
             if (doc.RootElement.TryGetProperty("groups", out var g) && g.ValueKind == JsonValueKind.Object)
                 foreach (var kv in g.EnumerateObject())
@@ -227,14 +228,19 @@ public partial class EditsWatcher : Node
                         ? m.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList()
                         : new();
                 }
-            var regions = new Dictionary<string, string>();
+            var patches = new Dictionary<string, string>();
             var boxes = new Dictionary<string, (double, double, double, double)>();
-            if (doc.RootElement.TryGetProperty("regions", out var rg) && rg.ValueKind == JsonValueKind.Object)
+            var patchTypes = new Dictionary<string, string>();
+            var groundTypes = new Dictionary<string, string>();
+            if (doc.RootElement.TryGetProperty("ground_patches", out var rg) && rg.ValueKind == JsonValueKind.Object)
                 foreach (var kv in rg.EnumerateObject())
                 {
-                    regions[kv.Name] = Canon(kv.Value);
-                    if (RegionBox(kv.Value) is { } box) boxes[kv.Name] = box;
+                    patches[kv.Name] = Canon(kv.Value);
+                    if (PatchBox(kv.Value) is { } box) boxes[kv.Name] = box;
+                    if (kv.Value.ValueKind == JsonValueKind.Object && kv.Value.TryGetProperty("type", out var pt) && pt.ValueKind == JsonValueKind.String) patchTypes[kv.Name] = pt.GetString()!;
                 }
+            if (doc.RootElement.TryGetProperty("ground_types", out var gtj) && gtj.ValueKind == JsonValueKind.Object)
+                foreach (var kv in gtj.EnumerateObject()) groundTypes[kv.Name] = Canon(kv.Value);
             var cables = new List<Drycastle.MapLoader.CableSpec>();
             if (doc.RootElement.TryGetProperty("cables", out var cb) && cb.ValueKind == JsonValueKind.Object)
                 foreach (var kv in cb.EnumerateObject().OrderBy(kv => kv.Name, StringComparer.Ordinal))
@@ -242,11 +248,25 @@ public partial class EditsWatcher : Node
                         && kv.Value.TryGetProperty("from", out var cf) && cf.ValueKind == JsonValueKind.String
                         && kv.Value.TryGetProperty("to", out var ct) && ct.ValueKind == JsonValueKind.String)
                         cables.Add(new Drycastle.MapLoader.CableSpec(kv.Name, cf.GetString()!, ct.GetString()!));
-            snap = new Snapshot(text, parcels, groups, members, noObjects, regions, boxes, CablesText(cables), cables);
+            snap = new Snapshot(text, parcels, groups, members, objects, patches, boxes, patchTypes, groundTypes, CablesText(cables), cables);
             error = "";
             return true;
         }
         catch (JsonException e) { error = e.Message; return false; }
+    }
+
+    /// <summary>
+    /// Every placed object of an edits document: the top-level <c>objects</c> list, then (a file in the old shape) the
+    /// lists under <c>parcels.&lt;ID&gt;.objects</c>. An object belongs to no parcel (edits.py).
+    /// </summary>
+    static IEnumerable<JsonElement> EnumerateObjects(JsonElement root)
+    {
+        if (root.TryGetProperty("objects", out var top) && top.ValueKind == JsonValueKind.Array)
+            foreach (var o in top.EnumerateArray()) yield return o;
+        if (root.TryGetProperty("parcels", out var parcels) && parcels.ValueKind == JsonValueKind.Object)
+            foreach (var entry in parcels.EnumerateObject())
+                if (entry.Value.ValueKind == JsonValueKind.Object && entry.Value.TryGetProperty("objects", out var legacy) && legacy.ValueKind == JsonValueKind.Array)
+                    foreach (var o in legacy.EnumerateArray()) yield return o;
     }
 
     static string CablesText(IEnumerable<Drycastle.MapLoader.CableSpec> cables)
@@ -266,7 +286,7 @@ public partial class EditsWatcher : Node
     /// <summary>Number of times the cable list changed and was drawn again.</summary>
     public int CablesAppliedCount { get; private set; }
 
-    static (double, double, double, double)? RegionBox(JsonElement entry)
+    static (double, double, double, double)? PatchBox(JsonElement entry)
     {
         if (entry.ValueKind != JsonValueKind.Object || !entry.TryGetProperty("polygon", out var poly)
             || poly.ValueKind != JsonValueKind.Array) return null;
@@ -282,31 +302,36 @@ public partial class EditsWatcher : Node
     }
 
     /// <summary>
-    /// Regions affected by the change from old to new: added, removed or changed (colour or polygon) entries, plus every
-    /// other region whose bounding box touches the old or new shape of one of them (its visible area changes with it;
-    /// the higher ID wins where regions overlap). Bounding boxes only: a few extra regions are rebuilt, none are missed.
+    /// Patches affected by the change from old to new: added, removed or changed (type, water level or polygon) entries, the patches
+    /// of a type whose `ground_types` entry changed (their paint colour), plus every other patch whose bounding box touches the old
+    /// or new shape of one of them (its visible area changes with it; the higher ID wins where patches overlap). Bounding boxes
+    /// only: a few extra patches are rebuilt, none are missed.
     /// </summary>
-    static SortedSet<string> RegionDiff(Snapshot old, Snapshot now)
+    static SortedSet<string> PatchDiff(Snapshot old, Snapshot now)
     {
         var changed = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var rid in old.Regions.Keys.Union(now.Regions.Keys))
+        foreach (var pid in old.Patches.Keys.Union(now.Patches.Keys))
         {
-            old.Regions.TryGetValue(rid, out var a);
-            now.Regions.TryGetValue(rid, out var b);
-            if (a != b) changed.Add(rid);
+            old.Patches.TryGetValue(pid, out var a);
+            now.Patches.TryGetValue(pid, out var b);
+            if (a != b) changed.Add(pid);
         }
+        var changedTypes = old.GroundTypes.Keys.Union(now.GroundTypes.Keys)
+            .Where(t => old.GroundTypes.GetValueOrDefault(t) != now.GroundTypes.GetValueOrDefault(t)).ToHashSet();
+        if (changedTypes.Count > 0)
+            foreach (var (pid, type) in now.PatchTypes) if (changedTypes.Contains(type)) changed.Add(pid);
         if (changed.Count == 0) return changed;
         var shapes = new List<(double X0, double Y0, double X1, double Y1)>();
-        foreach (var rid in changed)
+        foreach (var pid in changed)
         {
-            if (old.RegionBoxes.TryGetValue(rid, out var ob)) shapes.Add(ob);
-            if (now.RegionBoxes.TryGetValue(rid, out var nb)) shapes.Add(nb);
+            if (old.PatchBoxes.TryGetValue(pid, out var ob)) shapes.Add(ob);
+            if (now.PatchBoxes.TryGetValue(pid, out var nb)) shapes.Add(nb);
         }
         var result = new SortedSet<string>(changed, StringComparer.Ordinal);
-        foreach (var (rid, box) in now.RegionBoxes)
-            if (!changed.Contains(rid)
+        foreach (var (pid, box) in now.PatchBoxes)
+            if (!changed.Contains(pid)
                 && shapes.Any(s => s.X0 <= box.X1 && box.X0 <= s.X1 && s.Y0 <= box.Y1 && box.Y0 <= s.Y1))
-                result.Add(rid);
+                result.Add(pid);
         return result;
     }
 
@@ -345,28 +370,32 @@ public partial class EditsWatcher : Node
     // ---- instant path: only placed objects changed ----
 
     /// <summary>
-    /// The parcels whose placed objects changed when nothing else did: no group changed and every changed parcel
-    /// entry differs only in its "objects". Null when anything else changed (the parcel-run path then handles all).
+    /// Whether nothing but placed objects (and cables) changed: no group, patch or known parcel entry differs. Objects
+    /// are in none of those, so an object edit leaves them all equal.
     /// </summary>
-    static SortedSet<string>? ObjectsOnlyDiff(Snapshot old, Snapshot now, Func<string, bool> known)
+    static bool ObjectsOnly(Snapshot old, Snapshot now, Func<string, bool> known)
     {
-        if (RegionDiff(old, now).Count > 0) return null; // regions need a region-run
-        if (old.Groups.Count != now.Groups.Count) return null;
+        if (PatchDiff(old, now).Count > 0) return false; // patches need a patch-run
+        if (old.Groups.Count != now.Groups.Count) return false;
         foreach (var (gid, text) in now.Groups)
-            if (!old.Groups.TryGetValue(gid, out var o) || o != text) return null;
-        var changed = new SortedSet<string>(StringComparer.Ordinal);
+            if (!old.Groups.TryGetValue(gid, out var o) || o != text) return false;
         foreach (var pid in old.Parcels.Keys.Union(now.Parcels.Keys))
         {
             if (!known(pid)) continue; // entries of parcels that are not in the map are skipped anyway
             old.Parcels.TryGetValue(pid, out var a);
             now.Parcels.TryGetValue(pid, out var b);
-            if (a == b) continue;
-            old.NoObjects.TryGetValue(pid, out var na);
-            now.NoObjects.TryGetValue(pid, out var nb);
-            if ((na ?? "{}") != (nb ?? "{}")) return null;
-            changed.Add(pid);
+            if (a != b) return false;
         }
-        return changed;
+        return true;
+    }
+
+    /// <summary>The ids of the objects that are gone, and those that are new or differ, between two snapshots.</summary>
+    static (List<string> removed, List<string> changed) ObjectDiff(Snapshot old, Snapshot now)
+    {
+        var removed = old.Objects.Keys.Where(id => !now.Objects.ContainsKey(id)).OrderBy(id => id, StringComparer.Ordinal).ToList();
+        var changed = now.Objects.Where(kv => !old.Objects.TryGetValue(kv.Key, out var t) || t != kv.Value).Select(kv => kv.Key)
+            .OrderBy(id => id, StringComparer.Ordinal).ToList();
+        return (removed, changed);
     }
 
     /// <summary>
@@ -384,56 +413,51 @@ public partial class EditsWatcher : Node
     bool TryInstant(Snapshot snap)
     {
         if (_run != null || Map.OriginEpsg5514 is not { } origin) return false;
-        var changed = ObjectsOnlyDiff(_applied, snap, Map.Parcels.ContainsKey);
-        if (changed == null) return false;
+        if (!ObjectsOnly(_applied, snap, Map.Parcels.ContainsKey)) return false;
         var t0 = Stopwatch.StartNew();
-        var known = changed.ToList();
-        if (known.Count == 0) { _seen = _parsedStat; _dirty = false; ApplyCables(snap); _applied = snap; return true; }
+        var (removed, changed) = ObjectDiff(_applied, snap);
+        if (removed.Count == 0 && changed.Count == 0) { _seen = _parsedStat; _dirty = false; ApplyCables(snap); _applied = snap; return true; }
         List<Drycastle.MapLoader.PlacedObject> objects;
         // on failure _applied stays as it was and the caller falls through to the parcel-run path
-        try { objects = ReadObjects(snap.Text, known, origin); }
+        try { objects = ReadObjects(snap.Text, changed, origin); }
         catch (Exception e) { Fail($"reading the placed objects failed: {e.Message}"); return false; }
         _seen = _parsedStat; // the stat taken before the file was read, so a write in between is seen by the poll
         _dirty = false;
-        Map.ApplyObjects(known, objects);
+        Map.ApplyObjectChanges(removed, objects);
         ApplyCables(snap);
         _applied = snap;
         InstantCount++;
         LastInstantMs = t0.Elapsed.TotalMilliseconds;
-        GD.Print($"objects updated: {string.Join(", ", known)} ({objects.Count} objects, no parcel-run) in {LastInstantMs:F1} ms");
-        InstantApplied?.Invoke(known, LastInstantMs);
+        var touched = removed.Concat(changed).Distinct().ToList();
+        GD.Print($"objects updated: {string.Join(", ", touched)} ({objects.Count} placed, {removed.Count} removed, no parcel-run) in {LastInstantMs:F1} ms");
+        InstantApplied?.Invoke(touched, LastInstantMs);
         return true;
     }
 
-    /// <summary>The objects listed under the given parcels as map-local PlacedObjects (S-JTSK minus the map origin).</summary>
-    List<Drycastle.MapLoader.PlacedObject> ReadObjects(string text, IReadOnlyCollection<string> parcels, (double X, double Y) origin)
+    /// <summary>The objects with the given ids as map-local PlacedObjects (S-JTSK minus the map origin).</summary>
+    List<Drycastle.MapLoader.PlacedObject> ReadObjects(string text, IReadOnlyCollection<string> ids, (double X, double Y) origin)
     {
         var list = new List<Drycastle.MapLoader.PlacedObject>();
+        var want = new HashSet<string>(ids);
         using var doc = JsonDocument.Parse(text);
-        if (!doc.RootElement.TryGetProperty("parcels", out var all) || all.ValueKind != JsonValueKind.Object) return list;
-        foreach (var pid in parcels)
+        foreach (var o in EnumerateObjects(doc.RootElement))
         {
-            if (!all.TryGetProperty(pid, out var entry) || entry.ValueKind != JsonValueKind.Object
-                || !entry.TryGetProperty("objects", out var arr) || arr.ValueKind != JsonValueKind.Array) continue;
-            foreach (var o in arr.EnumerateArray())
+            if (o.ValueKind != JsonValueKind.Object || !o.TryGetProperty("id", out var idp) || idp.GetString() is not { } id || !want.Contains(id)) continue;
+            var pos = o.GetProperty("position");
+            var x = (float)Math.Round(pos[0].GetDouble() - origin.X, 3);
+            var y = (float)Math.Round(pos[1].GetDouble() - origin.Y, 3);
+            list.Add(new Drycastle.MapLoader.PlacedObject
             {
-                var pos = o.GetProperty("position");
-                var x = (float)Math.Round(pos[0].GetDouble() - origin.X, 3);
-                var y = (float)Math.Round(pos[1].GetDouble() - origin.Y, 3);
-                list.Add(new Drycastle.MapLoader.PlacedObject
-                {
-                    Id = o.GetProperty("id").GetString()!,
-                    Asset = o.GetProperty("asset").GetString() ?? "",
-                    X = x,
-                    Y = y,
-                    Z = o.TryGetProperty("z", out var z) && z.ValueKind == JsonValueKind.Number ? z.GetSingle() : null,
-                    RotationDeg = o.TryGetProperty("rotation_deg", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetSingle() : 0f,
-                    Scale = o.TryGetProperty("scale", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetSingle() : 1f,
-                    Colour = o.TryGetProperty("colour", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null,
-                    Parcel = Map.ParcelAt(x, -y)?.Id,
-                    Owner = pid,
-                });
-            }
+                Id = id,
+                Asset = o.GetProperty("asset").GetString() ?? "",
+                X = x,
+                Y = y,
+                Z = o.TryGetProperty("z", out var z) && z.ValueKind == JsonValueKind.Number ? z.GetSingle() : null,
+                RotationDeg = o.TryGetProperty("rotation_deg", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetSingle() : 0f,
+                Scale = o.TryGetProperty("scale", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetSingle() : 1f,
+                Colour = o.TryGetProperty("colour", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null,
+                Parcel = Map.ParcelAt(x, -y)?.Id,
+            });
         }
         return list;
     }
@@ -456,14 +480,25 @@ public partial class EditsWatcher : Node
         var known = affected.Where(Map.Parcels.ContainsKey).ToList();
         foreach (var unknown in affected.Except(known))
             GD.Print($"warning: edits mention parcel {unknown}, which is not in the map; skipped");
-        var regionIds = RegionDiff(_applied, snap!).ToList();
-        if (known.Count == 0 && regionIds.Count == 0)
+        var patchIds = PatchDiff(_applied, snap!).ToList();
+        if (known.Count == 0 && patchIds.Count == 0)
         {
             ApplyCables(snap!);
             _applied = snap!;
             return;
         }
-        Launch(snap!, known, regionIds);
+        ApplyObjectDiff(snap!); // the objects of this save show at once; the run is only for what it makes (fences, patches)
+        Launch(snap!, known, patchIds);
+    }
+
+    /// <summary>Instance the objects that differ between the applied state and <paramref name="snap"/> (no subprocess), when this save also needs a run.</summary>
+    void ApplyObjectDiff(Snapshot snap)
+    {
+        if (Map.OriginEpsg5514 is not { } origin) return;
+        var (removed, changed) = ObjectDiff(_applied, snap);
+        if (removed.Count == 0 && changed.Count == 0) return;
+        try { Map.ApplyObjectChanges(removed, ReadObjects(snap.Text, changed, origin)); }
+        catch (Exception e) { GD.PushWarning($"placed objects not applied before the run: {e.Message}"); }
     }
 
     ProcessStartInfo UvStart(params string[] args)
@@ -506,7 +541,7 @@ public partial class EditsWatcher : Node
         }
     }
 
-    void Launch(Snapshot snap, List<string> ids, List<string> regionIds)
+    void Launch(Snapshot snap, List<string> ids, List<string> patchIds)
     {
         var n = ++_runCounter;
         var run = new Run
@@ -521,30 +556,30 @@ public partial class EditsWatcher : Node
         };
         // the subprocess reads exactly the snapshot we diffed, not whatever the file is by then
         File.WriteAllText(run.Edits, snap.Text);
-        run.RegionIds = regionIds;
-        run.RegionSummary = Path.Combine(_tmpDir, $"regions-{n}.json");
-        run.RegionGlb = Path.Combine(_tmpDir, $"regions-{n}.glb");
-        ProcessStartInfo? parcelPsi = null, regionPsi = null;
+        run.PatchIds = patchIds;
+        run.PatchSummary = Path.Combine(_tmpDir, $"patches-{n}.json");
+        run.PatchGlb = Path.Combine(_tmpDir, $"patches-{n}.glb");
+        ProcessStartInfo? parcelPsi = null, patchPsi = null;
         if (ids.Count > 0)
         {
             ParcelRunCount++;
-            var a = new List<string> { "parcel-run", "--area", Area };
+            var a = new List<string> { "parcel-run" };
             foreach (var id in ids) { a.Add("--parcel"); a.Add(id); }
             a.AddRange(new[] { "--edits", run.Edits, "--glb", run.Glb, "--out", run.Fragment });
             parcelPsi = UvStart(a.ToArray());
         }
-        if (regionIds.Count > 0)
+        if (patchIds.Count > 0)
         {
-            _regionRunCounter++;
-            var a = new List<string> { "region-run", "--area", Area };
-            foreach (var id in regionIds) { a.Add("--region"); a.Add(id); }
-            a.AddRange(new[] { "--edits", run.Edits, "--glb", run.RegionGlb, "--out", run.RegionSummary });
-            regionPsi = UvStart(a.ToArray());
+            _patchRunCounter++;
+            var a = new List<string> { "patch-run" };
+            foreach (var id in patchIds) { a.Add("--patch"); a.Add(id); }
+            a.AddRange(new[] { "--edits", run.Edits, "--glb", run.PatchGlb, "--out", run.PatchSummary });
+            patchPsi = UvStart(a.ToArray());
         }
         run.Task = Task.Run(() =>
         {
             var log = new StringBuilder();
-            foreach (var (psi, tool) in new[] { (parcelPsi, "parcel-run"), (regionPsi, "region-run") })
+            foreach (var (psi, tool) in new[] { (parcelPsi, "parcel-run"), (patchPsi, "patch-run") })
             {
                 if (psi == null) continue;
                 var (code, err) = RunProcess(run, psi);
@@ -554,8 +589,8 @@ public partial class EditsWatcher : Node
             return (0, log.ToString(), "");
         });
         _run = run;
-        GD.Print($"edits changed: regenerating {string.Join(", ", ids.Concat(regionIds))}");
-        Launched?.Invoke(ids.Concat(regionIds).ToList());
+        GD.Print($"edits changed: regenerating {string.Join(", ", ids.Concat(patchIds))}");
+        Launched?.Invoke(ids.Concat(patchIds).ToList());
     }
 
     void Finish(Run run)
@@ -566,25 +601,25 @@ public partial class EditsWatcher : Node
         {
             if (code != 0)
             {
-                Fail($"{failedTool} failed for {string.Join(", ", run.Ids.Concat(run.RegionIds))} (exit {code}): {err.Trim()}");
+                Fail($"{failedTool} failed for {string.Join(", ", run.Ids.Concat(run.PatchIds))} (exit {code}): {err.Trim()}");
                 return;
             }
             Drycastle.MapLoader.FragmentResult result = new(Array.Empty<string>(), 0, 0);
-            Drycastle.MapLoader.RegionResult? regions = null;
+            Drycastle.MapLoader.PatchResult? patches = null;
             try
             {
-                // applied together or not at all: parse the region result first (it changes nothing),
+                // applied together or not at all: parse the patch result first (it changes nothing),
                 // so neither apply below can fail after the other has already swapped nodes
-                if (run.RegionIds.Count > 0) Map.ValidateRegions(run.RegionSummary);
+                if (run.PatchIds.Count > 0) Map.ValidatePatches(run.PatchSummary);
                 if (run.Ids.Count > 0) result = Map.ApplyFragment(run.Fragment);
-                if (run.RegionIds.Count > 0) regions = Map.ApplyRegions(run.RegionSummary);
+                if (run.PatchIds.Count > 0) patches = Map.ApplyPatches(run.PatchSummary);
             }
             catch (Exception e)
             {
-                Fail($"applying the result for {string.Join(", ", run.Ids.Concat(run.RegionIds))} failed: {e.Message}");
+                Fail($"applying the result for {string.Join(", ", run.Ids.Concat(run.PatchIds))} failed: {e.Message}");
                 return;
             }
-            LastRegionsReplaced = regions?.Replaced ?? Array.Empty<string>();
+            LastPatchesReplaced = patches?.Replaced ?? Array.Empty<string>();
             ApplyCables(run.Snap);
             _applied = run.Snap;
             var ms = Time.GetTicksMsec() - (ulong)run.DetectedMs;
@@ -592,15 +627,15 @@ public partial class EditsWatcher : Node
             AppliedCount++;
             GD.Print($"edits applied: {string.Join(", ", result.Replaced)} in {ms} ms " +
                      $"(objects={result.Objects} props_nodes={result.PropsNodes}, parcel-run {Time.GetTicksMsec() - (ulong)run.StartedMs} ms)");
-            if (regions != null)
-                GD.Print($"regions applied: {string.Join(", ", regions.Replaced)} (region_nodes={regions.Nodes})");
+            if (patches != null)
+                GD.Print($"patches applied: {string.Join(", ", patches.Replaced)} (patch_nodes={patches.Nodes})");
             foreach (var line in err.Split('\n', StringSplitOptions.RemoveEmptyEntries))
                 GD.Print(line.Trim());
-            Applied?.Invoke(result.Replaced.Concat(regions?.Replaced ?? Array.Empty<string>()).ToList(), ms);
+            Applied?.Invoke(result.Replaced.Concat(patches?.Replaced ?? Array.Empty<string>()).ToList(), ms);
         }
         finally
         {
-            foreach (var f in new[] { run.Edits, run.Fragment, run.Glb, run.RegionSummary, run.RegionGlb })
+            foreach (var f in new[] { run.Edits, run.Fragment, run.Glb, run.PatchSummary, run.PatchGlb })
                 try { File.Delete(f); } catch { /* best effort */ }
         }
         // edits that arrived while the run was in flight set _dirty in the poll and start the next run
@@ -627,7 +662,7 @@ public partial class EditsWatcher : Node
             var yaw = Mathf.RadToDeg(Mathf.Atan2(-fwd.Z, fwd.X)); // counter-clockwise from east, like rotation_deg
             var json = "{\"camera\":{" +
                        $"\"x\":{F(pos.X)},\"y\":{F(-pos.Z)},\"yaw_deg\":{F(yaw)},\"z\":{F(pos.Y)}" +
-                       "},\"format_version\":1,\"selected\":[" + selected + "],\"sketch\":" + (SketchProvider?.Invoke() ?? EditorMode.EmptySketchJson) + "}\n";
+                       "},\"format_version\":1,\"selected\":[" + selected + "]}\n";
             if (json == _lastState) return;
             _lastState = json;
             var dir = Path.GetDirectoryName(StatePath);

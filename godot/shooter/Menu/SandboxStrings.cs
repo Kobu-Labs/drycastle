@@ -23,7 +23,7 @@ public static class SandboxStrings
         ("sandbox.panel.vehicles", "Spawn a vehicle in front"),
         ("sandbox.panel.respawn_on", "Target dummies respawn: on"), ("sandbox.panel.respawn_off", "Target dummies respawn: off"),
         ("sandbox.vehicle.car", "Car"), ("sandbox.vehicle.jeep", "Jeep"), ("sandbox.vehicle.quad", "Quad bike"),
-        ("sandbox.vehicle.boat", "Boat"), ("sandbox.vehicle.amphibious", "Amphibious"), ("sandbox.vehicle.flak", "Flak truck"), ("sandbox.vehicle.bus", "Bus"),
+        ("sandbox.vehicle.amphibious", "Amphibious"), ("sandbox.vehicle.flak", "Flak truck"), ("sandbox.vehicle.bus", "Bus"),
         ("sandbox.vehicle.utility_helicopter", "Utility helicopter"),
         ("sandbox.connect", "Sandbox mode"),
         ("sandbox.connect.hint", "Asks a dev server for godmode, unlimited ammo and every killstreak. No XP, stats or score."),

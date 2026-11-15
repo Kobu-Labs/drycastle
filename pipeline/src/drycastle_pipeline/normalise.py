@@ -1,8 +1,8 @@
 """Normalise stage: raw OSM + cadastral parcels (WGS84) -> local metres.
 
-Reads ``data/raw/{osm.json,parcels.geojson,slice_centre.json}`` and writes
-``data/work/normalised/{buildings,highways,landuse,parcels,trees}.geojson`` plus ``frame.json``.
-Coordinates in the output are local metres (EPSG:5514 axes, origin at the slice centre).
+Reads ``data/village/raw/{osm.json,parcels.geojson,centre.json}`` and writes
+``data/village/work/normalised/{buildings,highways,landuse,parcels,trees}.geojson`` plus ``frame.json``.
+Coordinates in the output are local metres (EPSG:5514 axes, origin at the map centre).
 """
 
 import json
@@ -13,22 +13,13 @@ from shapely.geometry import LineString, Point, Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, polygonize, unary_union
 
-from drycastle_pipeline.config import (
-    DEFAULT_AREA,
-    DEFAULT_CONFIG,
-    DEFAULT_RAW_DIR,
-    REPO_ROOT,
-    ConfigError,
-    area_paths,
-    load_slice_config,
-)
-from drycastle_pipeline.frame import Frame, box_to_sjtsk
-from drycastle_pipeline.geo import compute_bbox
+from drycastle_pipeline.config import DEFAULT_RAW_DIR, REPO_ROOT, map_paths
+from drycastle_pipeline.frame import Frame
 
-DEFAULT_WORK_DIR = REPO_ROOT / "data" / "work"
+DEFAULT_WORK_DIR = REPO_ROOT / "data" / "village" / "work"
 LANDUSE_CLASSES = ("landuse", "natural")
 HIGHWAY_TAGS = ("width", "lanes", "surface", "oneway", "tracktype", "bridge", "tunnel")
-LOCAL_CRS_NAME = "local metres: EPSG:5514 axes, origin at the slice centre"
+LOCAL_CRS_NAME = "local metres: EPSG:5514 axes, origin at the map centre"
 
 
 @dataclass
@@ -145,33 +136,31 @@ def _dump(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=1, sort_keys=True) + "\n")
 
 
-def fetched_bounds(raw_dir: Path, area: str, config_path: Path | None = None) -> list | None:
-    """Fetched box as an absolute EPSG:5514 ring, from ``area.json`` (written by fetch).
-
-    Raw data fetched before ``area.json`` existed falls back to the area's configured box.
-    Returns None when neither is available.
-    """
+def area_polygon(raw_dir: Path) -> Polygon:
+    """The outline everything is clipped to (absolute EPSG:5514), from ``area.json`` (written by fetch)."""
     path = raw_dir / "area.json"
-    if path.is_file():
-        west, south, east, north = json.loads(path.read_text())["bbox_wgs84"]
-    else:
-        centre = json.loads((raw_dir / "slice_centre.json").read_text())
-        try:
-            cfg = load_slice_config(config_path or DEFAULT_CONFIG, area)
-        except ConfigError:
-            return None
-        box = compute_bbox(centre["lon"], centre["lat"], cfg.radius_m, cfg.margin_m)
-        west, south, east, north = box.west, box.south, box.east, box.north
-    ring = box_to_sjtsk(west, south, east, north).exterior.coords
-    return [[round(x, 2), round(y, 2)] for x, y in ring]
+    ring = json.loads(path.read_text()).get("polygon_epsg5514") if path.is_file() else None
+    if not ring:
+        raise FileNotFoundError(2, "no map outline", "area.json")
+    return Polygon(ring)
+
+
+def _inside_test(outline: Polygon, frame: Frame):
+    """Predicate on local geometries: True when they touch the outline."""
+    import shapely
+
+    local = shapely.transform(
+        outline, lambda c: c - [frame.origin_x, frame.origin_y]
+    )
+    shapely.prepare(local)
+    return local.intersects
 
 
 def run_normalise(
     raw_dir: Path = DEFAULT_RAW_DIR,
     work_dir: Path = DEFAULT_WORK_DIR,
-    area: str = DEFAULT_AREA,
 ) -> dict[str, int]:
-    centre = json.loads((raw_dir / "slice_centre.json").read_text())
+    centre = json.loads((raw_dir / "centre.json").read_text())
     frame = Frame.at(centre["lon"], centre["lat"])
     osm = parse_osm(json.loads((raw_dir / "osm.json").read_text()))
 
@@ -183,26 +172,24 @@ def run_normalise(
         _dump(out_dir / f"{name}.geojson", _collection(features))
         counts[name] = len(features)
 
-    write(
-        "buildings",
-        [
-            _feature(frame.to_local(f.geom), {"osm_id": f.osm_id, "tags": f.tags})
-            for f in osm["buildings"]
-        ],
-    )
-    write(
-        "highways",
-        [_feature(frame.to_local(f.geom), _highway_props(f)) for f in osm["highways"]],
-    )
-    write("trees", [_feature(frame.to_local(f.geom), {"osm_id": f.osm_id}) for f in osm["trees"]])
-    write(
-        "street_lamps",
-        [_feature(frame.to_local(f.geom), {"osm_id": f.osm_id}) for f in osm["street_lamps"]],
-    )
-    write(
-        "landuse",
-        [_feature(frame.to_local(f.geom), _landuse_props(f)) for f in osm["landuse"]],
-    )
+    outline = area_polygon(raw_dir)
+    ring = [[round(x, 2), round(y, 2)] for x, y in outline.exterior.coords]
+    inside = _inside_test(outline, frame)
+
+    def local(features, props) -> list[dict]:
+        """OSM features in local metres that touch the outline, as GeoJSON features."""
+        out = []
+        for f in features:
+            geom = frame.to_local(f.geom)
+            if inside(geom):
+                out.append(_feature(geom, props(f)))
+        return out
+
+    write("buildings", local(osm["buildings"], lambda f: {"osm_id": f.osm_id, "tags": f.tags}))
+    write("highways", local(osm["highways"], _highway_props))
+    write("trees", local(osm["trees"], lambda f: {"osm_id": f.osm_id}))
+    write("street_lamps", local(osm["street_lamps"], lambda f: {"osm_id": f.osm_id}))
+    write("landuse", local(osm["landuse"], _landuse_props))
 
     parcels = json.loads((raw_dir / "parcels.geojson").read_text())["features"]
     parcel_features = []
@@ -212,6 +199,8 @@ def run_normalise(
         if not ref or not feat.get("geometry"):
             continue
         geom = frame.to_local(shape(feat["geometry"]))
+        if not inside(geom):
+            continue
         parcel_features.append(
             _feature(
                 geom,
@@ -232,16 +221,17 @@ def run_normalise(
             "lon": frame.lon,
             "lat": frame.lat,
             "origin_epsg5514": [frame.origin_x, frame.origin_y],
-            "fetched_bounds_epsg5514": fetched_bounds(raw_dir, area),
+            # the map outline in absolute EPSG:5514 (terrain clips to it; the registry only retires entries inside it)
+            "area_polygon_epsg5514": ring,
         },
     )
     return counts
 
 
-def run(force: bool = False, area: str = DEFAULT_AREA, **_options: object) -> int:
-    paths = area_paths(area)
+def run(force: bool = False, **_options: object) -> int:
+    paths = map_paths()
     try:
-        counts = run_normalise(paths.raw, paths.work, area)
+        counts = run_normalise(paths.raw, paths.work)
     except FileNotFoundError as exc:
         print(f"normalise: error: missing input {Path(str(exc.filename)).name}; run fetch first")
         return 1

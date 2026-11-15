@@ -65,9 +65,21 @@ public sealed partial class MapLoader
     /// <summary>The collision of the placed objects of one asset, as children of the object's node (scaled with it).</summary>
     void AddObjectColliders(Node3D node, string asset)
     {
+        if (ObjectColliders.IsPassThrough(asset)) return; // a satellite dish: no collision on the server or the client
         if (_assetManifest == null) ReadAssetManifest();
         var category = _assetManifest!.TryGetValue(asset, out var entry) ? entry.Category : "";
         var size = entry?.Size ?? GVector3.One;
+        if (entry is { Prefab: true } && GetAssetTemplate(asset, out _) is { } prefab)
+        {
+            // a private pack prefab brings its own bodies. With a model they are already in it; a headless load has no
+            // model, so it gets a copy of the prefab with the meshes taken out.
+            if (!CollisionOnly) return;
+            var solid = (Node3D)prefab.Duplicate();
+            solid.Name = "Solid";
+            foreach (var m in AllMeshes(solid).ToList()) m.Mesh = null; // not Free(): a prefab root is itself a mesh and the bodies hang under the meshes
+            node.AddChild(solid);
+            return;
+        }
         if (entry is { Solids.Count: > 0 })
         {
             // the asset says itself what is solid (a flood wall piece): one body per surface, with a box for each

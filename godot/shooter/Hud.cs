@@ -24,14 +24,17 @@ public partial class Hud : CanvasLayer
     public Func<float>? Spread { get; set; }
     /// <summary>True while a scope is up (sniper zoom): the dark ring and thin reticle replace the crosshair.</summary>
     public Func<bool>? Scoped { get; set; }
+    /// <summary>The scope that is up: its vertical FOV in degrees (the mil-dots are spaced by it) and the zero dialled, metres (0: the weapon has no bullet drop, so no dots and no zero).</summary>
+    public Func<(float FovDeg, float ZeroM)>? Scope { get; set; }
     /// <summary>Iron-sight aim amount 0..1; the crosshair fades out as it rises (the weapon's own sight takes over).</summary>
     public Func<float>? Aim { get; set; }
-    /// <summary>Sniper breath meter: whether it shows, the breath left (0..1) and the phase. Read each frame; the owner sets it.</summary>
+    /// <summary>Sniper breath hold: whether the weapon has one and is scoped, the breath left (0..1) and the phase. Read each frame; the owner sets it.</summary>
     public Func<(bool Show, float Meter, BreathState.BreathPhase Phase)>? Breath { get; set; }
     float _crossAlpha = 1;
-    Control _scope = null!;
+    ScopeOverlay _scope = null!;
+    Label _zero = null!;
+    (int Zero, int Mils) _zeroShown = (-1, -1);
     Control _breath = null!;
-    BreathBar _breathBar = null!;
     Label _breathLabel = null!;
 
     Control _root = null!;
@@ -48,11 +51,6 @@ public partial class Hud : CanvasLayer
     // health
     ProgressBar _hpBar = null!;
     int _hp = -1;
-    // breath: shown only while the head is under water (fades in and out)
-    Control _air = null!;
-    Label _airNum = null!, _airLow = null!;
-    ProgressBar _airBar = null!;
-    float _airShown = -1, _breathTarget;
     // ammo
     Label _wName = null!, _mag = null!, _reserve = null!, _speed = null!, _prompt = null!;
     RadialProgress _radial = null!;
@@ -77,8 +75,17 @@ public partial class Hud : CanvasLayer
     // scoreboard
     Control _board = null!;
     Label _boardTitle = null!, _boardFoot = null!;
-    readonly PanelContainer[] _row = new PanelContainer[BoardRows];
-    readonly Label[][] _cells = new Label[BoardRows][];
+    /// <summary>One scoreboard table: optional team heading, column header, pre-built rows, empty line.</summary>
+    sealed class BoardCol
+    {
+        public VBoxContainer Root = null!;
+        public Label Head = null!, Empty = null!;
+        public readonly PanelContainer[] Row = new PanelContainer[BoardRows];
+        public readonly Label[][] Cells = new Label[BoardRows][];
+    }
+    /// <summary>Left table (everyone in free-for-all, own team in team deathmatch), right table (other team), and players without a team below.</summary>
+    readonly BoardCol[] _cols = { new(), new(), new() };
+    const float BoardWidth = 800, BoardWidthTeams = 2 * 640 + 2 * ShooterTheme.Space;
     IReadOnlyList<ScoreRow> _rows = Array.Empty<ScoreRow>();
     IReadOnlyList<ushort> _winners = Array.Empty<ushort>();
     bool _boardShown, _boardDirty = true;
@@ -97,13 +104,21 @@ public partial class Hud : CanvasLayer
         _root = new Control { Theme = ShooterTheme.Build(), MouseFilter = Control.MouseFilterEnum.Ignore };
         AddChild(_root);
         BuildProtection();
+        BuildPounce();
         _scope = new ScopeOverlay { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
         _scope.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _root.AddChild(_scope);
+        // the zero and what one dot is worth, inside the lower part of the scope's circle
+        _zero = Place(L("", "HudSmall", HorizontalAlignment.Center), 0.5f, 0.76f, -240, 0, 480, 24);
+        _zero.Visible = false;
+        _root.AddChild(_zero);
         BuildCrosshair();
         BuildBreath();
+        BuildHuntShot();
+        BuildBinoculars();
         BuildHealth();
-        BuildAir();
+        BuildStatus();
+        BuildRozhlas(); // the set holder's hint and ON AIR chip
         BuildAmmo();
         BuildSeats(); // the vehicle seat schematic above the vehicle readout
         BuildTop();
@@ -116,6 +131,7 @@ public partial class Hud : CanvasLayer
         BuildStreaks();
         BuildUav();
         BuildSandbox();
+        BuildTacticalMap();
         BuildChat();
         ApplyMinimapSettings();
         Relayout();
@@ -131,9 +147,26 @@ public partial class Hud : CanvasLayer
         Relayout();
         ApplyMinimapSettings();
         _gap = -1;
+        _rozhlasHintStale = true; // the talk key may have been rebound
         _seatsDef = null; // the seat hint names the (maybe rebound) keys: rebuilt on the next frame
         foreach (var tri in _indTri) tri.Color = ShooterTheme.Danger; // read at build time otherwise; the palette may have switched
-        if (_crossRoot != null) _crossRoot.Visible = Settings.ShowCrosshair;
+        ApplyCrosshairVisibility();
+    }
+
+    bool _crossCovered;
+    /// <summary>A panel stands in the middle of the screen (the corpse chooser): the crosshair would show through it, so it is hidden meanwhile.</summary>
+    public void CoverCrosshair(bool on)
+    {
+        if (_crossCovered == on) return;
+        _crossCovered = on;
+        ApplyCrosshairVisibility();
+    }
+
+    /// <summary>The one writer of the crosshair's Visible: the setting, the cover, the scope, the binoculars and the pounce all go through <see cref="CrosshairRules"/>.</summary>
+    void ApplyCrosshairVisibility()
+    {
+        if (_crossRoot == null) return;
+        _crossRoot.Visible = CrosshairRules.Visible(Settings.ShowCrosshair, _crossCovered, _scope?.Visible ?? false, _bino?.Visible ?? false, _pounceHide);
     }
 
     public override void _ExitTree() => GameSettings.Changed -= OnSettingsChanged;
@@ -167,7 +200,7 @@ public partial class Hud : CanvasLayer
     {
         var vp = GetViewport().GetVisibleRect().Size;
         if (vp == _lastSize && Mathf.IsEqualApprox(_root.Scale.X, UiFactor())) return;
-        _lastSize = vp;
+        _lastSize = vp; _boardDirty = true; // the board's width is capped to the screen
         var s = UiFactor();
         _root.Scale = new Vector2(s, s);
         _root.Position = Vector2.Zero;
@@ -226,49 +259,6 @@ public partial class Hud : CanvasLayer
     {
         _hpBar = Place(new ProgressBar { MaxValue = 100, Value = 100, ShowPercentage = false, ThemeTypeVariation = "HealthBar", MouseFilter = Control.MouseFilterEnum.Ignore }, 0, 1, ShooterTheme.Margin, -ShooterTheme.Margin, 320, 16);
         _root.AddChild(_hpBar);
-    }
-
-    /// <summary>Breath meter above the health panel: "AIR" and seconds left, a bar, and "LOW" in the last seconds. Fixed size; invisible when dry.</summary>
-    void BuildAir()
-    {
-        _air = Place(P("HudPanel"), 0, 1, ShooterTheme.Margin, -ShooterTheme.Margin - 16 - ShooterTheme.Space, 320, 64);
-        _root.AddChild(_air);
-        _air.Modulate = new Color(1, 1, 1, 0);
-        var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        v.AddThemeConstantOverride("separation", 0);
-        _air.AddChild(v);
-        var top = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        v.AddChild(top);
-        top.AddChild(L(Strings.T("hud.air"), "HudSmall", minW: 96));
-        _airLow = L(Strings.T("hud.low"), "HudDanger"); _airLow.Modulate = new Color(1, 1, 1, 0);
-        top.AddChild(_airLow);
-        _airNum = L("", "HudDisplay", HorizontalAlignment.Left, 120);
-        v.AddChild(_airNum);
-        _airBar = new ProgressBar { MaxValue = 100, Value = 100, ShowPercentage = false, CustomMinimumSize = new Vector2(0, 12), MouseFilter = Control.MouseFilterEnum.Ignore, Modulate = ShooterTheme.Accent };
-        v.AddChild(_airBar);
-    }
-
-    /// <summary>Breath meter state: seconds of air left and whether the head is under water. Text and bar change only on a new value.</summary>
-    public void SetBreath(float airLeft, bool underwater)
-    {
-        _breathTarget = underwater ? 1f : 0f;
-        var secs = MathF.Round(Math.Clamp(airLeft, 0f, Drycastle.ShooterCore.Breath.Capacity), 1);
-        if (secs == _airShown) return;
-        _airShown = secs;
-        var low = HudLogic.BreathLow(secs);
-        Set(_airNum, HudLogic.BreathText(secs));
-        _airBar.Value = secs / Drycastle.ShooterCore.Breath.Capacity * 100;
-        _airBar.Modulate = low ? ShooterTheme.Danger : ShooterTheme.Accent; // "LOW" text carries it too, not colour alone
-        Fade(_airLow, low ? 1 : 0);
-    }
-
-    /// <summary>Breath meter fade, 150 ms (instant with reduce motion).</summary>
-    void AdvanceBreath(float delta)
-    {
-        var a = _air.Modulate.A;
-        if (Mathf.IsEqualApprox(a, _breathTarget)) return;
-        var step = Settings.ReduceMotion ? 1f : delta / 0.15f;
-        _air.Modulate = new Color(1, 1, 1, Mathf.MoveToward(a, _breathTarget, step));
     }
 
     void BuildAmmo()
@@ -374,14 +364,26 @@ public partial class Hud : CanvasLayer
         var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         _board.AddChild(v);
         _boardTitle = L("", "HudBig", HorizontalAlignment.Center); _boardTitle.ClipText = true; v.AddChild(_boardTitle);
-        v.AddChild(BoardRow(null, out var header, true));
-        _ = header;
+        var tables = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        tables.AddThemeConstantOverride("separation", 2 * ShooterTheme.Space);
+        v.AddChild(tables);
+        tables.AddChild(BoardTable(_cols[0])); tables.AddChild(BoardTable(_cols[1]));
+        v.AddChild(BoardTable(_cols[2]));
+        _boardFoot = L("", "HudSmall", HorizontalAlignment.Center); v.AddChild(_boardFoot);
+    }
+
+    VBoxContainer BoardTable(BoardCol col)
+    {
+        var v = col.Root = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        col.Head = L("", "HudHead", HorizontalAlignment.Center); col.Head.ClipText = true; v.AddChild(col.Head);
+        v.AddChild(BoardRow(null, out _, true));
         for (var i = 0; i < BoardRows; i++)
         {
-            _row[i] = BoardRow(i, out _cells[i], false);
-            v.AddChild(_row[i]);
+            col.Row[i] = BoardRow(i, out col.Cells[i], false);
+            v.AddChild(col.Row[i]);
         }
-        _boardFoot = L("", "HudSmall", HorizontalAlignment.Center); v.AddChild(_boardFoot);
+        col.Empty = L(Strings.T("score.empty"), "HudDim", HorizontalAlignment.Center); v.AddChild(col.Empty);
+        return v;
     }
 
     PanelContainer BoardRow(int? index, out Label[] cells, bool header)
@@ -520,6 +522,7 @@ public partial class Hud : CanvasLayer
     public void ClearTransients()
     {
         _hitUntil = 0; Fade(_hit, 0);
+        ClearHuntShot();
         for (var i = 0; i < Indicators; i++) { _indAt[i] = 0; Fade(_ind[i], 0); }
     }
 
@@ -567,7 +570,7 @@ public partial class Hud : CanvasLayer
         if (text != null) Set(_prompt, text);
     }
 
-    /// <summary>The hold ring above the prompt (care package open, #151): a fill from 0 to 1, or null to hide it.</summary>
+    /// <summary>The hold ring above the prompt (care package open, #151; taking the rozhlas set): a fill from 0 to 1, or null to hide it.</summary>
     public void SetRadial(float? fraction)
     {
         _radial.Visible = fraction != null;
@@ -600,7 +603,6 @@ public partial class Hud : CanvasLayer
     public override void _Process(double delta)
     {
         var now = Now;
-        AdvanceBreath((float)delta);
         if (_timeRunning) UpdateTimer();
         if (_dead) { UpdateRespawn(); PollRespawnKeys(); }
         if (_protUntil > 0)
@@ -608,10 +610,13 @@ public partial class Hud : CanvasLayer
             if (now >= _protUntil) SetProtection(0); else UpdateProtection();
         }
         if (_hitUntil > 0) UpdateHit(now);
+        if (_huntUntil > 0) UpdateHuntShot(now);
         for (var i = 0; i < Indicators; i++) UpdateIndicator(i, now);
         UpdateFeed(now);
         UpdateCrosshair();
         UpdateBreath();
+        UpdateTacticalMap();
+        UpdateEquipment();
         var want = (Input.IsActionPressed("scoreboard") && !ChatOpen) || _phase == MatchPhase.Ending; // Tab completes in the chat box
         if (want != _boardShown || (want && _boardDirty)) UpdateBoard(want);
     }
@@ -660,12 +665,59 @@ public partial class Hud : CanvasLayer
 
     string WeaponName(byte id)
     {
-        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Drown => Strings.T("weapon.drown"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), SpecialWeapons.VehicleGun => Strings.T("weapon.vehicle_gun"), SpecialWeapons.Flak => Strings.T("weapon.flak"), SpecialWeapons.Moab => Strings.T("weapon.moab"), SpecialWeapons.Missile => Strings.T("weapon.attack_missile"), SpecialWeapons.Turret => Strings.T("weapon.turret"), SpecialWeapons.AttackHelicopter => Strings.T("heli.weapon"), SpecialWeapons.Ac130 => Strings.T("ac130.kill"), SpecialWeapons.Helper => Strings.T("helper.weapon"), _ => KillWeaponName?.Invoke(id) ?? Strings.T("weapon.unknown") };
+        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Bigfoot => Strings.T("weapon.bigfoot"), SpecialWeapons.Gang => Strings.T("weapon.gang"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), SpecialWeapons.VehicleGun => Strings.T("weapon.vehicle_gun"), SpecialWeapons.Flak => Strings.T("weapon.flak"), SpecialWeapons.Burn => Strings.T("weapon.burn"), SpecialWeapons.Moab => Strings.T("weapon.moab"), SpecialWeapons.Missile => Strings.T("weapon.attack_missile"), SpecialWeapons.Turret => Strings.T("weapon.turret"), SpecialWeapons.AttackHelicopter => Strings.T("heli.weapon"), SpecialWeapons.Ac130 => Strings.T("ac130.kill"), SpecialWeapons.Helper => Strings.T("helper.weapon"), _ => KillWeaponName?.Invoke(id) ?? Strings.T("weapon.unknown") };
     }
 
-    /// <summary>Black outside a centred circle with a thin cross, drawn over the zoomed view.</summary>
+    /// <summary>The mil-dots and the zero of a scope with bullet drop: the dots follow the scope's FOV, the words change only with the zero or the dot spacing.</summary>
+    void UpdateScope(bool scoped)
+    {
+        (float FovDeg, float ZeroM) sc = scoped ? Scope?.Invoke() ?? (0f, 0f) : (0f, 0f);
+        var on = sc.ZeroM > 0 && sc.FovDeg > 0;
+        if (_zero.Visible != on) _zero.Visible = on;
+        _scope.SetMils(on ? sc.FovDeg : 0f);
+        if (!on) return;
+        var shown = ((int)MathF.Round(sc.ZeroM), _scope.DotMils);
+        if (shown == _zeroShown) return;
+        _zeroShown = shown;
+        Set(_zero, Strings.F("hud.scope.zero", shown.Item1, shown.Item2));
+    }
+
+    /// <summary>
+    /// Black outside a centred circle with a thin cross, drawn over the zoomed view. A scope with bullet drop has mil-dots on the cross: a dot every
+    /// <see cref="DotMils"/> mils (1 mil = 1 m at 1000 m), spaced from the FOV so they are true angles on the world: a target of a known height that
+    /// spans n mils is height x 1000 / n metres away, and a dot under the centre is the hold-over for a target beyond the zero.
+    /// </summary>
     sealed partial class ScopeOverlay : Control
     {
+        /// <summary>The dot spacings tried, mils: the first that puts the dots at least <see cref="MinDotPx"/> apart.</summary>
+        static readonly int[] Steps = { 1, 2, 5, 10, 20 };
+        const float MinDotPx = 10f, DotRadius = 2f;
+        const int MaxDots = 10;
+        float _fov;
+
+        /// <summary>Mils between two dots at the current FOV and size (0: no dots).</summary>
+        public int DotMils { get; private set; }
+
+        /// <summary>Screen pixels one mil spans at a vertical FOV, for a view this high.</summary>
+        float PxPerMil(float fovDeg) => Size.Y / 2f / Mathf.Tan(Mathf.DegToRad(fovDeg) / 2f) / 1000f;
+
+        public void SetMils(float fovDeg)
+        {
+            if (Mathf.IsEqualApprox(fovDeg, _fov)) return;
+            _fov = fovDeg;
+            Respace();
+            QueueRedraw();
+        }
+
+        void Respace()
+        {
+            DotMils = 0;
+            if (_fov <= 0 || Size.Y <= 0) return;
+            var px = PxPerMil(_fov);
+            DotMils = Steps[^1];
+            foreach (var step in Steps) if (step * px >= MinDotPx) { DotMils = step; break; }
+        }
+
         public override void _Draw()
         {
             var s = Size; var c = s / 2; var r = Mathf.Min(s.X, s.Y) * 0.46f;
@@ -676,79 +728,64 @@ public partial class Hud : CanvasLayer
             var line = new Color(0, 0, 0, 0.85f);
             DrawLine(new Vector2(c.X - r, c.Y), new Vector2(c.X + r, c.Y), line, 1.5f);
             DrawLine(new Vector2(c.X, c.Y - r), new Vector2(c.X, c.Y + r), line, 1.5f);
+            if (DotMils > 0)
+            {
+                var gap = DotMils * PxPerMil(_fov);
+                for (var i = 1; i <= MaxDots && i * gap < r * 0.9f; i++)
+                {
+                    DrawCircle(new Vector2(c.X, c.Y + i * gap), DotRadius, Colors.Black);
+                    DrawCircle(new Vector2(c.X, c.Y - i * gap), DotRadius, Colors.Black);
+                    DrawCircle(new Vector2(c.X + i * gap, c.Y), DotRadius, Colors.Black);
+                    DrawCircle(new Vector2(c.X - i * gap, c.Y), DotRadius, Colors.Black);
+                }
+            }
             DrawCircle(c, 2f, new Color(0.9f, 0.1f, 0.1f));
         }
 
-        public override void _Notification(int what) { if (what == NotificationResized) QueueRedraw(); }
+        public override void _Notification(int what) { if (what == NotificationResized) { Respace(); QueueRedraw(); } }
     }
 
-    /// <summary>Breath meter under the crosshair, shown only while scoped with a breath hold. The state is in words as well as colour.</summary>
+    /// <summary>
+    /// The breath hold has no meter (the heartbeat and the exhale say how much is left, see <see cref="BreathCues"/>): the HUD only names the key,
+    /// under the crosshair, while scoped with a full breath that is not being held.
+    /// </summary>
     void BuildBreath()
     {
         const float w = 240;
-        var box = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
         _breathLabel = L("", "HudSmall", HorizontalAlignment.Center);
-        _breathBar = new BreathBar { CustomMinimumSize = new Vector2(w, 12), MouseFilter = Control.MouseFilterEnum.Ignore };
-        box.AddChild(_breathLabel);
-        box.AddChild(_breathBar);
-        _breath = Place(box, 0.5f, 0.5f, -w / 2, 40, w, 40);
+        _breath = Place(_breathLabel, 0.5f, 0.5f, -w / 2, 40, w, 24);
+        _breath.Visible = false;
         _root.AddChild(_breath);
     }
 
     void UpdateBreath()
     {
         var b = Breath?.Invoke() ?? (false, 0f, BreathState.BreathPhase.Ready);
-        if (_breath.Visible != b.Show) _breath.Visible = b.Show;
-        if (!b.Show) return;
-        _breathBar.Set(b.Meter, b.Phase);
-        // the label's words depend only on the phase, whether the breath is empty and the bound key: text is built when one changes (#173, T3-032)
-        var state = (b.Phase, Empty: b.Meter <= 0.01f, Key: InputBindings.Name("sprint"));
-        if (state == _breathState) return;
-        _breathState = state;
-        Set(_breathLabel, b.Phase switch
-        {
-            BreathState.BreathPhase.Holding => Strings.T("hud.breath.held"),
-            BreathState.BreathPhase.Exhaled => Strings.T("hud.breath.exhaled"),
-            _ => state.Empty ? Strings.T("hud.breath.empty") : Strings.F("hud.breath.ready", state.Key),
-        });
+        var show = b.Show && b.Phase == BreathState.BreathPhase.Ready && b.Meter >= 0.999f;
+        if (_breath.Visible != show) _breath.Visible = show;
+        if (!show) return;
+        // the words depend only on the bound key: text is built when it changes (#173, T3-032)
+        var key = InputBindings.Name("sprint");
+        if (key == _breathKey) return;
+        _breathKey = key;
+        Set(_breathLabel, Strings.F("hud.breath.ready", key));
     }
 
-    (BreathState.BreathPhase Phase, bool Empty, string Key)? _breathState;
-
-    /// <summary>Breath bar: fill = breath left. Blue while held, amber when low, red while forced out, green otherwise.</summary>
-    sealed partial class BreathBar : Control
-    {
-        float _meter = 1;
-        BreathState.BreathPhase _phase;
-
-        public void Set(float meter, BreathState.BreathPhase phase)
-        {
-            if (Mathf.IsEqualApprox(meter, _meter) && phase == _phase) return;
-            _meter = meter; _phase = phase; QueueRedraw();
-        }
-
-        public override void _Draw()
-        {
-            var s = Size;
-            var b = ShooterTheme.Border;
-            DrawRect(new Rect2(Vector2.Zero, s), ShooterTheme.Surface);
-            var fill = _phase switch
-            {
-                BreathState.BreathPhase.Holding => ShooterTheme.Accent,
-                BreathState.BreathPhase.Exhaled => ShooterTheme.Danger,
-                _ => _meter < 0.25f ? ShooterTheme.Warn : ShooterTheme.Good,
-            };
-            DrawRect(new Rect2(b, b, Mathf.Max(0, (s.X - 2 * b) * _meter), s.Y - 2 * b), fill);
-            DrawRect(new Rect2(Vector2.Zero, s), ShooterTheme.Line, false, b);
-        }
-
-        public override void _Notification(int what) { if (what == NotificationResized) QueueRedraw(); }
-    }
+    string? _breathKey;
 
     void UpdateCrosshair()
     {
+        if (_pounceHide) return; // lying under the demon: no crosshair
+        if (UpdateBinoculars())
+        {
+            // the binoculars are up: their own view, no crosshair, and no scope left over from the moment they were raised
+            if (_scope.Visible) _scope.Visible = false;
+            UpdateScope(false);
+            return;
+        }
         var scoped = Scoped?.Invoke() ?? false;
-        if (_scope.Visible != scoped) { _scope.Visible = scoped; _scope.QueueRedraw(); _crossRoot.Visible = Settings.ShowCrosshair && !scoped; }
+        if (_scope.Visible != scoped) { _scope.Visible = scoped; _scope.QueueRedraw(); ApplyCrosshairVisibility(); }
+        UpdateScope(scoped);
         if (scoped) return;
         var alpha = 1f - Math.Clamp(Aim?.Invoke() ?? 0f, 0f, 1f);
         if (Math.Abs(alpha - _crossAlpha) > 0.004f) { _crossAlpha = alpha; _crossRoot.Modulate = new Color(1, 1, 1, alpha); }
@@ -784,8 +821,35 @@ public partial class Hud : CanvasLayer
         }
         else Set(_boardTitle, Strings.T("score.title"));
         Set(_boardFoot, Strings.T(ending ? "score.hint.next" : "score.hint.hold"));
-        var sorted = TeamMode ? HudLogic.SortTeams(_rows, _team!.ScoreA, _team.ScoreB) : HudLogic.Sort(_rows);
-        // keep the local row visible even when the room exceeds the pre-built rows
+        // two tables side by side in team deathmatch: own team left, so the sides never swap with the lead
+        var w = Math.Min(TeamMode ? BoardWidthTeams : BoardWidth, _root.Size.X - 2 * ShooterTheme.Margin);
+        _board.OffsetLeft = -w / 2; _board.OffsetRight = w / 2;
+        if (!TeamMode)
+        {
+            FillTable(_cols[0], HudLogic.Sort(_rows), Teams.None);
+            _cols[1].Root.Visible = _cols[2].Root.Visible = false;
+            return;
+        }
+        var split = HudLogic.SplitTeams(_rows, MyTeam);
+        FillTable(_cols[0], split.Left, split.LeftTeam);
+        FillTable(_cols[1], split.Right, Teams.Other(split.LeftTeam));
+        _cols[2].Root.Visible = split.NoTeam.Count > 0;
+        if (split.NoTeam.Count > 0) FillTable(_cols[2], split.NoTeam, Teams.None);
+    }
+
+    /// <summary>Fills one table with already sorted rows; <paramref name="team"/> names its heading (free-for-all has none).</summary>
+    void FillTable(BoardCol col, List<ScoreRow> sorted, byte team)
+    {
+        col.Root.Visible = true;
+        col.Head.Visible = TeamMode;
+        if (TeamMode)
+        {
+            var key = HudLogic.RelationOf(MyTeam, team) switch { HudLogic.Relation.Friend => "score.team.mine", HudLogic.Relation.Enemy => "score.team.enemy", _ => "score.team.other" };
+            Set(col.Head, team == Teams.None ? Strings.T("score.team.none") : Strings.F(key, Teams.Tag(team), team == Teams.A ? _team!.ScoreA : _team!.ScoreB));
+            Tint(col.Head, RelationColor(team));
+        }
+        col.Empty.Visible = sorted.Count == 0;
+        // keep the local row visible even when the table exceeds the pre-built rows
         if (sorted.Count > BoardRows)
         {
             var me = sorted.FindIndex(r => r.Id == MyId);
@@ -793,15 +857,15 @@ public partial class Hud : CanvasLayer
         }
         for (var i = 0; i < BoardRows; i++)
         {
-            if (i >= sorted.Count) { _row[i].Visible = false; continue; }
+            if (i >= sorted.Count) { col.Row[i].Visible = false; continue; }
             var r = sorted[i];
             var mine = r.Id == MyId;
-            _row[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
-            var c = _cells[i];
-            Set(c[0], Tagged(mine ? Strings.F("score.you", r.Name) : r.Name, r.Team));
+            col.Row[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
+            var c = col.Cells[i];
+            Set(c[0], mine ? Strings.F("score.you", r.Name) : r.Name); // the team is the table's heading
             Tint(c[0], RelationColor(r.Team));
             Set(c[1], r.Kills.ToString()); Set(c[2], r.Deaths.ToString()); Set(c[3], Strings.F("score.ping", r.Ping));
-            _row[i].Visible = true;
+            col.Row[i].Visible = true;
         }
     }
 }

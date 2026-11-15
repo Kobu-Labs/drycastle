@@ -105,6 +105,8 @@ public class WeaponsFile
         NonNegative(r.BreathHoldSeconds, where, "breath_hold_seconds");
         NonNegative(r.BreathRecoverSeconds, where, "breath_recover_seconds");
         NonNegative(r.QuickscopePenalty, where, "quickscope_penalty");
+        NonNegative(r.MuzzleVelocity, where, "muzzle_velocity");
+        NonNegative(r.ZeroDistance, where, "zero_distance");
         if (r.Pellets is { } pellets && pellets < 1) throw Invalid(where, "pellets", "must be at least 1");
         if (r.PumpAction == true && r.FullAuto == true) throw Invalid(where, "pump_action", "cannot be combined with full_auto");
         if (r.ShellReload == true && (r.MagazineSize is not > 0 || r.ReloadTime is not > 0))
@@ -155,6 +157,8 @@ public class WeaponsFile
             BreathHoldSeconds = r.BreathHoldSeconds ?? 0,
             BreathRecoverSeconds = r.BreathRecoverSeconds ?? 0,
             QuickscopePenalty = r.QuickscopePenalty ?? 0,
+            MuzzleVelocity = r.MuzzleVelocity ?? 0,
+            ZeroDistance = r.ZeroDistance ?? 0,
             Pellets = r.Pellets ?? 1,
             PelletSpread = r.PelletSpread ?? 0,
             DamagePerPellet = r.DamagePerPellet ?? damage,
@@ -293,6 +297,8 @@ public class WeaponsFile
         public float? BreathHoldSeconds { get; set; }
         public float? BreathRecoverSeconds { get; set; }
         public float? QuickscopePenalty { get; set; }
+        public float? MuzzleVelocity { get; set; }
+        public float? ZeroDistance { get; set; }
         public int? Pellets { get; set; }
         public float? PelletSpread { get; set; }
         public float? DamagePerPellet { get; set; }
@@ -377,6 +383,10 @@ public class WeaponDef
     public float BreathRecoverSeconds { get; set; }
     /// <summary>Extra aim penalty for firing from the hip right after a scoped shot (sniper).</summary>
     public float QuickscopePenalty { get; set; }
+    /// <summary>Metres per second the bullet drops as if it flew at (the hit is still instant); 0 = no bullet drop. See <see cref="BulletDrop"/>.</summary>
+    public float MuzzleVelocity { get; set; }
+    /// <summary>The zero the sight has before the dial is touched, metres (0 = <see cref="BulletDrop.DefaultZeroM"/>). Only with a muzzle velocity.</summary>
+    public float ZeroDistance { get; set; }
 
     // Shotgun: pellets per shot, cone half-angle in degrees per pellet, damage per pellet (resolved: damage).
     public int Pellets { get; set; } = 1;

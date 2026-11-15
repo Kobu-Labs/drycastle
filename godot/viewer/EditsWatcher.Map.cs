@@ -6,12 +6,12 @@ using Godot;
 
 /// <summary>
 /// Hot reload of a re-exported map (`make export`): the buildings. The edits file only describes fences, trees,
-/// objects and regions; buildings come from the pipeline (overrides.yaml, config/buildings, the model code) and
+/// objects and ground patches; buildings come from the pipeline (overrides.yaml, config/buildings, the model code) and
 /// reach the viewer only through the chunk files. The export writes manifest.json last, with a sha256 per chunk
 /// file, so the manifest is polled like the edits file: when it changes, the chunks whose hash differs from what
 /// is loaded get their building nodes swapped (MapLoader.ReloadChunkBuildings), one chunk per frame.
-/// Everything else baked into a chunk (terrain, roads, fences, trees, regions) is not reloaded: fences, trees and
-/// regions follow the edits file as before, the rest needs a restart. A map whose parcels changed is not swapped
+/// Everything else baked into a chunk (terrain, roads, fences, trees, patches) is not reloaded: fences, trees and
+/// patches follow the edits file as before, the rest needs a restart. A map whose parcels changed is not swapped
 /// at all (building nodes are keyed by parcel ID); the viewer says to restart.
 /// </summary>
 public partial class EditsWatcher

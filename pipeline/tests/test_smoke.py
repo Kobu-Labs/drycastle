@@ -3,7 +3,7 @@ import pytest
 from drycastle_pipeline import cli
 from drycastle_pipeline.stages import STAGES
 
-EXPECTED_ORDER = ["fetch", "normalise", "parcels", "rules", "terrain", "roads", "props", "detail", "export"]
+EXPECTED_ORDER = ["fetch", "normalise", "ortho", "ortho-trees", "parcels", "rules", "terrain", "roads", "props", "detail", "export"]
 
 
 def test_stage_order() -> None:
@@ -27,7 +27,7 @@ def fake_fetch(monkeypatch: pytest.MonkeyPatch) -> list[bool]:
         return stage
 
     monkeypatch.setitem(STAGES, "fetch", run)
-    for name in ("normalise", "parcels", "rules", "terrain", "roads", "props", "detail", "export"):
+    for name in ("normalise", "ortho", "ortho-trees", "parcels", "rules", "terrain", "roads", "props", "detail", "export"):
         monkeypatch.setitem(STAGES, name, fake_stage(name))
     return calls
 
@@ -37,7 +37,9 @@ def test_run_all_runs_every_stage_in_order(
 ) -> None:
     assert cli.main(["run-all"]) == 0
     lines = capsys.readouterr().out.strip().splitlines()
-    assert lines == [f"{s}: fake" for s in EXPECTED_ORDER]
+    assert [ln for ln in lines if not ln.startswith("timing:")] == [f"{s}: fake" for s in EXPECTED_ORDER]
+    timed = [ln.split()[1] for ln in lines[len(EXPECTED_ORDER) + 1 :]]  # after the total line, slowest first
+    assert sorted(timed) == sorted(EXPECTED_ORDER)
 
 
 def test_force_flag_reaches_fetch(fake_fetch: list[bool]) -> None:

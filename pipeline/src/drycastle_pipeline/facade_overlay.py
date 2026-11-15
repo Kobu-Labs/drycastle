@@ -6,7 +6,7 @@ numbers and 1 m ticks along each wall, so window and door positions can be read 
 facade coordinates (edge number + metres from the edge start).
 
     python -m drycastle_pipeline.facade_overlay w378920362 0                 # frame 0 -> overlay_0.png
-    python -m drycastle_pipeline.facade_overlay w378920362 0 village E N H   # calibrate: shift camera
+    python -m drycastle_pipeline.facade_overlay w378920362 0 E N H           # calibrate: shift camera
                                                                              # E/N metres, heading H degrees
 
 Edge numbers are those of ``orient(footprint, 1.0)`` in buildings.json, the ones used by
@@ -24,7 +24,7 @@ from PIL import Image, ImageDraw
 from shapely.geometry.polygon import orient
 
 from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import area_paths
+from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.streetview import M_PER_DEG
 
 CAMERA_H = 2.5
@@ -89,8 +89,7 @@ def apply(rot, shift, pt):
 def main(argv=None) -> int:
     args = list(argv if argv is not None else sys.argv[1:])
     bid, n = args[0], int(args[1])
-    area = args[2] if len(args) > 2 else "village"
-    paths = area_paths(area)
+    paths = map_paths()
     folder = paths.raw.parent / "streetview"
     view = json.loads((folder / "index.json").read_text())[bid][n]
     osm = json.loads((paths.raw / "osm.json").read_text())
@@ -108,7 +107,7 @@ def main(argv=None) -> int:
     cam = (cam_xy[0], cam_xy[1], CAMERA_H)
     hx, hy = apply(rot, (0, 0), (math.sin(math.radians(view["heading"])), math.cos(math.radians(view["heading"]))))
     heading = math.degrees(math.atan2(hx, hy)) % 360
-    off_e, off_n, off_h = (float(v) for v in (args[3:6] + ["0", "0", "0"])[:3])  # calibration
+    off_e, off_n, off_h = (float(v) for v in (args[2:5] + ["0", "0", "0"])[:3])  # calibration
     cam = (cam[0] + off_e, cam[1] + off_n, cam[2])
     heading += off_h
     print(f"registration residual {resid:.2f} m, local heading {heading:.1f}")

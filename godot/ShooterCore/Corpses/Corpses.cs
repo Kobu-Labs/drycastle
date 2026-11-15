@@ -64,15 +64,24 @@ public enum PickUpResult : byte { Ok, Gone, OutOfReach, BadSlot, WrongKind, Alre
 /// plus reserve, capped at 255 on the wire). The state is replicated as <see cref="WorldState"/>: the weapon in
 /// <see cref="WorldState.State"/> and the rounds in <see cref="WorldState.Hp"/> (corpses have no hit points).
 /// Corpses take no damage. They despawn after <see cref="CorpseRules.LifetimeSeconds"/>.
+/// <para>
+/// A corpse can also carry <see cref="Items"/>, up to <see cref="ItemRules.MaxCarried"/> (all its player wore and bagged, ADR 0018):
+/// not in the world state, but announced by <see cref="EventKind.CorpseItems"/>. They live and die with the corpse.
+/// </para>
 /// </summary>
 public sealed class Corpse : IWorldEntity
 {
     readonly float _yaw;
-    float _age;
+    Lifetime _life;
+    readonly float _lifetime;
 
-    public Corpse(ushort owner, Vector3 position, float yaw, int weapon, int rounds)
+    readonly List<ItemStack> _items = new();
+
+    /// <param name="lifetime">How long it lies, seconds: a player's corpse lasts <see cref="CorpseRules.LifetimeSeconds"/>; the Bigfoot's (issue #264) lasts longer, since it has to be found.</param>
+    public Corpse(ushort owner, Vector3 position, float yaw, int weapon, int rounds, IEnumerable<ItemStack>? items = null, float lifetime = CorpseRules.LifetimeSeconds)
     {
-        Owner = owner; _body = new ThrownBody(position); _yaw = yaw; Weapon = weapon; Rounds = rounds;
+        Owner = owner; _body = new ThrownBody(position); _yaw = yaw; Weapon = weapon; Rounds = rounds; _lifetime = lifetime;
+        if (items != null) _items.AddRange(items.Take(ItemRules.MaxCarried));
     }
 
     public byte TypeId => CorpseRules.TypeId;
@@ -87,11 +96,14 @@ public sealed class Corpse : IWorldEntity
     /// <summary>weapons.json index of the weapon the corpse carries.</summary>
     public int Weapon { get; private set; }
     public int Rounds { get; private set; }
+    /// <summary>The items the corpse carries (each with how often it has been taken), in the order they were put on it: what was worn, then the bag.</summary>
+    public IReadOnlyList<ItemStack> Items => _items;
+    /// <summary>The first item the corpse carries, or null: what the single-row chooser and the prompt name.</summary>
+    public ItemStack? Item => _items.Count > 0 ? _items[0] : null;
 
     public void Tick(float dt)
     {
-        _age += dt;
-        if (_age >= CorpseRules.LifetimeSeconds) Ended = WorldDespawnReason.Expired;
+        if (_life.Tick(dt, _lifetime)) Ended = WorldDespawnReason.Expired;
     }
 
     public void OnDamage(float amount, ushort attacker) { }
@@ -110,36 +122,108 @@ public sealed class Corpse : IWorldEntity
         Weapon = weapon;
         Rounds = rounds;
     }
+
+    /// <summary>Puts an item on the corpse at the end of its list. False (nothing changes) when it already carries <see cref="ItemRules.MaxCarried"/>.</summary>
+    public bool AddItem(ItemStack item)
+    {
+        if (_items.Count >= ItemRules.MaxCarried) return false;
+        _items.Add(item);
+        return true;
+    }
+
+    /// <summary>Takes the item at <paramref name="index"/> off the corpse (taken, or crumbled); the ones after it move up. An index out of range is ignored.</summary>
+    public void RemoveItem(int index)
+    {
+        if (index >= 0 && index < _items.Count) _items.RemoveAt(index);
+    }
+
+    /// <summary>Puts <paramref name="item"/> in the place of the one at <paramref name="index"/> (the one a taker swapped out). An index out of range is ignored.</summary>
+    public void ReplaceItem(int index, ItemStack item)
+    {
+        if (index >= 0 && index < _items.Count) _items[index] = item;
+    }
 }
 
 /// <summary>
-/// The corpses on the map, in spawn order: enforces the cap (oldest first) and the pickup rules against the taker's
-/// <see cref="PlayerWeapons"/>. Owned by the match next to <see cref="WorldEntityManager"/>; it forgets a corpse when the
+/// The corpses and the ground items on the map, in spawn order: enforces the cap (oldest first) and the pickup rules against the taker's
+/// <see cref="PlayerWeapons"/>, <see cref="Equipment"/> and <see cref="Bag"/>. A ground item (ADR 0018) counts against the corpse cap, so
+/// a busy fight cannot fill the map with either. Owned by the match next to <see cref="WorldEntityManager"/>; it forgets one when the
 /// manager despawns it, whatever the reason (expiry, cap, round end).
 /// </summary>
 public sealed class CorpseBook
 {
     readonly WorldEntityManager _world;
     readonly List<(ushort Id, Corpse Body)> _order = new();
+    readonly List<(ushort Id, GroundItem Item)> _ground = new();
+    /// <summary>When each thing was put on the map (a running number), so the cap can find the oldest across both lists.</summary>
+    readonly Dictionary<ushort, long> _born = new();
+    long _clock;
 
     public CorpseBook(WorldEntityManager world)
     {
         _world = world;
-        world.Despawned += d => _order.RemoveAll(x => x.Id == d.Id);
+        world.Despawned += d =>
+        {
+            _order.RemoveAll(x => x.Id == d.Id);
+            _ground.RemoveAll(x => x.Id == d.Id);
+            _born.Remove(d.Id);
+        };
     }
 
-    public int Count => _order.Count;
+    /// <summary>Everything the cap counts: the corpses and the ground items.</summary>
+    public int Count => _order.Count + _ground.Count;
+
+    public int CorpseCount => _order.Count;
+
+    public int GroundCount => _ground.Count;
 
     /// <summary>The corpses on the map, oldest first.</summary>
     public IEnumerable<Corpse> Bodies => _order.Select(x => x.Body);
 
-    /// <summary>Puts a new corpse on the map, removing the oldest corpses first to stay within <see cref="CorpseRules.MaxCorpses"/>.</summary>
+    /// <summary>The corpses on the map with their ids, oldest first.</summary>
+    public IEnumerable<(ushort Id, Corpse Body)> WithIds => _order;
+
+    /// <summary>The corpse with this id, or null.</summary>
+    public Corpse? Get(ushort id) => _order.FirstOrDefault(x => x.Id == id).Body;
+
+    /// <summary>The ground item with this id, or null.</summary>
+    public GroundItem? GetGround(ushort id) => _ground.FirstOrDefault(x => x.Id == id).Item;
+
+    /// <summary>
+    /// Removes the oldest things until there is room for one more under <see cref="CorpseRules.MaxCorpses"/>. A thing that carries an item
+    /// goes last (every ground item does, and a corpse with items): a busy fight must not wipe out an event reward, so the oldest corpse
+    /// without one is taken first.
+    /// </summary>
+    void MakeRoom()
+    {
+        while (Count >= CorpseRules.MaxCorpses)
+        {
+            var plain = _order.Where(x => x.Body.Items.Count == 0).Select(x => (ushort?)x.Id).OrderBy(id => _born.GetValueOrDefault(id!.Value)).FirstOrDefault();
+            var victim = plain ?? _born.OrderBy(kv => kv.Value).Select(kv => (ushort?)kv.Key).FirstOrDefault();
+            if (victim is not { } id) return;
+            if (!_world.Despawn(id, WorldDespawnReason.Removed)) { _order.RemoveAll(x => x.Id == id); _ground.RemoveAll(x => x.Id == id); _born.Remove(id); }
+        }
+    }
+
+    /// <summary>
+    /// Puts a new corpse on the map, removing the oldest things first to stay within <see cref="CorpseRules.MaxCorpses"/> (see
+    /// <see cref="MakeRoom"/>).
+    /// </summary>
     public ushort? Add(Corpse body)
     {
-        while (_order.Count >= CorpseRules.MaxCorpses)
-            if (!_world.Despawn(_order[0].Id, WorldDespawnReason.Removed)) _order.RemoveAt(0);
+        MakeRoom();
         var id = _world.Spawn(body);
-        if (id is { } i) _order.Add((i, body));
+        if (id is { } i) { _order.Add((i, body)); _born[i] = ++_clock; }
+        return id;
+    }
+
+    /// <summary>Puts a dropped item on the map at <paramref name="at"/> (the terrain height under the dropper), under the same cap as the corpses. Null when the world refuses it.</summary>
+    public ushort? Drop(ushort dropper, Vector3 at, ItemStack stack)
+    {
+        MakeRoom();
+        var item = new GroundItem(dropper, at, stack);
+        var id = _world.Spawn(item);
+        if (id is { } i) { _ground.Add((i, item)); _born[i] = ++_clock; }
         return id;
     }
 
@@ -159,6 +243,50 @@ public sealed class CorpseBook
         taker.ReplaceHotbar(hotbarPos, body.Weapon, out var dropped, out var rounds);
         body.Carry(dropped, rounds);
         return PickUpResult.Ok;
+    }
+
+    /// <summary>
+    /// Item pickup: the taker at <paramref name="player"/> takes the item at <paramref name="index"/> of the corpse's list
+    /// (<see cref="ItemRules.Take"/> counts the pickup). It goes into its empty slot, else the bag; with both full it is worn and what was worn
+    /// in that slot takes its place on the corpse (<see cref="ItemRules.Place"/>, <paramref name="placed"/> says which). An item taken as often
+    /// as its definition allows crumbles instead: it is gone from the corpse and the taker gets nothing. The corpse's weapon is not involved;
+    /// this is a separate action.
+    /// </summary>
+    public ItemPickUp TryPickUpItem(ushort corpseId, int index, Vector3 player, Equipment worn, Bag bag, ItemsFile items, out ItemPlace placed, float slack = CorpseRules.LatencySlackMetres)
+    {
+        placed = ItemPlace.None;
+        var entry = _order.FirstOrDefault(x => x.Id == corpseId);
+        if (entry.Body == null) return ItemPickUp.Gone;
+        var body = entry.Body;
+        if (!CorpseRules.InReach(player, body.Position, slack)) return ItemPickUp.OutOfReach;
+        if (index < 0 || index >= body.Items.Count) return ItemPickUp.NoItem;
+        if (items.At(body.Items[index].Item) is { BagOnly: true } && bag.IsFull) return ItemPickUp.NoRoom; // a plain item has no slot to swap into: before the count
+        var result = ItemRules.Take(items, body.Items[index], out var taken);
+        if (result == ItemPickUp.Crumbled) body.RemoveItem(index);
+        if (result != ItemPickUp.Ok) return result;
+        placed = ItemRules.Place(items, taken, worn, bag, swap: true, out var displaced);
+        if (placed == ItemPlace.Swapped) body.ReplaceItem(index, displaced!.Value); else body.RemoveItem(index);
+        return ItemPickUp.Ok;
+    }
+
+    /// <summary>
+    /// Ground item pickup: the taker at <paramref name="player"/> takes it (the dropper too), counting one pickup, into its empty slot, else the
+    /// bag. With both full nothing is taken or counted (<see cref="ItemPickUp.NoRoom"/>, the item stays where it is): there is no swap, since the
+    /// item that would be left behind has no corpse to go on. An item taken as often as its definition allows crumbles: it is gone.
+    /// </summary>
+    public ItemPickUp TryTakeGround(ushort id, Vector3 player, Equipment worn, Bag bag, ItemsFile items, out ItemPlace placed, float slack = GroundItemRules.LatencySlackMetres)
+    {
+        placed = ItemPlace.None;
+        var entry = _ground.FirstOrDefault(x => x.Id == id);
+        if (entry.Item == null) return ItemPickUp.Gone;
+        if (!GroundItemRules.InReach(player, entry.Item.Position, slack)) return ItemPickUp.OutOfReach;
+        if (items.At(entry.Item.Stack.Item) is { } def && (def.BagOnly || worn.Get(def.Slot) != null) && bag.IsFull) return ItemPickUp.NoRoom; // before the count: a futile attempt must not crumble it
+        var result = ItemRules.Take(items, entry.Item.Stack, out var taken);
+        if (result == ItemPickUp.Crumbled) _world.Despawn(id, WorldDespawnReason.Removed);
+        if (result != ItemPickUp.Ok) return result;
+        placed = ItemRules.Place(items, taken, worn, bag, swap: false, out _);
+        _world.Despawn(id, WorldDespawnReason.Opened);
+        return ItemPickUp.Ok;
     }
 }
 
@@ -202,19 +330,30 @@ public static class CorpseCodec
     }
 }
 
+/// <summary>Where a <see cref="ThrownBody"/> is: at rest, or in flight.</summary>
+public enum BodyFlightState : byte { Grounded, Airborne }
+
 /// <summary>
 /// A body in flight (the ragdoll): thrown with a velocity, falls under gravity, stops against walls and lands. Used by corpses and by
 /// target dummies. <see cref="Fly"/> is stepped by the server with a world ray cast; nothing here knows the physics engine.
 /// </summary>
 public sealed class ThrownBody
 {
-    float _flight;
+    public static readonly StateMachineSpec<BodyFlightState> Spec = StateMachineSpec<BodyFlightState>
+        .Define("Corpse.Flight", "A thrown body (corpse or target dummy): at rest on the ground, or airborne after a launch until it lands or the flight cap runs out.", BodyFlightState.Grounded)
+        .Allow(BodyFlightState.Grounded, BodyFlightState.Airborne)
+        .Allow(BodyFlightState.Airborne, BodyFlightState.Grounded)
+        .Note(BodyFlightState.Grounded, "At rest. A launch (a push that is not zero) throws it; a dummy standing up again (Reset) comes back here.")
+        .Note(BodyFlightState.Airborne, "Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens. A new launch while airborne restarts the count.")
+        .Build();
+
+    readonly StateMachine<BodyFlightState> _fsm = new(Spec);
 
     public ThrownBody(Vector3 position) => Position = position;
 
     public Vector3 Position { get; private set; }
     public Vector3 Velocity { get; private set; }
-    public bool Airborne { get; private set; }
+    public bool Airborne => _fsm.Is(BodyFlightState.Airborne);
 
     /// <summary>Throws the body with <paramref name="velocity"/> (m/s), capped at <see cref="CorpseRules.MaxThrowSpeed"/>. A zero push does nothing.</summary>
     public void Launch(Vector3 velocity)
@@ -222,8 +361,8 @@ public sealed class ThrownBody
         var v = velocity.Length() > CorpseRules.MaxThrowSpeed ? Vector3.Normalize(velocity) * CorpseRules.MaxThrowSpeed : velocity;
         if (v.LengthSquared() < 1e-4f) return;
         Velocity = v;
-        Airborne = true;
-        _flight = 0;
+        _fsm.Enter(BodyFlightState.Airborne);
+        _fsm.Restart(); // a re-launch in flight starts the flight time over too
         Position += Vector3.UnitY * 0.05f; // clear of the floor it stands on
     }
 
@@ -232,7 +371,7 @@ public sealed class ThrownBody
     {
         Position = position;
         Velocity = Vector3.Zero;
-        Airborne = false;
+        _fsm.Enter(BodyFlightState.Grounded);
     }
 
     /// <summary>
@@ -244,7 +383,7 @@ public sealed class ThrownBody
     public void Fly(float dt, Func<Vector3, Vector3, float, float?> cast)
     {
         if (!Airborne) return;
-        _flight += dt;
+        _fsm.Tick(dt); // Elapsed is the flight time: the same float running sum as before
         var v = Velocity;
         v.Y -= CorpseRules.Gravity * dt;
         var p = Position;
@@ -273,13 +412,13 @@ public sealed class ThrownBody
         }
         Position = p;
         Velocity = v;
-        if (_flight >= CorpseRules.MaxFlightSeconds) Land(p);
+        if (_fsm.Elapsed >= CorpseRules.MaxFlightSeconds) Land(p);
     }
 
     void Land(Vector3 at)
     {
         Position = at;
         Velocity = Vector3.Zero;
-        Airborne = false;
+        _fsm.Enter(BodyFlightState.Grounded);
     }
 }

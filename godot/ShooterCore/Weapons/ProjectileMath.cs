@@ -21,7 +21,7 @@ public static class ProjectileMath
     /// stopped on, and <paramref name="wallPastHull"/> where the world stops it with that hull left out (<see cref="GunnerCover"/>).
     /// </summary>
     public static SweepResult Sweep(Vector3 from, Vector3 dir, float length, float wallDistance, IEnumerable<HitTarget> targets, ushort owner,
-        HitTarget? exposedGunner = null, float wallPastHull = float.PositiveInfinity)
+        ExposedRiders? exposedGunner = null, float wallPastHull = float.PositiveInfinity)
     {
         var hit = GunnerCover.Raycast(from, dir, length, wallDistance, targets, owner, exposedGunner, wallPastHull);
         if (hit is { } h) return new SweepResult(ImpactKind.Player, h.Distance, h.Id);

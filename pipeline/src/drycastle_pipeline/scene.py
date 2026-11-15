@@ -14,26 +14,30 @@ import numpy as np
 import shapely
 from shapely.geometry import Polygon
 
+from drycastle_pipeline.building_detail import GLASS as PANE_GLASS
+from drycastle_pipeline.bed import carve_terrain
 from drycastle_pipeline.building_detail import build_detail, load_details
 from drycastle_pipeline.buildings import hex_to_rgb
 from drycastle_pipeline.bunker import bunker_rooms
 from drycastle_pipeline.detail import load_patches, patches_by_chunk
 from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits
+from drycastle_pipeline.ground import ground_types, ground_units, type_colours, water_kinds
 from drycastle_pipeline.landmarks import build_landmark
 from drycastle_pipeline.meshes import Mesh, building_mesh, collision_mesh
+from drycastle_pipeline.patches import node_name, patch_meshes, plan_patches
 from drycastle_pipeline.propmeshes import fence_mesh, fence_meshes, parcel_props_meshes, trees_mesh
-from drycastle_pipeline.regions import node_name, plan_regions, region_meshes
-from drycastle_pipeline.roads import road_mesh
+from drycastle_pipeline.roads import clip_graph, road_mesh
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.terrain import Terrain, cut_holes, load_terrain
 from drycastle_pipeline.textures import TexturedMesh, tex_node_name
+from drycastle_pipeline.water import WaterPlan, plan_water, water_rules
 
 Chunk = tuple[int, int]
 GREY = (128, 128, 128)
 
 
 class ParcelColours:
-    """Flat terrain colour by the parcel kind under a point; a shade is picked per parcel."""
+    """Flat terrain colour by the kind of the parcel or ground area under a point; a shade is picked per unit."""
 
     def __init__(self, parcels: list[dict], palette: dict[str, list[str]]):
         from shapely.geometry import shape
@@ -63,7 +67,7 @@ class ParcelColours:
 @dataclass
 class MapScene:
     terrain: Terrain | None = None
-    regions: dict = field(default_factory=dict)  # planned regions by ID (water.json takes the ones with a water_y)
+    patches: dict = field(default_factory=dict)  # planned ground patches by ID (water.json takes the ones with a water_y)
     building_elevation: dict[str, float] = field(default_factory=dict)
     parcels: dict[Chunk, list[tuple[str, Mesh, Mesh]]] = field(default_factory=dict)
     # terrain, roads, props, ...; a "<node>_tex_<texture id>" entry is a TexturedMesh (textures.py)
@@ -80,6 +84,9 @@ class MapScene:
     warnings: list[str] = field(default_factory=list)  # stale or unusable edits entries
     windows: list[dict] = field(default_factory=list)  # tagged window panes, see building_detail
     bunkers: list[dict] = field(default_factory=list)  # rooms of the enterable bunkers, see bunker.bunker_rooms
+    church: dict | None = None  # the inside of the church, see church_interior.church_info
+    urad: dict | None = None  # the inside of the municipal office, see office_interior.urad_info
+    water: WaterPlan | None = None  # the water bodies (water.json) and the terrain they are carved into, with a terrain
 
     def chunks(self) -> list[Chunk]:
         return sorted(set(self.parcels) | set(self.nodes) | set(self.parcel_props))
@@ -112,12 +119,12 @@ def build_scene(
     work_dir: Path,
     rules_path: Path = DEFAULT_RULES,
     exaggeration: float = 1.0,
-    area: str | None = None,
     edits_path: Path = DEFAULT_EDITS,
 ) -> MapScene:
     """All meshes of the map. ``exaggeration`` scales heights (preview only; 1 for export).
 
-    ``edits_path`` is read for the regions (``region_<ID>`` nodes in every chunk they touch).
+    ``edits_path`` is read for the ground types and the water patches (``patch_<ID>`` nodes in every chunk they touch; the
+    other patches are ground areas, baked into the terrain by the parcels stage).
     """
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     chunk_m = float(parcels_doc["chunk_size_m"])
@@ -127,10 +134,18 @@ def build_scene(
     scene = MapScene()
     details = load_details()
     k = exaggeration
+    types = ground_types(rules_path, edits_path)
+    pplan = None
     if (work_dir / "terrain.json").is_file():
-        scene.terrain, elev = load_terrain(work_dir)
+        base, elev = load_terrain(work_dir)
         scene.building_elevation = {b: e * k for b, e in elev.items()}
-        scene.terrain = scene.terrain.scaled(k) if k != 1 else scene.terrain
+        # the water and the patches are worked out on the terrain as it is, then the terrain is carved to the beds
+        pplan = plan_patches(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), base, types)
+        wrules = water_rules(rules_path)
+        scene.water = plan_water(ground_units(parcels_doc), base, pplan.patches, wrules, water_kinds(types))
+        scene.terrain = base.scaled(k) if k != 1 else base
+        beds = [b.scaled(k) for b in scene.water.bodies] if k != 1 else scene.water.bodies
+        carve_terrain(scene.terrain, beds, float(wrules["carve_blend_m"]))
 
     for p in sorted(parcels_doc["parcels"], key=lambda p: p["id"]):
         ids = sorted(bid for bid in p["buildings"] if bid in buildings)
@@ -154,6 +169,28 @@ def build_scene(
                             )
                 elif b.get("model"):  # hand-modelled landmark: detailed visual, plain-massing collision
                     m = build_landmark(b, detail=fn is building_mesh)
+                    if b["model"] == "church" and fn is building_mesh:
+                        from drycastle_pipeline.church_interior import church_info, church_panes
+
+                        scene.church = {"id": bid, "parcel": p["id"], **church_info(b, dz)}
+                        for node, tris, meta in church_panes({**b, "id": bid}):  # see-through, breakable glass
+                            meta["centre"][2] = round(meta["centre"][2] + dz, 3)
+                            scene.windows.append({**meta, "parcel": p["id"]})
+                            scene.nodes.setdefault(tuple(p["chunk"]), {})[node] = Mesh(
+                                np.array(tris, float) + [0, 0, dz], np.array([PANE_GLASS] * len(tris), np.uint8)
+                            )
+                    if b["model"] == "office" and fn is building_mesh:
+                        from drycastle_pipeline import office_interior
+                        from drycastle_pipeline.office import _details as office_details
+
+                        if bid == office_interior.MIDDLE_BAR:
+                            scene.urad = {"id": bid, "parcel": p["id"], **office_interior.urad_info(scene.building_elevation)}
+                        for node, tris, meta in office_interior.office_panes({**b, "id": bid}, office_details().get(bid)):
+                            meta["centre"][2] = round(meta["centre"][2] + dz, 3)
+                            scene.windows.append({**meta, "parcel": p["id"]})
+                            scene.nodes.setdefault(tuple(p["chunk"]), {})[node] = Mesh(
+                                np.array(tris, float) + [0, 0, dz], np.array([PANE_GLASS] * len(tris), np.uint8)
+                            )
                     if b["model"] == "bunker" and fn is building_mesh:
                         a = float(b["model_axis"])
                         rooms = bunker_rooms(b["footprint"]["exterior"], (math.cos(a), math.sin(a)))
@@ -163,6 +200,7 @@ def build_scene(
                                 "floors": [_raised(r, dz) for r in rooms["floors"]],
                                 "ladders": [_raised(r, dz) for r in rooms["ladders"]],
                                 "hatch": rooms["hatch"],
+                                **({"intel": _raised(rooms["intel"], dz)} if "intel" in rooms else {}),
                             })
                 else:
                     m = fn(b)
@@ -181,7 +219,7 @@ def build_scene(
                 scene.nodes.setdefault(key, {})[name] = mesh
 
     tcfg = load_section("terrain", rules_path)
-    colours = ParcelColours(parcels_doc["parcels"], tcfg["colours"])
+    colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(types)})
     dec = int(tcfg["collision_decimate"])
     grey = np.array(GREY, np.uint8)
     # the hatch of each bunker is a hole in the ground (#224): the terrain, seen and collided with, has it cut out
@@ -194,6 +232,14 @@ def build_scene(
         for x in (c.centroid.x - 8, c.centroid.x + 8)
         for y in (c.centroid.y - 8, c.centroid.y + 8)
     }
+    # ... and so is the ground of a water body: the carved bed is what the player wades and swims over
+    for b in scene.water.bodies:
+        minx, miny, maxx, maxy = b.geom.bounds
+        exact |= {
+            (cx, cy)
+            for cx in range(math.floor(minx / chunk_m), math.floor(maxx / chunk_m) + 1)
+            for cy in range(math.floor(miny / chunk_m), math.floor(maxy / chunk_m) + 1)
+        }
     for key in t.chunks():
         put("terrain", {key: cut_holes(t.chunk_mesh(*key, colours), cuts)})
         put(
@@ -207,17 +253,19 @@ def build_scene(
 
     scene.graph = _read(work_dir, "roads.json")
     if scene.graph:
+        scene.graph = clip_graph(scene.graph, t.coverage)  # nothing of the road network lies off the terrain
         put("roads", _by_chunk(road_mesh(scene.graph, t, load_section("roads", rules_path)), chunk_m))
 
-    rplan = plan_regions(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), t)
-    scene.warnings += rplan.warnings
-    scene.regions = rplan.regions
-    if rplan.regions:
-        meshes = region_meshes(
-            rplan, t, scene.graph, load_section("roads", rules_path), load_section("regions", rules_path)
+    scene.warnings += pplan.warnings
+    scene.patches = pplan.patches
+    water = {pid for pid, p in pplan.patches.items() if p.water_y is not None}
+    if water:
+        meshes = patch_meshes(
+            pplan, t, scene.graph, load_section("roads", rules_path), load_section("ground_patches", rules_path), only=water,
+            wet=scene.water.wet,
         )
-        for rid, mesh in meshes.items():
-            put(node_name(rid), _by_chunk(mesh, chunk_m))
+        for pid, mesh in meshes.items():
+            put(node_name(pid), _by_chunk(mesh, chunk_m))
 
     # ground detail (detail stage): patches draped on the terrain, one flat node and one node per texture in each
     # chunk; the clutter instances are not meshes, the export copies them as clutter.json
@@ -228,7 +276,7 @@ def build_scene(
 
     scene.props = _read(work_dir, "props.json")
     if scene.props:
-        pcfg = load_section("props", rules_path, area)
+        pcfg = load_section("props", rules_path)
         fences = [{**s, "za": s["za"] * k, "zb": s["zb"] * k} for s in scene.props["fences"]]
         trees = [{**tr, "z": tr["z"] * k} for tr in scene.props["trees"]]
         scene.trees = trees

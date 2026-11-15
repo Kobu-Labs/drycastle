@@ -13,8 +13,8 @@ namespace Drycastle.MapLoader;
 /// props / props_collision (items without a parcel, e.g. OSM trees).
 /// Independent of any mod. Axes: map x east, y north; Godot x east, y up, z = -north.
 /// </summary>
-/// <summary>A hand-drawn ground colour region, for the minimap: ring in ground (x, z) metres.</summary>
-public sealed record RegionPaint(string Id, Color Colour, Vector2[] Ring);
+/// <summary>A hand-drawn ground patch, for the minimap: its type's colour and ring in ground (x, z) metres.</summary>
+public sealed record PatchPaint(string Id, Color Colour, Vector2[] Ring);
 
 public sealed partial class MapLoader
 {
@@ -29,11 +29,14 @@ public sealed partial class MapLoader
     readonly Dictionary<string, List<CollisionShape3D>> _propsShapes = new();
     readonly Dictionary<string, Node3D> _replacements = new();
     readonly List<(Vector3[] faces, Aabb box)> _terrain = new();
+    readonly List<MeshInstance3D> _terrainVisuals = new();
     float _meanTerrainY = float.NaN;
 
     /// <summary>Root of everything the loader created. Add it to the scene tree.</summary>
     public Node3D Root { get; } = new() { Name = "Map" };
     public string MapVersion { get; private set; } = "";
+    /// <summary>FNV-1a of manifest.json, which names every chunk's hash: the identity of this map build (Hello and the join check, E-06). 0 before a load.</summary>
+    public ulong BuildHash { get; private set; }
     public string RoadsJson { get; private set; } = "";
     /// <summary>Contents of water.json (empty when the map has no water file); parsed by the shooter (ShooterCore.Water).</summary>
     public string WaterJson { get; private set; } = "";
@@ -43,11 +46,19 @@ public sealed partial class MapLoader
     public string BunkersJson { get; private set; } = "";
     /// <summary>Origin of the local frame in S-JTSK (EPSG:5514) metres (east, north), from parcels.json (map 0.4.0+); null for older maps.</summary>
     public (double X, double Y)? OriginEpsg5514 { get; private set; }
+    /// <summary>The ground types a patch can be given (name, "#rrggbb" of its terrain colour) as of the build: not the ones a rule makes, not water; from parcels.json `ground_types`, empty for older maps. The editor lists the current ones through <see cref="GroundTypeTable"/> and the edits.</summary>
+    public IReadOnlyList<(string Name, string Colour)> GroundTypes { get; private set; } = Array.Empty<(string, string)>();
+    /// <summary>Every ground type of the map (those of rules.yaml, then the user's own) as written by the last build; empty for maps without `ground_types`.</summary>
+    public IReadOnlyList<MapGroundType> GroundTypeTable { get; private set; } = Array.Empty<MapGroundType>();
+    /// <summary>The type of the ground no other type claims (parcels.json `ground_default`); "" for older maps.</summary>
+    public string GroundDefault { get; private set; } = "";
+    /// <summary>The shipped settings of each detail recipe without its clutter tables, as JSON by recipe name (parcels.json `ground_recipes`); what a ground type's `detail` is laid over. Empty for older maps.</summary>
+    public IReadOnlyDictionary<string, string> GroundRecipes { get; private set; } = new Dictionary<string, string>();
     /// <summary>Rule values (fence and tree defaults) from the manifest (map 0.4.0+); null for older maps.</summary>
     public EditDefaults? EditDefaults { get; private set; }
     public LoadStats Stats { get; } = new();
     /// <summary>
-    /// Counts changes to the physics of the map (placed objects, parcel and props swaps, regions). A cached ray result
+    /// Counts changes to the physics of the map (placed objects, parcel and props swaps, patches). A cached ray result
     /// is valid only for the version it was cast in.
     /// </summary>
     public int GeometryVersion { get; private set; }
@@ -55,6 +66,8 @@ public sealed partial class MapLoader
     void GeometryChanged() => GeometryVersion++;
     /// <summary>Per-parcel props visuals and colliders by parcel ID (for the runtime props swap).</summary>
     public IReadOnlyDictionary<string, MeshInstance3D> PropsVisuals => _propsVisuals;
+    /// <summary>The building visual of a parcel (parcel_&lt;ID&gt;_visual); null when it has none.</summary>
+    public Node3D? ParcelVisual(string parcelId) => _visuals.GetValueOrDefault(parcelId);
     public IReadOnlyDictionary<string, List<CollisionShape3D>> PropsShapes => _propsShapes;
     public IReadOnlyDictionary<string, ParcelInfo> Parcels => _parcels;
     public IReadOnlyList<SpawnPoint> SpawnPoints => _spawns;
@@ -66,7 +79,7 @@ public sealed partial class MapLoader
 
     /// <summary>
     /// Headless (server) load: only the collision meshes and the data the server reads are kept. Visual nodes are freed
-    /// as they load (no materials, no triangle count, no region or props visuals), and placed objects get no model.
+    /// as they load (no materials, no triangle count, no patch or props visuals), and placed objects get no model.
     /// Set before <see cref="LoadSteps"/>. The bodies of the <c>_collision</c> nodes stay, they are their children.
     /// </summary>
     public bool CollisionOnly { get; set; }
@@ -87,7 +100,9 @@ public sealed partial class MapLoader
         _mapDir = mapDir;
         if (!Directory.Exists(mapDir)) throw new DirectoryNotFoundException(mapDir);
 
-        using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(mapDir, "manifest.json")));
+        var manifestBytes = File.ReadAllBytes(Path.Combine(mapDir, "manifest.json"));
+        BuildHash = Drycastle.ShooterCore.Wire.Fnv1a64(manifestBytes);
+        using var manifest = JsonDocument.Parse(manifestBytes);
         MapVersion = manifest.RootElement.GetProperty("map_version").GetString() ?? "";
         if (manifest.RootElement.TryGetProperty("edit_defaults", out var ed)) EditDefaults = EditDefaults.Read(ed);
         ReadParcels(Path.Combine(mapDir, "parcels.json"));
@@ -98,8 +113,8 @@ public sealed partial class MapLoader
         if (File.Exists(lamps)) ReadLamps(lamps); // map 0.5.0+
         var roads = Path.Combine(mapDir, "roads.json");
         if (File.Exists(roads)) RoadsJson = File.ReadAllText(roads); // no consumer in v1
-        var regionsFile = Path.Combine(mapDir, "regions.json");
-        ReadRegionPaint(File.Exists(regionsFile) ? regionsFile : null);
+        var patchesFile = Path.Combine(mapDir, "patches.json");
+        ReadPatchPaint(File.Exists(patchesFile) ? patchesFile : null);
         var water = Path.Combine(mapDir, "water.json");
         WaterJson = File.Exists(water) ? File.ReadAllText(water) : "";
         var trees = Path.Combine(mapDir, "trees.json");
@@ -108,6 +123,7 @@ public sealed partial class MapLoader
         WindowsJson = File.Exists(windows) ? File.ReadAllText(windows) : ""; // only maps with hand-described building detail have it
         var bunkers = Path.Combine(mapDir, "bunkers.json");
         BunkersJson = File.Exists(bunkers) ? File.ReadAllText(bunkers) : ""; // only maps with an enterable bunker have it
+        ReadZonePoints(mapDir, manifest.RootElement); // only maps with a zone that has usable ground have the file
         yield return 0.03f;
 
         var tPhase = Time.GetTicksMsec();
@@ -145,11 +161,21 @@ public sealed partial class MapLoader
     public int BoundaryWalls { get; private set; }
     const float RimCell = 1f, RimHeight = 24f;
 
+    /// <summary>The box around the whole terrain (every chunk's collision mesh), or null without terrain. The terrain is a ragged patch inside it.</summary>
+    public Aabb? TerrainBox
+    {
+        get
+        {
+            if (_terrain.Count == 0) return null;
+            var box = _terrain[0].box;
+            foreach (var t in _terrain) box = box.Merge(t.box);
+            return box;
+        }
+    }
+
     void BuildTerrainBoundary()
     {
-        if (_terrain.Count == 0) return;
-        var box = _terrain[0].box;
-        foreach (var t in _terrain) box = box.Merge(t.box);
+        if (TerrainBox is not { } box) return;
         int x0 = (int)Mathf.Floor(box.Position.X / RimCell) - 1, x1 = (int)Mathf.Ceil(box.End.X / RimCell) + 1;
         int z0 = (int)Mathf.Floor(box.Position.Z / RimCell) - 1, z1 = (int)Mathf.Ceil(box.End.Z / RimCell) + 1;
         int w = x1 - x0 + 1, h = z1 - z0 + 1;
@@ -206,22 +232,68 @@ public sealed partial class MapLoader
         if (dropped > 0) GD.Print($"map: dropped {dropped} spawn points within 2 m of the terrain rim");
     }
 
-    /// <summary>Ground paint regions (regions.json) for the minimap, in ID order (the higher ID paints last): ring in ground (x, z) metres and colour.</summary>
-    public IReadOnlyList<RegionPaint> RegionPaints => _regionPaints;
-    readonly List<RegionPaint> _regionPaints = new();
+    /// <summary>Ground patch paint (patches.json) for the minimap, in ID order (the higher ID paints last): ring in ground (x, z) metres and colour.</summary>
+    public IReadOnlyList<PatchPaint> PatchPaints => _patchPaints;
+    /// <summary>The visible terrain meshes (one per chunk file, vertex colours = the ground's colour; identity transforms), for the maps' top-down colour. Empty on a collision-only load.</summary>
+    public IReadOnlyList<MeshInstance3D> TerrainVisuals => _terrainVisuals;
+    readonly List<PatchPaint> _patchPaints = new();
 
-    void ReadRegionPaint(string? path)
+    void ReadPatchPaint(string? path)
     {
-        _regionPaints.Clear();
+        _patchPaints.Clear();
         if (path == null) return;
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
-        foreach (var r in doc.RootElement.GetProperty("regions").EnumerateArray())
+        foreach (var r in doc.RootElement.GetProperty("patches").EnumerateArray())
         {
             var c = r.GetProperty("colour");
             var ring = r.GetProperty("ring").EnumerateArray().Select(p => new Vector2(p[0].GetSingle(), -p[1].GetSingle())).ToArray();
             if (ring.Length < 3) continue;
-            _regionPaints.Add(new RegionPaint(r.GetProperty("id").GetString() ?? "", new Color(c[0].GetInt32() / 255f, c[1].GetInt32() / 255f, c[2].GetInt32() / 255f), ring));
+            _patchPaints.Add(new PatchPaint(r.GetProperty("id").GetString() ?? "", new Color(c[0].GetInt32() / 255f, c[1].GetInt32() / 255f, c[2].GetInt32() / 255f), ring));
         }
+    }
+
+    /// <summary>The zone kinds of the catalog in catalog order (parcels.json `zone_kinds`); empty for maps built before they were listed.</summary>
+    public IReadOnlyList<ZoneKindInfo> ZoneKinds { get; private set; } = Array.Empty<ZoneKindInfo>();
+
+    static List<ZoneKindInfo> ReadZoneKinds(JsonElement root)
+    {
+        var list = new List<ZoneKindInfo>();
+        if (!root.TryGetProperty("zone_kinds", out var zk) || zk.ValueKind != JsonValueKind.Array) return list;
+        foreach (var k in zk.EnumerateArray())
+        {
+            if (k.ValueKind != JsonValueKind.Object || !k.TryGetProperty("name", out var n) || n.ValueKind != JsonValueKind.String) continue;
+            string Str(string key, string fallback) => k.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? fallback : fallback;
+            List<string>? where = null;
+            if (k.TryGetProperty("where_ground", out var wg) && wg.ValueKind == JsonValueKind.Array)
+                where = wg.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList();
+            var name = n.GetString()!;
+            list.Add(new ZoneKindInfo(name, Str("label", name), Str("group", ""), Str("tint", "#808080"), where is { Count: > 0 } ? where : null));
+        }
+        return list;
+    }
+
+    /// <summary>Every ground area of the last build (empty for maps built before `ground_areas`).</summary>
+    public IReadOnlyList<GroundAreaInfo> GroundAreas => _groundAreas;
+    readonly List<GroundAreaInfo> _groundAreas = new();
+
+    /// <summary>The rings of a GeoJSON Polygon or MultiPolygon in ground (x, z) metres, all parts in one list, and the area they enclose (holes subtracted).</summary>
+    static List<Vector2[]> ReadRings(JsonElement poly, out float area)
+    {
+        var rings = new List<Vector2[]>();
+        area = 0f;
+        if (!poly.TryGetProperty("coordinates", out var coords)) return rings;
+        var multi = poly.TryGetProperty("type", out var ty) && ty.GetString() == "MultiPolygon";
+        foreach (var part in multi ? coords.EnumerateArray().ToList() : new List<JsonElement> { coords })
+        {
+            var i = 0;
+            foreach (var r in part.EnumerateArray())
+            {
+                var ring = r.EnumerateArray().Select(c => new Vector2(c[0].GetSingle(), -c[1].GetSingle())).ToArray();
+                rings.Add(ring);
+                area += (i++ == 0 ? 1 : -1) * ParcelInfo.RingArea(ring);
+            }
+        }
+        return rings;
     }
 
     void ReadParcels(string path)
@@ -229,24 +301,50 @@ public sealed partial class MapLoader
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
         if (doc.RootElement.TryGetProperty("origin_epsg5514", out var o) && o.ValueKind == JsonValueKind.Array && o.GetArrayLength() == 2)
             OriginEpsg5514 = (o[0].GetDouble(), o[1].GetDouble());
+        if (doc.RootElement.TryGetProperty("ground_types", out var gt) && gt.ValueKind == JsonValueKind.Array)
+        {
+            var types = new List<(string, string)>();
+            var table = new List<MapGroundType>();
+            foreach (var t in gt.EnumerateArray())
+            {
+                if (!(t.TryGetProperty("name", out var n) && t.TryGetProperty("colour", out var c) && n.GetString() is { } name && c.GetString() is { } colour)) continue;
+                var source = t.TryGetProperty("source", out var so) ? so.GetString() ?? "" : "";
+                var water = t.TryGetProperty("water", out var w) && w.ValueKind == JsonValueKind.True;
+                var custom = t.TryGetProperty("custom", out var cu) && cu.ValueKind == JsonValueKind.True;
+                var rules = t.TryGetProperty("rules", out var ru) && ru.ValueKind == JsonValueKind.Object ? ru.GetRawText() : null;
+                if (source != "rule" && !water) types.Add((name, colour));
+                table.Add(new MapGroundType(name, colour, custom, rules, source == ""));
+            }
+            GroundTypes = types;
+            GroundTypeTable = table;
+        }
+        if (doc.RootElement.TryGetProperty("ground_default", out var gd) && gd.ValueKind == JsonValueKind.String) GroundDefault = gd.GetString() ?? "";
+        if (doc.RootElement.TryGetProperty("ground_recipes", out var gr) && gr.ValueKind == JsonValueKind.Object)
+            GroundRecipes = gr.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetRawText());
+        ZoneKinds = ReadZoneKinds(doc.RootElement);
+        _groundAreas.Clear();
+        if (doc.RootElement.TryGetProperty("ground_areas", out var ga) && ga.ValueKind == JsonValueKind.Array)
+            foreach (var a in ga.EnumerateArray())
+            {
+                if (!(a.TryGetProperty("id", out var gi) && a.TryGetProperty("kind", out var gk) && a.TryGetProperty("polygon", out var gp))) continue;
+                var garings = ReadRings(gp, out var garea);
+                if (garings.Count > 0) _groundAreas.Add(new GroundAreaInfo(gi.GetString() ?? "", gk.GetString() ?? "", garings, Mathf.Max(0f, garea)));
+            }
         foreach (var p in doc.RootElement.GetProperty("parcels").EnumerateArray())
         {
             var id = p.GetProperty("id").GetString()!;
             var a = p.GetProperty("anchor");
             var ch = p.GetProperty("chunk");
-            var rings = new List<Vector2[]>();
-            if (p.TryGetProperty("polygon", out var poly) && poly.TryGetProperty("coordinates", out var coords))
-                foreach (var r in coords.EnumerateArray())
-                    rings.Add(r.EnumerateArray()
-                        .Select(c => new Vector2(c[0].GetSingle(), -c[1].GetSingle())).ToArray());
+            // a Polygon (rings: outer, then holes) or a MultiPolygon (one such list per part, e.g. a parcel cut down to
+            // several buildings); the rings of all parts go in one list, which the even-odd point test handles
+            var area = 0f;
+            var rings = p.TryGetProperty("polygon", out var poly) ? ReadRings(poly, out area) : new List<Vector2[]>();
             var bounds = new Rect2();
             if (rings.Count > 0)
             {
                 bounds = new Rect2(rings[0][0], Vector2.Zero);
                 foreach (var ring in rings) foreach (var v in ring) bounds = bounds.Expand(v);
             }
-            var area = 0f;
-            for (var i = 0; i < rings.Count; i++) area += (i == 0 ? 1 : -1) * ParcelInfo.RingArea(rings[i]);
             _parcels[id] = new ParcelInfo
             {
                 Id = id,
@@ -326,9 +424,13 @@ public sealed partial class MapLoader
                     tex.Add(mi);
                 }
             }
-            else if (RegionId(name) is { } regionId)
+            else if (name == "terrain")
             {
-                RegisterBakedRegion(regionId, mi);
+                _terrainVisuals.Add(mi);
+            }
+            else if (PatchId(name) is { } patchId)
+            {
+                RegisterBakedPatch(patchId, mi);
             }
             else if (name.StartsWith("parcel_") && name.EndsWith("_visual"))
             {

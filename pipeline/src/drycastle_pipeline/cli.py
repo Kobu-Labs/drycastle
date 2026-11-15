@@ -1,19 +1,26 @@
 """Command-line interface for the map pipeline."""
 
 import argparse
+import time
 from collections.abc import Sequence
-
-from drycastle_pipeline.config import AREAS, DEFAULT_AREA
 
 # Heavy modules (matplotlib, rasterio, trimesh, ...) are imported only by the command that needs
 # them, so that ``parcel-run`` starts fast. ``STAGE_NAMES`` must equal ``list(stages.STAGES)``
 # (checked in tests).
-STAGE_NAMES = ("fetch", "normalise", "parcels", "rules", "terrain", "roads", "props", "detail", "export")
+STAGE_NAMES = ("fetch", "normalise", "ortho", "ortho-trees", "parcels", "rules", "terrain", "roads", "props", "detail", "export")
 RUN_ALL = "run-all"
 PREVIEW = "preview"  # not a map stage: renders PNGs from the work files
 PARCEL_RUN = "parcel-run"  # not a map stage: fences and trees of some parcels, as JSON
-REGION_RUN = "region-run"  # not a map stage: the meshes of some regions, as a GLB
+PATCH_RUN = "patch-run"  # not a map stage: the meshes of some ground patches, as a GLB
 DEFAULT_EXAGGERATION = 3.0  # same as preview.DEFAULT_EXAGGERATION
+
+
+def print_timings(timings: list[tuple[str, float]]) -> None:
+    """The seconds of every stage of a ``run-all``, slowest first, with each one's share of the total."""
+    total = sum(seconds for _, seconds in timings)
+    print(f"timing: {total:.1f} s in all")
+    for name, seconds in sorted(timings, key=lambda t: -t[1]):
+        print(f"timing: {name:<12} {seconds:7.1f} s  {100 * seconds / total:4.1f} %")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -21,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="drycastle_pipeline",
         description="Generate the Drycastle base map from source data.",
     )
-    choices = [*STAGE_NAMES, RUN_ALL, PREVIEW, PARCEL_RUN, REGION_RUN]
+    choices = [*STAGE_NAMES, RUN_ALL, PREVIEW, PARCEL_RUN, PATCH_RUN]
     parser.add_argument(
         "stage",
         choices=choices,
@@ -29,22 +36,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="one of: " + ", ".join(choices),
     )
     parser.add_argument(
-        "--area",
-        choices=AREAS,
-        default=DEFAULT_AREA,
-        help="slice (default): data/raw, data/work, out/map; "
-        "village: data/village/..., out/village/map",
-    )
-    parser.add_argument(
         "--force",
         action="store_true",
-        help="fetch: ignore the disk cache and download everything again",
+        help="fetch, ortho: ignore the disk cache and download everything again",
     )
     parser.add_argument(
         "--edits",
         metavar="PATH",
         default=None,
-        help="props, detail, export, parcel-run, region-run: hand edits file (default: pipeline/config/edits.json)",
+        help="props, detail, export, parcel-run, patch-run: hand edits file (default: pipeline/config/edits.json)",
     )
     parser.add_argument(
         "--report",
@@ -72,30 +72,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="parcel-run: property group to regenerate, e.g. G-0001 (repeatable)",
     )
     parser.add_argument(
-        "--region",
+        "--patch",
         action="append",
         default=[],
         metavar="ID",
-        help="region-run: region to rebuild, e.g. R-0001 (repeatable; none = all regions)",
+        help="patch-run: ground patch to rebuild, e.g. GP-0001 (repeatable; none = all patches)",
     )
     parser.add_argument(
         "--out",
         metavar="PATH",
         default=None,
         help="parcel-run: write the JSON fragment here instead of stdout; "
-        "export: write the map folder here instead of out/map",
+        "export: write the map folder here instead of out/village/map",
     )
     parser.add_argument(
         "--work",
         metavar="DIR",
         default=None,
-        help="detail, export, parcel-run: read this work directory instead of data/work (experiments; detail also writes its files there)",
+        help="detail, export, parcel-run: read this work directory instead of data/village/work (experiments; detail also writes its files there)",
     )
     parser.add_argument(
         "--glb",
         metavar="PATH",
         default=None,
-        help="parcel-run, region-run: also write a GLB with the props nodes / region_<ID> nodes "
+        help="parcel-run, patch-run: also write a GLB with the props nodes / patch_<ID> nodes "
         "(chunk-file frame)",
     )
     return parser
@@ -109,18 +109,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         return parcel_run.run(
             parcels=args.parcel,
             groups=args.group,
-            area=args.area,
             edits=args.edits,
             out=args.out,
             glb=args.glb,
             work=args.work,
         )
-    if args.stage == REGION_RUN:
-        from drycastle_pipeline import region_run
+    if args.stage == PATCH_RUN:
+        from drycastle_pipeline import patch_run
 
-        return region_run.run(
-            regions=args.region,
-            area=args.area,
+        return patch_run.run(
+            patches=args.patch,
             edits=args.edits,
             out=args.out,
             glb=args.glb,
@@ -129,19 +127,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     from drycastle_pipeline.stages import STAGES
 
     if args.stage == RUN_ALL:
-        for run in STAGES.values():
-            status = run(force=args.force, report=args.report, area=args.area, edits=args.edits)
+        timings: list[tuple[str, float]] = []
+        for name, run in STAGES.items():
+            started = time.perf_counter()
+            status = run(force=args.force, report=args.report, edits=args.edits)
+            timings.append((name, time.perf_counter() - started))
             if status != 0:
+                print(f"{name}: failed")
                 return status
+        print_timings(timings)
         return 0
     if args.stage == PREVIEW:
         from drycastle_pipeline import preview
 
-        return preview.run(exaggeration=args.exaggeration, area=args.area)
+        return preview.run(exaggeration=args.exaggeration)
     return STAGES[args.stage](
         force=args.force,
         report=args.report,
-        area=args.area,
         edits=args.edits,
         out=args.out,
         work=args.work,

@@ -1,7 +1,8 @@
-# AREA=slice (default): data/raw, data/work, out/map. AREA=village: data/village/..., out/village/map.
-AREA ?= slice
+# The map: the village inside its outline (pipeline/config/map.local.yaml), data/village/..., out/village/map.
+# MAP: the map folder the viewer, editor and shooter targets load (override with MAP=<dir>).
+MAP ?= out/village/map
 
-.PHONY: editor setup test fetch normalise parcels rules terrain roads props detail export parcel-run region-run preview poles-preview poles-manifest floodwall-preview floodwall-manifest map viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: rozhlas thief-voices private-pack release-check editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run patch-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-patches-smoke viewer-editor-smoke viewer-panel-smoke viewer-shape-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -10,52 +11,70 @@ test:
 	cd pipeline && uv run pytest
 
 fetch:
-	cd pipeline && uv run python -m drycastle_pipeline fetch --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline fetch
 
 normalise:
-	cd pipeline && uv run python -m drycastle_pipeline normalise --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline normalise
 
 parcels:
-	cd pipeline && uv run python -m drycastle_pipeline parcels --area $(AREA) --report
+	cd pipeline && uv run python -m drycastle_pipeline parcels --report
 
 rules:
-	cd pipeline && uv run python -m drycastle_pipeline rules --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline rules
 
 terrain:
-	cd pipeline && uv run python -m drycastle_pipeline terrain --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline terrain
 
 roads:
-	cd pipeline && uv run python -m drycastle_pipeline roads --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline roads
 
 props:
-	cd pipeline && uv run python -m drycastle_pipeline props --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline props
 
 # Ground detail: draped patches (dirt, gravel, leaf litter, beds, furrows, verges) and clutter instances (tufts, pebbles, ...)
-# for every parcel; writes data/work/detail*.{json,npy}. Needs props. See docs/pipeline.md "Detail".
-detail:
-	cd pipeline && uv run python -m drycastle_pipeline detail --area $(AREA)
+# for every parcel; writes data/village/work/detail*.{json,npy}. Needs props. See docs/pipeline.md "Detail".
+# Runs on the Rust engine only, which detail-rust-build builds first (an unchanged engine is a few seconds).
+detail: detail-rust-build
+	cd pipeline && uv run python -m drycastle_pipeline detail
+
+# Builds the Rust engine of the detail stage (pipeline/rust/detail, PyO3, linked to the system GEOS: needs cargo and
+# geos-devel, e.g. `sudo dnf install geos-devel`) and installs it into the pipeline's venv with maturin. `make setup` (uv sync) removes it again: build it again after.
+detail-rust-build:
+	cd pipeline && uv pip install --quiet maturin && uv run maturin develop --release --manifest-path rust/detail/Cargo.toml
 
 export:
-	cd pipeline && uv run python -m drycastle_pipeline export --area $(AREA)
+	cd pipeline && uv run python -m drycastle_pipeline export
 
 # PARCEL=P-0412 [GROUP=G-0001] [OUT=file.json] [GLB=file.glb]: fences and trees of one parcel as JSON
 # (stdout by default), optionally also as a GLB with parcel_<ID>_props nodes
 PARCEL_ARGS = $(if $(PARCEL),--parcel $(PARCEL),) $(if $(GROUP),--group $(GROUP),) $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb $(abspath $(GLB)),)
 
 parcel-run:
-	cd pipeline && uv run python -m drycastle_pipeline parcel-run --area $(AREA) $(PARCEL_ARGS)
+	cd pipeline && uv run python -m drycastle_pipeline parcel-run $(PARCEL_ARGS)
 
-# [REGION=R-0001] [OUT=file.json] GLB=file.glb: meshes of the regions (none named: all) as a GLB with
-# region_<ID> nodes (hot reload); the JSON summary lists the regions to replace
-REGION_ARGS = $(if $(REGION),--region $(REGION),) $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb $(abspath $(GLB)),)
+# [PATCH=GP-0001] [OUT=file.json] GLB=file.glb: meshes of the ground patches (none named: all) as a GLB with
+# patch_<ID> nodes (hot reload); the JSON summary lists the patches to replace
+PATCH_ARGS = $(if $(PATCH),--patch $(PATCH),) $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb $(abspath $(GLB)),)
 
-region-run:
-	cd pipeline && uv run python -m drycastle_pipeline region-run --area $(AREA) $(REGION_ARGS)
+patch-run:
+	cd pipeline && uv run python -m drycastle_pipeline patch-run $(PATCH_ARGS)
 
 EXAG ?= 3
 
 preview:
-	cd pipeline && uv run python -m drycastle_pipeline preview --area $(AREA) --exaggeration $(EXAG)
+	cd pipeline && uv run python -m drycastle_pipeline preview --exaggeration $(EXAG)
+
+# Aerial photo of the village for the editor's "Aerial photo" layer, in data/village/ortho (reference only, never exported or
+# shipped: its licence forbids redistributing and altering it). Needs `make fetch` first. ORTHO_LEVEL=12 is 0.3 m per pixel.
+ORTHO_LEVEL ?= 11
+
+ortho:
+	cd pipeline && uv run python -m drycastle_pipeline.ortho --level $(ORTHO_LEVEL)
+
+# Where the trees are, read from the photo (data/village/ortho/trees.json + canopy.png). Needs `make ortho` (and normalise) first.
+# The first run trains the canopy model (a minute or two), later runs reuse it; RETRAIN=1 trains it again.
+ortho-trees:
+	cd pipeline && uv run python -m drycastle_pipeline.ortho_trees $(if $(RETRAIN),--retrain,)
 
 # Pictures of the generated utility poles in out/poles (variants, random seeds, a wired row, the parts kit); GLB=1 also
 # writes each placeable pole as a GLB. No map data needed. See docs/utility-poles.md.
@@ -75,10 +94,17 @@ floodwall-preview:
 floodwall-manifest:
 	cd pipeline && uv run python -m drycastle_pipeline.floodwall_preview --sync-manifest
 
-map:
-	cd pipeline && uv run python -m drycastle_pipeline run-all --area $(AREA)
+map: detail-rust-build
+	cd pipeline && uv run python -m drycastle_pipeline run-all
 
-# MAP: map folder (default: DRYCASTLE_MAP env var, else ../../out/map relative to godot/viewer)
+# Re-export after edits.json changed (placed objects, ground patches, zones, fences): props, detail, export into out/village/map.
+# Skips fetch, normalise, ortho, ortho-trees, parcels, rules, terrain and roads (needs one full `make map` before);
+# the trees are planted again from the cached ortho/trees.json, the detector does not run. Sub-makes keep the order under -j.
+map-update:
+	$(MAKE) props
+	$(MAKE) detail
+	$(MAKE) export
+
 MAP_ARG = $(if $(MAP),--map $(abspath $(MAP)),)
 SEED ?= 1
 
@@ -86,44 +112,45 @@ viewer:
 	dotnet build godot/viewer/viewer.csproj
 	godot --path godot/viewer -- $(MAP_ARG)
 
-# Editor mode (see README "Editor mode"). MAP=... AREA=slice|village, optional EDITS=file STATE=file (scratch copies).
+# Editor mode (see README "Editor mode"). MAP=..., optional EDITS=file STATE=file (scratch copies).
 editor:
 	dotnet build godot/viewer/viewer.csproj
-	godot --path godot/viewer -- --editor --area $(AREA) $(MAP_ARG) $(if $(EDITS),--edits $(abspath $(EDITS)),) $(if $(STATE),--state $(abspath $(STATE)),)
+	godot --path godot/viewer -- --editor $(MAP_ARG) $(if $(EDITS),--edits $(abspath $(EDITS)),) $(if $(STATE),--state $(abspath $(STATE)),)
 
 viewer-smoke:
 	dotnet build godot/viewer/viewer.csproj
 	godot --headless --path godot/viewer -- --smoke --seed $(SEED) $(MAP_ARG)
 
-# Hot reload end to end: exports a fresh slice map into a scratch dir (nothing under data/ or out/ is touched),
+# Hot reload end to end: exports a fresh map into a scratch dir (nothing under data/ or out/ is touched),
 # runs the viewer headless with --watch and checks that edits show up. Needs uv, dotnet and godot.
 viewer-edit-smoke:
 	python3 godot/viewer/edit_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
 
-# Region hot reload end to end (headless): exports a slice map with regions into a scratch dir, then recolours, reshapes,
-# adds and removes regions (also together with a parcel edit) through the watcher and checks the swaps, that nothing
+# Ground patch hot reload end to end (headless): exports a map with ground patches into a scratch dir, then retypes, reshapes,
+# adds and removes patches (also together with a parcel edit) through the watcher and checks the swaps, that nothing
 # leaks and that a broken file changes nothing. Needs uv, dotnet and godot.
-viewer-regions-smoke:
-	python3 godot/viewer/regions_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
+viewer-patches-smoke:
+	python3 godot/viewer/patches_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
 
-# Editor mode end to end (headless): exports a slice map into a scratch dir, drives the editor APIs (picking,
+# Editor mode end to end (headless): exports a map into a scratch dir, drives the editor APIs (picking,
 # selection, groups, edits.json writes, outlines, editor-state.json, F2 round trip). Needs uv, dotnet and godot.
 viewer-editor-smoke:
 	python3 godot/viewer/editor_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
 
-# Fence and Trees panel end to end (headless): drives the panel API on a scratch export (Apply, pending state, gates,
-# groups, reroll, watcher round trip) and checks the saved files with the Python validator. SHOTS=dir adds two
-# windowed screenshots of the panel (needs a display). Needs uv, dotnet and godot.
+# Fence panel end to end (headless): drives the panel API on a scratch export (Apply, pending state, gates,
+# groups, watcher round trip) and checks the saved files with the Python validator. SHOTS=dir adds a
+# windowed screenshot of the panel (needs a display). Needs uv, dotnet and godot.
 viewer-panel-smoke:
 	python3 godot/viewer/panel_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),) $(if $(SHOTS),--shots $(SHOTS),)
 
-# Region tool end to end (headless): exports a slice map with one region into a scratch dir, drives drawing, closing, colour,
-# corner drags (valid and self-crossing), recolour, delete with confirm, undo/redo, Esc levels and the Ctrl+P palette through
-# the editor APIs and key events, and compares edits.json after every step with the Python writer's text. Needs uv, dotnet and godot.
-viewer-region-editor-smoke:
-	python3 godot/viewer/region_editor_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
+# Ground patch and Zones tools end to end (headless): exports a map with one ground patch into a scratch dir, drives drawing,
+# the water level step, retype, corner drags (valid and self-crossing), zone kind, delete with confirm, undo/redo, Esc levels and the
+# Ctrl+P palette through the editor APIs and key events, and compares edits.json after every step with the Python writer's text.
+# Needs uv, dotnet and godot, and a pipeline that exports zone_kinds.
+viewer-shape-editor-smoke:
+	python3 godot/viewer/shape_editor_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
 
-# Objects, gizmo and session undo end to end (headless): exports a slice map into a scratch dir, drives placement, drag,
+# Objects, gizmo and session undo end to end (headless): exports a map into a scratch dir, drives placement, drag,
 # rotate, cross-parcel moves, field edits, duplicate/delete, group + fence Apply and undo/redo through the editor APIs,
 # asserts the exact edits.json text of every step, that object edits run no parcel-run, and checks the saved files with
 # the Python validator. SHOTS=dir adds two windowed screenshots (needs a display). Needs uv, dotnet and godot.
@@ -131,11 +158,11 @@ viewer-objects-smoke:
 	python3 godot/viewer/objects_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),) $(if $(SHOTS),--shots $(SHOTS),)
 
 # MCP server (stdio) for parcel edits, see docs/mcp.md. Claude Code normally starts it itself; this is for manual runs.
-# EDITS=file STATE=file ASSETS=file override the defaults. AREA=slice|village picks the map work files.
+# EDITS=file STATE=file ASSETS=file override the defaults.
 MCP_ARGS = $(if $(EDITS),--edits $(abspath $(EDITS)),) $(if $(STATE),--state $(abspath $(STATE)),) $(if $(ASSETS),--assets $(abspath $(ASSETS)),)
 
 mcp:
-	cd pipeline && uv run python -m drycastle_pipeline.mcp_server --area $(AREA) $(MCP_ARGS)
+	cd pipeline && uv run python -m drycastle_pipeline.mcp_server $(MCP_ARGS)
 
 # Loads every glTF in assets/manifest.json with GLTFDocument (headless); exits nonzero on failure.
 assets-check:
@@ -150,8 +177,17 @@ viewer-shot:
 	godot --path godot/viewer --resolution 1600x900 -- --view street --screenshot $(abspath out/screens)/street.png $(MAP_ARG)
 	godot --path godot/viewer --resolution 1600x900 -- --view player --seed $(SEED) --screenshot $(abspath out/screens)/player.png $(MAP_ARG)
 
+# The whole map from above (orthographic, north up) as one PNG + .json with its extent: the tactical map's real colours.
+# TOPDOWN_MPP = metres per pixel, TOPDOWN_OUT = the PNG. The game reads tactical-map.png(+.json) from the map folder (MapBase),
+# so `make map-package` renders it into $(SHOOTER_PKG_MAP) at 2 m/px; CI also attaches a 1 m/px one to the release (job tactical-map).
+TOPDOWN_MPP ?= 1
+TOPDOWN_OUT ?= out/tactical-map.png
+tactical-map:
+	dotnet build godot/viewer/viewer.csproj
+	godot --path godot/viewer --rendering-method gl_compatibility --resolution 256x256 -- $(MAP_ARG) --topdown $(abspath $(TOPDOWN_OUT)) --topdown-mpp $(TOPDOWN_MPP)
+
 # 64-client netcode spike (see godot/netspike/README in the main README). Needs a map folder:
-# MAP=/path/to/out/map or DRYCASTLE_MAP. Results go to out/netspike/<timestamp>/.
+# MAP=/path/to/out/village/map or DRYCASTLE_MAP. Results go to out/netspike/<timestamp>/.
 NETSPIKE_MAP = $(if $(MAP),--map $(abspath $(MAP)),)
 
 netspike:
@@ -160,7 +196,7 @@ netspike:
 netspike-quick:
 	python3 godot/netspike/run_spike.py --quick $(NETSPIKE_MAP)
 
-# Shooter v1 (godot/shooter + godot/ShooterCore). MAP=/path/to/out/map or DRYCASTLE_MAP.
+# Shooter v1 (godot/shooter + godot/ShooterCore). MAP=/path/to/out/village/map or DRYCASTLE_MAP.
 # shooter-server runs headless; add SMOKE=1 to boot, load and exit cleanly.
 SHOOTER_MAP = $(if $(MAP),--map $(abspath $(MAP)),)
 # Dev mode (issue #149): every weapon, perk, killstreak and level-gated item unlocked on the dev servers. Nothing is saved
@@ -249,6 +285,22 @@ shooter-nav-spike:
 	dotnet build godot/shooter/shooter.csproj
 	godot --headless --path godot/shooter -- --role server --nav-spike --nav-out $(abspath out/navspike) $(NAV) $(SHOOTER_MAP)
 
+# Bake the rozhlas broadcast from assets/drycastle-rozhlas/source/{song,announcement,opakujem}.* (scripts/make_rozhlas.py).
+rozhlas:
+	python3 -I scripts/make_rozhlas.py
+
+# Bake the thieves' voice lines from ~/downloads/New Recording*.mov into assets-private/audio/thieves/voice/ (scripts/make_thief_voices.py, chain: godot/shooter/data/thief_voice.json).
+thief-voices:
+	python3 -I scripts/make_thief_voices.py
+
+# The private asset pack for players: the runtime subset of assets-private/ -> out/private-pack/assets-private.zip + .json (scripts/make_private_pack.py; never publish it on GitHub).
+private-pack:
+	python3 -I scripts/make_private_pack.py
+
+# Before a release: is the published map, private pack and launcher still what this machine would publish? Exit 1 = republish first (scripts/check_release_assets.py).
+release-check:
+	python3 -I scripts/check_release_assets.py
+
 shooter-test:
 	dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj
 
@@ -265,6 +317,11 @@ shooter-menu-shots:
 	dotnet build godot/shooter/shooter.csproj
 	godot --path godot/shooter -- --menu-shots $(abspath $(or $(DIR),out/menu))
 
+# The intel screen's content (the base's wall screen) with made-up events, at its two texture sizes (needs a display): make shooter-intel-shots DIR=out/intel
+shooter-intel-shots:
+	dotnet build godot/shooter/shooter.csproj
+	godot --path godot/shooter -- --intel-shots $(abspath $(or $(DIR),out/intel))
+
 # Export presets (godot/shooter/export_presets.cfg) into out/shooter/. Needs the Godot 4.7.2 mono export templates
 # (Editor > Manage Export Templates); not downloaded here. assets/ and map/ (SHOOTER_PKG_MAP) are copied next to each binary.
 .PHONY: shooter-export shooter-export-check shooter-package
@@ -277,18 +334,20 @@ shooter-export-check:
 	@test -f godot/shooter/export_presets.cfg || { echo "missing godot/shooter/export_presets.cfg"; exit 1; }
 	@grep -q 'include_filter="data/\*.json"' godot/shooter/export_presets.cfg || { echo "export_presets.cfg does not pack data/*.json (#133)"; exit 1; }
 	@for f in weapons match vehicles sounds perks levels killstreaks turret environment camo; do test -f godot/shooter/data/$$f.json || { echo "missing godot/shooter/data/$$f.json"; exit 1; }; done
-	@[ -n "$(SHOOTER_NO_MAP)" ] || test -f $(SHOOTER_PKG_MAP)/manifest.json || { echo "map not built: $(SHOOTER_PKG_MAP)/manifest.json missing. Exports bundle the full village map: run 'make map AREA=village' (or set SHOOTER_PKG_MAP=<map dir>)"; exit 1; }
+	@[ -n "$(SHOOTER_NO_MAP)" ] || test -f $(SHOOTER_PKG_MAP)/manifest.json || { echo "map not built: $(SHOOTER_PKG_MAP)/manifest.json missing. Exports bundle the full village map: run 'make map' (or set SHOOTER_PKG_MAP=<map dir>)"; exit 1; }
 	@echo "$$(grep -c '^name=' godot/shooter/export_presets.cfg) export presets found; map: $(if $(SHOOTER_NO_MAP),not bundled (SHOOTER_NO_MAP),bundling $(SHOOTER_PKG_MAP))"
 	@if [ -d "$(SHOOTER_TEMPLATES)" ] && [ -n "$$(ls -A $(SHOOTER_TEMPLATES) 2>/dev/null)" ]; then echo "export templates: OK ($(SHOOTER_TEMPLATES))"; \
 	else echo "export templates: MISSING at $(SHOOTER_TEMPLATES) (install the 4.7.2 mono templates: Editor > Manage Export Templates)"; exit 1; fi
 
 shooter-export: shooter-export-check
 	dotnet build godot/shooter/shooter.csproj
-	mkdir -p out/shooter/windows/assets out/shooter/linux-client/assets out/shooter/linux-server/assets out/shooter/windows/map out/shooter/linux-client/map out/shooter/linux-server/map
+	mkdir -p out/shooter/windows/assets out/shooter/linux-client/assets out/shooter/linux-server/assets out/shooter/windows/map out/shooter/linux-client/map out/shooter/linux-server/map out/shooter/macos/assets out/shooter/macos/map out/shooter/macos-export
 	godot --headless --path godot/shooter --export-release "Windows Client"
 	godot --headless --path godot/shooter --export-release "Linux Client"
 	godot --headless --path godot/shooter --export-release "Linux Server"
-	for d in windows linux-client linux-server; do cp -r assets/. out/shooter/$$d/assets/; [ -n "$(SHOOTER_NO_MAP)" ] || cp -r $(SHOOTER_PKG_MAP)/. out/shooter/$$d/map/; done
+	godot --headless --path godot/shooter --export-release "macOS Client"
+	unzip -qo out/shooter/macos-export/drycastle-shooter.zip -d out/shooter/macos   # Godot writes the .app as a zip; unzip keeps the exec bits
+	for d in windows linux-client linux-server macos; do cp -r assets/. out/shooter/$$d/assets/; [ -n "$(SHOOTER_NO_MAP)" ] || cp -r $(SHOOTER_PKG_MAP)/. out/shooter/$$d/map/; done
 	@echo "exported to out/shooter/ (assets/ and map/ next to each binary; see docs/shooter-server.md)"
 
 # Double-click Windows package: out/shooter/drycastle-windows.zip (exe + assets/ + map/ + README.txt).
@@ -302,14 +361,15 @@ shooter-package: shooter-export
 	@echo "package: out/shooter/drycastle-windows.zip ($$(du -h out/shooter/drycastle-windows.zip | cut -f1))"
 
 # Launcher distribution (docs/launcher.md). The CI release job runs these; they work locally too.
-# Game zips WITHOUT the map (the launcher installs the map from its own release): out/shooter/drycastle-game-{windows,linux}.zip, files at the zip root.
+# Game zips WITHOUT the map (the launcher installs the map from its own release): out/shooter/drycastle-game-{windows,linux,macos}.zip, files at the zip root.
 .PHONY: shooter-export-server shooter-package-game map-package launcher-build launcher-export launcher-test
 shooter-package-game:
 	$(MAKE) shooter-export SHOOTER_NO_MAP=1
-	rm -f out/shooter/drycastle-game-windows.zip out/shooter/drycastle-game-linux.zip
+	rm -f out/shooter/drycastle-game-windows.zip out/shooter/drycastle-game-linux.zip out/shooter/drycastle-game-macos.zip
 	cd out/shooter/windows && zip -qr ../drycastle-game-windows.zip . -x 'map/*'
 	cd out/shooter/linux-client && zip -qr ../drycastle-game-linux.zip . -x 'map/*'
-	@echo "packages: out/shooter/drycastle-game-{windows,linux}.zip"
+	cd out/shooter/macos && zip -qr ../drycastle-game-macos.zip . -x 'map/*'
+	@echo "packages: out/shooter/drycastle-game-{windows,linux,macos}.zip"
 
 # Linux server export only (used by the release pipeline to deploy): out/shooter/linux-server with assets/ and map/ (SHOOTER_PKG_MAP).
 shooter-export-server: shooter-export-check
@@ -320,8 +380,10 @@ shooter-export-server: shooter-export-check
 	cp -r $(SHOOTER_PKG_MAP)/. out/shooter/linux-server/map/
 
 # Map archive for the launcher: out/village/map.zip + out/village/map.json (name, size, sha256). Publish with scripts/publish-map.sh.
+# It carries the top-down render (tactical-map.png + .json) the tactical map draws; set TACTICAL_MAP_SKIP=1 to leave it out (the game then shows the terrain colours).
 map-package:
-	@test -f $(SHOOTER_PKG_MAP)/manifest.json || { echo "map not built: run 'make map AREA=village'"; exit 1; }
+	@test -f $(SHOOTER_PKG_MAP)/manifest.json || { echo "map not built: run 'make map'"; exit 1; }
+	@[ -n "$(TACTICAL_MAP_SKIP)" ] || $(MAKE) tactical-map MAP=$(SHOOTER_PKG_MAP) TOPDOWN_MPP=2 TOPDOWN_OUT=$(SHOOTER_PKG_MAP)/tactical-map.png
 	rm -f out/village/map.zip
 	cd $(SHOOTER_PKG_MAP) && zip -qr $(abspath out/village/map.zip) .
 	python3 scripts/map_json.py out/village/map.zip out/village/map.json
@@ -332,12 +394,15 @@ launcher-build:
 launcher-test:
 	dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj --filter "FullyQualifiedName~Launcher"
 
-# Exports godot/launcher to out/launcher/ (Windows and Linux zips). Needs the same 4.7.2 mono templates as shooter-export.
+# Exports godot/launcher to out/launcher/ (Windows, Linux and macOS zips). Needs the same 4.7.2 mono templates as shooter-export.
 launcher-export: launcher-build
-	mkdir -p out/launcher/windows out/launcher/linux
+	mkdir -p out/launcher/windows out/launcher/linux out/launcher/macos
 	godot --headless --path godot/launcher --export-release "Windows Launcher"
 	godot --headless --path godot/launcher --export-release "Linux Launcher"
-	cp docs/launcher-readme.txt out/launcher/windows/README.txt; cp docs/launcher-readme.txt out/launcher/linux/README.txt
-	rm -f out/launcher/drycastle-launcher-windows.zip out/launcher/drycastle-launcher-linux.zip
+	godot --headless --path godot/launcher --export-release "macOS Launcher"
+	unzip -qo out/launcher/macos/DrycastleLauncher.zip -d out/launcher/macos && rm out/launcher/macos/DrycastleLauncher.zip   # Godot writes the .app as a zip; re-zipped below with the README
+	cp docs/launcher-readme.txt out/launcher/windows/README.txt; cp docs/launcher-readme.txt out/launcher/linux/README.txt; cp docs/launcher-readme.txt out/launcher/macos/README.txt
+	rm -f out/launcher/drycastle-launcher-windows.zip out/launcher/drycastle-launcher-linux.zip out/launcher/drycastle-launcher-macos.zip
 	cd out/launcher/windows && zip -qr ../drycastle-launcher-windows.zip .
 	cd out/launcher/linux && zip -qr ../drycastle-launcher-linux.zip .
+	cd out/launcher/macos && zip -qr ../drycastle-launcher-macos.zip .

@@ -1,6 +1,6 @@
 """Preview stage: ``out/preview/{topdown,iso,iso_close}.png`` (matplotlib).
 
-The top-down view is drawn from ``data/work/parcels.json`` and ``buildings.json``. The isometric
+The top-down view is drawn from ``data/village/work/parcels.json`` and ``buildings.json``. The isometric
 views use the same triangle meshes that go into the glTF files (terrain, roads, buildings, fences,
 trees), with terrain relief exaggerated by a factor. ``iso_close.png`` zooms on the densest
 cluster of buildings.
@@ -21,10 +21,11 @@ from matplotlib.patches import Patch, PathPatch
 from matplotlib.path import Path as MplPath
 from shapely.geometry import box, shape
 
-from drycastle_pipeline.config import DEFAULT_AREA, REPO_ROOT, area_paths
+from drycastle_pipeline.config import REPO_ROOT, map_paths
 from drycastle_pipeline.meshes import Mesh
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.rules import DEFAULT_RULES
+from drycastle_pipeline.ground import ground_units
 from drycastle_pipeline.scene import MapScene, build_scene
 from drycastle_pipeline.textures import flat_mesh, split_tex_node
 
@@ -32,11 +33,11 @@ DEFAULT_PREVIEW_DIR = REPO_ROOT / "out" / "preview"
 KIND_COLOURS = {
     "building_plot": "#e9d9a6",
     "garden": "#b9d9a0",
-    "road": "#9a9a9a",
+    "village": "#cfe0b8",
+    "dike": "#a9c98a",
     "field": "#d8e2a0",
     "forest": "#5f9a60",
     "water": "#7fb2dc",
-    "other": "#e2dfd8",
 }
 BAR_CANDIDATES_M = (5, 10, 20, 25, 50, 100, 200)
 
@@ -52,7 +53,7 @@ def _polygon_path(geom) -> MplPath:
 
 
 def _load(work_dir: Path):
-    parcels = json.loads((work_dir / "parcels.json").read_text())["parcels"]
+    parcels = ground_units(json.loads((work_dir / "parcels.json").read_text()))
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     return parcels, buildings
 
@@ -265,15 +266,13 @@ def run_preview(
     out_dir: Path = DEFAULT_PREVIEW_DIR,
     rules_path: Path = DEFAULT_RULES,
     exaggeration: float = DEFAULT_EXAGGERATION,
-    overview: bool = False,
-    area: str | None = None,
 ) -> list[Path]:
     parcels, buildings = _load(work_dir)
     top, iso, close = out_dir / "topdown.png", out_dir / "iso.png", out_dir / "iso_close.png"
     render_topdown(parcels, buildings, top)
     has_terrain = (work_dir / "terrain.json").is_file()
     k = exaggeration if has_terrain else 1.0
-    scene = build_scene(work_dir, rules_path, k, area)
+    scene = build_scene(work_dir, rules_path, k)
     what = f"terrain relief x{k:g}, roads, fences, trees, buildings" if has_terrain else "buildings"
     render_iso(scene, parcels, buildings, iso, _extent(buildings, 20),
                f"Isometric view from the south-west, flat colours from the mesh data ({what})")
@@ -281,26 +280,21 @@ def run_preview(
     render_iso(scene, parcels, buildings, close,
                (cx - CLOSE_HALF_X_M, cx + CLOSE_HALF_X_M, cy - CLOSE_HALF_Y_M, cy + CLOSE_HALF_Y_M),
                f"Close-up of the densest building cluster (relief x{k:g})")
-    paths = [top, iso, close]
-    if overview:
-        chunk_m = float(json.loads((work_dir / "parcels.json").read_text())["chunk_size_m"])
-        over = out_dir / "overview.png"
-        render_topdown(parcels, buildings, over, chunk_m,
-                       f"Overview with the {chunk_m:g} m chunk grid (chunk ix,iy)")
-        paths.append(over)
-    return paths
+    chunk_m = float(json.loads((work_dir / "parcels.json").read_text())["chunk_size_m"])
+    over = out_dir / "overview.png"
+    render_topdown(parcels, buildings, over, chunk_m,
+                   f"Overview with the {chunk_m:g} m chunk grid (chunk ix,iy)")
+    return [top, iso, close, over]
 
 
 def run(
     force: bool = False,
     exaggeration: float = DEFAULT_EXAGGERATION,
-    area: str = DEFAULT_AREA,
     **_options: object,
 ) -> int:
-    ap = area_paths(area)
+    ap = map_paths()
     try:
-        paths = run_preview(ap.work, ap.preview, exaggeration=exaggeration,
-                            overview=area != DEFAULT_AREA, area=area)
+        paths = run_preview(ap.work, ap.preview, exaggeration=exaggeration)
     except FileNotFoundError as exc:
         print(f"preview: error: missing input {Path(str(exc.filename)).name}; run rules first")
         return 1

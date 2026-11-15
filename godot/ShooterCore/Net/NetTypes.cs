@@ -5,9 +5,10 @@ namespace Drycastle.ShooterCore;
 /// <summary>
 /// Target: a stationary target dummy (#148), drawn like a player with the target look. Turret: the aim of a vehicle's gun (<see cref="FlakRecord"/>),
 /// one record per flak truck and per utility helicopter (its door gun). Flight: a flying vehicle's velocity, pitch, roll and rotor
-/// (<see cref="FlightRecord"/>), one record per utility helicopter next to its Vehicle record.
+/// (<see cref="FlightRecord"/>), one record per utility helicopter next to its Vehicle record. Drive: a driven vehicle's speeds, the slope it
+/// stands on, its steering and whether it floats (<see cref="DriveRecord"/>), one record per amphibious transport next to its Vehicle record.
 /// </summary>
-public enum EntityType : byte { Player = 0, Projectile = 1, Vehicle = 2, Target = 3, Turret = 4, Flight = 5 }
+public enum EntityType : byte { Player = 0, Projectile = 1, Vehicle = 2, Target = 3, Turret = 4, Flight = 5, Drive = 6 }
 
 /// <summary>State byte of a snapshot entity.</summary>
 public enum EntityState : byte { Alive = 0, Protected = 1, InVehicle = 2, Dead = 3 }

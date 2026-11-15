@@ -1,6 +1,6 @@
 """Builds the non-weapon icons of godot/shooter/ui/icons (run by `make shooter-icons` after render_icons.gd).
 
-Perk and killstreak glyphs and the placeholder are authored here as flat SVG (white on transparent, 128x128 viewBox),
+Perk and killstreak glyphs, the placeholder and the generic item icon are authored here as flat SVG (white on transparent, 128x128 viewBox),
 written to ui/icons/src/ for review and rasterised with ImageMagick (librsvg). Category badges are white silhouettes
 of one representative weapon each, cut from ui/icons/weapons/<id>.png, so run after render_icons.gd.
 
@@ -87,6 +87,13 @@ PLACEHOLDER = (
 )
 
 
+# what an item without an icon of its own shows (IconRegistry.ItemFallback): a plain box, not to be taken for the placeholder's crossed square
+ITEM_FALLBACK = (
+    '<g fill="none" stroke-width="8"><path d="M64 14 L108 38 V90 L64 114 L20 90 V38 Z"/>'
+    '<path d="M20 38 L64 64 L108 38"/><path d="M64 64 V114"/></g>'
+)
+
+
 def rasterise(svg_text: str, name: str, out_dir: Path) -> None:
     SRC.mkdir(parents=True, exist_ok=True)
     (SRC / f"{name}.svg").write_text(svg_text, encoding="utf-8")
@@ -123,6 +130,7 @@ def main() -> int:
     for name, body in STREAKS.items():
         rasterise(svg(body), name, streaks_dir)
     rasterise(svg(PLACEHOLDER), "placeholder", ICONS)
+    rasterise(svg(ITEM_FALLBACK), "item_fallback", ICONS)
     for cat, weapon in CATEGORY_SOURCE.items():
         src = ICONS / "weapons" / f"{weapon}.png"
         if not src.exists():

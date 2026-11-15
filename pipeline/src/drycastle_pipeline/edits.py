@@ -5,10 +5,15 @@ developer's deliberate choices, so it survives every pipeline re-run. Keys are s
 formatting is fixed, so git diffs stay small. Version 1::
 
     {"version": 1,
-     "parcels": {"P-0412": {"fence": {...}, "trees": {...}, "objects": [...]}},
+     "parcels": {"P-0412": {"fence": {...}}},
+     "objects": [{"id": "o-0001", "asset": "prim:pole_lamp_1", "position": [x, y], "rotation_deg": 0}],
      "groups":  {"G-0001": {"parcels": ["P-0412", "P-0413"], "fence": {...}}},
-     "regions": {"R-0001": {"colour": "#8a7a5c", "polygon": [[x, y], ...]}},
-     "cables":  {"C-0001": {"from": "o-0012", "to": "o-0015"}}}
+     "ground_patches": {"GP-0001": {"type": "meadow", "polygon": [[x, y], ...]}},
+     "zones":   {"Z-0001": {"kind": "bigfoot", "polygon": [[x, y], ...]}},
+     "zone_cuts": {"ZC-0001": {"kind": "deer", "polygon": [[x, y], ...]}},
+     "cables":  {"C-0001": {"from": "o-0012", "to": "o-0015"}},
+     "ground_types": {"meadow": {"attributes": {"colours": ["#7aa860"]}},
+                      "my_dunes": {"attributes": {"colours": ["#d8c38a"], "recipe": "field"}}}}
 
 ``fence`` (all keys optional)
     mode              auto | none | custom. Default auto, or custom when type, height_m,
@@ -31,14 +36,11 @@ formatting is fixed, so git diffs stay small. Version 1::
                       the boundary, centred on the nearest boundary point to ``at``. ``at`` is
                       absolute EPSG:5514 (S-JTSK) metres, the same frame as objects.
 
-``trees`` (both keys are optional, but exactly one of density or count must be given)
-    density_per_1000m2  number >= 0: trees per 1000 m2 of the parcel (replaces the rules'
-                        density for this parcel).
-    count               int >= 0: exact number of trees.
-    seed_offset         int, default 0: mixed into the seed so that the layout rerolls. 0 keeps
-                        the default layout.
-
-``objects`` (list; placed objects, emitted to objects.json, not instanced in props.json)
+``objects`` (top level, a list; placed objects, emitted to objects.json, not instanced in props.json). An object
+    belongs to no parcel: it only needs its absolute position, so a pole beside a road (ground, not a parcel)
+    is as good as a car in a yard. Files written before this kept the list under ``parcels.<ID>.objects``;
+    :func:`parse` still reads that and moves the objects here, the next write uses the new shape. The list is
+    written sorted by id (so an undone removal or an edit never reorders the file).
     id                  str, unique within the whole file.
     asset               "pack:<pack>/<model>" or "prim:<name>".
     position            [x, y] absolute EPSG:5514 metres.
@@ -46,8 +48,8 @@ formatting is fixed, so git diffs stay small. Version 1::
     rotation_deg        number, default 0.
     scale               number > 0, default 1.
     colour              optional "#rrggbb" override.
-    (objects.json entries also carry ``parcel`` (the parcel containing the object, or null),
-    ``owner`` (the parcel entry that lists it) and ``chunk``; both are derived.)
+    (objects.json entries also carry ``parcel`` (the parcel containing the object, or null) and
+    ``chunk``; both are derived.)
 
 ``groups`` (a property group: parcels that share one fence around their combined outer edge)
     parcels             non-empty list of unique parcel IDs. A parcel is in at most one group.
@@ -56,19 +58,39 @@ formatting is fixed, so git diffs stay small. Version 1::
                         settings of the member that owns it. Edges shared by two members get no
                         fence.
 
-``regions`` (a hand-drawn shape painted in one colour over the ground; only the colour changes)
-    colour              "#rrggbb".
+``ground_patches`` (a hand-drawn ground area of exactly one ground type, ADR 0022; ``GP-`` and 4 or more digits)
+    type                name of a ground type: one of ``ground.types`` in rules.yaml or of ``ground_types`` below, not a
+                        deleted one. The patch is ground of that type (terrain colour, detail, trees) outside the parcels,
+                        before the rule types, on the next full run; the editor shows it at once as a coloured preview
+                        (the type's first colour). A colour that no type has is a ground type of your own.
     polygon             one ring: a list of at least 3 [x, y] points in absolute S-JTSK metres, x
                         east, y north. Not closed by repeating the first point (a repeated last
                         point is tolerated), no repeated or collinear-only points, no
-                        self-intersection (edges may not cross or touch each other). Regions are
-                        independent of parcel boundaries. Where regions overlap, the higher ID
-                        wins. The ``regions`` key is only written when there are regions.
-    water_y             optional number: the region is a body of water whose flat surface is at this
-                        height, in metres on the terrain's datum (as terrain.json, e.g. 185.6). The
-                        colour then tints the surface in the editor view; the body is also written
-                        to water.json (swimming, drowning, the shooter's water surface) with its bed
-                        at the lowest terrain inside the polygon. Without it the region is ground paint.
+                        self-intersection (edges may not cross or touch each other). Patches are
+                        independent of parcel boundaries. Where patches overlap, the higher ID
+                        wins. The ``ground_patches`` key is only written when there are patches.
+    water_y             a number, required when the type carries the ``water`` attribute and refused otherwise: the patch
+                        is a body of water whose flat surface is at this height, in metres on the terrain's datum (as
+                        terrain.json, e.g. 185.6). The body is also written to water.json (swimming, the shooter's water
+                        surface) with its bed at the natural bed (bed.py: banks shelve, pools and riffles on a river,
+                        the terrain under it carved to that bed).
+    max_depth           optional number of metres (0 < x <= 20), only with water_y: the body's deepest
+                        point. Its bed is scaled so the deepest point is this deep. Default: the class
+                        depth in rules.yaml (water.river.pool_depth_m, water.pond.max_depth_m).
+
+``zones`` (a marked area of exactly one zone kind, ADR 0022; ``Z-`` and 4 or more digits; see zones.py)
+    kind                a zone kind of the catalog (``zones.KIND_NAMES``): what the area means in play. A zone never
+                        changes the terrain; zones overlap freely and add up. The export turns them into candidate points
+                        for the server (``zone_points.json``) and, for ``player_spawn``, into spawn candidates.
+    polygon             as of a ground patch. The ``zones`` key is only written when there are zones.
+
+``zone_cuts`` (internal: the editor's record that a zone that comes from a rule was moved, retyped or deleted; ``ZC-`` and 4
+or more digits; see zones.py). The user never sees these as zones.
+    kind                a zone kind of the catalog.
+    polygon             as of a ground patch: the area that was taken out, in absolute S-JTSK metres. The export subtracts it
+                        (grown by zones.CUT_BUFFER_M, so a rebuilt, slightly different area leaves no sliver) from the rule
+                        zone of that kind. It never touches drawn zones. Geometry, not ground area ids: those are not
+                        stable across builds. The ``zone_cuts`` key is only written when there are cuts.
 
 ``cables`` (the wires strung between two placed utility poles, or from a pole to a house connector;
 drawn by the game, see docs/utility-poles.md)
@@ -78,6 +100,26 @@ drawn by the game, see docs/utility-poles.md)
                         A cable whose end no longer exists, or is neither, is skipped with a
                         warning by the props stage. The ``cables`` key is only written when there
                         are cables.
+
+``ground_types`` (overrides and additions to the ground types of ``ground.types`` in rules.yaml, by name; see
+ground.py and ground_attributes.py. The key is only written when there are some.)
+    name                lower_snake, ``^[a-z][a-z0-9_]{0,23}$``. A name of rules.yaml overrides that type, a new name
+                        is a new type (appended after the rules' types). Names are IDs: there is no rename.
+    attributes          the attributes the type carries (the fixed catalog of ground_attributes.py), each one key:
+                          colours       1-6 terrain shades, each "#rrggbb" (replaces the type's list).
+                          recipe        field | forest | village | dike (replaces the type's recipe).
+                          detail        object laid over the shipped ``detail.<recipe>`` section of rules.yaml (deep
+                                        merge); its top-level keys must exist in that section. Needs a recipe, own or
+                                        the rules type's.
+                          water         true.
+                        A ground type is terrain only: ``spawns``, ``event_spawn``, ``wildlife`` and the like are unknown
+                        attributes (what an area means in play is a zone). A type with only ``colours`` is valid.
+                        A value ``null`` removes that attribute of the rules type (only for a type of rules.yaml).
+    osm                 {landuse|natural: [str, ...]}: the OSM values the type takes (a key replaces that class's list).
+                        A type that takes OSM land must carry terrain attributes.
+    deleted             true (and nothing else): removes the type that rules.yaml defines. Not the default type and
+                        not a type with a ``rule`` (the dike).
+    There is no ``rule`` key: rule types stay in rules.yaml. Unknown keys are errors.
 
 Unknown keys are validation errors. Entries that refer to parcels that no longer exist are not
 errors: the props stage warns about them and skips them (see props.plan_edits).
@@ -96,6 +138,14 @@ from pathlib import Path
 from shapely.geometry import LinearRing, Polygon
 
 from drycastle_pipeline.config import PIPELINE_DIR
+from drycastle_pipeline.ground_attributes import (
+    ATTRIBUTES,
+    COLOURS_MAX,
+    FLAG_KEYS,
+    RECIPES,
+    TERRAIN_KEYS,
+)
+from drycastle_pipeline.zones import KIND_NAMES
 
 EDITS_VERSION = 1
 DEFAULT_EDITS = PIPELINE_DIR / "config" / "edits.json"
@@ -116,23 +166,33 @@ FENCE_TYPES: dict[str, dict[str, float | str]] = {
 # Columns a fence can be given instead of its type's own (fencestyles.COLUMN_STYLES).
 COLUMN_TYPES = ("none", "wood_post", "metal_post", "brick_red", "brick_white", "stone", "concrete")
 
-TOP_KEYS = ("version", "parcels", "groups", "regions", "cables")
-PARCEL_KEYS = ("fence", "trees", "objects")
+TOP_KEYS = ("version", "parcels", "objects", "groups", "ground_patches", "zones", "zone_cuts", "cables", "ground_types")
+PARCEL_KEYS = ("fence", "objects")  # "objects" only so a file of the old shape still validates; see parse()
 FENCE_KEYS = ("mode", "type", "column", "height_m", "thickness_m", "colour", "gaps")
 CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "gaps")
 GAP_KEYS = ("at", "width_m")
-TREE_KEYS = ("density_per_1000m2", "count", "seed_offset")
 OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour")
 GROUP_KEYS = ("parcels", "fence")
-REGION_KEYS = ("colour", "polygon", "water_y")
+PATCH_KEYS = ("type", "polygon", "water_y", "max_depth")
+ZONE_KEYS = ("kind", "polygon")
+MAX_DEPTH_LIMIT_M = 20.0  # a water body's deepest point may be set up to this (metres)
 CABLE_KEYS = ("from", "to")
+GROUND_TYPE_KEYS = ("attributes", "osm", "deleted")
+GROUND_OSM_CLASSES = ("landuse", "natural")
+GROUND_RECIPES = RECIPES  # the detail.RECIPES a ground type can use (not garden)
+GROUND_COLOURS_MAX = COLOURS_MAX
+GROUND_NAME_MAX = 24
 POLE_ASSET_PREFIX = "prim:pole_"
 CONNECTOR_ASSET_PREFIX = "prim:connector_"
 WIRE_ASSET_PREFIXES = (POLE_ASSET_PREFIX, CONNECTOR_ASSET_PREFIX)  # the assets a cable can end on
 
 _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")
-_REGION_ID = re.compile(r"R-\d{4,}")
+_PATCH_ID = re.compile(r"GP-\d{4,}")
+_ZONE_ID = re.compile(r"Z-\d{4,}")
+_ZONE_CUT_ID = re.compile(r"ZC-\d{4,}")
+_GROUND_TYPE = re.compile(r"[a-z][a-z0-9_]*")
+_GROUND_NAME = re.compile(r"[a-z][a-z0-9_]{0,%d}" % (GROUND_NAME_MAX - 1))
 _CABLE_ID = re.compile(r"C-\d{4,}")
 _COLOUR = re.compile(r"#[0-9a-fA-F]{6}")
 _ASSET = re.compile(r"pack:[^/\s]+/\S+|prim:[A-Za-z0-9_.-]+")
@@ -148,12 +208,16 @@ class EditsError(ValueError):
 
 @dataclass
 class Edits:
-    """A validated edits document. ``parcels``, ``groups``, ``regions`` and ``cables`` are JSON-native, as written."""
+    """A validated edits document. ``parcels``, ``objects``, ``groups``, ``ground_patches``, ``zones``, ``zone_cuts``, ``cables`` and ``ground_types`` are JSON-native, as written."""
 
     parcels: dict[str, dict] = field(default_factory=dict)
+    objects: list[dict] = field(default_factory=list)
     groups: dict[str, dict] = field(default_factory=dict)
-    regions: dict[str, dict] = field(default_factory=dict)
+    ground_patches: dict[str, dict] = field(default_factory=dict)
+    zones: dict[str, dict] = field(default_factory=dict)
+    zone_cuts: dict[str, dict] = field(default_factory=dict)
     cables: dict[str, dict] = field(default_factory=dict)
+    ground_types: dict[str, dict] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -248,21 +312,6 @@ def _check_fence(v: object, path: str, errors: list[str]) -> None:
                 _check_positive(gap["width_m"], f"{gpath}.width_m", errors)
 
 
-def _check_trees(v: object, path: str, errors: list[str]) -> None:
-    if not _is_dict(v, path, errors):
-        return
-    _unknown_keys(v, TREE_KEYS, path, errors)
-    has_density, has_count = "density_per_1000m2" in v, "count" in v
-    if has_density == has_count:
-        errors.append(f"{path}: give exactly one of density_per_1000m2 or count")
-    if has_density and not (_is_num(v["density_per_1000m2"]) and v["density_per_1000m2"] >= 0):
-        errors.append(f"{path}.density_per_1000m2: must be a number >= 0")
-    if has_count and not (_is_int(v["count"]) and v["count"] >= 0):
-        errors.append(f"{path}.count: must be an integer >= 0")
-    if "seed_offset" in v and not _is_int(v["seed_offset"]):
-        errors.append(f"{path}.seed_offset: must be an integer")
-
-
 def _check_objects(v: object, path: str, errors: list[str], seen: dict[str, str]) -> None:
     if not isinstance(v, list):
         errors.append(f"{path}: must be a list")
@@ -299,19 +348,18 @@ def _check_objects(v: object, path: str, errors: list[str], seen: dict[str, str]
             _check_colour(obj["colour"], f"{opath}.colour", errors)
 
 
-def _check_parcels(parcels: dict, errors: list[str]) -> None:
-    seen: dict[str, str] = {}
+def _check_parcels(parcels: dict, errors: list[str], seen: dict[str, str]) -> None:
     for pid, entry in parcels.items():
         path = f"parcels.{pid}"
         if not _PARCEL_ID.fullmatch(pid):
             errors.append(f"{path}: parcel IDs look like P-0412")
         if not _is_dict(entry, path, errors):
             continue
-        _unknown_keys(entry, PARCEL_KEYS, path, errors)
+        if "trees" in entry:  # removed: trees are planted by the rules or read from the orthophoto, not set per parcel
+            errors.append(f"{path}.trees: per-parcel tree settings were removed; delete this entry")
+        _unknown_keys({k: v for k, v in entry.items() if k != "trees"}, PARCEL_KEYS, path, errors)
         if "fence" in entry:
             _check_fence(entry["fence"], f"{path}.fence", errors)
-        if "trees" in entry:
-            _check_trees(entry["trees"], f"{path}.trees", errors)
         if "objects" in entry:
             _check_objects(entry["objects"], f"{path}.objects", errors, seen)
 
@@ -345,24 +393,16 @@ def _check_groups(groups: dict, errors: list[str]) -> None:
             _check_fence(entry["fence"], f"{path}.fence", errors)
 
 
-def region_ring(polygon: list) -> list[tuple[float, float]]:
-    """The points of a region polygon as tuples, without a repeated closing point."""
+def polygon_ring(polygon: list) -> list[tuple[float, float]]:
+    """The points of a patch or zone polygon as tuples, without a repeated closing point."""
     pts = [(float(p[0]), float(p[1])) for p in polygon]
     if len(pts) > 1 and pts[0] == pts[-1]:
         pts.pop()
     return pts
 
 
-def _check_region(entry: object, path: str, errors: list[str]) -> None:
-    if not _is_dict(entry, path, errors):
-        return
-    _unknown_keys(entry, REGION_KEYS, path, errors)
-    if "colour" not in entry:
-        errors.append(f"{path}.colour: required")
-    else:
-        _check_colour(entry["colour"], f"{path}.colour", errors)
-    if "water_y" in entry and not (_is_num(entry["water_y"]) and math.isfinite(entry["water_y"])):
-        errors.append(f"{path}.water_y: must be a number (metres, terrain datum)")
+def _check_polygon(entry: dict, path: str, errors: list[str]) -> None:
+    """The ``polygon`` of a patch or a zone: one simple ring of at least 3 points."""
     if "polygon" not in entry:
         errors.append(f"{path}.polygon: required")
         return
@@ -376,7 +416,7 @@ def _check_region(entry: object, path: str, errors: list[str]) -> None:
         _check_point(pt, f"{ppath}.{i}", errors)
     if len(errors) > n:
         return
-    ring = region_ring(poly)
+    ring = polygon_ring(poly)
     if len(ring) < 3:
         errors.append(f"{ppath}: needs at least 3 points")
     elif any(a == b for a, b in zip(ring, ring[1:] + ring[:1], strict=True)):
@@ -385,12 +425,66 @@ def _check_region(entry: object, path: str, errors: list[str]) -> None:
         errors.append(f"{ppath}: must not intersect or touch itself, and must enclose an area")
 
 
-def _check_regions(regions: dict, errors: list[str]) -> None:
-    for rid, entry in regions.items():
-        path = f"regions.{rid}"
-        if not _REGION_ID.fullmatch(rid):
-            errors.append(f"{path}: region IDs look like R-0001")
-        _check_region(entry, path, errors)
+def _effective_type_names(own: dict, shipped: dict) -> set[str]:
+    """The ground type names once the ``ground_types`` of the edits are laid over rules.yaml's (deleted ones are gone)."""
+    names = set(shipped)
+    for name, entry in own.items():
+        if isinstance(entry, dict) and entry.get("deleted"):
+            names.discard(name)
+        else:
+            names.add(name)
+    return names
+
+
+def _check_patches(patches: dict, own_types: dict, errors: list[str]) -> None:
+    from drycastle_pipeline.rules import load_section
+
+    shipped = load_section("ground")["types"]
+    known = _effective_type_names(own_types, shipped)
+    for pid, entry in patches.items():
+        path = f"ground_patches.{pid}"
+        if not _PATCH_ID.fullmatch(pid):
+            errors.append(f"{path}: ground patch IDs look like GP-0001")
+        if not _is_dict(entry, path, errors):
+            continue
+        _unknown_keys(entry, PATCH_KEYS, path, errors)
+        name = entry.get("type")
+        if "type" not in entry:
+            errors.append(f"{path}.type: required")
+        elif not isinstance(name, str) or name not in known:
+            errors.append(f"{path}.type: must be a ground type ({', '.join(sorted(known))})")
+        else:
+            own = own_types.get(name)
+            carries_water = bool(_effective_attributes(name, own if isinstance(own, dict) else {}, shipped).get("water"))
+            if carries_water and "water_y" not in entry:
+                errors.append(f"{path}.water_y: required, {name} is a water type")
+            elif not carries_water and "water_y" in entry:
+                errors.append(f"{path}.water_y: only for a water type, {name} does not carry the water attribute")
+        if "water_y" in entry and not (_is_num(entry["water_y"]) and math.isfinite(entry["water_y"])):
+            errors.append(f"{path}.water_y: must be a number (metres, terrain datum)")
+        if "max_depth" in entry:
+            md = entry["max_depth"]
+            if "water_y" not in entry:
+                errors.append(f"{path}.max_depth: only a body of water (with water_y) has a depth")
+            elif not (_is_num(md) and math.isfinite(md) and 0 < md <= MAX_DEPTH_LIMIT_M):
+                errors.append(f"{path}.max_depth: must be a number of metres in (0, {MAX_DEPTH_LIMIT_M:g}]")
+        _check_polygon(entry, path, errors)
+
+
+def _check_zones(zones: dict, errors: list[str], key: str = "zones") -> None:
+    cuts = key == "zone_cuts"
+    for zid, entry in zones.items():
+        path = f"{key}.{zid}"
+        if not (_ZONE_CUT_ID if cuts else _ZONE_ID).fullmatch(zid):
+            errors.append(f"{path}: {'zone cut' if cuts else 'zone'} IDs look like {'ZC-0001' if cuts else 'Z-0001'}")
+        if not _is_dict(entry, path, errors):
+            continue
+        _unknown_keys(entry, ZONE_KEYS, path, errors)
+        if "kind" not in entry:
+            errors.append(f"{path}.kind: required")
+        elif entry["kind"] not in KIND_NAMES:
+            errors.append(f"{path}.kind: must be a zone kind ({', '.join(KIND_NAMES)})")
+        _check_polygon(entry, path, errors)
 
 
 def cable_pair(entry: dict) -> tuple[str, str]:
@@ -428,6 +522,114 @@ def _check_cables(cables: dict, errors: list[str]) -> None:
             seen[pair] = cid
 
 
+def protected_ground_types() -> dict[str, str]:
+    """The types of the shipped rules.yaml that cannot be deleted, with the reason: the default type, and the types
+    made by a rule (the dike, which ``detail.dike`` needs)."""
+    from drycastle_pipeline.rules import load_section
+
+    gcfg = load_section("ground")
+    out = {name: "has a rule (detail.dike needs it)" for name, spec in gcfg["types"].items() if (spec or {}).get("rule")}
+    out[gcfg["default"]] = "is the default type (what no other type claims)"
+    return out
+
+
+def _effective_attributes(name: str, entry: dict, shipped: dict) -> dict:
+    """The attributes a type has once its entry is laid over rules.yaml's (a ``null`` removes one)."""
+    out = dict((shipped.get(name) or {}).get("attributes") or {})
+    own = entry.get("attributes")
+    for key, value in own.items() if isinstance(own, dict) else []:
+        if value is None:
+            out.pop(key, None)
+        else:
+            out[key] = value
+    return out
+
+
+def _check_attributes(name: str, attrs: object, path: str, errors: list[str], shipped: dict) -> None:
+    from drycastle_pipeline.rules import load_section
+
+    if not _is_dict(attrs, path, errors):
+        return
+    known = tuple(ATTRIBUTES)
+    for key in attrs:
+        if key not in known:
+            errors.append(f"{path}.{key}: unknown attribute (the catalog has {', '.join(known)})")
+    for key, value in attrs.items():
+        kpath = f"{path}.{key}"
+        if key not in known:
+            continue
+        if value is None:
+            if name not in shipped or key not in ((shipped[name] or {}).get("attributes") or {}):
+                errors.append(f"{kpath}: null removes an attribute of the type in rules.yaml, and {name} has no {key} there")
+            continue
+        if key == "colours":
+            if not (isinstance(value, list) and 1 <= len(value) <= GROUND_COLOURS_MAX):
+                errors.append(f"{kpath}: must be a list of 1 to {GROUND_COLOURS_MAX} colours")
+            else:
+                for i, c in enumerate(value):
+                    _check_colour(c, f"{kpath}.{i}", errors)
+        elif key == "recipe":
+            if value not in GROUND_RECIPES:
+                errors.append(f"{kpath}: must be one of {', '.join(GROUND_RECIPES)}")
+        elif key in FLAG_KEYS:
+            if value is not True:
+                errors.append(f"{kpath}: must be true (null removes it)")
+    if "detail" in attrs and attrs["detail"] is not None:
+        detail = attrs["detail"]
+        if _is_dict(detail, f"{path}.detail", errors):
+            recipe = attrs["recipe"] if "recipe" in attrs else (((shipped.get(name) or {}).get("attributes") or {}).get("recipe"))
+            section = load_section("detail").get(recipe) if recipe in GROUND_RECIPES else None
+            if detail and not isinstance(section, dict):
+                errors.append(f"{path}.detail: needs a recipe (one of {', '.join(GROUND_RECIPES)}) to lay the settings over")
+            else:
+                for key in detail:
+                    if section is not None and key not in section:
+                        errors.append(f"{path}.detail.{key}: not a setting of detail.{recipe} (known: {', '.join(section)})")
+
+
+def _check_ground_type(name: str, entry: object, path: str, errors: list[str]) -> None:
+    from drycastle_pipeline.rules import load_section
+
+    if not (_GROUND_NAME.fullmatch(name)):
+        errors.append(f"{path}: type names are lower case letters, digits and _, starting with a letter, at most {GROUND_NAME_MAX} long")
+    if not _is_dict(entry, path, errors):
+        return
+    if "rule" in entry:
+        errors.append(f"{path}.rule: rule types stay in rules.yaml")
+    _unknown_keys({k: v for k, v in entry.items() if k != "rule"}, GROUND_TYPE_KEYS, path, errors)
+    shipped = load_section("ground")["types"]
+    if "deleted" in entry:
+        if entry["deleted"] is not True:
+            errors.append(f"{path}.deleted: must be true (remove the entry to bring the type back)")
+        if len([k for k in entry if k != "rule"]) > 1:
+            errors.append(f"{path}: a deleted type has no other keys")
+        if name not in shipped:
+            errors.append(f"{path}.deleted: {name!r} is not a type of rules.yaml; remove this entry instead")
+        elif name in (why := protected_ground_types()):
+            errors.append(f"{path}.deleted: {name!r} cannot be deleted, it {why[name]}")
+        return
+    n = len(errors)
+    if "attributes" in entry:
+        _check_attributes(name, entry["attributes"], f"{path}.attributes", errors, shipped)
+    osm = entry.get("osm")
+    if "osm" in entry and _is_dict(osm, f"{path}.osm", errors):
+        _unknown_keys(osm, GROUND_OSM_CLASSES, f"{path}.osm", errors)
+        for cls, values in osm.items():
+            if cls in GROUND_OSM_CLASSES and not (
+                isinstance(values, list) and all(isinstance(v, str) and v.strip() for v in values)
+            ):
+                errors.append(f"{path}.osm.{cls}: must be a list of OSM values (text)")
+    own_source = isinstance(osm, dict) and any(osm.values())
+    takes_land = own_source or (shipped.get(name) or {}).get("osm") or (shipped.get(name) or {}).get("rule")
+    if len(errors) == n and takes_land and not any(k in _effective_attributes(name, entry, shipped) for k in TERRAIN_KEYS):
+        errors.append(f"{path}.attributes: a type that takes OSM land needs appearance or water attributes ({', '.join(TERRAIN_KEYS)})")
+
+
+def _check_ground_types(types: dict, errors: list[str]) -> None:
+    for name, entry in types.items():
+        _check_ground_type(name, entry, f"ground_types.{name}", errors)
+
+
 def validate(doc: object) -> list[str]:
     """Every problem in an edits document as ``path: message``; an empty list means valid."""
     if not isinstance(doc, dict):
@@ -437,18 +639,30 @@ def validate(doc: object) -> list[str]:
     version = doc.get("version")
     if not (_is_int(version) and version == EDITS_VERSION):
         errors.append(f"version: must be {EDITS_VERSION}")
+    seen: dict[str, str] = {}  # object id -> where it first appears (ids are unique across the whole file)
+    if "objects" in doc:
+        _check_objects(doc["objects"], "objects", errors, seen)
     parcels = doc.get("parcels", {})
     if _is_dict(parcels, "parcels", errors):
-        _check_parcels(parcels, errors)
+        _check_parcels(parcels, errors, seen)
     groups = doc.get("groups", {})
     if _is_dict(groups, "groups", errors):
         _check_groups(groups, errors)
-    regions = doc.get("regions", {})
-    if _is_dict(regions, "regions", errors):
-        _check_regions(regions, errors)
+    gtypes = doc.get("ground_types", {})
+    patches = doc.get("ground_patches", {})
+    if _is_dict(patches, "ground_patches", errors):
+        _check_patches(patches, gtypes if isinstance(gtypes, dict) else {}, errors)
+    zones = doc.get("zones", {})
+    if _is_dict(zones, "zones", errors):
+        _check_zones(zones, errors)
+    zone_cuts = doc.get("zone_cuts", {})
+    if _is_dict(zone_cuts, "zone_cuts", errors):
+        _check_zones(zone_cuts, errors, "zone_cuts")
     cables = doc.get("cables", {})
     if _is_dict(cables, "cables", errors):
         _check_cables(cables, errors)
+    if _is_dict(gtypes, "ground_types", errors):
+        _check_ground_types(gtypes, errors)
     return errors
 
 
@@ -458,11 +672,25 @@ def parse(doc: object) -> Edits:
     if errors:
         raise EditsError(errors)
     assert isinstance(doc, dict)
+    parcels = copy.deepcopy(doc.get("parcels", {}))
+    objects = copy.deepcopy(doc.get("objects", []))
+    legacy: list[dict] = []  # the old shape: objects listed under their parcel
+    for pid in list(parcels):
+        listed = parcels[pid].pop("objects", None)
+        if listed is not None:
+            legacy.extend(listed)
+            if not parcels[pid]:
+                del parcels[pid]
+    objects += sorted(legacy, key=lambda o: o["id"])
     return Edits(
-        parcels=copy.deepcopy(doc.get("parcels", {})),
+        parcels=parcels,
+        objects=objects,
         groups=copy.deepcopy(doc.get("groups", {})),
-        regions=copy.deepcopy(doc.get("regions", {})),
+        ground_patches=copy.deepcopy(doc.get("ground_patches", {})),
+        zones=copy.deepcopy(doc.get("zones", {})),
+        zone_cuts=copy.deepcopy(doc.get("zone_cuts", {})),
         cables=copy.deepcopy(doc.get("cables", {})),
+        ground_types=copy.deepcopy(doc.get("ground_types", {})),
     )
 
 
@@ -483,10 +711,18 @@ def load_edits(path: Path = DEFAULT_EDITS) -> Edits:
 def dump_text(edits: Edits) -> str:
     """The canonical text of an edits document (sorted keys, indent 1, trailing newline)."""
     doc: dict = {"version": EDITS_VERSION, "parcels": edits.parcels, "groups": edits.groups}
-    if edits.regions:  # omitted when empty, so files without regions keep their bytes
-        doc["regions"] = edits.regions
+    if edits.objects:  # omitted when empty, so files without objects keep their bytes; sorted by id, so no edit reorders them
+        doc["objects"] = sorted(edits.objects, key=lambda o: o["id"])
+    if edits.ground_patches:  # omitted when empty, so files without patches keep their bytes
+        doc["ground_patches"] = edits.ground_patches
+    if edits.zones:  # likewise
+        doc["zones"] = edits.zones
+    if edits.zone_cuts:  # likewise
+        doc["zone_cuts"] = edits.zone_cuts
     if edits.cables:  # likewise
         doc["cables"] = edits.cables
+    if edits.ground_types:  # likewise
+        doc["ground_types"] = edits.ground_types
     errors = validate(doc)
     if errors:
         raise EditsError(errors)

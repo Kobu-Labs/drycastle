@@ -149,40 +149,7 @@ public sealed class FenceDraft
     }
 }
 
-/// <summary>Tree parameters of a parcel: the rules (no entry), a density per 1000 m2 or an exact count, plus the reroll seed.</summary>
-public sealed class TreesDraft
-{
-    public const string Rules = "rules", Density = "density", Count = "count";
-    public string Kind = Rules;
-    public double DensityValue;
-    public int CountValue;
-    public int Seed;
-
-    public TreesDraft Clone() => (TreesDraft)MemberwiseClone();
-
-    public static TreesDraft FromEntry(object? entry)
-    {
-        var d = new TreesDraft();
-        if (entry is not Obj o) return d;
-        if (FenceDraft.Number(o.GetValueOrDefault("count")) is { } c) { d.Kind = Count; d.CountValue = (int)c; }
-        else if (FenceDraft.Number(o.GetValueOrDefault("density_per_1000m2")) is { } v) { d.Kind = Density; d.DensityValue = v; }
-        d.Seed = (int)(FenceDraft.Number(o.GetValueOrDefault("seed_offset")) ?? 0);
-        return d;
-    }
-
-    /// <summary>The entry to write; null means "use the rules" (a seed offset alone is not expressible).</summary>
-    public Obj? ToEntry()
-    {
-        if (Kind == Rules) return null;
-        var o = EditsFile.NewObject();
-        if (Kind == Density) o["density_per_1000m2"] = FenceDraft.Num(DensityValue);
-        else o["count"] = new EditsFile.Num(CountValue.ToString(CultureInfo.InvariantCulture));
-        if (Seed != 0) o["seed_offset"] = new EditsFile.Num(Seed.ToString(CultureInfo.InvariantCulture));
-        return o;
-    }
-}
-
-/// <summary>What the panel edits: a property group (its fence; trees per member parcel) or one or more parcels.</summary>
+/// <summary>What the panel edits: a property group (its fence) or one or more parcels.</summary>
 public sealed record EditTarget(string Key, string? GroupId, IReadOnlyList<string> Parcels)
 {
     public bool IsGroup => GroupId != null;
@@ -203,7 +170,6 @@ public sealed class Pending
 {
     public EditTarget Target { get; init; } = null!;
     public FenceDraft? Fence;
-    public TreesDraft? Trees;
 }
 
 /// <summary>Reading drafts from, and applying pending changes to, an edits.json tree (see EditsFile).</summary>
@@ -227,28 +193,25 @@ public static class EditModel
         return FenceDraft.FromEntry((EditsFile.Groups(root).GetValueOrDefault(gid) as Obj)?.GetValueOrDefault("fence"));
     }
 
-    public static TreesDraft TreesFromDisk(Obj root, EditTarget t)
-        => TreesDraft.FromEntry(ParcelEntry(root, t.Parcels[0])?.GetValueOrDefault("trees"));
-
     /// <summary>True when the targeted entries differ from each other on disk (the panel then shows the first one).</summary>
     public static bool Mixed(Obj root, EditTarget t)
     {
         if (t.IsGroup || t.Parcels.Count < 2) return false;
-        string F(string p) => EditsFile.Dump(Wrap(ParcelEntry(root, p)?.GetValueOrDefault("fence"), ParcelEntry(root, p)?.GetValueOrDefault("trees")));
+        string F(string p) => EditsFile.Dump(Wrap(ParcelEntry(root, p)?.GetValueOrDefault("fence")));
         var first = F(t.Parcels[0]);
         return t.Parcels.Skip(1).Any(p => F(p) != first);
     }
 
-    static Obj Wrap(object? fence, object? trees)
+    static Obj Wrap(object? fence)
     {
         var o = EditsFile.NewObject();
-        o["fence"] = fence; o["trees"] = trees;
+        o["fence"] = fence;
         return o;
     }
 
     /// <summary>
     /// Write the pending changes into a freshly loaded document: set the fence (group entry for a group target, each
-    /// parcel otherwise) and the trees (each parcel), drop what became empty, validate what was written.
+    /// parcel otherwise), drop what became empty, validate what was written.
     /// Returns the errors (empty when fine); the document is then complete and can be saved.
     /// </summary>
     public static List<string> Apply(Obj root, IEnumerable<Pending> items)
@@ -280,13 +243,6 @@ public static class EditModel
                     foreach (var msg in CheckFence(e, $"parcels.{pid}.fence")) errors.Add(msg);
                 }
             }
-            if (p.Trees != null)
-                foreach (var pid in parcels)
-                {
-                    var e = p.Trees.ToEntry();
-                    SetParcelKey(root, pid, "trees", e);
-                    foreach (var msg in CheckTrees(e, $"parcels.{pid}.trees")) errors.Add(msg);
-                }
             touchedParcels.UnionWith(parcels);
         }
         foreach (var pid in touchedParcels)
@@ -303,7 +259,7 @@ public static class EditModel
         entry[key] = value;
     }
 
-    // ---- the Python validator's rules for the pieces the panel writes (edits.py _check_fence / _check_trees) ----
+    // ---- the Python validator's rules for the piece the panel writes (edits.py _check_fence) ----
 
     static bool Positive(object? v) => FenceDraft.Number(v) is { } d && d > 0;
 
@@ -327,18 +283,6 @@ public static class EditModel
                     || !Positive(g.GetValueOrDefault("width_m")))
                     errs.Add($"{path}.gaps.{i}: needs at [x, y] and width_m > 0");
             }
-        return errs;
-    }
-
-    public static List<string> CheckTrees(Obj? t, string path)
-    {
-        var errs = new List<string>();
-        if (t == null) return errs;
-        var hasD = t.ContainsKey("density_per_1000m2"); var hasC = t.ContainsKey("count");
-        if (hasD == hasC) errs.Add($"{path}: give exactly one of density_per_1000m2 or count");
-        if (hasD && !(FenceDraft.Number(t["density_per_1000m2"]) is { } d && d >= 0)) errs.Add($"{path}.density_per_1000m2: must be >= 0");
-        if (hasC && !(t["count"] is EditsFile.Num n && int.TryParse(n.Text, out var c) && c >= 0)) errs.Add($"{path}.count: must be an integer >= 0");
-        if (t.ContainsKey("seed_offset") && !(t["seed_offset"] is EditsFile.Num sn && int.TryParse(sn.Text, out _))) errs.Add($"{path}.seed_offset: must be an integer");
         return errs;
     }
 }

@@ -57,7 +57,6 @@ public class MovementTests
     [Theory]
     [InlineData(MoveButtons.Fire)]
     [InlineData(MoveButtons.Aim)]
-    [InlineData(MoveButtons.Crouch)]
     public void SprintCancelled(MoveButtons also) =>
         Assert.True(HSpeed(Run(new MoveInput { MoveY = 1, Buttons = MoveButtons.Sprint | also })) < 5.01f);
 

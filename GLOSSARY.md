@@ -9,14 +9,38 @@ A separate game built on the base map, with its own gameplay, database, and mult
 _Avoid_: game mode, plugin
 
 **Parcel**:
-A land unit of the base map with a stable ID of our own (not the cadastral number), covering every cadastral parcel including roads and fields. Its boundary is fixed; its contents (building, props, events) can be replaced by a mod.
+A property of the base map with a stable ID of our own (not the cadastral number): a cadastral parcel that holds a building, or one in a property group with a parcel that does. Its boundary is the cadastre's and fixed; its contents (building, props, events) can be replaced by a mod. Land that is no property is ground areas, not parcels.
 _Avoid_: plot, lot, tile
 
 **Map pipeline**:
 The scripted, re-runnable process that generates the base map from source data with no manual map building.
 
 **Parcel kind**:
-The category of a parcel (building plot, garden, road, field, forest, water, other), assigned by rules.
+The category of a parcel: building plot (it holds a building) or garden (the rest of a property).
+
+**Ground area**:
+A piece of the land outside the parcels with one ground type (field, forest, water, village, dike), cut from OSM land use and rules instead of cadastral outlines, or drawn by hand (a ground patch). It has no fence and no stable ID.
+_Avoid_: road parcel
+
+**Ground type**:
+A named description of one kind of ground (forest, field, meadow, orchard, allotments, village, dike, water, ...): its terrain colours, detail recipe and whether it is water. It says where it comes from (OSM land use or a rule, or only drawn by hand). Every point of the map has exactly one. Defined in `rules.yaml` (`ground.types`); you override, add and delete types in `edits.json` (`ground_types`) from the editor's Ground types tool or MCP. A change shows after the next full map build. Names are IDs and cannot be renamed. It carries nothing a game system reads: that is a zone.
+_Avoid_: biome, terrain type, layer
+
+**Ground patch**:
+A hand-drawn polygon of exactly one ground type (and a water level when the type is water); where patches overlap the higher ID wins. It is how you change the ground by hand, and the only thing drawn in the Ground tool.
+_Avoid_: region, paint, ground stack
+
+**Zone**:
+A polygon of exactly one zone kind. It marks what the area means in play and never changes how the ground looks; zones overlap freely and add up. Every zone is the same to you: counted once, selected, reshaped, given another kind or deleted in the Zones tool, wherever it came from (drawn by you, or one per ground area of a kind's rule). The editor keeps a **cut** (`zone_cuts`, internal, never listed) when you edit one that came from a rule.
+_Avoid_: region, layer, attribute layer, ground type
+
+**Zone kind**:
+What a zone means in play, from a fixed list in code (each needs something in the pipeline or the game to read it): Bigfoot, deer, player spawn, ... Its numbers (density, clearances) are in `rules.yaml`, and it may have a zone for every ground area of some ground types (deer wherever there is forest) without anything drawn; the editor shows one count of all its zones.
+_Avoid_: event area, spawn area, marker type
+
+**Runtime zone**:
+A zone that the game server needs while it runs. The game never sees ground areas or zones, so the build exports **candidate points** instead: seeded points inside every zone of the kind, one per N m² between a minimum and a maximum, clear of buildings and water, in `attribute_points.json` of the map. The server picks one at random; a kind no zone covers has no point.
+_Avoid_: exported attribute, spawn area (an area is not exported)
 
 **Replacement scene**:
 What a mod supplies to replace a parcel's base contents.
@@ -26,7 +50,11 @@ Several parcels that belong to one owner and are treated as one property, sharin
 _Avoid_: merged parcel, estate
 
 **Hand edit**:
-A deliberate, developer-made change to a parcel's or property group's contents (fence, trees, placed objects) that survives every pipeline re-run.
+A deliberate, developer-made change to a parcel's or property group's fence, or a placed object, that survives every pipeline re-run.
+
+**Placed object**:
+A car, pole, wall piece or other asset put on the map by hand, at an absolute position, listed in the top-level `objects` of `edits.json`. It belongs to no parcel: a pole beside a road stands on ground, which is no parcel, as well as a car in a yard. The parcel it stands in is derived from its position and only names its group node in the game.
+_Avoid_: parcel object, prop (a prop is generated: a fence or a tree)
 
 **Loadout**:
 One of a player's five saved sets: a primary weapon, a secondary weapon, a perk and three killstreaks. Edited in game and switched on death.
@@ -65,7 +93,7 @@ A lamp post of the base map, placed from OSM street lamp nodes or along roads by
 _Avoid_: light, streetlight, lamp post
 
 **Corpse**:
-A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile.
+A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. It also carries every Item its player wore or carried in the Bag (up to eight), which another player can take one at a time (see Pickup limit).
 _Avoid_: ragdoll, body, drop
 
 **Sandbox mode**:
@@ -77,7 +105,7 @@ A player whose player token is listed on the server (`--admin-token`). Admins ma
 _Avoid_: operator, moderator, op
 
 **Chat command**:
-A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
+A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/event` (`rozhlas` the loudspeaker, `intel` a test announcement, `bigfoot` starts the Bigfoot Event, `thieves` starts the Thieves event, `current end` concludes the running Event as a win for testing, `current cancel` removes it with no reward), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
 _Avoid_: console command, cheat
 
 **Care package**:
@@ -88,13 +116,25 @@ _Avoid_: supply drop, crate
 A class of primary weapon (machine guns, assault rifles, shotguns, SMGs, sniper rifles) that shares a base recoil pattern; individual weapons may override it. Pistols form the secondary category.
 _Avoid_: weapon type, class
 
-**Boat**:
-A water-only vehicle: it floats on a water body, has no drive on land (it coasts to a stop), and never runs anyone over.
-_Avoid_: ship, watercraft
-
 **Amphibious transport**:
-A four-seat vehicle that drives on land like the war jeep (and runs people over there) and floats at reduced speed on water.
-_Avoid_: APC, amphib
+An open three-seat vehicle, a boat-shaped hull on four wheels: a driver, an armed seat beside them and a ring gun over the rear. On land it drives (and runs people over there); in a water body it floats and drives like a boat (a lazy helm, a stern that swings out), slower. Nothing covers its riders: all three sit in exposed seats.
+_Avoid_: APC, amphib, Schwimmwagen, duck
+
+**Predicted vehicle**:
+A vehicle whose driver's client steps its own copy with the driver's inputs, so the driver sees it in the present rather than about 100 ms late: the utility helicopter (ADR 0006), the amphibious transport (ADR 0010) and the car (ADR 0014). Everyone else, the riders included, sees a predicted vehicle drawn from the snapshots; the other ground vehicles are drawn from the snapshots for the driver too.
+_Avoid_: client-side vehicle, smooth vehicle
+
+**Armed seat**:
+A passenger seat whose rider keeps their own loadout and fights with it from the seat, in first person, aiming with the view inside the seat's arc. The mouse wheel changes the weapon there, since the number keys are the seat switch. The amphibious transport's front right seat is one; the bus's passenger seats are not.
+_Avoid_: shotgun seat, gunner seat (that seat works the vehicle's own gun), fighting seat
+
+**Exposed seat**:
+A seat the hull does not cover: a shot that reaches its rider's body hits the rider and not the hull, and a shot that misses them hits the hull. The flak truck's and the utility helicopter's gunner seats are exposed, and all three seats of the amphibious transport. Riders of one vehicle never hit each other.
+_Avoid_: open seat, unprotected seat
+
+**Ring gun**:
+The amphibious transport's machine gun, on a ring mount over the rear compartment and worked from the gunner seat by a gunner who stands inside the ring. The gunner's view aims it all the way round; over the two riders in front it cannot be depressed. Its rounds are the jeep's roof gun's, and its kills are ordinary kills.
+_Avoid_: turret (alone), pintle gun, rear gun
 
 **Seat switch**:
 Moving to another seat of the vehicle you sit in, without getting out: while seated, the number keys (the weapon slot keys) take that seat (key 2 is the second seat of the vehicle's `seats` list), and a small top-down schematic in the bottom right shows each seat with its number (free: outlined; yours: filled, double ring; taken: struck through). A vehicle with no `seats` list has the one driver seat. A free seat is taken at once; a taken one is refused. Leaving the driver seat leaves the vehicle without input, so it coasts to a stop (a utility helicopter in the air holds a hover, then sets itself down); a gunner's turret keeps its aim. One player can drive, go to the turret and drive again.
@@ -104,8 +144,44 @@ _Avoid_: seat change, swap seat
 The weapons a player can select: the primary, the secondary and the knife of the active loadout (keys 1-3 and the next-weapon cycle). A corpse swap changes its primary or secondary position. Smoke arenas and `--debug-cmds` servers hold every weapon.
 _Avoid_: inventory, toolbar, slots
 
+**Item**:
+Something a player wears that is not a weapon, perk or killstreak, defined in `items.json`. The first Items are event rewards (the Bigfoot head, the Gold chain). A player wears at most one Item per equipment slot and carries the rest in the Bag.
+_Avoid_: loot, gear, drop (as a noun)
+
+**Equipment**:
+What a player wears right now: one Item per equipment slot (the headgear slot and the Neck slot). It belongs to the match and not to the Profile: death puts the worn Items on the Corpse, leaving the match loses it, and a new round keeps it. What is carried unworn is the Bag.
+_Avoid_: inventory (the weapons are the Hotbar), outfit (that is Camouflage)
+
+**Bag**:
+Six cells that hold Items a player carries without wearing them. Match state like Equipment, never in the Profile. Moving an Item between the Bag and an equipment slot is free (no pickup is counted): equipping into a taken slot swaps the worn Item into the Bag, and taking an Item off with a full Bag is refused. Death puts everything in it on the Corpse; leaving the match loses it, a new round keeps it.
+_Avoid_: inventory, backpack, stash
+
+**Ground item**:
+An Item lying on the ground after a player dropped it from their Equipment or Bag. It lands at their feet with no throw, or on the ground under their vehicle (any seat, a helicopter in the air included). Anyone, the dropper too, takes it with the interact key; each take counts one pickup, and with the slot and the Bag full nothing is taken. It expires on the Corpse timer and shares the Corpse cap, which removes things that carry no Item first.
+_Avoid_: loot, drop (as a noun), pickup (that is the act)
+
+**Headgear slot**:
+The equipment slot on the head: an Item in it is worn instead of a helmet. Not the Camouflage's headgear, which is only the look of the helmet; the slot is gameplay.
+_Avoid_: helmet slot, hat slot
+
+**Bigfoot head**:
+The first Item: headgear, the reward for defeating the Bigfoot event. A headshot on its wearer is a body hit: the weapon's body damage, with no headshot multiplier, marker or bonus XP. It has a Pickup limit of three.
+_Avoid_: Bigfoot mask, Bigfoot helmet
+
+**Neck slot**:
+The equipment slot on the neck, under the headgear slot: it holds one Item and nothing hides when it is worn. Worn, moved to the Bag and dropped as the headgear slot is.
+_Avoid_: necklace slot, amulet slot
+
+**Gold chain**:
+The Item of the Neck slot, cosmetic (it protects nothing): a chunky gold chain with a pendant, drawn on the wearer's neck. Each Gang boss killed by a hit leaves one on his body, a Corpse that lasts a few minutes (`reward.chain_corpse_seconds` in `thieves.json`) and carries only the chain. A Gang boss who boards his van and leaves, or flees off the map, keeps his. It has a Pickup limit of three.
+_Avoid_: necklace, bling
+
+**Pickup limit**:
+How many times an Item can be taken from a Corpse or the ground over its whole life. Moving it between the Bag and an equipment slot or dropping it counts nothing. The count belongs to the Item and travels with it from corpse to wearer or Bag to corpse or ground; the attempt after the last pickup makes it crumble (it is gone, and the player reads "The item crumbles in your hands"). An Item with no limit never crumbles.
+_Avoid_: use count, durability, charges
+
 **Streak weapon**:
-A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the turret, the MOAB, the aircraft guns). Kills made with one do not advance the Streak counter. The jeep's roof gun and the utility helicopter's door gun are not streak weapons.
+A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the turret, the MOAB, the aircraft guns). Kills made with one do not advance the Streak counter. The jeep's roof gun, the utility helicopter's door gun and the amphibious transport's ring gun are not streak weapons.
 _Avoid_: killstreak weapon (ambiguous with the streak itself)
 
 **Pellet fan**:
@@ -113,11 +189,11 @@ The pellets of one shotgun shot, sent as a seed, an aim and a cone so every clie
 _Avoid_: spread (alone), buckshot
 
 **Shot spread**:
-The half-angle of the cone a shot can land in. It starts from the weapon's own spread (base plus growth per shot, or the pellet cone of a shotgun), grows with the shooter's speed up to sprint speed and is at its widest in the air, and is then reduced by crouch, prone and aiming. The server and the crosshair use the same rule, so the crosshair gap is the cone.
+The half-angle of the cone a shot can land in. It starts from the weapon's own spread (base plus growth per shot, or the pellet cone of a shotgun), grows with the shooter's speed up to sprint speed and is at its widest in the air, and is then reduced by crouch, prone and aiming. From an armed seat the vehicle's speed stands in for the shooter's own, and the seat gives no stance bonus. The server and the crosshair use the same rule, so the crosshair gap is the cone.
 _Avoid_: accuracy, bloom, recoil (recoil moves the aim; spread scatters around it)
 
 **Camouflage**:
-A loadout's look (`camo.json`): the character (body model, skin tone, headgear), the suit's base colour and pattern, ghillie tufts and face paint. Chosen in the customiser and stored per loadout slot.
+A loadout's look (`camo.json`): the character (body model, skin tone, headgear: the helmet's look, not the Headgear slot), the suit's base colour and pattern, ghillie tufts and face paint. Chosen in the customiser and stored per loadout slot.
 _Avoid_: outfit, cosmetic
 
 **Shot-only cover**:
@@ -133,12 +209,43 @@ The lowest stance: the player lies down and spreads less. Toggled by the prone k
 _Avoid_: lay down, crawl
 
 **Water body**:
-A lake, pond or river area from the map pipeline (`water.json`), with a surface height. The shooter swims in it, and boats float on it.
+A lake, pond or river area from the map pipeline (`water.json`), with a surface height and a bed under it (see Bed). Its depth varies across the body. In deep water the shooter floats at the surface and swims; in shallow water it wades; the amphibious transport floats on it.
 _Avoid_: pond (alone), lake (alone), pool
 
+**Bed**:
+The ground under a water body, carved into the terrain so walking, wading and the visible bottom agree. Its depth varies across the body (a per-body depth grid in `water.json`), and depth at a point is the surface minus the bed there.
+_Avoid_: riverbed (alone), floor, bottom
+
+**Current**:
+The flow of a river water body, which pushes swimmers and the amphibious transport and not waders. Only the Morava has one, and it is added in a later slice (not yet built).
+_Avoid_: flow (alone), drift
+
 **Breath**:
-The air meter under water: it runs down while the player is submerged (shown as AIR on the HUD). Also the sniper's breath hold while scoped.
-_Avoid_: oxygen, stamina
+The sniper's breath hold while scoped: the time the scope can be held steady before the breath must be let go and recovered. It has no meter on the HUD: the player hears an inhale when the hold begins, a heartbeat once under 40 % of the breath is left (faster and louder to the end), and a loud exhale when the breath is forced out, after which the scope sways heavily until it is recovered. There is no air under water.
+_Avoid_: oxygen, stamina, air
+
+**Bullet drop**:
+The fall of a sniper rifle's bullet under gravity, as if it flew at the weapon's `muzzle_velocity`. The hit is still instant (no travel time, no leading a moving target): only the path is a curve. Sniper rifles only; a bot's shots do not drop. Not the damage falloff (less damage with distance).
+_Avoid_: falloff (that is damage), ballistics (the thrown arcs of the Bigfoot)
+
+**Zero**:
+The distance at which a sniper rifle's bullet lands on the crosshair: short of it the bullet is above the crosshair, beyond it under. The player dials it with the mouse wheel while scoped, in 10 m steps from 50 m to the weapon's range; the scope shows it. One zero per weapon, back to the weapon's `zero_distance` (100 m) on death. The distance to the target is the zero to dial, uphill and downhill alike.
+_Avoid_: elevation, sight setting
+
+**Mil-dots**:
+The dots on the cross of a sniper scope, at true angles: 1 mil is 1 m at 1000 m. The scope says how many mils one dot is. A target of a known height that spans n mils is height x 1000 / n metres away; a dot under the centre is the hold-over for a target beyond the Zero.
+
+**Hit diagram**:
+The card a hunter sees after killing a wild animal with a sniper rifle: the animal's side view (always facing left), the place the bullet entered marked on it, the distance of the shot, the weapon, and "HEAD" when the bullet met the head. The side view is always the one picture of the animal standing, whatever it was doing when it was hit: the hit is moved from the Hit shape the bullet was tested against onto the standing one, a head hit to the same place of the head and a body hit to the same place of the body. Only the shooter sees it, for 5 s. Only a kill, only a sniper rifle, only wildlife (not a Pet, a Citizen or a player).
+_Avoid_: kill cam, x-ray
+
+**Hit shape**:
+What a bullet is tested against on a wild animal: the animal's outline in the pose a client draws it in, as a grid of 5 cm cells on its side plane, each covered cell with the animal's half width there and whether it is head. A bullet hits only where it crosses a covered cell, so a shot over the back, between the legs or under the neck misses. Baked from the species' model and its clips (`scripts/make_animal_shapes.py`, `animal_shapes.json`; the paid packs' species in the private asset folder): one shape for standing, one for walking and one for running (everything the clip covers, since the server does not know the stride a client shows), and for eating one every 0.2 s of the clip, picked by how long the animal has eaten less the shooter's delay (the head goes down and comes up). The head cells are for the Hit diagram only: an animal has no headshot damage. A species with no shape, another look of a species (a variant) and an animal that lies or flies are tested against the body box of `animals.json` (`hit_box`, its centre `hit_box_ahead` of the position). A blast or a knife measures to the scaled player capsule, as before.
+_Avoid_: hitbox (the plain box), mask
+
+**Binoculars**:
+An Item that rides in the Bag (it cannot be worn) and is used from there: the binoculars key (B) raises and lowers them. Raised, the view is narrowed about eight times, the weapon is neither shown, fired nor aimed, and the middle of the view reads the distance in metres to what is under it (ground, wall, vehicle, animal, player; "---" for the sky): the number a sniper dials as the Zero. The client measures it against what it draws; the server is not asked. They come down on death, in a seat and when they leave the Bag. The other players see the pair held at the face with both hands, in place of the weapon (the server is told only that they are up or down). Standard issue: every player has a pair in the Bag from the start of each life (when a cell is free), and a death does not leave it on the Corpse. `/give binoculars` adds one. No Pickup limit.
+_Avoid_: rangefinder, spotter scope
 
 **Headlights**:
 A vehicle's front and tail lights, from the optional `lights` block in `vehicles.json`. The driver toggles them with the headlights key (H).
@@ -165,7 +272,7 @@ The utility helicopter's machine gun, on a pintle in its right door and worked f
 _Avoid_: turret (alone), minigun, side gun
 
 **Flak truck**:
-A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every other vehicle.
+A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every closed vehicle.
 _Avoid_: AA gun, anti-air vehicle, SPAAG
 
 **Bus**:
@@ -184,6 +291,10 @@ _Avoid_: turret (alone, ambiguous with the vehicle gun), gun emplacement
 The 4-kill killstreak: for 60 seconds the owner receives enemy pings on the minimap, one every second. Enemies with Ghost are not shown.
 _Avoid_: drone, radar
 
+**Gunfire blip**:
+A short-lived mark on the minimap and the tactical map at the spot an enemy fired from, shown when the shot is within 150 m of the local player (match.json `gunfire_blip_radius`), for 1.5 seconds with a fade, at most one per shooter every 0.25 seconds. Only enemies' gun shots blip (in team deathmatch teammates never do, in free-for-all everyone else does); the knife, streak weapons and vehicle guns do not, and Ghost does not hide it. Shown out of sight too. It is a hollow diamond, not the UAV's filled ping.
+_Avoid_: radar ping, UAV ping, shot marker
+
 **Attack missile**:
 The 5-kill killstreak: a rocket dropped high above the owner that the owner steers from an infrared point of view. It can only dive (never level, never straight down), so it reaches the ground within about 7 to 13 seconds and detonates there.
 _Avoid_: rocket (alone), missile strike
@@ -201,19 +312,27 @@ A flat test map (far from the village) run by one of the `--*-smoke` flags for s
 _Avoid_: test map, sandbox
 
 **World entity**:
-A non-player thing the server replicates on one channel: a corpse, a turret, an attack missile, a care package or an aircraft, identified by a type byte.
+A non-player thing the server replicates on one channel: a corpse, a ground item, a turret, an attack missile, a care package or an aircraft, identified by a type byte.
 _Avoid_: object, prop, actor
+
+**Interest**:
+The distance rule of the world channel (ADR 0025): the world entity types that opt in (animals, flocks, poop) are sent to a client only while they are within 800 m of its player (horizontal), and stay in until 850 m. Out of interest an entity is still alive and still counts (its spawn and despawn go to everyone); the client just does not see it. Players and vehicles are not subject to it.
+_Avoid_: relevancy, culling, area of interest, visibility range
+
+**Dormant**:
+A world entity that is alive but out of a client's interest: the server told that client (a dormant record) and the client hides it and stops animating it, keeping no pose. It comes back from a keyframe, never by sliding from its old pose. Not the same as despawned.
+_Avoid_: hidden entity, sleeping, culled
 
 **Protocol version**:
 The number in the hello and welcome messages. A client and a server must match, or the server refuses the client with both numbers in the message.
 _Avoid_: build number, version (alone)
-**Region**:
-A hand-drawn shape of any form, independent of parcel boundaries, painted in one colour over the ground inside it. It changes only colour: parcels, roads, buildings and everything standing on the ground are unaffected.
-_Avoid_: zone, area (an "area" is the slice or the village)
+**Map outline**:
+The ground the map covers: a polygon (`polygon` in `map.local.yaml`) of absolute S-JTSK points. Only what touches it is in the map; the terrain stops at it.
+_Avoid_: border, boundary
 
 **Sketch**:
-The temporary marks a developer draws on the ground in the map editor to point at places in a prompt: points (A, B, ...) and lines (L1, L2, ...; a closed line means the ground inside it). A sketch is never map content and is not a hand edit; it lives in the editor's state file only.
-_Avoid_: annotation, drawing, region (a region is saved and paints the ground)
+A named group (ROAD, FENCE_PLAN, ...) of the temporary marks a developer draws on the ground in the map editor to point at places in a prompt. Several sketches exist at once, each holding any number of **marks**: points (A, B, ...) and lines (L1, L2, ...; a closed line means the ground inside it). Mark names are unique across all sketches; a prompt can name one mark ("at A"), or a whole sketch ("everything in sketch ROAD"). The developer draws in the editor, and Claude draws through the MCP server (`sketch_add_*`, e.g. "highlight this road under sketch ROAD"). A sketch is never map content and is not a hand edit; it lives in `out/sketch.json` only.
+_Avoid_: annotation, drawing, ground patch or zone (those are saved map content), layer
 
 **Building detail**:
 A hand-written description of one real building's geometry beyond its OSM footprint (`pipeline/config/buildings/<OSM id>.yaml`): wall openings, roof overhang, read from reference photos. The shell stays the rule-generated one; the detail adds to it and never changes the footprint.
@@ -241,23 +360,31 @@ The state of a glass pane with no hit points left: its fragments fly out once, a
 _Avoid_: broken, destroyed (that is a vehicle or an aircraft)
 
 **Bunker**:
-One of the village's three concrete WW2 fortifications: a building of the base map, and the only kind of building a player can go inside. It has a ground floor and three floors under it.
+One of the village's three concrete WW2 fortifications: a building of the base map, and the only kind of building a player can go inside. It has a ground floor and three floors under it; the lowest is its command post. Not the **Base**: that is the military hangar.
 _Avoid_: pillbox, fortification
 
 **Flood wall**:
 The concrete wall between the river and the village, built from placed pieces (`prim:floodwall_*`): a ledge on the village side that players walk on, an upper wall with a railing behind it, access points and road gates. Its village side is the piece's `-y`.
 _Avoid_: levee, dike, river wall
 
+**Dike**:
+The earth embankment north of the village, with a gravel track on top and thick grass on its sides; the cadastral parcel P-0073. Distinct from the flood wall, which is the concrete wall between the river and the village.
+_Avoid_: levee, flood wall (that is the concrete wall)
+
 **Ladder**:
 How a player moves between the floors of a bunker: they get on with the interact key, climb with forward and back, and step off at either end. They cannot fire on it.
 _Avoid_: stairs, climbing (that is the verb)
 
 **Shelter**:
-What a bunker's room gives the players in it: a blast outside the room does not hurt them, and a blast inside it hurts nobody outside. The MOAB is not stopped.
+What a bunker's room, or the church, gives the players in it: a blast outside the room does not hurt them, and a blast inside it hurts nobody outside. The MOAB is not stopped.
 _Avoid_: blast cover, shot-only cover (that stops shots, not blasts), protection (that is spawn protection)
 
+**Church doors**:
+The double doors in the doorway of the church: closed (solid, drawn as dark wooden leaves) or open (leaves swung inward, nothing solid). Closed unless the Holy Mass event opens them. The church rooms shelter whether they are open or not.
+_Avoid_: church gate, church entrance (that is the doorway)
+
 **Match mode**:
-How a round is scored and won, set by `mode` in `match.json`: free-for-all (`ffa`, the default: every player alone) or team deathmatch (`tdm`).
+How a round is scored and won, set by `mode` in `match.json` at server start, or by an admin's `/restart`: free-for-all (`ffa`, the default: every player alone) or team deathmatch (`tdm`).
 _Avoid_: game mode, playlist
 
 **Team**:
@@ -265,4 +392,131 @@ One of the two sides (A and B) of a team deathmatch round. A joining player goes
 _Avoid_: squad, clan, faction
 
 **Friend / enemy colours**:
-The blue (friend) and orange (enemy) the HUD uses, seen from the local player's team, for names in the kill feed and scoreboard and for the minimap dots. A team tag ("A"/"B") always accompanies the colour, and both colours have a colour-blind set (`TeamPalette`).
+The blue (friend) and orange (enemy) the HUD uses, seen from the local player's team, for names in the kill feed and scoreboard and for the enemy pings on the maps. Teammates on the minimap and tactical map are green circles instead. A team tag ("A"/"B") always accompanies the colour, and both colours have a colour-blind set (`TeamPalette`).
+
+**Tactical map**:
+The full-screen, north-up map sheet of the whole world (the square that holds the whole terrain polygon, so the player can be anywhere on it; the minimap shows the village's smaller square) that the M key (rebindable, `map`) opens and closes; Esc also closes it. It does not pause anything. It frees the mouse and the legs keep working (like the Equipment screen), but the view does not turn and nothing fires. The ground is painted from the terrain mesh's own colours, top-down (the default ground colour shows where the terrain is cut off), and the map's top-down render (`tactical-map.png` in the map folder: buildings, roofs, props, forest) lies over it wherever it has pixels when the map has one (the minimap uses it only inside the village polygon); roads and a square grid are drawn over it, labelling columns A, B, C... from the west and rows 1, 2, 3... from the south, so a square has a short reference such as "C7" (the cell is 50, 100 or 200 m, chosen so there are about 10 to 20 a side; these are not S-JTSK coordinates). One panel on the right holds only the compass rose (with the player's heading) and the player's current grid reference. Markers (the player's arrow, vehicles, friends in team deathmatch, UAV pings, gunfire blips, the waypoint) are the minimap's, drawn from the same data. It closes on the respawn screen, at the end of a match and in a missile or turret view.
+_Avoid_: world map, big map, full map
+
+**Waypoint**:
+The one point a player sets by left-clicking the tactical map (or Enter / the pad's A at the keyboard cursor moved with the arrows or D-pad). Clicking it again, right-click, Delete (pad X) or walking within 5 m of it clears it; setting another moves it. It is local to the player (nobody else sees it), not kept between matches, and nothing leads to it: no route, no line. It shows as a downward triangle on the tactical map and the minimap, and in the world as a light green diamond with "Target - 500m" (distance on the ground, "1.2km" from 1000 m) under it, only while it is in front of the camera and on the screen.
+_Avoid_: ping, marker, objective
+
+**Animal**:
+A creature of the world that is not a player: a deer, a dog, a cow. It has hit points and can be shot dead (`animals.json` lists the species, their hit points, speeds and models). It stands, eats, wanders around the spot it spawned at, and runs from players, vehicles and the shot that hurt it. A killed animal lies for `corpse_seconds` with its death clip held on the last frame, then is removed (a one-hit species, see Pet, does not lie: it is removed at once). A vehicle fast enough to hurt a player that runs a wild animal over throws it ahead and takes `run_over_hp_fraction` (half) of its full hit points, without being stopped itself: the first time the animal flies (state Thrown), lies where it landed for `knockdown_seconds` (Down), then gets up and runs; the second time it is killed and the body flies on. Thrown, it is a ragdoll on every client: the model rolls about its own length in the air and settles on a side. Pets are not run over. A species may sit (from standing, for a random while: the client plays sit-down, holds, stands up) or bark (once, one clip length); both are opt-in (`sit`, `bark` in `animals.json`) and neither is a state a player can cause. It is a world entity (wire type 50) the server owns; clients only draw it. Not a target dummy (a player-shaped practice target) and not a corpse (what a killed player leaves).
+_Avoid_: NPC (alone), mob, critter
+
+**Pet**:
+An Animal (a dog, cat, hen, rooster, chick or duck) that lives in one property group and never leaves its Pen. It wanders, stands, eats, sits (dogs and cats) and barks (dogs) around the point it spawned at, and does not flee: not from players or vehicles, and not when shot. It dies of any hit that deals damage (`one_hit`, whatever its `hp`): it has no hit reaction and no corpse, the entity ends at once and every client shows a **puff** (a few small grey clouds) where it stood. A kill scores nothing, is not in the kill feed, and nothing replaces it until the next round. Each round starts with new pets: `pets.json` gives a property group's chance to keep pets, how many, which species (by weight, ids of `animals.json`) and a cap for the whole map; a parcel in no group gets none. A **pinned pet** (`pinned` in `pets.json`) is added to a named group on top of the random ones: a species, optionally one asset of it (a **variant**: another model of the species, listed in `animals.json`, such as a breed and its colour look; `base` names the species' own first model; unpinned pets wear a random one), a count and a chance rolled per pet each round, placed before the random pets so the cap never drops it. A variant may have its own hit box (a Chihuahua is smaller than a Saint Bernard); a shot is tested against the box of the pet's own variant. Their models are the paid Synty pet packs, kept outside the repository in the private asset folder (`assets-private/synty/glb/pets`): a game without that folder draws each pet as a box of its hit box, and everything else works the same. There is no bark sound (no asset). A world entity of wire type 50 like any Animal; the species' `flees: false` is what makes an animal a pet. A Thief of the Thieves event may carry a pet away as Loot (Animal state Carried, held at the Thief's side): it stays a hit target, walks home if its carrier is killed (penned again once inside its Pen), and is gone while loaded in a van. Not a stray, wildlife (#254) or livestock in a field.
+_Avoid_: companion, NPC (alone)
+
+**Pen**:
+The ground a Pet may stand on: the union of the polygons of all parcels of one property group (each parcel its outer ring minus its holes). The unit is always the property group, never a lone parcel. A Pet's world has no ground outside its Pen, so its own steps refuse to leave; a house inside it does not stop a Pet (it may walk through). Not a fence (the fence is the property group's wall; a Pen is only the area).
+_Avoid_: enclosure, yard, garden (that is a parcel kind)
+
+**Poop**:
+What a Pet leaves on the ground: a small cosmetic world entity (wire type 53) with no hit points and no collision, drawn as one of the private pack's poop models (a dog's about 12 cm, a cat's 7 cm; which one is picked by the entity id, not by the pet) or, without the pack, as a small brown cube. Each Pet has its own clock (`poop_min_seconds` to `poop_max_seconds`); when it runs out and the Pet is alive and standing or eating (not sitting or barking: it waits), a Poop drops at its feet and the clock starts over. It lies `poop_lifetime_seconds` and disappears; a property group keeps at most `poop_max_per_group`, and the next one removes the oldest.
+_Avoid_: dung, droppings, mess
+
+**Citizen**:
+A villager of the Holy Mass: leaves a house, walks the navigation mesh to the church door, follows the church's scripted route to its seat and sits. Any hit kills it in one (it lies for `corpse_seconds`, nothing replaces it); it never reacts to combat, and bots do not see it. The server tells who killed it (the event's sinner rule). A world entity (wire type 51) with a pure brain; `holy_mass.json` holds its numbers and bodies, `church.json` (door, aisle, seats) its destination. Not a bot (bots are players with loadouts), not an Animal, not a target dummy.
+_Avoid_: NPC (alone), villager, pedestrian
+
+**Rozhlas**:
+The village loudspeaker broadcast: a song, the announcement, "OPAKUJEM" (I repeat), then the announcement again, all through the same bad-loudspeaker sound, heard across the village as one shared recording, not one per pole. Baked from clean recordings by `scripts/make_rozhlas.py`; on the air at a clock-derived moment, so every client hears the same thing. Louder and clearer the closer the player is to the nearest megaphone pole, quieter and duller the further; poles next to each other do not add up. An **Event announcement** also starts it, and so does an admin's `/event rozhlas`.
+_Avoid_: PA system, radio, announcer
+
+**Detour**:
+The Obecny Urad (the village office, parcel P-0288) open to players while a Rozhlas broadcast is on air: every scheduled broadcast and an admin's `/event rozhlas` opens one, an Intel or Event announcement over the megaphones does not. It lasts as long as the broadcast, or as the Hijack if the announcer is killed; outside it the building is sealed and its workers do not exist. Not an Event (it is not on the Intel board, and Events run beside it). The loudspeaker's own state is `RozhlasPhase` (Idle, OnAir, Hijacked).
+_Avoid_: rozhlas event, urad event
+
+**Hijack**:
+The 3 minutes after the announcer is killed during a Detour: her announcement is cut at once, the microphone stays live and a player can take the Set and speak over the megaphones. The clock is exactly 180 s from the kill and is not refreshed (by taking the Set, the holder dying, other kills); it runs even if nobody takes the Set. One per broadcast. Every other worker stays and everything ends together. Without a kill the broadcast just ends on schedule and no player has the microphone.
+_Avoid_: takeover, hack
+
+**Set holder**:
+The one player on the microphone during a Hijack, at the dictation table, heard over every megaphone. Takes the Set by holding interact at the table once the announcer is dead; loses it on death, disconnect, moving more than about 2 m from the table or the end of the Hijack, and the next player can take it at once. The Set is fixed at the table: not carried, not an item.
+_Avoid_: broadcaster, speaker, host
+
+**Urad worker**:
+A person of the Detour, drawn and killed like a Citizen (same world entity, new roles), one of three: The **Mayor** (fat) sits in the chair; two **Clerks** (one female) sit at their desks; the **Announcer** (female) sits at the dictation table and is the voice of the broadcast. They appear sitting at their seats (`urad.json`) when the Detour opens, fresh each time, never walk or flee and do not react to combat. Any hit kills one in one (no score, no kill feed, no penalty); a corpse stays until the Detour ends. Killing the Announcer is the only way to start the Hijack. Not Mass citizens: the Holy Mass does not touch them and they do not touch it.
+_Avoid_: NPC (alone), staff, official
+
+**Base**:
+The place players are told to report to when something is happening: the military hangar, a large building placed on the map. It is an ordinary building; what makes it the base is that the intel room is on its floor.
+_Avoid_: HQ, headquarters, camp, outpost
+
+**Intel room**:
+The floor of the base, with the intel screen on the wall of its far end, facing the entrance. It is where players walk in through the hangar's small door and read what is coming. A map with no hangar uses the command post of a bunker instead.
+_Avoid_: briefing room, war room, control room
+
+**Intel screen**:
+The big military-styled wall screen in the intel room. For each announced event it shows what it is, when it begins (a countdown, then "under way"), the risks, where (a grid reference and a map of the surroundings; none for an event with no place) and an emblem of its kind. With several events it shows one at a time. With none it says all is quiet. An admin's test event carries a "not a real event" tag. It is a client-only texture; nothing on it can be used or shot.
+_Avoid_: terminal, monitor, TV
+
+**Intel board**:
+The server's list of announced events (each: name, kind, start time, description, risks, an optional place), sent whole to every client at each change and to a joiner. The intel screen draws it. An event is on it from its announcement until it is over. This is the one thing an event gives the announcement; the event itself is none of its business.
+_Avoid_: event list, schedule
+
+**Event announcement**:
+What tells players that something was detected: a toast and a chat line ("Suspicious activity detected. Report to the base for more information.", with the base's grid reference when the map has a sheet) and the **Rozhlas** broadcast. It never says what the event is: that is for the intel screen.
+_Avoid_: alert, notification, warning (the HUD's helicopter warning is another thing)
+
+**Event**:
+A short, time-limited happening in the village with a challenge and a reward, such as the Bigfoot. An Event is started by an admin with `/event <name>` (there is no scheduler yet), and only one runs at a time. It is active until it is **won** (its challenge is beaten: the reward is given) or **despawned** (it timed out or an admin cancelled it: no reward). What it does belongs to its kind; the lifecycle is the same for all (`EventRun`, `EventBook`). It can be announced on the Intel board; the Bigfoot's first version is not.
+_Avoid_: quest, mission, mode (a match mode is another thing), wave
+
+**Bigfoot**:
+The first Event: a giant, twice a player's height, that spawns at a baked point of an area with `event spawn: bigfoot` (or, on a map with none, near a random player as a dev fallback) and hunts the players. It is a **world entity** with its own brain (`Bigfoot`), not a bot: it has no player health or weapons, ignores the navmesh, walks a straight line over the terrain towards the nearest player (trees do not stop it, buildings do), and has a **Hit count** instead of hit points. Its attacks come with its phases: it hurls tree trunks (phase one); stomps and throws vehicles (two); grabs a player, flails with them and launches them, at another player when there is one (three); everything it does to a player is 2 to 5 damage. When it dies the Event is won: players credited get XP, and footsteps lead to a Corpse that carries the Bigfoot head. Every number is in `bigfoot.json`.
+_Avoid_: boss (alone), monster, sasquatch, yeti
+
+**Thieves event**:
+The Event started with `/event thieves`: one wave of Raids comes to the village to steal Loot: its vans (one to three, at random) arrive in a convoy and split in the village. It cannot be lost: it is won when every van of the wave is gone (destroyed or driven off), and it runs to its end even with no player near. What is stolen stays stolen until the round resets. Every number is in `thieves.json`; the design is in `docs/events/README.md`.
+_Avoid_: invasion, heist, robbery
+
+**Raid**:
+One van of the Thieves event and its crew of Gang members (a Gang boss, Enforcers, Thieves). The van drives in along one of two fixed routes (picked at random, the same one for every van of the wave, which arrives in a convoy of 1 to 3 and splits in the village), parks at a stop of its own on a road within 180 m of the church, the crew steals and loads Loot, and the van leaves when it is full or its stay timer runs out (not when its crew is dead: it stays, solid and destroyable).
+_Avoid_: wave, attack, round (a round is the match's)
+
+**Raid van**:
+The vehicle of a Raid: a scripted world entity that follows the road graph (in and out along one of the two fixed routes), not a vehicle a player can use (ADR 0021). Nobody enters it and nothing pushes it; it pushes through what is in its way and honks. It has a Hit count; it leaves when it is full or its stay timer runs out, crew dead or not; destroyed, its Raid is over, everything loaded in it goes back to its place and its crew flees on foot. World entity wire type 55.
+_Avoid_: truck, transport, car
+
+**Gang member**:
+A person of a Raid: a world entity with its own brain and a Hit count, not a Citizen (a Citizen dies of one hit and never reacts) and not a bot. Three kinds: a **Thief** steals Loot and carries it to the van; an **Enforcer** carries a pipe, steals nothing and guards the Thieves and the van; the **Gang boss** stays by the van and wears the Gold chain. They attack a player only while that player keeps attacking them: a hit on a member of their Raid makes the whole Raid fight that player (Enforcers, the Gang boss and a Thief with free hands) until 8 s after their last hit, they die or are 30 m from every living member; then the Thieves go back to stealing and the Enforcers and the Gang boss to guarding. Members do not stack on one spot: chasers take different places round the player. Killed by hits (a Hit count of 5 / 8.75 / 20: a bullet 1, a headshot 2, an explosive or a vehicle weapon a weight) or by a vehicle running it over; it lies 10 s, pays a little XP and is not in the kill feed. Turrets and killstreak weapons shoot it, bots ignore it. World entity wire type 57.
+_Avoid_: NPC (alone), enemy, bandit, robber; boss (alone: say Gang boss)
+
+**Loot**:
+What a Thief takes: a tire off a car, a Pet, a satellite dish off a house, a connector off a utility pole. Tires are the priority: a Thief goes for a tire before any other Loot, and a vehicle that newly turns up near a Raid's van (spawned, or driven there and stopped) pulls a share of its free Thieves to its tires, at most one per wheel. It is carried, lying (its carrier was killed: another Thief may take it, a player holds use on it to send it back to its place; a Pet walks home by itself) or loaded in a Raid van. Loaded Loot of a van that drove off is gone until the round resets. At most 24 pieces lie at once (over it the oldest goes back by itself), and lying Loot stays, and stays returnable, after the event. Not an Item: a player never carries it.
+_Avoid_: item, pickup, cargo, stolen goods
+
+**Hit count**:
+How the Bigfoot is killed: not hit points but a number of hits, `hits.per_player` times the participants (at least one), tuned for about a minute. A bullet hit counts 1, with no headshot bonus (a headshot on it is a body hit); an explosive hit (a rocket, the attack missile, the MOAB) and a vehicle-weapon hit count a larger, configurable weight; ramming it counts nothing. The count only goes up while it fights.
+_Avoid_: health, hit points, HP bar
+
+**Participant**:
+A living player within `hits.participant_radius_m` of the Bigfoot. Participants set the Hit count. Credit for the win goes to everyone who hit it at least `reward.credit_min_hits` times and to every participant alive when it fell. If every participant dies it **wipes** the fight: it heals to full and waits where it stands until a player comes near.
+_Avoid_: contributor, attacker
+
+**Bigfoot phase**:
+One of three stages of the Bigfoot's fight, at fractions of the Hit count taken (30 % and 60 %), with an **enrage** past 85 %, when it is faster and its cooldowns shorter. A phase adds attacks and never takes any away.
+_Avoid_: stage, level, form
+
+**Shockwave**:
+The stomp's ring of force running outwards along the ground from the Bigfoot. It knocks back and hurts every player standing on the ground it crosses, once; a player who is in the air as it passes (a jump) is untouched. The stomp's wind-up (its pose and a sound) is the warning.
+_Avoid_: blast, explosion (those have a radius and damage falloff)
+
+**Footsteps**:
+The trail of giant footprints that appears where the Bigfoot fell and leads, a little over a hundred metres, to its corpse. They are drawn on every client for as long as the corpse lasts (`reward.corpse_seconds`, much longer than a player's corpse).
+_Avoid_: tracks, breadcrumbs
+**Status**:
+A condition a player carries that is not an Item: no slot, no bag cell, no drop, no corpse. Server session state beside the Equipment, never in the profile. Two kinds: the devil's curse (the player's hits set victims ablaze) and the divine blessing (one lethal hit is negated). A new round keeps it; the player's death ends it.
+_Avoid_: buff, effect, power-up, item (an Item is worn or carried)
+
+**Burn**:
+Damage over time on a player who was set ablaze, by a cursed player's hit or by a demon's fireball: 0.5 hp/s for 10 s (`burn` in `holy_mass_demon.json`). A new ignition refreshes it and never stacks; a kill is credited to the cursed shooter, and a fireball's burn to nobody. It ends with the victim's death.
+_Avoid_: fire damage, DoT, poison
+
+**Demon**:
+The boss the priest turns into in the Holy Mass event: it crawls on the walls and ceiling of the church between baked anchor points (no physics, no navmesh) and throws telegraphed fireballs. It has no hit points but a hit count (bullet 1, explosive and vehicle weapons more, no headshot bonus) that scales with the players inside. If everyone inside dies it heals and waits. Every player who hit it at least once when it dies gets the devil's curse (a Status).
+_Avoid_: boss (alone), monster, priest (that is its first form)

@@ -13,7 +13,7 @@ from drycastle_pipeline.edits import (
     resolve_fence,
     validate,
 )
-from drycastle_pipeline.props import make_fences, make_trees, run_props
+from drycastle_pipeline.props import make_fences, run_props
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace
 
@@ -31,21 +31,20 @@ FULL = {
                 "colour": "#223344",
                 "gaps": [{"at": [ORIGIN[0] + 40, ORIGIN[1] + 70], "width_m": 3.0}],
             },
-            "trees": {"count": 4, "seed_offset": 2},
-            "objects": [
-                {
-                    "id": "car-1",
-                    "asset": "pack:cars/sedan",
-                    "position": [ORIGIN[0] + 50, ORIGIN[1] + 50],
-                    "rotation_deg": 90,
-                    "scale": 1.1,
-                    "colour": "#aa0000",
-                },
-            ],
         },
-        "P-0002": {"fence": {"mode": "none"}, "trees": {"density_per_1000m2": 2.5}},
-        "P-0003": {"objects": [{"id": "bench", "asset": "prim:box", "position": [1, 2], "z": 3}]},
+        "P-0002": {"fence": {"mode": "none"}},
     },
+    "objects": [  # written sorted by id
+        {"id": "bench", "asset": "prim:box", "position": [1, 2], "z": 3},
+        {
+            "id": "car-1",
+            "asset": "pack:cars/sedan",
+            "position": [ORIGIN[0] + 50, ORIGIN[1] + 50],
+            "rotation_deg": 90,
+            "scale": 1.1,
+            "colour": "#aa0000",
+        },
+    ],
     "groups": {
         "G-0001": {
             "parcels": ["P-0004", "P-0005"],
@@ -98,15 +97,7 @@ def test_validator_accepts_full_document() -> None:
             "parcels.P-0412.fence.gaps.0.width_m: must be",
         ),
         (with_parcel({"fence": {"gaps": [{"width_m": 2}]}}), "gaps.0.at: required"),
-        (with_parcel({"trees": {}}), "parcels.P-0412.trees: give exactly one"),
-        (
-            with_parcel({"trees": {"density_per_1000m2": 1, "count": 2}}),
-            "parcels.P-0412.trees: give exactly one",
-        ),
-        (with_parcel({"trees": {"density_per_1000m2": -1}}), "density_per_1000m2: must be"),
-        (with_parcel({"trees": {"count": 2.5}}), "parcels.P-0412.trees.count: must be an integer"),
-        (with_parcel({"trees": {"count": 1, "seed_offset": "a"}}), "seed_offset: must be"),
-        (with_parcel({"trees": {"count": 1, "rate": 2}}), "parcels.P-0412.trees.rate: unknown"),
+        (with_parcel({"trees": {"count": 1}}), "parcels.P-0412.trees: per-parcel tree settings were removed"),
         (with_parcel({"objects": {}}), "parcels.P-0412.objects: must be a list"),
         (
             with_parcel({"objects": [{"id": "a", "asset": "prim:box", "position": [1]}]}),
@@ -235,7 +226,7 @@ def test_shipped_edits_file_is_canonical_and_valid() -> None:
 
     text = DEFAULT_EDITS.read_text()
     assert text == dump_text(load_edits(DEFAULT_EDITS))
-    assert load_edits(DEFAULT_EDITS) == Edits()
+    assert not [pid for pid, e in json.loads(text)["parcels"].items() if "objects" in e]  # the new shape
 
 
 def test_resolve_fence_group_inheritance() -> None:
@@ -390,54 +381,6 @@ def test_group_auto_uses_one_seeded_roll_for_all_members(ws) -> None:
     assert all(off_shared_edge(s) for s in got)
 
 
-def trees_for(ws, overrides=None, objects=None):
-    osm: list[dict] = []
-    return make_trees(
-        ws["parcels"],
-        ws["buildings"],
-        ws["graph"],
-        osm,
-        ws["terrain"],
-        TREE,
-        overrides=overrides,
-        objects=objects,
-    )
-
-
-def parcel_trees(trees, pid):
-    return [t for t in trees if t["src"] == "rule" and t["parcel"] == pid]
-
-
-def test_seed_offset_rerolls_only_that_parcel(ws) -> None:
-    base = trees_for(ws)
-    zero = trees_for(ws, {"P-0002": {"density_per_1000m2": TREE["density_per_1000m2"]["garden"]}})
-    # offset 0 with the rule density is the same layout as the default
-    assert parcel_trees(zero, "P-0002") == parcel_trees(base, "P-0002")
-    rerolled = trees_for(
-        ws,
-        {"P-0002": {"density_per_1000m2": TREE["density_per_1000m2"]["garden"], "seed_offset": 3}},
-    )
-    assert parcel_trees(rerolled, "P-0002") != parcel_trees(base, "P-0002")
-    assert parcel_trees(rerolled, "P-0002")
-    assert parcel_trees(rerolled, "P-0001") == parcel_trees(base, "P-0001")
-
-
-def test_tree_count_override_is_exact(ws) -> None:
-    got = trees_for(ws, {"P-0002": {"count": 7}})
-    assert len(parcel_trees(got, "P-0002")) == 7
-    assert parcel_trees(trees_for(ws, {"P-0002": {"count": 0}}), "P-0002") == []
-
-
-def test_trees_keep_clear_of_placed_objects(ws) -> None:
-    objects = [(60.0, 60.0), (120.0, 40.0 + 30.0)]
-    got = trees_for(ws, objects=objects)
-    for t in parcel_trees(got, "P-0001") + parcel_trees(got, "P-0002"):
-        for ox, oy in objects:
-            assert (
-                Point(t["x"], t["y"]).distance(Point(ox, oy)) >= TREE["object_clearance_m"] - 1e-6
-            )
-
-
 def write_edits(tmp_path, doc):
     path = tmp_path / "edits.json"
     dump_edits(parse(doc), path)
@@ -453,30 +396,22 @@ def test_objects_json_content_and_order(ws, tmp_path, capsys) -> None:
         tmp_path,
         {
             "version": 1,
-            "parcels": {
-                "P-0002": {
-                    "objects": [
-                        {
-                            "id": "z-bench",
-                            "asset": "prim:slab",
-                            "position": [ORIGIN[0] + 120, ORIGIN[1] + 60],
-                            "colour": "#334455",
-                        }
-                    ]
+            "objects": [
+                {
+                    "id": "z-bench",
+                    "asset": "prim:slab",
+                    "position": [ORIGIN[0] + 120, ORIGIN[1] + 60],
+                    "colour": "#334455",
                 },
-                "P-0001": {
-                    "objects": [
-                        {
-                            "id": "car-1",
-                            "asset": "pack:kenney-car-kit/sedan",
-                            "position": [ORIGIN[0] + 50.25, ORIGIN[1] + 50],
-                            "z": 101.5,
-                            "rotation_deg": 90,
-                            "scale": 1.5,
-                        }
-                    ]
+                {
+                    "id": "car-1",
+                    "asset": "pack:kenney-car-kit/sedan",
+                    "position": [ORIGIN[0] + 50.25, ORIGIN[1] + 50],
+                    "z": 101.5,
+                    "rotation_deg": 90,
+                    "scale": 1.5,
                 },
-            },
+            ],
         },
     )
     run_props(ws["work"], DEFAULT_RULES, edits_path=edits)
@@ -493,7 +428,6 @@ def test_objects_json_content_and_order(ws, tmp_path, capsys) -> None:
         "scale": 1.5,
         "colour": None,
         "parcel": "P-0001",
-        "owner": "P-0001",
         "chunk": [0, 0],
     }
     assert bench["parcel"] == "P-0002" and bench["colour"] == "#334455"
@@ -501,53 +435,69 @@ def test_objects_json_content_and_order(ws, tmp_path, capsys) -> None:
     assert capsys.readouterr().err == ""
 
 
-def test_objects_outside_every_parcel_warn_and_are_placed(ws, tmp_path, capsys) -> None:
+def test_object_outside_every_parcel_is_placed_without_a_warning(ws, tmp_path, capsys) -> None:
+    # an object belongs to no parcel: a pole on a road or on ground needs only its position
     edits = write_edits(
         tmp_path,
         {
             "version": 1,
-            "parcels": {
-                "P-0001": {
-                    "objects": [
-                        {
-                            "id": "lost",
-                            "asset": "prim:box",
-                            "position": [ORIGIN[0] + 900, ORIGIN[1]],
-                        }
-                    ]
-                }
-            },
+            "objects": [
+                {"id": "lost", "asset": "prim:box", "position": [ORIGIN[0] + 900, ORIGIN[1]]}
+            ],
         },
     )
     run_props(ws["work"], DEFAULT_RULES, edits_path=edits)
     (obj,) = read_objects(ws["work"])["objects"]
     assert obj["id"] == "lost" and obj["parcel"] is None
-    assert "outside every parcel" in capsys.readouterr().err
+    assert "outside" not in capsys.readouterr().err
 
 
-def test_object_in_a_different_parcel_warns_but_is_placed(ws, tmp_path, capsys) -> None:
+def test_object_parcel_is_the_one_containing_it(ws, tmp_path, capsys) -> None:
     edits = write_edits(
         tmp_path,
         {
             "version": 1,
-            "parcels": {
-                "P-0001": {
-                    "objects": [
-                        {
-                            "id": "moved",
-                            "asset": "prim:box",
-                            "position": [ORIGIN[0] + 120, ORIGIN[1] + 50],
-                        }
-                    ]
-                }
-            },
+            "objects": [
+                {"id": "moved", "asset": "prim:box", "position": [ORIGIN[0] + 120, ORIGIN[1] + 50]}
+            ],
         },
     )
     run_props(ws["work"], DEFAULT_RULES, edits_path=edits)
     (obj,) = read_objects(ws["work"])["objects"]
     assert obj["parcel"] == "P-0002"
-    err = capsys.readouterr().err
-    assert "outside its parcel P-0001" in err and "inside P-0002" in err
+    assert "outside" not in capsys.readouterr().err
+
+
+def test_objects_listed_under_a_parcel_are_still_read_and_moved_to_the_top_level(ws, tmp_path) -> None:
+    # the old shape (a file from before objects belonged to no parcel) still loads
+    edits = write_edits(
+        tmp_path,
+        {
+            "version": 1,
+            "parcels": {
+                "P-0002": {"objects": [{"id": "o-0002", "asset": "prim:box", "position": [1, 2]}]},
+                "P-0001": {
+                    "fence": {"mode": "none"},
+                    "objects": [{"id": "o-0001", "asset": "prim:box", "position": [3, 4]}],
+                },
+            },
+        },
+    )
+    loaded = load_edits(edits)
+    assert [o["id"] for o in loaded.objects] == ["o-0001", "o-0002"]  # sorted by id
+    assert loaded.parcels == {"P-0001": {"fence": {"mode": "none"}}}  # P-0002 held only objects
+    doc = json.loads(dump_text(loaded))
+    assert [o["id"] for o in doc["objects"]] == ["o-0001", "o-0002"]
+    assert all("objects" not in e for e in doc["parcels"].values())  # written in the new shape
+
+
+def test_object_ids_are_unique_across_the_top_level_and_old_shape() -> None:
+    doc = {
+        "version": 1,
+        "objects": [{"id": "o-0001", "asset": "prim:box", "position": [1, 2]}],
+        "parcels": {"P-0001": {"objects": [{"id": "o-0001", "asset": "prim:box", "position": [3, 4]}]}},
+    }
+    assert any("duplicate object id 'o-0001'" in e for e in validate(doc))
 
 
 def test_stale_entries_warn_and_are_skipped(ws, tmp_path, capsys) -> None:
@@ -556,42 +506,44 @@ def test_stale_entries_warn_and_are_skipped(ws, tmp_path, capsys) -> None:
         {
             "version": 1,
             "parcels": {
-                "P-9999": {
-                    "fence": {"mode": "custom"},
-                    "objects": [{"id": "ghost", "asset": "prim:box", "position": [1, 1]}],
-                },
+                "P-9999": {"fence": {"mode": "custom"}},
                 "P-0001": {"fence": {"mode": "none"}},
             },
+            "objects": [{"id": "ghost", "asset": "prim:box", "position": [1, 1]}],
             "groups": {
                 "G-0001": {"parcels": ["P-0002", "P-9998"], "fence": {"mode": "custom"}},
-                "G-0002": {"parcels": ["P-9997"]},
+                "G-0002": {"parcels": ["P-9997"], "fence": {"mode": "custom"}},
+                "G-0003": {"parcels": ["P-9996"]},
             },
         },
     )
     counts = run_props(ws["work"], DEFAULT_RULES, edits_path=edits)
     err = capsys.readouterr().err
-    assert "parcels.P-9999: parcel not found; entry skipped" in err
+    assert "parcels.P-9999: parcel not found; fence skipped" in err
     assert "groups.G-0001: parcel P-9998 not found; skipped" in err
     assert "groups.G-0002: no member parcels left; group skipped" in err
-    assert read_objects(ws["work"])["objects"] == []
-    assert counts["objects"] == 0
+    assert "P-0001" not in err and "G-0003" not in err  # nothing of theirs was skipped: no warning
+    # an object belongs to no parcel, so a dropped parcel loses none
+    (ghost,) = read_objects(ws["work"])["objects"]
+    assert (ghost["id"], ghost["parcel"]) == ("ghost", None)
+    assert counts["objects"] == 1 and "outside every parcel" not in err
     props = json.loads((ws["work"] / "props.json").read_text())
     assert not [s for s in props["fences"] if s["parcel"] == "P-0001"]  # mode none applied
 
 
-def test_run_props_applies_group_and_trees_end_to_end(ws, tmp_path) -> None:
+def test_run_props_applies_groups_end_to_end(ws, tmp_path) -> None:
     edits = write_edits(
         tmp_path,
         {
             "version": 1,
-            "parcels": {"P-0002": {"trees": {"count": 5, "seed_offset": 1}}},
+            "parcels": {},
             "groups": {"G-0001": {"parcels": ["P-0001", "P-0002"], "fence": {"mode": "custom"}}},
         },
     )
     run_props(ws["work"], DEFAULT_RULES, edits_path=edits)
     props = json.loads((ws["work"] / "props.json").read_text())
     assert all(off_shared_edge(s) for s in props["fences"])
-    assert len([t for t in props["trees"] if t["parcel"] == "P-0002" and t["src"] == "rule"]) == 5
+    assert any(t["src"] == "ortho-canopy" for t in props["trees"])  # the trees still come from the orthophoto
 
 
 def test_empty_edits_leave_props_unchanged(ws, tmp_path) -> None:
@@ -625,7 +577,7 @@ def test_missing_origin_fails_only_when_objects_or_gaps_need_it(ws, tmp_path) ->
 
 
 def test_parcel_geometry_fixture_is_as_described(ws) -> None:
-    # the group and gap tests rely on these exact edges of the synthetic slice
+    # the group and gap tests rely on these exact edges of the synthetic map
     polys = {p["id"]: shape(p["polygon"]) for p in ws["parcels"]}
     assert polys["P-0001"].bounds == (40, 40, 95, 100)
     assert polys["P-0002"].bounds == (95, 40, 140, 100)
@@ -700,10 +652,10 @@ def test_plan_keeps_cables_between_placed_poles_only() -> None:
         return {"id": oid, "asset": asset, "position": [x, 10.0]}
 
     edits = Edits(
-        parcels={"P-0001": {"objects": [
+        objects=[
             obj("o-0001", "prim:pole_lamp_1", 5), obj("o-0002", "prim:pole_plain_1", 30), obj("o-0003", "prim:slab", 40),
             {**obj("o-0004", "prim:connector_wall_2", 20), "z": 204.5, "rotation_deg": 90.0},
-        ]}},
+        ],
         cables={
             "C-0002": {"from": "o-0002", "to": "o-0001"},
             "C-0003": {"from": "o-0001", "to": "o-0003"},
@@ -719,3 +671,16 @@ def test_plan_keeps_cables_between_placed_poles_only() -> None:
     assert next(o for o in plan.objects if o["id"] == "o-0004")["z"] == 204.5
     assert "cables.C-0003: o-0003 is not a utility pole or a house connector; cable skipped" in plan.warnings
     assert "cables.C-0004: o-0009 is not placed; cable skipped" in plan.warnings
+
+
+def test_objects_are_written_sorted_by_id() -> None:
+    edits = Edits(
+        objects=[
+            {"id": "o-0010", "asset": "prim:box", "position": [1, 1]},
+            {"id": "o-0002", "asset": "prim:box", "position": [2, 2]},
+            {"id": "car-1", "asset": "prim:box", "position": [3, 3]},
+        ]
+    )
+    doc = json.loads(dump_text(edits))
+    assert [o["id"] for o in doc["objects"]] == ["car-1", "o-0002", "o-0010"]
+    assert [o["id"] for o in edits.objects] == ["o-0010", "o-0002", "car-1"]  # the document in memory is not reordered

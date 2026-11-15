@@ -9,7 +9,7 @@ using Godot;
 /// only the page of the active tool. Clicking the active tool again hides the sidebar. Built from the shared theme
 /// (EditorTheme); no per-control colours or font sizes.
 /// </summary>
-public enum EditorTool { None, Select, Group, Fence, Trees, Objects, Region, Poles, View, Sketch }
+public enum EditorTool { None, Select, Group, Fence, Ground, Objects, Zones, Poles, View, Sketch }
 
 public partial class EditorMode
 {
@@ -29,9 +29,9 @@ public partial class EditorMode
         (EditorTool.Select, "select", "Select", Key.Key1),
         (EditorTool.Group, "group", "Group", Key.Key2),
         (EditorTool.Fence, "fence", "Fence", Key.Key3),
-        (EditorTool.Trees, "trees", "Trees", Key.Key4),
+        (EditorTool.Ground, "ground", "Ground", Key.Key4),
         (EditorTool.Objects, "objects", "Objects", Key.Key5),
-        (EditorTool.Region, "region", "Region", Key.Key6),
+        (EditorTool.Zones, "zone", "Zones", Key.Key6),
         (EditorTool.Poles, "poles", "Poles", Key.Key7),
         (EditorTool.View, "view", "View", Key.Key8),
         (EditorTool.Sketch, "sketch", "Sketch", Key.Key9),
@@ -53,7 +53,7 @@ public partial class EditorMode
         BuildSidebar(root);
         BuildStatusBar(root);
         BuildCheatSheet(root);
-        BuildRegionOverlays(root);
+        BuildDialogs(root);
         LoadUiConfig();
         SelectTool(Tool, save: false);
     }
@@ -187,9 +187,9 @@ public partial class EditorMode
         grp.AddChild(new Label { Text = "Clear the marks with Esc.", ThemeTypeVariation = "Dim" });
 
         BuildFenceSection(Page(EditorTool.Fence));
-        BuildTreesSection(Page(EditorTool.Trees));
         BuildObjectsSection(Page(EditorTool.Objects));
-        BuildRegionPage(Page(EditorTool.Region));
+        BuildGroundPage(Page(EditorTool.Ground));
+        BuildZonesPage(Page(EditorTool.Zones));
         BuildPolesPage(Page(EditorTool.Poles));
         BuildViewPage(Page(EditorTool.View));
         BuildSketchPage(Page(EditorTool.Sketch));
@@ -222,6 +222,8 @@ public partial class EditorMode
         page.AddChild(Btn("Walk from where I was  (F2)", () => SetActive(false)));
         page.AddChild(new Label { Text = "Dropping puts you on the ground below the camera, facing the way you look.", ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
         page.AddChild(new Label { Text = "WASD fly, Space up, Shift down, hold the right mouse button to look.", ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
+
+        BuildOrthoSection(page);
     }
 
     static Button Btn(string text, Action onPress)
@@ -262,20 +264,24 @@ public partial class EditorMode
         "Fly\tWASD, Space up, Shift down, Alt x3, hold RMB to look, wheel changes speed\n" +
         "Select\tLMB select, Shift+LMB add or remove, Esc clear\n" +
         "Walk\tF2 walk from where you were, F3 drop to the ground below the camera and walk\n" +
-        "Tools\t1 Select, 2 Group, 3 Fence, 4 Trees, 5 Objects, 6 Region, 7 Poles, 8 View, 9 Sketch (press again to hide)\n" +
+        "Tools\t1 Select, 2 Group, 3 Fence, 4 Ground, 5 Objects, 6 Zones, 7 Poles, 8 View, 9 Sketch (press again to hide)\n" +
         "Group\tG group the selection (marked groups merge)\n" +
         "Edit\tEnter apply, Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo\n" +
         "Objects\tLMB place, R / Shift+R rotate, Ctrl free position, Ctrl+D duplicate, Del delete, arrows nudge\n" +
-        "Region\tN new region, LMB or C adds a corner, Enter closes, then choose the colour and Enter creates\n" +
-        "Region edit\tdrag a corner, [ ] pick one, arrows move it, Backspace last corner, Del delete (asks), Ctrl+Z undo\n" +
+        "Ground\tpick a type in the list (Tab reaches it) or click the ground; tick what it carries (colours, recipe, water) and edit colours and OSM values: each change saves and Ctrl+Z undoes; Shift+N new type, Del delete type (asks); M shows the ground map; type changes show after make map\n" +
+        "Ground patch\tN draws a patch of the selected type: LMB or C adds a corner, Enter closes and creates it (a water type asks for the water level first); click a patch to select it, change its type in the form\n" +
+        "Zones\tpick a kind in the list, N draws a zone of it: LMB or C adds a corner, Enter creates it; click a zone to select it, change its kind in the form; M shows the zone overlay; a selected kind is shown alone with moving bands (also with the overlay off), Esc shows all kinds again; every zone, also one the map gives a kind by itself, can be selected, reshaped, given another kind or deleted\n" +
+        "Zones mass delete\tmark zones: tick them in the list, Ctrl+LMB on the map, X for the selected one, or Mark all of the kind; Shift+Del deletes every marked zone (asks), one Ctrl+Z brings them all back\n" +
+        "Patch and zone edit\tdrag a corner, [ ] pick one, arrows move it, Backspace last corner, Del delete (asks), Ctrl+Z undo, Esc one level back\n" +
         "Poles plan\tP plans a line: LMB a pole point, RMB a house, Backspace removes the last, Enter builds poles, cables and house connections\n" +
         "Poles\tchoose a pole and LMB places it, C connects: LMB on a pole, then on the next poles or on a house, Esc stops\n" +
         "Poles edit\tdrag a pole or its ring, R / Shift+R turn, LMB on a cable selects it, Del removes the cable or the pole with its cables\n" +
         "Sketch\tP points, L lines: LMB or C marks, Enter finishes a line, Shift+Enter or the first corner closes it\n" +
         "Sketch edit\tLMB on a mark or [ ] selects it, Del deletes it, Backspace last corner, Ctrl+Z undo; marks are temporary and named in prompts\n" +
-        "Commands\tCtrl+P: tools, undo, region, sketch and parcel IDs\n" +
-        "View\tT top-down, F1 this sheet, F2 walk mode\n" +
-        "Esc\tgoes one level back: drawing, colour, region or sketch selection, placement, planning, connecting, gate, cable, object, selection, sidebar";
+        "Sketches\tpick, New, Rename, Delete in the Sketch panel: marks go into the active sketch, prompts can name a whole sketch (\"sketch ROAD\")\n" +
+        "Commands\tCtrl+P: tools, actions, ground types, patch, zone and parcel IDs\n" +
+        "View\tT top-down, O aerial photo (reference), B floor plan of the selected parcel (building hidden, wall lines and a 1 m grid to sketch on), F1 this sheet, F2 walk mode\n" +
+        "Esc\tgoes one level back: drawing, water level, patch, zone or sketch selection, placement, planning, connecting, gate, cable, object, selection, sidebar";
 
     void BuildCheatSheet(Control root)
     {
@@ -306,16 +312,18 @@ public partial class EditorMode
 
     public void SelectTool(EditorTool tool, bool save = true)
     {
-        if (Tool == EditorTool.Region && tool != EditorTool.Region) CancelRegionGesture();
+        if (ShapeTool && (tool != Tool)) CancelShapeGesture();
         if (Tool == EditorTool.Sketch && tool != EditorTool.Sketch) CancelSketchGesture();
-        if (tool is EditorTool.Region or EditorTool.Sketch) { DisarmPlacement(false); if (GateArmed) CancelGate(); }
+        if (Dragging && tool != Tool) CancelDrag(); // an object drag must not outlive its tool (the release would still save it)
+        if (tool is EditorTool.Ground or EditorTool.Zones or EditorTool.Sketch) { DisarmPlacement(false); if (GateArmed) CancelGate(); }
         if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { StopConnecting(false); StopPlanning(false); SelectCable(null); }
         if (tool == EditorTool.Poles && GateArmed) CancelGate();
         Tool = tool;
+        ShapeRest(); // Selected or Idle depends on which kind of shape the tool selects
         _panel.Visible = tool != EditorTool.None;
         foreach (var (t, p) in _pages) p.Visible = t == tool;
         foreach (var (t, b) in _railButtons) b.SetPressedNoSignal(t == tool);
-        var edit = tool is EditorTool.Fence or EditorTool.Trees;
+        var edit = tool is EditorTool.Fence;
         _editHead.Visible = _editFoot.Visible = edit;
         _panelTitle.Text = Tools.FirstOrDefault(x => x.tool == tool).name ?? "";
         _scroll.ScrollVertical = 0;
@@ -351,11 +359,22 @@ public partial class EditorMode
         {
             var cfg = new ConfigFile();
             if (cfg.Load(CfgPath) != Error.Ok) return;
-            if (Enum.TryParse<EditorTool>((string)cfg.GetValue("ui", "tool", "None"), true, out var t)) Tool = t;
+            if (Enum.TryParse<EditorTool>((string)cfg.GetValue("ui", "tool", "None"), true, out var t)) { Tool = t; ShapeRest(); }
             SetSpeed((float)(double)cfg.GetValue("ui", "speed", (double)Speed));
-            if (ParseColour((string)cfg.GetValue("ui", "region_colour", _newColour)) is { } rc) _newColour = rc;
-            var rsel = (string)cfg.GetValue("ui", "region", "");
-            if (rsel != "") _restoreRegion = rsel;
+            SetOrthoOpacity((float)(double)cfg.GetValue("ui", "ortho_opacity", (double)_orthoOpacity), save: false);
+            _orthoRestore = (bool)cfg.GetValue("ui", "ortho_on", false); // applied when the editor first opens, the map is not up yet
+            _gmOn = (bool)cfg.GetValue("ui", "ground_map_on", true);
+            _zoOn = (bool)cfg.GetValue("ui", "zone_overlay_on", true);
+            var fp = (string)cfg.GetValue("ui", "floor_plan", "");
+            if (fp != "") _floorRestore = fp; // applied when the editor first opens, the map is not up yet
+            var gsel = (string)cfg.GetValue("ui", "ground_type", "");
+            if (gsel != "") _restoreGround = gsel;
+            var psel = (string)cfg.GetValue("ui", "patch", "");
+            if (psel != "") _restorePatch = psel;
+            var zsel = (string)cfg.GetValue("ui", "zone", "");
+            if (zsel != "") _restoreZone = zsel;
+            var zk = (string)cfg.GetValue("ui", "zone_kind", "");
+            if (zk != "") _restoreZoneKind = zk;
             if (Enum.TryParse<SketchKind>((string)cfg.GetValue("ui", "sketch_mode", _skMode.ToString()), true, out var sk)) _skMode = sk;
         }
         catch (Exception e) { GD.PushWarning($"editor ui settings not loaded: {e.Message}"); }
@@ -368,8 +387,15 @@ public partial class EditorMode
             var cfg = new ConfigFile();
             cfg.SetValue("ui", "tool", Tool.ToString());
             cfg.SetValue("ui", "speed", (double)Speed);
-            cfg.SetValue("ui", "region_colour", _newColour);
-            cfg.SetValue("ui", "region", SelectedRegionId ?? "");
+            cfg.SetValue("ui", "ortho_on", _orthoOn || _orthoRestore);
+            cfg.SetValue("ui", "ortho_opacity", (double)_orthoOpacity);
+            cfg.SetValue("ui", "ground_map_on", _gmOn);
+            cfg.SetValue("ui", "zone_overlay_on", _zoOn);
+            cfg.SetValue("ui", "floor_plan", _floorParcel ?? _floorRestore ?? "");
+            cfg.SetValue("ui", "patch", SelectedPatchId ?? "");
+            cfg.SetValue("ui", "zone", SelectedZoneId ?? "");
+            cfg.SetValue("ui", "zone_kind", SelectedZoneKind ?? "");
+            cfg.SetValue("ui", "ground_type", SelectedGroundType ?? "");
             cfg.SetValue("ui", "sketch_mode", _skMode.ToString());
             cfg.Save(CfgPath);
         }

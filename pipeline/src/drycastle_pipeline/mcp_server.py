@@ -2,7 +2,7 @@
 
 Run it over stdio (Claude Code starts it)::
 
-    uv run --directory <repo>/pipeline python -m drycastle_pipeline.mcp_server [--area slice|village]
+    uv run --directory <repo>/pipeline python -m drycastle_pipeline.mcp_server
         [--edits PATH] [--state PATH] [--assets PATH] [--work DIR]
 
 It talks only to files: it reads the map's work files (``parcels.json``, ``buildings.json``,
@@ -45,15 +45,17 @@ from mcp.server.mcpserver.exceptions import ToolError
 from shapely.geometry import LinearRing, LineString, Point, Polygon, shape
 from shapely.ops import nearest_points, unary_union
 
+from drycastle_pipeline import sketchfile
 from drycastle_pipeline.assets import DEFAULT_MANIFEST, load_manifest, validate_asset_ref
 from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import DEFAULT_AREA, REPO_ROOT, area_paths
+from drycastle_pipeline.config import REPO_ROOT, map_paths
 from drycastle_pipeline.edits import (
     COLUMN_TYPES,
     CONNECTOR_ASSET_PREFIX,
     CUSTOM_FENCE_KEYS,
     DEFAULT_EDITS,
     FENCE_TYPES,
+    MAX_DEPTH_LIMIT_M,
     POLE_ASSET_PREFIX,
     WIRE_ASSET_PREFIXES,
     Edits,
@@ -61,14 +63,30 @@ from drycastle_pipeline.edits import (
     cable_pair,
     dump_edits,
     load_edits,
-    region_ring,
+    polygon_ring,
+    protected_ground_types,
     resolve_fence,
     validate,
 )
 from drycastle_pipeline.fencestyles import FENCE_STYLES
-from drycastle_pipeline.regions import region_rank
+from drycastle_pipeline.ground import (
+    ground_type_source,
+    ground_types,
+    merge_ground_types,
+    rules_ground_types,
+)
+from drycastle_pipeline.ground_attributes import (
+    ATTRIBUTES,
+    GROUPS,
+    RECIPES,
+    attributes_of,
+)
+from drycastle_pipeline.patches import patch_rank
 from drycastle_pipeline.roads import edge_lines
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
+from drycastle_pipeline.zones import KIND_NAMES, PLAYER_SPAWN, RULE_KEYS, rule_part_is_cut, rule_parts, zone_cuts
+from drycastle_pipeline.zones import kind_rows as zone_kind_rows
+from drycastle_pipeline.zones import rules as zone_rules
 
 DEFAULT_STATE = REPO_ROOT / "out" / "editor-state.json"
 STATE_FORMAT_VERSION = 1
@@ -85,9 +103,10 @@ ROAD_FAR_M = 30.0
 OVERLAP_SEARCH_M = 25.0
 _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")
-_REGION_ID = re.compile(r"R-\d{4,}")
-_COLOUR = re.compile(r"#[0-9a-fA-F]{6}")
-_GENERATED_ID = re.compile(r"[oGRC]-(\d+)")
+_PATCH_ID = re.compile(r"GP-\d{4,}")
+_ZONE_ID = re.compile(r"Z-\d{4,}")
+_RULE_ZONE_ID = re.compile(r"A-\d{4,}(?:\.\d+)?")  # a zone that comes from a rule: a ground area (or one outline of it)
+_GENERATED_ID = re.compile(r"(?:[oGCZ]|GP|ZC)-(\d+)")
 
 
 def _r3(v: float) -> float:
@@ -103,16 +122,20 @@ def _pt(x: float, y: float) -> list[float]:
 
 @dataclass(frozen=True)
 class Settings:
-    area: str = DEFAULT_AREA
     work_dir: Path | None = None
     edits_path: Path = DEFAULT_EDITS
     state_path: Path = DEFAULT_STATE
     assets_path: Path = DEFAULT_MANIFEST
     rules_path: Path = DEFAULT_RULES
+    sketch_path: Path | None = None  # default: sketch.json next to the state file
 
     @property
     def work(self) -> Path:
-        return self.work_dir or area_paths(self.area).work
+        return self.work_dir or map_paths().work
+
+    @property
+    def sketch_file(self) -> Path:
+        return self.sketch_path or self.state_path.with_name("sketch.json")
 
 
 @dataclass
@@ -149,12 +172,13 @@ class Frame:
 
 
 class MapData:
-    """The work files of one area, as shapely geometry in local metres. Reloaded when they change."""
+    """The work files of the map, as shapely geometry in local metres. Reloaded when they change."""
 
     def __init__(self, work_dir: Path) -> None:
         self.work_dir = work_dir
         self._stamp: tuple | None = None
         self.parcels: dict[str, dict] = {}
+        self.ground: list[dict] = []
         self.polys: dict[str, Polygon] = {}
         self.buildings: dict[str, dict] = {}
         self.bpolys: dict[str, Polygon] = {}
@@ -176,7 +200,7 @@ class MapData:
             raise ToolError(
                 f"map work files missing in {self.work_dir}: {', '.join(missing)}. Run the "
                 "pipeline stages first (make normalise parcels rules terrain roads, with the same "
-                "AREA) or start the server with --area/--work pointing at a built area."
+                ") or start the server with --work pointing at a built map."
             )
         stamp = tuple(f.stat().st_mtime_ns for f in files)
         if stamp != self._stamp:
@@ -194,6 +218,7 @@ class MapData:
             )
         self.origin = (float(origin[0]), float(origin[1]))
         self.parcels = {p["id"]: p for p in doc["parcels"]}
+        self.ground = doc.get("ground", [])
         self._pids = sorted(self.parcels)
         self.polys = {}
         for pid in self._pids:
@@ -209,7 +234,6 @@ class MapData:
         self._btree = shapely.STRtree([self.bpolys[b] for b in self._bids])
         graph = json.loads((self.work_dir / "roads.json").read_text())
         parts = [ln.buffer(e["width"] / 2) for e, ln in edge_lines(graph)]
-        parts += [self.polys[p] for p in self._pids if self.parcels[p]["kind"] == "road"]
         self.road_zone = unary_union(parts) if parts else None
         if self.road_zone is not None:
             shapely.prepare(self.road_zone)
@@ -227,7 +251,7 @@ class MapData:
         if not isinstance(pid, str) or pid not in self.parcels:
             hint = ""
             if isinstance(pid, str) and _PARCEL_ID.fullmatch(pid):
-                hint = " (it may be retired or outside this area; check --area)"
+                hint = " (it may be retired or outside this map)"
             raise ToolError(f"unknown parcel {pid!r}{hint}. Use find_parcels to look up IDs.")
         return pid
 
@@ -355,12 +379,20 @@ def _read_edits(path: Path) -> Edits:
 
 
 def _edits_doc(edits: Edits) -> dict:
-    """The edits as the document ``validate`` checks (regions included when present)."""
+    """The edits as the document ``validate`` checks (patches and zones included when present)."""
     doc: dict = {"version": 1, "parcels": edits.parcels, "groups": edits.groups}
-    if edits.regions:
-        doc["regions"] = edits.regions
+    if edits.objects:
+        doc["objects"] = edits.objects
+    if edits.ground_patches:
+        doc["ground_patches"] = edits.ground_patches
+    if edits.zones:
+        doc["zones"] = edits.zones
+    if edits.zone_cuts:
+        doc["zone_cuts"] = edits.zone_cuts
     if edits.cables:
         doc["cables"] = edits.cables
+    if edits.ground_types:
+        doc["ground_types"] = edits.ground_types
     return doc
 
 
@@ -378,8 +410,9 @@ def _next_id(prefix: str, ids: list[str]) -> str:
     return f"{prefix}-{top + 1:04d}"
 
 
-def _all_objects(edits: Edits) -> list[tuple[str, dict]]:
-    return [(pid, o) for pid, e in sorted(edits.parcels.items()) for o in e.get("objects", [])]
+def _all_objects(edits: Edits) -> list[dict]:
+    """Every placed object (they belong to no parcel; see edits.py)."""
+    return edits.objects
 
 
 # --- geometry helpers -----------------------------------------------------------------------
@@ -632,58 +665,274 @@ class ParcelEditTools:
         if unknown:
             raise ToolError(
                 f"the viewer's selection {unknown[:5]} is not in this map: the state file comes "
-                f"from another area or an older map (this server uses --area {self.settings.area}). "
-                "Check the --area/--state options."
+                "from an older map. Check the --state option."
             )
         extra = {"selection_age_s": round(age, 1), "camera": doc.get("camera")}
         return sorted(ids), extra, warnings
+
+    # sketch --------------------------------------------------------------------------------
+    def _sketch_doc(self, guide: str) -> tuple[dict, float, list[str]]:
+        """The sketch document (sketch.json; the sketch of an older viewer's editor-state.json as DEFAULT), its age and warnings."""
+        path = self.settings.sketch_file
+        try:
+            doc = sketchfile.read(path)
+        except sketchfile.SketchFileError as exc:
+            raise ToolError(f"{exc}. {guide}") from exc
+        if doc is not None:
+            age = max(0.0, time.time() - path.stat().st_mtime)
+            warnings = []
+            if age > STATE_STALE_S:
+                warnings.append(
+                    f"the sketch file is {age / 60:.0f} min old; the viewer may no longer be running, "
+                    "so the sketch there could differ"
+                )
+            return doc, age, warnings
+        state, age, warnings = self._state_doc(guide, "sketch")
+        if not isinstance(state.get("sketch"), dict):
+            raise ToolError(f"no sketch file at {path}. {guide}")
+        try:
+            return sketchfile.normalise(state["sketch"]), age, warnings
+        except sketchfile.SketchFileError as exc:
+            raise ToolError(f"the sketch in {self.settings.state_path} is unreadable ({exc}). {guide}") from exc
+
+    def _sketch_change(self, change: Callable[[dict], Any]) -> Any:
+        """Reload the sketch file under its lock, apply ``change`` to the document, write it (the viewer picks it up as one undo step)."""
+        path = self.settings.sketch_file
+        with sketchfile.lock(path):
+            try:
+                doc = sketchfile.read(path)
+            except sketchfile.SketchFileError as exc:
+                raise ToolError(str(exc)) from exc
+            if doc is None:
+                doc = sketchfile.empty_doc()
+                try:  # an older viewer's sketch in editor-state.json becomes the DEFAULT sketch
+                    state = json.loads(self.settings.state_path.read_text())
+                    if isinstance(state.get("sketch"), dict):
+                        doc = sketchfile.normalise(state["sketch"])
+                except (OSError, ValueError, sketchfile.SketchFileError):
+                    pass
+            result = change(doc)
+            sketchfile.tidy(doc)
+            sketchfile.write(path, doc)
+        return result
+
+    def _sketch_name(self, doc: dict, sketch: str | None, create: bool) -> str:
+        """The sketch a mark goes to: ``sketch`` (made when new), else the only one, else DEFAULT when there is none."""
+        if sketch is None:
+            if len(doc["sketches"]) == 1:
+                return doc["sketches"][0]
+            if not doc["sketches"]:
+                sketch = sketchfile.DEFAULT_SKETCH
+            else:
+                raise ToolError(f"name the sketch: there are several ({', '.join(doc['sketches'])})")
+        if not isinstance(sketch, str) or not sketchfile.SKETCH_NAME.fullmatch(sketch):
+            raise ToolError(f"{sketch!r} is not a sketch name: 1 to 24 letters, digits, _ or -")
+        known = sketchfile.sketch_of(doc, sketch)
+        if known:
+            return known
+        if not create:
+            raise ToolError(f"there is no sketch {sketch!r}; it has {', '.join(doc['sketches']) or 'none'}")
+        doc["sketches"].append(sketch)
+        return sketch
+
+    def _sketch_corners(self, points: object) -> list[list[float]]:
+        if not isinstance(points, list) or len(points) < 2:
+            raise ToolError("`points` needs at least 2 [x, y] corners (absolute S-JTSK metres)")
+        out = []
+        for p in points:
+            if not (isinstance(p, (list, tuple)) and len(p) == 2):
+                raise ToolError(f"corner {p!r} is not [x, y]")
+            out.append(_pt(_check_num("x", p[0]), _check_num("y", p[1])))
+        return out
+
+    def create_sketch(self, name: str) -> dict:
+        """Create an empty named sketch (see the registered tool description)."""
+        def change(doc: dict) -> dict:
+            if isinstance(name, str) and sketchfile.sketch_of(doc, name):
+                raise ToolError(f"sketch {name!r} exists already")
+            if not isinstance(name, str):
+                raise ToolError("`name` is the new sketch's name, e.g. ROAD")
+            return {"sketch": self._sketch_name(doc, name, True)}
+
+        return self._sketch_change(change)
+
+    def sketch_add_point(self, x: float, y: float, sketch: str | None = None) -> dict:
+        """Mark a point in a sketch (see the registered tool description)."""
+        px, py = _r3(_check_num("x", x)), _r3(_check_num("y", y))
+
+        def change(doc: dict) -> dict:
+            name = self._sketch_name(doc, sketch, True)
+            pid = sketchfile.new_point_id(doc)
+            doc["points"].append({"id": pid, "x": px, "y": py, "sketch": name})
+            return {"id": pid, "sketch": name, "position": _pt(px, py)}
+
+        return self._sketch_change(change)
+
+    def sketch_add_line(self, points: list[list[float]], closed: bool = False, sketch: str | None = None) -> dict:
+        """Draw a line in a sketch (see the registered tool description)."""
+        pts = self._sketch_corners(points)
+        if closed:
+            if len(pts) > 1 and pts[0] == pts[-1]:
+                pts.pop()
+            if len(pts) < 3:
+                raise ToolError("a closed line needs at least 3 corners")
+            if not Polygon(pts).is_valid:
+                raise ToolError("a closed line must not cross itself")
+
+        def change(doc: dict) -> dict:
+            name = self._sketch_name(doc, sketch, True)
+            lid = sketchfile.new_line_id(doc)
+            doc["lines"].append({"id": lid, "closed": bool(closed), "points": pts, "sketch": name})
+            return {"id": lid, "sketch": name, "closed": bool(closed), "corners": len(pts)}
+
+        return self._sketch_change(change)
+
+    def _road_graph(self) -> dict:
+        self.map  # noqa: B018  (loads and checks the work files)
+        return json.loads((self.settings.work / "roads.json").read_text())
+
+    @staticmethod
+    def _road_line(edges: list[dict]) -> list[list[tuple[float, float]]]:
+        """The polylines of some edges chained end to end (an OSM way is cut into edges at its junctions)."""
+        pieces = [[tuple(p) for p in e["polyline"]] for e in edges]
+        chains: list[list[tuple[float, float]]] = []
+        while pieces:
+            chain = pieces.pop(0)
+            grown = True
+            while grown:
+                grown = False
+                for i, piece in enumerate(pieces):
+                    if piece[0] == chain[-1]:
+                        chain += piece[1:]
+                    elif piece[-1] == chain[-1]:
+                        chain += piece[::-1][1:]
+                    elif piece[-1] == chain[0]:
+                        chain = piece[:-1] + chain
+                    elif piece[0] == chain[0]:
+                        chain = piece[::-1][:-1] + chain
+                    else:
+                        continue
+                    pieces.pop(i)
+                    grown = True
+                    break
+            chains.append(chain)
+        return chains
+
+    def sketch_add_road(self, road: str | None = None, near: Any = None, sketch: str | None = None) -> dict:
+        """Draw a road of the map as a line in a sketch (see the registered tool description)."""
+        graph = self._road_graph()
+        edges = graph["edges"]
+        if (road is None) == (near is None):
+            raise ToolError("give exactly one of `road` (an edge id like E-0130 or an OSM way like w84718108) or `near` ([x, y] or a point of the sketch)")
+        if road is not None:
+            hit = [e for e in edges if road in (e["id"], e.get("osm_id"))]
+            if not hit:
+                raise ToolError(f"no road {road!r}; use an edge id (E-0130) or an osm_id (w84718108) from roads.json")
+            # an edge id draws that edge only, an OSM way all its edges
+            chosen = hit if road != hit[0]["id"] else hit[:1]
+        else:
+            if isinstance(near, str):
+                doc, _age, _w = self._sketch_doc("Draw or ask for the point first.")
+                pts = [p for p in doc["points"] if p["id"] == near]
+                if not pts:
+                    raise ToolError(f"the sketch has no point {near!r}")
+                nx, ny = pts[0]["x"], pts[0]["y"]
+            elif isinstance(near, (list, tuple)) and len(near) == 2:
+                nx, ny = _check_num("x", near[0]), _check_num("y", near[1])
+            else:
+                raise ToolError("`near` is [x, y] (absolute S-JTSK metres) or the id of a sketch point such as A")
+            here = Point(*self.map.to_local(nx, ny))
+            best = min(edge_lines(graph), key=lambda el: el[1].distance(here), default=None)
+            if best is None or best[1].distance(here) > ROAD_FAR_M:
+                raise ToolError(f"no road within {ROAD_FAR_M:.0f} m of that spot")
+            chosen = [best[0]]
+        info = {k: chosen[0].get(k) for k in ("id", "osm_id", "highway", "surface", "width", "name")}
+        chains = self._road_line(chosen)
+        lines = [[self.map.to_abs(x, y) for x, y in chain] for chain in chains]
+
+        def change(doc: dict) -> dict:
+            name = self._sketch_name(doc, sketch, True)
+            ids = []
+            for corners in lines:
+                lid = sketchfile.new_line_id(doc)
+                doc["lines"].append({"id": lid, "closed": False, "points": corners, "sketch": name})
+                ids.append(lid)
+            return {"sketch": name, "lines": ids, "road": info, "length_m": round(sum(e["length_m"] for e in chosen), 1)}
+
+        return self._sketch_change(change)
+
+    def sketch_remove(self, target: str) -> dict:
+        """Remove one mark, or a whole sketch with its marks (see the registered tool description)."""
+        def change(doc: dict) -> dict:
+            if any(p["id"] == target for p in doc["points"]) or any(ln["id"] == target for ln in doc["lines"]):
+                doc["points"] = [p for p in doc["points"] if p["id"] != target]
+                doc["lines"] = [ln for ln in doc["lines"] if ln["id"] != target]
+                return {"removed": target}
+            name = sketchfile.sketch_of(doc, target) if isinstance(target, str) else None
+            if name is None:
+                raise ToolError(f"the sketch has no mark or sketch {target!r}; marks: "
+                                f"{', '.join(m['id'] for m in doc['points'] + doc['lines']) or 'none'}; sketches: "
+                                f"{', '.join(doc['sketches']) or 'none'}")
+            gone = [m["id"] for m in doc["points"] + doc["lines"] if m["sketch"] == name]
+            doc["points"] = [p for p in doc["points"] if p["sketch"] != name]
+            doc["lines"] = [ln for ln in doc["lines"] if ln["sketch"] != name]
+            doc["sketches"].remove(name)
+            return {"removed_sketch": name, "removed_marks": gone}
+
+        return self._sketch_change(change)
 
     # get_sketch ----------------------------------------------------------------------------
     def get_sketch(self, id: str | None = None) -> dict:
         """The marks the user drew in the viewer's Sketch tool (see the registered tool description)."""
         m = self.map
-        path = self.settings.state_path
+        path = self.settings.sketch_file
         guide = (
             "Start the viewer in editor mode (godot --path godot/viewer -- --editor ...), open the "
-            "Sketch tool (9), mark points (P) or draw lines (L) on the ground, then try again."
+            "Sketch tool (9), mark points (P) or draw lines (L) on the ground, or draw them with "
+            "sketch_add_point / sketch_add_line / sketch_add_road, then try again."
         )
-        doc, age, warnings = self._state_doc(guide, "sketch")
-        sketch = doc.get("sketch")
-        if not isinstance(sketch, dict):
-            raise ToolError(
-                f"the editor state file {path.name} has no sketch: the viewer that wrote it is older "
-                "than the Sketch tool. Rebuild and restart it (make editor)."
-            )
-        try:
-            points = [(str(p["id"]), float(p["x"]), float(p["y"])) for p in sketch.get("points", [])]
-            lines = [
-                (str(ln["id"]), bool(ln["closed"]), [(float(x), float(y)) for x, y in ln["points"]])
-                for ln in sketch.get("lines", [])
-            ]
-        except (KeyError, TypeError, ValueError) as exc:
-            raise ToolError(f"the sketch in {path} is unreadable ({exc}). {guide}") from exc
+        doc, age, warnings = self._sketch_doc(guide)
+        sketches = [
+            {
+                "name": n,
+                "points": sum(p["sketch"] == n for p in doc["points"]),
+                "lines": sum(ln["sketch"] == n for ln in doc["lines"]),
+            }
+            for n in doc["sketches"]
+        ]
+        points = [(p["id"], p["x"], p["y"], p["sketch"]) for p in doc["points"]]
+        lines = [(ln["id"], ln["closed"], [tuple(c) for c in ln["points"]], ln["sketch"]) for ln in doc["lines"]]
         names = [p[0] for p in points] + [ln[0] for ln in lines]
-        if not names:
-            raise ToolError(f"nothing is sketched in the viewer (state file {path.name}). {guide}")
+        if not names and not sketches:
+            raise ToolError(f"nothing is sketched (sketch file {path.name}). {guide}")
         if id is not None:
-            if id not in names:
-                raise ToolError(f"the sketch has no {id!r}; it has {', '.join(names)}")
-            points = [p for p in points if p[0] == id]
-            lines = [ln for ln in lines if ln[0] == id]
+            whole = sketchfile.sketch_of(doc, id) if id not in names else None
+            if whole is not None:
+                points = [p for p in points if p[3] == whole]
+                lines = [ln for ln in lines if ln[3] == whole]
+            elif id in names:
+                points = [p for p in points if p[0] == id]
+                lines = [ln for ln in lines if ln[0] == id]
+            else:
+                raise ToolError(
+                    f"the sketch has no {id!r}; marks: {', '.join(names) or 'none'}; "
+                    f"sketches: {', '.join(doc['sketches']) or 'none'}"
+                )
 
         on_map = False
         point_rows = []
-        for pid, x, y in points:
+        for pid, x, y, psketch in points:
             parcel = m.parcel_at(*m.to_local(x, y))
             on_map = on_map or parcel is not None
             point_rows.append({
                 "id": pid,
+                "sketch": psketch,
                 "position": _pt(x, y),
                 "parcel": parcel,
                 "kind": m.parcels[parcel]["kind"] if parcel else None,
             })
         line_rows = []
-        for lid, closed, pts in lines:
+        for lid, closed, pts, lsketch in lines:
             local = [m.to_local(x, y) for x, y in pts]
             closed = closed and len(local) >= 3
             if len(local) < 2:
@@ -692,6 +941,7 @@ class ParcelEditTools:
             geom: Any = Polygon(local) if closed else LineString(local)
             row: dict = {
                 "id": lid,
+                "sketch": lsketch,
                 "closed": closed,
                 "points": [_pt(x, y) for x, y in pts],
                 "length_m": round(geom.length, 1),
@@ -727,11 +977,12 @@ class ParcelEditTools:
             line_rows.append(row)
         if not on_map:
             warnings.append(
-                "no mark lies on a parcel of this map: the sketch may come from another area or an "
-                f"older map (this server uses --area {self.settings.area}); check the --area/--state options"
+                "no mark lies on a parcel of this map: the sketch may come from an older map; "
+                "check the --state option"
             )
         out: dict = {
             "count": len(point_rows) + len(line_rows),
+            "sketches": sketches,
             "points": point_rows,
             "lines": line_rows,
             "state_age_s": round(age, 1),
@@ -754,7 +1005,7 @@ class ParcelEditTools:
         gid = self._group_of(edits, pid)
         entry = edits.parcels.get(pid, {})
         group_fence = edits.groups[gid].get("fence") if gid else None
-        fence_rules = load_section("props", self.settings.rules_path, self.settings.area)
+        fence_rules = load_section("props", self.settings.rules_path)
         fcfg, tcfg = fence_rules["fences"], fence_rules["trees"]
         effective = resolve_fence(entry.get("fence"), group_fence)
         buildings = []
@@ -818,8 +1069,11 @@ class ParcelEditTools:
             "neighbours": neighbours,
             "edits": {
                 "fence": entry.get("fence"),
-                "trees": entry.get("trees"),
-                "objects": entry.get("objects", []),
+                # objects belong to no parcel: these are the ones whose position lies inside this one
+                "objects": [
+                    o for o in edits.objects
+                    if self.map.polys[pid].covers(Point(*self.map.to_local(*o["position"])))
+                ],
                 "group_fence": group_fence,
             },
             "effective_fence": {
@@ -839,9 +1093,6 @@ class ParcelEditTools:
                     "gate_gap_m": fcfg["gate_gap_m"],
                     "custom_types": FENCE_TYPES,
                     "column_types": list(COLUMN_TYPES),
-                },
-                "trees": {
-                    "density_per_1000m2": tcfg["density_per_1000m2"].get(p["kind"], 0.0),
                 },
             },
             **({"warnings": warnings} if warnings else {}),
@@ -976,89 +1227,20 @@ class ParcelEditTools:
             "changed": changed,
         }
 
-    # trees ---------------------------------------------------------------------------------
-    def set_trees(
-        self,
-        parcel: str,
-        density_per_1000m2: float | None = None,
-        count: int | None = None,
-        seed_offset: int | None = None,
-    ) -> dict:
-        """Set generated trees of a parcel (see the registered tool description)."""
-        pid = self.map.need(parcel)
-        if density_per_1000m2 is not None and count is not None:
-            raise ToolError("give exactly one of density_per_1000m2 or count, not both")
-        if density_per_1000m2 is not None:
-            _check_num("density_per_1000m2", density_per_1000m2, minimum=0)
-        if count is not None and (isinstance(count, bool) or not isinstance(count, int) or count < 0):
-            raise ToolError(f"count must be an integer >= 0 (got {count!r})")
-        if seed_offset is not None and (isinstance(seed_offset, bool) or not isinstance(seed_offset, int)):
-            raise ToolError(f"seed_offset must be an integer (got {seed_offset!r})")
-        if density_per_1000m2 is None and count is None and seed_offset is None:
-            raise ToolError("nothing to set: give density_per_1000m2 or count (and/or seed_offset)")
-
-        def change(edits: Edits) -> dict:
-            holder = edits.parcels.setdefault(pid, {})
-            trees = dict(holder.get("trees", {}))
-            if density_per_1000m2 is not None:
-                trees.pop("count", None)
-                trees["density_per_1000m2"] = density_per_1000m2
-            if count is not None:
-                trees.pop("density_per_1000m2", None)
-                trees["count"] = count
-            if seed_offset is not None:
-                trees["seed_offset"] = seed_offset
-            if "density_per_1000m2" not in trees and "count" not in trees:
-                tcfg = load_section("props", self.settings.rules_path, self.settings.area)["trees"]
-                rate = tcfg["density_per_1000m2"].get(self.map.parcels[pid]["kind"], 0.0)
-                raise ToolError(
-                    "a seed_offset alone cannot be stored: edits.json needs a density or a count "
-                    f"with it. The rules' density for this parcel's kind is {rate} per 1000 m2; "
-                    "pass density_per_1000m2 (e.g. that value) together with seed_offset."
-                )
-            holder["trees"] = trees
-            return trees
-
-        trees = self._write(change)
-        return {
-            "summary": f"trees of {pid} set: {json.dumps(trees, sort_keys=True)}",
-            "parcel": pid,
-            "trees": trees,
-            "warnings": [],
-        }
-
-    def reset_trees(self, parcel: str) -> dict:
-        """Remove the trees entry of a parcel so the rules' tree density applies again."""
-        pid = self.map.need(parcel)
-
-        def change(edits: Edits) -> bool:
-            holder = edits.parcels.get(pid)
-            if not holder or "trees" not in holder:
-                return False
-            del holder["trees"]
-            return True
-
-        changed = self._write(change)
-        return {
-            "summary": f"trees of {pid} reset to the rules" if changed else f"{pid} had no trees edit",
-            "parcel": pid,
-            "changed": changed,
-        }
-
     # objects -------------------------------------------------------------------------------
     def _place_point(
         self,
-        pid: str,
+        pid: str | None,
         anchor: str | None,
         offset_m: dict | None,
         position: list[float] | None,
         warnings: list[str],
-    ) -> tuple[float, float, Frame]:
-        """Local position for an anchor or exact position; the frame is the parcel's."""
+    ) -> tuple[float, float, Frame | None]:
+        """Local position for an anchor or exact position; the frame is the parcel's (None without a parcel).
+
+        An exact position needs no parcel. An anchor is a spot relative to a parcel's front edge, so it does.
+        """
         m = self.map
-        poly = m.polys[pid]
-        frame, fw = m.frame(pid)
-        warnings.extend(fw)
         if position is not None:
             if anchor is not None or offset_m is not None:
                 raise ToolError("give either position or anchor/offset_m, not both")
@@ -1066,7 +1248,16 @@ class ParcelEditTools:
                 raise ToolError("position must be [x, y] in absolute S-JTSK metres")
             px = _check_num("position[0]", position[0])
             py = _check_num("position[1]", position[1])
+            frame = None
+            if pid is not None:
+                frame, fw = m.frame(pid)
+                warnings.extend(fw)
             return (*m.to_local(px, py), frame)
+        if pid is None:
+            raise ToolError("give an exact `position` [x, y] (S-JTSK metres), or a `parcel` for an anchor")
+        poly = m.polys[pid]
+        frame, fw = m.frame(pid)
+        warnings.extend(fw)
         anchor = anchor or "centre"
         if anchor not in ANCHORS:
             raise ToolError(f"anchor must be one of {', '.join(ANCHORS)} (got {anchor!r})")
@@ -1131,7 +1322,7 @@ class ParcelEditTools:
 
     def _placement_warnings(
         self,
-        pid: str,
+        pid: str | None,
         xy: tuple[float, float],
         asset: dict,
         rotation: float,
@@ -1142,7 +1333,7 @@ class ParcelEditTools:
         m = self.map
         warnings: list[str] = []
         pt = Point(xy)
-        if not m.polys[pid].covers(pt):
+        if pid is not None and not m.polys[pid].covers(pt):  # only when a parcel was named as the reference
             inside = m.parcel_at(*xy)
             where = f"inside {inside}" if inside else "outside every parcel"
             warnings.append(f"position is outside {pid} ({where}); placed anyway as requested")
@@ -1152,7 +1343,7 @@ class ParcelEditTools:
                 f"overlaps building {bid} (approximate footprint of {asset['id']} at this "
                 "rotation and scale)"
             )
-        for opid, other in _all_objects(edits):
+        for other in _all_objects(edits):
             if other["id"] == skip_id:
                 continue
             ox, oy = m.to_local(*other["position"])
@@ -1165,7 +1356,7 @@ class ParcelEditTools:
                 (ox, oy), osz, float(other.get("rotation_deg", 0)), float(other.get("scale", 1))
             )
             if fp.intersects(ofp):
-                warnings.append(f"overlaps placed object {other['id']} ({other['asset']}, in {opid})")
+                warnings.append(f"overlaps placed object {other['id']} ({other['asset']})")
         size = asset.get("size_m") or [1, 1, 1]
         if max(size) < 1.0 and scale == 1.0:
             warnings.append(
@@ -1176,8 +1367,8 @@ class ParcelEditTools:
 
     def place_object(
         self,
-        parcel: str,
         asset: str,
+        parcel: str | None = None,
         anchor: str | None = None,
         offset_m: dict | None = None,
         position: list[float] | None = None,
@@ -1185,8 +1376,8 @@ class ParcelEditTools:
         scale: float | None = None,
         colour: str | None = None,
     ) -> dict:
-        """Place an object on a parcel (see the registered tool description)."""
-        pid = self.map.need(parcel)
+        """Place an object (see the registered tool description). It belongs to no parcel."""
+        pid = self.map.need(parcel) if parcel is not None else None
         info = self._asset(asset)
         if scale is not None:
             _check_num("scale", scale, positive=True)
@@ -1196,27 +1387,29 @@ class ParcelEditTools:
             raise ToolError(f'colour must look like "#rrggbb" (got {colour!r})')
         warnings: list[str] = []
         x, y, frame = self._place_point(pid, anchor, offset_m, position, warnings)
-        rot = _norm_deg(rotation_deg) if rotation_deg is not None else _facing_rotation(frame.side.normal)
+        if rotation_deg is not None:
+            rot = _norm_deg(rotation_deg)
+        else:
+            rot = _facing_rotation(frame.side.normal) if frame is not None else 0.0
         scl = float(scale) if scale is not None else 1.0
         absolute = self.map.to_abs(x, y)
 
         def change(edits: Edits) -> dict:
-            oid = _next_id("o", [o["id"] for _, o in _all_objects(edits)])
+            oid = _next_id("o", [o["id"] for o in _all_objects(edits)])
             entry: dict = {"id": oid, "asset": asset, "position": absolute, "rotation_deg": rot}
             if scale is not None:
                 entry["scale"] = scl
             if colour is not None:
                 entry["colour"] = colour
             warnings.extend(self._placement_warnings(pid, (x, y), info, rot, scl, edits, None))
-            edits.parcels.setdefault(pid, {}).setdefault("objects", []).append(entry)
+            edits.objects.append(entry)
             return entry
 
         entry = self._write(change)
         return {
-            "summary": f"placed {entry['id']} ({asset}) on {pid} at {absolute}, rotation {rot} deg"
+            "summary": f"placed {entry['id']} ({asset}) at {absolute}, rotation {rot} deg"
             + (f", {len(warnings)} warning(s)" if warnings else ""),
             "id": entry["id"],
-            "parcel": pid,
             "position": absolute,
             "rotation_deg": rot,
             "scale": scl,
@@ -1228,33 +1421,28 @@ class ParcelEditTools:
         """Remove a placed object by ID; the cables hanging from it (a utility pole) go with it."""
         dropped: list[str] = []
 
-        def change(edits: Edits) -> str:
-            for pid, e in edits.parcels.items():
-                objs = e.get("objects", [])
-                for o in objs:
-                    if o["id"] == id:
-                        objs.remove(o)
-                        if not objs:
-                            del e["objects"]
-                        for cid in [c for c, cb in edits.cables.items() if id in (cb["from"], cb["to"])]:
-                            dropped.append(cid)
-                            del edits.cables[cid]
-                        return pid
-            known = [o["id"] for _, o in _all_objects(edits)]
+        def change(edits: Edits) -> None:
+            for o in edits.objects:
+                if o["id"] == id:
+                    edits.objects.remove(o)
+                    for cid in [c for c, cb in edits.cables.items() if id in (cb["from"], cb["to"])]:
+                        dropped.append(cid)
+                        del edits.cables[cid]
+                    return
+            known = [o["id"] for o in _all_objects(edits)]
             raise ToolError(
                 f"no placed object {id!r}. Existing ids: {known[:20] if known else 'none'}. "
-                "get_parcel lists a parcel's objects."
+                "get_parcel lists the objects inside a parcel."
             )
 
-        pid = self._write(change)
+        self._write(change)
         note = f" and its cable{'s' if len(dropped) > 1 else ''} {', '.join(dropped)}" if dropped else ""
-        return {"summary": f"removed {id} from {pid}{note}", "id": id, "parcel": pid,
-                "cables_removed": dropped, "warnings": []}
+        return {"summary": f"removed {id}{note}", "id": id, "cables_removed": dropped, "warnings": []}
 
     # cables ----------------------------------------------------------------------------------
     def _pole(self, edits: Edits, oid: object) -> dict:
         """The placed utility pole or house connector with this id (what a cable can end on)."""
-        for _, o in _all_objects(edits):
+        for o in _all_objects(edits):
             if o["id"] == oid:
                 if not o["asset"].startswith(WIRE_ASSET_PREFIXES):
                     raise ToolError(
@@ -1263,12 +1451,12 @@ class ParcelEditTools:
                         f"connectors (category \"connector\", placed in the editor's Poles tool)."
                     )
                 return o
-        poles = [o["id"] for _, o in _all_objects(edits) if o["asset"].startswith(POLE_ASSET_PREFIX)]
+        poles = [o["id"] for o in _all_objects(edits) if o["asset"].startswith(POLE_ASSET_PREFIX)]
         raise ToolError(f"no placed object {oid!r}. Placed poles: {poles[:30] if poles else 'none'}.")
 
     @staticmethod
     def _cable_row(cid: str, cable: dict, edits: Edits) -> dict:
-        pos = {o["id"]: o["position"] for _, o in _all_objects(edits)}
+        pos = {o["id"]: o["position"] for o in _all_objects(edits)}
         a, b = pos.get(cable["from"]), pos.get(cable["to"])
         length = _r3(math.hypot(a[0] - b[0], a[1] - b[1])) if a and b else None
         return {"id": cid, "from": cable["from"], "to": cable["to"], "length_m": length}
@@ -1330,7 +1518,7 @@ class ParcelEditTools:
         edits = _read_edits(self.settings.edits_path)
         rows = [self._cable_row(cid, cb, edits) for cid, cb in sorted(edits.cables.items())
                 if pole is None or pole in (cb["from"], cb["to"])]
-        placed = {o["id"]: o for _, o in _all_objects(edits)}
+        placed = {o["id"]: o for o in _all_objects(edits)}
         warnings = [f"{r['id']}: {end} is not a placed utility pole (the cable is skipped)"
                     for r in rows for end in (r["from"], r["to"])
                     if not placed.get(end, {}).get("asset", "").startswith(WIRE_ASSET_PREFIXES)]
@@ -1370,18 +1558,20 @@ class ParcelEditTools:
         path = self.settings.edits_path
         with edits_lock(path):
             edits = _read_edits(path)
-            owner = next((p for p, o in _all_objects(edits) if o["id"] == id), None)
-            if owner is None:
-                raise ToolError(f"no placed object {id!r}; get_parcel lists a parcel's objects.")
-            obj = next(o for o in edits.parcels[owner]["objects"] if o["id"] == id)
-            target = self.map.need(parcel) if parcel else owner
+            obj = next((o for o in _all_objects(edits) if o["id"] == id), None)
+            if obj is None:
+                raise ToolError(f"no placed object {id!r}; get_parcel lists the objects inside a parcel.")
+            # a parcel is only the frame an anchor is measured in; the object keeps belonging to none
+            target = self.map.need(parcel) if parcel else None
             new = dict(obj)
             if relocate:
                 if position is None and anchor is None and offset_m is not None:
                     anchor = "centre"
+                if position is None and target is None:  # an anchor, no parcel named: the one it stands in
+                    target = self.map.parcel_at(*self.map.to_local(*obj["position"]))
                 x, y, frame = self._place_point(target, anchor, offset_m, position, warnings)
                 new["position"] = self.map.to_abs(x, y)
-                if rotation_deg is None and (anchor is not None or parcel is not None):
+                if rotation_deg is None and frame is not None and (anchor is not None or parcel is not None):
                     new["rotation_deg"] = _facing_rotation(frame.side.normal)
             if rotation_deg is not None:
                 new["rotation_deg"] = _norm_deg(rotation_deg)
@@ -1397,13 +1587,7 @@ class ParcelEditTools:
                     float(new.get("scale", 1)), edits, id,
                 )
             )
-            if target != owner:
-                edits.parcels[owner]["objects"].remove(obj)
-                if not edits.parcels[owner]["objects"]:
-                    del edits.parcels[owner]["objects"]
-                edits.parcels.setdefault(target, {}).setdefault("objects", []).append(new)
-            else:
-                edits.parcels[owner]["objects"][edits.parcels[owner]["objects"].index(obj)] = new
+            edits.objects[edits.objects.index(obj)] = new
             _empty_parcel_cleanup(edits)
             errors = validate(_edits_doc(edits))
             if errors:
@@ -1413,10 +1597,9 @@ class ParcelEditTools:
                 )
             dump_edits(edits, path)
         return {
-            "summary": f"moved {id} on {target} to {new['position']}, rotation {new.get('rotation_deg', 0)} deg"
+            "summary": f"moved {id} to {new['position']}, rotation {new.get('rotation_deg', 0)} deg"
             + (f", {len(warnings)} warning(s)" if warnings else ""),
             "id": id,
-            "parcel": target,
             "entry": new,
             "warnings": warnings,
         }
@@ -1560,18 +1743,59 @@ class ParcelEditTools:
         }
 
 
-    # regions -------------------------------------------------------------------------------
+    # ground patches and zones ----------------------------------------------------------------
     @staticmethod
-    def _region_colour(colour: object) -> str:
-        if not (isinstance(colour, str) and _COLOUR.fullmatch(colour)):
-            raise ToolError(f'colour must look like "#rrggbb" (got {colour!r})')
-        return colour.lower()
-
-    @staticmethod
-    def _region_id(id: object) -> str:
-        if not (isinstance(id, str) and _REGION_ID.fullmatch(id)):
-            raise ToolError(f"{id!r} is not a region ID like R-0001. list_regions shows the existing ones.")
+    def _id(pattern: re.Pattern, noun: str, example: str, lister: str, id: object) -> str:
+        if not (isinstance(id, str) and pattern.fullmatch(id)):
+            raise ToolError(f"{id!r} is not a {noun} ID like {example}. {lister} shows the existing ones.")
         return id
+
+    def _patch_id(self, id: object) -> str:
+        return self._id(_PATCH_ID, "ground patch", "GP-0001", "list_ground_patches", id)
+
+    def _zone_id(self, id: object) -> str:
+        return self._id(_ZONE_ID, "zone", "Z-0001", "list_zones", id)
+
+    def _zone_ref(self, id: object) -> str:
+        """A zone ID: ``Z-0001`` or, for a zone that comes from a rule, ``A-0012`` (``A-0012.2`` for the second outline)."""
+        if isinstance(id, str) and _RULE_ZONE_ID.fullmatch(id):
+            return id
+        return self._zone_id(id)
+
+    def _rule_zones(self, edits: Edits, kind: str | None = None) -> list[tuple[str, str, Polygon]]:
+        """``(id, kind, polygon)`` of the zones that come from a rule (the ground areas of a kind's ``where_ground``), local
+        metres, less those that were cut (edited or deleted before)."""
+        m = self.map.ensure()
+        section = zone_rules(load_section("zones", self.settings.rules_path))
+        cuts = zone_cuts(edits.zone_cuts, m.origin)
+        out = []
+        for k, rule in section.items():
+            if (kind is not None and k != kind) or not rule.get("where_ground"):
+                continue
+            for area in sorted(m.ground, key=lambda a: a["id"]):
+                if area["kind"] not in rule["where_ground"]:
+                    continue
+                out += [(zid, k, poly) for zid, poly in rule_parts(area) if not rule_part_is_cut(poly, cuts.get(k))]
+        return out
+
+    def _detach(self, edits: Edits, rid: str, kind: object, new_kind: str | None = None, keep: bool = True) -> str | None:
+        """Make a zone that comes from a rule an ordinary edit: cut its polygon out of the rule zone of ``kind`` and, when
+        ``keep``, write it as a drawn zone (of ``new_kind``, default the same). Returns the new ``Z-`` id (None: nothing kept)."""
+        if not isinstance(kind, str) or kind not in KIND_NAMES:
+            of = sorted({k for z, k, _ in self._rule_zones(edits) if z == rid})
+            raise ToolError(
+                f"{rid} is a zone of several kinds ({', '.join(of) or 'none'}): give its `kind` (the kind it has now) too. list_zones shows them."
+            )
+        hit = [p for z, k, p in self._rule_zones(edits, kind) if z == rid]
+        if not hit:
+            raise ToolError(f"zone {rid} of kind {kind} does not exist (it may be edited already); call list_zones(kind={kind!r}) to see them.")
+        ring = [self.map.to_abs(x, y) for x, y in list(hit[0].exterior.coords)[:-1]]
+        edits.zone_cuts[_next_id("ZC", list(edits.zone_cuts))] = {"kind": kind, "polygon": ring}
+        if not keep:
+            return None
+        zid = _next_id("Z", list(edits.zones))
+        edits.zones[zid] = {"kind": new_kind or kind, "polygon": [list(p) for p in ring]}
+        return zid
 
     @staticmethod
     def _xy(name: str, p: object) -> list[float]:
@@ -1579,23 +1803,31 @@ class ParcelEditTools:
             raise ToolError(f"{name} must be [x, y] in absolute S-JTSK metres, got {p!r}")
         return _pt(_check_num(f"{name}[0]", p[0]), _check_num(f"{name}[1]", p[1]))
 
-    def _region_entry(self, edits: Edits, rid: str) -> dict:
-        if rid not in edits.regions:
+    @staticmethod
+    def _patch_entry(edits: Edits, pid: str) -> dict:
+        if pid not in edits.ground_patches:
             raise ToolError(
-                f"region {rid} does not exist; regions: {sorted(edits.regions) or 'none'}. "
-                "Call list_regions to see them."
+                f"ground patch {pid} does not exist; patches: {sorted(edits.ground_patches) or 'none'}. "
+                "Call list_ground_patches to see them."
             )
-        return edits.regions[rid]
+        return edits.ground_patches[pid]
 
     @staticmethod
-    def _region_row(rid: str, entry: dict) -> dict:
-        ring = region_ring(entry["polygon"])
-        poly = Polygon(ring)
+    def _zone_entry(edits: Edits, zid: str) -> dict:
+        if zid not in edits.zones:
+            raise ToolError(
+                f"zone {zid} does not exist; zones: {sorted(edits.zones) or 'none'}. Call list_zones to see them."
+            )
+        return edits.zones[zid]
+
+    @staticmethod
+    def _shape_row(sid: str, entry: dict) -> dict:
+        """The row of a patch or a zone: its own keys (type, kind, water_y), the size and where it is."""
+        poly = Polygon(polygon_ring(entry["polygon"]))
         c = poly.centroid
         return {
-            "id": rid,
-            "colour": entry["colour"],
-            **({"water_y": entry["water_y"]} if "water_y" in entry else {}),
+            "id": sid,
+            **{k: entry[k] for k in ("type", "kind", "water_y", "max_depth") if k in entry},
             "area_m2": round(poly.area, 1),
             "points": len(entry["polygon"]),
             "bbox": [_r3(v) for v in poly.bounds],
@@ -1603,31 +1835,205 @@ class ParcelEditTools:
         }
 
     @staticmethod
-    def _overlap_warnings(edits: Edits, rid: str) -> list[str]:
-        mine = Polygon(region_ring(edits.regions[rid]["polygon"]))
+    def _overlap_warnings(edits: Edits, pid: str) -> list[str]:
+        mine = Polygon(polygon_ring(edits.ground_patches[pid]["polygon"]))
         if not mine.is_valid:
             return []
         out = []
-        for oid, other in sorted(edits.regions.items()):
-            if oid == rid:
+        for oid, other in sorted(edits.ground_patches.items()):
+            if oid == pid:
                 continue
-            op = Polygon(region_ring(other["polygon"]))
+            op = Polygon(polygon_ring(other["polygon"]))
             if op.is_valid and mine.intersection(op).area > 0.01:
-                winner = max(rid, oid, key=region_rank)
-                out.append(f"overlaps region {oid}; where they overlap {winner} wins (higher ID)")
+                winner = max(pid, oid, key=patch_rank)
+                out.append(f"overlaps ground patch {oid}; where they overlap {winner} wins (higher ID)")
         return out
 
-    def create_region(
+    def _ground_types(self) -> dict[str, dict]:
+        """The effective ground types: rules.yaml with the overrides and additions of edits.json."""
+        _read_edits(self.settings.edits_path)  # an invalid edits file is reported as such, not as a crash
+        return ground_types(self.settings.rules_path, edits_path=self.settings.edits_path)
+
+    def _ground_type(self, name: object) -> str:
+        types = self._ground_types()
+        if not isinstance(name, str) or name not in types:
+            raise ToolError(f"unknown ground type {name!r}; choose one of {', '.join(types)} (see list_ground_types)")
+        return name
+
+    def _zone_kind(self, kind: object) -> str:
+        if not isinstance(kind, str) or kind not in KIND_NAMES:
+            raise ToolError(f"unknown zone kind {kind!r}; choose one of {', '.join(KIND_NAMES)} (see list_zone_kinds)")
+        return kind
+
+    def _is_water_type(self, name: str) -> bool:
+        return bool(attributes_of(self._ground_types()[name]).get("water"))
+
+    @staticmethod
+    def _catalog() -> dict:
+        """The attribute catalog for the model: the groups and what values each attribute takes."""
+        values = {
+            "colours": "list of 1-6 \"#rrggbb\"",
+            "recipe": " | ".join(RECIPES),
+            "detail": "object laid over the recipe's section of rules.yaml detail",
+            "water": "true",
+        }
+        return {
+            "groups": [
+                {
+                    "group": g.key,
+                    "note": g.note,
+                    "attributes": [
+                        {"attribute": a.key, "label": a.label, "value": values[a.key]}
+                        for a in ATTRIBUTES.values()
+                        if a.group == g.key
+                    ],
+                }
+                for g in GROUPS
+            ],
+        }
+
+    def list_ground_types(self) -> dict:
+        """The ground types, effective attributes and where each comes from (see the registered tool description)."""
+        rules = rules_ground_types(self.settings.rules_path)
+        edited = _read_edits(self.settings.edits_path).ground_types
+        rows = []
+        for name, spec in merge_ground_types(rules, edited).items():
+            rows.append({
+                "type": name,
+                "source": ground_type_source(name, rules, edited),
+                "attributes": attributes_of(spec),
+                "osm": spec.get("osm") or {},
+                "from": "rule: " + spec["rule"] if spec.get("rule") else ("osm: " + json.dumps(spec["osm"], sort_keys=True) if spec.get("osm") else "hand-drawn or default only"),
+            })
+        deleted = sorted(n for n in edited if ground_type_source(n, rules, edited) == "deleted")
+        out: dict = {
+            "summary": f"{len(rows)} ground types" + (f" ({len(deleted)} deleted by you)" if deleted else ""),
+            "types": rows,
+            "catalog": self._catalog(),
+        }
+        if deleted:
+            out["deleted"] = deleted
+        return out
+
+    @staticmethod
+    def _ground_type_patches(name: str, edits: Edits) -> list[str]:
+        return sorted(pid for pid, p in edits.ground_patches.items() if p.get("type") == name)
+
+    def set_ground_type(
         self,
-        colour: str,
-        polygon: list[list[float]] | None = None,
-        parcel: str | None = None,
-        points: list | None = None,
-        water_y: float | None = None,
+        name: str,
+        attributes: dict | None = None,
+        osm: dict | None = None,
     ) -> dict:
-        """Create a region (see the registered tool description)."""
-        level = None if water_y is None else _check_num("water_y", water_y)
-        col = self._region_colour(colour)
+        """Create a ground type or change the user's override of one (see the registered tool description)."""
+        if not isinstance(name, str):
+            raise ToolError("name must be text, a lower_snake type name like my_meadow")
+        if attributes is None and osm is None:
+            raise ToolError("give attributes (the attributes to set, null removes one) and/or osm")
+        if attributes is not None:
+            if not isinstance(attributes, dict) or not attributes:
+                raise ToolError("attributes must be an object like {\"colours\": [\"#d8c38a\"], \"recipe\": \"field\"} (see list_ground_types catalog)")
+            unknown = [k for k in attributes if k not in ATTRIBUTES]
+            if unknown:
+                raise ToolError(
+                    f"unknown attribute {', '.join(unknown)}; a ground type is terrain only, the catalog has {', '.join(ATTRIBUTES)} "
+                    "(what an area means in play is a zone: see create_zone) (see list_ground_types)"
+                )
+        rules = rules_ground_types(self.settings.rules_path)
+
+        def change(edits: Edits) -> str:
+            before = ground_type_source(name, rules, edits.ground_types)
+            if before == "deleted":
+                raise ToolError(f"{name} is deleted by you; reset_ground_type it first to bring it back. Nothing was changed.")
+            existed = name in edits.ground_types
+            entry = edits.ground_types.setdefault(name, {})
+            if attributes is not None:
+                own = entry.setdefault("attributes", {})
+                carried_by_rules = attributes_of(rules.get(name))
+                for key, value in attributes.items():
+                    if value is None:  # remove: a null only where the rules carry it, else just drop what was set
+                        if key in carried_by_rules:
+                            own[key] = None
+                        else:
+                            own.pop(key, None)
+                    elif key == "detail":
+                        if not isinstance(value, dict):
+                            raise ToolError("detail must be an object, e.g. {\"furrow\": {\"probability\": 0.0}}")
+                        own[key] = _merge(own.get(key) or {}, value)
+                    else:
+                        own[key] = value
+                if not own:
+                    del entry["attributes"]
+            if osm is not None:
+                entry["osm"] = osm
+            return "updated" if existed else ("created" if name not in rules else "overridden")
+
+        what = self._write(change)
+        row = next(r for r in self.list_ground_types()["types"] if r["type"] == name)
+        return {
+            "summary": f"ground type {name} {what}; the map shows it after the next full run (make map)",
+            "type": row,
+            "warnings": [],
+        }
+
+    def reset_ground_type(self, name: str) -> dict:
+        """Remove the user's override of a ground type of the rules (also brings a deleted one back)."""
+        rules = rules_ground_types(self.settings.rules_path)
+
+        def change(edits: Edits) -> str:
+            source = ground_type_source(name, rules, edits.ground_types) if isinstance(name, str) else "custom"
+            if source == "custom":
+                raise ToolError(
+                    f"{name!r} is not a type of rules.yaml, so there is nothing to reset to; use delete_ground_type to remove it. "
+                    f"Types of the rules: {', '.join(rules)}. Nothing was changed."
+                )
+            if source == "rules":
+                raise ToolError(f"{name} has no override of yours; it is as in rules.yaml. Nothing was changed.")
+            del edits.ground_types[name]
+            return source
+
+        was = self._write(change)
+        return {
+            "summary": f"ground type {name} is as in rules.yaml again" + (" (it was deleted)" if was == "deleted" else "")
+            + "; the map shows it after the next full run (make map)",
+            "type": next(r for r in self.list_ground_types()["types"] if r["type"] == name),
+            "warnings": [],
+        }
+
+    def delete_ground_type(self, name: str) -> dict:
+        """Delete a ground type: a custom one is removed, one of the rules is marked deleted (reset_ground_type undoes)."""
+        rules = rules_ground_types(self.settings.rules_path)
+
+        def change(edits: Edits) -> str:
+            if not isinstance(name, str) or name not in {*rules, *edits.ground_types}:
+                raise ToolError(f"unknown ground type {name!r}; choose one of {', '.join(self._ground_types())} (see list_ground_types)")
+            source = ground_type_source(name, rules, edits.ground_types)
+            if source == "deleted":
+                raise ToolError(f"{name} is already deleted. Nothing was changed.")
+            if name in protected_ground_types():
+                raise ToolError(f"{name} cannot be deleted, it {protected_ground_types()[name]}. Nothing was changed.")
+            used = self._ground_type_patches(name, edits)
+            if used:
+                raise ToolError(
+                    f"ground patches {', '.join(used)} are of type {name}; delete them or give them another type "
+                    "(set_patch_type) first. Nothing was changed."
+                )
+            if source == "custom":
+                del edits.ground_types[name]
+            else:
+                edits.ground_types[name] = {"deleted": True}
+            return source
+
+        was = self._write(change)
+        return {
+            "summary": f"ground type {name} deleted" + ("" if was == "custom" else " (reset_ground_type brings it back)")
+            + "; the map shows it after the next full run (make map)",
+            "type": name,
+            "warnings": [],
+        }
+
+    def _points_of(self, polygon: object, parcel: object, points: object, noun: str) -> list[list[float]]:
+        """The corners of a new patch or zone: an absolute polygon, or points in a parcel's frame made absolute."""
         if (polygon is None) == (points is None):
             raise ToolError(
                 "give exactly one of polygon (absolute [x, y] points) or parcel + points "
@@ -1658,63 +2064,131 @@ class ParcelEditTools:
         if len(pts) > 1 and pts[0] == pts[-1]:
             pts.pop()  # the file does not need the closing point
         if len(pts) < 3:
-            raise ToolError(f"a region needs at least 3 points, got {len(pts)}. Nothing was changed.")
+            raise ToolError(f"a {noun} needs at least 3 points, got {len(pts)}. Nothing was changed.")
+        return pts
+
+    def create_ground_patch(
+        self,
+        type: str,
+        polygon: list[list[float]] | None = None,
+        parcel: str | None = None,
+        points: list | None = None,
+        water_y: float | None = None,
+        max_depth: float | None = None,
+    ) -> dict:
+        """Create a ground patch (see the registered tool description)."""
+        name = self._ground_type(type)
+        water = self._is_water_type(name)
+        level = None if water_y is None else _check_num("water_y", water_y)
+        depth = self._depth(max_depth)
+        if depth is not None and not water:
+            raise ToolError(f"max_depth only goes with a water type; {name} does not carry the water attribute")
+        if water and level is None:
+            raise ToolError(f"{name} is a water type: give water_y (metres, terrain datum)")
+        if not water and level is not None:
+            raise ToolError(f"water_y only goes with a water type; {name} does not carry the water attribute")
+        pts = self._points_of(polygon, parcel, points, "ground patch")
+        extra = {} if level is None else {"water_y": level}
+        if depth is not None:
+            extra["max_depth"] = depth
 
         def change(edits: Edits) -> dict:
-            rid = _next_id("R", list(edits.regions))
-            edits.regions[rid] = {"colour": col, "polygon": pts, **({} if level is None else {"water_y": level})}
-            return {"id": rid, "warnings": self._overlap_warnings(edits, rid)}
+            pid = _next_id("GP", list(edits.ground_patches))
+            edits.ground_patches[pid] = {"type": name, "polygon": pts, **extra}
+            return {"id": pid, "warnings": self._overlap_warnings(edits, pid)}
 
         out = self._write(change)
-        row = self._region_row(out["id"], {"colour": col, "polygon": pts, **({} if level is None else {"water_y": level})})
+        row = self._shape_row(out["id"], {"type": name, "polygon": pts, **extra})
         return {
-            "summary": f"created {out['id']} ({col}, {row['points']} points, {row['area_m2']} m2)"
+            "summary": f"created {out['id']} ({name}, {row['points']} points, {row['area_m2']} m2)"
             + (f", {len(out['warnings'])} warning(s)" if out["warnings"] else ""),
             **row,
             "polygon": pts,
             "warnings": out["warnings"],
         }
 
-    def set_region_water(self, id: str, water_y: float | None) -> dict:
-        """Make a region a body of water at a flat height (terrain datum, metres), or None to make it ground paint again."""
-        rid = self._region_id(id)
+    def set_patch_type(self, id: str, type: str, water_y: float | None = None, max_depth: float | None = None) -> dict:
+        """Give a ground patch another ground type (and a water level when the type is water)."""
+        pid = self._patch_id(id)
+        name = self._ground_type(type)
+        water = self._is_water_type(name)
         level = None if water_y is None else _check_num("water_y", water_y)
+        depth = self._depth(max_depth)
+        if not water and level is not None:
+            raise ToolError(f"water_y only goes with a water type; {name} does not carry the water attribute")
+        if not water and depth is not None:
+            raise ToolError(f"max_depth only goes with a water type; {name} does not carry the water attribute")
 
         def change(edits: Edits) -> object:
-            entry = self._region_entry(edits, rid)
-            old = entry.get("water_y")
-            if level is None:
+            entry = self._patch_entry(edits, pid)
+            old = entry["type"]
+            if water and level is None and "water_y" not in entry:
+                raise ToolError(f"{name} is a water type: give water_y (metres, terrain datum). Nothing was changed.")
+            entry["type"] = name
+            if not water:
                 entry.pop("water_y", None)
+                entry.pop("max_depth", None)
             else:
-                entry["water_y"] = level
+                if level is not None:
+                    entry["water_y"] = level
+                if depth is not None:
+                    entry["max_depth"] = depth
             return old
 
         old = self._write(change)
-        return {"summary": f"{rid} water_y {old} -> {level}", "id": rid, "water_y": level, "warnings": []}
+        return {
+            "summary": f"{pid} type {old} -> {name}; the map shows it after the next full run (make map)",
+            "id": pid,
+            "type": name,
+            "warnings": [],
+        }
 
-    def set_region_colour(self, id: str, colour: str) -> dict:
-        """Change a region's colour."""
-        rid = self._region_id(id)
-        col = self._region_colour(colour)
+    @staticmethod
+    def _depth(max_depth: float | None) -> float | None:
+        """A body's ``max_depth`` (metres, 0 to ``MAX_DEPTH_LIMIT_M``), or None when not given."""
+        if max_depth is None:
+            return None
+        depth = _check_num("max_depth", max_depth)
+        if not (0 < depth <= MAX_DEPTH_LIMIT_M):
+            raise ToolError(f"max_depth must be in metres, between 0 and {MAX_DEPTH_LIMIT_M:g}, got {max_depth!r}")
+        return depth
 
-        def change(edits: Edits) -> str:
-            entry = self._region_entry(edits, rid)
-            old = entry["colour"]
-            entry["colour"] = col
+    def set_patch_water(self, id: str, water_y: float, max_depth: float | None = None) -> dict:
+        """Change the flat water surface height of a ground patch of a water type, and optionally its deepest point.
+
+        ``max_depth`` (metres, optional) is the body's deepest point; left out it keeps the current one (the class
+        default when there is none).
+        """
+        pid = self._patch_id(id)
+        level = _check_num("water_y", water_y)
+        depth = self._depth(max_depth)
+
+        def change(edits: Edits) -> object:
+            entry = self._patch_entry(edits, pid)
+            if "water_y" not in entry:
+                raise ToolError(f"{pid} is of type {entry['type']}, not a water type; set_patch_type it to a water type first. Nothing was changed.")
+            old = entry["water_y"]
+            entry["water_y"] = level
+            if depth is not None:
+                entry["max_depth"] = depth
             return old
 
         old = self._write(change)
-        return {"summary": f"{rid} colour {old} -> {col}", "id": rid, "colour": col, "warnings": []}
+        out = {"summary": f"{pid} water_y {old} -> {level}", "id": pid, "water_y": level, "warnings": []}
+        if depth is not None:
+            out["max_depth"] = depth
+            out["summary"] += f", max_depth {depth}"
+        return out
 
-    def move_region_point(
+    def _move_corner(
         self,
-        id: str,
-        index: int,
-        position: list[float] | None = None,
-        offset: dict | None = None,
+        collection: str,
+        sid: str,
+        index: object,
+        position: list[float] | None,
+        offset: dict | None,
+        kind: str | None = None,
     ) -> dict:
-        """Move one polygon point to a position or by an offset."""
-        rid = self._region_id(id)
         if isinstance(index, bool) or not isinstance(index, int):
             raise ToolError(f"index must be an integer, got {index!r}")
         if (position is None) == (offset is None):
@@ -1727,66 +2201,179 @@ class ParcelEditTools:
             dx = _check_num("offset.dx", offset.get("dx", 0.0))
             dy = _check_num("offset.dy", offset.get("dy", 0.0))
             target = None
+        patches = collection == "ground_patches"
 
         def change(edits: Edits) -> dict:
-            entry = self._region_entry(edits, rid)
+            zid = sid
+            if not patches and _RULE_ZONE_ID.fullmatch(sid):  # comes from a rule: it becomes an ordinary zone first
+                zid = self._detach(edits, sid, kind) or sid
+            entry = self._patch_entry(edits, sid) if patches else self._zone_entry(edits, zid)
             poly = entry["polygon"]
             if not 0 <= index < len(poly):
                 raise ToolError(
-                    f"index {index} is out of range: {rid} has {len(poly)} points (0..{len(poly) - 1}). "
-                    "list_regions shows the point count."
+                    f"index {index} is out of range: {sid} has {len(poly)} points (0..{len(poly) - 1}). "
+                    f"{'list_ground_patches' if patches else 'list_zones'} shows the point count."
                 )
             old = poly[index]
             new = target if target is not None else _pt(old[0] + dx, old[1] + dy)
             poly[index] = new
-            return {"old": old, "new": new, "warnings": self._overlap_warnings(edits, rid)}
+            return {"id": zid, "old": old, "new": new, "warnings": self._overlap_warnings(edits, sid) if patches else []}
 
         out = self._write(change)
+        sid = out["id"]
         return {
-            "summary": f"moved {rid} point {index} {out['old']} -> {out['new']}",
-            "id": rid,
+            "summary": f"moved {sid} corner {index} {out['old']} -> {out['new']}",
+            "id": sid,
             "index": index,
             "old": out["old"],
             "position": out["new"],
             "warnings": out["warnings"],
         }
 
-    def delete_region(self, id: str) -> dict:
-        """Delete a region."""
-        rid = self._region_id(id)
+    def move_patch_corner(
+        self, id: str, index: int, position: list[float] | None = None, offset: dict | None = None
+    ) -> dict:
+        """Move one corner of a ground patch to a position or by an offset."""
+        return self._move_corner("ground_patches", self._patch_id(id), index, position, offset)
+
+    def move_zone_corner(
+        self, id: str, index: int, position: list[float] | None = None, offset: dict | None = None, kind: str | None = None
+    ) -> dict:
+        """Move one corner of a zone to a position or by an offset."""
+        return self._move_corner("zones", self._zone_ref(id), index, position, offset, kind)
+
+    def delete_ground_patch(self, id: str) -> dict:
+        """Delete a ground patch."""
+        pid = self._patch_id(id)
 
         def change(edits: Edits) -> dict:
-            self._region_entry(edits, rid)
-            return edits.regions.pop(rid)
+            self._patch_entry(edits, pid)
+            return edits.ground_patches.pop(pid)
 
         entry = self._write(change)
-        return {"summary": f"deleted {rid} ({entry['colour']})", "id": rid, "entry": entry, "warnings": []}
+        return {"summary": f"deleted {pid} ({entry['type']})", "id": pid, "entry": entry, "warnings": []}
 
-    def list_regions(self, near: dict | None = None, limit: int = 50) -> dict:
-        """List regions, optionally those near a point or parcel."""
+    def _near_rows(self, rows: list[dict], entries: dict[str, dict], near: dict | None) -> list[dict]:
+        """``rows`` kept within ``near`` (a point or a parcel and a radius), nearest first, with ``distance_m``."""
+        if near is None:
+            return rows
+        if not isinstance(near, dict):
+            raise ToolError('near must be {"x": .., "y": ..} or {"parcel": "P-0001", "radius_m": ..}')
+        radius = _check_num("near.radius_m", near.get("radius_m", 100.0), positive=True)
+        if "parcel" in near:
+            src: Any = shapely.affinity.translate(self.map.polys[self.map.need(near["parcel"])], *self.map.origin)
+        elif "x" in near and "y" in near:
+            src = Point(_check_num("near.x", near["x"]), _check_num("near.y", near["y"]))
+        else:
+            raise ToolError('near needs "x" and "y" (S-JTSK metres) or "parcel"')
+        keep = []
+        for row in rows:
+            d = Polygon(polygon_ring(entries[row.get("_key", row["id"])]["polygon"])).distance(src)
+            if d <= radius:
+                keep.append({**row, "distance_m": round(d, 1)})
+        return sorted(keep, key=lambda r: (r["distance_m"], r["id"]))
+
+    def list_ground_patches(self, near: dict | None = None, limit: int = 50) -> dict:
+        """List ground patches, optionally those near a point or parcel."""
         if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
             raise ToolError("limit must be an integer >= 1")
         edits = _read_edits(self.settings.edits_path)
-        rows = [self._region_row(rid, e) for rid, e in sorted(edits.regions.items())]
-        if near is not None:
-            if not isinstance(near, dict):
-                raise ToolError('near must be {"x": .., "y": ..} or {"parcel": "P-0001", "radius_m": ..}')
-            radius = _check_num("near.radius_m", near.get("radius_m", 100.0), positive=True)
-            if "parcel" in near:
-                src: Any = shapely.affinity.translate(
-                    self.map.polys[self.map.need(near["parcel"])], *self.map.origin
-                )
-            elif "x" in near and "y" in near:
-                src = Point(_check_num("near.x", near["x"]), _check_num("near.y", near["y"]))
-            else:
-                raise ToolError('near needs "x" and "y" (S-JTSK metres) or "parcel"')
-            keep = []
-            for row in rows:
-                d = Polygon(region_ring(edits.regions[row["id"]]["polygon"])).distance(src)
-                if d <= radius:
-                    keep.append({**row, "distance_m": round(d, 1)})
-            rows = sorted(keep, key=lambda r: (r["distance_m"], r["id"]))
-        return {"count": len(rows[:limit]), "total_matching": len(rows), "regions": rows[:limit]}
+        rows = [self._shape_row(pid, e) for pid, e in sorted(edits.ground_patches.items())]
+        rows = self._near_rows(rows, edits.ground_patches, near)
+        return {"count": len(rows[:limit]), "total_matching": len(rows), "ground_patches": rows[:limit]}
+
+    def create_zone(
+        self,
+        kind: str,
+        polygon: list[list[float]] | None = None,
+        parcel: str | None = None,
+        points: list | None = None,
+    ) -> dict:
+        """Create a zone (see the registered tool description)."""
+        name = self._zone_kind(kind)
+        pts = self._points_of(polygon, parcel, points, "zone")
+
+        def change(edits: Edits) -> str:
+            zid = _next_id("Z", list(edits.zones))
+            edits.zones[zid] = {"kind": name, "polygon": pts}
+            return zid
+
+        zid = self._write(change)
+        row = self._shape_row(zid, {"kind": name, "polygon": pts})
+        return {
+            "summary": f"created {zid} ({name}, {row['points']} points, {row['area_m2']} m2); the server gets its points after the next full run (make map)",
+            **row,
+            "polygon": pts,
+            "warnings": [],
+        }
+
+    def set_zone_kind(self, id: str, kind: str, from_kind: str | None = None) -> dict:
+        """Give a zone another kind."""
+        zid = self._zone_ref(id)
+        name = self._zone_kind(kind)
+
+        def change(edits: Edits) -> tuple[str, str]:
+            if _RULE_ZONE_ID.fullmatch(zid):  # comes from a rule: it becomes an ordinary zone of the new kind
+                new = self._detach(edits, zid, from_kind, new_kind=name)
+                assert new is not None
+                return new, str(from_kind)
+            entry = self._zone_entry(edits, zid)
+            old = entry["kind"]
+            entry["kind"] = name
+            return zid, old
+
+        new, old = self._write(change)
+        return {"summary": f"{zid} kind {old} -> {name}" + (f" (now {new})" if new != zid else ""), "id": new, "kind": name, "warnings": []}
+
+    def delete_zone(self, id: str, kind: str | None = None) -> dict:
+        """Delete a zone."""
+        zid = self._zone_ref(id)
+
+        def change(edits: Edits) -> dict:
+            if _RULE_ZONE_ID.fullmatch(zid):  # comes from a rule: cut it out of the rule zone
+                self._detach(edits, zid, kind, keep=False)
+                return {"kind": kind}
+            self._zone_entry(edits, zid)
+            return edits.zones.pop(zid)
+
+        entry = self._write(change)
+        return {"summary": f"deleted {zid} ({entry['kind']})", "id": zid, "entry": entry, "warnings": []}
+
+    def _zone_entries(self, edits: Edits, kind: str | None) -> dict[str, dict]:
+        """Every zone of a kind (all kinds: None) as edits entries with absolute polygons: the ``Z-`` zones and the ones that
+        come from a rule (``A-``), which the editor treats the same."""
+        entries = {zid: e for zid, e in edits.zones.items() if kind is None or e["kind"] == kind}
+        if not self.map.work_dir.joinpath("parcels.json").is_file():
+            return entries
+        for zid, k, poly in self._rule_zones(edits, kind):
+            entries[zid + ("" if kind else f"|{k}")] = {"kind": k, "polygon": [self.map.to_abs(x, y) for x, y in list(poly.exterior.coords)[:-1]]}
+        return entries
+
+    def list_zones(self, near: dict | None = None, limit: int = 50, kind: str | None = None) -> dict:
+        """List the zones, optionally of one kind or near a point or parcel."""
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ToolError("limit must be an integer >= 1")
+        if kind is not None:
+            self._zone_kind(kind)
+        edits = _read_edits(self.settings.edits_path)
+        entries = self._zone_entries(edits, kind)
+        rows = [{**self._shape_row(key.split("|")[0], e), "_key": key} for key, e in sorted(entries.items())]
+        rows = [{k: v for k, v in r.items() if k != "_key"} for r in self._near_rows(rows, entries, near)]
+        return {"count": len(rows[:limit]), "total_matching": len(rows), "zones": rows[:limit]}
+
+    def list_zone_kinds(self) -> dict:
+        """The catalog of zone kinds with their rules (see the registered tool description)."""
+        edits = _read_edits(self.settings.edits_path)
+        rules = zone_rules(load_section("zones", self.settings.rules_path))
+        rows = []
+        for row in zone_kind_rows(rules):
+            rule = rules.get(row["name"], {})
+            rows.append({
+                **{k: row[k] for k in ("name", "label", "group", "where_ground")},
+                "zones": len(self._zone_entries(edits, row["name"])),
+                "points": "none: read by the props stage as spawn candidates" if row["name"] == PLAYER_SPAWN else {k: rule[k] for k in RULE_KEYS if k in rule} or "no rule in rules.yaml zones",
+            })
+        return {"summary": f"{len(rows)} zone kinds", "kinds": rows}
 
 
 # --- MCP registration -----------------------------------------------------------------------
@@ -1806,13 +2393,14 @@ def build_server(settings: Settings) -> Any:
     server = MCPServer(
         "drycastle-parcel-edits",
         instructions=(
-            "Edit parcels of the Drycastle map: fences, trees, placed objects, property "
-            "groups and ground-colour regions, all stored in edits.json (a viewer in --editor --watch "
+            "Edit parcels of the Drycastle map: fences, placed objects (trees are placed as objects), property "
+            "groups, ground patches (hand-drawn ground of one ground type) and zones (what an area means in play), all stored in edits.json (a viewer in --editor --watch "
             "mode shows changes within about a second). Coordinates are absolute S-JTSK metres (x east, y north). "
             "Typical flow: find_parcels (selected=true for what the user selected) -> get_parcel "
-            "-> set_fence / set_trees / place_object; create_region for ground colour. When the "
+            "-> set_fence / place_object; create_ground_patch for ground, create_zone for what an area means in play. When the "
             "user points at something they drew ('this line', 'this area', 'here', 'at A', "
-            "'inside L1'), call get_sketch for its coordinates."
+            "'inside L1', 'sketch ROAD'), call get_sketch for its coordinates. To show the user something on the map "
+            "(a road, a spot, an outline), draw it with sketch_add_road / sketch_add_point / sketch_add_line under a named sketch."
         ),
     )
 
@@ -1845,14 +2433,51 @@ def build_server(settings: Settings) -> Any:
         "requests like 'plant trees in this area', 'a fence along L1', 'put a lamp at A' or just "
         "'here' / 'this line'. A sketch holds points (named A, B, C, ...) and lines (L1, L2, ...; "
         "`closed: true` joins the last corner to the first and means the ground inside). Returns, in absolute "
-        "S-JTSK metres ready for place_object `position`, create_region `polygon` or a fence gap "
+        "S-JTSK metres ready for place_object `position`, create_ground_patch or create_zone `polygon` or a fence gap "
         "`at`: each point's position and the parcel it is on; each line's corners in drawing "
         "order, length_m, bbox, and for a closed line area_m2 and centroid; plus the parcels a line "
         "runs over (length_m on each) or a closed line covers (area_m2 and share_of_parcel). Optional "
-        "`id` returns one mark. Read-only: the user draws and clears the sketch in the viewer "
-        "(read from editor-state.json, like the selection); it is never part of edits.json."))
+        "`id` returns one mark, or all marks of one sketch when it is a sketch name. Marks are grouped in named "
+        "sketches (`sketches` lists them; every mark has its `sketch`). The user draws in the viewer and you draw "
+        "with sketch_add_*; the sketch lives in sketch.json and is never part of edits.json."))
     def get_sketch(id: str | None = None) -> dict:
         return tools.get_sketch(id)
+
+    @server.tool(description=(
+        "Create an empty named sketch (e.g. ROAD, FENCE_PLAN): a group of marks the user can see and name in the viewer. "
+        "1 to 24 letters, digits, _ or -; names match ignoring case. The other sketch_add_* tools create the sketch "
+        "they name when it is new, so this is only needed for an empty one."))
+    def create_sketch(name: str) -> dict:
+        return tools.create_sketch(name)
+
+    @server.tool(description=(
+        "Mark a point on the ground in a sketch, in absolute S-JTSK metres (x east, y north). It appears in the "
+        "viewer within a frame, as one undo step, named A, B, ... (unique across all sketches). `sketch` is the "
+        "sketch's name (made when new); optional when there is at most one sketch."))
+    def sketch_add_point(x: float, y: float, sketch: str | None = None) -> dict:
+        return tools.sketch_add_point(x, y, sketch)
+
+    @server.tool(description=(
+        "Draw a line on the ground in a sketch: `points` is [[x, y], ...] in absolute S-JTSK metres (at least 2). "
+        "`closed: true` joins the last corner to the first and means the ground inside (3+ corners, must not "
+        "cross itself). Named L1, L2, ... (unique across all sketches). `sketch` as for sketch_add_point."))
+    def sketch_add_line(points: list[list[float]], closed: bool = False, sketch: str | None = None) -> dict:
+        return tools.sketch_add_line(points, closed, sketch)
+
+    @server.tool(description=(
+        "Highlight a road of the map by drawing its centreline as a line in a sketch (\"highlight this road under "
+        "sketch ROAD\"). Give exactly one of: `road` (an edge id such as E-0130 draws that edge; an osm_id such as "
+        "w84718108 draws the whole OSM way) or `near` ([x, y] in absolute S-JTSK metres, or the id of a sketch point "
+        "such as A: the nearest road within 30 m). Returns the new line ids and the road's highway type, surface, "
+        "width and length. `sketch` as for sketch_add_point."))
+    def sketch_add_road(road: str | None = None, near: list[float] | str | None = None, sketch: str | None = None) -> dict:
+        return tools.sketch_add_road(road, near, sketch)
+
+    @server.tool(description=(
+        "Remove one mark by id (A, L2), or a whole sketch by name with all its marks. The viewer's undo "
+        "(Ctrl+Z) brings it back. When no marks are left the names start again at A and L1."))
+    def sketch_remove(target: str) -> dict:
+        return tools.sketch_remove(target)
 
     @server.tool(description=(
         "Everything needed to edit one parcel: kind, area, cadastral ref, polygon bounds and "
@@ -1860,7 +2485,7 @@ def build_server(settings: Settings) -> Any:
         "normal and the axes used by place_object: `along` grows to the right when standing on "
         "the front edge looking into the parcel, `inward` grows away from the road), buildings on "
         "it (footprint centroid, bounds), neighbouring parcels, its group, the current edits "
-        "(fence, trees, objects), the effective fence after group inheritance, and the rules' "
+        "(fence, objects), the effective fence after group inheritance, and the rules' "
         "defaults (fence probability, tree density for its kind). Coordinates are S-JTSK metres."))
     def get_parcel(id: str) -> dict:
         return tools.get_parcel(id)
@@ -1894,39 +2519,25 @@ def build_server(settings: Settings) -> Any:
         return tools.reset_fence(target)
 
     @server.tool(description=(
-        "Set the generated trees of a parcel: exactly one of `density_per_1000m2` (trees per "
-        "1000 m2) or `count` (exact number), and optionally `seed_offset` (an integer that "
-        "rerolls the layout; a seed_offset alone is accepted only when the parcel already has a "
-        "density or count). Generated trees avoid buildings, roads and placed objects."))
-    def set_trees(
-        parcel: str,
-        density_per_1000m2: float | None = None,
-        count: int | None = None,
-        seed_offset: int | None = None,
-    ) -> dict:
-        return tools.set_trees(parcel, density_per_1000m2, count, seed_offset)
-
-    @server.tool(description="Remove the trees edit of a parcel so the rules' density applies again.")
-    def reset_trees(parcel: str) -> dict:
-        return tools.reset_trees(parcel)
-
-    @server.tool(description=(
-        "Place an asset (see list_assets) on a parcel. Position is either `anchor` = front | back "
+        "Place an asset (see list_assets). An object belongs to no parcel, it only has a position: "
+        "give an exact `position` [x, y] in S-JTSK metres (nothing else is needed, so a pole by a "
+        "road is fine), or name a `parcel` and an `anchor` = front | back "
         "| left | right | centre | near_building (default centre) plus optional `offset_m` "
-        "{\"along\": m, \"inward\": m}, or an exact `position` [x, y] in S-JTSK metres. Anchors "
+        "{\"along\": m, \"inward\": m}. Anchors "
         "are relative to the parcel's front edge (the side nearest a road; see get_parcel): "
         "left/right as seen standing on the front edge looking into the parcel, along > 0 = "
         "further right, inward > 0 = further from the road. `near_building` is between the "
         "building and the front edge. An anchor-based point is kept inside the parcel (moved to "
-        "the nearest interior point with a warning). Default rotation turns the object's front "
-        "toward the road (right for a car parked in front of the house); `rotation_deg` is "
+        "the nearest interior point with a warning). Default rotation, with a parcel, turns the "
+        "object's front toward the road (right for a car parked in front of the house), else 0; "
+        "`rotation_deg` is "
         "counter-clockwise seen from above, absolute. `scale` is uniform, default 1 (small pack "
         "models may need it); `colour` is \"#rrggbb\". Unknown asset/parcel and bad values are "
-        "errors; overlaps with buildings or other objects and positions outside the parcel are "
+        "errors; overlaps with buildings or other objects and positions outside a named parcel are "
         "applied and reported in `warnings`. Returns the new object's id, final position, rotation."))
     def place_object(
-        parcel: str,
         asset: str,
+        parcel: str | None = None,
         anchor: str | None = None,
         offset_m: dict | None = None,
         position: list[float] | None = None,
@@ -1935,7 +2546,7 @@ def build_server(settings: Settings) -> Any:
         colour: str | None = None,
     ) -> dict:
         return tools.place_object(
-            parcel, asset, anchor, offset_m, position, rotation_deg, scale, colour
+            asset, parcel, anchor, offset_m, position, rotation_deg, scale, colour
         )
 
     @server.tool(description="Remove a placed object by its id (e.g. o-0003). The cables hanging from a "
@@ -1965,10 +2576,10 @@ def build_server(settings: Settings) -> Any:
         return tools.list_cables(pole)
 
     @server.tool(description=(
-        "Change a placed object: new position (`anchor` + `offset_m` relative to `parcel`, "
-        "default the parcel that lists it, or an exact `position`), `rotation_deg`, `scale` or "
+        "Change a placed object: new position (an exact `position` [x, y], or `anchor` + `offset_m` "
+        "relative to `parcel`, default the parcel the object stands in), `rotation_deg`, `scale` or "
         "`colour`. With a new anchor and no rotation_deg the object turns to face the road "
-        "again; a new `parcel` re-lists the object under that parcel."))
+        "again. An object belongs to no parcel; `parcel` is only the frame an anchor is measured in."))
     def move_object(
         id: str,
         parcel: str | None = None,
@@ -2004,56 +2615,161 @@ def build_server(settings: Settings) -> Any:
         return tools.dissolve_group(id)
 
     @server.tool(description=(
-        "Create a region (id R-NNNN): a flat-coloured shape painted on the ground, independent "
-        "of parcel boundaries (a meadow, a gravel yard, a path). `colour` is \"#rrggbb\". Give "
+        "Create a ground patch (id GP-NNNN): a hand-drawn area of exactly one ground type, independent of parcel "
+        "boundaries (a meadow, a gravel yard, a path). `type` is a ground type of list_ground_types; a colour that no "
+        "type has is a ground type of your own (set_ground_type). Outside the parcels the patch is ground of that type "
+        "(terrain colour, detail, trees), overriding what the rules put there, after the next full run (make map); "
+        "the viewer shows it at once as a preview in the type's first colour. Give "
         "exactly one shape form: `polygon` = [[x, y], ...] in absolute S-JTSK metres, or `parcel` "
         "+ `points` = [[along, inward], ...] metres in that parcel's front-edge frame (same axes "
         "as place_object: along grows right, inward grows away from the road; see get_parcel). "
         "Needs 3+ points; edges may not cross or touch each other. Invalid shapes are refused "
-        "and nothing is written. Where regions overlap the higher ID wins (reported in "
-        "`warnings`). Optional `water_y` makes it a body of water with a flat surface at that height "
-        "(metres, terrain datum): see set_region_water. Returns the id, area, bbox and the final "
-        "absolute polygon."))
-    def create_region(
-        colour: str,
+        "and nothing is written. Where patches overlap the higher ID wins (reported in "
+        "`warnings`). A water type (carries the water attribute) needs `water_y`, the flat surface of the body of "
+        "water in metres on the terrain datum (see set_patch_water), and may give `max_depth` (metres, 0 to 20), the "
+        "body's deepest point (its natural bed is scaled to it); other types refuse both. "
+        "Returns the id, area, bbox and the final absolute polygon."))
+    def create_ground_patch(
+        type: str,
         polygon: list[list[float]] | None = None,
         parcel: str | None = None,
         points: list[list[float]] | None = None,
         water_y: float | None = None,
+        max_depth: float | None = None,
     ) -> dict:
-        return tools.create_region(colour, polygon, parcel, points, water_y)
+        return tools.create_ground_patch(type, polygon, parcel, points, water_y, max_depth)
 
     @server.tool(description=(
-        "Make a region a real body of water: a flat surface at `water_y` (metres on the terrain's "
-        "datum, e.g. 185.6) that stays level over the terrain, also written to water.json "
-        "(swimming, the shooter's water surface). The region's colour tints it. `water_y` null "
-        "turns it back into ground paint. Raise or lower the level by calling this again."))
-    def set_region_water(id: str, water_y: float | None) -> dict:
-        return tools.set_region_water(id, water_y)
-
-    @server.tool(description="Change a region's colour (\"#rrggbb\"). Use list_regions for ids.")
-    def set_region_colour(id: str, colour: str) -> dict:
-        return tools.set_region_colour(id, colour)
+        "Give a ground patch another ground type (see list_ground_types). A water type needs `water_y` unless the "
+        "patch has one, and may give `max_depth` (the body's deepest point, metres, 0 to 20); a type that is not water "
+        "drops both. Shows after the next full run (make map)."))
+    def set_patch_type(id: str, type: str, water_y: float | None = None, max_depth: float | None = None) -> dict:
+        return tools.set_patch_type(id, type, water_y, max_depth)
 
     @server.tool(description=(
-        "Move one point of a region's polygon (`index`, 0-based as in the file) to an absolute "
+        "Change the flat water surface height of a ground patch of a water type (`water_y`, metres on the terrain's "
+        "datum, e.g. 185.6): the body of water stays level over the terrain and is also written to water.json "
+        "(swimming, the shooter's water surface). `max_depth` (metres, optional, 0 to 20) sets the body's deepest "
+        "point: its natural bed is scaled to it. Raise or lower the level by calling this again."))
+    def set_patch_water(id: str, water_y: float, max_depth: float | None = None) -> dict:
+        return tools.set_patch_water(id, water_y, max_depth)
+
+    @server.tool(description=(
+        "Move one corner of a ground patch's polygon (`index`, 0-based as in the file) to an absolute "
         "`position` [x, y] or by an `offset` {\"dx\": east m, \"dy\": north m}; give exactly one. "
         "A move that would make the polygon self-intersect is refused and nothing is written."))
-    def move_region_point(
+    def move_patch_corner(
         id: str, index: int, position: list[float] | None = None, offset: dict | None = None
     ) -> dict:
-        return tools.move_region_point(id, index, position, offset)
+        return tools.move_patch_corner(id, index, position, offset)
 
-    @server.tool(description="Delete a region by id (e.g. R-0001).")
-    def delete_region(id: str) -> dict:
-        return tools.delete_region(id)
+    @server.tool(description="Delete a ground patch by id (e.g. GP-0001).")
+    def delete_ground_patch(id: str) -> dict:
+        return tools.delete_ground_patch(id)
 
     @server.tool(description=(
-        "List regions: id, colour, area_m2, point count, bbox [minx, miny, maxx, maxy] and "
+        "List ground patches: id, ground type, water_y (water types), area_m2, point count, bbox [minx, miny, maxx, maxy] and "
         "centroid (absolute S-JTSK). Optional filter `near` = {\"x\", \"y\", radius_m?} or "
         "{\"parcel\", radius_m?} (default radius 100 m; adds distance_m, nearest first); `limit`."))
-    def list_regions(near: dict | None = None, limit: int = 50) -> dict:
-        return tools.list_regions(near, limit)
+    def list_ground_patches(near: dict | None = None, limit: int = 50) -> dict:
+        return tools.list_ground_patches(near, limit)
+
+    @server.tool(description=(
+        "List the zone kinds: what a marked area can mean in play (a fixed catalog: bigfoot, player_spawn and one per wild "
+        "species). Per kind: label, group (event, player, wildlife), `where_ground` (a rule zone: the ground types the kind "
+        "applies to wherever they lie; null: only the zones you create), the number of its `zones` and `points` (the density "
+        "rule of the candidate points the server picks from; player_spawn has none, the props stage takes spawn "
+        "candidates on its ground). Use a name as the `kind` of create_zone."))
+    def list_zone_kinds() -> dict:
+        return tools.list_zone_kinds()
+
+    @server.tool(description=(
+        "Create a zone (id Z-NNNN): a marked area of exactly one zone kind (list_zone_kinds), independent of parcel "
+        "boundaries. A zone never changes the terrain (a zone over a forest does not cut the forest) and zones overlap "
+        "freely. After the next full run (make map) the export draws candidate points inside it (clear of buildings and "
+        "water) for the game server, or, for player_spawn, takes spawn candidates on the ground inside it. Shape forms, "
+        "validation and result as create_ground_patch: `polygon` = [[x, y], ...] in absolute S-JTSK metres, or `parcel` + "
+        "`points` = [[along, inward], ...]."))
+    def create_zone(
+        kind: str,
+        polygon: list[list[float]] | None = None,
+        parcel: str | None = None,
+        points: list[list[float]] | None = None,
+    ) -> dict:
+        return tools.create_zone(kind, polygon, parcel, points)
+
+    @server.tool(description=(
+        "Give a zone another kind (see list_zone_kinds). A zone from list_zones with an `A-` id (one the kind has by "
+        "rule, wherever some ground lies) works the same: give its current kind as `from_kind`; it is returned as a new Z- zone."))
+    def set_zone_kind(id: str, kind: str, from_kind: str | None = None) -> dict:
+        return tools.set_zone_kind(id, kind, from_kind)
+
+    @server.tool(description=(
+        "Move one corner of a zone's polygon (`index`, 0-based as in the file) to an absolute "
+        "`position` [x, y] or by an `offset` {\"dx\": east m, \"dy\": north m}; give exactly one. "
+        "A move that would make the polygon self-intersect is refused and nothing is written. For an `A-` zone from "
+        "list_zones give its `kind`; it is returned as a new Z- zone."))
+    def move_zone_corner(
+        id: str, index: int, position: list[float] | None = None, offset: dict | None = None, kind: str | None = None
+    ) -> dict:
+        return tools.move_zone_corner(id, index, position, offset, kind)
+
+    @server.tool(description=(
+        "Delete a zone by id (e.g. Z-0001, or A-0012 from list_zones: then also give its `kind`, since one ground area "
+        "is a zone of several kinds)."))
+    def delete_zone(id: str, kind: str | None = None) -> dict:
+        return tools.delete_zone(id, kind)
+
+    @server.tool(description=(
+        "List the zones: id, kind, area_m2, point count, bbox [minx, miny, maxx, maxy] and centroid (absolute "
+        "S-JTSK). Every zone is here, the Z- ones you created and the A- ones a kind has wherever some ground lies "
+        "(deer in forests); both can be moved, retyped and deleted the same. Optional filters `kind`, "
+        "`near` = {\"x\", \"y\", radius_m?} or {\"parcel\", radius_m?} (default radius 100 m; adds distance_m, nearest "
+        "first); `limit`."))
+    def list_zones(near: dict | None = None, limit: int = 50, kind: str | None = None) -> dict:
+        return tools.list_zones(near, limit, kind)
+
+    @server.tool(description=(
+        "List the ground types (rules.yaml ground.types plus your overrides and additions in edits.json): name, "
+        "`source` (rules = as in rules.yaml, overridden = rules.yaml plus your override, custom = made by you), "
+        "the `attributes` it carries (a ground type is terrain only: colours, detail recipe and settings, water), the OSM "
+        "values it takes, and where it comes from on its own (OSM, a rule, or only hand-drawn); `deleted` names the types "
+        "of the rules you removed. `catalog` lists every attribute that exists, grouped (Appearance, Water), and what "
+        "values it takes. Use a name as the `type` of create_ground_patch."))
+    def list_ground_types() -> dict:
+        return tools.list_ground_types()
+
+    @server.tool(description=(
+        "Create a ground type, or change your override of one that rules.yaml defines. Name: lower_snake, at most 24 "
+        "characters, an ID that cannot be renamed. A type is a named bundle of terrain attributes; `attributes` sets the "
+        "ones you give (see the `catalog` of list_ground_types): `colours` (1-6 \"#rrggbb\" terrain shades), `recipe` (field, "
+        "forest, village or dike), `detail` (settings laid over that recipe's section of rules.yaml `detail`, e.g. "
+        "{\"furrow\": {\"probability\": 0.0}, \"tone_per_ha\": 8}; merged into your earlier ones), `water` (true; a patch of "
+        "a water type needs a water_y). A type with only `colours` is a paint colour. A value null removes that "
+        "attribute (the type stops carrying it). A ground type carries nothing a game system reads: what an area means in "
+        "play is a zone (create_zone). `osm` ({\"landuse\": [...], \"natural\": [...]}, the OSM values the type "
+        "takes; each class given replaces its list; such a type needs attributes). Only what you give is "
+        "overridden; the rest stays as in rules.yaml. A new name makes a custom type (usable as the `type` of a "
+        "patch). Needs the next full run to show on the map (make map)."))
+    def set_ground_type(
+        name: str,
+        attributes: dict | None = None,
+        osm: dict | None = None,
+    ) -> dict:
+        return tools.set_ground_type(name, attributes, osm)
+
+    @server.tool(description=(
+        "Remove your override of a ground type of rules.yaml, so it is as in rules.yaml again; also brings back one you "
+        "deleted. Not for custom types (delete_ground_type)."))
+    def reset_ground_type(name: str) -> dict:
+        return tools.reset_ground_type(name)
+
+    @server.tool(description=(
+        "Delete a ground type: a custom one is removed, one of rules.yaml is marked deleted (reset_ground_type brings it "
+        "back). Refused for the default type and for the dike, and while ground patches are of the type (the error names "
+        "them)."))
+    def delete_ground_type(name: str) -> dict:
+        return tools.delete_ground_type(name)
 
     return server
 
@@ -2063,17 +2779,17 @@ def parse_args(argv: list[str] | None = None) -> Settings:
         prog="python -m drycastle_pipeline.mcp_server",
         description="MCP server (stdio) that edits pipeline/config/edits.json",
     )
-    ap.add_argument("--area", choices=("slice", "village"), default=DEFAULT_AREA)
     ap.add_argument("--edits", type=Path, default=DEFAULT_EDITS, help="edits file to read and write")
     ap.add_argument("--state", type=Path, default=DEFAULT_STATE, help="editor-state.json of the viewer")
+    ap.add_argument("--sketch", type=Path, default=None, help="sketch.json shared with the viewer (default: next to --state)")
     ap.add_argument("--assets", type=Path, default=DEFAULT_MANIFEST, help="asset manifest")
-    ap.add_argument("--work", type=Path, default=None, help="work dir (default: from --area)")
+    ap.add_argument("--work", type=Path, default=None, help="work dir (default: data/village/work)")
     a = ap.parse_args(argv)
     return Settings(
-        area=a.area,
         work_dir=a.work.resolve() if a.work else None,
         edits_path=a.edits.resolve(),
         state_path=a.state.resolve(),
+        sketch_path=a.sketch.resolve() if a.sketch else None,
         assets_path=a.assets.resolve(),
     )
 
@@ -2081,7 +2797,7 @@ def parse_args(argv: list[str] | None = None) -> Settings:
 def main(argv: list[str] | None = None) -> int:
     settings = parse_args(argv)
     print(
-        f"drycastle MCP server: area={settings.area} edits={settings.edits_path} "
+        f"drycastle MCP server: edits={settings.edits_path} "
         f"state={settings.state_path}",
         file=sys.stderr,
     )

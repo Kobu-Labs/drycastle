@@ -15,6 +15,24 @@ public class GameData
     public EnvironmentConfig Environment { get; init; } = new();
     /// <summary>glass.json (glass pane hit points, crack stages, shards; ADR 0007). Defaults when the file is absent.</summary>
     public GlassConfig Glass { get; init; } = new();
+    /// <summary>animals.json (the species of wildlife and livestock and their rules). Empty when the file is absent.</summary>
+    public AnimalsFile Animals { get; init; } = new();
+    /// <summary>animal_shapes.json (the hit shapes of the wild species, baked from their models), with the private packs' species merged in by the host. Empty when absent: every animal is its body box.</summary>
+    public AnimalShapes Shapes { get; set; } = new();
+    /// <summary>items.json (equippable items: headgear and the event rewards). Empty when the file is absent.</summary>
+    public ItemsFile Items { get; init; } = new();
+    /// <summary>pets.json (which property groups keep pets, of which species, and the poop rules). Inert when the file is absent.</summary>
+    public PetsFile Pets { get; init; } = new();
+    /// <summary>wildlife.json (which wild species the map holds and how many). Empty when the file is absent.</summary>
+    public WildlifeFile Wildlife { get; init; } = new();
+    /// <summary>bigfoot.json (every number of the Bigfoot event, issue #264). The defaults of the file when it is absent.</summary>
+    public BigfootFile Bigfoot { get; init; } = new();
+    /// <summary>thieves.json (every number of the Thieves event). Only the version so far; defaults when the file is absent.</summary>
+    public ThievesFile Thieves { get; init; } = new();
+    /// <summary>holy_mass.json (the citizens of the Holy Mass and, later, the event itself). Defaults when the file is absent.</summary>
+    public HolyMassFile HolyMass { get; init; } = new();
+    /// <summary>holy_mass_demon.json (the demon of the Holy Mass, its fireball and the burn). Defaults when the file is absent (the numbers are then zero: the demon fight needs the file).</summary>
+    public DemonFile Demon { get; init; } = new();
     /// <summary>turret.json: the sentry turret's tuning (the turret killstreak).</summary>
     public required TurretFile Turret { get; init; }
 
@@ -33,11 +51,12 @@ public class GameData
         """;
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string wildlifeJson = "", string thievesJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
         var killstreaks = KillstreakFile.Parse(killstreaksJson);
+        var animals = animalsJson == "" ? new() : AnimalsFile.Parse(animalsJson);
         return new()
         {
             Weapons = weapons,
@@ -50,6 +69,14 @@ public class GameData
             Environment = environmentJson == "" ? new() : EnvironmentConfig.Parse(environmentJson),
             Camo = camoJson == "" ? CamoFile.Parse(MinimalCamoJson) : CamoFile.Parse(camoJson),
             Glass = glassJson == "" ? new() : GlassConfig.Parse(glassJson),
+            Animals = animals,
+            Pets = petsJson == "" ? new() : PetsFile.Parse(petsJson).CheckAgainst(animals),
+            Wildlife = wildlifeJson == "" ? new() : WildlifeFile.Parse(wildlifeJson).CheckAgainst(animals),
+            Items = itemsJson == "" ? new() : ItemsFile.Parse(itemsJson),
+            Bigfoot = bigfootJson == "" ? new() : BigfootFile.Parse(bigfootJson),
+            Thieves = thievesJson == "" ? new() : ThievesFile.Parse(thievesJson),
+            HolyMass = holyMassJson == "" ? new() : HolyMassFile.Parse(holyMassJson),
+            Demon = demonJson == "" ? new() : DemonFile.Parse(demonJson),
         };
     }
 
@@ -58,6 +85,7 @@ public class GameData
         var weapons = WeaponsFile.Load(Path.Combine(dir, "weapons.json"));
         var perks = PerksFile.Load(Path.Combine(dir, "perks.json"));
         var killstreaks = KillstreakFile.Load(Path.Combine(dir, "killstreaks.json"));
+        var animals = File.Exists(Path.Combine(dir, "animals.json")) ? AnimalsFile.Load(Path.Combine(dir, "animals.json")) : new();
         return new()
         {
             Weapons = weapons,
@@ -70,6 +98,15 @@ public class GameData
             Environment = File.Exists(Path.Combine(dir, "environment.json")) ? EnvironmentConfig.Load(Path.Combine(dir, "environment.json")) : new(),
             Camo = File.Exists(Path.Combine(dir, "camo.json")) ? CamoFile.Load(Path.Combine(dir, "camo.json")) : CamoFile.Parse(MinimalCamoJson),
             Glass = File.Exists(Path.Combine(dir, "glass.json")) ? GlassConfig.Load(Path.Combine(dir, "glass.json")) : new(),
+            Animals = animals,
+            Shapes = File.Exists(Path.Combine(dir, "animal_shapes.json")) ? AnimalShapes.Load(Path.Combine(dir, "animal_shapes.json")) : new(),
+            Pets = File.Exists(Path.Combine(dir, "pets.json")) ? PetsFile.Load(Path.Combine(dir, "pets.json")).CheckAgainst(animals) : new(),
+            Wildlife = File.Exists(Path.Combine(dir, "wildlife.json")) ? WildlifeFile.Load(Path.Combine(dir, "wildlife.json")).CheckAgainst(animals) : new(),
+            Items = File.Exists(Path.Combine(dir, "items.json")) ? ItemsFile.Load(Path.Combine(dir, "items.json")) : new(),
+            Bigfoot = File.Exists(Path.Combine(dir, "bigfoot.json")) ? BigfootFile.Load(Path.Combine(dir, "bigfoot.json")) : new(),
+            Thieves = File.Exists(Path.Combine(dir, "thieves.json")) ? ThievesFile.Load(Path.Combine(dir, "thieves.json")) : new(),
+            HolyMass = File.Exists(Path.Combine(dir, "holy_mass.json")) ? HolyMassFile.Load(Path.Combine(dir, "holy_mass.json")) : new(),
+            Demon = File.Exists(Path.Combine(dir, "holy_mass_demon.json")) ? DemonFile.Load(Path.Combine(dir, "holy_mass_demon.json")) : new(),
         };
     }
 }

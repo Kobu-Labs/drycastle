@@ -11,6 +11,18 @@ public class ChatTests
     // ---- parsing ----
 
     [Fact]
+    public void SandboxTakesAPlayerAndAnOptionalState()
+    {
+        var p = ChatCommands.Parse("/sandbox Bob ON", Admin);
+        Assert.True(p.Ok);
+        Assert.Equal(new[] { "Bob", "on" }, p.Args);
+        Assert.True(ChatCommands.Parse("/sandbox #4", Admin).Ok);
+        Assert.False(ChatCommands.Parse("/sandbox", Admin).Ok);
+        Assert.False(ChatCommands.Parse("/sandbox bob maybe", Admin).Ok);
+        Assert.Contains("admin", ChatCommands.Parse("/sandbox bob", Guest).Error);
+    }
+
+    [Fact]
     public void BotsTakesACountInRange()
     {
         var p = ChatCommands.Parse("/bots 12", Admin);
@@ -28,6 +40,25 @@ public class ChatTests
 
     [Fact]
     public void BotsWithoutACountAsksForTheCurrentOne() => Assert.True(ChatCommands.Parse("/bots", Admin).Ok);
+
+    [Fact]
+    public void EventNeedsAKnownEventAndAnAdmin()
+    {
+        Assert.Equal(new[] { "rozhlas" }, ChatCommands.Parse("/event ROZHLAS", Admin).Args);
+        Assert.False(ChatCommands.Parse("/event", Admin).Ok);
+        Assert.False(ChatCommands.Parse("/event fireworks", Admin).Ok);
+        Assert.Contains("admin", ChatCommands.Parse("/event rozhlas", Guest).Error);
+    }
+
+    [Fact]
+    public void RestartTakesNoModeOrOneKnownMode()
+    {
+        Assert.True(ChatCommands.Parse("/restart", Admin).Ok);
+        Assert.Equal(new[] { "tdm" }, ChatCommands.Parse("/restart TDM", Admin).Args);
+        Assert.False(ChatCommands.Parse("/restart ctf", Admin).Ok);
+        Assert.False(ChatCommands.Parse("/restart ffa tdm", Admin).Ok);
+        Assert.Contains("admin", ChatCommands.Parse("/restart", Guest).Error);
+    }
 
     [Fact]
     public void SpawnNeedsAKnownVehicleAndNormalisesTheCase()
@@ -85,7 +116,7 @@ public class ChatTests
     {
         var all = ChatCommands.Hint("/", Admin);
         Assert.Equal(ChatCommands.All.Count, all.Suggestions.Count);
-        var b = ChatCommands.Hint("/bo", Admin);
+        var b = ChatCommands.Hint("/bot", Admin);
         Assert.Equal("bots", Assert.Single(b.Suggestions).Insert);
         Assert.Equal("/bots [count]", b.Usage);
     }

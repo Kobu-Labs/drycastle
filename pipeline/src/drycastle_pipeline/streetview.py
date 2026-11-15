@@ -1,13 +1,13 @@
-"""Google Street View reference photos of the buildings -> ``data/<area>/streetview/`` (reference only).
+"""Google Street View reference photos of the buildings -> ``data/village/streetview/`` (reference only).
 
 Not a map stage. The photos are for looking at while modelling buildings by hand; Google's terms
 forbid bulk storage and derived datasets, so they stay local (``data/`` is gitignored), never go
 in a release, and nothing (textures, traced models) may be generated from them automatically.
 Needs ``GOOGLE_MAPS_KEY`` (Street View Static API enabled, see docs/streetview.md).
 
-    python -m drycastle_pipeline.streetview --area village                    # coverage report (free)
-    python -m drycastle_pipeline.streetview --area village --building w378920327 --download
-    python -m drycastle_pipeline.streetview --area village --download --max-images 200
+    python -m drycastle_pipeline.streetview                                   # coverage report (free)
+    python -m drycastle_pipeline.streetview --building w378920327 --download
+    python -m drycastle_pipeline.streetview --download --max-images 200
 
 Metadata requests are free; every downloaded image is billed (~$0.007), so ``--download`` is
 required and ``--max-images`` (default 100) caps one run. Already downloaded images are skipped.
@@ -19,7 +19,7 @@ import math
 import os
 from collections.abc import Sequence
 
-from drycastle_pipeline.config import AREAS, DEFAULT_AREA, area_paths, load_dotenv
+from drycastle_pipeline.config import load_dotenv, map_paths
 from drycastle_pipeline.http import HttpError, PoliteClient
 
 KEY_ENV = "GOOGLE_MAPS_KEY"
@@ -129,7 +129,6 @@ def fov_for(radius_m: float, dist_m: float) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="drycastle_pipeline.streetview", description=__doc__.split("\n")[0])
-    p.add_argument("--area", choices=AREAS, default=DEFAULT_AREA)
     p.add_argument("--building", action="append", default=[], metavar="ID",
                    help="OSM way id as in buildings.json, e.g. w378920327 (repeatable; none = all)")
     p.add_argument("--views", type=int, default=3, help="views per building (default 3)")
@@ -144,7 +143,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"{KEY_ENV} is not set; see docs/streetview.md")
         return 2
 
-    paths = area_paths(args.area)
+    paths = map_paths()
     buildings = building_points(json.loads((paths.raw / "osm.json").read_text()))
     if args.building:
         missing = [b for b in args.building if b not in buildings]

@@ -60,15 +60,22 @@ public partial class ServerCar : CharacterBody3D
     public CarState State;
     public readonly Dictionary<ushort, double> HitCooldown = new();
 
+    /// <summary>The hit points and the life of the vehicle (alive, doomed with a blast scheduled, destroyed until it returns): the pure machine in <see cref="VehicleLifecycle"/>. Built in <see cref="_Ready"/>.</summary>
+    public VehicleLifecycle Life { get; private set; } = null!;
     /// <summary>Hidden hit points (ticket #103): only the stage derived from them ever reaches clients.</summary>
-    public float Hp;
+    public float Hp => Life.Hp;
     /// <summary>Who dealt the last damage (0 = nobody) and with which weapon byte: credited for the blast.</summary>
     public ushort LastAttacker;
     public byte LastWeapon;
-    /// <summary>Server time at which the vehicle blows up (it ran out of HP), or negative.</summary>
-    public double DetonateAt = -1;
-    public bool Destroyed;
-    public double ReturnAt;
+    /// <summary>Blown up and gone from the world until it returns (<see cref="VehicleLife.Destroyed"/>).</summary>
+    public bool Destroyed => Life.Destroyed;
+    /// <summary>Counts every <see cref="Reset"/>: the lag compensation starts a new pose history when it changes (ADR 0013, B-02).</summary>
+    public int Lives;
+    public int LivesSeen;
+    /// <summary>The tick the current life began (a reset): no rewind goes before it.</summary>
+    public uint LifeStart;
+    /// <summary>This vehicle's poses at the end of recent ticks, for rewinding a shot (ADR 0013, B-02).</summary>
+    public readonly VehiclePoseRing Poses = new();
     /// <summary>Speed lost to a wall in the last <see cref="Step"/> (m/s), for crash damage.</summary>
     public float LastImpact;
 
@@ -86,10 +93,23 @@ public partial class ServerCar : CharacterBody3D
     public Water FlightWater = Water.Empty;
     public FlightBounds FlightBounds = FlightBounds.None;
 
+    /// <summary>A type its driver's client predicts (vehicles.json drive, the amphibious transport, ADR 0010): stepped by <see cref="StepDrive"/>, never by <see cref="Step"/>.</summary>
+    public bool Drives => Def.Drive != null;
+    /// <summary>The drive state of such a type: the server's is the true one, the driver's client predicts its own.</summary>
+    public DriveState Drive;
+    /// <summary>Its view of the solid world; null for every other type.</summary>
+    public DriveProbe? DriveWorld;
+    /// <summary>Server tick of the last step a driver's input made (the inputs step it one for one); the vehicle step fills in when they stop arriving.</summary>
+    public uint DriveTick;
+    /// <summary>The hardest impact of the drive steps since the vehicle step last read it, m/s.</summary>
+    public float DriveImpact;
+    /// <summary>Where it stood when the last vehicle step ended: the run-over test sweeps from here, since a driver's inputs move it before the next one.</summary>
+    public Vector3 TickEndPos;
+
     public override void _Ready()
     {
         CollisionLayer = 2; CollisionMask = 1;
-        Hp = Def.Hp;
+        Life = new VehicleLifecycle(Def.Hp);
         Seat = new VehicleSeat(Def.Seats.Count);
         AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(HalfWidth * 2, Def.Height, HalfLength * 2) }, Position = new Vector3(0, Def.Height / 2, 0) }); // the hit volume (VehicleBox): ground to the top of the body
         FloorSnapLength = 0.4f;
@@ -97,6 +117,7 @@ public partial class ServerCar : CharacterBody3D
         SetPhysicsProcess(false); // stepped by the server
         if (Flies) { Probe = FlightProbe.Make(Def, FlightWater, FlightBounds); AddChild(Probe); }
         _solid = VehicleCollider.Make(this, Def);
+        if (Drives) { DriveWorld = DriveProbe.Make(Def, FlightWater); AddChild(DriveWorld); }
         Reset();
         PlaceSolid();
     }
@@ -132,22 +153,25 @@ public partial class ServerCar : CharacterBody3D
     public Vector3 Forward => new(-Mathf.Sin(State.Yaw), 0, -Mathf.Cos(State.Yaw));
     public bool AtOrigin => GlobalPosition.DistanceTo(OriginPos) < 0.5f;
 
-    /// <summary>Gone from the world after the blast: no collision, no driving; comes back through <see cref="Reset"/>.</summary>
-    public void Destroy()
+    /// <summary>Gone from the world after the blast: no collision, no driving; comes back through <see cref="Reset"/> once the server's clock reaches <paramref name="returnAt"/>.</summary>
+    public void Destroy(double returnAt)
     {
-        Destroyed = true; DetonateAt = -1;
+        Life.Destroy(returnAt); Asleep = false; RestCount = 0;
         CollisionLayer = 0;
         Velocity = Vector3.Zero; State.Speed = 0;
         Flight.Velocity = System.Numerics.Vector3.Zero;
+        Drive.Speed = 0; Drive.Slip = 0; Drive.VerticalSpeed = 0; Drive.YawRate = 0;
     }
 
-    /// <summary>Back to the origin. <paramref name="repair"/> restores the HP too: not on an abandon return (a smoking vehicle stays damaged).</summary>
+    /// <summary>Back to the origin. <paramref name="repair"/> restores the HP too: not on an abandon return (a smoking vehicle stays damaged), but a doomed or destroyed one always comes back repaired (<see cref="VehicleLifecycle.Reset"/>).</summary>
     public void Reset(bool repair = true)
     {
-        if (repair || Destroyed)
+        Asleep = false; RestCount = 0;
+        Lives++; // a new life for the lag compensation's pose history (NetServer.SyncCarLife)
+        if (Life.Reset(repair))
         {
-            Hp = Def.Hp; LastAttacker = 0; LastWeapon = 0; DetonateAt = -1;
-            Destroyed = false; CollisionLayer = 2;
+            LastAttacker = 0; LastWeapon = 0;
+            CollisionLayer = 2;
             Gun = Def.Gun is { } g ? new VehicleGun(g) : Def.Flak is { } fk ? new VehicleGun(fk.AsGun()) : null;
             TurretLocalYaw = 0; FlakBarrel = 0;
             GunPitch = Def.Flak is { } f0 ? FlakRules.ClampPitch(f0, 0) : 0;
@@ -157,6 +181,8 @@ public partial class ServerCar : CharacterBody3D
         Rotation = new Vector3(0, OriginYaw, 0);
         Velocity = Vector3.Zero;
         if (Flies) ResetFlight();
+        if (Drives) ResetDrive();
+        TickEndPos = GlobalPosition;
         Abandon.Reset();
         HitCooldown.Clear();
         Lights = false;
@@ -190,8 +216,177 @@ public partial class ServerCar : CharacterBody3D
         Velocity = new Vector3(Flight.Velocity.X, Flight.Velocity.Y, Flight.Velocity.Z);
     }
 
-    /// <summary>Over a water body (amphibious or boat): the origin rides its surface and gravity does not apply.</summary>
+    /// <summary>What of this vehicle other vehicles touch (#253): the hit box and, for a helicopter, the rotor disc, where the vehicle is now.</summary>
+    public ContactShape ContactShape()
+    {
+        var p = Flies ? Flight.Position : new System.Numerics.Vector3(GlobalPosition.X, GlobalPosition.Y, GlobalPosition.Z);
+        var f = Def.Flight;
+        return new ContactShape(p, State.Yaw, HalfWidth, HalfLength, Def.Height, f?.RotorRadius ?? 0, f?.RotorHeight ?? 0, f?.RotorThickness ?? 0);
+    }
+
+    /// <summary>This vehicle as one side of a bump: its mass (a type with none counts as a car) and the velocity it is moving with.</summary>
+    public BumpBody BumpBody() => new(Def.Mass > 0 ? Def.Mass : 1200f, Flies ? Flight.Velocity : new System.Numerics.Vector3(Forward.X, 0, Forward.Z) * State.Speed, Flies);
+
+    /// <summary>
+    /// Applies a bump (<see cref="VehicleContact.Bump"/>): moves the vehicle apart and changes its velocity. A ground vehicle is moved through the
+    /// world (it stops at a wall) and keeps only the part of the change along its facing, as the arcade model has no sideways speed; a helicopter
+    /// moves freely (the flight probe finds what it ended up in on its next step) and, standing on its skids, is shoved without taking speed.
+    /// </summary>
+    public void ApplyBump(System.Numerics.Vector3 move, System.Numerics.Vector3 deltaV)
+    {
+        Wake();
+        if (Flies)
+        {
+            Flight.Position += move;
+            if (!Flight.Grounded) Flight.Velocity += deltaV;
+            GlobalPosition = new Vector3(Flight.Position.X, Flight.Position.Y, Flight.Position.Z);
+            Velocity = new Vector3(Flight.Velocity.X, Flight.Velocity.Y, Flight.Velocity.Z);
+            return;
+        }
+        if (move.X != 0 || move.Z != 0) MoveAndCollide(new Vector3(move.X, 0, move.Z));
+        var fwd = Forward;
+        State.Speed += deltaV.X * fwd.X + deltaV.Z * fwd.Z;
+        if (Drives)
+        {
+            // a driven type's state is the drive state (FollowDrive rewrites the node and State.Speed from it): the bump goes there too
+            Drive.Position = new System.Numerics.Vector3(GlobalPosition.X, Drive.Position.Y, GlobalPosition.Z);
+            Drive.Speed = State.Speed;
+        }
+    }
+
+    /// <summary>A driven type back at its origin, at rest: standing on the ground under its wheels (lying on its slope), or afloat at its waterline.</summary>
+    void ResetDrive()
+    {
+        Drive = new DriveState { Position = new System.Numerics.Vector3(OriginPos.X, OriginPos.Y, OriginPos.Z), Yaw = FlightMath.Wrap(OriginYaw) };
+        DriveModel.Settle(ref Drive, Def, DriveWorld!);
+        DriveImpact = 0;
+        OriginPos = new Vector3(Drive.Position.X, Drive.Position.Y, Drive.Position.Z); // where it stands is its origin: the abandon timer measures from here
+        FollowDrive();
+    }
+
+    /// <summary>The node, the planar state the other rules read (yaw, speed, afloat) and the physics velocity follow the drive state. The hit box stays upright.</summary>
+    void FollowDrive()
+    {
+        GlobalPosition = new Vector3(Drive.Position.X, Drive.Position.Y, Drive.Position.Z);
+        Rotation = new Vector3(0, Drive.Yaw, 0);
+        State.Yaw = Drive.Yaw;
+        State.Speed = Drive.Speed;
+        State.YawRate = Drive.YawRate;
+        Afloat = Drive.Afloat;
+        var v = Drive.Velocity;
+        Velocity = new Vector3(v.X, v.Y, v.Z);
+    }
+
+    /// <summary>
+    /// One drive step (<see cref="DriveModel"/>): from the driver's input, or hands off when nobody drives. The node follows the state; the hit box
+    /// stays upright (it turns with the yaw only), as the clients' bullet-hole box does.
+    /// </summary>
+    public void StepDrive(in DriveInput input, float dt)
+    {
+        DriveModel.Step(ref Drive, Def, input, dt, DriveWorld!);
+        DriveImpact = MathF.Max(DriveImpact, Drive.Impact);
+        FollowDrive();
+    }
+
+    /// <summary>Over a water body (the amphibious transport): the origin rides its surface and gravity does not apply.</summary>
     public bool Afloat;
+
+    /// <summary>
+    /// The Bigfoot's throw (issue #264) while the vehicle flies: a scripted arc that nobody steers and nothing damages. The server moves the vehicle along
+    /// it (<see cref="PlaceThrown"/>) instead of stepping it, and ignores its driver's input, until it lands (<see cref="EndThrow"/>). Null otherwise.
+    /// </summary>
+    public VehicleThrow? Thrown;
+
+    /// <summary>Puts the thrown vehicle at <paramref name="pos"/> turned to <paramref name="yaw"/>, flying at <paramref name="verticalSpeed"/>. No speed along the ground, no steering, no contact damage.</summary>
+    public void PlaceThrown(Vector3 pos, float yaw, float verticalSpeed)
+    {
+        if (Drives)
+        {
+            Drive.Position = new System.Numerics.Vector3(pos.X, pos.Y, pos.Z);
+            Drive.Yaw = FlightMath.Wrap(yaw);
+            Drive.Speed = 0; Drive.Slip = 0; Drive.YawRate = 0; Drive.Throttle = 0; Drive.Steer = 0; Drive.Pitch = 0; Drive.Roll = 0; Drive.Sink = 0; Drive.Afloat = false;
+            Drive.VerticalSpeed = verticalSpeed; Drive.Airborne = true; Drive.Impact = 0;
+            DriveImpact = 0;
+            FollowDrive();
+            return;
+        }
+        if (Flies)
+        {
+            // a helicopter in its hands or in the air: level, still, off the ground, its rotor as it was; the clients draw it from this state
+            Flight.Position = new System.Numerics.Vector3(pos.X, pos.Y, pos.Z);
+            Flight.Velocity = new System.Numerics.Vector3(0, verticalSpeed, 0);
+            Flight.Yaw = FlightMath.Wrap(yaw); Flight.Pitch = 0; Flight.Roll = 0;
+            Flight.YawRate = 0; Flight.PitchRate = 0; Flight.RollRate = 0;
+            Flight.Grounded = false; Flight.Impact = 0;
+            FlightImpact = 0;
+        }
+        GlobalPosition = pos;
+        State.Yaw = FlightMath.Wrap(yaw); State.Speed = 0; State.YawRate = 0;
+        Rotation = new Vector3(0, State.Yaw, 0);
+        Velocity = Vector3.Zero;
+        LastImpact = 0;
+    }
+
+    /// <summary>The throw is over: the vehicle stands where it landed, at rest, with the damage of the throw none (the crash rules read nothing from it).</summary>
+    public void EndThrow(Vector3 landing)
+    {
+        Thrown = null;
+        PlaceThrown(landing, State.Yaw, 0);
+        if (Drives)
+        {
+            DriveModel.Settle(ref Drive, Def, DriveWorld!);
+            DriveTick = 0;
+            FollowDrive();
+        }
+        if (Flies) { Flight.Velocity = System.Numerics.Vector3.Zero; Flight.Grounded = true; Flight.Agl = 0; Flight.Impact = 0; FlightImpact = 0; } // set down, undamaged
+        TickEndPos = GlobalPosition;
+        LastImpact = 0; DriveImpact = 0;
+        Wake();
+    }
+
+    /// <summary>
+    /// A parked car (no driver) rests once a driverless step leaves it where it stood (<see cref="ParkedRules"/>): the server then skips it until
+    /// <see cref="Wake"/> (a rider, a hit, a bump, a blast, a reset).
+    /// </summary>
+    public bool Asleep;
+    /// <summary>Consecutive resting driverless steps so far (<see cref="ParkedRules"/> hysteresis).</summary>
+    public int RestCount;
+
+    /// <summary>Puts a parked car back into the step (it was disturbed).</summary>
+    public void Wake() { Asleep = false; RestCount = 0; }
+
+    /// <summary>One driverless step (throttle, steer and handbrake zero), then whether the car now rests (<see cref="Asleep"/>).</summary>
+    public void StepParked(float dt, Water water)
+    {
+        var before = GlobalPosition;
+        Step(Def, 0, 0, false, dt, water);
+        var moved = before.DistanceTo(GlobalPosition);
+        RestCount = ParkedRules.NextRestCount(RestCount, ParkedRules.IsAtRest(moved, State.Speed, State.YawRate, Afloat || IsOnFloor()));
+        Asleep = ParkedRules.Sleeps(RestCount);
+    }
+
+    /// <summary>
+    /// One driverless flight step (the stabiliser's), then whether the helicopter now rests on the ground (<see cref="Asleep"/>, <see cref="FlightRest"/>).
+    /// A helicopter with a rider never rests: somebody may take the pilot seat.
+    /// </summary>
+    public void StepFlightUnpiloted(float dt, uint tick)
+    {
+        var before = Flight;
+        StepFlight(FlightInput.Pilotless(Seat.Occupied), dt, tick);
+        RestCount = ParkedRules.NextRestCount(RestCount, FlightRest.IsAtRest(before, Flight) && !Seat.Occupied);
+        Asleep = ParkedRules.Sleeps(RestCount);
+    }
+
+    /// <summary>
+    /// One hands-off drive step, then whether the vehicle now rests (<see cref="Asleep"/>, <see cref="DriveRest"/>). With a rider it never rests.
+    /// </summary>
+    public void StepDriveUnpiloted(float dt)
+    {
+        var before = Drive;
+        StepDrive(DriveInput.None, dt);
+        RestCount = ParkedRules.NextRestCount(RestCount, DriveRest.IsAtRest(before, Drive) && !Seat.Occupied);
+        Asleep = ParkedRules.Sleeps(RestCount);
+    }
 
     public void Step(VehicleDef def, float throttle, float steer, bool handbrake, float dt, Water water)
     {

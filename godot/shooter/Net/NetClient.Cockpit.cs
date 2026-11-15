@@ -30,7 +30,7 @@ public partial class NetClient
     /// <summary>The vehicle view key while driving a vehicle with a cockpit: switches the view. True when the key was used.</summary>
     bool HandleViewInput(InputEvent e)
     {
-        if (!e.IsActionPressed("vehicle_view") || Dead || _gunship != null || _controlling || Input.MouseMode != Input.MouseModeEnum.Captured) return false;
+        if (!e.IsActionPressed("vehicle_view") || !Mode.CanToggleCockpitView || Input.MouseMode != Input.MouseModeEnum.Captured) return false;
         if (DrivenCar() is not { } v || CockpitOf(v) == null) return false;
         _cockpitView = !_cockpitView;
         return true;
@@ -43,7 +43,7 @@ public partial class NetClient
     /// </summary>
     bool CockpitFrame(CarView v, Vector3 p, Vector3 rot, float dt)
     {
-        if (!_cockpitView || _me == null || !ShotFx.Enabled || _gunship != null || _controlling || CockpitOf(v) is not { } spec) return false;
+        if (!_cockpitView || _me == null || !ShotFx.Enabled || !Mode.ViewIsBody || CockpitOf(v) is not { } spec) return false;
         if (_rig == null || _rigCar != v || !IsInstanceValid(_rig))
         {
             EndCockpit();

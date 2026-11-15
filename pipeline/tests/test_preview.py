@@ -22,13 +22,13 @@ def test_preview_writes_three_images(tmp_path) -> None:
     ws = make_workspace(tmp_path)
     run_props(ws["work"], DEFAULT_RULES)
     paths = run_preview(ws["work"], tmp_path / "preview", DEFAULT_RULES, exaggeration=2.0)
-    assert [p.name for p in paths] == ["topdown.png", "iso.png", "iso_close.png"]
+    assert [p.name for p in paths] == ["topdown.png", "iso.png", "iso_close.png", "overview.png"]
     assert all(p.stat().st_size > 5000 for p in paths)
 
 
 def test_village_preview_adds_overview_with_chunk_grid(tmp_path) -> None:
     ws = make_workspace(tmp_path)
     run_props(ws["work"], DEFAULT_RULES)
-    paths = run_preview(ws["work"], tmp_path / "preview", DEFAULT_RULES, overview=True)
+    paths = run_preview(ws["work"], tmp_path / "preview", DEFAULT_RULES)
     assert [p.name for p in paths][-1] == "overview.png"
     assert paths[-1].stat().st_size > 5000

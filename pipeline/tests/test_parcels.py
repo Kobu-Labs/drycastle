@@ -1,13 +1,13 @@
-"""Registry, building assignment and kind rules on synthetic geometry (no network, no real data)."""
+"""Registry, building assignment and the parcels stage on synthetic geometry (no network, no real data)."""
 
 import json
 from pathlib import Path
 
 import pytest
-from shapely.geometry import LineString, Point, box
+from shapely.geometry import Point, box, shape
 
 from drycastle_pipeline.normalise import parse_osm
-from drycastle_pipeline.parcels import Landuse, assign_buildings, build_parcels, classify_parcels
+from drycastle_pipeline.parcels import assign_buildings, build_parcels
 from drycastle_pipeline.registry import load_registry, match_parcels, save_registry
 from drycastle_pipeline.rules import ParcelRules, load_rules
 
@@ -146,62 +146,8 @@ def test_building_beyond_max_distance_is_unassigned() -> None:
     assert res.unassigned == ["b"]
 
 
-# --- kind rules ----------------------------------------------------------------------------
-
-
-def kind_of(parcel, *, building=False, highways=(), landuse=(), buildings=(), rules=None):
-    rules = rules or ParcelRules(
-        landuse_kinds={"forest": "forest", "meadow": "field"}, natural_kinds={"water": "water"}
-    )
-    return classify_parcels(
-        [parcel], [building], list(highways), list(landuse), list(buildings), rules
-    )[0]
-
-
-def test_kind_building_plot() -> None:
-    assert kind_of(box(0, 0, 30, 30), building=True) == "building_plot"
-
-
-def test_kind_road_from_centreline_buffer() -> None:
-    strip = box(0, 0, 200, 6)
-    line = LineString([(0, 3), (200, 3)])
-    assert kind_of(strip, highways=[line]) == "road"
-    assert kind_of(box(0, 50, 200, 56), highways=[line]) == "other"
-
-
-def test_kind_road_buffer_width_is_configurable() -> None:
-    strip = box(0, 0, 200, 20)  # 10 m wide strip beside the line
-    line = LineString([(0, 0), (200, 0)])
-    narrow = ParcelRules(road_buffer_width_m=4)
-    wide = ParcelRules(road_buffer_width_m=40)
-    assert kind_of(strip, highways=[line], rules=narrow) == "other"
-    assert kind_of(strip, highways=[line], rules=wide) == "road"
-
-
-def test_kind_forest_field_water() -> None:
-    p = box(0, 0, 200, 200)
-    cover = box(-10, -10, 300, 300)
-    assert kind_of(p, landuse=[Landuse("landuse", "forest", cover)]) == "forest"
-    assert kind_of(p, landuse=[Landuse("landuse", "meadow", cover)]) == "field"
-    assert kind_of(p, landuse=[Landuse("natural", "water", cover)]) == "water"
-    assert kind_of(p, landuse=[Landuse("landuse", "forest", box(0, 0, 50, 50))]) == "other"
-
-
-def test_kind_garden_needs_small_parcel_in_built_up_area() -> None:
-    house = box(0, 0, 10, 10)
-    small_near = box(15, 0, 45, 30)
-    assert kind_of(small_near, buildings=[house]) == "garden"
-    assert kind_of(box(500, 0, 530, 30), buildings=[house]) == "other"  # not built-up
-    assert kind_of(box(15, 0, 215, 200), buildings=[house]) == "other"  # too big
-    residential = Landuse("landuse", "residential", box(-500, -500, 1000, 1000))
-    assert kind_of(box(500, 0, 530, 30), landuse=[residential]) == "garden"
-
-
-def test_rules_yaml_loads_and_defines_kinds() -> None:
-    rules = load_rules()
-    assert rules.landuse_kinds["forest"] == "forest"
-    assert rules.natural_kinds["water"] == "water"
-    assert rules.chunk_size_m == 250
+def test_rules_yaml_loads() -> None:
+    assert load_rules().chunk_size_m == 250
 
 
 # --- normalise: OSM parsing ----------------------------------------------------------------
@@ -281,44 +227,64 @@ def _write_normalised(work: Path) -> None:
     (norm / "highways.geojson").write_text(json.dumps(_fc([])))
     (norm / "landuse.geojson").write_text(json.dumps(_fc([])))
     (work / "frame.json").write_text(
-        json.dumps({"crs": "test", "origin_epsg5514": [-500000.0, -1200000.0]})
+        json.dumps({"crs": "test", "origin_epsg5514": [-500000.0, -1200000.0], "area_polygon_epsg5514": [[-500050.0, -1200050.0], [-498900.0, -1200050.0], [-498900.0, -1198900.0], [-500050.0, -1198900.0]]})
     )
 
 
-def test_stage_writes_parcels_json_and_is_idempotent(tmp_path: Path) -> None:
+def _edits(tmp_path: Path, groups: dict) -> Path:
+    path = tmp_path / "edits.json"
+    path.write_text(json.dumps({"version": 1, "groups": {g: {"parcels": m} for g, m in groups.items()}}))
+    return path
+
+
+def test_stage_keeps_properties_and_turns_the_rest_into_ground(tmp_path: Path) -> None:
     work = tmp_path / "work"
     _write_normalised(work)
     registry = tmp_path / "registry" / "parcels.registry.json"
     rules = ParcelRules(chunk_size_m=50)
 
-    res = build_parcels(work, registry, rules)
-    assert res.match.new == ["P-0001", "P-0002"]
+    res = build_parcels(work, registry, rules, edits_path=_edits(tmp_path, {}))
+    assert res.match.new == ["P-0001", "P-0002"]  # every cadastral parcel keeps its registry entry
     assert res.unassigned == ["w2"]
+    assert (res.parcel_count, res.dropped, dict(res.ground)) == (1, 1, {"field": 1})
     doc = json.loads((work / "parcels.json").read_text())
-    p1, p2 = doc["parcels"]
+    (p1,) = doc["parcels"]
     assert (p1["id"], p1["cadastral_ref"], p1["kind"], p1["buildings"]) == (
         "P-0001",
         "100/1",
         "building_plot",
         ["w1"],
     )
-    assert p2["buildings"] == [] and p1["area"] == 10000
+    assert p1["area"] == 10000
     assert p1["chunk"] == [int(p1["anchor"][0] // 50), int(p1["anchor"][1] // 50)]
     assert box(0, 0, 100, 100).contains(Point(*p1["anchor"]))
+    (g1,) = doc["ground"]  # the parcel without a building is ground of the default type
+    assert (g1["id"], g1["kind"], g1["buildings"]) == ("A-0001", "field", [])
+    assert shape(g1["polygon"]).equals(box(100, 0, 200, 100))
 
     before = (registry.read_bytes(), (work / "parcels.json").read_bytes())
-    again = build_parcels(work, registry, rules)
+    again = build_parcels(work, registry, rules, edits_path=_edits(tmp_path, {}))
     assert (registry.read_bytes(), (work / "parcels.json").read_bytes()) == before
     assert not again.match.new
 
 
-# --- area-aware registry: slice and village share one registry --------------------------------
+def test_stage_keeps_a_parcel_grouped_with_a_building_plot_as_garden(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    _write_normalised(work)
+    registry = tmp_path / "registry" / "parcels.registry.json"
+    res = build_parcels(work, registry, ParcelRules(), edits_path=_edits(tmp_path, {"G-0001": ["P-0001", "P-0002"]}))
+    doc = json.loads((work / "parcels.json").read_text())
+    assert [(p["id"], p["kind"]) for p in doc["parcels"]] == [("P-0001", "building_plot"), ("P-0002", "garden")]
+    assert doc["ground"] == [] and res.dropped == 0
 
-# Slice box covers the first two parcels, the village box all of them (plus extra parcels).
-SLICE_BOX = box(-10, -10, 210, 110)
-VILLAGE_BOX = box(-10, -10, 1100, 1100)
-VILLAGE = {**BASE, "200/1": box(500, 0, 600, 100), "200/2": box(600, 0, 700, 100)}
-SLICE = {k: v for k, v in VILLAGE.items() if SLICE_BOX.covers(v)}
+
+# --- registry: partial and full coverage share one registry ---------------------------------------
+
+# The partial box covers the first two parcels, the full box all of them (plus extra parcels).
+PART_BOX = box(-10, -10, 210, 110)
+FULL_BOX = box(-10, -10, 1100, 1100)
+FULL = {**BASE, "200/1": box(500, 0, 600, 100), "200/2": box(600, 0, 700, 100)}
+PART = {k: v for k, v in FULL.items() if PART_BOX.covers(v)}
 
 
 def _run(registry: dict, current: dict, bounds):
@@ -326,28 +292,28 @@ def _run(registry: dict, current: dict, bounds):
     return res
 
 
-def test_village_after_slice_keeps_ids_and_appends_new_ones() -> None:
-    s = _run({"parcels": []}, SLICE, SLICE_BOX)
+def test_full_after_partial_keeps_ids_and_appends_new_ones() -> None:
+    s = _run({"parcels": []}, PART, PART_BOX)
     assert s.ids == {"100/1": "P-0001", "100/2": "P-0002"}
-    v = _run(s.registry, VILLAGE, VILLAGE_BOX)
+    v = _run(s.registry, FULL, FULL_BOX)
     assert v.ids["100/1"] == "P-0001" and v.ids["100/2"] == "P-0002"
     assert v.ids["100/3"] == "P-0003"
     assert v.ids["200/1"] == "P-0004" and v.ids["200/2"] == "P-0005"
     assert not v.retired
 
 
-def test_slice_after_village_does_not_retire_village_only_parcels() -> None:
-    v = _run({"parcels": []}, VILLAGE, VILLAGE_BOX)
-    s = _run(v.registry, SLICE, SLICE_BOX)
+def test_partial_after_full_does_not_retire_full_only_parcels() -> None:
+    v = _run({"parcels": []}, FULL, FULL_BOX)
+    s = _run(v.registry, PART, PART_BOX)
     assert not s.retired and not s.new
     assert all(e["status"] == "active" for e in s.registry["parcels"])
     assert s.registry == v.registry  # outside entries untouched, inside ones unchanged
 
 
-def test_unmatched_entry_inside_area_is_retired_outside_is_not() -> None:
-    v = _run({"parcels": []}, VILLAGE, VILLAGE_BOX)
-    gone_inside = {k: p for k, p in SLICE.items() if k != "100/2"}
-    s = _run(v.registry, gone_inside, SLICE_BOX)
+def test_unmatched_entry_inside_bounds_is_retired_outside_is_not() -> None:
+    v = _run({"parcels": []}, FULL, FULL_BOX)
+    gone_inside = {k: p for k, p in PART.items() if k != "100/2"}
+    s = _run(v.registry, gone_inside, PART_BOX)
     assert s.retired == [v.ids["100/2"]]
     status = {e["id"]: e["status"] for e in s.registry["parcels"]}
     assert status[v.ids["100/2"]] == "retired"
@@ -355,15 +321,15 @@ def test_unmatched_entry_inside_area_is_retired_outside_is_not() -> None:
 
 
 def test_without_bounds_every_unclaimed_entry_is_retired() -> None:
-    v = _run({"parcels": []}, VILLAGE, None)
-    s = _run(v.registry, SLICE, None)
+    v = _run({"parcels": []}, FULL, None)
+    s = _run(v.registry, PART, None)
     assert len(s.retired) == 3
 
 
 def test_both_orders_are_idempotent_and_stable(tmp_path: Path) -> None:
     path = tmp_path / "reg.json"
-    sequence = [(SLICE, SLICE_BOX), (VILLAGE, VILLAGE_BOX), (SLICE, SLICE_BOX),
-                (VILLAGE, VILLAGE_BOX), (VILLAGE, VILLAGE_BOX), (SLICE, SLICE_BOX)]
+    sequence = [(PART, PART_BOX), (FULL, FULL_BOX), (PART, PART_BOX),
+                (FULL, FULL_BOX), (FULL, FULL_BOX), (PART, PART_BOX)]
     seen = []
     for current, bounds in sequence:
         res = _run(load_registry(path), current, bounds)
@@ -373,3 +339,60 @@ def test_both_orders_are_idempotent_and_stable(tmp_path: Path) -> None:
     first_ids = {e["cadastral_ref"]: e["id"] for e in json.loads(seen[0])["parcels"]}
     final_ids = {e["cadastral_ref"]: e["id"] for e in json.loads(seen[-1])["parcels"]}
     assert all(final_ids[r] == i for r, i in first_ids.items())
+
+
+def test_stage_turns_a_ground_patch_into_ground(tmp_path: Path, capsys) -> None:
+    work = tmp_path / "work"
+    _write_normalised(work)
+    ox, oy = -500000.0, -1200000.0
+
+    def ring(x0, y0, x1, y1):
+        return [[ox + x0, oy + y0], [ox + x1, oy + y0], [ox + x1, oy + y1], [ox + x0, oy + y1]]
+
+    edits = tmp_path / "edits.json"
+    edits.write_text(json.dumps({"version": 1, "ground_patches": {
+        "GP-0001": {"type": "meadow", "polygon": ring(50, 0, 150, 50)},  # half over the building plot
+        "GP-0002": {"type": "water", "polygon": ring(150, 0, 200, 50), "water_y": 100.0},  # a body of water, not ground
+    }}))
+    build_parcels(work, tmp_path / "registry" / "parcels.registry.json", ParcelRules(), edits_path=edits)
+    doc = json.loads((work / "parcels.json").read_text())
+    got = sorted((g["kind"], g["area"]) for g in doc["ground"])
+    assert got == [("field", 7500.0), ("meadow", 2500.0)]  # the meadow stops at the parcel line
+    meadow = next(g for g in doc["ground"] if g["kind"] == "meadow")
+    assert shape(meadow["polygon"]).equals(box(100, 0, 150, 50))
+    assert "ground_layers" not in doc and "zones" not in doc  # a ground type is terrain only
+
+
+def test_zones_change_no_ground_area(tmp_path: Path) -> None:
+    ox, oy = -500000.0, -1200000.0
+
+    def ring(x0, y0, x1, y1):
+        return [[ox + x0, oy + y0], [ox + x1, oy + y0], [ox + x1, oy + y1], [ox + x0, oy + y1]]
+
+    def build(name: str, extra: dict) -> dict:
+        work = tmp_path / name / "work"
+        _write_normalised(work)
+        edits = tmp_path / name / "edits.json"
+        edits.write_text(json.dumps({"version": 1, "ground_patches": {"GP-0001": {"type": "meadow", "polygon": ring(50, 0, 150, 50)}}, **extra}))
+        build_parcels(work, tmp_path / name / "registry" / "parcels.registry.json", ParcelRules(), edits_path=edits)
+        return json.loads((work / "parcels.json").read_text())
+
+    plain = build("plain", {})
+    zoned = build("zoned", {"zones": {"Z-0001": {"kind": "bigfoot", "polygon": ring(40, 0, 160, 50)}, "Z-0002": {"kind": "deer", "polygon": ring(150, 0, 200, 50)}}})
+    assert zoned["ground"] == plain["ground"]  # a zone is an overlay: no ground area changes
+
+
+def test_a_carved_parcel_is_its_building_outline_and_the_rest_is_ground(tmp_path: Path) -> None:
+    work = tmp_path / "work"
+    _write_normalised(work)  # P-0001 = 100 x 100 m with a 10 x 10 m building, P-0002 beside it, no building
+    rules = tmp_path / "rules.yaml"
+    rules.write_text("ground:\n  carve:\n    P-0001: {margin_m: 2}\n    P-0002: {}\n")  # P-0002 has no building
+    build_parcels(work, tmp_path / "registry" / "parcels.registry.json", ParcelRules(), rules_path=rules,
+                  edits_path=_edits(tmp_path, {}))
+    doc = json.loads((work / "parcels.json").read_text())
+    (p1,) = doc["parcels"]
+    assert p1["id"] == "P-0001" and p1["kind"] == "building_plot" and p1["buildings"] == ["w1"]
+    assert abs(p1["area"] - 14 * 14) < 1.0 and box(10, 10, 20, 20).within(shape(p1["polygon"]))
+    (g1,) = doc["ground"]  # the rest of P-0001 and all of P-0002 are one field, with no hole and no overlap
+    assert abs(g1["area"] - (20000 - p1["area"])) < 0.1
+    assert shape(g1["polygon"]).intersection(shape(p1["polygon"])).area < 1e-6

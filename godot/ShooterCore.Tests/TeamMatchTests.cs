@@ -204,6 +204,52 @@ public class TeamMatchTests
         // free-for-all contacts carry no team: everyone else shows
         Assert.Equal(2, UavRules.Visible(new[] { new UavContact(1, 0, 0, 1), new UavContact(2, 1, 0, 1), new UavContact(3, 2, 0, 1) }, 1).Count);
     }
+
+    [Fact]
+    public void RestartKeepsTheModeAndResetsTheRound()
+    {
+        var r = new Rig();
+        for (ushort i = 1; i <= 4; i++) r.M.AddPlayer(i, $"p{i}");
+        var teams = r.M.Players.ToDictionary(p => p.Id, p => p.Team);
+        r.Pass(); // spawn protection over
+        r.Kill(1, 2);
+        Assert.Equal(1, r.M.TeamScore(Teams.A));
+        r.M.Restart();
+        Assert.Equal((MatchPhase.Running, MatchMode.TeamDeathmatch, 0, 0), (r.M.Phase, r.M.Mode, r.M.TeamScore(Teams.A), r.M.TeamScore(Teams.B)));
+        Assert.All(r.M.Players, p => Assert.Equal((0, 0, PlayerLife.Alive, teams[p.Id]), (p.Kills, p.Deaths, p.Life, p.Team)));
+    }
+
+    [Fact]
+    public void RestartInAnotherModeRegroupsEveryone()
+    {
+        var r = new Rig();
+        for (ushort i = 1; i <= 5; i++) r.M.AddPlayer(i, $"p{i}");
+        r.M.AddPlayer(6, "sb", sandbox: true);
+        r.M.Restart(MatchMode.FreeForAll);
+        Assert.False(r.M.IsTeamMode);
+        Assert.All(r.M.Players, p => Assert.Equal(Teams.None, p.Team));
+        r.M.Restart(MatchMode.TeamDeathmatch);
+        Assert.True(r.M.IsTeamMode);
+        Assert.Equal(3, r.M.Players.Count(p => p.Team == Teams.A));
+        Assert.Equal(2, r.M.Players.Count(p => p.Team == Teams.B));
+        Assert.Equal(Teams.None, r.M.Get(6)!.Team);
+        Assert.Equal(MatchPhase.Running, r.M.Phase);
+    }
+
+    [Fact]
+    public void RestartRestartsAFinishedRoundAndWaitsWithoutPlayers()
+    {
+        var r = new Rig(c => c.TeamScoreGoal = 1);
+        r.M.AddPlayer(1, "a"); r.M.AddPlayer(2, "b");
+        r.Pass(); // spawn protection over
+        r.Kill(1, 2);
+        Assert.Equal(MatchPhase.Ending, r.M.Phase);
+        r.M.Restart(MatchMode.FreeForAll);
+        Assert.Equal((MatchPhase.Running, MatchMode.FreeForAll), (r.M.Phase, r.M.Mode));
+        var empty = new Rig();
+        empty.M.Restart(MatchMode.FreeForAll);
+        Assert.Equal((MatchPhase.Waiting, MatchMode.FreeForAll), (empty.M.Phase, empty.M.Mode));
+    }
 }
 
 public class TeamPaletteTests
@@ -246,6 +292,14 @@ public class TeamPaletteTests
         Assert.Equal(HudLogic.Relation.Neutral, HudLogic.RelationOf(Teams.None, Teams.B));
         Assert.Equal((5, 2, Teams.B), HudLogic.TeamScores(Teams.B, 2, 5));
         var rows = new[] { new ScoreRow(1, "a", 1, 0, 0, Teams.A), new ScoreRow(2, "b", 4, 0, 0, Teams.B), new ScoreRow(3, "c", 0, 0, 0, Teams.A) };
-        Assert.Equal(new ushort[] { 2, 1, 3 }, HudLogic.SortTeams(rows, 1, 4).Select(r => r.Id).ToArray());
+        rows = rows.Append(new ScoreRow(4, "d", 9, 0, 0)).ToArray();
+        var mineB = HudLogic.SplitTeams(rows, Teams.B);
+        Assert.Equal(Teams.B, mineB.LeftTeam);
+        Assert.Equal(new ushort[] { 2 }, mineB.Left.Select(r => r.Id).ToArray());
+        Assert.Equal(new ushort[] { 1, 3 }, mineB.Right.Select(r => r.Id).ToArray());
+        Assert.Equal(new ushort[] { 4 }, mineB.NoTeam.Select(r => r.Id).ToArray());
+        var none = HudLogic.SplitTeams(rows, Teams.None);
+        Assert.Equal(Teams.A, none.LeftTeam);
+        Assert.Equal(new ushort[] { 1, 3 }, none.Left.Select(r => r.Id).ToArray());
     }
 }

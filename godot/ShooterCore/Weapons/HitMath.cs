@@ -2,15 +2,30 @@ using System.Numerics;
 
 namespace Drycastle.ShooterCore;
 
-/// <summary>A player as a hit target: feet position, stance (sets the capsule height) and the yaw they face.</summary>
-public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw);
+/// <summary>
+/// A player as a hit target: feet position, stance (sets the capsule height) and the yaw they face. <paramref name="HeadGuarded"/>: the target wears
+/// an item that makes a headshot a body hit (<see cref="Equipment.HeadGuarded"/>); it is a state of the player, not of the pose, so a rewound target takes the present one.
+/// <paramref name="Scale"/> grows the whole hit volume (height, radius, head) about the feet: 1 for a player and a dummy, 2 for the Bigfoot (twice the player's size).
+/// </summary>
+/// <summary>
+/// A shot target. <paramref name="Box"/> (a wild animal's body, [width, height, length] with the length along the facing direction, feet on the
+/// ground, its centre <paramref name="BoxAhead"/> metres ahead of the feet) replaces the capsule for a bullet's ray when its height is above 0;
+/// blasts, knives and everything else that measures a distance keep the capsule. <paramref name="Shape"/> (a wild animal's hit shape in the pose
+/// its shooter sees, with the pose and frame it is, for the hit diagram) replaces the box in turn: the bullet must cross a cell the animal covers.
+/// </summary>
+public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw, bool HeadGuarded = false, float Scale = 1f, Vector3 Box = default, float BoxAhead = 0f,
+    AnimalShape? Shape = null, AnimalPose ShapePose = AnimalPose.Idle, int ShapeFrame = 0);
 
-public readonly record struct RayHit(ushort Id, float Distance, bool Head);
+/// <summary>
+/// A ray's hit. <paramref name="Head"/> is a headshot (the weapon's headshot damage). <paramref name="ShapeHead"/> says the bullet met the head cells of
+/// an animal's hit shape: for the hit diagram only, an animal has no headshot damage.
+/// </summary>
+public readonly record struct RayHit(ushort Id, float Distance, bool Head, bool ShapeHead = false);
 public readonly record struct MeleeHit(ushort Id, bool Backstab, float Distance);
 
 /// <summary>
 /// Server-side hit resolution without Godot: ray against the player capsule and head sphere, damage falloff, aim
-/// direction with spread, melee reach and backstab test. No lag compensation: targets are at their current positions.
+/// direction with spread, melee reach and backstab test. Targets are the positions passed in: the server passes players where the shooter saw them (ADR 0013).
 /// </summary>
 public static class HitMath
 {
@@ -47,15 +62,19 @@ public static class HitMath
     /// </summary>
     public static (Vector3 A, Vector3 B) Axis(in HitTarget t)
     {
+        var k = t.Scale;
         if (t.Stance == Stance.Prone)
         {
-            var half = PlayerHitBox.StandHeight / 2f - PlayerHitBox.Radius;
-            var up = new Vector3(0, PlayerHitBox.ProneLift, 0);
+            var half = (PlayerHitBox.StandHeight / 2f - PlayerHitBox.Radius) * k;
+            var up = new Vector3(0, PlayerHitBox.ProneLift * k, 0);
             var along = Forward(t.Yaw, 0) * half;
             return (t.Feet + up - along, t.Feet + up + along);
         }
-        return (t.Feet + new Vector3(0, PlayerHitBox.Radius, 0), t.Feet + new Vector3(0, Height(t.Stance) - PlayerHitBox.Radius, 0));
+        return (t.Feet + new Vector3(0, PlayerHitBox.Radius * k, 0), t.Feet + new Vector3(0, (Height(t.Stance) - PlayerHitBox.Radius) * k, 0));
     }
+
+    /// <summary>The radius of the target's hit capsule: the player's, grown by <see cref="HitTarget.Scale"/>.</summary>
+    public static float BodyRadius(in HitTarget t) => PlayerHitBox.Radius * t.Scale;
 
     /// <summary>Centre of the body's hit capsule.</summary>
     public static Vector3 Centre(in HitTarget t)
@@ -67,9 +86,10 @@ public static class HitMath
     /// <summary>Head hit sphere centre: upright, the top of the body minus the head radius; prone, forward of the body centre at the head height.</summary>
     public static Vector3 HeadCenter(in HitTarget t)
     {
+        var k = t.Scale;
         if (t.Stance == Stance.Prone)
-            return t.Feet + Forward(t.Yaw, 0) * PlayerHitBox.ProneHeadOffset + new Vector3(0, PlayerHitBox.ProneLift, 0);
-        return t.Feet + new Vector3(0, Height(t.Stance) - HeadRadius, 0);
+            return t.Feet + Forward(t.Yaw, 0) * (PlayerHitBox.ProneHeadOffset * k) + new Vector3(0, PlayerHitBox.ProneLift * k, 0);
+        return t.Feet + new Vector3(0, (Height(t.Stance) - HeadRadius) * k, 0);
     }
 
     /// <summary>Distance from a point to the body's hit volume (0 inside it), for projectiles and splash.</summary>
@@ -79,7 +99,7 @@ public static class HitMath
         var ab = b - a;
         var len2 = ab.LengthSquared();
         var s = len2 > 1e-8f ? Math.Clamp(Vector3.Dot(p - a, ab) / len2, 0f, 1f) : 0f;
-        return MathF.Max(0, Vector3.Distance(p, a + ab * s) - PlayerHitBox.Radius);
+        return MathF.Max(0, Vector3.Distance(p, a + ab * s) - BodyRadius(t));
     }
 
     /// <summary>Unit view direction for Godot yaw (0 faces -Z, positive turns left) and pitch (positive looks up).</summary>
@@ -168,10 +188,23 @@ public static class HitMath
     public static Dictionary<ushort, PelletTotal> ResolvePellets(WeaponDef w, Vector3 origin, IReadOnlyList<Vector3> dirs, float maxDistance,
         IReadOnlyList<float> walls, IReadOnlyList<HitTarget> targets, ushort shooter, IReadOnlyList<HitTarget?>? exposed = null, IReadOnlyList<float>? wallsPastHull = null)
     {
+        if (exposed == null) return ResolvePelletsPastHulls(w, origin, dirs, maxDistance, walls, targets, shooter, null, null);
+        var riders = new ExposedRiders?[exposed.Count];
+        for (var i = 0; i < riders.Length; i++) riders[i] = exposed[i];
+        return ResolvePelletsPastHulls(w, origin, dirs, maxDistance, walls, targets, shooter, riders, wallsPastHull);
+    }
+
+    /// <summary>
+    /// <see cref="ResolvePellets"/> for vehicles with several riders in the open: <paramref name="exposed"/>[i] are the exposed riders of the vehicle
+    /// pellet i stopped on (null for none), any of whom it may still reach.
+    /// </summary>
+    public static Dictionary<ushort, PelletTotal> ResolvePelletsPastHulls(WeaponDef w, Vector3 origin, IReadOnlyList<Vector3> dirs, float maxDistance,
+        IReadOnlyList<float> walls, IReadOnlyList<HitTarget> targets, ushort shooter, IReadOnlyList<ExposedRiders?>? exposed, IReadOnlyList<float>? wallsPastHull)
+    {
         var totals = new Dictionary<ushort, PelletTotal>();
         for (var i = 0; i < dirs.Count; i++)
         {
-            // a pellet that stopped on a vehicle with an exposed gunner may still reach him (GunnerCover)
+            // a pellet that stopped on a vehicle with riders in the open may still reach one of them (GunnerCover)
             var found = exposed?[i] is { } g ? GunnerCover.Raycast(origin, dirs[i], maxDistance, walls[i], targets, shooter, g, wallsPastHull![i]) : Raycast(origin, dirs[i], maxDistance, walls[i], targets, shooter);
             if (found is not { } hit) continue;
             var prev = totals.GetValueOrDefault(hit.Id);
@@ -182,7 +215,8 @@ public static class HitMath
 
     /// <summary>
     /// Nearest target hit by the ray, or null. <paramref name="wallDistance"/> is where the world blocks the ray
-    /// (infinity if nothing); targets behind it are not hit. A hit is a headshot when the ray also passes through the head sphere, no more than one body radius behind the point it entered the body.
+    /// (infinity if nothing); targets behind it are not hit. A hit is a headshot when the ray also passes through the head sphere, no more than one body radius behind the point it entered the body,
+    /// unless the target is <see cref="HitTarget.HeadGuarded"/>: then it is the body hit it entered as, with the body's damage.
     /// </summary>
     public static RayHit? Raycast(Vector3 origin, Vector3 dir, float maxDistance, float wallDistance, IEnumerable<HitTarget> targets, ushort shooter)
     {
@@ -191,15 +225,78 @@ public static class HitMath
         foreach (var t in targets)
         {
             if (t.Id == shooter) continue;
+            float d;
+            if (t.Shape != null)
+            {
+                // a hit shape (a wild animal in the pose its shooter sees): the ray must cross a cell the animal covers
+                if (t.Shape.Ray(ToFrame(t, origin), ToFrameDirection(t, dir), limit) is not { } sh) continue;
+                if (best is { } sb && sb.Distance <= sh.Distance) continue;
+                best = new RayHit(t.Id, sh.Distance, false, sh.Head);
+                continue;
+            }
+            if (t.Box.Y > 0)
+            {
+                // a body box (a wild animal): no head, the ray meets the box or misses
+                if (RayBox(origin, dir, t) is not { } bd || bd > limit) continue;
+                if (best is { } bb && bb.Distance <= bd) continue;
+                best = new RayHit(t.Id, bd, false);
+                continue;
+            }
             var (p0, p1) = Axis(t);
-            if (RayCapsule(origin, dir, p0, p1, PlayerHitBox.Radius) is not { } d || d > limit) continue;
+            if (RayCapsule(origin, dir, p0, p1, BodyRadius(t)) is not { } cd || cd > limit) continue;
+            d = cd;
             if (best is { } b && b.Distance <= d) continue;
             // the head sphere only counts when the ray reaches it soon after entering the body: a shot into the feet or back of
             // a prone player passes the whole body first (an upright head sits inside the capsule, so its entry is within one radius)
-            var head = RaySphere(origin, dir, HeadCenter(t), HeadRadius) is { } hd && hd - d <= PlayerHitBox.Radius;
+            var head = !t.HeadGuarded && RaySphere(origin, dir, HeadCenter(t), HeadRadius * t.Scale) is { } hd && hd - d <= BodyRadius(t);
             best = new RayHit(t.Id, d, head);
         }
         return best;
+    }
+
+    /// <summary>A world point in a target's own frame: x to its right, y up from its feet, z ahead of its feet (the frame of an <see cref="AnimalShape"/>).</summary>
+    public static Vector3 ToFrame(in HitTarget t, Vector3 p)
+    {
+        var f = Forward(t.Yaw, 0);
+        var rel = p - t.Feet;
+        return new Vector3(Vector3.Dot(rel, new Vector3(-f.Z, 0, f.X)), rel.Y, Vector3.Dot(rel, f));
+    }
+
+    /// <summary>A world direction in a target's own frame (<see cref="ToFrame"/>).</summary>
+    public static Vector3 ToFrameDirection(in HitTarget t, Vector3 d)
+    {
+        var f = Forward(t.Yaw, 0);
+        return new Vector3(Vector3.Dot(d, new Vector3(-f.Z, 0, f.X)), d.Y, Vector3.Dot(d, f));
+    }
+
+    /// <summary>A world point in the frame of a target's body box: x to the body's right, y up from the feet, z ahead of the box's centre.</summary>
+    public static Vector3 ToBox(in HitTarget t, Vector3 p)
+    {
+        var f = Forward(t.Yaw, 0);
+        var right = new Vector3(-f.Z, 0, f.X);
+        var rel = p - t.Feet;
+        return new Vector3(Vector3.Dot(rel, right), rel.Y, Vector3.Dot(rel, f) - t.BoxAhead);
+    }
+
+    /// <summary>Distance along the ray to a target's body box (<see cref="HitTarget.Box"/>), 0 if the origin is inside, null on a miss.</summary>
+    public static float? RayBox(Vector3 o, Vector3 d, in HitTarget t)
+    {
+        var f = Forward(t.Yaw, 0);
+        var right = new Vector3(-f.Z, 0, f.X);
+        var lo = ToBox(t, o);
+        var ld = new Vector3(Vector3.Dot(d, right), d.Y, Vector3.Dot(d, f));
+        var min = new Vector3(-t.Box.X / 2, 0, -t.Box.Z / 2); var max = new Vector3(t.Box.X / 2, t.Box.Y, t.Box.Z / 2);
+        float near = 0, far = float.PositiveInfinity;
+        for (var axis = 0; axis < 3; axis++)
+        {
+            var (oo, dd, a, b) = axis switch { 0 => (lo.X, ld.X, min.X, max.X), 1 => (lo.Y, ld.Y, min.Y, max.Y), _ => (lo.Z, ld.Z, min.Z, max.Z) };
+            if (MathF.Abs(dd) < 1e-8f) { if (oo < a || oo > b) return null; continue; }
+            var t0 = (a - oo) / dd; var t1 = (b - oo) / dd;
+            if (t0 > t1) (t0, t1) = (t1, t0);
+            near = MathF.Max(near, t0); far = MathF.Min(far, t1);
+            if (near > far) return null;
+        }
+        return near;
     }
 
     /// <summary>Distance along the ray to the sphere, 0 if the origin is inside, null on a miss (only forward hits).</summary>
@@ -281,9 +378,10 @@ public static class HitMath
             if (MathF.Abs(to.Y) > MeleeVerticalReach) continue;
             to.Y = 0;
             var len = to.Length();
-            var edge = len - PlayerHitBox.Radius;
+            var radius = BodyRadius(t);
+            var edge = len - radius;
             if (edge > reach) continue;
-            if (len > PlayerHitBox.Radius && Vector3.Dot(to / len, fwd) < cos) continue;
+            if (len > radius && Vector3.Dot(to / len, fwd) < cos) continue;
             if (best is { } b && b.Distance <= edge) continue;
             best = new MeleeHit(t.Id, IsBackstab(attackerFeet, t.Feet, t.Yaw), edge);
         }

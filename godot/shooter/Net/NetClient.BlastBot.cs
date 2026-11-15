@@ -88,7 +88,7 @@ public partial class NetClient
         foreach (var x in WaitBobAlive()) yield return x;
         var a3 = c + new NVec3(2.2f, 0, -30);
         Teleport(_myId, a3);
-        foreach (var x in WaitFor(() => _gotSelf && !Dead && NearXZ(_me!.State.Position, a3) && _me.State.OnFloor, 4, "teleport next to car 0")) yield return x;
+        foreach (var x in WaitFor(() => OwnSpawned && !Dead && NearXZ(_me!.State.Position, a3) && _me.State.OnFloor, 4, "teleport next to car 0")) yield return x;
         foreach (var x in Wait(0.4)) yield return x;
         _wbPulse = MoveButtons.Use;
         foreach (var x in WaitFor(() => _driving && _cars[car0].Driver == _myId, 2, "entering car 0")) yield return x;

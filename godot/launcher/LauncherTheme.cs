@@ -78,6 +78,17 @@ public static class LauncherTheme
         t.SetColor("font_disabled_color", "Primary", Disabled);
         t.SetFontSize("font_size", "Primary", FontHead);
 
+        // text field: the same surface and states as a button; the caret and selection use the accent
+        t.SetStylebox("normal", "LineEdit", Box(Backdrop, Line));
+        t.SetStylebox("focus", "LineEdit", Ring());
+        t.SetStylebox("read_only", "LineEdit", Box(Surface, Line));
+        t.SetColor("font_color", "LineEdit", Text);
+        t.SetColor("font_placeholder_color", "LineEdit", Disabled);
+        t.SetColor("font_selected_color", "LineEdit", AccentText);
+        t.SetColor("selection_color", "LineEdit", Accent);
+        t.SetColor("caret_color", "LineEdit", Accent);
+        t.SetFontSize("font_size", "LineEdit", FontBody);
+
         t.SetStylebox("background", "ProgressBar", Box(Raised, Line, Border, 0, Space));
         t.SetStylebox("fill", "ProgressBar", Box(Accent, null, 0, 0, Space));
         t.SetColor("font_color", "ProgressBar", Text);

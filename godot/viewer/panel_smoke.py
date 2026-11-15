@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Fence and Trees panel smoke test (`make viewer-panel-smoke`).
+"""Fence panel smoke test (`make viewer-panel-smoke`).
 
-Exports a fresh slice map into a scratch directory (a copy of data/work, so nothing under data/ or out/ is
+Exports a fresh map into a scratch directory (a copy of data/village/work, so nothing under data/ or out/ is
 touched), seeds a scratch edits.json, starts the viewer headless with `--panel-smoke` (ViewerPanelSmoke.cs:
 drives the panel's controller API, applies, waits for the watcher round trip, copies the edits file after every
 Apply into <scratch>/steps) and then checks those files with the Python validator (`edits.validate`), the
@@ -56,9 +56,8 @@ def python_facts() -> dict:
         "import json\n"
         "from drycastle_pipeline import edits\n"
         "from drycastle_pipeline.rules import DEFAULT_RULES, load_section\n"
-        "props = load_section('props', DEFAULT_RULES, 'slice')\n"
         "print(json.dumps({'types': edits.FENCE_TYPES, 'modes': list(edits.FENCE_MODES), 'default_type': edits.DEFAULT_FENCE_TYPE,\n"
-        " 'density': props['trees']['density_per_1000m2']}))\n"
+        "}))\n"
     )
     r = es.uv("-c", code)
     if r.returncode != 0:
@@ -71,7 +70,7 @@ def fence_sections(parcel_id: str, work: Path, scratch: Path) -> list[dict]:
     probe_edits = scratch / "probe_edits.json"
     probe_edits.write_text(text({parcel_id: {"fence": CUSTOM_C}}, {}))
     out = scratch / "probe_fragment.json"
-    r = es.uv("-m", "drycastle_pipeline", "parcel-run", "--area", "slice", "--parcel", parcel_id,
+    r = es.uv("-m", "drycastle_pipeline", "parcel-run", "--parcel", parcel_id,
               "--edits", str(probe_edits), "--work", str(work), "--out", str(out))
     if r.returncode != 0:
         return []
@@ -104,7 +103,7 @@ def main() -> int:
     work = scratch / "work"
     if work.exists():
         shutil.rmtree(work)
-    shutil.copytree(REPO / "data" / "work", work)
+    shutil.copytree(REPO / "data" / "village" / "work", work)
     pdoc = json.loads((work / "parcels.json").read_text())
     origin = pdoc["origin_epsg5514"]
     parcels = pdoc["parcels"]
@@ -140,21 +139,19 @@ def main() -> int:
     others = [p for p in usable if p["id"] not in (a_id, b_id, c["id"])]
     f, e = others[0], others[-1]
     c_id, f_id, e_id = c["id"], f["id"], e["id"]
-    print(f"panel smoke: group {a_id}+{b_id}, parcel C {c_id}, F {f_id}, seed trees on {e_id}")
+    print(f"panel smoke: group {a_id}+{b_id}, parcel C {c_id}, F {f_id}, a stale entry on {e_id}")
 
     facts = python_facts()
     # ---- scenario texts ----
-    stale = {"P-9999": {"fence": {"mode": "none"}}, e_id: {"trees": {"count": 3}}}
+    stale = {"P-9999": {"fence": {"mode": "none"}}, e_id: {"fence": {"mode": "auto"}}}
     group0 = {"G-0001": {"parcels": sorted([a_id, b_id])}}
     seed = text(dict(stale), group0)
     expect = {
         "seed": seed,
         "t1": text({**stale, c_id: {"fence": CUSTOM_C}}, group0),
         "t3": text({**stale, c_id: {"fence": {"mode": "none"}}}, group0),
-        "t4a": text({**stale, c_id: {"fence": {"mode": "none"}, "trees": {"density_per_1000m2": 20.0, "seed_offset": 1}}}, group0),
-        "t4b": text({**stale, c_id: {"fence": {"mode": "none"}, "trees": {"density_per_1000m2": 20.0, "seed_offset": 2}}}, group0),
         "t6": text({**stale, c_id: {"fence": {"mode": "custom"}}, f_id: {"fence": {"mode": "none"}}}, group0),
-        "t7": text({**stale, c_id: {"fence": {"mode": "none"}, "trees": {"count": 2}}, f_id: {"fence": {"mode": "none"}, "trees": {"count": 2}}}, group0),
+        "t7": text({**stale, c_id: {"fence": {"mode": "none"}}, f_id: {"fence": {"mode": "none"}}}, group0),
     }
     edir = scratch / "expect"
     edir.mkdir(exist_ok=True)
@@ -187,9 +184,6 @@ def main() -> int:
         "steps_dir": str(steps),
         "expect": {k: str(edir / f"{k}.json") for k in expect},
         "fence_types": fence_types, "fence_modes": facts["modes"], "default_type": facts["default_type"],
-        "rules_density": facts["density"].get(c["kind"], 0.0),
-        "c_area": sum((1 if i == 0 else -1) * abs(sum(r[j][0] * r[j - 1][1] - r[j - 1][0] * r[j][1] for j in range(len(r)))) / 2
-                      for i, r in enumerate(c["polygon"]["coordinates"])),
         "probe1": {k: probe1[k] for k in ("x", "y", "nx", "ny", "z")},
         "probe2": {k: probe2[k] for k in ("x", "y", "nx", "ny", "z")},
         "probe1_pt": [probe1["x"], probe1["y"]], "probe1_tangent": [probe1["tx"], probe1["ty"]],
@@ -199,7 +193,7 @@ def main() -> int:
     }
     (scratch / "plan.json").write_text(json.dumps(plan, indent=1))
 
-    r = es.uv("-m", "drycastle_pipeline", "export", "--area", "slice", "--out", str(scratch / "map"), "--work", str(work))
+    r = es.uv("-m", "drycastle_pipeline", "export", "--out", str(scratch / "map"), "--work", str(work))
     print(r.stdout.strip())
     if r.returncode != 0:
         print(r.stderr)
@@ -216,7 +210,7 @@ def main() -> int:
     code = 0
     if not args.skip_smoke:
         cmd = [args.godot, "--headless", "--path", str(REPO / "godot/viewer"), "--",
-               "--map", str(scratch / "map"), "--seed", args.seed, "--area", "slice",
+               "--map", str(scratch / "map"), "--seed", args.seed,
                "--edits", str(edits), "--state", str(scratch / "editor-state.json"),
                "--panel-smoke", "--panel-smoke-plan", str(scratch / "plan.json")]
         code = subprocess.run(cmd).returncode
@@ -268,16 +262,14 @@ def verify_steps(steps: Path, origin, by_id, c_id, probe1, a, b, shared_edges, o
         ok(gaps[0]["width_m"] == 2.0, f"t2: gate width {gaps[0]['width_m']} m (dragged 1 m from the centre = 2 m)")
         near = math.hypot(lx - probe1["x"], ly - probe1["y"])
         ok(near < 0.05, f"t2: the gate is at the clicked fence point ({near * 100:.1f} cm from it)")
-    # t8: group fence with a gate on the group's outer perimeter, per-parcel trees
+    # t8: group fence with a gate on the group's outer perimeter
     t8 = json.loads((steps / "t8.json").read_text())
     g = t8["groups"]["G-0001"]
     gf = g.get("fence", {})
     ggaps = gf.get("gaps", [])
     ok({k: v for k, v in gf.items() if k != "gaps"} == {"colour": "#aabbcc", "mode": "custom", "type": "wire"} and len(ggaps) == 1,
        f"t8: group fence is custom wire #aabbcc with one gate ({gf.get('mode')})")
-    ok(all("fence" not in t8["parcels"].get(p, {}) for p in (a_id, b_id))
-       and all(t8["parcels"][p]["trees"] == {"count": 4} for p in (a_id, b_id)),
-       "t8: the fence is on the group, the trees (count 4) on each member parcel")
+    ok(all("fence" not in t8["parcels"].get(p, {}) for p in (a_id, b_id)), "t8: the fence is on the group, not on the member parcels")
     if ggaps:
         lx, ly = ggaps[0]["at"][0] - ox, ggaps[0]["at"][1] - oy
         d_out = dist_to_ring_edges(lx, ly, outer)
@@ -288,7 +280,7 @@ def verify_steps(steps: Path, origin, by_id, c_id, probe1, a, b, shared_edges, o
     ok(t8b["parcels"][a_id]["fence"] == {"mode": "none"} and t8b["groups"]["G-0001"]["fence"] == gf,
        "t8b: member override written to the parcel, group fence unchanged")
     t8c = json.loads((steps / "t8c.json").read_text())
-    ok("fence" not in t8c["parcels"][a_id] and t8c["parcels"][a_id]["trees"] == {"count": 4}, "t8c: Reset removed only the member's fence override")
+    ok("fence" not in t8c["parcels"].get(a_id, {}), "t8c: Reset removed the member's fence override")
     print("PANEL SMOKE (python checks) " + ("PASS" if not bad else "FAIL"))
     return bad
 
@@ -301,15 +293,13 @@ def shots(args, scratch: Path, origin, c_id: str, probe1: dict) -> int:
     fence = {**CUSTOM_C, "gaps": [gate]}
     runs = [
         ("panel_fence_gate.png", {c_id: {"fence": fence}}, ["--shot-gate", "0", "--shot-collapse", "Group"]),
-        ("panel_trees.png", {c_id: {"fence": fence, "trees": {"density_per_1000m2": 12.0, "seed_offset": 1}}},
-         ["--shot-collapse", "Group,Fence", "--shot-reroll"]),
     ]
     for name, parcels, extra in runs:
         shot_edits = scratch / (name + ".edits.json")
         shot_edits.write_text(text(parcels, {}))
         edits = scratch / "edits_shot.json"
         edits.write_text(text({}, {}))
-        cmd = [args.godot, "--path", str(REPO / "godot/viewer"), "--", "--map", str(scratch / "map"), "--area", "slice",
+        cmd = [args.godot, "--path", str(REPO / "godot/viewer"), "--", "--map", str(scratch / "map"),
                "--edits", str(edits), "--state", str(scratch / "editor-state-shot.json"),
                "--editor-shot", str(out / name), "--select", c_id, "--shot-at", c_id, "--shot-edits", str(shot_edits),
                "--shot-focus", f"{probe1['x']:.2f},{probe1['y']:.2f}", "--shot-dist", "40", *extra]

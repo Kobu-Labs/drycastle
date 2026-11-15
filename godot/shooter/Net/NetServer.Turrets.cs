@@ -43,15 +43,25 @@ public partial class NetServer
         var q = PhysicsRayQueryParameters3D.Create(new Vector3(from.X, from.Y, from.Z), new Vector3(to.X, to.Y, to.Z));
         q.CollisionMask = CollisionLayers.Bullets; // as for bullets
         q.Exclude = PlayerRids();
-        var r = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
         if (r.Count == 0) return null;
         return new GroundHit(N(r["position"].AsVector3()), N(r["normal"].AsVector3()));
     }
 
     /// <summary>Every live player except the owner, aimed at chest height.</summary>
-    IReadOnlyList<TurretCandidate> TurretEnemies(ushort owner) =>
-        LiveTargets().Where(t => t.Id != owner)
-            .Select(t => new TurretCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM)).ToList();
+    IReadOnlyList<TurretCandidate> TurretEnemies(ushort owner)
+    {
+        // one buffer for every turret: a turret reads its enemies inside its own tick and keeps none (TurretEntity)
+        _turretEnemies.Clear();
+        var targets = LiveTargets();
+        foreach (var t in targets)
+            if (t.Id != owner && !NonEnemyTargets.IsNonEnemy(t.Id)) _turretEnemies.Add( // citizens are no enemy: automatic guns leave them alone
+                new TurretCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM));
+        ReturnTargets(targets);
+        return _turretEnemies;
+    }
+
+    readonly List<TurretCandidate> _turretEnemies = new();
 
     /// <summary>The armed turret a knife swing reaches (the nearest in the swing's cone), or null.</summary>
     ushort? TurretMelee(NVec3 feet, float yaw, float reach)

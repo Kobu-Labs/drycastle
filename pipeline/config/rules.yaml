@@ -1,6 +1,6 @@
-# Parcel kind and building rules for the base map.
+# Parcel, ground and building rules for the base map.
 #
-# Read by the `parcels` stage (parcel kinds, chunking) and the `rules` stage (`buildings` section
+# Read by the `parcels` stage (parcels, ground areas, chunking) and the `rules` stage (`buildings` section
 # at the end). Changing a value and re-running the pipeline regenerates the map.
 
 # --- Parcel registry matching ---------------------------------------------------------------
@@ -16,53 +16,91 @@ building_assignment:
   # otherwise it is listed as unassigned.
   max_distance_m: 10
 
-# --- Parcel kind ----------------------------------------------------------------------------
-# kind is one of: building_plot, road, forest, field, water, garden, other.
-# Rules are tried in this order, the first that matches wins:
-#   1. building_plot  the parcel has at least one assigned building
-#   2. road           the parcel is covered by a road centreline buffer (see `road`)
-#   3. water/forest/field  OSM landuse/natural polygons cover the parcel (see `landuse`)
-#   4. garden         small parcel in built-up area without a building (see `garden`)
-#   5. other          everything else
-parcel_kind:
-  road:
-    # OSM highway values counted as roads (footways, paths and tracks are not).
-    highways: [motorway, trunk, primary, secondary, tertiary, unclassified, residential, living_street, service]
-    # Total width of the buffer drawn around each centreline, in metres.
-    buffer_width_m: 8
-    # Fraction of the parcel area (0..1) that must lie inside the buffer to be a road.
-    min_covered_ratio: 0.3
-  landuse:
-    # A parcel gets the kind of the OSM polygon that covers at least this fraction of it.
-    min_cover_ratio: 0.5
-    # OSM landuse=<value> -> kind (values not listed are ignored; residential is built-up).
-    landuse:
-      forest: forest
-      farmland: field
-      meadow: field
-      grass: field
-      orchard: field
-      vineyard: field
-    # OSM natural=<value> -> kind.
-    natural:
-      water: water
-      wood: forest
-  garden:
-    # Parcels up to this area (square metres) ...
-    max_area_m2: 1500
-    # ... that lie in built-up area: covered at least min_cover_ratio by one of these OSM
-    # landuse values, or within builtup_distance_m metres of any building.
-    builtup_landuse: [residential]
-    builtup_distance_m: 30
+# --- Parcels and ground (parcels stage, ground.py) -----------------------------------------
+# Only a property is a parcel: a cadastral parcel with a building (kind building_plot), or one in a property group
+# (config/edits.json) with a parcel that has a building (kind garden). The land of every other cadastral parcel
+# (fields, forest, water, the land roads lie on, loose gardens) becomes ground areas, cut by type below.
+ground:
+  # A piece of ground smaller than this (m2) is dropped (the terrain keeps the fallback colour there).
+  min_area_m2: 1.0
+  # Parcels cut down to their buildings: the parcel becomes the building outline(s) grown by margin_m (a slim yard), and the
+  # rest of its land is ground (whatever the types below make of it). Use it for a big cadastral parcel (a field, the
+  # dike) that is only a parcel because a building stands on it.
+  carve:
+    P-0073: {margin_m: 2.0}   # the dike strip north of the village: a hut stands on it
+    P-0754: {margin_m: 2.0}   # a 13 ha field with one building
+    P-0089: {margin_m: 2.0}   # the streets and squares of the village core: only a parcel because buildings stand on it
+  # What no type below claims.
+  default: field
+  # A type is a named bundle of terrain attributes (ground_attributes.py; ADR 0015, 0022). Types are tried top to bottom; each takes what the
+  # ones above left of its source (a type without a source is only the default, or for hand-made areas):
+  #   rule: dike    the flood dike of detail.dike (its parcels, and the clipped part of its clips parcels)
+  #   osm           OSM polygons, {class: [values]} with class landuse or natural
+  # and carries the attributes it lists under `attributes`. What a type does not list it does not carry. By relation:
+  #   Appearance    colours   terrain shades (one is picked per area)
+  #                 recipe    detail recipe: field, forest, village or dike (detail.py RECIPES); none: no patches, no clutter
+  #                 detail    settings laid over that recipe's section of `detail` below, for this type only
+  #   Water         water     true: a water body (water.json), no detail
+  # Every point has exactly one ground type: a ground area is of one type, a hand-drawn ground patch (edits.json) too. A type
+  # carries nothing a game system reads; what an area means in play (players spawn, wildlife, events) is a zone, see `zones`
+  # below. A type with a source (osm, rule) needs attributes: they say what the land it takes looks like.
+  types:
+    dike:
+      rule: dike
+      attributes:
+        colours: ["#86b362", "#7aa858"]
+        recipe: dike
+    water:
+      osm: {natural: [water]}
+      attributes:
+        colours: ["#6b7a6a", "#62725f"]
+        water: true
+    forest:
+      osm: {landuse: [forest], natural: [wood]}
+      attributes:
+        colours: ["#2f5f38", "#2a5633", "#356a3c"]
+        recipe: forest
+    # garden plots outside the properties: mostly dug-over soil in rows
+    allotments:
+      osm: {landuse: [allotments]}
+      attributes:
+        colours: ["#8a9a5f", "#7f9058"]
+        recipe: field
+        detail: {furrow: {probability: 1.0, min_area_m2: 300, coverage: [0.5, 0.8], max_area_m2: 20000}, tone_per_ha: 8}
+    # fruit trees in grass
+    orchard:
+      osm: {landuse: [orchard]}
+      attributes:
+        colours: ["#7fae62", "#76a55a"]
+        recipe: field
+        detail: {furrow: {probability: 0.0}, headland: {keep: 0.0}}
+    # mown or grazed grass: no furrows, no dirt headlands
+    meadow:
+      osm: {landuse: [meadow, grass]}
+      attributes:
+        colours: ["#7aa860", "#84b068", "#72a058"]
+        recipe: field
+        detail: {furrow: {probability: 0.0}, headland: {keep: 0.0}}
+    # the open ground of the built-up area (street sides, greens, gardens of no property): grass, the asphalt is the OSM
+    # ribbon on top (same shades as the grass of its recipe, detail.village)
+    village:
+      osm: {landuse: [residential]}
+      attributes:
+        colours: ["#86b362", "#7aa858"]
+        recipe: village
+    field:
+      attributes:
+        colours: ["#72996b", "#7aa072", "#6a9163"]
+        recipe: field
 
 # --- Chunking -------------------------------------------------------------------------------
 chunking:
-  # Edge of a square chunk in metres, on a grid anchored at the local origin (slice centre).
+  # Edge of a square chunk in metres, on a grid anchored at the local origin (map centre).
   # A parcel belongs to the chunk containing its anchor point.
   size_m: 250
 
 # --- Buildings (rules stage) ----------------------------------------------------------------
-# One entry per building in data/work/buildings.json. Order of precedence for every value:
+# One entry per building in data/village/work/buildings.json. Order of precedence for every value:
 #   1. pipeline/config/overrides.yaml (see there)
 #   2. OSM tags: height, building:levels, roof:shape, roof:levels
 #   3. `types`: class chosen by the OSM building=<value> tag
@@ -127,7 +165,7 @@ buildings:
     flat_roofs: ["#6a6a6e", "#7c7f86", "#8a8478", "#5c5f66"]
 
 # --- Terrain (terrain stage) ----------------------------------------------------------------
-# data/raw/dmr5.tif (DMR 5.0, EPSG:3046) is resampled bilinearly into a regular grid in the local
+# data/village/raw/dmr5.tif (DMR 5.0, EPSG:3046) is resampled bilinearly into a regular grid in the local
 # frame. Chunk edges are grid lines, so neighbouring chunks share their border vertices exactly.
 # Terrain exists only where the DMR raster covers: a grid cell is meshed only when all four of
 # its corners lie inside the raster (no clamping, no invented ground); chunks without such cells
@@ -146,26 +184,68 @@ terrain:
   collision_decimate: 2
   # Flat face colours by the parcel kind under the face centre. A list is a set of shades; one
   # is picked per parcel (seeded by the parcel ID), so parcels read as patches.
+  # Parcel kinds; the ground types carry their own colours (ground.types).
   colours:
     building_plot: ["#c9b78f", "#c2b088"]
     garden: ["#8fbf6a", "#83b562", "#9bc673", "#8ab868"]
-    field: ["#6f9a69", "#78a272", "#68925f", "#7fa878"]
-    forest: ["#2f5f38", "#2a5633", "#356a3c"]
-    water: ["#6b7a6a", "#62725f"]
-    road: ["#8e8e8e"]
+    # terrain under no parcel and no ground area (the first shade is used)
     other: ["#72996b", "#7aa072", "#6a9163"]
 
-# --- Regions (export, region-run) ---------------------------------------------------------
-regions:
-  # Regions (hand-drawn colour shapes, edits.json) float this far above the terrain surface ...
+# --- Water (water stage of export; bed.py, water.py) --------------------------------------
+# Every water body (a water parcel, or a ground patch with water_y) gets a natural bed generated from its outline, and
+# the terrain under it is carved to that bed. Depths in metres.
+water:
+  # Water bodies that are rivers (current, pools and riffles, outer bends deeper); the rest are static (ponds, lakes).
+  # The ids are parcel, ground area or patch IDs; a patch piece "GP-0023.2" counts as "GP-0023". The Morava is seven parcels.
+  river_ids: [P-0901, P-0534, P-1180, P-1184, P-1378, P-1597, P-1596]
+  # Water ground areas are numbered by place ("A-0007") and move with the inputs, so a body is also a river when its outline
+  # is at least this long (village map: the Morava's two bodies are 497 m and 4718 m, the longest pond 339 m).
+  river_min_length_m: 400
+  bed:
+    # Grid of the depth in water.json: cells of this size, and the least depth inside an outline.
+    cell_m: 2.0
+    min_depth_m: 0.1
+  # The terrain under a body is lowered to its bed; a bank standing above the surface is cut down to it over this
+  # many metres outside the outline (never raised), so banks meet the water without a step.
+  carve_blend_m: 4.0
+  river:
+    mid_depth_m: 2.5  # typical mid-channel depth
+    pool_depth_m: 3.5  # deepest pool: the body's max_depth (edits.json) when it has one
+    riffle_depth_m: 0.8  # shallowest riffle (wadeable)
+    # Pools and riffles follow a seeded value-noise pattern along the flow (the body's main axis). Bars every
+    # 60 to 120 m: a lattice of about pattern_m, jittered by the seed per body.
+    pattern_m: 60
+    # Across the flow the pattern changes slowly, so the bars run across the channel.
+    cross_m: 150
+    # Pattern values below this are riffles (the shallow runs); the change to a riffle takes about RIFFLE_RAMP.
+    riffle_below: -0.35
+    # The bed reaches its depth this far from the bank: banks shelve.
+    shelf_m: 6
+    # On the outside of a bend the shelf is shorter by this share at a full bend (steeper banks).
+    outer_shelf_steepness: 0.4
+    # The bank curvature (1/m) of a full bend: 0.02 is a bend of radius 50 m (gentler bends count for less).
+    bend_curvature_per_m: 0.02
+    # Extra depth on the outside of a full bend.
+    bend_depth_m: 0.6
+  pond:
+    max_depth_m: 1.5  # the shallow bowl of a pond or lake (its max_depth in edits.json overrides it)
+    shelf_m: 5
+    pattern_m: 30  # a little irregularity on the bottom
+    pattern_gain: 0.1  # the bottom dips to (1 - this) of max_depth_m in places, never deeper than max_depth_m
+
+# --- Ground patches (export, patch-run) ---------------------------------------------------
+ground_patches:
+  # The preview of a ground patch (hand-drawn ground, edits.json; the editor shows it before the next full run) floats
+  # this far above the terrain surface ...
   lift_m: 0.03
-  # ... and this far above a road ribbon where they cover one (so they never z-fight with it).
+  # ... and this far above a road ribbon where it covers one (so it never z-fights with it).
   road_lift_m: 0.02
 
 # --- Roads (roads stage) --------------------------------------------------------------------
-# Ribbons from OSM highways in normalised/highways.geojson, draped on the terrain. Overlapping
-# ribbons at junctions are accepted in v1 (a higher road class is lifted a hair above lower ones
-# to avoid z-fighting). roads.json: nodes are way ends and shared vertices, edges run between them.
+# Ribbons from OSM highways in normalised/highways.geojson, draped on the terrain. A higher road
+# class is lifted a hair above a lower one; ribbons of one class and different colour meeting at a
+# node are split along the bisector instead of stacked, so nothing z-fights.
+# roads.json: nodes are way ends and shared vertices, edges run between them.
 roads:
   # Ribbon sample spacing along a way, in metres (the ribbon follows the terrain at this step).
   sample_step_m: 2
@@ -209,11 +289,11 @@ props:
     kinds: [building_plot, garden]
     garden_near_building_m: 25
     # Fraction of eligible parcels that get a fence (seeded per parcel).
-    probability: 0.75
+    probability: 0.5
     height_m: 1.2
     thickness_m: 0.08
     # A fence is built from boxes of at most this length.
-    section_m: 3
+    section_m: 4
     colour: "#8a6a47"
     # Optional `type` (picket, wire, brick_red, brick_white, stone_wall, concrete; see edits.py
     # FENCE_TYPES) draws the rule fences in that textured style instead of the plain box, and an
@@ -224,33 +304,23 @@ props:
     building_clearance_m: 0.8
     # Boundary stretches within this distance of a road centreline are not fenced.
     road_clearance_m: 0.5
-    # Boundary stretches shared with a road parcel get a gap of this length for a gate (0 = no
-    # gap), centred on the middle of the longest such stretch. Stretches already fenced for
-    # another parcel (shared boundary) are not fenced twice.
+    # Boundary stretches that face a road (within gate_road_within_m of a carriageway) get a gap of this
+    # length for a gate (0 = no gap), centred on the middle of the longest such stretch. Stretches already
+    # fenced for another parcel (shared boundary) are not fenced twice.
     gate_gap_m: 3
+    gate_road_within_m: 4
     # Emit fence collision boxes (props_collision node). They are about half of all triangles of a
-    # chunk file; turn off where fences need not stop players (the village profile does).
-    collision: true
+    # chunk file; off, fences are visual only.
+    collision: false
   trees:
-    # Trees per 1000 m2 of parcel area, by kind (random placement, min spacing, seeded).
-    density_per_1000m2: {garden: 1.5, building_plot: 0.8, forest: 8.0, field: 0.0, other: 0.3}
-    # Cap on rule-based trees per chunk (0 = no cap); OSM trees always stay. Surplus trees are
-    # dropped by a position hash, so the result is stable and spread over the chunk.
+    # Every tree comes from the orthophoto detector (props.ortho_trees; make ortho-trees writes data/village/ortho/trees.json
+    # and the canopy mask); there are no rule-based, OSM or shore trees. Without ortho data there are no trees.
+    # Cap on trees per chunk (0 = no cap); surplus trees are dropped by a position hash, so the result is stable.
     max_per_chunk: 0
-    min_spacing_m: 3.5
     building_clearance_m: 3.5
     road_clearance_m: 2.0
-    parcel_edge_clearance_m: 1.0
-    # Rule-based trees keep this far from placed objects (objects.json, see config/edits.json).
+    # Trees keep this far from placed objects (objects.json, see config/edits.json).
     object_clearance_m: 1.0
-    # Rows of trees along the edge of water regions (edits.json regions with water_y): offset from the
-    # shoreline and the share of positions kept per row (thinner outwards), positions this far apart.
-    shore:
-      spacing_m: 4.0
-      rows:
-        - {offset_m: 2.0, keep: 1.0}
-        - {offset_m: 5.5, keep: 0.7}
-        - {offset_m: 9.0, keep: 0.4}
     # Tree size: trunk height and canopy edge in metres, scaled by a seeded factor in [0.8, 1.25].
     trunk_height_m: 1.8
     trunk_width_m: 0.35
@@ -258,6 +328,13 @@ props:
     trunk_colour: "#6b4a2f"
     canopy_colours: ["#4f8f45", "#5a9a4c", "#468040"]
     forest_canopy_colours: ["#2f6a3a", "#285e33"]
+    # The trees planted inside the detected canopy. A forest seen from above is nearly closed (crowns 5-7 m across): about one
+    # tree per 40 m2, 4-5 m apart, crown edge canopy_m * canopy_crown_scale (4.4-6.5 m). The standalone trees keep the crown
+    # radius the detector measured.
+    ortho:
+      canopy_per_1000m2: 25.0
+      canopy_min_spacing_m: 4.0
+      canopy_crown_scale: [1.7, 2.5]
 
 # --- Ground detail (detail stage, `make detail`; docs/pipeline.md "Detail") ----------------------------
 # Patches (flat colour or library texture, draped on the terrain, never overlapping: the first layer in
@@ -267,7 +344,7 @@ props:
 # (sha256 of "<parcel>:detail:<purpose>"), so reruns give identical output.
 # Budgets (village): patch triangles under ~150k in all, clutter.json under ~6 MB (about 150k instances).
 detail:
-  # Patches float this far above the terrain; hand-drawn regions (regions.lift_m, 0.03) are cut out of them.
+  # Patches float this far above the terrain; water patches (ground_patches.lift_m, 0.03) are cut out of them.
   lift_m: 0.02
   # Parts of a parcel (clipped to the terrain coverage) smaller than this get no detail.
   min_parcel_m2: 4
@@ -277,6 +354,44 @@ detail:
   road_clearance_m: 0.15
   # Placed objects (objects.json) keep detail off a circle of half their footprint diagonal plus this.
   object_clearance_m: 0.3
+  # Flood dike (recipe "dike", detail.py + dike.py): these parcels are the dike whatever their kind. The carriageway of the road
+  # edges inside them is covered by a gravel track (texture dike_gravel: fine gravel, grass patches) a little wider than the
+  # road with a wandering edge, the rest is flat grass with thick grass as clutter: tall grass and tufts, taller and a bit
+  # sparser the further from the track (the dike's sides), tufts on the grass patches of the track.
+  dike:
+    parcels: ["P-0073", "P-0821", "P-0805"]
+    # Parcels of which only a part is the dike (the rest keeps its own recipe): the ground within within_m of a road way.
+    clips:
+      P-1057: {osm_id: w825140517, within_m: 12}
+      P-1021: {osm_id: w825140517, within_m: 12}
+      P-0847: {osm_id: w825140519, within_m: 12}   # the dike's north end: the service road on from P-0073 through H to G
+      P-0089: {osm_id: w825140519, within_m: 12}
+      P-1059: {osm_id: w1148486728, within_m: 12}  # the dike hill reaches over the P-0073 line here (L1)
+    # Regular roads beside the dike's own pebbled road: no track and no lawn over them (P-0821: the grass track w825143074, drawn as L2
+    # and L3, runs alongside the gravel pair w150827706 and w192898627, which is the dike's road).
+    not_track: [w825143074]
+    track_width_m: 1.5       # the gravel track: this wide plus the wandering of its edges (about 2.2 m on average); the road under it is wider, the lawn covers the rest
+    track_wobble_m: 0.7      # how far the edge of the track wanders out beyond that, each side (waves of 1.4 to 16 m)
+    track_lift_m: 0.08       # above the terrain: over the road ribbon (roads.lift_m 0.05 plus 3 mm per class rank) so the texture shows
+    spill:                   # loose pebbles beyond the edge of the track: blobs every spacing_m (varied), radius, how far out
+      {spacing_m: 0.9, radius_m: [0.1, 0.38], reach_m: 0.45}
+    piece_m: 8.0             # the texture is laid in pieces of this length, each along its own direction and start
+    lawn_colours: ["#86b362", "#7aa858", "#6e9c50"]
+    border:                  # the parcel's outline is only a guide: the green flows over it, at random
+      inward_m: 0.0          # the lawn's edge lies this much inside the parcel line at most (0: never, the plot colour would show) ...
+      outward_m: 3.5         # ... and this much outside at most (smooth waves of 7 to 32 m)
+      blob_spacing_m: 1.6    # loose lawn blobs beyond the edge: about one per this many metres of it (varied)
+      blob_radius_m: [0.3, 1.1]
+      blob_reach_m: 4.5      # how far out they lie (most close to the edge, smaller the further out)
+      fade_m: 3.0            # the grass is half as dense on the parcel line, full this far inside, gone this far outside
+      lawn_lift_m: 0.07      # above the terrain: over the neighbours' own patches (detail.lift_m) and over the road ribbons (roads.lift_m 0.05 plus 3 mm per class rank), under the track
+    grass:
+      spacing_m: 0.95
+      scale: [0.95, 1.4]
+      kinds: [[tall_grass, 0.55], [tuft, 0.33], [straw, 0.12]]
+      reach_m: 9.0           # the distance from the track at which the scale has grown by reach_scale
+      reach_scale: 0.6
+    patch_tuft: {spacing_m: 0.3, keep: 0.5, scale: [0.7, 1.1]}
   # Hard cap of instances per chunk and kind (0 = none); surplus ones are dropped by a position hash. (Kinds the yards and verges
   # grow: the tall and the flower kinds have their own caps; the meadow's kinds are generated by the game, not stored.)
   caps_per_chunk: {tuft: 5000, flower: 700, pebble: 4000, rock: 300, leaf: 2500, stick: 700, fern: 900, tall_grass: 2500, clover: 1500, straw: 1500, reed: 600, weed: 800, dandelion: 300, daisy: 300, red_clover: 300, buttercup: 300, poppy: 300, cornflower: 300, yarrow: 300, tulip: 400, sunflower: 200, spike: 300, rose: 200}
@@ -364,11 +479,11 @@ detail:
     rock:   {spacing_m: 3.0,  dirt: 0.25, lawn: 0.04, edge: 0.12, edge_m: 1.5, scale: [0.6, 1.5]}
     leaf:   {spacing_m: 0.45, litter: 0.3, tree_lawn: 0.1, tree_reach_m: 1.6, scale: [0.8, 1.2]}
     stick:  {spacing_m: 1.0,  litter: 0.25, scale: [0.7, 1.3]}
-  # Meadow and field (parcel kind other).
+  # Meadow and field (ground type field).
   field:
     tone_colours: ["#b7aa6c", "#7fa56d"]
     tone_shades: [1.14, 0.88]
-    terrain_mix: {other: 0.45}
+    terrain_mix: 0.45
     tone_per_ha: 3
     tone_radius_m: [3.0, 8.0]
     # Within edge_band_m of the boundary clutter is denser, and dirt headland blobs lie along it.
@@ -395,9 +510,9 @@ detail:
       pebble: {spacing_m: 0.7, dirt: 0.2, scale: [0.6, 1.4]}
       tuft:   {spacing_m: 1.5, tone: 0.1, interior: 0.06, scale: [0.8, 1.3]}
       fern:   {per_tree: 0.45, group_max: 3, ring_m: [0.5, 1.8], scale: [0.8, 1.3]}
-  # Road land (parcel kind road): a grass shoulder this wide beside the carriageway.
-  road:
-    grass_width_m: 1.2
+  # Village ground (ground type village: street sides, greens): grass on all of it beside the carriageway (OSM roads are the
+  # only paved ground).
+  village:
     grass_colours: ["#86b362", "#7aa858"]
     clutter:
       tuft:   {spacing_m: 0.6, grass: 0.3, dirt: 0.15, scale: [0.8, 1.3], kinds: [[tuft, 0.7], [tall_grass, 0.15], [clover, 0.15]]}
@@ -469,23 +584,74 @@ detail:
 # --- Spawn candidates (props stage, spawns.json) --------------------------------------------
 spawns:
   # Number of candidates written (a seeded subset of all valid points).
-  count: 60
-  # Share of the subset taken from roads, the rest from open ground (garden, field, other).
+  count: 150
+  # Share of the subset taken from roads, the rest from open ground (garden, field, village).
   road_fraction: 0.4
   min_building_distance_m: 12
   min_tree_distance_m: 2
   # Candidate pool: spacing along roads and per-parcel point density in the open ground.
   road_spacing_m: 12
   ground_per_1000m2: 2.0
-  ground_kinds: [garden, field, other]
+  # Parcel kinds with spawns in the open ground; ground areas: the `player_spawn` zone kind (`zones` below).
+  ground_kinds: [garden]
 
-# --- Street lamps (props stage, data/work/lamps.json) ----------------------------------------
+# --- Zones (zones.py; props stage for player_spawn, export stage for zone_points.json) -------------------------
+# A zone kind is what a marked area means in play (ADR 0022). The kinds are a fixed catalog in code (zones.py KINDS); a kind
+# listed here has its numbers, one not listed does nothing. A zone is a polygon drawn of one kind (edits.json `zones`), or a
+# rule zone: `where_ground: [ground types]` makes the kind apply wherever a ground area of those types lies, nothing is
+# drawn. Both are the same to the export, and a zone never changes the terrain (a zone over a forest does not cut it).
+#
+# The game never sees ground areas or zones, so for every kind with zones the export stage draws candidate points
+# (inside the terrain, clear of buildings and water) and writes them to zone_points.json; the server picks one. Every kind
+# but player_spawn has all of these keys:
+#   m2_per_point         one point per this many m2 of usable ground (the zones inside the terrain, minus the clearances),
+#   min_points, max_points  but at least min_points and at most max_points. No usable ground: no points.
+#   building_clearance_m, water_clearance_m  clear of buildings and of water (and its shore), in metres.
+#   where_ground         optional: the rule zone, the ground types the kind applies to.
+# player_spawn has no points: the props stage takes spawn candidates on the ground areas inside its zones (spawns above).
+zones:
+  # The Bigfoot event starts at one of its points. No rule zone: it is drawn only. Clear of buildings (solid for it) and of
+  # water; not of trees: it walks through them.
+  bigfoot:
+    m2_per_point: 1000
+    min_points: 30
+    max_points: 300
+    building_clearance_m: 10
+    water_clearance_m: 5
+  # Players may spawn on open ground: the village and the fields.
+  player_spawn:
+    where_ground: [allotments, orchard, meadow, village, field]
+  # Wildlife: one point pool per species (the server picks a spawn point for that species from it). The numbers are shared
+  # by every species (YAML anchor); the ground types are where the species lives. Species ids: godot/shooter/data/animals.json.
+  deer: &wildlife_rule
+    m2_per_point: 20000
+    min_points: 5
+    max_points: 80
+    building_clearance_m: 15
+    water_clearance_m: 5
+    where_ground: [forest, meadow, field]
+  doe: {<<: *wildlife_rule, where_ground: [forest, meadow, field]}
+  stag: {<<: *wildlife_rule, where_ground: [forest]}
+  moose: {<<: *wildlife_rule, where_ground: [forest]}
+  boar: {<<: *wildlife_rule, where_ground: [forest]}
+  bear: {<<: *wildlife_rule, where_ground: [forest]}
+  fox: {<<: *wildlife_rule, where_ground: [dike, forest, meadow, field]}
+  wolf: {<<: *wildlife_rule, where_ground: [forest]}
+  rabbit: {<<: *wildlife_rule, where_ground: [dike, forest, allotments, orchard, meadow, field]}
+  raccoon: {<<: *wildlife_rule, where_ground: [forest, allotments, orchard]}
+  skunk: {<<: *wildlife_rule, where_ground: [forest, allotments, orchard]}
+  # Flocks of birds (wildlife.json `flocks`): a flock starts at one of these points and flies about from there.
+  crow: {<<: *wildlife_rule, where_ground: [forest, meadow, field]}
+
+# --- Street lamps (props stage, data/village/work/lamps.json) ----------------------------------------
 # OSM street_lamp nodes are kept where they stand. Where a road has no lamp nearby, rule lamps are
 # placed along it every spacing_m, staggered left and right, just beyond the carriageway edge.
 # Every lamp must lie in the terrain coverage, outside building footprints (grown by
 # building_clearance_m) and outside parcels of avoid_kinds (house plots and gardens). OSM lamps
 # only get the coverage and building checks, since their position is taken as given.
 lamps:
+  # false: no street lamps at all (OSM ones included); the poles and lamps of the edits are placed objects, not these.
+  enabled: false
   spacing_m: 30
   # Gap between the carriageway edge and the lamp pole, metres.
   road_offset_m: 1.0
@@ -495,20 +661,21 @@ lamps:
   rule_highways: [primary, secondary, tertiary, unclassified, residential, living_street, service]
   avoid_kinds: [building_plot, garden]
 
-# --- Area overlays --------------------------------------------------------------------------
-# `areas.<name>.<section>` is merged over the section when the pipeline runs with that area
-# (--area / AREA=). The slice has none and keeps the settings above. The village is ~50x larger,
-# so it trades prop density for chunk size (all chunks are loaded at startup, 16-64 players,
-# weak GPUs): fewer fences without collision, fewer trees, a few more spawn candidates.
-areas:
-  village:
-    props:
-      fences:
-        probability: 0.5
-        section_m: 4
-        collision: false
-      trees:
-        density_per_1000m2: {garden: 1.0, building_plot: 0.5, forest: 4.0, field: 0.0, other: 0.2}
-        max_per_chunk: 0
-    spawns:
-      count: 150
+# --- Satellite dishes (python -m drycastle_pipeline.dishes, into config/edits.json as placed objects) ----------
+# A seeded share of the dwellings (not the hand-modelled landmarks) gets a dish on the wall that faces the nearest road,
+# under the eave, clear of the known openings (config/buildings/*.yaml) and of a house connector. See docs/pipeline.md.
+dishes:
+  # Chance per dwelling, rolled from a generator seeded with "<building id>:dish": the same houses on every run.
+  dish_chance: 0.8
+  # No dish on a house whose eave is lower than this (the dish would not fit under it).
+  min_eave_m: 2.6
+  # The dish's origin hangs this far under the eave (a seeded value in the range) and never lower than min_height_m above the ground.
+  drop_m: [0.6, 0.9]
+  min_height_m: 2.0
+  # The dish keeps this far from the corners of its wall (measured to its centre), and this far (along the wall) from a connector.
+  wall_end_m: 0.8
+  connector_clear_m: 0.9
+  # A dish within this distance of a footprint belongs to that house (so a dragged dish still counts), and a house further than
+  # this from every road gets none.
+  owned_m: 1.5
+  road_max_m: 60

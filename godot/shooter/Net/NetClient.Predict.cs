@@ -19,6 +19,29 @@ public partial class NetClient
     double _shakeAmp;
     RecoilState _recoil = new(0);
     BreathState _breath = new(0);
+    readonly BreathCues _breathCues = new();
+
+    readonly ZeroDial _zero = new();
+
+    /// <summary>The scope that is up, for the HUD's mil-dots and zero: its FOV and the zero dialled on the weapon (0: no bullet drop).</summary>
+    (float FovDeg, float ZeroM) ScopeView() =>
+        _me is { ZoomFov: > 0 } me && !_binoculars && Ammo is { } a && CurrentWeapon is { } w && BulletDrop.HasDrop(w) ? (me.ZoomFov, _zero.Of(a.Slot - 1, w)) : (0f, 0f);
+
+    /// <summary>
+    /// The mouse wheel while a scope with bullet drop is up: one click of the zero dial (up: farther). The server is told the new zero and resolves the
+    /// next shots with it. False when the wheel is not the dial's (no such scope up), so it cycles the weapons as ever.
+    /// </summary>
+    bool DialZero(int clicks)
+    {
+        if (_me is not { ZoomFov: > 0 } || _binoculars || Ammo is not { } a || CurrentWeapon is not { } w || !BulletDrop.HasDrop(w)) return false;
+        var was = _zero.Of(a.Slot - 1, w);
+        var now = BulletDrop.Dial(w, was, clicks);
+        if (now == was) return true; // at the end of the dial
+        _zero.Set(a.Slot - 1, w, now);
+        SendItem(EventKind.SetZero, BulletDrop.EncodeZero(a.Slot - 1, now));
+        Sfx.Ui("ui.hover");
+        return true;
+    }
 
     bool PredictionOn => !Bot && ShotFx.Enabled && Weapons != null;
 
@@ -26,7 +49,7 @@ public partial class NetClient
     void PredictOnAmmo(AmmoMsg a)
     {
         if (!PredictionOn || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count) return;
-        if (a.Slot != _pSlot) _pSlot = a.Slot;
+        if (a.Slot != _pSlot) { _pSlot = a.Slot; ClearPredictedReload(); } // a reload belongs to the weapon it started on
         while (_predShots.Count > 0 && Now - _predShots.Peek() > 0.6) _predShots.Dequeue();
         var inFlight = _predShots.Count(t => Now - t < 0.25); // shots sent but not yet counted by this message
         _pMag = Math.Max(0, a.Slots[a.Slot - 1].Mag - inFlight);
@@ -40,20 +63,29 @@ public partial class NetClient
         _me.AimKick = new Vector2(_recoil.PitchRad, _recoil.YawRad);
     }
 
-    /// <summary>Advances the sniper breath (the server runs the same state from the same input) and shows the cosmetic sway on the camera.</summary>
+    /// <summary>Advances the sniper breath (the server runs the same state from the same input), plays its sounds (inhale, heartbeat, exhale) and shows the cosmetic sway on the camera.</summary>
     void TickBreath(MoveInput mi)
     {
         if (_me == null || CurrentWeapon is not { } w) return;
-        var scoped = mi.Has(MoveButtons.Aim) && w.ZoomFov > 0 && !_driving && !_controlling;
+        var scoped = mi.Has(MoveButtons.Aim) && w.ZoomFov > 0 && Mode.CanScope;
         _breath.Tick(Now, scoped, mi.Has(MoveButtons.Sprint), w, Perks.HoldBreathTime);
+        var cue = _breathCues.Tick(Now, _breath.Phase, _breath.Meter);
+        if (Sfx.Enabled)
+        {
+            if (cue.Inhale) Sfx.Play2D("breath.in");
+            if (cue.Beat) Sfx.Play2D("breath.heartbeat", cue.BeatDb);
+            if (cue.ForcedExhale) Sfx.Play2D("breath.out");
+            else if (cue.Exhale) Sfx.Play2D("breath.out", -8f);
+        }
         var v = BreathState.VisualSway(Now, _breath.SwayDegrees(w));
-        _me.ViewSway = GameSettings.Current.ReduceMotion ? Vector2.Zero : new Vector2(v.X, v.Y);
+        // the binoculars are held steady: the weapon's sway is not theirs (it would show at their zoom with a sniper rifle in the hotbar)
+        _me.ViewSway = GameSettings.Current.ReduceMotion || _binoculars ? Vector2.Zero : new Vector2(v.X, v.Y);
     }
 
-    /// <summary>The breath meter while scoped with a breath hold (the HUD reads it each frame).</summary>
+    /// <summary>The breath while scoped with a breath hold (the HUD reads it each frame for the key hint).</summary>
     (bool Show, float Meter, BreathState.BreathPhase Phase) BreathView()
     {
-        if (_me is not { ZoomFov: > 0 } || CurrentWeapon is not { } w || BreathState.BudgetSeconds(w, Perks.HoldBreathTime) <= 0)
+        if (_me is not { ZoomFov: > 0 } || _binoculars || CurrentWeapon is not { } w || BreathState.BudgetSeconds(w, Perks.HoldBreathTime) <= 0)
             return (false, 0f, BreathState.BreathPhase.Ready);
         return (true, _breath.Meter, _breath.Phase);
     }
@@ -61,7 +93,7 @@ public partial class NetClient
     /// <summary>Predicts this tick's trigger pull / reload key; plays sounds and own-shot effects at once.</summary>
     void PredictFire(MoveInput mi)
     {
-        if (!PredictionOn || Dead || _driving || _controlling || Ammo is not { } a || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count || a.Slot != _wantSlot) return;
+        if (!PredictionOn || !Mode.CanPredictFire || Ammo is not { } a || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count || a.Slot != _wantSlot) return;
         var w = Weapons.Weapons[a.Slot - 1];
         var now = Now;
         if (_pReloadUntil > 0 && now >= _pReloadUntil) { _pMag = _pMagAfter; _pReloadUntil = 0; }
@@ -91,7 +123,7 @@ public partial class NetClient
         if (w.Kind == WeaponKind.Hitscan && _me != null)
         {
             // same offset step as the server's shot; the viewmodel kicks by the same (ADS / crouch scaled) climb
-            var mult = RecoilState.Multiplier(w.Recoil, mi.Has(MoveButtons.Aim), _me.State.Stance);
+            var mult = RecoilState.Multiplier(w.Recoil, mi.Has(MoveButtons.Aim), InArmedSeat ? Stance.Stand : _me.State.Stance); // a seat steadies it no more than standing does, as on the server
             _recoil.Shot(w.Recoil, mult);
             _breath.AimError(_breath.SwayDegrees(w)); // the server's per-shot aim error; kept in step (the tracer follows the camera, like recoil)
             _viewmodel?.Kick(w.Recoil.VerticalPerShot * mult);
@@ -101,6 +133,13 @@ public partial class NetClient
     }
 
     bool _pHeld;
+
+    /// <summary>Forgets the predicted reload and magazine (weapon switch, death, spawn): the next ammo message re-syncs the magazine, and no reload keeps counting for a weapon that is gone.</summary>
+    void ClearPredictedReload()
+    {
+        _pReloadUntil = 0; _pMagAfter = 0; _pMag = -1;
+        _predShots.Clear();
+    }
 
     void StartPredictedReload(WeaponDef w, int reserve)
     {
@@ -129,7 +168,7 @@ public partial class NetClient
         q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
         var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         var worldDist = hit.Count == 0 ? 300f : from.DistanceTo(hit["position"].AsVector3());
-        if (VehicleAlong(from, dir, MathF.Min(300f, worldDist), out var car, out var vh))
+        if (VehicleAlong(from, dir, MathF.Min(300f, worldDist), out var car, out var vh, MySeat()?.Car))
         {
             // the predicted shot stops on a car: the tracer ends on its hit box, the hole rides the car's node
             var vat = ToWorld(car, G(vh.Local));
