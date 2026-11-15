@@ -48,14 +48,14 @@ public partial class NetServer
         return new GroundHit(N(r["position"].AsVector3()), N(r["normal"].AsVector3()));
     }
 
-    /// <summary>Every live player except the owner, aimed at chest height.</summary>
+    /// <summary>Every live player except the owner and the owner's teammates, aimed at chest height.</summary>
     IReadOnlyList<TurretCandidate> TurretEnemies(ushort owner)
     {
         // one buffer for every turret: a turret reads its enemies inside its own tick and keeps none (TurretEntity)
         _turretEnemies.Clear();
         var targets = LiveTargets();
         foreach (var t in targets)
-            if (t.Id != owner && !NonEnemyTargets.IsNonEnemy(t.Id)) _turretEnemies.Add( // citizens are no enemy: automatic guns leave them alone
+            if (BotEnemies.IsEnemy(_match, owner, t.Id) && !NonEnemyTargets.IsNonEnemy(t.Id)) _turretEnemies.Add( // citizens are no enemy: automatic guns leave them alone
                 new TurretCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM));
         ReturnTargets(targets);
         return _turretEnemies;
