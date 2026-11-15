@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.ShooterCore;
 
 namespace Drycastle.Shooter;
 
@@ -22,13 +23,11 @@ public static partial class LootProp
         return root;
     }
 
-    /// <summary>Hangs from one hand (the right: the Thief faces -Z, so +X), lower than the chest where both hands would hold a tire.</summary>
+    /// <summary>In one hand, its foot on the origin (the view puts the origin at the hand, <see cref="CarryKind.PropAt"/>). When the data names a pack model for it (the downpipe connector hangs from its origin) that is drawn instead.</summary>
     static Node3D CarriedConnector()
     {
         var root = new Node3D { Name = "CarriedConnector" };
-        var c = ConnectorModel();
-        c.Position = new Vector3(0.26f, -0.42f, 0.14f);
-        root.AddChild(c);
+        root.AddChild(PackModel(LootKind.Connector) ?? ConnectorModel());
         return root;
     }
 

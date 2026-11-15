@@ -4,10 +4,11 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// A Raid van's body on the client (GLOSSARY "Raid van", ADR 0021): a box van of boxes and cylinders, drawn without any private asset. A cargo box, a cab with a dark windscreen, four wheels
-/// that turn with the road and a side door as a sliding panel (the server's door fraction says how far it is open; the dark opening shows behind it). Hit by hits it darkens a little by the
-/// stage the hp byte carries; destroyed it is the wreck: charred, canted and with its door hanging half open. The size is <see cref="VanConfig"/>'s box, the same numbers the server's hit volume
-/// and solid box use. The origin is on the ground under the centre, forward is -Z.
+/// A Raid van's body on the client (GLOSSARY "Raid van", ADR 0021). With the private Military pack it is the pack's burnt van (thieves.json <c>van.view.model</c>: +Z forward, its right-hand door a separate node that
+/// slides from <c>door_closed</c> to <c>door_open</c> by the server's door fraction), turned to face -Z and drawn at its own size; a van whose server door is on the left is the mirrored model. Without it a box van of
+/// boxes and cylinders: a cargo box, a cab with a dark windscreen, four wheels that turn with the road and a side door as a sliding panel (the dark opening shows behind it). Hit by hits it darkens a little by the
+/// stage the hp byte carries; destroyed it is the wreck: charred, canted and with its door hanging half open. The size is <see cref="VanConfig"/>'s box (the numbers in thieves.json are the model's), the same
+/// numbers the server's hit volume and solid box use. The origin is on the ground under the centre, forward is -Z.
 /// </summary>
 public sealed partial class RaidVanView : Node3D
 {
@@ -17,8 +18,10 @@ public sealed partial class RaidVanView : Node3D
     readonly List<(MeshInstance3D Mesh, StandardMaterial3D Own, bool Body, Color Base)> _parts = new();
     readonly List<Node3D> _wheels = new();
     readonly Node3D _pivot = new() { Name = "Pivot" };   // canted when wrecked
-    MeshInstance3D _door = null!;
+    MeshInstance3D? _door;
     StandardMaterial3D _wreck = null!;
+    Node3D? _holder, _modelDoor;      // the pack's van (turned to face -Z, mirrored for a left door) and its sliding door node
+    StandardMaterial3D? _modelPaint;  // its paint: the atlas, tinted by damage and by the wreck
     int _side = 1, _stage;
     bool _wrecked;
     float _doorOpen;
@@ -37,6 +40,39 @@ public sealed partial class RaidVanView : Node3D
     void Build()
     {
         AddChild(_pivot);
+        if (!BuildModel()) BuildBox();
+    }
+
+    /// <summary>The pack's van, when the private pack has it.</summary>
+    bool BuildModel()
+    {
+        var v = _cfg.View;
+        if (v.Model == "" || SyntyLib.Instance(v.Model, v.Atlas) is not { } model) return false;
+        _holder = new Node3D { Name = "Model", Position = new Vector3(0, v.ModelLiftM, 0) };
+        _holder.AddChild(model);
+        _pivot.AddChild(_holder);
+        _modelDoor = v.DoorNode == "" ? null : model.FindChild(v.DoorNode, true, false) as Node3D;
+        var atlas = model.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>().Select(m => m.MaterialOverride).OfType<StandardMaterial3D>().FirstOrDefault();
+        if (atlas?.Duplicate() is StandardMaterial3D own)
+        {
+            _modelPaint = own; // this van's own copy: its tint does not touch the others
+            foreach (var m in model.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>()) m.MaterialOverride = own;
+        }
+        PlaceModel();
+        return true;
+    }
+
+    /// <summary>The model faces +Z: turned to -Z, and mirrored for a left door (the pack's door is on its right). The door node slides by the open fraction.</summary>
+    void PlaceModel()
+    {
+        _holder!.Basis = Basis.FromEuler(new Vector3(0, Mathf.Pi, 0)) * Basis.FromScale(new Vector3(_side, 1, 1));
+        if (_modelDoor == null) return;
+        var v = _cfg.View;
+        _modelDoor.Position = new Vector3(v.DoorClosed[0], v.DoorClosed[1], v.DoorClosed[2]).Lerp(new Vector3(v.DoorOpen[0], v.DoorOpen[1], v.DoorOpen[2]), Mathf.Clamp(_doorOpen, 0f, 1f));
+    }
+
+    void BuildBox()
+    {
         var v = _cfg.View;
         var hw = _cfg.HalfWidthM; var hl = _cfg.HalfLengthM; var h = _cfg.HeightM;
         var body = Color.FromHtml(v.BodyColor); var cab = Color.FromHtml(v.CabColor); var door = Color.FromHtml(v.DoorColor);
@@ -89,6 +125,7 @@ public sealed partial class RaidVanView : Node3D
         if (side == _side && doorOpen == _doorOpen && stage == _stage && wrecked == _wrecked) return;
         _side = side; _doorOpen = doorOpen; _stage = stage;
         PlaceDoor();
+        if (_holder != null) PlaceModel();
         if (wrecked != _wrecked)
         {
             _wrecked = wrecked;
@@ -96,13 +133,15 @@ public sealed partial class RaidVanView : Node3D
             _pivot.RotationDegrees = wrecked ? new Vector3(-4, 0, 11 * -_side) : Vector3.Zero; // listing to the side of its door
             _pivot.Position = wrecked ? new Vector3(0, -0.12f, 0) : Vector3.Zero;
         }
-        var k = 1f - 0.07f * stage; // each damage stage dims the paint a little
+        var k = 1f - _cfg.View.StageDim * stage; // each damage stage dims the paint a little
+        if (_modelPaint != null) _modelPaint.AlbedoColor = (wrecked ? Color.FromHtml(_cfg.View.WreckTint) : Colors.White) * new Color(k, k, k); // the wreck: charred (the model is burnt already; the tint takes it black)
         foreach (var (_, own, isBody, baseColour) in _parts)
             if (isBody) own.AlbedoColor = new Color(baseColour.R * k, baseColour.G * k, baseColour.B * k);
     }
 
     void PlaceDoor()
     {
+        if (_door == null) return; // the pack's van moves its own door (PlaceModel)
         var x = _side * (_cfg.HalfWidthM + 0.035f + (_doorOpen > 0.02f ? DoorLiftOutM : 0));
         var z = -_cfg.DoorAlongM + _doorOpen * DoorSlideM;
         var y = 0.55f + (_cfg.HeightM - 0.55f) * 0.5f;

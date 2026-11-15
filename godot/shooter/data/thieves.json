@@ -43,11 +43,70 @@
     "board_reach_m": 1.5,
     // The dev fallback (no van yet): the crew appears on a road between min_m and max_m of the admin, spread_m round the point.
     "spawn": { "min_m": 25, "max_m": 60, "spread_m": 3 },
-    // Client only. Stand-in bodies (Synty peasants, as holy_mass.json's citizens) until the Gang Warfare pack (ticket 08); without the private pack a coloured capsule per kind.
-    // An empty clip name plays nothing: the windup and swing then lean the body, steal (kneeling at a target) bends and lowers it, climb_up, climb_down and climb_work (tickets 06 and 07) hold the pose.
+    // Client only (ticket 08): how a member is drawn. With the private Gang Warfare pack: the kind's model (the look number picks among a kind's models; "femn" lists the feminine bodies, where a clip name's {g} becomes
+    // "femn" instead of "masc") in one of the 12 atlases (a uniform pick by the look number), the gang-rig clips below, the blows, climbing, the carry overlay and what it wears. Without the pack: a coloured capsule per kind.
+    // An empty clip name plays nothing. Lengths are metres, times seconds.
     "view": {
-      "models": ["peasant_male_01", "peasant_male_01", "peasant_female_01"],
-      "clips": { "idle": "idle_standing_masc", "walk": "walk_f_masc", "run": "sprint_up25f_femn", "windup": "", "swing": "", "steal": "", "climb_up": "", "climb_down": "", "climb_work": "", "knockdown_begin": "", "knockdown_loop": "", "knockdown_end": "", "stun_loop": "", "hop_in": "", "death": ["death_back_sword", "death_left_sword"] },
+      "models": { "gang_boss": ["gang_boss_01"], "enforcer": ["gang_enforcer_01"], "thief": ["gang_thief_01", "gang_thief_02"], "femn": ["gang_thief_02"] },
+      "atlases": [
+        "gang-warfare/textures/PolygonGangWarfare_01_A.png", "gang-warfare/textures/PolygonGangWarfare_01_B.png", "gang-warfare/textures/PolygonGangWarfare_01_C.png",
+        "gang-warfare/textures/PolygonGangWarfare_02_A.png", "gang-warfare/textures/PolygonGangWarfare_02_B.png", "gang-warfare/textures/PolygonGangWarfare_02_C.png",
+        "gang-warfare/textures/PolygonGangWarfare_03_A.png", "gang-warfare/textures/PolygonGangWarfare_03_B.png", "gang-warfare/textures/PolygonGangWarfare_03_C.png",
+        "gang-warfare/textures/PolygonGangWarfare_04_A.png", "gang-warfare/textures/PolygonGangWarfare_04_B.png", "gang-warfare/textures/PolygonGangWarfare_04_C.png"
+      ],
+      // Run: chasing and boarding; sprint: fleeing and hauling. steal = kneeling at a target (the way down, then the loop; the pack's 7.5 s way up is never played: the next state blends out). The climbs play at the
+      // speed of loot.climb_speed (see climb). hop_in / hop_out = the jump over a pet's fence, land = the landing after it. death: one by the look number (front, back, left).
+      "clips": {
+        "idle": "idle_standing_{g}_g", "walk": "walk_f_{g}_g", "run": "run_f_{g}", "sprint": "sprint_f_{g}",
+        "steal": "kneel_enter_{g}", "steal_loop": "kneel_loop_{g}",
+        "climb_up": "climb_up", "climb_down": "climb_down", "climb_work": "climb_work",
+        "knockdown_begin": "knockdown_begin", "knockdown_loop": "knockdown_loop", "knockdown_end": "knockdown_end", "stun_loop": "stun_loop",
+        "hop_in": "jump_running_{g}", "hop_out": "jump_running_{g}", "land": "land_soft_{g}",
+        "death": ["death_front_sword", "death_back_sword_g", "death_left_sword_g"]
+      },
+      // blend_s: the crossfade between clips. steal_enter_seconds: the kneel's way down (3.2 s in the pack) is sped up to this. hop_seek_s / hop_speed: jump_running (2.4 s) is played from there at that speed over the
+      // hop (loot.pet.hop_seconds); land_seconds: land_soft after it. get_up_seek_s: knockdown_end (4 s) lies until about 2.3 s then rises: played from there, sped up to loot.connector.get_up_seconds.
+      "playback": { "blend_s": 0.2, "steal_enter_seconds": 1.0, "hop_seek_s": 0.5, "hop_speed": 1.5, "land_seconds": 0.5, "get_up_seek_s": 2.3 },
+      // A windup is the server's telegraph (melee.windup_seconds), the blow lands at the start of the swing. The clip is started so its peak_s falls there; seek_s is where the clip's own motion starts
+      // (swing_b and swing_c start held: their first second is the combo before). One of the list per swing (by look and swing count). The Enforcer swings the pipe, the others hit with the fist/shoulder.
+      "blows": {
+        "enforcer": [ { "clip": "swing_a", "seek_s": 0.07, "peak_s": 0.40 }, { "clip": "swing_b", "seek_s": 0.85, "peak_s": 1.10 }, { "clip": "swing_c", "seek_s": 1.45, "peak_s": 1.93 } ],
+        "thief": [ { "clip": "pommel_strike", "seek_s": 0.53, "peak_s": 0.87 }, { "clip": "counter_shove", "seek_s": 0.53, "peak_s": 0.70 } ],
+        "gang_boss": [ { "clip": "counter_shove", "seek_s": 0.53, "peak_s": 0.70 }, { "clip": "pommel_strike", "seek_s": 0.53, "peak_s": 0.87 } ]
+      },
+      // The climb clips (ours): wall plane wall_plane_m in front of the model's origin, one loop of a clip travels clip_speed_mps x its length (0.489 m/s), so a clip plays at loot.climb_speed / clip_speed_mps.
+      // The server's member stands surface_m from what it climbs (loot.dish.base_out_m, loot.connector.base_offset_m: 0.9), so the body is slid (surface_m - wall_plane_m) towards it while it hangs on the wall.
+      "climb": { "clip_speed_mps": 0.489, "wall_plane_m": 0.27, "surface_m": 0.9, "slide_seconds": 0.25 },
+      // An idle Gang boss and an Enforcer on guard now and then play one of these (a drag, drink, for a member with a cigarette); a random time between min and max, never while fighting or walking. Client only.
+      "gestures": { "taunts": ["taunt_laugh_point_{g}", "taunt_shake_fist_{g}", "taunt_beckon_{g}", "taunt_menacing_fists_{g}"], "drink": "drink_sip_{g}", "min_gap_seconds": 8, "max_gap_seconds": 25 },
+      // What a member wears. offsets: metres in the rest pose's axes (the model faces +Z, up +Y, its right hand is -X) from the bone's origin; rotation_deg: Euler degrees. Nothing here was seen in the game: nudge freely.
+      // pipe: the grip is in the hand bone's frame (position, rotation xyzw: Synty weapons have the blade along +Y, grip at the origin); the model is turned 180 degrees about Z and shifted 0.215 up its Y (pipe_01 spans y -0.566 to 0.335).
+      // cigarette: the lit cigarette (0.147 m along +Z, filter at the origin) at the mouth, one member in one_in. speaker: speaker_01 (0.48 m tall) scaled down to about 0.2 m on the hip. chain: the Gang boss's gold chain
+      // (the model of the Item in items.json, authored facing -Z) at the neck bone.
+      "dress": {
+        "pipe": { "model": "props/pipe_01", "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png", "bone": "Hand_R", "position": [-0.0879, 0.0391, 0.0163], "rotation": [-0.4785, -0.3531, 0.3529, 0.7224], "model_rotation_deg": [0, 0, 180], "model_offset": [0, 0.215, 0] },
+        "cigarette": { "model": "props/cigarette_lit_01", "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png", "bone": "Head", "offset": [-0.025, 0.07, 0.1], "rotation_deg": [12, 0, 0], "one_in": 3 },
+        "speaker": { "model": "props/speaker_01", "atlas": "glb/atlas/military_01_A.png", "bone": "Hips", "offset": [-0.25, 0, 0], "rotation_deg": [0, 0, 0], "scale": 0.42 },
+        "chain": { "bone": "Neck", "offset": [0, 0, 0], "rotation_deg": [0, 180, 0], "scale": 1.0 }
+      },
+      // The carry overlay: while a member carries Loot the arms of the pose (right/left hand goal in the rest pose's axes; elbow_down/elbow_out weight where the elbow bends; hand_roll_deg turns the palm inwards) are blended
+      // over its clip (blend_s fades), the prop of the kind is held at prop_at (the middle of the prop). two_hands: tire, dish. under_arm: the pet is its own entity the server holds at loot.pet carry_right_m / carry_up_m /
+      // carry_forward_m: the right hand goes there plus pet_offset (right, up, forward of the member). one_hand: connector. model/atlas: the pack's model for the prop (the tire; the connector stays the generated insulator
+      // fitting, which reads as a pole's connector: props/downpipe_connector_01 is a rain gutter piece; name it here, with atlas "glb/atlas/military_01_A.png", to try it). The dish is always the generated model.
+      "carry": {
+        "blend_s": 0.2, "chest_bone": "Spine_03",
+        "poses": {
+          "two_hands": { "right": [-0.30, 1.05, 0.34], "left": [0.30, 1.05, 0.34], "elbow_down": 1.0, "elbow_out": 0.5, "hand_roll_deg": 90 },
+          "under_arm": { "pet_offset": [-0.08, 0.1, -0.08], "elbow_down": 1.0, "elbow_out": 0.8, "hand_roll_deg": 0 },
+          "one_hand": { "right": [-0.27, 0.92, 0.18], "elbow_down": 1.0, "elbow_out": 0.6, "hand_roll_deg": 0 }
+        },
+        "kinds": {
+          "tire": { "pose": "two_hands", "prop_at": [0, 1.05, 0.36], "model": "props/tire_01", "atlas": "glb/atlas/military_01_A.png" },
+          "dish": { "pose": "two_hands", "prop_at": [0, 1.05, 0.38] },
+          "pet": { "pose": "under_arm", "prop_at": [0, 1.05, 0.38] },
+          "connector": { "pose": "one_hand", "prop_at": [-0.27, 0.86, 0.18] }
+        }
+      },
       "thief_color": "#7d6b4f", "enforcer_color": "#8a3b32", "gang_boss_color": "#c9a227", "capsule_height_m": 1.8
     }
   },
@@ -63,15 +122,15 @@
     "speed_mps": 13, "park_speed_mps": 1.5, "accel_mps2": 4, "decel_mps2": 4, "turn_deg_per_s": 110,
     "hits": 300,
     "hit": { "headshot_weight": 1, "explosive_weight": 25, "vehicle_weapon_weight": 6 },
-    // The hit volume: two prone capsules grown by hit_scale, hit_offset_m ahead of and behind the centre.
-    "hit_scale": 2.2, "hit_offset_m": 0.9,
-    // The box: what rams, what shoves vehicles aside, what a parked van is solid with.
-    "half_width_m": 1.1, "half_length_m": 2.8, "height_m": 2.5,
+    // The hit volume: two prone capsules grown by hit_scale (radius 0.56 x 2.2 = the model's half width), hit_offset_m ahead of and behind the centre (the capsule ends then reach the model's 2.38 m).
+    "hit_scale": 2.2, "hit_offset_m": 0.4,
+    // The box: what rams, what shoves vehicles aside, what a parked van is solid with. The model's (vehicles/raid_van.glb, 2.417 x 4.753 x 1.860 m): the data follows the model, not the other way round.
+    "half_width_m": 1.21, "half_length_m": 2.38, "height_m": 1.86,
     // Loot it takes before it leaves, the longest stay after it stopped, how long it waits for the crew it called back.
     "capacity": 8, "stay_seconds": 240, "board_wait_seconds": 25,
     "door_seconds": 1.5, "crew_stagger_seconds": 0.8, "wreck_seconds": 25,
-    // The side door: how far outside the van's side the crew steps out, and how far ahead of the centre.
-    "door_out_m": 1.1, "door_along_m": 0.4,
+    // The side door: how far outside the van's side the crew steps out, and how far ahead of the centre (0.07: the middle of the model's doorway).
+    "door_out_m": 1.1, "door_along_m": 0.07,
     "honk_min_seconds": 9, "honk_max_seconds": 22, "honk_near_m": 25, "honk_near_gap_seconds": 6,
     // Roads at least min_road_width_m wide. Stop = the candidate (every stop_step_m, stop_inset_m inside the map) with most targets within stop_radius_m, not within used_apart_m of an earlier stop.
     "min_road_width_m": 3, "stop_radius_m": 80, "stop_step_m": 20, "stop_inset_m": 30, "used_apart_m": 60,
@@ -79,8 +138,14 @@
     "u_turn_penalty_m": 150, "exit_straight_m": 150,
     // Ramming: its mass over a car's for the run-over damage of vehicles.json, and the damage when there is no such table.
     "ram_mass_scale": 3, "ram_fallback_damage": 100,
-    // Client only: a box van of boxes and cylinders; honk_hear_m is how far from the camera a honk is heard.
-    "view": { "body_color": "#b9b3a2", "cab_color": "#8c3f33", "door_color": "#9b9585", "wreck_color": "#2b2724", "honk_hear_m": 180 }
+    // Client only. With the private Military pack: model (glb/vehicles/raid_van.glb, +Z forward, origin at the middle on the ground, the right-hand sliding door a node "door") in its atlas; the door node slides from
+    // door_closed to door_open (the model's own coordinates) by the door fraction; a left door is the mirrored model; model_lift_m lifts it (its wheels reach 0.10 m under the origin). The wreck: paint x wreck_tint, each
+    // damage stage dims the paint by stage_dim. Without the pack a box van of boxes and cylinders in the colours; honk_hear_m is how far from the camera a honk is heard.
+    "view": {
+      "model": "vehicles/raid_van", "atlas": "glb/atlas/military_land_vehicle_01_burnt.png", "door_node": "door",
+      "door_closed": [-0.722, 0.763, 0.068], "door_open": [-0.842, 0.763, -0.932], "model_lift_m": 0.0, "wreck_tint": "#3a3532", "stage_dim": 0.07,
+      "body_color": "#b9b3a2", "cab_color": "#8c3f33", "door_color": "#9b9585", "wreck_color": "#2b2724", "honk_hear_m": 180
+    }
   },
   // Ticket 09. Voice lines (server): a living member not in a windup or swing with a human within voice_near_m rolls voice_chance every voice_roll_s; a member that spoke waits
   // voice_cooldown_s; one line at a time per Raid (voice_busy_s, the server does not know how long a line is). voice_lines = recordings the server picks from; the client plays line mod files found.

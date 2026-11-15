@@ -66,7 +66,7 @@ public static class GangVoiceCodec
 /// <summary>
 /// The voice lines and the speaker roll of the Gang members, pure (docs/events/thieves/09). The server calls <see cref="Update"/> once a tick with the humans' positions.
 /// <para>
-/// A member that is alive, not in a windup or swing, with a listener within <see cref="ThievesAudioConfig.VoiceNearM"/>, rolls <see cref="ThievesAudioConfig.VoiceChance"/> every
+/// A member that is alive, not in a windup or swing or electrocuted (<see cref="CanSpeakIn"/>), with a listener within <see cref="ThievesAudioConfig.VoiceNearM"/>, rolls <see cref="ThievesAudioConfig.VoiceChance"/> every
 /// <see cref="ThievesAudioConfig.VoiceRollS"/> (the clock only runs while a listener is near); a member that spoke waits out <see cref="ThievesAudioConfig.VoiceCooldownS"/>; and a Raid
 /// lets one line at a time through: after one, its other members are silent for <see cref="ThievesAudioConfig.VoiceBusyS"/>.
 /// </para>
@@ -92,8 +92,11 @@ public sealed class GangAudio
     /// <summary>Members the audio knows (tests).</summary>
     public int Tracked => _slots.Count;
 
-    /// <summary>Whether this member can say something now: alive and not mid-blow.</summary>
-    public static bool CanSpeak(GangMember m) => m.Alive && m.State is not (GangMemberState.Windup or GangMemberState.Swing);
+    /// <summary>Whether this member can say something now: alive, not mid-blow and not electrocuted (shocked, falling, lying, getting up).</summary>
+    public static bool CanSpeak(GangMember m) => m.Alive && CanSpeakIn(m.State);
+
+    /// <summary>Whether a member in this state can speak: not in a windup or swing, not Shocked, Falling, Down or GetUp (ticket 07's open point).</summary>
+    public static bool CanSpeakIn(GangMemberState state) => state is not (GangMemberState.Windup or GangMemberState.Swing or GangMemberState.Shocked or GangMemberState.Falling or GangMemberState.Down or GangMemberState.GetUp);
 
     /// <summary>Advances every clock by <paramref name="dt"/>; <paramref name="say"/> is called with the member and a line number below <see cref="ThievesAudioConfig.VoiceLines"/> for each line said.</summary>
     public void Update(float dt, IReadOnlyList<ThiefGang> gangs, IReadOnlyList<GangPlayer> listeners, Action<GangMember, byte> say)

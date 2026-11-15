@@ -10,7 +10,16 @@ namespace Drycastle.Shooter;
 /// </summary>
 public static partial class LootProp
 {
-    /// <summary>The prop a Thief carries in both hands.</summary>
+    /// <summary>
+    /// thieves.json <c>gang.view.carry</c> (set by the client when the event data arrives): where a kind has a pack model (<see cref="CarryKind.Model"/>, the tire's and, if switched on, the connector's) it replaces the
+    /// primitive shape; without the private pack or the file the shape is drawn as before. Null: shapes only.
+    /// </summary>
+    public static GangCarry? Config { get; set; }
+
+    /// <summary>A pack model of the kind's carry data (<c>props/tire_01</c> in its atlas), or null.</summary>
+    static Node3D? PackModel(LootKind kind) => Config?.Kinds.GetValueOrDefault(kind.ToString().ToLowerInvariant()) is { Model: not "" } k ? SyntyLib.Instance(k.Model, k.Atlas) : null;
+
+    /// <summary>The prop a Thief carries in both hands. Its origin is the middle of the prop, facing -Z like the Thief; the view puts it at the member's chest (<see cref="CarryKind.PropAt"/>).</summary>
     public static Node3D Carried(LootKind kind) => kind switch
     {
         LootKind.Tire => CarriedTire(),

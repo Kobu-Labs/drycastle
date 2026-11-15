@@ -14,6 +14,7 @@ public sealed partial class ThiefAudio : Node
     const string VoiceDir = "audio/thieves/voice", SongDir = "audio/thieves/songs", VanSongNode = "VanSong";
     const string SfxBus = "SFX", MusicBus = "Music";
     const float VoiceHeightM = 1.6f, VoiceDb = 4f;
+    static readonly Vector3 HipAt = new(0.24f, 1.0f, 0.04f);   // where the song plays from on a member (the box's place; a mounted speaker follows the hip bone, the song stays on the body)
 
     sealed class Speaker { public Node3D View = null!; public Node3D Prop = null!; public AudioStreamPlayer3D? Song; }
 
@@ -62,19 +63,20 @@ public sealed partial class ThiefAudio : Node
             return;
         }
         if (cur != null) return;
-        var s = new Speaker { View = view, Prop = MakeProp() };
-        view.AddChild(s.Prop);
+        var mounted = view is GangMemberView body ? body.MountSpeaker() : null; // the pack's speaker on the hip bone (ticket 08), else the box
+        var s = new Speaker { View = view, Prop = mounted ?? MakeProp() };
+        if (mounted == null) view.AddChild(s.Prop);
         if (Sfx.Enabled && SongCount > 0 && Load(_songs![id % _songs.Length], true) is { } song)
         {
             s.Song = Player(song, MusicBus, _cfg.SpeakerRangeM, 4f, 0f);
-            s.Song.Position = s.Prop.Position;
+            s.Song.Position = mounted == null ? s.Prop.Position : HipAt;
             view.AddChild(s.Song);
             s.Song.Play((float)(GD.Randf() * song.GetLength() * 0.5)); // not every speaker from the first bar
         }
         _speakers[id] = s;
     }
 
-    /// <summary>A JBL-like box on the member's hip: dark body, a lighter grille on the front (-Z), a small accent.</summary>
+    /// <summary>A JBL-like box on the member's hip (the fallback of <see cref="GangMemberView.MountSpeaker"/>): dark body, a lighter grille on the front (-Z), a small accent.</summary>
     static Node3D MakeProp()
     {
         var root = new Node3D { Name = "Speaker", Position = new Vector3(0.24f, 1.0f, 0.04f) };

@@ -100,7 +100,7 @@ public class PolesTests
         Assert.Equal(0.05f, c.ElectrocuteChance);
         Assert.True(c.PoleCooldownS > 0 && c.ShockSeconds > 0 && c.DownSeconds > 0 && c.GetUpSeconds > 0 && c.BaseOffsetM > 0 && c.Weight > 0);
         var clips = Cfg().Gang.View.Clips;
-        Assert.Equal(new[] { "", "", "", "" }, new[] { clips.KnockdownBegin, clips.KnockdownLoop, clips.KnockdownEnd, clips.StunLoop });
+        Assert.Equal(new[] { "knockdown_begin", "knockdown_loop", "knockdown_end", "stun_loop" }, new[] { clips.KnockdownBegin, clips.KnockdownLoop, clips.KnockdownEnd, clips.StunLoop });
         Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"loot":{"connector":{"electrocute_chance":1.5}}}"""));
         Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"loot":{"connector":{"shock_seconds":0}}}"""));
         Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"loot":{"connector":{"pole_cooldown_s":-1}}}"""));

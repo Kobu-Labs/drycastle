@@ -26,6 +26,7 @@ public partial class NetClient
     void InitLootView()
     {
         LootRules.Register(WorldEntityRegistry.Shared);
+        LootProp.Config = ThievesData.Gang.View.Carry; // the pack's tire and the like (ticket 08)
         WorldEntities.Spawned += OnLootSpawned;
         WorldEntities.Despawned += OnLootDespawned;
     }

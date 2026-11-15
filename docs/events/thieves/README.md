@@ -11,7 +11,7 @@ Throwaway. Delete this folder when the event is done. Design: `docs/events/READM
 | 05 | Pets | 04 | done (fence hop needs the rebuilt map) |
 | 06 | Dishes | 04 | done (map has no dishes until the owner places them) |
 | 07 | Poles | 04 | done |
-| 08 | Assets | 02 (pack on disk) | blocked: Gang Warfare pack not found on disk |
+| 08 | Assets | 02 (pack on disk) | done (looks unseen) |
 | 09 | Audio | 02, 03 | done |
 | 10 | Reward | 02 | done |
 

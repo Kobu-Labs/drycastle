@@ -53,7 +53,7 @@ public sealed class ThievesFile : IVersioned
         Positive(g.WalkGiveUpSeconds, "gang.walk_give_up_seconds"); Positive(g.FleeSeconds, "gang.flee_seconds"); Positive(g.EdgeArriveM, "gang.edge_arrive_m"); Positive(g.BoardReachM, "gang.board_reach_m");
         Positive(g.Spawn.MinM, "gang.spawn.min_m"); Positive(g.Spawn.MaxM, "gang.spawn.max_m"); Positive(g.Spawn.SpreadM, "gang.spawn.spread_m");
         if (!(g.Spawn.MaxM > g.Spawn.MinM)) throw new DataFileException($"{F}: gang.spawn.max_m is not above min_m");
-        if (g.View.Models.Count == 0) throw new DataFileException($"{F}: gang.view.models lists at least one model");
+        g.View.Validate(F);
         var v = f.Van;
         Positive(v.SpeedMps, "van.speed_mps"); Positive(v.ParkSpeedMps, "van.park_speed_mps"); Positive(v.AccelMps2, "van.accel_mps2"); Positive(v.DecelMps2, "van.decel_mps2"); Positive(v.TurnDegPerS, "van.turn_deg_per_s");
         if (v.ParkSpeedMps > v.SpeedMps) throw new DataFileException($"{F}: van.park_speed_mps is above speed_mps");
@@ -68,7 +68,7 @@ public sealed class ThievesFile : IVersioned
         Positive(v.HonkNearM, "van.honk_near_m"); Positive(v.HonkNearGapSeconds, "van.honk_near_gap_seconds");
         Positive(v.MinRoadWidthM, "van.min_road_width_m"); Positive(v.StopRadiusM, "van.stop_radius_m"); Positive(v.StopStepM, "van.stop_step_m"); Positive(v.StopInsetM, "van.stop_inset_m");
         NotNegative(v.UsedApartM, "van.used_apart_m"); NotNegative(v.UTurnPenaltyM, "van.u_turn_penalty_m"); Positive(v.ExitStraightM, "van.exit_straight_m"); Positive(v.RamMassScale, "van.ram_mass_scale"); NotNegative(v.RamFallbackDamage, "van.ram_fallback_damage");
-        Positive(v.View.HonkHearM, "van.view.honk_hear_m");
+        v.View.Validate(F);
         var r = f.Raids;
         if (r.Count < 1) throw new DataFileException($"{F}: raids.count is at least 1");
         if (r.MaxVans < 1) throw new DataFileException($"{F}: raids.max_vans is at least 1");
@@ -174,42 +174,6 @@ public sealed class GangSpawn
     public float SpreadM { get; set; } = 3;
 }
 
-/// <summary>How a member is drawn (client only). The models are stand-ins from the Synty peasants until the Gang Warfare pack (ticket 08); without the private pack a coloured capsule is drawn.</summary>
-public sealed class GangView
-{
-    /// <summary>Models under assets-private/synty/glb (the same as holy_mass.json's citizens), picked by the look number.</summary>
-    public List<string> Models { get; set; } = new() { "peasant_male_01", "peasant_male_01", "peasant_female_01" };
-    public GangClips Clips { get; set; } = new();
-    /// <summary>The capsule fallback: colour (html) and height in metres of a scale 1 member, per kind.</summary>
-    public string ThiefColor { get; set; } = "#7d6b4f";
-    public string EnforcerColor { get; set; } = "#8a3b32";
-    public string GangBossColor { get; set; } = "#c9a227";
-    public float CapsuleHeightM { get; set; } = 1.8f;
-}
-
-/// <summary>Synty clip names (anim/baked) by what a member does; an empty or missing name plays nothing (windup and swing then lean the body in code).</summary>
-public sealed class GangClips
-{
-    public string Idle { get; set; } = "idle_standing_masc";
-    public string Walk { get; set; } = "walk_f_masc";
-    public string Run { get; set; } = "sprint_up25f_femn";
-    public string Windup { get; set; } = "";
-    public string Swing { get; set; } = "";
-    /// <summary>The Thief kneeling at a target (Steal; empty: the body is bent forward and lowered) and on a climb (tickets 06 and 07; empty: a held pose, the body stays as it was).</summary>
-    public string Steal { get; set; } = "";
-    public string ClimbUp { get; set; } = "";
-    public string ClimbDown { get; set; } = "";
-    public string ClimbWork { get; set; } = "";
-    /// <summary>The electrocution (ticket 07): falling, lying knocked down, getting up, and stunned at the top. Empty: a held pose (lying flat for Down).</summary>
-    public string KnockdownBegin { get; set; } = "";
-    public string KnockdownLoop { get; set; } = "";
-    public string KnockdownEnd { get; set; } = "";
-    public string StunLoop { get; set; } = "";
-    /// <summary>The Thief hopping over a pet's fence (HopIn, ticket 05; a jump clip; empty: a held pose).</summary>
-    public string HopIn { get; set; } = "";
-    public List<string> Death { get; set; } = new() { "death_back_sword", "death_left_sword" };
-}
-
 /// <summary>The Raids of the event, one after another (GLOSSARY "Raid"): how many, when the next one comes, and how a crew grows with the players.</summary>
 public sealed class RaidsConfig
 {
@@ -289,7 +253,11 @@ public sealed class VanConfig
     public VanView View { get; set; } = new();
 }
 
-/// <summary>How the van is drawn (client only): a box van of boxes and cylinders, no private assets.</summary>
+/// <summary>
+/// How the van is drawn (client only). With the private pack the model <see cref="Model"/> (+Z forward, the door on its x less than 0 side, origin at the middle on the ground) turned to face -Z, wearing
+/// <see cref="Atlas"/>; the door node slides from <see cref="DoorClosed"/> to <see cref="DoorOpen"/> (the model's own coordinates). Without it a box van of boxes and cylinders (the colours). The model is drawn at
+/// its own size: the box numbers above (half_width_m, half_length_m, height_m) are the model's, not the other way round. A left door (the server may pick one) is the mirrored model.
+/// </summary>
 public sealed class VanView
 {
     public string BodyColor { get; set; } = "#b9b3a2";
@@ -298,6 +266,26 @@ public sealed class VanView
     public string WreckColor { get; set; } = "#2b2724";
     /// <summary>How far from the camera a honk is heard (the sound is a stand-in with no range of its own).</summary>
     public float HonkHearM { get; set; } = 180;
+    /// <summary>The model under assets-private/synty/glb (without .glb), its atlas under synty/, and the node that is the sliding door ("" = the model has no door to slide).</summary>
+    public string Model { get; set; } = "";
+    public string Atlas { get; set; } = "";
+    public string DoorNode { get; set; } = "door";
+    /// <summary>The door node's position shut and fully open, in the model's own coordinates (a right door; metres).</summary>
+    public float[] DoorClosed { get; set; } = { 0, 0, 0 };
+    public float[] DoorOpen { get; set; } = { 0, 0, 0 };
+    /// <summary>Lifts the model off the ground (the model's wheels reach below its origin), metres.</summary>
+    public float ModelLiftM { get; set; }
+    /// <summary>What the model's paint is multiplied by when it is the wreck (a dark charred tint; html), and how much each damage stage dims it.</summary>
+    public string WreckTint { get; set; } = "#3a3532";
+    public float StageDim { get; set; } = 0.07f;
+
+    public void Validate(string file)
+    {
+        if (Model != "" && Atlas == "") throw new DataFileException($"{file}: van.view.atlas names the model's atlas");
+        if (DoorClosed.Length != 3 || DoorOpen.Length != 3) throw new DataFileException($"{file}: van.view.door_closed and door_open are three numbers");
+        if (!(HonkHearM > 0)) throw new DataFileException($"{file}: van.view.honk_hear_m must be positive");
+        if (!(StageDim >= 0 && StageDim < 0.3f)) throw new DataFileException($"{file}: van.view.stage_dim is between 0 and 0.3");
+    }
 }
 
 /// <summary>What the event pays. The win's XP is the level data's event-win award (levels.json), the same for every event, so it is not a number here.</summary>

@@ -62,7 +62,7 @@ public partial class NetClient
             return;
         }
         if (e.Type != GangRules.TypeId) return;
-        var view = GangMemberView.Make(ThievesData.Gang, GangRules.KindOf(e.State.Hp), e.State.Owner);
+        var view = GangMemberView.Make(ThievesData, GangRules.KindOf(e.State.Hp), e.State.Owner, ItemData.Find(ThievesData.Reward.ChainItem)?.Model ?? "");
         view.Name = $"GangMember{e.Id}";
         Owned.AddChild(view);
         _gang[e.Id] = new GangNode { View = view };
