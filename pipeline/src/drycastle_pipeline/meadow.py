@@ -9,7 +9,7 @@ nothing is sent over the network.
 * **Where**: field and forest parcels only (:data:`MEADOW_TYPES`); gardens, plots and road verges keep their stored
   instances in ``clutter.json``. A cell is on the raster only if the centre and the four corners of its jitter
   window (``jitter_m`` around the centre) are on free ground: not on buildings, fences, roads, placed objects or
-  hand-drawn regions, and on the terrain. Trunks are not cut out here (the loader drops instances within a
+  water patches, and on the terrain. Trunks are not cut out here (the loader drops instances within a
   trunk's reach from ``trees.json``).
 * **How much** (per layer and parcel type, 0..1 of ``max_per_cell``): ``interior`` everywhere, ``edge`` within the
   recipe's edge band of the boundary, ``tone`` on tone patches, ``litter`` on leaf litter, ``tree`` near a trunk,
@@ -276,7 +276,7 @@ def zone_cells(meadow: Meadow, ctx, atype: str, gx: np.ndarray, gy: np.ndarray, 
 
 def add_parcel(meadow: Meadow, ctx, res, atype: str, free: BaseGeometry, cfg: dict, edge_band_m: float) -> int:
     """Puts the cells of one parcel part on the raster. ``free`` is the part's free ground (no buildings, fences,
-    roads, objects, regions), ``res`` its detail result (the patches say where soil, litter and tones are).
+    roads, objects, water patches), ``res`` its detail result (the patches say where soil, litter and tones are).
     Returns the number of cells."""
     if free.is_empty:
         return 0

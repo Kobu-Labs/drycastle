@@ -2,7 +2,7 @@
 
 Python stays the orchestrator: it reads the work files, the rules and ``edits.json`` exactly like :class:`detail.Village`, resolves
 what the Python stage resolves (the detail rules of every ground type, the terrain colour of every unit, the recipe of every unit,
-the regions, the placed objects' clearance discs) and hands it over as one JSON document plus the terrain arrays to the extension
+the water patches, the placed objects' clearance discs) and hands it over as one JSON document plus the terrain arrays to the extension
 module ``drycastle_detail`` (``pipeline/rust/detail``, built with ``make detail-rust-build``). The module does the per-unit work on
 all cores, merges it in a fixed order and writes ``detail.json``, ``detail_patches.npy``, ``detail_patches.json`` and
 ``detail_meadow.bin`` in the formats of the Python stage, so the export stage and the game read them unchanged. See
@@ -25,7 +25,7 @@ from drycastle_pipeline.detail_meshes import KINDS, TINTABLE
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
 from drycastle_pipeline.ground import ground_types, ground_units, type_colours, water_kinds
 from drycastle_pipeline.ground_attributes import attributes_of
-from drycastle_pipeline.regions import plan_regions
+from drycastle_pipeline.patches import plan_patches
 from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
 from drycastle_pipeline.terrain import load_terrain
 from drycastle_pipeline.textures import load_textures
@@ -65,7 +65,7 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
     graph = json.loads((work_dir / "roads.json").read_text())
     objects_path = work_dir / "objects.json"
     objects = json.loads(objects_path.read_text())["objects"] if objects_path.is_file() else []
-    types = ground_types(rules_path)
+    types = ground_types(rules_path, edits_path)
     colours = ParcelColours(units, {**load_section("terrain", rules_path)["colours"], **type_colours(types)})
 
     # the unit table: recipe (None: no detail), terrain colour, whether the whole unit is the dike
@@ -93,8 +93,8 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
         r = 0.5 * math.hypot(sx, sz) * float(o.get("scale", 1.0)) + float(cfg["object_clearance_m"])
         discs.append([o["position"][0], o["position"][1], r])
 
-    plan = plan_regions(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), terrain, ground=False)
-    regions = [q for r in plan.regions.values() for q in _polys(r.polygon)]
+    plan = plan_patches(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), terrain, types)
+    water_patches = [q for p in plan.patches.values() if p.water_y is not None for q in _polys(p.polygon)]
 
     lib = load_textures()
     tex_list = sorted(set(D.PATCH_TEXTURE.values()))
@@ -118,7 +118,7 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
         "roads": [{"id": e["id"], "highway": e["highway"], "width": float(e["width"]), "osm_id": e.get("osm_id") or "", "polyline": e["polyline"]}
                   for e in graph["edges"]],
         "objects": discs,
-        "regions": regions,
+        "regions": water_patches,  # the engine calls the polygons it keeps detail out of "regions"
         "coverage": [list(c) for c in terrain.coverage.exterior.coords],
         "textures": {t: [lib[t].tile_w, lib[t].tile_h] for t in tex_list},
         "tex_list": tex_list,
@@ -134,7 +134,7 @@ def run_engine(
     work_dir: Path, rules_path: Path = DEFAULT_RULES, edits_path: Path = DEFAULT_EDITS,
     threads: int = 0, only: list[str] | None = None, write: bool = True, out_dir: Path | None = None,
 ) -> tuple[dict, list[str]]:
-    """Runs the engine; returns its statistics and the warnings of the regions."""
+    """Runs the engine; returns its statistics and the warnings of the water patches."""
     mod = load_module()
     doc, heights, valid, image, warnings = build_input(work_dir, rules_path, edits_path)
     stats = json.loads(mod.run(json.dumps(doc), heights.tobytes(), valid.tobytes(), image[2], (image[0], image[1]),

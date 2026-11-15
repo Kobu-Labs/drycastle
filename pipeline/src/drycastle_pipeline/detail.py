@@ -9,9 +9,9 @@ This is the ``detail`` stage (``make detail``, between ``props`` and ``export``)
   export puts them into the chunk files as ``detail_patches`` nodes).
 
 * **Patches** are polygons on the ground, flat-coloured or textured from the texture library, draped on
-  the terrain by :func:`regions.drape` (so they follow the ground triangle by triangle) at ``detail.lift_m``.
+  the terrain by :func:`patches.drape` (so they follow the ground triangle by triangle) at ``detail.lift_m``.
   They never overlap: the layers are clipped in the order of :data:`PATCH_PRIORITY` (first wins), parcels
-  are disjoint, so nothing z-fights. Hand-drawn regions (3 cm) are cut out of every patch, so they never
+  are disjoint, so nothing z-fights. Water patches (3 cm) are cut out of every patch, so they never
   fight with a patch either.
 * **Clutter** is data only: ``{"kind", "x", "y", "z", "rot", "scale"}`` per instance. The game draws them as
   instanced meshes near the player; nothing in the map holds them as triangles.
@@ -23,7 +23,7 @@ This is the ``detail`` stage (``make detail``, between ``props`` and ``export``)
   generator per purpose, so identical input gives identical output and a change to one recipe step does
   not move the others.
 * **Exclusion**: nothing lands on a building (plus a wall margin), on a fence, a trunk, a placed object, a
-  hand-drawn region or the road. Crowns do not exclude: leaf litter belongs under them.
+  water patch or the road. Crowns do not exclude: leaf litter belongs under them.
 """
 
 import functools
@@ -52,7 +52,7 @@ from drycastle_pipeline.ground import ground_types, ground_units, type_colours, 
 from drycastle_pipeline.ground_attributes import attributes_of
 from drycastle_pipeline.meshes import Mesh
 from drycastle_pipeline.props import chunk_of, seeded
-from drycastle_pipeline.regions import drape, plan_regions
+from drycastle_pipeline.patches import drape, plan_patches
 from drycastle_pipeline.roads import edge_lines
 from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
 from drycastle_pipeline.terrain import Terrain, load_terrain
@@ -117,7 +117,7 @@ class ParcelContext:
     terrain: Terrain
     tree_cfg: dict
     colour: list[int] | None = None  # the parcel's flat terrain colour (the lawn palette follows it)
-    blocked: BaseGeometry | None = None  # placed objects and hand-drawn regions
+    blocked: BaseGeometry | None = None  # placed objects and water patches
     verge: dict[str, BaseGeometry] | None = None  # "gravel" and "dirt" verge blobs along the roads, clipped
     water: BaseGeometry | None = None  # water parcels near the parcel (grass beside them stands fresh)
     road_lines: list[tuple[LineString, float]] | None = None  # centre lines and widths of the road edges near the parcel
@@ -333,7 +333,7 @@ def palette(ctx: ParcelContext, fixed: list[str], shades: list[float], mix_by_ki
 
 
 def free_area(ctx: ParcelContext, cfg: dict, trunks: bool = True) -> BaseGeometry:
-    """The parcel without buildings (and a wall margin), fences, trunks, placed objects, regions and the road.
+    """The parcel without buildings (and a wall margin), fences, trunks, placed objects, water patches and the road.
 
     ``trunks=False`` (forest, field) leaves the trunk footprints in the patches (nobody sees the ground under
     a trunk) and keeps the polygons simple; the clutter then filters its points by :func:`_trunk_filter`.
@@ -1050,10 +1050,11 @@ class Village:
             r = 0.5 * math.hypot(sx, sz) * float(o.get("scale", 1.0)) + float(self.cfg["object_clearance_m"])
             self.object_polys.append(Point(o["position"][0], o["position"][1]).buffer(r, 8))
         self.o_tree = shapely.STRtree(self.object_polys)
-        plan = plan_regions(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), self.terrain, ground=False)
+        plan = plan_patches(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), self.terrain, self.types)
         self.warnings = list(plan.warnings)
-        self.regions = unary_union([r.polygon for r in plan.regions.values()]) if plan.regions else Polygon()
-        shapely.prepare(self.regions)
+        water_patches = [p.polygon for p in plan.patches.values() if p.water_y is not None]
+        self.water_patches = unary_union(water_patches) if water_patches else Polygon()
+        shapely.prepare(self.water_patches)
         wet = water_kinds(self.types)
         self.water_polys = [shape(p["polygon"]) for p in self.parcels if p["kind"] in wet]
         self.w_tree = shapely.STRtree(self.water_polys)
@@ -1108,8 +1109,8 @@ class Village:
         near = part.buffer(_NEAR_M)
         roads = self._near(self.r_tree, self.road_polys, near)
         blocked = self._near(self.o_tree, self.object_polys, part)
-        if not self.regions.is_empty and self.regions.intersects(part):
-            blocked.append(self.regions.intersection(part.buffer(1.0)))
+        if not self.water_patches.is_empty and self.water_patches.intersects(part):
+            blocked.append(self.water_patches.intersection(part.buffer(1.0)))
         verge = {
             name: _union(self._near(tree, self.verge_polys[name], part)).intersection(part)
             for name, tree in self.v_tree.items()

@@ -341,7 +341,7 @@ def test_both_orders_are_idempotent_and_stable(tmp_path: Path) -> None:
     assert all(final_ids[r] == i for r, i in first_ids.items())
 
 
-def test_stage_turns_a_region_with_a_ground_type_into_ground(tmp_path: Path, capsys) -> None:
+def test_stage_turns_a_ground_patch_into_ground(tmp_path: Path, capsys) -> None:
     work = tmp_path / "work"
     _write_normalised(work)
     ox, oy = -500000.0, -1200000.0
@@ -350,10 +350,9 @@ def test_stage_turns_a_region_with_a_ground_type_into_ground(tmp_path: Path, cap
         return [[ox + x0, oy + y0], [ox + x1, oy + y0], [ox + x1, oy + y1], [ox + x0, oy + y1]]
 
     edits = tmp_path / "edits.json"
-    edits.write_text(json.dumps({"version": 1, "regions": {
-        "R-0001": {"colour": "#112233", "polygon": ring(50, 0, 150, 50), "ground": ["meadow"]},  # half over the building plot
-        "R-0002": {"colour": "#112233", "polygon": ring(150, 0, 200, 50), "ground": ["swamp"]},
-        "R-0003": {"colour": "#112233", "polygon": ring(150, 50, 200, 100)},  # paint only
+    edits.write_text(json.dumps({"version": 1, "ground_patches": {
+        "GP-0001": {"type": "meadow", "polygon": ring(50, 0, 150, 50)},  # half over the building plot
+        "GP-0002": {"type": "water", "polygon": ring(150, 0, 200, 50), "water_y": 100.0},  # a body of water, not ground
     }}))
     build_parcels(work, tmp_path / "registry" / "parcels.registry.json", ParcelRules(), edits_path=edits)
     doc = json.loads((work / "parcels.json").read_text())
@@ -361,36 +360,26 @@ def test_stage_turns_a_region_with_a_ground_type_into_ground(tmp_path: Path, cap
     assert got == [("field", 7500.0), ("meadow", 2500.0)]  # the meadow stops at the parcel line
     meadow = next(g for g in doc["ground"] if g["kind"] == "meadow")
     assert shape(meadow["polygon"]).equals(box(100, 0, 150, 50))
-    assert "R-0002" in capsys.readouterr().err  # unknown type: warned about and skipped
-    assert "ground_layers" not in doc  # no type adds attributes: the key is only there when something does
+    assert "ground_layers" not in doc and "zones" not in doc  # a ground type is terrain only
 
 
-def test_stage_keeps_the_attributes_that_add_up_as_layers_and_leaves_the_ground_alone(tmp_path: Path) -> None:
+def test_zones_change_no_ground_area(tmp_path: Path) -> None:
     ox, oy = -500000.0, -1200000.0
 
     def ring(x0, y0, x1, y1):
         return [[ox + x0, oy + y0], [ox + x1, oy + y0], [ox + x1, oy + y1], [ox + x0, oy + y1]]
 
-    def build(name: str, regions: dict) -> dict:
+    def build(name: str, extra: dict) -> dict:
         work = tmp_path / name / "work"
         _write_normalised(work)
         edits = tmp_path / name / "edits.json"
-        edits.write_text(json.dumps({"version": 1, "ground_types": {"bigfoot_zone": {"attributes": {"event_spawn": ["bigfoot"]}}}, "regions": regions}))
+        edits.write_text(json.dumps({"version": 1, "ground_patches": {"GP-0001": {"type": "meadow", "polygon": ring(50, 0, 150, 50)}}, **extra}))
         build_parcels(work, tmp_path / name / "registry" / "parcels.registry.json", ParcelRules(), edits_path=edits)
         return json.loads((work / "parcels.json").read_text())
 
-    meadow = {"colour": "#112233", "polygon": ring(50, 0, 150, 50), "ground": ["meadow"]}
-    plain = build("plain", {"R-0001": meadow})
-    stacked = build("stacked", {
-        "R-0001": {**meadow, "ground": ["meadow", "bigfoot_zone"]},
-        "R-0002": {"colour": "#aa00ff", "polygon": ring(150, 0, 200, 50), "ground": ["bigfoot_zone"]},  # only the event, on the field
-    })
-    assert stacked["ground"] == plain["ground"]  # the layers change no ground area
-    assert [(layer["id"], layer["region"], layer["types"]) for layer in stacked["ground_layers"]] == [
-        ("L-0001", "R-0001", ["bigfoot_zone"]), ("L-0002", "R-0002", ["bigfoot_zone"]),
-    ]
-    assert shape(stacked["ground_layers"][1]["polygon"]).equals(box(150, 0, 200, 50))
-    assert "ground_layers" not in plain
+    plain = build("plain", {})
+    zoned = build("zoned", {"zones": {"Z-0001": {"kind": "bigfoot", "polygon": ring(40, 0, 160, 50)}, "Z-0002": {"kind": "deer", "polygon": ring(150, 0, 200, 50)}}})
+    assert zoned["ground"] == plain["ground"]  # a zone is an overlay: no ground area changes
 
 
 def test_a_carved_parcel_is_its_building_outline_and_the_rest_is_ground(tmp_path: Path) -> None:

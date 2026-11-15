@@ -32,7 +32,7 @@ ground:
     P-0089: {margin_m: 2.0}   # the streets and squares of the village core: only a parcel because buildings stand on it
   # What no type below claims.
   default: field
-  # A type is a named bundle of attributes (ground_attributes.py; ADR 0015). Types are tried top to bottom; each takes what the
+  # A type is a named bundle of terrain attributes (ground_attributes.py; ADR 0015, 0022). Types are tried top to bottom; each takes what the
   # ones above left of its source (a type without a source is only the default, or for hand-made areas):
   #   rule: dike    the flood dike of detail.dike (its parcels, and the clipped part of its clips parcels)
   #   osm           OSM polygons, {class: [values]} with class landuse or natural
@@ -41,11 +41,9 @@ ground:
   #                 recipe    detail recipe: field, forest, village or dike (detail.py RECIPES); none: no patches, no clutter
   #                 detail    settings laid over that recipe's section of `detail` below, for this type only
   #   Water         water     true: a water body (water.json), no detail
-  #   Spawning      spawns    true: players may spawn on it
-  #   Events        event_spawn  the events that may spawn there, e.g. [bigfoot]
-  # A ground area has the terrain (appearance and water) of one type; hand-drawn areas can stack types, then the topmost
-  # type with appearance or water attributes decides, and spawning and events add up over all of them. A type with a source
-  # (osm, rule) needs appearance or water attributes: they say what the land it takes looks like.
+  # Every point has exactly one ground type: a ground area is of one type, a hand-drawn ground patch (edits.json) too. A type
+  # carries nothing a game system reads; what an area means in play (players spawn, wildlife, events) is a zone, see `zones`
+  # below. A type with a source (osm, rule) needs attributes: they say what the land it takes looks like.
   types:
     dike:
       rule: dike
@@ -69,7 +67,6 @@ ground:
         colours: ["#8a9a5f", "#7f9058"]
         recipe: field
         detail: {furrow: {probability: 1.0, min_area_m2: 300, coverage: [0.5, 0.8], max_area_m2: 20000}, tone_per_ha: 8}
-        spawns: true
     # fruit trees in grass
     orchard:
       osm: {landuse: [orchard]}
@@ -77,7 +74,6 @@ ground:
         colours: ["#7fae62", "#76a55a"]
         recipe: field
         detail: {furrow: {probability: 0.0}, headland: {keep: 0.0}}
-        spawns: true
     # mown or grazed grass: no furrows, no dirt headlands
     meadow:
       osm: {landuse: [meadow, grass]}
@@ -85,7 +81,6 @@ ground:
         colours: ["#7aa860", "#84b068", "#72a058"]
         recipe: field
         detail: {furrow: {probability: 0.0}, headland: {keep: 0.0}}
-        spawns: true
     # the open ground of the built-up area (street sides, greens, gardens of no property): grass, the asphalt is the OSM
     # ribbon on top (same shades as the grass of its recipe, detail.village)
     village:
@@ -93,12 +88,10 @@ ground:
       attributes:
         colours: ["#86b362", "#7aa858"]
         recipe: village
-        spawns: true
     field:
       attributes:
         colours: ["#72996b", "#7aa072", "#6a9163"]
         recipe: field
-        spawns: true
 
 # --- Chunking -------------------------------------------------------------------------------
 chunking:
@@ -198,11 +191,12 @@ terrain:
     # terrain under no parcel and no ground area (the first shade is used)
     other: ["#72996b", "#7aa072", "#6a9163"]
 
-# --- Regions (export, region-run) ---------------------------------------------------------
-regions:
-  # Regions (hand-drawn colour shapes, edits.json) float this far above the terrain surface ...
+# --- Ground patches (export, patch-run) ---------------------------------------------------
+ground_patches:
+  # The preview of a ground patch (hand-drawn ground, edits.json; the editor shows it before the next full run) floats
+  # this far above the terrain surface ...
   lift_m: 0.03
-  # ... and this far above a road ribbon where they cover one (so they never z-fight with it).
+  # ... and this far above a road ribbon where it covers one (so it never z-fights with it).
   road_lift_m: 0.02
 
 # --- Roads (roads stage) --------------------------------------------------------------------
@@ -308,7 +302,7 @@ props:
 # (sha256 of "<parcel>:detail:<purpose>"), so reruns give identical output.
 # Budgets (village): patch triangles under ~150k in all, clutter.json under ~6 MB (about 150k instances).
 detail:
-  # Patches float this far above the terrain; hand-drawn regions (regions.lift_m, 0.03) are cut out of them.
+  # Patches float this far above the terrain; water patches (ground_patches.lift_m, 0.03) are cut out of them.
   lift_m: 0.02
   # Parts of a parcel (clipped to the terrain coverage) smaller than this get no detail.
   min_parcel_m2: 4
@@ -556,27 +550,54 @@ spawns:
   # Candidate pool: spacing along roads and per-parcel point density in the open ground.
   road_spacing_m: 12
   ground_per_1000m2: 2.0
-  # Parcel kinds with spawns in the open ground; ground types: the `spawns` attribute of ground.types.
+  # Parcel kinds with spawns in the open ground; ground areas: the `player_spawn` zone kind (`zones` below).
   ground_kinds: [garden]
 
-# --- Runtime attributes (export stage, attribute_points.json) --------------------------------
-# Ground attributes the game server needs while it runs, as "a random spot inside an area that carries this attribute" (the
-# first user is the Bigfoot event). The areas are not exported: for each entry below, the export stage draws candidate points
-# inside every area that carries it (ground areas of a type with the attribute, and the attribute layers stacked over ground,
-# ADR 0015) and writes them to attribute_points.json; the server picks one. This list is an explicit allowlist: an attribute
-# that is not here stays in the build (spawns included). Only list attributes of the catalog (ground_attributes.py LIST_VALUES)
-# can be listed, as <attribute>: {<value>: rule}; every rule has all the keys below.
-runtime_points:
-  event_spawn:
-    bigfoot:
-      # One point per this many m2 of usable ground (the areas inside the terrain, minus the clearances), but at least
-      # min_points and at most max_points. No usable ground: no points.
-      m2_per_point: 1000
-      min_points: 30
-      max_points: 300
-      # Clear of buildings (solid for it) and of water (and its shore), in metres. Not of trees: it walks through them.
-      building_clearance_m: 10
-      water_clearance_m: 5
+# --- Zones (zones.py; props stage for player_spawn, export stage for zone_points.json) -------------------------
+# A zone kind is what a marked area means in play (ADR 0022). The kinds are a fixed catalog in code (zones.py KINDS); a kind
+# listed here has its numbers, one not listed does nothing. A zone is a polygon drawn of one kind (edits.json `zones`), or a
+# rule zone: `where_ground: [ground types]` makes the kind apply wherever a ground area of those types lies, nothing is
+# drawn. Both are the same to the export, and a zone never changes the terrain (a zone over a forest does not cut it).
+#
+# The game never sees ground areas or zones, so for every kind with zones the export stage draws candidate points
+# (inside the terrain, clear of buildings and water) and writes them to zone_points.json; the server picks one. Every kind
+# but player_spawn has all of these keys:
+#   m2_per_point         one point per this many m2 of usable ground (the zones inside the terrain, minus the clearances),
+#   min_points, max_points  but at least min_points and at most max_points. No usable ground: no points.
+#   building_clearance_m, water_clearance_m  clear of buildings and of water (and its shore), in metres.
+#   where_ground         optional: the rule zone, the ground types the kind applies to.
+# player_spawn has no points: the props stage takes spawn candidates on the ground areas inside its zones (spawns above).
+zones:
+  # The Bigfoot event starts at one of its points. No rule zone: it is drawn only. Clear of buildings (solid for it) and of
+  # water; not of trees: it walks through them.
+  bigfoot:
+    m2_per_point: 1000
+    min_points: 30
+    max_points: 300
+    building_clearance_m: 10
+    water_clearance_m: 5
+  # Players may spawn on open ground: the village and the fields.
+  player_spawn:
+    where_ground: [allotments, orchard, meadow, village, field]
+  # Wildlife: one point pool per species (the server picks a spawn point for that species from it). The numbers are shared
+  # by every species (YAML anchor); the ground types are where the species lives. Species ids: godot/shooter/data/animals.json.
+  deer: &wildlife_rule
+    m2_per_point: 20000
+    min_points: 5
+    max_points: 80
+    building_clearance_m: 15
+    water_clearance_m: 5
+    where_ground: [forest, meadow, field]
+  doe: {<<: *wildlife_rule, where_ground: [forest, meadow, field]}
+  stag: {<<: *wildlife_rule, where_ground: [forest]}
+  moose: {<<: *wildlife_rule, where_ground: [forest]}
+  boar: {<<: *wildlife_rule, where_ground: [forest]}
+  bear: {<<: *wildlife_rule, where_ground: [forest]}
+  fox: {<<: *wildlife_rule, where_ground: [dike, forest, meadow, field]}
+  wolf: {<<: *wildlife_rule, where_ground: [forest]}
+  rabbit: {<<: *wildlife_rule, where_ground: [dike, forest, allotments, orchard, meadow, field]}
+  raccoon: {<<: *wildlife_rule, where_ground: [forest, allotments, orchard]}
+  skunk: {<<: *wildlife_rule, where_ground: [forest, allotments, orchard]}
 
 # --- Street lamps (props stage, data/village/work/lamps.json) ----------------------------------------
 # OSM street_lamp nodes are kept where they stand. Where a road has no lamp nearby, rule lamps are

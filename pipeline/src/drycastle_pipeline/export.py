@@ -13,24 +13,34 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
-from drycastle_pipeline.attribute_points import (
-    FILE_NAME as ATTRIBUTE_POINTS_FILE,
-    AttributePointsError,
-    build_attribute_points,
-)
 from drycastle_pipeline.buildings import DEFAULT_OVERRIDES
 from drycastle_pipeline.config import DEFAULT_RAW_DIR, REPO_ROOT, map_paths
-from drycastle_pipeline.edits import DEFAULT_EDITS, GROUND_RECIPES, load_edits
 from drycastle_pipeline.detail_meshes import clutter_meshes
+from drycastle_pipeline.edits import DEFAULT_EDITS, GROUND_RECIPES, load_edits
+from drycastle_pipeline.ground import (
+    ground_type_row,
+    ground_types,
+    ground_units,
+    rules_ground_types,
+    water_kinds,
+)
 from drycastle_pipeline.meshes import Mesh
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
+from drycastle_pipeline.patches import patch_rank
 from drycastle_pipeline.primitives import PRIMITIVES, build_primitive
-from drycastle_pipeline.regions import region_rank
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.scene import build_scene
 from drycastle_pipeline.textures import TexturedMesh, tex_node_name
-from drycastle_pipeline.ground import ground_type_row, ground_types, ground_units, rules_ground_types, water_kinds
 from drycastle_pipeline.water import build_water
+from drycastle_pipeline.zones import FILE_NAME as ZONE_POINTS_FILE
+from drycastle_pipeline.zones import (
+    ZonesError,
+    build_zone_points,
+    check_ground_types,
+    drawn_zones,
+    kind_rows,
+)
+from drycastle_pipeline.zones import rules as zone_rules
 
 DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # 0.2.0: fences and trees of a parcel moved from the chunk-level props / props_collision nodes into
@@ -58,9 +68,11 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
 # Only maps with a bunker have it; a loader that does not know it gives no shelter from blasts. A bunker may carry "intel", the
 # wall of its command post the intel screen hangs on (ADR 0017); a loader that does not know it has no intel room.
-# (no bump) attribute_points.json (files.attribute_points): candidate points per runtime attribute (rules.yaml runtime_points,
-# first: event_spawn bigfoot) that the server picks from. Only maps where some area carries one have it; a loader that does not
-# know it, or a map without it, means "no points".
+# (no bump) zone_points.json (files.zone_points): candidate points per zone kind (rules.yaml zones: bigfoot, one kind per wild
+# species) that the server picks from. Only maps where some zone has an area have it; a loader that does not know it, or a map
+# without it, means "no points".
+# (no bump) patches.json (files.patches): the ground patches of the edits in the colour of their type, for the minimap; the
+# patch_<ID> nodes of the chunk files are the water patches only (the other patches are ground, baked into terrain and detail).
 # (no bump) groups.json (files.groups): the property groups of the edits (group id -> parcel ids), for the game server's pets.
 # Only maps with a group have it; a loader that does not know it, or a map without it, means "no groups".
 MAP_VERSION_BASE = "0.10.0"
@@ -382,10 +394,15 @@ def run_export(
         "axes": "x east, y north (local metres); glTF files use Y-up: x east, y up, z -north",
         "chunk_size_m": parcels_doc["chunk_size_m"],
         "parcels": parcels_out,
+        # the ground areas by type (ground.py: kind = the type): the editor's Ground types tool draws them to show what is where
+        "ground_areas": [
+            {"id": a["id"], "kind": a["kind"], "area": a["area"], "polygon": a["polygon"]}
+            for a in sorted(parcels_doc.get("ground", []), key=lambda a: a["id"])
+        ],
     }
     if "origin_epsg5514" in parcels_doc:  # always there from the parcels stage on
         parcels_file["origin_epsg5514"] = parcels_doc["origin_epsg5514"]
-    # the ground types for the editor (ground types tool, the ground list of a region): every type of the rules, with the
+    # the ground types for the editor (ground types tool, the type of a patch): every type of the rules, with the
     # rules' own entry (`rules`; the editor lays the user's edits.json overrides over it, so the list stays live between
     # builds), then the types the user made (`custom`); name, first colour and a summary are those at this build
     rule_types = rules_ground_types(rules_path)
@@ -400,32 +417,37 @@ def run_export(
         ground_type_row(name, rule_types.get(name), effective.get(name) or rule_types.get(name) or {})
         for name in [*rule_types, *(n for n in effective if n not in rule_types)]
     ]
+    zrules = zone_rules(load_section("zones", rules_path))
+    check_ground_types(zrules, effective)
+    # the zone kinds for the editor (zones tool): the catalog with the ground types of each rule zone; the drawn zones are in the edits
+    parcels_file["zone_kinds"] = kind_rows(zrules)
     _dump(out_dir / "parcels.json", parcels_file)
     water_file = out_dir / "water.json"
     if scene.terrain is not None:
         water_doc, water_skipped = build_water(
-            ground_units(parcels_doc), scene.terrain, scene.regions, water_kinds(effective)
+            ground_units(parcels_doc), scene.terrain, scene.patches, water_kinds(effective)
         )
         for pid in water_skipped:
-            print(f"export: warning: water parcel/region {pid} has no terrain under it (or none below its surface); no water body", file=sys.stderr)
+            print(f"export: warning: water parcel/patch {pid} has no terrain under it (or none below its surface); no water body", file=sys.stderr)
         _dump(water_file, water_doc)
         files["water"] = "water.json"
-        # candidate points of the runtime attributes, drawn clear of the buildings and of the water just built
-        points_doc, points_warnings = build_attribute_points(
-            parcels_doc, list(buildings.values()), scene.terrain, water_doc, effective, load_section("runtime_points", rules_path)
+        # candidate points of the zone kinds, drawn clear of the buildings and of the water just built
+        drawn = drawn_zones(load_edits(edits_path).zones, parcels_doc["origin_epsg5514"]) if parcels_doc.get("origin_epsg5514") else {}
+        points_doc, points_warnings = build_zone_points(
+            parcels_doc, drawn, list(buildings.values()), scene.terrain, water_doc, zrules
         )
         for warning in points_warnings:
-            print(f"export: warning: attribute points: {warning}", file=sys.stderr)
+            print(f"export: warning: zone points: {warning}", file=sys.stderr)
     else:
         points_doc = None
         if water_file.exists():
             water_file.unlink()  # no terrain: a water file from an earlier run would be stale
-    points_file = out_dir / ATTRIBUTE_POINTS_FILE
+    points_file = out_dir / ZONE_POINTS_FILE
     if points_doc is not None:
         _dump(points_file, points_doc)
-        files["attribute_points"] = ATTRIBUTE_POINTS_FILE
+        files["zone_points"] = ZONE_POINTS_FILE
     else:
-        points_file.unlink(missing_ok=True)  # no area carries a runtime attribute (any more): no file, "no points"
+        points_file.unlink(missing_ok=True)  # no zone has an area (any more): no file, "no points"
     groups_doc = build_groups(edits_path, (p["id"] for p in parcels_doc["parcels"]))
     groups_file = out_dir / GROUPS_FILE
     if groups_doc is not None:
@@ -433,17 +455,20 @@ def run_export(
         files["groups"] = GROUPS_FILE
     else:
         groups_file.unlink(missing_ok=True)  # no property group (any more): no file, "no pets"
-    regions_file = out_dir / "regions.json"
-    if scene.regions:
-        # ground paint for the minimap: local metres (x east, y north), drawn in ID order so the higher ID wins
-        ordered = sorted(scene.regions.values(), key=lambda r: region_rank(r.id))
-        _dump(regions_file, {"regions": [
-            {"id": r.id, "colour": list(r.colour), "ring": [[round(float(x), 2), round(float(y), 2)] for x, y in r.polygon.exterior.coords]}
-            for r in ordered
+    patches_file = out_dir / "patches.json"
+    ground_patches = [p for p in scene.patches.values() if p.water_y is None]  # a water patch is in water.json
+    if ground_patches:
+        # ground patches for the minimap: local metres (x east, y north), drawn in ID order so the higher ID wins
+        ordered = sorted(ground_patches, key=lambda p: patch_rank(p.id))
+        _dump(patches_file, {"version": 1, "patches": [
+            {"id": p.id, "type": p.type, "colour": list(p.colour),
+             "ring": [[round(float(x), 2), round(float(y), 2)] for x, y in piece.exterior.coords]}
+            for p in ordered
+            for piece in getattr(p.polygon, "geoms", [p.polygon])
         ]})
-        files["regions"] = "regions.json"
-    elif regions_file.exists():
-        regions_file.unlink()
+        files["patches"] = "patches.json"
+    elif patches_file.exists():
+        patches_file.unlink()
     generated = {"buildings"}
     if "lamps" in files:
         generated.add("lamps")
@@ -466,8 +491,8 @@ def run_export(
             generated |= {"fences", "trees"}
         if scene.spawns is not None:
             generated |= {"spawns"}
-    if any(name.startswith("region_") for nodes in scene.nodes.values() for name in nodes):
-        generated.add("regions")
+    if any(name.startswith("patch_") for nodes in scene.nodes.values() for name in nodes):
+        generated.add("patches")
     inputs = {
         "raw": {f["file"]: f["sha256"] for f in raw_manifest.get("files", [])},
         "work/parcels.json": _sha256(work_dir / "parcels.json"),
@@ -519,7 +544,7 @@ def run(
     except FileNotFoundError as exc:
         print(f"export: error: missing input {Path(str(exc.filename)).name}; run earlier stages")
         return 1
-    except AttributePointsError as exc:
+    except ZonesError as exc:
         print(f"export: error: {exc}", file=sys.stderr)
         return 1
     print(f"export: {len(manifest['chunks'])} chunk file(s) written to {out_dir}/")

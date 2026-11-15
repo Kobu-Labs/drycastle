@@ -23,8 +23,8 @@ from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits
 from drycastle_pipeline.ground import ground_types, ground_units, type_colours
 from drycastle_pipeline.landmarks import build_landmark
 from drycastle_pipeline.meshes import Mesh, building_mesh, collision_mesh
+from drycastle_pipeline.patches import node_name, patch_meshes, plan_patches
 from drycastle_pipeline.propmeshes import fence_mesh, fence_meshes, parcel_props_meshes, trees_mesh
-from drycastle_pipeline.regions import node_name, plan_regions, region_meshes
 from drycastle_pipeline.roads import road_mesh
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.terrain import Terrain, cut_holes, load_terrain
@@ -65,7 +65,7 @@ class ParcelColours:
 @dataclass
 class MapScene:
     terrain: Terrain | None = None
-    regions: dict = field(default_factory=dict)  # planned regions by ID (water.json takes the ones with a water_y)
+    patches: dict = field(default_factory=dict)  # planned ground patches by ID (water.json takes the ones with a water_y)
     building_elevation: dict[str, float] = field(default_factory=dict)
     parcels: dict[Chunk, list[tuple[str, Mesh, Mesh]]] = field(default_factory=dict)
     # terrain, roads, props, ...; a "<node>_tex_<texture id>" entry is a TexturedMesh (textures.py)
@@ -120,7 +120,8 @@ def build_scene(
 ) -> MapScene:
     """All meshes of the map. ``exaggeration`` scales heights (preview only; 1 for export).
 
-    ``edits_path`` is read for the regions (``region_<ID>`` nodes in every chunk they touch).
+    ``edits_path`` is read for the ground types and the water patches (``patch_<ID>`` nodes in every chunk they touch; the
+    other patches are ground areas, baked into the terrain by the parcels stage).
     """
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     chunk_m = float(parcels_doc["chunk_size_m"])
@@ -207,7 +208,8 @@ def build_scene(
                 scene.nodes.setdefault(key, {})[name] = mesh
 
     tcfg = load_section("terrain", rules_path)
-    colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(ground_types(rules_path, edits_path))})
+    types = ground_types(rules_path, edits_path)
+    colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(types)})
     dec = int(tcfg["collision_decimate"])
     grey = np.array(GREY, np.uint8)
     # the hatch of each bunker is a hole in the ground (#224): the terrain, seen and collided with, has it cut out
@@ -235,15 +237,16 @@ def build_scene(
     if scene.graph:
         put("roads", _by_chunk(road_mesh(scene.graph, t, load_section("roads", rules_path)), chunk_m))
 
-    rplan = plan_regions(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), t, ground=False)
-    scene.warnings += rplan.warnings
-    scene.regions = rplan.regions
-    if rplan.regions:
-        meshes = region_meshes(
-            rplan, t, scene.graph, load_section("roads", rules_path), load_section("regions", rules_path)
+    pplan = plan_patches(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), t, types)
+    scene.warnings += pplan.warnings
+    scene.patches = pplan.patches
+    water = {pid for pid, p in pplan.patches.items() if p.water_y is not None}
+    if water:
+        meshes = patch_meshes(
+            pplan, t, scene.graph, load_section("roads", rules_path), load_section("ground_patches", rules_path), only=water
         )
-        for rid, mesh in meshes.items():
-            put(node_name(rid), _by_chunk(mesh, chunk_m))
+        for pid, mesh in meshes.items():
+            put(node_name(pid), _by_chunk(mesh, chunk_m))
 
     # ground detail (detail stage): patches draped on the terrain, one flat node and one node per texture in each
     # chunk; the clutter instances are not meshes, the export copies them as clutter.json

@@ -138,6 +138,45 @@ def test_spawn_constraints_and_determinism(ws) -> None:
     assert far == []
 
 
+def test_spawn_candidates_also_come_from_ground_inside_player_spawn_zones(ws) -> None:
+    from shapely.geometry import mapping
+
+    cfg = {**SPAWN, "ground_kinds": [], "road_fraction": 0.0, "ground_per_1000m2": 20.0, "count": 40}
+
+    def make(units):
+        return make_spawns(ws["parcels"], ws["buildings"], ws["graph"], [], ws["terrain"], cfg, ROADS, 250.0, zone_units=units)
+
+    def ground_spawns(units):
+        return [s for s in make(units) if s["kind"] != "road"]  # the roads fill up what the open ground does not give
+
+    assert ground_spawns(None) == [] and ground_spawns([]) == []  # no spawn kind, no zone: no open ground to spawn on
+    area = box(120, 120, 200, 190)
+    got = ground_spawns([{"id": "A-0007", "kind": "forest", "polygon": mapping(area)}])
+    assert got and all(s["parcel"] == "A-0007" and s["kind"] == "forest" and area.contains(Point(s["x"], s["y"])) for s in got)
+
+
+def test_run_props_takes_spawns_from_the_player_spawn_zone(ws, tmp_path) -> None:
+    from shapely.geometry import mapping
+
+    parcels_file = ws["work"] / "parcels.json"
+    doc = json.loads(parcels_file.read_text())
+    doc["ground"] = [{"id": "A-0001", "kind": "forest", "polygon": mapping(box(120, 120, 200, 190)), "area": 80 * 70}]
+    parcels_file.write_text(json.dumps(doc))
+    ox, oy = SYNTHETIC_ORIGIN
+    edits = tmp_path / "edits.json"
+    edits.write_text(json.dumps({"version": 1, "zones": {"Z-0001": {"kind": "player_spawn", "polygon": [
+        [ox + 100, oy + 100], [ox + 210, oy + 100], [ox + 210, oy + 200], [ox + 100, oy + 200]]}}}))
+    rules = tmp_path / "rules.yaml"
+    rules.write_text(yaml.safe_dump({"spawns": {"count": 150, "ground_kinds": [], "road_fraction": 0.0, "ground_per_1000m2": 5.0}}))
+    run_props(ws["work"], rules, edits)
+    def forest():
+        return [s for s in json.loads((ws["work"] / "spawns.json").read_text())["spawns"] if s["kind"] == "forest"]
+
+    assert forest() and {s["parcel"] for s in forest()} == {"A-0001"}
+    run_props(ws["work"], rules, tmp_path / "none.json")  # without the zone nothing spawns on a forest
+    assert forest() == []
+
+
 def test_run_props_writes_files_deterministically(ws, tmp_path) -> None:
     rules = tmp_path / "rules.yaml"
     rules.write_text(yaml.safe_dump({"spawns": {"count": 12}}))

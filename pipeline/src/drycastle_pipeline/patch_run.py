@@ -1,17 +1,17 @@
-"""Per-region run: the meshes of some regions only, as a GLB (for the editor's hot reload).
+"""Per-patch run: the meshes of some ground patches only, as a GLB (for the editor's hot reload).
 
-``python -m drycastle_pipeline region-run --region R-0001 --glb r.glb`` loads the
-work files, applies ``edits.json`` exactly like the export and rebuilds only the named regions
-(none named: all). The GLB holds one node ``region_<ID>`` per region in the chunk files' frame (add
-it at the map root); unlike the chunk files, a region that spans chunks is one node here. A JSON
+``python -m drycastle_pipeline patch-run --patch GP-0001 --glb p.glb`` loads the
+work files, applies ``edits.json`` exactly like the export and rebuilds only the named patches
+(none named: all). The GLB holds one node ``patch_<ID>`` per patch in the chunk files' frame (add
+it at the map root); unlike the chunk files, a patch that spans chunks is one node here. A JSON
 summary goes to stdout (or ``--out``), shaped like the ``parcel-run`` fragment::
 
-    {"format_version": 1, "regions": [...], "replaces": [...], "glb": "...", "triangles": {...}}
+    {"format_version": 1, "patches": [...], "replaces": [...], "glb": "...", "triangles": {...}}
 
-``replaces`` lists the regions whose baked ``region_<ID>`` nodes the viewer must hide: the named
-ones, plus every region that overlaps one of them (the higher ID wins, so a change shows in the
-visible area of the others too). A named ID that is not in the edits (a deleted region) is still
-listed: its baked nodes have to go. Regions that overlapped a deleted region are not known any
+``replaces`` lists the patches whose baked ``patch_<ID>`` nodes the viewer must hide: the named
+ones, plus every patch that overlaps one of them (the higher ID wins, so a change shows in the
+visible area of the others too). A named ID that is not in the edits (a deleted patch) is still
+listed: its baked nodes have to go. Patches that overlapped a deleted patch are not known any
 more; name them too. Nothing under ``data/`` is written.
 """
 
@@ -24,25 +24,25 @@ from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
 from drycastle_pipeline.ground import ground_types
 from drycastle_pipeline.parcel_run import _EMPTY_GLB
-from drycastle_pipeline.regions import node_name, overlapping, plan_regions, region_meshes
+from drycastle_pipeline.patches import node_name, overlapping, patch_meshes, plan_patches
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.terrain import load_terrain
 
-REGION_RUN_FORMAT_VERSION = 1
+PATCH_RUN_FORMAT_VERSION = 1
 
 
 def write_glb(path: Path, meshes: dict) -> None:
-    """GLB with one ``region_<ID>`` node per mesh (same axes and frame as the chunk files)."""
+    """GLB with one ``patch_<ID>`` node per mesh (same axes and frame as the chunk files)."""
     from drycastle_pipeline.export import build_chunk_scene
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    nodes = {node_name(rid): mesh for rid, mesh in sorted(meshes.items())}
+    nodes = {node_name(pid): mesh for pid, mesh in sorted(meshes.items())}
     path.write_bytes(build_chunk_scene([], nodes).export(file_type="glb") if nodes else _EMPTY_GLB)
 
 
-def run_region_run(
+def run_patch_run(
     work_dir: Path,
-    regions: list[str],
+    patches: list[str],
     edits_path: Path = DEFAULT_EDITS,
     rules_path: Path = DEFAULT_RULES,
     glb_path: Path | None = None,
@@ -53,16 +53,16 @@ def run_region_run(
     graph_path = work_dir / "roads.json"
     graph = json.loads(graph_path.read_text()) if graph_path.is_file() else None
     edits = load_edits(edits_path)
-    plan = plan_regions(edits, parcels_doc.get("origin_epsg5514"), terrain, types=ground_types(rules_path, edits_path))
+    plan = plan_patches(edits, parcels_doc.get("origin_epsg5514"), terrain, ground_types(rules_path, edits_path))
     for warning in plan.warnings:
-        print(f"region-run: warning: {warning}", file=sys.stderr)
-    named = set(regions) if regions else set(plan.regions)
-    for rid in sorted(named - set(plan.regions) - set(edits.regions)):  # a region of a ground layer is in the edits but has no mesh
-        print(f"region-run: warning: {rid} is not in the edits; its nodes are removed", file=sys.stderr)
+        print(f"patch-run: warning: {warning}", file=sys.stderr)
+    named = set(patches) if patches else set(plan.patches)
+    for pid in sorted(named - set(plan.patches) - set(edits.ground_patches)):
+        print(f"patch-run: warning: {pid} is not in the edits; its nodes are removed", file=sys.stderr)
     targets = overlapping(plan, named)
     t1 = time.perf_counter()
-    meshes = region_meshes(
-        plan, terrain, graph, load_section("roads", rules_path), load_section("regions", rules_path),
+    meshes = patch_meshes(
+        plan, terrain, graph, load_section("roads", rules_path), load_section("ground_patches", rules_path),
         only=targets,
     )
     glb = {}
@@ -71,10 +71,10 @@ def run_region_run(
         glb = {"glb": str(glb_path.resolve())}
     t2 = time.perf_counter()
     return {
-        "format_version": REGION_RUN_FORMAT_VERSION,
-        "regions": sorted(set(meshes)),
+        "format_version": PATCH_RUN_FORMAT_VERSION,
+        "patches": sorted(set(meshes)),
         "replaces": sorted(targets),
-        "triangles": {rid: m.face_count for rid, m in sorted(meshes.items())},
+        "triangles": {pid: m.face_count for pid, m in sorted(meshes.items())},
         **glb,
         "timing_s": {
             "load": round(t1 - t0, 3),
@@ -85,7 +85,7 @@ def run_region_run(
 
 
 def run(
-    regions: list[str] | None = None,
+    patches: list[str] | None = None,
     edits: str | None = None,
     out: str | None = None,
     glb: str | None = None,
@@ -93,24 +93,24 @@ def run(
 ) -> int:
     edits_path = Path(edits) if edits else DEFAULT_EDITS
     try:
-        summary = run_region_run(
+        summary = run_patch_run(
             Path(work) if work else map_paths().work,
-            regions or [],
+            patches or [],
             edits_path,
             glb_path=Path(glb) if glb else None,
         )
     except FileNotFoundError as exc:
         print(
-            f"region-run: error: missing input {Path(str(exc.filename)).name}; run earlier stages",
+            f"patch-run: error: missing input {Path(str(exc.filename)).name}; run earlier stages",
             file=sys.stderr,
         )
         return 1
     except EditsError as exc:
         for error in exc.errors:
-            print(f"region-run: error: {edits_path.name}: {error}", file=sys.stderr)
+            print(f"patch-run: error: {edits_path.name}: {error}", file=sys.stderr)
         return 1
     except ValueError as exc:
-        print(f"region-run: error: {exc}", file=sys.stderr)
+        print(f"patch-run: error: {exc}", file=sys.stderr)
         return 1
     text = json.dumps(summary, sort_keys=True, separators=(",", ":")) + "\n"
     if out:

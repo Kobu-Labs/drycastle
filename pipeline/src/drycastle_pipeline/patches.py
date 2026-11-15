@@ -1,33 +1,32 @@
-"""Regions: hand-drawn colour shapes draped on the ground (``regions`` in ``edits.json``).
+"""Ground patches: the preview meshes of hand-drawn ground (``ground_patches`` in ``edits.json``).
 
-A region is one flat-coloured mesh over the terrain and the road ribbons; it changes only colour
-(no collision, nothing else is generated or moved). Meshes are built from the work files at
-export and by ``region-run``, with the same code, so a hot-reloaded region equals the baked one.
+A ground patch is a polygon of exactly one ground type (ADR 0022). In the baked map it is ground: the parcels stage turns
+its polygon into a ground area of its type (``ground.py``), so terrain colour, detail and trees follow on the next full
+run. Between two runs the editor shows it as a **preview**: one flat-coloured mesh in the type's first colour over the
+terrain and the road ribbons (no collision, nothing else is generated or moved). The meshes are built from the work files
+by ``patch-run`` and, for patches of a water type, at export, with the same code, so a hot-reloaded patch equals the baked
+one.
 
 * **Exact edges, draped.** The polygon is cut along the terrain mesh (every grid cell is split
   into the two triangles the terrain mesh uses, see :meth:`Terrain.surface`), so inside each piece
   the ground is one plane. Each piece is triangulated with its own corners only, and every vertex
-  takes the terrain height plus a small lift: the region's boundary is the drawn polygon, and its
+  takes the terrain height plus a small lift: the patch's boundary is the drawn polygon, and its
   surface follows the terrain triangle by triangle.
 * **Roads.** Where the polygon covers a road ribbon (or junction patch) the piece is further cut
   along the ribbon outline and lifted above the ribbon, whose height is the terrain plus the road
   lift of its class (see :func:`road_layers`). Buildings, trees, fences and placed objects are
-  ignored: the region just paints the ground under them.
-* **Overlaps: the higher ID wins.** The visible area of a region is its polygon minus the polygons
-  of all regions with a higher ID, cut in 2D before draping. There is never more than one region
+  ignored: the patch just paints the ground under them.
+* **Overlaps: the higher ID wins.** The visible area of a patch is its polygon minus the polygons
+  of all patches with a higher ID, cut in 2D before draping. There is never more than one patch
   on a point, so nothing z-fights and the order needs no per-ID lift.
-* **Water.** A region with ``water_y`` is a body of water: its mesh is flat at that height instead
+* **Water.** A patch of a water type has a ``water_y``: it is a body of water. Its mesh is flat at that height instead
   of draped, and covers the terrain below that level reached from the drawn outline (:func:`water.wet_area`:
   the outline is only a hint, the shore is where the ground rises above the level; overlaps with other
-  regions are not resolved for water), and the export
+  patches are not resolved for water), and the export
   also writes it to ``water.json`` (see :func:`water.build_water`). The flat mesh sits
   ``WATER_VISUAL_DROP_M`` under the surface, so the shooter's own water surface, drawn at
-  ``water_y``, always wins and nothing z-fights.
-* **Hand-drawn ground.** A region with ``ground`` (a stack of ground types) is not paint in the baked map: the parcels
-  stage turns its polygon into ground of the stack's terrain type (``ground.py``), and the export and the detail
-  stage leave it out. ``region-run`` still paints it, so the editor shows the shape at once, unless the stack
-  carries no terrain attribute (only spawning or events): that is a layer over the ground, which the editor
-  draws as a translucent overlay and no mesh paints.
+  ``water_y``, always wins and nothing z-fights. A water patch is the only kind baked into the chunk files as
+  ``patch_<ID>`` nodes; the other patches are baked as ground.
 * Entries that fail the drape (no terrain, polygon outside the terrain coverage) are warned about
   and skipped; a schema error fails the file as for every other edit kind (see ``edits.py``).
 """
@@ -41,8 +40,8 @@ from shapely.geometry import MultiPolygon, Polygon
 from shapely.geometry.base import BaseGeometry
 
 from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.edits import Edits, region_ring
-from drycastle_pipeline.ground_attributes import carries_terrain
+from drycastle_pipeline.edits import Edits, polygon_ring
+from drycastle_pipeline.ground_attributes import attributes_of
 from drycastle_pipeline.meshes import Mesh, triangulate
 from drycastle_pipeline.roads import road_mesh
 from drycastle_pipeline.terrain import Terrain
@@ -54,19 +53,23 @@ _ROAD_MARGIN_M = 1.0
 WATER_VISUAL_DROP_M = 0.02
 
 
+FALLBACK_COLOUR = "#808080"  # a type that carries no colours
+
+
 @dataclass
-class Region:
+class Patch:
     id: str
-    colour: list[int]
+    type: str
+    colour: list[int]  # the first terrain colour of the type
     polygon: Polygon  # local metres (x east, y north), clipped to the terrain coverage
-    water_y: float | None = None  # flat water surface height (terrain datum), None: ground paint
+    water_y: float | None = None  # flat water surface height (terrain datum), None: ground
 
 
 @dataclass
-class RegionPlan:
-    """Edits resolved against this run's terrain (see :func:`plan_regions`)."""
+class PatchPlan:
+    """Edits resolved against this run's terrain (see :func:`plan_patches`)."""
 
-    regions: dict[str, Region] = field(default_factory=dict)
+    patches: dict[str, Patch] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -78,72 +81,68 @@ def _polygons(geom: BaseGeometry) -> list[Polygon]:
     return [p for g in getattr(geom, "geoms", []) for p in _polygons(g)]
 
 
-def plan_regions(
+def type_colour(spec: dict | None) -> str:
+    """The first terrain colour of a ground type (``#rrggbb``), grey when it has none."""
+    return (attributes_of(spec).get("colours") or [FALLBACK_COLOUR])[0]
+
+
+def plan_patches(
     edits: Edits,
     origin: list[float] | None,
     terrain: Terrain | None,
-    ground: bool = True,
-    types: dict[str, dict] | None = None,
-) -> RegionPlan:
-    """Resolve the regions of the edits: local frame, clipped to the terrain coverage.
+    types: dict[str, dict],
+) -> PatchPlan:
+    """Resolve the ground patches of the edits: local frame, clipped to the terrain coverage, in the colour of their type.
 
-    A region without terrain under it (none at all, or outside the coverage) is skipped with a
-    warning. Parts outside the coverage are cut off silently, like road ribbons. ``ground`` False leaves
-    out the regions that are hand-drawn ground areas (``ground`` key): the baked map has them as ground
-    (:mod:`drycastle_pipeline.ground`), only the editor's hot reload paints them, as a preview; with the ground
-    ``types`` it leaves out those whose stack carries no terrain attribute (a layer of attributes is not paint).
+    A patch without terrain under it (none at all, or outside the coverage) is skipped with a warning, and so is one
+    whose type is not in ``types``. Parts outside the coverage are cut off silently, like road ribbons.
     """
-    plan = RegionPlan()
-    if not edits.regions:
+    plan = PatchPlan()
+    if not edits.ground_patches:
         return plan
     if origin is None:
         raise ValueError("parcels.json has no origin_epsg5514; run the parcels stage again")
-    for rid in sorted(edits.regions):
-        entry = edits.regions[rid]
-        if "ground" in entry and (not ground or (types is not None and not _paints(entry["ground"], types))):
+    for pid in sorted(edits.ground_patches, key=patch_rank):
+        entry = edits.ground_patches[pid]
+        if entry["type"] not in types:
+            plan.warnings.append(f"ground_patches.{pid}: unknown ground type {entry['type']!r}; patch skipped")
             continue
         if terrain is None:
-            plan.warnings.append(f"regions.{rid}: no terrain; region skipped")
+            plan.warnings.append(f"ground_patches.{pid}: no terrain; patch skipped")
             continue
-        ring = [(x - origin[0], y - origin[1]) for x, y in region_ring(entry["polygon"])]
+        ring = [(x - origin[0], y - origin[1]) for x, y in polygon_ring(entry["polygon"])]
         clipped = Polygon(ring).buffer(0).intersection(terrain.coverage)
         pieces = _polygons(clipped)
         if not pieces:
-            plan.warnings.append(f"regions.{rid}: outside the terrain coverage; region skipped")
+            plan.warnings.append(f"ground_patches.{pid}: outside the terrain coverage; patch skipped")
             continue
         poly = pieces[0] if len(pieces) == 1 else MultiPolygon(pieces)
-        plan.regions[rid] = Region(rid, hex_to_rgb(entry["colour"]), poly, entry.get("water_y"))
+        plan.patches[pid] = Patch(pid, entry["type"], hex_to_rgb(type_colour(types[entry["type"]])), poly, entry.get("water_y"))
     return plan
 
 
-def _paints(stack: list[str], types: dict[str, dict]) -> bool:
-    """True when a ground stack has a type that decides terrain (colours, recipe, detail or water), so its region is a
-    preview of ground in the editor."""
-    return any(carries_terrain(types.get(name)) for name in stack)
+def patch_rank(pid: str) -> tuple[int, str]:
+    """Sort key for "higher ID wins": numeric, so GP-10000 beats GP-9999 (IDs have 4+ digits)."""
+    tail = pid[3:] if pid.startswith("GP-") else ""
+    return (int(tail), pid) if tail.isdigit() else (-1, pid)
 
 
-def region_rank(rid: str) -> tuple[int, str]:
-    """Sort key for "higher ID wins": numeric, so R-10000 beats R-9999 (IDs have 4+ digits)."""
-    tail = rid[2:] if rid.startswith("R-") else ""
-    return (int(tail), rid) if tail.isdigit() else (-1, rid)
-
-
-def visible_area(plan: RegionPlan, rid: str) -> BaseGeometry:
-    """The polygon of ``rid`` minus every region with a higher ID (the higher ID wins)."""
-    geom = plan.regions[rid].polygon
-    higher = [r.polygon for other, r in plan.regions.items() if region_rank(other) > region_rank(rid)]
+def visible_area(plan: PatchPlan, pid: str) -> BaseGeometry:
+    """The polygon of ``pid`` minus every patch with a higher ID (the higher ID wins)."""
+    geom = plan.patches[pid].polygon
+    higher = [r.polygon for other, r in plan.patches.items() if patch_rank(other) > patch_rank(pid)]
     if higher:
         geom = geom.difference(shapely.union_all(higher))
     return geom
 
 
-def overlapping(plan: RegionPlan, ids: set[str]) -> set[str]:
-    """``ids`` plus every region sharing area with one of them: their visible area depends on it."""
+def overlapping(plan: PatchPlan, ids: set[str]) -> set[str]:
+    """``ids`` plus every patch sharing area with one of them: their visible area depends on it."""
     out = set(ids)
-    for rid in ids & set(plan.regions):
-        poly = plan.regions[rid].polygon
+    for pid in ids & set(plan.patches):
+        poly = plan.patches[pid].polygon
         out |= {
-            o for o, r in plan.regions.items() if r.polygon.intersection(poly).area > _MIN_AREA_M2
+            o for o, r in plan.patches.items() if r.polygon.intersection(poly).area > _MIN_AREA_M2
         }
     return out
 
@@ -286,41 +285,41 @@ def flat_mesh(geom: BaseGeometry, colour: list[int], z: float) -> Mesh:
     return Mesh(np.array(tris), np.tile(np.array(colour, np.uint8), (len(tris), 1)))
 
 
-def region_meshes(
-    plan: RegionPlan,
+def patch_meshes(
+    plan: PatchPlan,
     terrain: Terrain,
     graph: dict | None,
     roads_cfg: dict,
-    rcfg: dict,
+    pcfg: dict,
     only: set[str] | None = None,
 ) -> dict[str, Mesh]:
-    """``{region ID: mesh}`` for the planned regions (``only``: just these), empty ones omitted."""
+    """``{patch ID: mesh}`` for the planned patches (``only``: just these), empty ones omitted."""
     out: dict[str, Mesh] = {}
-    for rid in sorted(plan.regions if only is None else only & set(plan.regions)):
-        geom = visible_area(plan, rid)
+    for pid in sorted(plan.patches if only is None else only & set(plan.patches)):
+        geom = visible_area(plan, pid)
         if geom.is_empty:
             continue
-        water_y = plan.regions[rid].water_y
+        water_y = plan.patches[pid].water_y
         if water_y is not None:
             # the drawn outline is only a hint: the water lies wherever the terrain is below its level
-            wet = wet_area(plan.regions[rid].polygon, terrain, water_y)
-            mesh = flat_mesh(wet, plan.regions[rid].colour, water_y - WATER_VISUAL_DROP_M)
+            wet = wet_area(plan.patches[pid].polygon, terrain, water_y)
+            mesh = flat_mesh(wet, plan.patches[pid].colour, water_y - WATER_VISUAL_DROP_M)
             if mesh.face_count:
-                out[rid] = mesh
+                out[pid] = mesh
             continue
         layers = road_layers(graph, terrain, roads_cfg, geom.bounds) if graph else []
         mesh = drape(
             geom,
-            plan.regions[rid].colour,
+            plan.patches[pid].colour,
             terrain,
             layers,
-            float(rcfg["lift_m"]),
-            float(rcfg["road_lift_m"]),
+            float(pcfg["lift_m"]),
+            float(pcfg["road_lift_m"]),
         )
         if mesh.face_count:
-            out[rid] = mesh
+            out[pid] = mesh
     return out
 
 
-def node_name(rid: str) -> str:
-    return f"region_{rid}"
+def node_name(pid: str) -> str:
+    return f"patch_{pid}"

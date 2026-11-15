@@ -1,9 +1,6 @@
 """Ground areas: which parcels stay parcels, and how the other land is cut by type."""
 
 from shapely.geometry import LineString, box
-
-from drycastle_pipeline.edits import validate
-from drycastle_pipeline.regions import plan_regions
 from shapely.ops import unary_union
 
 from drycastle_pipeline.detail import RECIPES
@@ -14,11 +11,12 @@ from drycastle_pipeline.ground import (
     ground_types,
     ground_units,
     kept_parcels,
-    spawn_kinds,
     type_colours,
     water_kinds,
 )
+from drycastle_pipeline.patches import plan_patches
 from drycastle_pipeline.rules import load_section
+
 
 def _terrain(**attrs):
     return {"attributes": {"colours": ["#808080"], **attrs}}
@@ -35,9 +33,6 @@ CFG = {
         "field": _terrain(),
     },
 }
-# a type that only adds attributes (no terrain): it can lie over any ground without changing it
-BIGFOOT = {"attributes": {"event_spawn": ["bigfoot"]}}
-SPAWN = {"attributes": {"spawns": True}}
 
 
 def test_a_parcel_is_kept_with_a_building_or_in_a_group_that_has_one() -> None:
@@ -93,13 +88,13 @@ def test_shipped_ground_types_have_a_colour_and_the_default_is_a_type() -> None:
         assert attrs.get("recipe") in RECIPES or attrs.get("water")
 
 
-def test_the_type_table_hands_out_water_spawns_and_colours() -> None:
+def test_the_type_table_hands_out_water_and_colours() -> None:
     types = {
         "pond": {"attributes": {"water": True}},
         "wood": {},
-        "green": {"attributes": {"spawns": True, "colours": ["#00ff00"]}},
+        "green": {"attributes": {"colours": ["#00ff00"]}},
     }
-    assert (water_kinds(types), spawn_kinds(types)) == ({"pond"}, {"green"})
+    assert water_kinds(types) == {"pond"}
     assert type_colours(types) == {"green": ["#00ff00"]}
 
 
@@ -107,65 +102,29 @@ def test_ground_types_carry_no_tree_settings() -> None:
     assert all("trees" not in spec["attributes"] for spec in ground_types().values())  # every tree comes from the orthophoto
 
 
-# --- hand-drawn ground: regions with a ground type --------------------------------------------
+# --- hand-drawn ground: ground patches -------------------------------------------------------
 
 
-def _region(x0, y0, x1, y1, **extra):
-    return {"colour": "#112233", "polygon": [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], **extra}
-
-
-def test_region_ground_key_is_validated() -> None:
-    def errs(**extra):
-        return validate({"version": 1, "regions": {"R-0001": _region(0, 0, 10, 10, **extra)}})
-
-    assert errs(ground=["meadow"]) == []
-    assert errs(ground=["forest", "bigfoot_zone"]) == []  # a stack, lowest first
-    assert any("non-empty list" in e for e in errs(ground="meadow"))  # the old shape, one name
-    assert any("non-empty list" in e for e in errs(ground=[]))
-    assert any("ground type name" in e for e in errs(ground=["Meadow!"]))
-    assert any("ground type name" in e for e in errs(ground=[3]))
-    assert any("twice" in e for e in errs(ground=["meadow", "meadow"]))
-    assert any("not together with water_y" in e for e in errs(ground=["meadow"], water_y=100.0))
+def _patch(type, x0, y0, x1, y1, **extra):
+    return {"type": type, "polygon": [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], **extra}
 
 
 def test_drawn_ground_is_local_ordered_by_id_and_warns_about_unknown_types() -> None:
-    regions = {
-        "R-0001": _region(1000, 2000, 1010, 2010, ground=["meadow"]),
-        "R-0002": _region(1000, 2000, 1005, 2005),  # paint: not ground
-        "R-0003": _region(1005, 2000, 1020, 2010, ground=["orchard"]),
-        "R-0004": _region(0, 0, 1, 1, ground=["swamp"]),
+    patches = {
+        "GP-0001": _patch("meadow", 1000, 2000, 1010, 2010),
+        "GP-0003": _patch("orchard", 1005, 2000, 1020, 2010),
+        "GP-0004": _patch("swamp", 0, 0, 1, 1),
     }
     types = CFG["types"] | {"meadow": _terrain(), "orchard": _terrain()}
-    drawn, layers, warnings = drawn_ground(regions, (1000.0, 2000.0), types)
+    drawn, warnings = drawn_ground(patches, (1000.0, 2000.0), types)
     assert [(k, p.bounds) for k, p in drawn] == [("orchard", (5, 0, 20, 10)), ("meadow", (0, 0, 10, 10))]  # higher ID first
-    assert layers == []  # no type adds attributes
-    assert len(warnings) == 1 and "R-0004" in warnings[0] and "swamp" in warnings[0]
+    assert len(warnings) == 1 and "GP-0004" in warnings[0] and "swamp" in warnings[0]
 
 
-def test_a_stack_has_the_terrain_of_its_topmost_terrain_type_and_the_layers_of_every_type() -> None:
-    types = CFG["types"] | {"meadow": _terrain(spawns=True), "bigfoot_zone": BIGFOOT, "spawn_zone": SPAWN}
-    regions = {
-        "R-0001": _region(1000, 2000, 1010, 2010, ground=["forest", "meadow", "bigfoot_zone"]),  # events on top: meadow decides
-        "R-0002": _region(1020, 2000, 1030, 2010, ground=["bigfoot_zone", "forest"]),  # forest on top of the events
-        "R-0003": _region(1040, 2000, 1050, 2010, ground=["bigfoot_zone", "spawn_zone"]),  # no terrain type at all
-    }
-    drawn, layers, warnings = drawn_ground(regions, (1000.0, 2000.0), types)
-    assert [(k, p.bounds) for k, p in drawn] == [("forest", (20, 0, 30, 10)), ("meadow", (0, 0, 10, 10))]
-    assert [(rid, names) for rid, names, _ in layers] == [  # lowest region first; only the types that add up, not the deciding one
-        ("R-0001", ["bigfoot_zone"]), ("R-0002", ["bigfoot_zone"]), ("R-0003", ["bigfoot_zone", "spawn_zone"]),
-    ]
-    assert layers[0][2].bounds == (0, 0, 10, 10) and warnings == []
-
-
-def test_an_unknown_type_is_left_out_of_its_stack_and_a_stack_of_unknowns_is_skipped() -> None:
-    types = CFG["types"] | {"bigfoot_zone": BIGFOOT}
-    regions = {
-        "R-0001": _region(0, 0, 10, 10, ground=["swamp", "forest", "bigfoot_zone"]),
-        "R-0002": _region(20, 0, 30, 10, ground=["swamp"]),
-    }
-    drawn, layers, warnings = drawn_ground(regions, (0.0, 0.0), types)
-    assert [k for k, _ in drawn] == ["forest"] and [rid for rid, _, _ in layers] == ["R-0001"]
-    assert len(warnings) == 2 and all("swamp" in w for w in warnings)
+def test_a_patch_of_a_water_type_is_a_body_of_water_and_no_ground_area() -> None:
+    patches = {"GP-0001": _patch("water", 0, 0, 10, 10, water_y=185.0), "GP-0002": _patch("forest", 20, 0, 30, 10)}
+    drawn, warnings = drawn_ground(patches, (0.0, 0.0), CFG["types"])
+    assert [k for k, _ in drawn] == ["forest"] and warnings == []
 
 
 def test_drawn_ground_wins_over_the_rules_and_never_enters_a_parcel() -> None:
@@ -185,34 +144,22 @@ def test_drawn_ground_wins_over_the_rules_and_never_enters_a_parcel() -> None:
     assert sorted((k, p.area) for k, p in out) == [("field", 9900), ("meadow", 700)]  # 20 x 40 minus the corner inside the parcel
 
 
-def test_a_type_without_terrain_attributes_claims_no_land_and_an_events_layer_changes_no_ground() -> None:
+def test_a_type_without_attributes_claims_no_land() -> None:
     free = box(0, 0, 100, 100)
     landuse = [("landuse", "forest", box(0, 0, 50, 100)), ("landuse", "wetland", box(25, 0, 75, 100))]
-    cfg = {**CFG, "types": {**CFG["types"], "wet": {"osm": {"landuse": ["wetland"]}, **BIGFOOT}}}
+    cfg = {**CFG, "types": {**CFG["types"], "wet": {"osm": {"landuse": ["wetland"]}}}}
     assert build_ground(free, landuse, box(0, 0, 0, 0), cfg) == build_ground(free, landuse, box(0, 0, 0, 0), CFG)
-    # an events-only stack on top of a forest region: the ground areas are exactly those of the forest region alone
-    types = CFG["types"] | {"bigfoot_zone": BIGFOOT}
-    region = _region(10, 10, 60, 60, ground=["forest"])
-    stacked = _region(10, 10, 60, 60, ground=["forest", "bigfoot_zone"])
-    plain, layers, _ = drawn_ground({"R-0001": region}, (0.0, 0.0), types)
-    both, layers2, _ = drawn_ground({"R-0001": stacked}, (0.0, 0.0), types)
-    assert layers == [] and len(layers2) == 1
-    assert build_ground(free, landuse, box(0, 0, 0, 0), CFG, plain) == build_ground(free, landuse, box(0, 0, 0, 0), CFG, both)
 
 
-def test_ground_regions_are_left_out_of_the_paint_plan_on_request() -> None:
+def test_the_plan_has_every_patch_in_the_colour_of_its_type_for_the_preview() -> None:
     from drycastle_pipeline.edits import parse
 
     from .synthetic import SYNTHETIC_ORIGIN, make_terrain
 
     ox, oy = SYNTHETIC_ORIGIN
-    edits = parse({"version": 1, "regions": {
-        "R-0001": _region(ox + 50, oy + 120, ox + 90, oy + 150),
-        "R-0002": _region(ox + 60, oy + 120, ox + 100, oy + 150, ground=["meadow"]),
-        "R-0003": _region(ox + 60, oy + 120, ox + 100, oy + 150, ground=["bigfoot_zone"]),
+    edits = parse({"version": 1, "ground_patches": {
+        "GP-0001": _patch("meadow", ox + 50, oy + 120, ox + 90, oy + 150),
+        "GP-0002": _patch("forest", ox + 60, oy + 120, ox + 100, oy + 150),
     }})
-    terrain = make_terrain()
-    assert set(plan_regions(edits, list(SYNTHETIC_ORIGIN), terrain).regions) == {"R-0001", "R-0002", "R-0003"}  # hot reload preview
-    assert set(plan_regions(edits, list(SYNTHETIC_ORIGIN), terrain, ground=False).regions) == {"R-0001"}
-    types = {"meadow": _terrain(), "bigfoot_zone": BIGFOOT}  # a layer of attributes is no paint: the editor draws it as an overlay
-    assert set(plan_regions(edits, list(SYNTHETIC_ORIGIN), terrain, types=types).regions) == {"R-0001", "R-0002"}
+    plan = plan_patches(edits, list(SYNTHETIC_ORIGIN), make_terrain(), ground_types())
+    assert {p.id: p.type for p in plan.patches.values()} == {"GP-0001": "meadow", "GP-0002": "forest"}

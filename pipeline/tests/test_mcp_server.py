@@ -402,111 +402,194 @@ def test_concurrent_writers_do_not_lose_updates(tools, env):
     assert not list(settings.edits_path.parent.glob("edits.json.*.tmp"))
 
 
-# --- regions ------------------------------------------------------------------------------
+# --- ground patches and zones -------------------------------------------------------------
 
 SQUARE = [[OX + 10, OY + 10], [OX + 20, OY + 10], [OX + 20, OY + 20], [OX + 10, OY + 20]]
 
 
-def test_region_create_list_colour_delete(env):
+def test_patch_create_list_retype_delete(env):
     tools, settings, _ = env
-    assert tools.list_regions() == {"count": 0, "total_matching": 0, "regions": []}
-    out = tools.create_region("#8A7A5C", polygon=SQUARE)
-    assert out["id"] == "R-0001" and out["area_m2"] == 100.0 and out["points"] == 4
+    assert tools.list_ground_patches() == {"count": 0, "total_matching": 0, "ground_patches": []}
+    out = tools.create_ground_patch("meadow", polygon=SQUARE)
+    assert out["id"] == "GP-0001" and out["area_m2"] == 100.0 and out["points"] == 4 and out["type"] == "meadow"
     assert out["warnings"] == [] and out["polygon"] == SQUARE
     canonical(settings)
-    assert load_edits(settings.edits_path).regions["R-0001"] == {"colour": "#8a7a5c", "polygon": SQUARE}
-    second = tools.create_region("#112233", polygon=[*SQUARE[:3], SQUARE[0]])  # closing point is dropped
-    assert second["id"] == "R-0002" and second["points"] == 3
-    rows = tools.list_regions()["regions"]
-    assert [r["id"] for r in rows] == ["R-0001", "R-0002"]
+    assert load_edits(settings.edits_path).ground_patches["GP-0001"] == {"type": "meadow", "polygon": SQUARE}
+    second = tools.create_ground_patch("forest", polygon=[*SQUARE[:3], SQUARE[0]])  # closing point is dropped
+    assert second["id"] == "GP-0002" and second["points"] == 3
+    rows = tools.list_ground_patches()["ground_patches"]
+    assert [r["id"] for r in rows] == ["GP-0001", "GP-0002"]
     assert rows[0]["bbox"] == [OX + 10, OY + 10, OX + 20, OY + 20] and rows[0]["centroid"] == [OX + 15, OY + 15]
-    tools.set_region_colour("R-0001", "#ffffff")
-    assert tools.list_regions()["regions"][0]["colour"] == "#ffffff"
-    tools.delete_region("R-0001")
+    tools.set_patch_type("GP-0001", "orchard")
+    assert tools.list_ground_patches()["ground_patches"][0]["type"] == "orchard"
+    tools.delete_ground_patch("GP-0001")
     canonical(settings)
-    assert tools.create_region("#000000", polygon=SQUARE)["id"] == "R-0003"  # max + 1, no reuse of 0001
-    tools.delete_region("R-0003")
-    tools.delete_region("R-0002")
-    assert "regions" not in json.loads(settings.edits_path.read_text())
+    assert tools.create_ground_patch("field", polygon=SQUARE)["id"] == "GP-0003"  # max + 1, no reuse of 0001
+    tools.delete_ground_patch("GP-0003")
+    tools.delete_ground_patch("GP-0002")
+    assert "ground_patches" not in json.loads(settings.edits_path.read_text())
     canonical(settings)
 
 
-def test_region_parcel_relative_points(env):
+def test_patch_parcel_relative_points(env):
     tools, settings, _ = env
     # P-0001's front edge is y=100 (road to the north): along grows west, inward grows south
-    out = tools.create_region("#00ff00", parcel="P-0001", points=[[0, 1], [-5, 1], {"along": -5, "inward": 6}, [0, 6]])
+    out = tools.create_ground_patch("meadow", parcel="P-0001", points=[[0, 1], [-5, 1], {"along": -5, "inward": 6}, [0, 6]])
     assert out["polygon"] == [
         [OX + 67.5, OY + 99.0], [OX + 72.5, OY + 99.0], [OX + 72.5, OY + 94.0], [OX + 67.5, OY + 94.0]
     ]
     assert out["area_m2"] == 25.0
     canonical(settings)
-    near = tools.list_regions(near={"parcel": "P-0001", "radius_m": 1})
-    assert [r["id"] for r in near["regions"]] == ["R-0001"] and near["regions"][0]["distance_m"] == 0
-    assert tools.list_regions(near={"x": OX + 500, "y": OY + 500})["regions"] == []
-    assert tools.list_regions(near={"x": OX + 70, "y": OY + 95, "radius_m": 3})["count"] == 1
+    near = tools.list_ground_patches(near={"parcel": "P-0001", "radius_m": 1})
+    assert [r["id"] for r in near["ground_patches"]] == ["GP-0001"] and near["ground_patches"][0]["distance_m"] == 0
+    assert tools.list_ground_patches(near={"x": OX + 500, "y": OY + 500})["ground_patches"] == []
+    assert tools.list_ground_patches(near={"x": OX + 70, "y": OY + 95, "radius_m": 3})["count"] == 1
 
 
-def test_region_move_point(env):
+def test_patch_move_corner(env):
     tools, settings, _ = env
-    tools.create_region("#123456", polygon=SQUARE)
-    out = tools.move_region_point("R-0001", 2, offset={"dx": 5, "dy": -2})
+    tools.create_ground_patch("meadow", polygon=SQUARE)
+    out = tools.move_patch_corner("GP-0001", 2, offset={"dx": 5, "dy": -2})
     assert out["position"] == [OX + 25, OY + 18] and out["old"] == [OX + 20, OY + 20]
-    tools.move_region_point("R-0001", 0, position=[OX + 5, OY + 5])
-    assert load_edits(settings.edits_path).regions["R-0001"]["polygon"][0] == [OX + 5, OY + 5]
+    tools.move_patch_corner("GP-0001", 0, position=[OX + 5, OY + 5])
+    assert load_edits(settings.edits_path).ground_patches["GP-0001"]["polygon"][0] == [OX + 5, OY + 5]
     canonical(settings)
 
 
-def test_region_errors_leave_file_untouched(env):
+def test_patch_errors_leave_file_untouched(env):
     tools, settings, _ = env
     with pytest.raises(ToolError, match="exactly one"):
-        tools.create_region("#000000")
+        tools.create_ground_patch("meadow")
     with pytest.raises(ToolError, match="exactly one"):
-        tools.create_region("#000000", polygon=SQUARE, points=[[0, 0]])
+        tools.create_ground_patch("meadow", polygon=SQUARE, points=[[0, 0]])
     with pytest.raises(ToolError, match="pass parcel"):
-        tools.create_region("#000000", points=[[0, 0], [1, 0], [1, 1]])
+        tools.create_ground_patch("meadow", points=[[0, 0], [1, 0], [1, 1]])
     with pytest.raises(ToolError, match="unknown parcel"):
-        tools.create_region("#000000", parcel="P-9999", points=[[0, 0], [1, 0], [1, 1]])
-    with pytest.raises(ToolError, match="#rrggbb"):
-        tools.create_region("red", polygon=SQUARE)
+        tools.create_ground_patch("meadow", parcel="P-9999", points=[[0, 0], [1, 0], [1, 1]])
+    with pytest.raises(ToolError, match="unknown ground type"):
+        tools.create_ground_patch("swamp", polygon=SQUARE)
     with pytest.raises(ToolError, match="at least 3"):
-        tools.create_region("#000000", polygon=SQUARE[:2])
+        tools.create_ground_patch("meadow", polygon=SQUARE[:2])
     with pytest.raises(ToolError, match=r"polygon\[1\]"):
-        tools.create_region("#000000", polygon=[[1, 2], [1], [3, 4]])
+        tools.create_ground_patch("meadow", polygon=[[1, 2], [1], [3, 4]])
     bow = [[OX, OY], [OX + 10, OY + 10], [OX + 10, OY], [OX, OY + 10]]
     with pytest.raises(ToolError, match="nothing was written"):
-        tools.create_region("#000000", polygon=bow)
+        tools.create_ground_patch("meadow", polygon=bow)
+    with pytest.raises(ToolError, match="water type"):
+        tools.create_ground_patch("water", polygon=SQUARE)  # a water type needs its level
+    with pytest.raises(ToolError, match="only goes with a water type"):
+        tools.create_ground_patch("meadow", polygon=SQUARE, water_y=100.0)
     assert not settings.edits_path.exists()
-    tools.create_region("#123456", polygon=SQUARE)
+    tools.create_ground_patch("meadow", polygon=SQUARE)
     before = settings.edits_path.read_bytes()
     with pytest.raises(ToolError, match="nothing was written"):
-        tools.move_region_point("R-0001", 2, position=[OX + 10, OY + 10])  # collapses the region
+        tools.move_patch_corner("GP-0001", 2, position=[OX + 10, OY + 10])  # collapses the patch
     with pytest.raises(ToolError, match="nothing was written"):
-        tools.move_region_point("R-0001", 1, position=[OX + 10, OY + 20])  # bow tie via touch
+        tools.move_patch_corner("GP-0001", 1, position=[OX + 10, OY + 20])  # bow tie via touch
     with pytest.raises(ToolError, match="out of range"):
-        tools.move_region_point("R-0001", 4, offset={"dx": 1})
+        tools.move_patch_corner("GP-0001", 4, offset={"dx": 1})
     with pytest.raises(ToolError, match="exactly one"):
-        tools.move_region_point("R-0001", 0)
-    with pytest.raises(ToolError, match="not a region ID"):
-        tools.delete_region("P-0001")
+        tools.move_patch_corner("GP-0001", 0)
+    with pytest.raises(ToolError, match="not a ground patch ID"):
+        tools.delete_ground_patch("P-0001")
+    with pytest.raises(ToolError, match="not a ground patch ID"):
+        tools.delete_ground_patch("R-0001")
     with pytest.raises(ToolError, match="does not exist"):
-        tools.delete_region("R-0009")
+        tools.delete_ground_patch("GP-0009")
     with pytest.raises(ToolError, match="does not exist"):
-        tools.set_region_colour("R-0009", "#000000")
-    with pytest.raises(ToolError, match="#rrggbb"):
-        tools.set_region_colour("R-0001", "#12")
+        tools.set_patch_type("GP-0009", "forest")
+    with pytest.raises(ToolError, match="unknown ground type"):
+        tools.set_patch_type("GP-0001", "swamp")
+    with pytest.raises(ToolError, match="water type"):
+        tools.set_patch_type("GP-0001", "water")  # needs a level
+    with pytest.raises(ToolError, match="not a water type"):
+        tools.set_patch_water("GP-0001", 100.0)
     assert settings.edits_path.read_bytes() == before
 
 
-def test_region_overlap_warning_and_coexistence(env):
+def test_a_water_patch_has_a_level(env):
+    tools, settings, _ = env
+    out = tools.create_ground_patch("water", polygon=SQUARE, water_y=186.4)
+    assert out["water_y"] == 186.4 and load_edits(settings.edits_path).ground_patches["GP-0001"]["water_y"] == 186.4
+    tools.set_patch_water("GP-0001", 187.0)
+    assert tools.list_ground_patches()["ground_patches"][0]["water_y"] == 187.0
+    tools.set_patch_type("GP-0001", "meadow")  # no longer water: the level goes
+    assert load_edits(settings.edits_path).ground_patches["GP-0001"] == {"type": "meadow", "polygon": SQUARE}
+    tools.set_patch_type("GP-0001", "water", water_y=100.0)
+    assert load_edits(settings.edits_path).ground_patches["GP-0001"]["water_y"] == 100.0
+    canonical(settings)
+
+
+def test_patch_overlap_warning_and_coexistence(env):
     tools, settings, _ = env
     tools.place_object(CAR, "P-0001")
-    tools.create_region("#111111", polygon=SQUARE)
-    out = tools.create_region("#222222", polygon=[[OX + 15, OY + 15], [OX + 30, OY + 15], [OX + 30, OY + 30]])
-    assert out["warnings"] and "R-0002 wins" in out["warnings"][0]
+    tools.create_ground_patch("meadow", polygon=SQUARE)
+    out = tools.create_ground_patch("forest", polygon=[[OX + 15, OY + 15], [OX + 30, OY + 15], [OX + 30, OY + 30]])
+    assert out["warnings"] and "GP-0002 wins" in out["warnings"][0]
     tools.create_group(["P-0001", "P-0002"])
     edits = load_edits(settings.edits_path)
-    assert len(edits.regions) == 2 and edits.groups  # other writers keep the regions
+    assert len(edits.ground_patches) == 2 and edits.groups  # other writers keep the patches
     canonical(settings)
+
+
+def test_zone_create_list_kind_delete(env):
+    tools, settings, _ = env
+    assert tools.list_zones() == {"count": 0, "total_matching": 0, "zones": []}
+    out = tools.create_zone("bigfoot", polygon=SQUARE)
+    assert out["id"] == "Z-0001" and out["area_m2"] == 100.0 and out["kind"] == "bigfoot"
+    canonical(settings)
+    assert load_edits(settings.edits_path).zones["Z-0001"] == {"kind": "bigfoot", "polygon": SQUARE}
+    tools.create_zone("deer", polygon=SQUARE)  # zones overlap freely: no warning
+    assert tools.create_zone("player_spawn", parcel="P-0001", points=[[0, 1], [-5, 1], [-5, 6], [0, 6]])["id"] == "Z-0003"
+    assert [r["id"] for r in tools.list_zones(kind="deer")["zones"]] == ["Z-0002"]
+    assert [r["id"] for r in tools.list_zones(near={"parcel": "P-0001", "radius_m": 1})["zones"]] == ["Z-0003"]
+    tools.set_zone_kind("Z-0002", "wolf")
+    assert load_edits(settings.edits_path).zones["Z-0002"]["kind"] == "wolf"
+    moved = tools.move_zone_corner("Z-0001", 2, offset={"dx": 5, "dy": -2})
+    assert moved["position"] == [OX + 25, OY + 18]
+    for zid in ("Z-0001", "Z-0002", "Z-0003"):
+        tools.delete_zone(zid)
+    assert "zones" not in json.loads(settings.edits_path.read_text())
+    canonical(settings)
+
+
+def test_zone_errors_leave_file_untouched(env):
+    tools, settings, _ = env
+    with pytest.raises(ToolError, match="unknown zone kind"):
+        tools.create_zone("yeti", polygon=SQUARE)
+    with pytest.raises(ToolError, match="exactly one"):
+        tools.create_zone("bigfoot")
+    with pytest.raises(ToolError, match="at least 3"):
+        tools.create_zone("bigfoot", polygon=SQUARE[:2])
+    bow = [[OX, OY], [OX + 10, OY + 10], [OX + 10, OY], [OX, OY + 10]]
+    with pytest.raises(ToolError, match="nothing was written"):
+        tools.create_zone("bigfoot", polygon=bow)
+    assert not settings.edits_path.exists()
+    tools.create_zone("bigfoot", polygon=SQUARE)
+    before = settings.edits_path.read_bytes()
+    with pytest.raises(ToolError, match="not a zone ID"):
+        tools.delete_zone("GP-0001")
+    with pytest.raises(ToolError, match="does not exist"):
+        tools.delete_zone("Z-0009")
+    with pytest.raises(ToolError, match="unknown zone kind"):
+        tools.set_zone_kind("Z-0001", "yeti")
+    with pytest.raises(ToolError, match="nothing was written"):
+        tools.move_zone_corner("Z-0001", 2, position=[OX + 10, OY + 10])
+    assert settings.edits_path.read_bytes() == before
+
+
+def test_list_zone_kinds_is_the_catalog_with_its_rules(env):
+    from drycastle_pipeline.zones import KIND_NAMES
+
+    tools, settings, _ = env
+    tools.create_zone("bigfoot", polygon=SQUARE)
+    out = tools.list_zone_kinds()
+    rows = {k["name"]: k for k in out["kinds"]}
+    assert list(rows) == list(KIND_NAMES)
+    assert rows["bigfoot"]["where_ground"] is None and rows["bigfoot"]["drawn_zones"] == ["Z-0001"]
+    assert rows["bigfoot"]["points"]["min_points"] == 30
+    assert rows["stag"]["where_ground"] == ["forest"] and rows["stag"]["group"] == "wildlife"
+    assert "props stage" in rows["player_spawn"]["points"]
 
 
 def test_object_polygon_orientation():
@@ -545,8 +628,9 @@ def test_through_mcp_session(env):
             assert names == {
                 "list_assets", "find_parcels", "get_parcel", "set_fence", "reset_fence",
                 "place_object", "remove_object", "move_object", "create_group", "merge_groups",
-                "dissolve_group", "create_region", "set_region_colour", "set_region_water", "set_region_ground", "list_ground_types", "set_ground_type", "reset_ground_type", "delete_ground_type", "move_region_point",
-                "delete_region", "list_regions", "connect_poles", "disconnect_poles", "list_cables", "get_sketch", "create_sketch", "sketch_add_point", "sketch_add_line", "sketch_add_road", "sketch_remove",
+                "dissolve_group", "create_ground_patch", "set_patch_type", "set_patch_water", "move_patch_corner", "delete_ground_patch", "list_ground_patches",
+                "create_zone", "set_zone_kind", "move_zone_corner", "delete_zone", "list_zones", "list_zone_kinds",
+                "list_ground_types", "set_ground_type", "reset_ground_type", "delete_ground_type", "connect_poles", "disconnect_poles", "list_cables", "get_sketch", "create_sketch", "sketch_add_point", "sketch_add_line", "sketch_add_road", "sketch_remove",
             }
             tool = next(t for t in (await client.list_tools()).tools if t.name == "place_object")
             assert {"parcel", "asset", "anchor", "offset_m", "position"} <= set(tool.input_schema["properties"])
@@ -567,21 +651,22 @@ def test_through_mcp_session(env):
     canonical(settings)
 
 
-def test_validation_doc_includes_regions(env):
+def test_validation_doc_includes_patches_and_zones(env):
     from drycastle_pipeline.mcp_server import _edits_doc
 
     tools, settings, _ = env
-    tools.create_region("#111111", polygon=SQUARE)
+    tools.create_ground_patch("meadow", polygon=SQUARE)
+    tools.create_zone("deer", polygon=SQUARE)
     doc = _edits_doc(load_edits(settings.edits_path))
-    assert "R-0001" in doc["regions"]
+    assert "GP-0001" in doc["ground_patches"] and "Z-0001" in doc["zones"]
 
 
-def test_region_overlap_winner_is_numeric(env):
+def test_patch_overlap_winner_is_numeric(env):
     tools, settings, _ = env
     edits = load_edits(settings.edits_path)
-    edits.regions["R-9999"] = {"colour": "#111111", "polygon": SQUARE}
-    edits.regions["R-10000"] = {"colour": "#222222", "polygon": SQUARE}
-    assert "R-10000 wins" in type(tools)._overlap_warnings(edits, "R-9999")[0]
+    edits.ground_patches["GP-9999"] = {"type": "meadow", "polygon": SQUARE}
+    edits.ground_patches["GP-10000"] = {"type": "forest", "polygon": SQUARE}
+    assert "GP-10000 wins" in type(tools)._overlap_warnings(edits, "GP-9999")[0]
 
 
 def test_set_fence_takes_the_textured_types_and_a_column(tools) -> None:
@@ -654,72 +739,46 @@ def test_disconnect_poles_and_removing_a_pole_takes_its_cables(tools, env):
     canonical(settings)
 
 
-def test_region_ground_types(env):
+def test_ground_types_are_terrain_only(env):
     tools, settings, _ = env
     types = {t["type"]: t for t in tools.list_ground_types()["types"]}
     assert {"field", "forest", "meadow", "village", "water"} <= set(types)
     assert types["water"]["attributes"]["water"] and types["meadow"]["attributes"]["recipe"] == "field"
-    out = tools.create_region(polygon=SQUARE, ground="meadow")  # no colour: the type's first shade tints the preview; a name is a stack of one
-    assert (out["ground"], out["colour"]) == (["meadow"], types["meadow"]["attributes"]["colours"][0].lower())
-    assert load_edits(settings.edits_path).regions["R-0001"]["ground"] == ["meadow"]
-    assert tools.list_regions()["regions"][0]["ground"] == ["meadow"]
-    tools.set_region_ground("R-0001", "orchard")
-    assert load_edits(settings.edits_path).regions["R-0001"]["ground"] == ["orchard"]
-    tools.set_region_ground("R-0001", None)
-    assert "ground" not in load_edits(settings.edits_path).regions["R-0001"]
-    canonical(settings)
-    with pytest.raises(ToolError, match="unknown ground type"):
-        tools.set_region_ground("R-0001", "swamp")
-    with pytest.raises(ToolError, match="colour is required"):
-        tools.create_region(polygon=SQUARE)
-    with pytest.raises(ToolError, match="not both"):
-        tools.create_region(polygon=SQUARE, ground="meadow", water_y=100.0)
-    with pytest.raises(ToolError, match="twice"):
-        tools.set_region_ground("R-0001", ["meadow", "meadow"])
-    tools.set_region_water("R-0001", 100.0)
-    with pytest.raises(ToolError, match="body of water"):
-        tools.set_region_ground("R-0001", "meadow")
-
-
-def test_a_region_can_stack_an_event_type_on_forest(env):
-    tools, settings, _ = env
-    out = tools.set_ground_type("bigfoot_zone", attributes={"event_spawn": ["bigfoot"]})
-    assert out["type"]["attributes"] == {"event_spawn": ["bigfoot"]} and out["type"]["from"] == "hand-drawn or default only"
+    assert all(not ({"spawns", "event_spawn", "wildlife"} & set(t["attributes"])) for t in types.values())
     catalog = tools.list_ground_types()["catalog"]
-    assert [g["group"] for g in catalog["groups"]] == ["appearance", "spawning", "water", "events"]
-    events = next(g for g in catalog["groups"] if g["group"] == "events")["attributes"][0]
-    assert (events["attribute"], events["stacking"]) == ("event_spawn", "union") and "bigfoot" in events["value"]
+    assert [g["group"] for g in catalog["groups"]] == ["appearance", "water"]
+    assert {a["attribute"] for g in catalog["groups"] for a in g["attributes"]} == {"colours", "recipe", "detail", "water"}
+    assert all("stacking" not in a for g in catalog["groups"] for a in g["attributes"])
+    for gone in ({"spawns": True}, {"event_spawn": ["bigfoot"]}, {"wildlife": ["deer"]}):
+        with pytest.raises(ToolError, match="unknown attribute"):
+            tools.set_ground_type("herd", attributes=gone)
+    assert not settings.edits_path.exists()
 
-    out = tools.create_region(polygon=SQUARE, ground=["forest", "bigfoot_zone"])  # forest decides the terrain colour
-    assert out["ground"] == ["forest", "bigfoot_zone"]
-    assert out["colour"] == next(t for t in tools.list_ground_types()["types"] if t["type"] == "forest")["attributes"]["colours"][0].lower()
-    only = tools.create_region(polygon=SQUARE, ground="bigfoot_zone")  # no terrain type: the overlay tint
-    assert only["colour"] == "#c46be0"
-    assert load_edits(settings.edits_path).regions["R-0002"]["ground"] == ["bigfoot_zone"]
-    colour = load_edits(settings.edits_path).regions["R-0001"]["colour"]
-    tools.set_region_ground("R-0001", ["bigfoot_zone"])  # no terrain type any more: the colour stays what it was
-    assert load_edits(settings.edits_path).regions["R-0001"]["colour"] == colour
-    out = tools.delete_ground_type("bigfoot_zone")
-    assert "R-0001" in out["warnings"][0] and "R-0002" in out["warnings"][0]
+
+def test_a_paint_colour_is_a_ground_type_of_your_own(env):
+    tools, settings, _ = env
+    out = tools.set_ground_type("paint_e2b92c", attributes={"colours": ["#e2b92c"]})
+    assert out["type"]["attributes"] == {"colours": ["#e2b92c"]} and out["type"]["from"] == "hand-drawn or default only"
+    assert tools.create_ground_patch("paint_e2b92c", polygon=SQUARE)["type"] == "paint_e2b92c"
     canonical(settings)
 
 
 def test_ground_type_tools(env):
     tools, settings, _ = env
     rows = {t["type"]: t for t in tools.list_ground_types()["types"]}
-    assert rows["meadow"]["source"] == "rules" and rows["meadow"]["attributes"]["spawns"] and rows["forest"]["osm"]["landuse"] == ["forest"]
-    out = tools.set_ground_type("meadow", attributes={"colours": ["#112233"], "spawns": None, "detail": {"tone_per_ha": 9}})
+    assert rows["meadow"]["source"] == "rules" and rows["meadow"]["attributes"]["recipe"] == "field" and rows["forest"]["osm"]["landuse"] == ["forest"]
+    out = tools.set_ground_type("meadow", attributes={"colours": ["#112233"], "detail": {"tone_per_ha": 9}})
     assert "overridden" in out["summary"] and "make map" in out["summary"]
     attrs = out["type"]["attributes"]
-    assert out["type"]["source"] == "overridden" and attrs["colours"] == ["#112233"] and "spawns" not in attrs  # null: no longer carried
+    assert out["type"]["source"] == "overridden" and attrs["colours"] == ["#112233"] and attrs["recipe"] == "field"
     assert attrs["detail"]["furrow"]["probability"] == 0.0 and attrs["detail"]["tone_per_ha"] == 9  # merged
-    assert load_edits(settings.edits_path).ground_types["meadow"] == {"attributes": {"colours": ["#112233"], "spawns": None, "detail": {"tone_per_ha": 9}}}
+    assert load_edits(settings.edits_path).ground_types["meadow"] == {"attributes": {"colours": ["#112233"], "detail": {"tone_per_ha": 9}}}
     canonical(settings)
 
     out = tools.set_ground_type("dunes", attributes={"colours": ["#d8c38a"], "recipe": "field"}, osm={"natural": ["sand"]})
     assert "created" in out["summary"] and out["type"]["source"] == "custom"
     assert [r["type"] for r in tools.list_ground_types()["types"]][-1] == "dunes"
-    assert tools.create_region(polygon=SQUARE, ground="dunes")["ground"] == ["dunes"]  # a custom type is usable
+    assert tools.create_ground_patch("dunes", polygon=SQUARE)["type"] == "dunes"  # a custom type is usable
     assert "updated" in tools.set_ground_type("dunes", attributes={"recipe": None})["summary"]  # a custom type just drops it
     assert load_edits(settings.edits_path).ground_types["dunes"]["attributes"] == {"colours": ["#d8c38a"]}
 
@@ -728,13 +787,11 @@ def test_ground_type_tools(env):
     with pytest.raises(ToolError, match="1 to 6"):
         tools.set_ground_type("meadow", attributes={"colours": []})
     with pytest.raises(ToolError, match="type names"):
-        tools.set_ground_type("Bad Name", attributes={"spawns": True})
+        tools.set_ground_type("Bad Name", attributes={"colours": ["#ffffff"]})
     with pytest.raises(ToolError, match="#rrggbb"):
         tools.set_ground_type("meadow", attributes={"colours": ["red"]})
     with pytest.raises(ToolError, match="unknown attribute"):
         tools.set_ground_type("meadow", attributes={"trees": {}})
-    with pytest.raises(ToolError, match="non-empty list of events"):
-        tools.set_ground_type("meadow", attributes={"event_spawn": ["yeti"]})
     assert "Bad Name" not in settings.edits_path.read_text()  # nothing was written
 
     out = tools.reset_ground_type("meadow")
@@ -744,6 +801,15 @@ def test_ground_type_tools(env):
     with pytest.raises(ToolError, match="delete_ground_type"):
         tools.reset_ground_type("dunes")
     canonical(settings)
+
+
+def test_a_type_that_makes_a_patch_water_needs_the_patch_to_have_a_level(env):
+    tools, settings, _ = env
+    tools.create_ground_patch("meadow", polygon=SQUARE)
+    before = settings.edits_path.read_bytes()
+    with pytest.raises(ToolError, match="water_y"):
+        tools.set_ground_type("meadow", attributes={"water": True})  # the patch has no level
+    assert settings.edits_path.read_bytes() == before
 
 
 def test_delete_ground_type(env):
@@ -757,18 +823,22 @@ def test_delete_ground_type(env):
     assert tools.delete_ground_type("dunes")["type"] == "dunes"
     assert load_edits(settings.edits_path).ground_types == {}  # a custom type is just removed
 
-    tools.create_region(polygon=SQUARE, ground="orchard")
+    tools.create_ground_patch("orchard", polygon=SQUARE)
+    with pytest.raises(ToolError, match="GP-0001"):  # a patch of the type: delete or retype it first
+        tools.delete_ground_type("orchard")
+    assert load_edits(settings.edits_path).ground_types == {}
+    tools.delete_ground_patch("GP-0001")
     out = tools.delete_ground_type("orchard")
-    assert "reset_ground_type" in out["summary"] and "R-0001" in out["warnings"][0]
+    assert "reset_ground_type" in out["summary"]
     assert load_edits(settings.edits_path).ground_types == {"orchard": {"deleted": True}}
     listing = tools.list_ground_types()
     assert "orchard" not in {t["type"] for t in listing["types"]} and listing["deleted"] == ["orchard"]
     with pytest.raises(ToolError, match="unknown ground type"):
-        tools.set_region_ground("R-0001", "orchard")
+        tools.create_ground_patch("orchard", polygon=SQUARE)
     with pytest.raises(ToolError, match="already deleted"):
         tools.delete_ground_type("orchard")
     with pytest.raises(ToolError, match="reset_ground_type it first"):
-        tools.set_ground_type("orchard", attributes={"event_spawn": ["bigfoot"]})
+        tools.set_ground_type("orchard", attributes={"colours": ["#ffffff"]})
     assert "it was deleted" in tools.reset_ground_type("orchard")["summary"]
     assert load_edits(settings.edits_path).ground_types == {}
     assert '"ground_types"' not in settings.edits_path.read_text()

@@ -11,7 +11,7 @@ STAGE_NAMES = ("fetch", "normalise", "ortho", "ortho-trees", "parcels", "rules",
 RUN_ALL = "run-all"
 PREVIEW = "preview"  # not a map stage: renders PNGs from the work files
 PARCEL_RUN = "parcel-run"  # not a map stage: fences and trees of some parcels, as JSON
-REGION_RUN = "region-run"  # not a map stage: the meshes of some regions, as a GLB
+PATCH_RUN = "patch-run"  # not a map stage: the meshes of some ground patches, as a GLB
 DEFAULT_EXAGGERATION = 3.0  # same as preview.DEFAULT_EXAGGERATION
 
 
@@ -28,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="drycastle_pipeline",
         description="Generate the Drycastle base map from source data.",
     )
-    choices = [*STAGE_NAMES, RUN_ALL, PREVIEW, PARCEL_RUN, REGION_RUN]
+    choices = [*STAGE_NAMES, RUN_ALL, PREVIEW, PARCEL_RUN, PATCH_RUN]
     parser.add_argument(
         "stage",
         choices=choices,
@@ -44,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--edits",
         metavar="PATH",
         default=None,
-        help="props, detail, export, parcel-run, region-run: hand edits file (default: pipeline/config/edits.json)",
+        help="props, detail, export, parcel-run, patch-run: hand edits file (default: pipeline/config/edits.json)",
     )
     parser.add_argument(
         "--report",
@@ -72,11 +72,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="parcel-run: property group to regenerate, e.g. G-0001 (repeatable)",
     )
     parser.add_argument(
-        "--region",
+        "--patch",
         action="append",
         default=[],
         metavar="ID",
-        help="region-run: region to rebuild, e.g. R-0001 (repeatable; none = all regions)",
+        help="patch-run: ground patch to rebuild, e.g. GP-0001 (repeatable; none = all patches)",
     )
     parser.add_argument(
         "--out",
@@ -95,7 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--glb",
         metavar="PATH",
         default=None,
-        help="parcel-run, region-run: also write a GLB with the props nodes / region_<ID> nodes "
+        help="parcel-run, patch-run: also write a GLB with the props nodes / patch_<ID> nodes "
         "(chunk-file frame)",
     )
     return parser
@@ -114,11 +114,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             glb=args.glb,
             work=args.work,
         )
-    if args.stage == REGION_RUN:
-        from drycastle_pipeline import region_run
+    if args.stage == PATCH_RUN:
+        from drycastle_pipeline import patch_run
 
-        return region_run.run(
-            regions=args.region,
+        return patch_run.run(
+            patches=args.patch,
             edits=args.edits,
             out=args.out,
             glb=args.glb,

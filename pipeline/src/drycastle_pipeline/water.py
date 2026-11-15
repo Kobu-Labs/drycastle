@@ -41,8 +41,8 @@ def water_heights(geom, terrain, step: float = SAMPLE_STEP_M) -> tuple[float, fl
     return round(surface, 3), round(bed, 3)
 
 
-def region_bed(geom, terrain, step: float = SAMPLE_STEP_M) -> float | None:
-    """The lowest terrain height inside a water region's polygon, or None when the terrain does not cover it."""
+def patch_bed(geom, terrain, step: float = SAMPLE_STEP_M) -> float | None:
+    """The lowest terrain height inside a water patch's polygon, or None when the terrain does not cover it."""
     minx, miny, maxx, maxy = geom.bounds
     gx, gy = np.meshgrid(np.arange(minx + step / 2, maxx, step), np.arange(miny + step / 2, maxy, step))
     gx, gy = gx.ravel(), gy.ravel()
@@ -62,7 +62,7 @@ WET_REACH_M = 8.0  # how far past the drawn outline the water may run to find it
 def wet_area(outline, terrain, water_y: float, step: float = WET_STEP_M):
     """Where a flat water surface at ``water_y`` really lies: the terrain below it, reached from ``outline``.
 
-    The drawn outline of a water region is only a hint (traced on the coarse terrain grid); the shore is where the
+    The drawn outline of a water patch is only a hint (traced on the coarse terrain grid); the shore is where the
     ground rises above the level. This samples the terrain on a ``step`` grid within ``WET_REACH_M`` of the outline,
     keeps the cells below ``water_y`` and returns the pieces that touch the outline (a pit that is not connected to it
     stays dry), smoothed a little so the shore is not a staircase. Empty when nothing there is below the level.
@@ -89,12 +89,12 @@ def wet_area(outline, terrain, water_y: float, step: float = WET_STEP_M):
 
 
 def build_water(
-    parcels: list[dict], terrain, regions: dict | None = None, kinds: frozenset[str] | set[str] = frozenset({"water"})
+    parcels: list[dict], terrain, patches: dict | None = None, kinds: frozenset[str] | set[str] = frozenset({"water"})
 ) -> tuple[dict, list[str]]:
     """The ``water.json`` document for the ground areas (and parcels) of a water kind (``kinds``), and the ids skipped for lack of terrain.
 
-    ``regions`` (``plan_regions(...).regions``) adds one body per region that has a ``water_y``: its polygon, that
-    surface and the lowest terrain inside as the bed. A region whose terrain is nowhere below its surface holds no
+    ``patches`` (``plan_patches(...).patches``) adds one body per ground patch that has a ``water_y`` (a patch of a water type): its polygon, that
+    surface and the lowest terrain inside as the bed. A patch whose terrain is nowhere below its surface holds no
     water and is skipped too.
     """
     bodies, skipped = [], []
@@ -107,22 +107,22 @@ def build_water(
             continue
         surface, bed = heights
         bodies.append({"id": p["id"], "polygon": p["polygon"], "surface_y": surface, "bed_y": bed})
-    for rid, region in sorted((regions or {}).items()):
-        if region.water_y is None:
+    for pid, patch in sorted((patches or {}).items()):
+        if patch.water_y is None:
             continue
-        wet = wet_area(region.polygon, terrain, region.water_y)
+        wet = wet_area(patch.polygon, terrain, patch.water_y)
         pieces = [g for g in getattr(wet, "geoms", [wet]) if not g.is_empty and g.area > 1.0]
-        beds = [region_bed(g, terrain) for g in pieces]
+        beds = [patch_bed(g, terrain) for g in pieces]
         if not pieces or any(b is None for b in beds):
-            skipped.append(rid)
+            skipped.append(pid)
             continue
         for k, (g, bed) in enumerate(zip(pieces, beds, strict=True), 1):
             bodies.append(
                 {
-                    "id": rid if len(pieces) == 1 else f"{rid}.{k}",
+                    "id": pid if len(pieces) == 1 else f"{pid}.{k}",
                     "polygon": mapping(g),
-                    "surface_y": round(region.water_y, 3),
-                    "bed_y": min(bed, round(region.water_y - 0.05, 3)),
+                    "surface_y": round(patch.water_y, 3),
+                    "bed_y": min(bed, round(patch.water_y - 0.05, 3)),
                 }
             )
     doc = {

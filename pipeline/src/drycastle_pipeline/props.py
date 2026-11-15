@@ -22,6 +22,7 @@ from shapely.geometry import LineString, MultiLineString, Point, Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, nearest_points, unary_union
 
+from drycastle_pipeline import zones as zone_kinds
 from drycastle_pipeline.assets import load_manifest, validate_asset_ref
 from drycastle_pipeline.buildings import footprint_polygon
 from drycastle_pipeline.config import map_paths
@@ -32,10 +33,10 @@ from drycastle_pipeline.edits import (
     EditsError,
     FenceSpec,
     load_edits,
-    region_ring,
+    polygon_ring,
     resolve_fence,
 )
-from drycastle_pipeline.ground import ground_types, ground_units, spawn_kinds
+from drycastle_pipeline.ground import ground_types, ground_units
 from drycastle_pipeline.lamps import make_lamps, read_osm_lamps, write_lamps
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.roads import edge_lines
@@ -317,7 +318,7 @@ def make_trees(
     There is no other source: no OSM trees, no per-parcel density, no shore rows. ``cfg["ortho_dir"]`` is the folder
     of the detector's output (``trees.json`` and the canopy mask); without it there are no trees. ``origin`` is the
     frame origin (EPSG:5514; without it there are no trees). ``objects`` are placed object positions (local metres) that trees keep
-    ``object_clearance_m`` away from; ``water`` (local metres) is where the water regions lie: no trunk in it.
+    ``object_clearance_m`` away from; ``water`` (local metres) is where the water patches lie: no trunk in it.
     """
     if origin is None or not (Path(cfg["ortho_dir"]) / "trees.json").is_file():
         return []
@@ -364,8 +365,12 @@ def make_spawns(
     cfg: dict,
     road_cfg: dict,
     chunk_m: float,
+    zone_units: list[dict] | None = None,
 ) -> list[dict]:
-    """A seeded subset of candidate points on roads and open ground, away from buildings."""
+    """A seeded subset of candidate points on roads and open ground, away from buildings.
+
+    Open ground is the parcels and ground areas of the kinds ``cfg["ground_kinds"]``, and ``zone_units``: parts of ground
+    areas inside a drawn ``player_spawn`` zone (``zones.drawn_spawn_units``), whatever their kind."""
     bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
     mind = float(cfg["min_building_distance_m"])
     bzone = unary_union(bpolys).buffer(mind) if bpolys else None
@@ -414,9 +419,9 @@ def make_spawns(
                     }
                 )
     ground_pool: list[dict] = []
-    for p, poly in parcel_polys:
-        if p["kind"] not in cfg["ground_kinds"]:
-            continue
+    spawn_ground = [(p, poly) for p, poly in parcel_polys if p["kind"] in cfg["ground_kinds"]]
+    spawn_ground += [(u, shape(u["polygon"])) for u in zone_units or []]
+    for p, poly in spawn_ground:
         inner = poly.buffer(-1.5)
         if inner.is_empty:
             continue
@@ -493,7 +498,7 @@ class EditPlan:
     objects: list[dict] = field(default_factory=list)  # objects.json entries, sorted by id
     cables: list[dict] = field(default_factory=list)  # {"id", "from", "to"} between placed poles and connectors, by id
     warnings: list[str] = field(default_factory=list)
-    water_regions: list[tuple[Polygon, float]] = field(default_factory=list)  # (outline in local metres, water_y)
+    water_patches: list[tuple[Polygon, float]] = field(default_factory=list)  # (outline in local metres, water_y)
 
 
 def _local_xy(x: float, y: float, origin: list[float] | None) -> tuple[float, float]:
@@ -568,19 +573,19 @@ def plan_edits(
             plan.warnings.append(f"cables.{cid}: {'; '.join(bad)}; cable skipped")
         else:
             plan.cables.append({"id": cid, "from": cable["from"], "to": cable["to"]})
-    plan.water_regions = [
-        (Polygon([_local_xy(x, y, origin) for x, y in region_ring(r["polygon"])]), float(r["water_y"]))
-        for _, r in sorted(edits.regions.items())
+    plan.water_patches = [
+        (Polygon([_local_xy(x, y, origin) for x, y in polygon_ring(r["polygon"])]), float(r["water_y"]))
+        for _, r in sorted(edits.ground_patches.items())
         if "water_y" in r
     ]
     return plan
 
 
 def water_zone(plan: EditPlan, terrain: Terrain) -> BaseGeometry | None:
-    """Where the water regions of the plan really lie (see :func:`water.wet_area`), or None without any."""
+    """Where the water patches of the plan really lie (see :func:`water.wet_area`), or None without any."""
     from drycastle_pipeline.water import wet_area
 
-    zones = [wet_area(outline, terrain, level) for outline, level in plan.water_regions]
+    zones = [wet_area(outline, terrain, level) for outline, level in plan.water_patches]
     zones = [z for z in zones if not z.is_empty]
     return unary_union(zones) if zones else None
 
@@ -616,9 +621,19 @@ def run_props(
     graph = json.loads((work_dir / "roads.json").read_text())
     fcfg = load_section("props", rules_path)
     scfg = load_section("spawns", rules_path)
-    scfg["ground_kinds"] = sorted(set(scfg["ground_kinds"]) | spawn_kinds(ground_types(rules_path, edits_path)))
+    zrules = zone_kinds.rules(load_section("zones", rules_path))
+    zone_kinds.check_ground_types(zrules, ground_types(rules_path, edits_path))
+    spawn_where = zrules.get(zone_kinds.PLAYER_SPAWN, {}).get("where_ground")
+    scfg["ground_kinds"] = sorted(set(scfg["ground_kinds"]) | set(spawn_where or []))  # the rule zone of player_spawn
     chunk_m = float(parcels_doc["chunk_size_m"])
-    plan = plan_edits(load_edits(edits_path), parcels, parcels_doc.get("origin_epsg5514"), chunk_m)
+    edits = load_edits(edits_path)
+    plan = plan_edits(edits, parcels, parcels_doc.get("origin_epsg5514"), chunk_m)
+    origin = parcels_doc.get("origin_epsg5514")
+    drawn_spawn = (
+        zone_kinds.drawn_spawn_units(parcels_doc, zone_kinds.drawn_zones(edits.zones, origin), spawn_where)
+        if edits.zones and origin
+        else []
+    )
     for warning in plan.warnings + unknown_asset_warnings(plan.objects):
         print(f"props: warning: {warning}", file=sys.stderr)
     fences = make_fences(
@@ -650,6 +665,7 @@ def run_props(
         scfg,
         load_section("roads", rules_path),
         float(parcels_doc["chunk_size_m"]),
+        zone_units=drawn_spawn,
     )
     objects_doc = {"format_version": OBJECTS_FORMAT_VERSION, "objects": plan.objects}
     if plan.cables:  # the wires between placed utility poles; the game strings them (docs/utility-poles.md)

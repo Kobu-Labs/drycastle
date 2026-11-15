@@ -18,7 +18,6 @@ from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits
 from drycastle_pipeline.ground import ID_PREFIX as GROUND_PREFIX
 from drycastle_pipeline.ground import (
-    LAYER_PREFIX,
     build_ground,
     carve_parcel,
     dike_ground,
@@ -209,7 +208,7 @@ def build_parcels(
         (f["properties"]["class"], f["properties"]["value"], shape(f["geometry"])) for f in _read(norm / "landuse.geojson")
     ]
     dike = dike_ground(dropped, ways, load_section("detail", rules_path)["dike"])
-    drawn, layers, warnings = drawn_ground(edits.regions, (ox, oy), gcfg["types"])
+    drawn, warnings = drawn_ground(edits.ground_patches, (ox, oy), gcfg["types"])
     for warning in warnings:
         print(f"parcels: warning: {warning}", file=sys.stderr)
     kept_union = unary_union([g for pid, g in zip(ids, geoms, strict=True) if pid in kept]) if drawn else None
@@ -227,11 +226,6 @@ def build_parcels(
         "ground": ground,
         "unassigned_buildings": assignment.unassigned,
     }
-    if layers:  # the attributes that add up (spawning, events) of the hand-drawn stacks; the key is only there when there are some
-        doc["ground_layers"] = [
-            {"id": f"{LAYER_PREFIX}{n:04d}", "region": rid, "types": names, "polygon": poly.__geo_interface__}
-            for n, (rid, names, poly) in enumerate(layers, 1)
-        ]
     (work_dir / "parcels.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 
     return ParcelsResult(

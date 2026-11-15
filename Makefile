@@ -2,7 +2,7 @@
 # MAP: the map folder the viewer, editor and shooter targets load (override with MAP=<dir>).
 MAP ?= out/village/map
 
-.PHONY: rozhlas editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run region-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-regions-smoke viewer-editor-smoke viewer-panel-smoke viewer-region-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: rozhlas editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run patch-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-patches-smoke viewer-editor-smoke viewer-panel-smoke viewer-shape-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -52,12 +52,12 @@ PARCEL_ARGS = $(if $(PARCEL),--parcel $(PARCEL),) $(if $(GROUP),--group $(GROUP)
 parcel-run:
 	cd pipeline && uv run python -m drycastle_pipeline parcel-run $(PARCEL_ARGS)
 
-# [REGION=R-0001] [OUT=file.json] GLB=file.glb: meshes of the regions (none named: all) as a GLB with
-# region_<ID> nodes (hot reload); the JSON summary lists the regions to replace
-REGION_ARGS = $(if $(REGION),--region $(REGION),) $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb $(abspath $(GLB)),)
+# [PATCH=GP-0001] [OUT=file.json] GLB=file.glb: meshes of the ground patches (none named: all) as a GLB with
+# patch_<ID> nodes (hot reload); the JSON summary lists the patches to replace
+PATCH_ARGS = $(if $(PATCH),--patch $(PATCH),) $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb $(abspath $(GLB)),)
 
-region-run:
-	cd pipeline && uv run python -m drycastle_pipeline region-run $(REGION_ARGS)
+patch-run:
+	cd pipeline && uv run python -m drycastle_pipeline patch-run $(PATCH_ARGS)
 
 EXAG ?= 3
 
@@ -97,7 +97,7 @@ floodwall-manifest:
 map: detail-rust-build
 	cd pipeline && uv run python -m drycastle_pipeline run-all
 
-# Re-export after edits.json changed (placed objects, regions, fences): props, detail, export into out/village/map.
+# Re-export after edits.json changed (placed objects, ground patches, zones, fences): props, detail, export into out/village/map.
 # Skips fetch, normalise, ortho, ortho-trees, parcels, rules, terrain and roads (needs one full `make map` before);
 # the trees are planted again from the cached ortho/trees.json, the detector does not run. Sub-makes keep the order under -j.
 map-update:
@@ -126,11 +126,11 @@ viewer-smoke:
 viewer-edit-smoke:
 	python3 godot/viewer/edit_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
 
-# Region hot reload end to end (headless): exports a map with regions into a scratch dir, then recolours, reshapes,
-# adds and removes regions (also together with a parcel edit) through the watcher and checks the swaps, that nothing
+# Ground patch hot reload end to end (headless): exports a map with ground patches into a scratch dir, then retypes, reshapes,
+# adds and removes patches (also together with a parcel edit) through the watcher and checks the swaps, that nothing
 # leaks and that a broken file changes nothing. Needs uv, dotnet and godot.
-viewer-regions-smoke:
-	python3 godot/viewer/regions_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
+viewer-patches-smoke:
+	python3 godot/viewer/patches_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
 
 # Editor mode end to end (headless): exports a map into a scratch dir, drives the editor APIs (picking,
 # selection, groups, edits.json writes, outlines, editor-state.json, F2 round trip). Needs uv, dotnet and godot.
@@ -143,11 +143,12 @@ viewer-editor-smoke:
 viewer-panel-smoke:
 	python3 godot/viewer/panel_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),) $(if $(SHOTS),--shots $(SHOTS),)
 
-# Region tool end to end (headless): exports a map with one region into a scratch dir, drives drawing, closing, colour,
-# corner drags (valid and self-crossing), recolour, delete with confirm, undo/redo, Esc levels and the Ctrl+P palette through
-# the editor APIs and key events, and compares edits.json after every step with the Python writer's text. Needs uv, dotnet and godot.
-viewer-region-editor-smoke:
-	python3 godot/viewer/region_editor_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
+# Ground patch and Zones tools end to end (headless): exports a map with one ground patch into a scratch dir, drives drawing,
+# the water level step, retype, corner drags (valid and self-crossing), zone kind, delete with confirm, undo/redo, Esc levels and the
+# Ctrl+P palette through the editor APIs and key events, and compares edits.json after every step with the Python writer's text.
+# Needs uv, dotnet and godot, and a pipeline that exports zone_kinds.
+viewer-shape-editor-smoke:
+	python3 godot/viewer/shape_editor_smoke.py $(if $(SMOKE_DIR),--dir $(SMOKE_DIR),)
 
 # Objects, gizmo and session undo end to end (headless): exports a map into a scratch dir, drives placement, drag,
 # rotate, cross-parcel moves, field edits, duplicate/delete, group + fence Apply and undo/redo through the editor APIs,
