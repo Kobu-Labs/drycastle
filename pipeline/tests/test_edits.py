@@ -512,7 +512,8 @@ def test_stale_entries_warn_and_are_skipped(ws, tmp_path, capsys) -> None:
             "objects": [{"id": "ghost", "asset": "prim:box", "position": [1, 1]}],
             "groups": {
                 "G-0001": {"parcels": ["P-0002", "P-9998"], "fence": {"mode": "custom"}},
-                "G-0002": {"parcels": ["P-9997"]},
+                "G-0002": {"parcels": ["P-9997"], "fence": {"mode": "custom"}},
+                "G-0003": {"parcels": ["P-9996"]},
             },
         },
     )
@@ -521,6 +522,7 @@ def test_stale_entries_warn_and_are_skipped(ws, tmp_path, capsys) -> None:
     assert "parcels.P-9999: parcel not found; fence skipped" in err
     assert "groups.G-0001: parcel P-9998 not found; skipped" in err
     assert "groups.G-0002: no member parcels left; group skipped" in err
+    assert "P-0001" not in err and "G-0003" not in err  # nothing of theirs was skipped: no warning
     # an object belongs to no parcel, so a dropped parcel loses none
     (ghost,) = read_objects(ws["work"])["objects"]
     assert (ghost["id"], ghost["parcel"]) == ("ghost", None)

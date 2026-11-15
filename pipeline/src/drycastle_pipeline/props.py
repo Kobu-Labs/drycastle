@@ -542,7 +542,7 @@ def plan_edits(
     """Resolve the edits against this run's parcels.
 
     Entries for parcels that no longer exist (parcel entries, group members) are skipped with a
-    warning. Every object is placed: an object belongs to no parcel and only needs its position (so a
+    warning (not a parcel's ``fence: none`` or a group with no fence, which have nothing to skip). Every object is placed: an object belongs to no parcel and only needs its position (so a
     pole on a road, or on land a dropped parcel left as ground, is as normal as a car in a yard); its
     ``parcel`` in objects.json is the parcel containing it, or null. A cable is
     kept when both its ends are placed utility poles or house connectors, else skipped with a warning.
@@ -551,19 +551,22 @@ def plan_edits(
     polys = {p["id"]: shape(p["polygon"]) for p in parcels}
     for gid in sorted(edits.groups):
         members = []
+        # a group with no fence of its own loses nothing with a member that is gone: no warning then
+        fenced = (edits.groups[gid].get("fence") or {}).get("mode", "none") != "none"
         for pid in edits.groups[gid].get("parcels", []):
             if pid in polys:
                 members.append(pid)
-            else:
+            elif fenced:
                 plan.warnings.append(f"groups.{gid}: parcel {pid} not found; skipped")
         if members:
             plan.groups[gid] = sorted(members)
-        else:
+        elif fenced:
             plan.warnings.append(f"groups.{gid}: no member parcels left; group skipped")
     member_group = {pid: gid for gid, pids in plan.groups.items() for pid in pids}
     for pid in sorted(edits.parcels):
         if pid not in polys:
-            kept = [k for k in ("fence",) if k in edits.parcels[pid]]
+            # "no fence" on a parcel that is gone loses nothing: no warning (the entry applies again if the parcel comes back)
+            kept = [k for k in ("fence",) if k in edits.parcels[pid] and edits.parcels[pid][k].get("mode") != "none"]
             if kept:
                 plan.warnings.append(f"parcels.{pid}: parcel not found; {', '.join(kept)} skipped")
     for pid in sorted(polys):
