@@ -202,9 +202,10 @@ def test_patch_water_bodies_get_their_max_depth_and_dry_levels_are_skipped() -> 
     assert dry.bodies == [] and dry.skipped == ["GP-0001"]
 
 
-def test_water_ground_areas_of_a_water_kind_are_bodies_and_long_narrow_ones_are_rivers() -> None:
+def test_water_ground_areas_of_a_water_kind_are_bodies_and_long_ones_are_rivers() -> None:
     terrain = make_terrain()
     r = rules()
+    r["river_min_length_m"] = 150  # the test river is 170 m
     areas = [parcel("A-0001", "water", RIVER), parcel("A-0002", "water", POND), parcel("A-0003", "field", box(20, 20, 40, 40))]
     plan = plan_water(areas, terrain, None, r)
     assert [b.id for b in plan.bodies] == ["A-0001", "A-0002"]  # the ID is not in river_ids

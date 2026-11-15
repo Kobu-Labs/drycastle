@@ -644,7 +644,7 @@ list until flow is added). A water parcel or ground area with no terrain under i
 
 *The natural bed (`bed.py`).* Each body's depth comes from its outline alone (seeded, so the same map gives the same
 bed): depth grows from the bank over a shelf (banks shelve), a river (`water.river_ids` in `rules.yaml`, or any body at least
-`river_min_length_m` (150 m) long and `river_min_aspect` (6) times as long as wide, since a water ground area's ID `A-NNNN` moves with the
+`river_min_length_m` (400 m) long, since a water ground area's ID `A-NNNN` moves with the
 inputs and cannot name the Morava) gets pools and riffles from a seeded value-noise pattern along its main axis (mid-channel 2.5 m, pools to
 3.5 m, riffles 0.8 m, bars every 60 to 120 m), and the outside of a bend (the outline curls round the water) is deeper
 and steeper. Ponds and lakes (every other body) get a shallow bowl (1.5 m). A patch's `max_depth` (edits.json, or the

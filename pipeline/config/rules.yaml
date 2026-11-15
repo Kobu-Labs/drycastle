@@ -199,9 +199,8 @@ water:
   # The ids are parcel, ground area or patch IDs; a patch piece "GP-0023.2" counts as "GP-0023". The Morava is seven parcels.
   river_ids: [P-0901, P-0534, P-1180, P-1184, P-1378, P-1597, P-1596]
   # Water ground areas are numbered by place ("A-0007") and move with the inputs, so a body is also a river when its outline
-  # is long and narrow: at least this long, and at least this many times as long as wide (the Morava; ponds and lakes are not).
-  river_min_length_m: 150
-  river_min_aspect: 6
+  # is at least this long (village map: the Morava's two bodies are 497 m and 4718 m, the longest pond 339 m).
+  river_min_length_m: 400
   bed:
     # Grid of the depth in water.json: cells of this size, and the least depth inside an outline.
     cell_m: 2.0

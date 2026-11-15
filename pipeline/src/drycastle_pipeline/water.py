@@ -96,12 +96,12 @@ def wet_area(outline, terrain: Terrain, water_y: float, step: float = WET_STEP_M
 
 
 def is_river(body_id: str, geom, rules: dict) -> bool:
-    """Whether a body is a river: its ID is in ``river_ids``, or its outline is long and narrow.
+    """Whether a body is a river: its ID is in ``river_ids``, or its outline is long.
 
     Only a property is a parcel; the water of the cadastre is a ground area whose ID (``A-NNNN``) is numbered by type
     and place and moves with the inputs, so an ID list alone cannot name the Morava. A body at least
-    ``river_min_length_m`` long whose minimum rotated rectangle is at least ``river_min_aspect`` times as long as wide
-    is a river too.
+    ``river_min_length_m`` long (the long side of its minimum rotated rectangle) is a river too. Length alone: the
+    Morava meanders, so its rectangle is wide and no aspect ratio tells it from a lake.
     """
     if body_id.partition(".")[0] in rules["river_ids"]:
         return True
@@ -111,8 +111,7 @@ def is_river(body_id: str, geom, rules: dict) -> bool:
     pts = list(rect.exterior.coords)
     a = math.dist(pts[0], pts[1])
     b = math.dist(pts[1], pts[2])
-    length, width = max(a, b), min(a, b)
-    return length >= float(rules["river_min_length_m"]) and length >= float(rules["river_min_aspect"]) * max(width, 1e-6)
+    return max(a, b) >= float(rules["river_min_length_m"])
 
 
 def _body(body_id: str, geom, surface: float, rules: dict, max_depth: float | None = None) -> WaterBody:
