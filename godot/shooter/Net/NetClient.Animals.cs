@@ -45,6 +45,21 @@ public partial class NetClient
         WorldEntities.Spawned += OnAnimalSpawned;
         WorldEntities.DespawnedFor += OnAnimalDespawnedFor;
         WorldEntities.Despawned += OnAnimalDespawned;
+        WorldEntities.DormancyChanged += OnAnimalDormancy;
+    }
+
+    /// <summary>An animal outside the interest range (ADR 0024) is hidden and its animation stops; one that comes back starts its clip afresh (its pose is from a keyframe, not from the last time we saw it).</summary>
+    void OnAnimalDormancy(WorldReplica.Entity e)
+    {
+        if (e.Type == AnimalRules.TypeId && _animals.TryGetValue(e.Id, out var v)) SetAnimalDormant(v, e);
+    }
+
+    static void SetAnimalDormant(AnimalView v, WorldReplica.Entity e)
+    {
+        v.Node.Visible = !e.Dormant;
+        v.Node.ProcessMode = e.Dormant ? Node.ProcessModeEnum.Disabled : Node.ProcessModeEnum.Inherit; // an AnimationPlayer keeps playing while hidden otherwise
+        if (e.Dormant) return;
+        v.Shown = 255; v.HitUntil = 0; v.Toggle = AnimalRules.HitToggled(e.State.State);
     }
 
     void OnAnimalSpawned(WorldReplica.Entity e)
@@ -81,7 +96,9 @@ public partial class NetClient
             node.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(w, h, l) }, Position = new Vector3(0, h / 2, 0) });
         }
         Owned.AddChild(node);
-        _animals[e.Id] = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Toggle = AnimalRules.HitToggled(e.State.State) };
+        var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Toggle = AnimalRules.HitToggled(e.State.State) };
+        _animals[e.Id] = view;
+        if (e.Dormant) SetAnimalDormant(view, e); // spawned outside the interest range: hidden until a keyframe shows it
     }
 
     /// <summary>A pet that died of a hit (it has no corpse) goes in a puff where it stood; an animal that expired or was removed just leaves. Runs before <see cref="OnAnimalDespawned"/> frees the node.</summary>
@@ -106,7 +123,7 @@ public partial class NetClient
         var now = Time.GetTicksMsec() / 1000.0;
         foreach (var (id, v) in _animals)
         {
-            if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
+            if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant) continue;
             if (e.Buf.At(rt) is { } s)
             {
                 v.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);

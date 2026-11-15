@@ -13,6 +13,9 @@ public sealed class Interpolator
     public int Count => _buf.Count;
     public uint NewestTick => _buf.Count == 0 ? 0 : _buf[^1].Tick;
 
+    /// <summary>Forgets every sample: the next push starts over, so a body that jumped (came back from interest dormancy) does not slide from its old place.</summary>
+    public void Reset() => _buf.Clear();
+
     public void Push(uint tick, Vector3 pos, float yaw, float pitch)
     {
         if (_buf.Count > 0 && tick < _buf[^1].Tick) return;

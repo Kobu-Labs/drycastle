@@ -1166,7 +1166,11 @@ public partial class NetServer : Node
         }
         var world = _match.Entities.Snapshot();
         foreach (var c in _clients.Values)
-            if (c.Joined) foreach (var pkt in c.WEnc.Encode(_tick, c.WAck, world)) Tx(c.Peer!, Wire.ChanData, pkt, 0);
+        {
+            if (!c.Joined) continue;
+            var at = c.Body.GlobalPosition; // the body, dead or spectating too: world interest follows where the player is (ADR 0024)
+            foreach (var pkt in c.WEnc.Encode(_tick, c.WAck, world, new System.Numerics.Vector3(at.X, at.Y, at.Z))) Tx(c.Peer!, Wire.ChanData, pkt, 0);
+        }
         LossLogStates(ents);
         _host.Flush();
     }

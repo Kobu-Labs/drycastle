@@ -17,7 +17,7 @@ public static class FlockRules
 
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "flock", HasHp: false));
+        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "flock", HasHp: false, Interest: true));
     }
 }
 

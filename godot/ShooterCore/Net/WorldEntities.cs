@@ -5,9 +5,10 @@ namespace Drycastle.ShooterCore;
 /// <summary>
 /// A world entity type (turret, missile, aircraft, corpse, care package, ...) registered under its wire id.
 /// All types share one state codec (<see cref="WorldState"/>); <see cref="HasHp"/> only decides whether the
-/// optional hp byte is sent for that type.
+/// optional hp byte is sent for that type. <see cref="Interest"/> opts the type into distance filtering of its state
+/// (<see cref="WorldInterest"/>, ADR 0024); every other type is sent to every client at every range.
 /// </summary>
-public sealed record WorldEntityDef(byte Id, string Name, bool HasHp);
+public sealed record WorldEntityDef(byte Id, string Name, bool HasHp, bool Interest = false);
 
 /// <summary>Registered world entity types by wire id. <see cref="Shared"/> is the table the server and client use.</summary>
 public sealed class WorldEntityRegistry
@@ -69,7 +70,8 @@ public interface IWorldEntity
     WorldState Serialize();
 }
 
-public readonly record struct WorldEntry(ushort Id, byte Type, WorldState State);
+/// <summary>One world entity's state. <paramref name="Dormant"/> is only ever set on a client's committed copy (<see cref="WorldReplica"/>): the server sent it the "left interest" record and its State is stale.</summary>
+public readonly record struct WorldEntry(ushort Id, byte Type, WorldState State, bool Dormant = false);
 public readonly record struct WorldSpawned(ushort Id, byte Type, WorldState State);
 public readonly record struct WorldDespawned(ushort Id, WorldDespawnReason Reason);
 

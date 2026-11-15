@@ -28,6 +28,18 @@ public partial class NetClient
         PoopRules.Register(WorldEntityRegistry.Shared);
         WorldEntities.Spawned += OnPoopSpawned;
         WorldEntities.Despawned += OnPoopDespawned;
+        WorldEntities.DormancyChanged += OnPoopDormancy;
+    }
+
+    /// <summary>Poop outside the interest range (ADR 0024) is hidden; one that comes back is shown where the keyframe puts it.</summary>
+    void OnPoopDormancy(WorldReplica.Entity e)
+    {
+        if (e.Type != PoopRules.TypeId || !_poops.TryGetValue(e.Id, out var node)) return;
+        node.Visible = !e.Dormant;
+        if (e.Dormant) return;
+        var p = e.State.Position;
+        node.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
+        node.Rotation = new Vector3(0, e.State.YawRad, 0);
     }
 
     void OnPoopSpawned(WorldReplica.Entity e)
@@ -46,6 +58,7 @@ public partial class NetClient
         Owned.AddChild(node);
         node.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
         node.Rotation = new Vector3(0, e.State.YawRad, 0);
+        node.Visible = !e.Dormant; // spawned outside the interest range: hidden until a keyframe shows it
         _poops[e.Id] = node;
     }
 
