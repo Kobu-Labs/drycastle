@@ -7,7 +7,12 @@ namespace Drycastle.ShooterCore;
 /// an item that makes a headshot a body hit (<see cref="Equipment.HeadGuarded"/>); it is a state of the player, not of the pose, so a rewound target takes the present one.
 /// <paramref name="Scale"/> grows the whole hit volume (height, radius, head) about the feet: 1 for a player and a dummy, 2 for the Bigfoot (twice the player's size).
 /// </summary>
-public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw, bool HeadGuarded = false, float Scale = 1f);
+/// <summary>
+/// A shot target. <paramref name="Box"/> (a wild animal's body, [width, height, length] with the length along the facing direction, feet on the
+/// ground, its centre <paramref name="BoxAhead"/> metres ahead of the feet) replaces the capsule for a bullet's ray when its height is above 0;
+/// blasts, knives and everything else that measures a distance keep the capsule.
+/// </summary>
+public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw, bool HeadGuarded = false, float Scale = 1f, Vector3 Box = default, float BoxAhead = 0f);
 
 public readonly record struct RayHit(ushort Id, float Distance, bool Head);
 public readonly record struct MeleeHit(ushort Id, bool Backstab, float Distance);
@@ -214,8 +219,18 @@ public static class HitMath
         foreach (var t in targets)
         {
             if (t.Id == shooter) continue;
+            float d;
+            if (t.Box.Y > 0)
+            {
+                // a body box (a wild animal): no head, the ray meets the box or misses
+                if (RayBox(origin, dir, t) is not { } bd || bd > limit) continue;
+                if (best is { } bb && bb.Distance <= bd) continue;
+                best = new RayHit(t.Id, bd, false);
+                continue;
+            }
             var (p0, p1) = Axis(t);
-            if (RayCapsule(origin, dir, p0, p1, BodyRadius(t)) is not { } d || d > limit) continue;
+            if (RayCapsule(origin, dir, p0, p1, BodyRadius(t)) is not { } cd || cd > limit) continue;
+            d = cd;
             if (best is { } b && b.Distance <= d) continue;
             // the head sphere only counts when the ray reaches it soon after entering the body: a shot into the feet or back of
             // a prone player passes the whole body first (an upright head sits inside the capsule, so its entry is within one radius)
@@ -223,6 +238,36 @@ public static class HitMath
             best = new RayHit(t.Id, d, head);
         }
         return best;
+    }
+
+    /// <summary>A world point in the frame of a target's body box: x to the body's right, y up from the feet, z ahead of the box's centre.</summary>
+    public static Vector3 ToBox(in HitTarget t, Vector3 p)
+    {
+        var f = Forward(t.Yaw, 0);
+        var right = new Vector3(-f.Z, 0, f.X);
+        var rel = p - t.Feet;
+        return new Vector3(Vector3.Dot(rel, right), rel.Y, Vector3.Dot(rel, f) - t.BoxAhead);
+    }
+
+    /// <summary>Distance along the ray to a target's body box (<see cref="HitTarget.Box"/>), 0 if the origin is inside, null on a miss.</summary>
+    public static float? RayBox(Vector3 o, Vector3 d, in HitTarget t)
+    {
+        var f = Forward(t.Yaw, 0);
+        var right = new Vector3(-f.Z, 0, f.X);
+        var lo = ToBox(t, o);
+        var ld = new Vector3(Vector3.Dot(d, right), d.Y, Vector3.Dot(d, f));
+        var min = new Vector3(-t.Box.X / 2, 0, -t.Box.Z / 2); var max = new Vector3(t.Box.X / 2, t.Box.Y, t.Box.Z / 2);
+        float near = 0, far = float.PositiveInfinity;
+        for (var axis = 0; axis < 3; axis++)
+        {
+            var (oo, dd, a, b) = axis switch { 0 => (lo.X, ld.X, min.X, max.X), 1 => (lo.Y, ld.Y, min.Y, max.Y), _ => (lo.Z, ld.Z, min.Z, max.Z) };
+            if (MathF.Abs(dd) < 1e-8f) { if (oo < a || oo > b) return null; continue; }
+            var t0 = (a - oo) / dd; var t1 = (b - oo) / dd;
+            if (t0 > t1) (t0, t1) = (t1, t0);
+            near = MathF.Max(near, t0); far = MathF.Min(far, t1);
+            if (near > far) return null;
+        }
+        return near;
     }
 
     /// <summary>Distance along the ray to the sphere, 0 if the origin is inside, null on a miss (only forward hits).</summary>

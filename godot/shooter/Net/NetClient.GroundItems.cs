@@ -47,7 +47,7 @@ public partial class NetClient
     static Node3D MakeGroundItemVisual(ItemDef? item)
     {
         var node = new Node3D();
-        if (item is { Model: not "" } && ModelLib.Instance(item.Model) is { } model && ModelBounds(model, Transform3D.Identity, true) is { } box)
+        if (item is { Model: not "" } && ItemModel(item) is { } model && ModelBounds(model, Transform3D.Identity, true) is { } box)
         {
             model.Position = new Vector3(-(box.Position.X + box.Size.X / 2f), GroundLift - box.Position.Y, -(box.Position.Z + box.Size.Z / 2f));
             node.AddChild(model);
@@ -55,6 +55,14 @@ public partial class NetClient
         }
         node.AddChild(PlaceholderBlock());
         return node;
+    }
+
+    /// <summary>An item's model: its own file, or for a model of the paid Synty packs (<see cref="ItemDef.Atlas"/>) the pack's model wearing that atlas; null when the file is not there.</summary>
+    static Node3D? ItemModel(ItemDef item)
+    {
+        const string synty = "synty/glb/";
+        if (item.Atlas == "") return ModelLib.Instance(item.Model);
+        return SyntyLib.Instance(item.Model[synty.Length..^".glb".Length], item.Atlas);
     }
 
     static MeshInstance3D PlaceholderBlock() => new()

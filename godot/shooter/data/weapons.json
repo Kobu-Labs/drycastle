@@ -44,7 +44,7 @@
       "magazine_size": 5, "reserve_ammo": 15, "reload_time": 3.2,
       "range": 600, "scope_fov": 20, "zoom_levels": 1,
       "falloff_start": 600, "falloff_end": 600, "falloff_multiplier": 1.0,
-      "sway_amount": 0.5, "breath_hold_seconds": 4.0, "breath_recover_seconds": 1.0
+      "muzzle_velocity": 450, "zero_distance": 100, "sway_amount": 0.5, "breath_hold_seconds": 4.0, "breath_recover_seconds": 1.0
     },
     {
       "id": "m4a1", "category": "assault_rifle", "slot": "primary", "unlock_level": 2, "kind": "hitscan", "full_auto": true,
@@ -159,7 +159,7 @@
       "magazine_size": 10, "reserve_ammo": 30, "reload_time": 4.0,
       "range": 800, "scope_fov": 15, "zoom_levels": 1,
       "falloff_start": 800, "falloff_end": 800, "falloff_multiplier": 1.0,
-      "sway_amount": 0.7, "breath_hold_seconds": 3.5, "breath_recover_seconds": 1.2,
+      "muzzle_velocity": 520, "zero_distance": 100, "sway_amount": 0.7, "breath_hold_seconds": 3.5, "breath_recover_seconds": 1.2,
       "recoil": { "vertical_per_shot": 2.0, "recovery_rate": 5, "max_climb": 5 }
     },
     {
@@ -168,7 +168,7 @@
       "magazine_size": 5, "reserve_ammo": 20, "reload_time": 3.6,
       "range": 700, "scope_fov": 12, "zoom_levels": 1,
       "falloff_start": 700, "falloff_end": 700, "falloff_multiplier": 1.0,
-      "sway_amount": 0.35, "breath_hold_seconds": 5.0, "breath_recover_seconds": 1.4,
+      "muzzle_velocity": 560, "zero_distance": 100, "sway_amount": 0.35, "breath_hold_seconds": 5.0, "breath_recover_seconds": 1.4,
       "recoil": { "vertical_per_shot": 1.6, "recovery_rate": 5, "max_climb": 4 }
     },
     {
@@ -177,7 +177,7 @@
       "magazine_size": 10, "reserve_ammo": 40, "reload_time": 3.0,
       "range": 600, "scope_fov": 18, "zoom_levels": 1,
       "falloff_start": 250, "falloff_end": 600, "falloff_multiplier": 0.6,
-      "sway_amount": 0.45, "breath_hold_seconds": 3.0, "breath_recover_seconds": 0.8,
+      "muzzle_velocity": 420, "zero_distance": 100, "sway_amount": 0.45, "breath_hold_seconds": 3.0, "breath_recover_seconds": 0.8,
       "recoil": { "vertical_per_shot": 0.9, "recovery_rate": 6, "max_climb": 3 }
     }
   ]

@@ -4264,6 +4264,42 @@
       "note": "Mains hum, a whizz sweep and random crackle clicks by scripts/make_shock_crackle.py (in the repo, deterministic); mono OGG, ~2.2 s"
     },
     {
+      "id": "sfx:drycastle-generated-sounds/heartbeat",
+      "name": "Heartbeat (sniper breath running out)",
+      "file": "drycastle-generated-sounds/heartbeat.ogg",
+      "used_for": "breath.heartbeat",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-15",
+      "generated": true,
+      "note": "Two falling low sine thumps by scripts/make_breath_sounds.py (in the repo, deterministic); mono OGG, 0.42 s, one beat"
+    },
+    {
+      "id": "sfx:drycastle-generated-sounds/breath_in",
+      "name": "Inhale (sniper breath hold begins)",
+      "file": "drycastle-generated-sounds/breath_in.ogg",
+      "used_for": "breath.in",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-15",
+      "generated": true,
+      "note": "Band-limited noise with a rising band by scripts/make_breath_sounds.py (in the repo, deterministic); mono OGG, 0.55 s"
+    },
+    {
+      "id": "sfx:drycastle-generated-sounds/breath_out",
+      "name": "Exhale (sniper breath let go or forced out)",
+      "file": "drycastle-generated-sounds/breath_out.ogg",
+      "used_for": "breath.out",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-15",
+      "generated": true,
+      "note": "Band-limited noise with a falling band by scripts/make_breath_sounds.py (in the repo, deterministic); mono OGG, 1.1 s"
+    },
+    {
       "id": "sfx:drycastle-generated-sounds/vehicle_engine",
       "name": "Vehicle engine loop",
       "file": "drycastle-generated-sounds/vehicle_engine.ogg",

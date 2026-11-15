@@ -24,14 +24,17 @@ public partial class Hud : CanvasLayer
     public Func<float>? Spread { get; set; }
     /// <summary>True while a scope is up (sniper zoom): the dark ring and thin reticle replace the crosshair.</summary>
     public Func<bool>? Scoped { get; set; }
+    /// <summary>The scope that is up: its vertical FOV in degrees (the mil-dots are spaced by it) and the zero dialled, metres (0: the weapon has no bullet drop, so no dots and no zero).</summary>
+    public Func<(float FovDeg, float ZeroM)>? Scope { get; set; }
     /// <summary>Iron-sight aim amount 0..1; the crosshair fades out as it rises (the weapon's own sight takes over).</summary>
     public Func<float>? Aim { get; set; }
-    /// <summary>Sniper breath meter: whether it shows, the breath left (0..1) and the phase. Read each frame; the owner sets it.</summary>
+    /// <summary>Sniper breath hold: whether the weapon has one and is scoped, the breath left (0..1) and the phase. Read each frame; the owner sets it.</summary>
     public Func<(bool Show, float Meter, BreathState.BreathPhase Phase)>? Breath { get; set; }
     float _crossAlpha = 1;
-    Control _scope = null!;
+    ScopeOverlay _scope = null!;
+    Label _zero = null!;
+    (int Zero, int Mils) _zeroShown = (-1, -1);
     Control _breath = null!;
-    BreathBar _breathBar = null!;
     Label _breathLabel = null!;
 
     Control _root = null!;
@@ -96,8 +99,14 @@ public partial class Hud : CanvasLayer
         _scope = new ScopeOverlay { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
         _scope.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _root.AddChild(_scope);
+        // the zero and what one dot is worth, inside the lower part of the scope's circle
+        _zero = Place(L("", "HudSmall", HorizontalAlignment.Center), 0.5f, 0.76f, -240, 0, 480, 24);
+        _zero.Visible = false;
+        _root.AddChild(_zero);
         BuildCrosshair();
         BuildBreath();
+        BuildHuntShot();
+        BuildBinoculars();
         BuildHealth();
         BuildStatus();
         BuildRozhlas(); // the set holder's hint and ON AIR chip
@@ -485,6 +494,7 @@ public partial class Hud : CanvasLayer
     public void ClearTransients()
     {
         _hitUntil = 0; Fade(_hit, 0);
+        ClearHuntShot();
         for (var i = 0; i < Indicators; i++) { _indAt[i] = 0; Fade(_ind[i], 0); }
     }
 
@@ -572,6 +582,7 @@ public partial class Hud : CanvasLayer
             if (now >= _protUntil) SetProtection(0); else UpdateProtection();
         }
         if (_hitUntil > 0) UpdateHit(now);
+        if (_huntUntil > 0) UpdateHuntShot(now);
         for (var i = 0; i < Indicators; i++) UpdateIndicator(i, now);
         UpdateFeed(now);
         UpdateCrosshair();
@@ -629,9 +640,56 @@ public partial class Hud : CanvasLayer
         return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Bigfoot => Strings.T("weapon.bigfoot"), SpecialWeapons.Gang => Strings.T("weapon.gang"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), SpecialWeapons.VehicleGun => Strings.T("weapon.vehicle_gun"), SpecialWeapons.Flak => Strings.T("weapon.flak"), SpecialWeapons.Burn => Strings.T("weapon.burn"), SpecialWeapons.Moab => Strings.T("weapon.moab"), SpecialWeapons.Missile => Strings.T("weapon.attack_missile"), SpecialWeapons.Turret => Strings.T("weapon.turret"), SpecialWeapons.AttackHelicopter => Strings.T("heli.weapon"), SpecialWeapons.Ac130 => Strings.T("ac130.kill"), SpecialWeapons.Helper => Strings.T("helper.weapon"), _ => KillWeaponName?.Invoke(id) ?? Strings.T("weapon.unknown") };
     }
 
-    /// <summary>Black outside a centred circle with a thin cross, drawn over the zoomed view.</summary>
+    /// <summary>The mil-dots and the zero of a scope with bullet drop: the dots follow the scope's FOV, the words change only with the zero or the dot spacing.</summary>
+    void UpdateScope(bool scoped)
+    {
+        (float FovDeg, float ZeroM) sc = scoped ? Scope?.Invoke() ?? (0f, 0f) : (0f, 0f);
+        var on = sc.ZeroM > 0 && sc.FovDeg > 0;
+        if (_zero.Visible != on) _zero.Visible = on;
+        _scope.SetMils(on ? sc.FovDeg : 0f);
+        if (!on) return;
+        var shown = ((int)MathF.Round(sc.ZeroM), _scope.DotMils);
+        if (shown == _zeroShown) return;
+        _zeroShown = shown;
+        Set(_zero, Strings.F("hud.scope.zero", shown.Item1, shown.Item2));
+    }
+
+    /// <summary>
+    /// Black outside a centred circle with a thin cross, drawn over the zoomed view. A scope with bullet drop has mil-dots on the cross: a dot every
+    /// <see cref="DotMils"/> mils (1 mil = 1 m at 1000 m), spaced from the FOV so they are true angles on the world: a target of a known height that
+    /// spans n mils is height x 1000 / n metres away, and a dot under the centre is the hold-over for a target beyond the zero.
+    /// </summary>
     sealed partial class ScopeOverlay : Control
     {
+        /// <summary>The dot spacings tried, mils: the first that puts the dots at least <see cref="MinDotPx"/> apart.</summary>
+        static readonly int[] Steps = { 1, 2, 5, 10, 20 };
+        const float MinDotPx = 10f, DotRadius = 2f;
+        const int MaxDots = 10;
+        float _fov;
+
+        /// <summary>Mils between two dots at the current FOV and size (0: no dots).</summary>
+        public int DotMils { get; private set; }
+
+        /// <summary>Screen pixels one mil spans at a vertical FOV, for a view this high.</summary>
+        float PxPerMil(float fovDeg) => Size.Y / 2f / Mathf.Tan(Mathf.DegToRad(fovDeg) / 2f) / 1000f;
+
+        public void SetMils(float fovDeg)
+        {
+            if (Mathf.IsEqualApprox(fovDeg, _fov)) return;
+            _fov = fovDeg;
+            Respace();
+            QueueRedraw();
+        }
+
+        void Respace()
+        {
+            DotMils = 0;
+            if (_fov <= 0 || Size.Y <= 0) return;
+            var px = PxPerMil(_fov);
+            DotMils = Steps[^1];
+            foreach (var step in Steps) if (step * px >= MinDotPx) { DotMils = step; break; }
+        }
+
         public override void _Draw()
         {
             var s = Size; var c = s / 2; var r = Mathf.Min(s.X, s.Y) * 0.46f;
@@ -642,80 +700,64 @@ public partial class Hud : CanvasLayer
             var line = new Color(0, 0, 0, 0.85f);
             DrawLine(new Vector2(c.X - r, c.Y), new Vector2(c.X + r, c.Y), line, 1.5f);
             DrawLine(new Vector2(c.X, c.Y - r), new Vector2(c.X, c.Y + r), line, 1.5f);
+            if (DotMils > 0)
+            {
+                var gap = DotMils * PxPerMil(_fov);
+                for (var i = 1; i <= MaxDots && i * gap < r * 0.9f; i++)
+                {
+                    DrawCircle(new Vector2(c.X, c.Y + i * gap), DotRadius, Colors.Black);
+                    DrawCircle(new Vector2(c.X, c.Y - i * gap), DotRadius, Colors.Black);
+                    DrawCircle(new Vector2(c.X + i * gap, c.Y), DotRadius, Colors.Black);
+                    DrawCircle(new Vector2(c.X - i * gap, c.Y), DotRadius, Colors.Black);
+                }
+            }
             DrawCircle(c, 2f, new Color(0.9f, 0.1f, 0.1f));
         }
 
-        public override void _Notification(int what) { if (what == NotificationResized) QueueRedraw(); }
+        public override void _Notification(int what) { if (what == NotificationResized) { Respace(); QueueRedraw(); } }
     }
 
-    /// <summary>Breath meter under the crosshair, shown only while scoped with a breath hold. The state is in words as well as colour.</summary>
+    /// <summary>
+    /// The breath hold has no meter (the heartbeat and the exhale say how much is left, see <see cref="BreathCues"/>): the HUD only names the key,
+    /// under the crosshair, while scoped with a full breath that is not being held.
+    /// </summary>
     void BuildBreath()
     {
         const float w = 240;
-        var box = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
         _breathLabel = L("", "HudSmall", HorizontalAlignment.Center);
-        _breathBar = new BreathBar { CustomMinimumSize = new Vector2(w, 12), MouseFilter = Control.MouseFilterEnum.Ignore };
-        box.AddChild(_breathLabel);
-        box.AddChild(_breathBar);
-        _breath = Place(box, 0.5f, 0.5f, -w / 2, 40, w, 40);
+        _breath = Place(_breathLabel, 0.5f, 0.5f, -w / 2, 40, w, 24);
+        _breath.Visible = false;
         _root.AddChild(_breath);
     }
 
     void UpdateBreath()
     {
         var b = Breath?.Invoke() ?? (false, 0f, BreathState.BreathPhase.Ready);
-        if (_breath.Visible != b.Show) _breath.Visible = b.Show;
-        if (!b.Show) return;
-        _breathBar.Set(b.Meter, b.Phase);
-        // the label's words depend only on the phase, whether the breath is empty and the bound key: text is built when one changes (#173, T3-032)
-        var state = (b.Phase, Empty: b.Meter <= 0.01f, Key: InputBindings.Name("sprint"));
-        if (state == _breathState) return;
-        _breathState = state;
-        Set(_breathLabel, b.Phase switch
-        {
-            BreathState.BreathPhase.Holding => Strings.T("hud.breath.held"),
-            BreathState.BreathPhase.Exhaled => Strings.T("hud.breath.exhaled"),
-            _ => state.Empty ? Strings.T("hud.breath.empty") : Strings.F("hud.breath.ready", state.Key),
-        });
+        var show = b.Show && b.Phase == BreathState.BreathPhase.Ready && b.Meter >= 0.999f;
+        if (_breath.Visible != show) _breath.Visible = show;
+        if (!show) return;
+        // the words depend only on the bound key: text is built when it changes (#173, T3-032)
+        var key = InputBindings.Name("sprint");
+        if (key == _breathKey) return;
+        _breathKey = key;
+        Set(_breathLabel, Strings.F("hud.breath.ready", key));
     }
 
-    (BreathState.BreathPhase Phase, bool Empty, string Key)? _breathState;
-
-    /// <summary>Breath bar: fill = breath left. Blue while held, amber when low, red while forced out, green otherwise.</summary>
-    sealed partial class BreathBar : Control
-    {
-        float _meter = 1;
-        BreathState.BreathPhase _phase;
-
-        public void Set(float meter, BreathState.BreathPhase phase)
-        {
-            if (Mathf.IsEqualApprox(meter, _meter) && phase == _phase) return;
-            _meter = meter; _phase = phase; QueueRedraw();
-        }
-
-        public override void _Draw()
-        {
-            var s = Size;
-            var b = ShooterTheme.Border;
-            DrawRect(new Rect2(Vector2.Zero, s), ShooterTheme.Surface);
-            var fill = _phase switch
-            {
-                BreathState.BreathPhase.Holding => ShooterTheme.Accent,
-                BreathState.BreathPhase.Exhaled => ShooterTheme.Danger,
-                _ => _meter < 0.25f ? ShooterTheme.Warn : ShooterTheme.Good,
-            };
-            DrawRect(new Rect2(b, b, Mathf.Max(0, (s.X - 2 * b) * _meter), s.Y - 2 * b), fill);
-            DrawRect(new Rect2(Vector2.Zero, s), ShooterTheme.Line, false, b);
-        }
-
-        public override void _Notification(int what) { if (what == NotificationResized) QueueRedraw(); }
-    }
+    string? _breathKey;
 
     void UpdateCrosshair()
     {
         if (_pounceHide) return; // lying under the demon: no crosshair
+        if (UpdateBinoculars())
+        {
+            // the binoculars are up: their own view, no crosshair, and no scope left over from the moment they were raised
+            if (_scope.Visible) _scope.Visible = false;
+            UpdateScope(false);
+            return;
+        }
         var scoped = Scoped?.Invoke() ?? false;
         if (_scope.Visible != scoped) { _scope.Visible = scoped; _scope.QueueRedraw(); _crossRoot.Visible = Settings.ShowCrosshair && !scoped && !_crossCovered; }
+        UpdateScope(scoped);
         if (scoped) return;
         var alpha = 1f - Math.Clamp(Aim?.Invoke() ?? 0f, 0f, 1f);
         if (Math.Abs(alpha - _crossAlpha) > 0.004f) { _crossAlpha = alpha; _crossRoot.Modulate = new Color(1, 1, 1, alpha); }

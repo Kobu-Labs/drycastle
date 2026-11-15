@@ -385,7 +385,7 @@ public partial class NetClient : Node
                     _wantSlot = StartSlot();
                     Dead = false; _gotSelf = false; _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
                     _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
-                    _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId);
+                    _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId); _breathCues.Reset(); _zero.Reset();
                 }
                 break;
             case EventKind.Death:
@@ -855,8 +855,10 @@ public partial class NetClient : Node
             // seated (roof/door gun, turret, any seat) or steering a missile: the held weapon's scope and iron-sight zoom stay off (#241)
             _me.ZoomFov = 0f; _me.IronSightZoom = false;
             if (_viewmodel != null) _viewmodel.Aiming = false;
+            LowerBinoculars();
             return;
         }
+        if (TickBinoculars()) return; // raised binoculars are the zoom: no scope, no iron sights
         var slot = Ammo?.Slot ?? _wantSlot;
         var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
         var on = zoom > 0 && !Dead && !_pinned && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
@@ -893,9 +895,11 @@ public partial class NetClient : Node
         if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
         if (HandleSeatInput(e)) return; // a number key while seated takes that seat
         if (HandleViewInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
+        if (HandleBinocularsInput(e)) return; // B: the binoculars from the bag
         if (Bot || Weapons == null || Dead || ChooserOpen || Input.MouseMode != Input.MouseModeEnum.Captured) return;
         if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {
+            if (DialZero(b.ButtonIndex == MouseButton.WheelUp ? 1 : -1)) return; // a scope with bullet drop is up: the wheel is its zero dial
             _wantSlot = CycleSlot(_wantSlot, b.ButtonIndex == MouseButton.WheelDown ? 1 : -1);
         }
     }
@@ -972,6 +976,9 @@ public partial class NetClient : Node
                 break;
             case EventKind.GlassSync when GlassCodec.DecodeSync(payload) is { } gsync:
                 OnGlassSync(gsync);
+                break;
+            case EventKind.HuntShot when HuntShot.Decode(payload) is { } hs:
+                HudHuntShot(hs);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 if (KeepEventLogs) _hitLog.Add((Now, h));

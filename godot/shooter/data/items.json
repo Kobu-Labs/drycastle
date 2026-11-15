@@ -6,13 +6,17 @@
   //   slot            the equipment slot it goes into: "headgear" (instead of the camouflage helmet) or "neck" (cosmetic); one item per slot
   //   model           the model a character wears, relative to the asset library (assets/), authored in the slot's frame: metres, facing -Z,
   //                   for headgear the origin is the middle of the head, for neck the base of the neck (see CharacterView.Worn.cs). Leave out to wear it without drawing it
+  //   atlas           for a model of the paid Synty packs (model under synty/glb/, in assets-private): the atlas texture it wears, a path under synty/.
+  //                   Without the private packs the item has no model (the ground shows the placeholder block)
   //   pickup_limit    how many times it can be taken from a corpse over its whole life; the next attempt makes it crumble. Leave out for no limit
   //   bag_only        a plain item with no slot (the Thieves' speaker): it rides in the bag and cannot be put on; slot is ignored
+  //   binoculars      a pair of binoculars (bag_only): the binoculars key raises them from the bag; the view zooms and reads the distance under its centre
   //   headshot_immune a headshot on its wearer is resolved as a body hit: no headshot multiplier, no headshot marker, no headshot bonus XP
   // Icons: ui/icons/items/<id>.png (tools/render_icons.gd renders it from `model`); an item without one shows the generic item icon.
   "items": [
     { "id": "bigfoot_head", "name": "Bigfoot head", "slot": "headgear", "model": "drycastle-generated-models/bigfoot_head.glb", "pickup_limit": 3, "headshot_immune": true },
     { "id": "gold_chain", "name": "Gold chain", "slot": "neck", "model": "drycastle-generated-models/gold_chain.glb", "pickup_limit": 3 },
-    { "id": "speaker", "name": "Speaker", "bag_only": true }
+    { "id": "speaker", "name": "Speaker", "bag_only": true },
+    { "id": "binoculars", "name": "Binoculars", "bag_only": true, "binoculars": true, "model": "synty/glb/props/binoculars_01.glb", "atlas": "glb/atlas/military_01_A.png" }
   ]
 }

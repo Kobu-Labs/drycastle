@@ -19,12 +19,19 @@ public sealed class ItemDef
     /// the slot's frame, in metres, facing -Z (the game's forward): for headgear the origin is the middle of the head, for the neck the base of the neck (the neck bone).
     /// </summary>
     public string Model { get; set; } = "";
+    /// <summary>
+    /// For a model of the paid Synty packs (<see cref="Model"/> under <c>synty/glb/</c>, which carries no texture): the atlas it wears, a path under the
+    /// private <c>synty/</c> folder ("glb/atlas/military_01_A.png"). Empty for a model that has its own materials.
+    /// </summary>
+    public string Atlas { get; set; } = "";
     /// <summary>How many times the item can be taken from a corpse over its whole life, or null for any number. The attempt after the last makes it crumble.</summary>
     public int? PickupLimit { get; set; }
     /// <summary>A headshot on the wearer is a body hit (<see cref="HitTarget.HeadGuarded"/>).</summary>
     public bool HeadshotImmune { get; set; }
     /// <summary>A plain item with no slot (the Thieves' speaker): it rides in the bag and cannot be worn. <see cref="Slot"/> is then unused.</summary>
     public bool BagOnly { get; set; }
+    /// <summary>A pair of binoculars: carried in the bag, the binoculars key raises them (<see cref="ShooterCore.Binoculars"/>). Needs <see cref="BagOnly"/>.</summary>
+    public bool Binoculars { get; set; }
 }
 
 /// <summary>
@@ -68,6 +75,9 @@ public sealed class ItemsFile : IVersioned
             if (!Enum.IsDefined(i.Slot)) throw new DataFileException($"{F}: {i.Id}: unknown slot");
             if (i.Model != "" && (!i.Model.EndsWith(".glb", StringComparison.Ordinal) || i.Model.StartsWith('/') || i.Model.Contains("..", StringComparison.Ordinal)))
                 throw new DataFileException($"{F}: {i.Id}: model is a .glb path inside the asset library");
+            if (i.Atlas != "" && (!i.Model.StartsWith("synty/glb/", StringComparison.Ordinal) || !i.Atlas.EndsWith(".png", StringComparison.Ordinal) || i.Atlas.StartsWith('/') || i.Atlas.Contains("..", StringComparison.Ordinal)))
+                throw new DataFileException($"{F}: {i.Id}: atlas is a .png path under synty/, for a model under synty/glb/");
+            if (i.Binoculars && !i.BagOnly) throw new DataFileException($"{F}: {i.Id}: binoculars are bag_only (they are used from the bag)");
             if (i.PickupLimit is < 1) throw new DataFileException($"{F}: {i.Id}: pickup_limit is at least 1 (leave it out for no limit)");
         }
         return f;

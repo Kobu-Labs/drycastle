@@ -193,9 +193,19 @@ public sealed class WildlifeKeeper : IAnimalHits
         foreach (var h in _herds) h.Update(dt, ground);
     }
 
-    /// <summary>A wild animal's hit volume is the player capsule scaled to the height of its own hit box (its variant's, else the species'; a head hit counts as a body hit).</summary>
-    public static HitTarget TargetOf(ushort hitId, Animal animal) =>
-        new(hitId, animal.Position, Stance.Stand, animal.Yaw, HeadGuarded: true, Scale: animal.HitBox[1] / PlayerHitBox.StandHeight);
+    /// <summary>
+    /// A wild animal's hit volume. A bullet meets its body box (its variant's, else the species': the length along its facing direction, so a deer is hit
+    /// from its nose to its tail, and nowhere is a head hit); a blast or a knife measures to the player capsule scaled to the box's height, as before.
+    /// </summary>
+    public static HitTarget TargetOf(ushort hitId, Animal animal)
+    {
+        var box = animal.HitBox;
+        return new(hitId, animal.Position, Stance.Stand, animal.Yaw, HeadGuarded: true, Scale: box[1] / PlayerHitBox.StandHeight,
+            Box: new Vector3(box[0], box[1], box[2]), BoxAhead: animal.Def.HitBoxAhead);
+    }
+
+    /// <summary>The animal with a hit id, null when it is gone.</summary>
+    public Animal? AnimalOf(ushort hitId) => _byHit.TryGetValue(hitId, out var w) ? w.Animal : null;
 
     /// <summary>Adds the living wild animals as hit targets.</summary>
     public void AddTargets(List<HitTarget> into)

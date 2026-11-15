@@ -19,6 +19,29 @@ public partial class NetClient
     double _shakeAmp;
     RecoilState _recoil = new(0);
     BreathState _breath = new(0);
+    readonly BreathCues _breathCues = new();
+
+    readonly ZeroDial _zero = new();
+
+    /// <summary>The scope that is up, for the HUD's mil-dots and zero: its FOV and the zero dialled on the weapon (0: no bullet drop).</summary>
+    (float FovDeg, float ZeroM) ScopeView() =>
+        _me is { ZoomFov: > 0 } me && !_binoculars && Ammo is { } a && CurrentWeapon is { } w && BulletDrop.HasDrop(w) ? (me.ZoomFov, _zero.Of(a.Slot - 1, w)) : (0f, 0f);
+
+    /// <summary>
+    /// The mouse wheel while a scope with bullet drop is up: one click of the zero dial (up: farther). The server is told the new zero and resolves the
+    /// next shots with it. False when the wheel is not the dial's (no such scope up), so it cycles the weapons as ever.
+    /// </summary>
+    bool DialZero(int clicks)
+    {
+        if (_me is not { ZoomFov: > 0 } || _binoculars || Ammo is not { } a || CurrentWeapon is not { } w || !BulletDrop.HasDrop(w)) return false;
+        var was = _zero.Of(a.Slot - 1, w);
+        var now = BulletDrop.Dial(w, was, clicks);
+        if (now == was) return true; // at the end of the dial
+        _zero.Set(a.Slot - 1, w, now);
+        SendItem(EventKind.SetZero, BulletDrop.EncodeZero(a.Slot - 1, now));
+        Sfx.Ui("ui.hover");
+        return true;
+    }
 
     bool PredictionOn => !Bot && ShotFx.Enabled && Weapons != null;
 
@@ -40,20 +63,28 @@ public partial class NetClient
         _me.AimKick = new Vector2(_recoil.PitchRad, _recoil.YawRad);
     }
 
-    /// <summary>Advances the sniper breath (the server runs the same state from the same input) and shows the cosmetic sway on the camera.</summary>
+    /// <summary>Advances the sniper breath (the server runs the same state from the same input), plays its sounds (inhale, heartbeat, exhale) and shows the cosmetic sway on the camera.</summary>
     void TickBreath(MoveInput mi)
     {
         if (_me == null || CurrentWeapon is not { } w) return;
         var scoped = mi.Has(MoveButtons.Aim) && w.ZoomFov > 0 && Mode.CanScope;
         _breath.Tick(Now, scoped, mi.Has(MoveButtons.Sprint), w, Perks.HoldBreathTime);
+        var cue = _breathCues.Tick(Now, _breath.Phase, _breath.Meter);
+        if (Sfx.Enabled)
+        {
+            if (cue.Inhale) Sfx.Play2D("breath.in");
+            if (cue.Beat) Sfx.Play2D("breath.heartbeat", cue.BeatDb);
+            if (cue.ForcedExhale) Sfx.Play2D("breath.out");
+            else if (cue.Exhale) Sfx.Play2D("breath.out", -8f);
+        }
         var v = BreathState.VisualSway(Now, _breath.SwayDegrees(w));
         _me.ViewSway = GameSettings.Current.ReduceMotion ? Vector2.Zero : new Vector2(v.X, v.Y);
     }
 
-    /// <summary>The breath meter while scoped with a breath hold (the HUD reads it each frame).</summary>
+    /// <summary>The breath while scoped with a breath hold (the HUD reads it each frame for the key hint).</summary>
     (bool Show, float Meter, BreathState.BreathPhase Phase) BreathView()
     {
-        if (_me is not { ZoomFov: > 0 } || CurrentWeapon is not { } w || BreathState.BudgetSeconds(w, Perks.HoldBreathTime) <= 0)
+        if (_me is not { ZoomFov: > 0 } || _binoculars || CurrentWeapon is not { } w || BreathState.BudgetSeconds(w, Perks.HoldBreathTime) <= 0)
             return (false, 0f, BreathState.BreathPhase.Ready);
         return (true, _breath.Meter, _breath.Phase);
     }

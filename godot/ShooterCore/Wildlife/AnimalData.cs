@@ -68,6 +68,8 @@ public sealed class AnimalDef
     public float WanderRadius { get; set; }
     /// <summary>Body box in the entity's frame: [width, height, length], feet on the ground, centred on the position. For hit tests.</summary>
     public List<float> HitBox { get; set; } = new();
+    /// <summary>Metres the body box's centre lies ahead of the position (a model whose origin is under its hind half: a deer). For a bullet's hit test and the hit diagram.</summary>
+    public float HitBoxAhead { get; set; }
     /// <summary>Other models of the same species. Variant index 0 is <see cref="Model"/>; index i (1 up) is <c>Variants[i - 1]</c>. The index travels on the wire.</summary>
     public List<AnimalVariant> Variants { get; set; } = new();
 

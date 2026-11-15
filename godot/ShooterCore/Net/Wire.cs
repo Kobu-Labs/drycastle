@@ -42,6 +42,10 @@ public enum EventKind : byte
     StreakEnded = 19,
     /// <summary>Server to the owner: a care package granted a reward streak, and the older reward it replaced if the slots were full (<see cref="KillstreakEvents"/>).</summary>
     StreakGranted = 23,
+    /// <summary>Client to server: the zero dialled on a weapon with bullet drop (<see cref="BulletDrop.EncodeZero"/>: u8 weapon index, u16 metres).</summary>
+    SetZero = 24,
+    /// <summary>Server to the shooter: a sniper rifle killed a wild animal, with where the bullet entered its body (<see cref="HuntShot"/>); the client shows the hit diagram.</summary>
+    HuntShot = 25,
     /// <summary>Client to server: take a corpse's weapon into a hotbar position (<see cref="CorpseCodec"/>).</summary>
     PickUpCorpse = 20,
     /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
@@ -264,7 +268,8 @@ public static class Wire
     //   v35 Holy Mass (213-215, citizen roles and states)
     //   v34 player statuses (220, 221)
     //   v33 church door
-    public const byte ProtocolVersion = 51;
+    //   v52 bullet drop of the sniper rifles: the zero dial (event 24, client to server); the hit diagram of a hunted animal (event 25)
+    public const byte ProtocolVersion = 52;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

@@ -16,6 +16,7 @@
   "eat_max_seconds": 7,
   // Species. scale and hit_box come from the models (assets/animated-animals, measured with `make assets-check`: scale brings the
   // import to the real size, hit_box = measured size x scale as [width, height, length], head up and antlers included). hp, speeds and
+  // hit_box_ahead: metres the box's centre lies ahead of the model's origin (scripts/make_animal_silhouettes.py prints it), for a bullet's hit test and the hit diagram.
   // radii are placeholders tuned by feel; the models face +Z, so model_yaw_deg 180. The species index is its position in this list.
   // A species may list "variants": [{ "id": "corgi", "model": "simple-dog-pack/corgi.glb" }]: other models with the same numbers. A pet wears
   // a random one (the base model included); a pinned pet of pets.json can name one ("asset").
@@ -27,7 +28,7 @@
     { "id": "cow", "name": "Cow", "model": "animated-animals/cow.glb", "scale": 0.3, "model_yaw_deg": 180, "hp": 120,
       "walk_speed": 1.0, "run_speed": 6, "turn_rate_deg_per_s": 140, "flee_radius": 8, "wander_radius": 20, "hit_box": [0.69, 1.38, 2.42] },
     { "id": "deer", "name": "Deer", "model": "animated-animals/deer.glb", "scale": 0.33, "model_yaw_deg": 180, "hp": 60,
-      "walk_speed": 1.5, "run_speed": 12, "turn_rate_deg_per_s": 240, "flee_radius": 35, "wander_radius": 60, "hit_box": [0.48, 1.41, 1.45] },
+      "walk_speed": 1.5, "run_speed": 12, "turn_rate_deg_per_s": 240, "flee_radius": 35, "wander_radius": 60, "hit_box": [0.48, 1.41, 1.45], "hit_box_ahead": 0.19 },
     { "id": "donkey", "name": "Donkey", "model": "animated-animals/donkey.glb", "scale": 0.33, "model_yaw_deg": 180, "hp": 100,
       "walk_speed": 1.3, "run_speed": 8, "turn_rate_deg_per_s": 160, "flee_radius": 10, "wander_radius": 25, "hit_box": [0.38, 1.3, 1.55] },
     { "id": "fox", "name": "Fox", "model": "animated-animals/fox.glb", "scale": 0.19, "model_yaw_deg": 180, "hp": 30,
@@ -39,7 +40,7 @@
     { "id": "shiba_inu", "name": "Shiba Inu", "model": "animated-animals/shiba-inu.glb", "scale": 0.17, "model_yaw_deg": 180, "hp": 35,
       "walk_speed": 1.4, "run_speed": 7, "turn_rate_deg_per_s": 300, "flee_radius": 10, "wander_radius": 30, "hit_box": [0.18, 0.53, 0.67] },
     { "id": "stag", "name": "Stag", "model": "animated-animals/stag.glb", "scale": 0.38, "model_yaw_deg": 180, "hp": 90,
-      "walk_speed": 1.5, "run_speed": 12, "turn_rate_deg_per_s": 220, "flee_radius": 35, "wander_radius": 60, "hit_box": [1.03, 2.07, 1.84] },
+      "walk_speed": 1.5, "run_speed": 12, "turn_rate_deg_per_s": 220, "flee_radius": 35, "wander_radius": 60, "hit_box": [1.03, 2.07, 1.84], "hit_box_ahead": 0.24 },
     { "id": "white_horse", "name": "White Horse", "model": "animated-animals/white-horse.glb", "scale": 0.38, "model_yaw_deg": 180, "hp": 150,
       "walk_speed": 1.6, "run_speed": 12, "turn_rate_deg_per_s": 180, "flee_radius": 15, "wander_radius": 30, "hit_box": [0.53, 1.83, 2.16] },
     { "id": "wolf", "name": "Wolf", "model": "animated-animals/wolf.glb", "scale": 0.3, "model_yaw_deg": 180, "hp": 60,
@@ -59,12 +60,12 @@
         { "id": "boar_03", "model": "synty/glb/pets/boar/boar_03.glb", "hit_box": [0.48, 0.9, 1.68] }
       ] },
     { "id": "doe", "name": "Doe", "model": "synty/glb/pets/doe/doe_01.glb", "scale": 1, "model_yaw_deg": 180, "hp": 50, "one_hit": true,
-      "walk_speed": 1.5, "run_speed": 12, "turn_rate_deg_per_s": 240, "flee_radius": 35, "wander_radius": 60, "hit_box": [0.35, 1.2, 1.28],
+      "walk_speed": 1.5, "run_speed": 12, "turn_rate_deg_per_s": 240, "flee_radius": 35, "wander_radius": 60, "hit_box": [0.35, 1.2, 1.28], "hit_box_ahead": 0.15,
       "variants": [
         { "id": "doe_02", "model": "synty/glb/pets/doe/doe_02.glb", "hit_box": [0.35, 1.2, 1.28] }
       ] },
     { "id": "moose", "name": "Moose", "model": "synty/glb/pets/moose/moose_female_01.glb", "scale": 1, "model_yaw_deg": 180, "hp": 220, "one_hit": true,
-      "walk_speed": 1.5, "run_speed": 10, "turn_rate_deg_per_s": 150, "flee_radius": 25, "wander_radius": 50, "hit_box": [0.62, 1.9, 2.06],
+      "walk_speed": 1.5, "run_speed": 10, "turn_rate_deg_per_s": 150, "flee_radius": 25, "wander_radius": 50, "hit_box": [0.62, 1.9, 2.06], "hit_box_ahead": 0.24,
       "variants": [
         { "id": "moose_female_02", "model": "synty/glb/pets/moose/moose_female_02.glb", "hit_box": [0.62, 1.9, 2.06] },
         { "id": "moose_male_01", "model": "synty/glb/pets/moose/moose_male_01.glb", "hit_box": [0.85, 2.3, 2.1] },

@@ -49,6 +49,16 @@ Mechanics added in v2:
   (#112). Pump and shell reloads are flags on the weapon.
 - Snipers have a scope (`scope_fov`) and breath hold (`breath_hold_seconds`, `breath_recover_seconds`). Zoom levels
   beyond one are not implemented (#113).
+- The breath hold has no meter: an inhale, a heartbeat under 40 % of the breath (faster and louder to the end) and a loud
+  exhale when it is forced out (`BreathCues`; sounds by `scripts/make_breath_sounds.py`).
+- Sniper bullets drop (`muzzle_velocity`, `zero_distance`; `BulletDrop`): the server resolves the shot at once along a
+  curve of 25 m pieces, each against the rewound targets (ADR 0013 holds). The mouse wheel while scoped dials the zero in
+  10 m steps (event 24, `SetZero`); the scope shows the zero and mil-dots at true angles. A bot's shots do not drop.
+- Hit diagram: a sniper kill of a wild animal sends the shooter event 25 (`HuntShot`: species, where the bullet entered the
+  body box, distance, weapon); the HUD shows the species' side view (`scripts/make_animal_silhouettes.py`) with the entry
+  marked. A bullet tests a wild animal against its body box (`hit_box`, `hit_box_ahead`), no longer the scaled capsule.
+- Binoculars: a bag item (`binoculars` in items.json, `/give binoculars`), key B. Zoom and a distance readout measured on
+  the client (`NetClient.Binoculars.cs`); no wire traffic.
 - Iron sights (hold zoom) ease the gun to centre and fade the crosshair; the sniper keeps its scope (commit bda2271).
 - Bullet holes (64-decal ring buffer, fade after 15 s) and sparks oriented along the surface normal on hitscan hits (commit 189b6bf).
 

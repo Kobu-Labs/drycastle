@@ -220,6 +220,7 @@ public static class InputBindings
         ("chat", Binding.Key((int)Key.T)),
         ("map", Binding.Key((int)Key.M)),
         ("inventory", Binding.Key((int)Key.F)),
+        ("binoculars", Binding.Key((int)Key.B)),
     };
 
     /// <summary>Actions that may hold the same key because they are never active together: the vehicle view acts only in a vehicle, the rozhlas talk key (hold, the set holder) only on foot (<see cref="BindingMap.Shares"/>).</summary>

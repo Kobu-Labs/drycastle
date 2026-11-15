@@ -221,8 +221,27 @@ The flow of a river water body, which pushes swimmers and the amphibious transpo
 _Avoid_: flow (alone), drift
 
 **Breath**:
-The sniper's breath hold while scoped: the time the scope can be held steady before the breath must be let go and recovered. There is no air under water.
+The sniper's breath hold while scoped: the time the scope can be held steady before the breath must be let go and recovered. It has no meter on the HUD: the player hears an inhale when the hold begins, a heartbeat once under 40 % of the breath is left (faster and louder to the end), and a loud exhale when the breath is forced out, after which the scope sways heavily until it is recovered. There is no air under water.
 _Avoid_: oxygen, stamina, air
+
+**Bullet drop**:
+The fall of a sniper rifle's bullet under gravity, as if it flew at the weapon's `muzzle_velocity`. The hit is still instant (no travel time, no leading a moving target): only the path is a curve. Sniper rifles only; a bot's shots do not drop. Not the damage falloff (less damage with distance).
+_Avoid_: falloff (that is damage), ballistics (the thrown arcs of the Bigfoot)
+
+**Zero**:
+The distance at which a sniper rifle's bullet lands on the crosshair: short of it the bullet is above the crosshair, beyond it under. The player dials it with the mouse wheel while scoped, in 10 m steps from 50 m to the weapon's range; the scope shows it. One zero per weapon, back to the weapon's `zero_distance` (100 m) on death. The distance to the target is the zero to dial, uphill and downhill alike.
+_Avoid_: elevation, sight setting
+
+**Mil-dots**:
+The dots on the cross of a sniper scope, at true angles: 1 mil is 1 m at 1000 m. The scope says how many mils one dot is. A target of a known height that spans n mils is height x 1000 / n metres away; a dot under the centre is the hold-over for a target beyond the Zero.
+
+**Hit diagram**:
+The card a hunter sees after killing a wild animal with a sniper rifle: the species' side view (its outline seen from the flank the bullet came in by), the place the bullet entered marked on it, the distance of the shot and the weapon. Only the shooter sees it, for 5 s. Only a kill, only a sniper rifle, only wildlife (not a Pet, a Citizen or a player). The place is where the bullet met the animal's body box: a bullet tests a wild animal against the box of `animals.json` (`hit_box`, its length along the animal, its centre `hit_box_ahead` of the position), a blast or a knife against the scaled player capsule as before.
+_Avoid_: kill cam, x-ray
+
+**Binoculars**:
+An Item that rides in the Bag (it cannot be worn) and is used from there: the binoculars key (B) raises and lowers them. Raised, the view is narrowed about eight times, the weapon is neither shown, fired nor aimed, and the middle of the view reads the distance in metres to what is under it (ground, wall, vehicle, animal, player; "---" for the sky): the number a sniper dials as the Zero. The client measures it against what it draws; the server is not asked. They come down on death, in a seat and when they leave the Bag. Given with `/give binoculars`; meant as an event reward. No Pickup limit.
+_Avoid_: rangefinder, spotter scope
 
 **Headlights**:
 A vehicle's front and tail lights, from the optional `lights` block in `vehicles.json`. The driver toggles them with the headlights key (H).

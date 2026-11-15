@@ -34,6 +34,8 @@ public partial class NetServer : Node
         public RecoilState Recoil = new(0);
         /// <summary>Sniper breath hold of this player; the server adds its per-shot aim error to hitscan shots.</summary>
         public BreathState Breath = new(0);
+        /// <summary>The zero this player dialled on each weapon with bullet drop (<see cref="BulletDrop"/>); a death resets it.</summary>
+        public readonly ZeroDial Zero = new();
         public readonly Queue<NetInput> Inputs = new();
         public ushort Ack;
         public bool HasAck;
@@ -430,6 +432,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpse } pu) OnPickUpCorpse(c, pu.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpseItem } pi) OnPickUpCorpseItem(c, pi.Payload);
             else if (m is EventMsg { Kind: >= (byte)EventKind.EquipItem and <= (byte)EventKind.TakeGroundItem } ir) OnItemRequest(c, (EventKind)ir.Kind, ir.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.SetZero } sz) { if (c.Joined && BulletDrop.TryDecodeZero(sz.Payload, out var zi, out var zm) && zi < Weapons.Weapons.Count && BulletDrop.HasDrop(Weapons.Weapons[zi])) c.Zero.Set(zi, Weapons.Weapons[zi], zm); }
             else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
@@ -676,6 +679,7 @@ public partial class NetServer : Node
                     sc.W.Reset(_elapsed);
                     sc.Recoil.Reset();
                     sc.Breath.Reset();
+                    sc.Zero.Reset();
                     SendAmmo(sc);
                 }
                 BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(s.Id, s.Position, s.ProtectionSeconds)));
@@ -979,20 +983,47 @@ public partial class NetServer : Node
             var d = HitMath.SpreadDirection(yaw + kick.YawRad + sway.YawRad, RecoilState.ClampPitch(pitch + kick.PitchRad + sway.PitchRad), Spread(shot.SpreadDegrees), _rng);
             var dir = new Vector3(d.X, d.Y, d.Z);
             var range = w.Range > 0 ? w.Range : MaxShotRange;
-            List<GlassCross>? crossed = null;
-            var wall = BulletHit(eye, dir, range, out var shotCar, ref crossed, seatCar);
-            var (exposedGunner, pastHull) = ExposedGunnerBehind(shotCar, eye, dir, range, targets, skip: seatCar);
-            var hit = GunnerCover.Raycast(N(eye), d, range, wall, targets, c.Id, exposedGunner, pastHull); // a flak gunner in the open is hit through his hull
-            if (hit == null && HitMath.Raycast(N(eye), d, range, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
+            // a weapon with bullet drop is resolved along its curve, one straight piece at a time (BulletDrop); any other, and a bot's, is the one piece of the whole range
+            var drops = BulletDrop.HasDrop(w) && !c.IsBot;
+            var zero = drops ? c.Zero.Of(shot.WeaponIndex, w) : 0f;
+            var from = eye; var along = dir; var len = range; var before = 0f; // the piece: its start, direction, length, and the metres of line of sight before it
+            List<GlassCross>? crossed; float wall; ServerCar? shotCar; RayHit? hit;
+            while (true)
+            {
+                if (drops)
+                {
+                    var a = BulletDrop.Point(N(eye), d, w, zero, before);
+                    var b = BulletDrop.Point(N(eye), d, w, zero, MathF.Min(range, before + BulletDrop.SegmentM));
+                    var piece = b - a;
+                    len = piece.Length();
+                    from = new Vector3(a.X, a.Y, a.Z);
+                    along = len > 1e-4f ? new Vector3(piece.X, piece.Y, piece.Z) / len : dir;
+                }
+                crossed = null;
+                wall = BulletHit(from, along, len, out shotCar, ref crossed, seatCar);
+                var (exposedGunner, pastHull) = ExposedGunnerBehind(shotCar, from, along, len, targets, skip: seatCar);
+                hit = GunnerCover.Raycast(N(from), N(along), len, wall, targets, c.Id, exposedGunner, pastHull); // a flak gunner in the open is hit through his hull
+                if (hit == null && HitMath.Raycast(N(from), N(along), len, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
+                if (!drops || hit != null || wall <= len || before + BulletDrop.SegmentM >= range) break;
+                var passed = before;
+                DamageCrossed(crossed, float.PositiveInfinity, at => HitMath.HitscanDamage(w, passed + at, false)); // the panes of a piece the bullet flew through
+                before += BulletDrop.SegmentM;
+            }
             PerfShot(c, eye, dir, range, hit?.Id);
-            var end = eye + dir * (hit?.Distance ?? Math.Min(wall, range));
+            var end = from + along * (hit?.Distance ?? Math.Min(wall, len));
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
-            if (hit is { } h) Deal(c.Id, (byte)shot.WeaponIndex, h.Id, HitMath.HitscanDamage(w, h.Distance, h.Head), h.Head, false);
-            else if (shotCar != null && Vehicles != null && wall <= range)
-                DamageVehicle(shotCar, HitMath.HitscanDamage(w, wall, false) * Vehicles.BulletDamageMultiplier, c.Id, (byte)shot.WeaponIndex, 0);
-            else if (shotCar == null && wall <= range) BulletPuff(N(eye + dir * wall)); // dust where a bullet meets the ground or a wall (ticket #154)
-            if (hit == null && wall <= range) ShotGlass(shotCar, eye, dir, wall, HitMath.HitscanDamage(w, wall, false)); // the pane the bullet crossed where it stopped (ADR 0007)
-            DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, d => HitMath.HitscanDamage(w, d, false));
+            if (hit is { } h)
+            {
+                // a wild animal under a sniper rifle: where the bullet entered its body, taken before the hit can remove it (the hit diagram)
+                var hunt = w.Category == WeaponCategory.Sniper && WildlifeRules.IsHitId(h.Id) ? HuntShotOf(targets, h.Id, N(from + along * h.Distance), before + h.Distance, (byte)shot.WeaponIndex) : null;
+                var dealt = Deal(c.Id, (byte)shot.WeaponIndex, h.Id, HitMath.HitscanDamage(w, before + h.Distance, h.Head), h.Head, false);
+                if (dealt == DamageResult.Killed && hunt is { } shown) Send(c, new EventMsg((byte)EventKind.HuntShot, HuntShot.Encode(shown)));
+            }
+            else if (shotCar != null && Vehicles != null && wall <= len)
+                DamageVehicle(shotCar, HitMath.HitscanDamage(w, before + wall, false) * Vehicles.BulletDamageMultiplier, c.Id, (byte)shot.WeaponIndex, 0);
+            else if (shotCar == null && wall <= len) BulletPuff(N(from + along * wall)); // dust where a bullet meets the ground or a wall (ticket #154)
+            if (hit == null && wall <= len) ShotGlass(shotCar, from, along, wall, HitMath.HitscanDamage(w, before + wall, false)); // the pane the bullet crossed where it stopped (ADR 0007)
+            DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, at => HitMath.HitscanDamage(w, before + at, false));
         }
         else if (w.Kind == WeaponKind.Projectile)
         {

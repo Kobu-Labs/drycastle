@@ -117,6 +117,9 @@ public partial class Player : CharacterBody3D
     /// <summary>Scope: the vertical FOV wanted while zooming (0 = not scoped). The camera eases toward it and mouse sensitivity scales with the FOV.</summary>
     public float ZoomFov { get; set; }
 
+    /// <summary>The hands hold something that is not the weapon (raised binoculars): fire and aim are not read.</summary>
+    public bool HandsBusy { get; set; }
+
     /// <summary>Iron-sight aim-in (#237): the camera eases to <see cref="IronSightFovScale"/> of the normal FOV. Scopes (<see cref="ZoomFov"/>) take precedence.</summary>
     public bool IronSightZoom { get; set; }
 
@@ -415,8 +418,8 @@ public partial class Player : CharacterBody3D
         if (Input.IsActionPressed("sprint")) b |= MoveButtons.Sprint;
         if (Input.IsActionPressed("crouch")) b |= MoveButtons.Crouch;
         if (Input.IsActionPressed("prone")) b |= MoveButtons.Prone;
-        if (Input.IsActionPressed("fire")) b |= MoveButtons.Fire;
-        if (Input.IsActionPressed("zoom")) b |= MoveButtons.Aim;
+        if (!HandsBusy && Input.IsActionPressed("fire")) b |= MoveButtons.Fire;
+        if (!HandsBusy && Input.IsActionPressed("zoom")) b |= MoveButtons.Aim;
         if (Input.IsActionPressed("reload")) b |= MoveButtons.Reload;
         if (Input.IsActionPressed("interact")) b |= MoveButtons.Use;
         if (Input.IsActionPressed("headlights")) b |= MoveButtons.Headlights;

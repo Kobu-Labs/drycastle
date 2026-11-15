@@ -36,7 +36,7 @@ public partial class NetClient
     void HudWelcome()
     {
         if (!ShotFx.Enabled || _hud != null) return; // headless runs have no HUD
-        _hud = new Hud { MyId = _myId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => _me is { ZoomFov: > 0 }, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Spread = CrosshairSpread };
+        _hud = new Hud { MyId = _myId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => _me is { ZoomFov: > 0 } && !_binoculars, Binoculars = BinocularsView, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Scope = ScopeView, Spread = CrosshairSpread };
         AddChild(_hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
         _hud.TacticalMapTeleport = OnMapTeleport;
         _hud.SetSandbox(SandboxGranted, SandboxHeldStreak, SandboxTakesDamage); // the SANDBOX badge (#156)
@@ -67,6 +67,36 @@ public partial class NetClient
             if (gi < a.Slots.Count) all.Add((a.Slots[gi].Mag, a.Slots[gi].Reserve, Weapons.Weapons[gi].MagazineSize == 0));
         var (mag, reserve) = a.Slots[a.Slot - 1];
         _hud.SetAmmo(Math.Max(1, HotbarPos(a.Slot) + 1), w.MagazineSize == 0 ? -1 : mag, reserve, all, a.ReloadRemaining, w.ReloadTime);
+    }
+
+    readonly Dictionary<string, Texture2D?> _silhouettes = new();
+
+    /// <summary>
+    /// A species' side view for the hit diagram: <c>res://ui/icons/animals/&lt;id&gt;.png</c> (the free packs' models, in the repository), else
+    /// <c>animal-silhouettes/&lt;id&gt;.png</c> of the private asset folder (the paid packs'); null when it has neither (the diagram draws a plain body).
+    /// Both are baked by <c>scripts/make_animal_silhouettes.py</c>. Loaded once per species.
+    /// </summary>
+    Texture2D? Silhouette(string speciesId)
+    {
+        if (_silhouettes.TryGetValue(speciesId, out var known)) return known;
+        Texture2D? tex = null;
+        var res = $"{IconRegistry.Root}animals/{speciesId}.png";
+        if (ResourceLoader.Exists(res)) tex = GD.Load<Texture2D>(res);
+        else
+        {
+            var file = System.IO.Path.Combine(GamePaths.PrivateAssets(), "animal-silhouettes", speciesId + ".png");
+            if (System.IO.File.Exists(file) && Image.LoadFromFile(file) is { } img) tex = ImageTexture.CreateFromImage(img);
+        }
+        return _silhouettes[speciesId] = tex;
+    }
+
+    /// <summary>The hit diagram of an animal this player just killed with a sniper rifle.</summary>
+    void HudHuntShot(HuntShotMsg m)
+    {
+        if (_hud == null || m.Species >= AnimalData.Animals.Count) return;
+        var def = AnimalData.Animals[m.Species];
+        var weapon = Weapons != null && m.Weapon < Weapons.Weapons.Count ? WeaponName(Weapons.Weapons[m.Weapon].Id) : "";
+        _hud.ShowHuntShot(def.Name.ToUpperInvariant(), Silhouette(def.Id), m.Along, m.Height, m.RightFlank, Strings.F("hud.hunt.line", m.DistanceM, weapon));
     }
 
     void HudHit(HitMsg h)
