@@ -70,9 +70,10 @@ public sealed class ThievesFile : IVersioned
         NotNegative(v.UsedApartM, "van.used_apart_m"); NotNegative(v.UTurnPenaltyM, "van.u_turn_penalty_m"); Positive(v.ExitStraightM, "van.exit_straight_m"); Positive(v.RamMassScale, "van.ram_mass_scale"); NotNegative(v.RamFallbackDamage, "van.ram_fallback_damage");
         v.View.Validate(F);
         var r = f.Raids;
-        if (r.Count < 1) throw new DataFileException($"{F}: raids.count is at least 1");
-        if (r.MaxVans < 1) throw new DataFileException($"{F}: raids.max_vans is at least 1");
-        Positive(r.NextRaidSeconds, "raids.next_raid_seconds"); NotNegative(r.GapSeconds, "raids.gap_seconds");
+        if (r.MinVans < 1) throw new DataFileException($"{F}: raids.min_vans is at least 1");
+        if (r.MaxVans < r.MinVans || r.MaxVans > RaidVanRules.MaxVans) throw new DataFileException($"{F}: raids.max_vans is between min_vans and {RaidVanRules.MaxVans}");
+        if (r.PlayersPerVan < 1) throw new DataFileException($"{F}: raids.players_per_van is at least 1");
+        NotNegative(r.ConvoyGapSeconds, "raids.convoy_gap_seconds");
         if (r.PlayersPerExtra < 1 || r.MaxExtraThieves < 0 || r.MaxExtraEnforcers < 0) throw new DataFileException($"{F}: raids.players_per_extra is at least 1, the extras are not negative");
         if (g.Raid.Size + r.MaxExtraThieves + r.MaxExtraEnforcers > GangRules.MaxCrew) throw new DataFileException($"{F}: raids can grow a crew past {GangRules.MaxCrew} members");
         if (r.RoutePick != "random") throw new DataFileException($"{F}: raids.route_pick is \"random\" (the only way so far)");
@@ -183,17 +184,16 @@ public sealed class GangSpawn
     public float SpreadM { get; set; } = 3;
 }
 
-/// <summary>The Raids of the event, one after another (GLOSSARY "Raid"): how many, when the next one comes, and how a crew grows with the players.</summary>
+/// <summary>The convoy of the event (GLOSSARY "Thieves event", "Raid"): how many vans come, how far apart they are launched, and how a crew grows with the players.</summary>
 public sealed class RaidsConfig
 {
-    /// <summary>The Raids the event consists of; it is won when the last van is gone.</summary>
-    public int Count { get; set; } = 3;
-    /// <summary>The most vans in the village at once.</summary>
-    public int MaxVans { get; set; } = 2;
-    /// <summary>The next Raid comes this long after the last one began, even when that van is still there (while fewer than <see cref="MaxVans"/> are).</summary>
-    public float NextRaidSeconds { get; set; } = 150;
-    /// <summary>When a van leaves or is destroyed, the next Raid comes at the latest this long after it.</summary>
-    public float GapSeconds { get; set; } = 8;
+    /// <summary>The wave has at least this many vans, and at most <see cref="MaxVans"/> (at most <see cref="RaidVanRules.MaxVans"/>).</summary>
+    public int MinVans { get; set; } = 1;
+    public int MaxVans { get; set; } = 3;
+    /// <summary>One van per this many human players, rounded up, between <see cref="MinVans"/> and <see cref="MaxVans"/>.</summary>
+    public int PlayersPerVan { get; set; } = 3;
+    /// <summary>The next van of the wave is launched this long after the one before: they drive the same route in a line (at the van's speed, seconds x speed = metres apart).</summary>
+    public float ConvoyGapSeconds { get; set; } = 3;
     /// <summary>The crew grows by one extra member for every this many players beyond the first (Thieves first, then Enforcers), up to the maxima below.</summary>
     public int PlayersPerExtra { get; set; } = 2;
     public int MaxExtraThieves { get; set; } = 3;
@@ -201,10 +201,10 @@ public sealed class RaidsConfig
 
     /// <summary>
     /// The fixed routes a van comes in on and leaves by (<see cref="RaidRoutes"/>), in the map's local ground metres; empty: the old automatic choice (a random road at the map edge, the stop with the most targets).
-    /// Each Raid picks one at random (<see cref="RoutePick"/>), follows the roads through its waypoints, then on to a stop near the church (<see cref="ParkNearChurchM"/>) and leaves the same way back.
+    /// Each wave picks one at random (<see cref="RoutePick"/>), every van of it follows the roads through its waypoints, then on to its own stop near the church (<see cref="ParkNearChurchM"/>) and leaves the same way back.
     /// </summary>
     public List<RaidRouteConfig> Routes { get; set; } = new();
-    /// <summary>How a Raid picks its route: "random" (the only way so far).</summary>
+    /// <summary>How a wave picks its route: "random" (the only way so far).</summary>
     public string RoutePick { get; set; } = "random";
     /// <summary>The roads a route may be driven over: at least this wide (0: all, footpaths too, because the owner drew the routes over them; the van's own <see cref="VanConfig.MinRoadWidthM"/> applies from the route's end to the stop).</summary>
     public float RouteMinRoadWidthM { get; set; } = 0;
@@ -216,6 +216,9 @@ public sealed class RaidsConfig
     public float[]? ParkCentre { get; set; }
     /// <summary>With no centre to park near (or no stop found near it): the van parks at the end of its route, or, when that spot fails, the nearest working spot back along it within this distance.</summary>
     public float RouteStopSearchM { get; set; } = 40;
+
+    /// <summary>How many vans the wave has for <paramref name="humans"/> human players.</summary>
+    public int VansFor(int humans) => Math.Clamp((Math.Max(1, humans) + PlayersPerVan - 1) / PlayersPerVan, MinVans, MaxVans);
 
     /// <summary>The crew of a Raid for <paramref name="players"/> human players: the base counts of <see cref="GangConfig.Raid"/> plus the extras.</summary>
     public GangRaidCounts CrewFor(GangRaidCounts baseCrew, int players)

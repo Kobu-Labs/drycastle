@@ -27,6 +27,6 @@
   // shown in BoidRules); they flow round aircraft (the gunship aircraft and flying vehicles) and never fly through one. "model" is a GLB of assets/ or assets-private/ (a small wedge when it is missing); model_yaw_deg turns it to face forward.
   "flocks": [
     { "id": "crow", "name": "Crows", "model": "animal-kit/bird.glb", "scale": 1, "model_yaw_deg": 180,
-      "flocks": 3, "birds_min": 24, "birds_max": 48, "altitude_min_m": 18, "altitude_max_m": 40, "range_m": 200, "speed_mps": 7, "scatter_radius_m": 30 }
+      "flocks": 15, "birds_min": 24, "birds_max": 48, "altitude_min_m": 18, "altitude_max_m": 40, "range_m": 200, "speed_mps": 7, "scatter_radius_m": 30 }
   ]
 }

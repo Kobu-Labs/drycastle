@@ -666,7 +666,7 @@ lamps:
 # under the eave, clear of the known openings (config/buildings/*.yaml) and of a house connector. See docs/pipeline.md.
 dishes:
   # Chance per dwelling, rolled from a generator seeded with "<building id>:dish": the same houses on every run.
-  dish_chance: 0.4
+  dish_chance: 0.8
   # No dish on a house whose eave is lower than this (the dish would not fit under it).
   min_eave_m: 2.6
   # The dish's origin hangs this far under the eave (a seeded value in the range) and never lower than min_height_m above the ground.

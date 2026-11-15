@@ -113,7 +113,7 @@ public sealed class RaidVan : IWorldEntity
         .FromAnywhere(RaidVanState.Destroyed)
         .Note(RaidVanState.Arriving, "Drives the road path from the map edge to the stop at its speed (it brakes only for the stop, never for what is in its way); no clock. Ends in Opening at the stop.")
         .Note(RaidVanState.Opening, "Stopped; the side door slides open (clock: door seconds) and the crew starts getting out, one every stagger seconds.")
-        .Note(RaidVanState.Parked, "The crew works (the stay clock runs beside). Leaves for Boarding (or Closing when nobody is afoot) when the Loot loaded reaches capacity, the stay time ran out, or the crew is gone (dead or aboard).")
+        .Note(RaidVanState.Parked, "The crew works (the stay clock runs beside). Leaves for Boarding (or Closing when nobody is afoot) when the Loot loaded reaches capacity or the stay time ran out; a dead crew does not send it off.")
         .Note(RaidVanState.Boarding, "The living crew is called back (clock: board wait seconds); ends when none is afoot, or the wait ran out (those left behind flee).")
         .Note(RaidVanState.Closing, "The door slides shut (clock: door seconds), then the van drives off.")
         .Note(RaidVanState.Leaving, "Drives the way out to the map edge, accelerating; the entity ends at its end (no state follows).")
@@ -351,8 +351,7 @@ public sealed class RaidVan : IWorldEntity
     {
         _speed = 0;
         _stay.Tick(dt);
-        var crewGone = Crew is { } c ? c.StillToSpawn == 0 && c.Afoot == 0 : true;
-        if (!(Full || _stay.Ready || crewGone)) return;
+        if (!(Full || _stay.Ready)) return; // a dead crew does not send it off: it stands, solid and destroyable
         if (Crew is { Afoot: > 0 }) _fsm.Enter(RaidVanState.Boarding, _d.BoardWaitSeconds);
         else _fsm.Enter(RaidVanState.Closing, _d.DoorSeconds);
     }

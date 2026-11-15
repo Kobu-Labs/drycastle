@@ -4,7 +4,7 @@
   // pets; the pets of a group are "pets_per_group_min".."pets_per_group_max", each one of "species" by weight (ids of animals.json).
   // "max_pets" caps all pets in the map at once.
   "group_chance": 0.25,
-  "max_pets": 40,
+  "max_pets": 80,
   "pets_per_group_min": 1,
   "pets_per_group_max": 3,
   "species": [

@@ -244,15 +244,20 @@ public class RaidVanTests
     }
 
     [Fact]
-    public void ItLeavesWhenTheCrewIsGoneButNotWhileSomeStillComeOut()
+    public void ADeadCrewDoesNotSendItOffItStandsSolidUntilFullOrTheStayTimeRanOut()
     {
-        var crew = new FakeCrew { StillToSpawn = 2, Afoot = 0 };
-        var van = Parked(crew);
-        Run(van, 3);
-        Assert.Equal(RaidVanState.Parked, van.State); // two are still to get out
-        crew.StillToSpawn = 0; // they never came (or died): nobody afoot, nobody to come
-        Run(van, Dt * 2);
-        Assert.Equal(RaidVanState.Closing, van.State); // no one to call back: straight to the door
+        var crew = new FakeCrew { StillToSpawn = 0, Afoot = 0 }; // every member killed
+        var van = Parked(crew, c => c.StaySeconds = 20);
+        Run(van, 15);
+        Assert.Equal(RaidVanState.Parked, van.State);
+        Assert.True(RaidVanRules.IsSolid(van.State));
+        Run(van, 6);
+        Assert.Equal(RaidVanState.Closing, van.State); // stay clock out, nobody afoot: straight to the door
+
+        var full = Parked(new FakeCrew { StillToSpawn = 0, Afoot = 0 });
+        Assert.True(full.LoadLoot(full.Capacity));
+        Run(full, Dt * 2);
+        Assert.Equal(RaidVanState.Closing, full.State); // full with nobody afoot: no calling back
     }
 
     [Fact]

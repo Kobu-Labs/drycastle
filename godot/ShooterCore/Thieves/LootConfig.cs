@@ -31,6 +31,9 @@ public sealed class LootConfig
     /// <summary>How fast a Thief climbs (up and down, straight along the climb from its base to its top) for a target that needs a climb. Falls at 9.81 m/s2 when killed aloft.</summary>
     public float ClimbSpeed { get; set; } = 1.5f;
 
+    /// <summary>Vehicles are the Thieves' priority: tires are picked before other Loot, and a vehicle that newly becomes available pulls a share of the free Thieves to its tires.</summary>
+    public VehiclePriorityConfig VehiclePriority { get; set; } = new();
+
     public TireLootConfig Tire { get; set; } = new();
     public PetLootConfig Pet { get; set; } = new();
     public DishLootConfig Dish { get; set; } = new();
@@ -52,6 +55,7 @@ public sealed class LootConfig
         Positive(ApproachSpeedMps, "approach_speed_mps"); Positive(HaulSpeedMps, "haul_speed_mps"); Positive(ArriveM, "arrive_m"); Positive(ApproachGiveUpSeconds, "approach_give_up_seconds");
         Positive(AvoidSeconds, "avoid_seconds"); Positive(HaulGiveUpSeconds, "haul_give_up_seconds"); Positive(PickupSeconds, "pickup_seconds"); Positive(LoadSeconds, "load_seconds");
         Positive(LoadReachM, "load_reach_m"); Positive(ClimbSpeed, "climb_speed");
+        VehiclePriority.Validate(file);
         foreach (var k in LootKinds.All) Of(k).Validate(file, k.ToString().ToLowerInvariant());
     }
 }
@@ -67,5 +71,26 @@ public class LootKindConfig
     {
         if (!(Weight >= 0) || !float.IsFinite(Weight)) throw new DataFileException($"{file}: loot.{kind}.weight must not be negative");
         if (!(StealSeconds > 0) || !float.IsFinite(StealSeconds)) throw new DataFileException($"{file}: loot.{kind}.steal_seconds must be positive");
+    }
+}
+
+/// <summary>
+/// The <c>loot.vehicle_priority</c> section: a car at rest with a wheel on, newly within <see cref="ArriveRadiusM"/> of a Raid's van (a spawn, a respawn, a player stopping one there), sends
+/// <see cref="ThiefShare"/> of the Raid's free Thieves (rounded up, at least one; not those carrying or working) to its tires, at most <see cref="MaxThievesPerVehicle"/> (one per wheel). The server looks
+/// every <see cref="CheckSeconds"/>. <see cref="ArriveRadiusM"/> 0: the seek radius.
+/// </summary>
+public sealed class VehiclePriorityConfig
+{
+    public float ThiefShare { get; set; } = 0.5f;
+    public int MaxThievesPerVehicle { get; set; } = 4;
+    public float CheckSeconds { get; set; } = 1f;
+    public float ArriveRadiusM { get; set; }
+
+    public void Validate(string file)
+    {
+        if (!(ThiefShare > 0 && ThiefShare <= 1)) throw new DataFileException($"{file}: loot.vehicle_priority.thief_share must be in (0, 1]");
+        if (MaxThievesPerVehicle < 1 || MaxThievesPerVehicle > VehiclePriority.Wheels) throw new DataFileException($"{file}: loot.vehicle_priority.max_thieves_per_vehicle is 1 to {VehiclePriority.Wheels}");
+        if (!(CheckSeconds > 0) || !float.IsFinite(CheckSeconds)) throw new DataFileException($"{file}: loot.vehicle_priority.check_seconds must be positive");
+        if (!(ArriveRadiusM >= 0) || !float.IsFinite(ArriveRadiusM)) throw new DataFileException($"{file}: loot.vehicle_priority.arrive_radius_m must not be negative (0: the seek radius)");
     }
 }
