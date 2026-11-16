@@ -229,7 +229,7 @@ The fall of a sniper rifle's bullet under gravity, as if it flew at the weapon's
 _Avoid_: falloff (that is damage), ballistics (the thrown arcs of the Bigfoot)
 
 **Casing**:
-The spent case a gun throws out when it fires (#307): every gun that fires a round has one (a pistol's, a rifle's, a shotgun's red hull, the big case of a door gun, the jeep's roof gun or a sentry turret, the 35 mm case of the flak), a knife or a bazooka none. Seen by every client, drawn only near the camera, never sent over the network (each client throws its own from the same shot). It flies, bounces up to three times with a clink (`casing.tink`), lies on the floor for 20 s and fades. One that lands on a vehicle's roof goes after a second; it does not come to rest inside a vehicle (not yet, #316).
+The spent case a gun throws out when it fires (#307): every gun that fires a round has one (a pistol's, a rifle's, a shotgun's red hull, the big case of a door gun, the jeep's roof gun or a sentry turret, the 35 mm case of the flak), a knife or a bazooka none. Seen by every client, drawn only near the camera, never sent over the network (each client throws its own from the same shot). It flies, bounces up to three times with a clink (`casing.tink`), lies on the floor for 20 s and fades. One that lands on a vehicle's roof goes after a second; one that goes under water sinks slowly, lies on the bed and makes no sound; one that lands on a steep face slides down it; it does not come to rest inside a vehicle (not yet, #316).
 _Avoid_: shell (a flak **shell** is the round, not the case), brass
 
 **Zero**:

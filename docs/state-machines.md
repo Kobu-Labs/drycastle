@@ -242,7 +242,7 @@ stateDiagram-v2
     Fading --> Free
 ```
 
-- **Flying**: Ballistic arc, then bounces (up to Bounces, each quieter) and a short slide. Ends lying still, or at once in the void (no floor 8 m below where it started).
+- **Flying**: Ballistic arc, then bounces off the surface normal (up to Bounces, each quieter) and a short slide; on a steep face it slides down instead of settling. Under water it sinks slowly, never bounces, never clinks. Ends lying still, or at once in the void (no floor 8 m below where it started).
 - **Resting**: Lies flat on the floor for Stay seconds (a vehicle's roof: VehicleStay). Counts a clock; no movement, so its instance is not touched.
 - **Fading**: Shrinks to nothing over FadeSeconds, then the slot is free.
 

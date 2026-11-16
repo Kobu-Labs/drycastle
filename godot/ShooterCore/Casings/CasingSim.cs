@@ -33,8 +33,18 @@ public static class CasingProfiles
 
 public enum CasingPhase : byte { Free, Flying, Resting, Fading }
 
-/// <summary>Where the ground is under a point: the floor height below <c>from</c> within <c>depth</c> metres, and whether it is a vehicle's solid box (not terrain).</summary>
-public delegate bool CasingFloor(Vector3 from, float depth, out float y, out bool onVehicle);
+/// <summary>
+/// What a casing lands on: the floor's height and unit normal, its ground type (the collider's group as <see cref="SurfaceClassifier"/> reads it; water is not here, the sim
+/// asks <see cref="Water"/>), and whether it is a vehicle's solid box (not terrain). Not used yet: <see cref="Ground"/> (#316 will pick a soft tink by it).
+/// </summary>
+public readonly record struct CasingSurface(float Y, Vector3 Normal, SurfaceKind Ground, bool OnVehicle)
+{
+    /// <summary>Level ground at <paramref name="y"/>.</summary>
+    public static CasingSurface Flat(float y, SurfaceKind ground = SurfaceKind.Ground, bool onVehicle = false) => new(y, Vector3.UnitY, ground, onVehicle);
+}
+
+/// <summary>Where the floor is under a point: the surface below <c>from</c> within <c>depth</c> metres, false for none. One delegate, no allocation per call.</summary>
+public delegate bool CasingFloor(Vector3 from, float depth, out CasingSurface surface);
 
 /// <summary>
 /// Spent casings (#307): a fixed ring of slots, each a casing that flies on a ballistic arc, bounces on the floor a few times, lies still and fades out. Pure and
@@ -49,7 +59,7 @@ public sealed class CasingSim
         .Allow(CasingPhase.Flying, CasingPhase.Resting, CasingPhase.Free)
         .Allow(CasingPhase.Resting, CasingPhase.Fading)
         .Allow(CasingPhase.Fading, CasingPhase.Free)
-        .Note(CasingPhase.Flying, "Ballistic arc, then bounces (up to Bounces, each quieter) and a short slide. Ends lying still, or at once in the void (no floor 8 m below where it started).")
+        .Note(CasingPhase.Flying, "Ballistic arc, then bounces off the surface normal (up to Bounces, each quieter) and a short slide; on a steep face it slides down instead of settling. Under water it sinks slowly, never bounces, never clinks. Ends lying still, or at once in the void (no floor 8 m below where it started).")
         .Note(CasingPhase.Resting, "Lies flat on the floor for Stay seconds (a vehicle's roof: VehicleStay). Counts a clock; no movement, so its instance is not touched.")
         .Note(CasingPhase.Fading, "Shrinks to nothing over FadeSeconds, then the slot is free.")
         .Build();
@@ -60,6 +70,12 @@ public sealed class CasingSim
     public const float MinBounce = 0.7f;
     const int MaxBounces = 3;
     const float Restitution = 0.35f, Friction = 0.7f, Hard = 0.6f;
+    /// <summary>A face steeper than this (normal Y; about 37 degrees) is no place to lie: the casing slides down it.</summary>
+    public const float SlideNormalY = 0.8f;
+    const float SlideDrag = 1f;
+    /// <summary>Under water: the sinking speed (m/s) and how fast the casing's motion is brought to it (1/s).</summary>
+    public const float SinkSpeed = 0.6f;
+    const float WaterDrag = 8f;
 
     public sealed class Slot
     {
@@ -82,6 +98,8 @@ public sealed class CasingSim
 
     public readonly Slot[] Slots = new Slot[Capacity];
     public readonly List<Impact> Impacts = new();
+    /// <summary>The map's water: a casing below its surface sinks to the bed and makes no sound. Set by the caller.</summary>
+    public Water Water = Water.Empty;
     int _next;
 
     public CasingSim() { for (var i = 0; i < Capacity; i++) Slots[i] = new Slot(i); }
@@ -99,7 +117,7 @@ public sealed class CasingSim
         if (s.Phase != CasingPhase.Free) s.Fsm.Reset(CasingPhase.Free); // taken over
         s.Fsm.Enter(CasingPhase.Flying);
         s.Pos = pos; s.Vel = vel; s.Yaw = yaw; s.Tumble = 0; s.TumbleRate = tumbleRate; s.Kind = kind; s.Bounces = 0; s.StartY = pos.Y;
-        s.FloorY = floor(pos, 60f, out var y, out _) ? y : float.NaN;
+        s.FloorY = floor(pos, 60f, out var surface) ? surface.Y : float.NaN;
         s.Dirty = true;
         return s;
     }
@@ -121,44 +139,63 @@ public sealed class CasingSim
         }
     }
 
+    bool Submerged(Vector3 at) => at.Y < Water.SurfaceY(at.X, at.Z); // NaN (dry) compares false
+
     void Fly(Slot s, float dt, CasingFloor floor)
     {
         var p = CasingProfiles.Of(s.Kind);
         s.Dirty = true;
-        s.Vel.Y -= Gravity * dt;
+        var wet = Submerged(s.Pos);
+        if (wet)
+        {
+            // water: no gravity arc, the motion is brought to a slow sink
+            var k = MathF.Min(1f, WaterDrag * dt);
+            s.Vel += (new Vector3(0, -SinkSpeed, 0) - s.Vel) * k;
+            s.TumbleRate *= 1f - k;
+        }
+        else s.Vel.Y -= Gravity * dt;
         s.Pos += s.Vel * dt;
         s.Tumble += s.TumbleRate * dt;
         if (s.Pos.Y < s.StartY - 8f && float.IsNaN(s.FloorY)) { s.Fsm.Enter(CasingPhase.Free); return; } // fell into the void
         // the floor is found again only (from just above the casing: a step may end below it) when the casing is close to the one cached (or none was found)
-        var onVehicle = false;
+        var surface = CasingSurface.Flat(0f);
         if (float.IsNaN(s.FloorY) || s.Pos.Y - s.FloorY < 1.2f)
         {
-            if (floor(s.Pos + new Vector3(0, 0.3f, 0), 1.7f + MathF.Max(0f, -s.Vel.Y) * dt * 2f, out var y, out onVehicle)) s.FloorY = y; else s.FloorY = float.NaN;
+            if (floor(s.Pos + new Vector3(0, 0.3f, 0), 1.7f + MathF.Max(0f, -s.Vel.Y) * dt * 2f, out surface)) s.FloorY = surface.Y; else s.FloorY = float.NaN;
         }
         if (float.IsNaN(s.FloorY)) return;
         var contact = s.FloorY + Reach(s, p);
         if (s.Pos.Y > contact) return;
         s.Pos.Y = contact;
-        var speed = -s.Vel.Y;
-        if (speed > MinBounce && s.Bounces < MaxBounces)
+        var n = surface.Normal.LengthSquared() < 0.5f || surface.Normal.Y <= 0f ? Vector3.UnitY : Vector3.Normalize(surface.Normal);
+        var vn = Vector3.Dot(s.Vel, n); // negative: into the surface
+        var speed = -vn;
+        var underwater = Submerged(s.Pos); // lying on the bed
+        if (!underwater && speed > MinBounce && s.Bounces < MaxBounces)
         {
             s.Bounces++;
-            s.Vel = new Vector3(s.Vel.X * Friction, speed * Restitution, s.Vel.Z * Friction);
+            s.Vel = (s.Vel - n * vn) * Friction + n * (speed * Restitution); // off the normal, the along-surface part slowed
             s.TumbleRate *= Hard;
             Impacts.Add(new Impact(s.Pos, speed, s.Kind));
             return;
         }
-        // settled: slide to a stop, lie flat
-        s.Vel.Y = 0;
-        var k = MathF.Max(0f, 1f - 8f * dt);
-        s.Vel.X *= k; s.Vel.Z *= k;
+        // settled: slide along the surface, lie flat (a steep face: slide down it, never rest)
+        var vt = vn < 0 ? s.Vel - n * vn : s.Vel;
         var flat = MathF.Round(s.Tumble / MathF.PI) * MathF.PI;
         s.Tumble += (flat - s.Tumble) * MathF.Min(1f, dt * 25f);
         s.TumbleRate = 0;
-        if (s.Vel.X * s.Vel.X + s.Vel.Z * s.Vel.Z < 0.0025f)
+        if (n.Y < SlideNormalY && !underwater)
+        {
+            s.Vel = vt * MathF.Max(0f, 1f - SlideDrag * dt); // gravity's share along the face is already in the velocity
+            return;
+        }
+        if (!wet) { var g = new Vector3(0, -Gravity, 0); vt -= (g - n * Vector3.Dot(g, n)) * dt; } // friction holds it on a gentle slope
+        s.Vel = vt * MathF.Max(0f, 1f - 8f * dt);
+        if (s.Vel.LengthSquared() < 0.0025f)
         {
             s.Tumble = flat; s.Vel = Vector3.Zero;
-            s.Fsm.Enter(CasingPhase.Resting, onVehicle ? VehicleStay : Stay);
+            s.Pos.Y = s.FloorY + Reach(s, p); // lying flat now
+            s.Fsm.Enter(CasingPhase.Resting, surface.OnVehicle ? VehicleStay : Stay);
         }
     }
 }

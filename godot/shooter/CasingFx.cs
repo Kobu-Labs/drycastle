@@ -15,6 +15,12 @@ public static partial class CasingFx
     /// <summary>Metres from the camera within which a casing is thrown at all.</summary>
     public const float SpawnRange = 60f;
 
+    /// <summary>The map's water, set by the client on welcome: a casing that goes under it sinks to the bed and does not clink.</summary>
+    public static Water Water { get; set; } = Water.Empty;
+
+    /// <summary>What a casing collides with (ADR 0028, the Casing row): the world and the vehicles' solid boxes, not cover, players or the demon. From the rule table, not a hand-written mask.</summary>
+    static readonly uint FloorMask = CollisionRules.BodyMask(MoverKind.Casing);
+
     static Pool? _pool;
 
     /// <summary>
@@ -75,23 +81,28 @@ public static partial class CasingFx
 
         static NVec3 N(Vector3 v) => new(v.X, v.Y, v.Z);
 
-        /// <summary>The floor under a point: the world and the vehicles' solid boxes (a vehicle's roof is no place to keep a casing). Not the shot-only cover (tree crowns).</summary>
-        bool Floor(NVec3 from, float depth, out float y, out bool onVehicle)
+        /// <summary>The surface under a point: one ray with the Casing row's mask (<see cref="FloorMask"/>). Its height, normal, ground type (the collider's "surface" group) and whether it is a vehicle's box. Water is the sim's.</summary>
+        bool Floor(NVec3 from, float depth, out CasingSurface surface)
         {
-            y = 0; onVehicle = false;
+            surface = default;
             _q ??= PhysicsRayQueryParameters3D.Create(Vector3.Zero, Vector3.Zero);
             _q.From = new Vector3(from.X, from.Y, from.Z);
             _q.To = new Vector3(from.X, from.Y - depth, from.Z);
-            _q.CollisionMask = CollisionLayers.World | CollisionLayers.VehicleSolid;
+            _q.CollisionMask = FloorMask;
             var hit = GetWorld3D().DirectSpaceState.IntersectRay(_q);
             if (hit.Count == 0) return false;
-            y = hit["position"].AsVector3().Y;
-            onVehicle = hit["collider"].As<CollisionObject3D>() is { } c && (c.CollisionLayer & CollisionLayers.VehicleSolid) != 0;
+            var at = hit["position"].AsVector3();
+            var n = hit["normal"].AsVector3();
+            var collider = hit["collider"].As<CollisionObject3D>();
+            var onVehicle = collider != null && (collider.CollisionLayer & CollisionLayers.VehicleSolid) != 0;
+            var group = collider != null && collider.HasMeta("surface") ? collider.GetMeta("surface").AsString() : null;
+            surface = new CasingSurface(at.Y, N(n), SurfaceClassifier.Classify(false, onVehicle, false, group), onVehicle);
             return true;
         }
 
         public override void _Process(double delta)
         {
+            _sim.Water = Water;
             _sim.Step((float)Mathf.Min(delta, 0.05), _floor);
             foreach (var i in _sim.Impacts)
             {

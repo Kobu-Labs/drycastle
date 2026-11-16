@@ -45,7 +45,7 @@ Run-over tests the victim's Body footprint scaled to 85%.
 - A fence and a placed solid catch a drop (they share the world layer). Players, animals and walkers pass a target dummy.
 - Splash is one rule for every explosion (rocket, missile, gunship burst, vehicle).
 - The Bigfoot and the raid van keep the 0.56 m Hit radius (`PlayerHitBox.WideRadius`). Bigfoot's rays still see player bodies.
-- Casings: not built; #307 is not merged.
+- Casings (#307, client only): the floor ray's mask is `CollisionRules.BodyMask(MoverKind.Casing)` (world and vehicle solid), and it returns a surface (height, normal, ground type, vehicle?). A casing bounces off the normal, slides down a face steeper than about 37 degrees, and under water (the client's `Water`, not a physics body) sinks slowly to the bed, never bounces and never clinks.
 
 **Rejected.** A Godot-free static obstacle index in ShooterCore: it would let the rules run in unit tests, but it duplicates the map's collision geometry and must be kept in sync with it. The rule table is Godot-free; the geometry stays in the physics world.
 

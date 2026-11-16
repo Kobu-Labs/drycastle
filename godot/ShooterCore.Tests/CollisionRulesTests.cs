@@ -104,6 +104,14 @@ public class CollisionRulesTests
         Expect(MoverKind.Casing, Rule.Collide, ObstacleClass.Terrain, ObstacleClass.Building, ObstacleClass.Trunk, ObstacleClass.ClosedDoor, ObstacleClass.Vehicle);
         Expect(MoverKind.Casing, Rule.Pass, ObstacleClass.Crown, ObstacleClass.Bush, ObstacleClass.Player, ObstacleClass.DeepWater);
         Expect(MoverKind.Casing, Rule.Pass, Npcs);
+        Expect(MoverKind.Casing, Rule.Collide, Walls);
+    }
+
+    [Fact]
+    public void Casing_floor_ray_mask_is_world_and_vehicle_solid_only()
+    {
+        // no crowns (ShotOnly), no players, no demon
+        Assert.Equal(CollisionLayers.World | CollisionLayers.VehicleSolid, CollisionRules.BodyMask(MoverKind.Casing));
     }
 
     [Fact]
