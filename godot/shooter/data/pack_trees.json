@@ -20,8 +20,8 @@
     "value": 0.1,
     "accent_share": 0.0,
     "undergrowth_scale": 0.5,
-    "leaf_lo": 0.06,
-    "leaf_hi": 0.3,
+    "leaf_lo": 0.01,
+    "leaf_hi": 0.08,
     "accents": [
       {
         "name": "spring",
@@ -66,7 +66,7 @@
       "#4a8a3e",
       "#2f6a36"
     ],
-    "leaf_ref": 0.2,
+    "leaf_ref": 0.17,
     "shade_min": 0.75,
     "shade_max": 1.25
   },

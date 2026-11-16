@@ -132,8 +132,8 @@ public sealed class PackColourConfig
     /// <summary>How much of all this the undergrowth gets (0 = none, 1 = as the trees): ferns and shrubs vary, but gently.</summary>
     public float UndergrowthScale { get; set; } = 0.5f;
     /// <summary>A texel is foliage by how much greener than red and blue it is (g - max(r, b)) / g: none below <see cref="LeafLo"/>, fully above <see cref="LeafHi"/>.</summary>
-    public float LeafLo { get; set; } = 0.06f;
-    public float LeafHi { get; set; } = 0.3f;
+    public float LeafLo { get; set; } = 0.01f;
+    public float LeafHi { get; set; } = 0.08f;
     public List<PackColourAccent> Accents { get; set; } = new();
     /// <summary>Foliage takes the colour of the baked tree it stands in for (trees.json <c>colour</c>), so a tree is the same green on both sides of the swap; the
     /// atlas only shades it. This is the colour of a tree whose record has none (#rrggbb).</summary>

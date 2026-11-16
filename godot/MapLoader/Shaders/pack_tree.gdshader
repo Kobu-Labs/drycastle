@@ -17,8 +17,8 @@ uniform float specular = 0.5;
 // Foliage colour (pack_trees.json colour): saturation and brightness of the green texels, and how green a texel must be to count as foliage.
 uniform float foliage_saturation = 1.0;
 uniform float foliage_gain = 1.0;
-uniform float leaf_lo = 0.06;
-uniform float leaf_hi = 0.3;
+uniform float leaf_lo = 0.01;
+uniform float leaf_hi = 0.08;
 // Foliage takes the colour in the vertex colour (the baked tree's own green), shaded by the texel's brightness against leaf_ref.
 uniform float recolour = 1.0;
 uniform float leaf_ref = 0.2;
