@@ -270,6 +270,7 @@ public partial class NetClient : Node
         UpdateDeath(delta);
         UpdatePounce(delta);
         RenderCars();
+        RenderHarvester((float)delta);
         RenderAircraft(delta);
         RenderRockets();
         RenderMissiles();
@@ -361,6 +362,7 @@ public partial class NetClient : Node
                 OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
                 OnThiefAudioEvent((EventKind)e.Kind, e.Payload); // a Gang member says a line (ticket 09)
                 OnBigfootEvent((EventKind)e.Kind, e.Payload); // the Bigfoot's effects and the footprints to its corpse (#264)
+                OnHarvesterEvent((EventKind)e.Kind, e.Payload); // the harvester's cut, its bales' fire (#331)
                 OnThievesEvent((EventKind)e.Kind, e.Payload); // the Raid vans' honk
                 OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
                 OnRozhlasEvent((EventKind)e.Kind, e.Payload); // the village loudspeaker's phase, broadcast and offset

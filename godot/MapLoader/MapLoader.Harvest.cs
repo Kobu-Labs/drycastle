@@ -11,7 +11,11 @@ namespace Drycastle.MapLoader;
 public sealed partial class MapLoader
 {
     /// <summary>One MultiMesh of the crop layer with what a cut needs: its instances (map rows, so world = <c>ToGodot</c>) and which are cut already.</summary>
-    sealed record CropCell(MultiMesh Mesh, string Kind, bool Plant, IReadOnlyList<ClutterInstance> Rows, bool[] Cut);
+    sealed record CropCell(MultiMesh Mesh, string Kind, bool Plant, IReadOnlyList<ClutterInstance> Rows, bool[] Cut)
+    {
+        /// <summary>The cell's rows in game x, z (a swath that misses this box skips the cell).</summary>
+        public readonly Vector2 Min = new(Rows.Min(r => r.X), Rows.Min(r => -r.Y)), Max = new(Rows.Max(r => r.X), Rows.Max(r => -r.Y));
+    }
 
     readonly List<CropCell> _cropCells = new();
 
@@ -54,7 +58,7 @@ public sealed partial class MapLoader
         var max = new Vector2(Mathf.Max(a.X, b.X), Mathf.Max(a.Y, b.Y)) + Vector2.One * halfWidth;
         foreach (var cell in _cropCells)
         {
-            if (!cell.Plant || !GodotObject.IsInstanceValid(cell.Mesh)) continue;
+            if (!cell.Plant || cell.Max.X < min.X || cell.Min.X > max.X || cell.Max.Y < min.Y || cell.Min.Y > max.Y || !GodotObject.IsInstanceValid(cell.Mesh)) continue;
             var rows = cell.Rows;
             for (var k = 0; k < rows.Count; k++)
             {

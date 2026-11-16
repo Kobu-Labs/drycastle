@@ -346,7 +346,7 @@ public class HarvesterTests
         var entered = new List<MachineCorpsePhase>();
         for (var t = 0f; t < 20 && !m.Done; t += Dt)
         {
-            if (m.Phase == MachineCorpsePhase.Drawn && t > Cfg.DrawSeconds / 2) Assert.InRange(m.DrawFraction, 0.4f, 0.8f);
+            if (m.Phase == MachineCorpsePhase.Drawn && t > Cfg.DrawSeconds * 0.5f && t < Cfg.DrawSeconds * 0.6f) Assert.InRange(m.DrawFraction, 0.4f, 0.7f); // about half way in
             if (m.Tick(Dt) is { } p) entered.Add(p);
         }
         Assert.Equal(new[] { MachineCorpsePhase.Inside, MachineCorpsePhase.Baled }, entered);

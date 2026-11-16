@@ -1,0 +1,11 @@
+# Harvester event (#331)
+
+Server `NetServer.Harvester.cs`, client `NetClient.Harvester.cs`, pure rules `ShooterCore/Events/Harvester*.cs`, `CropFields.cs` (tests `HarvesterTests`). Machines: `Harvester.Ai`, `Hay.Bale`, `Harvester.Corpse` (`docs/state-machines.md`).
+
+- **When.** One at a time (the `EventBook`). After one is done (left the field, driver killed, machine destroyed, cancelled) no new one for 12 min (`HarvesterConfig.CooldownS`, a `Countdown`). Auto spawn: 10 min after start or round, then a roll every 60 s with 12 % while a human plays and no other event runs; the field must have a human within 350 m of its outline. `/event harvester` (admin) ignores the cooldown, refuses while one is out, answers with field id and x,y,z in map metres (x east, y up, z south).
+- **Fields.** The ground patches of `patches.json` (id, type, ring) whose type is `crop_*` except `crop_bare` (`MapLoader.PatchPaints`, `CropFields`). The wire id of a field is its index in that list. No export change.
+- **Machine.** vehicles.json `harvester` (`pack:synty-farm/SM_Veh_Harvester_01`, box without the pack): one hidden `ServerCar` reused for every job. `run_over` false: the event runs over at field speed (`HarvesterContacts`). Driver: a seated bot (`Client.HarvesterDriver`), shot dead it stays seated (ADR 0026) and anyone takes the seat once it rests (the kick-out is #330).
+- **Drive.** `FieldPlanner`: passes along the longest edge, header 4.8 m, half-circle turns, way out along the inset edge to where it came in. `HarvesterBrain` steers the car model.
+- **Cut.** Cosmetic. The server sends `HarvesterState` (phase, field, pass, metres) twice a second; clients replay the plan and squash the plants in the swath (`MapLoader.CropCut`).
+- **Kills.** Run over, or in front of the reel (`SpecialWeapons.Harvester`, "Harvester reel"): credited to the driver, so the kill feed and score count them. The corpse is drawn in, spends 2.5 s inside, and a bale (corpse owned by 60002, Items inside, lifetime of a corpse) leaves the unloader.
+- **Fire.** Any hitscan bullet or pellet that passes a bale lights it (also the field's `art_hay_bale*`, `MapLoader.CropBales`); 6 s, players within 2.6 m burn (`BurnSet.HazardSource`, `BurnCredit`: nobody is credited); then ash. Not rockets or blasts yet.

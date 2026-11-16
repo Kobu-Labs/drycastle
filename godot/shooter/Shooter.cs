@@ -56,6 +56,8 @@ namespace Drycastle.Shooter;
 public partial class Shooter : Node3D
 {
     readonly Drycastle.MapLoader.MapLoader _map = new();
+    /// <summary>Vehicle models of the paid packs (the harvester, #331) come from the map's asset library.</summary>
+    void HookPackModels() => CarFx.PackLoader = id => _map.InstantiateAsset(id);
     /// <summary>The map's water (water.json), parsed when the map loads; Water.Empty on a dry map.</summary>
     Drycastle.ShooterCore.Water _water = Drycastle.ShooterCore.Water.Empty;
     Drycastle.ShooterServer.Persistence.IProgressionStore? _progression;
@@ -92,6 +94,7 @@ public partial class Shooter : Node3D
     {
         // an undeclared state-machine transition is taken anyway (a rare bad edge must not end a match) but is logged, so the spec in docs/state-machines.md can be corrected
         StateMachineDiagnostics.Report = msg => GD.PrintErr("state machine: " + msg);
+        HookPackModels();
         var cfg = Config.Parse(OS.GetCmdlineUserArgs());
         var role = cfg.Str("role", "client");
         _smoke = cfg.Flag("smoke");
