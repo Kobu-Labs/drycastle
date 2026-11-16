@@ -149,6 +149,8 @@ material; the materials are the pack's own shared ones (`materials.json`, atlas)
 (`CropPlaceholder`, a colour per kind), with one warning per kind; rapeseed keeps its own glb. The pack's layout and how its GLBs are built: `assets-private/synty/README.md`
 (Farm section), `scripts/private_pack_glb.gd`.
 
+Crops react at run time, still cosmetic: a harvester's reel cuts them to stubble along its real path and vehicles flatten them (`MapLoader.Harvest.cs`: `CropCut`, `CropCrush`, `CropMarkGround`, `CropReset`; events `HarvesterCut`, `CropCrush`). See `docs/events/harvester.md` and `docs/crops-destruction.md`.
+
 ### Meadow clutter (generated near the player)
 
 Fields, meadows and forests are about 400 ha, too much to store clutter instances for. Maps with `files.meadow` (`meadow.bin`, map 0.9.0) carry a density raster instead
