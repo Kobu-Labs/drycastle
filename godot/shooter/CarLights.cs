@@ -23,9 +23,9 @@ public sealed class CarLights
     /// threshold + <see cref="DayNightCycle.GlowRamp"/>): lit values are well above it, off and dim ones below it. Colours peak at 1 (head,
     /// fallback lenses) so the energy is the HDR value; the Golf's glTF tail and reverse emissive factors are 0.5 and 0.68, hence higher energies.
     /// </summary>
-    const float HeadOnEnergy = 6f, HeadOffEnergy = 0.3f, TailEnergy = 0.5f, BrakeEnergy = 6f;
-    /// <summary>Model lamp materials: tails dim (below the threshold) when the lights are on, bloom while braking, off otherwise; reverse lamps bloom only while reversing.</summary>
-    const float ModelTailOn = 1.5f, ModelTailBrake = 12f, ModelReverseOn = 9f;
+    const float HeadOnEnergy = 6f, HeadOffEnergy = 0.3f, TailEnergy = 0.5f, TailOnEnergy = 3.5f, BrakeEnergy = 10f;
+    /// <summary>Model lamp materials: tails glow softly when the lights are on (the Golf's 0.5 factor makes 7 about 3.5, just over the threshold), flare while braking, off otherwise; reverse lamps bloom only while reversing.</summary>
+    const float ModelTailOn = 7f, ModelTailBrake = 20f, ModelReverseOn = 9f;
     /// <summary>Material names of the lamps a model may carry (assets/README.md, scripts/make_golf_mk2_model.py).</summary>
     public const string HeadLensMaterial = "Emissive warm headlight lens", TailLampMaterial = "Emissive red tail lamps",
         ReverseLampMaterial = "Emissive reverse lamps", IndicatorMaterial = "Emissive amber indicators";
@@ -116,7 +116,7 @@ public sealed class CarLights
         if (_modelHead != null) _modelHead.EmissionEnergyMultiplier = on ? HeadOnEnergy : HeadOffEnergy;
         if (_modelTail != null) _modelTail.EmissionEnergyMultiplier = braking ? ModelTailBrake : on ? ModelTailOn : 0f;
         if (_modelReverse != null) _modelReverse.EmissionEnergyMultiplier = reversing ? ModelReverseOn : 0f;
-        _tailMat.EmissionEnergyMultiplier = braking ? BrakeEnergy : TailEnergy;
+        _tailMat.EmissionEnergyMultiplier = braking ? BrakeEnergy : on ? TailOnEnergy : TailEnergy;
         _headMat.EmissionEnergyMultiplier = on ? HeadOnEnergy : HeadOffEnergy;
         foreach (var s in _spots) s.Visible = on && beam;
     }
