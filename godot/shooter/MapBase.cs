@@ -271,7 +271,7 @@ public sealed class MapBase
         var inside = ParcelMask(side, metresPerTexel);
         for (var i = 0; i < px.Length; i += 4)
             if (!_world && inside[i + 3] == 0) Buffer.BlockCopy(terrain, 0, px, i, 4); // the world sheet keeps the terrain's own colours past the parcels
-        PaintTopDown(px, _world ? null : inside, side, metresPerTexel);
+        PaintTopDown(px, null, side, metresPerTexel); // the picture over every texel it has, as on the tactical map
         using var img = Image.CreateFromData(side, side, false, Image.Format.Rgba8, px);
         img.GenerateMipmaps();
         return ImageTexture.CreateFromImage(img);

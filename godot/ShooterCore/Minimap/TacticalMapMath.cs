@@ -12,10 +12,10 @@ namespace Drycastle.ShooterCore;
 public static class TacticalMapMath
 {
     /// <summary>The grid cell sizes in metres, smallest first. The cell is the first that gives at most <see cref="MaxCells"/> per side.</summary>
-    public static readonly float[] CellSizes = { 50f, 100f, 200f, 500f, 1000f, 2000f };
+    public static readonly float[] CellSizes = { 25f, 50f, 100f, 250f, 500f, 1000f };
 
-    /// <summary>Most cells per side the grid may have; the sizes above give roughly 10 to 20 for a map of a few hundred metres to a few kilometres.</summary>
-    public const int MaxCells = 20;
+    /// <summary>Most cells per side the grid may have; the sizes above give roughly 16 to 40 for a map of a few hundred metres to a few kilometres.</summary>
+    public const int MaxCells = 40;
 
     /// <summary>The grid cell size in metres for a square map of <paramref name="extentMetres"/>: the smallest of <see cref="CellSizes"/> that keeps the grid to <see cref="MaxCells"/> cells a side (the largest when none does, the smallest for a tiny map).</summary>
     public static float CellSize(float extentMetres)

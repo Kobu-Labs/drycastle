@@ -66,7 +66,7 @@ public sealed partial class TacticalMap : Control
         SetProcess(false);
         SetProcessInput(false);
 
-        _sheet = new SheetLayer(this) { MouseFilter = MouseFilterEnum.Ignore, TextureFilter = TextureFilterEnum.LinearWithMipmaps };
+        _sheet = new SheetLayer(this) { MouseFilter = MouseFilterEnum.Ignore, ClipContents = true, TextureFilter = TextureFilterEnum.LinearWithMipmaps };
         _markers = new MarkerLayer(this) { MouseFilter = MouseFilterEnum.Stop };
         AddChild(_sheet);
         AddChild(_markers);
