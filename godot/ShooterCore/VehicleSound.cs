@@ -116,6 +116,10 @@ public sealed class EngineSoundModel
 
     readonly EngineSoundTuning _t;
     readonly StateMachine<EnginePhase> _fsm = new(Spec);
+    /// <summary>Seconds on the gas so far (accelerating or at the top speed, unbroken).</summary>
+    public float PushSeconds => _push;
+    /// <summary>What the last end of a push decided about the lift, in words (for the log): fired, or why not.</summary>
+    public string? LiftNote { get; private set; }
     float _lastSpeed = float.NaN, _rate, _push, _sinceLift = 1e9f;
     bool _lift;
 
@@ -157,11 +161,16 @@ public sealed class EngineSoundModel
         else want = EnginePhase.Coasting;
 
         if (_fsm.Is(want) || _fsm.Elapsed < _t.MinDwell) return;
+        var pushBefore = _push;
         _fsm.Enter(want);
-        // the turbo lets go when the driver ends a long push, by lifting or by going straight onto the brake (the handbrake, reverse pressed while rolling forward)
-        if (pushing && want is EnginePhase.Coasting or EnginePhase.Braking && _push >= _t.LiftMinPushSeconds && frac >= _t.LiftMinFraction && _sinceLift >= _t.LiftCooldown)
+        LiftNote = null;
+        if (pushing && want is EnginePhase.Coasting or EnginePhase.Braking)
         {
-            _lift = true; _sinceLift = 0;
+            // the turbo lets go when the driver ends a long push, by lifting or by going straight onto the brake (the handbrake, reverse pressed while rolling forward)
+            if (pushBefore < _t.LiftMinPushSeconds) LiftNote = $"no lift: pushed {pushBefore:F1}s, needs {_t.LiftMinPushSeconds:F0}s";
+            else if (frac < _t.LiftMinFraction) LiftNote = $"no lift: {frac * 100:F0}% of top speed, needs {_t.LiftMinFraction * 100:F0}%";
+            else if (_sinceLift < _t.LiftCooldown) LiftNote = $"no lift: cooldown ({_sinceLift:F1}s of {_t.LiftCooldown:F1}s)";
+            else { _lift = true; _sinceLift = 0; LiftNote = $"lift after a {pushBefore:F1}s push"; }
         }
         if (want is not (EnginePhase.Accelerating or EnginePhase.TopSpeed)) _push = 0;
     }
@@ -184,13 +193,13 @@ public sealed class EngineMix
     /// <summary>What each layer plays at, 0 to 1: the straight fade, eased (smoothstep), so a crossfade starts and ends gently.</summary>
     public readonly float[] Gain = new float[Count];
     readonly float[] _fade = new float[Count];
-    float _duck;
+    float _duck = -1f; // seconds since the lift played; negative: none
 
-    /// <summary>How far the loops dip (to this share of their volume) the moment the lift sound plays, and how long they take to come back, seconds: so the turbo is not buried under the engine.</summary>
-    public const float LiftDuckGain = 0.35f, LiftDuckSeconds = 1.0f;
+    /// <summary>How far the loops dip (to this share of their volume) under the lift sound, how fast they get there and how long they take to come back, seconds: so the turbo is not buried under the engine.</summary>
+    public const float LiftDuckGain = 0.45f, LiftDuckAttack = 0.04f, LiftDuckSeconds = 0.8f;
 
     /// <summary>The lift sound is playing now: duck the loops under it.</summary>
-    public void Duck() => _duck = LiftDuckSeconds;
+    public void Duck() => _duck = 0f;
 
     /// <summary>
     /// One frame. The background asks for full volume always, the phase's layer for full volume (the brake layer by the speed: a squeal at a walking
@@ -202,11 +211,12 @@ public sealed class EngineMix
         var active = EngineSoundModel.LayerOf(phase);
         var body = Body(def);
         var duck = 1f;
-        if (_duck > 0)
+        if (_duck >= 0)
         {
-            _duck = Math.Max(0f, _duck - dt);
-            var u = 1f - _duck / LiftDuckSeconds;
-            duck = LiftDuckGain + (1f - LiftDuckGain) * (u * u * (3f - 2f * u));
+            _duck += dt;
+            if (_duck < LiftDuckAttack) duck = 1f - (1f - LiftDuckGain) * (_duck / LiftDuckAttack);
+            else if (_duck < LiftDuckAttack + LiftDuckSeconds) { var u = (_duck - LiftDuckAttack) / LiftDuckSeconds; duck = LiftDuckGain + (1f - LiftDuckGain) * (u * u * (3f - 2f * u)); }
+            else _duck = -1f;
         }
         for (var i = 0; i < Count; i++)
         {
@@ -239,5 +249,5 @@ public sealed class EngineMix
     /// <summary>Gain as a volume offset in dB (silent: -80).</summary>
     public static float Db(float gain) => gain <= 0.001f ? -80f : 20f * MathF.Log10(gain);
 
-    public void Clear() { Array.Clear(Gain); Array.Clear(_fade); _duck = 0; }
+    public void Clear() { Array.Clear(Gain); Array.Clear(_fade); _duck = -1f; }
 }

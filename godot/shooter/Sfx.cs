@@ -169,7 +169,9 @@ public partial class Sfx : Node
     /// <summary>Non-positional (own weapon, hit marker, stingers).</summary>
     public static void Play2D(string id, float dbOffset = 0f) => Instance?.Do2D(id, dbOffset);
     /// <summary>3D positional at <paramref name="at"/> with the event's range; silent beyond it. Events with no range play non-positional.</summary>
-    public static void Play3D(string id, Vector3 at, float dbOffset = 0f) => Instance?.Do3D(id, at, dbOffset);
+    /// <summary>True when the sound started; false when it was skipped or has no voice, with the reason in <see cref="LastNote"/>.</summary>
+    public static bool Play3D(string id, Vector3 at, float dbOffset = 0f) => Instance?.Do3D(id, at, dbOffset) ?? false;
+    public static string LastNote { get; private set; } = "";
     public static void Ui(string id) => Instance?.DoUi(id);
     /// <summary>A looping voice; <paramref name="startFraction"/> starts it that share of the way into its file (0 to 1).</summary>
     public static LoopVoice? Loop(string id, Vector3 at, float startFraction = 0f) => Instance?.DoLoop(id, at, startFraction);
@@ -192,15 +194,19 @@ public partial class Sfx : Node
         _s2[i] = ++_i2;
     }
 
-    void Do3D(string id, Vector3 at, float dbOffset)
+    bool Do3D(string id, Vector3 at, float dbOffset)
     {
-        if (!Enabled || _p3.Length == 0 || Def(id) is not { } d) return;
-        if (!d.Positional) { Do2D(id, dbOffset); return; }
+        if (!Enabled || _p3.Length == 0) { LastNote = "audio disabled"; return false; }
+        if (Def(id) is not { } d) { LastNote = $"no sounds.json entry {id}"; return false; }
+        if (!d.Positional) { Do2D(id, dbOffset); LastNote = "played 2D"; return true; }
         var cam = GetViewport().GetCamera3D();
-        if (cam != null && !SoundRules.Audible(d, cam.GlobalPosition.DistanceTo(at))) return;
-        if (!GapOk(d)) return;
+        var dist = cam != null ? cam.GlobalPosition.DistanceTo(at) : 0f;
+        if (cam != null && !SoundRules.Audible(d, dist)) { LastNote = $"out of range ({dist:F0} m of {d.MaxDistance:F0})"; return false; }
+        if (!GapOk(d)) { LastNote = "min gap"; return false; }
         var i = SoundRules.PickVoice(_p3.Length, k => _p3[k].Playing, k => _pr3[k], k => _s3[k], d.Priority);
-        if (i < 0 || Pick(d) is not { } st) return;
+        if (i < 0) { LastNote = $"no voice: every playing voice outranks priority {d.Priority}"; return false; }
+        if (Pick(d) is not { } st) { LastNote = "no stream loaded (file missing or failed to decode)"; return false; }
+        var stolen = _p3[i].Playing;
         _pr3[i] = d.Priority;
         var p = _p3[i];
         p.Stream = st; p.Bus = d.Bus; p.VolumeDb = d.VolumeDb + dbOffset;
@@ -209,6 +215,8 @@ public partial class Sfx : Node
         p.GlobalPosition = at;
         p.Play();
         _s3[i] = ++_i3;
+        LastNote = $"played on voice {i}{(stolen ? " (stole a playing voice)" : "")}, {d.VolumeDb + dbOffset:F1} dB, pitch {p.PitchScale:F2}, listener {dist:F1} m, length {st.GetLength():F2}s, bus {p.Bus}";
+        return true;
     }
 
     /// <summary>UI sounds: when several are asked for in the same frame (a button click that also pops the screen) the last one wins.</summary>
