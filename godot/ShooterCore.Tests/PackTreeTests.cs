@@ -299,7 +299,6 @@ public class PackTreeTests
         Assert.False(c.Stands["swamp"].Edge); Assert.False(c.Stands["thicket"].Edge); Assert.True(c.Stands["pine"].Edge);
         // pine: the pine families; birch: birches and slender round trees; swamp: dead trees, willows, bare swamp trees, and one swamp-pack LOD
         Assert.All(c.Stands["pine"].Any, e => Assert.Matches("^SM_Tree_(Poly)?Pine", e.Name));
-        Assert.Contains(c.Stands["swamp"].Any, e => e.Name.StartsWith("SM_Tree_Dead_") || e.Name == "SM_Tree_Pine_Dead_01");
         Assert.All(c.Stands["swamp"].Any.Where(e => e.Pack == "swamp"), e => Assert.Matches("_LOD[12]$", e.Name)); // 28-30k triangles at full detail: only an LOD is affordable
         Assert.Contains(c.Stands["thicket"].Any, e => e.Name.Contains("Small") || e.Name.StartsWith("SM_Plant_Bush"));
         Assert.All(c.Stands["edge"].Any, e => Assert.Matches("^SM_Tree_(Round|Generic|0)", e.Name));

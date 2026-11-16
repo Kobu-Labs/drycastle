@@ -242,23 +242,44 @@
       "edge": false,
       "any": [
         {
-          "name": "SM_Tree_Pine_Dead_01",
-          "weight": 4,
+          "name": "SM_Tree_Round_03",
+          "weight": 2,
           "bulk": true
         },
         {
-          "name": "SM_Tree_Swamp_03",
+          "name": "SM_Tree_Round_04",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_TallRound_01",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_01",
+          "weight": 1.5,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_02",
+          "weight": 1.5,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_Sparse_01",
           "weight": 1,
           "bulk": true
         },
         {
-          "name": "SM_Tree_Swamp_04",
+          "name": "SM_Tree_PolyPine_Sparse_02",
           "weight": 1,
           "bulk": true
         },
         {
-          "name": "SM_Tree_Generic_Dead_01",
-          "weight": 0.5
+          "name": "SM_Tree_PolyPine_Sparse_03",
+          "weight": 1,
+          "bulk": true
         }
       ]
     },
