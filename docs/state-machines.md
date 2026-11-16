@@ -487,6 +487,37 @@ stateDiagram-v2
 - **Drawing**: Corners of an unfinished line are placed; nothing is part of the sketch yet. Enter finishes, Esc cancels.
 - **Selected**: One mark of the sketch is selected: Del deletes it, [ ] steps to the next.
 
+## Engine.Sound
+
+Which engine sound a vehicle makes (idle, accelerating, off the gas, braking, top speed), read from its speed.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Accelerating
+    Idle --> Coasting
+    Idle --> Braking
+    Accelerating --> Idle
+    Accelerating --> Coasting
+    Accelerating --> Braking
+    Accelerating --> TopSpeed
+    Coasting --> Idle
+    Coasting --> Accelerating
+    Coasting --> Braking
+    Coasting --> TopSpeed
+    Braking --> Idle
+    Braking --> Accelerating
+    Braking --> Coasting
+    Braking --> TopSpeed
+    TopSpeed --> Idle
+    TopSpeed --> Accelerating
+    TopSpeed --> Coasting
+    TopSpeed --> Braking
+```
+
+- **Idle**: standing: the idle loop
+- **Coasting**: off the gas: only the background loop (the lift sound plays on the way in)
+
 ## Event.Run
 
 One run of an event: active, then won (reward given) or despawned (no reward). Both ends are final.

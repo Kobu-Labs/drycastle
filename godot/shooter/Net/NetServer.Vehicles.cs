@@ -49,7 +49,34 @@ public partial class NetServer
         return anchors;
     }
 
-    /// <summary>Places the cars once the spawn candidates are validated: near the spawn zones, at least 12 m apart, random colours.</summary>
+    /// <summary>
+    /// The places of the types' <see cref="VehicleDef.FixedSpots"/> (vehicles.json), on the ground there: the heading is the spot's own or along the nearest
+    /// road (<see cref="RoadHeading"/>), the height the highest ground under the footprint (the same probe the random deal uses, else the terrain's own
+    /// height). A spot with no terrain under it is logged and left out. A vehicle that returns (<see cref="ServerCar.Reset"/>) comes back to its spot.
+    /// </summary>
+    List<(NVec3 Pos, float Yaw, int Kind)> PlanFixedSpots(PhysicsDirectSpaceState3D space)
+    {
+        var planned = new List<(NVec3 Pos, float Yaw, int Kind)>();
+        if (Vehicles == null || Map == null) return planned;
+        List<RoadLine>? roads = null;
+        for (var kind = 0; kind < Vehicles.Vehicles.Count; kind++)
+        {
+            var def = Vehicles.Vehicles[kind];
+            foreach (var spot in def.FixedSpots)
+            {
+                roads ??= RoadNetwork.Parse(Map.RoadsJson);
+                var yaw = RoadHeading.YawFor(spot, roads);
+                var terrain = Map.GroundHeight(spot.X, spot.Z);
+                if (float.IsNaN(terrain)) { GD.PrintErr($"server: fixed spot of {def.Id} at ({spot.X:F1},{spot.Z:F1}) has no ground, left out"); continue; }
+                var gy = ServerCar.RestHeight(space, new Vector3(spot.X, terrain, spot.Z), yaw, def.HalfWidth, def.HalfLength, terrain) ?? terrain;
+                planned.Add((new NVec3(spot.X, gy, spot.Z), yaw, kind));
+                GD.Print($"server: fixed spot {def.Id} at ({spot.X:F1},{gy:F1},{spot.Z:F1}) facing {yaw * 180f / MathF.PI:F0} deg");
+            }
+        }
+        return planned;
+    }
+
+    /// <summary>Places the cars once the spawn candidates are validated: near the spawn zones, at least 12 m apart, random colours; the types' fixed spots stand last in the list.</summary>
     void SpawnCars()
     {
         var space = World.GetWorld3D().DirectSpaceState;
@@ -78,12 +105,13 @@ public partial class NetServer
                 for (var n = 0; n < Vehicles.Vehicles[kind].SpawnCount; n++) kinds.Add(kind);
             var anchors = ClusterAnchors(Spawns, Math.Max(1, Math.Min(6, (kinds.Count + 2) / 3)), ClusterRadius);
             var fitProbes = new Dictionary<int, FlightProbe>();
+            var fixedSpots = PlanFixedSpots(space); // the random deal keeps 12 m clear of them; they join the list after it, so the ids of the dealt vehicles do not move
             bool Place(int kind, IEnumerable<NVec3> cands)
             {
                 var def0 = Vehicles.Vehicles[kind];
                 foreach (var p in cands)
                 {
-                    if (spots.Any(s => NVec3.Distance(s.Pos, p) < 12f)) continue;
+                    if (spots.Any(s => NVec3.Distance(s.Pos, p) < 12f) || fixedSpots.Any(s => NVec3.Distance(s.Pos, p) < 12f)) continue;
                     var yaw = (float)(_rng.NextDouble() * Math.PI * 2);
                     if (ServerCar.RestHeight(space, new Vector3(p.X, p.Y, p.Z), yaw, def0.HalfWidth, def0.HalfLength, p.Y) is not { } gy) continue;
                     if (def0.Flight != null)
@@ -111,6 +139,7 @@ public partial class NetServer
                 if (!ok) GD.PrintErr($"server: no spot for {def.Id}");
             }
             foreach (var fit in fitProbes.Values) fit.QueueFree();
+            spots.AddRange(fixedSpots);
             // players must not respawn inside a vehicle: drop the spawn candidates next to one (keep a healthy pool)
             var free = Spawns.Where(s => spots.All(v => NVec3.Distance(v.Pos, s) > 4f)).ToList();
             if (free.Count >= 20) { Spawns.Clear(); Spawns.AddRange(free); }

@@ -37,6 +37,8 @@ public partial class NetClient
         public float SnapYaw;
         public uint LastTick;
         public LoopVoice? Snd;
+        /// <summary>The layered engine sounds of a type with a vehicles.json "sounds" set (null otherwise, and until driven).</summary>
+        public VehicleEngineSound? Engine;
         /// <summary>Damage stage 0..3 from the record, whether the vehicle is destroyed, and whether its blast was already drawn (event or state, whichever came first).</summary>
         public int Stage;
         public bool Destroyed, Exploded;
@@ -115,7 +117,7 @@ public partial class NetClient
     void ExplodeVehicle(CarView v, Vector3 at, float radius)
     {
         v.Exploded = true;
-        v.Snd?.Release(); v.Snd = null;
+        v.Snd?.Release(); v.Snd = null; v.Engine?.Release();
         v.Rotor?.Stop();
         v.Drive?.Stop();
         v.ExplodedAt = Now;
@@ -190,7 +192,7 @@ public partial class NetClient
             if (flakMine) flakGunner = true;
             v.Smoke?.Near(Sfx.ListenerDistance(p) < 90f); // far vehicles do not smoke: particle budget
             if (flies) StepFlightFx(v, FlightDef(v)!, p, rot, dt); // rotors, their sound, the downwash
-            else SfxCar(v, p);
+            else SfxCar(v, p, dt);
             if (drive != null) StepDriveFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
             if (v.Driver == _myId && _driving && _me != null)
             {

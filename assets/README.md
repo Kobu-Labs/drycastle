@@ -65,6 +65,14 @@ materials, no texture; `Glass` and `GlassClear` are alpha-blended. Same vehicle 
 at the pivot: `wheel_fl`/`_fr`/`_rl`/`_rr` and the door leaves `door_front_1`/`_2`, `door_mid_1`/`_2` (the game does not move them yet); empties mark
 `seat_driver`, `seat_passenger_1` to `_3` (the four seats of vehicles.json), the lamps and `smoke_engine` (the engine is at the rear).
 
+`drycastle-generated-models/golf_mk2.glb` (2026-11-16) is the Golf Mk2 (`godot/shooter` vehicle id `golf_mk2`): a low-poly three-door hatchback, 4.28 m long, in
+near-black paint, with a left-hand-drive interior (four seats, dashboard, steering wheel) because riders look out of it. Original geometry written as code in
+`scripts/make_golf_mk2_model.py` (it needs numpy, unlike the other model scripts, and loads the flak script's `GlassSet`; run `python3 scripts/make_golf_mk2_model.py`,
+without `-I` since numpy may live in the user site), CC0, 15 flat-colour materials, no texture; `Transparent blue glass` is alpha-blended. Same vehicle frame, origin
+on the ground between the axles. Nodes: `hull` (the body leans on it) holding `wheel_fl_steer`/`wheel_fr_steer` (turn about Y) with `wheel_fl`/`wheel_fr` (roll about X),
+`wheel_rl`/`wheel_rr`, the six breakable panes `glass_0` to `glass_5` (the script rewrites the `glass` list of vehicles.json) and empties for the seats and lamps. The paint
+is the material `Black paint`. The front and rear badges are a drawn V/W monogram, not a traced logo.
+
 `drycastle-generated-models/utility_helicopter.glb` (2026-11-12) is the utility helicopter (`godot/shooter` vehicle id `utility_helicopter`): a two-blade
 transport with an open cabin (no doors: you see through it from side to side), skids, a glazed cockpit and a pintle-mounted door gun on the right.
 Original geometry written as code in `scripts/make_utility_helicopter_model.py` (standard library only; it loads the flak script's mesh helpers from the
@@ -269,3 +277,5 @@ The glyph icons are white on transparent so the theme can tint them; the weapon 
 
 `validate_asset_ref(ref, manifest)` in `pipeline/src/drycastle_pipeline/assets.py` checks an asset reference
 against the manifest.
+
+**Per-vehicle engine sounds** (vehicles.json `sounds`, `godot/ShooterCore/VehicleSound.cs`): a type with a `sounds` block plays layered engine sounds instead of the shared `vehicle.engine` loop. Roles: `background` (loop, always on while driven), `idle` (loop, standing), `accel` (a pull through the gears played once from where the speed puts it (`start_by_speed`), then looping its last steady stretch: sounds.json `loop_start`), `lift` (one-shot, off the gas after a push: turbo blow-off), `brake` (loop, speed falling hard, louder with speed), `top` (loop, holding top speed). Each role names a sounds.json id and may set `pitch: [standstill, top speed]`, `fade_in`, `fade_out`. A role a type leaves out simply does not play: no idle layer leaves the background; no top layer leaves the accelerating loop running at top speed (a top layer replaces it); off the gas and under braking the engine body (the top loop, else the accelerating one) stays at 50% / 60% and the idle comes in as the speed dies, so the engine never falls silent; no lift or brake is silent. The Golf Mk2's files are `assets/golf-mk2-sounds/{background,idle,accel,lift,top}.ogg` (the owner's own recordings, CC0; cut by `scripts/make_golf_mk2_sounds.py`, which also synthesises the background; ogg vorbis, loops seamless). The Golf has no brake sound: under braking its top loop, pitched down with the speed, is the engine slowing.
