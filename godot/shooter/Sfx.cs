@@ -269,6 +269,8 @@ public partial class Sfx : Node
     }
 
     internal void FreeLoopSlot(int i) => _loopTaken[i] = false;
+    /// <summary>How many looping voices are held right now, by anything (engines, rockets): for the engine sound trace.</summary>
+    public static int LoopVoicesInUse => Instance?._loopTaken.Count(t => t) ?? 0;
 
     AudioStreamPlayer? _fight;
     Tween? _fightFade;
