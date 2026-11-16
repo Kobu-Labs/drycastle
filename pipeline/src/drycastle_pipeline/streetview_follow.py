@@ -7,7 +7,7 @@ file, puts the character there and, in the top-down view (T), draws a red point 
 (``godot/viewer/StreetViewFollow.cs``). No model and no MCP server is involved.
 
 Points (only with ``--points``): when you stop and look at something (the view stays put for ``--dwell``
-seconds), a permanent point is dropped in the sketch ``POLES`` of ``out/sketch.json``, at the spot you are
+seconds), a permanent point is dropped in the sketch ``POLES`` of the shared sketch file (``~/.local/state/drycastle/sketch.json``), at the spot you are
 looking at (``--ahead`` metres along the view; ``--at camera`` puts it where you stand instead). Place the poles
 on them later (the editor's Sketch tool shows them, Claude reads them with get_sketch).
 
@@ -44,7 +44,7 @@ from drycastle_pipeline import sketchfile
 SKETCH_NAME = "STREETVIEW"
 POINTS_SKETCH = "POLES"
 OUT_DIR = Path(__file__).resolve().parents[3] / "out"
-DEFAULT_SKETCH_FILE = OUT_DIR / "sketch.json"
+DEFAULT_SKETCH_FILE = sketchfile.default_path()
 DEFAULT_POSITION_FILE = OUT_DIR / "streetview-position.json"
 POSITION_FORMAT_VERSION = 1
 VIEW_LINE_M = 8.0
@@ -255,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--port", type=int, default=9222, help="Chrome remote debugging port (default 9222)")
     ap.add_argument("--position-file", type=Path, default=DEFAULT_POSITION_FILE, help="where the viewer reads the position")
     ap.add_argument("--sketch", nargs="?", type=Path, const=DEFAULT_SKETCH_FILE, default=None,
-                    help="also keep the position as a point and a view line in this sketch.json (default out/sketch.json)")
+                    help="also keep the position as a point and a view line in this sketch.json (default ~/.local/state/drycastle/sketch.json)")
     ap.add_argument("--interval", type=float, default=0.5, help="seconds between looks at the tab (default 0.5)")
     ap.add_argument("--points", action="store_true", help="drop a permanent point when the view stays put (off by default)")
     ap.add_argument("--points-sketch", default=POINTS_SKETCH, help=f"the sketch the points go to (default {POINTS_SKETCH})")

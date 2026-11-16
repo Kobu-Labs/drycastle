@@ -331,7 +331,7 @@ The ground the map covers: a polygon (`polygon` in `map.local.yaml`) of absolute
 _Avoid_: border, boundary
 
 **Sketch**:
-A named group (ROAD, FENCE_PLAN, ...) of the temporary marks a developer draws on the ground in the map editor to point at places in a prompt. Several sketches exist at once, each holding any number of **marks**: points (A, B, ...) and lines (L1, L2, ...; a closed line means the ground inside it). Mark names are unique across all sketches; a prompt can name one mark ("at A"), or a whole sketch ("everything in sketch ROAD"). The developer draws in the editor, and Claude draws through the MCP server (`sketch_add_*`, e.g. "highlight this road under sketch ROAD"). A sketch is never map content and is not a hand edit; it lives in `out/sketch.json` only.
+A named group (ROAD, FENCE_PLAN, ...) of the temporary marks a developer draws on the ground in the map editor to point at places in a prompt. Several sketches exist at once, each holding any number of **marks**: points (A, B, ...) and lines (L1, L2, ...; a closed line means the ground inside it). Mark names are unique across all sketches; a prompt can name one mark ("at A"), or a whole sketch ("everything in sketch ROAD"). The developer draws in the editor, and Claude draws through the MCP server (`sketch_add_*`, e.g. "highlight this road under sketch ROAD"). A sketch is never map content and is not a hand edit; it lives in the shared per-user `~/.local/state/drycastle/sketch.json` only (every worktree sees the same sketches).
 _Avoid_: annotation, drawing, ground patch or zone (those are saved map content), layer
 
 **Building detail**:

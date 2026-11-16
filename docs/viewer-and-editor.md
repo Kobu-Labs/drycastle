@@ -84,7 +84,8 @@ viewing and headless servers are unaffected):
   `{"camera": {"x": east, "y": north, "z": elevation, "yaw_deg": view direction counter-clockwise from east},
   "format_version": 1, "selected": []}`; x and y are in the map frame (local metres). `selected` is the list of
   selected parcel IDs while the editor mode is on (empty otherwise).
-- `sketch.json` (next to `editor-state.json`, written within a frame of every sketch change, also an ignored build output) holds
+- `sketch.json` (not in `out/`: one shared file per user at `~/.local/state/drycastle/sketch.json`, `$XDG_STATE_HOME` and `$DRYCASTLE_SKETCH`
+  respected, so every worktree's editor, MCP server and streetview follower see the same sketches; written within a frame of every sketch change) holds
   the marks of the Sketch tool in absolute S-JTSK metres, and is the one file the editor and the MCP server both write:
   `{"format_version": 1, "version": 7, "sketches": ["ROAD"], "next_line": 1, "next_point": 1,
   "lines": [{"closed": false, "id": "L1", "points": [[x, y], ...], "sketch": "ROAD"}],

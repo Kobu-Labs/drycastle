@@ -12,7 +12,7 @@ using SketchState = Drycastle.ShooterCore.EditorSketchState;
 /// The Sketch tool: temporary marks on the ground that a prompt can name ("plant trees inside L1", "a lamp at A").
 /// Marks are grouped in named sketches (ROAD, FENCE_PLAN, ...); each sketch holds any number of points (A, B, C, ...) and lines (L1, L2, ...; a closed line
 /// joins its last corner to its first and marks the ground inside). Mark names are unique across all sketches. New marks go to the active sketch.
-/// It is never written to edits.json: the marks live in sketch.json next to editor-state.json, a file the MCP server reads and writes too
+/// It is never written to edits.json: the marks live in the shared per-user sketch.json (~/.local/state/drycastle/, every worktree sees it), a file the MCP server reads and writes too
 /// (sketch_add_*, get_sketch): the editor reloads it when its version changes, as one undo step, and writes it on every local change.
 ///
 /// States (the hint bar names each): Idle, Drawing (a line's corners are being placed), Selected. Every change of the
@@ -104,7 +104,18 @@ public partial class EditorMode
     public string SketchJson => _sketchJson;
     /// <summary>Where new marks go.</summary>
     public string ActiveSketch => _skActive;
-    string SketchPath => Watcher == null || Watcher.StatePath == "" ? "" : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(Watcher.StatePath)) ?? ".", "sketch.json");
+    // one file per user, not per checkout; same rule as sketchfile.default_path in the pipeline
+    string SketchPath => Watcher == null || Watcher.StatePath == "" ? "" : SharedSketchPath();
+
+    static string SharedSketchPath()
+    {
+        var env = System.Environment.GetEnvironmentVariable("DRYCASTLE_SKETCH");
+        if (!string.IsNullOrEmpty(env)) return Path.GetFullPath(env.StartsWith("~/") ? Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile), env[2..]) : env);
+        var state = System.Environment.GetEnvironmentVariable("XDG_STATE_HOME");
+        var home = System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile);
+        var baseDir = !string.IsNullOrEmpty(state) && Path.IsPathRooted(state) ? state : Path.Combine(home, ".local", "state");
+        return Path.Combine(baseDir, "drycastle", "sketch.json");
+    }
     public SketchKind SketchMode => _skMode;
     public string? SelectedSketchId => _skSelected;
     public IReadOnlyList<(double x, double y)> SketchDraft => _skDraft;
