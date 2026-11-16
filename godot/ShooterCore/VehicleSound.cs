@@ -13,6 +13,11 @@ public class VehicleSoundLayerDef
     /// <summary>Seconds to fade up when the layer takes over, and down when it gives way.</summary>
     public float FadeIn { get; set; } = 0.3f;
     public float FadeOut { get; set; } = 0.6f;
+    /// <summary>
+    /// A loop that is a recording of a run through the revs (the pull, gear shifts and all, ending in a steady stretch that loops): when it starts it
+    /// begins that share of the way into the clip that the speed is of the top speed, so pulling away at 120 km/h does not start from first gear.
+    /// </summary>
+    public bool StartBySpeed { get; set; }
 
     public float PitchAt(float speedFraction) => Pitch[0] + (Pitch[1] - Pitch[0]) * Math.Clamp(speedFraction, 0f, 1f);
 }
@@ -185,19 +190,31 @@ public sealed class EngineMix
     {
         var loops = def.Loops;
         var active = EngineSoundModel.LayerOf(phase);
+        var body = Body(def);
         for (var i = 0; i < Count; i++)
         {
             var l = loops[i];
             if (l == null) { Gain[i] = _fade[i] = 0; continue; }
-            // the accelerating layer carries on under the top speed one (a type without a top layer simply keeps accelerating)
-            var on = active == (EngineLayer)i || (i == (int)EngineLayer.Accel && phase == EnginePhase.TopSpeed);
+            var on = active == (EngineLayer)i || (i == (int)EngineLayer.Accel && phase == EnginePhase.TopSpeed && def.Top == null); // no top layer: the pull carries on at the top
             var target = i == (int)EngineLayer.Background || on ? 1f : 0f;
+            // the engine does not stop off the gas or under braking: its body stays under the lift and the brake, and the idle comes in as the speed dies
+            if (!on && phase is EnginePhase.Coasting or EnginePhase.Braking)
+            {
+                if (body is { } bl && i == (int)bl) target = phase == EnginePhase.Braking ? BrakeBody : CoastBody;
+                else if (i == (int)EngineLayer.Idle) target = 1f - Math.Clamp(speedFraction * 8f, 0f, 1f);
+            }
             if (target > 0 && i == (int)EngineLayer.Brake) target = Math.Clamp(speedFraction * 2f, 0f, 1f);
             var rate = target > _fade[i] ? l.FadeIn : l.FadeOut;
             _fade[i] = rate <= 0 ? target : target > _fade[i] ? Math.Min(target, _fade[i] + dt / rate) : Math.Max(target, _fade[i] - dt / rate);
             Gain[i] = _fade[i] * _fade[i] * (3f - 2f * _fade[i]);
         }
     }
+
+    /// <summary>The engine sound that carries on while the driver is off the gas or braking: the accelerating loop, else the top one.</summary>
+    public static EngineLayer? Body(VehicleSoundsDef def) => def.Accel != null ? EngineLayer.Accel : def.Top != null ? EngineLayer.Top : null;
+
+    /// <summary>How loud the engine body stays off the gas and under braking (engines do not fall silent), and how far under that the idle comes in as the speed dies.</summary>
+    public const float CoastBody = 0.4f, BrakeBody = 0.5f;
 
     /// <summary>Gain as a volume offset in dB (silent: -80).</summary>
     public static float Db(float gain) => gain <= 0.001f ? -80f : 20f * MathF.Log10(gain);

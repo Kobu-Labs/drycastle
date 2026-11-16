@@ -133,19 +133,34 @@ public class EngineSoundTests
     }
 
     [Fact]
-    public void Accel_layer_carries_on_under_the_top_speed_layer_and_idle_missing_leaves_the_background()
+    public void Top_layer_takes_over_from_accel_and_without_one_accel_carries_on()
     {
         var def = Set();
-        def.Top = new VehicleSoundLayerDef { Sound = "t" };
         var mix = new EngineMix();
         for (var i = 0; i < 300; i++) mix.Step(def, EnginePhase.TopSpeed, 1f, Dt);
+        Assert.Equal(1f, mix.Gain[(int)EngineLayer.Accel]); // no top layer: the pull carries on
+        def.Top = new VehicleSoundLayerDef { Sound = "t" };
+        for (var i = 0; i < 600; i++) mix.Step(def, EnginePhase.TopSpeed, 1f, Dt);
         Assert.Equal(1f, mix.Gain[(int)EngineLayer.Top]);
-        Assert.Equal(1f, mix.Gain[(int)EngineLayer.Accel]);
-        def.Idle = null;
-        for (var i = 0; i < 300; i++) mix.Step(def, EnginePhase.Idle, 0f, Dt);
-        Assert.Equal(0f, mix.Gain[(int)EngineLayer.Idle]);
-        Assert.Equal(1f, mix.Gain[(int)EngineLayer.Background]);
         Assert.Equal(0f, mix.Gain[(int)EngineLayer.Accel]);
+    }
+
+    [Fact]
+    public void The_engine_never_falls_silent_off_the_gas_or_under_braking()
+    {
+        var def = Set();
+        var mix = new EngineMix();
+        for (var i = 0; i < 600; i++) mix.Step(def, EnginePhase.Coasting, 0.8f, Dt);
+        Assert.InRange(mix.Gain[(int)EngineLayer.Accel], 0.3f, 0.4f);   // the engine body, under the lift
+        Assert.Equal(0f, mix.Gain[(int)EngineLayer.Idle]);               // fast: no idle yet
+        for (var i = 0; i < 600; i++) mix.Step(def, EnginePhase.Braking, 0.8f, Dt);
+        Assert.InRange(mix.Gain[(int)EngineLayer.Accel], 0.4f, 0.6f);
+        Assert.Equal(1f, mix.Gain[(int)EngineLayer.Background]);
+        for (var i = 0; i < 600; i++) mix.Step(def, EnginePhase.Braking, 0.02f, Dt);
+        Assert.InRange(mix.Gain[(int)EngineLayer.Idle], 0.6f, 1f);       // nearly stopped: the idle is coming in
+        def.Accel = null; def.Top = new VehicleSoundLayerDef { Sound = "t" };
+        for (var i = 0; i < 600; i++) mix.Step(def, EnginePhase.Coasting, 0.8f, Dt);
+        Assert.InRange(mix.Gain[(int)EngineLayer.Top], 0.3f, 0.4f);     // a type with no accel layer keeps its top one under
     }
 
     [Fact]

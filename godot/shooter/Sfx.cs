@@ -92,6 +92,7 @@ public partial class Sfx : Node
                 var st = AudioStreamOggVorbis.LoadFromFile(path);
                 if (st == null) { GD.PrintErr($"sound failed to load: {f}"); continue; }
                 st.Loop = d.Loop;
+                if (d.Loop && d.LoopStart > 0) st.LoopOffset = d.LoopStart;
                 list.Add(st);
             }
             _streams[d.Id] = list.ToArray();
@@ -170,7 +171,8 @@ public partial class Sfx : Node
     /// <summary>3D positional at <paramref name="at"/> with the event's range; silent beyond it. Events with no range play non-positional.</summary>
     public static void Play3D(string id, Vector3 at, float dbOffset = 0f) => Instance?.Do3D(id, at, dbOffset);
     public static void Ui(string id) => Instance?.DoUi(id);
-    public static LoopVoice? Loop(string id, Vector3 at) => Instance?.DoLoop(id, at);
+    /// <summary>A looping voice; <paramref name="startFraction"/> starts it that share of the way into its file (0 to 1).</summary>
+    public static LoopVoice? Loop(string id, Vector3 at, float startFraction = 0f) => Instance?.DoLoop(id, at, startFraction);
     /// <summary>Distance from the listener (the current camera) to a point; 0 when there is no camera yet.</summary>
     public static float ListenerDistance(Vector3 at) => Instance?.GetViewport().GetCamera3D() is { } c ? c.GlobalPosition.DistanceTo(at) : 0f;
     public static void MenuMusic(bool on) => Instance?.DoMusic(on);
@@ -220,7 +222,7 @@ public partial class Sfx : Node
         _sUi[i] = ++_iUi; _uiFrame = frame; _uiFrameSlot = i;
     }
 
-    LoopVoice? DoLoop(string id, Vector3 at)
+    LoopVoice? DoLoop(string id, Vector3 at, float startFraction)
     {
         if (!Enabled || _pLoop.Length == 0 || Def(id) is not { } d || Pick(d) is not { } st) return null;
         for (var i = 0; i < PoolLoop; i++)
@@ -231,7 +233,7 @@ public partial class Sfx : Node
             p.Stream = st; p.Bus = d.Bus; p.VolumeDb = d.VolumeDb; p.PitchScale = d.Pitch;
             p.MaxDistance = d.MaxDistance; p.UnitSize = SoundRules.UnitSize(d.MaxDistance);
             p.GlobalPosition = at;
-            p.Play();
+            p.Play(startFraction > 0 ? (float)(Math.Clamp(startFraction, 0f, 0.98f) * st.GetLength()) : 0f);
             return new LoopVoice { Player = p, Def = d, BaseDb = d.VolumeDb, Owner = this, Slot = i };
         }
         return null;

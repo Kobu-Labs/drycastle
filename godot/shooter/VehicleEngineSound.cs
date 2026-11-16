@@ -29,7 +29,7 @@ public sealed class VehicleEngineSound
                 if (_voices[i] != null) { _voices[i]!.Release(); _voices[i] = null; }
                 continue;
             }
-            _voices[i] ??= Sfx.Loop(layer.Sound, at);
+            _voices[i] ??= Sfx.Loop(layer.Sound, at, layer.StartBySpeed ? Math.Min(frac, 1f) : 0f);
             _voices[i]?.Update(at, layer.PitchAt(frac), EngineMix.Db(gain));
         }
         if (_model.TakeLift() && def.Lift is { } lift) Sfx.Play3D(lift.Sound, at);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Golf Mk2 engine sounds (vehicles.json golf_mk2 "sounds"): cuts the recorded layers from two source clips and synthesises the rest.
+"""Golf Mk2 engine sounds (vehicles.json golf_mk2 "sounds"): cuts the recorded layers from two source clips and synthesises the rest (brake squeal, background rumble).
 
 Needs numpy and ffmpeg (libvorbis). Not stdlib-only, so do not run it with -I. The source clips are other people's recordings: the output goes to
 assets-private/audio/golf-mk2-sounds/ (gitignored), never into assets/.
@@ -15,10 +15,13 @@ from pathlib import Path
 import numpy as np
 
 SR = 48000
-ACCEL = (8.9, 10.35)    # one gear's steady stretch of the pull (no shift in it), a loop is searched inside it
-ACCEL_LOOP = (1.0, 1.3) # seconds the loop may last
+PULL_FROM = 2.1         # the pull from the standing start, gear shifts and all, played once ...
+TAIL = (8.9, 10.35)     # ... then it carries on in a loop of the last gear's steady stretch (no shift in it), searched inside this window
+TAIL_LOOP = (1.0, 1.3)  # seconds the accel tail loop may last
+TOP = (9.2, 10.35)      # the top speed engine loop, smaller still
+TOP_LOOP = (0.4, 0.6)
 LIFT = (11.65, 13.1)    # off the gas: the turbo blow-off and the revs falling
-IDLE_XFADE, ACCEL_XFADE = 0.6, 0.12
+IDLE_XFADE, TAIL_XFADE, TOP_XFADE = 0.6, 0.12, 0.08
 
 
 def load(path):
@@ -46,7 +49,7 @@ def lowpass(x, hz):
 
 def best_loop(x, lo, hi, min_len, max_len, ctx=0.1):
     """The loop [a, b) inside x[lo:hi] whose seam is least audible: the signal before b should look like the signal before a (so that continuing
-    from b into a is continuous in wave shape, not just level). Returns the clip, cut at the best a and b."""
+    from b into a is continuous in wave shape, not just level). Returns a and b as sample indexes into x."""
     n = int(ctx * SR)
     best = None
     seg = x[int(lo * SR):int(hi * SR)]
@@ -64,8 +67,27 @@ def best_loop(x, lo, hi, min_len, max_len, ctx=0.1):
         k = int(score.argmax())
         if best is None or score[k] > best[0]: best = (float(score[k]), a, b0 + k)
     score, a, b = best
-    print(f"accel loop: {a / SR + lo:.3f}-{b / SR + lo:.3f} s, seam match {score:.2f}")
-    return seg[a:b]
+    a, b = a + int(lo * SR), b + int(lo * SR)
+    print(f"loop {a / SR:.3f}-{b / SR:.3f} s, seam match {score:.2f}")
+    return a, b
+
+
+def loop_clip(x, a, b, xf):
+    """x[a:b] as a seamless loop: its end blends into the signal that came just before a, so b flows on into a."""
+    n = int(xf * SR)
+    t = np.linspace(0, np.pi / 2, n, dtype=np.float32)
+    c = x[a:b].copy()
+    c[-n:] = x[b - n:b] * np.cos(t) + x[a - n:a] * np.sin(t)
+    return c
+
+
+def pull_with_tail(x, start, a, b, xf):
+    """The pull from `start` through to b, with [a, b) as the loop the stream carries on in after one go through. Returns the clip and where the loop starts (s)."""
+    n = int(xf * SR)
+    t = np.linspace(0, np.pi / 2, n, dtype=np.float32)
+    c = x[int(start * SR):b].copy()
+    c[-n:] = x[b - n:b] * np.cos(t) + x[a - n:a] * np.sin(t)
+    return c, a / SR - start
 
 
 def fades(x, fin, fout):
@@ -105,12 +127,6 @@ def brake():
     return 0.6 * (hiss * (0.8 + 0.2 * cycles(d, 7)) + 0.35 * sq)
 
 
-def top():
-    """Wind and road roar at speed. 4 s loop."""
-    d = 4.0
-    return 0.9 * (noise(d, 80, 5000, 0.9, 2) * (0.85 + 0.15 * cycles(d, 1)) + 0.15 * noise(d, 5000, 12000, 0.4, 3))
-
-
 def background():
     """Low drivetrain and road rumble under everything. 4 s loop."""
     d = 4.0
@@ -135,10 +151,14 @@ def main():
     idle, drive = load(a.idle), load(a.drive)
     cut = lambda x, r: x[int(r[0] * SR):int(r[1] * SR)]
     write(out / "idle.ogg", seam(idle, IDLE_XFADE))
-    write(out / "accel.ogg", seam(best_loop(drive, ACCEL[0], ACCEL[1], *ACCEL_LOOP), ACCEL_XFADE))
+    a, b = best_loop(drive, *TAIL, *TAIL_LOOP)
+    clip, loop_start = pull_with_tail(drive, PULL_FROM, a, b, TAIL_XFADE)
+    write(out / "accel.ogg", clip)
+    print(f'accel: sounds.json loop_start = {loop_start:.3f}')
+    a, b = best_loop(drive, *TOP, *TOP_LOOP)
+    write(out / "top.ogg", loop_clip(drive, a, b, TOP_XFADE))
     write(out / "lift.ogg", fades(cut(drive, LIFT), 0.02, 0.35))
     write(out / "brake.ogg", brake())
-    write(out / "top.ogg", top())
     write(out / "background.ogg", background())
 
 

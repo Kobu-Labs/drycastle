@@ -53,6 +53,8 @@ public class SoundDef
     public bool Loop { get; set; }
     /// <summary>The files may be missing (a set still being recorded): the game starts and the sound is silent, instead of refusing to start.</summary>
     public bool Optional { get; set; }
+    /// <summary>Seconds into a looping file where the loop starts: it plays through from the beginning once, then repeats from here (0: the whole file loops).</summary>
+    public float LoopStart { get; set; }
     /// <summary>Voice priority when the pool is full: a new sound steals the lowest-priority (then oldest) voice, and is dropped when every playing voice outranks it.</summary>
     public int Priority { get; set; }
     /// <summary>Minimum seconds between two plays of this event (0 = none); rapid repeats inside the gap are dropped so e.g. impacts do not starve weapon sounds.</summary>
