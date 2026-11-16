@@ -210,11 +210,14 @@ public sealed class EngineMix
         }
     }
 
-    /// <summary>The engine sound that carries on while the driver is off the gas or braking: the accelerating loop, else the top one.</summary>
-    public static EngineLayer? Body(VehicleSoundsDef def) => def.Accel != null ? EngineLayer.Accel : def.Top != null ? EngineLayer.Top : null;
+    /// <summary>
+    /// The engine sound that carries on while the driver is off the gas or braking: the top loop when there is one (a steady stretch of engine that, pitched
+    /// down with the speed, is the engine slowing down; the pull would sound like revving up), else the accelerating one.
+    /// </summary>
+    public static EngineLayer? Body(VehicleSoundsDef def) => def.Top != null ? EngineLayer.Top : def.Accel != null ? EngineLayer.Accel : null;
 
     /// <summary>How loud the engine body stays off the gas and under braking (engines do not fall silent), and how far under that the idle comes in as the speed dies.</summary>
-    public const float CoastBody = 0.4f, BrakeBody = 0.5f;
+    public const float CoastBody = 0.5f, BrakeBody = 0.6f;
 
     /// <summary>Gain as a volume offset in dB (silent: -80).</summary>
     public static float Db(float gain) => gain <= 0.001f ? -80f : 20f * MathF.Log10(gain);

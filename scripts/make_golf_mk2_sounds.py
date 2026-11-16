@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Golf Mk2 engine sounds (vehicles.json golf_mk2 "sounds"): cuts the recorded layers from two source clips and synthesises the rest (brake squeal, background rumble).
+"""Golf Mk2 engine sounds (vehicles.json golf_mk2 "sounds"): cuts the recorded layers from two source clips and synthesises the background rumble.
 
 Needs numpy and ffmpeg (libvorbis). Not stdlib-only, so do not run it with -I. The source clips are other people's recordings: the output goes to
 assets-private/audio/golf-mk2-sounds/ (gitignored), never into assets/.
@@ -118,15 +118,6 @@ def cycles(seconds, hz):
     return np.sin(2 * np.pi * hz * np.arange(n) / SR).astype(np.float32)
 
 
-def brake():
-    """Tyre and brake squeal: a hissy band with two thin, wobbling whistles on top. 2 s loop."""
-    d = 2.0
-    hiss = noise(d, 1800, 6500, 0.3, 1) * 0.5
-    wob = 0.75 + 0.25 * cycles(d, 3)
-    sq = (cycles(d, 2350) * 0.5 + cycles(d, 3140) * 0.35) * wob * (0.7 + 0.3 * cycles(d, 5))
-    return 0.6 * (hiss * (0.8 + 0.2 * cycles(d, 7)) + 0.35 * sq)
-
-
 def background():
     """Low drivetrain and road rumble under everything. 4 s loop."""
     d = 4.0
@@ -158,7 +149,6 @@ def main():
     a, b = best_loop(drive, *TOP, *TOP_LOOP)
     write(out / "top.ogg", loop_clip(drive, a, b, TOP_XFADE))
     write(out / "lift.ogg", fades(cut(drive, LIFT), 0.02, 0.35))
-    write(out / "brake.ogg", brake())
     write(out / "background.ogg", background())
 
 

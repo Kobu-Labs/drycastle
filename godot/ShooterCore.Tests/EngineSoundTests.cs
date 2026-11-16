@@ -151,16 +151,17 @@ public class EngineSoundTests
         var def = Set();
         var mix = new EngineMix();
         for (var i = 0; i < 600; i++) mix.Step(def, EnginePhase.Coasting, 0.8f, Dt);
-        Assert.InRange(mix.Gain[(int)EngineLayer.Accel], 0.3f, 0.4f);   // the engine body, under the lift
+        Assert.InRange(mix.Gain[(int)EngineLayer.Accel], 0.4f, 0.5f);   // the engine body, under the lift
         Assert.Equal(0f, mix.Gain[(int)EngineLayer.Idle]);               // fast: no idle yet
         for (var i = 0; i < 600; i++) mix.Step(def, EnginePhase.Braking, 0.8f, Dt);
-        Assert.InRange(mix.Gain[(int)EngineLayer.Accel], 0.4f, 0.6f);
+        Assert.InRange(mix.Gain[(int)EngineLayer.Accel], 0.5f, 0.7f);
         Assert.Equal(1f, mix.Gain[(int)EngineLayer.Background]);
         for (var i = 0; i < 600; i++) mix.Step(def, EnginePhase.Braking, 0.02f, Dt);
         Assert.InRange(mix.Gain[(int)EngineLayer.Idle], 0.6f, 1f);       // nearly stopped: the idle is coming in
-        def.Accel = null; def.Top = new VehicleSoundLayerDef { Sound = "t" };
-        for (var i = 0; i < 600; i++) mix.Step(def, EnginePhase.Coasting, 0.8f, Dt);
-        Assert.InRange(mix.Gain[(int)EngineLayer.Top], 0.3f, 0.4f);     // a type with no accel layer keeps its top one under
+        def.Top = new VehicleSoundLayerDef { Sound = "t" };              // a top layer is the engine body instead: a steady loop that slows with the speed
+        for (var i = 0; i < 900; i++) mix.Step(def, EnginePhase.Coasting, 0.8f, Dt);
+        Assert.InRange(mix.Gain[(int)EngineLayer.Top], 0.4f, 0.5f);
+        Assert.Equal(0f, mix.Gain[(int)EngineLayer.Accel]);
     }
 
     [Fact]

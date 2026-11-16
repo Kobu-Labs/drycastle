@@ -224,8 +224,7 @@
         "idle": { "sound": "golf_mk2.idle", "fade_in": 0.5, "fade_out": 0.7 },
         "accel": { "sound": "golf_mk2.accel", "pitch": [0.92, 1.08], "start_by_speed": true, "fade_in": 0.4, "fade_out": 0.9 },
         "lift": { "sound": "golf_mk2.lift" },
-        "brake": { "sound": "golf_mk2.brake", "fade_in": 0.25, "fade_out": 0.6 },
-        "top": { "sound": "golf_mk2.top", "pitch": [0.97, 1.05], "fade_in": 0.9, "fade_out": 1.0 }
+        "top": { "sound": "golf_mk2.top", "pitch": [0.45, 1.05], "fade_in": 0.6, "fade_out": 0.8 }
       }
     }
   ]
