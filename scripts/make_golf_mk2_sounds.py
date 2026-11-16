@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 
 SR = 48000
-ACCEL = (0.0, 1.9)     # the clip from its start to just before the first gear change (about 2.0)
+ACCEL = (4.0, 5.9)     # mid first gear, through the first gear change (about 5.4), to just after it
 TOP = (9.2, 10.35)      # the top speed engine loop, smaller still
 TOP_LOOP = (0.4, 0.6)
 LIFT = (11.65, 13.1)    # off the gas: the turbo blow-off and the revs falling
