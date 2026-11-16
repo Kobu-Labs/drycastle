@@ -16,28 +16,44 @@ public class ThrowGuessTests
         Assert.True(g.Start(Stand, CorpseRules.ThrowFromCar(-Vector3.UnitZ, 20f)));
         Assert.False(g.Start(Stand, Vector3.UnitY)); // one guess at a time
         var at = Stand;
-        for (var i = 0; i < 12; i++) at = g.Step(Dt, Stand, false); // 0.2 s: the server still shows it standing
-        Assert.True(g.Flying);
+        for (var i = 0; i < 12; i++) at = g.Step(Dt, Stand, false, false); // 0.2 s: the server still shows it standing
+        Assert.True(g.Active);
         Assert.True(at.Y > Stand.Y);
         Assert.True(Stand.Z - at.Z > 20f * 0.2f, "it leaves faster than the car drives, so it is not carried along inside the hull");
     }
 
     [Fact]
-    public void The_servers_throw_takes_over_without_a_jump()
+    public void The_servers_later_arc_never_pulls_the_body_back()
     {
+        // the server's arc is the guessed one, seen 0.15 s later: the body is drawn on the guessed arc all the way and only goes over once both have landed
+        var v = CorpseRules.ThrowFromCar(-Vector3.UnitZ, 20f);
+        const int late = 9;
+        Vector3 Arc(int frame)
+        {
+            var t = MathF.Max(0, frame - late) * Dt;
+            var p = Stand + v * t + new Vector3(0, -MoveConsts.Gravity * t * t / 2, 0);
+            return p.Y > Stand.Y || t == 0 ? p : default;
+        }
         var g = new ThrowGuess();
-        g.Start(Stand, CorpseRules.ThrowFromCar(-Vector3.UnitZ, 20f));
-        var before = Stand;
-        for (var i = 0; i < 9; i++) before = g.Step(Dt, Stand, false);
-        var server = Stand + new Vector3(0, 0.1f, -0.4f); // the server's arc has just begun
-        var at = g.Step(Dt, server, true);
-        Assert.Equal(ThrowGuessPhase.Settling, g.Phase);
-        Assert.True((at - before).Length() < 0.6f, "one frame of the arc, not a jump back to the server's place");
-        var next = g.Step(Dt, server, true);
-        Assert.True((next - at).Length() < 0.2f);
-        for (var i = 0; i < 600; i++) next = g.Step(Dt, server, true);
-        Assert.Equal(server, next); // the offset is gone
+        g.Start(Stand, v);
+        var landed = Stand; var z = Stand.Z; var settled = -1;
+        for (var i = 1; i < 400; i++)
+        {
+            var s = Arc(i);
+            var inAir = s != default;
+            if (inAir) landed = s; // the server's body stays where it came down
+            var at = g.Step(Dt, inAir ? s : landed, i > late, i > late && inAir);
+            if (g.Phase == ThrowGuessPhase.Confirmed || g.Phase == ThrowGuessPhase.Flying) Assert.True(at.Z <= z + 1e-4f, $"pulled back at frame {i}");
+            else if (settled < 0)
+            {
+                settled = i;
+                Assert.True((at - landed).Length() < 1.5f, "the two landing spots are near each other: what is left to glide is small");
+            }
+            z = at.Z;
+        }
+        Assert.True(settled > late);
         Assert.True(g.Ready);
+        Assert.Equal(landed, g.Step(Dt, landed, true, false));
     }
 
     [Fact]
@@ -46,11 +62,11 @@ public class ThrowGuessTests
         var g = new ThrowGuess();
         g.Start(Stand, CorpseRules.ThrowFromCar(-Vector3.UnitZ, 10f));
         var steps = 0;
-        while (g.Flying && steps < 1000) { g.Step(Dt, Stand, false); steps++; }
+        while (g.Active && steps < 1000) { g.Step(Dt, Stand, false, false); steps++; }
         Assert.InRange(steps * Dt, ThrowGuess.ConfirmSeconds - 0.05f, ThrowGuess.ConfirmSeconds + 0.05f);
         Assert.False(g.Start(Stand, Vector3.UnitY)); // not again at once: the car is still on it
         var at = Stand;
-        for (var i = 0; i < 600; i++) at = g.Step(Dt, Stand, false);
+        for (var i = 0; i < 600; i++) at = g.Step(Dt, Stand, false, false);
         Assert.Equal(Stand, at);
         Assert.True(g.Start(Stand, Vector3.UnitY));
     }
@@ -61,8 +77,8 @@ public class ThrowGuessTests
         var g = new ThrowGuess();
         g.Start(Stand, new Vector3(0, 1f, -2f)); // a nudge: down again well inside the wait
         var at = Stand;
-        for (var i = 0; i < 20; i++) at = g.Step(Dt, Stand, false);
-        Assert.True(g.Flying);
+        for (var i = 0; i < 20; i++) at = g.Step(Dt, Stand, false, false);
+        Assert.True(g.Active);
         Assert.Equal(Stand.Y, at.Y, 4);
     }
 }

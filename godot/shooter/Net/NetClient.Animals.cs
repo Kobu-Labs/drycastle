@@ -45,6 +45,9 @@ public partial class NetClient : IStandingBodies
         public bool SeenFeet;
         /// <summary>The driver's own picture of a throw by the vehicle it drives, shown before the server's arrives (<see cref="ThrowGuess"/>).</summary>
         public readonly ThrowGuess Guess = new();
+        /// <summary>Where the snapshots had it last frame: how fast the server's body moves (a dead one still flying).</summary>
+        public NVec3 LastServer;
+        public bool SeenServer;
     }
 
     readonly Dictionary<ushort, AnimalView> _animals = new();
@@ -97,7 +100,7 @@ public partial class NetClient : IStandingBodies
     {
         v.Node.Visible = !e.Dormant;
         v.Node.ProcessMode = e.Dormant ? Node.ProcessModeEnum.Disabled : Node.ProcessModeEnum.Inherit; // an AnimationPlayer keeps playing while hidden otherwise
-        if (e.Dormant) { v.Guess.Reset(); return; }
+        if (e.Dormant) { v.Guess.Reset(); v.SeenServer = false; return; }
         v.Shown = 255; v.HitUntil = 0; v.Toggle = AnimalRules.HitToggled(e.State.State);
     }
 
@@ -175,10 +178,13 @@ public partial class NetClient : IStandingBodies
                 var thrown = state is AnimalState.Thrown or AnimalState.Down or AnimalState.Dead;
                 if (car is { } c && !thrown && state != AnimalState.Carried && v.Guess.Ready && !v.Def.OneHit && CarTouches(c.State, c.Def, v, s.Pos, s.Yaw))
                     v.Guess.Start(s.Pos, CorpseRules.ThrowFromCar(new NVec3(-MathF.Sin(c.State.Yaw), 0, -MathF.Cos(c.State.Yaw)), c.State.Speed));
-                var at = v.Guess.Step(dt, s.Pos, thrown);
-                PlaceAnimal(v, v.Guess.Flying ? AnimalState.Thrown : state, new Vector3(at.X, at.Y, at.Z), s.Yaw, dt);
+                var serverSpeed = v.SeenServer && dt > 0 ? (s.Pos - v.LastServer).Length() / dt : 0f;
+                v.LastServer = s.Pos; v.SeenServer = true;
+                var inAir = state == AnimalState.Thrown || state == AnimalState.Dead && serverSpeed > AnimalFlyingSpeed;
+                var at = v.Guess.Step(dt, s.Pos, thrown, inAir);
+                PlaceAnimal(v, GuessedState(v, state), new Vector3(at.X, at.Y, at.Z), s.Yaw, dt);
             }
-            var shown = v.Guess.Flying ? AnimalState.Thrown : state; // a guessed throw is drawn as a thrown body until the server's state says what became of it
+            var shown = GuessedState(v, state);
             var toggle = AnimalRules.HitToggled(raw);
             if (toggle != v.Toggle)
             {
@@ -203,6 +209,9 @@ public partial class NetClient : IStandingBodies
         var s = _drive.Predict.State;
         return s.Afloat || !RunOver.Contacts(s.Speed) ? null : (s, _drive.Def);
     }
+
+    /// <summary>The state an animal is drawn in: while a guessed throw is what is drawn, a thrown body in the air or one knocked down where the guess landed, whatever the server's state says yet.</summary>
+    static AnimalState GuessedState(AnimalView v, AnimalState state) => !v.Guess.Active ? state : v.Guess.Airborne ? AnimalState.Thrown : AnimalState.Down;
 
     /// <summary>Whether the predicted vehicle's footprint touches the animal as it is drawn: the server's run-over test (<see cref="RunOverFootprint"/>), on the Body box the client builds as the server does.</summary>
     static bool CarTouches(in DriveState car, VehicleDef def, AnimalView v, NVec3 feet, float yaw)
