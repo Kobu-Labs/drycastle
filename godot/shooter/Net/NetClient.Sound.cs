@@ -126,7 +126,7 @@ public partial class NetClient
         }
         if (v.Driver == 0 || (!mine && Sfx.ListenerDistance(at) > 80f)) { v.Snd?.Release(); v.Snd = null; return; }
         v.Snd ??= Sfx.Loop("vehicle.engine", at);
-        v.Snd?.Update(at, SoundRules.EnginePitch(v.Kmh));
+        v.Snd?.Update(at, SoundRules.EnginePitch(v.Kmh), 0f, exact: true);
     }
 
     void SfxTeardown()

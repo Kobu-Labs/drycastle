@@ -49,11 +49,11 @@ public sealed class VehicleEngineSound
                 _voices[i] = Sfx.Loop(layer.Sound, at, layer.StartBySpeed ? Math.Min(frac, 1f) : 0f);
                 Log($"{RoleNames[i]} loop on ({layer.Sound}): {(_voices[i] != null ? "voice taken" : "NO VOICE (pool full or stream missing)")}, gain {gain:F2}, pitch {layer.PitchAt(frac):F2}");
             }
-            _voices[i]?.Update(at, layer.PitchAt(frac), EngineMix.Db(gain));
+            _voices[i]?.Update(at, layer.PitchAt(frac), EngineMix.Db(gain), exact: true);
         }
         if (lift)
         {
-            var played = def.Lift is { } l && Sfx.Play3D(l.Sound, at);
+            var played = def.Lift is { } l && Sfx.Play3D(l.Sound, at, exact: true);
             Log($"LIFT kmh={kmh:F0} ({_model.LiftNote}) -> {(def.Lift == null ? "this type has no lift sound" : played ? "played" : "NOT played")}: {Sfx.LastNote}; loops ducked to {EngineMix.LiftDuckGain * 100:F0}%, mix now bg={_mix.Gain[0]:F2} idle={_mix.Gain[1]:F2} accel={_mix.Gain[2]:F2} top={_mix.Gain[4]:F2}");
         }
     }
