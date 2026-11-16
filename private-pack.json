@@ -1,11 +1,11 @@
 {
-  "id": "6668a0f57d5c",
-  "plain_sha256": "6668a0f57d5cb6b73630e426dca5f4407a45cde252a4ef45020a36eb594997da",
+  "id": "7e6a16fcafc0",
+  "plain_sha256": "7e6a16fcafc01ad208c93562e6cfd52d3fd47f98dadefa778d1938348d91a0a1",
   "iterations": 600000,
   "file": {
-    "name": "assets-private-6668a0f57d5c.zip.enc",
-    "url": "http://159.195.244.164:27080/assets-private-6668a0f57d5c.zip.enc",
-    "sha256": "f4d142121b661c8c40860d45827d48831478e7cb191b85d5946cfd750a014680",
-    "size": 126410496
+    "name": "assets-private-7e6a16fcafc0.zip.enc",
+    "url": "http://159.195.244.164:27080/assets-private-7e6a16fcafc0.zip.enc",
+    "sha256": "822e7ed0e17a4254998c0f270530e6ce98c196abf53c22b7712dd61dea2e8310",
+    "size": 196404048
   }
 }
