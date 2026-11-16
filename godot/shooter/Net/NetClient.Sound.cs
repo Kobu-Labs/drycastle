@@ -120,7 +120,7 @@ public partial class NetClient
         {
             // a type with its own set: layered engine sounds, kept only while it is occupied and near
             if (v.Driver == 0 || v.Destroyed || (!mine && Sfx.ListenerDistance(at) > 160f)) { v.Engine?.Release(); return; }
-            var kmh = DriveOf(v) is { } ds ? MathF.Abs(ds.Speed) * 3.6f : v.Kmh; // the drawn speed: smooth every frame, not once a snapshot
+            var kmh = DriveOf(v) is { } ds ? ds.Speed * 3.6f : v.Kmh; // the drawn speed, signed (negative reversing): smooth every frame, not once a snapshot
             (v.Engine ??= new VehicleEngineSound()).Update(set, kmh, def.TopSpeed * 3.6f, at, dt);
             return;
         }

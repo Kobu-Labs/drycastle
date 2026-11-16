@@ -222,7 +222,7 @@
       "sounds": {
         "background": { "sound": "golf_mk2.background", "pitch": [0.8, 1.6], "fade_in": 0.5 },
         "idle": { "sound": "golf_mk2.idle", "fade_in": 0.5, "fade_out": 0.7 },
-        "accel": { "sound": "golf_mk2.accel", "pitch": [0.92, 1.08], "start_by_speed": true, "fade_in": 0.4, "fade_out": 0.9 },
+        "accel": { "sound": "golf_mk2.accel", "pitch": [0.92, 1.08], "fade_in": 0.4, "fade_out": 0.9 },
         "lift": { "sound": "golf_mk2.lift" },
         "top": { "sound": "golf_mk2.top", "pitch": [0.45, 1.05], "fade_in": 0.6, "fade_out": 0.8 }
       }

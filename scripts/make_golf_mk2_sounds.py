@@ -15,13 +15,12 @@ from pathlib import Path
 import numpy as np
 
 SR = 48000
-PULL_FROM = 2.1         # the pull from the standing start, gear shifts and all, played once ...
-TAIL = (8.9, 10.35)     # ... then it carries on in a loop of the last gear's steady stretch (no shift in it), searched inside this window
-TAIL_LOOP = (1.0, 1.3)  # seconds the accel tail loop may last
+ACCEL_START = 2.2      # the pull from the standing start through the first gear shift, looped whole: it starts here
+ACCEL_END = (5.9, 6.9)  # and ends somewhere in the second gear, where the seam is least audible
 TOP = (9.2, 10.35)      # the top speed engine loop, smaller still
 TOP_LOOP = (0.4, 0.6)
 LIFT = (11.65, 13.1)    # off the gas: the turbo blow-off and the revs falling
-IDLE_XFADE, TAIL_XFADE, TOP_XFADE = 0.6, 0.12, 0.08
+IDLE_XFADE, ACCEL_XFADE, TOP_XFADE = 0.6, 0.25, 0.08
 
 
 def load(path):
@@ -72,6 +71,20 @@ def best_loop(x, lo, hi, min_len, max_len, ctx=0.1):
     return a, b
 
 
+def best_end(x, a, lo, hi, ctx=0.1):
+    """The end b in [lo, hi] s of a loop that starts at a (s): the one whose lead-in looks most like the lead-in of a. Returns sample indexes."""
+    n = int(ctx * SR)
+    a = int(a * SR)
+    tpl = lowpass(x[a - n:a], 700)
+    best = None
+    for b in range(int(lo * SR), int(hi * SR), int(0.004 * SR)):
+        w = lowpass(x[b - n:b], 700)
+        sc = float((w * tpl).sum() / (np.sqrt((w ** 2).sum() * (tpl ** 2).sum()) + 1e-9))
+        if best is None or sc > best[0]: best = (sc, b)
+    print(f"accel loop: {a / SR:.3f}-{best[1] / SR:.3f} s, seam match {best[0]:.2f}")
+    return a, best[1]
+
+
 def loop_clip(x, a, b, xf):
     """x[a:b] as a seamless loop: its end blends into the signal that came just before a, so b flows on into a."""
     n = int(xf * SR)
@@ -79,15 +92,6 @@ def loop_clip(x, a, b, xf):
     c = x[a:b].copy()
     c[-n:] = x[b - n:b] * np.cos(t) + x[a - n:a] * np.sin(t)
     return c
-
-
-def pull_with_tail(x, start, a, b, xf):
-    """The pull from `start` through to b, with [a, b) as the loop the stream carries on in after one go through. Returns the clip and where the loop starts (s)."""
-    n = int(xf * SR)
-    t = np.linspace(0, np.pi / 2, n, dtype=np.float32)
-    c = x[int(start * SR):b].copy()
-    c[-n:] = x[b - n:b] * np.cos(t) + x[a - n:a] * np.sin(t)
-    return c, a / SR - start
 
 
 def fades(x, fin, fout):
@@ -142,10 +146,8 @@ def main():
     idle, drive = load(a.idle), load(a.drive)
     cut = lambda x, r: x[int(r[0] * SR):int(r[1] * SR)]
     write(out / "idle.ogg", seam(idle, IDLE_XFADE))
-    a, b = best_loop(drive, *TAIL, *TAIL_LOOP)
-    clip, loop_start = pull_with_tail(drive, PULL_FROM, a, b, TAIL_XFADE)
-    write(out / "accel.ogg", clip)
-    print(f'accel: sounds.json loop_start = {loop_start:.3f}')
+    a, b = best_end(drive, ACCEL_START, *ACCEL_END)
+    write(out / "accel.ogg", loop_clip(drive, a, b, ACCEL_XFADE))
     a, b = best_loop(drive, *TOP, *TOP_LOOP)
     write(out / "top.ogg", loop_clip(drive, a, b, TOP_XFADE))
     write(out / "lift.ogg", fades(cut(drive, LIFT), 0.02, 0.35))

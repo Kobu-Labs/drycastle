@@ -89,11 +89,23 @@ public class EngineSoundTests
     }
 
     [Fact]
-    public void Reverse_counts_by_magnitude()
+    public void Reversing_never_sounds_like_accelerating_nor_lifts()
     {
         var m = new EngineSoundModel();
-        for (var t = 0f; t < 2f; t += Dt) m.Step(-(t * 15f), Top, Dt);
-        Assert.Equal(EnginePhase.Accelerating, m.Phase);
+        var lifts = 0;
+        for (var t = 0f; t < 3f; t += Dt) { m.Step(-(t * 12f), Top, Dt); if (m.TakeLift()) lifts++; Assert.NotEqual(EnginePhase.Accelerating, m.Phase); }
+        Assert.Equal(EnginePhase.Coasting, m.Phase);
+        for (var t = 0f; t < 2f; t += Dt) { m.Step(-36f + t * 18f, Top, Dt); if (m.TakeLift()) lifts++; } // easing off
+        Assert.Equal(0, lifts);
+    }
+
+    [Fact]
+    public void Braking_out_of_reverse_counts_by_magnitude()
+    {
+        var m = new EngineSoundModel();
+        for (var t = 0f; t < 2f; t += Dt) m.Step(-60f, Top, Dt);
+        for (var t = 0f; t < 1f; t += Dt) m.Step(-60f + t * 40f, Top, Dt);
+        Assert.Equal(EnginePhase.Braking, m.Phase);
     }
 
     static VehicleSoundsDef Set() => new()

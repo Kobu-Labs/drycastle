@@ -132,7 +132,7 @@ public sealed class EngineSoundModel
         _lastSpeed = float.NaN; _rate = 0; _push = 0; _sinceLift = 1e9f; _lift = false;
     }
 
-    /// <summary>One frame: the drawn speed (km/h, either sign), the type's top speed in km/h and the frame time.</summary>
+    /// <summary>One frame: the drawn speed (km/h, negative reversing), the type's top speed in km/h and the frame time.</summary>
     public void Step(float kmh, float topKmh, float dt)
     {
         if (dt <= 0) return;
@@ -151,7 +151,7 @@ public sealed class EngineSoundModel
         if (speed < _t.IdleKmh && _rate < _t.AccelRate) want = EnginePhase.Idle;
         else if (_rate < -_t.BrakeRate) want = EnginePhase.Braking;
         else if (frac >= _t.TopFraction) want = EnginePhase.TopSpeed;
-        else if (_rate > _t.AccelRate) want = EnginePhase.Accelerating;
+        else if (_rate > _t.AccelRate) want = kmh < -0.3f ? EnginePhase.Coasting : EnginePhase.Accelerating; // reversing is no pull: no accelerating sound
         else want = EnginePhase.Coasting;
 
         if (_fsm.Is(want) || _fsm.Elapsed < _t.MinDwell) return;
