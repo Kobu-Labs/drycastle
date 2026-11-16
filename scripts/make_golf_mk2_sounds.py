@@ -15,9 +15,10 @@ from pathlib import Path
 import numpy as np
 
 SR = 48000
-ACCEL = (6.5, 10.3)     # steady part of the pull, looped
+ACCEL = (8.9, 10.35)    # one gear's steady stretch of the pull (no shift in it), a loop is searched inside it
+ACCEL_LOOP = (1.0, 1.3) # seconds the loop may last
 LIFT = (11.65, 13.1)    # off the gas: the turbo blow-off and the revs falling
-IDLE_XFADE, ACCEL_XFADE = 0.6, 0.5
+IDLE_XFADE, ACCEL_XFADE = 0.6, 0.12
 
 
 def load(path):
@@ -35,6 +36,36 @@ def seam(x, xf):
     head, tail = x[:n], x[-n:]
     mid = tail * np.cos(t) + head * np.sin(t)
     return np.concatenate([mid, x[n:-n]])
+
+
+def lowpass(x, hz):
+    sp = np.fft.rfft(x)
+    sp[np.fft.rfftfreq(len(x), 1 / SR) > hz] = 0
+    return np.fft.irfft(sp, len(x)).astype(np.float32)
+
+
+def best_loop(x, lo, hi, min_len, max_len, ctx=0.1):
+    """The loop [a, b) inside x[lo:hi] whose seam is least audible: the signal before b should look like the signal before a (so that continuing
+    from b into a is continuous in wave shape, not just level). Returns the clip, cut at the best a and b."""
+    n = int(ctx * SR)
+    best = None
+    seg = x[int(lo * SR):int(hi * SR)]
+    low = lowpass(seg, 700)  # the firing pattern, not the noise on top of it, has to line up
+    for a in range(n, len(seg) - int(min_len * SR), int(0.004 * SR)):
+        tpl = low[a - n:a]
+        e_t = np.sqrt((tpl ** 2).sum()) + 1e-9
+        b0, b1 = a + int(min_len * SR), min(len(seg), a + int(max_len * SR))
+        if b1 <= b0: continue
+        win = low[b0 - n:b1]
+        c = np.correlate(win, tpl, mode="valid")
+        cs = np.concatenate([[0], np.cumsum(win ** 2)])
+        e_w = np.sqrt(cs[n:n + len(c)] - cs[:len(c)]) + 1e-9
+        score = c / (e_t * e_w)
+        k = int(score.argmax())
+        if best is None or score[k] > best[0]: best = (float(score[k]), a, b0 + k)
+    score, a, b = best
+    print(f"accel loop: {a / SR + lo:.3f}-{b / SR + lo:.3f} s, seam match {score:.2f}")
+    return seg[a:b]
 
 
 def fades(x, fin, fout):
@@ -104,7 +135,7 @@ def main():
     idle, drive = load(a.idle), load(a.drive)
     cut = lambda x, r: x[int(r[0] * SR):int(r[1] * SR)]
     write(out / "idle.ogg", seam(idle, IDLE_XFADE))
-    write(out / "accel.ogg", seam(cut(drive, ACCEL), ACCEL_XFADE))
+    write(out / "accel.ogg", seam(best_loop(drive, ACCEL[0], ACCEL[1], *ACCEL_LOOP), ACCEL_XFADE))
     write(out / "lift.ogg", fades(cut(drive, LIFT), 0.02, 0.35))
     write(out / "brake.ogg", brake())
     write(out / "top.ogg", top())

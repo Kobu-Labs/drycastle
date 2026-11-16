@@ -11,8 +11,8 @@ public class VehicleSoundLayerDef
     /// <summary>[pitch at standstill, pitch at top speed]; the pitch follows the speed linearly between them.</summary>
     public float[] Pitch { get; set; } = { 1f, 1f };
     /// <summary>Seconds to fade up when the layer takes over, and down when it gives way.</summary>
-    public float FadeIn { get; set; } = 0.15f;
-    public float FadeOut { get; set; } = 0.4f;
+    public float FadeIn { get; set; } = 0.3f;
+    public float FadeOut { get; set; } = 0.6f;
 
     public float PitchAt(float speedFraction) => Pitch[0] + (Pitch[1] - Pitch[0]) * Math.Clamp(speedFraction, 0f, 1f);
 }
@@ -84,9 +84,9 @@ public sealed class EngineSoundTuning
     /// <summary>From this share of the top speed, with no braking, the vehicle is "at top speed".</summary>
     public float TopFraction = 0.96f;
     /// <summary>A phase lasts at least this long, so a ragged speed does not flutter between them.</summary>
-    public float MinDwell = 0.2f;
+    public float MinDwell = 0.35f;
     /// <summary>Time constant of the rate filter, seconds.</summary>
-    public float RateSmoothing = 0.25f;
+    public float RateSmoothing = 0.4f;
     /// <summary>Coming off the gas plays the lift sound only after this long on it, from this share of the top speed, and not twice within the cooldown.</summary>
     public float LiftMinPushSeconds = 0.8f, LiftMinFraction = 0.2f, LiftCooldown = 1.5f;
 }
@@ -173,7 +173,9 @@ public sealed class EngineSoundModel
 public sealed class EngineMix
 {
     public const int Count = 5;
+    /// <summary>What each layer plays at, 0 to 1: the straight fade, eased (smoothstep), so a crossfade starts and ends gently.</summary>
     public readonly float[] Gain = new float[Count];
+    readonly float[] _fade = new float[Count];
 
     /// <summary>
     /// One frame. The background asks for full volume always, the phase's layer for full volume (the brake layer by the speed: a squeal at a walking
@@ -186,18 +188,19 @@ public sealed class EngineMix
         for (var i = 0; i < Count; i++)
         {
             var l = loops[i];
-            if (l == null) { Gain[i] = 0; continue; }
+            if (l == null) { Gain[i] = _fade[i] = 0; continue; }
             // the accelerating layer carries on under the top speed one (a type without a top layer simply keeps accelerating)
             var on = active == (EngineLayer)i || (i == (int)EngineLayer.Accel && phase == EnginePhase.TopSpeed);
             var target = i == (int)EngineLayer.Background || on ? 1f : 0f;
             if (target > 0 && i == (int)EngineLayer.Brake) target = Math.Clamp(speedFraction * 2f, 0f, 1f);
-            var rate = target > Gain[i] ? l.FadeIn : l.FadeOut;
-            Gain[i] = rate <= 0 ? target : target > Gain[i] ? Math.Min(target, Gain[i] + dt / rate) : Math.Max(target, Gain[i] - dt / rate);
+            var rate = target > _fade[i] ? l.FadeIn : l.FadeOut;
+            _fade[i] = rate <= 0 ? target : target > _fade[i] ? Math.Min(target, _fade[i] + dt / rate) : Math.Max(target, _fade[i] - dt / rate);
+            Gain[i] = _fade[i] * _fade[i] * (3f - 2f * _fade[i]);
         }
     }
 
     /// <summary>Gain as a volume offset in dB (silent: -80).</summary>
     public static float Db(float gain) => gain <= 0.001f ? -80f : 20f * MathF.Log10(gain);
 
-    public void Clear() => Array.Clear(Gain);
+    public void Clear() { Array.Clear(Gain); Array.Clear(_fade); }
 }
