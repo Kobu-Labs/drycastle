@@ -18,8 +18,8 @@
   // import to the real size, hit_box = measured size x scale as [width, height, length], head up and antlers included). hp, speeds and
   // hit_box_ahead: metres the box's centre lies ahead of the model's origin (scripts/make_animal_silhouettes.py prints it), for a bullet's hit test and the hit diagram.
   // radii are placeholders tuned by feel; the models face +Z, so model_yaw_deg 180. The species index is its position in this list.
-  // "weight_kg": [min, max] gives a species a size (GLOSSARY "Animal size"): each animal rolls 0.88-1.12 times the model and boxes and a weight in the range (a variant may have its own range: a moose bull);
-  // hp is scaled by size^3 for a species that is not one_hit, so keep hp x 1.12^3 within 255. No weight_kg: no size (pets, livestock).
+  // "weight_kg": [min, max] gives a species a size (GLOSSARY "Animal size"): each animal rolls 0.7-1.4 times the model and boxes and a weight in the range (a variant may have its own range: a moose bull);
+  // hp is scaled by size^3 for a species that is not one_hit, so keep hp x 1.4^3 (2.74) within 255. No weight_kg: no size (pets, livestock).
   // A species may list "variants": [{ "id": "corgi", "model": "simple-dog-pack/corgi.glb" }]: other models with the same numbers. A pet wears
   // a random one (the base model included); a pinned pet of pets.json can name one ("asset").
   "animals": [

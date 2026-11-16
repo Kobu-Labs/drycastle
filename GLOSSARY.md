@@ -435,7 +435,7 @@ A creature of the world that is not a player: a deer, a dog, a cow. It has hit p
 _Avoid_: NPC (alone), mob, critter
 
 **Animal size**:
-How much bigger or smaller than its species' model a wild Animal stands: one of 8 steps from 0.88 to 1.12, rolled when it spawns (the mean of three uniform draws, so most are middling and a very big or small one is rare) and sent in the animal's state byte. It scales the model, the body box, the run-over radius and the Hit shape, and, for a species with real hit points (not one-hit), its hit points by size cubed (at most 255). A species with `weight_kg` in `animals.json` (a look of it may have its own: a moose bull) has a size; a Pet and livestock do not. Its weight in kg comes from the same roll, as a point of the species' range; only the server knows it, and the Hit diagram tells the shooter.
+How much bigger or smaller than its species' model a wild Animal stands: one of 8 steps from 0.7 to 1.4, rolled when it spawns (the mean of two uniform draws, so the middle is commonest but a big or a small one is not rare) and sent in the animal's state byte. It scales the model, the body box, the run-over radius and the Hit shape, and, for a species with real hit points (not one-hit), its hit points by size cubed (at most 255). A species with `weight_kg` in `animals.json` (a look of it may have its own: a moose bull) has a size; a Pet and livestock do not. Its weight in kg comes from the same roll, as a point of the species' range; only the server knows it, and the Hit diagram tells the shooter.
 _Avoid_: scale (that is the model's import scale), growth
 
 **Pet**:

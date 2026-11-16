@@ -47,8 +47,8 @@ public class AnimalSizeTests
     [Fact]
     public void Steps_run_from_the_smallest_to_the_largest_size_and_the_roll_picks_the_nearest()
     {
-        Assert.Equal(0.88f, AnimalRules.SizeOfStep(0), 4);
-        Assert.Equal(1.12f, AnimalRules.SizeOfStep(7), 4);
+        Assert.Equal(AnimalRules.MinSize, AnimalRules.SizeOfStep(0), 4);
+        Assert.Equal(AnimalRules.MaxSize, AnimalRules.SizeOfStep(7), 4);
         for (var s = 1; s < AnimalRules.SizeSteps; s++) Assert.True(AnimalRules.SizeOfStep(s) > AnimalRules.SizeOfStep(s - 1));
         Assert.Equal(0, AnimalRules.StepOf(0f));
         Assert.Equal(7, AnimalRules.StepOf(1f));
@@ -86,12 +86,12 @@ public class AnimalSizeTests
         var def = Animals.Find("deer")!;
         Assert.Equal(60f, small.WeightKg, 3);
         Assert.Equal(120f, big.WeightKg, 3);
-        Assert.Equal(0.88f, small.Size, 4);
-        Assert.Equal(1.12f, big.Size, 4);
+        Assert.Equal(AnimalRules.MinSize, small.Size, 4);
+        Assert.Equal(AnimalRules.MaxSize, big.Size, 4);
         for (var i = 0; i < 3; i++)
         {
-            Assert.Equal(def.HitBox[i] * 0.88f, small.HitBox[i], 4);
-            Assert.Equal(def.HitBox[i] * 1.12f, big.HitBox[i], 4);
+            Assert.Equal(def.HitBox[i] * AnimalRules.MinSize, small.HitBox[i], 4);
+            Assert.Equal(def.HitBox[i] * AnimalRules.MaxSize, big.HitBox[i], 4);
         }
         Assert.Equal(90f, Make("deer", 0.5f).WeightKg, 3);
     }
@@ -112,8 +112,8 @@ public class AnimalSizeTests
     public void Hit_points_grow_with_the_volume_for_a_species_that_has_them_and_stay_for_a_one_hit_one()
     {
         var deer = Animals.Find("deer")!;
-        Assert.Equal(MathF.Round(deer.Hp * 1.12f * 1.12f * 1.12f), Make("deer", 1f).MaxHp);
-        Assert.Equal(MathF.Round(deer.Hp * 0.88f * 0.88f * 0.88f), Make("deer", 0f).MaxHp);
+        Assert.Equal(MathF.Round(deer.Hp * AnimalRules.MaxSize * AnimalRules.MaxSize * AnimalRules.MaxSize), Make("deer", 1f).MaxHp);
+        Assert.Equal(MathF.Round(deer.Hp * AnimalRules.MinSize * AnimalRules.MinSize * AnimalRules.MinSize), Make("deer", 0f).MaxHp);
         Assert.True(Make("deer", 1f).MaxHp > Make("deer", 0f).MaxHp);
         Assert.Equal(Make("deer", 1f).MaxHp, Make("deer", 1f).Hp);
         Assert.Equal(Make("deer", 1f).MaxHp, Make("deer", 1f).Serialize().Hp);
@@ -261,15 +261,15 @@ public class AnimalSizeTests
     {
         var shape = Shapes.At("deer", AnimalPose.Idle, 0)!.Value.Shape;
         var (hz, hy) = HeadOf(shape);
-        const float Size = 1.12f;
+        const float Size = AnimalRules.MaxSize;
 
-        // the head of a 12 % bigger deer is 12 % further forward and higher: a bullet at the scaled spot meets the head, at the old spot it no longer does
+        // the head of a bigger deer is further forward and higher, by its size: a bullet at the scaled spot meets the head, at the old spot it no longer does
         var head = Broadside(shape, Size, hz * Size, hy * Size);
         Assert.NotNull(head);
         Assert.True(head!.Value.ShapeHead);
         Assert.Null(Broadside(shape, Size, hz * Size + 0.3f, hy * Size + 0.5f)); // above and beyond the scaled head
 
-        // the same cell is met 12 % deeper into the animal's width: its flank is Size times as far from the middle
+        // the same cell is met deeper into the animal's width: its flank is Size times as far from the middle
         var plain = Broadside(shape, 1f, 0.1f, 0.85f)!.Value.Distance;
         var big = Broadside(shape, Size, 0.1f * Size, 0.85f * Size)!.Value.Distance;
         Assert.Equal((40f - big) / (40f - plain), Size, 2);
@@ -285,7 +285,7 @@ public class AnimalSizeTests
     {
         var found = Shapes.At("deer", AnimalPose.Idle, 0)!.Value;
         var (hz, hy) = HeadOf(found.Shape);
-        const float Size = 0.88f;
+        const float Size = AnimalRules.MinSize;
         var t = new HitTarget(WildlifeRules.FirstHitId, Vector3.Zero, Stance.Stand, 0, HeadGuarded: true, Box: new Vector3(0.48f, 1.41f, 1.45f) * Size, BoxAhead: 0.19f * Size,
             Shape: found.Shape, ShapePose: AnimalPose.Idle, ShapeFrame: found.Frame, ShapeScale: Size);
         var msg = HuntShot.From(t, new Vector3(-0.2f, hy * Size, -hz * Size), 3, 100, 0, weightKg: 71.4f);

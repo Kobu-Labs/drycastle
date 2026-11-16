@@ -16,10 +16,10 @@ public static class AnimalRules
 
     /// <summary>Size steps the state byte carries (0 .. <see cref="SizeSteps"/> - 1), and the scale of the smallest and the largest.</summary>
     public const int SizeSteps = 8;
-    public const float MinSize = 0.88f, MaxSize = 1.12f;
+    public const float MinSize = 0.7f, MaxSize = 1.4f;
 
-    /// <summary>The weight roll of a new animal, 0..1: the mean of three uniform draws, so it clusters around the middle (a heavy one is rare, a trophy). Draws exactly three values from <paramref name="rng"/>.</summary>
-    public static float RollSize(Random rng) => (float)((rng.NextDouble() + rng.NextDouble() + rng.NextDouble()) / 3.0);
+    /// <summary>The weight roll of a new animal, 0..1: the mean of two uniform draws (a triangle), so it leans to the middle but the big and the small ones are not rare. Draws exactly two values from <paramref name="rng"/>.</summary>
+    public static float RollSize(Random rng) => (float)((rng.NextDouble() + rng.NextDouble()) / 2.0);
 
     /// <summary>The size step of a roll: 0 .. <see cref="SizeSteps"/> - 1.</summary>
     public static int StepOf(float roll) => Math.Clamp((int)MathF.Round(Math.Clamp(roll, 0f, 1f) * (SizeSteps - 1)), 0, SizeSteps - 1);
