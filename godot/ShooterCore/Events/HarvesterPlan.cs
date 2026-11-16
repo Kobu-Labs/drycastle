@@ -50,6 +50,14 @@ public sealed class HarvesterConfig
     /// <summary>A shot ignites a bale it passes within this of its centre.</summary>
     public float BaleHitRadiusM { get; set; } = 0.9f;
     public float BaleLifetimeS { get; set; } = CorpseRules.LifetimeSeconds;
+    /// <summary>Bales the machine drops while it cuts grain or rapeseed (<see cref="DroppedBales"/>): one per this many metres of finished swath, at most <see cref="MaxDroppedBales"/> a field.</summary>
+    public float DroppedBaleEveryM { get; set; } = 60;
+    public int MaxDroppedBales { get; set; } = 24;
+    /// <summary>The unloader's spot relative to the header: this far behind it along the pass (the header's reach 4.0 + the machine's half length 4.3 + 1.6) and this far to the left (the corpse bale's spot).</summary>
+    public float DroppedBaleBehindM { get; set; } = 9.9f;
+    public float DroppedBaleLeftM { get; set; } = 1.6f;
+    /// <summary>After the job ends the dropped bales stay this long (10 minutes) and then fade out, for the server and every client; a round reset or the next job removes them sooner.</summary>
+    public float DroppedBaleFadeS { get; set; } = 10 * 60;
     public BurnDef BaleBurn { get; set; } = new() { Dps = 3f, DurationS = 4f, TickIntervalS = 1f };
 }
 

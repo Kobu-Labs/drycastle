@@ -208,12 +208,15 @@ public static class BurnCredit
 /// <summary>Wire payloads of the harvester events (little-endian).</summary>
 public static class HarvesterCodec
 {
-    public const int StateBytes = 12;
+    public const int StateBytes = 14;
+
+    /// <summary><see cref="StateMsg.FadeS"/> while the job runs: the dropped bales do not fade yet.</summary>
+    public const ushort NoFade = ushort.MaxValue;
 
     /// <summary>The harvester's job as everyone needs it to draw the field: where it is in its job, which field (index in the map's field list) and the progress of the cut, and the plan's numbers.</summary>
-    public readonly record struct StateMsg(HarvesterPhase Phase, ushort Car, ushort Field, byte Pass, float Along, bool Cutting, bool Driven, float HeaderM, float MarginM, float OverlapM);
+    public readonly record struct StateMsg(HarvesterPhase Phase, ushort Car, ushort Field, byte Pass, float Along, bool Cutting, bool Driven, float HeaderM, float MarginM, float OverlapM, ushort FadeS = NoFade);
 
-    /// <summary>Server to everyone, <see cref="EventKind.HarvesterState"/>: u8 phase, u16 vehicle id, u16 field index, u8 pass (255: none yet), u16 metres done on the pass in decimetres, u8 flags (1 cutting, 2 driven by the AI), u8 header, u8 margin and u8 overlap in decimetres.</summary>
+    /// <summary>Server to everyone, <see cref="EventKind.HarvesterState"/>: u8 phase, u16 vehicle id, u16 field index, u8 pass (255: none yet), u16 metres done on the pass in decimetres, u8 flags (1 cutting, 2 driven by the AI), u8 header, u8 margin and u8 overlap in decimetres, u16 seconds until the bales it dropped fade (65535: the job still runs; after it ended, the time left).</summary>
     public static byte[] EncodeState(StateMsg m)
     {
         var b = new byte[StateBytes];
@@ -224,6 +227,7 @@ public static class HarvesterCodec
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(6), (ushort)Math.Clamp((int)MathF.Round(m.Along * 10f), 0, ushort.MaxValue));
         b[8] = (byte)((m.Cutting ? 1 : 0) | (m.Driven ? 2 : 0));
         b[9] = Dm(m.HeaderM); b[10] = Dm(m.MarginM); b[11] = Dm(m.OverlapM);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(12), m.FadeS);
         return b;
     }
 
@@ -233,14 +237,15 @@ public static class HarvesterCodec
     {
         if (d.Length != StateBytes || !Enum.IsDefined((HarvesterPhase)d[0])) return null;
         return new StateMsg((HarvesterPhase)d[0], System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[1..]), System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[3..]), d[5],
-            System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[6..]) / 10f, (d[8] & 1) != 0, (d[8] & 2) != 0, d[9] / 10f, d[10] / 10f, d[11] / 10f);
+            System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[6..]) / 10f, (d[8] & 1) != 0, (d[8] & 2) != 0, d[9] / 10f, d[10] / 10f, d[11] / 10f,
+            System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[12..]));
     }
 
     public const int FxBytes = 15;
 
     public enum FxKind : byte
     {
-        /// <summary>A bale caught fire (the id is the corpse's for a made bale, else the static bale's index with the high bit set).</summary>
+        /// <summary>A bale caught fire (the id is the corpse's for a made bale, else the static bale's index with the high bit set, or a dropped bale's index with both).</summary>
         BaleLit = 0,
         /// <summary>A bale burnt out.</summary>
         BaleAsh = 1,
@@ -273,6 +278,13 @@ public static class HarvesterCodec
 
     /// <summary>The id a static field bale (index in the list) goes by in an effect: the high bit says it is not a corpse.</summary>
     public static ushort StaticBaleId(int index) => (ushort)(0x8000 | index);
-    public static bool IsStaticBale(ushort id) => (id & 0x8000) != 0;
-    public static int StaticBaleIndex(ushort id) => id & 0x7FFF;
+    public static bool IsStaticBale(ushort id) => (id & 0xC000) == 0x8000;
+    public static int StaticBaleIndex(ushort id) => id & 0x3FFF;
+
+    /// <summary>The id a bale the harvester dropped (<see cref="DroppedBales"/>, its index) goes by in an effect: both high bits.</summary>
+    public static ushort DroppedBaleId(int index) => (ushort)(0xC000 | index);
+    public static bool IsDroppedBale(ushort id) => (id & 0xC000) == 0xC000;
+    public static int DroppedBaleIndex(ushort id) => id & 0x3FFF;
+    /// <summary>Not a corpse: a bale of the world (the field's own or a dropped one), drawn and burnt on its own.</summary>
+    public static bool IsWorldBale(ushort id) => (id & 0x8000) != 0;
 }

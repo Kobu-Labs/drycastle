@@ -369,6 +369,77 @@ public class HarvesterTests
         Assert.Equal(CorpseRules.LifetimeSeconds, Cfg.BaleLifetimeS); // despawns like a corpse
     }
 
+    // ---- dropped bales ----
+
+    [Fact]
+    public void Only_grain_and_rapeseed_fields_drop_bales()
+    {
+        var ring = Rect(0, 0, 100, 60);
+        Assert.True(new CropField("a", "crop_grain", ring).DropsBales);
+        Assert.True(new CropField("b", "crop_rapeseed", ring).DropsBales);
+        Assert.False(new CropField("c", "crop_corn", ring).DropsBales);
+        Assert.False(new CropField("d", "crop_potato", ring).DropsBales);
+        Assert.False(new CropField("e", "crop_bare", ring).DropsBales);
+    }
+
+    [Fact]
+    public void A_bale_drops_every_sixty_metres_of_finished_swath_up_to_the_cap()
+    {
+        var passes = new[] { new HarvestPass(new Vector2(0, 0), new Vector2(100, 0)), new HarvestPass(new Vector2(100, 4.5f), new Vector2(0, 4.5f)) };
+        Assert.Equal(0, DroppedBales.Count(passes, HarvestProgress.None, Cfg));
+        Assert.Equal(0, DroppedBales.Count(passes, new HarvestProgress(0, 59), Cfg));
+        Assert.Equal(1, DroppedBales.Count(passes, new HarvestProgress(0, 60), Cfg));
+        Assert.Equal(1, DroppedBales.Count(passes, new HarvestProgress(1, 19), Cfg)); // 119 m done
+        Assert.Equal(2, DroppedBales.Count(passes, new HarvestProgress(1, 20), Cfg));
+        Assert.Equal(3, DroppedBales.Count(passes, new HarvestProgress(1, 100), Cfg)); // 200 m
+        var long1 = new[] { new HarvestPass(new Vector2(0, 0), new Vector2(5000, 0)) };
+        Assert.Equal(Cfg.MaxDroppedBales, DroppedBales.Count(long1, new HarvestProgress(0, 5000), Cfg)); // capped
+        Assert.Equal(Cfg.MaxDroppedBales, DroppedBales.Derive(long1, new HarvestProgress(0, 5000), Cfg).Count);
+    }
+
+    [Fact]
+    public void Dropped_bales_lie_behind_the_header_on_the_left_and_are_the_same_for_any_progress()
+    {
+        var passes = new[] { new HarvestPass(new Vector2(0, 0), new Vector2(200, 0)), new HarvestPass(new Vector2(200, 4.5f), new Vector2(0, 4.5f)) };
+        var early = DroppedBales.Derive(passes, new HarvestProgress(0, 130), Cfg); // 2 bales
+        var late = DroppedBales.Derive(passes, new HarvestProgress(1, 150), Cfg); // 350 m: 5 bales
+        Assert.Equal(2, early.Count); Assert.Equal(5, late.Count);
+        Assert.Equal(early, late.Take(2).ToList()); // bale i never depends on how far the job has got
+        // pass 0 runs east (+x): the header at x=60, the unloader 9.9 m behind (west) and 1.6 m to the left (north, -z)
+        Assert.Equal(60f - Cfg.DroppedBaleBehindM, early[0].Pos.X, 3);
+        Assert.Equal(-Cfg.DroppedBaleLeftM, early[0].Pos.Y, 3);
+        // pass 1 runs west (-x): behind is east, left is south (+z)
+        var third = late[3]; // 240 m: 40 m into pass 1, header at x=160
+        Assert.Equal(160f + Cfg.DroppedBaleBehindM, third.Pos.X, 3);
+        Assert.Equal(4.5f + Cfg.DroppedBaleLeftM, third.Pos.Y, 3);
+        Assert.Null(DroppedBales.At(passes, 20, Cfg)); // past the end of the passes
+    }
+
+    [Fact]
+    public void The_dropped_bales_of_a_planned_field_are_what_the_progress_message_alone_gives()
+    {
+        var plan = FieldPlanner.Plan(Rect(0, 0, 200, 100), Cfg)!;
+        Assert.True(plan.TotalCutM > 1500);
+        var done = new HarvestProgress(plan.Passes.Count - 1, plan.Passes[^1].Length);
+        var all = DroppedBales.Derive(plan.Passes, done, Cfg);
+        Assert.Equal(Math.Min(Cfg.MaxDroppedBales, (int)(plan.TotalCutM / Cfg.DroppedBaleEveryM)), all.Count);
+        Assert.All(all, b => Assert.InRange(b.Pos.X, -15, 215)); // beside the swath, roughly in the field
+        // a late joiner replays the same list from the same plan and progress
+        Assert.Equal(all, DroppedBales.Derive(FieldPlanner.Plan(Rect(0, 0, 200, 100), Cfg)!.Passes, done, Cfg));
+    }
+
+    [Fact]
+    public void A_dropped_bale_burns_like_any_other_bale()
+    {
+        var passes = new[] { new HarvestPass(new Vector2(0, 0), new Vector2(200, 0)) };
+        var at = DroppedBales.At(passes, 0, Cfg)!.Value.Pos;
+        var bale = new HayBale(new Vector3(at.X, 0, at.Y), Cfg, 0);
+        Assert.True(bale.HitBy(new Vector3(at.X - 10, 1.2f, at.Y), Vector3.UnitX, 20));
+        Assert.True(bale.Ignite());
+        for (var i = 0; i < 400; i++) bale.Tick(Dt);
+        Assert.Equal(BaleState.Ash, bale.State);
+    }
+
     // ---- the wire ----
 
     [Fact]
@@ -380,6 +451,8 @@ public class HarvesterTests
         Assert.Equal(63.4f, back.Along, 1);
         Assert.True(back.Cutting && back.Driven);
         Assert.Equal(4.8f, back.HeaderM, 1); Assert.Equal(3.5f, back.MarginM, 1); Assert.Equal(0.3f, back.OverlapM, 1);
+        Assert.Equal(HarvesterCodec.NoFade, back.FadeS); // a running job: no fade
+        Assert.Equal((ushort)417, HarvesterCodec.DecodeState(HarvesterCodec.EncodeState(s with { FadeS = 417 }))!.Value.FadeS);
         Assert.Null(HarvesterCodec.DecodeState(new byte[3]));
         var fx = new HarvesterCodec.FxMsg(HarvesterCodec.FxKind.BaleLit, new Vector3(12.5f, 3f, -40.25f), HarvesterCodec.StaticBaleId(300));
         var fb = HarvesterCodec.DecodeFx(HarvesterCodec.EncodeFx(fx))!.Value;
@@ -387,6 +460,11 @@ public class HarvesterTests
         Assert.True(HarvesterCodec.IsStaticBale(fb.Id));
         Assert.Equal(300, HarvesterCodec.StaticBaleIndex(fb.Id));
         Assert.False(HarvesterCodec.IsStaticBale(77));
+        var dropped = HarvesterCodec.DroppedBaleId(23);
+        Assert.True(HarvesterCodec.IsDroppedBale(dropped) && HarvesterCodec.IsWorldBale(dropped) && !HarvesterCodec.IsStaticBale(dropped));
+        Assert.Equal(23, HarvesterCodec.DroppedBaleIndex(dropped));
+        Assert.True(HarvesterCodec.IsWorldBale(HarvesterCodec.StaticBaleId(5)) && !HarvesterCodec.IsDroppedBale(HarvesterCodec.StaticBaleId(5)));
+        Assert.False(HarvesterCodec.IsWorldBale(77));
         Assert.Null(HarvesterCodec.DecodeFx(new byte[15].Select((_, i) => i == 0 ? (byte)99 : (byte)0).ToArray()));
     }
 

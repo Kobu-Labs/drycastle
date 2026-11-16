@@ -15,6 +15,9 @@ public sealed class CropField
         Centroid = Poly.Centroid(ring);
     }
 
+    /// <summary>Whether the harvester drops hay bales on this field (<see cref="DroppedBales"/>): grain and rapeseed only.</summary>
+    public bool DropsBales => Type is "crop_grain" or "crop_rapeseed";
+
     public string Id { get; }
     /// <summary>The ground type, e.g. <c>crop_grain</c>.</summary>
     public string Type { get; }
