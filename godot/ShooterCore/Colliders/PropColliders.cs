@@ -7,7 +7,8 @@ namespace Drycastle.ShooterCore;
 /// Physics layers of the world. Solid world (players, vehicles and bullets stop on it) is layer 1; vehicles are layer 2 (as
 /// before). Shot-only cover (tree crowns, bushes) is layer 4: bullets, pellets, rockets and sight lines stop on it, while
 /// players and cars move through it. Layer 8 is the box of a vehicle that on-foot players are stopped by: a body of its own
-/// beside the vehicle's (see <see cref="VehicleSolid"/>).
+/// beside the vehicle's (see <see cref="VehicleSolid"/>). Layer 16 is the player and bot bodies (<see cref="Players"/>): no world ray queries it, so none
+/// has to exclude them by hand.
 /// </summary>
 public static class CollisionLayers
 {
@@ -22,8 +23,21 @@ public static class CollisionLayers
     /// </summary>
     public const uint VehicleSolid = 8;
 
-    /// <summary>What an on-foot player's movement collides with: the world and the vehicles' solid boxes (#217). Not while seated, which is the world only.</summary>
-    public const uint OnFoot = World | VehicleSolid;
+    /// <summary>
+    /// The bodies of players and bots, server and client. Off the world layer so that a ray for the ground, a wall or a shot never meets one, and an
+    /// on-foot body does not stop on another (<see cref="CollisionRules"/>: player x other player = Pass). A mover that must stop on players asks for it
+    /// by its rule row (<see cref="CollisionRules.BodyMask"/>).
+    /// </summary>
+    public const uint Players = 16;
+
+    /// <summary>
+    /// The Holy Mass demon's body: one static body (a capsule, the player's scaled as the demon is) that the server and every client move to the demon's pose. The demon is no obstacle
+    /// for a shot (it is hit by its Hit shape), no ray meets it; the movers whose row Collides with it (<see cref="CollisionRules.BodyMask"/>, <see cref="CollisionRules.SweepMask"/>) stop on it.
+    /// </summary>
+    public const uint Demon = 32;
+
+    /// <summary>What an on-foot player's movement collides with: the world, the vehicles' solid boxes (#217) and the demon's body. Not while seated, which is the world only.</summary>
+    public const uint OnFoot = World | VehicleSolid | Demon;
 
     /// <summary>Server rays for bullets, rockets, splash and turret sight: world, vehicles and shot-only cover.</summary>
     public const uint Bullets = World | Vehicles | ShotOnly;

@@ -311,7 +311,7 @@ public partial class NetClient : Node
                 _myId = w.PlayerId; _welcomed = true; _link.Enter(LinkPhase.Welcomed);
                 RozhlasSetReset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
                 DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
-                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders };
+                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Bodies = this };
                 World.AddChild(_me);
                 if (!Bot && ShotFx.Enabled) { _viewmodel = MakeViewmodel(); _me.Camera.AddChild(_viewmodel); }
                 if (WeaponsBot != "" || CarBot != "" || FxDemo.StartsWith("vehicle:")) NetServer.AddArenaColliders(World);
@@ -597,6 +597,7 @@ public partial class NetClient : Node
         if (Bot && LossBot != "") { if (_elapsed >= BotSeconds) LossFail("timeout: round never reached its end"); }
         else if (Bot && _elapsed >= BotSeconds) { if (CarBot != "") CarResult(false, "timeout"); else if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
         if (!OwnSpawned) return; // wait for our spawn position
+        DemonBodyTick(); // the demon's Body capsule is where the server last put it, before the body is predicted
         ReplayReconcile(); // C-02: a snapshot's reconcile replays here, with the physics step (see OnSelf)
         ReplayDriveReconcile(); // and so does a predicted vehicle's (ADR 0010, ADR 0014)
         var dt = (float)delta;

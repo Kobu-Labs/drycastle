@@ -51,6 +51,16 @@ public static class DemonRules
         return new HitTarget(HitId, centre - new Vector3(0, MoveConsts.CrouchHeight * scale / 2, 0), Stance.Crouch, yaw, false, scale);
     }
 
+    /// <summary>Whether the demon is a body in the world in this state: from the climb on, until it dies. The turning is a scripted show, not a body to walk into.</summary>
+    public static bool Blocks(DemonState state) => state is not (DemonState.Transforming or DemonState.Dead);
+
+    /// <summary>
+    /// The demon's Body shape (ADR 0028): the player's capsule (<see cref="MoveConsts.CapsuleRadius"/>, the crouch height: the figure it is) scaled as the demon is, upright, centred
+    /// <paramref name="bodyHeightM"/> off the surface along its normal, where its Hit shape is (<see cref="Target"/>). A player on foot and a ground vehicle stop against it; it is never pushed.
+    /// </summary>
+    public static (Vector3 Centre, float Radius, float Height) BodyCapsule(Vector3 surface, Vector3 normal, float bodyHeightM, float scale) =>
+        (surface + normal * bodyHeightM, MoveConsts.CapsuleRadius * scale, MoveConsts.CrouchHeight * scale);
+
     /// <summary>A unit vector in two bytes (octahedral, about 1.5 degrees off at worst; the axes of the church are exact).</summary>
     public static ushort PackNormal(Vector3 n)
     {

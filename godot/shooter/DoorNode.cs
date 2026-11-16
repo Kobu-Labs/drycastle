@@ -62,6 +62,12 @@ public abstract partial class DoorNode : Node3D
         return pivot;
     }
 
+    /// <summary>
+    /// For the navigation bake only (<see cref="BotNav"/>): while <paramref name="through"/> the box is off the World layer whatever the door's state, so the doorway is part of the mesh and a route may
+    /// go through it. Whether the door lets anyone through is a question for the moment of walking (a closed box is solid then); the baked mesh does not remember the state it was baked in.
+    /// </summary>
+    public void PassForBake(bool through) => _body.CollisionLayer = through || IsOpen ? 0 : CollisionLayers.World;
+
     /// <summary>Opens or closes the doors. Closed: the box is solid. <paramref name="animate"/>: the leaves swing; else they jump (the server, a joiner).</summary>
     public void SetOpen(bool open, bool animate)
     {

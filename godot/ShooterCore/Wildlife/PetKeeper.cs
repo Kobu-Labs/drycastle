@@ -76,6 +76,9 @@ public sealed class PetKeeper : IAnimalHits
     /// <summary>Counts up whenever the keeper forgets its pets (<see cref="Clear"/>): a record of a pet from an earlier round must not bring it back.</summary>
     public int Round { get; private set; }
 
+    /// <summary>Every animal of the match, wildlife included: the pets are put into it when they spawn and out when they end, so a pet runs into another pet and into wildlife of another herd (ADR 0028). Null: none do.</summary>
+    public AnimalCrowd? Crowd { get; set; }
+
     /// <summary>Raised at the end of every <see cref="Update"/> (once a tick, after the entities ticked).</summary>
     public event Action? Updated;
 
@@ -182,7 +185,16 @@ public sealed class PetKeeper : IAnimalHits
             if (pen.RandomPoint(_rng) is { } p && world.GroundY(p.X, p.Y) != null) home = p;
         if (home is not { } h) return Spawned.NoGround;
         var species = pinned ?? _cfg.Pick(_animals, _rng.NextDouble());
-        var animal = new Animal(_animals, species, new Vector3(h.X, 0, h.Y), (float)_rng.NextDouble() * MathF.Tau, world, _rng.Next(), pinnedVariant ?? _rng.Next(_animals.Animals[species].VariantCount));
+        var (yaw, seed) = ((float)_rng.NextDouble() * MathF.Tau, _rng.Next());
+        var variant = pinnedVariant ?? _rng.Next(_animals.Animals[species].VariantCount);
+        // a pen is whole parcels, houses and all: the spot must have room for this pet's body (not inside a building), else another point
+        var radius = _animals.Animals[species].BodyRadiusOf(variant);
+        for (var attempt = 0; attempt < 30 && !world.Fits(h.X, h.Y, radius); attempt++)
+        {
+            if (pen.RandomPoint(_rng) is { } q && world.GroundY(q.X, q.Y) != null) h = q;
+            if (attempt == 29) return Spawned.NoGround;
+        }
+        var animal = new Animal(_animals, species, new Vector3(h.X, 0, h.Y), yaw, world, seed, variant);
         return Add(animal, group) == null ? Spawned.EntitiesFull : Spawned.Yes;
     }
 
@@ -193,6 +205,7 @@ public sealed class PetKeeper : IAnimalHits
         var hit = NextHitId();
         var pet = new Pet { Animal = animal, Entity = entity, HitId = hit, Group = group, Poop = new PoopSchedule(_cfg, new Random(_rng.Next())) };
         animal.Died += (a, by) => Killed?.Invoke(a, by);
+        Crowd?.Add(animal);
         _byHit[hit] = pet;
         _byEntity[entity] = pet;
         _byAnimal[animal] = pet;
@@ -229,10 +242,14 @@ public sealed class PetKeeper : IAnimalHits
         _poops.Forget(d.Id);
         if (!_byEntity.Remove(d.Id, out var pet)) return;
         pet.Gone = true;
+        Crowd?.Remove(pet.Animal);
         _byHit.Remove(pet.HitId);
         _byAnimal.Remove(pet.Animal);
         _all.Remove(pet); // at most 100 pets, and only when one is despawned
     }
+
+    /// <summary>The pet with a hit id, null when it is gone.</summary>
+    public Animal? AnimalOf(ushort hitId) => _byHit.TryGetValue(hitId, out var p) ? p.Animal : null;
 
     /// <summary>Adds the living pets as hit targets.</summary>
     public void AddTargets(List<HitTarget> into)
@@ -252,7 +269,7 @@ public sealed class PetKeeper : IAnimalHits
     /// <summary>Forgets every pet and poop (the match cleared its entities, or the round is over).</summary>
     public void Clear()
     {
-        foreach (var p in _all) p.Gone = true;
+        foreach (var p in _all) { p.Gone = true; Crowd?.Remove(p.Animal); }
         _byHit.Clear(); _byEntity.Clear(); _byAnimal.Clear(); _all.Clear(); _poops.Clear();
         _worlds.Clear(); _pens.Clear();
         Round++;

@@ -11,8 +11,9 @@ namespace Drycastle.Shooter;
 /// <summary>
 /// The walkable map the bots find their routes on (#214): a navigation mesh baked from the server's own colliders, one
 /// tile per map chunk, so it agrees with what stops a player. Settings come from the spike (<see cref="NavSpike"/>,
-/// <c>make shooter-nav-spike</c>): 0.5 m cells, and tree trunks left out (they are three quarters of the polygons; a bot
-/// steers round a tree itself). The bake takes a few seconds for the village, so the tiles are kept on disk under a key made
+/// <c>make shooter-nav-spike</c>): 0.5 m cells, tree trunks left out (they are three quarters of the polygons, and every one is a hole a route is searched round) and
+/// every door baked open (the state the mesh was baked in is not the state a door has when someone walks, so it is the walker's to ask: a bot's body stops at a closed door, a citizen's or
+/// member's <see cref="WalkGuard"/> asks <see cref="WorldQuery.Ahead"/>, which also finds a trunk and a parked vehicle). The bake takes a few seconds for the village, so the tiles are kept on disk under a key made
 /// from the map's manifest, its placed objects and lamps, and the settings: a server bakes once per map version.
 /// <para>
 /// A route costs 13-16 ms across the village, too much for the tick, so the tick does not compute them: <see cref="Submit"/> hands a request to ONE background worker and
@@ -27,7 +28,7 @@ public sealed class BotNav
 {
     public const float Cell = 0.5f, CellHeight = 0.25f;
     /// <summary>Part of the cache key: change it with any setting below, so old tiles are not reused.</summary>
-    const string Settings = "nav1 cell=0.5 height=0.25 radius=0.5 climb=0.25 slope=45 edge=1.0 trunks=out";
+    const string Settings = "nav2 cell=0.5 height=0.25 radius=0.5 climb=0.25 slope=45 edge=1.0 trunks=out doors=open";
     const float AgentRadius = 0.5f; // one cell: the player capsule (0.35 m) rounded up
     const float Border = AgentRadius + 2 * Cell; // baked around a tile and thrown away, so its edge sees the neighbour's obstacles
 
@@ -207,8 +208,10 @@ public sealed class BotNav
 
     static List<NavigationMesh> Bake(Node world, string mapDir, int threads)
     {
-        // the tree trunks are taken off the world layer for the parse only, so the mesh has no hole per tree
+        // the tree trunks are taken off the world layer for the parse only, so the mesh has no hole per tree (a walker meets a trunk at walk time, WorldQuery.Ahead); the doors are
+        // opened for it, so the doorways are in the mesh whatever state the doors happen to have now (the walker meets a closed one at walk time as well)
         var trunks = new List<(StaticBody3D Body, uint Layer)>();
+        var doors = new List<DoorNode>();
         var stack = new Stack<Node>();
         stack.Push(world);
         while (stack.Count > 0)
@@ -216,10 +219,15 @@ public sealed class BotNav
             var n = stack.Pop();
             foreach (var c in n.GetChildren()) stack.Push(c);
             if (n is StaticBody3D b && b.Name.ToString().Contains("TreeTrunks")) { trunks.Add((b, b.CollisionLayer)); b.CollisionLayer = 0; }
+            else if (n is DoorNode d) { doors.Add(d); d.PassForBake(true); }
         }
         var source = new NavigationMeshSourceGeometryData3D();
         try { NavigationServer3D.ParseSourceGeometryData(NewMesh(), source, world); }
-        finally { foreach (var (b, layer) in trunks) b.CollisionLayer = layer; }
+        finally
+        {
+            foreach (var (b, layer) in trunks) b.CollisionLayer = layer;
+            foreach (var d in doors) d.PassForBake(false);
+        }
         if (!source.HasData()) throw new InvalidOperationException("bot navigation: no static collider on the world layer to bake from");
 
         var bounds = source.GetBounds();

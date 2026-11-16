@@ -19,6 +19,12 @@ public static class AnimalRules
     public static int SpeciesOf(ushort look) => look & 0xFF;
     public static int VariantOf(ushort look) => look >> 8;
 
+    /// <summary>
+    /// Whether an animal in this state stands where it is, and so is a body a player on foot cannot walk through: idle, eating, sitting, barking. One that walks or runs is not (the server and a
+    /// client would see it in different places a moment apart, and the player would be stopped by a body that is no longer there); it stops or steers for a player itself.
+    /// </summary>
+    public static bool Stands(AnimalState state) => state is AnimalState.Idle or AnimalState.Eat or AnimalState.Sit or AnimalState.Bark;
+
     public static AnimalState StateOf(byte state) => (AnimalState)(state & StateMask);
     public static bool HitToggled(byte state) => (state & HitToggle) != 0;
 
@@ -39,6 +45,29 @@ public interface IAnimalWorld
 
     /// <summary>Where a player stands now (the one who shot the animal), or null when they are gone.</summary>
     Vector3? PositionOf(ushort player);
+
+    /// <summary>
+    /// Whether a player is near enough to <paramref name="at"/> for any client to be sent the animal (<see cref="WorldInterest.LeaveM"/>, ADR 0025).
+    /// An unwatched animal that is standing, eating or walking is not simulated: it stays as it is until a player comes near again (#280).
+    /// </summary>
+    bool Watched(Vector3 at) => true;
+
+    /// <summary>
+    /// How far a ray at <paramref name="height"/> metres above the ground runs from <paramref name="from"/> (a point on the ground, the front of the animal)
+    /// along <paramref name="dir"/> (flat, unit) before it meets something solid: a building, fence, placed solid, trunk, closed door or a vehicle's solid box
+    /// (the rule row of <see cref="MoverKind.Animal"/>; players are not asked, see <see cref="PlayersNear"/>). Infinity when nothing is within <paramref name="maxM"/>.
+    /// One physics ray: the animal asks rarely (<see cref="ClearPath"/>). The default world has nothing solid.
+    /// </summary>
+    float SolidAhead(Vector3 from, Vector3 dir, float maxM, float height) => float.PositiveInfinity;
+
+    /// <summary>
+    /// Whether an animal's body of <paramref name="radius"/> metres may be at (x, z): there is ground and nothing solid in the way (a spawn point or a
+    /// wander target inside a building is not). The default is the ground alone.
+    /// </summary>
+    bool Fits(float x, float z, float radius) => GroundY(x, z) != null;
+
+    /// <summary>Appends the position of every living player on foot within <paramref name="radius"/> of <paramref name="at"/> (flat) to <paramref name="into"/>: the circles an animal stops for. A player is never pushed.</summary>
+    void PlayersNear(Vector3 at, float radius, List<Vector3> into) { }
 }
 
 /// <summary>
@@ -99,7 +128,11 @@ public sealed class Animal : IWorldEntity
     Countdown _alarm;
     Vector3 _alarmFrom;
     Vector3 _fleeFrom;
-    float _bias;           // radians added to the flight heading to go round what blocked the way
+    float _bias;           // radians added to the heading to go round what blocked the way
+    Countdown _steer;      // the window after a block in which a second block is not a new one (the turn is still under way); in a walk it also ends the detour
+    ClearPath _clear;      // the straight run the last ray found free (or blocked): no ray while it holds (ADR 0028 cost)
+    Countdown _recheck;    // how long a blocked answer is kept before the way is asked again
+    readonly float _bodyW, _bodyL, _bodyAhead, _bodyH; // the Body box (variant's size, species' offset), metres
     IAnimalWorld? _open;   // a pet put down outside its pen walks home over this open ground; null = it stays in its own world
     Vector3 _target;       // the wander target
     Vector3? _arc;         // the velocity of the arc a vehicle threw it on (Thrown, or a body killed by the same hit); null on the ground
@@ -118,6 +151,9 @@ public sealed class Animal : IWorldEntity
         Position = _world.GroundY(home.X, home.Z) is { } y ? new Vector3(home.X, y, home.Z) : home;
         Yaw = yaw;
         Hp = Def.Hp;
+        var box = Def.HitBoxOf(variant);
+        (_bodyW, _bodyH, _bodyL, _bodyAhead) = (box[0], box[1], box[2], Def.BodyAheadOf(variant));
+        BodyReach = MathF.Sqrt(_bodyW * _bodyW + _bodyL * _bodyL) / 2 + MathF.Abs(_bodyAhead);
         _fsm.Restart(Between(file.IdleMinSeconds, file.IdleMaxSeconds));
     }
 
@@ -129,6 +165,18 @@ public sealed class Animal : IWorldEntity
     public Vector3 Home { get; }
     /// <summary>The herd it belongs to (set by the keeper right after spawning): it wanders about the herd's anchor instead of its own home and the herd takes fright together. Null: it is on its own.</summary>
     public Herd? Herd { get; internal set; }
+    /// <summary>Every animal of the match (set by <see cref="AnimalCrowd.Add"/>): who it runs into. Null: it meets no other animal.</summary>
+    public AnimalCrowd? Crowd { get; internal set; }
+    /// <summary>Metres from its position to the farthest point of its Body box: the cheap distance that rules out an animal that is far.</summary>
+    public float BodyReach { get; }
+    /// <summary>Whether another animal stops for this one: it stands on the ground. One that lies, flies, is held or is dead is no obstacle.</summary>
+    public bool Obstructs => Ended == null && State is not (AnimalState.Dead or AnimalState.Thrown or AnimalState.Down or AnimalState.Carried);
+    /// <summary>Whether it stands where it is (<see cref="AnimalRules.Stands"/>): then a player on foot cannot walk through its Body box.</summary>
+    public bool Stands => Ended == null && AnimalRules.Stands(State);
+    /// <summary>Its Body box now (ADR 0028): the footprint contact with a player or another animal is tested against.</summary>
+    public BodyBox Body => BodyBox.Of(Position, Yaw, _bodyW, _bodyL, _bodyAhead);
+    /// <summary>Radius of the sphere that asks the world whether it fits at a spot.</summary>
+    public float BodyRadius => Def.BodyRadiusOf(Variant);
     public Vector3 Position { get; private set; }
     /// <summary>Godot convention: 0 faces -Z.</summary>
     public float Yaw { get; private set; }
@@ -198,6 +246,7 @@ public sealed class Animal : IWorldEntity
         if (State == AnimalState.Carried) return; // held: the Thief moves it
         if (State == AnimalState.Thrown) { if (Fly(dt)) Go(AnimalState.Down, _file.KnockdownSeconds); return; }
         if (State == AnimalState.Down) { if (_fsm.Tick(dt)) GetUp(); return; }
+        if (!_world.Watched(Position)) return; // no client holds it: nothing to show, so nothing to simulate (a corpse, a throw and a knockdown above run on)
         if (_open != null && _world is IPennedWorld pen && pen.Inside(Position.X, Position.Z)) _open = null; // back inside: its own world again
 
         var threat = Def.Flees ? _world.NearestThreat(Position, Def.FleeRadius) : null;
@@ -322,6 +371,9 @@ public sealed class Animal : IWorldEntity
     void Go(AnimalState s, float seconds = float.PositiveInfinity)
     {
         _bias = 0;
+        _steer.Cancel();
+        _clear.Reset();
+        _recheck.Cancel();
         _fsm.Enter(s, seconds);
     }
 
@@ -388,7 +440,7 @@ public sealed class Animal : IWorldEntity
             var reach = strayed ? Between(0, radius * 0.25f) : Between(_file.WanderMinM, radius);
             var x = centre.X + MathF.Cos(angle) * reach;
             var z = centre.Z + MathF.Sin(angle) * reach;
-            if (_world.GroundY(x, z) is not { } y) continue;
+            if (_world.GroundY(x, z) is not { } y || !_world.Fits(x, z, BodyRadius)) continue; // no ground, or a wall in the way (a building, a fence)
             _target = new Vector3(x, y, z);
             Go(AnimalState.Walk, HorizontalDistance(Position, _target) / Def.WalkSpeed * 2 + 3); // twice the straight walk and a margin; then it gives up
             return;
@@ -399,13 +451,24 @@ public sealed class Animal : IWorldEntity
     void Walk(float dt)
     {
         if (_fsm.Tick(dt) || HorizontalDistance(Position, _target) < 0.6f) { if (_open != null) GoHome(); else StandStill(); return; }
-        if (!Step(TurretMath.YawTo(Position, _target), Def.WalkSpeed, dt)) StandStill();
+        if (_steer.Tick(dt)) _bias = 0; // the detour is over: back to the line to the target
+        switch (Step(TurretMath.YawTo(Position, _target) + _bias, Def.WalkSpeed, dt))
+        {
+            case Block.None: break;
+            case Block.Solid when _steer.Ready: // a wall, a fence, a trunk: turn aside for a moment, once; blocked again within it, it stops
+                _bias = _bias > 0 ? -WalkSteerRad : WalkSteerRad;
+                _steer.Start(SteerSeconds);
+                break;
+            case Block.Solid when _steer.Running: break; // still turning away
+            default: StandStill(); break; // no ground, or a player or an animal in the way: it waits where it is (and picks again)
+        }
     }
 
     /// <summary>Walks to <see cref="Home"/> in a straight line over open ground (a pet that was carried out of its pen).</summary>
     void GoHome()
     {
         _target = _world.GroundY(Home.X, Home.Z) is { } y ? new Vector3(Home.X, y, Home.Z) : Home;
+        _clear.Reset();
         if (_fsm.Is(AnimalState.Walk)) _fsm.Restart(HorizontalDistance(Position, _target) / Def.WalkSpeed * 2 + 3);
         else Go(AnimalState.Walk, HorizontalDistance(Position, _target) / Def.WalkSpeed * 2 + 3);
     }
@@ -417,8 +480,16 @@ public sealed class Animal : IWorldEntity
             if (_calm.Tick(dt, _file.CalmSeconds)) { StandStill(); return; }
         }
         var away = Position * 2 - _fleeFrom; // the point as far on the other side of the animal as the threat is on this one
-        if (!Step(TurretMath.YawTo(Position, away) + _bias, Def.RunSpeed, dt))
-            _bias = _bias >= 0 ? -1.3f : 1.3f; // blocked: try round the other way
+        _steer.Tick(dt);
+        var block = Step(TurretMath.YawTo(Position, away) + _bias, Def.RunSpeed, dt);
+        if (block == Block.None) return;
+        if (block == Block.Ground) _bias = _bias >= 0 ? -FleeSteerRad : FleeSteerRad; // no ground there (water, a ledge): try round the other way, at once, as it always did
+        else if (_steer.Ready)
+        {
+            // a wall, a player, an animal: turn aside, and each time it is still blocked once the turn has had its time, turn further the same way (a wall is slid along, not butted)
+            _bias = Math.Clamp(_bias == 0 ? -FleeSteerRad : _bias - MathF.Sign(_bias) * FleeEscalateRad, -MaxBiasRad, MaxBiasRad);
+            _steer.Start(FleeJudgeSeconds);
+        }
     }
 
     /// <summary>Back to standing with a fresh idle clock (also when already standing: the clock restarts).</summary>
@@ -429,20 +500,85 @@ public sealed class Animal : IWorldEntity
         else _fsm.Restart(seconds);
     }
 
+    /// <summary>Why a step did not happen (<see cref="Step"/>).</summary>
+    enum Block : byte { None, Ground, Solid, Body }
+
+    const float WalkSteerRad = 1.0f, FleeSteerRad = 1.3f, FleeEscalateRad = 0.5f, MaxBiasRad = 2.8f, SteerSeconds = 1.2f, FleeJudgeSeconds = 0.5f;
+    /// <summary>The ray looks this far ahead at least, or this many seconds of the speed; and a wall closer than the step plus the gap stops it.</summary>
+    const float LookMinM = 2.5f, LookSeconds = 0.5f, GapM = 0.15f, RecheckSeconds = 0.3f;
+    /// <summary>A player's footprint for contact: the player capsule's radius.</summary>
+    const float PlayerRadius = MoveConsts.CapsuleRadius;
+
+    [ThreadStatic] static List<Vector3>? s_players;
+
     /// <summary>
-    /// Turns towards <paramref name="want"/> and, once roughly facing it, walks one step forward. False when the step is
-    /// blocked (no ground there, or a drop or climb bigger than <see cref="AnimalsFile.MaxStepM"/>); turning in place is not blocked.
+    /// Turns towards <paramref name="want"/> and, once roughly facing it, walks one step forward. Blocked (and why) when the ground refuses it (no ground, a
+    /// drop or climb bigger than <see cref="AnimalsFile.MaxStepM"/>), a player or another animal stands in the way (its Body box would touch
+    /// theirs: <see cref="BodyBox"/>; a player is never pushed, the animal yields) or something solid is ahead (a ray, rarely: <see cref="ClearPath"/>).
+    /// Turning in place is not blocked.
     /// </summary>
-    bool Step(float want, float speed, float dt)
+    Block Step(float want, float speed, float dt)
     {
-        Yaw = TurretMath.StepAngle(Yaw, want, Def.TurnRateDegPerS * MathF.PI / 180f * dt);
-        if (MathF.Abs(TurretMath.AngleDiff(Yaw, want)) > 1f) return true;
+        var turned = TurretMath.StepAngle(Yaw, want, Def.TurnRateDegPerS * MathF.PI / 180f * dt);
+        if (_recheck.Running && turned != Yaw && SolidAlong(_open ?? _world, turned)) turned = Yaw; // just blocked by a wall: it does not swing its nose into it
+        Yaw = turned;
+        if (MathF.Abs(TurretMath.AngleDiff(Yaw, want)) > 1f) return Block.None;
         var f = Forward;
-        var x = Position.X + f.X * speed * dt;
+        var step = speed * dt;
+        var x = Position.X + f.X * speed * dt; // (not f * step: the same sum, rounded the way it always was, keeps the golden trajectories)
         var z = Position.Z + f.Z * speed * dt;
-        if ((_open ?? _world).GroundY(x, z) is not { } y || MathF.Abs(y - Position.Y) > _file.MaxStepM) return false;
+        var world = _open ?? _world;
+        if (world.GroundY(x, z) is not { } y || MathF.Abs(y - Position.Y) > _file.MaxStepM) return Block.Ground;
+        if (BodyAhead(x, z)) return Block.Body;
+        if (SolidAhead(world, step, speed, dt)) return Block.Solid;
         Position = new Vector3(x, y, z);
-        return true;
+        return Block.None;
+    }
+
+    /// <summary>Whether something solid lies within the reach of its body from the origin along <paramref name="yaw"/>: where its nose would swing to. One ray, asked only while it is up against a wall.</summary>
+    bool SolidAlong(IAnimalWorld world, float yaw)
+    {
+        var (s, c) = MathF.SinCos(yaw);
+        var reach = _bodyAhead + _bodyL / 2 + 0.1f;
+        return world.SolidAhead(Position, new Vector3(-s, 0, -c), reach, Math.Clamp(_bodyH * 0.6f, 0.25f, 0.8f)) < reach;
+    }
+
+    /// <summary>Whether the animal, one step on, would touch a player or another animal it is not already touching (or is closing in on).</summary>
+    bool BodyAhead(float x, float z)
+    {
+        var to = BodyBox.Of(new Vector3(x, Position.Y, z), Yaw, _bodyW, _bodyL, _bodyAhead);
+        var from = Body;
+        if (Crowd?.Blocks(this, from, to) == true) return true;
+        var near = s_players ??= new List<Vector3>();
+        near.Clear();
+        _world.PlayersNear(Position, BodyReach + PlayerRadius + 1f, near);
+        foreach (var p in near)
+        {
+            var d = to.DistanceTo(p.X, p.Z);
+            if (d < PlayerRadius && (from.DistanceTo(p.X, p.Z) >= PlayerRadius || d < from.DistanceTo(p.X, p.Z))) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Whether something solid lies within a step (and the gap) of the front of its body. Two rays (the front corners) a good way ahead, kept as the <see cref="ClearPath"/>
+    /// they found free: the next steps along the same heading ask nobody.
+    /// </summary>
+    bool SolidAhead(IAnimalWorld world, float step, float speed, float dt)
+    {
+        if (_recheck.Tick(dt)) _clear.Reset();
+        if (_clear.Covers(Position.X, Position.Z, Yaw, step)) return false;
+        if (_clear.KnownBlocked(Position.X, Position.Z, Yaw)) return true;
+        var look = MathF.Max(LookMinM, speed * LookSeconds);
+        var f = Forward;
+        var reach = _bodyAhead + _bodyL / 2; // from the front of the body, not the origin
+        var (fx, fz) = (Position.X + f.X * reach, Position.Z + f.Z * reach);
+        var (rx, rz) = (-f.Z * _bodyW / 2, f.X * _bodyW / 2); // half its width to its right: the two front corners, so a wall beside the nose stops it too
+        var height = Math.Clamp(_bodyH * 0.6f, 0.25f, 0.8f);
+        var d = MathF.Min(world.SolidAhead(new Vector3(fx + rx, Position.Y, fz + rz), f, look, height), world.SolidAhead(new Vector3(fx - rx, Position.Y, fz - rz), f, look, height));
+        if (d < step + GapM) { _clear.SetBlocked(Position.X, Position.Z, Yaw); _recheck.Start(RecheckSeconds); return true; }
+        _clear.Set(Position.X, Position.Z, Yaw, MathF.Min(d, look) - GapM);
+        return false;
     }
 
     static float HorizontalDistance(Vector3 a, Vector3 b)

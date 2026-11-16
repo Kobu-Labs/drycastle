@@ -96,6 +96,26 @@ public partial class NetClient
         }
     }
 
+    /// <summary>The demon's Body capsule in the physics world, where the player's prediction and the driver's sweep meet it (<see cref="DemonBlocker"/>): null until there is a demon.</summary>
+    DemonBlocker? _demonBody;
+
+    /// <summary>
+    /// Once a physics tick, before the body is predicted: the capsule stands at the demon's NEWEST pose (not the interpolated, drawn one, which lags by the render delay), the nearest the client
+    /// can get to where the server's capsule is when the input being predicted is simulated there. With no demon it goes.
+    /// </summary>
+    void DemonBodyTick()
+    {
+        foreach (var (id, _) in _demons)
+        {
+            if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Buf.At(double.MaxValue) is not { } s) continue;
+            if (_demonBody == null || !GodotObject.IsInstanceValid(_demonBody)) { _demonBody = new DemonBlocker(); Owned.AddChild(_demonBody); }
+            var n = DemonRules.UnpackNormal(e.State.Owner);
+            _demonBody.Place(DemonRules.StateOf(e.State.State), s.Pos, n, DemonData.BodyM, DemonData.Scale);
+            return;
+        }
+        if (_demonBody != null) { if (GodotObject.IsInstanceValid(_demonBody)) _demonBody.QueueFree(); _demonBody = null; }
+    }
+
     /// <summary>Places the demon (interpolated, a little in the past like every remote body), shows what it does, and flies the fireballs.</summary>
     void RenderDemon()
     {

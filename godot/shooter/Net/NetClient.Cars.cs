@@ -87,7 +87,21 @@ public partial class NetClient
         }
         v.LastTick = tick; v.Pos = rec.Position; v.Yaw = rec.YawRad;
         v.Buf.Push(tick, rec.Position, rec.YawRad, 0);
-        VehicleCollider.Place(v.Solid, new Vector3(rec.Position.X, rec.Position.Y, rec.Position.Z), rec.YawRad, !v.Destroyed);
+        PlaceCarSolid(v);
+    }
+
+    /// <summary>The pitch and roll a vehicle's hull is turned by on this client: the latest flight record's for a type with a hull list (<see cref="VehicleDef.Tilts"/>), else none (the one upright box turns with the yaw).</summary>
+    (float Pitch, float Roll) HullTiltOf(CarView v, VehicleDef def) =>
+        def.Tilts && _flights.TryGetValue(v.Id, out var f) ? (FlightRecord.Pitch(f.Rec), FlightRecord.Roll(f.Rec)) : (0f, 0f);
+
+    /// <summary>Puts a vehicle's solid box where its latest records say: the server builds its own from the same numbers (<c>ServerCar.PlaceSolid</c>).</summary>
+    void PlaceCarSolid(CarView v)
+    {
+        if (v.Solid == null) return;
+        var p = new Vector3(v.Pos.X, v.Pos.Y, v.Pos.Z);
+        var def = Vehicles!.Vehicles[v.Kind];
+        if (def.Tilts) { var (pitch, roll) = HullTiltOf(v, def); VehicleCollider.Place(v.Solid, p, v.Yaw, pitch, roll, !v.Destroyed); }
+        else VehicleCollider.Place(v.Solid, p, v.Yaw, !v.Destroyed);
     }
 
     /// <summary>Applies the stage and destroyed flag of a record: smoke stage emitters; a destroyed vehicle disappears (its blast is drawn here if the event has not arrived), a returned one shows again.</summary>
@@ -290,15 +304,16 @@ public partial class NetClient
         {
             if (v.Destroyed || v == skip || v.Kind >= Vehicles.Vehicles.Count) continue;
             var def = Vehicles.Vehicles[v.Kind];
-            if (VehicleBox.Ray(NV(from), NV(dir), maxDistance, v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, def.Height) is not { } h || h.Distance >= best) continue;
+            var (pitch, roll) = HullTiltOf(v, def);
+            if (VehicleBox.Ray(NV(from), NV(dir), maxDistance, v.Pos, v.Yaw, pitch, roll, def) is not { } h || h.Distance >= best) continue;
             if (def.GlassRects.Count > 0 || def.OpenSideRects.Count > 0)
             {
-                var lo = GlassRules.ToVehicle(NV(from), v.Pos, v.Yaw); var ld = GlassRules.DirToVehicle(NV(dir), v.Yaw);
+                var lo = GlassRules.ToVehicle(NV(from), v.Pos, v.Yaw, pitch, roll); var ld = GlassRules.DirToVehicle(NV(dir), v.Yaw, pitch, roll);
                 var way = GlassRules.Through(def.GlassRects, def.OpenSideRects, lo, ld, h.Distance, GlassData.VehicleReach);
                 if (way.Enters)
                 {
                     if (way.Leaves) continue; // through the glass and out again
-                    var far = MathF.Max(VehicleBox.ExitDistance(lo, ld, def.HalfWidth, def.HalfLength, def.Height), way.EntryT);
+                    var far = MathF.Max(VehicleBox.ExitDistance(lo, ld, def), way.EntryT);
                     if (far > maxDistance || far >= best) continue;
                     h = new VehicleBoxHit(far, lo + ld * far, -ld); // inside, on the far side, facing back along the ray
                 }

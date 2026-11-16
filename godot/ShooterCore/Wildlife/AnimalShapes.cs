@@ -6,6 +6,12 @@ namespace Drycastle.ShooterCore;
 /// <summary>What an animal is doing, as far as its hit shape goes (the clip a client plays for it).</summary>
 public enum AnimalPose : byte { Idle = 0, Eat = 1, Walk = 2, Run = 3 }
 
+/// <summary>
+/// The bounding box of a hit shape in the animal's frame (x to its right, y up from the ground, z ahead of its position): from <see cref="Z0"/> to <see cref="Z1"/> along its length, the ground
+/// to <see cref="Top"/>, and <see cref="HalfWidth"/> either side of its middle plane.
+/// </summary>
+public readonly record struct ShapeBounds(float Z0, float Z1, float Top, float HalfWidth);
+
 /// <summary>Where a bullet met a hit shape: how far along the ray, whether that cell is head, and the cell.</summary>
 public readonly record struct ShapeHit(float Distance, bool Head, int Col, int Row);
 
@@ -35,10 +41,20 @@ public sealed class AnimalShape
     {
         if (!(cell > 0) || cols < 1 || rows < 1 || cells.Length != cols * rows) throw new DataFileException("animal shape: cells must be cols x rows bytes and the cell positive");
         Cell = cell; Z0 = z0; Cols = cols; Rows = rows; _cells = cells;
-        var widest = 0;
-        foreach (var c in cells) widest = Math.Max(widest, c & 0x7F);
+        var widest = 0; int c0 = cols, c1 = -1, r1 = -1;
+        for (var i = 0; i < cells.Length; i++)
+        {
+            if ((cells[i] & 0x7F) == 0) continue;
+            widest = Math.Max(widest, cells[i] & 0x7F);
+            int col = i % cols, row = i / cols;
+            c0 = Math.Min(c0, col); c1 = Math.Max(c1, col); r1 = Math.Max(r1, row);
+        }
         _halfWidth = widest / 100f;
+        Bounds = c1 < 0 ? default : new ShapeBounds(Z0 + c0 * cell, Z0 + (c1 + 1) * cell, (r1 + 1) * cell, _halfWidth);
     }
+
+    /// <summary>The bounding box of the covered cells (the outline's bounding box, ADR 0028): what a blast and a knife measure to. Empty (all 0) when the grid covers nothing.</summary>
+    public ShapeBounds Bounds { get; }
 
     /// <summary>Metres from the rear of the grid to its front, and from the ground to its top.</summary>
     public float Length => Cols * Cell;

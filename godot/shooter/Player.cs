@@ -27,13 +27,22 @@ public partial class Player : CharacterBody3D
 
     /// <summary>The map's ladders (bunkers.json, set by the owner before the first tick); none on a map without bunkers.</summary>
     public Ladders Ladders { get; set; } = Ladders.Empty;
+    /// <summary>
+    /// The standing bodies that are no physics bodies (the animals that stand, ADR 0028): a player on foot does not walk through them. Set by the owner: the server answers with the animals themselves,
+    /// a client with the newest it was sent, so a predicted move and the server's are stopped by the same boxes. Null: none.
+    /// </summary>
+    public IStandingBodies? Bodies { get; set; }
+    readonly List<BodyObstacle> _nearBodies = new();
     bool _inVehicle;
     /// <summary>Seated in a vehicle: no prone here. Entering clears the prone latch (the body is not simulated while driving).</summary>
     public bool InVehicle
     {
         get => _inVehicle;
-        set { _inVehicle = value; CollisionMask = value ? CollisionLayers.World : CollisionLayers.OnFoot; if (value) _state.ProneLatched = false; } // seated: inside the vehicle's own box
+        set { _inVehicle = value; CollisionMask = BodyMask(); if (value) _state.ProneLatched = false; } // seated: inside the vehicle's own box
     }
+    /// <summary>What this body stops on: the player row of <see cref="CollisionRules"/> (the world and the vehicles' solid boxes, #217); seated, the world only.</summary>
+    uint BodyMask() => _inVehicle ? SeatedMask : OnFootMask;
+    static readonly uint OnFootMask = CollisionRules.BodyMask(MoverKind.Player), SeatedMask = CollisionRules.StaticMask(MoverKind.Player);
     public MoveState State => _state;
     public float KillY { get; set; } = float.NegativeInfinity;
     /// <summary>Picks the respawn position (a random spawn point).</summary>
@@ -98,7 +107,8 @@ public partial class Player : CharacterBody3D
     public override void _Ready()
     {
         _headless = DisplayServer.GetName() == "headless";
-        CollisionMask = _inVehicle ? CollisionLayers.World : CollisionLayers.OnFoot; // solid vehicles stop on-foot movement (#217)
+        CollisionLayer = CollisionLayers.Players; // off the world layer: no world ray meets a body, and bodies pass each other (CollisionRules: player x other player = Pass)
+        CollisionMask = BodyMask();
         AddChild(_shape);
         _shape.Shape = _capsule;
         if (UseCamera) AddChild(_camera);
@@ -493,7 +503,9 @@ public partial class Player : CharacterBody3D
 
         Velocity = ToG(_state.Velocity);
         StepUp(dt);
+        var movedFrom = ToN(GlobalPosition);
         MoveAndSlide();
+        if (Bodies != null && !_inVehicle) KeepOutOfBodies(movedFrom);
         LastFallDamage = MovementStep.PostMove(ref _state, ToN(GlobalPosition), ToN(Velocity), IsOnFloor(), Water.DepthAt(ToN(GlobalPosition)));
         if (Authoritative && LastFallDamage > 0)
         {
@@ -501,6 +513,28 @@ public partial class Player : CharacterBody3D
             GD.Print($"player: fall damage {LastFallDamage:F1}, health {Health:F1}");
         }
         if (Authoritative && (Health <= 0 || GlobalPosition.Y < KillY)) Respawn();
+    }
+
+    /// <summary>
+    /// After the physics move: a standing animal's Body box that the move walked into puts the body back out along its face (<see cref="PlayerBodyBlock"/>); the part of the velocity into it is dropped, so
+    /// the next step does not push on. Nothing is asked of a body that did not move across the ground (the server and a client's replay run this alike).
+    /// </summary>
+    void KeepOutOfBodies(NVec3 from)
+    {
+        var to = ToN(GlobalPosition);
+        var (dx, dz) = (to.X - from.X, to.Z - from.Z);
+        if (dx * dx + dz * dz < 1e-8f) return;
+        _nearBodies.Clear();
+        Bodies!.Near(to.X, to.Z, MoveConsts.CapsuleRadius + MathF.Sqrt(dx * dx + dz * dz), _nearBodies);
+        if (_nearBodies.Count == 0) return;
+        var kept = PlayerBodyBlock.Resolve(from, to, MoveConsts.CapsuleRadius, MovementStep.CapsuleHeight(_state.Stance), _nearBodies);
+        var (cx, cz) = (kept.X - to.X, kept.Z - to.Z);
+        var len = MathF.Sqrt(cx * cx + cz * cz);
+        if (len < 1e-6f) return;
+        GlobalPosition = ToG(kept);
+        var (nx, nz) = (cx / len, cz / len);
+        var into = Velocity.X * nx + Velocity.Z * nz;
+        if (into < 0) Velocity = new Vector3(Velocity.X - nx * into, Velocity.Y, Velocity.Z - nz * into);
     }
 
     bool HeadBlockedCheck(Stance current)

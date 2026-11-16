@@ -36,16 +36,13 @@ public partial class NetServer
         return (feet, feet + NVec3.UnitY * MovementStep.EyeHeight(c.Body.State.Stance));
     }
 
-    /// <summary>The first world surface along a ray (players excluded, vehicles included), with its point and normal.</summary>
+    /// <summary>The first thing the sight line stops on, as for a bullet (<see cref="WorldQuery.Shot"/>: walls, cover, a vehicle's hull), with its point and normal.</summary>
     GroundHit? TurretRay(NVec3 from, NVec3 dir, float maxDistance)
     {
-        var to = from + dir * maxDistance;
-        var q = PhysicsRayQueryParameters3D.Create(new Vector3(from.X, from.Y, from.Z), new Vector3(to.X, to.Y, to.Z));
-        q.CollisionMask = CollisionLayers.Bullets; // as for bullets
-        q.Exclude = PlayerRids();
-        var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
-        if (r.Count == 0) return null;
-        return new GroundHit(N(r["position"].AsVector3()), N(r["normal"].AsVector3()));
+        var o = new Vector3(from.X, from.Y, from.Z);
+        var d = new Vector3(dir.X, dir.Y, dir.Z);
+        var stop = Query.Shot(o, d, maxDistance);
+        return stop.Hit ? new GroundHit(N(o + d * stop.Distance), N(stop.Normal)) : null;
     }
 
     /// <summary>Every live player except the owner and the owner's teammates, aimed at chest height.</summary>

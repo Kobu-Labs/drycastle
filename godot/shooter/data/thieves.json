@@ -140,7 +140,7 @@
     "speed_mps": 13, "park_speed_mps": 1.5, "accel_mps2": 4, "decel_mps2": 4, "turn_deg_per_s": 110,
     "hits": 300,
     "hit": { "headshot_weight": 1, "explosive_weight": 25, "vehicle_weapon_weight": 6 },
-    // The hit volume: two prone capsules grown by hit_scale (radius 0.56 x 2.1 = the model's half width), hit_offset_m ahead of and behind the centre (the capsule ends then reach the model's 2.38 m).
+    // The hit volume: two prone capsules grown by hit_scale (the old player radius 0.56 x 2.1 = the model's half width: PlayerHitBox.WideRadius, not the player's 0.35 now), hit_offset_m ahead of and behind the centre (the capsule ends then reach the model's 2.38 m).
     "hit_scale": 2.1, "hit_offset_m": 0.43,
     // The box: what rams, what shoves vehicles aside, what a parked van is solid with. The model's (military/SM_Veh_Van_01.glb, 2.36 x 4.63 x 2.10 m): the data follows the model, not the other way round.
     "half_width_m": 1.18, "half_length_m": 2.32, "height_m": 2.10,

@@ -6,13 +6,17 @@ namespace Drycastle.Shooter;
 /// <summary>
 /// Server-side vehicle (any type in vehicles.json: the def sets the footprint and medium; water craft float, see <see cref="Afloat"/>): a kinematic CharacterBody3D driven by <see cref="CarModel"/> (arcade planar model: speed along the facing, yaw rate
 /// from steering) with the physics move providing wall collision, slopes and gravity. Chosen over VehicleBody3D (Jolt) because
-/// it is deterministic, cannot flip or jitter, and needs no per-wheel tuning. Layer 2: bullets and rockets stop on it. Mask 1 = world only,
-/// and players are excluded per body with collision exceptions, so it drives over them; run-over is an overlap test in the server.
-/// An exception works both ways, so this body does not stop a player on foot either: that is the job of its solid box, a static body of
+/// it is deterministic, cannot flip or jitter, and needs no per-wheel tuning. Layer 2: bullets and rockets stop on it. Mask = the world only,
+/// so it drives over the players (their bodies are on their own layer); run-over is an overlap test in the server.
+/// It does not stop a player on foot either (layer 2 is not in the player's mask): that is the job of its solid box, a static body of
 /// its own (<see cref="PlaceSolid"/>, #217).
 /// </summary>
 public partial class ServerCar : CharacterBody3D
 {
+    /// <summary>What a vehicle's body and ground rays stop on: the ground vehicle row of the rule table (the world; not the players, which have a layer of their own and are run over by an overlap test).</summary>
+    static readonly uint WorldMask = CollisionRules.StaticMask(MoverKind.GroundVehicle);
+    /// <summary>What its own sweep stops on: the world, and the demon's body (the ground vehicle row Collides with it).</summary>
+    static readonly uint SweepMask = CollisionRules.SweepMask(MoverKind.GroundVehicle);
     public float HalfWidth = 1.1f, HalfLength = 2.15f;
     /// <summary>Where the car was at the start of the tick (set by the server before the step): the run-over test sweeps from here to the end.</summary>
     public Vector3 PrevPos;
@@ -27,7 +31,7 @@ public partial class ServerCar : CharacterBody3D
         {
             var p = pos + fwd * (ia / 8f * halfLength) + right * (ib / 3f * halfWidth);
             var q = PhysicsRayQueryParameters3D.Create(new Vector3(p.X, hint + 3f, p.Z), new Vector3(p.X, hint - 8f, p.Z));
-            q.CollisionMask = 1;
+            q.CollisionMask = WorldMask;
             var r = space.IntersectRay(q);
             if (r.Count == 0) return null;
             var y = r["position"].AsVector3().Y;
@@ -108,10 +112,13 @@ public partial class ServerCar : CharacterBody3D
 
     public override void _Ready()
     {
-        CollisionLayer = 2; CollisionMask = 1;
+        CollisionLayer = 2; CollisionMask = SweepMask;
         Life = new VehicleLifecycle(Def.Hp);
         Seat = new VehicleSeat(Def.Seats.Count);
-        AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(HalfWidth * 2, Def.Height, HalfLength * 2) }, Position = new Vector3(0, Def.Height / 2, 0) }); // the hit volume (VehicleBox): ground to the top of the body
+        // the hit volume (VehicleBox): ground to the top of the body; a type with a hull list has a shape for each of its boxes (the body itself stays upright, it turns with the yaw only)
+        if (Def.Tilts)
+            foreach (var b in Def.HullBoxes) AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(b.HalfWidth * 2, b.Y1 - b.Y0, b.HalfLength * 2) }, Position = new Vector3(b.Cx, (b.Y0 + b.Y1) / 2, b.Cz) });
+        else AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(HalfWidth * 2, Def.Height, HalfLength * 2) }, Position = new Vector3(0, Def.Height / 2, 0) });
         FloorSnapLength = 0.4f;
         FloorMaxAngle = Mathf.DegToRad(50);
         SetPhysicsProcess(false); // stepped by the server
@@ -123,7 +130,7 @@ public partial class ServerCar : CharacterBody3D
     }
 
     StaticBody3D _solid = null!;
-    (int X, int Y, int Z, ushort Yaw, bool Solid)? _solidAt;
+    (int X, int Y, int Z, ushort Yaw, bool Solid, short Pitch, ushort Roll)? _solidAt;
 
     /// <summary>
     /// Puts the box that stops on-foot players (<see cref="VehicleCollider"/>) where the vehicle is now, gone while it is destroyed. The server calls it
@@ -133,17 +140,21 @@ public partial class ServerCar : CharacterBody3D
     public void PlaceSolid()
     {
         var p = GlobalPosition;
-        (int X, int Y, int Z, ushort Yaw, bool Solid) at = (Quant.Pos(p.X), Quant.Pos(p.Y), Quant.Pos(p.Z), Quant.Yaw(State.Yaw), !Destroyed);
+        var tilt = Def.Tilts && Flies; // a hull that tilts turns with the flight state, rounded as its flight record is (FlightRecord.AsSent)
+        (int X, int Y, int Z, ushort Yaw, bool Solid, short Pitch, ushort Roll) at = (Quant.Pos(p.X), Quant.Pos(p.Y), Quant.Pos(p.Z), Quant.Yaw(State.Yaw), !Destroyed,
+            tilt ? Quant.Pitch(Flight.Pitch) : (short)0, tilt ? Quant.Yaw(Flight.Roll) : (ushort)0);
         if (at == _solidAt) return;
         _solidAt = at;
-        VehicleCollider.Place(_solid, new Vector3(Quant.Pos(at.X), Quant.Pos(at.Y), Quant.Pos(at.Z)), Quant.Yaw(at.Yaw), at.Solid);
+        var place = new Vector3(Quant.Pos(at.X), Quant.Pos(at.Y), Quant.Pos(at.Z));
+        if (tilt) VehicleCollider.Place(_solid, place, Quant.Yaw(at.Yaw), Quant.Pitch(at.Pitch), FlightMath.Wrap(Quant.Yaw(at.Roll)), at.Solid);
+        else VehicleCollider.Place(_solid, place, Quant.Yaw(at.Yaw), at.Solid);
     }
 
     /// <summary>Raises the origin onto the ground under it when that is above it (a bank rising out of the water).</summary>
     void LiftToGround()
     {
         var q = PhysicsRayQueryParameters3D.Create(new Vector3(GlobalPosition.X, GlobalPosition.Y + 3f, GlobalPosition.Z), new Vector3(GlobalPosition.X, GlobalPosition.Y - 8f, GlobalPosition.Z));
-        q.CollisionMask = 1;
+        q.CollisionMask = WorldMask;
         var r = GetWorld3D().DirectSpaceState.IntersectRay(q);
         if (r.Count == 0) return;
         var g = r["position"].AsVector3().Y + 0.02f;
@@ -202,7 +213,7 @@ public partial class ServerCar : CharacterBody3D
 
     /// <summary>
     /// One flight step (<see cref="FlightModel"/>): from a pilot's input, or the stabiliser's when nobody flies. The node follows the state; the hit box
-    /// stays upright (it turns with the yaw only), as the clients' bullet-hole box does.
+    /// stays upright (it turns with the yaw only; the hull boxes of a type that has them are turned by the attitude where they are asked, from the flight state).
     /// </summary>
     public void StepFlight(in FlightInput input, float dt, uint tick)
     {
@@ -221,7 +232,9 @@ public partial class ServerCar : CharacterBody3D
     {
         var p = Flies ? Flight.Position : new System.Numerics.Vector3(GlobalPosition.X, GlobalPosition.Y, GlobalPosition.Z);
         var f = Def.Flight;
-        return new ContactShape(p, State.Yaw, HalfWidth, HalfLength, Def.Height, f?.RotorRadius ?? 0, f?.RotorHeight ?? 0, f?.RotorThickness ?? 0);
+        var tilt = Def.Tilts && Flies;
+        return new ContactShape(p, State.Yaw, HalfWidth, HalfLength, Def.Height, f?.RotorRadius ?? 0, f?.RotorHeight ?? 0, f?.RotorThickness ?? 0,
+            tilt ? Flight.Pitch : 0, tilt ? Flight.Roll : 0, Def.Tilts ? Def.HullBoxes : null);
     }
 
     /// <summary>This vehicle as one side of a bump: its mass (a type with none counts as a car) and the velocity it is moving with.</summary>

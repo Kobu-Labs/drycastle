@@ -169,7 +169,7 @@ public sealed class TrunkEntity : IWorldEntity
         {
             if (p.InVehicle) continue;
             var body = new Vector3(p.Feet.X, p.Feet.Y + MoveConsts.CapsuleHeight * 0.5f, p.Feet.Z);
-            if (DistanceToSegment(body, before, _position) > _data.Trunk.RadiusM + PlayerHitBox.Radius) continue;
+            if (DistanceToSegment(body, before, _position) > _data.Trunk.RadiusM + PlayerHitBox.WideRadius) continue;
             if (MathF.Abs(body.Y - _position.Y) > MoveConsts.CapsuleHeight * 0.5f + _data.Trunk.RadiusM) continue;
             _world.Hurt(p.Id, _data.RollDamage(_rng), BigfootHurt.Trunk);
             Ended = WorldDespawnReason.Destroyed;

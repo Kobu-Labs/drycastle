@@ -168,7 +168,7 @@ public sealed partial class CharacterView : Node3D
         if (_model == null) return;
         var prone = _stance == Stance.Prone;
         _model.RotationDegrees = new Vector3(_swim ? UnderwaterFx.SwimLeanDegrees : prone ? 90 : 0, 180, 0);
-        _model.Position = prone ? new Vector3(0, PlayerHitBox.ProneLift, PlayerHitBox.ProneCentreShift) : Vector3.Zero;
+        _model.Position = prone ? new Vector3(0, PlayerHitBox.ProneDrawLift, PlayerHitBox.ProneCentreShift) : Vector3.Zero;
         var squash = _stance == Stance.Crouch ? MovementStep.CapsuleHeight(Stance.Crouch) / PlayerHitBox.StandHeight : 1f;
         _model.Scale = new Vector3(Scale, Scale * squash, Scale);
         if (_anim != null) _anim.SpeedScale = _swim ? 0.5f : 1f;

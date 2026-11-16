@@ -121,6 +121,7 @@ public partial class NetServer
         if (_mass == null) return;
         _mass.Update(dt);
         DemonTick(dt);
+        DemonBodyTick();
         if (_massDirty) { _massDirty = false; SendMassState(); }
         foreach (var c in _byId.Values)
         {
