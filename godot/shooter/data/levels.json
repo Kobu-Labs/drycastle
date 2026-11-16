@@ -37,6 +37,7 @@
     { "level": 9, "kind": "weapon", "id": "svd" },
     { "level": 10, "kind": "weapon", "id": "benelli_m4" },
     { "level": 10, "kind": "weapon", "id": "m249" },
+    { "level": 10, "kind": "weapon", "id": "strela" },
     { "level": 11, "kind": "weapon", "id": "awm" },
     { "level": 12, "kind": "weapon", "id": "m60" },
     { "level": 12, "kind": "perk", "id": "hot_streak" },

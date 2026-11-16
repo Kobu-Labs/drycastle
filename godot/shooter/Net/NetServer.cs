@@ -48,6 +48,9 @@ public partial class NetServer : Node
         public bool HasSeq;
         public byte Slot;
         public PlayerWeapons W = null!;
+        /// <summary>This player's Lock (Lock-on launcher, <c>NetServer.LockOn.cs</c>) and what of it was last sent to them (phase, Aircraft, tracking).</summary>
+        public readonly LockOn Lock = new();
+        public Change<(LockPhase, ushort, bool)> LockSent;
         /// <summary>What the player wears (items.json): set at join, taken off onto the corpse at death, never stored in the profile.</summary>
         public Equipment Worn = null!;
         /// <summary>The blessing and the curse the player carries (Holy Mass reward); ends at death, survives a round change, never stored.</summary>
@@ -288,6 +291,7 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.PlaceSolids);
         _simClients.Clear(); _simClients.AddRange(_byId.Values); // a copy: a client may leave while the others are simulated
         foreach (var c in _simClients) SimulateClient(c, (float)delta); // every joined player, bots included
+        StepLocks((float)delta); // the Lock-on launchers: each Lock steps where its player now looks (ADR 0031)
         PerfLap(ServerPerf.Ph.SimClients);
         StepRockets((float)delta);
         PerfLap(ServerPerf.Ph.Rockets);
@@ -300,6 +304,7 @@ public partial class NetServer : Node
         StatusTick((float)delta); // burns tick
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
         DetonateFlak();    // flak shells that have arrived burst now
+        DetonateHoming();  // homing missiles that have arrived hit their Aircraft now
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
         FlushStatuses(); // statuses and burning that changed this tick
@@ -676,6 +681,7 @@ public partial class NetServer : Node
         ResetCars();
         HarvesterRoundReset(); // the car reset brought the harvester back to its old field: hidden again
         StatusRoundStart();
+        LockRoundReset();
         RoundStarted();
     }
 
@@ -815,7 +821,7 @@ public partial class NetServer : Node
             // breath hold: sprint is cancelled while aiming, so the sprint bit with aim held is the breath key
             c.Breath.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Aim) != 0 && c.W.Current.ZoomFov > 0,
                 (i.Buttons & (ushort)MoveButtons.Sprint) != 0, c.W.Current, c.Perks.HoldBreathTime);
-            var wi = new WeaponInput((i.Buttons & (ushort)MoveButtons.Fire) != 0 && !c.Body.State.OnLadder, (i.Buttons & (ushort)MoveButtons.Reload) != 0, i.Slot, (i.Buttons & (ushort)MoveButtons.Switch) != 0);
+            var wi = new WeaponInput((i.Buttons & (ushort)MoveButtons.Fire) != 0 && !c.Body.State.OnLadder, (i.Buttons & (ushort)MoveButtons.Reload) != 0, i.Slot, (i.Buttons & (ushort)MoveButtons.Switch) != 0, HasLock(c));
             if (c.W.Update(_elapsed, wi) is { } shot)
             {
                 if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++; // spawn protection ends on a real shot, not on Fire held with an empty magazine
@@ -846,7 +852,7 @@ public partial class NetServer : Node
         c.Recoil.Tick(_elapsed, input.Fire, c.W.Current.Recoil);
         c.Breath.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Aim) != 0 && c.W.Current.ZoomFov > 0,
             (i.Buttons & (ushort)MoveButtons.Sprint) != 0, c.W.Current, c.Perks.HoldBreathTime);
-        if (c.W.Update(_elapsed, input) is { } shot)
+        if (c.W.Update(_elapsed, input with { Locked = HasLock(c) }) is { } shot)
         {
             if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++;
             FireWeapon(c, i, shot, car);
@@ -1059,6 +1065,7 @@ public partial class NetServer : Node
         else if (w.Kind == WeaponKind.Projectile)
         {
             var dir = HitMath.Forward(yaw, pitch);
+            if (w.Lock != null && FireHoming(c, shot, eye)) { _vehicleView = null; return; } // a Lock-on launcher's missile homes on its Aircraft (ADR 0031)
             var rocket = new Rocket { Id = _nextRocket, Owner = c.Id, Weapon = (byte)shot.WeaponIndex, Pos = eye, Dir = new Vector3(dir.X, dir.Y, dir.Z), FromCar = seatCar };
             _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
             rocket.ViewBack = back; rocket.ViewLife = c.LifeStart; // a rocket rewinds vehicles by the shooter's lag at each step (B-02)

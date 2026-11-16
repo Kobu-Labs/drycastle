@@ -117,6 +117,12 @@ public partial class NetClient
             else if (now - _pDryAt > 0.45) { _pDryAt = now; Sfx.Play2D(SoundRules.Event("dry", w.Id)); }
             return;
         }
+        if (w.Lock != null && !LockComplete)
+        {
+            // a Lock-on launcher has no dumb fire: without a complete Lock the trigger only clicks (the server fires nothing)
+            if (now - _pDryAt > 0.45) { _pDryAt = now; Sfx.Play2D("lock.deny"); }
+            return;
+        }
         _pNextFire = now + w.FireInterval;
         if (ranged) _pMag--;
         _predShots.Enqueue(now);

@@ -204,6 +204,12 @@ public enum EventKind : byte
     HarvesterCut = 237,
     /// <summary>Server to everyone, and the mask to a joiner: the 1 m cells of a crop field that vehicles crushed (<see cref="CrushCodec"/>: field, ascending cell indices as deltas, or runs of the whole mask). The client lays the plants there flat and darkens the ground; nothing per plant, no gameplay (#328).</summary>
     CropCrush = 238,
+    /// <summary>Server to the shooter only: their own Lock (Lock-on launcher, ADR 0031): phase, Aircraft, tracking, progress and lock seconds (<see cref="LockCodec"/>).</summary>
+    LockState = 246,
+    /// <summary>Server to an Aircraft's owner only: the worst of the launchers on their Aircraft (a <see cref="Drycastle.ShooterCore.LockAlert"/> level) and the Aircraft.</summary>
+    LockAlert = 247,
+    /// <summary>Server to everyone: a homing missile left a Lock-on launcher, the Aircraft it homes on and its flight seconds; the Explosion with its id ends it.</summary>
+    HomingLaunch = 248,
 }
 
 public abstract record ReliableMsg;
@@ -312,7 +318,8 @@ public static class Wire
     //   v62 the harvester event (#331): events 234 HarvesterState and 235 HarvesterFx, special weapon 238, a corpse owned by 60002 is a hay bale
     //   v61 the bus garage: event 245 GarageDoor (its doors open or closed)
     //   v62 the Hunter's Log (#336): events 100-106 (requests for a page of hunts, the records and a player's log, their redacted answers, and the server-wide announcement)
-    public const byte ProtocolVersion = 63;
+    //   v64 the Lock-on launcher (ADR 0031): events 246 LockState (the shooter's Lock), 247 LockAlert (to the Aircraft's owner) and 248 HomingLaunch (a homing missile, broadcast)
+    public const byte ProtocolVersion = 64;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

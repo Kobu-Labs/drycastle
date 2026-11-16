@@ -36,6 +36,7 @@ const MODELS := {
 	"awm": ["sniper-rifle-3.glb", 1.2],
 	"svd": ["sniper-rifle-4.glb", 1.2],
 	"bazooka": ["", 0.0],
+	"strela": ["", 0.0],
 }
 
 # id -> [model in assets/ (items.json `model`), yaw degrees to the right of the item's front, pitch degrees above it]
@@ -92,6 +93,9 @@ func _initialize() -> void:
 		var model: Node3D = null
 		if id == "bazooka":
 			model = _bazooka()
+			holder.add_child(model)
+		elif id == "strela":
+			model = _strela()
 			holder.add_child(model)
 		else:
 			model = _load_glb(repo_assets + PACK + spec[0])
@@ -197,6 +201,36 @@ func _bazooka() -> Node3D:
 	mi.rotation_degrees = Vector3(90, 0, 0)
 	mi.position = Vector3(0, 0, -0.41)
 	n.add_child(mi)
+	return n
+
+
+# The Lock-on launcher (issue #347): the code-built stand-in of WeaponFx.BuildLockOnLauncher, seen from the side.
+func _strela() -> Node3D:
+	var n := Node3D.new()
+	var olive := StandardMaterial3D.new()
+	olive.albedo_color = Color(0.27, 0.31, 0.2)
+	olive.roughness = 0.75
+	var dark := StandardMaterial3D.new()
+	dark.albedo_color = Color(0.12, 0.13, 0.12)
+	dark.roughness = 0.7
+	var tube := CylinderMesh.new()
+	tube.top_radius = 0.045
+	tube.bottom_radius = 0.045
+	tube.height = 1.3
+	tube.material = olive
+	var body := MeshInstance3D.new()
+	body.mesh = tube
+	body.rotation_degrees = Vector3(90, 0, 0)
+	body.position = Vector3(0, 0, -0.22)
+	n.add_child(body)
+	for spec in [[Vector3(0.05, 0.07, 0.16), Vector3(0.03, 0.075, -0.25)], [Vector3(0.04, 0.13, 0.05), Vector3(0, -0.11, -0.05)], [Vector3(0.04, 0.1, 0.05), Vector3(0, -0.095, -0.5)], [Vector3(0.14, 0.14, 0.1), Vector3(0, 0, 0.48)]]:
+		var box := BoxMesh.new()
+		box.size = spec[0]
+		box.material = dark
+		var part := MeshInstance3D.new()
+		part.mesh = box
+		part.position = spec[1]
+		n.add_child(part)
 	return n
 
 
