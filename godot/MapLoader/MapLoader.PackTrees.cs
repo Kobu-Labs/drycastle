@@ -196,6 +196,12 @@ public sealed partial class MapLoader
         PackTreeConfig cfg;
         try { cfg = PackTreeConfig.Parse(Godot.FileAccess.Open(PackTreeConfigPath, Godot.FileAccess.ModeFlags.Read).GetAsText()); }
         catch (DataFileException e) { PackWarn("config", $"pack trees: {e.Message}; no pack trees"); return; }
+        // measurement only: DRYCASTLE_PACK_NEAR_M overrides near_m (perf runs compare radii without touching the file)
+        if (float.TryParse(System.Environment.GetEnvironmentVariable("DRYCASTLE_PACK_NEAR_M"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var nearM) && nearM > 0)
+        {
+            cfg.NearM = nearM;
+            cfg.FadeM = MathF.Min(cfg.FadeM, nearM * 0.25f);
+        }
         if (!PackTreeSettings.ReadBaseUv2(TreesJson))
         {
             PackWarn("base-uv2", "pack trees: this map's trees.json has no model.base_uv2 (its props meshes do not carry the base of each tree); pack trees stay off, rebuild the map");

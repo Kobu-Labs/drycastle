@@ -6,14 +6,32 @@ namespace Drycastle.MapLoader;
 // Prefabs of the private (paid) packs: loose GLBs under assets-private/ (scripts/private_pack_glb.gd), never res:// resources, so a
 // build holds nothing of a pack and the files arrive in the private asset pack. A prefab GLB has the prefab's own collision bodies and
 // NO textures: each surface wears an empty material that carries a name, looked up in materials.json beside the GLB. The materials
-// are built once per pack and shared by every model.
+// are shared by every model of the pack, and each is built (its textures decoded and uploaded) when the first model that wears it is
+// loaded: a pack has far more materials than a map uses (the swamp pack's 23 textures are about 400 MB of video memory, for four models).
 public sealed partial class MapLoader
 {
     /// <summary>Textures of a pack are flat colour atlases and small signs: this is plenty, and a 4096 atlas would cost 64 MB of video memory.</summary>
     const int PrefabTextureMax = 2048;
 
-    // materials.json path -> material name -> the shared material (null = named in no table: the model keeps its empty one)
-    readonly Dictionary<string, Dictionary<string, StandardMaterial3D>> _prefabMaterials = new();
+    /// <summary>The materials of one pack (materials.json), each made on first use; the textures are shared between them.</summary>
+    sealed class PrefabMaterialTable
+    {
+        public string Dir = "";
+        public readonly Dictionary<string, JsonElement> Specs = new();
+        readonly Dictionary<string, StandardMaterial3D> _made = new();
+        readonly Dictionary<string, Texture2D?> _textures = new();
+
+        public bool TryGetValue(string name, out StandardMaterial3D mat)
+        {
+            if (_made.TryGetValue(name, out mat!)) return true;
+            if (!Specs.TryGetValue(name, out var spec)) return false;
+            _made[name] = mat = PrefabMaterial(spec, Dir, _textures);
+            return true;
+        }
+    }
+
+    // materials.json path -> the pack's materials by name (a name in no table: the model keeps its empty one)
+    readonly Dictionary<string, PrefabMaterialTable> _prefabMaterials = new();
     readonly HashSet<string> _noPrivatePack = new();
 
     void WarnNoPrivatePack(string root)
@@ -49,19 +67,17 @@ public sealed partial class MapLoader
         return scene;
     }
 
-    Dictionary<string, StandardMaterial3D> PrefabMaterials(string file)
+    PrefabMaterialTable PrefabMaterials(string file)
     {
         if (_prefabMaterials.TryGetValue(file, out var known)) return known;
-        var made = new Dictionary<string, StandardMaterial3D>();
+        var made = new PrefabMaterialTable { Dir = Path.GetDirectoryName(file) ?? "" };
         _prefabMaterials[file] = made;
         if (!File.Exists(file)) { Warn($"prefab materials not found: {file}; the pack's models are drawn plain"); return made; }
-        var dir = Path.GetDirectoryName(file) ?? "";
-        var textures = new Dictionary<string, Texture2D?>();
         try
         {
             using var doc = JsonDocument.Parse(File.ReadAllText(file));
             foreach (var m in doc.RootElement.GetProperty("materials").EnumerateObject())
-                made[m.Name] = PrefabMaterial(m.Value, dir, textures);
+                made.Specs[m.Name] = m.Value.Clone();
         }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
         {
