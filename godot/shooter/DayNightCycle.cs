@@ -43,6 +43,13 @@ public partial class DayNightCycle : Node3D
     public float Gloom { get; set; }
     const float GloomFloor = 0.03f;
 
+    /// <summary>
+    /// Glow (bloom) is for lamps only. The threshold is on the scene's linear HDR value before exposure: a white surface in full sun
+    /// peaks at about 1.1 (sun) + 0.7 (ambient) = 1.8 and the sun disc at 1.4, so nothing lit by day or the sky reaches 2; lit lamp lenses
+    /// are driven to 6 and up (<see cref="CarLights"/>). Full bloom from threshold + ramp. Exposure (0.5..1.5 x 1.0..1.35) comes after.
+    /// </summary>
+    public const float GlowThreshold = 2f, GlowRamp = 1f;
+
     readonly DirectionalLight3D _sun = new() { ShadowEnabled = true };
     readonly DirectionalLight3D _moon = new() { ShadowEnabled = false };
     readonly WorldEnvironment _worldEnv = new();
@@ -63,6 +70,16 @@ public partial class DayNightCycle : Node3D
         _env.Sky = new Sky { SkyMaterial = _sky };
         _env.AmbientLightSource = Godot.Environment.AmbientSource.Color;
         _env.FogEnabled = true;
+        // a small tight halo: only the first mips (levels 1-3), additive, nothing below the threshold
+        _env.GlowEnabled = true;
+        _env.GlowBlendMode = Godot.Environment.GlowBlendModeEnum.Additive;
+        _env.GlowHdrThreshold = GlowThreshold;
+        _env.GlowHdrScale = GlowRamp;
+        _env.GlowHdrLuminanceCap = 8f;
+        _env.GlowIntensity = 0.6f;
+        _env.GlowStrength = 1f;
+        _env.GlowBloom = 0f;
+        for (var i = 0; i < 7; i++) _env.SetGlowLevel(i, i switch { 1 => 1f, 2 => 1f, 3 => 0.5f, _ => 0f });
         _worldEnv.Environment = _env;
         AddChild(_worldEnv);
         Apply(LocalClock.HourAt(0));
