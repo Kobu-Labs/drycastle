@@ -209,11 +209,20 @@ public partial class Hud : CanvasLayer
         _root.Scale = new Vector2(s, s);
         _root.Position = Vector2.Zero;
         _root.Size = vp / s;
-        // the feed sits beside _root, so it follows the same resolution and UI scale itself
+        FitOverlayRoots();
+        _gap = -1;
+    }
+
+    /// <summary>The roots that sit beside _root (the kill feed, the Hunter's Log) follow the same resolution and UI scale themselves.</summary>
+    void FitOverlayRoots()
+    {
+        var vp = GetViewport().GetVisibleRect().Size;
+        var s = UiFactor();
         _feedRoot.Scale = new Vector2(s, s);
         _feedRoot.Size = vp / s;
-        ApplyFeedAside();
-        _gap = -1;
+        if (_logRoot == null) return;
+        _logRoot.Scale = new Vector2(s, s);
+        _logRoot.Size = vp / s;
     }
 
     float UiFactor() => HudLogic.ScreenScale(GetViewport().GetVisibleRect().Size.Y, Settings.UiScale);

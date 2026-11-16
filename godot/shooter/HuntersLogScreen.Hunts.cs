@@ -53,7 +53,7 @@ public sealed partial class HuntersLogScreen
     Control _hitBox = null!;
     AnimalPicture _hitPic = null!;
     Control _hitHidden = null!;
-    Label _hitName = null!, _hitKg = null!, _hitDistance = null!, _hitWeapon = null!, _hitWhen = null!, _hitNone = null!, _hitPick = null!;
+    Label _hitName = null!, _hitKg = null!, _hitDistance = null!, _hitWeapon = null!, _hitWhen = null!, _hitNone = null!;
     BlurText _hitBlur = null!;
     Button _hitHunter = null!;
     PanelContainer _hitHead = null!;
@@ -164,16 +164,13 @@ public sealed partial class HuntersLogScreen
         _hit = new PanelContainer { ThemeTypeVariation = "LogHit", CustomMinimumSize = new Vector2(ShooterTheme.LogHitW, 0), SizeFlagsVertical = SizeFlags.ShrinkBegin, MouseFilter = MouseFilterEnum.Ignore };
         var outer = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         _hit.AddChild(outer);
-        _hitPick = Text(Strings.T("log.hit.pick"), "HudDim", wrap: true);
-        outer.AddChild(_hitPick);
-
         var v = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         v.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
         _hitBox = v;
         outer.AddChild(v);
         var artSize = new Vector2(ShooterTheme.LogHitW - 3 * ShooterTheme.Space, ShooterTheme.LogHitArtH);
         _hitPic = new AnimalPicture(artSize);
-        _hitHidden = HiddenFigure(artSize, filled: true);
+        _hitHidden = HiddenFigure(artSize, caught: true);
         v.AddChild(_hitPic); v.AddChild(_hitHidden);
 
         var title = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
@@ -297,7 +294,7 @@ public sealed partial class HuntersLogScreen
                 default:
                     ShowStateBox(t.Filtered
                         ? StateBox(Strings.T("log.empty.hunts"), Strings.T("log.empty.hunts.body"), actionText: Strings.T("log.filter.clear"), action: ClearFilters)
-                        : StateBox(Strings.T("log.empty.book"), Strings.T("log.book.empty")));
+                        : StateBox(Strings.T("log.empty.book"), ""));
                     break;
             }
         }
@@ -341,6 +338,7 @@ public sealed partial class HuntersLogScreen
             var cells = NewRow();
             cells.Btn.Pressed += () => SelectRow(index);
             cells.Btn.GuiInput += e => RowInput(index, e);
+            cells.Btn.MouseExited += () => cells.Player.Hot = false;
             _rows.Add(cells);
             _rowsBox.AddChild(cells.Btn);
         }
@@ -349,7 +347,7 @@ public sealed partial class HuntersLogScreen
     RowCells NewRow()
     {
         var r = new RowCells();
-        r.Btn = new ContentButton { ThemeTypeVariation = "LogRow", ToggleMode = true, CustomMinimumSize = new Vector2(0, ShooterTheme.LogRowH), SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        r.Btn = new ContentButton { ThemeTypeVariation = "LogRow", ToggleMode = true, MinSize = new Vector2(0, ShooterTheme.LogRowH), SizeFlagsHorizontal = SizeFlags.ExpandFill };
         var h = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         h.AddThemeConstantOverride("separation", ShooterTheme.Space);
         r.When = Cell("HudTextSmall", HorizontalAlignment.Left, Columns[0].Ratio);
@@ -398,23 +396,27 @@ public sealed partial class HuntersLogScreen
         r.Btn.Visible = true;
     }
 
-    /// <summary>A click on a player's name opens that player's log; a click anywhere else on the row selects it.</summary>
+    /// <summary>The pointer over a player's name lights the name (its own hover state: a border); a click on it opens that player's log; a click anywhere else on the row selects it.</summary>
     void RowInput(int i, InputEvent e)
     {
-        if (e is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb || Data.Hunts.Data is not { } page || i >= page.Rows.Count) return;
+        if (i >= _rows.Count) return;
         var cell = _rows[i].PlayerCell;
-        var local = cell.GetGlobalTransformWithCanvas().AffineInverse() * mb.GlobalPosition; // the click, in the name's own coordinates
-        if (!new Rect2(Vector2.Zero, cell.Size).HasPoint(local)) return;
+        if (e is InputEventMouseMotion mm) { _rows[i].Player.Hot = OverName(cell, mm.GlobalPosition); return; }
+        if (e is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb || Data.Hunts.Data is not { } page || i >= page.Rows.Count) return;
+        if (!OverName(cell, mb.GlobalPosition)) return;
         _rows[i].Btn.AcceptEvent();
         var h = page.Rows[i];
         OpenPlayerLog(h.PlayerId, h.Hunter);
     }
 
+    /// <summary>Whether a screen position is over the name's cell (tested in the cell's own coordinates).</summary>
+    static bool OverName(Control cell, Vector2 global) => new Rect2(Vector2.Zero, cell.Size).HasPoint(cell.GetGlobalTransformWithCanvas().AffineInverse() * global);
+
     // ---- the hit card ----
 
     void ShowHit(HuntView? h)
     {
-        _hitPick.Visible = h == null;
+        _hit.Visible = h != null; // nothing selected: no card, no hint
         _hitBox.Visible = h != null;
         if (h == null) return;
         _hitPic.Visible = !h.Hidden;

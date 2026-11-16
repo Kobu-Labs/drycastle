@@ -22,7 +22,12 @@ public partial class Hud
         _root.AddChild(_chat);
     }
 
-    public void OpenChat(string prefill = "") => _chat.Open(prefill);
+    /// <summary>Opens the chat box. The Hunter's Log closes first: it sits on the top layer, so it would cover the box and take its Q / E keys.</summary>
+    public void OpenChat(string prefill = "")
+    {
+        CloseHuntersLog();
+        _chat.Open(prefill);
+    }
 
     /// <summary>Closes the chat box. True when it was open.</summary>
     public bool CloseChat() => _chat.Close();

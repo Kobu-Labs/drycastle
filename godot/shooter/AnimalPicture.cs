@@ -18,13 +18,11 @@ public enum PictureLook
     Filled,
     /// <summary>A species not hunted yet: only its outline.</summary>
     Outline,
-    /// <summary>A hidden Mystery creature: the generic blurred blob, filled when someone caught it (<see cref="AnimalPicture.BlobFilled"/>), else outlined.</summary>
-    Blob,
 }
 
 /// <summary>
 /// The side view of an animal, always facing left (the nose on the left), fitted in the control with its proportions kept: the hit card after a sniper kill, a
-/// recorded hit of the Hunter's Log, a Life List tile (filled or outlined) and the hidden Mystery blob. In the <see cref="PictureLook.Hit"/> look the bullet's
+/// recorded hit of the Hunter's Log, and a Life List tile (filled or outlined). In the <see cref="PictureLook.Hit"/> look the bullet's
 /// entry is marked along the animal's length and height by a ring and a cross (shape, not colour alone). Redraws only when set or resized.
 /// </summary>
 public sealed partial class AnimalPicture : Control
@@ -35,7 +33,7 @@ public sealed partial class AnimalPicture : Control
 
     AnimalArt _art = AnimalArt.Box;
     PictureLook _look = PictureLook.Hit;
-    bool _mark, _blobFilled;
+    bool _mark;
     float _along = 0.5f, _height = 0.5f;
 
     public AnimalPicture(Vector2 size)
@@ -44,9 +42,6 @@ public sealed partial class AnimalPicture : Control
         MouseFilter = MouseFilterEnum.Ignore;
         TextureFilter = TextureFilterEnum.LinearWithMipmaps; // the baked pictures are drawn at a third of their size
     }
-
-    /// <summary>The hidden blob is filled (someone caught it) or outlined (nobody did, for this viewer's log).</summary>
-    public bool BlobFilled => _blobFilled;
 
     public void SetHit(AnimalArt art, bool mark, float along, float height)
     {
@@ -60,20 +55,8 @@ public sealed partial class AnimalPicture : Control
         QueueRedraw();
     }
 
-    public void SetBlob(bool filled)
-    {
-        _look = PictureLook.Blob; _blobFilled = filled; _mark = false;
-        QueueRedraw();
-    }
-
     public override void _Draw()
     {
-        if (_look == PictureLook.Blob)
-        {
-            var r = Fit(HuntArt.BlobAspect);
-            DrawTextureRect(HuntArt.Blob(_blobFilled), r, false, _blobFilled ? ShooterTheme.Accent : ShooterTheme.Dim);
-            return;
-        }
         // the body's rectangle: the silhouette's proportions (a plain 2:1 body without one), as large as fits
         var aspect = _art.Shape != null ? _art.Shape.Length / _art.Shape.Height : _art.Aspect;
         var rect = Fit(aspect);
