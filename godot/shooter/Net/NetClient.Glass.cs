@@ -81,8 +81,24 @@ public partial class NetClient
         if (Vehicles == null || !_cars.TryGetValue(key.Owner, out var v) || !GodotObject.IsInstanceValid(v.Node)) return false;
         var rects = Vehicles.Vehicles[v.Kind].GlassRects;
         if (key.Index >= rects.Count) return false;
-        parent = v.Node; rect = rects[key.Index]; hole = VehicleHole;
+        parent = GlassHost(v.Node); rect = rects[key.Index]; hole = VehicleHole;
         return true;
+    }
+
+    /// <summary>
+    /// The node a vehicle's pane overlays and shards hang under, in the vehicle's frame: its hull when the model has one (a driven vehicle's body
+    /// leans and sways over its wheels, the root does not), else the root itself.
+    /// </summary>
+    static Node3D GlassHost(Node3D vehicle)
+    {
+        if (vehicle.FindChild("hull", true, false) is not Node3D hull) return vehicle;
+        if (hull.GetNodeOrNull<Node3D>("GlassHost") is { } host) return host;
+        var rest = Transform3D.Identity; // the hull's frame in the vehicle's, unleaned
+        for (Node? n = hull; n is Node3D n3 && n3 != vehicle; n = n.GetParent())
+            rest = (n == hull ? new Transform3D(Basis.FromScale(n3.Scale), n3.Position) : n3.Transform) * rest;
+        host = new Node3D { Name = "GlassHost", Transform = rest.AffineInverse() };
+        hull.AddChild(host);
+        return host;
     }
 
     /// <summary>The name of the node of a vehicle model that holds the glass of pane <paramref name="index"/> (the pane's place in vehicles.json "glass").</summary>
