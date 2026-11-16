@@ -58,7 +58,7 @@ public class GolfMk2Tests
             Assert.True(n.ContainsKey(name), $"the model has no node {name}");
         for (var i = 0; i < Golf.Glass.Count; i++) Assert.True(n.ContainsKey(NetClientPaneName(i)), $"the model has no node for pane {i}");
         Assert.Equal(n["wheel_fl_steer"], n["wheel_fl"]);
-        foreach (var w in new[] { "wheel_fl", "wheel_fr", "wheel_rl", "wheel_rr" }) Assert.InRange(n[w].Y, 0.25f, 0.35f);
+        foreach (var w in new[] { "wheel_fl", "wheel_fr", "wheel_rl", "wheel_rr" }) Assert.InRange(n[w].Y, 0.30f, 0.45f);
     }
 
     static string NetClientPaneName(int index) => $"glass_{index}"; // NetClient.PaneNodeName (the client is not in the test project)
@@ -87,9 +87,9 @@ public class GolfMk2Tests
     public void Its_hit_box_covers_the_model()
     {
         var g = Golf;
-        Assert.InRange(g.HalfLength, 2.1f, 2.2f); // the body is 4.28 m long
-        Assert.InRange(g.HalfWidth, 0.84f, 1.0f);
-        Assert.InRange(g.Height, 1.4f, 1.5f);   // the roof is 1.42 m
+        Assert.InRange(g.HalfLength, 2.6f, 2.75f); // the body is 4.28 m x 1.25 long
+        Assert.InRange(g.HalfWidth, 1.05f, 1.25f);
+        Assert.InRange(g.Height, 1.75f, 1.85f);   // the roof is 1.42 m x 1.25
     }
 
     [Fact]

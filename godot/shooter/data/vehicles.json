@@ -187,38 +187,38 @@
     {
       "id": "golf_mk2",
       "drive": {
-        "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 2.47, "track": 1.42,
+        "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 3.0875, "track": 1.775,
         "land": {
           "launch_boost": 2.5, "launch_speed": 12, "power_curve": 18, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
           "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
-          "step_height": 0.4, "max_climb_deg": 50, "snap_down": 0.3
+          "step_height": 0.5, "max_climb_deg": 50, "snap_down": 0.3
         },
         "body": {
           "squat_deg": 0.3, "dive_deg": 0.4, "lean_deg": 0.3, "max_pitch_deg": 3, "max_roll_deg": 4, "response": 7, "damping": 0.45, "terrain_response": 12,
           "wheel_lock_deg": 30
         },
-        "camera": { "distance": 6.2, "height": 1.5, "follow": 10, "max_lag": 2, "tilt": 0.35, "fov_boost_deg": 10, "turn_follow": 0, "turn_response": 5 }
+        "camera": { "distance": 7.75, "height": 1.9, "follow": 10, "max_lag": 2, "tilt": 0.35, "fov_boost_deg": 10, "turn_follow": 0, "turn_response": 5 }
       },
-      "top_speed": 55.6, "acceleration": 6, "brake": 10.5, "turn_radius": 3.4, "high_speed_radius_factor": 14, "max_lateral_accel": 12, "mass": 950, "hp": 250, "hood": [0, 0.95, -1.3], "spawn_count": 0,
+      "top_speed": 55.6, "acceleration": 6, "brake": 10.5, "turn_radius": 3.4, "high_speed_radius_factor": 14, "max_lateral_accel": 12, "mass": 950, "hp": 250, "hood": [0, 1.1875, -1.625], "spawn_count": 0,
       "fixed_spots": [{ "x": 37, "z": -7 }],
-      "half_width": 0.9, "half_length": 2.14, "height": 1.43,
+      "half_width": 1.125, "half_length": 2.68, "height": 1.79,
       "model": "drycastle-generated-models/golf_mk2.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Black paint", "paints": ["Black paint"],
       "seats": [
-        { "role": "driver", "offset": [-0.39, 0.36, 0.17] },
-        { "role": "passenger", "offset": [0.39, 0.36, 0.17] },
-        { "role": "passenger", "offset": [-0.36, 0.36, 1] },
-        { "role": "passenger", "offset": [0.36, 0.36, 1] }
+        { "role": "driver", "offset": [-0.4875, 0.45, 0.2125] },
+        { "role": "passenger", "offset": [0.4875, 0.45, 0.2125] },
+        { "role": "passenger", "offset": [-0.45, 0.45, 1.25] },
+        { "role": "passenger", "offset": [0.45, 0.45, 1.25] }
       ],
       "glass": [
-        { "id": "windscreen", "centre": [0, 1.17, -0.53], "normal": [0, 0.737, -0.676], "size": [1.57, 0.651], "outline": [[0.65, 0.326], [-0.65, 0.326], [-0.785, -0.326], [0.785, -0.326]] },
-        { "id": "rear", "centre": [0, 1.185, 1.38], "normal": [0, 0.856, 0.516], "size": [1.56, 0.794], "outline": [[-0.78, -0.397], [0.78, -0.397], [0.65, 0.397], [-0.65, 0.397]] },
-        { "id": "door_left", "centre": [-0.732, 1.165, -0.05], "normal": [-0.958, 0.288, 0], "size": [1.34, 0.418], "outline": [[0.67, -0.209], [0.67, 0.209], [-0.21, 0.209], [-0.67, -0.209]] },
-        { "id": "quarter_left", "centre": [-0.732, 1.165, 1.165], "normal": [-0.958, 0.288, 0], "size": [0.93, 0.418], "outline": [[0.465, -0.209], [-0.165, 0.209], [-0.465, 0.209], [-0.465, -0.209]] },
-        { "id": "door_right", "centre": [0.732, 1.165, -0.05], "normal": [0.958, 0.288, 0], "size": [1.34, 0.418], "outline": [[0.67, -0.209], [0.21, 0.209], [-0.67, 0.209], [-0.67, -0.209]] },
-        { "id": "quarter_right", "centre": [0.732, 1.165, 1.165], "normal": [0.958, 0.288, 0], "size": [0.93, 0.418], "outline": [[0.465, -0.209], [0.465, 0.209], [0.165, 0.209], [-0.465, -0.209]] }
+        { "id": "windscreen", "centre": [0, 1.462, -0.662], "normal": [0, 0.737, -0.676], "size": [1.963, 0.814], "outline": [[0.812, 0.407], [-0.812, 0.407], [-0.981, -0.407], [0.981, -0.407]] },
+        { "id": "rear", "centre": [0, 1.481, 1.725], "normal": [0, 0.856, 0.516], "size": [1.95, 0.993], "outline": [[-0.975, -0.496], [0.975, -0.496], [0.812, 0.496], [-0.812, 0.496]] },
+        { "id": "door_left", "centre": [-0.915, 1.456, -0.062], "normal": [-0.958, 0.288, 0], "size": [1.675, 0.522], "outline": [[0.837, -0.261], [0.837, 0.261], [-0.263, 0.261], [-0.837, -0.261]] },
+        { "id": "quarter_left", "centre": [-0.915, 1.456, 1.456], "normal": [-0.958, 0.288, 0], "size": [1.162, 0.522], "outline": [[0.581, -0.261], [-0.206, 0.261], [-0.581, 0.261], [-0.581, -0.261]] },
+        { "id": "door_right", "centre": [0.915, 1.456, -0.062], "normal": [0.958, 0.288, 0], "size": [1.675, 0.522], "outline": [[0.837, -0.261], [0.263, 0.261], [-0.837, 0.261], [-0.837, -0.261]] },
+        { "id": "quarter_right", "centre": [0.915, 1.456, 1.456], "normal": [0.958, 0.288, 0], "size": [1.162, 0.522], "outline": [[0.581, -0.261], [0.581, 0.261], [0.206, 0.261], [-0.581, -0.261]] }
       ],
-      "lights": { "head": [[-0.46, 0.75, -2.07], [0.46, 0.75, -2.07]], "tail": [[-0.56, 0.76, 2.03], [0.56, 0.76, 2.03]], "beam_range": 45, "beam_angle": 26 },
+      "lights": { "head": [[-0.575, 0.9375, -2.5875], [0.575, 0.9375, -2.5875]], "tail": [[-0.7, 0.95, 2.5375], [0.7, 0.95, 2.5375]], "beam_range": 45, "beam_angle": 26 },
       "sounds": {
         "background": { "sound": "golf_mk2.background", "pitch": [0.8, 1.6], "fade_in": 0.5 },
         "idle": { "sound": "golf_mk2.idle", "fade_in": 0.5, "fade_out": 0.7 },

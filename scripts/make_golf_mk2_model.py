@@ -11,6 +11,7 @@ Without an output path it also rewrites the `glass` list of golf_mk2 in godot/sh
 Lamp materials carry glTF emissiveFactor ('Emissive warm headlight lens', 'Emissive red tail lamps', 'Emissive amber indicators', 'Emissive reverse lamps');
 the client finds them by name and drives their emission from the lamp state (CarLights.BindModelLamps).
 
+SCALE (below) makes the car bigger than a real Golf so a seated rider fits; the numbers in this file are at 1:1 and vehicles.json carries the factor.
 Frame: the game's vehicle frame, metres. x right, y up, z back (forward is -Z), origin on the ground halfway between the axles.
 So vehicles.json uses model_scale 1, model_yaw_deg 0, model_offset [0, 0, 0]. Left-hand drive: the driver sits at x -0.39.
 
@@ -25,6 +26,7 @@ Node tree (the names the client looks for, NetClient.DriveFx.cs DriveNodes and N
                                    rewrites that list): windscreen, rear, then door and rear quarter light of the left and the right
         seat_driver, seat_passenger_1 .. _3   empties: the four seats of vehicles.json (feet)
         light_head_l/r, light_tail_l/r        empties: the lamp positions of vehicles.json
+        steering_wheel_rim, steering_wheel_spokes   (meshes, in hull) the wheel: the cockpit view hides them and draws its own wheel that turns (CockpitRig)
 """
 import importlib.util
 import json, math, struct, sys
@@ -36,6 +38,10 @@ _spec=importlib.util.spec_from_file_location('make_flak_model',Path(__file__).re
 kit=importlib.util.module_from_spec(_spec); _spec.loader.exec_module(kit)
 GLASS=kit.GlassSet('golf_mk2')
 _PANES=kit.Node('panes')    # GlassSet hangs its (empty) pane nodes here; the real ones are made by export()
+# The whole model is built at 1:1 Golf size below and scaled by SCALE on the way out (vertices, pivots, seats, lamps, glass): the game's
+# characters are 1.2 m tall seated, taller than a real Golf's cabin, so the car is made bigger until a seated rider's head is inside the roof.
+# vehicles.json carries the same factor in its vehicle-frame numbers (hood, half_*, height, wheelbase, track, seats, lights, camera).
+SCALE=1.25
 MATS=[]; PARTS=[]
 def mat(name,color,metal=0,rough=.7,alpha=1,emission=None):
     m={'name':name,'pbrMetallicRoughness':{'baseColorFactor':[*color,alpha],'metallicFactor':metal,'roughnessFactor':rough},'doubleSided':True}
@@ -59,23 +65,23 @@ reverse_light=mat('Emissive reverse lamps',(.86,.89,.85),.1,.3,emission=(.65,.68
 blue=mat('Plate blue band',(.025,.12,.48))
 black=mat('Dark grille',(.008,.012,.016))
 gauge=mat('Vintage instrument markings',(.54,.65,.49))
-def mesh(name,verts,faces,material,parent=None,gnode=None):
-    PARTS.append(dict(name=name,v=np.array(verts,dtype=float),f=faces,mat=material,parent=parent,gnode=gnode));return len(PARTS)-1
+def mesh(name,verts,faces,material,parent=None,gnode=None,gname=None):
+    PARTS.append(dict(name=name,v=np.array(verts,dtype=float),f=faces,mat=material,parent=parent,gnode=gnode,gname=gname));return len(PARTS)-1
 def poly(name,pts,m):return mesh(name,pts,[list(range(len(pts)))],m)
 def glass_pane(pane_id,pts):
     """A breakable pane: its own node glass_N (N = its place in the glass list of vehicles.json), outline from its corners."""
-    n=len(GLASS.panes);GLASS.pane(_PANES,pane_id,[],[tuple(float(v) for v in p) for p in pts])
+    n=len(GLASS.panes);GLASS.pane(_PANES,pane_id,[],[tuple(float(v)*SCALE for v in p) for p in pts])
     mesh(f'glass_{n}',pts,[list(range(len(pts)))],glass,gnode=n)
-def box(name,c,size,m):
+def box(name,c,size,m,gname=None):
     c=np.array(c); s=np.array(size)/2
     v=[c+s*np.array(p) for p in [(-1,-1,-1),(1,-1,-1),(1,1,-1),(-1,1,-1),(-1,-1,1),(1,-1,1),(1,1,1),(-1,1,1)]]
-    return mesh(name,v,[[0,3,2,1],[4,5,6,7],[0,1,5,4],[3,7,6,2],[0,4,7,3],[1,2,6,5]],m)
-def beam(name,a,b,width,m,depth=None):
+    return mesh(name,v,[[0,3,2,1],[4,5,6,7],[0,1,5,4],[3,7,6,2],[0,4,7,3],[1,2,6,5]],m,gname=gname)
+def beam(name,a,b,width,m,depth=None,gname=None):
     a=np.array(a,float);b=np.array(b,float); d=b-a;d/=np.linalg.norm(d)
     u=np.cross(d,[0,1,0] if abs(d[1])<.95 else [1,0,0]);u/=np.linalg.norm(u);u*=width/2
     v=np.cross(d,u);v=v/np.linalg.norm(v)*(depth or width)/2
-    return mesh(name,[p+su*u+sv*v for p in (a,b) for su,sv in [(-1,-1),(1,-1),(1,1),(-1,1)]],[[0,3,2,1],[4,5,6,7],[0,1,5,4],[1,2,6,5],[2,3,7,6],[3,0,4,7]],m)
-def ring(name,c,ro,ri,depth,m,n=16,axis='x'):
+    return mesh(name,[p+su*u+sv*v for p in (a,b) for su,sv in [(-1,-1),(1,-1),(1,1),(-1,1)]],[[0,3,2,1],[4,5,6,7],[0,1,5,4],[1,2,6,5],[2,3,7,6],[3,0,4,7]],m,gname=gname)
+def ring(name,c,ro,ri,depth,m,n=16,axis='x',gname=None):
     v=[]
     for d,r in [(-depth/2,ro),(depth/2,ro),(-depth/2,ri),(depth/2,ri)]:
         for i in range(n):
@@ -86,7 +92,7 @@ def ring(name,c,ro,ri,depth,m,n=16,axis='x'):
     for i in range(n):
         j=(i+1)%n
         for a,b in [(0,n),(2*n,0),(n,3*n),(3*n,2*n)]:f.append([a+i,a+j,b+j,b+i])
-    return mesh(name,v,f,m)
+    return mesh(name,v,f,m,gname=gname)
 # Mk2-specific three-door shell, short nose and upright hatch.
 stations=[(-1.99,.755,.90),(-1.82,.80,.915),(-1.55,.82,.925),(-.78,.82,.94),(.70,.82,.94),(1.63,.81,.94),(1.99,.76,.89)]
 def shape(z):
@@ -276,10 +282,10 @@ box('Gear_knob',(0,.69,-.075),(.055,.045,.055),trim)
 beam('Handbrake',(.075,.55,.31),(.075,.60,.12),.033,trim)
 # Left-hand drive steering wheel, circular face points toward driver (+Z).
 beam('Steering_column',(-.39,.81,-.40),(-.39,.91,-.19),.065,dash)
-ring('Steering_wheel',(-.39,.94,-.18),.165,.137,.026,trim,20,'z')
+ring('Steering_wheel',(-.39,.94,-.18),.165,.137,.026,trim,20,'z',gname='steering_wheel_rim')
 for a in [.65,2.49,3.79,5.63]:
-    beam('Steering_spoke',(-.39,.94,-.18),(-.39+.145*math.sin(a),.94+.145*math.cos(a),-.18),.035,dash)
-box('Steering_hub',(-.39,.94,-.17),(.115,.09,.04),dash)
+    beam('Steering_spoke',(-.39,.94,-.18),(-.39+.145*math.sin(a),.94+.145*math.cos(a),-.18),.035,dash,gname='steering_wheel_spokes')
+box('Steering_hub',(-.39,.94,-.17),(.115,.09,.04),dash,gname='steering_wheel_spokes')
 box('Instrument_binnacle',(-.39,.995,-.40),(.39,.11,.08),dash)
 for x in [-.49,-.29]:ring('Vintage_analog_dial',(x,1.00,-.352),.055,.045,.005,gauge,16,'z')
 # Seats (feet, vehicles.json "seats": x right, y up, z back) and lamps ([x, y, z] of vehicles.json "lights"); empties in the glb.
@@ -295,7 +301,7 @@ def export(path):
         access.append(a);return len(access)-1
     def node(name,parent,translation=None):
         nodes.append({'name':name});i=len(nodes)-1
-        if translation is not None:nodes[i]['translation']=[round(float(v),5)+0.0 for v in translation]
+        if translation is not None:nodes[i]['translation']=[round(float(v)*SCALE,5)+0.0 for v in translation]
         if parent is not None:nodes[parent].setdefault('children',[]).append(i)
         return i
     root=node('golf_mk2',None);hull=node('hull',root)
@@ -308,13 +314,13 @@ def export(path):
     tris=0
     grouped={}
     for p in PARTS:
-        key=(p['parent'],p['gnode'],p['mat'])
+        key=(p['parent'],p['gnode'],p['mat'],p['gname'])
         if key not in grouped:
-            gname=f"glass_{p['gnode']}" if p['gnode'] is not None else (p['parent'] or 'body')+'_'+MATS[p['mat']]['name'].replace(' ','_')
+            gname=p['gname'] or (f"glass_{p['gnode']}" if p['gnode'] is not None else (p['parent'] or 'body')+'_'+MATS[p['mat']]['name'].replace(' ','_'))
             grouped[key]=dict(name=gname,v=[],f=[],mat=p['mat'],parent=p['parent'])
         g=grouped[key];offset=len(g['v']);g['v'].extend(p['v']);g['f'].extend([[i+offset for i in face] for face in p['f']])
     for part in grouped.values():
-        part['v']=np.array(part['v'])
+        part['v']=np.array(part['v'])*SCALE
         vv=[];nn=[]
         for face in part['f']:
             for k in range(1,len(face)-1):
@@ -334,7 +340,7 @@ def main():
     out=sys.argv[1] if len(sys.argv)>1 else str(OUT)
     export(out)
     pts=[p['v']+np.array(PIVOTS.get(p['parent'],[0,0,0])) for p in PARTS]
-    lo=np.min([v.min(axis=0) for v in pts],axis=0);hi=np.max([v.max(axis=0) for v in pts],axis=0)
+    lo=SCALE*np.min([v.min(axis=0) for v in pts],axis=0);hi=SCALE*np.max([v.max(axis=0) for v in pts],axis=0)
     print('bounds: x %.3f..%.3f  y %.3f..%.3f  z %.3f..%.3f'%(lo[0],hi[0],lo[1],hi[1],lo[2],hi[2]))
     GLASS.report()
     if len(sys.argv)<=1:
