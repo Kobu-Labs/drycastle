@@ -196,7 +196,7 @@ public sealed class BotNav
         CellSize = Cell,
         CellHeight = CellHeight,
         AgentRadius = AgentRadius,
-        AgentHeight = MoveConsts.CapsuleHeight,
+        AgentHeight = MathF.Ceiling(MoveConsts.CapsuleHeight / CellHeight) * CellHeight, // whole cells, as the bake rounds it anyway (silences the precision warning)
         AgentMaxClimb = CellHeight, // the body has no step-up; one cell keeps kerbs and terrain noise walkable
         AgentMaxSlope = 45f,        // under the body's 50 degree floor limit
         EdgeMaxError = 1.0f,        // at 1.0 or below a tile's edge stays on the tile boundary, so neighbours join
