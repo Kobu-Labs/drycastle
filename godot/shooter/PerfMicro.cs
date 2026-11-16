@@ -153,8 +153,7 @@ public partial class PerfMicro : Node
         // ---- vehicles: a parked car's step (the server steps every driverless car every tick, D-01) and RestHeight (rays per spawn)
         var cars = new Dictionary<string, object>();
         var def = Vehicles.Vehicles.First(v => v.Flight == null && v.Drive == null && v.Seats.Count > 0 && !v.CanFloat);
-        var roads = Map.SpawnPoints.Where(s => s.Kind == "road").Select(s => s.Position).ToList();
-        if (roads.Count == 0) roads = anchors;
+        var roads = anchors;
         ServerCar NewCar(int i, Vector3 at, VehicleDef d)
         {
             var car = new ServerCar { Name = $"perf{d.Id}{i}", Id = (ushort)(VehicleRecord.FirstId + i), Def = d, HalfWidth = d.HalfWidth, HalfLength = d.HalfLength,

@@ -36,7 +36,7 @@ from drycastle_pipeline.edits import (
     polygon_ring,
     resolve_fence,
 )
-from drycastle_pipeline.ground import ground_types, ground_units
+from drycastle_pipeline.ground import ground_types, ground_units, water_kinds
 from drycastle_pipeline.lamps import make_lamps, read_osm_lamps, write_lamps
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.roads import edge_lines
@@ -389,122 +389,64 @@ def make_trees(
 
 
 def make_spawns(
-    parcels: list[dict],
+    zones: list[tuple[str, BaseGeometry]],
     buildings: list[dict],
     graph: dict,
     trees: list[dict],
     terrain: Terrain,
     cfg: dict,
-    road_cfg: dict,
     chunk_m: float,
-    zone_units: list[dict] | None = None,
-    rule_units: dict[str, dict] | None = None,
+    water: BaseGeometry | None = None,
 ) -> list[dict]:
-    """A seeded subset of candidate points on roads and open ground, away from buildings.
+    """Seeded spawn points inside the ``player_spawn`` zones and nowhere else.
 
-    Open ground is the parcels and ground areas of the kinds ``cfg["ground_kinds"]``, and ``zone_units``: parts of ground
-    areas inside a drawn ``player_spawn`` zone (``zones.drawn_spawn_units``), whatever their kind. ``rule_units``
-    (``zones.rule_spawn_units``) replace the ground areas that a cut of the rule zone touches, by id."""
+    ``zones`` is ``(zone id, polygon)``: the drawn zones and the rule zone's ground areas (``zones.kind_areas``). A point lies
+    inside the terrain and clear of buildings (``min_building_distance_m``), trees (``min_tree_distance_m``) and ``water``
+    (``water_clearance_m``). A zone gets one point per ``m2_per_point`` of its usable ground, rounded up, so any zone with
+    usable ground has points and a bigger one has more: no minimum, no maximum. No zone at all: the points are drawn over the
+    whole terrain instead, off the roads (``kind`` ``random``, no zone id); a zone with no usable ground gets none and does not
+    trigger that."""
     bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
-    mind = float(cfg["min_building_distance_m"])
-    bzone = unary_union(bpolys).buffer(mind) if bpolys else None
-    tzone = (
-        unary_union(
-            [Point(t["x"], t["y"]).buffer(float(cfg["min_tree_distance_m"])) for t in trees]
+    avoid = [
+        g
+        for g in (
+            unary_union(bpolys).buffer(float(cfg["min_building_distance_m"])) if bpolys else None,
+            unary_union([Point(t["x"], t["y"]).buffer(float(cfg["min_tree_distance_m"])) for t in trees]) if trees else None,
+            water.buffer(float(cfg["water_clearance_m"])) if water is not None and not water.is_empty else None,
         )
-        if trees
-        else None
-    )
-    rzone = road_zone(graph, 0.5)
-    for g in (bzone, tzone, rzone, terrain.coverage):
-        if g is not None:
-            shapely.prepare(g)
-    parcel_polys = [(p, shape(p["polygon"])) for p in sorted(parcels, key=lambda p: p["id"])]
-    tree_idx = shapely.STRtree([g for _, g in parcel_polys])
-
-    def ok(x: float, y: float, on_road: bool) -> bool:
-        if not shapely.contains_xy(terrain.coverage, x, y):
-            return False
-        if bzone is not None and shapely.contains_xy(bzone, x, y):
-            return False
-        if tzone is not None and shapely.contains_xy(tzone, x, y):
-            return False
-        return on_road or rzone is None or not shapely.contains_xy(rzone, x, y)
-
-    def parcel_at(x: float, y: float) -> dict | None:
-        hits = sorted(int(i) for i in tree_idx.query(Point(x, y), predicate="within"))
-        return parcel_polys[hits[0]][0] if hits else None
-
-    road_pool: list[dict] = []
-    spacing = float(cfg["road_spacing_m"])
-    for e, ln in sorted(edge_lines(graph), key=lambda t: t[0]["id"]):
-        k = max(1, int(ln.length // spacing))
-        for i in range(k):
-            pt = ln.interpolate((i + 0.5) * ln.length / k)
-            if ok(pt.x, pt.y, True):
-                par = parcel_at(pt.x, pt.y)
-                road_pool.append(
-                    {
-                        "x": pt.x,
-                        "y": pt.y,
-                        "kind": "road",
-                        "parcel": par and par["id"],
-                        "highway": e["highway"],
-                    }
-                )
-    ground_pool: list[dict] = []
-    spawn_ground = [(p, poly) for p, poly in parcel_polys if p["kind"] in cfg["ground_kinds"]]
-    if rule_units:
-        cut_ground = []
-        for p, poly in spawn_ground:
-            unit = rule_units.get(p["id"])
-            if unit is None:
-                cut_ground.append((p, poly))
-            elif unit["polygon"] is not None:
-                cut_ground.append((unit, shape(unit["polygon"])))
-        spawn_ground = cut_ground
-    spawn_ground += [(u, shape(u["polygon"])) for u in zone_units or []]
-    for p, poly in spawn_ground:
-        inner = poly.buffer(-1.5)
-        if inner.is_empty:
-            continue
-        shapely.prepare(inner)
-        rng = seeded(f"{p['id']}:spawns")
-        expected = float(cfg["ground_per_1000m2"]) * poly.area / 1000.0
-        count = int(expected) + (rng.random() < expected % 1)
-        minx, miny, maxx, maxy = inner.bounds
-        got = 0
-        for _ in range(count * 30):
-            if got >= count:
-                break
-            x, y = rng.uniform(minx, maxx), rng.uniform(miny, maxy)
-            if shapely.contains_xy(inner, x, y) and ok(x, y, False):
-                ground_pool.append(
-                    {"x": x, "y": y, "kind": p["kind"], "parcel": p["id"], "highway": None}
-                )
-                got += 1
-
-    rng = seeded("spawns")
-    total = int(cfg["count"])
-    want_road = min(len(road_pool), round(total * float(cfg["road_fraction"])))
-    want_ground = min(len(ground_pool), total - want_road)
-    want_road = min(len(road_pool), total - want_ground)
-    picked = rng.sample(road_pool, want_road) + rng.sample(ground_pool, want_ground)
-    picked.sort(key=lambda s: (s["kind"] != "road", round(s["x"], 3), round(s["y"], 3)))
-    lift = float(road_cfg["lift_m"])
+        if g is not None
+    ]
+    clear = unary_union(avoid) if avoid else None
+    kind = "zone"
+    if not zones:
+        kind = "random"
+        rzone = road_zone(graph, 0.5)
+        zones = [("", terrain.coverage.difference(rzone) if rzone is not None else terrain.coverage)]
+    usable: list[tuple[str, BaseGeometry]] = []
+    for zid, poly in zones:
+        region = (poly if poly.is_valid else poly.buffer(0)).intersection(terrain.coverage)
+        if clear is not None:
+            region = region.difference(clear)
+        pieces = [g for g in getattr(region, "geoms", [region]) if g.geom_type == "Polygon" and g.area > 0.01]
+        if pieces:
+            usable.append((zid, unary_union(pieces)))
+    picked: list[tuple[str, float, float]] = []
+    for zid, region in usable:
+        n = math.ceil(region.area / float(cfg["m2_per_point"]))
+        picked += [(zid, x, y) for x, y in zone_kinds.sample_points(region, n, seeded(f"spawns:{zid}"))]
+    picked.sort(key=lambda s: (s[0], s[1], s[2]))
     out = []
-    for i, s in enumerate(picked, 1):
-        z = float(terrain.surface(np.array([s["x"]]), np.array([s["y"]]))[0])
+    for i, (zid, x, y) in enumerate(picked, 1):
+        z = float(terrain.surface(np.array([x]), np.array([y]))[0])
         out.append(
             {
                 "id": f"S-{i:03d}",
-                "x": _r3(s["x"]),
-                "y": _r3(s["y"]),
-                "z": _r3(z + (lift if s["kind"] == "road" else 0.0)),
-                "kind": s["kind"],
-                "parcel": s["parcel"],
-                "highway": s["highway"],
-                "chunk": chunk_of(s["x"], s["y"], chunk_m),
+                "x": _r3(x),
+                "y": _r3(y),
+                "z": _r3(z),
+                "kind": kind,
+                "zone": zid,
+                "chunk": chunk_of(x, y, chunk_m),
             }
         )
     return out
@@ -662,26 +604,21 @@ def run_props(
     terrain, _ = load_terrain(work_dir)
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
     parcels = parcels_doc["parcels"]
-    ground = ground_units(parcels_doc)  # spawns are by the kind of ground: parcels and ground areas
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     graph = json.loads((work_dir / "roads.json").read_text())
     fcfg = load_section("props", rules_path)
     scfg = load_section("spawns", rules_path)
     zrules = zone_kinds.rules(load_section("zones", rules_path))
-    zone_kinds.check_ground_types(zrules, ground_types(rules_path, edits_path))
+    types = ground_types(rules_path, edits_path)
+    zone_kinds.check_ground_types(zrules, types)
     spawn_where = zrules.get(zone_kinds.PLAYER_SPAWN, {}).get("where_ground")
-    scfg["ground_kinds"] = sorted(set(scfg["ground_kinds"]) | set(spawn_where or []))  # the rule zone of player_spawn
     chunk_m = float(parcels_doc["chunk_size_m"])
     edits = load_edits(edits_path)
     plan = plan_edits(edits, parcels, parcels_doc.get("origin_epsg5514"), chunk_m)
     origin = parcels_doc.get("origin_epsg5514")
     cuts = zone_kinds.zone_cuts(edits.zone_cuts, origin) if edits.zone_cuts and origin else {}
-    drawn_spawn = (
-        zone_kinds.drawn_spawn_units(parcels_doc, zone_kinds.drawn_zones(edits.zones, origin), spawn_where, cuts)
-        if edits.zones and origin
-        else []
-    )
-    rule_units = zone_kinds.rule_spawn_units(parcels_doc, spawn_where, cuts)
+    drawn = zone_kinds.drawn_zones(edits.zones, origin) if edits.zones and origin else {}
+    spawn_zones = zone_kinds.kind_areas(zone_kinds.PLAYER_SPAWN, parcels_doc, drawn, spawn_where, cuts)
     for warning in plan.warnings + unknown_asset_warnings(plan.objects):
         print(f"props: warning: {warning}", file=sys.stderr)
     fences = make_fences(
@@ -704,18 +641,21 @@ def run_props(
         origin=tuple(parcels_doc["origin_epsg5514"]) if parcels_doc.get("origin_epsg5514") else None,
     )
     trees = cap_trees(trees, chunk_m, int(fcfg["trees"]["max_per_chunk"]))
+    # water: the water ground areas and the wet part of the water patches
+    wet = [shape(u["polygon"]) for u in ground_units(parcels_doc) if u["kind"] in water_kinds(types)]
+    wet_patches = water_zone(plan, terrain)
     spawns = make_spawns(
-        ground,
+        spawn_zones,
         buildings,
         graph,
         trees,
         terrain,
         scfg,
-        load_section("roads", rules_path),
-        float(parcels_doc["chunk_size_m"]),
-        zone_units=drawn_spawn,
-        rule_units=rule_units,
+        chunk_m,
+        water=unary_union(wet + ([wet_patches] if wet_patches is not None else [])) if wet or wet_patches is not None else None,
     )
+    if spawn_zones and not spawns:
+        print("props: warning: there are player_spawn zones but no usable ground in them; no spawn points", file=sys.stderr)
     objects_doc = {"format_version": OBJECTS_FORMAT_VERSION, "objects": plan.objects}
     if plan.cables:  # the wires between placed utility poles; the game strings them (docs/utility-poles.md)
         objects_doc["cables"] = plan.cables

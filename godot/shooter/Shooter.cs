@@ -448,8 +448,6 @@ public partial class Shooter : Node3D
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             MatchConfig = WithTargets(ApplyOverrides(_data.Match, cfg.Str("match-set")), cfg.Str("targets")),
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")),
-            RoadSpawns = _map.SpawnPoints.Where(sp => sp.Kind == "road").OrderBy(sp => sp.Highway is "path" or "footway" or "steps" or "track" ? 1 : 0)
-                .Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             CarSmoke = cfg.Flag("car-smoke"), BlastSmoke = cfg.Flag("blast-smoke"), SmokeKind = cfg.Str("car-kind", "car"),
             Weapons = _data.Weapons, Items = _data.Items, HolyMass = _data.HolyMass, Demon = _data.Demon, BigfootData = _data.Bigfoot, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, PetsData = _data.Pets, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, WeaponsSmoke = cfg.Flag("weapons-smoke"), BazookaSmoke = cfg.Flag("bazooka-smoke"),
             MatchSmoke = cfg.Flag("match-smoke"), DebugCommands = cfg.Flag("debug-cmds") || cfg.Flag("match-smoke"),

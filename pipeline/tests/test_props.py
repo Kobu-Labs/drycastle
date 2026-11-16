@@ -110,87 +110,82 @@ def test_prop_meshes_are_small_and_valid(ws) -> None:
         assert v > 0
 
 
-def test_spawn_constraints_and_determinism(ws) -> None:
+def spawns_of(ws, zones, trees=(), water=None, cfg=SPAWN):
+    return make_spawns(zones, ws["buildings"], ws["graph"], list(trees), ws["terrain"], cfg, 250.0, water=water)
+
+
+def test_spawns_are_inside_the_zones_and_clear_of_obstacles(ws) -> None:
     trees = make_trees(ws["buildings"], ws["graph"], ws["terrain"], {**TREE, "ortho_dir": str(ws["work"].parent / "ortho")},
                        origin=SYNTHETIC_ORIGIN)
     assert trees
-
-    def make(cfg=SPAWN):
-        return make_spawns(
-            ws["parcels"], ws["buildings"], ws["graph"], trees, ws["terrain"], cfg, ROADS, 250.0
-        )
-
-    a = make()
-    assert a == make() and 0 < len(a) <= SPAWN["count"]
+    zones = [("Z-0001", box(20, 20, 120, 90)), ("Z-0002", box(150, 150, 230, 230))]
+    water = box(60, 40, 90, 70)
+    a = spawns_of(ws, zones, trees, water)
+    assert a == spawns_of(ws, zones, trees, water) and 0 < len(a)
     assert [s["id"] for s in a] == [f"S-{i:03d}" for i in range(1, len(a) + 1)]
     bpoly = building_poly(ws)
-    allowed = {"road", *SPAWN["ground_kinds"]}
+    by_id = dict(zones)
     for s in a:
         pt = Point(s["x"], s["y"])
-        assert s["kind"] in allowed
+        assert s["kind"] == "zone" and by_id[s["zone"]].contains(pt)
         assert pt.distance(bpoly) >= SPAWN["min_building_distance_m"] - 1e-6
+        assert pt.distance(water) >= SPAWN["water_clearance_m"] - 1e-6
         assert ws["terrain"].coverage.contains(pt)
         assert s["chunk"] == [0, 0]
-        ground = float(ws["terrain"].surface(s["x"], s["y"]))
-        lift = ROADS["lift_m"] if s["kind"] == "road" else 0.0
-        assert s["z"] == pytest.approx(ground + lift, abs=2e-3)
-        if s["kind"] != "road":
-            parcel = next(p for p in ws["parcels"] if p["id"] == s["parcel"])
-            assert parcel["kind"] == s["kind"] and shape(parcel["polygon"]).contains(pt)
+        assert s["z"] == pytest.approx(float(ws["terrain"].surface(s["x"], s["y"])), abs=2e-3)
         for t in trees:
             assert np.hypot(t["x"] - s["x"], t["y"] - s["y"]) >= SPAWN["min_tree_distance_m"] - 1e-6
-    assert any(s["kind"] == "road" for s in a) and any(s["kind"] != "road" for s in a)
-    assert len(make({**SPAWN, "count": 7})) == 7
-    far = make({**SPAWN, "min_building_distance_m": 1000})
-    assert far == []
+    assert {s["zone"] for s in a} == {"Z-0001", "Z-0002"}
 
 
-def test_spawn_candidates_also_come_from_ground_inside_player_spawn_zones(ws) -> None:
-    from shapely.geometry import mapping
-
-    cfg = {**SPAWN, "ground_kinds": [], "road_fraction": 0.0, "ground_per_1000m2": 20.0, "count": 40}
-
-    def make(units):
-        return make_spawns(ws["parcels"], ws["buildings"], ws["graph"], [], ws["terrain"], cfg, ROADS, 250.0, zone_units=units)
-
-    def ground_spawns(units):
-        return [s for s in make(units) if s["kind"] != "road"]  # the roads fill up what the open ground does not give
-
-    assert ground_spawns(None) == [] and ground_spawns([]) == []  # no spawn kind, no zone: no open ground to spawn on
-    area = box(120, 120, 200, 190)
-    got = ground_spawns([{"id": "A-0007", "kind": "forest", "polygon": mapping(area)}])
-    assert got and all(s["parcel"] == "A-0007" and s["kind"] == "forest" and area.contains(Point(s["x"], s["y"])) for s in got)
+def test_points_follow_area_with_no_minimum_or_maximum(ws) -> None:
+    big, tiny = box(150, 150, 240, 240), box(200, 20, 204, 24)  # 4 x 4 m
+    got = spawns_of(ws, [("big", big), ("tiny", tiny)])
+    n = lambda zid: sum(s["zone"] == zid for s in got)
+    assert n("tiny") == 1  # ceil: a zone with usable ground always has a point, whatever its size
+    assert n("big") >= 6  # and a bigger one has more (only 60 x 50 m of it is inside the terrain)
+    off_terrain = box(900, 900, 950, 950)
+    assert spawns_of(ws, [("off", off_terrain)]) == []  # a zone with no usable ground: nothing, not a random spawn
+    assert spawns_of(ws, [("z", big)], cfg={**SPAWN, "min_building_distance_m": 1000}) == []
+    dense = spawns_of(ws, [("z", big)], cfg={**SPAWN, "m2_per_point": 100})
+    sparse = spawns_of(ws, [("z", big)], cfg={**SPAWN, "m2_per_point": 1000})
+    assert len(dense) > 3 * len(sparse) > 0
 
 
-def test_run_props_takes_spawns_from_the_player_spawn_zone(ws, tmp_path) -> None:
-    from shapely.geometry import mapping
+def test_no_zone_means_random_points_off_the_roads(ws) -> None:
+    from drycastle_pipeline.props import road_zone
 
-    parcels_file = ws["work"] / "parcels.json"
-    doc = json.loads(parcels_file.read_text())
-    doc["ground"] = [{"id": "A-0001", "kind": "forest", "polygon": mapping(box(120, 120, 200, 190)), "area": 80 * 70}]
-    parcels_file.write_text(json.dumps(doc))
+    a = spawns_of(ws, [])
+    assert a and a == spawns_of(ws, []) and all(s["kind"] == "random" and s["zone"] == "" for s in a)
+    rzone = road_zone(ws["graph"], 0.0)
+    assert all(not rzone.contains(Point(s["x"], s["y"])) for s in a)
+
+
+def test_run_props_takes_spawns_only_from_the_player_spawn_zones(ws, tmp_path) -> None:
     ox, oy = SYNTHETIC_ORIGIN
     edits = tmp_path / "edits.json"
-    edits.write_text(json.dumps({"version": 1, "zones": {"Z-0001": {"kind": "player_spawn", "polygon": [
-        [ox + 100, oy + 100], [ox + 210, oy + 100], [ox + 210, oy + 200], [ox + 100, oy + 200]]}}}))
     rules = tmp_path / "rules.yaml"
-    rules.write_text(yaml.safe_dump({"spawns": {"count": 150, "ground_kinds": [], "road_fraction": 0.0, "ground_per_1000m2": 5.0}}))
-    run_props(ws["work"], rules, edits)
-    def forest():
-        return [s for s in json.loads((ws["work"] / "spawns.json").read_text())["spawns"] if s["kind"] == "forest"]
+    rules.write_text(yaml.safe_dump({"spawns": {"m2_per_point": 200}, "zones": {"player_spawn": {"where_ground": ["meadow"]}}}))
 
-    assert forest() and {s["parcel"] for s in forest()} == {"A-0001"}
-    run_props(ws["work"], rules, tmp_path / "none.json")  # without the zone nothing spawns on a forest
-    assert forest() == []
+    def run(zones):
+        edits.write_text(json.dumps({"version": 1, "zones": zones}))
+        run_props(ws["work"], rules, edits)
+        return json.loads((ws["work"] / "spawns.json").read_text())["spawns"]
+
+    zone = {"kind": "player_spawn", "polygon": [[ox + 120, oy + 120], [ox + 200, oy + 120], [ox + 200, oy + 190], [ox + 120, oy + 190]]}
+    got = run({"Z-0001": zone, "Z-0002": {"kind": "deer", "polygon": zone["polygon"]}})
+    assert got and all(s["zone"] == "Z-0001" and box(120, 120, 200, 190).contains(Point(s["x"], s["y"])) for s in got)
+    assert all(s["kind"] == "random" for s in run({}))  # no zone at all: random points
 
 
 def test_run_props_writes_files_deterministically(ws, tmp_path) -> None:
     rules = tmp_path / "rules.yaml"
-    rules.write_text(yaml.safe_dump({"spawns": {"count": 12}}))
-    counts = run_props(ws["work"], rules)
+    rules.write_text(yaml.safe_dump({"spawns": {"m2_per_point": 400}}))
+    none = tmp_path / "no_edits.json"  # not the repo's own zones
+    counts = run_props(ws["work"], rules, none)
     first = {n: (ws["work"] / n).read_bytes() for n in ("props.json", "spawns.json")}
-    assert counts["spawns"] == 12 and counts["fences"] > 0 and counts["trees"] > 0
-    run_props(ws["work"], rules)
+    assert counts["spawns"] > 0 and counts["fences"] > 0 and counts["trees"] > 0
+    run_props(ws["work"], rules, none)
     assert first == {n: (ws["work"] / n).read_bytes() for n in first}
     doc = json.loads(first["spawns.json"])
     assert set(doc) == {"version", "axes", "chunk_size_m", "spawns"}
@@ -204,8 +199,8 @@ def test_map_props_defaults_are_the_village_values() -> None:
 
 def test_custom_rules_file_is_merged_over_the_shipped_defaults(tmp_path) -> None:
     custom = tmp_path / "r.yaml"
-    custom.write_text(yaml.safe_dump({"spawns": {"count": 7}}))
-    assert load_section("spawns", custom)["count"] == 7
+    custom.write_text(yaml.safe_dump({"spawns": {"m2_per_point": 7}}))
+    assert load_section("spawns", custom)["m2_per_point"] == 7
     assert load_section("spawns", custom).keys() == load_section("spawns").keys()
 
 
@@ -275,7 +270,7 @@ def test_run_props_spawns_skip_a_cut_of_the_player_spawn_rule_zone(ws, tmp_path)
     ox, oy = SYNTHETIC_ORIGIN
     rules = tmp_path / "rules.yaml"
     rules.write_text(yaml.safe_dump({
-        "spawns": {"count": 150, "ground_kinds": [], "road_fraction": 0.0, "ground_per_1000m2": 5.0},
+        "spawns": {"m2_per_point": 400},
         "zones": {"player_spawn": {"where_ground": ["meadow"]}},
     }))
     edits = tmp_path / "edits.json"
@@ -283,11 +278,11 @@ def test_run_props_spawns_skip_a_cut_of_the_player_spawn_rule_zone(ws, tmp_path)
     def meadow(cuts):
         edits.write_text(json.dumps({"version": 1, **({"zone_cuts": cuts} if cuts else {})}))
         run_props(ws["work"], rules, edits)
-        return [s for s in json.loads((ws["work"] / "spawns.json").read_text())["spawns"] if s["kind"] == "meadow"]
+        return [s for s in json.loads((ws["work"] / "spawns.json").read_text())["spawns"] if s["kind"] == "zone"]
 
     assert meadow(None)  # the rule zone: every meadow area
     half = [[ox + 100, oy + 100], [ox + 160, oy + 100], [ox + 160, oy + 200], [ox + 100, oy + 200]]
     left = meadow({"ZC-0001": {"kind": "player_spawn", "polygon": half}})
     assert left and all(s["x"] > 160 for s in left)  # the cut part is gone, the rest stays
     whole = [[ox + 100, oy + 100], [ox + 210, oy + 100], [ox + 210, oy + 200], [ox + 100, oy + 200]]
-    assert meadow({"ZC-0001": {"kind": "player_spawn", "polygon": whole}}) == []
+    assert meadow({"ZC-0001": {"kind": "player_spawn", "polygon": whole}}) == []  # all cut away: no spawn, not a random one

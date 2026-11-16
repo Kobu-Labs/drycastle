@@ -96,14 +96,13 @@ public partial class GroundCheck : Node3D
 
     int _carBad;
 
-    /// <summary>Same placement as NetServer.SpawnCars (road candidates first, 12 m apart, ground ray, origin +0.05) for every vehicle in vehicles.json.</summary>
+    /// <summary>Same placement as NetServer.SpawnCars (spawn candidates, 12 m apart, ground ray, origin +0.05) for every vehicle in vehicles.json.</summary>
     void SetupCars()
     {
         var vf = VehiclesFile.Load(Path.Combine(ProjectSettings.GlobalizePath("res://"), "data/vehicles.json"));
         var space = GetWorld3D().DirectSpaceState;
         var rng = new Random(3);
-        var road = _map.SpawnPoints.Where(sp => sp.Kind == "road").Select(sp => sp.Position).ToList();
-        var pool = road.OrderBy(_ => rng.Next()).Concat(_map.SpawnPoints.Select(sp => sp.Position).Where(v => !road.Contains(v)).OrderBy(_ => rng.Next())).ToList();
+        var pool = _map.SpawnPoints.Select(sp => sp.Position).OrderBy(_ => rng.Next()).ToList();
         var spots = new List<Vector3>();
         var pi = 0;
         foreach (var def in vf.Vehicles)
