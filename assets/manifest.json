@@ -3625,6 +3625,27 @@
       "used_for": "godot/shooter item id gold_chain (data/items.json `model`), worn by CharacterView on the Neck bone and rendered into ui/icons/items/gold_chain.png; authored in the neck slot frame (forward -Z, origin at the Neck bone's origin, metres), one mesh node, 3 flat-colour materials"
       },
       {
+      "id": "pack:drycastle-generated-models/rapeseed_plant",
+      "category": "other",
+      "name": "Oilseed rape plant (green stem and leaves, yellow flower heads)",
+      "file": "drycastle-generated-models/rapeseed_plant.glb",
+      "size_m": [
+        0.43,
+        0.81,
+        0.43
+      ],
+      "tags": [
+        "crop",
+        "field",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_rapeseed_model.py (original geometry written as code; python3 -I scripts/make_rapeseed_model.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "crop_rapeseed ground type (#328), instanced over the field; origin on the ground at the foot of the stem, forward -Z, metres, one mesh node, 4 flat-colour materials, 280 triangles"
+      },
+      {
       "id": "pack:drycastle-generated-models/satellite_dish",
       "category": "other",
       "name": "Satellite dish (household, 0.7 m, on a short wall arm)",
