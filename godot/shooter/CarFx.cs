@@ -18,8 +18,25 @@ public static class CarFx
         if (ShotFx.Enabled) Load(model);
     }
 
+    /// <summary>Loads a model of the private asset library by its id ("pack:synty-farm/..."), a scene not in the tree; set by the shell once the map (which owns that library) is up. Null: not available, the vehicle is a box.</summary>
+    public static Func<string, Node3D?>? PackLoader;
+    static readonly HashSet<string> PackWarned = new();
+
+    static Node3D? LoadPack(string model)
+    {
+        if (Templates.TryGetValue(model, out var t) && t != null) return t;
+        if (PackLoader?.Invoke(model) is not { } scene)
+        {
+            if (PackWarned.Add(model)) GD.PrintErr($"vehicle model {model} is not available (private pack missing, or the map is not up yet); using a box");
+            return null; // not cached: it may be there after the map loads
+        }
+        foreach (var co in scene.FindChildren("*", "CollisionObject3D", true, false).OfType<CollisionObject3D>()) { co.CollisionLayer = 0; co.CollisionMask = 0; } // the vehicle's solid is the server's box, not the prefab's meshes
+        return Templates[model] = scene;
+    }
+
     static Node3D? Load(string model)
     {
+        if (model.StartsWith("pack:", StringComparison.Ordinal)) return LoadPack(model);
         if (Templates.TryGetValue(model, out var t)) return t;
         Templates[model] = null;
         var path = Path.GetFullPath(Path.Combine(GamePaths.Assets(), model));

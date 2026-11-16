@@ -316,4 +316,79 @@ public class CorpseSeatTests
         s.Clear();
         Assert.False(s.IsBlocked(0));
     }
+
+    // ---- boarding kicks the corpse out (#330) ----------------------------------------------------------------------
+
+    [Fact]
+    public void BoardingASeatThatHoldsACorpseTakesItAtOnceAndSaysTheCorpseIsKicked()
+    {
+        var s = new VehicleSeat(2);
+        s.Block(0);
+        Assert.True(s.HoldsCorpse(0));
+        Assert.False(s.HoldsCorpse(1));
+        Assert.True(s.TryBoard(5, 0, out var kicked));
+        Assert.True(kicked);
+        Assert.Equal(0, s.SeatOf(5));
+        Assert.False(s.IsBlocked(0));
+        Assert.False(s.HoldsCorpse(0));
+    }
+
+    [Fact]
+    public void BoardingAFreeSeatKicksNothingAndATakenOrBadSeatChangesNothing()
+    {
+        var s = new VehicleSeat(2);
+        Assert.True(s.TryBoard(5, 1, out var kicked));
+        Assert.False(kicked);
+        Assert.False(s.TryBoard(6, 1, out _)); // taken
+        Assert.False(s.TryBoard(5, 0, out _)); // already seated
+        Assert.False(s.TryBoard(6, 2, out _)); // no such seat
+        Assert.False(s.TryBoard(0, 0, out _));
+        Assert.Equal(0, s.Occupant(0));
+    }
+
+    [Fact]
+    public void AVehicleWithOnlyCorpseSeatsIsBoardableAndTheNearestSeatCountsCorpseSeatsWhenKicking()
+    {
+        var def = new VehicleDef();
+        def.Seats.Clear();
+        def.Seats.Add(new VehicleSeatDef { Role = "driver", Offset = new[] { 0f, 0f, 0f } });
+        def.Seats.Add(new VehicleSeatDef { Role = "passenger", Offset = new[] { 5f, 0f, 0f } });
+        var s = new VehicleSeat(2);
+        s.Block(0); s.Block(1);
+        Assert.False(s.HasFree);
+        Assert.True(s.HasBoardable);
+        Assert.Equal(-1, s.NearestFreeSeat(def, Vector3.Zero, 0, Vector3.Zero, float.MaxValue));
+        Assert.Equal(0, s.NearestFreeSeat(def, Vector3.Zero, 0, new Vector3(100, 0, 0), float.MaxValue, kickCorpses: true)); // nobody aboard: the driver's seat
+        Assert.False(s.TryEnter(7, 0)); // TryEnter still refuses a corpse seat
+        Assert.True(s.TryBoard(7, 0, out _));
+        Assert.Equal(1, s.NearestFreeSeat(def, Vector3.Zero, 0, Vector3.Zero, float.MaxValue, kickCorpses: true)); // the passenger corpse is next
+    }
+
+    [Fact]
+    public void AKickedCorpseFliesOutTheBoardersSideWithAHopAndLandsGroundedWithItsItems()
+    {
+        // yaw 0: the vehicle's right is +X
+        var v = CorpseRules.ThrowFromSeat(Vector3.Zero, 0, new Vector3(-2, 0, 0), Vector3.Zero);
+        Assert.Equal(-CorpseRules.KickSpeed, v.X, 0.001f);
+        Assert.Equal(CorpseRules.KickLift, v.Y, 0.001f);
+        Assert.Equal(0, v.Z, 0.001f);
+        Assert.True(CorpseRules.ThrowFromSeat(Vector3.Zero, 0, new Vector3(2, 0, 0), Vector3.Zero).X > 0);
+        var turned = CorpseRules.ThrowFromSeat(Vector3.Zero, MathF.PI / 2, new Vector3(0, 0, -2), Vector3.Zero); // yaw 90: right is -Z, the boarder stands on it
+        Assert.Equal(-CorpseRules.KickSpeed, turned.Z, 0.001f);
+        var moving = CorpseRules.ThrowFromSeat(Vector3.Zero, 0, new Vector3(2, 0, 0), new Vector3(0, 0, -3));
+        Assert.Equal(-3, moving.Z, 0.001f); // the vehicle's velocity adds
+
+        var item = new ItemStack(1);
+        var c = new Corpse(1, new Vector3(0, 0.5f, 0), 0, 0, 0, new List<ItemStack> { item });
+        c.Attach(new Vector3(0, 1, 0));
+        Assert.True(c.Seated);
+        c.Throw(v);
+        Assert.False(c.Seated);
+        Assert.True(c.Airborne); // Corpse.Flight Seated -> Airborne
+        for (var i = 0; i < 300 && c.Airborne; i++) c.Fly(1f / 30, Floor);
+        Assert.False(c.Airborne);
+        Assert.True(c.Position.X < -1f); // out the boarder's side
+        Assert.Single(c.Items);
+        Assert.True(c.CanLoot);
+    }
 }

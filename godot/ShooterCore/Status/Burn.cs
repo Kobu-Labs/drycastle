@@ -24,6 +24,9 @@ public sealed class BurnSet
     /// <summary>Source of the demon's own fire (a fireball): no player is credited.</summary>
     public const ushort NoSource = ushort.MaxValue;
 
+    /// <summary>Source of a burning hay bale's fire (#331): credited to nobody either, even when a player's shot lit the bale (<see cref="BurnCredit"/>).</summary>
+    public const ushort HazardSource = ushort.MaxValue - 1;
+
     const float Eps = 1e-3f;
 
     sealed class Burn

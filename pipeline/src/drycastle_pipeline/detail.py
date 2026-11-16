@@ -60,6 +60,7 @@ from drycastle_pipeline.detail_meshes import KINDS, TINTABLE
 from drycastle_pipeline.textures import TexturedMesh, tex_node_name, texture
 
 DETAIL_FORMAT_VERSION = 1
+CROP_FORMAT_VERSION = 1
 CLUTTER_KINDS = KINDS
 # The first layer wins where two overlap (a path crosses lawn, litter lies on lawn, ...).
 PATCH_PRIORITY = (
@@ -73,6 +74,7 @@ PATCH_TEXTURE = {
 _SOFT_LAYERS = ("lawn", "tone_a", "tone_b", "litter")  # big soft shapes: simplified harder (fewer triangles)
 _RECT_LAYERS = ("bed", "furrow")  # textured with their own angle and origin
 _NEAR_M = 8.0  # what around a parcel counts as near it
+_AROUND_M = 16.0  # the ground a crop patch's edge blends into (crop.py): widest border zone plus the probe
 _TILE_M = 24.0
 CELL_M = 2.0  # the meadow cell: the tone noise is laid out in these (meadow.py), stored clutter reads it at its position
 _MIN_PIECE_M2 = 0.15
@@ -95,6 +97,7 @@ class DetailResult:
     parcel: str
     patches: list[Patch] = field(default_factory=list)
     clutter: list[dict] = field(default_factory=list)
+    crops: list[dict] = field(default_factory=list)  # crop plants and artifacts (crop.py): the crops.json of the map, not clutter
 
     def counts(self) -> dict[str, int]:
         out = {k: 0 for k in CLUTTER_KINDS}
@@ -122,6 +125,8 @@ class ParcelContext:
     water: BaseGeometry | None = None  # water parcels near the parcel (grass beside them stands fresh)
     road_lines: list[tuple[LineString, float]] | None = None  # centre lines and widths of the road edges near the parcel
     plain_road: BaseGeometry | None = None  # carriageways of the dike's regular roads (``detail.dike.not_track``): no track, no lawn over them
+    crop_neighbours: list[tuple[str, BaseGeometry]] | None = None  # (id, polygon) of the other crop patches touching this one (the baulk)
+    ground_around: list[tuple[str, BaseGeometry, list[int], bool]] | None = None  # crop only: (id, polygon, terrain colour, is_crop) of the other ground units near the patch (what a field's edge blends into)
     dike: bool = False  # this part of the parcel is the flood dike: it gets the dike recipe, whatever the parcel kind
 
 
@@ -954,7 +959,15 @@ def dike_recipe(ctx: ParcelContext, cfg: dict) -> DetailResult:
     return dike_detail(ctx, cfg)
 
 
-RECIPES = {"garden": garden_detail, "field": field_detail, "forest": forest_detail, "village": village_detail, "dike": dike_recipe}
+def crop_recipe(ctx: ParcelContext, cfg: dict) -> DetailResult:
+    from drycastle_pipeline.crop import crop_detail  # crop.py imports this module
+
+    return crop_detail(ctx, cfg)
+
+
+RECIPES = {"garden": garden_detail, "field": field_detail, "forest": forest_detail, "village": village_detail, "dike": dike_recipe, "crop": crop_recipe}
+# Recipes the Rust engine does not run: the stage builds them in Python after it (:func:`append_crops`) and the engine skips their units.
+PYTHON_RECIPES = frozenset({"crop"})
 
 
 @functools.cache
@@ -1060,6 +1073,10 @@ class Village:
         self.w_tree = shapely.STRtree(self.water_polys)
         self.verge_polys = make_verge(graph, self.cfg["verge"])
         self.v_tree = {k: shapely.STRtree(v) for k, v in self.verge_polys.items()}
+        # crop patches, for the baulk between two that adjoin
+        self.crop_units = [(p["id"], shape(p["polygon"])) for p in self.parcels if area_type(p, self.types) == "crop"]
+        self.crop_tree = shapely.STRtree([g for _, g in self.crop_units])
+        self._around: tuple[list, shapely.STRtree] | None = None
 
     def cfg_for(self, parcel: dict, recipe: str) -> dict:
         """The detail rules for a unit: for a ground area whose type has ``detail`` settings, those laid over the
@@ -1105,6 +1122,19 @@ class Village:
                 yield self._context(parcel, piece, parcel["id"] if k == 0 else f"{parcel['id']}.{k}", dike)
                 k += 1
 
+    def _crop_neighbours(self, pid: str, part: Polygon) -> list[tuple[str, BaseGeometry]]:
+        near = part.buffer(0.5)
+        return [self.crop_units[i] for i in sorted(self.crop_tree.query(near, predicate="intersects")) if self.crop_units[i][0] != pid]
+
+    def _ground_around(self, pid: str, part: Polygon) -> list[tuple[str, BaseGeometry, list[int], bool]]:
+        """The other ground units within ``_AROUND_M`` of a crop patch with their terrain colour (built on first use)."""
+        if self._around is None:
+            units = [(p["id"], shape(p["polygon"]), self.colour[p["id"]], area_type(p, self.types) == "crop")
+                     for p in self.parcels if area_type(p, self.types) is not None]
+            self._around = (units, shapely.STRtree([g for _, g, _, _ in units]))
+        units, tree = self._around
+        return [units[i] for i in sorted(tree.query(part.buffer(_AROUND_M), predicate="intersects")) if units[i][0] != pid]
+
     def _context(self, parcel: dict, part: Polygon, cid: str, dike: bool) -> ParcelContext:
         near = part.buffer(_NEAR_M)
         roads = self._near(self.r_tree, self.road_polys, near)
@@ -1131,6 +1161,8 @@ class Village:
             road_lines=self._near(self.rl_tree, self.road_lines, near),
             plain_road=_union(self._near(self.plain_tree, self.plain_polys, near)) if dike and self.plain_polys else None,
             dike=dike,
+            crop_neighbours=self._crop_neighbours(parcel["id"], part) if area_type(parcel, self.types) == "crop" else None,
+            ground_around=self._ground_around(parcel["id"], part) if area_type(parcel, self.types) == "crop" else None,
             water=_union(self._near(self.w_tree, self.water_polys, part.buffer(float(self.cfg["tint"]["water_m"])))) if self.water_polys else None,
         )
 
@@ -1143,6 +1175,7 @@ class VillageDetail:
     textures: list[str]
     stats: dict = field(default_factory=dict)
     meadow: "meadow_mod.Meadow | None" = None  # density raster of the clutter the game generates (field, forest)
+    crops: dict[tuple[int, int], dict[str, list[list[float]]]] = field(default_factory=dict)  # crop instances per chunk and kind
 
 
 def cap_clutter(chunks: dict, caps: dict[str, int]) -> dict:
@@ -1179,15 +1212,17 @@ def patch_rows(flat: Mesh, textured: dict[str, TexturedMesh], textures: list[str
 
 def build_village_detail(
     work_dir: Path, rules_path: Path = DEFAULT_RULES, edits_path: Path = DEFAULT_EDITS,
-    only: set[str] | None = None, log=None,
+    only: set[str] | None = None, log=None, recipe: str | None = None,
 ) -> VillageDetail:
-    """The detail of every parcel of the map (``only``: just these parcel IDs; tests, previews)."""
+    """The detail of every parcel of the map (``only``: just these parcel IDs; tests, previews; ``recipe``: just the units of
+    this recipe, :data:`PYTHON_RECIPES` after the Rust engine)."""
     v = Village(work_dir, rules_path, edits_path)
     for w in v.warnings:
         print(f"detail: warning: {w}", file=sys.stderr)
     lift = float(v.cfg["lift_m"])
     textures = sorted(set(PATCH_TEXTURE.values()))
     chunks: dict[tuple[int, int], dict[str, list[list[float]]]] = {}
+    crops: dict[tuple[int, int], dict[str, list[list[float]]]] = {}
     rows = []
     by_type: dict[str, dict[str, int]] = {}
     mcfg = v.cfg["meadow"]
@@ -1197,7 +1232,7 @@ def build_village_detail(
     t0 = time.time()
     for n, parcel in enumerate(sorted(v.parcels, key=lambda p: p["id"])):
         atype = area_type(parcel, v.types)
-        if atype is None or (only is not None and parcel["id"] not in only):
+        if atype is None or (only is not None and parcel["id"] not in only) or (recipe is not None and atype != recipe):
             continue
         for ctx in v.contexts(parcel):
             kind = "dike" if ctx.dike else atype
@@ -1210,6 +1245,10 @@ def build_village_detail(
                 meadow_cells += meadow_mod.add_parcel(meadow, ctx, res, kind, free_area(ctx, cfg, trunks=False), mcfg, band)
             flat, tex = patch_meshes(res, v.terrain, lift, by_type.setdefault(kind, {}))
             rows.append(patch_rows(flat, tex, textures))
+            for c in res.crops:
+                key = tuple(chunk_of(c["x"], c["y"], v.chunk_m))
+                crops.setdefault(key, {}).setdefault(c["kind"], []).append(
+                    [round(c["x"], 2), round(c["y"], 2), round(c["z"], 2), round(c["rot"], 2), round(c["scale"], 2)])
             for c in res.clutter:
                 key = tuple(chunk_of(c["x"], c["y"], v.chunk_m))
                 row = [round(c["x"], 2), round(c["y"], 2), round(c["z"], 2), round(c["rot"], 2), round(c["scale"], 2)]
@@ -1221,6 +1260,7 @@ def build_village_detail(
     count = lambda: {k: sum(len(kinds.get(k, [])) for kinds in chunks.values()) for k in CLUTTER_KINDS}  # noqa: E731
     before = count()
     cap_clutter(chunks, v.cfg["caps_per_chunk"])
+    cap_clutter(crops, {k: s.get("cap", 0) for k, s in v.cfg["crop_kinds"].items()})
     patches = np.concatenate(rows) if rows else np.zeros((0, _PATCH_ROW))
     stats = {
         "clutter_before_caps": before,
@@ -1233,7 +1273,8 @@ def build_village_detail(
         "meadow_busiest": meadow.busiest({"tuft": 70, "fern": 70, "flower": 55, "pebble": 40, "litter": 40}),
         "seconds": round(time.time() - t0, 1),
     }
-    return VillageDetail(v.chunk_m, chunks, patches, textures, stats, meadow)
+    stats["crops"] = {k: sum(len(kinds.get(k, [])) for kinds in crops.values()) for k in v.cfg["crop_kinds"]}
+    return VillageDetail(v.chunk_m, chunks, patches, textures, stats, meadow, crops)
 
 
 def clutter_document(detail: VillageDetail) -> dict:
@@ -1252,7 +1293,58 @@ def clutter_document(detail: VillageDetail) -> dict:
     }
 
 
+def crops_document(detail: VillageDetail, cfg: dict | None = None) -> dict:
+    """The ``crops.json`` document: instances per chunk and kind (rows ``[x, y, z, rot, scale]``, like the clutter), and per kind what
+    the game draws it with (``detail.crop_kinds``: ``role``, ``asset`` or ``synty`` names, ``cap`` per chunk)."""
+    kinds = (cfg or load_section("detail", DEFAULT_RULES))["crop_kinds"]
+    chunks = {}
+    for ix, iy in sorted(detail.crops):
+        by_kind = {k: rows for k, rows in sorted(detail.crops[(ix, iy)].items()) if rows}
+        if by_kind:
+            chunks[f"{ix}_{iy}"] = by_kind
+    return {
+        "format_version": CROP_FORMAT_VERSION,
+        "axes": "map metres: x east, y north, z up (ground height at the instance); row: x y z rot(rad about up) scale",
+        "chunk_size_m": detail.chunk_m,
+        "kinds": {k: {key: v for key, v in spec.items() if key != "cap"} for k, spec in kinds.items()},
+        "chunks": chunks,
+    }
+
+
+def write_crops(work_dir: Path, detail: VillageDetail) -> None:
+    """``detail_crops.json`` (the export copies it as ``crops.json``); none when no crop instance exists."""
+    path = work_dir / "detail_crops.json"
+    doc = crops_document(detail)
+    if doc["chunks"]:
+        path.write_text(json.dumps(doc, separators=(",", ":")) + "\n")
+    else:
+        path.unlink(missing_ok=True)
+
+
+def crop_units_exist(work_dir: Path, rules_path: Path = DEFAULT_RULES, edits_path: Path = DEFAULT_EDITS) -> bool:
+    """True when some ground unit of the work files has the crop recipe (cheap: no terrain, no props)."""
+    parcels_doc = json.loads((work_dir / "parcels.json").read_text())
+    types = ground_types(rules_path, edits_path)
+    return any(area_type(p, types) == "crop" for p in ground_units(parcels_doc))
+
+
+def append_crops(work_dir: Path, rules_path: Path = DEFAULT_RULES, edits_path: Path = DEFAULT_EDITS) -> dict:
+    """After the Rust engine: builds the :data:`PYTHON_RECIPES` units (crop patches) in Python, appends their patch triangles to
+    ``detail_patches.npy`` and writes ``detail_crops.json``. Returns the stats (``{}`` when there is no crop unit)."""
+    if not crop_units_exist(work_dir, rules_path, edits_path):
+        (work_dir / "detail_crops.json").unlink(missing_ok=True)
+        return {}
+    detail = build_village_detail(work_dir, rules_path, edits_path, recipe="crop")
+    textures = json.loads((work_dir / "detail_patches.json").read_text())["textures"]
+    assert textures == detail.textures, "the crop recipe uses a texture the engine's list lacks"
+    base = np.load(work_dir / "detail_patches.npy")
+    np.save(work_dir / "detail_patches.npy", np.concatenate([base, detail.patches]) if len(detail.patches) else base)
+    write_crops(work_dir, detail)
+    return detail.stats
+
+
 def write_detail(work_dir: Path, detail: VillageDetail) -> None:
+    write_crops(work_dir, detail)
     (work_dir / "detail.json").write_text(json.dumps(clutter_document(detail), separators=(",", ":")) + "\n")
     np.save(work_dir / "detail_patches.npy", detail.patches)
     if detail.meadow is not None and detail.meadow.chunks:
@@ -1362,7 +1454,7 @@ def patch_meshes(res: DetailResult, terrain: Terrain, lift_m: float, tally: dict
                 if tally is not None:
                     tally[p.layer] = tally.get(p.layer, 0) + m.face_count
             continue
-        m = drape(p.geom, [255, 255, 255], terrain, [], p.lift or lift_m, p.lift or lift_m)
+        m = drape(p.geom, p.colour or [255, 255, 255], terrain, [], p.lift or lift_m, p.lift or lift_m)  # a textured patch's colour is its tint
         if not m.face_count:
             continue
         if tally is not None:

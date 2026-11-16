@@ -356,7 +356,7 @@ stateDiagram-v2
 
 - **Grounded**: At rest. A launch (a push that is not zero) or a drop throws it; a dummy standing up again (Reset) comes back here.
 - **Airborne**: Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens (it then snaps to the ground under it). Lands Grounded, or Floating when it lands in water. A new launch while airborne restarts the count.
-- **Seated**: A dead pilot or driver still in the seat: the server moves it with the vehicle (Follow), it is not flown. Leaves by a drop or a throw (the vehicle at rest for CorpseRules.SeatedRestSeconds, or destroyed).
+- **Seated**: A dead pilot or driver still in the seat: the server moves it with the vehicle (Follow), it is not flown. Leaves by a drop or a throw (the vehicle at rest for CorpseRules.SeatedRestSeconds, or destroyed) or when a player boards its seat, which flings it out sideways.
 - **Floating**: Lies at the water surface height where it landed, not flown. The client bobs and drifts it on the waves (cosmetic, nothing on the wire); it stays lootable until its lifetime ends.
 
 ## Demon.Phase
@@ -709,6 +709,65 @@ stateDiagram-v2
 
 - **Shut**: Closed and solid (the start state, and every new server): the leaves fill the doorway.
 - **Open**: The leaves are swung out into the yard and nothing is solid. Stays open until a player closes it; it does not close while a vehicle stands in the doorway.
+
+## Harvester.Ai
+
+The AI harvester's job: drive to the field's first pass, cut the passes with turns between, leave along the edge; stops when its driver is killed.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Approach
+    Approach --> Cut
+    Approach --> Leave
+    Cut --> Turn
+    Cut --> Leave
+    Turn --> Cut
+    Turn --> Leave
+    Leave --> Gone
+    Gone --> [*]
+    Stopped --> [*]
+```
+
+From any state: Stopped
+
+- **Approach**: Appeared just inside the field's outline, facing the first pass.
+- **Cut**: Driving a pass at cutting speed; the cut progress (pass, metres) is what the clients draw the stubble from.
+- **Turn**: A half circle to a lane several lanes over (the lanes between are cut on the way back), or a bulb turn of three arcs for the last lanes: never tighter than the machine's turning radius.
+- **Leave**: The edge route to where it came in, then past it. A plan whose passes were all given up goes straight here.
+- **Gone**: Reached the exit: the event is over (cooldown starts).
+- **Stopped**: Its driver died, or an admin ended the event: from any phase. The brain gives no more commands.
+
+## Harvester.Corpse
+
+A victim of the harvester: drawn in at the front, inside the machine for a few seconds, then ejected as a bale at the unloader.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Drawn
+    Drawn --> Inside
+    Inside --> Baled
+    Baled --> [*]
+```
+
+- **Drawn**: The body slides from where it fell to the intake at the front; it cannot be looted meanwhile.
+- **Inside**: Gone from the world (the corpse entity is removed, its Items are kept for the bale).
+- **Baled**: The bale is spawned at the unloader with the Items. The end.
+
+## Hay.Bale
+
+A hay bale: whole, set alight by a shot, burning for a few seconds, then ash.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Intact
+    Intact --> Burning
+    Burning --> Ash
+    Ash --> [*]
+```
+
+- **Intact**: Any shot that reaches it ignites it (a bullet, a pellet). A harvester's bale starts here too.
+- **Burning**: Fire for BaleBurnSeconds; everyone close enough is ignited each tick. Nobody is credited for those burns.
+- **Ash**: Burnt out: a dark heap. Stays until the bale despawns (a corpse's lifetime) or the round ends; it cannot be lit again.
 
 ## HelicopterGunner.Phase
 

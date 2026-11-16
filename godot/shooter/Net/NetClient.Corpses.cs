@@ -27,6 +27,8 @@ public partial class NetClient
         public CharacterView? View;
         /// <summary>The Bigfoot's corpse (issue #264): the giant's model in its death pose, no character, no weapon to take.</summary>
         public bool Giant;
+        /// <summary>A hay bale (#331): a corpse owned by <see cref="HarvesterRules.BaleOwner"/>, drawn as a bale; only its Items to take.</summary>
+        public bool Bale;
         public string Weapon = "";
         /// <summary>The ragdoll: the spin, limb flail and settling of a body thrown by a blast or a car.</summary>
         public readonly RagdollTumble Tumble = new();
@@ -69,6 +71,7 @@ public partial class NetClient
     {
         if (e.Type != CorpseRules.TypeId) return;
         if (e.State.Owner == BigfootRules.TargetId) { _corpses[e.Id] = MakeGiantCorpse(e); return; }
+        if (HarvesterRules.IsBale(e.State.Owner)) { _corpses[e.Id] = MakeBaleCorpse(e); return; }
         var node = new Node3D { Name = $"Corpse{e.Id}" };
         var view = CharacterView.Make();
         if (Appearances.TryGetValue(e.State.Owner, out var look)) view.SetCamo(look, CamoData); // the dead player's look (#203)
@@ -82,6 +85,7 @@ public partial class NetClient
     void OnCorpseDespawned(ushort id)
     {
         _corpseItems.Remove(id);
+        HarvesterCorpseGone(id);
         if (!_corpses.Remove(id, out var v)) return;
         v.Node.QueueFree();
         if (_chooser.IsOpen && _chooser.Corpse == id) _chooser.Close();
@@ -96,7 +100,7 @@ public partial class NetClient
             var s = e.State;
             var p = s.Position;
             var at = new Vector3(p.X, p.Y, p.Z);
-            if (v.Giant) { v.Feet = at; v.Node.GlobalPosition = at; v.Node.Basis = new Basis(Vector3.Up, s.YawRad); continue; }
+            if (v.Giant || v.Bale) { v.Feet = at; v.Node.GlobalPosition = at; v.Node.Basis = new Basis(Vector3.Up, s.YawRad); continue; }
             var view = v.View!;
             var flying = s.PitchRad > CorpseRules.FlightPitch * 0.5f; // a thrown body (blast, car): the server flies it, we turn it and flail its limbs
             var t = v.Tumble;
@@ -189,7 +193,7 @@ public partial class NetClient
 
     /// <summary>A corpse that offers no weapon, only its Items: the giant's, and the Gang boss's with the Gold chain (owner <see cref="ThievesReward.ChainCorpseOwner"/>, drawn as a body like any other).</summary>
     bool IsItemOnlyCorpse(ushort corpse) =>
-        IsGiantCorpse(corpse) || WorldEntities.Entities.TryGetValue(corpse, out var e) && e.State.Owner == ThievesReward.ChainCorpseOwner;
+        IsGiantCorpse(corpse) || IsBaleCorpse(corpse) || WorldEntities.Entities.TryGetValue(corpse, out var e) && e.State.Owner == ThievesReward.ChainCorpseOwner;
 
     /// <summary>Opens the chooser at a corpse. <paramref name="weapon"/> is null for a corpse that offers no weapon (<see cref="IsItemOnlyCorpse"/>): the Items are all it offers.</summary>
     void OpenChooser(ushort corpse, WeaponDef? weapon)

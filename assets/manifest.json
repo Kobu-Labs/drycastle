@@ -3646,6 +3646,27 @@
       "used_for": "godot/shooter item id gold_chain (data/items.json `model`), worn by CharacterView on the Neck bone and rendered into ui/icons/items/gold_chain.png; authored in the neck slot frame (forward -Z, origin at the Neck bone's origin, metres), one mesh node, 3 flat-colour materials"
       },
       {
+      "id": "pack:drycastle-generated-models/rapeseed_plant",
+      "category": "other",
+      "name": "Oilseed rape plant (green stem and leaves, yellow flower heads)",
+      "file": "drycastle-generated-models/rapeseed_plant.glb",
+      "size_m": [
+        0.43,
+        0.81,
+        0.43
+      ],
+      "tags": [
+        "crop",
+        "field",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_rapeseed_model.py (original geometry written as code; python3 -I scripts/make_rapeseed_model.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "crop_rapeseed ground type (#328), instanced over the field; origin on the ground at the foot of the stem, forward -Z, metres, one mesh node, 4 flat-colour materials, 280 triangles"
+      },
+      {
       "id": "pack:drycastle-generated-models/satellite_dish",
       "category": "other",
       "name": "Satellite dish (household, 0.7 m, on a short wall arm)",
@@ -4283,6 +4304,42 @@
       "downloaded": "2026-11-15",
       "generated": true,
       "note": "Mains hum, a whizz sweep and random crackle clicks by scripts/make_shock_crackle.py (in the repo, deterministic); mono OGG, ~2.2 s"
+    },
+    {
+      "id": "sfx:drycastle-generated-sounds/harvester_reel_in",
+      "name": "Harvester reel draws a player in",
+      "file": "drycastle-generated-sounds/harvester_reel_in.ogg",
+      "used_for": "harvester.reel_in",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-16",
+      "generated": true,
+      "note": "A whirr rising in pitch with a quickening chop, the engine straining underneath, a clank at the grab; ~1.3 s by scripts/make_harvester_sounds.py (in the repo, deterministic); mono OGG"
+    },
+    {
+      "id": "sfx:drycastle-generated-sounds/harvester_chew",
+      "name": "Harvester processing a catch (muffled)",
+      "file": "drycastle-generated-sounds/harvester_chew.ogg",
+      "used_for": "harvester.chew",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-16",
+      "generated": true,
+      "note": "A muffled labouring rumble, irregular crunching thuds, pulsing grind; ~2.6 s by scripts/make_harvester_sounds.py (in the repo, deterministic); mono OGG"
+    },
+    {
+      "id": "sfx:drycastle-generated-sounds/harvester_eject",
+      "name": "Harvester chute ejects a bale",
+      "file": "drycastle-generated-sounds/harvester_eject.ogg",
+      "used_for": "harvester.eject",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-16",
+      "generated": true,
+      "note": "A pneumatic whoomp, a puff of air and a dull clank; ~0.8 s by scripts/make_harvester_sounds.py (in the repo, deterministic); mono OGG"
     },
     {
       "id": "sfx:drycastle-generated-sounds/casing_tink_1",

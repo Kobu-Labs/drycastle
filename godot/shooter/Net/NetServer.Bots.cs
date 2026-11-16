@@ -163,9 +163,9 @@ public partial class NetServer
     /// <summary>Once a tick, before the players are simulated: keeps the roster at the wanted size and queues one input per living bot.</summary>
     void BotsTick(float dt)
     {
-        if (Bots <= 0 && _byId.Values.All(c => !c.IsBot)) return; // no bots wanted and none to send away: the usual server
-        var bots = _byId.Values.Where(c => c.IsBot).ToList();
-        var humans = _byId.Count - bots.Count;
+        if (Bots <= 0 && _byId.Values.All(c => !c.IsBot || c.HarvesterDriver)) return; // no bots wanted and none to send away: the usual server
+        var bots = _byId.Values.Where(c => c.IsBot && !c.HarvesterDriver).ToList(); // the harvester's driver is no roster bot (#331)
+        var humans = _byId.Values.Count(c => !c.IsBot);
         var want = humans > 0 ? Math.Min(Bots, MaxBots) : 0;
         if (bots.Count < want) AddBot(); // one a tick: a join builds a body
         else if (bots.Count > want)

@@ -73,6 +73,8 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
     cfgs: dict[str, dict] = {}
     for p in sorted(units, key=lambda u: u["id"]):
         recipe = D.area_type(p)
+        if recipe in D.PYTHON_RECIPES:  # the engine skips these units; ``D.append_crops`` builds them after it
+            recipe = None
         out_units.append({
             "id": p["id"], "kind": p["kind"], "recipe": recipe or "",
             "whole_dike": bool(p["id"] in D.dike_parcels() or p["kind"] == "dike"),
@@ -161,6 +163,14 @@ def run(force: bool = False, edits: str | None = None, work: str | None = None, 
         return 1
     for w in warnings:
         print(f"detail: warning: {w}", file=sys.stderr)
+    try:
+        crops = D.append_crops(work_dir, edits_path=edits_path)
+    except EditsError as exc:
+        for error in exc.errors:
+            print(f"detail: error: {edits_path.name}: {error}", file=sys.stderr)
+        return 1
+    if crops:
+        print("detail: crops: " + ", ".join(f"{k}: {n}" for k, n in crops["crops"].items() if n), file=sys.stderr)
     for f in stats["failed"]:
         print(f"detail: warning: a unit failed and has no detail: {f}", file=sys.stderr)
     print(

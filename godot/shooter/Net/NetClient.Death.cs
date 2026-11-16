@@ -59,7 +59,7 @@ public partial class NetClient
     {
         foreach (var (id, v) in _corpses)
         {
-            if (v.Giant || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.Owner != _myId) continue;
+            if (v.Giant || v.Bale || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.Owner != _myId) continue;
             if (v.Node.Visible != visible) v.Node.Visible = visible;
         }
     }

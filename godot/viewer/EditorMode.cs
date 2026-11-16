@@ -644,7 +644,7 @@ public partial class EditorMode : Node
         if (_panelDirty) RefreshPanel();
         _unsavedLabel.Text = PendingCount == 0 ? "" : $"* {PendingCount} unsaved (Enter applies)";
         var c = FlyCam.GlobalPosition;
-        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedShapeId != null && ShapeTool ? $"  |  {(Tool == EditorTool.Zones ? "zone" : "patch")} {SelectedShape(CurrentKind)?.Label}" : "") + (Tool == EditorTool.Zones && MarkedZoneCount > 0 ? $"  |  {MarkedZoneCount} marked for deletion" : "") + (PendingCount > 0 || ShapeDraftPending ? $"  |  * {(PendingCount > 0 ? $"{PendingCount} UNSAVED" : "UNSAVED")}" : "");
+        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedShapeId != null && ShapeTool ? $"  |  {(Tool == EditorTool.Zones ? "zone" : "patch")} {SelectedShape(CurrentKind)?.Label}{(SelectedShape(CurrentKind) is PatchInfo sp ? "  " + sp.Type : "")}" : "") + (Tool == EditorTool.Zones && MarkedZoneCount > 0 ? $"  |  {MarkedZoneCount} marked for deletion" : "") + (PendingCount > 0 || ShapeDraftPending ? $"  |  * {(PendingCount > 0 ? $"{PendingCount} UNSAVED" : "UNSAVED")}" : "");
         if (Time.GetTicksMsec() / 1000.0 > _statusUntil && _statusLabel.Text != "")
             _statusLabel.Text = "";
     }
@@ -708,8 +708,10 @@ public partial class EditorMode : Node
                 : _gmOn ? GroundHoverText(_hoverPoint!.Value) : null;
             _hoverLabel.Visible = text != null;
             if (text != null) { _hoverLabel.Text = text; _hoverLabel.Position = mouse + new Vector2(16, 20); }
+            UpdateGroundHoverOutline(Tool == EditorTool.Ground && calm ? _hoverPoint : null);
             return;
         }
+        UpdateGroundHoverOutline(null);
         if (id == null) { _hoverLabel.Visible = false; return; }
         var info = Map.Parcels[id];
         _hoverLabel.Text = info.Group != null
@@ -809,6 +811,11 @@ public partial class EditorMode : Node
             };
             OutlineRoot.AddChild(mi);
             _outlines[name] = mi;
+        }
+        else if (segs.Count > 0 && mi.MaterialOverride is StandardMaterial3D m) // the colour of a kind may change (a selected patch takes its crop's)
+        {
+            m.AlbedoColor = colour;
+            m.Transparency = colour.A < 1f ? BaseMaterial3D.TransparencyEnum.Alpha : BaseMaterial3D.TransparencyEnum.Disabled;
         }
         mi.Mesh = segs.Count == 0 ? null : BuildRibbon(segs, lift, width);
     }

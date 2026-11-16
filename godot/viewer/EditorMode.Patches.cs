@@ -16,7 +16,11 @@ using ShapeState = Drycastle.ShooterCore.EditorShapeState;
 public partial class EditorMode
 {
     OptionButton _pType = null!;
-    HBoxContainer _pTypeRow = null!;
+    HBoxContainer _pTypeRow = null!, _pCropRow = null!;
+    TextureRect _pCropSwatch = null!;
+    Label _pCropName = null!;
+    public const string OutlineGroundHover = "outline_ground_hover";
+    PatchInfo? _gHoverPatch;
     Label _pNote = null!;
     bool _pSync;
     string _pTypeSig = "\0", _pScrolledFor = "";
@@ -90,8 +94,28 @@ public partial class EditorMode
     {
         var (x, y) = RawAbs(point);
         if (ShapeAt(ShapeKind.Patch, x, y) is not { } id || Patch(id) is not { } p) return null;
-        return $"{p.Id}  patch of {p.Type}{(p.WaterY is { } w ? $", water {w:0.0} m" : "")}  click to select";
+        return $"{p.Id}  patch of {p.Type}{(EditorTheme.CropName(p.Type) is { } crop ? $" (crop: {crop})" : "")}{(p.WaterY is { } w ? $", water {w:0.0} m" : "")}  click to select";
     }
+
+    /// <summary>
+    /// The one outline of the Ground tool besides the selected patch: the patch under the cursor, lighter and thinner than the selection
+    /// (crop types in their crop colour, others white). Not drawn for the selected patch (its own outline is stronger) nor while a
+    /// gesture is under way. <paramref name="point"/> null: nothing hovered. Rebuilt only when the hovered patch changes.
+    /// </summary>
+    void UpdateGroundHoverOutline(Vector3? point)
+    {
+        PatchInfo? hot = null;
+        if (point is { } pt)
+        {
+            var (x, y) = RawAbs(pt);
+            if (ShapeAt(ShapeKind.Patch, x, y) is { } id && id != SelectedPatchId) hot = Patch(id);
+        }
+        if (ReferenceEquals(hot, _gHoverPatch)) return;
+        _gHoverPatch = hot;
+        var colour = hot != null && EditorTheme.CropColour(hot.Type) is { } c ? c : EditorTheme.Text;
+        SetOutline(OutlineGroundHover, hot == null ? new() : RingSegs(hot.Points, true), new Color(colour, GroundHoverAlpha), 0.27f, GroundHoverWidth);
+    }
+    const float GroundHoverAlpha = 0.65f, GroundHoverWidth = 0.28f;
 
     // ---- the page ----
 
@@ -106,7 +130,17 @@ public partial class EditorMode
             _pType.ReleaseFocus();
         };
         _pTypeRow = FieldRow("Type", _pType, "The ground type of the selected patch. A water type needs a water level.");
-        BuildShapeActions(page, ShapeKind.Patch, _pTypeRow);
+        // a crop_* type also says its crop in words next to its outline colour, so the colour is never the only cue
+        _pCropSwatch = new TextureRect { StretchMode = TextureRect.StretchModeEnum.KeepCentered, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+        _pCropName = new Label { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        var cropField = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        cropField.AddChild(_pCropSwatch);
+        cropField.AddChild(_pCropName);
+        _pCropRow = FieldRow("Crop", cropField, "The crop of the selected patch (its ground type is a crop_ one). The patch is outlined in this colour on the map. Change the crop by changing the Type above.");
+        var form = new VBoxContainer();
+        form.AddChild(_pTypeRow);
+        form.AddChild(_pCropRow);
+        BuildShapeActions(page, ShapeKind.Patch, form);
         _pNote = Note("");
         page.AddChild(_pNote);
         BuildShapeDelete(page, ShapeKind.Patch);
@@ -123,10 +157,13 @@ public partial class EditorMode
         var mode = ShapeMode;
         var typeText = SelectedGroundType ?? "the selected type";
 
-        RefreshShapeActions(ShapeKind.Patch, $"Draw patch of {typeText}  (N)", s => ((PatchInfo)s).Type + (((PatchInfo)s).WaterY is { } w ? $", water {w:0.0} m" : ""));
+        RefreshShapeActions(ShapeKind.Patch, $"Draw patch of {typeText}  (N)", s => ((PatchInfo)s).Type + (EditorTheme.CropName(((PatchInfo)s).Type) is { } cn ? $", crop {cn}" : "") + (((PatchInfo)s).WaterY is { } w ? $", water {w:0.0} m" : ""));
         var u = _su[ShapeKind.Patch];
         var showForm = mode == ShapeState.Selected && sel != null;
         _pTypeRow.Visible = showForm;
+        var crop = showForm ? EditorTheme.CropName(sel!.Type) : null;
+        _pCropRow.Visible = crop != null;
+        if (crop != null) { _pCropSwatch.Texture = Swatch(EditorTheme.CropColour(sel!.Type)!.Value); _pCropName.Text = crop; }
         if (showForm)
         {
             FillPatchTypes(sel!.Type);
@@ -171,12 +208,16 @@ public partial class EditorMode
             _pChoices = choices;
             _pSync = true;
             _pType.Clear();
-            foreach (var t in choices) _pType.AddIconItem(Swatch(t.Colour), t.Water ? t.Name + "  (water)" : t.Name);
+            foreach (var t in choices) _pType.AddIconItem(Swatch(t.Colour), PatchTypeText(t.Name, t.Water));
             _pSync = false;
         }
         var at = _pChoices.FindIndex(c => c.Name == current);
         if (!_pType.GetPopup().Visible && _pType.Selected != at) { _pSync = true; _pType.Selected = at; _pSync = false; }
     }
+
+    /// <summary>A type in the Type dropdown: crops read as "crop_grain  (crop: Grain)", water types get "(water)".</summary>
+    static string PatchTypeText(string name, bool water)
+        => EditorTheme.CropName(name) is { } crop ? $"{name}  (crop: {crop})" : water ? name + "  (water)" : name;
 
     // test hooks
     public string PatchTypeShown => _pType.Selected >= 0 && _pType.Selected < _pChoices.Count ? _pChoices[_pType.Selected].Name : "";
