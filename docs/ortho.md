@@ -80,6 +80,17 @@ has no trees, and `make props` warns. `make map` runs `ortho` and `ortho-trees` 
   `scale` multiplies its crown scale, and is drawn with the forest model (`props.trees.forest`: tapered clear trunk, crown from
   about 5 m up, 15-25 m tall; see `docs/pipeline.md`, "Tree collision"). Standalone trees keep the short trunk and blocky crown.
 
+* **Stands and the edge mantle (#287).** A forest is not one mix. `props.trees.stands` (`props.Stands`) lays a seeded Voronoi
+  field over the map (`cell_m` 110, one seed per cell, so a forest of a few hectares has several) and gives every forest tree a
+  **stand**: `pine` (95% conifer, x1.1), `birch` (90% broadleaf, x0.9, 90% of the density), `mixed` (as before), `thicket` (x0.5-0.65,
+  extra trees up to 1.6x the density, down to 0.65 of the canopy spacing apart) in shares 30/20/35/15. Within `swamp.reach_m` (25 m)
+  of water (`props.wet_zone`: the water ground areas and the wet areas of the water patches, the bodies of `water.json`) the stand is
+  `swamp` instead: 45% kept, mostly broadleaf, x0.8. Trees within `edge.edge_m` (8 m) of the canopy mask's outer boundary
+  (`props.edge_distance`; open ground, gaps under `gap_m` do not count) are `edge` trees: x0.6 at the boundary rising to x0.8, mostly
+  broadleaf, so the wall steps down. `trees.json` carries `"stand"` and, where true, `"edge": true` on every forest tree (the
+  collision solids read neither: `scale` has the size). The village gets about +1% trees (58,243 against 57,735: thicket adds,
+  birch and swamp remove).
+
 Numbers on the 7.15 km2 village: 218 ha of canopy, 54,000 forest trees and 4,200 standalone (58,000 in all, against 17,800
 for the rules); `out/village/map` 236 MB, the largest chunk glb 4.4 MB (the village profile aims at 1.7 MB). Not yet seen
 in the game, so the frame-rate cost is unknown.

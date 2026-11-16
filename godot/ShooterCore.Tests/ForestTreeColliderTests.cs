@@ -118,4 +118,14 @@ public class ForestTreeColliderTests
         var withBlock = TreeColliders.Parse(TreesJson(Golden()), out var full);
         Assert.NotEqual(TreeColliders.Parts(withBlock[0] with { Forest = false }, full).Count, TreeColliders.Parts(withBlock[0], full).Count);
     }
+
+    [Fact]
+    public void StandAndEdgeAreReadAndChangeNoSolid()
+    {
+        const string model = """{"model":{"trunk_width_m":0.35,"trunk_height_m":1.8,"canopy_m":2.6},"trees":[""";
+        var a = TreeColliders.Parse(model + """{"x":1,"y":2,"z":3,"scale":1,"rot":0,"shape":"box","forest":1,"stand":"swamp","edge":true},{"x":1,"y":2,"z":3,"scale":1,"rot":0,"shape":"box","forest":1}]}""", out var m);
+        Assert.Equal(("swamp", true), (a[0].Stand, a[0].Edge));
+        Assert.Equal(("mixed", false), (a[1].Stand, a[1].Edge)); // a map before stands
+        Assert.Equal(TreeColliders.Parts(a[1], m).Count, TreeColliders.Parts(a[0], m).Count);
+    }
 }

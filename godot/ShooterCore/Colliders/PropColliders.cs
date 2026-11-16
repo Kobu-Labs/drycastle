@@ -166,8 +166,12 @@ public readonly record struct SolidPart(PartRole Role, PartShape Shape, float X,
     }
 }
 
-/// <summary>A tree from trees.json (map metres; Z is the ground height at the trunk foot, Cone the conifer crown).</summary>
-public readonly record struct TreeInstance(float X, float Y, float Z, float Scale, float Rot, bool Cone, int ChunkX, int ChunkY, bool Forest = false);
+/// <summary>
+/// A tree from trees.json (map metres; Z is the ground height at the trunk foot, Cone the conifer crown). A forest tree
+/// belongs to a <c>Stand</c> (pine, birch, mixed, thicket, swamp; a map without stands: mixed) and is an <c>Edge</c> tree
+/// within the outer fringe of the forest. Both only pick its look: the size is already in Scale, so the solids ignore them.
+/// </summary>
+public readonly record struct TreeInstance(float X, float Y, float Z, float Scale, float Rot, bool Cone, int ChunkX, int ChunkY, bool Forest = false, string Stand = "mixed", bool Edge = false);
 
 /// <summary>One crown tier of a forest tree, metres at scale 1 above the ground: <c>Lo</c> is the base (pyramid) or bottom (box), <c>Hi</c> the apex or top.</summary>
 public readonly record struct CrownTier(float Lo, float Half, float Hi);
@@ -208,7 +212,9 @@ public static class TreeColliders
                 F(t, "x", 0), F(t, "y", 0), F(t, "z", 0), F(t, "scale", 1), F(t, "rot", 0),
                 t.TryGetProperty("shape", out var sh) && sh.GetString() == "cone",
                 cx, cy,
-                t.TryGetProperty("forest", out var fo) && (fo.ValueKind == JsonValueKind.True || fo.ValueKind == JsonValueKind.Number && fo.GetInt32() != 0)));
+                t.TryGetProperty("forest", out var fo) && (fo.ValueKind == JsonValueKind.True || fo.ValueKind == JsonValueKind.Number && fo.GetInt32() != 0),
+                t.TryGetProperty("stand", out var st) && st.ValueKind == JsonValueKind.String ? st.GetString()! : "mixed",
+                t.TryGetProperty("edge", out var ed) && ed.ValueKind == JsonValueKind.True));
         }
         return list;
     }

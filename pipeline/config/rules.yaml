@@ -342,6 +342,24 @@ props:
         - {name: young, share: 0.25, scale: 0.8}
         - {name: mature, share: 0.60, scale: 1.0}
         - {name: giant, share: 0.15, scale: 1.25}
+    # Stands (#287): the forest is not one mix. A seeded Voronoi field over the map (cells of `cell_m`, one seed each, its type drawn
+    # by `share`) gives every forest tree a stand (props.Stands; trees.json "stand"); near water (`swamp`) overrides it.
+    # `cone_share`: fraction of conifers (rest broadleaf boxes); `scale`: multiplies the tree's size (a number or [lo, hi] drawn per
+    # tree); `keep`: fraction of the planted trees that stay (< 1: sparser). A thicket also gets extra trees up to
+    # `density_factor` times the density, at least `spacing_scale` times the canopy spacing from the others (young, dense growth).
+    # Village: net about +1% trees (thicket adds, birch and swamp thin). Remove `stands` for the old uniform forest.
+    stands:
+      cell_m: 110
+      types:
+        pine: {share: 0.30, cone_share: 0.95, scale: 1.1, keep: 1.0}
+        birch: {share: 0.20, cone_share: 0.10, scale: 0.9, keep: 0.9}
+        mixed: {share: 0.35, cone_share: 0.60, scale: 1.0, keep: 1.0}
+        thicket: {share: 0.15, cone_share: 0.50, scale: [0.5, 0.65], keep: 1.0, density_factor: 1.6, spacing_scale: 0.65}
+      # Forest trees within reach_m of water (a water ground area, or a water patch's wet area): sparse, mostly broadleaf, smaller.
+      swamp: {reach_m: 25, keep: 0.45, cone_share: 0.2, scale: 0.8}
+      # The forest wall steps down: trees within edge_m of the outer edge of the canopy mask (open ground; gaps narrower than
+      # gap_m do not count) get "edge": true and scale `scale` = [at the edge, at edge_m] times their size, mostly broadleaf.
+      edge: {edge_m: 8, scale: [0.6, 0.8], cone_share: 0.15, gap_m: 3}
     # The model of a forest tree (planted inside the detected canopy; the standalone trees above keep the trunk box and the two
     # stacked crown pieces sized by canopy_m). Tall clear trunk, crown on top: at the median scale 2.1 the crown starts about 5 m
     # up and the tree is about 20 m tall. All lengths are metres at scale 1 (multiplied by the tree's scale) and measured from the

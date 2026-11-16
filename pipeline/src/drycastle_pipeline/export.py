@@ -255,6 +255,13 @@ def _on_terrain(areas: list[dict], terrain) -> list[dict]:
     return areas if terrain is None else clip_areas(areas, terrain.coverage)
 
 
+def forest_fields(tree: dict) -> dict:
+    """A forest tree's trees.json fields: the flag, its stand (props.Stands; mixed when the props.json has none) and, where true, ``edge``."""
+    if not is_forest(tree):
+        return {}
+    return {"forest": 1, "stand": tree.get("stand", "mixed"), **({"edge": True} if tree.get("edge") else {})}
+
+
 def forest_model(tree_cfg: dict) -> dict:
     """The forest tree numbers of trees.json's model block (metres at scale 1; the same ones ``tree_mesh`` draws)."""
     f = tree_cfg["forest"]
@@ -418,7 +425,7 @@ def run_export(
                 {
                     "x": t["x"], "y": t["y"], "z": round(t["z"], 3), "scale": t["scale"], "rot": t["rot"],
                     "shape": t["shape"],
-                    **({"forest": 1} if is_forest(t) else {}),
+                    **forest_fields(t),
                     "chunk": [int(math.floor(t["x"] / chunk_m)), int(math.floor(t["y"] / chunk_m))],
                 }
                 for t in scene.trees

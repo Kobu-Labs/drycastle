@@ -24,7 +24,8 @@ RES = 1.0  # metres per pixel of the synthetic canopy mask, 250 x 250 px coverin
 
 
 def cfg_for(folder: Path) -> dict:
-    return {**TREE, "ortho_dir": str(folder)}
+    """The rules without stands: these tests are of the planting itself (test_stands.py has the stands and the edge mantle)."""
+    return {**{k: v for k, v in TREE.items() if k != "stands"}, "ortho_dir": str(folder)}
 
 
 def test_trees_come_only_from_the_detector(tmp_path: Path) -> None:
