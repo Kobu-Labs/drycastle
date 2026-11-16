@@ -179,6 +179,151 @@ public class PackTreeTests
         Assert.InRange(cfg.BulkShare, 0.5f, 1f);
     }
 
+    // ---- stands and edge trees ----
+
+    static PackTreeEntry E(string name, float weight = 1f, bool bulk = false, string pack = "nature") => new() { Name = name, Weight = weight, Bulk = bulk, Pack = pack };
+
+    // ids by name: the name's last digit is the id and the height is 5 m, except names that are not in the "pack"
+    static PackCandidate? Resolve(PackTreeEntry e) => e.Name.StartsWith("gone") ? null : new PackCandidate(int.Parse(e.Name[^1..]), 5f, e.Weight, e.Bulk);
+
+    static PackTreeConfig StandConfig() => new()
+    {
+        BulkShare = 0.9f, EdgeShare = 0.5f,
+        Shapes = new() { ["cone"] = [E("c1", 1, true)], ["box"] = [E("b2", 1, true)] },
+        Stands = new()
+        {
+            ["pine"] = new() { Any = [E("p3", 1, true), E("gone4")], BulkShare = 0.6f },
+            ["swamp"] = new() { Cone = [E("s5")], Edge = false },
+            ["edge"] = new() { Any = [E("e6", 1, true)] },
+            ["bare"] = new() { Any = [E("gone7")] }, // nothing of it loads
+        },
+    };
+
+    [Fact]
+    public void StandsPickTheirOwnModelsAndFallBackToTheShapeLists()
+    {
+        var sets = PackModelSets.Build(StandConfig(), Resolve);
+        Assert.Equal([1], sets.Default.Cone.Select(c => c.ModelId));
+        Assert.Equal([2], sets.Default.Box.Select(c => c.ModelId));
+        var pine = sets.For(new PackTreeTag("pine", false), 0.5f, 0.9);
+        Assert.Equal([3], pine.Cone.Select(c => c.ModelId)); // a model that cannot load is skipped
+        Assert.Equal([3], pine.Box.Select(c => c.ModelId)); // `any` serves both shapes
+        Assert.Equal(0.6f, pine.BulkShare); // its own share
+        Assert.Equal(0.9f, sets.Default.BulkShare);
+        // a stand with one shape's list only: the other shape takes it too; no list that loads: today's shape lists
+        Assert.Equal([5], sets.For(new PackTreeTag("swamp", false), 0.5f, 0.9).Box.Select(c => c.ModelId));
+        Assert.Same(sets.Default.Cone, sets.For(new PackTreeTag("bare", false), 0.5f, 0.9).Cone);
+        // unknown, absent ("mixed") and null stands are the default
+        Assert.Same(sets.Default, sets.For(new PackTreeTag("mixed", false), 0.5f, 0.9));
+        Assert.Same(sets.Default, sets.For(new PackTreeTag("moor", false), 0.5f, 0.9));
+        Assert.Same(sets.Default, sets.For(new PackTreeTag(null!, false), 0.5f, 0.9));
+        Assert.Same(sets.Default, sets.For(PackTreeTag.Plain, 0.5f, 0.9));
+    }
+
+    [Fact]
+    public void EdgeTreesTakeTheEdgeModelsByShareUnlessTheirStandKeepsThem()
+    {
+        var sets = PackModelSets.Build(StandConfig(), Resolve);
+        var edge = new PackTreeTag("pine", true);
+        Assert.Equal([6], sets.For(edge, 0.5f, 0.49).Cone.Select(c => c.ModelId));
+        Assert.Equal([3], sets.For(edge, 0.5f, 0.51).Cone.Select(c => c.ModelId)); // the rest keep their stand's
+        Assert.Equal([3], sets.For(new PackTreeTag("pine", false), 0.5f, 0.0).Cone.Select(c => c.ModelId)); // not at the edge
+        Assert.Equal([1], sets.For(new PackTreeTag("mixed", false), 0.5f, 0.0).Cone.Select(c => c.ModelId));
+        Assert.Equal([6], sets.For(new PackTreeTag("mixed", true), 1f, 0.99).Cone.Select(c => c.ModelId)); // share 1: all of them
+        Assert.Equal([5], sets.For(new PackTreeTag("swamp", true), 1f, 0.0).Cone.Select(c => c.ModelId)); // edge: false on the swamp
+        // no edge stand in the config: nothing to take
+        var cfg = StandConfig(); cfg.Stands.Remove("edge");
+        Assert.Equal([3], PackModelSets.Build(cfg, Resolve).For(edge, 1f, 0.0).Cone.Select(c => c.ModelId));
+        // the edge number is a position hash of its own, spread over [0, 1) and not the model roll
+        var seen = Enumerable.Range(0, 2000).Select(i => PackTreeMath.EdgeRoll(i * 2.3f, i * 0.7f - 40f)).ToList();
+        Assert.All(seen, r => Assert.InRange(r, 0.0, 1.0));
+        Assert.InRange(seen.Count(r => r < 0.5), 900, 1100);
+        Assert.NotEqual(PackTreeMath.Roll(12.5f, 3.5f), PackTreeMath.EdgeRoll(12.5f, 3.5f));
+    }
+
+    [Fact]
+    public void PlacementUsesTheStandsModelsAndItsBulkShare()
+    {
+        var cfg = StandConfig();
+        var sets = PackModelSets.Build(cfg, Resolve);
+        var t = new TreeInstance(201.4f, -1677.2f, 150f, 1.3f, 0.7f, true, 0, 0);
+        Assert.Equal(1, PackTreeMath.Place(t, Model, PackTreeTag.Plain, sets, cfg)!.Value.Model);
+        Assert.Equal(3, PackTreeMath.Place(t, Model, new PackTreeTag("pine", false), sets, cfg)!.Value.Model);
+        Assert.Equal(PackTreeMath.Place(t, Model, new PackTreeTag("pine", true), sets, cfg), PackTreeMath.Place(t, Model, new PackTreeTag("pine", true), sets, cfg));
+        // the old entry point is the default set
+        var one = new[] { C(1, 5f) };
+        Assert.Equal(PackTreeMath.Place(t, Model, one, one, cfg), PackTreeMath.Place(t, Model, PackTreeTag.Plain, sets, cfg));
+    }
+
+    [Fact]
+    public void TagsAreReadInFileOrderWithDefaultsForWhatIsMissing()
+    {
+        const string json = """{"trees":[{"x":1},{"x":2,"stand":"swamp","edge":true},{"x":3,"stand":"","edge":0},{"x":4,"stand":"pine","edge":1},{"x":5,"stand":7}]}""";
+        var tags = PackTreeTags.Parse(json, 5);
+        Assert.Equal([PackTreeTag.Plain, new("swamp", true), PackTreeTag.Plain, new("pine", true), PackTreeTag.Plain], tags);
+        // fewer records than trees: padded; more: cut; unreadable or empty: all plain
+        Assert.Equal(7, PackTreeTags.Parse(json, 7).Length);
+        Assert.Equal(PackTreeTag.Plain, PackTreeTags.Parse(json, 7)[6]);
+        Assert.Equal(2, PackTreeTags.Parse(json, 2).Length);
+        Assert.All(PackTreeTags.Parse("not json", 3), t => Assert.Equal(PackTreeTag.Plain, t));
+        Assert.All(PackTreeTags.Parse("""{"model":{}}""", 3), t => Assert.Equal(PackTreeTag.Plain, t));
+        Assert.Empty(PackTreeTags.Parse("", 0));
+    }
+
+    [Fact]
+    public void ConfigRejectsBadStandsAndEdgeShare()
+    {
+        Assert.Throws<DataFileException>(() => PackTreeConfig.Parse("""{"version":1,"edge_share":1.5}"""));
+        Assert.Throws<DataFileException>(() => PackTreeConfig.Parse("""{"version":1,"stands":{"pine":{"bulk_share":2}}}"""));
+        Assert.Throws<DataFileException>(() => PackTreeConfig.Parse("""{"version":1,"stands":{"pine":{"any":[{"name":"a","weight":-1}]}}}"""));
+        Assert.Throws<DataFileException>(() => PackTreeConfig.Parse("""{"version":1,"stands":{"pine":{"any":[{"name":"a","pack":""}]}}}"""));
+        var ok = PackTreeConfig.Parse("""{"version":1,"stands":{"swamp":{"edge":false,"cone":[{"pack":"swamp","name":"a"}]}}}""");
+        Assert.Equal("swamp", ok.Stands["swamp"].Cone.Single().Pack);
+        Assert.Equal("nature", new PackTreeEntry().Pack);
+        Assert.Contains("swamp", ok.Packs());
+        Assert.Contains("nature", ok.Packs());
+    }
+
+    [Fact]
+    public void ShippedStandsCoverEveryStandAndEveryNumberTheyAddIsRead()
+    {
+        var c = Shipped();
+        // the number settings of the stands are read (an unread one stays at the class default or null, see DataFile's snake-case policy)
+        Assert.True(c.EdgeShare > 0 && c.EdgeShare != new PackTreeConfig().EdgeShare);
+        foreach (var stand in new[] { "pine", "birch", "thicket", "swamp", "edge" })
+        {
+            Assert.True(c.Stands.TryGetValue(stand, out var s), stand);
+            Assert.NotNull(s!.BulkShare);
+            Assert.True(s.BulkShare > 0 && s.BulkShare != c.BulkShare, stand + " bulk_share");
+            Assert.NotEmpty(s.For(true)); Assert.NotEmpty(s.For(false));
+            Assert.All(s.For(true).Concat(s.For(false)), e => Assert.True(e.Weight > 0, e.Name));
+        }
+        Assert.False(c.Stands["swamp"].Edge); Assert.False(c.Stands["thicket"].Edge); Assert.True(c.Stands["pine"].Edge);
+        // pine: the pine families; birch: birches and slender round trees; swamp: dead trees, willows, bare swamp trees, and one swamp-pack LOD
+        Assert.All(c.Stands["pine"].Any, e => Assert.Matches("^SM_Tree_(Poly)?Pine", e.Name));
+        Assert.Contains(c.Stands["birch"].Any, e => e.Name.StartsWith("SM_Tree_Birch_0"));
+        Assert.Contains(c.Stands["swamp"].Any, e => e.Name.StartsWith("SM_Tree_Dead_") || e.Name == "SM_Tree_Pine_Dead_01");
+        Assert.Contains(c.Stands["swamp"].Any, e => e.Name.StartsWith("SM_Tree_Willow_"));
+        Assert.All(c.Stands["swamp"].Any.Where(e => e.Pack == "swamp"), e => Assert.Matches("_LOD[12]$", e.Name)); // 28-30k triangles at full detail: only an LOD is affordable
+        Assert.Contains(c.Stands["thicket"].Any, e => e.Name.Contains("Small") || e.Name.StartsWith("SM_Plant_Bush"));
+        Assert.All(c.Stands["edge"].Any, e => Assert.Matches("^SM_Tree_(Round|Generic|0)", e.Name));
+        // the models only the swamp stand has are not in the bulk of today's lists, and every list keeps its bulk/occasional split
+        foreach (var s in c.Stands.Values) { Assert.Contains(s.Any, e => e.Bulk); Assert.Contains(s.Any, e => !e.Bulk); }
+    }
+
+    [Fact]
+    public void ShippedJsonHasOnlyKeysTheStandsConfigReads()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(DataDir, "pack_trees.json")));
+        foreach (var stand in doc.RootElement.GetProperty("stands").EnumerateObject())
+        {
+            Assert.All(stand.Value.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "bulk_share", "edge", "cone", "box", "any" }));
+            foreach (var list in stand.Value.EnumerateObject().Where(p => p.Value.ValueKind == System.Text.Json.JsonValueKind.Array))
+                foreach (var e in list.Value.EnumerateArray())
+                    Assert.All(e.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "pack", "name", "weight", "bulk" }));
+        }
+    }
+
     // ---- the cut ----
 
     [Fact]

@@ -50,11 +50,19 @@ public sealed class UndergrowthKindConfig
     public List<PackTreeEntry> Models { get; set; } = new();
 }
 
+/// <summary>The kinds of undergrowth that grow on the cells of one meadow mix (the high nibble of meadow.bin's zone byte: rules.yaml detail.meadow.zones, 5 = forest, 9 = swamp).</summary>
+public sealed class UndergrowthMixConfig
+{
+    public int Mix { get; set; }
+    public string Name { get; set; } = "";
+    public List<UndergrowthKindConfig> Kinds { get; set; } = new();
+}
+
 public sealed class UndergrowthConfig
 {
     public bool Enabled { get; set; } = true;
-    /// <summary>The mix id (high nibble of meadow.bin's zone byte) of forest ground: rules.yaml detail.meadow.zones.forest.</summary>
-    public int ForestMix { get; set; } = 5;
+    /// <summary>Per meadow mix: its kinds. A mix no cell of the map has costs nothing; a cell of a mix not listed grows nothing.</summary>
+    public List<UndergrowthMixConfig> Mixes { get; set; } = new();
     /// <summary>Most triangles of undergrowth in one tile; over it the scatter is thinned.</summary>
     public int TrisPerTile { get; set; } = 60000;
     /// <summary>Lattice of the clump noise (m).</summary>
@@ -63,17 +71,22 @@ public sealed class UndergrowthConfig
     public float FootM { get; set; } = 4f;
     /// <summary>Nothing grows within this distance (m, times the tree's scale) of a trunk.</summary>
     public float TrunkClearM { get; set; } = 0.4f;
-    public List<UndergrowthKindConfig> Kinds { get; set; } = new();
 
     public void Validate()
     {
         if (TrisPerTile < 0) throw new DataFileException("pack_trees.json: undergrowth.tris_per_tile must not be negative");
         if (!(ClumpM > 0) || FootM < 0 || TrunkClearM < 0) throw new DataFileException("pack_trees.json: undergrowth clump_m must be above 0, foot_m and trunk_clear_m not negative");
-        foreach (var k in Kinds)
+        var seen = new HashSet<int>();
+        foreach (var mix in Mixes)
         {
-            if (k.Name.Length == 0 || k.Per100M2 < 0 || !(k.ScaleMin > 0) || k.ScaleMax < k.ScaleMin || k.Clump < 0 || k.Clump > 1 || k.Foot < 0)
-                throw new DataFileException($"pack_trees.json: undergrowth kind '{k.Name}' has a bad number (per_100m2, scale_min/max, clump 0..1, foot)");
-            if (k.Models.Any(e => e.Name.Length == 0 || e.Weight < 0)) throw new DataFileException($"pack_trees.json: undergrowth kind '{k.Name}' has an entry without a name or with a negative weight");
+            // the zone byte's high nibble: 0..15
+            if (mix.Mix is < 0 or > 15 || !seen.Add(mix.Mix)) throw new DataFileException($"pack_trees.json: undergrowth mix '{mix.Name}' needs a mix id within 0 and 15 that no other mix has");
+            foreach (var k in mix.Kinds)
+            {
+                if (k.Name.Length == 0 || k.Per100M2 < 0 || !(k.ScaleMin > 0) || k.ScaleMax < k.ScaleMin || k.Clump < 0 || k.Clump > 1 || k.Foot < 0)
+                    throw new DataFileException($"pack_trees.json: undergrowth kind '{k.Name}' has a bad number (per_100m2, scale_min/max, clump 0..1, foot)");
+                PackTreeConfig.CheckEntries($"undergrowth kind '{k.Name}'", k.Models);
+            }
         }
     }
 }
@@ -164,7 +177,10 @@ public readonly record struct TreeFoot(float X, float Y, float Scale);
 /// <summary>One kind of undergrowth resolved against the loaded models.</summary>
 public sealed record UndergrowthKind(float PerM2, float ScaleMin, float ScaleMax, float Clump, float Foot, int[] ModelIds, float[] Weights, int[] Tris);
 
-/// <summary>The forest cells of a tile: global cell indices (floor of metres over cell size), a bool per cell of the box starting at (Gx0, Gy0).</summary>
+/// <summary>The kinds that grow on the cells of one meadow mix in a tile; <see cref="SaltBase"/> keeps the hash of its pieces apart from another mix's (0 for the first, so a one-mix tile is as it was).</summary>
+public sealed record UndergrowthSet(ForestMask Cells, IReadOnlyList<UndergrowthKind> Kinds, int SaltBase);
+
+/// <summary>The cells of one meadow mix in a tile: global cell indices (floor of metres over cell size), a bool per cell of the box starting at (Gx0, Gy0).</summary>
 public sealed class ForestMask
 {
     public required int Gx0 { get; init; }
@@ -198,49 +214,62 @@ public static class UndergrowthGen
     /// </summary>
     public static List<PackPlacement> Tile(UndergrowthConfig cfg, IReadOnlyList<UndergrowthKind> kinds, float x0, float y0, float x1, float y1, float cellM,
         ForestMask forest, IReadOnlyList<TreeFoot> trees, Func<float, float, float> groundZ, int trisBudget, out int triangles)
+        => Tile(cfg, [new UndergrowthSet(forest, kinds, 0)], x0, y0, x1, y1, cellM, trees, groundZ, trisBudget, out triangles);
+
+    /// <summary>
+    /// <see cref="Tile(UndergrowthConfig, IReadOnlyList{UndergrowthKind}, float, float, float, float, float, ForestMask, IReadOnlyList{TreeFoot}, Func{float, float, float}, int, out int)"/>
+    /// for several meadow mixes at once: each set grows its kinds on its own cells (a cell is in one mix, so two sets never share one), and the triangle budget is
+    /// the tile's, shared by all of them.
+    /// </summary>
+    public static List<PackPlacement> Tile(UndergrowthConfig cfg, IReadOnlyList<UndergrowthSet> sets, float x0, float y0, float x1, float y1, float cellM,
+        IReadOnlyList<TreeFoot> trees, Func<float, float, float> groundZ, int trisBudget, out int triangles)
     {
         var all = new List<(PackPlacement P, int Tris, double Prio)>();
         int gx0 = (int)MathF.Floor(x0 / cellM), gx1 = (int)MathF.Ceiling(x1 / cellM), gy0 = (int)MathF.Floor(y0 / cellM), gy1 = (int)MathF.Ceiling(y1 / cellM);
         var lattice = cfg.ClumpM / cellM;
-        for (var gy = gy0; gy < gy1; gy++)
-            for (var gx = gx0; gx < gx1; gx++)
-            {
-                if (!forest.Contains(gx, gy)) continue;
-                var cx = (gx + 0.5f) * cellM; var cy = (gy + 0.5f) * cellM;
-                var d = float.MaxValue;
-                foreach (var t in trees) d = MathF.Min(d, MathF.Sqrt((t.X - cx) * (t.X - cx) + (t.Y - cy) * (t.Y - cy)));
-                for (var ki = 0; ki < kinds.Count; ki++)
+        foreach (var set in sets)
+        {
+            var forest = set.Cells; var kinds = set.Kinds;
+            for (var gy = gy0; gy < gy1; gy++)
+                for (var gx = gx0; gx < gx1; gx++)
                 {
-                    var k = kinds[ki];
-                    if (k.PerM2 <= 0 || k.ModelIds.Length == 0) continue;
-                    var kb = Salt + ki * 100;
-                    var noise = k.Clump > 0 ? MeadowGen.ValueNoise(gx + 0.5, gy + 0.5, lattice, kb + 99) : 0.5;
-                    var e = k.PerM2 * cellM * cellM * ClumpFactor(noise, k.Clump) * FootFactor(d, cfg.FootM, k.Foot);
-                    var whole = MathF.Floor(e);
-                    var count = Math.Min(MaxPerCell, (int)whole + (MeadowGen.Hash01(gx, gy, kb) < e - whole ? 1 : 0));
-                    for (var j = 0; j < count; j++)
+                    if (!forest.Contains(gx, gy)) continue;
+                    var cx = (gx + 0.5f) * cellM; var cy = (gy + 0.5f) * cellM;
+                    var d = float.MaxValue;
+                    foreach (var t in trees) d = MathF.Min(d, MathF.Sqrt((t.X - cx) * (t.X - cx) + (t.Y - cy) * (t.Y - cy)));
+                    for (var ki = 0; ki < kinds.Count; ki++)
                     {
-                        var s = kb + 1 + 6 * j;
-                        var x = (gx + (float)MeadowGen.Hash01(gx, gy, s)) * cellM;
-                        var y = (gy + (float)MeadowGen.Hash01(gx, gy, s + 1)) * cellM;
-                        if (x < x0 || x >= x1 || y < y0 || y >= y1) continue;
-                        var rot = (float)(MeadowGen.Hash01(gx, gy, s + 2) * 2 * Math.PI);
-                        var scale = k.ScaleMin + (float)MeadowGen.Hash01(gx, gy, s + 3) * (k.ScaleMax - k.ScaleMin);
-                        var pick = PackTreeMath.Pick(k.Weights, MeadowGen.Hash01(gx, gy, s + 4));
-                        if (pick < 0) continue;
-                        var clear = false;
-                        foreach (var t in trees)
+                        var k = kinds[ki];
+                        if (k.PerM2 <= 0 || k.ModelIds.Length == 0) continue;
+                        var kb = Salt + set.SaltBase + ki * 100;
+                        var noise = k.Clump > 0 ? MeadowGen.ValueNoise(gx + 0.5, gy + 0.5, lattice, kb + 99) : 0.5;
+                        var e = k.PerM2 * cellM * cellM * ClumpFactor(noise, k.Clump) * FootFactor(d, cfg.FootM, k.Foot);
+                        var whole = MathF.Floor(e);
+                        var count = Math.Min(MaxPerCell, (int)whole + (MeadowGen.Hash01(gx, gy, kb) < e - whole ? 1 : 0));
+                        for (var j = 0; j < count; j++)
                         {
-                            var r = cfg.TrunkClearM * t.Scale;
-                            if ((t.X - x) * (t.X - x) + (t.Y - y) * (t.Y - y) < r * r) { clear = true; break; }
+                            var s = kb + 1 + 6 * j;
+                            var x = (gx + (float)MeadowGen.Hash01(gx, gy, s)) * cellM;
+                            var y = (gy + (float)MeadowGen.Hash01(gx, gy, s + 1)) * cellM;
+                            if (x < x0 || x >= x1 || y < y0 || y >= y1) continue;
+                            var rot = (float)(MeadowGen.Hash01(gx, gy, s + 2) * 2 * Math.PI);
+                            var scale = k.ScaleMin + (float)MeadowGen.Hash01(gx, gy, s + 3) * (k.ScaleMax - k.ScaleMin);
+                            var pick = PackTreeMath.Pick(k.Weights, MeadowGen.Hash01(gx, gy, s + 4));
+                            if (pick < 0) continue;
+                            var clear = false;
+                            foreach (var t in trees)
+                            {
+                                var r = cfg.TrunkClearM * t.Scale;
+                                if ((t.X - x) * (t.X - x) + (t.Y - y) * (t.Y - y) < r * r) { clear = true; break; }
+                            }
+                            if (clear) continue;
+                            var z = groundZ(x, y);
+                            if (float.IsNaN(z)) continue;
+                            all.Add((new PackPlacement(new Vector3(x, z, -y), rot, scale, k.ModelIds[pick]), k.Tris[pick], MeadowGen.Hash01((int)MathF.Round(x * 100f), (int)MathF.Round(y * 100f), Salt + 7)));
                         }
-                        if (clear) continue;
-                        var z = groundZ(x, y);
-                        if (float.IsNaN(z)) continue;
-                        all.Add((new PackPlacement(new Vector3(x, z, -y), rot, scale, k.ModelIds[pick]), k.Tris[pick], MeadowGen.Hash01((int)MathF.Round(x * 100f), (int)MathF.Round(y * 100f), Salt + 7)));
                     }
                 }
-            }
+        }
         long total = 0;
         foreach (var a in all) total += a.Tris;
         if (total > trisBudget)

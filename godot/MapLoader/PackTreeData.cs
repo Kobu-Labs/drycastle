@@ -10,14 +10,35 @@ namespace Drycastle.MapLoader;
 /// <summary>A model that may stand in for a tree shape, its share among the models of that shape, and whether it is a bulk model (see the file's _note).</summary>
 public sealed class PackTreeEntry
 {
+    /// <summary>The pack (folder under assets-private/synty/glb) the model is in; model names are unique per pack, so two packs may share one.</summary>
+    public string Pack { get; set; } = PackTreeConfig.DefaultPack;
     public string Name { get; set; } = "";
     public float Weight { get; set; } = 1f;
     public bool Bulk { get; set; }
 }
 
+/// <summary>The models of one stand (trees.json <c>stand</c>): per shape, or <c>any</c> for both; a shape without models takes today's <c>shapes</c> list.</summary>
+public sealed class PackStandConfig
+{
+    public List<PackTreeEntry> Cone { get; set; } = new();
+    public List<PackTreeEntry> Box { get; set; } = new();
+    /// <summary>Models for a shape this stand lists nothing for (a cone or box list of its own wins).</summary>
+    public List<PackTreeEntry> Any { get; set; } = new();
+    /// <summary>The stand's own bulk share (the file's bulk_share when absent): a birch stand wants its birches seen, a pine stand its cheap bulk pines.</summary>
+    public float? BulkShare { get; set; }
+    /// <summary>Whether an edge tree of this stand may take the <c>edge</c> models (a swamp keeps its dead trees to the edge).</summary>
+    public bool Edge { get; set; } = true;
+
+    public IReadOnlyList<PackTreeEntry> For(bool cone) => (cone ? Cone : Box) is { Count: > 0 } l ? l : Any;
+}
+
 /// <summary>pack_trees.json: the near radius, the tiles and the models per tree shape (see the file's _note).</summary>
 public sealed class PackTreeConfig : IVersioned
 {
+    public const string DefaultPack = "nature";
+    /// <summary>The stand whose models an edge tree may take (see <see cref="EdgeShare"/>).</summary>
+    public const string EdgeStand = "edge";
+
     public int Version { get; set; }
     public float NearM { get; set; } = 70f;
     public float FadeM { get; set; } = 14f;
@@ -28,8 +49,12 @@ public sealed class PackTreeConfig : IVersioned
     public float ScaleMin { get; set; } = 0.5f;
     public float ScaleMax { get; set; } = 4f;
     public float BulkShare { get; set; } = 0.85f;
+    /// <summary>Share of edge trees (trees.json <c>edge</c>) that take the models of the <c>edge</c> stand (round, bushy broadleaf) instead of their stand's.</summary>
+    public float EdgeShare { get; set; } = 0.5f;
     public bool Shadows { get; set; } = true;
     public Dictionary<string, List<PackTreeEntry>> Shapes { get; set; } = new();
+    /// <summary>Models per stand (pine, birch, mixed, thicket, swamp, and edge); a stand not listed (or a shape it lists nothing for) takes <see cref="Shapes"/>.</summary>
+    public Dictionary<string, PackStandConfig> Stands { get; set; } = new();
     public GroundObjectsConfig GroundObjects { get; set; } = new();
     public UndergrowthConfig Undergrowth { get; set; } = new();
 
@@ -43,11 +68,31 @@ public sealed class PackTreeConfig : IVersioned
         if (c.MaxInFlight < 1) throw new DataFileException("pack_trees.json: max_in_flight must be at least 1");
         if (!(c.ScaleMin > 0) || c.ScaleMax < c.ScaleMin) throw new DataFileException("pack_trees.json: scale_min must be above 0 and scale_max at least scale_min");
         if (c.BulkShare < 0 || c.BulkShare > 1) throw new DataFileException("pack_trees.json: bulk_share must be within 0 and 1");
-        foreach (var (shape, list) in c.Shapes)
-            if (list.Any(e => e.Name.Length == 0 || e.Weight < 0)) throw new DataFileException($"pack_trees.json: shape '{shape}' has an entry without a name or with a negative weight");
+        if (c.EdgeShare < 0 || c.EdgeShare > 1) throw new DataFileException("pack_trees.json: edge_share must be within 0 and 1");
+        foreach (var (shape, list) in c.Shapes) CheckEntries($"shape '{shape}'", list);
+        foreach (var (stand, sc) in c.Stands)
+        {
+            if (sc.BulkShare is < 0 or > 1) throw new DataFileException($"pack_trees.json: stand '{stand}' bulk_share must be within 0 and 1");
+            CheckEntries($"stand '{stand}'", sc.Cone.Concat(sc.Box).Concat(sc.Any));
+        }
         c.GroundObjects.Validate();
         c.Undergrowth.Validate();
         return c;
+    }
+
+    internal static void CheckEntries(string what, IEnumerable<PackTreeEntry> list)
+    {
+        if (list.Any(e => e.Name.Length == 0 || e.Pack.Length == 0 || e.Weight < 0)) throw new DataFileException($"pack_trees.json: {what} has an entry without a name or pack or with a negative weight");
+    }
+
+    /// <summary>Every pack the config names a model of (the nature pack always: it is the one a map needs).</summary>
+    public IEnumerable<string> Packs()
+    {
+        var entries = Shapes.Values.SelectMany(l => l)
+            .Concat(Stands.Values.SelectMany(s => s.Cone.Concat(s.Box).Concat(s.Any)))
+            .Concat(GroundObjects.Kinds.Values.SelectMany(k => k.Models))
+            .Concat(Undergrowth.Mixes.SelectMany(m => m.Kinds.SelectMany(k => k.Models)));
+        return entries.Select(e => e.Pack).Append(DefaultPack).Distinct();
     }
 
     /// <summary>The entries of a tree shape (cone or box); empty for an unknown shape.</summary>
@@ -78,6 +123,91 @@ public static class PackTreeSettings
 
 /// <summary>A model that may stand in for a tree: its id (index into the loader's models), native height, weight within its shape and bulk flag.</summary>
 public readonly record struct PackCandidate(int ModelId, float HeightM, float Weight, bool Bulk);
+
+/// <summary>What trees.json says about a tree besides its geometry: its stand and whether it stands at the forest edge (the collision ignores both).</summary>
+public readonly record struct PackTreeTag(string Stand, bool Edge)
+{
+    public const string Mixed = "mixed";
+    public static readonly PackTreeTag Plain = new(Mixed, false);
+}
+
+public static class PackTreeTags
+{
+    /// <summary>
+    /// The tag of every tree record of trees.json, in file order (<see cref="TreeColliders.Parse"/> makes one tree per record in the same order, so the two lists
+    /// line up). A record without <c>stand</c> is "mixed", without <c>edge</c> not at the edge. Padded with plain tags to <paramref name="count"/> when the file
+    /// holds fewer records (and empty when it cannot be read), so an index into the trees is always valid.
+    /// </summary>
+    public static PackTreeTag[] Parse(string treesJson, int count)
+    {
+        var tags = new PackTreeTag[count];
+        Array.Fill(tags, PackTreeTag.Plain);
+        if (count == 0 || string.IsNullOrWhiteSpace(treesJson)) return tags;
+        try
+        {
+            using var doc = JsonDocument.Parse(treesJson);
+            if (!doc.RootElement.TryGetProperty("trees", out var trees) || trees.ValueKind != JsonValueKind.Array) return tags;
+            var i = 0;
+            foreach (var t in trees.EnumerateArray())
+            {
+                if (i >= count) break;
+                var stand = t.ValueKind == JsonValueKind.Object && t.TryGetProperty("stand", out var s) && s.ValueKind == JsonValueKind.String && s.GetString() is { Length: > 0 } v ? v : PackTreeTag.Mixed;
+                var edge = t.ValueKind == JsonValueKind.Object && t.TryGetProperty("edge", out var e) && (e.ValueKind == JsonValueKind.True || e.ValueKind == JsonValueKind.Number && e.GetInt32() != 0);
+                tags[i++] = new PackTreeTag(stand, edge);
+            }
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException) { }
+        return tags;
+    }
+}
+
+/// <summary>The models one stand draws, resolved: per shape, the bulk share, whether its edge trees may take the edge models.</summary>
+public sealed record PackStandModels(PackCandidate[] Cone, PackCandidate[] Box, float BulkShare, bool Edge);
+
+/// <summary>The resolved model lists of every stand (<see cref="PackTreeConfig.Stands"/>) beside today's per-shape lists, which anything unlisted falls back to.</summary>
+public sealed class PackModelSets
+{
+    public required PackStandModels Default { get; init; }
+    public IReadOnlyDictionary<string, PackStandModels> Stands { get; init; } = new Dictionary<string, PackStandModels>();
+
+    /// <summary>The set of a tree: its stand's (the default one for an unknown stand), or the edge stand's for an edge tree whose <paramref name="edgeRoll"/> falls under <paramref name="edgeShare"/>.</summary>
+    public PackStandModels For(PackTreeTag tag, float edgeShare, double edgeRoll)
+    {
+        var set = Stands.TryGetValue(string.IsNullOrEmpty(tag.Stand) ? PackTreeTag.Mixed : tag.Stand, out var s) ? s : Default;
+        if (tag.Edge && set.Edge && edgeRoll < edgeShare && Stands.TryGetValue(PackTreeConfig.EdgeStand, out var e)) return e;
+        return set;
+    }
+
+    /// <summary>
+    /// Resolves the config's lists with <paramref name="resolve"/> (the model's id and height, null when the model cannot be loaded). A shape a list is empty for
+    /// (nothing listed or nothing loadable) takes the default list of the shape, and the default's own empty shape the other shape's, so a tree always has a model
+    /// as long as any has loaded.
+    /// </summary>
+    public static PackModelSets Build(PackTreeConfig cfg, Func<PackTreeEntry, PackCandidate?> resolve)
+    {
+        PackCandidate[] List(IEnumerable<PackTreeEntry> entries)
+        {
+            var l = new List<PackCandidate>();
+            foreach (var e in entries)
+                if (e.Weight > 0 && resolve(e) is { } c) l.Add(c with { Weight = e.Weight, Bulk = e.Bulk });
+            return l.ToArray();
+        }
+        var cone = List(cfg.For(true));
+        var box = List(cfg.For(false));
+        var def = new PackStandModels(cone.Length > 0 ? cone : box, box.Length > 0 ? box : cone, cfg.BulkShare, true);
+        var stands = new Dictionary<string, PackStandModels>();
+        foreach (var (name, sc) in cfg.Stands)
+        {
+            var sCone = List(sc.For(true));
+            var sBox = List(sc.For(false));
+            if (sCone.Length == 0 && sBox.Length == 0) { sCone = def.Cone; sBox = def.Box; }
+            else if (sCone.Length == 0) sCone = sBox; // a stand with one shape's list only
+            else if (sBox.Length == 0) sBox = sCone;
+            stands[name] = new PackStandModels(sCone, sBox, sc.BulkShare ?? cfg.BulkShare, sc.Edge);
+        }
+        return new PackModelSets { Default = def, Stands = stands };
+    }
+}
 
 /// <summary>The arithmetic of the pack trees: which model, how big, which tile, where the cut is.</summary>
 public static class PackTreeMath
@@ -158,14 +288,29 @@ public static class PackTreeMath
 
     /// <summary>One tree of a tile as a pack tree: the model's id, scale and turn; null when the shape has no model. Base in Godot axes.</summary>
     public static PackPlacement? Place(TreeInstance t, TreeModel m, IReadOnlyList<PackCandidate> cone, IReadOnlyList<PackCandidate> box, PackTreeConfig cfg)
+        => PlaceFrom(t, m, t.Cone ? cone : box, cfg.BulkShare, cfg);
+
+    /// <summary>One tree as a pack tree, the models by the tree's stand and edge flag (<see cref="PackModelSets.For"/>).</summary>
+    public static PackPlacement? Place(TreeInstance t, TreeModel m, PackTreeTag tag, PackModelSets sets, PackTreeConfig cfg)
     {
-        var list = t.Cone ? cone : box;
+        var set = sets.For(tag, cfg.EdgeShare, EdgeRoll(t.X, t.Y));
+        return PlaceFrom(t, m, t.Cone ? set.Cone : set.Box, set.BulkShare, cfg);
+    }
+
+    static PackPlacement? PlaceFrom(TreeInstance t, TreeModel m, IReadOnlyList<PackCandidate> list, float bulkShare, PackTreeConfig cfg)
+    {
         var h = CodeHeight(t, m);
-        var pick = Choose(list, h, Roll(t.X, t.Y), cfg.ScaleMin, cfg.ScaleMax, cfg.BulkShare);
+        var pick = Choose(list, h, Roll(t.X, t.Y), cfg.ScaleMin, cfg.ScaleMax, bulkShare);
         if (pick < 0) return null;
         var model = list[pick];
         return new PackPlacement(new Vector3(t.X, t.Z, -t.Y), t.Rot, model.HeightM > 1e-4f ? h / model.HeightM : 1f, model.ModelId);
     }
+
+    const int EdgeSalt = 3002;
+
+    /// <summary>A second number in [0, 1) from a tree's position, independent of <see cref="Roll"/>: whether an edge tree takes the edge models.</summary>
+    public static double EdgeRoll(float x, float y)
+        => MeadowGen.Hash01((int)MathF.Round(x * 100f), (int)MathF.Round(y * 100f), EdgeSalt);
 
     public static int TileOf(float v, float tileM) => (int)MathF.Floor(v / tileM);
 

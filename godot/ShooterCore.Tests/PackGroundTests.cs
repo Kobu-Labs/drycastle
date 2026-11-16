@@ -21,9 +21,63 @@ public class PackGroundTests
         }
         Assert.All(c.GroundObjects.Kinds["log"].Models, e => Assert.StartsWith("SM_Tree_Log_", e.Name));
         Assert.All(c.GroundObjects.Kinds["boulder"].Models, e => Assert.StartsWith("SM_Rock_", e.Name));
-        Assert.NotEmpty(c.Undergrowth.Kinds);
-        Assert.All(c.Undergrowth.Kinds, k => Assert.NotEmpty(k.Models));
+        Assert.Equal(new[] { 5, 9 }, c.Undergrowth.Mixes.Select(m => m.Mix)); // forest and swamp
+        Assert.All(c.Undergrowth.Mixes, m => { Assert.NotEmpty(m.Kinds); Assert.All(m.Kinds, k => Assert.NotEmpty(k.Models)); });
         Assert.Equal(60000, c.Undergrowth.TrisPerTile);
+    }
+
+    [Fact]
+    public void ShippedUndergrowthHasUnderstoryKindsThinAtTrunksAndASwampSet()
+    {
+        var u = Shipped().Undergrowth;
+        var forest = u.Mixes.Single(m => m.Mix == 5).Kinds.ToDictionary(k => k.Name);
+        // the old kinds stay, the understory kinds are new
+        Assert.All(new[] { "fern", "bush", "mushroom", "twig", "rock", "grass" }, n => Assert.True(forest.ContainsKey(n), n));
+        var sapling = forest["sapling"]; var shrub = forest["shrub"];
+        Assert.Equal(0.4f, sapling.Per100M2);
+        Assert.Equal(0.6f, shrub.Per100M2);
+        Assert.InRange(sapling.ScaleMin, 0.25f, 0.25f); Assert.InRange(sapling.ScaleMax, 0.5f, 0.5f);
+        Assert.All(new[] { sapling, shrub }, k => { Assert.True(k.Foot < 1f, k.Name + " must thin at trunks"); Assert.True(k.Clump > 0f, k.Name + " is clumped"); });
+        Assert.All(sapling.Models, e => Assert.Matches("Pine_Small|Birch_Small", e.Name));
+        var swamp = u.Mixes.Single(m => m.Mix == 9);
+        Assert.All(new[] { "reeds", "swamp_grass", "moss_mound", "root", "log" }, n => Assert.Contains(swamp.Kinds, k => k.Name == n));
+        Assert.All(swamp.Kinds.Where(k => k.Name is "reeds" or "swamp_grass" or "moss_mound").SelectMany(k => k.Models), e => Assert.Equal("swamp", e.Pack));
+        Assert.DoesNotContain(swamp.Kinds, k => k.Name.Contains("lil", StringComparison.OrdinalIgnoreCase)); // no lily pads: they need water under them
+    }
+
+    [Fact]
+    public void EveryNumberTheShippedUndergrowthSetsIsReadNotLeftAtItsDefault()
+    {
+        // the snake-case policy once made per_100m2 per100_m2 and the file's value was never read (unmapped members are skipped): every number must differ from the class default
+        var u = Shipped().Undergrowth;
+        var d = new UndergrowthKindConfig();
+        Assert.All(u.Mixes, m => Assert.InRange(m.Mix, 1, 15));
+        foreach (var k in u.Mixes.SelectMany(m => m.Kinds))
+        {
+            Assert.True(k.Per100M2 > 0 && k.Per100M2 != d.Per100M2, k.Name + " per_100m2");
+            Assert.True(k.ScaleMin > 0 && k.ScaleMax > 0 && (k.ScaleMin != d.ScaleMin || k.ScaleMax != d.ScaleMax), k.Name + " scale");
+            Assert.True(k.Clump > 0 && k.Clump != d.Clump, k.Name + " clump");
+            Assert.True(k.Foot > 0 && k.Foot != d.Foot, k.Name + " foot");
+        }
+    }
+
+    [Fact]
+    public void ShippedUndergrowthJsonHasOnlyKeysTheConfigReads()
+    {
+        // a key the class does not have is skipped without a word, so a typo is a setting that silently does nothing
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "pack_trees.json")));
+        var u = doc.RootElement.GetProperty("undergrowth");
+        Assert.All(u.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "enabled", "tris_per_tile", "clump_m", "foot_m", "trunk_clear_m", "mixes" }));
+        foreach (var mix in u.GetProperty("mixes").EnumerateArray())
+        {
+            Assert.All(mix.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "mix", "name", "kinds" }));
+            foreach (var kind in mix.GetProperty("kinds").EnumerateArray())
+            {
+                Assert.All(kind.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "name", "per_100m2", "scale_min", "scale_max", "clump", "foot", "models" }));
+                foreach (var model in kind.GetProperty("models").EnumerateArray())
+                    Assert.All(model.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "pack", "name", "weight" }));
+            }
+        }
     }
 
     [Fact]
@@ -31,7 +85,9 @@ public class PackGroundTests
     {
         Assert.Throws<DataFileException>(() => PackTreeConfig.Parse("""{"version":1,"ground_objects":{"kinds":{"log":{"radius_m":0}}}}"""));
         Assert.Throws<DataFileException>(() => PackTreeConfig.Parse("""{"version":1,"undergrowth":{"tris_per_tile":-1}}"""));
-        Assert.Throws<DataFileException>(() => PackTreeConfig.Parse("""{"version":1,"undergrowth":{"kinds":[{"name":"a","clump":2}]}}"""));
+        Assert.Throws<DataFileException>(() => PackTreeConfig.Parse("""{"version":1,"undergrowth":{"mixes":[{"mix":5,"kinds":[{"name":"a","clump":2}]}]}}"""));
+        Assert.Throws<DataFileException>(() => PackTreeConfig.Parse("""{"version":1,"undergrowth":{"mixes":[{"mix":5},{"mix":5}]}}""")); // one set per mix
+        Assert.Throws<DataFileException>(() => PackTreeConfig.Parse("""{"version":1,"undergrowth":{"mixes":[{"mix":16}]}}""")); // the zone byte's nibble
     }
 
     // ---- ground_objects.json and the kind mapping ----
@@ -189,6 +245,29 @@ public class PackGroundTests
         List<PackPlacement> Grow(TreeFoot[] trees) => UndergrowthGen.Tile(Cfg(), one, 0, 0, 48, 48, 2f, All(0, 0, 48, 48, 2f), trees, (_, _) => 0f, 1 << 30, out _);
         int Around(IEnumerable<PackPlacement> l) => l.Count(p => spots.Any(t => (p.Base.X - t.X) * (p.Base.X - t.X) + (-p.Base.Z - t.Y) * (-p.Base.Z - t.Y) < 9f));
         Assert.True(Around(Grow(spots)) > 2 * Around(Grow([])));
+    }
+
+    [Fact]
+    public void EachMixGrowsItsOwnKindsOnItsOwnCellsUnderOneBudget()
+    {
+        // forest on the left half of the tile (kind models 10, 11), swamp on the right (model 20): each stays on its cells
+        bool[] Half(bool left) { var c = new bool[24 * 24]; for (var y = 0; y < 24; y++) for (var x = 0; x < 24; x++) c[y * 24 + x] = (x < 12) == left; return c; }
+        var forest = new UndergrowthSet(new ForestMask { Gx0 = 0, Gy0 = 0, W = 24, H = 24, Cells = Half(true) }, Kinds(), 50000);
+        UndergrowthKind[] swampKinds = [new(0.05f, 1f, 1f, 0f, 1f, [20], [1f], [30])];
+        var swamp = new UndergrowthSet(new ForestMask { Gx0 = 0, Gy0 = 0, W = 24, H = 24, Cells = Half(false) }, swampKinds, 90000);
+        var both = UndergrowthGen.Tile(Cfg(), [forest, swamp], 0, 0, 48, 48, 2f, [], (_, _) => 0f, 1 << 30, out var tris);
+        Assert.All(both.Where(p => p.Model == 20), p => Assert.InRange(p.Base.X, 24f, 48f));
+        Assert.All(both.Where(p => p.Model != 20), p => Assert.InRange(p.Base.X, 0f, 24f));
+        Assert.Contains(both, p => p.Model == 20);
+        Assert.Contains(both, p => p.Model != 20);
+        // a mix with no cell in the tile (the swamp on a map that has none) adds nothing and changes nothing
+        var none = new UndergrowthSet(new ForestMask { Gx0 = 0, Gy0 = 0, W = 24, H = 24, Cells = new bool[576] }, swampKinds, 90000);
+        Assert.Equal(UndergrowthGen.Tile(Cfg(), [forest], 0, 0, 48, 48, 2f, [], (_, _) => 0f, 1 << 30, out _),
+            UndergrowthGen.Tile(Cfg(), [forest, none], 0, 0, 48, 48, 2f, [], (_, _) => 0f, 1 << 30, out _));
+        // one budget for both: thinned to it together
+        var thin = UndergrowthGen.Tile(Cfg(), [forest, swamp], 0, 0, 48, 48, 2f, [], (_, _) => 0f, tris / 2, out var thinTris);
+        Assert.InRange(thinTris, tris / 2 - 200, tris / 2);
+        Assert.Contains(thin, p => p.Model == 20);
     }
 
     [Fact]
