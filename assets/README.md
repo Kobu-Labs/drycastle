@@ -102,8 +102,8 @@ animation written as code, needs numpy; `python3 scripts/make_bigfoot_model.py` 
 The body: a hunched, near-black giant with a spiked ridge down its back, forearms thicker than its upper arms, clawed hands at knee height, a head slung low
 with a scowling brow, burning eyes, fangs and tusks. Metres, stands on y 0, faces -Z, 3.6 m to the crest; one skinned mesh of 2242 triangles on 26 bones
 whose rest rotations are identity (`Root > Hips > Spine > Chest > Neck > Head > Jaw`, arms `Clavicle/UpperArm/Forearm/Hand/Fingers`, legs
-`Thigh/Shin/Foot/Toe`, `.L` and `.R`), and 13 clips: Idle, Walk, Run, Death, Hit, Roar, TrunkThrow, StompWindup, Stomp, VehicleLift, Launch, GrabReach,
-Hold. Walk and Run cover 2.8 m and 8.4 m a loop (`movement.walk_stride_m`, `run_stride_m`). `python3 scripts/preview_glb_clips.py <glb> <out_dir>` draws
+`Thigh/Shin/Foot/Toe`, `.L` and `.R`), and 14 clips: Idle, Walk, Run, Death, Hit, Roar, TrunkThrow, StompWindup, Stomp, VehicleLift, Launch, GrabReach,
+Hold, Hurl. Walk and Run cover 2.8 m and 8.4 m a loop (`movement.walk_stride_m`, `run_stride_m`). `python3 scripts/preview_glb_clips.py <glb> <out_dir>` draws
 a turnaround and a contact sheet per clip from the file itself, without the game. The head: the same head at 1 / 1.25, the jaw hanging open, 732 triangles,
 one mesh node, in the frame of a worn headgear item (metres, forward -Z, origin at the middle of the wearer's head), about 1.14 x 1.22 x 1.17 m with the
 mane, so it swallows the head of every player body. Its icon (`ui/icons/items/bigfoot_head.png`) is a render of the model: `make shooter-icons` redraws it.

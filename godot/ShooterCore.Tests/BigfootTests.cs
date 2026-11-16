@@ -521,10 +521,10 @@ public class BigfootTests
         sky.VehicleList.Add(new BigfootVehicle(0x4003, new Vector3(1, 30, 0), HalfLength: 4f));
         var b2 = Make(sky);
         HitUntil(b2, Shipped.Hits.SecondPhaseAt);
-        Run(b2, 0.5f);
+        Run(b2, BigfootRules.RoarSeconds + 0.5f); // it roars at the new phase first, and still leaves it alone
         Assert.Empty(sky.VehicleLifts);
-        sky.VehicleList[0] = new BigfootVehicle(0x4003, new Vector3(1, 3, 0), HalfLength: 4f);
-        Run(b2, 0.5f);
+        sky.VehicleList[0] = new BigfootVehicle(0x4003, b2.Position + new Vector3(1, 3, 0), HalfLength: 4f); // beside it, wherever the chase took it
+        Run(b2, Shipped.Trunk.WindupSeconds + 0.5f); // it may be in the middle of a log throw
         Assert.Single(sky.VehicleLifts);
     }
 
@@ -648,6 +648,7 @@ public class BigfootTests
         var angry = Make(far2);
         HitUntil(angry, Shipped.Hits.EnrageAt);
         Assert.True(angry.Enraged);
+        Run(angry, BigfootRules.RoarSeconds + 0.5f); // it stands and roars first
         var start = angry.Position.Z;
         Run(angry, 4);
         Assert.True(start - angry.Position.Z > calmWalked * 1.15f, $"enraged it walked {start - angry.Position.Z} m, calm {calmWalked} m");
@@ -1023,12 +1024,12 @@ public class BigfootTests
         Assert.Equal(PinnedDeathHash, h);
     }
 
-    const string PinnedFight = "0.00 VehicleWindup\n1.63 Launch\n2.17 Idle\n2.20 StompWindup\n3.30 Stomp\n3.90 Idle\n3.93 Walk\n4.20 GrabReach\n4.90 Hold\n0.00 Hold\n1.40 Launch\n1.93 Idle\n1.97 Walk\n2.40 Idle\n4.30 StompWindup\n5.40 Stomp\n6.00 Idle\n0.00 Idle\n1.83 GrabReach\n2.53 Hold\n5.07 Launch\n5.60 Idle\n5.63 StompWindup\n6.73 Stomp\n7.33 Idle\n13.53 GrabReach\n14.23 Hold\n16.77 Launch\n17.30 Idle\n17.33 StompWindup\n18.43 Stomp\n19.03 Idle";
-    const ulong PinnedFightHash = 17521742334228743959UL;
-    const string PinnedWipe = "0.00 Run\n0.30 Walk\n1.50 TrunkWindup\n2.50 Idle\n2.53 Walk\n3.07 StompWindup\n0.00 StompWindup\n0.13 Stomp\n0.73 Idle\n0.77 Walk\n2.37 GrabReach\n0.00 Idle\n0.00 TrunkWindup\n1.00 Idle\n1.03 Run\n3.50 Walk\n4.43 TrunkWindup\n5.43 Idle\n5.47 Walk\n6.23 StompWindup\n7.33 Stomp\n7.93 Idle\n7.97 Walk\n8.07 TrunkWindup\n9.07 Idle\n9.10 Walk\n0.00 Walk\n0.60 GrabReach";
-    const ulong PinnedWipeHash = 10882475949325797536UL;
-    const string PinnedDeath = "0.00 GrabReach\n0.70 Hold\n0.00 Hold\n1.20 Launch\n1.73 Idle\n1.77 StompWindup\n2.87 Stomp\n3.47 Idle\n0.00 Dead";
-    const ulong PinnedDeathHash = 4960527982406786367UL;
+    const string PinnedFight = "0.00 VehicleWindup\n1.63 Launch\n2.17 Idle\n2.20 StompWindup\n3.30 Stomp\n3.90 Idle\n3.93 Walk\n4.27 GrabReach\n4.97 Hold\n0.00 Hold\n1.47 Launch\n2.00 Idle\n2.03 Roar\n3.87 Idle\n3.90 Walk\n4.30 StompWindup\n5.40 Stomp\n6.00 Idle\n6.03 Walk\n6.27 Idle\n0.00 Roar\n1.83 Idle\n1.90 GrabReach\n2.60 Hold\n5.13 Launch\n5.67 Idle\n5.70 StompWindup\n6.80 Stomp\n7.40 Idle\n13.60 GrabReach\n14.30 Hold\n16.83 Launch\n17.37 Idle\n17.40 StompWindup\n18.50 Stomp\n19.10 Idle";
+    const ulong PinnedFightHash = 4511632879054200742UL;
+    const string PinnedWipe = "0.00 Run\n1.00 Walk\n1.33 StompWindup\n2.43 Stomp\n3.03 Idle\n3.07 TrunkWindup\n0.00 TrunkWindup\n0.03 Idle\n0.07 Roar\n1.90 Idle\n1.93 Walk\n0.00 Idle\n0.00 TrunkWindup\n1.00 Idle\n1.03 Run\n4.20 Walk\n4.43 TrunkWindup\n5.43 Idle\n5.47 Walk\n5.70 StompWindup\n6.80 Stomp\n7.40 Idle\n7.43 Walk\n8.07 TrunkWindup\n9.07 Idle\n9.10 Walk\n0.00 Walk\n0.30 GrabReach";
+    const ulong PinnedWipeHash = 12185621259592720610UL;
+    const string PinnedDeath = "0.00 GrabReach\n0.70 Hold\n0.00 Hold\n1.20 Launch\n1.73 Idle\n1.77 StompWindup\n2.87 Stomp\n3.47 Idle\n3.50 Roar\n5.33 Idle\n0.00 Dead";
+    const ulong PinnedDeathHash = 17841702554619195757UL;
 
     // ---- the act and life machines ----
 

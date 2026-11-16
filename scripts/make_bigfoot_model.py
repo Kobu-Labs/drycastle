@@ -836,6 +836,20 @@ def clip_hold(t):
                 hand_L=(0.5, 0.75 + 0.06 * wave(t * 2, 0.5), -0.25), curl_L=85)
 
 
+def clip_hurl(t):
+    """Throws the player it holds: the right fist goes back over the shoulder and whips forward and down, the body after it. Starts where Hold stands."""
+    one = dict(handw_R=1, elbow_R=(1.0, -0.2, 0.4), hand_L=(0.4, 0.5, -0.2), curl_L=60)
+    return spline([
+        (0.00, clip_hold(0.0)),
+        (0.30, pose(STAND, hips_pos=(0, -0.12, 0.34), hips=(-4, -8, 0), spine=(-6, -8, 0), chest=(-10, -14, 0), neck=(-6, 8, 0), head=(-8, 12, 0), jaw=40,
+                    handm_R=(0.75, 3.55, 0.35), curl_R=85, **one)),
+        (0.62, pose(STAND, hips_pos=(0, -0.26, -0.1), hips=(12, 6, 0), spine=(8, 6, 0), chest=(12, 12, 0), neck=(-14, -6, 0), head=(-16, -8, 0), jaw=44,
+                    handm_R=(0.3, 2.3, -2.15), curl_R=10, **one)),
+        (1.00, pose(STAND, hips_pos=(0, -0.38, -0.2), hips=(20, 10, 0), spine=(12, 8, 0), chest=(18, 14, 0), neck=(-16, -8, 0), head=(-18, -10, 0), jaw=30,
+                    handm_R=(-0.1, 1.05, -1.5), curl_R=5, **one)),
+    ], t, False)
+
+
 # name, seconds, looped, pose at phase, metres per loop (0: stands still). The attack clips are as long as their act in bigfoot.json;
 # the game stretches each over the act's time anyway.
 CLIPS = [
@@ -852,6 +866,7 @@ CLIPS = [
     ("Launch", 0.5, False, clip_launch, 0.0),
     ("GrabReach", 0.7, False, clip_grab_reach, 0.0),
     ("Hold", 0.8, True, clip_hold, 0.0),
+    ("Hurl", 0.5, False, clip_hurl, 0.0),
 ]
 FPS = 30
 

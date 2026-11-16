@@ -553,10 +553,14 @@ despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: 
   it does not use the intel board (`AnnounceIntel` is the one call that would).
 - **A world entity, not a bot** (wire type 60). The state byte is the act (`BigfootAct`, bits 0-3), a bit that flips on every hit that did not kill, the phase (bits 5-6) and
   the enrage (bit 7); the owner field is the player it holds; the hp byte is the hit count left in percent. The client draws the generated giant
-  (`drycastle-generated-models/bigfoot.glb`, `scripts/make_bigfoot_model.py`: a skinned mesh, 26 bones, 13 clips) and picks the clip from the act (`ClipFor`): every act
+  (`drycastle-generated-models/bigfoot.glb`, `scripts/make_bigfoot_model.py`: a skinned mesh, 26 bones, 14 clips) and picks the clip from the act (`ClipFor`): every act
   has its own, and a wind-up is stretched over its act's time so the blow lands with the server's. Walk and Run play at the speed it moves (`PaceGait`: ground speed over
-  the clip's stride, `movement.walk_stride_m` / `run_stride_m`). A hit makes it flinch only while it stands; a roar (the phase change, its arrival) plays the Roar clip only
-  while it stands, because the server does not stop it to roar. The log it winds up with rides its right hand; the fist that holds a player rocks the whole figure
+  the clip's stride, `movement.walk_stride_m` / `run_stride_m`). A hit makes it flinch only while it stands. When a phase begins or it enrages it owes a roar: the first tick it has no
+  attack to make it stops, faces its target and roars for `BigfootRules.RoarSeconds` (the act `Roar`); its arrival plays the same clip on the client. A launch out of a
+  hold is the one-handed Hurl clip, any other the two-handed Launch. The chase (#285): it runs until its target is within 0.8 x `run_beyond_m` and stands until the
+  target is 1.2 m beyond `stop_distance_m`, gathers and sheds speed, turns on the spot at a walk, keeps a way round a building for 0.6 s and faces it, treats under
+  0.3 s of no way through as still moving, and its height follows the ground at up to 20 m/s; the client turns the figure to the server's yaw quickly instead of
+  jumping. The log it winds up with rides its right hand; the fist that holds a player rocks the whole figure
   (`MoveBigfoot`). The sounds are still placeholders
   (`BigfootSounds` names the sounds the game already has).
 - **Hit count, not hit points.** It dies after `hits.per_player` x participants hits (participants: living players within `participant_radius_m`; the number only goes

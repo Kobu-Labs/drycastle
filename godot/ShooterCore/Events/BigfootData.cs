@@ -302,6 +302,8 @@ public static class BigfootRules
 
     /// <summary>How long the Stomp act lasts once the shockwave starts, and the Launch act's swing after a vehicle throw or a player launch (seconds, then back to Idle).</summary>
     public const float StompSeconds = 0.6f, LaunchSwingSeconds = 0.5f;
+    /// <summary>How long it stands and roars when a phase begins or it enrages (the Roar clip's length).</summary>
+    public const float RoarSeconds = 1.8f;
 
     /// <summary>Registers the Bigfoot and its log once (idempotent): the Bigfoot carries its hit count left in the hp byte, the log nothing.</summary>
     public static void Register(WorldEntityRegistry registry)
@@ -324,10 +326,10 @@ public static class BigfootRules
     /// </summary>
     public const string ClipIdle = "Idle", ClipWalk = "Walk", ClipRun = "Run", ClipHit = "Hit", ClipRoar = "Roar", ClipDeath = "Death",
         ClipTrunkThrow = "TrunkThrow", ClipStompWindup = "StompWindup", ClipStomp = "Stomp", ClipVehicleLift = "VehicleLift", ClipLaunch = "Launch",
-        ClipGrabReach = "GrabReach", ClipHold = "Hold";
+        ClipGrabReach = "GrabReach", ClipHold = "Hold", ClipHurl = "Hurl";
     public static readonly string[] Clips =
     {
-        ClipIdle, ClipWalk, ClipRun, ClipHit, ClipRoar, ClipDeath, ClipTrunkThrow, ClipStompWindup, ClipStomp, ClipVehicleLift, ClipLaunch, ClipGrabReach, ClipHold,
+        ClipIdle, ClipWalk, ClipRun, ClipHit, ClipRoar, ClipDeath, ClipTrunkThrow, ClipStompWindup, ClipStomp, ClipVehicleLift, ClipLaunch, ClipGrabReach, ClipHold, ClipHurl,
     };
     /// <summary>The clips that loop; the others play once and hold their last frame.</summary>
     public static readonly string[] LoopedClips = { ClipIdle, ClipWalk, ClipRun, ClipHold };
@@ -376,16 +378,16 @@ public static class BigfootRules
 /// <summary>What a hit on the Bigfoot is made by, which sets what it counts.</summary>
 public enum HitSource : byte { None, Bullet, Explosive, VehicleWeapon }
 
-/// <summary>What the Bigfoot is doing: the low four bits of its replicated state byte. The clients pick the clip and the procedural motion from it.</summary>
+/// <summary>What the Bigfoot is doing: the low four bits of its replicated state byte. The clients pick the clip from it.</summary>
 public enum BigfootAct : byte
 {
     /// <summary>Standing (it waits after a wipe, and when nobody is near).</summary>
     Idle = 0,
     Walk = 1,
     Run = 2,
-    /// <summary>Winding up a log throw: the Attack clip, leaning back, then forward at the release.</summary>
+    /// <summary>Winding up a log throw: the log on its shoulder, drawn back, hurled when the wind-up ends.</summary>
     TrunkWindup = 3,
-    /// <summary>Winding up the stomp: the telegraph (the Attack clip and a sound), arms and body up.</summary>
+    /// <summary>Winding up the stomp: the telegraph (a clip and a sound), fists and a knee up.</summary>
     StompWindup = 4,
     /// <summary>The stomp lands: the shockwave runs.</summary>
     Stomp = 5,
@@ -395,7 +397,9 @@ public enum BigfootAct : byte
     GrabReach = 7,
     /// <summary>Holding the player in its hand and flailing: the player is the entity's owner field.</summary>
     Hold = 8,
-    /// <summary>The launch: a short Attack clip, then back to the chase.</summary>
+    /// <summary>The launch: the swing of the throw, then back to the chase.</summary>
     Launch = 9,
     Dead = 10,
+    /// <summary>Standing and roaring: a phase began, or the enrage.</summary>
+    Roar = 11,
 }

@@ -45,6 +45,9 @@ public partial class NetClient
         public Vector3 LastAt;
         public bool HasLastAt;
         public float Speed;
+        /// <summary>The act drawn before the one that plays now: a launch out of a hold is the one-handed throw of a player, any other the two-handed one.</summary>
+        public BigfootAct Before;
+        public BigfootAct Shown;
         /// <summary>The log on its shoulder while it winds a throw up (the thrown one is a world entity of its own).</summary>
         public Node3D? HeldLog;
     }
@@ -186,7 +189,9 @@ public partial class NetClient
                 if (e.Buf.At(rt) is { } s)
                 {
                     v.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
-                    v.Node.Rotation = new Vector3(0, s.Yaw, 0);
+                    // the server snaps its yaw at the start of an attack and steps it in a detour: the figure turns there quickly instead of jumping
+                    var yaw = v.HasLastAt ? Mathf.LerpAngle(v.Node.Rotation.Y, s.Yaw, 1f - MathF.Exp(-14f * (float)GetProcessDeltaTime())) : s.Yaw;
+                    v.Node.Rotation = new Vector3(0, yaw, 0);
                     MeasureSpeed(v);
                 }
                 var raw = e.State.State;
@@ -274,7 +279,8 @@ public partial class NetClient
         BigfootAct.VehicleWindup => (BigfootRules.ClipVehicleLift, BigfootData.VehicleThrow.WindupSeconds, 0.12),
         BigfootAct.GrabReach => (BigfootRules.ClipGrabReach, BigfootData.Grab.ReachSeconds, 0.1),
         BigfootAct.Stomp => (BigfootRules.ClipStomp, BigfootRules.StompSeconds, 0.03), // it begins in the wind-up's last pose
-        BigfootAct.Launch => (BigfootRules.ClipLaunch, BigfootRules.LaunchSwingSeconds, 0.08),
+        BigfootAct.Launch => (BigfootRules.ClipLaunch, BigfootRules.LaunchSwingSeconds, 0.08), // a player is thrown with Hurl instead (ShowBigfootAct)
+        BigfootAct.Roar => (BigfootRules.ClipRoar, BigfootRules.RoarSeconds, 0.15),
         BigfootAct.Hold => (BigfootRules.ClipHold, 0, 0.2),
         BigfootAct.Dead => (BigfootRules.ClipDeath, 0, 0.1),
         _ => (BigfootRules.ClipIdle, 0, 0.25),
@@ -287,6 +293,8 @@ public partial class NetClient
         v.Introduced = true; v.Since = now;
         if (v.Anim == null) return;
         var (plain, seconds, blend) = ClipFor(act);
+        v.Before = v.Shown; v.Shown = act;
+        if (act == BigfootAct.Launch && v.Before == BigfootAct.Hold) plain = BigfootRules.ClipHurl;
         if (!v.Clips.TryGetValue(plain, out var clip)) return;
         var length = v.Anim.GetAnimation(clip).Length;
         v.Anim.SpeedScale = seconds > 0 && length > 0.05 ? (float)(length / seconds) : 1f;
@@ -403,7 +411,10 @@ public partial class NetClient
         }
     }
 
-    /// <summary>The Bigfoot standing at a roar's place plays the Roar clip. Only standing: the server does not stop it for a roar, and it would slide.</summary>
+    /// <summary>
+    /// The Bigfoot standing at a roar's place plays the Roar clip: its arrival, and a phase that began while it stood. In a fight the server's Roar act
+    /// (<see cref="BigfootAct.Roar"/>) stops it and plays the same clip; a giant on the move is left alone here, it would slide.
+    /// </summary>
     void RoarAt(Vector3 at)
     {
         foreach (var v in _bigfoots.Values)

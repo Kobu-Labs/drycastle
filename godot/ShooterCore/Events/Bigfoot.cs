@@ -111,6 +111,12 @@ public sealed class Bigfoot : IWorldEntity
     readonly StateMachine<BigfootLife> _life = new(BigfootSpecs.Life);  // fighting, waiting after a wipe, dead
     ushort _target;
     float _retarget;
+    float _speed;                     // how fast it moves now: it gathers speed and sheds it (m/s)
+    bool _running, _stopped;          // the chase's two choices, each with its own slack so a target on the line does not flip them every tick
+    float _stuckFor;                  // seconds no heading let it through: a moment of that is not standing
+    float _detourFor, _detourHeading; // the way round it found, kept for a moment so it does not turn back into the wall
+    float _groundY;                   // the ground under it: its height follows this a little late, so a ledge is a ramp
+    bool _roarDue;                    // a phase began (or the enrage): it roars the next time it is free to
     float _fight;                     // seconds awake with a target: the phases also begin by this clock
     float _trunkCd, _stompCd, _vehicleCd, _grabCd;
     ushort _vehicleToThrow;
@@ -129,6 +135,7 @@ public sealed class Bigfoot : IWorldEntity
         _d = data; _w = world; _rng = new Random(seed);
         Position = _w.GroundY(spawn.X, spawn.Z, spawn.Y) is { } y ? new Vector3(spawn.X, y, spawn.Z) : spawn;
         Yaw = yaw;
+        _groundY = Position.Y;
         _need = BigfootRules.HitsNeeded(data.Hits, participants);
         _trunkCd = 1.5f; // it does not open with a throw the moment it appears
     }
@@ -223,7 +230,8 @@ public sealed class Bigfoot : IWorldEntity
         var f = TakenFraction;
         var phase = Math.Max(BigfootRules.PhaseAt(_d.Hits, f), BigfootRules.PhaseAfter(_d.Hits, _fight));
         var enraged = BigfootRules.EnrageAt(_d.Hits, f) || BigfootRules.EnrageAfter(_d.Hits, _fight);
-        if (phase > Phase) _w.Fx(BigfootFxKind.Roar, Position, 0, (byte)phase);
+        if (phase > Phase) { _w.Fx(BigfootFxKind.Roar, Position, 0, (byte)phase); _roarDue = true; }
+        if (enraged && !Enraged) _roarDue = true;
         Phase = Math.Max(Phase, phase);
         Enraged = Enraged || enraged;
     }
@@ -246,6 +254,7 @@ public sealed class Bigfoot : IWorldEntity
         TickWaves(players, dt);
         TickFlyers(players, dt);
         _trunkCd -= dt; _stompCd -= dt; _vehicleCd -= dt; _grabCd -= dt;
+        Position = new Vector3(Position.X, Position.Y + Math.Clamp(_groundY - Position.Y, -ClimbMps * dt, ClimbMps * dt), Position.Z);
         if (Waiting) { Rest(); return; }
         if (_target != 0) { _fight += dt; UpdatePhase(); }
 
@@ -266,6 +275,10 @@ public sealed class Bigfoot : IWorldEntity
                 break;
             case BigfootAct.Hold:
                 TickHold(players, dt);
+                break;
+            case BigfootAct.Roar:
+                FaceTarget(players, dt);
+                if (_act.Tick(dt)) Rest();
                 break;
             case BigfootAct.Stomp:
             case BigfootAct.Launch:
@@ -311,7 +324,7 @@ public sealed class Bigfoot : IWorldEntity
     void Wipe()
     {
         _taken = 0; _hitsBy.Clear(); _life.Enter(BigfootLife.Waiting);
-        Phase = 0; Enraged = false; _fight = 0;
+        Phase = 0; Enraged = false; _fight = 0; _roarDue = false;
         _need = BigfootRules.HitsNeeded(_d.Hits, 0);
         ReleaseHeld();
         DropLiftedVehicle();
@@ -329,7 +342,16 @@ public sealed class Bigfoot : IWorldEntity
     }
 
     /// <summary>Back to standing: where every ended act, a lost target and a wipe go.</summary>
-    void Rest() => _act.Enter(BigfootAct.Idle);
+    void Rest() { _speed = 0; _act.Enter(BigfootAct.Idle); }
+
+    /// <summary>The fastest its height follows the ground (m/s): a ledge of <see cref="BigfootMovement.MaxStepM"/> takes a fifth of a second, a steep slope at a run is still kept up with.</summary>
+    const float ClimbMps = 20f;
+    /// <summary>How it gathers and sheds speed (m/s per second): a run is reached in about a second.</summary>
+    const float AccelMps2 = 14f, DecelMps2 = 30f;
+    /// <summary>It runs until its target is this share of <see cref="BigfootMovement.RunBeyondM"/> near, and stands until the target is this much beyond the stop distance.</summary>
+    const float RunKeepShare = 0.8f, StopSlackM = 1.2f;
+    /// <summary>A way round a building is kept this long before it turns to its target again; no way through for this long is standing.</summary>
+    const float DetourSeconds = 0.6f, StuckSeconds = 0.3f;
 
     float SpeedMul => Enraged ? _d.Hits.EnrageSpeedMultiplier : 1f;
     float CooldownMul => Enraged ? _d.Hits.EnrageCooldownMultiplier : 1f;
@@ -363,6 +385,12 @@ public sealed class Bigfoot : IWorldEntity
         if (_trunkCd <= 0 && dist >= _d.Trunk.MinRangeM && dist <= _d.Trunk.MaxRangeM && !_w.Blocked(Chest, ChestOf(t.Feet), 0.3f))
         {
             _act.Enter(BigfootAct.TrunkWindup, _d.Trunk.WindupSeconds); FaceYaw(t.Feet, dt, snap: true);
+            return;
+        }
+        if (_roarDue) // a phase began, or the enrage: with no attack to make this tick it stops and roars before it chases on
+        {
+            _roarDue = false; _speed = 0;
+            _act.Enter(BigfootAct.Roar, BigfootRules.RoarSeconds);
             return;
         }
         Chase(t, dist, dt);
@@ -433,11 +461,30 @@ public sealed class Bigfoot : IWorldEntity
 
     void Chase(BigfootPlayer t, float dist, float dt)
     {
-        var run = dist > _d.Movement.RunBeyondM;
-        if (dist <= _d.Movement.StopDistanceM) { FaceYaw(t.Feet, dt); Rest(); return; }
-        var speed = (run ? _d.Movement.RunSpeed : _d.Movement.WalkSpeed) * SpeedMul;
-        _act.Enter(Step(t.Feet, speed, dt) ? (run ? BigfootAct.Run : BigfootAct.Walk) : BigfootAct.Idle);
+        var m = _d.Movement;
+        _running = dist > (_running ? m.RunBeyondM * RunKeepShare : m.RunBeyondM);
+        _stopped = dist <= (_stopped ? m.StopDistanceM + StopSlackM : m.StopDistanceM);
+        if (_stopped) { FaceYaw(t.Feet, dt); Rest(); return; }
+        var top = (_running ? m.RunSpeed : m.WalkSpeed) * SpeedMul;
+        _speed = _speed < top ? MathF.Min(top, _speed + AccelMps2 * dt) : MathF.Max(top, _speed - DecelMps2 * dt);
+        switch (Step(t.Feet, _speed, dt))
+        {
+            case Stepped.Moved:
+                _stuckFor = 0;
+                _act.Enter(_running ? BigfootAct.Run : BigfootAct.Walk);
+                break;
+            case Stepped.Turning: // it turns on the spot at a walk, whatever it was doing, and gathers speed again afterwards
+                _stuckFor = 0; _speed = 0;
+                _act.Enter(BigfootAct.Walk);
+                break;
+            default: // no heading let it through: one such tick in a chase is not standing
+                _speed = 0; _stuckFor += dt;
+                if (_stuckFor >= StuckSeconds || Act == BigfootAct.Idle) _act.Enter(BigfootAct.Idle);
+                break;
+        }
     }
+
+    enum Stepped { Moved, Turning, Stuck }
 
     void FaceTarget(IReadOnlyList<BigfootPlayer> players, float dt)
     {
@@ -452,13 +499,17 @@ public sealed class Bigfoot : IWorldEntity
 
     /// <summary>
     /// Turns towards <paramref name="goal"/> and, once roughly facing it, walks one step on the terrain. A building in the way (<see cref="IBigfootWorld.Blocked"/>)
-    /// or a step the ground refuses turns the heading aside, the way an animal goes round; trees are not in the way. False when it did not move.
+    /// or a step the ground refuses turns the heading aside, the way an animal goes round; trees are not in the way. The way round is kept for
+    /// <see cref="DetourSeconds"/> and faced, so it walks along it instead of sidling and turning back into the wall. Its height follows the ground a little
+    /// late (<see cref="ClimbMps"/>).
     /// </summary>
-    bool Step(Vector3 goal, float speed, float dt)
+    Stepped Step(Vector3 goal, float speed, float dt)
     {
         var want = TurretMath.YawTo(Position, goal);
-        Yaw = TurretMath.StepAngle(Yaw, want, _d.Movement.TurnRateDegPerS * MathF.PI / 180f * dt);
-        if (MathF.Abs(TurretMath.AngleDiff(Yaw, want)) > 1.0f) return true; // turning on the spot
+        var rate = _d.Movement.TurnRateDegPerS * MathF.PI / 180f * dt;
+        if (_detourFor > 0) { _detourFor -= dt; want = _detourHeading; rate *= 2f; }
+        Yaw = TurretMath.StepAngle(Yaw, want, rate);
+        if (MathF.Abs(TurretMath.AngleDiff(Yaw, want)) > 1.0f) return Stepped.Turning;
         foreach (var turn in new[] { 0f, 0.7f, -0.7f, 1.4f, -1.4f })
         {
             var heading = Yaw + turn;
@@ -466,11 +517,12 @@ public sealed class Bigfoot : IWorldEntity
             var next = Position + f * speed * dt;
             if (_w.GroundY(next.X, next.Z, Position.Y) is not { } y || MathF.Abs(y - Position.Y) > _d.Movement.MaxStepM) continue;
             if (_w.Blocked(Position + Vector3.UnitY, new Vector3(next.X, Position.Y + 1f, next.Z), _d.Movement.BodyRadiusM)) continue;
-            Position = new Vector3(next.X, y, next.Z);
-            if (turn != 0) Yaw = TurretMath.StepAngle(Yaw, heading, _d.Movement.TurnRateDegPerS * MathF.PI / 180f * dt);
-            return true;
+            _groundY = y;
+            Position = new Vector3(next.X, Position.Y + Math.Clamp(y - Position.Y, -ClimbMps * dt, ClimbMps * dt), next.Z);
+            if (turn != 0) { _detourHeading = heading; _detourFor = DetourSeconds; }
+            return Stepped.Moved;
         }
-        return false;
+        return Stepped.Stuck;
     }
 
     // ---- attacks ----
