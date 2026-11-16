@@ -117,10 +117,14 @@ public partial class PauseScreen : MenuScreen
     readonly Action _resume, _disconnect;
     readonly Action? _loadouts, _teams;
     readonly Func<bool>? _unlockAll;
+    readonly Action? _respawn;
+    readonly Func<bool>? _canRespawn;
     Button _first = null!;
+    Button? _respawnBtn;
     /// <param name="unlockAll">True while the server runs in dev mode (<c>--unlock-all</c>): the corner indicator shows.</param>
     /// <param name="teams">Opens the Teams screen (#312); null hides the entry (not an admin in team deathmatch).</param>
-    public PauseScreen(Action resume, Action disconnect, Action? loadouts = null, Func<bool>? unlockAll = null, Action? teams = null) : base("HudScrim") { _resume = resume; _disconnect = disconnect; _loadouts = loadouts; _unlockAll = unlockAll; _teams = teams; }
+    /// <param name="respawn">The player's own Respawn (#284), asked after a confirm; <paramref name="canRespawn"/> false (the player is already dead) disables the button.</param>
+    public PauseScreen(Action resume, Action disconnect, Action? loadouts = null, Func<bool>? unlockAll = null, Action? teams = null, Action? respawn = null, Func<bool>? canRespawn = null) : base("HudScrim") { _resume = resume; _disconnect = disconnect; _loadouts = loadouts; _unlockAll = unlockAll; _teams = teams; _respawn = respawn; _canRespawn = canRespawn; }
 
     public override void _Ready()
     {
@@ -138,6 +142,13 @@ public partial class PauseScreen : MenuScreen
         v.AddChild(_first);
         if (_loadouts != null) v.AddChild(Ui.Btn(Strings.T("pause.loadouts"), _loadouts));
         if (_teams != null) v.AddChild(Ui.Btn(Strings.T("pause.teams"), _teams));
+        if (_respawn != null)
+        {
+            _respawnBtn = Ui.Btn(Strings.T("pause.respawn"), () => Shell.Push(new DialogScreen(Strings.T("respawn.title"), Strings.T("respawn.body"),
+                new[] { new DialogScreen.Choice(Strings.T("respawn.confirm"), () => { _respawn(); Shell.Reset(); }, "MenuDanger") })));
+            v.AddChild(_respawnBtn);
+            UpdateRespawn();
+        }
         v.AddChild(Ui.Btn(Strings.T("menu.settings"), () => Shell.Push(new SettingsScreen(true))));
         v.AddChild(Ui.Btn(Strings.T("pause.disconnect"), () => Shell.Push(new DialogScreen(Strings.T("disconnect.title"), Strings.T("disconnect.body"),
             new[] { new DialogScreen.Choice(Strings.T("pause.disconnect"), _disconnect, "MenuDanger") }))));
@@ -150,6 +161,18 @@ public partial class PauseScreen : MenuScreen
 
     protected override Control? FirstFocusTarget() => _first;
     public override void Back() { if (Shell.Pop(this)) _resume(); }
+
+    public override void _Process(double delta) { base._Process(delta); UpdateRespawn(); }
+
+    /// <summary>Respawn is off while already dead (the game goes on behind the pause menu); the tooltip says why.</summary>
+    void UpdateRespawn()
+    {
+        if (_respawnBtn == null) return;
+        var ok = _canRespawn?.Invoke() ?? true;
+        if (_respawnBtn.Disabled == !ok) return;
+        _respawnBtn.Disabled = !ok;
+        _respawnBtn.TooltipText = Strings.T(ok ? "respawn.tip" : "respawn.tip.dead");
+    }
 }
 
 public partial class LoadingScreen : MenuScreen

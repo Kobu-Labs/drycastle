@@ -57,7 +57,7 @@ A car, pole, wall piece or other asset put on the map by hand, at an absolute po
 _Avoid_: parcel object, prop (a prop is generated: a fence or a tree)
 
 **Loadout**:
-One of a player's five saved sets: a primary weapon, a secondary weapon, a perk and three killstreaks. Edited in game and switched on death.
+One of a player's five saved sets: a primary weapon, a secondary weapon, a perk and three killstreaks. Edited in game; the active one applies at each spawn (a Respawn gets the new one at once).
 _Avoid_: build, class, kit
 
 **Perk**:
@@ -91,6 +91,10 @@ _Avoid_: reward, achievement
 **Street lamp**:
 A lamp post of the base map, placed from OSM street lamp nodes or along roads by the pipeline (`lamps.json`). In the shooter it is solid and lights up at night (see the night factor); the viewer does not show it.
 _Avoid_: light, streetlight, lamp post
+
+**Respawn**:
+The player's own action (pause menu, or "Apply now" in the Loadouts screen, both with a confirm): the player dies at once and comes back after the normal respawn delay with the active loadout, or the one named. It is a suicide like a fall: a death, the killfeed names only the victim ("Respawn"), a Corpse, the Streak counter resets. No cooldown and no combat lockout (a victim can deny the kill; accepted). Refused while dead, outside a running round, or held by the demon or the Bigfoot.
+_Avoid_: redeploy (the wire name only), suicide
 
 **Corpse**:
 A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. It also carries every Item its player wore or carried in the Bag (up to eight), which another player can take one at a time (see Pickup limit).
@@ -339,7 +343,7 @@ The ground the map covers: a polygon (`polygon` in `map.local.yaml`) of absolute
 _Avoid_: border, boundary
 
 **Sketch**:
-A named group (ROAD, FENCE_PLAN, ...) of the temporary marks a developer draws on the ground in the map editor to point at places in a prompt. Several sketches exist at once, each holding any number of **marks**: points (A, B, ...) and lines (L1, L2, ...; a closed line means the ground inside it). Mark names are unique across all sketches; a prompt can name one mark ("at A"), or a whole sketch ("everything in sketch ROAD"). The developer draws in the editor, and Claude draws through the MCP server (`sketch_add_*`, e.g. "highlight this road under sketch ROAD"). A sketch is never map content and is not a hand edit; it lives in `out/sketch.json` only.
+A named group (ROAD, FENCE_PLAN, ...) of the temporary marks a developer draws on the ground in the map editor to point at places in a prompt. Several sketches exist at once, each holding any number of **marks**: points (A, B, ...) and lines (L1, L2, ...; a closed line means the ground inside it). Mark names are unique across all sketches; a prompt can name one mark ("at A"), or a whole sketch ("everything in sketch ROAD"). The developer draws in the editor, and Claude draws through the MCP server (`sketch_add_*`, e.g. "highlight this road under sketch ROAD"). A sketch is never map content and is not a hand edit; it lives in the shared per-user `~/.local/state/drycastle/sketch.json` only (every worktree sees the same sketches).
 _Avoid_: annotation, drawing, ground patch or zone (those are saved map content), layer
 
 **Building detail**:

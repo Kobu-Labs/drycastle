@@ -1,4 +1,7 @@
-"""The sketch file (``out/sketch.json``): temporary named marks on the ground, shared by the viewer and the MCP server.
+"""The sketch file (``~/.local/state/drycastle/sketch.json``): temporary named marks on the ground, shared by the viewer and the MCP server.
+
+One file per user, not per checkout: every worktree's viewer, MCP server and streetview follower reads and writes it
+(``$DRYCASTLE_SKETCH`` overrides the path; else ``$XDG_STATE_HOME/drycastle/sketch.json``).
 
 A *sketch* is a named group of marks (``ROAD``, ``FENCE_PLAN``); a mark is a point (``A``, ``B``, ...) or a line
 (``L1``, ``L2``, ...; closed means the ground inside). Mark ids are unique across all sketches, so a prompt can say
@@ -24,6 +27,19 @@ from typing import Any
 SKETCH_FORMAT_VERSION = 1
 DEFAULT_SKETCH = "DEFAULT"
 SKETCH_NAME = re.compile(r"[A-Za-z0-9_-]{1,24}")
+
+
+def default_path() -> Path:
+    """The shared sketch file: ``$DRYCASTLE_SKETCH``, else ``$XDG_STATE_HOME/drycastle/sketch.json`` (``~/.local/state`` when unset).
+
+    The viewer (``EditorMode.SketchPath``) resolves it the same way.
+    """
+    env = os.environ.get("DRYCASTLE_SKETCH")
+    if env:
+        return Path(env).expanduser()
+    state = os.environ.get("XDG_STATE_HOME")
+    base = Path(state) if state and os.path.isabs(state) else Path.home() / ".local" / "state"
+    return base / "drycastle" / "sketch.json"
 
 
 class SketchFileError(ValueError):

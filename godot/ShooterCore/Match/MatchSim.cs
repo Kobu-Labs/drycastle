@@ -35,6 +35,8 @@ public static class SpecialWeapons
     public const byte Bigfoot = 241;
     /// <summary>Burning (the devil's curse, <see cref="BurnSet"/>): a kill is credited to the curse owner and named "Burning" in the feed.</summary>
     public const byte Burn = 242;
+    /// <summary>The player's own Respawn action (#284, <see cref="MatchSim.ForceDeath"/>): the kill feed names it.</summary>
+    public const byte Redeploy = 239;
 }
 
 public abstract record MatchEvent;
@@ -435,6 +437,13 @@ public sealed class MatchSim
             return DamageResult.Saved;
         }
 
+        Die(v, victim, attacker, weapon, cause);
+        return DamageResult.Killed;
+    }
+
+    /// <summary>The lethal part of a hit on a living player: health 0, the death counted, the respawn timer, the credit, the events, the score goal. Shared by <see cref="ApplyDamage"/> and <see cref="ForceDeath"/>.</summary>
+    void Die(MatchPlayer v, ushort victim, ushort attacker, byte weapon, KillCause cause)
+    {
         v.Health = 0; v.SetLife(PlayerLife.Dead); v.Deaths++;
         v.RespawnAt = _now() + _cfg.RespawnDelay;
         var credited = attacker != victim && _players.TryGetValue(attacker, out var a) ? a : null;
@@ -448,7 +457,23 @@ public sealed class MatchSim
         if (IsTeamMode ? credited is { Sandbox: false, Team: not Teams.None } && !teamKill && _teamScore[credited.Team] >= _cfg.TeamScoreGoal
                        : credited is { Sandbox: false } && credited.Kills >= _cfg.ScoreGoal) End();
         Emit(new ScoreboardChanged());
-        return DamageResult.Killed;
+    }
+
+    /// <summary>
+    /// The player's own Respawn (#284): whether <see cref="ForceDeath"/> would take effect now. A round must be running and the player alive and not
+    /// held (the demon's pounce, the Bigfoot's grip). No damage gate applies: godmode and spawn protection do not stop it.
+    /// </summary>
+    public bool CanForceDeath(ushort id) => Phase == MatchPhase.Running && _players.TryGetValue(id, out var p) && p.Life == PlayerLife.Alive && !p.Held;
+
+    /// <summary>
+    /// Kills a living player by their own choice, not by damage (so no gate blocks it), as a suicide: death +1, no kill or team point, the kill feed
+    /// names only the victim, and the normal respawn delay. False when <see cref="CanForceDeath"/> says no.
+    /// </summary>
+    public bool ForceDeath(ushort id)
+    {
+        if (!CanForceDeath(id)) return false;
+        Die(_players[id], id, id, SpecialWeapons.Redeploy, KillCause.Standard);
+        return true;
     }
 
     /// <summary>

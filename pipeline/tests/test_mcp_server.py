@@ -29,6 +29,7 @@ def env(tmp_path):
         work_dir=ws["work"],
         edits_path=tmp_path / "edits.json",
         state_path=tmp_path / "editor-state.json",
+        sketch_path=tmp_path / "sketch.json",
     )
     return ParcelEditTools(settings), settings, tmp_path
 

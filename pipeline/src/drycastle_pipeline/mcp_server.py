@@ -127,7 +127,7 @@ class Settings:
     state_path: Path = DEFAULT_STATE
     assets_path: Path = DEFAULT_MANIFEST
     rules_path: Path = DEFAULT_RULES
-    sketch_path: Path | None = None  # default: sketch.json next to the state file
+    sketch_path: Path | None = None  # default: the shared per-user file (sketchfile.default_path)
 
     @property
     def work(self) -> Path:
@@ -135,7 +135,7 @@ class Settings:
 
     @property
     def sketch_file(self) -> Path:
-        return self.sketch_path or self.state_path.with_name("sketch.json")
+        return self.sketch_path or sketchfile.default_path()
 
 
 @dataclass
@@ -2781,7 +2781,7 @@ def parse_args(argv: list[str] | None = None) -> Settings:
     )
     ap.add_argument("--edits", type=Path, default=DEFAULT_EDITS, help="edits file to read and write")
     ap.add_argument("--state", type=Path, default=DEFAULT_STATE, help="editor-state.json of the viewer")
-    ap.add_argument("--sketch", type=Path, default=None, help="sketch.json shared with the viewer (default: next to --state)")
+    ap.add_argument("--sketch", type=Path, default=None, help="sketch.json shared with the viewer (default: ~/.local/state/drycastle/sketch.json, or $DRYCASTLE_SKETCH)")
     ap.add_argument("--assets", type=Path, default=DEFAULT_MANIFEST, help="asset manifest")
     ap.add_argument("--work", type=Path, default=None, help="work dir (default: data/village/work)")
     a = ap.parse_args(argv)

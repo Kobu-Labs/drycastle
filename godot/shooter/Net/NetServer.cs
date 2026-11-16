@@ -454,6 +454,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: >= (byte)EventKind.EquipItem and <= (byte)EventKind.TakeGroundItem } ir) OnItemRequest(c, (EventKind)ir.Kind, ir.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SetZero } sz) { if (c.Joined && BulletDrop.TryDecodeZero(sz.Payload, out var zi, out var zm) && zi < Weapons.Weapons.Count && BulletDrop.HasDrop(Weapons.Weapons[zi])) c.Zero.Set(zi, Weapons.Weapons[zi], zm); }
             else if (m is EventMsg { Kind: (byte)EventKind.RaiseBinoculars } rb) { if (c.Joined && Binoculars.TryDecodeRaise(rb.Payload, out var up)) SetBinoculars(c, up && CarriesBinoculars(c)); }
+            else if (m is EventMsg { Kind: (byte)EventKind.Redeploy } rd && c.Joined) OnRedeploy(c, rd.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
