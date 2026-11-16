@@ -95,7 +95,7 @@ public sealed class EngineSoundTuning
     /// <summary>Time constant of the rate filter, seconds.</summary>
     public float RateSmoothing = 0.4f;
     /// <summary>Coming off the gas plays the lift sound only after this long on it, from this share of the top speed, and not twice within the cooldown.</summary>
-    public float LiftMinPushSeconds = 0.8f, LiftMinFraction = 0.2f, LiftCooldown = 1.5f;
+    public float LiftMinPushSeconds = 10f, LiftMinFraction = 0.2f, LiftCooldown = 1.5f;
 }
 
 /// <summary>
@@ -158,9 +158,8 @@ public sealed class EngineSoundModel
 
         if (_fsm.Is(want) || _fsm.Elapsed < _t.MinDwell) return;
         _fsm.Enter(want);
-        // off the gas after a push, or onto the brake (the handbrake, or reverse pressed while rolling forward) at speed, push or no push: the turbo lets go
-        if (want is EnginePhase.Coasting or EnginePhase.Braking && frac >= _t.LiftMinFraction && _sinceLift >= _t.LiftCooldown
-            && ((pushing && _push >= _t.LiftMinPushSeconds) || want == EnginePhase.Braking))
+        // the turbo lets go when the driver ends a long push, by lifting or by going straight onto the brake (the handbrake, reverse pressed while rolling forward)
+        if (pushing && want is EnginePhase.Coasting or EnginePhase.Braking && _push >= _t.LiftMinPushSeconds && frac >= _t.LiftMinFraction && _sinceLift >= _t.LiftCooldown)
         {
             _lift = true; _sinceLift = 0;
         }
