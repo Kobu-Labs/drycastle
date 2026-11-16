@@ -58,11 +58,10 @@ public partial class NetServer
     int _swathTotal;
     double _swathFlushAt;
 
-    /// <summary>Crop crush (#328): a mask per crop field (by field index) of the cells vehicles flattened, the cells not sent yet, each vehicle's path sampler.</summary>
-    readonly Dictionary<int, CrushGrid?> _crush = new();
+    /// <summary>Crop crush (#328, #353): the masks per crop field and each vehicle's path (<see cref="CropCrushMask"/>, the same code a client stamps its drawn vehicles with), the cells not sent yet, a scratch list.</summary>
+    CropCrushMask? _crushMask;
     readonly Dictionary<int, List<int>> _crushPending = new();
-    readonly Dictionary<ushort, SwathSampler> _crushSamplers = new();
-    int _crushTotal;
+    readonly List<int> _crushFresh = new();
     double _crushFlushAt;
 
     /// <summary>Called once from <c>_Ready</c> with the other events: the director and the handler table's kind.</summary>
@@ -217,7 +216,7 @@ public partial class NetServer
         _harvOldDrivers.Clear();
         _harvVictims.Clear(); _machineCorpses.Clear(); _machineItems.Clear(); _madeBales.Clear(); _staticBales = null;
         _swaths.Clear(); _samplers.Clear(); _swathTotal = 0;
-        _crush.Clear(); _crushPending.Clear(); _crushSamplers.Clear(); _crushTotal = 0; // the marks do not outlive the round
+        _crushMask?.Clear(); _crushPending.Clear(); // the marks do not outlive the round
         _harvDirector!.Reset();
     }
 
@@ -232,7 +231,7 @@ public partial class NetServer
                 foreach (var bytes in SwathCodec.Pack((ushort)field, Harvester.HeaderWidthM, age, i < sf.Swath.FirstCounted, sf.Swath.Strokes[i]))
                     Send(c, new EventMsg((byte)EventKind.HarvesterCut, bytes));
         }
-        foreach (var (field, grid) in _crush) // the crushed ground: the whole mask of each field as runs
+        foreach (var (field, grid) in _crushMask?.Grids ?? new Dictionary<int, CrushGrid?>()) // the crushed ground: the whole mask of each field as runs
             if (grid != null && grid.Count > 0)
                 foreach (var bytes in CrushCodec.PackRuns((ushort)field, grid.Runs(), CropCrush.MaxMessageBytes)) Send(c, new EventMsg((byte)EventKind.CropCrush, bytes));
         if (_staticBales != null)
@@ -467,28 +466,23 @@ public partial class NetServer
 
     // ---- crops crushed by vehicles (#328) ----
 
-    /// <summary>Every ground vehicle that moves (with a driver, or rolling fast) over a crop field stamps its body's width into the field's mask, a sample every couple of metres; the new cells go out a few times a second. Cosmetic.</summary>
+    /// <summary>Every ground vehicle that moves (with a driver, or rolling fast) over a crop field stamps its body's width into the field's mask, from its leading end, a sample every couple of metres (<see cref="CropCrushMask"/>); the new cells go out <see cref="CropCrushConfig.FlushS"/> apart. A client stamped the same from what it draws; this mask is the authority. Cosmetic.</summary>
     void StepCrush()
     {
         if (Map == null) return;
+        var mask = _crushMask ??= new CropCrushMask(CropCrush, CropFieldList);
         foreach (var car in _cars)
         {
             var ground = !car.Destroyed && car.Def.Flight == null && !car.Afloat;
-            var active = ground && CropCrushRules.Crushes(CropCrush, car.State.Speed, car.Seat.Occupied);
-            if (!_crushSamplers.TryGetValue(car.Id, out var sampler)) { if (!active) continue; _crushSamplers[car.Id] = sampler = new SwathSampler(Harvester); }
-            var at = new NVec2(car.GlobalPosition.X, car.GlobalPosition.Z);
-            var field = active ? CropFieldAt(at) : -1;
-            if (!sampler.Step(field, at, active, out var a, out var b)) continue;
-            if (!_crush.TryGetValue(field, out var grid)) _crush[field] = grid = CrushGrid.For(CropFieldList[field].Ring, CropCrush);
-            if (grid == null) continue;
-            var fresh = grid.Mark(a.Metres, b.Metres, CropCrushRules.HalfStrip(CropCrush, car.HalfWidth), _crushTotal);
-            if (fresh.Count == 0) continue;
-            _crushTotal += fresh.Count;
+            var body = new CrushBody(new NVec2(car.GlobalPosition.X, car.GlobalPosition.Z), car.State.Yaw, car.HalfWidth, car.HalfLength, car.State.Speed, car.Seat.Occupied, ground);
+            _crushFresh.Clear();
+            var field = mask.Step(car.Id, body, _crushFresh);
+            if (field < 0) continue;
             if (!_crushPending.TryGetValue(field, out var list)) _crushPending[field] = list = new List<int>();
-            list.AddRange(fresh);
+            list.AddRange(_crushFresh);
         }
         if (_crushPending.Count == 0 || _elapsed < _crushFlushAt) return;
-        _crushFlushAt = _elapsed + 0.4;
+        _crushFlushAt = _elapsed + CropCrush.FlushS;
         foreach (var (field, list) in _crushPending)
         {
             list.Sort();

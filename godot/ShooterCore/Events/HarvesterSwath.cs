@@ -35,11 +35,14 @@ public readonly record struct SwathPt(int X, int Z)
 /// </summary>
 public sealed class SwathSampler
 {
-    readonly HarvesterConfig _cfg;
+    readonly float _sampleM;
     SwathPt? _last;
     int _field = -1;
 
-    public SwathSampler(HarvesterConfig cfg) => _cfg = cfg;
+    public SwathSampler(HarvesterConfig cfg) : this(cfg.SwathSampleM) { }
+
+    /// <summary>A sampler with its own spacing: the vehicles' crop crush (<see cref="CropCrushConfig.SampleM"/>) is not the reel's.</summary>
+    public SwathSampler(float sampleM) => _sampleM = sampleM;
 
     public void Reset() { _last = null; _field = -1; }
 
@@ -51,7 +54,7 @@ public sealed class SwathSampler
         var q = SwathPt.From(reel);
         if (_last is not { } last || field != _field) { _last = q; _field = field; return false; }
         var step = Vector2.Distance(last.Metres, q.Metres);
-        if (step < _cfg.SwathSampleM) return false;
+        if (step < _sampleM) return false;
         _last = q;
         if (step > 30f) return false; // a jump (a respawn), not a drive
         a = last; b = q;

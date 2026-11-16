@@ -103,6 +103,7 @@ public partial class NetClient
     {
         if (!ShotFx.Enabled || Vehicles == null) return;
         FadeDroppedBales();
+        StampCrush(); // after RenderCars: from the drawn poses
         FlushCrush();
         foreach (var v in _cars.Values)
         {
@@ -395,44 +396,10 @@ public partial class NetClient
         if (fadeOnly) sw.Swath.FadeBales();
     }
 
-    // ---- crops crushed by vehicles (#328) ----
-
-    readonly Dictionary<ushort, CrushGrid?> _crushGrids = new();
-    readonly HashSet<(int X, int Z)> _crushCells = new();
-    readonly List<Vector2> _crushCentres = new();
-    int _crushTotalC;
-    static readonly CropCrushConfig CrushCfg = new();
-
-    /// <summary>The cells a message flattens go in a queue; <see cref="FlushCrush"/> lays the plants down once per frame, not per message.</summary>
-    void OnCropCrush(CrushCodec.Msg m)
-    {
-        if (Map == null || !ShotFx.Enabled) return;
-        var fields = HarvFields;
-        if (m.Field >= fields.Count) return;
-        if (!_crushGrids.TryGetValue(m.Field, out var grid)) _crushGrids[m.Field] = grid = CrushGrid.For(fields[m.Field].Ring.Select(v => new NVec2(v.X, v.Y)).ToList(), CrushCfg);
-        if (grid == null) return;
-        foreach (var i in CrushCodec.Cells(m))
-        {
-            if (!grid.Set(i, _crushTotalC)) continue;
-            _crushTotalC++;
-            _crushCells.Add(grid.CellOf(i));
-            var c = grid.CentreOf(i);
-            _crushCentres.Add(new Vector2(c.X, c.Y));
-        }
-    }
-
-    void FlushCrush()
-    {
-        if (_crushCells.Count == 0 || Map == null) return;
-        Map.CropCrush(_crushCells, CrushCfg.CellM);
-        Map.CropMarkGround(_crushCentres, CrushCfg.CellM);
-        _crushCells.Clear(); _crushCentres.Clear();
-    }
-
     /// <summary>A new round: the server forgot every cut and bale.</summary>
     void HarvesterRoundRestart()
     {
-        _crushGrids.Clear(); _crushCells.Clear(); _crushCentres.Clear(); _crushTotalC = 0;
+        CropCrushRestart(); // the masks and every vehicle's path start afresh
         Map?.CropReset(); // plants stand again, the ground marks go
         foreach (var sw in _swathsC.Values) ClearDroppedBales(sw, false);
         _swathsC.Clear();
