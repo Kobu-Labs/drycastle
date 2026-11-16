@@ -1,6 +1,6 @@
 """The tiny blocky meshes of the ground clutter (``clutter_meshes.glb``, one node per kind of ``clutter.json``).
 
-Each mesh is 3 to 27 triangles with flat colours (a few shades of the kind's palette across its faces, so one
+Each mesh is 3 to 30 triangles with flat colours (a few shades of the kind's palette across its faces, so one
 mesh already looks varied; an instance varies only in turn and scale), at scale 1 in metres, standing on z = 0
 with its middle on the origin, wound counter-clockwise seen from outside like every other mesh of the
 pipeline. Built in map axes (x east, y north, z up); the export turns them into glTF axes (Y up) like the
@@ -21,10 +21,12 @@ from drycastle_pipeline.propmeshes import box_tris
 GRASSES = ("tuft", "tall_grass", "straw", "clover", "reed", "weed")
 WILD_FLOWERS = ("dandelion", "daisy", "red_clover", "buttercup", "poppy", "cornflower", "yarrow")
 GARDEN_FLOWERS = ("tulip", "sunflower", "spike", "rose")
-KINDS = ("tuft", "flower", "pebble", "rock", "leaf", "stick", "fern", *GRASSES[1:], *WILD_FLOWERS, *GARDEN_FLOWERS)
+# The forest floor (client-only, from meadow.bin's litter and floor layers): toadstools, fallen branches, moss mounds, big ferns, rotten stumps.
+FOREST_FLOOR = ("mushroom", "branch", "moss_mound", "fern_big", "stump_small")
+KINDS = ("tuft", "flower", "pebble", "rock", "leaf", "stick", "fern", *GRASSES[1:], *WILD_FLOWERS, *GARDEN_FLOWERS, *FOREST_FLOOR)
 # Kinds whose instances carry a tint byte (see meadow.py): the grasses and ferns, whose green is the point. Flowers keep their
 # own colours; stones and litter are varied by their faces.
-TINTABLE = frozenset({*GRASSES, "fern"})
+TINTABLE = frozenset({*GRASSES, "fern", "fern_big"})
 # The loader multiplies the vertex colours by these (ClutterData.cs, ClutterTint.Rgb): 0 = fresh, 128 = as drawn, 255 = dry.
 # A multiplication cannot add yellow to a green, only take green and blue away, so "dry" reads as olive; real straw is
 # its own kind.
@@ -392,11 +394,77 @@ def rose() -> Mesh:
     return t.mesh()
 
 
+# --- forest floor -----------------------------------------------------------------------------
+
+
+def mushroom() -> Mesh:
+    """Three toadstools of different sizes, pale stems under red, brown and tan caps (27 triangles)."""
+    t = _Tris()
+    for x, y, h, half, cap in ((0.0, 0.0, 0.10, 0.065, "#b8372b"), (0.11, 0.05, 0.065, 0.045, "#8a5a38"), (-0.07, 0.09, 0.08, 0.05, "#c9a27a")):
+        t.blade(x, y, 0.018, 0.0, 0.0, h, "#e6dcc4")
+        t.pyramid(x, y, h - 0.01, half, h + 0.03, cap)
+    return t.mesh()
+
+
+def branch() -> Mesh:
+    """A fallen branch 1.3 m long lying on the ground: a thick bole, a thinner bent tip and a side twig (30 triangles)."""
+    t: list = []
+    for (a, b), w, h in ((((-0.65, 0.0), (0.15, 0.0)), 0.08, 0.08), (((0.15, 0.0), (0.63, 0.14)), 0.05, 0.05), (((-0.2, 0.0), (0.12, -0.34)), 0.03, 0.03)):
+        t += box_tris(a, b, w, 0.0, h, bottom=False)
+    browns = ["#6e4f33", "#85623f", "#7a6a55"]
+    return Mesh(np.array(t, float), np.array([hex_to_rgb(browns[(i // 10 + i % 2) % 3]) for i in range(len(t))], np.uint8))
+
+
+def moss_mound() -> Mesh:
+    """A low dome of moss 0.7 m across and 0.16 m high: two hexagon rings and a cap, in three mossy greens (18 triangles)."""
+    t = _Tris()
+    n = 6
+    ring0 = [(0.35 * (0.9 + 0.2 * (k % 2)) * math.cos(k * math.tau / n), 0.35 * (0.9 + 0.2 * (k % 2)) * math.sin(k * math.tau / n), 0.0) for k in range(n)]
+    ring1 = [(0.22 * math.cos((k + 0.3) * math.tau / n), 0.22 * math.sin((k + 0.3) * math.tau / n), 0.11 + 0.02 * (k % 3)) for k in range(n)]
+    apex = (0.0, 0.0, 0.16)
+    greens = ["#5f8f3a", "#74a644", "#4f7d34"]
+    for k in range(n):
+        t.add(ring0[k], ring0[(k + 1) % n], ring1[k], greens[k % 3])
+        t.add(ring0[(k + 1) % n], ring1[(k + 1) % n], ring1[k], greens[(k + 1) % 3])
+        t.add(ring1[k], ring1[(k + 1) % n], apex, greens[(k + 2) % 3])
+    return t.mesh()
+
+
+def fern_big() -> Mesh:
+    """A dense fern clump 0.7 m tall: three upright fronds in the middle ringed by six arching ones (27 triangles)."""
+    t = _Tris()
+    greens = ["#3b7a37", "#2c6a30", "#4c8c40", "#34723a"]
+    for i, (h, lean) in enumerate(((0.70, 0.10), (0.62, 0.12), (0.56, 0.11))):
+        t.blade(0.0, 0.0, 0.06, i * math.tau / 3 + 0.5, lean, h, greens[i])
+    for i in range(6):
+        t.blade(0.0, 0.0, 0.08, i * math.tau / 6 + 0.2, 0.40 + 0.08 * (i % 2), 0.46 + 0.07 * (i % 3), greens[i % 4])
+    return t.mesh()
+
+
+def stump_small() -> Mesh:
+    """A rotten stump 0.27 m high: a six-sided trunk with a broken, hollowed top, dark bark and a brown top with a moss patch (18 triangles)."""
+    t = _Tris()
+    n = 6
+    tops = (0.27, 0.22, 0.25, 0.19, 0.26, 0.2)
+    low = [(0.17 * math.cos(k * math.tau / n), 0.17 * math.sin(k * math.tau / n), 0.0) for k in range(n)]
+    up = [(0.13 * math.cos(k * math.tau / n), 0.13 * math.sin(k * math.tau / n), tops[k]) for k in range(n)]
+    bark = ["#4f3b2a", "#5e4733", "#45341f"]
+    for k in range(n):
+        a, b, c, d = low[k], low[(k + 1) % n], up[(k + 1) % n], up[k]
+        t.add(a, b, c, bark[k % 3])
+        t.add(a, c, d, bark[(k + 1) % 3])
+    centre = (0.0, 0.0, 0.14)
+    for k in range(n):
+        t.add(centre, up[k], up[(k + 1) % n], "#5f8a3a" if k == 1 else ("#8a7050" if k % 2 else "#74603f"))
+    return t.mesh()
+
+
 BUILDERS = {
     "tuft": tuft, "flower": flower, "pebble": pebble, "rock": rock, "leaf": leaf, "stick": stick, "fern": fern,
     "tall_grass": tall_grass, "straw": straw, "clover": clover, "reed": reed, "weed": weed,
     "dandelion": dandelion, "daisy": daisy, "red_clover": red_clover, "buttercup": buttercup, "poppy": poppy,
     "cornflower": cornflower, "yarrow": yarrow, "tulip": tulip, "sunflower": sunflower, "spike": spike, "rose": rose,
+    "mushroom": mushroom, "branch": branch, "moss_mound": moss_mound, "fern_big": fern_big, "stump_small": stump_small,
 }
 
 

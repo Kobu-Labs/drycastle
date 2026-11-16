@@ -136,7 +136,7 @@ visibility range of its farthest kind). The village: 89k stored instances in abo
 ### Meadow clutter (generated near the player)
 
 Fields, meadows and forests are about 400 ha, too much to store clutter instances for. Maps with `files.meadow` (`meadow.bin`, map 0.9.0) carry a density raster instead
-(layers tuft, flower, fern, pebble, litter; one byte per 2 m cell per layer plus a zone byte per cell, format 3 in `pipeline/src/drycastle_pipeline/meadow.py`; the zone byte's high nibble picks the species
+(layers tuft, flower, fern, pebble, litter, floor; one byte per 2 m cell per layer plus a zone byte per cell, format 3 in `pipeline/src/drycastle_pipeline/meadow.py`; the zone byte's high nibble picks the species
 mix, which says per layer which kinds a cell makes and in what shares, its low nibble is a dryness that biases the tint). `MapLoader.Meadow.cs` turns the cells
 near the focus into instances with `MeadowGen` (a hash of the cell and layer, the same on every client, nothing is sent; `MeadowData.cs`, pure, mirrors `meadow.generate`
 and a test pins both). The ground is cut into 24 m tiles, each tile and layer is one `MultiMeshInstance3D` per kind (pooled), built nearest first at most 6 tiles or 2 ms per
@@ -144,6 +144,8 @@ frame, freed 30 m behind its range. A tile and layer with a kind of at least `Me
 (`meadow_merged`, tint baked into the vertex colours), so a layer with seven flower species is about one or two nodes per tile, not seven (`MapLoader.MeadowNodes` counts them). Ranges and `DRYCASTLE_CLUTTER` are those of the stored clutter; live instances per layer are capped (`MeadowSettings.CapOf`).
 Instances within a tree's trunk reach (from `trees.json`) are dropped; the height comes from `GroundHeight` (the terrain collision mesh, decimated). The focus is the current camera
 unless `MapLoader.SetClutterFocus(position)` is called each frame. A map without `meadow.bin` and the headless server do nothing.
+
+Forest floor (#287, slice 3): `mushroom`, `branch`, `moss_mound`, `fern_big`, `stump_small` are code-built kinds for machines without the pack. A layer shows to its farthest kind and costs at least one draw per tile in reach, so they are two groups, not five layers: `moss_mound`, `branch`, `fern_big` are the layer `floor` (60 m), `mushroom` and `stump_small` are in the woodland mix of the `litter` layer (40 m, merged with the sticks). Extra draws: the floor layer is about `pi * (60 + 17)^2 / 24^2` = 32 tiles in an all-forest 360 degree view, one merged mesh each (a kind with 48+ in a tile gets its own MultiMesh, so at most 3 per tile, only in the densest tiles); the litter additions are free (already merged). While the pack trees are on, `MeadowSettings.IsSuppressed` drops the kinds the pack's undergrowth also draws (`PackUndergrowthKinds`: mushroom, branch, fern_big); moss mounds and small stumps stay.
 
 Pack trees (#287; `MapLoader.PackTrees.cs`, `PackTreeData.cs`, `TreeCutShaders.cs`, `Shaders/`, `shooter/data/pack_trees.json`): with the private nature pack (`assets-private/synty/glb/nature`) installed, trees whose base is within `near_m` of the focus are drawn as pack models and their baked trees are not.
 The cut is in the shaders: a map whose `trees.json` has `model.base_uv2` has UV2 on every props mesh that holds trees (a tree's base in the mesh's own (x, z), `1e6` for fences); those meshes (chunk `props`, `parcel_ID_props`, the dynamic ones of a parcel swap) get `props_tree_cut.gdshader` (the flat vertex-colour material plus the cut) instead of the flat material.

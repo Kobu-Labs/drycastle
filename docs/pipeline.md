@@ -607,7 +607,7 @@ implemented.
 
 **Meadow (`meadow.bin`, map 0.9.0).** Field and forest parcels keep no dense clutter in `clutter.json` (only `detail.meadow.stored_kinds`, rocks). Instead the stage writes
 a density raster, `work/detail_meadow.bin`, copied by the export as `meadow.bin` (`files.meadow`): 2 m cells, one byte per cell per layer (tuft, flower, fern, pebble,
-litter), zlib per chunk, about 0.7 MB for the village. A cell is on it only where its whole jitter window is free ground (no buildings, fences, roads, objects, water patches)
+litter, floor), zlib per chunk, about 0.7 MB for the village. A cell is on it only where its whole jitter window is free ground (no buildings, fences, roads, objects, water patches)
 and the density comes from the recipe's zones (edge band, tone and litter patches, bare soil, near a trunk) times smooth noise; see `detail.meadow` in `rules.yaml` and
 `meadow.py`. The game generates the instances at run time (`docs/viewer-and-editor.md`, "Meadow clutter"). `detail_preview --meadow` draws what the game would generate for a parcel.
 
@@ -618,13 +618,18 @@ Voronoi patch of `patch_m` ≈ 3 to 8 m, picked from the shares in `zones.<type>
 nibble the dryness (8 = neutral, 10 tint units a step: drier at a field's edge, fresher beside water and fences). A layer lists per mix which kinds it makes and in what shares (a mix names only the
 layers it changes), so a patch of one mix grows one set of species with strays. `meadow.bin` has a kind table (with the tint flag), the mixes per layer, and the zone plane after the layers (format in `meadow.py`).
 
-**Kinds (map 0.10.0).** `clutter_meshes.glb` has 23 tiny meshes (3 to 30 triangles, `detail_meshes.py`; `detail_preview --kinds` draws a contact sheet to `out/detail/kinds.png`):
+**Kinds (map 0.10.0).** `clutter_meshes.glb` has 28 tiny meshes (3 to 30 triangles, `detail_meshes.py`; `detail_preview --kinds` draws a contact sheet to `out/detail/kinds.png`):
 the grasses `tuft`, `tall_grass` (seed heads), `straw` (dry), `clover` (a flat mat), `reed` (by water) and `weed` (broad leaves), `fern`; the wild flowers `dandelion` (with a puffball), `daisy`,
 `red_clover`, `buttercup`, `poppy`, `cornflower`, `yarrow` (umbels); the garden flowers `tulip`, `sunflower`, `spike` (hollyhock or lupin) and `rose` (a bush); and `pebble`, `rock`, `leaf`, `stick`
-(and `flower`, the first mixed-flower mesh, which no recipe uses any more). Wild and garden flowers are kept apart: a yard (garden and plot recipes) grows garden flowers only, in one-species clusters
+(and `flower`, the first mixed-flower mesh, which no recipe uses any more); and the forest floor (`detail_meshes.FOREST_FLOOR`, meadow only): `mushroom` (three caps), `branch` (1.3 m, lying, 30 triangles), `moss_mound` (0.7 m dome), `fern_big` (0.7 m, tintable) and `stump_small` (0.27 m, rotten). Wild and garden flowers are kept apart: a yard (garden and plot recipes) grows garden flowers only, in one-species clusters
 (`detail.clutter.flower.species`), tall grass beside fences and walls (`tuft.unmown_m`, `tall`) and some clover in the lawn; meadows, fields and road verges grow the wild ones. The meadow's
 species mixes (`detail.meadow.mixes`) name which grass profile and which dominant flower each patch has: `meadow` (short grass and clover, daisies), `tall meadow` (red clover, yarrow), `dry` (straw, poppies and
 cornflowers), `weedy` (dandelions), `wet` (reed, buttercups), `woodland`, and three flower meadows (cornflower, yarrow, dandelion). Tintable kinds are `detail_meshes.TINTABLE` (the grasses and ferns).
+
+**Forest floor (#287).** The forest's mix (5, `woodland`) gives the `litter` layer toadstools and rotten stumps next to leaves and sticks (`mixes[5].litter`), and a new layer `floor` makes moss mounds, fallen branches and big ferns
+(clump 0.7, `max_per_cell` 2). Densities are in `detail.meadow.forest` (`floor`: interior 0.09, tree 0.35, litter 0.3, tone 0.12; `litter` interior 0.14 became 0.10 to make room): plain forest floor is about 21 pieces per 100 m2
+(tuft 6.0, fern 1.9, pebble 1.5, litter 7.5, floor 4.5; a cell is 4 m2), more at trunks and on leaf litter, where toadstools (litter 0.6) and moss mounds gather. A test keeps the total in 15 to 25. The game draws them to 60 m (`floor`) and 40 m (`litter`),
+and not at all where the pack's undergrowth is on (`docs/viewer-and-editor.md`, "Meadow clutter"). No format change; `meadow.bin` just has more kinds and one more layer.
 
 **Tint (map 0.10.0).** Tufts and ferns (`detail_meshes.TINTABLE`) carry a tint byte: the sixth number of their `clutter.json` entry, and in `meadow.bin` (format 2) a flag per layer.
 128 is the mesh as drawn, lower is fresher (darker, greener), higher drier. The byte is the smooth tone noise over the ground (2 m cells, 12-cell lattice, `meadow.tone_noise`) plus a per-instance

@@ -252,6 +252,15 @@ public static class MeadowSettings
 
     public static bool UsesMultiMesh(int instances) => instances >= MultiMeshMin;
 
+    /// <summary>
+    /// The code-built forest-floor kinds that the private pack's undergrowth (pack_trees.json: ferns, mushrooms, twigs) already draws within its 70 m: a mushroom, a branch
+    /// and a big fern. They are not drawn while the pack trees are on, so the two do not double up. Moss mounds and small stumps have no twin there and stay.
+    /// </summary>
+    public static readonly IReadOnlySet<string> PackUndergrowthKinds = new HashSet<string> { "mushroom", "branch", "fern_big" };
+
+    /// <summary>Whether generated instances of <paramref name="kind"/> are dropped because the pack's undergrowth is drawing in their place.</summary>
+    public static bool IsSuppressed(string kind, bool packActive) => packActive && PackUndergrowthKinds.Contains(kind);
+
     /// <summary>Tiles are re-chosen when the focus has moved this far (metres) since the last time.</summary>
     public const float RescanM = 3f;
     /// <summary>Tile builds started per call at most, and the time one call may spend (milliseconds); a build is never split.</summary>

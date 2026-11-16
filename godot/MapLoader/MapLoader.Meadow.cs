@@ -194,8 +194,10 @@ public sealed partial class MapLoader
         MeadowGen.Tile(m, li, tx, ty, MeadowSettings.TileCells, _meadowScratch);
         if (_meadowScratch.Count == 0) return;
         var byKind = new Dictionary<string, List<(Vector3 P, float Rot, float Scale, byte Tint)>>();
+        var packActive = PackTreesActive; // the pack's undergrowth draws mushrooms, twigs and ferns itself
         foreach (var i in _meadowScratch)
         {
+            if (MeadowSettings.IsSuppressed(i.Kind, packActive)) continue;
             if (!MeadowSettings.HasRoom(layer.Name, ClutterScale, _meadowLive[li] + tile.Instances)) break;
             if (NearTrunk(i.X, i.Y)) continue;
             var z = GroundHeight(i.X, -i.Y);

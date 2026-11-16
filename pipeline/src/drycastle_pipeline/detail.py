@@ -1268,7 +1268,7 @@ def build_village_detail(
         "patch_triangles_by_type": {a: dict(sorted(l.items())) | {"total": sum(l.values())} for a, l in sorted(by_type.items())},
         "meadow_cells": meadow_cells,
         "meadow_expected": {k: round(x) for k, x in meadow.expected().items()},
-        "meadow_busiest": meadow.busiest({"tuft": 70, "fern": 70, "flower": 55, "pebble": 40, "litter": 40}),
+        "meadow_busiest": meadow.busiest({"tuft": 70, "fern": 70, "flower": 55, "pebble": 40, "litter": 40, "floor": 60}),
         "seconds": round(time.time() - t0, 1),
     }
     return VillageDetail(v.chunk_m, chunks, patches, textures, stats, meadow)
