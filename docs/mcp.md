@@ -44,7 +44,7 @@ Options (`python -m drycastle_pipeline.mcp_server --help`):
 | --- | --- | --- |
 | `--edits PATH` | `pipeline/config/edits.json` | the file it reads and writes; must be the one the viewer watches |
 | `--state PATH` | `out/editor-state.json` | the viewer's selection and camera, for "the selected parcel" |
-| `--sketch PATH` | `sketch.json` next to `--state` | the sketches the viewer and this server share, for "this line", "at A", "sketch ROAD" |
+| `--sketch PATH` | `~/.local/state/drycastle/sketch.json` (`$DRYCASTLE_SKETCH`) | the sketches the viewer and this server share, for "this line", "at A", "sketch ROAD" |
 | `--assets PATH` | `assets/manifest.json` | asset manifest |
 | `--work DIR` | `data/village/work` | work directory override (for experiments) |
 
@@ -181,8 +181,8 @@ coordinates on write:
 A sketch is a named group (`ROAD`, `FENCE_PLAN`, ...) of the temporary marks drawn on the ground (Sketch tool, rail icon 9; see
 `docs/viewer-and-editor.md`): points named `A`, `B`, ... and lines named `L1`, `L2`, ..., a line being open or closed
 (closed: the last corner joins the first and the mark means the ground inside). Several sketches exist at once; mark names are
-unique across all of them, so "at A" needs no sketch name. The viewer and this server share one file, `out/sketch.json`
-(`--sketch`); either side writes it atomically and raises its `version`. The server changes it under a `flock` on
+unique across all of them, so "at A" needs no sketch name. The viewer and this server share one file, `~/.local/state/drycastle/sketch.json`
+(`--sketch`, `$DRYCASTLE_SKETCH`; per user, so all worktrees share it); either side writes it atomically and raises its `version`. The server changes it under a `flock` on
 `sketch.json.lock`; the viewer does not lock, so an edit in the viewer and an MCP edit within the same frame can overwrite one
 another (last writer wins; Ctrl+Z in the viewer undoes what it took over). The viewer takes a changed file over within a
 quarter of a second, as one undo step ("sketch changed by the MCP server"). With the viewer closed, the file simply waits.

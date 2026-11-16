@@ -41,6 +41,7 @@ public partial class NetServer
         public CitizenWorld(NetServer server) => _s = server;
         public IReadOnlyList<NVec3> HouseDoors(NVec3 around, float minM, float radiusM) => _s.HouseDoors(around, minM, radiusM);
         public IReadOnlyList<NVec3> Route(NVec3 from, NVec3 to) => _s.CitizenRoute(from, to);
+        public IWalkerGround? Walk => _s.WalkerWorld;
     }
 
     /// <summary>Loads the church and starts the crowd the first time; returns why citizens are unavailable, or null when they are ready.</summary>

@@ -280,7 +280,7 @@ one match and level 20 after about six good matches. No telemetry exists yet.
   (half is the colours as picked).
 - Arms: the rig has no rifle clips, so `ArmsReadyPose` (a skeleton modifier) poses both arms on the weapon over any clip with a two-bone solve
   (right hand at the chest, left hand on the foregrip); pistols use the right arm only, a knife swing plays `SwordSlash`.
-- Hit volume: `PlayerHitBox` is measured from these models (3.147 units tall in their T-pose, scaled to 1.8 m); the 0.56 m radius is unchanged.
+- Hit volume: `PlayerHitBox` is measured from these models (3.147 units tall in their T-pose, scaled to 1.8 m); the radius was 0.56 m, since ADR 0028 it is the movement capsule's 0.35 m (the Bigfoot and the Raid van keep 0.56 m).
 - Customiser UI (`CustomizationScreen.cs`, `CamoPreview.cs`) edits the look per loadout slot (#141).
 - Prone stance (#139): a prone latch toggled by the prone key (a move button bit); crouch now has a transition time.
 - Concealment is a number only; it is not applied in the tick, the name tags or the kill cam (section 8).

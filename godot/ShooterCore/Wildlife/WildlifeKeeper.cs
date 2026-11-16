@@ -40,6 +40,7 @@ public sealed class WildlifeKeeper : IAnimalHits
     readonly List<Herd> _herds = new();
     readonly List<Flock> _flocks = new();
     int _nextHit;
+    AnimalCrowd? _crowd;
 
     public WildlifeKeeper(WildlifeFile cfg, AnimalsFile animals, WorldEntityManager entities, int seed)
     {
@@ -47,6 +48,9 @@ public sealed class WildlifeKeeper : IAnimalHits
         _rng = new Random(seed);
         entities.Despawned += OnDespawned;
     }
+
+    /// <summary>Every animal of the match, pets included: the wild ones are put into it when they spawn and out when they end, so an animal runs into one of another herd or a pet (ADR 0028). Null: none do.</summary>
+    public AnimalCrowd? Crowd { get => _crowd; set => _crowd = value; }
 
     /// <summary>Error log for animals that could not be spawned (the entity cap). Null means silent.</summary>
     public Action<string>? Log { get; set; }
@@ -84,7 +88,7 @@ public sealed class WildlifeKeeper : IAnimalHits
             if (points.Count == 0) { Log?.Invoke($"wildlife: no habitat point for the {kind.Id} flocks: none spawned"); continue; }
             for (var k = 0; k < kind.Flocks; k++)
             {
-                if (PickPoint(points, ground) is not { } at) break;
+                if (PickPoint(points, ground, 0) is not { } at) break; // birds fly: only the ground
                 var flock = new Flock(kind, ki, _rng.Next(kind.BirdsMin, kind.BirdsMax + 1), new Vector3(at.X, ground.GroundY(at.X, at.Z) ?? at.Y, at.Z), ground, _rng.Next());
                 if (_entities.Spawn(flock) is null) { Log?.Invoke("wildlife: the world is full of entities; no more flocks"); return; }
                 _flocks.Add(flock);
@@ -115,7 +119,7 @@ public sealed class WildlifeKeeper : IAnimalHits
     Spawned SpawnSingle(int species, IReadOnlyList<Vector3> points, IAnimalWorld ground, out int made)
     {
         made = 0;
-        if (PickPoint(points, ground) is not { } at) return Spawned.NoGround;
+        if (PickPoint(points, ground, _animals.Animals[species].BodyRadiusOf(0)) is not { } at) return Spawned.NoGround;
         var r = SpawnAt(species, at, ground, null);
         if (r == Spawned.Yes) made = 1;
         return r;
@@ -125,8 +129,9 @@ public sealed class WildlifeKeeper : IAnimalHits
     Spawned SpawnHerd(int species, int size, HerdRules rules, IReadOnlyList<Vector3> points, IAnimalWorld ground, out int made)
     {
         made = 0;
-        if (PickPoint(points, ground) is not { } home) return Spawned.NoGround;
-        var herd = new Herd(home, rules.SpreadM, rules.RangeM, rules.MoveMinSeconds, rules.MoveMaxSeconds, _rng.Next());
+        var radius = _animals.Animals[species].BodyRadiusOf(0);
+        if (PickPoint(points, ground, radius) is not { } home) return Spawned.NoGround;
+        var herd = new Herd(home, rules.SpreadM, rules.RangeM, rules.MoveMinSeconds, rules.MoveMaxSeconds, _rng.Next(), radius);
         for (var k = 0; k < size && _byHit.Count < _cfg.MaxAnimals; k++)
         {
             var at = home;
@@ -135,7 +140,7 @@ public sealed class WildlifeKeeper : IAnimalHits
                 var angle = (float)_rng.NextDouble() * MathF.Tau;
                 var reach = (float)Math.Sqrt(_rng.NextDouble()) * rules.SpreadM;
                 var p = new Vector3(home.X + MathF.Cos(angle) * reach, 0, home.Z + MathF.Sin(angle) * reach);
-                if (ground.GroundY(p.X, p.Z) != null) { at = p; break; }
+                if (ground.GroundY(p.X, p.Z) != null && ground.Fits(p.X, p.Z, radius)) { at = p; break; } // not inside a building
             }
             var r = SpawnAt(species, at, ground, herd);
             if (r == Spawned.EntitiesFull) { if (herd.Members.Count > 0) _herds.Add(herd); return r; }
@@ -145,13 +150,13 @@ public sealed class WildlifeKeeper : IAnimalHits
         return Spawned.Yes;
     }
 
-    /// <summary>A random point of the habitat that has ground, or null.</summary>
-    Vector3? PickPoint(IReadOnlyList<Vector3> points, IAnimalWorld ground)
+    /// <summary>A random point of the habitat that has ground and room for a body of <paramref name="radius"/> (not inside a building, not on a parked vehicle); 0: the ground alone. Null when 30 tries find none.</summary>
+    Vector3? PickPoint(IReadOnlyList<Vector3> points, IAnimalWorld ground, float radius)
     {
         for (var attempt = 0; attempt < 30; attempt++)
         {
             var p = points[_rng.Next(points.Count)];
-            if (ground.GroundY(p.X, p.Z) != null) return p;
+            if (ground.GroundY(p.X, p.Z) != null && (radius <= 0 || ground.Fits(p.X, p.Z, radius))) return p;
         }
         return null;
     }
@@ -164,6 +169,7 @@ public sealed class WildlifeKeeper : IAnimalHits
         var animal = new Animal(_animals, species, new Vector3(h.X, 0, h.Z), (float)_rng.NextDouble() * MathF.Tau, ground, _rng.Next(), _rng.Next(def.VariantCount));
         if (_entities.Spawn(animal) is not { } entity) { Log?.Invoke("wildlife: the world is full of entities; no more wildlife"); return Spawned.EntitiesFull; }
         herd?.Add(animal);
+        _crowd?.Add(animal);
         var hit = NextHitId();
         var wild = new Wild { Animal = animal, Entity = entity, HitId = hit };
         animal.Died += (a, by) => Killed?.Invoke(a, by);
@@ -183,6 +189,7 @@ public sealed class WildlifeKeeper : IAnimalHits
     {
         if (!_byEntity.Remove(d.Id, out var wild)) return;
         wild.Gone = true;
+        _crowd?.Remove(wild.Animal);
         _byHit.Remove(wild.HitId);
         _all.Remove(wild); // at most 100 animals, and only when one is despawned
     }
@@ -251,7 +258,7 @@ public sealed class WildlifeKeeper : IAnimalHits
     /// <summary>Forgets every wild animal (the match cleared its entities, or the round is over).</summary>
     public void Clear()
     {
-        foreach (var w in _all) w.Gone = true;
+        foreach (var w in _all) { w.Gone = true; _crowd?.Remove(w.Animal); }
         _byHit.Clear(); _byEntity.Clear(); _all.Clear(); _herds.Clear(); _flocks.Clear();
     }
 }

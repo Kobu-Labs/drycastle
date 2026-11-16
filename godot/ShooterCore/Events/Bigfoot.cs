@@ -168,7 +168,7 @@ public sealed class Bigfoot : IWorldEntity
     public WorldDespawnReason? Ended { get; private set; }
 
     /// <summary>The standing hit volume the shots test against: the player's capsule at <see cref="BigfootFile.HitScale"/>.</summary>
-    public HitTarget HitVolume => new(BigfootRules.TargetId, Position, Stance.Stand, Yaw, HeadGuarded: true, Scale: _d.HitScale);
+    public HitTarget HitVolume => new(BigfootRules.TargetId, Position, Stance.Stand, Yaw, HeadGuarded: true, Scale: _d.HitScale, BaseRadius: PlayerHitBox.WideRadius);
 
     // ---- hits ----
 
@@ -635,7 +635,7 @@ public sealed class Bigfoot : IWorldEntity
             foreach (var p in players)
             {
                 if (p.Id == f.Player || p.InVehicle || f.Hit.Contains(p.Id)) continue;
-                if (Vector3.Distance(p.Feet + new Vector3(0, 0.9f, 0), m.Feet + new Vector3(0, 0.9f, 0)) > _d.Grab.LaunchHitRadiusM + PlayerHitBox.Radius) continue;
+                if (Vector3.Distance(p.Feet + new Vector3(0, 0.9f, 0), m.Feet + new Vector3(0, 0.9f, 0)) > _d.Grab.LaunchHitRadiusM + PlayerHitBox.WideRadius) continue;
                 f.Hit.Add(p.Id);
                 _w.Hurt(p.Id, _d.RollDamage(_rng), BigfootHurt.LaunchHit);
             }

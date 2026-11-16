@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bakes the hit shapes of the wild species (GLOSSARY "Hit shape"): what a bullet is tested against, and what the hit diagram draws.
+"""Bakes the hit shapes of every animal species (GLOSSARY "Hit shape"): what a bullet is tested against, and what the hit diagram draws.
 
 A hit shape is a grid of 5 cm cells on the animal's side plane (its length ahead of its origin, its height above the ground). A cell the
 animal covers holds its half width there, in centimetres, and whether it is head. A bullet hits when its path through the animal's frame
@@ -220,8 +220,10 @@ def bake(model: Model) -> dict | None:
 def main() -> None:
     animals = {x["id"]: x for x in glb.load_jsonc(glb.DATA / "animals.json")["animals"]}
     free, paid = {}, {}
-    for species in glb.load_jsonc(glb.DATA / "wildlife.json")["species"]:
-        a = animals[species["id"]]
+    # every species of animals.json (the wild ones, the farm animals and the pets): the wild ones first, in wildlife.json's order
+    wild = [s["id"] for s in glb.load_jsonc(glb.DATA / "wildlife.json")["species"]]
+    for species_id in wild + [i for i in animals if i not in wild]:
+        a = animals[species_id]
         # the species' own model, then each other look of it (a variant) under "<species>/<variant>"
         for key, rel in [(a["id"], a["model"])] + [(f"{a['id']}/{v['id']}", v["model"]) for v in a.get("variants", [])]:
             for base, into in ((ROOT / "assets", free), (ROOT / "assets-private", paid)):

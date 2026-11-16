@@ -31,21 +31,13 @@ public partial class NetServer
     /// <summary>The deepest water a pet wades in.</summary>
     const float PetWadeM = 0.3f;
 
-    sealed class PetGround : IAnimalWorld
+    sealed class PetGround : AnimalGroundBase
     {
-        readonly NetServer _s;
-        public PetGround(NetServer server) => _s = server;
+        public PetGround(NetServer server) : base(server) { }
 
-        public float? GroundY(float x, float z)
-        {
-            if (_s.Map == null || _s.Water.Depth(x, z) > PetWadeM) return null;
-            var y = _s.Map.GroundHeight(x, z);
-            return float.IsNaN(y) ? null : y;
-        }
+        protected override float WadeM => PetWadeM;
 
-        public NVec3? NearestThreat(NVec3 from, float radius) => null; // a pet fears nothing
-
-        public NVec3? PositionOf(ushort player) => _s._byId.TryGetValue(player, out var c) ? N(c.Body.GlobalPosition) : null;
+        public override NVec3? NearestThreat(NVec3 from, float radius) => null; // a pet fears nothing
     }
 
     /// <summary>Registers the animal and poop types and starts the keeper. Called once from <c>_Ready</c>, after the match exists.</summary>
@@ -53,7 +45,7 @@ public partial class NetServer
     {
         AnimalRules.Register(WorldEntityRegistry.Shared);
         PoopRules.Register(WorldEntityRegistry.Shared);
-        _pets = new PetKeeper(PetsData, AnimalData, _match.Entities, System.Environment.TickCount) { Log = s => GD.PrintErr($"server: {s}") };
+        _pets = new PetKeeper(PetsData, AnimalData, _match.Entities, System.Environment.TickCount) { Log = s => GD.PrintErr($"server: {s}"), Crowd = _animalCrowd };
         _match.Pets = _pets;
         _pets.Killed += (pet, by) => GD.Print($"server: #{by} killed a pet ({pet.Def.Id})");
     }

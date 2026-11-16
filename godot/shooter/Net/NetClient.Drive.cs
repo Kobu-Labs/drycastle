@@ -84,7 +84,6 @@ public partial class NetClient
             var def = DriveDef(mine)!;
             var probe = DriveProbe.Make(def, Water);
             Owned.AddChild(probe);
-            if (_me != null) probe.Ignore(_me); // the body rides at the vehicle's origin: it is not an obstacle
             _drive = new Driving { CarId = mine.Id, Def = def, Probe = probe, Predict = new DrivePrediction(def, probe, server) };
             // what was drawn until now is the interpolated past: fade from there to the predicted present
             _drive.Smooth = mine.Node.GlobalPosition - new Vector3(server.Position.X, server.Position.Y, server.Position.Z);

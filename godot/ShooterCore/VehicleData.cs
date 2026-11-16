@@ -108,6 +108,9 @@ public class VehiclesFile : IVersioned
             }
             if (v.ChaseDistance is <= 0 || v.ChaseHeight is < 0) throw new DataFileException($"vehicles.json: {v.Id}: chase_distance must be positive and chase_height not negative");
             if (v.Height <= 0 || v.HalfWidth <= 0 || v.HalfLength <= 0) throw new DataFileException($"vehicles.json: {v.Id}: height, half_width and half_length must be positive");
+            if (v.Hull is { } hull && (hull.Count == 0 || hull.Any(b => b == null || b.Length != 6 || !(b[2] > 0) || !(b[3] > 0) || !(b[5] > b[4]) || b.Any(x => !float.IsFinite(x)))))
+                throw new DataFileException($"vehicles.json: {v.Id}: hull is a list of [cx, cz, half_width, half_length, y0, y1] with positive half sizes and y1 above y0");
+            if (v.Hull != null && v.Flight == null) throw new DataFileException($"vehicles.json: {v.Id}: a hull list tilts with the flight state: it is for a flying type");
             if (v.EnterRadius is < 0 || f.EnterRadius < 0) throw new DataFileException($"vehicles.json: {v.Id}: enter_radius must not be negative");
             if (v.RunOverMass is { } rm && rm <= 0) throw new DataFileException($"vehicles.json: {v.Id}: run_over_mass must be positive");
             if (!VehicleMedium.All.Contains(v.Medium)) throw new DataFileException($"vehicles.json: {v.Id}: medium {v.Medium} is not land, amphibious or air");
@@ -730,6 +733,29 @@ public class VehicleDef
     /// it misses; one that enters the footprint below it hits. See <see cref="VehicleBox"/>.
     /// </summary>
     public float Height { get; set; } = 1.2f;
+    /// <summary>
+    /// The hull as several boxes instead of the one upright box over the footprint (<see cref="HalfWidth"/>, <see cref="HalfLength"/>, <see cref="Height"/>): [cx, cz, half_width, half_length, y0, y1] each, in the
+    /// vehicle's node frame, metres (the utility helicopter: cabin, tail boom, fin). They are both Hit shape and Body shape (ADR 0028) and tilt with the vehicle's pitch and roll.
+    /// Null: the one upright box, turned by the yaw only. <see cref="HalfWidth"/>, <see cref="HalfLength"/> and <see cref="Height"/> stay the footprint the run-over, the enter reach and the seat schematic read.
+    /// </summary>
+    public List<float[]>? Hull { get; set; }
+
+    HullBox[]? _hullBoxes;
+    /// <summary>The boxes of the hull (<see cref="Hull"/>), or the one upright box of a type without one.</summary>
+    public HullBox[] HullBoxes => _hullBoxes ??= Hull is { } h ? h.Select(b => new HullBox(b[0], b[1], b[2], b[3], b[4], b[5])).ToArray() : new[] { HullBox.Upright(HalfWidth, HalfLength, Height) };
+
+    /// <summary>Whether the hull's boxes tilt with the pitch and roll (a type with a <see cref="Hull"/> list); the one upright box turns with the yaw only.</summary>
+    public bool Tilts => Hull != null;
+
+    /// <summary>
+    /// How far from the origin the hull reaches, metres (a cheap distance for a broad test): the footprint's half length and width added for the one upright box; for a <see cref="Hull"/>, the farthest corner of any
+    /// box, whatever the attitude.
+    /// </summary>
+    public float BroadReach => _broadReach ??= Tilts ? HullBoxes.Max(b => MathF.Sqrt(MathF.Pow(MathF.Abs(b.Cx) + b.HalfWidth, 2) + MathF.Pow(MathF.Abs(b.Cz) + b.HalfLength, 2) + MathF.Pow(MathF.Max(MathF.Abs(b.Y0), MathF.Abs(b.Y1)), 2))) : HalfLength + HalfWidth;
+    float? _broadReach;
+
+    /// <summary>The pitch and roll the hull is turned by: the vehicle's attitude for a type that <see cref="Tilts"/>, else none (so a hull is looked at one way everywhere).</summary>
+    public (float Pitch, float Roll) TiltOf(float pitch, float roll) => Tilts ? (pitch, roll) : (0f, 0f);
     /// <summary>Override of the file's enter_radius for this type (metres from the footprint). Null: the file's.</summary>
     public float? EnterRadius { get; set; }
     /// <summary>Seats in order; seat 0 is the driver. Default: one driver seat.</summary>

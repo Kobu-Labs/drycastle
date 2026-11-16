@@ -12,6 +12,8 @@ public sealed class AnimalVariant
     public string Model { get; set; } = "";
     /// <summary>The body box of this look, [width, height, length] like <see cref="AnimalDef.HitBox"/>; null: the species' box.</summary>
     public List<float>? HitBox { get; set; }
+    /// <summary>Where the Body box of this look is centred, metres ahead of the position (see <see cref="AnimalDef.BodyAhead"/>); null: the species'.</summary>
+    public float? BodyAhead { get; set; }
 }
 
 /// <summary>Opt-in "sits" behaviour of a species (animals.json, "sit"): from standing it now and then sits for a random while, then stands up again.</summary>
@@ -70,6 +72,13 @@ public sealed class AnimalDef
     public List<float> HitBox { get; set; } = new();
     /// <summary>Metres the body box's centre lies ahead of the position (a model whose origin is under its hind half: a deer). For a bullet's hit test and the hit diagram.</summary>
     public float HitBoxAhead { get; set; }
+    /// <summary>
+    /// Metres the Body box's centre lies ahead of the position (<c>body_ahead</c>), measured from the model's own bounds (<c>scripts/make_animal_silhouettes.py</c>
+    /// prints it). The Body box (what contact is tested against, ADR 0028) is <see cref="HitBox"/>'s width and length, which are the model's measured size head and
+    /// antlers included, centred this far ahead: the origin of most models sits under the hind half, so a cow's head lies 1.5 m ahead and its tail 0.9 m behind.
+    /// Not <see cref="HitBoxAhead"/>, which a bullet's box test and the hit diagram already use and which is left as it was.
+    /// </summary>
+    public float BodyAhead { get; set; }
     /// <summary>Other models of the same species. Variant index 0 is <see cref="Model"/>; index i (1 up) is <c>Variants[i - 1]</c>. The index travels on the wire.</summary>
     public List<AnimalVariant> Variants { get; set; } = new();
 
@@ -90,6 +99,15 @@ public sealed class AnimalDef
 
     /// <summary>The body box of a variant index (0 or out of range: the species' box; a variant without its own: the species' box).</summary>
     public IReadOnlyList<float> HitBoxOf(int variant) => variant >= 1 && variant <= Variants.Count && Variants[variant - 1].HitBox is { } b ? b : HitBox;
+
+    /// <summary>
+    /// Half the body's width, clamped to 0.1 to 0.5 m: the radius of the sphere that asks the world whether the animal fits at a spot (a spawn point, a wander
+    /// target). Not the contact test, which is the box (<see cref="BodyBox"/>).
+    /// </summary>
+    public float BodyRadiusOf(int variant) => Math.Clamp(HitBoxOf(variant)[0] / 2, 0.1f, 0.5f);
+
+    /// <summary>The Body box's centre ahead of the position for a variant index (a variant without its own: the species').</summary>
+    public float BodyAheadOf(int variant) => variant >= 1 && variant <= Variants.Count && Variants[variant - 1].BodyAhead is { } a ? a : BodyAhead;
 
     /// <summary>The variant index of an asset id: a variant's id (1 up), or -1.</summary>
     public int VariantIndex(string asset) => Variants.FindIndex(v => v.Id == asset) is >= 0 and var i ? i + 1 : -1;
@@ -174,6 +192,7 @@ public sealed class AnimalsFile : IVersioned
                 if (v.HitBox is { } vb && (vb.Count != 3 || vb.Any(x => !(x > 0)))) throw new DataFileException($"{F}: {a.Id}: variant {v.Id}: hit_box is [width, height, length], all positive");
             }
             if (a.HitBox.Count != 3 || a.HitBox.Any(x => !(x > 0))) throw new DataFileException($"{F}: {a.Id}: hit_box is [width, height, length], all positive");
+            if (!(MathF.Abs(a.BodyAhead) < a.HitBox[2] / 2)) throw new DataFileException($"{F}: {a.Id}: body_ahead must lie within the body (under half its length)");
             if (a.Sit is { } sit && (sit.Chance is < 0 or > 1 || !(sit.MinSeconds > 0) || sit.MaxSeconds < sit.MinSeconds))
                 throw new DataFileException($"{F}: {a.Id}: sit chance is 0..1, min_seconds positive and not above max_seconds");
             if (a.Bark is { } bark && (bark.Chance is < 0 or > 1 || !(bark.Seconds > 0)))

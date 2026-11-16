@@ -64,6 +64,8 @@ public class AnimalTests
     sealed class FakeWorld : IAnimalWorld
     {
         public Func<float, float, bool> Blocked = (_, _) => false;
+        public bool IsWatched = true;
+        public bool Watched(Vector3 at) => IsWatched;
         public readonly List<Vector3> Threats = new();
         public readonly Dictionary<ushort, Vector3> Players = new();
 
@@ -356,6 +358,33 @@ public class AnimalTests
     }
 
     // ---- behaviour ----
+
+    [Fact]
+    public void UnwatchedItStandsStillAndGoesOnWhenAPlayerComesNear()
+    {
+        var w = new FakeWorld { IsWatched = false };
+        var a = Make(w);
+        Run(a, 30); // long enough to wander when watched
+        Assert.Equal(AnimalState.Idle, a.State);
+        Assert.Equal(Vector3.Zero, a.Position);
+        w.IsWatched = true;
+        w.Threats.Add(new Vector3(-10, 0, 0));
+        Run(a, 2);
+        Assert.Equal(AnimalState.Flee, a.State);
+        Assert.True(a.Position.X > 10, $"it ran east, to x = {a.Position.X}");
+    }
+
+    [Fact]
+    public void UnwatchedAThrownOneStillLandsAndGetsUp()
+    {
+        var w = new FakeWorld { IsWatched = false };
+        var a = Make(w, Small("\"knockdown_seconds\":2,"));
+        Assert.True(a.Throw(new Vector3(0, 5, -10), new Vector3(0, 0, 5)));
+        Run(a, 1.5f);
+        Assert.Equal(AnimalState.Down, a.State); // landed: the flight is not held up
+        Run(a, 3);
+        Assert.Equal(AnimalState.Flee, a.State); // and it got up; only then does it stand unseen
+    }
 
     [Fact]
     public void AThreatInRangeMakesItRunAwayFromIt()

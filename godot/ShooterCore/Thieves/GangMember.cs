@@ -37,6 +37,9 @@ public interface IGangWorld
 
     /// <summary>The nearest walkable point to <paramref name="p"/> (the navigation mesh); the point itself when the world cannot tell. Used for the spots chasers take round a player.</summary>
     Vector3 Snap(Vector3 p) => p;
+
+    /// <summary>What a walking member asks of the world on its way (a trunk, a closed door, a parked vehicle: <see cref="WalkGuard"/>); null: it walks its route as it is.</summary>
+    IWalkerGround? Walk => null;
 }
 
 /// <summary>What a weapon hit on a Gang member (the match calls it for a victim id in the members' range).</summary>
@@ -179,6 +182,7 @@ public sealed partial class GangMember : IWorldEntity
     Vector3 _edge;
     Vector3 _door;
     float _taken;                   // the hit count taken so far, weighted
+    WalkGuard _guard;               // the detour round what the navigation mesh does not hold (trunk, closed door, parked vehicle)
     Vector3 _slotPoint, _slotFor;   // the spot on the ring round the target, and where the target stood when it was worked out
     bool _slotValid;
 
@@ -341,7 +345,7 @@ public sealed partial class GangMember : IWorldEntity
     public void SetRoute(IReadOnlyList<Vector3> route)
     {
         RouteRequest = null; RequestSeq = 0; RouteDropped();
-        _route.Clear(); _next = 0;
+        _route.Clear(); _next = 0; _guard.Reset();
         if (route.Count < 2) { RouteFailed(); return; }
         _route.AddRange(route);
         // the answer came after some ticks: when the member has run past the first point, it goes on from the next
@@ -527,19 +531,22 @@ public sealed partial class GangMember : IWorldEntity
 
     void Request(Vector3 to) { RouteRequest = new GangRouteRequest(Position, to); RequestSeq = 0; RouteDropped(); }
 
-    void ClearRoute() { _route.Clear(); _next = 0; RouteRequest = null; RequestSeq = 0; RouteDropped(); }
+    void ClearRoute() { _guard.Reset(); _route.Clear(); _next = 0; RouteRequest = null; RequestSeq = 0; RouteDropped(); }
 
     /// <summary>Walks the route from the current point, turning towards each leg. True when its end is reached.</summary>
     bool Follow(float dt, float speed)
     {
         var budget = speed * dt;
         var turn = _d.TurnRateDegPerS * MathF.PI / 180f * dt;
+        _guard.Tick(dt);
         while (_next < _route.Count)
         {
-            var to = _route[_next];
+            var leg = _route[_next];
+            // the route is the mesh's: what it does not hold (trunk, closed door, parked vehicle) is gone round by a point beside the leg, or waited at (WalkGuard)
+            if (_guard.Head(Position, leg, budget, _world.Walk) is not { } to) return false;
             var d = Vector3.Distance(Position, to);
             if (d > 0.01f) Yaw = TurretMath.StepAngle(Yaw, TurretMath.YawTo(Position, to), turn);
-            if (d <= budget) { Position = to; budget -= d; _next++; continue; }
+            if (d <= budget) { Position = to; budget -= d; if (to == leg) _next++; continue; }
             Position += (to - Position) * (budget / d);
             return false;
         }

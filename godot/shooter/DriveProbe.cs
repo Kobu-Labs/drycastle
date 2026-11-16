@@ -21,6 +21,11 @@ public sealed partial class DriveProbe : CharacterBody3D, IDriveWorld
     /// <summary>A wheel's ground ray starts this far above the wheel (so a kerb or a bank ahead is found, a floor overhead is not) and reaches this far down.</summary>
     const float RayLift = 1f, RayReach = 8f;
 
+    /// <summary>What a driven ground vehicle stops on: its row of the rule table (the world without the shot-only cover).</summary>
+    static readonly uint WorldMask = CollisionRules.StaticMask(MoverKind.GroundVehicle);
+    /// <summary>What its sweep stops on: the world, and the demon's body.</summary>
+    static readonly uint SweepMask = CollisionRules.SweepMask(MoverKind.GroundVehicle);
+
     VehicleDef _def = null!;
     Water _water = Water.Empty;
 
@@ -29,36 +34,17 @@ public sealed partial class DriveProbe : CharacterBody3D, IDriveWorld
     public override void _Ready()
     {
         CollisionLayer = 0;
-        CollisionMask = CollisionLayers.World;
+        CollisionMask = SweepMask;
         var height = MathF.Max(0.2f, _def.Height - Clearance);
         AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(_def.HalfWidth * 2, height, _def.HalfLength * 2) }, Position = new Vector3(0, Clearance + height / 2, 0) });
         SetPhysicsProcess(false);
-    }
-
-    readonly Godot.Collections.Array<Rid> _ignored = new();
-
-    /// <summary>
-    /// Player bodies are on the world's layer, and they are not part of the world a vehicle drives through: riders sit inside the hull, the driver's
-    /// client knows no body but its own, and running someone over is the server's overlap test. Every one is ignored, by the sweep and by the rays.
-    /// </summary>
-    public void Ignore(PhysicsBody3D body)
-    {
-        AddCollisionExceptionWith(body);
-        if (!_ignored.Contains(body.GetRid())) _ignored.Add(body.GetRid());
-    }
-
-    public void Unignore(PhysicsBody3D body)
-    {
-        RemoveCollisionExceptionWith(body);
-        _ignored.Remove(body.GetRid());
     }
 
     public float GroundY(NVec3 from)
     {
         var top = new Vector3(from.X, from.Y + RayLift, from.Z);
         var q = PhysicsRayQueryParameters3D.Create(top, top + Vector3.Down * (RayLift + RayReach));
-        q.CollisionMask = CollisionLayers.World;
-        q.Exclude = _ignored;
+        q.CollisionMask = WorldMask;
         var r = GetWorld3D().DirectSpaceState.IntersectRay(q);
         return r.Count == 0 ? float.NegativeInfinity : r["position"].AsVector3().Y;
     }

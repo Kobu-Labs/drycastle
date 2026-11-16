@@ -147,10 +147,8 @@ public partial class NetServer
     {
         if (!c.Sandbox || SandboxEvents.DecodeTeleportTo(payload) is not { } at) return;
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { SandboxNote(c, "Sandbox actions work while alive."); return; }
-        var q = PhysicsRayQueryParameters3D.Create(new Vector3(at.X, 2000f, at.Z), new Vector3(at.X, -500f, at.Z), CollisionLayers.World);
-        var hit = World.GetWorld3D().DirectSpaceState.PerfRay(q);
-        if (hit.Count == 0) { SandboxNote(c, "Nothing to stand on there."); return; }
-        var p = hit["position"].AsVector3();
+        if (Query.Ground(MoverKind.Player, new Vector3(at.X, 0f, at.Z), 2000f, 500f) is not { } hit) { SandboxNote(c, "Nothing to stand on there."); return; }
+        var p = hit.Position;
         if (c.Car != null) LeaveSeat(c, false);
         c.Body.Teleport(new Vector3(p.X, p.Y + 0.1f, p.Z));
         c.Inputs.Clear();
@@ -195,7 +193,6 @@ public partial class NetServer
             FlightWater = Water, FlightBounds = MapFlightBounds,
         };
         World.AddChild(car);
-        foreach (var cl in _byId.Values) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); car.DriveWorld?.Ignore(cl.Body); }
         _cars.Add(car);
         GD.Print($"server: {c.Name} #{c.Id} spawned a {def.Id}");
         return null;

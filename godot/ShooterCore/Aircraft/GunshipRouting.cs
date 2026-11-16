@@ -4,9 +4,19 @@ namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// A vehicle's hit volume as the gunship routing sees it: its index in the server's car list, its footprint and its height, and the riders its
-/// hull does not cover (an amphibious transport's, ADR 0012; null for none), whom a round reaches through that volume.
+/// hull does not cover (an amphibious transport's, ADR 0012; null for none), whom a round reaches through that volume. <paramref name="Hull"/> (a type with a <see cref="VehicleDef.Hull"/>: its boxes,
+/// tilted by <paramref name="Pitch"/> and <paramref name="Roll"/> as well as the yaw) replaces the one upright box of the footprint and height.
 /// </summary>
-public readonly record struct GunshipVehicle(int Index, Vector3 Feet, float Yaw, float HalfWidth, float HalfLength, float Height, ExposedRiders? Riders = null);
+public readonly record struct GunshipVehicle(int Index, Vector3 Feet, float Yaw, float HalfWidth, float HalfLength, float Height, ExposedRiders? Riders = null, float Pitch = 0, float Roll = 0, HullBox[]? Hull = null)
+{
+    /// <summary>The ray against this vehicle's hit volume.</summary>
+    public VehicleBoxHit? Ray(Vector3 origin, Vector3 dir, float range) =>
+        Hull != null ? VehicleBox.Ray(origin, dir, range, Feet, Yaw, Pitch, Roll, Hull) : VehicleBox.Ray(origin, dir, range, Feet, Yaw, HalfWidth, HalfLength, Height);
+
+    /// <summary>Distance from a blast to this vehicle's hit volume.</summary>
+    public float DistanceTo(Vector3 blast) =>
+        Hull != null ? VehicleBox.DistanceToHull(FlightMath.Unrotate(blast - Feet, Yaw, Pitch, Roll), Hull) : VehicleDamage.DistanceToBox(blast, Feet, Yaw, HalfWidth, HalfLength, Height);
+}
 
 /// <summary>What a gunship round's ray stopped on.</summary>
 public enum GunshipImpact : byte { None, World, Body, Vehicle }
@@ -44,7 +54,7 @@ public static class GunshipRouting
         ExposedRiders? riders = null;
         foreach (var v in vehicles)
         {
-            if (VehicleBox.Ray(origin, dir, range, v.Feet, v.Yaw, v.HalfWidth, v.HalfLength, v.Height) is not { } h) continue;
+            if (v.Ray(origin, dir, range) is not { } h) continue;
             if (h.Distance >= carDist) { behind = MathF.Min(behind, h.Distance); continue; }
             behind = carDist;
             carDist = h.Distance;
@@ -88,7 +98,7 @@ public static class GunshipRouting
         foreach (var v in vehicles)
         {
             var isDirect = directVehicle == v.Index;
-            var dist = VehicleDamage.DistanceToBox(at, v.Feet, v.Yaw, v.HalfWidth, v.HalfLength, v.Height);
+            var dist = v.DistanceTo(at);
             var dmg = (isDirect ? def.Damage : ProjectileMath.SplashDamage(w, dist, false)) * explosiveMultiplier;
             if (dmg <= 0) continue;
             hits.Add(new GunshipHit(true, 0, v.Index, dmg, isDirect ? 1f : ProjectileMath.SplashFraction(w, dist), isDirect));
