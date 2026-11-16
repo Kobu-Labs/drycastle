@@ -25,6 +25,7 @@ public sealed class BigfootFile : IVersioned
     public BigfootStomp Stomp { get; set; } = new();
     public BigfootVehicleThrow VehicleThrow { get; set; } = new();
     public BigfootGrab Grab { get; set; } = new();
+    public BigfootHunt Hunt { get; set; } = new();
     public BigfootWipe Wipe { get; set; } = new();
     public BigfootReward Reward { get; set; } = new();
     /// <summary>Where the event starts when the map has no <c>bigfoot</c> zone (a dev aid).</summary>
@@ -90,6 +91,7 @@ public sealed class BigfootFile : IVersioned
         Positive(v.FlightSeconds, "vehicle_throw.flight_seconds"); NotNegative(v.SpinRadPerS, "vehicle_throw.spin_rad_per_s");
         if (v.PlacementTries < 1) throw new DataFileException($"{F}: vehicle_throw.placement_tries is at least 1");
 
+        Positive(f.Hunt.RoarEverySeconds, "hunt.roar_every_seconds"); Positive(f.Hunt.MaxSeconds, "hunt.max_seconds"); Positive(f.Hunt.RadiusM, "hunt.radius_m");
         var g = f.Grab;
         Positive(g.RangeM, "grab.range_m"); Positive(g.CooldownSeconds, "grab.cooldown_seconds"); Positive(g.ReachSeconds, "grab.reach_seconds");
         Positive(g.HoldSeconds, "grab.hold_seconds"); Positive(g.LaunchFlightSeconds, "grab.launch_flight_seconds"); NotNegative(g.LaunchGraceSeconds, "grab.launch_grace_seconds");
@@ -221,6 +223,20 @@ public sealed class BigfootVehicleThrow
     public float SpinRadPerS { get; set; } = 2.5f;
     /// <summary>It picks a random direction and distance up to this many times, and throws where it finds ground (it gives up and throws short otherwise).</summary>
     public int PlacementTries { get; set; } = 8;
+}
+
+/// <summary>
+/// The hunt: it stops and roars now and then (the players' breather), then picks one player at random and sprints at them until it has them in its
+/// hand. See <see cref="Bigfoot"/>.
+/// </summary>
+public sealed class BigfootHunt
+{
+    /// <summary>Seconds of the fight between the end of one hunt and the roar that starts the next. A new phase and the enrage roar at once.</summary>
+    public float RoarEverySeconds { get; set; } = 14;
+    /// <summary>A hunt that has not caught its player after this long is given up.</summary>
+    public float MaxSeconds { get; set; } = 12;
+    /// <summary>The players it may pick: the living ones this near when the roar ends.</summary>
+    public float RadiusM { get; set; } = 90;
 }
 
 /// <summary>Phase three: it picks a player up, flails with them and launches them, at another player when there is one.</summary>

@@ -44,12 +44,12 @@
   // It ignores the navmesh: a straight line over the terrain towards the nearest player, kept for retarget_seconds. Trees are no
   // obstacle (it tramples through them); buildings and walls are solid, and it goes round them.
   "movement": {
-    "walk_speed": 3.4,
+    "walk_speed": 6,
     "run_speed": 13.9,
     // the ground one loop of the Walk and Run clips covers (the script prints them): the client plays the clip at the speed it moves
     "walk_stride_m": 2.8,
     "run_stride_m": 8.4,
-    "run_beyond_m": 16,
+    "run_beyond_m": 7,
     "turn_rate_deg_per_s": 150,
     "max_step_m": 1.4,
     "body_radius_m": 1.1,
@@ -63,7 +63,7 @@
   // ahead of the target. Nearer than min_range_m it does not throw (it stomps and grabs there); a log is in the air at least
   // min_flight_seconds, so a near throw is lobbed high and is seen coming.
   "trunk": {
-    "min_range_m": 8,
+    "min_range_m": 18,
     "max_range_m": 55,
     "cooldown_seconds": 3.2,
     "windup_seconds": 1.0,
@@ -105,8 +105,8 @@
 
   // The grab: it picks a player on foot up, flails with them for hold_seconds and launches them, aimed at another player when there is one.
   "grab": {
-    "range_m": 4.5,
-    "cooldown_seconds": 11,
+    "range_m": 5.5,
+    "cooldown_seconds": 6,
     "reach_seconds": 0.7,
     "hold_seconds": 2.5,
     "launch_flight_seconds": 2.4,
@@ -118,6 +118,16 @@
     "launch_hit_radius_m": 1.3,
     "hand_height_m": 2.7,
     "hand_forward_m": 1.4
+  },
+
+  // The hunt: every roar_every_seconds of the fight (and whenever a phase begins or it enrages) it stops and roars, which is the
+  // players' breather; then it picks one player at random among those within radius_m and sprints at them, whatever the distance,
+  // throwing nothing and stomping nothing on the way, and lunges for them when it is on them (the grab, its cooldown ignored, made
+  // on the move; a miss and it sprints on) until it has them in its hand, they are dead or gone, or max_seconds have passed. The clock to the next roar starts when the hunt is over.
+  "hunt": {
+    "roar_every_seconds": 14,
+    "max_seconds": 12,
+    "radius_m": 90
   },
 
   // When every participant dies it heals to full and waits where it stands until a player comes within wake_radius_m. With no living

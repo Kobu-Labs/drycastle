@@ -117,6 +117,9 @@ public sealed class Bigfoot : IWorldEntity
     float _detourFor, _detourHeading; // the way round it found, kept for a moment so it does not turn back into the wall
     float _groundY;                   // the ground under it: its height follows this a little late, so a ledge is a ramp
     bool _roarDue;                    // a phase began (or the enrage): it roars the next time it is free to
+    float _roarIn;                    // seconds of the fight until it roars by the clock (it runs between hunts)
+    bool _hunting;                    // it sprints at _target and nobody else until it has them
+    float _huntLeft;
     float _fight;                     // seconds awake with a target: the phases also begin by this clock
     float _trunkCd, _stompCd, _vehicleCd, _grabCd;
     ushort _vehicleToThrow;
@@ -136,6 +139,7 @@ public sealed class Bigfoot : IWorldEntity
         Position = _w.GroundY(spawn.X, spawn.Z, spawn.Y) is { } y ? new Vector3(spawn.X, y, spawn.Z) : spawn;
         Yaw = yaw;
         _groundY = Position.Y;
+        _roarIn = data.Hunt.RoarEverySeconds;
         _need = BigfootRules.HitsNeeded(data.Hits, participants);
         _trunkCd = 1.5f; // it does not open with a throw the moment it appears
     }
@@ -151,6 +155,8 @@ public sealed class Bigfoot : IWorldEntity
     public bool Alive => !_life.Is(BigfootLife.Dead);
     /// <summary>True from a wipe until a living player comes near again.</summary>
     public bool Waiting => _life.Is(BigfootLife.Waiting);
+    /// <summary>True while it sprints at the one player it picked after a roar (<see cref="BigfootHunt"/>).</summary>
+    public bool Hunting => _hunting;
     /// <summary>The hit count that kills it now.</summary>
     public int HitsNeeded => _need;
     /// <summary>The hits taken, weighted (a rocket counts many).</summary>
@@ -256,7 +262,7 @@ public sealed class Bigfoot : IWorldEntity
         _trunkCd -= dt; _stompCd -= dt; _vehicleCd -= dt; _grabCd -= dt;
         Position = new Vector3(Position.X, Position.Y + Math.Clamp(_groundY - Position.Y, -ClimbMps * dt, ClimbMps * dt), Position.Z);
         if (Waiting) { Rest(); return; }
-        if (_target != 0) { _fight += dt; UpdatePhase(); }
+        if (_target != 0) { _fight += dt; UpdatePhase(); if (!_hunting) _roarIn -= dt; }
 
         switch (Act)
         {
@@ -271,6 +277,7 @@ public sealed class Bigfoot : IWorldEntity
                 if (_act.Tick(dt)) ThrowTheVehicle();
                 break;
             case BigfootAct.GrabReach:
+                if (_hunting) Lunge(players, dt);
                 if (_act.Tick(dt)) TakeHold(players);
                 break;
             case BigfootAct.Hold:
@@ -278,7 +285,7 @@ public sealed class Bigfoot : IWorldEntity
                 break;
             case BigfootAct.Roar:
                 FaceTarget(players, dt);
-                if (_act.Tick(dt)) Rest();
+                if (_act.Tick(dt)) { Rest(); StartHunt(players); }
                 break;
             case BigfootAct.Stomp:
             case BigfootAct.Launch:
@@ -324,7 +331,7 @@ public sealed class Bigfoot : IWorldEntity
     void Wipe()
     {
         _taken = 0; _hitsBy.Clear(); _life.Enter(BigfootLife.Waiting);
-        Phase = 0; Enraged = false; _fight = 0; _roarDue = false;
+        Phase = 0; Enraged = false; _fight = 0; _roarDue = false; EndHunt();
         _need = BigfootRules.HitsNeeded(_d.Hits, 0);
         ReleaseHeld();
         DropLiftedVehicle();
@@ -359,9 +366,20 @@ public sealed class Bigfoot : IWorldEntity
     /// <summary>Idle, walk or run: pick the next thing to do. The first thing that applies wins, the heaviest first.</summary>
     void Decide(IReadOnlyList<BigfootPlayer> players, float dt)
     {
-        var target = Retarget(players, dt);
+        var target = Hunted(players, dt) ?? Retarget(players, dt);
         if (target is not { } t) { Rest(); return; }
         var dist = Flat(t.Feet, Position);
+
+        if (_hunting) // nothing but its prey: it sprints at them and lunges when it is on them, whatever the grab's cooldown says; a miss and it sprints on
+        {
+            if (!t.InVehicle && dist <= _d.Movement.StopDistanceM + StopSlackM)
+            {
+                _act.Enter(BigfootAct.GrabReach, _d.Grab.ReachSeconds); FaceYaw(t.Feet, dt, snap: true);
+                return;
+            }
+            if (dist <= _d.Movement.StopDistanceM + StopSlackM) EndHunt(); // prey it cannot pick up (in a vehicle): the vehicle is its business now
+            else { Chase(t, dist, dt, sprint: true); return; }
+        }
 
         if (_vehicleCd <= 0 && FindVehicleInContact() is { } car) // every attack is its from the start; the phases only make it angrier
         {
@@ -387,9 +405,9 @@ public sealed class Bigfoot : IWorldEntity
             _act.Enter(BigfootAct.TrunkWindup, _d.Trunk.WindupSeconds); FaceYaw(t.Feet, dt, snap: true);
             return;
         }
-        if (_roarDue) // a phase began, or the enrage: with no attack to make this tick it stops and roars before it chases on
+        if (_roarDue || _roarIn <= 0) // a phase began, the enrage, or the clock: with no attack to make this tick it stops and roars, then hunts
         {
-            _roarDue = false; _speed = 0;
+            _roarDue = false; _speed = 0; _roarIn = _d.Hunt.RoarEverySeconds;
             _act.Enter(BigfootAct.Roar, BigfootRules.RoarSeconds);
             return;
         }
@@ -459,11 +477,54 @@ public sealed class Bigfoot : IWorldEntity
         return best;
     }
 
-    void Chase(BigfootPlayer t, float dist, float dt)
+    /// <summary>After a roar: one living player within <see cref="BigfootHunt.RadiusM"/>, picked at random, is its prey until it has them (or the hunt runs out).</summary>
+    void StartHunt(IReadOnlyList<BigfootPlayer> players)
+    {
+        var near = players.Where(p => Flat(p.Feet, Position) <= _d.Hunt.RadiusM).ToList();
+        if (near.Count == 0) return;
+        var prey = near[_rng.Next(near.Count)];
+        if (prey.Id != _target) _targetSeenValid = false;
+        _target = prey.Id; _hunting = true; _huntLeft = _d.Hunt.MaxSeconds;
+    }
+
+    /// <summary>The hunt is over (caught, lost, timed out, a wipe): it picks its target by distance again, and the clock to the next roar runs.</summary>
+    void EndHunt()
+    {
+        if (!_hunting) return;
+        _hunting = false; _retarget = 0;
+        _roarIn = _d.Hunt.RoarEverySeconds;
+    }
+
+    /// <summary>Its prey while it hunts; null when it does not, or the prey is dead, gone, out of reach or the hunt has run out (which ends it).</summary>
+    BigfootPlayer? Hunted(IReadOnlyList<BigfootPlayer> players, float dt)
+    {
+        if (!_hunting) return null;
+        _huntLeft -= dt;
+        foreach (var p in players)
+            if (p.Id == _target && _huntLeft > 0 && Flat(p.Feet, Position) <= _d.Movement.GiveUpM) return p;
+        EndHunt();
+        return null;
+    }
+
+    /// <summary>The hunt's grab is made on the move: it keeps after its prey through the reach, slower than its run but faster than a player sprints.</summary>
+    void Lunge(IReadOnlyList<BigfootPlayer> players, float dt)
+    {
+        foreach (var p in players)
+        {
+            if (p.Id != _target) continue;
+            if (Flat(p.Feet, Position) > _d.Movement.StopDistanceM) Step(p.Feet, _d.Movement.RunSpeed * SpeedMul * LungeShare, dt);
+            else FaceYaw(p.Feet, dt);
+            return;
+        }
+    }
+
+    const float LungeShare = 0.7f;
+
+    void Chase(BigfootPlayer t, float dist, float dt, bool sprint = false)
     {
         var m = _d.Movement;
-        _running = dist > (_running ? m.RunBeyondM * RunKeepShare : m.RunBeyondM);
-        _stopped = dist <= (_stopped ? m.StopDistanceM + StopSlackM : m.StopDistanceM);
+        _running = sprint || dist > (_running ? m.RunBeyondM * RunKeepShare : m.RunBeyondM);
+        _stopped = !sprint && dist <= (_stopped ? m.StopDistanceM + StopSlackM : m.StopDistanceM);
         if (_stopped) { FaceYaw(t.Feet, dt); Rest(); return; }
         var top = (_running ? m.RunSpeed : m.WalkSpeed) * SpeedMul;
         _speed = _speed < top ? MathF.Min(top, _speed + AccelMps2 * dt) : MathF.Max(top, _speed - DecelMps2 * dt);
@@ -608,7 +669,8 @@ public sealed class Bigfoot : IWorldEntity
         _grabCd = _d.Grab.CooldownSeconds * CooldownMul;
         BigfootPlayer? p = null;
         foreach (var q in players) if (q.Id == _target && !q.InVehicle && Flat(q.Feet, Position) <= _d.Grab.RangeM + 1.5f) p = q;
-        if (p is not { } held) { Rest(); return; } // the player got away (or boarded a vehicle) during the reach
+        if (p is not { } held) { Rest(); return; } // the player got away (or boarded a vehicle) during the reach; a hunt goes on
+        EndHunt();
         _held = held.Id; _act.Enter(BigfootAct.Hold, _d.Grab.HoldSeconds);
         _w.Fx(BigfootFxKind.Grab, Position, held.Id);
         _w.Hold(held.Id, Hand);
