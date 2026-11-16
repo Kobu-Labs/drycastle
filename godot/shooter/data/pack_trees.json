@@ -23,118 +23,371 @@
     "leaf_lo": 0.06,
     "leaf_hi": 0.3,
     "accents": [
-      { "name": "spring", "tint": [1.1, 1.3, 0.8], "weight": 3 },
-      { "name": "olive", "tint": [1.35, 1.1, 0.65], "weight": 2 },
-      { "name": "teal", "tint": [0.8, 1.1, 1.2], "weight": 1.5 },
-      { "name": "golden", "tint": [1.7, 1.2, 0.45], "weight": 0.7 }
+      {
+        "name": "spring",
+        "tint": [
+          1.1,
+          1.3,
+          0.8
+        ],
+        "weight": 3
+      },
+      {
+        "name": "olive",
+        "tint": [
+          1.35,
+          1.1,
+          0.65
+        ],
+        "weight": 2
+      },
+      {
+        "name": "teal",
+        "tint": [
+          0.8,
+          1.1,
+          1.2
+        ],
+        "weight": 1.5
+      },
+      {
+        "name": "golden",
+        "tint": [
+          1.7,
+          1.2,
+          0.45
+        ],
+        "weight": 0.7
+      }
     ]
   },
   "shapes": {
     "cone": [
-      { "name": "SM_Tree_PolyPine_01", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_PolyPine_02", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_PolyPine_03", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_PolyPine_Sparse_01", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_PolyPine_Sparse_02", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_PolyPine_Sparse_03", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_Pine_01", "weight": 3 },
-      { "name": "SM_Tree_Pine_02", "weight": 3 },
-      { "name": "SM_Tree_Pine_Large_01", "weight": 2 },
-      { "name": "SM_Tree_Pine_Large_02", "weight": 2 },
-      { "name": "SM_Tree_Pine_Small_01", "weight": 1.5 },
-      { "name": "SM_Tree_Pine_Small_02", "weight": 1.5 }
+      {
+        "name": "SM_Tree_PolyPine_01",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_PolyPine_02",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_PolyPine_03",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_PolyPine_Sparse_01",
+        "weight": 1,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_PolyPine_Sparse_02",
+        "weight": 1,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_PolyPine_Sparse_03",
+        "weight": 1,
+        "bulk": true
+      }
     ],
     "box": [
-      { "name": "SM_Tree_Round_01", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_Round_02", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_Round_03", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_Round_04", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_Round_05", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_TallRound_01", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_01", "weight": 1.5, "bulk": true },
-      { "name": "SM_Tree_02", "weight": 1.5, "bulk": true },
-      { "name": "SM_Tree_03", "weight": 1.5, "bulk": true },
-      { "name": "SM_Tree_04", "weight": 1.5, "bulk": true },
-      { "name": "SM_Tree_Birch_01", "weight": 2 },
-      { "name": "SM_Tree_Birch_02", "weight": 2 },
-      { "name": "SM_Tree_Birch_03", "weight": 2 },
-      { "name": "SM_Tree_Birch_04", "weight": 2 },
-      { "name": "SM_Tree_Generic_01", "weight": 2 }
+      {
+        "name": "SM_Tree_Round_01",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_Round_02",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_Round_03",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_Round_04",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_Round_05",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_TallRound_01",
+        "weight": 1,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_01",
+        "weight": 1.5,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_02",
+        "weight": 1.5,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_03",
+        "weight": 1.5,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_04",
+        "weight": 1.5,
+        "bulk": true
+      }
     ]
   },
   "stands": {
-    "pine": { "bulk_share": 0.92, "any": [
-      { "name": "SM_Tree_PolyPine_01", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_PolyPine_02", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_PolyPine_03", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_PolyPine_Sparse_01", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_PolyPine_Sparse_02", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_PolyPine_Sparse_03", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_Pine_01", "weight": 3 },
-      { "name": "SM_Tree_Pine_02", "weight": 3 },
-      { "name": "SM_Tree_Pine_Large_01", "weight": 2 },
-      { "name": "SM_Tree_Pine_Large_02", "weight": 2 },
-      { "name": "SM_Tree_Pine_Small_01", "weight": 1 },
-      { "name": "SM_Tree_Pine_Small_02", "weight": 1 }
-    ] },
-    "birch": { "bulk_share": 0.5, "any": [
-      { "name": "SM_Tree_Round_03", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_Round_04", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_TallRound_01", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_Birch_01", "weight": 2 },
-      { "name": "SM_Tree_Birch_02", "weight": 2 },
-      { "name": "SM_Tree_Birch_03", "weight": 2 },
-      { "name": "SM_Tree_Birch_04", "weight": 2 },
-      { "name": "SM_Tree_Birch_Small_01", "weight": 0.5 }
-    ] },
-    "thicket": { "bulk_share": 0.75, "edge": false, "any": [
-      { "name": "SM_Tree_PolyPine_03", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_PolyPine_02", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_Round_03", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_Round_01", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_Pine_Small_01", "weight": 2 },
-      { "name": "SM_Tree_Pine_Small_02", "weight": 2 },
-      { "name": "SM_Tree_Birch_Small_01", "weight": 2 },
-      { "name": "SM_Plant_Bush_01", "weight": 0.6 },
-      { "name": "SM_Plant_Bush_03", "weight": 0.6 }
-    ] },
-    "swamp": { "bulk_share": 0.7, "edge": false, "any": [
-      { "name": "SM_Tree_Pine_Dead_01", "weight": 4, "bulk": true },
-      { "name": "SM_Tree_Swamp_03", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_Swamp_04", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_Dead_01", "weight": 2 },
-      { "name": "SM_Tree_Dead_02", "weight": 2 },
-      { "name": "SM_Tree_Generic_Dead_01", "weight": 0.5 },
-      { "name": "SM_Tree_Willow_Small_01", "weight": 2 },
-      { "name": "SM_Tree_Willow_Medium_01", "weight": 1.5 },
-      { "pack": "swamp", "name": "SM_Env_Tree_Swamp_04_LOD2", "weight": 1 }
-    ] },
-    "edge": { "bulk_share": 0.85, "any": [
-      { "name": "SM_Tree_Round_01", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_Round_02", "weight": 2, "bulk": true },
-      { "name": "SM_Tree_Round_05", "weight": 1.5, "bulk": true },
-      { "name": "SM_Tree_01", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_02", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_03", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_04", "weight": 1, "bulk": true },
-      { "name": "SM_Tree_Generic_01", "weight": 1.5 }
-    ] }
+    "pine": {
+      "bulk_share": 0.92,
+      "any": [
+        {
+          "name": "SM_Tree_PolyPine_01",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_02",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_03",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_Sparse_01",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_Sparse_02",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_Sparse_03",
+          "weight": 1,
+          "bulk": true
+        }
+      ]
+    },
+    "birch": {
+      "bulk_share": 0.5,
+      "any": [
+        {
+          "name": "SM_Tree_Round_03",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Round_04",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_TallRound_01",
+          "weight": 1,
+          "bulk": true
+        }
+      ]
+    },
+    "thicket": {
+      "bulk_share": 0.75,
+      "edge": false,
+      "any": [
+        {
+          "name": "SM_Tree_PolyPine_03",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_02",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Round_03",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Round_01",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Plant_Bush_01",
+          "weight": 0.6
+        },
+        {
+          "name": "SM_Plant_Bush_03",
+          "weight": 0.6
+        }
+      ]
+    },
+    "swamp": {
+      "bulk_share": 0.7,
+      "edge": false,
+      "any": [
+        {
+          "name": "SM_Tree_Pine_Dead_01",
+          "weight": 4,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Swamp_03",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Swamp_04",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Generic_Dead_01",
+          "weight": 0.5
+        }
+      ]
+    },
+    "edge": {
+      "bulk_share": 0.85,
+      "any": [
+        {
+          "name": "SM_Tree_Round_01",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Round_02",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Round_05",
+          "weight": 1.5,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_01",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_02",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_03",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_04",
+          "weight": 1,
+          "bulk": true
+        }
+      ]
+    }
   },
   "ground_objects": {
     "enabled": true,
-    "fallen": { "stretch_max": 1.25, "scale_min": 0.5, "scale_max": 2.6, "sink": 0.12, "max_pieces": 3, "piece_weight": 0.75 },
+    "fallen": {
+      "stretch_max": 1.25,
+      "scale_min": 0.5,
+      "scale_max": 2.6,
+      "sink": 0.12,
+      "max_pieces": 3,
+      "piece_weight": 0.75
+    },
     "kinds": {
-      "log": { "radius_m": 0.225, "yaw_deg": 90, "models": [
-        { "name": "SM_Tree_Log_01", "weight": 2 },
-        { "name": "SM_Tree_Log_02", "weight": 2 },
-        { "name": "SM_Tree_Dead_01", "weight": 3, "lay": true },
-        { "name": "SM_Tree_Dead_02", "weight": 2, "lay": true },
-        { "name": "SM_Tree_Pine_Dead_01", "weight": 3, "lay": true },
-        { "pack": "swamp", "name": "SM_Env_Tree_Dead_01", "weight": 1, "lay": true }
-      ] },
-      "stump": { "radius_m": 0.3, "models": [ { "name": "SM_Tree_Stump_01", "weight": 2 }, { "name": "SM_Tree_Stump_03", "weight": 2 } ] },
-      "boulder": { "radius_m": 0.5, "models": [ { "name": "SM_Rock_Boulder_01", "weight": 3 }, { "name": "SM_Rock_Rounded_01", "weight": 1 }, { "name": "SM_Rock_Small_01", "weight": 1 } ] },
-      "rootplate": { "radius_m": 1.1, "models": [ { "name": "SM_Tree_Stump_02", "weight": 1 } ] }
+      "log": {
+        "radius_m": 0.225,
+        "yaw_deg": 90,
+        "models": [
+          {
+            "name": "SM_Tree_Log_01",
+            "weight": 2
+          },
+          {
+            "name": "SM_Tree_Log_02",
+            "weight": 2
+          },
+          {
+            "name": "SM_Tree_Dead_01",
+            "weight": 3,
+            "lay": true
+          },
+          {
+            "name": "SM_Tree_Dead_02",
+            "weight": 2,
+            "lay": true
+          },
+          {
+            "name": "SM_Tree_Pine_Dead_01",
+            "weight": 3,
+            "lay": true
+          },
+          {
+            "pack": "swamp",
+            "name": "SM_Env_Tree_Dead_01",
+            "weight": 1,
+            "lay": true
+          }
+        ]
+      },
+      "stump": {
+        "radius_m": 0.3,
+        "models": [
+          {
+            "name": "SM_Tree_Stump_01",
+            "weight": 2
+          },
+          {
+            "name": "SM_Tree_Stump_03",
+            "weight": 2
+          }
+        ]
+      },
+      "boulder": {
+        "radius_m": 0.5,
+        "models": [
+          {
+            "name": "SM_Rock_Boulder_01",
+            "weight": 3
+          },
+          {
+            "name": "SM_Rock_Rounded_01",
+            "weight": 1
+          },
+          {
+            "name": "SM_Rock_Small_01",
+            "weight": 1
+          }
+        ]
+      },
+      "rootplate": {
+        "radius_m": 1.1,
+        "models": [
+          {
+            "name": "SM_Tree_Stump_02",
+            "weight": 1
+          }
+        ]
+      }
     }
   },
   "undergrowth": {
@@ -147,86 +400,362 @@
     "foot_m": 4,
     "trunk_clear_m": 0.4,
     "mixes": [
-    { "mix": 5, "name": "forest", "kinds": [
-      { "name": "fern", "per_100m2": 3.0, "scale_min": 0.7, "scale_max": 1.3, "clump": 0.6, "foot": 2.0, "models": [
-        { "name": "SM_Plant_Fern_01", "weight": 1 },
-        { "name": "SM_Plant_Fern_02", "weight": 1 },
-        { "name": "SM_Plant_Fern_03", "weight": 1 }
-      ] },
-      { "name": "bush", "per_100m2": 0.5, "scale_min": 0.6, "scale_max": 1.1, "clump": 0.4, "foot": 2.5, "models": [
-        { "name": "SM_Plant_Bush_01", "weight": 1 },
-        { "name": "SM_Plant_Bush_03", "weight": 1 }
-      ] },
-      { "name": "mushroom", "per_100m2": 0.6, "scale_min": 0.8, "scale_max": 1.4, "clump": 0.8, "foot": 3.0, "models": [
-        { "name": "SM_Plant_Mushrooms_03", "weight": 1 },
-        { "name": "SM_Plant_Mushrooms_04", "weight": 1 },
-        { "name": "SM_Plant_Mushrooms_05", "weight": 1 },
-        { "name": "SM_Plant_Mushrooms_06", "weight": 1 }
-      ] },
-      { "name": "twig", "per_100m2": 5.0, "scale_min": 0.8, "scale_max": 1.6, "clump": 0.3, "foot": 2.0, "models": [
-        { "name": "SM_Tree_Twig_01", "weight": 1 },
-        { "name": "SM_Tree_Twig_02", "weight": 1 },
-        { "name": "SM_Tree_Twig_03", "weight": 1 },
-        { "name": "SM_Tree_Twig_04", "weight": 1 },
-        { "name": "SM_Tree_Twig_05", "weight": 1 },
-        { "name": "SM_Tree_Branch_01", "weight": 0.3 }
-      ] },
-      { "name": "rock", "per_100m2": 1.2, "scale_min": 0.8, "scale_max": 2.0, "clump": 0.2, "foot": 1.5, "models": [
-        { "name": "SM_Rock_01", "weight": 1 },
-        { "name": "SM_Rock_02", "weight": 1 },
-        { "name": "SM_Rock_03", "weight": 1 },
-        { "name": "SM_Rock_04", "weight": 1 },
-        { "name": "SM_Rock_Small_02", "weight": 1 }
-      ] },
-      { "name": "grass", "per_100m2": 2.0, "scale_min": 0.8, "scale_max": 1.3, "clump": 0.7, "foot": 1.2, "models": [
-        { "name": "SM_Plant_Grass_02", "weight": 1 },
-        { "name": "SM_Plant_Grass_04", "weight": 1 },
-        { "name": "SM_Plant_Grass_05", "weight": 1 }
-      ] },
-      { "name": "sapling", "per_100m2": 0.4, "scale_min": 0.25, "scale_max": 0.5, "clump": 0.7, "foot": 0.3, "models": [
-        { "name": "SM_Tree_Pine_Small_01", "weight": 2 },
-        { "name": "SM_Tree_Pine_Small_02", "weight": 2 },
-        { "name": "SM_Tree_Birch_Small_01", "weight": 2 }
-      ] },
-      { "name": "shrub", "per_100m2": 0.6, "scale_min": 0.7, "scale_max": 1.1, "clump": 0.6, "foot": 0.4, "models": [
-        { "name": "SM_Plant_Hedge_Bush_01", "weight": 1 },
-        { "name": "SM_Plant_Hedge_Bush_02", "weight": 1 },
-        { "name": "SM_Plant_Bush_02", "weight": 1 },
-        { "name": "SM_Plant_Bush_Leaves_01", "weight": 1.5 },
-        { "name": "SM_Plant_Bush_Leaves_03", "weight": 1 }
-      ] }
-    ] },
-    { "mix": 9, "name": "swamp", "kinds": [
-      { "name": "reeds", "per_100m2": 2.5, "scale_min": 0.5, "scale_max": 0.9, "clump": 0.85, "foot": 0.8, "models": [
-        { "pack": "swamp", "name": "SM_Env_Reeds_01_LOD1", "weight": 1 },
-        { "pack": "swamp", "name": "SM_Env_Reeds_02_LOD1", "weight": 1 }
-      ] },
-      { "name": "swamp_grass", "per_100m2": 4.0, "scale_min": 0.7, "scale_max": 1.2, "clump": 0.7, "foot": 1.2, "models": [
-        { "pack": "swamp", "name": "SM_Env_SwampGrass_Small_01_LOD1", "weight": 1 },
-        { "pack": "swamp", "name": "SM_Env_SwampGrass_Medium_01_LOD1", "weight": 1 },
-        { "pack": "swamp", "name": "SM_Env_SwampGrass_Tall_01_LOD1", "weight": 1 }
-      ] },
-      { "name": "moss_mound", "per_100m2": 0.8, "scale_min": 0.8, "scale_max": 1.5, "clump": 0.5, "foot": 1.5, "models": [
-        { "pack": "swamp", "name": "SM_Env_MossMound_01", "weight": 1 },
-        { "pack": "swamp", "name": "SM_Env_MossMound_02", "weight": 1 },
-        { "pack": "swamp", "name": "SM_Env_MossMound_03", "weight": 1 }
-      ] },
-      { "name": "root", "per_100m2": 1.5, "scale_min": 0.8, "scale_max": 1.6, "clump": 0.4, "foot": 1.5, "models": [
-        { "name": "SM_Swamp_Root_01", "weight": 1 },
-        { "name": "SM_Swamp_Root_02", "weight": 1 },
-        { "name": "SM_Tree_Swamp_Root_01", "weight": 1 },
-        { "name": "SM_Tree_Swamp_Root_02", "weight": 1 }
-      ] },
-      { "name": "log", "per_100m2": 0.15, "scale_min": 0.8, "scale_max": 1.3, "clump": 0.3, "foot": 1.5, "models": [
-        { "name": "SM_Tree_Log_01", "weight": 1 },
-        { "name": "SM_Tree_Log_02", "weight": 1 }
-      ] },
-      { "name": "branch", "per_100m2": 0.4, "scale_min": 0.8, "scale_max": 1.3, "clump": 0.3, "foot": 1.5, "models": [
-        { "name": "SM_Tree_Swamp_Branch_01", "weight": 1 },
-        { "name": "SM_Tree_Swamp_Branch_02", "weight": 1 },
-        { "name": "SM_Tree_Branch_01", "weight": 1 }
-      ] }
-    ] }
+      {
+        "mix": 5,
+        "name": "forest",
+        "kinds": [
+          {
+            "name": "fern",
+            "per_100m2": 3.0,
+            "scale_min": 0.7,
+            "scale_max": 1.3,
+            "clump": 0.6,
+            "foot": 2.0,
+            "models": [
+              {
+                "name": "SM_Plant_Fern_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Fern_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Fern_03",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "bush",
+            "per_100m2": 0.5,
+            "scale_min": 0.6,
+            "scale_max": 1.1,
+            "clump": 0.4,
+            "foot": 2.5,
+            "models": [
+              {
+                "name": "SM_Plant_Bush_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Bush_03",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "mushroom",
+            "per_100m2": 0.6,
+            "scale_min": 0.8,
+            "scale_max": 1.4,
+            "clump": 0.8,
+            "foot": 3.0,
+            "models": [
+              {
+                "name": "SM_Plant_Mushrooms_03",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Mushrooms_04",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Mushrooms_05",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Mushrooms_06",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "twig",
+            "per_100m2": 5.0,
+            "scale_min": 0.8,
+            "scale_max": 1.6,
+            "clump": 0.3,
+            "foot": 2.0,
+            "models": [
+              {
+                "name": "SM_Tree_Twig_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Twig_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Twig_03",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Twig_04",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Twig_05",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Branch_01",
+                "weight": 0.3
+              }
+            ]
+          },
+          {
+            "name": "rock",
+            "per_100m2": 1.2,
+            "scale_min": 0.8,
+            "scale_max": 2.0,
+            "clump": 0.2,
+            "foot": 1.5,
+            "models": [
+              {
+                "name": "SM_Rock_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Rock_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Rock_03",
+                "weight": 1
+              },
+              {
+                "name": "SM_Rock_04",
+                "weight": 1
+              },
+              {
+                "name": "SM_Rock_Small_02",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "grass",
+            "per_100m2": 2.0,
+            "scale_min": 0.8,
+            "scale_max": 1.3,
+            "clump": 0.7,
+            "foot": 1.2,
+            "models": [
+              {
+                "name": "SM_Plant_Grass_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Grass_04",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Grass_05",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "sapling",
+            "per_100m2": 0.4,
+            "scale_min": 0.25,
+            "scale_max": 0.5,
+            "clump": 0.7,
+            "foot": 0.3,
+            "models": [
+              {
+                "name": "SM_Tree_PolyPine_03",
+                "weight": 2
+              },
+              {
+                "name": "SM_Tree_PolyPine_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Round_03",
+                "weight": 2
+              },
+              {
+                "name": "SM_Tree_Round_01",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "shrub",
+            "per_100m2": 0.6,
+            "scale_min": 0.7,
+            "scale_max": 1.1,
+            "clump": 0.6,
+            "foot": 0.4,
+            "models": [
+              {
+                "name": "SM_Plant_Hedge_Bush_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Hedge_Bush_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Bush_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Bush_Leaves_01",
+                "weight": 1.5
+              },
+              {
+                "name": "SM_Plant_Bush_Leaves_03",
+                "weight": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "mix": 9,
+        "name": "swamp",
+        "kinds": [
+          {
+            "name": "reeds",
+            "per_100m2": 2.5,
+            "scale_min": 0.5,
+            "scale_max": 0.9,
+            "clump": 0.85,
+            "foot": 0.8,
+            "models": [
+              {
+                "pack": "swamp",
+                "name": "SM_Env_Reeds_01_LOD1",
+                "weight": 1
+              },
+              {
+                "pack": "swamp",
+                "name": "SM_Env_Reeds_02_LOD1",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "swamp_grass",
+            "per_100m2": 4.0,
+            "scale_min": 0.7,
+            "scale_max": 1.2,
+            "clump": 0.7,
+            "foot": 1.2,
+            "models": [
+              {
+                "pack": "swamp",
+                "name": "SM_Env_SwampGrass_Small_01_LOD1",
+                "weight": 1
+              },
+              {
+                "pack": "swamp",
+                "name": "SM_Env_SwampGrass_Medium_01_LOD1",
+                "weight": 1
+              },
+              {
+                "pack": "swamp",
+                "name": "SM_Env_SwampGrass_Tall_01_LOD1",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "moss_mound",
+            "per_100m2": 0.8,
+            "scale_min": 0.8,
+            "scale_max": 1.5,
+            "clump": 0.5,
+            "foot": 1.5,
+            "models": [
+              {
+                "pack": "swamp",
+                "name": "SM_Env_MossMound_01",
+                "weight": 1
+              },
+              {
+                "pack": "swamp",
+                "name": "SM_Env_MossMound_02",
+                "weight": 1
+              },
+              {
+                "pack": "swamp",
+                "name": "SM_Env_MossMound_03",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "root",
+            "per_100m2": 1.5,
+            "scale_min": 0.8,
+            "scale_max": 1.6,
+            "clump": 0.4,
+            "foot": 1.5,
+            "models": [
+              {
+                "name": "SM_Swamp_Root_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Swamp_Root_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Swamp_Root_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Swamp_Root_02",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "log",
+            "per_100m2": 0.15,
+            "scale_min": 0.8,
+            "scale_max": 1.3,
+            "clump": 0.3,
+            "foot": 1.5,
+            "models": [
+              {
+                "name": "SM_Tree_Log_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Log_02",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "branch",
+            "per_100m2": 0.4,
+            "scale_min": 0.8,
+            "scale_max": 1.3,
+            "clump": 0.3,
+            "foot": 1.5,
+            "models": [
+              {
+                "name": "SM_Tree_Swamp_Branch_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Swamp_Branch_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Branch_01",
+                "weight": 1
+              }
+            ]
+          }
+        ]
+      }
     ]
   }
 }

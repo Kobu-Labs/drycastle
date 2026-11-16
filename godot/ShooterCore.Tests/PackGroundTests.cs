@@ -39,7 +39,7 @@ public class PackGroundTests
         Assert.Equal(0.6f, shrub.Per100M2);
         Assert.InRange(sapling.ScaleMin, 0.25f, 0.25f); Assert.InRange(sapling.ScaleMax, 0.5f, 0.5f);
         Assert.All(new[] { sapling, shrub }, k => { Assert.True(k.Foot < 1f, k.Name + " must thin at trunks"); Assert.True(k.Clump > 0f, k.Name + " is clumped"); });
-        Assert.All(sapling.Models, e => Assert.Matches("Pine_Small|Birch_Small", e.Name));
+        Assert.All(sapling.Models, e => Assert.Matches("PolyPine|Round", e.Name));
         var swamp = u.Mixes.Single(m => m.Mix == 9);
         Assert.All(new[] { "reeds", "swamp_grass", "moss_mound", "root", "log" }, n => Assert.Contains(swamp.Kinds, k => k.Name == n));
         Assert.All(swamp.Kinds.Where(k => k.Name is "reeds" or "swamp_grass" or "moss_mound").SelectMany(k => k.Models), e => Assert.Equal("swamp", e.Pack));
