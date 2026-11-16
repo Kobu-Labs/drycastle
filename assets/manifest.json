@@ -4306,6 +4306,42 @@
       "note": "Mains hum, a whizz sweep and random crackle clicks by scripts/make_shock_crackle.py (in the repo, deterministic); mono OGG, ~2.2 s"
     },
     {
+      "id": "sfx:drycastle-generated-sounds/harvester_reel_in",
+      "name": "Harvester reel draws a player in",
+      "file": "drycastle-generated-sounds/harvester_reel_in.ogg",
+      "used_for": "harvester.reel_in",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-16",
+      "generated": true,
+      "note": "A whirr rising in pitch with a quickening chop, the engine straining underneath, a clank at the grab; ~1.3 s by scripts/make_harvester_sounds.py (in the repo, deterministic); mono OGG"
+    },
+    {
+      "id": "sfx:drycastle-generated-sounds/harvester_chew",
+      "name": "Harvester processing a catch (muffled)",
+      "file": "drycastle-generated-sounds/harvester_chew.ogg",
+      "used_for": "harvester.chew",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-16",
+      "generated": true,
+      "note": "A muffled labouring rumble, irregular crunching thuds, pulsing grind; ~2.6 s by scripts/make_harvester_sounds.py (in the repo, deterministic); mono OGG"
+    },
+    {
+      "id": "sfx:drycastle-generated-sounds/harvester_eject",
+      "name": "Harvester chute ejects a bale",
+      "file": "drycastle-generated-sounds/harvester_eject.ogg",
+      "used_for": "harvester.eject",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-16",
+      "generated": true,
+      "note": "A pneumatic whoomp, a puff of air and a dull clank; ~0.8 s by scripts/make_harvester_sounds.py (in the repo, deterministic); mono OGG"
+    },
+    {
       "id": "sfx:drycastle-generated-sounds/casing_tink_1",
       "name": "Casing clink, variant 1 (spent casing on a hard floor)",
       "file": "drycastle-generated-sounds/casing_tink_1.ogg",

@@ -244,10 +244,12 @@ public static class HarvesterCodec
         BaleLit = 0,
         /// <summary>A bale burnt out.</summary>
         BaleAsh = 1,
-        /// <summary>A victim was drawn in (the id is the corpse's).</summary>
+        /// <summary>The reel took a victim and draws the body in (the id is the corpse's): the reel's whirr and the strain of the engine.</summary>
         Drawn = 2,
         /// <summary>A bale left the unloader (the id is the bale corpse's).</summary>
         BaleOut = 3,
+        /// <summary>The victim went into the machine: the body is gone from the world, the machine labours for <see cref="HarvesterConfig.ChewSeconds"/> (the id is the corpse's, the position is the intake).</summary>
+        Swallowed = 4,
     }
 
     public readonly record struct FxMsg(FxKind Kind, Vector3 Position, ushort Id);

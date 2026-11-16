@@ -33,6 +33,12 @@ public partial class NetClient
     readonly List<(Node3D Root, BaleState State)> _orphanBales = new();
     double _baleFadeCheck;
     readonly Dictionary<ushort, Node3D> _reels = new();
+    /// <summary>The catch as one transformation: corpses being drawn in (id to when and by which machine), bales just out of the chute (id to when), machines that rumble while they work (car id to until).</summary>
+    readonly Dictionary<ushort, (double Start, CarView? Car)> _drawIn = new();
+    readonly Dictionary<ushort, double> _baleEmerge = new();
+    readonly Dictionary<ushort, double> _shakeUntil = new();
+    static readonly float HarvesterConfigDraw = new HarvesterConfig().DrawSeconds, HarvesterConfigChew = new HarvesterConfig().ChewSeconds;
+    const float EmergeSeconds = 0.9f;
     /// <summary>A harvester's wheels (SM_Veh_Harvester_Wheel_fl, fr, rl, rr; the model has no hull to hang them under) and how far they have rolled and steered.</summary>
     sealed class HarvWheels
     {
@@ -108,6 +114,58 @@ public partial class NetClient
             if (v.Driver != 0) reel.RotateX(-ReelSpin * dt); // the cut side moves down at the front: the top turns forward
             RollHarvesterWheels(v);
         }
+        AnimateCatch();
+    }
+
+    CarView? NearestHarvester(Vector3 at)
+    {
+        CarView? best = null; var bd = 12f;
+        if (Vehicles == null) return null;
+        foreach (var v in _cars.Values)
+        {
+            if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count || Vehicles.Vehicles[v.Kind].Id != HarvesterRules.VehicleId) continue;
+            var d = v.Node.GlobalPosition.DistanceTo(at);
+            if (d < bd) { bd = d; best = v; }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// After the corpses and the cars are placed: the body being drawn in is lifted in an arc, tumbles about the reel's axis and shrinks into the intake (the server moves it there in
+    /// <see cref="HarvesterConfig.DrawSeconds"/>); the machine rumbles while it chews; the bale that leaves the chute grows from nothing with a hop and a roll. Cosmetic: nothing here touches the server positions.
+    /// </summary>
+    void AnimateCatch()
+    {
+        if (!ShotFx.Enabled) return;
+        foreach (var (id, d) in _drawIn.ToArray())
+        {
+            var k = (float)((Now - d.Start) / HarvesterConfigDraw);
+            if (k > 1.6f || !_corpses.TryGetValue(id, out var v) || !GodotObject.IsInstanceValid(v.Node)) { if (k > 1.6f) _drawIn.Remove(id); continue; }
+            k = Mathf.Clamp(k, 0f, 1f);
+            var axis = d.Car != null && GodotObject.IsInstanceValid(d.Car.Node) ? d.Car.Node.GlobalBasis.X.Normalized() : Vector3.Right;
+            var turn = new Basis(axis, -k * k * Mathf.Tau * 1.25f); // forward over the reel: the top moves into the machine
+            var size = Mathf.Lerp(1f, 0.18f, k * k);
+            v.Node.Basis = (turn * v.Node.Basis).Scaled(Vector3.One * size);
+            v.Node.GlobalPosition += Vector3.Up * (MathF.Sin(k * Mathf.Pi) * 0.9f);
+        }
+        foreach (var (id, start) in _baleEmerge.ToArray())
+        {
+            var t = (float)((Now - start) / EmergeSeconds);
+            if (t >= 1f || !_corpses.TryGetValue(id, out var v) || !GodotObject.IsInstanceValid(v.Node)) { if (t >= 1f) _baleEmerge.Remove(id); continue; }
+            const float c1 = 1.70158f, c3 = c1 + 1f;
+            var grow = t <= 0 ? 0.01f : 1f + c3 * MathF.Pow(t - 1f, 3f) + c1 * MathF.Pow(t - 1f, 2f); // ease out back: a little overshoot
+            var hop = 4f * 0.55f * t * (1f - t);
+            var roll = new Basis(Vector3.Right, (1f - t) * -3.0f);
+            v.Node.Basis = (v.Node.Basis * roll).Scaled(Vector3.One * Mathf.Max(0.01f, grow));
+            v.Node.GlobalPosition += Vector3.Up * hop;
+        }
+        foreach (var (carId, until) in _shakeUntil.ToArray())
+        {
+            if (Now >= until || !_cars.TryGetValue(carId, out var car) || !GodotObject.IsInstanceValid(car.Node)) { if (Now >= until) _shakeUntil.Remove(carId); continue; }
+            var env = (float)Math.Min(1.0, (until - Now) / 0.6);
+            var tt = (float)Now;
+            car.Node.GlobalPosition += new Vector3(MathF.Sin(tt * 47f) * 0.02f, MathF.Sin(tt * 61f) * 0.025f, MathF.Cos(tt * 53f) * 0.02f) * env;
+        }
     }
 
     /// <summary>The wheels roll with the ground distance the machine covers (angle = distance / radius) and the front pair steers by the turn the body makes per metre.</summary>
@@ -149,7 +207,19 @@ public partial class NetClient
             case HarvesterCodec.FxKind.BaleAsh when HarvesterCodec.IsDroppedBale(m.Id): DroppedBaleState(at, BaleState.Ash); break;
             case HarvesterCodec.FxKind.BaleLit: LightBale(m.Id, at); break;
             case HarvesterCodec.FxKind.BaleAsh: BurnOutBale(m.Id, at); break;
-            case HarvesterCodec.FxKind.Drawn: if (Sfx.Enabled) Sfx.Play3D("explosion.vehicle", at, 0.3f); break; // a dull thump as the machine takes the body in
+            case HarvesterCodec.FxKind.Drawn: // the reel took somebody: it whirrs up, the engine strains, the body is lifted and tumbled in
+                if (Sfx.Enabled) Sfx.Play3D("harvester.reel_in", at);
+                _drawIn[m.Id] = (Now, NearestHarvester(at));
+                if (NearestHarvester(at) is { } car) _shakeUntil[car.Id] = Now + HarvesterConfigDraw + HarvesterConfigChew;
+                break;
+            case HarvesterCodec.FxKind.Swallowed: // gone into the machine: a muffled chewing while it works
+                if (Sfx.Enabled) Sfx.Play3D("harvester.chew", at);
+                _drawIn.Remove(m.Id);
+                break;
+            case HarvesterCodec.FxKind.BaleOut: // the chute pops the bale out: it grows from nothing with a hop and a roll
+                if (Sfx.Enabled) Sfx.Play3D("harvester.eject", at);
+                _baleEmerge[m.Id] = Now;
+                break;
         }
     }
 

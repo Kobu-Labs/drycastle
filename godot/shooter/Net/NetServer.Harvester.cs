@@ -378,7 +378,7 @@ public partial class NetServer
                     if (_corpses.Get(m.Corpse) is { } swallowed)
                     {
                         _machineItems[m.Corpse] = swallowed.Items.ToList();
-                        HarvesterFx(HarvesterCodec.FxKind.Drawn, swallowed.Position, m.Corpse);
+                        HarvesterFx(HarvesterCodec.FxKind.Swallowed, swallowed.Position, m.Corpse);
                         _match.Entities.Despawn(m.Corpse, WorldDespawnReason.Removed);
                     }
                     break;
