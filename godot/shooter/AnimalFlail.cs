@@ -30,6 +30,8 @@ public sealed partial class AnimalFlail : SkeletonModifier3D
 
     /// <summary>0 = the clip as it is, 1 = fully loose. A landed body keeps a lower value: the limbs lie slack.</summary>
     public float Amount { get; set; }
+    /// <summary>The ground's height under a body that lies (world): no loose end goes under it. Null in the air.</summary>
+    public float? FloorY { get; set; }
 
     /// <returns>Null when the rig has no bone that swings.</returns>
     public static AnimalFlail? Create(Skeleton3D sk)
@@ -78,6 +80,7 @@ public sealed partial class AnimalFlail : SkeletonModifier3D
             j.Vel += (Vector3.Down * Gravity + (clipTip - j.Tip) * j.Pull) * dt;
             j.Vel = carried + (j.Vel - carried) * keep;
             j.Tip += j.Vel * dt;
+            if (FloorY is { } floor && j.Tip.Y < floor) { j.Tip.Y = floor; if (j.Vel.Y < 0) j.Vel.Y = 0; } // it rests on the ground
             var to = j.Tip - origin;
             var dir = to.LengthSquared() > 1e-10f ? to.Normalized() : clipDir;
             var max = j.MaxAngle * _blend;

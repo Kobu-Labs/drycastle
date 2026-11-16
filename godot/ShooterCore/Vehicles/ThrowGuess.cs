@@ -39,12 +39,15 @@ public sealed class ThrowGuess
     readonly StateMachine<ThrowGuessPhase> _fsm = new(Spec);
     Vector3 _pos, _vel, _offset;
     float _floorY;
+    bool _rolling; // the guessed body has come down and rolls on (ThrownRoll), as the server's will
 
     public ThrowGuessPhase Phase => _fsm.Current;
     /// <summary>The guessed arc is what is drawn: the body is shown as a thrown one (<see cref="Airborne"/>, or lying where it landed) whatever the server's state says.</summary>
     public bool Active => _fsm.IsAny(ThrowGuessPhase.Flying, ThrowGuessPhase.Confirmed);
-    /// <summary>The guessed body is in the air (false once it has landed and waits for the server's).</summary>
-    public bool Airborne => Active && _vel != Vector3.Zero;
+    /// <summary>The guessed body still moves, in the air or rolling on the ground (false once it lies and waits for the server's).</summary>
+    public bool Moving => Active && _vel != Vector3.Zero;
+    /// <summary>Where the guessed body is: the ground under it is what the next <see cref="Step"/> is given.</summary>
+    public Vector3 Position => _pos;
     /// <summary>A touch may start a guess now.</summary>
     public bool Ready => _fsm.Is(ThrowGuessPhase.None);
 
@@ -52,24 +55,35 @@ public sealed class ThrowGuess
     public bool Start(Vector3 feet, Vector3 velocity)
     {
         if (!Ready) return false;
-        _pos = feet; _vel = velocity; _floorY = feet.Y; _offset = Vector3.Zero;
+        _pos = feet; _vel = velocity; _floorY = feet.Y; _offset = Vector3.Zero; _rolling = false;
         _fsm.Enter(ThrowGuessPhase.Flying, ConfirmSeconds);
         return true;
     }
 
     /// <summary>
     /// One frame: where the animal is drawn. <paramref name="server"/> is where the snapshots have it at the render tick, <paramref name="serverThrown"/> whether they show it
-    /// thrown by now (flying, knocked down, or dead of the hit), <paramref name="serverInAir"/> whether that body is still flying.
+    /// thrown by now (flying, knocked down, or dead of the hit), <paramref name="serverInAir"/> whether that body still moves (flying or rolling),
+    /// <paramref name="groundY"/> the ground's height under <see cref="Position"/> (null: not known, the last one stands).
     /// </summary>
-    public Vector3 Step(float dt, Vector3 server, bool serverThrown, bool serverInAir)
+    public Vector3 Step(float dt, Vector3 server, bool serverThrown, bool serverInAir, float? groundY = null)
     {
         if (Active)
         {
+            if (groundY is { } gy) _floorY = gy;
             if (_vel != Vector3.Zero)
             {
-                _vel.Y -= MoveConsts.Gravity * dt;
-                _pos += _vel * dt;
-                if (_pos.Y <= _floorY) { _pos.Y = _floorY; _vel = Vector3.Zero; } // landed at the height it left: it lies there until the server's picture takes over
+                if (_rolling)
+                {
+                    if (_pos.Y - _floorY > ThrownRoll.LedgeM) _rolling = false; // over an edge: it falls
+                    else { _pos += _vel * dt; _pos.Y = _floorY; ThrownRoll.Roll(ref _vel, dt); } // at rest it lies there until the server's picture takes over
+                }
+                if (!_rolling && _vel != Vector3.Zero)
+                {
+                    _vel.Y -= MoveConsts.Gravity * dt;
+                    _pos += _vel * dt;
+                    if (_pos.Y <= _floorY && _vel.Y <= 0) { _pos.Y = _floorY; _vel = ThrownRoll.Land(_vel); _rolling = _vel != Vector3.Zero; }
+                    else if (_pos.Y < _floorY) _pos.Y = _floorY; // the ground rose under it while it was still going up: it skims on
+                }
             }
             var expired = _fsm.Tick(dt);
             if (_fsm.Is(ThrowGuessPhase.Flying) && serverThrown) { _fsm.Enter(ThrowGuessPhase.Confirmed, LandSeconds); expired = false; }
