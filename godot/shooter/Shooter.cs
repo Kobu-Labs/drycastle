@@ -30,7 +30,7 @@ namespace Drycastle.Shooter;
 ///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
 ///   --match-bot alice|bob     client: scripted match smoke role (alice kills bob with the debug command, bob fires after each spawn)
 ///   --blast-smoke             server: flat arena with three cars, judges vehicle damage stages, the blast and the chain reaction; --blast-bot a|b client roles (ticket #103)
-///   --car-smoke               server: flat test arena with three cars, judges the vehicle scenario; --car-bot a|b client roles; --car-kind car|motorcycle|bicycle picks the vehicle type of the smoke (default car); --vehicle-set abandon_return_time=3 overrides vehicles.json
+///   --car-smoke               server: flat test arena with three cars, judges the vehicle scenario; --car-bot a|b client roles; --car-kind car|motorcycle|bicycle picks the vehicle type of the smoke (default car); --vehicle-set destroyed_return_time=3 overrides vehicles.json
 ///   --weapons-smoke           server: flat test arena with a wall (far from the map), honours debug commands, judges the weapons scenario
 ///   --bazooka-smoke           server: same flat arena, judges the bazooka scenario
 ///   --bazooka-bot a|b         client: scripted bazooka smoke role (a shoots, b is the target)
@@ -189,7 +189,8 @@ public partial class Shooter : Node3D
     {
         _shell = new UiShell
         {
-            PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks)),
+            PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks),
+                _client is { CanManageTeams: true } tc ? () => _shell.Push(new TeamsScreen(tc)) : null),
             WantsFreeMouse = () => _client is { WantsFreeMouse: true }, // MouseOwners: the respawn screen, the chat box, the Equipment screen, the tactical map (click to set the waypoint) and the corpse chooser's item list release the mouse (buttons to click, keys to type, cells to drag or click)
             BackHandler = () => (_client?.CloseChat() ?? false) || (_client?.CloseEquipment() ?? false) || (_client?.CloseTacticalMap() ?? false), // Esc closes the chat box, then the Equipment screen, then the tactical map, before it opens Pause
         };
@@ -504,7 +505,6 @@ public partial class Shooter : Node3D
             if (p.Length != 2 || !float.TryParse(p[1], System.Globalization.CultureInfo.InvariantCulture, out var x)) throw new InvalidOperationException($"bad --vehicle-set entry {kv}");
             switch (p[0])
             {
-                case "abandon_return_time": v.AbandonReturnTime = x; break;
                 case "destroyed_return_time": v.DestroyedReturnTime = x; break;
                 case "run_over_min_speed": v.RunOverMinSpeed = x; break;
                 default: throw new InvalidOperationException($"unknown vehicle key {p[0]}");

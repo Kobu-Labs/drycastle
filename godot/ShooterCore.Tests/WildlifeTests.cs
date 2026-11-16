@@ -161,7 +161,7 @@ public class WildlifeTests
         Assert.InRange(t.Scale * PlayerHitBox.StandHeight, wolf.HitBox[1] - 0.001f, wolf.HitBox[1] + 0.001f);
         ushort by = 0;
         keeper.Killed += (_, k) => by = k;
-        Assert.Equal(DamageResult.Damaged, keeper.Hit(t.Id, 9, wolf.Def.Hp - 1));
+        Assert.Equal(DamageResult.Damaged, keeper.Hit(t.Id, 9, wolf.MaxHp - 1)); // its own hit points: the species' scaled by the size it rolled
         Assert.Equal(AnimalState.Flee, wolf.State); // a shot that hurt it: it runs
         Assert.Equal(DamageResult.Killed, keeper.Hit(t.Id, 9, 5));
         Assert.Equal((ushort)9, by);

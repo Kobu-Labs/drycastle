@@ -47,6 +47,8 @@ public enum KillCause : byte { Standard = 0, Headshot = 1, Roadkill = 2 }
 
 /// <summary>Killer == Victim for suicides.</summary>
 public sealed record PlayerKilled(ushort Killer, ushort Victim, byte Weapon, KillCause Cause = KillCause.Standard) : MatchEvent;
+/// <summary>An admin moved a player to the other team (#312), the player alive or dead: the host drops what ties them to the old side (vehicle, turrets, streak progress). A living player is respawned at once, so a PlayerSpawned follows.</summary>
+public sealed record PlayerTeamChanged(ushort Id, byte From, byte To) : MatchEvent;
 public sealed record PlayerDied(ushort Victim, ushort Killer, float RespawnDelay) : MatchEvent;
 /// <summary>A target dummy (#148) was killed: no roster change, no round end.</summary>
 public sealed record TargetKilled(ushort Killer, TargetDummies.Dummy Target, byte Weapon, KillCause Cause) : MatchEvent;
@@ -70,6 +72,10 @@ public sealed class MatchPlayer
     public int Kills, Deaths;
     /// <summary>Team deathmatch: <see cref="Teams.A"/> or <see cref="Teams.B"/>. <see cref="Teams.None"/> (0) in free-for-all and for sandbox players.</summary>
     public byte Team;
+    /// <summary>An admin put this player on <see cref="Team"/> (#312): the round-start balance leaves them there. Cleared when a mode change regroups everyone.</summary>
+    public bool TeamPinned;
+    /// <summary>A bot: the balance moves bots before humans.</summary>
+    public bool Bot;
     /// <summary>Sandbox mode (#156): godmode, and no kills, score or round end. Ranked after everyone else.</summary>
     public bool Sandbox;
     /// <summary>A sandbox player who chose to take damage (the panel's switch): hurt and killed like anyone, still unscored. Meaningless without <see cref="Sandbox"/>.</summary>
@@ -211,17 +217,108 @@ public sealed class MatchSim
         return _teamScore[Teams.B] < _teamScore[Teams.A] ? Teams.B : Teams.A;
     }
 
-    /// <summary>Round start: if the teams differ by two or more, the most recent joiners of the bigger team move over until they differ by at most one.</summary>
-    void Rebalance()
+    /// <summary>
+    /// Evens the teams out: while they differ by two or more, one player of the bigger team moves over. Pinned players (<see cref="MatchPlayer.TeamPinned"/>) stay;
+    /// bots go before humans, the most recent joiner first. Gives up when only pinned players are left to move. Returns who moved.
+    /// </summary>
+    List<MatchPlayer> Rebalance()
     {
+        var moved = new List<MatchPlayer>();
         while (true)
         {
             var a = _players.Values.Where(p => p.Team == Teams.A).ToList();
             var b = _players.Values.Where(p => p.Team == Teams.B).ToList();
-            if (Math.Abs(a.Count - b.Count) < 2) return;
+            if (Math.Abs(a.Count - b.Count) < 2) return moved;
             var big = a.Count > b.Count ? a : b;
-            big.OrderByDescending(p => p.Id).First().Team = Teams.Other(big[0].Team);
+            var pick = big.Where(p => !p.TeamPinned).OrderByDescending(p => p.Bot).ThenByDescending(p => p.Id).FirstOrDefault();
+            if (pick == null) return moved;
+            Move(pick, Teams.Other(pick.Team));
+            moved.Add(pick);
         }
+    }
+
+    /// <summary>Puts a player on another team. One already in the world leaves their old side: the host is told, and a living one respawns (at the new side's spawn). Scores stay where they were earned.</summary>
+    void Move(MatchPlayer p, byte team)
+    {
+        var from = p.Team;
+        p.Team = team;
+        if (p.Life == PlayerLife.Unspawned || from == team) return;
+        Emit(new PlayerTeamChanged(p.Id, from, team));
+        if (p.Life == PlayerLife.Alive && Phase == MatchPhase.Running) { p.SetLife(PlayerLife.Unspawned); Spawn(p); } // a dead one respawns on the new team at the usual time
+    }
+
+    /// <summary>
+    /// An admin puts a player on a team and pins them there (#312): the round-start balance leaves them. Team deathmatch only; false for an unknown or sandbox player, outside
+    /// team deathmatch, or a team that is not A or B. Kills and deaths stay with the player, the team score with the old team.
+    /// </summary>
+    public bool SetTeam(ushort id, byte team, bool pinned = true)
+    {
+        if (!IsTeamMode || team is not (Teams.A or Teams.B) || !_players.TryGetValue(id, out var p) || p.Sandbox) return false;
+        p.TeamPinned = pinned;
+        Move(p, team);
+        Emit(new ScoreboardChanged());
+        return true;
+    }
+
+    /// <summary>The admin lets the balance move this player again (#312). False for an unknown player.</summary>
+    public bool Unpin(ushort id)
+    {
+        if (!_players.TryGetValue(id, out var p)) return false;
+        p.TeamPinned = false;
+        Emit(new ScoreboardChanged());
+        return true;
+    }
+
+    /// <summary>Every player is free for the balance again. False outside team deathmatch.</summary>
+    public bool UnpinAll()
+    {
+        if (!IsTeamMode) return false;
+        foreach (var p in _players.Values) p.TeamPinned = false;
+        Emit(new ScoreboardChanged());
+        return true;
+    }
+
+    /// <summary>Every bot goes to <paramref name="team"/> and is pinned there (a bot already there is just pinned). Returns how many moved; null outside team deathmatch or for a team that is not A or B.</summary>
+    public int? MoveBots(byte team)
+    {
+        if (!IsTeamMode || team is not (Teams.A or Teams.B)) return null;
+        var moved = 0;
+        foreach (var p in _players.Values.Where(p => p.Bot && !p.Sandbox).ToList())
+        {
+            p.TeamPinned = true;
+            if (p.Team != team) { Move(p, team); moved++; }
+        }
+        Emit(new ScoreboardChanged());
+        return moved;
+    }
+
+    /// <summary>Swap: every non-sandbox player changes side (pins follow them). False outside team deathmatch.</summary>
+    public bool SwapTeams()
+    {
+        if (!IsTeamMode) return false;
+        foreach (var p in _players.Values.Where(p => !p.Sandbox && p.Team != Teams.None).ToList()) Move(p, Teams.Other(p.Team));
+        (_teamScore[Teams.A], _teamScore[Teams.B]) = (_teamScore[Teams.B], _teamScore[Teams.A]); // the earned score goes with the people who earned it
+        Emit(new ScoreboardChanged());
+        return true;
+    }
+
+    /// <summary>Shuffle: every non-sandbox player is dealt at random into two even teams, pins dropped. False outside team deathmatch.</summary>
+    public bool ShuffleTeams()
+    {
+        if (!IsTeamMode) return false;
+        var all = _players.Values.Where(p => !p.Sandbox).OrderBy(_ => _rng.Next()).ToList();
+        for (var i = 0; i < all.Count; i++) { all[i].TeamPinned = false; Move(all[i], i % 2 == 0 ? Teams.A : Teams.B); }
+        Emit(new ScoreboardChanged());
+        return true;
+    }
+
+    /// <summary>Balance: the round-start balance now, mid-round. Returns who moved; null outside team deathmatch.</summary>
+    public IReadOnlyList<MatchPlayer>? BalanceTeams()
+    {
+        if (!IsTeamMode) return null;
+        var moved = Rebalance();
+        if (moved.Count > 0) Emit(new ScoreboardChanged());
+        return moved;
     }
 
     /// <summary>Sandbox (#156): full health for a living player. False when the player is not alive.</summary>
@@ -274,9 +371,9 @@ public sealed class MatchSim
 
     public void SetPosition(ushort id, Vector3 pos) { if (_players.TryGetValue(id, out var p)) p.Position = pos; }
 
-    public void AddPlayer(ushort id, string name, bool sandbox = false)
+    public void AddPlayer(ushort id, string name, bool sandbox = false, bool bot = false)
     {
-        _players[id] = new MatchPlayer { Id = id, Name = name, Sandbox = sandbox };
+        _players[id] = new MatchPlayer { Id = id, Name = name, Sandbox = sandbox, Bot = bot };
         if (IsTeamMode && !sandbox) _players[id].Team = SmallerTeam(); // auto-balance on join
         if (Phase == MatchPhase.Waiting) { StartIfReady(); }
         else if (Phase == MatchPhase.Running) Spawn(_players[id]);
@@ -403,7 +500,7 @@ public sealed class MatchSim
         if (mode is { } m && m != Mode)
         {
             Mode = m;
-            foreach (var p in _players.Values) p.Team = Teams.None;
+            foreach (var p in _players.Values) { p.Team = Teams.None; p.TeamPinned = false; } // a mode change regroups everyone, pins included
             if (IsTeamMode) foreach (var p in _players.Values.Where(p => !p.Sandbox)) p.Team = SmallerTeam();
         }
         if (_players.Count >= _cfg.MinPlayers && _players.Count > 0) StartRound();
@@ -415,9 +512,9 @@ public sealed class MatchSim
 
     void StartRound()
     {
-        if (IsTeamMode) Rebalance();
         Array.Clear(_teamScore); WinningTeam = Teams.None;
         foreach (var p in _players.Values) { p.Kills = 0; p.Deaths = 0; p.SetLife(PlayerLife.Unspawned); }
+        if (IsTeamMode) Rebalance(); // after the reset: everyone is unspawned, so a move here needs no respawn
         Entities.Clear();
         Targets.ResetAll();
         Winners = Array.Empty<ushort>();

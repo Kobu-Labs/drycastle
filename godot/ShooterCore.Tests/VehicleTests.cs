@@ -38,26 +38,6 @@ public class VehicleTests
     }
 
     [Fact]
-    public void AbandonTimerReturnsOnceAfterTheTime()
-    {
-        var t = new AbandonTimer();
-        for (var i = 0; i < 29; i++) Assert.False(t.Update(false, false, 1f, 30f));
-        Assert.True(t.Update(false, false, 1f, 30f));
-        Assert.False(t.Update(false, false, 1f, 30f)); // counting again from zero
-    }
-
-    [Fact]
-    public void AbandonTimerResetsWhenOccupiedOrHome()
-    {
-        var t = new AbandonTimer();
-        t.Update(false, false, 20f, 30f);
-        Assert.Equal(20f, t.Empty);
-        t.Update(true, false, 1f, 30f);
-        Assert.Equal(0f, t.Empty);
-        Assert.False(t.Update(false, true, 100f, 30f)); // already at its origin: nothing to return
-    }
-
-    [Fact]
     public void ColourPickPrefersUntakenAndStaysInPalette()
     {
         var rng = new Random(5);

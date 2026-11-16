@@ -136,6 +136,14 @@ _Avoid_: open seat, unprotected seat
 The amphibious transport's machine gun, on a ring mount over the rear compartment and worked from the gunner seat by a gunner who stands inside the ring. The gunner's view aims it all the way round; over the two riders in front it cannot be depressed. Its rounds are the jeep's roof gun's, and its kills are ordinary kills.
 _Avoid_: turret (alone), pintle gun, rear gun
 
+**Fixed seat**:
+Where a rider sits, in every vehicle: the seat's offset in the vehicle's frame (`vehicles.json` `seats`; a vehicle with none has one driver seat at its origin). Its rider is drawn on it, turning and tilting with the hull as it is drawn this frame, and never as a free figure beside the vehicle. The server tells every client who sits in each seat (the driver in the vehicle's record, seats 1..3 in its seats record), so a rider is placed by id.
+_Avoid_: rider offset, seat anchor
+
+**Head look**:
+What a seated rider's view does to their figure for everyone: with the view in first person (a passenger's own eyes, the driver's cockpit view), the head turns up to 70 degrees either side and tips, and a look further round twists the upper body over the hips, so the look reaches straight behind. The body stays on the seat. In the chase view the head faces ahead; a helicopter's pilot only looks up and down (their yaw is the heading). A gunner or an armed seat's rider turns the whole figure to the aim instead (ADR 0026).
+_Avoid_: neck turn, look-around
+
 **Seat switch**:
 Moving to another seat of the vehicle you sit in, without getting out: while seated, the number keys (the weapon slot keys) take that seat (key 2 is the second seat of the vehicle's `seats` list), and a small top-down schematic in the bottom right shows each seat with its number (free: outlined; yours: filled, double ring; taken: struck through). A vehicle with no `seats` list has the one driver seat. A free seat is taken at once; a taken one is refused. Leaving the driver seat leaves the vehicle without input, so it coasts to a stop (a utility helicopter in the air holds a hover, then sets itself down); a gunner's turret keeps its aim. One player can drive, go to the turret and drive again.
 _Avoid_: seat change, swap seat
@@ -236,7 +244,7 @@ _Avoid_: elevation, sight setting
 The dots on the cross of a sniper scope, at true angles: 1 mil is 1 m at 1000 m. The scope says how many mils one dot is. A target of a known height that spans n mils is height x 1000 / n metres away; a dot under the centre is the hold-over for a target beyond the Zero.
 
 **Hit diagram**:
-The card a hunter sees after killing a wild animal with a sniper rifle: the animal's side view (always facing left), the place the bullet entered marked on it, the distance of the shot, the weapon, and "HEAD" when the bullet met the head. The side view is always the one picture of the animal standing, whatever it was doing when it was hit: the hit is moved from the Hit shape the bullet was tested against onto the standing one, a head hit to the same place of the head and a body hit to the same place of the body. Only the shooter sees it, for 5 s. Only a kill, only a sniper rifle, only wildlife (not a Pet, a Citizen or a player).
+The card a hunter sees after killing a wild animal with a sniper rifle: the animal's side view (always facing left), the place the bullet entered marked on it, the distance of the shot, the weapon, the animal's weight in kg (next to its name), and "HEAD" when the bullet met the head. The side view is always the one picture of the animal standing, whatever it was doing when it was hit: the hit is moved from the Hit shape the bullet was tested against onto the standing one, a head hit to the same place of the head and a body hit to the same place of the body. Only the shooter sees it, for 5 s. Only a kill, only a sniper rifle, only wildlife (not a Pet, a Citizen or a player).
 _Avoid_: kill cam, x-ray
 
 **Hit shape**:
@@ -260,7 +268,7 @@ A value from the day clock that drives street lamp light, headlight and window g
 _Avoid_: darkness, night mode
 
 **Aircraft**:
-A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper and the AC-130 gunship. Nobody boards or flies it; its owner only works its guns. It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship) and can be shot down by flak: its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
+A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper, the AC-130 gunship and the UAV. Nobody boards or flies it; its owner only works its guns (the UAV has none). It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship, 200 for the UAV) and can be shot down by flak and any other anti-aircraft (ADR 0005): its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
 _Avoid_: plane (for helicopters), drone, helicopter (alone)
 
 **Utility helicopter**:
@@ -288,7 +296,7 @@ The killstreak that places a 500 hp gun on the ground for 15 seconds. It turns t
 _Avoid_: turret (alone, ambiguous with the vehicle gun), gun emplacement
 
 **UAV**:
-The 4-kill killstreak: for 60 seconds the owner receives enemy pings on the minimap, one every second. Enemies with Ghost are not shown.
+The 4-kill killstreak: for 60 seconds the owner receives enemy pings on the minimap, one every second. Enemies with Ghost are not shown. A small drone aircraft circles the map for the same time, visible to everyone, so enemies know a UAV is up. Anti-aircraft that shoots it down ends the streak and the pings.
 _Avoid_: drone, radar
 
 **Gunfire blip**:
@@ -388,7 +396,7 @@ How a round is scored and won, set by `mode` in `match.json` at server start, or
 _Avoid_: game mode, playlist
 
 **Team**:
-One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team.
+One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team. An admin can regroup from the Pause menu's Teams screen (#312): drag a player to the other table (or Left/Right on the keyboard), or use the quick actions (bots to a team, swap, shuffle, balance, unpin all). The player respawns on the new side, leaves any vehicle, loses their turrets and streak progress, keeps their kills and deaths, and the earned team score stays with the old team (swap carries it over with the people). A moved player is **pinned**: the round-start balance skips pinned players (and moves bots before humans); a mode change drops all pins.
 _Avoid_: squad, clan, faction
 
 **Friend / enemy colours**:
@@ -405,6 +413,10 @@ _Avoid_: ping, marker, objective
 **Animal**:
 A creature of the world that is not a player: a deer, a dog, a cow. It has hit points and can be shot dead (`animals.json` lists the species, their hit points, speeds and models). It stands, eats, wanders around the spot it spawned at, and runs from players, vehicles and the shot that hurt it. A killed animal lies for `corpse_seconds` with its death clip held on the last frame, then is removed (a one-hit species, see Pet, does not lie: it is removed at once). A vehicle fast enough to hurt a player that runs a wild animal over throws it ahead and takes `run_over_hp_fraction` (half) of its full hit points, without being stopped itself: the first time the animal flies (state Thrown), lies where it landed for `knockdown_seconds` (Down), then gets up and runs; the second time it is killed and the body flies on. Thrown, it is a ragdoll on every client: the model rolls about its own length in the air and settles on a side. Pets are not run over. A species may sit (from standing, for a random while: the client plays sit-down, holds, stands up) or bark (once, one clip length); both are opt-in (`sit`, `bark` in `animals.json`) and neither is a state a player can cause. It is a world entity (wire type 50) the server owns; clients only draw it. Not a target dummy (a player-shaped practice target) and not a corpse (what a killed player leaves).
 _Avoid_: NPC (alone), mob, critter
+
+**Animal size**:
+How much bigger or smaller than its species' model a wild Animal stands: one of 8 steps from 0.88 to 1.12, rolled when it spawns (the mean of three uniform draws, so most are middling and a very big or small one is rare) and sent in the animal's state byte. It scales the model, the body box, the run-over radius and the Hit shape, and, for a species with real hit points (not one-hit), its hit points by size cubed (at most 255). A species with `weight_kg` in `animals.json` (a look of it may have its own: a moose bull) has a size; a Pet and livestock do not. Its weight in kg comes from the same roll, as a point of the species' range; only the server knows it, and the Hit diagram tells the shooter.
+_Avoid_: scale (that is the model's import scale), growth
 
 **Pet**:
 An Animal (a dog, cat, hen, rooster, chick or duck) that lives in one property group and never leaves its Pen. It wanders, stands, eats, sits (dogs and cats) and barks (dogs) around the point it spawned at, and does not flee: not from players or vehicles, and not when shot. It dies of any hit that deals damage (`one_hit`, whatever its `hp`): it has no hit reaction and no corpse, the entity ends at once and every client shows a **puff** (a few small grey clouds) where it stood. A kill scores nothing, is not in the kill feed, and nothing replaces it until the next round. Each round starts with new pets: `pets.json` gives a property group's chance to keep pets, how many, which species (by weight, ids of `animals.json`) and a cap for the whole map; a parcel in no group gets none. A **pinned pet** (`pinned` in `pets.json`) is added to a named group on top of the random ones: a species, optionally one asset of it (a **variant**: another model of the species, listed in `animals.json`, such as a breed and its colour look; `base` names the species' own first model; unpinned pets wear a random one), a count and a chance rolled per pet each round, placed before the random pets so the cap never drops it. A variant may have its own hit box (a Chihuahua is smaller than a Saint Bernard); a shot is tested against the box of the pet's own variant. Their models are the paid Synty pet packs, kept outside the repository in the private asset folder (`assets-private/synty/glb/pets`): a game without that folder draws each pet as a box of its hit box, and everything else works the same. There is no bark sound (no asset). A world entity of wire type 50 like any Animal; the species' `flees: false` is what makes an animal a pet. A Thief of the Thieves event may carry a pet away as Loot (Animal state Carried, held at the Thief's side): it stays a hit target, walks home if its carrier is killed (penned again once inside its Pen), and is gone while loaded in a van. Not a stray, wildlife (#254) or livestock in a field.

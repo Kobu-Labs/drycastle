@@ -99,7 +99,7 @@ public partial class NetServer
             if (car.HitCooldown.TryGetValue(hitId, out var until) && _elapsed < until) continue;
             car.HitCooldown[hitId] = _elapsed + RunOverCooldown;
             a.Throw(CorpseRules.ThrowFromCar(N(car.Forward), car.State.Speed), N(car.GlobalPosition));
-            Deal(driver.Id, SpecialWeapons.Vehicle, hitId, a.Def.Hp * AnimalData.RunOverHpFraction, false, false, KillCause.Roadkill);
+            Deal(driver.Id, SpecialWeapons.Vehicle, hitId, a.MaxHp * AnimalData.RunOverHpFraction, false, false, KillCause.Roadkill);
         }
     }
 
@@ -108,7 +108,7 @@ public partial class NetServer
     {
         if (_wildlife?.AnimalOf(hitId) is not { } animal) return null;
         foreach (var t in targets)
-            if (t.Id == hitId) return HuntShot.From(t, point, animal.Species, distance, weapon, head, animal.Variant);
+            if (t.Id == hitId) return HuntShot.From(t, point, animal.Species, distance, weapon, head, animal.Variant, animal.WeightKg);
         return null;
     }
 

@@ -4,10 +4,10 @@ using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;
 
-/// <summary>Server side of vehicles (#91, #92: car, motorcycle, bicycle share it): spawning, enter/exit, driving from the driver's inputs, run-over, abandon return, resets.</summary>
+/// <summary>Server side of vehicles (#91, #92: car, motorcycle, bicycle share it): spawning, enter/exit, driving from the driver's inputs, run-over, resets. A vehicle never despawns while abandoned (#294): it returns to its origin only when destroyed, or out of the world.</summary>
 public partial class NetServer
 {
-    /// <summary>vehicles.json (run-over numbers, abandon time, spawn count, car stats).</summary>
+    /// <summary>vehicles.json (run-over numbers, spawn count, car stats).</summary>
     public VehiclesFile? Vehicles;
     /// <summary>Spawn candidates of Kind road (with ground); cars prefer these, the other candidates fill up.</summary>
     public List<NVec3> RoadSpawns = new();
@@ -17,8 +17,7 @@ public partial class NetServer
     const float RunOverCooldown = 0.8f;
     int _destroyedReturns, _vehicleHits, _vehicleBlasts, _blastHits, _chainHits;
     int _seatSwitches;
-    int _carEnters, _carExits, _runOvers, _runOverKills, _carReturns, _carResets;
-    bool _carWasAway;
+    int _carEnters, _carExits, _runOvers, _runOverKills, _carResets;
 
     FlightBounds? _mapFlightBounds;
     /// <summary>The flyable rectangle of the map (the box around its terrain, <see cref="FlightProbe.MapBounds"/>); a smoke arena has none.</summary>
@@ -170,7 +169,7 @@ public partial class NetServer
         var seat = best.Seat.NearestFreeSeat(best.Def, N(best.GlobalPosition), best.State.Yaw, N(p), float.MaxValue); // any free seat of a vehicle in reach: the nearest one
         var wasEmpty = !best.Seat.Occupied;
         if (seat < 0 || !best.Seat.TryEnter(c.Id, seat)) return false;
-        c.Car = best; c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.Body.InVehicle = true; c.FlakSent = null;
+        c.Car = best; c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.Body.InVehicle = true; c.FlakSent = null; c.HeadOff = c.HeadPitch = 0;
         if (wasEmpty) best.Lights = Headlights.OnEnterAt(Clock.HourAt(_elapsed)); // night: on as the first rider gets in
         c.Body.Teleport(SeatPos(best, seat));
         _carEnters++;
@@ -218,18 +217,26 @@ public partial class NetServer
     /// <summary>
     /// The seated player moves to <paramref name="seat"/> without leaving the vehicle: the old seat is freed (a driver's seat then has no input, so the
     /// vehicle coasts to a stop; a gunner's turret keeps its aim) and the new one is set up as entering it does (the body on the seat, the gunner's ammo
-    /// sent anew). The vehicle stays occupied throughout, so the abandon timer never runs. False when the seat is refused.
+    /// sent anew). False when the seat is refused.
     /// </summary>
     bool SwitchSeat(Client c, ServerCar car, int seat)
     {
         var from = c.CarSeat;
         if (car.Seat.SeatOf(c.Id) != from || !car.Seat.TrySwitch(c.Id, seat)) return false;
-        c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.FlakSent = null;
+        c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.FlakSent = null; c.HeadOff = c.HeadPitch = 0;
         c.Body.Teleport(SeatPos(car, seat));
         _match.SetPosition(c.Id, N(c.Body.GlobalPosition));
         _seatSwitches++;
         GD.Print($"server: {c.Name} moved in {car.Def.Id} {car.Id} from seat {from} to seat {seat} ({car.Def.Seats[seat].Role})");
         return true;
+    }
+
+    /// <summary>The occupants of the car's seats, in seat order (the seats record's source).</summary>
+    static ushort[] SeatOccupants(ServerCar car)
+    {
+        var o = new ushort[car.Seat.Count];
+        for (var s = 0; s < o.Length; s++) o[s] = car.Seat.Occupant(s);
+        return o;
     }
 
     /// <summary>Tells the riders who sits where when that has changed since the last send (an entry, an exit, a switch, a seat freed by a death or a drop).</summary>
@@ -368,7 +375,7 @@ public partial class NetServer
             else if (car.Drives) StepDrivenVehicle(car, driver, dt);
             else if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt, Water);
             else if (!car.Asleep || occupied) car.StepParked(dt, Water); // a parked car at rest is not stepped until disturbed (ParkedRules, T2-04)
-            var here = car.GlobalPosition; // read once: nothing below moves the car before the abandon test (a native read each time, every car every tick)
+            var here = car.GlobalPosition; // read once: a native read each time, every car every tick
             car.TickEndPos = here;
             if (here.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); continue; }
             // a wall takes speed from a driven car; a helicopter is hurt by what it hits whoever flies it, or nobody
@@ -381,16 +388,9 @@ public partial class NetServer
                 var at = SeatPos(car, o.CarSeat);
                 o.Body.Teleport(at);
                 _match.SetPosition(o.Id, N(at));
+                if (!RiderPose.FollowsAim(car.Def.Seats[o.CarSeat])) ApplyHeadLook(o, car); // the figure keeps facing along the hull as it turns (a gunner's follows the aim)
             }
             if (driver != null && car.Def.RunOver && !car.Afloat && (!car.Flies || car.Flight.Agl <= car.Def.Flight!.RunOverAgl)) RunOverCheck(car, driver); // road kill: on land only; a helicopter only skimming the ground
-            var atOrigin = here.DistanceTo(car.OriginPos) < 0.5f; // ServerCar.AtOrigin, from the position read above
-            if (!occupied && car.Abandon.Update(false, atOrigin, dt, Vehicles.AbandonReturnTime))
-            {
-                car.Reset(false); _carReturns++;
-                GD.Print($"server: {car.Def.Id} {car.Id} abandoned, returned to its origin");
-            }
-            else if (!occupied && !atOrigin && here.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
-            if (occupied && here.DistanceTo(car.OriginPos) > 20) _carWasAway = true;
         }
     }
 
@@ -609,8 +609,8 @@ public partial class NetServer
     {
         var maxHit = RunOver.Damage(Vehicles!, Vehicles!.Vehicles.First(v => v.Id == SmokeKind).TopSpeed);
         var needKill = maxHit >= Vehicles.RunOverMaxDamage; // a bicycle at 11 m/s cannot kill a full-health player in one pass
-        var ok = _carEnters >= 1 && _carExits >= 1 && _runOvers >= 1 && (_runOverKills >= 1 || !needKill) && _carReturns >= 1 && _carWasAway && _shotsFired == 0 && _cars.Count >= 3;
-        GD.Print($"server: car smoke kind={SmokeKind} cars={_cars.Count} enters={_carEnters} exits={_carExits} runOvers={_runOvers} runOverKills={_runOverKills} returns={_carReturns} shotsWhileDriving={_shotsFired}");
+        var ok = _carEnters >= 1 && _carExits >= 1 && _runOvers >= 1 && (_runOverKills >= 1 || !needKill) && _shotsFired == 0 && _cars.Count >= 3;
+        GD.Print($"server: car smoke kind={SmokeKind} cars={_cars.Count} enters={_carEnters} exits={_carExits} runOvers={_runOvers} runOverKills={_runOverKills} shotsWhileDriving={_shotsFired}");
         GD.Print(ok ? "SHOOTER_CAR_SERVER_OK" : "SHOOTER_CAR_SERVER_FAIL");
         GetTree().Quit(ok ? 0 : 2);
         SetPhysicsProcess(false);

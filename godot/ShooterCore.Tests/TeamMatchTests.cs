@@ -250,6 +250,127 @@ public class TeamMatchTests
         empty.M.Restart(MatchMode.FreeForAll);
         Assert.Equal((MatchPhase.Waiting, MatchMode.FreeForAll), (empty.M.Phase, empty.M.Mode));
     }
+
+    // --- #312: admin team changes ---
+
+    [Fact]
+    public void SetTeamMovesPinsAndKeepsPersonalKillsAndTeamScore()
+    {
+        var r = new Rig();
+        for (ushort i = 1; i <= 4; i++) r.M.AddPlayer(i, $"p{i}"); // 1,3 A; 2,4 B
+        r.Pass(); r.Kill(1, 2); // A scores 1, p1: 1 kill, p2: 1 death
+        var events = new List<MatchEvent>(); r.M.Event += events.Add;
+        Assert.True(r.M.SetTeam(1, Teams.B));
+        var p1 = r.M.Get(1)!;
+        Assert.Equal((Teams.B, true, 1), (p1.Team, p1.TeamPinned, p1.Kills));
+        Assert.Equal(1, r.M.TeamScore(Teams.A)); // earned score stays with the old team
+        Assert.Contains(events, e => e is PlayerTeamChanged { Id: 1, From: Teams.A, To: Teams.B });
+        Assert.Contains(events, e => e is PlayerSpawned { Id: 1 }); // alive: respawned at once
+        Assert.Equal(PlayerLife.Alive, p1.Life);
+    }
+
+    [Fact]
+    public void SetTeamOnADeadPlayerDoesNotRespawnThem()
+    {
+        var r = new Rig();
+        for (ushort i = 1; i <= 2; i++) r.M.AddPlayer(i, $"p{i}");
+        r.Pass(); r.M.ApplyDamage(2, 1, 0, 200);
+        var events = new List<MatchEvent>(); r.M.Event += events.Add;
+        r.M.SetTeam(2, Teams.A);
+        Assert.Equal(PlayerLife.Dead, r.M.Get(2)!.Life);
+        Assert.DoesNotContain(events, e => e is PlayerSpawned);
+    }
+
+    [Fact]
+    public void SetTeamRefusesFreeForAllSandboxUnknownAndBadTeam()
+    {
+        var ffa = new MatchSim(new MatchConfig(), () => 0, new[] { Vector3.Zero }, new Random(1));
+        ffa.AddPlayer(1, "a");
+        Assert.False(ffa.SetTeam(1, Teams.A));
+        var r = new Rig();
+        r.M.AddPlayer(1, "sb", sandbox: true); r.M.AddPlayer(2, "b");
+        Assert.False(r.M.SetTeam(1, Teams.A));
+        Assert.False(r.M.SetTeam(9, Teams.A));
+        Assert.False(r.M.SetTeam(2, Teams.None));
+    }
+
+    [Fact]
+    public void RoundStartBalanceSkipsPinnedPlayersAndPrefersBots()
+    {
+        var r = new Rig();
+        r.M.AddPlayer(1, "p1"); r.M.AddPlayer(2, "p2"); r.M.AddPlayer(3, "bot", bot: true); r.M.AddPlayer(4, "p4"); // A:1,3  B:2,4
+        r.M.SetTeam(2, Teams.A); r.M.SetTeam(4, Teams.A); // A:1,2,3,4 (2,4 pinned)  B:-
+        r.Pass(); r.M.Restart(); // round start rebalances
+        Assert.Equal(2, r.M.Players.Count(p => p.Team == Teams.A));
+        Assert.Equal(Teams.A, r.M.Get(2)!.Team); Assert.Equal(Teams.A, r.M.Get(4)!.Team); // pinned stay
+        Assert.Equal(Teams.B, r.M.Get(3)!.Team); // the bot goes first
+        Assert.Equal(Teams.B, r.M.Get(1)!.Team);
+    }
+
+    [Fact]
+    public void BalanceGivesUpWhenOnlyPinnedPlayersRemain()
+    {
+        var r = new Rig();
+        for (ushort i = 1; i <= 2; i++) r.M.AddPlayer(i, $"p{i}");
+        r.M.SetTeam(1, Teams.A); r.M.SetTeam(2, Teams.A);
+        Assert.Empty(r.M.BalanceTeams()!);
+        Assert.Equal(2, r.M.Players.Count(p => p.Team == Teams.A));
+    }
+
+    [Fact]
+    public void BalanceMidRoundMovesAndRespawnsTheMovedPlayer()
+    {
+        var r = new Rig();
+        for (ushort i = 1; i <= 4; i++) r.M.AddPlayer(i, $"p{i}");
+        r.M.SetTeam(2, Teams.A, pinned: false); r.M.SetTeam(4, Teams.A, pinned: false); // A:1,2,3,4
+        var moved = r.M.BalanceTeams()!;
+        Assert.Equal(2, moved.Count);
+        Assert.Equal(2, r.M.Players.Count(p => p.Team == Teams.B));
+    }
+
+    [Fact]
+    public void SwapFlipsEveryoneAndTheScoreFollows()
+    {
+        var r = new Rig();
+        for (ushort i = 1; i <= 3; i++) r.M.AddPlayer(i, $"p{i}"); // 1,3 A; 2 B
+        r.Pass(); r.Kill(1, 2);
+        Assert.True(r.M.SwapTeams());
+        Assert.Equal((Teams.B, Teams.A, Teams.B), (r.M.Get(1)!.Team, r.M.Get(2)!.Team, r.M.Get(3)!.Team));
+        Assert.Equal(1, r.M.TeamScore(Teams.B));
+        Assert.Equal(0, r.M.TeamScore(Teams.A));
+    }
+
+    [Fact]
+    public void ShuffleDealsEvenTeamsAndDropsPins()
+    {
+        var r = new Rig();
+        for (ushort i = 1; i <= 5; i++) r.M.AddPlayer(i, $"p{i}");
+        r.M.SetTeam(1, Teams.A);
+        Assert.True(r.M.ShuffleTeams());
+        Assert.InRange(r.M.Players.Count(p => p.Team == Teams.A), 2, 3);
+        Assert.InRange(r.M.Players.Count(p => p.Team == Teams.B), 2, 3);
+        Assert.All(r.M.Players, p => Assert.False(p.TeamPinned));
+    }
+
+    [Fact]
+    public void ModeChangeDropsPins()
+    {
+        var r = new Rig();
+        for (ushort i = 1; i <= 2; i++) r.M.AddPlayer(i, $"p{i}");
+        r.M.SetTeam(1, Teams.B);
+        r.M.Restart(MatchMode.FreeForAll); r.M.Restart(MatchMode.TeamDeathmatch);
+        Assert.All(r.M.Players, p => Assert.False(p.TeamPinned));
+    }
+
+    [Fact]
+    public void RestartInTheSameModeKeepsPins()
+    {
+        var r = new Rig();
+        for (ushort i = 1; i <= 2; i++) r.M.AddPlayer(i, $"p{i}");
+        r.M.SetTeam(1, Teams.B);
+        r.M.Restart();
+        Assert.True(r.M.Get(1)!.TeamPinned);
+    }
 }
 
 public class TeamPaletteTests

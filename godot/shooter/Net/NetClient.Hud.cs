@@ -105,7 +105,10 @@ public partial class NetClient
             (along, height) = hitOn.MapOnto(standing, m.Along, m.Height, m.Head);
         else if (m.Pose == HuntShot.NoShape) standing = null; // tested against the body box: its picture, by the box
         var line = Strings.F(m.Head ? "hud.hunt.line.head" : "hud.hunt.line", m.DistanceM, weapon);
-        _hud.ShowHuntShot(def.Name.ToUpperInvariant(), standing, standing == null ? Silhouette(def.Id) : null, along, height, line);
+        // the species and what it weighed (a species with no weight: the name alone)
+        var name = def.Name.ToUpperInvariant();
+        var title = m.WeightKg > 0 ? Strings.F("hud.hunt.title", name, m.WeightKg.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)) : name;
+        _hud.ShowHuntShot(title, standing, standing == null ? Silhouette(def.Id) : null, along, height, line);
     }
 
     void HudHit(HitMsg h)

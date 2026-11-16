@@ -56,7 +56,6 @@ public partial class ServerCar : CharacterBody3D
     public ushort[]? SeatsSent;
     /// <summary>Headlights on (replicated as one bit, <see cref="VehicleRecord.Make"/>): set when a driver gets in at night, toggled by the H key, off when empty.</summary>
     public bool Lights;
-    public readonly AbandonTimer Abandon = new();
     public CarState State;
     public readonly Dictionary<ushort, double> HitCooldown = new();
 
@@ -151,7 +150,6 @@ public partial class ServerCar : CharacterBody3D
     }
 
     public Vector3 Forward => new(-Mathf.Sin(State.Yaw), 0, -Mathf.Cos(State.Yaw));
-    public bool AtOrigin => GlobalPosition.DistanceTo(OriginPos) < 0.5f;
 
     /// <summary>Gone from the world after the blast: no collision, no driving; comes back through <see cref="Reset"/> once the server's clock reaches <paramref name="returnAt"/>.</summary>
     public void Destroy(double returnAt)
@@ -163,7 +161,7 @@ public partial class ServerCar : CharacterBody3D
         Drive.Speed = 0; Drive.Slip = 0; Drive.VerticalSpeed = 0; Drive.YawRate = 0;
     }
 
-    /// <summary>Back to the origin. <paramref name="repair"/> restores the HP too: not on an abandon return (a smoking vehicle stays damaged), but a doomed or destroyed one always comes back repaired (<see cref="VehicleLifecycle.Reset"/>).</summary>
+    /// <summary>Back to the origin. <paramref name="repair"/> restores the HP too: not on a fall out of the world (a smoking vehicle stays damaged), but a doomed or destroyed one always comes back repaired (<see cref="VehicleLifecycle.Reset"/>).</summary>
     public void Reset(bool repair = true)
     {
         Asleep = false; RestCount = 0;
@@ -183,7 +181,6 @@ public partial class ServerCar : CharacterBody3D
         if (Flies) ResetFlight();
         if (Drives) ResetDrive();
         TickEndPos = GlobalPosition;
-        Abandon.Reset();
         HitCooldown.Clear();
         Lights = false;
     }
@@ -196,7 +193,7 @@ public partial class ServerCar : CharacterBody3D
         if (!float.IsNegativeInfinity(ground) && MathF.Abs(ground - at.Y) < 5f) at.Y = ground + 0.02f;
         Flight = new FlightState { Position = at, Yaw = FlightMath.Wrap(OriginYaw), Grounded = true };
         FlightImpact = 0;
-        OriginPos = new Vector3(at.X, at.Y, at.Z); // where it stands is its origin: the abandon timer measures from here
+        OriginPos = new Vector3(at.X, at.Y, at.Z); // where it stands is its origin: a destroyed vehicle comes back here
         GlobalPosition = OriginPos;
     }
 
@@ -260,7 +257,7 @@ public partial class ServerCar : CharacterBody3D
         Drive = new DriveState { Position = new System.Numerics.Vector3(OriginPos.X, OriginPos.Y, OriginPos.Z), Yaw = FlightMath.Wrap(OriginYaw) };
         DriveModel.Settle(ref Drive, Def, DriveWorld!);
         DriveImpact = 0;
-        OriginPos = new Vector3(Drive.Position.X, Drive.Position.Y, Drive.Position.Z); // where it stands is its origin: the abandon timer measures from here
+        OriginPos = new Vector3(Drive.Position.X, Drive.Position.Y, Drive.Position.Z); // where it stands is its origin: a destroyed vehicle comes back here
         FollowDrive();
     }
 

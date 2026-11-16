@@ -63,6 +63,11 @@ public enum MoveButtons
     Prone = 512,
     /// <summary>Killstreak key (Q by default), held: the server uses the next held streak on its press edge.</summary>
     Killstreak = 1024,
+    /// <summary>
+    /// Seated in a first-person view (a passenger's own eyes, the driver's cockpit view): the input's yaw and pitch are where the head looks, and the server
+    /// shows them on the rider's figure (<see cref="RiderPose"/>). Clear in the chase view, where the yaw is the camera's orbit and the head faces ahead.
+    /// </summary>
+    HeadLook = 2048,
 }
 
 /// <summary>One tick of player input: movement axes (x = strafe right, y = forward, each -1..1), look yaw in radians, buttons.</summary>

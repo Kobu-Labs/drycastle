@@ -63,6 +63,17 @@ public partial class NetServer
         _match.Entities.DespawnOwned(victim, TurretRules.TypeId, WorldDespawnReason.Removed); // a turret does not outlive its owner
     }
 
+    /// <summary>
+    /// An admin moved a player to the other team (#312): they climb out of any vehicle, and their turrets and killstreak progress are dropped like at a death
+    /// (a turret would else turn on its owner's new teammates). The respawn at the new side's spawn follows from the match.
+    /// </summary>
+    void OnTeamChanged(PlayerTeamChanged tc)
+    {
+        if (_byId.TryGetValue(tc.Id, out var c) && c.Car != null) LeaveSeat(c, false);
+        StreakDeath(tc.Id);
+        GD.Print($"server: #{tc.Id} moved from team {Teams.Tag(tc.From)} to {Teams.Tag(tc.To)}");
+    }
+
     void StreakRoundReset() => _streaks.Reset();
 
     void StreakTick(float dt)

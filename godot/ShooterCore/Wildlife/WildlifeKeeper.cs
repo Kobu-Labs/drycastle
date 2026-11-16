@@ -161,7 +161,10 @@ public sealed class WildlifeKeeper : IAnimalHits
     Spawned SpawnAt(int species, Vector3 h, IAnimalWorld ground, Herd? herd)
     {
         var def = _animals.Animals[species];
-        var animal = new Animal(_animals, species, new Vector3(h.X, 0, h.Z), (float)_rng.NextDouble() * MathF.Tau, ground, _rng.Next(), _rng.Next(def.VariantCount));
+        var yaw = (float)_rng.NextDouble() * MathF.Tau;
+        var seed = _rng.Next();
+        var variant = _rng.Next(def.VariantCount);
+        var animal = new Animal(_animals, species, new Vector3(h.X, 0, h.Z), yaw, ground, seed, variant, AnimalRules.RollSize(_rng));
         if (_entities.Spawn(animal) is not { } entity) { Log?.Invoke("wildlife: the world is full of entities; no more wildlife"); return Spawned.EntitiesFull; }
         herd?.Add(animal);
         var hit = NextHitId();
@@ -215,7 +218,7 @@ public sealed class WildlifeKeeper : IAnimalHits
     {
         var box = animal.HitBox;
         var target = new HitTarget(hitId, animal.Position, Stance.Stand, animal.Yaw, HeadGuarded: true, Scale: box[1] / PlayerHitBox.StandHeight,
-            Box: new Vector3(box[0], box[1], box[2]), BoxAhead: animal.Def.HitBoxAhead);
+            Box: new Vector3(box[0], box[1], box[2]), BoxAhead: animal.Def.HitBoxAhead * animal.Size, ShapeScale: animal.Size);
         // each look of a species (a variant) has its own shapes, baked from its own model
         if (Shapes == null || PoseOf(animal.State) is not { } pose) return target;
         return Shapes.At(animal.Def.ShapeKey(animal.Variant), pose, MathF.Max(0, animal.StateSeconds - backSeconds)) is { } s

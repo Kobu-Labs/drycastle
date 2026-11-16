@@ -1233,7 +1233,7 @@ stateDiagram-v2
     Destroyed --> Alive
 ```
 
-- **Alive**: Hit points above zero. A return that does not repair (abandoned, out of the world) keeps a damaged vehicle damaged.
+- **Alive**: Hit points above zero. A return that does not repair (out of the world) keeps a damaged vehicle damaged.
 - **Doomed**: Hit points are zero and DetonateAt is set: the blast goes off when the clock reaches it (the chain delay after a neighbour's blast, else this tick). A return repairs it.
 - **Destroyed**: Blown up, no collision, nobody aboard. ReturnAt is set; the return repairs it and puts it back at its origin.
 

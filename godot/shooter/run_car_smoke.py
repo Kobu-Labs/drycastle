@@ -2,7 +2,7 @@
 """Headless vehicle smoke on the weapons smoke's flat arena (three vehicles of one type) with two scripted bots.
 
 alice enters a car (E), cannot shoot, drives 20+ m with full throttle into bob (run-over, capped damage, kill credited to the car),
-stops with the handbrake, exits to a free side, and the abandoned car returns to its origin after the shortened timer (3 s).
+stops with the handbrake, exits to a free side, and the abandoned car stays where it was left.
 Usage: run_car_smoke.py [--map DIR] [--port N] [--kind car|motorcycle|bicycle ...]  (several kinds run one after another; default car)
 """
 import argparse, os, subprocess, sys, time
@@ -24,7 +24,7 @@ def run(kind, port):
     def spawn(extra):
         return subprocess.Popen(base + extra + mapargs, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-    procs = {"server": spawn(["--role", "server", "--port", str(port), "--car-smoke", "--car-kind", kind, "--match-set", overrides, "--vehicle-set", "abandon_return_time=3", "--quit-after", str(deadline)])}
+    procs = {"server": spawn(["--role", "server", "--port", str(port), "--car-smoke", "--car-kind", kind, "--match-set", overrides, "--quit-after", str(deadline)])}
     time.sleep(4)
     procs["bob"] = spawn(["--role", "client", "--headless-bot", "--car-bot", "b", "--connect", f"127.0.0.1:{port}", "--name", "bob", "--bot-seconds", str(deadline - 3)])
     time.sleep(1.5)

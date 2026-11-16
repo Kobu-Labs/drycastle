@@ -1,12 +1,12 @@
 namespace Drycastle.ShooterCore;
 
-/// <summary>How many hits the demon takes: <c>round(Base + PerExtraPlayer * (players - 1))</c>, kept in <c>[Min, Max]</c>.</summary>
+/// <summary>How many hits the demon takes: <c>round(Base + PerExtraPlayer * (players - 1))</c>, at least <c>Min</c>, capped at <c>Max</c> when set (no cap when absent).</summary>
 public sealed class DemonHitsDef
 {
     public float Base { get; set; }
     public float PerExtraPlayer { get; set; }
     public int Min { get; set; }
-    public int Max { get; set; }
+    public int? Max { get; set; }
 }
 
 /// <summary>What one hit counts, by weapon kind. No headshot bonus, so there is no field for one.</summary>
@@ -232,7 +232,7 @@ public sealed class DemonFile : IVersioned
     public int HitsNeeded(int players)
     {
         var n = MathF.Round(Hits.Base + Hits.PerExtraPlayer * (Math.Max(players, 1) - 1));
-        return (int)Math.Clamp(n, Hits.Min, Hits.Max);
+        return (int)Math.Clamp(n, Hits.Min, Hits.Max ?? int.MaxValue);
     }
 
     public int WeightOf(DemonHitKind kind) => kind switch
@@ -251,7 +251,7 @@ public sealed class DemonFile : IVersioned
         Pos(f.Scale, "scale");
         var h = f.Hits;
         Pos(h.Base, "hits.base"); NonNeg(h.PerExtraPlayer, "hits.per_extra_player");
-        if (h.Min < 1 || h.Max < h.Min) throw new DataFileException($"{F}: \"hits.min\" must be 1 or more and \"hits.max\" at least \"hits.min\"");
+        if (h.Min < 1 || h.Max < h.Min) throw new DataFileException($"{F}: \"hits.min\" must be 1 or more and \"hits.max\", when given, at least \"hits.min\"");
         var w = f.HitWeights;
         if (w.Bullet < 1 || w.Explosive < 1 || w.Vehicle < 1) throw new DataFileException($"{F}: every \"hit_weights\" entry is required and must be 1 or more");
 

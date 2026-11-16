@@ -8,7 +8,7 @@ namespace Drycastle.ShooterCore;
 /// (<see cref="FlightRecord"/>), one record per utility helicopter next to its Vehicle record. Drive: a driven vehicle's speeds, the slope it
 /// stands on, its steering and whether it floats (<see cref="DriveRecord"/>), one record per amphibious transport next to its Vehicle record.
 /// </summary>
-public enum EntityType : byte { Player = 0, Projectile = 1, Vehicle = 2, Target = 3, Turret = 4, Flight = 5, Drive = 6 }
+public enum EntityType : byte { Player = 0, Projectile = 1, Vehicle = 2, Target = 3, Turret = 4, Flight = 5, Drive = 6, Seats = 7 }
 
 /// <summary>State byte of a snapshot entity.</summary>
 public enum EntityState : byte { Alive = 0, Protected = 1, InVehicle = 2, Dead = 3 }
