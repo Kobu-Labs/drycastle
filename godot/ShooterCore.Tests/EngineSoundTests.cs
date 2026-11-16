@@ -91,8 +91,9 @@ public class EngineSoundTests
         var def = Set(); var mix = new EngineMix();
         for (var i = 0; i < 120; i++) mix.Step(def, EnginePhase.Coasting, 0.5f, Dt);
         var before = mix.Gain[(int)EngineLayer.Background];
-        mix.Duck(); mix.Step(def, EnginePhase.Coasting, 0.5f, Dt);
-        Assert.InRange(mix.Gain[(int)EngineLayer.Background], 0.3f, 0.45f);
+        mix.Duck();
+        for (var i = 0; i < 4; i++) mix.Step(def, EnginePhase.Coasting, 0.5f, Dt); // past the 40 ms fade down
+        Assert.InRange(mix.Gain[(int)EngineLayer.Background], 0.44f, 0.55f);
         for (var i = 0; i < 90; i++) mix.Step(def, EnginePhase.Coasting, 0.5f, Dt);
         Assert.Equal(before, mix.Gain[(int)EngineLayer.Background], 3);
     }
