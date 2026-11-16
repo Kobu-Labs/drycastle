@@ -3,7 +3,7 @@ using System.Numerics;
 namespace Drycastle.ShooterCore;
 
 /// <summary>
-/// The mechanic's garage on the garden plots by the road E-0101 (sketch L1; ticket #320): a plain OSB shed, 11 x 8 m, its long wall to the road. The Golf Mk2 stands inside
+/// The mechanic's garage on the garden plots by the road E-0101 (sketch L1; ticket #320): a plain OSB shed, 6.6 x 8 m, its long wall to the road. The Golf Mk2 stands inside
 /// behind one breakable OSB plate in that wall. Godot-free: the layout in the garage's own frame, which the game (<c>MechanicGarage</c>) builds from and which the tests hold
 /// against vehicles.json and the glass panes.
 /// <para>
@@ -19,16 +19,16 @@ public static class MechanicGarageSite
     public const float PlateHp = 240f;
 
     /// <summary>Outer footprint: along the road (X) and across it (Z), and the thickness of a wall.</summary>
-    public const float Width = 11f, Depth = 8f, Wall = 0.15f;
-    /// <summary>The inner half extents (the room is 10.7 x 7.7 m).</summary>
+    public const float Width = 6.6f, Depth = 8f, Wall = 0.15f;
+    /// <summary>The inner half extents (the room is 6.3 x 7.7 m).</summary>
     public const float HalfX = Width / 2 - Wall, HalfZ = Depth / 2 - Wall;
     /// <summary>The roof's underside: high at the road wall, low at the back wall (a mono-pitch roof draining to the back).</summary>
     public const float RoofHigh = 3.9f, RoofLow = 3.3f;
     /// <summary>The roof slab and the sheet's overhang past the walls.</summary>
     public const float RoofThickness = 0.14f, Overhang = 0.35f;
 
-    /// <summary>The plate in the road wall: centred on the Golf's lane, wide enough for the Golf (2.25 m) to drive out, from the floor up.</summary>
-    public const float PlateX = -2.55f, PlateWidth = 3.0f, PlateHeight = 2.5f;
+    /// <summary>The plate in the road wall: centred on the Golf's lane, wide enough for the Golf (2.25 m) to drive out, from the floor up. The Golf stands against the north wall (-X), 0.45 m off it.</summary>
+    public const float PlateX = -HalfX + 1.45f, PlateWidth = 2.7f, PlateHeight = 2.5f;
     /// <summary>The Golf's place: nose <see cref="GolfNoseGap"/> m from the road wall's inner face (it is 5.35 m long, its origin in the middle).</summary>
     public const float GolfX = PlateX, GolfNoseGap = 1.3f, GolfHalfLength = 2.68f;
     public const float GolfZ = -HalfZ + GolfNoseGap + GolfHalfLength;
@@ -104,8 +104,8 @@ public static class MechanicGarageSite
     /// <summary>The roof's underside at depth <paramref name="z"/> of the garage frame.</summary>
     public static float RoofAt(float z) => RoofHigh + (RoofLow - RoofHigh) * (z + Depth / 2) / Depth;
 
-    /// <summary>The room's lamps along the ceiling: garage-frame x, z of each fixture (the middle one is over the Golf's lane).</summary>
-    public static readonly (float X, float Z)[] Lamps = { (-3.4f, 0.1f), (-0.1f, 0.1f), (3.1f, 0.1f) };
+    /// <summary>The room's lamps along the ceiling: garage-frame x, z of each fixture (the first is over the Golf).</summary>
+    public static readonly (float X, float Z)[] Lamps = { (PlateX, 0.1f), (1.1f, 0.1f) };
 }
 
 /// <summary>What the room's lights are doing: shut in the dark, just opened to the daylight, flickering, or on.</summary>
@@ -131,11 +131,11 @@ public sealed class MechanicGarageLights
         .Note(GarageLightPhase.On, "The lights are on: they come up over a moment, or at once for a client that arrived later.")
         .Build();
 
-    public const float DarkSeconds = 1.4f, FlickerSeconds = 3.2f, RampSeconds = 0.7f;
+    public const float DarkSeconds = 0.5f, FlickerSeconds = 1.3f, RampSeconds = 0.5f;
 
     /// <summary>The flashes of the tubes in the flicker: (start, length) in seconds into it.</summary>
     static readonly (float Start, float Length)[] Bursts =
-        { (0.25f, 0.07f), (0.6f, 0.16f), (1.0f, 0.05f), (1.12f, 0.05f), (1.65f, 0.32f), (2.25f, 0.08f), (2.5f, 0.55f) };
+        { (0.1f, 0.06f), (0.3f, 0.12f), (0.5f, 0.04f), (0.58f, 0.04f), (0.8f, 0.18f), (1.05f, 0.25f) };
 
     readonly StateMachine<GarageLightPhase> _fsm = new(Spec);
     float _level;
@@ -150,8 +150,8 @@ public sealed class MechanicGarageLights
         GarageLightPhase.Flicker => InBurst(_fsm.Elapsed) ? 1f : 0f,
         _ => 0f,
     };
-    /// <summary>The darkness the opening shows: 1 sealed, 0.9 while the room is dark or flickering, fading out as the lights come up.</summary>
-    public float Veil => _fsm.Current == GarageLightPhase.Sealed ? 1f : 0.9f * (1f - _level);
+    /// <summary>The darkness the opening shows: 1 sealed, 0.96 while the room is dark or flickering, fading out as the lights come up.</summary>
+    public float Veil => _fsm.Current == GarageLightPhase.Sealed ? 1f : 0.96f * (1f - _level);
 
     static bool InBurst(float t)
     {

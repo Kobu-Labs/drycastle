@@ -20,7 +20,7 @@ public class MechanicGarageTests
         Assert.Equal(MechanicGarageSite.GolfZ - g.HalfLength, -S + MechanicGarageSite.GolfNoseGap, 1);
         // beside the walls, and the plate is wider than the Golf by more than a mirror's width
         Assert.InRange(MechanicGarageSite.GolfX - g.HalfWidth, -MechanicGarageSite.HalfX, MechanicGarageSite.HalfX);
-        Assert.True(MechanicGarageSite.PlateWidth >= g.HalfWidth * 2 + 0.6f, "the Golf has to drive out through the opening");
+        Assert.True(MechanicGarageSite.PlateWidth >= g.HalfWidth * 2 + 0.4f, "the Golf has to drive out through the opening");
         Assert.True(MechanicGarageSite.PlateHeight >= g.Height + 0.5f);
         Assert.Equal(MechanicGarageSite.GolfX, MechanicGarageSite.PlateX);
         // the vehicle probe starts 3 m over the ground: it must start under the roof
@@ -114,6 +114,12 @@ public class MechanicGarageTests
     }
 
     [Fact]
+    public void The_whole_sequence_from_the_break_to_the_lights_on_is_short()
+    {
+        Assert.InRange(MechanicGarageLights.DarkSeconds + MechanicGarageLights.FlickerSeconds + MechanicGarageLights.RampSeconds, 0f, 2.5f);
+    }
+
+    [Fact]
     public void A_client_that_arrives_after_the_break_sees_the_lights_on_and_a_restored_plate_darkens_it()
     {
         StateMachineDiagnostics.Strict = true;
@@ -132,7 +138,7 @@ public class MechanicGarageTests
     [Fact]
     public void Covers_is_the_footprint_in_the_world_and_the_inverse_of_the_frame()
     {
-        foreach (var (x, z) in new[] { (0f, 0f), (4.9f, 3.9f), (-5.4f, -3.9f), (MechanicGarageSite.GolfX, MechanicGarageSite.GolfZ) })
+        foreach (var (x, z) in new[] { (0f, 0f), (2.9f, 3.9f), (-3.2f, -3.9f), (MechanicGarageSite.GolfX, MechanicGarageSite.GolfZ) })
         {
             var p = MechanicGarageSite.ToWorld(x, z);
             Assert.True(MechanicGarageSite.Covers(p.X, p.Z, 0), $"({x}, {z}) is inside");

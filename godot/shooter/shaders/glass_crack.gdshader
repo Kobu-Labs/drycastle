@@ -16,6 +16,8 @@ uniform float seed = 0.0;
 uniform float cells_per_m = 5.0;
 uniform vec2 outline[12];           // the pane's outline polygon (see GlassFx.SetOutline)
 uniform int outline_count = 0;      // 0: the pane is the whole rectangle
+uniform vec3 crack_colour = vec3(0.90, 0.95, 1.0); // glass cracks are white; GlassFx.ShardLook gives the mechanic garage's OSB plate black ones
+uniform float edge_shards = 1.0;    // 0: a shattered pane leaves nothing along its edge (the plate breaks as a whole)
 
 vec2 hash2(vec2 p) {
 	p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
@@ -78,8 +80,7 @@ void fragment() {
 	float cracked = 1.0 - smoothstep(reach * 0.75, reach, dist);
 	float bruise = 1.0 - smoothstep(0.0, 0.06, dist);
 
-	vec3 glass_white = vec3(0.90, 0.95, 1.0);
-	vec3 col = glass_white;
+	vec3 col = crack_colour;
 	float alpha = max(crack_line * cracked * 0.85, bruise * 0.9) + cracked * 0.06;
 
 	if (shattered > 0.5) {
@@ -87,7 +88,7 @@ void fragment() {
 		vec2 c = p + to_point / cells_per_m;
 		float to_edge = pane_edge_distance(c);
 		float keep = 0.05 + 0.10 * hash2(floor(c * 40.0)).x;
-		if (to_edge < keep) {
+		if (edge_shards > 0.5 && to_edge < keep) {
 			alpha = crack_line * 0.85 + 0.10;
 		} else {
 			if (hole_darkness < 0.01) { discard; } // a real opening: nothing to fill

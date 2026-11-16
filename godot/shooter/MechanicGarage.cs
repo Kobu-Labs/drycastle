@@ -20,6 +20,8 @@ public partial class MechanicGarage : Node3D
     public float FloorY { get; private set; }
 
     const string Atlas = "glb/atlas/construction_01_A.png", ModelDir = "construction/";
+    /// <summary>The roof lights' energy when fully on: a soft working light, not a floodlight (the room is small).</summary>
+    const float LampEnergy = 1.3f;
     /// <summary>Lights further than this from the camera (m) are not drawn or lit.</summary>
     const float DrawRange = 90f;
 
@@ -71,22 +73,25 @@ public partial class MechanicGarage : Node3D
         const float W = MechanicGarageSite.Width, D = MechanicGarageSite.Depth, T = MechanicGarageSite.Wall;
         if (_draw)
         {
-            _osb = new StandardMaterial3D { AlbedoTexture = OsbTexture(), Roughness = 0.95f, Uv1Triplanar = true, Uv1Scale = Vector3.One / 2.5f };
+            _osb = new StandardMaterial3D { AlbedoTexture = OsbTexture(), Roughness = 0.95f, Uv1Triplanar = true, Uv1Scale = Vector3.One / 2.5f, TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic };
             _concrete = new StandardMaterial3D { AlbedoColor = new Color(0.43f, 0.43f, 0.41f), Roughness = 0.95f };
             _dark = new StandardMaterial3D { AlbedoColor = new Color(0.12f, 0.11f, 0.10f), Roughness = 0.8f };
         }
         // floor slab, under the walls too
         Solid("floor", new Vector3(0, -0.15f, 0), new Vector3(W, 0.3f, D), _concrete);
-        // road wall (east): the plate's opening between two runs and a lintel; the plate is its own box
-        const float zE = -D / 2 + T / 2, roofE = MechanicGarageSite.RoofHigh - 0.02f;
+        // The walls do not overlap: the north and south walls take the corners (full depth), the road and back walls run between them, all standing on the slab (y 0) and
+        // ending inside the roof slab: no two faces share a plane, so nothing z-fights.
+        const float zE = -D / 2 + T / 2, zW = D / 2 - T / 2, xa = -W / 2 + T, xb = W / 2 - T;
+        float roofE = MechanicGarageSite.RoofAt(zE) + RoofInset, roofW = MechanicGarageSite.RoofAt(zW) + RoofInset;
         var plateLo = MechanicGarageSite.PlateX - MechanicGarageSite.PlateWidth / 2;
         var plateHi = MechanicGarageSite.PlateX + MechanicGarageSite.PlateWidth / 2;
-        Solid("wall_east_north", Box(-W / 2, plateLo, -0.5f, roofE, zE, T), _osb);
-        Solid("wall_east_south", Box(plateHi, W / 2, -0.5f, roofE, zE, T), _osb);
+        // road wall (east): the plate's opening between two runs and a lintel; the plate is its own box
+        Solid("wall_east_north", Box(xa, plateLo, 0, roofE, zE, T), _osb);
+        Solid("wall_east_south", Box(plateHi, xb, 0, roofE, zE, T), _osb);
         Solid("wall_east_lintel", Box(plateLo, plateHi, MechanicGarageSite.PlateHeight, roofE, zE, T), _osb);
-        Solid("wall_west", Box(-W / 2, W / 2, -0.5f, MechanicGarageSite.RoofAt(D / 2 - T / 2), D / 2 - T / 2, T), _osb);
-        Wedge("wall_north", -W / 2, -W / 2 + T);
-        Wedge("wall_south", W / 2 - T, W / 2);
+        Solid("wall_west", Box(xa, xb, 0, roofW, zW, T), _osb);
+        Wedge("wall_north", -W / 2, xa);
+        Wedge("wall_south", xb, W / 2);
         BuildPlate(zE, T);
         BuildRoof();
         if (_draw)
@@ -98,6 +103,9 @@ public partial class MechanicGarage : Node3D
         BuildProps();
         _lights.PlateBroken(false, false);
     }
+
+    /// <summary>How far the walls reach up into the roof slab (m): they end inside it, not under it.</summary>
+    const float RoofInset = 0.04f;
 
     /// <summary>A box of the garage frame, x0..x1 along the wall and y0..y1 up, centred at depth <paramref name="z"/> with thickness <paramref name="t"/>: (centre, size).</summary>
     static (Vector3 Centre, Vector3 Size) Box(float x0, float x1, float y0, float y1, float z, float t) =>
@@ -119,7 +127,7 @@ public partial class MechanicGarage : Node3D
     void Wedge(string name, float x0, float x1)
     {
         const float D = MechanicGarageSite.Depth;
-        float tA = MechanicGarageSite.RoofAt(-D / 2) - 0.02f, tB = MechanicGarageSite.RoofAt(D / 2) - 0.02f, y0 = -0.5f;
+        float tA = MechanicGarageSite.RoofAt(-D / 2) + RoofInset, tB = MechanicGarageSite.RoofAt(D / 2) + RoofInset, y0 = 0f;
         var c = new[]
         {
             new Vector3(x0, y0, -D / 2), new Vector3(x1, y0, -D / 2), new Vector3(x1, y0, D / 2), new Vector3(x0, y0, D / 2),
@@ -181,7 +189,7 @@ public partial class MechanicGarage : Node3D
         roof.Position = new Vector3(0, mid + Th / 2 / MathF.Cos(slope), 0);
         AddChild(roof);
         Solid("slab", new Vector3(0, 0, 0), new Vector3(W + 2 * O, Th, length), _osb, roof);
-        if (_draw) roof.AddChild(new MeshInstance3D { Name = "sheet", Mesh = RoofSheet(W + 2 * O, length), Position = new Vector3(0, Th / 2 + 0.04f, 0), MaterialOverride = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.85f, CullMode = BaseMaterial3D.CullModeEnum.Disabled }, CastShadow = GeometryInstance3D.ShadowCastingSetting.On });
+        if (_draw) roof.AddChild(new MeshInstance3D { Name = "sheet", Mesh = RoofSheet(W + 2 * O, length), Position = new Vector3(0, Th / 2 + 0.07f, 0), MaterialOverride = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.85f, CullMode = BaseMaterial3D.CullModeEnum.Disabled }, CastShadow = GeometryInstance3D.ShadowCastingSetting.On });
     }
 
     /// <summary>
@@ -272,7 +280,7 @@ public partial class MechanicGarage : Node3D
         void Joint(int x0, int y0, int w, int h)
         {
             for (var y = y0; y < y0 + h; y++)
-            for (var x = x0; x < x0 + w; x++) { var o = ((y % S) * S + x % S) * 4; px[o] = 70; px[o + 1] = 48; px[o + 2] = 28; }
+            for (var x = x0; x < x0 + w; x++) { var o = ((y % S) * S + x % S) * 4; px[o] = 118; px[o + 1] = 84; px[o + 2] = 50; }
         }
         Joint(0, 0, 3, S); Joint(0, S / 2 - 1, S, 3);
         var img = Image.CreateFromData(S, S, false, Image.Format.Rgba8, px);
@@ -304,7 +312,7 @@ public partial class MechanicGarage : Node3D
             _fixtures.Add(fixture);
             var lamp = new OmniLight3D
             {
-                Position = new Vector3(x, y - 0.6f, z), LightColor = new Color(1f, 0.95f, 0.82f), LightEnergy = 0f, OmniRange = 8f, OmniAttenuation = 1.1f,
+                Position = new Vector3(x, y - 0.6f, z), LightColor = new Color(1f, 0.95f, 0.82f), LightEnergy = 0f, OmniRange = 6f, OmniAttenuation = 1.3f,
                 ShadowEnabled = false, Visible = false,
             };
             AddChild(lamp);
@@ -341,11 +349,11 @@ public partial class MechanicGarage : Node3D
         var cam = GetViewport()?.GetCamera3D();
         var near = cam != null && cam.GlobalPosition.DistanceTo(GlobalPosition) < DrawRange;
         var level = near ? _lights.Level : 0f;
-        _tubeMat!.EmissionEnergyMultiplier = _lights.Glow * 3f;
+        _tubeMat!.EmissionEnergyMultiplier = _lights.Glow * 1.9f;
         for (var i = 0; i < _lamps.Count; i++)
         {
             _lamps[i].Visible = level > 0.01f;
-            _lamps[i].LightEnergy = 2.6f * level;
+            _lamps[i].LightEnergy = LampEnergy * level;
         }
         if (_veilMat != null && _veil != null && _veil.Visible) _veilMat.AlbedoColor = new Color(0, 0, 0, _lights.Veil);
         // inside the room the daylight's ambient is turned down while the lights are off (the sun through the opening still comes in)
@@ -380,7 +388,10 @@ public partial class MechanicGarage : Node3D
         AddChild(body);
     }
 
-    /// <summary>The furnishing after the sketch: a workbench along the south wall (L2), a shelf on the road wall beside it (L3), the working stuff along the back wall (L4).</summary>
+    /// <summary>
+    /// The furnishing after the sketch, fitted to the 6.3 x 7.7 m room (the Golf takes the north half of the road side, its lane to the plate kept clear): a workbench along the south
+    /// wall (L2), a shelf on the road wall beside the plate (L3), the working stuff along the back wall (L4), a few things on the floor between the Golf and the bench.
+    /// </summary>
     void BuildProps()
     {
         const float south = MechanicGarageSite.HalfX, back = MechanicGarageSite.HalfZ, road = -MechanicGarageSite.HalfZ;
@@ -395,25 +406,22 @@ public partial class MechanicGarage : Node3D
         Prop("SM_Tool_Pipe_Wrench_01", south - 0.7f, 2.0f, 80, 0.74f);
         Prop("SM_Tool_Wrench_01", south - 0.35f, 0.15f, 10, 0.76f);
         // L3: a wooden shelf unit on the road wall, with cans and buckets
-        Shelf(1.0f, 3.2f, road);
-        // L4: the working stuff along the back wall
-        Prop("SM_Prop_Compressor_01", -4.3f, back - 0.3f, 0, 0, new Vector3(1.26f, 0.97f, 0.46f));
-        Prop("SM_Prop_Generator_Small_01", -3.1f, back - 0.4f, 90, 0, new Vector3(0.64f, 0.56f, 0.42f));
-        Prop("SM_Prop_Barrel_Oil_01", -2.2f, back - 0.42f, 0, 0, new Vector3(0.72f, 1.59f, 0.72f));
-        Prop("SM_Prop_Crate_01", -1.2f, back - 0.45f, 0, 0, new Vector3(0.83f, 0.82f, 0.83f));
-        Prop("SM_Prop_Pallet_01", -0.1f, back - 0.75f, 0, 0, new Vector3(1.44f, 0.23f, 1.41f));
-        Prop("SM_Prop_Crate_02", -0.1f, back - 0.75f, 90, 0.23f, new Vector3(1.35f, 0.88f, 0.9f));
-        Prop("SM_Prop_Table_Saw_01", 1.5f, back - 0.55f, 180, 0, new Vector3(1.05f, 0.51f, 0.95f));
-        Prop("SM_Prop_Ladder_Small_01", 2.8f, back - 0.5f, 180);
-        Prop("SM_Prop_Light_Portable_01", 3.9f, 2.9f, 200);
-        // the north end and the floor: tyres, a sawhorse, a wheelbarrow, buckets and cans
-        Prop("SM_Prop_TireStack_01", -4.55f, 2.2f, 0, 0, new Vector3(0.75f, 0.68f, 0.75f));
-        Prop("SM_Prop_Tire_01", -4.7f, 0.9f, 15, 0, new Vector3(0.75f, 0.22f, 0.75f));
-        Prop("SM_Prop_Sawhorse_01", -4.5f, -0.9f, 0, 0, new Vector3(0.7f, 0.85f, 1.55f));
-        Prop("SM_Prop_Wheelbarrow_01", -4.6f, -2.9f, 200, 0, new Vector3(0.8f, 0.9f, 1.9f));
-        Prop("SM_Prop_Paint_Bucket_Closed_01", 3.7f, -3.45f, 0, 0, new Vector3(0.48f, 0.55f, 0.48f));
-        Prop("SM_Prop_Tool_Bucket_01", 3.9f, -2.7f, 30, 0, new Vector3(0.48f, 0.51f, 0.47f));
-        Prop("SM_Prop_Paint_Can_Open_White_01", 3.5f, 0.2f, 0, 0);
+        Shelf(0.05f, 1.95f, road);
+        // L4: the working stuff along the back wall, behind the Golf and past it
+        Prop("SM_Prop_Compressor_01", -2.45f, back - 0.3f, 0, 0, new Vector3(1.26f, 0.97f, 0.46f));
+        Prop("SM_Prop_Generator_Small_01", -1.45f, back - 0.4f, 90, 0, new Vector3(0.64f, 0.56f, 0.42f));
+        Prop("SM_Prop_Barrel_Oil_01", -0.6f, back - 0.42f, 0, 0, new Vector3(0.72f, 1.59f, 0.72f));
+        Prop("SM_Prop_Crate_01", 0.45f, back - 0.45f, 0, 0, new Vector3(0.83f, 0.82f, 0.83f));
+        Prop("SM_Prop_Pallet_01", 1.6f, back - 0.75f, 0, 0, new Vector3(1.44f, 0.23f, 1.41f));
+        Prop("SM_Prop_Crate_02", 1.6f, back - 0.75f, 90, 0.23f, new Vector3(1.35f, 0.88f, 0.9f));
+        Prop("SM_Prop_Light_Portable_01", 2.85f, back - 0.4f, 200);
+        // between the Golf and the bench: tyres, a sawhorse, a few cans and buckets (the table saw, the ladder and the wheelbarrow did not fit)
+        Prop("SM_Prop_TireStack_01", 0.2f, -2.3f, 0, 0, new Vector3(0.75f, 0.68f, 0.75f));
+        Prop("SM_Prop_Tire_01", 0.2f, -1.2f, 15, 0, new Vector3(0.75f, 0.22f, 0.75f));
+        Prop("SM_Prop_Sawhorse_01", 0.2f, 0.3f, 0, 0, new Vector3(0.7f, 0.85f, 1.55f));
+        Prop("SM_Prop_Paint_Bucket_Closed_01", south - 0.35f, road + 0.35f, 0, 0, new Vector3(0.48f, 0.55f, 0.48f));
+        Prop("SM_Prop_Tool_Bucket_01", south - 0.95f, road + 0.4f, 30, 0, new Vector3(0.48f, 0.51f, 0.47f));
+        Prop("SM_Prop_Paint_Can_Open_White_01", 1.2f, 0.4f, 0, 0);
     }
 
     /// <summary>A shelf unit of OSB boards on posts against the road wall, <paramref name="x0"/> to <paramref name="x1"/> along it, with paint cans and buckets on the boards.</summary>
@@ -426,12 +434,12 @@ public partial class MechanicGarage : Node3D
         var boards = new[] { 0.45f, 1.05f, 1.65f, 2.2f };
         foreach (var by in boards) Solid("shelf_board", new Vector3((x0 + x1) / 2, by, zc), new Vector3(x1 - x0, board, depth), _osb);
         Prop("SM_Prop_Paint_Bucket_Closed_01", x0 + 0.4f, zc, 0, boards[0] + board / 2);
-        Prop("SM_Prop_Tool_Bucket_01", x0 + 1.2f, zc, 40, boards[0] + board / 2);
-        Prop("SM_Prop_Paint_Can_Closed_Black_01", x0 + 1.9f, zc, 0, boards[0] + board / 2);
-        Prop("SM_Prop_Paint_Can_Closed_Black_01", x0 + 0.5f, zc, 0, boards[1] + board / 2);
-        Prop("SM_Prop_Paint_Can_Open_White_01", x0 + 0.95f, zc, 30, boards[1] + board / 2);
-        Prop("SM_Prop_Paint_Bucket_Closed_01", x0 + 1.7f, zc, 0, boards[1] + board / 2);
-        Prop("SM_Prop_ToolBox_01", x0 + 0.8f, zc, 0, boards[2] + board / 2);
-        Prop("SM_Prop_Tool_Bucket_01", x0 + 1.7f, zc, 0, boards[2] + board / 2);
+        Prop("SM_Prop_Tool_Bucket_01", x0 + 0.95f, zc, 40, boards[0] + board / 2);
+        Prop("SM_Prop_Paint_Can_Closed_Black_01", x0 + 1.5f, zc, 0, boards[0] + board / 2);
+        Prop("SM_Prop_Paint_Can_Closed_Black_01", x0 + 0.4f, zc, 0, boards[1] + board / 2);
+        Prop("SM_Prop_Paint_Can_Open_White_01", x0 + 0.85f, zc, 30, boards[1] + board / 2);
+        Prop("SM_Prop_Paint_Bucket_Closed_01", x0 + 1.4f, zc, 0, boards[1] + board / 2);
+        Prop("SM_Prop_ToolBox_01", x0 + 0.6f, zc, 0, boards[2] + board / 2);
+        Prop("SM_Prop_Tool_Bucket_01", x0 + 1.3f, zc, 0, boards[2] + board / 2);
     }
 }

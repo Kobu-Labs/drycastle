@@ -20,9 +20,12 @@ public static class GlassFx
     /// <summary>Most points of an outline the crack shader takes (glass_crack.gdshader, `outline[12]`; vehicles.json allows no more).</summary>
     const int MaxOutline = 12;
 
-    /// <summary>What the fragments of a pane look like: glass by default, the OSB plate of the mechanic garage as pale-brown opaque chips.</summary>
-    public readonly record struct ShardLook(Vector3 Colour, float Opacity, float Roughness);
-    public static readonly ShardLook OsbShards = new(new Vector3(0.78f, 0.58f, 0.32f), 1f, 0.95f);
+    /// <summary>
+    /// What a pane looks like when it is hurt and when it breaks: glass by default (white cracks, a rim of shards left along the opening, translucent fragments); the mechanic
+    /// garage's OSB plate has black cracks, leaves nothing behind when it goes and its fragments are pale-brown opaque chips.
+    /// </summary>
+    public readonly record struct ShardLook(Vector3 Colour, float Opacity, float Roughness, Vector3 CrackColour, bool EdgeShards);
+    public static readonly ShardLook OsbShards = new(new Vector3(0.78f, 0.58f, 0.32f), 1f, 0.95f, new Vector3(0.02f, 0.015f, 0.01f), false);
 
     static ShaderMaterial? _crack, _shards;
     static int _active;
@@ -61,13 +64,14 @@ public static class GlassFx
     }
 
     /// <summary>The overlay of one pane under <paramref name="parent"/> (the vehicle's node, or a world node for a building's pane). <paramref name="holeDarkness"/> is how opaque the opening of the shattered pane is.</summary>
-    public static MeshInstance3D MakeOverlay(Node3D parent, GlassPaneRect rect, GlassPaneKey key, float holeDarkness)
+    public static MeshInstance3D MakeOverlay(Node3D parent, GlassPaneRect rect, GlassPaneKey key, float holeDarkness, ShardLook? look = null)
     {
         var mat = Crack();
         mat.SetShaderParameter("pane_size", new Vector2(rect.Width, rect.Height));
         mat.SetShaderParameter("seed", Seed(key));
         mat.SetShaderParameter("hole_darkness", holeDarkness);
         SetOutline(mat, rect);
+        if (look is { } l) { mat.SetShaderParameter("crack_colour", l.CrackColour); mat.SetShaderParameter("edge_shards", l.EdgeShards ? 1f : 0f); }
         var mi = new MeshInstance3D
         {
             Name = $"Glass_{key.Owner}_{key.Index}",

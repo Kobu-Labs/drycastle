@@ -18,7 +18,7 @@ public sealed partial class CockpitRig : Node3D
 
     static readonly Dictionary<string, Spec> Specs = new()
     {
-        ["golf_mk2"] = new Spec(new Vector3(-0.4875f, 1.40f, 0.30f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildGolf),
+        ["golf_mk2"] = new Spec(new Vector3(-0.4875f, 1.50f, 0.30f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildGolf),
         ["bus"] = new Spec(new Vector3(-0.70f, 1.60f, -4.75f), System.Array.Empty<string>(), BuildBus),
         ["flak"] = new Spec(new Vector3(-0.50f, 2.05f, -1.25f), new[] { "cab" }, BuildFlak),
         ["utility_helicopter"] = new Spec(new Vector3(0.55f, 1.78f, -1.80f), new[] { "fuselage" }, BuildHelicopter),
