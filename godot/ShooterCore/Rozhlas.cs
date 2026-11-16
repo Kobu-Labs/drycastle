@@ -18,6 +18,9 @@ public class RozhlasFile : IVersioned
     public double DefaultLengthS { get; set; } = 180;
     /// <summary>One broadcast every this many seconds, at a random moment inside each slot.</summary>
     public double PeriodS { get; set; } = 600;
+    /// <summary>With both delays 0 the broadcast starts at a random moment anywhere in its slot; otherwise it starts this many seconds (random between the two) after the slot begins.</summary>
+    public double DelayMinS { get; set; }
+    public double DelayMaxS { get; set; }
     /// <summary>Base level of every speaker, before distance.</summary>
     public float VolumeDb { get; set; }
     /// <summary>Within this many metres of a speaker it is at full level.</summary>
@@ -36,11 +39,16 @@ public class RozhlasFile : IVersioned
     /// <summary>The longest broadcast: the window a slot reserves (<see cref="RozhlasRules.OnAir"/>).</summary>
     public double LongestS => Files.Count == 0 ? 0 : Enumerable.Range(0, Files.Count).Max(LengthOf);
 
+    /// <summary><see cref="RozhlasRules.OnAir"/> with this file's schedule.</summary>
+    public RozhlasOnAir? OnAirAt(double unixSeconds) => RozhlasRules.OnAir(unixSeconds, PeriodS, LongestS, Files.Count, DelayMinS, DelayMaxS);
+
     public static RozhlasFile Parse(string json) => Validate(DataFile.Parse<RozhlasFile>(json, "rozhlas.json"));
 
     public static RozhlasFile Validate(RozhlasFile f)
     {
         if (f.PeriodS <= 0) throw new DataFileException("rozhlas.json: period_s must be positive");
+        if (f.DelayMinS < 0 || f.DelayMaxS < f.DelayMinS) throw new DataFileException("rozhlas.json: delay_min_s/delay_max_s must satisfy 0 <= min <= max");
+        if (f.DelayMaxS > 0 && f.DelayMaxS + f.LongestS > f.PeriodS) throw new DataFileException("rozhlas.json: delay_max_s plus the longest broadcast must fit in period_s");
         if (f.DefaultLengthS <= 0) throw new DataFileException("rozhlas.json: default_length_s must be positive");
         if (f.LengthsS.Any(l => l <= 0)) throw new DataFileException("rozhlas.json: lengths_s entries must be positive");
         if (f.LengthsS.Count > f.Files.Count) throw new DataFileException("rozhlas.json: lengths_s has more entries than files");
@@ -149,7 +157,7 @@ public sealed class RozhlasBroadcast
     {
         if (DetourOpen && _fsm.Tick(dt)) { Variant = -1; _fsm.Enter(RozhlasPhase.Idle); }
         if (!_fsm.Is(RozhlasPhase.Idle)) return;
-        if (RozhlasRules.OnAir(unixSeconds, _cfg.PeriodS, _cfg.LongestS, _cfg.Files.Count) is not { } air || air.Slot == _handledSlot) return;
+        if (_cfg.OnAirAt(unixSeconds) is not { } air || air.Slot == _handledSlot) return;
         _handledSlot = air.Slot;
         if (air.Offset < _cfg.LengthOf(air.Variant)) Begin(air.Variant, air.Offset); // this variant is shorter than the slot's window: nothing this slot
     }
@@ -160,7 +168,7 @@ public sealed class RozhlasBroadcast
     public bool StartNow(double unixSeconds, int variant)
     {
         if (DetourOpen || _cfg.Files.Count == 0) return false;
-        if (RozhlasRules.OnAir(unixSeconds, _cfg.PeriodS, _cfg.LongestS, _cfg.Files.Count) is { } air) _handledSlot = air.Slot;
+        if (_cfg.OnAirAt(unixSeconds) is { } air) _handledSlot = air.Slot;
         Begin(Math.Abs(variant % _cfg.Files.Count), 0); // any number picks a broadcast (the caller passes a random one)
         return true;
     }
@@ -199,12 +207,12 @@ public static class RozhlasRules
     /// seconds; each slot holds one broadcast of <paramref name="length"/> seconds, starting at a moment fixed by the slot number.
     /// It depends on the clock alone, so every client (and the server) agrees without sending anything.
     /// </summary>
-    public static RozhlasOnAir? OnAir(double unixSeconds, double period, double length, int variants)
+    public static RozhlasOnAir? OnAir(double unixSeconds, double period, double length, int variants, double delayMin = 0, double delayMax = 0)
     {
         if (period <= 0 || length <= 0 || variants < 1) return null;
         var slot = (long)Math.Floor(unixSeconds / period);
         var room = Math.Max(0.0, period - length);
-        var start = slot * period + Hash01(slot) * room;
+        var start = slot * period + (delayMax > 0 ? Math.Min(delayMin + Hash01(slot) * (delayMax - delayMin), room) : Hash01(slot) * room);
         var offset = unixSeconds - start;
         if (offset < 0 || offset >= length) return null;
         return new RozhlasOnAir(slot, (int)(Mix((ulong)slot ^ 0x9E3779B97F4A7C15UL) % (ulong)variants), offset);
