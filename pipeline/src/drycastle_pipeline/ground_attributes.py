@@ -11,8 +11,8 @@ The editor mirrors this table (``godot/viewer/GroundTypeEdits.cs``: ``Attributes
 
 from dataclasses import dataclass
 
-#: The recipes a ground type can name (``detail.RECIPES`` without the parcel recipe ``garden``).
-RECIPES = ("field", "forest", "village", "dike")
+#: The recipes a ground type can name (``detail.RECIPES`` without the parcel recipe ``garden``; ``crop``: the crop fields, ``crop.py``).
+RECIPES = ("field", "forest", "village", "dike", "crop")
 
 COLOURS_MAX = 6
 

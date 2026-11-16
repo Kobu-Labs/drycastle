@@ -17,7 +17,7 @@ using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 public static class GroundTypeEdits
 {
     public const int NameMax = 24, ColoursMax = 6;
-    public static readonly string[] Recipes = { "field", "forest", "village", "dike" };
+    public static readonly string[] Recipes = { "field", "forest", "village", "dike", "crop" };
     public static readonly string[] OsmClasses = { "landuse", "natural" };
     public static readonly string[] Keys = { "attributes", "osm", "deleted" };
     public static readonly Regex NameRx = new("^[a-z][a-z0-9_]{0,23}$", RegexOptions.Compiled);

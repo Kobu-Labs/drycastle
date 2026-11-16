@@ -133,6 +133,22 @@ is a `MultiMeshInstance3D`; the cell's smaller groups are merged into one `MeshI
 visibility range of its farthest kind). The village: 89k stored instances in about 1,700 nodes (about 19 MB of merged vertices), against 1,824 nodes for 79k instances before the variety.
 `MapLoader.ClutterNodes` lists them.
 
+### Crop fields (#328)
+
+Maps with `files.crops` (`crops.json`, only maps with a crop ground patch; format in `docs/pipeline.md`, recipe `crop`) draw the plants and artifacts of crop fields:
+wheat, corn, potato, rapeseed; hay bales, tractor, scarecrow and so on. Rows are `[x, y, z, rot_rad, scale]` in map axes, placed exactly like clutter (`ToGodot`).
+`MapLoader.Crops.cs` builds one `MultiMeshInstance3D` per 48 m cell, kind and variant (`crop_<kind>[_<variant>]`) in the chunk's node, with a visibility range
+(`CropSettings`: plants 110 m, artifacts 220 m, times `ClutterScale`, plus half a cell and an 8 m fade). **Cosmetic only: no collision shape, nothing blocks a
+bullet**; a headless load (`CollisionOnly`) builds nothing. `DRYCASTLE_CLUTTER=0` turns it off with the clutter. `MapLoader.CropNodes` lists the nodes.
+
+Models, per kind in `crops.json` `kinds`: `asset` (an id of `assets/manifest.json`; rapeseed: `pack:drycastle-generated-models/rapeseed_plant`) or `synty` (prefab names of the
+paid POLYGON Farm pack, id `pack:synty-farm/<name>`; several names = variants, one per instance chosen by a hash of its position, so every client agrees). A model is
+flattened once (every visible mesh of the prefab, so a tractor comes with its wheels, merged with its node transforms) into one `ArrayMesh` with one surface per pack
+material; the materials are the pack's own shared ones (`materials.json`, atlas), so an instance costs a transform and nothing else. **Without the pack** (no
+`assets-private/synty/glb/farm`, the kind's ids are not in the private `manifest.json`) the kind is a flat-coloured cone (plants, hay pile, scarecrow) or box
+(`CropPlaceholder`, a colour per kind), with one warning per kind; rapeseed keeps its own glb. The pack's layout and how its GLBs are built: `assets-private/synty/README.md`
+(Farm section), `scripts/private_pack_glb.gd`.
+
 ### Meadow clutter (generated near the player)
 
 Fields, meadows and forests are about 400 ha, too much to store clutter instances for. Maps with `files.meadow` (`meadow.bin`, map 0.9.0) carry a density raster instead

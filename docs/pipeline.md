@@ -107,7 +107,7 @@ code (`ground_attributes.py`, mirrored in `godot/viewer/GroundTypeEdits.cs`); th
 | Group | Attribute | Value |
 |---|---|---|
 | Appearance | `colours` | 1-6 `#rrggbb` terrain shades |
-| Appearance | `recipe` | `field`, `forest`, `village`, `dike` (none: no detail) |
+| Appearance | `recipe` | `field`, `forest`, `village`, `dike`, `crop` (none: no detail) |
 | Appearance | `detail` | settings laid over that recipe's `detail` section |
 | Water | `water` | `true`: a body of water (`water.json`), no detail |
 
@@ -484,6 +484,26 @@ objects (a circle of half the footprint diagonal plus 0.3 m), water patches and 
   on the track's grass patches (found by reading the texture). Only the part of a parcel inside the terrain coverage gets detail (of
   P-0821's 73,000 m2 about 7,700 m2). About 30k patch triangles and 14k instances for the three parcels; `tall_grass` reaches its
   per-chunk cap in the busiest chunk of P-0073.
+* **crop** (`crop.py`, `detail.crop` in `rules.yaml`; ground types `crop_grain`, `crop_corn`, `crop_potato`, `crop_rapeseed`,
+  `crop_bare`, drawn only: a ground patch of one of them is a crop field, painted in the Ground tool; an unpainted field keeps
+  `field`; the five types hold their own numbers as `detail` over `detail.crop`). Cosmetic: nothing collides or blocks a bullet.
+  Ground: flat tones, or a texture turned along the rows (potato `soil_rows`, bare `dirt`). Edge: mode `feather` = `steps` flat
+  bands from `surround` to the field colour over `feather_m` (1.6 to 3 m), band edges wandering with value noise, plants thin out
+  over `plant_falloff_m`; mode `wall` (corn) = no bands, plants stop dead at `plant_margin_m`. Headland: dirt blobs along the edge,
+  kept in part (broken, not a band). Baulk: where two crop patches adjoin (edges within 0.3 m for 3 m or more) a noise-edged
+  0.5 to 1 m strip of grass (some dirt), each patch takes its half from the same position-based width; no feather, headland
+  or plant on it. Plants are instances in rows along the long side (or a jittered grid), ~4 to 10 per 100 m2; artifacts are 2 to 10
+  per patch (`per_ha` 4, none under 400 m2), clustered at a corner, on the edge or alone inside, plants keep `radius_m` clear.
+  The Rust engine skips crop units; the stage builds them in Python right after it (`detail.append_crops`: appends their
+  triangles to `detail_patches.npy`, writes `detail_crops.json`). The Python reference build does the same in one go.
+  **`crops.json`** (map `files.crops`, copied from `detail_crops.json`; only maps with a crop patch): `{format_version: 1, axes,
+  chunk_size_m, kinds: {kind: {role: plant|artifact, asset | synty: [Farm pack prefab names, full `SM_...`]}}, chunks: {"ix_iy": {kind: [[x, y, z, rot,
+  scale], ...]}}}`, rows as in `clutter.json` without a tint; at most `detail.crop_kinds.<kind>.cap` per kind and chunk (a hash drops
+  the rest). Kinds: plants `crop_wheat`, `crop_corn`, `crop_potato`, `crop_rapeseed` (asset
+  `pack:drycastle-generated-models/rapeseed_plant`); artifacts `art_hay_bale_round`, `art_hay_bale_square`, `art_hay_pile`,
+  `art_baler`, `art_scarecrow`, `art_tractor`, `art_potato_box`, `art_sign_potatoes`, `art_grain_bag`, `art_sprinkler`, `art_tyre`,
+  `art_plough`, `art_wood_stack`. Patch layers: `crop_baulk`, `crop_baulk_dirt`, `crop_headland`, `crop_edge_<k>`, `crop_tone`,
+  `crop_ground`, `crop_rows`. The game side (models, placeholders, culling): `docs/viewer-and-editor.md` "Crop fields".
 * **verges**: along `track`, `residential`, `tertiary` and `service` roads, gravel and dirt blobs lie at the carriageway
   edge (built once per road edge, every parcel they touch takes its share), whatever the parcel kind.
 

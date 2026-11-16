@@ -65,6 +65,9 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # "tint" flag; meadow.bin is format 2 (a tint flag per layer) and then 3 (a species-zone plane and kind mixes); more
 # clutter kinds (grasses, wild and garden flowers) in clutter_meshes.glb. A loader that reads only 0.9.0 clutter would refuse
 # meadow.bin's new format and draw no meadow.
+# (no bump) crops.json (files.crops): instances of the crop fields (ground types crop_*): per chunk and kind rows [x, y, z, rot,
+# scale] of plants (crop_wheat, ...) and artifacts (art_hay_bale_round, ...), and per kind what to draw it with (role, asset or
+# synty names). Cosmetic: no collision. Only maps with a crop patch have it; a loader that does not know it draws none.
 # (no bump) urad.json (files.urad): the inside of the municipal office: entrance, rooms, worker seats, dictation desk.
 # (no bump) church.json (files.church): the inside of the church: door, seats with routes, spots, anchors, rooms.
 # (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
@@ -85,7 +88,7 @@ ARTIFACT_FORMAT_VERSION = 1
 TREES_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
                "props.json", "spawns.json", "lamps.json", "detail.json", "detail_patches.npy",
-               "detail_patches.json", "detail_meadow.bin")
+               "detail_patches.json", "detail_meadow.bin", "detail_crops.json")
 NOT_GENERATED_NOTE = "Landmarks, navmesh and water surface meshes are not generated (water.json holds the water bodies). Textures are not in the map: textured nodes name a texture of the asset library."
 
 
@@ -360,6 +363,13 @@ def run_export(
     else:
         for stale in ("clutter.json", "clutter_meshes.glb"):
             (out_dir / stale).unlink(missing_ok=True)
+    crops_src = work_dir / "detail_crops.json"
+    if crops_src.is_file():
+        # crop plants and artifacts (detail stage, crop recipe); copied verbatim, the game draws each kind with its own model
+        (out_dir / "crops.json").write_bytes(crops_src.read_bytes())
+        files["crops"] = "crops.json"
+    else:
+        (out_dir / "crops.json").unlink(missing_ok=True)
     meadow_src = work_dir / "detail_meadow.bin"
     if meadow_src.is_file():
         # density raster of the meadow clutter (detail stage); copied verbatim, the game generates the instances from it

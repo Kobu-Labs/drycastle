@@ -8,7 +8,7 @@ using Drycastle.MapLoader;
 /// The ground map of the Ground tool: every ground area of the map drawn on the terrain in its type's colour, so you can see
 /// what is where. The areas are those of the last build (parcels.json `ground_areas`, <see cref="MapLoader.GroundAreas"/>) plus the
 /// hand-drawn ground patches (ground_patches of edits.json; they show before the next build). Selecting a type in the list brightens its
-/// areas (white edge) and dims the rest; hovering the ground names the patch or type under the cursor and clicking it selects it. M toggles
+/// areas and dims the rest (fill only: no outline round every area; the hovered or selected patch alone is outlined, EditorMode.Patches.cs); hovering the ground names the patch or type under the cursor and clicking it selects it. M toggles
 /// the overlay (remembered in editor_ui.cfg). The mesh is built one type per frame (a labelled progress line says so) and is only
 /// rebuilt when a patch changes; a colour or selection change only touches the materials. Nothing is saved here. The area meshes
 /// (<see cref="BuildAreaSurfaces"/>) are also what the Zones overlay draws.
@@ -77,7 +77,7 @@ public partial class EditorMode
         _gmCheck = new CheckBox
         {
             Text = "Show areas on the map  (M)", FocusMode = Control.FocusModeEnum.All, ButtonPressed = _gmOn,
-            TooltipText = "Draw every ground area on the terrain in its type's colour (M). A selected type is brightened, the others dimmed. Hover names the type, click selects it.",
+            TooltipText = "Draw every ground area on the terrain in its type's colour (M). A selected type is brightened, the others dimmed. Hover names the type and outlines the patch under the cursor, click selects it.",
         };
         _gmCheck.Toggled += on => SetGroundMap(on);
         page.AddChild(_gmCheck);
@@ -196,7 +196,7 @@ public partial class EditorMode
             _gmArrayMesh ??= new ArrayMesh();
             if (_gmBuildStep == 0 && _gmArrayMesh.GetSurfaceCount() > 0) _gmArrayMesh = new ArrayMesh();
             var t = _gmTypes[_gmOrder[_gmBuildStep]];
-            BuildAreaSurfaces(_gmArrayMesh, t, GroundMapColour(t.Name), GroundMapFill, 2, _gmBudget);
+            BuildAreaSurfaces(_gmArrayMesh, t, GroundMapColour(t.Name), GroundMapFill, 2, _gmBudget, edges: false); // fill only: an outline round every field is noise; the hovered and selected patch get one
             _gmBuildStep++;
             _gmMesh.Mesh = _gmArrayMesh;
         }
@@ -236,7 +236,7 @@ public partial class EditorMode
     };
 
     /// <summary>One fill surface and one edge surface for the areas of <paramref name="t"/> (its materials are stored on it). Polygons with holes are cut open along a thin slit (Clipper) so they triangulate.</summary>
-    void BuildAreaSurfaces(ArrayMesh mesh, GroundMapType t, Color colour, float fillAlpha, int priority, TriangleBudget budget, Texture2D? stripes = null)
+    void BuildAreaSurfaces(ArrayMesh mesh, GroundMapType t, Color colour, float fillAlpha, int priority, TriangleBudget budget, Texture2D? stripes = null, bool edges = true)
     {
         var fill = new List<Vector3>();
         var edge = new List<Vector3>(); var edgeIdx = new List<int>();
@@ -300,6 +300,7 @@ public partial class EditorMode
                 var tri = Geometry2D.TriangulatePolygon(piece);
                 for (var k = 0; k + 2 < tri.Length; k += 3) Triangle(piece[tri[k]], piece[tri[k + 1]], piece[tri[k + 2]], 0);
             }
+            if (!edges) continue;
             Ribbon(t.Outers[i]);
             foreach (var h in t.Holes[i]) Ribbon(h);
         }

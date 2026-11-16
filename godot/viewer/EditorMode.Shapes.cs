@@ -673,6 +673,9 @@ public partial class EditorMode
         return s;
     }
 
+    /// <summary>The outline of a selected shape: its crop's colour for a patch of a crop_* type, else the accent.</summary>
+    static Color ShapeOutlineColour(ShapeInfo s) => s is PatchInfo p && EditorTheme.CropColour(p.Type) is { } c ? c : EditorTheme.Accent;
+
     static string ShapeTag(ShapeInfo s) => s is PatchInfo p ? p.Type + p.WaterY : s is ZoneInfo z ? z.Kind : "";
 
     void ShapeWorld()
@@ -711,8 +714,8 @@ public partial class EditorMode
             if (sig != _shSignature)
             {
                 var bad = dragRing != null && RingBad(dragRing);
-                SetOutline(OutlineShapeSel, dragRing == null ? RingSegs(sel.Points, true) : new(), EditorTheme.Accent, 0.31f, 0.45f);
-                SetOutline(OutlineShapeDrag, dragRing != null && !bad ? RingSegs(dragRing, true) : new(), EditorTheme.Accent, 0.32f, 0.45f);
+                SetOutline(OutlineShapeSel, dragRing == null ? RingSegs(sel.Points, true) : new(), ShapeOutlineColour(sel), 0.31f, 0.45f);
+                SetOutline(OutlineShapeDrag, dragRing != null && !bad ? RingSegs(dragRing, true) : new(), ShapeOutlineColour(sel), 0.32f, 0.45f);
                 SetOutline(OutlineShapeBad, bad ? RingSegs(dragRing!, true) : new(), EditorTheme.Danger, 0.33f, 0.45f);
                 SetOutline(OutlineShapeDraft, new(), Colors.White, 0, 0);
                 SetOutline(OutlineShapeGhost, new(), Colors.White, 0, 0);
@@ -780,11 +783,13 @@ public partial class EditorMode
     static Label Note(string text, string variation = "Dim")
         => new() { Text = text, ThemeTypeVariation = variation, AutowrapMode = TextServer.AutowrapMode.WordSmart };
 
-    static ImageTexture Swatch(string hex)
+    static ImageTexture Swatch(string hex) => Swatch(Color.FromHtml(hex));
+
+    static ImageTexture Swatch(Color colour)
     {
         const int n = EditorTheme.Space * 3;
         var img = Image.CreateEmpty(n, n, false, Image.Format.Rgba8);
-        img.Fill(Color.FromHtml(hex));
+        img.Fill(colour);
         for (var i = 0; i < n; i++) foreach (var (x, y) in new[] { (i, 0), (i, n - 1), (0, i), (n - 1, i) }) img.SetPixel(x, y, EditorTheme.Border);
         return ImageTexture.CreateFromImage(img);
     }

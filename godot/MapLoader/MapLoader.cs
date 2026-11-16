@@ -146,7 +146,8 @@ public sealed partial class MapLoader
             && files.TryGetProperty("objects", out var objFile) && objFile.GetString() is { } of)
             foreach (var f in LoadObjectSteps(Path.Combine(mapDir, of))) yield return 0.92f + 0.05f * f;
         var tObjects = Time.GetTicksMsec();
-        foreach (var f in BuildClutterSteps(mapDir, manifest.RootElement)) yield return 0.97f + 0.02f * f;
+        foreach (var f in BuildClutterSteps(mapDir, manifest.RootElement)) yield return 0.97f + 0.01f * f;
+        foreach (var f in BuildCropSteps(mapDir, manifest.RootElement)) yield return 0.98f + 0.01f * f;
         var tClutter = Time.GetTicksMsec();
         yield return 0.99f;
         if (BuildBoundary) BuildTerrainBoundary();

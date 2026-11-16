@@ -38,7 +38,7 @@ ground:
   #   osm           OSM polygons, {class: [values]} with class landuse or natural
   # and carries the attributes it lists under `attributes`. What a type does not list it does not carry. By relation:
   #   Appearance    colours   terrain shades (one is picked per area)
-  #                 recipe    detail recipe: field, forest, village or dike (detail.py RECIPES); none: no patches, no clutter
+  #                 recipe    detail recipe: field, forest, village, dike or crop (detail.py RECIPES); none: no patches, no clutter
   #                 detail    settings laid over that recipe's section of `detail` below, for this type only
   #   Water         water     true: a water body (water.json), no detail
   # Every point has exactly one ground type: a ground area is of one type, a hand-drawn ground patch (edits.json) too. A type
@@ -88,6 +88,81 @@ ground:
       attributes:
         colours: ["#86b362", "#7aa858"]
         recipe: village
+    # Crops (#328): drawn-only ground types, a ground patch of one of them is a crop field. Terrain colour here; the
+    # draped ground, plants, artifacts, edge and baulk are the `crop` recipe (detail.crop below), and `detail` lays the
+    # crop's own numbers over it. Cosmetic only: nothing collides, nothing blocks a bullet. A field no one painted keeps `field`.
+    crop_grain:
+      attributes:
+        colours: ["#c8a951", "#bf9f47"]
+        recipe: crop
+        detail:
+          ground_colours: ["#cdb055", "#c2a44a"]
+          edge: {mode: feather, feather_m: 2.5, plant_margin_m: 0.4, plant_falloff_m: 3.0}
+          plants:
+            - {kind: crop_wheat, spacing_m: 1.0, row_m: 0.0, scale: [0.85, 1.25], density: 0.95, noise_amp: 0.3}
+          artifacts:
+            items:
+              - {kind: art_hay_bale_round, weight: 0.40, place: corner, group: [1, 3], scale: [0.95, 1.1], radius_m: 1.2, sep_m: 2.4}
+              - {kind: art_hay_bale_square, weight: 0.25, place: corner, group: [1, 4], scale: [0.95, 1.05], radius_m: 0.9, sep_m: 1.6}
+              - {kind: art_hay_pile, weight: 0.20, place: edge, group: [1, 1], scale: [0.9, 1.2], radius_m: 1.6, sep_m: 3.0}
+              - {kind: art_baler, weight: 0.15, place: edge, group: [1, 1], scale: [1.0, 1.0], radius_m: 2.2, sep_m: 5.0}
+    crop_corn:
+      attributes:
+        colours: ["#47703a", "#3e6633"]
+        recipe: crop
+        detail:
+          ground_colours: ["#4a7a35", "#40702f"]
+          edge: {mode: wall, feather_m: 0.0, plant_margin_m: 0.7, plant_falloff_m: 0.0}
+          headland: {keep: 0.5, radius_m: [0.7, 1.4]}
+          plants:
+            - {kind: crop_corn, spacing_m: 0.75, row_m: 1.4, scale: [0.9, 1.15], density: 0.97, noise_amp: 0.1}
+          artifacts:
+            items:
+              - {kind: art_scarecrow, weight: 0.5, place: interior, group: [1, 1], scale: [0.95, 1.1], radius_m: 0.9, sep_m: 12.0}
+              - {kind: art_tractor, weight: 0.5, place: corner, group: [1, 1], scale: [1.0, 1.0], radius_m: 2.6, sep_m: 6.0}
+    crop_potato:
+      attributes:
+        colours: ["#6e5238", "#664b33"]
+        recipe: crop
+        detail:
+          ground_colours: ["#6b4f35", "#634830"]
+          texture: soil_rows
+          edge: {mode: feather, feather_m: 1.8, plant_margin_m: 0.4, plant_falloff_m: 1.8}
+          plants:
+            - {kind: crop_potato, spacing_m: 0.55, row_m: 0.9, scale: [0.8, 1.15], density: 0.92, noise_amp: 0.25}
+          artifacts:
+            items:
+              - {kind: art_potato_box, weight: 0.45, place: corner, group: [1, 4], scale: [0.95, 1.05], radius_m: 0.8, sep_m: 1.4}
+              - {kind: art_sign_potatoes, weight: 0.25, place: edge, group: [1, 1], scale: [1.0, 1.0], radius_m: 0.6, sep_m: 8.0}
+              - {kind: art_grain_bag, weight: 0.30, place: corner, group: [1, 3], scale: [0.95, 1.05], radius_m: 0.7, sep_m: 1.2}
+    crop_rapeseed:
+      attributes:
+        colours: ["#a9b83a", "#9fae34"]
+        recipe: crop
+        detail:
+          ground_colours: ["#adbb3c", "#a2b232"]
+          edge: {mode: feather, feather_m: 3.0, plant_margin_m: 0.3, plant_falloff_m: 3.5}
+          plants:
+            - {kind: crop_rapeseed, spacing_m: 0.8, row_m: 0.0, scale: [0.85, 1.3], density: 1.0, noise_amp: 0.2}
+          artifacts:
+            items:
+              - {kind: art_sprinkler, weight: 0.5, place: edge, group: [1, 2], scale: [1.0, 1.0], radius_m: 0.8, sep_m: 6.0}
+              - {kind: art_tyre, weight: 0.5, place: corner, group: [1, 4], scale: [0.95, 1.05], radius_m: 0.7, sep_m: 1.4}
+    # an empty ploughed field: furrow ground, no plants
+    crop_bare:
+      attributes:
+        colours: ["#85694a", "#7d6244"]
+        recipe: crop
+        detail:
+          ground_colours: ["#8a6d4b", "#7f6444"]
+          texture: dirt
+          edge: {mode: feather, feather_m: 1.6, plant_margin_m: 0.4, plant_falloff_m: 1.6}
+          plants: []
+          artifacts:
+            items:
+              - {kind: art_plough, weight: 0.4, place: edge, group: [1, 1], scale: [1.0, 1.0], radius_m: 2.0, sep_m: 5.0}
+              - {kind: art_tractor, weight: 0.35, place: corner, group: [1, 1], scale: [1.0, 1.0], radius_m: 2.6, sep_m: 6.0}
+              - {kind: art_wood_stack, weight: 0.25, place: corner, group: [1, 2], scale: [0.95, 1.1], radius_m: 1.3, sep_m: 2.4}
     field:
       attributes:
         colours: ["#72996b", "#7aa072", "#6a9163"]
@@ -479,6 +554,27 @@ detail:
     rock:   {spacing_m: 3.0,  dirt: 0.25, lawn: 0.04, edge: 0.12, edge_m: 1.5, scale: [0.6, 1.5]}
     leaf:   {spacing_m: 0.45, litter: 0.3, tree_lawn: 0.1, tree_reach_m: 1.6, scale: [0.8, 1.2]}
     stick:  {spacing_m: 1.0,  litter: 0.25, scale: [0.7, 1.3]}
+  # What the game draws for each crop instance kind (crops.json): `plant` kinds are the
+  # field's crop, `artifact` kinds the sparse props. `asset`: an asset id of assets/manifest.json; `synty`: prefab names (full, `SM_...`) of the
+  # private Synty POLYGON Farm pack, id `pack:synty-farm/<name>` (several = variants by position; placeholder without the pack). `cap`: at most this many per chunk (a stable hash drops the rest).
+  crop_kinds:
+    crop_wheat:   {role: plant, synty: [SM_Prop_Plant_Wheat_Optimised_01, SM_Prop_Plant_Wheat_Optimised_02, SM_Prop_Plant_Wheat_Optimised_03, SM_Prop_Plant_Wheat_Optimised_04], cap: 30000}
+    crop_corn:    {role: plant, synty: [SM_Prop_Plant_Corn_01], cap: 20000}
+    crop_potato:  {role: plant, synty: [SM_Prop_Plant_Potato_01_M], cap: 25000}
+    crop_rapeseed: {role: plant, asset: "pack:drycastle-generated-models/rapeseed_plant", cap: 25000}
+    art_hay_bale_round:  {role: artifact, synty: [SM_Prop_Hay_Bale_Round_01], cap: 400}
+    art_hay_bale_square: {role: artifact, synty: [SM_Prop_Hay_Bale_Square_01], cap: 400}
+    art_hay_pile:        {role: artifact, synty: [SM_Prop_Hay_Pile_01], cap: 200}
+    art_baler:           {role: artifact, synty: [SM_Veh_Attach_Baler_01], cap: 100}
+    art_scarecrow:       {role: artifact, synty: [SM_Prop_Scarecrow_01], cap: 100}
+    art_tractor:         {role: artifact, synty: [SM_Veh_Tractor_01], cap: 100}
+    art_potato_box:      {role: artifact, synty: [SM_Prop_Box_Potato_01], cap: 400}
+    art_sign_potatoes:   {role: artifact, synty: [SM_Prop_Sign_Potatoes_01], cap: 100}
+    art_grain_bag:       {role: artifact, synty: [SM_Prop_GrainBag_01], cap: 400}
+    art_sprinkler:       {role: artifact, synty: [SM_Prop_Sprinkler_01], cap: 200}
+    art_tyre:            {role: artifact, synty: [SM_Prop_Tyre_01], cap: 400}
+    art_plough:          {role: artifact, synty: [SM_Veh_Attach_Plough_01], cap: 100}
+    art_wood_stack:      {role: artifact, synty: [SM_Prop_Wood_Stack_01], cap: 200}
   # Meadow and field (ground type field).
   field:
     tone_colours: ["#b7aa6c", "#7fa56d"]
@@ -496,6 +592,50 @@ detail:
       pebble: {spacing_m: 0.5, dirt: 0.1, edge: 0.005, scale: [0.6, 1.4]}
       rock:   {spacing_m: 4.0, edge: 0.06, dirt: 0.2, interior: 0.004, scale: [0.6, 1.6]}
       flower: {spacing_m: 2.0, tone: 0.08, interior: 0.012, scale: [0.8, 1.2]}
+  # Crop field (ground types crop_*; crop.py). Base values: a type's `detail` (ground.types) lays its own
+  # over them. Ground = flat tones (or a texture) over the patch; the edge feathers into `surround` over feather_m in `steps`
+  # noise-broken bands (mode feather) or stops dead (mode wall); plants (instances, crops.json) thin out toward the edge;
+  # artifacts are a few clustered at corners/edges; a baulk strip lies where two crop patches adjoin. Cosmetic only.
+  crop:
+    ground_colours: ["#cdb055", "#c2a44a"]
+    texture: null            # a library texture (soil_rows, dirt) for the ground instead of flat tones; turned along the rows
+    tone_per_ha: 6           # blobs of the second ground colour (flat ground only)
+    tone_radius_m: [2.5, 7.0]
+    surround: "#72996b"      # the colour the feathered edge blends into (the field ground around)
+    edge:
+      mode: feather          # feather | wall
+      feather_m: 2.5         # ground colour blends over this width (0 = none)
+      steps: 4               # bands of the blend
+      wobble_m: 0.5          # how far the band edges wander (value noise)
+      wobble_lattice_m: 3.0
+      plant_margin_m: 0.4    # no plants this close to the edge (wall: the hard stop)
+      plant_falloff_m: 3.0   # plant density 0 -> full over this width beyond the margin (0 = abrupt)
+    # Dirt headland along the edge: blobs, kept in part, so the strip is broken. Not along a baulk.
+    headland: {spacing_m: 2.5, keep: 0.65, radius_m: [0.9, 1.9], stretch: 2.0, vertices: 10, texture: dirt}
+    # Between two adjoining crop patches: a strip of grass (or dirt), `width_m` in all (each side takes half), edge from noise.
+    baulk:
+      width_m: [0.5, 1.0]
+      shared_tol_m: 0.3      # patches this close count as adjoining
+      min_shared_m: 3.0      # ... along at least this much of the edge
+      step_m: 0.4
+      colours: ["#6f9a52", "#7da25a"]
+      dirt_share: 0.3        # share of baulks that are bare dirt (one per pair)
+      dirt_colour: "#8a7a58"
+    # Plants: one instance kind each (crops.json). spacing_m: step along the row (row_m > 0: rows row_m apart, along the
+    # patch's long side) or the jittered grid (row_m 0). density: share kept; noise_amp: patches of thinner growth.
+    plants:
+      - {kind: crop_wheat, spacing_m: 1.0, row_m: 0.0, scale: [0.85, 1.25], density: 0.95, noise_amp: 0.3}
+    # Artifacts: items dealt by weight; per_ha of the patch (min..max, at least `min` when the patch is >= min_area_m2).
+    # place: corner (a cluster at a corner of the patch), edge (a spot on the edge), interior (alone inside). group: how many in
+    # a cluster; sep_m: least distance between two of this kind; radius_m: plants stay this far from it.
+    artifacts:
+      per_ha: 4.0
+      min: 2
+      max: 10
+      min_area_m2: 400
+      inset_m: 2.0
+      cluster_m: 3.0
+      items: []
   forest:
     tone_colours: ["#3f7444", "#26512f"]
     tone_shades: [1.25, 0.75]

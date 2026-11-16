@@ -33,6 +33,40 @@ public static class EditorTheme
     /// <summary>The character's own point on the ground in the top-down view: red, with a white rim for contrast on any ground.</summary>
     public static readonly Color You = new(1f, 0.12f, 0.12f);
 
+
+    // Crop outlines (ground types crop_*): Okabe-Ito based, distinct under the common colour-vision deficiencies and apart from Accent
+    // (plain patch), Danger (refused) and the selection yellow. Colour is never the only cue: the inspector names the crop too.
+    public const string CropPrefix = "crop_";
+    public static readonly Color CropGrain = new(0.90f, 0.62f, 0.00f);
+    public static readonly Color CropCorn = new(0.80f, 0.47f, 0.65f);
+    public static readonly Color CropPotato = new(0.25f, 0.55f, 0.95f);
+    public static readonly Color CropRapeseed = new(0.94f, 0.89f, 0.26f);
+    public static readonly Color CropBare = new(0.84f, 0.37f, 0.00f);
+
+    public static bool IsCrop(string? type) => type != null && type.StartsWith(CropPrefix, System.StringComparison.Ordinal) && type.Length > CropPrefix.Length;
+
+    /// <summary>The readable crop name of a crop_* ground type ("Grain" for crop_grain); null for any other type.</summary>
+    public static string? CropName(string? type)
+    {
+        if (!IsCrop(type)) return null;
+        return type!.Substring(CropPrefix.Length) switch
+        {
+            "grain" => "Grain", "corn" => "Corn", "potato" => "Potato", "rapeseed" => "Rapeseed", "bare" => "Bare (ploughed)",
+            var other => char.ToUpperInvariant(other[0]) + other[1..].Replace('_', ' '),
+        };
+    }
+
+    /// <summary>The outline colour of a crop_* ground type; null for any other type. A crop added later without a colour of its own gets Text.</summary>
+    public static Color? CropColour(string? type)
+    {
+        if (!IsCrop(type)) return null;
+        return type!.Substring(CropPrefix.Length) switch
+        {
+            "grain" => CropGrain, "corn" => CropCorn, "potato" => CropPotato, "rapeseed" => CropRapeseed, "bare" => CropBare,
+            _ => Text,
+        };
+    }
+
     public static StyleBoxFlat Box(Color bg, int pad = Space, Color? border = null, int radius = Radius)
     {
         var s = new StyleBoxFlat { BgColor = bg };
