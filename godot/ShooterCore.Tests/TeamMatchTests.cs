@@ -32,6 +32,30 @@ public class TeamMatchTests
     }
 
     [Fact]
+    public void VehicleHitsAreBlockedOnlyByATeammateAboard()
+    {
+        var r = new Rig();
+        r.M.AddPlayer(1, "a"); r.M.AddPlayer(2, "b"); r.M.AddPlayer(3, "c");
+        r.M.SetTeam(1, Teams.A); r.M.SetTeam(2, Teams.A); r.M.SetTeam(3, Teams.B);
+        Assert.True(r.M.VehicleHitBlocked(1, new ushort[] { 0, 2 }));   // teammate in any seat
+        Assert.False(r.M.VehicleHitBlocked(1, new ushort[] { 0, 0 }));  // empty
+        Assert.False(r.M.VehicleHitBlocked(1, new ushort[] { 1 }));     // own seat
+        Assert.False(r.M.VehicleHitBlocked(1, new ushort[] { 3 }));     // enemy
+        Assert.False(r.M.VehicleHitBlocked(0, new ushort[] { 2 }));     // no attacker (crash)
+    }
+
+    [Fact]
+    public void VehicleHitsLandWithFriendlyFireOnAndInFreeForAll()
+    {
+        var ff = new Rig(c => c.FriendlyFire = true);
+        ff.M.AddPlayer(1, "a"); ff.M.AddPlayer(2, "b"); ff.M.SetTeam(1, Teams.A); ff.M.SetTeam(2, Teams.A);
+        Assert.False(ff.M.VehicleHitBlocked(1, new ushort[] { 2 }));
+        var m = new MatchSim(new MatchConfig(), () => 0, new[] { Vector3.Zero }, new Random(1));
+        m.AddPlayer(1, "a"); m.AddPlayer(2, "b");
+        Assert.False(m.VehicleHitBlocked(1, new ushort[] { 2 }));
+    }
+
+    [Fact]
     public void FreeForAllHasNoTeams()
     {
         var m = new MatchSim(new MatchConfig(), () => 0, new[] { Vector3.Zero }, new Random(1));
