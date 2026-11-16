@@ -35,15 +35,16 @@ public static class CollisionLayers
 /// <summary>Whether a solid part is a trunk (wood, solid) or a crown (foliage, shot-only).</summary>
 public enum PartRole : byte { Trunk = 0, Crown = 1 }
 
-/// <summary>Box (rectangle in plan, yawed) or a four-sided pyramid with a square base.</summary>
-public enum PartShape : byte { Box = 0, Pyramid = 1 }
+/// <summary>Box (rectangle in plan, yawed), a four-sided pyramid with a square base, or a four-sided taper (frustum) with square rings.</summary>
+public enum PartShape : byte { Box = 0, Pyramid = 1, Frustum = 2 }
 
 /// <summary>
 /// One collision solid of a prop, in map metres (x east, y north, z up). Box: centre (X, Y), vertical extent Z0..Z1, half
 /// sizes along the yaw axes (HalfU along (cos, sin), HalfV along (-sin, cos)). Pyramid: base at Z0 with ring half-size
-/// HalfU (= HalfV), apex at (X, Y, Z1). The same numbers build the Godot shapes, so the tests and the game agree.
+/// HalfU (= HalfV), apex at (X, Y, Z1). Frustum: square ring of half-size HalfU (= HalfV) at Z0, of half-size HalfTop at Z1.
+/// The same numbers build the Godot shapes, so the tests and the game agree.
 /// </summary>
-public readonly record struct SolidPart(PartRole Role, PartShape Shape, float X, float Y, float Z0, float Z1, float HalfU, float HalfV, float Yaw)
+public readonly record struct SolidPart(PartRole Role, PartShape Shape, float X, float Y, float Z0, float Z1, float HalfU, float HalfV, float Yaw, float HalfTop = 0)
 {
     /// <summary>Physics layer: trunks stop walking, crowns only shots.</summary>
     public uint Layer => Role == PartRole.Trunk ? CollisionLayers.World : CollisionLayers.ShotOnly;
@@ -51,13 +52,18 @@ public readonly record struct SolidPart(PartRole Role, PartShape Shape, float X,
     /// <summary>The surface group of a hit on this part (for <c>SurfaceClassifier</c>).</summary>
     public string Group => Role == PartRole.Trunk ? "wood" : "foliage";
 
-    /// <summary>Corners (box, 8) or the base ring and the apex (pyramid, 5), map metres.</summary>
+    /// <summary>Corners (box, 8), the base ring and the apex (pyramid, 5) or the base and top rings (frustum, 8), map metres.</summary>
     public Vector3[] Points()
     {
         if (Shape == PartShape.Pyramid)
         {
-            var ring = Ring();
+            var ring = Ring(HalfU, Z0);
             return [ring[0], ring[1], ring[2], ring[3], new Vector3(X, Y, Z1)];
+        }
+        if (Shape == PartShape.Frustum)
+        {
+            var (lo, hi) = (Ring(HalfU, Z0), Ring(HalfTop, Z1));
+            return [lo[0], lo[1], lo[2], lo[3], hi[0], hi[1], hi[2], hi[3]];
         }
         var (ux, uy) = (MathF.Cos(Yaw), MathF.Sin(Yaw));
         var (vx, vy) = (-uy, ux);
@@ -70,13 +76,14 @@ public readonly record struct SolidPart(PartRole Role, PartShape Shape, float X,
         return pts;
     }
 
-    Vector3[] Ring()
+    /// <summary>The square ring of half-size <paramref name="half"/> at height <paramref name="z"/>, in the solid's yawed frame.</summary>
+    Vector3[] Ring(float half, float z)
     {
         var (c, s) = (MathF.Cos(Yaw), MathF.Sin(Yaw));
         var ring = new Vector3[4];
         var k = 0;
-        foreach (var (dx, dy) in new[] { (-HalfU, -HalfU), (HalfU, -HalfU), (HalfU, HalfU), (-HalfU, HalfU) })
-            ring[k++] = new Vector3(X + c * dx - s * dy, Y + s * dx + c * dy, Z0);
+        foreach (var (dx, dy) in new[] { (-half, -half), (half, -half), (half, half), (-half, half) })
+            ring[k++] = new Vector3(X + c * dx - s * dy, Y + s * dx + c * dy, z);
         return ring;
     }
 
@@ -100,21 +107,32 @@ public readonly record struct SolidPart(PartRole Role, PartShape Shape, float X,
             ];
         }
 
-        var ring = Ring();
-        var apex = new Vector3(X, Y, Z1);
+        var ring = Ring(HalfU, Z0);
         var inside = new Vector3(X, Y, Z0 + (Z1 - Z0) * 0.1f); // on the axis, above the base: strictly inside
+        if (Shape == PartShape.Frustum)
+        {
+            var top = Ring(HalfTop, Z1);
+            var sides = new (Vector3 N, float D)[6];
+            for (var k = 0; k < 4; k++)
+                sides[k] = Side(ring[k], ring[(k + 1) % 4], top[k], inside); // a side face is planar: a base edge and the top corner above its start
+            sides[4] = (new Vector3(0, 0, 1), Z1);
+            sides[5] = (new Vector3(0, 0, -1), -Z0);
+            return sides;
+        }
+        var apex = new Vector3(X, Y, Z1);
         var planes = new (Vector3 N, float D)[5];
         for (var k = 0; k < 4; k++)
-        {
-            var p = ring[k];
-            var q = ring[(k + 1) % 4];
-            var n = Vector3.Cross(q - p, apex - p);
-            var d = Vector3.Dot(n, p);
-            if (Vector3.Dot(n, inside) > d) { n = -n; d = -d; }
-            planes[k] = (n, d);
-        }
+            planes[k] = Side(ring[k], ring[(k + 1) % 4], apex, inside);
         planes[4] = (new Vector3(0, 0, -1), -Z0);
         return planes;
+    }
+
+    /// <summary>The outward plane through p, q (a base edge) and r (a point above it), oriented away from <paramref name="inside"/>.</summary>
+    static (Vector3 N, float D) Side(Vector3 p, Vector3 q, Vector3 r, Vector3 inside)
+    {
+        var n = Vector3.Cross(q - p, r - p);
+        var d = Vector3.Dot(n, p);
+        return Vector3.Dot(n, inside) > d ? (-n, -d) : (n, d);
     }
 
     /// <summary>True when p is inside the solid, or within <paramref name="tolerance"/> metres outside it.</summary>
@@ -149,14 +167,25 @@ public readonly record struct SolidPart(PartRole Role, PartShape Shape, float X,
 }
 
 /// <summary>A tree from trees.json (map metres; Z is the ground height at the trunk foot, Cone the conifer crown).</summary>
-public readonly record struct TreeInstance(float X, float Y, float Z, float Scale, float Rot, bool Cone, int ChunkX, int ChunkY);
+public readonly record struct TreeInstance(float X, float Y, float Z, float Scale, float Rot, bool Cone, int ChunkX, int ChunkY, bool Forest = false);
 
-/// <summary>The tree model numbers of the rules (trunk width and height, canopy edge, metres at scale 1).</summary>
-public readonly record struct TreeModel(float TrunkWidthM, float TrunkHeightM, float CanopyM);
+/// <summary>One crown tier of a forest tree, metres at scale 1 above the ground: <c>Lo</c> is the base (pyramid) or bottom (box), <c>Hi</c> the apex or top.</summary>
+public readonly record struct CrownTier(float Lo, float Half, float Hi);
+
+/// <summary>
+/// The forest tree numbers of the model block (rules <c>props.trees.forest</c>, metres at scale 1): a trunk frustum
+/// (<c>TrunkWidthM</c> at its foot, <c>TrunkTopRatio</c> of that at <c>TrunkHeightM</c>) and the crown tiers of a conifer
+/// (stacked pyramids) or a broadleaf (stacked boxes).
+/// </summary>
+public sealed record ForestModel(float TrunkWidthM, float TrunkHeightM, float TrunkTopRatio, IReadOnlyList<CrownTier> Cone, IReadOnlyList<CrownTier> Box);
+
+/// <summary>The tree model numbers of the rules (trunk width and height, canopy edge, metres at scale 1; Forest only in maps 0.11.0+).</summary>
+public readonly record struct TreeModel(float TrunkWidthM, float TrunkHeightM, float CanopyM, ForestModel? Forest = null);
 
 /// <summary>
 /// Collision solids of the base map's trees, mirroring the drawn tree (pipeline <c>propmeshes.tree_mesh</c>): a trunk box
-/// (solid) and either two stacked boxes (broadleaf) or two stacked pyramids (conifer) as the crown (shot-only).
+/// (solid) and either two stacked boxes (broadleaf) or two stacked pyramids (conifer) as the crown (shot-only). A forest tree
+/// (record flag, and the model's forest block) has a tapered trunk and tiers from the forest block instead.
 /// </summary>
 public static class TreeColliders
 {
@@ -169,7 +198,7 @@ public static class TreeColliders
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         if (root.TryGetProperty("model", out var m))
-            model = new TreeModel(F(m, "trunk_width_m", 0.35f), F(m, "trunk_height_m", 1.8f), F(m, "canopy_m", 2.6f));
+            model = new TreeModel(F(m, "trunk_width_m", 0.35f), F(m, "trunk_height_m", 1.8f), F(m, "canopy_m", 2.6f), ParseForest(m));
         if (!root.TryGetProperty("trees", out var trees) || trees.ValueKind != JsonValueKind.Array) return list;
         foreach (var t in trees.EnumerateArray())
         {
@@ -178,7 +207,30 @@ public static class TreeColliders
             list.Add(new TreeInstance(
                 F(t, "x", 0), F(t, "y", 0), F(t, "z", 0), F(t, "scale", 1), F(t, "rot", 0),
                 t.TryGetProperty("shape", out var sh) && sh.GetString() == "cone",
-                cx, cy));
+                cx, cy,
+                t.TryGetProperty("forest", out var fo) && (fo.ValueKind == JsonValueKind.True || fo.ValueKind == JsonValueKind.Number && fo.GetInt32() != 0)));
+        }
+        return list;
+    }
+
+    /// <summary>The forest block of the model, or null when the map has none (a map before 0.11.0) or it is incomplete: forest trees are then built as plain ones.</summary>
+    static ForestModel? ParseForest(JsonElement model)
+    {
+        if (!model.TryGetProperty("forest", out var f) || f.ValueKind != JsonValueKind.Object) return null;
+        var cone = Tiers(f, "cone_tiers");
+        var box = Tiers(f, "box_tiers");
+        if (cone == null || box == null || !f.TryGetProperty("trunk_width_m", out _) || !f.TryGetProperty("trunk_height_m", out _) || !f.TryGetProperty("trunk_top_ratio", out _)) return null;
+        return new ForestModel(F(f, "trunk_width_m", 0), F(f, "trunk_height_m", 0), F(f, "trunk_top_ratio", 1), cone, box);
+    }
+
+    static List<CrownTier>? Tiers(JsonElement e, string name)
+    {
+        if (!e.TryGetProperty(name, out var arr) || arr.ValueKind != JsonValueKind.Array) return null;
+        var list = new List<CrownTier>();
+        foreach (var t in arr.EnumerateArray())
+        {
+            if (t.ValueKind != JsonValueKind.Array || t.GetArrayLength() != 3) return null;
+            list.Add(new CrownTier(t[0].GetSingle(), t[1].GetSingle(), t[2].GetSingle()));
         }
         return list;
     }
@@ -190,6 +242,7 @@ public static class TreeColliders
     public static List<SolidPart> Parts(TreeInstance t, TreeModel m)
     {
         var s = t.Scale;
+        if (t.Forest && m.Forest is { } f) return ForestParts(t, f);
         var trunkW = m.TrunkWidthM * s;
         var trunkH = m.TrunkHeightM * s;
         var canopy = m.CanopyM * s;
@@ -209,6 +262,20 @@ public static class TreeColliders
             parts.Add(new(PartRole.Crown, PartShape.Box, t.X, t.Y, lo, lo + canopy, canopy / 2, canopy / 2, t.Rot));
             parts.Add(new(PartRole.Crown, PartShape.Box, t.X, t.Y, lo + canopy, lo + canopy * 1.6f, canopy * 0.3f, canopy * 0.3f, t.Rot));
         }
+        return parts;
+    }
+
+    /// <summary>The solids of a forest tree: a trunk frustum from 0.2 m below the ground, then a pyramid or box per crown tier, as drawn by <c>propmeshes.forest_tree_mesh</c>.</summary>
+    static List<SolidPart> ForestParts(TreeInstance t, ForestModel f)
+    {
+        var s = t.Scale;
+        var half = f.TrunkWidthM * s / 2;
+        var parts = new List<SolidPart>(1 + (t.Cone ? f.Cone.Count : f.Box.Count))
+        {
+            new(PartRole.Trunk, PartShape.Frustum, t.X, t.Y, t.Z - 0.2f, t.Z + f.TrunkHeightM * s, half, half, t.Rot, half * f.TrunkTopRatio),
+        };
+        foreach (var tier in t.Cone ? f.Cone : f.Box)
+            parts.Add(new(PartRole.Crown, t.Cone ? PartShape.Pyramid : PartShape.Box, t.X, t.Y, t.Z + tier.Lo * s, t.Z + tier.Hi * s, tier.Half * s, tier.Half * s, t.Rot));
         return parts;
     }
 
@@ -288,15 +355,18 @@ public static class TreeColliders
 /// </summary>
 public static class SolidShapeKeys
 {
-    /// <summary>Kind 0 is a box (A = width, B = height, C = depth); kind 1 a pyramid (A = base half-size, B = height, C unused). Values in millimetres.</summary>
+    /// <summary>Kind 0 is a box (A = width, B = height, C = depth); kind 1 a pyramid (A = base half-size, B = height, C unused); kind 2 a frustum (A = base half-size, B = height, C = top half-size). Values in millimetres.</summary>
     public readonly record struct Key(byte Kind, long A, long B, long C);
 
     public static Key Of(SolidPart p)
     {
         var height = Quantise(p.Z1 - p.Z0);
-        return p.Shape == PartShape.Pyramid
-            ? new Key(1, Quantise(p.HalfU), height, 0)
-            : new Key(0, Quantise(2 * p.HalfU), height, Quantise(2 * p.HalfV));
+        return p.Shape switch
+        {
+            PartShape.Pyramid => new Key(1, Quantise(p.HalfU), height, 0),
+            PartShape.Frustum => new Key(2, Quantise(p.HalfU), height, Quantise(p.HalfTop)),
+            _ => new Key(0, Quantise(2 * p.HalfU), height, Quantise(2 * p.HalfV)),
+        };
     }
 
     /// <summary>Metres to whole millimetres, rounded to nearest.</summary>

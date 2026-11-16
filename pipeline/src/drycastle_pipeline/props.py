@@ -248,6 +248,19 @@ def fences_doc(sections: list[dict], groups: dict[str, list[str]], cfg: dict) ->
 CANOPY_CELL_PX = 42  # the canopy mask is planted cell by cell (about 25 m at the photo's 0.6 m per pixel)
 
 
+def age_class(ages: list[tuple[str, float, float]], rng) -> tuple[str, float]:
+    """(name, scale factor) of a forest tree's age class, drawn by share; no classes: ("", 1)."""
+    total = sum(share for _, share, _ in ages)
+    if total <= 0:
+        return "", 1.0
+    pick = rng.random() * total
+    for name, share, factor in ages:
+        pick -= share
+        if pick < 0:
+            return name, factor
+    return ages[-1][0], ages[-1][2]
+
+
 def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[float, float] | None) -> list[dict]:
     """Every tree, planted from the orthophoto detector (``make ortho-trees``).
 
@@ -256,7 +269,8 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
     * the canopy mask (``canopy.png``) is planted so that the forest looks closed from above, as in the photo:
       ``ortho.canopy_per_1000m2`` trees per 1000 m2 of mask at least ``ortho.canopy_min_spacing_m`` apart, each with a
       crown ``ortho.canopy_crown_scale`` times the normal one (the rules' own forest density is far too thin for
-      that). Seeded per 25 m cell; never on a building, road, placed object or water.
+      that). Seeded per 25 m cell; never on a building, road, placed object or water. Each gets an age class
+      (``ortho.age_classes``: young, mature, giant) that multiplies its scale, seeded from its position.
 
     The photo does not resolve single crowns in a forest, so the canopy trunks are random within the detected extent.
     """
@@ -304,6 +318,7 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
 
     density = float(ocfg.get("canopy_per_1000m2", 25.0))
     crown_lo, crown_hi = (float(v) for v in ocfg.get("canopy_crown_scale", (1.7, 2.5)))
+    ages = [(str(a["name"]), float(a["share"]), float(a["scale"])) for a in ocfg.get("age_classes", ())]
     h, w = mask.shape
     for r0 in range(0, h, CANOPY_CELL_PX):
         for c0 in range(0, w, CANOPY_CELL_PX):
@@ -331,7 +346,9 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
                 if not free(x, y):
                     continue
                 add(x, y)
-                trees.append(tree(x, y, rng, None, True, "ortho-canopy", crown_lo + (crown_hi - crown_lo) * rng.random()))
+                crown = crown_lo + (crown_hi - crown_lo) * rng.random()
+                age, grow = age_class(ages, seeded(f"ortho:age:{x:.3f}:{y:.3f}"))  # its own seed: the planting above stays as it was
+                trees.append({**tree(x, y, rng, None, True, "ortho-canopy", crown * grow), "age": age})
                 placed += 1
     return trees
 
@@ -380,6 +397,7 @@ def make_trees(
             "rot": round(rng.random() * math.pi / 2, 3),
             "shape": shape_,
             "colour": palette[rng.randrange(len(palette))],
+            "forest": forest,
         }
 
     return ortho_trees(tree, terrain, (bzone, rzone, ozone, water), cfg, origin)

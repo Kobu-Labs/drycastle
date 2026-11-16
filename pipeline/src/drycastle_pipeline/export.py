@@ -29,6 +29,7 @@ from drycastle_pipeline.meshes import Mesh
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.patches import patch_rank
 from drycastle_pipeline.primitives import PRIMITIVES, build_primitive
+from drycastle_pipeline.propmeshes import is_forest
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.scene import build_scene
 from drycastle_pipeline.textures import TexturedMesh, tex_node_name
@@ -65,6 +66,9 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # "tint" flag; meadow.bin is format 2 (a tint flag per layer) and then 3 (a species-zone plane and kind mixes); more
 # clutter kinds (grasses, wild and garden flowers) in clutter_meshes.glb. A loader that reads only 0.9.0 clutter would refuse
 # meadow.bin's new format and draw no meadow.
+# 0.11.0: forest trees (props.trees.forest): trees.json's model carries a "forest" block (tapered trunk, crown tiers) and each
+# forest tree a "forest": 1 flag; the chunk meshes draw them with it. A loader that does not know it builds the old trunk and
+# crown solids for them, which no longer match the drawn tree. Trees without the flag are drawn and built as before.
 # (no bump) urad.json (files.urad): the inside of the municipal office: entrance, rooms, worker seats, dictation desk.
 # (no bump) church.json (files.church): the inside of the church: door, seats with routes, spots, anchors, rooms.
 # (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
@@ -79,7 +83,7 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # Only maps with a group have it; a loader that does not know it, or a map without it, means "no groups".
 # (no bump) fences.json (files.fences): every fence section (two end points with ground z, height_m, type, parcel, property group),
 # for the game server's pets (the fence hop). A loader that does not know it, or a map without it, means "no fence data".
-MAP_VERSION_BASE = "0.10.0"
+MAP_VERSION_BASE = "0.11.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 TREES_FORMAT_VERSION = 1
@@ -208,6 +212,18 @@ def _on_terrain(areas: list[dict], terrain) -> list[dict]:
     return areas if terrain is None else clip_areas(areas, terrain.coverage)
 
 
+def forest_model(tree_cfg: dict) -> dict:
+    """The forest tree numbers of trees.json's model block (metres at scale 1; the same ones ``tree_mesh`` draws)."""
+    f = tree_cfg["forest"]
+    return {
+        "trunk_width_m": float(f["trunk_width_m"]),
+        "trunk_height_m": float(f["trunk_height_m"]),
+        "trunk_top_ratio": float(f["trunk_top_ratio"]),
+        "cone_tiers": [[float(v) for v in t] for t in f["cone_tiers"]],
+        "box_tiers": [[float(v) for v in t] for t in f["box_tiers"]],
+    }
+
+
 def _dump(path: Path, doc: dict) -> None:
     # compact: the map loader parses these at every start, and indentation was most of trees.json (1.8 MB)
     path.write_text(json.dumps(doc, separators=(",", ":"), sort_keys=True) + "\n")
@@ -328,11 +344,13 @@ def run_export(
                 "trunk_width_m": float(tree_cfg["trunk_width_m"]),
                 "trunk_height_m": float(tree_cfg["trunk_height_m"]),
                 "canopy_m": float(tree_cfg["canopy_m"]),
+                **({"forest": forest_model(tree_cfg)} if "forest" in tree_cfg else {}),
             },
             "trees": [
                 {
                     "x": t["x"], "y": t["y"], "z": round(t["z"], 3), "scale": t["scale"], "rot": t["rot"],
                     "shape": t["shape"],
+                    **({"forest": 1} if is_forest(t) else {}),
                     "chunk": [int(math.floor(t["x"] / chunk_m)), int(math.floor(t["y"] / chunk_m))],
                 }
                 for t in scene.trees

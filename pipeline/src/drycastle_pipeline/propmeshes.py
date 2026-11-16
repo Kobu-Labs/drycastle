@@ -81,8 +81,68 @@ def fence_mesh(
     return _mesh(tris, cols)
 
 
+def frustum_tris(centre, half0: float, half1: float, z0: float, z1: float, angle: float):
+    """Four-sided taper with square rings: ``half0`` at z0, ``half1`` at z1, no bottom (10 triangles, like ``box_tris``)."""
+    c, s = math.cos(angle), math.sin(angle)
+
+    def ring(half: float, z: float):
+        # the corner order of box_tris along the yaw axis: (-u,-v), (+u,-v), (+u,+v), (-u,+v)
+        return [
+            (centre[0] + c * dx - s * dy, centre[1] + s * dx + c * dy, z)
+            for dx, dy in ((-half, -half), (half, -half), (half, half), (-half, half))
+        ]
+
+    low, top = ring(half0, z0), ring(half1, z1)
+    tris = []
+    for k in range(4):
+        a, b = low[k], low[(k + 1) % 4]
+        c1, d1 = top[(k + 1) % 4], top[k]
+        tris.append([a, b, c1])
+        tris.append([a, c1, d1])
+    tris += [[top[0], top[1], top[2]], [top[0], top[2], top[3]]]
+    return tris
+
+
+def is_forest(tree: dict) -> bool:
+    """A tree planted inside the detected canopy. Trees of older props.json have no flag: their ``src`` says it."""
+    return bool(tree.get("forest", tree.get("src") == "ortho-canopy"))
+
+
+def forest_tree_mesh(tree: dict, cfg: dict) -> Mesh:
+    """Forest tree: a tapered trunk with a clear stem, then stacked pyramids (conifer) or boxes (broadleaf).
+
+    Numbers: ``cfg["forest"]`` (rules.yaml props.trees.forest), metres at scale 1 times the tree's scale.
+    """
+    f = cfg["forest"]
+    s = float(tree["scale"])
+    x, y, z = tree["x"], tree["y"], tree["z"]
+    rot = float(tree["rot"])
+    ux, uy = math.cos(rot), math.sin(rot)
+    trunk_c, canopy_c = hex_to_rgb(cfg["trunk_colour"]), hex_to_rgb(tree["colour"])
+    half0 = float(f["trunk_width_m"]) * s / 2
+    t = frustum_tris((x, y), half0, half0 * float(f["trunk_top_ratio"]), z - 0.2, z + float(f["trunk_height_m"]) * s, rot)
+    tris, cols = t, [trunk_c] * len(t)
+    if tree["shape"] == "cone":
+        for base, half, top in f["cone_tiers"]:
+            t = pyramid_tris((x, y), float(half) * s, z + float(base) * s, z + float(top) * s, rot)
+            tris += t
+            cols += [canopy_c] * len(t)
+    else:
+        for k, (lo, half, hi) in enumerate(f["box_tiers"]):
+            h = float(half) * s
+            t = box_tris((x - ux * h, y - uy * h), (x + ux * h, y + uy * h), h * 2, z + float(lo) * s, z + float(hi) * s, bottom=k == 0)
+            tris += t
+            cols += [canopy_c] * len(t)
+    return _mesh(tris, cols)
+
+
 def tree_mesh(tree: dict, cfg: dict) -> Mesh:
-    """Trunk box plus a canopy: two stacked boxes (broadleaf) or two stacked pyramids (conifer)."""
+    """Trunk box plus a canopy: two stacked boxes (broadleaf) or two stacked pyramids (conifer).
+
+    Forest trees (``is_forest``) get ``forest_tree_mesh``, when the rules have the forest model.
+    """
+    if is_forest(tree) and "forest" in cfg:
+        return forest_tree_mesh(tree, cfg)
     s = float(tree["scale"])
     trunk_w, trunk_h, canopy = (
         float(cfg["trunk_width_m"]) * s,

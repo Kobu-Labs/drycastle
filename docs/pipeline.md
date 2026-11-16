@@ -409,7 +409,11 @@ or do not rerun); existing objects are never touched. The game finds the dishes 
 **Tree collision (`trees.json`).** Each tree is two or three solids, built in the game from the rule model numbers
 (`model`: trunk width and height, canopy edge) and the tree's scale and rotation, with the same arithmetic as the drawn tree
 (`propmeshes.tree_mesh`): the trunk box (solid, starts 0.2 m below the ground) and the crown (two stacked boxes for a broadleaf,
-two stacked pyramids for a conifer). Trunks are on the world layer, so players and cars stop at them. Crowns are shot-only
+two stacked pyramids for a conifer). **Forest trees** (map 0.11.0: `"forest": 1` on the record, planted inside the detected canopy)
+use the `model.forest` block instead (`props.trees.forest` in `rules.yaml`): a tapered trunk (a four-sided frustum, solid, `PartShape.Frustum`)
+with a clear stem, and crown tiers (three stacked pyramids, or two boxes) from about 5 m up; all numbers are metres at scale 1 and
+the same block feeds the drawn mesh and the solids. Records without the flag, or a model without the block (maps before 0.11.0),
+use the formula above. Trunks are on the world layer, so players and cars stop at them. Crowns are shot-only
 (layer 4): bullets, pellets, rockets, turret sight and the client's decals and tracers stop on them, while players and cars drive
 through. The geometry is `ShooterCore/Colliders/PropColliders.cs`; the loader (`MapLoader.Trees.cs`) makes one static body per
 chunk and role, not one per tree. The surface of a hit (wood or foliage) comes from the tree lookup

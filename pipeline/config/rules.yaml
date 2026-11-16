@@ -335,6 +335,27 @@ props:
       canopy_per_1000m2: 25.0
       canopy_min_spacing_m: 4.0
       canopy_crown_scale: [1.7, 2.5]
+      # Age classes of the forest trees (seeded per tree from its position): `share` is the fraction of the forest, `scale`
+      # multiplies the crown scale above, so it grows the whole tree (a giant is taller, wider, thicker). Shares need not sum to 1.
+      age_classes:
+        - {name: young, share: 0.25, scale: 0.8}
+        - {name: mature, share: 0.60, scale: 1.0}
+        - {name: giant, share: 0.15, scale: 1.25}
+    # The model of a forest tree (planted inside the detected canopy; the standalone trees above keep the trunk box and the two
+    # stacked crown pieces sized by canopy_m). Tall clear trunk, crown on top: at the median scale 2.1 the crown starts about 5 m
+    # up and the tree is about 20 m tall. All lengths are metres at scale 1 (multiplied by the tree's scale) and measured from the
+    # ground at the trunk foot. The drawn mesh (propmeshes.tree_mesh), the collision solids (PropColliders.cs) and the model block
+    # of trees.json all read these; change them here only.
+    forest:
+      # The trunk is a four-sided taper: trunk_width_m wide at its foot (0.2 m below ground), trunk_top_ratio times that at the
+      # top. It rises into the crown (past the crown base), which hides its end. Solid for players, like any trunk.
+      trunk_width_m: 0.3
+      trunk_height_m: 4.4
+      trunk_top_ratio: 0.55
+      # Conifer crown: stacked four-sided pyramids, [base height, base half-width, apex height]. 6 triangles each, base included.
+      cone_tiers: [[2.4, 1.25, 5.4], [4.2, 0.95, 7.6], [6.2, 0.62, 9.5]]
+      # Broadleaf crown: stacked boxes, [bottom height, half-width, top height]. Only the lowest has a drawn underside.
+      box_tiers: [[2.4, 1.3, 5.6], [5.6, 0.85, 9.2]]
 
 # --- Ground detail (detail stage, `make detail`; docs/pipeline.md "Detail") ----------------------------
 # Patches (flat colour or library texture, draped on the terrain, never overlapping: the first layer in

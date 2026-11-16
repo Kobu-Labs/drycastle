@@ -76,6 +76,9 @@ has no trees, and `make props` warns. `make map` runs `ortho` and `ortho-trees` 
   crown edge of 4.4-6.5 m). The village profile's own forest density (4 per 1000 m2, crowns 2-3 m) is far too thin for this:
   it gives a forest that is mostly bare ground when seen at true scale. Seeded per 25 m cell, never on a building, road,
   placed object or water.
+* Each forest tree gets an age class (`ortho.age_classes`: young 25%, mature 60%, giant 15%; seeded from its position) whose
+  `scale` multiplies its crown scale, and is drawn with the forest model (`props.trees.forest`: tapered clear trunk, crown from
+  about 5 m up, 15-25 m tall; see `docs/pipeline.md`, "Tree collision"). Standalone trees keep the short trunk and blocky crown.
 
 Numbers on the 7.15 km2 village: 218 ha of canopy, 54,000 forest trees and 4,200 standalone (58,000 in all, against 17,800
 for the rules); `out/village/map` 236 MB, the largest chunk glb 4.4 MB (the village profile aims at 1.7 MB). Not yet seen
