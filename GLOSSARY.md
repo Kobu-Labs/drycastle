@@ -93,7 +93,7 @@ A lamp post of the base map, placed from OSM street lamp nodes or along roads by
 _Avoid_: light, streetlight, lamp post
 
 **Corpse**:
-A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. It also carries every Item its player wore or carried in the Bag (up to eight), which another player can take one at a time (see Pickup limit).
+A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. A rider killed in a vehicle leaves it thrown with the vehicle's velocity (a blast adds its knockback) so it falls, except a pilot or driver, whose corpse stays seated and rides with the vehicle until it has rested for a second. One that lands in water floats on the surface. It also carries every Item its player wore or carried in the Bag (up to eight), which another player can take one at a time (see Pickup limit).
 _Avoid_: ragdoll, body, drop
 
 **Sandbox mode**:

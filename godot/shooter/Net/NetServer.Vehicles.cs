@@ -509,6 +509,7 @@ public partial class NetServer
         var driver = OccupantAt(car, 0);
         var attacker = car.LastAttacker != 0 ? car.LastAttacker : driver?.Id ?? (ushort)0;
         var weapon = car.LastWeapon != 0 ? car.LastWeapon : SpecialWeapons.Vehicle;
+        var carVelocity = CarVelocity(car); // before Destroy zeroes it: the riders' bodies fly on with it
         car.Destroy(_elapsed + Vehicles.DestroyedReturnTime);
         _vehicleBlasts++;
         BroadcastEvent(EventKind.VehicleExplosion, WeaponCodec.Encode(new VehicleExplosionMsg(car.Id, attacker, N(at), e.Splash.Radius)));
@@ -516,9 +517,14 @@ public partial class NetServer
         BlastGlass(at, e.Splash.Radius);
         GD.Print($"server: {car.Def.Id} {car.Id} exploded at ({at.X:F1},{at.Y:F1},{at.Z:F1}), credited to #{attacker}");
 
+        ThrowRidingCorpses(car, carVelocity, N(at), e.Splash, 1f); // the dead pilots and drivers still in their seats are flung out (ADR 0026)
         foreach (var o in Occupants(car))
         {
-            Deal(attacker, weapon, o.Id, e.DriverDamage, false, false); // everyone still aboard (a gunner too)
+            // a rider who dies is thrown with the vehicle's velocity plus the blast's knockback from its centre (no corpse stays seated in a wreck)
+            var k = ProjectileMath.Knockback(e.Splash.KnockbackSpeed, N(at), N(o.Body.GlobalPosition) + NVec3.UnitY * 0.9f, 1f);
+            PushOnDeath(o.Id, (k == NVec3.Zero ? NVec3.Zero : CorpseRules.ThrowFromBlast(k)) + carVelocity);
+            var dealt = Deal(attacker, weapon, o.Id, e.DriverDamage, false, false); // everyone still aboard (a gunner too)
+            ClearPush(o.Id, dealt);
             if (o.Car == car) LeaveSeat(o, true); // survived (spawn protection): thrown out, the seat is gone
         }
         foreach (var t in LiveTargets())
