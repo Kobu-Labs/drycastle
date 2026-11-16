@@ -36,6 +36,10 @@ void vertex() {
 		VERTEX = vec3(0.0);
 	}
 	tint = COLOR.rgb * 2.0;
+	if (recolour > 0.5) {
+		// the colour is the baked tree's, in sRGB bytes: to linear exactly as props_tree_cut does for the baked mesh, or the two would not match
+		tint = mix(pow((tint + vec3(0.055)) * (1.0 / (1.0 + 0.055)), vec3(2.4)), tint * (1.0 / 12.92), lessThan(tint, vec3(0.04045)));
+	}
 	tinted = abs(kind - 0.5) > 0.25 ? 1.0 : 0.0; // ground objects keep the atlas as it is
 }
 
