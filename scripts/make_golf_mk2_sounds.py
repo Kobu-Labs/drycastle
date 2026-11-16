@@ -15,11 +15,11 @@ from pathlib import Path
 import numpy as np
 
 SR = 48000
-ACCEL = (2.5, 5.9)     # the pull from where the revs start to climb (before it the clip is still idling), through the first gear shift (about 5.4) and just into second, looped whole
+ACCEL = (4.0, 9.5)     # the pull from mid first gear through the shifts at about 5.4 and 8.0, looped whole
 TOP = (9.2, 10.35)      # the top speed engine loop, smaller still
 TOP_LOOP = (0.4, 0.6)
 LIFT = (11.65, 13.1)    # off the gas: the turbo blow-off and the revs falling
-IDLE_XFADE, ACCEL_XFADE, TOP_XFADE = 0.6, 0.25, 0.08
+IDLE_XFADE, ACCEL_XFADE, TOP_XFADE = 0.6, 0.3, 0.08
 
 
 def load(path):
