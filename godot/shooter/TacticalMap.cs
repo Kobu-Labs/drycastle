@@ -125,7 +125,7 @@ public sealed partial class TacticalMap : Control
         _rose.SetLabels(Strings.T("map.dir.0"), Strings.T("map.dir.2"), Strings.T("map.dir.4"), Strings.T("map.dir.6"));
         _shownCell = (-1, -1); _shownHeading = -1; _shownNone = false;
         _cursorShown = false;
-        _zoom = 1f; _tl = Vector2.Zero;
+        SetView(1f, Vector2.Zero); // also resets the zoom label
         _layoutDirty = true;
         var reduce = GameSettings.Current.ReduceMotion;
         _fade.Show(reduce);
