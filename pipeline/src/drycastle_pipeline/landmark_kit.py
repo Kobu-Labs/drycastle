@@ -192,14 +192,15 @@ def sheet_roof(
 
 def gable_roof(
     S: _Solids, frame: Frame, width: float, v_lo: float, v_hi: float, eave_z: float, ridge_z: float, detail: bool, *,
-    overhang: float = 0.3, **style,
+    overhang: float = 0.3, ridge_at: float = 0.5, **style,
 ) -> Callable[[float], float]:  # fmt: skip
-    """A gabled roof over ``a`` in 0..``width``, the ridge along ``v`` in the middle: two ``sheet_roof`` planes (``style``
-    is passed on; the seed gets a suffix per plane). Returns the underside ``z(a)``: use it for the tops of the gable walls."""
-    half = width / 2
+    """A gabled roof over ``a`` in 0..``width``, the ridge along ``v`` at ``ridge_at`` of the width (0.5: the middle; else
+    one slope is longer and flatter than the other): two ``sheet_roof`` planes (``style`` is passed on; the seed gets a
+    suffix per plane). Returns the underside ``z(a)``: use it for the tops of the gable walls."""
+    half = width * ridge_at
 
     def z(a: float) -> float:
-        return eave_z + (ridge_z - eave_z) * (1 - abs(a - half) / half)
+        return eave_z + (ridge_z - eave_z) * (1 - abs(a - half) / (half if a < half else width - half))
 
     seed = style.pop("seed")
     sheet_roof(S, frame, z, lambda v: -overhang, lambda v: half, v_lo, v_hi, detail, seed=seed + ":a", **style)

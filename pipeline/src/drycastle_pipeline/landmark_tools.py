@@ -157,8 +157,9 @@ def near(ids: list[str], within: float) -> None:
     print(f"{count} thing(s) within {within} m. In front of a door or a gate they are in the way: report them, change nothing.")
 
 
-def _raster(tris: np.ndarray, cols: np.ndarray, eye, target, fov: float, size=(1400, 900)) -> Image.Image:
-    """A z-buffered picture: perspective, back faces dropped, shaded by a fixed sun."""
+def _raster(tris: np.ndarray, cols: np.ndarray, eye, target, fov: float, size=(1400, 900), with_mask: bool = False):
+    """A z-buffered picture: perspective, back faces dropped, shaded by a fixed sun. ``with_mask``: also the pixels the
+    mesh covers."""
     w, h = size
     eye, target = np.array(eye, float), np.array(target, float)
     f = target - eye
@@ -197,7 +198,7 @@ def _raster(tris: np.ndarray, cols: np.ndarray, eye, target, fov: float, size=(1
         hit = (a >= 0) & (b >= 0) & (c >= 0) & (zz < sub)
         sub[hit] = zz[hit]
         img[y0 : y1 + 1, x0 : x1 + 1][hit] = np.clip(cols[i] * shade[i], 0, 255).astype(np.uint8)
-    return Image.fromarray(img)
+    return (Image.fromarray(img), np.isfinite(depth)) if with_mask else Image.fromarray(img)
 
 
 def render(ids: list[str], out: Path, model: str | None, collision: bool, view: tuple[float, float] | None = None) -> list[Path]:

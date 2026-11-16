@@ -60,28 +60,54 @@ How to pick the edge:
 If two edges fit a photo equally, ask the user. Do not guess. Sides with no photo: copy the opposite side's roof line,
 draw no openings, and list them as guessed.
 
-## Step 3: measure (do this as careful, slow work)
+## Step 3: measure with the camera fit (do this as careful, slow work)
 
-Scale, wall seen square-on: the edge length from step 1 is the photo's width of that wall; measure along it as a
-fraction of that width.
+Do not estimate sizes by eye. Fit a camera to the photo on the footprint, then let the tool turn pixels into metres.
+`PHOTO` is the photo's path, `CAM` a file in your scratchpad (one per photo), `<id>` the building.
 
-Scale, wall seen at an angle (it gets smaller towards one end): a fraction of the width is WRONG. Do this instead:
-1. Heights: measure them at the corner nearest the camera, where the wall is largest. Use a known height there as the
-   ruler (below).
-2. Along the wall: count, do not measure. Place openings by order and by even spacing between the wall's two ends
-   ("2 windows, the first about a quarter along, the second about two thirds"), then turn that into metres with the
-   edge length. Mark every such position confidence low.
-3. Two walls in one photo have two different scales. Never carry a pixel size from one wall to the other.
+**3a. Grid.** `uv run python -m drycastle_pipeline.landmark_photo grid PHOTO --out <scratchpad>/fit`
+Read the written `grid.png`. Yellow lines are x, cyan lines are y, every 50 px. Read every pixel position below off
+this picture, to about 5 px.
 
-Rulers: a house door is 2.0 m high, a window sill is 0.8 to 0.9 m up, a storey is about 2.8 m, a car garage door 2.1
-to 2.4 m, a fence or gate 1.5 to 1.8 m.
+**3b. Fit.** Name 5 or more points of the building that you can see, each `WHERE:LEVEL:X,Y`:
+- WHERE: a footprint corner `c0`, `c1`, ... (step 1), or `r<edge>`: the top of the gable triangle over that edge.
+- LEVEL: `ground` (where the wall meets the ground), `eave` (where the wall meets the roof), `top` (the ridge).
+- Take: the corner nearest the camera at `ground` and at `eave`; the far end of each visible wall at `eave` (and at
+  `ground` if you can see it); the ridge end `r<edge>:top`. A corner hidden by a fence or a bush: leave it out.
+- At the eave, take the top of the WALL, not the edge of the overhanging roof.
 
-Ridge height when nothing measures it: village houses here have a roof pitch of 35 to 45 degrees. Take
-TOP = EAVE + 0.4 x (length of ROOF_EDGE) and mark it low confidence. The generated height printed in step 1 is often
-wrong; do not use it as evidence.
+      uv run python -m drycastle_pipeline.landmark_photo fit PHOTO <id> --view=X,Y --cam CAM \
+          c1:ground:443,535 c1:eave:432,318 c0:eave:122,332 c0:ground:125,484 c2:eave:738,352 r1:top:568,120
 
-Colours: sample a sunlit part of the surface, not a shaded one. If the whole wall is in shade, brighten the sample by
-about a quarter. Compare by eye with the render in step 5 and correct.
+  `--view`: the photo's viewpoint from step 1. None given: use a point 10 m out from the middle of the photographed
+  edge (its middle plus 10 x the direction it faces). Hand-held photo: add `--cam-height 1.6`.
+
+It prints `EAVE`, `TOP`, `RIDGE_AT` and a fit error. Rules:
+- "good" or "usable": take the numbers. They go into the sheet as measured.
+- "BAD", or a WARNING: re-read the points it marks on `grid.png` and fit again. Still bad after 3 tries: check the
+  photo-to-edge table (a wall on the wrong edge gives exactly this), then fall back to the rulers below and mark the
+  heights low confidence. Never use the numbers of a bad fit.
+- `RIDGE_AT` far from 0.5 (below 0.4 or above 0.6) is real: one slope is longer. Use it; give `r<edge>` with
+  edge = ROOF_EDGE so it counts from the right corner.
+- Only one wall in the photo, seen square-on: the fit cannot tell distance from zoom, so its heights are unreliable
+  even when the error is small. Take heights from the rulers below (low confidence); positions along the wall from
+  `measure` are still good.
+
+**3c. Openings.** For each window and ground-level door, two opposite corners of its glass or leaf:
+
+      uv run python -m drycastle_pipeline.landmark_photo measure CAM --edge 0 158,368 208,440
+
+It prints `s0, width, z0, height` to paste into `OPENINGS`. "not on this wall": wrong edge or a mis-read pixel.
+
+**3d. Colours.** `uv run python -m drycastle_pipeline.landmark_photo sample PHOTO X,Y [--white X,Y]`
+- A sunlit surface: no `--white`.
+- A surface in shade: `--white` on something white IN THE SAME SHADE on the same wall (a window frame). No such
+  white: sample without it and multiply by 1.4.
+- Roof: sample three spots, use them as the three shades.
+
+Rulers, only when the fit is impossible: a house door is 2.0 m high, a window sill 0.8 to 0.9 m up, a storey about
+2.8 m, a car garage door 2.1 to 2.4 m, a fence or gate 1.5 to 1.8 m. Ridge with nothing to measure it:
+TOP = EAVE + 0.4 x (length of ROOF_EDGE), low confidence. The generated height printed in step 1 is often wrong.
 
 Write this sheet down before any code (in your reply, not a file):
 
@@ -89,6 +115,7 @@ Write this sheet down before any code (in your reply, not a file):
     ROOF_EDGE:   index of the edge the roof slopes across (gable: an edge with a triangle on top;
                  lean-to: an edge whose wall top is slanted, starting at its LOW corner)
     EAVE, TOP:   metres above the ground (lean-to: wall top at the first / second corner of ROOF_EDGE)
+    RIDGE_AT:    gable only, from `fit` (0.5 when not measured)
     overhang:    metres the roof passes the wall
     colours:     wall, gable wall if different, plinth, frames, door, roof (3 close shades), each as [r, g, b]
     roof cover:  sheet metal (panel 0.55, seam_height 0.04) | tiles or shingles (panel 0.4, seam_height 0.0);
@@ -127,13 +154,22 @@ Roof form by look:
 
 ## Step 5: look at it (GATE, at most 3 rounds)
 
-    uv run python -m drycastle_pipeline.landmark_tools render <ids> --model <name> --out <scratchpad>/render [--view=X,Y]
+With a fitted camera (step 3b), draw the model over the photo:
 
-It writes `edge_<building>_<i>.png` (each side seen square-on), `roof_a.png`, `roof_b.png`, and with `--view` (the
-photo's viewpoint from step 1) `view.png`: the building as that photo sees it. Compare `view.png` with the photo when
-you have a viewpoint; otherwise compare each photographed edge's picture with its photo. The renderer has no sun
-shadows and no surroundings; judge shape and colour only. Answer each line yes/no:
+    uv run python -m drycastle_pipeline.landmark_photo overlay PHOTO CAM <ids> --model <name> --out <scratchpad>/fit
 
+Read `overlay.png`: the model is half see-through over the photo, its outline is magenta. Roof edges, eave line,
+wall corners and windows of the model must sit on those of the photo. Where they do not, the model is wrong THERE:
+fix that constant (do not re-fit the camera to hide it).
+
+Also, always:
+
+    uv run python -m drycastle_pipeline.landmark_tools render <ids> --model <name> --out <scratchpad>/render
+
+It writes `edge_<building>_<i>.png` (each side seen square-on), `roof_a.png`, `roof_b.png`; look at the sides with no
+photo too. The renderer has no sun shadows and no surroundings; judge shape and colour only. Answer each line yes/no:
+
+- [ ] overlay: the model's outline and openings sit on the photo's, within a window frame's width
 - [ ] same outline: roof form, which side is higher, where the ridge is
 - [ ] same number of openings, in the same left-to-right order (not counting what rule 7 left out)
 - [ ] each opening about where it is in the photo, and about that size (oblique photo: same order and spacing)
@@ -154,11 +190,11 @@ Any "no": fix the constant and render again. After 3 rounds stop and report what
 3. From the repo root: `make rules && make export`. This rebuilds `out/village/map` (the only map to use).
 4. `uv run python -m drycastle_pipeline.landmark_tools near <ids>` lists fences, objects, lamps and trees within 6 m.
    Report those that stand off an edge with a door, and any at 0.0 m (inside the walls). Do not remove anything.
-5. Open the final pictures for the user: `xdg-open <file>` for the photo-side renders and `roof_a.png`.
+5. Open the final pictures for the user: `xdg-open <file>` for `overlay.png` and `roof_a.png`.
 
 ## Step 7: report
 
-Short bullets: the photo-to-edge table; the sheet as built; every guess; anything that differs from the photos and
+Short bullets: the photo-to-edge table; the fit error; the sheet as built, each line marked measured or guessed; anything that differs from the photos and
 why; obstacles from step 6.4; files changed; "not seen in-game". Do not commit unless asked; if asked, work on an issue
 branch and stage only your own files (the working tree is shared and edited live).
 

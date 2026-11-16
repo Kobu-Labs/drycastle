@@ -3,9 +3,10 @@
 From the owner's Street View photo of 2026-11-16, taken from around sketch point A: the long eave wall (edge 0, 7.16 m)
 is pale green render on a brick plinth with two white windows; the gable end (edge 1, 8.24 m) is white with a small
 window to the right; the roof is dark green asphalt shingle, pitched, with white bargeboards.
-Guessed: eave 2.6 m and ridge 6.0 m (scaled from the window and gate heights, no scale object in the photo), roof
-overhangs, the window positions (read off an oblique view, about 0.3 m), all colours (the photo is in shade), the plinth
-colour, and the two sides with no photo (edge 2: eave wall, no openings; edge 3: gable end, white, no openings).
+Measured with a camera fitted to the photo on the footprint (``landmark_photo fit``, error 6 px): eave 2.3 m, ridge
+5.0 m and off the middle (0.32 along edge 1: the slope towards the yard is the longer one), the three windows.
+Guessed: roof overhangs, the wall colours (the street wall is in shade in the photo; brightened), the plinth colour, and
+the two sides with no photo (edge 2: eave wall, no openings; edge 3: gable end, white, no openings).
 Left out (not covered by the skill): the loft door with its balcony and outside staircase on the gable end, the gate
 and the boundary wall in front of it, the lean-to shed at the right, the drainpipe and the junction box.
 
@@ -38,13 +39,14 @@ RINGS = {BUILDING: RING}
 
 ROOF = "gable"  # "gable", "lean_to" or "flat"
 ROOF_EDGE = 1  # the gable end seen in the photo (8.24 m, faces S)
-EAVE = 2.6  # wall top at the eave, metres above the base
-TOP = 6.0  # the ridge
+EAVE = 2.3  # wall top at the eave, metres above the base (camera fit)
+TOP = 5.0  # the ridge (camera fit)
+RIDGE_AT = 0.32  # the ridge is not over the middle: the slope towards the yard is longer (camera fit)
 OVERHANG = 0.2  # the roof past the eave walls
 END_OH = 0.25  # the roof past the two gable ends
 T = 0.3  # thickness of the gable end walls
 
-WALL, PLINTH = [150, 186, 166], [128, 80, 64]
+WALL, PLINTH = [140, 174, 166], [128, 80, 64]
 GABLE_WALL = [240, 242, 244]  # the white gable ends (edges 1 and 3), the eave walls are green
 FRAME_C, GLASS, DOOR = [220, 222, 222], [58, 70, 78], [92, 62, 50]
 # the roof: whole sheets (or tile strips) in these colours; `worn` and `streaks` only for weathered roofs
@@ -55,10 +57,10 @@ ROOF_STYLE = {
 }  # fmt: skip
 
 # Openings, drawn on the face of the wall: (edge, kind, s0, width, z0, height, casements).
-OPENINGS = (
-    (0, "window", 0.95, 1.1, 0.75, 1.25, 1),
-    (0, "window", 4.05, 1.1, 0.75, 1.25, 2),
-    (1, "window", 6.0, 0.7, 0.8, 1.2, 1),
+OPENINGS = (  # measured with the camera fit
+    (0, "window", 1.13, 1.45, 0.8, 1.03, 2),
+    (0, "window", 4.78, 1.41, 0.76, 1.01, 2),
+    (1, "window", 5.89, 0.76, 0.99, 0.74, 1),
 )
 
 _N = len(RING)
@@ -71,7 +73,8 @@ DEPTH = max(FRAME.av(p)[1] for p in RING)
 def _roof_z(a: float) -> float:
     """Underside of the roof at ``a``."""
     if ROOF == "gable":
-        return EAVE + (TOP - EAVE) * (1 - abs(a - WIDTH / 2) / (WIDTH / 2))
+        ridge = WIDTH * RIDGE_AT
+        return EAVE + (TOP - EAVE) * (1 - abs(a - ridge) / (ridge if a < ridge else WIDTH - ridge))
     if ROOF == "lean_to":
         return EAVE + (TOP - EAVE) * a / WIDTH
     return EAVE
@@ -88,11 +91,11 @@ def building_mesh(b: dict, detail: bool = True) -> Mesh:
             (ap, vp), (aq, vq) = FRAME.av(p), FRAME.av(q)
             if abs(vp - vq) > 0.5:  # an eave wall: nothing above it
                 continue
-            t = (WIDTH / 2 - ap) / (aq - ap)  # where the ridge meets this wall (not its middle when the footprint is skewed)
+            t = (WIDTH * RIDGE_AT - ap) / (aq - ap)  # where the ridge meets this wall (not its middle when the footprint is skewed)
             mid = (p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t)
             wall(S, p, mid, _roof_z(ap) + 0.05, TOP + 0.05, T, GABLE_WALL, base=EAVE - 0.05)
             wall(S, mid, q, TOP + 0.05, _roof_z(aq) + 0.05, T, GABLE_WALL, base=EAVE - 0.05)
-        gable_roof(S, FRAME, WIDTH, -END_OH, DEPTH + END_OH, EAVE, TOP, detail, overhang=OVERHANG, seed=BUILDING, collision=WALL, **ROOF_STYLE)
+        gable_roof(S, FRAME, WIDTH, -END_OH, DEPTH + END_OH, EAVE, TOP, detail, overhang=OVERHANG, ridge_at=RIDGE_AT, seed=BUILDING, collision=WALL, **ROOF_STYLE)
     else:
         prism(S, list(RING), [-0.3] * _N, [_roof_z(FRAME.av(p)[0]) + 0.05 for p in RING], WALL)
         if ROOF == "lean_to":

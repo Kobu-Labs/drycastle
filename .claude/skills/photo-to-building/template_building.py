@@ -36,6 +36,7 @@ ROOF = "gable"  # "gable", "lean_to" or "flat"
 ROOF_EDGE = 0
 EAVE = 3.0  # wall top at the eave, metres above the base (lean-to: at the first corner of ROOF_EDGE)
 TOP = 5.2  # gable: the ridge; lean-to: the wall top at the second corner of ROOF_EDGE; flat: not used
+RIDGE_AT = 0.5  # gable: where the ridge sits along ROOF_EDGE, from its first corner (0.5: the middle; `fit` prints it)
 OVERHANG = 0.3  # the roof past the eave walls
 END_OH = 0.15  # the roof past the two end walls
 T = 0.3  # thickness of the gable end walls
@@ -69,7 +70,8 @@ DEPTH = max(FRAME.av(p)[1] for p in RING)
 def _roof_z(a: float) -> float:
     """Underside of the roof at ``a``."""
     if ROOF == "gable":
-        return EAVE + (TOP - EAVE) * (1 - abs(a - WIDTH / 2) / (WIDTH / 2))
+        ridge = WIDTH * RIDGE_AT
+        return EAVE + (TOP - EAVE) * (1 - abs(a - ridge) / (ridge if a < ridge else WIDTH - ridge))
     if ROOF == "lean_to":
         return EAVE + (TOP - EAVE) * a / WIDTH
     return EAVE
@@ -86,11 +88,11 @@ def building_mesh(b: dict, detail: bool = True) -> Mesh:
             (ap, vp), (aq, vq) = FRAME.av(p), FRAME.av(q)
             if abs(vp - vq) > 0.5:  # an eave wall: nothing above it
                 continue
-            t = (WIDTH / 2 - ap) / (aq - ap)  # where the ridge meets this wall (not its middle when the footprint is skewed)
+            t = (WIDTH * RIDGE_AT - ap) / (aq - ap)  # where the ridge meets this wall (not its middle when the footprint is skewed)
             mid = (p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t)
             wall(S, p, mid, _roof_z(ap) + 0.05, TOP + 0.05, T, GABLE_WALL, base=EAVE - 0.05)
             wall(S, mid, q, TOP + 0.05, _roof_z(aq) + 0.05, T, GABLE_WALL, base=EAVE - 0.05)
-        gable_roof(S, FRAME, WIDTH, -END_OH, DEPTH + END_OH, EAVE, TOP, detail, overhang=OVERHANG, seed=BUILDING, collision=WALL, **ROOF_STYLE)
+        gable_roof(S, FRAME, WIDTH, -END_OH, DEPTH + END_OH, EAVE, TOP, detail, overhang=OVERHANG, ridge_at=RIDGE_AT, seed=BUILDING, collision=WALL, **ROOF_STYLE)
     else:
         prism(S, list(RING), [-0.3] * _N, [_roof_z(FRAME.av(p)[0]) + 0.05 for p in RING], WALL)
         if ROOF == "lean_to":

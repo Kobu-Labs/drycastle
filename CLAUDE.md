@@ -16,6 +16,10 @@ Every state machine has a `StateMachineSpec<T>` (godot/ShooterCore/Fsm/) and is 
 
 Anything that draws, attaches to or measures a vehicle (glass, lamps, wheels, cockpit, seats, smoke, holes) follows `docs/standards/car-design.md`: body parts hang under the `hull`, not the root. Read it first.
 
+### Buildings from photos
+
+Modelling a real building from photos: invoke the `photo-to-building` skill (`/photo-to-building`). Flow and tools: `docs/photo-to-building.md`.
+
 ### UI/UX standard
 
 All UI, including the map editor, meets `docs/standards/ui-ux.md` (non-negotiable). Invoke the `ui-work` skill before writing or changing UI.

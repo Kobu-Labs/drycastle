@@ -126,14 +126,14 @@ buildings:
 
   # P-0023 (G-0377): house with attic, pale green render eave walls, white gable ends, dark green asphalt
   # shingle roof (pipeline/src/drycastle_pipeline/house_g0377.py). From the owner's Street View photo of
-  # 2026-11-16. Guessed: eave 2.6 m, ridge 6.0 m, window places, colours, the sides with no photo.
+  # 2026-11-16. Heights and windows measured with a camera fit; colours and the sides with no photo are guessed.
   w378920410:
     model: house_g0377
     wall_colour: "#96baa6"
     roof_colour: "#5c6c58"
     levels: 1
     roof: flat
-    height_m: 6.0
+    height_m: 5.0
 
   # P-0028 (G-0001): old village house, street gable to the road, grey-white weathered render, orange-red
   # clay tile, steep (about 47 degrees) roof. Eave about 3.0 m, ridge about 6.6 m, scaled from one Street
