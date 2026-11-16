@@ -12,7 +12,7 @@ public class WeaponSoundAssetTests
     static readonly SoundsFile Sounds = SoundsFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "sounds.json"));
     static readonly WeaponsFile Weapons = WeaponsFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "weapons.json"));
 
-    static string AssetsDir()
+    internal static string AssetsDir()
     {
         for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
         {

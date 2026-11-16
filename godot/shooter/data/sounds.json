@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_note": "Event id to sound. files are relative to assets/ (variants are picked at random, never the same twice in a row); bus is SFX, UI or Music; volume_db and pitch are the base; pitch_variance is the +/- fraction applied per play; max_distance is the audible range in metres for 3D playback (0 = always non-positional); loop makes the stream loop. Own sounds are played non-positional by the game whatever max_distance says. Ranges follow the sound plan (#78).",
+  "_note": "Event id to sound. files are relative to assets/, else assets-private/ (variants are picked at random, never the same twice in a row; first_found: not variants, only the first file that exists plays, so a private take can come before a generated fallback); bus is SFX, UI or Music; volume_db and pitch are the base; pitch_variance is the +/- fraction applied per play; max_distance is the audible range in metres for 3D playback (0 = always non-positional); loop makes the stream loop. Own sounds are played non-positional by the game whatever max_distance says. Ranges follow the sound plan (#78).",
   "sounds": [
     { "id": "shot.pistol", "files": ["free-firearm-sound-library/pistol_1911.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 120, "priority": 3 },
     { "id": "shot.ak47", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 200, "priority": 3 },
@@ -16,6 +16,7 @@
     { "id": "shock.crackle", "files": ["drycastle-generated-sounds/shock_crackle.ogg"], "bus": "SFX", "volume_db": -2, "pitch_variance": 0.04, "max_distance": 40, "priority": 3 },
     { "id": "harvester.reel_in", "files": ["drycastle-generated-sounds/harvester_reel_in.ogg"], "bus": "SFX", "volume_db": 0, "pitch_variance": 0.04, "max_distance": 70, "priority": 3 },
     { "id": "harvester.chew", "files": ["drycastle-generated-sounds/harvester_chew.ogg"], "bus": "SFX", "volume_db": -1, "pitch_variance": 0.03, "max_distance": 55, "priority": 3 },
+    { "id": "harvester.pop", "files": ["audio/harvester/pop.ogg", "drycastle-generated-sounds/harvester_pop.ogg"], "first_found": true, "bus": "SFX", "volume_db": 0, "pitch_variance": 0.05, "max_distance": 60, "priority": 3 },
     { "id": "harvester.eject", "files": ["drycastle-generated-sounds/harvester_eject.ogg"], "bus": "SFX", "volume_db": 0, "pitch_variance": 0.05, "max_distance": 60, "priority": 3 },
     { "id": "explosion.bazooka", "files": ["oga-combat-sound-effects-150/explosion_bazooka.ogg"], "bus": "SFX", "volume_db": 0, "pitch_variance": 0.05, "max_distance": 300, "priority": 4 },
     { "id": "explosion.vehicle", "files": ["oga-combat-sound-effects-150/explosion_bazooka.ogg"], "bus": "SFX", "volume_db": 2, "pitch": 0.75, "pitch_variance": 0.05, "max_distance": 350, "priority": 4 },

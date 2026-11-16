@@ -63,6 +63,26 @@ public class SoundTests
     }
 
     [Fact]
+    public void FirstFoundPlaysTheFirstFileThatExistsAndOtherwiseEveryOne()
+    {
+        var t = SoundsFile.Parse("""{"version":1,"sounds":[{"id":"a","files":["private/a.ogg","gen/a.ogg"],"first_found":true,"bus":"SFX"},{"id":"b","files":["x.ogg","y.ogg"],"bus":"SFX"}]}""");
+        Assert.Equal(new[] { "private/a.ogg" }, t.Find("a")!.Usable(_ => true));            // the private take wins when it is installed
+        Assert.Equal(new[] { "gen/a.ogg" }, t.Find("a")!.Usable(f => f.StartsWith("gen/"))); // the generated fallback without it
+        Assert.Empty(t.Find("a")!.Usable(_ => false));
+        Assert.Equal(new[] { "x.ogg", "y.ogg" }, t.Find("b")!.Usable(_ => true));           // without the flag the files are variants
+    }
+
+    [Fact]
+    public void TheHarvesterPopFallsBackToTheGeneratedFileInTheRepo()
+    {
+        var pop = Real().Find("harvester.pop")!;
+        Assert.True(pop.FirstFound);
+        Assert.StartsWith("audio/harvester/", pop.Files[0]); // the private clip first (assets-private, not in the repo)
+        var assets = WeaponSoundAssetTests.AssetsDir();
+        Assert.True(File.Exists(Path.Combine(assets, pop.Files[^1])), pop.Files[^1]); // the fallback is a repo file
+    }
+
+    [Fact]
     public void VariantNeverRepeatsTheLastOne()
     {
         for (var count = 2; count <= 6; count++)

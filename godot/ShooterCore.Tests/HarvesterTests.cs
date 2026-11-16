@@ -586,6 +586,15 @@ public class HarvesterTests
         Assert.Null(SwathCodec.Decode(new byte[5]));
     }
 
+    [Fact]
+    public void A_stretch_for_a_joiner_says_it_is_a_replay_and_a_live_one_does_not()
+    {
+        var stroke = new[] { new SwathPt(0, 0), new SwathPt(8, 0) };
+        Assert.False(SwathCodec.Decode(SwathCodec.Pack(1, 4.8f, 0, false, stroke)[0])!.Value.Replay);
+        var replay = SwathCodec.Decode(SwathCodec.Pack(1, 4.8f, 0, true, stroke, replay: true)[0])!.Value;
+        Assert.True(replay.Replay); Assert.True(replay.NoBales); // the two flag bits are independent
+    }
+
     // ---- the wire ----
 
     [Fact]

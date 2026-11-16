@@ -147,10 +147,11 @@ public static class SwathCodec
     public const int MaxPoints = 100;
     public const int HeaderBytes = 15;
 
-    public readonly record struct Msg(ushort Field, float WidthM, ushort AgeS, bool NoBales, IReadOnlyList<SwathPt> Points);
+    /// <summary><paramref name="Replay"/>: history sent to a joiner, not something that just happened (its bales fall silently; a live stretch's pop).</summary>
+    public readonly record struct Msg(ushort Field, float WidthM, ushort AgeS, bool NoBales, IReadOnlyList<SwathPt> Points, bool Replay = false);
 
-    /// <summary>Messages for one stroke: u16 field, u8 width in dm, u16 seconds since the field was last cut, u8 flags (1: no bales: history from before a fade), i32 x, i32 z of the first point, u8 count of the rest, then i8 dx, i8 dz each. A long stroke is split (the next message starts at the last point); a delta beyond a byte starts one afresh.</summary>
-    public static List<byte[]> Pack(ushort field, float widthM, ushort ageS, bool noBales, IReadOnlyList<SwathPt> stroke)
+    /// <summary>Messages for one stroke: u16 field, u8 width in dm, u16 seconds since the field was last cut, u8 flags (1: no bales: history from before a fade; 2: replay for a joiner, not live; older readers ignore the bit), i32 x, i32 z of the first point, u8 count of the rest, then i8 dx, i8 dz each. A long stroke is split (the next message starts at the last point); a delta beyond a byte starts one afresh.</summary>
+    public static List<byte[]> Pack(ushort field, float widthM, ushort ageS, bool noBales, IReadOnlyList<SwathPt> stroke, bool replay = false)
     {
         var list = new List<byte[]>();
         var i = 0;
@@ -164,7 +165,7 @@ public static class SwathCodec
                 if (dx is < -127 or > 127 || dz is < -127 or > 127) break;
                 pts.Add(stroke[++j]);
             }
-            if (pts.Count >= 2) list.Add(Encode(new Msg(field, widthM, ageS, noBales, pts)));
+            if (pts.Count >= 2) list.Add(Encode(new Msg(field, widthM, ageS, noBales, pts, replay)));
             i = pts.Count >= 2 ? j : i + 1;
         }
         return list;
@@ -176,7 +177,7 @@ public static class SwathCodec
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(0), m.Field);
         b[2] = (byte)Math.Clamp((int)MathF.Round(m.WidthM * 10f), 0, 255);
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(3), m.AgeS);
-        b[5] = (byte)(m.NoBales ? 1 : 0);
+        b[5] = (byte)((m.NoBales ? 1 : 0) | (m.Replay ? 2 : 0));
         System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(6), m.Points[0].X);
         System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(10), m.Points[0].Z);
         b[14] = (byte)(m.Points.Count - 1);
@@ -195,6 +196,6 @@ public static class SwathCodec
         if (n < 1 || d.Length != HeaderBytes + 2 * n) return null;
         var pts = new List<SwathPt>(n + 1) { new(System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(d[6..]), System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(d[10..])) };
         for (var i = 0; i < n; i++) pts.Add(new SwathPt(pts[^1].X + (sbyte)d[HeaderBytes + 2 * i], pts[^1].Z + (sbyte)d[HeaderBytes + 2 * i + 1]));
-        return new Msg(System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d), d[2] / 10f, System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[3..]), (d[5] & 1) != 0, pts);
+        return new Msg(System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d), d[2] / 10f, System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[3..]), (d[5] & 1) != 0, pts, (d[5] & 2) != 0);
     }
 }

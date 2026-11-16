@@ -229,7 +229,7 @@ public partial class NetServer
         {
             var age = (ushort)Math.Clamp(_elapsed - sf.LastCut, 0, ushort.MaxValue - 1);
             for (var i = 0; i < sf.Swath.Strokes.Count; i++)
-                foreach (var bytes in SwathCodec.Pack((ushort)field, Harvester.HeaderWidthM, age, i < sf.Swath.FirstCounted, sf.Swath.Strokes[i]))
+                foreach (var bytes in SwathCodec.Pack((ushort)field, Harvester.HeaderWidthM, age, i < sf.Swath.FirstCounted, sf.Swath.Strokes[i], replay: true))
                     Send(c, new EventMsg((byte)EventKind.HarvesterCut, bytes));
         }
         foreach (var (field, grid) in _crush) // the crushed ground: the whole mask of each field as runs

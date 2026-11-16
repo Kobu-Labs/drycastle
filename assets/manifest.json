@@ -4422,6 +4422,18 @@
       "note": "A pneumatic whoomp, a puff of air and a dull clank; ~0.8 s by scripts/make_harvester_sounds.py (in the repo, deterministic); mono OGG"
     },
     {
+      "id": "sfx:drycastle-generated-sounds/harvester_pop",
+      "name": "A bale pops out (fallback)",
+      "file": "drycastle-generated-sounds/harvester_pop.ogg",
+      "used_for": "harvester.pop",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-17",
+      "generated": true,
+      "note": "A hollow pop (falling sine, soft low body, click of noise), ~0.4 s by scripts/make_harvester_sounds.py (in the repo, deterministic); mono OGG. Played only when the private take audio/harvester/pop.ogg (assets-private, not in the repo: a recording of unclear licence) is not installed: sounds.json first_found"
+    },
+    {
       "id": "sfx:drycastle-generated-sounds/casing_tink_1",
       "name": "Casing clink, variant 1 (spent casing on a hard floor)",
       "file": "drycastle-generated-sounds/casing_tink_1.ogg",

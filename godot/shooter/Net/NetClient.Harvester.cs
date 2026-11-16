@@ -95,7 +95,7 @@ public partial class NetClient
             Map.CropCut(new Vector2(a.X, a.Y), new Vector2(b.X, b.Y), m.WidthM / 2f);
             if (!m.NoBales) sw.Swath.Add(m.Points[i - 1], m.Points[i]);
         }
-        for (var i = sw.Bales.Count; i < sw.Swath.Bales.Count; i++) SpawnDroppedBale(sw, i);
+        for (var i = sw.Bales.Count; i < sw.Swath.Bales.Count; i++) SpawnDroppedBale(sw, i, pop: !m.Replay);
     }
 
     /// <summary>Per frame: the reel of every harvester somebody drives turns.</summary>
@@ -103,6 +103,7 @@ public partial class NetClient
     {
         if (!ShotFx.Enabled || Vehicles == null) return;
         FadeDroppedBales();
+        StepCarVoices();
         FlushCrush();
         foreach (var v in _cars.Values)
         {
@@ -210,16 +211,19 @@ public partial class NetClient
             case HarvesterCodec.FxKind.BaleLit: LightBale(m.Id, at); break;
             case HarvesterCodec.FxKind.BaleAsh: BurnOutBale(m.Id, at); break;
             case HarvesterCodec.FxKind.Drawn: // the reel took somebody: it whirrs up, the engine strains, the body is lifted and tumbled in
-                if (Sfx.Enabled) Sfx.Play3D("harvester.reel_in", at);
-                _drawIn[m.Id] = (Now, NearestHarvester(at));
-                if (NearestHarvester(at) is { } car) _shakeUntil[car.Id] = Now + HarvesterConfigDraw + HarvesterConfigChew;
+                var catcher = NearestHarvester(at);
+                if (catcher != null) PlayCarVoice("harvester.reel_in", at, catcher); else if (Sfx.Enabled) Sfx.Play3D("harvester.reel_in", at); // on the machine, heard the same from any camera
+                _drawIn[m.Id] = (Now, catcher);
+                if (catcher != null) _shakeUntil[catcher.Id] = Now + HarvesterConfigDraw + HarvesterConfigChew;
                 break;
             case HarvesterCodec.FxKind.Swallowed: // gone into the machine: a muffled chewing while it works
-                if (Sfx.Enabled) Sfx.Play3D("harvester.chew", at);
+                if (NearestHarvester(at) is { } chewer) PlayCarVoice("harvester.chew", at, chewer); else if (Sfx.Enabled) Sfx.Play3D("harvester.chew", at);
                 _drawIn.Remove(m.Id);
                 break;
             case HarvesterCodec.FxKind.BaleOut: // the chute pops the bale out: it grows from nothing with a hop and a roll
-                if (Sfx.Enabled) Sfx.Play3D("harvester.eject", at);
+                var chute = NearestHarvester(at);
+                PlayCarSound("harvester.eject", at, chute);
+                PlayCarSound("harvester.pop", at, chute);
                 _baleEmerge[m.Id] = Now;
                 break;
         }
@@ -307,7 +311,7 @@ public partial class NetClient
     // ---- bales the machine dropped ----
 
     /// <summary>Puts bale <paramref name="i"/> of the field's derived list on the ground (adopting fire or ash that arrived first).</summary>
-    void SpawnDroppedBale(ClientSwath sw, int i)
+    void SpawnDroppedBale(ClientSwath sw, int i, bool pop)
     {
         var (pos, yaw) = sw.Swath.Bales[i];
         var ground = Map!.GroundHeight(pos.X, pos.Y);
@@ -325,6 +329,7 @@ public partial class NetClient
         root.Rotation = new Vector3(0, yaw, 0);
         if (state != BaleState.Ash) { var model = MakeBaleModel(); root.AddChild(model); }
         sw.Bales.Add(root); sw.States.Add(state);
+        if (pop) PlayCarSound("harvester.pop", at, NearestHarvester(at)); // a live message, not the joiner's replay: the machine's unloader (heard from inside when it is the one we ride)
     }
 
     /// <summary>The server's bale fire or ash at <paramref name="at"/>: the nearest dropped bale there (or a node of its own that the bale adopts when its stretch arrives).</summary>

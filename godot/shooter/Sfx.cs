@@ -14,6 +14,9 @@ public sealed class LoopVoice
 
     public bool Active => Player != null;
 
+    /// <summary>False once a one-shot played through its file (a voice of a looping stream stays true until released).</summary>
+    public bool Playing => Player is { Playing: true };
+
     /// <summary><paramref name="exact"/>: play at exactly the volume asked, see <see cref="Sfx.SetExactLevel"/>.</summary>
     public void Update(Vector3 position, float pitch = 1f, float dbOffset = 0f, bool exact = false)
     {
@@ -82,13 +85,16 @@ public partial class Sfx : Node
             ?? throw new DataFileException($"sounds.json: cannot open ({Godot.FileAccess.GetOpenError()})");
         _table = SoundsFile.Parse(json);
         foreach (var d in _table.Sounds)
-            foreach (var f in d.Files)
-                if (!d.Optional && ModelLib.Find(f) == null) throw new DataFileException($"sounds.json: {d.Id}: file not found {ModelLib.AssetPath(f)}");
+        {
+            var found = d.Usable(f => ModelLib.Find(f) != null);
+            if (!d.Optional && found.Count < (d.FirstFound ? 1 : d.Files.Count))
+                throw new DataFileException($"sounds.json: {d.Id}: file not found {ModelLib.AssetPath(d.Files.FirstOrDefault(f => ModelLib.Find(f) == null) ?? d.Files[0])}");
+        }
         if (!Enabled) return;
         foreach (var d in _table.Sounds)
         {
             var list = new List<AudioStream>();
-            foreach (var f in d.Files)
+            foreach (var f in d.Usable(f => ModelLib.Find(f) != null))
             {
                 if (ModelLib.Find(f) is not { } path) continue; // an optional sound whose file is not there
                 var st = AudioStreamOggVorbis.LoadFromFile(path);
