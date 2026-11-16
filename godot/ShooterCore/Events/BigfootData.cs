@@ -102,6 +102,7 @@ public sealed class BigfootFile : IVersioned
         var r = f.Reward;
         if (r.HeadItem == "") throw new DataFileException($"{F}: reward.head_item is empty");
         Positive(r.CorpseSeconds, "reward.corpse_seconds"); Positive(r.DeathSeconds, "reward.death_seconds");
+        if (r.CorpseHeadM is not { Length: 3 } || r.CorpseHeadM.Any(v => !float.IsFinite(v))) throw new DataFileException($"{F}: reward.corpse_head_m is three numbers (x, y, z)");
         Positive(r.TrailLengthM, "reward.trail_length_m"); Positive(r.TrailSpacingM, "reward.trail_spacing_m");
         if (r.TrailLengthM / r.TrailSpacingM > BigfootTrail.MaxPrints) throw new DataFileException($"{F}: reward.trail_length_m / trail_spacing_m is at most {BigfootTrail.MaxPrints} footprints");
         if (r.TrailTries < 1) throw new DataFileException($"{F}: reward.trail_tries is at least 1");
@@ -262,6 +263,12 @@ public sealed class BigfootReward
     public float CorpseSeconds { get; set; } = 900;
     /// <summary>The body lies where it fell (the death clip) this long, then it is gone and the footsteps begin.</summary>
     public float DeathSeconds { get; set; } = 8;
+    /// <summary>
+    /// Where the head lies on the dead body, in the model's frame (x to its right, y up, z behind it; scripts/make_bigfoot_model.py prints it). The corpse
+    /// is over five metres long and is looted for its head, so the reach is measured from here (<see cref="CorpseRules.ReachPoint"/>), not from its feet.
+    /// </summary>
+    public float[] CorpseHeadM { get; set; } = { -0.22f, 1.03f, 2.88f };
+    public System.Numerics.Vector3 CorpseHead => new(CorpseHeadM[0], CorpseHeadM[1], CorpseHeadM[2]);
     public float TrailLengthM { get; set; } = 120;
     public float TrailSpacingM { get; set; } = 1.9f;
     /// <summary>It tries this many headings for a trail that runs over ground the whole way, and takes the best.</summary>

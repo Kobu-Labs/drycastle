@@ -135,6 +135,9 @@
     "head_item": "bigfoot_head",
     "corpse_seconds": 900,
     "death_seconds": 3.5,
+    // where the head lies on the dead body, in the model's frame (x to its right, y up, z behind it; the script prints it): the
+    // corpse is looted from there, not from its feet
+    "corpse_head_m": [-0.22, 1.03, 2.88],
     "trail_length_m": 120,
     "trail_spacing_m": 1.9,
     "trail_tries": 24,

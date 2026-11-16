@@ -98,9 +98,9 @@ Z), `gun_mount` (the ring's carriage, yaw about Y from the ring centre, all the 
 
 `drycastle-generated-models/bigfoot.glb` and `bigfoot_head.glb` (2026-11-16, #286) are the Bigfoot of the Bigfoot event (`godot/shooter/data/bigfoot.json` `model`)
 and its head as the headgear item (item id `bigfoot_head`, `data/items.json` `model`). Both come from `scripts/make_bigfoot_model.py` (original geometry and
-animation written as code, needs numpy; `python3 scripts/make_bigfoot_model.py` rebuilds both files byte for byte), CC0, 10 flat-colour materials, no texture.
+animation written as code, needs numpy; `python3 scripts/make_bigfoot_model.py` rebuilds both files byte for byte), CC0, 12 flat-colour materials, no texture.
 The body: a hunched, near-black giant with a spiked ridge down its back, forearms thicker than its upper arms, clawed hands at knee height, a head slung low
-with a scowling brow, burning eyes, fangs and tusks. Metres, stands on y 0, faces -Z, 3.6 m to the crest; one skinned mesh of 2242 triangles on 26 bones
+with a scowling brow, burning eyes, fangs and tusks. Metres, stands on y 0, faces -Z, 3.6 m to the crest; one skinned mesh of 2336 triangles on 26 bones
 whose rest rotations are identity (`Root > Hips > Spine > Chest > Neck > Head > Jaw`, arms `Clavicle/UpperArm/Forearm/Hand/Fingers`, legs
 `Thigh/Shin/Foot/Toe`, `.L` and `.R`), and 14 clips: Idle, Walk, Run, Death, Hit, Roar, TrunkThrow, StompWindup, Stomp, VehicleLift, Launch, GrabReach,
 Hold, Hurl. Walk and Run cover 2.8 m and 8.4 m a loop (`movement.walk_stride_m`, `run_stride_m`). `python3 scripts/preview_glb_clips.py <glb> <out_dir>` draws

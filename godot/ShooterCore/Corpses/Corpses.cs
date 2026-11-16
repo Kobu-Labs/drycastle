@@ -64,6 +64,16 @@ public static class CorpseRules
         if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "corpse", HasHp: true));
     }
 
+    /// <summary>
+    /// A point of a lying body in the world: <paramref name="local"/> is in the body's own frame as its model has it (x to its right, y up, z behind
+    /// it; it faces -Z at yaw 0), <paramref name="yaw"/> the yaw it lies at.
+    /// </summary>
+    public static Vector3 ReachPoint(Vector3 corpse, float yaw, Vector3 local)
+    {
+        var (s, c) = MathF.SinCos(yaw);
+        return corpse + new Vector3(local.X * c + local.Z * s, local.Y, -local.X * s + local.Z * c);
+    }
+
     public static bool InReach(Vector3 player, Vector3 corpse, float slack = 0) =>
         Vector3.Distance(player, corpse) <= ReachMetres + slack;
 
@@ -101,9 +111,10 @@ public sealed class Corpse : IWorldEntity
     readonly List<ItemStack> _items = new();
 
     /// <param name="lifetime">How long it lies, seconds: a player's corpse lasts <see cref="CorpseRules.LifetimeSeconds"/>; the Bigfoot's (issue #264) lasts longer, since it has to be found.</param>
-    public Corpse(ushort owner, Vector3 position, float yaw, int weapon, int rounds, IEnumerable<ItemStack>? items = null, float lifetime = CorpseRules.LifetimeSeconds)
+    /// <param name="reachFrom">Where it is looted from, in its own frame (<see cref="CorpseRules.ReachPoint"/>); zero is the corpse itself.</param>
+    public Corpse(ushort owner, Vector3 position, float yaw, int weapon, int rounds, IEnumerable<ItemStack>? items = null, float lifetime = CorpseRules.LifetimeSeconds, Vector3 reachFrom = default)
     {
-        Owner = owner; _body = new ThrownBody(position); _yaw = yaw; Weapon = weapon; Rounds = rounds; _lifetime = lifetime;
+        Owner = owner; _body = new ThrownBody(position); _yaw = yaw; Weapon = weapon; Rounds = rounds; _lifetime = lifetime; _reachFrom = reachFrom;
         if (items != null) _items.AddRange(items.Take(ItemRules.MaxCarried));
     }
 
@@ -112,6 +123,12 @@ public sealed class Corpse : IWorldEntity
     public WorldDespawnReason? Ended { get; private set; }
     readonly ThrownBody _body;
     public Vector3 Position => _body.Position;
+    readonly Vector3 _reachFrom;
+    /// <summary>
+    /// The point a taker must be near (<see cref="CorpseRules.InReach"/>): the corpse itself, or for a body much longer than the reach (the Bigfoot's,
+    /// looted at its head) a point of that body.
+    /// </summary>
+    public Vector3 ReachPoint => CorpseRules.ReachPoint(Position, _yaw, _reachFrom);
     /// <summary>Velocity while thrown (a blast, a car); zero at rest.</summary>
     public Vector3 Velocity => _body.Velocity;
     /// <summary>True while the body is thrown and has not landed. Replicated in the pitch field (<see cref="CorpseRules.FlightPitch"/>) so the client tumbles it.</summary>
@@ -301,7 +318,7 @@ public sealed class CorpseBook
         var entry = _order.FirstOrDefault(x => x.Id == corpseId);
         if (entry.Body == null) return PickUpResult.Gone;
         var body = entry.Body;
-        if (!CorpseRules.InReach(player, body.Position, slack) || !body.CanLoot) return PickUpResult.OutOfReach;
+        if (!CorpseRules.InReach(player, body.ReachPoint, slack) || !body.CanLoot) return PickUpResult.OutOfReach;
         if (hotbarPos < 0 || hotbarPos >= taker.HotbarCount) return PickUpResult.BadSlot;
         if (!CorpseRules.CanReplace(file.Weapons[body.Weapon], hotbarPos)) return PickUpResult.WrongKind;
         if (taker.HotbarHolds(body.Weapon)) return PickUpResult.AlreadyHeld;
@@ -323,7 +340,7 @@ public sealed class CorpseBook
         var entry = _order.FirstOrDefault(x => x.Id == corpseId);
         if (entry.Body == null) return ItemPickUp.Gone;
         var body = entry.Body;
-        if (!CorpseRules.InReach(player, body.Position, slack) || !body.CanLoot) return ItemPickUp.OutOfReach;
+        if (!CorpseRules.InReach(player, body.ReachPoint, slack) || !body.CanLoot) return ItemPickUp.OutOfReach;
         if (index < 0 || index >= body.Items.Count) return ItemPickUp.NoItem;
         if (items.At(body.Items[index].Item) is { BagOnly: true } && bag.IsFull) return ItemPickUp.NoRoom; // a plain item has no slot to swap into: before the count
         var result = ItemRules.Take(items, body.Items[index], out var taken);

@@ -560,7 +560,9 @@ despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: 
   hold is the one-handed Hurl clip, any other the two-handed Launch. The chase (#285): it runs until its target is within 0.8 x `run_beyond_m` and stands until the
   target is 1.2 m beyond `stop_distance_m`, gathers and sheds speed, turns on the spot at a walk, keeps a way round a building for 0.6 s and faces it, treats under
   0.3 s of no way through as still moving, and its height follows the ground at up to 20 m/s; the client turns the figure to the server's yaw quickly instead of
-  jumping. The log it winds up with rides its right hand; the fist that holds a player rocks the whole figure
+  jumping. Its corpse is over five metres long and is looted for its head, so the reach (`CorpseRules.ReachMetres`) is measured from where
+  the head lies (`reward.corpse_head_m`, `Corpse.ReachPoint`), on the server and for the prompt; once the head is taken the Head bone is shrunk away and the stump of the
+  neck (part of the model, inside the skull until then) shows. The log it winds up with rides its right hand; the fist that holds a player rocks the whole figure
   (`MoveBigfoot`). The sounds are still placeholders
   (`BigfootSounds` names the sounds the game already has).
 - **Hit count, not hit points.** It dies after `hits.per_player` x participants hits (participants: living players within `participant_radius_m`; the number only goes

@@ -27,6 +27,8 @@ public partial class NetClient
         public CharacterView? View;
         /// <summary>The Bigfoot's corpse (issue #264): the giant's model in its death pose, no character, no weapon to take.</summary>
         public bool Giant;
+        /// <summary>Where the corpse is looted from when that is not where it lies (the giant's head); null: its <see cref="Feet"/>.</summary>
+        public Vector3? ReachFrom;
         /// <summary>A hay bale (#331): a corpse owned by <see cref="HarvesterRules.BaleOwner"/>, drawn as a bale; only its Items to take.</summary>
         public bool Bale;
         public string Weapon = "";
@@ -100,7 +102,16 @@ public partial class NetClient
             var s = e.State;
             var p = s.Position;
             var at = new Vector3(p.X, p.Y, p.Z);
-            if (v.Giant || v.Bale) { v.Feet = at; v.Node.GlobalPosition = at; v.Node.Basis = new Basis(Vector3.Up, s.YawRad); continue; }
+            if (v.Giant || v.Bale)
+            {
+                v.Feet = at; v.Node.GlobalPosition = at; v.Node.Basis = new Basis(Vector3.Up, s.YawRad);
+                if (v.Giant) // it is looted at its head: the same point the server measures from (CorpseRules.ReachPoint)
+                {
+                    var head = BigfootData.Reward.CorpseHead;
+                    v.ReachFrom = at + v.Node.Basis * new Vector3(head.X, head.Y, head.Z);
+                }
+                continue;
+            }
             var view = v.View!;
             var flying = s.PitchRad > CorpseRules.FlightPitch * 0.5f; // a thrown body (blast, car): the server flies it, we turn it and flail its limbs
             var t = v.Tumble;
@@ -140,7 +151,7 @@ public partial class NetClient
         var at = _me.GlobalPosition;
         foreach (var (id, v) in _corpses)
         {
-            var d = v.Feet.DistanceTo(at);
+            var d = (v.ReachFrom ?? v.Feet).DistanceTo(at);
             if (d <= bd) { best = id; bd = d; }
         }
         return best;

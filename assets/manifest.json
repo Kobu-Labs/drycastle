@@ -3624,7 +3624,7 @@
       "licence": "CC0",
       "source": "scripts/make_bigfoot_model.py (original geometry and animation written as code; python3 scripts/make_bigfoot_model.py rebuilds the file, needs numpy)",
       "pack": "drycastle-generated-models",
-      "used_for": "the Bigfoot event (#264, #286): data/bigfoot.json `model`, drawn by godot/shooter NetClient.Bigfoot.cs. Metres, stands on y 0, faces -Z, 3.6 m to the crest. One skinned mesh (2242 triangles, 10 flat-colour materials), 26 bones with identity rest rotations (Root > Hips > Spine > Chest > Neck > Head > Jaw; Clavicle/UpperArm/Forearm/Hand/Fingers and Thigh/Shin/Foot/Toe, .L and .R), clips Idle, Walk, Run, Death, Hit, Roar, TrunkThrow, StompWindup, Stomp, VehicleLift, Launch, GrabReach, Hold, Hurl. scripts/preview_glb_clips.py draws the clips without the game."
+      "used_for": "the Bigfoot event (#264, #286): data/bigfoot.json `model`, drawn by godot/shooter NetClient.Bigfoot.cs. Metres, stands on y 0, faces -Z, 3.6 m to the crest. One skinned mesh (2336 triangles, 12 flat-colour materials), 26 bones with identity rest rotations (Root > Hips > Spine > Chest > Neck > Head > Jaw; Clavicle/UpperArm/Forearm/Hand/Fingers and Thigh/Shin/Foot/Toe, .L and .R), clips Idle, Walk, Run, Death, Hit, Roar, TrunkThrow, StompWindup, Stomp, VehicleLift, Launch, GrabReach, Hold, Hurl. scripts/preview_glb_clips.py draws the clips without the game."
     },
     {
       "id": "pack:drycastle-generated-models/bigfoot_head",

@@ -45,6 +45,8 @@ MATERIALS = {
     "Eye": (1.0, 0.22, 0.04, 0.4, 3.0),           # burning: reads in shade and at range
     "Tooth": (0.88, 0.82, 0.62, 0.6, 0),
     "Claw": (0.70, 0.63, 0.47, 0.6, 0),
+    "Gore": (0.42, 0.03, 0.03, 0.6, 0),           # the stump of the neck, inside the head until the head is taken
+    "GoreDark": (0.20, 0.015, 0.02, 0.7, 0),
 }
 FUR = "FUR"  # a facet of fur: one of the three shades, picked per triangle
 
@@ -362,7 +364,19 @@ def build_body():
         return "Skin" if 1.9 < c[1] < 3.0 and c[2] < zc - hd * 0.8 and abs(c[0]) < hw * 0.55 else FUR
     m.loft(torso_mat, [ring(V(0, y, zc), X, Z, hw, hd, 12, w) for y, zc, hw, hd, w in TORSO])
     # the neck: a thick mass from the chest out to the back of the skull
-    m.tube(FUR, [(V(0, 3.02, -0.25), (0.50, 0.40), {"Chest": 1}), (V(0, 2.95, -0.55), (0.44, 0.38), {"Chest": 0.4, "Neck": 0.6}), (V(0, 2.88, -0.80), (0.38, 0.34), {"Neck": 0.5, "Head": 0.5})], 8)
+    m.tube(FUR, [(V(0, 3.02, -0.25), (0.50, 0.40), {"Chest": 1}), (V(0, 2.95, -0.55), (0.44, 0.38), {"Chest": 0.4, "Neck": 0.6}), (V(0, 2.88, -0.80), (0.38, 0.34), {"Neck": 1})], 8)
+    # the stump: what is left when the head is taken (the game shrinks the Head bone to nothing on a looted corpse). Raw flesh across the end of
+    # the neck, torn at the rim, the spine standing out of it. All of it on the Neck bone and inside the skull while the head is on.
+    nk = {"Neck": 1}
+    end, out = V(0, 2.88, -0.80), unit(V(0, -0.27, -0.96))   # the end of the neck and the way it points
+    su, sv = X, np.cross(out, X)
+    m.loft("Gore", [ring(end, su, sv, 0.385, 0.345, 8, nk), ring(end + out * 0.05, su, sv, 0.33, 0.29, 8, nk), ring(end + out * 0.03, su, sv, 0.11, 0.10, 8, nk)], False, False)
+    m.loft("GoreDark", [ring(end + out * 0.03, su, sv, 0.11, 0.10, 8, nk), Ring([end - out * 0.04] * 8, nk)], False, False)
+    m.tube("Tooth", [(end - out * 0.02 + sv * 0.07, 0.085, nk), (end + out * 0.11 + sv * 0.07, 0.07, nk)], 6, cap0=False)
+    for i in range(9):  # torn flesh round the rim
+        a = 2 * math.pi * (i + 0.5) / 9
+        base = end + out * 0.03 + su * 0.31 * math.cos(a) + sv * 0.27 * math.sin(a)
+        m.spike("Gore" if i % 3 else "GoreDark", base, base + out * (0.08 + 0.05 * math.sin(i * 2.4)) + (su * math.cos(a) + sv * math.sin(a)) * 0.04, 0.06, nk)
 
     s = Mesh()  # the right side
     sh, el, wr, fi = REST["UpperArm.R"], REST["Forearm.R"], REST["Hand.R"], REST["Fingers.R"]
@@ -1016,6 +1030,14 @@ def main():
     head = build_head_item()
     write_glb(head, out / "bigfoot_head.glb", "bigfoot_head", False)
     report("head", head, out / "bigfoot_head.glb")
+    local, hips = solve(clip_death(1.0))  # where the head lies when it is dead: the corpse is looted from there
+    world, at = {"Root": np.eye(3)}, {"Root": np.zeros(3)}
+    for bname in NAMES[1:]:
+        par = PARENT[bname]
+        world[bname] = world[par] @ local[bname]
+        at[bname] = hips if bname == "Hips" else at[par] + world[par] @ (REST[bname] - REST[par])
+    head_at = at["Head"] + world["Head"] @ (HEAD_AT - REST["Head"])
+    print("dead, the head lies at x %.2f  y %.2f  z %.2f (bigfoot.json reward.corpse_head_m)" % tuple(head_at))
     for cname, seconds, looped, _, stride in CLIPS:
         print(f"clip {cname}: {seconds} s{', looped' if looped else ''}{f', {stride} m a loop ({stride / seconds:.1f} m/s)' if stride else ''}")
 

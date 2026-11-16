@@ -120,6 +120,21 @@ public class BigfootTests
     }
 
     [Fact]
+    public void TheCorpseIsLootedAtItsHeadNotAtItsFeet()
+    {
+        var head = Shipped.Reward.CorpseHead;
+        Assert.True(head.Z > CorpseRules.ReachMetres, "the head lies farther behind the feet than the reach");
+        // the model's frame: z behind it, x to its right. Facing -Z (yaw 0) the head is at +Z; turned a quarter to its left (it faces -X) at +X
+        Assert.Equal(new Vector3(10 + head.X, head.Y, 20 + head.Z), CorpseRules.ReachPoint(new Vector3(10, 0, 20), 0, head));
+        var turned = CorpseRules.ReachPoint(Vector3.Zero, MathF.PI / 2, head);
+        Assert.Equal(head.Z, turned.X, 4); Assert.Equal(-head.X, turned.Z, 4);
+        var corpse = new Corpse(BigfootRules.TargetId, Vector3.Zero, 0, 0, 0, null, 60, head);
+        Assert.False(CorpseRules.InReach(Vector3.Zero, corpse.ReachPoint)); // standing at its feet
+        Assert.True(CorpseRules.InReach(new Vector3(head.X + 1, 0, head.Z), corpse.ReachPoint)); // standing beside its head
+        Assert.Equal(Vector3.Zero, new Corpse(1, Vector3.Zero, 1f, 0, 0).ReachPoint); // a player's corpse is looted where it lies
+    }
+
+    [Fact]
     public void TheModelHasTheClipsTheClientPlays()
     {
         var bytes = File.ReadAllBytes(Path.Combine(AssetsDir(), Shipped.Model));
