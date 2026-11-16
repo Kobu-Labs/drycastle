@@ -48,7 +48,7 @@ public class PackGroundTests
         var f = GroundObjectFile.Parse(File1)!;
         Assert.True(f.BaseUv2);
         Assert.Equal(2, f.Objects.Count); // the two malformed entries are skipped
-        Assert.Equal(new GroundObject("log", 10, 20, 3, 1.5f, 1.2f, 4), f.Objects[0]);
+        Assert.Equal(new PackGroundObject("log", 10, 20, 3, 1.5f, 1.2f, 4), f.Objects[0]);
         Assert.Equal(1f, f.Objects[1].Scale); // default
         Assert.Equal(0.4f, f.RadiusM["log"]);
         Assert.False(f.RadiusM.ContainsKey("stump"));
@@ -80,7 +80,7 @@ public class PackGroundTests
     [Fact]
     public void LogIsScaledToTheCodeBuiltRadiusAndStretchedToItsLength()
     {
-        var o = new GroundObject("log", 10, 20, 3, 0.5f, 1.5f, 4.5f);
+        var o = new PackGroundObject("log", 10, 20, 3, 0.5f, 1.5f, 4.5f);
         var p = GroundObjectMath.Place(o, Log(), 2, radiusM: 0.3f, yawDeg: 90f, stretchToLen: true);
         // radius 0.3 * 1.5 = 0.45 over the model's 0.3 (half of 0.6): scale 1.5; length 3 * 1.5 = 4.5 already: no stretch
         Assert.Equal(1.5f, p.Scale, 4);
@@ -109,7 +109,7 @@ public class PackGroundTests
             Name = "stump", HeightM = 0.8f,
             Surfaces = [new PackSurface(0, [new V3(-0.4f, 0, -0.2f), new V3(0.4f, 0.8f, 0.2f), new V3(0, 0, 0)], [V3.UnitY, V3.UnitY, V3.UnitY], [V2.Zero, V2.Zero, V2.Zero], [0, 1, 2])],
         };
-        var p = GroundObjectMath.Place(new GroundObject("stump", 0, 0, 0, 0, 2f, 0), m, 0, 0.35f, 0, false);
+        var p = GroundObjectMath.Place(new PackGroundObject("stump", 0, 0, 0, 0, 2f, 0), m, 0, 0.35f, 0, false);
         Assert.Equal(0.7f / 0.4f, p.Scale, 4);
     }
 

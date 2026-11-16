@@ -81,13 +81,13 @@ public sealed class UndergrowthConfig
 // ---- ground_objects.json ----
 
 /// <summary>One solid ground object of the map (map metres, z up; Rot as in trees.json; Len for logs).</summary>
-public readonly record struct GroundObject(string Kind, float X, float Y, float Z, float Rot, float Scale, float Len);
+public readonly record struct PackGroundObject(string Kind, float X, float Y, float Z, float Rot, float Scale, float Len);
 
 /// <summary>ground_objects.json (format 1): the objects, and the sizes it states for its kinds (<c>model.kinds.KIND.radius_m</c>, optional).</summary>
 public sealed class GroundObjectFile
 {
     public bool BaseUv2 { get; init; }
-    public IReadOnlyList<GroundObject> Objects { get; init; } = Array.Empty<GroundObject>();
+    public IReadOnlyList<PackGroundObject> Objects { get; init; } = Array.Empty<PackGroundObject>();
     public IReadOnlyDictionary<string, float> RadiusM { get; init; } = new Dictionary<string, float>();
 
     /// <summary>Parses the file; null for a file that is not JSON or is not format 1 (the caller warns). A malformed object is skipped.</summary>
@@ -109,14 +109,14 @@ public sealed class GroundObjectFile
                         if (k.Value.ValueKind == JsonValueKind.Object && k.Value.TryGetProperty("radius_m", out var r) && r.ValueKind == JsonValueKind.Number && r.GetSingle() > 0)
                             radii[k.Name] = r.GetSingle();
             }
-            var list = new List<GroundObject>();
+            var list = new List<PackGroundObject>();
             if (root.TryGetProperty("objects", out var objs) && objs.ValueKind == JsonValueKind.Array)
                 foreach (var o in objs.EnumerateArray())
                 {
                     if (o.ValueKind != JsonValueKind.Object || !o.TryGetProperty("kind", out var kind) || kind.ValueKind != JsonValueKind.String) continue;
                     float N(string key, float dflt) => o.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetSingle() : dflt;
                     if (!o.TryGetProperty("x", out _) || !o.TryGetProperty("y", out _)) continue;
-                    list.Add(new GroundObject(kind.GetString()!, N("x", 0), N("y", 0), N("z", 0), N("rot", 0), N("scale", 1f), N("len", 0)));
+                    list.Add(new PackGroundObject(kind.GetString()!, N("x", 0), N("y", 0), N("z", 0), N("rot", 0), N("scale", 1f), N("len", 0)));
                 }
             return new GroundObjectFile { BaseUv2 = baseUv2, Objects = list, RadiusM = radii };
         }
@@ -143,7 +143,7 @@ public static class GroundObjectMath
     /// the object's scale (the code-built size, which the collider follows); a log with a length is stretched along the model's Z (its long axis) to exactly that
     /// length, so the model never passes the collider.
     /// </summary>
-    public static PackPlacement Place(GroundObject o, PackModelMesh model, int modelId, float radiusM, float yawDeg, bool stretchToLen)
+    public static PackPlacement Place(PackGroundObject o, PackModelMesh model, int modelId, float radiusM, float yawDeg, bool stretchToLen)
     {
         var (lo, hi) = model.Bounds;
         float ex = hi.X - lo.X, ey = hi.Y - lo.Y, ez = hi.Z - lo.Z;

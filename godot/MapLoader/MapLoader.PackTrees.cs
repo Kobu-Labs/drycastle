@@ -67,7 +67,7 @@ public sealed partial class MapLoader
     PackCandidate[] _packCone = Array.Empty<PackCandidate>(), _packBox = Array.Empty<PackCandidate>();
     Dictionary<(int Tx, int Ty), List<int>> _packTreeTiles = new();
     GroundObjectFile? _packGround;
-    GroundObject[] _packObjs = Array.Empty<GroundObject>();
+    PackGroundObject[] _packObjs = Array.Empty<PackGroundObject>();
     Dictionary<(int Tx, int Ty), List<int>> _packObjectTiles = new();
     Dictionary<string, GroundKindModels> _packObjKinds = new();
     UndergrowthKind[] _packUnder = Array.Empty<UndergrowthKind>();
@@ -142,7 +142,7 @@ public sealed partial class MapLoader
         _packMaterials.Clear(); _packMaterialIds.Clear();
         _packCone = Array.Empty<PackCandidate>(); _packBox = Array.Empty<PackCandidate>();
         _packTreeTiles = new();
-        _packGround = null; _packObjs = Array.Empty<GroundObject>(); _packObjectTiles = new(); _packObjKinds = new();
+        _packGround = null; _packObjs = Array.Empty<PackGroundObject>(); _packObjectTiles = new(); _packObjKinds = new();
         _packUnder = Array.Empty<UndergrowthKind>(); _packTileSet = new();
         _packWanted.Clear();
         _packCutR = 0;
@@ -214,7 +214,7 @@ public sealed partial class MapLoader
     void InitGroundObjects(PackTreeConfig cfg, List<string> missing)
     {
         if (_packGround == null) return;
-        var objs = new List<GroundObject>();
+        var objs = new List<PackGroundObject>();
         foreach (var kind in _packGround.Objects.Select(o => o.Kind).Distinct())
         {
             var models = cfg.GroundObjects.Kinds.TryGetValue(kind, out var kc) ? kc : null;
@@ -480,7 +480,7 @@ public sealed partial class MapLoader
     {
         // everything the worker reads is a copy or immutable: a map reload cannot change it under the task
         var trees = _packTreeTiles.TryGetValue(key, out var ti) ? ti.Select(i => _trees[i]).ToArray() : Array.Empty<TreeInstance>();
-        var objs = _packObjectTiles.TryGetValue(key, out var oi) ? oi.Select(i => _packObjs[i]).ToArray() : Array.Empty<GroundObject>();
+        var objs = _packObjectTiles.TryGetValue(key, out var oi) ? oi.Select(i => _packObjs[i]).ToArray() : Array.Empty<PackGroundObject>();
         var centre = new NVector3((key.Tx + 0.5f) * c.TileM, 0, -(key.Ty + 0.5f) * c.TileM);
         var model = TreeModel;
         PackCandidate[] cone = _packCone, box = _packBox;
@@ -537,7 +537,7 @@ public sealed partial class MapLoader
 
     /// <summary>The worker's part of a tile: model choice, the merged triangles per material, as the arrays the mesh takes. Trees, ground objects and undergrowth share the buckets, so a tile still costs one draw per material.</summary>
     static PackTileResult BuildPackTileData(PackTreeConfig c, TreeInstance[] trees, TreeModel model, PackCandidate[] cone, PackCandidate[] box, PackModelMesh[] models, NVector3 centre,
-        GroundObject[] objs, Dictionary<string, GroundKindModels> objKinds, UndergrowthKind[] underKinds, UndergrowthInput? under, (int Tx, int Ty) key)
+        PackGroundObject[] objs, Dictionary<string, GroundKindModels> objKinds, UndergrowthKind[] underKinds, UndergrowthInput? under, (int Tx, int Ty) key)
     {
         var placed = new List<PackPlacement>(trees.Length);
         foreach (var t in trees)
