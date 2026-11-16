@@ -26,9 +26,18 @@ namespace Drycastle.Shooter;
 /// </summary>
 public sealed class BotNav
 {
-    public const float Cell = 0.5f, CellHeight = 0.25f;
+    public const float Cell = 0.5f;
+    /// <summary>
+    /// The bake's vertical cell, metres. The mesh lies one cell above the ground plus the rounding up to the next cell, so with 0.25 m a walker (who takes its height from the route) went
+    /// 0.25 to 0.5 m above flat ground; with 0.05 m it is 0.05 to 0.1 m.
+    /// </summary>
+    public const float CellHeight = 0.05f;
+    /// <summary>The step a route may take, metres: a whole number of <see cref="CellHeight"/>.</summary>
+    const float MaxClimb = 0.25f;
+    /// <summary>The bake counts height in 13 bits of cells: a map taller than this many metres would be baked wrong.</summary>
+    const float MaxBakeHeightM = 8000 * CellHeight;
     /// <summary>Part of the cache key: change it with any setting below, so old tiles are not reused.</summary>
-    const string Settings = "nav2 cell=0.5 height=0.25 radius=0.5 climb=0.25 slope=45 edge=1.0 trunks=out doors=open";
+    const string Settings = "nav3 cell=0.5 height=0.05 radius=0.5 climb=0.25 slope=45 edge=1.0 detail=0.25 trunks=out doors=open";
     const float AgentRadius = 0.5f; // one cell: the player capsule (0.35 m) rounded up
     const float Border = AgentRadius + 2 * Cell; // baked around a tile and thrown away, so its edge sees the neighbour's obstacles
 
@@ -198,7 +207,8 @@ public sealed class BotNav
         CellHeight = CellHeight,
         AgentRadius = AgentRadius,
         AgentHeight = MathF.Ceiling(MoveConsts.CapsuleHeight / CellHeight) * CellHeight, // whole cells, as the bake rounds it anyway (silences the precision warning)
-        AgentMaxClimb = CellHeight, // the body has no step-up; one cell keeps kerbs and terrain noise walkable
+        AgentMaxClimb = MaxClimb,   // the body has no step-up; this keeps kerbs and terrain noise walkable
+        DetailSampleMaxError = MaxClimb / CellHeight, // in cells: 0.25 m, as it was with the 0.25 m cell. Left at 1 cell (0.05 m) the village bakes to 142 000 polygons, not 72 000, and no lower
         AgentMaxSlope = 45f,        // under the body's 50 degree floor limit
         EdgeMaxError = 1.0f,        // at 1.0 or below a tile's edge stays on the tile boundary, so neighbours join
         GeometryParsedGeometryType = NavigationMesh.ParsedGeometryType.StaticColliders,
@@ -231,6 +241,7 @@ public sealed class BotNav
         if (!source.HasData()) throw new InvalidOperationException("bot navigation: no static collider on the world layer to bake from");
 
         var bounds = source.GetBounds();
+        if (bounds.Size.Y + 2f > MaxBakeHeightM) throw new InvalidOperationException($"bot navigation: the map is {bounds.Size.Y:F0} m tall, over the {MaxBakeHeightM:F0} m a {CellHeight} m cell can bake");
         using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(mapDir, "manifest.json")));
         var chunk = (float)manifest.RootElement.GetProperty("chunk_size_m").GetDouble();
         if (MathF.Abs(chunk / Cell - MathF.Round(chunk / Cell)) > 1e-3f) throw new InvalidOperationException($"bot navigation: the chunk size {chunk} m is not a multiple of the {Cell} m cell");
