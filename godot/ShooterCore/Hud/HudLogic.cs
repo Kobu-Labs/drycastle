@@ -101,6 +101,23 @@ public static class HudLogic
     }
 
     /// <summary>
+    /// Map rule (#313): a vehicle with an enemy aboard is not drawn on the minimap or tactical map. Enemy aboard = its driver is an enemy,
+    /// or an enemy on-foot-in-vehicle rider sits within <paramref name="margin"/> m of its footprint (covers gunner-only seats). The player's
+    /// own vehicle is never hidden: they drive it, or their own ride position is inside it. Mixed riders (friend + enemy): hidden.
+    /// </summary>
+    public static bool HideEnemyOccupiedVehicle(ushort driver, ushort myId, Func<ushort, bool> isEnemy,
+        System.Numerics.Vector3 carPos, float yaw, float halfWidth, float halfLength,
+        IEnumerable<(ushort Id, System.Numerics.Vector3 Pos)> riders, System.Numerics.Vector3? myRidePos = null, float margin = 1f)
+    {
+        if (driver == myId) return false;
+        if (myRidePos is { } mine && VehicleReach.DistanceToFootprint(carPos, yaw, halfWidth, halfLength, mine) <= margin) return false;
+        if (driver != 0 && isEnemy(driver)) return true;
+        foreach (var (id, pos) in riders)
+            if (isEnemy(id) && VehicleReach.DistanceToFootprint(carPos, yaw, halfWidth, halfLength, pos) <= margin) return true;
+        return false;
+    }
+
+    /// <summary>
     /// Screen angle (radians, 0 = up, clockwise positive) of a damage source for a viewer at (vx, vz) looking along
     /// <paramref name="yaw"/> (the game's convention: forward = (-sin yaw, -cos yaw)). Source in front = 0, right = +pi/2.
     /// </summary>

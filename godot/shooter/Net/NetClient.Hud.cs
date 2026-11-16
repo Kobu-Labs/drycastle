@@ -131,6 +131,10 @@ public partial class NetClient
     }
 
     readonly List<Vector2> _friendDots = new();
+    readonly List<(ushort Id, System.Numerics.Vector3 Pos)> _riders = new();
+
+    /// <summary>Anyone but me who is not a teammate (FFA: everyone else).</summary>
+    bool IsMapEnemy(ushort id) => id != _myId && !Match.AreFriends(_myId, id);
 
     void UpdateHud()
     {
@@ -153,8 +157,21 @@ public partial class NetClient
             var src = MinimapView.Select(missilePov: _povCam is { Current: true }, turret: _gunship != null, driving: _driving);
             _hud.Minimap.SetPlayer(new Vector2(g.X, g.Z), MinimapView.YawFor(src, _me.Yaw, _carYaw, _turretViewYaw, _missileViewYaw));
             _carDots.Clear();
+            _riders.Clear();
+            foreach (var (id, r) in _remotes)
+                if (r.State == EntityState.InVehicle && GodotObject.IsInstanceValid(r.Node))
+                    _riders.Add((id, new System.Numerics.Vector3(r.Node.GlobalPosition.X, r.Node.GlobalPosition.Y, r.Node.GlobalPosition.Z)));
+            System.Numerics.Vector3? myRide = _myState == EntityState.InVehicle ? new(g.X, g.Y, g.Z) : null;
             foreach (var c in _cars.Values)
-                if (!c.Destroyed) _carDots.Add(new Vector2(c.Node.GlobalPosition.X, c.Node.GlobalPosition.Z));
+            {
+                if (c.Destroyed) continue;
+                if (Vehicles != null && c.Kind >= 0 && c.Kind < Vehicles.Vehicles.Count) // an enemy aboard: not on the map (#313)
+                {
+                    var def = Vehicles.Vehicles[c.Kind];
+                    if (HudLogic.HideEnemyOccupiedVehicle(c.Driver, _myId, IsMapEnemy, c.Pos, c.Yaw, def.HalfWidth, def.HalfLength, _riders, myRide)) continue;
+                }
+                _carDots.Add(new Vector2(c.Node.GlobalPosition.X, c.Node.GlobalPosition.Z));
+            }
             _hud.Minimap.SetVehicleDots(_carDots);
             _friendDots.Clear();
             if (Match.IsTeamMode)
