@@ -153,6 +153,17 @@ public sealed class MatchSim
     public bool AreFriends(ushort a, ushort b) =>
         IsTeamMode && a != b && _players.TryGetValue(a, out var pa) && _players.TryGetValue(b, out var pb) && pa.Team != Teams.None && pa.Team == pb.Team;
 
+    /// <summary>
+    /// A hit by <paramref name="attacker"/> on a vehicle is dropped (#338): friendly fire is off and a teammate sits in any seat. An empty vehicle is never
+    /// protected; the attacker's own seat does not protect it (self damage is not friendly fire). Occupant 0 = empty seat. Attacker 0 (crash, water) is never blocked.
+    /// </summary>
+    public bool VehicleHitBlocked(ushort attacker, IEnumerable<ushort> occupants)
+    {
+        if (attacker == 0 || _cfg.FriendlyFire) return false;
+        foreach (var o in occupants) if (o != 0 && AreFriends(attacker, o)) return true;
+        return false;
+    }
+
     public MatchPhase Phase => _phase.Current;
     public IReadOnlyList<ushort> Winners { get; private set; } = Array.Empty<ushort>();
     /// <summary>Team deathmatch: the team that won the finished round, <see cref="Teams.None"/> for a tie, in free-for-all and while no round has ended.</summary>

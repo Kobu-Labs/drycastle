@@ -517,6 +517,7 @@ public partial class NetServer
     {
         car.Wake();
         if (car.Destroyed || amount <= 0 || Vehicles == null) return;
+        if (_match.VehicleHitBlocked(attacker, SeatOccupants(car))) return; // a teammate aboard: no damage, no hit credit (#338)
         if (attacker != 0 && _byId.TryGetValue(attacker, out var attackerClient)) amount *= attackerClient.Perks.VehicleDamageDealt; // Tank Hunter
         if (attacker != 0) { car.LastAttacker = attacker; car.LastWeapon = weapon; }
         var before = VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages);
