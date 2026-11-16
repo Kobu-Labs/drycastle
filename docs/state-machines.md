@@ -321,17 +321,25 @@ stateDiagram-v2
 
 ## Corpse.Flight
 
-A thrown body (corpse or target dummy): at rest on the ground, or airborne after a launch until it lands or the flight cap runs out.
+A thrown body (corpse or target dummy): at rest on the ground, airborne after a launch or a drop until it lands, seated in a vehicle (a dead pilot or driver), or floating on water.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Grounded
     Grounded --> Airborne
+    Grounded --> Seated
     Airborne --> Grounded
+    Airborne --> Floating
+    Seated --> Airborne
+    Seated --> Grounded
+    Floating --> Airborne
+    Floating --> Grounded
 ```
 
-- **Grounded**: At rest. A launch (a push that is not zero) throws it; a dummy standing up again (Reset) comes back here.
-- **Airborne**: Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens. A new launch while airborne restarts the count.
+- **Grounded**: At rest. A launch (a push that is not zero) or a drop throws it; a dummy standing up again (Reset) comes back here.
+- **Airborne**: Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens (it then snaps to the ground under it). Lands Grounded, or Floating when it lands in water. A new launch while airborne restarts the count.
+- **Seated**: A dead pilot or driver still in the seat: the server moves it with the vehicle (Follow), it is not flown. Leaves by a drop or a throw (the vehicle at rest for CorpseRules.SeatedRestSeconds, or destroyed).
+- **Floating**: Lies at the water surface height where it landed, not flown. The client bobs and drifts it on the waves (cosmetic, nothing on the wire); it stays lootable until its lifetime ends.
 
 ## Demon.Phase
 
@@ -1013,6 +1021,20 @@ stateDiagram-v2
 - **Unsynced**: No snapshot yet: RenderTick returns the raw target and the drawn tick is not recorded.
 - **Tracking**: The drawn tick follows the estimate (it never moves backwards).
 - **Holding**: The estimate moved behind the drawn tick: the drawn tick stays put until the estimate passes it again. One episode counts once in HoldEvents.
+
+## Player.DeathView
+
+The local player's death screen: the camera falls and the blood spatters, then it lies there under the respawn scrim until the spawn.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Falling
+    Falling --> Lying
+    Lying --> [*]
+```
+
+- **Falling**: Clock: the fall length (a share of the respawn delay). Camera drops and rolls, blood grows, scrim not yet shown. Zero seconds for a plain fade.
+- **Lying**: Held until the spawn ends it. Clock (elapsed): the scrim fade-in with the "eliminated by" text and the countdown.
 
 ## Pounce.View
 
