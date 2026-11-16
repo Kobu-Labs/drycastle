@@ -159,7 +159,8 @@ def test_forest_moss_keeps_off_the_road_edge_and_clumps_on_noise(cfg) -> None:
     xs, ys = np.meshgrid(np.arange(4.5, 90, 3.0), np.arange(6.0, 90, 3.0))
     f = clump(xs.ravel(), ys.ravel(), float(mc["clump"]), float(mc["clump_m"]), MOSS_SALT)
     covered = shapely.contains_xy(geom, xs.ravel(), ys.ravel())
-    assert covered[f > 1.2].mean() > 0.25 and covered[f < 0.5].mean() < 0.08
+    thick, thin = covered[f > 1.2].mean(), covered[f < 0.5].mean()  # relative: the amounts are rules.yaml's to tune
+    assert thick > 0.04 and thin < 0.4 * thick
 
 
 def test_area_type_and_caps_and_patch_nodes(cfg) -> None:

@@ -171,6 +171,7 @@ def run(force: bool = False, edits: str | None = None, work: str | None = None, 
     print(f"detail: meadow: {stats['meadow_cells']} cells; expected instances " + ", ".join(f"{k}: {n}" for k, n in stats["meadow_expected"].items()),
           file=sys.stderr)
     print("detail: patch triangles by area type: "
-          + "; ".join(f"{a} {sum(l.values())}" for a, l in sorted(stats["patch_triangles_by_type"].items())), file=sys.stderr)
+          + "; ".join(f"{a} {sum(l.values())} (" + ", ".join(f"{k} {n}" for k, n in sorted(l.items())) + ")"
+                      for a, l in sorted(stats["patch_triangles_by_type"].items())), file=sys.stderr)
     print("detail: seconds by step: " + ", ".join(f"{k} {v:.1f}" for k, v in stats["timing_s"].items()), file=sys.stderr)
     return 0

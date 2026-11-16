@@ -142,6 +142,7 @@ public sealed partial class MapLoader
         var tChunks = Time.GetTicksMsec();
         // after the chunks, so each tree's bodies go under its chunk
         foreach (var f in BuildTreeColliderSteps()) yield return 0.85f + 0.07f * f;
+        foreach (var f in BuildGroundObjectColliderSteps(mapDir, manifest.RootElement)) yield return 0.92f + 0.005f * f; // map 0.13.0+
         var tTrees = Time.GetTicksMsec();
         if (manifest.RootElement.TryGetProperty("files", out var files)
             && files.TryGetProperty("objects", out var objFile) && objFile.GetString() is { } of)

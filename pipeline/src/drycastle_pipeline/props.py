@@ -261,6 +261,18 @@ def age_class(ages: list[tuple[str, float, float]], rng) -> tuple[str, float]:
     return ages[-1][0], ages[-1][2]
 
 
+def canopy_mask(cfg: dict):
+    """(trees.json of the detector, canopy mask (True = canopy), west edge x and north edge y in EPSG:5514, metres per pixel)."""
+    from PIL import Image
+
+    ortho_dir = Path(cfg["ortho_dir"])
+    doc = json.loads((ortho_dir / "trees.json").read_text())
+    Image.MAX_IMAGE_PIXELS = None
+    mask = np.asarray(Image.open(ortho_dir / doc["canopy"]["file"]).convert("L")) > 0
+    minx, _, _, maxy = doc["canopy"]["bounds_epsg5514"]
+    return doc, mask, minx, maxy, float(doc["canopy"]["pixel_m"])
+
+
 def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[float, float] | None) -> list[dict]:
     """Every tree, planted from the orthophoto detector (``make ortho-trees``).
 
@@ -274,16 +286,9 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
 
     The photo does not resolve single crowns in a forest, so the canopy trunks are random within the detected extent.
     """
-    from PIL import Image
-
     if origin is None:
         raise ValueError("trees from the orthophoto need the frame origin (parcels.json origin_epsg5514)")
-    ortho_dir = Path(cfg["ortho_dir"])
-    doc = json.loads((ortho_dir / "trees.json").read_text())
-    Image.MAX_IMAGE_PIXELS = None
-    mask = np.asarray(Image.open(ortho_dir / doc["canopy"]["file"]).convert("L")) > 0
-    minx, _, _, maxy = doc["canopy"]["bounds_epsg5514"]
-    res = float(doc["canopy"]["pixel_m"])
+    doc, mask, minx, maxy, res = canopy_mask(cfg)
     ox, oy = origin
     ocfg = cfg.get("ortho", {})
     spacing = float(ocfg.get("canopy_min_spacing_m", 4.0))
@@ -353,6 +358,19 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
     return trees
 
 
+def clearance_zones(buildings: list[dict], graph: dict, cfg: dict, objects: list[tuple[float, float]] | None):
+    """(buildings, roads, placed objects) grown by the cfg's ``building_clearance_m``, ``road_clearance_m``, ``object_clearance_m``; None where empty."""
+    bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
+    bzone = unary_union(bpolys).buffer(float(cfg["building_clearance_m"])) if bpolys else None
+    rzone = road_zone(graph, float(cfg["road_clearance_m"]))
+    ozone = (
+        unary_union([Point(x, y).buffer(float(cfg["object_clearance_m"])) for x, y in objects])
+        if objects
+        else None
+    )
+    return bzone, rzone, ozone
+
+
 def make_trees(
     buildings: list[dict],
     graph: dict,
@@ -371,14 +389,7 @@ def make_trees(
     """
     if origin is None or not (Path(cfg["ortho_dir"]) / "trees.json").is_file():
         return []
-    bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
-    bzone = unary_union(bpolys).buffer(float(cfg["building_clearance_m"])) if bpolys else None
-    rzone = road_zone(graph, float(cfg["road_clearance_m"]))
-    ozone = (
-        unary_union([Point(x, y).buffer(float(cfg["object_clearance_m"])) for x, y in objects])
-        if objects
-        else None
-    )
+    bzone, rzone, ozone = clearance_zones(buildings, graph, cfg, objects)
     shapely.prepare(terrain.coverage)
     for g in (bzone, rzone, ozone, water):
         if g is not None:
@@ -401,6 +412,59 @@ def make_trees(
         }
 
     return ortho_trees(tree, terrain, (bzone, rzone, ozone, water), cfg, origin)
+
+
+def plan_ground_objects(
+    parcels_doc: dict,
+    buildings: list[dict],
+    graph: dict,
+    terrain: Terrain,
+    trees: list[dict],
+    tree_cfg: dict,
+    cfg: dict,
+    objects: list[tuple[float, float]] | None = None,
+    water: BaseGeometry | None = None,
+) -> list[dict]:
+    """Logs, stumps, boulders and root plates on the forest ground (see :mod:`groundobjects`); none without orthophoto canopy data.
+
+    Allowed where the canopy mask is set, on ground of the ``ground_kinds`` types, not on a property (parcel of kind
+    ``avoid_parcel_kinds``), not within the clearances of a building, road, placed object or water.
+    """
+    from drycastle_pipeline.groundobjects import make_ground_objects
+
+    origin = parcels_doc.get("origin_epsg5514")
+    if origin is None or not (Path(tree_cfg["ortho_dir"]) / "trees.json").is_file():
+        return []
+    _, mask, minx, maxy, res = canopy_mask(tree_cfg)
+    ox, oy = origin
+    x0, y_top = minx - ox, maxy - oy
+    units = ground_units(parcels_doc)
+    forest = [shape(u["polygon"]) for u in units if u["kind"] in cfg["ground_kinds"]]
+    avoid = [shape(p["polygon"]) for p in parcels_doc["parcels"] if p["kind"] in cfg["avoid_parcel_kinds"]]
+    bzone, rzone, ozone = clearance_zones(buildings, graph, cfg, objects)
+    keep_out = [g for g in (bzone, rzone, ozone, water, *avoid) if g is not None]
+    forest_zone = unary_union(forest) if forest else None
+    if forest_zone is None:
+        return []
+    off = unary_union(keep_out) if keep_out else None
+    for g in (terrain.coverage, forest_zone, off):
+        if g is not None:
+            shapely.prepare(g)
+    h, w = mask.shape
+
+    def inside(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+        col = np.floor((xs - x0) / res).astype(int)
+        row = np.floor((y_top - ys) / res).astype(int)
+        ok = (row >= 0) & (row < h) & (col >= 0) & (col < w)
+        ok[ok] = mask[row[ok], col[ok]]
+        ok &= shapely.contains_xy(terrain.coverage, xs, ys) & shapely.contains_xy(forest_zone, xs, ys)
+        if off is not None:
+            ok &= ~shapely.contains_xy(off, xs, ys)
+        return ok
+
+    return make_ground_objects(
+        trees, tree_cfg, cfg, mask, (x0, y_top, res), inside, lambda xs, ys: terrain.surface(xs, ys), seeded, CANOPY_CELL_PX
+    )
 
 
 # --- spawns ---------------------------------------------------------------------------------
@@ -712,16 +776,21 @@ def run_props(
     elif not parcels_doc.get("origin_epsg5514"):
         print("props: warning: parcels.json has no origin_epsg5514, so the orthophoto trees cannot be placed; the map has no trees",
               file=sys.stderr)
+    water = water_zone(plan, terrain)
     trees = make_trees(
         buildings,
         graph,
         terrain,
         tree_cfg,
         objects=[(o["position"][0], o["position"][1]) for o in plan.objects],
-        water=water_zone(plan, terrain),
+        water=water,
         origin=tuple(parcels_doc["origin_epsg5514"]) if parcels_doc.get("origin_epsg5514") else None,
     )
     trees = cap_trees(trees, chunk_m, int(fcfg["trees"]["max_per_chunk"]))
+    ground_objects = plan_ground_objects(
+        parcels_doc, buildings, graph, terrain, trees, tree_cfg, fcfg["ground_objects"],
+        objects=[(o["position"][0], o["position"][1]) for o in plan.objects], water=water,
+    )
     spawns = make_spawns(
         ground,
         buildings,
@@ -738,7 +807,7 @@ def run_props(
     if plan.cables:  # the wires between placed utility poles; the game strings them (docs/utility-poles.md)
         objects_doc["cables"] = plan.cables
     (work_dir / "objects.json").write_text(json.dumps(objects_doc, indent=1, sort_keys=True) + "\n")
-    props = {"version": PROPS_FORMAT_VERSION, "fences": fences, "trees": trees}
+    props = {"version": PROPS_FORMAT_VERSION, "fences": fences, "trees": trees, "ground_objects": ground_objects}
     (work_dir / "fences.json").write_text(json.dumps(fences_doc(fences, plan.groups, fcfg["fences"]), indent=1, sort_keys=True) + "\n")
     spawn_doc = {
         "version": SPAWNS_FORMAT_VERSION,
@@ -762,6 +831,7 @@ def run_props(
     return {
         "fences": len(fences),
         "trees": len(trees),
+        "ground_objects": len(ground_objects),
         "spawns": len(spawns),
         "objects": len(plan.objects),
         "lamps": len(lamps),

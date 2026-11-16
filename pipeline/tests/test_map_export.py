@@ -75,6 +75,7 @@ def test_roads_json_spawns_json_and_manifest(ws) -> None:
         "fences": "fences.json",
         "lamps": "lamps.json",
         "trees": "trees.json",
+        "ground_objects": "ground_objects.json",
     }
     assert {"terrain", "roads", "fences", "trees", "spawns", "buildings", "water"} <= set(
         manifest["generated"]
@@ -117,7 +118,7 @@ def test_export_is_byte_deterministic_across_runs(ws, tmp_path) -> None:
 
 
 def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
-    from drycastle_pipeline.propmeshes import fence_meshes, trees_mesh
+    from drycastle_pipeline.propmeshes import fence_meshes, ground_objects_mesh, trees_mesh
     from drycastle_pipeline.rules import load_section
 
     manifest = export(ws)
@@ -131,7 +132,7 @@ def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
     # (typed fences add flat posts and caps to the visual; their textured parts are separate nodes)
     want_visual = fence_meshes(props["fences"], pcfg["fences"])[0].face_count + trees_mesh(
         props["trees"], pcfg["trees"]
-    ).face_count
+    ).face_count + ground_objects_mesh(props["ground_objects"], pcfg["ground_objects"]).face_count  # no parcel: chunk level
     got_visual = sum(v for n, v in tris.items() if n == "props" or n.endswith("_props"))
     got_collision = sum(v for n, v in tris.items() if n.endswith("props_collision"))
     assert got_visual == want_visual > 0

@@ -306,6 +306,7 @@ buildings or the carriageway), and trees planted from the orthophoto detector on
 canopy, or stacked pyramids in forests). Fences also get a simple closed-box
 collision node. Trees are not in the chunk collision: `trees.json` (map 0.6.0, `files.trees`) lists every tree (position,
 ground height, scale, rotation, broadleaf or conifer, chunk) and the game builds the solids from it (see below).
+The forest floor also gets solid **ground objects** (fallen logs, stumps, boulders, root plates; `ground_objects.json`, map 0.13.0; see below).
 
 **Fence types and the texture library.** A fence section with a `type` is drawn in that type's style
 (`fencestyles.py`) instead of the plain box: `picket` and `wire` are one thin two-sided quad with a
@@ -426,6 +427,32 @@ other vertex (fences) `export.NO_TREE_UV2` (1e6, 1e6). So `MODEL_MATRIX * vec4(U
 of the tree base, and a vertex shader can drop a whole tree near the player with the chunk still one draw. Meshes without trees have
 no UV2. It is written by `export.to_trimesh` from `Mesh.bases` (set by `propmeshes.trees_mesh`) and renamed from trimesh's
 `_UV2` by `export.export_glb`, which every GLB that may hold trees (chunks, `parcel-run --glb`) goes through.
+
+**Ground objects (`ground_objects.json`, map 0.13.0, `files.ground_objects`; `props.ground_objects` in `rules.yaml`).** Solid objects
+on the forest floor, placed by the props stage (`groundobjects.py`, seeded per 25 m cell of the canopy mask, so reruns are identical;
+`props.json` carries them under `ground_objects`). Only on the canopy of the orthophoto that lies on ground of a `ground_kinds` type
+(forest), never on a property (building plot or garden), nor within the clearances of a building, road or path, placed object or
+water, never within `trunk_clearance_m` of a tree trunk, and never on another ground object. Densities are per hectare of canopy and
+come in clumps (`clump`): `log` 8 (fallen trunk, 4-9 m long, 0.3-0.6 m thick, random heading, ends within 0.3 m in height so it lies
+on the ground; 20 % have a `rootplate` at the thick end), `stump` 13 (0.4-0.8 m wide), `boulder` 5 (0.6-2.2 m, clumps of 1-4), about
+two thirds to all of them placed after the clearances: the village (about 215 ha of canopy) gets about 4,000 objects. Each is a
+low-poly vertex-coloured mesh (`propmeshes.ground_object_mesh`: log = tapered 6-sided prism, 24 triangles; stump = 6-sided taper with
+a lighter cut face, 18; boulder = squashed rock of three jittered hexagon rings seeded by its position, 30; root plate = octagonal
+slab on edge about 2 m tall, 32) baked into the same chunk-level `props` mesh as the trees, with the object's base point as UV2 exactly
+as for trees (see above), so a shader can swap a detailed model in near the player.
+
+The file: `{"format_version":1,"axes":<as trees.json>,"chunk_size_m":..,"model":{"base_uv2":true,"kinds":{<kind>:{...}}},"objects":[{"kind","x","y","z","rot","scale","len"(logs only),"chunk":[cx,cy]}]}`.
+`z` is the ground height at (`x`, `y`); `rot` is the yaw as for trees, u = (cos rot, sin rot). A log lies along u with its midpoint
+at (`x`, `y`), `len` metres long, thick end at -u, `scale` multiplying only its thickness (`model.kinds.log.diameter_m` at scale 1,
+`top_ratio` of that at the far end); a root plate stands on edge with its flat faces across u (a log's plate stands at its -u end);
+stump, boulder and root plate dimensions (`model.kinds`) are metres at scale 1 and multiply with `scale`. The model numbers feed the
+mesh, the file and the solids alike. Collision (`ShooterCore/Colliders/GroundObjectColliders.cs`, wired by
+`MapLoader.GroundObjects.cs`): one box per object on the world layer (solid for players, cars and shots), a little inside the mesh;
+one static body per chunk and surface (wood: logs, stumps, plates; rock: boulders). Walking into a ledge up to `MoveConsts.StepHeight`
+(0.3 m) lifts the player onto it, so a log thinner than about 0.35 m is stepped over; thicker logs, stumps and boulders are jumped onto
+(jump peak about 1.1 m) and stood on (flat tops). The collider and the mesh are checked against each other by
+`tests/test_ground_objects.py` and `GroundObjectColliderTests` through `fixtures/ground_object_parity.json`
+(`UPDATE_GROUND_PARITY=1 uv run pytest tests/test_ground_objects.py` rewrites it).
 
 ## Ground patches (preview and water)
 

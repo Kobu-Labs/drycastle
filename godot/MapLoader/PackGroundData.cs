@@ -39,6 +39,7 @@ public sealed class GroundObjectsConfig
 public sealed class UndergrowthKindConfig
 {
     public string Name { get; set; } = "";
+    [System.Text.Json.Serialization.JsonPropertyName("per_100m2")] // the snake-case policy would make it per100_m2
     public float Per100M2 { get; set; }
     public float ScaleMin { get; set; } = 1f;
     public float ScaleMax { get; set; } = 1f;

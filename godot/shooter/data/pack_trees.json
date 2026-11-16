@@ -47,10 +47,10 @@
   "ground_objects": {
     "enabled": true,
     "kinds": {
-      "log": { "radius_m": 0.3, "yaw_deg": 90, "models": [ { "name": "SM_Tree_Log_01", "weight": 1 }, { "name": "SM_Tree_Log_02", "weight": 1 } ] },
-      "stump": { "radius_m": 0.35, "models": [ { "name": "SM_Tree_Stump_01", "weight": 2 }, { "name": "SM_Tree_Stump_03", "weight": 2 } ] },
-      "boulder": { "radius_m": 0.9, "models": [ { "name": "SM_Rock_Boulder_01", "weight": 3 }, { "name": "SM_Rock_Rounded_01", "weight": 1 }, { "name": "SM_Rock_Small_01", "weight": 1 } ] },
-      "rootplate": { "radius_m": 1.0, "models": [ { "name": "SM_Tree_Stump_02", "weight": 1 } ] }
+      "log": { "radius_m": 0.225, "yaw_deg": 90, "models": [ { "name": "SM_Tree_Log_01", "weight": 1 }, { "name": "SM_Tree_Log_02", "weight": 1 } ] },
+      "stump": { "radius_m": 0.3, "models": [ { "name": "SM_Tree_Stump_01", "weight": 2 }, { "name": "SM_Tree_Stump_03", "weight": 2 } ] },
+      "boulder": { "radius_m": 0.5, "models": [ { "name": "SM_Rock_Boulder_01", "weight": 3 }, { "name": "SM_Rock_Rounded_01", "weight": 1 }, { "name": "SM_Rock_Small_01", "weight": 1 } ] },
+      "rootplate": { "radius_m": 1.1, "models": [ { "name": "SM_Tree_Stump_02", "weight": 1 } ] }
     }
   },
   "undergrowth": {

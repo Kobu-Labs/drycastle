@@ -75,6 +75,10 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # (POSITION x, POSITION z) of the same mesh, so MODEL_MATRIX * vec4(uv2.x, vertex.y, uv2.y, 1) is the base's world point; for all
 # other vertices (fences) NO_TREE_UV2, a point no player is near. Meshes without trees have no TEXCOORD_1, and trees.json's model
 # says "base_uv2": true. A loader that does not know it ignores the attribute and draws every tree; maps before 0.12.0 have none.
+# 0.13.0: ground objects (props.ground_objects): ground_objects.json (files.ground_objects) lists the fallen logs, stumps, boulders and
+# root plates of the forest ("kind", x, y, z, rot, scale, "len" for a log, chunk) and the model numbers of each kind; the game builds
+# their solid colliders from it. Their low-poly meshes are baked into the same props meshes as the trees, with the object's base as
+# TEXCOORD_1 (the model says "base_uv2": true). A loader that does not know the file draws them but walks and shoots through them.
 # (no bump) urad.json (files.urad): the inside of the municipal office: entrance, rooms, worker seats, dictation desk.
 # (no bump) church.json (files.church): the inside of the church: door, seats with routes, spots, anchors, rooms.
 # (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
@@ -89,12 +93,14 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # Only maps with a group have it; a loader that does not know it, or a map without it, means "no groups".
 # (no bump) fences.json (files.fences): every fence section (two end points with ground z, height_m, type, parcel, property group),
 # for the game server's pets (the fence hop). A loader that does not know it, or a map without it, means "no fence data".
-MAP_VERSION_BASE = "0.12.0"
+MAP_VERSION_BASE = "0.13.0"
 NO_TREE_UV2 = 1.0e6  # TEXCOORD_1 of a vertex that is no tree
 BASE_UV2_ATTRIBUTE = "_UV2"  # trimesh writes custom attributes with a leading underscore; export_glb renames it
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 TREES_FORMAT_VERSION = 1
+GROUND_OBJECTS_FORMAT_VERSION = 1
+TREES_AXES = "map metres: x east, y north, z up (ground height at the trunk foot)"
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
                "props.json", "spawns.json", "lamps.json", "detail.json", "detail_patches.npy",
                "detail_patches.json", "detail_meadow.bin")
@@ -261,6 +267,30 @@ def forest_model(tree_cfg: dict) -> dict:
     }
 
 
+def ground_model(cfg: dict) -> dict:
+    """The ground object numbers of ground_objects.json's model block (metres at scale 1; the same ones ``ground_object_mesh`` draws)."""
+    return {kind: {k: float(v) for k, v in cfg["model"][kind].items()} for kind in ("log", "stump", "boulder", "rootplate")}
+
+
+def ground_objects_doc(objects: list[dict], cfg: dict, chunk_m: float) -> dict:
+    """The ``ground_objects.json`` document. ``rot`` is the yaw as for trees: u = (cos rot, sin rot). A log lies along u (thick end at -u,
+    ``len`` metres long, its midpoint at x, y); a root plate's flat faces are across u (a log's plate stands at its -u end)."""
+    return {
+        "format_version": GROUND_OBJECTS_FORMAT_VERSION,
+        "axes": TREES_AXES,
+        "chunk_size_m": chunk_m,
+        "model": {"base_uv2": True, "kinds": ground_model(cfg)},
+        "objects": [
+            {
+                "kind": o["kind"], "x": o["x"], "y": o["y"], "z": round(o["z"], 3), "rot": o["rot"], "scale": o["scale"],
+                **({"len": o["len"]} if o["kind"] == "log" else {}),
+                "chunk": [int(math.floor(o["x"] / chunk_m)), int(math.floor(o["y"] / chunk_m))],
+            }
+            for o in objects
+        ],
+    }
+
+
 def _dump(path: Path, doc: dict) -> None:
     # compact: the map loader parses these at every start, and indentation was most of trees.json (1.8 MB)
     path.write_text(json.dumps(doc, separators=(",", ":"), sort_keys=True) + "\n")
@@ -375,7 +405,7 @@ def run_export(
         chunk_m = float(parcels_doc["chunk_size_m"])
         _dump(out_dir / "trees.json", {
             "format_version": TREES_FORMAT_VERSION,
-            "axes": "map metres: x east, y north, z up (ground height at the trunk foot)",
+            "axes": TREES_AXES,
             "chunk_size_m": chunk_m,
             "model": {
                 "trunk_width_m": float(tree_cfg["trunk_width_m"]),
@@ -395,6 +425,14 @@ def run_export(
             ],
         })
         files["trees"] = "trees.json"
+    ground_file = out_dir / "ground_objects.json"
+    if scene.ground_objects is not None:
+        # solid ground objects of the forest (props stage): the game builds colliders from the records and the model numbers
+        _dump(ground_file, ground_objects_doc(
+            scene.ground_objects, load_section("props", rules_path)["ground_objects"], float(parcels_doc["chunk_size_m"])))
+        files["ground_objects"] = "ground_objects.json"
+    else:
+        ground_file.unlink(missing_ok=True)  # props.json from before this file existed: no objects
     fences_src = work_dir / "fences.json"
     if fences_src.is_file():
         # fence sections (props stage); copied verbatim, the game server hops pets over them
@@ -562,6 +600,8 @@ def run_export(
             generated |= {"roads", "roads_graph"}
         if scene.props is not None:
             generated |= {"fences", "trees"}
+            if "ground_objects" in files:
+                generated.add("ground_objects")
         if scene.spawns is not None:
             generated |= {"spawns"}
     if any(name.startswith("patch_") for nodes in scene.nodes.values() for name in nodes):

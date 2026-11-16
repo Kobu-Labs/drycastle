@@ -357,6 +357,60 @@ props:
       cone_tiers: [[2.4, 1.25, 5.4], [4.2, 0.95, 7.6], [6.2, 0.62, 9.5]]
       # Broadleaf crown: stacked boxes, [bottom height, half-width, top height]. Only the lowest has a drawn underside.
       box_tiers: [[2.4, 1.3, 5.6], [5.6, 0.85, 9.2]]
+  # Solid ground objects of the forest (#287): fallen logs, stumps, boulders and root plates, placed by the props stage
+  # (groundobjects.py), drawn as low-poly meshes baked into the chunk props meshes (propmeshes.ground_object_mesh, each carrying
+  # its base point in UV2 like a tree) and solid for players and shots (ShooterCore GroundObjectColliders, built from
+  # ground_objects.json). Only on the forest canopy of the orthophoto (props.trees.ortho) that lies on ground of the `ground_kinds`
+  # types, never on a property (parcel of kind avoid_parcel_kinds), nor within the clearances of a building, a road or path, a
+  # placed object or water, and never within trunk_clearance_m of a tree trunk or on another ground object. Seeded per 25 m
+  # cell, so reruns give identical output. Densities are per hectare of canopy before the clearances (about 70-100% of them are placed); objects come in clumps (`clump` = [min, max]
+  # objects around one centre, spread by `clump_sigma_m`), so the forest floor is patchy rather than evenly littered.
+  # Village: about 215 ha of forest, so about 4,000 objects and 100,000 triangles.
+  ground_objects:
+    ground_kinds: [forest]
+    avoid_parcel_kinds: [building_plot, garden]
+    building_clearance_m: 3.5
+    road_clearance_m: 2.0
+    object_clearance_m: 1.0
+    trunk_clearance_m: 0.3
+    # Shape numbers at scale 1 (metres): the drawn mesh, ground_objects.json's model block and the collision solids all follow them.
+    # The scale of an object multiplies them all (a log's length is its own `len`, not scaled).
+    model:
+      # A hexagonal prism lying on the ground: `diameter_m` across at the thick (root) end, `top_ratio` of that at the far end.
+      log: {diameter_m: 0.45, top_ratio: 0.8}
+      # A short hexagonal taper standing on the ground, `top_ratio` of its width at the top.
+      stump: {width_m: 0.6, height_m: 0.6, top_ratio: 0.85}
+      # A squashed irregular rock; `width_m` is its length along the heading (the other horizontal axis is 0.75-1 of that).
+      boulder: {width_m: 1.0, height_m: 0.7}
+      # An upturned root disc standing on edge (an octagonal slab): `radius_m` its radius, `thickness_m` along the log, `lift_m` the
+      # height of its centre above the ground (the foot sinks a little).
+      rootplate: {radius_m: 1.1, thickness_m: 0.4, lift_m: 0.9}
+    log:
+      per_ha: 8
+      clump: [1, 2]
+      clump_sigma_m: 5.0
+      length_m: [4.0, 9.0]
+      thickness_m: [0.3, 0.6]
+      # The two ends of a log may differ this much in ground height (m): a longer drop and it would hang in the air or sink.
+      max_end_drop_m: 0.3
+      # Share of logs that have a root plate standing at their thick end.
+      rootplate_share: 0.2
+      rootplate_scale: [0.8, 1.3]
+      colours: ["#5a4430", "#4e3c2a", "#66503a"]
+    stump:
+      per_ha: 13
+      clump: [1, 3]
+      clump_sigma_m: 4.0
+      width_m: [0.4, 0.8]
+      colours: ["#5f4731", "#6b5139"]
+      top_colour: "#a98c63"
+    boulder:
+      per_ha: 5
+      clump: [1, 4]
+      clump_sigma_m: 2.5
+      size_m: [0.6, 2.2]
+      colours: ["#7d7b74", "#6e6d68", "#878379"]
+    rootplate_colour: "#46362a"
 
 # --- Ground detail (detail stage, `make detail`; docs/pipeline.md "Detail") ----------------------------
 # Patches (flat colour or library texture, draped on the terrain, never overlapping: the first layer in
@@ -526,7 +580,7 @@ detail:
     tone_radius_m: [2.5, 6.0]
     # Leaf litter (leaf_litter texture) under the trees: `blobs_per_tree` blobs of canopy_m * scale * radius_factor, each kept
     # with probability `keep`. Merged blobs make the thick litter stretches.
-    litter: {radius_factor: 0.75, blobs_per_tree: 1, keep: 0.3}
+    litter: {radius_factor: 0.55, blobs_per_tree: 1, keep: 0.22}
     # Moss (moss texture, bright green): small irregular blobs, thick in the clumps of a noise (clump: 0 = even, 1 = bare gaps
     # between thick clumps; clump_m: size of a clump) and thin in the gaps. `tree`: at the feet of the trees (keep per tree, blob
     # radius, distance from the trunk); `interior`: over the open floor (one candidate per spacing_m cell, `keep` of them in a
@@ -535,8 +589,8 @@ detail:
       edge_m: 3.0
       clump: 0.9
       clump_m: 12.0
-      tree: {keep: 0.3, radius_m: [0.5, 1.1], reach_m: [0.3, 1.4]}
-      interior: {spacing_m: 3.5, keep: 0.25, radius_m: [0.9, 1.8], stretch: 1.5}
+      tree: {keep: 0.04, radius_m: [0.6, 1.3], reach_m: [0.3, 1.4]}
+      interior: {spacing_m: 9.0, keep: 0.25, radius_m: [1.5, 3.0], stretch: 1.5}
     dirt: {per_ha: 3, radius_m: [0.6, 1.4]}
     clutter:
       leaf:   {spacing_m: 0.8, litter: 0.1, tone: 0.01, interior: 0.003, scale: [0.8, 1.2]}

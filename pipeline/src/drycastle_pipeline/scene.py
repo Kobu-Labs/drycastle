@@ -25,7 +25,7 @@ from drycastle_pipeline.ground import ground_types, ground_units, type_colours, 
 from drycastle_pipeline.landmarks import build_landmark
 from drycastle_pipeline.meshes import Mesh, building_mesh, collision_mesh
 from drycastle_pipeline.patches import node_name, patch_meshes, plan_patches
-from drycastle_pipeline.propmeshes import fence_mesh, fence_meshes, parcel_props_meshes, trees_mesh
+from drycastle_pipeline.propmeshes import fence_mesh, fence_meshes, ground_objects_mesh, parcel_props_meshes, trees_mesh
 from drycastle_pipeline.roads import clip_graph, road_mesh
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.terrain import Terrain, cut_holes, load_terrain
@@ -80,6 +80,7 @@ class MapScene:
     graph: dict | None = None
     props: dict | None = None
     trees: list[dict] | None = None  # tree records as exported (z with the exaggeration), for trees.json
+    ground_objects: list[dict] | None = None  # logs, stumps, boulders, root plates (z with the exaggeration), for ground_objects.json
     spawns: dict | None = None
     warnings: list[str] = field(default_factory=list)  # stale or unusable edits entries
     windows: list[dict] = field(default_factory=list)  # tagged window panes, see building_detail
@@ -280,6 +281,8 @@ def build_scene(
         fences = [{**s, "za": s["za"] * k, "zb": s["zb"] * k} for s in scene.props["fences"]]
         trees = [{**tr, "z": tr["z"] * k} for tr in scene.props["trees"]]
         scene.trees = trees
+        if "ground_objects" in scene.props:  # props.json of a run before map 0.13.0 has none: no file, no meshes
+            scene.ground_objects = [{**o, "z": o["z"] * k} for o in scene.props["ground_objects"]]
         chunk_of_parcel = {p["id"]: tuple(p["chunk"]) for p in parcels_doc["parcels"]}
 
         def owned(it: dict) -> bool:  # OSM trees have no parcel (null or absent): chunk level
@@ -299,9 +302,14 @@ def build_scene(
         by_tree = _group(
             [t for t in trees if not owned(t)], lambda t: _chunk((t["x"], t["y"]), chunk_m)
         )
-        for key in sorted(set(by_fence) | set(by_tree)):
+        by_ground = _group(scene.ground_objects or [], lambda o: _chunk((o["x"], o["y"]), chunk_m))
+        for key in sorted(set(by_fence) | set(by_tree) | set(by_ground)):
             fence_flat, textured = fence_meshes(by_fence.get(key, []), pcfg["fences"])
-            visual = Mesh.concat([fence_flat, trees_mesh(by_tree.get(key, []), pcfg["trees"])])
+            visual = Mesh.concat([
+                fence_flat,
+                trees_mesh(by_tree.get(key, []), pcfg["trees"]),
+                ground_objects_mesh(by_ground.get(key, []), pcfg["ground_objects"]),
+            ])
             put("props", {key: visual})
             for tid, mesh in textured.items():
                 put(tex_node_name("props", tid), {key: mesh})
