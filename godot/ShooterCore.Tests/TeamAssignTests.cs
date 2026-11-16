@@ -19,12 +19,10 @@ public class TeamAssignTests
     [Theory]
     [InlineData(TeamAction.Move, 7, Teams.B)]
     [InlineData(TeamAction.Move, 65535, Teams.A)]
-    [InlineData(TeamAction.Unpin, 300, Teams.None)]
+    [InlineData(TeamAction.Move, 300, Teams.None)]
     [InlineData(TeamAction.MoveBots, 0, Teams.A)]
-    [InlineData(TeamAction.Swap, 0, Teams.None)]
     [InlineData(TeamAction.Shuffle, 0, Teams.None)]
     [InlineData(TeamAction.Balance, 0, Teams.None)]
-    [InlineData(TeamAction.UnpinAll, 0, Teams.None)]
     public void CodecRoundTrips(TeamAction action, int id, byte team)
     {
         var a = new TeamAssign(action, (ushort)id, team);
@@ -35,22 +33,22 @@ public class TeamAssignTests
     [InlineData(new byte[] { })]
     [InlineData(new byte[] { 1, 0, 0 })] // short
     [InlineData(new byte[] { 0, 0, 0, 0 })] // no such action
-    [InlineData(new byte[] { 8, 0, 0, 0 })]
+    [InlineData(new byte[] { 5, 0, 0, 0 })]
     [InlineData(new byte[] { 1, 0, 0, 3 })] // no such team
     public void CodecRejectsGarbage(byte[] d) => Assert.Null(TeamAssignCodec.Decode(d));
 
     [Fact]
-    public void ScoreboardRowsCarryTeamPinAndBot()
+    public void ScoreboardRowsCarryTeamSandboxAndBot()
     {
         var rows = new[]
         {
-            new ScoreRow(1, "a", 1, 2, 3, Teams.A, Pinned: true),
+            new ScoreRow(1, "a", 1, 2, 3, Teams.A, Sandbox: true),
             new ScoreRow(2, "b", 0, 0, 5, Teams.B, Bot: true),
             new ScoreRow(3, "c", 0, 0, 5, Teams.None),
-            new ScoreRow(4, "d", 0, 0, 5, Teams.B, Pinned: true, Bot: true),
+            new ScoreRow(4, "d", 0, 0, 5, Teams.B, Sandbox: true, Bot: true),
         };
         var back = MatchCodec.DecodeMatchState(MatchCodec.Encode(new MatchStateMsg(MatchPhase.Running, 9, Array.Empty<ushort>(), rows, MatchMode.TeamDeathmatch, 1, 2)))!;
-        Assert.Equal(rows.Select(r => (r.Team, r.Pinned, r.Bot)), back.Rows.Select(r => (r.Team, r.Pinned, r.Bot)));
+        Assert.Equal(rows.Select(r => (r.Team, r.Sandbox, r.Bot)), back.Rows.Select(r => (r.Team, r.Sandbox, r.Bot)));
     }
 
     [Fact]
@@ -58,40 +56,28 @@ public class TeamAssignTests
     {
         var ffa = Match("ffa", 2);
         Assert.Null(TeamAssignRules.Apply(ffa, new TeamAssign(TeamAction.Move, 1, Teams.A), "admin"));
-        Assert.Null(TeamAssignRules.Apply(ffa, new TeamAssign(TeamAction.Swap), "admin"));
+        Assert.Null(TeamAssignRules.Apply(ffa, new TeamAssign(TeamAction.Shuffle), "admin"));
     }
 
     [Fact]
-    public void MoveAnnouncesAndPins()
+    public void MoveAnnouncesAndMoves()
     {
         var m = Match();
-        var line = TeamAssignRules.Apply(m, new TeamAssign(TeamAction.Move, 1, Teams.B), "Kobu");
-        Assert.Equal("Kobu moved p1 to team B.", line);
-        Assert.True(m.Get(1)!.TeamPinned);
+        Assert.Equal("Kobu moved p1 to team B.", TeamAssignRules.Apply(m, new TeamAssign(TeamAction.Move, 1, Teams.B), "Kobu"));
+        Assert.Equal(Teams.B, m.Get(1)!.Team);
+        Assert.Equal("Kobu took p1 out of the round.", TeamAssignRules.Apply(m, new TeamAssign(TeamAction.Move, 1, Teams.None), "Kobu"));
+        Assert.Equal(Teams.None, m.Get(1)!.Team);
         Assert.Null(TeamAssignRules.Apply(m, new TeamAssign(TeamAction.Move, 99, Teams.B), "Kobu")); // unknown player
-        Assert.Null(TeamAssignRules.Apply(m, new TeamAssign(TeamAction.Move, 1, Teams.None), "Kobu")); // not a team
     }
 
     [Fact]
-    public void UnpinFreesOnePlayerAndUnpinAllFreesEveryone()
-    {
-        var m = Match();
-        m.SetTeam(1, Teams.A); m.SetTeam(2, Teams.A);
-        Assert.NotNull(TeamAssignRules.Apply(m, new TeamAssign(TeamAction.Unpin, 1), "k"));
-        Assert.False(m.Get(1)!.TeamPinned);
-        Assert.True(m.Get(2)!.TeamPinned);
-        Assert.NotNull(TeamAssignRules.Apply(m, new TeamAssign(TeamAction.UnpinAll), "k"));
-        Assert.All(m.Players, p => Assert.False(p.TeamPinned));
-    }
-
-    [Fact]
-    public void MoveBotsSendsEveryBotAndPinsThemButNoHuman()
+    public void MoveBotsSendsEveryBotButNoHuman()
     {
         var m = Match(players: 2, bots: 3);
         var humans = m.Players.Where(p => !p.Bot).ToDictionary(p => p.Id, p => p.Team);
         Assert.NotNull(TeamAssignRules.Apply(m, new TeamAssign(TeamAction.MoveBots, 0, Teams.B), "k"));
-        Assert.All(m.Players.Where(p => p.Bot), p => Assert.Equal((Teams.B, true), (p.Team, p.TeamPinned)));
-        Assert.All(m.Players.Where(p => !p.Bot), p => { Assert.Equal(humans[p.Id], p.Team); Assert.False(p.TeamPinned); });
+        Assert.All(m.Players.Where(p => p.Bot), p => Assert.Equal(Teams.B, p.Team));
+        Assert.All(m.Players.Where(p => !p.Bot), p => Assert.Equal(humans[p.Id], p.Team));
     }
 
     [Fact]
@@ -106,8 +92,7 @@ public class TeamAssignTests
     public void BalanceReportsWhoMoved()
     {
         var m = Match(players: 0, bots: 4);
-        m.MoveBots(Teams.A); // all four on A, pinned
-        m.UnpinAll();
+        m.MoveBots(Teams.A); // all four on A
         var line = TeamAssignRules.Apply(m, new TeamAssign(TeamAction.Balance), "k")!;
         Assert.StartsWith("k balanced the teams:", line);
         Assert.Equal(2, m.Players.Count(p => p.Team == Teams.B));

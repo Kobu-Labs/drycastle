@@ -4,9 +4,9 @@ using System.Text;
 
 namespace Drycastle.ShooterCore;
 
-/// <param name="Pinned">An admin put the player on <paramref name="Team"/> (#312): the round-start balance leaves them there. Travels in bit 2 of the row's team byte.</param>
+/// <param name="Sandbox">A sandbox player (no team, but playing: not "unassigned"). Bit 2 of the row's team byte (#312).</param>
 /// <param name="Bot">The player is a bot. Bit 3 of the team byte.</param>
-public readonly record struct ScoreRow(ushort Id, string Name, int Kills, int Deaths, ushort Ping, byte Team = Teams.None, bool Pinned = false, bool Bot = false);
+public readonly record struct ScoreRow(ushort Id, string Name, int Kills, int Deaths, ushort Ping, byte Team = Teams.None, bool Sandbox = false, bool Bot = false);
 
 /// <param name="Mode">Free-for-all or team deathmatch; in team deathmatch <paramref name="ScoreA"/> and <paramref name="ScoreB"/> are the team totals and each row carries its team.</param>
 public sealed record MatchStateMsg(MatchPhase Phase, float TimeRemaining, IReadOnlyList<ushort> Winners, IReadOnlyList<ScoreRow> Rows,
@@ -14,12 +14,16 @@ public sealed record MatchStateMsg(MatchPhase Phase, float TimeRemaining, IReadO
 /// <summary>A kill for the feed. <paramref name="Cause"/> travels as an optional sixth byte (old 5-byte messages decode as Standard).</summary>
 public sealed record KillMsg(ushort Killer, ushort Victim, byte Weapon, KillCause Cause = KillCause.Standard);
 public sealed record SpawnMsg(ushort Id, Vector3 Position, float Protection);
-public sealed record DeathMsg(ushort Victim, ushort Killer, float RespawnDelay);
+public sealed record DeathMsg(ushort Victim, ushort Killer, float RespawnDelay)
+{
+    /// <summary><see cref="RespawnDelay"/> of a player an admin took out of the round (#312): no countdown, they wait to be put on a team.</summary>
+    public const float WaitsForAdmin = -1f;
+}
 
 /// <summary>
 /// Payload codecs for the match event kinds (little-endian), carried in the reliable event envelope.
 ///   MatchState: u8 phase, f32 timeRemaining, u8 nWinners, u16*n ids, u8 nRows, rows (u16 id, u8 nameLen, name, u16 kills, u16 deaths, u16 ping)
-///     then an optional team tail (older messages end after the rows): u8 mode, u16 scoreA, u16 scoreB, u8 per row in row order (bits 0-1 team, bit 2 pinned by an admin, bit 3 bot)
+///     then an optional team tail (older messages end after the rows): u8 mode, u16 scoreA, u16 scoreB, u8 per row in row order (bits 0-1 team, bit 2 sandbox, bit 3 bot)
 ///   Kill: u16 killer, u16 victim, u8 weapon          (killer == victim: suicide)
 ///   Spawn: u16 id, f32 x, y, z, f32 protectionSeconds
 ///   Death: u16 victim, u16 killer, f32 respawnDelay
@@ -28,10 +32,10 @@ public sealed record DeathMsg(ushort Victim, ushort Killer, float RespawnDelay);
 public static class MatchCodec
 {
     public const byte DebugKill = 1;
-    const byte TeamMask = 3, PinnedBit = 4, BotBit = 8;
+    const byte TeamMask = 3, SandboxBit = 4, BotBit = 8;
 
     static ScoreRow DecodeTeamByte(ScoreRow row, byte b) =>
-        row with { Team = (b & TeamMask) is var tm and (Teams.A or Teams.B) ? (byte)tm : Teams.None, Pinned = (b & PinnedBit) != 0, Bot = (b & BotBit) != 0 };
+        row with { Team = (b & TeamMask) is var tm and (Teams.A or Teams.B) ? (byte)tm : Teams.None, Sandbox = (b & SandboxBit) != 0, Bot = (b & BotBit) != 0 };
 
     public static byte[] Encode(MatchStateMsg m)
     {
@@ -49,7 +53,7 @@ public static class MatchCodec
             w.Write((ushort)r.Kills); w.Write((ushort)r.Deaths); w.Write(r.Ping);
         }
         w.Write((byte)m.Mode); w.Write((ushort)m.ScoreA); w.Write((ushort)m.ScoreB);
-        foreach (var r in m.Rows) w.Write((byte)((r.Team & TeamMask) | (r.Pinned ? PinnedBit : 0) | (r.Bot ? BotBit : 0)));
+        foreach (var r in m.Rows) w.Write((byte)((r.Team & TeamMask) | (r.Sandbox ? SandboxBit : 0) | (r.Bot ? BotBit : 0)));
         return ms.ToArray();
     }
 

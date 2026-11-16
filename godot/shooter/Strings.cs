@@ -20,7 +20,7 @@ public static class Strings
         ("hud.streak.ready.dead", "READY"), ("hud.streak.active", "ACTIVE"), ("hud.streak.spent", "USED"),
         ("hud.uav.title", "UAV"), ("hud.uav.time", "{0}:{1:00} LEFT"),
         ("hud.respawn.title", "You were eliminated"), ("hud.respawn.by", "by {0}"), ("hud.respawn.self", "by accident"),
-        ("hud.respawn.in", "Respawning in {0}"),
+        ("hud.respawn.in", "Respawning in {0}"), ("hud.respawn.out", "You are out of the round"), ("hud.respawn.waits", "Waiting for an admin to put you on a team"),
         ("hud.hint.captured", "{0}  Scoreboard     {1}-{2}  Weapons     Esc  Pause"),
         ("hud.hint.released", "Mouse released. Close the menu to resume"),
         ("hud.seats.title", "Seat {0}: {1}"), ("hud.seats.hint", "{0}-{1}  Switch seat"),
