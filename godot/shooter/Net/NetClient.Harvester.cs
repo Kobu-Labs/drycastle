@@ -33,6 +33,18 @@ public partial class NetClient
     readonly List<(Node3D Root, BaleState State)> _orphanBales = new();
     double _baleFadeCheck;
     readonly Dictionary<ushort, Node3D> _reels = new();
+    /// <summary>A harvester's wheels (SM_Veh_Harvester_Wheel_fl, fr, rl, rr; the model has no hull to hang them under) and how far they have rolled and steered.</summary>
+    sealed class HarvWheels
+    {
+        public Node3D?[] Nodes = new Node3D?[4];
+        public Vector3 LastPos; public float LastYaw; public bool Seen;
+        public readonly float[] Roll = new float[4]; public float Steer;
+    }
+    readonly Dictionary<ushort, HarvWheels> _harvWheels = new();
+    static readonly string[] WheelNodes = { "SM_Veh_Harvester_Wheel_fl", "SM_Veh_Harvester_Wheel_fr", "SM_Veh_Harvester_Wheel_rl", "SM_Veh_Harvester_Wheel_rr" };
+    /// <summary>Rolling radii of the wheels (the model's mesh: the big front pair 0.733 m, the rear pair 0.554 m) and the wheelbase (z 0.86 to -2.82) the front steering angle follows from.</summary>
+    static readonly float[] WheelRadius = { 0.733f, 0.733f, 0.554f, 0.554f };
+    const float HarvWheelBase = 3.68f;
     readonly Dictionary<ushort, Node3D> _baleFires = new();
     readonly List<Node3D> _ashHeaps = new();
 
@@ -94,6 +106,37 @@ public partial class NetClient
                 _reels[v.Id] = reel;
             }
             if (v.Driver != 0) reel.RotateX(-ReelSpin * dt); // the cut side moves down at the front: the top turns forward
+            RollHarvesterWheels(v);
+        }
+    }
+
+    /// <summary>The wheels roll with the ground distance the machine covers (angle = distance / radius) and the front pair steers by the turn the body makes per metre.</summary>
+    void RollHarvesterWheels(CarView v)
+    {
+        if (!_harvWheels.TryGetValue(v.Id, out var w))
+        {
+            w = new HarvWheels();
+            for (var i = 0; i < 4; i++) w.Nodes[i] = v.Node.FindChild(WheelNodes[i], true, false) as Node3D;
+            _harvWheels[v.Id] = w;
+        }
+        if (w.Nodes[0] == null && w.Nodes[2] == null) return; // the box without the pack
+        var pos = v.Node.GlobalPosition; var yaw = v.Node.GlobalRotation.Y;
+        if (!w.Seen) { w.LastPos = pos; w.LastYaw = yaw; w.Seen = true; return; }
+        var fwd = new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
+        var dist = (pos - w.LastPos).Dot(fwd);
+        var dYaw = Mathf.Wrap(yaw - w.LastYaw, -Mathf.Pi, Mathf.Pi);
+        w.LastPos = pos; w.LastYaw = yaw;
+        if (MathF.Abs(dist) > 0.002f)
+        {
+            var target = Mathf.Clamp(MathF.Atan(HarvWheelBase * dYaw / dist), -0.7f, 0.7f); // yaw grows turning left; a left turn turns the model's wheels about +Y
+            w.Steer = Mathf.Lerp(w.Steer, target, 0.25f);
+        }
+        else w.Steer = Mathf.Lerp(w.Steer, 0f, 0.1f);
+        for (var i = 0; i < 4; i++)
+        {
+            if (w.Nodes[i] is not { } node || !GodotObject.IsInstanceValid(node)) continue;
+            w.Roll[i] = Mathf.Wrap(w.Roll[i] + dist / WheelRadius[i], -Mathf.Pi, Mathf.Pi); // forward: the top moves towards the model's +Z
+            node.Basis = new Basis(Vector3.Up, i < 2 ? w.Steer : 0f) * new Basis(Vector3.Right, w.Roll[i]);
         }
     }
 
