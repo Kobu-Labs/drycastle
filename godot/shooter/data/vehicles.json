@@ -218,7 +218,15 @@
         { "id": "door_right", "centre": [0.732, 1.165, -0.05], "normal": [0.958, 0.288, 0], "size": [1.34, 0.418], "outline": [[0.67, -0.209], [0.21, 0.209], [-0.67, 0.209], [-0.67, -0.209]] },
         { "id": "quarter_right", "centre": [0.732, 1.165, 1.165], "normal": [0.958, 0.288, 0], "size": [0.93, 0.418], "outline": [[0.465, -0.209], [0.465, 0.209], [0.165, 0.209], [-0.465, -0.209]] }
       ],
-      "lights": { "head": [[-0.46, 0.75, -2.07], [0.46, 0.75, -2.07]], "tail": [[-0.56, 0.76, 2.03], [0.56, 0.76, 2.03]], "beam_range": 45, "beam_angle": 26 }
+      "lights": { "head": [[-0.46, 0.75, -2.07], [0.46, 0.75, -2.07]], "tail": [[-0.56, 0.76, 2.03], [0.56, 0.76, 2.03]], "beam_range": 45, "beam_angle": 26 },
+      "sounds": {
+        "background": { "sound": "golf_mk2.background", "pitch": [0.8, 1.6] },
+        "idle": { "sound": "golf_mk2.idle", "fade_in": 0.3, "fade_out": 0.3 },
+        "accel": { "sound": "golf_mk2.accel", "pitch": [0.85, 1.35], "fade_in": 0.12, "fade_out": 0.4 },
+        "lift": { "sound": "golf_mk2.lift" },
+        "brake": { "sound": "golf_mk2.brake", "fade_in": 0.1, "fade_out": 0.25 },
+        "top": { "sound": "golf_mk2.top", "pitch": [0.95, 1.1], "fade_in": 0.5, "fade_out": 0.5 }
+      }
     }
   ]
 }
