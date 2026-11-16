@@ -188,6 +188,8 @@ public enum EventKind : byte
     HarvesterFx = 235,
     /// <summary>Server to everyone, and the history to a joiner: a stretch of the path the harvester's reel cut (<see cref="SwathCodec"/>: field, width, a polyline of quarter-metre points, the time since the field was last cut). The client squashes the crop along it and derives the bales it dropped; nothing per plant.</summary>
     HarvesterCut = 237,
+    /// <summary>Server to everyone, and the mask to a joiner: the 1 m cells of a crop field that vehicles crushed (<see cref="CrushCodec"/>: field, ascending cell indices as deltas, or runs of the whole mask). The client lays the plants there flat and darkens the ground; nothing per plant, no gameplay (#328).</summary>
+    CropCrush = 238,
 }
 
 public abstract record ReliableMsg;
@@ -292,7 +294,7 @@ public static class Wire
     //   v58 aircraft state byte (#303): kind in bits 6-7 (was bit 7), bank in bits 0-5 (was 0-6); a third kind, the UAV
     //   v55 world interest (ADR 0025): world record flag FDormant 64 (the entity left this client's interest, no fields); animals, flocks and poop outside 800 m are not sent
     //   v56 wild animal size and weight (ticket #309): the animal state byte's bits 5-7 are the size step; event 25 ends in the animal's weight (u16, tenths of a kg)
-    //   v63 the harvester's cut is its real path: event 237 HarvesterCut; the state message no longer says what is cut
+    //   v63 the harvester's cut is its real path: events 237 HarvesterCut and 238 CropCrush (vehicles flatten crops); the state message no longer says what is cut
     //   v62 the harvester event (#331): events 234 HarvesterState and 235 HarvesterFx, special weapon 238, a corpse owned by 60002 is a hay bale
     //   v61 the bus garage: event 245 GarageDoor (its doors open or closed)
     public const byte ProtocolVersion = 63;
