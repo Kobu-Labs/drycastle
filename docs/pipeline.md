@@ -416,7 +416,8 @@ or do not rerun); existing objects are never touched. The game finds the dishes 
 two stacked pyramids for a conifer). **Forest trees** (map 0.11.0: `"forest": 1` on the record, planted inside the detected canopy)
 use the `model.forest` block instead (`props.trees.forest` in `rules.yaml`): a tapered trunk (a four-sided frustum, solid, `PartShape.Frustum`)
 with a clear stem, and crown tiers (three stacked pyramids, or two boxes) from about 5 m up; all numbers are metres at scale 1 and
-the same block feeds the drawn mesh and the solids. Records without the flag, or a model without the block (maps before 0.11.0),
+the same block feeds the drawn mesh and the solids. The baked forest trunk colour is `forest.trunk_colour` (close to the near pack bark, #350;
+unset: the global `trunk_colour`, which standalone trees keep). Records without the flag, or a model without the block (maps before 0.11.0),
 use the formula above. A forest tree's record also has `"stand"` (`pine`, `birch`, `mixed`, `thicket`, `swamp`) and, where true,
 `"edge": true` (see `docs/ortho.md`, "Stands"); they pick the look only, the solids read neither, and a reader that ignores them
 works (a record without them: `mixed`, not edge). Trunks are on the world layer, so players and cars stop at them. Crowns are shot-only
