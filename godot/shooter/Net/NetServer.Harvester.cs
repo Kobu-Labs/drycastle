@@ -31,13 +31,29 @@ public partial class NetServer
     /// <summary>Drivers that lost the job (dead, or the job ended): taken out of the match once their corpse exists.</summary>
     readonly List<Client> _harvOldDrivers = new();
     /// <summary>Players the harvester killed this tick, from the kill event to the corpse: their bodies go into the machine instead of being thrown.</summary>
-    readonly HashSet<ushort> _harvVictims = new();
-    readonly List<(MachineCorpse Machine, NVec3 From)> _machineCorpses = new();
+    readonly Dictionary<ushort, ServerCar> _harvVictims = new();
+    readonly List<(MachineCorpse Machine, NVec3 From, ServerCar Car)> _machineCorpses = new();
     /// <summary>The Items of the victims inside the machine, by their corpse id, until the bale leaves the unloader.</summary>
     readonly Dictionary<ushort, List<ItemStack>> _machineItems = new();
     HayBale[]? _staticBales;
     readonly Dictionary<ushort, HayBale> _madeBales = new();
     readonly List<(ushort Id, NVec3 Feet)> _baleFolk = new();
+
+    /// <summary>What the reels have cut on one crop field and the bales dropped there (<see cref="FieldSwath"/>); the clients derive the same from the stretches sent (<see cref="EventKind.HarvesterCut"/>).</summary>
+    sealed class SwathField
+    {
+        public required FieldSwath Swath;
+        public double LastCut;
+        public readonly List<HayBale> Bales = new();
+        /// <summary>Kept points not sent yet (the first one was, when it is a continuation).</summary>
+        public readonly List<SwathPt> Open = new();
+    }
+
+    readonly Dictionary<int, SwathField> _swaths = new();
+    readonly Dictionary<ushort, SwathSampler> _samplers = new();
+    List<(NVec2 Min, NVec2 Max)>? _cropBounds;
+    int _swathTotal;
+    double _swathFlushAt;
 
     /// <summary>Called once from <c>_Ready</c> with the other events: the director and the handler table's kind.</summary>
     void InitHarvester() => _harvDirector = new HarvesterDirector(Harvester, _rng);
@@ -190,6 +206,7 @@ public partial class NetServer
         foreach (var o in _harvOldDrivers.ToList()) if (_byId.ContainsKey(o.Id)) Leave(o);
         _harvOldDrivers.Clear();
         _harvVictims.Clear(); _machineCorpses.Clear(); _machineItems.Clear(); _madeBales.Clear(); _staticBales = null;
+        _swaths.Clear(); _samplers.Clear(); _swathTotal = 0;
         _harvDirector!.Reset();
     }
 
@@ -197,10 +214,23 @@ public partial class NetServer
     void SendHarvesterOnJoin(Client c)
     {
         if (_harvBrain != null && _harvField != null) Send(c, new EventMsg((byte)EventKind.HarvesterState, HarvesterCodec.EncodeState(HarvesterStateOf(_harvBrain.Phase))));
-        if (_staticBales == null) return;
-        for (var i = 0; i < _staticBales.Length; i++)
-            if (_staticBales[i].State != BaleState.Intact)
-                Send(c, new EventMsg((byte)EventKind.HarvesterFx, HarvesterCodec.EncodeFx(new HarvesterCodec.FxMsg(_staticBales[i].State == BaleState.Burning ? HarvesterCodec.FxKind.BaleLit : HarvesterCodec.FxKind.BaleAsh, _staticBales[i].Position, HarvesterCodec.StaticBaleId(i)))));
+        foreach (var (field, sf) in _swaths) // the cut so far, field by field (bounded: SwathCodec, HarvesterConfig.MaxSwathPoints)
+        {
+            var age = (ushort)Math.Clamp(_elapsed - sf.LastCut, 0, ushort.MaxValue - 1);
+            for (var i = 0; i < sf.Swath.Strokes.Count; i++)
+                foreach (var bytes in SwathCodec.Pack((ushort)field, Harvester.HeaderWidthM, age, i < sf.Swath.FirstCounted, sf.Swath.Strokes[i]))
+                    Send(c, new EventMsg((byte)EventKind.HarvesterCut, bytes));
+        }
+        if (_staticBales != null)
+            for (var i = 0; i < _staticBales.Length; i++) SendBaleFxOnJoin(c, _staticBales[i], HarvesterCodec.StaticBaleId(i));
+        foreach (var sf in _swaths.Values)
+            for (var i = 0; i < sf.Bales.Count; i++) SendBaleFxOnJoin(c, sf.Bales[i], HarvesterCodec.DroppedBaleId(i));
+    }
+
+    void SendBaleFxOnJoin(Client c, HayBale b, ushort id)
+    {
+        if (b.State == BaleState.Intact) return;
+        Send(c, new EventMsg((byte)EventKind.HarvesterFx, HarvesterCodec.EncodeFx(new HarvesterCodec.FxMsg(b.State == BaleState.Burning ? HarvesterCodec.FxKind.BaleLit : HarvesterCodec.FxKind.BaleAsh, b.Position, id))));
     }
 
     HarvesterCodec.StateMsg HarvesterStateOf(HarvesterPhase phase)
@@ -262,7 +292,14 @@ public partial class NetServer
     /// <summary>After the vehicles moved: what the machine runs over and what its reel draws in, the corpses on their way into it, the bales' fire.</summary>
     void HarvesterAfterVehicles(float dt)
     {
-        if (_harvCar is { Destroyed: false } car && car.Def.Id == HarvesterRules.VehicleId && _match.Phase == MatchPhase.Running) HarvesterContacts(car);
+        foreach (var car in _cars)
+        {
+            if (car.Destroyed || car.Def.Id != HarvesterRules.VehicleId || car.Seat.Occupant(0) == 0) continue; // any harvester with somebody at the wheel: the event's, a stolen one, a spawned one
+            if (_match.Phase == MatchPhase.Running) HarvesterContacts(car);
+            StepSwath(car);
+        }
+        foreach (var car in _cars) if (car.Def.Id == HarvesterRules.VehicleId && (car.Destroyed || car.Seat.Occupant(0) == 0)) _samplers.Remove(car.Id);
+        FlushSwaths();
         StepMachineCorpses(dt);
         StepBales(dt);
     }
@@ -270,32 +307,28 @@ public partial class NetServer
     /// <summary>The credit of the machine's kills: its driver (the AI's, or a player who took the seat), else nobody.</summary>
     ushort HarvesterAttacker(ServerCar car) => OccupantAt(car, 0) is { } d && _match.Get(d.Id)?.Life == PlayerLife.Alive ? d.Id : HarvesterRules.NobodyAttacker;
 
+    /// <summary>The reel is the only part that harms (<see cref="HarvesterConfig.Reel"/>): a player on foot inside its box is drawn in while the machine moves forward. The body kills nobody (vehicles.json run_over is false).</summary>
     void HarvesterContacts(ServerCar car)
     {
-        if (!RunOver.Contacts(car.State.Speed)) return;
+        if (car.State.Speed < Harvester.CutMinSpeedMps) return;
         var attacker = HarvesterAttacker(car);
-        var fwd = new NVec3(car.Forward.X, 0, car.Forward.Z);
-        var right = new NVec3(fwd.Z * -1f, 0, fwd.X);
         var pos = N(car.GlobalPosition);
-        // the reel: a player on foot in front of the header is drawn in
         var targets = LiveTargets();
         try
         {
             foreach (var t in targets)
             {
                 if (!_byId.TryGetValue(t.Id, out var o) || o.Car != null || car.Seat.SeatOf(t.Id) >= 0) continue;
-                var d = t.Feet - pos;
-                var along = NVec3.Dot(d, fwd); var lateral = NVec3.Dot(d, right);
-                if (along < car.HalfLength - 1.4f || along > car.HalfLength + Harvester.ReelReachM || MathF.Abs(lateral) > car.HalfWidth || d.Y < -0.6f || d.Y > 2.5f) continue;
+                if (!Harvester.Reel.Contains(pos, car.State.Yaw, t.Feet + NVec3.UnitY * 0.1f)) continue;
                 if (car.HitCooldown.TryGetValue(t.Id, out var until) && _elapsed < until) continue;
                 car.HitCooldown[t.Id] = _elapsed + RunOverCooldown;
+                _harvVictims[t.Id] = car;
                 var r = Deal(attacker, SpecialWeapons.Harvester, t.Id, Harvester.ReelDamage, false, false);
                 if (r != DamageResult.Ignored) GD.Print($"server: the harvester's reel drew in #{t.Id} ({r})");
+                else _harvVictims.Remove(t.Id);
             }
         }
         finally { ReturnTargets(targets); }
-        // the rest of the body: whoever the machine drives over
-        RunOverTargets(new RunOverSweep(MoverKind.GroundVehicle, N(car.PrevPos), pos, car.State.Yaw, car.HalfWidth, car.HalfLength, fwd, car.State.Speed, Harvester.ReelDamage, attacker, car.HitCooldown), id => car.Seat.SeatOf(id) >= 0);
     }
 
     // ---- the corpse in the machine ----
@@ -303,31 +336,27 @@ public partial class NetServer
     /// <summary>A kill event (<c>PlayerKilled</c>): when the harvester made it, the body is not thrown, it goes into the machine.</summary>
     void HarvesterOnKill(PlayerKilled k)
     {
-        if (_harvCar is not { Destroyed: false } car) return;
-        var byMachine = k.Weapon == SpecialWeapons.Harvester
-            || (k.Weapon == SpecialWeapons.Vehicle && _byId.TryGetValue(k.Killer, out var killer) && killer.Car == car && killer.CarSeat == 0);
-        if (!byMachine) return;
-        _harvVictims.Add(k.Victim);
+        if (k.Weapon != SpecialWeapons.Harvester) return; // only the reel
+        if (!_harvVictims.TryGetValue(k.Victim, out var car) || car.Destroyed) { _harvVictims.Remove(k.Victim); return; }
         _deathPush.Remove(k.Victim); // no ragdoll throw: the body lies where it fell until the machine draws it in
     }
 
     /// <summary>A corpse was made (<see cref="SpawnCorpse"/>): when the harvester killed its player the corpse begins its way into the machine.</summary>
     void HarvesterOnCorpse(ushort victim, ushort corpseId, Corpse corpse)
     {
-        if (!_harvVictims.Remove(victim) || _harvCar is not { Destroyed: false }) return;
+        if (!_harvVictims.Remove(victim, out var car) || car.Destroyed) return;
         corpse.Attach(corpse.Position); // seated: it cannot be looted and is moved by the machine
-        _machineCorpses.Add((new MachineCorpse(corpseId, Harvester), corpse.Position));
+        _machineCorpses.Add((new MachineCorpse(corpseId, Harvester), corpse.Position, car));
         HarvesterFx(HarvesterCodec.FxKind.Drawn, corpse.Position, corpseId);
     }
 
     void StepMachineCorpses(float dt)
     {
         if (_machineCorpses.Count == 0) return;
-        var car = _harvCar;
         for (var i = _machineCorpses.Count - 1; i >= 0; i--)
         {
-            var (m, from) = _machineCorpses[i];
-            var machineGone = car == null || car.Destroyed; // it blew up or was hidden: whatever is in it is lost, a body still outside is left where it is
+            var (m, from, car) = _machineCorpses[i];
+            var machineGone = car.Destroyed; // it blew up or was hidden: whatever is in it is lost, a body still outside is left where it is
             if (m.Phase == MachineCorpsePhase.Drawn)
             {
                 var body = _corpses.Get(m.Corpse);
@@ -337,7 +366,7 @@ public partial class NetServer
                     _machineCorpses.RemoveAt(i);
                     continue;
                 }
-                var fwd0 = new NVec3(car!.Forward.X, 0, car.Forward.Z);
+                var fwd0 = new NVec3(car.Forward.X, 0, car.Forward.Z);
                 var intake0 = N(car.GlobalPosition) + fwd0 * (car.HalfLength - 0.2f) + NVec3.UnitY * 0.9f;
                 var k = m.DrawFraction;
                 body.Follow(NVec3.Lerp(from, intake0, k * k * (3f - 2f * k)));
@@ -354,7 +383,7 @@ public partial class NetServer
                     }
                     break;
                 case MachineCorpsePhase.Baled:
-                    EjectBale(car!, _machineItems.Remove(m.Corpse, out var items) ? items : new List<ItemStack>());
+                    EjectBale(car, _machineItems.Remove(m.Corpse, out var items) ? items : new List<ItemStack>());
                     _machineCorpses.RemoveAt(i);
                     break;
             }
@@ -379,6 +408,67 @@ public partial class NetServer
         GD.Print($"server: harvester bale {cid} at ({at.X:F1},{at.Y:F1},{at.Z:F1}) with {items.Count} items");
     }
 
+    // ---- the cut: the real path of the reel ----
+
+    /// <summary>The crop field (index in the field list, the wire id) a point lies on, or -1.</summary>
+    int CropFieldAt(NVec2 p)
+    {
+        var fields = CropFieldList;
+        if (_cropBounds == null || _cropBounds.Count != fields.Count)
+            _cropBounds = fields.Select(f => (new NVec2(f.Ring.Min(v => v.X), f.Ring.Min(v => v.Y)), new NVec2(f.Ring.Max(v => v.X), f.Ring.Max(v => v.Y)))).ToList();
+        for (var i = 0; i < fields.Count; i++)
+        {
+            var (lo, hi) = _cropBounds[i];
+            if (p.X < lo.X || p.X > hi.X || p.Y < lo.Y || p.Y > hi.Y) continue;
+            if (Poly.Contains(fields[i].Ring, p)) return i;
+        }
+        return -1;
+    }
+
+    /// <summary>While somebody drives a harvester forward over a crop field its reel cuts a swath: the real path, sampled every couple of metres, whoever drives. The kept stretches are sent in batches.</summary>
+    void StepSwath(ServerCar car)
+    {
+        if (Map == null) return;
+        if (!_samplers.TryGetValue(car.Id, out var sampler)) _samplers[car.Id] = sampler = new SwathSampler(Harvester);
+        var reel = Harvester.Reel.Centre(new NVec2(car.GlobalPosition.X, car.GlobalPosition.Z), car.State.Yaw);
+        var active = car.State.Speed >= Harvester.CutMinSpeedMps;
+        var field = active ? CropFieldAt(reel) : -1;
+        if (!sampler.Step(field, reel, active, out var a, out var b)) return;
+        if (!_swaths.TryGetValue(field, out var sf)) _swaths[field] = sf = new SwathField { Swath = new FieldSwath(Harvester, CropFieldList[field].DropsBales) };
+        var before = sf.Swath.PointCount;
+        if (!sf.Swath.TryAdd(a, b, _swathTotal)) { FlushSwath(field, sf); sf.Open.Clear(); return; }
+        _swathTotal += sf.Swath.PointCount - before;
+        sf.LastCut = _elapsed;
+        if (sf.Open.Count == 0 || sf.Open[^1] != a) { FlushSwath(field, sf); sf.Open.Clear(); sf.Open.Add(a); }
+        sf.Open.Add(b);
+        for (var i = sf.Bales.Count; i < sf.Swath.Bales.Count; i++)
+        {
+            var (pos, _) = sf.Swath.Bales[i];
+            var ground = Map.GroundHeight(pos.X, pos.Y);
+            if (float.IsNaN(ground)) ground = Map.GroundHeightOrMean(pos.X, pos.Y);
+            sf.Bales.Add(new HayBale(new NVec3(pos.X, ground, pos.Y), Harvester, (ushort)i));
+        }
+    }
+
+    void FlushSwath(int field, SwathField sf)
+    {
+        if (sf.Open.Count < 2) return;
+        foreach (var bytes in SwathCodec.Pack((ushort)field, Harvester.HeaderWidthM, 0, false, sf.Open)) BroadcastEvent(EventKind.HarvesterCut, bytes);
+        sf.Open.RemoveRange(0, sf.Open.Count - 1);
+    }
+
+    /// <summary>Twice a second: the kept stretches go out; a field's bales fade <see cref="HarvesterConfig.DroppedBaleFadeS"/> after its last cut (every client counts the same from the age it was told).</summary>
+    void FlushSwaths()
+    {
+        if (_swaths.Count == 0 || _elapsed < _swathFlushAt) return;
+        _swathFlushAt = _elapsed + 0.5;
+        foreach (var (field, sf) in _swaths)
+        {
+            FlushSwath(field, sf);
+            if (sf.Bales.Count > 0 && _elapsed - sf.LastCut >= Harvester.DroppedBaleFadeS) { sf.Bales.Clear(); sf.Swath.FadeBales(); sf.Open.Clear(); }
+        }
+    }
+
     // ---- bale fire ----
 
     HayBale[] StaticBales => _staticBales ??= (Map?.CropBales ?? Array.Empty<Vector3>()).Select(p => new HayBale(N(p), Harvester)).ToArray();
@@ -389,6 +479,9 @@ public partial class NetServer
         if (!(length > 0)) return;
         foreach (var kv in _madeBales)
             if (kv.Value.State == BaleState.Intact && _corpses.Get(kv.Key) != null && kv.Value.HitBy(from, dir, length) && kv.Value.Ignite()) HarvesterFx(HarvesterCodec.FxKind.BaleLit, kv.Value.Position, kv.Key);
+        foreach (var sf in _swaths.Values)
+            for (var i = 0; i < sf.Bales.Count; i++)
+                if (sf.Bales[i].State == BaleState.Intact && sf.Bales[i].HitBy(from, dir, length) && sf.Bales[i].Ignite()) HarvesterFx(HarvesterCodec.FxKind.BaleLit, sf.Bales[i].Position, HarvesterCodec.DroppedBaleId(i));
         var bales = StaticBales;
         for (var i = 0; i < bales.Length; i++)
             if (bales[i].State == BaleState.Intact && bales[i].HitBy(from, dir, length) && bales[i].Ignite()) HarvesterFx(HarvesterCodec.FxKind.BaleLit, bales[i].Position, HarvesterCodec.StaticBaleId(i));
@@ -400,6 +493,7 @@ public partial class NetServer
         var any = false;
         foreach (var kv in _madeBales) if (kv.Value.Burning) { any = true; break; }
         if (!any && _staticBales != null) foreach (var b in _staticBales) if (b.Burning) { any = true; break; }
+        if (!any) foreach (var sf in _swaths.Values) foreach (var b in sf.Bales) if (b.Burning) { any = true; break; }
         if (!any) { PruneMadeBales(); return; }
         _baleFolk.Clear();
         foreach (var o in _byId.Values)
@@ -411,6 +505,7 @@ public partial class NetServer
         }
         foreach (var kv in _madeBales) if (kv.Value.Burning) Fire(kv.Value, kv.Key);
         if (_staticBales != null) for (var i = 0; i < _staticBales.Length; i++) if (_staticBales[i].Burning) Fire(_staticBales[i], HarvesterCodec.StaticBaleId(i));
+        foreach (var sf in _swaths.Values) for (var i = 0; i < sf.Bales.Count; i++) if (sf.Bales[i].Burning) Fire(sf.Bales[i], HarvesterCodec.DroppedBaleId(i));
         PruneMadeBales();
     }
 
