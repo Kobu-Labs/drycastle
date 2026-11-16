@@ -1354,12 +1354,15 @@ The driver's client shows an animal its predicted vehicle hit as thrown before t
 stateDiagram-v2
     [*] --> None
     None --> Flying
+    Flying --> Confirmed
     Flying --> Settling
+    Confirmed --> Settling
     Settling --> None
 ```
 
 - **None**: Drawn where the server has it (plus what is left of the last offset). A touch of the predicted vehicle starts Flying.
-- **Flying**: Flies on the guessed arc (clock: ConfirmSeconds). The server's throw showing, or the clock running out, ends it: the difference to the server's position becomes the offset.
+- **Flying**: Flies on the guessed arc (clock: ConfirmSeconds). The server's throw showing makes it Confirmed; the clock running out (a miss) makes it Settling, the difference to the server's position the offset.
+- **Confirmed**: The server shows the throw, later than the guess: the guessed arc is kept, and the body lies where it lands, until the server's body has landed too (clock: LandSeconds, a guard). Then Settling, the difference of the two landing spots the offset.
 - **Settling**: Drawn at the server's position plus the fading offset (clock: SettleSeconds); no new guess, as the server throws one body once in that time.
 
 ## WorldInterest.Relevance
