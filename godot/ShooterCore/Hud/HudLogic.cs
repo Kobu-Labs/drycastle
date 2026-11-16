@@ -101,20 +101,23 @@ public static class HudLogic
     }
 
     /// <summary>
-    /// Map rule (#313): a vehicle with an enemy aboard is not drawn on the minimap or tactical map. Enemy aboard = its driver is an enemy,
-    /// or an enemy on-foot-in-vehicle rider sits within <paramref name="margin"/> m of its footprint (covers gunner-only seats). The player's
-    /// own vehicle is never hidden: they drive it, or their own ride position is inside it. Mixed riders (friend + enemy): hidden.
+    /// Map rule (#313): a vehicle with an enemy on any seat is not drawn on the minimap or tactical map. The seats are the ids the server says
+    /// (ADR 0026): the driver, and <paramref name="others"/> = seats 1..3 (0 = empty). The player's own vehicle is never hidden (they sit in it).
+    /// Mixed riders (friend + enemy) hide it. FFA: <paramref name="isEnemy"/> is true for everyone else.
     /// </summary>
-    public static bool HideEnemyOccupiedVehicle(ushort driver, ushort myId, Func<ushort, bool> isEnemy,
-        System.Numerics.Vector3 carPos, float yaw, float halfWidth, float halfLength,
-        IEnumerable<(ushort Id, System.Numerics.Vector3 Pos)> riders, System.Numerics.Vector3? myRidePos = null, float margin = 1f)
+    public static bool HideEnemyOccupiedVehicle(ushort driver, IReadOnlyList<ushort>? others, ushort myId, Func<ushort, bool> isEnemy)
     {
+        var enemy = false;
         if (driver == myId) return false;
-        if (myRidePos is { } mine && VehicleReach.DistanceToFootprint(carPos, yaw, halfWidth, halfLength, mine) <= margin) return false;
-        if (driver != 0 && isEnemy(driver)) return true;
-        foreach (var (id, pos) in riders)
-            if (isEnemy(id) && VehicleReach.DistanceToFootprint(carPos, yaw, halfWidth, halfLength, pos) <= margin) return true;
-        return false;
+        if (driver != 0 && isEnemy(driver)) enemy = true;
+        if (others != null)
+            foreach (var id in others)
+            {
+                if (id == 0) continue;
+                if (id == myId) return false;
+                if (isEnemy(id)) enemy = true;
+            }
+        return enemy;
     }
 
     /// <summary>

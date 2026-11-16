@@ -136,38 +136,37 @@ public class StatePaletteTests
     }
 
     // #313: vehicles with an enemy aboard are hidden on the maps
-    static readonly System.Numerics.Vector3 Car = new(10, 0, 10);
-    static bool Hide(ushort driver, ushort me, Func<ushort, bool> enemy, (ushort, System.Numerics.Vector3)[]? riders = null, System.Numerics.Vector3? myRide = null) =>
-        HudLogic.HideEnemyOccupiedVehicle(driver, me, enemy, Car, 0, 1.5f, 3f, riders ?? Array.Empty<(ushort, System.Numerics.Vector3)>(), myRide);
+    static bool Hide(ushort driver, ushort me, Func<ushort, bool> enemy, params ushort[] others) =>
+        HudLogic.HideEnemyOccupiedVehicle(driver, others, me, enemy);
 
     [Fact]
     public void EmptyAndFriendlyVehiclesStayOnTheMap()
     {
         Assert.False(Hide(0, 1, id => id == 2));
         Assert.False(Hide(3, 1, id => id == 2)); // friend drives
+        Assert.False(Hide(3, 1, id => id == 2, 0, 4, 0)); // friends only
     }
 
     [Fact]
     public void EnemyDriverHidesTheVehicle() => Assert.True(Hide(2, 1, id => id == 2));
 
     [Fact]
-    public void EnemyGunnerInsideFootprintHidesAGunnerOnlyVehicle()
+    public void EnemyOnAnySeatHidesAGunnerOnlyVehicle()
     {
-        Assert.True(Hide(0, 1, id => id == 2, new[] { ((ushort)2, new System.Numerics.Vector3(10, 1, 11)) }));
-        Assert.True(Hide(0, 1, id => id == 2, new[] { ((ushort)2, new System.Numerics.Vector3(11.5f + 0.9f, 1, 10)) })); // within the 1 m margin
-        Assert.False(Hide(0, 1, id => id == 2, new[] { ((ushort)2, new System.Numerics.Vector3(30, 0, 30)) })); // a rider of another vehicle
-        Assert.False(Hide(0, 1, id => id == 2, new[] { ((ushort)3, new System.Numerics.Vector3(10, 1, 10)) })); // a friendly rider
+        Assert.True(Hide(0, 1, id => id == 2, 2));
+        Assert.True(Hide(0, 1, id => id == 2, 0, 0, 2));
+        Assert.False(Hide(0, 1, id => id == 2, 3)); // a friendly rider
+        Assert.False(Hide(0, 1, id => id == 2, null!)); // no seats record
     }
 
     [Fact]
-    public void MixedRidersHide() =>
-        Assert.True(Hide(3, 1, id => id == 2, new[] { ((ushort)2, new System.Numerics.Vector3(10, 1, 10)) }));
+    public void MixedRidersHide() => Assert.True(Hide(3, 1, id => id == 2, 2));
 
     [Fact]
     public void OwnVehicleIsNeverHidden()
     {
-        Assert.False(Hide(1, 1, _ => true, new[] { ((ushort)2, new System.Numerics.Vector3(10, 1, 10)) })); // I drive, an enemy rides along
-        Assert.False(Hide(2, 1, id => id == 2, null, new System.Numerics.Vector3(10, 1, 10))); // I am a passenger of an enemy-driven vehicle
+        Assert.False(Hide(1, 1, _ => true, 2)); // I drive, an enemy rides along
+        Assert.False(Hide(2, 1, id => id == 2, 1)); // I am a passenger of an enemy-driven vehicle
     }
 
     [Fact]
