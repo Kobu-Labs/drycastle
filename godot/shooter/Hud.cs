@@ -62,7 +62,8 @@ public partial class Hud : CanvasLayer
     Control _feedRoot = null!, _feedBox = null!;
     readonly PanelContainer[] _feed = new PanelContainer[FeedRows];
     readonly Label[] _feedKiller = new Label[FeedRows], _feedWeapon = new Label[FeedRows], _feedVictim = new Label[FeedRows];
-    readonly List<(KillMsg Msg, string Killer, string Victim)> _kills = new();
+    readonly BlurText[] _feedBlur = new BlurText[FeedRows];
+    readonly List<FeedEntry> _kills = new();
     readonly List<double> _killTimes = new();
     (int, int) _feedShown = (-1, -1);
     // respawn, protection, hints
@@ -209,8 +210,8 @@ public partial class Hud : CanvasLayer
         _root.Size = vp / s;
         // the feed sits beside _root, so it follows the same resolution and UI scale itself
         _feedRoot.Scale = new Vector2(s, s);
-        _feedRoot.Position = Vector2.Zero;
         _feedRoot.Size = vp / s;
+        ApplyFeedAside();
         _gap = -1;
     }
 
@@ -322,7 +323,8 @@ public partial class Hud : CanvasLayer
             _feedKiller[i] = L("");
             _feedWeapon[i] = L("", "HudDim");
             _feedVictim[i] = L("");
-            h.AddChild(_feedKiller[i]); h.AddChild(_feedWeapon[i]); h.AddChild(_feedVictim[i]);
+            _feedBlur[i] = new BlurText(Strings.T("hunt.hidden.name")) { Visible = false }; // a hunt line's Mystery creature the viewer has not caught
+            h.AddChild(_feedKiller[i]); h.AddChild(_feedWeapon[i]); h.AddChild(_feedBlur[i]); h.AddChild(_feedVictim[i]);
             v.AddChild(row); _feed[i] = row;
         }
     }
@@ -493,9 +495,19 @@ public partial class Hud : CanvasLayer
 
     public void AddKill(KillMsg k, string killer, string victim)
     {
-        _kills.Add((k, killer, victim)); _killTimes.Add(Now);
+        _kills.Add(new FeedEntry(k, killer, victim)); _killTimes.Add(Now);
         if (_kills.Count > 64) { _kills.RemoveRange(0, 32); _killTimes.RemoveRange(0, 32); }
         AddOwnKill(k, killer, victim);
+        _feedShown = (-1, -1);
+    }
+
+    /// <summary>A server-wide Hunter's Log announcement (a record or a first) as a line of the kill feed; the owner's own are kept for the compact feed of a control session too.</summary>
+    public void AddHuntLine(HuntFeedLine line)
+    {
+        var e = new FeedEntry(new KillMsg(0, 0, 0), "", "", line); // a hunt line has no kill: the message is a placeholder the feed never reads
+        _kills.Add(e); _killTimes.Add(Now);
+        if (_kills.Count > 64) { _kills.RemoveRange(0, 32); _killTimes.RemoveRange(0, 32); }
+        if (line.Mine) AddOwnEntry(e);
         _feedShown = (-1, -1);
     }
 
@@ -633,6 +645,7 @@ public partial class Hud : CanvasLayer
         UpdateBreath();
         UpdateTacticalMap();
         UpdateEquipment();
+        UpdateHuntersLog();
         var want = (Input.IsActionPressed("scoreboard") && !ChatOpen) || _phase == MatchPhase.Ending; // Tab completes in the chat box
         if (want != _boardShown || (want && _boardDirty)) UpdateBoard(want);
     }
@@ -663,7 +676,9 @@ public partial class Hud : CanvasLayer
         for (var i = 0; i < FeedRows; i++)
         {
             if (i >= w.Count) { _feed[i].Visible = false; continue; }
-            var (k, killer, victim) = list[w.Start + i];
+            var (k, killer, victim, hunt) = list[w.Start + i];
+            if (hunt != null) { ShowHuntFeedRow(i, hunt); continue; }
+            ResetFeedRow(i);
             var mine = k.Killer == MyId || k.Victim == MyId;
             var suicide = k.Killer == k.Victim;
             _feed[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
@@ -675,6 +690,38 @@ public partial class Hud : CanvasLayer
             Tint(_feedKiller[i], RelationColor(killerTeam)); Tint(_feedVictim[i], RelationColor(victimTeam));
             _feed[i].Visible = true;
         }
+    }
+
+    /// <summary>A hunt line: the tag in its colour (and words), then the sentence; a Mystery creature the viewer has not caught is the blurred placeholder between its two halves.</summary>
+    void ShowHuntFeedRow(int i, HuntFeedLine l)
+    {
+        _feed[i].ThemeTypeVariation = l.Mine ? "HudRowMine" : "HudRow";
+        Set(_feedKiller[i], l.Tag);
+        Tint(_feedKiller[i], l.Record ? ShooterTheme.Warn : ShooterTheme.Good);
+        _feedWeapon[i].ThemeTypeVariation = "Label";
+        Set(_feedWeapon[i], l.Hidden ? l.Before : l.Before + l.Species + l.After);
+        Tint(_feedWeapon[i], null);
+        _feedBlur[i].Visible = l.Hidden;
+        Set(_feedVictim[i], l.Hidden ? l.After : "");
+        Tint(_feedVictim[i], null);
+        // a sentence is longer than a kill: the part after the tag wraps inside the feed's width instead of widening it past the screen's edge
+        Wrap(_feedWeapon[i], !l.Hidden);
+        Wrap(_feedVictim[i], l.Hidden);
+        _feed[i].Visible = true;
+    }
+
+    static void Wrap(Label l, bool on)
+    {
+        l.AutowrapMode = on ? TextServer.AutowrapMode.WordSmart : TextServer.AutowrapMode.Off;
+        l.SizeFlagsHorizontal = on ? Control.SizeFlags.ExpandFill : Control.SizeFlags.Fill;
+    }
+
+    /// <summary>A kill row after a hunt row used it: the dim weapon tag, no blur, no wrapping.</summary>
+    void ResetFeedRow(int i)
+    {
+        Wrap(_feedWeapon[i], false); Wrap(_feedVictim[i], false);
+        if (_feedWeapon[i].ThemeTypeVariation != "HudDim") _feedWeapon[i].ThemeTypeVariation = "HudDim";
+        if (_feedBlur[i].Visible) _feedBlur[i].Visible = false;
     }
 
     static string WithYou(string name, bool mine) => mine ? Strings.F("score.you", name) : name;

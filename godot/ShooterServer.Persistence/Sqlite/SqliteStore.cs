@@ -16,6 +16,7 @@ public sealed class SqliteProgressionStore : IProgressionStore
         Unlocks = new UnlockRepo(db);
         Stats = new StatsRepo(db);
         Camo = new CamoRepo(db);
+        Hunts = new HuntRepo(db);
     }
 
     public IProfileRepository Profiles { get; }
@@ -23,6 +24,7 @@ public sealed class SqliteProgressionStore : IProgressionStore
     public IUnlockRepository Unlocks { get; }
     public IStatsRepository Stats { get; }
     public ICamoRepository Camo { get; }
+    public IHuntRepository Hunts { get; }
 
     /// <summary>
     /// Opens (creating if needed) and migrates the database. <paramref name="curve"/> (from levels.json) turns XP into the Level on read.
@@ -263,5 +265,47 @@ public sealed class SqliteProgressionStore : IProgressionStore
 
         public Task RecordMatchAsync(long playerId) =>
             db.Write("record match", c => Exec(c, "UPDATE stats SET matches = matches + 1 WHERE player_id = $id;", ("$id", playerId)));
+    }
+
+    sealed class HuntRepo(SqliteWorker db) : IHuntRepository
+    {
+        public Task AppendAsync(HuntRecord h) => db.Write("append hunt", c => Exec(c,
+            "INSERT INTO hunts (player_id, species, exact_species, variant, kg, distance_m, weapon, hit_along, hit_height, hit_right, hit_head, hit_pose, hit_frame, x, y, z, hunted_at) " +
+            "VALUES ($pl, $sp, $ex, $va, $kg, $d, $w, $ha, $hh, $hr, $hd, $hp, $hf, $x, $y, $z, $at);",
+            ("$pl", h.PlayerId), ("$sp", h.Species), ("$ex", h.Exact), ("$va", h.Variant), ("$kg", h.Kg), ("$d", h.DistanceM), ("$w", h.Weapon),
+            ("$ha", (int?)h.Diagram?.Along), ("$hh", (int?)h.Diagram?.Height), ("$hr", h.Diagram is { } r ? (r.RightFlank ? 1 : 0) : null), ("$hd", h.Diagram is { } g ? (g.Head ? 1 : 0) : null),
+            ("$hp", (int?)h.Diagram?.Pose), ("$hf", (int?)h.Diagram?.Frame), ("$x", h.X), ("$y", h.Y), ("$z", h.Z), ("$at", Stamp(h.AtUtc))));
+
+        public Task<HuntPage> PageAsync(HuntQuery q) => db.Read(c =>
+        {
+            var args = new List<object>();
+            var where = HuntSql.Where(q, args);
+            var count = Convert.ToInt32(Query(c, $"SELECT COUNT(*) FROM hunts h WHERE {where};", args, r => r.GetInt64(0)).Single());
+            var order = HuntSql.OrderBy(q, args);
+            var rows = Query(c, $"SELECT {HuntSql.Columns} FROM hunts h JOIN players p ON p.id = h.player_id WHERE {where} ORDER BY {order} LIMIT {HuntBook.PageSize} OFFSET {q.Skip};", args, ReadRow);
+            return new HuntPage(rows, count);
+        });
+
+        public Task<IReadOnlyList<HuntRow>> GetAllAsync() => db.Read<IReadOnlyList<HuntRow>>(c =>
+            Query(c, $"SELECT {HuntSql.Columns} FROM hunts h JOIN players p ON p.id = h.player_id ORDER BY h.hunted_at, h.id;", new List<object>(), ReadRow));
+
+        static List<T> Query<T>(SqliteConnection c, string sql, List<object> args, Func<SqliteDataReader, T> read)
+        {
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = sql;
+            for (var i = 0; i < args.Count; i++) cmd.Parameters.AddWithValue("@p" + i, args[i]); // every one is in the text: the list grows with the clauses
+            using var r = cmd.ExecuteReader();
+            var list = new List<T>();
+            while (r.Read()) list.Add(read(r));
+            return list;
+        }
+
+        static HuntRow ReadRow(SqliteDataReader r)
+        {
+            HitDiagram? diagram = r.IsDBNull(9) ? null : new HitDiagram((byte)r.GetInt32(9), (byte)r.GetInt32(10), r.GetInt32(11) != 0, r.GetInt32(12) != 0, (byte)r.GetInt32(13), (byte)r.GetInt32(14));
+            var hunt = new HuntRecord(r.GetInt64(0), r.GetInt64(1), r.GetString(3), r.GetString(4), r.GetString(5), r.IsDBNull(6) ? null : (float)r.GetDouble(6), r.IsDBNull(7) ? null : (float)r.GetDouble(7),
+                r.GetString(8), diagram, (float)r.GetDouble(15), (float)r.GetDouble(16), (float)r.GetDouble(17), ParseStamp(r.GetString(18)).ToUniversalTime());
+            return new HuntRow(hunt, r.GetString(2));
+        }
     }
 }

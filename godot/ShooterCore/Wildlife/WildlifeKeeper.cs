@@ -98,6 +98,21 @@ public sealed class WildlifeKeeper : IAnimalHits
 
     int PopulateAnimals(Func<string, IReadOnlyList<Vector3>> habitat, IAnimalWorld ground)
     {
+        foreach (var mix in _cfg.Herds)
+        {
+            var points = habitat(mix.HabitatKind);
+            if (points.Count == 0) { Log?.Invoke($"wildlife: no habitat point for the {mix.Id} herds ({mix.HabitatKind}): none spawned"); continue; }
+            var left = mix.Count;
+            while (left > 0 && _byHit.Count < _cfg.MaxAnimals)
+            {
+                var members = mix.Roll(Math.Min(left, _rng.Next(mix.Size.Min, mix.Size.Max + 1)), _rng).Select(id => _animals.IndexOf(id)).Where(i => i >= 0).ToList();
+                if (members.Count == 0) break;
+                var r = SpawnHerd(members, mix.SpreadM, mix.RangeM, mix.MoveMinSeconds, mix.MoveMaxSeconds, points, ground, out var made);
+                if (r == Spawned.EntitiesFull) return _byHit.Count;
+                if (r == Spawned.NoGround) break;
+                left -= made;
+            }
+        }
         foreach (var sp in _cfg.Species)
         {
             var species = _animals.IndexOf(sp.Id);
@@ -107,7 +122,9 @@ public sealed class WildlifeKeeper : IAnimalHits
             var left = sp.Count;
             while (left > 0 && _byHit.Count < _cfg.MaxAnimals)
             {
-                var r = sp.Herd is { } rules ? SpawnHerd(species, Math.Min(left, _rng.Next(rules.Min, rules.Max + 1)), rules, points, ground, out var made) : SpawnSingle(species, points, ground, out made);
+                var r = sp.Herd is { } rules
+                    ? SpawnHerd(Enumerable.Repeat(species, Math.Min(left, _rng.Next(rules.Min, rules.Max + 1))).ToList(), rules.SpreadM, rules.RangeM, rules.MoveMinSeconds, rules.MoveMaxSeconds, points, ground, out var made)
+                    : SpawnSingle(species, points, ground, out made);
                 if (r == Spawned.EntitiesFull) return _byHit.Count;
                 if (r == Spawned.NoGround) break; // this species has no usable point: the rest has none either
                 left -= made;
@@ -125,20 +142,21 @@ public sealed class WildlifeKeeper : IAnimalHits
         return r;
     }
 
-    /// <summary>A herd of <paramref name="size"/> animals: one habitat point is its home, each member starts at a spot with ground within the spread of it.</summary>
-    Spawned SpawnHerd(int species, int size, HerdRules rules, IReadOnlyList<Vector3> points, IAnimalWorld ground, out int made)
+    /// <summary>A herd of <paramref name="members"/> (animals.json indices, one per animal, any mix of species): one habitat point is its home, each member starts at a spot with ground within the spread of it.</summary>
+    Spawned SpawnHerd(IReadOnlyList<int> members, float spreadM, float rangeM, float moveMin, float moveMax, IReadOnlyList<Vector3> points, IAnimalWorld ground, out int made)
     {
         made = 0;
-        var radius = _animals.Animals[species].BodyRadiusOf(0);
+        var radius = members.Max(i => _animals.Animals[i].BodyRadiusOf(0)); // the biggest body of the herd needs room at home and at each drift target
         if (PickPoint(points, ground, radius) is not { } home) return Spawned.NoGround;
-        var herd = new Herd(home, rules.SpreadM, rules.RangeM, rules.MoveMinSeconds, rules.MoveMaxSeconds, _rng.Next(), radius);
-        for (var k = 0; k < size && _byHit.Count < _cfg.MaxAnimals; k++)
+        var herd = new Herd(home, spreadM, rangeM, moveMin, moveMax, _rng.Next(), radius);
+        for (var k = 0; k < members.Count && _byHit.Count < _cfg.MaxAnimals; k++)
         {
+            var species = members[k];
             var at = home;
             for (var attempt = 0; attempt < 6; attempt++)
             {
                 var angle = (float)_rng.NextDouble() * MathF.Tau;
-                var reach = (float)Math.Sqrt(_rng.NextDouble()) * rules.SpreadM;
+                var reach = (float)Math.Sqrt(_rng.NextDouble()) * spreadM;
                 var p = new Vector3(home.X + MathF.Cos(angle) * reach, 0, home.Z + MathF.Sin(angle) * reach);
                 if (ground.GroundY(p.X, p.Z) != null && ground.Fits(p.X, p.Z, radius)) { at = p; break; } // not inside a building
             }

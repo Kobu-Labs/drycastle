@@ -180,6 +180,20 @@ public enum EventKind : byte
     DemonPounce = 223,
     /// <summary>Server to everyone: a one-shot effect of the Thieves event (<see cref="ThievesFxCodec"/>: u8 <see cref="ThievesFxKind"/>, a point, a u16 id): the Raid van's honk, a Thief's electrocution. Kinds 232-239 belong to the Thieves event.</summary>
     ThievesFx = 232,
+    /// <summary>Client to server: one page of the Hunter's Log table (<see cref="HuntEvents.EncodeRequest"/>, <see cref="HuntsRequest"/>). Kinds 100-106 belong to the Hunter's Log (#336).</summary>
+    HuntsRequest = 100,
+    /// <summary>Server to the asker: that page, redacted for them (<see cref="HuntsAnswer"/>).</summary>
+    HuntsPage = 101,
+    /// <summary>Client to server: the records of every species (u16 request id, <see cref="HuntEvents.EncodeRecordsRequest"/>).</summary>
+    RecordsRequest = 102,
+    /// <summary>Server to the asker: the records, redacted for them (<see cref="RecordsAnswer"/>).</summary>
+    Records = 103,
+    /// <summary>Client to server: one player's log (<see cref="PlayerLogRequest"/>; player 0 is the asker's own).</summary>
+    PlayerLogRequest = 104,
+    /// <summary>Server to the asker: that log, redacted for them (<see cref="PlayerLogAnswer"/>).</summary>
+    PlayerLog = 105,
+    /// <summary>Server to everyone: a new record, a player's first of a species, or both in one (<see cref="HuntAnnounceMsg"/>); the same hunt is redacted separately for each recipient.</summary>
+    HuntAnnounce = 106,
     /// <summary>Server to everyone, and to a joiner: the satellite dishes taken so far (<see cref="DishCodec"/>: the whole set of object ids, also when it is empty after a round reset). The client hides those objects' nodes.</summary>
     DishTaken = 233,
 }
@@ -287,7 +301,8 @@ public static class Wire
     //   v55 world interest (ADR 0025): world record flag FDormant 64 (the entity left this client's interest, no fields); animals, flocks and poop outside 800 m are not sent
     //   v56 wild animal size and weight (ticket #309): the animal state byte's bits 5-7 are the size step; event 25 ends in the animal's weight (u16, tenths of a kg)
     //   v61 the bus garage: event 245 GarageDoor (its doors open or closed)
-    public const byte ProtocolVersion = 61;
+    //   v62 the Hunter's Log (#336): events 100-106 (requests for a page of hunts, the records and a player's log, their redacted answers, and the server-wide announcement)
+    public const byte ProtocolVersion = 62;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

@@ -777,6 +777,51 @@ stateDiagram-v2
 - **Open**: Wanted open at full alpha. Reduce motion jumps Closed -> Open and Open -> Closed.
 - **Closing**: Not wanted, alpha ramping down; Show during it turns back to Opening from the current alpha.
 
+## HuntersLog.Load
+
+One query of the Hunter's Log: asked, answered, failed (Retry) or no such player.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Loading
+    Loading --> Ready
+    Loading --> Failed
+    Loading --> Missing
+    Ready --> Loading
+    Failed --> Loading
+    Missing --> Loading
+```
+
+- **Loading**: Waiting for the answer carrying this request id; an answer to an older request is dropped. Gives up (Failed) after the timeout.
+- **Failed**: The server could not read it, or never answered: the screen offers Retry.
+- **Missing**: The server knows no such player (a guest's own log, or a player that was never logged).
+
+## HuntersLog.Page
+
+Which page of the Hunter's Log shows: the first tab (own log, or another player's), Records, All hunts.
+
+```mermaid
+stateDiagram-v2
+    [*] --> MyLog
+    MyLog --> PlayerLog
+    MyLog --> Records
+    MyLog --> AllHunts
+    PlayerLog --> MyLog
+    PlayerLog --> PlayerLog
+    PlayerLog --> Records
+    PlayerLog --> AllHunts
+    Records --> MyLog
+    Records --> PlayerLog
+    Records --> AllHunts
+    AllHunts --> MyLog
+    AllHunts --> PlayerLog
+    AllHunts --> Records
+```
+
+- **MyLog**: The default, and where a screen opens. The asker's own log.
+- **PlayerLog**: Another player's log, opened from a name. Esc goes up to My Log; another tab keeps it parked on the first tab.
+
 ## Interact.Hold
 
 One hold of the interact key at a crate or a rozhlas set: idle, charging toward the send, sent once and waiting for the key to be released.
