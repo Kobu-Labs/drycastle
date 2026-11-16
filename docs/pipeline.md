@@ -419,6 +419,14 @@ through. The geometry is `ShooterCore/Colliders/PropColliders.cs`; the loader (`
 chunk and role, not one per tree. The surface of a hit (wood or foliage) comes from the tree lookup
 (`TreeColliders.GroupAt`). Trees that the viewer edits are not in the game's collision until the map is re-exported.
 
+**Per-tree hiding (map 0.12.0, `"base_uv2": true` in `trees.json`'s `model`).** Every props mesh that has tree triangles carries a
+second UV set (glTF `TEXCOORD_1`, Godot `UV2`, two floats per vertex): for a tree's vertices the tree's base point (`x`, `y` of its
+record, on the ground at the trunk centre) as (POSITION x, POSITION z) of that mesh, i.e. `x` and `-y` of the map frame; for every
+other vertex (fences) `export.NO_TREE_UV2` (1e6, 1e6). So `MODEL_MATRIX * vec4(UV2.x, VERTEX.y, UV2.y, 1.0)` is the world point
+of the tree base, and a vertex shader can drop a whole tree near the player with the chunk still one draw. Meshes without trees have
+no UV2. It is written by `export.to_trimesh` from `Mesh.bases` (set by `propmeshes.trees_mesh`) and renamed from trimesh's
+`_UV2` by `export.export_glb`, which every GLB that may hold trees (chunks, `parcel-run --glb`) goes through.
+
 ## Ground patches (preview and water)
 
 A ground patch (`ground_patches` in `edits.json`, see "Ground patches" under "Parcels and ground areas") is ground of one type in

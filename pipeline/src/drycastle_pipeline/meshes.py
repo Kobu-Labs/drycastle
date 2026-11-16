@@ -31,6 +31,9 @@ _MIN_PIECE_AREA = 1e-6
 class Mesh:
     tris: np.ndarray  # (n, 3, 3) float64
     colours: np.ndarray  # (n, 3) uint8
+    # (n, 2) per triangle: the (x, y) of the tree base the triangle belongs to (local metres), NaN for any other
+    # triangle; None = no tree in the mesh. Export writes it per vertex as the second UV set (TEXCOORD_1).
+    bases: np.ndarray | None = None
 
     @classmethod
     def empty(cls) -> "Mesh":
@@ -40,8 +43,13 @@ class Mesh:
     def concat(cls, meshes: list["Mesh"]) -> "Mesh":
         if not meshes:
             return cls.empty()
+        bases = None
+        if any(m.bases is not None for m in meshes):
+            bases = np.concatenate(
+                [m.bases if m.bases is not None else np.full((m.face_count, 2), np.nan) for m in meshes]
+            )
         return cls(
-            np.concatenate([m.tris for m in meshes]), np.concatenate([m.colours for m in meshes])
+            np.concatenate([m.tris for m in meshes]), np.concatenate([m.colours for m in meshes]), bases
         )
 
     @property

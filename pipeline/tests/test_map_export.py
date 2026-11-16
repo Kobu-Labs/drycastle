@@ -144,3 +144,20 @@ def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
     for name in tris:
         if name.endswith(("_props", "_props_collision")):
             assert len(scene.geometry[scene.graph[name][1]].faces) == tris[name]
+
+
+def test_baked_trees_carry_their_base_as_second_uv_set(ws) -> None:
+    import struct
+
+    export(ws)
+    assert json.loads((ws["out"] / "trees.json").read_text())["model"]["base_uv2"] is True
+    data = (ws["out"] / "chunks" / "chunk_0_0.glb").read_bytes()
+    doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
+    attrs = {m["name"]: m["primitives"][0]["attributes"] for m in doc["meshes"]}
+    trees = json.loads((ws["work"] / "props.json").read_text())["trees"]
+    # a tree's parcel props mesh (or the chunk-level one, for trees without a parcel) has TEXCOORD_1
+    with_trees = {f"parcel_{t['parcel']}_props" if t.get("parcel") else "props" for t in trees}
+    assert with_trees
+    for name in with_trees:
+        assert "TEXCOORD_1" in attrs[name], name
+    assert not any("_UV2" in a for a in attrs.values())

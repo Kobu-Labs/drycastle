@@ -7,6 +7,7 @@ glTF (x, y, z) = local (east, up, -north). parcels.json keeps local metres (x ea
 import hashlib
 import json
 import math
+import struct
 import sys
 from pathlib import Path
 
@@ -69,6 +70,11 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # 0.11.0: forest trees (props.trees.forest): trees.json's model carries a "forest" block (tapered trunk, crown tiers) and each
 # forest tree a "forest": 1 flag; the chunk meshes draw them with it. A loader that does not know it builds the old trunk and
 # crown solids for them, which no longer match the drawn tree. Trees without the flag are drawn and built as before.
+# 0.12.0: baked trees can be hidden one by one on the GPU. A props mesh with tree triangles (parcel_<ID>_props, the chunk-level
+# props) carries a second UV set (TEXCOORD_1, two floats per vertex): for a tree's vertices the tree's base (trees.json x, y) as
+# (POSITION x, POSITION z) of the same mesh, so MODEL_MATRIX * vec4(uv2.x, vertex.y, uv2.y, 1) is the base's world point; for all
+# other vertices (fences) NO_TREE_UV2, a point no player is near. Meshes without trees have no TEXCOORD_1, and trees.json's model
+# says "base_uv2": true. A loader that does not know it ignores the attribute and draws every tree; maps before 0.12.0 have none.
 # (no bump) urad.json (files.urad): the inside of the municipal office: entrance, rooms, worker seats, dictation desk.
 # (no bump) church.json (files.church): the inside of the church: door, seats with routes, spots, anchors, rooms.
 # (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
@@ -83,7 +89,9 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # Only maps with a group have it; a loader that does not know it, or a map without it, means "no groups".
 # (no bump) fences.json (files.fences): every fence section (two end points with ground z, height_m, type, parcel, property group),
 # for the game server's pets (the fence hop). A loader that does not know it, or a map without it, means "no fence data".
-MAP_VERSION_BASE = "0.11.0"
+MAP_VERSION_BASE = "0.12.0"
+NO_TREE_UV2 = 1.0e6  # TEXCOORD_1 of a vertex that is no tree
+BASE_UV2_ATTRIBUTE = "_UV2"  # trimesh writes custom attributes with a leading underscore; export_glb renames it
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 TREES_FORMAT_VERSION = 1
@@ -107,12 +115,18 @@ def to_trimesh(mesh: Mesh) -> trimesh.Trimesh:
     verts = to_gltf_axes(mesh.tris).reshape(-1, 3)
     faces = np.arange(len(verts)).reshape(-1, 3)
     rgba = np.concatenate([mesh.colours, np.full((len(mesh.colours), 1), 255, np.uint8)], axis=1)
-    return trimesh.Trimesh(
+    tm = trimesh.Trimesh(
         vertices=verts,
         faces=faces,
         vertex_colors=np.repeat(rgba, 3, axis=0),
         process=False,
     )
+    if mesh.bases is not None and not np.isnan(mesh.bases).all():
+        # (POSITION x, POSITION z) of the tree base: glTF axes of (x, y, z) are (x, z, -y); same rounding as the positions
+        uv2 = np.round(np.stack([mesh.bases[:, 0], -mesh.bases[:, 1]], axis=1), 4)
+        uv2[np.isnan(uv2).any(axis=1)] = NO_TREE_UV2
+        tm.vertex_attributes[BASE_UV2_ATTRIBUTE] = np.repeat(uv2, 3, axis=0).astype(np.float32)
+    return tm
 
 
 def to_trimesh_textured(mesh: TexturedMesh, tid: str) -> trimesh.Trimesh:
@@ -138,6 +152,29 @@ def node_trimesh(name: str, mesh: Mesh | TexturedMesh) -> trimesh.Trimesh:
     if isinstance(mesh, TexturedMesh):
         return to_trimesh_textured(mesh, name.partition("_tex_")[2])
     return to_trimesh(mesh)
+
+
+def export_glb(scene: trimesh.Scene) -> bytes:
+    """``scene`` as GLB bytes, with the base attribute (``_UV2``, see ``to_trimesh``) renamed to ``TEXCOORD_1``.
+
+    trimesh can only write TEXCOORD_0 itself. Every GLB that may carry tree meshes goes through here.
+    """
+    data = scene.export(file_type="glb")
+    jlen, jtype = struct.unpack_from("<II", data, 12)
+    assert jtype == 0x4E4F534A  # "JSON"
+    doc = json.loads(data[20 : 20 + jlen])
+    found = False
+    for mesh in doc.get("meshes", []):
+        for prim in mesh["primitives"]:
+            if BASE_UV2_ATTRIBUTE in prim["attributes"]:
+                prim["attributes"]["TEXCOORD_1"] = prim["attributes"].pop(BASE_UV2_ATTRIBUTE)
+                found = True
+    if not found:
+        return data
+    blob = json.dumps(doc, separators=(",", ":")).encode()
+    blob += b" " * (-len(blob) % 4)
+    rest = data[20 + jlen :]
+    return struct.pack("<4sIIII", b"glTF", 2, 20 + len(blob) + len(rest), len(blob), jtype) + blob + rest
 
 
 def parcel_props_nodes(
@@ -304,7 +341,7 @@ def run_export(
             **parcel_props_nodes(scene.parcel_props.get((ix, iy), [])),
         }
         rel = f"chunks/{chunk_name(ix, iy)}.glb"
-        data = build_chunk_scene(items, extra).export(file_type="glb")
+        data = export_glb(build_chunk_scene(items, extra))
         (out_dir / rel).write_bytes(data)
         triangles = {f"parcel_{pid}_{sfx}": m.face_count for pid, v, c in items
                      for sfx, m in (("visual", v), ("collision", c))}
@@ -344,6 +381,7 @@ def run_export(
                 "trunk_width_m": float(tree_cfg["trunk_width_m"]),
                 "trunk_height_m": float(tree_cfg["trunk_height_m"]),
                 "canopy_m": float(tree_cfg["canopy_m"]),
+                "base_uv2": True,  # the chunk props meshes carry each tree's base as TEXCOORD_1 (map 0.12.0)
                 **({"forest": forest_model(tree_cfg)} if "forest" in tree_cfg else {}),
             },
             "trees": [

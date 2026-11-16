@@ -179,7 +179,13 @@ def tree_mesh(tree: dict, cfg: dict) -> Mesh:
 
 
 def trees_mesh(trees: list[dict], cfg: dict) -> Mesh:
-    return Mesh.concat([tree_mesh(t, cfg) for t in trees])
+    """All trees; every triangle remembers its tree's base (x, y), so the game can hide single trees on the GPU."""
+    meshes = []
+    for t in trees:
+        m = tree_mesh(t, cfg)
+        m.bases = np.tile([float(t["x"]), float(t["y"])], (m.face_count, 1))
+        meshes.append(m)
+    return Mesh.concat(meshes)
 
 
 def fence_meshes(sections: list[dict], cfg: dict) -> tuple[Mesh, dict]:
