@@ -122,7 +122,7 @@ public class RozhlasTests
     static double StartOf(RozhlasFile cfg, long slot)
     {
         for (var t = slot * cfg.PeriodS; t < (slot + 1) * cfg.PeriodS; t += 0.25)
-            if (RozhlasRules.OnAir(t, cfg.PeriodS, cfg.LongestS, cfg.Files.Count) is { } a) return t - a.Offset;
+            if (cfg.OnAirAt(t) is { } a) return t - a.Offset;
         throw new InvalidOperationException("no broadcast in slot");
     }
 
@@ -184,7 +184,7 @@ public class RozhlasTests
         var r = new RozhlasBroadcast(cfg);
         r.Update(0.05f, start - 5);
         Assert.Equal(RozhlasPhase.Idle, r.Phase);
-        var air = RozhlasRules.OnAir(start + 10, cfg.PeriodS, cfg.LongestS, 2)!.Value;
+        var air = cfg.OnAirAt(start + 10)!.Value;
         r.Update(0.05f, start + 10); // the slot began 10 s ago: the broadcast joins at its offset
         Assert.True(10 < cfg.LengthOf(air.Variant));
         Assert.Equal(RozhlasPhase.OnAir, r.Phase);

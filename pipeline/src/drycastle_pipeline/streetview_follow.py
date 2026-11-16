@@ -7,7 +7,7 @@ file, puts the character there and, in the top-down view (T), draws a red point 
 (``godot/viewer/StreetViewFollow.cs``). No model and no MCP server is involved.
 
 Points (only with ``--points``): when you stop and look at something (the view stays put for ``--dwell``
-seconds), a permanent point is dropped in the sketch ``POLES`` of ``out/sketch.json``, at the spot you are
+seconds), a permanent point is dropped in the sketch ``POLES`` of the shared sketch file (``~/.local/state/drycastle/sketch.json``), at the spot you are
 looking at (``--ahead`` metres along the view; ``--at camera`` puts it where you stand instead). Place the poles
 on them later (the editor's Sketch tool shows them, Claude reads them with get_sketch).
 
@@ -44,7 +44,7 @@ from drycastle_pipeline import sketchfile
 SKETCH_NAME = "STREETVIEW"
 POINTS_SKETCH = "POLES"
 OUT_DIR = Path(__file__).resolve().parents[3] / "out"
-DEFAULT_SKETCH_FILE = OUT_DIR / "sketch.json"
+DEFAULT_SKETCH_FILE = sketchfile.default_path()
 DEFAULT_POSITION_FILE = OUT_DIR / "streetview-position.json"
 POSITION_FORMAT_VERSION = 1
 VIEW_LINE_M = 8.0
@@ -216,6 +216,7 @@ def launch_chrome(port: int, lat: float, lon: float) -> subprocess.Popen:
 def follow(
     port: int, position_path: Path, sketch_path: Path | None, interval: float,
     points_path: Path | None = None, dropper: PointDropper | None = None, points_sketch: str = POINTS_SKETCH,
+    capturer=None,
 ) -> None:
     last: tuple[float, float, float | None] | None = None
     warned = False
@@ -229,6 +230,8 @@ def follow(
                 warned = True
             time.sleep(interval)
             continue
+        if capturer is not None:  # a press of the capture key in the tab since the last look
+            capturer.poll()
         current = next((p for p in (parse_maps_url(u) for u in urls) if p), None)
         if dropper is not None and points_path is not None:
             spot = dropper.feed(current, time.monotonic())
@@ -255,7 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--port", type=int, default=9222, help="Chrome remote debugging port (default 9222)")
     ap.add_argument("--position-file", type=Path, default=DEFAULT_POSITION_FILE, help="where the viewer reads the position")
     ap.add_argument("--sketch", nargs="?", type=Path, const=DEFAULT_SKETCH_FILE, default=None,
-                    help="also keep the position as a point and a view line in this sketch.json (default out/sketch.json)")
+                    help="also keep the position as a point and a view line in this sketch.json (default ~/.local/state/drycastle/sketch.json)")
     ap.add_argument("--interval", type=float, default=0.5, help="seconds between looks at the tab (default 0.5)")
     ap.add_argument("--points", action="store_true", help="drop a permanent point when the view stays put (off by default)")
     ap.add_argument("--points-sketch", default=POINTS_SKETCH, help=f"the sketch the points go to (default {POINTS_SKETCH})")
@@ -263,6 +266,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ahead", type=float, default=VIEW_LINE_M, help=f"metres along the view where the point goes (default {VIEW_LINE_M:g})")
     ap.add_argument("--at", choices=("aim", "camera"), default="aim", help="a point where you look (aim) or where you stand (camera)")
     ap.add_argument("--min-gap", type=float, default=1.5, help="no new point within this many metres of the last one (default 1.5)")
+    ap.add_argument("--capture", action="store_true", help="pressing the capture key in the Street View tab saves its picture and camera (photo_capture.py)")
+    ap.add_argument("--capture-key", default="c", help="the capture key (default c)")
     ap.add_argument("--launch", action="store_true", help="start a Chrome with its own profile on the village")
     ap.add_argument("--start", default="48.4024653,16.8607311", help="lat,lon the launched Chrome opens at")
     args = ap.parse_args(argv)
@@ -278,8 +283,14 @@ def main(argv: list[str] | None = None) -> int:
     points_path = args.sketch or DEFAULT_SKETCH_FILE
     if dropper is not None:
         print(f"points: stop and look for {args.dwell:g} s to drop one in sketch {args.points_sketch} ({args.at}) of {points_path}")
+    capturer = None
+    if args.capture:
+        from drycastle_pipeline.photo_capture import PHOTOS_DIR, Capturer
+
+        capturer = Capturer(args.port, args.capture_key)
+        print(f"capture: aim the middle of the view at a building and press {args.capture_key.upper()} in the Street View tab; pictures go to {PHOTOS_DIR}")
     try:
-        follow(args.port, args.position_file, args.sketch, args.interval, points_path, dropper, args.points_sketch)
+        follow(args.port, args.position_file, args.sketch, args.interval, points_path, dropper, args.points_sketch, capturer)
     except KeyboardInterrupt:
         pass
     finally:

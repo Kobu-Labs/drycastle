@@ -4,7 +4,7 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The cockpit view (prototype, ticket #219): the driver of a vehicle that has a cockpit rig (<see cref="CockpitRig"/>: the bus, the flak
+/// The cockpit view (prototype, ticket #219): the driver of a vehicle that has a cockpit rig (<see cref="CockpitRig"/>: the Golf Mk2, the bus, the flak
 /// truck, the utility helicopter) switches between the chase camera and a view from the driver's seat with the vehicle view key. The view
 /// is this client's own: nothing is sent, and nobody else sees the rig. The choice lasts for the session, so the next vehicle is entered in
 /// the view the last one was left in. A killstreak's point of view takes the camera as before; the rig is put away for as long as it lasts.

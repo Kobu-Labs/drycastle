@@ -84,7 +84,8 @@ viewing and headless servers are unaffected):
   `{"camera": {"x": east, "y": north, "z": elevation, "yaw_deg": view direction counter-clockwise from east},
   "format_version": 1, "selected": []}`; x and y are in the map frame (local metres). `selected` is the list of
   selected parcel IDs while the editor mode is on (empty otherwise).
-- `sketch.json` (next to `editor-state.json`, written within a frame of every sketch change, also an ignored build output) holds
+- `sketch.json` (not in `out/`: one shared file per user at `~/.local/state/drycastle/sketch.json`, `$XDG_STATE_HOME` and `$DRYCASTLE_SKETCH`
+  respected, so every worktree's editor, MCP server and streetview follower see the same sketches; written within a frame of every sketch change) holds
   the marks of the Sketch tool in absolute S-JTSK metres, and is the one file the editor and the MCP server both write:
   `{"format_version": 1, "version": 7, "sketches": ["ROAD"], "next_line": 1, "next_point": 1,
   "lines": [{"closed": false, "id": "L1", "points": [[x, y], ...], "sketch": "ROAD"}],
@@ -218,7 +219,7 @@ parcel's own fence override, which wins field by field over the group's.
   width spin changes it, `delete` removes it.
 * **Trees are not edited per parcel** (the Trees tool, `set_trees` and the `trees` key of `edits.json` were removed):
   the orthophoto detector (`docs/ortho.md`) is the only source of trees. To add one by hand, place a tree object
-  (`pack:kenney-city-kit-suburban/tree-large` or `tree-small`) with the Objects tool.
+  (`pack:kenney-city-kit-suburban/tree-large` or `tree-small`) with the Objects tool. To remove one, add a circle to `pipeline/config/tree_overrides.yaml` (see `docs/ortho.md`).
 * **Apply**: changes are pending per target (`* unsaved changes` under the header, `N unsaved targets` at the
   bottom; selecting something else keeps them). `Apply` (button, or Enter when no text field has focus) reloads
   `edits.json`, writes every pending target in one atomic save in the canonical format and drops what became empty

@@ -26,8 +26,8 @@ does that to a rule zone lazily: editing one writes a drawn zone with its polygo
 of that kind (:func:`zone_cuts`, :data:`CUT_BUFFER_M`). A cut is geometry, not a ground area id: the ids are not stable across
 builds. A cut never touches drawn zones (the detached copy is one). Nothing cut: the export is exactly what it was.
 
-``player_spawn`` has no points: ``props.make_spawns`` takes the ground areas inside it (the whole areas of the rule zone's ground types and
-:func:`drawn_spawn_units`) as places players may spawn and writes ``spawns.json``.
+``player_spawn`` has no points here: ``props.make_spawns`` draws the spawn points inside its zones (:func:`kind_areas`: the
+rule zone's ground areas and the drawn zones) and writes ``spawns.json``. Players spawn there and nowhere else.
 """
 
 import bisect
@@ -213,59 +213,6 @@ def kind_areas(
                 out.append((area["id"], left))
     out += [(zid, poly) for zid, (k, poly) in drawn.items() if k == kind]
     return sorted(out, key=lambda t: t[0])
-
-
-def rule_spawn_units(parcels_doc: dict, where_ground: list[str] | None, cuts: dict[str, BaseGeometry] | None) -> dict[str, dict]:
-    """``{area id: unit}`` of the ground areas of the ``player_spawn`` rule zone that a cut touches, as units shaped like a
-    parcel with the cut taken out. ``polygon`` is ``None`` for an area that is cut away completely. Areas no cut touches are
-    not here. ``props.make_spawns`` replaces those areas by these."""
-    cut = (cuts or {}).get(PLAYER_SPAWN)
-    out: dict[str, dict] = {}
-    if cut is None:
-        return out
-    for area in sorted(parcels_doc.get("ground", []), key=lambda a: a["id"]):
-        if area["kind"] not in (where_ground or []):
-            continue
-        poly = shape(area["polygon"])
-        if not poly.intersects(cut):
-            continue
-        left = _cut_region(poly, cut)
-        out[area["id"]] = {"id": area["id"], "kind": area["kind"], "polygon": None if left is None else left.__geo_interface__}
-    return out
-
-
-def drawn_spawn_units(
-    parcels_doc: dict,
-    drawn: dict[str, tuple[str, Polygon]],
-    where_ground: list[str] | None,
-    cuts: dict[str, BaseGeometry] | None = None,
-) -> list[dict]:
-    """The part of every ground area that lies inside a drawn ``player_spawn`` zone, as units shaped like a parcel
-    (``id`` and ``kind`` of the area, ``polygon``), sorted by id. ``props.make_spawns`` takes spawn points from them.
-
-    The areas of the rule zone's ground types (``where_ground``) are not here: they are whole spawn kinds, which
-    ``make_spawns`` takes by their kind. Only what a cut took out of them is here, where a drawn zone covers it again (a
-    rule area that was moved)."""
-    inside = [g if g.is_valid else g.buffer(0) for k, g in drawn.values() if k == PLAYER_SPAWN]
-    if not inside:
-        return []
-    zone = unary_union(inside)
-    cut = (cuts or {}).get(PLAYER_SPAWN)
-    out = []
-    for area in sorted(parcels_doc.get("ground", []), key=lambda a: a["id"]):
-        poly = shape(area["polygon"])
-        if not poly.intersects(zone):
-            continue
-        if area["kind"] in (where_ground or []):
-            if cut is None or not poly.intersects(cut):
-                continue
-            part = poly.intersection(zone).intersection(cut)
-        else:
-            part = poly.intersection(zone)
-        pieces = [g for g in getattr(part, "geoms", [part]) if g.geom_type == "Polygon" and g.area > 0.01]
-        if pieces:
-            out.append({"id": area["id"], "kind": area["kind"], "polygon": unary_union(pieces).__geo_interface__})
-    return out
 
 
 def _triangles(geom: BaseGeometry) -> list[tuple[tuple[float, float], tuple[float, float], tuple[float, float]]]:

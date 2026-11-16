@@ -63,7 +63,7 @@ stateDiagram-v2
 - **Sit**: Sits for a random while (clock: sit seconds; the client plays sit-down, holds, stands up after), then stands. Species with a sit rule only.
 - **Bark**: Barks once (clock: the bark clip's length), then stands. Species with a bark rule only.
 - **Carried**: A Thief of the Thieves event holds it (no clock: it is moved by the Thief, MoveCarried, and does nothing itself). Let go (Release) it stands; one put down outside its Pen walks home over open ground until it is inside again. Still a hit target: any hit that deals damage kills it.
-- **Thrown**: A vehicle ran it over and it survived (Throw): it flies on the arc the vehicle gave it; no clock. Landing puts it Down. Still a hit target; another vehicle only changes the arc.
+- **Thrown**: A vehicle ran it over and it survived (Throw): it flies on the arc the vehicle gave it, then rolls on along the ground with part of that speed; no clock. Coming to rest puts it Down. Still a hit target; another vehicle only changes the arc.
 - **Down**: Lies knocked down where it landed (clock: knockdown_seconds), then gets up: Flee from where the vehicle was (a species that does not flee stands). Run over again it is Thrown again.
 
 ## App.Phase
@@ -228,6 +228,24 @@ stateDiagram-v2
 - **Opened**: Opened by a player: ended, the reward is granted, the book despawns it at once. Cannot be reached from Expired.
 - **Expired**: The lifetime ran out unopened: ended. An ended crate cannot be opened even before it is despawned.
 
+## Casing.Phase
+
+One spent casing: in the air or sliding, lying still on the floor, fading out, or a free slot.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Free
+    Free --> Flying
+    Flying --> Resting
+    Flying --> Free
+    Resting --> Fading
+    Fading --> Free
+```
+
+- **Flying**: Ballistic arc, then bounces off the surface normal (up to Bounces, each quieter) and a short slide; on a steep face it slides down instead of settling. Under water it sinks slowly, never bounces, never clinks. Ends lying still, or at once in the void (no floor 8 m below where it started).
+- **Resting**: Lies flat on the floor for Stay seconds (a vehicle's roof: VehicleStay). Counts a clock; no movement, so its instance is not touched.
+- **Fading**: Shrinks to nothing over FadeSeconds, then the slot is free.
+
 ## Church.Door
 
 Should the church doors be open: shut or open, each with or without the deferred close-when-empty armed. The demon fight's door-grace clock runs beside (not a state).
@@ -321,17 +339,25 @@ stateDiagram-v2
 
 ## Corpse.Flight
 
-A thrown body (corpse or target dummy): at rest on the ground, or airborne after a launch until it lands or the flight cap runs out.
+A thrown body (corpse or target dummy): at rest on the ground, airborne after a launch or a drop until it lands, seated in a vehicle (a dead pilot or driver), or floating on water.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Grounded
     Grounded --> Airborne
+    Grounded --> Seated
     Airborne --> Grounded
+    Airborne --> Floating
+    Seated --> Airborne
+    Seated --> Grounded
+    Floating --> Airborne
+    Floating --> Grounded
 ```
 
-- **Grounded**: At rest. A launch (a push that is not zero) throws it; a dummy standing up again (Reset) comes back here.
-- **Airborne**: Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens. A new launch while airborne restarts the count.
+- **Grounded**: At rest. A launch (a push that is not zero) or a drop throws it; a dummy standing up again (Reset) comes back here.
+- **Airborne**: Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens (it then snaps to the ground under it). Lands Grounded, or Floating when it lands in water. A new launch while airborne restarts the count.
+- **Seated**: A dead pilot or driver still in the seat: the server moves it with the vehicle (Follow), it is not flown. Leaves by a drop or a throw (the vehicle at rest for CorpseRules.SeatedRestSeconds, or destroyed).
+- **Floating**: Lies at the water surface height where it landed, not flown. The client bobs and drifts it on the waves (cosmetic, nothing on the wire); it stays lootable until its lifetime ends.
 
 ## Demon.Phase
 
@@ -487,6 +513,37 @@ stateDiagram-v2
 - **Drawing**: Corners of an unfinished line are placed; nothing is part of the sketch yet. Enter finishes, Esc cancels.
 - **Selected**: One mark of the sketch is selected: Del deletes it, [ ] steps to the next.
 
+## Engine.Sound
+
+Which engine sound a vehicle makes (idle, accelerating, off the gas, braking, top speed), read from its speed.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Accelerating
+    Idle --> Coasting
+    Idle --> Braking
+    Accelerating --> Idle
+    Accelerating --> Coasting
+    Accelerating --> Braking
+    Accelerating --> TopSpeed
+    Coasting --> Idle
+    Coasting --> Accelerating
+    Coasting --> Braking
+    Coasting --> TopSpeed
+    Braking --> Idle
+    Braking --> Accelerating
+    Braking --> Coasting
+    Braking --> TopSpeed
+    TopSpeed --> Idle
+    TopSpeed --> Accelerating
+    TopSpeed --> Coasting
+    TopSpeed --> Braking
+```
+
+- **Idle**: standing: the idle loop
+- **Coasting**: off the gas: only the background loop (the lift sound plays on the way in)
+
 ## Event.Run
 
 One run of an event: active, then won (reward given) or despawned (no reward). Both ends are final.
@@ -638,6 +695,20 @@ From any state: Dead
 - **Falling**: Falls from the top to the base's height under gravity (no clock: the height), off the navigation mesh. Ends in Down; shot dead here it keeps falling and lies.
 - **Down**: Lies knocked down (clock: the shock's down seconds); a lying hit volume, normal hits count. Ends in GetUp.
 - **GetUp**: Gets up (clock: the shock's get-up seconds), then goes for the same target again (ClimbUp), or looks for another when it is gone (Seek). All four are Working states: the Thief does not fight.
+
+## Garage.Door
+
+The bus garage's double doors: a player on foot at the doorway opens and closes them with the interact key.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Shut
+    Shut --> Open
+    Open --> Shut
+```
+
+- **Shut**: Closed and solid (the start state, and every new server): the leaves fill the doorway.
+- **Open**: The leaves are swung out into the yard and nothing is solid. Stays open until a player closes it; it does not close while a vehicle stands in the doorway.
 
 ## HelicopterGunner.Phase
 
@@ -962,6 +1033,28 @@ stateDiagram-v2
 - **Alive**: In the world with health. Spawn protection (ProtectedUntil), a blessing's invulnerability and the demon's hold are timers beside this state.
 - **Dead**: Awaiting RespawnAt (the respawn delay after the lethal hit).
 
+## MechanicGarage.Lights
+
+The garage interior's lights after the plate breaks: dark, then a flicker that lights nothing, then fully on.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Sealed
+    Sealed --> Dark
+    Sealed --> On
+    Dark --> Flicker
+    Dark --> On
+    Dark --> Sealed
+    Flicker --> On
+    Flicker --> Sealed
+    On --> Sealed
+```
+
+- **Sealed**: The plate stands (the start state): the lights are off and nothing of the room can be seen.
+- **Dark**: The plate has just broken: the room is dark.
+- **Flicker**: The tubes of the roof lights flash a few times; the real lights stay off, so the Golf is not lit.
+- **On**: The lights are on: they come up over a moment, or at once for a client that arrived later.
+
 ## Menu.Connect
 
 The connect screen: edit the target, probe it with a visible timeout, show what went wrong.
@@ -1013,6 +1106,22 @@ stateDiagram-v2
 - **Unsynced**: No snapshot yet: RenderTick returns the raw target and the drawn tick is not recorded.
 - **Tracking**: The drawn tick follows the estimate (it never moves backwards).
 - **Holding**: The estimate moved behind the drawn tick: the drawn tick stays put until the estimate passes it again. One episode counts once in HoldEvents.
+
+## Player.DeathView
+
+The local player's death screen: the legs give way, the body goes over and the blood spatters, then it lies there under the respawn scrim until the spawn.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Buckling
+    Buckling --> Falling
+    Falling --> Lying
+    Lying --> [*]
+```
+
+- **Buckling**: Clock: the buckle length. The knees or the lean give way and the view sinks part of the way; a little blood. Zero seconds for a death that does not move the camera.
+- **Falling**: Clock: the fall length. The body goes over (forward, back, left or right by the plan) and the view hits the ground; the blood grows to full. Zero seconds for a plain fade.
+- **Lying**: Held until the spawn ends it. Clock (elapsed): the impact shake, then the scrim fade-in with the "eliminated by" text and the countdown.
 
 ## Pounce.View
 
@@ -1233,9 +1342,28 @@ stateDiagram-v2
     Destroyed --> Alive
 ```
 
-- **Alive**: Hit points above zero. A return that does not repair (abandoned, out of the world) keeps a damaged vehicle damaged.
+- **Alive**: Hit points above zero. A return that does not repair (out of the world) keeps a damaged vehicle damaged.
 - **Doomed**: Hit points are zero and DetonateAt is set: the blast goes off when the clock reaches it (the chain delay after a neighbour's blast, else this tick). A return repairs it.
 - **Destroyed**: Blown up, no collision, nobody aboard. ReturnAt is set; the return repairs it and puts it back at its origin.
+
+## Vehicle.ThrowGuess
+
+The driver's client shows an animal its predicted vehicle hit as thrown before the server says so, then hands the picture over to the server's.
+
+```mermaid
+stateDiagram-v2
+    [*] --> None
+    None --> Flying
+    Flying --> Confirmed
+    Flying --> Settling
+    Confirmed --> Settling
+    Settling --> None
+```
+
+- **None**: Drawn where the server has it (plus what is left of the last offset). A touch of the predicted vehicle starts Flying.
+- **Flying**: Flies on the guessed arc (clock: ConfirmSeconds). The server's throw showing makes it Confirmed; the clock running out (a miss) makes it Settling, the difference to the server's position the offset.
+- **Confirmed**: The server shows the throw, later than the guess: the guessed arc is kept, and the body lies where it lands, until the server's body has landed too (clock: LandSeconds, a guard). Then Settling, the difference of the two landing spots the offset.
+- **Settling**: Drawn at the server's position plus the fading offset (clock: SettleSeconds); no new guess, as the server throws one body once in that time.
 
 ## WorldInterest.Relevance
 

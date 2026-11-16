@@ -56,10 +56,10 @@ public sealed partial class ArmsReadyPose : SkeletonModifier3D
     /// between them in front of the eyes, level. No recoil, no pitch.
     /// </summary>
     public bool Binoculars { get; set; }
-    /// <summary>Where the pair is held, metres in the model's own frame: in front of the eyes (measured on the soldier model: eyes about 1.45 m up, the face 0.33 m ahead).</summary>
-    static readonly Vector3 AtFace = new(0, 1.43f, 0.40f);
-    /// <summary>Each hand, from the pair's centre: to its side, a little under it and nearer the face.</summary>
-    static readonly Vector3 HandFromPair = new(0.10f, -0.03f, -0.04f);
+    /// <summary>Where the pair is held, metres in the model's own frame: in front of the eyes (measured on the soldier model: eyes about 1.46 m up, the face plate 0.28 m ahead, the helmet brim 0.33 m). The pair is 0.28 m wide and 0.28 m deep, so its eyepieces end 1.5 cm in front of the face.</summary>
+    static readonly Vector3 AtFace = new(0, 1.46f, 0.44f);
+    /// <summary>Each hand, from the pair's centre: just outside its side (half the pair's width is 0.14 m), a little under it and a touch nearer the face, so the fists do not cover it.</summary>
+    static readonly Vector3 HandFromPair = new(0.16f, -0.03f, -0.02f);
 
     /// <param name="bind">Bind-pose global transform by bone index (<c>CharacterView.BindPoses</c>).</param>
     /// <param name="rigPerMetre">Rig units per metre (1 / the model's draw scale).</param>

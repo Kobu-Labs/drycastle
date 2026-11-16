@@ -111,6 +111,9 @@ public sealed class Citizen : IWorldEntity
     public bool Seated => State is CitizenState.Seated or CitizenState.Kneeling;
     /// <summary>Pastor and monks are citizen entities that never sit: they walk to a spot and stand there. A worker of the Urad sits at its spot.</summary>
     public CitizenRole Role { get; init; }
+    /// <summary>What it asks of the world as it walks the navigation route: a trunk, a door closed now or a parked vehicle in the way (<see cref="WalkGuard"/>). Null: it walks the route as it is.</summary>
+    public IWalkerGround? Ground { get; init; }
+    WalkGuard _guard;
     /// <summary>The place is a standing spot, not a pew: on arrival the citizen kneels (<see cref="CitizenState.Kneeling"/>) instead of sitting.</summary>
     public bool Stand { get; init; }
     /// <summary>The player whose hit killed it.</summary>
@@ -152,13 +155,15 @@ public sealed class Citizen : IWorldEntity
                 if (_fsm.Elapsed >= _cfg.CorpseSeconds) Ended = WorldDespawnReason.Expired;
                 break;
             case CitizenState.Walking:
-                if (Follow(_walk, dt)) BeginEntering();
+                _guard.Tick(dt);
+                if (Follow(_walk, dt, guard: true)) BeginEntering();
                 break;
             case CitizenState.Entering:
                 if (Follow(_enter, dt)) Sit();
                 break;
             case CitizenState.Fleeing:
-                if (Follow(_flee, dt, _cfg.FleeSpeed * _factor)) Ended = WorldDespawnReason.Removed; // home: gone
+                _guard.Tick(dt);
+                if (Follow(_flee, dt, _cfg.FleeSpeed * _factor, guard: true)) Ended = WorldDespawnReason.Removed; // home: gone
                 break;
         }
     }
@@ -196,6 +201,7 @@ public sealed class Citizen : IWorldEntity
         }
         _flee = route;
         _next = 0;
+        _guard.Reset(); // the detour round something on the way in is over: it runs home
         _fsm.Enter(CitizenState.Fleeing);
     }
 
@@ -216,16 +222,18 @@ public sealed class Citizen : IWorldEntity
     }
 
     /// <summary>Walks <paramref name="route"/> from the current point at the citizen's speed, turning towards the leg. True when its end is reached.</summary>
-    bool Follow(List<Vector3> route, float dt, float speed = 0)
+    bool Follow(List<Vector3> route, float dt, float speed = 0, bool guard = false)
     {
         var budget = (speed > 0 ? speed : _speed) * dt;
         var turn = _cfg.TurnRateDegPerS * MathF.PI / 180f * dt;
         while (_next < route.Count)
         {
-            var to = route[_next];
+            var leg = route[_next];
+            // a route on the navigation mesh is checked for what the mesh does not hold (trunk, closed door, parked vehicle): the point to head for is the leg's end or a point beside it, null when it stands
+            if ((guard ? _guard.Head(Position, leg, budget, Ground) : leg) is not { } to) return false;
             var d = Distance(Position, to);
             if (d > 0.01f) Yaw = TurnTo(to, turn);
-            if (d <= budget) { Position = to; budget -= d; _next++; continue; }
+            if (d <= budget) { Position = to; budget -= d; if (to == leg) _next++; continue; }
             Position += (to - Position) * (budget / d);
             return false;
         }

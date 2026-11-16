@@ -16,5 +16,5 @@ Decided for the utility helicopter. Builds on ADR 0002 (the snapshot layer); **c
 **Consequences.**
 - A pilot whose inputs stop arriving would freeze the helicopter in the air, as a stalled player freezes on foot. After 6 ticks without one the server flies it hands off (a hover) until they resume.
 - Stepping per input means two flight steps in a tick when the server catches up on a late input, as for a body on foot.
-- The hit volume stays an upright box that turns with the yaw only, on the server and for the clients' bullet holes; the drawn model pitches and rolls inside it.
+- The hit volume stays an upright box that turns with the yaw only, on the server and for the clients' bullet holes; the drawn model pitches and rolls inside it. (ADR 0028 later replaced the box by three that tilt with pitch and roll.)
 - The pilot sees the helicopter in the present and everyone else about 100 ms in the past. The door gunner's shots are resolved by the server from its own state, as every shot is.

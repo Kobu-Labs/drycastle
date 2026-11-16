@@ -7,7 +7,6 @@ public class VehiclesFile : IVersioned
     public float RunOverMinSpeed { get; set; } = 8;
     public float RunOverDamagePerSpeed { get; set; } = 10;
     public float RunOverMaxDamage { get; set; } = 100;
-    public float AbandonReturnTime { get; set; } = 30;
     /// <summary>Remaining-HP fractions at which smoke stage 1, 2 and 3 start (descending); at 0 HP the vehicle explodes.</summary>
     public List<float> DamageStages { get; set; } = new() { 0.66f, 0.33f, 0.12f };
     /// <summary>Seconds a destroyed vehicle stays gone before it returns to its origin with full HP.</summary>
@@ -42,6 +41,8 @@ public class VehiclesFile : IVersioned
             if (v.TopSpeed <= 0 || v.Acceleration <= 0 || v.Brake <= 0 || v.TurnRadius <= 0 || v.MaxLateralAccel <= 0)
                 throw new DataFileException($"vehicles.json: {v.Id}: top_speed, acceleration, brake, turn_radius and max_lateral_accel must be positive");
             if (v.HighSpeedRadiusFactor < 1) throw new DataFileException($"vehicles.json: {v.Id}: high_speed_radius_factor must be at least 1");
+            if (v.SpawnCount < 0 || v.FixedSpots.Count > 8 || v.FixedSpots.Any(sp => sp is null || !float.IsFinite(sp.X) || !float.IsFinite(sp.Z) || sp.YawDeg is { } y && !float.IsFinite(y)))
+                throw new DataFileException($"vehicles.json: {v.Id}: spawn_count must not be negative; fixed_spots are at most 8 of {{ x, z, optional yaw_deg }}");
             if (v.Hood.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: hood is [x, y, z]");
             if (v.Variants is < 1 or > 16) throw new DataFileException($"vehicles.json: {v.Id}: variants must be 1..16");
             if (v.Paints.Count > 0 && v.PaintMaterial == "") throw new DataFileException($"vehicles.json: {v.Id}: paints need paint_material");
@@ -51,6 +52,7 @@ public class VehiclesFile : IVersioned
                 if (l.Head.Concat(l.Tail).Any(p => p is null || p.Length != 3)) throw new DataFileException($"vehicles.json: {v.Id}: each lamp is [x, y, z]");
                 if (l.BeamRange <= 0 || l.BeamAngle <= 0 || l.BeamAngle >= 89) throw new DataFileException($"vehicles.json: {v.Id}: beam_range must be positive, beam_angle 1..88 degrees");
             }
+            if (v.Sounds is { } snd) VehicleSoundsDef.Validate(v.Id, snd);
             if (v.Glass.Count > 24) throw new DataFileException($"vehicles.json: {v.Id}: at most 24 glass panes");
             foreach (var pane in v.Glass)
             {
@@ -108,6 +110,9 @@ public class VehiclesFile : IVersioned
             }
             if (v.ChaseDistance is <= 0 || v.ChaseHeight is < 0) throw new DataFileException($"vehicles.json: {v.Id}: chase_distance must be positive and chase_height not negative");
             if (v.Height <= 0 || v.HalfWidth <= 0 || v.HalfLength <= 0) throw new DataFileException($"vehicles.json: {v.Id}: height, half_width and half_length must be positive");
+            if (v.Hull is { } hull && (hull.Count == 0 || hull.Any(b => b == null || b.Length != 6 || !(b[2] > 0) || !(b[3] > 0) || !(b[5] > b[4]) || b.Any(x => !float.IsFinite(x)))))
+                throw new DataFileException($"vehicles.json: {v.Id}: hull is a list of [cx, cz, half_width, half_length, y0, y1] with positive half sizes and y1 above y0");
+            if (v.Hull != null && v.Flight == null) throw new DataFileException($"vehicles.json: {v.Id}: a hull list tilts with the flight state: it is for a flying type");
             if (v.EnterRadius is < 0 || f.EnterRadius < 0) throw new DataFileException($"vehicles.json: {v.Id}: enter_radius must not be negative");
             if (v.RunOverMass is { } rm && rm <= 0) throw new DataFileException($"vehicles.json: {v.Id}: run_over_mass must be positive");
             if (!VehicleMedium.All.Contains(v.Medium)) throw new DataFileException($"vehicles.json: {v.Id}: medium {v.Medium} is not land, amphibious or air");
@@ -155,6 +160,18 @@ public static class VehicleMedium
 {
     public const string Land = "land", Amphibious = "amphibious", Air = "air";
     public static readonly string[] All = { Land, Amphibious, Air };
+}
+
+/// <summary>
+/// A fixed place for one vehicle (vehicles.json "fixed_spots"): world ground position (x east, z south, as the game's world) and, optionally, a yaw.
+/// Without <see cref="YawDeg"/> the vehicle faces along the road nearest to the spot (<see cref="RoadHeading"/>), or yaw 0 when there is none close.
+/// </summary>
+public class VehicleSpotDef
+{
+    public float X { get; set; }
+    public float Z { get; set; }
+    /// <summary>Heading in degrees, game convention (0 faces -Z, positive turns left). Null: along the nearest road.</summary>
+    public float? YawDeg { get; set; }
 }
 
 /// <summary>One seat of a vehicle (vehicles.json "seats"). Seat 0 is always the driver. Offset is in the vehicle's frame, metres: x right, y up, z back (forward is -Z), origin on the ground at the car's centre.</summary>
@@ -716,8 +733,13 @@ public class VehicleDef
     public float Hp { get; set; } = 300;
     /// <summary>Where the smoke and sparks come out, [x, y, z] in the vehicle's frame (forward is -Z).</summary>
     public float[] Hood { get; set; } = { 0, 0.95f, -1.3f };
-    /// <summary>How many of this type are placed at match start.</summary>
+    /// <summary>How many of this type are dealt at random over the spawn areas at match start. 0 for a type that only stands at its <see cref="FixedSpots"/>.</summary>
     public int SpawnCount { get; set; }
+    /// <summary>
+    /// Places this type always stands at (vehicles.json "fixed_spots"), one vehicle each, in addition to the <see cref="SpawnCount"/> dealt at random.
+    /// A vehicle that returns (abandoned or destroyed) comes back to its spot. See <see cref="VehicleSpotDef"/>.
+    /// </summary>
+    public List<VehicleSpotDef> FixedSpots { get; set; } = new();
     /// <summary>Half extents of the footprint (server collision box and run-over test), metres.</summary>
     public float HalfWidth { get; set; } = 1.1f;
     public float HalfLength { get; set; } = 2.15f;
@@ -730,6 +752,29 @@ public class VehicleDef
     /// it misses; one that enters the footprint below it hits. See <see cref="VehicleBox"/>.
     /// </summary>
     public float Height { get; set; } = 1.2f;
+    /// <summary>
+    /// The hull as several boxes instead of the one upright box over the footprint (<see cref="HalfWidth"/>, <see cref="HalfLength"/>, <see cref="Height"/>): [cx, cz, half_width, half_length, y0, y1] each, in the
+    /// vehicle's node frame, metres (the utility helicopter: cabin, tail boom, fin). They are both Hit shape and Body shape (ADR 0028) and tilt with the vehicle's pitch and roll.
+    /// Null: the one upright box, turned by the yaw only. <see cref="HalfWidth"/>, <see cref="HalfLength"/> and <see cref="Height"/> stay the footprint the run-over, the enter reach and the seat schematic read.
+    /// </summary>
+    public List<float[]>? Hull { get; set; }
+
+    HullBox[]? _hullBoxes;
+    /// <summary>The boxes of the hull (<see cref="Hull"/>), or the one upright box of a type without one.</summary>
+    public HullBox[] HullBoxes => _hullBoxes ??= Hull is { } h ? h.Select(b => new HullBox(b[0], b[1], b[2], b[3], b[4], b[5])).ToArray() : new[] { HullBox.Upright(HalfWidth, HalfLength, Height) };
+
+    /// <summary>Whether the hull's boxes tilt with the pitch and roll (a type with a <see cref="Hull"/> list); the one upright box turns with the yaw only.</summary>
+    public bool Tilts => Hull != null;
+
+    /// <summary>
+    /// How far from the origin the hull reaches, metres (a cheap distance for a broad test): the footprint's half length and width added for the one upright box; for a <see cref="Hull"/>, the farthest corner of any
+    /// box, whatever the attitude.
+    /// </summary>
+    public float BroadReach => _broadReach ??= Tilts ? HullBoxes.Max(b => MathF.Sqrt(MathF.Pow(MathF.Abs(b.Cx) + b.HalfWidth, 2) + MathF.Pow(MathF.Abs(b.Cz) + b.HalfLength, 2) + MathF.Pow(MathF.Max(MathF.Abs(b.Y0), MathF.Abs(b.Y1)), 2))) : HalfLength + HalfWidth;
+    float? _broadReach;
+
+    /// <summary>The pitch and roll the hull is turned by: the vehicle's attitude for a type that <see cref="Tilts"/>, else none (so a hull is looked at one way everywhere).</summary>
+    public (float Pitch, float Roll) TiltOf(float pitch, float roll) => Tilts ? (pitch, roll) : (0f, 0f);
     /// <summary>Override of the file's enter_radius for this type (metres from the footprint). Null: the file's.</summary>
     public float? EnterRadius { get; set; }
     /// <summary>Seats in order; seat 0 is the driver. Default: one driver seat.</summary>
@@ -786,6 +831,8 @@ public class VehicleDef
     public float ModelYawDeg { get; set; }
     /// <summary>Headlights and tail lights (vehicles.json "lights"); null for a type without lamps.</summary>
     public VehicleLights? Lights { get; set; }
+    /// <summary>The engine sound set of this type (vehicles.json "sounds"); null keeps the shared vehicle.engine loop.</summary>
+    public VehicleSoundsDef? Sounds { get; set; }
     /// <summary>The glass panes of this type (vehicles.json "glass"), at most 24; empty for a type without glass. A pane's place in the list is its index on the wire.</summary>
     public List<VehicleGlassDef> Glass { get; set; } = new();
     List<GlassPaneRect>? _glassRects;

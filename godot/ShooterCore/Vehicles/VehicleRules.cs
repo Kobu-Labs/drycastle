@@ -5,6 +5,15 @@ namespace Drycastle.ShooterCore;
 /// <summary>Run-over damage (ticket #77): above the minimum speed, a hit player takes damage per m/s over it, capped.</summary>
 public static class RunOver
 {
+    /// <summary>
+    /// The speed (m/s) from which a vehicle's contact moves a body at all. Between it and <see cref="VehiclesFile.RunOverMinSpeed"/> the body is pushed (a player) or knocked over (an animal)
+    /// and not hurt, so a slow vehicle does not drive through a body that stands in it.
+    /// </summary>
+    public const float ContactMinSpeed = 1.5f;
+
+    /// <summary>Whether a vehicle at <paramref name="speed"/> moves the bodies it touches (<see cref="ContactMinSpeed"/>).</summary>
+    public static bool Contacts(float speed) => MathF.Abs(speed) >= ContactMinSpeed;
+
     /// <param name="massScale">A type's <see cref="VehiclesFile.RunOverScale"/> (1 for the v1 numbers).</param>
     public static float Damage(VehiclesFile f, float speed, float massScale = 1f)
     {
@@ -14,8 +23,8 @@ public static class RunOver
 }
 
 /// <summary>
-/// Where a vehicle hits a body: the car's oriented footprint against the body's circle, swept along the path the car drove this tick so
-/// a fast or small vehicle cannot step over a body between two ticks. Players and target dummies share it.
+/// Where a vehicle hits a body: the car's oriented footprint against the body's footprint (a circle, or a box for an animal; see <see cref="RunOverFootprint"/>), swept along the path the car drove this tick so
+/// a fast or small vehicle cannot step over a body between two ticks. Every victim shares it.
 /// </summary>
 public static class CarFootprint
 {
@@ -39,12 +48,37 @@ public static class CarFootprint
     /// <summary>The same test along the path from <paramref name="from"/> to <paramref name="to"/> (the car's origin at the start and end of the tick; the end yaw is used all along).</summary>
     public static bool Hits(Vector3 from, Vector3 to, float yaw, float halfWidth, float halfLength, Vector3 body, float radius)
     {
-        var travel = Vector3.Distance(from, to);
-        if (travel > MaxSweepMetres) return Overlaps(to, yaw, halfWidth, halfLength, body, radius);
-        var steps = Math.Max(1, (int)MathF.Ceiling(travel / StepMetres));
+        var steps = Steps(from, to, out var jump);
+        if (jump) return Overlaps(to, yaw, halfWidth, halfLength, body, radius);
         for (var i = 0; i <= steps; i++)
             if (Overlaps(Vector3.Lerp(from, to, (float)i / steps), yaw, halfWidth, halfLength, body, radius)) return true;
         return false;
+    }
+
+    /// <summary>The car at <paramref name="p"/> with <paramref name="yaw"/> touches a standing box (an animal's footprint, its feet at <paramref name="feetY"/>): the two rectangles overlap, the feet within the car's height band as for a circle.</summary>
+    public static bool Overlaps(Vector3 p, float yaw, float halfWidth, float halfLength, in BodyBox body, float feetY)
+    {
+        var dy = feetY - p.Y;
+        if (dy < -0.6f || dy > 2f) return false;
+        return new BodyBox(p.X, p.Z, halfWidth, halfLength, yaw).Overlaps(body);
+    }
+
+    /// <summary>The box test along the path of the tick, as for a circle.</summary>
+    public static bool Hits(Vector3 from, Vector3 to, float yaw, float halfWidth, float halfLength, in BodyBox body, float feetY)
+    {
+        var steps = Steps(from, to, out var jump);
+        if (jump) return Overlaps(to, yaw, halfWidth, halfLength, body, feetY);
+        for (var i = 0; i <= steps; i++)
+            if (Overlaps(Vector3.Lerp(from, to, (float)i / steps), yaw, halfWidth, halfLength, body, feetY)) return true;
+        return false;
+    }
+
+    /// <summary>How many samples cover the path; <paramref name="jump"/> when it is a teleport (only the end point counts).</summary>
+    static int Steps(Vector3 from, Vector3 to, out bool jump)
+    {
+        var travel = Vector3.Distance(from, to);
+        jump = travel > MaxSweepMetres;
+        return Math.Max(1, (int)MathF.Ceiling(travel / StepMetres));
     }
 }
 
@@ -84,6 +118,14 @@ public static class VehicleDamage
     }
 }
 
+/// <summary>Blast distance to a vehicle's hull as its type has it (<see cref="VehicleDef.Hull"/> boxes, tilted by the attitude; else the one upright box).</summary>
+public static class HullDistance
+{
+    public static float Of(Vector3 blast, Vector3 feet, float yaw, float pitch, float roll, VehicleDef def) =>
+        def.Tilts ? VehicleBox.DistanceToHull(FlightMath.Unrotate(blast - feet, yaw, pitch, roll), def.HullBoxes)
+                  : VehicleDamage.DistanceToBox(blast, feet, yaw, def.HalfWidth, def.HalfLength, def.Height);
+}
+
 /// <summary>
 /// Lifetime of a destroyed vehicle's blast visuals (client, <c>VehicleFx.Explode</c>), in seconds from the blast. The burning spot's
 /// fire and black smoke column stop emitting after <see cref="EmitSeconds"/>; the last column puff dies <see cref="ColumnLife"/> later;
@@ -108,7 +150,15 @@ public sealed class VehicleSeat
     {
         if (seats < 1 || seats > MaxSeats) throw new ArgumentOutOfRangeException(nameof(seats));
         _occupant = new ushort[seats];
+        _blocked = new bool[seats];
     }
+
+    /// <summary>Seats a dead rider's corpse still sits in (ADR 0026): nobody can take or switch to one. A blocked seat has no occupant, so it does not keep the vehicle occupied.</summary>
+    readonly bool[] _blocked;
+
+    public bool IsBlocked(int seat) => _blocked[seat];
+    public void Block(int seat) => _blocked[seat] = true;
+    public void Unblock(int seat) => _blocked[seat] = false;
 
     public int Count => _occupant.Length;
     /// <summary>Player id of the driver (seat 0), 0 when empty.</summary>
@@ -116,8 +166,8 @@ public sealed class VehicleSeat
     /// <summary>Player id in <paramref name="seat"/>, 0 when empty.</summary>
     public ushort Occupant(int seat) => _occupant[seat];
     public bool Occupied => _occupant.Any(p => p != 0);
-    public bool HasFree => _occupant.Any(p => p == 0);
-    public bool IsFree(int seat) => _occupant[seat] == 0;
+    public bool HasFree { get { for (var i = 0; i < _occupant.Length; i++) if (IsFree(i)) return true; return false; } }
+    public bool IsFree(int seat) => _occupant[seat] == 0 && !_blocked[seat];
 
     /// <summary>The seat <paramref name="player"/> sits in, or -1.</summary>
     public int SeatOf(ushort player)
@@ -131,8 +181,8 @@ public sealed class VehicleSeat
     public bool TryEnter(ushort player, int seat = -1)
     {
         if (player == 0 || SeatOf(player) >= 0) return false;
-        if (seat < 0) seat = Array.FindIndex(_occupant, p => p == 0);
-        if (seat < 0 || seat >= _occupant.Length || _occupant[seat] != 0) return false;
+        if (seat < 0) { for (var i = 0; i < _occupant.Length && seat < 0; i++) if (IsFree(i)) seat = i; }
+        if (seat < 0 || seat >= _occupant.Length || !IsFree(seat)) return false;
         _occupant[seat] = player;
         return true;
     }
@@ -154,14 +204,14 @@ public sealed class VehicleSeat
     public bool TrySwitch(ushort player, int seat)
     {
         var from = SeatOf(player);
-        if (from < 0 || seat < 0 || seat >= _occupant.Length || seat == from || _occupant[seat] != 0) return false;
+        if (from < 0 || seat < 0 || seat >= _occupant.Length || seat == from || !IsFree(seat)) return false;
         _occupant[from] = 0;
         _occupant[seat] = player;
         return true;
     }
 
     public void Clear(int seat) => _occupant[seat] = 0;
-    public void Clear() => Array.Clear(_occupant);
+    public void Clear() { Array.Clear(_occupant); Array.Clear(_blocked); }
 
     /// <summary>World position of a seat: <paramref name="offset"/> in the vehicle's frame (forward -Z, yaw as in <see cref="CarState"/>) from the car's ground centre.</summary>
     public static Vector3 SeatPosition(Vector3 carPos, float yaw, float[] offset)
@@ -176,11 +226,11 @@ public sealed class VehicleSeat
     /// </summary>
     public int NearestFreeSeat(VehicleDef def, Vector3 carPos, float yaw, Vector3 from, float range)
     {
-        if (!Occupied && _occupant.Length > 0) return 0; // an empty vehicle: whoever gets in first is the driver, wherever they stand
+        if (!Occupied && _occupant.Length > 0 && !_blocked[0]) return 0; // an empty vehicle: whoever gets in first is the driver, wherever they stand (unless a corpse sits there)
         var best = -1; var bd = range;
         for (var i = 0; i < _occupant.Length && i < def.Seats.Count; i++)
         {
-            if (_occupant[i] != 0) continue;
+            if (!IsFree(i)) continue;
             var p = SeatPosition(carPos, yaw, def.Seats[i].Offset);
             var d = MathF.Sqrt((p.X - from.X) * (p.X - from.X) + (p.Z - from.Z) * (p.Z - from.Z));
             if (d <= bd && (best < 0 || d < bd)) { best = i; bd = d; }
@@ -250,24 +300,6 @@ public sealed class VehicleGun
         _nextShot = now + Def.FireInterval;
         return true;
     }
-}
-
-/// <summary>Counts seconds a vehicle has stood empty and away from its origin; fires once when it reaches the return time. A count-up beside the vehicle's life (<see cref="VehicleLifecycle"/>), reset by any return.</summary>
-public sealed class AbandonTimer
-{
-    public float Empty { get; private set; }
-
-    /// <summary>Advance by <paramref name="dt"/>. True on the tick the vehicle should return to its origin.</summary>
-    public bool Update(bool occupied, bool atOrigin, float dt, float returnTime)
-    {
-        if (occupied || atOrigin) { Empty = 0; return false; }
-        Empty += dt;
-        if (Empty < returnTime) return false;
-        Empty = 0;
-        return true;
-    }
-
-    public void Reset() => Empty = 0;
 }
 
 public static class VehicleColours

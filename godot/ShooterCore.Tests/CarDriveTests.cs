@@ -65,7 +65,7 @@ public class CarDriveTests
         Assert.Equal(10f, c.HighSpeedRadiusFactor); // the car's speed-dependent steering is the handling overhaul's (#134), shared by both models
         Assert.True(c.Drive!.Land.MaxClimbDeg <= 50f + 1e-3f, "it climbs no steeper than the server's floor angle allowed");
         Assert.Equal(VehicleMedium.Amphibious, Shipped.Vehicles.Single(v => v.Id == "amphibious").Medium);
-        Assert.All(Shipped.Vehicles.Where(v => v.Id is not ("car" or "amphibious")), v => Assert.Null(v.Drive));
+        Assert.All(Shipped.Vehicles.Where(v => v.Id is not ("car" or "amphibious" or "golf_mk2")), v => Assert.Null(v.Drive));
     }
 
     [Fact]

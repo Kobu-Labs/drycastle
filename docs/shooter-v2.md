@@ -280,7 +280,7 @@ one match and level 20 after about six good matches. No telemetry exists yet.
   (half is the colours as picked).
 - Arms: the rig has no rifle clips, so `ArmsReadyPose` (a skeleton modifier) poses both arms on the weapon over any clip with a two-bone solve
   (right hand at the chest, left hand on the foregrip); pistols use the right arm only, a knife swing plays `SwordSlash`.
-- Hit volume: `PlayerHitBox` is measured from these models (3.147 units tall in their T-pose, scaled to 1.8 m); the 0.56 m radius is unchanged.
+- Hit volume: `PlayerHitBox` is measured from these models (3.147 units tall in their T-pose, scaled to 1.8 m); the radius was 0.56 m, since ADR 0028 it is the movement capsule's 0.35 m (the Bigfoot and the Raid van keep 0.56 m).
 - Customiser UI (`CustomizationScreen.cs`, `CamoPreview.cs`) edits the look per loadout slot (#141).
 - Prone stance (#139): a prone latch toggled by the prone key (a move button bit); crouch now has a transition time.
 - Concealment is a number only; it is not applied in the tick, the name tags or the kill cam (section 8).
@@ -642,7 +642,7 @@ usage are listed above the input. A command that cannot be valid is shown with t
 
 Commands are for admins. The dev server (`make shooter-server`) passes `--admin-all`, so every player is one (`ADMIN=0` turns it off); never pass it on a release server. Otherwise start the server with `--admin-token TOKEN[,TOKEN...]`, where a token is the `player_token` in the `[connect]` section of the client's settings file (Godot user data
 folder, `shooter_settings.cfg`). They run on the server, so they work live: `/bots N` (0 to 64) changes the roster on the next tick (the first time bots are wanted after a start with none, the navigation is
-baked once, and the server pauses for that, the admin is told); `/spawn vehicle` puts a vehicle in front of the admin (up to 32 a run, shared with the sandbox's 8; spawned vehicles are not removed);
+baked once, and the server pauses for that, the admin is told); `/spawn vehicle` puts a vehicle in front of the admin (up to 32 a run, counting the sandbox's; the sandbox itself is uncapped; spawned vehicles are not removed);
 `/time HH:MM|dawn|morning|noon|dusk|night|midnight|freeze|resume` sets the day clock and sends it to every client at once (event 183); `/event bigfoot` starts the Bigfoot event, `/event current end` concludes the running event as a win and `/event current cancel` removes it with no reward (section 7c); `/restart [ffa|tdm]` starts a fresh round now (scores, lives and world entities reset), in the current match mode or, with an argument, in that one (the teams are regrouped, everyone is told; the mode reaches clients in the next scoreboard). `/event rozhlas` starts the village loudspeaker broadcast on every client now (event 184, no payload; each client starts its own copy at once and the scheduled broadcast waits until it ends); `/event intel [clear]` announces a made-up test event (section 8c; `clear` takes it off again); `/give <item> [player]` puts an item of `items.json` on a living player (by name or `#id`) or on the admin, a fresh one with no pickups counted, replacing what was worn in its slot (section 7b); `/help [command]` lists them for anyone.
 The grammar, completion and history are pure code in `ShooterCore/Chat` (`ChatCommands`, `ChatCompleter`, `ChatHistory`) with tests in `ChatTests`; `NetServer.Chat.cs` runs the commands, `ChatBox.cs` draws the window.
 

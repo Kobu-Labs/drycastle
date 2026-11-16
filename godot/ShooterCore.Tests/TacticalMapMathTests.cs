@@ -8,16 +8,17 @@ namespace Drycastle.ShooterCore.Tests;
 public class TacticalMapMathTests
 {
     [Theory]
-    [InlineData(300f, 50f)]     // 6 cells: the smallest size is the floor
-    [InlineData(800f, 50f)]     // 16 cells
-    [InlineData(1000f, 50f)]    // exactly 20 cells
-    [InlineData(1001f, 100f)]   // 21 at 50 m, so 100 m: 11 cells
-    [InlineData(1500f, 100f)]
-    [InlineData(2000f, 100f)]
-    [InlineData(3000f, 200f)]
-    [InlineData(4000f, 200f)]
-    [InlineData(9000f, 500f)]
-    public void CellSizeKeepsTheGridToAtMostTwentyCellsASide(float extent, float expected)
+    [InlineData(300f, 25f)]     // 12 cells: the smallest size is the floor
+    [InlineData(800f, 25f)]     // 32 cells
+    [InlineData(1000f, 25f)]    // exactly 40 cells
+    [InlineData(1001f, 50f)]    // 41 at 25 m, so 50 m: 21 cells
+    [InlineData(1500f, 50f)]
+    [InlineData(2000f, 50f)]
+    [InlineData(3000f, 100f)]
+    [InlineData(4000f, 100f)]
+    [InlineData(4200f, 250f)]
+    [InlineData(9000f, 250f)]
+    public void CellSizeKeepsTheGridToAtMostFortyCellsASide(float extent, float expected)
     {
         Assert.Equal(expected, TacticalMapMath.CellSize(extent));
     }
@@ -28,7 +29,7 @@ public class TacticalMapMathTests
         for (var extent = 600f; extent <= 4000f; extent += 25f)
         {
             var cells = TacticalMapMath.Cells(extent, TacticalMapMath.CellSize(extent));
-            Assert.InRange(cells, 8, TacticalMapMath.MaxCells); // the lower end is reached just after a size step
+            Assert.InRange(cells, 16, TacticalMapMath.MaxCells); // the lower end is reached just after a size step
         }
     }
 
@@ -107,9 +108,9 @@ public class TacticalMapMathTests
     [Fact]
     public void ReferenceOfNamesTheCellOfAGroundPointOnTheSheet()
     {
-        // 1000 m sheet, west edge x = -500, south edge z = 500 (north is -z): 50 m cells, so ground (-250, 100) is 250 m east and 400 m north of the corner
-        Assert.Equal(50f, TacticalMapMath.CellSize(1000f));
-        Assert.Equal("F9", TacticalMapMath.ReferenceOf(new Vector2(-250f, 100f), -500f, 500f, 1000f));
+        // 1000 m sheet, west edge x = -500, south edge z = 500 (north is -z): 25 m cells, so ground (-250, 100) is 250 m east and 400 m north of the corner
+        Assert.Equal(25f, TacticalMapMath.CellSize(1000f));
+        Assert.Equal("K17", TacticalMapMath.ReferenceOf(new Vector2(-250f, 100f), -500f, 500f, 1000f));
         Assert.Equal("A1", TacticalMapMath.ReferenceOf(new Vector2(-500f, 500f), -500f, 500f, 1000f)); // the south-west corner
     }
 

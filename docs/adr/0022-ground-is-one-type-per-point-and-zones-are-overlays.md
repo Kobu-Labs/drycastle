@@ -19,3 +19,5 @@ The map has two independent things: what the land is, and what an area means in 
 **Why a fixed catalog of kinds.** A kind with nothing in the pipeline or the game reading it does nothing; a new kind is one catalog entry, its `rules.yaml` section and the code that reads its points.
 
 **Why no stacks.** A stack exists only to let one polygon be both terrain and marker. With two overlays there is nothing to stack.
+
+**Addendum: players spawn only inside Player spawn zones.** `spawns.json` holds points drawn inside the `player_spawn` zones (drawn ones and the rule zone's ground areas, less its cuts) and nowhere else: no road or garden points. A map with no such zone gets random points over the whole terrain, off the roads. Points are clear of buildings, trees and water, one per `m2_per_point` of usable zone ground rounded up (no minimum or maximum per zone), and carry the id of their zone. The editor does not show them: the user only draws areas.

@@ -67,7 +67,8 @@ public partial class Hud : CanvasLayer
     (int, int) _feedShown = (-1, -1);
     // respawn, protection, hints
     Control _respawn = null!;
-    Label _respawnBy = null!, _respawnIn = null!;
+    Label _respawnTitle = null!, _respawnBy = null!, _respawnIn = null!;
+    bool _respawnWaits;
     double _respawnAt; bool _dead; int _respawnShown = -1;
     Control _protChip = null!, _protOutline = null!;
     Label _protText = null!;
@@ -125,6 +126,7 @@ public partial class Hud : CanvasLayer
         BuildFeed();
         BuildProtectionChip();
         BuildRespawn();
+        BuildBlood(); // above the scrim
         BuildBoard();
         BuildXpPanel();
         BuildMinimap();
@@ -348,7 +350,7 @@ public partial class Hud : CanvasLayer
         _respawn.AddChild(c);
         var v = new VBoxContainer { CustomMinimumSize = new Vector2(640, 0), MouseFilter = Control.MouseFilterEnum.Ignore };
         c.AddChild(v);
-        v.AddChild(L(Strings.T("hud.respawn.title"), "HudHead", HorizontalAlignment.Center));
+        _respawnTitle = L(Strings.T("hud.respawn.title"), "HudHead", HorizontalAlignment.Center); v.AddChild(_respawnTitle);
         _respawnBy = L("", "HudBig", HorizontalAlignment.Center); _respawnBy.ThemeTypeVariation = "HudDanger"; _respawnBy.ClipText = true; v.AddChild(_respawnBy);
         _respawnIn = L("", "HudDisplay", HorizontalAlignment.Center); v.AddChild(_respawnIn);
         BuildRespawnLoadouts(v);
@@ -526,19 +528,33 @@ public partial class Hud : CanvasLayer
         for (var i = 0; i < Indicators; i++) { _indAt[i] = 0; Fade(_ind[i], 0); }
     }
 
-    /// <summary>Respawn screen: show with the killer and seconds left; <paramref name="killer"/> empty = no killer line.</summary>
-    public void SetDead(bool dead, string killer = "", float secondsLeft = 0)
+    /// <summary>
+    /// Respawn screen: show with the killer and seconds left; <paramref name="killer"/> empty = no killer line. <paramref name="fadeIn"/>: the scrim starts clear and the caller fades it in
+    /// with <see cref="SetRespawnScrim"/> (the death screen, #283); the countdown runs from now either way, and the respawn keys work while it is still clear.
+    /// </summary>
+    public void SetDead(bool dead, string killer = "", float secondsLeft = 0, bool fadeIn = false)
     {
         _dead = dead;
         _respawn.Visible = dead;
+        _respawn.Modulate = new Color(1, 1, 1, dead && fadeIn ? 0f : 1f);
         if (!dead) return;
+        _respawnWaits = secondsLeft < 0; // an admin took the player out of the round (#312): no countdown
+        Set(_respawnTitle, Strings.T(_respawnWaits ? "hud.respawn.out" : "hud.respawn.title"));
+        if (_respawnWaits) { Set(_respawnBy, ""); Set(_respawnIn, Strings.T("hud.respawn.waits")); return; }
         _respawnAt = Now + secondsLeft; _respawnShown = -1;
         Set(_respawnBy, killer == "" ? Strings.T("hud.respawn.self") : Strings.F("hud.respawn.by", killer));
         UpdateRespawn();
     }
 
+    /// <summary>The respawn scrim's opacity 0..1 (its text, the countdown and the loadout fade with it); only while dead.</summary>
+    public void SetRespawnScrim(float alpha)
+    {
+        if (_dead) _respawn.Modulate = new Color(1, 1, 1, Mathf.Clamp(alpha, 0f, 1f));
+    }
+
     void UpdateRespawn()
     {
+        if (_respawnWaits) return;
         var s = HudLogic.CeilSeconds(_respawnAt - Now);
         if (s == _respawnShown) return;
         _respawnShown = s;
@@ -665,7 +681,7 @@ public partial class Hud : CanvasLayer
 
     string WeaponName(byte id)
     {
-        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Bigfoot => Strings.T("weapon.bigfoot"), SpecialWeapons.Gang => Strings.T("weapon.gang"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), SpecialWeapons.VehicleGun => Strings.T("weapon.vehicle_gun"), SpecialWeapons.Flak => Strings.T("weapon.flak"), SpecialWeapons.Burn => Strings.T("weapon.burn"), SpecialWeapons.Moab => Strings.T("weapon.moab"), SpecialWeapons.Missile => Strings.T("weapon.attack_missile"), SpecialWeapons.Turret => Strings.T("weapon.turret"), SpecialWeapons.AttackHelicopter => Strings.T("heli.weapon"), SpecialWeapons.Ac130 => Strings.T("ac130.kill"), SpecialWeapons.Helper => Strings.T("helper.weapon"), _ => KillWeaponName?.Invoke(id) ?? Strings.T("weapon.unknown") };
+        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Bigfoot => Strings.T("weapon.bigfoot"), SpecialWeapons.Gang => Strings.T("weapon.gang"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Redeploy => Strings.T("weapon.redeploy"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), SpecialWeapons.VehicleGun => Strings.T("weapon.vehicle_gun"), SpecialWeapons.Flak => Strings.T("weapon.flak"), SpecialWeapons.Burn => Strings.T("weapon.burn"), SpecialWeapons.Moab => Strings.T("weapon.moab"), SpecialWeapons.Missile => Strings.T("weapon.attack_missile"), SpecialWeapons.Turret => Strings.T("weapon.turret"), SpecialWeapons.AttackHelicopter => Strings.T("heli.weapon"), SpecialWeapons.Ac130 => Strings.T("ac130.kill"), SpecialWeapons.Helper => Strings.T("helper.weapon"), _ => KillWeaponName?.Invoke(id) ?? Strings.T("weapon.unknown") };
     }
 
     /// <summary>The mil-dots and the zero of a scope with bullet drop: the dots follow the scope's FOV, the words change only with the zero or the dot spacing.</summary>

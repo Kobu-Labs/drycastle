@@ -35,6 +35,8 @@ public static class SpecialWeapons
     public const byte Bigfoot = 241;
     /// <summary>Burning (the devil's curse, <see cref="BurnSet"/>): a kill is credited to the curse owner and named "Burning" in the feed.</summary>
     public const byte Burn = 242;
+    /// <summary>The player's own Respawn action (#284, <see cref="MatchSim.ForceDeath"/>): the kill feed names it.</summary>
+    public const byte Redeploy = 239;
 }
 
 public abstract record MatchEvent;
@@ -47,6 +49,8 @@ public enum KillCause : byte { Standard = 0, Headshot = 1, Roadkill = 2 }
 
 /// <summary>Killer == Victim for suicides.</summary>
 public sealed record PlayerKilled(ushort Killer, ushort Victim, byte Weapon, KillCause Cause = KillCause.Standard) : MatchEvent;
+/// <summary>An admin moved a player to the other team (#312), the player alive or dead: the host drops what ties them to the old side (vehicle, turrets, streak progress). A living player is respawned at once, so a PlayerSpawned follows.</summary>
+public sealed record PlayerTeamChanged(ushort Id, byte From, byte To) : MatchEvent;
 public sealed record PlayerDied(ushort Victim, ushort Killer, float RespawnDelay) : MatchEvent;
 /// <summary>A target dummy (#148) was killed: no roster change, no round end.</summary>
 public sealed record TargetKilled(ushort Killer, TargetDummies.Dummy Target, byte Weapon, KillCause Cause) : MatchEvent;
@@ -68,8 +72,10 @@ public sealed class MatchPlayer
     public ushort Id;
     public string Name = "";
     public int Kills, Deaths;
-    /// <summary>Team deathmatch: <see cref="Teams.A"/> or <see cref="Teams.B"/>. <see cref="Teams.None"/> (0) in free-for-all and for sandbox players.</summary>
+    /// <summary>Team deathmatch: <see cref="Teams.A"/> or <see cref="Teams.B"/>. <see cref="Teams.None"/> (0) in free-for-all, for sandbox players and, in team deathmatch, for a player an admin took out of the round (#312).</summary>
     public byte Team;
+    /// <summary>A bot: the balance moves bots before humans.</summary>
+    public bool Bot;
     /// <summary>Sandbox mode (#156): godmode, and no kills, score or round end. Ranked after everyone else.</summary>
     public bool Sandbox;
     /// <summary>A sandbox player who chose to take damage (the panel's switch): hurt and killed like anyone, still unscored. Meaningless without <see cref="Sandbox"/>.</summary>
@@ -211,17 +217,92 @@ public sealed class MatchSim
         return _teamScore[Teams.B] < _teamScore[Teams.A] ? Teams.B : Teams.A;
     }
 
-    /// <summary>Round start: if the teams differ by two or more, the most recent joiners of the bigger team move over until they differ by at most one.</summary>
-    void Rebalance()
+    /// <summary>Team deathmatch player with no team (#312): taken out of the round by an admin, not spawned until put on a team. Sandbox players have no team and play.</summary>
+    bool Benched(MatchPlayer p) => IsTeamMode && !p.Sandbox && p.Team == Teams.None;
+
+    /// <summary>
+    /// Evens the teams out: while they differ by two or more, one player of the bigger team moves over; bots go before humans, the most recent joiner first.
+    /// Unassigned players stay unassigned. <paramref name="quiet"/> (the round start, where nobody is in the world) moves without respawns. Returns who moved.
+    /// </summary>
+    List<MatchPlayer> Rebalance(bool quiet = false)
     {
+        var moved = new List<MatchPlayer>();
         while (true)
         {
             var a = _players.Values.Where(p => p.Team == Teams.A).ToList();
             var b = _players.Values.Where(p => p.Team == Teams.B).ToList();
-            if (Math.Abs(a.Count - b.Count) < 2) return;
+            if (Math.Abs(a.Count - b.Count) < 2) return moved;
             var big = a.Count > b.Count ? a : b;
-            big.OrderByDescending(p => p.Id).First().Team = Teams.Other(big[0].Team);
+            var pick = big.OrderByDescending(p => p.Bot).ThenByDescending(p => p.Id).First();
+            Move(pick, Teams.Other(pick.Team), quiet);
+            moved.Add(pick);
         }
+    }
+
+    /// <summary>
+    /// Puts a player on a team, or (<see cref="Teams.None"/>) out of the round. One in the world leaves their old side: the host is told. A living player moved to a team respawns
+    /// at once (at the new side's spawn); one moved out dies without a death on the record and waits; an unassigned one put on a team spawns. A dead player with a respawn timer keeps it.
+    /// Scores stay where they were earned.
+    /// </summary>
+    void Move(MatchPlayer p, byte team, bool quiet = false)
+    {
+        var from = p.Team;
+        if (from == team) return;
+        p.Team = team;
+        if (quiet) return;
+        var running = Phase == MatchPhase.Running;
+        if (p.Life == PlayerLife.Unspawned && !running) return; // not in the world and no round on: nothing to tell
+        Emit(new PlayerTeamChanged(p.Id, from, team));
+        if (!running) return;
+        if (team == Teams.None)
+        {
+            if (p.Life == PlayerLife.Alive) p.SetLife(PlayerLife.Dead);
+            p.Health = 0; p.RespawnAt = double.PositiveInfinity; // waits for an admin
+            return;
+        }
+        if (p.Life == PlayerLife.Alive) p.SetLife(PlayerLife.Unspawned);
+        if (p.Life == PlayerLife.Unspawned || double.IsPositiveInfinity(p.RespawnAt)) Spawn(p); // alive: respawn on the new side; unassigned: in at last (a timed respawn stays as it is)
+    }
+
+    /// <summary>
+    /// An admin puts a player on a team or, with <see cref="Teams.None"/>, out of the round (#312). Team deathmatch only; false for an unknown or sandbox player, or outside
+    /// team deathmatch. Kills and deaths stay with the player, the team score with the old team.
+    /// </summary>
+    public bool SetTeam(ushort id, byte team)
+    {
+        if (!IsTeamMode || team > Teams.B || !_players.TryGetValue(id, out var p) || p.Sandbox) return false;
+        Move(p, team);
+        Emit(new ScoreboardChanged());
+        return true;
+    }
+
+    /// <summary>Every bot goes to <paramref name="team"/>. Returns how many moved; null outside team deathmatch or for a team that is not A or B.</summary>
+    public int? MoveBots(byte team)
+    {
+        if (!IsTeamMode || team is not (Teams.A or Teams.B)) return null;
+        var moved = 0;
+        foreach (var p in _players.Values.Where(p => p.Bot && !p.Sandbox && p.Team != team).ToList()) { Move(p, team); moved++; }
+        Emit(new ScoreboardChanged());
+        return moved;
+    }
+
+    /// <summary>Shuffle: every player on a team is dealt at random into two even teams (the unassigned stay out). False outside team deathmatch.</summary>
+    public bool ShuffleTeams()
+    {
+        if (!IsTeamMode) return false;
+        var all = _players.Values.Where(p => !p.Sandbox && p.Team != Teams.None).OrderBy(_ => _rng.Next()).ToList();
+        for (var i = 0; i < all.Count; i++) Move(all[i], i % 2 == 0 ? Teams.A : Teams.B);
+        Emit(new ScoreboardChanged());
+        return true;
+    }
+
+    /// <summary>Balance: the round-start balance now, mid-round. Returns who moved; null outside team deathmatch.</summary>
+    public IReadOnlyList<MatchPlayer>? BalanceTeams()
+    {
+        if (!IsTeamMode) return null;
+        var moved = Rebalance();
+        if (moved.Count > 0) Emit(new ScoreboardChanged());
+        return moved;
     }
 
     /// <summary>Sandbox (#156): full health for a living player. False when the player is not alive.</summary>
@@ -274,9 +355,9 @@ public sealed class MatchSim
 
     public void SetPosition(ushort id, Vector3 pos) { if (_players.TryGetValue(id, out var p)) p.Position = pos; }
 
-    public void AddPlayer(ushort id, string name, bool sandbox = false)
+    public void AddPlayer(ushort id, string name, bool sandbox = false, bool bot = false)
     {
-        _players[id] = new MatchPlayer { Id = id, Name = name, Sandbox = sandbox };
+        _players[id] = new MatchPlayer { Id = id, Name = name, Sandbox = sandbox, Bot = bot };
         if (IsTeamMode && !sandbox) _players[id].Team = SmallerTeam(); // auto-balance on join
         if (Phase == MatchPhase.Waiting) { StartIfReady(); }
         else if (Phase == MatchPhase.Running) Spawn(_players[id]);
@@ -338,6 +419,13 @@ public sealed class MatchSim
             return DamageResult.Saved;
         }
 
+        Die(v, victim, attacker, weapon, cause);
+        return DamageResult.Killed;
+    }
+
+    /// <summary>The lethal part of a hit on a living player: health 0, the death counted, the respawn timer, the credit, the events, the score goal. Shared by <see cref="ApplyDamage"/> and <see cref="ForceDeath"/>.</summary>
+    void Die(MatchPlayer v, ushort victim, ushort attacker, byte weapon, KillCause cause)
+    {
         v.Health = 0; v.SetLife(PlayerLife.Dead); v.Deaths++;
         v.RespawnAt = _now() + _cfg.RespawnDelay;
         var credited = attacker != victim && _players.TryGetValue(attacker, out var a) ? a : null;
@@ -351,7 +439,23 @@ public sealed class MatchSim
         if (IsTeamMode ? credited is { Sandbox: false, Team: not Teams.None } && !teamKill && _teamScore[credited.Team] >= _cfg.TeamScoreGoal
                        : credited is { Sandbox: false } && credited.Kills >= _cfg.ScoreGoal) End();
         Emit(new ScoreboardChanged());
-        return DamageResult.Killed;
+    }
+
+    /// <summary>
+    /// The player's own Respawn (#284): whether <see cref="ForceDeath"/> would take effect now. A round must be running and the player alive and not
+    /// held (the demon's pounce, the Bigfoot's grip). No damage gate applies: godmode and spawn protection do not stop it.
+    /// </summary>
+    public bool CanForceDeath(ushort id) => Phase == MatchPhase.Running && _players.TryGetValue(id, out var p) && p.Life == PlayerLife.Alive && !p.Held;
+
+    /// <summary>
+    /// Kills a living player by their own choice, not by damage (so no gate blocks it), as a suicide: death +1, no kill or team point, the kill feed
+    /// names only the victim, and the normal respawn delay. False when <see cref="CanForceDeath"/> says no.
+    /// </summary>
+    public bool ForceDeath(ushort id)
+    {
+        if (!CanForceDeath(id)) return false;
+        Die(_players[id], id, id, SpecialWeapons.Redeploy, KillCause.Standard);
+        return true;
     }
 
     /// <summary>
@@ -403,7 +507,7 @@ public sealed class MatchSim
         if (mode is { } m && m != Mode)
         {
             Mode = m;
-            foreach (var p in _players.Values) p.Team = Teams.None;
+            foreach (var p in _players.Values) { p.Team = Teams.None; } // a mode change regroups everyone
             if (IsTeamMode) foreach (var p in _players.Values.Where(p => !p.Sandbox)) p.Team = SmallerTeam();
         }
         if (_players.Count >= _cfg.MinPlayers && _players.Count > 0) StartRound();
@@ -415,9 +519,9 @@ public sealed class MatchSim
 
     void StartRound()
     {
-        if (IsTeamMode) Rebalance();
         Array.Clear(_teamScore); WinningTeam = Teams.None;
         foreach (var p in _players.Values) { p.Kills = 0; p.Deaths = 0; p.SetLife(PlayerLife.Unspawned); }
+        if (IsTeamMode) Rebalance(quiet: true); // after the reset: everyone is unspawned, so a move here needs no respawn
         Entities.Clear();
         Targets.ResetAll();
         Winners = Array.Empty<ushort>();
@@ -459,6 +563,7 @@ public sealed class MatchSim
 
     void Spawn(MatchPlayer p)
     {
+        if (Benched(p)) return; // out of the round until an admin puts them on a team (#312)
         // team deathmatch: only enemies count, so a team may spawn together and never next to the other side
         var others = _players.Values.Where(o => o.Id != p.Id && o.Life == PlayerLife.Alive && (!IsTeamMode || p.Team == Teams.None || o.Team != p.Team)).Select(o => o.Position);
         p.Position = SpawnChooser.Choose(_spawns, others, _cfg.MinSpawnDistance, _rng);

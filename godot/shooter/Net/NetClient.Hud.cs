@@ -105,7 +105,10 @@ public partial class NetClient
             (along, height) = hitOn.MapOnto(standing, m.Along, m.Height, m.Head);
         else if (m.Pose == HuntShot.NoShape) standing = null; // tested against the body box: its picture, by the box
         var line = Strings.F(m.Head ? "hud.hunt.line.head" : "hud.hunt.line", m.DistanceM, weapon);
-        _hud.ShowHuntShot(def.Name.ToUpperInvariant(), standing, standing == null ? Silhouette(def.Id) : null, along, height, line);
+        // the species and what it weighed (a species with no weight: the name alone)
+        var name = def.Name.ToUpperInvariant();
+        var title = m.WeightKg > 0 ? Strings.F("hud.hunt.title", name, m.WeightKg.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)) : name;
+        _hud.ShowHuntShot(title, standing, standing == null ? Silhouette(def.Id) : null, along, height, line);
     }
 
     void HudHit(HitMsg h)
@@ -132,6 +135,9 @@ public partial class NetClient
 
     readonly List<Vector2> _friendDots = new();
 
+    /// <summary>Anyone but me who is not a teammate (FFA: everyone else).</summary>
+    bool IsMapEnemy(ushort id) => id != _myId && !Match.AreFriends(_myId, id);
+
     void UpdateHud()
     {
         _hud?.SetControlMode(Mode.RemoteViewOwnsScreen); // one mode switch: a turret or the missile owns the screen (ticket #152)
@@ -154,7 +160,12 @@ public partial class NetClient
             _hud.Minimap.SetPlayer(new Vector2(g.X, g.Z), MinimapView.YawFor(src, _me.Yaw, _carYaw, _turretViewYaw, _missileViewYaw));
             _carDots.Clear();
             foreach (var c in _cars.Values)
-                if (!c.Destroyed) _carDots.Add(new Vector2(c.Node.GlobalPosition.X, c.Node.GlobalPosition.Z));
+            {
+                if (c.Destroyed) continue;
+                _seatOccupants.TryGetValue(c.Id, out var others); // an enemy on any seat: not on the map (#313)
+                if (HudLogic.HideEnemyOccupiedVehicle(c.Driver, others, _myId, IsMapEnemy)) continue;
+                _carDots.Add(new Vector2(c.Node.GlobalPosition.X, c.Node.GlobalPosition.Z));
+            }
             _hud.Minimap.SetVehicleDots(_carDots);
             _friendDots.Clear();
             if (Match.IsTeamMode)

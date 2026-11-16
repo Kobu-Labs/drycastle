@@ -249,19 +249,20 @@ public class BigfootTests
 
     // ---- the hit volume ----
 
-    static HitTarget Giant(Vector3 feet) => new(BigfootRules.TargetId, feet, Stance.Stand, 0, HeadGuarded: true, Scale: 2f);
+    static HitTarget Giant(Vector3 feet) => new(BigfootRules.TargetId, feet, Stance.Stand, 0, HeadGuarded: true, Scale: 2f, BaseRadius: PlayerHitBox.WideRadius); // as Bigfoot.HitVolume: its shape did not follow the player's capsule (ADR 0028)
     static HitTarget Person(Vector3 feet) => new(1, feet, Stance.Stand, 0);
 
     [Fact]
-    public void TheHitVolumeIsThePlayersCapsuleAtTwiceTheSize()
+    public void TheHitVolumeKeepsTheOldWidePlayerCapsuleAtTwiceTheSize()
     {
         var feet = new Vector3(0, 0, -10);
         var (a, b) = HitMath.Axis(Giant(feet));
-        var (pa, pb) = HitMath.Axis(Person(feet));
-        Assert.Equal(pa.Y * 2, a.Y, 3);
-        Assert.Equal(pb.Y * 2, b.Y, 3);
-        Assert.Equal(PlayerHitBox.Radius * 2, HitMath.BodyRadius(Giant(feet)), 4);
+        // its numbers are the ones it had before the player's capsule narrowed to 0.35 m: radius 0.56 x 2, the axis ends that far in from the top and the bottom of the 3.6 m figure
+        Assert.Equal(PlayerHitBox.WideRadius * 2, a.Y, 3);
+        Assert.Equal(PlayerHitBox.StandHeight * 2 - PlayerHitBox.WideRadius * 2, b.Y, 3);
+        Assert.Equal(1.12f, HitMath.BodyRadius(Giant(feet)), 4);
         Assert.Equal(PlayerHitBox.Radius, HitMath.BodyRadius(Person(feet)), 4);
+        Assert.Equal(1.12f, HitMath.BodyRadius(Make(new FakeWorld()).HitVolume), 4); // the real one
     }
 
     [Fact]

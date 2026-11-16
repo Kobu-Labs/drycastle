@@ -116,8 +116,6 @@ public sealed class SpawnPoint
 {
     public string Id { get; init; } = "";
     public string Kind { get; init; } = "";
-    public string Parcel { get; init; } = "";
-    public string Highway { get; init; } = "";
     public Vector2I Chunk { get; init; }
     /// <summary>Position in Godot axes: x east, y elevation, z = -north.</summary>
     public Vector3 Position { get; init; }

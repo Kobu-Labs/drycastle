@@ -106,12 +106,20 @@ public sealed class PennedWorld : IPennedWorld
 
     public bool Inside(float x, float z) => _pen.Contains(x, z);
 
+    public bool Fits(float x, float z, float radius) => _pen.Contains(x, z) && _inner.Fits(x, z, radius);
+
+    public float SolidAhead(Vector3 from, Vector3 dir, float maxM, float height) => _inner.SolidAhead(from, dir, maxM, height);
+
+    public void PlayersNear(Vector3 at, float radius, List<Vector3> into) => _inner.PlayersNear(at, radius, into);
+
     /// <summary>The ground with no pen (what a pet carried out of it walks on).</summary>
     public IAnimalWorld Open => _inner;
 
     public Vector3? NearestThreat(Vector3 from, float radius) => null;
 
     public Vector3? PositionOf(ushort player) => _inner.PositionOf(player);
+
+    public bool Watched(Vector3 at) => _inner.Watched(at);
 }
 
 /// <summary>

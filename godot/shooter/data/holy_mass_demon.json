@@ -1,7 +1,7 @@
 {
   "version": 1,
   "scale": 1.6,
-  "hits": { "base": 24, "per_extra_player": 8, "min": 12, "max": 150 },
+  "hits": { "base": 240, "per_extra_player": 80, "min": 12 },
   "hit_weights": { "bullet": 1, "explosive": 8, "vehicle": 8 },
   "crawl": {
     "speed_mps": 4.5,

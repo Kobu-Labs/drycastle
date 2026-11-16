@@ -64,6 +64,8 @@ public class AnimalTests
     sealed class FakeWorld : IAnimalWorld
     {
         public Func<float, float, bool> Blocked = (_, _) => false;
+        public bool IsWatched = true;
+        public bool Watched(Vector3 at) => IsWatched;
         public readonly List<Vector3> Threats = new();
         public readonly Dictionary<ushort, Vector3> Players = new();
 
@@ -269,7 +271,7 @@ public class AnimalTests
         var a = new Animal(file, species, new Vector3(10, 2, -5), 1f, new FakeWorld(), 3);
         var s = a.Serialize();
         Assert.Equal((ushort)species, s.Owner);
-        Assert.Equal((byte)file.Find("stag")!.Hp, s.Hp);
+        Assert.Equal((byte)a.MaxHp, s.Hp);
         Assert.Equal(AnimalState.Idle, AnimalRules.StateOf(s.State));
         Assert.False(AnimalRules.HitToggled(s.State));
         Assert.Equal(0, a.Owner); // the owner field of the entity stays free: it belongs to no player
@@ -278,7 +280,7 @@ public class AnimalTests
         var hit = a.Serialize();
         Assert.True(AnimalRules.HitToggled(hit.State));
         Assert.Equal(AnimalState.Flee, AnimalRules.StateOf(hit.State));
-        Assert.Equal((byte)(file.Find("stag")!.Hp - 10), hit.Hp);
+        Assert.Equal((byte)(a.MaxHp - 10), hit.Hp);
 
         a.OnDamage(10, 4);
         Assert.False(AnimalRules.HitToggled(a.Serialize().State)); // flips with every hit, so a client sees each one
@@ -356,6 +358,33 @@ public class AnimalTests
     }
 
     // ---- behaviour ----
+
+    [Fact]
+    public void UnwatchedItStandsStillAndGoesOnWhenAPlayerComesNear()
+    {
+        var w = new FakeWorld { IsWatched = false };
+        var a = Make(w);
+        Run(a, 30); // long enough to wander when watched
+        Assert.Equal(AnimalState.Idle, a.State);
+        Assert.Equal(Vector3.Zero, a.Position);
+        w.IsWatched = true;
+        w.Threats.Add(new Vector3(-10, 0, 0));
+        Run(a, 2);
+        Assert.Equal(AnimalState.Flee, a.State);
+        Assert.True(a.Position.X > 10, $"it ran east, to x = {a.Position.X}");
+    }
+
+    [Fact]
+    public void UnwatchedAThrownOneStillLandsAndGetsUp()
+    {
+        var w = new FakeWorld { IsWatched = false };
+        var a = Make(w, Small("\"knockdown_seconds\":2,"));
+        Assert.True(a.Throw(new Vector3(0, 5, -10), new Vector3(0, 0, 5)));
+        Run(a, 1.5f);
+        Assert.Equal(AnimalState.Down, a.State); // landed: the flight is not held up
+        Run(a, 3);
+        Assert.Equal(AnimalState.Flee, a.State); // and it got up; only then does it stand unseen
+    }
 
     [Fact]
     public void AThreatInRangeMakesItRunAwayFromIt()
@@ -529,6 +558,27 @@ public class AnimalTests
         Run(a, 1f);
         Assert.Equal(lies, a.Position);
         Assert.False(a.Throw(new Vector3(0, 5, -10), Vector3.Zero)); // a dead one is not thrown again
+    }
+
+    [Fact]
+    public void ThrownItRollsOnAlongTheGroundAndStopsWhereTheGroundEnds()
+    {
+        var a = Make(new FakeWorld());
+        a.Throw(new Vector3(0, 5, -10), Vector3.Zero); a.OnDamage(1, 7);
+        var touched = float.NaN;
+        for (var i = 0; i < 200 && a.State == AnimalState.Thrown; i++)
+        {
+            a.Tick(Dt);
+            if (float.IsNaN(touched) && a.Position.Y == 0 && i > 2) touched = a.Position.Z;
+        }
+        Assert.Equal(AnimalState.Down, a.State);
+        Assert.True(a.Position.Z < touched - 1f, $"came down at z {touched}, lies at {a.Position.Z}: it kept part of its speed");
+        Assert.Equal(0, a.Position.Y);
+
+        var b = Make(new FakeWorld { Blocked = (_, z) => z < -6 }); // comes down at about z -5, a wall at -6
+        b.Throw(new Vector3(0, 5, -10), Vector3.Zero); b.OnDamage(1, 7);
+        Run(b, 3f);
+        Assert.True(b.Position.Z >= -6, $"rolled through the wall to {b.Position.Z}");
     }
 
     [Fact]

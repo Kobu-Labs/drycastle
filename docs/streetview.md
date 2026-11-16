@@ -32,6 +32,11 @@ frames to `data/village/streetview/<building id>/<n>.jpg`. `index.json` records 
 date, distance, heading and copyright. Each downloaded image costs about $0.007; `--max-images`
 (default 100) caps a run and existing files are skipped.
 
+## Capturing a view for photo-to-building
+
+`streetview_follow --capture`: pressing **C** in the Street View tab saves its picture and camera under the building in the
+middle of the view (`data/village/photos/`, gitignored). See `docs/photo-to-building.md`; note what it says about the terms above.
+
 ## Following a Street View tab (character and top-down point)
 
 `pipeline/src/drycastle_pipeline/streetview_follow.py` watches the address of a Chrome tab and writes where you
@@ -50,7 +55,7 @@ uv run python -m drycastle_pipeline.streetview_follow --launch     # opens its o
 ```
 
 Open Street View in that window and walk. With `--points` (off by default) **stopping to look at a spot for about two
-seconds** drops a permanent point in the sketch `POLES` of `out/sketch.json`, where you are looking (8 m along the view;
+seconds** drops a permanent point in the sketch `POLES` of `~/.local/state/drycastle/sketch.json`, where you are looking (8 m along the view;
 `--ahead M` changes it, `--at camera` puts it where you stand, `--dwell S` the wait, `--min-gap M` stops a second point
 close to the last one). Walking or turning drops nothing. The points show in the editor's Sketch tool (key 9) as
 A, B, C ... and Claude reads them with `get_sketch`; place poles on them later (`place_object` at each point). Each point is one

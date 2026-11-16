@@ -33,8 +33,12 @@ public partial class NetClient
         public int Kind;
         public NVec3 Pos;
         public float Yaw, Kmh;
+        /// <summary>The yaw of the newest interpolated snapshot sample at the render tick, before the drawn pose replaces it: the hull's yaw the riders' snapshot views are taken against (<see cref="RiderPose.Figure"/>).</summary>
+        public float SnapYaw;
         public uint LastTick;
         public LoopVoice? Snd;
+        /// <summary>The layered engine sounds of a type with a vehicles.json "sounds" set (null otherwise, and until driven).</summary>
+        public VehicleEngineSound? Engine;
         /// <summary>Damage stage 0..3 from the record, whether the vehicle is destroyed, and whether its blast was already drawn (event or state, whichever came first).</summary>
         public int Stage;
         public bool Destroyed, Exploded;
@@ -87,7 +91,21 @@ public partial class NetClient
         }
         v.LastTick = tick; v.Pos = rec.Position; v.Yaw = rec.YawRad;
         v.Buf.Push(tick, rec.Position, rec.YawRad, 0);
-        VehicleCollider.Place(v.Solid, new Vector3(rec.Position.X, rec.Position.Y, rec.Position.Z), rec.YawRad, !v.Destroyed);
+        PlaceCarSolid(v);
+    }
+
+    /// <summary>The pitch and roll a vehicle's hull is turned by on this client: the latest flight record's for a type with a hull list (<see cref="VehicleDef.Tilts"/>), else none (the one upright box turns with the yaw).</summary>
+    (float Pitch, float Roll) HullTiltOf(CarView v, VehicleDef def) =>
+        def.Tilts && _flights.TryGetValue(v.Id, out var f) ? (FlightRecord.Pitch(f.Rec), FlightRecord.Roll(f.Rec)) : (0f, 0f);
+
+    /// <summary>Puts a vehicle's solid box where its latest records say: the server builds its own from the same numbers (<c>ServerCar.PlaceSolid</c>).</summary>
+    void PlaceCarSolid(CarView v)
+    {
+        if (v.Solid == null) return;
+        var p = new Vector3(v.Pos.X, v.Pos.Y, v.Pos.Z);
+        var def = Vehicles!.Vehicles[v.Kind];
+        if (def.Tilts) { var (pitch, roll) = HullTiltOf(v, def); VehicleCollider.Place(v.Solid, p, v.Yaw, pitch, roll, !v.Destroyed); }
+        else VehicleCollider.Place(v.Solid, p, v.Yaw, !v.Destroyed);
     }
 
     /// <summary>Applies the stage and destroyed flag of a record: smoke stage emitters; a destroyed vehicle disappears (its blast is drawn here if the event has not arrived), a returned one shows again.</summary>
@@ -113,7 +131,7 @@ public partial class NetClient
     void ExplodeVehicle(CarView v, Vector3 at, float radius)
     {
         v.Exploded = true;
-        v.Snd?.Release(); v.Snd = null;
+        v.Snd?.Release(); v.Snd = null; v.Engine?.Release();
         v.Rotor?.Stop();
         v.Drive?.Stop();
         v.ExplodedAt = Now;
@@ -152,24 +170,6 @@ public partial class NetClient
         return _beams;
     }
 
-    /// <summary>
-    /// The pilot's own helicopter is drawn from the prediction (the present) while the other riders are interpolated like everyone else (the past), so
-    /// without this a gunner trails behind the helicopter. Each rider seated on it keeps the offset it has from the interpolated helicopter, in the
-    /// helicopter's own frame, and wears it on the drawn one.
-    /// </summary>
-    void CarryRiders(Vector3 interpPos, Vector3 interpRot, Vector3 drawnPos, Vector3 drawnRot)
-    {
-        var from = Basis.FromEuler(interpRot).Inverse();
-        var to = Basis.FromEuler(drawnRot);
-        foreach (var r in _remotes.Values)
-        {
-            if (r.State != EntityState.InVehicle || !GodotObject.IsInstanceValid(r.Node)) continue;
-            var off = r.Node.GlobalPosition - interpPos;
-            if (off.LengthSquared() > 64f) continue; // not seated on this helicopter
-            r.Node.GlobalPosition = drawnPos + to * (from * off);
-        }
-    }
-
     void RenderCars()
     {
         if (_lastTick == 0) return;
@@ -186,16 +186,15 @@ public partial class NetClient
         var dt = (float)GetProcessDeltaTime();
         foreach (var v in _cars.Values)
         {
-            v.Lamps?.Set(v.Lights && !v.Destroyed, v.Braking, beams.Contains(v));
+            v.Lamps?.Set(v.Lights && !v.Destroyed, v.Braking, beams.Contains(v), DriveOf(v) is { Speed: < -0.3f }); // reverse lamps: the drawn signed speed
             if (v.Buf.At(rt) is not { } s) continue;
             var p = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
             var rot = new Vector3(0, s.Yaw, 0);
+            v.SnapYaw = s.Yaw;
             var flies = FlightDef(v) != null;
-            var p0 = p; var rot0 = rot;
             var drive = flies ? null : DriveDef(v);
             if (flies) PoseFlight(v, rt, dt, ref p, ref rot); // a helicopter pitches and rolls; the one this player flies is drawn from its prediction
             if (drive != null) PoseDrive(v, drive, rt, dt, ref p, ref rot); // an amphibious transport lies on the slope and bobs; the one this player drives is drawn from its prediction
-            if (flies && _pilot != null && _pilot.CarId == v.Id) CarryRiders(p0, rot0, p, rot); // the pilot's helicopter is drawn ahead of the snapshots: its riders go with it
             v.Node.GlobalPosition = p;
             v.Node.Rotation = rot;
             WaterCraft(v, p);
@@ -207,7 +206,7 @@ public partial class NetClient
             if (flakMine) flakGunner = true;
             v.Smoke?.Near(Sfx.ListenerDistance(p) < 90f); // far vehicles do not smoke: particle budget
             if (flies) StepFlightFx(v, FlightDef(v)!, p, rot, dt); // rotors, their sound, the downwash
-            else SfxCar(v, p);
+            else SfxCar(v, p, dt);
             if (drive != null) StepDriveFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
             if (v.Driver == _myId && _driving && _me != null)
             {
@@ -227,7 +226,7 @@ public partial class NetClient
             }
             else if (!flakMine && _driving && _me != null && _seats is { Mine: > 0 } st && st.CarId == v.Id) { RideSeat(v, st.Mine); kmh = DriveOf(v) is { } rs ? MathF.Abs(rs.Speed) * 3.6f : v.Kmh; } // another seat: first person from it, the speed shown as the driver's is
         }
-        SeatRiders(); // the riders of driven vehicles, on their seats as the vehicles are drawn this frame
+        SeatRiders(); // the riders of every vehicle, on their seats as the vehicles are drawn this frame (ADR 0026)
         if (!_driving) HideSelfInCar();
         if (!cockpit) EndCockpit();
         if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) _me?.EndChase(_me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
@@ -240,7 +239,7 @@ public partial class NetClient
         if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
-        _hud?.SetPrompt(TurretPrompt() ?? LootPrompt() ?? prompt ?? MassPrompt() ?? RozhlasSetPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
+        _hud?.SetPrompt(TurretPrompt() ?? LootPrompt() ?? GarageDoorPrompt() ?? prompt ?? MassPrompt() ?? RozhlasSetPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
     }
 
     CharacterView? _selfView;
@@ -290,15 +289,16 @@ public partial class NetClient
         {
             if (v.Destroyed || v == skip || v.Kind >= Vehicles.Vehicles.Count) continue;
             var def = Vehicles.Vehicles[v.Kind];
-            if (VehicleBox.Ray(NV(from), NV(dir), maxDistance, v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, def.Height) is not { } h || h.Distance >= best) continue;
+            var (pitch, roll) = HullTiltOf(v, def);
+            if (VehicleBox.Ray(NV(from), NV(dir), maxDistance, v.Pos, v.Yaw, pitch, roll, def) is not { } h || h.Distance >= best) continue;
             if (def.GlassRects.Count > 0 || def.OpenSideRects.Count > 0)
             {
-                var lo = GlassRules.ToVehicle(NV(from), v.Pos, v.Yaw); var ld = GlassRules.DirToVehicle(NV(dir), v.Yaw);
+                var lo = GlassRules.ToVehicle(NV(from), v.Pos, v.Yaw, pitch, roll); var ld = GlassRules.DirToVehicle(NV(dir), v.Yaw, pitch, roll);
                 var way = GlassRules.Through(def.GlassRects, def.OpenSideRects, lo, ld, h.Distance, GlassData.VehicleReach);
                 if (way.Enters)
                 {
                     if (way.Leaves) continue; // through the glass and out again
-                    var far = MathF.Max(VehicleBox.ExitDistance(lo, ld, def.HalfWidth, def.HalfLength, def.Height), way.EntryT);
+                    var far = MathF.Max(VehicleBox.ExitDistance(lo, ld, def), way.EntryT);
                     if (far > maxDistance || far >= best) continue;
                     h = new VehicleBoxHit(far, lo + ld * far, -ld); // inside, on the far side, facing back along the ray
                 }

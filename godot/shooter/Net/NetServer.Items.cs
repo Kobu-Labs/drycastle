@@ -184,8 +184,7 @@ public partial class NetServer
         var from = c.Car != null ? PresentPose(c.Car).Feet : N(c.Body.GlobalPosition);
         if (c.Car is { Flies: false }) return from;
         var down = c.Car is { Flies: true } ? DropRayAirMetres : DropRayFootMetres;
-        var q = PhysicsRayQueryParameters3D.Create(new Vector3(from.X, from.Y + DropRayLiftMetres, from.Z), new Vector3(from.X, from.Y - down, from.Z), CollisionLayers.World);
-        var hit = World.GetWorld3D().DirectSpaceState.PerfRay(q);
-        return hit.Count == 0 ? from : new NVec3(from.X, hit["position"].AsVector3().Y, from.Z);
+        // a drop lands on the ground: under a vehicle, never on a player's body or a vehicle's roof (ADR 0028, the Drop row)
+        return Query.GroundY(MoverKind.Drop, new Vector3(from.X, from.Y, from.Z), DropRayLiftMetres, down) is { } y ? new NVec3(from.X, y, from.Z) : from;
     }
 }

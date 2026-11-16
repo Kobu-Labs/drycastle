@@ -78,10 +78,12 @@ public sealed partial class CharacterView : Node3D
                 if (_anim.HasAnimation(n)) _anim.GetAnimation(n).LoopMode = Animation.LoopModeEnum.Linear;
         _skeleton = m.FindChildren("*", "Skeleton3D", true, false).FirstOrDefault() as Skeleton3D;
         _mesh = m.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>().FirstOrDefault();
-        _hand = null; _grip = null; _arms = null; _aim = null; _aimed = false;
+        _hand = null; _grip = null; _arms = null; _aim = null; _aimed = false; _look = null;
         if (_skeleton != null && _mesh?.Skin != null)
         {
             PrepareMesh(_mesh, path);
+            _look = LookPose.Create(_skeleton);
+            if (_look != null) _skeleton.AddChild(_look); // before the arms: a rider's look moves the body, the weapon's hands follow
             BuildHandSlot(_skeleton, _mesh.Skin);
             BuildEyes(_skeleton, _mesh);
             RebuildWorn(); // what is worn goes on the new body
@@ -154,6 +156,14 @@ public sealed partial class CharacterView : Node3D
         if (_arms != null) _arms.Pitch = Mathf.Clamp(pitch, -1.1f, 1.1f);
     }
 
+    LookPose? _look;
+
+    /// <summary>
+    /// Where a rider on a fixed seat looks (ADR 0026): the upper body's twist, the head's turn and its pitch, radians against the hips. All zero (everyone
+    /// on foot) leaves the clip as it is.
+    /// </summary>
+    public void SetLook(float torsoYaw, float headYaw, float pitch) => _look?.Set(torsoYaw, headYaw, pitch);
+
     /// <summary>Swimming pose: the body leans forward (<see cref="UnderwaterFx.SwimLeanDegrees"/>) and moves at the slow walk; stands up again when not swimming.</summary>
     public void SetSwim(bool swimming)
     {
@@ -168,7 +178,7 @@ public sealed partial class CharacterView : Node3D
         if (_model == null) return;
         var prone = _stance == Stance.Prone;
         _model.RotationDegrees = new Vector3(_swim ? UnderwaterFx.SwimLeanDegrees : prone ? 90 : 0, 180, 0);
-        _model.Position = prone ? new Vector3(0, PlayerHitBox.ProneLift, PlayerHitBox.ProneCentreShift) : Vector3.Zero;
+        _model.Position = prone ? new Vector3(0, PlayerHitBox.ProneDrawLift, PlayerHitBox.ProneCentreShift) : Vector3.Zero;
         var squash = _stance == Stance.Crouch ? MovementStep.CapsuleHeight(Stance.Crouch) / PlayerHitBox.StandHeight : 1f;
         _model.Scale = new Vector3(Scale, Scale * squash, Scale);
         if (_anim != null) _anim.SpeedScale = _swim ? 0.5f : 1f;
@@ -220,25 +230,27 @@ public sealed partial class CharacterView : Node3D
     public void SetBinoculars(bool up) => _binoculars = up;
 
     /// <summary>
-    /// The pair a character holds: the model of the paid pack wearing its atlas, at about real size (it is authored 0.35 m wide), or two dark
-    /// barrels when the pack is not there.
+    /// The pair a character holds: the model of the paid pack wearing its atlas, drawn 0.8 x its authored size (0.35 m wide) so it is 28 cm
+    /// across, the width of the soldier's face under the helmet and readable from a few metres (real binoculars are about 17 cm), or two
+    /// light barrels when the pack is not there.
     /// </summary>
     static Node3D MakeBinoculars()
     {
         var root = new Node3D { Name = "Binoculars" };
         if (SyntyLib.Instance("props/binoculars_01", "glb/atlas/military_01_A.png") is { } model)
         {
-            // the pack's props face +Z, the hands hold things facing -Z; centred on its own height
-            model.Transform = new Transform3D(new Basis(Vector3.Up, Mathf.Pi).Scaled(Vector3.One * 0.5f), new Vector3(0, -0.03f, 0));
+            // the pack's props face +Z (eyepieces at -Z), the hands hold things facing -Z; centred on its own height (0.134 m authored)
+            const float s = 0.8f;
+            model.Transform = new Transform3D(new Basis(Vector3.Up, Mathf.Pi).Scaled(Vector3.One * s), new Vector3(0, -0.067f * s, 0));
             root.AddChild(model);
             return root;
         }
-        var dark = new StandardMaterial3D { AlbedoColor = new Color(0.12f, 0.13f, 0.14f), Roughness = 0.8f };
-        foreach (var x in new[] { -0.04f, 0.04f })
+        var light = new StandardMaterial3D { AlbedoColor = new Color(0.62f, 0.55f, 0.42f), Roughness = 0.8f };
+        foreach (var x in new[] { -0.085f, 0.085f })
             root.AddChild(new MeshInstance3D
             {
-                Mesh = new CylinderMesh { TopRadius = 0.028f, BottomRadius = 0.034f, Height = 0.15f, RadialSegments = 12 },
-                MaterialOverride = dark, Position = new Vector3(x, 0, 0), Rotation = new Vector3(Mathf.Pi / 2, 0, 0),
+                Mesh = new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.062f, Height = 0.26f, RadialSegments = 12 },
+                MaterialOverride = light, Position = new Vector3(x, 0, 0), Rotation = new Vector3(Mathf.Pi / 2, 0, 0),
             });
         return root;
     }

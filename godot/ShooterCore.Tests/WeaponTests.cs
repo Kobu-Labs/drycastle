@@ -201,8 +201,8 @@ public class WeaponTests
         var eye = new Vector3(0, 1.65f, 0);
         var target = T(2, 0, 0, -10);
         var body = HitMath.Raycast(eye, Vector3.Normalize(new Vector3(0, 0.9f - 1.65f, -10)), 100, float.PositiveInfinity, new[] { target }, 1);
-        // the body's near surface is the hit volume's radius (about 0.56 m) in front of the feet line at 10 m
-        Assert.NotNull(body); Assert.False(body!.Value.Head); Assert.InRange(body.Value.Distance, 9.4f, 9.55f);
+        // the body's near surface is the hit volume's radius (0.35 m) in front of the feet line at 10 m
+        Assert.NotNull(body); Assert.False(body!.Value.Head); Assert.InRange(body.Value.Distance, 9.6f, 9.7f);
         var head = HitMath.Raycast(eye, new Vector3(0, 0, -1), 100, float.PositiveInfinity, new[] { target }, 1);
         Assert.True(head!.Value.Head);
         var over = HitMath.Raycast(eye, Vector3.Normalize(new Vector3(0, 0.4f, -10)), 100, float.PositiveInfinity, new[] { target }, 1);
@@ -267,8 +267,8 @@ public class WeaponTests
     {
         var knife = Def("knife");
         var me = Vector3.Zero;
-        Assert.NotNull(HitMath.Melee(me, 0, knife.Reach, new[] { T(2, 0, 0, -2.0f) }, 1));     // edge at 1.44 m (centre 2.0 less the 0.56 m radius)
-        Assert.Null(HitMath.Melee(me, 0, knife.Reach, new[] { T(2, 0, 0, -2.5f) }, 1));        // edge at 1.94 m, beyond the 1.8 m reach
+        Assert.NotNull(HitMath.Melee(me, 0, knife.Reach, new[] { T(2, 0, 0, -2.0f) }, 1));     // edge at 1.65 m (centre 2.0 less the 0.35 m radius)
+        Assert.Null(HitMath.Melee(me, 0, knife.Reach, new[] { T(2, 0, 0, -2.5f) }, 1));        // edge at 2.15 m, beyond the 1.8 m reach
         Assert.Null(HitMath.Melee(me, 0, knife.Reach, new[] { T(2, 0, 0, 1.0f) }, 1));         // behind me
         Assert.Null(HitMath.Melee(me, 0, knife.Reach, new[] { T(2, 0, 3f, -1.0f) }, 1));       // a floor above
         var two = HitMath.Melee(me, 0, knife.Reach, new[] { T(3, 0, 0, -1.5f), T(2, 0, 0, -0.8f) }, 1);

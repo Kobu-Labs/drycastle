@@ -459,11 +459,9 @@ public sealed partial class DemonView : Node3D
             if (show) { _orb.Scale = Vector3.One * (0.3f + 0.9f * _wind); if (_orbLight != null) _orbLight.LightEnergy = DemonFx.Flicker(_t, 2, 1.5f, 3.5f) * _wind; }
         }
 
-        // hurt: a flinch and a flash
+        // hurt: a flinch, no glow
         var hurt = Mathf.Clamp(1f - (float)((_t - _hurtAt) / 0.3), 0f, 1f);
-        if (hurt > 0 && _state != DemonState.Dead)
-            foreach (var m in _demonMats) { m.EmissionEnabled = true; m.Emission = new Color(1f, 0.25f, 0.1f); m.EmissionEnergyMultiplier = hurt * 3f; }
-        else if (_state != DemonState.Dead && _state != DemonState.Transforming)
+        if (_state != DemonState.Dead && _state != DemonState.Transforming)
             foreach (var m in _demonMats) m.EmissionEnergyMultiplier = 0;
 
         Emotes(dt, hurt);

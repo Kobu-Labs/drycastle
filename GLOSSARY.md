@@ -57,7 +57,7 @@ A car, pole, wall piece or other asset put on the map by hand, at an absolute po
 _Avoid_: parcel object, prop (a prop is generated: a fence or a tree)
 
 **Loadout**:
-One of a player's five saved sets: a primary weapon, a secondary weapon, a perk and three killstreaks. Edited in game and switched on death.
+One of a player's five saved sets: a primary weapon, a secondary weapon, a perk and three killstreaks. Edited in game; the active one applies at each spawn (a Respawn gets the new one at once).
 _Avoid_: build, class, kit
 
 **Perk**:
@@ -92,8 +92,12 @@ _Avoid_: reward, achievement
 A lamp post of the base map, placed from OSM street lamp nodes or along roads by the pipeline (`lamps.json`). In the shooter it is solid and lights up at night (see the night factor); the viewer does not show it.
 _Avoid_: light, streetlight, lamp post
 
+**Respawn**:
+The player's own action (pause menu, or "Apply now" in the Loadouts screen, both with a confirm): the player dies at once and comes back after the normal respawn delay with the active loadout, or the one named. It is a suicide like a fall: a death, the killfeed names only the victim ("Respawn"), a Corpse, the Streak counter resets. No cooldown and no combat lockout (a victim can deny the kill; accepted). Refused while dead, outside a running round, or held by the demon or the Bigfoot.
+_Avoid_: redeploy (the wire name only), suicide
+
 **Corpse**:
-A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. It also carries every Item its player wore or carried in the Bag (up to eight), which another player can take one at a time (see Pickup limit).
+A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. A rider killed in a vehicle leaves it thrown with the vehicle's velocity (a blast adds its knockback) so it falls, except a pilot or driver, whose corpse stays seated and rides with the vehicle until it has rested for a second. One that lands in water floats on the surface. It also carries every Item its player wore or carried in the Bag (up to eight), which another player can take one at a time (see Pickup limit).
 _Avoid_: ragdoll, body, drop
 
 **Sandbox mode**:
@@ -135,6 +139,14 @@ _Avoid_: open seat, unprotected seat
 **Ring gun**:
 The amphibious transport's machine gun, on a ring mount over the rear compartment and worked from the gunner seat by a gunner who stands inside the ring. The gunner's view aims it all the way round; over the two riders in front it cannot be depressed. Its rounds are the jeep's roof gun's, and its kills are ordinary kills.
 _Avoid_: turret (alone), pintle gun, rear gun
+
+**Fixed seat**:
+Where a rider sits, in every vehicle: the seat's offset in the vehicle's frame (`vehicles.json` `seats`; a vehicle with none has one driver seat at its origin). Its rider is drawn on it, turning and tilting with the hull as it is drawn this frame, and never as a free figure beside the vehicle. The server tells every client who sits in each seat (the driver in the vehicle's record, seats 1..3 in its seats record), so a rider is placed by id.
+_Avoid_: rider offset, seat anchor
+
+**Head look**:
+What a seated rider's view does to their figure for everyone: with the view in first person (a passenger's own eyes, the driver's cockpit view), the head turns up to 70 degrees either side and tips, and a look further round twists the upper body over the hips, so the look reaches straight behind. The body stays on the seat. In the chase view the head faces ahead; a helicopter's pilot only looks up and down (their yaw is the heading). A gunner or an armed seat's rider turns the whole figure to the aim instead (ADR 0026).
+_Avoid_: neck turn, look-around
 
 **Seat switch**:
 Moving to another seat of the vehicle you sit in, without getting out: while seated, the number keys (the weapon slot keys) take that seat (key 2 is the second seat of the vehicle's `seats` list), and a small top-down schematic in the bottom right shows each seat with its number (free: outlined; yours: filled, double ring; taken: struck through). A vehicle with no `seats` list has the one driver seat. A free seat is taken at once; a taken one is refused. Leaving the driver seat leaves the vehicle without input, so it coasts to a stop (a utility helicopter in the air holds a hover, then sets itself down); a gunner's turret keeps its aim. One player can drive, go to the turret and drive again.
@@ -228,6 +240,10 @@ _Avoid_: oxygen, stamina, air
 The fall of a sniper rifle's bullet under gravity, as if it flew at the weapon's `muzzle_velocity`. The hit is still instant (no travel time, no leading a moving target): only the path is a curve. Sniper rifles only; a bot's shots do not drop. Not the damage falloff (less damage with distance).
 _Avoid_: falloff (that is damage), ballistics (the thrown arcs of the Bigfoot)
 
+**Casing**:
+The spent case a gun throws out when it fires (#307): every gun that fires a round has one (a pistol's, a rifle's, a shotgun's red hull, the big case of a door gun, the jeep's roof gun or a sentry turret, the 35 mm case of the flak), a knife or a bazooka none. Seen by every client, drawn only near the camera, never sent over the network (each client throws its own from the same shot). It flies, bounces up to three times with a clink (`casing.tink`), lies on the floor for 20 s and fades. One that lands on a vehicle's roof goes after a second; one that goes under water sinks slowly, lies on the bed and makes no sound; one that lands on a steep face slides down it; it does not come to rest inside a vehicle (not yet, #316).
+_Avoid_: shell (a flak **shell** is the round, not the case), brass
+
 **Zero**:
 The distance at which a sniper rifle's bullet lands on the crosshair: short of it the bullet is above the crosshair, beyond it under. The player dials it with the mouse wheel while scoped, in 10 m steps from 50 m to the weapon's range; the scope shows it. One zero per weapon, back to the weapon's `zero_distance` (100 m) on death. The distance to the target is the zero to dial, uphill and downhill alike.
 _Avoid_: elevation, sight setting
@@ -236,12 +252,24 @@ _Avoid_: elevation, sight setting
 The dots on the cross of a sniper scope, at true angles: 1 mil is 1 m at 1000 m. The scope says how many mils one dot is. A target of a known height that spans n mils is height x 1000 / n metres away; a dot under the centre is the hold-over for a target beyond the Zero.
 
 **Hit diagram**:
-The card a hunter sees after killing a wild animal with a sniper rifle: the animal's side view (always facing left), the place the bullet entered marked on it, the distance of the shot, the weapon, and "HEAD" when the bullet met the head. The side view is always the one picture of the animal standing, whatever it was doing when it was hit: the hit is moved from the Hit shape the bullet was tested against onto the standing one, a head hit to the same place of the head and a body hit to the same place of the body. Only the shooter sees it, for 5 s. Only a kill, only a sniper rifle, only wildlife (not a Pet, a Citizen or a player).
+The card a hunter sees after killing a wild animal with a sniper rifle: the animal's side view (always facing left), the place the bullet entered marked on it, the distance of the shot, the weapon, the animal's weight in kg (next to its name), and "HEAD" when the bullet met the head. The side view is always the one picture of the animal standing, whatever it was doing when it was hit: the hit is moved from the Hit shape the bullet was tested against onto the standing one, a head hit to the same place of the head and a body hit to the same place of the body. Only the shooter sees it, for 5 s. Only a kill, only a sniper rifle, only wildlife (not a Pet, a Citizen or a player).
 _Avoid_: kill cam, x-ray
 
 **Hit shape**:
-What a bullet is tested against on a wild animal: the animal's outline in the pose a client draws it in, as a grid of 5 cm cells on its side plane, each covered cell with the animal's half width there and whether it is head. A bullet hits only where it crosses a covered cell, so a shot over the back, between the legs or under the neck misses. Baked from the species' model and its clips (`scripts/make_animal_shapes.py`, `animal_shapes.json`; the paid packs' species in the private asset folder): one shape for standing, one for walking and one for running (everything the clip covers, since the server does not know the stride a client shows), and for eating one every 0.2 s of the clip, picked by how long the animal has eaten less the shooter's delay (the head goes down and comes up). The head cells are for the Hit diagram only: an animal has no headshot damage. A species with no shape, another look of a species (a variant) and an animal that lies or flies are tested against the body box of `animals.json` (`hit_box`, its centre `hit_box_ahead` of the position). A blast or a knife measures to the scaled player capsule, as before.
+What a weapon is tested against (a bullet, a blast, a knife); what contact is tested against is the Body shape (ADR 0028). A player's is the capsule of the movement, radius 0.35 m, and a head sphere of 0.25 m at the top (the head is a headshot only while the player is not Head-guarded); a citizen, gang member, worker and the demon follow the same capsule, scaled as they are. The Bigfoot and the Raid van keep the wider capsule (0.56 m before scaling) their data was fitted to. A vehicle's is its upright box, or for the Utility helicopter its three boxes (cabin, tail boom, fin) turned by its pitch and roll as well as its yaw, so a shot that passes under the tail or beside the boom misses. On a wild animal or a Pet it is the animal's outline in the pose a client draws it in, as a grid of 5 cm cells on its side plane, each covered cell with the animal's half width there and whether it is head. A bullet hits only where it crosses a covered cell, so a shot over the back, between the legs or under the neck misses. Baked from the species' model and its clips for every species of `animals.json` (`scripts/make_animal_shapes.py`, `animal_shapes.json`; the paid packs' species in the private asset folder): one shape for standing, one for walking and one for running (everything the clip covers, since the server does not know the stride a client shows), and for eating one every 0.2 s of the clip, picked by how long the animal has eaten less the shooter's delay (the head goes down and comes up). The head cells are for the Hit diagram only: an animal has no headshot damage. A look of a species (a variant) with no shape, and an animal that lies or flies, are tested against the body box of `animals.json` (`hit_box`, its centre `hit_box_ahead` of the position). A blast or a knife measures to the bounding box of the outline in that pose, or to that box when there is no outline.
 _Avoid_: hitbox (the plain box), mask
+
+**Body shape**:
+What contact is tested against: movement, blocking, being stood on, bumping, running over; what a weapon is tested against is the Hit shape (ADR 0028). A player's, a citizen's, a gang member's, a worker's and the demon's is the capsule of the movement, radius 0.35 m (the demon's scaled as it is); an animal's is a box per species on the ground plane (`hit_box`'s width and length, centred `body_ahead` ahead of its position); a vehicle's is its upright box, or for the Utility helicopter the same three boxes as its Hit shape, tilted with its pitch and roll: the solid box a player stands on and walks into, the vehicle bumps, and the helicopter's own sweep through the world use them (its rotor disc stays level and is a Body shape of its own). A vehicle runs a body over by the victim's Body footprint scaled to 95% about its centre: an animal's box, or the circle of the capsule.
+_Avoid_: hitbox, collider
+
+**Collision rule**:
+What happens when a mover meets an obstacle: Collide (it stops, or the shot or drop lands), Pass, or RunOver (it is not stopped and the obstacle is hurt: run over by a vehicle, hit by a shot or a blast). One table in ShooterCore, mover kind x obstacle class, default Collide (ADR 0028). An exemption is a row there, never a mask at a call site: the physics mask of a mover is made from its row. Bigfoot is not in the table. Players are on a physics layer of their own, so a player passes another player and no ray excludes them by hand.
+_Avoid_: collision matrix, layer mask (at a call site)
+
+**World query**:
+The server's one answer to what is there: Ground (what is under a point), Blocked (may this mover go from a to b), Shot (what a shot meets first: terrain, building, fence, placed solid, trunk, crown, bush, closed door, a vehicle's hull) and Overlaps (what a volume touches), each by the Collision rule of the one who asks. A blast is stopped by the same walls, one line of sight per target, and a rider in a covered seat takes half of it through the hull.
+_Avoid_: raycast helper
 
 **Binoculars**:
 An Item that rides in the Bag (it cannot be worn) and is used from there: the binoculars key (B) raises and lowers them. Raised, the view is narrowed about eight times, the weapon is neither shown, fired nor aimed, and the middle of the view reads the distance in metres to what is under it (ground, wall, vehicle, animal, player; "---" for the sky): the number a sniper dials as the Zero. The client measures it against what it draws; the server is not asked. They come down on death, in a seat and when they leave the Bag. The other players see the pair held at the face with both hands, in place of the weapon (the server is told only that they are up or down). Standard issue: every player has a pair in the Bag from the start of each life (when a cell is free), and a death does not leave it on the Corpse. `/give binoculars` adds one. No Pickup limit.
@@ -260,7 +288,7 @@ A value from the day clock that drives street lamp light, headlight and window g
 _Avoid_: darkness, night mode
 
 **Aircraft**:
-A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper and the AC-130 gunship. Nobody boards or flies it; its owner only works its guns. It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship) and can be shot down by flak: its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
+A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper, the AC-130 gunship and the UAV. Nobody boards or flies it; its owner only works its guns (the UAV has none). It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship, 200 for the UAV) and can be shot down by flak and any other anti-aircraft (ADR 0005): its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
 _Avoid_: plane (for helicopters), drone, helicopter (alone)
 
 **Utility helicopter**:
@@ -279,6 +307,14 @@ _Avoid_: AA gun, anti-air vehicle, SPAAG
 A 12 m land vehicle modelled on the regional bus that serves the village: a driver seat and three passenger seats, no weapon, slow to turn and heavy to run into. It is boarded, left and destroyed like any other vehicle; its doors do not open, riders are placed on their seats.
 _Avoid_: coach, autobus, transport (that is the amphibious one)
 
+**Golf Mk2**:
+A small black three-door hatchback (4.3 m) with four seats (left-hand drive) that tops out at 200 km/h, the fastest vehicle. Driven by the drive model like the car; no weapon. It is never dealt at random: it stands at its fixed spot.
+_Avoid_: Golf (alone), VW
+
+**Fixed spot**:
+A place in a vehicle type's `fixed_spots` list in `vehicles.json` (world x and z, an optional `yaw_deg`) where one vehicle of that type always stands. It is placed on the ground there before the random deal, which keeps 12 m clear of it, and faces along the nearest road within 15 m (yaw 0 when there is none) unless the spot gives a yaw. An abandoned or destroyed vehicle returns to its fixed spot, as every vehicle returns to where it started.
+_Avoid_: parking spot, spawn point (that is where a player appears)
+
 **Airburst**:
 A flak shell's end by an aircraft: the shell flies straight at 700 m/s, and once it passes within 12 m of an aircraft it bursts at the closest approach. An aircraft within 15 m of the burst takes 150 damage out to 4 m, falling to 40 at the edge. The gunner has to lead the aircraft, which flies a known circle. A shell that meets no aircraft ends on the ground with a small blast (4 m, weak), or runs out of range.
 _Avoid_: proximity fuse (the fuse is how it works, the burst is the thing), flak burst
@@ -288,7 +324,7 @@ The killstreak that places a 500 hp gun on the ground for 15 seconds. It turns t
 _Avoid_: turret (alone, ambiguous with the vehicle gun), gun emplacement
 
 **UAV**:
-The 4-kill killstreak: for 60 seconds the owner receives enemy pings on the minimap, one every second. Enemies with Ghost are not shown.
+The 4-kill killstreak: for 60 seconds the owner receives enemy pings on the minimap, one every second. Enemies with Ghost are not shown. A small drone aircraft circles the map for the same time, visible to everyone, so enemies know a UAV is up. Anti-aircraft that shoots it down ends the streak and the pings.
 _Avoid_: drone, radar
 
 **Gunfire blip**:
@@ -331,7 +367,7 @@ The ground the map covers: a polygon (`polygon` in `map.local.yaml`) of absolute
 _Avoid_: border, boundary
 
 **Sketch**:
-A named group (ROAD, FENCE_PLAN, ...) of the temporary marks a developer draws on the ground in the map editor to point at places in a prompt. Several sketches exist at once, each holding any number of **marks**: points (A, B, ...) and lines (L1, L2, ...; a closed line means the ground inside it). Mark names are unique across all sketches; a prompt can name one mark ("at A"), or a whole sketch ("everything in sketch ROAD"). The developer draws in the editor, and Claude draws through the MCP server (`sketch_add_*`, e.g. "highlight this road under sketch ROAD"). A sketch is never map content and is not a hand edit; it lives in `out/sketch.json` only.
+A named group (ROAD, FENCE_PLAN, ...) of the temporary marks a developer draws on the ground in the map editor to point at places in a prompt. Several sketches exist at once, each holding any number of **marks**: points (A, B, ...) and lines (L1, L2, ...; a closed line means the ground inside it). Mark names are unique across all sketches; a prompt can name one mark ("at A"), or a whole sketch ("everything in sketch ROAD"). The developer draws in the editor, and Claude draws through the MCP server (`sketch_add_*`, e.g. "highlight this road under sketch ROAD"). A sketch is never map content and is not a hand edit; it lives in the shared per-user `~/.local/state/drycastle/sketch.json` only (every worktree sees the same sketches).
 _Avoid_: annotation, drawing, ground patch or zone (those are saved map content), layer
 
 **Building detail**:
@@ -383,12 +419,28 @@ _Avoid_: blast cover, shot-only cover (that stops shots, not blasts), protection
 The double doors in the doorway of the church: closed (solid, drawn as dark wooden leaves) or open (leaves swung inward, nothing solid). Closed unless the Holy Mass event opens them. The church rooms shelter whether they are open or not.
 _Avoid_: church gate, church entrance (that is the doorway)
 
+**Bus garage**:
+The garage beside the church (parcel P-0666, two buildings sharing a wall): its deep part is one hollow bay sized for the Bus, which stands in it at the start, nose to the garage doors. The other part is solid. Not a shelter.
+_Avoid_: depot, hangar (that is the Base), bus stop
+
+**Mechanic garage**:
+The OSB shed on the garden plots by road E-0101 (sketch L1, ticket #320), 6.6 x 8 m under a wavy rubber roof, its long wall to the road. The Golf Mk2 stands inside against the north wall, nose to the road wall, with a workbench, a shelf and workshop clutter. Built in code on the server (solid boxes) and the clients (drawn); not part of the map file. Sealed: the only way in is shooting the Garage plate.
+_Avoid_: bus garage (that is another building), workshop
+
+**Garage plate**:
+The one breakable section of the Mechanic garage's road wall, 2.7 x 2.5 m, in front of the Golf: a map glass pane with 240 hit points. While it stands the wall is solid and shows black cracks as it is hurt; once it shatters, all at once, nothing of it stays in the opening (OSB chips fly) its box is gone, the Golf can drive out, and the garage's roof lights run their sequence: dark, a short flicker that lights nothing, then on (about 2 s in all). Whole again at a round start.
+_Avoid_: door, window
+
+**Garage doors**:
+The double doors of the Bus garage: closed (solid, brown sheet-metal leaves) or open (leaves swung out into the yard, nothing solid). A player on foot at the doorway opens and closes them with the interact key, from either side; they do not close on a vehicle standing in the doorway. Closed on a new server.
+_Avoid_: gate, garage door as a Building detail opening (that is a drawn, fixed door of a house)
+
 **Match mode**:
 How a round is scored and won, set by `mode` in `match.json` at server start, or by an admin's `/restart`: free-for-all (`ffa`, the default: every player alone) or team deathmatch (`tdm`).
 _Avoid_: game mode, playlist
 
 **Team**:
-One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team.
+One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team. An admin can regroup from the Pause menu's Teams screen (#312): drag a player card onto a team's table (or A, B, U on the keyboard), or use the quick actions (bots to a team, shuffle, balance). A player moved to a team respawns on the new side, leaves any vehicle, loses their turrets and streak progress, keeps their kills and deaths, and the earned team score stays with the old team. A player dropped on the **Unassigned** table is out of the round: down, no death on the record, not spawned (also not at round starts), not balanced or shuffled, until an admin puts them on a team. A mode change puts everyone on a team again. Round-start balance moves bots before humans, then the newest.
 _Avoid_: squad, clan, faction
 
 **Friend / enemy colours**:
@@ -403,8 +455,12 @@ The one point a player sets by left-clicking the tactical map (or Enter / the pa
 _Avoid_: ping, marker, objective
 
 **Animal**:
-A creature of the world that is not a player: a deer, a dog, a cow. It has hit points and can be shot dead (`animals.json` lists the species, their hit points, speeds and models). It stands, eats, wanders around the spot it spawned at, and runs from players, vehicles and the shot that hurt it. A killed animal lies for `corpse_seconds` with its death clip held on the last frame, then is removed (a one-hit species, see Pet, does not lie: it is removed at once). A vehicle fast enough to hurt a player that runs a wild animal over throws it ahead and takes `run_over_hp_fraction` (half) of its full hit points, without being stopped itself: the first time the animal flies (state Thrown), lies where it landed for `knockdown_seconds` (Down), then gets up and runs; the second time it is killed and the body flies on. Thrown, it is a ragdoll on every client: the model rolls about its own length in the air and settles on a side. Pets are not run over. A species may sit (from standing, for a random while: the client plays sit-down, holds, stands up) or bark (once, one clip length); both are opt-in (`sit`, `bark` in `animals.json`) and neither is a state a player can cause. It is a world entity (wire type 50) the server owns; clients only draw it. Not a target dummy (a player-shaped practice target) and not a corpse (what a killed player leaves).
+A creature of the world that is not a player: a deer, a dog, a cow. It has hit points and can be shot dead (`animals.json` lists the species, their hit points, speeds and models). It stands, eats, wanders around the spot it spawned at, and runs from players, vehicles and the shot that hurt it. A killed animal lies for `corpse_seconds` with its death clip held on the last frame, then is removed (a one-hit species, see Pet, does not lie: it is removed at once). A vehicle fast enough to hurt a player that runs a wild animal over throws it ahead and takes `run_over_hp_fraction` (half) of its full hit points, without being stopped itself: the first time the animal flies (state Thrown), comes down and rolls on along the ground with part of the speed it was given, lies where it comes to rest for `knockdown_seconds` (Down), then gets up and runs; the second time it is killed and the body flies on. A slower vehicle that still moves (1.5 m/s up) knocks it over the same way without hurting it, and pushes a player on foot ahead of it, so no vehicle drives through a body. Thrown, it is a ragdoll on every client: the model rolls about its own length in the air and settles on a side. A Pet is run over the same way (ADR 0028). A species may sit (from standing, for a random while: the client plays sit-down, holds, stands up) or bark (once, one clip length); both are opt-in (`sit`, `bark` in `animals.json`) and neither is a state a player can cause. It is a world entity (wire type 50) the server owns; clients only draw it. An animal farther than 850 m from every player (the distance beyond which no client is sent it, ADR 0025) is not simulated: it stays as it stands until a player comes near; a thrown one still lands and a dead one is still removed. It collides (ADR 0028): a building, fence, placed solid, trunk, closed door, parked vehicle, a player, a pet and an animal of another herd stop it (it turns aside, or stands and picks another spot; a player is never pushed), and it never spawns or wanders into one; crowns, bushes, its own herd, citizens, gang and workers it passes. Contact is tested against its Body shape, a box per species (`hit_box`'s width and length, centred `body_ahead` ahead of its position). Not a target dummy (a player-shaped practice target) and not a corpse (what a killed player leaves).
 _Avoid_: NPC (alone), mob, critter
+
+**Animal size**:
+How much bigger or smaller than its species' model a wild Animal stands: one of 8 steps from 0.7 to 1.4, rolled when it spawns (the mean of two uniform draws, so the middle is commonest but a big or a small one is not rare) and sent in the animal's state byte. It scales the model, the body box, the run-over radius and the Hit shape, and, for a species with real hit points (not one-hit), its hit points by size cubed (at most 255). A species with `weight_kg` in `animals.json` (a look of it may have its own: a moose bull) has a size; a Pet and livestock do not. Its weight in kg comes from the same roll, as a point of the species' range; only the server knows it, and the Hit diagram tells the shooter.
+_Avoid_: scale (that is the model's import scale), growth
 
 **Pet**:
 An Animal (a dog, cat, hen, rooster, chick or duck) that lives in one property group and never leaves its Pen. It wanders, stands, eats, sits (dogs and cats) and barks (dogs) around the point it spawned at, and does not flee: not from players or vehicles, and not when shot. It dies of any hit that deals damage (`one_hit`, whatever its `hp`): it has no hit reaction and no corpse, the entity ends at once and every client shows a **puff** (a few small grey clouds) where it stood. A kill scores nothing, is not in the kill feed, and nothing replaces it until the next round. Each round starts with new pets: `pets.json` gives a property group's chance to keep pets, how many, which species (by weight, ids of `animals.json`) and a cap for the whole map; a parcel in no group gets none. A **pinned pet** (`pinned` in `pets.json`) is added to a named group on top of the random ones: a species, optionally one asset of it (a **variant**: another model of the species, listed in `animals.json`, such as a breed and its colour look; `base` names the species' own first model; unpinned pets wear a random one), a count and a chance rolled per pet each round, placed before the random pets so the cap never drops it. A variant may have its own hit box (a Chihuahua is smaller than a Saint Bernard); a shot is tested against the box of the pet's own variant. Their models are the paid Synty pet packs, kept outside the repository in the private asset folder (`assets-private/synty/glb/pets`): a game without that folder draws each pet as a box of its hit box, and everything else works the same. There is no bark sound (no asset). A world entity of wire type 50 like any Animal; the species' `flees: false` is what makes an animal a pet. A Thief of the Thieves event may carry a pet away as Loot (Animal state Carried, held at the Thief's side): it stays a hit target, walks home if its carrier is killed (penned again once inside its Pen), and is gone while loaded in a van. Not a stray, wildlife (#254) or livestock in a field.

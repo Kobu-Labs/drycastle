@@ -81,7 +81,7 @@ public partial class Viewer
         // ---- walk mode, then F2 ----
         await Physics(3);
         _player.Velocity = Vector3.Zero;
-        _player.GlobalPosition = _map.SpawnPoints.First(sp => sp.Kind == "garden" && !float.IsNaN(_map.GroundHeight(sp.Position.X, sp.Position.Z))).Position + Vector3.Up * 2f; // as in the plain smoke: land on the real ground
+        _player.GlobalPosition = _map.SpawnPoints.First(sp => !float.IsNaN(_map.GroundHeight(sp.Position.X, sp.Position.Z))).Position + Vector3.Up * 2f; // as in the plain smoke: land on the real ground
         for (var i = 0; i < 600 && !(i > 10 && _player.IsOnFloor()); i++) await Physics(1);
         await Physics(10);
         var mouseAtStart = Input.MouseMode;

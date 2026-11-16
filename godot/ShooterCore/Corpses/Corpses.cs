@@ -20,6 +20,8 @@ public static class CorpseRules
     public const float ThrowScale = 3f, ThrowLift = 0.4f, MaxThrowSpeed = 30f, Gravity = 20f, BodyRadius = 0.4f, MaxFlightSeconds = 6f;
     /// <summary>Pitch value (rad) a flying corpse carries in its replicated state; a corpse at rest carries 0.</summary>
     public const float FlightPitch = 1f;
+    /// <summary>A pilot's or driver's corpse stays seated until its vehicle has been at rest (no faster than <see cref="RestSpeed"/>, a helicopter also on the ground) for <see cref="SeatedRestSeconds"/>, then it drops (ADR 0026).</summary>
+    public const float RestSpeed = 0.5f, SeatedRestSeconds = 1f;
 
     /// <summary>The velocity a killed player is thrown with from a blast knockback (<see cref="ProjectileMath.Knockback(float, Vector3, Vector3, float)"/>): scaled up, with extra lift that grows with the horizontal speed.</summary>
     public static Vector3 ThrowFromBlast(Vector3 knockback)
@@ -29,9 +31,15 @@ public static class CorpseRules
         return v;
     }
 
-    /// <summary>The velocity of a body run over: carried forward at the car's speed, with a hop that grows with it.</summary>
+    /// <summary>
+    /// The velocity of a body run over: thrown the way the car goes, faster than the car (so it leaves the bumper and is not carried along inside the hull), with a hop that grows with
+    /// the speed. <paramref name="speed"/> is signed: a reversing car throws it backwards.
+    /// </summary>
     public static Vector3 ThrowFromCar(Vector3 forward, float speed) =>
-        forward * speed * 0.9f + Vector3.UnitY * (2.5f + MathF.Abs(speed) * 0.2f);
+        forward * (speed * ThrowFromCarScale + MathF.Sign(speed) * ThrowFromCarExtra) + Vector3.UnitY * (2.5f + MathF.Abs(speed) * 0.2f);
+
+    /// <summary>The share of the car's speed a run-over body leaves with, and the speed (m/s) added on top of it.</summary>
+    public const float ThrowFromCarScale = 1.1f, ThrowFromCarExtra = 1.5f;
 
     /// <summary>Hotbar positions a corpse weapon can go into: 0 = primary, 1 = secondary (the knife is never replaced).</summary>
     public const int PrimaryPos = 0, SecondaryPos = 1;
@@ -73,6 +81,7 @@ public sealed class Corpse : IWorldEntity
 {
     readonly float _yaw;
     Lifetime _life;
+    Countdown _still; // seated: runs while the vehicle is at rest, then the body drops
     readonly float _lifetime;
 
     readonly List<ItemStack> _items = new();
@@ -93,6 +102,12 @@ public sealed class Corpse : IWorldEntity
     public Vector3 Velocity => _body.Velocity;
     /// <summary>True while the body is thrown and has not landed. Replicated in the pitch field (<see cref="CorpseRules.FlightPitch"/>) so the client tumbles it.</summary>
     public bool Airborne => _body.Airborne;
+    /// <summary>True while the body still sits in its vehicle's pilot or driver seat (ADR 0026): its position follows the vehicle.</summary>
+    public bool Seated => _body.Seated;
+    /// <summary>True while the body floats on water (ADR 0026): at the surface height, not stepped; the client bobs it cosmetically.</summary>
+    public bool Floating => _body.Floating;
+    /// <summary>Whether a taker may loot it: not while it rides a vehicle that is still moving.</summary>
+    public bool CanLoot => !Seated || _still.Running;
     /// <summary>weapons.json index of the weapon the corpse carries.</summary>
     public int Weapon { get; private set; }
     public int Rounds { get; private set; }
@@ -114,7 +129,33 @@ public sealed class Corpse : IWorldEntity
     public void Launch(Vector3 velocity) => _body.Launch(velocity);
 
     /// <summary>One step of the flight, see <see cref="ThrownBody.Fly"/>.</summary>
-    public void Fly(float dt, Func<Vector3, Vector3, float, float?> cast) => _body.Fly(dt, cast);
+    public void Fly(float dt, Func<Vector3, Vector3, float, float?> cast, Func<Vector3, float?>? waterSurface = null) => _body.Fly(dt, cast, waterSurface);
+
+    /// <summary>Seats the body at <paramref name="seat"/> (a dead pilot or driver stays in the vehicle, ADR 0026); <see cref="Follow"/> keeps it there.</summary>
+    public void Attach(Vector3 seat) { _body.Attach(seat); _still.Cancel(); }
+
+    /// <summary>Moves a seated body with its vehicle (to <paramref name="seat"/>); nothing when it is not seated.</summary>
+    public void Follow(Vector3 seat) => _body.Follow(seat);
+
+    /// <summary>
+    /// Sends the body out of the vehicle: thrown with <paramref name="velocity"/> (the vehicle's, plus a blast's), or just dropped (zero), so it falls from a
+    /// parked or hovering vehicle too. Capped as <see cref="Launch"/>.
+    /// </summary>
+    public void Throw(Vector3 velocity) { _body.Launch(velocity); _body.Drop(); }
+
+    /// <summary>
+    /// One tick of a seated body: <paramref name="vehicleStopped"/> says the vehicle is at rest (see <see cref="CorpseRules.RestSpeed"/>). After
+    /// <see cref="CorpseRules.SeatedRestSeconds"/> of rest it drops and this returns true; any movement starts the count over.
+    /// </summary>
+    public bool TickSeated(float dt, bool vehicleStopped)
+    {
+        if (!Seated) return false;
+        if (!vehicleStopped) { _still.Cancel(); return false; }
+        _still.StartIfReady(CorpseRules.SeatedRestSeconds);
+        if (!_still.Tick(dt)) return false;
+        _body.Drop();
+        return true;
+    }
 
     /// <summary>Puts a weapon on the corpse (the one a taker swapped out).</summary>
     public void Carry(int weapon, int rounds)
@@ -236,7 +277,7 @@ public sealed class CorpseBook
         var entry = _order.FirstOrDefault(x => x.Id == corpseId);
         if (entry.Body == null) return PickUpResult.Gone;
         var body = entry.Body;
-        if (!CorpseRules.InReach(player, body.Position, slack)) return PickUpResult.OutOfReach;
+        if (!CorpseRules.InReach(player, body.Position, slack) || !body.CanLoot) return PickUpResult.OutOfReach;
         if (hotbarPos < 0 || hotbarPos >= taker.HotbarCount) return PickUpResult.BadSlot;
         if (!CorpseRules.CanReplace(file.Weapons[body.Weapon], hotbarPos)) return PickUpResult.WrongKind;
         if (taker.HotbarHolds(body.Weapon)) return PickUpResult.AlreadyHeld;
@@ -258,7 +299,7 @@ public sealed class CorpseBook
         var entry = _order.FirstOrDefault(x => x.Id == corpseId);
         if (entry.Body == null) return ItemPickUp.Gone;
         var body = entry.Body;
-        if (!CorpseRules.InReach(player, body.Position, slack)) return ItemPickUp.OutOfReach;
+        if (!CorpseRules.InReach(player, body.Position, slack) || !body.CanLoot) return ItemPickUp.OutOfReach;
         if (index < 0 || index >= body.Items.Count) return ItemPickUp.NoItem;
         if (items.At(body.Items[index].Item) is { BagOnly: true } && bag.IsFull) return ItemPickUp.NoRoom; // a plain item has no slot to swap into: before the count
         var result = ItemRules.Take(items, body.Items[index], out var taken);
@@ -330,8 +371,8 @@ public static class CorpseCodec
     }
 }
 
-/// <summary>Where a <see cref="ThrownBody"/> is: at rest, or in flight.</summary>
-public enum BodyFlightState : byte { Grounded, Airborne }
+/// <summary>Where a <see cref="ThrownBody"/> is: at rest, in flight, seated in a vehicle (a dead pilot or driver, ADR 0026) or floating on water.</summary>
+public enum BodyFlightState : byte { Grounded, Airborne, Seated, Floating }
 
 /// <summary>
 /// A body in flight (the ragdoll): thrown with a velocity, falls under gravity, stops against walls and lands. Used by corpses and by
@@ -340,11 +381,19 @@ public enum BodyFlightState : byte { Grounded, Airborne }
 public sealed class ThrownBody
 {
     public static readonly StateMachineSpec<BodyFlightState> Spec = StateMachineSpec<BodyFlightState>
-        .Define("Corpse.Flight", "A thrown body (corpse or target dummy): at rest on the ground, or airborne after a launch until it lands or the flight cap runs out.", BodyFlightState.Grounded)
+        .Define("Corpse.Flight", "A thrown body (corpse or target dummy): at rest on the ground, airborne after a launch or a drop until it lands, seated in a vehicle (a dead pilot or driver), or floating on water.", BodyFlightState.Grounded)
         .Allow(BodyFlightState.Grounded, BodyFlightState.Airborne)
+        .Allow(BodyFlightState.Grounded, BodyFlightState.Seated)
         .Allow(BodyFlightState.Airborne, BodyFlightState.Grounded)
-        .Note(BodyFlightState.Grounded, "At rest. A launch (a push that is not zero) throws it; a dummy standing up again (Reset) comes back here.")
-        .Note(BodyFlightState.Airborne, "Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens. A new launch while airborne restarts the count.")
+        .Allow(BodyFlightState.Airborne, BodyFlightState.Floating)
+        .Allow(BodyFlightState.Seated, BodyFlightState.Airborne)
+        .Allow(BodyFlightState.Seated, BodyFlightState.Grounded)
+        .Allow(BodyFlightState.Floating, BodyFlightState.Airborne)
+        .Allow(BodyFlightState.Floating, BodyFlightState.Grounded)
+        .Note(BodyFlightState.Grounded, "At rest. A launch (a push that is not zero) or a drop throws it; a dummy standing up again (Reset) comes back here.")
+        .Note(BodyFlightState.Airborne, "Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens (it then snaps to the ground under it). Lands Grounded, or Floating when it lands in water. A new launch while airborne restarts the count.")
+        .Note(BodyFlightState.Seated, "A dead pilot or driver still in the seat: the server moves it with the vehicle (Follow), it is not flown. Leaves by a drop or a throw (the vehicle at rest for CorpseRules.SeatedRestSeconds, or destroyed).")
+        .Note(BodyFlightState.Floating, "Lies at the water surface height where it landed, not flown. The client bobs and drifts it on the waves (cosmetic, nothing on the wire); it stays lootable until its lifetime ends.")
         .Build();
 
     readonly StateMachine<BodyFlightState> _fsm = new(Spec);
@@ -354,17 +403,44 @@ public sealed class ThrownBody
     public Vector3 Position { get; private set; }
     public Vector3 Velocity { get; private set; }
     public bool Airborne => _fsm.Is(BodyFlightState.Airborne);
+    public bool Seated => _fsm.Is(BodyFlightState.Seated);
+    public bool Floating => _fsm.Is(BodyFlightState.Floating);
 
-    /// <summary>Throws the body with <paramref name="velocity"/> (m/s), capped at <see cref="CorpseRules.MaxThrowSpeed"/>. A zero push does nothing.</summary>
+    /// <summary>Throws the body with <paramref name="velocity"/> (m/s), capped at <see cref="CorpseRules.MaxThrowSpeed"/>. A zero push does nothing (<see cref="Drop"/> makes it fall).</summary>
     public void Launch(Vector3 velocity)
     {
         var v = velocity.Length() > CorpseRules.MaxThrowSpeed ? Vector3.Normalize(velocity) * CorpseRules.MaxThrowSpeed : velocity;
         if (v.LengthSquared() < 1e-4f) return;
         Velocity = v;
+        TakeOff();
+    }
+
+    /// <summary>Lets the body fall from where it is, at zero velocity (a parked or hovering vehicle leaves no push to throw it with). Nothing while it is already in flight or floating.</summary>
+    public void Drop()
+    {
+        if (Airborne || Floating) return;
+        Velocity = Vector3.Zero;
+        TakeOff();
+    }
+
+    void TakeOff()
+    {
         _fsm.Enter(BodyFlightState.Airborne);
         _fsm.Restart(); // a re-launch in flight starts the flight time over too
         Position += Vector3.UnitY * 0.05f; // clear of the floor it stands on
     }
+
+    /// <summary>Sits the body at <paramref name="seat"/> (from rest only); <see cref="Follow"/> moves it with the vehicle.</summary>
+    public void Attach(Vector3 seat)
+    {
+        if (!_fsm.Is(BodyFlightState.Grounded)) return;
+        Position = seat;
+        Velocity = Vector3.Zero;
+        _fsm.Enter(BodyFlightState.Seated);
+    }
+
+    /// <summary>Moves a seated body to <paramref name="seat"/>; nothing otherwise.</summary>
+    public void Follow(Vector3 seat) { if (Seated) Position = seat; }
 
     /// <summary>Back on <paramref name="position"/> at rest (a dummy standing up again).</summary>
     public void Reset(Vector3 position)
@@ -377,10 +453,11 @@ public sealed class ThrownBody
     /// <summary>
     /// One step of the flight: gravity, then the horizontal move (stops dead against a wall), then the vertical one (lands on
     /// the ground, bumps the ceiling). <paramref name="cast"/> gives the distance to the first solid along a ray from a point
-    /// (direction is unit length), or null when nothing is hit within the length. The flight ends after
-    /// <see cref="CorpseRules.MaxFlightSeconds"/> whatever happens.
+    /// (direction is unit length), or null when nothing is hit within the length. <paramref name="waterSurface"/> gives the water
+    /// surface height at a point, or null when it is not over water: a body that reaches it floats there. The flight ends after
+    /// <see cref="CorpseRules.MaxFlightSeconds"/> whatever happens, on the ground under the body when there is one.
     /// </summary>
-    public void Fly(float dt, Func<Vector3, Vector3, float, float?> cast)
+    public void Fly(float dt, Func<Vector3, Vector3, float, float?> cast, Func<Vector3, float?>? waterSurface = null)
     {
         if (!Airborne) return;
         _fsm.Tick(dt); // Elapsed is the flight time: the same float running sum as before
@@ -401,8 +478,9 @@ public sealed class ThrownBody
         var dy = v.Y * dt;
         if (dy < 0)
         {
+            if (waterSurface?.Invoke(p) is { } w && p.Y + dy <= w) { Settle(new Vector3(p.X, p.Y + dy, p.Z), w); return; } // reached the surface
             var hit = cast(p + Vector3.UnitY * 0.3f, -Vector3.UnitY, 0.3f - dy);
-            if (hit is { } d) { p.Y += 0.3f - d; Land(p); return; }
+            if (hit is { } d) { p.Y += 0.3f - d; Settle(p, waterSurface?.Invoke(p)); return; }
             p.Y += dy;
         }
         else
@@ -412,13 +490,27 @@ public sealed class ThrownBody
         }
         Position = p;
         Velocity = v;
-        if (_fsm.Elapsed >= CorpseRules.MaxFlightSeconds) Land(p);
+        if (_fsm.Elapsed >= CorpseRules.MaxFlightSeconds)
+        {
+            if (cast(p + Vector3.UnitY * 0.3f, -Vector3.UnitY, GroundSearchMetres) is { } g) p.Y += 0.3f - g; // out of time with ground below: down on it, not frozen in mid-air
+            Settle(p, waterSurface?.Invoke(p));
+        }
     }
 
-    void Land(Vector3 at)
+    /// <summary>How far under a body that ran out of flight time the ground is looked for.</summary>
+    const float GroundSearchMetres = 500f;
+
+    /// <summary>Comes to rest at <paramref name="at"/>: on the ground, or floating at <paramref name="surface"/> when that is at or above it.</summary>
+    void Settle(Vector3 at, float? surface)
     {
-        Position = at;
         Velocity = Vector3.Zero;
+        if (surface is { } s && at.Y <= s)
+        {
+            Position = new Vector3(at.X, s, at.Z);
+            _fsm.Enter(BodyFlightState.Floating);
+            return;
+        }
+        Position = at;
         _fsm.Enter(BodyFlightState.Grounded);
     }
 }

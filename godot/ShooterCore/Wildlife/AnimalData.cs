@@ -12,6 +12,10 @@ public sealed class AnimalVariant
     public string Model { get; set; } = "";
     /// <summary>The body box of this look, [width, height, length] like <see cref="AnimalDef.HitBox"/>; null: the species' box.</summary>
     public List<float>? HitBox { get; set; }
+    /// <summary>The weight range of this look, [min, max] kg like <see cref="AnimalDef.WeightKg"/> (a moose bull is heavier than a cow); null: the species' range.</summary>
+    public List<float>? WeightKg { get; set; }
+    /// <summary>Where the Body box of this look is centred, metres ahead of the position (see <see cref="AnimalDef.BodyAhead"/>); null: the species'.</summary>
+    public float? BodyAhead { get; set; }
 }
 
 /// <summary>Opt-in "sits" behaviour of a species (animals.json, "sit"): from standing it now and then sits for a random while, then stands up again.</summary>
@@ -70,6 +74,15 @@ public sealed class AnimalDef
     public List<float> HitBox { get; set; } = new();
     /// <summary>Metres the body box's centre lies ahead of the position (a model whose origin is under its hind half: a deer). For a bullet's hit test and the hit diagram.</summary>
     public float HitBoxAhead { get; set; }
+    /// <summary>Weight range of a wild adult, [min, max] kg. Set: every animal of the species rolls a size and a weight in it (<see cref="AnimalRules.SizeOfStep"/>), and a hunter is told the weight of one a sniper rifle killed. Null: no size roll (a pet, livestock).</summary>
+    public List<float>? WeightKg { get; set; }
+    /// <summary>
+    /// Metres the Body box's centre lies ahead of the position (<c>body_ahead</c>), measured from the model's own bounds (<c>scripts/make_animal_silhouettes.py</c>
+    /// prints it). The Body box (what contact is tested against, ADR 0028) is <see cref="HitBox"/>'s width and length, which are the model's measured size head and
+    /// antlers included, centred this far ahead: the origin of most models sits under the hind half, so a cow's head lies 1.5 m ahead and its tail 0.9 m behind.
+    /// Not <see cref="HitBoxAhead"/>, which a bullet's box test and the hit diagram already use and which is left as it was.
+    /// </summary>
+    public float BodyAhead { get; set; }
     /// <summary>Other models of the same species. Variant index 0 is <see cref="Model"/>; index i (1 up) is <c>Variants[i - 1]</c>. The index travels on the wire.</summary>
     public List<AnimalVariant> Variants { get; set; } = new();
 
@@ -90,6 +103,18 @@ public sealed class AnimalDef
 
     /// <summary>The body box of a variant index (0 or out of range: the species' box; a variant without its own: the species' box).</summary>
     public IReadOnlyList<float> HitBoxOf(int variant) => variant >= 1 && variant <= Variants.Count && Variants[variant - 1].HitBox is { } b ? b : HitBox;
+
+    /// <summary>The weight range [min, max] kg of a variant index (a variant without its own: the species'), or null when the species has none.</summary>
+    public IReadOnlyList<float>? WeightKgOf(int variant) => variant >= 1 && variant <= Variants.Count && Variants[variant - 1].WeightKg is { } w ? w : WeightKg;
+
+    /// <summary>
+    /// Half the body's width, clamped to 0.1 to 0.5 m: the radius of the sphere that asks the world whether the animal fits at a spot (a spawn point, a wander
+    /// target). Not the contact test, which is the box (<see cref="BodyBox"/>).
+    /// </summary>
+    public float BodyRadiusOf(int variant) => Math.Clamp(HitBoxOf(variant)[0] / 2, 0.1f, 0.5f);
+
+    /// <summary>The Body box's centre ahead of the position for a variant index (a variant without its own: the species').</summary>
+    public float BodyAheadOf(int variant) => variant >= 1 && variant <= Variants.Count && Variants[variant - 1].BodyAhead is { } a ? a : BodyAhead;
 
     /// <summary>The variant index of an asset id: a variant's id (1 up), or -1.</summary>
     public int VariantIndex(string asset) => Variants.FindIndex(v => v.Id == asset) is >= 0 and var i ? i + 1 : -1;
@@ -139,6 +164,11 @@ public sealed class AnimalsFile : IVersioned
     /// <summary>The species index (the position in the list, what the wire carries), or -1.</summary>
     public int IndexOf(string id) => Animals.FindIndex(a => a.Id == id);
 
+    /// <summary>The heaviest weight a species may have: the hunt shot carries it in tenths of a kg in a u16.</summary>
+    public const float MaxWeightKg = 6000;
+
+    static bool ValidWeight(List<float> w) => w.Count == 2 && w[0] > 0 && w[1] >= w[0] && w[1] <= MaxWeightKg;
+
     public static AnimalsFile Validate(AnimalsFile f)
     {
         const string F = "animals.json";
@@ -172,8 +202,11 @@ public sealed class AnimalsFile : IVersioned
                 if (v.Id == AnimalVariant.BaseAssetId) throw new DataFileException($"{F}: {a.Id}: variant id \"{AnimalVariant.BaseAssetId}\" is reserved for the base model");
                 if (!v.Model.EndsWith(".glb", StringComparison.Ordinal)) throw new DataFileException($"{F}: {a.Id}: variant {v.Id}: model must be a .glb path in the asset library");
                 if (v.HitBox is { } vb && (vb.Count != 3 || vb.Any(x => !(x > 0)))) throw new DataFileException($"{F}: {a.Id}: variant {v.Id}: hit_box is [width, height, length], all positive");
+                if (v.WeightKg is { } vw && (a.WeightKg == null || !ValidWeight(vw))) throw new DataFileException($"{F}: {a.Id}: variant {v.Id}: weight_kg is [min, max], 0 < min <= max <= {MaxWeightKg}, and only for a species with weight_kg");
             }
+            if (a.WeightKg is { } w && !ValidWeight(w)) throw new DataFileException($"{F}: {a.Id}: weight_kg is [min, max], 0 < min <= max <= {MaxWeightKg}");
             if (a.HitBox.Count != 3 || a.HitBox.Any(x => !(x > 0))) throw new DataFileException($"{F}: {a.Id}: hit_box is [width, height, length], all positive");
+            if (!(MathF.Abs(a.BodyAhead) < a.HitBox[2] / 2)) throw new DataFileException($"{F}: {a.Id}: body_ahead must lie within the body (under half its length)");
             if (a.Sit is { } sit && (sit.Chance is < 0 or > 1 || !(sit.MinSeconds > 0) || sit.MaxSeconds < sit.MinSeconds))
                 throw new DataFileException($"{F}: {a.Id}: sit chance is 0..1, min_seconds positive and not above max_seconds");
             if (a.Bark is { } bark && (bark.Chance is < 0 or > 1 || !(bark.Seconds > 0)))

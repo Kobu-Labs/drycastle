@@ -1,0 +1,13 @@
+# P-0120: two-storey house, grey render with stone-pattern plinth, red tile gable roof. Measured by landmark_photo (camera fit: photo 0 7 px, photo 1 8 px).
+# Eave 5.15 m, top 8.39 m. Sides with no photo have no openings. Not modelled: downpipes, gutters, yard wall, gate, fence, electricity box, extensions on the footprint.
+id: w378920537
+source: Street View captures of 2022-09
+overhang_m: 0.4
+frame_colour: '#eeeeee'
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 1.49, width_m: 1.27, height_m: 1.05, sill_m: 3.57, recess_m: 0.12, confidence: medium}
+  - {id: w2, kind: window, edge: 0, at_m: 4.64, width_m: 1.47, height_m: 1.03, sill_m: 3.57, recess_m: 0.12, confidence: medium}
+  - {id: w3, kind: window, edge: 0, at_m: 1.61, width_m: 1.25, height_m: 0.9, sill_m: 1.09, recess_m: 0.12, confidence: medium}
+  - {id: w4, kind: window, edge: 0, at_m: 4.56, width_m: 1.23, height_m: 0.91, sill_m: 1.07, recess_m: 0.12, confidence: medium}
+  - {id: w5, kind: window, edge: 0, at_m: 3.39, width_m: 0.65, height_m: 0.84, sill_m: 6.24, recess_m: 0.12, confidence: medium}
+  - {id: w6, kind: window, edge: 7, at_m: 7.61, width_m: 1.01, height_m: 1.12, sill_m: 3.31, recess_m: 0.12, confidence: medium}

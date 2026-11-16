@@ -11,8 +11,9 @@ namespace Drycastle.Shooter;
 /// <summary>
 /// The walkable map the bots find their routes on (#214): a navigation mesh baked from the server's own colliders, one
 /// tile per map chunk, so it agrees with what stops a player. Settings come from the spike (<see cref="NavSpike"/>,
-/// <c>make shooter-nav-spike</c>): 0.5 m cells, and tree trunks left out (they are three quarters of the polygons; a bot
-/// steers round a tree itself). The bake takes a few seconds for the village, so the tiles are kept on disk under a key made
+/// <c>make shooter-nav-spike</c>): 0.5 m cells, tree trunks left out (they are three quarters of the polygons, and every one is a hole a route is searched round) and
+/// every door baked open (the state the mesh was baked in is not the state a door has when someone walks, so it is the walker's to ask: a bot's body stops at a closed door, a citizen's or
+/// member's <see cref="WalkGuard"/> asks <see cref="WorldQuery.Ahead"/>, which also finds a trunk and a parked vehicle). The bake takes a few seconds for the village, so the tiles are kept on disk under a key made
 /// from the map's manifest, its placed objects and lamps, and the settings: a server bakes once per map version.
 /// <para>
 /// A route costs 13-16 ms across the village, too much for the tick, so the tick does not compute them: <see cref="Submit"/> hands a request to ONE background worker and
@@ -25,9 +26,18 @@ namespace Drycastle.Shooter;
 /// </summary>
 public sealed class BotNav
 {
-    public const float Cell = 0.5f, CellHeight = 0.25f;
+    public const float Cell = 0.5f;
+    /// <summary>
+    /// The bake's vertical cell, metres. The mesh lies one cell above the ground plus the rounding up to the next cell, so with 0.25 m a walker (who takes its height from the route) went
+    /// 0.25 to 0.5 m above flat ground; with 0.05 m it is 0.05 to 0.1 m.
+    /// </summary>
+    public const float CellHeight = 0.05f;
+    /// <summary>The step a route may take, metres: a whole number of <see cref="CellHeight"/>.</summary>
+    const float MaxClimb = 0.25f;
+    /// <summary>The bake counts height in 13 bits of cells: a map taller than this many metres would be baked wrong.</summary>
+    const float MaxBakeHeightM = 8000 * CellHeight;
     /// <summary>Part of the cache key: change it with any setting below, so old tiles are not reused.</summary>
-    const string Settings = "nav1 cell=0.5 height=0.25 radius=0.5 climb=0.25 slope=45 edge=1.0 trunks=out";
+    const string Settings = "nav3 cell=0.5 height=0.05 radius=0.5 climb=0.25 slope=45 edge=1.0 detail=0.25 trunks=out doors=open";
     const float AgentRadius = 0.5f; // one cell: the player capsule (0.35 m) rounded up
     const float Border = AgentRadius + 2 * Cell; // baked around a tile and thrown away, so its edge sees the neighbour's obstacles
 
@@ -196,8 +206,9 @@ public sealed class BotNav
         CellSize = Cell,
         CellHeight = CellHeight,
         AgentRadius = AgentRadius,
-        AgentHeight = MoveConsts.CapsuleHeight,
-        AgentMaxClimb = CellHeight, // the body has no step-up; one cell keeps kerbs and terrain noise walkable
+        AgentHeight = MathF.Ceiling(MoveConsts.CapsuleHeight / CellHeight) * CellHeight, // whole cells, as the bake rounds it anyway (silences the precision warning)
+        AgentMaxClimb = MaxClimb,   // the body has no step-up; this keeps kerbs and terrain noise walkable
+        DetailSampleMaxError = MaxClimb / CellHeight, // in cells: 0.25 m, as it was with the 0.25 m cell. Left at 1 cell (0.05 m) the village bakes to 142 000 polygons, not 72 000, and no lower
         AgentMaxSlope = 45f,        // under the body's 50 degree floor limit
         EdgeMaxError = 1.0f,        // at 1.0 or below a tile's edge stays on the tile boundary, so neighbours join
         GeometryParsedGeometryType = NavigationMesh.ParsedGeometryType.StaticColliders,
@@ -207,8 +218,10 @@ public sealed class BotNav
 
     static List<NavigationMesh> Bake(Node world, string mapDir, int threads)
     {
-        // the tree trunks are taken off the world layer for the parse only, so the mesh has no hole per tree
+        // the tree trunks are taken off the world layer for the parse only, so the mesh has no hole per tree (a walker meets a trunk at walk time, WorldQuery.Ahead); the doors are
+        // opened for it, so the doorways are in the mesh whatever state the doors happen to have now (the walker meets a closed one at walk time as well)
         var trunks = new List<(StaticBody3D Body, uint Layer)>();
+        var doors = new List<DoorNode>();
         var stack = new Stack<Node>();
         stack.Push(world);
         while (stack.Count > 0)
@@ -216,13 +229,19 @@ public sealed class BotNav
             var n = stack.Pop();
             foreach (var c in n.GetChildren()) stack.Push(c);
             if (n is StaticBody3D b && b.Name.ToString().Contains("TreeTrunks")) { trunks.Add((b, b.CollisionLayer)); b.CollisionLayer = 0; }
+            else if (n is DoorNode d) { doors.Add(d); d.PassForBake(true); }
         }
         var source = new NavigationMeshSourceGeometryData3D();
         try { NavigationServer3D.ParseSourceGeometryData(NewMesh(), source, world); }
-        finally { foreach (var (b, layer) in trunks) b.CollisionLayer = layer; }
+        finally
+        {
+            foreach (var (b, layer) in trunks) b.CollisionLayer = layer;
+            foreach (var d in doors) d.PassForBake(false);
+        }
         if (!source.HasData()) throw new InvalidOperationException("bot navigation: no static collider on the world layer to bake from");
 
         var bounds = source.GetBounds();
+        if (bounds.Size.Y + 2f > MaxBakeHeightM) throw new InvalidOperationException($"bot navigation: the map is {bounds.Size.Y:F0} m tall, over the {MaxBakeHeightM:F0} m a {CellHeight} m cell can bake");
         using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(mapDir, "manifest.json")));
         var chunk = (float)manifest.RootElement.GetProperty("chunk_size_m").GetDouble();
         if (MathF.Abs(chunk / Cell - MathF.Round(chunk / Cell)) > 1e-3f) throw new InvalidOperationException($"bot navigation: the chunk size {chunk} m is not a multiple of the {Cell} m cell");
