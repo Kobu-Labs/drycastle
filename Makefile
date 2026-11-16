@@ -241,12 +241,12 @@ shooter-server:
 
 shooter-client:
 	dotnet build godot/shooter/shooter.csproj
-	godot --path godot/shooter -- --role client $(if $(SMOKE),--smoke,) $(SHOOTER_MAP)
+	$(PACK_ENV) godot --path godot/shooter -- --role client $(if $(SMOKE),--smoke,) $(SHOOTER_MAP)
 
 # Client that asks the dev server for sandbox mode (--sandbox). The server must run with SANDBOX=1 (its default) to grant it.
 shooter-client-sandbox:
 	dotnet build godot/shooter/shooter.csproj
-	godot --path godot/shooter -- --role client --sandbox $(SHOOTER_MAP)
+	$(PACK_ENV) godot --path godot/shooter -- --role client --sandbox $(SHOOTER_MAP)
 
 # Headless server + 2 scripted bot clients: asserts both move and see each other.
 shooter-net-smoke:
