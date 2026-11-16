@@ -71,6 +71,7 @@ public partial class NetServer
     {
         if (_byId.TryGetValue(tc.Id, out var c) && c.Car != null) LeaveSeat(c, false);
         StreakDeath(tc.Id);
+        if (tc.To == Teams.None) BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(tc.Id, tc.Id, DeathMsg.WaitsForAdmin))); // out of the round: down until an admin puts them on a team, no corpse, no death on the record
         GD.Print($"server: #{tc.Id} moved from team {Teams.Tag(tc.From)} to {Teams.Tag(tc.To)}");
     }
 

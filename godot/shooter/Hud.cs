@@ -67,7 +67,8 @@ public partial class Hud : CanvasLayer
     (int, int) _feedShown = (-1, -1);
     // respawn, protection, hints
     Control _respawn = null!;
-    Label _respawnBy = null!, _respawnIn = null!;
+    Label _respawnTitle = null!, _respawnBy = null!, _respawnIn = null!;
+    bool _respawnWaits;
     double _respawnAt; bool _dead; int _respawnShown = -1;
     Control _protChip = null!, _protOutline = null!;
     Label _protText = null!;
@@ -348,7 +349,7 @@ public partial class Hud : CanvasLayer
         _respawn.AddChild(c);
         var v = new VBoxContainer { CustomMinimumSize = new Vector2(640, 0), MouseFilter = Control.MouseFilterEnum.Ignore };
         c.AddChild(v);
-        v.AddChild(L(Strings.T("hud.respawn.title"), "HudHead", HorizontalAlignment.Center));
+        _respawnTitle = L(Strings.T("hud.respawn.title"), "HudHead", HorizontalAlignment.Center); v.AddChild(_respawnTitle);
         _respawnBy = L("", "HudBig", HorizontalAlignment.Center); _respawnBy.ThemeTypeVariation = "HudDanger"; _respawnBy.ClipText = true; v.AddChild(_respawnBy);
         _respawnIn = L("", "HudDisplay", HorizontalAlignment.Center); v.AddChild(_respawnIn);
         BuildRespawnLoadouts(v);
@@ -532,6 +533,9 @@ public partial class Hud : CanvasLayer
         _dead = dead;
         _respawn.Visible = dead;
         if (!dead) return;
+        _respawnWaits = secondsLeft < 0; // an admin took the player out of the round (#312): no countdown
+        Set(_respawnTitle, Strings.T(_respawnWaits ? "hud.respawn.out" : "hud.respawn.title"));
+        if (_respawnWaits) { Set(_respawnBy, ""); Set(_respawnIn, Strings.T("hud.respawn.waits")); return; }
         _respawnAt = Now + secondsLeft; _respawnShown = -1;
         Set(_respawnBy, killer == "" ? Strings.T("hud.respawn.self") : Strings.F("hud.respawn.by", killer));
         UpdateRespawn();
@@ -539,6 +543,7 @@ public partial class Hud : CanvasLayer
 
     void UpdateRespawn()
     {
+        if (_respawnWaits) return;
         var s = HudLogic.CeilSeconds(_respawnAt - Now);
         if (s == _respawnShown) return;
         _respawnShown = s;
