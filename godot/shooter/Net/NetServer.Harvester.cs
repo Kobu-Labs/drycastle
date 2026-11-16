@@ -98,11 +98,11 @@ public partial class NetServer
         var car = _harvCar ?? MakeHarvesterCar((byte)kind, def, origin, plan.EntryYaw);
         car.OriginPos = origin; car.OriginYaw = plan.EntryYaw;
         car.Reset(); // back from where it was hidden: repaired, at the entry
-        car.Seat.Clear();
+        car.Seat.Clear(); car.Seat.Unblock(0); // a corpse that rode the last job's seat is not in the way
         if (AddHarvesterDriver() is not { } driver) { said = "No player id is free for the harvester's driver."; return false; }
+        if (!car.Seat.TryEnter(driver.Id, 0)) { Leave(driver); said = "The harvester's driver could not take the seat."; return false; }
         _harvCar = car; _harvDriver = driver;
         driver.Car = car; driver.CarSeat = 0; driver.Throttle = driver.Steer = 0; driver.Handbrake = false; driver.Body.InVehicle = true;
-        car.Seat.TryEnter(driver.Id, 0);
         driver.Body.Teleport(SeatPos(car, 0));
         _match.SetPosition(driver.Id, N(driver.Body.GlobalPosition));
         _harvBrain = new HarvesterBrain(plan, Harvester);
