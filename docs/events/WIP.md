@@ -53,7 +53,7 @@ Open:
 - **Intel board:** `AnnounceIntel` / `WithdrawIntel` is not called by the Bigfoot (the ticket says no announcement). It is one call each at start and end.
 - **Sounds:** no roar, no stomp, no throw sound exists; `NetClient.Bigfoot.cs` `BigfootSounds` reuses the closest ones.
 - **A boss bar or any HUD** for the hit count or the phase: none (the hit marker and the roar are the feedback).
-- **The final model and animations** replace the placeholder (a clean swap is `NetClient.Bigfoot.cs` and `bigfoot.json`); the Giant's licence is unverified (`assets/quaternius-giant/NOTICE.txt`).
+- **The model and animations** are the project's own since #286 (`scripts/make_bigfoot_model.py`, `drycastle-generated-models/bigfoot.glb`); the Quaternius placeholder is gone. Not yet seen in the game.
 - **Launched player's client** does not know the launch velocity (it reconciles to the server, as for a blast's knockback); a better hand-off would send it in `BigfootFx`.
 - Tuning: every number in `bigfoot.json` is a first guess (the fight is meant to take about a minute: 300 hits per participant).
 - The corpse and its footsteps are not on the minimap or the tactical map.

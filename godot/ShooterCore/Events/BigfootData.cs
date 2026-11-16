@@ -8,12 +8,12 @@ public sealed class BigfootFile : IVersioned
 {
     public int Version { get; set; }
 
-    /// <summary>The placeholder model (Quaternius "Giant", rigged, 12 joints), relative to the asset library (assets/).</summary>
-    public string Model { get; set; } = "quaternius-giant/giant.glb";
-    /// <summary>Uniform scale that brings the model, as it imports (4.53 units tall), to <see cref="HeightM"/>.</summary>
-    public float ModelScale { get; set; } = 0.8f;
-    /// <summary>Yaw added to the model so its face points to the entity's forward (-Z). The Quaternius packs face +Z, so 180.</summary>
-    public float ModelYawDeg { get; set; } = 180;
+    /// <summary>The model (scripts/make_bigfoot_model.py: skinned, its own clips, see <see cref="BigfootRules.Clips"/>), relative to the asset library (assets/).</summary>
+    public string Model { get; set; } = "drycastle-generated-models/bigfoot.glb";
+    /// <summary>Uniform scale that brings the model, as it imports, to <see cref="HeightM"/>. The generated one is built at that height.</summary>
+    public float ModelScale { get; set; } = 1f;
+    /// <summary>Yaw added to the model so its face points to the entity's forward (-Z). The generated one already faces -Z.</summary>
+    public float ModelYawDeg { get; set; }
     /// <summary>The drawn and hit height: twice a player (1.8 m). The hit volume is the player's capsule grown by <see cref="HitScale"/>.</summary>
     public float HeightM { get; set; } = 3.6f;
     /// <summary>Grows the player's hit capsule (<see cref="HitTarget.Scale"/>): 2 = twice as tall and as wide.</summary>
@@ -50,6 +50,7 @@ public sealed class BigfootFile : IVersioned
         if (!f.Model.EndsWith(".glb", StringComparison.Ordinal) || f.Model.StartsWith('/') || f.Model.Contains("..", StringComparison.Ordinal))
             throw new DataFileException($"{F}: model is a .glb path inside the asset library");
         Positive(f.ModelScale, "model_scale"); Positive(f.HeightM, "height_m"); Positive(f.HitScale, "hit_scale");
+        Positive(f.Movement.WalkStrideM, "movement.walk_stride_m"); Positive(f.Movement.RunStrideM, "movement.run_stride_m");
         if (f.DamageMin < 1 || f.DamageMax < f.DamageMin) throw new DataFileException($"{F}: damage_min is at least 1 and not above damage_max");
 
         var h = f.Hits;
@@ -145,6 +146,12 @@ public sealed class BigfootMovement
 {
     public float WalkSpeed { get; set; } = 3.4f;
     public float RunSpeed { get; set; } = 6.8f;
+    /// <summary>
+    /// The ground one loop of the model's Walk and Run clips covers (scripts/make_bigfoot_model.py prints them). The client plays the clip at
+    /// ground speed / (stride / clip length), so the feet do not slide whatever the speed is tuned to.
+    /// </summary>
+    public float WalkStrideM { get; set; } = 2.8f;
+    public float RunStrideM { get; set; } = 8.4f;
     /// <summary>Farther than this from its target it runs, nearer it walks.</summary>
     public float RunBeyondM { get; set; } = 16;
     public float TurnRateDegPerS { get; set; } = 150;
@@ -311,9 +318,19 @@ public static class BigfootRules
     public static byte Pack(BigfootAct act, bool hitToggle, int phase, bool enraged) =>
         (byte)((byte)act | (hitToggle ? HitToggle : 0) | (Math.Clamp(phase, 0, 2) << PhaseShift) | (enraged ? Enraged : 0));
 
-    /// <summary>The clips the placeholder model has, by their last name (the model names them "EnemyArmature|EnemyArmature|EnemyArmature|Attack"); a client matches on the ending.</summary>
-    public const string ClipIdle = "Idle", ClipWalk = "Walk", ClipRun = "Run", ClipAttack = "Attack", ClipHit = "HitRecieve", ClipDeath = "Death", ClipJump = "Jump";
-    public static readonly string[] Clips = { ClipIdle, ClipWalk, ClipRun, ClipAttack, ClipHit, ClipDeath, ClipJump };
+    /// <summary>
+    /// The clips the model has (scripts/make_bigfoot_model.py CLIPS): one per act, a flinch and a roar. The wind-ups end on their blow (the log leaves, the
+    /// foot lands, the vehicle is overhead at three quarters), so a client stretches each over its act's time.
+    /// </summary>
+    public const string ClipIdle = "Idle", ClipWalk = "Walk", ClipRun = "Run", ClipHit = "Hit", ClipRoar = "Roar", ClipDeath = "Death",
+        ClipTrunkThrow = "TrunkThrow", ClipStompWindup = "StompWindup", ClipStomp = "Stomp", ClipVehicleLift = "VehicleLift", ClipLaunch = "Launch",
+        ClipGrabReach = "GrabReach", ClipHold = "Hold";
+    public static readonly string[] Clips =
+    {
+        ClipIdle, ClipWalk, ClipRun, ClipHit, ClipRoar, ClipDeath, ClipTrunkThrow, ClipStompWindup, ClipStomp, ClipVehicleLift, ClipLaunch, ClipGrabReach, ClipHold,
+    };
+    /// <summary>The clips that loop; the others play once and hold their last frame.</summary>
+    public static readonly string[] LoopedClips = { ClipIdle, ClipWalk, ClipRun, ClipHold };
 
     /// <summary>The hits needed to kill it for <paramref name="participants"/> players (at least <see cref="BigfootHits.MinPlayers"/>).</summary>
     public static int HitsNeeded(BigfootHits h, int participants) => (int)MathF.Ceiling(h.PerPlayer * Math.Max(participants, h.MinPlayers));

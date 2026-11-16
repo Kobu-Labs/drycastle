@@ -4,12 +4,11 @@
   // These are first guesses made by reading, not by playing: the fight is meant to take about a minute and has never been run.
   // `/event bigfoot` starts it (admin), `/event current end` wins it, `/event current cancel` removes it with no reward.
 
-  // The placeholder art: Quaternius "Giant" (rigged, 12 joints; clips Attack, Death, HitRecieve, Idle, Jump, Run, Walk).
-  // model_scale brings the imported model (4.53 units tall as Godot imports it, measured with the asset check; feet at y 0.03) to
-  // height_m, twice a player (1.8 m); the model faces +Z, so 180.
-  "model": "quaternius-giant/giant.glb",
-  "model_scale": 0.8,
-  "model_yaw_deg": 180,
+  // The model: built by scripts/make_bigfoot_model.py (skinned, a clip per act, a flinch, a roar, the death), at height_m (twice a
+  // player, 1.8 m), standing on y 0 and facing -Z: no scale, no yaw.
+  "model": "drycastle-generated-models/bigfoot.glb",
+  "model_scale": 1,
+  "model_yaw_deg": 0,
   "height_m": 3.6,
   // The hit volume is the player's capsule (HitMath) grown by this much: 2 = twice as tall and as wide. A headshot is a body hit.
   "hit_scale": 2,
@@ -47,6 +46,9 @@
   "movement": {
     "walk_speed": 3.4,
     "run_speed": 13.9,
+    // the ground one loop of the Walk and Run clips covers (the script prints them): the client plays the clip at the speed it moves
+    "walk_stride_m": 2.8,
+    "run_stride_m": 8.4,
     "run_beyond_m": 16,
     "turn_rate_deg_per_s": 150,
     "max_step_m": 1.4,
@@ -132,7 +134,7 @@
   "reward": {
     "head_item": "bigfoot_head",
     "corpse_seconds": 900,
-    "death_seconds": 3,
+    "death_seconds": 3.5,
     "trail_length_m": 120,
     "trail_spacing_m": 1.9,
     "trail_tries": 24,

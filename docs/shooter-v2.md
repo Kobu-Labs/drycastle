@@ -526,8 +526,8 @@ items, ADR 0018 (#267, protocol 31).
   the origin is the middle of the head). `CharacterView.SetWorn(slot, item)` (`CharacterView.Worn.cs`) hangs it on the head bone, so it follows every
   clip, stance, the prone roll and the ragdoll, and hides what it replaces: the helmet and the hair, the head's foliage and the face paint. The same call
   dresses remote players (from event 194), the local player's seat view, a corpse that carries the item (from event 191: gone again once taken or crumbled)
-  and the menu figure (`CamoPreview.ShowWorn(slot, item)`). The Bigfoot head is `scripts/make_bigfoot_head_model.py` (a faceted ape-like head, 1142
-  triangles, about 30 % bigger than the head it covers). An item without a model is worn but not drawn.
+  and the menu figure (`CamoPreview.ShowWorn(slot, item)`). The Bigfoot head is the giant's own head from `scripts/make_bigfoot_model.py` (732
+  triangles, about twice the width of the head it covers). An item without a model is worn but not drawn.
 - **Icons.** `IconRegistry` has `IconKind.Item`: `ui/icons/items/<id>.png` (128x128, a render of `model` from `tools/render_icons.gd`); an item without a
   file shows `item_fallback.png` (a plain box glyph from `make_icons.py`), not the crossed placeholder.
 - **Granting it for tests.** An admin's `/give <item> [player]` gives a fresh item (no pickups counted) to a living player, or to the admin: worn when the slot is empty, else in the bag; refused when both are full.
@@ -552,9 +552,12 @@ despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: 
   `/event current end` kills it (a win, for testing), `/event current cancel` removes it with no reward. The first version announces nothing but a system chat line:
   it does not use the intel board (`AnnounceIntel` is the one call that would).
 - **A world entity, not a bot** (wire type 60). The state byte is the act (`BigfootAct`, bits 0-3), a bit that flips on every hit that did not kill, the phase (bits 5-6) and
-  the enrage (bit 7); the owner field is the player it holds; the hp byte is the hit count left in percent. The client draws the placeholder giant
-  (`quaternius-giant/giant.glb`, `assets/quaternius-giant/NOTICE.txt`) and picks the clip from the act. Idle, Walk, Run, Death and HitRecieve map directly; every attack
-  reuses the Attack clip stretched over the wind-up, plus a procedural lean, rise and wobble of the whole figure (`MoveBigfoot`). The model and the sounds are placeholders
+  the enrage (bit 7); the owner field is the player it holds; the hp byte is the hit count left in percent. The client draws the generated giant
+  (`drycastle-generated-models/bigfoot.glb`, `scripts/make_bigfoot_model.py`: a skinned mesh, 26 bones, 13 clips) and picks the clip from the act (`ClipFor`): every act
+  has its own, and a wind-up is stretched over its act's time so the blow lands with the server's. Walk and Run play at the speed it moves (`PaceGait`: ground speed over
+  the clip's stride, `movement.walk_stride_m` / `run_stride_m`). A hit makes it flinch only while it stands; a roar (the phase change, its arrival) plays the Roar clip only
+  while it stands, because the server does not stop it to roar. The log it winds up with rides its right hand; the fist that holds a player rocks the whole figure
+  (`MoveBigfoot`). The sounds are still placeholders
   (`BigfootSounds` names the sounds the game already has).
 - **Hit count, not hit points.** It dies after `hits.per_player` x participants hits (participants: living players within `participant_radius_m`; the number only goes
   up while it fights). Shots reach it through the normal pipeline: it is a `HitTarget` (id `BigfootRules.TargetId` 60000) with `Scale` 2, a player capsule twice as tall

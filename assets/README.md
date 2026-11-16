@@ -96,26 +96,23 @@ Z), `gun_mount` (the ring's carriage, yaw about Y from the ring centre, all the 
 `seat_gunner`, the lights (`light_head_l`/`_r`, `light_tail_l`/`_r`), `smoke_engine` (the engine is in the stern) and the wake points at the waterline
 (`wake_bow`, `wake_stern_l`/`_r`; the waterline afloat is 0.56 m above the origin, under the cockpit floor).
 
-`drycastle-generated-models/bigfoot_head.glb` (2026-11-13) is the Bigfoot head, the headgear item of the Bigfoot event (`godot/shooter` item id `bigfoot_head`,
-`data/items.json` `model`): a faceted, ape-like head with a sagittal crest, a heavy arched brow, a dark face plate with amber eyes, nose and bared teeth, and a
-shaggy mane of spikes round the back, cheeks and jaw. Original geometry written as code in `scripts/make_bigfoot_head_model.py` (standard library only; it
-loads the flak script's mesh helpers from the file beside it; `python3 -I scripts/make_bigfoot_head_model.py` rebuilds the file byte for byte), CC0, 8
-flat-colour materials, no texture, one mesh node, about 1100 triangles. Frame of a worn headgear item: metres, forward -Z, origin at the middle of the
-wearer's head (it is not a vehicle). About 0.88 x 1.12 x 0.87 m with the mane, sized to swallow the head of every player body; the game turns it to the
-rig's +Z face and scales it to rig units (`CharacterView.Worn.cs`). Not meant to be placed on the map, though it is listed like the other generated models.
+`drycastle-generated-models/bigfoot.glb` and `bigfoot_head.glb` (2026-11-16, #286) are the Bigfoot of the Bigfoot event (`godot/shooter/data/bigfoot.json` `model`)
+and its head as the headgear item (item id `bigfoot_head`, `data/items.json` `model`). Both come from `scripts/make_bigfoot_model.py` (original geometry and
+animation written as code, needs numpy; `python3 scripts/make_bigfoot_model.py` rebuilds both files byte for byte), CC0, 10 flat-colour materials, no texture.
+The body: a hunched, near-black giant with a spiked ridge down its back, forearms thicker than its upper arms, clawed hands at knee height, a head slung low
+with a scowling brow, burning eyes, fangs and tusks. Metres, stands on y 0, faces -Z, 3.6 m to the crest; one skinned mesh of 2242 triangles on 26 bones
+whose rest rotations are identity (`Root > Hips > Spine > Chest > Neck > Head > Jaw`, arms `Clavicle/UpperArm/Forearm/Hand/Fingers`, legs
+`Thigh/Shin/Foot/Toe`, `.L` and `.R`), and 13 clips: Idle, Walk, Run, Death, Hit, Roar, TrunkThrow, StompWindup, Stomp, VehicleLift, Launch, GrabReach,
+Hold. Walk and Run cover 2.8 m and 8.4 m a loop (`movement.walk_stride_m`, `run_stride_m`). `python3 scripts/preview_glb_clips.py <glb> <out_dir>` draws
+a turnaround and a contact sheet per clip from the file itself, without the game. The head: the same head at 1 / 1.25, the jaw hanging open, 732 triangles,
+one mesh node, in the frame of a worn headgear item (metres, forward -Z, origin at the middle of the wearer's head), about 1.14 x 1.22 x 1.17 m with the
+mane, so it swallows the head of every player body. Its icon (`ui/icons/items/bigfoot_head.png`) is a render of the model: `make shooter-icons` redraws it.
 
 `drycastle-generated-models/gold_chain.glb` (2026-11-15) is the Gold chain, the neck item of the Thieves event (item id `gold_chain`, `data/items.json` `model`): a chunky necklace of 38 interlocked
 links (every other one on its edge, two golds) round the neck and over the collar, drooping to a diamond pendant on the chest. Original geometry written as code in `scripts/make_gold_chain_model.py`
 (standard library only; it loads the flak script's mesh helpers; `python3 -I scripts/make_gold_chain_model.py` rebuilds the file byte for byte), CC0, 3 flat-colour materials, no texture, one mesh
 node, about 2400 triangles, 0.24 x 0.26 x 0.27 m. Frame of a worn neck item: metres, forward -Z, origin at the origin of the rig's Neck bone (`CharacterView.Worn.cs`); the placement is from the bone
 origins, not checked on a render. The Gang Warfare pack may replace it later (point `model` at it).
-
-**Unverified, user-provided (2026-11-13):** `quaternius-giant/giant.glb` is the placeholder model of the Bigfoot event (#264, `godot/shooter/data/bigfoot.json`): "Giant" by
-Quaternius, a free rigged model (3812 triangles, one texture atlas, an `EnemyArmature` skeleton of 12 joints) the owner downloaded as a local file. It comes with seven clips
-(Attack, Death, HitRecieve, Idle, Jump, Run, Walk, each prefixed `EnemyArmature|EnemyArmature|EnemyArmature|`). As Godot imports it, it is 4.53 units tall, 6.47 wide with the arms out
-and 2.34 deep, feet at y 0.03, facing +Z (measured with `make assets-check`'s script); the game scales it by 0.8 to the Bigfoot's 3.6 m. Quaternius publishes its free models as CC0, but
-nobody checked this model's page, so it is listed as `UNVERIFIED` under `unverified_models` (`shooter:quaternius-giant/giant`) with a `NOTICE.txt`, like the other user-provided models, and
-**not** among the project's own generated models (whose licence says every file there is original code). The final model and animations are a separate follow-up.
 
 **Unverified, user-provided artwork (2026-11-13):** `welcome-sign/welcome_sign.glb` is the village welcome sign ("VITAJTE V OBCI", coat of arms, village name):
 an arched board between two light-blue posts that bend in to two legs with two cross rails, a cap and a ball on each post (about 1.05 x 3.35 x 0.12 m, origin on

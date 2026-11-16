@@ -717,12 +717,141 @@ def clip_death(t):
     return spline([(time / DEATH_SECONDS, p) for time, p in keys], t, False)
 
 
-# name, seconds, looped, pose at phase, metres per loop (0: stands still)
+def clip_hit(t):
+    """A flinch: the chest and head snap back and round, and come home."""
+    return spline([
+        (0.00, STAND),
+        (0.22, pose(STAND, hips_pos=(0.03, -0.16, 0.26), spine=(3, 4, 0), chest=(0, 13, 2), neck=(-12, -4, 0), head=(-16, -14, 6), jaw=24, hand_R=(0.2, 0.35, -0.25), hand_L=(0.12, 0.12, -0.05), curl=10)),
+        (0.58, pose(STAND, hips_pos=(0, -0.15, 0.13), chest=(14, -4, 0), head=(-2, 5, 0), jaw=12)),
+        (1.00, STAND),
+    ], t, False)
+
+
+def clip_roar(t):
+    """Gathers itself, then throws its chest out and its arms wide and roars at the sky, shaking."""
+    burst = dict(hips_pos=(0, -0.06, 0.24), hips=(-5, 0, 0), spine=(-8, 0, 0), chest=(-13, 0, 0), neck=(-14, 0, 0), head=(-20, 0, 0), curl=0, elbow=(1.0, 0.1, 0.6))
+    p = spline([
+        (0.00, STAND),
+        (0.20, pose(STAND, hips_pos=(0, -0.34, 0.12), hips=(12, 0, 0), spine=(12, 0, 0), chest=(18, 0, 0), neck=(2, 0, 0), head=(8, 0, 0), jaw=2, hand=(-0.12, 0.25, -0.3), curl=70)),
+        (0.36, pose(STAND, jaw=48, hand=(0.85, 0.62, 0.42), **burst)),
+        (0.82, pose(STAND, jaw=44, hand=(0.9, 0.5, 0.5), **burst)),
+        (1.00, STAND),
+    ], t, False)
+    shake = smooth((t - 0.3) / 0.08) * (1 - smooth((t - 0.8) / 0.12))
+    return shift(p, head=(1.5 * shake * wave(t * 13), 5 * shake * wave(t * 9), 3 * shake * wave(t * 11, 0.3)), chest=(1.2 * shake * wave(t * 12), 0, 0),
+                 hand=(0, 0.04 * shake * wave(t * 12, 0.5), 0), jaw=3 * shake * wave(t * 10))
+
+
+def clip_trunk_throw(t):
+    """The log goes up on the right shoulder, the body winds back over the rear foot, and in the last fifth of the clip it is hurled: the log leaves at the end."""
+    carry = dict(elbow_R=(1.0, -0.4, -0.2), curl_R=60)
+    return spline([
+        (0.00, STAND),
+        (0.28, pose(STAND, hips_pos=(0, -0.14, 0.2), hips=(4, -6, 0), spine=(2, -6, 0), chest=(0, -12, 0), head=(-6, 14, 0), jaw=12,
+                    hand_R=(-0.15, 2.1, 0.25), hand_L=(0.1, 0.55, -0.55), **carry)),
+        (0.74, pose(STAND, hips_pos=(0, -0.2, 0.36), hips=(-2, -12, 0), spine=(-6, -10, 0), chest=(-12, -16, 0), neck=(-4, 12, 0), head=(-4, 20, 0), jaw=26,
+                    hand_R=(-0.05, 2.2, 0.8), hand_L=(0.15, 0.9, -0.8), **carry)),
+        (0.88, pose(STAND, hips_pos=(0, -0.2, 0.0), hips=(12, 6, 0), spine=(8, 6, 0), chest=(10, 12, 0), head=(-10, -8, 0), jaw=34,
+                    hand_R=(-0.25, 2.1, -1.0), hand_L=(0.25, 0.3, 0.2), elbow_R=(1.0, 0.2, 0.4), curl_R=30)),
+        (1.00, pose(STAND, hips_pos=(0, -0.3, -0.22), hips=(18, 12, 0), spine=(12, 8, 0), chest=(18, 14, 0), neck=(-14, -8, 0), head=(-16, -10, 0), jaw=38,
+                    hand_R=(-0.6, 0.7, -1.3), hand_L=(0.3, 0.25, 0.5), curl_R=5)),
+    ], t, False)
+
+
+# the stomp's last pose and the first of what follows: the right foot driven into the ground, the fists down beside it
+STOMPED = pose(STAND, hips_pos=(0.08, -0.56, -0.02), hips=(20, 0, 0), spine=(12, 0, 0), chest=(16, 0, 0), neck=(-16, 0, 0), head=(-20, 0, 0), jaw=40,
+               hand=(0.3, 0.05, -0.7), curl=85, foot_R=(0.2, 0, -0.5))
+
+
+def clip_stomp_windup(t):
+    """Rears up on its left leg, fists over its head and the right knee high, and comes down: the foot strikes at the very end (the shockwave starts there)."""
+    return spline([
+        (0.00, STAND),
+        (0.34, pose(STAND, hips_pos=(-0.16, -0.06, 0.16), hips=(2, 0, 3), spine=(-2, 0, 0), chest=(-6, 0, 0), neck=(-10, 0, 0), head=(-12, 0, 0), jaw=28,
+                    hand=(0.25, 2.3, -0.5), curl=80, foot_R=(0.16, 0.5, -0.25), footrot_R=(20, -8, 0))),
+        (0.78, pose(STAND, hips_pos=(-0.2, 0.0, 0.2), hips=(-2, 0, 4), spine=(-6, 0, 0), chest=(-12, 0, 0), neck=(-12, 0, 0), head=(-14, 0, 0), jaw=40,
+                    hand=(0.2, 2.75, -0.15), curl=85, foot_R=(0.2, 1.0, -0.45), footrot_R=(10, -8, 0))),
+        (0.92, pose(STAND, hips_pos=(-0.04, -0.3, 0.06), hips=(12, 0, 1), spine=(6, 0, 0), chest=(8, 0, 0), neck=(-14, 0, 0), head=(-16, 0, 0), jaw=40,
+                    hand=(0.28, 1.5, -0.9), curl=85, foot_R=(0.2, 0.35, -0.5), footrot_R=(-6, -8, 0))),
+        (1.00, STOMPED),
+    ], t, False)
+
+
+def clip_stomp(t):
+    """The blow has landed: it sinks into it, holds a moment, and rises."""
+    return spline([
+        (0.00, STOMPED),
+        (0.18, shift(STOMPED, hips_pos=(0, -0.08, 0), chest=(3, 0, 0), head=(4, 0, 0), jaw=4)),
+        (0.50, shift(STOMPED, hips_pos=(0, -0.02, 0), head=(-4, 0, 0))),
+        (1.00, STAND),
+    ], t, False)
+
+
+LIFT_HANDS = 0.92   # half the gap between its hands under a vehicle
+
+
+def clip_vehicle_lift(t):
+    """Bends to the vehicle, takes it in both hands, straightens and has it over its head at three quarters of the clip (the server's lift), then leans back to throw."""
+    both = dict(handw=1, curl=15, elbow=(1.0, 0.2, 0.5))
+    return spline([
+        (0.00, STAND),
+        (0.20, pose(STAND, hips_pos=(0, -0.55, 0.2), hips=(30, 0, 0), spine=(14, 0, 0), chest=(16, 0, 0), neck=(-18, 0, 0), head=(-22, 0, 0), jaw=14, handm=(LIFT_HANDS, 0.75, -1.75), **both)),
+        (0.46, pose(STAND, hips_pos=(0, -0.3, 0.14), hips=(12, 0, 0), spine=(4, 0, 0), chest=(4, 0, 0), neck=(-12, 0, 0), head=(-14, 0, 0), jaw=26, handm=(LIFT_HANDS, 2.3, -1.45), **both)),
+        (0.75, pose(STAND, hips_pos=(0, -0.06, 0.1), hips=(-3, 0, 0), spine=(-5, 0, 0), chest=(-7, 0, 0), neck=(-12, 0, 0), head=(-16, 0, 0), jaw=34, handm=(LIFT_HANDS, 4.0, -0.2), **both)),
+        (1.00, pose(STAND, hips_pos=(0, -0.1, 0.3), hips=(-6, 0, 0), spine=(-8, 0, 0), chest=(-12, 0, 0), neck=(-8, 0, 0), head=(-10, 0, 0), jaw=40, handm=(LIFT_HANDS, 3.95, 0.3), **both)),
+    ], t, False)
+
+
+def clip_launch(t):
+    """The throw: both arms come over from behind the head and down in front, the body after them."""
+    both = dict(handw=1, curl=10, elbow=(1.0, 0.2, 0.5))
+    return spline([
+        (0.00, pose(STAND, hips_pos=(0, -0.1, 0.3), hips=(-6, 0, 0), spine=(-8, 0, 0), chest=(-12, 0, 0), neck=(-8, 0, 0), head=(-10, 0, 0), jaw=40, handm=(LIFT_HANDS, 3.9, 0.3), **both)),
+        (0.30, pose(STAND, hips_pos=(0, -0.2, -0.1), hips=(12, 0, 0), spine=(8, 0, 0), chest=(12, 0, 0), neck=(-14, 0, 0), head=(-16, 0, 0), jaw=44, handm=(0.85, 2.7, -2.0), **both)),
+        (0.60, pose(STAND, hips_pos=(0, -0.42, -0.2), hips=(22, 0, 0), spine=(12, 0, 0), chest=(18, 0, 0), neck=(-18, 0, 0), head=(-20, 0, 0), jaw=40, handm=(0.75, 0.95, -1.7), **both)),
+        (1.00, pose(STAND, hips_pos=(0, -0.3, 0.0), hips=(14, 0, 0), spine=(10, 0, 0), chest=(13, 0, 0), neck=(-12, 0, 0), head=(-12, 0, 0), jaw=22, handm=(0.85, 0.95, -1.1), **both)),
+    ], t, False)
+
+
+HOLD_HAND = (0.3, 2.7, -1.35)   # the right wrist while it holds a player: bigfoot.json grab hand_height_m, hand_forward_m
+
+
+def clip_grab_reach(t):
+    """Lunges, the right hand shooting out low for a player, and closes on them at the end."""
+    return spline([
+        (0.00, STAND),
+        (0.30, pose(STAND, hips_pos=(0, -0.2, 0.3), hips=(4, -8, 0), chest=(6, -12, 0), head=(-8, 10, 0), jaw=18, hand_R=(0.2, 0.9, 0.3), hand_L=(0.1, 0.3, -0.4), curl_R=0)),
+        (0.72, pose(STAND, hips_pos=(0, -0.5, -0.3), hips=(26, 8, 0), spine=(12, 4, 0), chest=(14, 12, 0), neck=(-18, -6, 0), head=(-22, -8, 0), jaw=30,
+                    handm_R=(0.25, 1.35, -2.1), handw_R=1, curl_R=0, hand_L=(0.25, 0.3, 0.5))),
+        (1.00, pose(STAND, hips_pos=(0, -0.46, -0.24), hips=(24, 8, 0), spine=(12, 4, 0), chest=(14, 10, 0), neck=(-18, -6, 0), head=(-22, -8, 0), jaw=22,
+                    handm_R=(0.25, 1.2, -1.85), handw_R=1, curl_R=85, hand_L=(0.25, 0.3, 0.45))),
+    ], t, False)
+
+
+def clip_hold(t):
+    """Holds a player up in its right fist in front of its face and bellows at them; the fist shakes."""
+    x, y, z = HOLD_HAND
+    return pose(STAND, hips_pos=(0, -0.12, 0.2), hips=(2, 0, 0), spine=(-2, 0, 0), chest=(-4 + 1.5 * wave(t * 2), 5 * wave(t), 0), neck=(-8, 0, 0), head=(-10, -6 + 4 * wave(t, 0.2), 3 * wave(t * 2)),
+                jaw=34 + 8 * wave(t * 2), handm_R=(x + 0.05 * wave(t * 2, 0.2), y + 0.1 * wave(t * 2), z + 0.07 * wave(t, 0.4)), handw_R=1, curl_R=85, elbow_R=(1.0, -0.6, 0.2),
+                hand_L=(0.5, 0.75 + 0.06 * wave(t * 2, 0.5), -0.25), curl_L=85)
+
+
+# name, seconds, looped, pose at phase, metres per loop (0: stands still). The attack clips are as long as their act in bigfoot.json;
+# the game stretches each over the act's time anyway.
 CLIPS = [
     ("Idle", 4.0, True, clip_idle, 0.0),
     ("Walk", 0.84, True, clip_walk, WALK_STRIDE),
     ("Run", 0.62, True, clip_run, RUN_STRIDE),
     ("Death", DEATH_SECONDS, False, clip_death, 0.0),
+    ("Hit", 0.5, False, clip_hit, 0.0),
+    ("Roar", 1.8, False, clip_roar, 0.0),
+    ("TrunkThrow", 1.0, False, clip_trunk_throw, 0.0),
+    ("StompWindup", 1.1, False, clip_stomp_windup, 0.0),
+    ("Stomp", 0.6, False, clip_stomp, 0.0),
+    ("VehicleLift", 1.6, False, clip_vehicle_lift, 0.0),
+    ("Launch", 0.5, False, clip_launch, 0.0),
+    ("GrabReach", 0.7, False, clip_grab_reach, 0.0),
+    ("Hold", 0.8, True, clip_hold, 0.0),
 ]
 FPS = 30
 

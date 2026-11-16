@@ -113,8 +113,10 @@ public class BigfootTests
         Assert.NotNull(head);
         Assert.True(head!.HeadshotImmune);
         using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(AssetsDir(), "manifest.json")));
-        var listed = doc.RootElement.GetProperty("unverified_models").EnumerateArray().Select(m => m.GetProperty("file").GetString()).ToHashSet();
-        Assert.Contains(Shipped.Model, listed);
+        // the project's own model: listed with its licence, not among the unverified ones
+        var entry = doc.RootElement.GetProperty("assets").EnumerateArray().Single(m => m.GetProperty("file").GetString() == Shipped.Model);
+        Assert.Equal("CC0", entry.GetProperty("licence").GetString());
+        Assert.DoesNotContain(doc.RootElement.GetProperty("unverified_models").EnumerateArray(), m => m.GetProperty("file").GetString() == Shipped.Model);
     }
 
     [Fact]
@@ -133,7 +135,7 @@ public class BigfootTests
     [InlineData("\"damage_min\": 2", "\"damage_min\": 0")]
     [InlineData("\"hit_scale\": 2", "\"hit_scale\": 0")]
     [InlineData("\"trail_spacing_m\": 1.9", "\"trail_spacing_m\": 0.1")]
-    [InlineData("\"model\": \"quaternius-giant/giant.glb\"", "\"model\": \"../giant.glb\"")]
+    [InlineData("\"model\": \"drycastle-generated-models/bigfoot.glb\"", "\"model\": \"../bigfoot.glb\"")]
     [InlineData("\"head_item\": \"bigfoot_head\"", "\"head_item\": \"\"")]
     public void BadFilesAreRefused(string good, string bad)
     {

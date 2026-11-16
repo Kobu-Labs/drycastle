@@ -55,13 +55,14 @@ class Model:
         for i, n in enumerate(d["nodes"]):
             for c in n.get("children", []):
                 self.parent[c] = i
-        self.clips = {}
+        self.clips, self.extras = {}, {}
         for a in d.get("animations", []):
             tracks = []
             for ch in a["channels"]:
                 s = a["samplers"][ch["sampler"]]
                 tracks.append((ch["target"]["node"], ch["target"]["path"], accessor(d, self.blob, s["input"]), accessor(d, self.blob, s["output"])))
             self.clips[a["name"]] = (tracks, max(float(t[2][-1]) for t in tracks))
+            self.extras[a["name"]] = a.get("extras", {})
         self.prims = []
         for ni, n in enumerate(d["nodes"]):
             if "mesh" not in n:
@@ -213,7 +214,7 @@ def main():
     wanted = [c for c in args.clips.split(",") if c] or list(model.clips)
     for name in wanted:
         length = model.clips[name][1]
-        looped = "loop" in name.lower() or name in ("Idle", "Walk", "Run")
+        looped = bool(model.extras.get(name, {}).get("loop"))
         times = [length * k / (args.frames if looped else args.frames - 1) for k in range(args.frames)]
         posed = [model.triangles(name, t) for t in times]
         every = np.concatenate([p[0].reshape(-1, 3) for p in posed])
