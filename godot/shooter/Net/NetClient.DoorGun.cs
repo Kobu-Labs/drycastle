@@ -56,6 +56,9 @@ public partial class NetClient
         }
     }
 
+    /// <summary>How fast a vehicle moves, forward (m/s): what a casing thrown from it keeps.</summary>
+    static Vector3 CarVelocity(CarView car) => -car.Node.GlobalTransform.Basis.Z * (car.Kmh / 3.6f);
+
     /// <summary>The seat a vehicle's gunner sits in, or -1.</summary>
     static int GunnerSeat(VehicleDef def) => def.Seats.FindIndex(s => s.Role == "gunner");
 
@@ -104,7 +107,8 @@ public partial class NetClient
     /// </summary>
     bool OnDoorGunShot(ShotMsg sh)
     {
-        if (sh.Weapon != SpecialWeapons.VehicleGun || DoorGunCarOf(sh.Shooter) is not { DoorGun: { } nodes }) return false;
+        var car = sh.Weapon == SpecialWeapons.VehicleGun ? DoorGunCarOf(sh.Shooter) : null;
+        if (car?.DoorGun is not { } nodes) return false;
         if (KeepEventLogs) _shotLog.Add((Now, sh));
         SfxShot(sh, false);
         var origin = G(sh.Origin); var end = G(sh.End);
@@ -112,6 +116,7 @@ public partial class NetClient
         ShotHole(origin, end);
         BulletSurfaceHit(origin, end);
         nodes.Kick();
+        CasingFx.Eject(Owned, nodes.Muzzle?.GlobalPosition ?? origin, end - origin, CasingKind.Heavy, CarVelocity(car));
         return true;
     }
 

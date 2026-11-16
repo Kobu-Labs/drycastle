@@ -78,15 +78,8 @@ public partial class NetServer
         if (_byId.TryGetValue(owner, out var c)) Send(c, new EventMsg((byte)EventKind.GunshipStatus, GunshipCodec.Encode(s)));
     }
 
-    /// <summary>The world blocks at the blocking geometry only (layer 1; vehicles and player bodies are not walls for a gunship round).</summary>
-    float WorldWall(Vector3 from, Vector3 dir, float max)
-    {
-        var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
-        q.CollisionMask = 1;
-        q.Exclude = PlayerRids();
-        var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
-        return r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3());
-    }
+    /// <summary>The static walls a gunship round stops on, as every shot (<see cref="WorldQuery.Wall"/>: crowns and bushes too). Its vehicles are routed by <see cref="GunshipRouting"/>, which tests their hulls.</summary>
+    float WorldWall(Vector3 from, Vector3 dir, float max) => Query.Wall(from, dir, max);
 
     /// <summary>
     /// The live vehicles as the gunship routing sees them: the index is the position in <see cref="_cars"/>. With <paramref name="targets"/> (the
@@ -101,7 +94,9 @@ public partial class NetServer
             var c = _cars[i];
             if (c.Destroyed) continue; // no collision: a destroyed vehicle is shot through
             var riders = targets != null && c.Seat.Occupied ? RiderRules.Exposed(c.Def, c.Seat, targets, seatsOnly: true) : null;
-            list.Add(new GunshipVehicle(i, N(c.GlobalPosition), c.State.Yaw, c.HalfWidth, c.HalfLength, c.Def.Height, riders));
+            var (_, pitch, roll) = AttitudeOf(c);
+            var (tp, tr) = c.Def.TiltOf(pitch, roll);
+            list.Add(new GunshipVehicle(i, N(c.GlobalPosition), c.State.Yaw, c.HalfWidth, c.HalfLength, c.Def.Height, riders, tp, tr, c.Def.Tilts ? c.Def.HullBoxes : null));
         }
         return list;
     }
@@ -218,10 +213,11 @@ public partial class NetServer
                 continue;
             }
             var t = targets.FirstOrDefault(x => x.Id == h.TargetId);
-            if (!h.Direct && !BlastReaches(at, t)) continue; // a bunker room's walls are between them
-            var k = ProjectileMath.Knockback(splash.KnockbackSpeed, at, HitMath.Centre(t), h.Fraction);
+            var share = h.Direct ? 1f : SplashShare(at, t); // walls, a bunker room's too, and a covered seat's hull
+            if (share <= 0) continue;
+            var k = ProjectileMath.Knockback(splash.KnockbackSpeed, at, HitMath.Centre(t), h.Fraction * share);
             PushOnDeath(h.TargetId, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
-            var res = Deal(owner, credit, h.TargetId, h.Damage, false, false);
+            var res = Deal(owner, credit, h.TargetId, h.Damage * share, false, false);
             ClearPush(h.TargetId, res);
             if (res == DamageResult.Ignored) continue; // spawn protected or a pilot at the gun: neither damage nor knockback
             if (h.Direct && res == DamageResult.Killed) kill = true;

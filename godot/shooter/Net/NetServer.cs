@@ -111,6 +111,11 @@ public partial class NetServer : Node
     }
 
     public Node3D World = null!;
+
+    WorldQuery? _query;
+    /// <summary>The one answer to what is under a point, in the way of a mover, or in the way of a shot (ADR 0028). Built on first use: <see cref="World"/> is set by then.</summary>
+    WorldQuery Query => _query ??= new WorldQuery(World, NearestHull, ParkedHullDistance);
+
     /// <summary>Spawn candidates (the map's pipeline spawn points); the match state machine picks among them.</summary>
     public List<System.Numerics.Vector3> Spawns = new();
     public MatchConfig MatchConfig = new();
@@ -155,8 +160,6 @@ public partial class NetServer : Node
     readonly SnapshotHistory _sentStates = new();
     /// <summary>The world states of recent ticks the server sent (the world channel's baselines, shared by every client).</summary>
     readonly WorldHistory _sentWorld = new();
-    Godot.Collections.Array<Rid> _playerRids = new();
-    bool _playerRidsDirty = true;
     MatchSim _match = null!;
     // match smoke bookkeeping
     int _kills, _roundsEnded, _restarts, _ignoredHits, _earlyProtectionEnds;
@@ -342,13 +345,8 @@ public partial class NetServer : Node
     void CheckSpawnGround()
     {
         _spawnsChecked = true;
-        var space = World.GetWorld3D().DirectSpaceState;
         var before = Spawns.Count;
-        Spawns.RemoveAll(sp =>
-        {
-            var q = PhysicsRayQueryParameters3D.Create(new Vector3(sp.X, sp.Y + 2f, sp.Z), new Vector3(sp.X, sp.Y - 5f, sp.Z), CollisionLayers.World);
-            return space.PerfRay(q).Count == 0;
-        });
+        Spawns.RemoveAll(sp => Query.Ground(MoverKind.Player, new Vector3(sp.X, sp.Y, sp.Z), 2f, 5f) == null);
         GD.Print($"server: {Spawns.Count}/{before} spawn candidates have ground");
         LossClusterSpawns();
     }
@@ -517,13 +515,11 @@ public partial class NetServer : Node
         c.Worn = new Equipment(Items);
         c.Bag = new Bag();
         ItemRules.IssueStandard(Items, c.Bag); // every player has the standard items (the binoculars) from the start
-        c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = MapLadders };
+        c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = MapLadders, Bodies = _animalCrowd };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
         c.Session.Enter(SessionPhase.Joined);
-        foreach (var car in _cars) { car.AddCollisionExceptionWith(c.Body); car.Probe?.Ignore(c.Body); car.DriveWorld?.Ignore(c.Body); }
         _byId[c.Id] = c;
-        _playerRidsDirty = true;
         c.Enc = new SnapshotEncoder(_sentStates);
         c.WEnc = new WorldSnapshotEncoder(history: _sentWorld);
         SendProfile(c);
@@ -575,10 +571,8 @@ public partial class NetServer : Node
         RozhlasSetLeave(c.Id);
         MassStandUp(c.Id); _seatHint.Remove(c.Id);
         DetachFromCar(c);
-        foreach (var car in _cars) { car.RemoveCollisionExceptionWith(c.Body); car.Probe?.Unignore(c.Body); car.DriveWorld?.Unignore(c.Body); } // the exception outlives the freed body otherwise (T3-014)
         c.Body.QueueFree();
         _byId.Remove(c.Id);
-        _playerRidsDirty = true;
         foreach (var o in _byId.Values) Send(o, new LeaveMsg(c.Id));
         _match.RemovePlayer(c.Id);
         GD.Print($"server: {c.Name} #{c.Id} left");
@@ -928,36 +922,19 @@ public partial class NetServer : Node
         return new HitTarget(o.Id, N(o.Body.GlobalPosition), BodyStanceOf(o), o.Body.Yaw, o.Worn.HeadGuarded);
     }
 
-    /// <summary>The player bodies' RIDs for ray exclusion, rebuilt only after a join or a drop (T2-02) instead of per ray.</summary>
-    Godot.Collections.Array<Rid> PlayerRids()
-    {
-        if (!_playerRidsDirty) return _playerRids;
-        _playerRids = new Godot.Collections.Array<Rid>();
-        foreach (var o in _byId.Values) _playerRids.Add(o.Body.GetRid());
-        _playerRidsDirty = false;
-        return _playerRids;
-    }
-
-    /// <summary>Distance from <paramref name="from"/> along <paramref name="dir"/> to the first world collider (player bodies excluded), or infinity.</summary>
+    /// <summary>Distance from <paramref name="from"/> along <paramref name="dir"/> to the first thing a shot stops on (<see cref="WorldQuery.Shot"/>), or infinity.</summary>
     float WorldDistance(Vector3 from, Vector3 dir, float max) => WorldHit(from, dir, max, out _);
 
     /// <summary>
-    /// The walls a ray stops on: the world and the shot-only cover (tree crowns), by physics. Vehicles are not in it: their hulls are
-    /// <see cref="NearestHull"/>, analytic, at the pose the shot's view showed (ADR 0013, B-02). Player bodies are excluded.
+    /// The walls a ray stops on: the world and the shot-only cover (tree crowns, bushes), by physics (<see cref="WorldQuery.Wall"/>). Vehicles are not in it: their hulls are
+    /// <see cref="NearestHull"/>, analytic, at the pose the shot's view showed (ADR 0013, B-02).
     /// </summary>
-    float WallDistance(Vector3 from, Vector3 dir, float max)
-    {
-        var q = PhysicsRayQueryParameters3D.Create(from, from + dir * max);
-        q.CollisionMask = CollisionLayers.World | CollisionLayers.ShotOnly;
-        q.Exclude = PlayerRids();
-        var r = World.GetWorld3D().DirectSpaceState.PerfRay(q);
-        return r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3());
-    }
+    float WallDistance(Vector3 from, Vector3 dir, float max) => Query.Wall(from, dir, max);
 
     /// <summary>
     /// The nearest vehicle hull a ray from <paramref name="from"/> enters within <paramref name="max"/>, among the living vehicles that are not
-    /// <paramref name="skipA"/>, <paramref name="skipB"/> or in <paramref name="passed"/>. The hull is the upright box of <see cref="VehicleBox"/>
-    /// (the one <see cref="VehicleCollider"/> uses) at the pose <see cref="PoseOf"/> gives it. Distance in metres from <paramref name="from"/>.
+    /// <paramref name="skipA"/>, <paramref name="skipB"/> or in <paramref name="passed"/>. The hull is the upright box of <see cref="VehicleBox"/>, or the tilted boxes
+    /// of a type's <see cref="VehicleDef.Hull"/> (the ones <see cref="VehicleCollider"/> uses), at the pose <see cref="PoseOf"/> gives it. Distance in metres from <paramref name="from"/>.
     /// </summary>
     ServerCar? NearestHull(Vector3 from, Vector3 dir, float max, ServerCar? skipA, ServerCar? skipB, List<ServerCar>? passed, out float distance, out VehiclePose pose)
     {
@@ -967,7 +944,7 @@ public partial class NetServer : Node
         {
             if (car == skipA || car == skipB || car.Destroyed || passed != null && passed.Contains(car)) continue;
             var p = PoseOf(car);
-            if (VehicleBox.Ray(N(from), N(dir), max, p.Feet, p.Yaw, car.HalfWidth, car.HalfLength, car.Def.Height) is not { } hit || hit.Distance >= distance) continue;
+            if (VehicleBox.Ray(N(from), N(dir), max, p.Feet, p.Yaw, p.Pitch, p.Roll, car.Def) is not { } hit || hit.Distance >= distance) continue;
             best = car; distance = hit.Distance; pose = p;
         }
         return best;
@@ -980,20 +957,13 @@ public partial class NetServer : Node
     /// </summary>
     float WorldHit(Vector3 from, Vector3 dir, float max, out ServerCar? car, ServerCar? skip = null)
     {
-        var wall = WallDistance(from, dir, max);
-        var hull = NearestHull(from, dir, max, skip, null, null, out var d, out _);
-        if (hull != null && d < wall) { car = hull; return d; }
-        car = null;
-        return wall;
+        var stop = Query.Shot(from, dir, max, skip);
+        car = stop.Car;
+        return stop.Distance;
     }
 
     /// <summary>The distance the ray stops at with two vehicles left out (the hull it hit and the shooter's own): a wall or another hull.</summary>
-    float NextStop(Vector3 from, Vector3 dir, float max, ServerCar? skipA, ServerCar? skipB)
-    {
-        var wall = WallDistance(from, dir, max);
-        NearestHull(from, dir, max, skipA, skipB, null, out var d, out _);
-        return MathF.Min(wall, d);
-    }
+    float NextStop(Vector3 from, Vector3 dir, float max, ServerCar? skipA, ServerCar? skipB) => Query.Shot(from, dir, max, skipA, skipB).Distance;
 
     const float MaxShotRange = 300f;
 
@@ -1179,8 +1149,7 @@ public partial class NetServer : Node
 
     /// <summary>
     /// Explosion: the direct-hit victim takes the full damage (and no splash on top); everyone else alive within the splash
-    /// radius takes the linear falloff damage, the owner scaled by the self multiplier. Splash ignores walls and hulls, except a bunker room's (<see cref="BlastReaches"/>), so it reaches the riders of
-    /// every vehicle, covered or not. Affected players get knockback. A rocket fired from an armed seat spares the shooter's fellow riders (riders
+    /// radius takes the linear falloff damage, the owner scaled by the self multiplier. A wall between the blast and a target stops it, and a covered seat's rider takes half through the hull (<see cref="SplashShare"/>). Affected players get knockback. A rocket fired from an armed seat spares the shooter's fellow riders (riders
     /// of one vehicle never hit each other); the shooter takes their own blast as on foot, and so does the vehicle.
     /// </summary>
     void Explode(Rocket r, WeaponDef weapon, Vector3 pos, ushort? direct, ServerCar? directCar = null)
@@ -1196,14 +1165,16 @@ public partial class NetServer : Node
         foreach (var t in targets)
         {
             var isDirect = direct == t.Id;
-            if (!isDirect && !BlastReaches(N(pos), t)) continue; // a bunker room's walls are between them
             var dist = HitMath.DistanceToBody(N(pos), t);
             var self = t.Id == r.Owner;
             if (!self && own != null && own.Seat.SeatOf(t.Id) >= 0) continue; // a fellow rider of the shooter's vehicle
             var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, self);
             if (dmg <= 0) continue;
+            var share = isDirect ? 1f : SplashShare(N(pos), t); // walls, a bunker room's too, and a covered seat's hull
+            if (share <= 0) continue;
+            dmg *= share;
             if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
-            var k = ProjectileMath.Knockback(w, N(pos), HitMath.Centre(t), isDirect ? 1f : ProjectileMath.SplashFraction(w, dist));
+            var k = ProjectileMath.Knockback(w, N(pos), HitMath.Centre(t), isDirect ? 1f : share * ProjectileMath.SplashFraction(w, dist));
             PushOnDeath(t.Id, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
             var res = Deal(r.Owner, r.Weapon, t.Id, dmg, false, false);
             ClearPush(t.Id, res);

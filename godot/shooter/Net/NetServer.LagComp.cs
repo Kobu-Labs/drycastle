@@ -76,6 +76,13 @@ public partial class NetServer
         car.Poses.Clear();
     }
 
+    /// <summary>Distance from a point to a vehicle's hull where it stands now (its upright box, or its type's tilted boxes).</summary>
+    static float HullDistanceNow(ServerCar car, NVec3 at)
+    {
+        var (yaw, pitch, roll) = AttitudeOf(car);
+        return HullDistance.Of(at, N(car.GlobalPosition), yaw, pitch, roll, car.Def);
+    }
+
     /// <summary>The vehicle as it stands now: its feet, yaw and attitude, and the turret's yaw (the same numbers the hit box and the seats read).</summary>
     static VehiclePose PresentPose(ServerCar car)
     {

@@ -109,6 +109,17 @@ public partial class NetServer
         GD.Print($"server: demon: cleared (was {was})");
     }
 
+    /// <summary>The demon's Body capsule in the physics world (<see cref="DemonBlocker"/>): null until there is a demon.</summary>
+    DemonBlocker? _dBody;
+
+    /// <summary>Once a tick, after <see cref="DemonTick"/>: the Body capsule follows the demon's pose; with no demon it goes.</summary>
+    void DemonBodyTick()
+    {
+        if (_dEnt == null) { if (_dBody != null) { _dBody.QueueFree(); _dBody = null; } return; }
+        if (_dBody == null) { _dBody = new DemonBlocker(); World.AddChild(_dBody); }
+        _dBody.Place(_dEnt.State, _dEnt.Position, _dEnt.Normal, Demon.BodyM, Demon.Scale);
+    }
+
     /// <summary>Once a tick, after the Mass.</summary>
     void DemonTick(float dt)
     {
@@ -359,24 +370,31 @@ public partial class NetServer
         if (_balls.Count == 0) return;
         var all = LiveTargets();
         var players = all.Where(t => _byId.ContainsKey(t.Id)).ToList();
+        var npcs = all.Where(t => !_byId.ContainsKey(t.Id) && !DemonRules.IsHitId(t.Id) && t.Id != BigfootRules.TargetId).ToList(); // citizens, the Gang, workers, animals, dummies: a fireball hits them as a shot does
         ReturnTargets(all);
+        var struck = new List<HitTarget>(players.Count + npcs.Count);
+        struck.AddRange(players); struck.AddRange(npcs);
         for (var i = _balls.Count - 1; i >= 0; i--)
         {
-            var step = FireballFlight.Step(_balls[i], Demon.Fireball, dt, (o, d, len) => WallDistance(new Vector3(o.X, o.Y, o.Z), new Vector3(d.X, d.Y, d.Z), len), players);
+            // stopped as every shot is: walls, cover and a vehicle's hull (WorldQuery.Shot)
+            var step = FireballFlight.Step(_balls[i], Demon.Fireball, dt, (o, d, len) => WorldDistance(new Vector3(o.X, o.Y, o.Z), new Vector3(d.X, d.Y, d.Z), len), struck);
             if (step.Outcome == FireballOutcome.Flying) { _balls[i] = step.Ball; continue; }
             var ball = _balls[i];
             _balls.RemoveAt(i);
             var fizzled = step.Outcome == FireballOutcome.Expired;
             BroadcastEvent(EventKind.DemonImpact, DemonCodec.EncodeImpact(new DemonImpactMsg((ushort)ball.Id, step.Impact, step.Outcome == FireballOutcome.Player, fizzled)));
-            if (!fizzled) FireballBurst(step, players);
+            if (!fizzled) FireballBurst(step, players, npcs);
         }
     }
 
-    /// <summary>A fireball's blast: the direct hit and the splash (the church's rooms shelter each other), each victim set ablaze and hurt as their own damage.</summary>
-    void FireballBurst(FireballStep step, List<HitTarget> players)
+    /// <summary>A fireball's blast: the direct hit and the splash (the church's rooms shelter each other), each player set ablaze and hurt as their own damage, each NPC hurt.</summary>
+    void FireballBurst(FireballStep step, List<HitTarget> players, List<HitTarget> npcs)
     {
         BlastGlass(new Vector3(step.Impact.X, step.Impact.Y, step.Impact.Z), Demon.Fireball.Splash.RadiusM);
         ushort? direct = step.Outcome == FireballOutcome.Player ? step.Victim : null;
+        // an NPC (the same blast, the same shelter rule) takes the damage in the demon's name; it is not set ablaze (the burn set is the players') and not pushed
+        foreach (var v in FireballBlast.Detonate(step.Impact, direct, npcs, Demon.Fireball, MapShelters))
+            Deal(DemonRules.HitId, SpecialWeapons.Burn, v.Id, MathF.Max(1f, MathF.Round(v.Damage)), false, false);
         foreach (var v in FireballBlast.Detonate(step.Impact, direct, players, Demon.Fireball, MapShelters, _burns, Demon.Burn))
         {
             if (!_byId.TryGetValue(v.Id, out var victim)) continue;

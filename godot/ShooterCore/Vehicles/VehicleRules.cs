@@ -14,8 +14,8 @@ public static class RunOver
 }
 
 /// <summary>
-/// Where a vehicle hits a body: the car's oriented footprint against the body's circle, swept along the path the car drove this tick so
-/// a fast or small vehicle cannot step over a body between two ticks. Players and target dummies share it.
+/// Where a vehicle hits a body: the car's oriented footprint against the body's footprint (a circle, or a box for an animal; see <see cref="RunOverFootprint"/>), swept along the path the car drove this tick so
+/// a fast or small vehicle cannot step over a body between two ticks. Every victim shares it.
 /// </summary>
 public static class CarFootprint
 {
@@ -39,12 +39,37 @@ public static class CarFootprint
     /// <summary>The same test along the path from <paramref name="from"/> to <paramref name="to"/> (the car's origin at the start and end of the tick; the end yaw is used all along).</summary>
     public static bool Hits(Vector3 from, Vector3 to, float yaw, float halfWidth, float halfLength, Vector3 body, float radius)
     {
-        var travel = Vector3.Distance(from, to);
-        if (travel > MaxSweepMetres) return Overlaps(to, yaw, halfWidth, halfLength, body, radius);
-        var steps = Math.Max(1, (int)MathF.Ceiling(travel / StepMetres));
+        var steps = Steps(from, to, out var jump);
+        if (jump) return Overlaps(to, yaw, halfWidth, halfLength, body, radius);
         for (var i = 0; i <= steps; i++)
             if (Overlaps(Vector3.Lerp(from, to, (float)i / steps), yaw, halfWidth, halfLength, body, radius)) return true;
         return false;
+    }
+
+    /// <summary>The car at <paramref name="p"/> with <paramref name="yaw"/> touches a standing box (an animal's footprint, its feet at <paramref name="feetY"/>): the two rectangles overlap, the feet within the car's height band as for a circle.</summary>
+    public static bool Overlaps(Vector3 p, float yaw, float halfWidth, float halfLength, in BodyBox body, float feetY)
+    {
+        var dy = feetY - p.Y;
+        if (dy < -0.6f || dy > 2f) return false;
+        return new BodyBox(p.X, p.Z, halfWidth, halfLength, yaw).Overlaps(body);
+    }
+
+    /// <summary>The box test along the path of the tick, as for a circle.</summary>
+    public static bool Hits(Vector3 from, Vector3 to, float yaw, float halfWidth, float halfLength, in BodyBox body, float feetY)
+    {
+        var steps = Steps(from, to, out var jump);
+        if (jump) return Overlaps(to, yaw, halfWidth, halfLength, body, feetY);
+        for (var i = 0; i <= steps; i++)
+            if (Overlaps(Vector3.Lerp(from, to, (float)i / steps), yaw, halfWidth, halfLength, body, feetY)) return true;
+        return false;
+    }
+
+    /// <summary>How many samples cover the path; <paramref name="jump"/> when it is a teleport (only the end point counts).</summary>
+    static int Steps(Vector3 from, Vector3 to, out bool jump)
+    {
+        var travel = Vector3.Distance(from, to);
+        jump = travel > MaxSweepMetres;
+        return Math.Max(1, (int)MathF.Ceiling(travel / StepMetres));
     }
 }
 
@@ -82,6 +107,14 @@ public static class VehicleDamage
         var dy = d.Y < 0 ? -d.Y : MathF.Max(0, d.Y - height);
         return MathF.Sqrt(dx * dx + dy * dy + dz * dz);
     }
+}
+
+/// <summary>Blast distance to a vehicle's hull as its type has it (<see cref="VehicleDef.Hull"/> boxes, tilted by the attitude; else the one upright box).</summary>
+public static class HullDistance
+{
+    public static float Of(Vector3 blast, Vector3 feet, float yaw, float pitch, float roll, VehicleDef def) =>
+        def.Tilts ? VehicleBox.DistanceToHull(FlightMath.Unrotate(blast - feet, yaw, pitch, roll), def.HullBoxes)
+                  : VehicleDamage.DistanceToBox(blast, feet, yaw, def.HalfWidth, def.HalfLength, def.Height);
 }
 
 /// <summary>

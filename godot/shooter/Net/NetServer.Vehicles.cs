@@ -171,7 +171,6 @@ public partial class NetServer
                 FlightWater = Water, FlightBounds = MapFlightBounds,
             };
             World.AddChild(car);
-            foreach (var cl in _byId.Values) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); car.DriveWorld?.Ignore(cl.Body); }
             _cars.Add(car);
         }
         GD.Print($"server: {_cars.Count} vehicles spawned ({string.Join(", ", colours.Select(k => $"{Vehicles!.Vehicles[k.Key].Id} x{k.Value.Count} colours {string.Join(",", k.Value)}"))})");
@@ -356,7 +355,6 @@ public partial class NetServer
     {
         var yaw = car.State.Yaw;
         var fwd = car.Forward; var right = new Vector3(Mathf.Cos(yaw), 0, -Mathf.Sin(yaw));
-        var space = World.GetWorld3D().DirectSpaceState;
         var side = car.HalfWidth + 1f; var along = car.HalfLength + 1.05f; // 2.1 / 3.2 m for the car
         if (car.Flies && !car.Flight.Grounded)
         {
@@ -374,11 +372,8 @@ public partial class NetServer
         foreach (var off in new[] { right * side, -right * side, -fwd * along, fwd * along })
         {
             var p = car.GlobalPosition + off;
-            var q = PhysicsRayQueryParameters3D.Create(p + Vector3.Up * 1.5f, p + Vector3.Down * 2.5f);
-            q.CollisionMask = 1;
-            var r = space.PerfRay(q);
-            if (r.Count == 0) continue;
-            var g = r["position"].AsVector3() + Vector3.Up * 0.1f;
+            if (Query.Ground(MoverKind.Player, p, 1.5f, 2.5f) is not { } ground) continue;
+            var g = ground.Position + Vector3.Up * 0.1f;
             if (!c.Body.TestMove(new Transform3D(Basis.Identity, g), Vector3.Zero)) return g;
         }
         return car.GlobalPosition + Vector3.Up * 2.5f;
@@ -563,10 +558,12 @@ public partial class NetServer
         foreach (var t in LiveTargets())
         {
             if (car.Seat.SeatOf(t.Id) >= 0) continue;
-            if (!BlastReaches(N(at), t)) continue; // a bunker room's walls are between them
             var dist = HitMath.DistanceToBody(N(at), t);
             var dmg = VehicleDamage.BlastDamage(e, dist);
             if (dmg <= 0) continue;
+            var share = SplashShare(N(at), t); // walls, a bunker room's too, and a covered seat's hull
+            if (share <= 0) continue;
+            dmg *= share;
             var self = t.Id == attacker;
             if (self) dmg = MathF.Max(1f, MathF.Round(dmg * e.Splash.SelfDamageMultiplier));
             if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
@@ -581,7 +578,7 @@ public partial class NetServer
         foreach (var other in _cars)
         {
             if (other == car || other.Destroyed) continue;
-            var dist = VehicleDamage.DistanceToBox(N(at), N(other.GlobalPosition), other.State.Yaw, other.HalfWidth, other.HalfLength, other.Def.Height);
+            var dist = HullDistanceNow(other, N(at));
             var dmg = VehicleDamage.BlastDamage(e, dist) * e.VehicleDamageMultiplier;
             if (dmg <= 0) continue;
             _chainHits++;
@@ -599,40 +596,19 @@ public partial class NetServer
             if (car == direct) dmg = w.Damage;
             else
             {
-                var dist = VehicleDamage.DistanceToBox(N(pos), N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, car.Def.Height);
+                var dist = HullDistanceNow(car, N(pos));
                 dmg = ProjectileMath.SplashDamage(w, dist, false);
             }
             DamageVehicle(car, dmg * Vehicles!.RocketDamageMultiplier, owner, weapon, 0);
         }
     }
 
-    /// <summary>The car's footprint, swept over this tick's drive, touches a body standing at <paramref name="feet"/> (players and dummies alike).</summary>
-    bool CarHits(ServerCar car, Vector3 feet) =>
-        CarFootprint.Hits(N(car.PrevPos), N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(feet), MoveConsts.CapsuleRadius);
-
+    /// <summary>A vehicle fast enough to hurt, driven, on land or skimming it: its row of the rule table runs over every live target it sweeps (<see cref="RunOverTargets"/>).</summary>
     void RunOverCheck(ServerCar car, Client driver)
     {
         var dmg = RunOver.Damage(Vehicles!, car.State.Speed, Vehicles!.RunOverScale(car.Def));
         if (dmg <= 0) return;
-        RunOverTargets(car, driver, dmg); // target dummies (#148)
-        RunOverGang(car, driver); // the Gang members of the Thieves event
-        RunOverWildlife(car, driver); // wild animals: thrown, half their hit points
-        var fwd = car.Forward;
-        foreach (var t in _byId.Values)
-        {
-            if (t == driver || t.Car != null || _match.Get(t.Id)?.Life != PlayerLife.Alive) continue;
-            if (!CarHits(car, t.Body.GlobalPosition)) continue;
-            if (car.HitCooldown.TryGetValue(t.Id, out var until) && _elapsed < until) continue;
-            car.HitCooldown[t.Id] = _elapsed + RunOverCooldown;
-            var fwdN = N(fwd);
-            PushOnDeath(t.Id, CorpseRules.ThrowFromCar(fwdN, car.State.Speed)); // a roadkill is thrown ahead of the car (the ragdoll)
-            var r = Deal(driver.Id, SpecialWeapons.Vehicle, t.Id, dmg, false, false, KillCause.Roadkill);
-            ClearPush(t.Id, r);
-            if (r == DamageResult.Ignored) continue;
-            _runOvers++;
-            if (r == DamageResult.Killed) _runOverKills++;
-            GD.Print($"server: {car.Def.Id} {car.Id} ran over #{t.Id} at {car.State.Speed:F1} m/s for {dmg:F0}");
-        }
+        RunOverTargets(new RunOverSweep(RunOverMoverOf(car), N(car.PrevPos), N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(car.Forward), car.State.Speed, dmg, driver.Id, car.HitCooldown));
     }
 
     void FinishBlast()

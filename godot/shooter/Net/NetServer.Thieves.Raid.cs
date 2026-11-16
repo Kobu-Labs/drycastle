@@ -183,8 +183,8 @@ public partial class NetServer
     }
 
     /// <summary>
-    /// The van rams what its box sweeps over this tick (it never brakes): players on foot as a car does (<see cref="RunOver"/> by its speed and mass, a roadkill thrown ahead) and the Gang members
-    /// of other Raids (dead outright). Its own crew is not run over.
+    /// The van rams what its box sweeps over this tick (it never brakes): everything its row of the rule table runs over (<see cref="RunOverTargets"/>: players on foot as a car does,
+    /// <see cref="RunOver"/> by its speed and mass, a roadkill thrown ahead; the Gang members of other Raids, citizens, workers, animals and dummies). Its own crew is not run over.
     /// </summary>
     void RaidContacts()
     {
@@ -196,25 +196,9 @@ public partial class NetServer
             var dmg = Vehicles != null ? RunOver.Damage(Vehicles, van.Speed, ThievesData.Van.RamMassScale) : ThievesData.Van.RamFallbackDamage;
             if (dmg <= 0) continue;
             var vc = ThievesData.Van;
-            var prev = van.PrevPosition; var now = van.Position;
-            var hitId = RaidVanRules.HitIdOf(van.Slot, 0);
-            foreach (var t in _byId.Values)
-            {
-                if (t.Car != null || _match.Get(t.Id)?.Life != PlayerLife.Alive) continue;
-                if (!CarFootprint.Hits(prev, now, van.Yaw, vc.HalfWidthM, vc.HalfLengthM, N(t.Body.GlobalPosition), MoveConsts.CapsuleRadius)) continue;
-                if (body.HitCooldown.TryGetValue(t.Id, out var until) && _elapsed < until) continue;
-                body.HitCooldown[t.Id] = _elapsed + RunOverCooldown;
-                PushOnDeath(t.Id, CorpseRules.ThrowFromCar(van.Forward, van.Speed)); // a roadkill is thrown ahead of the van (the ragdoll)
-                var r = Deal(hitId, SpecialWeapons.Vehicle, t.Id, dmg, false, false, KillCause.Roadkill);
-                ClearPush(t.Id, r);
-                if (r != DamageResult.Ignored) GD.Print($"server: a Raid van ran over #{t.Id} at {van.Speed:F1} m/s for {dmg:F0}");
-            }
-            foreach (var other in _raids.Raids)
-            {
-                if (other == raid) continue;
-                foreach (var m in other.Gang.Members.ToList())
-                    if (m.Alive && CarFootprint.Hits(prev, now, van.Yaw, vc.HalfWidthM, vc.HalfLengthM, m.Position, MoveConsts.CapsuleRadius)) other.Gang.Hit(m.HitId, 0, SpecialWeapons.Vehicle, 1, KillCause.Roadkill);
-            }
+            var crew = raid.Gang.Members;
+            RunOverTargets(new RunOverSweep(MoverKind.RaidVan, van.PrevPosition, van.Position, van.Yaw, vc.HalfWidthM, vc.HalfLengthM, van.Forward, van.Speed, dmg, RaidVanRules.HitIdOf(van.Slot, 0), body.HitCooldown),
+                spare: id => { for (var i = 0; i < crew.Count; i++) if (crew[i].HitId == id) return true; return false; }); // its own crew is not run over
         }
     }
 

@@ -12,7 +12,7 @@ namespace Drycastle.Shooter;
 /// They are hit targets: <see cref="LiveTargets"/> lists the living ones under ids of their own (<see cref="GangRules.FirstHitId"/> up), <see cref="RewoundTargets"/> lists them
 /// where the shooter's screen showed them (they run, so they have a pose ring each, like the Bigfoot: ADR 0013), and <see cref="MatchSim.ApplyDamage"/> hands those ids to
 /// the roster, which counts the hit (a Hit count, not hit points). A kill pays a little XP and is not in the kill feed. A vehicle runs one over = dead
-/// (<see cref="RunOverGang"/>). A member's blow reaches a player through <see cref="Deal"/> under <see cref="SpecialWeapons.Gang"/>.
+/// (<see cref="RunOverTargets"/>). A member's blow reaches a player through <see cref="Deal"/> under <see cref="SpecialWeapons.Gang"/>.
 /// </para>
 /// <para>
 /// The routes they walk come from the same navigation mesh as the bots'; the route worker finds them, the oldest request first (<see cref="GangsTick"/>), the answers are applied at <see cref="NavDrain"/>.
@@ -34,6 +34,7 @@ public partial class NetServer
         public IReadOnlyList<GangPlayer> Players => _s._gangPlayers;
         public void Hurt(ushort player, float damage, ushort memberHitId) => _s.Deal(memberHitId, SpecialWeapons.Gang, player, damage, false, false);
         public NVec3 Snap(NVec3 p) => _s._nav == null ? p : N(_s._nav.Snap(new Vector3(p.X, p.Y, p.Z)));
+        public IWalkerGround? Walk => _s.WalkerWorld;
     }
 
     /// <summary>Called once from <see cref="InitThieves"/>: the entity type, the roster behind the match's hit routing, the weight of a weapon, the XP of a kill.</summary>
@@ -90,21 +91,6 @@ public partial class NetServer
     }
 
     void CaptureGangPoses() => _gangs?.RecordPoses(_tick);
-
-    /// <summary>A car that runs over a member kills it (a roadkill needs the speed the run-over damage does, as for a player).</summary>
-    void RunOverGang(ServerCar car, Client driver)
-    {
-        if (_gangs == null || _match.Phase != MatchPhase.Running) return;
-        foreach (var gang in _gangs.Gangs)
-            for (var i = 0; i < gang.Members.Count; i++)
-            {
-                var m = gang.Members[i];
-                if (!m.Alive || !CarHits(car, new Vector3(m.Position.X, m.Position.Y, m.Position.Z))) continue;
-                if (car.HitCooldown.TryGetValue(m.HitId, out var until) && _elapsed < until) continue;
-                car.HitCooldown[m.HitId] = _elapsed + RunOverCooldown;
-                Deal(driver.Id, SpecialWeapons.Vehicle, m.HitId, 1, false, false, KillCause.Roadkill); // the amount only has to be above 0: a roadkill kills
-            }
-    }
 
     /// <summary>The event ended (by an admin) or a new round began: every Raid goes, vans and members, the dead too.</summary>
     void ClearGangs() { ClearRaids(); _gangs?.Clear(); }

@@ -10,6 +10,9 @@ public interface ICitizenWorld
 
     /// <summary>The points to walk from <paramref name="from"/> to <paramref name="to"/>, the first on the mesh near <paramref name="from"/>. Empty when there is no route.</summary>
     IReadOnlyList<Vector3> Route(Vector3 from, Vector3 to);
+
+    /// <summary>What a walking citizen asks of the world on its way (a trunk, a closed door, a parked vehicle: <see cref="WalkGuard"/>); null: it walks its route as it is.</summary>
+    IWalkerGround? Walk => null;
 }
 
 /// <summary>A citizen was killed: who, which seat it was heading for, where it lay, and whether it was already sitting in it.</summary>
@@ -106,7 +109,7 @@ public sealed class CitizenCrowd : ICitizenHits
     /// </summary>
     public Citizen? SpawnRole(CitizenRole role, IReadOnlyList<Vector3> walk, float yaw)
     {
-        var citizen = new Citizen(_cfg, -1, yaw, walk, new[] { walk[^1] }, (ushort)_rng.Next(ushort.MaxValue + 1), 1f) { Role = role };
+        var citizen = new Citizen(_cfg, -1, yaw, walk, new[] { walk[^1] }, (ushort)_rng.Next(ushort.MaxValue + 1), 1f) { Role = role, Ground = _world.Walk };
         citizen.Settle();
         var hit = NextHitId();
         citizen.HitId = hit;
@@ -193,7 +196,7 @@ public sealed class CitizenCrowd : ICitizenHits
         if (route.Count == 0) { Log?.Invoke($"citizens: no route from a house at ({door.X:0}, {door.Z:0}) to the church door, seat {seat.Id} stays empty"); return false; }
         var look = (ushort)_rng.Next(ushort.MaxValue + 1);
         var factor = 1f + (float)(_rng.NextDouble() * 2 - 1) * _cfg.SpeedJitter;
-        var citizen = new Citizen(_cfg, seat.Id, seat.Yaw, route, _church.RouteTo(seat, _cfg.SeatHeightM), look, factor) { Stand = seat.Stand };
+        var citizen = new Citizen(_cfg, seat.Id, seat.Yaw, route, _church.RouteTo(seat, _cfg.SeatHeightM), look, factor) { Stand = seat.Stand, Ground = _world.Walk };
         var hit = NextHitId();
         citizen.HitId = hit;
         citizen.Died += OnDied;

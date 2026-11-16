@@ -613,7 +613,7 @@ public class DemonTests
         Assert.Equal(d.Flame.HeadForwardM * 1.6f, Vector3.Dot(mouth, b.Pose.Forward), 3);
         var small = DemonRules.Target(Vector3.Zero, Vector3.UnitX, d.Fight.BodyHeightM, 0f);
         var big = DemonRules.Target(Vector3.Zero, Vector3.UnitX, d.BodyM, 0f, d.Scale);
-        var from = new Vector3(8, 0f, 0.8f); // a shot that passes 0.8 m beside the body's axis
+        var from = new Vector3(8, 0f, 0.5f); // a shot that passes 0.5 m beside the body's axis: outside the player's capsule (0.35 m), inside the demon's at 1.6 times (0.56 m)
         Assert.Null(HitMath.Raycast(from, -Vector3.UnitX, 30, float.PositiveInfinity, new[] { small }, 1));
         Assert.NotNull(HitMath.Raycast(from, -Vector3.UnitX, 30, float.PositiveInfinity, new[] { big }, 1));
         Assert.True(HitMath.Centre(big).X > HitMath.Centre(small).X, "its middle is further off the surface");

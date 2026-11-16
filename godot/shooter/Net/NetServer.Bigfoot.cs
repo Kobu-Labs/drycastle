@@ -252,7 +252,7 @@ public partial class NetServer
         var exclude = new Godot.Collections.Array<Rid>();
         for (var i = 0; i < 5; i++)
         {
-            var q = PhysicsRayQueryParameters3D.Create(new Vector3(x, nearY + BigfootStepUpM, z), new Vector3(x, nearY - BigfootDropM, z), CollisionLayers.World);
+            var q = PhysicsRayQueryParameters3D.Create(new Vector3(x, nearY + BigfootStepUpM, z), new Vector3(x, nearY - BigfootDropM, z), BigfootRayMask);
             q.Exclude = exclude;
             var hit = space.PerfRay(q);
             if (hit.Count == 0) return null;
@@ -263,6 +263,9 @@ public partial class NetServer
     }
 
     const float BigfootStepUpM = 3.5f, BigfootDropM = 12f, BigfootWadeM = 2.2f;
+
+    /// <summary>Bigfoot is not in the rule table (ADR 0028): its rays see what they saw while player bodies shared the world layer.</summary>
+    const uint BigfootRayMask = CollisionLayers.World | CollisionLayers.Players;
 
     /// <summary>True when something solid that is not a tree (a building, a wall, a post) stands between the two points, for a body of <paramref name="radius"/>.</summary>
     bool BigfootBlocked(NVec3 from, NVec3 to, float radius)
@@ -279,7 +282,7 @@ public partial class NetServer
             var exclude = new Godot.Collections.Array<Rid>();
             for (var i = 0; i < 6; i++)
             {
-                var q = PhysicsRayQueryParameters3D.Create(a, b, CollisionLayers.World);
+                var q = PhysicsRayQueryParameters3D.Create(a, b, BigfootRayMask);
                 q.Exclude = exclude;
                 var hit = space.PerfRay(q);
                 if (hit.Count == 0) break;

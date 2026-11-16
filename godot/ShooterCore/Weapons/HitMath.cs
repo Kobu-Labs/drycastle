@@ -6,16 +6,19 @@ namespace Drycastle.ShooterCore;
 /// A player as a hit target: feet position, stance (sets the capsule height) and the yaw they face. <paramref name="HeadGuarded"/>: the target wears
 /// an item that makes a headshot a body hit (<see cref="Equipment.HeadGuarded"/>); it is a state of the player, not of the pose, so a rewound target takes the present one.
 /// <paramref name="Scale"/> grows the whole hit volume (height, radius, head) about the feet: 1 for a player and a dummy, 2 for the Bigfoot (twice the player's size).
+/// <paramref name="BaseRadius"/> is the capsule's radius before <paramref name="Scale"/>: 0 for the player's (<see cref="PlayerHitBox.Radius"/>); the Bigfoot and the Raid van, whose
+/// volumes were fitted to the old wider capsule, pass <see cref="PlayerHitBox.WideRadius"/>.
 /// </summary>
 /// <summary>
 /// A shot target. <paramref name="Box"/> (a wild animal's body, [width, height, length] with the length along the facing direction, feet on the
 /// ground, its centre <paramref name="BoxAhead"/> metres ahead of the feet) replaces the capsule for a bullet's ray when its height is above 0;
-/// blasts, knives and everything else that measures a distance keep the capsule. <paramref name="Shape"/> (a wild animal's hit shape in the pose
-/// its shooter sees, with the pose and frame it is, for the hit diagram) replaces the box in turn: the bullet must cross a cell the animal covers.
+/// <paramref name="Shape"/> (a wild animal's hit shape in the pose its shooter sees, with the pose and frame it is, for the hit diagram) replaces the box in
+/// turn: the bullet must cross a cell the animal covers. A blast and a knife measure to the shape's bounding box, or to <paramref name="Box"/> when there is no shape
+/// (ADR 0028); only a target with no box at all (a player, a citizen, the demon) is measured to its capsule.
 /// <paramref name="ShapeScale"/> is how much bigger than its baked model the animal stands (its size, <see cref="Animal.Size"/>): the shape is baked at the model's own size, so the ray is tested in the shape's frame, shrunk by it.
 /// </summary>
 public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, float Yaw, bool HeadGuarded = false, float Scale = 1f, Vector3 Box = default, float BoxAhead = 0f,
-    AnimalShape? Shape = null, AnimalPose ShapePose = AnimalPose.Idle, int ShapeFrame = 0, float ShapeScale = 1f);
+    AnimalShape? Shape = null, AnimalPose ShapePose = AnimalPose.Idle, int ShapeFrame = 0, float ShapeScale = 1f, float BaseRadius = 0f);
 
 /// <summary>
 /// A ray's hit. <paramref name="Head"/> is a headshot (the weapon's headshot damage). <paramref name="ShapeHead"/> says the bullet met the head cells of
@@ -59,23 +62,27 @@ public static class HitMath
 
     /// <summary>
     /// The body's hit capsule axis (segment end points; the capsule radius is <see cref="PlayerHitBox.Radius"/>). Stand and crouch are upright
-    /// from the feet. Prone is horizontal along the facing direction, centred on the feet, as the drawn figure lies.
+    /// from the feet. Prone is horizontal along the facing direction, centred on the feet, resting on the ground.
     /// </summary>
     public static (Vector3 A, Vector3 B) Axis(in HitTarget t)
     {
         var k = t.Scale;
+        var r = BaseOf(t);
         if (t.Stance == Stance.Prone)
         {
-            var half = (PlayerHitBox.StandHeight / 2f - PlayerHitBox.Radius) * k;
-            var up = new Vector3(0, PlayerHitBox.ProneLift * k, 0);
+            var half = (PlayerHitBox.StandHeight / 2f - r) * k;
+            var up = new Vector3(0, r * k, 0);
             var along = Forward(t.Yaw, 0) * half;
             return (t.Feet + up - along, t.Feet + up + along);
         }
-        return (t.Feet + new Vector3(0, PlayerHitBox.Radius * k, 0), t.Feet + new Vector3(0, (Height(t.Stance) - PlayerHitBox.Radius) * k, 0));
+        return (t.Feet + new Vector3(0, r * k, 0), t.Feet + new Vector3(0, (Height(t.Stance) - r) * k, 0));
     }
 
+    /// <summary>The capsule radius of a target before it is scaled: its own (<see cref="HitTarget.BaseRadius"/>), else the player's.</summary>
+    static float BaseOf(in HitTarget t) => t.BaseRadius > 0 ? t.BaseRadius : PlayerHitBox.Radius;
+
     /// <summary>The radius of the target's hit capsule: the player's, grown by <see cref="HitTarget.Scale"/>.</summary>
-    public static float BodyRadius(in HitTarget t) => PlayerHitBox.Radius * t.Scale;
+    public static float BodyRadius(in HitTarget t) => BaseOf(t) * t.Scale;
 
     /// <summary>Centre of the body's hit capsule.</summary>
     public static Vector3 Centre(in HitTarget t)
@@ -89,13 +96,41 @@ public static class HitMath
     {
         var k = t.Scale;
         if (t.Stance == Stance.Prone)
-            return t.Feet + Forward(t.Yaw, 0) * (PlayerHitBox.ProneHeadOffset * k) + new Vector3(0, PlayerHitBox.ProneLift * k, 0);
+            return t.Feet + Forward(t.Yaw, 0) * (PlayerHitBox.ProneHeadOffset * k) + new Vector3(0, BaseOf(t) * k, 0);
         return t.Feet + new Vector3(0, (Height(t.Stance) - HeadRadius) * k, 0);
     }
 
-    /// <summary>Distance from a point to the body's hit volume (0 inside it), for projectiles and splash.</summary>
+    /// <summary>
+    /// The box a blast and a knife measure to on an animal (ADR 0028), in the animal's frame (<see cref="ToFrame"/>): the bounding box of its hit shape in the pose it is in, or, a species
+    /// with no shape (or one that lies or flies), its plain body box. False for a target with neither (a player, a citizen, the demon: those are capsules).
+    /// </summary>
+    public static bool AnimalBounds(in HitTarget t, out Vector3 min, out Vector3 max)
+    {
+        if (t.Shape is { Bounds.Top: > 0 } s)
+        {
+            var b = s.Bounds;
+            var k = t.ShapeScale > 0 ? t.ShapeScale : 1f; // the shape is baked at the model's size; the animal stands this much bigger
+            min = new Vector3(-b.HalfWidth, 0, b.Z0) * k; max = new Vector3(b.HalfWidth, b.Top, b.Z1) * k;
+            return true;
+        }
+        if (t.Box.Y > 0)
+        {
+            min = new Vector3(-t.Box.X / 2, 0, t.BoxAhead - t.Box.Z / 2); max = new Vector3(t.Box.X / 2, t.Box.Y, t.BoxAhead + t.Box.Z / 2);
+            return true;
+        }
+        min = max = default;
+        return false;
+    }
+
+    /// <summary>Distance from a point to the body's hit volume (0 inside it), for projectiles and splash. An animal: to its <see cref="AnimalBounds"/>.</summary>
     public static float DistanceToBody(Vector3 p, in HitTarget t)
     {
+        if (AnimalBounds(t, out var lo, out var hi))
+        {
+            var q = ToBodyFrame(t, p);
+            var d = new Vector3(MathF.Max(MathF.Max(lo.X - q.X, q.X - hi.X), 0), MathF.Max(MathF.Max(lo.Y - q.Y, q.Y - hi.Y), 0), MathF.Max(MathF.Max(lo.Z - q.Z, q.Z - hi.Z), 0));
+            return d.Length();
+        }
         var (a, b) = Axis(t);
         var ab = b - a;
         var len2 = ab.LengthSquared();
@@ -258,6 +293,9 @@ public static class HitMath
         return best;
     }
 
+    /// <summary>As <see cref="ToFrame"/> but in metres as the animal stands (not shrunk to its baked size): the frame of <see cref="AnimalBounds"/>.</summary>
+    static Vector3 ToBodyFrame(in HitTarget t, Vector3 p) => ToFrame(t, p) * (t.ShapeScale > 0 ? t.ShapeScale : 1f);
+
     /// <summary>A world point in a target's own frame: x to its right, y up from its feet, z ahead of its feet (the frame of an <see cref="AnimalShape"/>, the baked model's size: shrunk by <see cref="HitTarget.ShapeScale"/>).</summary>
     public static Vector3 ToFrame(in HitTarget t, Vector3 p)
     {
@@ -381,8 +419,18 @@ public static class HitMath
             var to = t.Feet - attackerFeet;
             if (MathF.Abs(to.Y) > MeleeVerticalReach) continue;
             to.Y = 0;
-            var len = to.Length();
-            var radius = BodyRadius(t);
+            float len, radius;
+            if (AnimalBounds(t, out var lo, out var hi))
+            {
+                // an animal: the flat distance to its box, and the cone is taken to the nearest point of it
+                var q = ToBodyFrame(t, attackerFeet);
+                var near = new Vector3(Math.Clamp(q.X, lo.X, hi.X), 0, Math.Clamp(q.Z, lo.Z, hi.Z));
+                var gap = new Vector3(q.X - near.X, 0, q.Z - near.Z);
+                len = gap.Length(); radius = 0;
+                if (len < 1e-4f) len = 0; // inside the footprint
+                else { var f = Forward(t.Yaw, 0); var right = new Vector3(-f.Z, 0, f.X); to = -(right * gap.X + f * gap.Z); }
+            }
+            else { len = to.Length(); radius = BodyRadius(t); }
             var edge = len - radius;
             if (edge > reach) continue;
             if (len > radius && Vector3.Dot(to / len, fwd) < cos) continue;

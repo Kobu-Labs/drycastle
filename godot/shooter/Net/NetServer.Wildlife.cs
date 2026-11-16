@@ -8,7 +8,7 @@ namespace Drycastle.Shooter;
 /// Wildlife on the server (GLOSSARY "Wildlife"): wild animals (wire type 50, like pets) that stand in the zones of their species' kind
 /// (ADR 0022), run by a <see cref="WildlifeKeeper"/>. Each round, at its start, the keeper puts the species of <c>wildlife.json</c> at random
 /// candidate points of the map (zone_points.json); no map, no points or an arena mode means no wildlife. A wild animal flees from living players and
-/// moving vehicles, is thrown by a vehicle that runs it over (<see cref="RunOverWildlife"/>), is a hit target under ids of its own (<see cref="WildlifeRules.FirstHitId"/> up) and, like a pet, scores nothing and is not in the kill feed.
+/// moving vehicles, is thrown by a vehicle that runs it over (<see cref="RunOverTargets"/>), is a hit target under ids of its own (<see cref="WildlifeRules.FirstHitId"/> up) and, like a pet, scores nothing and is not in the kill feed.
 /// </summary>
 public partial class NetServer
 {
@@ -21,20 +21,14 @@ public partial class NetServer
     /// <summary>A vehicle slower than this frightens nothing (m/s).</summary>
     const float WildlifeCarThreatSpeed = 1.5f;
 
-    sealed class WildlifeGround : IAnimalWorld
+    sealed class WildlifeGround : AnimalGroundBase
     {
-        readonly NetServer _s;
-        public WildlifeGround(NetServer server) => _s = server;
+        public WildlifeGround(NetServer server) : base(server) { }
 
-        public float? GroundY(float x, float z)
-        {
-            if (_s.Map == null || _s.Water.Depth(x, z) > PetWadeM) return null;
-            var y = _s.Map.GroundHeight(x, z);
-            return float.IsNaN(y) ? null : y;
-        }
+        protected override float WadeM => PetWadeM;
 
         /// <summary>The nearest living player or moving vehicle within the radius (flat distance).</summary>
-        public NVec3? NearestThreat(NVec3 from, float radius)
+        public override NVec3? NearestThreat(NVec3 from, float radius)
         {
             NVec3? best = null;
             var bestSq = radius * radius;
@@ -50,15 +44,29 @@ public partial class NetServer
                 if (!car.Destroyed && MathF.Abs(car.State.Speed) > WildlifeCarThreatSpeed) Consider(N(car.GlobalPosition));
             return best;
         }
+    }
 
-        public NVec3? PositionOf(ushort player) => _s._byId.TryGetValue(player, out var c) ? N(c.Body.GlobalPosition) : null;
+    /// <summary>
+    /// Whether any player (a bot too, dead or spectating too) is within the world interest's leave distance of <paramref name="at"/>, flat: the
+    /// distance beyond which no client is sent the animal (ADR 0025), so one farther than that from everybody can stand still unseen (#280).
+    /// </summary>
+    bool AnimalWatched(NVec3 at)
+    {
+        const float r2 = WorldInterest.LeaveM * WorldInterest.LeaveM;
+        foreach (var c in _byId.Values)
+        {
+            var p = c.Body.GlobalPosition;
+            var dx = p.X - at.X; var dz = p.Z - at.Z;
+            if (dx * dx + dz * dz <= r2) return true;
+        }
+        return false;
     }
 
     /// <summary>Starts the keeper. Called once from <c>_Ready</c>, after the match exists (the animal type is registered by <c>InitPets</c>).</summary>
     void InitWildlife()
     {
         FlockRules.Register(WorldEntityRegistry.Shared);
-        _wildlife = new WildlifeKeeper(WildlifeData, AnimalData, _match.Entities, System.Environment.TickCount) { Log = s => GD.PrintErr($"server: {s}"), Shapes = AnimalShapes };
+        _wildlife = new WildlifeKeeper(WildlifeData, AnimalData, _match.Entities, System.Environment.TickCount) { Log = s => GD.PrintErr($"server: {s}"), Shapes = AnimalShapes, Crowd = _animalCrowd };
         _match.Wildlife = _wildlife;
         _wildlife.Killed += (a, by) => GD.Print($"server: #{by} killed a wild {a.Def.Id}");
     }
@@ -78,29 +86,6 @@ public partial class NetServer
     void WildlifeTick(float dt)
     {
         if (_wildlife != null && _wildlife.Count > 0 && _wildlifeGround != null) _wildlife.Update(dt, _wildlifeGround);
-    }
-
-    readonly List<(ushort HitId, Animal Animal)> _wildRunOver = new();
-
-    /// <summary>
-    /// A vehicle fast enough to hurt (<see cref="RunOverCheck"/>) whose footprint sweeps over a wild animal throws it ahead like a body it ran over and takes
-    /// <c>run_over_hp_fraction</c> of its full hit points: the first time it lands, lies and gets up running, the second kills it (the body keeps the arc).
-    /// The vehicle is not stopped, as by a player. A one-hit species just dies. The driver gets the hit marker; nothing is scored.
-    /// </summary>
-    void RunOverWildlife(ServerCar car, Client driver)
-    {
-        if (_wildlife == null || _wildlife.Count == 0 || _match.Phase != MatchPhase.Running) return;
-        _wildRunOver.Clear();
-        _wildlife.Living(_wildRunOver);
-        foreach (var (hitId, a) in _wildRunOver)
-        {
-            var box = a.HitBox;
-            if (!CarFootprint.Hits(N(car.PrevPos), N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, a.Position, (box[0] + box[2]) / 4)) continue;
-            if (car.HitCooldown.TryGetValue(hitId, out var until) && _elapsed < until) continue;
-            car.HitCooldown[hitId] = _elapsed + RunOverCooldown;
-            a.Throw(CorpseRules.ThrowFromCar(N(car.Forward), car.State.Speed), N(car.GlobalPosition));
-            Deal(driver.Id, SpecialWeapons.Vehicle, hitId, a.MaxHp * AnimalData.RunOverHpFraction, false, false, KillCause.Roadkill);
-        }
     }
 
     /// <summary>What the hit diagram shows of a bullet that met the wild animal <paramref name="hitId"/> at <paramref name="point"/>; null when the animal or its target is not there.</summary>

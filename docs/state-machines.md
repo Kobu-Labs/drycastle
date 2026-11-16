@@ -228,6 +228,24 @@ stateDiagram-v2
 - **Opened**: Opened by a player: ended, the reward is granted, the book despawns it at once. Cannot be reached from Expired.
 - **Expired**: The lifetime ran out unopened: ended. An ended crate cannot be opened even before it is despawned.
 
+## Casing.Phase
+
+One spent casing: in the air or sliding, lying still on the floor, fading out, or a free slot.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Free
+    Free --> Flying
+    Flying --> Resting
+    Flying --> Free
+    Resting --> Fading
+    Fading --> Free
+```
+
+- **Flying**: Ballistic arc, then bounces off the surface normal (up to Bounces, each quieter) and a short slide; on a steep face it slides down instead of settling. Under water it sinks slowly, never bounces, never clinks. Ends lying still, or at once in the void (no floor 8 m below where it started).
+- **Resting**: Lies flat on the floor for Stay seconds (a vehicle's roof: VehicleStay). Counts a clock; no movement, so its instance is not touched.
+- **Fading**: Shrinks to nothing over FadeSeconds, then the slot is free.
+
 ## Church.Door
 
 Should the church doors be open: shut or open, each with or without the deferred close-when-empty armed. The demon fight's door-grace clock runs beside (not a state).

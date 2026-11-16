@@ -6,7 +6,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// Server side of the shelter rule (#224, ADR 0009): a bunker room shelters the players inside from a blast outside it, and a
-/// blast inside a room stays in it. Asked by every blast that splashes players (rockets and flak shells, the attack missile, the
+/// blast inside a room stays in it. Asked by every blast that splashes players, through <see cref="SplashShare"/> (rockets and flak shells, the attack missile, the
 /// gunship, a vehicle blowing up). The MOAB does not ask: it kills everyone. A direct hit does not ask either.
 /// </summary>
 public partial class NetServer
@@ -28,7 +28,4 @@ public partial class NetServer
 
     /// <summary>The ladders of the map, given to every body the server simulates so it climbs as the client predicts.</summary>
     Ladders MapLadders => MapShelters.Ladders;
-
-    /// <summary>Does the splash of a blast at <paramref name="blast"/> reach <paramref name="t"/>? False when a bunker room's walls are between them.</summary>
-    bool BlastReaches(NVec3 blast, HitTarget t) => MapShelters.Reaches(blast, HitMath.Centre(t));
 }

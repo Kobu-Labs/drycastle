@@ -11,7 +11,7 @@ namespace Drycastle.Shooter;
 /// them differently). A one-hit pet is simply despawned by the server (<see cref="WorldDespawnReason.Destroyed"/>) and leaves a puff. Without a model
 /// (headless, or the file is missing) a box of the model's hit box stands in. The server owns the animal; the client only shows it.
 /// </summary>
-public partial class NetClient
+public partial class NetClient : IStandingBodies
 {
     /// <summary>animals.json: set by the host (the species table; the species index of a state is a position in it).</summary>
     public AnimalsFile AnimalData = new();
@@ -29,6 +29,8 @@ public partial class NetClient
         public IReadOnlyList<float> HitBox = Array.Empty<float>();
         /// <summary>How much bigger than its model as measured it stands (the animal's size roll; 1 for a species with no weight).</summary>
         public float Size = 1f;
+        /// <summary>The variant it wears: with the species it gives the Body box the client builds (as the server does, <see cref="Animal.Body"/>).</summary>
+        public int Variant;
         /// <summary>The state whose clip is showing; 255 = none yet.</summary>
         public byte Shown = 255;
         public bool Toggle;
@@ -49,6 +51,28 @@ public partial class NetClient
 
     /// <summary>How long a hit reaction may hold back the clip of the state (a gallop must not wait for a long clip).</summary>
     const double AnimalHitReactMaxSeconds = 0.6;
+
+    /// <summary>
+    /// The animals that stand, as the player's prediction meets them (<see cref="Player.Bodies"/>): each animal the server last sent that is in a state that stands (<see cref="AnimalRules.Stands"/>), at the
+    /// NEWEST position it was sent (not the interpolated, drawn one), as a Body box built as the server builds it (<see cref="Animal.Body"/>). A standing animal does not move, so this is the box the server
+    /// stops the player at; one that has just begun to walk or has just stopped is at most one round trip out of step, a correction of a step or two.
+    /// </summary>
+    void IStandingBodies.Near(float x, float z, float radius, List<BodyObstacle> into)
+    {
+        foreach (var (id, v) in _animals)
+        {
+            if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant || !AnimalRules.Stands(AnimalRules.StateOf(e.State.State))) continue;
+            if (e.Buf.At(double.MaxValue) is not { } s) continue;
+            var box = v.HitBox; // the look's box times its size, as the server's Animal.Body
+            if (box.Count < 3) continue;
+            var ahead = v.Def.BodyAheadOf(v.Variant) * v.Size;
+            var body = BodyBox.Of(s.Pos, s.Yaw, box[0], box[2], ahead);
+            var reach = MathF.Sqrt(box[0] * box[0] + box[2] * box[2]) / 2 + MathF.Abs(ahead) + radius;
+            float dx = s.Pos.X - x, dz = s.Pos.Z - z;
+            if (dx * dx + dz * dz > reach * reach) continue;
+            into.Add(new BodyObstacle(body, s.Pos.Y, s.Pos.Y + box[1]));
+        }
+    }
 
     /// <summary>Called once from <see cref="_Ready"/>: registers the animal type and follows its entities.</summary>
     void InitAnimals()
@@ -110,7 +134,7 @@ public partial class NetClient
             node.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(w, h, l) }, Position = new Vector3(0, h / 2, 0) });
         }
         Owned.AddChild(node);
-        var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Size = size, Toggle = AnimalRules.HitToggled(e.State.State) };
+        var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Size = size, Variant = variant, Toggle = AnimalRules.HitToggled(e.State.State) };
         _animals[e.Id] = view;
         if (e.Dormant) SetAnimalDormant(view, e); // spawned outside the interest range: hidden until a keyframe shows it
     }

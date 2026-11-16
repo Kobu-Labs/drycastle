@@ -420,5 +420,5 @@ public sealed class RaidVan : IWorldEntity
     // ---- hit volume ----
 
     /// <summary>The hit volume's centre (a prone figure's pose, grown to the box): the ids of its two capsules come from <see cref="RaidVanRules.Capsules"/>.</summary>
-    public HitTarget HitCentre => new(RaidVanRules.HitIdOf(Slot, 0), Position, Stance.Prone, Yaw, HeadGuarded: true, Scale: _d.HitScale);
+    public HitTarget HitCentre => new(RaidVanRules.HitIdOf(Slot, 0), Position, Stance.Prone, Yaw, HeadGuarded: true, Scale: _d.HitScale, BaseRadius: PlayerHitBox.WideRadius);
 }
