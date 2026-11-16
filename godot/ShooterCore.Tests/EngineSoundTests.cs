@@ -127,7 +127,7 @@ public class EngineSoundTests
         var def = Set();
         var mix = new EngineMix();
         for (var i = 0; i < 300; i++) mix.Step(def, EnginePhase.Braking, 0.1f, Dt);
-        Assert.Equal(0.2f, mix.Gain[(int)EngineLayer.Brake], 3);
+        Assert.Equal(0.104f, mix.Gain[(int)EngineLayer.Brake], 3); // 0.2 of the fade, eased
         for (var i = 0; i < 300; i++) mix.Step(def, EnginePhase.TopSpeed, 1f, Dt);
         Assert.Equal(0f, mix.Gain[(int)EngineLayer.Top]);
     }
