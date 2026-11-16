@@ -172,7 +172,7 @@ public partial class NetClient
         var dt = (float)GetProcessDeltaTime();
         foreach (var v in _cars.Values)
         {
-            v.Lamps?.Set(v.Lights && !v.Destroyed, v.Braking, beams.Contains(v));
+            v.Lamps?.Set(v.Lights && !v.Destroyed, v.Braking, beams.Contains(v), DriveOf(v) is { Speed: < -0.3f }); // reverse lamps: the drawn signed speed
             if (v.Buf.At(rt) is not { } s) continue;
             var p = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
             var rot = new Vector3(0, s.Yaw, 0);

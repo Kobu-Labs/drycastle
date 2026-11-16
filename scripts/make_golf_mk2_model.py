@@ -8,6 +8,9 @@ scripts are standard library only); it loads the flak script's GlassSet from the
 
 Without an output path it also rewrites the `glass` list of golf_mk2 in godot/shooter/data/vehicles.json (ADR 0008).
 
+Lamp materials carry glTF emissiveFactor ('Emissive warm headlight lens', 'Emissive red tail lamps', 'Emissive amber indicators', 'Emissive reverse lamps');
+the client finds them by name and drives their emission from the lamp state (CarLights.BindModelLamps).
+
 Frame: the game's vehicle frame, metres. x right, y up, z back (forward is -Z), origin on the ground halfway between the axles.
 So vehicles.json uses model_scale 1, model_yaw_deg 0, model_offset [0, 0, 0]. Left-hand drive: the driver sits at x -0.39.
 
@@ -34,9 +37,10 @@ kit=importlib.util.module_from_spec(_spec); _spec.loader.exec_module(kit)
 GLASS=kit.GlassSet('golf_mk2')
 _PANES=kit.Node('panes')    # GlassSet hangs its (empty) pane nodes here; the real ones are made by export()
 MATS=[]; PARTS=[]
-def mat(name,color,metal=0,rough=.7,alpha=1):
+def mat(name,color,metal=0,rough=.7,alpha=1,emission=None):
     m={'name':name,'pbrMetallicRoughness':{'baseColorFactor':[*color,alpha],'metallicFactor':metal,'roughnessFactor':rough},'doubleSided':True}
     if alpha<1:m['alphaMode']='BLEND'
+    if emission is not None:m['emissiveFactor']=list(emission)
     MATS.append(m);return len(MATS)-1
 paint=mat('Black paint',(.025,.025,.03),.12,.4)  # near-black, a little gloss so flat shading still reads
 trim=mat('Black rubber trim',(.022,.027,.032))
@@ -46,10 +50,12 @@ glass=mat('Transparent blue glass',(.38,.62,.70),.05,.16,.19)
 seat=mat('Charcoal cloth',(.085,.105,.12),0,.97)
 seam=mat('Cloth inserts',(.15,.18,.20))
 dash=mat('Dashboard graphite',(.045,.055,.065))
-light=mat('Headlight lens',(.75,.85,.87),.25,.23)
-red=mat('Tail lamp red',(.62,.025,.035),.15,.3)
-amber=mat('Indicator amber',(.95,.39,.045),.15,.35)
+light=mat('Emissive warm headlight lens',(.75,.85,.87),.25,.23,emission=(1,.85,.62))
+red=mat('Non-emissive red grille trim',(.62,.025,.035),.15,.3)
 white=mat('Plate ivory',(.86,.89,.85))
+tail_light=mat('Emissive red tail lamps',(.62,.025,.035),.15,.3,emission=(.5,.008,.012))
+indicator_light=mat('Emissive amber indicators',(.95,.39,.045),.15,.35,emission=(.8,.18,.008))
+reverse_light=mat('Emissive reverse lamps',(.86,.89,.85),.1,.3,emission=(.65,.68,.6))
 blue=mat('Plate blue band',(.025,.12,.48))
 black=mat('Dark grille',(.008,.012,.016))
 gauge=mat('Vintage instrument markings',(.54,.65,.49))
@@ -112,7 +118,17 @@ for s in [-1,1]:
             for r,t in [(.345,a),(.345,b),(.392,b),(.392,a)]:
                 z=w+r*math.cos(t);x,_=shape(z);pts.append((s*(x+.018),.315+r*math.sin(t),z))
             poly('Black_arch_extension',pts,trim)
-        poly('Wheel_well',[(s*.64,.28,w-.345)]+[(s*.64,.315+.345*math.sin(math.pi*i/12),w+.345*math.cos(math.pi*i/12)) for i in range(13)],black)
+        # Closed inner wall plus curved barrel: the tire opening stays open
+        # to the road, while views into the cabin/engine bay are blocked.
+        inner=.43 if w<0 else .58  # Front wheels need room at full steering lock.
+        arc=[(.315+.345*math.sin(math.pi*i/12),w+.345*math.cos(math.pi*i/12)) for i in range(13)]
+        poly('Wheelhouse_inner_wall',[(s*inner,.20,w-.345),(s*inner,.20,w+.345)]+[(s*inner,y,z) for y,z in arc],black)
+        for (ya,za),(yb,zb) in zip(arc,arc[1:]):
+            xa=shape(za)[0]+.018;xb=shape(zb)[0]+.018
+            poly('Curved_wheelhouse_liner',[(s*inner,ya,za),(s*xa,ya,za),(s*xb,yb,zb),(s*inner,yb,zb)],black)
+        for z in [w-.345,w+.345]:
+            x=shape(z)[0]+.018
+            poly('Wheelhouse_end_closure',[(s*inner,.20,z),(s*x,.20,z),(s*x,.315,z),(s*inner,.315,z)],black)
     for a,b in [(-1.94,-1.59),(-.88,.88),(1.59,1.94)]:
         xa,_=shape(a);xb,_=shape(b)
         beam('Side_moulding',(s*(xa+.015),.63,a),(s*(xb+.015),.63,b),.075,trim,.028)
@@ -122,7 +138,20 @@ for s in [-1,1]:
 for a,b in [(-1.99,-1.82),(-1.82,-1.55),(-1.55,-.78),(1.63,1.99)]:
     xa,ya=shape(a);xb,yb=shape(b)
     mesh('Bonnet' if a<0 else 'Hatch_lower_deck',[(-xa+.018,ya,a),(0,ya+.014,a),(xa-.018,ya,a),(-xb+.018,yb,b),(0,yb+.014,b),(xb-.018,yb,b)],[[0,1,4,3],[1,2,5,4]],paint)
-box('Cabin_floor',(0,.265,.35),(1.40,.065,2.60),dash)
+# Continuous center undertray and a wider passenger floor between the wheels.
+# Rear corners are occupied by wheel housings rather than a floor cutting tires.
+box('Continuous_undertray',(0,.215,0),(.86,.05,3.98),black)
+box('Front_undertray_crossmember',(0,.215,-1.79),(1.51,.05,.40),black)
+box('Rear_undertray',(0,.215,1.27),(1.16,.05,1.44),black)
+box('Cabin_floor',(0,.265,.025),(1.62,.065,1.69),dash)
+box('Rear_center_floor',(0,.265,1.265),(1.16,.065,.85),dash)
+box('Boot_floor',(0,.265,1.795),(1.54,.065,.39),dash)
+box('Engine_bay_bulkhead',(0,.6025,-.79),(1.60,.695,.045),dash)
+box('Rear_cabin_bulkhead',(0,.60,1.65),(1.54,.70,.045),dash)
+for s in [-1,1]:
+    box('Inner_sill_and_door_shell',(s*.795,.595,.025),(.04,.70,1.69),dash)
+    box('Rear_inner_quarter_upper',(s*.785,.80,1.235),(.045,.32,.84),dash)
+    box('Boot_side_closure',(s*.755,.59,1.81),(.045,.68,.36),dash)
 for z in [-1.99,1.99]:
     x,y=shape(z)
     poly('End_panel',[(-x,.24,z),(x,.24,z),(x,y,z),(0,y+.014,z),(-x,y,z)],paint)
@@ -134,6 +163,8 @@ mesh('Roof',[(-.66,1.405,-.29),(0,1.42,-.29),(.66,1.405,-.29),(-.66,1.405,1.02),
 front=[(-.785,.95,-.77),(.785,.95,-.77),(.65,1.39,-.29),(-.65,1.39,-.29)]
 rear=[(-.65,1.39,1.04),(.65,1.39,1.04),(.78,.98,1.72),(-.78,.98,1.72)]
 glass_pane('windscreen',front);glass_pane('rear',rear)
+poly('Rear_window_lower_surround',[rear[3],rear[2],(.79,.925,1.76),(-.79,.925,1.76)],paint)
+poly('Rear_roof_window_join',[(-.66,1.405,1.02),(.66,1.405,1.02),rear[1],rear[0]],trim)
 for name,pts in [('Windshield',front),('Rear_window',rear)]:
     for a,b in zip(pts,pts[1:]+pts[:1]):beam(name+'_rubber',a,b,.027,trim)
 for s in [-1,1]:
@@ -146,6 +177,13 @@ for s in [-1,1]:
     back=[(sx(.965),.965,.70),(sx(1.365),1.365,.70),(sx(1.365),1.365,1.00),(sx(.965),.965,1.63)]
     side='left' if s<0 else 'right'
     glass_pane(f'door_{side}',win);glass_pane(f'quarter_{side}',back)
+    # Fill all four edges of each aperture; thin edge beams alone leave slits.
+    front_outer=[(sx(.94),.94,-.78),(sx(1.405),1.405,-.29),(sx(1.405),1.405,.66),(sx(.94),.94,.66)]
+    rear_outer=[(sx(.94),.94,.66),(sx(1.405),1.405,.66),(sx(1.405),1.405,1.02),(sx(.94),.94,1.76)]
+    for inner,outer in [(win,front_outer),(back,rear_outer)]:
+        for i in range(4):
+            j=(i+1)%4
+            poly('Solid_window_aperture_surround',[outer[i],outer[j],inner[j],inner[i]],trim)
     beam('B_pillar',(sx(.94),.94,.66),(sx(1.40),1.40,.66),.075,trim)
     # Both gaps belong to a single long front door; no rear door handles.
     for z in [-.75,.66]:beam('Door_seam',(s*.827,.29,z),(s*.805,.93,z),.008,black)
@@ -155,7 +193,7 @@ for s in [-1,1]:
     box('Mirror_reflector',(s*.93,1.04,-.509),(.15,.085,.007),alloy)
     box('Inner_door_card',(s*.735,.64,.06),(.03,.38,1.34),dash)
     box('Inner_armrest',(s*.70,.68,.20),(.09,.06,.37),seat)
-    box('Side_indicator',(s*.837,.79,-.99),(.012,.038,.057),amber)
+    box('Side_indicator',(s*.837,.79,-.99),(.012,.038,.057),indicator_light)
 # Silver steel-style wheels, separate roll and steering nodes.
 PIVOTS={}
 for s in [-1,1]:
@@ -188,12 +226,12 @@ for s in [-1,1]:
         for fraction in [-.55,-.28,0,.28,.55]:
             xx=x+fraction*r;h=math.sqrt((r*.78)**2-(fraction*r)**2)
             beam('Headlamp_lens_fluting',(xx,.75-h,-2.072),(xx,.75+h,-2.072),.003,alloy)
-    box('Bumper_indicator',(s*.60,.485,-2.128),(.23,.068,.012),amber)
-    box('Indicator_inner',(s*.60,.485,-2.137),(.15,.038,.005),light)
+    box('Bumper_indicator',(s*.60,.485,-2.128),(.23,.068,.012),indicator_light)
+    box('Indicator_inner',(s*.60,.485,-2.137),(.15,.038,.005),indicator_light)
     box('Fog_lamp_surround',(s*.54,.298,-2.047),(.19,.087,.014),black)
     box('Fog_lamp',(s*.54,.298,-2.058),(.135,.055,.009),light)
     box('Rear_lamp_seal',(s*.555,.76,2.006),(.41,.17,.025),trim)
-    for xx,mm in [(s*.69,amber),(s*.56,red),(s*.43,white)]:box('Rear_lamp_segment',(xx,.76,2.025),(.122,.135,.012),mm)
+    for xx,mm in [(s*.69,indicator_light),(s*.56,tail_light),(s*.43,reverse_light)]:box('Rear_lamp_segment',(xx,.76,2.025),(.122,.135,.012),mm)
 box('Lower_front_intake',(0,.286,-2.049),(.73,.075,.018),black)
 # Badges remain separated geometric V/W strokes on a dark circular backing.
 for z,y,r in [(-2.058,.75,.069),(2.027,.856,.047)]:
@@ -217,10 +255,10 @@ for s in [-1,1]:
     box('Seat_back_insert',(x,.80,.425),(.32,.37,.022),seam)
     for xx in [x-.13,x+.13]:beam('Headrest_post',(xx,1.02,.50),(xx,1.105,.50),.018,alloy)
     box('Front_headrest',(x,1.10,.50),(.30,.17,.13),seat)
-box('Rear_bench',(0,.48,1.05),(1.35,.15,.48),seat)
-box('Rear_backrest',(0,.76,1.30),(1.35,.48,.13),seat)
-for x in [-.44,0,.44]:
-    box('Rear_seat_insert',(x,.76,1.225),(.34,.34,.025),seam)
+box('Rear_bench',(0,.48,1.05),(1.12,.15,.48),seat)
+box('Rear_backrest',(0,.76,1.30),(1.12,.48,.13),seat)
+for x in [-.36,0,.36]:
+    box('Rear_seat_insert',(x,.76,1.225),(.28,.34,.025),seam)
 box('Parcel_shelf',(0,.86,1.59),(1.37,.05,.36),dash)
 box('Dashboard',(0,.875,-.56),(1.47,.20,.37),dash)
 box('Dash_top',(0,.986,-.58),(1.42,.035,.33),seat)

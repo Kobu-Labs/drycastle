@@ -19,6 +19,13 @@ public class EngineSoundTests
         return v;
     }
 
+    /// <summary>A full pull to the top, 15 s on the gas: long enough for the turbo to have spooled.</summary>
+    static float Pull(EngineSoundModel m)
+    {
+        var v = Run(m, 0, 30, 3f);
+        return Run(m, v, 10, 12f);
+    }
+
     [Fact]
     public void Standing_idles()
     {
@@ -43,7 +50,7 @@ public class EngineSoundTests
     public void Coming_off_the_gas_coasts_and_fires_the_lift_once()
     {
         var m = new EngineSoundModel();
-        var v = Run(m, 0, 30, 3f);
+        var v = Pull(m);
         var lifts = 0;
         Run(m, v, -4, 3f, x => { if (x.TakeLift()) lifts++; });
         Assert.Equal(EnginePhase.Coasting, m.Phase);
@@ -63,6 +70,31 @@ public class EngineSoundTests
         Run(m, Top, -5.4f, 1.5f, x => { t += Dt; if (at == null && x.TakeLift()) at = t; }); // coasting off 200: 5.4 km/h per second
         Assert.NotNull(at);
         Assert.InRange(at!.Value, 0f, 0.9f);
+    }
+
+    [Fact]
+    public void The_turbo_needs_a_long_push_and_a_ducked_mix_recovers()
+    {
+        var m = new EngineSoundModel();
+        var v = Run(m, 0, 30, 3f);          // 90 km/h after a 3 s push: no turbo to let go
+        var lifts = 0;
+        v = Run(m, v, -40, 1f, x => { if (x.TakeLift()) lifts++; });
+        Assert.Equal(0, lifts);
+        var long1 = new EngineSoundModel();  // 6 s of it is not enough either, 10 s and more is
+        v = Run(long1, 0, 25, 6f);
+        Run(long1, v, -4, 2f, x => { if (x.TakeLift()) lifts++; });
+        Assert.Equal(0, lifts);
+        var long2 = new EngineSoundModel();  // and going straight onto the brake after a long push lets it go too
+        v = Pull(long2);
+        Run(long2, v, -40, 1f, x => { if (x.TakeLift()) lifts++; });
+        Assert.Equal(1, lifts);
+        var def = Set(); var mix = new EngineMix();
+        for (var i = 0; i < 120; i++) mix.Step(def, EnginePhase.Coasting, 0.5f, Dt);
+        var before = mix.Gain[(int)EngineLayer.Background];
+        mix.Duck(); mix.Step(def, EnginePhase.Coasting, 0.5f, Dt);
+        Assert.InRange(mix.Gain[(int)EngineLayer.Background], 0.3f, 0.45f);
+        for (var i = 0; i < 90; i++) mix.Step(def, EnginePhase.Coasting, 0.5f, Dt);
+        Assert.Equal(before, mix.Gain[(int)EngineLayer.Background], 3);
     }
 
     [Fact]
@@ -94,7 +126,7 @@ public class EngineSoundTests
     public void Lift_follows_a_braking_start_too_and_respects_the_cooldown()
     {
         var m = new EngineSoundModel();
-        var v = Run(m, 0, 30, 3f);
+        var v = Pull(m);
         var lifts = 0;
         v = Run(m, v, -40, 0.6f, x => { if (x.TakeLift()) lifts++; });
         Assert.Equal(1, lifts);
