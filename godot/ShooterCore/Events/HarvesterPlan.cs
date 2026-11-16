@@ -26,8 +26,8 @@ public sealed class HarvesterConfig
     /// <summary>How far the header is in front of the vehicle's origin (the reel's middle), and the headland a turn uses past the pass end.</summary>
     public float HeaderForwardM { get; set; } = 3.66f;
     public float HeadlandM { get; set; } = 9;
-    /// <summary>The machine's tightest turn (vehicles.json harvester <c>turn_radius</c>): the turn between two passes is a half circle of half their distance when that is not tighter, else a run out and back.</summary>
-    public float TurnRadiusM { get; set; } = 2.3f;
+    /// <summary>The machine's tightest turn (vehicles.json harvester <c>turn_radius</c>): the turn between two passes is a half circle of half their distance when that is not tighter (the planner skips lanes so it is), else a bulb turn of three arcs of this radius.</summary>
+    public float TurnRadiusM { get; set; } = 7f;
 
     public float CutSpeedMps { get; set; } = 3.2f;
     public float TransitSpeedMps { get; set; } = 5.0f;
@@ -127,18 +127,18 @@ public static class FieldPlanner
         var vmin = float.MaxValue; var vmax = float.MinValue;
         foreach (var p in ring) { var b = Vector2.Dot(p, v); vmin = MathF.Min(vmin, b); vmax = MathF.Max(vmax, b); }
         var step = Math.Max(0.5f, header - overlap);
-        var passes = new List<HarvestPass>();
+        // the lanes (a lane is a line across the field, cut in one or more spans), then the order they are driven in: lane i, then one at least k lanes away (k = the lanes a half circle of the
+        // machine's turning radius spans), so every turn is a smooth arc at or above the radius; the lanes in between come on the way back. A pass runs the other way than the one before.
+        var pieces = new List<(int Lane, float A0, float A1, float B)>();
         var line = 0;
         for (var b = vmin + margin + header / 2f; b <= vmax - margin + 1e-3f; b += step, line++)
+            foreach (var sp in Spans(ring, u, v, b).Where(x => x.To - x.From - 2 * margin >= minPass).OrderBy(x => x.From))
+                pieces.Add((line, sp.From + margin, sp.To - margin, b));
+        var passes = new List<HarvestPass>();
+        foreach (var pc in OrderPieces(pieces, SkipLanes(cfg.TurnRadiusM, step)))
         {
-            var spans = Spans(ring, u, v, b).Where(s => s.To - s.From - 2 * margin >= minPass).OrderBy(s => s.From).ToList();
-            if (line % 2 == 1) spans.Reverse(); // the way back: the far span first, driven the other way
-            foreach (var s in spans)
-            {
-                var a0 = s.From + margin; var a1 = s.To - margin;
-                var p0 = u * a0 + v * b; var p1 = u * a1 + v * b;
-                passes.Add(line % 2 == 0 ? new HarvestPass(p0, p1) : new HarvestPass(p1, p0));
-            }
+            var p0 = u * pc.A0 + v * pc.B; var p1 = u * pc.A1 + v * pc.B;
+            passes.Add(passes.Count % 2 == 0 ? new HarvestPass(p0, p1) : new HarvestPass(p1, p0));
         }
         if (passes.Count == 0) return null;
 
@@ -169,16 +169,39 @@ public static class FieldPlanner
         return new HarvestPlan(passes, entry, YawOf(toFirst.LengthSquared() < 1e-4f ? passes[0].Dir : toFirst), legs);
     }
 
+    /// <summary>The lanes between two passes that a half circle of <paramref name="radius"/> needs: ceil(2R / lane spacing).</summary>
+    public static int SkipLanes(float radius, float spacing) => Math.Max(1, (int)MathF.Ceiling(2f * radius / Math.Max(0.1f, spacing) - 1e-3f));
+
+    /// <summary>
+    /// Greedy lane order: from the lane just cut the nearest lane that is at least <paramref name="skip"/> lanes away (so the turn is a half circle of the turning radius or wider); when none is
+    /// left (the last lanes) the nearest one, which gets a bulb turn.
+    /// </summary>
+    static List<(int Lane, float A0, float A1, float B)> OrderPieces(List<(int Lane, float A0, float A1, float B)> pieces, int skip)
+    {
+        var left = pieces.ToList();
+        var order = new List<(int Lane, float A0, float A1, float B)>();
+        if (left.Count == 0) return order;
+        var cur = left[0]; left.RemoveAt(0); order.Add(cur);
+        while (left.Count > 0)
+        {
+            var far = left.Where(x => Math.Abs(x.Lane - cur.Lane) >= skip).OrderBy(x => Math.Abs(x.Lane - cur.Lane)).ThenBy(x => x.Lane).Cast<(int Lane, float A0, float A1, float B)?>().FirstOrDefault();
+            cur = far ?? left.OrderBy(x => Math.Abs(x.Lane - cur.Lane)).ThenBy(x => x.Lane).First();
+            left.Remove(cur); order.Add(cur);
+        }
+        return order;
+    }
+
     /// <summary>
     /// The turn from the end of <paramref name="a"/> to the start of <paramref name="b"/>: a half circle past the end of the pass when the passes are far enough apart for the machine's turning
-    /// radius, else (a pass on the same line, a narrow strip) out past the end, across and back in.
+    /// radius (<see cref="HarvesterConfig.TurnRadiusM"/>), else a bulb turn (<see cref="AddBulb"/>: three arcs of that radius), and for a pass on the same line a run out past the end, across and back in.
     /// </summary>
     static void AddTurn(List<HarvestLeg> legs, HarvestPass a, HarvestPass b, int pass, float headland, HarvesterConfig cfg)
     {
         var d = a.Dir;
-        var gap = Vector2.Distance(a.End, b.Start);
         var sideways = b.Start - a.End;
-        if (gap >= 2f * cfg.TurnRadiusM * 0.95f && MathF.Abs(Vector2.Dot(sideways, d)) < gap * 0.3f)
+        var gap = sideways.Length();
+        var lateral = MathF.Abs(sideways.X * -d.Y + sideways.Y * d.X);
+        if (gap >= 2f * cfg.TurnRadiusM * 0.999f && MathF.Abs(Vector2.Dot(sideways, d)) < gap * 0.3f)
         {
             var mid = (a.End + b.Start) / 2f; var r = gap / 2f;
             var half = (a.End - mid); // from the middle to where the pass ends: the lateral of the half circle
@@ -188,12 +211,70 @@ public static class FieldPlanner
                 legs.Add(new HarvestLeg(mid + d * (r * MathF.Sin(phi)) + half * MathF.Cos(phi), HarvesterPhase.Turn, pass, cfg.TurnSpeedMps));
             }
         }
+        else if (lateral > 0.5f && lateral < 2f * cfg.TurnRadiusM && Dot(b.Dir, d) < -0.99f) AddBulb(legs, a, b, pass, cfg);
         else
         {
             legs.Add(new HarvestLeg(a.End + d * headland, HarvesterPhase.Turn, pass, cfg.TurnSpeedMps));
             legs.Add(new HarvestLeg(b.Start - b.Dir * headland, HarvesterPhase.Turn, pass, cfg.TurnSpeedMps));
         }
         legs.Add(new HarvestLeg(b.Start, HarvesterPhase.Turn, pass, cfg.TurnSpeedMps));
+    }
+
+    static float Dot(Vector2 p, Vector2 q) => Vector2.Dot(p, q);
+
+    /// <summary>
+    /// A bulb (omega) turn between two parallel passes less than two radii apart: straight on past the end, then a right, a left and a right arc (the first away from the next pass) of the turning
+    /// radius, ending on the next pass's line heading the other way. The arcs are sampled every 15 degrees.
+    /// </summary>
+    static void AddBulb(List<HarvestLeg> legs, HarvestPass a, HarvestPass b, int pass, HarvesterConfig cfg)
+    {
+        var r = cfg.TurnRadiusM;
+        var d = a.Dir;
+        var toward = b.Start - a.End;
+        var delta = Dot(toward, new Vector2(-d.Y, d.X)); // signed lateral distance to the next pass
+        var lat = new Vector2(-d.Y, d.X) * MathF.Sign(delta);
+        var dy = MathF.Abs(delta);
+        // the first and the last arc turn alpha, the middle one pi + 2 alpha: find the alpha that ends dy to the side
+        float lo = 0, hi = MathF.PI;
+        for (var i = 0; i < 50; i++)
+        {
+            var mid = (lo + hi) / 2f;
+            if (BulbEnd(mid, r).Y > dy) lo = mid; else hi = mid;
+        }
+        var alpha = (lo + hi) / 2f;
+        var end = BulbEnd(alpha, r);
+        var along = Dot(b.Start - a.End, d); // where the next pass starts along the old direction
+        var lead = MathF.Max(0f, along - end.X + 1f); // straight on first, so the turn ends beyond where the next pass starts
+        Vector2 At(float x, float y) => a.End + d * x + lat * y;
+        var x0 = lead; var y0 = 0f; var th = 0f;
+        if (lead > 0.5f) legs.Add(new HarvestLeg(At(x0, y0), HarvesterPhase.Turn, pass, cfg.TurnSpeedMps));
+        foreach (var (turn, sweep) in new[] { (-1f, alpha), (1f, MathF.PI + 2f * alpha), (-1f, alpha) })
+        {
+            var steps = Math.Max(1, (int)MathF.Ceiling(sweep / (MathF.PI / 12f)));
+            var dth = turn * sweep / steps;
+            for (var k = 0; k < steps; k++)
+            {
+                // a chord of the arc: heading changes by dth over arc length r * |dth|; the chord leaves at the mean heading
+                var h = th + dth / 2f;
+                var chord = 2f * r * MathF.Sin(MathF.Abs(dth) / 2f);
+                x0 += MathF.Cos(h) * chord; y0 += MathF.Sin(h) * chord; th += dth;
+                legs.Add(new HarvestLeg(At(x0, y0), HarvesterPhase.Turn, pass, cfg.TurnSpeedMps));
+            }
+        }
+    }
+
+    /// <summary>Where the three arcs of a bulb turn with first and last arc <paramref name="alpha"/> end, relative to where they began (heading +x, +y to the next pass).</summary>
+    public static Vector2 BulbEnd(float alpha, float r)
+    {
+        float x = 0, y = 0, th = 0;
+        foreach (var (turn, sweep) in new[] { (-1f, alpha), (1f, MathF.PI + 2f * alpha), (-1f, alpha) })
+        {
+            // centre is to the left of the heading for a left turn (turn = 1), to the right for a right turn
+            var cxx = x + (-MathF.Sin(th)) * r * turn; var cyy = y + MathF.Cos(th) * r * turn;
+            th += turn * sweep;
+            x = cxx + MathF.Sin(th) * r * turn; y = cyy - MathF.Cos(th) * r * turn;
+        }
+        return new Vector2(x, y);
     }
 
     /// <summary>The direction of the ring's longest edge: fields run along it.</summary>

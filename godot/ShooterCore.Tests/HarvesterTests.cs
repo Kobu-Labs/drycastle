@@ -59,8 +59,10 @@ public class HarvesterTests
             Assert.True(Poly.Contains(ring, p.Start) && Poly.Contains(ring, p.End));
             Assert.True(p.Length > 100f); // 120 m less the two margins
             if (i > 0) Assert.True(Vector2.Dot(p.Dir, plan.Passes[i - 1].Dir) < -0.99f, "the next pass runs the other way");
-            if (i > 0) Assert.Equal(step, MathF.Abs(plan.Passes[i].Start.Y - plan.Passes[i - 1].Start.Y), 2); // along X: Y is the lateral
         }
+        // every lane is cut once: the lanes (along Y) are the field's, one step apart
+        var ys = plan.Passes.Select(p => p.Start.Y).OrderBy(y => y).ToList();
+        for (var i = 1; i < ys.Count; i++) Assert.Equal(step, ys[i] - ys[i - 1], 2);
         Assert.True(plan.TotalCutM > 100f * plan.Passes.Count);
     }
 
@@ -132,6 +134,17 @@ public class HarvesterTests
         // the header covered the whole field's width: every pass line was driven near its centre
         foreach (var p in plan.Passes)
             Assert.Contains(cut, c => Poly.DistanceToSegment(c, p.Start, p.End) < 1.5f && Vector2.Distance(c, p.End) < 12f);
+    }
+
+    [Fact]
+    public void The_driver_follows_the_skip_lane_and_bulb_turns_with_the_machines_real_handling()
+    {
+        var plan = FieldPlanner.Plan(Rect(0, 0, 160, 60), Cfg)!;
+        var brain = new HarvesterBrain(plan, Cfg);
+        var seconds = Drive(brain, plan, out _, 4000);
+        Assert.Equal(HarvesterPhase.Gone, brain.Phase);
+        Assert.True(seconds < 3000, $"took {seconds:0} s");
+        Assert.Equal(plan.Passes.Count - 1, brain.Progress.Pass);
     }
 
     [Fact]
@@ -386,6 +399,66 @@ public class HarvesterTests
         var more = Enumerable.Range(0, CorpseBook.MaxBales).Select(i => book.Add(new Corpse(HarvesterRules.BaleOwner, new Vector3(i, 0, 5), 0, 0, 0, null, Cfg.BaleLifetimeS))!.Value).ToList();
         Assert.Null(book.Get(bale));
         Assert.NotNull(book.Get(more[^1]));
+    }
+
+    /// <summary>The smallest radius of any three consecutive turn waypoints of the plan (the circle through them).</summary>
+    static float TightestTurn(HarvestPlan plan)
+    {
+        var tight = float.MaxValue;
+        for (var i = 1; i + 1 < plan.Legs.Count; i++)
+        {
+            if (plan.Legs[i].Phase != HarvesterPhase.Turn || plan.Legs[i - 1].Phase == HarvesterPhase.Cut && plan.Legs[i + 1].Phase != HarvesterPhase.Turn) continue;
+            var p = plan.Legs[i - 1].Target; var q = plan.Legs[i].Target; var r = plan.Legs[i + 1].Target;
+            var a = Vector2.Distance(p, q); var b = Vector2.Distance(q, r); var c = Vector2.Distance(p, r);
+            var area2 = MathF.Abs((q.X - p.X) * (r.Y - p.Y) - (q.Y - p.Y) * (r.X - p.X));
+            if (area2 < 1e-3f) continue; // a straight run
+            tight = MathF.Min(tight, a * b * c / (2f * area2));
+        }
+        return tight;
+    }
+
+    [Theory]
+    [InlineData(120, 40)]
+    [InlineData(200, 100)]
+    [InlineData(150, 33)]
+    [InlineData(300, 160)]
+    public void A_real_machine_turns_on_arcs_no_tighter_than_its_radius_and_still_cuts_every_lane(float w, float h)
+    {
+        Assert.Equal(7f, Cfg.TurnRadiusM);
+        var ring = Rect(0, 0, w, h);
+        var plan = FieldPlanner.Plan(ring, Cfg)!;
+        var step = Cfg.HeaderWidthM - Cfg.PassOverlapM;
+        var lanes = (int)MathF.Floor((h - 2 * Cfg.EdgeMarginM - Cfg.HeaderWidthM / 2f + 1e-3f) / step) + 1;
+        Assert.Equal(lanes, plan.Passes.Count); // none is left out
+        Assert.Equal(lanes, plan.Passes.Select(p => (int)MathF.Round((p.Start.Y - Cfg.EdgeMarginM - Cfg.HeaderWidthM / 2f) / step)).Distinct().Count());
+        Assert.True(TightestTurn(plan) >= Cfg.TurnRadiusM * 0.95f, $"tightest turn {TightestTurn(plan):F2} m");
+        // the lanes are skipped: the first turn spans the lanes a half circle needs
+        var skip = FieldPlanner.SkipLanes(Cfg.TurnRadiusM, step);
+        Assert.Equal(4, skip);
+        if (lanes > 2 * skip) Assert.True(MathF.Abs(plan.Passes[1].Start.Y - plan.Passes[0].Start.Y) >= skip * step - 0.01f);
+        for (var i = 1; i < plan.Passes.Count; i++) Assert.True(Vector2.Dot(plan.Passes[i].Dir, plan.Passes[i - 1].Dir) < -0.99f);
+    }
+
+    [Fact]
+    public void A_bulb_turn_between_neighbouring_lanes_is_three_arcs_that_end_on_the_next_lane_heading_back()
+    {
+        var a = new HarvestPass(new Vector2(0, 0), new Vector2(100, 0));
+        var b = new HarvestPass(new Vector2(100, 4.5f), new Vector2(0, 4.5f));
+        var legs = new List<HarvestLeg>();
+        typeof(FieldPlanner).GetMethod("AddTurn", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, new object[] { legs, a, b, 0, 9f, Cfg });
+        var plan = new HarvestPlan(new[] { a, b }, Vector2.Zero, 0, legs);
+        Assert.True(TightestTurn(plan) >= Cfg.TurnRadiusM * 0.95f, $"{TightestTurn(plan):F2}");
+        Assert.Equal(b.Start, legs[^1].Target);
+        var end = FieldPlanner.BulbEnd(0.9f, 7f);
+        Assert.True(end.Y > 0);
+        Assert.Equal(4.5f, FieldPlanner.BulbEnd(Bisect(4.5f), 7f).Y, 2);
+    }
+
+    static float Bisect(float dy)
+    {
+        float lo = 0, hi = MathF.PI;
+        for (var i = 0; i < 50; i++) { var m = (lo + hi) / 2f; if (FieldPlanner.BulbEnd(m, 7f).Y > dy) lo = m; else hi = m; }
+        return (lo + hi) / 2f;
     }
 
     // ---- the reel and the real path ----

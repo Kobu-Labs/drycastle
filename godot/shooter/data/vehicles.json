@@ -229,8 +229,8 @@
     },
     {
       "id": "harvester",
-      "comment": "The harvester event (#331): the Synty Farm combine (SM_Veh_Harvester_01, private pack; a grey box without it). Unity forward is +Z, hence model_yaw_deg 180. Its reel node SM_Veh_Harvester_Reel spins on X. Run-over is the event's own (run_over false): NetServer.Harvester.cs, because the field speed is far below run_over_min_speed. turn_radius is the arcade tightness the AI's half-circle turns between passes need (HarvesterConfig.TurnRadiusM).",
-      "top_speed": 6.5, "acceleration": 1.3, "brake": 4, "turn_radius": 2.3, "high_speed_radius_factor": 1, "max_lateral_accel": 4,
+      "comment": "The harvester event (#331): the Synty Farm combine (SM_Veh_Harvester_01, private pack; a grey box without it). Unity forward is +Z, hence model_yaw_deg 180. Its reel node SM_Veh_Harvester_Reel spins on X. Run-over is the event's own (run_over false): NetServer.Harvester.cs, because the field speed is far below run_over_min_speed. turn_radius (7 m, a real combine's) is what the AI's turns between passes are planned with (HarvesterConfig.TurnRadiusM, FieldPlanner: half circles between lanes k apart, a bulb turn for the last lanes).",
+      "top_speed": 6.5, "acceleration": 1.3, "brake": 4, "turn_radius": 7, "high_speed_radius_factor": 1, "max_lateral_accel": 4,
       "mass": 14000, "run_over_mass": 8000, "run_over": false, "hp": 1400,
       "hood": [0, 2.2, -4.3], "spawn_count": 0,
       "half_width": 2.5, "half_length": 4.3, "height": 3.8,

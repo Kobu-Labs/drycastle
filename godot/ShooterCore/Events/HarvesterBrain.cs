@@ -39,7 +39,7 @@ public sealed class HarvesterBrain
         .FromAnywhere(HarvesterPhase.Stopped)
         .Note(HarvesterPhase.Approach, "Appeared just inside the field's outline, facing the first pass.")
         .Note(HarvesterPhase.Cut, "Driving a pass at cutting speed; the cut progress (pass, metres) is what the clients draw the stubble from.")
-        .Note(HarvesterPhase.Turn, "Out past the end of the pass, across, and back in on the next one (a bulb turn).")
+        .Note(HarvesterPhase.Turn, "A half circle to a lane several lanes over (the lanes between are cut on the way back), or a bulb turn of three arcs for the last lanes: never tighter than the machine's turning radius.")
         .Note(HarvesterPhase.Leave, "The edge route to where it came in, then past it. A plan whose passes were all given up goes straight here.")
         .Note(HarvesterPhase.Gone, "Reached the exit: the event is over (cooldown starts).")
         .Note(HarvesterPhase.Stopped, "Its driver died, or an admin ended the event: from any phase. The brain gives no more commands.")
@@ -93,7 +93,7 @@ public sealed class HarvesterBrain
             cutting = lateral <= _cfg.HeaderWidthM * 0.6f;
             if (cutting) _progress = HarvestProgress.Advance(_progress, _plan.Passes, leg.Pass, header);
         }
-        var (throttle, steer) = HarvesterPilot.Drive(pos, yaw, speed, leg.Target, leg.SpeedMps);
+        var (throttle, steer) = HarvesterPilot.Drive(pos, yaw, speed, leg.Target, leg.SpeedMps, _cfg.TurnRadiusM);
         return new HarvesterCommand(throttle, steer, cutting, _progress);
     }
 
@@ -104,12 +104,14 @@ public sealed class HarvesterBrain
 public static class HarvesterPilot
 {
     /// <summary>Throttle and steer (-1..1) to drive from <paramref name="pos"/> facing <paramref name="yaw"/> at <paramref name="speed"/> to <paramref name="target"/> at about <paramref name="wantSpeed"/>.</summary>
-    public static (float Throttle, float Steer) Drive(Vector2 pos, float yaw, float speed, Vector2 target, float wantSpeed)
+    public static (float Throttle, float Steer) Drive(Vector2 pos, float yaw, float speed, Vector2 target, float wantSpeed, float radiusM = 7f)
     {
         var d = target - pos;
         if (d.LengthSquared() < 1e-6f) return (0, 0);
         var err = FieldPlanner.Wrap(FieldPlanner.YawOf(d) - yaw); // positive: the target is to the left
-        var steer = Math.Clamp(-err * 2.2f, -1f, 1f);
+        // pure pursuit: the curvature that reaches a point ld ahead is 2 sin(err) / ld, and steer 1 is the machine's tightest radius (CarModel: yaw rate = steer * v / R)
+        var ld = Math.Clamp(d.Length(), 2f, 8f);
+        var steer = MathF.Abs(err) > MathF.PI / 2f ? -MathF.Sign(err) : Math.Clamp(-2f * MathF.Sin(err) / ld * radiusM, -1f, 1f);
         var ease = Math.Clamp(1.2f - MathF.Abs(err) / 1.3f, 0.3f, 1f); // slow for a sharp turn
         var want = wantSpeed * ease;
         var throttle = Math.Clamp((want - speed) * 0.9f, -1f, 1f);

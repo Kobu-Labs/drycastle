@@ -732,7 +732,7 @@ From any state: Stopped
 
 - **Approach**: Appeared just inside the field's outline, facing the first pass.
 - **Cut**: Driving a pass at cutting speed; the cut progress (pass, metres) is what the clients draw the stubble from.
-- **Turn**: Out past the end of the pass, across, and back in on the next one (a bulb turn).
+- **Turn**: A half circle to a lane several lanes over (the lanes between are cut on the way back), or a bulb turn of three arcs for the last lanes: never tighter than the machine's turning radius.
 - **Leave**: The edge route to where it came in, then past it. A plan whose passes were all given up goes straight here.
 - **Gone**: Reached the exit: the event is over (cooldown starts).
 - **Stopped**: Its driver died, or an admin ended the event: from any phase. The brain gives no more commands.
