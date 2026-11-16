@@ -134,9 +134,8 @@ public partial class NetClient
     {
         var at = new Vector3(b.Position.X, b.Position.Y, b.Position.Z);
         if (_missiles.Remove(b.Id, out var r)) { r.Snd?.Release(); RocketFx.Retire(Owned, r.Node); }
-        if (Sfx.Enabled) Sfx.Play3D(SoundRules.Event("explosion", "bazooka"), at); // the bazooka's blast sound until the missile has its own
         RocketFx.Explode(Owned, at, b.Radius);
-        ShakeFor(at, b.Radius);
+        BlastFelt(at, b.Radius, SoundRules.Event("explosion", "bazooka")); // the bazooka's blast sound until the missile has its own
         if (b.Owner == _myId) _pov?.Impact();
     }
 }

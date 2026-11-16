@@ -105,6 +105,7 @@ public partial class Hud : CanvasLayer
         GameSettings.Changed += OnSettingsChanged;
         _root = new Control { Theme = ShooterTheme.Build(), MouseFilter = Control.MouseFilterEnum.Ignore };
         AddChild(_root);
+        BuildDust(); // first: the dust is behind every HUD element
         BuildProtection();
         BuildPounce();
         _scope = new ScopeOverlay { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };

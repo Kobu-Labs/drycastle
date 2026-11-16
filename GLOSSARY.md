@@ -574,6 +574,14 @@ _Avoid_: contributor, attacker
 One of three stages of the Bigfoot's fight, at fractions of the Hit count taken (30 % and 60 %), with an **enrage** past 85 %, when it is faster and its cooldowns shorter. A phase adds attacks and never takes any away.
 _Avoid_: stage, level, form
 
+**Dust cloud**:
+The dust a blast raises from the ground at its centre: thick and low at first, then wider, higher and thinner until it is gone (a rocket's lasts about four seconds). A camera in it sees little or nothing, and a friend's name tag behind it is not drawn. It is the same on every client, worked out from the blast alone. It hides; it stops nothing: shots, blasts and bots' sight pass through it. A blast in the air raises none.
+_Avoid_: smoke (that is a vehicle's damage or a rocket's trail), fog
+
+**Blast wave**:
+The wall of dust a large blast (a destroyed vehicle's and larger) sends out along the ground. It slows as it goes and stops at six times the blast's radius. The blast is heard and felt when the wave arrives, not when it goes off, and the dust it carries veils the view for a moment as it passes.
+_Avoid_: shockwave (that is the Bigfoot's stomp, and it hurts)
+
 **Shockwave**:
 The stomp's ring of force running outwards along the ground from the Bigfoot. It knocks back and hurts every player standing on the ground it crosses, once; a player who is in the air as it passes (a jump) is untouched. The stomp's wind-up (its pose and a sound) is the warning.
 _Avoid_: blast, explosion (those have a radius and damage falloff)

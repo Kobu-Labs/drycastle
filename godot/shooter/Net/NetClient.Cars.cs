@@ -139,8 +139,7 @@ public partial class NetClient
         v.Destroyed = true; // the wreck is gone until the server returns it: a live record must not bring it back or its smoke
         v.Node.Visible = false;
         VehicleFx.Explode(Owned, at, radius);
-        if (Sfx.Enabled) Sfx.Play3D("explosion.vehicle", at);
-        ShakeFor(at, radius);
+        BlastFelt(at, radius, "explosion.vehicle");
     }
 
     void OnVehicleExplosion(VehicleExplosionMsg m)
