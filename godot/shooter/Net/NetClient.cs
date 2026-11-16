@@ -328,6 +328,7 @@ public partial class NetClient : Node
                 _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Bodies = this };
                 World.AddChild(_me);
                 if (!Bot && ShotFx.Enabled) { _viewmodel = MakeViewmodel(); _me.Camera.AddChild(_viewmodel); }
+                if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(_me.Camera); // the glass shaders compile now, not at the first crack
                 if (WeaponsBot != "" || CarBot != "" || FxDemo.StartsWith("vehicle:")) NetServer.AddArenaColliders(World);
                 if (Bot) _me.InputOverride = new MoveInput { SpeedScale = 1 };
                 HudWelcome();

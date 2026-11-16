@@ -41,6 +41,29 @@ public static class GlassFx
         _shards ??= GD.Load<ShaderMaterial>(ShardMaterialPath);
     }
 
+    /// <summary>
+    /// Draws both glass shaders once, a hand's width in front of the player's camera, so their pipelines compile at the start and not on the first crack or shatter of the match
+    /// (loading the material alone does not draw it: the first hit of a session stalled a frame, most visibly on the big OSB plate of the mechanic garage). The two pieces are
+    /// a millimetre across and have the vertex layout of the real overlay and fragments; they are gone after a moment.
+    /// </summary>
+    public static void WarmUp(Camera3D camera)
+    {
+        Load();
+        var overlay = new MeshInstance3D { Name = "GlassWarmCrack", Mesh = new QuadMesh { Size = new Vector2(0.002f, 0.002f) }, MaterialOverride = Crack(), Position = new Vector3(0, 0, -0.3f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = new[] { new Vector3(0, 0, 0), new Vector3(0.002f, 0, 0), new Vector3(0, 0.002f, 0) };
+        arrays[(int)Mesh.ArrayType.Normal] = new[] { Vector3.Back, Vector3.Back, Vector3.Back };
+        arrays[(int)Mesh.ArrayType.TexUV2] = new[] { Vector2.Zero, Vector2.Zero, Vector2.Zero };
+        var mesh = new ArrayMesh();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        var shards = new MeshInstance3D { Name = "GlassWarmShards", Mesh = mesh, MaterialOverride = Shards(), Position = new Vector3(0, 0, -0.3f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        camera.AddChild(overlay);
+        camera.AddChild(shards);
+        var timer = camera.GetTree().CreateTimer(0.5);
+        timer.Timeout += () => { if (GodotObject.IsInstanceValid(overlay)) overlay.QueueFree(); if (GodotObject.IsInstanceValid(shards)) shards.QueueFree(); };
+    }
+
     static ShaderMaterial Crack() { Load(); return (ShaderMaterial)_crack!.Duplicate(); }
     static ShaderMaterial Shards() { Load(); return (ShaderMaterial)_shards!.Duplicate(); }
 

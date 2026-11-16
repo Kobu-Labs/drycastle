@@ -46,7 +46,7 @@ The motorcycle, bicycle, quad and amphibious transport have no glass. The utilit
 | Cutting a pane into fragments (clipped to the pane's outline) | `godot/ShooterCore/Glass/GlassShards.cs` |
 | Server | `godot/shooter/Net/NetServer.Glass.cs` |
 | Client state | `godot/shooter/Net/NetClient.Glass.cs` |
-| Client visuals | `godot/shooter/GlassFx.cs`, `shaders/glass_crack.gdshader`, `shaders/glass_shards.gdshader` |
+| Client visuals | `godot/shooter/GlassFx.cs` (`WarmUp` draws both shaders once at join so their pipelines compile before the first hit), `shaders/glass_crack.gdshader`, `shaders/glass_shards.gdshader` |
 | Model scripts that write the pane list | `scripts/make_bus_model.py`, `make_flak_model.py`, `make_utility_helicopter_model.py`, `make_golf_mk2_model.py` (`GlassSet` in the flak script) |
 | Tests | `godot/ShooterCore.Tests/GlassTests.cs` |
 
