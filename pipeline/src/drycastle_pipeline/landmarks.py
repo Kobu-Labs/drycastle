@@ -302,6 +302,13 @@ def _bus_garage(b: dict, detail: bool) -> Mesh:
     return garage_mesh(b, detail)
 
 
+def _house_g0377(b: dict, detail: bool) -> Mesh:
+    """House of G-0377 (P-0023): green eave walls, white gable ends, dark green shingle roof (see ``house_g0377.py``)."""
+    from drycastle_pipeline.house_g0377 import building_mesh
+
+    return building_mesh(b, detail)
+
+
 # Models built straight on the footprint (map metres) instead of in a local frame.
 FOOTPRINT_MODELS: dict[str, Callable[[dict, bool], Mesh]] = {
     "bunker": _bunker,
@@ -309,6 +316,7 @@ FOOTPRINT_MODELS: dict[str, Callable[[dict, bool], Mesh]] = {
     "flats": _flats,
     "loggia_house": _loggia_house,
     "bus_garage": _bus_garage,
+    "house_g0377": _house_g0377,
 }
 
 

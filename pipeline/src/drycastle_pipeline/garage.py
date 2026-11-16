@@ -13,18 +13,29 @@ Frame: ``(a, v)`` in metres from the bay's front left corner ``DF`` (seen from i
 seen from the yard), ``a`` across the front towards the side part, ``v`` into the building. z is up from the building base.
 """
 
-import itertools
 import math
-import random
 
-import numpy as np
-
+from drycastle_pipeline.landmark_kit import (
+    Frame,
+    boundary,
+    check_footprint,
+    door_frame,
+    plinth,
+    roof_piece,
+    sheet_roof,
+    to_mesh,
+    window,
+)
+from drycastle_pipeline.landmark_kit import edge as _edge
+from drycastle_pipeline.landmark_kit import prism as _prism
+from drycastle_pipeline.landmark_kit import unit as _unit
+from drycastle_pipeline.landmark_kit import wall as _kit_wall
 from drycastle_pipeline.landmarks import _Solids
 from drycastle_pipeline.meshes import Mesh
 
 DEEP, SIDE = "w378900337", "w1226408502"
 
-# the footprints (data/village/work/buildings.json), counter-clockwise; ``_check`` holds the building against them
+# the footprints (data/village/work/buildings.json), counter-clockwise; ``check_footprint`` holds the building against them
 SH0, SH1 = (-254.714, 260.372), (-249.69, 268.465)  # the shared wall, back end and front end
 DF, DB, DK = (-254.594, 271.394), (-262.161, 258.647), (-257.542, 256.117)  # bay: front corner, back corner, back corner on the side part's side
 SB, SF = (-250.403, 257.684), (-245.494, 265.957)  # side part: back corner, front corner
@@ -51,25 +62,10 @@ PALE_RUST = ([184, 164, 146], [170, 150, 132], [196, 176, 150])  # a sheet that 
 SEAM = [112, 120, 128]
 
 
-def _unit(p, q):
-    n = math.dist(p, q)
-    return ((q[0] - p[0]) / n, (q[1] - p[1]) / n)
-
-
-A, V = _unit(DF, SH1), _unit(DF, DB)
-_DET = A[0] * V[1] - A[1] * V[0]
+FRAME = Frame(DF, SH1, DB)
+A, V, at, av = FRAME.A, FRAME.V, FRAME.at, FRAME.av
 WD = math.dist(DF, SH1)  # the bay's front
 WS = math.dist(SH1, SF)  # the side part's front
-
-
-def at(a: float, v: float) -> tuple[float, float]:
-    return (DF[0] + A[0] * a + V[0] * v, DF[1] + A[1] * a + V[1] * v)
-
-
-def av(p) -> tuple[float, float]:
-    """(a, v) of a map point."""
-    dx, dy = p[0] - DF[0], p[1] - DF[1]
-    return ((dx * V[1] - dy * V[0]) / _DET, (A[0] * dy - A[1] * dx) / _DET)
 
 
 def _roof_z(bid: str, a: float) -> float:
@@ -79,23 +75,8 @@ def _roof_z(bid: str, a: float) -> float:
     return SIDE_HIGH - (SIDE_HIGH - SIDE_LOW) * (a - WD) / WS
 
 
-def _line(pts):
-    """``a`` as a function of ``v`` along a boundary given by map points, held flat beyond its ends."""
-    k = sorted((av(p)[1], av(p)[0]) for p in pts)
-
-    def f(v: float) -> float:
-        if v <= k[0][0]:
-            return k[0][1]
-        for (v0, a0), (v1, a1) in itertools.pairwise(k):
-            if v <= v1:
-                return a0 + (a1 - a0) * (v - v0) / (v1 - v0)
-        return k[-1][1]
-
-    return f
-
-
-_SHARED = _line((SH1, SH0, DK))  # the bay's boundary towards the side part
-_SIDE_OUT = _line((SF, SB))
+_SHARED = boundary(FRAME, (SH1, SH0, DK))  # the bay's boundary towards the side part
+_SIDE_OUT = boundary(FRAME, (SF, SB))
 # each roof: depth, the low-``a`` edge, the high-``a`` edge. The bay's sheet laps 6 cm over the shared wall.
 ROOFS = {
     DEEP: (max(av(DB)[1], av(DK)[1]), lambda v: -EAVE_OH, lambda v: _SHARED(v) + 0.06),
@@ -103,94 +84,33 @@ ROOFS = {
 }
 
 
-def _check(b: dict) -> None:
-    want, got = RINGS[b["id"]], b["footprint"]["exterior"]
-    if len(got) != len(want) or any(math.dist(p, q) > 0.05 for p, q in zip(got, want)):
-        raise ValueError(f"garage: the footprint of {b['id']} changed; the garage is laid out on the old one")
-
-
-def _prism(S: _Solids, corners, z0, z1, side, top=None, bottom=None) -> None:
-    """A prism on a convex polygon (map metres); ``z0`` and ``z1`` give the bottom and the top at each corner."""
-    lo = [(x, y, z) for (x, y), z in zip(corners, z0)]
-    hi = [(x, y, z) for (x, y), z in zip(corners, z1)]
-    faces = [(lo, bottom or side), (hi, top or side)]
-    n = len(corners)
-    faces += [([lo[k], lo[(k + 1) % n], hi[(k + 1) % n], hi[k]], side) for k in range(n)]
-    S.solid(faces)
-
-
-def _edge(S: _Solids, p, q, s0, s1, d0, d1, z0, z1, colour) -> None:
-    """A piece along edge p->q of a counter-clockwise ring: ``s`` along it, ``d`` outward. ``z0`` and ``z1`` are numbers,
-    or (at s0, at s1) pairs for a sloped bottom or top."""
-    ux, uy = _unit(p, q)
-    nx, ny = uy, -ux
-    b0, b1 = z0 if isinstance(z0, tuple) else (z0, z0)
-    t0, t1 = z1 if isinstance(z1, tuple) else (z1, z1)
-    c = [(p[0] + ux * s + nx * d, p[1] + uy * s + ny * d) for s, d in ((s0, d0), (s1, d0), (s1, d1), (s0, d1))]
-    _prism(S, c, (b0, b1, b1, b0), (t0, t1, t1, t0), colour)
-
-
 def _wall(S: _Solids, bid: str, p, q, holes=()) -> None:
-    """The wall on edge p->q from under the floor up into the roof, ``T`` thick inward; ``holes`` are (s0, s1, z0, z1).
-    A doorway is a hole from the base (z0 = 0): the floor slab fills its foot."""
-    length = math.dist(p, q)
-    zp, zq = _roof_z(bid, av(p)[0]) + ROOF_T / 2, _roof_z(bid, av(q)[0]) + ROOF_T / 2
-
-    def top(s):
-        return zp + (zq - zp) * s / length
-
-    s = 0.0
-    for h0, h1, z0, z1 in sorted(holes):
-        if h0 > s:
-            _edge(S, p, q, s, h0, -T, 0.0, -0.3, (top(s), top(h0)), WALL)
-        if z0 > 0:
-            _edge(S, p, q, h0, h1, -T, 0.0, -0.3, z0, WALL)
-        _edge(S, p, q, h0, h1, -T, 0.0, z1, (top(h0), top(h1)), WALL)
-        s = h1
-    if length > s:
-        _edge(S, p, q, s, length, -T, 0.0, -0.3, (top(s), top(length)), WALL)
+    """The wall on edge p->q from under the floor up into the roof, ``T`` thick inward; ``holes`` are (s0, s1, z0, z1)."""
+    _kit_wall(S, p, q, _roof_z(bid, av(p)[0]) + ROOF_T / 2, _roof_z(bid, av(q)[0]) + ROOF_T / 2, T, WALL, holes)
 
 
 def _roof(S: _Solids, bid: str, detail: bool) -> None:
-    """The lean-to roof of one part. Visual: one sheet between every two standing seams, each its own zinc or pale rust,
-    some with a rust streak (the pattern is fixed per building); collision: one slab."""
+    """The lean-to roof of one part (``landmark_kit.sheet_roof``: zinc sheets, runs of pale rusty ones, rust streaks) and
+    the gutter under its low eave."""
     depth, lo, hi = ROOFS[bid]
     v_lo, v_hi = -END_OH, depth + END_OH
 
-    def piece(a0, a1, v0, v1, z0, z1, top, side=None, bottom=None, clip=True):
-        ends = [(max(lo(v), min(hi(v), a)) if clip else a, v) for a, v in ((a0, v0), (a1, v0), (a1, v1), (a0, v1))]
-        zs = [_roof_z(bid, a) for a, _ in ends]
-        _prism(S, [at(a, v) for a, v in ends], [z + z0 for z in zs], [z + z1 for z in zs], side or top, top, bottom)
+    def z(a):
+        return _roof_z(bid, a)
 
+    sheet_roof(
+        S, FRAME, z, lo, hi, v_lo, v_hi, detail, seed=bid, sheets=ZINC, worn=PALE_RUST, streaks=RUST, seam=SEAM,
+        underside=BOARDS, thickness=ROOF_T, panel=PANEL, collision=WALL,
+    )  # fmt: skip
     if not detail:
-        piece(-9.0, 99.0, v_lo, v_hi, 0.0, 0.3, WALL)
         return
-    rng = random.Random(bid)
-    worn = False
-    n = round((v_hi - v_lo) / PANEL)
-    step = (v_hi - v_lo) / n
-    for k in range(n):
-        v0, v1 = v_lo + k * step, v_lo + (k + 1) * step
-        a0, a1 = min(lo(v0), lo(v1)), max(hi(v0), hi(v1))
-        worn = rng.random() < (0.55 if worn else 0.14)  # a sheet gone pale and rusty all over; they come in runs
-        base = [c + rng.randint(-4, 4) for c in rng.choice(PALE_RUST if worn else ZINC)]
-        # every sheet is one piece from eave to top; some carry a streak of open rust down their whole length, beside a seam
-        streak = rng.uniform(0.25, 0.5) * step if rng.random() < (0.45 if worn else 0.12) else 0.0
-        piece(a0, a1, v0 + streak, v1, 0.0, ROOF_T, base, SEAM, BOARDS)
-        if streak:
-            piece(a0, a1, v0, v0 + streak, 0.0, ROOF_T, rng.choice(RUST), SEAM, BOARDS)
-        if k:
-            piece(a0, a1, v0 - 0.02, v0 + 0.02, ROOF_T, ROOF_T + 0.04, SEAM)
-    # the gutter under the low eave
-    g = -EAVE_OH if bid == DEEP else None
-    for v0, v1 in ((v_lo, v_hi),):
-        if g is not None:
-            piece(g - 0.1, g + 0.02, v0, v1, -0.1, 0.0, GUTTER, clip=False)
-        else:
-            ends = [(hi(v) + da, v) for v in (v0, v1) for da in (-0.02, 0.1)]
-            ends = [ends[0], ends[1], ends[3], ends[2]]
-            zs = [_roof_z(bid, a) for a, _ in ends]
-            _prism(S, [at(a, v) for a, v in ends], [z - 0.1 for z in zs], zs, GUTTER)
+    if bid == DEEP:
+        roof_piece(S, FRAME, z, lo, hi, -EAVE_OH - 0.1, -EAVE_OH + 0.02, v_lo, v_hi, -0.1, 0.0, GUTTER, clip=False)
+    else:
+        ends = [(hi(v) + da, v) for v in (v_lo, v_hi) for da in (-0.02, 0.1)]
+        ends = [ends[0], ends[1], ends[3], ends[2]]
+        zs = [z(a) for a, _ in ends]
+        _prism(S, [at(a, v) for a, v in ends], [h - 0.1 for h in zs], zs, GUTTER)
 
 
 def _door_span() -> tuple[float, float]:
@@ -215,17 +135,13 @@ def _bay(S: _Solids, detail: bool) -> None:
         return
     # steel frame round the doorway, on the face of the wall
     top = F + DOOR_H
-    _edge(S, SH1, DF, d0 - 0.09, d0, 0.0, 0.03, 0.0, top + 0.09, DOOR_FRAME)
-    _edge(S, SH1, DF, d1, d1 + 0.09, 0.0, 0.03, 0.0, top + 0.09, DOOR_FRAME)
-    _edge(S, SH1, DF, d0, d1, 0.0, 0.03, top, top + 0.09, DOOR_FRAME)
+    door_frame(S, SH1, DF, d0, d1, top, DOOR_FRAME)
     # the junction box and its conduit, left of the door as in the photo
     _edge(S, SH1, DF, 0.38, 0.72, 0.0, 0.12, 3.75, 3.9, BOX)
     _edge(S, SH1, DF, 0.53, 0.57, 0.0, 0.04, 3.2, 3.75, DOOR_FRAME)
     # weathered foot of the outer walls
     for p, q in ((SH1, DF), (DF, DB), (DB, DK), (DK, SH0)):
-        spans = [(0.0, d0 - 0.09), (d1 + 0.09, math.dist(p, q))] if (p, q) == (SH1, DF) else [(0.0, math.dist(p, q))]
-        for s0, s1 in spans:
-            _edge(S, p, q, s0, s1, 0.0, 0.012, -0.3, 0.32, PLINTH)
+        plinth(S, p, q, PLINTH, gaps=[(d0 - 0.09, d1 + 0.09)] if (p, q) == (SH1, DF) else ())
     # an old oil stain where the engine stands
     pa, pv = WD / 2, T + PARK_CLEAR + 1.6
     _prism(S, [at(pa - 0.7, pv - 1.1), at(pa + 0.7, pv - 1.1), at(pa + 0.7, pv + 1.1), at(pa - 0.7, pv + 1.1)], [F] * 4, [F + 0.004] * 4, STAIN)
@@ -242,20 +158,9 @@ def _side(S: _Solids, detail: bool) -> None:
     # the barred window of the front: frame, glass and a grid, all on the face of the wall
     length = math.dist(SF, SH1)
     s0, s1, z0, z1 = (length - 2.4) / 2, (length + 2.4) / 2, 1.0, 2.25
-    _edge(S, SF, SH1, s0 - 0.07, s1 + 0.07, 0.0, 0.035, z0 - 0.07, z1 + 0.07, WINDOW_FRAME)
-    _edge(S, SF, SH1, s0, s1, 0.0, 0.045, z0, z1, GLASS)
-    _edge(S, SF, SH1, s0 - 0.1, s1 + 0.1, 0.0, 0.08, z0 - 0.12, z0 - 0.07, WINDOW_FRAME)  # sill
-    for k in (1, 2):  # the three casements
-        s = s0 + (s1 - s0) * k / 3
-        _edge(S, SF, SH1, s - 0.03, s + 0.03, 0.0, 0.055, z0, z1, WINDOW_FRAME)
-    for k in range(1, 12):
-        s = s0 + (s1 - s0) * k / 12
-        _edge(S, SF, SH1, s - 0.008, s + 0.008, 0.045, 0.07, z0, z1, BARS)
-    for k in range(1, 5):
-        z = z0 + (z1 - z0) * k / 5
-        _edge(S, SF, SH1, s0, s1, 0.045, 0.065, z - 0.008, z + 0.008, BARS)
+    window(S, SF, SH1, s0, s1, z0, z1, WINDOW_FRAME, GLASS, casements=3, bars=BARS, bars_n=(11, 4))
     for p, q in ((SH0, SB), (SB, SF), (SF, SH1)):
-        _edge(S, p, q, 0.0, math.dist(p, q), 0.0, 0.012, -0.3, 0.32, PLINTH)
+        plinth(S, p, q, PLINTH)
     # the downpipe at the low corner of the front, and a stove pipe through the roof
     _edge(S, SF, SH1, 0.08, 0.16, 0.0, 0.08, 0.0, SIDE_LOW, GUTTER)
     ca, cv = WD + WS * 0.45, 6.2
@@ -267,11 +172,11 @@ def _side(S: _Solids, detail: bool) -> None:
 def garage_mesh(b: dict, detail: bool = True) -> Mesh:
     """The visual mesh of one of the two parts, or its collision (``detail`` False: the same walls and floor, the roof as
     one slab, no trim), standing on the building base."""
-    _check(b)
+    check_footprint("garage", b, RINGS)
     S = _Solids()
     (_bay if b["id"] == DEEP else _side)(S, detail)
     _roof(S, b["id"], detail)
-    return Mesh(np.array(S.tris, float).reshape(-1, 3, 3), np.array(S.cols, np.uint8).reshape(-1, 3))
+    return to_mesh(S)
 
 
 def _bearing(e: float, n: float) -> float:
