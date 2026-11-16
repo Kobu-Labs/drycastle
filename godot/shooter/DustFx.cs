@@ -9,7 +9,7 @@ namespace Drycastle.Shooter;
 /// holding the Dust cloud, the column that climbs out of it and, for a large blast, the Blast wave. No particles, so there is nothing to make out but
 /// the dust. <see cref="RocketFx.Explode"/> calls <see cref="Blast"/> for every blast, so every kind of explosion gets it. The live blasts are kept in
 /// <see cref="Field"/>, which the screen veil and the name tags read. A blast a young cloud already covers draws nothing new; a blast with no ground
-/// close under it raises none. Skipped on headless runs. The wave runs level from the ground under the blast: on a slope it leaves the ground or enters it.
+/// close under it raises none. Skipped on headless runs. The wave follows the ground around the blast (sampled once when it goes off) and stays low over it.
 /// </summary>
 public static class DustFx
 {

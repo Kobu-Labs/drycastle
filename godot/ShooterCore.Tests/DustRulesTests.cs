@@ -63,9 +63,9 @@ public class DustRulesTests
         Assert.Equal(reach, DustRules.FrontRadius(9f, t), 3);
         Assert.Equal(reach, DustRules.FrontRadius(9f, t + 5), 3);
         // it starts at the tuned speed and is slower later
-        Assert.Equal(DustRules.FrontSpeedMps, DustRules.FrontRadius(9f, 0.01) / 0.01f, 0);
-        var early = DustRules.FrontRadius(9f, 0.2) - DustRules.FrontRadius(9f, 0.1);
-        var lateStep = DustRules.FrontRadius(9f, t - 0.1) - DustRules.FrontRadius(9f, t - 0.2);
+        Assert.Equal(DustRules.FrontSpeedMps, DustRules.FrontRadius(9f, 0.001) / 0.001f, 0);
+        var early = DustRules.FrontRadius(9f, t * 0.2) - DustRules.FrontRadius(9f, t * 0.1);
+        var lateStep = DustRules.FrontRadius(9f, t * 0.9) - DustRules.FrontRadius(9f, t * 0.8);
         Assert.True(early > lateStep * 3);
         // the particles' damping stops them at the same place: v0^2 / 2a = reach
         Assert.Equal(reach, DustRules.FrontSpeedMps * DustRules.FrontSpeedMps / (2 * DustRules.FrontDeceleration(9f)), 3);

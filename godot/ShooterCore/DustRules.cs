@@ -23,17 +23,19 @@ public static class DustRules
 
     /// <summary>Blasts of at least this radius send a Blast wave (a vehicle's is 9 m, a shot-down aircraft's 12 m; a rocket's 6 m and the gunship's 8 m do not).</summary>
     public const float FrontMinRadius = 9f;
-    /// <summary>The wave's speed as it leaves the blast, metres a second, for a blast that names none. It slows evenly to a stop at its reach. Far below the speed of sound, so the wave can be watched coming.</summary>
-    public const float FrontSpeedMps = 91f;
+    /// <summary>The wave's speed as it leaves the blast, metres a second, for a blast that names none. It slows evenly to a stop at its reach. Just under the speed of sound.</summary>
+    public const float FrontSpeedMps = 300f;
     /// <summary>How far the wave runs, in blast radii.</summary>
     public const float FrontReachPerRadius = 6f;
-    /// <summary>The wave's height, in blast radii (never below <see cref="FrontMinHeightM"/>): a camera above it is not veiled.</summary>
-    public const float FrontHeightPerRadius = 0.6f;
-    public const float FrontMinHeightM = 3f;
+    /// <summary>
+    /// The wave's height over the ground, metres: the same for every blast (a larger blast sends its wave further, it does not make it taller). It hugs the
+    /// ground and covers a standing player's eyes; a camera above it is not veiled.
+    /// </summary>
+    public const float FrontHeightM = 3f;
     /// <summary>The wave's veil is at its strongest this long after it arrives.</summary>
     public const float FrontRiseSeconds = 0.12f;
-    /// <summary>How long the wave's dust hangs where it passed (the time for the veil to fall to 37 %): this plus a part for each metre of radius.</summary>
-    public const float FrontHangSeconds = 0.8f, FrontHangPerRadius = 0.05f;
+    /// <summary>How long the wave's dust hangs where it passed (the time for the veil to fall to 37 %): the same for every blast.</summary>
+    public const float FrontHangSeconds = 1.3f;
     /// <summary>Past the wave's reach the sound runs on at this speed (the real speed of sound).</summary>
     public const float SoundSpeedMps = 340f;
 
@@ -66,7 +68,7 @@ public static class DustRules
     /// <summary>The wave's even slowing, metres a second squared: what the particles are damped by, so the drawn wall is where <see cref="FrontRadius"/> says.</summary>
     public static float FrontDeceleration(float radius, float speed = FrontSpeedMps) => speed * speed / (2f * FrontReach(radius));
 
-    public static float FrontHeight(float radius) => MathF.Max(FrontMinHeightM, radius * FrontHeightPerRadius);
+    public static float FrontHeight(float radius) => FrontHeightM;
 
     /// <summary>How far from the blast the wave is, <paramref name="age"/> seconds after it.</summary>
     public static float FrontRadius(float radius, double age, float speed = FrontSpeedMps)
@@ -93,7 +95,7 @@ public static class DustRules
         return !HasFront(radius) || distance >= reach ? 0f : MathF.Sqrt(1f - MathF.Max(0f, distance) / reach);
     }
 
-    public static float FrontHang(float radius) => FrontHangSeconds + FrontHangPerRadius * radius;
+    public static float FrontHang(float radius) => FrontHangSeconds;
 
     /// <summary>
     /// Seconds after the blast at which it is heard and felt <paramref name="distance"/> metres away: with the wave where the wave
@@ -149,13 +151,16 @@ public static class DustRules
         return opacity * (1f - Smooth((q - 0.55f) / 0.45f));
     }
 
-    /// <summary>The Blast wave's dust at <paramref name="p"/>, 0..1: nothing until the wave arrives, then at once as thick as the wave is there, thinning over <see cref="FrontHang"/>.</summary>
-    public static float FrontDensity(in DustBlast b, Vector3 p, double now)
+    /// <summary>
+    /// The Blast wave's dust at <paramref name="p"/>, 0..1: nothing until the wave arrives, then at once as thick as the wave is there, thinning over <see cref="FrontHang"/>.
+    /// The wave follows the ground: <paramref name="aboveGround"/> is how high <paramref name="p"/> is over the ground under it (without it, over the blast's own height).
+    /// </summary>
+    public static float FrontDensity(in DustBlast b, Vector3 p, double now, float? aboveGround = null)
     {
         if (FrontArrival(b.Radius, Flat(p, b.At), b.Speed) is not { } arrival) return 0f;
         var since = (float)(now - b.Born) - arrival;
         if (since < 0f) return 0f;
-        var dy = MathF.Abs(p.Y - b.At.Y) / FrontHeight(b.Radius);
+        var dy = MathF.Abs(aboveGround ?? p.Y - b.At.Y) / FrontHeight(b.Radius);
         var level = 1f - Smooth((dy - 0.6f) / 0.4f);
         if (level <= 0f) return 0f;
         var rise = MathF.Min(1f, since / FrontRiseSeconds);
@@ -163,7 +168,7 @@ public static class DustRules
     }
 
     /// <summary>All of one blast's dust at a point: the thicker of its cloud and its wave.</summary>
-    public static float Density(in DustBlast b, Vector3 p, double now) => MathF.Max(CloudDensity(b, p, now), FrontDensity(b, p, now));
+    public static float Density(in DustBlast b, Vector3 p, double now, float? aboveGround = null) => MathF.Max(CloudDensity(b, p, now), FrontDensity(b, p, now, aboveGround));
 
     /// <summary>
     /// Whether <paramref name="b"/>, going off now, is covered by the dust <paramref name="a"/> already made: close to its centre, not larger, and
@@ -212,14 +217,15 @@ public sealed class DustField
 
     /// <summary>
     /// How much of the view a camera at <paramref name="eye"/> loses to dust, 0 to <see cref="DustRules.MaxVeil"/>. <paramref name="reach"/> says how much
-    /// of a blast's dust gets to the eye (1 in the open, less behind a wall); it is asked only for a blast that has dust there.
+    /// of a blast's dust gets to the eye (1 in the open, less behind a wall); it is asked only for a blast that has dust there. <paramref name="aboveGround"/>
+    /// is the eye's height over the ground under it, for the waves (they follow the ground).
     /// </summary>
-    public float Veil(Vector3 eye, double now, Func<DustBlast, float>? reach = null)
+    public float Veil(Vector3 eye, double now, Func<DustBlast, float>? reach = null, float? aboveGround = null)
     {
         var clear = 1f;
         foreach (var b in _blasts)
         {
-            var d = DustRules.Density(b, eye, now);
+            var d = DustRules.Density(b, eye, now, aboveGround);
             if (d <= 0.005f) continue;
             if (reach != null) d *= Math.Clamp(reach(b), 0f, 1f);
             clear *= 1f - d;

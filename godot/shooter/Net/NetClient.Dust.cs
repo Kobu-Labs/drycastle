@@ -53,7 +53,12 @@ public partial class NetClient
         field.Prune(Now);
         _dustEye = cam.GlobalPosition;
         _dustReach ??= DustReach;
-        _hud.SetDust(field.Veil(new NVec3(_dustEye.X, _dustEye.Y, _dustEye.Z), Now, _dustReach), night);
+        // the waves follow the ground: the camera's height over the ground under it (one ray), not over the blast
+        _dustRay ??= new PhysicsRayQueryParameters3D { CollisionMask = CollisionLayers.World };
+        _dustRay.From = _dustEye; _dustRay.To = _dustEye + Vector3.Down * 60f;
+        var under = World.GetWorld3D().DirectSpaceState.IntersectRay(_dustRay);
+        float? above = under.Count == 0 ? null : _dustEye.Y - under["position"].AsVector3().Y;
+        _hud.SetDust(field.Veil(new NVec3(_dustEye.X, _dustEye.Y, _dustEye.Z), Now, _dustReach, above), night);
     }
 
     /// <summary>How much of a blast's dust gets to the camera: all of it in the open, <see cref="DustBehindWall"/> with the world (ground, a building) between them. One ray, only for a blast with dust at the camera.</summary>
