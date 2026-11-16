@@ -208,15 +208,12 @@ public static class BurnCredit
 /// <summary>Wire payloads of the harvester events (little-endian).</summary>
 public static class HarvesterCodec
 {
-    public const int StateBytes = 14;
-
-    /// <summary><see cref="StateMsg.FadeS"/> while the job runs: the dropped bales do not fade yet.</summary>
-    public const ushort NoFade = ushort.MaxValue;
+    public const int StateBytes = 12;
 
     /// <summary>The harvester's job as everyone needs it to draw the field: where it is in its job, which field (index in the map's field list) and the progress of the cut, and the plan's numbers.</summary>
-    public readonly record struct StateMsg(HarvesterPhase Phase, ushort Car, ushort Field, byte Pass, float Along, bool Cutting, bool Driven, float HeaderM, float MarginM, float OverlapM, ushort FadeS = NoFade);
+    public readonly record struct StateMsg(HarvesterPhase Phase, ushort Car, ushort Field, byte Pass, float Along, bool Cutting, bool Driven, float HeaderM, float MarginM, float OverlapM);
 
-    /// <summary>Server to everyone, <see cref="EventKind.HarvesterState"/>: u8 phase, u16 vehicle id, u16 field index, u8 pass (255: none yet), u16 metres done on the pass in decimetres, u8 flags (1 cutting, 2 driven by the AI), u8 header, u8 margin and u8 overlap in decimetres, u16 seconds until the bales it dropped fade (65535: the job still runs; after it ended, the time left).</summary>
+    /// <summary>Server to everyone, <see cref="EventKind.HarvesterState"/>: u8 phase, u16 vehicle id, u16 field index, u8 pass (255: none yet), u16 metres done on the pass in decimetres, u8 flags (1 cutting, 2 driven by the AI), u8 header, u8 margin and u8 overlap in decimetres.</summary>
     public static byte[] EncodeState(StateMsg m)
     {
         var b = new byte[StateBytes];
@@ -227,7 +224,6 @@ public static class HarvesterCodec
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(6), (ushort)Math.Clamp((int)MathF.Round(m.Along * 10f), 0, ushort.MaxValue));
         b[8] = (byte)((m.Cutting ? 1 : 0) | (m.Driven ? 2 : 0));
         b[9] = Dm(m.HeaderM); b[10] = Dm(m.MarginM); b[11] = Dm(m.OverlapM);
-        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(12), m.FadeS);
         return b;
     }
 
@@ -237,8 +233,7 @@ public static class HarvesterCodec
     {
         if (d.Length != StateBytes || !Enum.IsDefined((HarvesterPhase)d[0])) return null;
         return new StateMsg((HarvesterPhase)d[0], System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[1..]), System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[3..]), d[5],
-            System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[6..]) / 10f, (d[8] & 1) != 0, (d[8] & 2) != 0, d[9] / 10f, d[10] / 10f, d[11] / 10f,
-            System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[12..]));
+            System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[6..]) / 10f, (d[8] & 1) != 0, (d[8] & 2) != 0, d[9] / 10f, d[10] / 10f, d[11] / 10f);
     }
 
     public const int FxBytes = 15;

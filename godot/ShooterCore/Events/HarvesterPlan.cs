@@ -24,7 +24,7 @@ public sealed class HarvesterConfig
     public float EdgeMarginM { get; set; } = 3.5f;
     public float MinPassM { get; set; } = 8;
     /// <summary>How far the header is in front of the vehicle's origin (the reel's middle), and the headland a turn uses past the pass end.</summary>
-    public float HeaderForwardM { get; set; } = 4.0f;
+    public float HeaderForwardM { get; set; } = 3.66f;
     public float HeadlandM { get; set; } = 9;
     /// <summary>The machine's tightest turn (vehicles.json harvester <c>turn_radius</c>): the turn between two passes is a half circle of half their distance when that is not tighter, else a run out and back.</summary>
     public float TurnRadiusM { get; set; } = 2.3f;
@@ -36,8 +36,6 @@ public sealed class HarvesterConfig
     public float ArriveM { get; set; } = 3.0f;
     public float LegTimeoutS { get; set; } = 90;
 
-    /// <summary>The reel pulls in a player on foot within this of its front and this wide (half), when the machine moves.</summary>
-    public float ReelReachM { get; set; } = 1.8f;
     public float ReelDamage { get; set; } = 500;
 
     /// <summary>A corpse drawn in at the front, and the time it spends in the machine before the bale leaves the unloader.</summary>
@@ -50,14 +48,28 @@ public sealed class HarvesterConfig
     /// <summary>A shot ignites a bale it passes within this of its centre.</summary>
     public float BaleHitRadiusM { get; set; } = 0.9f;
     public float BaleLifetimeS { get; set; } = CorpseRules.LifetimeSeconds;
-    /// <summary>Bales the machine drops while it cuts grain or rapeseed (<see cref="DroppedBales"/>): one per this many metres of finished swath, at most <see cref="MaxDroppedBales"/> a field.</summary>
+    /// <summary>
+    /// The real path cuts (<see cref="FieldSwath"/>): the header's position is sampled every <see cref="SwathSampleM"/> of travel; a stretch is kept when at least <see cref="SwathNewShare"/> of its swath is ground
+    /// not cut before. A field keeps at most <see cref="MaxSwathPoints"/> points of history (all fields <see cref="MaxSwathPointsTotal"/>), so a late joiner's replay is bounded.
+    /// </summary>
+    public float SwathSampleM { get; set; } = 2;
+    public float SwathNewShare { get; set; } = 0.3f;
+    public int MaxSwathPoints { get; set; } = 6000;
+    public int MaxSwathPointsTotal { get; set; } = 40000;
+    /// <summary>The machine cuts (and drops bales) only while it moves forward faster than this.</summary>
+    public float CutMinSpeedMps { get; set; } = 0.4f;
+    /// <summary>One round bale per this many metres of cut on a grain or rapeseed field, at most <see cref="MaxDroppedBales"/> per field.</summary>
     public float DroppedBaleEveryM { get; set; } = 60;
     public int MaxDroppedBales { get; set; } = 24;
-    /// <summary>The unloader's spot relative to the header: this far behind it along the pass (the header's reach 4.0 + the machine's half length 4.3 + 1.6) and this far to the left (the corpse bale's spot).</summary>
-    public float DroppedBaleBehindM { get; set; } = 9.9f;
+    /// <summary>The unloader's spot relative to the reel: this far behind it (the reel's 3.66 + the machine's half length 4.3 + 1.6) and this far to the left (the corpse bale's spot).</summary>
+    public float DroppedBaleBehindM { get; set; } = 9.5f;
     public float DroppedBaleLeftM { get; set; } = 1.6f;
-    /// <summary>After the job ends the dropped bales stay this long (10 minutes) and then fade out, for the server and every client; a round reset or the next job removes them sooner.</summary>
+    /// <summary>A field's dropped bales fade out this long (10 minutes) after the last cut there, for the server and every client; a round reset removes them sooner.</summary>
     public float DroppedBaleFadeS { get; set; } = 10 * 60;
+    /// <summary>
+    /// The reel: the only part of the machine that cuts and catches (SM_Veh_Harvester_Reel: 4.85 m wide, 3.66 m ahead of the origin, a 0.68 m radius, plus a hand of margin). Machine space.
+    /// </summary>
+    public ReelBox Reel { get; set; } = new(3.66f, 2.5f, 0.9f, -0.3f, 2.2f);
     public BurnDef BaleBurn { get; set; } = new() { Dps = 3f, DurationS = 4f, TickIntervalS = 1f };
 }
 

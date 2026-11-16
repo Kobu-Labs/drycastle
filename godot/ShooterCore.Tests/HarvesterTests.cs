@@ -369,75 +369,129 @@ public class HarvesterTests
         Assert.Equal(CorpseRules.LifetimeSeconds, Cfg.BaleLifetimeS); // despawns like a corpse
     }
 
-    // ---- dropped bales ----
+    // ---- the reel and the real path ----
 
     [Fact]
-    public void Only_grain_and_rapeseed_fields_drop_bales()
+    public void Only_the_reel_box_catches_and_it_turns_with_the_machine()
     {
-        var ring = Rect(0, 0, 100, 60);
-        Assert.True(new CropField("a", "crop_grain", ring).DropsBales);
-        Assert.True(new CropField("b", "crop_rapeseed", ring).DropsBales);
-        Assert.False(new CropField("c", "crop_corn", ring).DropsBales);
-        Assert.False(new CropField("d", "crop_potato", ring).DropsBales);
-        Assert.False(new CropField("e", "crop_bare", ring).DropsBales);
+        var reel = Cfg.Reel;
+        var o = new Vector3(100, 5, 50);
+        // yaw 0 faces -Z: the reel is 3.66 m ahead (z smaller)
+        Assert.True(reel.Contains(o, 0, new Vector3(100, 5.5f, 50 - reel.CentreForwardM)));
+        Assert.True(reel.Contains(o, 0, new Vector3(100 + 2.4f, 5.5f, 50 - reel.CentreForwardM + 0.5f)));
+        Assert.False(reel.Contains(o, 0, new Vector3(100 + 3f, 5.5f, 50 - reel.CentreForwardM))); // beside the header
+        Assert.False(reel.Contains(o, 0, new Vector3(100, 5.5f, 50 - 1))); // the body
+        Assert.False(reel.Contains(o, 0, new Vector3(100, 5.5f, 50 + 2))); // behind
+        Assert.False(reel.Contains(o, 0, new Vector3(100, 5 + 4, 50 - reel.CentreForwardM))); // overhead
+        // turned a quarter to the left (yaw +90 deg faces -X): the same box lies west
+        var yaw = MathF.PI / 2;
+        Assert.True(reel.Contains(o, yaw, new Vector3(100 - reel.CentreForwardM, 5.5f, 50 + 2f)));
+        Assert.False(reel.Contains(o, yaw, new Vector3(100, 5.5f, 50 - reel.CentreForwardM)));
+        var c = reel.Centre(new Vector2(100, 50), yaw);
+        Assert.Equal(100 - reel.CentreForwardM, c.X, 3); Assert.Equal(50f, c.Y, 3);
     }
 
     [Fact]
-    public void A_bale_drops_every_sixty_metres_of_finished_swath_up_to_the_cap()
+    public void The_sampler_gives_a_segment_every_two_metres_only_while_it_cuts()
     {
-        var passes = new[] { new HarvestPass(new Vector2(0, 0), new Vector2(100, 0)), new HarvestPass(new Vector2(100, 4.5f), new Vector2(0, 4.5f)) };
-        Assert.Equal(0, DroppedBales.Count(passes, HarvestProgress.None, Cfg));
-        Assert.Equal(0, DroppedBales.Count(passes, new HarvestProgress(0, 59), Cfg));
-        Assert.Equal(1, DroppedBales.Count(passes, new HarvestProgress(0, 60), Cfg));
-        Assert.Equal(1, DroppedBales.Count(passes, new HarvestProgress(1, 19), Cfg)); // 119 m done
-        Assert.Equal(2, DroppedBales.Count(passes, new HarvestProgress(1, 20), Cfg));
-        Assert.Equal(3, DroppedBales.Count(passes, new HarvestProgress(1, 100), Cfg)); // 200 m
-        var long1 = new[] { new HarvestPass(new Vector2(0, 0), new Vector2(5000, 0)) };
-        Assert.Equal(Cfg.MaxDroppedBales, DroppedBales.Count(long1, new HarvestProgress(0, 5000), Cfg)); // capped
-        Assert.Equal(Cfg.MaxDroppedBales, DroppedBales.Derive(long1, new HarvestProgress(0, 5000), Cfg).Count);
+        var s = new SwathSampler(Cfg);
+        Assert.False(s.Step(0, new Vector2(0, 0), true, out _, out _)); // the first point only starts the path
+        Assert.False(s.Step(0, new Vector2(1, 0), true, out _, out _));
+        Assert.True(s.Step(0, new Vector2(2.1f, 0), true, out var a, out var b));
+        Assert.Equal(new SwathPt(0, 0), a); Assert.Equal(SwathPt.From(new Vector2(2.1f, 0)), b);
+        Assert.False(s.Step(0, new Vector2(3, 0), true, out _, out _));
+        Assert.False(s.Step(0, new Vector2(10, 0), false, out _, out _)); // lifted (stopped or backing): the path is over
+        Assert.False(s.Step(0, new Vector2(12, 0), true, out _, out _)); // and starts afresh
+        Assert.True(s.Step(0, new Vector2(14.5f, 0), true, out a, out _));
+        Assert.Equal(SwathPt.From(new Vector2(12, 0)), a);
+        Assert.False(s.Step(1, new Vector2(16.5f, 0), true, out _, out _)); // another field: afresh
+        Assert.False(s.Step(-1, new Vector2(18.5f, 0), true, out _, out _)); // off the crop
+        Assert.False(s.Step(1, new Vector2(500, 0), true, out _, out _)); // a jump is no drive
+    }
+
+    static (SwathPt, SwathPt) Seg(float x0, float z0, float x1, float z1) => (SwathPt.From(new Vector2(x0, z0)), SwathPt.From(new Vector2(x1, z1)));
+
+    [Fact]
+    public void Ground_cut_before_is_not_cut_again_and_does_not_count()
+    {
+        var f = new FieldSwath(Cfg, dropsBales: true);
+        var total = 0;
+        for (var x = 0f; x < 40; x += 2) { var (a, b) = Seg(x, 0, x + 2, 0); Assert.True(f.TryAdd(a, b, total)); total += 2; }
+        var metres = f.Metres;
+        Assert.Equal(40f, metres, 1);
+        for (var x = 0f; x < 40; x += 2) { var (a, b) = Seg(x, 0.5f, x + 2, 0.5f); Assert.False(f.TryAdd(a, b, total)); } // the same lane again
+        for (var x = 40f; x > 0; x -= 2) { var (a, b) = Seg(x, -0.5f, x - 2, -0.5f); Assert.False(f.TryAdd(a, b, total)); } // and back
+        Assert.Equal(metres, f.Metres);
+        var (c, d) = Seg(0, 4.5f, 2, 4.5f); // the next lane over: new ground
+        Assert.True(f.TryAdd(c, d, total));
+        Assert.Equal(2, f.Strokes.Count); // a stretch not joined to the last one starts a new stroke
     }
 
     [Fact]
-    public void Dropped_bales_lie_behind_the_header_on_the_left_and_are_the_same_for_any_progress()
+    public void A_bale_drops_every_sixty_metres_of_new_cut_where_the_unloader_was_up_to_the_cap()
     {
-        var passes = new[] { new HarvestPass(new Vector2(0, 0), new Vector2(200, 0)), new HarvestPass(new Vector2(200, 4.5f), new Vector2(0, 4.5f)) };
-        var early = DroppedBales.Derive(passes, new HarvestProgress(0, 130), Cfg); // 2 bales
-        var late = DroppedBales.Derive(passes, new HarvestProgress(1, 150), Cfg); // 350 m: 5 bales
-        Assert.Equal(2, early.Count); Assert.Equal(5, late.Count);
-        Assert.Equal(early, late.Take(2).ToList()); // bale i never depends on how far the job has got
-        // pass 0 runs east (+x): the header at x=60, the unloader 9.9 m behind (west) and 1.6 m to the left (north, -z)
-        Assert.Equal(60f - Cfg.DroppedBaleBehindM, early[0].Pos.X, 3);
-        Assert.Equal(-Cfg.DroppedBaleLeftM, early[0].Pos.Y, 3);
-        // pass 1 runs west (-x): behind is east, left is south (+z)
-        var third = late[3]; // 240 m: 40 m into pass 1, header at x=160
-        Assert.Equal(160f + Cfg.DroppedBaleBehindM, third.Pos.X, 3);
-        Assert.Equal(4.5f + Cfg.DroppedBaleLeftM, third.Pos.Y, 3);
-        Assert.Null(DroppedBales.At(passes, 20, Cfg)); // past the end of the passes
+        var f = new FieldSwath(Cfg, dropsBales: true);
+        var total = 0;
+        for (var i = 0; i < 29; i++) { var (a, b) = Seg(2 * i, 0, 2 * i + 2, 0); f.TryAdd(a, b, total); total += 2; } // 58 m
+        Assert.Empty(f.Bales);
+        { var (a, b) = Seg(58, 0, 60, 0); f.TryAdd(a, b, total); }
+        Assert.Single(f.Bales); // 60 m, the header at x=60 heading east
+        Assert.Equal(60f - Cfg.DroppedBaleBehindM, f.Bales[0].Pos.X, 1);
+        Assert.Equal(-Cfg.DroppedBaleLeftM, f.Bales[0].Pos.Y, 1); // left of east is north (-z)
+        // a long drive: capped
+        var g = new FieldSwath(new HarvesterConfig { MaxSwathPoints = 100000, MaxSwathPointsTotal = 1000000 }, true);
+        for (var i = 0; i < 2000; i++) { var (a, b) = Seg(2 * i, 0, 2 * i + 2, 0); g.TryAdd(a, b, 0); }
+        Assert.Equal(24, g.Bales.Count);
+        Assert.Empty(new FieldSwath(Cfg, dropsBales: false).Bales); // corn and potatoes drop none
     }
 
     [Fact]
-    public void The_dropped_bales_of_a_planned_field_are_what_the_progress_message_alone_gives()
+    public void A_client_replaying_the_kept_strokes_derives_the_same_bales_even_after_a_fade()
     {
-        var plan = FieldPlanner.Plan(Rect(0, 0, 200, 100), Cfg)!;
-        Assert.True(plan.TotalCutM > 1500);
-        var done = new HarvestProgress(plan.Passes.Count - 1, plan.Passes[^1].Length);
-        var all = DroppedBales.Derive(plan.Passes, done, Cfg);
-        Assert.Equal(Math.Min(Cfg.MaxDroppedBales, (int)(plan.TotalCutM / Cfg.DroppedBaleEveryM)), all.Count);
-        Assert.All(all, b => Assert.InRange(b.Pos.X, -15, 215)); // beside the swath, roughly in the field
-        // a late joiner replays the same list from the same plan and progress
-        Assert.Equal(all, DroppedBales.Derive(FieldPlanner.Plan(Rect(0, 0, 200, 100), Cfg)!.Passes, done, Cfg));
+        var server = new FieldSwath(Cfg, true);
+        var rng = new Random(5);
+        float x = 0, z = 0, yaw = 0; var total = 0;
+        for (var i = 0; i < 400; i++)
+        {
+            yaw += (float)(rng.NextDouble() - 0.5) * 0.5f;
+            var nx = x + MathF.Cos(yaw) * 2.1f; var nz = z + MathF.Sin(yaw) * 2.1f;
+            if (server.TryAdd(SwathPt.From(new Vector2(x, z)), SwathPt.From(new Vector2(nx, nz)), total)) total += 2;
+            x = nx; z = nz;
+        }
+        Assert.NotEmpty(server.Bales);
+        // the server sends each kept stroke packed; the client decodes and adds the segments
+        var client = new FieldSwath(Cfg, true);
+        foreach (var stroke in server.Strokes)
+            foreach (var bytes in SwathCodec.Pack(3, 4.8f, 0, false, stroke))
+            {
+                var m = SwathCodec.Decode(bytes)!.Value;
+                for (var i = 1; i < m.Points.Count; i++) client.Add(m.Points[i - 1], m.Points[i]);
+            }
+        Assert.Equal(server.Bales.Count, client.Bales.Count);
+        for (var i = 0; i < server.Bales.Count; i++) Assert.Equal(server.Bales[i], client.Bales[i]);
+        Assert.Equal(server.Metres, client.Metres, 2);
+        server.FadeBales();
+        Assert.Empty(server.Bales); Assert.Equal(0f, server.Metres);
+        Assert.Equal(server.Strokes.Count, server.FirstCounted); // a late joiner is told the earlier strokes bring no bales
     }
 
     [Fact]
-    public void A_dropped_bale_burns_like_any_other_bale()
+    public void The_history_is_bounded_and_packs_into_small_messages()
     {
-        var passes = new[] { new HarvestPass(new Vector2(0, 0), new Vector2(200, 0)) };
-        var at = DroppedBales.At(passes, 0, Cfg)!.Value.Pos;
-        var bale = new HayBale(new Vector3(at.X, 0, at.Y), Cfg, 0);
-        Assert.True(bale.HitBy(new Vector3(at.X - 10, 1.2f, at.Y), Vector3.UnitX, 20));
-        Assert.True(bale.Ignite());
-        for (var i = 0; i < 400; i++) bale.Tick(Dt);
-        Assert.Equal(BaleState.Ash, bale.State);
+        var cfg = new HarvesterConfig { MaxSwathPoints = 50 };
+        var f = new FieldSwath(cfg, false);
+        var kept = 0;
+        for (var i = 0; i < 100; i++) if (f.TryAdd(SwathPt.From(new Vector2(2 * i, 0)), SwathPt.From(new Vector2(2 * i + 2, 0)), 0)) kept++;
+        Assert.True(f.PointCount <= 50 && kept < 100);
+        Assert.False(new FieldSwath(Cfg, false).TryAdd(new SwathPt(0, 0), new SwathPt(8, 0), Cfg.MaxSwathPointsTotal)); // all fields together are bounded too
+        // a long stroke goes out in messages of at most 100 points; a jump inside it breaks it
+        var stroke = Enumerable.Range(0, 250).Select(i => new SwathPt(i * 8, 0)).Append(new SwathPt(100000, 0)).Append(new SwathPt(100008, 0)).ToList();
+        var msgs = SwathCodec.Pack(2, 4.8f, 7, false, stroke);
+        Assert.All(msgs, m => Assert.True(m.Length <= SwathCodec.HeaderBytes + 2 * (SwathCodec.MaxPoints - 1)));
+        var decoded = msgs.Select(m => SwathCodec.Decode(m)!.Value).ToList();
+        Assert.Equal(250, decoded.Sum(m => m.Points.Count - 1)); // every segment but the jump, once
+        Assert.Equal((ushort)7, decoded[0].AgeS); Assert.Equal(4.8f, decoded[0].WidthM, 1);
+        Assert.Null(SwathCodec.Decode(new byte[5]));
     }
 
     // ---- the wire ----
@@ -451,8 +505,6 @@ public class HarvesterTests
         Assert.Equal(63.4f, back.Along, 1);
         Assert.True(back.Cutting && back.Driven);
         Assert.Equal(4.8f, back.HeaderM, 1); Assert.Equal(3.5f, back.MarginM, 1); Assert.Equal(0.3f, back.OverlapM, 1);
-        Assert.Equal(HarvesterCodec.NoFade, back.FadeS); // a running job: no fade
-        Assert.Equal((ushort)417, HarvesterCodec.DecodeState(HarvesterCodec.EncodeState(s with { FadeS = 417 }))!.Value.FadeS);
         Assert.Null(HarvesterCodec.DecodeState(new byte[3]));
         var fx = new HarvesterCodec.FxMsg(HarvesterCodec.FxKind.BaleLit, new Vector3(12.5f, 3f, -40.25f), HarvesterCodec.StaticBaleId(300));
         var fb = HarvesterCodec.DecodeFx(HarvesterCodec.EncodeFx(fx))!.Value;
