@@ -228,6 +228,18 @@ public partial class NetClient : Node
         _conn.Flush();
     }
 
+    /// <summary>
+    /// The player's own Respawn (#284): the server kills them as a suicide and the normal respawn applies the loadout. <paramref name="slot"/> is selected
+    /// first (null keeps the active one); unsent loadout edits go out ahead of it, so "apply now" uses what is on screen.
+    /// </summary>
+    public void Redeploy(int? slot)
+    {
+        if (_peer == null || !_welcomed || Dead) return;
+        FlushAutosave();
+        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Redeploy, ShooterCore.Redeploy.Encode(slot))), (int)ENetPacketPeer.FlagReliable);
+        _conn.Flush();
+    }
+
     public override void _Process(double delta)
     {
         TelemetryFrame(delta);

@@ -50,6 +50,8 @@ public enum EventKind : byte
     RaiseBinoculars = 26,
     /// <summary>Server to everyone but that player, and to a joiner for each player who has them up: a player's binoculars are up or down (<see cref="Binoculars.EncodeRaised"/>: u16 player id, u8); the client poses the character.</summary>
     BinocularsRaised = 27,
+    /// <summary>Client to server: the player's own Respawn, with an optional loadout slot to select first (<see cref="Redeploy.Encode"/>: u8, 255 for none); the server kills them as a suicide (<see cref="MatchSim.ForceDeath"/>).</summary>
+    Redeploy = 28,
     /// <summary>Client to server: take a corpse's weapon into a hotbar position (<see cref="CorpseCodec"/>).</summary>
     PickUpCorpse = 20,
     /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
@@ -275,8 +277,9 @@ public static class Wire
     //   v52 bullet drop of the sniper rifles: the zero dial (event 24, client to server); the hit diagram of a hunted animal (event 25)
     //   v54 the Raid van's owner field: door in 63rds (bits 0-5), song bits 6-10, crew sitting inside bits 11-14, left door bit 15 (was door in thousandths, song bits 10-14)
     //   v53 the binoculars seen by the others (events 26 and 27); event 25 names the hit shape it was tested against (pose, frame) and the head
+    //   v56 event 28 Redeploy (the player's own Respawn, client to server: optional loadout slot), special weapon 239
     //   v55 world interest (ADR 0025): world record flag FDormant 64 (the entity left this client's interest, no fields); animals, flocks and poop outside 800 m are not sent
-    public const byte ProtocolVersion = 55;
+    public const byte ProtocolVersion = 56;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {
