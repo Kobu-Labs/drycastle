@@ -42,6 +42,8 @@ public class VehiclesFile : IVersioned
             if (v.TopSpeed <= 0 || v.Acceleration <= 0 || v.Brake <= 0 || v.TurnRadius <= 0 || v.MaxLateralAccel <= 0)
                 throw new DataFileException($"vehicles.json: {v.Id}: top_speed, acceleration, brake, turn_radius and max_lateral_accel must be positive");
             if (v.HighSpeedRadiusFactor < 1) throw new DataFileException($"vehicles.json: {v.Id}: high_speed_radius_factor must be at least 1");
+            if (v.SpawnCount < 0 || v.FixedSpots.Count > 8 || v.FixedSpots.Any(sp => sp is null || !float.IsFinite(sp.X) || !float.IsFinite(sp.Z) || sp.YawDeg is { } y && !float.IsFinite(y)))
+                throw new DataFileException($"vehicles.json: {v.Id}: spawn_count must not be negative; fixed_spots are at most 8 of {{ x, z, optional yaw_deg }}");
             if (v.Hood.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: hood is [x, y, z]");
             if (v.Variants is < 1 or > 16) throw new DataFileException($"vehicles.json: {v.Id}: variants must be 1..16");
             if (v.Paints.Count > 0 && v.PaintMaterial == "") throw new DataFileException($"vehicles.json: {v.Id}: paints need paint_material");
@@ -156,6 +158,18 @@ public static class VehicleMedium
 {
     public const string Land = "land", Amphibious = "amphibious", Air = "air";
     public static readonly string[] All = { Land, Amphibious, Air };
+}
+
+/// <summary>
+/// A fixed place for one vehicle (vehicles.json "fixed_spots"): world ground position (x east, z south, as the game's world) and, optionally, a yaw.
+/// Without <see cref="YawDeg"/> the vehicle faces along the road nearest to the spot (<see cref="RoadHeading"/>), or yaw 0 when there is none close.
+/// </summary>
+public class VehicleSpotDef
+{
+    public float X { get; set; }
+    public float Z { get; set; }
+    /// <summary>Heading in degrees, game convention (0 faces -Z, positive turns left). Null: along the nearest road.</summary>
+    public float? YawDeg { get; set; }
 }
 
 /// <summary>One seat of a vehicle (vehicles.json "seats"). Seat 0 is always the driver. Offset is in the vehicle's frame, metres: x right, y up, z back (forward is -Z), origin on the ground at the car's centre.</summary>
@@ -717,8 +731,13 @@ public class VehicleDef
     public float Hp { get; set; } = 300;
     /// <summary>Where the smoke and sparks come out, [x, y, z] in the vehicle's frame (forward is -Z).</summary>
     public float[] Hood { get; set; } = { 0, 0.95f, -1.3f };
-    /// <summary>How many of this type are placed at match start.</summary>
+    /// <summary>How many of this type are dealt at random over the spawn areas at match start. 0 for a type that only stands at its <see cref="FixedSpots"/>.</summary>
     public int SpawnCount { get; set; }
+    /// <summary>
+    /// Places this type always stands at (vehicles.json "fixed_spots"), one vehicle each, in addition to the <see cref="SpawnCount"/> dealt at random.
+    /// A vehicle that returns (abandoned or destroyed) comes back to its spot. See <see cref="VehicleSpotDef"/>.
+    /// </summary>
+    public List<VehicleSpotDef> FixedSpots { get; set; } = new();
     /// <summary>Half extents of the footprint (server collision box and run-over test), metres.</summary>
     public float HalfWidth { get; set; } = 1.1f;
     public float HalfLength { get; set; } = 2.15f;
