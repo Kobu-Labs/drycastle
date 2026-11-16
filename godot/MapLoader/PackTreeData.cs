@@ -15,6 +15,8 @@ public sealed class PackTreeEntry
     public string Name { get; set; } = "";
     public float Weight { get; set; } = 1f;
     public bool Bulk { get; set; }
+    /// <summary>Ground object log kind only: an upright model (a dead tree) that is laid down along the log instead of a model that already lies (see <see cref="FallenConfig"/>).</summary>
+    public bool Lay { get; set; }
 }
 
 /// <summary>The models of one stand (trees.json <c>stand</c>): per shape, or <c>any</c> for both; a shape without models takes today's <c>shapes</c> list.</summary>
@@ -40,11 +42,11 @@ public sealed class PackTreeConfig : IVersioned
     public const string EdgeStand = "edge";
 
     public int Version { get; set; }
-    public float NearM { get; set; } = 70f;
-    public float FadeM { get; set; } = 14f;
+    public float NearM { get; set; } = 150f;
+    public float FadeM { get; set; } = 30f;
     public float TileM { get; set; } = 48f;
-    public float AheadM { get; set; } = 16f;
-    public int MaxInFlight { get; set; } = 3;
+    public float AheadM { get; set; } = 32f;
+    public int MaxInFlight { get; set; } = 4;
     public double BudgetMs { get; set; } = 2.0;
     public float ScaleMin { get; set; } = 0.5f;
     public float ScaleMax { get; set; } = 4f;
@@ -57,6 +59,7 @@ public sealed class PackTreeConfig : IVersioned
     public Dictionary<string, PackStandConfig> Stands { get; set; } = new();
     public GroundObjectsConfig GroundObjects { get; set; } = new();
     public UndergrowthConfig Undergrowth { get; set; } = new();
+    public PackColourConfig Colour { get; set; } = new();
 
     public static PackTreeConfig Parse(string json)
     {
@@ -77,6 +80,7 @@ public sealed class PackTreeConfig : IVersioned
         }
         c.GroundObjects.Validate();
         c.Undergrowth.Validate();
+        c.Colour.Validate();
         return c;
     }
 
@@ -97,6 +101,83 @@ public sealed class PackTreeConfig : IVersioned
 
     /// <summary>The entries of a tree shape (cone or box); empty for an unknown shape.</summary>
     public IReadOnlyList<PackTreeEntry> For(bool cone) => Shapes.TryGetValue(cone ? "cone" : "box", out var l) ? l : new List<PackTreeEntry>();
+}
+
+/// <summary>A clearly different tree colour: a multiplier on the foliage texels (1 = unchanged, each channel 0..2) and its share among the accents.</summary>
+public sealed class PackColourAccent
+{
+    public string Name { get; set; } = "";
+    public float[] Tint { get; set; } = { 1f, 1f, 1f };
+    public float Weight { get; set; } = 1f;
+}
+
+/// <summary>
+/// Colour of the pack trees (the file's <c>colour</c> section): the atlas shows every tree of a model in the same few greens, the baked trees had several. The mesher
+/// writes a tint per tree into the vertex colour (hash of its position, <see cref="PackColourMath.Tint"/>) and the shader applies it to foliage texels only, with
+/// <see cref="Saturation"/> and <see cref="Gain"/> on top. Trunks, rocks and bark are not touched (the shader weighs by how green a texel is).
+/// </summary>
+public sealed class PackColourConfig
+{
+    public bool Enabled { get; set; } = true;
+    /// <summary>Saturation of foliage (1 = the atlas as it is).</summary>
+    public float Saturation { get; set; } = 1.25f;
+    /// <summary>Brightness of foliage (1 = as it is).</summary>
+    public float Gain { get; set; } = 1.05f;
+    /// <summary>Most a tree's green moves toward yellow-green (+) or blue-green (-): red goes up and blue down by this share, or the reverse.</summary>
+    public float HueShift { get; set; } = 0.2f;
+    /// <summary>Most a tree's foliage is lighter or darker than the atlas (share).</summary>
+    public float Value { get; set; } = 0.15f;
+    /// <summary>Share of trees that take one of the <see cref="Accents"/> instead of the hue shift (a position hash).</summary>
+    public float AccentShare { get; set; } = 0.15f;
+    /// <summary>How much of all this the undergrowth gets (0 = none, 1 = as the trees): ferns and shrubs vary, but gently.</summary>
+    public float UndergrowthScale { get; set; } = 0.5f;
+    /// <summary>A texel is foliage by how much greener than red and blue it is (g - max(r, b)) / g: none below <see cref="LeafLo"/>, fully above <see cref="LeafHi"/>.</summary>
+    public float LeafLo { get; set; } = 0.06f;
+    public float LeafHi { get; set; } = 0.3f;
+    public List<PackColourAccent> Accents { get; set; } = new();
+
+    public void Validate()
+    {
+        if (!(Saturation >= 0) || !(Gain > 0)) throw new DataFileException("pack_trees.json: colour saturation must not be negative and gain above 0");
+        if (HueShift < 0 || HueShift > 0.9f || Value < 0 || Value > 0.9f) throw new DataFileException("pack_trees.json: colour hue_shift and value must be within 0 and 0.9");
+        if (AccentShare < 0 || AccentShare > 1 || UndergrowthScale < 0 || UndergrowthScale > 1) throw new DataFileException("pack_trees.json: colour accent_share and undergrowth_scale must be within 0 and 1");
+        if (LeafLo < 0 || !(LeafHi > LeafLo)) throw new DataFileException("pack_trees.json: colour leaf_hi must be above leaf_lo, which is not negative");
+        foreach (var a in Accents)
+            if (a.Tint.Length != 3 || a.Tint.Any(v => !(v >= 0 && v <= 2)) || a.Weight < 0)
+                throw new DataFileException($"pack_trees.json: colour accent '{a.Name}' needs tint [r, g, b] within 0 and 2 and a weight of 0 or more");
+    }
+}
+
+/// <summary>The per-tree tint (#287): the same position gives the same colour on every client and every run.</summary>
+public static class PackColourMath
+{
+    const int Salt = 3003;
+
+    /// <summary>
+    /// The multiplier on the foliage texels of the thing standing at map position (x, y). A hue roll moves it toward yellow-green or blue-green (red and blue
+    /// opposite), a value roll lightens or darkens it, and a share of positions (<see cref="PackColourConfig.AccentShare"/>) take a weighted accent instead of the hue
+    /// shift. <paramref name="amount"/> (1 = trees, <see cref="PackColourConfig.UndergrowthScale"/> = undergrowth) scales every departure from 1, accents' share included.
+    /// Each channel stays within 0..2 (it is stored halved in an 8-bit vertex colour).
+    /// </summary>
+    public static Vector3 Tint(float x, float y, PackColourConfig c, float amount = 1f)
+    {
+        if (!c.Enabled || amount <= 0) return Vector3.One;
+        int ix = (int)MathF.Round(x * 100f), iy = (int)MathF.Round(y * 100f);
+        var hue = (float)(2 * MeadowGen.Hash01(ix, iy, Salt) - 1) * c.HueShift;
+        var value = 1f + (float)(2 * MeadowGen.Hash01(ix, iy, Salt + 1) - 1) * c.Value;
+        var tint = new Vector3(1f + hue, 1f, 1f - hue);
+        if (MeadowGen.Hash01(ix, iy, Salt + 2) < c.AccentShare * amount && c.Accents.Count > 0)
+        {
+            var pick = PackTreeMath.Pick(c.Accents.Select(a => a.Weight).ToList(), MeadowGen.Hash01(ix, iy, Salt + 3));
+            if (pick >= 0) tint = new Vector3(c.Accents[pick].Tint[0], c.Accents[pick].Tint[1], c.Accents[pick].Tint[2]);
+        }
+        tint = Vector3.Lerp(Vector3.One, tint, amount) * (1f + (value - 1f) * amount);
+        return Vector3.Clamp(tint, Vector3.Zero, new Vector3(2f));
+    }
+
+    /// <summary>A scattered piece of undergrowth (Godot axes) marked as such, for the shader's own cut radius, with its milder tint.</summary>
+    public static PackPlacement Undergrowth(PackPlacement p, PackColourConfig c)
+        => p with { Kind = PackKind.Undergrowth, Tint = Tint(p.Base.X, -p.Base.Z, c, c.UndergrowthScale) };
 }
 
 public static class PackTreeSettings
@@ -303,7 +384,7 @@ public static class PackTreeMath
         var pick = Choose(list, h, Roll(t.X, t.Y), cfg.ScaleMin, cfg.ScaleMax, bulkShare);
         if (pick < 0) return null;
         var model = list[pick];
-        return new PackPlacement(new Vector3(t.X, t.Z, -t.Y), t.Rot, model.HeightM > 1e-4f ? h / model.HeightM : 1f, model.ModelId);
+        return new PackPlacement(new Vector3(t.X, t.Z, -t.Y), t.Rot, model.HeightM > 1e-4f ? h / model.HeightM : 1f, model.ModelId, Tint: PackColourMath.Tint(t.X, t.Y, cfg.Colour));
     }
 
     const int EdgeSalt = 3002;
@@ -388,6 +469,29 @@ public sealed class PackModelMesh
     /// <summary>The box of all vertices in the model's frame.</summary>
     public (Vector3 Min, Vector3 Max) Bounds => _bounds ??= ComputeBounds();
 
+    readonly Lazy<float> _trunkRadius;
+    public PackModelMesh() => _trunkRadius = new Lazy<float>(ComputeTrunkRadius);
+
+    /// <summary>
+    /// The trunk's radius of an upright model (m at scale 1): the 30th percentile of the distance from the trunk's axis (the median position) of the vertices between 10% and 50%
+    /// of the height, above the root flare and below the crown. A dead tree's branch vertices lie far from the axis and a median would take them for trunk; a low percentile reads
+    /// the trunk itself. A log lying on the ground needs it for how high its axis rides and whether it fits the collider box.
+    /// </summary>
+    public float TrunkRadiusM => _trunkRadius.Value;
+
+    float ComputeTrunkRadius()
+    {
+        var (lo, hi) = Bounds;
+        float h = hi.Y - lo.Y, y0 = lo.Y + 0.1f * h, y1 = lo.Y + 0.5f * h;
+        if (h <= 1e-4f) return 0f;
+        var pts = new List<Vector2>();
+        foreach (var s in Surfaces) foreach (var v in s.Vertices) if (v.Y >= y0 && v.Y <= y1) pts.Add(new Vector2(v.X, v.Z));
+        if (pts.Count == 0) return 0f;
+        static float Percentile(List<float> l, float q) { l.Sort(); return l[(int)(q * (l.Count - 1))]; }
+        var axis = new Vector2(Percentile(pts.Select(p => p.X).ToList(), 0.5f), Percentile(pts.Select(p => p.Y).ToList(), 0.5f));
+        return Percentile(pts.Select(p => Vector2.Distance(p, axis)).ToList(), 0.3f);
+    }
+
     (Vector3, Vector3) ComputeBounds()
     {
         var lo = new Vector3(float.MaxValue); var hi = new Vector3(float.MinValue);
@@ -396,8 +500,16 @@ public sealed class PackModelMesh
     }
 }
 
-/// <summary>A pack model to draw (tree, ground object, undergrowth): its base (Godot axes), turn about the up axis, uniform scale, the model's id and a stretch of the model's Z axis on top of the scale (a log's length; 1 = none).</summary>
-public readonly record struct PackPlacement(Vector3 Base, float Rot, float Scale, int Model, float Stretch = 1f);
+/// <summary>What a placement is: decides how the shader cuts it (tree_cut, or undergrowth's own radius) and whether it takes the tint (ground objects do not). Stored in the vertex colour's alpha.</summary>
+public enum PackKind : byte { Tree = 0, Object = 1, Undergrowth = 2 }
+
+/// <summary>
+/// A pack model to draw (tree, ground object, undergrowth): its base (Godot axes), turn about the up axis, uniform scale, the model's id and a stretch on top of the scale
+/// (along the model's Z, a log's length; along its Y when it is laid down; 1 = none). <paramref name="Tint"/> is the foliage multiplier (default = none, see
+/// <see cref="PackColourMath"/>). A <paramref name="Pitch"/> above 0 tips the model about its X axis before the turn (a quarter turn lays an upright model down with its top toward
+/// the turn's heading), after <paramref name="Roll"/> turned it about its own upright axis (which way its branches point).
+/// </summary>
+public readonly record struct PackPlacement(Vector3 Base, float Rot, float Scale, int Model, float Stretch = 1f, PackKind Kind = PackKind.Tree, Vector3 Tint = default, float Pitch = 0f, float Roll = 0f);
 
 /// <summary>The triangles of every placement that wears one material, as one mesh: positions relative to the tile (centre x, z), UV2 = the tree's base (x, z) in the same frame.</summary>
 public sealed class PackBucket
@@ -405,6 +517,8 @@ public sealed class PackBucket
     public required int Material { get; init; }
     public readonly List<Vector3> V = new(), N = new();
     public readonly List<Vector2> Uv = new(), Uv2 = new();
+    /// <summary>Vertex colour: rgb = the tint halved (8 bits cannot hold above 1), a = the placement's <see cref="PackKind"/> (tree 1, object 0.5, undergrowth 0), read by pack_tree.gdshader.</summary>
+    public readonly List<Vector4> Col = new();
     public readonly List<int> I = new();
 }
 
@@ -420,24 +534,39 @@ public static class PackTileMesher
         foreach (var t in trees)
         {
             var (s, c) = MathF.SinCos(t.Rot);
+            var (sp, cp) = MathF.SinCos(t.Pitch);
+            var (sr, cr) = MathF.SinCos(t.Roll);
             var origin = new Vector3(t.Base.X - centre.X, t.Base.Y, t.Base.Z - centre.Z);
             var baseUv = new Vector2(origin.X, origin.Z);
+            var laid = t.Pitch != 0f;
+            var size = laid ? new Vector3(t.Scale, t.Scale * t.Stretch, t.Scale) : new Vector3(t.Scale, t.Scale, t.Scale * t.Stretch);
+            var tint = t.Tint == default ? Vector3.One : t.Tint;
+            var col = new Vector4(tint * 0.5f, t.Kind switch { PackKind.Tree => 1f, PackKind.Object => 0.5f, _ => 0f });
+            Vector3 Pose(Vector3 v)
+            {
+                if (laid) v = Tip(Turn(v, sr, cr), sp, cp);
+                return Turn(v, s, c);
+            }
             foreach (var surface in models[t.Model].Surfaces)
             {
                 if (!byMaterial.TryGetValue(surface.Material, out var b)) byMaterial[surface.Material] = b = new PackBucket { Material = surface.Material };
                 var first = b.V.Count;
                 for (var i = 0; i < surface.Vertices.Length; i++)
                 {
-                    b.V.Add(Turn(surface.Vertices[i] * new Vector3(t.Scale, t.Scale, t.Scale * t.Stretch), s, c) + origin);
-                    b.N.Add(Turn(surface.Normals[i], s, c));
+                    b.V.Add(Pose(surface.Vertices[i] * size) + origin);
+                    b.N.Add(Pose(surface.Normals[i]));
                     b.Uv.Add(surface.Uv[i]);
                     b.Uv2.Add(baseUv);
+                    b.Col.Add(col);
                 }
                 foreach (var idx in surface.Indices) b.I.Add(first + idx);
             }
         }
         return byMaterial.Values.ToList();
     }
+
+    /// <summary>Rotation about +X (Y toward Z for a positive angle): a quarter turn lays an upright model down, its top toward +Z and its +Z side down.</summary>
+    static Vector3 Tip(Vector3 v, float s, float c) => new(v.X, v.Y * c - v.Z * s, v.Y * s + v.Z * c);
 
     /// <summary>Rotation about +Y by the angle whose sine and cosine are given (Godot's <c>Basis.Rotated(Up, angle)</c>).</summary>
     static Vector3 Turn(Vector3 v, float s, float c) => new(v.X * c + v.Z * s, v.Y, -v.X * s + v.Z * c);

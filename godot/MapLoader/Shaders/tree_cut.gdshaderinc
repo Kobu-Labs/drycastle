@@ -4,14 +4,16 @@
 
 // x, y: the focus on the ground (world x, z); z: radius (m), negative = off; w: fade band inside the radius (m)
 global uniform vec4 tree_cut;
+// The same for the undergrowth, which has no baked twin and fades out on a radius of its own (shorter than the trees').
+global uniform vec4 tree_cut_under;
 
 // A tree's distance from being a pack tree, by the distance of its base point to the focus: 0 inside radius - band, 1 beyond the radius.
-// base_xz is the tree's base in the mesh's own space (x, z), y any height: the model matrix takes it to the world.
-float tree_far(vec2 base_xz, float y, mat4 model) {
+// base_xz is the tree's base in the mesh's own space (x, z), y any height: the model matrix takes it to the world. cut is tree_cut or tree_cut_under.
+float tree_far(vec2 base_xz, float y, mat4 model, vec4 cut) {
 	vec3 w = (model * vec4(base_xz.x, y, base_xz.y, 1.0)).xyz;
-	float d = distance(w.xz, tree_cut.xy);
-	float band = max(tree_cut.w, 0.001);
-	return d >= tree_cut.z ? 1.0 : clamp((d - (tree_cut.z - band)) / band, 0.0, 1.0);
+	float d = distance(w.xz, cut.xy);
+	float band = max(cut.w, 0.001);
+	return d >= cut.z ? 1.0 : clamp((d - (cut.z - band)) / band, 0.0, 1.0);
 }
 
 // Screen-door noise in [0, 1) at a pixel. Both sides use the same one: the pack tree keeps the pixels where it is below 1 - far, the baked tree the rest.

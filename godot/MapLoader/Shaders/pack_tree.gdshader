@@ -2,6 +2,8 @@ shader_type spatial;
 // One material of the pack's trees (materials.json: albedo texture and colour, alpha scissor, cull mode, roughness), drawn from a tile mesh that holds
 // many trees. UV2 holds the base point of the tree a vertex belongs to (PackTileMesher). A tree whose base is beyond the radius is dropped whole
 // (its vertices collapse into one point), and in the fade band it is dithered against the baked tree. MapLoader.PackTrees.cs replaces CULL_MODE.
+// COLOR (PackTileMesher): rgb = the tree's foliage tint halved, a = what it is: 1 tree, 0.5 ground object (cut like a tree, no tint), 0 undergrowth
+// (own radius, tree_cut_under: nothing stands behind it, so it just dithers out).
 render_mode diffuse_burley, specular_schlick_ggx, CULL_MODE;
 
 // @include tree_cut
@@ -12,14 +14,24 @@ uniform float scissor = -1.0;   // alpha scissor threshold; negative: opaque
 uniform float roughness = 0.8;
 uniform float metallic = 0.0;
 uniform float specular = 0.5;
+// Foliage colour (pack_trees.json colour): saturation and brightness of the green texels, and how green a texel must be to count as foliage.
+uniform float foliage_saturation = 1.0;
+uniform float foliage_gain = 1.0;
+uniform float leaf_lo = 0.06;
+uniform float leaf_hi = 0.3;
 
 varying flat float far_share;
+varying flat vec3 tint;
+varying flat float tinted;
 
 void vertex() {
-	far_share = tree_far(UV2, VERTEX.y, MODEL_MATRIX);
+	float kind = COLOR.a;
+	far_share = tree_far(UV2, VERTEX.y, MODEL_MATRIX, kind < 0.25 ? tree_cut_under : tree_cut);
 	if (far_share >= 1.0) {
 		VERTEX = vec3(0.0);
 	}
+	tint = COLOR.rgb * 2.0;
+	tinted = abs(kind - 0.5) > 0.25 ? 1.0 : 0.0; // ground objects keep the atlas as it is
 }
 
 void fragment() {
@@ -30,7 +42,12 @@ void fragment() {
 	if (scissor >= 0.0 && c.a < scissor) {
 		discard;
 	}
-	ALBEDO = c.rgb;
+	// foliage only: by how much greener than red and blue the texel is, so trunks, bark and rock keep their colour
+	float leaf = tinted * smoothstep(leaf_lo, leaf_hi, (c.g - max(c.r, c.b)) / max(c.g, 0.01));
+	vec3 varied = c.rgb * tint;
+	float luma = dot(varied, vec3(0.2126, 0.7152, 0.0722));
+	varied = mix(vec3(luma), varied, foliage_saturation) * foliage_gain;
+	ALBEDO = mix(c.rgb, varied, leaf);
 	ROUGHNESS = roughness;
 	METALLIC = metallic;
 	SPECULAR = specular;

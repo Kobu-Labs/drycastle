@@ -20,13 +20,42 @@ public sealed class GroundKindConfig
     public float YawDeg { get; set; }
 }
 
+/// <summary>
+/// Fallen trees (#287): how a log record (4-9 m, 0.3-0.6 m thick, a collider box of that size) gets a model. An upright model (<see cref="PackTreeEntry.Lay"/>: a dead tree) is laid down
+/// along the log, base at the thick end, scaled so its height is the log's length; a log model is used as it is, or several end to end, stretched at most <see cref="StretchMax"/>.
+/// </summary>
+public sealed class FallenConfig
+{
+    /// <summary>Off: every log takes a log model stretched to its length (the first #287 slice), <c>lay</c> entries are ignored.</summary>
+    public bool Enabled { get; set; } = true;
+    /// <summary>Most any axis of a model is stretched against the others (a log model's length against its girth, a laid tree's length against its girth).</summary>
+    public float StretchMax { get; set; } = 1.25f;
+    /// <summary>The span of the uniform scale that makes a laid model's height the log's length; a model outside it is not used for that log.</summary>
+    public float ScaleMin { get; set; } = 0.5f;
+    public float ScaleMax { get; set; } = 2.6f;
+    /// <summary>How deep a laid trunk sinks into the ground, as a share of its diameter (a log on a slope is half buried; the underside is never seen).</summary>
+    public float Sink { get; set; } = 0.12f;
+    /// <summary>Most log models laid end to end for one record (a 9 m log is three 3 m ones).</summary>
+    public int MaxPieces { get; set; } = 3;
+    /// <summary>Weight of the log models when they take two or more pieces, against one piece (a laid dead tree is the nicer sight on a long record).</summary>
+    public float PieceWeight { get; set; } = 0.5f;
+
+    public void Validate()
+    {
+        if (StretchMax < 1f || !(ScaleMin > 0) || ScaleMax < ScaleMin || Sink < 0 || Sink > 0.4f || MaxPieces < 1 || MaxPieces > 6 || PieceWeight < 0)
+            throw new DataFileException("pack_trees.json: ground_objects.fallen needs stretch_max of 1 or more, scale_min above 0 and not above scale_max, sink within 0 and 0.4, max_pieces within 1 and 6, piece_weight of 0 or more");
+    }
+}
+
 public sealed class GroundObjectsConfig
 {
     public bool Enabled { get; set; } = true;
     public Dictionary<string, GroundKindConfig> Kinds { get; set; } = new();
+    public FallenConfig Fallen { get; set; } = new();
 
     public void Validate()
     {
+        Fallen.Validate();
         foreach (var (kind, k) in Kinds)
         {
             if (!(k.RadiusM > 0)) throw new DataFileException($"pack_trees.json: ground_objects kind '{kind}' needs radius_m above 0");
@@ -61,6 +90,14 @@ public sealed class UndergrowthMixConfig
 public sealed class UndergrowthConfig
 {
     public bool Enabled { get; set; } = true;
+    /// <summary>
+    /// Undergrowth has no baked twin, so it fades out on its own, shorter radius (own fade band inside it) and is built only for tiles within <see cref="NearM"/> + <see cref="AheadM"/>
+    /// of the focus, as its own mesh (about 48k triangles a forest tile, more than the trees of it).
+    /// </summary>
+    public float NearM { get; set; } = 60f;
+    public float FadeM { get; set; } = 12f;
+    /// <summary>Tiles are built this far past <see cref="NearM"/> and freed twice as far.</summary>
+    public float AheadM { get; set; } = 16f;
     /// <summary>Per meadow mix: its kinds. A mix no cell of the map has costs nothing; a cell of a mix not listed grows nothing.</summary>
     public List<UndergrowthMixConfig> Mixes { get; set; } = new();
     /// <summary>Most triangles of undergrowth in one tile; over it the scatter is thinned.</summary>
@@ -75,6 +112,7 @@ public sealed class UndergrowthConfig
     public void Validate()
     {
         if (TrisPerTile < 0) throw new DataFileException("pack_trees.json: undergrowth.tris_per_tile must not be negative");
+        if (!(NearM > 0) || FadeM < 0 || AheadM < 0) throw new DataFileException("pack_trees.json: undergrowth near_m must be above 0, fade_m and ahead_m not negative");
         if (!(ClumpM > 0) || FootM < 0 || TrunkClearM < 0) throw new DataFileException("pack_trees.json: undergrowth clump_m must be above 0, foot_m and trunk_clear_m not negative");
         var seen = new HashSet<int>();
         foreach (var mix in Mixes)
@@ -104,6 +142,8 @@ public sealed class GroundObjectFile
     public IReadOnlyDictionary<string, float> RadiusM { get; init; } = new Dictionary<string, float>();
     /// <summary>Kinds whose baked mesh carries no base point (<c>model.baked_only</c>): never cut, so they need no pack model.</summary>
     public IReadOnlySet<string> BakedOnly { get; init; } = new HashSet<string>();
+    /// <summary>The model numbers the pipeline drew the objects and the collision solids from (the collider's arithmetic gives the box a log's trunk must lie in).</summary>
+    public GroundModel Model { get; init; } = new();
 
     /// <summary>Parses the file; null for a file that is not JSON or is not format 1 (the caller warns). A malformed object is skipped.</summary>
     public static GroundObjectFile? Parse(string json)
@@ -136,18 +176,27 @@ public sealed class GroundObjectFile
                     if (!o.TryGetProperty("x", out _) || !o.TryGetProperty("y", out _)) continue;
                     list.Add(new PackGroundObject(kind.GetString()!, N("x", 0), N("y", 0), N("z", 0), N("rot", 0), N("scale", 1f), N("len", 0)));
                 }
-            return new GroundObjectFile { BaseUv2 = baseUv2, Objects = list, RadiusM = radii, BakedOnly = bakedOnly };
+            GroundModel model;
+            try { GroundObjectColliders.Parse(json, out model); }
+            catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException) { model = new GroundModel(); }
+            return new GroundObjectFile { BaseUv2 = baseUv2, Objects = list, RadiusM = radii, BakedOnly = bakedOnly, Model = model };
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException) { return null; }
     }
 }
 
 /// <summary>A pack model that may stand in for a ground object of one kind (id into the loader's models).</summary>
-public readonly record struct GroundCandidate(int ModelId, float Weight);
+public readonly record struct GroundCandidate(int ModelId, float Weight, bool Lay = false);
+
+/// <summary>The collider box of a log, in metres: half its width across the log and the height of its top over the object's ground point (the trunk drawn must lie inside both).</summary>
+public readonly record struct LogBox(float HalfWidth, float Top);
+
+/// <summary>An upright model laid down on a log: the scale of its cross-section, how much its length is stretched against that, and how high its axis rides over the ground.</summary>
+public readonly record struct LaidFit(float Cross, float Stretch, float Lift);
 
 public static class GroundObjectMath
 {
-    const int ModelSalt = 3101;
+    const int ModelSalt = 3101, PieceSalt = 3102, RollSalt = 3103;
 
     /// <summary>The candidate for an object, by a hash of its position and the weights (-1 when the kind has none).</summary>
     public static int Choose(IReadOnlyList<GroundCandidate> list, float x, float y)
@@ -159,18 +208,154 @@ public static class GroundObjectMath
     /// <summary>
     /// The pack model as one object of the map, Godot axes. The cross-section is scaled so the model's horizontal radius is <paramref name="radiusM"/> times
     /// the object's scale (the code-built size, which the collider follows); a log with a length is stretched along the model's Z (its long axis) to exactly that
-    /// length, so the model never passes the collider.
+    /// length, so the model never passes the collider, and moved so that the middle of its length (not its origin) is the object's point.
     /// </summary>
     public static PackPlacement Place(PackGroundObject o, PackModelMesh model, int modelId, float radiusM, float yawDeg, bool stretchToLen)
+    {
+        var (s, ez) = LogSize(model, radiusM, o.Scale, stretchToLen);
+        var stretch = 1f;
+        if (stretchToLen && o.Len > 0 && ez > 1e-4f && s > 1e-6f) stretch = o.Len / (ez * s);
+        var yaw = o.Rot + yawDeg * MathF.PI / 180f;
+        var origin = new Vector3(o.X, o.Z, -o.Y);
+        if (stretchToLen)
+        {
+            var (lo, hi) = model.Bounds;
+            var (sin, cos) = MathF.SinCos(yaw);
+            origin -= new Vector3(sin, 0, cos) * ((lo.Z + hi.Z) * 0.5f * s * stretch); // the model's Z axis points along sin, cos after the turn
+        }
+        return new PackPlacement(origin, yaw, s, modelId, stretch, PackKind.Object);
+    }
+
+    /// <summary>Scale of a model for the code-built radius at the object's scale, and the model's native extent along its Z (a log's length).</summary>
+    static (float Scale, float ZExtent) LogSize(PackModelMesh model, float radiusM, float scale, bool log)
     {
         var (lo, hi) = model.Bounds;
         float ex = hi.X - lo.X, ey = hi.Y - lo.Y, ez = hi.Z - lo.Z;
         // a log's cross-section is X/Y (its length is Z); the others are as wide as the wider horizontal side
-        var modelRadius = stretchToLen ? MathF.Max(ex, ey) * 0.5f : MathF.Max(ex, ez) * 0.5f;
-        var s = modelRadius > 1e-4f ? radiusM * o.Scale / modelRadius : o.Scale;
-        var stretch = 1f;
-        if (stretchToLen && o.Len > 0 && ez > 1e-4f && s > 1e-6f) stretch = o.Len / (ez * s);
-        return new PackPlacement(new Vector3(o.X, o.Z, -o.Y), o.Rot + yawDeg * MathF.PI / 180f, s, modelId, stretch);
+        var modelRadius = log ? MathF.Max(ex, ey) * 0.5f : MathF.Max(ex, ez) * 0.5f;
+        return (modelRadius > 1e-4f ? radiusM * scale / modelRadius : scale, ez);
+    }
+
+    /// <summary>The collider box of a log record, from the collider's own arithmetic (<see cref="GroundObjectColliders.Parts"/>), so the drawn trunk and the solid agree.</summary>
+    public static LogBox BoxOf(PackGroundObject o, GroundModel model)
+    {
+        var part = GroundObjectColliders.Parts(new GroundObject(GroundKind.Log, o.X, o.Y, o.Z, o.Rot, o.Scale, o.Len, 0, 0), model)[0];
+        return new LogBox(part.HalfV, part.Z1 - o.Z);
+    }
+
+    /// <summary>
+    /// Whether (and how) an upright <paramref name="model"/> lies down as a log of <paramref name="len"/> metres: a uniform scale that makes its height the length (inside
+    /// <see cref="FallenConfig.ScaleMin"/>..<see cref="FallenConfig.ScaleMax"/>, else null), its trunk then no wider than the collider box (thinned across by up to
+    /// <see cref="FallenConfig.StretchMax"/> against the length, else null), and the axis height that rests it on the ground with <see cref="FallenConfig.Sink"/> of its diameter below it.
+    /// </summary>
+    public static LaidFit? FitLaid(PackModelMesh model, float len, LogBox box, FallenConfig f)
+    {
+        var height = model.HeightM;
+        if (height <= 1e-3f || len <= 0) return null;
+        var along = len / height;
+        if (along < f.ScaleMin || along > f.ScaleMax) return null;
+        var d = 2f * MathF.Max(model.TrunkRadiusM, 0.01f); // trunk diameter per unit scale
+        var room = MathF.Min(2f * box.HalfWidth, box.Top / (1f - f.Sink)); // widest trunk that is inside the box across and over the ground
+        var cross = along;
+        if (d * cross > room) cross = MathF.Max(room / d, along / f.StretchMax);
+        if (d * cross > room * 1.001f) return null;
+        return new LaidFit(cross, along / cross, d * cross * (0.5f - f.Sink));
+    }
+
+    /// <summary>How much a log model of native length <paramref name="modelLen"/> (already scaled to the girth) is stretched to cover <paramref name="seg"/> metres.</summary>
+    public static float PieceStretch(float modelLen, float seg) => modelLen > 1e-4f ? seg / modelLen : 1f;
+
+    /// <summary>
+    /// The pack model(s) of one log record, Godot axes: whole fallen trees (an upright <see cref="GroundCandidate.Lay"/> model laid along the log, base at the thick end -u, the
+    /// middle of its height at the log's midpoint) where one fits the record's length and collider box, else log models stretched at most <see cref="FallenConfig.StretchMax"/>,
+    /// on a long record several end to end (the fewest that fit). All candidates that fit share the choice by weight and a hash of the position; when none fits, the log model
+    /// nearest to its length is stretched to it all the same (the baked log must not vanish without a model), or the first laid model clamped if the kind has no log model.
+    /// </summary>
+    public static List<PackPlacement> PlaceLog(PackGroundObject o, IReadOnlyList<GroundCandidate> cands, IReadOnlyList<PackModelMesh> models, float radiusM, float yawDeg, FallenConfig f, LogBox box)
+    {
+        var logs = cands.Where(c => !c.Lay && c.Weight > 0).ToList();
+        var lays = f.Enabled ? cands.Where(c => c.Lay && c.Weight > 0).ToList() : new List<GroundCandidate>();
+        if (logs.Count == 0 && lays.Count == 0) return new List<PackPlacement>();
+        if (o.Len <= 0 || !f.Enabled)
+        {
+            // the first slice: one model stretched to the length
+            var pool = logs.Count > 0 ? logs : cands.Where(c => c.Weight > 0).ToList();
+            var id = pool[PackTreeMath.Pick(pool.Select(c => c.Weight).ToList(), MeadowGen.Hash01((int)MathF.Round(o.X * 100f), (int)MathF.Round(o.Y * 100f), ModelSalt))].ModelId;
+            return [Place(o, models[id], id, radiusM, yawDeg, true)];
+        }
+
+        float LogLen(GroundCandidate c) { var (s, ez) = LogSize(models[c.ModelId], radiusM, o.Scale, true); return s * ez; }
+        // the fewest pieces for which some log model stays within the stretch limit
+        int pieces = 0; var fitting = new List<GroundCandidate>();
+        for (var n = 1; n <= f.MaxPieces && fitting.Count == 0; n++)
+        {
+            var seg = o.Len / n;
+            fitting = logs.Where(c => { var st = PieceStretch(LogLen(c), seg); return st <= f.StretchMax && st >= 1f / f.StretchMax; }).ToList();
+            pieces = n;
+        }
+
+        var options = new List<(GroundCandidate Cand, LaidFit? Fit)>();
+        var weights = new List<float>();
+        foreach (var c in lays)
+            if (FitLaid(models[c.ModelId], o.Len, box, f) is { } fit) { options.Add((c, fit)); weights.Add(c.Weight); }
+        var groupWeight = fitting.Sum(c => c.Weight) * (pieces > 1 ? f.PieceWeight : 1f);
+        if (fitting.Count > 0 && groupWeight > 0) { options.Add((default, null)); weights.Add(groupWeight); }
+
+        if (options.Count == 0) return Fallback(o, logs, lays, models, radiusM, yawDeg, f, LogLen);
+        var roll = MeadowGen.Hash01((int)MathF.Round(o.X * 100f), (int)MathF.Round(o.Y * 100f), ModelSalt);
+        var pick = options[PackTreeMath.Pick(weights, roll)];
+        if (pick.Fit is { } laid) return [Laid(o, models[pick.Cand.ModelId], pick.Cand.ModelId, laid)];
+        return Pieces(o, fitting, models, radiusM, yawDeg, pieces);
+    }
+
+    /// <summary>An upright model laid along the log: the base (thick end) toward -u, the middle of its height on the object's point, the axis lifted so it rests on the ground.</summary>
+    static PackPlacement Laid(PackGroundObject o, PackModelMesh model, int id, LaidFit fit)
+    {
+        var (lo, hi) = model.Bounds;
+        var along = fit.Cross * fit.Stretch; // scale along the trunk
+        var mid = (lo.Y + hi.Y) * 0.5f * along;
+        float ux = MathF.Cos(o.Rot), uy = MathF.Sin(o.Rot);
+        var roll = (float)(MeadowGen.Hash01((int)MathF.Round(o.X * 100f), (int)MathF.Round(o.Y * 100f), RollSalt) * 2 * Math.PI); // which way the branches point
+        // the tip about X sends model +Y to +Z, the turn of rot + 90 degrees sends +Z to u: the base lies at -u and the top at +u
+        return new PackPlacement(new Vector3(o.X - ux * mid, o.Z + fit.Lift, -(o.Y - uy * mid)), o.Rot + MathF.PI / 2, fit.Cross, id, fit.Stretch, PackKind.Object, default, MathF.PI / 2, roll);
+    }
+
+    /// <summary>Log models end to end along the record, each covering <c>len / n</c>, the model of each piece chosen by a hash of the piece's own position.</summary>
+    static List<PackPlacement> Pieces(PackGroundObject o, List<GroundCandidate> fitting, IReadOnlyList<PackModelMesh> models, float radiusM, float yawDeg, int n)
+    {
+        var result = new List<PackPlacement>(n);
+        var seg = o.Len / n;
+        float ux = MathF.Cos(o.Rot), uy = MathF.Sin(o.Rot);
+        for (var k = 0; k < n; k++)
+        {
+            var t = -o.Len / 2 + seg * (k + 0.5f);
+            var piece = o with { X = o.X + ux * t, Y = o.Y + uy * t, Len = seg };
+            var roll = MeadowGen.Hash01((int)MathF.Round(piece.X * 100f), (int)MathF.Round(piece.Y * 100f), PieceSalt);
+            var id = fitting[PackTreeMath.Pick(fitting.Select(c => c.Weight).ToList(), roll)].ModelId;
+            result.Add(Place(piece, models[id], id, radiusM, yawDeg, true));
+        }
+        return result;
+    }
+
+    static List<PackPlacement> Fallback(PackGroundObject o, List<GroundCandidate> logs, List<GroundCandidate> lays, IReadOnlyList<PackModelMesh> models, float radiusM, float yawDeg, FallenConfig f, Func<GroundCandidate, float> logLen)
+    {
+        if (logs.Count == 0)
+        {
+            // no log model at all: the first upright model laid down as far as the scale span goes, its girth thinned within the stretch limit
+            var c = lays[0];
+            var m = models[c.ModelId];
+            var along = Math.Clamp(o.Len / MathF.Max(m.HeightM, 1e-3f), f.ScaleMin, f.ScaleMax);
+            var fit = new LaidFit(along, 1f, 2f * MathF.Max(m.TrunkRadiusM, 0.01f) * along * (0.5f - f.Sink));
+            return [Laid(o, m, c.ModelId, fit)];
+        }
+        GroundCandidate best = logs[0]; var bestPieces = 1; var bestOff = float.MaxValue;
+        foreach (var c in logs)
+            for (var n = 1; n <= f.MaxPieces; n++)
+            {
+                var off = MathF.Abs(MathF.Log(PieceStretch(logLen(c), o.Len / n)));
+                if (off < bestOff) { bestOff = off; best = c; bestPieces = n; }
+            }
+        return Pieces(o, [best], models, radiusM, yawDeg, bestPieces);
     }
 }
 

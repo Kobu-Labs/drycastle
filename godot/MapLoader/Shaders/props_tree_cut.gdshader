@@ -12,7 +12,7 @@ varying flat float far_share;
 
 void vertex() {
 	bool sun_shadow = PROJECTION_MATRIX[3][3] == 1.0; // orthographic: the directional light's shadow pass (the player's camera is perspective)
-	far_share = UV2.x > 1.0e5 || sun_shadow ? 1.0 : tree_far(UV2, VERTEX.y, MODEL_MATRIX);
+	far_share = UV2.x > 1.0e5 || sun_shadow ? 1.0 : tree_far(UV2, VERTEX.y, MODEL_MATRIX, tree_cut);
 	if (far_share <= 0.0) {
 		VERTEX = vec3(0.0);
 	}

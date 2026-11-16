@@ -19,7 +19,8 @@ public class PackGroundTests
             Assert.NotEmpty(k!.Models);
             Assert.All(k.Models, e => Assert.StartsWith("SM_", e.Name));
         }
-        Assert.All(c.GroundObjects.Kinds["log"].Models, e => Assert.StartsWith("SM_Tree_Log_", e.Name));
+        Assert.All(c.GroundObjects.Kinds["log"].Models.Where(e => !e.Lay), e => Assert.StartsWith("SM_Tree_Log_", e.Name)); // models that already lie
+        Assert.All(c.GroundObjects.Kinds["log"].Models.Where(e => e.Lay), e => Assert.Contains("Dead", e.Name)); // dead trees laid down
         Assert.All(c.GroundObjects.Kinds["boulder"].Models, e => Assert.StartsWith("SM_Rock_", e.Name));
         Assert.Equal(new[] { 5, 9 }, c.Undergrowth.Mixes.Select(m => m.Mix)); // forest and swamp
         Assert.All(c.Undergrowth.Mixes, m => { Assert.NotEmpty(m.Kinds); Assert.All(m.Kinds, k => Assert.NotEmpty(k.Models)); });
@@ -67,7 +68,7 @@ public class PackGroundTests
         // a key the class does not have is skipped without a word, so a typo is a setting that silently does nothing
         using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "pack_trees.json")));
         var u = doc.RootElement.GetProperty("undergrowth");
-        Assert.All(u.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "enabled", "tris_per_tile", "clump_m", "foot_m", "trunk_clear_m", "mixes" }));
+        Assert.All(u.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "enabled", "near_m", "fade_m", "ahead_m", "tris_per_tile", "clump_m", "foot_m", "trunk_clear_m", "mixes" }));
         foreach (var mix in u.GetProperty("mixes").EnumerateArray())
         {
             Assert.All(mix.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "mix", "name", "kinds" }));
@@ -141,7 +142,10 @@ public class PackGroundTests
         // radius 0.3 * 1.5 = 0.45 over the model's 0.3 (half of 0.6): scale 1.5; length 3 * 1.5 = 4.5 already: no stretch
         Assert.Equal(1.5f, p.Scale, 4);
         Assert.Equal(1f, p.Stretch, 4);
-        Assert.Equal(new V3(10, 3, -20), p.Base); // Godot axes
+        // Godot axes; the model's Z runs 0..3, so the middle of its length (4.5 m after the scale) is moved onto the object's point, back along the heading
+        var heading = new V3(MathF.Cos(0.5f), 0, -MathF.Sin(0.5f));
+        AssertNear(new V3(10, 3, -20) - heading * 2.25f, p.Base);
+        Assert.Equal(PackKind.Object, p.Kind);
         Assert.Equal(0.5f + MathF.PI / 2, p.Rot, 4);
         Assert.Equal(2, p.Model);
         // a longer log is stretched along the model's Z only: 6 m = 3 * 1.5 * 4/3
@@ -155,6 +159,8 @@ public class PackGroundTests
         Assert.Equal(1f, GroundObjectMath.Place(o with { Len = 0 }, Log(), 0, 0.3f, 0, true).Stretch);
         Assert.Equal(1f, GroundObjectMath.Place(o, Log(), 0, 0.3f, 0, false).Stretch);
     }
+
+    static void AssertNear(V3 expected, V3 actual) => Assert.True((expected - actual).Length() < 1e-4f, $"{expected} != {actual}");
 
     [Fact]
     public void RoundObjectsTakeTheWiderHorizontalSide()

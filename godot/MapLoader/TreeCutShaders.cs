@@ -10,7 +10,7 @@ namespace Drycastle.MapLoader;
 /// </summary>
 static class TreeCutShaders
 {
-    const string Param = "tree_cut";
+    const string Param = "tree_cut", UnderParam = "tree_cut_under";
     static readonly Vector4 Off = new(0, 0, -1, 0);
     static bool _added;
 
@@ -21,6 +21,7 @@ static class TreeCutShaders
         _added = true;
         // no project declares it in its settings (and listing the globals is an editor-only call that logs an error in the game)
         RenderingServer.GlobalShaderParameterAdd(Param, RenderingServer.GlobalShaderParameterType.Vec4, Off);
+        RenderingServer.GlobalShaderParameterAdd(UnderParam, RenderingServer.GlobalShaderParameterType.Vec4, Off);
     }
 
     static string ReadEmbedded(string resource)
@@ -40,16 +41,22 @@ static class TreeCutShaders
         return new Shader { Code = code };
     }
 
-    /// <summary>Sets the cut for this frame: the focus (Godot axes), the radius inside which pack trees stand, and the fade band within it.</summary>
-    public static void Set(Vector3 focus, float radius, float band)
+    /// <summary>
+    /// Sets the cut for this frame: the focus (Godot axes), the radius inside which pack trees stand, and the fade band within it; and the same for the undergrowth,
+    /// which has no baked twin and so only needs its own, shorter radius.
+    /// </summary>
+    public static void Set(Vector3 focus, float radius, float band, float underRadius, float underBand)
     {
         if (!_added) return;
         RenderingServer.GlobalShaderParameterSet(Param, new Vector4(focus.X, focus.Z, radius, band));
+        RenderingServer.GlobalShaderParameterSet(UnderParam, new Vector4(focus.X, focus.Z, underRadius, underBand));
     }
 
-    /// <summary>No cut: every baked tree is drawn, every pack tree dropped.</summary>
+    /// <summary>No cut: every baked tree is drawn, every pack tree and all undergrowth dropped.</summary>
     public static void Disable()
     {
-        if (_added) RenderingServer.GlobalShaderParameterSet(Param, Off);
+        if (!_added) return;
+        RenderingServer.GlobalShaderParameterSet(Param, Off);
+        RenderingServer.GlobalShaderParameterSet(UnderParam, Off);
     }
 }
