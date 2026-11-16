@@ -174,6 +174,8 @@ public partial class Sfx : Node
     /// <summary>A looping voice; <paramref name="startFraction"/> starts it that share of the way into its file (0 to 1).</summary>
     public static LoopVoice? Loop(string id, Vector3 at, float startFraction = 0f) => Instance?.DoLoop(id, at, startFraction);
     /// <summary>Distance from the listener (the current camera) to a point; 0 when there is no camera yet.</summary>
+    /// <summary>Where the listener (the current camera) is, or <paramref name="fallback"/> when there is no camera yet: a sound placed here is heard at full volume, centred.</summary>
+    public static Vector3 ListenerPosition(Vector3 fallback) => Instance?.GetViewport().GetCamera3D() is { } c ? c.GlobalPosition : fallback;
     public static float ListenerDistance(Vector3 at) => Instance?.GetViewport().GetCamera3D() is { } c ? c.GlobalPosition.DistanceTo(at) : 0f;
     public static void MenuMusic(bool on) => Instance?.DoMusic(on);
 
