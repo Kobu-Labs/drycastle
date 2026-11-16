@@ -2,7 +2,7 @@
 """Golf Mk2 engine sounds (vehicles.json golf_mk2 "sounds"): cuts the recorded layers from two source clips and synthesises the background rumble.
 
 Needs numpy and ffmpeg (libvorbis). Not stdlib-only, so do not run it with -I. The source clips are other people's recordings: the output goes to
-assets-private/audio/golf-mk2-sounds/ (gitignored), never into assets/.
+assets/golf-mk2-sounds/ (gitignored), never into assets/.
 
   make_golf_mk2_sounds.py --idle idle.wav --drive drive.wav [--out DIR]
 
@@ -136,7 +136,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--idle", required=True)
     ap.add_argument("--drive", required=True)
-    ap.add_argument("--out", default=str(Path(__file__).resolve().parent.parent / "assets-private/audio/golf-mk2-sounds"))
+    ap.add_argument("--out", default=str(Path(__file__).resolve().parent.parent / "assets/golf-mk2-sounds"))
     a = ap.parse_args()
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     idle, drive = load(a.idle), load(a.drive)
