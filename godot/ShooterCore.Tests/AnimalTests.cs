@@ -561,6 +561,27 @@ public class AnimalTests
     }
 
     [Fact]
+    public void ThrownItRollsOnAlongTheGroundAndStopsWhereTheGroundEnds()
+    {
+        var a = Make(new FakeWorld());
+        a.Throw(new Vector3(0, 5, -10), Vector3.Zero); a.OnDamage(1, 7);
+        var touched = float.NaN;
+        for (var i = 0; i < 200 && a.State == AnimalState.Thrown; i++)
+        {
+            a.Tick(Dt);
+            if (float.IsNaN(touched) && a.Position.Y == 0 && i > 2) touched = a.Position.Z;
+        }
+        Assert.Equal(AnimalState.Down, a.State);
+        Assert.True(a.Position.Z < touched - 1f, $"came down at z {touched}, lies at {a.Position.Z}: it kept part of its speed");
+        Assert.Equal(0, a.Position.Y);
+
+        var b = Make(new FakeWorld { Blocked = (_, z) => z < -6 }); // comes down at about z -5, a wall at -6
+        b.Throw(new Vector3(0, 5, -10), Vector3.Zero); b.OnDamage(1, 7);
+        Run(b, 3f);
+        Assert.True(b.Position.Z >= -6, $"rolled through the wall to {b.Position.Z}");
+    }
+
+    [Fact]
     public void ThrownOverNoGroundItDropsWhereTheGroundEnds()
     {
         var a = Make(new FakeWorld { Blocked = (_, z) => z < -2 });

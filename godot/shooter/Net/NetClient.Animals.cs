@@ -58,6 +58,8 @@ public partial class NetClient : IStandingBodies
     const float AnimalRollRate = 9f, AnimalSettleRate = 9f, AnimalFlyingSpeed = 1.5f;
     /// <summary>How loose the limbs of a thrown animal stay once it lies (<see cref="AnimalFlail.Amount"/>; 1 in the air).</summary>
     const float AnimalLyingFlail = 0.5f;
+    /// <summary>The smallest radius (m) a rolling body's turn rate is worked out with, and how far over the ground (m) a lying body's loose limbs are kept.</summary>
+    const float AnimalRollRadiusMin = 0.15f, AnimalLimbClearance = 0.04f;
 
     /// <summary>How long a hit reaction may hold back the clip of the state (a gallop must not wait for a long clip).</summary>
     const double AnimalHitReactMaxSeconds = 0.6;
@@ -188,7 +190,7 @@ public partial class NetClient : IStandingBodies
                 var serverSpeed = v.SeenServer && dt > 0 ? (s.Pos - v.LastServer).Length() / dt : 0f;
                 v.LastServer = s.Pos; v.SeenServer = true;
                 var inAir = state == AnimalState.Thrown || state == AnimalState.Dead && serverSpeed > AnimalFlyingSpeed;
-                var at = v.Guess.Step(dt, s.Pos, thrown, inAir);
+                var at = v.Guess.Step(dt, s.Pos, thrown, inAir, v.Guess.Active ? GroundUnder(v.Guess.Position) : null);
                 PlaceAnimal(v, GuessedState(v, state), new Vector3(at.X, at.Y, at.Z), s.Yaw, dt);
             }
             var shown = GuessedState(v, state);
@@ -217,8 +219,16 @@ public partial class NetClient : IStandingBodies
         return s.Afloat || !RunOver.Contacts(s.Speed) ? null : (s, _drive.Def);
     }
 
+    /// <summary>The ground's height under a guessed throw (one ray down through the static world), or null where there is none: the guess lands and rolls on the ground it is over, not at the height it left.</summary>
+    float? GroundUnder(NVec3 at)
+    {
+        var from = new Vector3(at.X, at.Y + 3f, at.Z);
+        var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(from, from + Vector3.Down * 40f, CollisionRules.StaticMask(MoverKind.Animal)));
+        return hit.Count > 0 ? hit["position"].AsVector3().Y : null;
+    }
+
     /// <summary>The state an animal is drawn in: while a guessed throw is what is drawn, a thrown body in the air or one knocked down where the guess landed, whatever the server's state says yet.</summary>
-    static AnimalState GuessedState(AnimalView v, AnimalState state) => !v.Guess.Active ? state : v.Guess.Airborne ? AnimalState.Thrown : AnimalState.Down;
+    static AnimalState GuessedState(AnimalView v, AnimalState state) => !v.Guess.Active ? state : v.Guess.Moving ? AnimalState.Thrown : AnimalState.Down;
 
     /// <summary>Whether the predicted vehicle's footprint touches the animal as it is drawn: the server's run-over test (<see cref="RunOverFootprint"/>), on the Body box the client builds as the server does.</summary>
     static bool CarTouches(in DriveState car, VehicleDef def, AnimalView v, NVec3 feet, float yaw)
@@ -241,14 +251,17 @@ public partial class NetClient : IStandingBodies
         var flying = state == AnimalState.Thrown || state == AnimalState.Dead && speed > AnimalFlyingSpeed;
         if (flying) v.Tumbling = true;
         else if (state is not (AnimalState.Down or AnimalState.Dead)) { v.Tumbling = false; v.Roll = 0; }
-        foreach (var f in v.Flail) f.Amount = !v.Tumbling ? 0f : flying ? 1f : AnimalLyingFlail; // loose limbs in the air, slack ones where it lies
+        // loose limbs in the air, slack ones where it lies; lying or rolling slowly, none of them sinks into the ground under it
+        var low = !flying || speed < AnimalRollRate * AnimalRollRadiusMin * 4f;
+        foreach (var f in v.Flail) { f.Amount = !v.Tumbling ? 0f : flying ? 1f : AnimalLyingFlail; f.FloorY = v.Tumbling && low ? feet.Y + AnimalLimbClearance : null; }
         if (!v.Tumbling)
         {
             v.Node.GlobalPosition = feet;
             v.Node.Rotation = new Vector3(0, yaw, 0);
             return;
         }
-        if (flying) v.Roll += AnimalRollRate * dt;
+        // in the air it spins at the full rate; rolling on along the ground it turns as fast as it goes, so the roll dies with its speed
+        if (flying) v.Roll += Mathf.Min(AnimalRollRate, speed / Mathf.Max(v.HitBox.Count == 3 ? v.HitBox[0] / 2 : 0.2f, AnimalRollRadiusMin)) * dt;
         else v.Roll = Mathf.MoveToward(v.Roll, Mathf.Round((v.Roll - Mathf.Pi / 2) / Mathf.Pi) * Mathf.Pi + Mathf.Pi / 2, AnimalSettleRate * dt); // on a side, whichever is nearer
         float halfWidth = v.HitBox.Count == 3 ? v.HitBox[0] / 2 : 0.2f, halfHeight = v.HitBox.Count == 3 ? v.HitBox[1] / 2 : 0.4f;
         var upright = new Basis(Vector3.Up, yaw);

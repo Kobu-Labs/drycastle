@@ -132,7 +132,7 @@ public sealed class Animal : IWorldEntity
         .Note(AnimalState.Walk, "Walks to a wander target (clock: the time budget to arrive, then it gives up and stands).")
         .Note(AnimalState.Flee, "Runs from the threat or the shooter; no clock of its own (calm and alarm timers run beside). Calms down into Idle.")
         .Note(AnimalState.Carried, "A Thief of the Thieves event holds it (no clock: it is moved by the Thief, MoveCarried, and does nothing itself). Let go (Release) it stands; one put down outside its Pen walks home over open ground until it is inside again. Still a hit target: any hit that deals damage kills it.")
-        .Note(AnimalState.Thrown, "A vehicle ran it over and it survived (Throw): it flies on the arc the vehicle gave it; no clock. Landing puts it Down. Still a hit target; another vehicle only changes the arc.")
+        .Note(AnimalState.Thrown, "A vehicle ran it over and it survived (Throw): it flies on the arc the vehicle gave it, then rolls on along the ground with part of that speed; no clock. Coming to rest puts it Down. Still a hit target; another vehicle only changes the arc.")
         .Note(AnimalState.Down, "Lies knocked down where it landed (clock: knockdown_seconds), then gets up: Flee from where the vehicle was (a species that does not flee stands). Run over again it is Thrown again.")
         .Note(AnimalState.Dead, "A body a vehicle threw flies on first. Lies for corpse_seconds (the clock's elapsed time), then the entity ends; a one-hit species' entity ends at once. Never left.")
         .Build();
@@ -156,6 +156,7 @@ public sealed class Animal : IWorldEntity
     Vector3 _target;       // the wander target
     Vector3? _arc;         // the velocity of the arc a vehicle threw it on (Thrown, or a body killed by the same hit); null on the ground
     float _floorY;         // the last ground height it flew over, to land on where there is none (water, the terrain's rim)
+    bool _rolling;         // the thrown body has come down and rolls on along the ground (ThrownRoll); false in the air
     bool _hitToggle;
 
     /// <param name="sizeRoll">The size and weight roll, 0..1 (<see cref="AnimalRules.RollSize"/>); only a species with <see cref="AnimalDef.WeightKg"/> has a size.</param>
@@ -325,6 +326,7 @@ public sealed class Animal : IWorldEntity
     {
         if (Ended != null || !Alive || State == AnimalState.Carried || Def.OneHit) return false;
         _arc = velocity;
+        _rolling = false;
         _floorY = Position.Y;
         _alarmFrom = from;
         if (State != AnimalState.Thrown) Go(AnimalState.Thrown);
@@ -332,21 +334,32 @@ public sealed class Animal : IWorldEntity
         return true;
     }
 
-    /// <summary>One step of the arc. True once it is on the ground (also when it was never thrown). Where there is no ground under the arc it drops straight down.</summary>
+    /// <summary>
+    /// One step of the throw: the arc, then the roll along the ground with what is left of its speed (<see cref="ThrownRoll"/>). True once it lies (also when it was never
+    /// thrown). Where there is no ground ahead (water, a wall, the terrain's rim) it goes no further that way: it drops straight down, or stops rolling.
+    /// </summary>
     bool Fly(float dt)
     {
         if (_arc is not { } v) return true;
-        v.Y -= MoveConsts.Gravity * dt;
+        if (!_rolling) v.Y -= MoveConsts.Gravity * dt;
         var next = Position + v * dt;
         var world = _open ?? _world;
         if (world.GroundY(next.X, next.Z) is { } ground) _floorY = ground;
         else { next.X = Position.X; next.Z = Position.Z; v.X = 0; v.Z = 0; }
+        if (_rolling)
+        {
+            if (Position.Y - _floorY > ThrownRoll.LedgeM) { _rolling = false; _arc = v; Position = new Vector3(next.X, Position.Y, next.Z); return false; } // over an edge: it falls
+            Position = new Vector3(next.X, _floorY, next.Z);
+            if (!ThrownRoll.Roll(ref v, dt)) { _arc = v; return false; }
+            _arc = null; _rolling = false;
+            return true;
+        }
         _arc = v;
         if (next.Y > _floorY) { Position = next; return false; }
         Position = new Vector3(next.X, _floorY, next.Z);
         if (v.Y > 0) return false; // the ground rose under it while it was still going up: it skims on
-        _arc = null;
-        return true;
+        _arc = ThrownRoll.Land(v); _rolling = true; // down: it rolls on with part of its speed (the next step lays it down when that is nothing)
+        return false;
     }
 
     /// <summary>The knockdown is over: it runs from where the vehicle was (a species that does not flee stands).</summary>

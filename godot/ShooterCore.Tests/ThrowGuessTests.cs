@@ -28,11 +28,16 @@ public class ThrowGuessTests
         // the server's arc is the guessed one, seen 0.15 s later: the body is drawn on the guessed arc all the way and only goes over once both have landed
         var v = CorpseRules.ThrowFromCar(-Vector3.UnitZ, 20f);
         const int late = 9;
+        // the server's body: the same arc and the same roll along the ground (ThrownRoll), begun `late` frames after the guess
+        var sp = Stand; var sv = v; var rolling = false; var moving = true;
         Vector3 Arc(int frame)
         {
-            var t = MathF.Max(0, frame - late) * Dt;
-            var p = Stand + v * t + new Vector3(0, -MoveConsts.Gravity * t * t / 2, 0);
-            return p.Y > Stand.Y || t == 0 ? p : default;
+            if (frame <= late || !moving) return moving ? sp : default;
+            if (rolling) { sp += sv * Dt; sp.Y = Stand.Y; if (ThrownRoll.Roll(ref sv, Dt)) moving = false; return sp; }
+            sv.Y -= MoveConsts.Gravity * Dt;
+            sp += sv * Dt;
+            if (sp.Y <= Stand.Y) { sp.Y = Stand.Y; sv = ThrownRoll.Land(sv); rolling = true; }
+            return sp;
         }
         var g = new ThrowGuess();
         g.Start(Stand, v);
@@ -42,7 +47,7 @@ public class ThrowGuessTests
             var s = Arc(i);
             var inAir = s != default;
             if (inAir) landed = s; // the server's body stays where it came down
-            var at = g.Step(Dt, inAir ? s : landed, i > late, i > late && inAir);
+            var at = g.Step(Dt, inAir ? s : landed, i > late, i > late && inAir, Stand.Y);
             if (g.Phase == ThrowGuessPhase.Confirmed || g.Phase == ThrowGuessPhase.Flying) Assert.True(at.Z <= z + 1e-4f, $"pulled back at frame {i}");
             else if (settled < 0)
             {
@@ -72,13 +77,20 @@ public class ThrowGuessTests
     }
 
     [Fact]
-    public void It_lands_at_the_height_it_left()
+    public void It_lands_on_the_ground_under_it_and_rolls_on()
     {
         var g = new ThrowGuess();
-        g.Start(Stand, new Vector3(0, 1f, -2f)); // a nudge: down again well inside the wait
-        var at = Stand;
-        for (var i = 0; i < 20; i++) at = g.Step(Dt, Stand, false, false);
+        g.Start(Stand, new Vector3(0, 1f, -6f)); // a nudge: down again well inside the wait
+        var at = Stand; var touched = Stand; var down = false;
+        for (var i = 0; i < 30; i++)
+        {
+            at = g.Step(Dt, Stand, false, false, Stand.Y + 0.2f); // the ground there is higher than where it left
+            if (!down && at.Y == Stand.Y + 0.2f) { down = true; touched = at; }
+        }
         Assert.True(g.Active);
-        Assert.Equal(Stand.Y, at.Y, 4);
+        Assert.True(down);
+        Assert.Equal(Stand.Y + 0.2f, at.Y, 4);
+        Assert.True(at.Z < touched.Z - 0.3f, "it rolls on with part of its speed");
+        Assert.False(g.Moving); // and comes to rest
     }
 }
