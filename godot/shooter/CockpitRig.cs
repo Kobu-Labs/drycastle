@@ -18,6 +18,7 @@ public sealed partial class CockpitRig : Node3D
 
     static readonly Dictionary<string, Spec> Specs = new()
     {
+        ["golf_mk2"] = new Spec(new Vector3(-0.4875f, 1.40f, 0.30f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildGolf),
         ["bus"] = new Spec(new Vector3(-0.70f, 1.60f, -4.75f), System.Array.Empty<string>(), BuildBus),
         ["flak"] = new Spec(new Vector3(-0.50f, 2.05f, -1.25f), new[] { "cab" }, BuildFlak),
         ["utility_helicopter"] = new Spec(new Vector3(0.55f, 1.78f, -1.80f), new[] { "fuselage" }, BuildHelicopter),
@@ -215,6 +216,14 @@ public sealed partial class CockpitRig : Node3D
         var face = new Vector3(-0.70f, 1.22f, -5.095f) + axis * 0.062f;
         r.SteeringWheel(face, 0.215f, Mathf.RadToDeg(Mathf.Atan2(axis.Z, axis.Y)), new Vector3(-0.70f, 1.16f, -4.80f), 0.32f, onModel: true);
     }
+
+    // ------------------------------------------------------------------ the Golf Mk2
+    // The model has its interior (scripts/make_golf_mk2_model.py at SCALE 1.25: dashboard, binnacle, seats, the headliner): nothing is built round
+    // the driver but the steering wheel, which the model draws as a static ring with spokes (two nodes, hidden here) so the rig's own can turn,
+    // and the hands. The wheel stands upright (face to the seat) at x -0.4875, y 1.175, z -0.225, 0.206 m in radius.
+
+    static void BuildGolf(CockpitRig r) =>
+        r.SteeringWheel(new Vector3(-0.4875f, 1.175f, -0.225f), 0.206f, 90f, new Vector3(-0.4875f, 0.95f, 0.55f), 0.30f);
 
     // ------------------------------------------------------------------ the flak truck
     // After scripts/make_flak_model.py: the cab is a box x +-1.2, y 0.95 .. 1.78, z -2.15 .. -0.80 with a glasshouse over it that narrows to

@@ -24,6 +24,8 @@ public sealed class CarLights
     /// <summary>Material names of the lamps a model may carry (assets/README.md, scripts/make_golf_mk2_model.py).</summary>
     public const string HeadLensMaterial = "Emissive warm headlight lens", TailLampMaterial = "Emissive red tail lamps",
         ReverseLampMaterial = "Emissive reverse lamps", IndicatorMaterial = "Emissive amber indicators";
+    /// <summary>The glow quads sit this fraction of their size outward from the lamp (along the vehicle's length), so the body around the lamp does not slice them.</summary>
+    const float GlowStandOff = 0.5f, GlowMinStandOff = 0.25f;
     static Texture2D? _glowTexture;
     static readonly Color HeadColour = new(1f, 0.95f, 0.8f), TailColour = new(1f, 0.08f, 0.04f);
 
@@ -32,6 +34,7 @@ public sealed class CarLights
     StandardMaterial3D? _modelHead, _modelTail, _modelReverse;
     readonly List<SpotLight3D> _spots = new();
     readonly List<MeshInstance3D> _headGlows = new(), _tailGlows = new();
+    readonly List<Vector3> _tailLamps = new();
     bool _on, _braking, _beam, _reversing;
     bool _set;
 
@@ -68,16 +71,17 @@ public sealed class CarLights
             };
             vehicle.AddChild(spot);
             c._spots.Add(spot);
-            var g = new MeshInstance3D { Mesh = glow, Position = at, MaterialOverride = glowMat, Scale = Vector3.One * HeadGlow, Visible = false };
+            var g = new MeshInstance3D { Mesh = glow, Position = GlowAt(at, HeadGlow), MaterialOverride = glowMat, Scale = Vector3.One * HeadGlow, Visible = false };
             vehicle.AddChild(g);
             c._headGlows.Add(g);
         }
         foreach (var p in l.Tail)
         {
             if (c._modelTail == null) vehicle.AddChild(new MeshInstance3D { Mesh = lens, Position = Lamp(p), MaterialOverride = tailMat });
-            var g = new MeshInstance3D { Mesh = glow, Position = Lamp(p), MaterialOverride = tailGlowMat, Scale = Vector3.One * TailGlowRest };
+            var g = new MeshInstance3D { Mesh = glow, Position = GlowAt(Lamp(p), TailGlowRest), MaterialOverride = tailGlowMat, Scale = Vector3.One * TailGlowRest };
             vehicle.AddChild(g);
             c._tailGlows.Add(g);
+            c._tailLamps.Add(Lamp(p));
         }
         return c;
     }
@@ -118,6 +122,9 @@ public sealed class CarLights
 
     static Vector3 Lamp(float[] p) => new(p[0], p[1], p[2]);
 
+    /// <summary>Glow position for a lamp: pushed outward (front lamps toward -Z, rear toward +Z) by <see cref="GlowStandOff"/> of its size, at least <see cref="GlowMinStandOff"/> (small tail glows, lamps set a bit inside the body).</summary>
+    static Vector3 GlowAt(Vector3 lamp, float size) => lamp + new Vector3(0, 0, MathF.Sign(lamp.Z) * MathF.Max(size * GlowStandOff, GlowMinStandOff));
+
     /// <summary>Per frame: the switched state, the braking state, whether this vehicle gets its real spot lights this frame and whether it reverses. Cheap when nothing changed.</summary>
     public void Set(bool on, bool braking, bool beam, bool reversing = false)
     {
@@ -129,7 +136,8 @@ public sealed class CarLights
         _tailMat.EmissionEnergyMultiplier = braking ? BrakeEnergy : TailEnergy;
         _headMat.EmissionEnergyMultiplier = on ? HeadOnEnergy : HeadOffEnergy;
         foreach (var g in _headGlows) g.Visible = on;
-        foreach (var g in _tailGlows) g.Scale = Vector3.One * (braking ? TailGlowBrake : TailGlowRest);
+        var tail = braking ? TailGlowBrake : TailGlowRest;
+        for (var i = 0; i < _tailGlows.Count; i++) { _tailGlows[i].Scale = Vector3.One * tail; _tailGlows[i].Position = GlowAt(_tailLamps[i], tail); }
         foreach (var s in _spots) s.Visible = on && beam;
     }
 }

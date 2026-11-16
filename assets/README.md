@@ -65,12 +65,12 @@ materials, no texture; `Glass` and `GlassClear` are alpha-blended. Same vehicle 
 at the pivot: `wheel_fl`/`_fr`/`_rl`/`_rr` and the door leaves `door_front_1`/`_2`, `door_mid_1`/`_2` (the game does not move them yet); empties mark
 `seat_driver`, `seat_passenger_1` to `_3` (the four seats of vehicles.json), the lamps and `smoke_engine` (the engine is at the rear).
 
-`drycastle-generated-models/golf_mk2.glb` (2026-11-16) is the Golf Mk2 (`godot/shooter` vehicle id `golf_mk2`): a low-poly three-door hatchback, 4.28 m long, in
+`drycastle-generated-models/golf_mk2.glb` (2026-11-16) is the Golf Mk2 (`godot/shooter` vehicle id `golf_mk2`): a low-poly three-door hatchback, 5.35 m long (a real Golf's 4.28 m x the script's `SCALE` 1.25, so a seated rider's head is inside the roof), in
 near-black paint, with a left-hand-drive interior (four seats, dashboard, steering wheel) because riders look out of it. Original geometry written as code in
 `scripts/make_golf_mk2_model.py` (it needs numpy, unlike the other model scripts, and loads the flak script's `GlassSet`; run `python3 scripts/make_golf_mk2_model.py`,
 without `-I` since numpy may live in the user site), CC0, 17 flat-colour materials, no texture; `Transparent blue glass` is alpha-blended. Same vehicle frame, origin
 on the ground between the axles. Nodes: `hull` (the body leans on it) holding `wheel_fl_steer`/`wheel_fr_steer` (turn about Y) with `wheel_fl`/`wheel_fr` (roll about X),
-`wheel_rl`/`wheel_rr`, the six breakable panes `glass_0` to `glass_5` (the script rewrites the `glass` list of vehicles.json) and empties for the seats and lamps. The paint
+`wheel_rl`/`wheel_rr`, the steering wheel (`steering_wheel_rim`, `steering_wheel_spokes`: the cockpit view hides them and draws a wheel that turns), the six breakable panes `glass_0` to `glass_5` (the script rewrites the `glass` list of vehicles.json) and empties for the seats and lamps. The paint
 is the material `Black paint`. The body is closed (wheelhouse walls and liners, a continuous undertray, cabin floor and bulkheads, solid window surrounds). The lamps have
 emissive materials (`Emissive warm headlight lens`, `Emissive red tail lamps`, `Emissive amber indicators`, `Emissive reverse lamps`; glTF `emissiveFactor`) that the client
 drives from the lamp state (`CarLights.BindModelLamps`) instead of letting them glow always. The front and rear badges are a drawn V/W monogram, not a traced logo.
