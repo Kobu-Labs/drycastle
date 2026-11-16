@@ -267,6 +267,7 @@ public partial class NetClient : Node
         RenderCitizens();
         RenderGang(delta);
         RenderDemon();
+        UpdateDeath(delta);
         UpdatePounce(delta);
         RenderCars();
         RenderAircraft(delta);
@@ -402,14 +403,14 @@ public partial class NetClient : Node
                     _wantSlot = StartSlot();
                     Dead = false; if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
                     _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
-                    _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId); _breathCues.Reset(); _zero.Reset(); ClearPredictedReload(); _pNextFire = 0;
+                    EndDeathView(); _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId); _breathCues.Reset(); _zero.Reset(); ClearPredictedReload(); _pNextFire = 0;
                 }
                 break;
             case EventKind.Death:
                 var d = Match.LatestDeath!;
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 SfxDeath(d);
-                if (d.Victim == _myId) { Dead = true; _deaths++; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay); _hud?.SetProtection(0); OnStreakDeath(); }
+                if (d.Victim == _myId) { _deaths++; BeginDeathView(d.RespawnDelay); Dead = true; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); _hud?.SetProtection(0); OnStreakDeath(); }
                 break;
         }
     }

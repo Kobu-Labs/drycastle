@@ -286,6 +286,7 @@ public partial class NetServer : Node
         StepCorpses((float)delta);
         PerfLap(ServerPerf.Ph.Corpses);
         StepVehicles((float)delta);
+        StepRidingCorpses((float)delta); // the dead pilots and drivers move with the vehicles that just moved
         PerfLap(ServerPerf.Ph.Vehicles);
         StatusTick((float)delta); // burns tick
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
@@ -714,7 +715,7 @@ public partial class NetServer : Node
                 BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(s.Id, s.Position, s.ProtectionSeconds)));
                 break;
             case PlayerKilled k:
-                if (_byId.TryGetValue(k.Victim, out var kv) && kv.Car != null) LeaveSeat(kv, false);
+                if (_byId.TryGetValue(k.Victim, out var kv) && kv.Car != null) RiderDies(kv); // frees the seat; the corpse (PlayerDied) stays in a pilot's or driver's seat, else falls (ADR 0026)
                 _kills += k.Killer != k.Victim ? 1 : 0;
                 BotKillLog(k);
                 if (WeaponsSmoke && _kills >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5;

@@ -108,7 +108,15 @@ public sealed class VehicleSeat
     {
         if (seats < 1 || seats > MaxSeats) throw new ArgumentOutOfRangeException(nameof(seats));
         _occupant = new ushort[seats];
+        _blocked = new bool[seats];
     }
+
+    /// <summary>Seats a dead rider's corpse still sits in (ADR 0026): nobody can take or switch to one. A blocked seat has no occupant, so it does not keep the vehicle occupied.</summary>
+    readonly bool[] _blocked;
+
+    public bool IsBlocked(int seat) => _blocked[seat];
+    public void Block(int seat) => _blocked[seat] = true;
+    public void Unblock(int seat) => _blocked[seat] = false;
 
     public int Count => _occupant.Length;
     /// <summary>Player id of the driver (seat 0), 0 when empty.</summary>
@@ -116,8 +124,8 @@ public sealed class VehicleSeat
     /// <summary>Player id in <paramref name="seat"/>, 0 when empty.</summary>
     public ushort Occupant(int seat) => _occupant[seat];
     public bool Occupied => _occupant.Any(p => p != 0);
-    public bool HasFree => _occupant.Any(p => p == 0);
-    public bool IsFree(int seat) => _occupant[seat] == 0;
+    public bool HasFree { get { for (var i = 0; i < _occupant.Length; i++) if (IsFree(i)) return true; return false; } }
+    public bool IsFree(int seat) => _occupant[seat] == 0 && !_blocked[seat];
 
     /// <summary>The seat <paramref name="player"/> sits in, or -1.</summary>
     public int SeatOf(ushort player)
@@ -131,8 +139,8 @@ public sealed class VehicleSeat
     public bool TryEnter(ushort player, int seat = -1)
     {
         if (player == 0 || SeatOf(player) >= 0) return false;
-        if (seat < 0) seat = Array.FindIndex(_occupant, p => p == 0);
-        if (seat < 0 || seat >= _occupant.Length || _occupant[seat] != 0) return false;
+        if (seat < 0) { for (var i = 0; i < _occupant.Length && seat < 0; i++) if (IsFree(i)) seat = i; }
+        if (seat < 0 || seat >= _occupant.Length || !IsFree(seat)) return false;
         _occupant[seat] = player;
         return true;
     }
@@ -154,14 +162,14 @@ public sealed class VehicleSeat
     public bool TrySwitch(ushort player, int seat)
     {
         var from = SeatOf(player);
-        if (from < 0 || seat < 0 || seat >= _occupant.Length || seat == from || _occupant[seat] != 0) return false;
+        if (from < 0 || seat < 0 || seat >= _occupant.Length || seat == from || !IsFree(seat)) return false;
         _occupant[from] = 0;
         _occupant[seat] = player;
         return true;
     }
 
     public void Clear(int seat) => _occupant[seat] = 0;
-    public void Clear() => Array.Clear(_occupant);
+    public void Clear() { Array.Clear(_occupant); Array.Clear(_blocked); }
 
     /// <summary>World position of a seat: <paramref name="offset"/> in the vehicle's frame (forward -Z, yaw as in <see cref="CarState"/>) from the car's ground centre.</summary>
     public static Vector3 SeatPosition(Vector3 carPos, float yaw, float[] offset)
@@ -176,11 +184,11 @@ public sealed class VehicleSeat
     /// </summary>
     public int NearestFreeSeat(VehicleDef def, Vector3 carPos, float yaw, Vector3 from, float range)
     {
-        if (!Occupied && _occupant.Length > 0) return 0; // an empty vehicle: whoever gets in first is the driver, wherever they stand
+        if (!Occupied && _occupant.Length > 0 && !_blocked[0]) return 0; // an empty vehicle: whoever gets in first is the driver, wherever they stand (unless a corpse sits there)
         var best = -1; var bd = range;
         for (var i = 0; i < _occupant.Length && i < def.Seats.Count; i++)
         {
-            if (_occupant[i] != 0) continue;
+            if (!IsFree(i)) continue;
             var p = SeatPosition(carPos, yaw, def.Seats[i].Offset);
             var d = MathF.Sqrt((p.X - from.X) * (p.X - from.X) + (p.Z - from.Z) * (p.Z - from.Z));
             if (d <= bd && (best < 0 || d < bd)) { best = i; bd = d; }

@@ -126,6 +126,7 @@ public partial class Hud : CanvasLayer
         BuildFeed();
         BuildProtectionChip();
         BuildRespawn();
+        BuildBlood(); // above the scrim
         BuildBoard();
         BuildXpPanel();
         BuildMinimap();
@@ -527,11 +528,15 @@ public partial class Hud : CanvasLayer
         for (var i = 0; i < Indicators; i++) { _indAt[i] = 0; Fade(_ind[i], 0); }
     }
 
-    /// <summary>Respawn screen: show with the killer and seconds left; <paramref name="killer"/> empty = no killer line.</summary>
-    public void SetDead(bool dead, string killer = "", float secondsLeft = 0)
+    /// <summary>
+    /// Respawn screen: show with the killer and seconds left; <paramref name="killer"/> empty = no killer line. <paramref name="fadeIn"/>: the scrim starts clear and the caller fades it in
+    /// with <see cref="SetRespawnScrim"/> (the death screen, #283); the countdown runs from now either way, and the respawn keys work while it is still clear.
+    /// </summary>
+    public void SetDead(bool dead, string killer = "", float secondsLeft = 0, bool fadeIn = false)
     {
         _dead = dead;
         _respawn.Visible = dead;
+        _respawn.Modulate = new Color(1, 1, 1, dead && fadeIn ? 0f : 1f);
         if (!dead) return;
         _respawnWaits = secondsLeft < 0; // an admin took the player out of the round (#312): no countdown
         Set(_respawnTitle, Strings.T(_respawnWaits ? "hud.respawn.out" : "hud.respawn.title"));
@@ -539,6 +544,12 @@ public partial class Hud : CanvasLayer
         _respawnAt = Now + secondsLeft; _respawnShown = -1;
         Set(_respawnBy, killer == "" ? Strings.T("hud.respawn.self") : Strings.F("hud.respawn.by", killer));
         UpdateRespawn();
+    }
+
+    /// <summary>The respawn scrim's opacity 0..1 (its text, the countdown and the loadout fade with it); only while dead.</summary>
+    public void SetRespawnScrim(float alpha)
+    {
+        if (_dead) _respawn.Modulate = new Color(1, 1, 1, Mathf.Clamp(alpha, 0f, 1f));
     }
 
     void UpdateRespawn()
