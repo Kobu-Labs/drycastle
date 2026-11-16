@@ -242,6 +242,7 @@ public static class ShooterTheme
         PanelVariation(t, "LogStat", Box(Raised, pad, Line));
         PanelVariation(t, "LogCard", Box(Raised, pad + Space / 2, Line));
         PanelVariation(t, "LogHit", Box(Raised, pad + Space / 2, Line));
+        PanelVariation(t, "LogNotice", Box(Raised, Space, Warn));
         PanelVariation(t, "LogPill", Box(Colors.Transparent, Space / 4, Accent, Border, Radius));
         Variation(t, "LogCaption", FontSmall, Dim);
 

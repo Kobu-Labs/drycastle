@@ -61,6 +61,7 @@ Same as above, plus:
 - Keys: J (`hunters_log`), pause menu entry, Q/E, bumpers, Page Up/Down change tab, the pad's B and Esc go up one level (another player's log first goes to My Log, then close). The kill feed does not move.
 - A Life List tile and a Records "All <species> hunts" button jump to All hunts (that species, heaviest first); a player's log has "All <name>'s hunts". A hidden creature's tile jumps to the "Mystery hunts" filter.
 - The player filter lists the players the client has seen in answers so far (the server sends no player list).
+- In sandbox nothing is logged (the server writes nothing to the database for a sandbox player): a one-line notice under the tabs, "Sandbox: hunts are not logged", shows on every tab while the player is in sandbox (the client knows it from `SandboxGranted`). The server records as before.
 - Everything clickable (rows, sort headers, tiles, buttons, the player-name link in a row) shows a border on hover, plus the focus ring; margins are fixed, so nothing shifts. `ContentButton` (tile, row) takes its minimum size from its content.
 - Table rows carry a "Record kg" / "Record shot" pill when the hunt holds that record (read from the Records answer); own rows are tinted and say "(you)".
 - A Mystery creature's tile reads "Caught <when>" and its longest shot (no weight). One without a baked picture is a plain body box (an upright one for a Mystery).

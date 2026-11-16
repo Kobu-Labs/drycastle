@@ -4,7 +4,7 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>What the Hunter's Log screen needs from the match: the queries, the pictures and the names (docs/hunters-log.md).</summary>
-public sealed record HuntLogEnv(HuntLogData Data, HuntArtResolver Art, Func<string, string> SpeciesName, Func<string, string> WeaponName, Func<IReadOnlyList<string>> WeaponIds);
+public sealed record HuntLogEnv(HuntLogData Data, HuntArtResolver Art, Func<string, string> SpeciesName, Func<string, string> WeaponName, Func<IReadOnlyList<string>> WeaponIds, Func<bool> InSandbox);
 
 /// <summary>
 /// The Hunter's Log (#336, J, rebindable action "hunters_log", also in the pause menu): the book of every wild animal a player hunted. A non-pausing overlay like the
@@ -27,6 +27,7 @@ public sealed partial class HuntersLogScreen : Control
     readonly Button[] _tabs = new Button[Tabs];
     readonly Control[] _panes = new Control[Tabs];
     Label _title = null!;
+    Control _sandboxNote = null!;
     Button _back = null!, _close = null!;
     PanelFade _fade;
     bool _logStale, _recordsStale, _huntsStale;
@@ -90,6 +91,11 @@ public sealed partial class HuntersLogScreen : Control
         _tabs[1].Text = Strings.T("log.tab.records");
         _tabs[2].Text = Strings.T("log.tab.hunts");
         col.AddChild(tabs);
+
+        // sandbox writes nothing to the database, so no hunt is logged: a line under the tabs says so on every tab while it holds (text, not colour alone)
+        _sandboxNote = new PanelContainer { ThemeTypeVariation = "LogNotice", Visible = false, MouseFilter = MouseFilterEnum.Ignore };
+        _sandboxNote.AddChild(Text(Strings.T("log.sandbox"), "HudWarn"));
+        col.AddChild(_sandboxNote);
 
         // the panes share one space; the shown one is visible
         var stack = new MarginContainer { SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
@@ -167,7 +173,14 @@ public sealed partial class HuntersLogScreen : Control
         var (changed, finished) = _fade.Tick((float)delta, UiShell.FadeTime);
         if (changed) ApplyAlpha();
         if (finished) { FinishClose(); return; }
-        if (_open) Data.Tick((float)delta);
+        if (_open) { Data.Tick((float)delta); SyncSandbox(); }
+    }
+
+    /// <summary>Shows the sandbox line while the player is in sandbox (a flag read per frame while open; the line only changes when it flips).</summary>
+    void SyncSandbox()
+    {
+        var on = _env.InSandbox();
+        if (_sandboxNote.Visible != on) _sandboxNote.Visible = on;
     }
 
     // ---- tabs ----
@@ -202,6 +215,7 @@ public sealed partial class HuntersLogScreen : Control
             _tabs[i].SetPressedNoSignal(i == _nav.TabIndex);
             _panes[i].Visible = i == _nav.TabIndex;
         }
+        SyncSandbox();
         var title = TitleText();
         _tabs[0].Text = title;
         _title.Text = title;

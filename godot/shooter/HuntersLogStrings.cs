@@ -10,6 +10,7 @@ public static class HuntersLogStrings
         // frame
         ("log.title.my", "My Log"), ("log.title.other", "{0}'s Log"), ("log.tab.records", "Records"), ("log.tab.hunts", "All hunts"),
         ("log.close", "Close"), ("log.back", "Back"),
+        ("log.sandbox", "Sandbox: hunts are not logged"),
         // my log
         ("log.stat.hunts", "Hunts"), ("log.stat.species", "Species"), ("log.stat.heaviest", "Heaviest"), ("log.stat.longest", "Longest shot"), ("log.none", "-"),
         ("log.life.title", "Life List"), ("log.life.count", "{0} of {1}"),
