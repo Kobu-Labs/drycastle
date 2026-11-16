@@ -38,6 +38,20 @@ public static class CorpseRules
     public static Vector3 ThrowFromCar(Vector3 forward, float speed) =>
         forward * (speed * ThrowFromCarScale + MathF.Sign(speed) * ThrowFromCarExtra) + Vector3.UnitY * (2.5f + MathF.Abs(speed) * 0.2f);
 
+    /// <summary>
+    /// The velocity of a seated corpse a boarder kicks out (#330): flung sideways out of the door on the boarder's side (the vehicle's right, signed by which side of
+    /// it <paramref name="boarder"/> stands), with a hop, on top of <paramref name="vehicleVelocity"/>. <paramref name="yaw"/> is as in <see cref="CarState"/>.
+    /// </summary>
+    public static Vector3 ThrowFromSeat(Vector3 carPos, float yaw, Vector3 boarder, Vector3 vehicleVelocity)
+    {
+        var right = new Vector3(MathF.Cos(yaw), 0, -MathF.Sin(yaw));
+        var side = Vector3.Dot(boarder - carPos, right) < 0 ? -1f : 1f;
+        return right * (side * KickSpeed) + Vector3.UnitY * KickLift + vehicleVelocity;
+    }
+
+    /// <summary>Sideways speed (m/s) and hop of a corpse kicked out of its seat by a boarder.</summary>
+    public const float KickSpeed = 5f, KickLift = 4f;
+
     /// <summary>The share of the car's speed a run-over body leaves with, and the speed (m/s) added on top of it.</summary>
     public const float ThrowFromCarScale = 1.1f, ThrowFromCarExtra = 1.5f;
 
@@ -141,7 +155,7 @@ public sealed class Corpse : IWorldEntity
     /// Sends the body out of the vehicle: thrown with <paramref name="velocity"/> (the vehicle's, plus a blast's), or just dropped (zero), so it falls from a
     /// parked or hovering vehicle too. Capped as <see cref="Launch"/>.
     /// </summary>
-    public void Throw(Vector3 velocity) { _body.Launch(velocity); _body.Drop(); }
+    public void Throw(Vector3 velocity) { _still.Cancel(); _body.Launch(velocity); _body.Drop(); }
 
     /// <summary>
     /// One tick of a seated body: <paramref name="vehicleStopped"/> says the vehicle is at rest (see <see cref="CorpseRules.RestSpeed"/>). After
@@ -392,7 +406,7 @@ public sealed class ThrownBody
         .Allow(BodyFlightState.Floating, BodyFlightState.Grounded)
         .Note(BodyFlightState.Grounded, "At rest. A launch (a push that is not zero) or a drop throws it; a dummy standing up again (Reset) comes back here.")
         .Note(BodyFlightState.Airborne, "Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens (it then snaps to the ground under it). Lands Grounded, or Floating when it lands in water. A new launch while airborne restarts the count.")
-        .Note(BodyFlightState.Seated, "A dead pilot or driver still in the seat: the server moves it with the vehicle (Follow), it is not flown. Leaves by a drop or a throw (the vehicle at rest for CorpseRules.SeatedRestSeconds, or destroyed).")
+        .Note(BodyFlightState.Seated, "A dead pilot or driver still in the seat: the server moves it with the vehicle (Follow), it is not flown. Leaves by a drop or a throw (the vehicle at rest for CorpseRules.SeatedRestSeconds, or destroyed) or when a player boards its seat, which flings it out sideways.")
         .Note(BodyFlightState.Floating, "Lies at the water surface height where it landed, not flown. The client bobs and drifts it on the waves (cosmetic, nothing on the wire); it stays lootable until its lifetime ends.")
         .Build();
 

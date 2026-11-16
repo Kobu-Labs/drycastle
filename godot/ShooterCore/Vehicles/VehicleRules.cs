@@ -168,6 +168,11 @@ public sealed class VehicleSeat
     public bool Occupied => _occupant.Any(p => p != 0);
     public bool HasFree { get { for (var i = 0; i < _occupant.Length; i++) if (IsFree(i)) return true; return false; } }
     public bool IsFree(int seat) => _occupant[seat] == 0 && !_blocked[seat];
+    /// <summary>Nobody sits in <paramref name="seat"/>: free, or held by a dead rider's corpse, which a boarder kicks out (#330).</summary>
+    public bool IsBoardable(int seat) => _occupant[seat] == 0;
+    /// <summary>A corpse (and no player) holds <paramref name="seat"/>.</summary>
+    public bool HoldsCorpse(int seat) => _occupant[seat] == 0 && _blocked[seat];
+    public bool HasBoardable { get { for (var i = 0; i < _occupant.Length; i++) if (IsBoardable(i)) return true; return false; } }
 
     /// <summary>The seat <paramref name="player"/> sits in, or -1.</summary>
     public int SeatOf(ushort player)
@@ -183,6 +188,20 @@ public sealed class VehicleSeat
         if (player == 0 || SeatOf(player) >= 0) return false;
         if (seat < 0) { for (var i = 0; i < _occupant.Length && seat < 0; i++) if (IsFree(i)) seat = i; }
         if (seat < 0 || seat >= _occupant.Length || !IsFree(seat)) return false;
+        _occupant[seat] = player;
+        return true;
+    }
+
+    /// <summary>
+    /// Boards <paramref name="seat"/> as <see cref="TryEnter"/> does, and also a seat a corpse holds (#330): <paramref name="kicked"/> is then true, the seat is
+    /// unblocked and taken at once; the caller flings the corpse out. A taken seat or a refused player changes nothing.
+    /// </summary>
+    public bool TryBoard(ushort player, int seat, out bool kicked)
+    {
+        kicked = false;
+        if (player == 0 || SeatOf(player) >= 0 || seat < 0 || seat >= _occupant.Length || !IsBoardable(seat)) return false;
+        kicked = _blocked[seat];
+        _blocked[seat] = false;
         _occupant[seat] = player;
         return true;
     }
@@ -222,15 +241,15 @@ public sealed class VehicleSeat
 
     /// <summary>
     /// The free seat of <paramref name="def"/> nearest to <paramref name="from"/> (horizontal distance, metres), within <paramref name="range"/>;
-    /// -1 if none. An empty vehicle always gives the driver's seat; ties go to the lower seat index.
+    /// -1 if none. An empty vehicle always gives the driver's seat; ties go to the lower seat index. With <paramref name="kickCorpses"/> a seat held by a corpse counts as free (#330).
     /// </summary>
-    public int NearestFreeSeat(VehicleDef def, Vector3 carPos, float yaw, Vector3 from, float range)
+    public int NearestFreeSeat(VehicleDef def, Vector3 carPos, float yaw, Vector3 from, float range, bool kickCorpses = false)
     {
-        if (!Occupied && _occupant.Length > 0 && !_blocked[0]) return 0; // an empty vehicle: whoever gets in first is the driver, wherever they stand (unless a corpse sits there)
+        if (!Occupied && _occupant.Length > 0 && (kickCorpses || !_blocked[0])) return 0; // an empty vehicle: whoever gets in first is the driver, wherever they stand (a corpse there is kicked out with kickCorpses, else it blocks)
         var best = -1; var bd = range;
         for (var i = 0; i < _occupant.Length && i < def.Seats.Count; i++)
         {
-            if (!IsFree(i)) continue;
+            if (kickCorpses ? !IsBoardable(i) : !IsFree(i)) continue;
             var p = SeatPosition(carPos, yaw, def.Seats[i].Offset);
             var d = MathF.Sqrt((p.X - from.X) * (p.X - from.X) + (p.Z - from.Z) * (p.Z - from.Z));
             if (d <= bd && (best < 0 || d < bd)) { best = i; bd = d; }
