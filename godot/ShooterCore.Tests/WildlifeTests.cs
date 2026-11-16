@@ -290,6 +290,113 @@ public class WildlifeTests
     public void BadHerdRulesAreRefused(string json, string why) =>
         Assert.Contains(why, Assert.Throws<DataFileException>(() => WildlifeFile.Parse(json)).Message);
 
+    // ---- mixed herds ----
+
+    const string Mixed = """{"version":1,"max_animals":60,"herds":[{"id":"red","count":37,"habitat":"deer","size":{"min":5,"max":9},"spread_m":10,"range_m":50,"members":[{"id":"stag","min":1,"max":3},{"id":"deer","weight":3},{"id":"doe","weight":1}]}]}""";
+
+    static readonly IReadOnlyList<Vector3> MixedPoints = Points((0, 0), (500, 500), (-500, 300), (300, -400), (-300, -300));
+
+    static IReadOnlyList<Vector3> DeerOnly(string kind) => kind == "deer" ? MixedPoints : Array.Empty<Vector3>();
+
+    [Fact]
+    public void AMixedHerdHoldsOneToThreeStagsAndEveryMemberSharesTheHerd()
+    {
+        var (keeper, _, _) = Make(Mixed);
+        Assert.Equal(37, keeper.Populate(DeerOnly, new Flat())); // the habitat is the deer zone for stag and doe too
+        Assert.Equal(37, keeper.Herds.Sum(h => h.Members.Count));
+        Assert.All(keeper.Herds.SkipLast(1), h => Assert.InRange(h.Members.Count, 5, 9));
+        Assert.All(keeper.Herds, h =>
+        {
+            var stags = h.Members.Count(m => m.Def.Id == "stag");
+            Assert.InRange(stags, h.Members.Count == 1 ? 0 : 1, 3);
+            Assert.True(stags < h.Members.Count, "a herd is never all stags");
+            Assert.All(h.Members, m =>
+            {
+                Assert.Same(h, m.Herd);
+                Assert.True(Vector3.Distance(m.Position, h.Home) <= 10.01f);
+            });
+        });
+        var species = keeper.Animals.Select(a => a.Def.Id).Distinct().ToHashSet();
+        Assert.Subset(new HashSet<string> { "stag", "deer", "doe" }, species);
+        Assert.Contains("deer", species);
+        Assert.True(keeper.Animals.Count(a => a.Def.Id == "deer") > keeper.Animals.Count(a => a.Def.Id == "doe"), "the 3:1 weight makes deer the commoner");
+    }
+
+    [Fact]
+    public void AMixedHerdIsDeterministicForASeed()
+    {
+        static string Layout(int seed)
+        {
+            var (keeper, _, _) = Make(Mixed, seed);
+            keeper.Populate(DeerOnly, new Flat());
+            return string.Join("|", keeper.Herds.Select(h => string.Join(",", h.Members.Select(m => m.Def.Id))));
+        }
+        Assert.Equal(Layout(7), Layout(7));
+        Assert.NotEqual(Layout(7), Layout(8));
+    }
+
+    [Fact]
+    public void AMixedHerdWithNoPointsInItsHabitatIsLoggedAndGetsNone()
+    {
+        var (keeper, _, _) = Make(Mixed);
+        var log = new List<string>();
+        keeper.Log = log.Add;
+        Assert.Equal(0, keeper.Populate(k => k == "stag" ? MixedPoints : Array.Empty<Vector3>(), new Flat())); // not the deer zone
+        Assert.Contains(log, l => l.Contains("red") && l.Contains("deer"));
+    }
+
+    [Fact]
+    public void TheHabitatOfAMixedHerdDefaultsToItsFirstWeightedMember()
+    {
+        var f = WildlifeFile.Parse(Mixed.Replace("\"habitat\":\"deer\",", ""));
+        Assert.Equal("deer", f.Herds[0].HabitatKind);
+    }
+
+    [Fact]
+    public void ASmallLastMixedHerdHasNoRoomForAStag()
+    {
+        var (keeper, _, _) = Make("""{"version":1,"max_animals":60,"herds":[{"id":"red","count":6,"size":{"min":5,"max":5},"members":[{"id":"stag","min":1,"max":3},{"id":"deer","weight":1}]}]}""");
+        Assert.Equal(6, keeper.Populate(DeerOnly, new Flat()));
+        Assert.Equal(2, keeper.Herds.Count);
+        Assert.Contains(keeper.Herds, h => h.Members.Count == 1 && h.Members[0].Def.Id == "deer"); // size 1: a herd is never all stags
+    }
+
+    [Fact]
+    public void TheShippedMixedHerdIsOneRedDeerHerdOfStagDeerAndDoe()
+    {
+        var data = GameData.Load(DataDir);
+        var herd = Assert.Single(data.Wildlife.Herds);
+        Assert.Equal("deer", herd.HabitatKind);
+        Assert.Equal(new[] { "stag", "deer", "doe" }, herd.Members.Select(m => m.Id));
+        Assert.DoesNotContain(data.Wildlife.Species, s => herd.Members.Any(m => m.Id == s.Id));
+    }
+
+    [Theory]
+    [InlineData("""{"version":1,"max_animals":5,"herds":[{"id":"","count":3}]}""", "no id")]
+    [InlineData("""{"version":1,"max_animals":5,"herds":[{"id":"a","count":3,"members":[{"id":"deer","weight":1},{"id":"doe","weight":1}]},{"id":"a","count":3,"members":[{"id":"deer","weight":1},{"id":"doe","weight":1}]}]}""", "twice")]
+    [InlineData("""{"version":1,"max_animals":5,"herds":[{"id":"a","count":0,"members":[{"id":"deer","weight":1},{"id":"doe","weight":1}]}]}""", "count")]
+    [InlineData("""{"version":1,"max_animals":5,"herds":[{"id":"a","count":3,"size":{"min":1,"max":4},"members":[{"id":"deer","weight":1},{"id":"doe","weight":1}]}]}""", "size min is at least 2")]
+    [InlineData("""{"version":1,"max_animals":5,"herds":[{"id":"a","count":3,"size":{"min":5,"max":4},"members":[{"id":"deer","weight":1},{"id":"doe","weight":1}]}]}""", "not above max")]
+    [InlineData("""{"version":1,"max_animals":5,"herds":[{"id":"a","count":3,"members":[{"id":"deer","weight":1}]}]}""", "at least 2")]
+    [InlineData("""{"version":1,"max_animals":5,"herds":[{"id":"a","count":3,"members":[{"id":"deer","weight":1},{"id":"deer","weight":1}]}]}""", "appears twice")]
+    [InlineData("""{"version":1,"max_animals":5,"herds":[{"id":"a","count":3,"members":[{"id":"stag","min":3,"max":2},{"id":"deer","weight":1}]}]}""", "not above max")]
+    [InlineData("""{"version":1,"max_animals":5,"herds":[{"id":"a","count":3,"members":[{"id":"deer","weight":-1},{"id":"doe","weight":1}]}]}""", "weight must be positive")]
+    [InlineData("""{"version":1,"max_animals":5,"herds":[{"id":"a","count":3,"members":[{"id":"deer"},{"id":"doe","weight":1}]}]}""", "needs a max")]
+    [InlineData("""{"version":1,"max_animals":5,"herds":[{"id":"a","count":3,"members":[{"id":"stag","min":1,"max":2},{"id":"bear","min":1,"max":1}]}]}""", "at least one member needs a weight")]
+    [InlineData("""{"version":1,"max_animals":5,"herds":[{"id":"a","count":3,"size":{"min":3,"max":4},"members":[{"id":"stag","min":3,"max":3},{"id":"deer","weight":1}]}]}""", "below size min")]
+    [InlineData("""{"version":1,"max_animals":5,"herds":[{"id":"a","count":3,"spread_m":0,"members":[{"id":"deer","weight":1},{"id":"doe","weight":1}]}]}""", "spread_m")]
+    public void BadMixedHerdsAreRefused(string json, string why) =>
+        Assert.Contains(why, Assert.Throws<DataFileException>(() => WildlifeFile.Parse(json)).Message);
+
+    [Fact]
+    public void AMixedHerdMemberThatIsUnknownOrAPetIsRefused()
+    {
+        var animals = GameData.Load(DataDir).Animals;
+        static string Herd(string id) => $$"""{"version":1,"max_animals":5,"herds":[{"id":"a","count":3,"members":[{"id":"{{id}}","weight":1},{"id":"doe","weight":1}]}]}""";
+        Assert.Contains("not in animals.json", Assert.Throws<DataFileException>(() => WildlifeFile.Parse(Herd("dragon")).CheckAgainst(animals)).Message);
+        Assert.Contains("is a pet", Assert.Throws<DataFileException>(() => WildlifeFile.Parse(Herd("dog")).CheckAgainst(animals)).Message);
+    }
+
     // ---- bird flocks ----
 
     static FlockSpecies Crow() => WildlifeFile.Parse("""{"version":1,"max_animals":0,"species":[],"flocks":[{"id":"crow","flocks":2,"birds_min":8,"birds_max":12,"altitude_min_m":20,"altitude_max_m":30,"range_m":100,"speed_mps":7,"scatter_radius_m":30,"scatter_seconds":5}]}""").Flocks[0];

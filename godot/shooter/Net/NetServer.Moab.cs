@@ -39,7 +39,12 @@ public partial class NetServer
         foreach (var id in victims)
         {
             if (id == BigfootRules.TargetId) DealBigfoot(owner, MoabWeapon); // the Bigfoot takes it as an explosive hit, not as a kill (issue #264)
-            else _match.ApplyDamage(id, owner, MoabWeapon, 9999, ignoreProtection: true);
+            else
+            {
+                _wildHit = new WildHit(MoabWeapon, KillCause.Standard, null, null); // a wild animal in the blast is a hunt with the MOAB
+                _match.ApplyDamage(id, owner, MoabWeapon, 9999, ignoreProtection: true);
+                _wildHit = null;
+            }
         }
         foreach (var car in _cars.Where(c => !c.Destroyed).ToList()) DamageVehicle(car, car.Hp + 1, owner, MoabWeapon, 0);
         GD.Print($"server: MOAB by #{owner} detonated: {victims.Count} killed, vehicles destroyed");

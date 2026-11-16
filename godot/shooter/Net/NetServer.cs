@@ -249,6 +249,7 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Poll);
         CompleteProfileLoads();
         CompleteSaves();
+        HuntTick();
         DropSilentPeers();
         IntelTick(); // a made-up event whose time is up leaves the intel screen
         PerfLap(ServerPerf.Ph.Housekeeping);
@@ -460,6 +461,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) OnSandboxTeleportTo(c, st.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SeatSwitch } sw && c.Joined) OnSeatSwitch(c, sw.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.TeamAssign } ta && c.Joined) OnTeamAssign(c, ta.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) OnHuntRequest(c, hq);
             else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) OnChatSend(c, cs.Payload);
             else if (c.Joined) OnProfileMessage(c, m);
         }
@@ -1034,10 +1036,10 @@ public partial class NetServer : Node
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
             if (hit is { } h)
             {
-                // a wild animal under a sniper rifle: where the bullet entered its body, taken before the hit can remove it (the hit diagram)
-                var hunt = w.Category == WeaponCategory.Sniper && WildlifeRules.IsHitId(h.Id) ? HuntShotOf(targets, h.Id, N(from + along * h.Distance), before + h.Distance, (byte)shot.WeaponIndex, h.ShapeHead) : null;
-                var dealt = Deal(c.Id, (byte)shot.WeaponIndex, h.Id, HitMath.HitscanDamage(w, before + h.Distance, h.Head), h.Head, false);
-                if (dealt == DamageResult.Killed && hunt is { } shown) Send(c, new EventMsg((byte)EventKind.HuntShot, HuntShot.Encode(shown)));
+                // a wild animal under any hitscan weapon: where the bullet entered its body, taken before the hit can remove it (the hunter's log keeps it; a sniper's shooter is also shown it)
+                var hunt = WildlifeRules.IsHitId(h.Id) ? HuntShotOf(targets, h.Id, N(from + along * h.Distance), before + h.Distance, (byte)shot.WeaponIndex, h.ShapeHead) : null;
+                var dealt = Deal(c.Id, (byte)shot.WeaponIndex, h.Id, HitMath.HitscanDamage(w, before + h.Distance, h.Head), h.Head, false, shot: hunt, shotDistance: before + h.Distance);
+                if (dealt == DamageResult.Killed && hunt is { } shown && w.Category == WeaponCategory.Sniper) Send(c, new EventMsg((byte)EventKind.HuntShot, HuntShot.Encode(shown)));
             }
             else if (shotCar != null && Vehicles != null && wall <= len)
                 DamageVehicle(shotCar, HitMath.HitscanDamage(w, before + wall, false) * Vehicles.BulletDamageMultiplier, c.Id, (byte)shot.WeaponIndex, 0);
@@ -1074,12 +1076,15 @@ public partial class NetServer : Node
     }
 
     /// <summary>Applies damage through the match and sends the hit event; returns the result (Ignored when absorbed).</summary>
-    DamageResult Deal(ushort attackerId, byte weaponIdx, ushort victim, float damage, bool head, bool backstab, KillCause cause = KillCause.Standard)
+    /// <param name="shot">Where the bullet entered a wild animal it hit (the hit diagram), and <paramref name="shotDistance"/> how far it flew: for the hunter's log (<see cref="OnWildKilled"/>).</param>
+    DamageResult Deal(ushort attackerId, byte weaponIdx, ushort victim, float damage, bool head, bool backstab, KillCause cause = KillCause.Standard, HuntShotMsg? shot = null, float? shotDistance = null)
     {
         if (victim == BigfootRules.TargetId) return DealBigfoot(attackerId, weaponIdx); // a hit count, not hit points (issue #264)
         if (_streaks.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
         if (DemonRules.IsHitId(victim)) return DemonHit(attackerId, weaponIdx, damage); // the demon: a hit count, no hit points
+        if (WildlifeRules.IsHitId(victim)) _wildHit = new WildHit(weaponIdx, cause, shotDistance, shot); // read by the keeper's Killed event, inside this call
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
+        _wildHit = null;
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
         if (CitizenRules.IsHitId(victim) || PetRules.IsHitId(victim) || WildlifeRules.IsHitId(victim) || GangRules.IsHitId(victim) || RaidVanRules.IsHitId(victim)) // a citizen, a pet, a wild animal, a Gang member or a Raid van: the hit marker, but no assist, streak, refill or kill feed
         {

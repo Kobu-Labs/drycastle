@@ -31,6 +31,15 @@ public static class ShooterTheme
     /// <summary>The drag preview's opacity and the opacity of a cell that is the source of a drag or cannot take the item being dragged.</summary>
     public const float DragPreviewAlpha = 0.85f, DragDimAlpha = 0.45f;
 
+    // the Hunter's Log (a side panel over the right of the screen, the world stays visible): its share of the screen, a Life List tile, a record card's pictures,
+    // the hit card beside the table, a table row; below LogStackBelow reference pixels of panel width the hit card goes under the table instead of beside it
+    public const float LogWidthShare = 0.6f, LogHeightShare = 0.85f;
+    public const int LogTileW = 22 * Space, LogTileArtH = 7 * Space, LogCardW = 40 * Space, LogFigureH = 12 * Space;
+    public const int LogHitW = 30 * Space, LogHitArtH = 20 * Space, LogRowH = 5 * Space, LogStatW = 14 * Space, LogStackBelow = 110 * Space;
+    public const int LogPageButton = 5 * Space, LogFilterW = 22 * Space, LogCloseSize = 3 * Space;
+    /// <summary>The share of the accent that tints the log owner's own rows (the row also says so in words: the "you" tag of the scoreboard).</summary>
+    public const float LogMineTint = 0.18f;
+
     // text sizes (five); body text is 20 and nothing is under 16 at 1080p
     public const int FontSmall = 16, FontBody = 20, FontHead = 24, FontBig = 32, FontDisplay = 48;
 
@@ -121,6 +130,8 @@ public static class ShooterTheme
         Variation(t, "HudBig", FontBig, Text);
         Variation(t, "HudDisplay", FontDisplay, Text);
         Variation(t, "HudAccent", FontBody, Accent);
+        Variation(t, "HudAccentSmall", FontSmall, Accent);
+        Variation(t, "HudTextSmall", FontSmall, Text);
         Variation(t, "HudWarn", FontBody, Warn);
         Variation(t, "HudDanger", FontHead, Danger);
         Variation(t, "HudDisplayDanger", FontDisplay, Danger);
@@ -177,6 +188,7 @@ public static class ShooterTheme
         t.SetConstant("v_separation", "IntelFlow", Space);
 
         ItemCellStyles(t);
+        LogStyles(t);
 
         t.SetStylebox("background", "ProgressBar", Box(new Color(0, 0, 0, 0.55f), 0, Line));
         Bar(t, "HealthBar", Good);
@@ -216,6 +228,63 @@ public static class ShooterTheme
         t.SetConstant("icon_size", c, CellIcon);
         PanelVariation(t, "ItemTip", Box(Raised with { A = 0.97f }, Space, Line));
         PanelVariation(t, "KeyCap", Box(Raised, Space / 2, Line));
+    }
+
+    /// <summary>
+    /// The Hunter's Log: the panel, a stat tile, a record card, a Life List tile (a button that jumps to that species' hunts; dashed in spirit by a dimmer
+    /// border while not hunted), a table row (selected is the pressed look: a strong accent border, not colour alone) and its tinted own-row variation, the
+    /// sortable header (its arrow is an icon in the accent) and the record pill.
+    /// </summary>
+    static void LogStyles(Theme t)
+    {
+        const int pad = Space;
+        PanelVariation(t, "LogPanel", Box(Surface with { A = 0.96f }, Space * 2, Line));
+        PanelVariation(t, "LogStat", Box(Raised, pad, Line));
+        PanelVariation(t, "LogCard", Box(Raised, pad + Space / 2, Line));
+        PanelVariation(t, "LogHit", Box(Raised, pad + Space / 2, Line));
+        PanelVariation(t, "LogPill", Box(Colors.Transparent, Space / 4, Accent, Border, Radius));
+        Variation(t, "LogCaption", FontSmall, Dim);
+
+        VariationButton(t, "LogTile", Box(Raised, pad, Line), Box(Hover, pad, Accent), Box(Active, pad, Accent, BorderStrong));
+        VariationButton(t, "LogTileTodo", Box(Surface, pad, new Color(Line, 0.5f)), Box(Hover, pad, Accent), Box(Active, pad, Accent, BorderStrong));
+        foreach (var n in new[] { "LogTile", "LogTileTodo" })
+        {
+            t.SetStylebox("focus", n, Ring(pad));
+            t.SetStylebox("disabled", n, Box(Surface, pad, new Color(Line, 0.4f)));
+        }
+
+        var none = Box(Colors.Transparent, Space / 2, null, 0);
+        var mine = Box(new Color(Accent, LogMineTint), Space / 2, null, 0);
+        var hover = Box(Hover, Space / 2, null, 0);
+        var selected = Box(Active, Space / 2, Accent, BorderStrong);
+        VariationButton(t, "LogRow", none, hover, selected);
+        VariationButton(t, "LogRowMine", mine, hover, selected);
+        foreach (var n in new[] { "LogRow", "LogRowMine" })
+        {
+            t.SetStylebox("focus", n, Ring(Space / 2));
+            t.SetStylebox("disabled", n, none);
+        }
+
+        VariationButton(t, "LogHead", Box(Raised, Space / 2, null, 0), Box(Hover, Space / 2, null, 0), Box(Active, Space / 2, null, 0));
+        VariationButton(t, "LogHeadSorted", Box(Raised, Space / 2, null, 0), Box(Hover, Space / 2, null, 0), Box(Active, Space / 2, null, 0));
+        foreach (var n in new[] { "LogHead", "LogHeadSorted" })
+        {
+            t.SetStylebox("focus", n, Ring(Space / 2));
+            t.SetFontSize("font_size", n, FontSmall);
+            t.SetColor("font_color", n, Dim);
+            t.SetColor("font_hover_color", n, Text);
+            t.SetColor("font_focus_color", n, Text);
+            foreach (var st in new[] { "icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color", "icon_hover_pressed_color" }) t.SetColor(st, n, Accent);
+            t.SetConstant("icon_max_width", n, Space * 2);
+            t.SetConstant("h_separation", n, Space / 2);
+        }
+        t.SetColor("font_color", "LogHeadSorted", Accent);
+        t.SetColor("font_hover_color", "LogHeadSorted", Accent);
+        t.SetColor("font_focus_color", "LogHeadSorted", Accent);
+
+        // the close button: a bare square holding the drawn cross
+        VariationButton(t, "LogClose", Box(Colors.Transparent, Space / 2, Line), Box(Hover, Space / 2, Accent), Box(Active, Space / 2, Accent, BorderStrong));
+        t.SetStylebox("focus", "LogClose", Ring(Space / 2));
     }
 
     static StyleBoxFlat Ring(int pad = Space * 1) => new StyleBoxFlat { DrawCenter = false, BorderColor = Accent }.With(b => { b.SetBorderWidthAll(BorderStrong); b.SetCornerRadiusAll(Radius); b.SetContentMarginAll(pad); });

@@ -220,6 +220,7 @@ public static class InputBindings
         ("chat", Binding.Key((int)Key.T)),
         ("map", Binding.Key((int)Key.M)),
         ("inventory", Binding.Key((int)Key.F)),
+        ("hunters_log", Binding.Key((int)Key.J)),
         ("binoculars", Binding.Key((int)Key.B)),
     };
 

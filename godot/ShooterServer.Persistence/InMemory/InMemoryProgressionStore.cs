@@ -14,8 +14,10 @@ public sealed class InMemoryProgressionStore : IProgressionStore
     readonly Dictionary<long, HashSet<Unlock>> _unlocks = new();
     readonly Dictionary<long, StatsRow> _stats = new();
     readonly Dictionary<(long Player, int Slot), CamoSpec> _camo = new();
+    readonly List<HuntRecord> _hunts = new();
     readonly LevelCurve _curve;
     long _nextId = 1;
+    long _nextHunt = 1;
 
     sealed record StatsRow(long Kills, long Deaths, long Matches, Dictionary<string, long> Weapons, long Roadkills = 0);
 
@@ -27,6 +29,7 @@ public sealed class InMemoryProgressionStore : IProgressionStore
         Unlocks = new UnlockRepo(this);
         Stats = new StatsRepo(this);
         Camo = new CamoRepo(this);
+        Hunts = new HuntRepo(this);
     }
 
     public IProfileRepository Profiles { get; }
@@ -34,6 +37,7 @@ public sealed class InMemoryProgressionStore : IProgressionStore
     public IUnlockRepository Unlocks { get; }
     public IStatsRepository Stats { get; }
     public ICamoRepository Camo { get; }
+    public IHuntRepository Hunts { get; }
 
     public void Dispose() { }
 
@@ -198,5 +202,28 @@ public sealed class InMemoryProgressionStore : IProgressionStore
                 if (s._stats.TryGetValue(playerId, out var st)) s._stats[playerId] = st with { Matches = st.Matches + 1 };
             return Task.CompletedTask;
         }
+    }
+
+    sealed class HuntRepo(InMemoryProgressionStore s) : IHuntRepository
+    {
+        public Task AppendAsync(HuntRecord hunt)
+        {
+            lock (s._gate)
+                if (s._byId.ContainsKey(hunt.PlayerId)) s._hunts.Add(hunt with { Id = s._nextHunt++ });
+            return Task.CompletedTask;
+        }
+
+        public Task<HuntPage> PageAsync(HuntQuery query)
+        {
+            lock (s._gate) return Task.FromResult(HuntQueryRules.Apply(Rows(), query));
+        }
+
+        public Task<IReadOnlyList<HuntRow>> GetAllAsync()
+        {
+            lock (s._gate)
+                return Task.FromResult<IReadOnlyList<HuntRow>>(Rows().OrderBy(r => r.Hunt.AtUtc).ThenBy(r => r.Hunt.Id).ToList());
+        }
+
+        IEnumerable<HuntRow> Rows() => s._hunts.Select(h => new HuntRow(h, s._byId[h.PlayerId].Name)).ToList();
     }
 }

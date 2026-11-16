@@ -46,6 +46,17 @@ public interface ICamoRepository
     Task SaveAsync(long playerId, int slot, CamoSpec spec);
 }
 
+/// <summary>The Hunter's Log (#336): every hunt, kept forever. Rules (records, first-times, redaction) are <see cref="HuntBook"/>'s, not the store's; the store keeps rows and pages them.</summary>
+public interface IHuntRepository
+{
+    /// <summary>Queues one hunt (its <see cref="HuntRecord.Id"/> is ignored). A failed write is logged, never thrown. A hunt of an unknown player is not stored.</summary>
+    Task AppendAsync(HuntRecord hunt);
+    /// <summary>One page of <see cref="HuntBook.PageSize"/> hunts, filtered and sorted as <see cref="HuntQuery"/> says, with the hunters' names as players.name has them.</summary>
+    Task<HuntPage> PageAsync(HuntQuery query);
+    /// <summary>Every hunt, oldest first (ties by id): what <see cref="HuntBook.From"/> replays at server start.</summary>
+    Task<IReadOnlyList<HuntRow>> GetAllAsync();
+}
+
 /// <summary>One store = one database (or in-memory set). Disposing it stops the background writer.</summary>
 public interface IProgressionStore : IDisposable
 {
@@ -54,6 +65,7 @@ public interface IProgressionStore : IDisposable
     IUnlockRepository Unlocks { get; }
     IStatsRepository Stats { get; }
     ICamoRepository Camo { get; }
+    IHuntRepository Hunts { get; }
     /// <summary>Writes and reads queued behind the database thread (0 for a store with no queue). Logged by the server telemetry line.</summary>
     int QueueDepth => 0;
 }

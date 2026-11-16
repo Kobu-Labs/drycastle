@@ -368,6 +368,7 @@ public partial class NetClient : Node
                 OnGarageDoorEvent((EventKind)e.Kind, e.Payload); // the bus garage's doors
                 OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
                 OnDemonEvent((EventKind)e.Kind, e.Payload); // the demon: fireballs, the curse
+                OnHuntEvent((EventKind)e.Kind, e.Payload); // the Hunter's Log: answers and announcements (#336)
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 OnProgressionEvent((EventKind)e.Kind, e.Payload);
@@ -917,6 +918,7 @@ public partial class NetClient : Node
         if (HandleChatInput(e)) return; // T or "/": the chat box
         if (HandleMapInput(e)) return; // M: the tactical map
         if (HandleEquipmentInput(e)) return; // F: the Equipment screen (#268)
+        if (HandleHuntersLogInput(e)) return; // J: the Hunter's Log (#336)
         if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
         if (HandleSeatInput(e)) return; // a number key while seated takes that seat
         if (HandleViewInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
