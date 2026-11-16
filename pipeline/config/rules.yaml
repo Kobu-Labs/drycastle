@@ -186,7 +186,8 @@ terrain:
   # Flat face colours by the parcel kind under the face centre. A list is a set of shades; one
   # is picked per parcel (seeded by the parcel ID), so parcels read as patches.
   # Around the outline of ground of these kinds the face colour is the mean of the colours within radius_m, so a forest
-  # fades into the field or meadow beside it over a band of about twice that width instead of ending at a line.
+  # fades into the field or meadow beside it over a band of about twice that width instead of ending at a line. The outline of
+  # swamp ground (detail.swamp) is faded the same way.
   colour_blend: {kinds: [forest], radius_m: 12}
   # Parcel kinds; the ground types carry their own colours (ground.types).
   colours:
@@ -482,7 +483,7 @@ detail:
   # height on a ring of ring_m round it minus its own, over depth_m. Puddles and ordinary mud are more likely in hollows (times 1 + gain * hollow).
   hollow: {ring_m: 6.0, depth_m: 0.25, gain: 3.0}
   # Swamp ground (#287): ground of the types in `kinds` within the reach of water gets a wet floor instead of the plain one: a dark wet-earth
-  # base (flat colours, a layer of its own under everything), large `mud` patches, small `puddle` patches (flat dark standing water, optionally
+  # base (`colours`: the terrain's own colour there, faded into the ground beside it by terrain.colour_blend; not a patch), large `mud` patches, small `puddle` patches (flat dark standing water, optionally
   # in a mud rim of rim_m, 0 = none), moss as in any forest, and leaf litter and bare spots cut to a share (litter_factor, dirt_factor). The zone is the
   # one the swamp stand of trees stands in: props.wet_zone (water ground areas, wet areas of water patches) buffered by
   # props.trees.stands.swamp.reach_m. Cells of it carry the meadow's swamp mix (`swamp_mix` of meadow.zones). Patches only; no real water, no gameplay.

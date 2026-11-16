@@ -71,7 +71,6 @@ pub fn swamp_layers(ctx: &Ctx, cfg: Cfg, free: &G, pid: &str, bx: [f64; 4]) -> B
         }
         puddles.push(g);
     }
-    out.insert("swamp", geom::dup(zone));
     out.insert("mud", geom::union_all(mud));
     out.insert("puddle", geom::union_all(puddles));
     out

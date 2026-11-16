@@ -155,7 +155,7 @@ def test_swamp_ground_matches_the_python_stage(wet_ws, tmp_path) -> None:
     assert not stats["failed"]
     for recipe in ("forest", "field"):  # the forest and the meadow (a field recipe) both take the wet floor
         want, got = py.stats["patch_triangles_by_type"][recipe], stats["patch_triangles_by_type"][recipe]
-        assert want["swamp"] > 100 and got["swamp"] == pytest.approx(want["swamp"], rel=0.5), (recipe, want, got)
+        assert "swamp" not in want and "swamp" not in got, (recipe, want, got)  # the base is the terrain's colour
     f, g = py.stats["patch_triangles_by_type"]["forest"], stats["patch_triangles_by_type"]["forest"]
     for layer in ("mud", "puddle"):
         assert f[layer] > 20 and g[layer] == pytest.approx(f[layer], rel=0.8), (layer, f, g)
@@ -183,4 +183,4 @@ def test_a_tiled_forest_gets_the_wet_floor(wet_ws, tmp_path) -> None:
     stats, _ = R.run_engine(work, edits_path=tmp / "no-edits.json", threads=2, only=["P-0005"], out_dir=tmp_path)
     assert stats["items"] > stats["parts"] and not stats["failed"]  # tiled
     forest = stats["patch_triangles_by_type"]["forest"]
-    assert forest["swamp"] > 100 and forest["mud"] > 20
+    assert forest["mud"] > 20

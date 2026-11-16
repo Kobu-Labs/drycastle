@@ -405,6 +405,8 @@ def ortho_trees(
             continue
         if road is not None and shapely.contains_xy(road, x, y):  # a trunk on a carriageway (roadside trees the photo puts on the road)
             continue
+        if zones[3] is not None and shapely.contains_xy(zones[3], x, y):  # or in water
+            continue
         scale = min(3.0, max(0.8, 2.0 * float(t["radius_m"]) / canopy_m))
         trees.append(tree(x, y, seeded(f"ortho:{t['x']}:{t['y']}"), None, False, "ortho", scale))
         add(x, y)
@@ -545,6 +547,8 @@ def make_trees(
         return []
     bzone, rzone, ozone = clearance_zones(buildings, graph, cfg, objects)
     shapely.prepare(terrain.coverage)
+    if wet is not None:  # every water: the water ground areas too, not only the wet areas of the water patches
+        water = wet
     for g in (bzone, rzone, ozone, water):
         if g is not None:
             shapely.prepare(g)

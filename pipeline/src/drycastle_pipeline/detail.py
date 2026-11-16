@@ -945,7 +945,7 @@ def _swamp_layers(ctx: ParcelContext, cfg: dict, free: BaseGeometry) -> dict[str
         puddles.append(pud)
         if float(pc["rim_m"]) > 0:
             mud.append(pud.buffer(float(pc["rim_m"]), quad_segs=2))
-    return {"swamp": ctx.swamp, "mud": _union(mud), "puddle": _union(puddles)}
+    return {"mud": _union(mud), "puddle": _union(puddles)}  # the dark base is the terrain's colour there (scene.ParcelColours)
 
 
 def _forest_mud(ctx: ParcelContext, cfg: dict, free: BaseGeometry) -> tuple[BaseGeometry, BaseGeometry]:

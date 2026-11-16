@@ -178,14 +178,10 @@ def test_swamp_ground_has_a_wet_floor_and_less_litter(cfg) -> None:
     ctx, res = swamp_forest(cfg)
     layer = lambda n: unary_union([p.geom for p in res.patches if p.layer == n] or [Polygon()])
     zone, free = ctx.swamp, free_area(ctx, cfg, trunks=False)
-    base = layer("swamp")
-    assert base.area > 0.3 * zone.intersection(free).area and base.difference(zone.buffer(1e-6)).area < 1e-6
-    assert all(p.colour is not None and p.texture is None for p in res.patches if p.layer == "swamp")
+    assert not any(p.layer == "swamp" for p in res.patches)  # the dark base is the terrain's colour (scene.ParcelColours), no patch
     assert {p.texture for p in res.patches if p.layer in ("mud", "puddle")} == {"mud", "puddle"}
-    # the wet floor covers the zone: no tone patch, and almost no bare ground (everything in it is some patch)
+    # no tone patch on the wet floor
     assert not any(p.layer in ("tone_a", "tone_b") and p.geom.intersects(zone.buffer(-0.5)) for p in res.patches)
-    covered = unary_union([p.geom for p in res.patches]).intersection(zone)
-    assert covered.area > 0.98 * zone.intersection(free).area
     # moss stays, litter is cut to its factor per tree
     assert layer("moss").intersection(zone).area > 0
     plain = forest_detail(forest_with_road(), cfg)
@@ -204,10 +200,10 @@ def test_swamp_ground_has_a_wet_floor_and_less_litter(cfg) -> None:
 def test_a_meadow_in_reach_of_water_is_swampy_too(cfg) -> None:
     ctx = yard()
     ctx.kind, ctx.polygon, ctx.fences, ctx.buildings, ctx.road, ctx.trees = "meadow", box(0, 0, 90, 90), [], [], None, []
-    assert not any(p.layer in ("swamp", "mud", "puddle") for p in field_detail(ctx, cfg).patches)
+    assert not any(p.layer in ("mud", "puddle") for p in field_detail(ctx, cfg).patches)
     ctx.swamp = box(-5, -5, 50, 95)
     got = {p.layer for p in field_detail(ctx, cfg).patches}
-    assert {"swamp", "mud", "puddle"} <= got and not {"tone_a", "tone_b"} & {
+    assert {"mud", "puddle"} <= got and not {"tone_a", "tone_b"} & {
         p.layer for p in field_detail(ctx, cfg).patches if p.geom.intersects(ctx.swamp.buffer(-0.5))}
 
 

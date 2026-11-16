@@ -177,3 +177,20 @@ def test_forest_colour_fades_into_its_neighbour_over_the_blend_band() -> None:
     assert (soft[0] == flat[0]).all() and (soft[4] == flat[4]).all()  # far from the outline: untouched
     red = soft[:, 0].astype(int)
     assert red[0] < red[1] < red[2] < red[3] < red[4]  # a ramp across the outline
+
+
+def test_swamp_ground_is_terrain_colour_and_fades_at_its_outline() -> None:
+    from shapely.geometry import box
+
+    from drycastle_pipeline.scene import ParcelColours
+
+    sq = lambda x0, x1: {"type": "Polygon", "coordinates": [[[x0, 0], [x1, 0], [x1, 100], [x0, 100], [x0, 0]]]}
+    units = [{"id": "A-1", "kind": "forest", "polygon": sq(0, 200)}, {"id": "A-2", "kind": "road", "polygon": sq(200, 300)}]
+    palette = {"forest": ["#30a030"], "road": ["#808080"], "other": ["#808080"]}
+    swamp = {"zone": box(-10, -10, 100, 310).union(box(240, -10, 310, 110)), "kinds": ["forest"], "colours": ["#402010"]}
+    pts = np.array([[50.0, 50.0], [95.0, 50.0], [100.5, 50.0], [106.0, 50.0], [150.0, 50.0], [270.0, 50.0]])
+    col = ParcelColours(units, palette, {"kinds": [], "radius_m": 12}, swamp)(pts)
+    assert col[0].tolist() == [0x40, 0x20, 0x10] and col[4].tolist() == [0x30, 0xA0, 0x30]  # wet inside the zone, plain forest outside
+    green = col[:5, 1].astype(int)
+    assert green[0] < green[1] < green[2] < green[3] < green[4]  # a ramp across the zone's outline
+    assert col[5].tolist() == [0x80, 0x80, 0x80]  # ground of another kind in the zone keeps its colour
