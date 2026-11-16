@@ -1,29 +1,33 @@
 using System.Numerics;
+using System.Text.Json;
 using Drycastle.ShooterCore;
 
 namespace Drycastle.MapLoader;
 
-// Pure (no Godot types): compiled into ShooterCore.Tests by a link. The pack-tree prototype (#287): detailed models of the private nature pack
+// Pure (no Godot types): compiled into ShooterCore.Tests by a link. The pack trees (#287): detailed models of the private nature pack
 // near the player in place of the baked trees. Config: shooter/data/pack_trees.json. Streaming and drawing: MapLoader.PackTrees.cs.
 
-/// <summary>A model that may stand in for a tree shape, and its share among the models of that shape.</summary>
+/// <summary>A model that may stand in for a tree shape, its share among the models of that shape, and whether it is a bulk model (see the file's _note).</summary>
 public sealed class PackTreeEntry
 {
     public string Name { get; set; } = "";
     public float Weight { get; set; } = 1f;
+    public bool Bulk { get; set; }
 }
 
-/// <summary>pack_trees.json: the near ring, the tiles and the models per tree shape (see the file's _note).</summary>
+/// <summary>pack_trees.json: the near radius, the tiles and the models per tree shape (see the file's _note).</summary>
 public sealed class PackTreeConfig : IVersioned
 {
     public int Version { get; set; }
     public float NearM { get; set; } = 70f;
     public float FadeM { get; set; } = 14f;
-    public float TileM { get; set; } = 32f;
-    public float ReleaseM { get; set; } = 120f;
-    public float RescanM { get; set; } = 3f;
-    public int MaxBuildsPerCall { get; set; } = 2;
-    public double BudgetMs { get; set; } = 3.0;
+    public float TileM { get; set; } = 48f;
+    public float AheadM { get; set; } = 16f;
+    public int MaxInFlight { get; set; } = 3;
+    public double BudgetMs { get; set; } = 2.0;
+    public float ScaleMin { get; set; } = 0.5f;
+    public float ScaleMax { get; set; } = 4f;
+    public float BulkShare { get; set; } = 0.85f;
     public bool Shadows { get; set; } = true;
     public Dictionary<string, List<PackTreeEntry>> Shapes { get; set; } = new();
 
@@ -33,8 +37,10 @@ public sealed class PackTreeConfig : IVersioned
         if (!(c.NearM > 0)) throw new DataFileException("pack_trees.json: near_m must be above 0");
         if (c.FadeM < 0) throw new DataFileException("pack_trees.json: fade_m must not be negative");
         if (!(c.TileM > 0)) throw new DataFileException("pack_trees.json: tile_m must be above 0");
-        if (c.ReleaseM < 0 || c.RescanM < 0) throw new DataFileException("pack_trees.json: release_m and rescan_m must not be negative");
-        if (c.MaxBuildsPerCall < 1) throw new DataFileException("pack_trees.json: max_builds_per_call must be at least 1");
+        if (c.AheadM < 0) throw new DataFileException("pack_trees.json: ahead_m must not be negative");
+        if (c.MaxInFlight < 1) throw new DataFileException("pack_trees.json: max_in_flight must be at least 1");
+        if (!(c.ScaleMin > 0) || c.ScaleMax < c.ScaleMin) throw new DataFileException("pack_trees.json: scale_min must be above 0 and scale_max at least scale_min");
+        if (c.BulkShare < 0 || c.BulkShare > 1) throw new DataFileException("pack_trees.json: bulk_share must be within 0 and 1");
         foreach (var (shape, list) in c.Shapes)
             if (list.Any(e => e.Name.Length == 0 || e.Weight < 0)) throw new DataFileException($"pack_trees.json: shape '{shape}' has an entry without a name or with a negative weight");
         return c;
@@ -51,12 +57,31 @@ public static class PackTreeSettings
 
     public static bool ParseEnabled(string? value)
         => string.IsNullOrWhiteSpace(value) || !(value.Trim().ToLowerInvariant() is "0" or "off" or "false" or "no");
+
+    /// <summary>Whether trees.json says the props meshes carry the base point of each tree in UV2 (<c>model.base_uv2</c>, see <see cref="PackTreeMath.NoBase"/>). False for a file without the flag.</summary>
+    public static bool ReadBaseUv2(string treesJson)
+    {
+        if (string.IsNullOrWhiteSpace(treesJson)) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(treesJson);
+            return doc.RootElement.TryGetProperty("model", out var m) && m.ValueKind == JsonValueKind.Object
+                && m.TryGetProperty("base_uv2", out var b) && b.ValueKind == JsonValueKind.True;
+        }
+        catch (JsonException) { return false; }
+    }
 }
 
-/// <summary>The arithmetic of the pack trees: which model, how big, which tile.</summary>
+/// <summary>A model that may stand in for a tree: its id (index into the loader's models), native height, weight within its shape and bulk flag.</summary>
+public readonly record struct PackCandidate(int ModelId, float HeightM, float Weight, bool Bulk);
+
+/// <summary>The arithmetic of the pack trees: which model, how big, which tile, where the cut is.</summary>
 public static class PackTreeMath
 {
     const int ModelSalt = 3001;
+
+    /// <summary>UV2 of a vertex that belongs to no tree (a fence): far outside any map. The shaders (tree_cut.gdshaderinc) skip the cut for it.</summary>
+    public const float NoBase = 1.0e6f;
 
     /// <summary>A number in [0, 1) from a tree's position (rounded to centimetres): the same tree gets the same number on every client and every run.</summary>
     public static double Roll(float x, float y)
@@ -92,6 +117,52 @@ public static class PackTreeMath
     public static float ScaleFor(TreeInstance t, TreeModel m, float modelHeightM)
         => modelHeightM > 1e-4f ? CodeHeight(t, m) / modelHeightM : 1f;
 
+    /// <summary>
+    /// The candidate for a tree of <paramref name="codeHeightM"/> (index into <paramref name="list"/>; -1 when nothing has a weight). A roll under
+    /// <paramref name="bulkShare"/> picks from the bulk models, the rest from the occasional ones (all of one kind when the list has only that kind);
+    /// within the kind the models whose scale (code height over native height) lies in [scaleMin, scaleMax] share the roll by weight, and when none does the
+    /// one nearest to the span (in ratio) stands in. The same inputs give the same model on every client.
+    /// </summary>
+    public static int Choose(IReadOnlyList<PackCandidate> list, float codeHeightM, double roll, float scaleMin, float scaleMax, float bulkShare)
+    {
+        bool hasBulk = false, hasOcc = false;
+        foreach (var c in list)
+        {
+            if (c.Weight <= 0) continue;
+            if (c.Bulk) hasBulk = true; else hasOcc = true;
+        }
+        if (!hasBulk && !hasOcc) return -1;
+        double share = hasBulk && hasOcc ? Math.Clamp(bulkShare, 0f, 1f) : hasBulk ? 1.0 : 0.0;
+        var bulk = roll < share;
+        var r = bulk ? (share > 0 ? roll / share : 0.0) : (share < 1 ? (roll - share) / (1 - share) : 0.0);
+
+        var fit = new List<int>();
+        var nearest = -1;
+        var nearestOff = double.MaxValue;
+        for (var i = 0; i < list.Count; i++)
+        {
+            var c = list[i];
+            if (c.Weight <= 0 || c.Bulk != bulk) continue;
+            var scale = c.HeightM > 1e-4f ? codeHeightM / c.HeightM : 1f;
+            if (scale >= scaleMin && scale <= scaleMax) { fit.Add(i); continue; }
+            var off = scale < scaleMin ? Math.Log(scaleMin / Math.Max(scale, 1e-6f)) : Math.Log(scale / scaleMax);
+            if (off < nearestOff) { nearestOff = off; nearest = i; }
+        }
+        if (fit.Count == 0) return nearest;
+        return fit[Pick(fit.Select(i => list[i].Weight).ToList(), r)];
+    }
+
+    /// <summary>One tree of a tile as a pack tree: the model's id, scale and turn; null when the shape has no model. Base in Godot axes.</summary>
+    public static PackPlacement? Place(TreeInstance t, TreeModel m, IReadOnlyList<PackCandidate> cone, IReadOnlyList<PackCandidate> box, PackTreeConfig cfg)
+    {
+        var list = t.Cone ? cone : box;
+        var h = CodeHeight(t, m);
+        var pick = Choose(list, h, Roll(t.X, t.Y), cfg.ScaleMin, cfg.ScaleMax, cfg.BulkShare);
+        if (pick < 0) return null;
+        var model = list[pick];
+        return new PackPlacement(new Vector3(t.X, t.Z, -t.Y), t.Rot, model.HeightM > 1e-4f ? h / model.HeightM : 1f, model.ModelId);
+    }
+
     public static int TileOf(float v, float tileM) => (int)MathF.Floor(v / tileM);
 
     /// <summary>The trees by tile (map metres, x and y of the trunk).</summary>
@@ -107,17 +178,15 @@ public static class PackTreeMath
         return index;
     }
 
-    /// <summary>The tiles whose centre is within <paramref name="radius"/> of (fx, fy), with that distance.</summary>
-    public static IEnumerable<(int Tx, int Ty, float Dist)> TilesWithin(float fx, float fy, float radius, float tileM)
+    /// <summary>The tiles whose box is within <paramref name="radius"/> of (fx, fy), with that distance (0 for the tile the point is in).</summary>
+    public static IEnumerable<(int Tx, int Ty, float Dist)> TilesNear(float fx, float fy, float radius, float tileM)
     {
         var span = (int)MathF.Ceiling(radius / tileM) + 1;
         int cx = TileOf(fx, tileM), cy = TileOf(fy, tileM);
         for (var ty = cy - span; ty <= cy + span; ty++)
             for (var tx = cx - span; tx <= cx + span; tx++)
             {
-                var dx = (tx + 0.5f) * tileM - fx;
-                var dy = (ty + 0.5f) * tileM - fy;
-                var d = MathF.Sqrt(dx * dx + dy * dy);
+                var d = DistToBox(fx, fy, tx * tileM, ty * tileM, (tx + 1) * tileM, (ty + 1) * tileM);
                 if (d <= radius) yield return (tx, ty, d);
             }
     }
@@ -129,81 +198,87 @@ public static class PackTreeMath
         var dy = MathF.Max(MathF.Max(y0 - fy, fy - y1), 0f);
         return MathF.Sqrt(dx * dx + dy * dy);
     }
+
+    /// <summary>
+    /// How far a tree whose base is <paramref name="dist"/> from the focus is from being a pack tree: 0 inside radius - band, 1 beyond the radius,
+    /// linear between. The pack tree is drawn with share 1 - this and the baked tree with this, dithered against the same noise, so exactly one of the
+    /// two is drawn at every pixel. Mirrors <c>tree_far</c> in tree_cut.gdshaderinc.
+    /// </summary>
+    public static float FarShare(float dist, float radius, float band)
+    {
+        if (dist >= radius) return 1f;
+        band = MathF.Max(band, 0.001f);
+        return Math.Clamp((dist - (radius - band)) / band, 0f, 1f);
+    }
+
+    /// <summary>
+    /// The radius of the cut: the near radius, but no further than the nearest tile that has pack trees to draw and is not built yet (distances from
+    /// the focus to those tiles), so the baked trees are never hidden before the pack trees that replace them exist.
+    /// </summary>
+    public static float CutRadius(float nearM, IEnumerable<float> unbuiltTileDistances)
+    {
+        var r = nearM;
+        foreach (var d in unbuiltTileDistances) r = MathF.Min(r, d);
+        return r;
+    }
 }
 
-/// <summary>
-/// Which tree a baked triangle belongs to. The chunk meshes hold fences and trees in one mesh per props node with nothing to tell them apart,
-/// but a tree's triangles lie exactly on the faces of its collision solids (the colliders mirror the drawn tree), so a triangle with all three
-/// corners on one face of one tree's solid is that tree's. A fence triangle would have to lie on a tree's face by chance. Map metres.
-/// </summary>
-public sealed class TreeTriangleOwner
+/// <summary>One surface of a pack model: vertices in the model's frame (foot at the origin, Godot axes), every vertex with a normal and a UV, and the index of its material.</summary>
+public sealed record PackSurface(int Material, Vector3[] Vertices, Vector3[] Normals, Vector2[] Uv, int[] Indices);
+
+/// <summary>A pack model with its surfaces; <see cref="Triangles"/> is the sum over them.</summary>
+public sealed class PackModelMesh
 {
-    const float CellM = 16f, Tol = 0.02f;
+    public required string Name { get; init; }
+    public required float HeightM { get; init; }
+    public required IReadOnlyList<PackSurface> Surfaces { get; init; }
+    int? _triangles;
+    public int Triangles => _triangles ??= Surfaces.Sum(s => s.Indices.Length / 3);
+}
 
-    readonly IReadOnlyList<TreeInstance> _trees;
-    readonly TreeModel _model;
-    readonly Dictionary<(int, int), List<int>> _cells = new();
-    readonly (Vector3 N, float D)[][][] _planes; // per tree (built when first asked), per part: unit normals
-    int _last = -1;
+/// <summary>A pack tree to draw: its base (Godot axes), turn about the up axis, uniform scale and the model's id.</summary>
+public readonly record struct PackPlacement(Vector3 Base, float Rot, float Scale, int Model);
 
-    public TreeTriangleOwner(IReadOnlyList<TreeInstance> trees, TreeModel model)
+/// <summary>The triangles of every placement that wears one material, as one mesh: positions relative to the tile (centre x, z), UV2 = the tree's base (x, z) in the same frame.</summary>
+public sealed class PackBucket
+{
+    public required int Material { get; init; }
+    public readonly List<Vector3> V = new(), N = new();
+    public readonly List<Vector2> Uv = new(), Uv2 = new();
+    public readonly List<int> I = new();
+}
+
+public static class PackTileMesher
+{
+    /// <summary>
+    /// A tile's trees as one bucket per material (ordered by material): each model's triangles scaled, turned by the tree's Rot and moved to its base, minus the tile
+    /// centre, like the meadow's merged tiles. A tile then costs one draw per material, whatever models it holds.
+    /// </summary>
+    public static List<PackBucket> Build(IReadOnlyList<PackModelMesh> models, IReadOnlyList<PackPlacement> trees, Vector3 centre)
     {
-        _trees = trees;
-        _model = model;
-        _planes = new (Vector3, float)[trees.Count][][];
-        for (var i = 0; i < trees.Count; i++)
+        var byMaterial = new SortedDictionary<int, PackBucket>();
+        foreach (var t in trees)
         {
-            var t = trees[i];
-            var r = model.CanopyM * t.Scale * 1.6f + 0.5f; // as TreeColliders: nothing of the tree lies further out
-            for (var cx = Cell(t.X - r); cx <= Cell(t.X + r); cx++)
-                for (var cy = Cell(t.Y - r); cy <= Cell(t.Y + r); cy++)
-                {
-                    if (!_cells.TryGetValue((cx, cy), out var list)) _cells[(cx, cy)] = list = new List<int>();
-                    list.Add(i);
-                }
-        }
-    }
-
-    static int Cell(float v) => (int)MathF.Floor(v / CellM);
-
-    /// <summary>The index (into the tree list) of the tree the triangle belongs to, or -1 (a fence, or anything else).</summary>
-    public int Find(Vector3 a, Vector3 b, Vector3 c)
-    {
-        if (_last >= 0 && On(_last, a, b, c)) return _last; // a tree's triangles are consecutive
-        var m = (a + b + c) / 3f;
-        if (!_cells.TryGetValue((Cell(m.X), Cell(m.Y)), out var candidates)) return -1;
-        foreach (var i in candidates)
-            if (i != _last && On(i, a, b, c)) return _last = i;
-        return -1;
-    }
-
-    bool On(int i, Vector3 a, Vector3 b, Vector3 c)
-    {
-        var parts = _planes[i] ??= Planes(i);
-        foreach (var planes in parts)
-            if (OnFace(planes, a, b, c)) return true;
-        return false;
-    }
-
-    (Vector3 N, float D)[][] Planes(int i)
-    {
-        var parts = TreeColliders.Parts(_trees[i], _model);
-        var result = new (Vector3, float)[parts.Count][];
-        for (var k = 0; k < parts.Count; k++)
-            result[k] = parts[k].Planes().Select(p => { var len = p.N.Length(); return (p.N / len, p.D / len); }).ToArray();
-        return result;
-    }
-
-    /// <summary>All three corners within the tolerance of the solid, and on one of its faces.</summary>
-    static bool OnFace((Vector3 N, float D)[] planes, Vector3 a, Vector3 b, Vector3 c)
-    {
-        foreach (var (n, d) in planes)
-            if (MathF.Abs(Vector3.Dot(n, a) - d) <= Tol && MathF.Abs(Vector3.Dot(n, b) - d) <= Tol && MathF.Abs(Vector3.Dot(n, c) - d) <= Tol)
+            var (s, c) = MathF.SinCos(t.Rot);
+            var origin = new Vector3(t.Base.X - centre.X, t.Base.Y, t.Base.Z - centre.Z);
+            var baseUv = new Vector2(origin.X, origin.Z);
+            foreach (var surface in models[t.Model].Surfaces)
             {
-                foreach (var (n2, d2) in planes)
-                    if (Vector3.Dot(n2, a) - d2 > Tol || Vector3.Dot(n2, b) - d2 > Tol || Vector3.Dot(n2, c) - d2 > Tol) return false;
-                return true;
+                if (!byMaterial.TryGetValue(surface.Material, out var b)) byMaterial[surface.Material] = b = new PackBucket { Material = surface.Material };
+                var first = b.V.Count;
+                for (var i = 0; i < surface.Vertices.Length; i++)
+                {
+                    b.V.Add(Turn(surface.Vertices[i], s, c) * t.Scale + origin);
+                    b.N.Add(Turn(surface.Normals[i], s, c));
+                    b.Uv.Add(surface.Uv[i]);
+                    b.Uv2.Add(baseUv);
+                }
+                foreach (var idx in surface.Indices) b.I.Add(first + idx);
             }
-        return false;
+        }
+        return byMaterial.Values.ToList();
     }
+
+    /// <summary>Rotation about +Y by the angle whose sine and cosine are given (Godot's <c>Basis.Rotated(Up, angle)</c>).</summary>
+    static Vector3 Turn(Vector3 v, float s, float c) => new(v.X * c + v.Z * s, v.Y, -v.X * s + v.Z * c);
 }

@@ -145,10 +145,11 @@ frame, freed 30 m behind its range. A tile and layer with a kind of at least `Me
 Instances within a tree's trunk reach (from `trees.json`) are dropped; the height comes from `GroundHeight` (the terrain collision mesh, decimated). The focus is the current camera
 unless `MapLoader.SetClutterFocus(position)` is called each frame. A map without `meadow.bin` and the headless server do nothing.
 
-Pack trees (prototype, #287; `MapLoader.PackTrees.cs`, `PackTreeData.cs`, `shooter/data/pack_trees.json`): with the private nature pack (`assets-private/synty/glb/nature`) installed, trees within `near_m` of the focus are drawn as pack models,
-one MultiMesh per model and 32 m tile (model = hash of the tree's position by the weights of its shape, scaled to the code-built tree's height), and their baked trees are hidden: a baked props node a tile touches is cut once into one mesh per tile
-plus the fences, and a tile with pack trees hides its mesh (a node whose tiles are all far is put back in one piece). Collision is unchanged. `DRYCASTLE_PACK_TREES=0` turns it off. Counters: `MapLoader.PackTreeNodes` (MultiMeshes, instances, triangles)
-and `PackTreeBaked` (cut nodes, baked pieces); `--perf-route` writes them to `route-frames.csv` and `route-summary.json`.
+Pack trees (#287; `MapLoader.PackTrees.cs`, `PackTreeData.cs`, `TreeCutShaders.cs`, `Shaders/`, `shooter/data/pack_trees.json`): with the private nature pack (`assets-private/synty/glb/nature`) installed, trees whose base is within `near_m` of the focus are drawn as pack models and their baked trees are not.
+The cut is in the shaders: a map whose `trees.json` has `model.base_uv2` has UV2 on every props mesh that holds trees (a tree's base in the mesh's own (x, z), `1e6` for fences); those meshes (chunk `props`, `parcel_ID_props`, the dynamic ones of a parcel swap) get `props_tree_cut.gdshader` (the flat vertex-colour material plus the cut) instead of the flat material.
+The streamer sets the global shader parameter `tree_cut` (focus, radius, fade band) each frame, so the shadow pass cuts the same trees. Over the last `fade_m` inside the radius the baked and the pack tree are dithered against one screen-door noise (each pixel shows one of them). The radius never passes a tile that is not built yet.
+Pack trees are merged per tile (`tile_m`, 48 m) and material into one mesh (`pack_tree.gdshader`: albedo texture and colour, alpha scissor, cull mode of `materials.json`), built on worker threads and handed to the renderer within `budget_ms`; a tile costs one draw per material (bulk models share the atlas). The model of a tree is a hash of its position among the models whose scale to the code-built tree's height lies within `scale_min`..`scale_max`, bulk models by `bulk_share`.
+Without `base_uv2` (old map), without the pack or with `DRYCASTLE_PACK_TREES=0` nothing changes (one warning for the old map). Collision is unchanged. Counters: `MapLoader.PackTreeDrawn` (tiles, draws, trees, triangles); `--perf-route` writes them to `route-frames.csv` and `route-summary.json`.
 
 ## Editor mode
 

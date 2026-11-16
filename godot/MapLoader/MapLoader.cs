@@ -105,7 +105,6 @@ public sealed partial class MapLoader
         using var manifest = JsonDocument.Parse(manifestBytes);
         MapVersion = manifest.RootElement.GetProperty("map_version").GetString() ?? "";
         if (manifest.RootElement.TryGetProperty("edit_defaults", out var ed)) EditDefaults = EditDefaults.Read(ed);
-        FreePackTrees();
         ReadParcels(Path.Combine(mapDir, "parcels.json"));
         ParcelIndex = new ParcelIndex(_parcels.Values);
         ReadSpawns(Path.Combine(mapDir, "spawns.json"));
@@ -120,6 +119,7 @@ public sealed partial class MapLoader
         WaterJson = File.Exists(water) ? File.ReadAllText(water) : "";
         var trees = Path.Combine(mapDir, "trees.json");
         TreesJson = File.Exists(trees) ? File.ReadAllText(trees) : ""; // map 0.6.0+
+        PlanPackTrees(); // before the chunks: decides whether their props meshes get the tree-cut material
         var windows = Path.Combine(mapDir, "windows.json");
         WindowsJson = File.Exists(windows) ? File.ReadAllText(windows) : ""; // only maps with hand-described building detail have it
         var bunkers = Path.Combine(mapDir, "bunkers.json");
@@ -419,16 +419,12 @@ public sealed partial class MapLoader
             var (baseName, texture) = SplitTexNode(name);
             if (PropsParcelId(baseName) is { } propsId)
             {
-                if (texture == null) { _propsVisuals[propsId] = mi; RegisterPropsNode(mi); }
+                if (texture == null) _propsVisuals[propsId] = mi;
                 else
                 {
                     if (!_propsTexVisuals.TryGetValue(propsId, out var tex)) _propsTexVisuals[propsId] = tex = new();
                     tex.Add(mi);
                 }
-            }
-            else if (name == "props")
-            {
-                RegisterPropsNode(mi); // the trees and fences of a chunk that belong to no parcel
             }
             else if (name == "terrain")
             {
