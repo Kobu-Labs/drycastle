@@ -15,6 +15,7 @@ public static class TeamsStrings
         ("teams.head.none", "Unassigned   {0} players"),
         ("teams.empty", "Nobody on this team. Drop a player here."),
         ("teams.empty.none", "Nobody is out of the round. Drop a player here to take them out until you put them on a team."),
+        ("teams.none.note", "Players in sandbox mode are listed here too. Dropping one on a team ends their sandbox mode."),
         ("teams.you", "{0} (you)"), ("teams.tag.bot", "BOT"),
         ("teams.act.bots_a", "Bots to team A"), ("teams.act.bots_b", "Bots to team B"),
         ("teams.act.shuffle", "Shuffle"), ("teams.act.balance", "Balance"),
@@ -105,12 +106,12 @@ public sealed partial class TeamsScreen : MenuScreen
         if (!ReferenceEquals(_seen, _client.Match.Rows)) Refresh(false);
     }
 
-    /// <summary>Redraws the tables when who is where or named changed (every new scoreboard also carries pings and kills that do not matter here). Sandbox players have no team and are not listed.</summary>
+    /// <summary>Redraws the tables when who is where or named changed (every new scoreboard also carries pings and kills that do not matter here). Every player is listed: a sandbox player (no team, name tagged by the server) sits on the Unassigned table, and a drop on a team ends their sandbox mode.</summary>
     void Refresh(bool force)
     {
-        var rows = _client.Match.Rows.Where(r => !r.Sandbox).ToList();
+        var rows = _client.Match.Rows.ToList();
         _seen = _client.Match.Rows;
-        var sig = string.Join('|', rows.Select(r => $"{r.Id}:{r.Team}:{(r.Bot ? 1 : 0)}:{r.Name}")) + $"#{_client.Match.ScoreA}:{_client.Match.ScoreB}";
+        var sig = string.Join('|', rows.Select(r => $"{r.Id}:{r.Team}:{(r.Bot ? 1 : 0)}:{(r.Sandbox ? 1 : 0)}:{r.Name}")) + $"#{_client.Match.ScoreA}:{_client.Match.ScoreB}";
         if (!force && sig == _signature) return;
         _signature = sig;
         var focus = _focusId != 0 ? _focusId : FocusedRowId();
@@ -148,6 +149,7 @@ public sealed partial class TeamsScreen : MenuScreen
             v.AddChild(scroll);
             _empty = Ui.Lbl(Strings.T(team == Teams.None ? "teams.empty.none" : "teams.empty"), "HudDim", 0, true);
             v.AddChild(_empty);
+            if (team == Teams.None) v.AddChild(Ui.Lbl(Strings.T("teams.none.note"), "HudSmall", 0, true));
             AddChild(v);
             AddChild(new DropZone(team, _move)); // last, so it covers the table while a card is dragged
         }
