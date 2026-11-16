@@ -13,8 +13,11 @@ public sealed record HitMsg(ushort Victim, ushort Attacker, byte Weapon, ushort 
 public sealed record LaunchMsg(ushort Id, ushort Owner, byte Weapon, Vector3 Origin, Vector3 Velocity);
 
 /// <summary>Explosion (broadcast, for effects): where, which projectile and who fired it.</summary>
-/// <summary>A rocket's explosion: its id, owner, weapon, centre and the blast radius it used (the launch's own, or weapons.json's).</summary>
-public sealed record ExplosionMsg(ushort Id, ushort Owner, byte Weapon, Vector3 Position, float Radius);
+/// <summary>
+/// A rocket's explosion: its id, owner, weapon, centre and the blast radius it used (the launch's own, or weapons.json's). <c>WaveSpeed</c> is the speed
+/// its Blast wave leaves at, metres a second; 0 (not sent) is the dust's own (<see cref="DustRules.FrontSpeedMps"/>). Only /explode names one.
+/// </summary>
+public sealed record ExplosionMsg(ushort Id, ushort Owner, byte Weapon, Vector3 Position, float Radius, float WaveSpeed = 0f);
 
 /// <summary>A destroyed vehicle's blast (broadcast, for effects): vehicle entity id, attacker (0 = none), centre and radius in metres.</summary>
 public sealed record VehicleExplosionMsg(ushort Id, ushort Attacker, Vector3 Position, float Radius);
@@ -99,17 +102,19 @@ public static class WeaponCodec
 
     public static byte[] Encode(ExplosionMsg m)
     {
-        var b = new byte[21];
+        var b = new byte[m.WaveSpeed > 0f ? 25 : 21]; // the wave speed rides at the end, only when one is named
         BinaryPrimitives.WriteUInt16LittleEndian(b, m.Id);
         BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(2), m.Owner);
         b[4] = m.Weapon;
         Put(b, 5, m.Position);
         BinaryPrimitives.WriteSingleLittleEndian(b.AsSpan(17), m.Radius);
+        if (b.Length == 25) BinaryPrimitives.WriteSingleLittleEndian(b.AsSpan(21), m.WaveSpeed);
         return b;
     }
 
     public static ExplosionMsg? DecodeExplosion(byte[] d) => d.Length < 21 ? null : new ExplosionMsg(
-        BinaryPrimitives.ReadUInt16LittleEndian(d), BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(2)), d[4], Get(d, 5), BinaryPrimitives.ReadSingleLittleEndian(d.AsSpan(17)));
+        BinaryPrimitives.ReadUInt16LittleEndian(d), BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(2)), d[4], Get(d, 5), BinaryPrimitives.ReadSingleLittleEndian(d.AsSpan(17)),
+        d.Length >= 25 ? BinaryPrimitives.ReadSingleLittleEndian(d.AsSpan(21)) : 0f);
 
     public static byte[] Encode(VehicleExplosionMsg m)
     {

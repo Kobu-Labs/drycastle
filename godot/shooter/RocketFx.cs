@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.ShooterCore;
 
 namespace Drycastle.Shooter;
 
@@ -195,7 +196,8 @@ public static class RocketFx
         return best;
     }
 
-    public static void Explode(Node3D world, Vector3 at, float radius)
+    /// <summary>The blast's look at <paramref name="at"/>. <paramref name="waveSpeed"/> above zero is the speed its Blast wave leaves at; else the dust's own.</summary>
+    public static void Explode(Node3D world, Vector3 at, float radius, float waveSpeed = 0f)
     {
         if (!ShotFx.Enabled || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree()) return;
         var c = C;
@@ -237,7 +239,7 @@ public static class RocketFx
         Burst(k.Spark, simple, r * 1.0f, r * 2.4f, 0.6f, 1.4f, 180f);
         Burst(k.Smoke, simple, 0.8f, r * 0.45f, r * 0.5f, r * 0.9f, 60f);
         Burst(k.Debris, simple, r * 0.8f, r * 1.9f, 0.7f, 1.8f, 70f);
-        DustFx.Blast(world, at, r); // the dust outlives the kit: it has its own pool
+        DustFx.Blast(world, at, r, DustRules.SpeedOr(waveSpeed)); // the dust outlives the kit: it has its own pool
 
         // the kit's root hides itself when the blast is over: an idle kit is not drawn
         var end = k.Root.CreateTween();

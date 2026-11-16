@@ -154,4 +154,32 @@ public class DustRulesTests
         var behind = field.Veil(eye, 10.5, _ => 0.3f);
         Assert.True(behind < open * 0.5f);
     }
+
+    [Fact]
+    public void ABlastCanNameItsWavesSpeed()
+    {
+        // half the speed: the wave takes twice as long to get anywhere, and reaches as far
+        Assert.Equal(DustRules.FrontSeconds(9f) * 2, DustRules.FrontSeconds(9f, DustRules.FrontSpeedMps / 2), 3);
+        Assert.Equal(DustRules.FrontArrival(9f, 30f)!.Value * 2, DustRules.FrontArrival(9f, 30f, DustRules.FrontSpeedMps / 2)!.Value, 3);
+        Assert.Equal(DustRules.FrontReach(9f), DustRules.FrontRadius(9f, 100, 20f), 3);
+        Assert.Equal(DustRules.FrontSpeedMps, DustRules.SpeedOr(0f));
+        Assert.Equal(40f, DustRules.SpeedOr(40f));
+        // the veil follows the blast's own speed
+        var eye = Origin + new Vector3(30, 1.6f, 0);
+        var slow = new DustBlast(Origin, 9f, 10.0, 20f);
+        var usual = DustRules.FrontArrival(9f, 30f)!.Value;
+        Assert.True(DustRules.FrontDensity(Vehicle, eye, 10.0 + usual + 0.1) > 0.3f);
+        Assert.Equal(0f, DustRules.FrontDensity(slow, eye, 10.0 + usual + 0.1));
+        Assert.True(DustRules.FrontDensity(slow, eye, 10.0 + DustRules.FrontArrival(9f, 30f, 20f)!.Value + 0.1) > 0.3f);
+    }
+
+    [Fact]
+    public void TheExplosionEventCarriesAWaveSpeedOnlyWhenOneIsNamed()
+    {
+        var plain = new ExplosionMsg(0x8001, 3, 2, new Vector3(4, 5, 6), 8f);
+        Assert.Equal(21, WeaponCodec.Encode(plain).Length); // a rocket's event is as it was
+        Assert.Equal(plain, WeaponCodec.DecodeExplosion(WeaponCodec.Encode(plain)));
+        var named = plain with { WaveSpeed = 40f };
+        Assert.Equal(named, WeaponCodec.DecodeExplosion(WeaponCodec.Encode(named)));
+    }
 }

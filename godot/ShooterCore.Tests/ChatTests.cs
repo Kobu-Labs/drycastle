@@ -313,6 +313,10 @@ public class ChatTests
         Assert.True(p.Ok);
         Assert.Equal(new[] { "12", "80" }, p.Args);
         Assert.True(ChatCommands.Parse("/explode 1 0", Admin).Ok);
+        Assert.Equal(new[] { "12", "80", "40" }, ChatCommands.Parse("/explode 12 80 40", Admin).Args); // the wave's speed is optional
+        Assert.False(ChatCommands.Parse($"/explode 12 80 {ChatCommands.MinExplodeSpeed - 1}", Admin).Ok);
+        Assert.False(ChatCommands.Parse($"/explode 12 80 {ChatCommands.MaxExplodeSpeed + 1}", Admin).Ok);
+        Assert.False(ChatCommands.Parse("/explode 12 80 40 1", Admin).Ok);
         Assert.False(ChatCommands.Parse("/explode 12", Admin).Ok);
         Assert.False(ChatCommands.Parse("/explode 0 10", Admin).Ok);
         Assert.False(ChatCommands.Parse($"/explode {ChatCommands.MaxExplodeSize + 1} 10", Admin).Ok);

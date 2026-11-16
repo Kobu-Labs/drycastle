@@ -59,8 +59,8 @@ public static class DustFx
     /// <summary>The time of day for the dust's colour: 0 at full day, 1 at full night.</summary>
     public static void SetNight(float night) => Colour = Day.Lerp(Night, Mathf.Clamp(night, 0f, 1f));
 
-    /// <summary>The dust of a blast of <paramref name="radius"/> at <paramref name="at"/>. A blast covered by a young cloud (<see cref="DustRules.Covers"/>) adds nothing.</summary>
-    public static void Blast(Node3D world, Vector3 at, float radius)
+    /// <summary>The dust of a blast of <paramref name="radius"/> at <paramref name="at"/>. Its Blast wave leaves at <paramref name="speed"/>. A blast covered by a young cloud (<see cref="DustRules.Covers"/>) adds nothing.</summary>
+    public static void Blast(Node3D world, Vector3 at, float radius, float speed)
     {
         if (!ShotFx.Enabled || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree()) return;
         var volumes = Volumes(world);
@@ -72,7 +72,7 @@ public static class DustFx
         if (ground.Count == 0) return;
         at = ground["position"].AsVector3();
         var born = nowMs / 1000.0;
-        if (!Field.Add(new DustBlast(new NVec3(at.X, at.Y, at.Z), r, born))) return;
+        if (!Field.Add(new DustBlast(new NVec3(at.X, at.Y, at.Z), r, born, speed))) return;
 
         // an idle volume, else the one whose dust ends first
         var pick = volumes[0];
@@ -81,6 +81,6 @@ public static class DustFx
             if (v.EndMs <= nowMs) { pick = v; break; }
             if (v.EndMs < pick.EndMs) pick = v;
         }
-        pick.Start(at, r, born);
+        pick.Start(at, r, born, speed);
     }
 }

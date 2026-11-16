@@ -2,8 +2,11 @@ using System.Numerics;
 
 namespace Drycastle.ShooterCore;
 
-/// <summary>One blast as the dust knows it: its centre, its radius in metres and the client time (seconds) it went off.</summary>
-public readonly record struct DustBlast(Vector3 At, float Radius, double Born);
+/// <summary>
+/// One blast as the dust knows it: its centre, its radius in metres, the client time (seconds) it went off and the speed its Blast wave leaves at
+/// (metres a second; <see cref="DustRules.FrontSpeedMps"/> unless the blast says otherwise, as /explode can).
+/// </summary>
+public readonly record struct DustBlast(Vector3 At, float Radius, double Born, float Speed = DustRules.FrontSpeedMps);
 
 /// <summary>
 /// The dust of a blast (#345), as pure numbers: no Godot, no state. A blast leaves a Dust cloud at its centre (dense, low, it swells,
@@ -20,7 +23,7 @@ public static class DustRules
 
     /// <summary>Blasts of at least this radius send a Blast wave (a vehicle's is 9 m, a shot-down aircraft's 12 m; a rocket's 6 m and the gunship's 8 m do not).</summary>
     public const float FrontMinRadius = 9f;
-    /// <summary>The wave's speed as it leaves the blast, metres a second. It slows evenly to a stop at its reach. Far below the speed of sound, so the wave can be watched coming.</summary>
+    /// <summary>The wave's speed as it leaves the blast, metres a second, for a blast that names none. It slows evenly to a stop at its reach. Far below the speed of sound, so the wave can be watched coming.</summary>
     public const float FrontSpeedMps = 91f;
     /// <summary>How far the wave runs, in blast radii.</summary>
     public const float FrontReachPerRadius = 6f;
@@ -55,29 +58,32 @@ public static class DustRules
     public static float FrontReach(float radius) => radius * FrontReachPerRadius;
 
     /// <summary>Seconds the wave takes to run out to its reach (twice the time it would take at its first speed, since it slows evenly).</summary>
-    public static float FrontSeconds(float radius) => 2f * FrontReach(radius) / FrontSpeedMps;
+    public static float FrontSeconds(float radius, float speed = FrontSpeedMps) => 2f * FrontReach(radius) / speed;
+
+    /// <summary>The speed a blast's wave leaves at: its own when it names one (above zero), else <see cref="FrontSpeedMps"/>.</summary>
+    public static float SpeedOr(float speed) => speed > 0f ? speed : FrontSpeedMps;
 
     /// <summary>The wave's even slowing, metres a second squared: what the particles are damped by, so the drawn wall is where <see cref="FrontRadius"/> says.</summary>
-    public static float FrontDeceleration(float radius) => FrontSpeedMps * FrontSpeedMps / (2f * FrontReach(radius));
+    public static float FrontDeceleration(float radius, float speed = FrontSpeedMps) => speed * speed / (2f * FrontReach(radius));
 
     public static float FrontHeight(float radius) => MathF.Max(FrontMinHeightM, radius * FrontHeightPerRadius);
 
     /// <summary>How far from the blast the wave is, <paramref name="age"/> seconds after it.</summary>
-    public static float FrontRadius(float radius, double age)
+    public static float FrontRadius(float radius, double age, float speed = FrontSpeedMps)
     {
         if (age <= 0) return 0f;
-        var t = FrontSeconds(radius);
+        var t = FrontSeconds(radius, speed);
         if (age >= t) return FrontReach(radius);
         var left = 1f - (float)age / t;
         return FrontReach(radius) * (1f - left * left);
     }
 
     /// <summary>Seconds after the blast at which the wave reaches a point <paramref name="distance"/> metres away along the ground; null beyond its reach.</summary>
-    public static float? FrontArrival(float radius, float distance)
+    public static float? FrontArrival(float radius, float distance, float speed = FrontSpeedMps)
     {
         var reach = FrontReach(radius);
         if (!HasFront(radius) || distance >= reach) return null;
-        return FrontSeconds(radius) * (1f - MathF.Sqrt(1f - MathF.Max(0f, distance) / reach));
+        return FrontSeconds(radius, speed) * (1f - MathF.Sqrt(1f - MathF.Max(0f, distance) / reach));
     }
 
     /// <summary>How thick the wave still is <paramref name="distance"/> metres out: 1 at the blast, 0 at its reach.</summary>
@@ -93,10 +99,10 @@ public static class DustRules
     /// Seconds after the blast at which it is heard and felt <paramref name="distance"/> metres away: with the wave where the wave
     /// reaches, later still beyond it (the sound runs on at its own speed); 0 for a blast with no wave.
     /// </summary>
-    public static float FeltDelay(float radius, float distance)
+    public static float FeltDelay(float radius, float distance, float speed = FrontSpeedMps)
     {
         if (!HasFront(radius)) return 0f;
-        return FrontArrival(radius, distance) ?? FrontSeconds(radius) + (distance - FrontReach(radius)) / SoundSpeedMps;
+        return FrontArrival(radius, distance, speed) ?? FrontSeconds(radius, speed) + (distance - FrontReach(radius)) / SoundSpeedMps;
     }
 
     // ---- the Dust cloud ----
@@ -120,8 +126,8 @@ public static class DustRules
     }
 
     /// <summary>How long a blast's dust lasts at all: the cloud, or the wave and what hangs behind it.</summary>
-    public static float Seconds(float radius) =>
-        HasFront(radius) ? MathF.Max(CloudSeconds(radius), FrontSeconds(radius) + 5f * FrontHang(radius)) : CloudSeconds(radius);
+    public static float Seconds(float radius, float speed = FrontSpeedMps) =>
+        HasFront(radius) ? MathF.Max(CloudSeconds(radius), FrontSeconds(radius, speed) + 5f * FrontHang(radius)) : CloudSeconds(radius);
 
     // ---- what a point sees ----
 
@@ -146,7 +152,7 @@ public static class DustRules
     /// <summary>The Blast wave's dust at <paramref name="p"/>, 0..1: nothing until the wave arrives, then at once as thick as the wave is there, thinning over <see cref="FrontHang"/>.</summary>
     public static float FrontDensity(in DustBlast b, Vector3 p, double now)
     {
-        if (FrontArrival(b.Radius, Flat(p, b.At)) is not { } arrival) return 0f;
+        if (FrontArrival(b.Radius, Flat(p, b.At), b.Speed) is not { } arrival) return 0f;
         var since = (float)(now - b.Born) - arrival;
         if (since < 0f) return 0f;
         var dy = MathF.Abs(p.Y - b.At.Y) / FrontHeight(b.Radius);
@@ -191,7 +197,7 @@ public sealed class DustField
     public void Prune(double now)
     {
         for (var i = _blasts.Count - 1; i >= 0; i--)
-            if (now - _blasts[i].Born >= DustRules.Seconds(_blasts[i].Radius)) _blasts.RemoveAt(i);
+            if (now - _blasts[i].Born >= DustRules.Seconds(_blasts[i].Radius, _blasts[i].Speed)) _blasts.RemoveAt(i);
     }
 
     /// <summary>Takes a blast. False when a live cloud covers it (<see cref="DustRules.Covers"/>): nothing new is to be drawn for it. A full field drops its oldest.</summary>

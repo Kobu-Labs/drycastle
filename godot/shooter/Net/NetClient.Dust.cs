@@ -20,11 +20,11 @@ public partial class NetClient
     Func<DustBlast, float>? _dustReach;
     Vector3 _dustEye;
 
-    /// <summary>The sound (none when null) and the camera shake of a blast: now, or when its Blast wave reaches the camera.</summary>
-    void BlastFelt(Vector3 at, float radius, string? sound)
+    /// <summary>The sound (none when null) and the camera shake of a blast: now, or when its Blast wave (leaving at <paramref name="waveSpeed"/>, the dust's own when zero) reaches the camera.</summary>
+    void BlastFelt(Vector3 at, float radius, string? sound, float waveSpeed = 0f)
     {
         var eye = Sfx.ListenerPosition(_me?.GlobalPosition ?? at);
-        var wait = DustRules.FeltDelay(radius, new Vector2(eye.X - at.X, eye.Z - at.Z).Length());
+        var wait = DustRules.FeltDelay(radius, new Vector2(eye.X - at.X, eye.Z - at.Z).Length(), DustRules.SpeedOr(waveSpeed));
         if (wait > 0.03f && _blastsDue.Count < 32) { _blastsDue.Add((Now + wait, at, radius, sound)); return; }
         FeelBlast(at, radius, sound);
     }

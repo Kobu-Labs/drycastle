@@ -969,8 +969,8 @@ public partial class NetClient : Node
                 if (_deadRockets.Count > 256) _deadRockets.Clear();
                 var exR = ex.Radius > 0 ? ex.Radius : 6f; // the blast the server used (a gunship rocket's is 8 m)
                 var exAt = new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z);
-                RocketFx.Explode(Owned, exAt, exR);
-                BlastFelt(exAt, exR, SoundRules.Event("explosion", WeaponId(ex.Weapon)));
+                RocketFx.Explode(Owned, exAt, exR, ex.WaveSpeed);
+                BlastFelt(exAt, exR, SoundRules.Event("explosion", WeaponId(ex.Weapon)), ex.WaveSpeed);
                 break;
             case EventKind.VehicleExplosion when WeaponCodec.DecodeVehicleExplosion(payload) is { } vx:
                 OnVehicleExplosion(vx);

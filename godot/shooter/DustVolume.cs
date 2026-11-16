@@ -26,7 +26,7 @@ public partial class DustVolume : MeshInstance3D
 
     ShaderMaterial? _mat;
     Vector3 _at;
-    float _radius, _columnHeight;
+    float _radius, _columnHeight, _speed;
     double _born;
 
     /// <summary>When this volume's dust is gone (engine milliseconds): the pool takes an idle one first.</summary>
@@ -45,11 +45,11 @@ public partial class DustVolume : MeshInstance3D
         return v;
     }
 
-    /// <summary>The dust of a blast of <paramref name="radius"/> on the ground at <paramref name="at"/>, gone off at <paramref name="born"/> (client seconds).</summary>
-    public void Start(Vector3 at, float radius, double born)
+    /// <summary>The dust of a blast of <paramref name="radius"/> on the ground at <paramref name="at"/>, gone off at <paramref name="born"/> (client seconds), its wave leaving at <paramref name="speed"/>.</summary>
+    public void Start(Vector3 at, float radius, double born, float speed)
     {
         if (_mat == null) return; // no shader: no dust is drawn (the veil still works)
-        _at = at; _radius = radius; _born = born;
+        _at = at; _radius = radius; _born = born; _speed = speed;
         _columnHeight = radius * Mathf.Lerp(ColumnLowPerRadius, ColumnTallPerRadius, Mathf.Clamp((radius - ColumnSmallRadius) / (ColumnTallRadius - ColumnSmallRadius), 0f, 1f));
         EndMs = (ulong)((born + Seconds) * 1000.0);
         var front = DustRules.HasFront(radius);
@@ -58,7 +58,7 @@ public partial class DustVolume : MeshInstance3D
         _mat.SetShaderParameter(PNoiseScale, 1f / (radius * NoiseFeaturePerRadius));
         _mat.SetShaderParameter(PColR, radius * ColumnRadiusPerRadius);
         _mat.SetShaderParameter(PWaveReach, front ? DustRules.FrontReach(radius) : 0f);
-        _mat.SetShaderParameter(PWaveSeconds, DustRules.FrontSeconds(radius));
+        _mat.SetShaderParameter(PWaveSeconds, DustRules.FrontSeconds(radius, speed));
         _mat.SetShaderParameter(PWaveHang, DustRules.FrontHang(radius));
         _mat.SetShaderParameter(PWaveRise, DustRules.FrontRiseSeconds);
         _mat.SetShaderParameter(PWaveH, DustRules.FrontHeight(radius));
@@ -67,7 +67,7 @@ public partial class DustVolume : MeshInstance3D
         SetProcess(true);
     }
 
-    float Seconds => MathF.Max(DustRules.Seconds(_radius), DustRules.CloudSeconds(_radius) * ColumnLifeShare);
+    float Seconds => MathF.Max(DustRules.Seconds(_radius, _speed), DustRules.CloudSeconds(_radius) * ColumnLifeShare);
 
     public override void _Process(double delta)
     {
@@ -90,7 +90,7 @@ public partial class DustVolume : MeshInstance3D
         var colA = Mathf.Min(1f, (float)age / 0.3f) * (1f - Mathf.SmoothStep(0.5f, 1f, u));
         var colR = r * ColumnRadiusPerRadius;
         var front = DustRules.HasFront(r);
-        var waveFront = front ? DustRules.FrontRadius(r, age) : 0f;
+        var waveFront = front ? DustRules.FrontRadius(r, age, _speed) : 0f;
         var waveH = DustRules.FrontHeight(r);
 
         var coreR = MathF.Max(cloudR, colR * 2.4f) * 1.25f;
