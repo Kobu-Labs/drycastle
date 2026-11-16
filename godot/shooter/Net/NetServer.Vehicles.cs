@@ -603,11 +603,14 @@ public partial class NetServer
         }
     }
 
-    /// <summary>A vehicle fast enough to hurt, driven, on land or skimming it: its row of the rule table runs over every live target it sweeps (<see cref="RunOverTargets"/>).</summary>
+    /// <summary>
+    /// A vehicle that moves (<see cref="RunOver.Contacts"/>), driven, on land or skimming it: its row of the rule table runs over every live target it sweeps (<see cref="RunOverTargets"/>).
+    /// Below the speed that hurts the damage is 0: the body is only pushed out of its way (<see cref="RunOverOne"/>).
+    /// </summary>
     void RunOverCheck(ServerCar car, Client driver)
     {
+        if (!RunOver.Contacts(car.State.Speed)) return;
         var dmg = RunOver.Damage(Vehicles!, car.State.Speed, Vehicles!.RunOverScale(car.Def));
-        if (dmg <= 0) return;
         RunOverTargets(new RunOverSweep(RunOverMoverOf(car), N(car.PrevPos), N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(car.Forward), car.State.Speed, dmg, driver.Id, car.HitCooldown));
     }
 

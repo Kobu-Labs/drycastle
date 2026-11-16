@@ -33,7 +33,7 @@ Where a player and an NPC or animal block each other, the NPC or animal stops or
 | Utility helicopter | 3 boxes (cabin, tail boom, fin) that tilt with pitch and roll | the same 3 boxes |
 | Other vehicles | one upright box | the same box |
 
-Run-over tests the victim's Body footprint scaled to 85%.
+Run-over tests the victim's Body footprint scaled to 95%.
 
 **4. Cost.** Measured 2026-11-16 (village map, 16 players, 226 animals): two rays on every animal step cost +1.6 to 2.0 ms a tick, every animal every tick +5.4 to 7.0 ms. The animal rows may cost at most 1 ms a tick: query objects are reused, an animal farther than `WorldInterest.LeaveM` from every player is not simulated, and checks are throttled.
 

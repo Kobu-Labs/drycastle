@@ -1346,6 +1346,22 @@ stateDiagram-v2
 - **Doomed**: Hit points are zero and DetonateAt is set: the blast goes off when the clock reaches it (the chain delay after a neighbour's blast, else this tick). A return repairs it.
 - **Destroyed**: Blown up, no collision, nobody aboard. ReturnAt is set; the return repairs it and puts it back at its origin.
 
+## Vehicle.ThrowGuess
+
+The driver's client shows an animal its predicted vehicle hit as thrown before the server says so, then hands the picture over to the server's.
+
+```mermaid
+stateDiagram-v2
+    [*] --> None
+    None --> Flying
+    Flying --> Settling
+    Settling --> None
+```
+
+- **None**: Drawn where the server has it (plus what is left of the last offset). A touch of the predicted vehicle starts Flying.
+- **Flying**: Flies on the guessed arc (clock: ConfirmSeconds). The server's throw showing, or the clock running out, ends it: the difference to the server's position becomes the offset.
+- **Settling**: Drawn at the server's position plus the fading offset (clock: SettleSeconds); no new guess, as the server throws one body once in that time.
+
 ## WorldInterest.Relevance
 
 One filtered world entity as one client's encoder sees it: keyframed until the client has it, then delta, then dormant (hidden) until it is acknowledged, then silent. Ticks are acknowledgements, not seconds.
