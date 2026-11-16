@@ -532,6 +532,7 @@ def run_export(
         },
         "config/rules.yaml": _sha256(rules_path),
         "config/overrides.yaml": _sha256(overrides_path),
+        **({"config/tree_overrides.yaml": _sha256(tree_overrides)} if (tree_overrides := overrides_path.parent / "tree_overrides.yaml").is_file() else {}),
     }
     manifest = {
         "map_version": f"{MAP_VERSION_BASE}-village",

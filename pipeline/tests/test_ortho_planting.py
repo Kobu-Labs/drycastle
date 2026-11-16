@@ -14,7 +14,7 @@ from shapely.geometry import box
 from shapely.ops import unary_union
 
 from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.props import make_trees, road_zone, run_props
+from drycastle_pipeline.props import load_tree_overrides, make_trees, road_zone, run_props
 from drycastle_pipeline.rules import load_section
 from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace, write_ortho
 
@@ -130,3 +130,29 @@ def test_run_props_plants_from_the_detector_and_a_map_without_ortho_data_has_no_
     shutil.rmtree(tmp_path / "ortho")
     assert run_props(work, rules)["trees"] == 0
     assert "no orthophoto trees" in capsys.readouterr().err
+
+
+def test_tree_overrides_drop_the_trees_in_their_circles_and_move_no_other_tree(tmp_path: Path) -> None:
+    ws = make_workspace(tmp_path)
+    work = ws["work"]
+    buildings = json.loads((work / "buildings.json").read_text())["buildings"]
+    graph = json.loads((work / "roads.json").read_text())
+    write_ortho(tmp_path / "ortho", (0.0, 0.0), (10, 10, 210, 200), [])
+    cfg = cfg_for(tmp_path / "ortho")
+    before = make_trees(buildings, graph, make_terrain(), cfg, origin=(0.0, 0.0))
+    victim = before[len(before) // 2]
+    after = make_trees(buildings, graph, make_terrain(), cfg, origin=(0.0, 0.0), removed=[(victim["x"], victim["y"], 0.05)])
+    assert len(after) == len(before) - 1
+    assert (victim["x"], victim["y"]) not in {(t["x"], t["y"]) for t in after}
+    assert {(t["x"], t["y"]) for t in after} == {(t["x"], t["y"]) for t in before} - {(victim["x"], victim["y"])}
+
+
+def test_tree_overrides_file_is_read_in_local_metres_and_checked(tmp_path: Path) -> None:
+    f = tmp_path / "tree_overrides.yaml"
+    f.write_text("remove:\n  - at: [1010.0, 2020.0]\n    radius: 2\n  - at: [1.0, 2.0]\n")
+    assert load_tree_overrides(f, (1000.0, 2000.0)) == [(10.0, 20.0, 2.0), (-999.0, -1998.0, 1.0)]
+    assert load_tree_overrides(tmp_path / "none.yaml", (0.0, 0.0)) == []
+    for bad in ("remove: 3\n", "other: []\n", "remove:\n  - at: [1]\n", "remove:\n  - at: [1, 2]\n    radius: 0\n", "remove:\n  - at: [1, 2]\n    colour: red\n"):
+        f.write_text(bad)
+        with pytest.raises(ValueError):
+            load_tree_overrides(f, (0.0, 0.0))

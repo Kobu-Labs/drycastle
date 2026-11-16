@@ -67,6 +67,7 @@ minus ground) would find trees far more reliably, but only the ground model is s
 
 The props stage plants **every** tree from `trees.json` and `canopy.png` (`props.ortho_trees`); this is the only tree source.
 There are no rule-based trees, OSM trees or shore rows, and no per-parcel tree settings (see `docs/viewer-and-editor.md`).
+The one hand override is `pipeline/config/tree_overrides.yaml` (`remove`: circles in absolute EPSG:5514 metres, `props.load_tree_overrides`): every planted tree with its trunk in one is dropped after the planting, so no other tree moves; applied by `make map-update`.
 The detector's output is read from `data/village/ortho/`; a map without it, or a `parcels.json` without a frame origin,
 has no trees, and `make props` warns. `make map` runs `ortho` and `ortho-trees` before `props`; alone, run `make ortho-trees` first.
 

@@ -61,7 +61,7 @@ public partial class NetClient
         if (!GlassPlace(s.Key, out var parent, out var rect, out var hole)) return;
         if (HasPaneNode(s.Key) && !SolidBehindPane(s.Key) || IsGaragePlate(s.Key)) hole = 0; // the model has a real opening: nothing to darken (nor the garage's, the room behind is real)
         if (!_glassOverlays.TryGetValue(s.Key, out var overlay) || !GodotObject.IsInstanceValid(overlay))
-            _glassOverlays[s.Key] = overlay = GlassFx.MakeOverlay(parent, rect, s.Key, hole);
+            _glassOverlays[s.Key] = overlay = GlassFx.MakeOverlay(parent, rect, s.Key, hole, IsGaragePlate(s.Key) ? GlassFx.OsbShards : null);
         SetPaneGeometry(s.Key, !s.Shattered, animate);
         GlassFx.SetOverlay(overlay, GlassRules.CrackStage(s.Fraction, GlassData.CrackStages), GlassRules.MaxCrackStage(GlassData.CrackStages), s.Shattered);
         if (animate && parent.IsVisibleInTree()) GlassFx.Shatter(Owned, parent.GlobalTransform, rect, GlassData, s.Key, IsGaragePlate(s.Key) ? GlassFx.OsbShards : null);

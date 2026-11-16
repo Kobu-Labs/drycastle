@@ -18,6 +18,7 @@ from pathlib import Path
 
 import numpy as np
 import shapely
+import yaml
 from shapely.geometry import LineString, MultiLineString, Point, Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, nearest_points, unary_union
@@ -336,6 +337,41 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
     return trees
 
 
+DEFAULT_TREE_OVERRIDES = DEFAULT_EDITS.parent / "tree_overrides.yaml"
+
+
+def load_tree_overrides(path: Path | None, origin: tuple[float, float] | None) -> list[tuple[float, float, float]]:
+    """Per-tree overrides of the planted trees (``config/tree_overrides.yaml``): the circles to clear, as ``(x, y, radius)`` in local map metres.
+
+    The file has one key, ``remove``: a list of ``{at: [x, y], radius: m, note: text}``. ``at`` is absolute EPSG:5514 metres (like a sketch
+    point or a gate: it survives a change of the map's frame origin), ``radius`` defaults to 1 m: every tree whose trunk stands within it is
+    left out, whether the detector found it alone or the canopy planting placed it. A missing file means no overrides.
+    """
+    if path is None or not path.is_file():
+        return []
+    doc = yaml.safe_load(path.read_text()) or {}
+    if not isinstance(doc, dict) or set(doc) - {"remove"}:
+        raise ValueError(f"{path.name}: the only top-level key is `remove`")
+    out: list[tuple[float, float, float]] = []
+    entries = doc.get("remove") or []
+    if not isinstance(entries, list):
+        raise ValueError(f"{path.name}: `remove` must be a list")
+    if entries and origin is None:
+        raise ValueError(f"{path.name}: tree overrides need the frame origin (parcels.json origin_epsg5514)")
+    for i, e in enumerate(entries):
+        where = f"{path.name}: remove[{i}]"
+        if not isinstance(e, dict) or set(e) - {"at", "radius", "note"}:
+            raise ValueError(f"{where}: keys are at, radius, note")
+        at = e.get("at")
+        if not (isinstance(at, list) and len(at) == 2 and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in at)):
+            raise ValueError(f"{where}: `at` is [x, y] in EPSG:5514 metres")
+        radius = e.get("radius", 1.0)
+        if not isinstance(radius, (int, float)) or isinstance(radius, bool) or not 0 < radius <= 50:
+            raise ValueError(f"{where}: `radius` is metres, above 0 and at most 50")
+        out.append((float(at[0]) - origin[0], float(at[1]) - origin[1], float(radius)))  # type: ignore[index]
+    return out
+
+
 def make_trees(
     buildings: list[dict],
     graph: dict,
@@ -344,13 +380,16 @@ def make_trees(
     objects: list[tuple[float, float]] | None = None,
     water: BaseGeometry | None = None,
     origin: tuple[float, float] | None = None,
+    removed: list[tuple[float, float, float]] | None = None,
 ) -> list[dict]:
     """Every tree of the map: planted from the orthophoto detector (:func:`ortho_trees`, ``make ortho-trees``).
 
     There is no other source: no OSM trees, no per-parcel density, no shore rows. ``cfg["ortho_dir"]`` is the folder
     of the detector's output (``trees.json`` and the canopy mask); without it there are no trees. ``origin`` is the
     frame origin (EPSG:5514; without it there are no trees). ``objects`` are placed object positions (local metres) that trees keep
-    ``object_clearance_m`` away from; ``water`` (local metres) is where the water patches lie: no trunk in it.
+    ``object_clearance_m`` away from; ``water`` (local metres) is where the water patches lie: no trunk in it. ``removed`` are the per-tree
+    overrides (:func:`load_tree_overrides`): circles ``(x, y, radius)`` in local metres, every planted tree with its trunk in one is dropped
+    after the planting, so no other tree moves.
     """
     if origin is None or not (Path(cfg["ortho_dir"]) / "trees.json").is_file():
         return []
@@ -382,7 +421,14 @@ def make_trees(
             "colour": palette[rng.randrange(len(palette))],
         }
 
-    return ortho_trees(tree, terrain, (bzone, rzone, ozone, water), cfg, origin)
+    trees = ortho_trees(tree, terrain, (bzone, rzone, ozone, water), cfg, origin)
+    if removed:
+        kept = [t for t in trees if not any(math.hypot(t["x"] - x, t["y"] - y) <= r for x, y, r in removed)]
+        for x, y, r in removed:
+            if not any(math.hypot(t["x"] - x, t["y"] - y) <= r for t in trees):
+                print(f"props: warning: {DEFAULT_TREE_OVERRIDES.name}: no tree within {r:g} m of local ({x:.1f}, {y:.1f}); the entry does nothing", file=sys.stderr)
+        trees = kept
+    return trees
 
 
 # --- spawns ---------------------------------------------------------------------------------
@@ -600,6 +646,7 @@ def run_props(
     work_dir: Path = DEFAULT_WORK_DIR,
     rules_path: Path = DEFAULT_RULES,
     edits_path: Path = DEFAULT_EDITS,
+    tree_overrides_path: Path | None = DEFAULT_TREE_OVERRIDES,
 ) -> dict:
     terrain, _ = load_terrain(work_dir)
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
@@ -639,6 +686,7 @@ def run_props(
         objects=[(o["position"][0], o["position"][1]) for o in plan.objects],
         water=water_zone(plan, terrain),
         origin=tuple(parcels_doc["origin_epsg5514"]) if parcels_doc.get("origin_epsg5514") else None,
+        removed=load_tree_overrides(tree_overrides_path, tuple(origin) if origin else None),
     )
     trees = cap_trees(trees, chunk_m, int(fcfg["trees"]["max_per_chunk"]))
     # water: the water ground areas and the wet part of the water patches
