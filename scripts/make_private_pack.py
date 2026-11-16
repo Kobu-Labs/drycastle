@@ -31,6 +31,7 @@ INCLUDE = [
     "audio/holy_mass/*.ogg",              # ChurchChant, DemonAudio
     "audio/thieves/voice/*.ogg",          # ThiefAudio
     "audio/thieves/songs/*.ogg",          # ThiefAudio (van song)
+    "audio/golf-mk2-sounds/*.ogg",        # sounds.json golf_mk2.* (the Golf Mk2 engine set; optional there, silent without)
     "synty/glb/**",                       # SyntyLib.Instance, ModelLib (pets, office, props, vehicles, atlas/); MapLoader.Prefabs (military/: map objects)
     "synty/anim/manifest.json",           # SyntyLib.Loops
     "synty/anim/baked/*.glb",             # SyntyLib.Clip
