@@ -248,7 +248,7 @@ def test_stale_patches_warn_and_are_skipped() -> None:
 def test_a_patch_is_in_the_first_colour_of_its_type() -> None:
     plan = plan_of(**{"GP-0001": patch("meadow"), "GP-0002": patch("forest", sq(120, 120, 150, 150))})
     assert plan.patches["GP-0001"].colour == MEADOW_RGB
-    assert plan.patches["GP-0002"].colour == [0x5A, 0x46, 0x30]
+    assert plan.patches["GP-0002"].colour == [0x3B, 0x7A, 0x3A]
     assert plan.patches["GP-0002"].type == "forest"
 
 

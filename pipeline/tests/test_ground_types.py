@@ -91,7 +91,7 @@ def test_ground_types_reads_the_edits_file(tmp_path) -> None:
 def test_export_row_summarises_the_effective_type() -> None:
     rules = rules_ground_types()
     row = ground_type_row("forest", rules["forest"], rules["forest"])
-    assert row["colour"] == "#5a4630" and row["recipe"] == "forest" and row["source"] == "osm"
+    assert row["colour"] == "#3b7a3a" and row["recipe"] == "forest" and row["source"] == "osm"
     assert row["attributes"] == ["colours", "recipe"] and "spawns" not in row
     assert row["rules"] == rules["forest"] and "custom" not in row
     assert ground_type_row("dunes", None, attrs(colours=["#D8C38A"]))["custom"] is True

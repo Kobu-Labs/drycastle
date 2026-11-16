@@ -58,8 +58,8 @@ ground:
     forest:
       osm: {landuse: [forest], natural: [wood]}
       attributes:
-        # brown needle and leaf litter: the floor is brown, the moss patches (detail.forest.moss) are the green
-        colours: ["#5a4630", "#524029", "#644e36"]
+        # lush green floor in several shades; the brown is the litter, mud and dirt patches (detail.forest)
+        colours: ["#3b7a3a", "#2f6a36", "#4a8a3e", "#35733f"]
         recipe: forest
     # garden plots outside the properties: mostly dug-over soil in rows
     allotments:
@@ -409,8 +409,8 @@ props:
       # A low earth mound, `width_m` across and `height_m` high at scale 1, with a dark hole face on one side (the heading `rot` points at it).
       burrow: {width_m: 1.3, height_m: 0.4}
     log:
-      per_ha: 8
-      clump: [1, 2]
+      per_ha: 24
+      clump: [1, 3]
       clump_sigma_m: 5.0
       length_m: [4.0, 9.0]
       thickness_m: [0.3, 0.6]
@@ -638,13 +638,13 @@ detail:
       flower: {spacing_m: 2.0, tone: 0.08, interior: 0.012, scale: [0.8, 1.2]}
   forest:
     # Flat tone patches: the ground colour times tone_shades (tone_colours only when a forest has no ground colour).
-    tone_colours: ["#6b5640", "#3f3223"]
+    tone_colours: ["#5a9a48", "#2a5c32"]
     tone_shades: [1.2, 0.8]
-    tone_per_ha: 4
+    tone_per_ha: 9
     tone_radius_m: [2.5, 6.0]
     # Leaf litter (leaf_litter texture) under the trees: `blobs_per_tree` blobs of canopy_m * scale * radius_factor, each kept
     # with probability `keep`. Merged blobs make the thick litter stretches.
-    litter: {radius_factor: 0.55, blobs_per_tree: 1, keep: 0.22}
+    litter: {radius_factor: 0.55, blobs_per_tree: 1, keep: 0.12}
     # Moss (moss texture, bright green): small irregular blobs, thick in the clumps of a noise (clump: 0 = even, 1 = bare gaps
     # between thick clumps; clump_m: size of a clump) and thin in the gaps. `tree`: at the feet of the trees (keep per tree, blob
     # radius, distance from the trunk); `interior`: over the open floor (one candidate per spacing_m cell, `keep` of them in a
