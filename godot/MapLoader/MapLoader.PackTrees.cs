@@ -48,12 +48,12 @@ public sealed partial class MapLoader
     {
         public required Vector3 Centre;
         public Task<PackTileResult>? Job;
-        public readonly Queue<ReadyBucket> Commit = new();
+        public readonly Queue<PackBucket> Commit = new();
         public MeshInstance3D? Node;
         public PackPlacement[] Placed = Array.Empty<PackPlacement>(), Objects = Array.Empty<PackPlacement>();
         public bool UnderStarted; // asked for (a tile with no forest floor has no job and is ready at once)
         public Task<PackUnderResult>? UnderJob;
-        public readonly Queue<ReadyBucket> UnderCommit = new();
+        public readonly Queue<PackBucket> UnderCommit = new();
         public MeshInstance3D? UnderNode;
         public PackPlacement[] Under = Array.Empty<PackPlacement>();
 
@@ -62,9 +62,8 @@ public sealed partial class MapLoader
         public bool UnderReady => UnderStarted && UnderJob == null && UnderCommit.Count == 0;
     }
 
-    sealed record ReadyBucket(int Material, Vector3[] V, Vector3[] N, Vector2[] Uv, Vector2[] Uv2, Color[] Col, int[] I);
-    sealed record PackTileResult(List<ReadyBucket> Buckets, PackPlacement[] Placed, PackPlacement[] Objects);
-    sealed record PackUnderResult(List<ReadyBucket> Buckets, PackPlacement[] Under);
+    sealed record PackTileResult(List<PackBucket> Buckets, PackPlacement[] Placed, PackPlacement[] Objects);
+    sealed record PackUnderResult(List<PackBucket> Buckets, PackPlacement[] Under);
 
     /// <summary>The pack models of one kind of ground object, the code-built radius at scale 1 and the turn added to the object's rot.</summary>
     sealed record GroundKindModels(GroundCandidate[] Models, float RadiusM, float YawDeg);
@@ -700,27 +699,34 @@ public sealed partial class MapLoader
         return new PackUnderResult(ReadyBuckets(models, growth, centre), growth.ToArray());
     }
 
-    static List<ReadyBucket> ReadyBuckets(PackModelMesh[] models, List<PackPlacement> all, NVector3 centre)
-        => PackTileMesher.Build(models, all, centre).Select(b => new ReadyBucket(b.Material, ToArray(b.V), ToArray(b.N), ToArray(b.Uv), ToArray(b.Uv2), ToArray(b.Col), b.I.ToArray())).ToList();
+    static List<PackBucket> ReadyBuckets(PackModelMesh[] models, List<PackPlacement> all, NVector3 centre) => PackTileMesher.Build(models, all, centre);
 
-    static Vector3[] ToArray(List<NVector3> l) { var r = new Vector3[l.Count]; for (var i = 0; i < r.Length; i++) r[i] = new Vector3(l[i].X, l[i].Y, l[i].Z); return r; }
-    static Vector2[] ToArray(List<NVector2> l) { var r = new Vector2[l.Count]; for (var i = 0; i < r.Length; i++) r[i] = new Vector2(l[i].X, l[i].Y); return r; }
-    static Color[] ToArray(List<System.Numerics.Vector4> l) { var r = new Color[l.Count]; for (var i = 0; i < r.Length; i++) r[i] = new Color(l[i].X, l[i].Y, l[i].Z, l[i].W); return r; }
+    // The mesher's lists go to the renderer as they are (System.Numerics and Godot vectors are the same floats): no second copy in managed memory.
+    static Variant Packed<T, TGodot>(List<T> l) where T : struct where TGodot : struct
+        => PackedOf(System.Runtime.InteropServices.MemoryMarshal.Cast<T, TGodot>(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(l)));
+    static Variant PackedOf<TGodot>(Span<TGodot> s) where TGodot : struct => s switch
+    {
+        _ when typeof(TGodot) == typeof(Vector3) => Variant.CreateFrom(System.Runtime.InteropServices.MemoryMarshal.Cast<TGodot, Vector3>(s)),
+        _ when typeof(TGodot) == typeof(Vector2) => Variant.CreateFrom(System.Runtime.InteropServices.MemoryMarshal.Cast<TGodot, Vector2>(s)),
+        _ when typeof(TGodot) == typeof(Color) => Variant.CreateFrom(System.Runtime.InteropServices.MemoryMarshal.Cast<TGodot, Color>(s)),
+        _ => Variant.CreateFrom(System.Runtime.InteropServices.MemoryMarshal.Cast<TGodot, int>(s)),
+    };
 
-    void CommitPackSurface(PackTile tile, ReadyBucket b, bool under)
+    void CommitPackSurface(PackTile tile, PackBucket b, bool under)
     {
         var node = under ? (tile.UnderNode ??= NewPackTileNode(tile, true)) : (tile.Node ??= NewPackTileNode(tile, false));
-        var arrays = new Godot.Collections.Array();
+        using var arrays = new Godot.Collections.Array(); // disposed here: left to the finalizer, the native copies would stay until a collection
         arrays.Resize((int)Mesh.ArrayType.Max);
-        arrays[(int)Mesh.ArrayType.Vertex] = b.V;
-        arrays[(int)Mesh.ArrayType.Normal] = b.N;
-        arrays[(int)Mesh.ArrayType.TexUV] = b.Uv;
-        arrays[(int)Mesh.ArrayType.TexUV2] = b.Uv2; // the base of the tree of each vertex, the shader's cut
-        arrays[(int)Mesh.ArrayType.Color] = b.Col; // the tree's tint (rgb, halved) and what the piece is (a), read by pack_tree.gdshader
-        arrays[(int)Mesh.ArrayType.Index] = b.I;
+        using (var v = Packed<NVector3, Vector3>(b.V)) arrays[(int)Mesh.ArrayType.Vertex] = v;
+        using (var v = Packed<NVector3, Vector3>(b.N)) arrays[(int)Mesh.ArrayType.Normal] = v;
+        using (var v = Packed<NVector2, Vector2>(b.Uv)) arrays[(int)Mesh.ArrayType.TexUV] = v;
+        using (var v = Packed<NVector2, Vector2>(b.Uv2)) arrays[(int)Mesh.ArrayType.TexUV2] = v; // the base of the tree of each vertex, the shader's cut
+        using (var v = Packed<System.Numerics.Vector4, Color>(b.Col)) arrays[(int)Mesh.ArrayType.Color] = v; // the tree's tint (rgb, halved) and what the piece is (a), read by pack_tree.gdshader
+        using (var v = Packed<int, int>(b.I)) arrays[(int)Mesh.ArrayType.Index] = v;
         var mesh = (ArrayMesh)node.Mesh;
         mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
         mesh.SurfaceSetMaterial(mesh.GetSurfaceCount() - 1, _packMaterials[b.Material]);
+        b.Return(); // the renderer has its own copy
     }
 
     MeshInstance3D NewPackTileNode(PackTile tile, bool under)
@@ -741,7 +747,7 @@ public sealed partial class MapLoader
     void FreePackTile((int Tx, int Ty) key)
     {
         if (!_packTiles.Remove(key, out var tile)) return; // a job still running is left to finish; its result is dropped with the tile
-        if (tile.Node != null && GodotObject.IsInstanceValid(tile.Node)) { tile.Node.GetParent()?.RemoveChild(tile.Node); tile.Node.QueueFree(); }
+        if (tile.Node != null && GodotObject.IsInstanceValid(tile.Node)) { FreeTileMesh(tile.Node); tile.Node.GetParent()?.RemoveChild(tile.Node); tile.Node.QueueFree(); }
         FreeUndergrowthNode(tile);
     }
 
@@ -755,9 +761,15 @@ public sealed partial class MapLoader
         tile.Under = Array.Empty<PackPlacement>();
     }
 
+    /// <summary>Frees a tile's vertex buffers now: the mesh is reference counted and a C# wrapper of it may hold it until the next garbage collection (hundreds of MB of freed tiles at a 220 m radius).</summary>
+    static void FreeTileMesh(MeshInstance3D node)
+    {
+        if (node.Mesh is ArrayMesh mesh) { mesh.ClearSurfaces(); mesh.Dispose(); }
+    }
+
     static void FreeUndergrowthNode(PackTile tile)
     {
-        if (tile.UnderNode != null && GodotObject.IsInstanceValid(tile.UnderNode)) { tile.UnderNode.GetParent()?.RemoveChild(tile.UnderNode); tile.UnderNode.QueueFree(); }
+        if (tile.UnderNode != null && GodotObject.IsInstanceValid(tile.UnderNode)) { FreeTileMesh(tile.UnderNode); tile.UnderNode.GetParent()?.RemoveChild(tile.UnderNode); tile.UnderNode.QueueFree(); }
         tile.UnderNode = null;
     }
 }

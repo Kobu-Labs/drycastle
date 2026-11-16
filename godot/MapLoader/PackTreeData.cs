@@ -551,12 +551,49 @@ public readonly record struct PackPlacement(Vector3 Base, float Rot, float Scale
 /// <summary>The triangles of every placement that wears one material, as one mesh: positions relative to the tile (centre x, z), UV2 = the tree's base (x, z) in the same frame.</summary>
 public sealed class PackBucket
 {
-    public required int Material { get; init; }
+    public int Material { get; set; }
     public readonly List<Vector3> V = new(), N = new();
     public readonly List<Vector2> Uv = new(), Uv2 = new();
     /// <summary>Vertex colour: rgb = the tint halved (8 bits cannot hold above 1), a = the placement's <see cref="PackKind"/> (tree 1, object 0.5, undergrowth 0), read by pack_tree.gdshader.</summary>
     public readonly List<Vector4> Col = new();
     public readonly List<int> I = new();
+
+    // A tile's lists are megabytes and live for a few frames (built on a worker, handed to the renderer, dropped): at a 220 m radius that was over a gigabyte of
+    // garbage on the large object heap. So the lists are sized once to what the tile needs and go back to a small pool when the renderer has them.
+    const int PoolMax = 24;
+    static readonly List<PackBucket> Pool = new(); // under its own lock; few entries
+
+    /// <summary>An empty bucket with room for this many vertices and indices: the smallest pooled one that is big enough (tiles differ a hundredfold), else a new one.</summary>
+    public static PackBucket Rent(int material, int vertices, int indices)
+    {
+        PackBucket? b = null;
+        lock (Pool)
+        {
+            var best = -1;
+            for (var i = 0; i < Pool.Count; i++)
+                if (Pool[i].V.Capacity >= vertices && Pool[i].I.Capacity >= indices && (best < 0 || Pool[i].V.Capacity < Pool[best].V.Capacity)) best = i;
+            if (best >= 0) { b = Pool[best]; Pool.RemoveAt(best); }
+        }
+        b ??= new PackBucket();
+        b.Material = material;
+        b.V.EnsureCapacity(vertices); b.N.EnsureCapacity(vertices); b.Uv.EnsureCapacity(vertices); b.Uv2.EnsureCapacity(vertices); b.Col.EnsureCapacity(vertices);
+        b.I.EnsureCapacity(indices);
+        return b;
+    }
+
+    /// <summary>Gives the bucket back once nothing reads it any more (its lists are emptied and reused by a later tile). A full pool drops its smallest.</summary>
+    public void Return()
+    {
+        V.Clear(); N.Clear(); Uv.Clear(); Uv2.Clear(); Col.Clear(); I.Clear();
+        lock (Pool)
+        {
+            Pool.Add(this);
+            if (Pool.Count <= PoolMax) return;
+            var least = 0;
+            for (var i = 1; i < Pool.Count; i++) if (Pool[i].V.Capacity < Pool[least].V.Capacity) least = i;
+            Pool.RemoveAt(least);
+        }
+    }
 }
 
 public static class PackTileMesher
@@ -568,6 +605,13 @@ public static class PackTileMesher
     public static List<PackBucket> Build(IReadOnlyList<PackModelMesh> models, IReadOnlyList<PackPlacement> trees, Vector3 centre)
     {
         var byMaterial = new SortedDictionary<int, PackBucket>();
+        var need = new Dictionary<int, (int V, int I)>(); // the size of each bucket, so its lists are allocated once
+        foreach (var t in trees)
+            foreach (var surface in models[t.Model].Surfaces)
+            {
+                need.TryGetValue(surface.Material, out var n);
+                need[surface.Material] = (n.V + surface.Vertices.Length, n.I + surface.Indices.Length);
+            }
         foreach (var t in trees)
         {
             var (s, c) = MathF.SinCos(t.Rot);
@@ -586,7 +630,7 @@ public static class PackTileMesher
             }
             foreach (var surface in models[t.Model].Surfaces)
             {
-                if (!byMaterial.TryGetValue(surface.Material, out var b)) byMaterial[surface.Material] = b = new PackBucket { Material = surface.Material };
+                if (!byMaterial.TryGetValue(surface.Material, out var b)) byMaterial[surface.Material] = b = PackBucket.Rent(surface.Material, need[surface.Material].V, need[surface.Material].I);
                 var first = b.V.Count;
                 for (var i = 0; i < surface.Vertices.Length; i++)
                 {

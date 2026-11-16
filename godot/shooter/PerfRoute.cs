@@ -153,7 +153,7 @@ public partial class PerfRoute : Node
             ["pack_trees"] = new { active = Map.PackTreesActive, tiles = Stats(_s.Select(x => x.PackTiles).ToList()), draws = Stats(_s.Select(x => x.PackDraws).ToList()), instances = Stats(_s.Select(x => x.PackInstances).ToList()), triangles = Stats(_s.Select(x => x.PackTris).ToList()), objects = Stats(_s.Select(x => x.PackObjects).ToList()), undergrowth = Stats(_s.Select(x => x.PackUnder).ToList()) },
             ["nodes"] = _s.Count == 0 ? 0 : _s[^1].Nodes, ["mem_static_mb"] = Performance.GetMonitor(Performance.Monitor.MemoryStatic) / 1048576.0, ["video_mem_mb"] = Performance.GetMonitor(Performance.Monitor.RenderVideoMemUsed) / 1048576.0,
             ["textures_mb"] = Performance.GetMonitor(Performance.Monitor.RenderTextureMemUsed) / 1048576.0, ["buffers_mb"] = Performance.GetMonitor(Performance.Monitor.RenderBufferMemUsed) / 1048576.0,
-            ["gc_heap_mb"] = GC.GetTotalMemory(false) / 1048576.0, ["gc_gen0"] = GC.CollectionCount(0), ["gc_gen1"] = GC.CollectionCount(1), ["gc_gen2"] = GC.CollectionCount(2),
+            ["gc_heap_mb"] = GC.GetTotalMemory(false) / 1048576.0, ["gc_allocated_mb"] = GC.GetTotalAllocatedBytes() / 1048576.0, ["gc_live_mb"] = GC.GetTotalMemory(true) / 1048576.0, ["gc_gen0"] = GC.CollectionCount(0), ["gc_gen1"] = GC.CollectionCount(1), ["gc_gen2"] = GC.CollectionCount(2),
         };
         File.WriteAllText(Path.Combine(OutDir, "route-summary.json"), System.Text.Json.JsonSerializer.Serialize(res, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         GD.Print("PERF_ROUTE_DONE");
