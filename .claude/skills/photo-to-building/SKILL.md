@@ -1,212 +1,129 @@
 ---
 name: photo-to-building
-description: Model one real building of the village as a 3D landmark in the map from photos of its sides (one or more photos, each naming a side). Use for "make a 3d model of this building from the photo", "model parcel P-xxxx / building wxxxx from these photos", "this house looks like this [image]". Exterior only. Not for interiors, doors that open, or game code.
+description: Model one real building of the village in the map from photos of its sides (one or more photos, each with its side or viewpoint). Use for "make a 3d model of this building from the photo", "model parcel P-xxxx / G-xxxx / building wxxxx from these photos", "this house looks like this [image]". Exterior only. Not for interiors, doors that open, or game code.
 ---
 
 # Photo to building
 
-Turn photos of a building into a hand-modelled landmark: a Python module in `pipeline/src/drycastle_pipeline/` that
-builds the mesh on the building's real footprint. Reference model: `garage.py` (read it once before step 4).
+Measure a house from photos and write its building detail: `pipeline/config/buildings/<id>.yaml` plus its entry in
+`pipeline/config/overrides.yaml`. No code. Two tool calls and two pictures to read; keep it that small.
+Commands run from `pipeline/`. Scratch files go in your scratchpad directory (`OUT` below).
 
-Follow the steps in order. Do not skip a gate. All commands run from `pipeline/` unless they start with `make`.
+## Rules
 
-## Rules (never break)
+- Never edit the footprint, `edits.json`, or anything but the two files `apply` writes. No game, no screenshots, no
+  commit, no `make`, no tests: the map is exported once after a batch, not per building.
+- Not the building's own walls, roof, windows and doors (stairs, balconies, gates, fences, sheds, pipes, poles): leave
+  out, name them in `not_modelled`.
+- Lean-to or split roofs, an L-shaped or many-cornered building, two buildings that are one, an interior: stop and say
+  it needs `LANDMARK.md` (same folder). Do not read that file otherwise.
+- Do not estimate sizes by eye. Pixels in, metres out.
 
-1. Never change the footprint. The plan comes from the footprint; heights, openings and colours come from the photos.
-2. Never edit `pipeline/config/edits.json`, never `git stash`, never run the game, never take screenshots.
-3. Build only with `landmark_kit` functions. Do not write your own triangles.
-4. Roof and wall colour varies per WHOLE sheet, tile strip or wall. Never cut a surface into random rectangles.
-5. No `random` without a fixed seed (`sheet_roof` handles it). The same input must give the same mesh.
-6. Interior, an opening door, a parked vehicle, anything the game must know about: finish the exterior, then tell the
-   user it needs separate work (ADR 0027 shows what that took). Do not attempt it.
-7. Leave out, and list in the report, everything that is not the building's own walls, roof, windows and ground-level
-   doors: outside stairs, balconies, a door high on a wall, gates, boundary walls and fences, sheds and lean-tos of the
-   neighbour, drainpipes, meter boxes, poles, cables, plants. Do not approximate them with boxes.
-8. Numbers you did not read from a photo are guesses. Write every guess in the module docstring and in the report.
+## 1. Prep (one command)
 
-## Step 1: footprint
+The building has captures (pictures of a Street View tab saved with their camera, `photo_capture list`):
 
-    uv run python -m drycastle_pipeline.landmark_tools footprint <P-xxxx | G-xxxx | building ids> [--view=X,Y]
+    uv run python -m drycastle_pipeline.landmark_photo prep <building id> --out OUT
 
-`--view`: where a photo was taken, when the user gives it (map metres, or a sketch point of the editor: read
-`~/.local/state/drycastle/sketch.json`, `points[].x, y`, and pass them as they are). Each edge then says whether that
-photo shows it (VISIBLE / HIDDEN). Run it once per photo viewpoint.
+A photo the user gave you instead:
 
-Keep the whole output. It gives corners, edges (index, length, the compass side each faces, shared walls, road distance)
-and the `RING = (...)` line to paste. Stop and ask the user if it says CLOCKWISE, if the first line shows a `model`
-other than `None` (it is already hand-modelled), or if it says MORE THAN 4 CORNERS (the template does not fit).
-"NOT square" with 4 corners is fine: carry on.
+    uv run python -m drycastle_pipeline.landmark_photo prep <G-xxxx | P-xxxx | building id> --photo PHOTO --view=X,Y --out OUT
 
-More than one building in the parcel: ask the user which one(s) the photos show unless they said so. Two buildings
-sharing a wall that are one real building: model both in one module as `garage.py` does (`RINGS` with two entries);
-otherwise one building per module.
+`--view`: where that photo was taken. A sketch point named by the user: its `x, y` from
+`~/.local/state/drycastle/sketch.json`, as they are. None given: leave `--view` out, and in the sheet use a point 10 m
+out from the middle of the photographed edge.
 
-## Step 2: match each photo to an edge (GATE)
+It prints, per photo, the footprint: corners `c0..`, edges with length and the side each faces, `view: VISIBLE /
+HIDDEN`. Stop if a building shows a `model` other than `None`. Then read `OUT/grid.png` (captures: `OUT/grid_<n>.png`,
+the newest two, already cut to where the building is and enlarged). Yellow lines are x, cyan lines are y, and EVERY
+line carries its number in pixels of the full photo. To read a point: take the numbers of the two lines it lies between
+and its place between them (halfway between 1050 and 1100 is 1075). Never measure the picture as shown to you; it is
+scaled. Ignore the map's own buttons and labels.
 
-Fill this table, one row per photo, and show it to the user:
+MORE THAN 4 CORNERS usually means the footprint holds a house and its extensions; the roof outline you mark in step 2
+lets the tool sort that out.
 
-| photo | side the user named | edge | edge length | why |
-|---|---|---|---|---|
+Which wall is which: only VISIBLE edges are in the photo. Seen from outside, an edge runs from its first corner on the
+LEFT to its second on the RIGHT. Two edges fit equally and the user is there: ask. Otherwise take the likelier one and
+say so.
 
-How to pick the edge:
-- A viewpoint was given: only edges marked VISIBLE can be in that photo. A photo from a corner shows two edges: give
-  it two rows. The viewpoint is approximate: use it to rule edges out, not to decide which wall is more head-on.
-- The user named a compass side or a street: take the edge that `faces` it.
-- The user said "front" and nothing else: the outer edge with the smallest `road` distance.
-- Check with shape: a long low side in the photo is a long edge; a gable end is usually a short edge.
-- Seen from outside, an edge runs from its first corner on the LEFT to its second corner on the RIGHT. Use this to
-  check that what is on the left in the photo is at the start of the edge.
+## 2. Sheet, then apply (one file, one command)
 
-If two edges fit a photo equally, ask the user. Do not guess. Sides with no photo: copy the opposite side's roof line,
-draw no openings, and list them as guessed.
+Write `OUT/sheet.json`. You mark points; the tool works out heights, the roof's form and how much of the footprint
+the house covers. Do not decide those yourself.
 
-## Step 3: measure with the camera fit (do this as careful, slow work)
+    {"building": "w378920451", "what": "house, cream render, dark shingle roof",
+     "source": "Street View captures of 2022-09",
+     "photos": [
+      {"capture": 0,
+       "points": ["c4:ground:1088,1075", "c4:eave:1088,392", "c3:eave:547,485"],
+       "profile": {"edge": 4, "px": [[1495, 110], [1660, 300]]},
+       "openings": []},
+      {"capture": 1,
+       "points": ["c4:ground:1370,960", "c4:eave:1380,425", "c3:eave:560,485", "c3:ground:560,800"],
+       "openings": [{"edge": 3, "kind": "window", "px": [[670, 624], [807, 776]]},
+                    {"edge": 3, "kind": "door", "px": [[600, 400], [640, 520]], "colour": "#6b3a2a"}]}],
+     "colours": {"wall": [800, 560, 0], "roof": [900, 330, 0], "frame": "#e6e8e8", "wall_in_shade": true},
+     "overhang_m": 0.3, "not_modelled": "gate, yard wall, chimney"}
 
-Do not estimate sizes by eye. Fit a camera to the photo on the footprint, then let the tool turn pixels into metres.
-`PHOTO` is the photo's path, `CAM` a file in your scratchpad (one per photo), `<id>` the building.
+Use BOTH captures: one entry in `photos` each. Every pixel is read off that capture's own grid.
 
-**3a. Grid.** `uv run python -m drycastle_pipeline.landmark_photo grid PHOTO --out <scratchpad>/fit`
-Read the written `grid.png`. Yellow lines are x, cyan lines are y, every 50 px. Read every pixel position below off
-this picture, to about 5 px.
+**`points`** (3 or more per photo, `WHERE:LEVEL:X,Y`): building corners you can see. WHERE is a footprint corner
+`c<n>`. LEVEL is `ground` (wall meets ground) or `eave` (top of the WALL, under the gutter; not the roof's edge).
+- Always: the corner nearest the camera at `ground` AND at `eave`. One `ground` point per photo is a must.
+- Then the far end of each wall you can see, at `eave`, and at `ground` if it shows.
+- Only real footprint corners. The footprint is often LONGER than the house (a gate, a yard wall, a shed share it):
+  if the house's wall ends before the footprint's corner, that corner is not on the house. Leave it out.
+- A corner hidden behind a hedge, fence or car: leave it out, do not guess. Fewer good points beat more bad ones.
+- The near corner's foot is hidden (very common): follow the visible foot of the wall along to the corner and mark
+  where it would meet it. If no foot of that wall shows at all, take the `ground` point at another corner.
 
-**3b. Fit.** Name 5 or more points of the building that you can see, each `WHERE:LEVEL:X,Y`:
-- WHERE: a footprint corner `c0`, `c1`, ... (step 1), or `r<edge>`: the top of the gable triangle over that edge.
-- LEVEL: `ground` (where the wall meets the ground), `eave` (where the wall meets the roof), `top` (the ridge).
-- Take: the corner nearest the camera at `ground` and at `eave`; the far end of each visible wall at `eave` (and at
-  `ground` if you can see it); the ridge end `r<edge>:top`. A corner hidden by a fence or a bush: leave it out.
-- At the eave, take the top of the WALL, not the edge of the overhanging roof.
+**`profile`** (in the ONE photo that best shows the wall on which you see the roof's outline: usually the gable end,
+the wall with the triangle; this is how the roof is measured): `edge` = that wall's edge, `px` = two pixels on the
+roof's outline where it meets that wall:
+1. the PEAK: the highest point of the outline (the tip of the gable, or where a slope stops climbing);
+2. the END: following the outline on past the peak, where it finishes: back down at the wall's far corner at eave
+   height for a gable, or, if the roof stays up, the furthest point of it you can see. Cannot see past the peak:
+   give the peak alone.
+Take the underside of the roof (where wall meets roof), not the top of the tiles. A gable whose tip is cut off by a
+small sloping face (a half-hip): the PEAK is the end of the ridge, the highest point of the roof above that wall. No side wall with the outline in
+any photo (only eave walls are seen): give no profile; the building is then written with a flat roof and flagged.
 
-      uv run python -m drycastle_pipeline.landmark_photo fit PHOTO <id> --view=X,Y --cam CAM \
-          c1:ground:443,535 c1:eave:432,318 c0:eave:122,332 c0:ground:125,484 c2:eave:738,352 r1:top:568,120
+**`openings`**: two opposite corners of each window's glass or door leaf, and the edge it is on. Each opening once,
+in the photo that shows it most square-on. A door high on a wall is fine. A gate in a yard wall is not the building.
 
-  `--view`: the photo's viewpoint from step 1. None given: use a point 10 m out from the middle of the photographed
-  edge (its middle plus 10 x the direction it faces). Hand-held photo: add `--cam-height 1.6`.
+**`colours`**: `[x, y, photo number]` well inside a clean, typical part of the surface (not near its edge, not on a
+roof window), or `"#rrggbb"`. `wall_in_shade`: true
+when the sampled wall is in shadow. `"white": [x, y]` only if something white is in the same light on that wall.
 
-It prints `EAVE`, `TOP`, `RIDGE_AT` and a fit error. Rules:
-- "good" or "usable": take the numbers. They go into the sheet as measured.
-- "BAD", or a WARNING: re-read the points it marks on `grid.png` and fit again. Still bad after 3 tries: check the
-  photo-to-edge table (a wall on the wrong edge gives exactly this), then fall back to the rulers below and mark the
-  heights low confidence. Never use the numbers of a bad fit.
-- `RIDGE_AT` far from 0.5 (below 0.4 or above 0.6) is real: one slope is longer. Use it; give `r<edge>` with
-  edge = ROOF_EDGE so it counts from the right corner.
-- Only one wall in the photo, seen square-on: the fit cannot tell distance from zoom, so its heights are unreliable
-  even when the error is small. Take heights from the rulers below (low confidence); positions along the wall from
-  `measure` are still good.
+Other keys, only when needed: `"roof": "flat"` or `"hipped"` (then no profile); `"rest_height_m"`: the height of the
+lower part of the footprint beside the house, when the tool reports it guessed one and you can see it;
+`"photo"`, `"view": [x, y]`, `"cam_height": 1.6` in place of `"capture"` for a photo the user gave (2.5 for a Street
+View screenshot); with such a photo give 5 or more points.
 
-**3c. Openings.** For each window and ground-level door, two opposite corners of its glass or leaf:
+Then:
 
-      uv run python -m drycastle_pipeline.landmark_photo measure CAM --edge 0 158,368 208,440
+    uv run python -m drycastle_pipeline.landmark_photo apply OUT/sheet.json --out OUT
 
-It prints `s0, width, z0, height` to paste into `OPENINGS`. "not on this wall": wrong edge or a mis-read pixel.
+It fits the camera, measures, samples, writes both files and draws `OUT/overlay_0.png`.
 
-**3d. Colours.** `uv run python -m drycastle_pipeline.landmark_photo sample PHOTO X,Y [--white X,Y]`
-- A sunlit surface: no `--white`.
-- A surface in shade: `--white` on something white IN THE SAME SHADE on the same wall (a window frame). No such
-  white: sample without it and multiply by 1.4.
-- Roof: sample three spots, use them as the three shades.
+- It prints `roof read from the profile: ...`: check that sentence against the picture (gable or one slope then
+  flat; house narrower than the footprint or not). If it is plainly wrong, a profile pixel is wrong: re-read it.
+- `fit error ... BAD`: that photo's numbers were not used. A `WARNING` about the camera: its heights are doubtful. Re-read the points it marks on `grid.png`, fix the
+  sheet, run again with `--replace`. Still bad on the third run: stop and report; a wall matched to the wrong edge
+  gives exactly this.
+- `PROBLEM:` lines are things it left out or guessed. Copy them into the report. "the photos disagree on the eave":
+  re-read the ground and eave points of the near corner in both pictures once, then accept what it says.
+- "already has an entry": the building was done before. Stop and report unless the user asked to redo it.
 
-Rulers, only when the fit is impossible: a house door is 2.0 m high, a window sill 0.8 to 0.9 m up, a storey about
-2.8 m, a car garage door 2.1 to 2.4 m, a fence or gate 1.5 to 1.8 m. Ridge with nothing to measure it:
-TOP = EAVE + 0.4 x (length of ROOF_EDGE), low confidence. The generated height printed in step 1 is often wrong.
+## 3. One look
 
-Write this sheet down before any code (in your reply, not a file):
+Read `OUT/overlay_0.png`: the model, half see-through with a magenta outline, over the photo. Eave line, wall corners
+and windows must sit on the photo's. One of them clearly off: fix it in the sheet and apply once more with `--replace`.
+Everything too high or too low together: the `ground` point of that photo is wrong. One window off: its two pixels.
+The roof off but the walls right: a `profile` pixel. The ridge tip may sit beside the real one (the generated roof has its ridge in the middle); that is known,
+leave it. Do not loop past one correction.
 
-    roof form:   gable | lean_to | flat | split (two lean-tos, see garage.py) | other -> stop, ask
-    ROOF_EDGE:   index of the edge the roof slopes across (gable: an edge with a triangle on top;
-                 lean-to: an edge whose wall top is slanted, starting at its LOW corner)
-    EAVE, TOP:   metres above the ground (lean-to: wall top at the first / second corner of ROOF_EDGE)
-    RIDGE_AT:    gable only, from `fit` (0.5 when not measured)
-    overhang:    metres the roof passes the wall
-    colours:     wall, gable wall if different, plinth, frames, door, roof (3 close shades), each as [r, g, b]
-    roof cover:  sheet metal (panel 0.55, seam_height 0.04) | tiles or shingles (panel 0.4, seam_height 0.0);
-                 weathered? which colours
-    left out:    what rule 7 removes from this photo
-    openings:    per edge: kind (window|door), s0 = metres from the LEFT end, width, z0 (sill), height, casements
-                 (a door stands on the ground; a door higher up is left out)
-    confidence:  high | medium | low for each line, and what is guessed
+## 4. Report (6 lines at most)
 
-Roof form by look:
-- gable: two slopes meeting at a ridge, a triangle wall at each end.
-- lean_to: one slope, one long wall higher than the opposite one.
-- flat: no visible slope.
-- lean-to with the low side at the SECOND corner of the edge: use the opposite edge as ROOF_EDGE instead.
-- hipped, L-shaped, dormers, towers: not covered. Stop and say so; do not approximate silently.
-
-## Step 4: write the module
-
-1. Copy `.claude/skills/photo-to-building/template_building.py` to `pipeline/src/drycastle_pipeline/<name>.py`.
-2. Fill ONLY the constants above `_N = len(RING)` and the docstring. Paste `RING` exactly as printed.
-3. Leave `building_mesh` alone unless the sheet needs something it lacks; then copy the pattern from `garage.py`
-   (`_bay`, `_side`, `_roof`), using kit functions only. Anything you add that is trim (frames, bands, boxes on a
-   wall) goes AFTER the `if not detail: return` line, or it ends up in the collision.
-4. Register it. In `landmarks.py` add next to `_bus_garage`, and one entry in `FOOTPRINT_MODELS`:
-
-       def _<name>(b: dict, detail: bool) -> Mesh:
-           """<what and where> (see ``<name>.py``)."""
-           from drycastle_pipeline.<name> import building_mesh
-
-           return building_mesh(b, detail)
-
-5. In `pipeline/config/overrides.yaml` add the building next to the `bus_garage` entries, with a comment (parcel,
-   what it is, photo date, what was guessed): `model: <name>`, `wall_colour`, `roof_colour` (hex), `levels`,
-   `roof: flat`, `height_m: <TOP>`. (`roof: flat` is right for every model: these fields only describe the building to
-   other stages, the mesh comes from the module. `levels`: 1 for one storey with or without an attic.)
-
-## Step 5: look at it (GATE, at most 3 rounds)
-
-With a fitted camera (step 3b), draw the model over the photo:
-
-    uv run python -m drycastle_pipeline.landmark_photo overlay PHOTO CAM <ids> --model <name> --out <scratchpad>/fit
-
-Read `overlay.png`: the model is half see-through over the photo, its outline is magenta. Roof edges, eave line,
-wall corners and windows of the model must sit on those of the photo. Where they do not, the model is wrong THERE:
-fix that constant (do not re-fit the camera to hide it).
-
-Also, always:
-
-    uv run python -m drycastle_pipeline.landmark_tools render <ids> --model <name> --out <scratchpad>/render
-
-It writes `edge_<building>_<i>.png` (each side seen square-on), `roof_a.png`, `roof_b.png`; look at the sides with no
-photo too. The renderer has no sun shadows and no surroundings; judge shape and colour only. Answer each line yes/no:
-
-- [ ] overlay: the model's outline and openings sit on the photo's, within a window frame's width
-- [ ] same outline: roof form, which side is higher, where the ridge is
-- [ ] same number of openings, in the same left-to-right order (not counting what rule 7 left out)
-- [ ] each opening about where it is in the photo, and about that size (oblique photo: same order and spacing)
-- [ ] wall, roof and frame colours close to the photo
-- [ ] roof: no patchwork, no steps; sheets or tiles run from eave to ridge
-- [ ] nothing floats, pokes through the roof or hangs outside the footprint
-
-Any "no": fix the constant and render again. After 3 rounds stop and report what still differs. Also render once with
-`--collision` and check it is the same massing without trim.
-
-## Step 6: test, export
-
-1. Copy `template_test.py` to `pipeline/tests/test_<name>.py`. Replace the word `MODULE` (twice: the docstring and
-   the import line, which becomes `from drycastle_pipeline import <name> as m`) and `NAME`.
-2. `uv run pytest tests/test_<name>.py tests/test_garage.py tests/test_landmarks.py -q` and
-   `uv run ruff check src/drycastle_pipeline/<name>.py tests/test_<name>.py`. Both must pass. (`test_dishes` fails on
-   its own in the full suite; that is known and not yours.)
-3. From the repo root: `make rules && make export`. This rebuilds `out/village/map` (the only map to use).
-4. `uv run python -m drycastle_pipeline.landmark_tools near <ids>` lists fences, objects, lamps and trees within 6 m.
-   Report those that stand off an edge with a door, and any at 0.0 m (inside the walls). Do not remove anything.
-5. Open the final pictures for the user: `xdg-open <file>` for `overlay.png` and `roof_a.png`.
-
-## Step 7: report
-
-Short bullets: the photo-to-edge table; the fit error; the sheet as built, each line marked measured or guessed; anything that differs from the photos and
-why; obstacles from step 6.4; files changed; "not seen in-game". Do not commit unless asked; if asked, work on an issue
-branch and stage only your own files (the working tree is shared and edited live).
-
-## Kit cheat sheet (`landmark_kit.py`)
-
-| need | call |
-|---|---|
-| solid block under a roof | `prism(S, corners, z0 list, z1 list, colour)` (convex only: split an L in two) |
-| box on a wall face | `edge(S, p, q, s0, s1, d0, d1, z0, z1, colour)` (`d` outward, 0 = wall face) |
-| wall with real holes | `wall(S, p, q, top_p, top_q, thickness, colour, holes=[(s0, s1, z0, z1)])` |
-| window drawn on a wall | `window(S, p, q, s0, s1, z0, z1, frame, glass, casements=2)` |
-| door frame, plinth | `door_frame(...)`, `plinth(S, p, q, colour, gaps=[(s0, s1)])` |
-| one roof slope | `sheet_roof(S, frame, roof_z, lo, hi, v_lo, v_hi, detail, seed=..., sheets=..., ...)` |
-| gable | `gable_roof(S, frame, width, v_lo, v_hi, eave_z, ridge_z, detail, seed=..., **style)` |
-| footprint side that is not straight | `boundary(frame, corners)` gives `a = f(v)` for `lo` / `hi` |
+Building and parcel; fit error; roof, eave and top; number of openings; every `PROBLEM:` line; what was not modelled.

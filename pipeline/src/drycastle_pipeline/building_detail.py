@@ -49,7 +49,7 @@ draws exactly these numbers. Everything is in the map frame of ``meshes.building
 """
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -229,7 +229,10 @@ def _unclamped_height(roof: str, rise: float, cu: float, cv: float, a: float, b:
     def hipped(u: float, v: float) -> float:
         return rise * min(1.0, (b - abs(v - cv)) / b, (a - abs(u - cu)) / b)
 
-    return gabled if roof == "gabled" else hipped
+    def lean_to(u: float, v: float) -> float:  # flat past the high edge: what stands behind it is as high as the roof's top
+        return rise * min(1.0, (v - (cv - b)) / (2 * b))
+
+    return {"gabled": gabled, "lean_to": lean_to}.get(roof, hipped)
 
 
 class _Tris:
@@ -256,8 +259,49 @@ class _Tris:
         return Mesh(np.array(self.tris), np.array(self.cols, dtype=np.uint8))
 
 
+def _on_part(d: Detail, ring: list, part_ring: list, first: bool) -> Detail:
+    """The detail of one part of a split building (``meshes.split_parts``): the openings of ``d`` that lie on walls of
+    the part, on the part's own edge numbers. Roof overhang and dormers stay with the first (main) part."""
+    out = Detail(id=d.id, overhang_m=d.overhang_m if first else 0.0, frame_colour=d.frame_colour, source=d.source)
+    n, m = len(ring), len(part_ring)
+    for o in d.openings:
+        p, q = ring[o.edge], ring[(o.edge + 1) % n]
+        length = math.dist(p, q)
+        ux, uy = (q[0] - p[0]) / length, (q[1] - p[1]) / length
+        for j in range(m):
+            a, c = part_ring[j], part_ring[(j + 1) % m]
+            sa, sc = (a[0] - p[0]) * ux + (a[1] - p[1]) * uy, (c[0] - p[0]) * ux + (c[1] - p[1]) * uy
+            off = max(abs((a[0] - p[0]) * uy - (a[1] - p[1]) * ux), abs((c[0] - p[0]) * uy - (c[1] - p[1]) * ux))
+            if off < 0.02 and sc > sa and sa - 0.02 <= o.at_m and o.at_m + o.width_m <= sc + 0.02:
+                out.openings.append(replace(o, edge=j, at_m=round(o.at_m - sa, 3)))
+                break
+    if first:
+        out.dormers = list(d.dormers)
+    return out
+
+
 def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
     """Visual mesh of building ``b`` with the detail ``d`` applied, and its window panes."""
+    if b.get("roof_part"):
+        from drycastle_pipeline.meshes import split_parts
+
+        ring = list(orient(footprint_polygon(b["footprint"]), 1.0).exterior.coords)[:-1]
+        parts = split_parts(b)
+        subs = [_on_part(d, ring, list(orient(footprint_polygon(p["footprint"]), 1.0).exterior.coords)[:-1], k == 0) for k, p in enumerate(parts)]
+        placed = {o.id for sub in subs for o in sub.openings}
+        lost = [o.id for o in d.openings if o.id not in placed]
+        if lost:
+            raise DetailError(f"{d.id} opening {lost[0]}: does not fit one wall of a part of the building (it crosses where roof_part cuts the footprint)")
+        if any(sub.dormers for sub in subs[1:]):
+            raise DetailError(f"{d.id}: dormers go on the main part only")
+        # the main part's roof overhangs only where the whole building's would: not over the parts behind it (their flat
+        # roof may be as high as its top) and without the spike a mitred corner makes where the cut meets a wall at a slant
+        whole = orient(footprint_polygon(b["footprint"]), 1.0)
+        outline = whole.buffer(d.overhang_m, join_style=2, mitre_limit=3.0) if d.overhang_m else whole
+        others = unary_union([footprint_polygon(p["footprint"]) for p in parts[1:]]) if len(parts) > 1 else None
+        parts[0] = {**parts[0], "_roof_clip": outline.difference(others) if others is not None else outline}
+        built = [build_detail(p, sub) for p, sub in zip(parts, subs)]
+        return Mesh.concat([m for m, _ in built]), [t for _, tags in built for t in tags]
     poly = orient(footprint_polygon(b["footprint"]), 1.0)
     eave, rise, roof = float(b["eave_height_m"]), float(b["roof_height_m"]), b["roof"]
     wall_c, roof_c = b["wall_colour"], b["roof_colour"]
@@ -387,6 +431,8 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
 
     # roof, with overhang: pieces of the grown footprint, heights continue the roof plane
     grown = poly.buffer(d.overhang_m, join_style=2, mitre_limit=3.0) if d.overhang_m else poly
+    if b.get("_roof_clip") is not None:
+        grown = max(_polygons(grown.intersection(b["_roof_clip"])), key=lambda g: g.area, default=poly)
     if flat:
         pieces = [grown]
         roof_z = lambda x, y: eave

@@ -216,6 +216,7 @@ def launch_chrome(port: int, lat: float, lon: float) -> subprocess.Popen:
 def follow(
     port: int, position_path: Path, sketch_path: Path | None, interval: float,
     points_path: Path | None = None, dropper: PointDropper | None = None, points_sketch: str = POINTS_SKETCH,
+    capturer=None,
 ) -> None:
     last: tuple[float, float, float | None] | None = None
     warned = False
@@ -229,6 +230,8 @@ def follow(
                 warned = True
             time.sleep(interval)
             continue
+        if capturer is not None:  # a press of the capture key in the tab since the last look
+            capturer.poll()
         current = next((p for p in (parse_maps_url(u) for u in urls) if p), None)
         if dropper is not None and points_path is not None:
             spot = dropper.feed(current, time.monotonic())
@@ -263,6 +266,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ahead", type=float, default=VIEW_LINE_M, help=f"metres along the view where the point goes (default {VIEW_LINE_M:g})")
     ap.add_argument("--at", choices=("aim", "camera"), default="aim", help="a point where you look (aim) or where you stand (camera)")
     ap.add_argument("--min-gap", type=float, default=1.5, help="no new point within this many metres of the last one (default 1.5)")
+    ap.add_argument("--capture", action="store_true", help="pressing the capture key in the Street View tab saves its picture and camera (photo_capture.py)")
+    ap.add_argument("--capture-key", default="c", help="the capture key (default c)")
     ap.add_argument("--launch", action="store_true", help="start a Chrome with its own profile on the village")
     ap.add_argument("--start", default="48.4024653,16.8607311", help="lat,lon the launched Chrome opens at")
     args = ap.parse_args(argv)
@@ -278,8 +283,14 @@ def main(argv: list[str] | None = None) -> int:
     points_path = args.sketch or DEFAULT_SKETCH_FILE
     if dropper is not None:
         print(f"points: stop and look for {args.dwell:g} s to drop one in sketch {args.points_sketch} ({args.at}) of {points_path}")
+    capturer = None
+    if args.capture:
+        from drycastle_pipeline.photo_capture import PHOTOS_DIR, Capturer
+
+        capturer = Capturer(args.port, args.capture_key)
+        print(f"capture: aim the middle of the view at a building and press {args.capture_key.upper()} in the Street View tab; pictures go to {PHOTOS_DIR}")
     try:
-        follow(args.port, args.position_file, args.sketch, args.interval, points_path, dropper, args.points_sketch)
+        follow(args.port, args.position_file, args.sketch, args.interval, points_path, dropper, args.points_sketch, capturer)
     except KeyboardInterrupt:
         pass
     finally:

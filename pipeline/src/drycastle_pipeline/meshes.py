@@ -74,12 +74,18 @@ def _roof_height_fn(roof: str, rise: float, cu: float, cv: float, a: float, b: f
         k = min((b - abs(v - cv)) / b, (a - abs(u - cu)) / b)
         return rise * min(1.0, max(0.0, k))
 
-    return gabled if roof == "gabled" else hipped
+    def lean_to(u: float, v: float) -> float:  # one slope: low at v = cv - b, high at v = cv + b (left of the ridge direction)
+        return rise * min(1.0, max(0.0, (v - (cv - b)) / (2 * b)))
+
+    return {"gabled": gabled, "lean_to": lean_to}.get(roof, hipped)
 
 
 def _roof_regions(roof: str, cu: float, cv: float, a: float, b: float) -> list[Polygon]:
     """Pieces of the (u, v) plane inside which the roof surface is one plane."""
     e, big = _EDGE_MARGIN, 1.0
+    if roof == "lean_to":
+        x0, x1 = cu - a - big, cu + a + big
+        return [Polygon([(x0, cv - b - big), (x1, cv - b - big), (x1, cv + b + big), (x0, cv + b + big)])]
     if roof == "gabled":
         x0, x1 = cu - a - big, cu + a + big
         return [
@@ -171,8 +177,40 @@ def _extrude(poly: Polygon, top, boundary, roof_pieces, roof_z, roof_colour, wal
     return np.array(tris), np.array(colours, dtype=np.uint8)
 
 
+def split_parts(b: dict) -> list[dict]:
+    """A building whose pitched roof covers only its main part (``roof_part``, a polygon in map metres: one cadastral
+    footprint often holds a house and its lower extensions) as the buildings it is made of: the main part, the footprint
+    inside ``roof_part``, keeps the roof and heights; every other piece is a flat-roofed block ``rest_height_m`` high.
+    Any other building: itself."""
+    if not b.get("roof_part"):
+        return [b]
+    poly = orient(footprint_polygon(b["footprint"]), 1.0)
+    # the part is grown by 2 cm so that a cut drawn along a wall takes the wall with it, and what is left is opened by
+    # 3 cm: no hair-thin strip of the footprint stays behind as a wall of its own
+    cut = Polygon(b["roof_part"]).buffer(0).buffer(0.02, join_style=2)
+    main = _polygons(poly.intersection(cut))
+    rest = _polygons(poly.difference(cut).buffer(-0.03, join_style=2).buffer(0.03, join_style=2))
+    if not main:
+        return [{k: v for k, v in b.items() if k not in ("roof_part", "rest_height_m")}]
+    base = {k: v for k, v in b.items() if k not in ("roof_part", "rest_height_m")}
+
+    def ring(p: Polygon) -> dict:
+        p = orient(p, 1.0)
+        return {"exterior": [list(c) for c in p.exterior.coords[:-1]], "holes": [[list(c) for c in r.coords[:-1]] for r in p.interiors]}
+
+    low = float(b["rest_height_m"]) if b.get("rest_height_m") else min(2.8, float(b["eave_height_m"]))
+    out = [{**base, "footprint": ring(p)} for p in main]
+    out += [
+        {**base, "footprint": ring(p), "roof": "flat", "roof_height_m": 0.0, "eave_height_m": low, "height_m": low, "ridge_dir": None}
+        for p in rest
+    ]
+    return out
+
+
 def building_mesh(b: dict) -> Mesh:
     """Visual mesh of one buildings.json entry (walls, roof, floor), flat colours per face."""
+    if b.get("roof_part"):
+        return Mesh.concat([building_mesh(p) for p in split_parts(b)])
     poly = orient(footprint_polygon(b["footprint"]), 1.0)
     eave, rise, roof = float(b["eave_height_m"]), float(b["roof_height_m"]), b["roof"]
     wall_c, roof_c = b["wall_colour"], b["roof_colour"]
@@ -198,6 +236,8 @@ def building_mesh(b: dict) -> Mesh:
 
 def collision_mesh(b: dict) -> Mesh:
     """Extruded footprint, no roof detail; pitched roofs are cut at half the roof height."""
+    if b.get("roof_part"):
+        return Mesh.concat([collision_mesh(p) for p in split_parts(b)])
     poly = orient(footprint_polygon(b["footprint"]), 1.0)
     top_z = float(b["eave_height_m"]) + float(b["roof_height_m"]) / 2
     grey = [128, 128, 128]

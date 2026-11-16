@@ -1,0 +1,9 @@
+# P-0044: house, cream render, dark shingle roof. Measured by landmark_photo (camera fit: photo 0 1 px, photo 1 2 px).
+# Eave 3.62 m, top 5.46 m. Sides with no photo have no openings. Not modelled: yard wall and blue gate, gate pillar, hedge, downpipe, chimney, skylights, wall box, extension beside the house.
+id: w378920451
+source: Street View captures of 2022-09
+overhang_m: 0.3
+frame_colour: '#e6e8e8'
+openings:
+  - {id: w1, kind: window, edge: 3, at_m: 1.72, width_m: 1.52, height_m: 1.24, sill_m: 1.0, recess_m: 0.12, confidence: medium}
+  - {id: w2, kind: window, edge: 3, at_m: 5.34, width_m: 1.5, height_m: 1.18, sill_m: 1.06, recess_m: 0.12, confidence: medium}
