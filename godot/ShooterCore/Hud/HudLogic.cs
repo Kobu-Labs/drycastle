@@ -101,6 +101,26 @@ public static class HudLogic
     }
 
     /// <summary>
+    /// Map rule (#313): a vehicle with an enemy on any seat is not drawn on the minimap or tactical map. The seats are the ids the server says
+    /// (ADR 0026): the driver, and <paramref name="others"/> = seats 1..3 (0 = empty). The player's own vehicle is never hidden (they sit in it).
+    /// Mixed riders (friend + enemy) hide it. FFA: <paramref name="isEnemy"/> is true for everyone else.
+    /// </summary>
+    public static bool HideEnemyOccupiedVehicle(ushort driver, IReadOnlyList<ushort>? others, ushort myId, Func<ushort, bool> isEnemy)
+    {
+        var enemy = false;
+        if (driver == myId) return false;
+        if (driver != 0 && isEnemy(driver)) enemy = true;
+        if (others != null)
+            foreach (var id in others)
+            {
+                if (id == 0) continue;
+                if (id == myId) return false;
+                if (isEnemy(id)) enemy = true;
+            }
+        return enemy;
+    }
+
+    /// <summary>
     /// Screen angle (radians, 0 = up, clockwise positive) of a damage source for a viewer at (vx, vz) looking along
     /// <paramref name="yaw"/> (the game's convention: forward = (-sin yaw, -cos yaw)). Source in front = 0, right = +pi/2.
     /// </summary>
