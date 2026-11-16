@@ -170,9 +170,12 @@ export refuses an unknown one); `player_spawn` has `where_ground` only. A kind t
 does nothing (a drawn zone of it is warned about at the export); a key or kind that does not exist is an error of the
 stage, never a silent skip (`zones.rules`).
 
-* **Player spawn.** The props stage (`props.make_spawns`, `spawns.json`) takes spawn candidates on open ground: the parcels of
-  `spawns.ground_kinds`, the ground areas of the types of the `player_spawn` rule zone, and the part of every other ground
-  area that lies inside a drawn `player_spawn` zone (`zones.drawn_spawn_units`). `player_spawn` is not exported as points.
+* **Player spawn.** Players spawn inside `player_spawn` zones and nowhere else. The props stage (`props.make_spawns`,
+  `spawns.json`) draws seeded points over the zones (the ground areas of the types of the rule zone, less its
+  cuts, and the drawn zones: `zones.kind_areas`): one per `spawns.m2_per_point` of usable ground, rounded up, so no minimum and
+  no maximum per zone; each inside the terrain and clear of buildings, trees and water. A point is `kind` `zone` with the id of its `zone`. A map with no
+  `player_spawn` zone gets `kind` `random` points over the whole terrain, off the roads. A zone with no usable ground gets none
+  (warning). `player_spawn` is not exported as points; roads are never spawn points.
 * **Every other kind** becomes candidate points for the server at the export, see "Zone points (`zone_points.json`)" under
   Export. Ground areas are never cut by a zone.
 
@@ -336,9 +339,9 @@ stage reads the `player_spawn` ones. The format and validator are documented in
 `pipeline/src/drycastle_pipeline/edits.py`. Entries for parcels that no longer exist are skipped
 with a warning; schema errors fail the stage.
 
-**Spawns**: `out/village/map/spawns.json` has a seeded subset (default 150) of points on roads and on
-open ground (garden parcels, the ground areas of the `player_spawn` zone, see "Zones"), at least `min_building_distance_m` from any building, with
-elevation, parcel (the id of the parcel or ground area), highway type (roads) and chunk index.
+**Spawns**: `out/village/map/spawns.json` has seeded points inside the `player_spawn` zones only (see "Zones"),
+inside the terrain and clear of buildings, trees and water, with elevation, `kind` (`zone`, or `random` on a map without a
+spawn zone), `zone` (the id of the zone) and chunk index. No road points.
 
 **Street lamps** (`lamps.py`, run by the props stage, `make props`): `data/village/work/lamps.json` holds
 one point per lamp (`id` `L-NNNN`, `x`, `y`, `z` elevation, `source` `osm` or `rule`, `osm_id`,

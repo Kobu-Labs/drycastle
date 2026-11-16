@@ -426,8 +426,7 @@ public partial class NavSpike : Node
     /// </summary>
     void Yards()
     {
-        var roads = Map.SpawnPoints.Where(s => s.Kind == "road").Select(s => s.Position).ToList();
-        if (roads.Count == 0) roads = Map.SpawnPoints.Select(s => s.Position).ToList();
+        var roads = Map.SpawnPoints.Select(s => s.Position).ToList();
         if (roads.Count == 0) return;
         int tested = 0, reached = 0, offMesh = 0, onRoof = 0, gardensUnreached = 0;
         var unreached = new List<string>();

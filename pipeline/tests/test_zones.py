@@ -23,13 +23,11 @@ from drycastle_pipeline.zones import (
     ZonesError,
     build_zone_points,
     check_ground_types,
-    drawn_spawn_units,
     drawn_zones,
     kind_areas,
     kind_rows,
     point_count,
     rule_parts,
-    rule_spawn_units,
     rules,
     sample_points,
     zone_cuts,
@@ -190,14 +188,12 @@ def test_a_drawn_zone_is_given_in_the_absolute_frame() -> None:
     assert kind == "bigfoot" and poly.equals(box(10, 10, 30, 30))
 
 
-def test_player_spawn_units_are_the_ground_inside_drawn_zones_except_the_rule_zone_types() -> None:
+def test_player_spawn_zones_are_the_rule_areas_and_the_drawn_zones() -> None:
     doc = {"ground": [ground("A-0001", "forest", box(0, 0, 100, 100)), ground("A-0002", "village", box(200, 0, 300, 100))]}
     d = drawn(zone("Z-0001", PLAYER_SPAWN, box(50, 0, 150, 100)), zone("Z-0002", "deer", box(0, 0, 100, 100)))
-    units = drawn_spawn_units(doc, d, ["village"])  # the village is a whole spawn kind by rule: not repeated here
-    assert [(u["id"], u["kind"]) for u in units] == [("A-0001", "forest")]
-    assert Polygon(units[0]["polygon"]["coordinates"][0]).equals(box(50, 0, 100, 100))  # only the part inside the zone
-    assert drawn_spawn_units(doc, drawn(zone("Z-0002", "deer", box(0, 0, 100, 100))), None) == []
-    assert drawn_spawn_units({}, d, None) == []
+    got = kind_areas(PLAYER_SPAWN, doc, d, ["village"])
+    assert [(i, g.equals(r)) for (i, g), r in zip(got, [box(200, 0, 300, 100), box(50, 0, 150, 100)], strict=True)] == [("A-0002", True), ("Z-0001", True)]
+    assert kind_areas(PLAYER_SPAWN, doc, drawn(zone("Z-0002", "deer", box(0, 0, 100, 100))), None) == []
 
 
 def test_a_zone_over_forest_does_not_change_the_ground() -> None:
@@ -205,7 +201,7 @@ def test_a_zone_over_forest_does_not_change_the_ground() -> None:
     doc = {"ground": [ground("A-0001", "forest", box(0, 0, 100, 100))]}
     before = json.dumps(doc, sort_keys=True)
     kind_areas("bigfoot", doc, drawn(zone("Z-0001", "bigfoot", box(20, 20, 60, 60))), None)
-    drawn_spawn_units(doc, drawn(zone("Z-0001", PLAYER_SPAWN, box(20, 20, 60, 60))), None)
+    kind_areas(PLAYER_SPAWN, doc, drawn(zone("Z-0001", PLAYER_SPAWN, box(20, 20, 60, 60))), None)
     assert json.dumps(doc, sort_keys=True) == before
 
 
@@ -277,13 +273,9 @@ def test_untouched_zone_points_are_the_same_with_cuts_of_other_kinds_and_places(
 def test_player_spawn_rule_areas_lose_the_cut_and_a_moved_one_comes_back_through_its_drawn_zone() -> None:
     doc = {"ground": [ground("A-0001", "village", box(0, 0, 100, 100)), ground("A-0002", "village", box(200, 0, 300, 100))]}
     cuts = cuts_of(PLAYER_SPAWN, box(0, 0, 100, 100))
-    units = rule_spawn_units(doc, ["village"], cuts)
-    assert list(units) == ["A-0001"] and units["A-0001"]["polygon"] is None  # cut away completely
-    assert rule_spawn_units(doc, ["village"], {}) == {}
+    assert [i for i, _ in kind_areas(PLAYER_SPAWN, doc, {}, ["village"], cuts)] == ["A-0002"]  # A-0001 cut away completely
     moved = drawn(zone("Z-0001", PLAYER_SPAWN, box(50, 0, 150, 100)))
-    (unit,) = drawn_spawn_units(doc, moved, ["village"], cuts)
-    assert unit["id"] == "A-0001" and Polygon(unit["polygon"]["coordinates"][0]).equals(box(50, 0, 100, 100))
-    assert drawn_spawn_units(doc, moved, ["village"]) == []  # without the cut the village is whole already
+    assert [i for i, _ in kind_areas(PLAYER_SPAWN, doc, moved, ["village"], cuts)] == ["A-0002", "Z-0001"]
 
 
 # --- the points ---------------------------------------------------------------------------------

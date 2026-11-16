@@ -371,8 +371,6 @@ public sealed partial class MapLoader
             {
                 Id = s.GetProperty("id").GetString()!,
                 Kind = s.GetProperty("kind").GetString() ?? "",
-                Parcel = s.TryGetProperty("parcel", out var pp) ? pp.GetString() ?? "" : "",
-                Highway = s.TryGetProperty("highway", out var hh) ? hh.GetString() ?? "" : "",
                 Chunk = new Vector2I(ch[0].GetInt32(), ch[1].GetInt32()),
                 Position = new Vector3(s.GetProperty("x").GetSingle(), s.GetProperty("z").GetSingle(),
                     -s.GetProperty("y").GetSingle()),

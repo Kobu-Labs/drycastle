@@ -10,7 +10,6 @@ public partial class NetServer
     /// <summary>vehicles.json (run-over numbers, spawn count, car stats).</summary>
     public VehiclesFile? Vehicles;
     /// <summary>Spawn candidates of Kind road (with ground); cars prefer these, the other candidates fill up.</summary>
-    public List<NVec3> RoadSpawns = new();
     /// <summary>Vehicle type of the car smoke arena (vehicles.json id).</summary>
     public string SmokeKind = "car";
     readonly List<ServerCar> _cars = new();
@@ -50,7 +49,7 @@ public partial class NetServer
         return anchors;
     }
 
-    /// <summary>Places the cars once the spawn candidates are validated: road candidates first (not footpaths), at least 12 m apart, random colours.</summary>
+    /// <summary>Places the cars once the spawn candidates are validated: near the spawn zones, at least 12 m apart, random colours.</summary>
     void SpawnCars()
     {
         var space = World.GetWorld3D().DirectSpaceState;
@@ -73,14 +72,11 @@ public partial class NetServer
         {
             // vehicles stand around the player spawn areas: the spawn candidates are clustered greedily (most uncovered candidates within ClusterRadius),
             // the vehicles of vehicles.json (cars first) are dealt round-robin over the clusters and each takes a free candidate within 40 m of its
-            // cluster anchor (road candidates first), at least 12 m from every other vehicle, on real ground under the whole footprint
+            // cluster anchor (a random one), at least 12 m from every other vehicle, on real ground under the whole footprint
             var kinds = new List<int>();
             for (var kind = 0; kind < Vehicles!.Vehicles.Count; kind++)
                 for (var n = 0; n < Vehicles.Vehicles[kind].SpawnCount; n++) kinds.Add(kind);
             var anchors = ClusterAnchors(Spawns, Math.Max(1, Math.Min(6, (kinds.Count + 2) / 3)), ClusterRadius);
-            var roadRank = new Dictionary<NVec3, int>();
-            for (var i = 0; i < RoadSpawns.Count; i++) roadRank.TryAdd(RoadSpawns[i], i);
-            int Rank(NVec3 s) => roadRank.TryGetValue(s, out var r) ? r : RoadSpawns.Count + 1;
             var fitProbes = new Dictionary<int, FlightProbe>();
             bool Place(int kind, IEnumerable<NVec3> cands)
             {
@@ -106,12 +102,12 @@ public partial class NetServer
                 var kind = kinds[i];
                 var def = Vehicles.Vehicles[kind];
                 var anchor = anchors.Count > 0 ? anchors[i % anchors.Count] : Spawns[0];
-                var near = Spawns.Where(s => Dist2D(s, anchor) <= 40f).OrderBy(Rank).ThenBy(_ => _rng.Next()).ToList();
+                var near = Spawns.Where(s => Dist2D(s, anchor) <= 40f).OrderBy(_ => _rng.Next()).ToList();
                 // amphibious: a shore candidate near its cluster first, so it can drive straight into the water
-                var ok = (def.Medium == VehicleMedium.Amphibious && Place(kind, Spawns.Where(s => Dist2D(s, anchor) <= 90f && Water.ShoreDistance(s.X, s.Z) <= 40f).OrderBy(Rank).ThenBy(_ => _rng.Next())))
+                var ok = (def.Medium == VehicleMedium.Amphibious && Place(kind, Spawns.Where(s => Dist2D(s, anchor) <= 90f && Water.ShoreDistance(s.X, s.Z) <= 40f).OrderBy(_ => _rng.Next())))
                     || Place(kind, near)
                     || Place(kind, Spawns.Where(s => Dist2D(s, anchor) <= 90f).OrderBy(s => Dist2D(s, anchor)))
-                    || Place(kind, Spawns.OrderBy(Rank).ThenBy(_ => _rng.Next()));
+                    || Place(kind, Spawns.OrderBy(_ => _rng.Next()));
                 if (!ok) GD.PrintErr($"server: no spot for {def.Id}");
             }
             foreach (var fit in fitProbes.Values) fit.QueueFree();
