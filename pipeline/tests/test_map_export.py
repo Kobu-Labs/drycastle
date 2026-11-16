@@ -75,6 +75,7 @@ def test_roads_json_spawns_json_and_manifest(ws) -> None:
         "fences": "fences.json",
         "lamps": "lamps.json",
         "trees": "trees.json",
+        "ground_objects": "ground_objects.json",
     }
     assert {"terrain", "roads", "fences", "trees", "spawns", "buildings", "water"} <= set(
         manifest["generated"]
@@ -117,7 +118,7 @@ def test_export_is_byte_deterministic_across_runs(ws, tmp_path) -> None:
 
 
 def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
-    from drycastle_pipeline.propmeshes import fence_meshes, trees_mesh
+    from drycastle_pipeline.propmeshes import fence_meshes, ground_objects_mesh, trees_mesh
     from drycastle_pipeline.rules import load_section
 
     manifest = export(ws)
@@ -131,7 +132,7 @@ def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
     # (typed fences add flat posts and caps to the visual; their textured parts are separate nodes)
     want_visual = fence_meshes(props["fences"], pcfg["fences"])[0].face_count + trees_mesh(
         props["trees"], pcfg["trees"]
-    ).face_count
+    ).face_count + ground_objects_mesh(props["ground_objects"], pcfg["ground_objects"]).face_count  # no parcel: chunk level
     got_visual = sum(v for n, v in tris.items() if n == "props" or n.endswith("_props"))
     got_collision = sum(v for n, v in tris.items() if n.endswith("props_collision"))
     assert got_visual == want_visual > 0
@@ -144,3 +145,52 @@ def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
     for name in tris:
         if name.endswith(("_props", "_props_collision")):
             assert len(scene.geometry[scene.graph[name][1]].faces) == tris[name]
+
+
+def test_baked_trees_carry_their_base_as_second_uv_set(ws) -> None:
+    import struct
+
+    export(ws)
+    assert json.loads((ws["out"] / "trees.json").read_text())["model"]["base_uv2"] is True
+    data = (ws["out"] / "chunks" / "chunk_0_0.glb").read_bytes()
+    doc = json.loads(data[20 : 20 + struct.unpack_from("<I", data, 12)[0]])
+    attrs = {m["name"]: m["primitives"][0]["attributes"] for m in doc["meshes"]}
+    trees = json.loads((ws["work"] / "props.json").read_text())["trees"]
+    # a tree's parcel props mesh (or the chunk-level one, for trees without a parcel) has TEXCOORD_1
+    with_trees = {f"parcel_{t['parcel']}_props" if t.get("parcel") else "props" for t in trees}
+    assert with_trees
+    for name in with_trees:
+        assert "TEXCOORD_1" in attrs[name], name
+    assert not any("_UV2" in a for a in attrs.values())
+
+
+def test_forest_colour_fades_into_its_neighbour_over_the_blend_band() -> None:
+    from drycastle_pipeline.scene import ParcelColours
+
+    sq = lambda x0, x1: {"type": "Polygon", "coordinates": [[[x0, 0], [x1, 0], [x1, 100], [x0, 100], [x0, 0]]]}
+    units = [{"id": "A-1", "kind": "forest", "polygon": sq(0, 100)}, {"id": "A-2", "kind": "field", "polygon": sq(100, 200)}]
+    palette = {"forest": ["#204020"], "field": ["#c0c080"], "other": ["#808080"]}
+    pts = np.array([[50.0, 50.0], [94.0, 50.0], [100.5, 50.0], [106.0, 50.0], [150.0, 50.0]])
+    flat = ParcelColours(units, palette)(pts)
+    soft = ParcelColours(units, palette, {"kinds": ["forest"], "radius_m": 12})(pts)
+    assert (flat[:2] == flat[0]).all() and (flat[3:] == flat[4]).all()  # a line without the blend
+    assert (soft[0] == flat[0]).all() and (soft[4] == flat[4]).all()  # far from the outline: untouched
+    red = soft[:, 0].astype(int)
+    assert red[0] < red[1] < red[2] < red[3] < red[4]  # a ramp across the outline
+
+
+def test_swamp_ground_is_terrain_colour_and_fades_at_its_outline() -> None:
+    from shapely.geometry import box
+
+    from drycastle_pipeline.scene import ParcelColours
+
+    sq = lambda x0, x1: {"type": "Polygon", "coordinates": [[[x0, 0], [x1, 0], [x1, 100], [x0, 100], [x0, 0]]]}
+    units = [{"id": "A-1", "kind": "forest", "polygon": sq(0, 200)}, {"id": "A-2", "kind": "road", "polygon": sq(200, 300)}]
+    palette = {"forest": ["#30a030"], "road": ["#808080"], "other": ["#808080"]}
+    swamp = {"zone": box(-10, -10, 100, 310).union(box(240, -10, 310, 110)), "kinds": ["forest"], "colours": ["#402010"]}
+    pts = np.array([[50.0, 50.0], [95.0, 50.0], [100.5, 50.0], [106.0, 50.0], [150.0, 50.0], [270.0, 50.0]])
+    col = ParcelColours(units, palette, {"kinds": [], "radius_m": 12}, swamp)(pts)
+    assert col[0].tolist() == [0x40, 0x20, 0x10] and col[4].tolist() == [0x30, 0xA0, 0x30]  # wet inside the zone, plain forest outside
+    green = col[:5, 1].astype(int)
+    assert green[0] < green[1] < green[2] < green[3] < green[4]  # a ramp across the zone's outline
+    assert col[5].tolist() == [0x80, 0x80, 0x80]  # ground of another kind in the zone keeps its colour

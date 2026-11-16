@@ -1,0 +1,791 @@
+{
+  "version": 1,
+  "_note": "Pack trees (#287): detailed trees of the private nature pack (assets-private/synty/glb/nature) within near_m of the player in place of the baked box/pyramid trees. Without the pack, with DRYCASTLE_PACK_TREES=0, or on a map whose trees.json lacks model.base_uv2, nothing changes. A tree's base point inside near_m is a pack tree and outside it a baked one (cut in the shaders, global parameter tree_cut); over the last fade_m inside near_m both are drawn, dithered against each other. tile_m: the pack trees are merged into one mesh per tile and material (a tile costs one draw per material; smaller tiles cull better, bigger ones draw less and take longer to build). near_m 150 / fade_m 30 (the swap is far enough that it is not noticed; about 38 tiles of 48 m in a forest view against 13 at 70 m, so the cost is bounded by the undergrowth radius below, the nearest-first build and max_in_flight): the radius never passes a tile that is not built, so a spawn fills nearest first and the baked tree stays until its pack tree stands. ahead_m (32: half a tile more than the old 16 so a walker, 8 m/s, has 4 s of build lead; a car outruns it and the radius dips to the unbuilt tile): tiles are built this far past near_m, and freed 2 * ahead_m past it. max_in_flight: tiles (trees or undergrowth) being built on worker threads at once, nearest first (4). budget_ms: what handing finished tiles to the renderer may take per frame (one surface at least). scale_min / scale_max: a tree is scaled to the height of the code-built tree; a model is chosen among those whose scale lies within this span (the nearest one when none does). bulk_share: the share of trees that take a bulk model (single material, the shared atlas: they merge into one draw per tile); the others take an occasional model (own leaf textures, more draws). shadows: whether pack trees cast shadows themselves; off, the baked tree in the same place casts the sun shadow for them (on roughly doubled the draw calls of a view). shapes: the models that stand in for the tree shapes of trees.json (cone, box), by name in nature/manifest.json, chosen by a hash of the tree's position in proportion to weight; bulk marks a bulk model; a name the pack does not have is skipped. Any entry may name its pack (\"pack\": a folder of assets-private/synty/glb, default nature; model names are unique per pack; a pack that is not installed has its models skipped, the nature pack is the one a map needs); the swamp pack is loaded beside it. An LOD of a pack is a model by its own name (the swamp pack's LOD1/LOD2 are whole, cheaper trees: Env_Tree_Swamp_04_LOD2 is 960 triangles against 3666; the other swamp-pack trees are 12k-30k triangles even at LOD2 (3.5k-8k) and stay out). stands: the models by trees.json stand (pine, birch, mixed, thicket, swamp; absent = mixed), each a cone/box list or one `any` list for both shapes, with its own bulk_share (else the file's); a stand or a shape without models takes shapes. edge: false on a stand keeps its edge trees on its own models. edge_share: the share of trees at the forest edge (trees.json edge) that take the models of the `edge` stand (round, bushy broadleaf) instead of their stand's, chosen by a hash of the position. A stand's model list keeps the bulk/occasional split and the scale span; a model with its own leaf texture is an occasional one and adds a material (a draw) to every tile that holds it. ground_objects: the pack model per kind of ground_objects.json (log, stump, boulder, rootplate), chosen by a hash of the object's position in proportion to weight, scaled so the model's horizontal radius is radius_m times the object's scale (radius_m is the code-built radius at scale 1; the file's model.kinds.KIND.radius_m wins); a log is stretched along the model's Z to its len; yaw_deg is added to rot (the pack log lies along Z; check it against the code-built log's axis). The baked objects are cut by the shared UV2 base, so every kind of the file needs a model here or its baked objects vanish inside the radius. undergrowth: client-only clutter on the ground (meadow.bin cells, per meadow mix in `mixes`: 5 = forest, 9 = swamp; a mix no cell has is harmless and a cell of an unlisted mix grows nothing), generated on the worker per tile from a hash of the 2 m cell, no collision, no shadows, gone beyond its own radius, undergrowth.near_m (60) with its own fade_m (12), dithered like the trees (global shader parameter tree_cut_under; the mesher marks it in the vertex colour alpha): it has no baked twin and is about 48k triangles a forest tile, more than the trees, so it is built (own ahead_m, 16), kept and drawn only for the tiles within that radius, as a mesh of its own per tile (one more draw per material it wears in those tiles, 4 in a forest, about 9 tiles in view; the other 30 tiles cost nothing for it). Per kind: per_100m2 expected pieces on forest floor, scale_min/max, clump (0 even .. 1 patches with gaps), foot (density factor at a trunk, falling to 1 at foot_m), models by weight. foot below 1 thins a kind at trunks (saplings, shrubs). The forest mix (full 48 m tile of forest floor, mean density, about 47,700 triangles against tris_per_tile 60,000: ferns 10.6k, grass 13.7k, twigs 10.5k, mushrooms 3.6k, saplings 3.3k, shrubs 2.7k, bushes 1.7k, rocks 1.6k) and the swamp mix (about 13,600). tris_per_tile: over it the scatter is thinned (hash order, all kinds alike), one budget for all mixes of a tile (it is a share of the trees' 150 m view, so it is the same worst case as before, in a third of the area). trunk_clear_m: nothing within this times the tree's scale of a trunk. clump_m: lattice of the clump noise. Models that wear the Plants atlas material (ferns, bushes, shrubs, grass, tinted colour) add one material, so one draw per tile; all others share the atlas draw of the bulk trees, except those with a leaf or texture of their own (pine and birch saplings: the draws of the pine and birch trees; swamp reeds, swamp grass and moss mounds: one draw each, only on tiles that hold swamp floor). colour: the atlas shows every tree of a model in the same greens, the baked trees had several. The mesher writes a per-tree tint (a multiplier on the foliage, stored halved in the vertex colour rgb) from a hash of the tree's position: hue_shift moves it toward yellow-green (red up, blue down) or blue-green by at most that share, value lightens or darkens it by at most that share, and accent_share of the trees take one of the accents instead (tint [r, g, b] multipliers, 0..2, by weight: spring green, olive, teal, golden). pack_tree.gdshader applies it only to texels that are green (leaf_lo..leaf_hi on (g - max(r, b)) / g), so trunks, bark and rocks keep the atlas, and then saturation and gain (1 = the atlas as it is) on top. undergrowth_scale is the share of all that the undergrowth gets (the variation and the accents' share), ground objects get none. enabled: false = the atlas as it is. fallen (under ground_objects): a log record is a trunk lying along u, 4-9 m long and 0.3-0.6 m thick, with a collider box as wide as its thin end (about 0.7 of the thickness) and about 0.65 of the thickness high. An entry of kind log with lay: true is an upright model (a dead tree) laid down: it is tipped a quarter turn about a horizontal axis before the yaw, its base at the thick end (-u) and the middle of its height on the record's point, turned about its own axis by a position hash (which way the branches point), scaled uniformly so its height is len (only inside scale_min..scale_max), then thinned across by at most stretch_max if its trunk (the trunk radius of the model is measured from its vertices, see TrunkRadiusM) would stand out of the collider box, and raised so the trunk rests on the ground with sink of its diameter buried. A model whose trunk still does not fit, or whose scale is outside the span, is not used for that record, so which dead trees take which logs follows the log's size (SM_Tree_Dead_01/02 the thin short ones, SM_Tree_Pine_Dead_01 and the swamp-pack SM_Env_Tree_Dead_01 the longer ones; the other dead trees, the bushy SM_Tree_Generic_Dead_01 and SM_Tree_Birch_Dead_01, and the swamp-pack logs and trunks, 1.8 m or more thick, are all too thick for these colliders and stay out). A log model (no lay) is used as it is, stretched at most stretch_max, or, on a longer record, the fewest of them end to end that stay within it (at most max_pieces, weight times piece_weight when it takes two or more); when nothing fits at all the nearest is stretched anyway, so a baked log never vanishes without a model. Everything that fits shares the choice by weight and a hash of the position. enabled: false = the first slice (one log model stretched to len).",
+  "near_m": 220,
+  "fade_m": 40,
+  "tile_m": 48,
+  "ahead_m": 40,
+  "max_in_flight": 6,
+  "budget_ms": 2,
+  "scale_min": 0.5,
+  "scale_max": 4,
+  "bulk_share": 0.9,
+  "edge_share": 0.6,
+  "shadows": false,
+  "colour": {
+    "enabled": true,
+    "saturation": 1.0,
+    "gain": 1.0,
+    "hue_shift": 0.05,
+    "value": 0.1,
+    "accent_share": 0.0,
+    "undergrowth_scale": 0.5,
+    "leaf_lo": 0.01,
+    "leaf_hi": 0.08,
+    "accents": [
+      {
+        "name": "spring",
+        "tint": [
+          1.1,
+          1.3,
+          0.8
+        ],
+        "weight": 3
+      },
+      {
+        "name": "olive",
+        "tint": [
+          1.35,
+          1.1,
+          0.65
+        ],
+        "weight": 2
+      },
+      {
+        "name": "teal",
+        "tint": [
+          0.8,
+          1.1,
+          1.2
+        ],
+        "weight": 1.5
+      },
+      {
+        "name": "golden",
+        "tint": [
+          1.7,
+          1.2,
+          0.45
+        ],
+        "weight": 0.7
+      }
+    ],
+    "tree_colour": "#2f6a3a",
+    "undergrowth_colours": [
+      "#3b7a3a",
+      "#4a8a3e",
+      "#2f6a36"
+    ],
+    "leaf_ref": 0.17,
+    "shade_min": 0.75,
+    "shade_max": 1.25
+  },
+  "shapes": {
+    "cone": [
+      {
+        "name": "SM_Tree_PolyPine_01",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_PolyPine_02",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_PolyPine_03",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_PolyPine_Sparse_01",
+        "weight": 1,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_PolyPine_Sparse_02",
+        "weight": 1,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_PolyPine_Sparse_03",
+        "weight": 1,
+        "bulk": true
+      }
+    ],
+    "box": [
+      {
+        "name": "SM_Tree_Round_01",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_Round_02",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_Round_03",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_Round_04",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_Round_05",
+        "weight": 2,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_TallRound_01",
+        "weight": 1,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_01",
+        "weight": 1.5,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_02",
+        "weight": 1.5,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_03",
+        "weight": 1.5,
+        "bulk": true
+      },
+      {
+        "name": "SM_Tree_04",
+        "weight": 1.5,
+        "bulk": true
+      }
+    ]
+  },
+  "stands": {
+    "pine": {
+      "bulk_share": 0.92,
+      "any": [
+        {
+          "name": "SM_Tree_PolyPine_01",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_02",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_03",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_Sparse_01",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_Sparse_02",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_Sparse_03",
+          "weight": 1,
+          "bulk": true
+        }
+      ]
+    },
+    "birch": {
+      "bulk_share": 0.5,
+      "any": [
+        {
+          "name": "SM_Tree_Round_03",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Round_04",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_TallRound_01",
+          "weight": 1,
+          "bulk": true
+        }
+      ]
+    },
+    "thicket": {
+      "bulk_share": 0.75,
+      "edge": false,
+      "any": [
+        {
+          "name": "SM_Tree_PolyPine_03",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_02",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Round_03",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Round_01",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Plant_Bush_01",
+          "weight": 0.6
+        },
+        {
+          "name": "SM_Plant_Bush_03",
+          "weight": 0.6
+        }
+      ]
+    },
+    "swamp": {
+      "bulk_share": 0.7,
+      "edge": false,
+      "any": [
+        {
+          "name": "SM_Tree_Round_03",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Round_04",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_TallRound_01",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_01",
+          "weight": 1.5,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_02",
+          "weight": 1.5,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_Sparse_01",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_Sparse_02",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_PolyPine_Sparse_03",
+          "weight": 1,
+          "bulk": true
+        }
+      ]
+    },
+    "edge": {
+      "bulk_share": 0.85,
+      "any": [
+        {
+          "name": "SM_Tree_Round_01",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Round_02",
+          "weight": 2,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_Round_05",
+          "weight": 1.5,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_01",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_02",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_03",
+          "weight": 1,
+          "bulk": true
+        },
+        {
+          "name": "SM_Tree_04",
+          "weight": 1,
+          "bulk": true
+        }
+      ]
+    }
+  },
+  "ground_objects": {
+    "enabled": true,
+    "fallen": {
+      "stretch_max": 1.25,
+      "scale_min": 0.5,
+      "scale_max": 2.6,
+      "sink": 0.12,
+      "max_pieces": 3,
+      "piece_weight": 0.75
+    },
+    "kinds": {
+      "log": {
+        "radius_m": 0.225,
+        "yaw_deg": 90,
+        "models": [
+          {
+            "name": "SM_Tree_Log_01",
+            "weight": 2
+          },
+          {
+            "name": "SM_Tree_Log_02",
+            "weight": 2
+          },
+          {
+            "name": "SM_Tree_Dead_01",
+            "weight": 3,
+            "lay": true
+          },
+          {
+            "name": "SM_Tree_Dead_02",
+            "weight": 2,
+            "lay": true
+          },
+          {
+            "name": "SM_Tree_Pine_Dead_01",
+            "weight": 3,
+            "lay": true
+          },
+          {
+            "pack": "swamp",
+            "name": "SM_Env_Tree_Dead_01",
+            "weight": 1,
+            "lay": true
+          }
+        ]
+      },
+      "stump": {
+        "radius_m": 0.3,
+        "models": [
+          {
+            "name": "SM_Tree_Stump_01",
+            "weight": 2
+          },
+          {
+            "name": "SM_Tree_Stump_03",
+            "weight": 2
+          }
+        ]
+      },
+      "boulder": {
+        "radius_m": 0.5,
+        "models": [
+          {
+            "name": "SM_Rock_Boulder_01",
+            "weight": 3
+          },
+          {
+            "name": "SM_Rock_Rounded_01",
+            "weight": 1
+          },
+          {
+            "name": "SM_Rock_Small_01",
+            "weight": 1
+          }
+        ]
+      },
+      "rootplate": {
+        "radius_m": 1.1,
+        "models": [
+          {
+            "name": "SM_Tree_Stump_02",
+            "weight": 1
+          }
+        ]
+      }
+    }
+  },
+  "undergrowth": {
+    "enabled": true,
+    "near_m": 60,
+    "fade_m": 12,
+    "ahead_m": 16,
+    "tris_per_tile": 60000,
+    "clump_m": 6,
+    "foot_m": 4,
+    "trunk_clear_m": 0.4,
+    "mixes": [
+      {
+        "mix": 5,
+        "name": "forest",
+        "kinds": [
+          {
+            "name": "fern",
+            "per_100m2": 3.0,
+            "scale_min": 0.7,
+            "scale_max": 1.3,
+            "clump": 0.6,
+            "foot": 2.0,
+            "models": [
+              {
+                "name": "SM_Plant_Fern_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Fern_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Fern_03",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "bush",
+            "per_100m2": 0.5,
+            "scale_min": 0.6,
+            "scale_max": 1.1,
+            "clump": 0.4,
+            "foot": 2.5,
+            "models": [
+              {
+                "name": "SM_Plant_Bush_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Bush_03",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "mushroom",
+            "per_100m2": 0.6,
+            "scale_min": 0.8,
+            "scale_max": 1.4,
+            "clump": 0.8,
+            "foot": 3.0,
+            "models": [
+              {
+                "name": "SM_Plant_Mushrooms_03",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Mushrooms_04",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Mushrooms_05",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Mushrooms_06",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "twig",
+            "per_100m2": 5.0,
+            "scale_min": 0.8,
+            "scale_max": 1.6,
+            "clump": 0.3,
+            "foot": 2.0,
+            "models": [
+              {
+                "name": "SM_Tree_Twig_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Twig_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Twig_03",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Twig_04",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Twig_05",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Branch_01",
+                "weight": 0.3
+              }
+            ]
+          },
+          {
+            "name": "rock",
+            "per_100m2": 1.2,
+            "scale_min": 0.8,
+            "scale_max": 2.0,
+            "clump": 0.2,
+            "foot": 1.5,
+            "models": [
+              {
+                "name": "SM_Rock_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Rock_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Rock_03",
+                "weight": 1
+              },
+              {
+                "name": "SM_Rock_04",
+                "weight": 1
+              },
+              {
+                "name": "SM_Rock_Small_02",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "grass",
+            "per_100m2": 2.0,
+            "scale_min": 0.8,
+            "scale_max": 1.3,
+            "clump": 0.7,
+            "foot": 1.2,
+            "models": [
+              {
+                "name": "SM_Plant_Grass_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Grass_04",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Grass_05",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "sapling",
+            "per_100m2": 0.4,
+            "scale_min": 0.25,
+            "scale_max": 0.5,
+            "clump": 0.7,
+            "foot": 0.3,
+            "models": [
+              {
+                "name": "SM_Tree_PolyPine_03",
+                "weight": 2
+              },
+              {
+                "name": "SM_Tree_PolyPine_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Round_03",
+                "weight": 2
+              },
+              {
+                "name": "SM_Tree_Round_01",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "shrub",
+            "per_100m2": 0.6,
+            "scale_min": 0.7,
+            "scale_max": 1.1,
+            "clump": 0.6,
+            "foot": 0.4,
+            "models": [
+              {
+                "name": "SM_Plant_Hedge_Bush_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Hedge_Bush_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Bush_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Plant_Bush_Leaves_01",
+                "weight": 1.5
+              },
+              {
+                "name": "SM_Plant_Bush_Leaves_03",
+                "weight": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "mix": 9,
+        "name": "swamp",
+        "kinds": [
+          {
+            "name": "reeds",
+            "per_100m2": 2.5,
+            "scale_min": 0.5,
+            "scale_max": 0.9,
+            "clump": 0.85,
+            "foot": 0.8,
+            "models": [
+              {
+                "pack": "swamp",
+                "name": "SM_Env_Reeds_01_LOD1",
+                "weight": 1
+              },
+              {
+                "pack": "swamp",
+                "name": "SM_Env_Reeds_02_LOD1",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "swamp_grass",
+            "per_100m2": 4.0,
+            "scale_min": 0.7,
+            "scale_max": 1.2,
+            "clump": 0.7,
+            "foot": 1.2,
+            "models": [
+              {
+                "pack": "swamp",
+                "name": "SM_Env_SwampGrass_Small_01_LOD1",
+                "weight": 1
+              },
+              {
+                "pack": "swamp",
+                "name": "SM_Env_SwampGrass_Medium_01_LOD1",
+                "weight": 1
+              },
+              {
+                "pack": "swamp",
+                "name": "SM_Env_SwampGrass_Tall_01_LOD1",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "moss_mound",
+            "per_100m2": 0.8,
+            "scale_min": 0.8,
+            "scale_max": 1.5,
+            "clump": 0.5,
+            "foot": 1.5,
+            "models": [
+              {
+                "pack": "swamp",
+                "name": "SM_Env_MossMound_01",
+                "weight": 1
+              },
+              {
+                "pack": "swamp",
+                "name": "SM_Env_MossMound_02",
+                "weight": 1
+              },
+              {
+                "pack": "swamp",
+                "name": "SM_Env_MossMound_03",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "root",
+            "per_100m2": 1.5,
+            "scale_min": 0.8,
+            "scale_max": 1.6,
+            "clump": 0.4,
+            "foot": 1.5,
+            "models": [
+              {
+                "name": "SM_Swamp_Root_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Swamp_Root_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Swamp_Root_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Swamp_Root_02",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "log",
+            "per_100m2": 0.15,
+            "scale_min": 0.8,
+            "scale_max": 1.3,
+            "clump": 0.3,
+            "foot": 1.5,
+            "models": [
+              {
+                "name": "SM_Tree_Log_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Log_02",
+                "weight": 1
+              }
+            ]
+          },
+          {
+            "name": "branch",
+            "per_100m2": 0.4,
+            "scale_min": 0.8,
+            "scale_max": 1.3,
+            "clump": 0.3,
+            "foot": 1.5,
+            "models": [
+              {
+                "name": "SM_Tree_Swamp_Branch_01",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Swamp_Branch_02",
+                "weight": 1
+              },
+              {
+                "name": "SM_Tree_Branch_01",
+                "weight": 1
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

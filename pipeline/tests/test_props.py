@@ -286,3 +286,65 @@ def test_run_props_spawns_skip_a_cut_of_the_player_spawn_rule_zone(ws, tmp_path)
     assert left and all(s["x"] > 160 for s in left)  # the cut part is gone, the rest stays
     whole = [[ox + 100, oy + 100], [ox + 210, oy + 100], [ox + 210, oy + 200], [ox + 100, oy + 200]]
     assert meadow({"ZC-0001": {"kind": "player_spawn", "polygon": whole}}) == []  # all cut away: no spawn, not a random one
+
+
+# --- per-tree base attribute (map 0.12.0) -----------------------------------------------------
+
+
+def glb_attributes(data: bytes, node: str) -> tuple[dict, dict]:
+    """The primitive of mesh ``node`` of a GLB and its POSITION / TEXCOORD_1 read as float arrays."""
+    import struct
+
+    jlen = struct.unpack_from("<I", data, 12)[0]
+    doc = json.loads(data[20 : 20 + jlen])
+    blen = struct.unpack_from("<I", data, 20 + jlen)[0]
+    blob = data[28 + jlen : 28 + jlen + blen]
+    prim = next(m["primitives"][0] for m in doc["meshes"] if m["name"] == node)
+    out = {}
+    for name in ("POSITION", "TEXCOORD_1"):
+        if name in prim["attributes"]:
+            acc = doc["accessors"][prim["attributes"][name]]
+            view = doc["bufferViews"][acc["bufferView"]]
+            width = 3 if acc["type"] == "VEC3" else 2
+            start = view.get("byteOffset", 0) + acc.get("byteOffset", 0)
+            out[name] = np.frombuffer(blob, "<f4", acc["count"] * width, start).reshape(-1, width)
+    return prim, out
+
+
+def test_tree_vertices_carry_their_base_and_fences_the_sentinel() -> None:
+    import trimesh
+
+    from drycastle_pipeline.export import NO_TREE_UV2, build_chunk_scene, export_glb, parcel_props_nodes
+    from drycastle_pipeline.propmeshes import parcel_props_meshes, trees_mesh
+
+    cfg = load_section("props")
+    trees = [
+        {"x": 1234.5, "y": 678.25, "z": 3.0, "scale": 1.0, "rot": 0.3, "shape": "cone", "colour": "#2f6b2f", "parcel": "P-1"},
+        {"x": -20.75, "y": 910.5, "z": 5.5, "scale": 1.4, "rot": 1.1, "shape": "box", "colour": "#3f7b3f", "parcel": "P-1", "forest": 1},
+    ]
+    fences = [{"parcel": "P-1", "a": [10.0, 10.0], "b": [13.0, 10.0], "za": 0.0, "zb": 0.0}]
+    visual, collision, textured = parcel_props_meshes(fences, trees, cfg)
+    fence_only = parcel_props_meshes(fences, [], cfg)[0]
+    n_tree = [trees_mesh([t], cfg["trees"]).face_count for t in trees]
+    assert visual.face_count == fence_only.face_count + sum(n_tree) and min(n_tree) > 0 and fence_only.face_count > 0
+
+    data = export_glb(build_chunk_scene([], parcel_props_nodes([("P-1", visual, collision, textured)])))
+    prim, attrs = glb_attributes(data, "parcel_P-1_props")
+    pos, uv2 = attrs["POSITION"], attrs["TEXCOORD_1"]
+    assert len(pos) == len(uv2) == 3 * visual.face_count  # one vertex per triangle corner
+
+    # triangle order: fence sections, then tree 1, then tree 2
+    ends = np.cumsum([fence_only.face_count, *n_tree]) * 3
+    assert (uv2[: ends[0]] == NO_TREE_UV2).all()
+    for t, lo, hi in zip(trees, ends[:-1], ends[1:]):
+        # (POSITION x, POSITION z) of the base: the glTF axes of (x, y, z) are (x, z, -y)
+        assert np.allclose(uv2[lo:hi], [t["x"], -t["y"]])
+        p = pos[lo:hi]
+        assert p[:, 0].min() < t["x"] < p[:, 0].max() and p[:, 2].min() < -t["y"] < p[:, 2].max()
+        assert p[:, 1].min() == pytest.approx(t["z"] - 0.2, abs=1e-3)  # the trunk starts just below the base
+
+    # no trees, no second UV set; and the renamed file still loads like any other
+    bare = export_glb(build_chunk_scene([], parcel_props_nodes([("P-1", fence_only, collision, textured)])))
+    assert "TEXCOORD_1" not in glb_attributes(bare, "parcel_P-1_props")[0]["attributes"]
+    loaded = trimesh.load(trimesh.util.wrap_as_stream(data), file_type="glb", force="scene")
+    assert len(loaded.geometry["parcel_P-1_props"].faces) == visual.face_count

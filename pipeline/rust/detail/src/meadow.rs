@@ -102,7 +102,8 @@ pub fn add_cells(ctx: &Ctx, patches: &[Patch], atype: &str, free: &G, mcfg: Cfg,
         Region::from_polycs(&ps)
     };
     let (bare_r, furrow_r, litter_r, tone_r) =
-        (region_of(&BARE_LAYERS), region_of(&["furrow", "bed"]), region_of(&["litter"]), region_of(&["tone_a", "tone_b"]));
+        (region_of(&BARE_LAYERS), region_of(&["furrow", "bed", "puddle"]), region_of(&["litter"]), region_of(&["tone_a", "tone_b"])); // nothing grows in a puddle
+    let swamp_r = ctx.swamp.as_ref().map(Region::from_geom);
     let interior = if band > 0.0 { Some(Region::from_geom(&geom::buffer(free, -band, 16))) } else { None };
     let reach = mcfg.at("tree_reach_m").f();
     let near_tree_of = |cx: f64, cy: f64| {
@@ -170,13 +171,17 @@ pub fn add_cells(ctx: &Ctx, patches: &[Patch], atype: &str, free: &G, mcfg: Cfg,
         if zc.has("unmown_mix") && unmown {
             mix = zc.at("unmown_mix").i();
         }
+        let swamp = zc.has("swamp_mix") && swamp_r.as_ref().is_some_and(|r| r.contains(cx, cy));
+        if swamp {
+            mix = zc.at("swamp_mix").i();
+        }
         if zc.has("dry_edge") && edge {
             dry += zc.at("dry_edge").i();
         }
         if unmown {
             dry -= mcfg.at("fresh_unmown").i();
         }
-        if wet {
+        if wet || swamp {
             dry -= mcfg.at("fresh_water").i();
         }
         let zone_byte = ((mix << 4) | dry.clamp(0, 15)) as u8;

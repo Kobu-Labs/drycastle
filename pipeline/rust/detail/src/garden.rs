@@ -288,7 +288,7 @@ pub fn garden(ctx: &Ctx, cfg: Cfg) -> Res {
     layers.insert("lawn", lawn);
     let mut rects: BTreeMap<&'static str, Vec<Rect>> = BTreeMap::new();
     rects.insert("bed", beds);
-    let flat = Flat { lawn: &base_cols, tone_a: tone_cols.first().copied(), tone_b: tone_cols.get(1).copied() };
+    let flat = Flat { lawn: &base_cols, swamp: &[], tone_a: tone_cols.first().copied(), tone_b: tone_cols.get(1).copied() };
     let got = assemble(&mut res.patches, free, &layers, &flat, &rects, &mut Rng::keyed(&format!("{pid}:detail:colours")));
     res.clutter = clutter(ctx, cfg, &got, free, canopy);
     res

@@ -123,6 +123,7 @@ public sealed partial class MapLoader
         _assetTemplates.Clear();
         FreeClutter();
         FreeCrops();
+        FreePackTrees();
     }
 
     /// <summary>Messages the loader would print as warnings (also written with GD.PushWarning).</summary>
@@ -334,9 +335,7 @@ public sealed partial class MapLoader
         }
         ReadAssetEntries(path, null);
         // private (paid) packs: a folder beside assets/ with its own manifest, written by scripts/private_pack_glb.gd; absent on a machine without them
-        var privDir = System.Environment.GetEnvironmentVariable("DRYCASTLE_ASSETS_PRIVATE") is { Length: > 0 } env
-            ? env
-            : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(dir!)) ?? "", "assets-private");
+        var privDir = PrivateAssetsDir()!;
         var priv = Path.Combine(privDir, "manifest.json");
         if (File.Exists(priv)) ReadAssetEntries(priv, privDir);
     }

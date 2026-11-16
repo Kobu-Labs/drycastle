@@ -2,7 +2,7 @@
 # MAP: the map folder the viewer, editor and shooter targets load (override with MAP=<dir>).
 MAP ?= out/village/map
 
-.PHONY: rozhlas thief-voices private-pack release-check editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run patch-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-patches-smoke viewer-editor-smoke viewer-panel-smoke viewer-shape-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: viewer-pack-trees rozhlas thief-voices private-pack release-check editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run patch-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-patches-smoke viewer-editor-smoke viewer-panel-smoke viewer-shape-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -108,14 +108,22 @@ map-update:
 MAP_ARG = $(if $(MAP),--map $(abspath $(MAP)),)
 SEED ?= 1
 
-viewer:
+# Pack trees (#287) in the viewer and editor: the shooter's config is copied in (the copy is gitignored), and the private
+# pack is looked for in the main checkout too, since a worktree has no assets-private of its own.
+PACK_DIR ?= $(firstword $(wildcard $(CURDIR)/assets-private $(dir $(shell git rev-parse --path-format=absolute --git-common-dir))assets-private))
+PACK_ENV = $(if $(DRYCASTLE_ASSETS_PRIVATE),,$(if $(PACK_DIR),DRYCASTLE_ASSETS_PRIVATE=$(PACK_DIR),))
+
+viewer-pack-trees:
+	mkdir -p godot/viewer/data && cp godot/shooter/data/pack_trees.json godot/viewer/data/pack_trees.json
+
+viewer: viewer-pack-trees
 	dotnet build godot/viewer/viewer.csproj
-	godot --path godot/viewer -- $(MAP_ARG)
+	$(PACK_ENV) godot --path godot/viewer -- $(MAP_ARG)
 
 # Editor mode (see README "Editor mode"). MAP=..., optional EDITS=file STATE=file (scratch copies).
-editor:
+editor: viewer-pack-trees
 	dotnet build godot/viewer/viewer.csproj
-	godot --path godot/viewer -- --editor $(MAP_ARG) $(if $(EDITS),--edits $(abspath $(EDITS)),) $(if $(STATE),--state $(abspath $(STATE)),)
+	$(PACK_ENV) godot --path godot/viewer -- --editor $(MAP_ARG) $(if $(EDITS),--edits $(abspath $(EDITS)),) $(if $(STATE),--state $(abspath $(STATE)),)
 
 viewer-smoke:
 	dotnet build godot/viewer/viewer.csproj
@@ -233,12 +241,12 @@ shooter-server:
 
 shooter-client:
 	dotnet build godot/shooter/shooter.csproj
-	godot --path godot/shooter -- --role client $(if $(SMOKE),--smoke,) $(SHOOTER_MAP)
+	$(PACK_ENV) godot --path godot/shooter -- --role client $(if $(SMOKE),--smoke,) $(SHOOTER_MAP)
 
 # Client that asks the dev server for sandbox mode (--sandbox). The server must run with SANDBOX=1 (its default) to grant it.
 shooter-client-sandbox:
 	dotnet build godot/shooter/shooter.csproj
-	godot --path godot/shooter -- --role client --sandbox $(SHOOTER_MAP)
+	$(PACK_ENV) godot --path godot/shooter -- --role client --sandbox $(SHOOTER_MAP)
 
 # Headless server + 2 scripted bot clients: asserts both move and see each other.
 shooter-net-smoke:

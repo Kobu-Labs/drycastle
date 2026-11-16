@@ -309,6 +309,7 @@ buildings or the carriageway), and trees planted from the orthophoto detector on
 canopy, or stacked pyramids in forests). Fences also get a simple closed-box
 collision node. Trees are not in the chunk collision: `trees.json` (map 0.6.0, `files.trees`) lists every tree (position,
 ground height, scale, rotation, broadleaf or conifer, chunk) and the game builds the solids from it (see below).
+The forest floor also gets solid **ground objects** (fallen logs, stumps, boulders, root plates, anthills and burrows; `ground_objects.json`, map 0.13.0; see below).
 
 **Fence types and the texture library.** A fence section with a `type` is drawn in that type's style
 (`fencestyles.py`) instead of the plain box: `picket` and `wire` are one thin two-sided quad with a
@@ -412,11 +413,60 @@ or do not rerun); existing objects are never touched. The game finds the dishes 
 **Tree collision (`trees.json`).** Each tree is two or three solids, built in the game from the rule model numbers
 (`model`: trunk width and height, canopy edge) and the tree's scale and rotation, with the same arithmetic as the drawn tree
 (`propmeshes.tree_mesh`): the trunk box (solid, starts 0.2 m below the ground) and the crown (two stacked boxes for a broadleaf,
-two stacked pyramids for a conifer). Trunks are on the world layer, so players and cars stop at them. Crowns are shot-only
+two stacked pyramids for a conifer). **Forest trees** (map 0.11.0: `"forest": 1` on the record, planted inside the detected canopy)
+use the `model.forest` block instead (`props.trees.forest` in `rules.yaml`): a tapered trunk (a four-sided frustum, solid, `PartShape.Frustum`)
+with a clear stem, and crown tiers (three stacked pyramids, or two boxes) from about 5 m up; all numbers are metres at scale 1 and
+the same block feeds the drawn mesh and the solids. Records without the flag, or a model without the block (maps before 0.11.0),
+use the formula above. A forest tree's record also has `"stand"` (`pine`, `birch`, `mixed`, `thicket`, `swamp`) and, where true,
+`"edge": true` (see `docs/ortho.md`, "Stands"); they pick the look only, the solids read neither, and a reader that ignores them
+works (a record without them: `mixed`, not edge). Trunks are on the world layer, so players and cars stop at them. Crowns are shot-only
 (layer 4): bullets, pellets, rockets, turret sight and the client's decals and tracers stop on them, while players and cars drive
 through. The geometry is `ShooterCore/Colliders/PropColliders.cs`; the loader (`MapLoader.Trees.cs`) makes one static body per
 chunk and role, not one per tree. The surface of a hit (wood or foliage) comes from the tree lookup
 (`TreeColliders.GroupAt`). Trees that the viewer edits are not in the game's collision until the map is re-exported.
+
+**Per-tree hiding (map 0.12.0, `"base_uv2": true` in `trees.json`'s `model`).** Every props mesh that has tree triangles carries a
+second UV set (glTF `TEXCOORD_1`, Godot `UV2`, two floats per vertex): for a tree's vertices the tree's base point (`x`, `y` of its
+record, on the ground at the trunk centre) as (POSITION x, POSITION z) of that mesh, i.e. `x` and `-y` of the map frame; for every
+other vertex (fences) `export.NO_TREE_UV2` (1e6, 1e6). So `MODEL_MATRIX * vec4(UV2.x, VERTEX.y, UV2.y, 1.0)` is the world point
+of the tree base, and a vertex shader can drop a whole tree near the player with the chunk still one draw. Meshes without trees have
+no UV2. It is written by `export.to_trimesh` from `Mesh.bases` (set by `propmeshes.trees_mesh`) and renamed from trimesh's
+`_UV2` by `export.export_glb`, which every GLB that may hold trees (chunks, `parcel-run --glb`) goes through.
+
+**Ground objects (`ground_objects.json`, map 0.13.0, `files.ground_objects`; `props.ground_objects` in `rules.yaml`).** Solid objects
+on the forest floor, placed by the props stage (`groundobjects.py`, seeded per 25 m cell of the canopy mask, so reruns are identical;
+`props.json` carries them under `ground_objects`). Only on the canopy of the orthophoto that lies on ground of a `ground_kinds` type
+(forest), never on a property (building plot or garden), nor within the clearances of a building, road or path, placed object or
+water, never within `trunk_clearance_m` of a tree trunk, and never on another ground object. Densities are per hectare of canopy and
+come in clumps (`clump`): `log` 8 (fallen trunk, 4-9 m long, 0.3-0.6 m thick, random heading, ends within 0.3 m in height so it lies
+on the ground; 20 % have a `rootplate` at the thick end), `stump` 13 (0.4-0.8 m wide), `boulder` 5 (0.6-2.2 m, clumps of 1-4), about
+two thirds to all of them placed after the clearances: the village (about 185 ha of forest ground) gets about 4,900 of these four kinds
+(measured). Two more kinds come in a second pass over the cells (own random streams, so they moved none of the others, and not in
+clumps): `anthill` (`per_ha` 2, a cone mound 0.8-1.6 m across and 0.53-1.07 m tall, beside a random tree of the stands `pine` and `mixed`
+at 0.05-0.8 m from the trunk's clearance ring, never in swamp ground: `props.wet_zone` buffered by the swamp stand's reach, the same zone
+as the trees and the wet floor of the ground detail) and `burrow` (`candidates_per_ha` 5, each kept with probability 0.15 plus 0.5 with
+open ground within 12 m, plus 0.5 where the ground climbs at least 0.15 (rise over run, over 1.5 m): a low earth mound 1.0-1.6 m across
+and 0.31-0.49 m tall whose dark hole faces downhill on a slope, else a random way); the village gets about 260 anthills and 200 burrows
+(1.4 and 1.1 per ha, measured). Each is a
+low-poly vertex-coloured mesh (`propmeshes.ground_object_mesh`: log = tapered 6-sided prism, 24 triangles; stump = 6-sided taper with
+a lighter cut face, 18; boulder = squashed rock of three jittered hexagon rings seeded by its position, 30; root plate = octagonal
+slab on edge about 2 m tall, 32; anthill = 8-sided cone of two bands and a peak, 24; burrow = 8-sided mound of a band and a flat peak
+with two dark triangles for the hole, 26) baked into the same chunk-level `props` mesh as the trees, with the object's base point as UV2 exactly
+as for trees (see above), so a shader can swap a detailed model in near the player.
+
+The file: `{"format_version":1,"axes":<as trees.json>,"chunk_size_m":..,"model":{"base_uv2":true,"kinds":{<kind>:{...}}},"objects":[{"kind","x","y","z","rot","scale","len"(logs only),"chunk":[cx,cy]}]}`.
+`z` is the ground height at (`x`, `y`); `rot` is the yaw as for trees, u = (cos rot, sin rot). A log lies along u with its midpoint
+at (`x`, `y`), `len` metres long, thick end at -u, `scale` multiplying only its thickness (`model.kinds.log.diameter_m` at scale 1,
+`top_ratio` of that at the far end); a root plate stands on edge with its flat faces across u (a log's plate stands at its -u end);
+stump, boulder, root plate, anthill and burrow dimensions (`model.kinds`) are metres at scale 1 and multiply with `scale`
+(`anthill`: `width_m` 1.2 across the base, `height_m` 0.8; `burrow`: `width_m` 1.3, `height_m` 0.4; a burrow's hole faces u). The model numbers feed the
+mesh, the file and the solids alike. Collision (`ShooterCore/Colliders/GroundObjectColliders.cs`, wired by
+`MapLoader.GroundObjects.cs`): one box per object on the world layer (solid for players, cars and shots), a little inside the mesh;
+one static body per chunk and surface (wood: logs, stumps, plates; rock: boulders; ground: anthills and burrows, a square frustum inside the cone, 0.55 and 0.7 of the height). Walking into a ledge up to `MoveConsts.StepHeight`
+(0.3 m) lifts the player onto it, so a log thinner than about 0.35 m is stepped over; thicker logs, stumps and boulders are jumped onto
+(jump peak about 1.1 m) and stood on (flat tops). The collider and the mesh are checked against each other by
+`tests/test_ground_objects.py` and `GroundObjectColliderTests` through `fixtures/ground_object_parity.json`
+(`UPDATE_GROUND_PARITY=1 uv run pytest tests/test_ground_objects.py` rewrites it).
 
 ## Ground patches (preview and water)
 
@@ -471,9 +521,28 @@ objects (a circle of half the footprint diagonal plus 0.3 m), water patches and 
   with the main building), leaf litter under trees; tufts (thick along walls and fences), flower clusters, pebbles on
   gravel, dirt and along walls, a few rocks, fallen leaves and sticks under trees.
 * **field** (meadow, field): large tone patches, dirt headlands along the boundary, a furrowed strip in some of the larger
-  parcels, sparse tufts, pebbles, rocks and flowers that thicken towards the edge and on the tones.
-* **forest**: leaf litter under some trees, dark and light forest-floor tones, a few bare spots; leaves, sticks, rocks,
-  pebbles, tufts and ferns in groups round the trunks.
+  parcels, sparse tufts, pebbles, rocks and flowers that thicken towards the edge and on the tones. A `meadow` ground area within
+  reach of water also gets the swamp floor below (none on the village map: no meadow lies that near water).
+* **forest**: a brown floor (the forest ground colour is the litter tone), leaf litter under many trees, **moss** (`moss`
+  layer, `moss` texture: bright green irregular blobs at the tree feet and over the open floor, thick in the clumps of a
+  position-only noise and thin in the gaps, none within `edge_m` of the carriageway and the verges), dark and light
+  forest-floor tones, a few bare spots; leaves, sticks, rocks, pebbles, tufts and ferns in groups round the trunks. The
+  numbers are `detail.forest` (`litter`, `moss`); `detail._moss` and the Rust `field::moss` read the same ones. A forest
+  costs about 1150 patch triangles per ha with these (about 360 before), so the forest patches of the village stay below 150k.
+  **Mud and puddles** (`mud` and `puddle` layers and textures, `detail.forest.mud`): a few patches per hectare outside the swamp, in damp spots
+  (a noise like moss's, likelier in hollows) and along the edge of the paths and tracks (`track`, `path`, `footway`; one candidate about every
+  30 m of the way, from the way's own stream so every tile and parcel it crosses agrees), a small puddle in the middle of a third of them.
+* **swamp ground** (`detail.swamp`; `detail.swamp_zone`; Rust `wet.rs`): ground of the types `swamp.kinds` (`forest`, `meadow`)
+  within the reach of water gets a wet floor in place of the plain one. The zone is `props.wet_zone` (water ground areas and the wet
+  areas of water patches) buffered by `props.trees.stands.swamp.reach_m` (25 m), the very zone the swamp stand of trees stands in, so trees and ground
+  agree; the Rust engine is handed it as `swamp` in its input. Inside it: a dark wet-earth base (`swamp` layer, flat colours `swamp.colours`,
+  under every other layer), large `mud` patches (about 10 per ha of zone before merging, 6-11 m radius), small `puddle` patches (flat dark standing
+  water, 0.5-2 m radius, likelier in terrain hollows: `detail.hollow`, the mean height on a 6 m ring minus the point's own, over 0.25 m), moss
+  as in any forest, the forest tone patches gone, and leaf litter and bare spots cut to `litter_factor` and `dirt_factor` (0.15). Patches only: no water body, no
+  gameplay. The meadow raster marks its cells with mix 9 (`swamp`, see below). Mud and puddle sizes are the triangle budget: patches are cut at the 4 m terrain
+  cells, so few large blobs cost much less than many small ones (a first try with 2-4.5 m mud every 8 m cost 2.5 times as many). Measured with the Rust
+  engine on the village map and its `edits.json` (no meadow within reach, 17.6 ha of forest in the zone, 11 ha of it the base): forest patch triangles 343k
+  before, 399k after (+56k: mud and puddles of the plain forest +17k, the swamp floor +39k; of the 399k the swamp base is 42k, mud 26k, puddle 6k).
 * **village** (village ground: street sides, greens): grass on all of it beside the OSM carriageway, tufts along the asphalt edge,
   pebbles on the gravel.
 * **dike** (`dike.py`, `detail.dike` in `rules.yaml`; the parcels P-0073, P-0821 and P-0805 are the earth dike north of the village, whatever
@@ -527,12 +596,12 @@ objects (a circle of half the footprint diagonal plus 0.3 m), water patches and 
   edge (built once per road edge, every parcel they touch takes its share), whatever the parcel kind.
 
 **Patches** are polygons draped on the terrain (`patches.drape`, so they follow the ground triangle by triangle) 2 cm
-above it. The layers (`detail.PATCH_PRIORITY`: gravel, verge gravel, bed, furrow, dirt, verge dirt, litter, two tones,
-lawn) are clipped in that order, so no two patches overlap and nothing z-fights; parcels are disjoint. Water
+above it. The layers (`detail.PATCH_PRIORITY`: dike track, gravel, verge gravel, bed, furrow, dirt, verge dirt, puddle, mud, moss, litter, two tones,
+swamp, lawn) are clipped in that order, so no two patches overlap and nothing z-fights; parcels are disjoint. Water
 patches (3 cm) are cut out of every patch. Patches go into the chunk GLBs as the node `detail_patches` (flat colours)
-and one `detail_patches_tex_<texture id>` node per texture (`dirt`, `gravel`, `leaf_litter`, `soil_rows`), at most five per
+and one `detail_patches_tex_<texture id>` node per texture (`dirt`, `gravel`, `leaf_litter`, `moss`, `mud`, `puddle`, `soil_rows`, and `dike_gravel` on the dike), at most eight per
 chunk; they have no collision. A patch triangle belongs to the chunk of its centroid (terrain cells never cross a chunk
-border). The village has about 143k patch triangles (garden 76k, forest 33k, field 24k, road 10k), which is why the shapes
+border). The village had about 143k patch triangles (garden 76k, forest 33k, field 24k, road 10k) before the moss and denser litter of the forest (about 105k, estimated from the per-ha cost above), which is why the shapes
 are few, soft and simplified: the terrain mesh cuts every patch at its 4 m cells, so area costs about 0.125 triangles
 per m2 before any outline.
 
@@ -603,24 +672,30 @@ implemented.
 
 **Meadow (`meadow.bin`, map 0.9.0).** Field and forest parcels keep no dense clutter in `clutter.json` (only `detail.meadow.stored_kinds`, rocks). Instead the stage writes
 a density raster, `work/detail_meadow.bin`, copied by the export as `meadow.bin` (`files.meadow`): 2 m cells, one byte per cell per layer (tuft, flower, fern, pebble,
-litter), zlib per chunk, about 0.7 MB for the village. A cell is on it only where its whole jitter window is free ground (no buildings, fences, roads, objects, water patches)
+litter, floor), zlib per chunk, about 0.7 MB for the village. A cell is on it only where its whole jitter window is free ground (no buildings, fences, roads, objects, water patches)
 and the density comes from the recipe's zones (edge band, tone and litter patches, bare soil, near a trunk) times smooth noise; see `detail.meadow` in `rules.yaml` and
 `meadow.py`. The game generates the instances at run time (`docs/viewer-and-editor.md`, "Meadow clutter"). `detail_preview --meadow` draws what the game would generate for a parcel.
 
 **Clumps and species zones (map 0.10.0, `meadow.bin` format 3).** Growth is patchy, not even: the meadow density is multiplied by a smoothed noise per layer
 (`detail.meadow.layers.<name>.clump`, patches of `clump_m`), and the stored garden tufts likewise (`detail.clutter.tuft.clump`); where nobody mows (within `unmown_m` of a fence, a wall or a
 building edge) tufts are thicker (`unmown`). The raster has a *zone byte* per cell: the high nibble is a *mix* (index into `detail.meadow.mixes`: a patch where one species dominates, a
-Voronoi patch of `patch_m` ≈ 3 to 8 m, picked from the shares in `zones.<type>.mixes`; the wet mix beside water, the unmown mix where nobody mows, the dry mix in half of a field's edge band), the low
-nibble the dryness (8 = neutral, 10 tint units a step: drier at a field's edge, fresher beside water and fences). A layer lists per mix which kinds it makes and in what shares (a mix names only the
+Voronoi patch of `patch_m` ≈ 3 to 8 m, picked from the shares in `zones.<type>.mixes`; the wet mix beside water, the unmown mix where nobody mows, the dry mix in half of a field's edge band, the swamp mix (9) on swamp ground, over all the others), the low
+nibble the dryness (8 = neutral, 10 tint units a step: drier at a field's edge, fresher beside water, fences and in swamp). Mix 9, `swamp` (`zones.<type>.swamp_mix`): `tuft` is reed and tall grass,
+`flower` buttercups, `litter` leaves and sticks, `floor` moss mounds and branches (the fern and pebble layers keep their kinds). A puddle patch gets nothing at all. A layer lists per mix which kinds it makes and in what shares (a mix names only the
 layers it changes), so a patch of one mix grows one set of species with strays. `meadow.bin` has a kind table (with the tint flag), the mixes per layer, and the zone plane after the layers (format in `meadow.py`).
 
-**Kinds (map 0.10.0).** `clutter_meshes.glb` has 23 tiny meshes (3 to 30 triangles, `detail_meshes.py`; `detail_preview --kinds` draws a contact sheet to `out/detail/kinds.png`):
+**Kinds (map 0.10.0).** `clutter_meshes.glb` has 28 tiny meshes (3 to 30 triangles, `detail_meshes.py`; `detail_preview --kinds` draws a contact sheet to `out/detail/kinds.png`):
 the grasses `tuft`, `tall_grass` (seed heads), `straw` (dry), `clover` (a flat mat), `reed` (by water) and `weed` (broad leaves), `fern`; the wild flowers `dandelion` (with a puffball), `daisy`,
 `red_clover`, `buttercup`, `poppy`, `cornflower`, `yarrow` (umbels); the garden flowers `tulip`, `sunflower`, `spike` (hollyhock or lupin) and `rose` (a bush); and `pebble`, `rock`, `leaf`, `stick`
-(and `flower`, the first mixed-flower mesh, which no recipe uses any more). Wild and garden flowers are kept apart: a yard (garden and plot recipes) grows garden flowers only, in one-species clusters
+(and `flower`, the first mixed-flower mesh, which no recipe uses any more); and the forest floor (`detail_meshes.FOREST_FLOOR`, meadow only): `mushroom` (three caps), `branch` (1.3 m, lying, 30 triangles), `moss_mound` (0.7 m dome), `fern_big` (0.7 m, tintable) and `stump_small` (0.27 m, rotten). Wild and garden flowers are kept apart: a yard (garden and plot recipes) grows garden flowers only, in one-species clusters
 (`detail.clutter.flower.species`), tall grass beside fences and walls (`tuft.unmown_m`, `tall`) and some clover in the lawn; meadows, fields and road verges grow the wild ones. The meadow's
 species mixes (`detail.meadow.mixes`) name which grass profile and which dominant flower each patch has: `meadow` (short grass and clover, daisies), `tall meadow` (red clover, yarrow), `dry` (straw, poppies and
-cornflowers), `weedy` (dandelions), `wet` (reed, buttercups), `woodland`, and three flower meadows (cornflower, yarrow, dandelion). Tintable kinds are `detail_meshes.TINTABLE` (the grasses and ferns).
+cornflowers), `weedy` (dandelions), `wet` (reed, buttercups), `woodland`, three flower meadows (cornflower, yarrow, dandelion), and `swamp` (reed, tall grass). Tintable kinds are `detail_meshes.TINTABLE` (the grasses and ferns).
+
+**Forest floor (#287).** The forest's mix (5, `woodland`) gives the `litter` layer toadstools and rotten stumps next to leaves and sticks (`mixes[5].litter`), and a new layer `floor` makes moss mounds, fallen branches and big ferns
+(clump 0.7, `max_per_cell` 2). Densities are in `detail.meadow.forest` (`floor`: interior 0.09, tree 0.35, litter 0.3, tone 0.12; `litter` interior 0.14 became 0.10 to make room): plain forest floor is about 21 pieces per 100 m2
+(tuft 6.0, fern 1.9, pebble 1.5, litter 7.5, floor 4.5; a cell is 4 m2), more at trunks and on leaf litter, where toadstools (litter 0.6) and moss mounds gather. A test keeps the total in 15 to 25. The game draws them to 60 m (`floor`) and 40 m (`litter`),
+and not at all where the pack's undergrowth is on (`docs/viewer-and-editor.md`, "Meadow clutter"). No format change; `meadow.bin` just has more kinds and one more layer.
 
 **Tint (map 0.10.0).** Tufts and ferns (`detail_meshes.TINTABLE`) carry a tint byte: the sixth number of their `clutter.json` entry, and in `meadow.bin` (format 2) a flag per layer.
 128 is the mesh as drawn, lower is fresher (darker, greener), higher drier. The byte is the smooth tone noise over the ground (2 m cells, 12-cell lattice, `meadow.tone_noise`) plus a per-instance

@@ -36,11 +36,12 @@ public sealed partial class MapLoader
     static string? PropsParcelId(string baseName)
         => baseName.StartsWith("parcel_") && baseName.EndsWith("_props") ? baseName["parcel_".Length..^"_props".Length] : null;
 
-    /// <summary>Flat colour for an ordinary node, the library texture for a "_tex_" node.</summary>
+    /// <summary>Flat colour for an ordinary node, the library texture for a "_tex_" node, the flat colour plus the tree cut for a props node with baked trees when pack trees are on (MapLoader.PackTrees.cs).</summary>
     void ApplyMaterial(MeshInstance3D mi, string name)
     {
-        var (_, texture) = SplitTexNode(name);
+        var (baseName, texture) = SplitTexNode(name);
         if (texture != null && TextureMaterial(texture) is { } mat) mi.MaterialOverride = mat;
+        else if (texture == null && TreeCutProps(baseName, mi.Mesh)) mi.MaterialOverride = PropsCutMaterial();
         else FixMaterials(mi);  // an unknown texture falls back to the tint as a flat colour
     }
 

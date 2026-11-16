@@ -37,3 +37,4 @@ assets-private/
 assets-private
 # linked private packs (res://Assets/Synty/<Pack> -> assets-private/...)
 godot/*/Assets/
+godot/viewer/data/pack_trees.json

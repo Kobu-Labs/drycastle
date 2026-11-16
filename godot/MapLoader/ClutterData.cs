@@ -120,6 +120,13 @@ public static class ClutterSettings
         ["sunflower"] = 80f,
         ["spike"] = 70f,
         ["rose"] = 80f,
+        // forest floor (meadow only). A meadow layer shows to the farthest of its kinds (MeadowSettings.RangeOf): the layer "floor" (moss_mound,
+        // branch, fern_big) to 60 m, and mushroom and stump_small ride the litter layer (leaf, stick: 40 m), so they are 40 m, not less.
+        ["mushroom"] = 40f,
+        ["stump_small"] = 40f,
+        ["moss_mound"] = 60f,
+        ["branch"] = 60f,
+        ["fern_big"] = 60f,
     };
 
     public static float RangeOf(string kind) => KindRangeM.TryGetValue(kind, out var r) ? r : DefaultRangeM;

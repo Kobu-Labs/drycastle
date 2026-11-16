@@ -1,13 +1,18 @@
 """Ground detail prototype: seeded and deterministic, and nothing lands where it must not."""
 
 import copy
+import math
 
 import numpy as np
 import pytest
+import shapely
 from shapely.geometry import LineString, Point, Polygon, box
+from shapely.ops import unary_union
 
 from drycastle_pipeline import detail_meshes
 from drycastle_pipeline.detail import (
+    _hollow,
+    MOSS_SALT,
     PATCH_PRIORITY,
     ParcelContext,
     area_type,
@@ -22,6 +27,7 @@ from drycastle_pipeline.detail import (
     poisson_disc,
     thin,
 )
+from drycastle_pipeline.meadow import clump
 from drycastle_pipeline.props import seeded
 from drycastle_pipeline.rules import load_section
 from drycastle_pipeline.terrain import Terrain
@@ -119,6 +125,117 @@ def test_field_and_forest_keep_off_blocked_ground(cfg) -> None:
         assert all(not ctx.blocked.contains(Point(c["x"], c["y"])) for c in res.clutter)
         assert all(p.geom.intersection(ctx.blocked).area < 1e-6 for p in res.patches)
         assert recipe(ctx, cfg).clutter == res.clutter  # seeded
+
+
+def forest_with_road() -> ParcelContext:
+    ctx = yard()
+    ctx.kind, ctx.polygon, ctx.fences, ctx.buildings = "forest", box(0, 0, 90, 90), [], []
+    ctx.road = box(-5, -6, 95, -1)
+    rng = np.random.default_rng(3)
+    ctx.trees = [(float(x), float(y), 2.0) for x, y in rng.uniform(2, 88, (200, 2))]
+    return ctx
+
+
+def test_forest_moss_is_a_textured_layer_between_verge_and_litter(cfg) -> None:
+    assert PATCH_PRIORITY.index("verge_dirt") < PATCH_PRIORITY.index("moss") < PATCH_PRIORITY.index("litter")
+    ctx = forest_with_road()
+    res = forest_detail(ctx, cfg)
+    moss = [p for p in res.patches if p.layer == "moss"]
+    assert moss and all(p.texture == "moss" for p in moss)
+    assert any(p.layer == "litter" for p in res.patches)
+    for p in res.patches:  # still disjoint
+        if p.layer != "moss":
+            assert p.geom.intersection(moss[0].geom).area < 1e-6
+    off = copy.deepcopy(cfg)
+    off["forest"]["moss"]["tree"]["keep"] = off["forest"]["moss"]["interior"]["keep"] = 0.0
+    assert not any(p.layer == "moss" for p in forest_detail(ctx, off).patches)
+
+
+def test_forest_moss_keeps_off_the_road_edge_and_clumps_on_noise(cfg) -> None:
+    ctx = forest_with_road()
+    mc = cfg["forest"]["moss"]
+    moss = forest_detail(ctx, cfg).patches
+    geom = unary_union([p.geom for p in moss if p.layer == "moss"])
+    assert geom.distance(ctx.road) >= float(mc["edge_m"]) - 1e-6
+    # thick where the clump noise is high, thin where it is low
+    xs, ys = np.meshgrid(np.arange(4.5, 90, 3.0), np.arange(6.0, 90, 3.0))
+    f = clump(xs.ravel(), ys.ravel(), float(mc["clump"]), float(mc["clump_m"]), MOSS_SALT)
+    covered = shapely.contains_xy(geom, xs.ravel(), ys.ravel())
+    thick, thin = covered[f > 1.2].mean(), covered[f < 0.5].mean()  # relative: the amounts are rules.yaml's to tune
+    assert thick > 0.04 and thin < 0.4 * thick
+
+
+def swamp_forest(cfg: dict, zone=None) -> tuple[ParcelContext, object]:
+    ctx = forest_with_road()
+    ctx.swamp = zone if zone is not None else box(-5, -5, 95, 45)  # the south half of the forest is within reach of water
+    return ctx, forest_detail(ctx, cfg)
+
+
+def test_swamp_ground_has_a_wet_floor_and_less_litter(cfg) -> None:
+    for name in ("swamp", "mud", "puddle"):
+        assert PATCH_PRIORITY.index("puddle") < PATCH_PRIORITY.index("mud") < PATCH_PRIORITY.index("moss") and name in PATCH_PRIORITY
+    assert PATCH_PRIORITY.index("tone_b") < PATCH_PRIORITY.index("swamp") < PATCH_PRIORITY.index("lawn")
+    ctx, res = swamp_forest(cfg)
+    layer = lambda n: unary_union([p.geom for p in res.patches if p.layer == n] or [Polygon()])
+    zone, free = ctx.swamp, free_area(ctx, cfg, trunks=False)
+    assert not any(p.layer == "swamp" for p in res.patches)  # the dark base is the terrain's colour (scene.ParcelColours), no patch
+    assert {p.texture for p in res.patches if p.layer in ("mud", "puddle")} == {"mud", "puddle"}
+    # no tone patch on the wet floor
+    assert not any(p.layer in ("tone_a", "tone_b") and p.geom.intersects(zone.buffer(-0.5)) for p in res.patches)
+    # moss stays, litter is cut to its factor per tree
+    assert layer("moss").intersection(zone).area > 0
+    plain = forest_detail(forest_with_road(), cfg)
+    lit = lambda r, g: unary_union([p.geom for p in r.patches if p.layer == "litter"]).intersection(g).area
+    north = box(-5, 45, 95, 95)
+    assert lit(res, zone) < 0.5 * lit(plain, zone) and lit(res, north) == pytest.approx(lit(plain, north), rel=0.6)  # few blobs at the tuned keep: loose
+    # the puddles are small pools of 1 to 4 m, mud patches are the large ones
+    pools = [g for p in res.patches if p.layer == "puddle" for g in getattr(p.geom, "geoms", [p.geom])]
+    assert pools and all(math.dist(g.bounds[:2], g.bounds[2:]) < 12 for g in pools)
+    for i, a in enumerate(res.patches):
+        for b in res.patches[i + 1:]:
+            assert a.geom.intersection(b.geom).area < 1e-6  # still disjoint
+    assert [p.geom.wkb for p in forest_detail(ctx, cfg).patches] == [p.geom.wkb for p in res.patches]  # seeded
+
+
+def test_a_meadow_in_reach_of_water_is_swampy_too(cfg) -> None:
+    ctx = yard()
+    ctx.kind, ctx.polygon, ctx.fences, ctx.buildings, ctx.road, ctx.trees = "meadow", box(0, 0, 90, 90), [], [], None, []
+    assert not any(p.layer in ("mud", "puddle") for p in field_detail(ctx, cfg).patches)
+    ctx.swamp = box(-5, -5, 50, 95)
+    got = {p.layer for p in field_detail(ctx, cfg).patches}
+    assert {"mud", "puddle"} <= got and not {"tone_a", "tone_b"} & {
+        p.layer for p in field_detail(ctx, cfg).patches if p.geom.intersects(ctx.swamp.buffer(-0.5))}
+
+
+def test_plain_forest_has_a_few_mud_patches_beside_the_tracks_and_a_third_with_puddles(cfg) -> None:
+    ctx = forest_with_road()
+    ctx.polygon, ctx.trees = box(0, 0, 200, 100), []
+    ctx.tracks = [("w1", LineString([(0, 50), (200, 50)]), 3.0)]
+    res = forest_detail(ctx, cfg)
+    mud = unary_union([p.geom for p in res.patches if p.layer == "mud"])
+    puddle = unary_union([p.geom for p in res.patches if p.layer == "puddle"])
+    n = len(getattr(mud, "geoms", [mud]))
+    assert 2 <= n / 2.0 <= 12  # per hectare (the parcel is 2 ha): a few
+    assert 0.1 * n <= len(getattr(puddle, "geoms", [puddle])) <= 0.7 * n and mud.area < 0.01 * ctx.polygon.area
+    beside = [g for g in getattr(mud, "geoms", [mud]) if g.distance(ctx.tracks[0][1]) < 3.5]
+    assert len(beside) >= 2  # along the edge of the track
+    ctx.tracks = []
+    off = copy.deepcopy(cfg)
+    off["forest"]["mud"]["damp"]["keep"] = 0.0
+    assert not any(p.layer in ("mud", "puddle") for p in forest_detail(ctx, off).patches)
+    ctx.swamp = box(-5, -5, 205, 105)  # all swamp: no plain-forest mud, the swamp's own instead
+    assert unary_union([p.geom for p in forest_detail(ctx, off).patches if p.layer == "mud"]).area > 0.1 * ctx.polygon.area
+
+
+def test_hollow_is_the_dip_below_the_ring() -> None:
+    n = 9
+    h = np.array([[0.002 * ((c * 4.0 - 16) ** 2 + (r * 4.0 - 16) ** 2) for c in range(n)] for r in range(n)])
+    bowl = Terrain(chunk_m=32.0, n=8, i0=-4, j0=-4, heights=h, valid=np.ones((n, n), bool), coverage=box(-16, -16, 16, 16))
+    hol = {"ring_m": 6.0, "depth_m": 0.25}
+    # the same number as the Rust test in wet.rs
+    assert _hollow(bowl, np.array([1.0]), np.array([2.0]), hol)[0] == pytest.approx(0.2795290039756342, abs=1e-9)
+    flat = Terrain(chunk_m=32.0, n=8, i0=-4, j0=-4, heights=np.full((n, n), 100.0), valid=np.ones((n, n), bool), coverage=box(-16, -16, 16, 16))
+    assert _hollow(flat, np.array([1.0]), np.array([2.0]), hol)[0] == 0.0
 
 
 def test_area_type_and_caps_and_patch_nodes(cfg) -> None:

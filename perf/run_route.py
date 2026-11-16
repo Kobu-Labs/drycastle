@@ -36,6 +36,8 @@ def main():
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--keep-profile", action="store_true", help="use the real saved settings (default: a fresh profile = new install)")
     ap.add_argument("--blasts", type=float, default=0, help="bench: rocket explosions per second around the camera (--perf-blasts)")
+    ap.add_argument("--anchors", default="", help='viewpoints "x,y,z;x,y,z" (Godot axes) instead of the spawn points (--perf-anchors)')
+    ap.add_argument("--settle", type=float, default=0.6, help="seconds at a view before it is measured (--perf-settle)")
     a = ap.parse_args()
     for v in [x for _ in range(a.repeat) for x in a.variants.split(",")]:
         d = out_dir(f"{a.tag}-{a.gpu}{a.gpu_index if a.gpu_index >= 0 else ''}-{v}-{int(time.time()) % 100000}")
@@ -46,7 +48,7 @@ def main():
         if a.gpu == "nvidia":
             env.update({"__NV_PRIME_RENDER_OFFLOAD": "1", "__GLX_VENDOR_LIBRARY_NAME": "nvidia", "__VK_LAYER_NV_optimus": "NVIDIA_only", "DRI_PRIME": "1"})
         args = [GODOT, "--path", str(SHOOTER), "--resolution", a.res, "--windowed"] + (["--gpu-index", str(a.gpu_index)] if a.gpu_index >= 0 else []) + RENDERER.get(v, []) + ["--", "--role", "client", "--offline", "--map", a.map, "--perf-route", "--perf-out", str(d),
-                "--perf-views", str(a.views), "--perf-dwell", str(a.dwell), "--perf-tag", v] + VARIANTS.get(v, []) + (["--perf-blasts", str(a.blasts)] if a.blasts > 0 else [])
+                "--perf-views", str(a.views), "--perf-dwell", str(a.dwell), "--perf-tag", v] + VARIANTS.get(v, []) + (["--perf-blasts", str(a.blasts)] if a.blasts > 0 else []) + (["--perf-anchors", a.anchors] if a.anchors else []) + ["--perf-settle", str(a.settle)]
         log = open(d / "client.log", "w")
         t0 = time.time()
         p = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, text=True, env=env)

@@ -9,7 +9,7 @@ namespace Drycastle.MapLoader;
 /// the cell (the same on every client, nothing is sent), and the ground height comes from <see cref="GroundHeight"/>. The ground is cut
 /// into 24 m tiles; each tile and layer within the layer's reach (plus a margin) is one MultiMesh per kind, built nearest first within a time
 /// budget per call, freed when it falls behind, and pooled. The focus is the current camera, or whatever the caller passes to
-/// <see cref="SetClutterFocus"/> each frame. A map without meadow.bin, a headless server (<see cref="CollisionOnly"/>) and
+/// <see cref="SetClutterFocus"/> each frame (the same focus drives the pack trees, MapLoader.PackTrees.cs). A map without meadow.bin, a headless server (<see cref="CollisionOnly"/>) and
 /// <c>DRYCASTLE_CLUTTER=0</c> do nothing.
 /// </summary>
 public sealed partial class MapLoader
@@ -92,8 +92,7 @@ public sealed partial class MapLoader
         _meadowLive = new int[_meadow.Layers.Count];
         _meadowRoot = new Node3D { Name = "MeadowClutter" };
         Root.AddChild(_meadowRoot);
-        _meadowStreamer = new MeadowStreamer { Name = "MeadowStreamer", Map = this };
-        Root.AddChild(_meadowStreamer);
+        EnsureStreamer();
         // trunks of the baked trees: generated instances keep out of them (the raster has no trunks)
         _meadowTrees = new();
         foreach (var t in _trees)
@@ -103,6 +102,14 @@ public sealed partial class MapLoader
             l.Add((t.X, t.Y, t.Scale));
         }
         GD.Print($"meadow: {_meadow.ChunkCount} chunks, {_meadow.Layers.Count} layers, cells {_meadow.CellM} m");
+    }
+
+    /// <summary>The one node that feeds the focus to the meadow and the pack trees every frame (created by whichever is set up first).</summary>
+    void EnsureStreamer()
+    {
+        if (_meadowStreamer != null) return;
+        _meadowStreamer = new MeadowStreamer { Name = "MeadowStreamer", Map = this };
+        Root.AddChild(_meadowStreamer);
     }
 
     const float TreeBucketM = 4f;
@@ -187,8 +194,10 @@ public sealed partial class MapLoader
         MeadowGen.Tile(m, li, tx, ty, MeadowSettings.TileCells, _meadowScratch);
         if (_meadowScratch.Count == 0) return;
         var byKind = new Dictionary<string, List<(Vector3 P, float Rot, float Scale, byte Tint)>>();
+        var packActive = PackUndergrowthActive; // the pack's undergrowth draws mushrooms, twigs and ferns itself
         foreach (var i in _meadowScratch)
         {
+            if (MeadowSettings.IsSuppressed(i.Kind, packActive)) continue;
             if (!MeadowSettings.HasRoom(layer.Name, ClutterScale, _meadowLive[li] + tile.Instances)) break;
             if (NearTrunk(i.X, i.Y)) continue;
             var z = GroundHeight(i.X, -i.Y);
@@ -348,8 +357,12 @@ public sealed partial class MapLoader
 
         public override void _Process(double delta)
         {
-            if (Map._meadowFocusSet is { } f) { Map._meadowFocusSet = null; Map.MeadowStep(f); return; }
-            if (GetViewport()?.GetCamera3D() is { } cam) Map.MeadowStep(cam.GlobalPosition);
+            Vector3 focus;
+            if (Map._meadowFocusSet is { } f) { Map._meadowFocusSet = null; focus = f; }
+            else if (GetViewport()?.GetCamera3D() is { } cam) focus = cam.GlobalPosition;
+            else return;
+            Map.MeadowStep(focus);
+            Map.PackTreeStep(focus);
         }
     }
 }

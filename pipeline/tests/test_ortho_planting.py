@@ -24,7 +24,8 @@ RES = 1.0  # metres per pixel of the synthetic canopy mask, 250 x 250 px coverin
 
 
 def cfg_for(folder: Path) -> dict:
-    return {**TREE, "ortho_dir": str(folder)}
+    """The rules without stands: these tests are of the planting itself (test_stands.py has the stands and the edge mantle)."""
+    return {**{k: v for k, v in TREE.items() if k != "stands"}, "ortho_dir": str(folder)}
 
 
 def test_trees_come_only_from_the_detector(tmp_path: Path) -> None:
@@ -57,7 +58,9 @@ def test_trees_come_only_from_the_detector(tmp_path: Path) -> None:
     canopy = [t for t in trees if t["src"] == "ortho-canopy"]
     assert canopy and all(30 <= t["x"] < 90 and 40 <= t["y"] < 100 for t in canopy)  # inside the mask only
     lo, hi = OCFG["canopy_crown_scale"]
-    assert all(lo <= t["scale"] <= hi for t in canopy)
+    ages = {a["name"]: a["scale"] for a in OCFG["age_classes"]}
+    assert all(t["forest"] and t["age"] in ages and lo * ages[t["age"]] <= t["scale"] <= hi * ages[t["age"]] for t in canopy)
+    assert not any(t["forest"] for t in alone)
     assert all(t["colour"] in TREE["forest_canopy_colours"] for t in canopy)
     expected = OCFG["canopy_per_1000m2"] * 60 * 60 / 1000.0  # 90 trees on the 60 x 60 m of mask
     assert 0.75 * expected <= len(canopy) <= 1.05 * expected

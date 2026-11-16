@@ -1,4 +1,4 @@
-"""Ground detail of the village: draped patches (lawn tones, bare soil, gravel, leaf litter, beds, furrows,
+"""Ground detail of the village: draped patches (lawn tones, bare soil, gravel, leaf litter, moss, mud, puddles, swamp floor, beds, furrows,
 road verges) and clutter instances (tufts, flowers, pebbles, rocks, leaves, sticks, ferns).
 
 This is the ``detail`` stage (``make detail``, between ``props`` and ``export``). It reads the work files
@@ -51,7 +51,7 @@ from drycastle_pipeline import meadow as meadow_mod
 from drycastle_pipeline.ground import ground_types, ground_units, type_colours, water_kinds
 from drycastle_pipeline.ground_attributes import attributes_of
 from drycastle_pipeline.meshes import Mesh
-from drycastle_pipeline.props import chunk_of, seeded
+from drycastle_pipeline.props import chunk_of, seeded, wet_zone
 from drycastle_pipeline.patches import drape, plan_patches
 from drycastle_pipeline.roads import edge_lines
 from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
@@ -64,14 +64,15 @@ CROP_FORMAT_VERSION = 1
 CLUTTER_KINDS = KINDS
 # The first layer wins where two overlap (a path crosses lawn, litter lies on lawn, ...).
 PATCH_PRIORITY = (
-    "dike_track", "gravel", "verge_gravel", "bed", "furrow", "dirt", "verge_dirt", "litter", "tone_a", "tone_b", "lawn",
+    "dike_track", "gravel", "verge_gravel", "bed", "furrow", "dirt", "verge_dirt", "puddle", "mud", "moss", "litter", "tone_a", "tone_b",
+    "swamp", "lawn",
 )
 # Library texture of a layer; layers without one are flat colour.
 PATCH_TEXTURE = {
     "dike_track": "dike_gravel", "gravel": "gravel", "verge_gravel": "gravel", "bed": "soil_rows", "furrow": "soil_rows",
-    "dirt": "dirt", "verge_dirt": "dirt", "litter": "leaf_litter",
+    "dirt": "dirt", "verge_dirt": "dirt", "litter": "leaf_litter", "moss": "moss", "mud": "mud", "puddle": "puddle",
 }
-_SOFT_LAYERS = ("lawn", "tone_a", "tone_b", "litter")  # big soft shapes: simplified harder (fewer triangles)
+_SOFT_LAYERS = ("lawn", "tone_a", "tone_b", "swamp", "litter", "moss", "mud")  # big soft shapes: simplified harder (fewer triangles)
 _RECT_LAYERS = ("bed", "furrow")  # textured with their own angle and origin
 _NEAR_M = 8.0  # what around a parcel counts as near it
 _AROUND_M = 16.0  # the ground a crop patch's edge blends into (crop.py): widest border zone plus the probe
@@ -128,6 +129,8 @@ class ParcelContext:
     crop_neighbours: list[tuple[str, BaseGeometry]] | None = None  # (id, polygon) of the other crop patches touching this one (the baulk)
     ground_around: list[tuple[str, BaseGeometry, list[int], bool]] | None = None  # crop only: (id, polygon, terrain colour, is_crop) of the other ground units near the patch (what a field's edge blends into)
     dike: bool = False  # this part of the parcel is the flood dike: it gets the dike recipe, whatever the parcel kind
+    swamp: BaseGeometry | None = None  # the part of this ground within the reach of water (swamp ground), for the types of ``detail.swamp.kinds``
+    tracks: list[tuple[str, LineString, float]] | None = None  # id, centre line, width of the path and track edges near the part (forest mud)
 
 
 # --- tools ----------------------------------------------------------------------------------
@@ -484,9 +487,9 @@ def _assemble(
         out[layer] = g
         taken = taken.union(g)
     for layer, g in out.items():
-        if layer == "lawn":
+        if layer in ("lawn", "swamp"):
             for poly in _polys(g):
-                res.patches.append(Patch(layer, poly, colour=flat["lawn"][rng.randrange(len(flat["lawn"]))]))
+                res.patches.append(Patch(layer, poly, colour=flat[layer][rng.randrange(len(flat[layer]))]))
         elif layer in ("tone_a", "tone_b"):
             res.patches.append(Patch(layer, g, colour=flat[layer][0]))
         elif layer in _RECT_LAYERS:
@@ -844,7 +847,10 @@ def field_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
             if not piece.is_empty and piece.area > float(fu["min_piece_m2"]):
                 furrow, rects = piece, [(rect[0].buffer(0.5), rect[1], rect[2])]
     layers.update({"verge_gravel": verge_g, "verge_dirt": verge_d, "furrow": furrow, "dirt": _union(heads)})
-    got = _assemble(res, free, layers, {"tone_a": flat["tone_a"], "tone_b": flat["tone_b"]}, {"furrow": rects}, seeded(f"{pid}:detail:colours"))
+    colours = {"tone_a": flat["tone_a"], "tone_b": flat["tone_b"]}
+    if ctx.swamp is not None:  # a meadow within the reach of water: wet floor
+        _add_swamp(ctx, cfg, free, layers, colours)
+    got = _assemble(res, free, layers, colours, {"furrow": rects}, seeded(f"{pid}:detail:colours"))
 
     c, out = fc["clutter"], []
     furrow = got.get("furrow", Polygon())
@@ -864,8 +870,143 @@ def field_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
     return res
 
 
+MOSS_SALT = 5100  # the noise of the moss clumps (the Rust stage reads the same number)
+
+
+def _moss(ctx: ParcelContext, cfg: dict, free: BaseGeometry, trees: list[tuple[float, float, float]],
+          verge_g: BaseGeometry, verge_d: BaseGeometry) -> BaseGeometry:
+    """Moss patches of the forest floor: small blobs at the tree feet and over the open floor, thick in the clumps of a
+    position-only noise (``meadow.clump``, so a tiled run agrees with itself) and thin in the gaps. None within ``edge_m`` of the
+    carriageway and its verges: the ground there is trodden. Every number is ``detail.forest.moss``."""
+    mc = cfg["forest"]["moss"]
+    edge = float(mc["edge_m"])
+    near = [verge_g, verge_d]
+    if ctx.road is not None and not ctx.road.is_empty:
+        near.append(ctx.road.buffer(float(cfg["road_clearance_m"]), quad_segs=2))
+    ban = _union(near).buffer(edge, quad_segs=2)
+    allowed = free.difference(ban) if not ban.is_empty else free
+    if allowed.is_empty:
+        return Polygon()
+
+    def dens(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+        return meadow_mod.clump(xs, ys, float(mc["clump"]), float(mc["clump_m"]), MOSS_SALT)
+
+    rng, g = seeded(f"{ctx.id}:detail:moss"), _gen(ctx.id, "moss")
+    parts = []
+    t = mc["tree"]
+    for x, y, _ in trees:
+        if rng.random() >= float(t["keep"]) * float(dens(np.array([x]), np.array([y]))[0]):
+            continue
+        a, dist = rng.random() * math.tau, float(t["reach_m"][0]) + rng.random() * (float(t["reach_m"][1]) - float(t["reach_m"][0]))
+        parts.append(blob(rng, x + dist * math.cos(a), y + dist * math.sin(a), _rad(rng, t["radius_m"]), 0.4, 1.3, 8))
+    i = mc["interior"]
+    pts = scatter(g, allowed, float(i["spacing_m"]), lambda xs, ys: float(i["keep"]) * dens(xs, ys))
+    for x, y in pts:
+        parts.append(blob(rng, float(x), float(y), _rad(rng, i["radius_m"]), 0.4, float(i["stretch"]), 10))
+    moss = _union(parts)
+    return moss.difference(ban) if not ban.is_empty else moss
+
+
+MUD_SALT, PUDDLE_SALT, DAMP_SALT = 5200, 5300, 5400  # the noises of mud and puddles (the Rust stage reads the same numbers)
+
+
+def swamp_zone(units: list[dict], types: dict[str, dict], plan, terrain: Terrain, reach_m: float) -> BaseGeometry | None:
+    """Where swamp ground lies: :func:`props.wet_zone` (water ground areas and the wet areas of water patches) buffered by ``reach_m``,
+    the zone the swamp stand of trees stands in (``props.trees.stands.swamp.reach_m``). None without any water."""
+    from drycastle_pipeline.water import wet_area
+
+    wet = [wet_area(p.polygon, terrain, p.water_y) for p in plan.patches.values() if p.water_y is not None]
+    wet = [w for w in wet if not w.is_empty]
+    zone = wet_zone(units, water_kinds(types), unary_union(wet) if wet else None)
+    return None if zone is None else zone.buffer(reach_m)
+
+
+def _hollow(terrain: Terrain, xs: np.ndarray, ys: np.ndarray, h: dict) -> np.ndarray:
+    """0..1: how far below its surroundings the ground lies (the mean height on a ring of ``ring_m`` minus the point's own, over ``depth_m``)."""
+    r = float(h["ring_m"])
+    ring = np.mean([terrain.surface(xs + r * math.cos(a), ys + r * math.sin(a)) for a in np.arange(8) * (math.tau / 8)], axis=0)
+    return np.clip((ring - terrain.surface(xs, ys)) / float(h["depth_m"]), 0.0, 1.0)
+
+
+def _swamp_layers(ctx: ParcelContext, cfg: dict, free: BaseGeometry) -> dict[str, BaseGeometry]:
+    """The wet floor of ``ctx.swamp`` (``detail.swamp``): the base colour over all of it, large mud patches, and small puddles (likelier in
+    hollows) each in a rim of mud. Shapes only; :func:`_assemble` clips them."""
+    sc, hol = cfg["swamp"], cfg["hollow"]
+    area = free.intersection(ctx.swamp)
+    if area.is_empty:
+        return {}
+    rng, g = seeded(f"{ctx.id}:detail:swamp"), _gen(ctx.id, "swamp")
+    mc, pc = sc["mud"], sc["puddle"]
+    mud, puddles = [], []
+    for x, y in scatter(g, area, float(mc["spacing_m"]), lambda xs, ys: float(mc["keep"]) * meadow_mod.clump(xs, ys, float(mc["clump"]), float(mc["clump_m"]), MUD_SALT)):
+        mud.append(blob(rng, float(x), float(y), _rad(rng, mc["radius_m"]), 0.4, float(mc["stretch"]), 10))
+
+    def likely(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+        return (float(pc["keep"]) * meadow_mod.clump(xs, ys, float(pc["clump"]), float(pc["clump_m"]), PUDDLE_SALT)
+                * (1.0 + float(hol["gain"]) * _hollow(ctx.terrain, xs, ys, hol)))
+
+    for x, y in scatter(g, area, float(pc["spacing_m"]), likely):
+        pud = blob(rng, float(x), float(y), _rad(rng, pc["radius_m"]), 0.35, float(pc["stretch"]), 9)
+        puddles.append(pud)
+        if float(pc["rim_m"]) > 0:
+            mud.append(pud.buffer(float(pc["rim_m"]), quad_segs=2))
+    return {"mud": _union(mud), "puddle": _union(puddles)}  # the dark base is the terrain's colour there (scene.ParcelColours)
+
+
+def _forest_mud(ctx: ParcelContext, cfg: dict, free: BaseGeometry) -> tuple[BaseGeometry, BaseGeometry]:
+    """Mud and puddles of the plain forest floor, outside the swamp (``detail.forest.mud``): a few patches per hectare in damp spots (a noise,
+    likelier in hollows) and at the edge of the paths and tracks; a puddle in the middle of some. (mud, puddles)."""
+    mc, hol = cfg["forest"]["mud"], cfg["hollow"]
+    area = free.difference(ctx.swamp) if ctx.swamp is not None else free
+    if area.is_empty:
+        return Polygon(), Polygon()
+    rng, g = seeded(f"{ctx.id}:detail:mud"), _gen(ctx.id, "mud")
+    spots: list[tuple[float, float, float | None]] = []  # x, y, heading of the way it lies along
+    d = mc["damp"]
+
+    def damp(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+        return (float(d["keep"]) * meadow_mod.clump(xs, ys, float(d["clump"]), float(d["clump_m"]), DAMP_SALT)
+                * (1.0 + float(hol["gain"]) * _hollow(ctx.terrain, xs, ys, hol)))
+
+    spots += [(float(x), float(y), None) for x, y in scatter(g, area, float(d["spacing_m"]), damp)]
+    tr = mc["track"]
+    for eid, line, width in ctx.tracks or []:
+        if line.length < 1.0 or line.distance(area) > 3.0:
+            continue
+        er = seeded(f"{eid}:detail:mud")  # the way's own stream: every parcel it crosses sees the same spots
+        s = er.random() * float(tr["spacing_m"])
+        while s < line.length:
+            if er.random() < float(tr["keep"]):
+                p, q = line.interpolate(s), line.interpolate(min(line.length, s + 0.5))
+                ang = math.atan2(q.y - p.y, q.x - p.x)
+                off = width / 2 + _rad(er, mc["radius_m"]) * 0.4
+                side = 1 if er.random() < 0.5 else -1
+                spots.append((p.x - side * math.sin(ang) * off, p.y + side * math.cos(ang) * off, ang))
+            s += float(tr["spacing_m"]) * (0.6 + 0.8 * er.random())
+    mud, puddles = [], []
+    for x, y, ang in spots:
+        if not shapely.contains_xy(area, x, y):
+            continue
+        r = _rad(rng, mc["radius_m"])
+        mud.append(blob(rng, x, y, r, 0.4, float(mc["stretch"]), 10, ang))
+        if rng.random() < float(mc["puddle_share"]):
+            puddles.append(blob(rng, x, y, r * _rad(rng, mc["puddle_scale"]), 0.35, 1.3, 8))
+    return _union(mud), _union(puddles)
+
+
+def _add_swamp(ctx: ParcelContext, cfg: dict, free: BaseGeometry, layers: dict[str, BaseGeometry], colours: dict) -> None:
+    """Swamp ground on a recipe's layers: the tone patches give way to the wet floor, whose layers join the recipe's own."""
+    for name in ("tone_a", "tone_b"):
+        if name in layers and not layers[name].is_empty:
+            layers[name] = layers[name].difference(ctx.swamp)
+    for name, geom in _swamp_layers(ctx, cfg, free).items():
+        layers[name] = _union([layers[name], geom]) if name in layers else geom
+    colours["swamp"] = [hex_to_rgb(h) for h in cfg["swamp"]["colours"]]
+
+
 def forest_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
-    """Forest: leaf litter under the trees, forest-floor tone patches, a few bare spots, and rocks, sticks, ferns, leaves."""
+    """Forest: leaf litter and moss under the trees, forest-floor tone patches, a few bare spots, a few mud patches and puddles, and rocks,
+    sticks, ferns, leaves. In swamp ground (``ctx.swamp``) the wet floor of :func:`_swamp_layers` replaces tones and most of the litter and dirt."""
     pid, fc = ctx.id, cfg["forest"]
     res = DetailResult(pid)
     free = free_area(ctx, cfg, trunks=False)
@@ -875,12 +1016,15 @@ def forest_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
     verge_g, verge_d = _verge(ctx)
     canopy = float(ctx.tree_cfg["canopy_m"])
     inside = [(x, y, s) for x, y, s in ctx.trees if ctx.polygon.contains(Point(x, y))]
+    swamp = ctx.swamp
+    wet_tree = shapely.contains_xy(swamp, [t[0] for t in inside], [t[1] for t in inside]) if swamp is not None and inside else np.zeros(len(inside), bool)
     lit = fc["litter"]
     litter_parts = []
-    for x, y, s in inside:
+    for (x, y, s), wet in zip(inside, wet_tree, strict=True):
         r = canopy * s * float(lit["radius_factor"])
+        keep = float(lit["keep"]) * (float(cfg["swamp"]["litter_factor"]) if wet else 1.0)
         for _ in range(int(lit["blobs_per_tree"])):
-            if rng.random() > float(lit["keep"]):
+            if rng.random() > keep:
                 continue
             a, dist = rng.random() * math.tau, rng.random() * r * 0.6
             litter_parts.append(blob(rng, x + dist * math.cos(a), y + dist * math.sin(a), r * (0.7 + 0.5 * rng.random()), 0.35, 1.3, 8))
@@ -892,10 +1036,17 @@ def forest_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
         for _try in range(10):
             x, y = x0 + rng.random() * (x1 - x0), y0 + rng.random() * (y1 - y0)
             if shapely.contains_xy(free, x, y):
+                if swamp is not None and shapely.contains_xy(swamp, x, y) and rng.random() >= float(cfg["swamp"]["dirt_factor"]):
+                    break
                 dirt.append(blob(rng, x, y, _rad(rng, d["radius_m"]), 0.4, 1.4, 10))
                 break
-    layers.update({"verge_gravel": verge_g, "verge_dirt": verge_d, "dirt": _union(dirt), "litter": _union(litter_parts)})
-    got = _assemble(res, free, layers, {"tone_a": flat["tone_a"], "tone_b": flat["tone_b"]}, {}, seeded(f"{pid}:detail:colours"))
+    layers.update({"verge_gravel": verge_g, "verge_dirt": verge_d, "dirt": _union(dirt), "litter": _union(litter_parts),
+                   "moss": _moss(ctx, cfg, free, inside, verge_g, verge_d)})
+    layers["mud"], layers["puddle"] = _forest_mud(ctx, cfg, free)
+    colours = {"tone_a": flat["tone_a"], "tone_b": flat["tone_b"]}
+    if swamp is not None:
+        _add_swamp(ctx, cfg, free, layers, colours)
+    got = _assemble(res, free, layers, colours, {}, seeded(f"{pid}:detail:colours"))
 
     c, out = fc["clutter"], []
     litter = got.get("litter", Polygon())
@@ -1077,6 +1228,14 @@ class Village:
         self.crop_units = [(p["id"], shape(p["polygon"])) for p in self.parcels if area_type(p, self.types) == "crop"]
         self.crop_tree = shapely.STRtree([g for _, g in self.crop_units])
         self._around: tuple[list, shapely.STRtree] | None = None
+        stands = self.tree_cfg.get("stands")
+        self.swamp_kinds = set(self.cfg["swamp"]["kinds"])
+        self.swamp = swamp_zone(self.parcels, self.types, plan, self.terrain, float(stands["swamp"]["reach_m"])) if stands and "swamp" in stands else None
+        if self.swamp is not None:
+            shapely.prepare(self.swamp)
+        ways = set(self.cfg["forest"]["mud"]["track"]["highways"])
+        self.tracks = [(e["id"], ln, float(e["width"])) for e, ln in edge_lines(graph) if e["highway"] in ways]
+        self.tk_tree = shapely.STRtree([t[1] for t in self.tracks])
 
     def cfg_for(self, parcel: dict, recipe: str) -> dict:
         """The detail rules for a unit: for a ground area whose type has ``detail`` settings, those laid over the
@@ -1145,6 +1304,13 @@ class Village:
             name: _union(self._near(tree, self.verge_polys[name], part)).intersection(part)
             for name, tree in self.v_tree.items()
         }
+        swamp = None
+        if self.swamp is not None and parcel["kind"] in self.swamp_kinds and self.swamp.intersects(part):
+            swamp = _union(_polys(self.swamp.intersection(part)))
+            if swamp.is_empty:
+                swamp = None
+            else:
+                shapely.prepare(swamp)
         return ParcelContext(
             id=cid,
             kind=parcel["kind"],
@@ -1163,6 +1329,8 @@ class Village:
             dike=dike,
             crop_neighbours=self._crop_neighbours(parcel["id"], part) if area_type(parcel, self.types) == "crop" else None,
             ground_around=self._ground_around(parcel["id"], part) if area_type(parcel, self.types) == "crop" else None,
+            swamp=swamp,
+            tracks=self._near(self.tk_tree, self.tracks, near),
             water=_union(self._near(self.w_tree, self.water_polys, part.buffer(float(self.cfg["tint"]["water_m"])))) if self.water_polys else None,
         )
 
@@ -1270,7 +1438,7 @@ def build_village_detail(
         "patch_triangles_by_type": {a: dict(sorted(l.items())) | {"total": sum(l.values())} for a, l in sorted(by_type.items())},
         "meadow_cells": meadow_cells,
         "meadow_expected": {k: round(x) for k, x in meadow.expected().items()},
-        "meadow_busiest": meadow.busiest({"tuft": 70, "fern": 70, "flower": 55, "pebble": 40, "litter": 40}),
+        "meadow_busiest": meadow.busiest({"tuft": 70, "fern": 70, "flower": 55, "pebble": 40, "litter": 40, "floor": 60}),
         "seconds": round(time.time() - t0, 1),
     }
     stats["crops"] = {k: sum(len(kinds.get(k, [])) for kinds in crops.values()) for k in v.cfg["crop_kinds"]}

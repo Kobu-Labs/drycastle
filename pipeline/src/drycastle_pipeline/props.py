@@ -249,7 +249,116 @@ def fences_doc(sections: list[dict], groups: dict[str, list[str]], cfg: dict) ->
 CANOPY_CELL_PX = 42  # the canopy mask is planted cell by cell (about 25 m at the photo's 0.6 m per pixel)
 
 
-def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[float, float] | None) -> list[dict]:
+def age_class(ages: list[tuple[str, float, float]], rng) -> tuple[str, float]:
+    """(name, scale factor) of a forest tree's age class, drawn by share; no classes: ("", 1)."""
+    total = sum(share for _, share, _ in ages)
+    if total <= 0:
+        return "", 1.0
+    pick = rng.random() * total
+    for name, share, factor in ages:
+        pick -= share
+        if pick < 0:
+            return name, factor
+    return ages[-1][0], ages[-1][2]
+
+
+def canopy_mask(cfg: dict):
+    """(trees.json of the detector, canopy mask (True = canopy), west edge x and north edge y in EPSG:5514, metres per pixel)."""
+    from PIL import Image
+
+    ortho_dir = Path(cfg["ortho_dir"])
+    doc = json.loads((ortho_dir / "trees.json").read_text())
+    Image.MAX_IMAGE_PIXELS = None
+    mask = np.asarray(Image.open(ortho_dir / doc["canopy"]["file"]).convert("L")) > 0
+    minx, _, _, maxy = doc["canopy"]["bounds_epsg5514"]
+    return doc, mask, minx, maxy, float(doc["canopy"]["pixel_m"])
+
+
+STAND_NAMES = ("pine", "birch", "mixed", "thicket", "swamp")
+
+
+class Stands:
+    """The stand of every point of the forest (``props.trees.stands``): a seeded Voronoi field, water overriding it.
+
+    One seed per ``cell_m`` grid cell, jittered inside the cell and drawn from the stands' shares, so the nearest of the 3 x 3
+    surrounding seeds is the point's Voronoi cell; a forest of a few hectares has several. A point within ``swamp.reach_m`` of
+    ``wet`` is swamp whatever the field says. Keyed by local position only, so reruns and chunk order do not matter.
+    """
+
+    def __init__(self, cfg: dict, wet: BaseGeometry | None) -> None:
+        self.cfg = cfg
+        self.cell = float(cfg["cell_m"])
+        self.types = {k: v for k, v in cfg["types"].items()}
+        self.names = list(self.types)
+        self.shares = [float(self.types[k]["share"]) for k in self.names]
+        self.seeds: dict[tuple[int, int], tuple[float, float, str]] = {}
+        self.swamp = None
+        if wet is not None and "swamp" in cfg:
+            self.swamp = wet.buffer(float(cfg["swamp"]["reach_m"]))
+            shapely.prepare(self.swamp)
+
+    def seed(self, i: int, j: int) -> tuple[float, float, str]:
+        got = self.seeds.get((i, j))
+        if got is None:
+            rng = seeded(f"stand:{self.cell}:{i}:{j}")
+            name = rng.choices(self.names, weights=self.shares)[0]
+            got = ((i + rng.random()) * self.cell, (j + rng.random()) * self.cell, name)
+            self.seeds[(i, j)] = got
+        return got
+
+    def noise(self, x: float, y: float) -> str:
+        i, j = int(x // self.cell), int(y // self.cell)
+        best = min(
+            (self.seed(a, b) for a in (i - 1, i, i + 1) for b in (j - 1, j, j + 1)),
+            key=lambda s: (s[0] - x) ** 2 + (s[1] - y) ** 2,
+        )
+        return best[2]
+
+    def at(self, x: float, y: float) -> str:
+        if self.swamp is not None and shapely.contains_xy(self.swamp, x, y):
+            return "swamp"
+        return self.noise(x, y)
+
+
+def _range(v, u: float) -> float:
+    """A scale setting: a number, or [lo, hi] drawn with ``u`` in [0, 1)."""
+    return float(v) if not isinstance(v, (list, tuple)) else float(v[0]) + (float(v[1]) - float(v[0])) * u
+
+
+def edge_distance(mask: np.ndarray, row: int, col: int, res: float, reach_m: float, gap_m: float) -> float:
+    """Metres from pixel (row, col) of the canopy mask to the nearest open ground within ``reach_m`` (``reach_m`` when none).
+
+    Open ground is where the canopy fraction within ``gap_m`` is under a half, so a speck of a gap in the mask is no edge.
+    Off the raster counts as canopy: the map's border is no forest edge.
+    """
+    k = max(1, int(round(gap_m / res / 2)))
+    r = int(math.ceil(reach_m / res))
+    h, w = mask.shape
+    r0, r1, c0, c1 = row - r - k, row + r + k + 1, col - r - k, col + r + k + 1
+    win = np.ones((r1 - r0, c1 - c0), np.float32)
+    a0, a1, b0, b1 = max(r0, 0), min(r1, h), max(c0, 0), min(c1, w)
+    win[a0 - r0 : a1 - r0, b0 - c0 : b1 - c0] = mask[a0:a1, b0:b1]
+    n = 2 * k + 1
+    acc = np.pad(win.cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+    mean = (acc[n:, n:] - acc[:-n, n:] - acc[n:, :-n] + acc[:-n, :-n]) / (n * n)  # (2r+1)^2: the window of every pixel within r
+    rr, cc = np.nonzero(mean < 0.5)
+    if rr.size == 0:
+        return reach_m
+    return min(reach_m, float(np.sqrt((rr - r) ** 2 + (cc - r) ** 2).min()) * res)
+
+
+def wet_zone(units: list[dict], kinds: set[str] | frozenset[str], water: BaseGeometry | None) -> BaseGeometry | None:
+    """Where there is water: ground units of a water kind (ponds, streams; as :func:`water.plan_water` reads them) and the
+    wet areas of the water patches (``water``, see :func:`water_zone`). Local metres; None without any."""
+    parts = [shape(u["polygon"]).buffer(0) for u in units if u["kind"] in kinds]
+    if water is not None:
+        parts.append(water)
+    return unary_union(parts) if parts else None
+
+
+def ortho_trees(
+    tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[float, float] | None, wet: BaseGeometry | None = None
+) -> list[dict]:
     """Every tree, planted from the orthophoto detector (``make ortho-trees``).
 
     * each standalone tree of ``trees.json`` is planted where the detector found it, its size following the crown
@@ -257,20 +366,18 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
     * the canopy mask (``canopy.png``) is planted so that the forest looks closed from above, as in the photo:
       ``ortho.canopy_per_1000m2`` trees per 1000 m2 of mask at least ``ortho.canopy_min_spacing_m`` apart, each with a
       crown ``ortho.canopy_crown_scale`` times the normal one (the rules' own forest density is far too thin for
-      that). Seeded per 25 m cell; never on a building, road, placed object or water.
+      that). Seeded per 25 m cell; never on a building, road, placed object or water. Each gets an age class
+      (``ortho.age_classes``: young, mature, giant) that multiplies its scale, seeded from its position;
+    * a forest tree also belongs to a stand (:class:`Stands`, ``stands`` in the rules: pine, birch, mixed, thicket, swamp
+      near ``wet``) that sets its shape mix, size and density (a thicket gets extra trees between the others, down to
+      ``spacing_scale`` of the spacing), and within ``edge.edge_m`` of the canopy's outer edge (:func:`edge_distance`) it is
+      an ``edge`` tree, smaller toward the edge. Without ``stands`` every forest tree is mixed, as before.
 
     The photo does not resolve single crowns in a forest, so the canopy trunks are random within the detected extent.
     """
-    from PIL import Image
-
     if origin is None:
         raise ValueError("trees from the orthophoto need the frame origin (parcels.json origin_epsg5514)")
-    ortho_dir = Path(cfg["ortho_dir"])
-    doc = json.loads((ortho_dir / "trees.json").read_text())
-    Image.MAX_IMAGE_PIXELS = None
-    mask = np.asarray(Image.open(ortho_dir / doc["canopy"]["file"]).convert("L")) > 0
-    minx, _, _, maxy = doc["canopy"]["bounds_epsg5514"]
-    res = float(doc["canopy"]["pixel_m"])
+    doc, mask, minx, maxy, res = canopy_mask(cfg)
     ox, oy = origin
     ocfg = cfg.get("ortho", {})
     spacing = float(ocfg.get("canopy_min_spacing_m", 4.0))
@@ -281,10 +388,10 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
     trees: list[dict] = []
     grid: dict[tuple[int, int], list[tuple[float, float]]] = {}
 
-    def free(x: float, y: float) -> bool:
+    def free(x: float, y: float, gap: float = spacing) -> bool:  # gap <= spacing: the 3 x 3 grid cells still hold every neighbour
         gx, gy = int(x // spacing), int(y // spacing)
         return not any(
-            math.hypot(x - a, y - b) < spacing
+            math.hypot(x - a, y - b) < gap
             for i in (gx - 1, gx, gx + 1)
             for j in (gy - 1, gy, gy + 1)
             for a, b in grid.get((i, j), ())
@@ -299,13 +406,59 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
             continue
         if road is not None and shapely.contains_xy(road, x, y):  # a trunk on a carriageway (roadside trees the photo puts on the road)
             continue
+        if zones[3] is not None and shapely.contains_xy(zones[3], x, y):  # or in water
+            continue
         scale = min(3.0, max(0.8, 2.0 * float(t["radius_m"]) / canopy_m))
         trees.append(tree(x, y, seeded(f"ortho:{t['x']}:{t['y']}"), None, False, "ortho", scale))
         add(x, y)
 
     density = float(ocfg.get("canopy_per_1000m2", 25.0))
     crown_lo, crown_hi = (float(v) for v in ocfg.get("canopy_crown_scale", (1.7, 2.5)))
+    ages = [(str(a["name"]), float(a["share"]), float(a["scale"])) for a in ocfg.get("age_classes", ())]
     h, w = mask.shape
+    scfg = cfg.get("stands")
+    stands = Stands(scfg, wet) if scfg else None
+    ecfg = (scfg or {}).get("edge")
+
+    def plant(x: float, y: float, rng, stand: str, row: int, col: int) -> dict:
+        """A forest tree: crown, age class, then the stand's shape mix and size, then the edge mantle. (row, col): its mask pixel."""
+        crown = crown_lo + (crown_hi - crown_lo) * rng.random()
+        age, grow = age_class(ages, seeded(f"ortho:age:{x:.3f}:{y:.3f}"))  # its own seed: the planting above stays as it was
+        scale, cone, edge = crown * grow, 0.6, False
+        if stands is not None:
+            st = scfg["swamp"] if stand == "swamp" else stands.types[stand]
+            scale *= _range(st.get("scale", 1.0), seeded(f"stand:size:{x:.3f}:{y:.3f}").random())
+            cone = float(st["cone_share"])
+            if ecfg:
+                edge_m = float(ecfg["edge_m"])
+                d = edge_distance(mask, row, col, res, edge_m, float(ecfg["gap_m"]))
+                if d < edge_m:  # the wall steps down: smallest at the edge itself
+                    lo, hi = (float(v) for v in ecfg["scale"])
+                    scale *= lo + (hi - lo) * d / edge_m
+                    cone, edge = float(ecfg["cone_share"]), True
+        rec = {**tree(x, y, rng, None, True, "ortho-canopy", scale, cone), "age": age}
+        if stands is not None:
+            rec["stand"] = stand
+            if edge:
+                rec["edge"] = True
+        return rec
+
+    def candidate(rng, x_lo: float, y_hi: float, size: float, cell: np.ndarray, only: str | None = None):
+        """A random point of the canopy in this cell (of stand ``only``, if given) that is inside the coverage and clear of the
+        zones: (x, y, row, col) or None."""
+        x, y = x_lo + rng.random() * size, y_hi - rng.random() * size
+        row, col = int((y_hi - y) / res), int((x - x_lo) / res)
+        if row >= cell.shape[0] or col >= cell.shape[1] or not cell[row, col]:
+            return None
+        if only is not None and stands.noise(x, y) != only:  # cheap: before the geometry tests
+            return None
+        if not shapely.contains_xy(terrain.coverage, x, y):
+            return None
+        if any(g is not None and shapely.contains_xy(g, x, y) for g in zones):
+            return None
+        return x, y, row, col
+
+    thicket = stands.types.get("thicket") if stands else None
     for r0 in range(0, h, CANOPY_CELL_PX):
         for c0 in range(0, w, CANOPY_CELL_PX):
             cell = mask[r0 : r0 + CANOPY_CELL_PX, c0 : c0 + CANOPY_CELL_PX]
@@ -321,18 +474,41 @@ def ortho_trees(tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[f
             for _ in range(count * 100):
                 if placed >= count:
                     break
-                x, y = x_lo + rng.random() * size, y_hi - rng.random() * size
-                row, col = int((y_hi - y) / res), int((x - x_lo) / res)
-                if row >= cell.shape[0] or col >= cell.shape[1] or not cell[row, col]:
+                got = candidate(rng, x_lo, y_hi, size, cell)
+                if got is None:
                     continue
-                if not shapely.contains_xy(terrain.coverage, x, y):
-                    continue
-                if any(g is not None and shapely.contains_xy(g, x, y) for g in zones):
-                    continue
+                x, y, row, col = got
                 if not free(x, y):
                     continue
+                stand = stands.at(x, y) if stands else "mixed"
+                keep = float((scfg["swamp"] if stand == "swamp" else stands.types[stand]).get("keep", 1.0)) if stands else 1.0
+                if keep < 1.0 and seeded(f"stand:keep:{x:.3f}:{y:.3f}").random() >= keep:
+                    placed += 1  # thinned out: no tree, and it leaves the room free
+                    continue
                 add(x, y)
-                trees.append(tree(x, y, rng, None, True, "ortho-canopy", crown_lo + (crown_hi - crown_lo) * rng.random()))
+                trees.append(plant(x, y, rng, stand, r0 + row, c0 + col))
+                placed += 1
+            extra_n = expected * (float(thicket.get("density_factor", 1.0)) - 1.0) if thicket else 0.0
+            if extra_n <= 0 or not any(  # no thicket in the cell (looked at on a 3 x 3 grid): skip the attempts
+                stands.noise(x_lo + fx * size, y_hi - fy * size) == "thicket" for fx in (0, 0.5, 1) for fy in (0, 0.5, 1)
+            ):
+                continue
+            # a thicket is denser than the canopy rule plants: add trees between the others, closer than the normal spacing
+            xrng = seeded(f"ortho:thicket:{r0}:{c0}")
+            extra = int(extra_n) + (xrng.random() < extra_n % 1)
+            gap = spacing * float(thicket.get("spacing_scale", 1.0))
+            placed = 0
+            for _ in range(extra * 60):
+                if placed >= extra:
+                    break
+                got = candidate(xrng, x_lo, y_hi, size, cell, "thicket")
+                if got is None:
+                    continue
+                x, y, row, col = got
+                if stands.at(x, y) != "thicket" or not free(x, y, gap):
+                    continue
+                add(x, y)
+                trees.append(plant(x, y, xrng, "thicket", r0 + row, c0 + col))
                 placed += 1
     return trees
 
@@ -370,6 +546,17 @@ def load_tree_overrides(path: Path | None, origin: tuple[float, float] | None) -
             raise ValueError(f"{where}: `radius` is metres, above 0 and at most 50")
         out.append((float(at[0]) - origin[0], float(at[1]) - origin[1], float(radius)))  # type: ignore[index]
     return out
+def clearance_zones(buildings: list[dict], graph: dict, cfg: dict, objects: list[tuple[float, float]] | None):
+    """(buildings, roads, placed objects) grown by the cfg's ``building_clearance_m``, ``road_clearance_m``, ``object_clearance_m``; None where empty."""
+    bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
+    bzone = unary_union(bpolys).buffer(float(cfg["building_clearance_m"])) if bpolys else None
+    rzone = road_zone(graph, float(cfg["road_clearance_m"]))
+    ozone = (
+        unary_union([Point(x, y).buffer(float(cfg["object_clearance_m"])) for x, y in objects])
+        if objects
+        else None
+    )
+    return bzone, rzone, ozone
 
 
 def make_trees(
@@ -381,6 +568,7 @@ def make_trees(
     water: BaseGeometry | None = None,
     origin: tuple[float, float] | None = None,
     removed: list[tuple[float, float, float]] | None = None,
+    wet: BaseGeometry | None = None,
 ) -> list[dict]:
     """Every tree of the map: planted from the orthophoto detector (:func:`ortho_trees`, ``make ortho-trees``).
 
@@ -390,24 +578,20 @@ def make_trees(
     ``object_clearance_m`` away from; ``water`` (local metres) is where the water patches lie: no trunk in it. ``removed`` are the per-tree
     overrides (:func:`load_tree_overrides`): circles ``(x, y, radius)`` in local metres, every planted tree with its trunk in one is dropped
     after the planting, so no other tree moves.
+    ``wet`` (see :func:`wet_zone`: that and the water ground areas) is what the swamp stand keeps near; none: no swamp.
     """
     if origin is None or not (Path(cfg["ortho_dir"]) / "trees.json").is_file():
         return []
-    bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
-    bzone = unary_union(bpolys).buffer(float(cfg["building_clearance_m"])) if bpolys else None
-    rzone = road_zone(graph, float(cfg["road_clearance_m"]))
-    ozone = (
-        unary_union([Point(x, y).buffer(float(cfg["object_clearance_m"])) for x, y in objects])
-        if objects
-        else None
-    )
+    bzone, rzone, ozone = clearance_zones(buildings, graph, cfg, objects)
     shapely.prepare(terrain.coverage)
+    if wet is not None:  # every water: the water ground areas too, not only the wet areas of the water patches
+        water = wet
     for g in (bzone, rzone, ozone, water):
         if g is not None:
             shapely.prepare(g)
 
-    def tree(x, y, rng, parcel, forest, src, scale=None):
-        shape_ = "cone" if forest and rng.random() < 0.6 else "box"
+    def tree(x, y, rng, parcel, forest, src, scale=None, cone_share=0.6):
+        shape_ = "cone" if forest and rng.random() < cone_share else "box"
         palette = cfg["forest_canopy_colours"] if forest else cfg["canopy_colours"]
         return {
             "src": src,
@@ -419,9 +603,10 @@ def make_trees(
             "rot": round(rng.random() * math.pi / 2, 3),
             "shape": shape_,
             "colour": palette[rng.randrange(len(palette))],
+            "forest": forest,
         }
 
-    trees = ortho_trees(tree, terrain, (bzone, rzone, ozone, water), cfg, origin)
+    trees = ortho_trees(tree, terrain, (bzone, rzone, ozone, water), cfg, origin, wet)
     if removed:
         kept = [t for t in trees if not any(math.hypot(t["x"] - x, t["y"] - y) <= r for x, y, r in removed)]
         for x, y, r in removed:
@@ -429,6 +614,66 @@ def make_trees(
                 print(f"props: warning: {DEFAULT_TREE_OVERRIDES.name}: no tree within {r:g} m of local ({x:.1f}, {y:.1f}); the entry does nothing", file=sys.stderr)
         trees = kept
     return trees
+
+
+def plan_ground_objects(
+    parcels_doc: dict,
+    buildings: list[dict],
+    graph: dict,
+    terrain: Terrain,
+    trees: list[dict],
+    tree_cfg: dict,
+    cfg: dict,
+    objects: list[tuple[float, float]] | None = None,
+    water: BaseGeometry | None = None,
+    wet: BaseGeometry | None = None,
+) -> list[dict]:
+    """Logs, stumps, boulders, root plates, anthills and burrows on the forest ground (see :mod:`groundobjects`); none without orthophoto canopy data.
+    ``wet`` (see :func:`wet_zone`) buffered by the swamp stand's reach is swamp ground: no anthills there.
+
+    Allowed where the canopy mask is set, on ground of the ``ground_kinds`` types, not on a property (parcel of kind
+    ``avoid_parcel_kinds``), not within the clearances of a building, road, placed object or water.
+    """
+    from drycastle_pipeline.groundobjects import make_ground_objects
+
+    origin = parcels_doc.get("origin_epsg5514")
+    if origin is None or not (Path(tree_cfg["ortho_dir"]) / "trees.json").is_file():
+        return []
+    _, mask, minx, maxy, res = canopy_mask(tree_cfg)
+    ox, oy = origin
+    x0, y_top = minx - ox, maxy - oy
+    units = ground_units(parcels_doc)
+    forest = [shape(u["polygon"]) for u in units if u["kind"] in cfg["ground_kinds"]]
+    avoid = [shape(p["polygon"]) for p in parcels_doc["parcels"] if p["kind"] in cfg["avoid_parcel_kinds"]]
+    bzone, rzone, ozone = clearance_zones(buildings, graph, cfg, objects)
+    keep_out = [g for g in (bzone, rzone, ozone, water, *avoid) if g is not None]
+    forest_zone = unary_union(forest) if forest else None
+    if forest_zone is None:
+        return []
+    off = unary_union(keep_out) if keep_out else None
+    for g in (terrain.coverage, forest_zone, off):
+        if g is not None:
+            shapely.prepare(g)
+    h, w = mask.shape
+
+    def inside(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+        col = np.floor((xs - x0) / res).astype(int)
+        row = np.floor((y_top - ys) / res).astype(int)
+        ok = (row >= 0) & (row < h) & (col >= 0) & (col < w)
+        ok[ok] = mask[row[ok], col[ok]]
+        ok &= shapely.contains_xy(terrain.coverage, xs, ys) & shapely.contains_xy(forest_zone, xs, ys)
+        if off is not None:
+            ok &= ~shapely.contains_xy(off, xs, ys)
+        return ok
+
+    stands = tree_cfg.get("stands")
+    swamp = wet.buffer(float(stands["swamp"]["reach_m"])) if wet is not None and stands and "swamp" in stands else None
+    if swamp is not None:
+        shapely.prepare(swamp)
+    return make_ground_objects(
+        trees, tree_cfg, cfg, mask, (x0, y_top, res), inside, lambda xs, ys: terrain.surface(xs, ys), seeded, CANOPY_CELL_PX,
+        (lambda xs, ys: shapely.contains_xy(swamp, xs, ys)) if swamp is not None else None,
+    )
 
 
 # --- spawns ---------------------------------------------------------------------------------
@@ -678,20 +923,24 @@ def run_props(
     elif not parcels_doc.get("origin_epsg5514"):
         print("props: warning: parcels.json has no origin_epsg5514, so the orthophoto trees cannot be placed; the map has no trees",
               file=sys.stderr)
+    water = water_zone(plan, terrain)
+    wet = wet_zone(ground_units(parcels_doc), water_kinds(types), water)
     trees = make_trees(
         buildings,
         graph,
         terrain,
         tree_cfg,
         objects=[(o["position"][0], o["position"][1]) for o in plan.objects],
-        water=water_zone(plan, terrain),
+        water=water,
         origin=tuple(parcels_doc["origin_epsg5514"]) if parcels_doc.get("origin_epsg5514") else None,
         removed=load_tree_overrides(tree_overrides_path, tuple(origin) if origin else None),
+        wet=wet,
     )
     trees = cap_trees(trees, chunk_m, int(fcfg["trees"]["max_per_chunk"]))
-    # water: the water ground areas and the wet part of the water patches
-    wet = [shape(u["polygon"]) for u in ground_units(parcels_doc) if u["kind"] in water_kinds(types)]
-    wet_patches = water_zone(plan, terrain)
+    ground_objects = plan_ground_objects(
+        parcels_doc, buildings, graph, terrain, trees, tree_cfg, fcfg["ground_objects"],
+        objects=[(o["position"][0], o["position"][1]) for o in plan.objects], water=water, wet=wet,
+    )
     spawns = make_spawns(
         spawn_zones,
         buildings,
@@ -700,7 +949,7 @@ def run_props(
         terrain,
         scfg,
         chunk_m,
-        water=unary_union(wet + ([wet_patches] if wet_patches is not None else [])) if wet or wet_patches is not None else None,
+        water=wet,  # the water ground areas and the wet part of the water patches
     )
     if spawn_zones and not spawns:
         print("props: warning: there are player_spawn zones but no usable ground in them; no spawn points", file=sys.stderr)
@@ -708,7 +957,7 @@ def run_props(
     if plan.cables:  # the wires between placed utility poles; the game strings them (docs/utility-poles.md)
         objects_doc["cables"] = plan.cables
     (work_dir / "objects.json").write_text(json.dumps(objects_doc, indent=1, sort_keys=True) + "\n")
-    props = {"version": PROPS_FORMAT_VERSION, "fences": fences, "trees": trees}
+    props = {"version": PROPS_FORMAT_VERSION, "fences": fences, "trees": trees, "ground_objects": ground_objects}
     (work_dir / "fences.json").write_text(json.dumps(fences_doc(fences, plan.groups, fcfg["fences"]), indent=1, sort_keys=True) + "\n")
     spawn_doc = {
         "version": SPAWNS_FORMAT_VERSION,
@@ -732,6 +981,7 @@ def run_props(
     return {
         "fences": len(fences),
         "trees": len(trees),
+        "ground_objects": len(ground_objects),
         "spawns": len(spawns),
         "objects": len(plan.objects),
         "lamps": len(lamps),

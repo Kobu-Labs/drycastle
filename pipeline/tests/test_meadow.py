@@ -73,3 +73,60 @@ def test_voronoi_patches_are_uniform_and_clumps_keep_the_mean() -> None:
     assert len(np.unique(v)) < gx.size / 4  # many cells share a patch
     f = meadow.clump(gx.ravel() + 0.5, gy.ravel() + 0.5, 0.8, 3.0, 1500)
     assert 0.8 < float(f.mean()) < 1.2 and float(f.min()) < 0.4 < 1.5 < float(f.max())
+
+
+def test_forest_floor_kinds_are_small_and_lie_low() -> None:
+    from drycastle_pipeline import detail_meshes as dm
+
+    meshes = dm.clutter_meshes()
+    assert set(dm.FOREST_FLOOR) <= set(meshes)
+    span = lambda k: np.ptp(meshes[k].tris.reshape(-1, 3), axis=0)  # noqa: E731
+    assert 1.0 <= span("branch")[:2].max() <= 1.5 and span("branch")[2] < 0.12  # lying: 1 to 1.5 m long, low
+    assert 0.5 <= span("moss_mound")[:2].max() <= 0.9 and span("moss_mound")[2] < 0.25
+    assert span("stump_small")[2] < 0.35
+    assert 0.6 <= span("fern_big")[2] <= 0.8 and "fern_big" in dm.TINTABLE
+    assert max(span("mushroom")[:2]) < 0.4 and span("mushroom")[2] < 0.2
+
+
+def test_forest_floor_is_a_clumped_layer_and_the_forest_total_stays_in_range() -> None:
+    from drycastle_pipeline import detail_meshes as dm
+    from drycastle_pipeline.rules import load_section
+
+    cfg = load_section("detail")["meadow"]
+    layers = {layer.name: layer for layer in meadow.meadow_layers(cfg)}
+    # one layer for the 60 m kinds; the toadstools and stumps ride the litter layer in the forest's mix (a layer is a draw per tile, see MapLoader.Meadow)
+    assert set(layers["floor"].kinds) == {"moss_mound", "branch", "fern_big"}
+    woodland = layers["litter"].mix(int(cfg["zones"]["forest"]["mixes"][0][0]))
+    assert {k for k, _ in woodland} == {"leaf", "stick", "mushroom", "stump_small"} and abs(sum(w for _, w in woodland) - 1.0) < 1e-6
+    assert set(dm.FOREST_FLOOR) <= {k for layer in layers.values() for mix in layer.mixes for k, _ in mix}
+    assert float(cfg["layers"]["floor"]["clump"]) > 0.5
+    assert "floor" not in cfg["field"]  # fields grow none of it
+    # plain forest floor, per 100 m2 (cells of cell_m, noise and clump average 1): the target is 15 to 25 pieces
+    f = cfg["forest"]
+    per100 = sum(float(f[n].get("interior", 0.0)) * float(cfg["layers"][n]["max_per_cell"]) for n in layers if n in f) * 100 / float(cfg["cell_m"]) ** 2
+    assert 15 <= per100 <= 25
+    # they favour trunks and litter over the open floor
+    assert f["floor"]["tree"] > 3 * f["floor"]["interior"] and f["floor"]["litter"] > 2 * f["floor"]["interior"]
+    assert f["litter"]["litter"] > 3 * f["litter"]["interior"]  # toadstools gather on the leaf litter round the trunks
+
+
+def test_swamp_ground_carries_the_swamp_mix_and_its_clutter_is_reeds() -> None:
+    from shapely.geometry import box
+
+    from drycastle_pipeline.rules import load_section
+
+    cfg = load_section("detail")["meadow"]
+    m = meadow.new_meadow(cfg, 250.0)
+    gx, gy = np.meshgrid(np.arange(10, 40), np.arange(10, 40))
+    gx, gy = gx.ravel(), gy.ravel()
+    ctx = type("Ctx", (), {"fences": [], "buildings": [], "water": None, "swamp": box(30.0, 0.0, 200.0, 200.0)})()  # x >= 30 m: cells 15 and on
+    for atype in ("forest", "field"):
+        zone, _, _ = meadow.zone_cells(m, ctx, atype, gx, gy, np.zeros(len(gx), bool), cfg)
+        wet = (gx + 0.5) * m.cell_m >= 30.0
+        assert wet.any() and (~wet).any()
+        assert (zone[wet] >> 4 == 9).all() and not (zone[~wet] >> 4 == 9).any()
+        assert (zone[wet] & 15 == 8 - int(cfg["fresh_water"])).all()  # fresher, like beside water
+    swamp = 9  # the mix id the game reads (detail.meadow.mixes: swamp)
+    tuft = next(layer for layer in m.layers if layer.name == "tuft")
+    assert {k for k, _ in tuft.mix(swamp)} == {"reed", "tall_grass"}
+    assert all(k in {"reed", "tall_grass", "buttercup", "fern", "pebble", "leaf", "stick", "moss_mound", "branch"} for layer in m.layers for k, _ in layer.mix(swamp))

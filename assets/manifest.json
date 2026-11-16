@@ -3602,8 +3602,8 @@
       "source": "scripts/make_amphibious_model.py (original geometry written as code; python3 -I scripts/make_amphibious_model.py rebuilds the file)",
       "pack": "drycastle-generated-models",
       "used_for": "godot/shooter vehicle id amphibious (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground at the centre, metres), separate nodes for hull, the four wheels, the two front steering pivots, propeller, gun_mount, gun, barrel"
-      },
-      {
+    },
+    {
       "id": "pack:drycastle-generated-models/bigfoot_head",
       "category": "other",
       "name": "Bigfoot head (faceted ape-like headgear with a crest, mane and amber eyes)",
@@ -3623,8 +3623,8 @@
       "source": "scripts/make_bigfoot_head_model.py (original geometry written as code; python3 -I scripts/make_bigfoot_head_model.py rebuilds the file)",
       "pack": "drycastle-generated-models",
       "used_for": "godot/shooter item id bigfoot_head (data/items.json `model`), worn by CharacterView on the head bone and rendered into ui/icons/items/bigfoot_head.png; authored in the headgear slot frame (forward -Z, origin at the middle of the head, metres), one mesh node, 8 flat-colour materials"
-      },
-      {
+    },
+    {
       "id": "pack:drycastle-generated-models/gold_chain",
       "category": "other",
       "name": "Gold chain (chunky necklace of interlocked links with a diamond pendant)",
@@ -3686,8 +3686,8 @@
       "source": "scripts/make_satellite_dish_model.py (original geometry written as code; python3 -I scripts/make_satellite_dish_model.py rebuilds the file)",
       "pack": "drycastle-generated-models",
       "used_for": "the dishes of the Thieves event (pipeline/src/drycastle_pipeline/dishes.py places them on house walls); origin on the wall at the arm's root, +X out of the wall (set rotation_deg to the way the wall faces and z to the height of the origin; it reaches 0.4 m above it), a node each for mount, dish and lnb"
-      },
-      {
+    },
+    {
       "id": "pack:welcome-sign/welcome_sign",
       "category": "other",
       "name": "Welcome sign (VITAJTE V OBCI)",
@@ -3877,6 +3877,63 @@
       "alpha": false,
       "tintable": false,
       "mean_colour": "#674f32",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "drycastle-generated-textures"
+    },
+    {
+      "id": "moss",
+      "name": "Moss",
+      "file": "drycastle-generated-textures/moss.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.5,
+        1.5
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#5b983c",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "drycastle-generated-textures"
+    },
+    {
+      "id": "mud",
+      "name": "Mud",
+      "file": "drycastle-generated-textures/mud.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        2.0,
+        2.0
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#453525",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "drycastle-generated-textures"
+    },
+    {
+      "id": "puddle",
+      "name": "Puddle",
+      "file": "drycastle-generated-textures/puddle.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        3.0,
+        3.0
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#2b3532",
       "licence": "CC0",
       "source": "scripts/make_textures.py",
       "pack": "drycastle-generated-textures"

@@ -25,7 +25,7 @@ from drycastle_pipeline.ground import ground_types, ground_units, type_colours, 
 from drycastle_pipeline.landmarks import build_landmark
 from drycastle_pipeline.meshes import Mesh, building_mesh, collision_mesh
 from drycastle_pipeline.patches import node_name, patch_meshes, plan_patches
-from drycastle_pipeline.propmeshes import fence_mesh, fence_meshes, parcel_props_meshes, trees_mesh
+from drycastle_pipeline.propmeshes import fence_mesh, fence_meshes, ground_objects_mesh, parcel_props_meshes, trees_mesh
 from drycastle_pipeline.roads import clip_graph, road_mesh
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.terrain import Terrain, cut_holes, load_terrain
@@ -39,7 +39,11 @@ GREY = (128, 128, 128)
 class ParcelColours:
     """Flat terrain colour by the kind of the parcel or ground area under a point; a shade is picked per unit."""
 
-    def __init__(self, parcels: list[dict], palette: dict[str, list[str]]):
+    def __init__(self, parcels: list[dict], palette: dict[str, list[str]], blend: dict | None = None, swamp: dict | None = None):
+        """``blend`` ({kinds, radius_m}, the terrain's ``colour_blend``): around the outline of ground of these kinds the colour is the mean of the
+        colours within ``radius_m``, so a forest runs into its neighbours over a band instead of ending at a line.
+        ``swamp`` ({zone, kinds, colours}): ground of these kinds inside the zone takes one of these colours instead (the wet floor of
+        ``detail.swamp``), and its outline is blended like the others."""
         from shapely.geometry import shape
 
         self.parcels = sorted(parcels, key=lambda p: p["id"])
@@ -48,19 +52,58 @@ class ParcelColours:
         self.palette = {k: [hex_to_rgb(c) for c in v] for k, v in palette.items()}
         self.fallback = self.palette["other"][0]
         self.parcel_colour = [self._pick(p) for p in self.parcels]
+        self.swamp = swamp["zone"] if swamp and swamp.get("zone") is not None and not swamp["zone"].is_empty else None
+        if self.swamp is not None:
+            shapely.prepare(self.swamp)
+            shades = [hex_to_rgb(c) for c in swamp["colours"]]
+            kinds_wet = set(swamp["kinds"])
+            # the wet colour of each unit of a swamp kind (None: the unit stays as it is)
+            self.swamp_colour = [self._shade(p, shades) if p["kind"] in kinds_wet else None for p in self.parcels]
+        kinds = set((blend or {}).get("kinds", []))
+        self.blend_m = float((blend or {}).get("radius_m", 0.0))
+        edges = [g.boundary for g, p in zip(self.polys, self.parcels) if p["kind"] in kinds] if self.blend_m > 0 else []
+        if self.swamp is not None and self.blend_m > 0:
+            edges.append(self.swamp.boundary)
+        self.edges = shapely.STRtree(edges) if edges else None
 
     def _pick(self, p: dict) -> list[int]:
-        shades = self.palette.get(p["kind"], self.palette["other"])
+        return self._shade(p, self.palette.get(p["kind"], self.palette["other"]))
+
+    @staticmethod
+    def _shade(p: dict, shades: list[list[int]]) -> list[int]:
         h = int.from_bytes(hashlib.sha256(p["id"].encode()).digest()[:4], "big")
         return shades[h % len(shades)]
 
     def __call__(self, pts: np.ndarray) -> np.ndarray:
+        out = self._flat(pts)
+        if self.edges is None or not len(pts):
+            return out
+        near = np.unique(self.edges.query(shapely.points(pts[:, 0], pts[:, 1]), predicate="dwithin", distance=self.blend_m)[0])
+        if not len(near):
+            return out
+        # mean of the flat colour on two rings around the point (and the point itself, twice): a soft band, as wide as the radius on each side
+        ang = np.arange(8) * (math.pi / 4)
+        offs = np.concatenate([np.zeros((2, 2)), 0.5 * self.blend_m * np.c_[np.cos(ang), np.sin(ang)], self.blend_m * np.c_[np.cos(ang + math.pi / 8), np.sin(ang + math.pi / 8)]])
+        acc = np.zeros((len(near), 3))
+        for o in offs:
+            acc += self._flat(pts[near] + o)
+        out[near] = np.rint(acc / len(offs)).astype(np.uint8)
+        return out
+
+    def _flat(self, pts: np.ndarray) -> np.ndarray:
         out = np.tile(np.array(self.fallback, np.uint8), (len(pts), 1))
         found = np.full(len(pts), len(self.parcels))
         idx, tidx = self.tree.query(shapely.points(pts[:, 0], pts[:, 1]), predicate="within")
         np.minimum.at(found, idx, tidx)
-        for i in np.nonzero(found < len(self.parcels))[0]:
+        hit = np.nonzero(found < len(self.parcels))[0]
+        for i in hit:
             out[i] = self.parcel_colour[found[i]]
+        if self.swamp is not None and len(hit):
+            wet = hit[shapely.contains_xy(self.swamp, pts[hit, 0], pts[hit, 1])]
+            for i in wet:
+                c = self.swamp_colour[found[i]]
+                if c is not None:
+                    out[i] = c
         return out
 
 
@@ -80,6 +123,7 @@ class MapScene:
     graph: dict | None = None
     props: dict | None = None
     trees: list[dict] | None = None  # tree records as exported (z with the exaggeration), for trees.json
+    ground_objects: list[dict] | None = None  # logs, stumps, boulders, root plates, anthills, burrows (z with the exaggeration), for ground_objects.json
     spawns: dict | None = None
     warnings: list[str] = field(default_factory=list)  # stale or unusable edits entries
     windows: list[dict] = field(default_factory=list)  # tagged window panes, see building_detail
@@ -109,6 +153,18 @@ def _by_chunk(mesh: Mesh, chunk_m: float) -> dict[Chunk, Mesh]:
 def _read(work_dir: Path, name: str) -> dict | None:
     path = work_dir / name
     return json.loads(path.read_text()) if path.is_file() else None
+
+
+def _swamp_colours(units: list[dict], types: dict, plan, terrain: Terrain, rules_path) -> dict | None:
+    """The swamp ground for :class:`ParcelColours`: the zone of ``detail.swamp_zone`` with the kinds and colours of ``detail.swamp`` (the
+    wet floor is the terrain's own colour, so that it fades into the ground beside it; the detail stage lays mud and puddles on it)."""
+    from drycastle_pipeline.detail import swamp_zone
+
+    stands = load_section("props", rules_path)["trees"].get("stands") or {}
+    sc = load_section("detail", rules_path).get("swamp")
+    if plan is None or sc is None or "swamp" not in stands:
+        return None
+    return {"zone": swamp_zone(units, types, plan, terrain, float(stands["swamp"]["reach_m"])), "kinds": sc["kinds"], "colours": sc["colours"]}
 
 
 def _raised(r: dict, dz: float) -> dict:
@@ -225,7 +281,8 @@ def build_scene(
                 scene.nodes.setdefault(key, {})[name] = mesh
 
     tcfg = load_section("terrain", rules_path)
-    colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(types)})
+    colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(types)}, tcfg.get("colour_blend"),
+                            _swamp_colours(ground_units(parcels_doc), types, pplan, t, rules_path))
     dec = int(tcfg["collision_decimate"])
     grey = np.array(GREY, np.uint8)
     # the hatch of each bunker is a hole in the ground (#224): the terrain, seen and collided with, has it cut out
@@ -286,6 +343,8 @@ def build_scene(
         fences = [{**s, "za": s["za"] * k, "zb": s["zb"] * k} for s in scene.props["fences"]]
         trees = [{**tr, "z": tr["z"] * k} for tr in scene.props["trees"]]
         scene.trees = trees
+        if "ground_objects" in scene.props:  # props.json of a run before map 0.13.0 has none: no file, no meshes
+            scene.ground_objects = [{**o, "z": o["z"] * k} for o in scene.props["ground_objects"]]
         chunk_of_parcel = {p["id"]: tuple(p["chunk"]) for p in parcels_doc["parcels"]}
 
         def owned(it: dict) -> bool:  # OSM trees have no parcel (null or absent): chunk level
@@ -305,9 +364,14 @@ def build_scene(
         by_tree = _group(
             [t for t in trees if not owned(t)], lambda t: _chunk((t["x"], t["y"]), chunk_m)
         )
-        for key in sorted(set(by_fence) | set(by_tree)):
+        by_ground = _group(scene.ground_objects or [], lambda o: _chunk((o["x"], o["y"]), chunk_m))
+        for key in sorted(set(by_fence) | set(by_tree) | set(by_ground)):
             fence_flat, textured = fence_meshes(by_fence.get(key, []), pcfg["fences"])
-            visual = Mesh.concat([fence_flat, trees_mesh(by_tree.get(key, []), pcfg["trees"])])
+            visual = Mesh.concat([
+                fence_flat,
+                trees_mesh(by_tree.get(key, []), pcfg["trees"]),
+                ground_objects_mesh(by_ground.get(key, []), pcfg["ground_objects"]),
+            ])
             put("props", {key: visual})
             for tid, mesh in textured.items():
                 put(tex_node_name("props", tid), {key: mesh})
