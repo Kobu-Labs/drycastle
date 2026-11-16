@@ -30,6 +30,8 @@ public sealed class PackTreeConfig : IVersioned
     public float BulkShare { get; set; } = 0.85f;
     public bool Shadows { get; set; } = true;
     public Dictionary<string, List<PackTreeEntry>> Shapes { get; set; } = new();
+    public GroundObjectsConfig GroundObjects { get; set; } = new();
+    public UndergrowthConfig Undergrowth { get; set; } = new();
 
     public static PackTreeConfig Parse(string json)
     {
@@ -43,6 +45,8 @@ public sealed class PackTreeConfig : IVersioned
         if (c.BulkShare < 0 || c.BulkShare > 1) throw new DataFileException("pack_trees.json: bulk_share must be within 0 and 1");
         foreach (var (shape, list) in c.Shapes)
             if (list.Any(e => e.Name.Length == 0 || e.Weight < 0)) throw new DataFileException($"pack_trees.json: shape '{shape}' has an entry without a name or with a negative weight");
+        c.GroundObjects.Validate();
+        c.Undergrowth.Validate();
         return c;
     }
 
@@ -234,10 +238,21 @@ public sealed class PackModelMesh
     public required IReadOnlyList<PackSurface> Surfaces { get; init; }
     int? _triangles;
     public int Triangles => _triangles ??= Surfaces.Sum(s => s.Indices.Length / 3);
+
+    (Vector3 Min, Vector3 Max)? _bounds;
+    /// <summary>The box of all vertices in the model's frame.</summary>
+    public (Vector3 Min, Vector3 Max) Bounds => _bounds ??= ComputeBounds();
+
+    (Vector3, Vector3) ComputeBounds()
+    {
+        var lo = new Vector3(float.MaxValue); var hi = new Vector3(float.MinValue);
+        foreach (var s in Surfaces) foreach (var v in s.Vertices) { lo = Vector3.Min(lo, v); hi = Vector3.Max(hi, v); }
+        return Surfaces.Count == 0 ? (Vector3.Zero, Vector3.Zero) : (lo, hi);
+    }
 }
 
-/// <summary>A pack tree to draw: its base (Godot axes), turn about the up axis, uniform scale and the model's id.</summary>
-public readonly record struct PackPlacement(Vector3 Base, float Rot, float Scale, int Model);
+/// <summary>A pack model to draw (tree, ground object, undergrowth): its base (Godot axes), turn about the up axis, uniform scale, the model's id and a stretch of the model's Z axis on top of the scale (a log's length; 1 = none).</summary>
+public readonly record struct PackPlacement(Vector3 Base, float Rot, float Scale, int Model, float Stretch = 1f);
 
 /// <summary>The triangles of every placement that wears one material, as one mesh: positions relative to the tile (centre x, z), UV2 = the tree's base (x, z) in the same frame.</summary>
 public sealed class PackBucket
@@ -268,7 +283,7 @@ public static class PackTileMesher
                 var first = b.V.Count;
                 for (var i = 0; i < surface.Vertices.Length; i++)
                 {
-                    b.V.Add(Turn(surface.Vertices[i], s, c) * t.Scale + origin);
+                    b.V.Add(Turn(surface.Vertices[i] * new Vector3(t.Scale, t.Scale, t.Scale * t.Stretch), s, c) + origin);
                     b.N.Add(Turn(surface.Normals[i], s, c));
                     b.Uv.Add(surface.Uv[i]);
                     b.Uv2.Add(baseUv);

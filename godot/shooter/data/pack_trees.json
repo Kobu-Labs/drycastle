@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_note": "Pack trees (#287): detailed trees of the private nature pack (assets-private/synty/glb/nature) within near_m of the player in place of the baked box/pyramid trees. Without the pack, with DRYCASTLE_PACK_TREES=0, or on a map whose trees.json lacks model.base_uv2, nothing changes. A tree's base point inside near_m is a pack tree and outside it a baked one (cut in the shaders, global parameter tree_cut); over the last fade_m inside near_m both are drawn, dithered against each other. tile_m: the pack trees are merged into one mesh per tile and material (a tile costs one draw per material; smaller tiles cull better, bigger ones draw less and take longer to build). ahead_m: tiles are built this far past near_m, and freed 2 * ahead_m past it. max_in_flight: tiles being built on worker threads at once. budget_ms: what handing finished tiles to the renderer may take per frame (one surface at least). scale_min / scale_max: a tree is scaled to the height of the code-built tree; a model is chosen among those whose scale lies within this span (the nearest one when none does). bulk_share: the share of trees that take a bulk model (single material, the shared atlas: they merge into one draw per tile); the others take an occasional model (own leaf textures, more draws). shadows: whether pack trees cast shadows themselves; off, the baked tree in the same place casts the sun shadow for them (on roughly doubled the draw calls of a view). shapes: the models that stand in for the tree shapes of trees.json (cone, box), by name in nature/manifest.json, chosen by a hash of the tree's position in proportion to weight; bulk marks a bulk model; a name the pack does not have is skipped.",
+  "_note": "Pack trees (#287): detailed trees of the private nature pack (assets-private/synty/glb/nature) within near_m of the player in place of the baked box/pyramid trees. Without the pack, with DRYCASTLE_PACK_TREES=0, or on a map whose trees.json lacks model.base_uv2, nothing changes. A tree's base point inside near_m is a pack tree and outside it a baked one (cut in the shaders, global parameter tree_cut); over the last fade_m inside near_m both are drawn, dithered against each other. tile_m: the pack trees are merged into one mesh per tile and material (a tile costs one draw per material; smaller tiles cull better, bigger ones draw less and take longer to build). ahead_m: tiles are built this far past near_m, and freed 2 * ahead_m past it. max_in_flight: tiles being built on worker threads at once. budget_ms: what handing finished tiles to the renderer may take per frame (one surface at least). scale_min / scale_max: a tree is scaled to the height of the code-built tree; a model is chosen among those whose scale lies within this span (the nearest one when none does). bulk_share: the share of trees that take a bulk model (single material, the shared atlas: they merge into one draw per tile); the others take an occasional model (own leaf textures, more draws). shadows: whether pack trees cast shadows themselves; off, the baked tree in the same place casts the sun shadow for them (on roughly doubled the draw calls of a view). shapes: the models that stand in for the tree shapes of trees.json (cone, box), by name in nature/manifest.json, chosen by a hash of the tree's position in proportion to weight; bulk marks a bulk model; a name the pack does not have is skipped. ground_objects: the pack model per kind of ground_objects.json (log, stump, boulder, rootplate), chosen by a hash of the object's position in proportion to weight, scaled so the model's horizontal radius is radius_m times the object's scale (radius_m is the code-built radius at scale 1; the file's model.kinds.KIND.radius_m wins); a log is stretched along the model's Z to its len; yaw_deg is added to rot (the pack log lies along Z; check it against the code-built log's axis). The baked objects are cut by the shared UV2 base, so every kind of the file needs a model here or its baked objects vanish inside the radius. undergrowth: client-only clutter on the forest floor (meadow.bin cells whose zone mix is forest_mix), generated on the worker per tile from a hash of the 2 m cell, no collision, no shadows, gone beyond near_m (dithered like the trees). Per kind: per_100m2 expected pieces on forest floor, scale_min/max, clump (0 even .. 1 patches with gaps), foot (density factor at a trunk, falling to 1 at foot_m), models by weight. tris_per_tile: over it the scatter is thinned (hash order, all kinds alike). trunk_clear_m: nothing within this times the tree's scale of a trunk. clump_m: lattice of the clump noise. Models that wear the Plants atlas material (ferns, bushes, grass, tinted colour) add one material, so one draw per tile; all others share the atlas draw of the bulk trees.",
   "near_m": 70,
   "fade_m": 14,
   "tile_m": 48,
@@ -42,6 +42,60 @@
       { "name": "SM_Tree_Birch_03", "weight": 2 },
       { "name": "SM_Tree_Birch_04", "weight": 2 },
       { "name": "SM_Tree_Generic_01", "weight": 2 }
+    ]
+  },
+  "ground_objects": {
+    "enabled": true,
+    "kinds": {
+      "log": { "radius_m": 0.3, "yaw_deg": 90, "models": [ { "name": "SM_Tree_Log_01", "weight": 1 }, { "name": "SM_Tree_Log_02", "weight": 1 } ] },
+      "stump": { "radius_m": 0.35, "models": [ { "name": "SM_Tree_Stump_01", "weight": 2 }, { "name": "SM_Tree_Stump_03", "weight": 2 } ] },
+      "boulder": { "radius_m": 0.9, "models": [ { "name": "SM_Rock_Boulder_01", "weight": 3 }, { "name": "SM_Rock_Rounded_01", "weight": 1 }, { "name": "SM_Rock_Small_01", "weight": 1 } ] },
+      "rootplate": { "radius_m": 1.0, "models": [ { "name": "SM_Tree_Stump_02", "weight": 1 } ] }
+    }
+  },
+  "undergrowth": {
+    "enabled": true,
+    "forest_mix": 5,
+    "tris_per_tile": 60000,
+    "clump_m": 6,
+    "foot_m": 4,
+    "trunk_clear_m": 0.4,
+    "kinds": [
+      { "name": "fern", "per_100m2": 3.0, "scale_min": 0.7, "scale_max": 1.3, "clump": 0.6, "foot": 2.0, "models": [
+        { "name": "SM_Plant_Fern_01", "weight": 1 },
+        { "name": "SM_Plant_Fern_02", "weight": 1 },
+        { "name": "SM_Plant_Fern_03", "weight": 1 }
+      ] },
+      { "name": "bush", "per_100m2": 0.5, "scale_min": 0.6, "scale_max": 1.1, "clump": 0.4, "foot": 2.5, "models": [
+        { "name": "SM_Plant_Bush_01", "weight": 1 },
+        { "name": "SM_Plant_Bush_03", "weight": 1 }
+      ] },
+      { "name": "mushroom", "per_100m2": 0.6, "scale_min": 0.8, "scale_max": 1.4, "clump": 0.8, "foot": 3.0, "models": [
+        { "name": "SM_Plant_Mushrooms_03", "weight": 1 },
+        { "name": "SM_Plant_Mushrooms_04", "weight": 1 },
+        { "name": "SM_Plant_Mushrooms_05", "weight": 1 },
+        { "name": "SM_Plant_Mushrooms_06", "weight": 1 }
+      ] },
+      { "name": "twig", "per_100m2": 5.0, "scale_min": 0.8, "scale_max": 1.6, "clump": 0.3, "foot": 2.0, "models": [
+        { "name": "SM_Tree_Twig_01", "weight": 1 },
+        { "name": "SM_Tree_Twig_02", "weight": 1 },
+        { "name": "SM_Tree_Twig_03", "weight": 1 },
+        { "name": "SM_Tree_Twig_04", "weight": 1 },
+        { "name": "SM_Tree_Twig_05", "weight": 1 },
+        { "name": "SM_Tree_Branch_01", "weight": 0.3 }
+      ] },
+      { "name": "rock", "per_100m2": 1.2, "scale_min": 0.8, "scale_max": 2.0, "clump": 0.2, "foot": 1.5, "models": [
+        { "name": "SM_Rock_01", "weight": 1 },
+        { "name": "SM_Rock_02", "weight": 1 },
+        { "name": "SM_Rock_03", "weight": 1 },
+        { "name": "SM_Rock_04", "weight": 1 },
+        { "name": "SM_Rock_Small_02", "weight": 1 }
+      ] },
+      { "name": "grass", "per_100m2": 2.0, "scale_min": 0.8, "scale_max": 1.3, "clump": 0.7, "foot": 1.2, "models": [
+        { "name": "SM_Plant_Grass_02", "weight": 1 },
+        { "name": "SM_Plant_Grass_04", "weight": 1 },
+        { "name": "SM_Plant_Grass_05", "weight": 1 }
+      ] }
     ]
   }
 }

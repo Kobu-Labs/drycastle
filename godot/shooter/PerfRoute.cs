@@ -26,7 +26,7 @@ public partial class PerfRoute : Node
     double _blastAcc;
     readonly Random _rng = new(7);
 
-    record struct Sample(int View, double T, double Ms, double Draws, double Prims, double Objects, double CpuMs, double GpuMs, double Nodes, double PackTiles, double PackDraws, double PackInstances, double PackTris);
+    record struct Sample(int View, double T, double Ms, double Draws, double Prims, double Objects, double CpuMs, double GpuMs, double Nodes, double PackTiles, double PackDraws, double PackInstances, double PackTris, double PackObjects, double PackUnder);
 
     readonly List<Sample> _warm = new(), _s = new();
     readonly List<Vector3> _anchors = new();
@@ -67,7 +67,7 @@ public partial class PerfRoute : Node
         var pack = Map.PackTreeDrawn; // pack tree counters (all 0 without pack trees), next to the draw calls they cost
         return new Sample(view, Time.GetTicksMsec() / 1000.0, dt * 1000, M(Performance.Monitor.RenderTotalDrawCallsInFrame), M(Performance.Monitor.RenderTotalPrimitivesInFrame),
             M(Performance.Monitor.RenderTotalObjectsInFrame), RenderingServer.ViewportGetMeasuredRenderTimeCpu(_vp), RenderingServer.ViewportGetMeasuredRenderTimeGpu(_vp), M(Performance.Monitor.ObjectNodeCount),
-            pack.Tiles, pack.Draws, pack.Instances, pack.Triangles);
+            pack.Tiles, pack.Draws, pack.Instances, pack.Triangles, pack.Objects, pack.Undergrowth);
     }
 
     public override void _Process(double delta)
@@ -129,10 +129,10 @@ public partial class PerfRoute : Node
     void Finish()
     {
         Directory.CreateDirectory(OutDir);
-        var sb = new StringBuilder("view,t,frame_ms,draws,prims,objects,render_cpu_ms,render_gpu_ms,nodes,pack_tiles,pack_draws,pack_instances,pack_triangles\n");
+        var sb = new StringBuilder("view,t,frame_ms,draws,prims,objects,render_cpu_ms,render_gpu_ms,nodes,pack_tiles,pack_draws,pack_instances,pack_triangles,pack_objects,pack_undergrowth\n");
         foreach (var s in _warm.Concat(_s))
             sb.Append(s.View).Append(',').Append(s.T.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.Ms.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.Draws).Append(',').Append(s.Prims)
-              .Append(',').Append(s.Objects).Append(',').Append(s.CpuMs.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.GpuMs.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.Nodes).Append(',').Append(s.PackTiles).Append(',').Append(s.PackDraws).Append(',').Append(s.PackInstances).Append(',').Append(s.PackTris).Append('\n');
+              .Append(',').Append(s.Objects).Append(',').Append(s.CpuMs.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.GpuMs.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.Nodes).Append(',').Append(s.PackTiles).Append(',').Append(s.PackDraws).Append(',').Append(s.PackInstances).Append(',').Append(s.PackTris).Append(',').Append(s.PackObjects).Append(',').Append(s.PackUnder).Append('\n');
         File.WriteAllText(Path.Combine(OutDir, "route-frames.csv"), sb.ToString());
         var perView = _s.GroupBy(x => x.View).Select(g => new { v = g.Key, draws = g.Average(x => x.Draws), ms = g.Average(x => x.Ms), prims = g.Average(x => x.Prims), p99 = P(g.Select(x => x.Ms).ToList(), 99) }).ToList();
         var warmMs = _warm.Select(x => x.Ms).ToList();
@@ -148,7 +148,7 @@ public partial class PerfRoute : Node
             ["worst_views_by_draws"] = perView.OrderByDescending(x => x.draws).Take(5).Select(x => new { view = x.v, draws = x.draws, frame_ms = x.ms }).ToList(),
             ["warmup_frame_ms"] = Stats(warmMs), ["warmup_frames_over_33ms"] = warmMs.Count(x => x > 33.3), ["warmup_frames_over_100ms"] = warmMs.Count(x => x > 100), ["warmup_first_frames_ms"] = warmMs.Take(8).ToList(),
             ["frames_over_16_7ms"] = _s.Count(x => x.Ms > 16.7), ["frames_over_33ms"] = _s.Count(x => x.Ms > 33.3), ["frames_over_50ms"] = _s.Count(x => x.Ms > 50),
-            ["pack_trees"] = new { active = Map.PackTreesActive, tiles = Stats(_s.Select(x => x.PackTiles).ToList()), draws = Stats(_s.Select(x => x.PackDraws).ToList()), instances = Stats(_s.Select(x => x.PackInstances).ToList()), triangles = Stats(_s.Select(x => x.PackTris).ToList()) },
+            ["pack_trees"] = new { active = Map.PackTreesActive, tiles = Stats(_s.Select(x => x.PackTiles).ToList()), draws = Stats(_s.Select(x => x.PackDraws).ToList()), instances = Stats(_s.Select(x => x.PackInstances).ToList()), triangles = Stats(_s.Select(x => x.PackTris).ToList()), objects = Stats(_s.Select(x => x.PackObjects).ToList()), undergrowth = Stats(_s.Select(x => x.PackUnder).ToList()) },
             ["nodes"] = _s.Count == 0 ? 0 : _s[^1].Nodes, ["mem_static_mb"] = Performance.GetMonitor(Performance.Monitor.MemoryStatic) / 1048576.0, ["video_mem_mb"] = Performance.GetMonitor(Performance.Monitor.RenderVideoMemUsed) / 1048576.0,
             ["textures_mb"] = Performance.GetMonitor(Performance.Monitor.RenderTextureMemUsed) / 1048576.0, ["buffers_mb"] = Performance.GetMonitor(Performance.Monitor.RenderBufferMemUsed) / 1048576.0,
             ["gc_heap_mb"] = GC.GetTotalMemory(false) / 1048576.0, ["gc_gen0"] = GC.CollectionCount(0), ["gc_gen1"] = GC.CollectionCount(1), ["gc_gen2"] = GC.CollectionCount(2),

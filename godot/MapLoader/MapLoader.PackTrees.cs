@@ -22,6 +22,11 @@ namespace Drycastle.MapLoader;
 /// rendering server a few at a time within <c>budget_ms</c>. A tile costs one draw per material. The model of a tree is chosen from its position and
 /// height (<see cref="PackTreeMath.Choose"/>). The radius of the cut never passes a tile that is not built yet, so the baked trees only vanish
 /// where the pack trees stand. The same streamer feeds it as the meadow (<see cref="MeadowStreamer"/>).</para>
+/// <para>The forest ground rides the same tiles and draws. Ground objects (ground_objects.json: logs, stumps, boulders, root plates) are baked low-poly meshes with
+/// their base in UV2 like a tree, so the props shader already hides them inside the radius; the pack model of their kind (<see cref="GroundObjectMath"/>) is
+/// drawn in their place. The cut is the one shared UV2, so it cannot skip a kind: every kind of the file needs a model or its baked objects vanish near the
+/// player. Undergrowth (<see cref="UndergrowthGen"/>: ferns, bushes, mushrooms, twigs, small rocks, grass) has no baked twin and no collision: it is generated on
+/// the worker from a hash of the cell where the meadow raster says forest, and fades out at the radius with the same dither (nothing stands behind it).</para>
 /// </summary>
 public sealed partial class MapLoader
 {
@@ -37,14 +42,20 @@ public sealed partial class MapLoader
         public Task<PackTileResult>? Job;
         public readonly Queue<ReadyBucket> Commit = new();
         public MeshInstance3D? Node;
-        public PackPlacement[] Placed = Array.Empty<PackPlacement>();
+        public PackPlacement[] Placed = Array.Empty<PackPlacement>(), Objects = Array.Empty<PackPlacement>(), Under = Array.Empty<PackPlacement>();
 
         /// <summary>Everything is in the mesh (a tile with no pack tree is ready at once).</summary>
         public bool Ready => Job == null && Commit.Count == 0;
     }
 
     sealed record ReadyBucket(int Material, Vector3[] V, Vector3[] N, Vector2[] Uv, Vector2[] Uv2, int[] I);
-    sealed record PackTileResult(List<ReadyBucket> Buckets, PackPlacement[] Placed);
+    sealed record PackTileResult(List<ReadyBucket> Buckets, PackPlacement[] Placed, PackPlacement[] Objects, PackPlacement[] Under);
+
+    /// <summary>The pack models of one kind of ground object, the code-built radius at scale 1 and the turn added to the object's rot.</summary>
+    sealed record GroundKindModels(GroundCandidate[] Models, float RadiusM, float YawDeg);
+
+    /// <summary>What a worker needs for the undergrowth of one tile, all copies (the meadow raster is not thread safe, so the forest cells are read on the main thread).</summary>
+    sealed record UndergrowthInput(ForestMask Forest, float CellM, TreeFoot[] Feet, Func<float, float, float> GroundZ);
 
     PackTreeConfig? _packCfg;
     string? _packDir;
@@ -55,6 +66,12 @@ public sealed partial class MapLoader
     readonly Dictionary<string, int> _packMaterialIds = new();
     PackCandidate[] _packCone = Array.Empty<PackCandidate>(), _packBox = Array.Empty<PackCandidate>();
     Dictionary<(int Tx, int Ty), List<int>> _packTreeTiles = new();
+    GroundObjectFile? _packGround;
+    GroundObject[] _packObjs = Array.Empty<GroundObject>();
+    Dictionary<(int Tx, int Ty), List<int>> _packObjectTiles = new();
+    Dictionary<string, GroundKindModels> _packObjKinds = new();
+    UndergrowthKind[] _packUnder = Array.Empty<UndergrowthKind>();
+    HashSet<(int Tx, int Ty)> _packTileSet = new(); // tiles with something to draw: trees or ground objects
     Node3D? _packRoot;
     readonly Dictionary<(int Tx, int Ty), PackTile> _packTiles = new();
     readonly List<(float D, int Tx, int Ty)> _packWanted = new();
@@ -67,27 +84,35 @@ public sealed partial class MapLoader
     public bool PackTreesActive => _packRoot != null;
 
     /// <summary>What the pack trees cost and draw now: tiles with pack trees in view range, draw calls (tiles times their materials), and the trees and triangles inside the cut radius (the rest of a tile is collapsed in the shader).</summary>
-    public readonly record struct PackTreeStats(int Tiles, int Draws, int Instances, long Triangles);
+    /// <remarks>Instances are trees; Objects and Undergrowth count the ground objects and undergrowth pieces inside the radius; Triangles are all of them.</remarks>
+    public readonly record struct PackTreeStats(int Tiles, int Draws, int Instances, long Triangles, int Objects = 0, int Undergrowth = 0);
 
     public PackTreeStats PackTreeDrawn
     {
         get
         {
-            int tiles = 0, draws = 0, instances = 0; long tris = 0;
+            int tiles = 0, draws = 0, instances = 0, objects = 0, under = 0; long tris = 0;
+            var r2 = _packCutR * _packCutR;
             foreach (var t in _packTiles.Values)
             {
                 if (t.Node is not { Visible: true } node) continue;
                 tiles++;
                 draws += ((ArrayMesh)node.Mesh).GetSurfaceCount();
-                foreach (var p in t.Placed)
+                int Inside(PackPlacement[] list)
                 {
-                    var dx = p.Base.X - _packFocus.X; var dz = p.Base.Z - _packFocus.Y;
-                    if (dx * dx + dz * dz >= _packCutR * _packCutR) continue;
-                    instances++;
-                    tris += _packModels[p.Model].Triangles;
+                    var n = 0;
+                    foreach (var p in list)
+                    {
+                        var dx = p.Base.X - _packFocus.X; var dz = p.Base.Z - _packFocus.Y;
+                        if (dx * dx + dz * dz >= r2) continue;
+                        n++;
+                        tris += _packModels[p.Model].Triangles;
+                    }
+                    return n;
                 }
+                instances += Inside(t.Placed); objects += Inside(t.Objects); under += Inside(t.Under);
             }
-            return new PackTreeStats(tiles, draws, instances, tris);
+            return new PackTreeStats(tiles, draws, instances, tris, objects, under);
         }
     }
 
@@ -117,6 +142,8 @@ public sealed partial class MapLoader
         _packMaterials.Clear(); _packMaterialIds.Clear();
         _packCone = Array.Empty<PackCandidate>(); _packBox = Array.Empty<PackCandidate>();
         _packTreeTiles = new();
+        _packGround = null; _packObjs = Array.Empty<GroundObject>(); _packObjectTiles = new(); _packObjKinds = new();
+        _packUnder = Array.Empty<UndergrowthKind>(); _packTileSet = new();
         _packWanted.Clear();
         _packCutR = 0;
         TreeCutShaders.Disable();
@@ -147,15 +174,27 @@ public sealed partial class MapLoader
         _packCfg = cfg;
         _packDir = dir;
         _packFiles = ReadNatureManifest(manifestPath);
+
+        // ground_objects.json is optional: a map without it has none, silently
+        var objectsPath = Path.Combine(_mapDir, "ground_objects.json");
+        if (cfg.GroundObjects.Enabled && File.Exists(objectsPath))
+        {
+            var file = GroundObjectFile.Parse(File.ReadAllText(objectsPath));
+            if (file == null) PackWarn("ground-objects", "pack trees: ground_objects.json is not a format 1 file; its objects stay baked");
+            else if (!file.BaseUv2) PackWarn("ground-objects-uv2", "pack trees: ground_objects.json has no model.base_uv2; its objects stay baked");
+            else _packGround = file;
+        }
     }
 
     /// <summary>Loads the pack models after the map is loaded; leaves the pack trees off unless some of the configured models are there.</summary>
     void InitPackTrees()
     {
-        if (_packCfg is not { } cfg || _packDir == null || _trees.Count == 0) return;
+        if (_packCfg is not { } cfg || _packDir == null || (_trees.Count == 0 && _packGround == null)) return;
         var missing = new List<string>();
         var cone = BuildPackList(cfg.For(true), missing);
         var box = BuildPackList(cfg.For(false), missing);
+        InitGroundObjects(cfg, missing);
+        InitUndergrowth(cfg, missing);
         if (missing.Count > 0) PackWarn("models", $"pack trees: {missing.Count} models are not in the nature pack and are skipped: {string.Join(", ", missing)}");
         if (cone.Length == 0 && box.Length == 0) { PackWarn("empty", "pack trees: none of the configured models could be loaded; no pack trees"); _packCfg = null; return; }
         if (cone.Length == 0 || box.Length == 0) PackWarn("shape", $"pack trees: no model for the {(cone.Length == 0 ? "cone" : "box")} shape; the other shape's models stand in");
@@ -163,10 +202,66 @@ public sealed partial class MapLoader
         _packBox = box.Length > 0 ? box : cone;
 
         _packTreeTiles = PackTreeMath.TileIndex(_trees, cfg.TileM);
+        _packTileSet = new HashSet<(int, int)>(_packTreeTiles.Keys);
+        foreach (var k in _packObjectTiles.Keys) _packTileSet.Add(k);
         _packRoot = new Node3D { Name = "PackTrees" };
         Root.AddChild(_packRoot);
         EnsureStreamer();
-        GD.Print($"pack trees: {_packModels.Count} models ({_packMaterials.Count} materials), near {cfg.NearM} m (+{cfg.FadeM} m fade), tiles {cfg.TileM} m");
+        GD.Print($"pack trees: {_packModels.Count} models ({_packMaterials.Count} materials), near {cfg.NearM} m (+{cfg.FadeM} m fade), tiles {cfg.TileM} m, {_packObjs.Length} ground objects, {_packUnder.Length} undergrowth kinds");
+    }
+
+    /// <summary>Resolves the pack models of every kind of ground object the file has and sorts the objects into tiles. A kind without a model keeps no pack object and, the cut being shared, loses its baked ones inside the radius.</summary>
+    void InitGroundObjects(PackTreeConfig cfg, List<string> missing)
+    {
+        if (_packGround == null) return;
+        var objs = new List<GroundObject>();
+        foreach (var kind in _packGround.Objects.Select(o => o.Kind).Distinct())
+        {
+            var models = cfg.GroundObjects.Kinds.TryGetValue(kind, out var kc) ? kc : null;
+            var list = new List<GroundCandidate>();
+            foreach (var e in models?.Models ?? new())
+            {
+                if (e.Weight <= 0) continue;
+                var id = PackModelId(e.Name);
+                if (id < 0) { if (!missing.Contains(e.Name)) missing.Add(e.Name); continue; }
+                list.Add(new GroundCandidate(id, e.Weight));
+            }
+            if (models == null || list.Count == 0)
+            {
+                PackWarn("ground-kind:" + kind, $"pack trees: no pack model for the ground object kind '{kind}'; the cut is shared, so its baked objects vanish inside the radius (map every kind in pack_trees.json ground_objects)");
+                continue;
+            }
+            _packObjKinds[kind] = new GroundKindModels(list.ToArray(), _packGround.RadiusM.TryGetValue(kind, out var r) ? r : models.RadiusM, models.YawDeg);
+        }
+        foreach (var o in _packGround.Objects) if (_packObjKinds.ContainsKey(o.Kind)) objs.Add(o);
+        _packObjs = objs.ToArray();
+        for (var i = 0; i < _packObjs.Length; i++)
+        {
+            var key = (PackTreeMath.TileOf(_packObjs[i].X, cfg.TileM), PackTreeMath.TileOf(_packObjs[i].Y, cfg.TileM));
+            if (!_packObjectTiles.TryGetValue(key, out var l)) _packObjectTiles[key] = l = new List<int>();
+            l.Add(i);
+        }
+    }
+
+    /// <summary>Resolves the undergrowth kinds against the loaded models. Needs the meadow raster (its zone plane says where the forest floor is), so a map without meadow.bin has none.</summary>
+    void InitUndergrowth(PackTreeConfig cfg, List<string> missing)
+    {
+        var u = cfg.Undergrowth;
+        if (!u.Enabled || _meadow == null || u.Kinds.Count == 0) return;
+        var kinds = new List<UndergrowthKind>();
+        foreach (var k in u.Kinds)
+        {
+            var ids = new List<int>(); var weights = new List<float>(); var tris = new List<int>();
+            foreach (var e in k.Models)
+            {
+                if (e.Weight <= 0) continue;
+                var id = PackModelId(e.Name);
+                if (id < 0) { if (!missing.Contains(e.Name)) missing.Add(e.Name); continue; }
+                ids.Add(id); weights.Add(e.Weight); tris.Add(_packModels[id].Triangles);
+            }
+            if (ids.Count > 0) kinds.Add(new UndergrowthKind(k.Per100M2 / 100f, k.ScaleMin, k.ScaleMax, k.Clump, k.Foot, ids.ToArray(), weights.ToArray(), tris.ToArray()));
+        }
+        _packUnder = kinds.ToArray();
     }
 
     /// <summary>The models of the pack's manifest.json by name: the GLB path (null for a model that is only an LOD or a collision body).</summary>
@@ -330,7 +425,7 @@ public sealed partial class MapLoader
 
         _packWanted.Clear();
         foreach (var (tx, ty, d) in PackTreeMath.TilesNear(fx, fy, c.NearM + c.AheadM, c.TileM))
-            if (_packTreeTiles.ContainsKey((tx, ty))) _packWanted.Add((d, tx, ty));
+            if (_packTileSet.Contains((tx, ty))) _packWanted.Add((d, tx, ty));
         _packWanted.Sort((a, b) => a.D.CompareTo(b.D));
 
         _packScratch.Clear();
@@ -352,7 +447,7 @@ public sealed partial class MapLoader
             if (t.Job is not { IsCompleted: true } job) continue;
             t.Job = null;
             if (job.IsFaulted) { PackWarn("tile", $"pack trees: a tile could not be built: {job.Exception?.GetBaseException().Message}"); continue; }
-            t.Placed = job.Result.Placed;
+            t.Placed = job.Result.Placed; t.Objects = job.Result.Objects; t.Under = job.Result.Under;
             foreach (var b in job.Result.Buckets) t.Commit.Enqueue(b);
         }
 
@@ -384,26 +479,86 @@ public sealed partial class MapLoader
     void StartPackTile(PackTreeConfig c, (int Tx, int Ty) key)
     {
         // everything the worker reads is a copy or immutable: a map reload cannot change it under the task
-        var trees = _packTreeTiles[key].Select(i => _trees[i]).ToArray();
+        var trees = _packTreeTiles.TryGetValue(key, out var ti) ? ti.Select(i => _trees[i]).ToArray() : Array.Empty<TreeInstance>();
+        var objs = _packObjectTiles.TryGetValue(key, out var oi) ? oi.Select(i => _packObjs[i]).ToArray() : Array.Empty<GroundObject>();
         var centre = new NVector3((key.Tx + 0.5f) * c.TileM, 0, -(key.Ty + 0.5f) * c.TileM);
         var model = TreeModel;
         PackCandidate[] cone = _packCone, box = _packBox;
         var models = _packModels.ToArray();
+        var objKinds = new Dictionary<string, GroundKindModels>(_packObjKinds);
+        var under = _packUnder;
+        var underInput = under.Length > 0 ? PlanUndergrowth(c, key) : null;
         _packTiles[key] = new PackTile
         {
             Centre = new Vector3(centre.X, 0, centre.Z),
-            Job = Task.Run(() => BuildPackTileData(c, trees, model, cone, box, models, centre)),
+            Job = Task.Run(() => BuildPackTileData(c, trees, model, cone, box, models, centre, objs, objKinds, under, underInput, key)),
         };
     }
 
-    /// <summary>The worker's part of a tile: model choice, the merged triangles per material, as the arrays the mesh takes.</summary>
-    static PackTileResult BuildPackTileData(PackTreeConfig c, TreeInstance[] trees, TreeModel model, PackCandidate[] cone, PackCandidate[] box, PackModelMesh[] models, NVector3 centre)
+    /// <summary>
+    /// The main thread's part of a tile's undergrowth: the forest cells of the meadow raster (not thread safe), the trunks around the tile and the terrain
+    /// as it is now. Null when the tile has no forest floor.
+    /// </summary>
+    UndergrowthInput? PlanUndergrowth(PackTreeConfig c, (int Tx, int Ty) key)
+    {
+        if (_meadow is not { } m) return null;
+        var u = c.Undergrowth;
+        float x0 = key.Tx * c.TileM, y0 = key.Ty * c.TileM, x1 = x0 + c.TileM, y1 = y0 + c.TileM, cell = m.CellM;
+        int gx0 = (int)MathF.Floor(x0 / cell), gx1 = (int)MathF.Ceiling(x1 / cell), gy0 = (int)MathF.Floor(y0 / cell), gy1 = (int)MathF.Ceiling(y1 / cell);
+        int w = gx1 - gx0, h = gy1 - gy0;
+        var cells = new bool[w * h];
+        var any = false;
+        try
+        {
+            for (var gy = gy0; gy < gy1; gy++)
+                for (var gx = gx0; gx < gx1; gx++)
+                {
+                    if ((m.Zone(gx, gy) >> 4) != u.ForestMix) continue;
+                    var on = false; // on the raster at all: free ground (no building, road, water), see meadow.py
+                    for (var li = 0; li < m.Layers.Count && !on; li++) on = m.Density(li, gx, gy) > 0;
+                    if (on) { cells[(gy - gy0) * w + (gx - gx0)] = true; any = true; }
+                }
+        }
+        catch (FormatException) { return null; }
+        if (!any) return null;
+        var margin = MathF.Max(u.FootM, 1f);
+        var feet = new List<TreeFoot>();
+        for (var dy = -1; dy <= 1; dy++)
+            for (var dx = -1; dx <= 1; dx++)
+                if (_packTreeTiles.TryGetValue((key.Tx + dx, key.Ty + dy), out var l))
+                    foreach (var i in l)
+                    {
+                        var t = _trees[i];
+                        if (t.X >= x0 - margin && t.X < x1 + margin && t.Y >= y0 - margin && t.Y < y1 + margin) feet.Add(new TreeFoot(t.X, t.Y, t.Scale));
+                    }
+        var ground = GroundHeightSnapshot();
+        return new UndergrowthInput(new ForestMask { Gx0 = gx0, Gy0 = gy0, W = w, H = h, Cells = cells }, cell, feet.ToArray(), (x, y) => ground(x, -y));
+    }
+
+    /// <summary>The worker's part of a tile: model choice, the merged triangles per material, as the arrays the mesh takes. Trees, ground objects and undergrowth share the buckets, so a tile still costs one draw per material.</summary>
+    static PackTileResult BuildPackTileData(PackTreeConfig c, TreeInstance[] trees, TreeModel model, PackCandidate[] cone, PackCandidate[] box, PackModelMesh[] models, NVector3 centre,
+        GroundObject[] objs, Dictionary<string, GroundKindModels> objKinds, UndergrowthKind[] underKinds, UndergrowthInput? under, (int Tx, int Ty) key)
     {
         var placed = new List<PackPlacement>(trees.Length);
         foreach (var t in trees)
             if (PackTreeMath.Place(t, model, cone, box, c) is { } p) placed.Add(p);
-        var buckets = PackTileMesher.Build(models, placed, centre).Select(b => new ReadyBucket(b.Material, ToArray(b.V), ToArray(b.N), ToArray(b.Uv), ToArray(b.Uv2), b.I.ToArray())).ToList();
-        return new PackTileResult(buckets, placed.ToArray());
+        var objects = new List<PackPlacement>(objs.Length);
+        foreach (var o in objs)
+        {
+            var k = objKinds[o.Kind];
+            var id = k.Models[GroundObjectMath.Choose(k.Models, o.X, o.Y)].ModelId;
+            objects.Add(GroundObjectMath.Place(o, models[id], id, k.RadiusM, k.YawDeg, o.Kind == "log"));
+        }
+        var growth = new List<PackPlacement>();
+        if (under != null)
+        {
+            float x0 = key.Tx * c.TileM, y0 = key.Ty * c.TileM;
+            growth = UndergrowthGen.Tile(c.Undergrowth, underKinds, x0, y0, x0 + c.TileM, y0 + c.TileM, under.CellM, under.Forest, under.Feet, under.GroundZ, c.Undergrowth.TrisPerTile, out _);
+        }
+        var all = new List<PackPlacement>(placed.Count + objects.Count + growth.Count);
+        all.AddRange(placed); all.AddRange(objects); all.AddRange(growth);
+        var buckets = PackTileMesher.Build(models, all, centre).Select(b => new ReadyBucket(b.Material, ToArray(b.V), ToArray(b.N), ToArray(b.Uv), ToArray(b.Uv2), b.I.ToArray())).ToList();
+        return new PackTileResult(buckets, placed.ToArray(), objects.ToArray(), growth.ToArray());
     }
 
     static Vector3[] ToArray(List<NVector3> l) { var r = new Vector3[l.Count]; for (var i = 0; i < r.Length; i++) r[i] = new Vector3(l[i].X, l[i].Y, l[i].Z); return r; }

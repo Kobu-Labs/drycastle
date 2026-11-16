@@ -572,11 +572,28 @@ public sealed partial class MapLoader
     {
         if (_terrain.Count == 0) return float.NaN;
         if (_terrainGrid == null) BuildTerrainGrid();
-        if (!_terrainGrid!.TryGetValue(CellKey((int)Mathf.Floor(x / TerrainCell), (int)Mathf.Floor(z / TerrainCell)), out var tris))
+        return TerrainHeight(_terrainGrid!, _terrain, x, z);
+    }
+
+    /// <summary>
+    /// <see cref="GroundHeight"/> for a worker thread: the terrain as it is now (the grid built, the mesh list copied; both are only read from here on),
+    /// so a map reload on the main thread cannot change it under the worker. Call on the main thread.
+    /// </summary>
+    Func<float, float, float> GroundHeightSnapshot()
+    {
+        if (_terrain.Count == 0) return static (_, _) => float.NaN;
+        if (_terrainGrid == null) BuildTerrainGrid();
+        var grid = _terrainGrid!; var terrain = _terrain.ToArray();
+        return (x, z) => TerrainHeight(grid, terrain, x, z);
+    }
+
+    static float TerrainHeight(Dictionary<long, List<(int mesh, int tri)>> grid, IReadOnlyList<(Vector3[] faces, Aabb box)> terrain, float x, float z)
+    {
+        if (!grid.TryGetValue(CellKey((int)Mathf.Floor(x / TerrainCell), (int)Mathf.Floor(z / TerrainCell)), out var tris))
             return float.NaN;
         foreach (var (m, t) in tris)
         {
-            var faces = _terrain[m].faces;
+            var faces = terrain[m].faces;
             var a = faces[t * 3]; var b = faces[t * 3 + 1]; var c = faces[t * 3 + 2];
             var d = (b.Z - c.Z) * (a.X - c.X) + (c.X - b.X) * (a.Z - c.Z);
             if (Mathf.Abs(d) < 1e-9f) continue;
