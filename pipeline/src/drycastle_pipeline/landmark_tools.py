@@ -105,7 +105,7 @@ def footprint(ids: list[str], view: tuple[float, float] | None = None) -> None:
         print(f"\n{b['id']}  parcel {b.get('parcel')}  model {b.get('model')}  generated: {b.get('roof')} roof, eave {b.get('eave_height_m')} m, "
               f"height {b.get('height_m')} m  base z {elev.get(b['id'], 0.0):.2f}  ring {'counter-clockwise' if ccw else 'CLOCKWISE (edge() needs counter-clockwise: reverse it)'}")  # fmt: skip
         skew = max(abs(90 - math.degrees(math.acos(max(-1.0, min(1.0, e0["normal"][0] * e1["normal"][0] + e0["normal"][1] * e1["normal"][1]))))) for e0, e1 in zip(es, es[1:] + es[:1]))
-        print(f"  {len(ring)} corners, " + ("square corners" if skew < 2 else f"NOT square: corners are up to {skew:.0f} deg off 90 (the template copes with 4 corners; renders will look slightly skewed)") + ("" if len(ring) == 4 else "  MORE THAN 4 CORNERS: the template does not fit, see garage.py"))
+        print(f"  {len(ring)} corners, " + ("square corners" if skew < 2 else f"corners up to {skew:.0f} deg off 90") + ("" if len(ring) == 4 else "; MORE THAN 4 CORNERS: likely several parts under one footprint, the generated roof covers it as one"))
         for k, p in enumerate(ring):
             print(f"  corner {k}: ({p[0]:.3f}, {p[1]:.3f})")
         for e in es:

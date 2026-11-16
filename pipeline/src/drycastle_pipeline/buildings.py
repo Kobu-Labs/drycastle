@@ -26,7 +26,7 @@ from drycastle_pipeline.rules import DEFAULT_RULES
 
 DEFAULT_OVERRIDES = PIPELINE_DIR / "config" / "overrides.yaml"
 BUILDINGS_FORMAT_VERSION = 1
-ROOFS = ("flat", "gabled", "hipped")
+ROOFS = ("flat", "gabled", "hipped", "lean_to")
 OVERRIDE_FIELDS = (
     "height_m",
     "roof_height_m",
@@ -38,6 +38,9 @@ OVERRIDE_FIELDS = (
     "model",
     "model_axis",
     "remove",
+
+    "roof_part",
+    "rest_height_m",
 )
 _COLOUR = re.compile(r"^#[0-9a-fA-F]{6}$")
 _NUMBER = re.compile(r"^\s*(-?\d+(?:[.,]\d+)?)\s*(m)?\s*$")
@@ -139,6 +142,12 @@ def load_overrides(path: Path = DEFAULT_OVERRIDES) -> dict[str, dict]:
                     raise RulesError(f"overrides: {key}: model must be one of {known}")
             if name == "model_axis" and not isinstance(value, int | float):
                 raise RulesError(f"overrides: {key}: model_axis must be a number (radians)")
+            if name == "roof_part" and not (
+                isinstance(value, list) and len(value) >= 3 and all(isinstance(p, list) and len(p) == 2 for p in value)
+            ):
+                raise RulesError(f"overrides: {key}: roof_part must be a polygon [[x, y], ...] in map metres")
+            if name == "rest_height_m" and not (isinstance(value, int | float) and value > 0):
+                raise RulesError(f"overrides: {key}: rest_height_m must be a positive number")
             if name.endswith("_colour") and not _COLOUR.match(str(value)):
                 raise RulesError(f"overrides: {key}: {name} must be #rrggbb")
     return {str(k): dict(v) for k, v in out.items()}
@@ -254,7 +263,8 @@ def derive_building(
     ridge_override = ov.get("ridge_dir")
     angle, _, _, a, b = roof_frame(
         footprint,
-        None if ridge_override is None else float(ridge_override) % math.pi,
+        # a lean-to keeps the full turn: its high edge is on the left of the ridge direction
+        None if ridge_override is None else float(ridge_override) % (2 * math.pi if roof == "lean_to" else math.pi),
         hipped=roof == "hipped",
     )
     if roof != "flat" and not forced and area / max(4 * a * b, 1e-9) < rules.min_roof_fill:
@@ -299,8 +309,14 @@ def derive_building(
         if ov.get("model")
         else {}
     )
+    part = (
+        {"roof_part": [[float(x), float(y)] for x, y in ov["roof_part"]], "rest_height_m": float(ov.get("rest_height_m", 2.8))}
+        if ov.get("roof_part")
+        else {}
+    )
     return {
         **landmark,
+        **part,
         "id": building_id,
         "parcel": parcel_id,
         "footprint": {"exterior": exterior, "holes": holes},

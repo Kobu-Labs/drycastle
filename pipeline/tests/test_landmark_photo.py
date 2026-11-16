@@ -53,3 +53,13 @@ def test_a_colour_is_corrected_by_a_white_surface(tmp_path):
     Image.fromarray(img).save(path)
     assert lp.sample(path, (30, 20), None) == [75, 93, 83]
     assert lp.sample(path, (30, 20), (10, 20)) == [150, 186, 166]
+
+
+def test_a_known_camera_needs_only_three_points_and_a_poor_viewpoint():
+    pts = [p for p in _points() if p[1] != "ground"][:3]  # two eave corners of the south wall and one of the gable end
+    pts.append(_points()[-1])  # and the ridge end, so the ridge height is asked for
+    pose = {"heading": TRUE["yaw"] + 2.0, "pitch": TRUE["pitch"] - 1.0, "fov": 2 * np.degrees(np.arctan(450 / TRUE["f"]))}
+    _, eave, top, errs, _ = lp.solve(pts[:3], (900, 700), view=(-4.0, -10.0), cam_height=2.5, pose=pose)
+    assert errs.max() < 3 and eave == pytest.approx(EAVE, abs=0.25)
+    _, eave, top, errs, _ = lp.solve(pts, (900, 700), view=(-4.0, -10.0), cam_height=2.5, pose=pose)
+    assert eave == pytest.approx(EAVE, abs=0.25) and top == pytest.approx(TOP, abs=0.4)

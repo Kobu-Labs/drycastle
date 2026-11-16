@@ -11,14 +11,18 @@
 #              roof_height_m rise from the eave to the ridge, metres (else from the roof pitch, capped);
 #                            the eave is then height_m - roof_height_m
 #              levels        number of storeys
-#              roof          flat | gabled | hipped (no footprint-fill fallback is applied)
-#              ridge_dir     ridge direction in radians (counter-clockwise from east, 0..pi)
+#              roof          flat | gabled | hipped | lean_to (no footprint-fill fallback is applied)
+#              ridge_dir     ridge direction in radians (counter-clockwise from east, 0..pi; lean_to: 0..2 pi,
+#                            its high edge is on the left of that direction)
 #              wall_colour   "#rrggbb"
 #              roof_colour   "#rrggbb"
 #              model         name of a hand-modelled landmark (pipeline/src/drycastle_pipeline/landmarks.py)
 #                            that replaces the generated mesh, e.g. church
 #              model_axis    with model: bearing of the model's front in radians, counter-clockwise from east
 #              remove        true: the building is left out of the map (a placed object stands there instead)
+#              roof_part     [[x, y], ...] polygon in map metres: the pitched roof covers only the footprint inside it
+#                            (the main house); every other piece of the footprint is a flat-roofed block
+#              rest_height_m with roof_part: the height of those blocks (default 2.8 or the eave if that is lower)
 # Keys that match no building are reported as a warning.
 #
 # Example (commented out):
@@ -124,17 +128,6 @@ buildings:
     roof: flat
     height_m: 3.9
 
-  # P-0023 (G-0377): house with attic, pale green render eave walls, white gable ends, dark green asphalt
-  # shingle roof (pipeline/src/drycastle_pipeline/house_g0377.py). From the owner's Street View photo of
-  # 2026-11-16. Heights and windows measured with a camera fit; colours and the sides with no photo are guessed.
-  w378920410:
-    model: house_g0377
-    wall_colour: "#96baa6"
-    roof_colour: "#5c6c58"
-    levels: 1
-    roof: flat
-    height_m: 5.0
-
   # P-0028 (G-0001): old village house, street gable to the road, grey-white weathered render, orange-red
   # clay tile, steep (about 47 degrees) roof. Eave about 3.0 m, ridge about 6.6 m, scaled from one Street
   # View frame. The attic has two small windows in the gable, so it is one storey plus attic. Openings
@@ -233,3 +226,59 @@ buildings:
     remove: true
   w378920332:
     remove: true
+
+  # P-0023: house with attic, green render, white gable ends, dark green shingle roof, from owner's Street View photo of 2026-11-16, from sketch point A; openings in config/buildings/.
+  w378920410:
+    roof: gabled
+    height_m: 4.98
+    levels: 1
+    roof_height_m: 2.69
+    ridge_dir: 1.96
+    wall_colour: "#85a5a4"
+    roof_colour: "#606f5a"
+
+  # P-0110: house raised at the back: one sheet-metal slope to the road, flat behind; white render, from Street View captures of 2022-09; openings in config/buildings/.
+  w378920531:
+    roof: lean_to
+    height_m: 6.33
+    levels: 1
+    roof_height_m: 2.78
+    roof_part: [[-24.305, 9.317], [-21.734, 0.237], [-24.455, -0.371], [-27.175, 9.237]]
+    rest_height_m: 6.33
+    ridge_dir: 1.8467
+    wall_colour: "#efeeec"
+    roof_colour: "#556878"
+
+  # P-0034: house, grey render, dark slate roof, from Street View captures of 2022-09; openings in config/buildings/.
+  w378920337:
+    roof: gabled
+    height_m: 4.33
+    levels: 1
+    roof_height_m: 1.67
+    ridge_dir: 1.9815
+    wall_colour: "#797e87"
+    roof_colour: "#89837c"
+
+  # P-0120: two-storey house, grey render with stone-pattern plinth, red tile gable roof, from Street View captures of 2022-09; openings in config/buildings/.
+  w378920537:
+    roof: gabled
+    height_m: 8.39
+    levels: 2
+    roof_height_m: 3.24
+    ridge_dir: 0.4251
+    roof_part: [[-37.987, 42.938], [-40.033, 41.957], [-47.173, 38.724], [-48.359, 41.073], [-50.66, 40.073], [-52.414, 43.443], [-50.05, 44.694], [-50.421, 45.507], [-41.067, 49.742]]
+    rest_height_m: 2.8
+    wall_colour: "#bebebe"
+    roof_colour: "#393949"
+
+  # P-0044: house, cream render, dark shingle roof, from Street View captures of 2022-09; openings in config/buildings/.
+  w378920451:
+    roof: gabled
+    height_m: 5.46
+    levels: 1
+    roof_height_m: 1.84
+    ridge_dir: 1.9916
+    roof_part: [[-25.272, 41.595], [-28.721, 49.246], [-23.461, 51.423], [-23.145, 51.323], [-19.873, 44.011]]
+    rest_height_m: 2.8
+    wall_colour: "#99998b"
+    roof_colour: "#62686a"

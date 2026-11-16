@@ -1,0 +1,9 @@
+# P-0110: house raised at the back: one sheet-metal slope to the road, flat behind; white render. Measured by landmark_photo (camera fit: photo 0 7 px, photo 1 4 px).
+# Eave 3.55 m, top 6.33 m. Sides with no photo have no openings. Not modelled: the brick plinth, the windows of the side wall hidden by the tree, the fence; the flat part falls slightly to the back, built level.
+id: w378920531
+source: Street View captures of 2022-09
+overhang_m: 0.35
+frame_colour: '#5a4a40'
+openings:
+  - {id: w1, kind: window, edge: 5, at_m: 1.64, width_m: 2.42, height_m: 1.4, sill_m: 0.86, recess_m: 0.12, confidence: medium}
+  - {id: w2, kind: window, edge: 5, at_m: 5.52, width_m: 2.3, height_m: 1.41, sill_m: 0.81, recess_m: 0.12, confidence: medium}

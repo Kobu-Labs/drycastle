@@ -32,6 +32,11 @@ frames to `data/village/streetview/<building id>/<n>.jpg`. `index.json` records 
 date, distance, heading and copyright. Each downloaded image costs about $0.007; `--max-images`
 (default 100) caps a run and existing files are skipped.
 
+## Capturing a view for photo-to-building
+
+`streetview_follow --capture`: pressing **C** in the Street View tab saves its picture and camera under the building in the
+middle of the view (`data/village/photos/`, gitignored). See `docs/photo-to-building.md`; note what it says about the terms above.
+
 ## Following a Street View tab (character and top-down point)
 
 `pipeline/src/drycastle_pipeline/streetview_follow.py` watches the address of a Chrome tab and writes where you
