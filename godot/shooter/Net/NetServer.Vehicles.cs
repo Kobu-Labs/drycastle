@@ -190,7 +190,7 @@ public partial class NetServer
         var p = c.Body.GlobalPosition;
         foreach (var car in _cars)
         {
-            if (car.Destroyed || !car.Seat.HasFree) continue;
+            if (car.Destroyed || !car.Seat.HasBoardable) continue; // a seat held by a corpse counts: it is kicked out (#330)
             // within the vehicle's enter radius of its footprint (#217), not of its centre
             if (!VehicleReach.CanEnter(N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(p), Vehicles!.EnterRadiusOf(car.Def))) continue;
             var d = VehicleReach.DistanceToFootprint(N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(p));
@@ -198,9 +198,10 @@ public partial class NetServer
         }
         if (best == null) return false;
         // the free seat nearest to the player (a roof gunner seat is a little further out than the car's centre)
-        var seat = best.Seat.NearestFreeSeat(best.Def, N(best.GlobalPosition), best.State.Yaw, N(p), float.MaxValue); // any free seat of a vehicle in reach: the nearest one
+        var seat = best.Seat.NearestFreeSeat(best.Def, N(best.GlobalPosition), best.State.Yaw, N(p), float.MaxValue, kickCorpses: true); // any free seat of a vehicle in reach: the nearest one
         var wasEmpty = !best.Seat.Occupied;
-        if (seat < 0 || !best.Seat.TryEnter(c.Id, seat)) return false;
+        if (seat < 0 || !best.Seat.TryBoard(c.Id, seat, out var kicked)) return false;
+        if (kicked) KickSeatedCorpse(best, seat, N(p));
         c.Car = best; c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.Body.InVehicle = true; c.FlakSent = null; c.HeadOff = c.HeadPitch = 0;
         if (wasEmpty) best.Lights = Headlights.OnEnterAt(Clock.HourAt(_elapsed)); // night: on as the first rider gets in
         c.Body.Teleport(SeatPos(best, seat));
@@ -254,6 +255,7 @@ public partial class NetServer
     bool SwitchSeat(Client c, ServerCar car, int seat)
     {
         var from = c.CarSeat;
+        if (seat >= 0 && seat < car.Seat.Count && car.Seat.HoldsCorpse(seat) && car.Seat.SeatOf(c.Id) == from) KickSeatedCorpse(car, seat, N(c.Body.GlobalPosition)); // a corpse sits there: out it goes (#330)
         if (car.Seat.SeatOf(c.Id) != from || !car.Seat.TrySwitch(c.Id, seat)) return false;
         c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.FlakSent = null; c.HeadOff = c.HeadPitch = 0;
         c.Body.Teleport(SeatPos(car, seat));

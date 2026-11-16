@@ -63,6 +63,23 @@ public partial class NetServer
         }
     }
 
+    /// <summary>
+    /// A player boards a seat a corpse holds (#330): the corpse leaves the riding list and is flung out of the door on the boarder's side (<see cref="CorpseRules.ThrowFromSeat"/>),
+    /// so it flies and lands Thrown like any other, keeping its items. The seat is unblocked by the caller (<see cref="VehicleSeat.TryBoard"/>) or here.
+    /// </summary>
+    void KickSeatedCorpse(ServerCar car, int seat, NVec3 boarder)
+    {
+        car.Seat.Unblock(seat);
+        for (var i = _riding.Count - 1; i >= 0; i--)
+        {
+            var r = _riding[i];
+            if (r.Car != car || r.Seat != seat) continue;
+            _riding.RemoveAt(i);
+            r.Body.Throw(CorpseRules.ThrowFromSeat(N(car.GlobalPosition), car.State.Yaw, boarder, CarVelocity(car)));
+            GD.Print($"server: corpse {r.Id} kicked out of {car.Def.Id} {car.Id} (seat {seat})");
+        }
+    }
+
     /// <summary>Moves the seated corpses with their vehicles and drops each one whose vehicle has been at rest for a second (ADR 0026). Runs after the vehicles moved.</summary>
     void StepRidingCorpses(float dt)
     {
