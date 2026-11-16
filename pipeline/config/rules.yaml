@@ -383,7 +383,8 @@ props:
   # placed object or water, and never within trunk_clearance_m of a tree trunk or on another ground object. Seeded per 25 m
   # cell, so reruns give identical output. Densities are per hectare of canopy before the clearances (about 70-100% of them are placed); objects come in clumps (`clump` = [min, max]
   # objects around one centre, spread by `clump_sigma_m`), so the forest floor is patchy rather than evenly littered.
-  # Village: about 215 ha of forest, so about 4,000 objects and 100,000 triangles.
+  # Village: about 185 ha of forest ground, so about 4,900 timber and rock objects (100,000 triangles), 260 anthills (1.4 per ha) and 200 burrows
+  # (1.1 per ha) of 24 and 26 triangles each (measured on the village map).
   ground_objects:
     ground_kinds: [forest]
     avoid_parcel_kinds: [building_plot, garden]
@@ -403,6 +404,10 @@ props:
       # An upturned root disc standing on edge (an octagonal slab): `radius_m` its radius, `thickness_m` along the log, `lift_m` the
       # height of its centre above the ground (the foot sinks a little).
       rootplate: {radius_m: 1.1, thickness_m: 0.4, lift_m: 0.9}
+      # A conical ant mound: an octagonal base `width_m` across, `height_m` high at scale 1 (an object's width is drawn in size_m, its height follows).
+      anthill: {width_m: 1.2, height_m: 0.8}
+      # A low earth mound, `width_m` across and `height_m` high at scale 1, with a dark hole face on one side (the heading `rot` points at it).
+      burrow: {width_m: 1.3, height_m: 0.4}
     log:
       per_ha: 8
       clump: [1, 2]
@@ -429,6 +434,28 @@ props:
       size_m: [0.6, 2.2]
       colours: ["#7d7b74", "#6e6d68", "#878379"]
     rootplate_colour: "#46362a"
+    # Anthills: at the feet of the trees of the `stands` (pine and mixed; never in swamp ground, `detail.swamp`): per_ha of the canopy, one beside a
+    # random tree of the stand, its centre foot_m from the trunk's edge beyond its own radius. Not in clumps.
+    anthill:
+      per_ha: 2.0
+      stands: [pine, mixed]
+      size_m: [0.8, 1.6]
+      foot_m: [0.05, 0.8]
+      colours: ["#6a5238", "#5e4a32", "#74603f"]
+      top_colour: "#8a7550"
+    # Burrows: low earth mounds with a hole, candidates_per_ha of the canopy at random, each kept with probability `base` plus `edge` when open
+    # ground lies within edge_m (the forest edge) plus `slope` when the ground there climbs at least slope_min (rise over run, measured over
+    # 1.5 m), so they gather at the edges and on slopes; about 1 per ha is placed on the village.
+    burrow:
+      candidates_per_ha: 5.0
+      size_m: [1.0, 1.6]
+      edge_m: 12.0
+      slope_min: 0.15
+      base: 0.15
+      edge: 0.5
+      slope: 0.5
+      colours: ["#5c4631", "#523f2c"]
+      hole_colour: "#1c1511"
 
 # --- Ground detail (detail stage, `make detail`; docs/pipeline.md "Detail") ----------------------------
 # Patches (flat colour or library texture, draped on the terrain, never overlapping: the first layer in
@@ -448,6 +475,25 @@ detail:
   road_clearance_m: 0.15
   # Placed objects (objects.json) keep detail off a circle of half their footprint diagonal plus this.
   object_clearance_m: 0.3
+  # Hollow test (detail._hollow, Rust wet::hollow): how far below its surroundings the ground lies at a point, 0..1: the mean terrain
+  # height on a ring of ring_m round it minus its own, over depth_m. Puddles and ordinary mud are more likely in hollows (times 1 + gain * hollow).
+  hollow: {ring_m: 6.0, depth_m: 0.25, gain: 3.0}
+  # Swamp ground (#287): ground of the types in `kinds` within the reach of water gets a wet floor instead of the plain one: a dark wet-earth
+  # base (flat colours, a layer of its own under everything), large `mud` patches, small `puddle` patches (flat dark standing water, optionally
+  # in a mud rim of rim_m, 0 = none), moss as in any forest, and leaf litter and bare spots cut to a share (litter_factor, dirt_factor). The zone is the
+  # one the swamp stand of trees stands in: props.wet_zone (water ground areas, wet areas of water patches) buffered by
+  # props.trees.stands.swamp.reach_m. Cells of it carry the meadow's swamp mix (`swamp_mix` of meadow.zones). Patches only; no real water, no gameplay.
+  # mud / puddle: one candidate per spacing_m cell, kept with keep times a noise (clump 0 = even .. 1 = bare gaps between thick clumps, clump_m the
+  # size of a clump); radius, stretch along a random axis. Puddles are likelier in hollows (detail.hollow). Few large mud patches on purpose: patches are
+  # cut at the 4 m terrain cells, so small many ones are what costs triangles (smaller blobs, 2-4.5 m every 8 m, cost 2.5x as many). Village: about 17.6 ha of
+  # forest in the zone, +39k patch triangles for it (measured on the village map), plus +17k for the plain forest's mud.
+  swamp:
+    kinds: [forest, meadow]
+    colours: ["#3a3024", "#342b20", "#40352a"]
+    litter_factor: 0.15
+    dirt_factor: 0.15
+    mud: {spacing_m: 22.0, keep: 0.5, radius_m: [6.0, 11.0], stretch: 1.6, clump: 0.8, clump_m: 40.0}
+    puddle: {spacing_m: 14.0, keep: 0.3, radius_m: [0.5, 2.0], stretch: 1.4, rim_m: 0.0, clump: 0.6, clump_m: 20.0}
   # Flood dike (recipe "dike", detail.py + dike.py): these parcels are the dike whatever their kind. The carriageway of the road
   # edges inside them is covered by a gravel track (texture dike_gravel: fine gravel, grass patches) a little wider than the
   # road with a wandering edge, the rest is flat grass with thick grass as clutter: tall grass and tufts, taller and a bit
@@ -609,6 +655,17 @@ detail:
       clump_m: 12.0
       tree: {keep: 0.04, radius_m: [0.6, 1.3], reach_m: [0.3, 1.4]}
       interior: {spacing_m: 9.0, keep: 0.25, radius_m: [1.5, 3.0], stretch: 1.5}
+    # Mud (mud texture) outside the swamp, a few patches per hectare: in damp spots (one candidate per spacing_m cell, kept with keep times a
+    # noise like moss's, times 1 + gain * hollow, see detail.hollow) and along the edge of the ways of `highways` (one candidate every
+    # about spacing_m metres of the way, kept with `keep`, on a random side). Radius, stretch; a puddle (puddle texture) of
+    # puddle_scale times the mud's radius sits in the middle of puddle_share of the patches.
+    mud:
+      damp: {spacing_m: 10.0, keep: 0.02, clump: 0.9, clump_m: 25.0}
+      track: {highways: [track, path, footway], spacing_m: 30.0, keep: 0.5}
+      radius_m: [1.4, 2.8]
+      stretch: 1.5
+      puddle_share: 0.33
+      puddle_scale: [0.35, 0.65]
     dirt: {per_ha: 3, radius_m: [0.6, 1.4]}
     clutter:
       leaf:   {spacing_m: 0.8, litter: 0.1, tone: 0.01, interior: 0.003, scale: [0.8, 1.2]}
@@ -658,8 +715,8 @@ detail:
     fresh_unmown: 3
     fresh_water: 4
     zones:
-      field:  {mixes: [[0, 0.28], [1, 0.17], [2, 0.10], [3, 0.10], [6, 0.10], [7, 0.10], [8, 0.15]], unmown_mix: 1, wet_mix: 4, edge_dry_mix: 2, edge_dry_share: 0.5, dry_edge: 4}
-      forest: {mixes: [[5, 1.0]]}
+      field:  {mixes: [[0, 0.28], [1, 0.17], [2, 0.10], [3, 0.10], [6, 0.10], [7, 0.10], [8, 0.15]], unmown_mix: 1, wet_mix: 4, edge_dry_mix: 2, edge_dry_share: 0.5, dry_edge: 4, swamp_mix: 9}
+      forest: {mixes: [[5, 1.0]], swamp_mix: 9}
     # Per layer: kinds = what it makes and in what shares by default; `mixes` entries list the layers they change.
     layers:
       tuft:   {kinds: [[tuft, 1.0]], max_per_cell: 3.0, scale: [0.8, 1.4], clump: 0.75, unmown: 1.3}
@@ -684,6 +741,8 @@ detail:
       - {name: cornflower meadow, tuft: [[tuft, 0.5], [tall_grass, 0.5]], flower: [[cornflower, 0.7], [poppy, 0.2], [daisy, 0.1]]}               # 6
       - {name: yarrow meadow, tuft: [[tall_grass, 0.5], [tuft, 0.5]], flower: [[yarrow, 0.7], [red_clover, 0.2], [daisy, 0.1]]}                  # 7
       - {name: dandelion meadow, tuft: [[tuft, 0.7], [clover, 0.3]], flower: [[dandelion, 0.75], [daisy, 0.15], [buttercup, 0.1]]}               # 8
+      # swamp ground (detail.swamp): reeds and tall grass, the odd buttercup, little else
+      - {name: swamp, tuft: [[reed, 0.6], [tall_grass, 0.4]], flower: [[buttercup, 1.0]], fern: [[fern, 1.0]], litter: [[leaf, 0.7], [stick, 0.3]], floor: [[moss_mound, 0.7], [branch, 0.3]]}  # 9
     field:
       tuft:   {interior: 0.40, edge: 0.65, tone: 0.5, bare: 0.0}
       flower: {interior: 0.10, tone: 0.25}

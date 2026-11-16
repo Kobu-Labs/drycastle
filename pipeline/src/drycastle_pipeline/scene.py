@@ -80,7 +80,7 @@ class MapScene:
     graph: dict | None = None
     props: dict | None = None
     trees: list[dict] | None = None  # tree records as exported (z with the exaggeration), for trees.json
-    ground_objects: list[dict] | None = None  # logs, stumps, boulders, root plates (z with the exaggeration), for ground_objects.json
+    ground_objects: list[dict] | None = None  # logs, stumps, boulders, root plates, anthills, burrows (z with the exaggeration), for ground_objects.json
     spawns: dict | None = None
     warnings: list[str] = field(default_factory=list)  # stale or unusable edits entries
     windows: list[dict] = field(default_factory=list)  # tagged window panes, see building_detail

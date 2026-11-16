@@ -188,7 +188,7 @@ def trees_mesh(trees: list[dict], cfg: dict) -> Mesh:
     return Mesh.concat(meshes)
 
 
-# --- ground objects (logs, stumps, boulders, root plates; rules.yaml props.ground_objects) -------------------------------
+# --- ground objects (logs, stumps, boulders, root plates, anthills, burrows; rules.yaml props.ground_objects) -------------------------------
 
 
 def _outward(tris: list, centre) -> list:
@@ -305,7 +305,63 @@ def rootplate_mesh(o: dict, model: dict, cfg: dict, rng) -> tuple[list, list]:
     return tris, [colour] * len(tris)
 
 
-GROUND_MESHES = {"log": log_mesh, "stump": stump_mesh, "boulder": boulder_mesh, "rootplate": rootplate_mesh}
+def _round_ring(c, r: float, z: float, phase: float, rng, angle_jitter: float, radius_jitter: tuple[float, float]) -> list:
+    """Eight points round ``c`` at radius ``r`` (each between the ``radius_jitter`` shares of it) and height ``z``, the first at ``phase``."""
+    out = []
+    for k in range(8):
+        a = phase + 2 * math.pi * (k + (rng.random() - 0.5) * angle_jitter) / 8
+        f = radius_jitter[0] + (radius_jitter[1] - radius_jitter[0]) * rng.random()
+        out.append((c[0] + r * f * math.cos(a), c[1] + r * f * math.sin(a), z))
+    return out
+
+
+def anthill_mesh(o: dict, model: dict, cfg: dict, rng) -> tuple[list, list]:
+    """A conical ant mound: an octagonal base sunk 0.1 m, a narrower ring at 0.55 of its height and a peak, lighter on top (24 triangles).
+    The collision frustum (ShooterCore GroundObjectColliders) stands inside the lower part: 0.45 of the radius at the ground, 0.27 at 0.55 of the height."""
+    m = model["anthill"]
+    s = float(o["scale"])
+    r, h = float(m["width_m"]) * s / 2, float(m["height_m"]) * s
+    c = (o["x"], o["y"])
+    base = _round_ring(c, r, o["z"] - 0.1, o["rot"], rng, 0.3, (0.88, 1.0))
+    mid = _round_ring(c, 0.55 * r, o["z"] + 0.55 * h, o["rot"], rng, 0.3, (0.88, 1.0))
+    peak = (c[0] + (rng.random() - 0.5) * 0.1 * r, c[1] + (rng.random() - 0.5) * 0.1 * r, o["z"] + h)
+    side = _outward(_band(base, mid), (c[0], c[1], o["z"] + 0.3 * h))
+    top = _outward(_fan(mid, peak), (c[0], c[1], o["z"] + 0.3 * h))
+    colour = hex_to_rgb(cfg["anthill"]["colours"][rng.randrange(len(cfg["anthill"]["colours"]))])
+    return side + top, [colour] * len(side) + [hex_to_rgb(cfg["anthill"]["top_colour"])] * len(top)
+
+
+def burrow_mesh(o: dict, model: dict, cfg: dict, rng) -> tuple[list, list]:
+    """A low earth mound with a hole: an octagonal base sunk 8 cm, a shoulder ring at 0.7 of its height and a flat peak, and a dark quad lying
+    on the face that looks along the heading ``rot`` (26 triangles). The collision frustum stands inside it: 0.5 of the radius at the ground, 0.36 at the shoulder."""
+    m = model["burrow"]
+    s = float(o["scale"])
+    r, h = float(m["width_m"]) * s / 2, float(m["height_m"]) * s
+    c = (o["x"], o["y"])
+    phase = o["rot"] - math.pi / 8  # vertices 0 and 1 straddle the heading, so face 0 looks along it
+    base = _round_ring(c, r, o["z"] - 0.08, phase, rng, 0.1, (0.97, 1.0))
+    shoulder = _round_ring(c, 0.65 * r, o["z"] + 0.7 * h, phase, rng, 0.1, (0.97, 1.0))
+    peak = (c[0], c[1], o["z"] + h)
+    mid = (c[0], c[1], o["z"] + 0.35 * h)
+    side = _outward(_band(base, shoulder), mid)
+    top = _outward(_fan(shoulder, peak), mid)
+    a, b, d, e = base[0], base[1], shoulder[1], shoulder[0]  # the face that looks along the heading
+    n = np.cross(np.subtract(b, a), np.subtract(e, a))
+    n = n / np.linalg.norm(n)
+    n = n if float(n @ (np.add(a, d) / 2 - np.asarray(mid))) >= 0 else -n
+
+    def at(u: float, t: float) -> tuple:  # a point of the face, 3 cm out of it
+        p = (1 - t) * ((1 - u) * np.asarray(a) + u * np.asarray(b)) + t * ((1 - u) * np.asarray(e) + u * np.asarray(d)) + 0.03 * n
+        return tuple(float(v) for v in p)
+
+    hole = _outward([[at(0.2, 0.12), at(0.8, 0.12), at(0.72, 0.68)], [at(0.2, 0.12), at(0.72, 0.68), at(0.28, 0.68)]], (c[0], c[1], o["z"]))
+    colour = hex_to_rgb(cfg["burrow"]["colours"][rng.randrange(len(cfg["burrow"]["colours"]))])
+    dark = hex_to_rgb(cfg["burrow"]["hole_colour"])
+    return side + top + hole, [colour] * (len(side) + len(top)) + [dark] * len(hole)
+
+
+GROUND_MESHES = {"log": log_mesh, "stump": stump_mesh, "boulder": boulder_mesh, "rootplate": rootplate_mesh,
+                 "anthill": anthill_mesh, "burrow": burrow_mesh}
 
 
 def ground_object_mesh(o: dict, cfg: dict) -> Mesh:
@@ -323,12 +379,17 @@ def seeded_xy(purpose: str, x: float, y: float):
     return random.Random(int.from_bytes(hashlib.sha256(f"{purpose}:{float(x):.3f}:{float(y):.3f}".encode()).digest()[:8], "big"))
 
 
+# Kinds no asset pack has a fitting model for: they carry no base point, so the game never swaps them out (ground_objects.json model.baked_only).
+GROUND_BAKED_ONLY = frozenset({"anthill", "burrow"})
+
+
 def ground_objects_mesh(objects: list[dict], cfg: dict) -> Mesh:
     """All ground objects; every triangle remembers its object's base (x, y), as for trees (UV2, so the game can swap a detailed model in)."""
     meshes = []
     for o in objects:
         m = ground_object_mesh(o, cfg)
-        m.bases = np.tile([float(o["x"]), float(o["y"])], (m.face_count, 1))
+        if o["kind"] not in GROUND_BAKED_ONLY:
+            m.bases = np.tile([float(o["x"]), float(o["y"])], (m.face_count, 1))
         meshes.append(m)
     return Mesh.concat(meshes)
 

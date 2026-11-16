@@ -21,6 +21,7 @@ mod terrain;
 mod util;
 mod verge;
 mod village;
+mod wet;
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;

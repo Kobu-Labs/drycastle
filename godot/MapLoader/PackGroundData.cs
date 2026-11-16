@@ -102,6 +102,8 @@ public sealed class GroundObjectFile
     public bool BaseUv2 { get; init; }
     public IReadOnlyList<PackGroundObject> Objects { get; init; } = Array.Empty<PackGroundObject>();
     public IReadOnlyDictionary<string, float> RadiusM { get; init; } = new Dictionary<string, float>();
+    /// <summary>Kinds whose baked mesh carries no base point (<c>model.baked_only</c>): never cut, so they need no pack model.</summary>
+    public IReadOnlySet<string> BakedOnly { get; init; } = new HashSet<string>();
 
     /// <summary>Parses the file; null for a file that is not JSON or is not format 1 (the caller warns). A malformed object is skipped.</summary>
     public static GroundObjectFile? Parse(string json)
@@ -114,9 +116,12 @@ public sealed class GroundObjectFile
             if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("format_version", out var fv) || fv.ValueKind != JsonValueKind.Number || fv.GetInt32() != 1) return null;
             var baseUv2 = false;
             var radii = new Dictionary<string, float>();
+            var bakedOnly = new HashSet<string>();
             if (root.TryGetProperty("model", out var m) && m.ValueKind == JsonValueKind.Object)
             {
                 baseUv2 = m.TryGetProperty("base_uv2", out var b) && b.ValueKind == JsonValueKind.True;
+                if (m.TryGetProperty("baked_only", out var bo) && bo.ValueKind == JsonValueKind.Array)
+                    foreach (var e in bo.EnumerateArray()) if (e.ValueKind == JsonValueKind.String) bakedOnly.Add(e.GetString()!);
                 if (m.TryGetProperty("kinds", out var ks) && ks.ValueKind == JsonValueKind.Object)
                     foreach (var k in ks.EnumerateObject())
                         if (k.Value.ValueKind == JsonValueKind.Object && k.Value.TryGetProperty("radius_m", out var r) && r.ValueKind == JsonValueKind.Number && r.GetSingle() > 0)
@@ -131,7 +136,7 @@ public sealed class GroundObjectFile
                     if (!o.TryGetProperty("x", out _) || !o.TryGetProperty("y", out _)) continue;
                     list.Add(new PackGroundObject(kind.GetString()!, N("x", 0), N("y", 0), N("z", 0), N("rot", 0), N("scale", 1f), N("len", 0)));
                 }
-            return new GroundObjectFile { BaseUv2 = baseUv2, Objects = list, RadiusM = radii };
+            return new GroundObjectFile { BaseUv2 = baseUv2, Objects = list, RadiusM = radii, BakedOnly = bakedOnly };
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException) { return null; }
     }

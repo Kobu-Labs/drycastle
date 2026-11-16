@@ -4,10 +4,12 @@
 //!
 //! * **field** (meadow, orchard, allotments, fields): tone patches, dirt headlands along the edge, a strip of furrows in a share
 //!   of the units, a few stored clutter kinds (the dense kinds come from the meadow raster).
-//! * **forest**: leaf litter and moss under the trees, forest-floor tone patches, bare spots.
+//! * **forest**: leaf litter and moss under the trees, forest-floor tone patches, bare spots, a few mud patches and puddles.
+//!
+//! Both also take swamp ground (``Ctx::swamp``, see ``wet``): a wet floor in place of the tones and most of the litter and dirt.
 
 use crate::cfg::Cfg;
-use crate::ctx::{palette, Ctx, Near, Shared};
+use crate::ctx::{hex_rgb, palette, Ctx, Near, Shared};
 use crate::emit::{Emitter, Res, Tint};
 use crate::geom::{self, PolyC, Pt, G};
 use crate::index::Region;
@@ -16,6 +18,7 @@ use crate::noise;
 use crate::patches::{assemble, Flat, Patch, Rect};
 use crate::rng::{seed_of, Rng};
 use crate::util::{self, blob, grow, lattice, lattice_in, point_rng, rad, Polyline};
+use crate::wet;
 use std::collections::BTreeMap;
 use std::f64::consts::TAU;
 
@@ -50,11 +53,13 @@ pub struct Pre {
 }
 
 const HEAD_REACH_M: f64 = 9.0;
+/// A tile of a forest sees this far beyond its box: mud and puddle blobs reach 10 m from their centre (``wet``).
+const FOREST_HALO_M: f64 = 10.0;
 /// The noise of the moss clumps (``detail.MOSS_SALT``).
 const MOSS_SALT: i64 = 5100;
 const TONE_REACH_M: f64 = 20.0;
 
-fn pid_seed(id: &str, purpose: &str) -> u64 {
+pub fn pid_seed(id: &str, purpose: &str) -> u64 {
     seed_of(&format!("{id}:detail:{purpose}"))
 }
 
@@ -249,7 +254,7 @@ pub fn run(sh: &Shared, part: &Part, cfg: Cfg, pre: &Pre, tile: Option<[f64; 4]>
     let sec = cfg.at(if forest { "forest" } else { "field" });
     let mcfg = cfg.at("meadow");
     let band = if forest { 0.0 } else { sec.at("edge_band_m").f() };
-    let halo = (band + 3.0).max(3.0);
+    let halo = if forest { FOREST_HALO_M } else { (band + 3.0).max(3.0) };
     let unit = geom::from_polyc(&part.poly);
     let unit_reg = Region::from_polycs(std::slice::from_ref(&part.poly));
     let unit_area = geom::area(&unit);
@@ -277,7 +282,7 @@ pub fn run(sh: &Shared, part: &Part, cfg: Cfg, pre: &Pre, tile: Option<[f64; 4]>
     let mut rects: BTreeMap<&'static str, Vec<Rect>> = BTreeMap::new();
     layers.insert("verge_gravel", geom::dup(&ctx.verge_g));
     layers.insert("verge_dirt", geom::dup(&ctx.verge_d));
-    let (ta, tb, tone_flat);
+    let (mut ta, mut tb, tone_flat);
     if forest {
         let canopy = sh.canopy_m;
         let lit = sec.at("litter");
@@ -286,13 +291,15 @@ pub fn run(sh: &Shared, part: &Part, cfg: Cfg, pre: &Pre, tile: Option<[f64; 4]>
             let reach = scan_box(10.0);
             sh.t_idx.query(reach).into_iter().map(|i| sh.trees[i]).filter(|t| unit_reg.contains(t[0], t[1])).collect()
         };
+        let sw_reg = ctx.swamp.as_ref().map(Region::from_geom);
         let lseed = pid_seed(pid, "forest:litter");
         let mut litter_parts = vec![];
         for t in &trees {
             let mut r = point_rng(lseed, t[0], t[1]);
             let rr = canopy * t[2] * lit.at("radius_factor").f();
+            let keep = lit.at("keep").f() * if sw_reg.as_ref().is_some_and(|s| s.contains(t[0], t[1])) { cfg.p("swamp.litter_factor").f() } else { 1.0 };
             for _ in 0..lit.at("blobs_per_tree").i() {
-                if r.f() > lit.at("keep").f() {
+                if r.f() > keep {
                     continue;
                 }
                 let (a, dist) = (r.f() * TAU, r.f() * rr * 0.6);
@@ -320,6 +327,9 @@ pub fn run(sh: &Shared, part: &Part, cfg: Cfg, pre: &Pre, tile: Option<[f64; 4]>
                     let mut r = Rng::cell(dseed, i, j);
                     let (x, y) = ((i as f64 + r.f()) * s, (j as f64 + r.f()) * s);
                     if r.f() < keep && util::in_box(sb, x, y) && unit_reg.contains(x, y) {
+                        if sw_reg.as_ref().is_some_and(|s| s.contains(x, y)) && r.f() >= cfg.p("swamp.dirt_factor").f() {
+                            continue; // swamp ground: most of the bare spots give way to the wet floor
+                        }
                         let radius = rad(&mut r, d.at("radius_m").f2());
                         dirt.push(blob(&mut r, x, y, radius, 0.4, 1.4, 10, None));
                     }
@@ -329,6 +339,9 @@ pub fn run(sh: &Shared, part: &Part, cfg: Cfg, pre: &Pre, tile: Option<[f64; 4]>
         layers.insert("dirt", geom::union_all(dirt));
         layers.insert("litter", geom::union_all(litter_parts));
         layers.insert("moss", moss(&ctx, cfg, sec.at("moss"), free, &trees, pid, scan_box(3.0)));
+        let (mud, puddle) = wet::forest_mud(&ctx, cfg, free, pid, scan_box(FOREST_HALO_M));
+        layers.insert("mud", mud);
+        layers.insert("puddle", puddle);
     } else {
         let (a, b, f) = tone_layers(&ctx, &unit_reg, unit_area, scan_box(TONE_REACH_M), sec, pid_seed(pid, "fieldtones"));
         (ta, tb, tone_flat) = (a, b, f);
@@ -353,9 +366,22 @@ pub fn run(sh: &Shared, part: &Part, cfg: Cfg, pre: &Pre, tile: Option<[f64; 4]>
             }
         }
     }
+    let swamp_cols: Vec<[u8; 3]> = if ctx.swamp.is_some() { cfg.p("swamp.colours").svec().into_iter().map(hex_rgb).collect() } else { vec![] };
+    if let Some(zone) = &ctx.swamp {
+        // the tone patches give way to the wet floor, whose layers join the recipe's own
+        ta = geom::diff(&ta, zone);
+        tb = geom::diff(&tb, zone);
+        for (name, g) in wet::swamp_layers(&ctx, cfg, free, pid, scan_box(FOREST_HALO_M)) {
+            let merged = match layers.remove(name) {
+                Some(own) => geom::union_all(vec![own, g]),
+                None => g,
+            };
+            layers.insert(name, merged);
+        }
+    }
     layers.insert("tone_a", ta);
     layers.insert("tone_b", tb);
-    let flat = Flat { lawn: &[], tone_a: tone_flat[0], tone_b: tone_flat[1] };
+    let flat = Flat { lawn: &[], swamp: &swamp_cols, tone_a: tone_flat[0], tone_b: tone_flat[1] };
     let got = assemble(&mut res.patches, free, &layers, &flat, &rects, &mut Rng::keyed(&format!("{pid}:detail:colours")));
 
     // stored clutter (the dense kinds come from the raster)

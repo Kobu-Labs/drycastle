@@ -235,7 +235,7 @@ pub fn dike(ctx: &Ctx, cfg: Cfg, image: (usize, usize, &[u8]), tile: (f64, f64))
     let before = res.patches.len();
     let mut layers: BTreeMap<&'static str, G> = BTreeMap::new();
     layers.insert("lawn", geom::dup(&free));
-    let flat = Flat { lawn: &cols, tone_a: None, tone_b: None };
+    let flat = Flat { lawn: &cols, swamp: &[], tone_a: None, tone_b: None };
     let rects: BTreeMap<&'static str, Vec<Rect>> = BTreeMap::new();
     let got = assemble(&mut res.patches, &free, &layers, &flat, &rects, &mut Rng::keyed(&format!("{pid}:detail:colours")));
     let lawn_lift = bc.at("lawn_lift_m").f();

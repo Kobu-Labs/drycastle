@@ -108,3 +108,25 @@ def test_forest_floor_is_a_clumped_layer_and_the_forest_total_stays_in_range() -
     # they favour trunks and litter over the open floor
     assert f["floor"]["tree"] > 3 * f["floor"]["interior"] and f["floor"]["litter"] > 2 * f["floor"]["interior"]
     assert f["litter"]["litter"] > 3 * f["litter"]["interior"]  # toadstools gather on the leaf litter round the trunks
+
+
+def test_swamp_ground_carries_the_swamp_mix_and_its_clutter_is_reeds() -> None:
+    from shapely.geometry import box
+
+    from drycastle_pipeline.rules import load_section
+
+    cfg = load_section("detail")["meadow"]
+    m = meadow.new_meadow(cfg, 250.0)
+    gx, gy = np.meshgrid(np.arange(10, 40), np.arange(10, 40))
+    gx, gy = gx.ravel(), gy.ravel()
+    ctx = type("Ctx", (), {"fences": [], "buildings": [], "water": None, "swamp": box(30.0, 0.0, 200.0, 200.0)})()  # x >= 30 m: cells 15 and on
+    for atype in ("forest", "field"):
+        zone, _, _ = meadow.zone_cells(m, ctx, atype, gx, gy, np.zeros(len(gx), bool), cfg)
+        wet = (gx + 0.5) * m.cell_m >= 30.0
+        assert wet.any() and (~wet).any()
+        assert (zone[wet] >> 4 == 9).all() and not (zone[~wet] >> 4 == 9).any()
+        assert (zone[wet] & 15 == 8 - int(cfg["fresh_water"])).all()  # fresher, like beside water
+    swamp = 9  # the mix id the game reads (detail.meadow.mixes: swamp)
+    tuft = next(layer for layer in m.layers if layer.name == "tuft")
+    assert {k for k, _ in tuft.mix(swamp)} == {"reed", "tall_grass"}
+    assert all(k in {"reed", "tall_grass", "buttercup", "fern", "pebble", "leaf", "stick", "moss_mound", "branch"} for layer in m.layers for k, _ in layer.mix(swamp))

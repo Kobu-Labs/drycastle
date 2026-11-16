@@ -30,7 +30,7 @@ from drycastle_pipeline.meshes import Mesh
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.patches import patch_rank
 from drycastle_pipeline.primitives import PRIMITIVES, build_primitive
-from drycastle_pipeline.propmeshes import is_forest
+from drycastle_pipeline.propmeshes import GROUND_BAKED_ONLY, is_forest
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.scene import build_scene
 from drycastle_pipeline.textures import TexturedMesh, tex_node_name
@@ -75,7 +75,7 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # (POSITION x, POSITION z) of the same mesh, so MODEL_MATRIX * vec4(uv2.x, vertex.y, uv2.y, 1) is the base's world point; for all
 # other vertices (fences) NO_TREE_UV2, a point no player is near. Meshes without trees have no TEXCOORD_1, and trees.json's model
 # says "base_uv2": true. A loader that does not know it ignores the attribute and draws every tree; maps before 0.12.0 have none.
-# 0.13.0: ground objects (props.ground_objects): ground_objects.json (files.ground_objects) lists the fallen logs, stumps, boulders and
+# 0.13.0: ground objects (props.ground_objects): ground_objects.json (files.ground_objects) lists the fallen logs, stumps, boulders, anthills, burrows and
 # root plates of the forest ("kind", x, y, z, rot, scale, "len" for a log, chunk) and the model numbers of each kind; the game builds
 # their solid colliders from it. Their low-poly meshes are baked into the same props meshes as the trees, with the object's base as
 # TEXCOORD_1 (the model says "base_uv2": true). A loader that does not know the file draws them but walks and shoots through them.
@@ -93,7 +93,7 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # Only maps with a group have it; a loader that does not know it, or a map without it, means "no groups".
 # (no bump) fences.json (files.fences): every fence section (two end points with ground z, height_m, type, parcel, property group),
 # for the game server's pets (the fence hop). A loader that does not know it, or a map without it, means "no fence data".
-MAP_VERSION_BASE = "0.13.0"
+MAP_VERSION_BASE = "0.14.0"
 NO_TREE_UV2 = 1.0e6  # TEXCOORD_1 of a vertex that is no tree
 BASE_UV2_ATTRIBUTE = "_UV2"  # trimesh writes custom attributes with a leading underscore; export_glb renames it
 PROPS_LAYOUT = "per_parcel"
@@ -276,7 +276,7 @@ def forest_model(tree_cfg: dict) -> dict:
 
 def ground_model(cfg: dict) -> dict:
     """The ground object numbers of ground_objects.json's model block (metres at scale 1; the same ones ``ground_object_mesh`` draws)."""
-    return {kind: {k: float(v) for k, v in cfg["model"][kind].items()} for kind in ("log", "stump", "boulder", "rootplate")}
+    return {kind: {k: float(v) for k, v in cfg["model"][kind].items()} for kind in ("log", "stump", "boulder", "rootplate", "anthill", "burrow")}
 
 
 def ground_objects_doc(objects: list[dict], cfg: dict, chunk_m: float) -> dict:
@@ -286,7 +286,7 @@ def ground_objects_doc(objects: list[dict], cfg: dict, chunk_m: float) -> dict:
         "format_version": GROUND_OBJECTS_FORMAT_VERSION,
         "axes": TREES_AXES,
         "chunk_size_m": chunk_m,
-        "model": {"base_uv2": True, "kinds": ground_model(cfg)},
+        "model": {"base_uv2": True, "baked_only": sorted(GROUND_BAKED_ONLY), "kinds": ground_model(cfg)},
         "objects": [
             {
                 "kind": o["kind"], "x": o["x"], "y": o["y"], "z": round(o["z"], 3), "rot": o["rot"], "scale": o["scale"],

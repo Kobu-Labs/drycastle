@@ -5,9 +5,11 @@ use crate::rng::Rng;
 use crate::terrain::Terrain;
 use std::collections::BTreeMap;
 
-pub const PATCH_PRIORITY: [&str; 12] =
-    ["dike_track", "gravel", "verge_gravel", "bed", "furrow", "dirt", "verge_dirt", "moss", "litter", "tone_a", "tone_b", "lawn"];
-const SOFT_LAYERS: [&str; 5] = ["lawn", "tone_a", "tone_b", "litter", "moss"];
+pub const PATCH_PRIORITY: [&str; 15] = [
+    "dike_track", "gravel", "verge_gravel", "bed", "furrow", "dirt", "verge_dirt", "puddle", "mud", "moss", "litter", "tone_a", "tone_b", "swamp",
+    "lawn",
+];
+const SOFT_LAYERS: [&str; 7] = ["lawn", "tone_a", "tone_b", "swamp", "litter", "moss", "mud"];
 pub const MIN_PIECE_M2: f64 = 0.15;
 pub const PATCH_ROW: usize = 19;
 
@@ -19,6 +21,8 @@ pub fn texture_of(layer: &str) -> Option<&'static str> {
         "dirt" | "verge_dirt" => Some("dirt"),
         "litter" => Some("leaf_litter"),
         "moss" => Some("moss"),
+        "mud" => Some("mud"),
+        "puddle" => Some("puddle"),
         _ => None,
     }
 }
@@ -56,6 +60,7 @@ pub fn clean(g: &G, tol: f64) -> G {
 
 pub struct Flat<'a> {
     pub lawn: &'a [[u8; 3]],
+    pub swamp: &'a [[u8; 3]],
     pub tone_a: Option<[u8; 3]>,
     pub tone_b: Option<[u8; 3]>,
 }
@@ -95,10 +100,11 @@ pub fn assemble(
     for layer in PATCH_PRIORITY {
         let Some(g) = out.get(layer) else { continue };
         match layer {
-            "lawn" => {
+            "lawn" | "swamp" => {
+                let cols = if layer == "lawn" { flat.lawn } else { flat.swamp };
                 for poly in geom::polys_g(g) {
-                    let c = flat.lawn[rng.below(flat.lawn.len())];
-                    patches.push(Patch { layer: "lawn", geom: poly, colour: Some(c), texture: None, angle: 0.0, origin: [0.0, 0.0], lift: None });
+                    let c = cols[rng.below(cols.len())];
+                    patches.push(Patch { layer: layer_name(layer), geom: poly, colour: Some(c), texture: None, angle: 0.0, origin: [0.0, 0.0], lift: None });
                 }
             }
             "tone_a" | "tone_b" => {
@@ -362,7 +368,7 @@ mod tests {
         layers.insert("dirt", geom::rect(5.0, 5.0, 15.0, 15.0));
         layers.insert("lawn", geom::rect(-5.0, -5.0, 25.0, 25.0)); // reaches beyond the free ground
         let cols = [[1u8, 2, 3]];
-        let flat = Flat { lawn: &cols, tone_a: None, tone_b: None };
+        let flat = Flat { lawn: &cols, swamp: &[], tone_a: None, tone_b: None };
         let mut patches = vec![];
         let got = assemble(&mut patches, &free, &layers, &flat, &BTreeMap::new(), &mut Rng::new(1));
         let area = |l: &str| got.get(l).map_or(0.0, geom::area);

@@ -20,7 +20,8 @@ from drycastle_pipeline.export import NO_TREE_UV2, ground_model, ground_objects_
 from drycastle_pipeline.propmeshes import ground_object_mesh, ground_objects_mesh
 from drycastle_pipeline.props import make_trees, plan_ground_objects, road_zone
 from drycastle_pipeline.rules import load_section
-from tests.synthetic import make_terrain, make_workspace, write_ortho
+from drycastle_pipeline.terrain import grid_from_samples
+from tests.synthetic import COVERAGE, make_terrain, make_workspace, write_ortho
 
 PROPS = load_section("props")
 TREE = PROPS["trees"]
@@ -47,9 +48,10 @@ def forest_map(tmp_path: Path, kind: str = "forest"):
     return parcels_doc, buildings, graph, terrain, trees, tree_cfg
 
 
-def plan(tmp_path: Path, kind: str = "forest"):
-    parcels_doc, buildings, graph, terrain, trees, tree_cfg = forest_map(tmp_path, kind)
-    objs = plan_ground_objects(parcels_doc, buildings, graph, terrain, trees, tree_cfg, CFG)
+def plan(tmp_path: Path, kind: str = "forest", cfg: dict = CFG, terrain=None, wet=None):
+    parcels_doc, buildings, graph, flat, trees, tree_cfg = forest_map(tmp_path, kind)
+    terrain = terrain if terrain is not None else flat
+    objs = plan_ground_objects(parcels_doc, buildings, graph, terrain, trees, tree_cfg, cfg, wet=wet)
     return objs, (parcels_doc, buildings, graph, terrain, trees)
 
 
@@ -65,7 +67,7 @@ def test_forest_gets_clumped_solid_objects_at_the_rule_densities(tmp_path: Path)
     objs, _ = plan(tmp_path)
     again, _ = plan(tmp_path / "again")
     assert objs == again  # deterministic
-    kinds = {k: [o for o in objs if o["kind"] == k] for k in ("log", "stump", "boulder", "rootplate")}
+    kinds = {k: [o for o in objs if o["kind"] == k] for k in ("log", "stump", "boulder", "rootplate", "anthill", "burrow")}
     ha = 230 * 230 / 10000.0
     for kind in ("log", "stump", "boulder"):
         want = CFG[kind]["per_ha"] * ha
@@ -132,6 +134,10 @@ SAMPLES = {
     "boulder": {"kind": "boulder", "x": -5.5, "y": 20.0, "z": 131.2, "rot": 0.3, "scale": 1.0},
     "boulder_big": {"kind": "boulder", "x": -15.5, "y": 2.0, "z": 131.2, "rot": 2.2, "scale": 2.2},
     "rootplate": {"kind": "rootplate", "x": 7.75, "y": 7.5, "z": 129.0, "rot": 1.9, "scale": 1.0},
+    "anthill": {"kind": "anthill", "x": 3.5, "y": -8.25, "z": 127.5, "rot": 0.9, "scale": 1.0},
+    "anthill_big": {"kind": "anthill", "x": 3.5, "y": -8.25, "z": 127.5, "rot": 2.4, "scale": 1.33},
+    "burrow": {"kind": "burrow", "x": -20.5, "y": 6.0, "z": 126.0, "rot": 0.3, "scale": 1.0},
+    "burrow_big": {"kind": "burrow", "x": -20.5, "y": 6.0, "z": 126.0, "rot": 3.9, "scale": 1.23},
 }
 
 
@@ -191,6 +197,67 @@ def test_ground_objects_json_has_the_contract_shape() -> None:
     doc = ground_objects_doc(objs, CFG, 128.0)
     assert list(doc) == ["format_version", "axes", "chunk_size_m", "model", "objects"] or set(doc) == {"format_version", "axes", "chunk_size_m", "model", "objects"}
     assert doc["format_version"] == 1 and doc["model"]["base_uv2"] is True
-    assert set(doc["model"]["kinds"]) == {"log", "stump", "boulder", "rootplate"}
+    assert set(doc["model"]["kinds"]) == {"log", "stump", "boulder", "rootplate", "anthill", "burrow"}
     assert doc["objects"][0] == {**SAMPLES["log"], "chunk": [0, -1]}
     assert "len" not in doc["objects"][1]
+
+
+def dense(**kw) -> dict:
+    """The rules with enough anthills and burrows to count (the village numbers are about one per hectare)."""
+    cfg = json.loads(json.dumps(CFG))
+    cfg["anthill"]["per_ha"], cfg["burrow"]["candidates_per_ha"] = 30, 200
+    for k, v in kw.items():
+        cfg[k].update(v)
+    return cfg
+
+
+def test_anthills_stand_at_the_feet_of_pines_and_mixed_trees_and_never_in_swamp(tmp_path: Path) -> None:
+    objs, (_, _, _, _, trees) = plan(tmp_path, cfg=dense())
+    hills = [o for o in objs if o["kind"] == "anthill"]
+    assert len(hills) > 30
+    lo, hi = CFG["anthill"]["size_m"]
+    assert all(lo - 2e-3 <= o["scale"] * CFG["model"]["anthill"]["width_m"] <= hi + 2e-3 for o in hills)
+    stand = {(t["x"], t["y"]): t.get("stand") for t in trees}
+    xy = np.array(list(stand))
+    for o in hills:
+        d = np.hypot(xy[:, 0] - o["x"], xy[:, 1] - o["y"])
+        feet = [stand[tuple(p)] for p in xy[d < 0.3 + 0.8 * 1.2 + 0.8 + 0.3]]  # a trunk within the widest reach
+        assert set(feet) & set(CFG["anthill"]["stands"]), o
+    # a pond in the middle: the zone round it is swamp ground (the stand's reach), and no anthill stands in it
+    pond = box(110, 110, 130, 130)
+    reach = TREE["stands"]["swamp"]["reach_m"]
+    wet, _ = plan(tmp_path / "wet", cfg=dense(), wet=pond)
+    zone = pond.buffer(reach)
+    assert not any(zone.contains(Point(o["x"], o["y"])) for o in wet if o["kind"] == "anthill")
+    assert sum(o["kind"] == "anthill" for o in wet) > 0.5 * len(hills)  # elsewhere there are still as many
+
+
+def test_burrows_gather_at_the_forest_edge_and_on_slopes_and_face_downhill(tmp_path: Path) -> None:
+    objs, _ = plan(tmp_path, cfg=dense())
+    burrows = [o for o in objs if o["kind"] == "burrow"]
+    assert len(burrows) > 60
+    lo, hi = CFG["burrow"]["size_m"]
+    assert all(lo - 2e-3 <= o["scale"] * CFG["model"]["burrow"]["width_m"] <= hi + 2e-3 for o in burrows)
+    edge = CFG["burrow"]["edge_m"]
+    near = np.mean([min(o["x"] - 10, 240 - o["x"], o["y"] - 10, 240 - o["y"]) < edge for o in burrows])
+    assert near > 0.38  # the edge band is a fifth of the canopy; weights 0.65 against 0.15 make about half
+    # a ground that climbs in the west half only (a plane z = 100 + 0.2 x there): burrows prefer it, and look down it
+    def climb(x, y):
+        x, y = np.asarray(x, float), np.asarray(y, float)
+        inside = (x >= 10) & (x <= 210) & (y >= 10) & (y <= 200)
+        return 100 + 0.2 * np.minimum(x, 125.0) + 0.02 * y, inside
+
+    steep = grid_from_samples(250.0, 4.0, COVERAGE, climb)
+    objs, _ = plan(tmp_path / "steep", cfg=dense(), terrain=steep)
+    west = [o for o in objs if o["kind"] == "burrow" and 20 < o["x"] < 115]
+    east = [o for o in objs if o["kind"] == "burrow" and 135 < o["x"] < 210]
+    assert len(west) > 1.8 * len(east)
+    assert np.mean([math.cos(o["rot"]) for o in west]) < -0.85  # the hole faces -x, down the slope
+
+
+def test_new_kinds_leave_the_rest_of_the_forest_as_it_was(tmp_path: Path) -> None:
+    objs, _ = plan(tmp_path)
+    old = json.loads(json.dumps(CFG))
+    old["anthill"]["per_ha"], old["burrow"]["candidates_per_ha"] = 0, 0
+    plain, _ = plan(tmp_path / "old", cfg=old)
+    assert [o for o in objs if o["kind"] not in ("anthill", "burrow")] == plain

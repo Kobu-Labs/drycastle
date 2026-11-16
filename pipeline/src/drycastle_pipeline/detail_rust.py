@@ -95,6 +95,8 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
 
     plan = plan_patches(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), terrain, types)
     water_patches = [q for p in plan.patches.values() if p.water_y is not None for q in _polys(p.polygon)]
+    stands = tree_cfg.get("stands")
+    swamp = D.swamp_zone(units, types, plan, terrain, float(stands["swamp"]["reach_m"])) if stands and "swamp" in stands else None
 
     lib = load_textures()
     tex_list = sorted(set(D.PATCH_TEXTURE.values()))
@@ -119,6 +121,7 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
                   for e in graph["edges"]],
         "objects": discs,
         "regions": water_patches,  # the engine calls the polygons it keeps detail out of "regions"
+        "swamp": _polys(swamp) if swamp is not None else [],  # swamp ground: where the swamp stand of trees stands (detail.swamp_zone)
         "coverage": [list(c) for c in terrain.coverage.exterior.coords],
         "textures": {t: [lib[t].tile_w, lib[t].tile_h] for t in tex_list},
         "tex_list": tex_list,

@@ -227,6 +227,7 @@ public sealed partial class MapLoader
         var objs = new List<PackGroundObject>();
         foreach (var kind in _packGround.Objects.Select(o => o.Kind).Distinct())
         {
+            if (_packGround.BakedOnly.Contains(kind)) continue; // its baked mesh is never cut
             var models = cfg.GroundObjects.Kinds.TryGetValue(kind, out var kc) ? kc : null;
             var list = new List<GroundCandidate>();
             foreach (var e in models?.Models ?? new())

@@ -578,8 +578,10 @@ def plan_ground_objects(
     cfg: dict,
     objects: list[tuple[float, float]] | None = None,
     water: BaseGeometry | None = None,
+    wet: BaseGeometry | None = None,
 ) -> list[dict]:
-    """Logs, stumps, boulders and root plates on the forest ground (see :mod:`groundobjects`); none without orthophoto canopy data.
+    """Logs, stumps, boulders, root plates, anthills and burrows on the forest ground (see :mod:`groundobjects`); none without orthophoto canopy data.
+    ``wet`` (see :func:`wet_zone`) buffered by the swamp stand's reach is swamp ground: no anthills there.
 
     Allowed where the canopy mask is set, on ground of the ``ground_kinds`` types, not on a property (parcel of kind
     ``avoid_parcel_kinds``), not within the clearances of a building, road, placed object or water.
@@ -616,8 +618,13 @@ def plan_ground_objects(
             ok &= ~shapely.contains_xy(off, xs, ys)
         return ok
 
+    stands = tree_cfg.get("stands")
+    swamp = wet.buffer(float(stands["swamp"]["reach_m"])) if wet is not None and stands and "swamp" in stands else None
+    if swamp is not None:
+        shapely.prepare(swamp)
     return make_ground_objects(
-        trees, tree_cfg, cfg, mask, (x0, y_top, res), inside, lambda xs, ys: terrain.surface(xs, ys), seeded, CANOPY_CELL_PX
+        trees, tree_cfg, cfg, mask, (x0, y_top, res), inside, lambda xs, ys: terrain.surface(xs, ys), seeded, CANOPY_CELL_PX,
+        (lambda xs, ys: shapely.contains_xy(swamp, xs, ys)) if swamp is not None else None,
     )
 
 
@@ -931,6 +938,7 @@ def run_props(
         print("props: warning: parcels.json has no origin_epsg5514, so the orthophoto trees cannot be placed; the map has no trees",
               file=sys.stderr)
     water = water_zone(plan, terrain)
+    wet = wet_zone(ground, water_kinds(ground_types(rules_path, edits_path)), water)
     trees = make_trees(
         buildings,
         graph,
@@ -939,12 +947,12 @@ def run_props(
         objects=[(o["position"][0], o["position"][1]) for o in plan.objects],
         water=water,
         origin=tuple(parcels_doc["origin_epsg5514"]) if parcels_doc.get("origin_epsg5514") else None,
-        wet=wet_zone(ground, water_kinds(ground_types(rules_path, edits_path)), water),
+        wet=wet,
     )
     trees = cap_trees(trees, chunk_m, int(fcfg["trees"]["max_per_chunk"]))
     ground_objects = plan_ground_objects(
         parcels_doc, buildings, graph, terrain, trees, tree_cfg, fcfg["ground_objects"],
-        objects=[(o["position"][0], o["position"][1]) for o in plan.objects], water=water,
+        objects=[(o["position"][0], o["position"][1]) for o in plan.objects], water=water, wet=wet,
     )
     spawns = make_spawns(
         ground,

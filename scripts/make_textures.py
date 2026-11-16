@@ -10,7 +10,7 @@ Original pixels computed by this script (no third-party image, no photo); standa
 Every texture repeats seamlessly in both directions. The style is flat: a few tones, hard edges, very
 little noise, so the textures sit next to the flat-colour map. Two kinds:
 
-* coloured   (brick_red, brick_white, stone, dirt, gravel, leaf_litter, moss, soil_rows, dike_gravel): carry their own colours; a white tint shows them as drawn.
+* coloured   (brick_red, brick_white, stone, dirt, gravel, leaf_litter, moss, mud, puddle, soil_rows, dike_gravel): carry their own colours; a white tint shows them as drawn.
 * tintable   (concrete, picket, wire): near-white, shaded only; the mesh's vertex colour is the paint.
 
 ``TEXTURES`` below is the single list: id, size in pixels, the size of one repeat in metres, and the
@@ -332,6 +332,48 @@ def moss(w, h):
     return out
 
 
+def mud(w, h):
+    """Wet mud: dark brown in big smooth blotches, darker slick hollows and a few pale glints where it shines. Coloured."""
+    base, dark, wet, glint = rgb("#3f3023"), rgb("#2e2318"), rgb("#54402c"), rgb("#7a6548")
+    out = []
+    for y in range(h):
+        line = []
+        for x in range(w):
+            n = vnoise(x / 64, y / 64, w // 64, 151) * 0.7 + vnoise(x / 16, y / 16, w // 16, 157) * 0.3
+            c = base
+            if n < 0.4:
+                c = dark
+            elif n > 0.64:
+                c = wet
+            k = 0.97 + 0.06 * hash01(x // 2, y // 2, 163)
+            if hash01(x // 3, y // 3, 167) > 0.992:
+                c, k = glint, 1.0  # wet glints
+            line.append((*shade(c, k), 255))
+        out.append(line)
+    return out
+
+
+def puddle(w, h):
+    """Standing water: flat dark grey-green with a faint lighter sheen in broad bands and a few thin pale reflections. Coloured."""
+    base, deep, sheen, glint = rgb("#2b3532"), rgb("#222b29"), rgb("#36443f"), rgb("#52665f")
+    out = []
+    for y in range(h):
+        line = []
+        for x in range(w):
+            n = vnoise(x / 64, y / 64, w // 64, 173) * 0.75 + vnoise(x / 32, y / 32, w // 32, 179) * 0.25
+            band = vnoise(x / 64, y / 64, w // 64, 181)  # broad bands of sky
+            c = base
+            if n < 0.4:
+                c = deep
+            elif band > 0.62:
+                c = sheen
+            if band > 0.85 and hash01(x // 4, y // 2, 191) > 0.93:
+                c = glint
+            line.append((*shade(c, 0.985 + 0.03 * hash01(x // 2, y // 2, 193)), 255))
+        out.append(line)
+    return out
+
+
 def soil_rows(w, h):
     """Tilled soil: four ridges running across the tile (along u), light crest and dark furrow, clods. Coloured."""
     crest, mid, furrow = rgb("#7d5e3f"), rgb("#6a4d33"), rgb("#4a3624")
@@ -426,6 +468,8 @@ TEXTURES = [
     ("gravel", (256, 256), (1.0, 1.0), False, gravel),
     ("leaf_litter", (256, 256), (1.5, 1.5), False, leaf_litter),
     ("moss", (256, 256), (1.5, 1.5), False, moss),
+    ("mud", (256, 256), (2.0, 2.0), False, mud),
+    ("puddle", (256, 256), (3.0, 3.0), False, puddle),
     ("soil_rows", (256, 256), (1.0, 1.0), False, soil_rows),
     ("dike_gravel", (512, 256), (8.0, 4.0), False, dike_gravel),
 ]
