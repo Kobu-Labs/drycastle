@@ -279,6 +279,14 @@ _Avoid_: AA gun, anti-air vehicle, SPAAG
 A 12 m land vehicle modelled on the regional bus that serves the village: a driver seat and three passenger seats, no weapon, slow to turn and heavy to run into. It is boarded, left and destroyed like any other vehicle; its doors do not open, riders are placed on their seats.
 _Avoid_: coach, autobus, transport (that is the amphibious one)
 
+**Golf Mk2**:
+A small black three-door hatchback (4.3 m) with four seats (left-hand drive) that tops out at 200 km/h, the fastest vehicle. Driven by the drive model like the car; no weapon. It is never dealt at random: it stands at its fixed spot.
+_Avoid_: Golf (alone), VW
+
+**Fixed spot**:
+A place in a vehicle type's `fixed_spots` list in `vehicles.json` (world x and z, an optional `yaw_deg`) where one vehicle of that type always stands. It is placed on the ground there before the random deal, which keeps 12 m clear of it, and faces along the nearest road within 15 m (yaw 0 when there is none) unless the spot gives a yaw. An abandoned or destroyed vehicle returns to its fixed spot, as every vehicle returns to where it started.
+_Avoid_: parking spot, spawn point (that is where a player appears)
+
 **Airburst**:
 A flak shell's end by an aircraft: the shell flies straight at 700 m/s, and once it passes within 12 m of an aircraft it bursts at the closest approach. An aircraft within 15 m of the burst takes 150 damage out to 4 m, falling to 40 at the edge. The gunner has to lead the aircraft, which flies a known circle. A shell that meets no aircraft ends on the ground with a small blast (4 m, weak), or runs out of range.
 _Avoid_: proximity fuse (the fuse is how it works, the burst is the thing), flak burst
