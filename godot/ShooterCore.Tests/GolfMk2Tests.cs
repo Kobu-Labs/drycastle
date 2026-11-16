@@ -33,12 +33,13 @@ public class GolfMk2Tests
     }
 
     [Fact]
-    public void It_stands_at_one_fixed_spot_with_no_yaw_of_its_own()
+    public void It_stands_at_one_fixed_spot_in_the_mechanic_garage_nose_to_the_road()
     {
         var spot = Assert.Single(Golf.FixedSpots);
-        Assert.Equal(37f, spot.X);
-        Assert.Equal(-7f, spot.Z);
-        Assert.Null(spot.YawDeg); // it faces along the road there
+        var site = MechanicGarageSite.GolfSpot;
+        Assert.Equal(site.X, spot.X, 2);
+        Assert.Equal(site.Z, spot.Z, 2);
+        Assert.Equal(site.YawDeg, spot.YawDeg!.Value, 1);
         Assert.Empty(Shipped.Vehicles.Where(v => v.Id != "golf_mk2").SelectMany(v => v.FixedSpots));
     }
 

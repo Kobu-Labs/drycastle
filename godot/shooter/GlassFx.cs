@@ -20,6 +20,10 @@ public static class GlassFx
     /// <summary>Most points of an outline the crack shader takes (glass_crack.gdshader, `outline[12]`; vehicles.json allows no more).</summary>
     const int MaxOutline = 12;
 
+    /// <summary>What the fragments of a pane look like: glass by default, the OSB plate of the mechanic garage as pale-brown opaque chips.</summary>
+    public readonly record struct ShardLook(Vector3 Colour, float Opacity, float Roughness);
+    public static readonly ShardLook OsbShards = new(new Vector3(0.78f, 0.58f, 0.32f), 1f, 0.95f);
+
     static ShaderMaterial? _crack, _shards;
     static int _active;
 
@@ -90,7 +94,7 @@ public static class GlassFx
     /// (<paramref name="paneParent"/> is the global transform of the node the rectangle is in). Skipped beyond the effect range of
     /// glass.json and when too many run already (the pane still changes to its shattered look).
     /// </summary>
-    public static void Shatter(Node3D world, Transform3D paneParent, GlassPaneRect rect, GlassConfig cfg, GlassPaneKey key)
+    public static void Shatter(Node3D world, Transform3D paneParent, GlassPaneRect rect, GlassConfig cfg, GlassPaneKey key, ShardLook? look = null)
     {
         if (_active >= cfg.MaxShatterEffects) return;
         var frame = paneParent * Frame(rect, Lift);
@@ -121,6 +125,7 @@ public static class GlassFx
         mat.SetShaderParameter("speed", cfg.ShardSpeed);
         mat.SetShaderParameter("life", cfg.ShardLife);
         mat.SetShaderParameter("t", 0f);
+        if (look is { } l) { mat.SetShaderParameter("tint", l.Colour); mat.SetShaderParameter("opacity", l.Opacity); mat.SetShaderParameter("roughness", l.Roughness); }
         var mi = new MeshInstance3D
         {
             Name = "GlassShards",

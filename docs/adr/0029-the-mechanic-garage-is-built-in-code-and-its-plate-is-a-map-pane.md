@@ -1,0 +1,15 @@
+# The mechanic garage is built in code and its plate is a map pane
+
+Ticket #320. A sealed OSB shed on the garden plots by road E-0101 (sketch L1) with the Golf Mk2 inside behind one breakable plate. Extends ADR 0007 (glass panes), ADR 0027 (the bus garage) and ADR 0020 (props with boxes on the server too).
+
+**1. Built in code, not in the map.** The pipeline builds buildings from OSM footprints; this plot has none, and objects have no collision. The garage is `MechanicGarage` (`godot/shooter`): walls, floor, roof and props as solid boxes on the World layer on the server and on every client, drawn only on clients, created in `Shooter.LoadMapSteps` next to the bus garage's doors and only on a map that has the bus garage's `garage.json` (the village). The layout is `MechanicGarageSite` (`ShooterCore`, Godot-free), so the tests hold it against `vehicles.json` and the pane. The map file is untouched.
+
+**2. One breakable section: the plate.** Only the plate in front of the Golf (3.0 x 2.5 m, the Golf is 2.25 m wide) is a pane; the rest of the 11 x 8 m shed is solid OSB. It is added to the map's pane list (`MechanicGarageSite.AddPane`, the same on the server and every client, so the wire index agrees) with its own hit points (`MapGlassPane.Hp`, 240: a window has 60), so shots and blasts damage it as any building pane and the event, the join sync and the round restore need nothing new. Its box (a collider on the World layer, so bullets stop on it and damage the pane) and its mesh are switched by the pane's state (`SetPlate`, the client in `ShowGlass`, the server after every flush and restore). A restored plate becomes solid again.
+
+**3. Dark, flicker, on.** `MechanicGarageLights` (machine `MechanicGarage.Lights`: Sealed, Dark, Flicker, On) is client only and started by the client when it sees the plate shatter; a joiner that arrives after sees the lights on. The room is dark because the ambient light is global: a black film over the opening (seen from the road, back-face culled from inside) and `DayNightCycle.IndoorExtra` (inside, the bunkers' mechanism) turn it down. In the flicker only the tubes' emission flashes, the real lights stay off, so the Golf is not lit; then three unshadowed omni lights ramp up.
+
+**4. Look.** OSB is a seeded generated texture (a few hundred ms once), the roof a corrugated mesh in sheets of three rubber colours; no model files. Interior props are Synty Construction models from the private pack (`scripts/construction_pack_glb.py`, 26 models, `SyntyLib` with the atlas); without it the solid props are boxes.
+
+**5. The Golf.** Its one fixed spot moved into the garage (nose out of the plate, `vehicles.json`, held to the site by a test), and it is built 1.25 times a real Golf (#292), so the garage is sized for 5.35 x 2.25 m.
+
+**6. Known limits.** Two baked trees stood on the footprint: their colliders are dropped (`MapLoader.TreeFilter`) but their canopies are in the chunk meshes until the map is built again with objects there. The sealed garage has no other door. The roof and walls shelter nobody from blasts (not registered, as ADR 0027 §7).

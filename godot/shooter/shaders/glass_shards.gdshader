@@ -10,6 +10,9 @@ uniform float life = 1.3;            // seconds until the fragments are gone
 uniform float speed = 3.5;           // m/s out of the pane
 uniform vec2 pane_size = vec2(1.0);  // metres
 uniform float seed = 0.0;
+uniform vec3 tint = vec3(0.74, 0.86, 0.90);  // glass; GlassFx.ShardLook gives other panes (the mechanic garage's OSB plate) their own
+uniform float opacity = 0.55;
+uniform float roughness = 0.15;
 
 vec3 hash3(vec2 p) {
 	vec3 q = vec3(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)), dot(p, vec2(419.2, 371.9)));
@@ -34,8 +37,8 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = vec3(0.74, 0.86, 0.90);
-	ROUGHNESS = 0.15;
+	ALBEDO = tint;
+	ROUGHNESS = roughness;
 	SPECULAR = 0.6;
-	ALPHA = 0.55 * (1.0 - smoothstep(0.75, 1.0, t / life));
+	ALPHA = opacity * (1.0 - smoothstep(0.75, 1.0, t / life));
 }

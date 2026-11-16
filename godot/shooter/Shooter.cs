@@ -375,6 +375,7 @@ public partial class Shooter : Node3D
         if (!Directory.Exists(dir)) throw new InvalidOperationException($"map folder not found: {dir} (pass --map DIR or set DRYCASTLE_MAP)");
         AddChild(_map.Root);
         _map.CollisionOnly = cfg.Str("role", "client") == "server"; // the server never draws the map
+        if (File.Exists(Path.Combine(dir, "garage.json"))) _map.TreeFilter = (x, y) => MechanicGarageSite.Covers(x, -y, 0.5f); // the village: the two baked trees on the mechanic garage's floor (#320) are not solid
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Water.Empty : Drycastle.ShooterCore.Water.Parse(_map.WaterJson);
         WaterSurfaces.ReduceMotion = () => GameSettings.Current.ReduceMotion;
@@ -387,6 +388,7 @@ public partial class Shooter : Node3D
         if (UradProps.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } uradProps) AddChild(uradProps); // desks, chairs: Synty models, boxes on the server too
         if (UradDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } uradDoor) AddChild(uradDoor); // the Obecny Urad's door: shut unless a rozhlas detour is open, solid on the server too
         if (GarageDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } garageDoors) AddChild(garageDoors); // the bus garage's doors: shut until a player opens them, solid on the server too
+        if (MechanicGarage.Create(_map, Path.GetFullPath(dir), !_map.CollisionOnly) is { } mechanicGarage) AddChild(mechanicGarage); // the mechanic's garage (#320): solid on the server too, its plate a glass pane
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {
             var bunkers = Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));

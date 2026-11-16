@@ -29,6 +29,7 @@ public partial class NetServer
             if (_mapPanes != null) return _mapPanes;
             try { _mapPanes = MapGlass.Parse(Map?.WindowsJson ?? ""); }
             catch (DataFileException e) { GD.PrintErr($"server: {e.Message}; the map's windows do not break"); _mapPanes = new(); }
+            if (MechanicGarage.Current is { } garage) MechanicGarageSite.AddPane(_mapPanes, garage.FloorY); // the mechanic garage's plate (#320)
             _mapPaneRects = _mapPanes.Select(p => p.Rect).ToList();
             if (_mapPanes.Count > 0) GD.Print($"server: {_mapPanes.Count} building panes ({_mapPanes.Count(p => p.Breakable)} breakable)");
             return _mapPanes;
@@ -55,7 +56,7 @@ public partial class NetServer
         var panes = MapPanes;
         if (panes.Count == 0) return;
         var b = GlassRules.FirstCrossed(_mapPaneRects!, N(from), N(dir), wall - 0.1f, wall + GlassData.BuildingReach, k => !panes[k].Breakable);
-        if (b >= 0 && _glass.Damage(new GlassPaneKey(GlassPaneKey.Map, (ushort)b), damage, GlassData.BuildingPaneHp)) _glassHits++;
+        if (b >= 0 && _glass.Damage(new GlassPaneKey(GlassPaneKey.Map, (ushort)b), damage, panes[b].Hp ?? GlassData.BuildingPaneHp)) _glassHits++;
     }
 
     /// <summary>The pane of <paramref name="car"/> a ray that stopped on its hull <paramref name="wall"/> metres out crosses first, or -1.</summary>
@@ -136,7 +137,7 @@ public partial class NetServer
         {
             if (!panes[i].Breakable) continue;
             var dmg = GlassRules.BlastDamage(NVec3.Distance(c, panes[i].Rect.Centre), radius, GlassData.BlastDamage);
-            if (dmg > 0 && _glass.Damage(new GlassPaneKey(GlassPaneKey.Map, (ushort)i), dmg, GlassData.BuildingPaneHp)) _glassHits++;
+            if (dmg > 0 && _glass.Damage(new GlassPaneKey(GlassPaneKey.Map, (ushort)i), dmg, panes[i].Hp ?? GlassData.BuildingPaneHp)) _glassHits++;
         }
         foreach (var car in _cars)
         {
@@ -158,11 +159,22 @@ public partial class NetServer
     /// <summary>Sends the panes that changed this tick, one reliable event each (called once at the end of the tick).</summary>
     void FlushGlass()
     {
+        var mapPane = false;
         foreach (var s in _glass.TakeChanges())
         {
             if (s.Shattered) _glassShattered++;
+            mapPane |= s.Key.Owner == GlassPaneKey.Map;
             BroadcastEvent(EventKind.GlassPane, GlassCodec.EncodePane(s));
         }
+        if (mapPane) SyncMechanicGarage();
+    }
+
+    /// <summary>The mechanic garage's plate (a map pane) is solid while its pane stands and gone once it has shattered (#320): the box follows the pane's state.</summary>
+    void SyncMechanicGarage()
+    {
+        if (MechanicGarage.Current is not { } garage) return;
+        var i = MapPanes.FindIndex(p => p.Node == MechanicGarageSite.PlateNode);
+        if (i >= 0) garage.SetPlate(!_glass.IsShattered(new GlassPaneKey(GlassPaneKey.Map, (ushort)i)), animate: false);
     }
 
     /// <summary>The joiner's catch-up: every pane that is not whole.</summary>
@@ -181,6 +193,10 @@ public partial class NetServer
     /// <summary>A new round: every pane is whole again (glass.json restore_on_round_start).</summary>
     void RestoreGlassForRound()
     {
-        if (GlassData.RestoreOnRoundStart && _glass.RestoreAll()) BroadcastEvent(EventKind.GlassSync, GlassCodec.EncodeSync(GlassCodec.Everything, Array.Empty<GlassPaneState>()));
+        if (GlassData.RestoreOnRoundStart && _glass.RestoreAll())
+        {
+            BroadcastEvent(EventKind.GlassSync, GlassCodec.EncodeSync(GlassCodec.Everything, Array.Empty<GlassPaneState>()));
+            SyncMechanicGarage();
+        }
     }
 }

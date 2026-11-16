@@ -1033,6 +1033,28 @@ stateDiagram-v2
 - **Alive**: In the world with health. Spawn protection (ProtectedUntil), a blessing's invulnerability and the demon's hold are timers beside this state.
 - **Dead**: Awaiting RespawnAt (the respawn delay after the lethal hit).
 
+## MechanicGarage.Lights
+
+The garage interior's lights after the plate breaks: dark, then a flicker that lights nothing, then fully on.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Sealed
+    Sealed --> Dark
+    Sealed --> On
+    Dark --> Flicker
+    Dark --> On
+    Dark --> Sealed
+    Flicker --> On
+    Flicker --> Sealed
+    On --> Sealed
+```
+
+- **Sealed**: The plate stands (the start state): the lights are off and nothing of the room can be seen.
+- **Dark**: The plate has just broken: the room is dark.
+- **Flicker**: The tubes of the roof lights flash a few times; the real lights stay off, so the Golf is not lit.
+- **On**: The lights are on: they come up over a moment, or at once for a client that arrived later.
+
 ## Menu.Connect
 
 The connect screen: edit the target, probe it with a visible timeout, show what went wrong.

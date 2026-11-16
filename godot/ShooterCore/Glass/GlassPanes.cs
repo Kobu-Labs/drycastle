@@ -283,8 +283,8 @@ public sealed class GlassReplica
     }
 }
 
-/// <summary>A building's pane from the base map's windows.json: the node of its mesh, its rectangle in the game's axes (Y up), and whether it can break.</summary>
-public sealed record MapGlassPane(string Node, GlassPaneRect Rect, bool Breakable);
+/// <summary>A building's pane from the base map's windows.json: the node of its mesh, its rectangle in the game's axes (Y up), whether it can break, and its own hit points where it has them (else glass.json's building_pane_hp; the mechanic garage's plate, <see cref="MechanicGarageSite"/>).</summary>
+public sealed record MapGlassPane(string Node, GlassPaneRect Rect, bool Breakable, float? Hp = null);
 
 /// <summary>
 /// The building panes of a base map (windows.json, written by the map pipeline's building detail). Server and client read the same file,
