@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "_note": "Prototype (#287): detailed pack trees (assets-private/synty/glb/nature) near the player in place of the baked box/pyramid trees. Without the pack, or with DRYCASTLE_PACK_TREES=0, nothing changes. near_m: a tile whose centre is this close to the player gets pack trees and loses its baked trees. fade_m: the pack tile fades out over this band past near_m (the tile is freed at the end of it). tile_m: the tile edge, one MultiMesh per model and tile; also the granularity at which baked trees are hidden. release_m: a baked props node cut into tiles is put back in one piece when it is this far past near_m + fade_m. rescan_m / max_builds_per_call / budget_ms: streaming, as for the meadow (a split of a baked node counts as a build). shadows: pack trees cast shadows like the baked ones. shapes: the models that stand in for the tree shapes of trees.json (cone, box), by name in nature/manifest.json, chosen by a hash of the tree's position in proportion to weight; a name the pack does not have is skipped.",
+  "near_m": 70,
+  "fade_m": 14,
+  "tile_m": 32,
+  "release_m": 120,
+  "rescan_m": 3,
+  "max_builds_per_call": 2,
+  "budget_ms": 3,
+  "shadows": true,
+  "shapes": {
+    "cone": [
+      { "name": "SM_Tree_Pine_01", "weight": 3 },
+      { "name": "SM_Tree_Pine_02", "weight": 3 },
+      { "name": "SM_Tree_Pine_Large_01", "weight": 1 },
+      { "name": "SM_Tree_Pine_Large_02", "weight": 1 },
+      { "name": "SM_Tree_Pine_Small_01", "weight": 1.5 },
+      { "name": "SM_Tree_Pine_Small_02", "weight": 1.5 },
+      { "name": "SM_Tree_PolyPine_01", "weight": 2 },
+      { "name": "SM_Tree_PolyPine_02", "weight": 2 },
+      { "name": "SM_Tree_PolyPine_03", "weight": 2 },
+      { "name": "SM_Tree_PolyPine_Sparse_01", "weight": 1 },
+      { "name": "SM_Tree_PolyPine_Sparse_02", "weight": 1 },
+      { "name": "SM_Tree_PolyPine_Sparse_03", "weight": 1 }
+    ],
+    "box": [
+      { "name": "SM_Tree_Birch_01", "weight": 2 },
+      { "name": "SM_Tree_Birch_02", "weight": 2 },
+      { "name": "SM_Tree_Birch_03", "weight": 2 },
+      { "name": "SM_Tree_Birch_04", "weight": 2 },
+      { "name": "SM_Tree_Round_01", "weight": 2 },
+      { "name": "SM_Tree_Round_02", "weight": 2 },
+      { "name": "SM_Tree_Round_03", "weight": 2 },
+      { "name": "SM_Tree_Round_04", "weight": 2 },
+      { "name": "SM_Tree_Round_05", "weight": 2 },
+      { "name": "SM_Tree_Generic_01", "weight": 2 },
+      { "name": "SM_Tree_TallRound_01", "weight": 1 },
+      { "name": "SM_Tree_Generic_Giant_01", "weight": 0.3 }
+    ]
+  }
+}

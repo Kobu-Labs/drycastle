@@ -105,6 +105,7 @@ public sealed partial class MapLoader
         using var manifest = JsonDocument.Parse(manifestBytes);
         MapVersion = manifest.RootElement.GetProperty("map_version").GetString() ?? "";
         if (manifest.RootElement.TryGetProperty("edit_defaults", out var ed)) EditDefaults = EditDefaults.Read(ed);
+        FreePackTrees();
         ReadParcels(Path.Combine(mapDir, "parcels.json"));
         ParcelIndex = new ParcelIndex(_parcels.Values);
         ReadSpawns(Path.Combine(mapDir, "spawns.json"));
@@ -147,6 +148,7 @@ public sealed partial class MapLoader
             foreach (var f in LoadObjectSteps(Path.Combine(mapDir, of))) yield return 0.92f + 0.05f * f;
         var tObjects = Time.GetTicksMsec();
         foreach (var f in BuildClutterSteps(mapDir, manifest.RootElement)) yield return 0.97f + 0.02f * f;
+        InitPackTrees();
         var tClutter = Time.GetTicksMsec();
         yield return 0.99f;
         if (BuildBoundary) BuildTerrainBoundary();
@@ -417,12 +419,16 @@ public sealed partial class MapLoader
             var (baseName, texture) = SplitTexNode(name);
             if (PropsParcelId(baseName) is { } propsId)
             {
-                if (texture == null) _propsVisuals[propsId] = mi;
+                if (texture == null) { _propsVisuals[propsId] = mi; RegisterPropsNode(mi); }
                 else
                 {
                     if (!_propsTexVisuals.TryGetValue(propsId, out var tex)) _propsTexVisuals[propsId] = tex = new();
                     tex.Add(mi);
                 }
+            }
+            else if (name == "props")
+            {
+                RegisterPropsNode(mi); // the trees and fences of a chunk that belong to no parcel
             }
             else if (name == "terrain")
             {

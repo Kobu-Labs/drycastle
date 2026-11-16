@@ -145,6 +145,11 @@ frame, freed 30 m behind its range. A tile and layer with a kind of at least `Me
 Instances within a tree's trunk reach (from `trees.json`) are dropped; the height comes from `GroundHeight` (the terrain collision mesh, decimated). The focus is the current camera
 unless `MapLoader.SetClutterFocus(position)` is called each frame. A map without `meadow.bin` and the headless server do nothing.
 
+Pack trees (prototype, #287; `MapLoader.PackTrees.cs`, `PackTreeData.cs`, `shooter/data/pack_trees.json`): with the private nature pack (`assets-private/synty/glb/nature`) installed, trees within `near_m` of the focus are drawn as pack models,
+one MultiMesh per model and 32 m tile (model = hash of the tree's position by the weights of its shape, scaled to the code-built tree's height), and their baked trees are hidden: a baked props node a tile touches is cut once into one mesh per tile
+plus the fences, and a tile with pack trees hides its mesh (a node whose tiles are all far is put back in one piece). Collision is unchanged. `DRYCASTLE_PACK_TREES=0` turns it off. Counters: `MapLoader.PackTreeNodes` (MultiMeshes, instances, triangles)
+and `PackTreeBaked` (cut nodes, baked pieces); `--perf-route` writes them to `route-frames.csv` and `route-summary.json`.
+
 ## Editor mode
 
 The first visible part of the world map editor: `--editor` starts the viewer in editor mode (it implies
