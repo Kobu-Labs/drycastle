@@ -79,6 +79,14 @@ def loop_clip(x, a, b, xf):
     return c
 
 
+def shelf(x, hz, db):
+    """Boosts everything above hz by db (a smooth step in the spectrum): brings the turbo's hiss out of the engine under it."""
+    sp = np.fft.rfft(x)
+    f = np.fft.rfftfreq(len(x), 1 / SR)
+    sp *= 1 + (10 ** (db / 20) - 1) / (1 + np.exp(-(f - hz) / (hz * 0.25)))
+    return np.fft.irfft(sp, len(x)).astype(np.float32)
+
+
 def fades(x, fin, fout):
     x = x.copy()
     a, b = int(fin * SR), int(fout * SR)
@@ -134,7 +142,7 @@ def main():
     write(out / "accel.ogg", seam(cut(drive, ACCEL), ACCEL_XFADE))
     a, b = best_loop(drive, *TOP, *TOP_LOOP)
     write(out / "top.ogg", loop_clip(drive, a, b, TOP_XFADE))
-    write(out / "lift.ogg", fades(cut(drive, LIFT), 0.02, 0.35))
+    write(out / "lift.ogg", fades(shelf(cut(drive, LIFT), 2000, 8), 0.02, 0.35))
     write(out / "background.ogg", background())
 
 

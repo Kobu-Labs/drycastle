@@ -51,6 +51,21 @@ public class EngineSoundTests
     }
 
     [Fact]
+    public void Lifting_at_top_speed_plays_the_lift_within_a_second()
+    {
+        var m = new EngineSoundModel();
+        var v = Run(m, 0, 30, 3f);
+        v = Run(m, v, 10, 12f);
+        Run(m, v, 0, 2f);
+        Assert.Equal(EnginePhase.TopSpeed, m.Phase);
+        m.TakeLift();
+        float? at = null; var t = 0f;
+        Run(m, Top, -5.4f, 1.5f, x => { t += Dt; if (at == null && x.TakeLift()) at = t; }); // coasting off 200: 5.4 km/h per second
+        Assert.NotNull(at);
+        Assert.InRange(at!.Value, 0f, 0.9f);
+    }
+
+    [Fact]
     public void Lifting_after_a_blip_or_at_a_crawl_is_silent()
     {
         var m = new EngineSoundModel();
