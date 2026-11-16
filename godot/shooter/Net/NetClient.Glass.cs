@@ -64,7 +64,7 @@ public partial class NetClient
             _glassOverlays[s.Key] = overlay = GlassFx.MakeOverlay(parent, rect, s.Key, hole, IsGaragePlate(s.Key) ? GlassFx.OsbShards : null);
         SetPaneGeometry(s.Key, !s.Shattered, animate);
         GlassFx.SetOverlay(overlay, GlassRules.CrackStage(s.Fraction, GlassData.CrackStages), GlassRules.MaxCrackStage(GlassData.CrackStages), s.Shattered);
-        if (animate && parent.IsVisibleInTree()) GlassFx.Shatter(Owned, parent.GlobalTransform, rect, GlassData, s.Key, IsGaragePlate(s.Key) ? GlassFx.OsbShards : null);
+        if (animate && parent.IsVisibleInTree()) GlassFx.Shatter(Owned, parent.GlobalTransform, rect, GlassData, s.Key, IsGaragePlate(s.Key) ? GlassFx.OsbShards : null, s.Key.Owner == GlassPaneKey.Map ? null : parent);
     }
 
     /// <summary>Where a pane is drawn: the node its rectangle is in and the rectangle. False for a pane this client cannot place (an unknown index, a vehicle not drawn yet).</summary>

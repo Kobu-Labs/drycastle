@@ -118,10 +118,10 @@ public static class GlassFx
 
     /// <summary>
     /// The shatter animation: the fragments of the pane fly out of it under <paramref name="world"/>, from where the pane is now
-    /// (<paramref name="paneParent"/> is the global transform of the node the rectangle is in). Skipped beyond the effect range of
+    /// (<paramref name="paneParent"/> is the global transform of the node the rectangle is in; with <paramref name="follow"/> the fragments are children of that node and move with it). Skipped beyond the effect range of
     /// glass.json and when too many run already (the pane still changes to its shattered look).
     /// </summary>
-    public static void Shatter(Node3D world, Transform3D paneParent, GlassPaneRect rect, GlassConfig cfg, GlassPaneKey key, ShardLook? look = null)
+    public static void Shatter(Node3D world, Transform3D paneParent, GlassPaneRect rect, GlassConfig cfg, GlassPaneKey key, ShardLook? look = null, Node3D? follow = null)
     {
         if (_active >= cfg.MaxShatterEffects) return;
         var frame = paneParent * Frame(rect, Lift);
@@ -162,8 +162,8 @@ public static class GlassFx
             // the shader moves the fragments out of the mesh's own bounds: keep it drawn while they fly
             ExtraCullMargin = cfg.ShardSpeed * cfg.ShardLife * 2f + 5f * cfg.ShardLife * cfg.ShardLife + 1f,
         };
-        world.AddChild(mi);
-        mi.GlobalTransform = frame;
+        if (follow != null) { follow.AddChild(mi); mi.Transform = Frame(rect, Lift); } // a vehicle's pane: the fragments ride along with it
+        else { world.AddChild(mi); mi.GlobalTransform = frame; }
         _active++;
         mi.TreeExiting += () => _active = Math.Max(0, _active - 1); // also when the client leaves mid-flight
         var tw = mi.CreateTween();
