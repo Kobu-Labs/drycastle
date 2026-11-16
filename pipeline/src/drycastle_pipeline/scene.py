@@ -86,6 +86,7 @@ class MapScene:
     bunkers: list[dict] = field(default_factory=list)  # rooms of the enterable bunkers, see bunker.bunker_rooms
     church: dict | None = None  # the inside of the church, see church_interior.church_info
     urad: dict | None = None  # the inside of the municipal office, see office_interior.urad_info
+    garage: dict | None = None  # the bus garage's doorway, bay and parking place, see garage.garage_info
     water: WaterPlan | None = None  # the water bodies (water.json) and the terrain they are carved into, with a terrain
 
     def chunks(self) -> list[Chunk]:
@@ -191,6 +192,11 @@ def build_scene(
                             scene.nodes.setdefault(tuple(p["chunk"]), {})[node] = Mesh(
                                 np.array(tris, float) + [0, 0, dz], np.array([PANE_GLASS] * len(tris), np.uint8)
                             )
+                    if b["model"] == "bus_garage" and fn is building_mesh:
+                        from drycastle_pipeline import garage
+
+                        if bid == garage.DEEP:
+                            scene.garage = {"id": bid, "parcel": p["id"], **garage.garage_info(scene.building_elevation)}
                     if b["model"] == "bunker" and fn is building_mesh:
                         a = float(b["model_axis"])
                         rooms = bunker_rooms(b["footprint"]["exterior"], (math.cos(a), math.sin(a)))

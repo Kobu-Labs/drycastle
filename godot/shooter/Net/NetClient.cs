@@ -363,6 +363,7 @@ public partial class NetClient : Node
                 OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
                 OnRozhlasEvent((EventKind)e.Kind, e.Payload); // the village loudspeaker's phase, broadcast and offset
                 OnUradDoorEvent((EventKind)e.Kind, e.Payload); // the Obecny Urad's door
+                OnGarageDoorEvent((EventKind)e.Kind, e.Payload); // the bus garage's doors
                 OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
                 OnDemonEvent((EventKind)e.Kind, e.Payload); // the demon: fireballs, the curse
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);

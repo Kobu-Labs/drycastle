@@ -104,6 +104,26 @@ buildings:
     height_m: 4.8
     roof_height_m: 1.8
 
+  # P-0666 (G-0124, beside the church): the bus garage, two parts sharing a wall. White render, two lean-to
+  # roofs of old rusty standing-seam sheet falling away from the shared wall, a brown double door in the
+  # deep part (w378900337) and a barred window in the other. From the owner's photos of 2026-11-16. The
+  # deep part is hollow and its door and walls are raised for the bus (pipeline/src/drycastle_pipeline/garage.py);
+  # the roof and height here only describe the model. The generated defaults (two storeys, gabled) were wrong.
+  w378900337:
+    model: bus_garage
+    wall_colour: "#eeece6"
+    roof_colour: "#8a939c"
+    levels: 1
+    roof: flat
+    height_m: 5.0
+  w1226408502:
+    model: bus_garage
+    wall_colour: "#eeece6"
+    roof_colour: "#8a939c"
+    levels: 1
+    roof: flat
+    height_m: 3.9
+
   # P-0028 (G-0001): old village house, street gable to the road, grey-white weathered render, orange-red
   # clay tile, steep (about 47 degrees) roof. Eave about 3.0 m, ridge about 6.6 m, scaled from one Street
   # View frame. The attic has two small windows in the gable, so it is one storey plus attic. Openings

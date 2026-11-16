@@ -386,6 +386,7 @@ public partial class Shooter : Node3D
         if (ChurchDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } churchDoors) AddChild(churchDoors); // closed doors in the doorway, solid on the server too (ADR 0019)
         if (UradProps.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } uradProps) AddChild(uradProps); // desks, chairs: Synty models, boxes on the server too
         if (UradDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } uradDoor) AddChild(uradDoor); // the Obecny Urad's door: shut unless a rozhlas detour is open, solid on the server too
+        if (GarageDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } garageDoors) AddChild(garageDoors); // the bus garage's doors: shut until a player opens them, solid on the server too
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {
             var bunkers = Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));

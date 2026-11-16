@@ -126,6 +126,8 @@ public enum EventKind : byte
     RozhlasSet = 187,
     /// <summary>Server to everyone, and to a joiner when the door is open: the Obecny Urad's door opened (1) or closed (0), one byte (<see cref="UradDoorCodec"/>). Open exactly while a detour broadcast is on (OnAir or Hijacked); kinds 186-189 belong to the loudspeaker.</summary>
     UradDoor = 188,
+    /// <summary>Server to everyone, and to a joiner when the doors are open: the bus garage's doors opened (1) or closed (0), one byte (<see cref="GarageDoorCodec"/>). A player on foot works them with the interact key; the server sees the key in the inputs, so there is no request message.</summary>
+    GarageDoor = 245,
     /// <summary>Server to everyone, and to a joiner: the events announced now (<see cref="IntelBoard"/>, <see cref="IntelCodec"/>), and which one is being announced this moment. The intel screen draws it.</summary>
     IntelSync = 185,
     /// <summary>Client to server: take the item at a position of a corpse's list (u16 corpse id, u8 index, <see cref="ItemEvents"/>). Kinds 190-199 belong to items and equipment.</summary>
@@ -284,7 +286,8 @@ public static class Wire
     //   v58 aircraft state byte (#303): kind in bits 6-7 (was bit 7), bank in bits 0-5 (was 0-6); a third kind, the UAV
     //   v55 world interest (ADR 0025): world record flag FDormant 64 (the entity left this client's interest, no fields); animals, flocks and poop outside 800 m are not sent
     //   v56 wild animal size and weight (ticket #309): the animal state byte's bits 5-7 are the size step; event 25 ends in the animal's weight (u16, tenths of a kg)
-    public const byte ProtocolVersion = 60;
+    //   v61 the bus garage: event 245 GarageDoor (its doors open or closed)
+    public const byte ProtocolVersion = 61;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

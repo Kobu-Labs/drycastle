@@ -73,6 +73,13 @@ public partial class NetServer
                 GD.Print($"server: fixed spot {def.Id} at ({spot.X:F1},{gy:F1},{spot.Z:F1}) facing {yaw * 180f / MathF.PI:F0} deg");
             }
         }
+        if (GarageParking() is { } park) // the bus garage's own vehicle, nose to the doors (garage.json)
+        {
+            var def = Vehicles.Vehicles[park.Kind];
+            var gy = ServerCar.RestHeight(space, new Vector3(park.Pos.X, park.Pos.Y, park.Pos.Z), park.Yaw, def.HalfWidth, def.HalfLength, park.Pos.Y) ?? park.Pos.Y;
+            planned.Add((new NVec3(park.Pos.X, gy, park.Pos.Z), park.Yaw, park.Kind));
+            GD.Print($"server: {def.Id} parked in the garage at ({park.Pos.X:F1},{gy:F1},{park.Pos.Z:F1})");
+        }
         return planned;
     }
 
@@ -101,8 +108,9 @@ public partial class NetServer
             // the vehicles of vehicles.json (cars first) are dealt round-robin over the clusters and each takes a free candidate within 40 m of its
             // cluster anchor (a random one), at least 12 m from every other vehicle, on real ground under the whole footprint
             var kinds = new List<int>();
+            var garaged = GarageParking()?.Kind ?? -1; // one of that type stands in the garage instead of being dealt
             for (var kind = 0; kind < Vehicles!.Vehicles.Count; kind++)
-                for (var n = 0; n < Vehicles.Vehicles[kind].SpawnCount; n++) kinds.Add(kind);
+                for (var n = kind == garaged ? 1 : 0; n < Vehicles.Vehicles[kind].SpawnCount; n++) kinds.Add(kind);
             var anchors = ClusterAnchors(Spawns, Math.Max(1, Math.Min(6, (kinds.Count + 2) / 3)), ClusterRadius);
             var fitProbes = new Dictionary<int, FlightProbe>();
             var fixedSpots = PlanFixedSpots(space); // the random deal keeps 12 m clear of them; they join the list after it, so the ids of the dealt vehicles do not move

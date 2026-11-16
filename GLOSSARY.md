@@ -403,6 +403,14 @@ _Avoid_: blast cover, shot-only cover (that stops shots, not blasts), protection
 The double doors in the doorway of the church: closed (solid, drawn as dark wooden leaves) or open (leaves swung inward, nothing solid). Closed unless the Holy Mass event opens them. The church rooms shelter whether they are open or not.
 _Avoid_: church gate, church entrance (that is the doorway)
 
+**Bus garage**:
+The garage beside the church (parcel P-0666, two buildings sharing a wall): its deep part is one hollow bay sized for the Bus, which stands in it at the start, nose to the garage doors. The other part is solid. Not a shelter.
+_Avoid_: depot, hangar (that is the Base), bus stop
+
+**Garage doors**:
+The double doors of the Bus garage: closed (solid, brown sheet-metal leaves) or open (leaves swung out into the yard, nothing solid). A player on foot at the doorway opens and closes them with the interact key, from either side; they do not close on a vehicle standing in the doorway. Closed on a new server.
+_Avoid_: gate, garage door as a Building detail opening (that is a drawn, fixed door of a house)
+
 **Match mode**:
 How a round is scored and won, set by `mode` in `match.json` at server start, or by an admin's `/restart`: free-for-all (`ffa`, the default: every player alone) or team deathmatch (`tdm`).
 _Avoid_: game mode, playlist

@@ -5,12 +5,19 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// Double doors in a <see cref="Doorway"/> (the church's, ADR 0019, and the Obecny Urad's): a box on the World layer in the doorway while closed (solid for players, bullets and citizens; on the
-/// server too, so it is made without drawing there) and two dark wooden leaves, code-built. Open: the box is off and the leaves are swung inward by <see cref="OpenAngleDeg"/>, with a short swing on
+/// server too, so it is made without drawing there) and two dark wooden leaves, code-built. Open: the box is off and the leaves are swung by its <see cref="DoorStyle"/> (inward unless it says outward), with a short swing on
 /// the clients. The server owns the state; a client sets it from the door's event. Closed by default. A subclass is one building's door (its <c>Current</c>, its event).
 /// </summary>
 public abstract partial class DoorNode : Node3D
 {
-    const float OpenAngleDeg = 100f, SwingSeconds = 0.8f, LeafThickness = 0.1f;
+    const float LeafThickness = 0.1f;
+
+    /// <summary>How one building's doors look and move: wooden leaves that swing inward by default (the church's, the Urad's).</summary>
+    protected record DoorStyle(bool SwingsOut = false, float OpenAngleDeg = 100f, float SwingSeconds = 0.8f, string Panel = "3b2414", string Seam = "24150b", string Iron = "1d1d20", int Seams = 3, bool Straps = true, float Metallic = 0f);
+
+    /// <summary>This door's look and swing; read once, in <see cref="Init"/>.</summary>
+    protected virtual DoorStyle Style => new();
+    DoorStyle _style = new();
 
     public Doorway Gate { get; private set; } = null!;
     public bool IsOpen { get; private set; }
@@ -24,7 +31,7 @@ public abstract partial class DoorNode : Node3D
     /// <summary>Sets the node up in <paramref name="gate"/> (the doorway's position and yaw: local -Z points out of the building, +X to the right of someone facing in) and builds the box and the leaves.</summary>
     protected void Init(string name, Doorway gate, bool draw)
     {
-        Name = name; Gate = gate; _draw = draw;
+        Name = name; Gate = gate; _draw = draw; _style = Style;
         Position = new Vector3(gate.Pos.X, gate.Pos.Y, gate.Pos.Z);
         Rotation = new Vector3(0, gate.Yaw, 0);
         Build();
@@ -37,9 +44,9 @@ public abstract partial class DoorNode : Node3D
         _body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(w, h, Doorway.Depth) } });
         AddChild(_body);
         if (!_draw) return;
-        var wood = new StandardMaterial3D { AlbedoColor = new Color("3b2414"), Roughness = 0.9f };
-        var seam = new StandardMaterial3D { AlbedoColor = new Color("24150b"), Roughness = 1f };
-        var iron = new StandardMaterial3D { AlbedoColor = new Color("1d1d20"), Roughness = 0.6f, Metallic = 0.6f };
+        var wood = new StandardMaterial3D { AlbedoColor = new Color(_style.Panel), Roughness = 0.9f, Metallic = _style.Metallic };
+        var seam = new StandardMaterial3D { AlbedoColor = new Color(_style.Seam), Roughness = 1f };
+        var iron = new StandardMaterial3D { AlbedoColor = new Color(_style.Iron), Roughness = 0.6f, Metallic = 0.6f };
         // the right-hand leaf hinges at +X and reaches to -X, the left-hand one the other way round
         _right = Leaf(+1, w / 2, h, wood, seam, iron);
         _left = Leaf(-1, w / 2, h, wood, seam, iron);
@@ -54,10 +61,13 @@ public abstract partial class DoorNode : Node3D
         void Box(Vector3 size, Vector3 centre, Material m) =>
             pivot.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = size }, MaterialOverride = m, Position = centre });
         Box(new Vector3(len, h - 0.02f, LeafThickness), new Vector3(toward * len / 2, h / 2, 0), wood);
-        for (var k = 1; k <= 3; k++) // plank seams
-            Box(new Vector3(0.015f, h - 0.1f, LeafThickness + 0.012f), new Vector3(toward * len * k / 4f, h / 2, 0), seam);
-        foreach (var y in new[] { 0.45f, h - 0.5f }) // straps from the hinge across the leaf
-            Box(new Vector3(len * 0.92f, 0.12f, LeafThickness + 0.03f), new Vector3(toward * len * 0.46f, y, 0), iron);
+        for (var k = 1; k <= _style.Seams; k++) // plank seams (the ribs of a sheet-metal leaf)
+            Box(new Vector3(0.015f, h - 0.1f, LeafThickness + 0.012f), new Vector3(toward * len * k / (_style.Seams + 1f), h / 2, 0), seam);
+        if (_style.Straps)
+            foreach (var y in new[] { 0.45f, h - 0.5f }) // straps from the hinge across the leaf
+                Box(new Vector3(len * 0.92f, 0.12f, LeafThickness + 0.03f), new Vector3(toward * len * 0.46f, y, 0), iron);
+        else // a lever handle near the meeting edge, on both faces
+            Box(new Vector3(0.04f, 0.16f, LeafThickness + 0.1f), new Vector3(toward * (len - 0.12f), 1.1f, 0), iron);
         AddChild(pivot);
         return pivot;
     }
@@ -76,16 +86,16 @@ public abstract partial class DoorNode : Node3D
         var target = IsOpen ? 1f : 0f;
         if (Angle != target)
         {
-            Angle = Mathf.MoveToward(Angle, target, (float)delta / SwingSeconds);
+            Angle = Mathf.MoveToward(Angle, target, (float)delta / _style.SwingSeconds);
             Pose();
         }
     }
 
-    /// <summary>Swung inward: the right leaf turns towards +Z (inside), the left one the other way. Eased so it starts and ends gently.</summary>
+    /// <summary>Swung inward: the right leaf turns towards +Z (inside), the left one the other way; outward (<see cref="DoorStyle.SwingsOut"/>) the other way round. Eased so it starts and ends gently.</summary>
     void Pose()
     {
         if (_left == null || _right == null) return;
-        var a = Mathf.DegToRad(OpenAngleDeg) * Mathf.SmoothStep(0, 1, Angle);
+        var a = Mathf.DegToRad(_style.OpenAngleDeg) * Mathf.SmoothStep(0, 1, Angle) * (_style.SwingsOut ? -1 : 1);
         _right.Rotation = new Vector3(0, a, 0);
         _left.Rotation = new Vector3(0, -a, 0);
     }
