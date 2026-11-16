@@ -37,6 +37,8 @@ public static class SpecialWeapons
     public const byte Burn = 242;
     /// <summary>The player's own Respawn action (#284, <see cref="MatchSim.ForceDeath"/>): the kill feed names it.</summary>
     public const byte Redeploy = 239;
+    /// <summary>The harvester's reel (#331): a player drawn into it; the kill feed names it. A run-over by the harvester is a plain Vehicle kill.</summary>
+    public const byte Harvester = 238;
 }
 
 public abstract record MatchEvent;

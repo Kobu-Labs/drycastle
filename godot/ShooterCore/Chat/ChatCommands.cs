@@ -120,6 +120,7 @@ public static class ChatCommands
                 ("intel", "TEST: announce a made-up event and put it on the intel screen at the base"),
                 ("mass", "the Holy Mass: the bells ring, the village walks to the church, the pastor leads the Mass"),
                 ("thieves", "the Thieves event: Raids of thieves drive into the village in vans to steal Loot (cannot be lost)"),
+                ("harvester", "a harvester drives onto a crop field near the players and cuts it; kill the driver to take it, keep clear of the reel (ignores the 12 minute cooldown, one at a time)"),
                 ("demon", "TEST: the pastor turns into the demon now; stand in the church to fight it"),
                 ("current", "the running event (with end)"),
             },

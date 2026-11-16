@@ -182,6 +182,10 @@ public enum EventKind : byte
     ThievesFx = 232,
     /// <summary>Server to everyone, and to a joiner: the satellite dishes taken so far (<see cref="DishCodec"/>: the whole set of object ids, also when it is empty after a round reset). The client hides those objects' nodes.</summary>
     DishTaken = 233,
+    /// <summary>Server to everyone, about twice a second while a harvester job runs and once when it ends (<see cref="HarvesterCodec.StateMsg"/>): the phase, the field and how far the cut has come. The client replays the plan of that field and draws the stubble; nothing per plant. Kinds 234-235 belong to the harvester (#331).</summary>
+    HarvesterState = 234,
+    /// <summary>Server to everyone: a one-shot effect of the harvester event (<see cref="HarvesterCodec.FxMsg"/>): a bale caught fire or burnt out, a victim drawn in, a bale left the unloader.</summary>
+    HarvesterFx = 235,
 }
 
 public abstract record ReliableMsg;
@@ -286,8 +290,9 @@ public static class Wire
     //   v58 aircraft state byte (#303): kind in bits 6-7 (was bit 7), bank in bits 0-5 (was 0-6); a third kind, the UAV
     //   v55 world interest (ADR 0025): world record flag FDormant 64 (the entity left this client's interest, no fields); animals, flocks and poop outside 800 m are not sent
     //   v56 wild animal size and weight (ticket #309): the animal state byte's bits 5-7 are the size step; event 25 ends in the animal's weight (u16, tenths of a kg)
+    //   v62 the harvester event (#331): events 234 HarvesterState and 235 HarvesterFx, special weapon 238, a corpse owned by 60002 is a hay bale
     //   v61 the bus garage: event 245 GarageDoor (its doors open or closed)
-    public const byte ProtocolVersion = 61;
+    public const byte ProtocolVersion = 62;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

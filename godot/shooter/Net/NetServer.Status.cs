@@ -56,7 +56,7 @@ public partial class NetServer
 
     /// <summary>
     /// Burns one tick. Hit events carry whole hit points, so the burn's 0.5 hp ticks are collected per victim (<see cref="BurnPayout"/>) and
-    /// dealt as whole points: 1 hp every 2 s, 5 hp over a full burn. A fireball's burn (no source) is the victim's own damage.
+    /// dealt as whole points: 1 hp every 2 s, 5 hp over a full burn. A fireball's burn (no source) and a burning bale's (<see cref="BurnSet.HazardSource"/>) are the victim's own damage (<see cref="BurnCredit"/>).
     /// </summary>
     void StatusTick(float dt)
     {
@@ -67,7 +67,7 @@ public partial class NetServer
         {
             var whole = _burnPay.Whole(t);
             if (whole <= 0) continue;
-            var source = t.Source == BurnSet.NoSource || !_byId.ContainsKey(t.Source) ? t.Victim : t.Source;
+            var source = BurnCredit.Attacker(t.Source, t.Victim, _byId.ContainsKey(t.Source)); // a fireball's, a bale's and a gone igniter's burn is the victim's own damage: nobody scores
             Deal(source, SpecialWeapons.Burn, t.Victim, whole, false, false);
         }
     }
