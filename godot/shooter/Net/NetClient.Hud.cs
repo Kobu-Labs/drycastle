@@ -18,7 +18,7 @@ public partial class NetClient
     void InitMatchEdges()
     {
         Match.PhaseChanged += SfxPhase;
-        Match.RoundRestarted += () => _hud?.ClearKills();
+        Match.RoundRestarted += () => { _hud?.ClearKills(); HarvesterRoundRestart(); };
     }
 
     WeaponDef? CurrentWeapon => Ammo is { } a && Weapons != null && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1] : null;
