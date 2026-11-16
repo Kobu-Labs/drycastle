@@ -74,6 +74,7 @@ PATCH_TEXTURE = {
 _SOFT_LAYERS = ("lawn", "tone_a", "tone_b", "litter")  # big soft shapes: simplified harder (fewer triangles)
 _RECT_LAYERS = ("bed", "furrow")  # textured with their own angle and origin
 _NEAR_M = 8.0  # what around a parcel counts as near it
+_AROUND_M = 16.0  # the ground a crop patch's edge blends into (crop.py): widest border zone plus the probe
 _TILE_M = 24.0
 CELL_M = 2.0  # the meadow cell: the tone noise is laid out in these (meadow.py), stored clutter reads it at its position
 _MIN_PIECE_M2 = 0.15
@@ -125,6 +126,7 @@ class ParcelContext:
     road_lines: list[tuple[LineString, float]] | None = None  # centre lines and widths of the road edges near the parcel
     plain_road: BaseGeometry | None = None  # carriageways of the dike's regular roads (``detail.dike.not_track``): no track, no lawn over them
     crop_neighbours: list[tuple[str, BaseGeometry]] | None = None  # (id, polygon) of the other crop patches touching this one (the baulk)
+    ground_around: list[tuple[str, BaseGeometry, list[int], bool]] | None = None  # crop only: (id, polygon, terrain colour, is_crop) of the other ground units near the patch (what a field's edge blends into)
     dike: bool = False  # this part of the parcel is the flood dike: it gets the dike recipe, whatever the parcel kind
 
 
@@ -1074,6 +1076,7 @@ class Village:
         # crop patches, for the baulk between two that adjoin
         self.crop_units = [(p["id"], shape(p["polygon"])) for p in self.parcels if area_type(p, self.types) == "crop"]
         self.crop_tree = shapely.STRtree([g for _, g in self.crop_units])
+        self._around: tuple[list, shapely.STRtree] | None = None
 
     def cfg_for(self, parcel: dict, recipe: str) -> dict:
         """The detail rules for a unit: for a ground area whose type has ``detail`` settings, those laid over the
@@ -1123,6 +1126,15 @@ class Village:
         near = part.buffer(0.5)
         return [self.crop_units[i] for i in sorted(self.crop_tree.query(near, predicate="intersects")) if self.crop_units[i][0] != pid]
 
+    def _ground_around(self, pid: str, part: Polygon) -> list[tuple[str, BaseGeometry, list[int], bool]]:
+        """The other ground units within ``_AROUND_M`` of a crop patch with their terrain colour (built on first use)."""
+        if self._around is None:
+            units = [(p["id"], shape(p["polygon"]), self.colour[p["id"]], area_type(p, self.types) == "crop")
+                     for p in self.parcels if area_type(p, self.types) is not None]
+            self._around = (units, shapely.STRtree([g for _, g, _, _ in units]))
+        units, tree = self._around
+        return [units[i] for i in sorted(tree.query(part.buffer(_AROUND_M), predicate="intersects")) if units[i][0] != pid]
+
     def _context(self, parcel: dict, part: Polygon, cid: str, dike: bool) -> ParcelContext:
         near = part.buffer(_NEAR_M)
         roads = self._near(self.r_tree, self.road_polys, near)
@@ -1150,6 +1162,7 @@ class Village:
             plain_road=_union(self._near(self.plain_tree, self.plain_polys, near)) if dike and self.plain_polys else None,
             dike=dike,
             crop_neighbours=self._crop_neighbours(parcel["id"], part) if area_type(parcel, self.types) == "crop" else None,
+            ground_around=self._ground_around(parcel["id"], part) if area_type(parcel, self.types) == "crop" else None,
             water=_union(self._near(self.w_tree, self.water_polys, part.buffer(float(self.cfg["tint"]["water_m"])))) if self.water_polys else None,
         )
 
