@@ -21,6 +21,9 @@ public sealed partial class CockpitRig : Node3D
         ["golf_mk2"] = new Spec(new Vector3(-0.4875f, 1.50f, 0.30f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildGolf),
         ["bus"] = new Spec(new Vector3(-0.70f, 1.60f, -4.75f), System.Array.Empty<string>(), BuildBus),
         ["flak"] = new Spec(new Vector3(-0.50f, 2.05f, -1.25f), new[] { "cab" }, BuildFlak),
+        // the harvester (#331): the combine's cab, after SM_Veh_Harvester_01 (model +Z is forward, the model faces yaw 180, so its steering wheel at x 0.79, y 2.70, z 1.21 is x -0.79, z -1.21 here; no hull: the rig hangs under the root).
+        // The eye sits 1 m over the seat (y 2.0, vehicles.json seats) just behind the wheel, inside the cab; the model's own wheel and glass are not drawn for the driver, the reel is in front below the sill.
+        ["harvester"] = new Spec(new Vector3(-0.79f, 3.0f, -0.55f), new[] { "SM_Veh_Harvester_SteeringW", "SM_Veh_Harvester_Glass" }, BuildHarvester),
         ["utility_helicopter"] = new Spec(new Vector3(0.55f, 1.78f, -1.80f), new[] { "fuselage" }, BuildHelicopter),
     };
 
@@ -224,6 +227,9 @@ public sealed partial class CockpitRig : Node3D
 
     static void BuildGolf(CockpitRig r) =>
         r.SteeringWheel(new Vector3(-0.4875f, 1.175f, -0.225f), 0.206f, 90f, new Vector3(-0.4875f, 0.95f, 0.55f), 0.30f);
+
+    static void BuildHarvester(CockpitRig r) =>
+        r.SteeringWheel(new Vector3(-0.787f, 2.705f, -1.21f), 0.22f, 45f, new Vector3(-0.79f, 2.45f, -0.45f), 0.30f);
 
     // ------------------------------------------------------------------ the flak truck
     // After scripts/make_flak_model.py: the cab is a box x +-1.2, y 0.95 .. 1.78, z -2.15 .. -0.80 with a glasshouse over it that narrows to
