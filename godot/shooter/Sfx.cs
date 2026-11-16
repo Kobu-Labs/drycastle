@@ -14,12 +14,14 @@ public sealed class LoopVoice
 
     public bool Active => Player != null;
 
-    public void Update(Vector3 position, float pitch = 1f, float dbOffset = 0f)
+    /// <summary><paramref name="exact"/>: play at exactly the volume asked, see <see cref="Sfx.SetExactLevel"/>.</summary>
+    public void Update(Vector3 position, float pitch = 1f, float dbOffset = 0f, bool exact = false)
     {
         if (Player == null) return;
         Player.GlobalPosition = position;
         Player.PitchScale = Mathf.Max(0.05f, pitch * Def.Pitch);
         Player.VolumeDb = BaseDb + dbOffset;
+        Sfx.SetExactLevel(Player, exact);
     }
 
     /// <summary>Stops the loop and returns the voice to the pool.</summary>
@@ -170,7 +172,19 @@ public partial class Sfx : Node
     public static void Play2D(string id, float dbOffset = 0f) => Instance?.Do2D(id, dbOffset);
     /// <summary>3D positional at <paramref name="at"/> with the event's range; silent beyond it. Events with no range play non-positional.</summary>
     /// <summary>True when the sound started; false when it was skipped or has no voice, with the reason in <see cref="LastNote"/>.</summary>
-    public static bool Play3D(string id, Vector3 at, float dbOffset = 0f) => Instance?.Do3D(id, at, dbOffset) ?? false;
+    public static bool Play3D(string id, Vector3 at, float dbOffset = 0f, bool exact = false) => Instance?.Do3D(id, at, dbOffset, exact) ?? false;
+
+    /// <summary>
+    /// Godot's 3D player clamps its level (volume plus the nearness boost of the attenuation) to max_db, 3 dB, so a sound close to the listener plays at +3 dB whatever its
+    /// volume_db is (fades, ducking and the mix levels do nothing, and several together clip), and below 0 dB it low-passes the sound at 5 kHz in proportion (muffled). A
+    /// vehicle's own engine, heard from the inside, wants neither: <paramref name="exact"/> makes the level the player's own volume near the source (max_db = volume) and
+    /// turns the filter off. Pooled players are put back when it is false.
+    /// </summary>
+    public static void SetExactLevel(AudioStreamPlayer3D p, bool exact)
+    {
+        p.MaxDb = exact ? p.VolumeDb : 3f;
+        p.AttenuationFilterCutoffHz = exact ? 20500f : 5000f;
+    }
     public static string LastNote { get; private set; } = "";
     public static void Ui(string id) => Instance?.DoUi(id);
     /// <summary>A looping voice; <paramref name="startFraction"/> starts it that share of the way into its file (0 to 1).</summary>
@@ -194,7 +208,7 @@ public partial class Sfx : Node
         _s2[i] = ++_i2;
     }
 
-    bool Do3D(string id, Vector3 at, float dbOffset)
+    bool Do3D(string id, Vector3 at, float dbOffset, bool exact)
     {
         if (!Enabled || _p3.Length == 0) { LastNote = "audio disabled"; return false; }
         if (Def(id) is not { } d) { LastNote = $"no sounds.json entry {id}"; return false; }
@@ -213,6 +227,7 @@ public partial class Sfx : Node
         p.PitchScale = SoundRules.PitchFor(d, _rng.Randf());
         p.MaxDistance = d.MaxDistance; p.UnitSize = SoundRules.UnitSize(d.MaxDistance);
         p.GlobalPosition = at;
+        SetExactLevel(p, exact);
         p.Play();
         _s3[i] = ++_i3;
         LastNote = $"played on voice {i}{(stolen ? " (stole a playing voice)" : "")}, {d.VolumeDb + dbOffset:F1} dB, pitch {p.PitchScale:F2}, listener {dist:F1} m, length {st.GetLength():F2}s, bus {p.Bus}";
@@ -243,6 +258,7 @@ public partial class Sfx : Node
             p.Stream = st; p.Bus = d.Bus; p.VolumeDb = d.VolumeDb; p.PitchScale = d.Pitch;
             p.MaxDistance = d.MaxDistance; p.UnitSize = SoundRules.UnitSize(d.MaxDistance);
             p.GlobalPosition = at;
+            SetExactLevel(p, false); // the loop's own Update says it again each frame
             p.Play(startFraction > 0 ? (float)(Math.Clamp(startFraction, 0f, 0.98f) * st.GetLength()) : 0f);
             return new LoopVoice { Player = p, Def = d, BaseDb = d.VolumeDb, Owner = this, Slot = i };
         }
