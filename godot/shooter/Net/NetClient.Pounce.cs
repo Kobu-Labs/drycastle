@@ -122,7 +122,6 @@ public partial class NetClient
         _pLie = Mathf.MoveToward(_pLie, pinnedNow ? 1f : 0f, dt / Math.Max(0.05f, pinnedNow ? cfg.DropS : cfg.RiseS));
         if (_pv.Marked) _pT += delta;
         if (_me == null || !GodotObject.IsInstanceValid(_me)) return;
-        _me.CutCamera ??= PounceCamera;
         var view = PounceView();
         var marked = _pv.MarkedMe(_myId);
         _me.LookLocked = marked;
@@ -164,7 +163,7 @@ public partial class NetClient
         _me.Pitch = Mathf.Lerp(_me.Pitch, pitch, k);
     }
 
-    /// <summary>The cut camera (<see cref="Player.CutCamera"/>): the drop to the floor and the look at the demon's muzzle while pinned, the rise back to the eye after. Null: the normal eye.</summary>
+    /// <summary>The pounce's part of the cut camera (<see cref="ComposedCamera"/> is the hook, shared with the death's fall): the drop to the floor and the look at the demon's muzzle while pinned, the rise back to the eye after. Null: the normal eye.</summary>
     Transform3D? PounceCamera(Transform3D eye)
     {
         var cfg = DemonData.Pounce;
