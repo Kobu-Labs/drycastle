@@ -103,11 +103,11 @@
     { "id": "shot.svd", "files": ["free-firearm-sound-library/sks.ogg"], "bus": "SFX", "volume_db": 1, "pitch": 0.9, "pitch_variance": 0.04, "max_distance": 400, "priority": 3 },
     { "id": "reload.svd", "files": ["drycastle-generated-sounds/reload_ak47.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.9, "pitch_variance": 0.03, "max_distance": 0, "priority": 2 },
     { "id": "dry.svd", "files": ["kenney-interface-sounds/click_004.ogg"], "bus": "SFX", "volume_db": -6, "pitch": 0.6, "pitch_variance": 0.03, "max_distance": 0 },
-    { "id": "golf_mk2.background", "files": ["golf-mk2-sounds/background.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 120, "loop": true, "optional": true },
-    { "id": "golf_mk2.idle", "files": ["golf-mk2-sounds/idle.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 90, "loop": true, "optional": true },
-    { "id": "golf_mk2.accel", "files": ["golf-mk2-sounds/accel.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 140, "loop": true, "optional": true },
-    { "id": "golf_mk2.lift", "files": ["golf-mk2-sounds/lift.ogg"], "bus": "SFX", "volume_db": -4, "max_distance": 100, "priority": 1, "optional": true },
-    { "id": "golf_mk2.brake", "files": ["golf-mk2-sounds/brake.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 100, "loop": true, "optional": true },
-    { "id": "golf_mk2.top", "files": ["golf-mk2-sounds/top.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 160, "loop": true, "optional": true }
+    { "id": "golf_mk2.background", "files": ["audio/golf-mk2-sounds/background.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 120, "loop": true, "optional": true },
+    { "id": "golf_mk2.idle", "files": ["audio/golf-mk2-sounds/idle.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 90, "loop": true, "optional": true },
+    { "id": "golf_mk2.accel", "files": ["audio/golf-mk2-sounds/accel.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 140, "loop": true, "optional": true },
+    { "id": "golf_mk2.lift", "files": ["audio/golf-mk2-sounds/lift.ogg"], "bus": "SFX", "volume_db": -4, "max_distance": 100, "priority": 1, "optional": true },
+    { "id": "golf_mk2.brake", "files": ["audio/golf-mk2-sounds/brake.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 100, "loop": true, "optional": true },
+    { "id": "golf_mk2.top", "files": ["audio/golf-mk2-sounds/top.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 160, "loop": true, "optional": true }
   ]
 }

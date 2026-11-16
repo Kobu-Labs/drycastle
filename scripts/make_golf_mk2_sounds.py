@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""Golf Mk2 engine sounds (vehicles.json golf_mk2 "sounds"): cuts the recorded layers from two source clips and synthesises the rest.
+
+Needs numpy and ffmpeg (libvorbis). Not stdlib-only, so do not run it with -I. The source clips are other people's recordings: the output goes to
+assets-private/audio/golf-mk2-sounds/ (gitignored), never into assets/.
+
+  make_golf_mk2_sounds.py --idle idle.wav --drive drive.wav [--out DIR]
+
+  idle  : a steady idle (loops seamlessly).
+  drive : a pull through the gears, then off the gas with the turbo blowing off.
+Cut times (seconds into the drive clip) are the constants below; change them, rerun, listen.
+"""
+import argparse, subprocess, sys, wave
+from pathlib import Path
+import numpy as np
+
+SR = 48000
+ACCEL = (6.5, 10.3)     # steady part of the pull, looped
+LIFT = (11.65, 13.1)    # off the gas: the turbo blow-off and the revs falling
+IDLE_XFADE, ACCEL_XFADE = 0.6, 0.5
+
+
+def load(path):
+    w = wave.open(str(path))
+    a = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32).reshape(-1, w.getnchannels()).mean(1) / 32768
+    if w.getframerate() != SR:
+        sys.exit(f"{path}: expected {SR} Hz (ffmpeg -ar {SR})")
+    return a
+
+
+def seam(x, xf):
+    """A loop from a clip: the tail crossfaded (equal power) over the head, so the end meets the start."""
+    n = int(xf * SR)
+    t = np.linspace(0, np.pi / 2, n, dtype=np.float32)
+    head, tail = x[:n], x[-n:]
+    mid = tail * np.cos(t) + head * np.sin(t)
+    return np.concatenate([mid, x[n:-n]])
+
+
+def fades(x, fin, fout):
+    x = x.copy()
+    a, b = int(fin * SR), int(fout * SR)
+    if a: x[:a] *= np.linspace(0, 1, a, dtype=np.float32)
+    if b: x[-b:] *= np.linspace(1, 0, b, dtype=np.float32)
+    return x
+
+
+def noise(seconds, lo, hi, tilt=0.0, seed=0):
+    """Band-limited noise that is periodic over its length (FFT-filtered, so it loops with no seam). tilt: spectral slope, 1/f^tilt."""
+    n = int(seconds * SR)
+    rng = np.random.default_rng(seed)
+    sp = np.fft.rfft(rng.standard_normal(n))
+    f = np.fft.rfftfreq(n, 1 / SR)
+    m = ((f >= lo) & (f <= hi)).astype(np.float32)
+    m *= 1 / np.maximum(f, 1) ** tilt
+    m = np.convolve(m, np.ones(9) / 9, mode="same")  # soft band edges
+    x = np.fft.irfft(sp * m, n).astype(np.float32)
+    return x / np.abs(x).max()
+
+
+def cycles(seconds, hz):
+    """A sine with a whole number of cycles in the loop."""
+    n = int(seconds * SR)
+    hz = round(hz * seconds) / seconds
+    return np.sin(2 * np.pi * hz * np.arange(n) / SR).astype(np.float32)
+
+
+def brake():
+    """Tyre and brake squeal: a hissy band with two thin, wobbling whistles on top. 2 s loop."""
+    d = 2.0
+    hiss = noise(d, 1800, 6500, 0.3, 1) * 0.5
+    wob = 0.75 + 0.25 * cycles(d, 3)
+    sq = (cycles(d, 2350) * 0.5 + cycles(d, 3140) * 0.35) * wob * (0.7 + 0.3 * cycles(d, 5))
+    return 0.6 * (hiss * (0.8 + 0.2 * cycles(d, 7)) + 0.35 * sq)
+
+
+def top():
+    """Wind and road roar at speed. 4 s loop."""
+    d = 4.0
+    return 0.9 * (noise(d, 80, 5000, 0.9, 2) * (0.85 + 0.15 * cycles(d, 1)) + 0.15 * noise(d, 5000, 12000, 0.4, 3))
+
+
+def background():
+    """Low drivetrain and road rumble under everything. 4 s loop."""
+    d = 4.0
+    return 0.9 * noise(d, 25, 320, 0.6, 4) * (0.9 + 0.1 * cycles(d, 0.5))
+
+
+def write(path, x, peak=0.8):
+    x = x / max(1e-6, np.abs(x).max()) * peak
+    p = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "s16le", "-ar", str(SR), "-ac", "1", "-i", "-", "-c:a", "libvorbis", "-q:a", "5", str(path)],
+                       input=(x * 32767).astype(np.int16).tobytes())
+    if p.returncode: sys.exit("ffmpeg failed")
+    print(f"{path.name}: {len(x) / SR:.2f} s")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--idle", required=True)
+    ap.add_argument("--drive", required=True)
+    ap.add_argument("--out", default=str(Path(__file__).resolve().parent.parent / "assets-private/audio/golf-mk2-sounds"))
+    a = ap.parse_args()
+    out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
+    idle, drive = load(a.idle), load(a.drive)
+    cut = lambda x, r: x[int(r[0] * SR):int(r[1] * SR)]
+    write(out / "idle.ogg", seam(idle, IDLE_XFADE))
+    write(out / "accel.ogg", seam(cut(drive, ACCEL), ACCEL_XFADE))
+    write(out / "lift.ogg", fades(cut(drive, LIFT), 0.02, 0.35))
+    write(out / "brake.ogg", brake())
+    write(out / "top.ogg", top())
+    write(out / "background.ogg", background())
+
+
+main()

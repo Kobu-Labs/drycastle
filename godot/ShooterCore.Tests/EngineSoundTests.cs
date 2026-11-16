@@ -133,6 +133,22 @@ public class EngineSoundTests
     }
 
     [Fact]
+    public void Accel_layer_carries_on_under_the_top_speed_layer_and_idle_missing_leaves_the_background()
+    {
+        var def = Set();
+        def.Top = new VehicleSoundLayerDef { Sound = "t" };
+        var mix = new EngineMix();
+        for (var i = 0; i < 300; i++) mix.Step(def, EnginePhase.TopSpeed, 1f, Dt);
+        Assert.Equal(1f, mix.Gain[(int)EngineLayer.Top]);
+        Assert.Equal(1f, mix.Gain[(int)EngineLayer.Accel]);
+        def.Idle = null;
+        for (var i = 0; i < 300; i++) mix.Step(def, EnginePhase.Idle, 0f, Dt);
+        Assert.Equal(0f, mix.Gain[(int)EngineLayer.Idle]);
+        Assert.Equal(1f, mix.Gain[(int)EngineLayer.Background]);
+        Assert.Equal(0f, mix.Gain[(int)EngineLayer.Accel]);
+    }
+
+    [Fact]
     public void Pitch_runs_from_standstill_to_top_speed()
     {
         var l = new VehicleSoundLayerDef { Sound = "a", Pitch = new[] { 0.8f, 1.6f } };

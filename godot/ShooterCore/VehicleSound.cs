@@ -187,7 +187,9 @@ public sealed class EngineMix
         {
             var l = loops[i];
             if (l == null) { Gain[i] = 0; continue; }
-            var target = i == (int)EngineLayer.Background ? 1f : active == (EngineLayer)i ? 1f : 0f;
+            // the accelerating layer carries on under the top speed one (a type without a top layer simply keeps accelerating)
+            var on = active == (EngineLayer)i || (i == (int)EngineLayer.Accel && phase == EnginePhase.TopSpeed);
+            var target = i == (int)EngineLayer.Background || on ? 1f : 0f;
             if (target > 0 && i == (int)EngineLayer.Brake) target = Math.Clamp(speedFraction * 2f, 0f, 1f);
             var rate = target > Gain[i] ? l.FadeIn : l.FadeOut;
             Gain[i] = rate <= 0 ? target : target > Gain[i] ? Math.Min(target, Gain[i] + dt / rate) : Math.Max(target, Gain[i] - dt / rate);

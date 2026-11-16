@@ -81,15 +81,15 @@ public partial class Sfx : Node
         _table = SoundsFile.Parse(json);
         foreach (var d in _table.Sounds)
             foreach (var f in d.Files)
-                if (!d.Optional && !System.IO.File.Exists(ModelLib.AssetPath(f))) throw new DataFileException($"sounds.json: {d.Id}: file not found {ModelLib.AssetPath(f)}");
+                if (!d.Optional && ModelLib.Find(f) == null) throw new DataFileException($"sounds.json: {d.Id}: file not found {ModelLib.AssetPath(f)}");
         if (!Enabled) return;
         foreach (var d in _table.Sounds)
         {
             var list = new List<AudioStream>();
             foreach (var f in d.Files)
             {
-                if (d.Optional && !System.IO.File.Exists(ModelLib.AssetPath(f))) continue;
-                var st = AudioStreamOggVorbis.LoadFromFile(ModelLib.AssetPath(f));
+                if (ModelLib.Find(f) is not { } path) continue; // an optional sound whose file is not there
+                var st = AudioStreamOggVorbis.LoadFromFile(path);
                 if (st == null) { GD.PrintErr($"sound failed to load: {f}"); continue; }
                 st.Loop = d.Loop;
                 list.Add(st);
