@@ -1024,17 +1024,19 @@ stateDiagram-v2
 
 ## Player.DeathView
 
-The local player's death screen: the camera falls and the blood spatters, then it lies there under the respawn scrim until the spawn.
+The local player's death screen: the legs give way, the body goes over and the blood spatters, then it lies there under the respawn scrim until the spawn.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Falling
+    [*] --> Buckling
+    Buckling --> Falling
     Falling --> Lying
     Lying --> [*]
 ```
 
-- **Falling**: Clock: the fall length (a share of the respawn delay). Camera drops and rolls, blood grows, scrim not yet shown. Zero seconds for a plain fade.
-- **Lying**: Held until the spawn ends it. Clock (elapsed): the scrim fade-in with the "eliminated by" text and the countdown.
+- **Buckling**: Clock: the buckle length. The knees or the lean give way and the view sinks part of the way; a little blood. Zero seconds for a death that does not move the camera.
+- **Falling**: Clock: the fall length. The body goes over (forward, back, left or right by the plan) and the view hits the ground; the blood grows to full. Zero seconds for a plain fade.
+- **Lying**: Held until the spawn ends it. Clock (elapsed): the impact shake, then the scrim fade-in with the "eliminated by" text and the countdown.
 
 ## Pounce.View
 

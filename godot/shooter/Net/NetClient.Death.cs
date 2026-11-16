@@ -5,8 +5,8 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The local player's death screen (#283). The pure half is <see cref="DeathPresentation"/> (Falling, then Lying, and how each kind of death looks); here it is fed a death and a clock and
-/// drives the three things that show it: the first-person camera (falls to about 0.2 m above the ground and rolls, then holds until the spawn), the blood overlay and the respawn scrim
+/// The local player's death screen (#283). The pure half is <see cref="DeathPresentation"/> (Buckling, Falling, then Lying, and how each kind of death looks: it falls forward, back, left or right); here it is fed a death and a clock and
+/// drives the three things that show it: the first-person camera (the knees give way, then it goes over to a side and lands about 0.2 m above the ground with a bounce, and holds until the spawn), the blood overlay and the respawn scrim
 /// (<see cref="Hud.SetBlood"/>, <see cref="Hud.SetRespawnScrim"/>). The camera goes through one composer (<see cref="ComposedCamera"/>) with the demon's pounce camera: a death while pinned
 /// starts from the pounce camera's pose of that frame, so nothing snaps. The own corpse (a server entity, drawn on this client too) is hidden while the camera lies where it fell.
 /// </summary>
@@ -15,7 +15,8 @@ public partial class NetClient
     readonly DeathPresentation _death = new();
     /// <summary>The camera's pose at the first frame of a fall (the pounce camera's, when pinned) and the ground height below it; null until that frame.</summary>
     Transform3D? _deathFrom;
-    float _deathTargetY;
+    float _deathTargetY, _deathPushScale = 1f;
+    Vector3 _deathForward;
     Change<bool> _deathHidesCorpse;
 
     /// <summary>The death of the local player: choose how it looks from what the player was doing until now, and start it.</summary>
@@ -80,12 +81,27 @@ public partial class NetClient
             from = pose;
             _deathFrom = from;
             _deathTargetY = GroundBelow(from.Origin) + DeathPresentation.GroundClearanceM;
+            _deathForward = new Vector3(-from.Basis.Z.X, 0, -from.Basis.Z.Z).Normalized();
+            _deathPushScale = PushRoom(from.Origin, _deathForward, _death.Current.Kind);
         }
-        var k = _death.Drop;
-        var pos = from.Origin;
-        pos.Y = Mathf.Lerp(from.Origin.Y, Math.Min(from.Origin.Y, _deathTargetY), k); // never rises: a pinned camera is already low
-        var roll = new Basis(Vector3.Back, _death.Current.RollRadians * k); // about the view axis
-        return new Transform3D(from.Basis * roll, pos);
+        var p = _death.Pose;
+        var pos = from.Origin + _deathForward * (p.PushM * _deathPushScale);
+        pos.Y = Mathf.Lerp(from.Origin.Y, Math.Min(from.Origin.Y, _deathTargetY), p.Drop) + p.BounceM; // never rises: a pinned camera is already low
+        var turn = new Basis(Vector3.Up, p.Yaw) * new Basis(Vector3.Right, p.Pitch) * new Basis(Vector3.Back, p.Roll); // about the view's own axes
+        return new Transform3D(from.Basis * turn, pos);
+    }
+
+    /// <summary>How much of a fall's travel (forward or back) fits before a wall: 0..1 (a body that falls against a wall does not push the view into it).</summary>
+    float PushRoom(Vector3 from, Vector3 forward, FallKind kind)
+    {
+        if (_me == null || !GodotObject.IsInstanceValid(_me) || !_me.IsInsideTree()) return 1f;
+        var dir = kind == FallKind.Backward ? -forward : forward;
+        var q = PhysicsRayQueryParameters3D.Create(from, from + dir * (DeathPresentation.MaxPushM + 0.3f));
+        q.CollisionMask = CollisionLayers.OnFoot;
+        q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
+        var hit = _me.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        if (hit.Count == 0) return 1f;
+        return Mathf.Clamp((from.DistanceTo(hit["position"].AsVector3()) - 0.3f) / DeathPresentation.MaxPushM, 0f, 1f);
     }
 
     /// <summary>The height of the ground (or a vehicle's roof) below <paramref name="from"/>: a ray down, so the camera never ends inside the floor. Without a hit, an eye's height lower.</summary>

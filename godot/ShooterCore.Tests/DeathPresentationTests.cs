@@ -1,3 +1,4 @@
+using System.Linq;
 using Xunit;
 
 namespace Drycastle.ShooterCore.Tests;
@@ -10,17 +11,57 @@ public class DeathPresentationTests
     public void On_foot_falls_with_a_share_of_the_respawn_delay_clamped()
     {
         Assert.Equal(DeathStyle.Fall, FallPlan().Style);
-        Assert.Equal(0.8f, FallPlan(5).FallSeconds);
-        Assert.Equal(0.45f, FallPlan(1.5f).FallSeconds, 3);
-        Assert.Equal(0.25f, FallPlan(0.2f).FallSeconds);
+        Assert.Equal(1.6f, Total(FallPlan(10)), 3);
+        Assert.Equal(1.5f, Total(FallPlan(3)), 3);
+        Assert.Equal(0.9f, Total(FallPlan(0.2f)), 3);
+    }
+
+    static float Total(DeathPlan p) => p.BuckleSeconds + p.FallSeconds;
+
+    [Fact]
+    public void Every_kind_of_fall_comes_up_and_the_forward_one_kneels_longer()
+    {
+        var kinds = Enumerable.Range(0, 64).Select(DeathPresentation.KindFor).Distinct().ToList();
+        Assert.Equal(4, kinds.Count);
+        var fwd = Enumerable.Range(0, 64).First(i => DeathPresentation.KindFor(i) == FallKind.Forward);
+        var back = Enumerable.Range(0, 64).First(i => DeathPresentation.KindFor(i) == FallKind.Backward);
+        var pf = DeathPresentation.Plan(ClientMode.OnFoot, false, false, false, 5, fwd);
+        var pb = DeathPresentation.Plan(ClientMode.OnFoot, false, false, false, 5, back);
+        Assert.True(pf.BuckleSeconds > pb.BuckleSeconds);
+        Assert.Equal(Total(pf), Total(pb), 3);
     }
 
     [Theory]
-    [InlineData(1)] [InlineData(2)] [InlineData(3)] [InlineData(99)] [InlineData(-7)]
-    public void Roll_is_70_to_90_degrees(int seed)
+    [InlineData(FallKind.Forward)] [InlineData(FallKind.Backward)] [InlineData(FallKind.Left)] [InlineData(FallKind.Right)]
+    public void The_buckle_stops_short_of_the_ground_and_the_fall_lands(FallKind k)
     {
-        var deg = MathF.Abs(DeathPresentation.RollFor(seed)) * 180f / MathF.PI;
-        Assert.InRange(deg, 69.99f, 90.01f);
+        var buckle = DeathPresentation.BucklePose(k, 1f);
+        Assert.InRange(buckle.Drop, 0.25f, 0.5f);
+        Assert.Equal(1f, DeathPresentation.FallPose(k, 1f).Drop);
+        Assert.Equal(buckle.Drop, DeathPresentation.FallPose(k, 0f).Drop, 3); // the two phases join without a jump
+        Assert.Equal(buckle.Pitch, DeathPresentation.FallPose(k, 0f).Pitch, 3);
+        Assert.Equal(buckle.Roll, DeathPresentation.FallPose(k, 0f).Roll, 3);
+    }
+
+    [Fact]
+    public void Each_kind_ends_in_its_own_direction()
+    {
+        Assert.True(DeathPresentation.FallPose(FallKind.Forward, 1f).Pitch < -1f);   // looks at the ground
+        Assert.True(DeathPresentation.FallPose(FallKind.Backward, 1f).Pitch > 1f);   // looks at the sky
+        Assert.True(DeathPresentation.FallPose(FallKind.Left, 1f).Roll > 1.2f);
+        Assert.True(DeathPresentation.FallPose(FallKind.Right, 1f).Roll < -1.2f);
+        Assert.True(DeathPresentation.FallPose(FallKind.Forward, 1f).PushM > 0);
+        Assert.True(DeathPresentation.FallPose(FallKind.Backward, 1f).PushM < 0);
+    }
+
+    [Fact]
+    public void Landing_bounces_and_settles()
+    {
+        var hit = DeathPresentation.LyingPose(FallKind.Left, 0.05f);
+        var later = DeathPresentation.LyingPose(FallKind.Left, 1f);
+        Assert.True(hit.BounceM > 0.02f);
+        Assert.True(later.BounceM < 0.001f);
+        Assert.Equal(1f, later.Drop);
     }
 
     [Theory]
@@ -34,7 +75,7 @@ public class DeathPresentationTests
     {
         var p = DeathPresentation.Plan(before, false, false, false, 5, 1);
         Assert.Equal(DeathStyle.Blood, p.Style);
-        Assert.Equal(0f, p.RollRadians);
+        Assert.Equal(0f, p.BuckleSeconds);
         Assert.True(p.Blood > 0);
     }
 
@@ -59,28 +100,39 @@ public class DeathPresentationTests
     }
 
     [Fact]
-    public void Falls_then_lies_and_the_scrim_waits_for_the_lying()
+    public void Buckles_falls_then_lies_and_the_scrim_waits_for_the_lying()
     {
         var d = new DeathPresentation();
         Assert.False(d.Active);
-        d.Begin(FallPlan(5));
-        Assert.True(d.Falling);
+        var plan = FallPlan(3);
+        d.Begin(plan);
+        Assert.True(d.Buckling);
         Assert.True(d.OwnsCamera);
-        d.Tick(0.4f);
+        Assert.InRange(d.BloodNow, 0.01f, plan.Blood * 0.3f);
+        d.Tick(plan.BuckleSeconds + 0.01f);
         Assert.True(d.Falling);
-        Assert.Equal(0.25f, d.Drop, 3);
+        Assert.InRange(d.Drop, 0.25f, 0.6f);
         Assert.Equal(0f, d.ScrimNow);
-        Assert.InRange(d.BloodNow, 0.49f, 0.51f);
-        d.Tick(0.45f);
+        d.Tick(plan.FallSeconds);
         Assert.True(d.Lying);
-        Assert.Equal(1f, d.Drop);
-        Assert.Equal(1f, d.BloodNow);
-        Assert.Equal(0f, d.ScrimNow);
-        d.Tick(0.125f);
-        Assert.Equal(0.5f, d.ScrimNow, 3);
+        Assert.Equal(plan.Blood, d.BloodNow);
+        Assert.Equal(0f, d.ScrimNow); // the impact settles first
+        d.Tick(DeathPresentation.ImpactSeconds * 0.4f + plan.ScrimFadeSeconds / 2);
+        Assert.InRange(d.ScrimNow, 0.4f, 0.6f);
         d.Tick(5);
         Assert.Equal(1f, d.ScrimNow);
         Assert.True(d.Lying);
+    }
+
+    [Fact]
+    public void Blood_only_grows_and_stays_light()
+    {
+        var d = new DeathPresentation();
+        var plan = FallPlan(3);
+        d.Begin(plan);
+        var last = 0f;
+        for (var i = 0; i < 200; i++) { d.Tick(0.01f); Assert.True(d.BloodNow >= last - 1e-5f); last = d.BloodNow; }
+        Assert.True(plan.Blood <= 0.4f);
     }
 
     [Fact]
@@ -97,7 +149,7 @@ public class DeathPresentationTests
         d.Tick(1); // nothing shown: nothing happens
         Assert.False(d.Active);
         d.Begin(FallPlan());
-        Assert.True(d.Falling);
+        Assert.True(d.Buckling);
         Assert.Equal(0f, d.Drop);
     }
 
@@ -106,10 +158,10 @@ public class DeathPresentationTests
     {
         var d = new DeathPresentation();
         d.Begin(FallPlan(1));
-        d.Tick(1);
+        d.Tick(3);
         Assert.True(d.Lying);
         d.Begin(FallPlan(1)); // a second death without a spawn between: starts over, no illegal edge
-        Assert.True(d.Falling);
+        Assert.True(d.Buckling);
         d.Tick(1);
         d.End();
         Assert.False(d.Active);
@@ -121,9 +173,9 @@ public class DeathPresentationTests
         var d = new DeathPresentation();
         d.Begin(DeathPresentation.Plan(ClientMode.Pinned, false, false, false, 4, 7));
         Assert.True(d.OwnsCamera);
-        d.Tick(2);
+        d.Tick(5);
         Assert.True(d.Lying);
-        Assert.Equal(1f, d.Drop);
+        Assert.Equal(1f, d.Pose.Drop);
     }
 
     [Fact]
@@ -133,8 +185,7 @@ public class DeathPresentationTests
         d.Begin(DeathPresentation.Plan(ClientMode.OnFoot, false, true, false, 5, 1));
         Assert.Equal(0f, d.BloodNow);
         Assert.False(d.OwnsCamera);
-        d.Tick(0.016f);
-        Assert.True(d.Lying);
+        Assert.True(d.Lying); // both beats are zero: straight to Lying
         d.Tick(0.016f);
         Assert.True(d.ScrimNow > 0);
     }
@@ -150,5 +201,6 @@ public class DeathPresentationTests
         Assert.True(d.BloodNow > 0);
         d.Tick(0.3f);
         Assert.True(d.Lying);
+        Assert.Equal(DeathPose.None, d.Pose);
     }
 }

@@ -33,8 +33,8 @@ float blobs(vec2 uv_aspect, float aspect, float scale, float inten) {
 			vec2 h2 = hash22(id + o + vec2(19.19, 7.7));
 			vec2 centre = o + 0.15 + 0.7 * h;
 			float edge = edge_of((id + o + 0.5) / scale, aspect);
-			float present = step(h2.x, clamp(edge * inten * 1.3, 0.0, 1.0));
-			float r = (0.16 + 0.26 * h2.y) * (0.45 + 0.55 * inten) * (0.6 + 0.4 * edge);
+			float present = step(h2.x, clamp(edge * inten * 0.9, 0.0, 1.0));
+			float r = (0.12 + 0.2 * h2.y) * (0.45 + 0.55 * inten) * (0.6 + 0.4 * edge);
 			vec2 d = f - centre;
 			vec2 ds = vec2(d.x, d.y * 0.6);
 			float blob = 1.0 - smoothstep(r * 0.7, r, length(ds));
@@ -50,9 +50,9 @@ void fragment() {
 	float aspect = SCREEN_PIXEL_SIZE.y / SCREEN_PIXEL_SIZE.x;
 	vec2 uva = vec2(UV.x * aspect, UV.y);
 	float edge = edge_of(uva, aspect);
-	float haze = pow(edge, 2.0) * 0.6 * intensity;
-	float spots = max(blobs(uva, aspect, 3.0, intensity), 0.85 * blobs(uva + vec2(5.3, 2.1), aspect, 7.0, intensity));
-	float alpha = clamp(haze + spots * 0.92, 0.0, 0.94) * smoothstep(0.0, 0.05, intensity);
+	float haze = pow(edge, 2.5) * 0.35 * intensity;
+	float spots = max(blobs(uva, aspect, 3.0, intensity), 0.7 * blobs(uva + vec2(5.3, 2.1), aspect, 7.0, intensity));
+	float alpha = clamp(haze + spots * 0.8, 0.0, 0.8) * smoothstep(0.0, 0.05, intensity);
 	vec3 col = mix(dark_color.rgb, blood_color.rgb, smoothstep(0.1, 1.0, spots));
 	COLOR = vec4(col, alpha);
 }
