@@ -15,6 +15,8 @@ public sealed partial class MapLoader
     {
         /// <summary>The cell's rows in game x, z (a swath that misses this box skips the cell).</summary>
         public readonly Vector2 Min = new(Rows.Min(r => r.X), Rows.Min(r => -r.Y)), Max = new(Rows.Max(r => r.X), Rows.Max(r => -r.Y));
+        /// <summary>Plants a vehicle laid flat (<see cref="MapLoader.CropCrush"/>); a cut one (<see cref="Cut"/>, stubble) is never crushed, and a cut overrides a crush.</summary>
+        public readonly bool[] Crushed = new bool[Rows.Count];
     }
 
     readonly List<CropCell> _cropCells = new();
@@ -95,6 +97,101 @@ public sealed partial class MapLoader
             }
         }
         return found;
+    }
+
+    /// <summary>
+    /// Lays the plants in <paramref name="cells"/> (cell coordinates: game metres / <paramref name="cellM"/>) flat (#328): tilted over and squashed, not removed (a tall crop like corn lies down). Each plant once; a plant the
+    /// harvester cut stays stubble. Only the MultiMesh cells the batch reaches are looked at. Returns how many plants it laid down. Cosmetic, no collision.
+    /// </summary>
+    public int CropCrush(HashSet<(int X, int Z)> cells, float cellM)
+    {
+        if (cells.Count == 0) return 0;
+        int x0 = int.MaxValue, x1 = int.MinValue, z0 = int.MaxValue, z1 = int.MinValue;
+        foreach (var (cx, cz) in cells) { x0 = Math.Min(x0, cx); x1 = Math.Max(x1, cx); z0 = Math.Min(z0, cz); z1 = Math.Max(z1, cz); }
+        var min = new Vector2(x0 * cellM, z0 * cellM); var max = new Vector2((x1 + 1) * cellM, (z1 + 1) * cellM);
+        var laid = 0;
+        foreach (var cell in _cropCells)
+        {
+            if (!cell.Plant || cell.Max.X < min.X || cell.Min.X > max.X || cell.Max.Y < min.Y || cell.Min.Y > max.Y || !GodotObject.IsInstanceValid(cell.Mesh)) continue;
+            var rows = cell.Rows;
+            for (var k = 0; k < rows.Count; k++)
+            {
+                if (cell.Cut[k] || cell.Crushed[k]) continue;
+                var r = rows[k];
+                var x = r.X; var z = -r.Y;
+                if (x < min.X || x > max.X || z < min.Y || z > max.Y) continue;
+                if (!cells.Contains(((int)Mathf.Floor(x / cellM), (int)Mathf.Floor(z / cellM)))) continue;
+                cell.Crushed[k] = true;
+                var axis = new Vector3(Mathf.Cos(r.Rot * 7.3f), 0, Mathf.Sin(r.Rot * 7.3f)); // each leans its own way
+                var basis = new Basis(axis, 1.25f) * Basis.Identity.Rotated(Vector3.Up, r.Rot).Scaled(new Vector3(r.Scale, r.Scale * 0.45f, r.Scale));
+                cell.Mesh.SetInstanceTransform(k, new Transform3D(basis, cell.Mesh.GetInstanceTransform(k).Origin));
+                laid++;
+            }
+        }
+        return laid;
+    }
+
+    /// <summary>A new round: every plant that was cut or crushed stands again and the ground marks go (the server forgot them too). Artifacts (bales) are not touched.</summary>
+    public void CropReset()
+    {
+        foreach (var cell in _cropCells)
+        {
+            if (!cell.Plant || !GodotObject.IsInstanceValid(cell.Mesh)) continue;
+            for (var k = 0; k < cell.Rows.Count; k++)
+            {
+                if (!cell.Cut[k] && !cell.Crushed[k]) continue;
+                var r = cell.Rows[k];
+                cell.Cut[k] = false; cell.Crushed[k] = false;
+                cell.Mesh.SetInstanceTransform(k, new Transform3D(Basis.Identity.Rotated(Vector3.Up, r.Rot).Scaled(new Vector3(r.Scale, r.Scale, r.Scale)), cell.Mesh.GetInstanceTransform(k).Origin));
+            }
+        }
+        _crushMarkTransforms.Clear();
+        if (_crushMarks != null) _crushMarks.VisibleInstanceCount = 0;
+    }
+
+    // ---- the flattened-ground strips (seen from beyond the plants' range) ----
+
+    const int MarkChunk = 2048;
+    MultiMesh? _crushMarks;
+    MultiMeshInstance3D? _crushMarkNode;
+    readonly List<Transform3D> _crushMarkTransforms = new();
+
+    /// <summary>
+    /// A darker flat patch on the ground for each crushed cell (<paramref name="centres"/>: game x, z of the cell's middle), so the mark reads from far beyond the plants' visibility range. One MultiMesh for all of them, grown in chunks;
+    /// the patches sit a hair over the terrain and cast no shadow. Returns how many it now shows.
+    /// </summary>
+    public int CropMarkGround(IReadOnlyList<Vector2> centres, float cellM)
+    {
+        if (centres.Count == 0) return _crushMarkTransforms.Count;
+        foreach (var c in centres)
+        {
+            var y = GroundHeight(c.X, c.Y);
+            if (float.IsNaN(y)) y = GroundHeightOrMean(c.X, c.Y);
+            _crushMarkTransforms.Add(new Transform3D(Basis.Identity.Scaled(new Vector3(cellM * 1.02f, 1f, cellM * 1.02f)), new Vector3(c.X, y + 0.04f, c.Y)));
+        }
+        if (_crushMarks == null || _crushMarks.InstanceCount < _crushMarkTransforms.Count)
+        {
+            var cap = MarkChunk;
+            while (cap < _crushMarkTransforms.Count) cap *= 2;
+            var mat = new StandardMaterial3D
+            {
+                AlbedoColor = new Color(0.16f, 0.14f, 0.07f, 0.55f), Transparency = BaseMaterial3D.TransparencyEnum.Alpha, Roughness = 1f,
+                CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+            };
+            _crushMarks = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = new PlaneMesh { Size = Vector2.One, Material = mat }, InstanceCount = cap, VisibleInstanceCount = 0 };
+            _crushMarks.CustomAabb = new Aabb(new Vector3(-20000, -500, -20000), new Vector3(40000, 1500, 40000));
+            if (_crushMarkNode == null || !GodotObject.IsInstanceValid(_crushMarkNode))
+            {
+                _crushMarkNode = new MultiMeshInstance3D { Name = "crop_crush_marks", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+                Root.AddChild(_crushMarkNode);
+            }
+            _crushMarkNode.Multimesh = _crushMarks;
+            for (var i = 0; i < _crushMarkTransforms.Count; i++) _crushMarks.SetInstanceTransform(i, _crushMarkTransforms[i]);
+        }
+        else
+            for (var i = _crushMarkTransforms.Count - centres.Count; i < _crushMarkTransforms.Count; i++) _crushMarks.SetInstanceTransform(i, _crushMarkTransforms[i]);
+        _crushMarks.VisibleInstanceCount = _crushMarkTransforms.Count;
+        return _crushMarkTransforms.Count;
     }
 
     static float DistanceToSegment(Vector2 p, Vector2 a, Vector2 b)
