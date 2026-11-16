@@ -47,7 +47,8 @@ public sealed class HarvesterConfig
     public float BaleFireRadiusM { get; set; } = 2.6f;
     /// <summary>A shot ignites a bale it passes within this of its centre.</summary>
     public float BaleHitRadiusM { get; set; } = 0.9f;
-    public float BaleLifetimeS { get; set; } = CorpseRules.LifetimeSeconds;
+    /// <summary>A corpse bale never expires (infinity): burnt to ash is the only way it goes, besides the round and the safety cap <see cref="CorpseBook.MaxBales"/>.</summary>
+    public float BaleLifetimeS { get; set; } = float.PositiveInfinity;
     /// <summary>
     /// The real path cuts (<see cref="FieldSwath"/>): the header's position is sampled every <see cref="SwathSampleM"/> of travel; a stretch is kept when at least <see cref="SwathNewShare"/> of its swath is ground
     /// not cut before. A field keeps at most <see cref="MaxSwathPoints"/> points of history (all fields <see cref="MaxSwathPointsTotal"/>), so a late joiner's replay is bounded.

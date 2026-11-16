@@ -366,7 +366,26 @@ public class HarvesterTests
         Assert.True(HarvesterRules.IsBale(bale.Owner));
         Assert.True(bale.CanLoot);
         Assert.Equal(corpse.Items.Count, bale.Items.Count);
-        Assert.Equal(CorpseRules.LifetimeSeconds, Cfg.BaleLifetimeS); // despawns like a corpse
+        Assert.True(float.IsPositiveInfinity(Cfg.BaleLifetimeS)); // no lifetime
+    }
+
+    [Fact]
+    public void A_bale_corpse_never_expires_is_no_corpse_for_the_cap_and_keeps_lying_after_its_items_are_taken()
+    {
+        var types = new WorldEntityRegistry();
+        CorpseRules.Register(types);
+        GroundItemRules.Register(types);
+        var world = new WorldEntityManager(types);
+        var book = new CorpseBook(world);
+        var bale = book.Add(new Corpse(HarvesterRules.BaleOwner, Vector3.Zero, 0, 0, 0, new[] { new ItemStack(3) }, Cfg.BaleLifetimeS))!.Value;
+        for (var i = 0; i < CorpseRules.MaxCorpses * 3; i++) book.Add(new Corpse(1, new Vector3(i, 0, 0), 0, 0, 0)); // a busy fight
+        for (var i = 0; i < 100; i++) world.Tick(60f); // 100 minutes
+        Assert.NotNull(book.Get(bale));
+        Assert.True(book.CorpseCount <= CorpseRules.MaxCorpses + 1);
+        // the safety cap drops the oldest bale only
+        var more = Enumerable.Range(0, CorpseBook.MaxBales).Select(i => book.Add(new Corpse(HarvesterRules.BaleOwner, new Vector3(i, 0, 5), 0, 0, 0, null, Cfg.BaleLifetimeS))!.Value).ToList();
+        Assert.Null(book.Get(bale));
+        Assert.NotNull(book.Get(more[^1]));
     }
 
     // ---- the reel and the real path ----

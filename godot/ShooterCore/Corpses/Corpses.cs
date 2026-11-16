@@ -225,6 +225,13 @@ public sealed class CorpseBook
         };
     }
 
+    /// <summary>The most bales of the harvester (#331) that may lie at once, a safety net: past it the oldest bale is removed. Otherwise a bale never despawns (no lifetime, not for the corpse cap, not when its items are taken).</summary>
+    public const int MaxBales = 60;
+
+    static bool IsBale(Corpse c) => HarvesterRules.IsBale(c.Owner);
+
+    int BaleCount => _order.Count(x => IsBale(x.Body));
+
     /// <summary>Everything the cap counts: the corpses and the ground items.</summary>
     public int Count => _order.Count + _ground.Count;
 
@@ -251,10 +258,10 @@ public sealed class CorpseBook
     /// </summary>
     void MakeRoom()
     {
-        while (Count >= CorpseRules.MaxCorpses)
+        while (Count - BaleCount >= CorpseRules.MaxCorpses) // a harvester's bale is no corpse to the cap (#331): it stays until the round ends, it is burnt, or the bale cap below
         {
-            var plain = _order.Where(x => x.Body.Items.Count == 0).Select(x => (ushort?)x.Id).OrderBy(id => _born.GetValueOrDefault(id!.Value)).FirstOrDefault();
-            var victim = plain ?? _born.OrderBy(kv => kv.Value).Select(kv => (ushort?)kv.Key).FirstOrDefault();
+            var plain = _order.Where(x => x.Body.Items.Count == 0 && !IsBale(x.Body)).Select(x => (ushort?)x.Id).OrderBy(id => _born.GetValueOrDefault(id!.Value)).FirstOrDefault();
+            var victim = plain ?? _born.Where(kv => !_order.Any(x => x.Id == kv.Key && IsBale(x.Body))).OrderBy(kv => kv.Value).Select(kv => (ushort?)kv.Key).FirstOrDefault();
             if (victim is not { } id) return;
             if (!_world.Despawn(id, WorldDespawnReason.Removed)) { _order.RemoveAll(x => x.Id == id); _ground.RemoveAll(x => x.Id == id); _born.Remove(id); }
         }
@@ -267,6 +274,9 @@ public sealed class CorpseBook
     public ushort? Add(Corpse body)
     {
         MakeRoom();
+        if (IsBale(body))
+            while (BaleCount >= MaxBales && _order.Where(x => IsBale(x.Body)).Select(x => (ushort?)x.Id).OrderBy(id => _born.GetValueOrDefault(id!.Value)).FirstOrDefault() is { } oldest)
+                _world.Despawn(oldest, WorldDespawnReason.Removed);
         var id = _world.Spawn(body);
         if (id is { } i) { _order.Add((i, body)); _born[i] = ++_clock; }
         return id;
