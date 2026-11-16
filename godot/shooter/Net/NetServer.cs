@@ -545,6 +545,7 @@ public partial class NetServer : Node
         SendThievesOnJoin(c); // the Thieves event, when one runs
         SendRozhlasOnJoin(c); // the village loudspeaker, when a detour broadcast is on
         SendUradDoorOnJoin(c); // and the Urad door, when it is open
+        SendGarageDoorOnJoin(c); // and the garage doors, when they are open
         SendPounceOnJoin(c); // and the demon's pounce, when one is on
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
@@ -801,7 +802,7 @@ public partial class NetServer : Node
                 if (useEdge) ExitCar(c);
                 continue;
             }
-            if (useEdge && LootInReach(c) == null && (MassSit(c) || TryEnterCar(c))) continue; // the use key on lying Loot sends it back, it does not take a seat
+            if (useEdge && LootInReach(c) == null && (MassSit(c) || GarageUse(c) || TryEnterCar(c))) continue; // the use key on lying Loot sends it back, it does not take a seat
             c.Body.Yaw = Quant.Yaw(i.Yaw);
             c.Body.Pitch = Quant.Pitch(i.Pitch);
             c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);

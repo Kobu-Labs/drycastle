@@ -65,6 +65,7 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # "tint" flag; meadow.bin is format 2 (a tint flag per layer) and then 3 (a species-zone plane and kind mixes); more
 # clutter kinds (grasses, wild and garden flowers) in clutter_meshes.glb. A loader that reads only 0.9.0 clutter would refuse
 # meadow.bin's new format and draw no meadow.
+# (no bump) garage.json (files.garage): the bus garage: the doorway its doors hang in, the bay, where the bus stands.
 # (no bump) urad.json (files.urad): the inside of the municipal office: entrance, rooms, worker seats, dictation desk.
 # (no bump) church.json (files.church): the inside of the church: door, seats with routes, spots, anchors, rooms.
 # (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
@@ -403,6 +404,16 @@ def run_export(
             **scene.urad,
         })
         files["urad"] = "urad.json"
+    stale_garage = out_dir / "garage.json"
+    stale_garage.unlink(missing_ok=True)
+    if scene.garage:
+        # the bus garage (garage.garage_info): the doorway of its swinging doors, the bay, the parking place
+        _dump(stale_garage, {
+            "version": 1,
+            "axes": "points: local metres [x east, y north, z up] (x, y as parcels.json, z as terrain.json); yaw: compass degrees",
+            **scene.garage,
+        })
+        files["garage"] = "garage.json"
 
     parcels_file = {
         "version": ARTIFACT_FORMAT_VERSION,

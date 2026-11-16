@@ -678,6 +678,20 @@ From any state: Dead
 - **Down**: Lies knocked down (clock: the shock's down seconds); a lying hit volume, normal hits count. Ends in GetUp.
 - **GetUp**: Gets up (clock: the shock's get-up seconds), then goes for the same target again (ClimbUp), or looks for another when it is gone (Seek). All four are Working states: the Thief does not fight.
 
+## Garage.Door
+
+The bus garage's double doors: a player on foot at the doorway opens and closes them with the interact key.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Shut
+    Shut --> Open
+    Open --> Shut
+```
+
+- **Shut**: Closed and solid (the start state, and every new server): the leaves fill the doorway.
+- **Open**: The leaves are swung out into the yard and nothing is solid. Stays open until a player closes it; it does not close while a vehicle stands in the doorway.
+
 ## HelicopterGunner.Phase
 
 The helicopter's gun cycle: wait, warn the picked enemy, fire a burst, wait again.
