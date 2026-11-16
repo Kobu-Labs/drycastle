@@ -4,10 +4,13 @@ import copy
 
 import numpy as np
 import pytest
+import shapely
 from shapely.geometry import LineString, Point, Polygon, box
+from shapely.ops import unary_union
 
 from drycastle_pipeline import detail_meshes
 from drycastle_pipeline.detail import (
+    MOSS_SALT,
     PATCH_PRIORITY,
     ParcelContext,
     area_type,
@@ -22,6 +25,7 @@ from drycastle_pipeline.detail import (
     poisson_disc,
     thin,
 )
+from drycastle_pipeline.meadow import clump
 from drycastle_pipeline.props import seeded
 from drycastle_pipeline.rules import load_section
 from drycastle_pipeline.terrain import Terrain
@@ -119,6 +123,43 @@ def test_field_and_forest_keep_off_blocked_ground(cfg) -> None:
         assert all(not ctx.blocked.contains(Point(c["x"], c["y"])) for c in res.clutter)
         assert all(p.geom.intersection(ctx.blocked).area < 1e-6 for p in res.patches)
         assert recipe(ctx, cfg).clutter == res.clutter  # seeded
+
+
+def forest_with_road() -> ParcelContext:
+    ctx = yard()
+    ctx.kind, ctx.polygon, ctx.fences, ctx.buildings = "forest", box(0, 0, 90, 90), [], []
+    ctx.road = box(-5, -6, 95, -1)
+    rng = np.random.default_rng(3)
+    ctx.trees = [(float(x), float(y), 2.0) for x, y in rng.uniform(2, 88, (200, 2))]
+    return ctx
+
+
+def test_forest_moss_is_a_textured_layer_between_verge_and_litter(cfg) -> None:
+    assert PATCH_PRIORITY.index("verge_dirt") < PATCH_PRIORITY.index("moss") < PATCH_PRIORITY.index("litter")
+    ctx = forest_with_road()
+    res = forest_detail(ctx, cfg)
+    moss = [p for p in res.patches if p.layer == "moss"]
+    assert moss and all(p.texture == "moss" for p in moss)
+    assert any(p.layer == "litter" for p in res.patches)
+    for p in res.patches:  # still disjoint
+        if p.layer != "moss":
+            assert p.geom.intersection(moss[0].geom).area < 1e-6
+    off = copy.deepcopy(cfg)
+    off["forest"]["moss"]["tree"]["keep"] = off["forest"]["moss"]["interior"]["keep"] = 0.0
+    assert not any(p.layer == "moss" for p in forest_detail(ctx, off).patches)
+
+
+def test_forest_moss_keeps_off_the_road_edge_and_clumps_on_noise(cfg) -> None:
+    ctx = forest_with_road()
+    mc = cfg["forest"]["moss"]
+    moss = forest_detail(ctx, cfg).patches
+    geom = unary_union([p.geom for p in moss if p.layer == "moss"])
+    assert geom.distance(ctx.road) >= float(mc["edge_m"]) - 1e-6
+    # thick where the clump noise is high, thin where it is low
+    xs, ys = np.meshgrid(np.arange(4.5, 90, 3.0), np.arange(6.0, 90, 3.0))
+    f = clump(xs.ravel(), ys.ravel(), float(mc["clump"]), float(mc["clump_m"]), MOSS_SALT)
+    covered = shapely.contains_xy(geom, xs.ravel(), ys.ravel())
+    assert covered[f > 1.2].mean() > 0.25 and covered[f < 0.5].mean() < 0.08
 
 
 def test_area_type_and_caps_and_patch_nodes(cfg) -> None:

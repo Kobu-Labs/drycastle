@@ -10,7 +10,7 @@ Original pixels computed by this script (no third-party image, no photo); standa
 Every texture repeats seamlessly in both directions. The style is flat: a few tones, hard edges, very
 little noise, so the textures sit next to the flat-colour map. Two kinds:
 
-* coloured   (brick_red, brick_white, stone, dirt, gravel, leaf_litter, soil_rows, dike_gravel): carry their own colours; a white tint shows them as drawn.
+* coloured   (brick_red, brick_white, stone, dirt, gravel, leaf_litter, moss, soil_rows, dike_gravel): carry their own colours; a white tint shows them as drawn.
 * tintable   (concrete, picket, wire): near-white, shaded only; the mesh's vertex colour is the paint.
 
 ``TEXTURES`` below is the single list: id, size in pixels, the size of one repeat in metres, and the
@@ -307,6 +307,31 @@ def leaf_litter(w, h):
     return out
 
 
+def moss(w, h):
+    """Moss cushions: bright green ground with round hard-edged clumps in lighter and darker greens, each with a lit
+    upper rim, and a few dark gaps between them. Coloured."""
+    ground = rgb("#4f8c36")
+    tones = [rgb(c) for c in ("#6cac45", "#86c04f", "#5c9a3c", "#3f7a2c", "#9bcc5e")]
+    out = [[(*shade(ground, 0.94 + 0.12 * vnoise(x / 16, y / 16, w // 16 + 1, 131)), 255) for x in range(w)] for y in range(h)]
+    for k in range(70):
+        cx, cy = hash01(k, 1, 137) * w, hash01(k, 2, 137) * h
+        r = 6 + 9 * hash01(k, 3, 137)
+        tone = shade(tones[int(hash01(k, 4, 137) * len(tones)) % len(tones)], 0.92 + 0.16 * hash01(k, 5, 137))
+        reach = int(r) + 2
+        for dy in range(-reach, reach + 1):
+            for dx in range(-reach, reach + 1):
+                d = math.hypot(dx, dy * 1.15)  # a little flattened
+                if d <= r:
+                    px, py = round(cx + dx) % w, round(cy + dy) % h  # wraps: tiles
+                    lit = dy < -r * 0.35 and d > r * 0.45  # upper rim
+                    out[py][px] = (*(shade(tone, 1.12) if lit else tone), 255)
+    for k in range(40):  # dark gaps
+        px, py = int(hash01(k, 1, 149) * w), int(hash01(k, 2, 149) * h)
+        for dx in range(2):
+            out[py][(px + dx) % w] = (*shade(ground, 0.62), 255)
+    return out
+
+
 def soil_rows(w, h):
     """Tilled soil: four ridges running across the tile (along u), light crest and dark furrow, clods. Coloured."""
     crest, mid, furrow = rgb("#7d5e3f"), rgb("#6a4d33"), rgb("#4a3624")
@@ -400,6 +425,7 @@ TEXTURES = [
     ("dirt", (256, 256), (2.0, 2.0), False, dirt),
     ("gravel", (256, 256), (1.0, 1.0), False, gravel),
     ("leaf_litter", (256, 256), (1.5, 1.5), False, leaf_litter),
+    ("moss", (256, 256), (1.5, 1.5), False, moss),
     ("soil_rows", (256, 256), (1.0, 1.0), False, soil_rows),
     ("dike_gravel", (512, 256), (8.0, 4.0), False, dike_gravel),
 ]

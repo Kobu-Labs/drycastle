@@ -1,4 +1,4 @@
-"""Ground detail of the village: draped patches (lawn tones, bare soil, gravel, leaf litter, beds, furrows,
+"""Ground detail of the village: draped patches (lawn tones, bare soil, gravel, leaf litter, moss, beds, furrows,
 road verges) and clutter instances (tufts, flowers, pebbles, rocks, leaves, sticks, ferns).
 
 This is the ``detail`` stage (``make detail``, between ``props`` and ``export``). It reads the work files
@@ -63,14 +63,14 @@ DETAIL_FORMAT_VERSION = 1
 CLUTTER_KINDS = KINDS
 # The first layer wins where two overlap (a path crosses lawn, litter lies on lawn, ...).
 PATCH_PRIORITY = (
-    "dike_track", "gravel", "verge_gravel", "bed", "furrow", "dirt", "verge_dirt", "litter", "tone_a", "tone_b", "lawn",
+    "dike_track", "gravel", "verge_gravel", "bed", "furrow", "dirt", "verge_dirt", "moss", "litter", "tone_a", "tone_b", "lawn",
 )
 # Library texture of a layer; layers without one are flat colour.
 PATCH_TEXTURE = {
     "dike_track": "dike_gravel", "gravel": "gravel", "verge_gravel": "gravel", "bed": "soil_rows", "furrow": "soil_rows",
-    "dirt": "dirt", "verge_dirt": "dirt", "litter": "leaf_litter",
+    "dirt": "dirt", "verge_dirt": "dirt", "litter": "leaf_litter", "moss": "moss",
 }
-_SOFT_LAYERS = ("lawn", "tone_a", "tone_b", "litter")  # big soft shapes: simplified harder (fewer triangles)
+_SOFT_LAYERS = ("lawn", "tone_a", "tone_b", "litter", "moss")  # big soft shapes: simplified harder (fewer triangles)
 _RECT_LAYERS = ("bed", "furrow")  # textured with their own angle and origin
 _NEAR_M = 8.0  # what around a parcel counts as near it
 _TILE_M = 24.0
@@ -859,8 +859,45 @@ def field_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
     return res
 
 
+MOSS_SALT = 5100  # the noise of the moss clumps (the Rust stage reads the same number)
+
+
+def _moss(ctx: ParcelContext, cfg: dict, free: BaseGeometry, trees: list[tuple[float, float, float]],
+          verge_g: BaseGeometry, verge_d: BaseGeometry) -> BaseGeometry:
+    """Moss patches of the forest floor: small blobs at the tree feet and over the open floor, thick in the clumps of a
+    position-only noise (``meadow.clump``, so a tiled run agrees with itself) and thin in the gaps. None within ``edge_m`` of the
+    carriageway and its verges: the ground there is trodden. Every number is ``detail.forest.moss``."""
+    mc = cfg["forest"]["moss"]
+    edge = float(mc["edge_m"])
+    near = [verge_g, verge_d]
+    if ctx.road is not None and not ctx.road.is_empty:
+        near.append(ctx.road.buffer(float(cfg["road_clearance_m"]), quad_segs=2))
+    ban = _union(near).buffer(edge, quad_segs=2)
+    allowed = free.difference(ban) if not ban.is_empty else free
+    if allowed.is_empty:
+        return Polygon()
+
+    def dens(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+        return meadow_mod.clump(xs, ys, float(mc["clump"]), float(mc["clump_m"]), MOSS_SALT)
+
+    rng, g = seeded(f"{ctx.id}:detail:moss"), _gen(ctx.id, "moss")
+    parts = []
+    t = mc["tree"]
+    for x, y, _ in trees:
+        if rng.random() >= float(t["keep"]) * float(dens(np.array([x]), np.array([y]))[0]):
+            continue
+        a, dist = rng.random() * math.tau, float(t["reach_m"][0]) + rng.random() * (float(t["reach_m"][1]) - float(t["reach_m"][0]))
+        parts.append(blob(rng, x + dist * math.cos(a), y + dist * math.sin(a), _rad(rng, t["radius_m"]), 0.4, 1.3, 8))
+    i = mc["interior"]
+    pts = scatter(g, allowed, float(i["spacing_m"]), lambda xs, ys: float(i["keep"]) * dens(xs, ys))
+    for x, y in pts:
+        parts.append(blob(rng, float(x), float(y), _rad(rng, i["radius_m"]), 0.4, float(i["stretch"]), 10))
+    moss = _union(parts)
+    return moss.difference(ban) if not ban.is_empty else moss
+
+
 def forest_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
-    """Forest: leaf litter under the trees, forest-floor tone patches, a few bare spots, and rocks, sticks, ferns, leaves."""
+    """Forest: leaf litter and moss under the trees, forest-floor tone patches, a few bare spots, and rocks, sticks, ferns, leaves."""
     pid, fc = ctx.id, cfg["forest"]
     res = DetailResult(pid)
     free = free_area(ctx, cfg, trunks=False)
@@ -889,7 +926,8 @@ def forest_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
             if shapely.contains_xy(free, x, y):
                 dirt.append(blob(rng, x, y, _rad(rng, d["radius_m"]), 0.4, 1.4, 10))
                 break
-    layers.update({"verge_gravel": verge_g, "verge_dirt": verge_d, "dirt": _union(dirt), "litter": _union(litter_parts)})
+    layers.update({"verge_gravel": verge_g, "verge_dirt": verge_d, "dirt": _union(dirt), "litter": _union(litter_parts),
+                   "moss": _moss(ctx, cfg, free, inside, verge_g, verge_d)})
     got = _assemble(res, free, layers, {"tone_a": flat["tone_a"], "tone_b": flat["tone_b"]}, {}, seeded(f"{pid}:detail:colours"))
 
     c, out = fc["clutter"], []

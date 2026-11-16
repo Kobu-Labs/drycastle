@@ -5,9 +5,9 @@ use crate::rng::Rng;
 use crate::terrain::Terrain;
 use std::collections::BTreeMap;
 
-pub const PATCH_PRIORITY: [&str; 11] =
-    ["dike_track", "gravel", "verge_gravel", "bed", "furrow", "dirt", "verge_dirt", "litter", "tone_a", "tone_b", "lawn"];
-const SOFT_LAYERS: [&str; 4] = ["lawn", "tone_a", "tone_b", "litter"];
+pub const PATCH_PRIORITY: [&str; 12] =
+    ["dike_track", "gravel", "verge_gravel", "bed", "furrow", "dirt", "verge_dirt", "moss", "litter", "tone_a", "tone_b", "lawn"];
+const SOFT_LAYERS: [&str; 5] = ["lawn", "tone_a", "tone_b", "litter", "moss"];
 pub const MIN_PIECE_M2: f64 = 0.15;
 pub const PATCH_ROW: usize = 19;
 
@@ -18,6 +18,7 @@ pub fn texture_of(layer: &str) -> Option<&'static str> {
         "bed" | "furrow" => Some("soil_rows"),
         "dirt" | "verge_dirt" => Some("dirt"),
         "litter" => Some("leaf_litter"),
+        "moss" => Some("moss"),
         _ => None,
     }
 }

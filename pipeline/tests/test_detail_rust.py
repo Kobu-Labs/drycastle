@@ -87,6 +87,20 @@ def test_counts_match_the_python_stage(ws, py_result, tmp_path) -> None:
     assert not stats["failed"]
 
 
+def test_moss_layer_matches_the_python_stage(ws, py_result, tmp_path) -> None:
+    # the same recipe with other random draws: the moss triangles agree in order of magnitude
+    py_dir, out = tmp_path / "py", tmp_path / "rs"
+    py_dir.mkdir()
+    D.write_detail(py_dir, py_result)
+    run_rust(ws, out, 2)
+    counts = []
+    for d in (py_dir, out):
+        rows, tex = D.load_patches(d)
+        assert "moss" in tex
+        counts.append(int((rows[:, 18] == tex.index("moss")).sum()))
+    assert counts[0] > 50 and counts[1] == pytest.approx(counts[0], rel=0.6), counts
+
+
 def test_nothing_on_buildings_and_clutter_stands_on_the_ground(ws, tmp_path) -> None:
     work, _ = ws
     run_rust(ws, tmp_path / "rs", 2)

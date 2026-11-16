@@ -58,7 +58,8 @@ ground:
     forest:
       osm: {landuse: [forest], natural: [wood]}
       attributes:
-        colours: ["#2f5f38", "#2a5633", "#356a3c"]
+        # brown needle and leaf litter: the floor is brown, the moss patches (detail.forest.moss) are the green
+        colours: ["#5a4630", "#524029", "#644e36"]
         recipe: forest
     # garden plots outside the properties: mostly dug-over soil in rows
     allotments:
@@ -518,11 +519,24 @@ detail:
       rock:   {spacing_m: 4.0, edge: 0.06, dirt: 0.2, interior: 0.004, scale: [0.6, 1.6]}
       flower: {spacing_m: 2.0, tone: 0.08, interior: 0.012, scale: [0.8, 1.2]}
   forest:
-    tone_colours: ["#3f7444", "#26512f"]
-    tone_shades: [1.25, 0.75]
+    # Flat tone patches: the ground colour times tone_shades (tone_colours only when a forest has no ground colour).
+    tone_colours: ["#6b5640", "#3f3223"]
+    tone_shades: [1.2, 0.8]
     tone_per_ha: 4
     tone_radius_m: [2.5, 6.0]
-    litter: {radius_factor: 0.5, blobs_per_tree: 1, keep: 0.22}
+    # Leaf litter (leaf_litter texture) under the trees: `blobs_per_tree` blobs of canopy_m * scale * radius_factor, each kept
+    # with probability `keep`. Merged blobs make the thick litter stretches.
+    litter: {radius_factor: 0.75, blobs_per_tree: 1, keep: 0.3}
+    # Moss (moss texture, bright green): small irregular blobs, thick in the clumps of a noise (clump: 0 = even, 1 = bare gaps
+    # between thick clumps; clump_m: size of a clump) and thin in the gaps. `tree`: at the feet of the trees (keep per tree, blob
+    # radius, distance from the trunk); `interior`: over the open floor (one candidate per spacing_m cell, `keep` of them in a
+    # thick clump, radius, stretch along a random axis). None within edge_m of the carriageway and its verges.
+    moss:
+      edge_m: 3.0
+      clump: 0.9
+      clump_m: 12.0
+      tree: {keep: 0.3, radius_m: [0.5, 1.1], reach_m: [0.3, 1.4]}
+      interior: {spacing_m: 3.5, keep: 0.25, radius_m: [0.9, 1.8], stretch: 1.5}
     dirt: {per_ha: 3, radius_m: [0.6, 1.4]}
     clutter:
       leaf:   {spacing_m: 0.8, litter: 0.1, tone: 0.01, interior: 0.003, scale: [0.8, 1.2]}

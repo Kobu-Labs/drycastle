@@ -4,7 +4,7 @@
 //!
 //! * **field** (meadow, orchard, allotments, fields): tone patches, dirt headlands along the edge, a strip of furrows in a share
 //!   of the units, a few stored clutter kinds (the dense kinds come from the meadow raster).
-//! * **forest**: leaf litter under the trees, forest-floor tone patches, bare spots.
+//! * **forest**: leaf litter and moss under the trees, forest-floor tone patches, bare spots.
 
 use crate::cfg::Cfg;
 use crate::ctx::{palette, Ctx, Near, Shared};
@@ -12,9 +12,10 @@ use crate::emit::{Emitter, Res, Tint};
 use crate::geom::{self, PolyC, Pt, G};
 use crate::index::Region;
 use crate::meadow::{self, Cells};
+use crate::noise;
 use crate::patches::{assemble, Flat, Patch, Rect};
 use crate::rng::{seed_of, Rng};
-use crate::util::{self, blob, grow, lattice, point_rng, rad, Polyline};
+use crate::util::{self, blob, grow, lattice, lattice_in, point_rng, rad, Polyline};
 use std::collections::BTreeMap;
 use std::f64::consts::TAU;
 
@@ -49,6 +50,8 @@ pub struct Pre {
 }
 
 const HEAD_REACH_M: f64 = 9.0;
+/// The noise of the moss clumps (``detail.MOSS_SALT``).
+const MOSS_SALT: i64 = 5100;
 const TONE_REACH_M: f64 = 20.0;
 
 fn pid_seed(id: &str, purpose: &str) -> u64 {
@@ -190,6 +193,56 @@ impl Zones {
     }
 }
 
+/// Moss of the forest floor (``detail._moss``): blobs at the tree feet and over the open floor, thick in the clumps of a noise of
+/// position only and thin in the gaps, none within ``edge_m`` of the carriageway and the verges. Every candidate is a pure
+/// function of its position (per-tree streams, lattice cells), so tiles agree along their seams.
+fn moss(ctx: &Ctx, cfg: Cfg, mc: Cfg, free: &G, trees: &[[f64; 3]], pid: &str, bx: [f64; 4]) -> G {
+    let edge = mc.at("edge_m").f();
+    let mut near = vec![geom::dup(&ctx.verge_g), geom::dup(&ctx.verge_d)];
+    if let Some(r) = &ctx.road {
+        near.push(geom::buffer(r, cfg.at("road_clearance_m").f(), 2));
+    }
+    let near = geom::union_all(near);
+    let ban = if geom::is_empty(&near) { geom::empty() } else { geom::buffer(&near, edge, 2) };
+    let allowed = if geom::is_empty(&ban) { geom::dup(free) } else { geom::diff(free, &ban) };
+    if geom::is_empty(&allowed) {
+        return geom::empty();
+    }
+    let (amount, lat) = (mc.at("clump").f(), mc.at("clump_m").f());
+    let dens = |x: f64, y: f64| noise::clump(x, y, amount, lat, MOSS_SALT);
+    let mut parts = vec![];
+    let t = mc.at("tree");
+    let (reach, trad) = (t.at("reach_m").f2(), t.at("radius_m").f2());
+    let tseed = pid_seed(pid, "moss:tree");
+    for tr in trees {
+        let mut r = point_rng(tseed, tr[0], tr[1]);
+        if r.f() >= t.at("keep").f() * dens(tr[0], tr[1]) {
+            continue;
+        }
+        let (a, dist) = (r.f() * TAU, rad(&mut r, reach));
+        let radius = rad(&mut r, trad);
+        parts.push(blob(&mut r, tr[0] + dist * a.cos(), tr[1] + dist * a.sin(), radius, 0.4, 1.3, 8, None));
+    }
+    let i = mc.at("interior");
+    let (keep, irad, stretch) = (i.at("keep").f(), i.at("radius_m").f2(), i.at("stretch").f());
+    let allowed_r = Region::from_geom(&allowed);
+    let iseed = pid_seed(pid, "moss:interior");
+    let pts = lattice_in(iseed, i.at("spacing_m").f(), bx, (keep * (1.0 + amount)).min(1.0), Some(&allowed_r), |x, y, u| {
+        allowed_r.contains(x, y) && u < keep * dens(x, y)
+    });
+    for p in pts {
+        let mut r = point_rng(iseed, p[0], p[1]);
+        let radius = rad(&mut r, irad);
+        parts.push(blob(&mut r, p[0], p[1], radius, 0.4, stretch, 10, None));
+    }
+    let g = geom::union_all(parts);
+    if geom::is_empty(&ban) {
+        g
+    } else {
+        geom::diff(&g, &ban)
+    }
+}
+
 /// Runs a field or forest part, or one tile of it (``tile``: the exact box). Returns the result and its meadow cells.
 pub fn run(sh: &Shared, part: &Part, cfg: Cfg, pre: &Pre, tile: Option<[f64; 4]>, forest: bool) -> (Res, Cells) {
     let mut res = Res::default();
@@ -275,6 +328,7 @@ pub fn run(sh: &Shared, part: &Part, cfg: Cfg, pre: &Pre, tile: Option<[f64; 4]>
         }
         layers.insert("dirt", geom::union_all(dirt));
         layers.insert("litter", geom::union_all(litter_parts));
+        layers.insert("moss", moss(&ctx, cfg, sec.at("moss"), free, &trees, pid, scan_box(3.0)));
     } else {
         let (a, b, f) = tone_layers(&ctx, &unit_reg, unit_area, scan_box(TONE_REACH_M), sec, pid_seed(pid, "fieldtones"));
         (ta, tb, tone_flat) = (a, b, f);

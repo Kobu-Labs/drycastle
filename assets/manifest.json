@@ -3840,6 +3840,25 @@
       "pack": "drycastle-generated-textures"
     },
     {
+      "id": "moss",
+      "name": "Moss",
+      "file": "drycastle-generated-textures/moss.png",
+      "size_px": [
+        256,
+        256
+      ],
+      "tile_m": [
+        1.5,
+        1.5
+      ],
+      "alpha": false,
+      "tintable": false,
+      "mean_colour": "#5b983c",
+      "licence": "CC0",
+      "source": "scripts/make_textures.py",
+      "pack": "drycastle-generated-textures"
+    },
+    {
       "id": "soil_rows",
       "name": "Soil rows",
       "file": "drycastle-generated-textures/soil_rows.png",

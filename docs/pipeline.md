@@ -481,8 +481,12 @@ objects (a circle of half the footprint diagonal plus 0.3 m), water patches and 
   gravel, dirt and along walls, a few rocks, fallen leaves and sticks under trees.
 * **field** (meadow, field): large tone patches, dirt headlands along the boundary, a furrowed strip in some of the larger
   parcels, sparse tufts, pebbles, rocks and flowers that thicken towards the edge and on the tones.
-* **forest**: leaf litter under some trees, dark and light forest-floor tones, a few bare spots; leaves, sticks, rocks,
-  pebbles, tufts and ferns in groups round the trunks.
+* **forest**: a brown floor (the forest ground colour is the litter tone), leaf litter under many trees, **moss** (`moss`
+  layer, `moss` texture: bright green irregular blobs at the tree feet and over the open floor, thick in the clumps of a
+  position-only noise and thin in the gaps, none within `edge_m` of the carriageway and the verges), dark and light
+  forest-floor tones, a few bare spots; leaves, sticks, rocks, pebbles, tufts and ferns in groups round the trunks. The
+  numbers are `detail.forest` (`litter`, `moss`); `detail._moss` and the Rust `field::moss` read the same ones. A forest
+  costs about 1150 patch triangles per ha with these (about 360 before), so the forest patches of the village stay below 150k.
 * **village** (village ground: street sides, greens): grass on all of it beside the OSM carriageway, tufts along the asphalt edge,
   pebbles on the gravel.
 * **dike** (`dike.py`, `detail.dike` in `rules.yaml`; the parcels P-0073, P-0821 and P-0805 are the earth dike north of the village, whatever
@@ -500,12 +504,12 @@ objects (a circle of half the footprint diagonal plus 0.3 m), water patches and 
   edge (built once per road edge, every parcel they touch takes its share), whatever the parcel kind.
 
 **Patches** are polygons draped on the terrain (`patches.drape`, so they follow the ground triangle by triangle) 2 cm
-above it. The layers (`detail.PATCH_PRIORITY`: gravel, verge gravel, bed, furrow, dirt, verge dirt, litter, two tones,
+above it. The layers (`detail.PATCH_PRIORITY`: gravel, verge gravel, bed, furrow, dirt, verge dirt, moss, litter, two tones,
 lawn) are clipped in that order, so no two patches overlap and nothing z-fights; parcels are disjoint. Water
 patches (3 cm) are cut out of every patch. Patches go into the chunk GLBs as the node `detail_patches` (flat colours)
-and one `detail_patches_tex_<texture id>` node per texture (`dirt`, `gravel`, `leaf_litter`, `soil_rows`), at most five per
+and one `detail_patches_tex_<texture id>` node per texture (`dirt`, `gravel`, `leaf_litter`, `moss`, `soil_rows`, and `dike_gravel` on the dike), at most six per
 chunk; they have no collision. A patch triangle belongs to the chunk of its centroid (terrain cells never cross a chunk
-border). The village has about 143k patch triangles (garden 76k, forest 33k, field 24k, road 10k), which is why the shapes
+border). The village had about 143k patch triangles (garden 76k, forest 33k, field 24k, road 10k) before the moss and denser litter of the forest (about 105k, estimated from the per-ha cost above), which is why the shapes
 are few, soft and simplified: the terrain mesh cuts every patch at its 4 m cells, so area costs about 0.125 triangles
 per m2 before any outline.
 
