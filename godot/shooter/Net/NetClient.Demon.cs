@@ -82,7 +82,7 @@ public partial class NetClient
                 if (i.Fizzled) break;
                 var r = DemonData.Fireball.Splash.RadiusM;
                 RocketFx.Explode(Owned, at, r);
-                ShakeFor(at, r);
+                BlastFelt(at, r, null);
                 break;
             case EventKind.DemonFlame when DemonCodec.DecodeFlame(payload) is { } target:
                 foreach (var d in _demons.Values) d.FlameTarget = target;

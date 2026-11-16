@@ -277,6 +277,7 @@ public partial class NetClient : Node
         RenderWater();
         UpdateViewmodel();
         UpdateDemonQuake(delta);
+        UpdateDust(); // before the shake: a blast wave that arrives this frame shakes this frame
         UpdateShake(delta);
         FadeOwnCorrection(delta);
         UpdateHud();
@@ -963,14 +964,13 @@ public partial class NetClient : Node
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
                 if (KeepEventLogs) _explosionLog.Add((Now, ex));
                 if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(Owned, rk.Node); }
-                SfxExplosion(ex);
                 _dec.Forget(ex.Id);
                 _deadRockets.Add(ex.Id);
                 if (_deadRockets.Count > 256) _deadRockets.Clear();
                 var exR = ex.Radius > 0 ? ex.Radius : 6f; // the blast the server used (a gunship rocket's is 8 m)
                 var exAt = new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z);
                 RocketFx.Explode(Owned, exAt, exR);
-                ShakeFor(exAt, exR);
+                BlastFelt(exAt, exR, SoundRules.Event("explosion", WeaponId(ex.Weapon)));
                 break;
             case EventKind.VehicleExplosion when WeaponCodec.DecodeVehicleExplosion(payload) is { } vx:
                 OnVehicleExplosion(vx);

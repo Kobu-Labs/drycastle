@@ -79,6 +79,9 @@ public static class ChatCommands
     /// <summary>Most citizens one /citizens asks for (the data's max_count may be lower).</summary>
     public const int MaxCitizens = 200;
 
+    /// <summary>Bounds of /explode: the blast radius and how far ahead of the player it goes off, metres.</summary>
+    public const int MaxExplodeSize = 60, MaxExplodeDistance = 500;
+
     public static readonly IReadOnlyList<ChatCommand> All = new ChatCommand[]
     {
         new("help", "List the commands, or explain one", new[] { new ChatArg("command", ChatArgKind.Choice, false) }, AdminOnly: false),
@@ -92,6 +95,8 @@ public static class ChatCommands
         new("church", "TEST: open or close the church doors, or show whether they are open", new[] { new ChatArg("action", ChatArgKind.Choice, false) }),
         new("rozhlas", "TEST: kill the rozhlas announcer now (hijack the mic for 3 minutes), take or release the set, or show the loudspeaker's phase", new[] { new ChatArg("action", ChatArgKind.Choice, false) }),
         new("status", "Give a player (name or #id), or yourself, the divine blessing or the devil's curse, or clear their statuses", new[] { new ChatArg("status", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
+        new("explode", "TEST: a blast of that radius (metres) on the ground that many metres in front of you. The look, the sound and the dust only: it hurts nobody",
+            new[] { new ChatArg("size", ChatArgKind.Int, true, 1, MaxExplodeSize), new ChatArg("distance", ChatArgKind.Int, true, 0, MaxExplodeDistance) }),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
     };
 

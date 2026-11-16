@@ -37,11 +37,6 @@ public partial class NetClient
         if (l.Owner == _myId) Sfx.Play2D(id); else Sfx.Play3D(id, G(l.Origin));
     }
 
-    void SfxExplosion(ExplosionMsg ex)
-    {
-        if (Sfx.Enabled) Sfx.Play3D(SoundRules.Event("explosion", WeaponId(ex.Weapon)), G(ex.Position));
-    }
-
     void SfxHit(HitMsg h)
     {
         if (!Sfx.Enabled) return;

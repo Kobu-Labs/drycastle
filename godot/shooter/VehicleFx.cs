@@ -5,7 +5,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// Vehicle damage and blast visuals (ticket #103). Damage stages are particle emitters at the hood: 1 a little light gray smoke, 2 a bigger, much darker cloud,
-/// 3 the dark cloud plus sparks flying out. The blast is the bazooka's (<see cref="RocketFx.Explode"/>: flash, fireball, shockwave, fire/spark/smoke/debris, light)
+/// 3 the dark cloud plus sparks flying out. The blast is the bazooka's (<see cref="RocketFx.Explode"/>: flash, fireball, fire/spark/smoke/debris, light, dust)
 /// scaled by the vehicle blast radius, plus chunks of bodywork and a burning spot with a black smoke column that lingers a few seconds. Meshes, materials and
 /// ramps come from the rocket cache; skipped on headless runs.
 /// </summary>

@@ -15,7 +15,7 @@ public partial class NetClient
     void UpdateNameTag(ushort id, Remote r)
     {
         var dummy = TargetDummies.IsDummyId(id);
-        var show = dummy || (Match.IsTeamMode && Match.AreFriends(_myId, id));
+        var show = (dummy || (Match.IsTeamMode && Match.AreFriends(_myId, id))) && !DustHides(r.Node.GlobalPosition + Vector3.Up * 1.6f); // not through dust (#345)
         foreach (var label in r.Node.GetChildren().OfType<Label3D>())
         {
             label.Visible = show;

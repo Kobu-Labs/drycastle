@@ -63,6 +63,7 @@ public partial class NetServer
             case "sandbox": ChatSandbox(c, args); break;
             case "give": ChatGive(c, args); break;
             case "time": ChatTimeCommand(c, args); break;
+            case "explode": ChatExplode(c, args); break;
             case "restart": ChatRestart(c, args); break;
             case "event": ChatEvent(c, args); break;
             case "citizens": ChatCitizens(c, args); break;
@@ -114,6 +115,24 @@ public partial class NetServer
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { ChatTo(c, ChatLineKind.Error, "You must be alive to spawn a vehicle."); return; }
         if (TrySpawnVehicle(c, (byte)kind, AdminVehicleCap) is { } why) { ChatTo(c, ChatLineKind.Error, why); return; }
         ChatTo(c, ChatLineKind.Info, $"Spawned a {id} in front of you.");
+    }
+
+    /// <summary>
+    /// "/explode size distance" (#345, a test of the blast's look): the explosion event of a rocket nobody fired, of that radius, on the first surface under the point
+    /// that far ahead of the player (their own height when there is none). Clients show the blast, its sound and its dust; no damage, glass or knockback is worked out.
+    /// </summary>
+    void ChatExplode(Client c, IReadOnlyList<string> args)
+    {
+        var size = int.Parse(args[0], System.Globalization.CultureInfo.InvariantCulture);
+        var distance = int.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture);
+        var yaw = c.Body.Yaw;
+        var at = c.Body.GlobalPosition + new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw)) * distance;
+        if (Query.Ground(MoverKind.Player, at, 60f, 200f) is { } ground) at = ground.Position;
+        var weapon = Math.Max(0, Weapons?.Weapons.FindIndex(w => w.Kind == WeaponKind.Projectile) ?? 0); // the sound of the blast: the bazooka's
+        var id = _nextRocket;
+        _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
+        BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(id, c.Id, (byte)weapon, N(at), size)));
+        ChatTo(c, ChatLineKind.Info, $"A {size} m blast {distance} m in front of you.");
     }
 
     /// <summary>A human player by name (spaces ignored) or "#id", or null.</summary>
