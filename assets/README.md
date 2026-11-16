@@ -269,3 +269,5 @@ The glyph icons are white on transparent so the theme can tint them; the weapon 
 
 `validate_asset_ref(ref, manifest)` in `pipeline/src/drycastle_pipeline/assets.py` checks an asset reference
 against the manifest.
+
+**Per-vehicle engine sounds** (vehicles.json `sounds`, `godot/ShooterCore/VehicleSound.cs`): a type with a `sounds` block plays layered engine sounds instead of the shared `vehicle.engine` loop. Roles: `background` (loop, always on while driven), `idle` (loop, standing), `accel` (loop, speed rising), `lift` (one-shot, off the gas after a push: turbo blow-off), `brake` (loop, speed falling hard, louder with speed), `top` (loop, holding top speed). Each role names a sounds.json id and may set `pitch: [standstill, top speed]`, `fade_in`, `fade_out`. The Golf Mk2's files go in `golf-mk2-sounds/` as `background.ogg idle.ogg accel.ogg lift.ogg brake.ogg top.ogg` (ogg vorbis; loops must be seamless); its sounds.json entries are `optional`, so a missing file is silent, not a startup error.

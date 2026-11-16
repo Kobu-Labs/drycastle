@@ -41,7 +41,7 @@ public sealed class LoopVoice
 /// </summary>
 public partial class Sfx : Node
 {
-    const int Pool2D = 32, Pool3D = 64, PoolUi = 4, PoolLoop = 10;
+    const int Pool2D = 32, Pool3D = 64, PoolUi = 4, PoolLoop = 24;
 
     public static Sfx? Instance { get; private set; }
     public static bool Enabled => ShotFx.Enabled;
@@ -81,13 +81,14 @@ public partial class Sfx : Node
         _table = SoundsFile.Parse(json);
         foreach (var d in _table.Sounds)
             foreach (var f in d.Files)
-                if (!System.IO.File.Exists(ModelLib.AssetPath(f))) throw new DataFileException($"sounds.json: {d.Id}: file not found {ModelLib.AssetPath(f)}");
+                if (!d.Optional && !System.IO.File.Exists(ModelLib.AssetPath(f))) throw new DataFileException($"sounds.json: {d.Id}: file not found {ModelLib.AssetPath(f)}");
         if (!Enabled) return;
         foreach (var d in _table.Sounds)
         {
             var list = new List<AudioStream>();
             foreach (var f in d.Files)
             {
+                if (d.Optional && !System.IO.File.Exists(ModelLib.AssetPath(f))) continue;
                 var st = AudioStreamOggVorbis.LoadFromFile(ModelLib.AssetPath(f));
                 if (st == null) { GD.PrintErr($"sound failed to load: {f}"); continue; }
                 st.Loop = d.Loop;

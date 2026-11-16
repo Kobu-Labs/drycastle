@@ -51,6 +51,7 @@ public class VehiclesFile : IVersioned
                 if (l.Head.Concat(l.Tail).Any(p => p is null || p.Length != 3)) throw new DataFileException($"vehicles.json: {v.Id}: each lamp is [x, y, z]");
                 if (l.BeamRange <= 0 || l.BeamAngle <= 0 || l.BeamAngle >= 89) throw new DataFileException($"vehicles.json: {v.Id}: beam_range must be positive, beam_angle 1..88 degrees");
             }
+            if (v.Sounds is { } snd) VehicleSoundsDef.Validate(v.Id, snd);
             if (v.Glass.Count > 24) throw new DataFileException($"vehicles.json: {v.Id}: at most 24 glass panes");
             foreach (var pane in v.Glass)
             {
@@ -786,6 +787,8 @@ public class VehicleDef
     public float ModelYawDeg { get; set; }
     /// <summary>Headlights and tail lights (vehicles.json "lights"); null for a type without lamps.</summary>
     public VehicleLights? Lights { get; set; }
+    /// <summary>The engine sound set of this type (vehicles.json "sounds"); null keeps the shared vehicle.engine loop.</summary>
+    public VehicleSoundsDef? Sounds { get; set; }
     /// <summary>The glass panes of this type (vehicles.json "glass"), at most 24; empty for a type without glass. A pane's place in the list is its index on the wire.</summary>
     public List<VehicleGlassDef> Glass { get; set; } = new();
     List<GlassPaneRect>? _glassRects;
