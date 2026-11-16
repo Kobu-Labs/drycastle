@@ -65,6 +65,14 @@ materials, no texture; `Glass` and `GlassClear` are alpha-blended. Same vehicle 
 at the pivot: `wheel_fl`/`_fr`/`_rl`/`_rr` and the door leaves `door_front_1`/`_2`, `door_mid_1`/`_2` (the game does not move them yet); empties mark
 `seat_driver`, `seat_passenger_1` to `_3` (the four seats of vehicles.json), the lamps and `smoke_engine` (the engine is at the rear).
 
+`drycastle-generated-models/golf_mk2.glb` (2026-11-16) is the Golf Mk2 (`godot/shooter` vehicle id `golf_mk2`): a low-poly three-door hatchback, 4.28 m long, in
+near-black paint, with a left-hand-drive interior (four seats, dashboard, steering wheel) because riders look out of it. Original geometry written as code in
+`scripts/make_golf_mk2_model.py` (it needs numpy, unlike the other model scripts, and loads the flak script's `GlassSet`; run `python3 scripts/make_golf_mk2_model.py`,
+without `-I` since numpy may live in the user site), CC0, 15 flat-colour materials, no texture; `Transparent blue glass` is alpha-blended. Same vehicle frame, origin
+on the ground between the axles. Nodes: `hull` (the body leans on it) holding `wheel_fl_steer`/`wheel_fr_steer` (turn about Y) with `wheel_fl`/`wheel_fr` (roll about X),
+`wheel_rl`/`wheel_rr`, the six breakable panes `glass_0` to `glass_5` (the script rewrites the `glass` list of vehicles.json) and empties for the seats and lamps. The paint
+is the material `Black paint`. The front and rear badges are a drawn V/W monogram, not a traced logo.
+
 `drycastle-generated-models/utility_helicopter.glb` (2026-11-12) is the utility helicopter (`godot/shooter` vehicle id `utility_helicopter`): a two-blade
 transport with an open cabin (no doors: you see through it from side to side), skids, a glazed cockpit and a pintle-mounted door gun on the right.
 Original geometry written as code in `scripts/make_utility_helicopter_model.py` (standard library only; it loads the flak script's mesh helpers from the
