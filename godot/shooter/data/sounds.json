@@ -106,7 +106,7 @@
     { "id": "golf_mk2.background", "files": ["golf-mk2-sounds/background.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 120, "loop": true },
     { "id": "golf_mk2.idle", "files": ["golf-mk2-sounds/idle.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 90, "loop": true },
     { "id": "golf_mk2.accel", "files": ["golf-mk2-sounds/accel.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 140, "loop": true },
-    { "id": "golf_mk2.lift", "files": ["golf-mk2-sounds/lift.ogg"], "bus": "SFX", "volume_db": 2, "max_distance": 100, "priority": 1 },
+    { "id": "golf_mk2.lift", "files": ["golf-mk2-sounds/lift.ogg"], "bus": "SFX", "volume_db": 4, "max_distance": 100, "priority": 1 },
     { "id": "golf_mk2.top", "files": ["golf-mk2-sounds/top.ogg"], "bus": "SFX", "volume_db": -6, "max_distance": 160, "loop": true }
   ]
 }

@@ -158,7 +158,9 @@ public sealed class EngineSoundModel
 
         if (_fsm.Is(want) || _fsm.Elapsed < _t.MinDwell) return;
         _fsm.Enter(want);
-        if (pushing && want is EnginePhase.Coasting or EnginePhase.Braking && _push >= _t.LiftMinPushSeconds && frac >= _t.LiftMinFraction && _sinceLift >= _t.LiftCooldown)
+        // off the gas after a push, or onto the brake (the handbrake, or reverse pressed while rolling forward) at speed, push or no push: the turbo lets go
+        if (want is EnginePhase.Coasting or EnginePhase.Braking && frac >= _t.LiftMinFraction && _sinceLift >= _t.LiftCooldown
+            && ((pushing && _push >= _t.LiftMinPushSeconds) || want == EnginePhase.Braking))
         {
             _lift = true; _sinceLift = 0;
         }
@@ -183,6 +185,13 @@ public sealed class EngineMix
     /// <summary>What each layer plays at, 0 to 1: the straight fade, eased (smoothstep), so a crossfade starts and ends gently.</summary>
     public readonly float[] Gain = new float[Count];
     readonly float[] _fade = new float[Count];
+    float _duck;
+
+    /// <summary>How far the loops dip (to this share of their volume) the moment the lift sound plays, and how long they take to come back, seconds: so the turbo is not buried under the engine.</summary>
+    public const float LiftDuckGain = 0.35f, LiftDuckSeconds = 1.0f;
+
+    /// <summary>The lift sound is playing now: duck the loops under it.</summary>
+    public void Duck() => _duck = LiftDuckSeconds;
 
     /// <summary>
     /// One frame. The background asks for full volume always, the phase's layer for full volume (the brake layer by the speed: a squeal at a walking
@@ -193,6 +202,13 @@ public sealed class EngineMix
         var loops = def.Loops;
         var active = EngineSoundModel.LayerOf(phase);
         var body = Body(def);
+        var duck = 1f;
+        if (_duck > 0)
+        {
+            _duck = Math.Max(0f, _duck - dt);
+            var u = 1f - _duck / LiftDuckSeconds;
+            duck = LiftDuckGain + (1f - LiftDuckGain) * (u * u * (3f - 2f * u));
+        }
         for (var i = 0; i < Count; i++)
         {
             var l = loops[i];
@@ -208,7 +224,7 @@ public sealed class EngineMix
             if (target > 0 && i == (int)EngineLayer.Brake) target = Math.Clamp(speedFraction * 2f, 0f, 1f);
             var rate = target > _fade[i] ? l.FadeIn : l.FadeOut;
             _fade[i] = rate <= 0 ? target : target > _fade[i] ? Math.Min(target, _fade[i] + dt / rate) : Math.Max(target, _fade[i] - dt / rate);
-            Gain[i] = _fade[i] * _fade[i] * (3f - 2f * _fade[i]);
+            Gain[i] = _fade[i] * _fade[i] * (3f - 2f * _fade[i]) * duck;
         }
     }
 
@@ -224,5 +240,5 @@ public sealed class EngineMix
     /// <summary>Gain as a volume offset in dB (silent: -80).</summary>
     public static float Db(float gain) => gain <= 0.001f ? -80f : 20f * MathF.Log10(gain);
 
-    public void Clear() { Array.Clear(Gain); Array.Clear(_fade); }
+    public void Clear() { Array.Clear(Gain); Array.Clear(_fade); _duck = 0; }
 }

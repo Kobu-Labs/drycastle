@@ -66,6 +66,25 @@ public class EngineSoundTests
     }
 
     [Fact]
+    public void Braking_at_speed_fires_the_lift_even_after_coasting_and_a_ducked_mix_recovers()
+    {
+        var m = new EngineSoundModel();
+        var v = Run(m, 0, 30, 3f);          // 90 km/h
+        v = Run(m, v, -3, 3f);               // off the gas long ago: coasting, no lift pending
+        while (m.TakeLift()) { }
+        var lifts = 0;
+        Run(m, v, -40, 1f, x => { if (x.TakeLift()) lifts++; });
+        Assert.Equal(1, lifts);
+        var def = Set(); var mix = new EngineMix();
+        for (var i = 0; i < 120; i++) mix.Step(def, EnginePhase.Coasting, 0.5f, Dt);
+        var before = mix.Gain[(int)EngineLayer.Background];
+        mix.Duck(); mix.Step(def, EnginePhase.Coasting, 0.5f, Dt);
+        Assert.InRange(mix.Gain[(int)EngineLayer.Background], 0.3f, 0.45f);
+        for (var i = 0; i < 90; i++) mix.Step(def, EnginePhase.Coasting, 0.5f, Dt);
+        Assert.Equal(before, mix.Gain[(int)EngineLayer.Background], 3);
+    }
+
+    [Fact]
     public void Lifting_after_a_blip_or_at_a_crawl_is_silent()
     {
         var m = new EngineSoundModel();
