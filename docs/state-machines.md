@@ -104,18 +104,21 @@ stateDiagram-v2
     Idle --> StompWindup
     Idle --> VehicleWindup
     Idle --> GrabReach
+    Idle --> Roar
     Walk --> Idle
     Walk --> Run
     Walk --> TrunkWindup
     Walk --> StompWindup
     Walk --> VehicleWindup
     Walk --> GrabReach
+    Walk --> Roar
     Run --> Idle
     Run --> Walk
     Run --> TrunkWindup
     Run --> StompWindup
     Run --> VehicleWindup
     Run --> GrabReach
+    Run --> Roar
     StompWindup --> Stomp
     VehicleWindup --> Launch
     GrabReach --> Hold
@@ -127,6 +130,7 @@ stateDiagram-v2
     GrabReach --> Idle
     Hold --> Idle
     Launch --> Idle
+    Roar --> Idle
     Dead --> [*]
 ```
 
@@ -141,6 +145,7 @@ From any state: Dead
 - **Hold**: Holds one player in its hand until the hold time runs out (launch) or the player dies or leaves (Idle).
 - **Launch**: The short swing after a throw or a launch.
 - **Dead**: Reachable from every act (a killing hit, or an admin ending the event).
+- **Roar**: A phase began or it enraged: it stands and roars (BigfootRules.RoarSeconds), facing its target. Owed while it is busy or has an attack to make, paid the first tick it would only chase.
 
 ## Bigfoot.Event
 

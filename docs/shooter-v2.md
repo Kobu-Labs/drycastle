@@ -526,8 +526,8 @@ items, ADR 0018 (#267, protocol 31).
   the origin is the middle of the head). `CharacterView.SetWorn(slot, item)` (`CharacterView.Worn.cs`) hangs it on the head bone, so it follows every
   clip, stance, the prone roll and the ragdoll, and hides what it replaces: the helmet and the hair, the head's foliage and the face paint. The same call
   dresses remote players (from event 194), the local player's seat view, a corpse that carries the item (from event 191: gone again once taken or crumbled)
-  and the menu figure (`CamoPreview.ShowWorn(slot, item)`). The Bigfoot head is `scripts/make_bigfoot_head_model.py` (a faceted ape-like head, 1142
-  triangles, about 30 % bigger than the head it covers). An item without a model is worn but not drawn.
+  and the menu figure (`CamoPreview.ShowWorn(slot, item)`). The Bigfoot head is the giant's own head from `scripts/make_bigfoot_model.py` (732
+  triangles, about twice the width of the head it covers). An item without a model is worn but not drawn.
 - **Icons.** `IconRegistry` has `IconKind.Item`: `ui/icons/items/<id>.png` (128x128, a render of `model` from `tools/render_icons.gd`); an item without a
   file shows `item_fallback.png` (a plain box glyph from `make_icons.py`), not the crossed placeholder.
 - **Granting it for tests.** An admin's `/give <item> [player]` gives a fresh item (no pickups counted) to a living player, or to the admin: worn when the slot is empty, else in the bag; refused when both are full.
@@ -552,9 +552,22 @@ despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: 
   `/event current end` kills it (a win, for testing), `/event current cancel` removes it with no reward. The first version announces nothing but a system chat line:
   it does not use the intel board (`AnnounceIntel` is the one call that would).
 - **A world entity, not a bot** (wire type 60). The state byte is the act (`BigfootAct`, bits 0-3), a bit that flips on every hit that did not kill, the phase (bits 5-6) and
-  the enrage (bit 7); the owner field is the player it holds; the hp byte is the hit count left in percent. The client draws the placeholder giant
-  (`quaternius-giant/giant.glb`, `assets/quaternius-giant/NOTICE.txt`) and picks the clip from the act. Idle, Walk, Run, Death and HitRecieve map directly; every attack
-  reuses the Attack clip stretched over the wind-up, plus a procedural lean, rise and wobble of the whole figure (`MoveBigfoot`). The model and the sounds are placeholders
+  the enrage (bit 7); the owner field is the player it holds; the hp byte is the hit count left in percent. The client draws the generated giant
+  (`drycastle-generated-models/bigfoot.glb`, `scripts/make_bigfoot_model.py`: a skinned mesh, 26 bones, 14 clips) and picks the clip from the act (`ClipFor`): every act
+  has its own, and a wind-up is stretched over its act's time so the blow lands with the server's. Walk and Run play at the speed it moves (`PaceGait`: ground speed over
+  the clip's stride, `movement.walk_stride_m` / `run_stride_m`). A hit makes it flinch only while it stands. When a phase begins or it enrages it owes a roar: the first tick it has no
+  attack to make it stops, faces its target and roars for `BigfootRules.RoarSeconds` (the act `Roar`); its arrival plays the same clip on the client. A launch out of a
+  hold is the one-handed Hurl clip, any other the two-handed Launch. The chase (#285): it runs until its target is within 0.8 x `run_beyond_m` and stands until the
+  target is 1.2 m beyond `stop_distance_m`, gathers and sheds speed, turns on the spot at a walk, keeps a way round a building for 0.6 s and faces it, treats under
+  0.3 s of no way through as still moving, and its height follows the ground at up to 20 m/s; the client turns the figure to the server's yaw quickly instead of
+  jumping. The hunt (`bigfoot.json` `hunt`): every `roar_every_seconds` of the fight, and at a new phase or
+  the enrage, it stops and roars (the players' breather), then picks one player within `radius_m` at random and sprints at them whatever the distance, with no log and
+  no stomp on the way; on them it lunges (the grab, its cooldown ignored, made on the move at 0.7 x its run, faster than a player sprints), and a miss sprints on, until
+  it holds them, they are dead or gone, or `max_seconds` pass; the clock to the next roar starts when the hunt ends. Between hunts it walks faster than a player walks
+  (`walk_speed` 6 against 5) and throws logs only from 18 m. Its corpse is over five metres long and is looted for its head, so the reach (`CorpseRules.ReachMetres`) is measured from where
+  the head lies (`reward.corpse_head_m`, `Corpse.ReachPoint`), on the server and for the prompt; once the head is taken the Head bone is shrunk away and the stump of the
+  neck (part of the model, inside the skull until then) shows. The log it winds up with rides its right hand; the fist that holds a player rocks the whole figure
+  (`MoveBigfoot`). The sounds are still placeholders
   (`BigfootSounds` names the sounds the game already has).
 - **Hit count, not hit points.** It dies after `hits.per_player` x participants hits (participants: living players within `participant_radius_m`; the number only goes
   up while it fights). Shots reach it through the normal pipeline: it is a `HitTarget` (id `BigfootRules.TargetId` 60000) with `Scale` 2, a player capsule twice as tall

@@ -8,12 +8,12 @@ public sealed class BigfootFile : IVersioned
 {
     public int Version { get; set; }
 
-    /// <summary>The placeholder model (Quaternius "Giant", rigged, 12 joints), relative to the asset library (assets/).</summary>
-    public string Model { get; set; } = "quaternius-giant/giant.glb";
-    /// <summary>Uniform scale that brings the model, as it imports (4.53 units tall), to <see cref="HeightM"/>.</summary>
-    public float ModelScale { get; set; } = 0.8f;
-    /// <summary>Yaw added to the model so its face points to the entity's forward (-Z). The Quaternius packs face +Z, so 180.</summary>
-    public float ModelYawDeg { get; set; } = 180;
+    /// <summary>The model (scripts/make_bigfoot_model.py: skinned, its own clips, see <see cref="BigfootRules.Clips"/>), relative to the asset library (assets/).</summary>
+    public string Model { get; set; } = "drycastle-generated-models/bigfoot.glb";
+    /// <summary>Uniform scale that brings the model, as it imports, to <see cref="HeightM"/>. The generated one is built at that height.</summary>
+    public float ModelScale { get; set; } = 1f;
+    /// <summary>Yaw added to the model so its face points to the entity's forward (-Z). The generated one already faces -Z.</summary>
+    public float ModelYawDeg { get; set; }
     /// <summary>The drawn and hit height: twice a player (1.8 m). The hit volume is the player's capsule grown by <see cref="HitScale"/>.</summary>
     public float HeightM { get; set; } = 3.6f;
     /// <summary>Grows the player's hit capsule (<see cref="HitTarget.Scale"/>): 2 = twice as tall and as wide.</summary>
@@ -25,6 +25,7 @@ public sealed class BigfootFile : IVersioned
     public BigfootStomp Stomp { get; set; } = new();
     public BigfootVehicleThrow VehicleThrow { get; set; } = new();
     public BigfootGrab Grab { get; set; } = new();
+    public BigfootHunt Hunt { get; set; } = new();
     public BigfootWipe Wipe { get; set; } = new();
     public BigfootReward Reward { get; set; } = new();
     /// <summary>Where the event starts when the map has no <c>bigfoot</c> zone (a dev aid).</summary>
@@ -50,6 +51,7 @@ public sealed class BigfootFile : IVersioned
         if (!f.Model.EndsWith(".glb", StringComparison.Ordinal) || f.Model.StartsWith('/') || f.Model.Contains("..", StringComparison.Ordinal))
             throw new DataFileException($"{F}: model is a .glb path inside the asset library");
         Positive(f.ModelScale, "model_scale"); Positive(f.HeightM, "height_m"); Positive(f.HitScale, "hit_scale");
+        Positive(f.Movement.WalkStrideM, "movement.walk_stride_m"); Positive(f.Movement.RunStrideM, "movement.run_stride_m");
         if (f.DamageMin < 1 || f.DamageMax < f.DamageMin) throw new DataFileException($"{F}: damage_min is at least 1 and not above damage_max");
 
         var h = f.Hits;
@@ -89,6 +91,7 @@ public sealed class BigfootFile : IVersioned
         Positive(v.FlightSeconds, "vehicle_throw.flight_seconds"); NotNegative(v.SpinRadPerS, "vehicle_throw.spin_rad_per_s");
         if (v.PlacementTries < 1) throw new DataFileException($"{F}: vehicle_throw.placement_tries is at least 1");
 
+        Positive(f.Hunt.RoarEverySeconds, "hunt.roar_every_seconds"); Positive(f.Hunt.MaxSeconds, "hunt.max_seconds"); Positive(f.Hunt.RadiusM, "hunt.radius_m");
         var g = f.Grab;
         Positive(g.RangeM, "grab.range_m"); Positive(g.CooldownSeconds, "grab.cooldown_seconds"); Positive(g.ReachSeconds, "grab.reach_seconds");
         Positive(g.HoldSeconds, "grab.hold_seconds"); Positive(g.LaunchFlightSeconds, "grab.launch_flight_seconds"); NotNegative(g.LaunchGraceSeconds, "grab.launch_grace_seconds");
@@ -101,6 +104,7 @@ public sealed class BigfootFile : IVersioned
         var r = f.Reward;
         if (r.HeadItem == "") throw new DataFileException($"{F}: reward.head_item is empty");
         Positive(r.CorpseSeconds, "reward.corpse_seconds"); Positive(r.DeathSeconds, "reward.death_seconds");
+        if (r.CorpseHeadM is not { Length: 3 } || r.CorpseHeadM.Any(v => !float.IsFinite(v))) throw new DataFileException($"{F}: reward.corpse_head_m is three numbers (x, y, z)");
         Positive(r.TrailLengthM, "reward.trail_length_m"); Positive(r.TrailSpacingM, "reward.trail_spacing_m");
         if (r.TrailLengthM / r.TrailSpacingM > BigfootTrail.MaxPrints) throw new DataFileException($"{F}: reward.trail_length_m / trail_spacing_m is at most {BigfootTrail.MaxPrints} footprints");
         if (r.TrailTries < 1) throw new DataFileException($"{F}: reward.trail_tries is at least 1");
@@ -145,6 +149,12 @@ public sealed class BigfootMovement
 {
     public float WalkSpeed { get; set; } = 3.4f;
     public float RunSpeed { get; set; } = 6.8f;
+    /// <summary>
+    /// The ground one loop of the model's Walk and Run clips covers (scripts/make_bigfoot_model.py prints them). The client plays the clip at
+    /// ground speed / (stride / clip length), so the feet do not slide whatever the speed is tuned to.
+    /// </summary>
+    public float WalkStrideM { get; set; } = 2.8f;
+    public float RunStrideM { get; set; } = 8.4f;
     /// <summary>Farther than this from its target it runs, nearer it walks.</summary>
     public float RunBeyondM { get; set; } = 16;
     public float TurnRateDegPerS { get; set; } = 150;
@@ -215,6 +225,20 @@ public sealed class BigfootVehicleThrow
     public int PlacementTries { get; set; } = 8;
 }
 
+/// <summary>
+/// The hunt: it stops and roars now and then (the players' breather), then picks one player at random and sprints at them until it has them in its
+/// hand. See <see cref="Bigfoot"/>.
+/// </summary>
+public sealed class BigfootHunt
+{
+    /// <summary>Seconds of the fight between the end of one hunt and the roar that starts the next. A new phase and the enrage roar at once.</summary>
+    public float RoarEverySeconds { get; set; } = 14;
+    /// <summary>A hunt that has not caught its player after this long is given up.</summary>
+    public float MaxSeconds { get; set; } = 12;
+    /// <summary>The players it may pick: the living ones this near when the roar ends.</summary>
+    public float RadiusM { get; set; } = 90;
+}
+
 /// <summary>Phase three: it picks a player up, flails with them and launches them, at another player when there is one.</summary>
 public sealed class BigfootGrab
 {
@@ -255,6 +279,12 @@ public sealed class BigfootReward
     public float CorpseSeconds { get; set; } = 900;
     /// <summary>The body lies where it fell (the death clip) this long, then it is gone and the footsteps begin.</summary>
     public float DeathSeconds { get; set; } = 8;
+    /// <summary>
+    /// Where the head lies on the dead body, in the model's frame (x to its right, y up, z behind it; scripts/make_bigfoot_model.py prints it). The corpse
+    /// is over five metres long and is looted for its head, so the reach is measured from here (<see cref="CorpseRules.ReachPoint"/>), not from its feet.
+    /// </summary>
+    public float[] CorpseHeadM { get; set; } = { -0.22f, 1.03f, 2.88f };
+    public System.Numerics.Vector3 CorpseHead => new(CorpseHeadM[0], CorpseHeadM[1], CorpseHeadM[2]);
     public float TrailLengthM { get; set; } = 120;
     public float TrailSpacingM { get; set; } = 1.9f;
     /// <summary>It tries this many headings for a trail that runs over ground the whole way, and takes the best.</summary>
@@ -295,6 +325,8 @@ public static class BigfootRules
 
     /// <summary>How long the Stomp act lasts once the shockwave starts, and the Launch act's swing after a vehicle throw or a player launch (seconds, then back to Idle).</summary>
     public const float StompSeconds = 0.6f, LaunchSwingSeconds = 0.5f;
+    /// <summary>How long it stands and roars when a phase begins or it enrages (the Roar clip's length).</summary>
+    public const float RoarSeconds = 1.8f;
 
     /// <summary>Registers the Bigfoot and its log once (idempotent): the Bigfoot carries its hit count left in the hp byte, the log nothing.</summary>
     public static void Register(WorldEntityRegistry registry)
@@ -311,9 +343,19 @@ public static class BigfootRules
     public static byte Pack(BigfootAct act, bool hitToggle, int phase, bool enraged) =>
         (byte)((byte)act | (hitToggle ? HitToggle : 0) | (Math.Clamp(phase, 0, 2) << PhaseShift) | (enraged ? Enraged : 0));
 
-    /// <summary>The clips the placeholder model has, by their last name (the model names them "EnemyArmature|EnemyArmature|EnemyArmature|Attack"); a client matches on the ending.</summary>
-    public const string ClipIdle = "Idle", ClipWalk = "Walk", ClipRun = "Run", ClipAttack = "Attack", ClipHit = "HitRecieve", ClipDeath = "Death", ClipJump = "Jump";
-    public static readonly string[] Clips = { ClipIdle, ClipWalk, ClipRun, ClipAttack, ClipHit, ClipDeath, ClipJump };
+    /// <summary>
+    /// The clips the model has (scripts/make_bigfoot_model.py CLIPS): one per act, a flinch and a roar. The wind-ups end on their blow (the log leaves, the
+    /// foot lands, the vehicle is overhead at three quarters), so a client stretches each over its act's time.
+    /// </summary>
+    public const string ClipIdle = "Idle", ClipWalk = "Walk", ClipRun = "Run", ClipHit = "Hit", ClipRoar = "Roar", ClipDeath = "Death",
+        ClipTrunkThrow = "TrunkThrow", ClipStompWindup = "StompWindup", ClipStomp = "Stomp", ClipVehicleLift = "VehicleLift", ClipLaunch = "Launch",
+        ClipGrabReach = "GrabReach", ClipHold = "Hold", ClipHurl = "Hurl";
+    public static readonly string[] Clips =
+    {
+        ClipIdle, ClipWalk, ClipRun, ClipHit, ClipRoar, ClipDeath, ClipTrunkThrow, ClipStompWindup, ClipStomp, ClipVehicleLift, ClipLaunch, ClipGrabReach, ClipHold, ClipHurl,
+    };
+    /// <summary>The clips that loop; the others play once and hold their last frame.</summary>
+    public static readonly string[] LoopedClips = { ClipIdle, ClipWalk, ClipRun, ClipHold };
 
     /// <summary>The hits needed to kill it for <paramref name="participants"/> players (at least <see cref="BigfootHits.MinPlayers"/>).</summary>
     public static int HitsNeeded(BigfootHits h, int participants) => (int)MathF.Ceiling(h.PerPlayer * Math.Max(participants, h.MinPlayers));
@@ -359,16 +401,16 @@ public static class BigfootRules
 /// <summary>What a hit on the Bigfoot is made by, which sets what it counts.</summary>
 public enum HitSource : byte { None, Bullet, Explosive, VehicleWeapon }
 
-/// <summary>What the Bigfoot is doing: the low four bits of its replicated state byte. The clients pick the clip and the procedural motion from it.</summary>
+/// <summary>What the Bigfoot is doing: the low four bits of its replicated state byte. The clients pick the clip from it.</summary>
 public enum BigfootAct : byte
 {
     /// <summary>Standing (it waits after a wipe, and when nobody is near).</summary>
     Idle = 0,
     Walk = 1,
     Run = 2,
-    /// <summary>Winding up a log throw: the Attack clip, leaning back, then forward at the release.</summary>
+    /// <summary>Winding up a log throw: the log on its shoulder, drawn back, hurled when the wind-up ends.</summary>
     TrunkWindup = 3,
-    /// <summary>Winding up the stomp: the telegraph (the Attack clip and a sound), arms and body up.</summary>
+    /// <summary>Winding up the stomp: the telegraph (a clip and a sound), fists and a knee up.</summary>
     StompWindup = 4,
     /// <summary>The stomp lands: the shockwave runs.</summary>
     Stomp = 5,
@@ -378,7 +420,9 @@ public enum BigfootAct : byte
     GrabReach = 7,
     /// <summary>Holding the player in its hand and flailing: the player is the entity's owner field.</summary>
     Hold = 8,
-    /// <summary>The launch: a short Attack clip, then back to the chase.</summary>
+    /// <summary>The launch: the swing of the throw, then back to the chase.</summary>
     Launch = 9,
     Dead = 10,
+    /// <summary>Standing and roaring: a phase began, or the enrage.</summary>
+    Roar = 11,
 }

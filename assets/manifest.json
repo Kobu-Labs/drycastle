@@ -3604,14 +3604,37 @@
       "used_for": "godot/shooter vehicle id amphibious (data/vehicles.json); authored in the vehicle frame (forward -Z, origin on the ground at the centre, metres), separate nodes for hull, the four wheels, the two front steering pivots, propeller, gun_mount, gun, barrel"
     },
     {
+      "id": "pack:drycastle-generated-models/bigfoot",
+      "category": "other",
+      "name": "Bigfoot (skinned giant: spiked back, burning eyes, tusks; 14 clips)",
+      "file": "drycastle-generated-models/bigfoot.glb",
+      "size_m": [
+        3.38,
+        3.79,
+        2.39
+      ],
+      "tags": [
+        "shooter",
+        "creature",
+        "skinned",
+        "animated",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_bigfoot_model.py (original geometry and animation written as code; python3 scripts/make_bigfoot_model.py rebuilds the file, needs numpy)",
+      "pack": "drycastle-generated-models",
+      "used_for": "the Bigfoot event (#264, #286): data/bigfoot.json `model`, drawn by godot/shooter NetClient.Bigfoot.cs. Metres, stands on y 0, faces -Z, 3.6 m to the crest. One skinned mesh (2336 triangles, 12 flat-colour materials), 26 bones with identity rest rotations (Root > Hips > Spine > Chest > Neck > Head > Jaw; Clavicle/UpperArm/Forearm/Hand/Fingers and Thigh/Shin/Foot/Toe, .L and .R), clips Idle, Walk, Run, Death, Hit, Roar, TrunkThrow, StompWindup, Stomp, VehicleLift, Launch, GrabReach, Hold, Hurl. scripts/preview_glb_clips.py draws the clips without the game."
+    },
+    {
       "id": "pack:drycastle-generated-models/bigfoot_head",
       "category": "other",
-      "name": "Bigfoot head (faceted ape-like headgear with a crest, mane and amber eyes)",
+      "name": "Bigfoot head (the giant's own head as headgear: scowling brow, burning eyes, fangs and tusks, crest and mane)",
       "file": "drycastle-generated-models/bigfoot_head.glb",
       "size_m": [
-        0.88,
-        1.12,
-        0.87
+        1.14,
+        1.22,
+        1.17
       ],
       "tags": [
         "shooter",
@@ -3620,9 +3643,9 @@
         "generated"
       ],
       "licence": "CC0",
-      "source": "scripts/make_bigfoot_head_model.py (original geometry written as code; python3 -I scripts/make_bigfoot_head_model.py rebuilds the file)",
+      "source": "scripts/make_bigfoot_model.py (original geometry written as code; the same head as bigfoot.glb at 1/1.25, the jaw hanging open; python3 scripts/make_bigfoot_model.py rebuilds the file, needs numpy)",
       "pack": "drycastle-generated-models",
-      "used_for": "godot/shooter item id bigfoot_head (data/items.json `model`), worn by CharacterView on the head bone and rendered into ui/icons/items/bigfoot_head.png; authored in the headgear slot frame (forward -Z, origin at the middle of the head, metres), one mesh node, 8 flat-colour materials"
+      "used_for": "godot/shooter item id bigfoot_head (data/items.json `model`), worn by CharacterView on the head bone and rendered into ui/icons/items/bigfoot_head.png; authored in the headgear slot frame (forward -Z, origin at the middle of the head, metres); one mesh node, 732 triangles"
     },
     {
       "id": "pack:drycastle-generated-models/gold_chain",
@@ -4969,21 +4992,6 @@
       "pack": "animated-animals",
       "provided": "2026-11-12",
       "used_for": "animals (#254): species table godot/shooter/data/animals.json; the client draws them, nothing spawns them yet"
-    },
-    {
-      "id": "shooter:quaternius-giant/giant",
-      "name": "Giant (Bigfoot placeholder)",
-      "file": "quaternius-giant/giant.glb",
-      "original_filename": "Giant by Quaternius - BldaiPtyJa.glb",
-      "size_note": "skinned rest mesh, 4.53 units tall as Godot imports it (feet at y 0.03, it faces +Z, 6.47 wide with the arms out, 2.34 deep; measured with asset_check.gd); godot/shooter scales it by data/bigfoot.json model_scale (0.8) to the 3.6 m the Bigfoot stands, twice a player. One 'EnemyArmature' skeleton (12 joints) and seven clips with the prefix 'EnemyArmature|EnemyArmature|EnemyArmature|': Attack, Death, HitRecieve, Idle, Jump, Run, Walk",
-      "materials": [
-        "Atlas.001"
-      ],
-      "licence": "UNVERIFIED",
-      "source": "User-provided free model 'Giant' by Quaternius (the file name looks like a poly.pizza download). Quaternius publishes its free models as CC0, but the model's page and licence were not checked, so it is not claimed to be CC0. The user must confirm the licence and attribution before any release.",
-      "pack": "quaternius-giant",
-      "provided": "2026-11-13",
-      "used_for": "the Bigfoot event (#264): data/bigfoot.json model, drawn by godot/shooter NetClient.Bigfoot.cs; a placeholder until the real animated model arrives"
     }
   ],
   "ui_icons": {

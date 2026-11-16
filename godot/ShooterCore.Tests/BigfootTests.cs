@@ -56,6 +56,7 @@ public class BigfootTests
 
         public FakeWorld Player(ushort id, float x, float z, bool onFloor = true, bool inVehicle = false) { PlayerList.Add(new BigfootPlayer(id, new Vector3(x, 0, z), onFloor, inVehicle)); return this; }
         public void Remove(ushort id) => PlayerList.RemoveAll(p => p.Id == id);
+        public void Move(ushort id, Vector3 to) { var i = PlayerList.FindIndex(p => p.Id == id); PlayerList[i] = PlayerList[i] with { Feet = to }; }
     }
 
     static Bigfoot Make(FakeWorld w, BigfootFile? data = null, int participants = 0) => new(data ?? Shipped, w, Vector3.Zero, 0f, seed: 7, participants);
@@ -113,8 +114,56 @@ public class BigfootTests
         Assert.NotNull(head);
         Assert.True(head!.HeadshotImmune);
         using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(AssetsDir(), "manifest.json")));
-        var listed = doc.RootElement.GetProperty("unverified_models").EnumerateArray().Select(m => m.GetProperty("file").GetString()).ToHashSet();
-        Assert.Contains(Shipped.Model, listed);
+        // the project's own model: listed with its licence, not among the unverified ones
+        var entry = doc.RootElement.GetProperty("assets").EnumerateArray().Single(m => m.GetProperty("file").GetString() == Shipped.Model);
+        Assert.Equal("CC0", entry.GetProperty("licence").GetString());
+        Assert.DoesNotContain(doc.RootElement.GetProperty("unverified_models").EnumerateArray(), m => m.GetProperty("file").GetString() == Shipped.Model);
+    }
+
+    [Fact]
+    public void AfterARoarItHuntsOnePlayerAtASprintUntilItHasThem()
+    {
+        // one player just inside the distance it would walk at, one far away: by the clock it roars, then sprints at whichever it picked
+        var w = new FakeWorld().Player(1, 0, -60).Player(2, 40, -70);
+        var b = Make(w);
+        Assert.False(b.Hunting);
+        var roared = false;
+        for (var i = 0; i < 30 * 60 && !b.Hunting; i++) { b.Tick(1f / 30); roared |= b.Act == BigfootAct.Roar; }
+        Assert.True(roared, "it stops and roars by the clock");
+        Assert.True(b.Hunting);
+        var prey = b.Target;
+        Assert.Contains(prey, new ushort[] { 1, 2 });
+        // the prey flees at a sprint; the other player stands closer and is ignored; no log, no stomp on the way
+        var trunks = w.Trunks.Count;
+        var held = false;
+        for (var i = 0; i < 30 * (int)Shipped.Hunt.MaxSeconds && b.Hunting; i++)
+        {
+            var at = w.PlayerList.First(p => p.Id == prey).Feet;
+            var away = Vector3.Normalize(new Vector3(at.X - b.Position.X, 0, at.Z - b.Position.Z));
+            w.Move(prey, at + away * MoveConsts.SprintSpeed / 30);
+            b.Tick(1f / 30);
+            Assert.Equal(prey, b.Target);
+            held |= b.HeldPlayer == prey;
+        }
+        Run(b, 0.1f);
+        Assert.True(held || b.HeldPlayer == prey, "a sprinting player is caught");
+        Assert.False(b.Hunting);
+        Assert.Equal(trunks, w.Trunks.Count);
+    }
+
+    [Fact]
+    public void TheCorpseIsLootedAtItsHeadNotAtItsFeet()
+    {
+        var head = Shipped.Reward.CorpseHead;
+        Assert.True(head.Z > CorpseRules.ReachMetres, "the head lies farther behind the feet than the reach");
+        // the model's frame: z behind it, x to its right. Facing -Z (yaw 0) the head is at +Z; turned a quarter to its left (it faces -X) at +X
+        Assert.Equal(new Vector3(10 + head.X, head.Y, 20 + head.Z), CorpseRules.ReachPoint(new Vector3(10, 0, 20), 0, head));
+        var turned = CorpseRules.ReachPoint(Vector3.Zero, MathF.PI / 2, head);
+        Assert.Equal(head.Z, turned.X, 4); Assert.Equal(-head.X, turned.Z, 4);
+        var corpse = new Corpse(BigfootRules.TargetId, Vector3.Zero, 0, 0, 0, null, 60, head);
+        Assert.False(CorpseRules.InReach(Vector3.Zero, corpse.ReachPoint)); // standing at its feet
+        Assert.True(CorpseRules.InReach(new Vector3(head.X + 1, 0, head.Z), corpse.ReachPoint)); // standing beside its head
+        Assert.Equal(Vector3.Zero, new Corpse(1, Vector3.Zero, 1f, 0, 0).ReachPoint); // a player's corpse is looted where it lies
     }
 
     [Fact]
@@ -133,7 +182,7 @@ public class BigfootTests
     [InlineData("\"damage_min\": 2", "\"damage_min\": 0")]
     [InlineData("\"hit_scale\": 2", "\"hit_scale\": 0")]
     [InlineData("\"trail_spacing_m\": 1.9", "\"trail_spacing_m\": 0.1")]
-    [InlineData("\"model\": \"quaternius-giant/giant.glb\"", "\"model\": \"../giant.glb\"")]
+    [InlineData("\"model\": \"drycastle-generated-models/bigfoot.glb\"", "\"model\": \"../bigfoot.glb\"")]
     [InlineData("\"head_item\": \"bigfoot_head\"", "\"head_item\": \"\"")]
     public void BadFilesAreRefused(string good, string bad)
     {
@@ -400,16 +449,16 @@ public class BigfootTests
     [Fact]
     public void ItThrowsLogsAtAPlayerInRangeAndAimsAhead()
     {
-        var w = new FakeWorld().Player(1, 0, -30);
+        var w = new FakeWorld().Player(1, 0, -60); // far enough that it is still beyond the log's nearest range when the first throw is due
         var b = Make(w);
-        Run(b, 6);
+        Run(b, 4);
         Assert.NotEmpty(w.Trunks);
         var (from, v) = w.Trunks[0];
         Assert.True(from.Y > 2f, "it throws from its hand, high up");
         // the log lands near the player's chest (the player stood still: no lead)
         var chest = MoveConsts.CapsuleHeight * 0.6f;
         var lands = Ballistics.PositionAt(from, v, FlightSeconds(from, v, chest)); // where the log passes the player's chest
-        Assert.True(Vector2.Distance(new Vector2(lands.X, lands.Z), new Vector2(0, -30)) < 1.5f, $"it passes the chest at {lands}");
+        Assert.True(Vector2.Distance(new Vector2(lands.X, lands.Z), new Vector2(0, -60)) < 1.5f, $"it passes the chest at {lands}");
         Assert.Contains(w.Fxs, f => f.Kind == BigfootFxKind.TrunkThrow);
     }
 
@@ -518,10 +567,9 @@ public class BigfootTests
         var sky = new FakeWorld().Player(1, 0, -12);
         sky.VehicleList.Add(new BigfootVehicle(0x4003, new Vector3(1, 30, 0), HalfLength: 4f));
         var b2 = Make(sky);
-        HitUntil(b2, Shipped.Hits.SecondPhaseAt);
         Run(b2, 0.5f);
         Assert.Empty(sky.VehicleLifts);
-        sky.VehicleList[0] = new BigfootVehicle(0x4003, new Vector3(1, 3, 0), HalfLength: 4f);
+        sky.VehicleList[0] = new BigfootVehicle(0x4003, b2.Position + new Vector3(1, 3, 0), HalfLength: 4f); // beside it, wherever the chase took it
         Run(b2, 0.5f);
         Assert.Single(sky.VehicleLifts);
     }
@@ -646,6 +694,7 @@ public class BigfootTests
         var angry = Make(far2);
         HitUntil(angry, Shipped.Hits.EnrageAt);
         Assert.True(angry.Enraged);
+        Run(angry, BigfootRules.RoarSeconds + 0.5f); // it stands and roars first
         var start = angry.Position.Z;
         Run(angry, 4);
         Assert.True(start - angry.Position.Z > calmWalked * 1.15f, $"enraged it walked {start - angry.Position.Z} m, calm {calmWalked} m");
@@ -1021,12 +1070,12 @@ public class BigfootTests
         Assert.Equal(PinnedDeathHash, h);
     }
 
-    const string PinnedFight = "0.00 VehicleWindup\n1.63 Launch\n2.17 Idle\n2.20 StompWindup\n3.30 Stomp\n3.90 Idle\n3.93 Walk\n4.20 GrabReach\n4.90 Hold\n0.00 Hold\n1.40 Launch\n1.93 Idle\n1.97 Walk\n2.40 Idle\n4.30 StompWindup\n5.40 Stomp\n6.00 Idle\n0.00 Idle\n1.83 GrabReach\n2.53 Hold\n5.07 Launch\n5.60 Idle\n5.63 StompWindup\n6.73 Stomp\n7.33 Idle\n13.53 GrabReach\n14.23 Hold\n16.77 Launch\n17.30 Idle\n17.33 StompWindup\n18.43 Stomp\n19.03 Idle";
-    const ulong PinnedFightHash = 17521742334228743959UL;
-    const string PinnedWipe = "0.00 Run\n0.30 Walk\n1.50 TrunkWindup\n2.50 Idle\n2.53 Walk\n3.07 StompWindup\n0.00 StompWindup\n0.13 Stomp\n0.73 Idle\n0.77 Walk\n2.37 GrabReach\n0.00 Idle\n0.00 TrunkWindup\n1.00 Idle\n1.03 Run\n3.50 Walk\n4.43 TrunkWindup\n5.43 Idle\n5.47 Walk\n6.23 StompWindup\n7.33 Stomp\n7.93 Idle\n7.97 Walk\n8.07 TrunkWindup\n9.07 Idle\n9.10 Walk\n0.00 Walk\n0.60 GrabReach";
-    const ulong PinnedWipeHash = 10882475949325797536UL;
-    const string PinnedDeath = "0.00 GrabReach\n0.70 Hold\n0.00 Hold\n1.20 Launch\n1.73 Idle\n1.77 StompWindup\n2.87 Stomp\n3.47 Idle\n0.00 Dead";
-    const ulong PinnedDeathHash = 4960527982406786367UL;
+    const string PinnedFight = "0.00 VehicleWindup\n1.63 Launch\n2.17 Idle\n2.20 GrabReach\n2.90 Hold\n5.43 Launch\n5.97 Idle\n6.00 StompWindup\n0.00 StompWindup\n1.07 Stomp\n1.67 Idle\n1.70 Roar\n3.53 Idle\n3.57 Run\n4.77 GrabReach\n5.47 Hold\n8.00 Launch\n0.00 Launch\n0.50 Idle\n0.53 StompWindup\n1.63 Stomp\n2.23 Idle\n2.27 Roar\n4.10 Idle\n4.13 Walk\n4.77 Run\n5.60 GrabReach\n6.30 Hold\n8.83 Launch\n9.37 Idle\n9.40 StompWindup\n10.50 Stomp\n11.10 Idle\n12.33 GrabReach\n13.03 Hold\n15.57 Launch\n16.10 Idle\n17.53 StompWindup\n18.63 Stomp\n19.23 Idle\n19.27 GrabReach\n19.97 Hold\n22.50 Launch\n23.03 Idle\n23.07 Roar\n24.90 Idle\n24.93 Walk";
+    const ulong PinnedFightHash = 9570826617494973490UL;
+    const string PinnedWipe = "0.00 Run\n1.20 StompWindup\n2.30 Stomp\n2.90 Idle\n2.93 Run\n3.73 GrabReach\n0.00 GrabReach\n0.40 Hold\n2.93 Launch\n0.00 Idle\n0.00 TrunkWindup\n1.00 Idle\n1.03 Run\n4.40 StompWindup\n5.50 Stomp\n6.10 Idle\n6.13 Run\n6.90 Walk\n6.93 GrabReach\n7.63 Hold\n0.00 Hold\n0.17 Launch\n0.70 Idle\n0.73 Roar";
+    const ulong PinnedWipeHash = 12676320353054961180UL;
+    const string PinnedDeath = "0.00 GrabReach\n0.70 Hold\n0.00 Hold\n1.20 Launch\n1.73 Idle\n1.77 StompWindup\n2.87 Stomp\n3.47 Idle\n3.50 Roar\n5.33 Idle\n5.37 GrabReach\n0.00 Dead";
+    const ulong PinnedDeathHash = 517379191213203903UL;
 
     // ---- the act and life machines ----
 

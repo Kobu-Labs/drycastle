@@ -223,7 +223,7 @@ public partial class NetServer
         var item = Items.IndexOf(r.HeadItem);
         if (item < 0) { GD.PrintErr($"server: the Bigfoot's reward item '{r.HeadItem}' is not in items.json: no corpse"); return; }
         var knife = Weapons.Weapons.FindIndex(w => w.Kind == WeaponKind.Melee); // a weapon nobody can take into a hotbar position (CorpseRules.CanReplace): the corpse is for its item
-        var corpse = new Corpse(BigfootRules.TargetId, fell, _bigfootFellYaw, Math.Max(0, knife), 0, new[] { new ItemStack(item) }, r.CorpseSeconds);
+        var corpse = new Corpse(BigfootRules.TargetId, fell, _bigfootFellYaw, Math.Max(0, knife), 0, new[] { new ItemStack(item) }, r.CorpseSeconds, r.CorpseHead);
         var id = _corpses.Add(corpse);
         if (id is not { } cid) { GD.PrintErr("server: the world refused the Bigfoot's corpse"); return; }
         BroadcastCorpseItems(cid);
