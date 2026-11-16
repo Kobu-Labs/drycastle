@@ -36,6 +36,9 @@ public partial class DayNightCycle : Node3D
     /// <summary>0 outdoors, 1 inside a bunker room: set each frame by <see cref="BunkerLights"/>; turns the ambient light down.</summary>
     public float Indoor { get; set; }
 
+    /// <summary>0..1: the same turn-down of the ambient light for a room that is not a bunker (the mechanic garage while its lights are off, <see cref="MechanicGarage"/>); the darker of the two counts.</summary>
+    public float IndoorExtra { get; set; }
+
     /// <summary>0..1: the world goes dark for this client (the church while the pastor turns and the demon lives): the sun, the moon, the ambient light and the sky are turned down to almost nothing, so only fires light the scene. Set every frame by the church's decor.</summary>
     public float Gloom { get; set; }
     const float GloomFloor = 0.03f;
@@ -121,7 +124,7 @@ public partial class DayNightCycle : Node3D
         _moon.LightEnergy = l.MoonEnergy * gloom;
 
         _env.AmbientLightColor = Col(l.AmbientColour);
-        _env.AmbientLightEnergy = l.AmbientEnergy * Mathf.Lerp(1f, IndoorAmbient, Indoor) * gloom;
+        _env.AmbientLightEnergy = l.AmbientEnergy * Mathf.Lerp(1f, IndoorAmbient, Mathf.Max(Indoor, IndoorExtra)) * gloom;
         _env.BackgroundEnergyMultiplier = Mathf.Lerp(1f, 0.12f, Mathf.Clamp(Gloom, 0f, 1f));
         _env.TonemapExposure = l.Exposure * brightness;
         _env.FogDensity = l.FogDensity;

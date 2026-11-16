@@ -200,7 +200,7 @@
         "camera": { "distance": 7.75, "height": 1.9, "follow": 10, "max_lag": 2, "tilt": 0.35, "fov_boost_deg": 10, "turn_follow": 0, "turn_response": 5 }
       },
       "top_speed": 55.6, "acceleration": 6, "brake": 10.5, "turn_radius": 3.4, "high_speed_radius_factor": 14, "max_lateral_accel": 12, "mass": 950, "hp": 250, "hood": [0, 1.1875, -1.625], "spawn_count": 0,
-      "fixed_spots": [{ "x": 37, "z": -7 }],
+      "fixed_spots": [{ "x": 33.078, "z": 12.842, "yaw_deg": -103.7 }],
       "half_width": 1.125, "half_length": 2.68, "height": 1.79,
       "model": "drycastle-generated-models/golf_mk2.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Black paint", "paints": ["Black paint"],

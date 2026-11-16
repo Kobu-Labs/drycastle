@@ -7,6 +7,7 @@ Glass panes on vehicles and buildings have hit points, crack as they lose them a
 | Glass | Source | Panes |
 |---|---|---|
 | Buildings | `windows.json` of the map (window openings of buildings with a detail file, `pipeline/config/buildings/`) | every pane whose `breakable` is not false (the village map lists 35 panes today) |
+| Mechanic garage plate | `MechanicGarageSite.AddPane` (not in `windows.json`: added to the map's pane list on the server and every client, sorted by node name `mechanic_garage_plate`) | one OSB plate, 240 hit points (`MapGlassPane.Hp`), fragments are OSB chips (`GlassFx.OsbShards`), its box and mesh go when it shatters (`MechanicGarage.SetPlate`), ADR 0029 |
 | Car | `vehicles.json` `glass` | windscreen, rear, two side |
 | War jeep | `vehicles.json` `glass` | windscreen, rear, two side |
 | Bus | `vehicles.json` `glass` | windscreen and its two wrapped corners, rear, six left windows, four right windows, four door leaves (18) |

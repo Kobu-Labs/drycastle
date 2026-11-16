@@ -19,6 +19,8 @@ public sealed partial class MapLoader
     public string TreesJson { get; private set; } = "";
     /// <summary>The trees of the map, as read from trees.json (map metres).</summary>
     public IReadOnlyList<TreeInstance> Trees => _trees;
+    /// <summary>Trees this says yes to (map metres, x east, y north) get no collision: a tree baked into the map where a building has since been put (the mechanic garage, #320). Set before loading. Their canopies stay in the chunk meshes until the map is built again.</summary>
+    public Func<float, float, bool>? TreeFilter { get; set; }
     /// <summary>The tree model numbers (trunk and canopy sizes) that the collision solids are built from.</summary>
     public TreeModel TreeModel { get; private set; } = new(0.35f, 1.8f, 2.6f);
 
@@ -40,6 +42,7 @@ public sealed partial class MapLoader
         foreach (var t in _trees)
         {
             if (n++ % Batch == Batch - 1) yield return 0.5f * n / _trees.Count;
+            if (TreeFilter?.Invoke(t.X, t.Y) == true) continue;
             foreach (var part in TreeColliders.Parts(t, model))
             {
                 var key = (t.ChunkX, t.ChunkY, part.Role);

@@ -423,6 +423,14 @@ _Avoid_: church gate, church entrance (that is the doorway)
 The garage beside the church (parcel P-0666, two buildings sharing a wall): its deep part is one hollow bay sized for the Bus, which stands in it at the start, nose to the garage doors. The other part is solid. Not a shelter.
 _Avoid_: depot, hangar (that is the Base), bus stop
 
+**Mechanic garage**:
+The OSB shed on the garden plots by road E-0101 (sketch L1, ticket #320), 11 x 8 m under a wavy rubber roof, its long wall to the road. The Golf Mk2 stands inside, nose to the road wall, with a workbench, a shelf and workshop clutter. Built in code on the server (solid boxes) and the clients (drawn); not part of the map file. Sealed: the only way in is shooting the Garage plate.
+_Avoid_: bus garage (that is another building), workshop
+
+**Garage plate**:
+The one breakable section of the Mechanic garage's road wall, 3.0 x 2.5 m, in front of the Golf: a map glass pane with 240 hit points. While it stands the wall is solid; once it shatters (OSB chips fly) its box is gone, the Golf can drive out, and the garage's roof lights run their sequence: dark, a flicker that lights nothing, then fully on. Whole again at a round start.
+_Avoid_: door, window
+
 **Garage doors**:
 The double doors of the Bus garage: closed (solid, brown sheet-metal leaves) or open (leaves swung out into the yard, nothing solid). A player on foot at the doorway opens and closes them with the interact key, from either side; they do not close on a vehicle standing in the doorway. Closed on a new server.
 _Avoid_: gate, garage door as a Building detail opening (that is a drawn, fixed door of a house)
