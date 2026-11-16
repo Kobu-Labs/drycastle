@@ -7,7 +7,7 @@ namespace Drycastle.Shooter;
 /// <summary>
 /// The local player's death screen (#283). The pure half is <see cref="DeathPresentation"/> (Falling, then Lying, and how each kind of death looks); here it is fed a death and a clock and
 /// drives the three things that show it: the first-person camera (falls to about 0.2 m above the ground and rolls, then holds until the spawn), the blood overlay and the respawn scrim
-/// . The camera goes through one composer (<see cref="ComposedCamera"/>) with the demon's pounce camera: a death while pinned
+/// (<see cref="Hud.SetBlood"/>, <see cref="Hud.SetRespawnScrim"/>). The camera goes through one composer (<see cref="ComposedCamera"/>) with the demon's pounce camera: a death while pinned
 /// starts from the pounce camera's pose of that frame, so nothing snaps. The own corpse (a server entity, drawn on this client too) is hidden while the camera lies where it fell.
 /// </summary>
 public partial class NetClient
@@ -37,6 +37,7 @@ public partial class NetClient
     {
         _death.End();
         _deathFrom = null;
+        _hud?.SetBlood(0);
     }
 
     /// <summary>Every frame: the clock, the overlays, the own corpse. Runs before <see cref="UpdatePounce"/>.</summary>
@@ -44,6 +45,11 @@ public partial class NetClient
     {
         if (_me != null && GodotObject.IsInstanceValid(_me)) _me.CutCamera ??= ComposedCamera;
         _death.Tick((float)delta);
+        if (_death.Active)
+        {
+            _hud?.SetBlood(_death.BloodNow, _deaths);
+            _hud?.SetRespawnScrim(_death.ScrimNow);
+        }
         var hide = _death.OwnsCamera;
         if (_deathHidesCorpse.Update(hide) || hide) ShowOwnCorpse(!hide);
     }
