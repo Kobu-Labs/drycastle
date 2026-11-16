@@ -41,6 +41,8 @@ public partial class NetClient : IStandingBodies
         /// <summary>The ragdoll of a body a vehicle threw: it rolls about its own length (radians) while it flies and settles on a side where it lands.</summary>
         public float Roll;
         public bool Tumbling;
+        /// <summary>The loose limbs of the thrown body, one per skeleton of the model; empty for a rig with none (it is thrown as a rigid body).</summary>
+        public List<AnimalFlail> Flail = new();
         public Vector3 LastFeet;
         public bool SeenFeet;
         /// <summary>The driver's own picture of a throw by the vehicle it drives, shown before the server's arrives (<see cref="ThrowGuess"/>).</summary>
@@ -54,6 +56,8 @@ public partial class NetClient : IStandingBodies
 
     /// <summary>A thrown animal's roll in flight and its settling onto a side (rad/s), and the speed (m/s) above which a dead body is taken to be flying.</summary>
     const float AnimalRollRate = 9f, AnimalSettleRate = 9f, AnimalFlyingSpeed = 1.5f;
+    /// <summary>How loose the limbs of a thrown animal stay once it lies (<see cref="AnimalFlail.Amount"/>; 1 in the air).</summary>
+    const float AnimalLyingFlail = 0.5f;
 
     /// <summary>How long a hit reaction may hold back the clip of the state (a gallop must not wait for a long clip).</summary>
     const double AnimalHitReactMaxSeconds = 0.6;
@@ -119,6 +123,7 @@ public partial class NetClient : IStandingBodies
         var size = def.WeightKgOf(variant) != null ? AnimalRules.SizeOfStep(AnimalRules.SizeStepOf(e.State.State)) : 1f;
         var box = def.HitBoxOf(variant).Select(x => x * size).ToArray();
         var node = new Node3D { Name = $"Animal{e.Id}" };
+        var flail = new List<AnimalFlail>();
         AnimationPlayer? anim = null;
         var clips = Array.Empty<string?>();
         if (ModelLib.Instance(def.ModelOf(variant)) is { } model)
@@ -127,6 +132,8 @@ public partial class NetClient : IStandingBodies
             model.RotationDegrees = new Vector3(0, def.ModelYawDeg, 0);
             node.AddChild(model);
             anim = model.FindChildren("*", "AnimationPlayer", true, false).FirstOrDefault() as AnimationPlayer;
+            foreach (var sk in model.FindChildren("*", "Skeleton3D", true, false).OfType<Skeleton3D>())
+                if (AnimalFlail.Create(sk) is { } f) { sk.AddChild(f); flail.Add(f); }
             if (anim != null)
             {
                 clips = AnimalClips.Resolve(n => anim.HasAnimation(n));
@@ -140,7 +147,7 @@ public partial class NetClient : IStandingBodies
             node.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(w, h, l) }, Position = new Vector3(0, h / 2, 0) });
         }
         Owned.AddChild(node);
-        var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Size = size, Variant = variant, Toggle = AnimalRules.HitToggled(e.State.State) };
+        var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Size = size, Variant = variant, Flail = flail, Toggle = AnimalRules.HitToggled(e.State.State) };
         _animals[e.Id] = view;
         if (e.Dormant) SetAnimalDormant(view, e); // spawned outside the interest range: hidden until a keyframe shows it
     }
@@ -234,6 +241,7 @@ public partial class NetClient : IStandingBodies
         var flying = state == AnimalState.Thrown || state == AnimalState.Dead && speed > AnimalFlyingSpeed;
         if (flying) v.Tumbling = true;
         else if (state is not (AnimalState.Down or AnimalState.Dead)) { v.Tumbling = false; v.Roll = 0; }
+        foreach (var f in v.Flail) f.Amount = !v.Tumbling ? 0f : flying ? 1f : AnimalLyingFlail; // loose limbs in the air, slack ones where it lies
         if (!v.Tumbling)
         {
             v.Node.GlobalPosition = feet;
