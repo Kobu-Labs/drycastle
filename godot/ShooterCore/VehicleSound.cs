@@ -116,6 +116,10 @@ public sealed class EngineSoundModel
 
     readonly EngineSoundTuning _t;
     readonly StateMachine<EnginePhase> _fsm = new(Spec);
+    /// <summary>Seconds on the gas so far (accelerating or at the top speed, unbroken).</summary>
+    public float PushSeconds => _push;
+    /// <summary>What the last end of a push decided about the lift, in words (for the log): fired, or why not.</summary>
+    public string? LiftNote { get; private set; }
     float _lastSpeed = float.NaN, _rate, _push, _sinceLift = 1e9f;
     bool _lift;
 
@@ -157,11 +161,16 @@ public sealed class EngineSoundModel
         else want = EnginePhase.Coasting;
 
         if (_fsm.Is(want) || _fsm.Elapsed < _t.MinDwell) return;
+        var pushBefore = _push;
         _fsm.Enter(want);
-        // the turbo lets go when the driver ends a long push, by lifting or by going straight onto the brake (the handbrake, reverse pressed while rolling forward)
-        if (pushing && want is EnginePhase.Coasting or EnginePhase.Braking && _push >= _t.LiftMinPushSeconds && frac >= _t.LiftMinFraction && _sinceLift >= _t.LiftCooldown)
+        LiftNote = null;
+        if (pushing && want is EnginePhase.Coasting or EnginePhase.Braking)
         {
-            _lift = true; _sinceLift = 0;
+            // the turbo lets go when the driver ends a long push, by lifting or by going straight onto the brake (the handbrake, reverse pressed while rolling forward)
+            if (pushBefore < _t.LiftMinPushSeconds) LiftNote = $"no lift: pushed {pushBefore:F1}s, needs {_t.LiftMinPushSeconds:F0}s";
+            else if (frac < _t.LiftMinFraction) LiftNote = $"no lift: {frac * 100:F0}% of top speed, needs {_t.LiftMinFraction * 100:F0}%";
+            else if (_sinceLift < _t.LiftCooldown) LiftNote = $"no lift: cooldown ({_sinceLift:F1}s of {_t.LiftCooldown:F1}s)";
+            else { _lift = true; _sinceLift = 0; LiftNote = $"lift after a {pushBefore:F1}s push"; }
         }
         if (want is not (EnginePhase.Accelerating or EnginePhase.TopSpeed)) _push = 0;
     }
