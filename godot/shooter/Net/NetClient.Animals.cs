@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.ShooterCore;
+using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;
 
@@ -42,6 +43,8 @@ public partial class NetClient : IStandingBodies
         public bool Tumbling;
         public Vector3 LastFeet;
         public bool SeenFeet;
+        /// <summary>The driver's own picture of a throw by the vehicle it drives, shown before the server's arrives (<see cref="ThrowGuess"/>).</summary>
+        public readonly ThrowGuess Guess = new();
     }
 
     readonly Dictionary<ushort, AnimalView> _animals = new();
@@ -94,7 +97,7 @@ public partial class NetClient : IStandingBodies
     {
         v.Node.Visible = !e.Dormant;
         v.Node.ProcessMode = e.Dormant ? Node.ProcessModeEnum.Disabled : Node.ProcessModeEnum.Inherit; // an AnimationPlayer keeps playing while hidden otherwise
-        if (e.Dormant) return;
+        if (e.Dormant) { v.Guess.Reset(); return; }
         v.Shown = 255; v.HitUntil = 0; v.Toggle = AnimalRules.HitToggled(e.State.State);
     }
 
@@ -160,24 +163,54 @@ public partial class NetClient : IStandingBodies
         var rt = RenderTickNow();
         var now = Time.GetTicksMsec() / 1000.0;
         var dt = (float)GetProcessDeltaTime();
+        var car = ThrowGuessCar();
         foreach (var (id, v) in _animals)
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant) continue;
             var raw = e.State.State;
             var state = AnimalRules.StateOf(raw);
-            if (e.Buf.At(rt) is { } s) PlaceAnimal(v, state, new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z), s.Yaw, dt);
+            if (e.Buf.At(rt) is { } s)
+            {
+                // the vehicle this player drives is drawn ahead of the server, so its run-over is shown here first and handed over to the server's when that shows
+                var thrown = state is AnimalState.Thrown or AnimalState.Down or AnimalState.Dead;
+                if (car is { } c && !thrown && state != AnimalState.Carried && v.Guess.Ready && !v.Def.OneHit && CarTouches(c.State, c.Def, v, s.Pos, s.Yaw))
+                    v.Guess.Start(s.Pos, CorpseRules.ThrowFromCar(new NVec3(-MathF.Sin(c.State.Yaw), 0, -MathF.Cos(c.State.Yaw)), c.State.Speed));
+                var at = v.Guess.Step(dt, s.Pos, thrown);
+                PlaceAnimal(v, v.Guess.Flying ? AnimalState.Thrown : state, new Vector3(at.X, at.Y, at.Z), s.Yaw, dt);
+            }
+            var shown = v.Guess.Flying ? AnimalState.Thrown : state; // a guessed throw is drawn as a thrown body until the server's state says what became of it
             var toggle = AnimalRules.HitToggled(raw);
             if (toggle != v.Toggle)
             {
                 v.Toggle = toggle;
                 if (state != AnimalState.Dead) PlayAnimalHit(v, now);
             }
-            if (v.Tumbling) { ShowAnimalTumble(v, state); continue; } // thrown by a vehicle: no clip of the state, the body is turned whole
+            if (v.Tumbling) { ShowAnimalTumble(v, shown); continue; } // thrown by a vehicle: no clip of the state, the body is turned whole
             if (state == AnimalState.Dead) { if (v.Shown != (byte)state) ShowAnimalState(v, state); continue; }
             if (now < v.HitUntil) continue;
             if (v.Shown != (byte)state) ShowAnimalState(v, state); // also after a reaction: Shown is 254 until its clip is over
             v.HitUntil = 0;
         }
+    }
+
+    /// <summary>
+    /// The vehicle whose run-overs this client shows ahead of the server (<see cref="ThrowGuess"/>): the predicted one the local player drives, while it runs bodies over
+    /// (on land, moving fast enough to move one: the server's conditions in RunOverCheck).
+    /// </summary>
+    (DriveState State, VehicleDef Def)? ThrowGuessCar()
+    {
+        if (_drive == null || Dead || !_drive.Def.RunOver || Match.Phase != MatchPhase.Running) return null; // the server throws no animal outside the round
+        var s = _drive.Predict.State;
+        return s.Afloat || !RunOver.Contacts(s.Speed) ? null : (s, _drive.Def);
+    }
+
+    /// <summary>Whether the predicted vehicle's footprint touches the animal as it is drawn: the server's run-over test (<see cref="RunOverFootprint"/>), on the Body box the client builds as the server does.</summary>
+    static bool CarTouches(in DriveState car, VehicleDef def, AnimalView v, NVec3 feet, float yaw)
+    {
+        var box = v.HitBox;
+        if (box.Count < 3) return false;
+        var body = BodyBox.Of(feet, yaw, box[0], box[2], v.Def.BodyAheadOf(v.Variant) * v.Size);
+        return RunOverFootprint.OfBody(body, feet.Y).Hits(car.Position, car.Position, car.Yaw, def.HalfWidth, def.HalfLength);
     }
 
     /// <summary>

@@ -5,6 +5,15 @@ namespace Drycastle.ShooterCore;
 /// <summary>Run-over damage (ticket #77): above the minimum speed, a hit player takes damage per m/s over it, capped.</summary>
 public static class RunOver
 {
+    /// <summary>
+    /// The speed (m/s) from which a vehicle's contact moves a body at all. Between it and <see cref="VehiclesFile.RunOverMinSpeed"/> the body is pushed (a player) or knocked over (an animal)
+    /// and not hurt, so a slow vehicle does not drive through a body that stands in it.
+    /// </summary>
+    public const float ContactMinSpeed = 1.5f;
+
+    /// <summary>Whether a vehicle at <paramref name="speed"/> moves the bodies it touches (<see cref="ContactMinSpeed"/>).</summary>
+    public static bool Contacts(float speed) => MathF.Abs(speed) >= ContactMinSpeed;
+
     /// <param name="massScale">A type's <see cref="VehiclesFile.RunOverScale"/> (1 for the v1 numbers).</param>
     public static float Damage(VehiclesFile f, float speed, float massScale = 1f)
     {

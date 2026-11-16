@@ -48,10 +48,21 @@ public partial class NetServer
     /// <summary>The class of a live target's hit id, null for the Bigfoot and what has no row (<see cref="CollisionRules.ClassOfHitId"/>).</summary>
     static ObstacleClass? ObstacleClassOf(ushort hitId) => CollisionRules.ClassOfHitId(hitId);
 
-    /// <summary>What running over one body does. A body that can die as a ragdoll (a player, a dummy) is thrown ahead; an animal is thrown and loses part of its hit points; any other NPC dies outright.</summary>
+    /// <summary>
+    /// What running over one body does. A body that can die as a ragdoll (a player, a dummy) is thrown ahead; an animal is thrown and loses part of its hit points; any other NPC dies outright.
+    /// A vehicle too slow to hurt (<see cref="RunOverSweep.Damage"/> 0, above <see cref="RunOver.ContactMinSpeed"/>) only moves the body out of its way: a player is pushed ahead, an animal is
+    /// knocked over unhurt, the rest are left alone.
+    /// </summary>
     void RunOverOne(in RunOverSweep m, ObstacleClass cls, HitTarget t, Animal? animal)
     {
         var id = t.Id;
+        if (m.Damage <= 0)
+        {
+            var push = CorpseRules.ThrowFromCar(m.Forward, m.Speed);
+            if (cls == ObstacleClass.Player && _byId.TryGetValue(id, out var pushed) && _match.Get(id)?.Life == PlayerLife.Alive) pushed.Body.AddImpulse(new Vector3(push.X, push.Y, push.Z));
+            else if (cls is ObstacleClass.Wildlife or ObstacleClass.Pet && _match.Phase == MatchPhase.Running) animal!.Throw(push, m.Prev);
+            return;
+        }
         switch (cls)
         {
             case ObstacleClass.Player:

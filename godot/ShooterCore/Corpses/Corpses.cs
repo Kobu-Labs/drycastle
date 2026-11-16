@@ -31,9 +31,15 @@ public static class CorpseRules
         return v;
     }
 
-    /// <summary>The velocity of a body run over: carried forward at the car's speed, with a hop that grows with it.</summary>
+    /// <summary>
+    /// The velocity of a body run over: thrown the way the car goes, faster than the car (so it leaves the bumper and is not carried along inside the hull), with a hop that grows with
+    /// the speed. <paramref name="speed"/> is signed: a reversing car throws it backwards.
+    /// </summary>
     public static Vector3 ThrowFromCar(Vector3 forward, float speed) =>
-        forward * speed * 0.9f + Vector3.UnitY * (2.5f + MathF.Abs(speed) * 0.2f);
+        forward * (speed * ThrowFromCarScale + MathF.Sign(speed) * ThrowFromCarExtra) + Vector3.UnitY * (2.5f + MathF.Abs(speed) * 0.2f);
+
+    /// <summary>The share of the car's speed a run-over body leaves with, and the speed (m/s) added on top of it.</summary>
+    public const float ThrowFromCarScale = 1.1f, ThrowFromCarExtra = 1.5f;
 
     /// <summary>Hotbar positions a corpse weapon can go into: 0 = primary, 1 = secondary (the knife is never replaced).</summary>
     public const int PrimaryPos = 0, SecondaryPos = 1;

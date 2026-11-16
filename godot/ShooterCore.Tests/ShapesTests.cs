@@ -146,27 +146,27 @@ public class RunOverFootprintTests
     static bool Hits(RunOverFootprint f) => f.Hits(Vector3.Zero, Vector3.Zero, 0f, 1.1f, 2.15f);
 
     [Fact]
-    public void A_body_is_the_capsules_circle_at_85_percent()
+    public void A_body_is_the_capsules_circle_at_95_percent()
     {
-        Assert.Equal(0.35f * 0.85f, RunOverFootprint.OfCapsule(Vector3.Zero).Radius, 4);
-        // 0.32 m off the car's side: the old 0.35 m circle was hit, the 85% one (0.2975 m) is not
-        var at = new Vector3(1.1f + 0.32f, 0, 0);
+        Assert.Equal(0.35f * 0.95f, RunOverFootprint.OfCapsule(Vector3.Zero).Radius, 4);
+        // 0.34 m off the car's side: the full 0.35 m circle is hit, the 95% one (0.3325 m) is not
+        var at = new Vector3(1.1f + 0.34f, 0, 0);
         Assert.True(CarFootprint.Hits(Vector3.Zero, Vector3.Zero, 0f, 1.1f, 2.15f, at, 0.35f));
         Assert.False(Hits(RunOverFootprint.OfCapsule(at)));
-        Assert.True(Hits(RunOverFootprint.OfCapsule(new Vector3(1.1f + 0.29f, 0, 0))));
+        Assert.True(Hits(RunOverFootprint.OfCapsule(new Vector3(1.1f + 0.32f, 0, 0))));
     }
 
     [Fact]
-    public void An_animal_is_its_body_box_at_85_percent_about_its_centre()
+    public void An_animal_is_its_body_box_at_95_percent_about_its_centre()
     {
         // a 0.6 m wide, 2.0 m long body, centred where it stands
         static RunOverFootprint Animal(float x, float z) => RunOverFootprint.OfBody(BodyBox.Of(new Vector3(x, 0, z), 0f, 0.6f, 2.0f, 0f), 0f);
-        // sideways: the body's edge is 0.3 m from its centre, 0.255 m scaled: touches the car's side (1.1) from 1.355
-        Assert.True(Hits(Animal(1.34f, 0)));
-        Assert.False(Hits(Animal(1.37f, 0))); // the full box (to 1.4 m) would have been hit
-        // along: half length 1.0, 0.85 scaled: the car's front is at z -2.15, so a centre at -2.95 touches and -3.05 does not
-        Assert.True(Hits(Animal(0, -2.95f)));
-        Assert.False(Hits(Animal(0, -3.05f)));
+        // sideways: the body's edge is 0.3 m from its centre, 0.285 m scaled: touches the car's side (1.1) from 1.385
+        Assert.True(Hits(Animal(1.37f, 0)));
+        Assert.False(Hits(Animal(1.39f, 0))); // the full box (to 1.4 m) would have been hit
+        // along: half length 1.0, 0.95 scaled: the car's front is at z -2.15, so a centre at -3.08 touches and -3.13 does not
+        Assert.True(Hits(Animal(0, -3.08f)));
+        Assert.False(Hits(Animal(0, -3.13f)));
     }
 
     [Fact]
