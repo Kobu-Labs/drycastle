@@ -12,4 +12,4 @@ Ticket #320. A sealed OSB shed on the garden plots by road E-0101 (sketch L1) wi
 
 **5. The Golf.** Its one fixed spot moved into the garage (nose out of the plate, `vehicles.json`, held to the site by a test), and it is built 1.25 times a real Golf (#292), so the garage is sized for 5.35 x 2.25 m.
 
-**6. Known limits.** Two baked trees stood on the footprint: their colliders are dropped (`MapLoader.TreeFilter`) but their canopies are in the chunk meshes until the map is built again with objects there. The sealed garage has no other door. The roof and walls shelter nobody from blasts (not registered, as ADR 0027 §7).
+**6. Known limits.** Two baked trees and two spawn candidates (S-603, S-606) lay on the footprint: the spawns are left out (`MapLoader.SpawnFilter`) and the trees lose their colliders (`MapLoader.TreeFilter`) but their canopies are in the chunk meshes until the map is built again with objects there. The sealed garage has no other door. The roof and walls shelter nobody from blasts (not registered, as ADR 0027 §7).

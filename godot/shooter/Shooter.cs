@@ -375,7 +375,11 @@ public partial class Shooter : Node3D
         if (!Directory.Exists(dir)) throw new InvalidOperationException($"map folder not found: {dir} (pass --map DIR or set DRYCASTLE_MAP)");
         AddChild(_map.Root);
         _map.CollisionOnly = cfg.Str("role", "client") == "server"; // the server never draws the map
-        if (File.Exists(Path.Combine(dir, "garage.json"))) _map.TreeFilter = (x, y) => MechanicGarageSite.Covers(x, -y, 0.5f); // the village: the two baked trees on the mechanic garage's floor (#320) are not solid
+        if (File.Exists(Path.Combine(dir, "garage.json"))) // the village: what the map has on the mechanic garage's ground (#320): two baked trees (not solid) and two spawn candidates (not used: nobody spawns in a sealed shed)
+        {
+            _map.TreeFilter = (x, y) => MechanicGarageSite.Covers(x, -y, 0.5f);
+            _map.SpawnFilter = (x, z) => MechanicGarageSite.Covers(x, z, 1.5f);
+        }
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
         _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Water.Empty : Drycastle.ShooterCore.Water.Parse(_map.WaterJson);
         WaterSurfaces.ReduceMotion = () => GameSettings.Current.ReduceMotion;

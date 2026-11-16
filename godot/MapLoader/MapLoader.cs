@@ -361,12 +361,16 @@ public sealed partial class MapLoader
         }
     }
 
+    /// <summary>Spawn candidates this says yes to (Godot x, z) are left out: ground that has been built on since the map was (the mechanic garage's floor, #320). Set before loading.</summary>
+    public Func<float, float, bool>? SpawnFilter { get; set; }
+
     void ReadSpawns(string path)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
         foreach (var s in doc.RootElement.GetProperty("spawns").EnumerateArray())
         {
             var ch = s.GetProperty("chunk");
+            if (SpawnFilter?.Invoke(s.GetProperty("x").GetSingle(), -s.GetProperty("y").GetSingle()) == true) continue;
             _spawns.Add(new SpawnPoint
             {
                 Id = s.GetProperty("id").GetString()!,
