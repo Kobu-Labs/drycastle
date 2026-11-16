@@ -16,7 +16,7 @@ namespace Drycastle.MapLoader;
 /// <para>The cut is on the GPU. The props meshes that hold baked trees (<c>props</c> of a chunk, <c>parcel_ID_props</c>, also the dynamic ones of a parcel swap)
 /// get the <c>props_tree_cut</c> material instead of the flat one, and the pack trees the <c>pack_tree</c> material; both read the global shader parameter
 /// <c>tree_cut</c> (focus, radius, fade band) that <see cref="PackTreeStep"/> sets each frame, and use the tree's base point (UV2) to keep a tree whole on
-/// one side or the other. Inside the band both are drawn, dithered against one noise so each pixel has exactly one of them. Nothing is cut at runtime.</para>
+/// one side or the other. Inside the band each tree swaps whole at a distance of its own (its threshold, a hash of the world base point, against the far share; no dither). Nothing is cut at runtime.</para>
 /// <para>Drawing: the ground is cut into <c>tile_m</c> tiles; each tile within <c>near_m + ahead_m</c> of the focus is built, nearest first, on a worker
 /// thread (<see cref="PackTileMesher"/>: every tree's triangles transformed into one mesh per material), and its surfaces are handed to the
 /// rendering server a few at a time within <c>budget_ms</c>. A tile costs one draw per material. The model of a tree is chosen from its position and
@@ -28,7 +28,7 @@ namespace Drycastle.MapLoader;
 /// drawn in their place. The cut is the one shared UV2, so it cannot skip a kind: every kind of the file needs a model or its baked objects vanish near the
 /// player. Undergrowth (<see cref="UndergrowthGen"/>: ferns, bushes, mushrooms, twigs, small rocks, grass, saplings and tall shrubs on forest floor; reeds, swamp grass,
 /// moss mounds, roots and logs on swamp floor) has no baked twin and no collision: it is generated on the worker from a hash of the cell by the meadow raster's mix of
-/// the cell (<c>undergrowth.mixes</c>), and fades out at a radius of its own (<c>undergrowth.near_m</c>, shorter than the trees') with the same dither (nothing stands behind it); it is built, kept and drawn
+/// the cell (<c>undergrowth.mixes</c>), and fades out at a radius of its own (<c>undergrowth.near_m</c>, shorter than the trees') each piece dropping out whole at its own distance (nothing stands behind it); it is built, kept and drawn
 /// only for the tiles within that radius, as a mesh of its own per tile (<c>pack_under</c>, <see cref="PackTile.UnderNode"/>).</para>
 /// <para>Colour and fallen trees: the mesher writes a per-tree tint and the kind of piece into the vertex colour (<see cref="PackColourMath"/>, <c>pack_tree.gdshader</c>); a log record may get a dead tree
 /// laid down (<see cref="GroundObjectMath.PlaceLog"/>).</para>

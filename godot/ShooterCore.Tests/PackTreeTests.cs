@@ -320,7 +320,7 @@ public class PackTreeTests
     // ---- the cut ----
 
     [Fact]
-    public void PackAndBakedSharesAddUpToOneAtEveryDistance()
+    public void FarShareRampsAndItsEndsDecideTheSwap()
     {
         // radius 70, band 14: all baked outside 70, all pack inside 56, linear between
         Assert.Equal(0f, PackTreeMath.FarShare(10f, 70f, 14f));
@@ -332,14 +332,49 @@ public class PackTreeTests
         Assert.Equal(0f, PackTreeMath.FarShare(69.9f, 70f, 0f));
         Assert.Equal(1f, PackTreeMath.FarShare(70f, 70f, 0f));
         Assert.Equal(1f, PackTreeMath.FarShare(0f, -1f, 0f));
-        // the pack tree is drawn exactly when its base is inside the radius (its share is above 0)
-        for (var i = 0; i < 240; i++) Assert.Equal(i * 0.5f < 70f, 1f - PackTreeMath.FarShare(i * 0.5f, 70f, 14f) > 0f);
-        // the dither: a pixel with noise n shows the pack tree when n < 1 - far and the baked one otherwise: the two cover every pixel once, in the shares 1 - far and far
-        for (var d = 40f; d < 90f; d += 1.3f)
+        // far 0 is always the pack tree and far 1 always the baked one, whatever the tree's threshold
+        for (var i = 0; i < 500; i++)
         {
-            var far = PackTreeMath.FarShare(d, 70f, 14f);
-            var packPixels = Enumerable.Range(0, 1000).Count(k => k / 1000.0 < 1.0 - far);
-            Assert.InRange(packPixels, (1 - far) * 1000 - 1, (1 - far) * 1000 + 1);
+            float x = i * 7.31f - 900f, z = i * 3.77f + 40f;
+            Assert.InRange(PackTreeMath.Threshold(x, z), 0f, 0.99999f);
+            Assert.False(PackTreeMath.IsBaked(0f, x, z));
+            Assert.True(PackTreeMath.IsBaked(1f, x, z));
+        }
+    }
+
+    [Fact]
+    public void TreesSwapWholeOneByOneAcrossTheBand()
+    {
+        // 4000 trees on a grid: each is baked or pack, never both (one predicate), the baked share grows with the distance, and the share baked at far f is about f
+        var pts = Enumerable.Range(0, 4000).Select(i => (X: (i % 80) * 2.37f + 0.13f, Z: (i / 80) * 2.91f + 0.07f)).ToArray();
+        foreach (var far in new[] { 0.1f, 0.25f, 0.5f, 0.75f, 0.9f })
+        {
+            var baked = pts.Count(p => PackTreeMath.IsBaked(far, p.X, p.Z)) / (double)pts.Length;
+            Assert.InRange(baked, far - 0.05, far + 0.05);
+        }
+        // a tree that is baked at far f stays baked at every larger far: it swaps once, at its own distance
+        foreach (var p in pts.Take(300))
+        {
+            var swapped = false;
+            for (var f = 0f; f <= 1f; f += 0.02f)
+            {
+                var b = PackTreeMath.IsBaked(f, p.X, p.Z);
+                Assert.False(swapped && !b);
+                swapped |= b;
+            }
+            Assert.True(swapped);
+        }
+    }
+
+    [Fact]
+    public void ThresholdIsStableAgainstFloatNoiseInTheBase()
+    {
+        // the baked mesh and the pack tile compute the same base through different matrices: rounding of 1e-4 m must not move a (centimetre-placed) tree to another cell
+        for (var i = 0; i < 2000; i++)
+        {
+            float x = i * 0.37f - 300f, z = i * 0.53f + 12f;
+            x = MathF.Round(x, 2); z = MathF.Round(z, 2);
+            Assert.Equal(PackTreeMath.Threshold(x, z), PackTreeMath.Threshold(x + 1e-4f, z - 1e-4f));
         }
     }
 
