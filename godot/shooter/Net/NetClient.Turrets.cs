@@ -122,7 +122,7 @@ public partial class NetClient
 static class TurretMaterials
 {
     public static readonly StandardMaterial3D Solid = new() { AlbedoColor = new Color(0.30f, 0.32f, 0.30f), Roughness = 0.7f, Metallic = 0.3f };
-    public static readonly StandardMaterial3D Muzzle = new() { AlbedoColor = new Color(0.30f, 0.32f, 0.30f), EmissionEnabled = true, Emission = new Color(1f, 0.75f, 0.3f), EmissionEnergyMultiplier = 3f };
+    public static readonly StandardMaterial3D Muzzle = new() { AlbedoColor = new Color(0.30f, 0.32f, 0.30f), EmissionEnabled = true, Emission = new Color(1f, 0.75f, 0.3f), EmissionEnergyMultiplier = 1.5f }; // under the glow threshold (DayNightCycle.GlowThreshold): a standing muzzle must not bloom
     public static readonly StandardMaterial3D GhostValid = Ghost(ShooterTheme.Good);
     public static readonly StandardMaterial3D GhostInvalid = Ghost(ShooterTheme.Danger);
 

@@ -349,7 +349,7 @@ public partial class MechanicGarage : Node3D
         var cam = GetViewport()?.GetCamera3D();
         var near = cam != null && cam.GlobalPosition.DistanceTo(GlobalPosition) < DrawRange;
         var level = near ? _lights.Level : 0f;
-        _tubeMat!.EmissionEnergyMultiplier = _lights.Glow * 1.9f;
+        _tubeMat!.EmissionEnergyMultiplier = _lights.Glow * 1.9f; // under the glow threshold: the tubes do not bloom
         for (var i = 0; i < _lamps.Count; i++)
         {
             _lamps[i].Visible = level > 0.01f;
