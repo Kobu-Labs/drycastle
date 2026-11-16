@@ -39,7 +39,9 @@ GREY = (128, 128, 128)
 class ParcelColours:
     """Flat terrain colour by the kind of the parcel or ground area under a point; a shade is picked per unit."""
 
-    def __init__(self, parcels: list[dict], palette: dict[str, list[str]]):
+    def __init__(self, parcels: list[dict], palette: dict[str, list[str]], blend: dict | None = None):
+        """``blend`` ({kinds, radius_m}, the terrain's ``colour_blend``): around the outline of ground of these kinds the colour is the mean of the
+        colours within ``radius_m``, so a forest runs into its neighbours over a band instead of ending at a line."""
         from shapely.geometry import shape
 
         self.parcels = sorted(parcels, key=lambda p: p["id"])
@@ -48,6 +50,10 @@ class ParcelColours:
         self.palette = {k: [hex_to_rgb(c) for c in v] for k, v in palette.items()}
         self.fallback = self.palette["other"][0]
         self.parcel_colour = [self._pick(p) for p in self.parcels]
+        kinds = set((blend or {}).get("kinds", []))
+        self.blend_m = float((blend or {}).get("radius_m", 0.0))
+        edges = [g.boundary for g, p in zip(self.polys, self.parcels) if p["kind"] in kinds] if self.blend_m > 0 else []
+        self.edges = shapely.STRtree(edges) if edges else None
 
     def _pick(self, p: dict) -> list[int]:
         shades = self.palette.get(p["kind"], self.palette["other"])
@@ -55,6 +61,22 @@ class ParcelColours:
         return shades[h % len(shades)]
 
     def __call__(self, pts: np.ndarray) -> np.ndarray:
+        out = self._flat(pts)
+        if self.edges is None or not len(pts):
+            return out
+        near = np.unique(self.edges.query(shapely.points(pts[:, 0], pts[:, 1]), predicate="dwithin", distance=self.blend_m)[0])
+        if not len(near):
+            return out
+        # mean of the flat colour on two rings around the point (and the point itself, twice): a soft band, as wide as the radius on each side
+        ang = np.arange(8) * (math.pi / 4)
+        offs = np.concatenate([np.zeros((2, 2)), 0.5 * self.blend_m * np.c_[np.cos(ang), np.sin(ang)], self.blend_m * np.c_[np.cos(ang + math.pi / 8), np.sin(ang + math.pi / 8)]])
+        acc = np.zeros((len(near), 3))
+        for o in offs:
+            acc += self._flat(pts[near] + o)
+        out[near] = np.rint(acc / len(offs)).astype(np.uint8)
+        return out
+
+    def _flat(self, pts: np.ndarray) -> np.ndarray:
         out = np.tile(np.array(self.fallback, np.uint8), (len(pts), 1))
         found = np.full(len(pts), len(self.parcels))
         idx, tidx = self.tree.query(shapely.points(pts[:, 0], pts[:, 1]), predicate="within")
@@ -220,7 +242,7 @@ def build_scene(
                 scene.nodes.setdefault(key, {})[name] = mesh
 
     tcfg = load_section("terrain", rules_path)
-    colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(types)})
+    colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(types)}, tcfg.get("colour_blend"))
     dec = int(tcfg["collision_decimate"])
     grey = np.array(GREY, np.uint8)
     # the hatch of each bunker is a hole in the ground (#224): the terrain, seen and collided with, has it cut out

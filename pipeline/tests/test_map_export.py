@@ -162,3 +162,18 @@ def test_baked_trees_carry_their_base_as_second_uv_set(ws) -> None:
     for name in with_trees:
         assert "TEXCOORD_1" in attrs[name], name
     assert not any("_UV2" in a for a in attrs.values())
+
+
+def test_forest_colour_fades_into_its_neighbour_over_the_blend_band() -> None:
+    from drycastle_pipeline.scene import ParcelColours
+
+    sq = lambda x0, x1: {"type": "Polygon", "coordinates": [[[x0, 0], [x1, 0], [x1, 100], [x0, 100], [x0, 0]]]}
+    units = [{"id": "A-1", "kind": "forest", "polygon": sq(0, 100)}, {"id": "A-2", "kind": "field", "polygon": sq(100, 200)}]
+    palette = {"forest": ["#204020"], "field": ["#c0c080"], "other": ["#808080"]}
+    pts = np.array([[50.0, 50.0], [94.0, 50.0], [100.5, 50.0], [106.0, 50.0], [150.0, 50.0]])
+    flat = ParcelColours(units, palette)(pts)
+    soft = ParcelColours(units, palette, {"kinds": ["forest"], "radius_m": 12})(pts)
+    assert (flat[:2] == flat[0]).all() and (flat[3:] == flat[4]).all()  # a line without the blend
+    assert (soft[0] == flat[0]).all() and (soft[4] == flat[4]).all()  # far from the outline: untouched
+    red = soft[:, 0].astype(int)
+    assert red[0] < red[1] < red[2] < red[3] < red[4]  # a ramp across the outline

@@ -185,6 +185,9 @@ terrain:
   collision_decimate: 2
   # Flat face colours by the parcel kind under the face centre. A list is a set of shades; one
   # is picked per parcel (seeded by the parcel ID), so parcels read as patches.
+  # Around the outline of ground of these kinds the face colour is the mean of the colours within radius_m, so a forest
+  # fades into the field or meadow beside it over a band of about twice that width instead of ending at a line.
+  colour_blend: {kinds: [forest], radius_m: 12}
   # Parcel kinds; the ground types carry their own colours (ground.types).
   colours:
     building_plot: ["#c9b78f", "#c2b088"]
