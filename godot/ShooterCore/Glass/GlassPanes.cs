@@ -162,6 +162,15 @@ public static class GlassRules
     /// <summary>A world point in a vehicle's node frame (origin on the ground under its centre, x right, y up, z back), as <see cref="VehicleBox"/> has it.</summary>
     public static Vector3 ToVehicle(Vector3 world, Vector3 feet, float yaw) => DirToVehicle(world - feet, yaw);
 
+    /// <summary>A world point in the node frame of a vehicle turned by its whole attitude (a tilting hull, <see cref="VehicleDef.Tilts"/>): yaw, pitch and roll as <see cref="FlightMath.Rotate"/>.</summary>
+    public static Vector3 ToVehicle(Vector3 world, Vector3 feet, float yaw, float pitch, float roll) => FlightMath.Unrotate(world - feet, yaw, pitch, roll);
+
+    /// <summary>A world direction in the node frame of a vehicle turned by its whole attitude.</summary>
+    public static Vector3 DirToVehicle(Vector3 dir, float yaw, float pitch, float roll) => FlightMath.Unrotate(dir, yaw, pitch, roll);
+
+    /// <summary>A point of the node frame of a vehicle turned by its whole attitude, in the world.</summary>
+    public static Vector3 FromVehicle(Vector3 local, Vector3 feet, float yaw, float pitch, float roll) => feet + FlightMath.Rotate(local, yaw, pitch, roll);
+
     /// <summary>A world direction in a vehicle's node frame.</summary>
     public static Vector3 DirToVehicle(Vector3 dir, float yaw)
     {
@@ -274,8 +283,8 @@ public sealed class GlassReplica
     }
 }
 
-/// <summary>A building's pane from the base map's windows.json: the node of its mesh, its rectangle in the game's axes (Y up), and whether it can break.</summary>
-public sealed record MapGlassPane(string Node, GlassPaneRect Rect, bool Breakable);
+/// <summary>A building's pane from the base map's windows.json: the node of its mesh, its rectangle in the game's axes (Y up), whether it can break, and its own hit points where it has them (else glass.json's building_pane_hp; the mechanic garage's plate, <see cref="MechanicGarageSite"/>).</summary>
+public sealed record MapGlassPane(string Node, GlassPaneRect Rect, bool Breakable, float? Hp = null);
 
 /// <summary>
 /// The building panes of a base map (windows.json, written by the map pipeline's building detail). Server and client read the same file,

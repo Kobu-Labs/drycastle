@@ -20,12 +20,12 @@ public static class Strings
         ("hud.streak.ready.dead", "READY"), ("hud.streak.active", "ACTIVE"), ("hud.streak.spent", "USED"),
         ("hud.uav.title", "UAV"), ("hud.uav.time", "{0}:{1:00} LEFT"),
         ("hud.respawn.title", "You were eliminated"), ("hud.respawn.by", "by {0}"), ("hud.respawn.self", "by accident"),
-        ("hud.respawn.in", "Respawning in {0}"),
+        ("hud.respawn.in", "Respawning in {0}"), ("hud.respawn.out", "You are out of the round"), ("hud.respawn.waits", "Waiting for an admin to put you on a team"),
         ("hud.hint.captured", "{0}  Scoreboard     {1}-{2}  Weapons     Esc  Pause"),
         ("hud.hint.released", "Mouse released. Close the menu to resume"),
         ("hud.seats.title", "Seat {0}: {1}"), ("hud.seats.hint", "{0}-{1}  Switch seat"),
         ("hud.seat.driver", "Driver"), ("hud.seat.gunner", "Gunner"), ("hud.seat.passenger", "Passenger"),
-        ("hud.vehicle.speed", "{0} km/h"), ("hud.flak.ammo", "FLAK  {0} / {1}"), ("hud.flak.reload", "FLAK  RELOADING"), ("weapon.flak", "Flak"), ("weapon.burn", "Burning"), ("status.blessed", "BLESSED"), ("status.cursed", "CURSED"), ("status.burning", "BURNING"), ("toast.status.blessed", "A blessing watches over you: it will save you from one lethal hit"), ("toast.status.cursed", "You are cursed: your bullets set enemies ablaze"), ("toast.status.saved", "The blessing saved your life"), ("hud.vehicle.enter", "{0}  Enter car"), ("hud.vehicle.exit", "{0}  Exit car     Space  Handbrake"),
+        ("hud.vehicle.speed", "{0} km/h"), ("hud.flak.ammo", "FLAK  {0} / {1}"), ("hud.flak.reload", "FLAK  RELOADING"), ("weapon.flak", "Flak"), ("weapon.burn", "Burning"), ("status.blessed", "BLESSED"), ("status.cursed", "CURSED"), ("status.burning", "BURNING"), ("toast.status.blessed", "A blessing watches over you: it will save you from one lethal hit"), ("toast.status.cursed", "You are cursed: your bullets set enemies ablaze"), ("toast.status.saved", "The blessing saved your life"), ("hud.vehicle.enter", "{0}  Enter car"), ("hud.garage.open", "{0}  Open the garage doors"), ("hud.garage.close", "{0}  Close the garage doors"), ("hud.vehicle.exit", "{0}  Exit car     Space  Handbrake"),
         ("hud.rozhlas.hint", "You are at the radio set.   Hold {0} to talk"), ("hud.rozhlas.onair", "ON AIR"), ("hud.rozhlas.take", "Hold {0}  sit at the radio set"),
         ("hud.vehicle.view.cockpit", "{0}  Cockpit view"), ("hud.vehicle.view.chase", "{0}  Chase view"),
         ("hud.seat.pilot", "Pilot"), ("hud.flight.enter", "{0}  Board helicopter"), ("hud.flight.readout", "{0} km/h  ALT {1}"),
@@ -42,8 +42,8 @@ public static class Strings
         ("score.team.mine", "Your team {0}: {1}"), ("score.team.enemy", "Enemy team {0}: {1}"), ("score.team.other", "Team {0}: {1}"),
         ("score.team.none", "No team"), ("score.empty", "No players"),
         ("weapon.pistol", "M1911"), ("weapon.ak47", "AK-47"), ("weapon.bazooka", "Bazooka"), ("weapon.knife", "Knife"), ("weapon.sniper", "Sniper"), ("weapon.glock17", "Glock 17"), ("weapon.deagle", "Desert Eagle"), ("weapon.m82", "Barrett M82"), ("weapon.awm", "AWM"), ("weapon.svd", "Dragunov SVD"),
-        ("hud.breath.ready", "Hold {0} to steady"), ("hud.hunt.line", "{0} m   |   {1}"), ("hud.hunt.line.head", "{0} m   |   {1}   |   HEAD"), ("hud.binoculars.range", "{0} m"), ("hud.binoculars.none", "---"), ("hud.binoculars.hint", "{0}: lower"), ("bind.binoculars", "Binoculars (raise / lower)"), ("hud.scope.zero", "ZERO {0} m   |   dot = {1} mil   |   scroll: zero"),
-        ("weapon.fall", "Fall"), ("weapon.bigfoot", "Bigfoot"), ("weapon.gang", "Gang member"), ("weapon.void", "Void"), ("weapon.debug", "Debug"), ("weapon.vehicle", "Car"), ("weapon.vehicle_gun", "Mounted MG"), ("weapon.moab", "MOAB"), ("moab.inbound", "MOAB inbound {0}"), ("moab.blast", "MOAB by {0}"), ("moab.cancelled", "MOAB cancelled"), ("weapon.turret", "Turret"), ("feed.roadkill", "Roadkill"), ("weapon.unknown", "?"),
+        ("hud.breath.ready", "Hold {0} to steady"), ("hud.hunt.title", "{0}   |   {1} kg"), ("hud.hunt.line", "{0} m   |   {1}"), ("hud.hunt.line.head", "{0} m   |   {1}   |   HEAD"), ("hud.binoculars.range", "{0} m"), ("hud.binoculars.none", "---"), ("hud.binoculars.hint", "{0}: lower"), ("bind.binoculars", "Binoculars (raise / lower)"), ("hud.scope.zero", "ZERO {0} m   |   dot = {1} mil   |   scroll: zero"),
+        ("weapon.fall", "Fall"), ("weapon.bigfoot", "Bigfoot"), ("weapon.gang", "Gang member"), ("weapon.void", "Void"), ("weapon.debug", "Debug"), ("weapon.redeploy", "Respawn"), ("weapon.vehicle", "Car"), ("weapon.vehicle_gun", "Mounted MG"), ("weapon.moab", "MOAB"), ("moab.inbound", "MOAB inbound {0}"), ("moab.blast", "MOAB by {0}"), ("moab.cancelled", "MOAB cancelled"), ("weapon.turret", "Turret"), ("feed.roadkill", "Roadkill"), ("weapon.unknown", "?"),
         ("player.unknown", "Player {0}"),
         ("hud.corpse.hold", "Hold {0}  take {1} as primary     Tap {0}  choose slot"), ("hud.corpse.tap", "Tap {0}  take {1}"),
         ("hud.corpse.hold.item", "Hold {0}  take {1} as primary     Tap {0}  choose slot or put on {2}"), ("hud.corpse.tap.item", "Tap {0}  take {1} or put on {2}"),
@@ -68,7 +68,11 @@ public static class Strings
         ("quit.title", "Quit the game?"), ("quit.menu.body", "The game closes and returns to the desktop. Settings are already saved."),
         ("quit.game.body", "The game closes. You leave the match and your score for this round is lost."), ("quit.confirm", "Quit to desktop"),
         ("pause.title", "Paused"), ("pause.resume", "Resume"), ("pause.disconnect", "Disconnect"),
-        ("pause.hint", "Esc to resume"), ("dev.unlock_all", "Dev: all unlocked"),
+        ("pause.hint", "Esc to resume"),
+        ("pause.respawn", "Respawn"), ("respawn.title", "Respawn?"), ("respawn.body", "You die and respawn in a few seconds with your active loadout. It counts as a death."),
+        ("respawn.apply.body", "You die and respawn in a few seconds with class {0}. It counts as a death."), ("respawn.confirm", "Respawn"),
+        ("respawn.tip", "Die and respawn now with your active loadout"), ("respawn.tip.dead", "You are already dead"),
+        ("loadout.apply_now", "Apply now (respawn)"), ("loadout.apply_now.tip", "Respawn now with this class"), ("loadout.apply_now.offline", "Join a match to use it"), ("dev.unlock_all", "Dev: all unlocked"),
         ("disconnect.title", "Leave the match?"), ("disconnect.body", "You disconnect from the server and return to the main menu. Your score for this round is lost."),
         ("connect.title", "Play"), ("connect.address", "Server address"), ("connect.address.hint", "host or IP, for example 192.168.1.20"),
         ("connect.port", "Port"), ("connect.name", "Player name"), ("connect.go", "Connect"), ("connect.retry", "Try again"),
@@ -208,6 +212,7 @@ public static class Strings
         foreach (var (k, v) in Table) tr.AddMessage(k, v);
         foreach (var (k, v) in Hud2Strings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in SandboxStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in TeamsStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in ChatStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in TacticalMapStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in IntelStrings.Table) tr.AddMessage(k, v);

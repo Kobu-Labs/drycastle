@@ -47,7 +47,8 @@ public partial class LoadoutScreen : MenuScreen
     readonly TextureRect[] _cellIcons = new TextureRect[4];
     readonly Label[] _cellNames = new Label[4], _cellNotes = new Label[4];
 
-    Button _useNext = null!;
+    Button _useNext = null!, _applyNow = null!;
+    int _applyState = -1;
     Glyph _useNextStar = null!;
     Label _useNextText = null!, _level = null!, _status = null!, _className = null!, _hint = null!, _pickHint = null!;
     Label _pickTitle = null!, _cmpTitle = null!, _cmpNote = null!, _empty = null!;
@@ -105,6 +106,7 @@ public partial class LoadoutScreen : MenuScreen
     {
         base._Process(delta);
         FitToViewport();
+        UpdateApplyNow();
         if (Autosave == null || _profile == null) return;
         var key = $"{_tab}|{Autosave.StateOf(_tab)}|{Autosave.RejectReason(_tab)}|{Autosave.CanUndo(_tab)}";
         if (key == _shownStatus) return;
@@ -199,6 +201,9 @@ public partial class LoadoutScreen : MenuScreen
         _useNextStar.Visible = false;
         _useNext.AddChild(nextContent);
         row.AddChild(_useNext);
+        row.AddChild(Ui.Gap(ShooterTheme.Space));
+        _applyNow = Ui.Btn(Strings.T("loadout.apply_now"), ApplyNow, "MenuDanger", 260);
+        row.AddChild(_applyNow);
         return row;
     }
 
@@ -474,6 +479,26 @@ public partial class LoadoutScreen : MenuScreen
         if (_net == null || _profile?.ActiveSlot == _tab) return;
         _net.SelectSlot(_tab);
         Shell.Toast(Strings.F("loadout.toast.active", _tab + 1));
+    }
+
+    /// <summary>"Apply now" (#284): after a confirm, the open class becomes the active one and the player respawns with it; every menu closes.</summary>
+    void ApplyNow()
+    {
+        if (_net == null) return;
+        var net = _net;
+        var slot = _tab;
+        Shell.Push(new DialogScreen(Strings.T("respawn.title"), Strings.F("respawn.apply.body", slot + 1),
+            new[] { new DialogScreen.Choice(Strings.T("respawn.confirm"), () => { net.Redeploy(slot); Shell.Reset(); }, "MenuDanger") }));
+    }
+
+    /// <summary>Apply now needs a match and a living player; the tooltip says which is missing.</summary>
+    void UpdateApplyNow()
+    {
+        var state = _net == null ? 0 : _net.Dead ? 1 : 2;
+        if (state == _applyState) return;
+        _applyState = state;
+        _applyNow.Disabled = state != 2;
+        _applyNow.TooltipText = Strings.T(state == 0 ? "loadout.apply_now.offline" : state == 1 ? "respawn.tip.dead" : "loadout.apply_now.tip");
     }
 
     void OpenRow(int row)

@@ -161,65 +161,54 @@ public partial class NetClient
     /// <summary>The node riders stand on: the body of a driven vehicle (it leans over its wheels), else the vehicle itself.</summary>
     static Node3D SeatAnchor(CarView v) => v.Drive?.Hull is { } hull && GodotObject.IsInstanceValid(hull) ? hull : v.Node;
 
+    /// <summary>Who sits in seats 1..3 of each vehicle, from the seats records (<see cref="SeatsRecord"/>); the driver is the vehicle record's.</summary>
+    readonly Dictionary<ushort, ushort[]> _seatOccupants = new();
+    /// <summary>The vehicle and seat each seated player is in this frame, rebuilt by <see cref="SeatRiders"/>.</summary>
+    readonly Dictionary<ushort, (CarView Car, int Seat)> _rideOf = new();
+
+    void OnSeatsState(EntityRecord rec)
+    {
+        var carId = SeatsRecord.CarOf(rec.Id);
+        if (!_seatOccupants.TryGetValue(carId, out var o)) _seatOccupants[carId] = o = new ushort[VehicleSeat.MaxSeats - 1];
+        for (var s = 1; s < VehicleSeat.MaxSeats; s++) o[s - 1] = SeatsRecord.Occupant(rec, s);
+    }
+
     /// <summary>
-    /// Puts every remote rider of a driven vehicle on their seat as the vehicle is drawn this frame. The server puts a rider's body on the seat, so
-    /// the snapshot says where they are; but they are drawn a tenth of a second in the past, and the vehicle its driver's client draws is in the
-    /// present, so drawn from the snapshot they would trail behind it. Each rider is matched to a seat by where the newest snapshot has them and
-    /// the vehicle, then drawn on that seat of the drawn body: leaning and bobbing with it, seated or standing as the seat says, the driver facing
-    /// the bow and the others where they aim, with their weapon pitched to that aim.
+    /// Puts every remote rider of every vehicle on their seat as the vehicle is drawn this frame (ADR 0026). The server says who sits where (the driver
+    /// in the vehicle's record, the other seats in its seats record), so a rider is drawn on the seat they are told to be on, not on one guessed from where
+    /// their body is. They are drawn a tenth of a second in the past, and the vehicle its driver's client draws is in the present, so drawn from the snapshot
+    /// they would trail behind it; drawn on the seat of the drawn hull they lean, bob and tilt with it. The figure is fixed there: it faces the way the hull
+    /// does, and what the rider looks at (the snapshot's view, taken against the hull) moves the head and, past the neck's reach, the upper body; a rider who
+    /// works a gun turns the whole figure to the aim (<see cref="RiderPose.Figure"/>), with the weapon pitched to it.
     /// </summary>
     void SeatRiders()
     {
         if (Vehicles == null) return;
-        foreach (var (id, r) in _remotes)
-        {
-            if (r.State != EntityState.InVehicle || !_dec.States.TryGetValue(id, out var rec) || !MatchSeat(r, rec.Position))
-            {
-                if (r.RideSeat >= 0) { r.RideSeat = -1; r.RideStanding = false; r.View?.SetAimPitch(0); }
-                continue;
-            }
-            var v = _cars[r.RideCar];
-            var seat = Vehicles.Vehicles[v.Kind].Seats[r.RideSeat];
-            var anchor = SeatAnchor(v);
-            var carYaw = v.Node.Rotation.Y;
-            r.Node.GlobalPosition = anchor.GlobalTransform * new Vector3(seat.Offset[0], seat.Offset[1], seat.Offset[2]);
-            r.Node.GlobalBasis = anchor.GlobalBasis.Orthonormalized() * new Basis(Vector3.Up, r.RideSeat == 0 ? 0f : FlightMath.Wrap(r.ShownYaw - carYaw));
-            r.RideStanding = seat.Standing;
-            r.View?.SetAimPitch(seat.Armed || seat.Role == "gunner" ? r.ShownPitch : 0f);
-        }
-    }
-
-    /// <summary>How far a rider's snapshot position may be from a seat's to be on it, metres: to take the seat, and to keep it once taken.</summary>
-    const float SeatTake = 0.6f, SeatKeep = 1.2f;
-
-    /// <summary>
-    /// The seat of a driven vehicle the remote player at <paramref name="at"/> (the newest snapshot) sits on: the one they were matched to while
-    /// it still fits, else the nearest within reach. False when they ride something else (or nothing this client draws that way).
-    /// </summary>
-    bool MatchSeat(Remote r, NVec3 at)
-    {
-        if (r.RideSeat >= 0 && _cars.TryGetValue(r.RideCar, out var held) && !held.Destroyed && SeatAt(held, r.RideSeat) is { } hp && NVec3.Distance(hp, at) <= SeatKeep) return true;
-        r.RideSeat = -1;
-        var best = SeatTake;
+        _rideOf.Clear();
         foreach (var v in _cars.Values)
         {
-            if (v.Destroyed || DriveDef(v) is not { } def) continue;
-            for (var s = 0; s < def.Seats.Count; s++)
-            {
-                if (SeatAt(v, s) is not { } p) continue;
-                var d = NVec3.Distance(p, at);
-                if (d > best) continue;
-                best = d; r.RideCar = v.Id; r.RideSeat = s;
-            }
+            if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count) continue;
+            if (v.Driver != 0) _rideOf[v.Driver] = (v, 0);
+            if (!_seatOccupants.TryGetValue(v.Id, out var others)) continue;
+            for (var k = 0; k < others.Length; k++) if (others[k] != 0) _rideOf[others[k]] = (v, k + 1);
         }
-        return r.RideSeat >= 0;
-    }
-
-    /// <summary>Where the newest snapshot has a seat of a driven vehicle (the server's own arithmetic: the seat on the slope the vehicle stands on), or null before its records are in.</summary>
-    NVec3? SeatAt(CarView v, int seat)
-    {
-        if (Vehicles == null || v.Kind >= Vehicles.Vehicles.Count || seat >= Vehicles.Vehicles[v.Kind].Seats.Count) return null;
-        if (!_drives.TryGetValue(v.Id, out var d) || !_dec.States.TryGetValue(v.Id, out var vehicle) || d.Rec.Type != EntityType.Drive) return null;
-        return DriveRecord.State(vehicle, d.Rec).ToWorld(Vehicles.Vehicles[v.Kind].Seats[seat].Offset);
+        foreach (var (id, r) in _remotes)
+        {
+            if (r.State != EntityState.InVehicle || !_rideOf.TryGetValue(id, out var ride) || ride.Seat >= Vehicles.Vehicles[ride.Car.Kind].Seats.Count)
+            {
+                if (r.RideSeat >= 0) { r.RideSeat = -1; r.RideStanding = false; r.View?.SetAimPitch(0); r.View?.SetLook(0, 0, 0); }
+                continue;
+            }
+            var v = ride.Car;
+            r.RideCar = v.Id; r.RideSeat = ride.Seat;
+            var seat = Vehicles.Vehicles[v.Kind].Seats[ride.Seat];
+            var anchor = SeatAnchor(v);
+            var figure = RiderPose.Figure(seat, v.SnapYaw, r.ShownYaw, r.ShownPitch);
+            r.Node.GlobalPosition = anchor.GlobalTransform * new Vector3(seat.Offset[0], seat.Offset[1], seat.Offset[2]);
+            r.Node.GlobalBasis = anchor.GlobalBasis.Orthonormalized() * new Basis(Vector3.Up, figure.BodyYaw);
+            r.RideStanding = seat.Standing;
+            r.View?.SetAimPitch(RiderPose.FollowsAim(seat) ? figure.Pitch : 0f);
+            r.View?.SetLook(figure.TorsoYaw, figure.HeadYaw, figure.Pitch);
+        }
     }
 }

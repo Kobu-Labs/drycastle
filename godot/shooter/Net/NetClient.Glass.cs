@@ -31,6 +31,7 @@ public partial class NetClient
             if (_mapPanes != null) return _mapPanes;
             try { _mapPanes = MapGlass.Parse(Map?.WindowsJson ?? ""); }
             catch (DataFileException e) { GD.PrintErr($"client: {e.Message}; building glass is not shown"); _mapPanes = new(); }
+            if (MechanicGarage.Current is { } garage) MechanicGarageSite.AddPane(_mapPanes, garage.FloorY); // the mechanic garage's plate (#320), as the server's list
             return _mapPanes;
         }
     }
@@ -58,12 +59,12 @@ public partial class NetClient
         if (!ShotFx.Enabled) return;
         if (s.Hp == GlassRules.Whole) { DropGlassOverlay(s.Key); return; }
         if (!GlassPlace(s.Key, out var parent, out var rect, out var hole)) return;
-        if (HasPaneNode(s.Key) && !SolidBehindPane(s.Key)) hole = 0; // the model has a real opening: nothing to darken
+        if (HasPaneNode(s.Key) && !SolidBehindPane(s.Key) || IsGaragePlate(s.Key)) hole = 0; // the model has a real opening: nothing to darken (nor the garage's, the room behind is real)
         if (!_glassOverlays.TryGetValue(s.Key, out var overlay) || !GodotObject.IsInstanceValid(overlay))
-            _glassOverlays[s.Key] = overlay = GlassFx.MakeOverlay(parent, rect, s.Key, hole);
-        SetPaneGeometry(s.Key, !s.Shattered);
+            _glassOverlays[s.Key] = overlay = GlassFx.MakeOverlay(parent, rect, s.Key, hole, IsGaragePlate(s.Key) ? GlassFx.OsbShards : null);
+        SetPaneGeometry(s.Key, !s.Shattered, animate);
         GlassFx.SetOverlay(overlay, GlassRules.CrackStage(s.Fraction, GlassData.CrackStages), GlassRules.MaxCrackStage(GlassData.CrackStages), s.Shattered);
-        if (animate && parent.IsVisibleInTree()) GlassFx.Shatter(Owned, parent.GlobalTransform, rect, GlassData, s.Key);
+        if (animate && parent.IsVisibleInTree()) GlassFx.Shatter(Owned, parent.GlobalTransform, rect, GlassData, s.Key, IsGaragePlate(s.Key) ? GlassFx.OsbShards : null, s.Key.Owner == GlassPaneKey.Map ? null : parent);
     }
 
     /// <summary>Where a pane is drawn: the node its rectangle is in and the rectangle. False for a pane this client cannot place (an unknown index, a vehicle not drawn yet).</summary>
@@ -80,16 +81,33 @@ public partial class NetClient
         if (Vehicles == null || !_cars.TryGetValue(key.Owner, out var v) || !GodotObject.IsInstanceValid(v.Node)) return false;
         var rects = Vehicles.Vehicles[v.Kind].GlassRects;
         if (key.Index >= rects.Count) return false;
-        parent = v.Node; rect = rects[key.Index]; hole = VehicleHole;
+        parent = GlassHost(v.Node); rect = rects[key.Index]; hole = VehicleHole;
         return true;
+    }
+
+    /// <summary>
+    /// The node a vehicle's pane overlays and shards hang under, in the vehicle's frame: its hull when the model has one (a driven vehicle's body
+    /// leans and sways over its wheels, the root does not), else the root itself.
+    /// </summary>
+    static Node3D GlassHost(Node3D vehicle)
+    {
+        if (vehicle.FindChild("hull", true, false) is not Node3D hull) return vehicle;
+        if (hull.GetNodeOrNull<Node3D>("GlassHost") is { } host) return host;
+        var rest = Transform3D.Identity; // the hull's frame in the vehicle's, unleaned
+        for (Node? n = hull; n is Node3D n3 && n3 != vehicle; n = n.GetParent())
+            rest = (n == hull ? new Transform3D(Basis.FromScale(n3.Scale), n3.Position) : n3.Transform) * rest;
+        host = new Node3D { Name = "GlassHost", Transform = rest.AffineInverse() };
+        hull.AddChild(host);
+        return host;
     }
 
     /// <summary>The name of the node of a vehicle model that holds the glass of pane <paramref name="index"/> (the pane's place in vehicles.json "glass").</summary>
     public static string PaneNodeName(int index) => $"glass_{index}";
 
     /// <summary>Shows or hides the model's own glass of a vehicle's pane. A model without a node for it (the Kenney cars) and a pane of the map are left as they are.</summary>
-    void SetPaneGeometry(GlassPaneKey key, bool visible)
+    void SetPaneGeometry(GlassPaneKey key, bool visible, bool animate = false)
     {
+        if (IsGaragePlate(key)) MechanicGarage.Current?.SetPlate(standing: visible, animate); // the plate's box and mesh go with its pane, and the room's lights start
         if (key.Owner == GlassPaneKey.Map || !_cars.TryGetValue(key.Owner, out var v) || !GodotObject.IsInstanceValid(v.Node)) return;
         if (v.Node.FindChild(PaneNodeName(key.Index), true, false) is Node3D glass) glass.Visible = visible;
     }
@@ -99,6 +117,9 @@ public partial class NetClient
 
     /// <summary>The flak truck's glasshouse is solid olive under its panes (make_flak_model.py), so its opening keeps a dark fill.</summary>
     bool SolidBehindPane(GlassPaneKey key) => Vehicles != null && _cars.TryGetValue(key.Owner, out var v) && v.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[v.Kind].Id == "flak";
+
+    /// <summary>The pane is the mechanic garage's breakable plate (a map pane of the shared list).</summary>
+    bool IsGaragePlate(GlassPaneKey key) => key.Owner == GlassPaneKey.Map && key.Index < MapPanes.Count && MapPanes[key.Index].Node == MechanicGarageSite.PlateNode;
 
     void DropGlassOverlay(GlassPaneKey key)
     {

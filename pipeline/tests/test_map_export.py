@@ -13,7 +13,7 @@ from tests.synthetic import make_workspace
 @pytest.fixture
 def ws(tmp_path):
     ws = make_workspace(tmp_path)
-    run_props(ws["work"], DEFAULT_RULES)
+    run_props(ws["work"], DEFAULT_RULES, ws["out"].parent / "no_edits.json")  # not the repo's own zones
     return ws
 
 

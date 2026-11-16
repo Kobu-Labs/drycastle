@@ -235,7 +235,7 @@ parcel's own fence override, which wins field by field over the group's.
   width spin changes it, `delete` removes it.
 * **Trees are not edited per parcel** (the Trees tool, `set_trees` and the `trees` key of `edits.json` were removed):
   the orthophoto detector (`docs/ortho.md`) is the only source of trees. To add one by hand, place a tree object
-  (`pack:kenney-city-kit-suburban/tree-large` or `tree-small`) with the Objects tool.
+  (`pack:kenney-city-kit-suburban/tree-large` or `tree-small`) with the Objects tool. To remove one, add a circle to `pipeline/config/tree_overrides.yaml` (see `docs/ortho.md`).
 * **Apply**: changes are pending per target (`* unsaved changes` under the header, `N unsaved targets` at the
   bottom; selecting something else keeps them). `Apply` (button, or Enter when no text field has focus) reloads
   `edits.json`, writes every pending target in one atomic save in the canonical format and drops what became empty

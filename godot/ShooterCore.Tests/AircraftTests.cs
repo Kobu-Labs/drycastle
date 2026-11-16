@@ -18,9 +18,9 @@ public class AircraftTests
 
 
     [Fact]
-    public void Shipped_data_has_two_kinds_and_a_gunship_with_two_weapons()
+    public void Shipped_data_has_three_kinds_and_a_gunship_with_two_weapons()
     {
-        Assert.Equal(new[] { "helicopter", "gunship" }, Shipping.AircraftKinds.Select(k => k.Id));
+        Assert.Equal(new[] { "helicopter", "gunship", "uav" }, Shipping.AircraftKinds.Select(k => k.Id));
         Assert.NotNull(Shipping.Gunship);
         Assert.Equal(new[] { "cannon", "rockets" }, Gun.Weapons.Select(w => w.Id));
         Assert.Contains(Gun.Weapons, w => w.Kind == GunshipWeaponKind.Rocket);
@@ -291,9 +291,10 @@ public class AircraftTests
     }
 
     [Fact]
-    public void Three_aircraft_kinds_are_rejected()
+    public void More_than_four_aircraft_kinds_are_rejected()
     {
-        var extra = "{ \"id\": \"third\", \"name\": \"Third\", \"radius_m\": 100, \"altitude_m\": 10, \"speed_mps\": 10, \"max_bank_deg\": 10, \"lifetime_s\": 10, \"hp\": 100 }";
+        string Extra(string id) => "{ \"id\": \"" + id + "\", \"name\": \"X\", \"radius_m\": 100, \"altitude_m\": 10, \"speed_mps\": 10, \"max_bank_deg\": 10, \"lifetime_s\": 10, \"hp\": 100 }";
+        var extra = Extra("fourth") + "," + Extra("fifth"); // the shipped three plus two is over the wire's four
         var json = Edited(j => j.Replace("\"aircraft\": [", "\"aircraft\": [" + extra + ","));
         Assert.Throws<DataFileException>(() => KillstreakFile.Parse(json));
     }

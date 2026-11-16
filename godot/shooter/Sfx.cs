@@ -14,12 +14,14 @@ public sealed class LoopVoice
 
     public bool Active => Player != null;
 
-    public void Update(Vector3 position, float pitch = 1f, float dbOffset = 0f)
+    /// <summary><paramref name="exact"/>: play at exactly the volume asked, see <see cref="Sfx.SetExactLevel"/>.</summary>
+    public void Update(Vector3 position, float pitch = 1f, float dbOffset = 0f, bool exact = false)
     {
         if (Player == null) return;
         Player.GlobalPosition = position;
         Player.PitchScale = Mathf.Max(0.05f, pitch * Def.Pitch);
         Player.VolumeDb = BaseDb + dbOffset;
+        Sfx.SetExactLevel(Player, exact);
     }
 
     /// <summary>Stops the loop and returns the voice to the pool.</summary>
@@ -41,7 +43,7 @@ public sealed class LoopVoice
 /// </summary>
 public partial class Sfx : Node
 {
-    const int Pool2D = 32, Pool3D = 64, PoolUi = 4, PoolLoop = 10;
+    const int Pool2D = 32, Pool3D = 64, PoolUi = 4, PoolLoop = 24;
 
     public static Sfx? Instance { get; private set; }
     public static bool Enabled => ShotFx.Enabled;
@@ -81,16 +83,18 @@ public partial class Sfx : Node
         _table = SoundsFile.Parse(json);
         foreach (var d in _table.Sounds)
             foreach (var f in d.Files)
-                if (!System.IO.File.Exists(ModelLib.AssetPath(f))) throw new DataFileException($"sounds.json: {d.Id}: file not found {ModelLib.AssetPath(f)}");
+                if (!d.Optional && ModelLib.Find(f) == null) throw new DataFileException($"sounds.json: {d.Id}: file not found {ModelLib.AssetPath(f)}");
         if (!Enabled) return;
         foreach (var d in _table.Sounds)
         {
             var list = new List<AudioStream>();
             foreach (var f in d.Files)
             {
-                var st = AudioStreamOggVorbis.LoadFromFile(ModelLib.AssetPath(f));
+                if (ModelLib.Find(f) is not { } path) continue; // an optional sound whose file is not there
+                var st = AudioStreamOggVorbis.LoadFromFile(path);
                 if (st == null) { GD.PrintErr($"sound failed to load: {f}"); continue; }
                 st.Loop = d.Loop;
+                if (d.Loop && d.LoopStart > 0) st.LoopOffset = d.LoopStart;
                 list.Add(st);
             }
             _streams[d.Id] = list.ToArray();
@@ -167,10 +171,30 @@ public partial class Sfx : Node
     /// <summary>Non-positional (own weapon, hit marker, stingers).</summary>
     public static void Play2D(string id, float dbOffset = 0f) => Instance?.Do2D(id, dbOffset);
     /// <summary>3D positional at <paramref name="at"/> with the event's range; silent beyond it. Events with no range play non-positional.</summary>
-    public static void Play3D(string id, Vector3 at, float dbOffset = 0f) => Instance?.Do3D(id, at, dbOffset);
+    /// <summary>True when the sound started; false when it was skipped or has no voice, with the reason in <see cref="LastNote"/>.</summary>
+    public static bool Play3D(string id, Vector3 at, float dbOffset = 0f, bool exact = false) => Instance?.Do3D(id, at, dbOffset, exact) ?? false;
+
+    /// <summary>
+    /// Godot's 3D player clamps its level (volume plus the nearness boost of the attenuation) to max_db, 3 dB, so a sound close to the listener plays at +3 dB whatever its
+    /// volume_db is (fades, ducking and the mix levels do nothing, and several together clip), and below 0 dB it low-passes the sound at 5 kHz in proportion (muffled). A
+    /// vehicle's own engine, heard from the inside, wants neither: <paramref name="exact"/> makes the level the player's own volume near the source (max_db = volume) and
+    /// turns the filter off. Pooled players are put back when it is false.
+    /// </summary>
+    public static void SetExactLevel(AudioStreamPlayer3D p, bool exact)
+    {
+        p.MaxDb = exact ? p.VolumeDb : 3f;
+        p.AttenuationFilterCutoffHz = exact ? 20500f : 5000f;
+        // A sound right at the listener (the car you sit in) has no direction: its offset from the camera is a frame of
+        // driving old, so left/right would flip and the level wobble. Centre it.
+        p.PanningStrength = exact && ListenerDistance(p.GlobalPosition) < 3f ? 0f : 1f;
+    }
+    public static string LastNote { get; private set; } = "";
     public static void Ui(string id) => Instance?.DoUi(id);
-    public static LoopVoice? Loop(string id, Vector3 at) => Instance?.DoLoop(id, at);
+    /// <summary>A looping voice; <paramref name="startFraction"/> starts it that share of the way into its file (0 to 1).</summary>
+    public static LoopVoice? Loop(string id, Vector3 at, float startFraction = 0f) => Instance?.DoLoop(id, at, startFraction);
     /// <summary>Distance from the listener (the current camera) to a point; 0 when there is no camera yet.</summary>
+    /// <summary>Where the listener (the current camera) is, or <paramref name="fallback"/> when there is no camera yet: a sound placed here is heard at full volume, centred.</summary>
+    public static Vector3 ListenerPosition(Vector3 fallback) => Instance?.GetViewport().GetCamera3D() is { } c ? c.GlobalPosition : fallback;
     public static float ListenerDistance(Vector3 at) => Instance?.GetViewport().GetCamera3D() is { } c ? c.GlobalPosition.DistanceTo(at) : 0f;
     public static void MenuMusic(bool on) => Instance?.DoMusic(on);
 
@@ -187,23 +211,30 @@ public partial class Sfx : Node
         _s2[i] = ++_i2;
     }
 
-    void Do3D(string id, Vector3 at, float dbOffset)
+    bool Do3D(string id, Vector3 at, float dbOffset, bool exact)
     {
-        if (!Enabled || _p3.Length == 0 || Def(id) is not { } d) return;
-        if (!d.Positional) { Do2D(id, dbOffset); return; }
+        if (!Enabled || _p3.Length == 0) { LastNote = "audio disabled"; return false; }
+        if (Def(id) is not { } d) { LastNote = $"no sounds.json entry {id}"; return false; }
+        if (!d.Positional) { Do2D(id, dbOffset); LastNote = "played 2D"; return true; }
         var cam = GetViewport().GetCamera3D();
-        if (cam != null && !SoundRules.Audible(d, cam.GlobalPosition.DistanceTo(at))) return;
-        if (!GapOk(d)) return;
+        var dist = cam != null ? cam.GlobalPosition.DistanceTo(at) : 0f;
+        if (cam != null && !SoundRules.Audible(d, dist)) { LastNote = $"out of range ({dist:F0} m of {d.MaxDistance:F0})"; return false; }
+        if (!GapOk(d)) { LastNote = "min gap"; return false; }
         var i = SoundRules.PickVoice(_p3.Length, k => _p3[k].Playing, k => _pr3[k], k => _s3[k], d.Priority);
-        if (i < 0 || Pick(d) is not { } st) return;
+        if (i < 0) { LastNote = $"no voice: every playing voice outranks priority {d.Priority}"; return false; }
+        if (Pick(d) is not { } st) { LastNote = "no stream loaded (file missing or failed to decode)"; return false; }
+        var stolen = _p3[i].Playing;
         _pr3[i] = d.Priority;
         var p = _p3[i];
         p.Stream = st; p.Bus = d.Bus; p.VolumeDb = d.VolumeDb + dbOffset;
         p.PitchScale = SoundRules.PitchFor(d, _rng.Randf());
         p.MaxDistance = d.MaxDistance; p.UnitSize = SoundRules.UnitSize(d.MaxDistance);
         p.GlobalPosition = at;
+        SetExactLevel(p, exact);
         p.Play();
         _s3[i] = ++_i3;
+        LastNote = $"played on voice {i}{(stolen ? " (stole a playing voice)" : "")}, {d.VolumeDb + dbOffset:F1} dB, pitch {p.PitchScale:F2}, listener {dist:F1} m, length {st.GetLength():F2}s, bus {p.Bus}";
+        return true;
     }
 
     /// <summary>UI sounds: when several are asked for in the same frame (a button click that also pops the screen) the last one wins.</summary>
@@ -219,7 +250,7 @@ public partial class Sfx : Node
         _sUi[i] = ++_iUi; _uiFrame = frame; _uiFrameSlot = i;
     }
 
-    LoopVoice? DoLoop(string id, Vector3 at)
+    LoopVoice? DoLoop(string id, Vector3 at, float startFraction)
     {
         if (!Enabled || _pLoop.Length == 0 || Def(id) is not { } d || Pick(d) is not { } st) return null;
         for (var i = 0; i < PoolLoop; i++)
@@ -230,13 +261,16 @@ public partial class Sfx : Node
             p.Stream = st; p.Bus = d.Bus; p.VolumeDb = d.VolumeDb; p.PitchScale = d.Pitch;
             p.MaxDistance = d.MaxDistance; p.UnitSize = SoundRules.UnitSize(d.MaxDistance);
             p.GlobalPosition = at;
-            p.Play();
+            SetExactLevel(p, false); // the loop's own Update says it again each frame
+            p.Play(startFraction > 0 ? (float)(Math.Clamp(startFraction, 0f, 0.98f) * st.GetLength()) : 0f);
             return new LoopVoice { Player = p, Def = d, BaseDb = d.VolumeDb, Owner = this, Slot = i };
         }
         return null;
     }
 
     internal void FreeLoopSlot(int i) => _loopTaken[i] = false;
+    /// <summary>How many looping voices are held right now, by anything (engines, rockets): for the engine sound trace.</summary>
+    public static int LoopVoicesInUse => Instance?._loopTaken.Count(t => t) ?? 0;
 
     AudioStreamPlayer? _fight;
     Tween? _fightFade;

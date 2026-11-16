@@ -109,17 +109,29 @@ public partial class NetClient
         r.Snd?.Update(at);
     }
 
-    void SfxCar(CarView v, Vector3 at)
+    void SfxCar(CarView v, Vector3 at, float dt)
     {
         if (!Sfx.Enabled) return;
-        if (v.Driver == 0 || Sfx.ListenerDistance(at) > 80f) { v.Snd?.Release(); v.Snd = null; return; }
+        var def = Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null;
+        // the vehicle this player rides (any seat) is heard from the inside: placed at the listener, so the chase camera's distance and the car's turning never pan or fade it
+        var mine = _driving && (v.Driver == _myId || (_seats is { Mine: >= 0 } st && st.CarId == v.Id));
+        if (mine) at = Sfx.ListenerPosition(at);
+        if (def?.Sounds is { } set)
+        {
+            // a type with its own set: layered engine sounds, kept only while it is occupied and near
+            if (v.Driver == 0 || v.Destroyed || (!mine && Sfx.ListenerDistance(at) > 160f)) { v.Engine?.Release(); return; }
+            var kmh = DriveOf(v) is { } ds ? ds.Speed * 3.6f : v.Kmh; // the drawn speed, signed (negative reversing): smooth every frame, not once a snapshot
+            (v.Engine ??= new VehicleEngineSound($"{def.Id}#{v.Id}")).Update(set, kmh, def.TopSpeed * 3.6f, at, dt);
+            return;
+        }
+        if (v.Driver == 0 || (!mine && Sfx.ListenerDistance(at) > 80f)) { v.Snd?.Release(); v.Snd = null; return; }
         v.Snd ??= Sfx.Loop("vehicle.engine", at);
-        v.Snd?.Update(at, SoundRules.EnginePitch(v.Kmh));
+        v.Snd?.Update(at, SoundRules.EnginePitch(v.Kmh), 0f, exact: true);
     }
 
     void SfxTeardown()
     {
         foreach (var r in _rockets.Values) r.Snd?.Release();
-        foreach (var c in _cars.Values) c.Snd?.Release();
+        foreach (var c in _cars.Values) { c.Snd?.Release(); c.Engine?.Release(); }
     }
 }

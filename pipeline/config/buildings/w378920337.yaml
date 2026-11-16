@@ -1,0 +1,10 @@
+# P-0034: house, grey render, dark slate roof. Measured by landmark_photo (camera fit: photo 0 7 px, photo 1 2 px).
+# Eave 2.66 m, top 4.33 m. Sides with no photo have no openings. Not modelled: balcony, drainpipe, chimney, gate, fence, meter box.
+id: w378920337
+source: Street View captures of 2022-09
+overhang_m: 0.3
+frame_colour: '#e6e8e8'
+openings:
+  - {id: w1, kind: window, edge: 3, at_m: 1.96, width_m: 1.53, height_m: 1.22, sill_m: 0.79, recess_m: 0.12, confidence: medium}
+  - {id: w2, kind: window, edge: 3, at_m: 5.67, width_m: 1.42, height_m: 1.23, sill_m: 0.78, recess_m: 0.12, confidence: medium}
+  - {id: w3, kind: window, edge: 3, at_m: 9.24, width_m: 1.6, height_m: 1.26, sill_m: 0.89, recess_m: 0.12, confidence: medium}

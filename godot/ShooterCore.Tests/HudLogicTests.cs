@@ -134,4 +134,41 @@ public class StatePaletteTests
             for (var j = i + 1; j < set.Length; j++)
                 Assert.True(DeltaE(set[i], set[j]) >= 20);
     }
+
+    // #313: vehicles with an enemy aboard are hidden on the maps
+    static bool Hide(ushort driver, ushort me, Func<ushort, bool> enemy, params ushort[] others) =>
+        HudLogic.HideEnemyOccupiedVehicle(driver, others, me, enemy);
+
+    [Fact]
+    public void EmptyAndFriendlyVehiclesStayOnTheMap()
+    {
+        Assert.False(Hide(0, 1, id => id == 2));
+        Assert.False(Hide(3, 1, id => id == 2)); // friend drives
+        Assert.False(Hide(3, 1, id => id == 2, 0, 4, 0)); // friends only
+    }
+
+    [Fact]
+    public void EnemyDriverHidesTheVehicle() => Assert.True(Hide(2, 1, id => id == 2));
+
+    [Fact]
+    public void EnemyOnAnySeatHidesAGunnerOnlyVehicle()
+    {
+        Assert.True(Hide(0, 1, id => id == 2, 2));
+        Assert.True(Hide(0, 1, id => id == 2, 0, 0, 2));
+        Assert.False(Hide(0, 1, id => id == 2, 3)); // a friendly rider
+        Assert.False(Hide(0, 1, id => id == 2, null!)); // no seats record
+    }
+
+    [Fact]
+    public void MixedRidersHide() => Assert.True(Hide(3, 1, id => id == 2, 2));
+
+    [Fact]
+    public void OwnVehicleIsNeverHidden()
+    {
+        Assert.False(Hide(1, 1, _ => true, 2)); // I drive, an enemy rides along
+        Assert.False(Hide(2, 1, id => id == 2, 1)); // I am a passenger of an enemy-driven vehicle
+    }
+
+    [Fact]
+    public void FfaEveryoneElseIsAnEnemy() => Assert.True(Hide(5, 1, id => id != 1));
 }

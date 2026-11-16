@@ -68,6 +68,7 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # (no bump) crops.json (files.crops): instances of the crop fields (ground types crop_*): per chunk and kind rows [x, y, z, rot,
 # scale] of plants (crop_wheat, ...) and artifacts (art_hay_bale_round, ...), and per kind what to draw it with (role, asset or
 # synty names). Cosmetic: no collision. Only maps with a crop patch have it; a loader that does not know it draws none.
+# (no bump) garage.json (files.garage): the bus garage: the doorway its doors hang in, the bay, where the bus stands.
 # (no bump) urad.json (files.urad): the inside of the municipal office: entrance, rooms, worker seats, dictation desk.
 # (no bump) church.json (files.church): the inside of the church: door, seats with routes, spots, anchors, rooms.
 # (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
@@ -82,6 +83,8 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # Only maps with a group have it; a loader that does not know it, or a map without it, means "no groups".
 # (no bump) fences.json (files.fences): every fence section (two end points with ground z, height_m, type, parcel, property group),
 # for the game server's pets (the fence hop). A loader that does not know it, or a map without it, means "no fence data".
+# (no bump) NORMAL on every drawn mesh of the chunk files, clutter_meshes.glb and prims (the face normal, flat shading);
+# collision meshes have none. Maps built before this shade with one constant normal (lights cut off by heading).
 MAP_VERSION_BASE = "0.10.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
@@ -101,8 +104,25 @@ def to_gltf_axes(tris: np.ndarray) -> np.ndarray:
     return np.round(out, 4)
 
 
-def to_trimesh(mesh: Mesh) -> trimesh.Trimesh:
-    """Flat-shaded trimesh: unshared vertices, one RGBA vertex colour per triangle."""
+def flat_normals(verts: np.ndarray) -> np.ndarray:
+    """One unit normal per vertex of unshared triangles (``verts`` is (3n, 3)): the face normal of its
+    triangle (counter-clockwise front). A degenerate triangle gets straight up.
+
+    Without NORMAL the game shades every map surface with one constant normal, so a lamp or a
+    headlight lights the ground only on one side of itself.
+    """
+    t = verts.reshape(-1, 3, 3)
+    n = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])
+    length = np.linalg.norm(n, axis=1, keepdims=True)
+    n = np.where(length > 1e-12, n / np.maximum(length, 1e-12), np.array([0.0, 1.0, 0.0]))
+    return np.repeat(n, 3, axis=0).astype(np.float32)
+
+
+def to_trimesh(mesh: Mesh, normals: bool = True) -> trimesh.Trimesh:
+    """Flat-shaded trimesh: unshared vertices, one RGBA vertex colour and one normal per triangle.
+
+    ``normals=False`` for a collision mesh (never drawn): no NORMAL attribute, a smaller file.
+    """
     verts = to_gltf_axes(mesh.tris).reshape(-1, 3)
     faces = np.arange(len(verts)).reshape(-1, 3)
     rgba = np.concatenate([mesh.colours, np.full((len(mesh.colours), 1), 255, np.uint8)], axis=1)
@@ -110,6 +130,7 @@ def to_trimesh(mesh: Mesh) -> trimesh.Trimesh:
         vertices=verts,
         faces=faces,
         vertex_colors=np.repeat(rgba, 3, axis=0),
+        vertex_normals=flat_normals(verts) if normals and len(verts) else None,
         process=False,
     )
 
@@ -129,14 +150,15 @@ def to_trimesh_textured(mesh: TexturedMesh, tid: str) -> trimesh.Trimesh:
     )
     visual.vertex_attributes["color"] = np.repeat(rgba, 3, axis=0)
     return trimesh.Trimesh(
-        vertices=verts, faces=np.arange(len(verts)).reshape(-1, 3), visual=visual, process=False
+        vertices=verts, faces=np.arange(len(verts)).reshape(-1, 3), visual=visual,
+        vertex_normals=flat_normals(verts) if len(verts) else None, process=False,
     )
 
 
 def node_trimesh(name: str, mesh: Mesh | TexturedMesh) -> trimesh.Trimesh:
     if isinstance(mesh, TexturedMesh):
         return to_trimesh_textured(mesh, name.partition("_tex_")[2])
-    return to_trimesh(mesh)
+    return to_trimesh(mesh, normals=not name.endswith("collision"))
 
 
 def parcel_props_nodes(
@@ -168,7 +190,7 @@ def build_chunk_scene(
     for pid, visual, collision in sorted(parcel_meshes, key=lambda t: t[0]):
         for suffix, mesh in (("visual", visual), ("collision", collision)):
             name = f"parcel_{pid}_{suffix}"
-            scene.add_geometry(to_trimesh(mesh), node_name=name, geom_name=name)
+            scene.add_geometry(to_trimesh(mesh, normals=suffix == "visual"), node_name=name, geom_name=name)
     for name, mesh in sorted((extra or {}).items()):
         scene.add_geometry(node_trimesh(name, mesh), node_name=name, geom_name=name)
     return scene
@@ -413,6 +435,16 @@ def run_export(
             **scene.urad,
         })
         files["urad"] = "urad.json"
+    stale_garage = out_dir / "garage.json"
+    stale_garage.unlink(missing_ok=True)
+    if scene.garage:
+        # the bus garage (garage.garage_info): the doorway of its swinging doors, the bay, the parking place
+        _dump(stale_garage, {
+            "version": 1,
+            "axes": "points: local metres [x east, y north, z up] (x, y as parcels.json, z as terrain.json); yaw: compass degrees",
+            **scene.garage,
+        })
+        files["garage"] = "garage.json"
 
     parcels_file = {
         "version": ARTIFACT_FORMAT_VERSION,
@@ -531,6 +563,7 @@ def run_export(
         },
         "config/rules.yaml": _sha256(rules_path),
         "config/overrides.yaml": _sha256(overrides_path),
+        **({"config/tree_overrides.yaml": _sha256(tree_overrides)} if (tree_overrides := overrides_path.parent / "tree_overrides.yaml").is_file() else {}),
     }
     manifest = {
         "map_version": f"{MAP_VERSION_BASE}-village",

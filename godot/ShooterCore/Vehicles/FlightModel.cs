@@ -96,6 +96,11 @@ public interface IFlightWorld
     float WaterY(float x, float z);
     /// <summary>Moves the hull and the rotor disc from <paramref name="from"/> by <paramref name="motion"/> until something solid stops them.</summary>
     FlightMove Move(Vector3 from, float yaw, Vector3 motion);
+    /// <summary>
+    /// <see cref="Move(Vector3, float, Vector3)"/> with the airframe's pitch and roll too: a hull that tilts (<see cref="VehicleDef.Hull"/>) is swept turned by them. A world that does not
+    /// tilt its hull (the default) answers as for the yaw alone.
+    /// </summary>
+    FlightMove Move(Vector3 from, float yaw, float pitch, float roll, Vector3 motion) => Move(from, yaw, motion);
     FlightBounds Bounds { get; }
 }
 
@@ -271,7 +276,7 @@ public static class FlightModel
         // ---- move: what a surface takes from the speed is the impact; then slide along it once
         var landed = false;
         var target = s.Position + s.Velocity * dt;
-        var move = world.Move(s.Position, s.Yaw, s.Velocity * dt);
+        var move = world.Move(s.Position, s.Yaw, s.Pitch, s.Roll, s.Velocity * dt);
         if (move.Hit)
         {
             Strike(ref s, move.Normal, ref landed);
@@ -279,7 +284,7 @@ public static class FlightModel
             rest -= move.Normal * Vector3.Dot(rest, move.Normal);
             if (rest.LengthSquared() > 1e-8f)
             {
-                move = world.Move(move.Position, s.Yaw, rest);
+                move = world.Move(move.Position, s.Yaw, s.Pitch, s.Roll, rest);
                 if (move.Hit) Strike(ref s, move.Normal, ref landed);
             }
         }
@@ -376,6 +381,9 @@ public static class FlightRecord
         var flags = (s.Grounded ? GroundedBit : 0) | (s.InWater ? InWaterBit : 0) | (s.AtEdge ? AtEdgeBit : 0);
         return EntityRecord.Make(IdOf(carId), EntityType.Flight, s.Velocity, s.Roll, s.Pitch, s.Rotor * 255f, EntityState.Alive, (byte)flags);
     }
+
+    /// <summary>A pitch and a roll as a client reads them from a flight record (<see cref="Pitch"/>, <see cref="Roll"/>): rounded to the wire's steps, so the server and a client turn a hull by the same angles.</summary>
+    public static (float Pitch, float Roll) AsSent(float pitch, float roll) => (Quant.Pitch(Quant.Pitch(pitch)), FlightMath.Wrap(Quant.Yaw(Quant.Yaw(roll))));
 
     public static Vector3 Velocity(in EntityRecord r) => r.Position;
     public static float Roll(in EntityRecord r) => FlightMath.Wrap(r.YawRad);

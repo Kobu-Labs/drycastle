@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.ShooterCore;
+using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;
 
@@ -11,7 +12,7 @@ namespace Drycastle.Shooter;
 /// them differently). A one-hit pet is simply despawned by the server (<see cref="WorldDespawnReason.Destroyed"/>) and leaves a puff. Without a model
 /// (headless, or the file is missing) a box of the model's hit box stands in. The server owns the animal; the client only shows it.
 /// </summary>
-public partial class NetClient
+public partial class NetClient : IStandingBodies
 {
     /// <summary>animals.json: set by the host (the species table; the species index of a state is a position in it).</summary>
     public AnimalsFile AnimalData = new();
@@ -25,8 +26,12 @@ public partial class NetClient
         public AnimalDef Def = null!;
         /// <summary>The model's name for each <see cref="AnimalClip"/> (indexed by it), null where it has none; empty without a model.</summary>
         public string?[] Clips = Array.Empty<string?>();
-        /// <summary>The body box of the look: for the puff's size.</summary>
+        /// <summary>The body box of the look, times its size: for the puff's size, the tumble and the binoculars.</summary>
         public IReadOnlyList<float> HitBox = Array.Empty<float>();
+        /// <summary>How much bigger than its model as measured it stands (the animal's size roll; 1 for a species with no weight).</summary>
+        public float Size = 1f;
+        /// <summary>The variant it wears: with the species it gives the Body box the client builds (as the server does, <see cref="Animal.Body"/>).</summary>
+        public int Variant;
         /// <summary>The state whose clip is showing; 255 = none yet.</summary>
         public byte Shown = 255;
         public bool Toggle;
@@ -36,17 +41,50 @@ public partial class NetClient
         /// <summary>The ragdoll of a body a vehicle threw: it rolls about its own length (radians) while it flies and settles on a side where it lands.</summary>
         public float Roll;
         public bool Tumbling;
+        /// <summary>The loose limbs of the thrown body, one per skeleton of the model; empty for a rig with none (it is thrown as a rigid body).</summary>
+        public List<AnimalFlail> Flail = new();
         public Vector3 LastFeet;
         public bool SeenFeet;
+        /// <summary>The driver's own picture of a throw by the vehicle it drives, shown before the server's arrives (<see cref="ThrowGuess"/>).</summary>
+        public readonly ThrowGuess Guess = new();
+        /// <summary>Where the snapshots had it last frame: how fast the server's body moves (a dead one still flying).</summary>
+        public NVec3 LastServer;
+        public bool SeenServer;
     }
 
     readonly Dictionary<ushort, AnimalView> _animals = new();
 
     /// <summary>A thrown animal's roll in flight and its settling onto a side (rad/s), and the speed (m/s) above which a dead body is taken to be flying.</summary>
     const float AnimalRollRate = 9f, AnimalSettleRate = 9f, AnimalFlyingSpeed = 1.5f;
+    /// <summary>How loose the limbs of a thrown animal stay once it lies (<see cref="AnimalFlail.Amount"/>; 1 in the air).</summary>
+    const float AnimalLyingFlail = 0.5f;
+    /// <summary>The smallest radius (m) a rolling body's turn rate is worked out with, and how far over the ground (m) a lying body's loose limbs are kept.</summary>
+    const float AnimalRollRadiusMin = 0.15f, AnimalLimbClearance = 0.04f;
 
     /// <summary>How long a hit reaction may hold back the clip of the state (a gallop must not wait for a long clip).</summary>
     const double AnimalHitReactMaxSeconds = 0.6;
+
+    /// <summary>
+    /// The animals that stand, as the player's prediction meets them (<see cref="Player.Bodies"/>): each animal the server last sent that is in a state that stands (<see cref="AnimalRules.Stands"/>), at the
+    /// NEWEST position it was sent (not the interpolated, drawn one), as a Body box built as the server builds it (<see cref="Animal.Body"/>). A standing animal does not move, so this is the box the server
+    /// stops the player at; one that has just begun to walk or has just stopped is at most one round trip out of step, a correction of a step or two.
+    /// </summary>
+    void IStandingBodies.Near(float x, float z, float radius, List<BodyObstacle> into)
+    {
+        foreach (var (id, v) in _animals)
+        {
+            if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant || !AnimalRules.Stands(AnimalRules.StateOf(e.State.State))) continue;
+            if (e.Buf.At(double.MaxValue) is not { } s) continue;
+            var box = v.HitBox; // the look's box times its size, as the server's Animal.Body
+            if (box.Count < 3) continue;
+            var ahead = v.Def.BodyAheadOf(v.Variant) * v.Size;
+            var body = BodyBox.Of(s.Pos, s.Yaw, box[0], box[2], ahead);
+            var reach = MathF.Sqrt(box[0] * box[0] + box[2] * box[2]) / 2 + MathF.Abs(ahead) + radius;
+            float dx = s.Pos.X - x, dz = s.Pos.Z - z;
+            if (dx * dx + dz * dz > reach * reach) continue;
+            into.Add(new BodyObstacle(body, s.Pos.Y, s.Pos.Y + box[1]));
+        }
+    }
 
     /// <summary>Called once from <see cref="_Ready"/>: registers the animal type and follows its entities.</summary>
     void InitAnimals()
@@ -68,7 +106,7 @@ public partial class NetClient
     {
         v.Node.Visible = !e.Dormant;
         v.Node.ProcessMode = e.Dormant ? Node.ProcessModeEnum.Disabled : Node.ProcessModeEnum.Inherit; // an AnimationPlayer keeps playing while hidden otherwise
-        if (e.Dormant) return;
+        if (e.Dormant) { v.Guess.Reset(); v.SeenServer = false; return; }
         v.Shown = 255; v.HitUntil = 0; v.Toggle = AnimalRules.HitToggled(e.State.State);
     }
 
@@ -83,16 +121,21 @@ public partial class NetClient
         }
         var def = AnimalData.Animals[species];
         var variant = AnimalRules.VariantOf(e.State.Owner);
-        var box = def.HitBoxOf(variant);
+        // a species with a weight rolls a size at spawn (the state byte's bits 5-7); the model and every box of it are scaled by it
+        var size = def.WeightKgOf(variant) != null ? AnimalRules.SizeOfStep(AnimalRules.SizeStepOf(e.State.State)) : 1f;
+        var box = def.HitBoxOf(variant).Select(x => x * size).ToArray();
         var node = new Node3D { Name = $"Animal{e.Id}" };
+        var flail = new List<AnimalFlail>();
         AnimationPlayer? anim = null;
         var clips = Array.Empty<string?>();
         if (ModelLib.Instance(def.ModelOf(variant)) is { } model)
         {
-            model.Scale = Vector3.One * def.Scale;
+            model.Scale = Vector3.One * (def.Scale * size);
             model.RotationDegrees = new Vector3(0, def.ModelYawDeg, 0);
             node.AddChild(model);
             anim = model.FindChildren("*", "AnimationPlayer", true, false).FirstOrDefault() as AnimationPlayer;
+            foreach (var sk in model.FindChildren("*", "Skeleton3D", true, false).OfType<Skeleton3D>())
+                if (AnimalFlail.Create(sk) is { } f) { sk.AddChild(f); flail.Add(f); }
             if (anim != null)
             {
                 clips = AnimalClips.Resolve(n => anim.HasAnimation(n));
@@ -106,7 +149,7 @@ public partial class NetClient
             node.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(w, h, l) }, Position = new Vector3(0, h / 2, 0) });
         }
         Owned.AddChild(node);
-        var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Toggle = AnimalRules.HitToggled(e.State.State) };
+        var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Size = size, Variant = variant, Flail = flail, Toggle = AnimalRules.HitToggled(e.State.State) };
         _animals[e.Id] = view;
         if (e.Dormant) SetAnimalDormant(view, e); // spawned outside the interest range: hidden until a keyframe shows it
     }
@@ -132,24 +175,68 @@ public partial class NetClient
         var rt = RenderTickNow();
         var now = Time.GetTicksMsec() / 1000.0;
         var dt = (float)GetProcessDeltaTime();
+        var car = ThrowGuessCar();
         foreach (var (id, v) in _animals)
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant) continue;
             var raw = e.State.State;
             var state = AnimalRules.StateOf(raw);
-            if (e.Buf.At(rt) is { } s) PlaceAnimal(v, state, new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z), s.Yaw, dt);
+            if (e.Buf.At(rt) is { } s)
+            {
+                // the vehicle this player drives is drawn ahead of the server, so its run-over is shown here first and handed over to the server's when that shows
+                var thrown = state is AnimalState.Thrown or AnimalState.Down or AnimalState.Dead;
+                if (car is { } c && !thrown && state != AnimalState.Carried && v.Guess.Ready && !v.Def.OneHit && CarTouches(c.State, c.Def, v, s.Pos, s.Yaw))
+                    v.Guess.Start(s.Pos, CorpseRules.ThrowFromCar(new NVec3(-MathF.Sin(c.State.Yaw), 0, -MathF.Cos(c.State.Yaw)), c.State.Speed));
+                var serverSpeed = v.SeenServer && dt > 0 ? (s.Pos - v.LastServer).Length() / dt : 0f;
+                v.LastServer = s.Pos; v.SeenServer = true;
+                var inAir = state == AnimalState.Thrown || state == AnimalState.Dead && serverSpeed > AnimalFlyingSpeed;
+                var at = v.Guess.Step(dt, s.Pos, thrown, inAir, v.Guess.Active ? GroundUnder(v.Guess.Position) : null);
+                PlaceAnimal(v, GuessedState(v, state), new Vector3(at.X, at.Y, at.Z), s.Yaw, dt);
+            }
+            var shown = GuessedState(v, state);
             var toggle = AnimalRules.HitToggled(raw);
             if (toggle != v.Toggle)
             {
                 v.Toggle = toggle;
                 if (state != AnimalState.Dead) PlayAnimalHit(v, now);
             }
-            if (v.Tumbling) { ShowAnimalTumble(v, state); continue; } // thrown by a vehicle: no clip of the state, the body is turned whole
+            if (v.Tumbling) { ShowAnimalTumble(v, shown); continue; } // thrown by a vehicle: no clip of the state, the body is turned whole
             if (state == AnimalState.Dead) { if (v.Shown != (byte)state) ShowAnimalState(v, state); continue; }
             if (now < v.HitUntil) continue;
             if (v.Shown != (byte)state) ShowAnimalState(v, state); // also after a reaction: Shown is 254 until its clip is over
             v.HitUntil = 0;
         }
+    }
+
+    /// <summary>
+    /// The vehicle whose run-overs this client shows ahead of the server (<see cref="ThrowGuess"/>): the predicted one the local player drives, while it runs bodies over
+    /// (on land, moving fast enough to move one: the server's conditions in RunOverCheck).
+    /// </summary>
+    (DriveState State, VehicleDef Def)? ThrowGuessCar()
+    {
+        if (_drive == null || Dead || !_drive.Def.RunOver || Match.Phase != MatchPhase.Running) return null; // the server throws no animal outside the round
+        var s = _drive.Predict.State;
+        return s.Afloat || !RunOver.Contacts(s.Speed) ? null : (s, _drive.Def);
+    }
+
+    /// <summary>The ground's height under a guessed throw (one ray down through the static world), or null where there is none: the guess lands and rolls on the ground it is over, not at the height it left.</summary>
+    float? GroundUnder(NVec3 at)
+    {
+        var from = new Vector3(at.X, at.Y + 3f, at.Z);
+        var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(from, from + Vector3.Down * 40f, CollisionRules.StaticMask(MoverKind.Animal)));
+        return hit.Count > 0 ? hit["position"].AsVector3().Y : null;
+    }
+
+    /// <summary>The state an animal is drawn in: while a guessed throw is what is drawn, a thrown body in the air or one knocked down where the guess landed, whatever the server's state says yet.</summary>
+    static AnimalState GuessedState(AnimalView v, AnimalState state) => !v.Guess.Active ? state : v.Guess.Moving ? AnimalState.Thrown : AnimalState.Down;
+
+    /// <summary>Whether the predicted vehicle's footprint touches the animal as it is drawn: the server's run-over test (<see cref="RunOverFootprint"/>), on the Body box the client builds as the server does.</summary>
+    static bool CarTouches(in DriveState car, VehicleDef def, AnimalView v, NVec3 feet, float yaw)
+    {
+        var box = v.HitBox;
+        if (box.Count < 3) return false;
+        var body = BodyBox.Of(feet, yaw, box[0], box[2], v.Def.BodyAheadOf(v.Variant) * v.Size);
+        return RunOverFootprint.OfBody(body, feet.Y).Hits(car.Position, car.Position, car.Yaw, def.HalfWidth, def.HalfLength);
     }
 
     /// <summary>
@@ -164,13 +251,17 @@ public partial class NetClient
         var flying = state == AnimalState.Thrown || state == AnimalState.Dead && speed > AnimalFlyingSpeed;
         if (flying) v.Tumbling = true;
         else if (state is not (AnimalState.Down or AnimalState.Dead)) { v.Tumbling = false; v.Roll = 0; }
+        // loose limbs in the air, slack ones where it lies; lying or rolling slowly, none of them sinks into the ground under it
+        var low = !flying || speed < AnimalRollRate * AnimalRollRadiusMin * 4f;
+        foreach (var f in v.Flail) { f.Amount = !v.Tumbling ? 0f : flying ? 1f : AnimalLyingFlail; f.FloorY = v.Tumbling && low ? feet.Y + AnimalLimbClearance : null; }
         if (!v.Tumbling)
         {
             v.Node.GlobalPosition = feet;
             v.Node.Rotation = new Vector3(0, yaw, 0);
             return;
         }
-        if (flying) v.Roll += AnimalRollRate * dt;
+        // in the air it spins at the full rate; rolling on along the ground it turns as fast as it goes, so the roll dies with its speed
+        if (flying) v.Roll += Mathf.Min(AnimalRollRate, speed / Mathf.Max(v.HitBox.Count == 3 ? v.HitBox[0] / 2 : 0.2f, AnimalRollRadiusMin)) * dt;
         else v.Roll = Mathf.MoveToward(v.Roll, Mathf.Round((v.Roll - Mathf.Pi / 2) / Mathf.Pi) * Mathf.Pi + Mathf.Pi / 2, AnimalSettleRate * dt); // on a side, whichever is nearer
         float halfWidth = v.HitBox.Count == 3 ? v.HitBox[0] / 2 : 0.2f, halfHeight = v.HitBox.Count == 3 ? v.HitBox[1] / 2 : 0.4f;
         var upright = new Basis(Vector3.Up, yaw);

@@ -29,6 +29,7 @@ public partial class NetServer
             if (_mapPanes != null) return _mapPanes;
             try { _mapPanes = MapGlass.Parse(Map?.WindowsJson ?? ""); }
             catch (DataFileException e) { GD.PrintErr($"server: {e.Message}; the map's windows do not break"); _mapPanes = new(); }
+            if (MechanicGarage.Current is { } garage) MechanicGarageSite.AddPane(_mapPanes, garage.FloorY); // the mechanic garage's plate (#320)
             _mapPaneRects = _mapPanes.Select(p => p.Rect).ToList();
             if (_mapPanes.Count > 0) GD.Print($"server: {_mapPanes.Count} building panes ({_mapPanes.Count(p => p.Breakable)} breakable)");
             return _mapPanes;
@@ -55,14 +56,15 @@ public partial class NetServer
         var panes = MapPanes;
         if (panes.Count == 0) return;
         var b = GlassRules.FirstCrossed(_mapPaneRects!, N(from), N(dir), wall - 0.1f, wall + GlassData.BuildingReach, k => !panes[k].Breakable);
-        if (b >= 0 && _glass.Damage(new GlassPaneKey(GlassPaneKey.Map, (ushort)b), damage, GlassData.BuildingPaneHp)) _glassHits++;
+        if (b >= 0 && _glass.Damage(new GlassPaneKey(GlassPaneKey.Map, (ushort)b), damage, panes[b].Hp ?? GlassData.BuildingPaneHp)) _glassHits++;
     }
 
     /// <summary>The pane of <paramref name="car"/> a ray that stopped on its hull <paramref name="wall"/> metres out crosses first, or -1.</summary>
     int VehiclePaneCrossed(ServerCar car, Vector3 from, Vector3 dir, float wall)
     {
         var pose = PoseOf(car); // the panes where the hull was at the shot's view, as the hit was (B-02)
-        return GlassRules.FirstCrossed(car.Def.GlassRects, GlassRules.ToVehicle(N(from), pose.Feet, pose.Yaw), GlassRules.DirToVehicle(N(dir), pose.Yaw), wall - 0.1f, wall + GlassData.VehicleReach);
+        var (pitch, roll) = car.Def.TiltOf(pose.Pitch, pose.Roll);
+        return GlassRules.FirstCrossed(car.Def.GlassRects, GlassRules.ToVehicle(N(from), pose.Feet, pose.Yaw, pitch, roll), GlassRules.DirToVehicle(N(dir), pose.Yaw, pitch, roll), wall - 0.1f, wall + GlassData.VehicleReach);
     }
 
     /// <summary>A pane a bullet went through: the vehicle, the pane and the metres along the ray.</summary>
@@ -98,13 +100,14 @@ public partial class NetServer
             if (car == solid || pass >= MaxGlassPasses) return wall;
             var panes = car.Def.GlassRects; var open = car.Def.OpenSideRects;
             if (panes.Count == 0 && open.Count == 0) return wall;
-            var lo = GlassRules.ToVehicle(n, pose.Feet, pose.Yaw); var ld = GlassRules.DirToVehicle(nd, pose.Yaw);
+            var (pitch, roll) = car.Def.TiltOf(pose.Pitch, pose.Roll);
+            var lo = GlassRules.ToVehicle(n, pose.Feet, pose.Yaw, pitch, roll); var ld = GlassRules.DirToVehicle(nd, pose.Yaw, pitch, roll);
             var way = GlassRules.Through(panes, open, lo, ld, wall, GlassData.VehicleReach);
             if (!way.Enters || way.EntryT > max) return wall; // the body where the ray met it, or the round's range ends before the pane
             if (way.EntryPane >= 0) (crossed ??= new()).Add(new GlassCross(car, way.EntryPane, way.EntryT));
             // no way out, or the round's range ends inside: the hull takes the round on its far side
             if (!way.Leaves || way.ExitT + 0.02f >= max)
-                return MathF.Min(MathF.Max(VehicleBox.ExitDistance(lo, ld, car.HalfWidth, car.HalfLength, car.Def.Height), way.EntryT), max);
+                return MathF.Min(MathF.Max(VehicleBox.ExitDistance(lo, ld, car.Def), way.EntryT), max);
             if (way.ExitPane >= 0) (crossed ??= new()).Add(new GlassCross(car, way.ExitPane, way.ExitT));
             off = way.ExitT + 0.02f;
             (passed ??= new()).Add(car);
@@ -134,18 +137,20 @@ public partial class NetServer
         {
             if (!panes[i].Breakable) continue;
             var dmg = GlassRules.BlastDamage(NVec3.Distance(c, panes[i].Rect.Centre), radius, GlassData.BlastDamage);
-            if (dmg > 0 && _glass.Damage(new GlassPaneKey(GlassPaneKey.Map, (ushort)i), dmg, GlassData.BuildingPaneHp)) _glassHits++;
+            if (dmg > 0 && _glass.Damage(new GlassPaneKey(GlassPaneKey.Map, (ushort)i), dmg, panes[i].Hp ?? GlassData.BuildingPaneHp)) _glassHits++;
         }
         foreach (var car in _cars)
         {
             if (car.Destroyed || car.Def.Glass.Count == 0) continue;
             var feet = N(car.GlobalPosition);
-            if (NVec3.Distance(c, feet) > radius + car.HalfLength + car.Def.Height) continue;
+            if (NVec3.Distance(c, feet) > radius + MathF.Max(car.HalfLength + car.Def.Height, car.Def.BroadReach)) continue;
             car.Wake();
             var rects = car.Def.GlassRects;
+            var (_, attPitch, attRoll) = AttitudeOf(car);
+            var (tiltPitch, tiltRoll) = car.Def.TiltOf(attPitch, attRoll);
             for (var i = 0; i < rects.Count; i++)
             {
-                var dmg = GlassRules.BlastDamage(NVec3.Distance(c, GlassRules.FromVehicle(rects[i].Centre, feet, car.State.Yaw)), radius, GlassData.BlastDamage);
+                var dmg = GlassRules.BlastDamage(NVec3.Distance(c, GlassRules.FromVehicle(rects[i].Centre, feet, car.State.Yaw, tiltPitch, tiltRoll)), radius, GlassData.BlastDamage);
                 if (dmg > 0 && _glass.Damage(new GlassPaneKey(car.Id, (ushort)i), dmg, VehiclePaneHp(car.Def, i))) _glassHits++;
             }
         }
@@ -154,11 +159,22 @@ public partial class NetServer
     /// <summary>Sends the panes that changed this tick, one reliable event each (called once at the end of the tick).</summary>
     void FlushGlass()
     {
+        var mapPane = false;
         foreach (var s in _glass.TakeChanges())
         {
             if (s.Shattered) _glassShattered++;
+            mapPane |= s.Key.Owner == GlassPaneKey.Map;
             BroadcastEvent(EventKind.GlassPane, GlassCodec.EncodePane(s));
         }
+        if (mapPane) SyncMechanicGarage();
+    }
+
+    /// <summary>The mechanic garage's plate (a map pane) is solid while its pane stands and gone once it has shattered (#320): the box follows the pane's state.</summary>
+    void SyncMechanicGarage()
+    {
+        if (MechanicGarage.Current is not { } garage) return;
+        var i = MapPanes.FindIndex(p => p.Node == MechanicGarageSite.PlateNode);
+        if (i >= 0) garage.SetPlate(!_glass.IsShattered(new GlassPaneKey(GlassPaneKey.Map, (ushort)i)), animate: false);
     }
 
     /// <summary>The joiner's catch-up: every pane that is not whole.</summary>
@@ -177,6 +193,10 @@ public partial class NetServer
     /// <summary>A new round: every pane is whole again (glass.json restore_on_round_start).</summary>
     void RestoreGlassForRound()
     {
-        if (GlassData.RestoreOnRoundStart && _glass.RestoreAll()) BroadcastEvent(EventKind.GlassSync, GlassCodec.EncodeSync(GlassCodec.Everything, Array.Empty<GlassPaneState>()));
+        if (GlassData.RestoreOnRoundStart && _glass.RestoreAll())
+        {
+            BroadcastEvent(EventKind.GlassSync, GlassCodec.EncodeSync(GlassCodec.Everything, Array.Empty<GlassPaneState>()));
+            SyncMechanicGarage();
+        }
     }
 }

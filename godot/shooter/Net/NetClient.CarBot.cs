@@ -7,8 +7,8 @@ namespace Drycastle.Shooter;
 /// <summary>
 /// Vehicle smoke scripts (car, motorcycle or bicycle: the server's --car-kind; headless, on the flat arena with three of that type). Alice teleports next to car 0, enters it (E), tries to fire (must do
 /// nothing), drives straight ahead with full throttle (must cover more than 20 m) into bob, who stands 40 m ahead and must take the run-over damage of the type's top speed
-/// (capped at 100 and a kill for car and motorcycle, 30 for the slow bicycle); she brakes with the handbrake, exits with E (to a free side, on foot again) and the empty car returns to its origin
-/// after the shortened abandon timer. Bob checks the hit event he received. Both print SHOOTER_CAR_CLIENT_OK.
+/// (capped at 100 and a kill for car and motorcycle, 30 for the slow bicycle); she brakes with the handbrake, exits with E (to a free side, on foot again) and the empty car stays where it was left
+/// (it never despawns). Bob checks the hit event he received. Both print SHOOTER_CAR_CLIENT_OK.
 /// </summary>
 public partial class NetClient
 {
@@ -105,11 +105,10 @@ public partial class NetClient
         var gap = XZ(_me!.State.Position - _cars[carId].Pos);
         Check(gap is > 1.0f and < 4.5f && _me.State.OnFloor, $"exit puts alice on the ground beside the car ({gap:F1} m from its centre)");
 
-        // abandoned: back at the origin after the (shortened) timer
-        var t0 = Now;
-        foreach (var x in WaitFor(() => XZ(_cars[carId].Pos - car0) < 0.6f, 9, "the abandoned car to return to its origin")) yield return x;
-        Check(Now - t0 > 1.0, $"the abandoned car returned to its origin after {Now - t0:F1} s");
-        foreach (var x in Wait(0.5)) yield return x;
+        // abandoned: it stays where it was left (#294: no despawn)
+        var left = _cars[carId].Pos;
+        foreach (var x in Wait(4)) yield return x;
+        Check(XZ(_cars[carId].Pos - car0) > 20f && XZ(_cars[carId].Pos - left) < 0.5f, "the abandoned car stays where it was left");
         CarResult(true, "");
     }
 

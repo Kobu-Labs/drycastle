@@ -20,6 +20,13 @@ public static class GlassFx
     /// <summary>Most points of an outline the crack shader takes (glass_crack.gdshader, `outline[12]`; vehicles.json allows no more).</summary>
     const int MaxOutline = 12;
 
+    /// <summary>
+    /// What a pane looks like when it is hurt and when it breaks: glass by default (white cracks, a rim of shards left along the opening, translucent fragments); the mechanic
+    /// garage's OSB plate has black cracks, leaves nothing behind when it goes and its fragments are pale-brown opaque chips.
+    /// </summary>
+    public readonly record struct ShardLook(Vector3 Colour, float Opacity, float Roughness, Vector3 CrackColour, bool EdgeShards);
+    public static readonly ShardLook OsbShards = new(new Vector3(0.78f, 0.58f, 0.32f), 1f, 0.95f, new Vector3(0.02f, 0.015f, 0.01f), false);
+
     static ShaderMaterial? _crack, _shards;
     static int _active;
 
@@ -32,6 +39,29 @@ public static class GlassFx
     {
         _crack ??= GD.Load<ShaderMaterial>(CrackMaterialPath);
         _shards ??= GD.Load<ShaderMaterial>(ShardMaterialPath);
+    }
+
+    /// <summary>
+    /// Draws both glass shaders once, a hand's width in front of the player's camera, so their pipelines compile at the start and not on the first crack or shatter of the match
+    /// (loading the material alone does not draw it: the first hit of a session stalled a frame, most visibly on the big OSB plate of the mechanic garage). The two pieces are
+    /// a millimetre across and have the vertex layout of the real overlay and fragments; they are gone after a moment.
+    /// </summary>
+    public static void WarmUp(Camera3D camera)
+    {
+        Load();
+        var overlay = new MeshInstance3D { Name = "GlassWarmCrack", Mesh = new QuadMesh { Size = new Vector2(0.002f, 0.002f) }, MaterialOverride = Crack(), Position = new Vector3(0, 0, -0.3f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = new[] { new Vector3(0, 0, 0), new Vector3(0.002f, 0, 0), new Vector3(0, 0.002f, 0) };
+        arrays[(int)Mesh.ArrayType.Normal] = new[] { Vector3.Back, Vector3.Back, Vector3.Back };
+        arrays[(int)Mesh.ArrayType.TexUV2] = new[] { Vector2.Zero, Vector2.Zero, Vector2.Zero };
+        var mesh = new ArrayMesh();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        var shards = new MeshInstance3D { Name = "GlassWarmShards", Mesh = mesh, MaterialOverride = Shards(), Position = new Vector3(0, 0, -0.3f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        camera.AddChild(overlay);
+        camera.AddChild(shards);
+        var timer = camera.GetTree().CreateTimer(0.5);
+        timer.Timeout += () => { if (GodotObject.IsInstanceValid(overlay)) overlay.QueueFree(); if (GodotObject.IsInstanceValid(shards)) shards.QueueFree(); };
     }
 
     static ShaderMaterial Crack() { Load(); return (ShaderMaterial)_crack!.Duplicate(); }
@@ -57,13 +87,14 @@ public static class GlassFx
     }
 
     /// <summary>The overlay of one pane under <paramref name="parent"/> (the vehicle's node, or a world node for a building's pane). <paramref name="holeDarkness"/> is how opaque the opening of the shattered pane is.</summary>
-    public static MeshInstance3D MakeOverlay(Node3D parent, GlassPaneRect rect, GlassPaneKey key, float holeDarkness)
+    public static MeshInstance3D MakeOverlay(Node3D parent, GlassPaneRect rect, GlassPaneKey key, float holeDarkness, ShardLook? look = null)
     {
         var mat = Crack();
         mat.SetShaderParameter("pane_size", new Vector2(rect.Width, rect.Height));
         mat.SetShaderParameter("seed", Seed(key));
         mat.SetShaderParameter("hole_darkness", holeDarkness);
         SetOutline(mat, rect);
+        if (look is { } l) { mat.SetShaderParameter("crack_colour", l.CrackColour); mat.SetShaderParameter("edge_shards", l.EdgeShards ? 1f : 0f); }
         var mi = new MeshInstance3D
         {
             Name = $"Glass_{key.Owner}_{key.Index}",
@@ -87,10 +118,10 @@ public static class GlassFx
 
     /// <summary>
     /// The shatter animation: the fragments of the pane fly out of it under <paramref name="world"/>, from where the pane is now
-    /// (<paramref name="paneParent"/> is the global transform of the node the rectangle is in). Skipped beyond the effect range of
+    /// (<paramref name="paneParent"/> is the global transform of the node the rectangle is in; with <paramref name="follow"/> the fragments are children of that node and move with it). Skipped beyond the effect range of
     /// glass.json and when too many run already (the pane still changes to its shattered look).
     /// </summary>
-    public static void Shatter(Node3D world, Transform3D paneParent, GlassPaneRect rect, GlassConfig cfg, GlassPaneKey key)
+    public static void Shatter(Node3D world, Transform3D paneParent, GlassPaneRect rect, GlassConfig cfg, GlassPaneKey key, ShardLook? look = null, Node3D? follow = null)
     {
         if (_active >= cfg.MaxShatterEffects) return;
         var frame = paneParent * Frame(rect, Lift);
@@ -121,6 +152,7 @@ public static class GlassFx
         mat.SetShaderParameter("speed", cfg.ShardSpeed);
         mat.SetShaderParameter("life", cfg.ShardLife);
         mat.SetShaderParameter("t", 0f);
+        if (look is { } l) { mat.SetShaderParameter("tint", l.Colour); mat.SetShaderParameter("opacity", l.Opacity); mat.SetShaderParameter("roughness", l.Roughness); }
         var mi = new MeshInstance3D
         {
             Name = "GlassShards",
@@ -130,8 +162,8 @@ public static class GlassFx
             // the shader moves the fragments out of the mesh's own bounds: keep it drawn while they fly
             ExtraCullMargin = cfg.ShardSpeed * cfg.ShardLife * 2f + 5f * cfg.ShardLife * cfg.ShardLife + 1f,
         };
-        world.AddChild(mi);
-        mi.GlobalTransform = frame;
+        if (follow != null) { follow.AddChild(mi); mi.Transform = Frame(rect, Lift); } // a vehicle's pane: the fragments ride along with it
+        else { world.AddChild(mi); mi.GlobalTransform = frame; }
         _active++;
         mi.TreeExiting += () => _active = Math.Max(0, _active - 1); // also when the client leaves mid-flight
         var tw = mi.CreateTween();

@@ -159,6 +159,18 @@ public partial class NetServer
         ChatToAll(ChatLineKind.System, "", $"{c.Name} turned sandbox mode {(on ? "on" : "off")} for {target.Name}.");
     }
 
+    /// <summary>An admin's change from the Teams screen (#312, <see cref="TeamAssign"/>). Anyone else is ignored (and logged). Everyone is told what was done.</summary>
+    void OnTeamAssign(Client c, byte[] payload)
+    {
+        if (TeamAssignCodec.Decode(payload) is not { } a) return;
+        if (!IsAdmin(c)) { GD.Print($"server: {c.Name} #{c.Id} sent a team change without being an admin"); return; }
+        // a sandbox player dropped on a team: sandbox mode ends first (it has no team), then the move
+        if (a is { Action: TeamAction.Move, Team: Teams.A or Teams.B } && _match.IsTeamMode && _byId.TryGetValue(a.Id, out var target) && target.Sandbox) SetSandbox(target, false);
+        if (TeamAssignRules.Apply(_match, a, c.Name) is not { } line) return;
+        ChatToAll(ChatLineKind.System, "", line);
+        GD.Print($"server: {c.Name} #{c.Id} team {a.Action} {a.Id} {a.Team}");
+    }
+
     /// <summary>"/restart [ffa|tdm]": a new round now, in the current mode or the named one. Everyone is told which.</summary>
     void ChatRestart(Client c, IReadOnlyList<string> args)
     {

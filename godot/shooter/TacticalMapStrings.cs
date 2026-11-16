@@ -7,6 +7,8 @@ public static class TacticalMapStrings
     {
         ("bind.map", "Tactical map (toggle)"),
         ("map.grid", "GRID REFERENCE"),
+        ("map.zoom", "ZOOM"),
+        ("map.zoom.hint", "Wheel, +/- or shoulder buttons: zoom. Drag: pan. 0: reset."),
         ("map.waypoint", "Target - {0}"),
         ("map.none", "--"),
         ("map.dir.0", "N"), ("map.dir.1", "NE"), ("map.dir.2", "E"), ("map.dir.3", "SE"),

@@ -14,7 +14,7 @@ public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
     sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc, WadeAcc; public double RippleDue; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
-        /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the driven vehicle and seat this player was last matched to (<see cref="SeatRiders"/>).</summary>
+        /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the vehicle and seat this player sits in (<see cref="SeatRiders"/>).</summary>
         public float ShownYaw, ShownPitch; public bool Binoculars; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
 
     public const double InterpDelayTicks = 3.0;
@@ -228,6 +228,18 @@ public partial class NetClient : Node
         _conn.Flush();
     }
 
+    /// <summary>
+    /// The player's own Respawn (#284): the server kills them as a suicide and the normal respawn applies the loadout. <paramref name="slot"/> is selected
+    /// first (null keeps the active one); unsent loadout edits go out ahead of it, so "apply now" uses what is on screen.
+    /// </summary>
+    public void Redeploy(int? slot)
+    {
+        if (_peer == null || !_welcomed || Dead) return;
+        FlushAutosave();
+        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Redeploy, ShooterCore.Redeploy.Encode(slot))), (int)ENetPacketPeer.FlagReliable);
+        _conn.Flush();
+    }
+
     public override void _Process(double delta)
     {
         TelemetryFrame(delta);
@@ -255,6 +267,7 @@ public partial class NetClient : Node
         RenderCitizens();
         RenderGang(delta);
         RenderDemon();
+        UpdateDeath(delta);
         UpdatePounce(delta);
         RenderCars();
         RenderAircraft(delta);
@@ -311,9 +324,11 @@ public partial class NetClient : Node
                 _myId = w.PlayerId; _welcomed = true; _link.Enter(LinkPhase.Welcomed);
                 RozhlasSetReset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
                 DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
-                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders };
+                CasingFx.Water = Water;
+                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Bodies = this };
                 World.AddChild(_me);
                 if (!Bot && ShotFx.Enabled) { _viewmodel = MakeViewmodel(); _me.Camera.AddChild(_viewmodel); }
+                if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(_me.Camera); // the glass shaders compile now, not at the first crack
                 if (WeaponsBot != "" || CarBot != "" || FxDemo.StartsWith("vehicle:")) NetServer.AddArenaColliders(World);
                 if (Bot) _me.InputOverride = new MoveInput { SpeedScale = 1 };
                 HudWelcome();
@@ -350,6 +365,7 @@ public partial class NetClient : Node
                 OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
                 OnRozhlasEvent((EventKind)e.Kind, e.Payload); // the village loudspeaker's phase, broadcast and offset
                 OnUradDoorEvent((EventKind)e.Kind, e.Payload); // the Obecny Urad's door
+                OnGarageDoorEvent((EventKind)e.Kind, e.Payload); // the bus garage's doors
                 OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
                 OnDemonEvent((EventKind)e.Kind, e.Payload); // the demon: fireballs, the curse
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
@@ -390,14 +406,14 @@ public partial class NetClient : Node
                     _wantSlot = StartSlot();
                     Dead = false; if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
                     _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
-                    _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId); _breathCues.Reset(); _zero.Reset(); ClearPredictedReload(); _pNextFire = 0;
+                    EndDeathView(); _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId); _breathCues.Reset(); _zero.Reset(); ClearPredictedReload(); _pNextFire = 0;
                 }
                 break;
             case EventKind.Death:
                 var d = Match.LatestDeath!;
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 SfxDeath(d);
-                if (d.Victim == _myId) { Dead = true; _deaths++; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay); _hud?.SetProtection(0); OnStreakDeath(); }
+                if (d.Victim == _myId) { _deaths++; BeginDeathView(d.RespawnDelay); Dead = true; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); _hud?.SetProtection(0); OnStreakDeath(); }
                 break;
         }
     }
@@ -415,12 +431,13 @@ public partial class NetClient : Node
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         _clock.OnSnapshot(h.Tick, _lastArrival);
         DayNightCycle.Current?.SetServerTick(h.Tick);
-        foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Node.QueueFree(); cg.Solid?.QueueFree(); _flights.Remove(id); _drives.Remove(id); } }
+        foreach (var id in _dec.Removed) { if (_remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (_cars.Remove(id, out var cg)) { cg.Snd?.Release(); cg.Engine?.Release(); cg.Node.QueueFree(); cg.Solid?.QueueFree(); _flights.Remove(id); _drives.Remove(id); _seatOccupants.Remove(id); } }
         foreach (var (id, rec) in _dec.States)
         {
             if (id == _myId) { OnSelf(rec, h.Ack); continue; }
             if (rec.Type == EntityType.Projectile) { OnRocketState(id, rec); continue; }
             if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
+            if (rec.Type == EntityType.Seats) { OnSeatsState(rec); continue; }
             if (rec.Type == EntityType.Turret) { OnTurretState(rec, h.Tick); continue; }
             if (rec.Type == EntityType.Flight) { OnFlightState(rec, h.Tick); continue; }
             if (rec.Type == EntityType.Drive) { OnDriveState(rec, h.Tick); continue; }
@@ -597,6 +614,7 @@ public partial class NetClient : Node
         if (Bot && LossBot != "") { if (_elapsed >= BotSeconds) LossFail("timeout: round never reached its end"); }
         else if (Bot && _elapsed >= BotSeconds) { if (CarBot != "") CarResult(false, "timeout"); else if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
         if (!OwnSpawned) return; // wait for our spawn position
+        DemonBodyTick(); // the demon's Body capsule is where the server last put it, before the body is predicted
         ReplayReconcile(); // C-02: a snapshot's reconcile replays here, with the physics step (see OnSelf)
         ReplayDriveReconcile(); // and so does a predicted vehicle's (ADR 0010, ADR 0014)
         var dt = (float)delta;
@@ -637,6 +655,7 @@ public partial class NetClient : Node
         if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); TickLootReturn(dt); }
         FxDemoInput(ref mi);
         _aimHeld = mi.Has(MoveButtons.Aim);
+        if (HeadLookWanted()) mi.Buttons |= MoveButtons.HeadLook; // seated and looking out of their own eyes: the view is the head's, shown to everyone (ADR 0026)
         TickRecoil(mi);
         TickBreath(mi);
         if (_gunship == null) PredictFire(mi); // rounds from a turret are the server's alone

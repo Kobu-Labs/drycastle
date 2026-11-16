@@ -32,11 +32,7 @@ public partial class NetServer
     /// <summary>Height of the ground under a point (a vertical ray), or null when nothing is below it.</summary>
     float? GroundBelow(NVec3 p)
     {
-        var space = World.GetWorld3D().DirectSpaceState;
-        var q = PhysicsRayQueryParameters3D.Create(new Vector3(p.X, p.Y + CarePackageRules.StartHeightMetres, p.Z),
-            new Vector3(p.X, p.Y - CarePackageRules.StartHeightMetres, p.Z), CollisionLayers.World);
-        var hit = space.PerfRay(q);
-        return hit.Count == 0 ? null : hit["position"].AsVector3().Y;
+        return Query.GroundY(MoverKind.Drop, new Vector3(p.X, p.Y, p.Z), CarePackageRules.StartHeightMetres, CarePackageRules.StartHeightMetres);
     }
 
     /// <summary>A client asked to open a crate (after holding the key). The server checks the player, the crate and the reach.</summary>

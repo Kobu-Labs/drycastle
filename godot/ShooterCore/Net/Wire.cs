@@ -50,6 +50,8 @@ public enum EventKind : byte
     RaiseBinoculars = 26,
     /// <summary>Server to everyone but that player, and to a joiner for each player who has them up: a player's binoculars are up or down (<see cref="Binoculars.EncodeRaised"/>: u16 player id, u8); the client poses the character.</summary>
     BinocularsRaised = 27,
+    /// <summary>Client to server: the player's own Respawn, with an optional loadout slot to select first (<see cref="Redeploy.Encode"/>: u8, 255 for none); the server kills them as a suicide (<see cref="MatchSim.ForceDeath"/>).</summary>
+    Redeploy = 28,
     /// <summary>Client to server: take a corpse's weapon into a hotbar position (<see cref="CorpseCodec"/>).</summary>
     PickUpCorpse = 20,
     /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
@@ -124,6 +126,8 @@ public enum EventKind : byte
     RozhlasSet = 187,
     /// <summary>Server to everyone, and to a joiner when the door is open: the Obecny Urad's door opened (1) or closed (0), one byte (<see cref="UradDoorCodec"/>). Open exactly while a detour broadcast is on (OnAir or Hijacked); kinds 186-189 belong to the loudspeaker.</summary>
     UradDoor = 188,
+    /// <summary>Server to everyone, and to a joiner when the doors are open: the bus garage's doors opened (1) or closed (0), one byte (<see cref="GarageDoorCodec"/>). A player on foot works them with the interact key; the server sees the key in the inputs, so there is no request message.</summary>
+    GarageDoor = 245,
     /// <summary>Server to everyone, and to a joiner: the events announced now (<see cref="IntelBoard"/>, <see cref="IntelCodec"/>), and which one is being announced this moment. The intel screen draws it.</summary>
     IntelSync = 185,
     /// <summary>Client to server: take the item at a position of a corpse's list (u16 corpse id, u8 index, <see cref="ItemEvents"/>). Kinds 190-199 belong to items and equipment.</summary>
@@ -154,6 +158,8 @@ public enum EventKind : byte
     BigfootTrail = 231,
     /// <summary>Server to everyone: a Gang member says a line (u16 world entity id, u8 line number, <see cref="GangVoiceCodec"/>); the client plays the line modulo the recordings it has, at the member, to <c>audio.voice_range_m</c>. 237 is kept free for this ticket.</summary>
     ThiefVoice = 236,
+    /// <summary>Client to server: an admin's team change from the Teams screen (<see cref="TeamAssignCodec"/>, #312); the server checks the sender is an admin and the match is team deathmatch. The result travels in the scoreboard (team, sandbox and bot bits per row).</summary>
+    TeamAssign = 240,
     /// <summary>Server to everyone, and to a joiner when the doors are open: the church doors opened (1) or closed (0), one byte (<see cref="ChurchDoorCodec"/>, ADR 0019). Kinds 210-219 belong to the church.</summary>
     ChurchDoor = 210,
     /// <summary>Server to everyone, and to a joiner: the Holy Mass as it is now (<see cref="MassStateMsg"/>, <see cref="MassCodec"/>): phase, chant on or off, the pastor's kills, where the chant is, and once at the start the bells. Kinds 210-219 belong to the Holy Mass.</summary>
@@ -275,8 +281,13 @@ public static class Wire
     //   v52 bullet drop of the sniper rifles: the zero dial (event 24, client to server); the hit diagram of a hunted animal (event 25)
     //   v54 the Raid van's owner field: door in 63rds (bits 0-5), song bits 6-10, crew sitting inside bits 11-14, left door bit 15 (was door in thousandths, song bits 10-14)
     //   v53 the binoculars seen by the others (events 26 and 27); event 25 names the hit shape it was tested against (pose, frame) and the head
+    //   v60 Teams screen (#312): event 240 TeamAssign (client to server); the scoreboard's team byte also carries a sandbox bit and a bot bit; a Death with respawn delay -1 means out of the round until an admin puts the player on a team
+    //   v59 event 28 Redeploy (the player's own Respawn, client to server: optional loadout slot), special weapon 239
+    //   v58 aircraft state byte (#303): kind in bits 6-7 (was bit 7), bank in bits 0-5 (was 0-6); a third kind, the UAV
     //   v55 world interest (ADR 0025): world record flag FDormant 64 (the entity left this client's interest, no fields); animals, flocks and poop outside 800 m are not sent
-    public const byte ProtocolVersion = 55;
+    //   v56 wild animal size and weight (ticket #309): the animal state byte's bits 5-7 are the size step; event 25 ends in the animal's weight (u16, tenths of a kg)
+    //   v61 the bus garage: event 245 GarageDoor (its doors open or closed)
+    public const byte ProtocolVersion = 61;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

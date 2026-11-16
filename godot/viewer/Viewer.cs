@@ -378,7 +378,7 @@ public partial class Viewer : Node3D
             case "overview": pos = c + new Vector3(0, 140, 140); break;
             case "oblique": pos = c + new Vector3(-110, 45, 60); break;
             case "street":
-                var road = _map.SpawnPoints.Where(s => s.Kind == "road")
+                var road = _map.SpawnPoints
                     .OrderBy(s => new Vector2(s.Position.X - c.X, s.Position.Z - c.Z).LengthSquared()).First();
                 pos = road.Position + Vector3.Up * 1.65f;
                 look = new Vector3(c.X, pos.Y, c.Z);

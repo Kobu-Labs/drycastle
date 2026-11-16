@@ -12,15 +12,17 @@ public sealed class Herd
 {
     readonly List<Animal> _members = new();
     readonly Random _rng;
-    readonly float _moveMin, _moveMax, _range;
+    readonly float _moveMin, _moveMax, _range, _bodyRadius;
     Countdown _move;
 
     /// <param name="home">Where the herd formed: the centre of its drifting.</param>
     /// <param name="spread">How far members wander from the anchor, metres.</param>
     /// <param name="range">How far the anchor may drift from home, metres.</param>
     /// <param name="moveMinSeconds">The anchor moves every this many to <paramref name="moveMaxSeconds"/> seconds (while calm).</param>
-    public Herd(Vector3 home, float spread, float range, float moveMinSeconds, float moveMaxSeconds, int seed)
+    /// <param name="bodyRadius">The radius of the species' body (<see cref="AnimalDef.BodyRadiusOf"/>): a drift target must have room for it (no building on it). 0: only ground is asked.</param>
+    public Herd(Vector3 home, float spread, float range, float moveMinSeconds, float moveMaxSeconds, int seed, float bodyRadius = 0)
     {
+        _bodyRadius = bodyRadius;
         Home = Anchor = home;
         Spread = spread;
         _range = range;
@@ -51,7 +53,7 @@ public sealed class Herd
             if (!ReferenceEquals(m, source)) m.Startle(from);
     }
 
-    /// <summary>Counts the drift clock; when it runs out and nobody is running, the anchor moves to a spot with ground within the range of home.</summary>
+    /// <summary>Counts the drift clock; when it runs out and nobody is running, the anchor moves to a spot with ground (and room for the body: not inside a building) within the range of home.</summary>
     public void Update(float dt, IAnimalWorld world)
     {
         if (!_move.Tick(dt)) return;
@@ -62,7 +64,7 @@ public sealed class Herd
             var reach = (float)Math.Sqrt(_rng.NextDouble()) * _range;
             var x = Home.X + MathF.Cos(angle) * reach;
             var z = Home.Z + MathF.Sin(angle) * reach;
-            if (world.GroundY(x, z) is not { } y) continue;
+            if (world.GroundY(x, z) is not { } y || _bodyRadius > 0 && !world.Fits(x, z, _bodyRadius)) continue; // no ground, or a building in the way
             Anchor = new Vector3(x, y, z);
             break;
         }

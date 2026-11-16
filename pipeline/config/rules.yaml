@@ -721,19 +721,16 @@ detail:
       pebble: {interior: 0.03, bare: 0.25}
       litter: {interior: 0.14, litter: 0.6, tree: 0.25, tone: 0.2}
 
-# --- Spawn candidates (props stage, spawns.json) --------------------------------------------
+# --- Spawn points (props stage, spawns.json) -----------------------------------------------
+# Players spawn inside the `player_spawn` zones (`zones` below) and nowhere else: the drawn zones and the rule zone's ground
+# areas. No zone on the map: points over the whole terrain, off the roads.
 spawns:
-  # Number of candidates written (a seeded subset of all valid points).
-  count: 150
-  # Share of the subset taken from roads, the rest from open ground (garden, field, village).
-  road_fraction: 0.4
+  # One point per this many m2 of usable ground (inside the terrain, clear of buildings, trees and water) of a zone, rounded up:
+  # every zone with usable ground has points, a bigger one more. No minimum, no maximum.
+  m2_per_point: 400
   min_building_distance_m: 12
   min_tree_distance_m: 2
-  # Candidate pool: spacing along roads and per-parcel point density in the open ground.
-  road_spacing_m: 12
-  ground_per_1000m2: 2.0
-  # Parcel kinds with spawns in the open ground; ground areas: the `player_spawn` zone kind (`zones` below).
-  ground_kinds: [garden]
+  water_clearance_m: 3  # clear of water bodies (and patches) by this much
 
 # --- Zones (zones.py; props stage for player_spawn, export stage for zone_points.json) -------------------------
 # A zone kind is what a marked area means in play (ADR 0022). The kinds are a fixed catalog in code (zones.py KINDS); a kind
@@ -748,7 +745,7 @@ spawns:
 #   min_points, max_points  but at least min_points and at most max_points. No usable ground: no points.
 #   building_clearance_m, water_clearance_m  clear of buildings and of water (and its shore), in metres.
 #   where_ground         optional: the rule zone, the ground types the kind applies to.
-# player_spawn has no points: the props stage takes spawn candidates on the ground areas inside its zones (spawns above).
+# player_spawn has no points here: the props stage draws the spawn points inside its zones (spawns above).
 zones:
   # The Bigfoot event starts at one of its points. No rule zone: it is drawn only. Clear of buildings (solid for it) and of
   # water; not of trees: it walks through them.

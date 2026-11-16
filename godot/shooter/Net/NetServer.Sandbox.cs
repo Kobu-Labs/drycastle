@@ -147,10 +147,8 @@ public partial class NetServer
     {
         if (!c.Sandbox || SandboxEvents.DecodeTeleportTo(payload) is not { } at) return;
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { SandboxNote(c, "Sandbox actions work while alive."); return; }
-        var q = PhysicsRayQueryParameters3D.Create(new Vector3(at.X, 2000f, at.Z), new Vector3(at.X, -500f, at.Z), CollisionLayers.World);
-        var hit = World.GetWorld3D().DirectSpaceState.PerfRay(q);
-        if (hit.Count == 0) { SandboxNote(c, "Nothing to stand on there."); return; }
-        var p = hit["position"].AsVector3();
+        if (Query.Ground(MoverKind.Player, new Vector3(at.X, 0f, at.Z), 2000f, 500f) is not { } hit) { SandboxNote(c, "Nothing to stand on there."); return; }
+        var p = hit.Position;
         if (c.Car != null) LeaveSeat(c, false);
         c.Body.Teleport(new Vector3(p.X, p.Y + 0.1f, p.Z));
         c.Inputs.Clear();
@@ -159,8 +157,8 @@ public partial class NetServer
         BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(c.Id, s, 0)));
     }
 
-    /// <summary>Sandbox vehicles per server run. Spawned cars are never removed, so an uncapped count would eventually wrap the vehicle id (T3-016).</summary>
-    const int SandboxVehicleCap = 8, AdminVehicleCap = 32;
+    /// <summary>Vehicles spawned per server run (sandbox + admin). Only the admin's /spawn is capped; the sandbox is unlimited.</summary>
+    const int AdminVehicleCap = 32;
     int _sandboxVehicles;
 
     /// <summary>
@@ -169,18 +167,18 @@ public partial class NetServer
     /// </summary>
     void SandboxSpawnVehicle(Client c, byte kind)
     {
-        if (TrySpawnVehicle(c, kind, SandboxVehicleCap) is { } why) SandboxNote(c, why);
+        if (TrySpawnVehicle(c, kind, null) is { } why) SandboxNote(c, why);
     }
 
     /// <summary>
     /// Spawns a vehicle in front of the player (the sandbox panel and the admin's /spawn). Returns why it did not, or null.
-    /// <paramref name="cap"/> bounds the vehicles spawned this run.
+    /// <paramref name="cap"/> (null = none) bounds the vehicles spawned this run.
     /// </summary>
-    string? TrySpawnVehicle(Client c, byte kind, int cap)
+    string? TrySpawnVehicle(Client c, byte kind, int? cap)
     {
         if (Vehicles == null || kind >= Vehicles.Vehicles.Count) return "Unknown vehicle.";
         if (c.Car != null) return "Leave the vehicle first.";
-        if (_sandboxVehicles >= cap) return $"The spawned vehicle limit ({cap}) is reached until the server restarts.";
+        if (cap is { } max && _sandboxVehicles >= max) return $"The spawned vehicle limit ({max}) is reached until the server restarts.";
         _sandboxVehicles++;
         var def = Vehicles.Vehicles[kind];
         var yaw = c.Body.Yaw;
@@ -195,7 +193,6 @@ public partial class NetServer
             FlightWater = Water, FlightBounds = MapFlightBounds,
         };
         World.AddChild(car);
-        foreach (var cl in _byId.Values) { car.AddCollisionExceptionWith(cl.Body); car.Probe?.Ignore(cl.Body); car.DriveWorld?.Ignore(cl.Body); }
         _cars.Add(car);
         GD.Print($"server: {c.Name} #{c.Id} spawned a {def.Id}");
         return null;

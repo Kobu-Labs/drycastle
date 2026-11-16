@@ -102,7 +102,7 @@ public class ShotgunSmgTests
         var r = Def("aa12");
         var near = T(2, 0, 0, -4);
         var far = T(3, 2.0f, 0, -10);
-        // the side pellets pass 0.8 m wide of the near target (its radius is 0.56 m) and enter the far one
+        // the side pellets pass 0.8 m wide of the near target (its radius is 0.35 m) and enter the far one
         var side = Vector3.Normalize(new Vector3(0.2f, 0, -1));
         var dirs = new[] { new Vector3(0, 0, -1), side, side };
         var walls = new[] { float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity };

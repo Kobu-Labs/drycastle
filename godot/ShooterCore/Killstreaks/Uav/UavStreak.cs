@@ -35,23 +35,33 @@ public static class UavRules
 /// The UAV killstreak (issue #121). Activation shows the owner's enemies at once and then every
 /// <see cref="UavRules.PulseSeconds"/> until the streak's <c>duration_seconds</c> (60 s in killstreaks.json) runs out. The
 /// expiry, owner's death and round end are handled by <see cref="KillstreakService"/>, which ends the instance; this class
-/// only sends the pulses, to the owner alone.
+/// sends the pulses, to the owner alone, and flies the UAV aircraft (#303): a world entity everyone sees circling overhead for
+/// the streak's time. Anti-aircraft that shoots it down ends the streak (<see cref="KillstreakService.EndForEntity"/>), so the pings stop.
 /// </summary>
 public sealed class UavStreak : IKillstreak
 {
     /// <summary>The killstreaks.json id.</summary>
     public const string StreakId = "uav";
 
+    /// <summary>The killstreaks.json aircraft kind it flies.</summary>
+    public const string AircraftKind = "uav";
+
     readonly Func<IReadOnlyList<UavContact>> _sample;
     readonly Action<ushort, EventKind, byte[]> _send;
+    readonly Func<ushort?>? _launch;
+    readonly Action<ushort>? _remove;
     readonly List<(KillstreakUse Use, double Next)> _open = new();
 
     /// <param name="sample">The current living players and their perks (called at each pulse).</param>
     /// <param name="send">Sends a reliable event to one player (the owner).</param>
-    public UavStreak(Func<IReadOnlyList<UavContact>> sample, Action<ushort, EventKind, byte[]> send)
+    /// <param name="launch">Spawns the UAV aircraft and returns its world entity id (null: no room, the pings still go out). Null: no aircraft.</param>
+    /// <param name="remove">Removes the aircraft when the streak ends (a no-op when it is already gone).</param>
+    public UavStreak(Func<IReadOnlyList<UavContact>> sample, Action<ushort, EventKind, byte[]> send, Func<ushort?>? launch = null, Action<ushort>? remove = null)
     {
         _sample = sample;
         _send = send;
+        _launch = launch;
+        _remove = remove;
     }
 
     public string Id => StreakId;
@@ -61,6 +71,12 @@ public sealed class UavStreak : IKillstreak
     {
         _open.Add((use, use.StartedAt + UavRules.PulseSeconds));
         use.OnEnded(_ => _open.RemoveAll(e => ReferenceEquals(e.Use, use)));
+        if (_launch?.Invoke() is { } aircraft)
+        {
+            use.BindEntity(aircraft); // its destruction ends the streak
+            use.OnEnded(_ => _remove?.Invoke(aircraft));
+        }
+        else if (_launch != null) use.Log("no room for the UAV aircraft (entity cap or aircraft kind missing): pings only");
         Pulse(use, use.StartedAt);
         return true;
     }

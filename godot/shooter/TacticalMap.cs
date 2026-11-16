@@ -32,6 +32,10 @@ public sealed partial class TacticalMap : Control
     Vector2 _laidOutFor;
     /// <summary>Side of the square map in HUD units, HUD units per metre, the grid cell in metres and the cells per side.</summary>
     float _side, _k, _cell;
+    /// <summary>Zoom (1 = the whole sheet) and the window's top-left as a fraction of the sheet, see <see cref="TacticalMapView"/>.</summary>
+    float _zoom = 1f;
+    Vector2 _tl;
+    Label _zoomValue = null!;
     int _cells;
     string[] _colLabels = Array.Empty<string>(), _rowLabels = Array.Empty<string>();
 
@@ -62,7 +66,7 @@ public sealed partial class TacticalMap : Control
         SetProcess(false);
         SetProcessInput(false);
 
-        _sheet = new SheetLayer(this) { MouseFilter = MouseFilterEnum.Ignore, TextureFilter = TextureFilterEnum.LinearWithMipmaps };
+        _sheet = new SheetLayer(this) { MouseFilter = MouseFilterEnum.Ignore, ClipContents = true, TextureFilter = TextureFilterEnum.LinearWithMipmaps };
         _markers = new MarkerLayer(this) { MouseFilter = MouseFilterEnum.Stop };
         AddChild(_sheet);
         AddChild(_markers);
@@ -77,6 +81,14 @@ public sealed partial class TacticalMap : Control
         r.AddChild(Text(Strings.T("map.grid"), "HudSmall"));
         _gridValue = Text("", "HudBig");
         r.AddChild(_gridValue);
+        r.AddChild(Gap());
+        r.AddChild(Text(Strings.T("map.zoom"), "HudSmall"));
+        _zoomValue = Text("1.0x", "HudBig");
+        r.AddChild(_zoomValue);
+        var hint = Text(Strings.T("map.zoom.hint"), "HudSmall");
+        hint.ClipText = false;
+        hint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        r.AddChild(hint);
         AddChild(_right);
     }
 
@@ -90,8 +102,9 @@ public sealed partial class TacticalMap : Control
     public Vector2? GroundAtMouse()
     {
         if (!_open || _base is not { } b || _side <= 0) return null;
-        var f = (_sheet.GetLocalMousePosition() - new Vector2(Gutter, Gutter)) / _side;
-        if (f.X < 0 || f.X > 1 || f.Y < 0 || f.Y > 1) return null;
+        var w = (_sheet.GetLocalMousePosition() - new Vector2(Gutter, Gutter)) / _side;
+        if (w.X < 0 || w.X > 1 || w.Y < 0 || w.Y > 1) return null;
+        var f = V.ToSheet(w, _tl, _zoom);
         return new Vector2(b.Origin.X + f.X * b.SideMetres, b.Origin.Y + f.Y * b.SideMetres);
     }
 
@@ -112,6 +125,7 @@ public sealed partial class TacticalMap : Control
         _rose.SetLabels(Strings.T("map.dir.0"), Strings.T("map.dir.2"), Strings.T("map.dir.4"), Strings.T("map.dir.6"));
         _shownCell = (-1, -1); _shownHeading = -1; _shownNone = false;
         _cursorShown = false;
+        SetView(1f, Vector2.Zero); // also resets the zoom label
         _layoutDirty = true;
         var reduce = GameSettings.Current.ReduceMotion;
         _fade.Show(reduce);
@@ -154,6 +168,40 @@ public sealed partial class TacticalMap : Control
         _markers.QueueRedraw();
     }
 
+    // ---- zoom and pan ----
+
+    /// <summary><see cref="TacticalMapView"/> in Godot vectors.</summary>
+    static class V
+    {
+        static System.Numerics.Vector2 N(Vector2 v) => new(v.X, v.Y);
+        static Vector2 G(System.Numerics.Vector2 v) => new(v.X, v.Y);
+        public static Vector2 ToSheet(Vector2 w, Vector2 tl, float z) => G(TacticalMapView.ToSheet(N(w), N(tl), z));
+        public static Vector2 ToWindow(Vector2 sheet, Vector2 tl, float z) => G(TacticalMapView.ToWindow(N(sheet), N(tl), z));
+        public static (float Zoom, Vector2 TopLeft) ZoomAt(float z, Vector2 tl, Vector2 anchor, float f) { var r = TacticalMapView.ZoomAt(z, N(tl), N(anchor), f); return (r.Zoom, G(r.TopLeft)); }
+        public static Vector2 Pan(Vector2 tl, float z, Vector2 d) => G(TacticalMapView.Pan(N(tl), z, N(d)));
+    }
+
+    /// <summary>Zooms by <paramref name="factor"/> about a window fraction (0..1 across the visible sheet).</summary>
+    void ZoomBy(float factor, Vector2 anchor)
+    {
+        var (z, tl) = V.ZoomAt(_zoom, _tl, anchor, factor);
+        SetView(z, tl);
+    }
+
+    /// <summary>Moves the window by layer pixels.</summary>
+    void PanPx(Vector2 px) { if (_side > 0) SetView(_zoom, V.Pan(_tl, _zoom, px / _side)); }
+
+    void SetView(float zoom, Vector2 tl)
+    {
+        if (Mathf.IsEqualApprox(zoom, _zoom) && tl.IsEqualApprox(_tl)) return;
+        _zoom = zoom; _tl = tl;
+        _zoomValue.Text = $"{_zoom:0.0}x";
+        _layoutDirty = true; // the scale changed: texture size, grid and roads follow
+    }
+
+    /// <summary>The cursor's window fraction when shown, else the middle of the window.</summary>
+    Vector2 ZoomAnchor() => _cursorShown && _side > 0 ? ((_cursor - new Vector2(Gutter, Gutter)) / _side).Clamp(Vector2.Zero, Vector2.One) : new Vector2(0.5f, 0.5f);
+
     // ---- the waypoint: click, or the keyboard / pad cursor ----
 
     /// <summary>How close (layer pixels) a click must be to the waypoint to take it away instead of moving it.</summary>
@@ -163,8 +211,9 @@ public sealed partial class TacticalMap : Control
     void PlaceAt(Vector2 layerPos)
     {
         if (_base is not { } b || _side <= 0) return;
-        var f = (layerPos - new Vector2(Gutter, Gutter)) / _side;
-        if (f.X < 0f || f.Y < 0f || f.X > 1f || f.Y > 1f) return;
+        var w = (layerPos - new Vector2(Gutter, Gutter)) / _side;
+        if (w.X < 0f || w.Y < 0f || w.X > 1f || w.Y > 1f) return;
+        var f = V.ToSheet(w, _tl, _zoom);
         var g = TacticalMapMath.FromSheet(new System.Numerics.Vector2(f.X, f.Y), b.Origin.X, b.SouthZ, b.SideMetres);
         _m.Waypoint.Click(g, WaypointHitPx / Math.Max(_k, 1e-4f));
     }
@@ -187,6 +236,9 @@ public sealed partial class TacticalMap : Control
                     case Key.Down: move = Vector2.Down; break;
                     case Key.Enter or Key.KpEnter when !k.Echo: Accept(); return;
                     case Key.Delete when !k.Echo: _m.Waypoint.Clear(); GetViewport().SetInputAsHandled(); return;
+                    case Key.Equal or Key.Plus or Key.KpAdd: ZoomBy(TacticalMapView.Step, ZoomAnchor()); GetViewport().SetInputAsHandled(); return;
+                    case Key.Minus or Key.KpSubtract: ZoomBy(1f / TacticalMapView.Step, ZoomAnchor()); GetViewport().SetInputAsHandled(); return;
+                    case Key.Key0 or Key.Kp0 or Key.Home: SetView(1f, Vector2.Zero); GetViewport().SetInputAsHandled(); return;
                 }
                 break;
             case InputEventJoypadButton { Pressed: true } j:
@@ -198,13 +250,18 @@ public sealed partial class TacticalMap : Control
                     case JoyButton.DpadDown: move = Vector2.Down; break;
                     case JoyButton.A: Accept(); return;
                     case JoyButton.X: _m.Waypoint.Clear(); GetViewport().SetInputAsHandled(); return;
+                    case JoyButton.RightShoulder: ZoomBy(TacticalMapView.Step, ZoomAnchor()); GetViewport().SetInputAsHandled(); return;
+                    case JoyButton.LeftShoulder: ZoomBy(1f / TacticalMapView.Step, ZoomAnchor()); GetViewport().SetInputAsHandled(); return;
                 }
                 break;
         }
         if (move == Vector2.Zero) return;
         if (!_cursorShown) StartCursor();
         var lo = new Vector2(Gutter, Gutter);
-        _cursor = (_cursor + move * step).Clamp(lo, lo + new Vector2(_side, _side));
+        var moved = _cursor + move * step;
+        var inside = moved.Clamp(lo, lo + new Vector2(_side, _side));
+        if (_zoom > 1f) PanPx(moved - inside); // the cursor pushes the window along at its edge
+        _cursor = inside;
         GetViewport().SetInputAsHandled();
 
         void Accept()
@@ -223,7 +280,7 @@ public sealed partial class TacticalMap : Control
         if (_base is { } b)
         {
             var at = _m.Waypoint.At ?? (_m.HasPlayer ? new System.Numerics.Vector2(_m.Player.X, _m.Player.Y) : (System.Numerics.Vector2?)null);
-            if (at is { } a) { var t = TacticalMapMath.ToSheet(a, b.Origin.X, b.SouthZ, b.SideMetres); f = new Vector2(Math.Clamp(t.X, 0f, 1f), Math.Clamp(t.Y, 0f, 1f)); }
+            if (at is { } a) { var t = TacticalMapMath.ToSheet(a, b.Origin.X, b.SouthZ, b.SideMetres); var w = V.ToWindow(new Vector2(t.X, t.Y), _tl, _zoom); f = new Vector2(Math.Clamp(w.X, 0f, 1f), Math.Clamp(w.Y, 0f, 1f)); }
         }
         _cursor = new Vector2(Gutter, Gutter) + f * _side;
     }
@@ -249,7 +306,7 @@ public sealed partial class TacticalMap : Control
 
         if (_base is { } b)
         {
-            _k = _side / b.SideMetres;
+            _k = _side * _zoom / b.SideMetres;
             _cell = TacticalMapMath.CellSize(b.SideMetres);
             var cells = TacticalMapMath.Cells(b.SideMetres, _cell);
             if (cells != _cells || _colLabels.Length != cells)
@@ -268,6 +325,13 @@ public sealed partial class TacticalMap : Control
         }
         _sheet.QueueRedraw();
     }
+
+    /// <summary>Pixels from the map's left edge of an easting (metres from the sheet's west edge), and from its top edge of a northing (metres from the south edge); the window and zoom applied.</summary>
+    float EastingPx(float easting) => (easting - _tl.X * _base!.SideMetres) * _k;
+    float NorthingPx(float northing) => (_base!.SideMetres - northing - _tl.Y * _base.SideMetres) * _k;
+
+    /// <summary>Ground (x, z) of the visible window's north-west corner.</summary>
+    Vector2 WinOrigin(MapBase b) => b.Origin + _tl * b.SideMetres;
 
     // ---- readouts ----
 
@@ -339,10 +403,20 @@ public sealed partial class TacticalMap : Control
                 DrawRect(map, ShooterTheme.MapFrame, false, 2f);
                 return;
             }
-            if (_o._tex != null) DrawTextureRect(_o._tex, map, false);
+            if (_o._tex != null)
+            {
+                var ts = (float)_o._texSide;
+                DrawTextureRectRegion(_o._tex, map, new Rect2(_o._tl * ts, new Vector2(ts, ts) / _o._zoom));
+            }
             else DrawRect(map, ShooterTheme.MapGround);
             DrawRect(map, ShooterTheme.MapWash);
             DrawRoads(b, map);
+            // roads reach past the zoomed window: the paper covers the gutter again
+            var paper = ShooterTheme.MapPaper;
+            DrawRect(new Rect2(0, 0, Size.X, Gutter), paper);
+            DrawRect(new Rect2(0, map.End.Y, Size.X, Size.Y - map.End.Y), paper);
+            DrawRect(new Rect2(0, Gutter, Gutter, side), paper);
+            DrawRect(new Rect2(map.End.X, Gutter, Size.X - map.End.X, side), paper);
             DrawGrid(map);
             DrawFrame(font, fs, map);
         }
@@ -355,7 +429,7 @@ public sealed partial class TacticalMap : Control
             for (var i = 0; i < roads.Count; i++)
             {
                 var road = roads[i];
-                for (var p = 0; p < road.Ground.Length; p++) road.Screen[p] = map.Position + (road.Ground[p] - b.Origin) * k;
+                for (var p = 0; p < road.Ground.Length; p++) road.Screen[p] = map.Position + (road.Ground[p] - _o.WinOrigin(b)) * k;
                 DrawPolyline(road.Screen, ShooterTheme.MapRoadCasing, Math.Max(1.5f, road.WidthM * k) + 2f, true);
             }
             for (var i = 0; i < roads.Count; i++)
@@ -365,46 +439,63 @@ public sealed partial class TacticalMap : Control
         /// <summary>Square grid lines at every cell, from the south-west corner (the last column and row may be cut short by the map's edge).</summary>
         void DrawGrid(Rect2 map)
         {
-            var step = _o._cell * _o._k;
             for (var i = 1; i < _o._cells; i++)
             {
-                DrawLine(new Vector2(map.Position.X + i * step, map.Position.Y), new Vector2(map.Position.X + i * step, map.End.Y), ShooterTheme.MapGrid, ShooterTheme.Border);
-                DrawLine(new Vector2(map.Position.X, map.End.Y - i * step), new Vector2(map.End.X, map.End.Y - i * step), ShooterTheme.MapGrid, ShooterTheme.Border);
+                var x = _o.EastingPx(i * _o._cell);
+                var y = _o.NorthingPx(i * _o._cell);
+                if (x >= 0 && x <= map.Size.X) DrawLine(new Vector2(map.Position.X + x, map.Position.Y), new Vector2(map.Position.X + x, map.End.Y), ShooterTheme.MapGrid, ShooterTheme.Border);
+                if (y >= 0 && y <= map.Size.Y) DrawLine(new Vector2(map.Position.X, map.Position.Y + y), new Vector2(map.End.X, map.Position.Y + y), ShooterTheme.MapGrid, ShooterTheme.Border);
             }
         }
 
         /// <summary>The neat line, the tick marks at every grid line, and the column letters and row numbers on all four edges.</summary>
         void DrawFrame(Font font, int fs, Rect2 map)
         {
-            var k = _o._k;
             var cell = _o._cell;
             var extent = _o._base!.SideMetres;
             var textDrop = (font.GetAscent(fs) - font.GetDescent(fs)) / 2f;
+            var side = _o._side;
             for (var i = 0; i <= _o._cells; i++)
             {
-                var at = Math.Min(i * cell, extent) * k;
-                var x = map.Position.X + at;
-                var y = map.End.Y - at;
-                DrawLine(new Vector2(x, Gutter - 6), new Vector2(x, Gutter), ShooterTheme.MapFrame, ShooterTheme.Border);
-                DrawLine(new Vector2(x, map.End.Y), new Vector2(x, map.End.Y + 6), ShooterTheme.MapFrame, ShooterTheme.Border);
-                DrawLine(new Vector2(Gutter - 6, y), new Vector2(Gutter, y), ShooterTheme.MapFrame, ShooterTheme.Border);
-                DrawLine(new Vector2(map.End.X, y), new Vector2(map.End.X + 6, y), ShooterTheme.MapFrame, ShooterTheme.Border);
+                var at = Math.Min(i * cell, extent);
+                var px = _o.EastingPx(at);
+                var py = _o.NorthingPx(at);
+                if (px >= -0.5f && px <= side + 0.5f)
+                {
+                    var x = map.Position.X + px;
+                    DrawLine(new Vector2(x, Gutter - 6), new Vector2(x, Gutter), ShooterTheme.MapFrame, ShooterTheme.Border);
+                    DrawLine(new Vector2(x, map.End.Y), new Vector2(x, map.End.Y + 6), ShooterTheme.MapFrame, ShooterTheme.Border);
+                }
+                if (py >= -0.5f && py <= side + 0.5f)
+                {
+                    var y = map.Position.Y + py;
+                    DrawLine(new Vector2(Gutter - 6, y), new Vector2(Gutter, y), ShooterTheme.MapFrame, ShooterTheme.Border);
+                    DrawLine(new Vector2(map.End.X, y), new Vector2(map.End.X + 6, y), ShooterTheme.MapFrame, ShooterTheme.Border);
+                }
             }
             for (var i = 0; i < _o._cells; i++)
             {
                 var from = i * cell;
                 var to = Math.Min((i + 1) * cell, extent);
-                var mid = (from + to) / 2f * k;
-                var span = (to - from) * k;
-                var cx = map.Position.X + from * k;
-                var cy = map.End.Y - mid + textDrop;
+                // the visible part of the cell, so a label stays readable on a zoomed sheet
+                var x0 = Math.Clamp(_o.EastingPx(from), 0f, side);
+                var x1 = Math.Clamp(_o.EastingPx(to), 0f, side);
+                var yTop = Math.Clamp(_o.NorthingPx(to), 0f, side);
+                var yBot = Math.Clamp(_o.NorthingPx(from), 0f, side);
                 var col = _o._colLabels[i];
                 var row = _o._rowLabels[i];
                 var topBase = Gutter / 2f + textDrop;
-                DrawString(font, new Vector2(cx, topBase), col, HorizontalAlignment.Center, span, fs, ShooterTheme.Text);
-                DrawString(font, new Vector2(cx, map.End.Y + Gutter / 2f + textDrop), col, HorizontalAlignment.Center, span, fs, ShooterTheme.Text);
-                DrawString(font, new Vector2(0, cy), row, HorizontalAlignment.Center, Gutter - 4, fs, ShooterTheme.Text);
-                DrawString(font, new Vector2(map.End.X + 4, cy), row, HorizontalAlignment.Center, Gutter - 4, fs, ShooterTheme.Text);
+                if (x1 - x0 > 8f)
+                {
+                    DrawString(font, new Vector2(map.Position.X + x0, topBase), col, HorizontalAlignment.Center, x1 - x0, fs, ShooterTheme.Text);
+                    DrawString(font, new Vector2(map.Position.X + x0, map.End.Y + Gutter / 2f + textDrop), col, HorizontalAlignment.Center, x1 - x0, fs, ShooterTheme.Text);
+                }
+                if (yBot - yTop > 8f)
+                {
+                    var cy = map.Position.Y + (yTop + yBot) / 2f + textDrop;
+                    DrawString(font, new Vector2(0, cy), row, HorizontalAlignment.Center, Gutter - 4, fs, ShooterTheme.Text);
+                    DrawString(font, new Vector2(map.End.X + 4, cy), row, HorizontalAlignment.Center, Gutter - 4, fs, ShooterTheme.Text);
+                }
             }
             DrawRect(map, ShooterTheme.MapFrame, false, 2f);
             DrawRect(new Rect2(0.5f, 0.5f, Size.X - 1, Size.Y - 1), ShooterTheme.MapFrame, false, ShooterTheme.Border);
@@ -424,16 +515,39 @@ public sealed partial class TacticalMap : Control
         /// <summary>Layer position of a ground point (x, z), kept inside the map so a far dot sits on its edge.</summary>
         Vector2 At(System.Numerics.Vector2 ground, MapBase b)
         {
-            var p = new Vector2(Gutter, Gutter) + (new Vector2(ground.X, ground.Y) - b.Origin) * _o._k;
+            var p = new Vector2(Gutter, Gutter) + (new Vector2(ground.X, ground.Y) - _o.WinOrigin(b)) * _o._k;
             return new Vector2(Math.Clamp(p.X, Gutter + 8, Gutter + _o._side - 8), Math.Clamp(p.Y, Gutter + 8, Gutter + _o._side - 8));
         }
 
         readonly List<GunfireBlip> _blipScratch = new();
+        const float DragPx = 6f;
+        bool _pressed, _dragged;
+        Vector2 _pressAt;
 
         public override void _GuiInput(InputEvent e)
         {
-            if (!_o._open || e is not InputEventMouseButton { Pressed: true } mb) return;
-            if (mb.ButtonIndex == MouseButton.Left) _o.PlaceAt(mb.Position);
+            if (!_o._open) return;
+            if (e is InputEventMouseMotion mm && _pressed)
+            {
+                _dragged |= (mm.Position - _pressAt).Length() > DragPx;
+                if (_dragged && _o._zoom > 1f) { _o.PanPx(-mm.Relative); AcceptEvent(); }
+                return;
+            }
+            if (e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left } up)
+            {
+                // a click places the waypoint on release, so a drag can pan the zoomed sheet instead
+                var wasClick = _pressed && !_dragged;
+                _pressed = false; _dragged = false;
+                if (wasClick) { _o.PlaceAt(up.Position); AcceptEvent(); }
+                return;
+            }
+            if (e is not InputEventMouseButton { Pressed: true } mb) return;
+            if (mb.ButtonIndex == MouseButton.Left) { _pressed = true; _dragged = false; _pressAt = mb.Position; }
+            else if (mb.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
+            {
+                var anchor = ((mb.Position - new Vector2(Gutter, Gutter)) / _o._side).Clamp(Vector2.Zero, Vector2.One);
+                _o.ZoomBy(mb.ButtonIndex == MouseButton.WheelUp ? TacticalMapView.Step : 1f / TacticalMapView.Step, anchor);
+            }
             else if (mb.ButtonIndex == MouseButton.Right) _o._m.Waypoint.Clear();
             else if (mb.ButtonIndex == MouseButton.Middle && _o.TeleportHint)
             {

@@ -58,12 +58,13 @@ public class DemonTests
     }
 
     [Fact]
-    public void Hits_needed_scale_with_players_inside_and_are_clamped()
+    public void Hits_needed_scale_with_players_inside__with_no_cap()
     {
         var d = Def;
         Assert.Equal(d.Hits.Min <= d.HitsNeeded(1) ? d.HitsNeeded(1) : d.Hits.Min, d.HitsNeeded(0));
         Assert.True(d.HitsNeeded(4) > d.HitsNeeded(2) && d.HitsNeeded(2) > d.HitsNeeded(1));
-        Assert.Equal(d.Hits.Max, d.HitsNeeded(10_000));
+        Assert.Null(d.Hits.Max);
+        Assert.Equal((int)MathF.Round(d.Hits.Base + 9_999 * d.Hits.PerExtraPlayer), d.HitsNeeded(10_000));
         Assert.Equal((int)MathF.Round(d.Hits.Base + 2 * d.Hits.PerExtraPlayer), d.HitsNeeded(3));
     }
 
@@ -612,7 +613,7 @@ public class DemonTests
         Assert.Equal(d.Flame.HeadForwardM * 1.6f, Vector3.Dot(mouth, b.Pose.Forward), 3);
         var small = DemonRules.Target(Vector3.Zero, Vector3.UnitX, d.Fight.BodyHeightM, 0f);
         var big = DemonRules.Target(Vector3.Zero, Vector3.UnitX, d.BodyM, 0f, d.Scale);
-        var from = new Vector3(8, 0f, 0.8f); // a shot that passes 0.8 m beside the body's axis
+        var from = new Vector3(8, 0f, 0.5f); // a shot that passes 0.5 m beside the body's axis: outside the player's capsule (0.35 m), inside the demon's at 1.6 times (0.56 m)
         Assert.Null(HitMath.Raycast(from, -Vector3.UnitX, 30, float.PositiveInfinity, new[] { small }, 1));
         Assert.NotNull(HitMath.Raycast(from, -Vector3.UnitX, 30, float.PositiveInfinity, new[] { big }, 1));
         Assert.True(HitMath.Centre(big).X > HitMath.Centre(small).X, "its middle is further off the surface");
@@ -639,7 +640,7 @@ public class DemonTests
         Assert.Equal(want.Count, want.Values.Select(v => v.State).Distinct().Count()); // no two phases look alike on the wire
     }
 
-    /// <summary>The shipped numbers, the nave, two players who come and go and die, hits that kill it: 4 x 8 seeds of 150 s. The test assembly throws on a transition the specs do not declare.</summary>
+    /// <summary>The shipped numbers (but a short hit count), the nave, two players who come and go and die, hits that kill it: 4 x 8 seeds of 150 s. The test assembly throws on a transition the specs do not declare.</summary>
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
@@ -651,6 +652,7 @@ public class DemonTests
         for (var seed = 1; seed <= 8; seed++)
         {
             var d = Full;
+            d.Hits.Base = 24; d.Hits.PerExtraPlayer = 8; // the sim's trickle of hits must still kill it in 150 s
             if (variant == 1) { d.Pounce.Chance = 1; d.Pounce.FirstAfterS = 0; d.Leap.Chance = 0; d.Flame.DurationS = 0; d.Roar.DurationS = 0; }
             if (variant == 2) d.Pounce.PinS = 0;
             if (variant == 3) { d.Roar.OnWake = true; d.Pounce.Chance = 0.5f; }

@@ -50,6 +50,7 @@ public partial class NetClient
         if (!_flights.TryGetValue(carId, out var f)) _flights[carId] = f = new FlightView();
         f.Rec = rec;
         f.Buf.Push(tick, FlightRecord.Velocity(rec), FlightRecord.Roll(rec), FlightRecord.Pitch(rec));
+        if (_cars.TryGetValue(carId, out var car) && Vehicles != null && car.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[car.Kind].Tilts) PlaceCarSolid(car); // the hull's solid box turns with the record
     }
 
     VehicleDef? FlightDef(CarView v) => Vehicles != null && v.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[v.Kind].Flight != null ? Vehicles.Vehicles[v.Kind] : null;
@@ -74,7 +75,6 @@ public partial class NetClient
             var def = FlightDef(mine)!;
             var probe = FlightProbe.Make(def, Water, _mapFlightBounds ??= FlightProbe.MapBounds(Map));
             Owned.AddChild(probe);
-            if (_me != null) probe.Ignore(_me); // the body rides at the helicopter's origin: it is not an obstacle
             _pilot = new Piloting { CarId = mine.Id, Def = def, Probe = probe, Predict = new FlightPrediction(def, probe, server), Shown = server };
             // what was drawn until now is the interpolated past: fade from there to the predicted present
             _pilot.Smooth = mine.Node.GlobalPosition - new Vector3(server.Position.X, server.Position.Y, server.Position.Z);

@@ -25,8 +25,11 @@ public class PlayerHitBoxTests
     public void DrawnModelMatchesTheStandHeight()
     {
         Assert.Equal(PlayerHitBox.StandHeight, PlayerHitBox.ModelHeight * PlayerHitBox.DrawScale, 4);
-        Assert.InRange(PlayerHitBox.Radius, 0.5f, 0.6f); // the drawn torso half width, not the 0.35 m movement capsule
+        Assert.Equal(MoveConsts.CapsuleRadius, PlayerHitBox.Radius, 4); // ADR 0028: the Hit capsule is the Body capsule (0.35 m)
+        Assert.Equal(0.35f, PlayerHitBox.Radius, 4);
         Assert.Equal(PlayerHitBox.ProneLift, PlayerHitBox.Radius, 4);
+        Assert.Equal(0.56f, PlayerHitBox.WideRadius, 4);     // the old radius, kept for the Bigfoot and the Raid van
+        Assert.Equal(0.56f, PlayerHitBox.ProneDrawLift, 4);  // the drawn rolled figure rests where it did
     }
 
     [Fact]
@@ -39,7 +42,8 @@ public class PlayerHitBoxTests
         var chest = Shoot(eye, Feet + new Vector3(0, 1.0f, 0), t);
         Assert.True(chest is { Head: false });
         Assert.NotNull(Shoot(new Vector3(0, 0.15f, 0), Feet + new Vector3(0, 0.15f, 0), t));       // feet
-        Assert.NotNull(Shoot(new Vector3(0.4f, 0.45f, 0), Feet + new Vector3(0.4f, 0.45f, 0), t)); // hand height, an arm out to the side
+        Assert.NotNull(Shoot(new Vector3(0.3f, 0.45f, 0), Feet + new Vector3(0.3f, 0.45f, 0), t)); // hand height, within the 0.35 m radius
+        Assert.Null(Shoot(new Vector3(0.4f, 0.45f, 0), Feet + new Vector3(0.4f, 0.45f, 0), t));    // an arm out to the side is no part of the shape
     }
 
     [Fact]
@@ -63,12 +67,13 @@ public class PlayerHitBoxTests
     [Fact]
     public void ProneBodyLiesAlongTheFacingDirection()
     {
-        var t = Target(Stance.Prone); // facing the shooter's -Z: the body runs from z -10.9 to -9.1, the head at the far end
+        var t = Target(Stance.Prone); // facing the shooter's -Z: the body runs from z -10.9 to -9.1 (its capsule ends 0.35 m in), the head at the far end
         var low = Shoot(new Vector3(0, 0.3f, 0), Feet + new Vector3(0, 0.3f, 0), t);
         Assert.NotNull(low);                                                                    // ground level, at the body's middle
-        // the lying body's rounded near end: 9.657 m (its axis end) less the horizontal reach of the cap at 0.3 m height
-        Assert.Equal(9.657f - Reach(0.3f), low!.Value.Distance, 0.02f);
-        Assert.NotNull(Shoot(new Vector3(0, 0.9f, 0), Feet + new Vector3(0, 0.9f, 0), t));      // the upper body from the side
+        // the lying body's rounded near end: its axis end (half the stand height less the radius from the feet) less the horizontal reach of the cap at 0.3 m height
+        Assert.Equal(10f - (PlayerHitBox.StandHeight / 2f - PlayerHitBox.Radius) - Reach(0.3f), low!.Value.Distance, 0.02f);
+        Assert.NotNull(Shoot(new Vector3(0, 0.6f, 0), Feet + new Vector3(0, 0.6f, 0), t));      // the upper body from the side (the lying capsule is 0.7 m thick)
+        Assert.Null(Shoot(new Vector3(0, 0.9f, 0), Feet + new Vector3(0, 0.9f, 0), t));         // over it
         Assert.Null(Shoot(new Vector3(0, 2.0f, -5), Feet + new Vector3(0, 1.3f, 0), t));        // standing height, above the lying body
         Assert.Null(Shoot(new Vector3(0.9f, 0.3f, 0), Feet + new Vector3(0.9f, 0.3f, 0), t));   // beside
     }
@@ -112,7 +117,7 @@ public class PlayerHitBoxTests
         var along = Shoot(new Vector3(0, 0.3f, 0), Feet + new Vector3(0, 0.3f, 0), t);
         Assert.NotNull(along);
         Assert.Equal(10f - Reach(0.3f), along!.Value.Distance, 0.02f);
-        // from the end of the body along X: hit; a line 0.7 m off the body's centre line (beyond the 0.56 m radius): miss
+        // from the end of the body along X: hit; a line 0.7 m off the body's centre line (beyond the 0.35 m radius): miss
         Assert.NotNull(Shoot(new Vector3(8f, 0.3f, -10), new Vector3(0, 0.3f, -10), t));
         Assert.Null(Shoot(new Vector3(8f, 0.3f, -9.3f), new Vector3(0, 0.3f, -9.3f), t));
     }
@@ -123,7 +128,7 @@ public class PlayerHitBoxTests
         var t = Target(Stance.Stand);
         Assert.Equal(0f, HitMath.DistanceToBody(Feet + new Vector3(0, 1f, 0), t), 4);
         Assert.Equal(0.3f, HitMath.DistanceToBody(Feet + new Vector3(PlayerHitBox.Radius + 0.3f, 1f, 0), t), 3);
-        // the axis ends at 1.8 - 0.56 = 1.24 m; a point at 2.5 m is 1.26 m above that end, less the radius: 0.70 m
+        // the axis ends at 1.8 - 0.35 = 1.45 m; a point at 2.5 m is 1.05 m above that end, less the radius: 0.70 m
         Assert.Equal(0.7f, HitMath.DistanceToBody(Feet + new Vector3(0, 2.5f, 0), t), 3);
     }
 

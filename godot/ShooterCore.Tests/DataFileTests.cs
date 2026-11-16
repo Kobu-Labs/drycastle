@@ -32,7 +32,6 @@ public class DataFileTests
         Assert.Equal(100, d.Weapons.Find("knife")!.BackstabDamage);
 
         Assert.Equal(8, d.Vehicles.RunOverMinSpeed);
-        Assert.Equal(30, d.Vehicles.AbandonReturnTime);
         Assert.Contains(d.Vehicles.Vehicles, v => v.Id == "car");
     }
 

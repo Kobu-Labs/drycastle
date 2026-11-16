@@ -1,5 +1,7 @@
 using Godot;
 using Drycastle.ShooterCore;
+using WaterPalettes = Drycastle.MapLoader.WaterPalettes;
+using WaterSurfaces = Drycastle.MapLoader.WaterSurfaces;
 
 namespace Drycastle.Shooter;
 
@@ -108,10 +110,22 @@ public partial class NetClient
             }
             else if (weapon != v.Weapon) { v.Weapon = weapon; view.ShowCorpse(weapon); }
             v.Feet = at;
-            v.Node.GlobalPosition = at + Vector3.Up * t.PivotHeight;
+            v.Node.GlobalPosition = at + FloatOffset(id, at, t.Thrown) + Vector3.Up * t.PivotHeight;
             v.Node.Basis = t.BasisFor(s.YawRad);
         }
         _near = NearestCorpseInReach();
+    }
+
+    /// <summary>
+    /// A corpse at rest on the water surface floats (ADR 0026): it rises and falls with the waves and drifts a little about where the server has it. Cosmetic
+    /// only: the server position (<see cref="CorpseView.Feet"/>, the pickup reach) does not move. Zero off the water, in flight, or with reduce motion's frozen waves.
+    /// </summary>
+    Vector3 FloatOffset(ushort id, Vector3 at, bool thrown)
+    {
+        if (thrown || Water.BodyAt(at.X, at.Z) is not { } body || MathF.Abs(at.Y - body.SurfaceY) > 0.15f) return Vector3.Zero;
+        var t = (float)WaterSurfaces.WaveClock;
+        var drift = new Vector3(MathF.Sin(t * 0.5f + id), 0, MathF.Cos(t * 0.4f + id * 1.7f)) * 0.3f;
+        return drift + Vector3.Up * WaterPalettes.WaveOffset(body, at.X, at.Z);
     }
 
     ushort? NearestCorpseInReach()

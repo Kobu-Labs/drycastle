@@ -102,7 +102,7 @@ public partial class NavSpike : Node
         CellSize = Cell,
         CellHeight = CellHeight,
         AgentRadius = MathF.Ceiling(MoveConsts.CapsuleRadius / Cell) * Cell, // whole cells, as the bake rounds it anyway
-        AgentHeight = MoveConsts.CapsuleHeight,
+        AgentHeight = MathF.Ceiling(MoveConsts.CapsuleHeight / CellHeight) * CellHeight, // whole cells, as the bake rounds it anyway (silences the precision warning)
         AgentMaxClimb = CellHeight, // the body has no step-up; one cell keeps kerbs and terrain noise walkable
         AgentMaxSlope = 45f,        // under the body's 50 degree floor limit
         EdgeMaxError = EdgeMaxError,
@@ -426,8 +426,7 @@ public partial class NavSpike : Node
     /// </summary>
     void Yards()
     {
-        var roads = Map.SpawnPoints.Where(s => s.Kind == "road").Select(s => s.Position).ToList();
-        if (roads.Count == 0) roads = Map.SpawnPoints.Select(s => s.Position).ToList();
+        var roads = Map.SpawnPoints.Select(s => s.Position).ToList();
         if (roads.Count == 0) return;
         int tested = 0, reached = 0, offMesh = 0, onRoof = 0, gardensUnreached = 0;
         var unreached = new List<string>();
