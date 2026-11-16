@@ -964,6 +964,23 @@ stateDiagram-v2
 - **Refused**: Activate returned false: dropped by the service, the streak stays held. Never ended by the framework.
 - **Ended**: Over: EndReason is set, StreakEnded sent, callbacks run.
 
+## Launcher.Lock
+
+The Lock of a Lock-on launcher on one Aircraft: it builds while the Aircraft stays in the lock circle and in sight, and only a complete Lock lets the launcher fire.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Locking
+    Locking --> Locked
+    Locking --> Idle
+    Locked --> Idle
+```
+
+- **Idle**: No Aircraft is held: the launcher is stowed, the player is dead or seated at a gun, or nothing lockable is in the circle.
+- **Locking**: One Aircraft is in the circle; the progress runs for lock.seconds and waits (up to lock.grace_seconds) while the Aircraft is out of the circle or out of sight.
+- **Locked**: The Lock is complete: a pull fires a missile that homes on the Aircraft, and the Lock starts over.
+
 ## Loadout.Autosave
 
 One loadout slot's save: debounce, one send on the wire, ack or retry with backoff; an explicit rejection stops the retries.

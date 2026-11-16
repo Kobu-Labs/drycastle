@@ -166,11 +166,20 @@ public partial class Hud : CanvasLayer
         ApplyCrosshairVisibility();
     }
 
+    bool _crossLauncher;
+    /// <summary>The Lock-on launcher's sight is up (<see cref="LockOnOverlay"/>): it has its own aim pip, so the crosshair is hidden meanwhile.</summary>
+    public void SetLauncherHidesCrosshair(bool hide)
+    {
+        if (_crossLauncher == hide) return;
+        _crossLauncher = hide;
+        ApplyCrosshairVisibility();
+    }
+
     /// <summary>The one writer of the crosshair's Visible: the setting, the cover, the scope, the binoculars and the pounce all go through <see cref="CrosshairRules"/>.</summary>
     void ApplyCrosshairVisibility()
     {
         if (_crossRoot == null) return;
-        _crossRoot.Visible = CrosshairRules.Visible(Settings.ShowCrosshair, _crossCovered, _scope?.Visible ?? false, _bino?.Visible ?? false, _pounceHide);
+        _crossRoot.Visible = CrosshairRules.Visible(Settings.ShowCrosshair, _crossCovered || _crossLauncher, _scope?.Visible ?? false, _bino?.Visible ?? false, _pounceHide);
     }
 
     public override void _ExitTree() => GameSettings.Changed -= OnSettingsChanged;

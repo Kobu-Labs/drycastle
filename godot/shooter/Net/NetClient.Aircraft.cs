@@ -79,6 +79,7 @@ public partial class NetClient
     {
         if (reason != WorldDespawnReason.Destroyed || !_aircraft.TryGetValue(id, out var v)) return;
         var at = v.Model.GlobalPosition;
+        if (HomingKillShown(at)) return; // a homing missile's kill blast (the Explosion event, with its Blast wave) is already there
         RocketFx.Explode(Owned, at, AircraftCrashRadius);
         BlastFelt(at, AircraftCrashRadius, "explosion.vehicle");
     }
