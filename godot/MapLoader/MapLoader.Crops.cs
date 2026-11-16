@@ -29,6 +29,7 @@ public sealed partial class MapLoader
         foreach (var n in _cropNodes)
             if (GodotObject.IsInstanceValid(n)) { n.GetParent()?.RemoveChild(n); n.QueueFree(); }
         _cropNodes.Clear();
+        _cropCells.Clear();
         _cropMeshes.Clear();
         Stats.CropInstances = 0;
     }
@@ -196,6 +197,7 @@ public sealed partial class MapLoader
             VisibilityRangeFadeMode = GeometryInstance3D.VisibilityRangeFadeModeEnum.Self,
         };
         parent.AddChild(node);
+        _cropCells.Add(new CropCell(mm, kind, plant, cell, new bool[cell.Count]));
         Stats.CropInstances += cell.Count;
         return node;
     }

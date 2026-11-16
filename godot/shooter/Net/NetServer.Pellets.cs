@@ -45,6 +45,7 @@ public partial class NetServer
         var totals = HitMath.ResolvePelletsPastHulls(w, N(eye), dirs, range, walls, targets, c.Id, exposed, pastHull);
         BroadcastEvent(EventKind.PelletFan, WeaponCodec.Encode(new PelletFanMsg(c.Id, weaponIdx, N(eye), aim, seed, cone)));
         foreach (var (id, t) in totals) Deal(c.Id, weaponIdx, id, t.Damage, t.Head, false);
+        for (var i = 0; i < dirs.Length; i++) BaleShot(N(eye), dirs[i], Math.Min(walls[i], range)); // any bale a pellet passes catches fire (#331)
 
         // a pellet that hit no player damages the pane it crossed where it stopped (ADR 0007); the changes of a tick go out as one event per pane
         for (var i = 0; i < dirs.Length; i++)

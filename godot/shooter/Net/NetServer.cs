@@ -75,6 +75,8 @@ public partial class NetServer : Node
         public uint LifeStart;
         public int TeleportsSeen;
         public ServerCar? Car;
+        /// <summary>The harvester event's driver (#331): a seated bot the AI steers (<c>NetServer.Harvester.cs</c>); the bot roster neither counts nor feeds it.</summary>
+        public bool HarvesterDriver;
         /// <summary>Seat of <see cref="Car"/> this player sits in (0 = driver).</summary>
         public int CarSeat;
         /// <summary>A passive rider's look against the hull (<see cref="RiderPose"/>): the turn and the pitch they last sent with the head-look bit, 0 and 0 with it clear. Held yaw is the hull's now plus the turn, so the figure keeps its look as the vehicle turns.</summary>
@@ -211,6 +213,7 @@ public partial class NetServer : Node
         InitPets();
         InitWildlife();
         InitThieves();
+        InitHarvester();
         InitEvents(); // after the kinds above: the handler table names their start, end and cancel
         InitAircraft();
         BuildCarePackages();
@@ -277,6 +280,7 @@ public partial class NetServer : Node
         StreakTick((float)delta);
         PerfLap(ServerPerf.Ph.Streaks);
         BotsTick((float)delta); // fills the roster and queues each bot's input for this tick (#214)
+        HarvesterTick((float)delta); // the harvester event: its spawn, its driver's pedals
         PerfLap(ServerPerf.Ph.Bots);
         foreach (var car in _cars) car.PlaceSolid(); // the boxes on-foot players are stopped by, where the vehicles stand after the last tick (#217)
         PlaceVanSolids(); // and the Raid vans' (a van that stands is solid)
@@ -290,6 +294,7 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Corpses);
         StepVehicles((float)delta);
         StepRidingCorpses((float)delta); // the dead pilots and drivers move with the vehicles that just moved
+        HarvesterAfterVehicles((float)delta); // what the harvester ran over, the corpses it draws in, the bales' fire
         PerfLap(ServerPerf.Ph.Vehicles);
         StatusTick((float)delta); // burns tick
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
@@ -542,6 +547,7 @@ public partial class NetServer : Node
         SendRozhlasOnJoin(c); // the village loudspeaker, when a detour broadcast is on
         SendUradDoorOnJoin(c); // and the Urad door, when it is open
         SendGarageDoorOnJoin(c); // and the garage doors, when they are open
+        SendHarvesterOnJoin(c); // the harvester's job and the bales that burn
         SendPounceOnJoin(c); // and the demon's pounce, when one is on
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
@@ -666,6 +672,7 @@ public partial class NetServer : Node
         WildlifeRoundStart(); // the match cleared the pets' entities too; a new round moves new ones into the property groups
         WorkersAfterRoundReset(); // the Urad workers of a detour still open sit down again
         ResetCars();
+        HarvesterRoundReset(); // the car reset brought the harvester back to its old field: hidden again
         StatusRoundStart();
         RoundStarted();
     }
@@ -710,6 +717,7 @@ public partial class NetServer : Node
                 BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(s.Id, s.Position, s.ProtectionSeconds)));
                 break;
             case PlayerKilled k:
+                HarvesterOnKill(k); // before the corpse: a body the harvester killed is not thrown
                 if (_byId.TryGetValue(k.Victim, out var kv) && kv.Car != null) RiderDies(kv); // frees the seat; the corpse (PlayerDied) stays in a pilot's or driver's seat, else falls (ADR 0026)
                 _kills += k.Killer != k.Victim ? 1 : 0;
                 BotKillLog(k);
@@ -1032,6 +1040,7 @@ public partial class NetServer : Node
             PerfShot(c, eye, dir, range, hit?.Id);
             var end = from + along * (hit?.Distance ?? Math.Min(wall, len));
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
+            BaleShot(N(from), N(along), hit?.Distance ?? Math.Min(wall, len)); // any bale the bullet passes catches fire (#331)
             if (hit is { } h)
             {
                 // a wild animal under a sniper rifle: where the bullet entered its body, taken before the hit can remove it (the hit diagram)

@@ -14,7 +14,7 @@ namespace Drycastle.MapLoader;
 /// Independent of any mod. Axes: map x east, y north; Godot x east, y up, z = -north.
 /// </summary>
 /// <summary>A hand-drawn ground patch, for the minimap: its type's colour and ring in ground (x, z) metres.</summary>
-public sealed record PatchPaint(string Id, Color Colour, Vector2[] Ring);
+public sealed record PatchPaint(string Id, Color Colour, Vector2[] Ring, string Type = "");
 
 public sealed partial class MapLoader
 {
@@ -124,6 +124,7 @@ public sealed partial class MapLoader
         var bunkers = Path.Combine(mapDir, "bunkers.json");
         BunkersJson = File.Exists(bunkers) ? File.ReadAllText(bunkers) : ""; // only maps with an enterable bunker have it
         ReadZonePoints(mapDir, manifest.RootElement); // only maps with a zone that has usable ground have the file
+        ReadCropBales(mapDir, manifest.RootElement); // the field's hay bales, for the server's bale fire (#331)
         yield return 0.03f;
 
         var tPhase = Time.GetTicksMsec();
@@ -249,7 +250,7 @@ public sealed partial class MapLoader
             var c = r.GetProperty("colour");
             var ring = r.GetProperty("ring").EnumerateArray().Select(p => new Vector2(p[0].GetSingle(), -p[1].GetSingle())).ToArray();
             if (ring.Length < 3) continue;
-            _patchPaints.Add(new PatchPaint(r.GetProperty("id").GetString() ?? "", new Color(c[0].GetInt32() / 255f, c[1].GetInt32() / 255f, c[2].GetInt32() / 255f), ring));
+            _patchPaints.Add(new PatchPaint(r.GetProperty("id").GetString() ?? "", new Color(c[0].GetInt32() / 255f, c[1].GetInt32() / 255f, c[2].GetInt32() / 255f), ring, r.TryGetProperty("type", out var ty) && ty.ValueKind == JsonValueKind.String ? ty.GetString() ?? "" : ""));
         }
     }
 

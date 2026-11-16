@@ -100,6 +100,7 @@ public partial class NetServer
             _riding.Add((cid, corpse, s.Car, s.Seat));
         }
         if (id is { } corpseId && items.Count > 0) BroadcastCorpseItems(corpseId); // after the corpse's own spawn event, on the same ordered channel
+        if (id is { } hid) HarvesterOnCorpse(victim, hid, corpse); // a victim of the harvester goes into the machine
         SendEquipmentIfChanged(c);
     }
 
