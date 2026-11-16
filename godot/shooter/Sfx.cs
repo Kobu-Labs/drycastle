@@ -184,6 +184,9 @@ public partial class Sfx : Node
     {
         p.MaxDb = exact ? p.VolumeDb : 3f;
         p.AttenuationFilterCutoffHz = exact ? 20500f : 5000f;
+        // A sound right at the listener (the car you sit in) has no direction: its offset from the camera is a frame of
+        // driving old, so left/right would flip and the level wobble. Centre it.
+        p.PanningStrength = exact && ListenerDistance(p.GlobalPosition) < 3f ? 0f : 1f;
     }
     public static string LastNote { get; private set; } = "";
     public static void Ui(string id) => Instance?.DoUi(id);
