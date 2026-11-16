@@ -24,8 +24,8 @@ public sealed class CarLights
     /// <summary>Material names of the lamps a model may carry (assets/README.md, scripts/make_golf_mk2_model.py).</summary>
     public const string HeadLensMaterial = "Emissive warm headlight lens", TailLampMaterial = "Emissive red tail lamps",
         ReverseLampMaterial = "Emissive reverse lamps", IndicatorMaterial = "Emissive amber indicators";
-    /// <summary>The glow quads sit this fraction of their size outward from the lamp (along the vehicle's length), so the body around the lamp does not slice them.</summary>
-    const float GlowStandOff = 0.5f, GlowMinStandOff = 0.25f;
+    /// <summary>Metres the glow is depth-tested nearer to the camera than the lamp (see <see cref="GlowMaterial"/>).</summary>
+    const float GlowPush = 0.3f;
     static Texture2D? _glowTexture;
     static readonly Color HeadColour = new(1f, 0.95f, 0.8f), TailColour = new(1f, 0.08f, 0.04f);
 
@@ -34,7 +34,6 @@ public sealed class CarLights
     StandardMaterial3D? _modelHead, _modelTail, _modelReverse;
     readonly List<SpotLight3D> _spots = new();
     readonly List<MeshInstance3D> _headGlows = new(), _tailGlows = new();
-    readonly List<Vector3> _tailLamps = new();
     bool _on, _braking, _beam, _reversing;
     bool _set;
 
@@ -46,14 +45,8 @@ public sealed class CarLights
         if (def.Lights is not { } l) return null;
         var headMat = new StandardMaterial3D { AlbedoColor = HeadColour, EmissionEnabled = true, Emission = HeadColour, EmissionEnergyMultiplier = HeadOffEnergy };
         var tailMat = new StandardMaterial3D { AlbedoColor = TailColour, EmissionEnabled = true, Emission = TailColour, EmissionEnergyMultiplier = TailEnergy };
-        var glowMat = new StandardMaterial3D
-        {
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            BlendMode = BaseMaterial3D.BlendModeEnum.Add, BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled,
-            AlbedoTexture = GlowTexture(), AlbedoColor = new Color(HeadColour.R, HeadColour.G, HeadColour.B, 0.6f), NoDepthTest = false,
-        };
-        var tailGlowMat = (StandardMaterial3D)glowMat.Duplicate();
-        tailGlowMat.AlbedoColor = new Color(TailColour.R, TailColour.G, TailColour.B, 0.7f);
+        var glowMat = GlowMaterial(new Color(HeadColour.R, HeadColour.G, HeadColour.B, 0.6f));
+        var tailGlowMat = GlowMaterial(new Color(TailColour.R, TailColour.G, TailColour.B, 0.7f));
         var lens = new SphereMesh { Radius = 0.06f, Height = 0.12f, RadialSegments = 8, Rings = 4 };
         var glow = new QuadMesh { Size = Vector2.One };
         var c = new CarLights(headMat, tailMat);
@@ -71,17 +64,16 @@ public sealed class CarLights
             };
             vehicle.AddChild(spot);
             c._spots.Add(spot);
-            var g = new MeshInstance3D { Mesh = glow, Position = GlowAt(at, HeadGlow), MaterialOverride = glowMat, Scale = Vector3.One * HeadGlow, Visible = false };
+            var g = new MeshInstance3D { Mesh = glow, Position = at, MaterialOverride = glowMat, Scale = Vector3.One * HeadGlow, Visible = false };
             vehicle.AddChild(g);
             c._headGlows.Add(g);
         }
         foreach (var p in l.Tail)
         {
             if (c._modelTail == null) vehicle.AddChild(new MeshInstance3D { Mesh = lens, Position = Lamp(p), MaterialOverride = tailMat });
-            var g = new MeshInstance3D { Mesh = glow, Position = GlowAt(Lamp(p), TailGlowRest), MaterialOverride = tailGlowMat, Scale = Vector3.One * TailGlowRest };
+            var g = new MeshInstance3D { Mesh = glow, Position = Lamp(p), MaterialOverride = tailGlowMat, Scale = Vector3.One * TailGlowRest };
             vehicle.AddChild(g);
             c._tailGlows.Add(g);
-            c._tailLamps.Add(Lamp(p));
         }
         return c;
     }
@@ -113,6 +105,44 @@ public sealed class CarLights
         copies.TryGetValue(ReverseLampMaterial, out _modelReverse);
     }
 
+    static Shader? _glowShader;
+
+    /// <summary>
+    /// The additive billboard glow of a lamp. The quad sits on the lamp, so the body around the lamp used to slice it; the shader moves each
+    /// vertex <see cref="GlowPush"/> m toward the camera along its own view ray and shrinks it by the same ratio, so it looks exactly where it
+    /// was but is depth-tested as if that much nearer: a bumper or panel edge less than that in front of the lamp no longer cuts it, a wall
+    /// or the car's own body further in front still hides it.
+    /// </summary>
+    static ShaderMaterial GlowMaterial(Color tint)
+    {
+        _glowShader ??= new Shader
+        {
+            Code = @"shader_type spatial;
+render_mode blend_add, unshaded, depth_draw_never, cull_disabled;
+uniform sampler2D glow : source_color, filter_linear;
+uniform vec4 tint : source_color = vec4(1.0);
+uniform float push = 0.3;
+void vertex() {
+    mat4 m = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
+    vec3 centre = (m * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    vec3 v = (m * vec4(VERTEX * vec3(length(MODEL_MATRIX[0].xyz), length(MODEL_MATRIX[1].xyz), 1.0), 1.0)).xyz;
+    float dist = length(centre);
+    v *= max(dist - push, 0.05) / max(dist, 0.05);
+    POSITION = PROJECTION_MATRIX * vec4(v, 1.0);
+}
+void fragment() {
+    vec4 t = texture(glow, UV);
+    ALBEDO = tint.rgb;
+    ALPHA = t.a * tint.a;
+}",
+        };
+        var m = new ShaderMaterial { Shader = _glowShader };
+        m.SetShaderParameter("glow", GlowTexture());
+        m.SetShaderParameter("tint", tint);
+        m.SetShaderParameter("push", GlowPush);
+        return m;
+    }
+
     /// <summary>A soft round falloff, white in the middle to clear at the edge (shared).</summary>
     static Texture2D GlowTexture() => _glowTexture ??= new GradientTexture2D
     {
@@ -122,8 +152,6 @@ public sealed class CarLights
 
     static Vector3 Lamp(float[] p) => new(p[0], p[1], p[2]);
 
-    /// <summary>Glow position for a lamp: pushed outward (front lamps toward -Z, rear toward +Z) by <see cref="GlowStandOff"/> of its size, at least <see cref="GlowMinStandOff"/> (small tail glows, lamps set a bit inside the body).</summary>
-    static Vector3 GlowAt(Vector3 lamp, float size) => lamp + new Vector3(0, 0, MathF.Sign(lamp.Z) * MathF.Max(size * GlowStandOff, GlowMinStandOff));
 
     /// <summary>Per frame: the switched state, the braking state, whether this vehicle gets its real spot lights this frame and whether it reverses. Cheap when nothing changed.</summary>
     public void Set(bool on, bool braking, bool beam, bool reversing = false)
@@ -136,8 +164,7 @@ public sealed class CarLights
         _tailMat.EmissionEnergyMultiplier = braking ? BrakeEnergy : TailEnergy;
         _headMat.EmissionEnergyMultiplier = on ? HeadOnEnergy : HeadOffEnergy;
         foreach (var g in _headGlows) g.Visible = on;
-        var tail = braking ? TailGlowBrake : TailGlowRest;
-        for (var i = 0; i < _tailGlows.Count; i++) { _tailGlows[i].Scale = Vector3.One * tail; _tailGlows[i].Position = GlowAt(_tailLamps[i], tail); }
+        foreach (var g in _tailGlows) g.Scale = Vector3.One * (braking ? TailGlowBrake : TailGlowRest);
         foreach (var s in _spots) s.Visible = on && beam;
     }
 }
