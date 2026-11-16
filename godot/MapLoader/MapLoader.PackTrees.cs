@@ -430,6 +430,10 @@ public sealed partial class MapLoader
         mat.SetShaderParameter("foliage_gain", colour.Enabled ? colour.Gain : 1f);
         mat.SetShaderParameter("leaf_lo", colour.LeafLo);
         mat.SetShaderParameter("leaf_hi", colour.LeafHi);
+        mat.SetShaderParameter("recolour", colour.Enabled ? 1f : 0f);
+        mat.SetShaderParameter("leaf_ref", colour.LeafRef);
+        mat.SetShaderParameter("shade_min", colour.ShadeMin);
+        mat.SetShaderParameter("shade_max", colour.ShadeMax);
         _packMaterials.Add(mat);
         return _packMaterialIds[key] = _packMaterials.Count - 1;
     }

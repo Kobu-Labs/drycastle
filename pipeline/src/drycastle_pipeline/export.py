@@ -425,6 +425,7 @@ def run_export(
                 {
                     "x": t["x"], "y": t["y"], "z": round(t["z"], 3), "scale": t["scale"], "rot": t["rot"],
                     "shape": t["shape"],
+                    **({"colour": t["colour"]} if t.get("colour") else {}),  # the canopy colour: the game's detailed tree takes it, so the swap keeps the green
                     **forest_fields(t),
                     "chunk": [int(math.floor(t["x"] / chunk_m)), int(math.floor(t["y"] / chunk_m))],
                 }

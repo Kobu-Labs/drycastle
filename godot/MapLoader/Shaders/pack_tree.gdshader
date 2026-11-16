@@ -19,6 +19,11 @@ uniform float foliage_saturation = 1.0;
 uniform float foliage_gain = 1.0;
 uniform float leaf_lo = 0.06;
 uniform float leaf_hi = 0.3;
+// Foliage takes the colour in the vertex colour (the baked tree's own green), shaded by the texel's brightness against leaf_ref.
+uniform float recolour = 1.0;
+uniform float leaf_ref = 0.2;
+uniform float shade_min = 0.75;
+uniform float shade_max = 1.25;
 
 varying flat float far_share;
 varying flat vec3 tint;
@@ -42,10 +47,11 @@ void fragment() {
 	if (scissor >= 0.0 && c.a < scissor) {
 		discard;
 	}
-	// foliage only: by how much greener than red and blue the texel is, so trunks, bark and rock keep their colour
-	float leaf = tinted * smoothstep(leaf_lo, leaf_hi, (c.g - max(c.r, c.b)) / max(c.g, 0.01));
-	vec3 varied = c.rgb * tint;
-	float luma = dot(varied, vec3(0.2126, 0.7152, 0.0722));
+	// foliage only: by how much greener than red the texel is (the atlas' leaves run from olive to blue-grey), so brown trunks and bark keep their colour
+	float leaf = tinted * smoothstep(leaf_lo, leaf_hi, (c.g - c.r) / max(c.g, 0.01));
+	vec3 lum = vec3(0.2126, 0.7152, 0.0722);
+	vec3 varied = recolour > 0.5 ? tint * clamp(dot(c.rgb, lum) / leaf_ref, shade_min, shade_max) : c.rgb * tint;
+	float luma = dot(varied, lum);
 	varied = mix(vec3(luma), varied, foliage_saturation) * foliage_gain;
 	ALBEDO = mix(c.rgb, varied, leaf);
 	ROUGHNESS = roughness;

@@ -135,6 +135,15 @@ public sealed class PackColourConfig
     public float LeafLo { get; set; } = 0.06f;
     public float LeafHi { get; set; } = 0.3f;
     public List<PackColourAccent> Accents { get; set; } = new();
+    /// <summary>Foliage takes the colour of the baked tree it stands in for (trees.json <c>colour</c>), so a tree is the same green on both sides of the swap; the
+    /// atlas only shades it. This is the colour of a tree whose record has none (#rrggbb).</summary>
+    public string TreeColour { get; set; } = "#2f6a3a";
+    /// <summary>The greens undergrowth takes (it has no baked twin), by a position hash.</summary>
+    public List<string> UndergrowthColours { get; set; } = new() { "#3b7a3a" };
+    /// <summary>The atlas' foliage brightness (linear luma) that shows the tree colour as it is; lighter and darker texels shade it within <see cref="ShadeMin"/>..<see cref="ShadeMax"/>.</summary>
+    public float LeafRef { get; set; } = 0.2f;
+    public float ShadeMin { get; set; } = 0.75f;
+    public float ShadeMax { get; set; } = 1.25f;
 
     public void Validate()
     {
@@ -142,6 +151,9 @@ public sealed class PackColourConfig
         if (HueShift < 0 || HueShift > 0.9f || Value < 0 || Value > 0.9f) throw new DataFileException("pack_trees.json: colour hue_shift and value must be within 0 and 0.9");
         if (AccentShare < 0 || AccentShare > 1 || UndergrowthScale < 0 || UndergrowthScale > 1) throw new DataFileException("pack_trees.json: colour accent_share and undergrowth_scale must be within 0 and 1");
         if (LeafLo < 0 || !(LeafHi > LeafLo)) throw new DataFileException("pack_trees.json: colour leaf_hi must be above leaf_lo, which is not negative");
+        if (!(LeafRef > 0) || !(ShadeMin > 0) || ShadeMax < ShadeMin) throw new DataFileException("pack_trees.json: colour leaf_ref and shade_min must be above 0, shade_max not below shade_min");
+        if (!PackColourMath.TryHex(TreeColour, out _) || UndergrowthColours.Count == 0 || UndergrowthColours.Any(c => !PackColourMath.TryHex(c, out _)))
+            throw new DataFileException("pack_trees.json: colour tree_colour and undergrowth_colours must be #rrggbb (at least one undergrowth colour)");
         foreach (var a in Accents)
             if (a.Tint.Length != 3 || a.Tint.Any(v => !(v >= 0 && v <= 2)) || a.Weight < 0)
                 throw new DataFileException($"pack_trees.json: colour accent '{a.Name}' needs tint [r, g, b] within 0 and 2 and a weight of 0 or more");
@@ -175,9 +187,32 @@ public static class PackColourMath
         return Vector3.Clamp(tint, Vector3.Zero, new Vector3(2f));
     }
 
-    /// <summary>A scattered piece of undergrowth (Godot axes) marked as such, for the shader's own cut radius, with its milder tint.</summary>
+    /// <summary>#rrggbb as channels 0..1 (the bytes the pipeline bakes into the far tree's vertex colour, so the two match exactly).</summary>
+    public static bool TryHex(string? hex, out Vector3 rgb)
+    {
+        rgb = default;
+        if (hex is not { Length: 7 } || hex[0] != '#' || !int.TryParse(hex.AsSpan(1), System.Globalization.NumberStyles.HexNumber, null, out var v)) return false;
+        rgb = new Vector3((v >> 16 & 255) / 255f, (v >> 8 & 255) / 255f, (v & 255) / 255f);
+        return true;
+    }
+
+    /// <summary>The foliage colour of the tree at (x, y): the baked tree's colour (the config's when the record has none) times the small per-tree variation.</summary>
+    public static Vector3 Foliage(Vector3 baked, float x, float y, PackColourConfig c)
+    {
+        if (!c.Enabled) return Vector3.One;
+        if (baked == default) TryHex(c.TreeColour, out baked);
+        return Vector3.Clamp(baked * Tint(x, y, c), Vector3.Zero, new Vector3(2f));
+    }
+
+    /// <summary>A scattered piece of undergrowth (Godot axes) marked as such, for the shader's own cut radius, in one of the undergrowth greens, varied gently.</summary>
     public static PackPlacement Undergrowth(PackPlacement p, PackColourConfig c)
-        => p with { Kind = PackKind.Undergrowth, Tint = Tint(p.Base.X, -p.Base.Z, c, c.UndergrowthScale) };
+    {
+        float x = p.Base.X, y = -p.Base.Z;
+        if (!c.Enabled) return p with { Kind = PackKind.Undergrowth, Tint = Vector3.One };
+        var pick = (int)(MeadowGen.Hash01((int)MathF.Round(x * 100f), (int)MathF.Round(y * 100f), Salt + 9) * c.UndergrowthColours.Count);
+        TryHex(c.UndergrowthColours[Math.Min(pick, c.UndergrowthColours.Count - 1)], out var green);
+        return p with { Kind = PackKind.Undergrowth, Tint = Vector3.Clamp(green * Tint(x, y, c, c.UndergrowthScale), Vector3.Zero, new Vector3(2f)) };
+    }
 }
 
 public static class PackTreeSettings
@@ -206,7 +241,7 @@ public static class PackTreeSettings
 public readonly record struct PackCandidate(int ModelId, float HeightM, float Weight, bool Bulk);
 
 /// <summary>What trees.json says about a tree besides its geometry: its stand and whether it stands at the forest edge (the collision ignores both).</summary>
-public readonly record struct PackTreeTag(string Stand, bool Edge)
+public readonly record struct PackTreeTag(string Stand, bool Edge, Vector3 Colour = default)
 {
     public const string Mixed = "mixed";
     public static readonly PackTreeTag Plain = new(Mixed, false);
@@ -234,7 +269,9 @@ public static class PackTreeTags
                 if (i >= count) break;
                 var stand = t.ValueKind == JsonValueKind.Object && t.TryGetProperty("stand", out var s) && s.ValueKind == JsonValueKind.String && s.GetString() is { Length: > 0 } v ? v : PackTreeTag.Mixed;
                 var edge = t.ValueKind == JsonValueKind.Object && t.TryGetProperty("edge", out var e) && (e.ValueKind == JsonValueKind.True || e.ValueKind == JsonValueKind.Number && e.GetInt32() != 0);
-                tags[i++] = new PackTreeTag(stand, edge);
+                var colour = default(Vector3);
+                if (t.ValueKind == JsonValueKind.Object && t.TryGetProperty("colour", out var c) && c.ValueKind == JsonValueKind.String) PackColourMath.TryHex(c.GetString(), out colour);
+                tags[i++] = new PackTreeTag(stand, edge, colour);
             }
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException) { }
@@ -375,16 +412,16 @@ public static class PackTreeMath
     public static PackPlacement? Place(TreeInstance t, TreeModel m, PackTreeTag tag, PackModelSets sets, PackTreeConfig cfg)
     {
         var set = sets.For(tag, cfg.EdgeShare, EdgeRoll(t.X, t.Y));
-        return PlaceFrom(t, m, t.Cone ? set.Cone : set.Box, set.BulkShare, cfg);
+        return PlaceFrom(t, m, t.Cone ? set.Cone : set.Box, set.BulkShare, cfg, tag.Colour);
     }
 
-    static PackPlacement? PlaceFrom(TreeInstance t, TreeModel m, IReadOnlyList<PackCandidate> list, float bulkShare, PackTreeConfig cfg)
+    static PackPlacement? PlaceFrom(TreeInstance t, TreeModel m, IReadOnlyList<PackCandidate> list, float bulkShare, PackTreeConfig cfg, Vector3 baked = default)
     {
         var h = CodeHeight(t, m);
         var pick = Choose(list, h, Roll(t.X, t.Y), cfg.ScaleMin, cfg.ScaleMax, bulkShare);
         if (pick < 0) return null;
         var model = list[pick];
-        return new PackPlacement(new Vector3(t.X, t.Z, -t.Y), t.Rot, model.HeightM > 1e-4f ? h / model.HeightM : 1f, model.ModelId, Tint: PackColourMath.Tint(t.X, t.Y, cfg.Colour));
+        return new PackPlacement(new Vector3(t.X, t.Z, -t.Y), t.Rot, model.HeightM > 1e-4f ? h / model.HeightM : 1f, model.ModelId, Tint: PackColourMath.Foliage(baked, t.X, t.Y, cfg.Colour));
     }
 
     const int EdgeSalt = 3002;

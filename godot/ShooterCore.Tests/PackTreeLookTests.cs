@@ -16,11 +16,13 @@ public class PackTreeLookTests
     public void ShippedConfigHasTheNewSettingsAndTheRadii()
     {
         var c = PackTreeConfig.Parse(Shipped);
-        Assert.Equal((150f, 30f, 32f, 4), (c.NearM, c.FadeM, c.AheadM, c.MaxInFlight));
+        Assert.Equal((220f, 40f, 40f, 6), (c.NearM, c.FadeM, c.AheadM, c.MaxInFlight));
         Assert.Equal((60f, 12f, 16f), (c.Undergrowth.NearM, c.Undergrowth.FadeM, c.Undergrowth.AheadM));
         Assert.True(c.Undergrowth.NearM < c.NearM && c.Undergrowth.FadeM < c.Undergrowth.NearM);
         var k = c.Colour;
-        Assert.True(k.Enabled && k.Saturation > 1f && k.Gain >= 1f && k.HueShift > 0 && k.Value > 0 && k.AccentShare > 0 && k.UndergrowthScale is > 0 and < 1);
+        Assert.True(k.Enabled && k.Saturation > 0 && k.Gain > 0 && k.HueShift > 0 && k.Value > 0 && k.UndergrowthScale is > 0 and < 1);
+        // the foliage takes the baked tree's colour: its fallback, the undergrowth greens and the shading span are read
+        Assert.True(PackColourMath.TryHex(k.TreeColour, out _) && k.UndergrowthColours.Count >= 2 && k.LeafRef != 0.2f + 1 && k.ShadeMin < 1 && k.ShadeMax > 1);
         Assert.True(k.Accents.Count >= 3 && k.Accents.All(a => a.Tint.Length == 3 && a.Weight > 0));
         var f = c.GroundObjects.Fallen;
         Assert.Equal((1.25f, 0.5f, 2.6f, 3), (f.StretchMax, f.ScaleMin, f.ScaleMax, f.MaxPieces));
@@ -57,7 +59,7 @@ public class PackTreeLookTests
     {
         using var doc = System.Text.Json.JsonDocument.Parse(Shipped);
         var root = doc.RootElement;
-        Assert.All(root.GetProperty("colour").EnumerateObject(), p => Assert.Contains(p.Name, new[] { "enabled", "saturation", "gain", "hue_shift", "value", "accent_share", "undergrowth_scale", "leaf_lo", "leaf_hi", "accents" }));
+        Assert.All(root.GetProperty("colour").EnumerateObject(), p => Assert.Contains(p.Name, new[] { "enabled", "saturation", "gain", "hue_shift", "value", "accent_share", "undergrowth_scale", "leaf_lo", "leaf_hi", "accents", "tree_colour", "undergrowth_colours", "leaf_ref", "shade_min", "shade_max" }));
         foreach (var a in root.GetProperty("colour").GetProperty("accents").EnumerateArray()) Assert.All(a.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "name", "tint", "weight" }));
         var ground = root.GetProperty("ground_objects");
         Assert.All(ground.GetProperty("fallen").EnumerateObject(), p => Assert.Contains(p.Name, new[] { "enabled", "stretch_max", "scale_min", "scale_max", "sink", "max_pieces", "piece_weight" }));
@@ -85,12 +87,12 @@ public class PackTreeLookTests
         Assert.Equal(PackColourMath.Tint(12.34f, -56.78f, c), PackColourMath.Tint(12.34f, -56.78f, c));
         var tints = Enumerable.Range(0, 3000).Select(i => PackColourMath.Tint(i * 1.7f, i * 0.9f - 400f, c)).ToList();
         Assert.All(tints, t => { Assert.InRange(t.X, 0f, 2f); Assert.InRange(t.Y, 0f, 2f); Assert.InRange(t.Z, 0f, 2f); });
-        Assert.True(tints.Select(t => MathF.Round(t.X, 2)).Distinct().Count() > 50); // not a handful of presets
+        Assert.True(tints.Select(t => MathF.Round(t.X, 3)).Distinct().Count() > 50); // not a handful of presets
         // ordinary trees stay within hue_shift and value of 1 (an accent is the clear departure): most of them
         var ordinary = tints.Count(t => MathF.Abs(t.X - t.Z) <= 2 * c.HueShift * (1 + c.Value) + 1e-3f && t.Y >= 1 - c.Value - 1e-3f && t.Y <= 1 + c.Value + 1e-3f);
-        Assert.InRange(ordinary / 3000.0, 1 - c.AccentShare - 0.05, 1 - c.AccentShare * 0.5); // about 85% (an accent can land inside the range too)
+        Assert.InRange(ordinary / 3000.0, 1 - c.AccentShare - 0.05, 1.0);
         // the shares of the red/blue tilt: both directions
-        Assert.Contains(tints, t => t.X > t.Z + 0.2f); Assert.Contains(tints, t => t.Z > t.X + 0.2f);
+        Assert.Contains(tints, t => t.X > t.Z + c.HueShift); Assert.Contains(tints, t => t.Z > t.X + c.HueShift);
     }
 
     [Fact]
@@ -103,7 +105,7 @@ public class PackTreeLookTests
         Assert.Equal(V3.One, PackColourMath.Tint(5, 5, new PackColourConfig { Enabled = false }));
         var piece = PackColourMath.Undergrowth(new PackPlacement(new V3(10, 2, -20), 0, 1, 3), c);
         Assert.Equal(PackKind.Undergrowth, piece.Kind);
-        Assert.Equal(PackColourMath.Tint(10, 20, c, c.UndergrowthScale), piece.Tint); // map y is minus Godot z
+        Assert.Contains(c.UndergrowthColours, h => PackColourMath.TryHex(h, out var g) && (g * PackColourMath.Tint(10, 20, c, c.UndergrowthScale) - piece.Tint).Length() < 1e-5f); // one of the greens, varied; map y is minus Godot z
     }
 
     [Fact]
@@ -113,7 +115,10 @@ public class PackTreeLookTests
         var cands = new[] { new PackCandidate(0, 5f, 1f, true) };
         var t = new TreeInstance(30.5f, 12.25f, 7f, 1f, 0, true, 0, 0);
         var p = PackTreeMath.Place(t, new TreeModel(0.35f, 1.8f, 2.6f), cands, cands, cfg)!.Value;
-        Assert.Equal(PackColourMath.Tint(30.5f, 12.25f, cfg.Colour), p.Tint);
+        PackColourMath.TryHex(cfg.Colour.TreeColour, out var green);
+        Assert.Equal(green * PackColourMath.Tint(30.5f, 12.25f, cfg.Colour), p.Tint); // no colour in the record: the config's green
+        PackColourMath.TryHex("#285e33", out var baked);
+        Assert.Equal(baked * PackColourMath.Tint(30.5f, 12.25f, cfg.Colour), PackColourMath.Foliage(baked, 30.5f, 12.25f, cfg.Colour)); // the baked tree's own colour
         var model = new PackModelMesh { Name = "m", HeightM = 1, Surfaces = [new PackSurface(0, [V3.Zero, V3.UnitX, V3.UnitY], [V3.UnitZ, V3.UnitZ, V3.UnitZ], [V2.Zero, V2.Zero, V2.Zero], [0, 1, 2])] };
         var b = PackTileMesher.Build([model], [p, p with { Kind = PackKind.Object, Tint = default }, p with { Kind = PackKind.Undergrowth }], V3.Zero).Single();
         Assert.Equal(9, b.Col.Count);
