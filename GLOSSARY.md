@@ -164,6 +164,10 @@ _Avoid_: turret (alone), pintle gun, rear gun
 Where a rider sits, in every vehicle: the seat's offset in the vehicle's frame (`vehicles.json` `seats`; a vehicle with none has one driver seat at its origin). Its rider is drawn on it, turning and tilting with the hull as it is drawn this frame, and never as a free figure beside the vehicle. The server tells every client who sits in each seat (the driver in the vehicle's record, seats 1..4 in its seats record; a vehicle has at most five seats), so a rider is placed by id.
 _Avoid_: rider offset, seat anchor
 
+**Rider view**:
+How the local rider of a seat sees, per rider and this client only: chase (the vehicle's chase camera), cockpit (first person from the seat's eye: seat offset + `eye_height`, the head's height for a seat in the open; hangs under the hull so the sway is in the view), or sight (a gun's or the Scud operator's own view; not switchable). One view key switches chase and cockpit in every seat; the choice is kept across seats and vehicles (`Rider.View`, `docs/state-machines.md`). Only the driver's seat has a cockpit rig (hands, turning wheel); any other seat sees the model's own interior.
+_Avoid_: camera mode, cockpit view (the first-person half of the rider view)
+
 **Head look**:
 What a seated rider's view does to their figure for everyone: with the view in first person (a passenger's own eyes, the driver's cockpit view), the head turns up to 70 degrees either side and tips, and a look further round twists the upper body over the hips, so the look reaches straight behind. The body stays on the seat. In the chase view the head faces ahead; a helicopter's pilot only looks up and down (their yaw is the heading). A gunner or an armed seat's rider turns the whole figure to the aim instead (ADR 0026).
 _Avoid_: neck turn, look-around
