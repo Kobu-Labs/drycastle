@@ -176,6 +176,7 @@ stage, never a silent skip (`zones.rules`).
   no maximum per zone; each inside the terrain and clear of buildings, trees and water. A point is `kind` `zone` with the id of its `zone`. A map with no
   `player_spawn` zone gets `kind` `random` points over the whole terrain, off the roads. A zone with no usable ground gets none
   (warning). `player_spawn` is not exported as points; roads are never spawn points.
+* **`plantation`** becomes polygons for the server at the export (`zone_polygons.json`, see "Zone polygons" under Export).
 * **Every other kind** becomes candidate points for the server at the export, see "Zone points (`zone_points.json`)" under
   Export. Ground areas are never cut by a zone.
 
@@ -810,6 +811,16 @@ the ground areas (rule zone) and drawn zones the points were drawn in, `area_m2`
 (x east, y north, as `parcels.json`) and `z` the terrain height there (as `terrain.json`). A kind with areas but no usable
 ground is listed with `points: []` and the export warns. `player_spawn` has no entry. The map version is not bumped (like
 `bunkers.json`, an optional file that a loader may ignore). No terrain, no file (the points need the coverage and the heights).
+
+**Zone polygons (`zone_polygons.json`, issue #364).** A kind the server asks "is this player standing inside?" of (`zones.POLYGON_KINDS`, today
+`plantation`) cannot use a pool of points, so the export writes its outlines: `zones.build_zone_polygons` takes the same areas
+(`kind_areas`: the rule zone's ground areas less the cuts, and the drawn zones), nothing clipped to the terrain or the buildings, one ring per outline
+(holes dropped). Rings are in **game axes** `[x, z]` (x east, z = -north of the local metres of `parcels.json`), rounded to a millimetre. Format (`version` 1):
+`{"version": 1, "axes": "...", "zones": [{"kind": "plantation", "areas": ["Z-0001"], "rings": [[[x, z], ...], ...]}]}`, one entry per kind that has a zone.
+Listed under `files.zone_polygons` of `manifest.json` and written **only when such a zone exists** (a stale file is deleted, no terrain needed); the map version
+is not bumped. A kind of `NO_POINT_KINDS` (`player_spawn`, `plantation`) has no entry in `zone_points.json`, and its `rules.yaml` `zones` section has no keys
+(`plantation: {}`). The server reads it as `ShooterCore.ZonePolygons` (`MapLoader.ZonePolygonsJson`, `NetServer.Plantation.cs`): `Contains(kind, x, z)`,
+2D even-odd point-in-polygon; no file or no zone: the feature is off, no error.
 
 `parcels.json` also carries `zone_kinds`, `[{"name", "label", "group", "tint", "where_ground": [types] | null}]` in catalog
 order, for the editor's Zones tool; the drawn zones are not in it (the editor reads them from `edits.json`).

@@ -620,6 +620,7 @@ def test_list_zone_kinds_is_the_catalog_with_its_rules(env):
     assert rows["bigfoot"]["points"]["min_points"] == 30
     assert rows["stag"]["where_ground"] == ["forest"] and rows["stag"]["group"] == "wildlife"
     assert "props stage" in rows["player_spawn"]["points"]
+    assert "zone_polygons.json" in rows["plantation"]["points"]
 
 
 def test_object_polygon_orientation():

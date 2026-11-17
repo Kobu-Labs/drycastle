@@ -1313,6 +1313,21 @@ stateDiagram-v2
 - **Falling**: Clock: the fall length. The body goes over (forward, back, left or right by the plan) and the view hits the ground; the blood grows to full. Zero seconds for a plain fade.
 - **Lying**: Held until the spawn ends it. Clock (elapsed): the impact shake, then the scrim fade-in with the "eliminated by" text and the countdown.
 
+## Player.High
+
+Whether a player is high from the plantation: sober, or high for a while with a clock that a new hold restarts.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Sober
+    Sober --> High
+    High --> Sober
+    High --> High
+```
+
+- **Sober**: The default, and what a death, a round reset or the clock running out leaves.
+- **High**: A completed hold in a plantation started it: the cigarette, the eyes and (for the player themselves) the nausea show. High to High is the restart: another completed hold starts the clock over.
+
 ## Pounce.View
 
 The client's view of the demon's pounce: a victim is marked (Wind), pinned flat, then let go; the local victim's camera rises back afterwards.

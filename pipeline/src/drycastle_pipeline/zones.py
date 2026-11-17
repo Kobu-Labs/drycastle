@@ -29,6 +29,10 @@ builds. A cut never touches drawn zones (the detached copy is one). Nothing cut:
 
 ``player_spawn`` has no points here: ``props.make_spawns`` draws the spawn points inside its zones (:func:`kind_areas`: the
 rule zone's ground areas and the drawn zones) and writes ``spawns.json``. Players spawn there and nowhere else.
+
+``plantation`` has no points either: the game asks "is this player standing inside one", which no pool of points can answer, so
+the export writes its polygons (:func:`build_zone_polygons`, ``zone_polygons.json``). A kind in :data:`POLYGON_KINDS` is a
+*runtime zone* that exports its outlines; the same file can carry more kinds later.
 """
 
 import bisect
@@ -44,9 +48,18 @@ from shapely.ops import unary_union
 
 ZONE_POINTS_FORMAT_VERSION = 2
 FILE_NAME = "zone_points.json"
+ZONE_POLYGONS_FORMAT_VERSION = 1
+POLYGONS_FILE_NAME = "zone_polygons.json"
 
 #: The kind that is read by ``props.make_spawns`` instead of being exported as points.
 PLAYER_SPAWN = "player_spawn"
+#: Players hold the interact key inside one to get high (``NetServer.Plantation.cs``); exported as polygons, not points.
+PLANTATION = "plantation"
+#: The kinds with no density rule (no ``zone_points.json`` entry): ``player_spawn`` is read by the props stage, the others are
+#: exported as polygons.
+NO_POINT_KINDS = (PLAYER_SPAWN, PLANTATION)
+#: The kinds whose polygons the export writes to ``zone_polygons.json`` for the server.
+POLYGON_KINDS = (PLANTATION,)
 BIGFOOT = "bigfoot"
 #: The Scud event's truck hides at one of the points of this kind (``NetServer.PickEventSpawn("scud")``); with no zone drawn the server falls back to open ground.
 SCUD = "scud"
@@ -75,6 +88,7 @@ class ZoneKind:
 
 EVENT_TINT = "#c46be0"
 PLAYER_TINT = "#4aa3e8"
+PLANTATION_TINT = "#8bc34a"
 WILDLIFE_TINT = "#6bc27a"
 
 #: The catalog, in order: the order of ``zone_kinds`` of parcels.json and of the entries of zone_points.json.
@@ -82,6 +96,7 @@ KINDS: tuple[ZoneKind, ...] = (
     ZoneKind(BIGFOOT, "Bigfoot", "event", EVENT_TINT),
     ZoneKind(SCUD, "Scud truck", "event", EVENT_TINT),
     ZoneKind(PLAYER_SPAWN, "Player spawn", "player", PLAYER_TINT),
+    ZoneKind(PLANTATION, "Plantation", "player", PLANTATION_TINT),
     *(ZoneKind(w, w.capitalize(), "wildlife", WILDLIFE_TINT) for w in (*WILDLIFE, *FLOCKS)),
 )
 KIND_NAMES = tuple(k.name for k in KINDS)
@@ -94,7 +109,7 @@ class ZonesError(ValueError):
 def rules(section: dict) -> dict[str, dict]:
     """The ``zones`` rules section by kind, in catalog order.
 
-    A kind with a density rule has all of :data:`RULE_KEYS`; ``player_spawn`` has none (it is not exported as points). Every
+    A kind with a density rule has all of :data:`RULE_KEYS`; the kinds of :data:`NO_POINT_KINDS` have none (they are not exported as points). Every
     kind may have ``where_ground``, a list of ground type names. Raises ``ZonesError`` for a kind that is not in the catalog, a
     missing or unknown key or a value out of range: the sections are explicit, so a mistake is an error and never a silent
     skip. Whether the ground types exist is checked by :func:`check_ground_types` (the types are not known here)."""
@@ -111,7 +126,7 @@ def rules(section: dict) -> dict[str, dict]:
         where = f"zones.{kind}"
         if not isinstance(rule, dict):
             raise ZonesError(f"{where}: expected an object")
-        needed = () if kind == PLAYER_SPAWN else RULE_KEYS
+        needed = () if kind in NO_POINT_KINDS else RULE_KEYS
         if set(rule) - {"where_ground"} != set(needed):
             raise ZonesError(
                 f"{where}: needs exactly the keys {', '.join(needed) or 'none'} (and optionally where_ground)"
@@ -281,7 +296,7 @@ def build_zone_points(
     ``parcels_doc`` is ``parcels.json`` (the ground areas), ``drawn`` the drawn zones (:func:`drawn_zones`), ``buildings`` the
     ``buildings.json`` records, ``terrain`` a ``Terrain`` (coverage and heights), ``water_doc`` the ``water.json`` document
     ``section_rules`` the ``zones`` rules (:func:`rules`) and ``cuts`` the cut regions (:func:`zone_cuts`). A kind that has zones is always in the document (with no points
-    when nothing usable is left, and a warning); one with no zones is not. ``player_spawn`` is never in it."""
+    when nothing usable is left, and a warning); one with no zones is not. The kinds of :data:`NO_POINT_KINDS` are never in it."""
     from drycastle_pipeline.buildings import footprint_polygon
     from drycastle_pipeline.props import seeded
 
@@ -300,7 +315,7 @@ def build_zone_points(
         if kind not in section_rules:
             warnings.append(f"{zid}: zone kind {kind} has no rule in rules.yaml zones; no points")
     for kind, rule in section_rules.items():
-        if kind == PLAYER_SPAWN:
+        if kind in NO_POINT_KINDS:
             continue
         areas = kind_areas(kind, parcels_doc, drawn, rule.get("where_ground"), cuts)
         if not areas:
@@ -341,3 +356,44 @@ def build_zone_points(
         },
         warnings,
     )
+
+
+def _outer_rings(geom: BaseGeometry) -> list[list[tuple[float, float]]]:
+    """The outer ring of every polygon of ``geom`` (holes are dropped: a zone is an outline), as local-metre ``(x, y)`` without the closing point."""
+    parts = [g for g in getattr(geom, "geoms", [geom]) if g.geom_type == "Polygon" and not g.is_empty and g.area > 0.01]
+    return [list(p.exterior.coords)[:-1] for p in parts]
+
+
+def build_zone_polygons(
+    parcels_doc: dict,
+    drawn: dict[str, tuple[str, Polygon]],
+    section_rules: dict[str, dict],
+    cuts: dict[str, BaseGeometry] | None = None,
+) -> dict | None:
+    """The ``zone_polygons.json`` document, or ``None`` when no kind of :data:`POLYGON_KINDS` has a zone.
+
+    One entry per kind that has zones, in catalog order, with one ring per outline (the zones of a kind, as :func:`kind_areas`
+    gives them, rule zones and drawn ones). Rings are in **game axes**, as the game reads them: ``[x, z]`` with x east and
+    ``z = -north`` of the local metres of parcels.json (the way :class:`ZonePoints` turns a point's y into z), counter-clockwise
+    or clockwise as drawn, rounded to a millimetre. Nothing is clipped to the terrain or the buildings: the server asks only
+    whether a player stands inside."""
+    entries = []
+    for kind in POLYGON_KINDS:
+        if kind not in section_rules:
+            continue
+        areas = kind_areas(kind, parcels_doc, drawn, section_rules[kind].get("where_ground"), cuts)
+        rings = [
+            [[round(x, 3), round(-y, 3)] for x, y in ring]
+            for _, geom in areas
+            for ring in _outer_rings(geom if geom.is_valid else geom.buffer(0))
+            if len(ring) >= 3
+        ]
+        if rings:
+            entries.append({"kind": kind, "areas": [aid for aid, _ in areas], "rings": rings})
+    if not entries:
+        return None
+    return {
+        "version": ZONE_POLYGONS_FORMAT_VERSION,
+        "axes": "rings: game axes [x, z], x east, z = -north of the local metres of parcels.json",
+        "zones": entries,
+    }

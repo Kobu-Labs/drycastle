@@ -997,12 +997,14 @@ spawns:
 #
 # The game never sees ground areas or zones, so for every kind with zones the export stage draws candidate points
 # (inside the terrain, clear of buildings and water) and writes them to zone_points.json; the server picks one. Every kind
-# but player_spawn has all of these keys:
+# but player_spawn and plantation have all of these keys:
 #   m2_per_point         one point per this many m2 of usable ground (the zones inside the terrain, minus the clearances),
 #   min_points, max_points  but at least min_points and at most max_points. No usable ground: no points.
 #   building_clearance_m, water_clearance_m  clear of buildings and of water (and its shore), in metres.
 #   where_ground         optional: the rule zone, the ground types the kind applies to.
 # player_spawn has no points here: the props stage draws the spawn points inside its zones (spawns above).
+# plantation has no points either: the export writes its polygons (zone_polygons.json) and the server asks whether a player
+# stands inside one.
 zones:
   # The Bigfoot event starts at one of its points. No rule zone: it is drawn only. Clear of buildings (solid for it) and of
   # water; not of trees: it walks through them.
@@ -1024,6 +1026,9 @@ zones:
   # Players may spawn on open ground: the village and the fields.
   player_spawn:
     where_ground: [allotments, orchard, meadow, village, field]
+  # The marijuana plantation: a player on foot inside one who holds the interact key for 1.5 s gets high (godot/shooter/data/plantation.json).
+  # Drawn only; no rule zone, no numbers here (the game reads the polygons, not points).
+  plantation: {}
   # Wildlife: one point pool per species (the server picks a spawn point for that species from it). The numbers are shared
   # by every species (YAML anchor); the ground types are where the species lives. Species ids: godot/shooter/data/animals.json.
   deer: &wildlife_rule

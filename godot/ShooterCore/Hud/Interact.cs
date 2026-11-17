@@ -10,20 +10,23 @@ public enum InteractOwner
     GroundItem,
     /// <summary>A corpse: hold to take the weapon, tap for the chooser.</summary>
     Corpse,
+    /// <summary>Inside a marijuana plantation, on foot: hold to get high. The LOWEST priority of the key and nothing is shown for it; the server counts it (<see cref="PlantationRules"/>).</summary>
+    Plantation,
 }
 
 /// <summary>
 /// Arbitration of the interact key between the things on foot that listen to it, in one place: the care package first, then a ground item (when it is nearer
-/// than the corpse and the chooser is not up), then the corpse. Vehicles, the door gun and the Mass seat have their own state (a seat, a mode) and
+/// than the corpse and the chooser is not up), then the corpse, then, last of all, the plantation. Vehicles, the door gun and the Mass seat have their own state (a seat, a mode) and
 /// are not candidates here: the prompt chain in NetClient.Cars.cs puts them before these (turret, vehicle, Mass, then crate, ground item, corpse).
 /// </summary>
 public static class InteractArbiter
 {
-    public static InteractOwner Owner(bool crateInReach, bool groundItemInReach, bool groundItemNearest, bool corpseInReach, bool chooserOpen)
+    public static InteractOwner Owner(bool crateInReach, bool groundItemInReach, bool groundItemNearest, bool corpseInReach, bool chooserOpen, bool insidePlantation = false)
     {
         if (crateInReach) return InteractOwner.Crate;
         if (groundItemInReach && groundItemNearest && !chooserOpen) return InteractOwner.GroundItem;
         if (corpseInReach) return InteractOwner.Corpse;
+        if (insidePlantation) return InteractOwner.Plantation;
         return InteractOwner.None;
     }
 
