@@ -554,7 +554,7 @@ public partial class NetServer
         var attacker = car.LastAttacker != 0 ? car.LastAttacker : driver?.Id ?? (ushort)0;
         var weapon = car.LastWeapon != 0 ? car.LastWeapon : SpecialWeapons.Vehicle;
         var carVelocity = CarVelocity(car); // before Destroy zeroes it: the riders' bodies fly on with it
-        car.Destroy(_elapsed + Vehicles.DestroyedReturnTime);
+        car.Destroy(car.Def.Returns ? _elapsed + Vehicles.DestroyedReturnTime : double.MaxValue); // a type that never returns (the Scud truck) is gone for the match
         _vehicleBlasts++;
         BroadcastEvent(EventKind.VehicleExplosion, WeaponCodec.Encode(new VehicleExplosionMsg(car.Id, attacker, N(at), e.Splash.Radius)));
         BroadcastImpact(N(car.GlobalPosition), ImpactSize.Plume); // the blast throws up dirt or road where the car sits (ticket #154)

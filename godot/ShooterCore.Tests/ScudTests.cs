@@ -726,4 +726,97 @@ public class ScudTests
         Assert.Contains(StateMachineCatalog.All, s => s.Name == "Scud.Launcher");
         Assert.Empty(ScudLauncher.Spec.Unreachable);
     }
+
+    // ---- the client's screen ----
+
+    [Fact]
+    public void The_operator_opens_the_screen_waits_for_the_server_and_it_closes_when_the_launcher_goes_to_a_dead_state()
+    {
+        var sc = new ScudScreen();
+        Assert.Equal(ScudScreenAction.None, sc.Update(0, true, true, ScudLauncherState.Stowed, toggle: false));
+        Assert.Equal(ScudScreenAction.SendOpen, sc.Update(1, true, true, ScudLauncherState.Stowed, toggle: true));
+        Assert.Equal(ScudScreenMode.Operating, sc.Mode);
+        Assert.True(sc.Pending);
+        // the server has not answered yet: the screen waits
+        sc.Update(1.5, true, true, ScudLauncherState.Stowed, false);
+        Assert.Equal(ScudScreenMode.Operating, sc.Mode);
+        // it answers: Targeting, the wait is over
+        sc.Update(1.6, true, true, ScudLauncherState.Targeting, false);
+        Assert.False(sc.Pending);
+        Assert.Equal(ScudScreenMode.Operating, sc.Mode);
+        // the proposal, the erect and the ignition keep it up
+        foreach (var s in new[] { ScudLauncherState.Proposed, ScudLauncherState.Erecting, ScudLauncherState.Launching })
+        {
+            sc.Update(2, true, true, s, false);
+            Assert.Equal(ScudScreenMode.Operating, sc.Mode);
+        }
+        // the missile left: the screen closes
+        sc.Update(3, true, true, ScudLauncherState.Spent, false);
+        Assert.Equal(ScudScreenMode.Closed, sc.Mode);
+    }
+
+    [Fact]
+    public void An_open_the_server_never_answers_gives_up_and_a_cancel_closes_the_screen()
+    {
+        var sc = new ScudScreen();
+        sc.Update(10, true, true, ScudLauncherState.Stowed, toggle: true);
+        sc.Update(10 + ScudScreen.AnswerGiveUpSeconds + 0.1, true, true, ScudLauncherState.Stowed, false);
+        Assert.Equal(ScudScreenMode.Closed, sc.Mode);
+        // a cancel that sends the launcher back to Stowed while the screen is up closes it
+        sc.Update(20, true, true, ScudLauncherState.Stowed, toggle: true);
+        sc.Update(20.2, true, true, ScudLauncherState.Targeting, false);
+        sc.Update(20.4, true, true, ScudLauncherState.Stowed, false);
+        Assert.Equal(ScudScreenMode.Closed, sc.Mode);
+    }
+
+    [Fact]
+    public void The_screen_key_and_back_close_the_screen_and_tell_the_server_while_it_matters()
+    {
+        var sc = new ScudScreen();
+        sc.Update(0, true, true, ScudLauncherState.Stowed, toggle: true);
+        sc.Update(0.1, true, true, ScudLauncherState.Targeting, false);
+        Assert.Equal(ScudScreenAction.SendClose, sc.Update(1, true, true, ScudLauncherState.Targeting, toggle: false, back: true));
+        Assert.Equal(ScudScreenMode.Closed, sc.Mode);
+        // back with no screen up does nothing (it is the pause menu's)
+        Assert.Equal(ScudScreenAction.None, sc.Update(2, true, true, ScudLauncherState.Stowed, toggle: false, back: true));
+        Assert.Equal(ScudScreenMode.Closed, sc.Mode);
+        // the screen key during the erect brings the screen back (no server message) and closes it again
+        Assert.Equal(ScudScreenAction.None, sc.Update(3, true, true, ScudLauncherState.Erecting, toggle: true));
+        Assert.Equal(ScudScreenMode.Operating, sc.Mode); // the operator gets the screen back to abort from
+        Assert.Equal(ScudScreenAction.None, sc.Update(4, true, true, ScudLauncherState.Erecting, toggle: true));
+        Assert.Equal(ScudScreenMode.Closed, sc.Mode);
+    }
+
+    [Fact]
+    public void Another_seat_watches_the_feed_only_while_a_screen_is_live_and_leaving_the_truck_closes_it()
+    {
+        var sc = new ScudScreen();
+        // nothing to watch while the operator has no screen up
+        Assert.Equal(ScudScreenAction.None, sc.Update(0, true, false, ScudLauncherState.Stowed, toggle: true));
+        Assert.Equal(ScudScreenMode.Closed, sc.Mode);
+        Assert.Equal(ScudScreenAction.None, sc.Update(1, true, false, ScudLauncherState.Proposed, toggle: true));
+        Assert.Equal(ScudScreenMode.Watching, sc.Mode);
+        sc.Update(2, true, false, ScudLauncherState.Erecting, false);
+        Assert.Equal(ScudScreenMode.Watching, sc.Mode);
+        sc.Update(3, true, false, ScudLauncherState.Targeting, false); // the proposal was dropped, the operator is aiming again: still live
+        Assert.Equal(ScudScreenMode.Watching, sc.Mode);
+        sc.Update(4, false, false, ScudLauncherState.Targeting, false);
+        Assert.Equal(ScudScreenMode.Closed, sc.Mode);
+        // the operator closing their screen ends the feed
+        sc.Update(5, true, false, ScudLauncherState.Targeting, toggle: true);
+        sc.Update(6, true, false, ScudLauncherState.Stowed, false);
+        Assert.Equal(ScudScreenMode.Closed, sc.Mode);
+    }
+
+    [Fact]
+    public void A_screen_is_closed_when_the_player_changes_seats_and_the_machine_is_in_the_catalog()
+    {
+        var sc = new ScudScreen();
+        sc.Update(0, true, true, ScudLauncherState.Stowed, toggle: true);
+        sc.Update(0.1, true, true, ScudLauncherState.Targeting, false);
+        sc.Update(0.2, true, false, ScudLauncherState.Targeting, false); // no longer in the operator seat
+        Assert.Equal(ScudScreenMode.Closed, sc.Mode);
+        Assert.Contains(StateMachineCatalog.All, s => s.Name == "Scud.Screen");
+        Assert.Empty(ScudScreen.Spec.Unreachable);
+    }
 }

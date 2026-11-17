@@ -741,6 +741,7 @@ public class VehicleLauncherDef
         if (OperatorSeat < 1 || OperatorSeat >= v.Seats.Count) return "operator_seat must be a seat of the vehicle other than the driver's";
         if (Muzzle.Length != 3 || Exhaust.Length != 3 || Muzzle.Concat(Exhaust).Any(x => !float.IsFinite(x))) return "muzzle and exhaust are [x, y, z]";
         if (v.Flight != null || v.Gun != null || v.Flak != null || v.DoorGun != null) return "a launcher truck is a ground vehicle with no gun, flak or door gun";
+        if (v.Drive != null) return "a launcher truck has no drive block: the server steps it and brakes it while its rack moves, its driver's client does not predict it";
         return null;
     }
 }

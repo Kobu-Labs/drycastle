@@ -257,6 +257,12 @@
         { "role": "passenger", "offset": [0.6, 1.55, -4.9] }
       ],
       "launcher": { "operator_seat": 1, "muzzle": [0, 3.2, 5.2], "exhaust": [0, 1.4, 6.2] },
+      "glass": [
+        { "id": "windscreen_left", "centre": [-0.72, 2.75, -5.43], "normal": [0, 0.3, -0.95], "size": [1.3, 0.8] },
+        { "id": "windscreen_right", "centre": [0.72, 2.75, -5.43], "normal": [0, 0.3, -0.95], "size": [1.3, 0.8] },
+        { "id": "door_left", "centre": [-1.46, 2.75, -4.5], "normal": [-1, 0, 0], "size": [1.5, 0.75] },
+        { "id": "door_right", "centre": [1.46, 2.75, -4.5], "normal": [1, 0, 0], "size": [1.5, 0.75] }
+      ],
       "lights": { "head": [[-1.1, 1.7, -6.45], [1.1, 1.7, -6.45]], "tail": [[-1.2, 1.0, 6.45], [1.2, 1.0, 6.45]], "beam_range": 45, "beam_angle": 26 }
     }
   ]

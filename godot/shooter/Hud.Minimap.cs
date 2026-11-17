@@ -15,6 +15,8 @@ public partial class Hud
 
     /// <summary>The HUD's minimap: build it with the map, set the player each frame, feed enemy pings. The tactical map shares its data.</summary>
     public Minimap Minimap => _minimap;
+    /// <summary>The Scud strikes the maps show (<see cref="MapStrikes"/>).</summary>
+    public MapStrikes Strikes => _mapMarkers.Strikes;
 
     /// <summary>Minimap placement in the HUD: top-left, under the control hint line.</summary>
     void BuildMinimap()

@@ -1408,6 +1408,23 @@ stateDiagram-v2
 - **Reloading**: A rocket is being loaded (clock: reload seconds). The truck is immobilised; the rocket shows on the rack for the second half.
 - **Aborting**: The operator aborted the erect: the rack lowers again from where it got to, at the lowering rate, and the rocket is kept. Then Stowed.
 
+## Scud.Screen
+
+Which screen of a Scud truck the local player has up: their own view, the operator's targeting screen, or the read-only feed of it.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Operating
+    Closed --> Watching
+    Operating --> Closed
+    Watching --> Closed
+```
+
+- **Closed**: The player's own view. Where every end goes: the screen key again, leaving the truck, the launcher leaving its live states.
+- **Operating**: The operator pans, zooms and locks. After the open request the screen waits for the server's answer (a pending answer) and gives up if it does not come.
+- **Watching**: Another seat's read-only view of the operator's camera and lock, where it confirms or withdraws. The operator's own seat watches once the rack rises.
+
 ## Session.Phase
 
 A connection on the server: connected, said hello (profile loading) or refused, then joined.

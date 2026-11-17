@@ -359,6 +359,26 @@ _Avoid_: missile warning, RWR
 What a Lock-on launcher fires: it flies at 160 m/s after the Aircraft it was locked on and always reaches it, unless the Aircraft is gone first (then it bursts in the air). Its hit is an explosion with no Dust cloud; the one that shoots the Aircraft down is 20 m and raises a Blast wave.
 _Avoid_: rocket (the bazooka's and the gunship's fly straight), attack missile (that is the killstreak)
 
+**Scud truck**:
+The heavy 8-wheel launcher vehicle (`scud` in `vehicles.json`) of the Scud event: a driver and an operator under one cab, a rack on its back that rises about the rear hinge, and one rocket. It is not dealt at the match start and has no fixed spot (the event, or `/scud spawn`, brings it), cannot tow, and once destroyed it never returns for the match (`returns: false`). Its Launcher fires the Scud missile; its model is the private pack's `scud_truck`, a grey box without it.
+_Avoid_: launcher (that is the machine on it), Scud (alone: the missile)
+
+**Launcher**:
+The machine on a Scud truck (`Scud.Launcher`, `ScudLauncher`, server-owned): the rocket on its rack, the operator's lock, the crew's confirmations and the rack's clock. Stowed, then Targeting (the operator has the targeting screen open), Proposed (a Lock point is placed), Erecting (about 8 s, the truck brakes and ignores its driver), Launching (about 2 s of ignition), Spent, Lowering, Empty (needs a reload), Reloading, back to Stowed; an aborted erect goes through Aborting back to Stowed with the rocket kept. One rocket only: after the launch the truck is Empty until a rocket cart reloads it (`TryReloadScud`, about 10 s) or an admin does (`/scud reload`). The client's own screen mode is `Scud.Screen` (closed, the operator's targeting screen, or the read-only feed).
+_Avoid_: rack (that is the part that rises), silo
+
+**Lock point**:
+The ground point the operator places on the targeting screen (primary fire at the reticle): at least 150 m from the truck (`min_range_m`), anywhere on the map. Placing one makes the **Launch confirmation**: every occupied seat of the truck, the operator's included, must confirm it (a solo player confirms from the operator seat alone). The Lock point is dropped, and the launch with it, when anyone leaves, joins or changes seat, a confirmer withdraws, the truck moves, the operator places another or closes the screen, or no one confirms for a minute. The player who placed it is credited with the blast. The driver sees the operator's camera and the point read-only and confirms from there.
+_Avoid_: target (alone, ambiguous with the target dummies), waypoint (that is the map's), lock (that is the Lock-on launcher's Lock)
+
+**Scud missile**:
+The world entity a Scud truck launches. Its whole flight is planned at the launch: a vertical boost to about 350 m in 3 s, one arc over, and a dive onto the Lock point at 70 degrees, 15 to 20 s in all by the range. It is not an Aircraft and not a rocket: it cannot be shot down, locked on to or hit, and passes over whatever lies between. Everyone sees it with a flame and a smoke trail and the launch smoke at the truck; players within 600 m of the target get a siren, a banner and a strike marker on the tactical map for the last 8 s.
+_Avoid_: rocket (the bazooka's), attack missile (that is the killstreak), Aircraft
+
+**Scud blast**:
+What a Scud missile's impact does (`NetServer.ScudBlast`, numbers in `scud.json`). Everyone within 60 m dies, in a vehicle or not and spawn protected or not; to 150 m the damage falls off from 90 to 10, with walls and covered seats as for any blast. A blast shelter (a Bunker room, the church) protects exactly as it does from other blasts. Vehicles whose hull is within 60 m are destroyed, those to 150 m lose hit points; every glass pane to 250 m shatters. It raises the biggest Blast wave and Dust cloud there is (90 m), shakes every camera on the map in proportion to its distance when the wave reaches it, and leaves a scorch. Kills are ordinary kills of the player who placed the Lock point; friendly fire follows the match mode.
+_Avoid_: nuke, MOAB (that kills everyone and ignores shelters)
+
 **Sentry turret**:
 The killstreak that places a 500 hp gun on the ground for 15 seconds. It turns to targets within its sight range and shoots them. It is removed when its owner dies or leaves the match, so it never fires or credits kills for an absent owner.
 _Avoid_: turret (alone, ambiguous with the vehicle gun), gun emplacement
