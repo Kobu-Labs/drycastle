@@ -1364,6 +1364,25 @@ From any state: Destroyed
 - **Leaving**: Drives the way out to the map edge, accelerating; the entity ends at its end (no state follows).
 - **Destroyed**: Hit count taken, from any state: the Raid is over. The wreck lies where it stopped (clock: wreck seconds), then the entity ends. Never left.
 
+## Rider.View
+
+How the local rider of a vehicle seat sees: chase camera, first person from the seat, or the gun's own sight.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Chase
+    Chase --> Cockpit
+    Chase --> Sight
+    Cockpit --> Chase
+    Cockpit --> Sight
+    Sight --> Chase
+    Sight --> Cockpit
+```
+
+- **Chase**: the vehicle's chase camera; the figure is drawn on the seat. The view key goes to Cockpit.
+- **Cockpit**: first person from the seat's eye in the hull frame, the own figure hidden for the viewer (its shadow stays); the driver's rig only on the driver's seat. The view key goes to Chase.
+- **Sight**: an armed, gunner or operator seat: the gun's or the screen's own first-person view; the view key does nothing. A seat switch leaves it for the last choice.
+
 ## RocketCart.Load
 
 A rocket cart: carrying its missile, or empty.

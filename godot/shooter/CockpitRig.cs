@@ -13,23 +13,23 @@ namespace Drycastle.Shooter;
 /// </summary>
 public sealed partial class CockpitRig : Node3D
 {
-    /// <summary>One vehicle's cockpit: where the camera sits, which model nodes the rig replaces, and what builds the rig.</summary>
-    public sealed record Spec(Vector3 Eye, string[] Hide, Action<CockpitRig> Build);
+    /// <summary>One vehicle's driver rig: which model nodes the rig replaces, and what builds it. The eye is the seat's (<see cref="SeatEye"/>, #339), not the rig's.</summary>
+    public sealed record Spec(string[] Hide, Action<CockpitRig> Build);
 
     static readonly Dictionary<string, Spec> Specs = new()
     {
-        ["golf_mk2"] = new Spec(new Vector3(-0.4875f, 1.50f, 0.30f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildGolf),
+        ["golf_mk2"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildGolf),
         // the Humvee: eye = seat_driver [-0.62, 0.6, -0.22] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/make_humvee_model.py): inside the cab (roof 1.83 inside, windscreen top 1.79), behind the wheel.
-        ["humvee"] = new Spec(new Vector3(-0.62f, 1.65f, -0.13f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildHumvee),
-        ["bus"] = new Spec(new Vector3(-0.70f, 1.60f, -4.75f), System.Array.Empty<string>(), BuildBus),
-        ["flak"] = new Spec(new Vector3(-0.50f, 2.05f, -1.25f), new[] { "cab" }, BuildFlak),
+        ["humvee"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildHumvee),
+        ["bus"] = new Spec(System.Array.Empty<string>(), BuildBus),
+        ["flak"] = new Spec(new[] { "cab" }, BuildFlak),
         // the harvester (#331): the combine's cab, after SM_Veh_Harvester_01 (model +Z is forward, the model faces yaw 180, so its steering wheel at x 0.79, y 2.70, z 1.21 is x -0.79, z -1.21 here; no hull: the rig hangs under the root).
         // The eye sits 1 m over the seat (y 2.0, vehicles.json seats) just behind the wheel, inside the cab; the model's own wheel and glass are not drawn for the driver, the reel is in front below the sill.
-        ["harvester"] = new Spec(new Vector3(-0.79f, 3.0f, -0.55f), new[] { "SM_Veh_Harvester_SteeringW", "SM_Veh_Harvester_Glass" }, BuildHarvester),
+        ["harvester"] = new Spec(new[] { "SM_Veh_Harvester_SteeringW", "SM_Veh_Harvester_Glass" }, BuildHarvester),
         // the Scud truck: eye = seat_driver [-0.892, 1.15, -4.328] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/make_scud_model.py): inside the left half cab (roof inside 2.66, windscreen 1.99-2.42), behind the
         // wheel. The operator's seat has the same eye over its own seat (+0.892) but no cockpit rig: its view is the seat's (vehicles.json eye_height 1.05).
-        ["scud"] = new Spec(new Vector3(-0.892f, 2.2f, -4.238f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildScud),
-        ["utility_helicopter"] = new Spec(new Vector3(0.55f, 1.78f, -1.80f), new[] { "fuselage" }, BuildHelicopter),
+        ["scud"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildScud),
+        ["utility_helicopter"] = new Spec(new[] { "fuselage" }, BuildHelicopter),
     };
 
     /// <summary>The cockpit of a vehicle type (vehicles.json id), or null when it has none.</summary>
