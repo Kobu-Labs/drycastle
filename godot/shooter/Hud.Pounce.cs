@@ -11,7 +11,7 @@ public partial class Hud
 {
     static readonly Color PounceRed = new(0.62f, 0.02f, 0.02f);
     ColorRect _pounceWash = null!;
-    bool _pounceHide;
+    bool _pounceHide, _flungHide;
 
     void BuildPounce()
     {
@@ -33,6 +33,14 @@ public partial class Hud
     {
         if (_pounceHide == hide) return;
         _pounceHide = hide;
+        ApplyCrosshairVisibility();
+    }
+
+    /// <summary>The crosshair is hidden while the Bigfoot holds the player and while they fly from its throw (#360).</summary>
+    public void SetFlungHidesCrosshair(bool hide)
+    {
+        if (_flungHide == hide) return;
+        _flungHide = hide;
         ApplyCrosshairVisibility();
     }
 }

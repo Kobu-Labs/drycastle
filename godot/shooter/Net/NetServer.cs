@@ -93,6 +93,8 @@ public partial class NetServer : Node
         public uint HeldUntilTick;
         /// <summary>Until this server time a launched player's fall damage is the Bigfoot's own (the brain hurts them 2 to 5 on landing).</summary>
         public double LaunchGraceUntil;
+        /// <summary>Server time of the Bigfoot's launch: until it lands (<see cref="LaunchedAt"/> plus a moment, then on the ground) the player cannot fire (#360).</summary>
+        public double LaunchedAt;
         public float Throttle, Steer;
         public PlayerProfile? Profile;
         public ProfileLoad? Loading;
@@ -696,7 +698,7 @@ public partial class NetServer : Node
                     sc.Body.Teleport(new Vector3(s.Position.X, s.Position.Y + 0.1f, s.Position.Z));
                     sc.Body.Health = MoveConsts.MaxHealth;
                     sc.Inputs.Clear(); sc.Start = sc.Body.GlobalPosition; sc.MaxMoved = 0;
-                    sc.HeldUntilTick = 0; sc.LaunchGraceUntil = 0; // a new life: no Bigfoot hold or launch grace left over from the last one
+                    sc.HeldUntilTick = 0; sc.LaunchGraceUntil = 0; sc.LaunchedAt = 0; // a new life: no Bigfoot hold or launch grace left over from the last one
                     ApplyLoadout(sc); // a loadout changed while alive applies from this spawn on
                     sc.W.Reset(_elapsed);
                     sc.Recoil.Reset();
@@ -763,6 +765,7 @@ public partial class NetServer : Node
             // Fire and Use belong to the session, not to the weapon or the vehicles
             var controlled = _streaks.RouteInput(c.Id, i);
             if (controlled) i.Buttons &= (ushort)(ushort.MaxValue ^ (ushort)(MoveButtons.Fire | MoveButtons.Use));
+            if (c.Car == null && _elapsed < c.LaunchGraceUntil && (_elapsed < c.LaunchedAt + 0.3 || !c.Body.State.OnFloor)) i.Buttons &= (ushort)(ushort.MaxValue ^ (ushort)MoveButtons.Fire); // thrown by the Bigfoot and in the air: no shooting (#360)
             var useDown = (i.Buttons & (ushort)MoveButtons.Use) != 0;
             var useEdge = c.UseKey.Pressed(useDown);
             RozhlasSetUse(c, useDown);

@@ -247,6 +247,7 @@ public partial class NetClient
         }
         _heldByBigfoot = held;
         TickOwnFling();
+        _hud?.SetFlungHidesCrosshair(OwnBodyFlung);
         // the server holds the body at a fixed point in front of the giant; the flailing is drawn here, so the eye rides the same swing as the figure
         var swing = Vector3.Zero; var tilt = 0f;
         if (holder != null && _me != null)
