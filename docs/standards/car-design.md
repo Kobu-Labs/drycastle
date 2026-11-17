@@ -4,9 +4,76 @@ Guiderail for anything that draws, attaches to, or measures a vehicle. Read befo
 
 Related: `docs/glass.md`, ADR 0007/0008 (glass), ADR 0010/0014 (prediction), ADR 0011/0012 (armed and exposed seats), `docs/vehicle-collision-and-entering.md`, `docs/vehicle-chase-camera.md`.
 
-Layout: A contract (every vehicle) | B Synty import | C from scratch | Definition of done | Reference (sections 0 to 13: the detail behind the contract, node table, per-system rules).
+Layout: Agent quick start (what to read, the three flows, when to ask) | A contract (every vehicle) | B Synty import | C from scratch | Definition of done | Reference (sections 0 to 13: the detail behind the contract, node table, per-system rules).
 
 Status marks: **[code]** checked by `VehicleContractTests` or already enforced; **[model]** a rule on the .glb, checked by the model script / the manual pass; **[NOT YET]** the contract says it, the code does not do it. Do not read a [NOT YET] item as current behaviour.
+
+## Agent quick start (read this part first)
+
+The one file for vehicle work. Read it when the task is vehicle design or vehicle mechanics: a vehicle model or its build script, `vehicles.json`, seats, cover, glass, wheels, lamps, cockpit/chase views, the seat panel, anything attached to or measured from a vehicle. Not needed for work that merely happens near vehicles (map, HUD outside the seat panel, weapons that do not touch the hit rules).
+
+**What to read for which task**
+
+| Task | Read |
+|---|---|
+| Import a Synty vehicle | A, B, Definition of done, flow 1 below |
+| Design a vehicle from scratch | A, C, Definition of done, flow 2 below |
+| Change an existing vehicle's model or data | A, the vehicle's row in the node table (section 1), flow 3 below |
+| Attach something to a vehicle (FX, decal, lamp, rider) | section 0, then the system's section (2 to 10) |
+| Seats, cover, glass hit rules | A3, A4, ADR 0035, `docs/glass.md` |
+| Views and camera | A3, sections 5 and 11 |
+| Wheels, steering, drive feel | A1, A7, section 3; ADR 0010/0014 for a `drive` type |
+| Trailers, towing | section 12b |
+
+**Flow 1: import a Synty vehicle** (detail: part B)
+
+1. Pack not yet under `assets-private/synty/glb/<pack>/`: import it (`scripts/build_vehicle_packs.sh`, or a new extract step in its style) and add a README section in `assets-private/synty/README.md`.
+2. Measure, never guess: `scripts/vehicle_model_probe.gd`, `vehicle_model_dump.gd` + `vehicle_model_analyze.py`; write the facts into `docs/research/vehicle-models-facts.md`.
+3. Write `scripts/vehicles/<id>.json` (copy the nearest: `car_small` closed car, `truck` six wheels + hitch, `bike` two wheels + raked fork, `quad` handlebars, `harvester` kept nodes).
+4. `python3 scripts/standardize_vehicle.py scripts/vehicles/<id>.json --private <main checkout>/assets-private --vehicles-json godot/shooter/data/vehicles.json`. Never hand-edit the keys it writes.
+5. Add the gameplay keys by hand (speed, hp, mass, `spawn_count`, `hood`, `tow`, chase camera); set seat `cover` and pane `kind` where the default (`glass` / `normal`) is not right.
+6. `python3 scripts/make_vehicle_outlines.py --only <id>`.
+7. Tests: `dotnet test godot/ShooterCore.Tests --filter "VehicleContractTests|StandardizedVehicleTests|SeatSwitchTests|SeatViewTests|GlassTests|VehicleTypesTests"`, then `dotnet build godot/shooter`. Headless model check: `scripts/vehicle_std_check.gd` (run by `build_vehicle_packs.sh --standardize-only`).
+8. Node table (section 1), `docs/glass.md` pane table, the README of the private pack.
+
+**Flow 2: a vehicle from scratch** (detail: part C)
+
+1. Real reference dimensions in the header of `scripts/make_<type>_model.py`.
+2. The script writes the whole contract (A) and the `glass` list; run it; .glb + `vehicles.json` in one commit.
+3. Steps 5 to 8 of flow 1 (`StandardizedVehicleTests` does not apply; add a per-vehicle model test).
+
+**Flow 3: change an existing vehicle**
+
+1. Change the script or the facts file, never the .glb or the generated keys. Check first that the script reproduces the committed .glb byte for byte; if not, stop and report.
+2. Regenerate; hull changed: regenerate the outline; box changed: A5's re-check list.
+3. Steps 7 and 8 of flow 1.
+
+**Stop and ask the user** (do not decide alone)
+
+- Which seats are `armoured`, which panes are `reinforced`.
+- A new or removed seat, gun or tow hitch; who may shoot from a seat.
+- A hit box change beyond the model's measured bounds, or any gameplay number (speed, hp, mass, spawn count).
+- Adding a `drive` block to a type (it switches the type to the predicted drive model) or changing shared drive maths.
+- Any change to the Humvee (model, data, view): it is the reference vehicle and stays as it is unless the user says so.
+- A change that needs a new wire field.
+
+**Hard rules**
+
+- Body parts under `hull`, never the root (section 0).
+- A Synty model is recoloured by an atlas swap (`skins`), never a tint.
+- Pack geometry is private: only scripts, facts and 2D outlines are committed.
+- A build without the private pack must still run (box fallback); no test may need a private .glb.
+- No new `bool` / timer clusters for state: `StateMachineSpec<T>` (CLAUDE.md).
+- Do not run the game or take screenshots unless the user says so.
+
+**Hand back for a human look** (cannot be verified without seeing the model; list it in the report)
+
+- Lamp lens plates on the lamps and lit; skins show the right colours; glass reads as glass from both sides.
+- Rider pose on every seat (hips on the seat, hands near the control, head under the roof); the cockpit view from every seat (nothing clips the eye, the cabin reads as a room).
+- Wheels roll the right way forward and in reverse and steer to the side of the turn; the hull leans while the wheels stay on the ground.
+- Chase camera, spawn clearance, tow hitch and trailer clearance, hood smoke point after a box change.
+- Shoot a pane, shoot each seat, destroy the vehicle; Thieves take a wheel.
+- The seat panel outline and markers.
 
 ## A. The contract (Synty-derived or generated, same rules)
 
@@ -117,7 +184,7 @@ One standardization step per pack prefab: **`scripts/standardize_vehicle.py`**, 
 
 - `empties` in the facts file: extra named empties under the hull (the truck's `tow_hitch`: on the centre line, behind the footprint by at least 0.1 m so a trailer starts clear of the vehicle, at the rocket cart's `tow_eye` height 0.62; `tow.hitch` in `vehicles.json` is the same point by hand, `TruckModelTests` checks the rules). No hook mesh.
 - Texture repeat: a prefab whose UVs leave 0..1 (the truck's bed, u to 2.64) needs the atlas to tile; the game's materials repeat by default (`StandardMaterial3D`), nothing to set.
-- Not done by the standardizer yet (later #325 steps): the two-sided shell material for a one-skin shell (`two_sided_shell: true` writes the `_2s` materials, not exercised by the car), seat cover and pane kinds (#301), per-seat views (#339).
+- Not done by the standardizer: the interior of a prefab that has none. It writes seat `cover` (`exposed` for an open seat, `glass` otherwise; `armoured` is set by hand) and leaves pane `kind` out (= `normal`; `reinforced` is set by hand). `two_sided_shell: true` writes the `_2s` materials for a one-skin shell.
 
 ## C. A vehicle designed from scratch (`scripts/make_<type>_model.py`)
 
