@@ -132,7 +132,7 @@ public partial class NetServer
     {
         SyncLife(c);
         var view = LagComp.ViewTick(_tick, BackTicksOf(c), c.LifeStart);
-        var list = new List<HitTarget>(_byId.Count);
+        var list = _targetLists.Count > 0 ? _targetLists.Pop() : new List<HitTarget>(_byId.Count + 4); // the caller's until ReturnTargets, as LiveTargets'
         foreach (var o in _byId.Values)
         {
             if (_match.Get(o.Id)?.Life != PlayerLife.Alive) continue;

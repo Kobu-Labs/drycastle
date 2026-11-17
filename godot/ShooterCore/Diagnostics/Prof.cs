@@ -8,7 +8,7 @@ namespace Drycastle.ShooterCore;
 /// Always-on scoped timers of the server tick (the "server: prof" log lines): how long the named parts of a tick took and how often they ran,
 /// summed over the report period, plus the same for the slowest tick of the period. A scope is a timestamp at each end and two array adds: no
 /// allocation, about 40 ns. Scopes nest (the time of an inner scope is also inside its outer one), so the columns do not sum to the tick.
-/// The scopes belong to the game thread; the navigation worker has its own counters (<see cref="NavSnap"/>, <see cref="NavPath"/>).
+/// The scopes belong to the game thread; the navigation worker has its own counter (<see cref="NavPath"/>).
 /// </summary>
 public static class Prof
 {
@@ -52,7 +52,7 @@ public static class Prof
     static long _lapAlloc;
     static long[] NewAllocAt() { var a = new long[N]; Array.Fill(a, -1L); return a; }
     static double _worstMs = -1;
-    static long _navSnapTicks, _navSnapCalls, _navPathTicks, _navPathCalls, _navRawTicks, _navRawCalls, _navSame, _navDiff, _navMaxDiffMm;
+    static long _navPathTicks, _navPathCalls;
 
     /// <summary>The name of a scope in the log.</summary>
     public static string Name(S s) => Names[(int)s];
@@ -106,25 +106,8 @@ public static class Prof
         return true;
     }
 
-    /// <summary>The navigation worker: one snap of a point to the mesh took the time since <paramref name="t0"/>. Any thread.</summary>
-    public static void NavSnap(long t0) { Interlocked.Add(ref _navSnapTicks, Stopwatch.GetTimestamp() - t0); Interlocked.Increment(ref _navSnapCalls); }
-
     /// <summary>The navigation worker: one path search took the time since <paramref name="t0"/>. Any thread.</summary>
     public static void NavPath(long t0) { Interlocked.Add(ref _navPathTicks, Stopwatch.GetTimestamp() - t0); Interlocked.Increment(ref _navPathCalls); }
-
-    /// <summary>
-    /// The navigation worker's shadow check (DRYCASTLE_NAV_COMPARE): the same route asked without the snaps took the time since <paramref name="t0"/>, and
-    /// its points lie at most <paramref name="maxDiffM"/> from the snapped route's (negative: another number of points). Any thread.
-    /// </summary>
-    public static void NavRaw(long t0, float maxDiffM)
-    {
-        Interlocked.Add(ref _navRawTicks, Stopwatch.GetTimestamp() - t0); Interlocked.Increment(ref _navRawCalls);
-        if (maxDiffM >= 0 && maxDiffM <= 0.05f) { Interlocked.Increment(ref _navSame); return; }
-        Interlocked.Increment(ref _navDiff);
-        var mm = maxDiffM < 0 ? long.MaxValue / 2 : (long)(maxDiffM * 1000);
-        long seen;
-        while (mm > (seen = Interlocked.Read(ref _navMaxDiffMm)) && Interlocked.CompareExchange(ref _navMaxDiffMm, mm, seen) != seen) { }
-    }
 
     static double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
 
@@ -161,19 +144,13 @@ public static class Prof
         return sb.ToString();
     }
 
-    /// <summary>The navigation worker's period: <c>snap=ms_per_second|calls_per_second path=...</c>. Reads and clears its counters.</summary>
+    /// <summary>The navigation worker's period: <c>path=ms_per_second|calls_per_second</c>. Reads and clears its counters.</summary>
     public static string Nav(double seconds)
     {
         var inv = CultureInfo.InvariantCulture;
         seconds = Math.Max(seconds, 1e-3);
-        long st = Interlocked.Exchange(ref _navSnapTicks, 0), sc = Interlocked.Exchange(ref _navSnapCalls, 0);
         long pt = Interlocked.Exchange(ref _navPathTicks, 0), pc = Interlocked.Exchange(ref _navPathCalls, 0);
-        var line = $"snap={(Ms(st) / seconds).ToString("F2", inv)}|{(sc / seconds).ToString("F1", inv)} path={(Ms(pt) / seconds).ToString("F2", inv)}|{(pc / seconds).ToString("F1", inv)}";
-        long rt = Interlocked.Exchange(ref _navRawTicks, 0), rc = Interlocked.Exchange(ref _navRawCalls, 0);
-        long same = Interlocked.Exchange(ref _navSame, 0), diff = Interlocked.Exchange(ref _navDiff, 0), mm = Interlocked.Exchange(ref _navMaxDiffMm, 0);
-        if (rc == 0) return line;
-        var worst = mm >= long.MaxValue / 2 ? "points" : (mm / 1000.0).ToString("F2", inv); // "points": a route with another number of points
-        return line + $" raw={(Ms(rt) / seconds).ToString("F2", inv)}|{(rc / seconds).ToString("F1", inv)} raw_same={same} raw_diff={diff} raw_maxdiff_m={worst}";
+        return $"path={(Ms(pt) / seconds).ToString("F2", inv)}|{(pc / seconds).ToString("F1", inv)}";
     }
 
     /// <summary>Start of the next period.</summary>
