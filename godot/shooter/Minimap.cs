@@ -41,6 +41,9 @@ public sealed partial class Minimap : Control
     /// <summary>The shared map data (null before <see cref="Build"/> or without a map); the tactical map draws from the same base.</summary>
     public MapBase? Base => _map;
 
+    /// <summary>The vehicle tracks both maps draw (the client feeds them from its crop crush).</summary>
+    public MapTrails Trails => _markers.Trails;
+
     /// <param name="markers">The shared markers; the HUD gives the same instance to the tactical map.</param>
     public Minimap(MapMarkers markers)
     {
@@ -133,6 +136,7 @@ public sealed partial class Minimap : Control
                 DrawSetTransform(Vector2.Zero);
             }
             DrawRoads(centre, theta, pxPerMetre, half);
+            DrawTrails(centre, theta, pxPerMetre, half);
             var inner = half - 6f;
             for (var i = 0; i < _markers.Vehicles.Count; i++)
             {
@@ -191,6 +195,44 @@ public sealed partial class Minimap : Control
             }
             DrawPolyline(road.Screen, road.Colour, Math.Max(1f, road.WidthM * pxPerMetre), true);
         }
+    }
+
+    /// <summary>Vehicle tracks as thin lines over the roads: all casings first, then the fills, culled to the view; nothing is allocated. Points past the square view are drawn as they are (the control clips).</summary>
+    void DrawTrails(Vector2 centre, float theta, float pxPerMetre, float half)
+    {
+        var trails = _markers.Trails;
+        if (trails.Trails.Count == 0 && trails.Dots.Count == 0) return;
+        var reach = ZoomMetres * 1.5f;
+        var lo = new NVector2(_markers.Player.X - reach, _markers.Player.Y - reach);
+        var hi = new NVector2(_markers.Player.X + reach, _markers.Player.Y + reach);
+        var player = new NVector2(_markers.Player.X, _markers.Player.Y);
+        for (var pass = 0; pass < 2; pass++)
+        {
+            var colour = pass == 0 ? ShooterTheme.Outline : ShooterTheme.MapTrail;
+            var width = pass == 0 ? ShooterTheme.MapTrailCasing : ShooterTheme.MapTrailWidth;
+            foreach (var t in trails.Trails)
+            {
+                if (t.Points.Count < 2 || t.Max.X < lo.X || t.Min.X > hi.X || t.Max.Y < lo.Y || t.Min.Y > hi.Y) continue;
+                var prev = ToScreen(t.Points[0] - player, theta, pxPerMetre, centre);
+                for (var i = 1; i < t.Points.Count; i++)
+                {
+                    var next = ToScreen(t.Points[i] - player, theta, pxPerMetre, centre);
+                    DrawLine(prev, next, colour, width, true);
+                    prev = next;
+                }
+            }
+            foreach (var d in trails.Dots)
+            {
+                if (d.X < lo.X || d.X > hi.X || d.Y < lo.Y || d.Y > hi.Y) continue;
+                DrawCircle(ToScreen(d - player, theta, pxPerMetre, centre), width * 0.5f, colour);
+            }
+        }
+    }
+
+    static Vector2 ToScreen(NVector2 delta, float theta, float pxPerMetre, Vector2 centre)
+    {
+        var s = MinimapMath.ToScreen(delta, theta, pxPerMetre);
+        return centre + new Vector2(s.X, s.Y);
     }
 
     /// <summary>The "N" marker on the rim, at ground north (-z) in the rotated view.</summary>

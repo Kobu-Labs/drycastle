@@ -520,6 +520,38 @@ public sealed partial class TacticalMap : Control
         }
 
         readonly List<GunfireBlip> _blipScratch = new();
+
+        /// <summary>Vehicle tracks as thin lines (casing, then fill) over the sheet, under the markers. A segment is drawn only when both its ends are on the shown map, so nothing spills into the margin.</summary>
+        void DrawTrails(MapBase b)
+        {
+            var trails = _o._m.Trails;
+            if (trails.Trails.Count == 0 && trails.Dots.Count == 0) return;
+            var origin = _o.WinOrigin(b);
+            var k = _o._k;
+            var shown = new Rect2(Gutter, Gutter, _o._side, _o._side);
+            for (var pass = 0; pass < 2; pass++)
+            {
+                var colour = pass == 0 ? ShooterTheme.Outline : ShooterTheme.MapTrail;
+                var width = pass == 0 ? ShooterTheme.MapTrailCasing : ShooterTheme.MapTrailWidth;
+                foreach (var t in trails.Trails)
+                {
+                    if (t.Points.Count < 2) continue;
+                    var prev = new Vector2(Gutter, Gutter) + (new Vector2(t.Points[0].X, t.Points[0].Y) - origin) * k;
+                    for (var i = 1; i < t.Points.Count; i++)
+                    {
+                        var next = new Vector2(Gutter, Gutter) + (new Vector2(t.Points[i].X, t.Points[i].Y) - origin) * k;
+                        if (shown.HasPoint(prev) && shown.HasPoint(next)) DrawLine(prev, next, colour, width, true);
+                        prev = next;
+                    }
+                }
+                foreach (var d in trails.Dots)
+                {
+                    var p = new Vector2(Gutter, Gutter) + (new Vector2(d.X, d.Y) - origin) * k;
+                    if (shown.HasPoint(p)) DrawCircle(p, width * 0.5f, colour);
+                }
+            }
+        }
+
         const float DragPx = 6f;
         bool _pressed, _dragged;
         Vector2 _pressAt;
@@ -573,6 +605,7 @@ public sealed partial class TacticalMap : Control
         {
             if (_o._base is not { } b || !_o._m.HasPlayer || _o._side <= 0) return;
             var m = _o._m;
+            DrawTrails(b);
             foreach (var area in m.SearchAreas.Items) MapGlyphs.SearchArea(this, At(area.Centre, b), area.RadiusM * _o._k, area.Label); // under the markers: a big translucent circle
             for (var i = 0; i < m.Vehicles.Count; i++) MapGlyphs.Vehicle(this, At(m.Vehicles[i], b));
             if (m.TeamColours)

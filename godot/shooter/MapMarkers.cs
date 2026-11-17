@@ -22,6 +22,8 @@ public sealed class MapMarkers
     public MinimapPings Pings { get; } = new();
     /// <summary>The Scud missiles about to land near the player: a ring the size of the lethal radius, until the impact (and a few seconds after).</summary>
     public MapStrikes Strikes { get; } = new();
+    /// <summary>The tracks vehicles left in crop fields this round: thin lines under the markers on both maps.</summary>
+    public MapTrails Trails { get; } = new();
     /// <summary>The search areas of the events on the intel board (an event that is somewhere inside a circle): the tactical map draws them while the event is on.</summary>
     public MapSearchAreas SearchAreas { get; } = new();
     /// <summary>Gunfire blips (enemy shots near the player); null until the client has the match data's radius and lifetime.</summary>
