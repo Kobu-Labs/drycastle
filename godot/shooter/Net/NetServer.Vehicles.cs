@@ -405,7 +405,9 @@ public partial class NetServer
     {
         if (Vehicles == null || _cars.Count == 0) return;
         TrailerLatchTick(); // a loose trailer is latched by a tractor that reverses its hitch onto it (before the contacts and the steps: it follows its tractor from this tick on)
+        var contactsT = Prof.Begin(Prof.S.VehicleContacts);
         ResolveVehicleContacts();
+        Prof.End(Prof.S.VehicleContacts, contactsT);
         foreach (var car in _cars)
         {
             var def = car.Def;
@@ -424,10 +426,12 @@ public partial class NetServer
             var occupied = car.Seat.Occupied;
             if (occupied) car.Wake(); // somebody aboard: the vehicle is stepped every tick until it is empty and rests again
             car.PrevPos = car.Drives ? car.TickEndPos : car.GlobalPosition; // a driven vehicle has already moved this tick, on its driver's inputs
+            var stepT = Prof.Begin(Prof.S.VehicleStep);
             if (car.Flies) StepFlyingVehicle(car, driver, dt);
             else if (car.Drives) StepDrivenVehicle(car, driver, dt);
             else if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt, Water);
             else if (!car.Asleep || occupied) car.StepParked(dt, Water); // a parked car at rest is not stepped until disturbed (ParkedRules, T2-04)
+            Prof.End(Prof.S.VehicleStep, stepT);
             var here = car.GlobalPosition; // read once: a native read each time, every car every tick
             car.TickEndPos = here;
             if (here.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); continue; }

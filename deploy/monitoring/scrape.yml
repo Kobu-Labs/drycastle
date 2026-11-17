@@ -1,0 +1,6 @@
+# What VictoriaMetrics fetches itself (the game server pushes its own numbers, see docker-compose.yml): the host's CPU, memory and disk.
+scrape_configs:
+  - job_name: node
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["node:9100"]

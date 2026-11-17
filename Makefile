@@ -306,6 +306,11 @@ private-pack:
 	python3 -I scripts/make_private_pack.py
 
 # Before a release: is the published map, private pack and launcher still what this machine would publish? Exit 1 = republish first (scripts/check_release_assets.py).
+# The live server's Grafana dashboard, through an ssh tunnel (docs/monitoring.md). Ctrl+C closes it.
+.PHONY: monitor
+monitor:
+	scripts/monitor.sh
+
 release-check:
 	python3 -I scripts/check_release_assets.py
 
