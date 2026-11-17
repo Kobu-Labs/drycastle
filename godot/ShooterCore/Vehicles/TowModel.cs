@@ -31,6 +31,13 @@ public readonly struct TowGeometry
         LatchRadius = tow.LatchRadius; LatchHeight = tow.LatchHeight; LatchAngle = tow.LatchAngleDeg * FlightMath.Deg2Rad; LatchReverseSpeed = tow.LatchReverseSpeed; Lockout = tow.RelatchLockout;
     }
 
+    /// <summary>
+    /// The geometry of a trailer on its own, with the default tractor numbers: what a trailer that nobody pulls needs (its footprint and how it rolls to a stop,
+    /// <see cref="TowModel.StepLoose"/>). The latch numbers and the hitch are a tractor's: use <see cref="Of"/> for those.
+    /// </summary>
+    public static TowGeometry ForTrailer(VehicleDef trailer) =>
+        new(new VehicleTowDef(), trailer, trailer.Trailer ?? throw new ArgumentException($"{trailer.Id} has no trailer block", nameof(trailer)));
+
     /// <summary>The geometry of <paramref name="tractor"/> pulling <paramref name="trailer"/>. Throws when the first has no <c>tow</c> block or the second no <c>trailer</c> block.</summary>
     public static TowGeometry Of(VehicleDef tractor, VehicleDef trailer) =>
         new(tractor.Tow ?? throw new ArgumentException($"{tractor.Id} has no tow block", nameof(tractor)), trailer,
@@ -174,14 +181,47 @@ public static class TowModel
         Pin(ref b, g, t);
     }
 
+    /// <summary>
+    /// Where the trailer's origin stands when its drawbar eye is at <paramref name="eye"/> (a point in the world) and it faces <paramref name="yaw"/>: the height is the eye's less the
+    /// eye's height on the trailer. The client draws a trailer from the hitch as it is drawn (the tractor leans, the trailer follows) with this.
+    /// </summary>
+    public static Vector3 OriginAt(in TowGeometry g, Vector3 eye, float yaw)
+    {
+        var (s, c) = MathF.SinCos(yaw);
+        // eye = origin + (EyeX*c + EyeZ*s, ., -EyeX*s + EyeZ*c)
+        return new Vector3(eye.X - (g.EyeX * c + g.EyeZ * s), eye.Y - g.EyeY, eye.Z - (-g.EyeX * s + g.EyeZ * c));
+    }
+
+    /// <summary>
+    /// The trailer's body when hitched to a tractor at <paramref name="tractorPosition"/> facing <paramref name="tractorYaw"/>, turned <paramref name="phi"/> against it (<see cref="TrailerBody.Phi"/>):
+    /// the pose a client draws from the tractor as it is drawn and the articulation it is told (speed and slide left zero).
+    /// </summary>
+    public static TrailerBody Pose(in TowGeometry g, Vector3 tractorPosition, float tractorYaw, float phi)
+    {
+        var b = new TrailerBody { Phi = Math.Clamp(FlightMath.Wrap(phi), -g.Limit, g.Limit) };
+        Pin(ref b, g, new TractorMotion(tractorPosition, tractorYaw, 0f, 0f, 0f));
+        return b;
+    }
+
+    /// <summary>
+    /// How far the trailer is pitched (radians, positive: the drawbar end up) when its wheels stand on the ground and the drawbar eye is <paramref name="eyeAboveAxleGround"/> metres above
+    /// the ground under the axle: the hitch's height when pulled; loose, the eye's height on the trailer plus the ground's rise from the axle to the eye. Level ground and a level hitch give 0.
+    /// The turn is about the axle's contact point; held to ±<paramref name="maxPitch"/>.
+    /// </summary>
+    public static float PitchFor(in TowGeometry g, float eyeAboveAxleGround, float maxPitch = 0.45f)
+    {
+        // eye above the axle's ground = EyeY cos(p) + Drawbar sin(p) (the trailer turning about the axle's contact point), solved for p
+        var r = MathF.Sqrt(g.Drawbar * g.Drawbar + g.EyeY * g.EyeY);
+        var p = MathF.Asin(Math.Clamp(eyeAboveAxleGround / r, -1f, 1f)) - MathF.Atan2(g.EyeY, g.Drawbar);
+        return Math.Clamp(p, -maxPitch, maxPitch);
+    }
+
     /// <summary>Puts the trailer where the hitch and the articulation say: heading, then the origin so that the eye is on the hitch; the axle speed.</summary>
     static void Pin(ref TrailerBody b, in TowGeometry g, in TractorMotion t)
     {
         b.Yaw = FlightMath.Wrap(t.Yaw + b.Phi);
         var hitch = HitchPoint(g, t.Position, t.Yaw);
-        var (s, c) = MathF.SinCos(b.Yaw);
-        // eye = origin + (EyeX*c + EyeZ*s, ., -EyeX*s + EyeZ*c)
-        b.Position = new Vector3(hitch.X - (g.EyeX * c + g.EyeZ * s), t.Position.Y + g.HitchY - g.EyeY, hitch.Z - (-g.EyeX * s + g.EyeZ * c));
+        b.Position = OriginAt(g, hitch, b.Yaw);
         var (sp, cp) = MathF.SinCos(b.Phi);
         b.Speed = (t.Speed + t.YawRate * g.HitchX) * cp - (t.Slip + t.YawRate * g.HitchZ) * sp;
     }

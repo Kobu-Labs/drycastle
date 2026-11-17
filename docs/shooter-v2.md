@@ -471,6 +471,47 @@ unchanged; when the vehicle blows up, everyone aboard dies with it.
 - *No driver.* It is stepped hands off every tick and coasts, on land or water. A driver whose inputs stop arriving for 6 ticks is driven the
   same way until they resume.
 
+### Towing and the rocket cart
+
+A **trailer** (vehicles.json `trailer`: drawbar `eye`, `axle`, `mass`, `grip`, `loaded_hp`; no seats) is pulled by a **tractor** (a type with a `tow` block: the jeep, the flak truck). The model is
+ShooterCore's (`TowModel`, `TowLink`, `TowRules`; the numbers and the maths are in their doc comments, the machines in `docs/state-machines.md`). The **rocket cart** is the first trailer:
+placeholder numbers (6.5 m with the drawbar, 2.2 m wide, 1500 kg, drawbar 4.1 m), `spawn_count` 0, model `pack:synty-simple-military/rocket_cart` (a grey box until it exists).
+
+- **A trailer is a vehicle.** A `ServerCar` in the vehicle list with an id, a record, hit points, a hit box and a solid; it has no seats, so nobody enters it (server: `TryEnterCar`; client: `NearestFreeCar`),
+  bots never see a vehicle, `VehicleSeat` accepts 0 seats and its driver is 0. What moves it is its `TowLink` (`ServerCar.PlaceTrailer`: the node on the ground under the link's body).
+- **Auto-latch (no key).** Every tick `TrailerLatchTick` asks each loose trailer against every tractor within 14 m that has no trailer and can tow it: the tractor reverses faster than 0.3 m/s, its hitch is within
+  0.8 m of the eye (and 1 m up) and the headings differ by less than 35 degrees (`TowRules.CheckLatch`). A tractor tows at most one trailer.
+- **The tick.** The tractor steps with the `TowEffect` of its trailer (`CarModel.Step` or `DriveModel.Step`: mass over the pair's, 60 % top speed, less lateral grip, the jackknife block), then
+  `ServerCar.StepTowed` steps the trailer (`TowLink.StepHitched`) against the world. A trailer that is blocked stops its tractor: the drive-model path `TowModel.Hold`s the state, the car-model path restores
+  the physics body, and the wall's speed loss goes to the tractor's crash damage as any wall does. Loose, the trailer rolls to a stop (`StepFree`).
+- **The world.** `TrailerProbe` is the trailer's `ITrailerWorld`: its whole box (drawbar included), swept 0.5 m above the ground and pitched with the ground under its ends, against terrain, buildings,
+  trunks, placed solids, closed doors and the demon (the ground vehicle row of the rule table, `CollisionRules.SweepMask`). It asks for **no vehicle solid**, so its own tractor, whose box it overlaps at a deep
+  articulation, never blocks it. Other vehicles are the vehicle contact pass's (`ResolveVehicleContacts`), which skips a tractor and its own trailer; a hitched trailer is pinned to its tractor and does not
+  move in a bump (the other vehicle takes the push back), a loose one is shoved and takes speed.
+- **Run over.** A moving trailer runs over what its row says (`TrailerRunOver`, the same `RunOverTargets` as a vehicle) over its whole box, hurt by its axle speed and its `run_over_mass`, credited to the
+  tractor's driver (nobody when loose). The swing of its tail in a turn is in the swept path, not in the speed (approximation).
+- **Unhitch.** The tractor's driver holds interact for 0.6 s (`UnhitchKey`, machine `Trailer.UnhitchKey`, counted by the server). With a trailer on the hook the interact key leaves the vehicle on its release
+  (a tap, under 0.6 s) instead of on its press, so the same key does both; any other seat leaves on the press as always. The trailer is then Released (it rolls on, 2 s lockout, then Loose). A destroyed tractor or
+  trailer, a reset of either, or the Bigfoot lifting either, unhitches too.
+- **The load.** `CartCargo` (machine `RocketCart.Load`: Loaded, Empty; starts Loaded; a reset or a return loads it again) sets the hit points: `trailer.loaded_hp` (150) loaded, the type's `hp` (200) empty, a cart
+  keeping its share of health when the load changes (`VehicleLifecycle.SetMaxHp`). A loaded cart that is destroyed (bullets, a blast, a crash, a chain reaction) calls `NetServer.OnRocketCartDetonated(cart,
+  position, attackerId)`, whose body for now is the ordinary vehicle explosion (`VehicleBlast`); an empty one goes through `Detonate` as any vehicle. For the Scud event: `SpawnRocketCart(position, yaw, loaded)`,
+  `RemoveRocketCarts()`, `SetRocketCartLoaded(cart, loaded)`, `LoadedRocketCartsNear(point, radius)`. A removed cart is retired, not deleted: it stays in the vehicle list (ids are list indices) as a
+  destroyed vehicle that never returns, is left out of the snapshot (clients drop it) and out of the round reset. `/spawn rocket_cart` (admin) puts one down in front of the admin.
+- **On the wire (protocol 67).** The trailer's vehicle record is a vehicle's with two fields read differently (`VehicleRecord.MakeTrailer`): the pitch field (a driver's id on any other vehicle) is the id of the tractor
+  it is hitched to, 0 when loose, and bit 6 of the health byte (free until then) is the loaded flag. Position and yaw are the trailer's own, so everything that reads a vehicle record (the hit box, the solid, bullet
+  holes) works on it; nothing else is sent. The articulation of a hitched trailer is its record's yaw less its tractor's yaw in the same snapshot (the two are within a quantum of the server's `Phi`).
+- **Client.** `NetClient.Tow.cs`. A trailer is never drawn from its own raw record while hitched: `RenderTrailers` runs after every tractor has its drawn pose and places the trailer from the drawn tractor's hitch
+  (`tractor.Node.GlobalTransform * hitch`, so it leans with the tractor) and the articulation, then fits the ground (pitch from the hitch's height over the axle's ground, `TowModel.PitchFor`; roll from the ground
+  under the wheels; smoothed), rolls `wheel_l`/`wheel_r` with the drawn speed and shows `missile` while loaded. Loose, it is drawn at its record on the ground. A tractor's driver sees the tractor as that type is
+  seen: the jeep and the flak truck are `CarModel` types, interpolated for everyone, so their trailer's articulation is the interpolated snapshot's (it cannot lag its tractor, both come from the same
+  render tick); a `DriveModel` type with a `tow` block (none yet) is predicted by its driver, who also steps a copy of the trailer's body with `TowModel` after it (`DrivePrediction.AttachTrailer`, the effect
+  and the blocked-trailer hold as the server's) and reconciles it from the articulation the snapshot gives. A coupling or an uncoupling (the record's tractor id changes) plays `tow.clunk` through `PlayCarSound`
+  (car-design section 9) and toasts the driver ("Trailer hitched" / "Trailer unhitched"); while towing the driver's prompt adds "Hold E  Unhitch trailer".
+
+Approximations and open points: the trailer's mass is its loaded one whether or not the missile is on; the tractor's crash damage from a blocked trailer is the wall's rule on the pair's speed; a hitched
+trailer ignores bumps; the trailer's wheels and missile are not tested without the model (the grey box has none of the nodes); no trailer sound beyond the clunk.
+
 ## 7b. Items and equipment (#261)
 
 The weapons are the hotbar, what a player wears is **Equipment**, one item per equipment slot, and what is carried unworn is the **Bag**, six cells
@@ -668,6 +709,8 @@ The board goes to every client whole in event kind 185 (`IntelSync`, `IntelCodec
 The intel room is the floor of the military hangar: the first placed object of `data/intel.json` `base_asset` (`pack:synty-military/SM_Bld_Hangar_01`; `MapLoader.FirstObjectOfAsset`, lowest object id). `room` in that file lays the screen out in the object's own frame (`floor_m`, `at` [x, z], `facing`, `bottom_m`, `width_m`, `height_m`), and `IntelRoom.Place` (`ShooterCore/Intel`) turns it into a world anchor from the object's position, turn and scale in objects.json, never from the model, so it is the same for a player who has only the placeholder box. The screen is on the -z end wall, on the door panel x 0 to 4.56 (inner face z = -16.006), facing the +z end; the prefab's doors are solid, so `room.open_parts` (`SM_Bld_Hangar_Door_Small_01`, the small door of the +z end) is hidden and stops colliding (`IntelScreen.OpenEntrance`, `MapLoader.OpenObjectParts`, client and server). A map without such an object uses the command post of `base_bunker` (the wall the pipeline reserves, `bunkers.json` `intel`; `docs/pipeline.md`); with neither there is no intel room. The game draws the screen (`IntelScreen`, content in `IntelScreenView`) only within `view_range_m` of the camera. With several events the screen shows each for `rotate_seconds` in turn. `make shooter-intel-shots` renders the content with made-up events for review.
 
 ## 9. Wire protocol
+
+(Version 67 is towing, section 7 "Towing and the rocket cart": a trailer's vehicle record carries the id of the tractor it is hitched to in the pitch field (0 loose, the field a driver's id is in for every other vehicle) and bit 6 of the health byte says it is loaded (`VehicleRecord.MakeTrailer`, `Tractor`, `Loaded`). Nothing else is new: a hitched trailer's articulation is the difference of its yaw and the tractor's yaw in the same snapshot, so the pose is the same bytes as any vehicle's.)
 
 (Version 66 raised the seat limit to five: the seats record (entity type 7) carries the occupant of seat 4 in its position X, the seat switch request and state accept up to 5 seats, `VehicleSeat.MaxSeats`; ADR 0026.)
 

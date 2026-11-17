@@ -132,8 +132,12 @@ _Avoid_: client-side vehicle, smooth vehicle
 A single-axle vehicle with no seats that a tractor pulls (vehicles.json `trailer`: drawbar eye, axle, mass). Loose it stands still; hitched its drawbar eye is pinned to the tractor's hitch and it follows the hitch's velocity, so it cuts corners and, reversed, folds. Its machine is `Trailer.Tow` (Loose, Hitched, Released). The first trailer is the rocket cart.
 _Avoid_: cart (alone), caravan, wagon
 
+**Rocket cart**:
+The trailer that carries one large missile (vehicles.json `rocket_cart`, 6.5 m with its drawbar, about 1500 kg loaded, no seats, never dealt: the Scud event or `/spawn rocket_cart` puts one down). It is Loaded or Empty (machine `RocketCart.Load`, server-owned, one bit of its vehicle record): loaded it has low hit points (`trailer.loaded_hp`, 150) and, destroyed, detonates (the server's `OnRocketCartDetonated`: the Scud blast); empty it has the type's own hit points and blows up as a small ordinary vehicle. A destroyed cart returns to where it was put, loaded.
+_Avoid_: missile trailer, Scud trailer, wagon
+
 **Tow hitch / Hitched**:
-The tow hitch is the ball at the rear of a vehicle whose type has a `tow` block (the jeep, the Humvee, the flak truck); only data decides who tows. A tractor latches a loose trailer by itself when it reverses with its hitch within 0.8 m of the drawbar eye and headings within 35 degrees; the driver unhitches by holding interact, and the trailer cannot be latched again for 2 s (Released). Hitched, the tractor accelerates and brakes by its mass over the pair's, tops out at 60 % of its speed and holds less sideways acceleration; a turn taken too fast lets the trailer swing out.
+The tow hitch is the ball at the rear of a vehicle whose type has a `tow` block (the jeep, the Humvee, the flak truck); only data decides who tows. A tractor latches a loose trailer by itself when it reverses with its hitch within 0.8 m of the drawbar eye and headings within 35 degrees; the driver unhitches by holding interact for 0.6 s (a tap still leaves the vehicle, on release; `Trailer.UnhitchKey`), and the trailer cannot be latched again for 2 s (Released). A tractor pulls at most one trailer. Hitched, the tractor accelerates and brakes by its mass over the pair's, tops out at 60 % of its speed and holds less sideways acceleration; a turn taken too fast lets the trailer swing out.
 _Avoid_: coupled, attached, trailer lock
 
 **Jackknife limit**:

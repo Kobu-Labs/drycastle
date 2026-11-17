@@ -58,6 +58,14 @@ public class VehicleTrailerDef
     public float SwaySettle { get; set; } = 0.4f;
     /// <summary>Unhitched at speed it rolls to a stop at this deceleration, m/s².</summary>
     public float RollDecel { get; set; } = 3f;
+    /// <summary>
+    /// Hit points while it carries its load (the rocket cart's missile); 0: the trailer has no load to speak of and always has the type's <see cref="VehicleDef.Hp"/>. Empty, the type's
+    /// own hit points apply. A load can be below them: the missile is the fragile part (<see cref="CartCargo"/>).
+    /// </summary>
+    public float LoadedHp { get; set; }
+
+    /// <summary>The trailer carries a load that changes its hit points and, destroyed, goes off (<see cref="CartCargo"/>).</summary>
+    public bool HasCargo => LoadedHp > 0;
 
     /// <summary>The distance from the drawbar eye back to the axle, metres.</summary>
     public float Drawbar => Axle[2] - Eye[2];
@@ -69,6 +77,7 @@ public class VehicleTrailerDef
         if (Drawbar < 0.5f) return "the axle must be at least 0.5 m behind the drawbar eye (eye z below axle z)";
         if (Mass <= 0) return "mass must be positive";
         if (Grip <= 0 || SwayGain < 0 || SwaySettle <= 0 || RollDecel < 0) return "grip and sway_settle must be positive, sway_gain and roll_decel not negative";
+        if (LoadedHp < 0 || !float.IsFinite(LoadedHp)) return "loaded_hp must not be negative";
         return null;
     }
 }

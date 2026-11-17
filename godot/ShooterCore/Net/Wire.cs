@@ -321,7 +321,8 @@ public static class Wire
     //   v62 the Hunter's Log (#336): events 100-106 (requests for a page of hunts, the records and a player's log, their redacted answers, and the server-wide announcement)
     //   v64 the Lock-on launcher (ADR 0031): events 246 LockState (the shooter's Lock), 247 LockAlert (to the Aircraft's owner) and 248 HomingLaunch (a homing missile, broadcast)
     //   v66 a fifth seat (the Humvee, ADR 0026): the seats record carries the occupant of seat 4 in its position X (seats 1..3 are unchanged); the seat switch request and state accept up to 5 seats
-    public const byte ProtocolVersion = 66;
+    //   v67 trailers (the rocket cart, towing): a trailer's vehicle record carries the id of the tractor it is hitched to in the pitch field (0: loose) in place of a driver's, and bit 6 of its health byte says it is loaded (VehicleRecord.MakeTrailer); a hitched trailer's articulation is its record's yaw less the tractor's
+    public const byte ProtocolVersion = 67;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {
