@@ -118,12 +118,12 @@ public sealed partial class MapLoader
         var key = SolidShapeKeys.Of(p);
         if (!_solidShapes.TryGetValue(key, out var shape))
         {
-            shape = key.Kind == 1 ? PyramidShape(key) : BoxShape(key);
+            shape = key.Kind switch { 1 => PyramidShape(key), 2 => FrustumShape(key), _ => BoxShape(key) };
             _solidShapes[key] = shape;
         }
         var basis = Basis.Identity.Rotated(GVector3.Up, p.Yaw);
-        if (p.Shape == PartShape.Pyramid)
-            // the pyramid is built around its base centre, in the solid's yawed frame
+        if (p.Shape != PartShape.Box)
+            // the pyramid and the frustum are built around their base centre, in the solid's yawed frame
             return new CollisionShape3D { Shape = shape, Transform = new Transform3D(basis, ToGodot(p.X, p.Y, p.Z0)) };
         var mid = (p.Z0 + p.Z1) / 2;
         // a rotation about Godot's up axis by the map yaw maps the box's X onto the map u axis (cos, sin)
@@ -132,6 +132,18 @@ public sealed partial class MapLoader
 
     static BoxShape3D BoxShape(SolidShapeKeys.Key k)
         => new() { Size = new GVector3(k.A / 1000f, k.B / 1000f, k.C / 1000f) };
+
+    // The taper: the base ring at y = 0 (half-size A) and the top ring at y = height (half-size C), in the pyramid's local frame.
+    static ConvexPolygonShape3D FrustumShape(SolidShapeKeys.Key k)
+    {
+        var (lo, height, hi) = (k.A / 1000f, k.B / 1000f, k.C / 1000f);
+        var pts = new[]
+        {
+            new GVector3(-lo, 0, lo), new GVector3(lo, 0, lo), new GVector3(lo, 0, -lo), new GVector3(-lo, 0, -lo),
+            new GVector3(-hi, height, hi), new GVector3(hi, height, hi), new GVector3(hi, height, -hi), new GVector3(-hi, height, -hi),
+        };
+        return new ConvexPolygonShape3D { Points = pts };
+    }
 
     // Local points (no yaw, base centre at the origin): the base ring at y = 0 and the apex above it. The
     // CollisionShape3D transform yaws and places it; the ring is the same as PropColliders' ring rotated by the yaw.

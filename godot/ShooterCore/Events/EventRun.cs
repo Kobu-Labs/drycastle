@@ -50,10 +50,10 @@ public sealed class EventRun
 /// </summary>
 public sealed class EventBook
 {
-    public const string Bigfoot = "bigfoot", Mass = "mass", Demon = "demon", Thieves = "thieves";
+    public const string Bigfoot = "bigfoot", Mass = "mass", Demon = "demon", Thieves = "thieves", Harvester = "harvester", Scud = "scud";
 
     /// <summary>The kinds an admin can start with <c>/event &lt;kind&gt;</c> that take part in "one at a time".</summary>
-    public static readonly IReadOnlyList<string> Startable = new[] { Bigfoot, Mass, Demon, Thieves };
+    public static readonly IReadOnlyList<string> Startable = new[] { Bigfoot, Mass, Demon, Thieves, Harvester, Scud };
 
     /// <summary>The running event, or null.</summary>
     public EventRun? Current { get; private set; }

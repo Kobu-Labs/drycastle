@@ -68,7 +68,7 @@ public partial class NetServer
         FlockRules.Register(WorldEntityRegistry.Shared);
         _wildlife = new WildlifeKeeper(WildlifeData, AnimalData, _match.Entities, System.Environment.TickCount) { Log = s => GD.PrintErr($"server: {s}"), Shapes = AnimalShapes, Crowd = _animalCrowd };
         _match.Wildlife = _wildlife;
-        _wildlife.Killed += (a, by) => GD.Print($"server: #{by} killed a wild {a.Def.Id}");
+        _wildlife.Killed += (a, by) => { GD.Print($"server: #{by} killed a wild {a.Def.Id}"); OnWildKilled(a, by); };
     }
 
     /// <summary>A round starts: the wildlife of the last one is gone with the entities; the species of wildlife.json move to their habitat points.</summary>
@@ -76,7 +76,7 @@ public partial class NetServer
     {
         if (_wildlife == null) return;
         _wildlife.Clear();
-        if (_match.Phase != MatchPhase.Running || ArenaMode || MapDir == "" || Map == null || (WildlifeData.MaxAnimals <= 0 || WildlifeData.Species.Count == 0) && WildlifeData.Flocks.Count == 0) return;
+        if (_match.Phase != MatchPhase.Running || ArenaMode || MapDir == "" || Map == null || (WildlifeData.MaxAnimals <= 0 || WildlifeData.Species.Count == 0 && WildlifeData.Herds.Count == 0) && WildlifeData.Flocks.Count == 0) return;
         var points = MapZonePoints;
         var n = _wildlife.Populate(species => points.Points(species), _wildlifeGround ??= new WildlifeGround(this));
         GD.Print($"server: {n} wild animals, {_wildlife.Flocks.Count} bird flocks");

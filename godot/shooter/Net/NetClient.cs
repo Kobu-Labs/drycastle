@@ -64,15 +64,15 @@ public partial class NetClient : Node
     /// The mode flags (dead, in a vehicle, at a turret, steering the missile, held by the Mass, the demon or the Bigfoot) as one value to ask named questions of
     /// (<see cref="ClientModeInputs"/>); build it where it is used, it is a few bools. <c>InArmedSeat</c> is only ever true while driving (<see cref="MySeat"/> needs it).
     /// </summary>
-    ClientModeInputs Mode => new(Dead, _driving, _gunship != null, _controlling, _massSeated, _pinned, _heldByBigfoot, _pRising, _myState == EntityState.InVehicle, _driving && InArmedSeat);
+    ClientModeInputs Mode => new(Dead, _driving, _gunship != null || ScudScreenOn, _controlling, _massSeated, _pinned, _heldByBigfoot, _pRising, _myState == EntityState.InVehicle, _driving && InArmedSeat);
     /// <summary>weapons.json: hotbar order and the per-weapon movement speed multiplier used by prediction.</summary>
     public WeaponsFile Weapons = null!;
     /// <summary>match.json as the client shipped it: the gunfire blips' radius, lifetime and rate limit (null: no blips, e.g. headless bots).</summary>
     public MatchConfig? BlipConfig;
     /// <summary>Weapons smoke role: "a" (shoots) or "b" (stands still and counts hits); empty = none.</summary>
     public string WeaponsBot = "";
-    /// <summary>Bazooka smoke role ("a"/"b"); WeaponsBot carries the same letter so the shared bot plumbing runs.</summary>
-    public string BazookaBot = "";
+    /// <summary>Rpg smoke role ("a"/"b"); WeaponsBot carries the same letter so the shared bot plumbing runs.</summary>
+    public string RpgBot = "";
     /// <summary>Vehicle blast smoke role ("a"/"b"); WeaponsBot carries the same letter.</summary>
     public string BlastBot = "";
     /// <summary>Latest owner ammo state from the server (null before the first one).</summary>
@@ -81,9 +81,9 @@ public partial class NetClient : Node
     readonly List<(double T, HitMsg M)> _hitLog = new();
     readonly List<(double T, LaunchMsg M)> _launchLog = new();
     readonly List<(double T, ExplosionMsg M)> _explosionLog = new();
-    /// <summary>The event logs are read only by the scripted bots (the weapons, bazooka, blast and car checks), so a normal match keeps none of them: they grew for the whole match (#173, T3-028).</summary>
-    bool KeepEventLogs => WeaponsBot != "" || BazookaBot != "" || BlastBot != "" || CarBot != "";
-    sealed class Rocket { public double Born; public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; }
+    /// <summary>The event logs are read only by the scripted bots (the weapons, rpg, blast and car checks), so a normal match keeps none of them: they grew for the whole match (#173, T3-028).</summary>
+    bool KeepEventLogs => WeaponsBot != "" || RpgBot != "" || BlastBot != "" || CarBot != "";
+    sealed class Rocket { public double Born; public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; /* a homing missile (NetClient.LockOn.cs): the Aircraft it closes on and when it gets there */ public bool Homing; public ushort Target; public double Arrive; }
     readonly Dictionary<ushort, Rocket> _rockets = new();
     readonly HashSet<ushort> _deadRockets = new();
     readonly List<(double T, AmmoMsg M)> _ammoLog = new();
@@ -139,8 +139,10 @@ public partial class NetClient : Node
         InitThieves();
         InitDemon();
         InitAircraft();
+        InitLockOn();
         InitFlak();
         InitSeats();
+        InitScud();
         InitMatchEdges();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
@@ -270,14 +272,20 @@ public partial class NetClient : Node
         UpdateDeath(delta);
         UpdatePounce(delta);
         RenderCars();
+        RenderHarvester((float)delta);
         RenderAircraft(delta);
         RenderRockets();
+        RenderLockOn();
+        RenderLauncherLoaded();
         RenderMissiles();
         RenderMissilePov();
+        RenderScud(delta);
         RenderWater();
         UpdateViewmodel();
         UpdateDemonQuake(delta);
+        UpdateDust(); // before the shake: a blast wave that arrives this frame shakes this frame
         UpdateShake(delta);
+        UpdateNausea(delta); // a high player's sway (NetClient.High.cs), before the roll is composed
         FadeOwnCorrection(delta);
         UpdateHud();
         RozhlasMicFrame(); // the set holder's mic and the ON AIR cue
@@ -361,6 +369,7 @@ public partial class NetClient : Node
                 OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
                 OnThiefAudioEvent((EventKind)e.Kind, e.Payload); // a Gang member says a line (ticket 09)
                 OnBigfootEvent((EventKind)e.Kind, e.Payload); // the Bigfoot's effects and the footprints to its corpse (#264)
+                OnHarvesterEvent((EventKind)e.Kind, e.Payload); // the harvester's cut, its bales' fire (#331)
                 OnThievesEvent((EventKind)e.Kind, e.Payload); // the Raid vans' honk
                 OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
                 OnRozhlasEvent((EventKind)e.Kind, e.Payload); // the village loudspeaker's phase, broadcast and offset
@@ -368,6 +377,7 @@ public partial class NetClient : Node
                 OnGarageDoorEvent((EventKind)e.Kind, e.Payload); // the bus garage's doors
                 OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
                 OnDemonEvent((EventKind)e.Kind, e.Payload); // the demon: fireballs, the curse
+                OnHuntEvent((EventKind)e.Kind, e.Payload); // the Hunter's Log: answers and announcements (#336)
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 OnProgressionEvent((EventKind)e.Kind, e.Payload);
@@ -413,6 +423,7 @@ public partial class NetClient : Node
                 var d = Match.LatestDeath!;
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 SfxDeath(d);
+                NoteDeath(d);
                 if (d.Victim == _myId) { _deaths++; BeginDeathView(d.RespawnDelay); Dead = true; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); _hud?.SetProtection(0); OnStreakDeath(); }
                 break;
         }
@@ -461,23 +472,26 @@ public partial class NetClient : Node
         if (!_rockets.TryGetValue(id, out var r))
         {
             var speed = Weapons != null && rec.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[rec.Weapon].ProjectileSpeed : 40f;
-            r = new Rocket { Node = RocketFx.Make(Owned), Born = Now, Speed = speed }; _rockets[id] = r;
+            r = new Rocket { Node = RocketFx.Make(Owned, WeaponId(rec.Weapon)), Born = Now, Speed = speed }; _rockets[id] = r;
         }
         r.Pos = rec.Position; r.Dir = dir; r.At = Now;
     }
 
     void RenderRockets()
     {
+        var camAt = GetViewport()?.GetCamera3D()?.GlobalPosition;
         foreach (var r in _rockets.Values)
         {
             if (r.Node == null) continue;
-            var p = r.Pos + r.Dir * (r.Speed * (float)Math.Min(0.1, Now - r.At));
+            if (r.Homing) StepHoming(r);
+            var p = r.Homing ? r.Pos : r.Pos + r.Dir * (r.Speed * (float)Math.Min(0.1, Now - r.At));
             // visual only: the server rocket starts at the eye; draw it leaving the muzzle (0.8 m ahead, right and down) and blend onto the true path
             var k = Mathf.Max(0f, 1f - (float)(Now - r.Born) / 0.35f);
             var d = new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z);
             var side = d.Cross(Vector3.Up).Normalized();
             r.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z) + (d * 0.8f + side * 0.25f + Vector3.Down * 0.2f) * k;
             SfxRocket(r, r.Node.GlobalPosition);
+            if (camAt is { } eye) RocketFx.GateTrail(r.Node, eye);
             if (Mathf.Abs(r.Dir.Y) < 0.99f) r.Node.LookAt(r.Node.GlobalPosition + new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z));
         }
     }
@@ -603,7 +617,7 @@ public partial class NetClient : Node
         _viewFix *= Mathf.Exp(-CorrectionFade * (float)delta);
         if (_viewFix.LengthSquared() < 1e-6f) _viewFix = Vector3.Zero; // under a millimetre: done
         _me.ViewOffset = _viewFix + _heldSwing; // in the Bigfoot's hand the eye swings with the hand (#264)
-        _me.ViewRoll = _heldRoll;
+        _me.ViewRoll = _heldRoll + _nauseaRoll;
     }
 
     public override void _PhysicsProcess(double delta)
@@ -654,6 +668,7 @@ public partial class NetClient : Node
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
         if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); TickLootReturn(dt); }
         FxDemoInput(ref mi);
+        ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         _aimHeld = mi.Has(MoveButtons.Aim);
         if (HeadLookWanted()) mi.Buttons |= MoveButtons.HeadLook; // seated and looking out of their own eyes: the view is the head's, shown to everyone (ADR 0026)
         TickRecoil(mi);
@@ -692,11 +707,13 @@ public partial class NetClient : Node
                 var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 var dead = r.State == EntityState.Dead;
                 r.ShownYaw = s.Yaw; r.ShownPitch = s.Pitch;
-                TumbleRemote(r, at, s.Yaw, dead && TargetDummies.IsDummyId(id), dt);
+                if (dead) EndFling(id);
+                TumbleRemote(id, r, at, s.Yaw, dead && TargetDummies.IsDummyId(id), dt);
                 PounceLieRemote(id, r, at); // the one the demon has pinned lies on its back
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
-                r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && CorpseOf(id)); // riders are drawn in their seat (the server puts the body there), seated rather than standing
+                r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && (CorpseOf(id) || HarvestVictimHidden(id, dead))); // the harvester's victim is in the machine, then inside its bale: no body at the spot where it died // riders are drawn in their seat (the server puts the body there), seated rather than standing
                 r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
+                if (r.State == EntityState.InVehicle) _lastRode[id] = Now;
                 AnimateRemote(r, s.Pos);
                 UpdateNameTag(id, r);
             }
@@ -707,9 +724,10 @@ public partial class NetClient : Node
     /// The ragdoll of a killed dummy: while it is thrown (dead and moving fast) it spins about its middle with its limbs flailing, then lies flat with
     /// them loose. A dummy that fell where it stood plays the death clip; everything else stands upright at its feet. Corpses do the same in <see cref="RenderCorpses"/>.
     /// </summary>
-    void TumbleRemote(Remote r, Vector3 at, float yaw, bool dummyDown, float dt)
+    void TumbleRemote(ushort id, Remote r, Vector3 at, float yaw, bool dummyDown, float dt)
     {
         var t = r.Tumble;
+        if (_flings.TryGetValue(id, out var fling) && fling.Active && !dummyDown) { FlingRemote(id, r, fling, at, yaw, dt); return; } // in the Bigfoot's fist or flying from it (#360)
         if (!dummyDown) { if (t.Thrown) { t.Reset(); r.View?.SetRagdoll(false); } }
         else
         {
@@ -738,7 +756,7 @@ public partial class NetClient : Node
         var slot = Ammo?.Slot ?? _wantSlot;
         var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
         _viewmodel.Show(id);
-        _viewmodel.Visible = Mode.ShowsViewmodel && _me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
+        _viewmodel.Visible = Mode.ShowsViewmodel && !OwnBodyFlung && _me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
     }
 
     /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
@@ -874,7 +892,7 @@ public partial class NetClient : Node
     /// <summary>Holding zoom with a scoped weapon (sniper) narrows the camera; never while dead or with the mouse released.</summary>
     void ApplyScope()
     {
-        if (_me == null || _gunship != null) return; // at a turret the zoom is the gunship's
+        if (_me == null || _gunship != null || ScudScreenOn) return; // at a turret the zoom is the gunship's; on a Scud screen it is the screen's
         if (Mode.ScopeSuppressed)
         {
             // seated (roof/door gun, turret, any seat) or steering a missile: the held weapon's scope and iron-sight zoom stay off (#241)
@@ -917,7 +935,9 @@ public partial class NetClient : Node
         if (HandleChatInput(e)) return; // T or "/": the chat box
         if (HandleMapInput(e)) return; // M: the tactical map
         if (HandleEquipmentInput(e)) return; // F: the Equipment screen (#268)
+        if (HandleHuntersLogInput(e)) return; // J: the Hunter's Log (#336)
         if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
+        if (HandleScudInput(e)) return; // the Scud screen's keys (open, confirm, abort, lock, the wheel's zoom)
         if (HandleSeatInput(e)) return; // a number key while seated takes that seat
         if (HandleViewInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
         if (HandleBinocularsInput(e)) return; // B: the binoculars from the bag
@@ -950,27 +970,32 @@ public partial class NetClient : Node
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
                 if (KeepEventLogs) _launchLog.Add((Now, l));
                 if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
-                // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the bazooka's)
+                // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the rpg's)
                 if (_rockets.TryGetValue(l.Id, out var known)) known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length();
                 else if (!_deadRockets.Contains(l.Id) && ShotFx.Enabled && Weapons != null)
                 {
                     // show the rocket at once from the launch event; snapshots take over
                     var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);
-                    _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length() };
+                    _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned, WeaponId(l.Weapon)), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length() };
                 }
-                if (!EchoOfPredicted(l.Owner)) { SfxLaunch(l); if (l.Owner == _myId) _viewmodel?.Flash(0.5f); else if (_remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f); }
+                if (!EchoOfPredicted(l.Owner))
+                {
+                    SfxLaunch(l);
+                    if (l.Owner == _myId) _viewmodel?.Flash(0.5f); else if (_remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
+                    // a held launcher's backblast, behind the shooter's shoulder (a gunship's rocket has no owner on foot: its owner is not a remote here)
+                    if (_remotes.ContainsKey(l.Owner) && l.Velocity.LengthSquared() > 1e-4f) { var ld = G(NVec3.Normalize(l.Velocity)); RocketFx.Backblast(Owned, G(l.Origin) - ld * WeaponFx.LauncherRear + Vector3.Down * 0.15f, ld); }
+                }
                 break;
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
                 if (KeepEventLogs) _explosionLog.Add((Now, ex));
-                if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(Owned, rk.Node); }
-                SfxExplosion(ex);
+                if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(Owned, rk.Node); if (rk.Homing) NoteHomingBlast(new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z), ex.Radius); }
                 _dec.Forget(ex.Id);
                 _deadRockets.Add(ex.Id);
                 if (_deadRockets.Count > 256) _deadRockets.Clear();
                 var exR = ex.Radius > 0 ? ex.Radius : 6f; // the blast the server used (a gunship rocket's is 8 m)
                 var exAt = new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z);
-                RocketFx.Explode(Owned, exAt, exR);
-                ShakeFor(exAt, exR);
+                RocketFx.Explode(Owned, exAt, exR, ex.WaveSpeed);
+                BlastFelt(exAt, exR, SoundRules.Event("explosion", WeaponId(ex.Weapon)), ex.WaveSpeed);
                 break;
             case EventKind.VehicleExplosion when WeaponCodec.DecodeVehicleExplosion(payload) is { } vx:
                 OnVehicleExplosion(vx);

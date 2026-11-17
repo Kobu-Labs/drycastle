@@ -77,7 +77,7 @@ public class FlightTests
         Assert.True(v.CrashDamage);
         Assert.Equal("driver", v.Seats[0].Role);   // the pilot's seat is the driver seat of the seat framework
         Assert.Equal("drycastle-generated-models/utility_helicopter.glb", v.Model);
-        Assert.Equal(1, v.SpawnCount);
+        Assert.Equal(0, v.SpawnCount);   // it stands on the heliport (HeliportTests), never dealt at random
         Assert.Null(v.Flak);
     }
 

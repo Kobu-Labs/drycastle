@@ -65,6 +65,9 @@ public struct DriveInput
 
     /// <summary>Nobody at the wheel, or a driver whose inputs are not arriving: it coasts.</summary>
     public static DriveInput None => default;
+
+    /// <summary>The brakes are on whatever the driver presses (a Scud truck while its rack moves): no throttle, no steering, the handbrake.</summary>
+    public static DriveInput Held => new() { Handbrake = true };
 }
 
 /// <summary>Where a move ended, and the surface that stopped it (unit normal, pointing away from the surface).</summary>
@@ -105,6 +108,8 @@ public static class DriveModel
     const float MaxTilt = 0.6f;
     /// <summary>A wheel over a drop hangs: it pulls the body down no further than this below the highest wheel, metres.</summary>
     const float WheelDroop = 1.2f;
+    /// <summary>... or this share of the wheelbase, whichever is more: a slope of this much (rise over run) is followed whole however long the vehicle is.</summary>
+    const float LongDroop = 0.35f;
     /// <summary>Falling, it goes afloat once the wheels are within this of the surface, metres.</summary>
     const float SurfaceTouch = 0.05f;
     /// <summary>Below these the vehicle is taken as exactly still, so nothing creeps.</summary>
@@ -119,7 +124,8 @@ public static class DriveModel
     public static float WaterDrag(VehicleDef def) =>
         (def.WaterAcceleration - def.Drive!.Water.CoastDrag * def.WaterTopSpeed) / (def.WaterTopSpeed * def.WaterTopSpeed);
 
-    public static void Step(ref DriveState s, VehicleDef def, in DriveInput input, float dt, IDriveWorld world)
+    /// <param name="tow">What a trailer on the hook does to the step (<see cref="TowLoad"/>: the pull, the brake, the top speed and the grip it takes; <see cref="TowBlock"/>: no folding it further than its limit). The default is no trailer, and then the step is exactly what it is without the argument.</param>
+    public static void Step(ref DriveState s, VehicleDef def, in DriveInput input, float dt, IDriveWorld world, in TowEffect tow = default)
     {
         var d = def.Drive!;
         var land = d.Land; var wet = d.Water;
@@ -169,16 +175,16 @@ public static class DriveModel
             {
                 // the key against the travel: part of the brake bites at once, the rest comes in with the ramp
                 var bite = land.BrakeBite + (1f - land.BrakeBite) * Math.Clamp(-MathF.Sign(u) * s.Throttle, 0f, 1f);
-                u = FlightMath.Approach(u, 0, def.Brake * bite * dt);
+                u = FlightMath.Approach(u, 0, def.Brake * tow.Load.BrakeScale * bite * dt);
             }
             else if (MathF.Abs(s.Throttle) > Dead && key * s.Throttle >= 0)
             {
                 // driven (a released key's ramp still pushes while it runs out, so lifting off is not a step)
-                var limit = s.Throttle > 0 ? def.TopSpeed : def.TopSpeed * land.ReverseTopFraction;
+                var limit = s.Throttle > 0 ? def.TopSpeed * tow.Load.TopSpeedScale : def.TopSpeed * tow.Load.TopSpeedScale * land.ReverseTopFraction;
                 var along = u * MathF.Sign(s.Throttle); // the speed in the direction it is driven
                 var launch = 1f + (land.LaunchBoost - 1f) * MathF.Max(0f, 1f - MathF.Abs(u) / land.LaunchSpeed);
                 var fade = 1f - MathF.Pow(Math.Clamp(along / limit, 0f, 1f), land.PowerCurve);
-                if (along <= limit) u += def.Acceleration * launch * fade * s.Throttle * dt;
+                if (along <= limit) u += def.Acceleration * tow.Load.AccelScale * launch * fade * s.Throttle * dt;
                 else u = FlightMath.Approach(u, limit * MathF.Sign(s.Throttle), (land.CoastDecel + land.CoastDrag * MathF.Abs(u)) * dt); // faster than it can drive (out of a drop): it rolls down to it
             }
             else u = FlightMath.Approach(u, 0, (land.CoastDecel + land.CoastDrag * MathF.Abs(u)) * dt);
@@ -186,6 +192,7 @@ public static class DriveModel
             // the wheel sets a circle; the tyres hold only so much sideways, which caps the yaw rate at speed
             wantYaw = -s.Steer * u / TurnRadiusAt(def, u);
             var hold = MathF.Abs(u) > 0.5f ? land.Grip / MathF.Abs(u) : float.PositiveInfinity;
+            if (tow.Hitched && MathF.Abs(u) > 0.5f) hold = MathF.Min(hold, def.MaxLateralAccel * tow.Load.LateralScale / MathF.Abs(u)); // the trailer's weight: the bend must be wider
             wantYaw = Math.Clamp(wantYaw, -hold, hold) * (input.Handbrake ? land.HandbrakeSteer : 1f);
             yawResponse = land.YawResponse;
         }
@@ -193,6 +200,7 @@ public static class DriveModel
         // ---- yaw: the rate follows what the wheel or the helm asks for; the heading turns, the motion keeps its own way
         s.YawRate += (wantYaw - s.YawRate) * (1f - MathF.Exp(-yawResponse * dt));
         if (MathF.Abs(wantYaw) < StillRate && MathF.Abs(s.YawRate) < StillRate) s.YawRate = 0;
+        if (tow.Block.Active) tow.Block.Clamp(ref u, ref w, ref s.YawRate); // the trailer is at its limit: what would fold it further is taken
         var turn = s.YawRate * dt;
         s.Yaw = FlightMath.Wrap(s.Yaw + turn);
         var (st, ct) = MathF.SinCos(turn);
@@ -307,6 +315,7 @@ public static class DriveModel
         public float Step(VehicleDriveDef d, float stood, float pitch, float roll)
         {
             var ahead = MathF.Tan(pitch) * d.Wheelbase / 2f; var side = MathF.Tan(roll) * d.Track / 2f;
+            stood -= MathF.Tan(pitch) * d.AxleCentre; // the plane's height between the axles, which is not under the origin on every vehicle
             return MathF.Max(MathF.Max(FrontLeft - (stood + ahead - side), FrontRight - (stood + ahead + side)),
                 MathF.Max(RearLeft - (stood - ahead - side), RearRight - (stood - ahead + side)));
         }
@@ -320,6 +329,9 @@ public static class DriveModel
     {
         var (sy, cy) = MathF.SinCos(yaw);
         var ahead = new Vector3(-sy, 0, -cy) * (d.Wheelbase / 2f); var side = new Vector3(cy, 0, -sy) * (d.Track / 2f);
+        pos -= new Vector3(-sy, 0, -cy) * d.AxleCentre; // the point between the axles (the model's z, positive: behind the origin)
+        // the world looks for ground from a step above the point it is given: an axle far from the middle is that much higher up a slope, so a long vehicle asks from higher
+        pos.Y += MathF.Max(0f, d.Wheelbase / 2f * LongDroop * 2f - 1f);
         var fl = world.GroundY(pos + ahead - side);
         var fr = world.GroundY(pos + ahead + side);
         var rl = world.GroundY(pos - ahead - side);
@@ -327,11 +339,15 @@ public static class DriveModel
         var highest = MathF.Max(MathF.Max(fl, fr), MathF.Max(rl, rr));
         wheels = default;
         if (float.IsNegativeInfinity(highest)) return false;
-        fl = MathF.Max(fl, highest - WheelDroop); fr = MathF.Max(fr, highest - WheelDroop);
-        rl = MathF.Max(rl, highest - WheelDroop); rr = MathF.Max(rr, highest - WheelDroop);
-        wheels = new Wheels(fl, fr, rl, rr, (fl + fr + rl + rr) / 4f,
-            Math.Clamp(MathF.Atan2((fl + fr - rl - rr) / 2f, d.Wheelbase), -MaxTilt, MaxTilt),
-            Math.Clamp(MathF.Atan2((fr + rr - fl - rl) / 2f, d.Track), -MaxTilt, MaxTilt));
+        // a long vehicle's axles are further apart in height on the same slope: its wheels may hang by that much more (a bus on a dyke lies on it)
+        var droop = MathF.Max(WheelDroop, d.Wheelbase * LongDroop);
+        fl = MathF.Max(fl, highest - droop); fr = MathF.Max(fr, highest - droop);
+        rl = MathF.Max(rl, highest - droop); rr = MathF.Max(rr, highest - droop);
+        var pitch = Math.Clamp(MathF.Atan2((fl + fr - rl - rr) / 2f, d.Wheelbase), -MaxTilt, MaxTilt);
+        // the origin stands on the wheels' plane: ahead of the point between the axles it is higher on a nose-up slope
+        wheels = new Wheels(fl, fr, rl, rr, (fl + fr + rl + rr) / 4f + MathF.Tan(pitch) * d.AxleCentre,
+            pitch,
+            d.Track > 0 ? Math.Clamp(MathF.Atan2((fr + rr - fl - rl) / 2f, d.Track), -MaxTilt, MaxTilt) : 0f); // a single-track vehicle stands upright across the slope
         return true;
     }
 
@@ -421,9 +437,18 @@ public sealed class DrivePrediction
 
     readonly VehicleDef _def;
     readonly IDriveWorld _world;
-    readonly List<(ushort Seq, DriveInput Input, DriveState After)> _pending = new();
+    readonly List<(ushort Seq, DriveInput Input, DriveState After, TrailerBody TrailerAfter)> _pending = new();
+
+    /// <summary>The trailer on the hook, if any: what the tractor's step is told about it and how the copy of its body is stepped (<see cref="AttachTrailer"/>).</summary>
+    sealed record TrailerRig(VehicleDef TrailerDef, TowGeometry Geometry, ITrailerWorld? World);
+    TrailerRig? _rig;
+
+    /// <summary>The trailer on the hook carries its load (a rocket cart with its missile): its mass is the loaded one's. The client sets it from the trailer's record as it changes.</summary>
+    public bool TrailerLoaded = true;
 
     public DriveState State;
+    /// <summary>The driver's own copy of the hitched trailer's body, stepped with the tractor (valid while <see cref="HasTrailer"/>).</summary>
+    public TrailerBody TrailerBody;
     /// <summary>Corrections made so far, and the largest position error seen at an acknowledged input.</summary>
     public int Corrections { get; private set; }
     public float MaxError { get; private set; }
@@ -435,27 +460,66 @@ public sealed class DrivePrediction
 
     public int PendingCount => _pending.Count;
 
+    /// <summary>A trailer is on the hook of the vehicle being predicted.</summary>
+    public bool HasTrailer => _rig != null;
+
+    /// <summary>
+    /// The tractor has a trailer hitched (the server's record says so): from now every step passes its effect to the tractor and steps a copy of <paramref name="body"/> with <see cref="TowModel"/> after the
+    /// tractor, as the server does (ADR 0014). <paramref name="world"/> is the trailer's view of the solids (null: nothing blocks it). The inputs already pending are not replayed with it.
+    /// </summary>
+    public void AttachTrailer(VehicleDef trailerDef, in TowGeometry geometry, in TrailerBody body, ITrailerWorld? world)
+    {
+        _rig = new TrailerRig(trailerDef, geometry, world);
+        TrailerBody = body;
+    }
+
+    /// <summary>The trailer is no longer on the hook (the server's record says it is loose).</summary>
+    public void DetachTrailer() => _rig = null;
+
+    /// <summary>One tick of the tractor and, with a trailer, of the trailer after it: a blocked trailer holds the tractor where it was.</summary>
+    void StepBoth(ref DriveState s, ref TrailerBody trailer, in DriveInput input, float dt)
+    {
+        if (_rig is not { } rig) { DriveModel.Step(ref s, _def, input, dt, _world); return; }
+        var before = s;
+        DriveModel.Step(ref s, _def, input, dt, _world, new TowEffect(TowLoad.Of(_def, rig.TrailerDef, TrailerLoaded), TowModel.BlockOf(rig.Geometry, trailer)));
+        if (rig.World == null) TowModel.Step(ref trailer, rig.Geometry, TractorMotion.From(s), dt);
+        else if (!TowModel.StepChecked(ref trailer, rig.Geometry, TractorMotion.From(s), dt, rig.World)) TowModel.Hold(ref s, before);
+    }
+
     /// <summary>Steps the prediction with the input just sent under <paramref name="seq"/>.</summary>
     public void Step(ushort seq, in DriveInput input, float dt)
     {
-        DriveModel.Step(ref State, _def, input, dt, _world);
-        _pending.Add((seq, input, State));
+        StepBoth(ref State, ref TrailerBody, input, dt);
+        _pending.Add((seq, input, State, TrailerBody));
         if (_pending.Count > MaxPending) _pending.RemoveAt(0);
+    }
+
+    /// <summary>
+    /// A copy of the prediction stepped on by <paramref name="dt"/> (the part of a tick a frame is past the last one) with <paramref name="input"/>: what is drawn between ticks. Nothing of the prediction itself changes.
+    /// </summary>
+    public (DriveState State, TrailerBody Trailer) Ahead(in DriveInput input, float dt)
+    {
+        var s = State; var t = TrailerBody;
+        StepBoth(ref s, ref t, input, dt);
+        return (s, t);
     }
 
     /// <summary>
     /// The server's state after it processed input <paramref name="ack"/>. Returns true when the prediction had to be corrected. Inputs up to the
     /// acknowledged one are forgotten; an acknowledgement of an input this prediction never stepped (sent before the driver sat down) is ignored.
+    /// With a trailer on the hook the server's articulation (<paramref name="serverPhi"/>, the record's yaw less the tractor's) is compared too; the slide, which is not on the wire, is kept as predicted.
     /// </summary>
-    public bool Reconcile(ushort ack, in DriveState server, float dt)
+    public bool Reconcile(ushort ack, in DriveState server, float dt, float serverPhi = 0f)
     {
         var index = _pending.FindIndex(p => p.Seq == ack);
         if (index < 0) return false;
         var predicted = _pending[index].After;
+        var predictedTrailer = _pending[index].TrailerAfter;
         _pending.RemoveRange(0, index + 1);
         var error = Vector3.Distance(predicted.Position, server.Position);
         MaxError = MathF.Max(MaxError, error);
-        if (error <= PositionEpsilon && MathF.Abs(predicted.Speed - server.Speed) <= SpeedEpsilon && MathF.Abs(predicted.Slip - server.Slip) <= SpeedEpsilon
+        var trailerOff = _rig != null && MathF.Abs(FlightMath.Wrap(predictedTrailer.Phi - serverPhi)) > AngleEpsilon;
+        if (!trailerOff && error <= PositionEpsilon && MathF.Abs(predicted.Speed - server.Speed) <= SpeedEpsilon && MathF.Abs(predicted.Slip - server.Slip) <= SpeedEpsilon
             && MathF.Abs(FlightMath.Wrap(predicted.Yaw - server.Yaw)) <= AngleEpsilon && predicted.Afloat == server.Afloat && predicted.Airborne == server.Airborne)
             return false;
         Corrections++;
@@ -466,12 +530,14 @@ public sealed class DrivePrediction
         s.Pitch = server.Pitch; s.Roll = server.Roll;
         s.Afloat = server.Afloat; s.Airborne = server.Airborne;
         s.Sink = server.Emerging ? MathF.Max(predicted.Sink, server.Sink) : 0f;
+        var trailer = predictedTrailer;
+        if (_rig is { } rig) { trailer = TowModel.Pose(rig.Geometry, s.Position, s.Yaw, serverPhi); trailer.Slide = predictedTrailer.Slide; trailer.Speed = predictedTrailer.Speed; }
         for (var i = 0; i < _pending.Count; i++)
         {
-            DriveModel.Step(ref s, _def, _pending[i].Input, dt, _world);
-            _pending[i] = (_pending[i].Seq, _pending[i].Input, s);
+            StepBoth(ref s, ref trailer, _pending[i].Input, dt);
+            _pending[i] = (_pending[i].Seq, _pending[i].Input, s, trailer);
         }
-        State = s;
+        State = s; TrailerBody = trailer;
         return true;
     }
 }

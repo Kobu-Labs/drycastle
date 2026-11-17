@@ -4,10 +4,10 @@ namespace Drycastle.ShooterCore;
 /// Who wants the mouse released (a cursor to click with) instead of captured (looking around). The shell asks it every frame and writes
 /// <c>Input.MouseMode</c>; any other writer must ask the same question or it fights the shell (last writer in the frame wins).
 /// </summary>
-public readonly record struct MouseOwners(bool Dead, bool ChatOpen, bool EquipmentOpen, bool TacticalMapOpen, bool ChooserFreesMouse)
+public readonly record struct MouseOwners(bool Dead, bool ChatOpen, bool EquipmentOpen, bool TacticalMapOpen, bool ChooserFreesMouse, bool HuntersLogOpen = false)
 {
-    /// <summary>The respawn screen, the chat box, the Equipment screen, the tactical map (click to set the waypoint) and the corpse chooser's item list release the mouse.</summary>
-    public bool WantsFreeMouse => Dead || ChatOpen || EquipmentOpen || TacticalMapOpen || ChooserFreesMouse;
+    /// <summary>The respawn screen, the chat box, the Equipment screen, the tactical map (click to set the waypoint), the Hunter's Log and the corpse chooser's item list release the mouse.</summary>
+    public bool WantsFreeMouse => Dead || ChatOpen || EquipmentOpen || TacticalMapOpen || ChooserFreesMouse || HuntersLogOpen;
 
     /// <summary>
     /// The sandbox map closes and gives the mouse back: captured unless a menu has opened meanwhile or another owner still wants the cursor (death, the chat box).
@@ -16,8 +16,8 @@ public readonly record struct MouseOwners(bool Dead, bool ChatOpen, bool Equipme
     public bool CapturesWhenMapCloses(bool menuOpen) => !menuOpen && !WantsFreeMouse;
 }
 
-/// <summary>The full-screen overlays of the HUD that never show together.</summary>
-public enum Overlay { Equipment, TacticalMap }
+/// <summary>The overlays of the HUD that never show together (the Hunter's Log is a centred panel on its own top layer, not full-screen).</summary>
+public enum Overlay { Equipment, TacticalMap, HuntersLog }
 
 /// <summary>What the arbiter needs to know. <c>ControlMode</c>: a turret or the missile owns the screen. <c>Ending</c>: the match is over.</summary>
 public readonly record struct OverlayContext(bool ChatOpen, bool Dead, bool Ending, bool ControlMode, bool MenuOpen, bool ChooserOpen);
@@ -43,10 +43,10 @@ public static class OverlayArbiter
     public static bool ScreenTaken(in OverlayContext c) => c.Dead || c.Ending || c.ControlMode;
 
     /// <summary>
-    /// An open overlay gives way to a menu (and the Equipment screen also to the corpse chooser). The map did not give way to a menu before: Esc
+    /// An open overlay gives way to a menu (and the Equipment screen and the Hunter's Log also to the corpse chooser). The map did not give way to a menu before: Esc
     /// closed it first, behind the pause menu's back, and a menu that opened by itself sat on top of a map that still held the cursor.
     /// </summary>
-    public static bool YieldsToMenu(Overlay o, in OverlayContext c) => o == Overlay.Equipment ? c.MenuOpen || c.ChooserOpen : c.MenuOpen;
+    public static bool YieldsToMenu(Overlay o, in OverlayContext c) => o != Overlay.TacticalMap ? c.MenuOpen || c.ChooserOpen : c.MenuOpen;
 
     /// <summary>The per-frame verdict: should the open overlay close now.</summary>
     public static bool ShouldClose(Overlay o, in OverlayContext c) => ScreenTaken(c) || YieldsToMenu(o, c);

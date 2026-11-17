@@ -143,12 +143,12 @@ public static class VehicleBlastFx
 /// </summary>
 public sealed class VehicleSeat
 {
-    public const int MaxSeats = 4;
+    public const int MaxSeats = 5;
     readonly ushort[] _occupant;
 
     public VehicleSeat(int seats = 1)
     {
-        if (seats < 1 || seats > MaxSeats) throw new ArgumentOutOfRangeException(nameof(seats));
+        if (seats < 0 || seats > MaxSeats) throw new ArgumentOutOfRangeException(nameof(seats)); // 0 seats: a trailer, which nobody can board
         _occupant = new ushort[seats];
         _blocked = new bool[seats];
     }
@@ -161,13 +161,18 @@ public sealed class VehicleSeat
     public void Unblock(int seat) => _blocked[seat] = false;
 
     public int Count => _occupant.Length;
-    /// <summary>Player id of the driver (seat 0), 0 when empty.</summary>
-    public ushort Driver => _occupant[0];
+    /// <summary>Player id of the driver (seat 0), 0 when empty (and for a type with no seats).</summary>
+    public ushort Driver => _occupant.Length > 0 ? _occupant[0] : (ushort)0;
     /// <summary>Player id in <paramref name="seat"/>, 0 when empty.</summary>
     public ushort Occupant(int seat) => _occupant[seat];
     public bool Occupied => _occupant.Any(p => p != 0);
     public bool HasFree { get { for (var i = 0; i < _occupant.Length; i++) if (IsFree(i)) return true; return false; } }
     public bool IsFree(int seat) => _occupant[seat] == 0 && !_blocked[seat];
+    /// <summary>Nobody sits in <paramref name="seat"/>: free, or held by a dead rider's corpse, which a boarder kicks out (#330).</summary>
+    public bool IsBoardable(int seat) => _occupant[seat] == 0;
+    /// <summary>A corpse (and no player) holds <paramref name="seat"/>.</summary>
+    public bool HoldsCorpse(int seat) => _occupant[seat] == 0 && _blocked[seat];
+    public bool HasBoardable { get { for (var i = 0; i < _occupant.Length; i++) if (IsBoardable(i)) return true; return false; } }
 
     /// <summary>The seat <paramref name="player"/> sits in, or -1.</summary>
     public int SeatOf(ushort player)
@@ -183,6 +188,20 @@ public sealed class VehicleSeat
         if (player == 0 || SeatOf(player) >= 0) return false;
         if (seat < 0) { for (var i = 0; i < _occupant.Length && seat < 0; i++) if (IsFree(i)) seat = i; }
         if (seat < 0 || seat >= _occupant.Length || !IsFree(seat)) return false;
+        _occupant[seat] = player;
+        return true;
+    }
+
+    /// <summary>
+    /// Boards <paramref name="seat"/> as <see cref="TryEnter"/> does, and also a seat a corpse holds (#330): <paramref name="kicked"/> is then true, the seat is
+    /// unblocked and taken at once; the caller flings the corpse out. A taken seat or a refused player changes nothing.
+    /// </summary>
+    public bool TryBoard(ushort player, int seat, out bool kicked)
+    {
+        kicked = false;
+        if (player == 0 || SeatOf(player) >= 0 || seat < 0 || seat >= _occupant.Length || !IsBoardable(seat)) return false;
+        kicked = _blocked[seat];
+        _blocked[seat] = false;
         _occupant[seat] = player;
         return true;
     }
@@ -222,15 +241,15 @@ public sealed class VehicleSeat
 
     /// <summary>
     /// The free seat of <paramref name="def"/> nearest to <paramref name="from"/> (horizontal distance, metres), within <paramref name="range"/>;
-    /// -1 if none. An empty vehicle always gives the driver's seat; ties go to the lower seat index.
+    /// -1 if none. An empty vehicle always gives the driver's seat; ties go to the lower seat index. With <paramref name="kickCorpses"/> a seat held by a corpse counts as free (#330).
     /// </summary>
-    public int NearestFreeSeat(VehicleDef def, Vector3 carPos, float yaw, Vector3 from, float range)
+    public int NearestFreeSeat(VehicleDef def, Vector3 carPos, float yaw, Vector3 from, float range, bool kickCorpses = false)
     {
-        if (!Occupied && _occupant.Length > 0 && !_blocked[0]) return 0; // an empty vehicle: whoever gets in first is the driver, wherever they stand (unless a corpse sits there)
+        if (!Occupied && _occupant.Length > 0 && (kickCorpses || !_blocked[0])) return 0; // an empty vehicle: whoever gets in first is the driver, wherever they stand (a corpse there is kicked out with kickCorpses, else it blocks)
         var best = -1; var bd = range;
         for (var i = 0; i < _occupant.Length && i < def.Seats.Count; i++)
         {
-            if (!IsFree(i)) continue;
+            if (kickCorpses ? !IsBoardable(i) : !IsFree(i)) continue;
             var p = SeatPosition(carPos, yaw, def.Seats[i].Offset);
             var d = MathF.Sqrt((p.X - from.X) * (p.X - from.X) + (p.Z - from.Z) * (p.Z - from.Z));
             if (d <= bd && (best < 0 || d < bd)) { best = i; bd = d; }
@@ -304,7 +323,7 @@ public sealed class VehicleGun
 
 public static class VehicleColours
 {
-    /// <summary>Paint palette (sRGB): tints the Kenney body material. Kept bright so the palette texture's shading still reads.</summary>
+    /// <summary>Default colour variants (sRGB) of a type with no skins, paints or tint: how many there are (the colour index of the record). No model is tinted with them any more.</summary>
     public static readonly (float R, float G, float B)[] Palette =
     {
         (0.90f, 0.20f, 0.18f), (0.20f, 0.45f, 0.90f), (0.95f, 0.80f, 0.15f), (0.25f, 0.75f, 0.35f),
@@ -326,7 +345,7 @@ public static class VehicleRecord
 {
     public const ushort FirstId = 0x4000;
 
-    /// <summary>Health byte bit 0x80: headlights on (one bit, see <see cref="Headlights"/>). Bits 0..1 are the damage stage, bits 2..5 the wheels the Thieves have taken (<see cref="WheelsMask"/>), bit 6 is free.</summary>
+    /// <summary>Health byte bit 0x80: headlights on (one bit, see <see cref="Headlights"/>). Bits 0..1 are the damage stage, bits 2..5 the wheels the Thieves have taken (<see cref="WheelsMask"/>), bit 6 is a trailer's loaded flag (<see cref="LoadedBit"/>, <see cref="MakeTrailer"/>).</summary>
     public const byte LightsBit = 0x80, StageMask = 0x03, WheelsMask = 0x3C;
     const int WheelsShift = 2;
 
@@ -342,7 +361,27 @@ public static class VehicleRecord
     /// <summary>Weapon byte of a vehicle record: type index in the high nibble, colour variant in the low one.</summary>
     public static byte Pack(int kind, byte colour) => (byte)((kind << 4) | (colour & 0xF));
 
+    /// <summary>
+    /// A trailer's record (a type with a <c>trailer</c> block; protocol 67). It has no seats, so the pitch field that carries a driver's id carries the id of the tractor it is hitched to
+    /// (0: loose), and bit 6 of the health byte, free until then, says it is <see cref="LoadedBit">loaded</see> (the rocket cart's missile). Position and yaw are the trailer's own, as
+    /// any vehicle's; a client draws a hitched one from its tractor as it draws it (<see cref="TowModel.Pose"/>) and the articulation, which is the two yaws' difference.
+    /// </summary>
+    public static EntityRecord MakeTrailer(ushort id, Vector3 pos, float yaw, ushort tractor, byte colourAndKind, bool loaded, int stage = 0, bool destroyed = false)
+    {
+        var health = (stage & StageMask) | (loaded ? LoadedBit : 0);
+        var r = EntityRecord.Make(id, EntityType.Vehicle, pos, yaw, 0, health, destroyed ? EntityState.Dead : EntityState.Alive, colourAndKind);
+        r.Pitch = unchecked((short)tractor);
+        return r;
+    }
+
+    /// <summary>Health byte bit 6 of a trailer's record: the load is on it. Bit 7 (<see cref="LightsBit"/>) and the wheel bits are a driven vehicle's; a trailer has neither.</summary>
+    public const byte LoadedBit = 0x40;
+
     public static ushort Driver(in EntityRecord r) => unchecked((ushort)r.Pitch);
+    /// <summary>The vehicle a trailer's record says it is hitched to, 0 when loose (the same field as <see cref="Driver"/>: a trailer has none).</summary>
+    public static ushort Tractor(in EntityRecord r) => unchecked((ushort)r.Pitch);
+    /// <summary>Whether a trailer's record says it carries its load.</summary>
+    public static bool Loaded(in EntityRecord r) => (r.Health & LoadedBit) != 0;
     public static int Stage(in EntityRecord r) => r.Health & StageMask;
     public static bool Lights(in EntityRecord r) => (r.Health & LightsBit) != 0;
     /// <summary>The wheels taken, one bit each (0 front left, 1 front right, 2 back left, 3 back right).</summary>
@@ -352,7 +391,7 @@ public static class VehicleRecord
 }
 
 /// <summary>
-/// Planar arcade vehicle model (car, motorcycle, bicycle: same model, different constants in vehicles.json), Godot-free.
+/// Planar arcade vehicle model (car, motorcycle: same model, different constants in vehicles.json), Godot-free.
 /// Only the server runs it: clients render snapshots, so there is no client-side mirror to keep in step.
 /// The host supplies collision (the real speed after the physics move is fed back).
 /// </summary>
@@ -386,7 +425,8 @@ public static class CarModel
     /// only moderately wider at top speed; the actual yaw rate chases that target at a limited slew rate.
     /// <paramref name="onWater"/> is set while the vehicle floats: an amphibious then drives at its water speed.
     /// </summary>
-    public static void Step(ref CarState s, VehicleDef def, float throttle, float steer, bool handbrake, float dt, bool onWater = false)
+    /// <param name="tow">What a trailer on the hook does to the step (<see cref="TowLoad"/>, <see cref="TowBlock"/>); the default is no trailer and changes nothing.</param>
+    public static void Step(ref CarState s, VehicleDef def, float throttle, float steer, bool handbrake, float dt, bool onWater = false, in TowEffect tow = default)
     {
         var h = def.Handling;
         var v = s.Speed;
@@ -397,19 +437,23 @@ public static class CarModel
         {
             top = def.WaterTopSpeed; accel = def.WaterAcceleration;
         }
+        var brake = def.Brake;
+        if (tow.Hitched) { top *= tow.Load.TopSpeedScale; accel *= tow.Load.AccelScale; brake *= tow.Load.BrakeScale; }
         // the launch boost: more thrust near a standstill, fading to the plain acceleration at h.LaunchSpeed (either direction of travel)
         accel *= 1f + (h.LaunchBoost - 1f) * MathF.Max(0f, 1f - MathF.Abs(v) / MathF.Max(0.1f, h.LaunchSpeed));
         if (handbrake) v = Approach(v, 0, h.HandbrakeDecel * dt);
         else if (throttle > 0.05f)
-            v = v < 0 ? Approach(v, 0, def.Brake * dt) : MathF.Min(top, v + accel * throttle * dt);
+            v = v < 0 ? Approach(v, 0, brake * dt) : tow.Hitched && v > top ? Approach(v, top, brake * dt) : MathF.Min(top, v + accel * throttle * dt);
         else if (throttle < -0.05f)
-            v = v > 0 ? Approach(v, 0, def.Brake * dt) : MathF.Max(-top * h.ReverseTopFraction, v + accel * throttle * dt);
+            v = v > 0 ? Approach(v, 0, brake * dt) : MathF.Max(-top * h.ReverseTopFraction, v + accel * throttle * dt);
         else v = Approach(v, 0, coast * dt);
         s.Speed = v;
 
         // steering: the wheel input sets the curvature; the handbrake sharpens it for a slide
         var target = -steer * v / TurnRadiusAt(def, v) * (handbrake ? h.HandbrakeSteerBoost : 1f);
+        if (tow.Hitched && MathF.Abs(v) > 0.5f) { var hold = def.MaxLateralAccel * tow.Load.LateralScale / MathF.Abs(v); target = Math.Clamp(target, -hold, hold); } // the trailer's weight: the bend must be wider
         s.YawRate = Approach(s.YawRate, target, h.YawSlew * dt);
+        if (tow.Block.Active) { var slip = 0f; tow.Block.Clamp(ref s.Speed, ref slip, ref s.YawRate); } // the trailer is at its limit: what would fold it further is taken
         s.Yaw += s.YawRate * dt;
     }
 

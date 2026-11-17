@@ -56,7 +56,7 @@ public partial class NetServer
 
     /// <summary>
     /// Burns one tick. Hit events carry whole hit points, so the burn's 0.5 hp ticks are collected per victim (<see cref="BurnPayout"/>) and
-    /// dealt as whole points: 1 hp every 2 s, 5 hp over a full burn. A fireball's burn (no source) is the victim's own damage.
+    /// dealt as whole points: 1 hp every 2 s, 5 hp over a full burn. A fireball's burn (no source) and a burning bale's (<see cref="BurnSet.HazardSource"/>) are the victim's own damage (<see cref="BurnCredit"/>).
     /// </summary>
     void StatusTick(float dt)
     {
@@ -67,24 +67,28 @@ public partial class NetServer
         {
             var whole = _burnPay.Whole(t);
             if (whole <= 0) continue;
-            var source = t.Source == BurnSet.NoSource || !_byId.ContainsKey(t.Source) ? t.Victim : t.Source;
+            var source = BurnCredit.Attacker(t.Source, t.Victim, _byId.ContainsKey(t.Source)); // a fireball's, a bale's and a gone igniter's burn is the victim's own damage: nobody scores
             Deal(source, SpecialWeapons.Burn, t.Victim, whole, false, false);
         }
     }
 
-    /// <summary>Death (or an admin clear): the statuses and the burn end.</summary>
+    /// <summary>Death (or an admin clear): the statuses, the burn and the high end (a respawned player is sober).</summary>
     void OnStatusDeath(ushort victim)
     {
         _burns.Extinguish(victim);
         _burnPay.Forget(victim);
-        if (_byId.TryGetValue(victim, out var c)) c.Status.OnDeath();
+        if (!_byId.TryGetValue(victim, out var c)) return;
+        c.High.Clear();
+        c.PlantHold.Reset();
+        c.Status.OnDeath();
     }
 
-    /// <summary>A new round: nobody burns on (the statuses stay).</summary>
+    /// <summary>A new round: nobody burns on and nobody is high (the other statuses stay).</summary>
     void StatusRoundStart()
     {
         _burns.Clear();
         _burnPay.Clear();
+        PlantationRoundStart();
     }
 
     void StatusLeave(ushort id)
@@ -124,8 +128,13 @@ public partial class NetServer
             ChatTo(c, ChatLineKind.Info, ClearStatuses(target.Id) ? $"{target.Name} has no statuses now." : $"{target.Name} had no status.");
             return;
         }
-        var bless = args[0] == "bless";
         if (_match.Get(target.Id)?.Life != PlayerLife.Alive) { ChatTo(c, ChatLineKind.Error, $"{target.Name} is not alive."); return; }
+        if (args[0] == "high")
+        {
+            ChatTo(c, ChatLineKind.Info, GetHigh(target) ? $"{target.Name} is high now." : $"{target.Name} cannot get high (a bot).");
+            return;
+        }
+        var bless = args[0] == "bless";
         var given = bless ? GrantBlessing(target.Id) : GrantCurse(target.Id);
         ChatTo(c, ChatLineKind.Info, given ? $"{target.Name} is {(bless ? "blessed" : "cursed")} now." : $"{target.Name} is {(bless ? "blessed" : "cursed")} already.");
     }

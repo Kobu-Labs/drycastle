@@ -17,7 +17,7 @@ public partial class Hud
     public bool ControlMode { get; private set; }
 
     /// <summary>The owner's kills, kept apart from the feed of everyone's kills, for the compact feed of a control session.</summary>
-    readonly List<(KillMsg Msg, string Killer, string Victim)> _mineKills = new();
+    readonly List<FeedEntry> _mineKills = new();
     readonly List<double> _mineTimes = new();
 
     /// <summary>
@@ -37,7 +37,21 @@ public partial class Hud
     void AddOwnKill(KillMsg k, string killer, string victim)
     {
         if (k.Killer != MyId || k.Killer == k.Victim) return;
-        _mineKills.Add((k, killer, victim)); _mineTimes.Add(Now);
+        AddOwnEntry(new FeedEntry(k, killer, victim));
+    }
+
+    void AddOwnEntry(FeedEntry e)
+    {
+        _mineKills.Add(e); _mineTimes.Add(Now);
         if (_mineKills.Count > 64) { _mineKills.RemoveRange(0, 32); _mineTimes.RemoveRange(0, 32); }
     }
 }
+
+/// <summary>One line of the kill feed: a kill, or (<see cref="Hunt"/>) a Hunter's Log announcement.</summary>
+public sealed record FeedEntry(KillMsg Msg, string Killer, string Victim, HuntFeedLine? Hunt = null);
+
+/// <summary>
+/// A Hunter's Log announcement as the feed shows it: <see cref="Tag"/> ("NEW RECORD" in the warn colour, "FIRST" in the good one; also words, so not colour alone), then
+/// <see cref="Before"/> + the species + <see cref="After"/>. A <see cref="Hidden"/> species is not in the text: the feed draws the blurred placeholder between the halves.
+/// </summary>
+public sealed record HuntFeedLine(string Tag, bool Record, bool Mine, string Before, string Species, string After, bool Hidden);

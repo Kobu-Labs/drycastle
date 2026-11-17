@@ -19,16 +19,16 @@ public static class BigfootSpecs
     static readonly BigfootAct[] AliveActs =
     {
         BigfootAct.Idle, BigfootAct.Walk, BigfootAct.Run, BigfootAct.TrunkWindup, BigfootAct.StompWindup, BigfootAct.Stomp,
-        BigfootAct.VehicleWindup, BigfootAct.GrabReach, BigfootAct.Hold, BigfootAct.Launch,
+        BigfootAct.VehicleWindup, BigfootAct.GrabReach, BigfootAct.Hold, BigfootAct.Launch, BigfootAct.Roar,
     };
 
     /// <summary>The replicated act (the low four bits of the state byte). Decide picks the next attack, heaviest first: vehicle, grab, stomp, trunk, else chase.</summary>
     public static readonly StateMachineSpec<BigfootAct> Act = StateMachineSpec<BigfootAct>
         .Define("Bigfoot.Act", "What the Bigfoot is doing this moment: chasing, winding up or landing one attack, or holding a player; it ends dead.", BigfootAct.Idle)
         // Decide runs only from these three; it moves, or starts the heaviest attack that applies
-        .Allow(BigfootAct.Idle, BigfootAct.Walk, BigfootAct.Run, BigfootAct.TrunkWindup, BigfootAct.StompWindup, BigfootAct.VehicleWindup, BigfootAct.GrabReach)
-        .Allow(BigfootAct.Walk, BigfootAct.Idle, BigfootAct.Run, BigfootAct.TrunkWindup, BigfootAct.StompWindup, BigfootAct.VehicleWindup, BigfootAct.GrabReach)
-        .Allow(BigfootAct.Run, BigfootAct.Idle, BigfootAct.Walk, BigfootAct.TrunkWindup, BigfootAct.StompWindup, BigfootAct.VehicleWindup, BigfootAct.GrabReach)
+        .Allow(BigfootAct.Idle, BigfootAct.Walk, BigfootAct.Run, BigfootAct.TrunkWindup, BigfootAct.StompWindup, BigfootAct.VehicleWindup, BigfootAct.GrabReach, BigfootAct.Roar)
+        .Allow(BigfootAct.Walk, BigfootAct.Idle, BigfootAct.Run, BigfootAct.TrunkWindup, BigfootAct.StompWindup, BigfootAct.VehicleWindup, BigfootAct.GrabReach, BigfootAct.Roar)
+        .Allow(BigfootAct.Run, BigfootAct.Idle, BigfootAct.Walk, BigfootAct.TrunkWindup, BigfootAct.StompWindup, BigfootAct.VehicleWindup, BigfootAct.GrabReach, BigfootAct.Roar)
         // windup -> the blow -> back to the chase
         .Allow(BigfootAct.StompWindup, BigfootAct.Stomp)
         .Allow(BigfootAct.VehicleWindup, BigfootAct.Launch)
@@ -45,6 +45,7 @@ public static class BigfootSpecs
         .Note(BigfootAct.GrabReach, "Reaching for the nearest player on foot; holds them if still in reach, else back to Idle.")
         .Note(BigfootAct.Hold, "Holds one player in its hand until the hold time runs out (launch) or the player dies or leaves (Idle).")
         .Note(BigfootAct.Launch, "The short swing after a throw or a launch.")
+        .Note(BigfootAct.Roar, "A phase began or it enraged: it stands and roars (BigfootRules.RoarSeconds), facing its target. Owed while it is busy or has an attack to make, paid the first tick it would only chase.")
         .Note(BigfootAct.Dead, "Reachable from every act (a killing hit, or an admin ending the event).")
         .Build();
 

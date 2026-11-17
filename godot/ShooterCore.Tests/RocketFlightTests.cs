@@ -6,7 +6,7 @@ namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
 /// The gunship's rockets (killstreaks.json: speed 250 m/s, range 3000 m) run through the rocket sim with a per-launch speed and life.
-/// The bazooka keeps its own 40 m/s and 3.75 s. These tests run <see cref="RocketFlight.Step"/> (the server's per-tick rule) on the
+/// The rpg keeps its own 40 m/s and 3.75 s. These tests run <see cref="RocketFlight.Step"/> (the server's per-tick rule) on the
 /// shipped numbers: the bug was that a gunship rocket flew at 40 m/s and burst about 150 m out, long before it reached the ground.
 /// </summary>
 public class RocketFlightTests
@@ -14,7 +14,7 @@ public class RocketFlightTests
     static string DataDir => Path.Combine(AppContext.BaseDirectory, "data");
     static readonly GameData Shipped = GameData.Load(DataDir);
     static GunshipWeaponDef GunRockets => Shipped.Killstreaks.Gunship!.Weapons.Single(w => w.Id == "rockets");
-    static WeaponDef Bazooka => Shipped.Weapons.Weapons.Single(w => w.Id == "bazooka");
+    static WeaponDef Rpg => Shipped.Weapons.Weapons.Single(w => w.Id == "rpg");
     const float Dt = 1f / 30f;
     /// <summary>The gunship's muzzle: 120 m above the ground.</summary>
     const float GroundY = 0f, MuzzleHeight = 120f;
@@ -71,25 +71,25 @@ public class RocketFlightTests
     }
 
     [Fact]
-    public void Had_the_gunship_rocket_kept_the_bazookas_40_mps_and_3_75_s_it_would_burst_about_150_metres_out()
+    public void Had_the_gunship_rocket_kept_the_rpgs_60_mps_and_4_s_it_would_burst_about_240_metres_out()
     {
-        // the bug, for the record: the same shot at the bazooka's flight expires in the air
+        // the bug, for the record: the same shot at the rpg's flight expires in the air
         var (muzzle, _, dir) = Shot(440f);
-        var (last, flown, _) = Fly(muzzle, dir, Bazooka.ProjectileSpeed, Bazooka.ProjectileLife, Array.Empty<HitTarget>());
+        var (last, flown, _) = Fly(muzzle, dir, Rpg.ProjectileSpeed, Rpg.ProjectileLife, Array.Empty<HitTarget>());
         Assert.Equal(RocketOutcome.Expired, last.Outcome);
-        Assert.Equal(150f, flown, 1.5f);
+        Assert.Equal(240f, flown, 2.5f);
     }
 
     [Fact]
-    public void The_bazookas_flight_is_unchanged_at_40_mps_for_3_75_s()
+    public void The_rpgs_flight_is_60_mps_for_4_s()
     {
-        Assert.Equal(40f, Bazooka.ProjectileSpeed);
-        Assert.Equal(3.75f, Bazooka.ProjectileLife);
+        Assert.Equal(60f, Rpg.ProjectileSpeed);
+        Assert.Equal(4f, Rpg.ProjectileLife);
         var (muzzle, _, dir) = Shot(440f);
-        var (last, flown, age) = Fly(muzzle, dir, Bazooka.ProjectileSpeed, Bazooka.ProjectileLife, Array.Empty<HitTarget>());
+        var (last, flown, age) = Fly(muzzle, dir, Rpg.ProjectileSpeed, Rpg.ProjectileLife, Array.Empty<HitTarget>());
         Assert.Equal(RocketOutcome.Expired, last.Outcome);
-        Assert.Equal(150f, flown, 1.5f);
-        Assert.Equal(3.75f, age, Dt);
+        Assert.Equal(240f, flown, 2.5f);
+        Assert.Equal(4f, age, 2 * Dt);
     }
 
     [Fact]
@@ -116,7 +116,7 @@ public class RocketFlightTests
     [Fact]
     public void A_rocket_with_no_per_launch_speed_uses_the_weapons_own_flight()
     {
-        // the bazooka's own speed and life: the gunship's override is per launch, not a change to the weapon
+        // the rpg's own speed and life: the gunship's override is per launch, not a change to the weapon
         Assert.Equal(0f, Shipped.Killstreaks.Gunship!.Weapons.Single(w => w.Id == "cannon").ProjectileSpeedMps);
         Assert.Equal(0f, Shipped.Killstreaks.Ac130!.Weapons.Single(w => w.Kind == GunshipWeaponKind.Shell).ProjectileSpeedMps);
     }

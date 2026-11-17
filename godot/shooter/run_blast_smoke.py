@@ -2,7 +2,7 @@
 """Headless vehicle damage and blast smoke (ticket #103) on the weapons smoke's flat arena: three cars (two side by side, one far away), two scripted bots.
 
 alice empties an AK-47 into car 0 (damage stages 1, 2, 3 in order, then the blast), bob stands beside it and dies in the blast (credited to alice),
-alice takes her self-reduced share, car 1 takes chain damage, a bazooka rocket damages car 2, car 0 returns undamaged, and finally alice drives car 0 and dies in its blast.
+alice takes her self-reduced share, car 1 takes chain damage, an rpg rocket damages car 2, car 0 returns undamaged, and finally alice drives car 0 and dies in its blast.
 Usage: run_blast_smoke.py [--map DIR] [--port N]
 """
 import argparse, os, subprocess, sys, time

@@ -81,7 +81,8 @@ formatting is fixed, so git diffs stay small. Version 1::
 ``zones`` (a marked area of exactly one zone kind, ADR 0022; ``Z-`` and 4 or more digits; see zones.py)
     kind                a zone kind of the catalog (``zones.KIND_NAMES``): what the area means in play. A zone never
                         changes the terrain; zones overlap freely and add up. The export turns them into candidate points
-                        for the server (``zone_points.json``) and, for ``player_spawn``, into spawn candidates.
+                        for the server (``zone_points.json``), for ``player_spawn`` into spawn candidates and for ``plantation`` into polygons
+                        (``zone_polygons.json``).
     polygon             as of a ground patch. The ``zones`` key is only written when there are zones.
 
 ``zone_cuts`` (internal: the editor's record that a zone that comes from a rule was moved, retyped or deleted; ``ZC-`` and 4

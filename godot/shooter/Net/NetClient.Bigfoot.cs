@@ -4,11 +4,11 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The Bigfoot on the client (issue #264): the world entity of type <see cref="BigfootRules.TypeId"/> drawn as the placeholder giant (bigfoot.json), the logs it
+/// The Bigfoot on the client (issue #264): the world entity of type <see cref="BigfootRules.TypeId"/> drawn as the giant (bigfoot.json), the logs it
 /// throws (type <see cref="BigfootRules.TrunkTypeId"/>), its one-shot effects (<see cref="EventKind.BigfootFx"/>: the shockwave ring, the sounds, the shake), the
 /// footprints that lead to its corpse (<see cref="EventKind.BigfootTrail"/>) and the giant's corpse itself (a corpse owned by <see cref="BigfootRules.TargetId"/>).
-/// The model has seven clips (Idle, Walk, Run, Attack, HitRecieve, Death, Jump); the stomp, the throws and the grab reuse the one Attack clip with a procedural
-/// lean, rise and wobble of the whole figure, until the real animated model arrives (the swap is this file and bigfoot.json, <see cref="BigfootView"/>).
+/// The model (scripts/make_bigfoot_model.py) has a clip per act, a flinch and a roar (<see cref="BigfootRules.Clips"/>): <see cref="ClipFor"/> picks one and
+/// stretches a wind-up over its act's time, Walk and Run play at the speed the giant moves (<see cref="PaceGait"/>).
 /// The server owns everything: a client only shows it, and stops predicting its own body while the Bigfoot holds it (<see cref="_heldByBigfoot"/>) or its
 /// vehicle while the Bigfoot throws it (<see cref="_thrownCars"/>).
 /// </summary>
@@ -20,7 +20,7 @@ public partial class NetClient
     /// <summary>The sound events the effects play. There is no roar yet: these are the closest sounds the game already has, and the table to change when real ones arrive.</summary>
     static class BigfootSounds
     {
-        public const string Roar = "explosion.vehicle", StompWindup = "land", Shockwave = "explosion.bazooka", Throw = "shot.knife", Land = "explosion.vehicle", Log = "impact", Grab = "death";
+        public const string Roar = "explosion.vehicle", StompWindup = "land", Shockwave = "explosion.rpg", Throw = "shot.knife", Land = "explosion.vehicle", Log = "impact", Grab = "death";
     }
 
     /// <summary>The figure of one Bigfoot: the node at its feet, the pivot the procedural motion turns and scales, and the model with its clips.</summary>
@@ -38,45 +38,28 @@ public partial class NetClient
         public bool Introduced;
         /// <summary>Client time (s) the shown act began, and until which a hit reaction holds the act's clip back.</summary>
         public double Since, HitUntil;
-        /// <summary>The skeleton and its two arm bones (-1 without them), with each arm's pose at rest and raised straight up: the vehicle lift poses them by hand.</summary>
+        /// <summary>The skeleton and the bone of its right hand (-1 without one): the log it winds up with rides that hand.</summary>
         public Skeleton3D? Skel;
-        public int ArmL = -1, ArmR = -1;
-        public Quaternion ArmLRest, ArmRRest, ArmLUp, ArmRUp;
-        /// <summary>The arms are posed by hand (the vehicle lift) and the clip is paused: <see cref="LiftArms"/> sets it, <see cref="LowerArms"/> clears it.</summary>
-        public bool ArmsRaised;
+        public int HandR = -1;
+        /// <summary>Where it was drawn last frame and the ground speed measured from that (m/s, smoothed): Walk and Run play at it.</summary>
+        public Vector3 LastAt;
+        public bool HasLastAt;
+        public float Speed;
+        /// <summary>The act drawn before the one that plays now: a launch out of a hold is the one-handed throw of a player, any other the two-handed one.</summary>
+        public BigfootAct Before;
+        public BigfootAct Shown;
         /// <summary>The log on its shoulder while it winds a throw up (the thrown one is a world entity of its own).</summary>
         public Node3D? HeldLog;
+        /// <summary>The player in its hand while the act is Hold (0 otherwise): when the act ends, a Launch makes the body fly, anything else lets it drop (#360).</summary>
+        public ushort HeldId;
     }
 
-    /// <summary>Finds the arm bones of the giant and works out the pose that points each straight up, from the skeleton's rest (no clip is read).</summary>
-    static void IndexArms(BigfootView v)
+    /// <summary>Finds the skeleton of the giant and its right hand.</summary>
+    static void IndexBones(BigfootView v)
     {
         if (v.Node.FindChildren("*", "Skeleton3D", true, false).FirstOrDefault() is not Skeleton3D sk) return;
         v.Skel = sk;
-        var up = sk.GlobalBasis.Orthonormalized().Inverse() * Vector3.Up; // "up" in the skeleton's own space
-        (int Bone, Quaternion Hang, Quaternion Raised) Arm(string side)
-        {
-            var arm = sk.FindBone("Arm." + side); if (arm < 0) arm = sk.FindBone("Arm_" + side);
-            if (arm < 0) return (-1, Quaternion.Identity, Quaternion.Identity);
-            var kids = sk.GetBoneChildren(arm);
-            var rest = sk.GetBoneGlobalRest(arm);
-            var dir = kids.Length > 0 ? sk.GetBoneGlobalRest(kids[0]).Origin - rest.Origin : rest.Basis.Y;
-            if (dir.LengthSquared() < 1e-8f) return (-1, Quaternion.Identity, Quaternion.Identity);
-            var raised = new Basis(new Quaternion(dir.Normalized(), up.Normalized())) * rest.Basis.Orthonormalized();
-            var parent = sk.GetBoneParent(arm);
-            var parentBasis = parent >= 0 ? sk.GetBoneGlobalRest(parent).Basis.Orthonormalized() : Basis.Identity;
-            return (arm, sk.GetBoneRest(arm).Basis.Orthonormalized().GetRotationQuaternion(), (parentBasis.Inverse() * raised).GetRotationQuaternion());
-        }
-        (v.ArmL, v.ArmLRest, v.ArmLUp) = Arm("L");
-        (v.ArmR, v.ArmRRest, v.ArmRUp) = Arm("R");
-    }
-
-    /// <summary>Both arms between hanging (0) and straight up over the head (1). The clip must be paused, or it poses them again the next frame.</summary>
-    static void RaiseArms(BigfootView v, float k)
-    {
-        if (v.Skel == null) return;
-        if (v.ArmL >= 0) v.Skel.SetBonePoseRotation(v.ArmL, v.ArmLRest.Slerp(v.ArmLUp, k));
-        if (v.ArmR >= 0) v.Skel.SetBonePoseRotation(v.ArmR, v.ArmRRest.Slerp(v.ArmRUp, k));
+        v.HandR = sk.FindBone("Hand.R");
     }
 
     readonly Dictionary<ushort, BigfootView> _bigfoots = new();
@@ -92,6 +75,13 @@ public partial class NetClient
     /// <summary>What the flailing hand adds to the held player's own eye: an offset (metres, world) and a roll (radians). Zero when not held.</summary>
     Vector3 _heldSwing;
     float _heldRoll;
+    /// <summary>The ragdoll phase of each player the Bigfoot picked up (#360): held, flying after the throw, getting up. Absent or None: the normal figure.</summary>
+    readonly Dictionary<ushort, BodyFlingTracker> _flings = new();
+    /// <summary>The giant that holds each player now: the hand's shake the body hangs in.</summary>
+    readonly Dictionary<ushort, BigfootView> _holders = new();
+    Vector3 _ownFlingLast;
+    /// <summary>This client's own body is in the fist or flying: its arms and weapon are not drawn.</summary>
+    bool OwnBodyFlung => _myId != 0 && _flings.TryGetValue(_myId, out var f) && f.Phase is BodyFling.Held or BodyFling.Flying or BodyFling.Lying;
 
     /// <summary>True while the Bigfoot's throw has the vehicle (the driver's client does not predict it).</summary>
     bool CarThrown(ushort car) => _thrownCars.TryGetValue(car, out var until) && Now < until;
@@ -116,7 +106,7 @@ public partial class NetClient
         v.Anim = anim;
         IndexClips(v.Clips, anim);
         Owned.AddChild(v.Node);
-        IndexArms(v);
+        IndexBones(v);
         _bigfoots[e.Id] = v;
     }
 
@@ -132,10 +122,7 @@ public partial class NetClient
             if (anim != null)
             {
                 foreach (var name in anim.GetAnimationList())
-                {
-                    var loops = name.EndsWith(BigfootRules.ClipIdle) || name.EndsWith(BigfootRules.ClipWalk) || name.EndsWith(BigfootRules.ClipRun) || name.EndsWith(BigfootRules.ClipAttack);
-                    anim.GetAnimation(name).LoopMode = loops ? Animation.LoopModeEnum.Linear : Animation.LoopModeEnum.None;
-                }
+                    anim.GetAnimation(name).LoopMode = BigfootRules.LoopedClips.Contains(name) ? Animation.LoopModeEnum.Linear : Animation.LoopModeEnum.None;
             }
             return model;
         }
@@ -145,7 +132,7 @@ public partial class NetClient
         return box;
     }
 
-    /// <summary>Maps the plain clip names to the model's (it names them with a prefix: "EnemyArmature|EnemyArmature|EnemyArmature|Idle").</summary>
+    /// <summary>Maps the plain clip names to the model's (a model exported from a tool may prefix them: "Armature|Idle").</summary>
     static void IndexClips(Dictionary<string, string> clips, AnimationPlayer? anim)
     {
         if (anim == null) return;
@@ -156,7 +143,7 @@ public partial class NetClient
 
     void OnBigfootDespawned(ushort id, WorldDespawnReason why)
     {
-        if (_bigfoots.Remove(id, out var v)) v.Node.QueueFree();
+        if (_bigfoots.Remove(id, out var v)) { TrackHold(v, BigfootAct.Dead, 0); v.Node.QueueFree(); } // the one in its hand drops
         if (_trunks.Remove(id, out var t))
         {
             // a log that ended on the ground (or on a player) thuds where it was
@@ -211,16 +198,21 @@ public partial class NetClient
                 if (e.Buf.At(rt) is { } s)
                 {
                     v.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
-                    v.Node.Rotation = new Vector3(0, s.Yaw, 0);
+                    // the server snaps its yaw at the start of an attack and steps it in a detour: the figure turns there quickly instead of jumping
+                    var yaw = v.HasLastAt ? Mathf.LerpAngle(v.Node.Rotation.Y, s.Yaw, 1f - MathF.Exp(-14f * (float)GetProcessDeltaTime())) : s.Yaw;
+                    v.Node.Rotation = new Vector3(0, yaw, 0);
+                    MeasureSpeed(v);
                 }
                 var raw = e.State.State;
                 var act = BigfootRules.ActOf(raw);
+                TrackHold(v, act, e.State.Owner);
                 if (_myId != 0 && e.State.Owner == _myId && act == BigfootAct.Hold) held = true;
                 if (v.HitBit.Update(BigfootRules.HitToggled(raw)))
                 {
-                    // a flinch at most every few seconds: under steady fire it would otherwise restart on every hit and never let the act's clip play
-                    if (act is BigfootAct.Idle or BigfootAct.Walk or BigfootAct.Run && now >= v.HitUntil + HitReactionGapSeconds) PlayBigfootHit(v, now);
+                    // it flinches only standing (a flinch in the chase would cut the stride and start it over), and at most every few seconds
+                    if (act == BigfootAct.Idle && now >= v.HitUntil + HitReactionGapSeconds) PlayOver(v, BigfootRules.ClipHit, 0.05, now);
                 }
+                if (act != BigfootAct.Idle && now < v.HitUntil) v.HitUntil = now; // a flinch or a roar gives way to whatever it does next
                 if (now >= v.HitUntil && v.Drawn.Update((byte)act)) ShowBigfootAct(v, act, now);
                 MoveBigfoot(v, act, BigfootRules.IsEnraged(raw), now);
                 if (_myId != 0 && e.State.Owner == _myId && act == BigfootAct.Hold) holder = v;
@@ -236,6 +228,8 @@ public partial class NetClient
             }
         }
         _heldByBigfoot = held;
+        TickOwnFling();
+        _hud?.SetFlungHidesCrosshair(OwnBodyFlung);
         // the server holds the body at a fixed point in front of the giant; the flailing is drawn here, so the eye rides the same swing as the figure
         var swing = Vector3.Zero; var tilt = 0f;
         if (holder != null && _me != null)
@@ -260,51 +254,129 @@ public partial class NetClient
 
     const double HitReactionGapSeconds = 4;
 
-    void PlayBigfootHit(BigfootView v, double now)
+    BodyFlingTracker FlingOf(ushort id)
     {
-        if (v.Anim == null || !v.Clips.TryGetValue(BigfootRules.ClipHit, out var clip)) return;
-        v.Anim.SpeedScale = 1;
-        v.Anim.Play(clip, 0.05);
-        v.HitUntil = now + Math.Min(0.45, v.Anim.GetAnimation(clip).Length);
-        v.Drawn.Reset(); // the act's clip is due again when the reaction is over
-        v.Introduced = true; // a reaction counts as the first sight: a death inside its window plays the fall, not the lying pose
+        if (!_flings.TryGetValue(id, out var f)) _flings[id] = f = new BodyFlingTracker();
+        return f;
     }
 
     /// <summary>
-    /// The clip an act plays, the seconds the clip is stretched over (0: its own length) and the blend into it. The windups stretch the Attack clip over the
-    /// telegraph's time, so its blow lands when the server's does; the rest of the figure's motion is <see cref="MoveBigfoot"/>.
+    /// What the giant's act says of the player in its hand: Hold grabs (<paramref name="owner"/> is the player), and when the Hold is over a Launch throws
+    /// them while anything else (the hold cut short, the giant dead or gone) lets them drop.
+    /// </summary>
+    void TrackHold(BigfootView v, BigfootAct act, ushort owner)
+    {
+        if (act == BigfootAct.Hold && owner != 0)
+        {
+            v.HeldId = owner; _holders[owner] = v;
+            FlingOf(owner).Grabbed();
+            return;
+        }
+        if (v.HeldId == 0) return;
+        var id = v.HeldId;
+        v.HeldId = 0; _holders.Remove(id);
+        if (act == BigfootAct.Launch) FlingOf(id).Flung(); else FlingOf(id).Ended();
+    }
+
+    /// <summary>A killed, respawned or departed player is no longer a ragdoll of this machine (a corpse is its own entity).</summary>
+    void EndFling(ushort id)
+    {
+        if (_flings.TryGetValue(id, out var f) && f.Active) { f.Ended(); _holders.Remove(id); }
+    }
+
+    /// <summary>The own body only needs its phase (the eye and the hidden arms): the landing is read from the predicted body's speed.</summary>
+    void TickOwnFling()
+    {
+        if (_myId == 0 || _me == null || !_flings.TryGetValue(_myId, out var f) || !f.Active) { if (_me != null) _ownFlingLast = _me.GlobalPosition; return; }
+        if (Dead) { f.Ended(); return; }
+        var dt = (float)GetProcessDeltaTime();
+        var at = _me.GlobalPosition;
+        f.Tick(dt, dt > 0 ? (at - _ownFlingLast).Length() / dt : 0, _me.State.OnFloor);
+        _ownFlingLast = at;
+        if (f.Phase == BodyFling.Landing && f.Elapsed >= GetUpSeconds) f.StoodUp();
+    }
+
+    /// <summary>How long a player who landed alive stays a ragdoll turning upright (the tumble's own settle is quicker; this ends it for the own body, which is not drawn).</summary>
+    const float GetUpSeconds = 0.4f;
+
+    /// <summary>
+    /// Another player the Bigfoot holds or has thrown (#360): a ragdoll the whole time. In the fist it hangs in the hand's shake (the same the held player's
+    /// own eye rides) with its limbs flailing; thrown it tumbles about its middle (<see cref="RagdollTumble"/>) until it lands, then turns upright and goes
+    /// slack, and the normal figure takes over without a pop (a turn is a whole circle, the pivot height at upright is the body's middle).
+    /// </summary>
+    void FlingRemote(ushort id, Remote r, BodyFlingTracker f, Vector3 at, float yaw, float dt)
+    {
+        var t = r.Tumble;
+        var speed = dt > 0 ? (at - r.TumbleLast).Length() / dt : 0;
+        r.TumbleLast = at;
+        f.Tick(dt, speed, Map is not { } map || at.Y - map.GroundHeight(at.X, at.Z) < 0.35f);
+        t.Thrown = true; t.StandUp = f.Phase == BodyFling.Landing; // lying on the ground first, then it turns upright // the tumble owns the ragdoll flag: when the machine is over, TumbleRemote's normal path puts the figure back
+        var middle = Vector3.Up * RagdollTumble.Half;
+        if (f.Phase == BodyFling.Held && _holders.TryGetValue(id, out var h))
+        {
+            var local = h.Node.ToLocal(at);
+            var tm = (float)(Now - h.Since);
+            var hand = h.Node.GlobalBasis;
+            var shaken = h.Pivot.Transform.Basis * local + new Vector3(0, 0.45f * MathF.Sin(tm * 22f), 0.3f * MathF.Sin(tm * 11f + 1.3f));
+            var tilt = h.Pivot.Rotation.Z * 1.6f + 0.1f * MathF.Sin(tm * 17f);
+            t.Amount = 1f; t.Spin = 0;
+            r.View?.SetRagdoll(true, 1f, false);
+            if (r.View != null) r.View.Position = -middle;
+            r.Node.GlobalPosition = at + hand * (shaken - local) + middle;
+            r.Node.Basis = new Basis(hand.Z.Normalized(), tilt) * new Basis(hand.X.Normalized(), h.Pivot.Rotation.X * 2f) * new Basis(Vector3.Up, yaw);
+            return;
+        }
+        t.Update(at, f.Phase == BodyFling.Flying, dt);
+        if (f.Phase == BodyFling.Landing && t.AtRest) f.StoodUp();
+        r.View?.SetRagdoll(true, t.Amount, t.AtRest);
+        if (r.View != null) r.View.Position = -middle;
+        r.Node.GlobalPosition = at + Vector3.Up * t.PivotHeight;
+        r.Node.Basis = t.BasisFor(yaw);
+    }
+
+    /// <summary>Plays a one-shot clip (the flinch, the roar) over the act's: the act's clip is held back until it is over, then started again.</summary>
+    void PlayOver(BigfootView v, string plain, double blend, double now)
+    {
+        if (v.Anim == null || !v.Clips.TryGetValue(plain, out var clip)) return;
+        v.Anim.SpeedScale = 1;
+        v.Anim.Play(clip, blend);
+        v.HitUntil = now + v.Anim.GetAnimation(clip).Length;
+        v.Drawn.Reset(); // the act's clip is due again when this one is over
+        v.Introduced = true; // it counts as the first sight: a death inside its window plays the fall, not the lying pose
+    }
+
+    /// <summary>The ground speed of the figure, from where it was drawn a frame ago (smoothed: the interpolated position steps a little).</summary>
+    void MeasureSpeed(BigfootView v)
+    {
+        var at = v.Node.GlobalPosition;
+        var dt = (float)GetProcessDeltaTime();
+        if (v.HasLastAt && dt > 1e-4f)
+        {
+            var moved = new Vector2(at.X - v.LastAt.X, at.Z - v.LastAt.Z).Length() / dt;
+            v.Speed = Mathf.Lerp(v.Speed, moved, 1f - MathF.Exp(-10f * dt));
+        }
+        v.LastAt = at; v.HasLastAt = true;
+    }
+
+    /// <summary>
+    /// The clip an act plays, the seconds the clip is stretched over (0: its own length) and the blend into it. A wind-up is stretched over its act's
+    /// time, so its blow lands when the server's does.
     /// </summary>
     (string Clip, float Seconds, double Blend) ClipFor(BigfootAct act) => act switch
     {
-        BigfootAct.Walk => (BigfootRules.ClipWalk, 0, 0.2),
-        BigfootAct.Run => (BigfootRules.ClipRun, 0, 0.2),
-        BigfootAct.TrunkWindup => (BigfootRules.ClipAttack, BigfootData.Trunk.WindupSeconds, 0.1),
-        BigfootAct.StompWindup => (BigfootRules.ClipAttack, BigfootData.Stomp.WindupSeconds, 0.1),
-        BigfootAct.VehicleWindup => (BigfootRules.ClipAttack, BigfootData.VehicleThrow.WindupSeconds, 0.1),
-        BigfootAct.GrabReach => (BigfootRules.ClipAttack, BigfootData.Grab.ReachSeconds, 0.1),
-        BigfootAct.Stomp => (BigfootRules.ClipAttack, StompClipSeconds, 0.05),
-        BigfootAct.Launch => (BigfootRules.ClipAttack, BigfootRules.LaunchSwingSeconds, 0.05),
-        BigfootAct.Hold => (BigfootRules.ClipAttack, HoldClipSeconds, 0.2), // flails: the clip loops fast
+        BigfootAct.Walk => (BigfootRules.ClipWalk, 0, 0.25),
+        BigfootAct.Run => (BigfootRules.ClipRun, 0, 0.25),
+        BigfootAct.TrunkWindup => (BigfootRules.ClipTrunkThrow, BigfootData.Trunk.WindupSeconds, 0.12),
+        BigfootAct.StompWindup => (BigfootRules.ClipStompWindup, BigfootData.Stomp.WindupSeconds, 0.12),
+        BigfootAct.VehicleWindup => (BigfootRules.ClipVehicleLift, BigfootData.VehicleThrow.WindupSeconds, 0.12),
+        BigfootAct.GrabReach => (BigfootRules.ClipGrabReach, BigfootData.Grab.ReachSeconds, 0.1),
+        BigfootAct.Stomp => (BigfootRules.ClipStomp, BigfootRules.StompSeconds, 0.03), // it begins in the wind-up's last pose
+        BigfootAct.Launch => (BigfootRules.ClipLaunch, BigfootRules.LaunchSwingSeconds, 0.08), // a player is thrown with Hurl instead (ShowBigfootAct)
+        BigfootAct.Roar => (BigfootRules.ClipRoar, BigfootRules.RoarSeconds, 0.15),
+        BigfootAct.Hold => (BigfootRules.ClipHold, 0, 0.2),
         BigfootAct.Dead => (BigfootRules.ClipDeath, 0, 0.1),
-        _ => (BigfootRules.ClipIdle, 0, 0.2),
+        _ => (BigfootRules.ClipIdle, 0, 0.25),
     };
-
-    /// <summary>The Stomp pose (clip and rise) runs a little shorter than the server's act (<see cref="BigfootRules.StompSeconds"/>): the foot is down before the shockwave's act ends. The Hold clip's loop time.</summary>
-    const float StompClipSeconds = 0.5f, HoldClipSeconds = 0.8f;
-
-    /// <summary>The vehicle lift is posed by hand (<see cref="MoveBigfoot"/>): it stands in its idle pose, held still, and the arms go up with the vehicle.</summary>
-    void LiftArms(BigfootView v)
-    {
-        if (v.Clips.TryGetValue(BigfootRules.ClipIdle, out var idle)) { v.Anim!.SpeedScale = 1; v.Anim.Play(idle, 0.1); v.Anim.Seek(0, true); v.Anim.Pause(); }
-        v.ArmsRaised = true;
-    }
-
-    /// <summary>The clips pose the arms again.</summary>
-    static void LowerArms(BigfootView v)
-    {
-        v.ArmsRaised = false;
-        v.Anim!.Play();
-    }
 
     /// <summary>Picks the clip of an act (<see cref="ClipFor"/>) and starts it.</summary>
     void ShowBigfootAct(BigfootView v, BigfootAct act, double now)
@@ -312,9 +384,9 @@ public partial class NetClient
         var first = !v.Introduced;
         v.Introduced = true; v.Since = now;
         if (v.Anim == null) return;
-        if (v.ArmsRaised) LowerArms(v);
-        if (act == BigfootAct.VehicleWindup && v.Skel != null && v.ArmL >= 0 && v.ArmR >= 0) { LiftArms(v); return; }
         var (plain, seconds, blend) = ClipFor(act);
+        v.Before = v.Shown; v.Shown = act;
+        if (act == BigfootAct.Launch && v.Before == BigfootAct.Hold) plain = BigfootRules.ClipHurl;
         if (!v.Clips.TryGetValue(plain, out var clip)) return;
         var length = v.Anim.GetAnimation(clip).Length;
         v.Anim.SpeedScale = seconds > 0 && length > 0.05 ? (float)(length / seconds) : 1f;
@@ -323,35 +395,25 @@ public partial class NetClient
         if (act == BigfootAct.Dead && first) v.Anim.Seek(length, true);
     }
 
-    /// <summary>The procedural motion on top of the clip: the whole figure leans, rises, squashes and wobbles about its feet, and breathes harder enraged.</summary>
+    /// <summary>Walk and Run play at the speed the giant moves: one loop of the clip covers its stride (bigfoot.json), so the feet hold the ground.</summary>
+    void PaceGait(BigfootView v, BigfootAct act, double now)
+    {
+        if (v.Anim == null || now < v.HitUntil || act is not (BigfootAct.Walk or BigfootAct.Run)) return;
+        var walking = act == BigfootAct.Walk;
+        if (!v.Clips.TryGetValue(walking ? BigfootRules.ClipWalk : BigfootRules.ClipRun, out var clip)) return;
+        var natural = (walking ? BigfootData.Movement.WalkStrideM : BigfootData.Movement.RunStrideM) / (float)v.Anim.GetAnimation(clip).Length; // m/s at speed scale 1
+        v.Anim.SpeedScale = Math.Clamp(v.Speed / natural, 0.35f, 1.8f); // turning on the spot it still steps, slowly
+    }
+
+    /// <summary>What the clips do not carry: the gait's pace, the log in its hand, the shake of the fist that holds a player, the heavier breath enraged.</summary>
     void MoveBigfoot(BigfootView v, BigfootAct act, bool enraged, double now)
     {
         var t = (float)(now - v.Since);
-        float pitch = 0, roll = 0, rise = 1;
-        switch (act)
-        {
-            case BigfootAct.TrunkWindup: // leans back to wind up, then forward at the release
-                pitch = MathF.Min(1f, t / BigfootData.Trunk.WindupSeconds) < 0.75f ? -0.28f * MathF.Min(1f, t / (BigfootData.Trunk.WindupSeconds * 0.75f)) : 0.22f;
-                break;
-            case BigfootAct.StompWindup: // rises up on its toes
-                rise = 1f + 0.14f * MathF.Min(1f, t / BigfootData.Stomp.WindupSeconds); pitch = -0.1f * MathF.Min(1f, t / BigfootData.Stomp.WindupSeconds);
-                break;
-            case BigfootAct.Stomp: rise = 0.88f + 0.12f * MathF.Min(1f, t / StompClipSeconds); pitch = 0.12f; break; // comes down hard
-            case BigfootAct.VehicleWindup:
-            {
-                // bends down to the vehicle, takes it in both hands, straightens with it and holds it over its head, leaning back for the throw
-                var k = Math.Clamp(t / BigfootData.VehicleThrow.WindupSeconds, 0f, 1f);
-                var up = Math.Clamp((k - 0.2f) / 0.5f, 0f, 1f); up = up * up * (3 - 2 * up);
-                pitch = k < 0.2f ? 0.35f * (k / 0.2f) : 0.35f + (-0.12f - 0.35f) * up;
-                rise = 1f + 0.06f * up;
-                if (v.ArmsRaised) RaiseArms(v, 0.35f + 0.65f * up); // reaching forward already as it bends
-                break;
-            }
-            case BigfootAct.GrabReach: pitch = 0.35f * MathF.Min(1f, t / BigfootData.Grab.ReachSeconds); break;
-            case BigfootAct.Hold: pitch = -0.12f; roll = MathF.Sin(t * 11f) * 0.16f; rise = 1f + 0.03f * MathF.Sin(t * 22f); break; // flails with the player in its hand
-            case BigfootAct.Launch: pitch = 0.3f; break;
-        }
-        // the log it is about to throw: up on its right shoulder, drawn back, gone at the release (the flying one takes over)
+        PaceGait(v, act, now);
+        float roll = 0, rise = 1;
+        // the whole figure rocks with the player in its fist: the held player's eye rides this (RenderBigfoot)
+        if (act == BigfootAct.Hold) { roll = MathF.Sin(t * 11f) * 0.1f; rise = 1f + 0.02f * MathF.Sin(t * 22f); }
+        // the log it is about to throw rides its right hand: up on the shoulder, drawn back, hurled, gone at the release (the flying one takes over)
         var winding = act == BigfootAct.TrunkWindup;
         if (winding && v.HeldLog == null)
         {
@@ -364,13 +426,17 @@ public partial class NetClient
             if (winding)
             {
                 var k = Math.Clamp(t / BigfootData.Trunk.WindupSeconds, 0f, 1f);
-                var h = BigfootData.HeightM;
-                v.HeldLog.Position = new Vector3(0.85f, h * (0.55f + 0.42f * MathF.Min(1f, k * 2f)), 0.3f + 0.5f * k); // lifted from the hip to over the shoulder, then back
-                v.HeldLog.Rotation = new Vector3(-0.35f * k, 0, 0); // its front end tips up
+                var hand = v.Skel != null && v.HandR >= 0
+                    ? v.Pivot.GlobalTransform.AffineInverse() * (v.Skel.GlobalTransform * v.Skel.GetBoneGlobalPose(v.HandR).Origin)
+                    : new Vector3(0.85f, BigfootData.HeightM * 0.9f, 0.3f);
+                v.HeldLog.Position = hand + new Vector3(-0.1f, 0.35f, 0);
+                // its front end tips up as it is drawn back, and comes down with the throw (the clip's last quarter)
+                var swing = Math.Clamp((k - 0.74f) / 0.26f, 0f, 1f);
+                v.HeldLog.Rotation = new Vector3(Mathf.Lerp(-0.35f * MathF.Min(1f, k / 0.74f), 0.25f, swing), 0, 0);
             }
         }
         if (enraged) rise *= 1f + 0.025f * MathF.Sin((float)now * 13f);
-        v.Pivot.Rotation = new Vector3(pitch, 0, roll);
+        v.Pivot.Rotation = new Vector3(0, 0, roll);
         v.Pivot.Scale = new Vector3(1, rise, 1);
     }
 
@@ -413,8 +479,8 @@ public partial class NetClient
         var at = new Vector3(m.Position.X, m.Position.Y, m.Position.Z);
         switch (m.Kind)
         {
-            case BigfootFxKind.Appear: Sfx.Play3D(BigfootSounds.Roar, at, 4f); ShakeFor(at, 25); break;
-            case BigfootFxKind.Roar: Sfx.Play3D(BigfootSounds.Roar, at, 6f); ShakeFor(at, 30); break;
+            case BigfootFxKind.Appear: Sfx.Play3D(BigfootSounds.Roar, at, 4f); ShakeFor(at, 25); RoarAt(at); break;
+            case BigfootFxKind.Roar: Sfx.Play3D(BigfootSounds.Roar, at, 6f); ShakeFor(at, 30); RoarAt(at); break;
             case BigfootFxKind.Death: Sfx.Play3D(BigfootSounds.Roar, at, 6f); ShakeFor(at, 30); break;
             case BigfootFxKind.StompWindup: Sfx.Play3D(BigfootSounds.StompWindup, at, 6f); break; // the telegraph: a sound, and the pose
             case BigfootFxKind.Shockwave:
@@ -435,6 +501,16 @@ public partial class NetClient
             case BigfootFxKind.Grab: Sfx.Play3D(BigfootSounds.Grab, at); break;
             case BigfootFxKind.Launch: Sfx.Play3D(BigfootSounds.Throw, at, 4f); break;
         }
+    }
+
+    /// <summary>
+    /// The Bigfoot standing at a roar's place plays the Roar clip: its arrival, and a phase that began while it stood. In a fight the server's Roar act
+    /// (<see cref="BigfootAct.Roar"/>) stops it and plays the same clip; a giant on the move is left alone here, it would slide.
+    /// </summary>
+    void RoarAt(Vector3 at)
+    {
+        foreach (var v in _bigfoots.Values)
+            if ((BigfootAct)v.Drawn.Last == BigfootAct.Idle && v.Node.GlobalPosition.DistanceTo(at) < 4f) PlayOver(v, BigfootRules.ClipRoar, 0.15, Now);
     }
 
     /// <summary>The height of the shockwave's wall of dust at full size (the wave itself is hit below <see cref="BigfootStomp.WaveHeightM"/>: a jump clears it).</summary>

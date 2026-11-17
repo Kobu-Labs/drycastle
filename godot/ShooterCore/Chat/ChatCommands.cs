@@ -79,6 +79,11 @@ public static class ChatCommands
     /// <summary>Most citizens one /citizens asks for (the data's max_count may be lower).</summary>
     public const int MaxCitizens = 200;
 
+    /// <summary>Bounds of /explode: the blast radius and how far ahead of the player it goes off, metres.</summary>
+    public const int MaxExplodeSize = 60, MaxExplodeDistance = 500;
+    /// <summary>Bounds of /explode's wave speed, metres a second.</summary>
+    public const int MinExplodeSpeed = 5, MaxExplodeSpeed = 400;
+
     public static readonly IReadOnlyList<ChatCommand> All = new ChatCommand[]
     {
         new("help", "List the commands, or explain one", new[] { new ChatArg("command", ChatArgKind.Choice, false) }, AdminOnly: false),
@@ -91,7 +96,11 @@ public static class ChatCommands
         new("citizens", "Send citizens to the church to sit on its pews (a number), or remove them all (clear)", new[] { new ChatArg("count", ChatArgKind.IntOrChoice, true, 1, MaxCitizens) }),
         new("church", "TEST: open or close the church doors, or show whether they are open", new[] { new ChatArg("action", ChatArgKind.Choice, false) }),
         new("rozhlas", "TEST: kill the rozhlas announcer now (hijack the mic for 3 minutes), take or release the set, or show the loudspeaker's phase", new[] { new ChatArg("action", ChatArgKind.Choice, false) }),
-        new("status", "Give a player (name or #id), or yourself, the divine blessing or the devil's curse, or clear their statuses", new[] { new ChatArg("status", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
+        new("status", "Give a player (name or #id), or yourself, the divine blessing, the devil's curse or a high, or clear their statuses", new[] { new ChatArg("status", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
+        new("explode", "TEST: a blast of that radius (metres) on the ground that many metres in front of you. The look, the sound and the dust only: it hurts nobody. The speed is how fast its blast wave leaves, metres a second (a blast of 9 m and larger has one)",
+            new[] { new ChatArg("size", ChatArgKind.Int, true, 1, MaxExplodeSize), new ChatArg("distance", ChatArgKind.Int, true, 0, MaxExplodeDistance), new ChatArg("speed", ChatArgKind.Int, false, MinExplodeSpeed, MaxExplodeSpeed) }),
+        new("scud", "TEST: the Scud truck. spawn: a truck stands in front of you; reload: the truck you ride or the nearest within 40 m is loaded at once; blast: a Scud blast 200 m ahead of you (kills, destroys, shatters glass); state: its launcher's state",
+            new[] { new ChatArg("action", ChatArgKind.Choice) }),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
     };
 
@@ -111,7 +120,7 @@ public static class ChatCommands
             ChatArgKind.Choice when cmd.Name == "spawn" => ctx.Vehicles.Select(v => (v, "")).ToList(),
             ChatArgKind.Choice when cmd.Name == "give" => ctx.Items.Select(i => (i, "")).ToList(),
             ChatArgKind.Choice when cmd.Name == "sandbox" => new[] { ("on", "godmode, unlimited ammo, no score"), ("off", "back to normal play") },
-            ChatArgKind.Choice when cmd.Name == "status" => new[] { ("bless", "one lethal hit is negated"), ("curse", "your bullets set victims ablaze"), ("clear", "take every status away") },
+            ChatArgKind.Choice when cmd.Name == "status" => new[] { ("bless", "one lethal hit is negated"), ("curse", "your bullets set victims ablaze"), ("high", "high from the plantation, as after a hold in it"), ("clear", "take every status away") },
             ChatArgKind.Choice when cmd.Name == "restart"=> new[] { ("ffa", "free-for-all, everyone alone"), ("tdm", "team deathmatch, two teams") },
             ChatArgKind.Choice when cmd.Name == "event" && argIndex == 0 => new[]
             {
@@ -120,6 +129,8 @@ public static class ChatCommands
                 ("intel", "TEST: announce a made-up event and put it on the intel screen at the base"),
                 ("mass", "the Holy Mass: the bells ring, the village walks to the church, the pastor leads the Mass"),
                 ("thieves", "the Thieves event: Raids of thieves drive into the village in vans to steal Loot (cannot be lost)"),
+                ("harvester", "a harvester drives onto a crop field near the players and cuts it; kill the driver to take it, keep clear of the reel (ignores the 12 minute cooldown, one at a time)"),
+                ("scud", "the Scud event: a Scud truck hides somewhere in a search area on the intel board, rocket carts wait at the bunkers; the first player to board it wins (nobody in 20 minutes: it is removed)"),
                 ("demon", "TEST: the pastor turns into the demon now; stand in the church to fight it"),
                 ("current", "the running event (with end)"),
             },
@@ -129,6 +140,7 @@ public static class ChatCommands
                 ("end", "conclude the running event as if it was completed (with current)"),
                 ("cancel", "remove the running event with no reward (with current; the Holy Mass cannot be cancelled)"),
             },
+            ChatArgKind.Choice when cmd.Name == "scud" => new[] { ("spawn", "a Scud truck stands in front of you"), ("reload", "the truck you ride (or the nearest within 40 m) is loaded at once, when its rack is down"), ("blast", "TEST: a Scud blast 200 m ahead of you, credited to you"), ("state", "say the launcher's state of the truck") },
             ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },
             ChatArgKind.Choice when cmd.Name == "rozhlas" => new[] { ("hijack", "the announcement cuts and the mic stays live for 3 minutes (only while a detour broadcast is on air)"), ("take", "TEST: hold the set yourself (stands in for holding E at the dictation table; only while hijacked)"), ("release", "TEST: let the set holder go"), ("goto", "TEST: stand at the dictation table (where E takes the set during a hijack)"), ("feedtest", "TEST: push a few seconds of test voice and a shot through the live feed (ffmpeg voice chain, 2 s delay) to every megaphone"), ("combattest", "TEST: push a shot, a blast and a death sound through the live feed, wherever you stand") },
             ChatArgKind.IntOrChoice when cmd.Name == "citizens" => new[] { ("clear", "remove every citizen") },

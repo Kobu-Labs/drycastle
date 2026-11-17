@@ -5,7 +5,7 @@ public enum WeaponKind { Hitscan, Projectile, Melee }
 /// <summary>Weapon category (weapons.json "category"). Melee and Launcher map to their own kinds; the rest are hitscan guns.</summary>
 public enum WeaponCategory { MachineGun, AssaultRifle, Shotgun, Smg, Sniper, Pistol, Launcher, Melee }
 
-/// <summary>Loadout slot (weapons.json "slot"). Special is carried outside the primary/secondary choice (knife, bazooka).</summary>
+/// <summary>Loadout slot (weapons.json "slot"). Special is carried outside the primary/secondary choice (the knife).</summary>
 public enum WeaponSlot { Primary, Secondary, Special }
 
 /// <summary>
@@ -113,6 +113,17 @@ public class WeaponsFile
             throw Invalid(where, "shell_reload", "needs magazine_size and reload_time > 0 (reload_time is then per shell)");
         if (r.ZoomLevels is { } levels && levels < 1) throw Invalid(where, "zoom_levels", "must be at least 1");
         if (category == WeaponCategory.Shotgun && r.Pellets is null) throw Invalid(where, "pellets", "is required for a shotgun");
+        if (r.Lock is { } lk)
+        {
+            if (kind != WeaponKind.Projectile) throw Invalid(where, "lock", "is only for a projectile weapon");
+            if (lk.Seconds <= 0) throw Invalid(where, "lock.seconds", "must be > 0");
+            if (lk.RangeM <= 0) throw Invalid(where, "lock.range_m", "must be > 0");
+            if (lk.ConeDeg is <= 0 or >= 90) throw Invalid(where, "lock.cone_deg", "must be between 0 and 90");
+            if (lk.AlertAtFraction is < 0 or > 1) throw Invalid(where, "lock.alert_at_fraction", "must be between 0 and 1");
+            if (lk.GraceSeconds < 0) throw Invalid(where, "lock.grace_seconds", "must be >= 0");
+            if (lk.HitBlastRadius < 0 || lk.KillBlastRadius < 0) throw Invalid(where, "lock", "blast radii must be >= 0");
+            if (r.ProjectileSpeed is not > 0 || r.ProjectileLife is not > 0) throw Invalid(where, "lock", "needs projectile_speed and projectile_life > 0");
+        }
 
         var c = categoryDefaults.GetValueOrDefault(category) ?? new TuningRaw();
         var move = Pick(r.MoveSpeedMultiplier, c.MoveSpeedMultiplier, 1);
@@ -166,6 +177,7 @@ public class WeaponsFile
             ProjectileSpeed = r.ProjectileSpeed ?? 0,
             ProjectileLife = r.ProjectileLife ?? 0,
             Splash = r.Splash,
+            Lock = r.Lock,
         };
     }
 
@@ -306,6 +318,7 @@ public class WeaponsFile
         public float? ProjectileSpeed { get; set; }
         public float? ProjectileLife { get; set; }
         public SplashDef? Splash { get; set; }
+        public LockDef? Lock { get; set; }
     }
 
     internal sealed class RecoilRaw
@@ -400,6 +413,31 @@ public class WeaponDef
     public float ProjectileSpeed { get; set; }
     public float ProjectileLife { get; set; }
     public SplashDef? Splash { get; set; }
+    /// <summary>The Lock a Lock-on launcher needs before it fires (weapons.json "lock"); null for every other weapon. See <see cref="LockRules"/>.</summary>
+    public LockDef? Lock { get; set; }
+}
+
+/// <summary>
+/// The Lock of a Lock-on launcher (ADR 0031, glossary "Lock"): the weapon fires only at an Aircraft it has locked, and the missile then homes on it.
+/// </summary>
+public class LockDef
+{
+    /// <summary>Seconds the Aircraft must stay inside the lock circle before the Lock is complete.</summary>
+    public float Seconds { get; set; }
+    /// <summary>Farthest an Aircraft can be locked, metres; kinds in <see cref="UnlimitedRange"/> have no limit.</summary>
+    public float RangeM { get; set; }
+    /// <summary>Half-angle of the lock circle round the aim, degrees (wider than the aim reticle).</summary>
+    public float ConeDeg { get; set; }
+    /// <summary>Share of the Lock (0..1) at which the Aircraft's owner is first warned.</summary>
+    public float AlertAtFraction { get; set; } = 0.4f;
+    /// <summary>Seconds the Aircraft may be out of the circle or out of sight before the Lock is lost (the progress waits meanwhile).</summary>
+    public float GraceSeconds { get; set; }
+    /// <summary>Aircraft kind ids (killstreaks.json) that can be locked at any distance (the UAV).</summary>
+    public List<string> UnlimitedRange { get; set; } = new();
+    /// <summary>Blast radius of a missile that hits an Aircraft and leaves it flying, or that lost its Aircraft, metres.</summary>
+    public float HitBlastRadius { get; set; }
+    /// <summary>Blast radius of the hit that shoots the Aircraft down, metres (9 m and up raises a Blast wave).</summary>
+    public float KillBlastRadius { get; set; }
 }
 
 /// <summary>
@@ -437,4 +475,9 @@ public class SplashDef
     /// kills the horizontal part within a few ticks. 0 disables knockback.
     /// </summary>
     public float KnockbackSpeed { get; set; } = 4.5f;
+    /// <summary>
+    /// The speed the blast's Blast wave leaves at, m/s (weapons.json <c>wave_speed</c>); 0 keeps the dust's own (<see cref="DustRules.FrontSpeedMps"/>).
+    /// It rides the Explosion event. Only a blast of <see cref="DustRules.FrontMinRadius"/> or more has a wave.
+    /// </summary>
+    public float WaveSpeed { get; set; }
 }

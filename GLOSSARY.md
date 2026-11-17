@@ -35,11 +35,11 @@ A polygon of exactly one zone kind. It marks what the area means in play and nev
 _Avoid_: region, layer, attribute layer, ground type
 
 **Zone kind**:
-What a zone means in play, from a fixed list in code (each needs something in the pipeline or the game to read it): Bigfoot, deer, player spawn, ... Its numbers (density, clearances) are in `rules.yaml`, and it may have a zone for every ground area of some ground types (deer wherever there is forest) without anything drawn; the editor shows one count of all its zones.
+What a zone means in play, from a fixed list in code (each needs something in the pipeline or the game to read it): Bigfoot, Scud truck, deer, player spawn, plantation, ... Its numbers (density, clearances) are in `rules.yaml`, and it may have a zone for every ground area of some ground types (deer wherever there is forest) without anything drawn; the editor shows one count of all its zones.
 _Avoid_: event area, spawn area, marker type
 
 **Runtime zone**:
-A zone that the game server needs while it runs. The game never sees ground areas or zones, so the build exports **candidate points** instead: seeded points inside every zone of the kind, one per N m² between a minimum and a maximum, clear of buildings and water, in `attribute_points.json` of the map. The server picks one at random; a kind no zone covers has no point.
+A zone that the game server needs while it runs. The game never sees ground areas or zones, so the build exports one of two things instead. **Candidate points** (most kinds): seeded points inside every zone of the kind, one per N m² between a minimum and a maximum, clear of buildings and water, in `zone_points.json` of the map; the server picks one at random, and a kind no zone covers has no point. **Polygons** (a kind the server asks "is a player standing inside?" of, today the Plantation): the zones' outlines in game axes (x east, z = -north), in `zone_polygons.json`; a map without the file or without such a zone has the feature off, with no error.
 _Avoid_: exported attribute, spawn area (an area is not exported)
 
 **Replacement scene**:
@@ -97,8 +97,8 @@ The player's own action (pause menu, or "Apply now" in the Loadouts screen, both
 _Avoid_: redeploy (the wire name only), suicide
 
 **Corpse**:
-A killed player's body, left on the ground for a couple of minutes. Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. A rider killed in a vehicle leaves it thrown with the vehicle's velocity (a blast adds its knockback) so it falls, except a pilot or driver, whose corpse stays seated and rides with the vehicle until it has rested for a second. One that lands in water floats on the surface. It also carries every Item its player wore or carried in the Bag (up to eight), which another player can take one at a time (see Pickup limit).
-_Avoid_: ragdoll, body, drop
+A killed player's body, left on the ground for a couple of minutes. One killed on foot by a bullet, a knife or a fall collapses on every client: it topples away from the killer, bounces and lies flat on the slope under it (the collapse is a look only, the server's point does not move). Another player can walk over it to take its primary weapon in place of their own primary or secondary. A player killed by a blast or run over by a car leaves the corpse thrown: the server flies it under gravity until it lands, and clients tumble it meanwhile. A rider killed in a vehicle leaves it thrown with the vehicle's velocity (a blast adds its knockback) so it falls, except a pilot or driver, whose corpse stays seated and rides with the vehicle until it has rested for a second. A player who boards a seat a corpse holds (any vehicle, any seat) flings it out of the door on their side and takes the seat at once; it flies a short arc and lands thrown, keeping its Items. One that lands in water floats on the surface. It also carries every Item its player wore or carried in the Bag (up to eight), which another player can take one at a time (see Pickup limit).
+_Avoid_: ragdoll (alone; "collapse" is the fall of a killed body, "thrown" its flight), body, drop
 
 **Sandbox mode**:
 A dev-only player state, asked for by the client (`--sandbox`) and granted by a server started with `--allow-sandbox`: godmode, unlimited ammo, every killstreak on demand. Its kills, XP and stats count for nothing.
@@ -109,7 +109,7 @@ A player whose player token is listed on the server (`--admin-token`). Admins ma
 _Avoid_: operator, moderator, op
 
 **Chat command**:
-A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/event` (`rozhlas` the loudspeaker, `intel` a test announcement, `bigfoot` starts the Bigfoot Event, `thieves` starts the Thieves event, `current end` concludes the running Event as a win for testing, `current cancel` removes it with no reward), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
+A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/event` (`rozhlas` the loudspeaker, `intel` a test announcement, `bigfoot` starts the Bigfoot Event, `thieves` starts the Thieves event, `harvester` starts a harvester on a crop field near the players (ignores the cooldown, says the field `GP-NNNN` and x,y,z), `current end` concludes the running Event as a win for testing, `current cancel` removes it with no reward), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
 _Avoid_: console command, cheat
 
 **Care package**:
@@ -125,31 +125,59 @@ An open three-seat vehicle, a boat-shaped hull on four wheels: a driver, an arme
 _Avoid_: APC, amphib, Schwimmwagen, duck
 
 **Predicted vehicle**:
-A vehicle whose driver's client steps its own copy with the driver's inputs, so the driver sees it in the present rather than about 100 ms late: the utility helicopter (ADR 0006), the amphibious transport (ADR 0010) and the car (ADR 0014). Everyone else, the riders included, sees a predicted vehicle drawn from the snapshots; the other ground vehicles are drawn from the snapshots for the driver too.
+A vehicle whose driver's client steps its own copy with the driver's inputs, so the driver sees it in the present rather than about 100 ms late: the utility helicopter (ADR 0006), the amphibious transport (ADR 0010) and the car (ADR 0014) and the vehicles that carry a `drive` block after it (the Golf Mk2, the Humvee). Everyone else, the riders included, sees a predicted vehicle drawn from the snapshots; the other ground vehicles are drawn from the snapshots for the driver too.
 _Avoid_: client-side vehicle, smooth vehicle
+
+**Trailer**:
+A single-axle vehicle with no seats that a tractor pulls (vehicles.json `trailer`: drawbar eye, axle, mass). Loose it stands still; hitched its drawbar eye is pinned to the tractor's hitch and it follows the hitch's velocity, so it cuts corners and, reversed, folds. Its machine is `Trailer.Tow` (Loose, Hitched, Released). The first trailer is the rocket cart.
+_Avoid_: cart (alone), caravan, wagon
+
+**Rocket cart**:
+The trailer that carries one large missile (vehicles.json `rocket_cart`, 12.6 m with its drawbar because it carries the whole 11.1 m missile, about 3000 kg loaded and 1000 kg empty, no seats, never dealt: the Scud event or `/spawn rocket_cart` puts one down). It is Loaded or Empty (machine `RocketCart.Load`, server-owned, one bit of its vehicle record): loaded it has low hit points (`trailer.loaded_hp`, 150) and, destroyed, detonates (the server's `OnRocketCartDetonated`: the Scud blast); empty it has the type's own hit points and blows up as a small ordinary vehicle. A shot loaded cart detonates with the full Scud blast, credited to its shooter, and a loaded cart in the damage of another Scud blast goes up in its turn (`blast.chain_delay_seconds`), each once. A cart that is emptied (a truck took its rocket) stays empty when it falls out of the world and is put back; it never returns by itself after destruction (`returns` false: the Scud event decides when a new loaded one stands at a bunker). Standing within 5 m of an empty Scud truck, it can be unloaded onto it (see Launcher).
+_Avoid_: missile trailer, Scud trailer, wagon
+
+**Tow hitch / Hitched**:
+The tow hitch is the ball at the rear of a vehicle whose type has a `tow` block (the jeep, the Humvee, the flak truck); only data decides who tows. A tractor latches a loose trailer by itself when it reverses with its hitch within 0.8 m of the drawbar eye and headings within 35 degrees; the driver unhitches by holding interact for 0.6 s (a tap still leaves the vehicle, on release; `Trailer.UnhitchKey`), and the trailer cannot be latched again for 2 s (Released). A tractor pulls at most one trailer. Hitched, the tractor accelerates and brakes by its mass over the pair's, tops out at 60 % of its speed and holds less sideways acceleration; a turn taken too fast lets the trailer swing out.
+_Avoid_: coupled, attached, trailer lock
+
+**Jackknife limit**:
+The most a hitched trailer can fold against its tractor (75 degrees, `tow.limit_deg`). Reversing grows the fold; at the limit the tractor's motion that would fold it further (speed, yaw rate) is taken from it, so it stops, and driving forward unfolds it. A trailer whose box is blocked blocks its tractor the same way.
+_Avoid_: max angle, articulation cap
 
 **Armed seat**:
 A passenger seat whose rider keeps their own loadout and fights with it from the seat, in first person, aiming with the view inside the seat's arc. The mouse wheel changes the weapon there, since the number keys are the seat switch. The amphibious transport's front right seat is one; the bus's passenger seats are not.
 _Avoid_: shotgun seat, gunner seat (that seat works the vehicle's own gun), fighting seat
 
 **Exposed seat**:
-A seat the hull does not cover: a shot that reaches its rider's body hits the rider and not the hull, and a shot that misses them hits the hull. The flak truck's and the utility helicopter's gunner seats are exposed, and all three seats of the amphibious transport. Riders of one vehicle never hit each other.
+A seat the hull does not cover: a shot that reaches its rider's body hits the rider and not the hull, and a shot that misses them hits the hull. The flak truck's, the utility helicopter's and the Humvee's gunner seats are exposed, and all three seats of the amphibious transport. Riders of one vehicle never hit each other.
 _Avoid_: open seat, unprotected seat
 
+**Seat cover**:
+What protects a seat's rider from a bullet, declared by every seat (`vehicles.json` seat `cover`, ADR 0035): **armoured** (hidden; no bullet, pellet or mounted-gun round reaches them, only explosive damage and the vehicle blowing up do: the flak truck's driver), **glass** (behind panes; a round reaches them only through a pane, an open side or a shattered pane, as the pane's Pane kind says: every closed seat), or **exposed** (see Exposed seat). Which pane guards which seat is the geometry of the shot, not a list. When the vehicle explodes everybody aboard dies, whatever the cover; a blast from outside hurts a covered rider at half.
+_Avoid_: protection level, armour flag
+
 **Ring gun**:
-The amphibious transport's machine gun, on a ring mount over the rear compartment and worked from the gunner seat by a gunner who stands inside the ring. The gunner's view aims it all the way round; over the two riders in front it cannot be depressed. Its rounds are the jeep's roof gun's, and its kills are ordinary kills.
+The amphibious transport's and the Humvee's machine gun, on a ring mount (over the rear compartment; on the Humvee's roof) and worked from the gunner seat by a gunner who stands inside the ring. The gunner's view aims it all the way round; over the two riders in front of the transport's it cannot be depressed. Its rounds are the vehicle gun round, and its kills are ordinary kills.
 _Avoid_: turret (alone), pintle gun, rear gun
 
+**Vehicle gun round**:
+The round the Humvee's roof gun, the amphibious transport's ring gun and the utility helicopter's door gun fire: 14 damage (30 from the helicopter's belt), one round every 0.1 s, 220 m range, 1.2 degrees of spread. There is no shared record: each of those types carries it in its own `gun` block in `vehicles.json`. It was "the jeep's roof gun" until the jeep became a gunless truck (#325).
+_Avoid_: jeep gun, roof gun (alone)
+
 **Fixed seat**:
-Where a rider sits, in every vehicle: the seat's offset in the vehicle's frame (`vehicles.json` `seats`; a vehicle with none has one driver seat at its origin). Its rider is drawn on it, turning and tilting with the hull as it is drawn this frame, and never as a free figure beside the vehicle. The server tells every client who sits in each seat (the driver in the vehicle's record, seats 1..3 in its seats record), so a rider is placed by id.
+Where a rider sits, in every vehicle: the seat's offset in the vehicle's frame (`vehicles.json` `seats`; a vehicle with none has one driver seat at its origin). Its rider is drawn on it, turning and tilting with the hull as it is drawn this frame, and never as a free figure beside the vehicle. The server tells every client who sits in each seat (the driver in the vehicle's record, seats 1..4 in its seats record; a vehicle has at most five seats), so a rider is placed by id.
 _Avoid_: rider offset, seat anchor
+
+**Rider view**:
+How the local rider of a seat sees, per rider and this client only: chase (the vehicle's chase camera), cockpit (first person from the seat's eye: seat offset + `eye_height`, the head's height for a seat in the open; hangs under the hull so the sway is in the view), or sight (a gun's or the Scud operator's own view; not switchable). One view key switches chase and cockpit in every seat; the choice is kept across seats and vehicles (`Rider.View`, `docs/state-machines.md`). Only the driver's seat has a cockpit rig (hands, turning wheel); any other seat sees the model's own interior.
+_Avoid_: camera mode, cockpit view (the first-person half of the rider view)
 
 **Head look**:
 What a seated rider's view does to their figure for everyone: with the view in first person (a passenger's own eyes, the driver's cockpit view), the head turns up to 70 degrees either side and tips, and a look further round twists the upper body over the hips, so the look reaches straight behind. The body stays on the seat. In the chase view the head faces ahead; a helicopter's pilot only looks up and down (their yaw is the heading). A gunner or an armed seat's rider turns the whole figure to the aim instead (ADR 0026).
 _Avoid_: neck turn, look-around
 
 **Seat switch**:
-Moving to another seat of the vehicle you sit in, without getting out: while seated, the number keys (the weapon slot keys) take that seat (key 2 is the second seat of the vehicle's `seats` list), and a small top-down schematic in the bottom right shows each seat with its number (free: outlined; yours: filled, double ring; taken: struck through). A vehicle with no `seats` list has the one driver seat. A free seat is taken at once; a taken one is refused. Leaving the driver seat leaves the vehicle without input, so it coasts to a stop (a utility helicopter in the air holds a hover, then sets itself down); a gunner's turret keeps its aim. One player can drive, go to the turret and drive again.
+Moving to another seat of the vehicle you sit in, without getting out: while seated, the number keys (the weapon slot keys) take that seat (key 2 is the second seat of the vehicle's `seats` list), and a small panel in the bottom right shows the vehicle's real top-view outline (`vehicle_outlines.json`, generated from the model; the hit box if it has none) with each seat on it at its real place and with its number (free: outlined; yours: filled, double ring; taken: struck through). A vehicle with no `seats` list has the one driver seat. A free seat is taken at once; a taken one is refused. Leaving the driver seat leaves the vehicle without input, so it coasts to a stop (a utility helicopter in the air holds a hover, then sets itself down); a gunner's turret keeps its aim. One player can drive, go to the turret and drive again.
 _Avoid_: seat change, swap seat
 
 **Hotbar**:
@@ -193,7 +221,7 @@ How many times an Item can be taken from a Corpse or the ground over its whole l
 _Avoid_: use count, durability, charges
 
 **Streak weapon**:
-A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the turret, the MOAB, the aircraft guns). Kills made with one do not advance the Streak counter. The jeep's roof gun, the utility helicopter's door gun and the amphibious transport's ring gun are not streak weapons.
+A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the turret, the MOAB, the aircraft guns). Kills made with one do not advance the Streak counter. The Humvee's roof gun, the utility helicopter's door gun and the amphibious transport's ring gun are not streak weapons.
 _Avoid_: killstreak weapon (ambiguous with the streak itself)
 
 **Pellet fan**:
@@ -207,6 +235,18 @@ _Avoid_: accuracy, bloom, recoil (recoil moves the aim; spread scatters around i
 **Camouflage**:
 A loadout's look (`camo.json`): the character (body model, skin tone, headgear: the helmet's look, not the Headgear slot), the suit's base colour and pattern, ghillie tufts and face paint. Chosen in the customiser and stored per loadout slot.
 _Avoid_: outfit, cosmetic
+
+**Ground object**:
+A fallen log, stump, boulder, upturned root plate, anthill or burrow mound on the forest floor, generated by the pipeline (`ground_objects.json`, rules `props.ground_objects`), not placed by hand. A low-poly mesh baked into the chunk's props and, except for a fallen log (not solid, #359), a solid box (or square taper) for players and shots; a detailed model may stand in near the player.
+_Avoid_: forest prop, rock (a boulder is one kind), placed object (that is hand-made)
+
+**Stand**:
+A patch of forest with one character (pine, birch, mixed, thicket, swamp), picked per forest tree by the pipeline from a seeded Voronoi field over the map (cells of about 110 m), or swamp where it lies near water. It sets the conifer/broadleaf mix, the size and the density, and is written to `trees.json` as `"stand"`; trees at the forest's outer boundary are also flagged `"edge"` (a smaller mantle that steps the wall down). It is not a zone (nothing in play reads it) and not a ground type (the terrain ignores it).
+_Avoid_: forest type, biome
+
+**Swamp ground**:
+Forest or meadow ground within 25 m of water (a water ground area or a water patch's wet area: the zone the swamp stand of trees stands in), which the ground detail draws wet: a dark earth base, large mud patches, small puddle patches and moss, and the meadow raster gives it the swamp mix (reeds and tall grass). Decided by rule from where the water is, never drawn or typed: not a ground type (nothing in `ground.types` or `edits.json`), not a zone, and no real water (no depth, no wading, no effect on play).
+_Avoid_: marsh, bog, wetland (those are not terms of this map)
 
 **Shot-only cover**:
 Collision that stops bullets, pellets, rockets and sight lines but not players or cars: tree crowns and bushes. Tree trunks and placed solids are solid for everyone.
@@ -241,7 +281,7 @@ The fall of a sniper rifle's bullet under gravity, as if it flew at the weapon's
 _Avoid_: falloff (that is damage), ballistics (the thrown arcs of the Bigfoot)
 
 **Casing**:
-The spent case a gun throws out when it fires (#307): every gun that fires a round has one (a pistol's, a rifle's, a shotgun's red hull, the big case of a door gun, the jeep's roof gun or a sentry turret, the 35 mm case of the flak), a knife or a bazooka none. Seen by every client, drawn only near the camera, never sent over the network (each client throws its own from the same shot). It flies, bounces up to three times with a clink (`casing.tink`), lies on the floor for 20 s and fades. One that lands on a vehicle's roof goes after a second; one that goes under water sinks slowly, lies on the bed and makes no sound; one that lands on a steep face slides down it; it does not come to rest inside a vehicle (not yet, #316).
+The spent case a gun throws out when it fires (#307): every gun that fires a round has one (a pistol's, a rifle's, a shotgun's red hull, the big case of a door gun or a roof gun, a sentry turret, the 35 mm case of the flak), a knife, an RPG or a Lock-on launcher none. Seen by every client, drawn only near the camera, never sent over the network (each client throws its own from the same shot). It flies, bounces up to three times with a clink (`casing.tink`), lies on the floor for 20 s and fades. One that lands on a vehicle's roof goes after a second; one that goes under water sinks slowly, lies on the bed and makes no sound; one that lands on a steep face slides down it; it does not come to rest inside a vehicle (not yet, #316).
 _Avoid_: shell (a flak **shell** is the round, not the case), brass
 
 **Zero**:
@@ -252,7 +292,7 @@ _Avoid_: elevation, sight setting
 The dots on the cross of a sniper scope, at true angles: 1 mil is 1 m at 1000 m. The scope says how many mils one dot is. A target of a known height that spans n mils is height x 1000 / n metres away; a dot under the centre is the hold-over for a target beyond the Zero.
 
 **Hit diagram**:
-The card a hunter sees after killing a wild animal with a sniper rifle: the animal's side view (always facing left), the place the bullet entered marked on it, the distance of the shot, the weapon, the animal's weight in kg (next to its name), and "HEAD" when the bullet met the head. The side view is always the one picture of the animal standing, whatever it was doing when it was hit: the hit is moved from the Hit shape the bullet was tested against onto the standing one, a head hit to the same place of the head and a body hit to the same place of the body. Only the shooter sees it, for 5 s. Only a kill, only a sniper rifle, only wildlife (not a Pet, a Citizen or a player).
+The card a hunter sees after killing a wild animal with a sniper rifle: the animal's side view (always facing left), the place the bullet entered marked on it, the distance of the shot, the weapon, the animal's weight in kg (next to its name), and "HEAD" when the bullet met the head. The side view is always the one picture of the animal standing, whatever it was doing when it was hit: the hit is moved from the Hit shape the bullet was tested against onto the standing one, a head hit to the same place of the head and a body hit to the same place of the body. Only the shooter sees it, for 5 s. Only a kill, only a sniper rifle, only wildlife (not a Pet, a Citizen or a player). The card is the sniper's; the Hunter's Log keeps the same diagram for a kill by any hitscan weapon (a shotgun's is the first pellet that hit).
 _Avoid_: kill cam, x-ray
 
 **Hit shape**:
@@ -288,36 +328,84 @@ A value from the day clock that drives street lamp light, headlight and window g
 _Avoid_: darkness, night mode
 
 **Aircraft**:
-A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper, the AC-130 gunship and the UAV. Nobody boards or flies it; its owner only works its guns (the UAV has none). It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship, 200 for the UAV) and can be shot down by flak and any other anti-aircraft (ADR 0005): its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
+A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper, the AC-130 gunship and the UAV. Nobody boards or flies it; its owner only works its guns (the UAV has none). It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship, 200 for the UAV) and can be shot down by flak, the Lock-on launcher and any other anti-aircraft (ADR 0005, ADR 0031): its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
 _Avoid_: plane (for helicopters), drone, helicopter (alone)
 
 **Utility helicopter**:
-The vehicle a player flies: boarded, left and destroyed like any other vehicle, and flown freely by whoever sits in its pilot seat (the vehicle's driver seat). Its second seat is the door gunner's. Hands off it levels itself, stops and holds a hover; with nobody in the pilot seat it hovers briefly, then sets itself down.
+The vehicle a player flies: boarded, left and destroyed like any other vehicle, and flown freely by whoever sits in its pilot seat (the vehicle's driver seat). Its second seat is the door gunner's. Hands off it levels itself, stops and holds a hover; with nobody in the pilot seat it hovers briefly, then sets itself down. There is one, standing at its fixed spot on the military base's heliport (square to the two open hangars beside it), never dealt at random; a destroyed one comes back there.
 _Avoid_: helicopter (alone), chopper, Huey, aircraft (that is the circling killstreak entity), flyable helicopter
 
 **Door gun**:
-The utility helicopter's machine gun, on a pintle in its right door and worked from the gunner seat. The gunner's view aims it inside an arc that keeps its rounds off the helicopter itself; its rounds are the jeep's roof gun's, and its kills are ordinary kills. The door gunner sits in the open, like the flak truck's gunner: a shot that reaches the body hits it, while the pilot stays behind the hull.
+The utility helicopter's machine gun, on a pintle in its right door and worked from the gunner seat. The gunner's view aims it inside an arc that keeps its rounds off the helicopter itself; its rounds are the vehicle gun round, and its kills are ordinary kills. The door gunner sits in the open, like the flak truck's gunner: a shot that reaches the body hits it, while the pilot stays behind the hull.
 _Avoid_: turret (alone), minigun, side gun
 
 **Flak truck**:
-A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every closed vehicle.
+A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the Humvee's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every closed vehicle.
 _Avoid_: AA gun, anti-air vehicle, SPAAG
 
 **Bus**:
 A 12 m land vehicle modelled on the regional bus that serves the village: a driver seat and three passenger seats, no weapon, slow to turn and heavy to run into. It is boarded, left and destroyed like any other vehicle; its doors do not open, riders are placed on their seats.
 _Avoid_: coach, autobus, transport (that is the amphibious one)
 
+**Humvee**:
+A heavier, tougher military car (a 4.6 m troop car, 2400 kg, 550 hp, 100 km/h) with five seats: a driver, a front passenger, two rear passengers and a roof gunner. Dealt at random (two), driven by the drive model like the car (wheels roll and steer, the body leans, the driver predicts it) and able to tow. The passengers sit under the hull, in plain seats; the gunner stands in the roof ring, an exposed seat working a ring gun with the vehicle gun round that turns all the way round. Its model is from the private SIMPLE Military pack (a grey box without it).
+_Avoid_: Hummer, HMMWV, troop car, jeep (that is the cargo truck)
+
+**Jeep**:
+The vehicle type `jeep`: the six-wheeled Synty Battle Royale cargo truck (SM_Veh_Truck_01, 3.05 x 3.16 x 7.05 m, drawn at real size, six camo and colour skins), with a three-seat cab bench (a driver and two passengers) and a flat bed behind. It has no gun and no gunner seat. It tows. The id stays `jeep` because data, tests and chat commands name it; it replaced the Kenney SUV with a roof gun (#325).
+_Avoid_: truck (alone: the flak truck and the Scud truck are other vehicles), war jeep, Kenney jeep
+
 **Golf Mk2**:
 A small black three-door hatchback (4.3 m) with four seats (left-hand drive) that tops out at 200 km/h, the fastest vehicle. Driven by the drive model like the car; no weapon. It is never dealt at random: it stands at its fixed spot.
 _Avoid_: Golf (alone), VW
 
 **Fixed spot**:
-A place in a vehicle type's `fixed_spots` list in `vehicles.json` (world x and z, an optional `yaw_deg`) where one vehicle of that type always stands. It is placed on the ground there before the random deal, which keeps 12 m clear of it, and faces along the nearest road within 15 m (yaw 0 when there is none) unless the spot gives a yaw. An abandoned or destroyed vehicle returns to its fixed spot, as every vehicle returns to where it started.
+A place in a vehicle type's `fixed_spots` list in `vehicles.json` (world x and z, an optional `yaw_deg`) where one vehicle of that type always stands. It is placed on the ground there before the random deal, which keeps 12 m clear of it, and faces along the nearest road within 15 m (yaw 0 when there is none) unless the spot gives a yaw. A destroyed vehicle (or one that falls out of the world) returns to its fixed spot, as every vehicle returns to where it started; an abandoned one stays where it was left. An air type stands on the ground there like any other, and the server logs a spot where its hull or rotor disc touches something solid.
 _Avoid_: parking spot, spawn point (that is where a player appears)
 
 **Airburst**:
 A flak shell's end by an aircraft: the shell flies straight at 700 m/s, and once it passes within 12 m of an aircraft it bursts at the closest approach. An aircraft within 15 m of the burst takes 150 damage out to 4 m, falling to 40 at the edge. The gunner has to lead the aircraft, which flies a known circle. A shell that meets no aircraft ends on the ground with a small blast (4 m, weak), or runs out of range.
 _Avoid_: proximity fuse (the fuse is how it works, the burst is the thing), flak burst
+
+**RPG**:
+A secondary weapon carried on the shoulder (`weapons.json` `rpg`, unlocked at level 8) that fires one unguided rocket where it is aimed: it flies straight at 60 m/s for up to 240 m and bursts on what it meets with a 10 m blast (a Dust cloud and a Blast wave at 200 m/s), half as harmful to the one who fired it. One rocket in the tube and two in reserve. A share of the bots carries it and aims it far more steadily than a gun. It replaced the bazooka (#348).
+_Avoid_: bazooka, rocket launcher (alone: the Lock-on launcher is one too)
+
+**Lock-on launcher**:
+A secondary weapon carried on the shoulder (`weapons.json` `strela`) that shoots down Aircraft and nothing else (ADR 0031). It fires only on a complete Lock; without one the trigger clicks. One Homing missile in the tube and two in reserve, 500 damage each: one for the UAV, two for a helicopter, three for the AC-130. Its sight replaces the crosshair while it is in the hand. Bots do not carry it.
+_Avoid_: AA launcher, MANPADS, Stinger, rocket launcher (that is the RPG)
+
+**Lock**:
+What a Lock-on launcher builds on one enemy Aircraft before it may fire: the Aircraft has to stay inside the lock circle (wider than the aim), within range (the UAV at any distance) and in sight for 2.5 seconds. Out of the circle or behind a wall the progress waits 0.4 seconds, then the Lock is lost. The server decides it; the shooter hears beeps that quicken and a solid tone when it is complete.
+_Avoid_: target lock, aim assist, tracking (that is a Lock whose Aircraft is in the circle right now)
+
+**Lock alert**:
+What an Aircraft's owner is told while a Lock-on launcher is on their Aircraft: an icon and a beep from 40 % of a Lock, a second icon and faster beeps at a complete Lock, a third when a Homing missile is in the air.
+_Avoid_: missile warning, RWR
+
+**Homing missile**:
+What a Lock-on launcher fires: it flies at 160 m/s after the Aircraft it was locked on and always reaches it, unless the Aircraft is gone first (then it bursts in the air). Its hit is an explosion with no Dust cloud; the one that shoots the Aircraft down is 20 m and raises a Blast wave.
+_Avoid_: rocket (the RPG's and the gunship's fly straight), attack missile (that is the killstreak)
+
+**Scud truck**:
+The heavy 8-wheel launcher vehicle (`scud` in `vehicles.json`) of the Scud event: a driver and an operator under one cab, a rack on its back that rises about the rear hinge, and one rocket. It is not dealt at the match start and has no fixed spot (the event, or `/scud spawn`, brings it), cannot tow, and once destroyed it never returns for the match (`returns: false`). Its Launcher fires the Scud missile; its model is the private pack's `scud` (8 wheels, the front two axles steer; two half cabs with the rocket's nose between them), a grey box without it.
+_Avoid_: launcher (that is the machine on it), Scud (alone: the missile)
+
+**Launcher**:
+The machine on a Scud truck (`Scud.Launcher`, `ScudLauncher`, server-owned): the rocket on its rack, the operator's lock, the crew's confirmations and the rack's clock. Stowed, then Targeting (the operator has the targeting screen open), Proposed (a Lock point is placed), Erecting (about 8 s, the truck brakes and ignores its driver), Launching (about 2 s of ignition), Spent, Lowering, Empty (needs a reload), Loading and Reloading, back to Stowed; an aborted erect goes through Aborting back to Stowed with the rocket kept. One rocket only: after the launch the truck is Empty until it is reloaded: from a loaded Rocket cart within 5 m of its hull (a player in the truck, or on foot within 4 m of it, holds interact for 1 s: Loading for the first half of the reload with the cart still loaded, the truck braked, cancelled back to Empty with the cart untouched if the truck or cart moves away or either is destroyed; at the half way point the rocket leaves the cart, which is Empty from then on, and appears on the rack through Reloading), or by `TryReloadScud` (the same 10 s with no cart) or an admin (`/scud reload`, at once). The client's own screen mode is `Scud.Screen` (closed, the operator's targeting screen, or the read-only feed).
+_Avoid_: rack (that is the part that rises), silo
+
+**Lock point**:
+The ground point the operator places on the targeting screen (primary fire at the reticle): at least 150 m from the truck (`min_range_m`), anywhere on the map. Placing one makes the **Launch confirmation**: every occupied seat of the truck, the operator's included, must confirm it (a solo player confirms from the operator seat alone). The Lock point is dropped, and the launch with it, when anyone leaves, joins or changes seat, a confirmer withdraws, the truck moves, the operator places another or closes the screen, or no one confirms for a minute. The player who placed it is credited with the blast. The driver sees the operator's camera and the point read-only and confirms from there.
+_Avoid_: target (alone, ambiguous with the target dummies), waypoint (that is the map's), lock (that is the Lock-on launcher's Lock)
+
+**Scud missile**:
+The world entity a Scud truck launches. Its whole flight is planned at the launch: a vertical boost to about 350 m in 3 s, one arc over, and a dive onto the Lock point at 70 degrees, 15 to 20 s in all by the range. It is not an Aircraft and not a rocket: it cannot be shot down, locked on to or hit, and passes over whatever lies between. Everyone sees it with a flame and a smoke trail and the launch smoke at the truck; players within 600 m of the target get a siren, a banner and a strike marker on the tactical map for the last 8 s.
+_Avoid_: rocket (the bazooka's), attack missile (that is the killstreak), Aircraft
+
+**Scud blast**:
+What a Scud missile's impact does (`NetServer.ScudBlast`, numbers in `scud.json`). Everyone within 60 m dies, in a vehicle or not and spawn protected or not; to 150 m the damage falls off from 90 to 10, with walls and covered seats as for any blast. A blast shelter (a Bunker room, the church) protects exactly as it does from other blasts. Vehicles whose hull is within 60 m are destroyed, those to 150 m lose hit points; every glass pane to 250 m shatters. It raises the biggest Blast wave and Dust cloud there is (90 m), shakes every camera on the map in proportion to its distance when the wave reaches it, and leaves a scorch. Kills are ordinary kills of the player who placed the Lock point; friendly fire follows the match mode.
+_Avoid_: nuke, MOAB (that kills everyone and ignores shelters)
 
 **Sentry turret**:
 The killstreak that places a 500 hp gun on the ground for 15 seconds. It turns to targets within its sight range and shoots them. It is removed when its owner dies or leaves the match, so it never fires or credits kills for an absent owner.
@@ -379,8 +467,12 @@ A window, door or garage door in a wall of a building with a detail: a real hole
 **Window pane**:
 The glass of a window opening, exported as its own node `window_<building>_<id>` and listed in `windows.json` (position, size, facade, `breakable`), so the game can make it transparent or breakable. In the shooter it is a glass pane. Doors and garage doors are part of the building and have no pane node.
 
+**Pane kind**:
+How a vehicle's glass pane treats a bullet (`vehicles.json` glass `kind`, hit points in `glass.json` `kinds`, ADR 0035): **normal** (the default: the bullet damages the pane and goes on, full damage to what is behind) or **reinforced** (more hit points; while it holds it stops the bullet, the pane takes the damage and the rider behind none; once shattered, shots go through with full damage). There is no reduced-damage kind.
+_Avoid_: bulletproof glass, armoured glass
+
 **Glass pane**:
-A flat piece of breakable glass with hit points that the server owns: a window pane of a building (`windows.json`, unless its `breakable` is false) or a pane of a vehicle type (the `glass` list in `vehicles.json`). It is a rectangle, or, for the generated vehicles (bus, flak truck, helicopter), a convex outline polygon inside its bounding rectangle, and there it is also its own node `glass_N` in the model. Bullets and blasts take its hit points; below full it shows a crack (see Crack stage), at zero it is shattered. It has no collider of its own.
+A flat piece of breakable glass with hit points that the server owns: a window pane of a building (`windows.json`, unless its `breakable` is false) or a pane of a vehicle type (the `glass` list in `vehicles.json`). It is a rectangle, or, for the generated vehicles (bus, flak truck, helicopter), a convex outline polygon inside its bounding rectangle, and there it is also its own node `glass_N` in the model. Bullets and blasts take its hit points; below full it shows a crack (see Crack stage), at zero it is shattered. It has no collider of its own. A vehicle's pane has a Pane kind.
 _Avoid_: window (for a vehicle's), glass (alone), windowpane
 
 **Open side**:
@@ -392,7 +484,7 @@ How far the crack of a standing glass pane has spread, from the fraction of its 
 _Avoid_: damage stage (that is a vehicle's smoke), crack level
 
 **Shattered**:
-The state of a glass pane with no hit points left: its fragments fly out once, and it then shows an opening (the model's own glass node of the pane is hidden). A bullet goes through a vehicle's pane whether it is shattered or not. It stays shattered until its vehicle returns repaired or a new round starts.
+The state of a glass pane with no hit points left: its fragments fly out once, and it then shows an opening (the model's own glass node of the pane is hidden). A bullet goes through a shattered vehicle pane; a standing one lets it through or stops it by its Pane kind. It stays shattered until its vehicle returns repaired or a new round starts.
 _Avoid_: broken, destroyed (that is a vehicle or an aircraft)
 
 **Bunker**:
@@ -440,7 +532,7 @@ How a round is scored and won, set by `mode` in `match.json` at server start, or
 _Avoid_: game mode, playlist
 
 **Team**:
-One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team. An admin can regroup from the Pause menu's Teams screen (#312): drag a player card onto a team's table (or A, B, U on the keyboard), or use the quick actions (bots to a team, shuffle, balance). A player moved to a team respawns on the new side, leaves any vehicle, loses their turrets and streak progress, keeps their kills and deaths, and the earned team score stays with the old team. A player dropped on the **Unassigned** table is out of the round: down, no death on the record, not spawned (also not at round starts), not balanced or shuffled, until an admin puts them on a team. A mode change puts everyone on a team again. Round-start balance moves bots before humans, then the newest.
+One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. The same goes for a vehicle with a teammate in any seat (an empty one, or one only the shooter sits in, can be hurt; crashes and water are never blocked) (#338). A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team. An admin can regroup from the Pause menu's Teams screen (#312): drag a player card onto a team's table (or A, B, U on the keyboard), or use the quick actions (bots to a team, shuffle, balance). A player moved to a team respawns on the new side, leaves any vehicle, loses their turrets and streak progress, keeps their kills and deaths, and the earned team score stays with the old team. A player dropped on the **Unassigned** table is out of the round: down, no death on the record, not spawned (also not at round starts), not balanced or shuffled, until an admin puts them on a team. A mode change puts everyone on a team again. Round-start balance moves bots before humans, then the newest.
 _Avoid_: squad, clan, faction
 
 **Friend / enemy colours**:
@@ -461,6 +553,10 @@ _Avoid_: NPC (alone), mob, critter
 **Animal size**:
 How much bigger or smaller than its species' model a wild Animal stands: one of 8 steps from 0.7 to 1.4, rolled when it spawns (the mean of two uniform draws, so the middle is commonest but a big or a small one is not rare) and sent in the animal's state byte. It scales the model, the body box, the run-over radius and the Hit shape, and, for a species with real hit points (not one-hit), its hit points by size cubed (at most 255). A species with `weight_kg` in `animals.json` (a look of it may have its own: a moose bull) has a size; a Pet and livestock do not. Its weight in kg comes from the same roll, as a point of the species' range; only the server knows it, and the Hit diagram tells the shooter.
 _Avoid_: scale (that is the model's import scale), growth
+
+**Herd**:
+A group of wild Animals of one or more species that start at one habitat point, wander about a shared centre that drifts now and then, and all run from the same spot when one of them takes fright. They pass through each other (an animal of another herd stops it, its own herd does not, whatever the species). `wildlife.json` makes herds two ways: a species with `herd` (min..max animals of that species) and a **mixed herd** (`herds`): `count` animals in all of one zone kind (`habitat`), in herds of `size` min..max, each rolling its counted members first (`min`..`max`, such as 1-3 stags, always leaving one animal) and filling the rest by `weight` (deer 3 : doe 1). A count not a multiple ends in a smaller herd. Not a bird flock (cosmetic boids, not animals).
+_Avoid_: group (alone), pack
 
 **Pet**:
 An Animal (a dog, cat, hen, rooster, chick or duck) that lives in one property group and never leaves its Pen. It wanders, stands, eats, sits (dogs and cats) and barks (dogs) around the point it spawned at, and does not flee: not from players or vehicles, and not when shot. It dies of any hit that deals damage (`one_hit`, whatever its `hp`): it has no hit reaction and no corpse, the entity ends at once and every client shows a **puff** (a few small grey clouds) where it stood. A kill scores nothing, is not in the kill feed, and nothing replaces it until the next round. Each round starts with new pets: `pets.json` gives a property group's chance to keep pets, how many, which species (by weight, ids of `animals.json`) and a cap for the whole map; a parcel in no group gets none. A **pinned pet** (`pinned` in `pets.json`) is added to a named group on top of the random ones: a species, optionally one asset of it (a **variant**: another model of the species, listed in `animals.json`, such as a breed and its colour look; `base` names the species' own first model; unpinned pets wear a random one), a count and a chance rolled per pet each round, placed before the random pets so the cap never drops it. A variant may have its own hit box (a Chihuahua is smaller than a Saint Bernard); a shot is tested against the box of the pet's own variant. Their models are the paid Synty pet packs, kept outside the repository in the private asset folder (`assets-private/synty/glb/pets`): a game without that folder draws each pet as a box of its hit box, and everything else works the same. There is no bark sound (no asset). A world entity of wire type 50 like any Animal; the species' `flees: false` is what makes an animal a pet. A Thief of the Thieves event may carry a pet away as Loot (Animal state Carried, held at the Thief's side): it stays a hit target, walks home if its carrier is killed (penned again once inside its Pen), and is gone while loaded in a van. Not a stray, wildlife (#254) or livestock in a field.
@@ -507,11 +603,11 @@ The floor of the base, with the intel screen on the wall of its far end, facing 
 _Avoid_: briefing room, war room, control room
 
 **Intel screen**:
-The big military-styled wall screen in the intel room. For each announced event it shows what it is, when it begins (a countdown, then "under way"), the risks, where (a grid reference and a map of the surroundings; none for an event with no place) and an emblem of its kind. With several events it shows one at a time. With none it says all is quiet. An admin's test event carries a "not a real event" tag. It is a client-only texture; nothing on it can be used or shot.
+The big military-styled wall screen in the intel room. For each announced event it shows what it is, when it begins (a countdown, then "under way"), the risks, where (a grid reference and a map of the surroundings; for an event whose place is an area, the centre's reference with the radius in cells and the dashed **Search area** circle on the map; none for an event with no place) and an emblem of its kind. With several events it shows one at a time. With none it says all is quiet. An admin's test event carries a "not a real event" tag. It is a client-only texture; nothing on it can be used or shot.
 _Avoid_: terminal, monitor, TV
 
 **Intel board**:
-The server's list of announced events (each: name, kind, start time, description, risks, an optional place), sent whole to every client at each change and to a joiner. The intel screen draws it. An event is on it from its announcement until it is over. This is the one thing an event gives the announcement; the event itself is none of its business.
+The server's list of announced events (each: name, kind, start time, description, risks, an optional place: a point, or an area, a centre and a radius in metres, the **Search area**), sent whole to every client at each change and to a joiner. The intel screen draws it. An event is on it from its announcement until it is over. This is the one thing an event gives the announcement; the event itself is none of its business.
 _Avoid_: event list, schedule
 
 **Event announcement**:
@@ -521,6 +617,14 @@ _Avoid_: alert, notification, warning (the HUD's helicopter warning is another t
 **Event**:
 A short, time-limited happening in the village with a challenge and a reward, such as the Bigfoot. An Event is started by an admin with `/event <name>` (there is no scheduler yet), and only one runs at a time. It is active until it is **won** (its challenge is beaten: the reward is given) or **despawned** (it timed out or an admin cancelled it: no reward). What it does belongs to its kind; the lifecycle is the same for all (`EventRun`, `EventBook`). It can be announced on the Intel board; the Bigfoot's first version is not.
 _Avoid_: quest, mission, mode (a match mode is another thing), wave
+
+**Scud event**:
+The Event started with `/event scud` (`ScudEventRun`, `NetServer.ScudEvent.cs`, docs/events/scud.md): a Scud truck is hidden at a baked point of a `scud` zone (or, on a map with none, on open ground away from the players), a loaded Rocket cart is put beside each Bunker, and the Intel board says "Top secret weapon located" with a **Search area**. It is **won** by the first human player to board the truck: XP to them, the board entry and the circle withdrawn, the slot free; the truck then stays as an ordinary vehicle, and the carts (replaced at their bunkers 10 minutes after one is emptied or destroyed) stay with it, until it is destroyed. Nobody boards it within 20 minutes, or it is destroyed unfound, or a round ends: truck and carts are removed and nothing is paid. Nothing shows the truck on a map until it is found.
+_Avoid_: Scud mission, Scud hunt
+
+**Search area**:
+A circle on the Intel board and the tactical map that an event is somewhere inside (the Scud truck): `search_radius_cells` (9) grid cells of the tactical map's grid, drawn as a dashed ring with a small cross at its centre. The centre is the truck's place moved by a random vector of up to 97 % of the radius, so the truck is uniformly anywhere inside and the centre says nothing about where; the board gives the centre's grid reference and the radius in cells. It is the only place an event may have besides an exact point.
+_Avoid_: zone (that is a map polygon), radius (alone), marker
 
 **Bigfoot**:
 The first Event: a giant, twice a player's height, that spawns at a baked point of an area with `event spawn: bigfoot` (or, on a map with none, near a random player as a dev fallback) and hunts the players. It is a **world entity** with its own brain (`Bigfoot`), not a bot: it has no player health or weapons, ignores the navmesh, walks a straight line over the terrain towards the nearest player (trees do not stop it, buildings do), and has a **Hit count** instead of hit points. Its attacks come with its phases: it hurls tree trunks (phase one); stomps and throws vehicles (two); grabs a player, flails with them and launches them, at another player when there is one (three); everything it does to a player is 2 to 5 damage. When it dies the Event is won: players credited get XP, and footsteps lead to a Corpse that carries the Bigfoot head. Every number is in `bigfoot.json`.
@@ -558,6 +662,14 @@ _Avoid_: contributor, attacker
 One of three stages of the Bigfoot's fight, at fractions of the Hit count taken (30 % and 60 %), with an **enrage** past 85 %, when it is faster and its cooldowns shorter. A phase adds attacks and never takes any away.
 _Avoid_: stage, level, form
 
+**Dust cloud**:
+The dust a blast raises from the ground at its centre: thick and low at first, then wider, higher and thinner until it is gone (a rocket's lasts about four seconds). A camera in it sees little or nothing, and a friend's name tag behind it is not drawn. It is the same on every client, worked out from the blast alone. It hides; it stops nothing: shots, blasts and bots' sight pass through it. A blast in the air raises none.
+_Avoid_: smoke (that is a vehicle's damage or a rocket's trail), fog
+
+**Blast wave**:
+The wall of dust a large blast (a destroyed vehicle's and larger) sends out along the ground. It slows as it goes and stops at six times the blast's radius. The blast is heard and felt when the wave arrives, not when it goes off, and the dust it carries veils the view for a moment as it passes.
+_Avoid_: shockwave (that is the Bigfoot's stomp, and it hurts)
+
 **Shockwave**:
 The stomp's ring of force running outwards along the ground from the Bigfoot. It knocks back and hurts every player standing on the ground it crosses, once; a player who is in the air as it passes (a jump) is untouched. The stomp's wind-up (its pose and a sound) is the warning.
 _Avoid_: blast, explosion (those have a radius and damage falloff)
@@ -566,8 +678,16 @@ _Avoid_: blast, explosion (those have a radius and damage falloff)
 The trail of giant footprints that appears where the Bigfoot fell and leads, a little over a hundred metres, to its corpse. They are drawn on every client for as long as the corpse lasts (`reward.corpse_seconds`, much longer than a player's corpse).
 _Avoid_: tracks, breadcrumbs
 **Status**:
-A condition a player carries that is not an Item: no slot, no bag cell, no drop, no corpse. Server session state beside the Equipment, never in the profile. Two kinds: the devil's curse (the player's hits set victims ablaze) and the divine blessing (one lethal hit is negated). A new round keeps it; the player's death ends it.
+A condition a player carries that is not an Item: no slot, no bag cell, no drop, no corpse. Server session state beside the Equipment, never in the profile. Three kinds: the devil's curse (the player's hits set victims ablaze), the divine blessing (one lethal hit is negated) and High (from a Plantation, with a clock of its own). A new round keeps the curse and the blessing (High ends); the player's death ends them all.
 _Avoid_: buff, effect, power-up, item (an Item is worn or carried)
+
+**Plantation**:
+A zone of the `plantation` kind: a marijuana field on the map (drawn like any zone; a Runtime zone, exported as polygons). A player on foot and alive inside one who holds the interact key (E) for 1.5 s, with nothing else in reach of the key, gets **High**. Nothing is shown for the hold (no prompt, no ring). The plantation has the lowest priority of the interact key: a corpse, a ground item, a crate, the garage doors, a ladder, a vehicle, the Mass seat, the rozhlas set and lying Loot all win it. The server counts the hold (`InteractHold`), and no bot gets high. Numbers: `plantation.json`.
+_Avoid_: weed field, drug zone
+
+**High**:
+A Status (bit 2 of the player status mask, `Player.High`: Sober or High) a player gets from a hold in a Plantation and keeps for 120 s (`high_seconds`); holding again while high starts the 120 s over. It ends when the time runs out, at the player's death (a respawned player is sober) and at a round reset. Everyone sees it on the figure: a lit cigarette with a glowing tip, a small warm light on the face and a dense smoke trail, and bigger white eyes with a red tint and a pupil each. Only the player themselves get the nausea: a slow sway of the real look yaw and pitch (so aiming gets harder and the sent look is the swayed one), a roll and a breathing field of view; the reduce-motion setting leaves a much weaker version, and no sway runs while a cut-scene camera, a turret or missile view, a seat or the death view owns the camera.
+_Avoid_: drunk, stoned, buff, effect
 
 **Burn**:
 Damage over time on a player who was set ablaze, by a cursed player's hit or by a demon's fireball: 0.5 hp/s for 10 s (`burn` in `holy_mass_demon.json`). A new ignition refreshes it and never stacks; a kill is credited to the cursed shooter, and a fireball's burn to nobody. It ends with the victim's death.
@@ -576,3 +696,23 @@ _Avoid_: fire damage, DoT, poison
 **Demon**:
 The boss the priest turns into in the Holy Mass event: it crawls on the walls and ceiling of the church between baked anchor points (no physics, no navmesh) and throws telegraphed fireballs. It has no hit points but a hit count (bullet 1, explosive and vehicle weapons more, no headshot bonus) that scales with the players inside. If everyone inside dies it heals and waits. Every player who hit it at least once when it dies gets the devil's curse (a Status).
 _Avoid_: boss (alone), monster, priest (that is its first form)
+
+**Hunt**:
+One logged kill of a wild Animal with `weight_kg` by a player, with any weapon (a vehicle run over included, weapon `run_over`), or one catch of a Mystery creature: the player, the Index species and the exact species and variant, the weight (none for a mystery), the distance (none for a run over and a catch), the weapon, the Hit diagram where a shape was hit, the place and the time. Weights and distances are kept to a tenth. Not a Pet, livestock, a bird flock or a kill by a bot; a guest (no stored Profile) and a sandbox player log nothing. Stored forever; the server is the only writer.
+_Avoid_: kill (alone), trophy, catch (that is a Mystery creature's)
+
+**Hunter's Log**:
+The server-wide, browsable book of every Hunt: a player's own log (totals and the Life List), the Records, and a paged table of all hunts. It has no XP, ranks or achievements. The server answers its queries already redacted for the asker (Mystery creature), and announces to everyone a new record (heaviest, or longest shot) and a player's first Hunt of an Index species or Mystery creature; a first that is also a record is one announcement, and an ordinary hunt is none. A tie keeps the earlier hunt; a run over holds no longest shot. Rules are in one place, `HuntBook` (ShooterCore). The J key (rebindable, `hunters_log`; also in Pause) opens it as a non-pausing panel centred over 60 % of the screen's width (on its own top layer, the kill feed stays put), with the three tabs My Log, Records and All hunts; the world stays visible and live, the mouse is released and the legs work, firing does not. Esc goes up one level, then closes.
+_Avoid_: hunter index, leaderboard, journal
+
+**Life List**:
+A player's tile for every Index species and every Mystery creature in the Hunter's Log: outline only until hunted, filled once hunted, with the player's best weight and longest shot and when it was first caught. A hidden Mystery tile carries no numbers.
+_Avoid_: collection, bestiary
+
+**Index species**:
+What a Hunter's Log record and Life List tile are kept per: Deer (the animals `deer` and `doe` together), Stag, Moose, Bear, Boar, Wolf, Fox, Raccoon, Skunk and Rabbit. A Hunt keeps the index id and the exact species. The one table is `IndexSpecies`.
+_Avoid_: species (alone, that is `animals.json`'s id)
+
+**Mystery creature**:
+A creature in the Hunter's Log caught by winning an Event, not hunted for weight: Bigfoot (live), Unicorn and Scylla (registered, nothing catches them yet). A viewer who has not caught one is never sent its name or shape: the server sends a hidden id, and the hunter, time, distance and weapon stay. A player's first catch unlocks it for them everywhere at once. It has no weight; it can hold a first catch and a longest shot.
+_Avoid_: cryptid, boss

@@ -4,7 +4,7 @@ using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;
 
-/// <summary>Server side of vehicles (#91, #92: car, motorcycle, bicycle share it): spawning, enter/exit, driving from the driver's inputs, run-over, resets. A vehicle never despawns while abandoned (#294): it returns to its origin only when destroyed, or out of the world.</summary>
+/// <summary>Server side of vehicles (#91, #92: car and motorcycle share it): spawning, enter/exit, driving from the driver's inputs, run-over, resets. A vehicle never despawns while abandoned (#294): it returns to its origin only when destroyed, or out of the world.</summary>
 public partial class NetServer
 {
     /// <summary>vehicles.json (run-over numbers, spawn count, car stats).</summary>
@@ -71,6 +71,7 @@ public partial class NetServer
                 var gy = ServerCar.RestHeight(space, new Vector3(spot.X, terrain, spot.Z), yaw, def.HalfWidth, def.HalfLength, terrain) ?? terrain;
                 planned.Add((new NVec3(spot.X, gy, spot.Z), yaw, kind));
                 GD.Print($"server: fixed spot {def.Id} at ({spot.X:F1},{gy:F1},{spot.Z:F1}) facing {yaw * 180f / MathF.PI:F0} deg");
+                if (def.Flight != null) WarnIfAircraftDoesNotFit(def, new Vector3(spot.X, gy, spot.Z), yaw);
             }
         }
         if (GarageParking() is { } park) // the bus garage's own vehicle, nose to the doors (garage.json)
@@ -81,6 +82,18 @@ public partial class NetServer
             GD.Print($"server: {def.Id} parked in the garage at ({park.Pos.X:F1},{gy:F1},{park.Pos.Z:F1})");
         }
         return planned;
+    }
+
+    /// <summary>
+    /// A helicopter dealt at random only takes a place where its hull and rotor disc fit (<see cref="FlightProbe.Fits"/>); one at a fixed spot is put there
+    /// whatever is around it, as placed by hand, so a spot that touches something solid (a hangar, a pole) is said in the log. It is still used.
+    /// </summary>
+    void WarnIfAircraftDoesNotFit(VehicleDef def, Vector3 at, float yaw)
+    {
+        var probe = FlightProbe.Make(def, Water, FlightBounds.None);
+        World.AddChild(probe);
+        if (!probe.Fits(at, yaw)) GD.PrintErr($"server: fixed spot of {def.Id} at ({at.X:F1},{at.Z:F1}): its hull or rotor disc touches something solid there (it stands there anyway)");
+        probe.QueueFree();
     }
 
     /// <summary>Places the cars once the spawn candidates are validated: near the spawn zones, at least 12 m apart, random colours; the types' fixed spots stand last in the list.</summary>
@@ -179,28 +192,35 @@ public partial class NetServer
     void ResetCars()
     {
         foreach (var cl in _clients.Values) DetachFromCar(cl); // out of the seat for good: Car, and Body.InVehicle with it (a body left flagged cannot go prone)
-        foreach (var car in _cars) { car.Seat.Clear(); car.Reset(); RestoreVehicleGlass(car); }
+        foreach (var car in _cars) { if (car.Retired) continue; car.Seat.Clear(); car.Reset(); RestoreVehicleGlass(car); }
         RestoreGlassForRound();
         _carResets += _cars.Count > 0 ? 1 : 0;
     }
 
-    bool TryEnterCar(Client c)
+    /// <summary>The vehicle the interact key would get a player at <paramref name="p"/> into: the nearest with a boardable seat within its enter radius, or null.</summary>
+    ServerCar? EnterableCar(Vector3 p)
     {
         ServerCar? best = null; var bd = float.MaxValue;
-        var p = c.Body.GlobalPosition;
         foreach (var car in _cars)
         {
-            if (car.Destroyed || !car.Seat.HasFree) continue;
+            if (car.Destroyed || car.Seat.Count == 0 || !car.Seat.HasBoardable) continue; // a seat held by a corpse counts: it is kicked out (#330); a trailer has no seat at all
             // within the vehicle's enter radius of its footprint (#217), not of its centre
             if (!VehicleReach.CanEnter(N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(p), Vehicles!.EnterRadiusOf(car.Def))) continue;
             var d = VehicleReach.DistanceToFootprint(N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(p));
             if (d <= bd) { best = car; bd = d; }
         }
-        if (best == null) return false;
+        return best;
+    }
+
+    bool TryEnterCar(Client c)
+    {
+        var p = c.Body.GlobalPosition;
+        if (EnterableCar(p) is not { } best) return false;
         // the free seat nearest to the player (a roof gunner seat is a little further out than the car's centre)
-        var seat = best.Seat.NearestFreeSeat(best.Def, N(best.GlobalPosition), best.State.Yaw, N(p), float.MaxValue); // any free seat of a vehicle in reach: the nearest one
+        var seat = best.Seat.NearestFreeSeat(best.Def, N(best.GlobalPosition), best.State.Yaw, N(p), float.MaxValue, kickCorpses: true); // any free seat of a vehicle in reach: the nearest one
         var wasEmpty = !best.Seat.Occupied;
-        if (seat < 0 || !best.Seat.TryEnter(c.Id, seat)) return false;
+        if (seat < 0 || !best.Seat.TryBoard(c.Id, seat, out var kicked)) return false;
+        if (kicked) KickSeatedCorpse(best, seat, N(p));
         c.Car = best; c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.Body.InVehicle = true; c.FlakSent = null; c.HeadOff = c.HeadPitch = 0;
         if (wasEmpty) best.Lights = Headlights.OnEnterAt(Clock.HourAt(_elapsed)); // night: on as the first rider gets in
         c.Body.Teleport(SeatPos(best, seat));
@@ -254,6 +274,7 @@ public partial class NetServer
     bool SwitchSeat(Client c, ServerCar car, int seat)
     {
         var from = c.CarSeat;
+        if (seat >= 0 && seat < car.Seat.Count && car.Seat.HoldsCorpse(seat) && car.Seat.SeatOf(c.Id) == from) KickSeatedCorpse(car, seat, N(c.Body.GlobalPosition)); // a corpse sits there: out it goes (#330)
         if (car.Seat.SeatOf(c.Id) != from || !car.Seat.TrySwitch(c.Id, seat)) return false;
         c.CarSeat = seat; c.Throttle = c.Steer = 0; c.Handbrake = false; c.FlakSent = null; c.HeadOff = c.HeadPitch = 0;
         c.Body.Teleport(SeatPos(car, seat));
@@ -302,6 +323,7 @@ public partial class NetServer
     /// <summary>The connected player in <paramref name="seat"/>, or null (empty, or the player has gone).</summary>
     Client? OccupantAt(ServerCar car, int seat)
     {
+        if (seat < 0 || seat >= car.Seat.Count) return null; // a trailer has no driver
         var id = car.Seat.Occupant(seat);
         return id != 0 && _byId.TryGetValue(id, out var c) ? c : null;
     }
@@ -336,7 +358,7 @@ public partial class NetServer
         var dir = new Vector3(d.X, d.Y, d.Z);
         List<GlassCross>? crossed = null;
         var wall = BulletHit(eye, dir, def.Range, out var shotCar, ref crossed, solid: car); // the gunner's own car stops the round as before: its glass is not shot out from the roof
-        var targets = LiveTargets().Where(t => car.Seat.SeatOf(t.Id) < 0).ToList();
+        var targets = LiveTargets().Where(t => car.Seat.SeatOf(t.Id) < 0 && !IsArmouredRider(t)).ToList();
         // riders whose seat is in the open (an amphibious transport's) are reached through their hull, as by every weapon
         var (riders, pastHull) = ExposedGunnerBehind(shotCar == car ? null : shotCar, eye, dir, def.Range, targets, seatsOnly: true);
         var hit = GunnerCover.Raycast(N(eye), d, def.Range, wall, targets, c.Id, riders, pastHull);
@@ -382,19 +404,22 @@ public partial class NetServer
     void StepVehicles(float dt)
     {
         if (Vehicles == null || _cars.Count == 0) return;
+        TrailerLatchTick(); // a loose trailer is latched by a tractor that reverses its hitch onto it (before the contacts and the steps: it follows its tractor from this tick on)
         ResolveVehicleContacts();
         foreach (var car in _cars)
         {
             var def = car.Def;
+            if (car.Retired) continue; // taken out of the world for good (RemoveRocketCarts)
             if (car.Destroyed)
             {
                 if (car.Life.ReturnDue(_elapsed)) { car.Reset(); RestoreVehicleGlass(car); _destroyedReturns++; if (BlastSmoke && _destroyedReturns >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5; GD.Print($"server: {def.Id} {car.Id} returned after its destruction"); }
                 continue;
             }
+            if (car.IsTrailer) { StepTrailerCar(car, dt); continue; } // no seats, no driver: it follows its tractor, or rolls free
             // seats of players who have gone (disconnect, death) are freed; the driver is seat 0 and only the driver steers
             for (var s = 0; s < car.Seat.Count; s++) if (car.Seat.Occupant(s) != 0 && OccupantAt(car, s) == null) car.Seat.Clear(s);
             SendSeatState(car);
-            if (car.Thrown != null) { StepThrownVehicle(car, dt); continue; } // flying on the Bigfoot's arc: no driving, no crash, no run-over (issue #264)
+            if (car.Thrown != null) { car.Towing?.Unhitch(); StepThrownVehicle(car, dt); continue; } // flying on the Bigfoot's arc: no driving, no crash, no run-over (issue #264)
             var driver = OccupantAt(car, 0);
             var occupied = car.Seat.Occupied;
             if (occupied) car.Wake(); // somebody aboard: the vehicle is stepped every tick until it is empty and rests again
@@ -444,6 +469,7 @@ public partial class NetServer
             {
                 var b = _cars[j];
                 if (b.Destroyed || b.Thrown != null) continue;
+                if (a.Towing == b || b.Towing == a) continue; // a tractor and its own trailer overlap at a deep articulation by design: they are one body
                 if (_contactAt[i].DistanceSquaredTo(_contactAt[j]) > range2) continue;
                 var shapeA = a.ContactShape(); var shapeB = b.ContactShape();
                 if (VehicleContact.Test(shapeA, shapeB, a.Flies || b.Flies) is not { } hit) continue;
@@ -501,7 +527,13 @@ public partial class NetServer
     /// </summary>
     void StepDrivenVehicle(ServerCar car, Client? driver, float dt)
     {
-        if (driver == null || _tick - car.DriveTick > DriveStarveTicks)
+        if (driver != null && driver == _harvDriver)
+        {
+            // the harvester's own driver sends no inputs: the server steers it (NetServer.Harvester), one step a tick
+            car.Wake();
+            car.StepDrive(new DriveInput { Throttle = driver.Throttle, Steer = driver.Steer, Handbrake = driver.Handbrake }, dt);
+        }
+        else if (driver == null || _tick - car.DriveTick > DriveStarveTicks)
         {
             if (!car.Asleep) car.StepDriveUnpiloted(dt); // a parked one at rest is not stepped until disturbed (DriveRest)
         }
@@ -517,13 +549,14 @@ public partial class NetServer
     {
         car.Wake();
         if (car.Destroyed || amount <= 0 || Vehicles == null) return;
+        if (_match.VehicleHitBlocked(attacker, SeatOccupants(car))) return; // a teammate aboard: no damage, no hit credit (#338)
         if (attacker != 0 && _byId.TryGetValue(attacker, out var attackerClient)) amount *= attackerClient.Perks.VehicleDamageDealt; // Tank Hunter
         if (attacker != 0) { car.LastAttacker = attacker; car.LastWeapon = weapon; }
-        var before = VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages);
+        var before = VehicleDamage.Stage(car.Hp, car.Life.MaxHp, Vehicles.DamageStages);
         car.Life.Damage(amount, _elapsed, delay); // at 0 HP the blast is scheduled `delay` seconds from now (0 = this tick's vehicle step)
         _vehicleHits++;
-        var stage = VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages);
-        if (stage != before) GD.Print($"server: {car.Def.Id} {car.Id} damage stage {before} -> {stage} (hp {car.Hp:F0}/{car.Def.Hp:F0})");
+        var stage = VehicleDamage.Stage(car.Hp, car.Life.MaxHp, Vehicles.DamageStages);
+        if (stage != before) GD.Print($"server: {car.Def.Id} {car.Id} damage stage {before} -> {stage} (hp {car.Hp:F0}/{car.Life.MaxHp:F0})");
     }
 
     /// <summary>
@@ -532,14 +565,25 @@ public partial class NetServer
     /// </summary>
     void Detonate(ServerCar car)
     {
-        var e = Vehicles!.Explosion;
         var at = car.GlobalPosition + Vector3.Up * 0.8f;
         var driver = OccupantAt(car, 0);
         var attacker = car.LastAttacker != 0 ? car.LastAttacker : driver?.Id ?? (ushort)0;
         var weapon = car.LastWeapon != 0 ? car.LastWeapon : SpecialWeapons.Vehicle;
         var carVelocity = CarVelocity(car); // before Destroy zeroes it: the riders' bodies fly on with it
-        car.Destroy(_elapsed + Vehicles.DestroyedReturnTime);
+        var loadedCart = car.Cargo?.Detonates(car.Def) ?? false; // before the destruction: a rocket cart that still carries its missile
+        car.Destroy(car.Def.Returns ? _elapsed + Vehicles.DestroyedReturnTime : double.MaxValue); // a type that never returns (the Scud truck) is gone for the match
         _vehicleBlasts++;
+        if (loadedCart) OnRocketCartDetonated(car, N(car.GlobalPosition), attacker); // it does not blow up like a vehicle: the Scud's blast is the hook's
+        else VehicleBlast(car, at, attacker, weapon, carVelocity);
+    }
+
+    /// <summary>
+    /// The ordinary vehicle explosion of <paramref name="car"/> (already destroyed, its life and its return set): the event for every client, the ground thrown up, the panes, then everyone aboard
+    /// and everyone and every vehicle within the blast's reach. Credited to <paramref name="attacker"/>.
+    /// </summary>
+    void VehicleBlast(ServerCar car, Vector3 at, ushort attacker, byte weapon, NVec3 carVelocity)
+    {
+        var e = Vehicles!.Explosion;
         BroadcastEvent(EventKind.VehicleExplosion, WeaponCodec.Encode(new VehicleExplosionMsg(car.Id, attacker, N(at), e.Splash.Radius)));
         BroadcastImpact(N(car.GlobalPosition), ImpactSize.Plume); // the blast throws up dirt or road where the car sits (ticket #154)
         BlastGlass(at, e.Splash.Radius);
@@ -626,7 +670,7 @@ public partial class NetServer
     void FinishCar()
     {
         var maxHit = RunOver.Damage(Vehicles!, Vehicles!.Vehicles.First(v => v.Id == SmokeKind).TopSpeed);
-        var needKill = maxHit >= Vehicles.RunOverMaxDamage; // a bicycle at 11 m/s cannot kill a full-health player in one pass
+        var needKill = maxHit >= Vehicles.RunOverMaxDamage; // a slow vehicle cannot kill a full-health player in one pass
         var ok = _carEnters >= 1 && _carExits >= 1 && _runOvers >= 1 && (_runOverKills >= 1 || !needKill) && _shotsFired == 0 && _cars.Count >= 3;
         GD.Print($"server: car smoke kind={SmokeKind} cars={_cars.Count} enters={_carEnters} exits={_carExits} runOvers={_runOvers} runOverKills={_runOverKills} shotsWhileDriving={_shotsFired}");
         GD.Print(ok ? "SHOOTER_CAR_SERVER_OK" : "SHOOTER_CAR_SERVER_FAIL");

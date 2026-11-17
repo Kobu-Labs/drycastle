@@ -242,17 +242,17 @@ public class GlassTests
     {
         var car = Shipped().Vehicles.First(v => v.Id == "car");
         var rects = car.GlassRects;
-        var right = car.Glass.FindIndex(g => g.Id == "side_right");
+        var right = car.Glass.FindIndex(g => g.Id == "side_right_1");
         var feet = new Vector3(40, 0, 15); const float yaw = 1.1f;
         var target = GlassRules.FromVehicle(rects[right].Centre, feet, yaw);
-        var origin = GlassRules.FromVehicle(new Vector3(8, 1.7f, -0.24f), feet, yaw); // level with the window, off to the right
+        var origin = GlassRules.FromVehicle(new Vector3(8, rects[right].Centre.Y, rects[right].Centre.Z), feet, yaw); // level with the window, off to the right
         var dir = Vector3.Normalize(target - origin);
         var wall = VehicleBox.Ray(origin, dir, 100, feet, yaw, car.HalfWidth, car.HalfLength, car.Height)!.Value.Distance;
         var crossed = GlassRules.FirstCrossed(rects, GlassRules.ToVehicle(origin, feet, yaw), GlassRules.DirToVehicle(dir, yaw), wall - 0.1f, wall + new GlassConfig().VehicleReach);
         Assert.Equal(right, crossed);
         // the same shot at the door below the window crosses no pane
-        var low = Vector3.Normalize(GlassRules.FromVehicle(new Vector3(0.867f, 0.8f, -0.24f), feet, yaw) - (origin with { Y = 0.8f }));
-        var o2 = origin with { Y = 0.8f };
+        var low = Vector3.Normalize(GlassRules.FromVehicle(new Vector3(0.7f, 0.6f, rects[right].Centre.Z), feet, yaw) - (origin with { Y = 0.6f }));
+        var o2 = origin with { Y = 0.6f };
         var wall2 = VehicleBox.Ray(o2, low, 100, feet, yaw, car.HalfWidth, car.HalfLength, car.Height)!.Value.Distance;
         Assert.Equal(-1, GlassRules.FirstCrossed(rects, GlassRules.ToVehicle(o2, feet, yaw), GlassRules.DirToVehicle(low, yaw), wall2 - 0.1f, wall2 + new GlassConfig().VehicleReach));
     }
@@ -269,16 +269,16 @@ public class GlassTests
     public void AShotThroughACarsWindscreenLeavesByItsRearPaneAndItsDoorStaysSolid()
     {
         var car = Shipped().Vehicles.First(v => v.Id == "car");
-        var way = Way(car, new Vector3(0, 1.75f, -10), new Vector3(0, 1.75f, 10));
+        var way = Way(car, new Vector3(0, 1.3f, -10), new Vector3(0, 1.3f, 10)); // level with the panes (the box is 1.62 m high)
         Assert.True(way.Enters && way.Leaves);
         Assert.Equal(car.Glass.FindIndex(g => g.Id == "windscreen"), way.EntryPane);
         Assert.Equal(car.Glass.FindIndex(g => g.Id == "rear"), way.ExitPane);
         Assert.True(way.ExitT > way.EntryT);
         // a round with no way out is stopped where its ray leaves the hit box
-        Assert.Equal(10 + car.HalfLength, VehicleBox.ExitDistance(new Vector3(0, 1.75f, -10), Vector3.UnitZ, car.HalfWidth, car.HalfLength, car.Height), 3);
-        Assert.Equal(1.75f, VehicleBox.ExitDistance(new Vector3(0, 1.75f, 0), -Vector3.UnitY, car.HalfWidth, car.HalfLength, car.Height), 3);
+        Assert.Equal(10 + car.HalfLength, VehicleBox.ExitDistance(new Vector3(0, 1.3f, -10), Vector3.UnitZ, car.HalfWidth, car.HalfLength, car.Height), 3);
+        Assert.Equal(1.3f, VehicleBox.ExitDistance(new Vector3(0, 1.3f, 0), -Vector3.UnitY, car.HalfWidth, car.HalfLength, car.Height), 3);
         // a shot from low down into the door, rising towards the far side pane: the door is solid, the pane beyond does not let it through
-        Assert.False(Way(car, new Vector3(3, 0.2f, -0.24f), car.GlassRects[car.Glass.FindIndex(g => g.Id == "side_left")].Centre).Enters);
+        Assert.False(Way(car, new Vector3(3, 0.2f, -0.24f), car.GlassRects[car.Glass.FindIndex(g => g.Id == "side_left_1")].Centre).Enters);
     }
 
     [Fact]
@@ -550,7 +550,7 @@ public class GlassTests
     [Fact]
     public void TheGeneratedVehiclesHaveAnOutlineOnEveryPaneAndTheirCountsMatchTheModels()
     {
-        var counts = new Dictionary<string, int> { ["bus"] = 18, ["flak"] = 6, ["utility_helicopter"] = 4, ["golf_mk2"] = 6 };
+        var counts = new Dictionary<string, int> { ["bus"] = 18, ["flak"] = 6, ["utility_helicopter"] = 4, ["golf_mk2"] = 6, ["humvee"] = 6 };
         foreach (var v in Shipped().Vehicles.Where(v => counts.ContainsKey(v.Id)))
         {
             Assert.Equal(counts[v.Id], v.Glass.Count);
@@ -650,6 +650,9 @@ public class GlassTests
         {
             // the server only looks for a pane where a bullet stopped on the hit box, so a pane outside it could never be hit
             Assert.True(MathF.Abs(r.Centre.X) <= v.HalfWidth + 0.01f && MathF.Abs(r.Centre.Z) <= v.HalfLength + 0.01f && r.Centre.Y > 0 && r.Centre.Y <= v.Height, $"{v.Id} {g.Id} is outside the hit box");
+            // the truck's two cab-back windows look from the cab into the bed: a partition inside the box that no bullet from outside reaches (the bed is in the way);
+            // explosions still break them (#325). Every other pane faces away from the middle of the vehicle and is reachable
+            if (v.Id == "jeep" && g.Id.StartsWith("rear_")) { Assert.True(r.Normal.Z > 0.9f, "the cab-back windows face the bed"); continue; }
             // a pane faces away from the middle of the vehicle (a partition inside would not)
             var fromMiddle = r.Centre - new Vector3(0, r.Centre.Y, 0);
             Assert.True(Vector3.Dot(r.Normal, fromMiddle) > 0 || r.Normal.Y > 0.5f, $"{v.Id} {g.Id} faces inwards");

@@ -49,7 +49,8 @@ public partial class Hud
         {
             case OverlayKeyVerdict.Close: _tacticalMap.Close(); return true;
             case OverlayKeyVerdict.Open:
-                _equipment?.Close(); // the two overlays never show together
+                _equipment?.Close(); // the overlays never show together
+                CloseHuntersLog();
                 _tacticalMap.TeleportHint = _sandboxOn;
                 _tacticalMap.Open(_minimap.Base?.World);
                 return true;

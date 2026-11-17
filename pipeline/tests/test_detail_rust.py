@@ -3,11 +3,12 @@
 Skipped when the extension module is not built (``make detail-rust-build``)."""
 
 import json
+import shutil
 
 import numpy as np
 import pytest
 import yaml
-from shapely.geometry import Point
+from shapely.geometry import Point, box, mapping
 
 pytest.importorskip("drycastle_detail", reason="build the Rust engine: make detail-rust-build")
 
@@ -87,6 +88,20 @@ def test_counts_match_the_python_stage(ws, py_result, tmp_path) -> None:
     assert not stats["failed"]
 
 
+def test_moss_layer_matches_the_python_stage(ws, py_result, tmp_path) -> None:
+    # the same recipe with other random draws: the moss triangles agree in order of magnitude
+    py_dir, out = tmp_path / "py", tmp_path / "rs"
+    py_dir.mkdir()
+    D.write_detail(py_dir, py_result)
+    run_rust(ws, out, 2)
+    counts = []
+    for d in (py_dir, out):
+        rows, tex = D.load_patches(d)
+        assert "moss" in tex
+        counts.append(int((rows[:, 18] == tex.index("moss")).sum()))
+    assert counts[0] > 50 and counts[1] == pytest.approx(counts[0], rel=0.6), counts
+
+
 def test_nothing_on_buildings_and_clutter_stands_on_the_ground(ws, tmp_path) -> None:
     work, _ = ws
     run_rust(ws, tmp_path / "rs", 2)
@@ -114,3 +129,58 @@ def test_stage_runs_rust_only(monkeypatch) -> None:
     monkeypatch.setenv("DRYCASTLE_DETAIL_ENGINE", "python")  # the old switch is gone: it changes nothing
     assert D.run() == 0
     assert called["ran"]
+
+
+@pytest.fixture(scope="module")
+def wet_ws(ws, tmp_path_factory):
+    """The workspace with a pond in the forest and one in a meadow (P-0006 turned meadow): their surroundings are swamp ground."""
+    work, tmp = ws
+    wet = tmp_path_factory.mktemp("wet") / "work"
+    shutil.copytree(work, wet)
+    doc = json.loads((wet / "parcels.json").read_text())
+    for p in doc["parcels"]:
+        if p["id"] == "P-0006":
+            p["kind"] = "meadow"
+    doc["ground"] = [{"id": f"G-000{i}", "kind": "water", "area": g.area, "polygon": mapping(g)}
+                     for i, g in enumerate((box(150, 60, 160, 75), box(28, 50, 34, 60)), 1)]
+    (wet / "parcels.json").write_text(json.dumps(doc))
+    return wet, tmp
+
+
+def test_swamp_ground_matches_the_python_stage(wet_ws, tmp_path) -> None:
+    work, tmp = wet_ws
+    edits = tmp / "no-edits.json"
+    py = D.build_village_detail(work, edits_path=edits)
+    stats, _ = R.run_engine(work, edits_path=edits, threads=2, out_dir=tmp_path)
+    assert not stats["failed"]
+    for recipe in ("forest", "field"):  # the forest and the meadow (a field recipe) both take the wet floor
+        want, got = py.stats["patch_triangles_by_type"][recipe], stats["patch_triangles_by_type"][recipe]
+        assert "swamp" not in want and "swamp" not in got, (recipe, want, got)  # the base is the terrain's colour
+    f, g = py.stats["patch_triangles_by_type"]["forest"], stats["patch_triangles_by_type"]["forest"]
+    for layer in ("mud", "puddle"):
+        assert f[layer] > 20 and g[layer] == pytest.approx(f[layer], rel=0.8), (layer, f, g)
+    assert g["litter"] > 0
+    # the meadow raster: the cells within reach of water have the swamp mix, in the same places
+    py_dir = tmp_path / "py"
+    py_dir.mkdir()
+    D.write_detail(py_dir, py)
+    cells = []
+    for d in (py_dir, tmp_path):
+        m = M.decode((d / "detail_meadow.bin").read_bytes())
+        z = np.concatenate([a[-1].ravel() for a in m.chunks.values()])
+        cells.append(int(((z >> 4) == 9).sum()))
+    assert cells[0] > 100 and cells[1] == pytest.approx(cells[0], rel=0.1), cells
+
+
+def test_a_tiled_forest_gets_the_wet_floor(wet_ws, tmp_path) -> None:
+    # a forest longer than a tile (TILE_ABOVE_M) is cut into tiles, which each draw the wet floor from the position alone
+    work, tmp = wet_ws
+    doc = json.loads((work / "parcels.json").read_text())
+    for p in doc["parcels"]:
+        if p["id"] == "P-0005":
+            p["polygon"] = mapping(box(100, 20, 260, 190))
+    (work / "parcels.json").write_text(json.dumps(doc))
+    stats, _ = R.run_engine(work, edits_path=tmp / "no-edits.json", threads=2, only=["P-0005"], out_dir=tmp_path)
+    assert stats["items"] > stats["parts"] and not stats["failed"]  # tiled
+    forest = stats["patch_triangles_by_type"]["forest"]
+    assert forest["mud"] > 20

@@ -193,6 +193,7 @@ public partial class NetServer
         var credited = bf.Credited.Where(id => _byId.ContainsKey(id)).ToList();
         var names = credited.Count == 0 ? "" : " " + string.Join(", ", credited.Select(id => _byId[id].Name).Take(8)) + (credited.Count > 8 ? " and others" : "") + " took part.";
         ChatToAll(ChatLineKind.System, "", $"Event won: the Bigfoot is down!{names} Loot its body for what it left behind.");
+        RecordMystery(credited, Mysteries.Bigfoot, bf.Position); // the log: everyone credited has caught it
         AwardXp(credited.Where(Scores).Select(id => new XpGrant(id, Levels.Awards.EventWin, XpReason.EventWin)).ToList());
         GD.Print($"server: Bigfoot died (last hit by #{bf.Killer}), credited {string.Join(",", credited)}");
     }
@@ -222,7 +223,7 @@ public partial class NetServer
         var item = Items.IndexOf(r.HeadItem);
         if (item < 0) { GD.PrintErr($"server: the Bigfoot's reward item '{r.HeadItem}' is not in items.json: no corpse"); return; }
         var knife = Weapons.Weapons.FindIndex(w => w.Kind == WeaponKind.Melee); // a weapon nobody can take into a hotbar position (CorpseRules.CanReplace): the corpse is for its item
-        var corpse = new Corpse(BigfootRules.TargetId, fell, _bigfootFellYaw, Math.Max(0, knife), 0, new[] { new ItemStack(item) }, r.CorpseSeconds);
+        var corpse = new Corpse(BigfootRules.TargetId, fell, _bigfootFellYaw, Math.Max(0, knife), 0, new[] { new ItemStack(item) }, r.CorpseSeconds, r.CorpseHead);
         var id = _corpses.Add(corpse);
         if (id is not { } cid) { GD.PrintErr("server: the world refused the Bigfoot's corpse"); return; }
         BroadcastCorpseItems(cid);
@@ -336,7 +337,7 @@ public partial class NetServer
             if (!_s._byId.TryGetValue(player, out var c)) return;
             c.HeldUntilTick = 0; // let go
             if (velocity == NVec3.Zero) return;
-            c.LaunchGraceUntil = _s._elapsed + graceSeconds;
+            c.LaunchGraceUntil = _s._elapsed + graceSeconds; c.LaunchedAt = _s._elapsed;
             c.Body.AddImpulse(new Vector3(velocity.X, velocity.Y, velocity.Z));
         }
 

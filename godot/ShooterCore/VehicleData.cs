@@ -46,6 +46,8 @@ public class VehiclesFile : IVersioned
             if (v.Hood.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: hood is [x, y, z]");
             if (v.Variants is < 1 or > 16) throw new DataFileException($"vehicles.json: {v.Id}: variants must be 1..16");
             if (v.Paints.Count > 0 && v.PaintMaterial == "") throw new DataFileException($"vehicles.json: {v.Id}: paints need paint_material");
+            if (v.Skins.Count > 0 && (v.Skins[0] != v.Model || v.Skins.Any(k => !k.StartsWith("pack:", StringComparison.Ordinal)) || v.Paints.Count > 0 || v.Tint != null))
+                throw new DataFileException($"vehicles.json: {v.Id}: skins are pack: models, the first is the model, and they exclude paints and tint");
             if (v.Lights is { } l)
             {
                 if (l.Head.Count is < 1 or > 4 || l.Tail.Count > 4) throw new DataFileException($"vehicles.json: {v.Id}: lights need 1 to 4 head and 0 to 4 tail lamps");
@@ -69,7 +71,20 @@ public class VehiclesFile : IVersioned
                 if (side.OutlineProblem() is { } problem) throw new DataFileException($"vehicles.json: {v.Id}: open side {side.Id}: {problem}");
             }
             if (v.Tint is { Length: not 3 } || v.Tint != null && v.Paints.Count > 0) throw new DataFileException($"vehicles.json: {v.Id}: tint is [r, g, b] and excludes paints");
-            if (v.Seats.Count is < 1 or > 4 || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..4 and the first is the driver");
+            if (v.Trailer is { } trl)
+            {
+                if (v.Seats.Count != 0) throw new DataFileException($"vehicles.json: {v.Id}: a trailer has no seats (\"seats\": [])");
+                if (v.Tow != null) throw new DataFileException($"vehicles.json: {v.Id}: a trailer does not tow: tow and trailer exclude each other");
+                if (v.Medium != VehicleMedium.Land || v.Drive != null || v.Gun != null || v.Flak != null || v.DoorGun != null) throw new DataFileException($"vehicles.json: {v.Id}: a trailer is a land type with no drive, gun, flak or door_gun block");
+                if (trl.Validate() is { } why) throw new DataFileException($"vehicles.json: {v.Id}: trailer: {why}");
+            }
+            else if (v.Seats.Count is < 1 or > VehicleSeat.MaxSeats || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..{VehicleSeat.MaxSeats} and the first is the driver");
+            if (v.Launcher is { } lch && lch.Validate(v) is { } lwhy) throw new DataFileException($"vehicles.json: {v.Id}: launcher: {lwhy}");
+            if (v.Tow is { } tw)
+            {
+                if (v.Medium == VehicleMedium.Air) throw new DataFileException($"vehicles.json: {v.Id}: a tow block is for a land or amphibious vehicle");
+                if (tw.Validate() is { } why) throw new DataFileException($"vehicles.json: {v.Id}: tow: {why}");
+            }
             foreach (var seat in v.Seats)
             {
                 if (seat.Role is not ("driver" or "gunner" or "passenger")) throw new DataFileException($"vehicles.json: {v.Id}: seat role {seat.Role} is not driver, gunner or passenger");
@@ -77,6 +92,7 @@ public class VehiclesFile : IVersioned
                 if (seat.Offset.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: seat offset is [x, y, z]");
                 if (seat.Armed && seat.Role != "passenger") throw new DataFileException($"vehicles.json: {v.Id}: only a passenger seat can be armed (a driver drives, a gunner has the vehicle's gun)");
                 if (seat.Standing && !seat.Exposed) throw new DataFileException($"vehicles.json: {v.Id}: a standing seat is an exposed seat");
+                if (seat.EyeHeight is { } eh && !(eh is >= 0.3f and <= 2.2f)) throw new DataFileException($"vehicles.json: {v.Id}: a seat's eye_height is 0.3..2.2 m above its feet");
                 if (seat.Aim is { } aim)
                 {
                     if (!seat.Armed) throw new DataFileException($"vehicles.json: {v.Id}: a seat's aim is for an armed seat");
@@ -84,6 +100,9 @@ public class VehiclesFile : IVersioned
                         throw new DataFileException($"vehicles.json: {v.Id}: a seat's aim needs arc_deg 0..180, min_pitch_deg below max_pitch_deg (within -89..89) and a positive spread_full_speed");
                 }
             }
+            for (var si = 0; si < v.Seats.Count; si++)
+                if (v.ExposedGunner && v.Seats[si].Role == "gunner" && v.Seats[si].Cover is { } gc && gc != SeatCover.Exposed)
+                    throw new DataFileException($"vehicles.json: {v.Id}: exposed_gunner makes the gunner seat exposed, its cover says {gc}");
             if (v.ExposedGunner && !v.Seats.Any(x => x.Role == "gunner")) throw new DataFileException($"vehicles.json: {v.Id}: exposed_gunner needs a gunner seat");
             if (v.Gun is { } g)
             {
@@ -174,6 +193,17 @@ public class VehicleSpotDef
     public float? YawDeg { get; set; }
 }
 
+/// <summary>What protects a seat's rider from a shot (ADR 0035). Glass is the default of a seat that says nothing.</summary>
+public enum SeatCover
+{
+    /// <summary>Behind panes: a bullet reaches the rider only through a pane or an opening of the hull, as that pane's kind lets it.</summary>
+    Glass,
+    /// <summary>Hidden behind armour: no bullet, pellet or mounted-gun round reaches the rider; explosive damage and the vehicle blowing up do.</summary>
+    Armoured,
+    /// <summary>In the open (ADR 0012): a round that reaches the rider's body hits them, whatever the hull is.</summary>
+    Exposed,
+}
+
 /// <summary>One seat of a vehicle (vehicles.json "seats"). Seat 0 is always the driver. Offset is in the vehicle's frame, metres: x right, y up, z back (forward is -Z), origin on the ground at the car's centre.</summary>
 public class VehicleSeatDef
 {
@@ -186,15 +216,25 @@ public class VehicleSeatDef
     /// </summary>
     public bool Armed { get; set; }
     /// <summary>
-    /// The hull does not cover this seat's rider (ADR 0012): a shot that reaches their body hits them and not the hull (<see cref="GunnerCover"/>).
-    /// False keeps the rider behind the hull, as in every closed vehicle. (The flak truck and the utility helicopter say it for their gunner with the
-    /// vehicle's <see cref="VehicleDef.ExposedGunner"/>.)
+    /// What protects this seat's rider (vehicles.json seat <c>cover</c>, ADR 0035): <see cref="SeatCover.Armoured"/>, <see cref="SeatCover.Glass"/> or
+    /// <see cref="SeatCover.Exposed"/> (ADR 0012). Null: not declared (the contract test wants every seat to declare it; <see cref="VehicleDef.CoverOf"/> reads Glass then).
     /// </summary>
-    public bool Exposed { get; set; }
+    public SeatCover? Cover { get; set; }
+    /// <summary>
+    /// The hull does not cover this seat's rider (ADR 0012): a shot that reaches their body hits them and not the hull (<see cref="GunnerCover"/>).
+    /// Its own spelling in vehicles.json is <c>"cover": "exposed"</c>; <c>"exposed": true</c> is read as the same (the old spelling). (The flak truck and the
+    /// utility helicopter say it for their gunner with the vehicle's <see cref="VehicleDef.ExposedGunner"/>.)
+    /// </summary>
+    public bool Exposed { get => Cover == SeatCover.Exposed; set { if (value) Cover = SeatCover.Exposed; else if (Cover == SeatCover.Exposed) Cover = SeatCover.Glass; } }
     /// <summary>The rider of an exposed seat stands (the gunner in a ring) instead of sitting: that is how they are drawn, and how tall they are to a bullet.</summary>
     public bool Standing { get; set; }
     /// <summary>How far round and up and down an armed seat's rider can aim. Null: all the way round.</summary>
     public VehicleSeatAimDef? Aim { get; set; }
+    /// <summary>
+    /// Metres from the seat's feet to the eye of the rider's own first-person view from a seat the hull covers (the client rides the camera on the seat). Null: the
+    /// body's own standing eye, which is right in a tall cabin (the bus) and above the roof of a low one (the Humvee's seats: 0.6 + 1.65 is over its 1.86 m roof, hence 1.05). An exposed seat has its own (<see cref="RiderStance"/>).
+    /// </summary>
+    public float? EyeHeight { get; set; }
 
     /// <summary>The stance an exposed rider has to a bullet and to the eye: seated riders have the crouch's height.</summary>
     public Stance RiderStance => Standing ? Stance.Stand : Stance.Crouch;
@@ -462,8 +502,10 @@ public class VehicleGlassDef
     /// counter-clockwise seen from outside, inside the <see cref="Size"/> box. Null: the whole rectangle.
     /// </summary>
     public float[][]? Outline { get; set; }
-    /// <summary>Hit points of this pane; null takes glass.json vehicle_pane_hp.</summary>
+    /// <summary>Hit points of this pane; null takes its <see cref="Kind"/>'s from glass.json (<see cref="GlassConfig.PaneHp"/>).</summary>
     public float? Hp { get; set; }
+    /// <summary>How the pane treats a bullet (ADR 0035): Normal (the default) lets it through at once, Reinforced stops it while it holds.</summary>
+    public GlassKind Kind { get; set; } = GlassKind.Normal;
 
     public GlassPaneRect Rect() => GlassPaneRect.Make(new System.Numerics.Vector3(Centre[0], Centre[1], Centre[2]), new System.Numerics.Vector3(Normal[0], Normal[1], Normal[2]), Size[0], Size[1],
         Outline?.Select(p => new System.Numerics.Vector2(p[0], p[1])).ToList());
@@ -486,6 +528,15 @@ public class VehicleGlassDef
     }
 }
 
+/// <summary>The kind of a vehicle's glass pane (vehicles.json glass <c>kind</c>, the table in glass.json <c>kinds</c>, ADR 0035).</summary>
+public enum GlassKind
+{
+    /// <summary>A bullet damages the pane and goes on, full damage to what is behind it.</summary>
+    Normal,
+    /// <summary>More hit points; while it holds it stops a bullet (the pane takes the damage, whatever is behind none), once shattered a shot goes through.</summary>
+    Reinforced,
+}
+
 /// <summary>
 /// The handling of a vehicle its driver's client predicts (vehicles.json "drive", ADR 0010 and ADR 0014: the amphibious transport and the car): every number
 /// <see cref="DriveModel"/> reads beyond the type's <see cref="VehicleDef.TopSpeed"/>, <see cref="VehicleDef.Acceleration"/>,
@@ -506,9 +557,17 @@ public class VehicleDriveDef
     public float SteerCalm { get; set; } = 0.45f;
 
     // ---- where the wheels are (the model's)
-    /// <summary>Distance between the axles and between the wheels of an axle, metres: where the ground is sampled, so the body lies on the slope under it.</summary>
+    /// <summary>
+    /// Distance between the axles (the first and the last of a vehicle with more) and between the wheels of an axle, metres: where the ground is sampled, so the body
+    /// lies on the slope under it. A track of 0 is a single-track vehicle (a motorcycle): the ground is sampled under its two wheels and it never rolls with the ground.
+    /// </summary>
     public float Wheelbase { get; set; } = 2.72f;
     public float Track { get; set; } = 1.96f;
+    /// <summary>
+    /// Where the point half way between the first and the last axle is along the model, metres (z: positive is behind the origin, 0: under it). The ground is
+    /// sampled round this point, so a vehicle whose axles are not centred on its footprint (a combine, a bus with a long nose) still stands on its own wheels.
+    /// </summary>
+    public float AxleCentre { get; set; }
 
     public DriveLandDef Land { get; set; } = new();
     public DriveWaterDef Water { get; set; } = new();
@@ -518,8 +577,9 @@ public class VehicleDriveDef
     /// <summary>Null when the numbers make a drivable vehicle, else what is wrong.</summary>
     public string? Validate(VehicleDef v)
     {
-        if (ThrottleRise <= 0 || ThrottleFall <= 0 || SteerRise <= 0 || SteerFall <= 0 || Wheelbase <= 0 || Track <= 0) return "the ramp rates, wheelbase and track must be positive";
+        if (ThrottleRise <= 0 || ThrottleFall <= 0 || SteerRise <= 0 || SteerFall <= 0 || Wheelbase <= 0 || Track < 0) return "the ramp rates and the wheelbase must be positive, the track not negative (0: a single-track vehicle, a motorcycle)";
         if (SteerCalm is <= 0 or > 1) return "steer_calm is above 0 and at most 1";
+        if (MathF.Abs(AxleCentre) + Wheelbase / 2f > v.HalfLength + 0.5f) return "axle_centre and wheelbase put an axle outside the vehicle's length";
         var l = Land;
         if (l.LaunchBoost < 1 || l.LaunchSpeed <= 0 || l.PowerCurve <= 0 || l.CoastDecel < 0 || l.CoastDrag < 0 || l.Grip <= 0 || l.YawResponse <= 0 || l.HandbrakeDecel <= 0
             || l.HandbrakeSteer <= 0 || l.StepHeight <= 0 || l.SnapDown <= 0)
@@ -712,6 +772,35 @@ public class VehicleHandling
     public float HandbrakeSteerBoost { get; set; } = 1.5f;
 }
 
+/// <summary>vehicles.json "launcher": the Scud truck's launcher (<see cref="ScudLauncher"/>). Offsets are in the vehicle's frame (x right, y up, forward is -Z, origin on the ground at the centre).</summary>
+public class VehicleLauncherDef
+{
+    /// <summary>The seat whose occupant is the operator (the targeting screen is theirs); the others only watch and confirm.</summary>
+    public int OperatorSeat { get; set; } = 1;
+    /// <summary>Where the missile entity spawns: the centre of the ERECTED rocket on the raised rack (the model's <c>missile</c> node with the rack at 90 degrees), so it leaves from where it stands.</summary>
+    public float[] Muzzle { get; set; } = { 0, 5.89f, 4.111f };
+    /// <summary>Where the launch smoke and the ignition flame come from (the erected rocket's tail end).</summary>
+    public float[] Exhaust { get; set; } = { 0, 1.1f, 4.111f };
+    /// <summary>The wheels' radius, metres: they roll by the distance driven (the model's wheel centres are at this height).</summary>
+    public float WheelRadius { get; set; } = 0.736f;
+    /// <summary>
+    /// The steered axles, front first: the distance from the middle of the fixed axles to each steered axle, metres. An axle's wheels turn by atan(arm / turn radius) (the truck turns about a point on the fixed axles' line),
+    /// so the front axle turns more than the second. Empty: no wheel steers.
+    /// </summary>
+    public float[] SteerArms { get; set; } = { 6.431f, 4.272f };
+
+    /// <summary>Why the block is bad, or null.</summary>
+    public string? Validate(VehicleDef v)
+    {
+        if (OperatorSeat < 1 || OperatorSeat >= v.Seats.Count) return "operator_seat must be a seat of the vehicle other than the driver's";
+        if (Muzzle.Length != 3 || Exhaust.Length != 3 || Muzzle.Concat(Exhaust).Any(x => !float.IsFinite(x))) return "muzzle and exhaust are [x, y, z]";
+        if (!(WheelRadius > 0.1f && WheelRadius < 2f)) return "wheel_radius must be between 0.1 and 2 metres";
+        if (SteerArms.Any(a => !(a > 0.5f && a < 20f))) return "steer_arms are distances in metres between 0.5 and 20";
+        if (v.Flight != null || v.Gun != null || v.Flak != null || v.DoorGun != null) return "a launcher truck is a ground vehicle with no gun, flak or door gun";
+        return null;
+    }
+}
+
 public class VehicleDef
 {
     public string Id { get; set; } = "";
@@ -737,7 +826,7 @@ public class VehicleDef
     public int SpawnCount { get; set; }
     /// <summary>
     /// Places this type always stands at (vehicles.json "fixed_spots"), one vehicle each, in addition to the <see cref="SpawnCount"/> dealt at random.
-    /// A vehicle that returns (abandoned or destroyed) comes back to its spot. See <see cref="VehicleSpotDef"/>.
+    /// A vehicle that returns (destroyed, or out of the world; an abandoned one stays) comes back to its spot. See <see cref="VehicleSpotDef"/>.
     /// </summary>
     public List<VehicleSpotDef> FixedSpots { get; set; } = new();
     /// <summary>Half extents of the footprint (server collision box and run-over test), metres.</summary>
@@ -783,19 +872,26 @@ public class VehicleDef
     public VehicleGunDef? Gun { get; set; }
     /// <summary>
     /// The gunner sits in the open (the flak truck's turret): shots that reach his body hit him, not the hull around him (<see cref="GunnerCover"/>).
-    /// False keeps every rider behind the hull, as the jeep's roof gunner is.
+    /// False keeps every rider behind the hull, as the Humvee's covered seats are.
     /// </summary>
     public bool ExposedGunner { get; set; }
     /// <summary>
     /// Whether the hull leaves the rider of <paramref name="seat"/> uncovered: the seat says so itself (<see cref="VehicleSeatDef.Exposed"/>, the
     /// amphibious transport's three), or it is the gunner seat of a vehicle with <see cref="ExposedGunner"/> (the flak truck, the utility helicopter).
     /// </summary>
-    public bool SeatExposed(int seat) => seat >= 0 && seat < Seats.Count && (Seats[seat].Exposed || ExposedGunner && Seats[seat].Role == "gunner");
+    public bool SeatExposed(int seat) => CoverOf(seat) == SeatCover.Exposed;
+    /// <summary>
+    /// The cover a seat declares: its own <see cref="VehicleSeatDef.Cover"/>, else Exposed for the gunner seat of a vehicle with <see cref="ExposedGunner"/>
+    /// (the shorthand for that seat), else null (not declared).
+    /// </summary>
+    public SeatCover? DeclaredCover(int seat) => seat < 0 || seat >= Seats.Count ? null : Seats[seat].Cover ?? (ExposedGunner && Seats[seat].Role == "gunner" ? SeatCover.Exposed : null);
+    /// <summary>The cover of a seat as the rules read it: the declared one, Glass for a seat that declares none.</summary>
+    public SeatCover CoverOf(int seat) => DeclaredCover(seat) ?? SeatCover.Glass;
     /// <summary>An anti-aircraft turret worked from the gunner seat (the flak truck). Null: none. Excludes <see cref="Gun"/>.</summary>
     public VehicleFlakDef? Flak { get; set; }
     /// <summary>
     /// Where the <see cref="Gun"/> is mounted and how far it swings (the utility helicopter's door gun). Null: the gun fires along the gunner's
-    /// view from above the seat, as the jeep's does. With it, the gun is on a pintle and the aim is held inside its arc (<see cref="DoorGunRules"/>).
+    /// view from above the seat (the roof gun of a covered seat). With it, the gun is on a pintle and the aim is held inside its arc (<see cref="DoorGunRules"/>).
     /// </summary>
     public VehicleDoorGunDef? DoorGun { get; set; }
     /// <summary>Mass (kg) for run-over damage. Unset: the v1 run-over numbers (see <see cref="VehiclesFile.RunOverScale"/>).</summary>
@@ -823,9 +919,17 @@ public class VehicleDef
     /// <see cref="DriveModel"/> and never by <see cref="CarModel"/>. Null for every other type. A land type's block has no water numbers in use (see <see cref="VehicleDriveDef.Validate"/>).
     /// </summary>
     public VehicleDriveDef? Drive { get; set; }
+    /// <summary>True (default): a destroyed vehicle of this type comes back after <see cref="VehiclesFile.DestroyedReturnTime"/>. False (the Scud truck): it is gone for the match, and a new round retires it instead of resetting it.</summary>
+    public bool Returns { get; set; } = true;
+    /// <summary>A missile launcher (vehicles.json "launcher", the Scud truck): which seat is the operator's and where the rocket leaves. Null: none. See <see cref="ScudLauncher"/>.</summary>
+    public VehicleLauncherDef? Launcher { get; set; }
+    /// <summary>The type can pull a trailer (vehicles.json "tow": the hitch and what the load does to it). Null: it cannot. See <see cref="TowModel"/>.</summary>
+    public VehicleTowDef? Tow { get; set; }
+    /// <summary>The type is a single-axle trailer (vehicles.json "trailer": drawbar eye, axle, mass) with no seats, pulled by a type with a <see cref="Tow"/> block. Null: it is not.</summary>
+    public VehicleTrailerDef? Trailer { get; set; }
     /// <summary>A single fixed body colour [r, g, b] (sRGB) for a type with one look (olive drab). Replaces the colour variants: such a type has one variant.</summary>
     public float[]? Tint { get; set; }
-    /// <summary>Model file relative to assets/ (empty: the code-built car with the Kenney sedan). Scale, yaw and offset fit the raw node to the game (forward -Z, origin at the ground centre).</summary>
+    /// <summary>Model file relative to assets/, or a private-pack model id (empty: no model, a box). Scale, yaw and offset fit the raw node to the game (forward -Z, origin at the ground centre).</summary>
     public string Model { get; set; } = "";
     public float ModelScale { get; set; } = 1;
     public float ModelYawDeg { get; set; }
@@ -852,6 +956,13 @@ public class VehicleDef
     /// <summary>The model's own material that takes the colour variants, and the model's own materials whose colours the variants are (index = colour byte).</summary>
     public string PaintMaterial { get; set; } = "";
     public List<string> Paints { get; set; } = new();
-    /// <summary>Number of colour variants: the model's paints, or the shared car palette.</summary>
-    public int Variants => Tint != null ? 1 : Paints.Count > 0 ? Paints.Count : VehicleColours.Palette.Length;
+    /// <summary>
+    /// Colour variants of a Synty model (#325): one standardized model per body colour (`pack:` ids, the first is <see cref="Model"/>), each wearing another atlas. An atlas swap, never a tint.
+    /// The colour index of the vehicle record picks the skin (<see cref="SkinModel"/>), so every client draws the same one without a new wire field.
+    /// </summary>
+    public List<string> Skins { get; set; } = new();
+    /// <summary>The model to draw for a colour index: its skin, or <see cref="Model"/> when the type has no skins.</summary>
+    public string SkinModel(int colour) => Skins.Count > 0 ? Skins[colour % Skins.Count] : Model;
+    /// <summary>Number of colour variants: the skins, the model's paints, or the shared car palette.</summary>
+    public int Variants => Skins.Count > 0 ? Skins.Count : Tint != null ? 1 : Paints.Count > 0 ? Paints.Count : VehicleColours.Palette.Length;
 }

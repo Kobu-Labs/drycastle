@@ -152,7 +152,7 @@ public partial class PerfMicro : Node
 
         // ---- vehicles: a parked car's step (the server steps every driverless car every tick, D-01) and RestHeight (rays per spawn)
         var cars = new Dictionary<string, object>();
-        var def = Vehicles.Vehicles.First(v => v.Flight == null && v.Drive == null && v.Seats.Count > 0 && !v.CanFloat);
+        var def = Vehicles.Vehicles.First(v => v.Flight == null && v.Drive != null && v.Seats.Count > 0 && !v.CanFloat); // every ground vehicle is driven (ADR 0036): the parked step is the drive model's
         var roads = anchors;
         ServerCar NewCar(int i, Vector3 at, VehicleDef d)
         {
@@ -162,9 +162,9 @@ public partial class PerfMicro : Node
             return car;
         }
         var c1 = NewCar(0, roads[0], def);
-        for (var i = 0; i < 30; i++) c1.Step(def, 0, 0, false, dt, Water);
+        for (var i = 0; i < 30; i++) c1.StepDrive(DriveInput.None, dt);
         var nsC = new List<double>(WalkSteps);
-        for (var i = 0; i < WalkSteps; i++) { var t0 = Stopwatch.GetTimestamp(); c1.Step(def, 0, 0, false, dt, Water); nsC.Add(Ns(Stopwatch.GetTimestamp() - t0)); }
+        for (var i = 0; i < WalkSteps; i++) { var t0 = Stopwatch.GetTimestamp(); c1.StepDrive(DriveInput.None, dt); nsC.Add(Ns(Stopwatch.GetTimestamp() - t0)); }
         cars["parked_car_step"] = Stats(nsC);
         var nsM = new List<double>(WalkSteps);
         for (var i = 0; i < WalkSteps; i++) { var t0 = Stopwatch.GetTimestamp(); c1.MoveAndSlide(); nsM.Add(Ns(Stopwatch.GetTimestamp() - t0)); }
@@ -178,9 +178,9 @@ public partial class PerfMicro : Node
         foreach (var n in new[] { 8, 32, 64, 128 })
         {
             var list = Enumerable.Range(0, n).Select(i => NewCar(i + 1, roads[i % roads.Count], def)).ToList();
-            for (var i = 0; i < 20; i++) foreach (var c in list) c.Step(def, 0, 0, false, dt, Water);
+            for (var i = 0; i < 20; i++) foreach (var c in list) c.StepDrive(DriveInput.None, dt);
             var tk = new List<double>();
-            for (var t = 0; t < 200; t++) { var t0 = Stopwatch.GetTimestamp(); foreach (var c in list) { c.PlaceSolid(); c.Step(def, 0, 0, false, dt, Water); } tk.Add(Ns(Stopwatch.GetTimestamp() - t0)); }
+            for (var t = 0; t < 200; t++) { var t0 = Stopwatch.GetTimestamp(); foreach (var c in list) { c.PlaceSolid(); c.StepDrive(DriveInput.None, dt); } tk.Add(Ns(Stopwatch.GetTimestamp() - t0)); }
             cars[$"parked_cars_{n}_tick_all"] = Stats(tk);
             foreach (var c in list) { World.RemoveChild(c); c.QueueFree(); }
         }

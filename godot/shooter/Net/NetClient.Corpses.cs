@@ -27,11 +27,70 @@ public partial class NetClient
         public CharacterView? View;
         /// <summary>The Bigfoot's corpse (issue #264): the giant's model in its death pose, no character, no weapon to take.</summary>
         public bool Giant;
+        /// <summary>Where the corpse is looted from when that is not where it lies (the giant's head); null: its <see cref="Feet"/>.</summary>
+        public Vector3? ReachFrom;
+        /// <summary>A hay bale (#331): a corpse owned by <see cref="HarvesterRules.BaleOwner"/>, drawn as a bale; only its Items to take.</summary>
+        public bool Bale;
+        /// <summary>A bale's drawing state (smoothed position, roll, the body inside it, #351); null for anything else.</summary>
+        public BaleMotion? Motion;
         public string Weapon = "";
         /// <summary>The ragdoll: the spin, limb flail and settling of a body thrown by a blast or a car.</summary>
         public readonly RagdollTumble Tumble = new();
         /// <summary>The feet, from the last render (the node sits at the body's turning point).</summary>
         public Vector3 Feet;
+        /// <summary>When the entity first came (client clock), and whether the collapse question is settled (<see cref="DecideCollapse"/>).</summary>
+        public double Born;
+        public bool Decided;
+    }
+
+    /// <summary>The latest death each player had (when, killer): a corpse that appears just after it is a fresh kill and collapses (#357).</summary>
+    readonly Dictionary<ushort, (double At, ushort Killer)> _deathSeen = new();
+    /// <summary>The last time each player was seen riding a vehicle: a rider's corpse stays seated or is thrown, it does not collapse.</summary>
+    readonly Dictionary<ushort, double> _lastRode = new();
+    /// <summary>A corpse younger than this waits for its death event; one older with none is an old corpse (a join), and lies in the death pose.</summary>
+    const double CollapseWaitSeconds = 0.25, CollapseWindowSeconds = 2.0;
+
+    void NoteDeath(DeathMsg d) => _deathSeen[d.Victim] = (Now, d.Killer);
+
+    /// <summary>
+    /// Settles whether a new corpse collapses. True once decided. A fresh kill (its death event within <see cref="CollapseWindowSeconds"/>) of a player on foot
+    /// topples away from the killer; a thrown body flies, a rider's stays seated, an old one lies. Hidden until decided (at most <see cref="CollapseWaitSeconds"/>).
+    /// </summary>
+    bool DecideCollapse(ushort id, CorpseView v, ushort owner, Vector3 at, float yaw, bool flying)
+    {
+        var fresh = _deathSeen.TryGetValue(owner, out var death) && Now - death.At < CollapseWindowSeconds;
+        if (!fresh && Now - v.Born < CollapseWaitSeconds) return false;
+        v.Decided = true;
+        v.Node.Visible = true;
+        var rode = _lastRode.TryGetValue(owner, out var when) && Now - when < 1.5;
+        if (!fresh || flying || rode) return true;
+        var away = new Basis(Vector3.Up, yaw) * Vector3.Back; // no killer to push it (a fall, a suicide): backwards
+        Vector3? from = death.Killer == owner ? null : death.Killer == _myId ? _me?.GlobalPosition : _remotes.TryGetValue(death.Killer, out var k) ? k.Node.GlobalPosition : null;
+        if (from is { } f) { var d = at - f; d.Y = 0; if (d.LengthSquared() > 0.04f) away = d.Normalized(); }
+        v.Tumble.BeginCollapse(away, 0.6f);
+        return true;
+    }
+
+    /// <summary>The up of the ground under a body (the slope it lies on): a short ray from above its feet. Up when there is none.</summary>
+    Vector3 GroundUpAt(Vector3 at)
+    {
+        var q = PhysicsRayQueryParameters3D.Create(at + Vector3.Up * 1f, at + Vector3.Down * 1.5f, CollisionRules.StaticMask(MoverKind.Drop));
+        var hit = Owned.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        return hit.Count > 0 ? hit["normal"].AsVector3() : Vector3.Up;
+    }
+
+    /// <summary>How a bale corpse is drawn (#351): its model hangs under <see cref="Spin"/>; <see cref="Shown"/> is the smoothed position, <see cref="Angle"/> the turn about its own axis, <see cref="Body"/> the caught body inside it.</summary>
+    sealed class BaleMotion
+    {
+        public Node3D? Spin;
+        /// <summary>The way it leans with the ground (<see cref="Up"/> eases to <see cref="UpTarget"/>; <see cref="Leaned"/>: looked up at rest), and the heading of its axis (<see cref="Yaw"/>: across the way it last moved).</summary>
+        public Vector3 Shown, Up = Vector3.Up, UpTarget = Vector3.Up;
+        public float Angle, Yaw;
+        public bool Leaned;
+        public bool Seen;
+        public CharacterView? Body;
+        /// <summary>Whether <see cref="Body"/>'s limbs fly (the bale moves) or hang still; null before the first frame.</summary>
+        public bool? BodyLoose;
     }
 
     readonly Dictionary<ushort, CorpseView> _corpses = new();
@@ -69,19 +128,22 @@ public partial class NetClient
     {
         if (e.Type != CorpseRules.TypeId) return;
         if (e.State.Owner == BigfootRules.TargetId) { _corpses[e.Id] = MakeGiantCorpse(e); return; }
+        if (HarvesterRules.IsBale(e.State.Owner)) { _corpses[e.Id] = MakeBaleCorpse(e); return; }
         var node = new Node3D { Name = $"Corpse{e.Id}" };
         var view = CharacterView.Make();
         if (Appearances.TryGetValue(e.State.Owner, out var look)) view.SetCamo(look, CamoData); // the dead player's look (#203)
         view.Position = new Vector3(0, -RagdollTumble.Half, 0); // the node sits at the body's middle, so a thrown body spins about its centre
         node.AddChild(view);
         Owned.AddChild(node);
-        _corpses[e.Id] = new CorpseView { Node = node, View = view };
+        node.Visible = false; // until RenderCorpses knows whether this body collapses (DecideCollapse)
+        _corpses[e.Id] = new CorpseView { Node = node, View = view, Born = Now };
         DressCorpse(e.Id); // the item the corpse carries, when its event came first (#266)
     }
 
     void OnCorpseDespawned(ushort id)
     {
         _corpseItems.Remove(id);
+        HarvesterCorpseGone(id);
         if (!_corpses.Remove(id, out var v)) return;
         v.Node.QueueFree();
         if (_chooser.IsOpen && _chooser.Corpse == id) _chooser.Close();
@@ -96,12 +158,22 @@ public partial class NetClient
             var s = e.State;
             var p = s.Position;
             var at = new Vector3(p.X, p.Y, p.Z);
-            if (v.Giant) { v.Feet = at; v.Node.GlobalPosition = at; v.Node.Basis = new Basis(Vector3.Up, s.YawRad); continue; }
+            if (v.Bale) { RenderBale(id, v, s, at, (float)GetProcessDeltaTime()); continue; }
+            if (v.Giant)
+            {
+                v.Feet = at; v.Node.GlobalPosition = at; v.Node.Basis = new Basis(Vector3.Up, s.YawRad);
+                // it is looted at its head: the same point the server measures from (CorpseRules.ReachPoint)
+                var head = BigfootData.Reward.CorpseHead;
+                v.ReachFrom = at + v.Node.Basis * new Vector3(head.X, head.Y, head.Z);
+                continue;
+            }
             var view = v.View!;
             var flying = s.PitchRad > CorpseRules.FlightPitch * 0.5f; // a thrown body (blast, car): the server flies it, we turn it and flail its limbs
             var t = v.Tumble;
+            if (!v.Decided && !DecideCollapse(id, v, s.Owner, at, s.YawRad, flying)) continue;
             var wasThrown = t.Thrown;
             t.Update(at, flying, (float)GetProcessDeltaTime());
+            if (t.Collapsing && !t.AtRest) t.GroundUp = GroundUpAt(at);
             var weapon = WeaponId(s.State);
             if (t.Thrown)
             {
@@ -136,7 +208,7 @@ public partial class NetClient
         var at = _me.GlobalPosition;
         foreach (var (id, v) in _corpses)
         {
-            var d = v.Feet.DistanceTo(at);
+            var d = (v.ReachFrom ?? v.Feet).DistanceTo(at);
             if (d <= bd) { best = id; bd = d; }
         }
         return best;
@@ -189,7 +261,7 @@ public partial class NetClient
 
     /// <summary>A corpse that offers no weapon, only its Items: the giant's, and the Gang boss's with the Gold chain (owner <see cref="ThievesReward.ChainCorpseOwner"/>, drawn as a body like any other).</summary>
     bool IsItemOnlyCorpse(ushort corpse) =>
-        IsGiantCorpse(corpse) || WorldEntities.Entities.TryGetValue(corpse, out var e) && e.State.Owner == ThievesReward.ChainCorpseOwner;
+        IsGiantCorpse(corpse) || IsBaleCorpse(corpse) || WorldEntities.Entities.TryGetValue(corpse, out var e) && e.State.Owner == ThievesReward.ChainCorpseOwner;
 
     /// <summary>Opens the chooser at a corpse. <paramref name="weapon"/> is null for a corpse that offers no weapon (<see cref="IsItemOnlyCorpse"/>): the Items are all it offers.</summary>
     void OpenChooser(ushort corpse, WeaponDef? weapon)

@@ -34,10 +34,9 @@ public class DoorGunTests
         Assert.NotNull(v.DoorGun);
         Assert.Null(v.Flak);
         Assert.True(v.ExposedGunner, "the door gunner sits in the open door");
-        var jeep = Shipped.Vehicles.Single(x => x.Id == "jeep").Gun!;
-        Assert.True(v.Gun!.Damage > jeep.Damage);                 // a belt-fed door gun hits harder than the jeep's round (30 vs 14)
-        Assert.Equal(jeep.FireInterval, v.Gun.FireInterval);
-        Assert.True(v.Gun.Magazine >= jeep.Magazine);
+        Assert.True(v.Gun!.Damage > VehicleGunRound.Damage);      // a belt-fed door gun hits harder than the vehicle machine gun round (30 vs 14)
+        Assert.Equal(VehicleGunRound.FireInterval, v.Gun.FireInterval);
+        Assert.True(v.Gun.Magazine >= VehicleGunRound.HumveeMagazine);
         // the gunner sits on the gun's side, inside the hull, behind the pivot
         var seat = v.Seats[1].Offset;
         Assert.True(seat[0] > 0 && seat[0] < Gun.Pivot[0] && MathF.Abs(seat[0]) < v.HalfWidth);
@@ -229,7 +228,7 @@ public class DoorGunTests
     public void The_generated_model_has_every_moving_part_and_marker_as_its_own_node()
     {
         var nodes = ModelNodes();
-        foreach (var name in new[] { "fuselage", "rotor_main", "rotor_tail", "gun_mount", "gun", "barrel", "muzzle", "gunner_sight", "seat_pilot", "seat_gunner",
+        foreach (var name in new[] { "hull", "rotor_main", "rotor_tail", "gun_mount", "gun", "barrel", "muzzle", "gunner_sight", "seat_pilot", "seat_gunner",
                                      "light_head", "light_tail", "light_nav_l", "light_nav_r", "smoke_engine" })
             Assert.True(nodes.ContainsKey(name), $"the model has no node {name}");
     }

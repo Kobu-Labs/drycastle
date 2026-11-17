@@ -1,0 +1,110 @@
+{
+ "model": "pack:synty-vehicles/harvester_farm",
+ "out_dir": "synty/glb/vehicles-std",
+ "skins": [
+  {
+   "id": "farm",
+   "model": "pack:synty-vehicles/harvester_farm",
+   "atlas": "PolygonFarm_01_A"
+  }
+ ],
+ "bounds": {
+  "min": [
+   -2.553,
+   0.0,
+   -4.333
+  ],
+  "max": [
+   2.465,
+   3.865,
+   4.06
+  ]
+ },
+ "suggested": {
+  "half_width": 2.56,
+  "half_length": 4.34,
+  "height": 3.87
+ },
+ "origin": {
+  "ground_shift_y": 0.0365,
+  "centre_shift_z": 0.0
+ },
+ "wheels": {
+  "radius": 0.643,
+  "wheelbase": 3.682,
+  "track": 2.137,
+  "tyre_x": 1.069,
+  "axle_z_mean_abs": 1.841,
+  "centres": {
+   "fl": {
+    "centre": [
+     -1.106,
+     0.733,
+     -0.86
+    ],
+    "radius": 0.733,
+    "width": 0.446,
+    "steer": true
+   },
+   "fr": {
+    "centre": [
+     1.106,
+     0.733,
+     -0.86
+    ],
+    "radius": 0.733,
+    "width": 0.446,
+    "steer": true
+   },
+   "rl": {
+    "centre": [
+     -1.031,
+     0.554,
+     2.822
+    ],
+    "radius": 0.554,
+    "width": 0.336,
+    "steer": false
+   },
+   "rr": {
+    "centre": [
+     1.031,
+     0.554,
+     2.822
+    ],
+    "radius": 0.554,
+    "width": 0.336,
+    "steer": false
+   }
+  }
+ },
+ "controls": {},
+ "seats": {
+  "seat_driver": {
+   "role": "driver",
+   "feet": [
+    -0.79,
+    2.0,
+    -0.95
+   ],
+   "exposed": true
+  }
+ },
+ "lamps": {},
+ "glass": [],
+ "nodes": [
+  "SM_Veh_Harvester_Glass",
+  "SM_Veh_Harvester_Reel",
+  "harvester",
+  "hull",
+  "seat_driver",
+  "steering_wheel_rim",
+  "steering_wheel_spokes",
+  "wheel_fl",
+  "wheel_fl_steer",
+  "wheel_fr",
+  "wheel_fr_steer",
+  "wheel_rl",
+  "wheel_rr"
+ ]
+}

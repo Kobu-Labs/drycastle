@@ -1,7 +1,10 @@
 namespace Drycastle.ShooterCore;
 
-/// <summary>Weapon related input of one tick. <see cref="Slot"/> is the wanted hotbar slot 1..4 (0 = no preference).</summary>
-public readonly record struct WeaponInput(bool Fire, bool Reload, int Slot, bool Next);
+/// <summary>
+/// Weapon related input of one tick. <see cref="Slot"/> is the wanted hotbar slot 1..4 (0 = no preference). <see cref="Locked"/> is whether the
+/// player holds a complete Lock (<see cref="LockOn"/>): a weapon with a <see cref="WeaponDef.Lock"/> fires only then, every other weapon ignores it.
+/// </summary>
+public readonly record struct WeaponInput(bool Fire, bool Reload, int Slot, bool Next, bool Locked = false);
 
 /// <summary>A trigger pull that fired (hitscan, projectile) or swung (melee) this tick.</summary>
 public readonly record struct FireOutcome(WeaponDef Weapon, int WeaponIndex, float SpreadDegrees);
@@ -9,7 +12,7 @@ public readonly record struct FireOutcome(WeaponDef Weapon, int WeaponIndex, flo
 /// <summary>
 /// Weapon state of one player: hotbar, ammo per weapon, reload, switch and fire timers, spread. Godot-free and
 /// deterministic: time is passed in (seconds), the host calls <see cref="Update"/> once per processed input. A projectile
-/// pull (bazooka) consumes a round and returns the outcome; the host spawns the rocket.
+/// pull (rpg) consumes a round and returns the outcome; the host spawns the rocket.
 /// <para>
 /// Slots are 1-based indexes into weapons.json (the wire uses them). The hotbar is the player's loadout (primary,
 /// secondary, knife) when one is given; without one it is every weapon in file order. Only hotbar weapons can be
@@ -171,6 +174,7 @@ public sealed class PlayerWeapons
                 return new FireOutcome(w, Slot - 1, spread);
             default: // projectile: one rocket per magazine, the reload is started by the next pull or the reload key
                 if (_mag[Slot - 1] <= 0 && !Unlimited) { if (CanReload(w)) StartReload(now, w); return null; }
+                if (w.Lock != null && !input.Locked) return null; // a Lock-on launcher has no dumb fire: no Lock, no missile, and the round stays
                 if (!Unlimited) _mag[Slot - 1]--;
                 _nextFire = now + w.FireInterval;
                 Changed = true;

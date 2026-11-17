@@ -44,6 +44,75 @@ public class BotBrainTests
 
     static bool Fired(IEnumerable<BotCommand> cmds) => cmds.Any(c => c.Buttons.HasFlag(MoveButtons.Fire));
 
+    // --- the rocket launcher (#348) ---------------------------------------------------------------------------
+
+    const int Gun = 2, Tube = 3;
+    static readonly BotLauncher Loaded = new(Tube, 1, 2, 10f, 120f, 60f);
+
+    /// <summary>A bot that carries a launcher; <paramref name="holding"/> is the slot in its hand (its magazine is that weapon's).</summary>
+    static BotSelf Armed(BotLauncher l, int holding = Gun) =>
+        holding == Tube ? new(1, Vector3.Zero, Stance.Stand, l.Magazine, 1, l.Reserve, false, false, Tube, Gun, l) : Self() with { Slot = Gun, GunSlot = Gun, Launcher = l };
+
+    [Fact]
+    public void ABotWithALoadedLauncherTakesItOutForATargetInRangeAndFiresIt()
+    {
+        var b = Brain();
+        var w = new World { List = { Ahead(40) } };
+        Assert.Equal(Tube, Run(b, w, 0.5, self: Armed(Loaded))[^1].Slot);
+        Assert.True(Fired(Run(b, w, 1.5, 0.5, Armed(Loaded, Tube))));
+    }
+
+    [Fact]
+    public void TheLauncherStaysAwayInsideItsOwnBlastAndWithAnEmptyTube()
+    {
+        Assert.All(Run(Brain(), new World { List = { Ahead(6) } }, 1.5, self: Armed(Loaded)), c => Assert.Equal(Gun, c.Slot));
+        // an empty tube: once the enemy is seen the gun stays in the hand
+        Assert.All(Run(Brain(), new World { List = { Ahead(40) } }, 1.5, self: Armed(Loaded with { Magazine = 0 })).Skip(10), c => Assert.Equal(Gun, c.Slot));
+    }
+
+    [Fact]
+    public void AnEmptyTubeIsReloadedOnlyWhenNobodyIsInSight()
+    {
+        var empty = Loaded with { Magazine = 0 };
+        var alone = Run(Brain(), new World(), 1, self: Armed(empty));
+        Assert.All(alone, c => Assert.Equal(Tube, c.Slot));
+        Assert.Contains(Run(Brain(), new World(), 1, self: Armed(empty, Tube)), c => c.Buttons.HasFlag(MoveButtons.Reload));
+        // in a fight the empty tube is put away without a reload
+        var fight = Run(Brain(), new World { List = { Ahead(40) } }, 1.5, self: Armed(empty, Tube));
+        Assert.Equal(Gun, fight[^1].Slot);
+        Assert.DoesNotContain(fight.Skip(10), c => c.Buttons.HasFlag(MoveButtons.Reload));
+        Assert.All(Run(Brain(), new World(), 1, self: Armed(empty with { Reserve = 0 })), c => Assert.Equal(Gun, c.Slot)); // nothing left to load
+    }
+
+    [Fact]
+    public void ARocketIsAimedAtTheFeetFarMoreSteadilyThanAGunAndLedAheadOfARunner()
+    {
+        // the worst angle off the wanted point while firing: the launcher's is a fraction of the gun's
+        static float Worst(BotSelf self, float wantPitch)
+        {
+            var cmds = Run(Brain(), new World { List = { Ahead(40) } }, 6, self: self);
+            return cmds.Skip(60).Max(c => MathF.Max(MathF.Abs(MathF.Atan2(MathF.Sin(c.Yaw), MathF.Cos(c.Yaw))), MathF.Abs(c.Pitch - wantPitch)));
+        }
+        var eye = MovementStep.EyeHeight(Stance.Stand);
+        var gun = Worst(Self(), MathF.Atan2(1.15f - eye, 40f));
+        var tube = Worst(Armed(Loaded, Tube), MathF.Atan2(0.2f - eye, 40f));
+        Assert.True(tube < gun / 3f, $"launcher off by {tube:F4} rad, gun by {gun:F4} rad");
+        Assert.True(tube <= BotTuning.Default.LauncherAimErrorDeg * MathF.PI / 180f + 1e-3f);
+
+        // a target running to the bot's right (+X) at 6 m/s, 40 m away: the rocket takes 2/3 s, so the aim is about 4 m ahead of it
+        var b = Brain();
+        var w = new World { List = { Ahead(40) } };
+        BotCommand last = default;
+        for (var t = 0.0; t < 2; t += Dt)
+        {
+            w.List[0] = w.List[0] with { Feet = new Vector3((float)(6 * t), 0, -40) };
+            last = b.Tick(t, Dt, Armed(Loaded, Tube), w);
+        }
+        var (direct, _) = BotBrain.Angles(new Vector3(0, eye, 0), w.List[0].Feet);
+        var ahead = MathF.Atan2(MathF.Sin(direct - last.Yaw), MathF.Cos(direct - last.Yaw)); // positive: aimed to the right of the target
+        Assert.InRange(ahead, 0.06f, 0.14f);
+    }
+
     [Fact]
     public void WithNobodyAroundItLooksAboutAndNeverFires()
     {

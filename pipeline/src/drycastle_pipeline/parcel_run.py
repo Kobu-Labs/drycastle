@@ -190,7 +190,7 @@ def write_glb(path: Path, fragment: dict, fcfg: dict) -> None:
     Same mesh functions, glTF axes and node naming as the chunk export (z scale 1), and the same
     frame as the chunk files: add it at the map root. Parcels without fences or trees get no nodes.
     """
-    from drycastle_pipeline.export import build_chunk_scene, parcel_props_nodes
+    from drycastle_pipeline.export import build_chunk_scene, export_glb, parcel_props_nodes
     from drycastle_pipeline.propmeshes import parcel_props_meshes
 
     by_f: dict[str, list[dict]] = {}
@@ -206,7 +206,7 @@ def write_glb(path: Path, fragment: dict, fcfg: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     nodes = parcel_props_nodes(items)
     path.write_bytes(
-        build_chunk_scene([], nodes).export(file_type="glb") if nodes else _EMPTY_GLB
+        export_glb(build_chunk_scene([], nodes)) if nodes else _EMPTY_GLB
     )
 
 

@@ -129,6 +129,8 @@ public sealed class LoadStats
     public int Triangles;
     /// <summary>Ground clutter instances built (0 on a headless load or a map without clutter).</summary>
     public int ClutterInstances;
+    /// <summary>Crop field instances built (plants and artifacts; 0 on a headless load or a map without crops).</summary>
+    public int CropInstances;
     public double LoadSeconds;
 }
 

@@ -14,7 +14,7 @@ namespace Drycastle.MapLoader;
 /// Independent of any mod. Axes: map x east, y north; Godot x east, y up, z = -north.
 /// </summary>
 /// <summary>A hand-drawn ground patch, for the minimap: its type's colour and ring in ground (x, z) metres.</summary>
-public sealed record PatchPaint(string Id, Color Colour, Vector2[] Ring);
+public sealed record PatchPaint(string Id, Color Colour, Vector2[] Ring, string Type = "");
 
 public sealed partial class MapLoader
 {
@@ -119,11 +119,13 @@ public sealed partial class MapLoader
         WaterJson = File.Exists(water) ? File.ReadAllText(water) : "";
         var trees = Path.Combine(mapDir, "trees.json");
         TreesJson = File.Exists(trees) ? File.ReadAllText(trees) : ""; // map 0.6.0+
+        PlanPackTrees(); // before the chunks: decides whether their props meshes get the tree-cut material
         var windows = Path.Combine(mapDir, "windows.json");
         WindowsJson = File.Exists(windows) ? File.ReadAllText(windows) : ""; // only maps with hand-described building detail have it
         var bunkers = Path.Combine(mapDir, "bunkers.json");
         BunkersJson = File.Exists(bunkers) ? File.ReadAllText(bunkers) : ""; // only maps with an enterable bunker have it
         ReadZonePoints(mapDir, manifest.RootElement); // only maps with a zone that has usable ground have the file
+        ReadCropBales(mapDir, manifest.RootElement); // the field's hay bales, for the server's bale fire (#331)
         yield return 0.03f;
 
         var tPhase = Time.GetTicksMsec();
@@ -141,12 +143,15 @@ public sealed partial class MapLoader
         var tChunks = Time.GetTicksMsec();
         // after the chunks, so each tree's bodies go under its chunk
         foreach (var f in BuildTreeColliderSteps()) yield return 0.85f + 0.07f * f;
+        foreach (var f in BuildGroundObjectColliderSteps(mapDir, manifest.RootElement)) yield return 0.92f + 0.005f * f; // map 0.13.0+
         var tTrees = Time.GetTicksMsec();
         if (manifest.RootElement.TryGetProperty("files", out var files)
             && files.TryGetProperty("objects", out var objFile) && objFile.GetString() is { } of)
             foreach (var f in LoadObjectSteps(Path.Combine(mapDir, of))) yield return 0.92f + 0.05f * f;
         var tObjects = Time.GetTicksMsec();
-        foreach (var f in BuildClutterSteps(mapDir, manifest.RootElement)) yield return 0.97f + 0.02f * f;
+        foreach (var f in BuildClutterSteps(mapDir, manifest.RootElement)) yield return 0.97f + 0.01f * f;
+        foreach (var f in BuildCropSteps(mapDir, manifest.RootElement)) yield return 0.98f + 0.01f * f;
+        InitPackTrees();
         var tClutter = Time.GetTicksMsec();
         yield return 0.99f;
         if (BuildBoundary) BuildTerrainBoundary();
@@ -248,7 +253,7 @@ public sealed partial class MapLoader
             var c = r.GetProperty("colour");
             var ring = r.GetProperty("ring").EnumerateArray().Select(p => new Vector2(p[0].GetSingle(), -p[1].GetSingle())).ToArray();
             if (ring.Length < 3) continue;
-            _patchPaints.Add(new PatchPaint(r.GetProperty("id").GetString() ?? "", new Color(c[0].GetInt32() / 255f, c[1].GetInt32() / 255f, c[2].GetInt32() / 255f), ring));
+            _patchPaints.Add(new PatchPaint(r.GetProperty("id").GetString() ?? "", new Color(c[0].GetInt32() / 255f, c[1].GetInt32() / 255f, c[2].GetInt32() / 255f), ring, r.TryGetProperty("type", out var ty) && ty.ValueKind == JsonValueKind.String ? ty.GetString() ?? "" : ""));
         }
     }
 
@@ -572,11 +577,28 @@ public sealed partial class MapLoader
     {
         if (_terrain.Count == 0) return float.NaN;
         if (_terrainGrid == null) BuildTerrainGrid();
-        if (!_terrainGrid!.TryGetValue(CellKey((int)Mathf.Floor(x / TerrainCell), (int)Mathf.Floor(z / TerrainCell)), out var tris))
+        return TerrainHeight(_terrainGrid!, _terrain, x, z);
+    }
+
+    /// <summary>
+    /// <see cref="GroundHeight"/> for a worker thread: the terrain as it is now (the grid built, the mesh list copied; both are only read from here on),
+    /// so a map reload on the main thread cannot change it under the worker. Call on the main thread.
+    /// </summary>
+    Func<float, float, float> GroundHeightSnapshot()
+    {
+        if (_terrain.Count == 0) return static (_, _) => float.NaN;
+        if (_terrainGrid == null) BuildTerrainGrid();
+        var grid = _terrainGrid!; var terrain = _terrain.ToArray();
+        return (x, z) => TerrainHeight(grid, terrain, x, z);
+    }
+
+    static float TerrainHeight(Dictionary<long, List<(int mesh, int tri)>> grid, IReadOnlyList<(Vector3[] faces, Aabb box)> terrain, float x, float z)
+    {
+        if (!grid.TryGetValue(CellKey((int)Mathf.Floor(x / TerrainCell), (int)Mathf.Floor(z / TerrainCell)), out var tris))
             return float.NaN;
         foreach (var (m, t) in tris)
         {
-            var faces = _terrain[m].faces;
+            var faces = terrain[m].faces;
             var a = faces[t * 3]; var b = faces[t * 3 + 1]; var c = faces[t * 3 + 2];
             var d = (b.Z - c.Z) * (a.X - c.X) + (c.X - b.X) * (a.Z - c.Z);
             if (Mathf.Abs(d) < 1e-9f) continue;

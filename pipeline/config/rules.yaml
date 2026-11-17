@@ -38,7 +38,7 @@ ground:
   #   osm           OSM polygons, {class: [values]} with class landuse or natural
   # and carries the attributes it lists under `attributes`. What a type does not list it does not carry. By relation:
   #   Appearance    colours   terrain shades (one is picked per area)
-  #                 recipe    detail recipe: field, forest, village or dike (detail.py RECIPES); none: no patches, no clutter
+  #                 recipe    detail recipe: field, forest, village, dike or crop (detail.py RECIPES); none: no patches, no clutter
   #                 detail    settings laid over that recipe's section of `detail` below, for this type only
   #   Water         water     true: a water body (water.json), no detail
   # Every point has exactly one ground type: a ground area is of one type, a hand-drawn ground patch (edits.json) too. A type
@@ -58,7 +58,8 @@ ground:
     forest:
       osm: {landuse: [forest], natural: [wood]}
       attributes:
-        colours: ["#2f5f38", "#2a5633", "#356a3c"]
+        # lush green floor in several shades; the brown is the litter, mud and dirt patches (detail.forest)
+        colours: ["#3b7a3a", "#2f6a36", "#4a8a3e", "#35733f"]
         recipe: forest
     # garden plots outside the properties: mostly dug-over soil in rows
     allotments:
@@ -88,6 +89,91 @@ ground:
       attributes:
         colours: ["#86b362", "#7aa858"]
         recipe: village
+    # Crops (#328): drawn-only ground types, a ground patch of one of them is a crop field. Terrain colour here; the
+    # draped ground, plants, artifacts, edge and baulk are the `crop` recipe (detail.crop below), and `detail` lays the
+    # crop's own numbers over it. Cosmetic only: nothing collides, nothing blocks a bullet. A field no one painted keeps `field`.
+    crop_grain:
+      attributes:
+        colours: ["#c8a951", "#bf9f47"]
+        recipe: crop
+        detail:
+          ground_colours: ["#cdb055", "#c2a44a"]
+          edge: {mode: feather, feather_m: 14.0, plant_falloff_m: 10.0}
+          tramlines: {enabled: true}
+          stubble: {probability: 0.22}
+          plants:
+            - {kind: crop_wheat, spacing_m: 1.0, row_m: 0.0, scale: [0.85, 1.25], density: 0.95, noise_amp: 0.3}
+          artifacts:
+            extras:
+              - {kind: art_hay_pile, probability: 0.10, place: corner, group: [1, 1], scale: [0.9, 1.2], radius_m: 1.6, sep_m: 3.0}
+            items:
+              - {kind: art_hay_bale_round, weight: 0.40, place: corner, group: [1, 3], scale: [0.95, 1.1], radius_m: 1.2, sep_m: 2.4}
+              - {kind: art_hay_bale_square, weight: 0.25, place: corner, group: [1, 4], scale: [0.95, 1.05], radius_m: 0.9, sep_m: 1.6}
+              - {kind: art_hay_pile, weight: 0.20, place: edge, group: [1, 1], scale: [0.9, 1.2], radius_m: 1.6, sep_m: 3.0}
+              - {kind: art_baler, weight: 0.15, place: edge, group: [1, 1], scale: [1.0, 1.0], radius_m: 2.2, sep_m: 5.0}
+    crop_corn:
+      attributes:
+        colours: ["#47703a", "#3e6633"]
+        recipe: crop
+        detail:
+          ground_colours: ["#4a7a35", "#40702f"]
+          # the plants keep their wall; the ground still blends over feather_m
+          edge: {mode: wall, feather_m: 10.0, plant_margin_m: 0.7, plant_falloff_m: 0.0, plant_jitter_m: 0.15}
+          headland: {keep: 0.3, radius_m: [0.7, 1.4]}
+          plants:
+            - {kind: crop_corn, spacing_m: 0.75, row_m: 1.4, scale: [0.9, 1.15], density: 0.97, noise_amp: 0.1}
+          artifacts:
+            extras:
+            items:
+              - {kind: art_scarecrow, weight: 0.5, place: interior, group: [1, 1], scale: [0.95, 1.1], radius_m: 0.9, sep_m: 12.0}
+    crop_potato:
+      attributes:
+        colours: ["#6e5238", "#664b33"]
+        recipe: crop
+        detail:
+          ground_colours: ["#6b4f35", "#634830"]
+          texture: soil_rows
+          edge: {mode: feather, feather_m: 11.0, plant_falloff_m: 8.0}
+          plants:
+            - {kind: crop_potato, spacing_m: 0.55, row_m: 0.9, scale: [0.8, 1.15], density: 0.92, noise_amp: 0.25}
+          artifacts:
+            extras:
+            items:
+              - {kind: art_potato_box, weight: 0.45, place: corner, group: [1, 4], scale: [0.95, 1.05], radius_m: 0.8, sep_m: 1.4}
+              - {kind: art_sign_potatoes, weight: 0.25, place: edge, group: [1, 1], scale: [1.0, 1.0], radius_m: 0.6, sep_m: 8.0}
+              - {kind: art_grain_bag, weight: 0.30, place: corner, group: [1, 3], scale: [0.95, 1.05], radius_m: 0.7, sep_m: 1.2}
+    crop_rapeseed:
+      attributes:
+        colours: ["#a9b83a", "#9fae34"]
+        recipe: crop
+        detail:
+          ground_colours: ["#adbb3c", "#a2b232"]
+          edge: {mode: feather, feather_m: 15.0, plant_margin_m: 0.3, plant_falloff_m: 11.0}
+          tramlines: {enabled: true}
+          plants:
+            - {kind: crop_rapeseed, spacing_m: 0.8, row_m: 0.0, scale: [0.85, 1.3], density: 1.0, noise_amp: 0.2}
+          artifacts:
+            extras:
+              - {kind: art_sprinkler, probability: 0.12, place: edge, group: [3, 5], scale: [1.0, 1.0], radius_m: 0.8, sep_m: 5.0, line: true}
+            items:
+              - {kind: art_sprinkler, weight: 0.5, place: edge, group: [1, 2], scale: [1.0, 1.0], radius_m: 0.8, sep_m: 6.0}
+              - {kind: art_tyre, weight: 0.5, place: corner, group: [1, 4], scale: [0.95, 1.05], radius_m: 0.7, sep_m: 1.4}
+    # an empty ploughed field: furrow ground, no plants
+    crop_bare:
+      attributes:
+        colours: ["#85694a", "#7d6244"]
+        recipe: crop
+        detail:
+          ground_colours: ["#8a6d4b", "#7f6444"]
+          texture: dirt
+          edge: {mode: feather, feather_m: 10.0, plant_falloff_m: 6.0}
+          fallow: {probability: 0.0}
+          plants: []
+          artifacts:
+            extras:
+            items:
+              - {kind: art_plough, weight: 0.4, place: edge, group: [1, 1], scale: [1.0, 1.0], radius_m: 2.0, sep_m: 5.0}
+              - {kind: art_wood_stack, weight: 0.25, place: corner, group: [1, 2], scale: [0.95, 1.1], radius_m: 1.3, sep_m: 2.4}
     field:
       attributes:
         colours: ["#72996b", "#7aa072", "#6a9163"]
@@ -184,6 +270,10 @@ terrain:
   collision_decimate: 2
   # Flat face colours by the parcel kind under the face centre. A list is a set of shades; one
   # is picked per parcel (seeded by the parcel ID), so parcels read as patches.
+  # Around the outline of ground of these kinds the face colour is the mean of the colours within radius_m, so a forest
+  # fades into the field or meadow beside it over a band of about twice that width instead of ending at a line. The outline of
+  # swamp ground (detail.swamp) is faded the same way.
+  colour_blend: {kinds: [forest], radius_m: 12}
   # Parcel kinds; the ground types carry their own colours (ground.types).
   colours:
     building_plot: ["#c9b78f", "#c2b088"]
@@ -335,6 +425,129 @@ props:
       canopy_per_1000m2: 25.0
       canopy_min_spacing_m: 4.0
       canopy_crown_scale: [1.7, 2.5]
+      # Age classes of the forest trees (seeded per tree from its position): `share` is the fraction of the forest, `scale`
+      # multiplies the crown scale above, so it grows the whole tree (a giant is taller, wider, thicker). Shares need not sum to 1.
+      age_classes:
+        - {name: young, share: 0.25, scale: 0.8}
+        - {name: mature, share: 0.60, scale: 1.0}
+        - {name: giant, share: 0.15, scale: 1.25}
+    # Stands (#287): the forest is not one mix. A seeded Voronoi field over the map (cells of `cell_m`, one seed each, its type drawn
+    # by `share`) gives every forest tree a stand (props.Stands; trees.json "stand"); near water (`swamp`) overrides it.
+    # `cone_share`: fraction of conifers (rest broadleaf boxes); `scale`: multiplies the tree's size (a number or [lo, hi] drawn per
+    # tree); `keep`: fraction of the planted trees that stay (< 1: sparser). A thicket also gets extra trees up to
+    # `density_factor` times the density, at least `spacing_scale` times the canopy spacing from the others (young, dense growth).
+    # Village: net about +1% trees (thicket adds, birch and swamp thin). Remove `stands` for the old uniform forest.
+    stands:
+      cell_m: 110
+      types:
+        pine: {share: 0.30, cone_share: 0.95, scale: 1.1, keep: 1.0}
+        birch: {share: 0.20, cone_share: 0.10, scale: 0.9, keep: 0.9}
+        mixed: {share: 0.35, cone_share: 0.60, scale: 1.0, keep: 1.0}
+        thicket: {share: 0.15, cone_share: 0.50, scale: [0.5, 0.65], keep: 1.0, density_factor: 1.6, spacing_scale: 0.65}
+      # Forest trees within reach_m of water (a water ground area, or a water patch's wet area): sparse, mostly broadleaf, smaller.
+      swamp: {reach_m: 25, keep: 0.45, cone_share: 0.2, scale: 0.8}
+      # The forest wall steps down: trees within edge_m of the outer edge of the canopy mask (open ground; gaps narrower than
+      # gap_m do not count) get "edge": true and scale `scale` = [at the edge, at edge_m] times their size, mostly broadleaf.
+      edge: {edge_m: 8, scale: [0.6, 0.8], cone_share: 0.15, gap_m: 3}
+    # The model of a forest tree (planted inside the detected canopy; the standalone trees above keep the trunk box and the two
+    # stacked crown pieces sized by canopy_m). Tall clear trunk, crown on top: at the median scale 2.1 the crown starts about 5 m
+    # up and the tree is about 20 m tall. All lengths are metres at scale 1 (multiplied by the tree's scale) and measured from the
+    # ground at the trunk foot. The drawn mesh (propmeshes.tree_mesh), the collision solids (PropColliders.cs) and the model block
+    # of trees.json all read these; change them here only.
+    forest:
+      # The trunk is a four-sided taper: trunk_width_m wide at its foot (0.2 m below ground), trunk_top_ratio times that at the
+      # top. It rises into the crown (past the crown base), which hides its end. Solid for players, like any trunk.
+      trunk_width_m: 0.3
+      trunk_height_m: 4.4
+      trunk_top_ratio: 0.55
+      # Far (baked) trunk colour, close to the near pack bark (pines, TallRound, Tree_04 #584b3a; Round_01..05 #473c30, Tree_01..03 #6b5c48,
+      # sampled median) so the swap at near_m does not show (#350). Unset: the global trunk_colour above (standalone trees keep that).
+      trunk_colour: "#584b3a"
+      # Conifer crown: stacked four-sided pyramids, [base height, base half-width, apex height]. 6 triangles each, base included.
+      cone_tiers: [[2.4, 1.25, 5.4], [4.2, 0.95, 7.6], [6.2, 0.62, 9.5]]
+      # Broadleaf crown: stacked boxes, [bottom height, half-width, top height]. Only the lowest has a drawn underside.
+      box_tiers: [[2.4, 1.3, 5.6], [5.6, 0.85, 9.2]]
+  # Solid ground objects of the forest (#287): fallen logs, stumps, boulders and root plates, placed by the props stage
+  # (groundobjects.py), drawn as low-poly meshes baked into the chunk props meshes (propmeshes.ground_object_mesh, each carrying
+  # its base point in UV2 like a tree) and solid for players and shots (ShooterCore GroundObjectColliders, built from
+  # ground_objects.json). Only on the forest canopy of the orthophoto (props.trees.ortho) that lies on ground of the `ground_kinds`
+  # types, never on a property (parcel of kind avoid_parcel_kinds), nor within the clearances of a building, a road or path, a
+  # placed object or water, and never within trunk_clearance_m of a tree trunk or on another ground object. Seeded per 25 m
+  # cell, so reruns give identical output. Densities are per hectare of canopy before the clearances (about 70-100% of them are placed); objects come in clumps (`clump` = [min, max]
+  # objects around one centre, spread by `clump_sigma_m`), so the forest floor is patchy rather than evenly littered.
+  # Village: about 185 ha of forest ground, so about 4,900 timber and rock objects (100,000 triangles), 260 anthills (1.4 per ha) and 200 burrows
+  # (1.1 per ha) of 24 and 26 triangles each (measured on the village map).
+  ground_objects:
+    ground_kinds: [forest]
+    avoid_parcel_kinds: [building_plot, garden]
+    building_clearance_m: 3.5
+    road_clearance_m: 2.0
+    object_clearance_m: 1.0
+    trunk_clearance_m: 0.3
+    # Shape numbers at scale 1 (metres): the drawn mesh, ground_objects.json's model block and the collision solids all follow them.
+    # The scale of an object multiplies them all (a log's length is its own `len`, not scaled).
+    model:
+      # A hexagonal prism lying on the ground: `diameter_m` across at the thick (root) end, `top_ratio` of that at the far end.
+      log: {diameter_m: 0.45, top_ratio: 0.8}
+      # A short hexagonal taper standing on the ground, `top_ratio` of its width at the top.
+      stump: {width_m: 0.6, height_m: 0.6, top_ratio: 0.85}
+      # A squashed irregular rock; `width_m` is its length along the heading (the other horizontal axis is 0.75-1 of that).
+      boulder: {width_m: 1.0, height_m: 0.7}
+      # An upturned root disc standing on edge (an octagonal slab): `radius_m` its radius, `thickness_m` along the log, `lift_m` the
+      # height of its centre above the ground (the foot sinks a little).
+      rootplate: {radius_m: 1.1, thickness_m: 0.4, lift_m: 0.9}
+      # A conical ant mound: an octagonal base `width_m` across, `height_m` high at scale 1 (an object's width is drawn in size_m, its height follows).
+      anthill: {width_m: 1.2, height_m: 0.8}
+      # A low earth mound, `width_m` across and `height_m` high at scale 1, with a dark hole face on one side (the heading `rot` points at it).
+      burrow: {width_m: 1.3, height_m: 0.4}
+    log:
+      per_ha: 24
+      clump: [1, 3]
+      clump_sigma_m: 5.0
+      length_m: [4.0, 9.0]
+      thickness_m: [0.3, 0.6]
+      # The two ends of a log may differ this much in ground height (m): a longer drop and it would hang in the air or sink.
+      max_end_drop_m: 0.3
+      # Share of logs that have a root plate standing at their thick end.
+      rootplate_share: 0.2
+      rootplate_scale: [0.8, 1.3]
+      colours: ["#5a4430", "#4e3c2a", "#66503a"]
+    stump:
+      per_ha: 13
+      clump: [1, 3]
+      clump_sigma_m: 4.0
+      width_m: [0.4, 0.8]
+      colours: ["#5f4731", "#6b5139"]
+      top_colour: "#a98c63"
+    boulder:
+      per_ha: 5
+      clump: [1, 4]
+      clump_sigma_m: 2.5
+      size_m: [0.6, 2.2]
+      colours: ["#7d7b74", "#6e6d68", "#878379"]
+    rootplate_colour: "#46362a"
+    # Anthills: at the feet of the trees of the `stands` (pine and mixed; never in swamp ground, `detail.swamp`): per_ha of the canopy, one beside a
+    # random tree of the stand, its centre foot_m from the trunk's edge beyond its own radius. Not in clumps.
+    anthill:
+      per_ha: 2.0
+      stands: [pine, mixed]
+      size_m: [0.8, 1.6]
+      foot_m: [0.05, 0.8]
+      colours: ["#6a5238", "#5e4a32", "#74603f"]
+      top_colour: "#8a7550"
+    # Burrows: low earth mounds with a hole, candidates_per_ha of the canopy at random, each kept with probability `base` plus `edge` when open
+    # ground lies within edge_m (the forest edge) plus `slope` when the ground there climbs at least slope_min (rise over run, measured over
+    # 1.5 m), so they gather at the edges and on slopes; about 1 per ha is placed on the village.
+    burrow:
+      candidates_per_ha: 5.0
+      size_m: [1.0, 1.6]
+      edge_m: 12.0
+      slope_min: 0.15
+      base: 0.15
+      edge: 0.5
+      slope: 0.5
+      colours: ["#5c4631", "#523f2c"]
+      hole_colour: "#1c1511"
 
 # --- Ground detail (detail stage, `make detail`; docs/pipeline.md "Detail") ----------------------------
 # Patches (flat colour or library texture, draped on the terrain, never overlapping: the first layer in
@@ -354,6 +567,25 @@ detail:
   road_clearance_m: 0.15
   # Placed objects (objects.json) keep detail off a circle of half their footprint diagonal plus this.
   object_clearance_m: 0.3
+  # Hollow test (detail._hollow, Rust wet::hollow): how far below its surroundings the ground lies at a point, 0..1: the mean terrain
+  # height on a ring of ring_m round it minus its own, over depth_m. Puddles and ordinary mud are more likely in hollows (times 1 + gain * hollow).
+  hollow: {ring_m: 6.0, depth_m: 0.25, gain: 3.0}
+  # Swamp ground (#287): ground of the types in `kinds` within the reach of water gets a wet floor instead of the plain one: a dark wet-earth
+  # base (`colours`: the terrain's own colour there, faded into the ground beside it by terrain.colour_blend; not a patch), large `mud` patches, small `puddle` patches (flat dark standing water, optionally
+  # in a mud rim of rim_m, 0 = none), moss as in any forest, and leaf litter and bare spots cut to a share (litter_factor, dirt_factor). The zone is the
+  # one the swamp stand of trees stands in: props.wet_zone (water ground areas, wet areas of water patches) buffered by
+  # props.trees.stands.swamp.reach_m. Cells of it carry the meadow's swamp mix (`swamp_mix` of meadow.zones). Patches only; no real water, no gameplay.
+  # mud / puddle: one candidate per spacing_m cell, kept with keep times a noise (clump 0 = even .. 1 = bare gaps between thick clumps, clump_m the
+  # size of a clump); radius, stretch along a random axis. Puddles are likelier in hollows (detail.hollow). Few large mud patches on purpose: patches are
+  # cut at the 4 m terrain cells, so small many ones are what costs triangles (smaller blobs, 2-4.5 m every 8 m, cost 2.5x as many). Village: about 17.6 ha of
+  # forest in the zone, +39k patch triangles for it (measured on the village map), plus +17k for the plain forest's mud.
+  swamp:
+    kinds: [forest, meadow]
+    colours: ["#3a3024", "#342b20", "#40352a"]
+    litter_factor: 0.15
+    dirt_factor: 0.15
+    mud: {spacing_m: 22.0, keep: 0.5, radius_m: [6.0, 11.0], stretch: 1.6, clump: 0.8, clump_m: 40.0}
+    puddle: {spacing_m: 14.0, keep: 0.3, radius_m: [0.5, 2.0], stretch: 1.4, rim_m: 0.0, clump: 0.6, clump_m: 20.0}
   # Flood dike (recipe "dike", detail.py + dike.py): these parcels are the dike whatever their kind. The carriageway of the road
   # edges inside them is covered by a gravel track (texture dike_gravel: fine gravel, grass patches) a little wider than the
   # road with a wandering edge, the rest is flat grass with thick grass as clutter: tall grass and tufts, taller and a bit
@@ -479,6 +711,27 @@ detail:
     rock:   {spacing_m: 3.0,  dirt: 0.25, lawn: 0.04, edge: 0.12, edge_m: 1.5, scale: [0.6, 1.5]}
     leaf:   {spacing_m: 0.45, litter: 0.3, tree_lawn: 0.1, tree_reach_m: 1.6, scale: [0.8, 1.2]}
     stick:  {spacing_m: 1.0,  litter: 0.25, scale: [0.7, 1.3]}
+  # What the game draws for each crop instance kind (crops.json): `plant` kinds are the
+  # field's crop, `artifact` kinds the sparse props. `asset`: an asset id of assets/manifest.json; `synty`: prefab names (full, `SM_...`) of the
+  # private Synty POLYGON Farm pack, id `pack:synty-farm/<name>` (several = variants by position; placeholder without the pack). `cap`: at most this many per chunk (a stable hash drops the rest).
+  crop_kinds:
+    crop_wheat:   {role: plant, synty: [SM_Prop_Plant_Wheat_Optimised_01, SM_Prop_Plant_Wheat_Optimised_02, SM_Prop_Plant_Wheat_Optimised_03, SM_Prop_Plant_Wheat_Optimised_04], cap: 30000}
+    crop_corn:    {role: plant, synty: [SM_Prop_Plant_Corn_01], cap: 20000}
+    crop_potato:  {role: plant, synty: [SM_Prop_Plant_Potato_01_M], cap: 25000}
+    crop_rapeseed: {role: plant, asset: "pack:drycastle-generated-models/rapeseed_plant", cap: 25000}
+    art_hay_bale_round:  {role: artifact, synty: [SM_Prop_Hay_Bale_Round_01], cap: 400}
+    art_hay_bale_square: {role: artifact, synty: [SM_Prop_Hay_Bale_Square_01], cap: 400}
+    art_hay_pile:        {role: artifact, synty: [SM_Prop_Hay_Pile_01], cap: 200}
+    art_baler:           {role: artifact, synty: [SM_Veh_Attach_Baler_01], cap: 100}
+    art_scarecrow:       {role: artifact, synty: [SM_Prop_Scarecrow_01], cap: 100}
+    art_tractor:         {role: artifact, synty: [SM_Veh_Tractor_01], cap: 100}
+    art_potato_box:      {role: artifact, synty: [SM_Prop_Box_Potato_01], cap: 400}
+    art_sign_potatoes:   {role: artifact, synty: [SM_Prop_Sign_Potatoes_01], cap: 100}
+    art_grain_bag:       {role: artifact, synty: [SM_Prop_GrainBag_01], cap: 400}
+    art_sprinkler:       {role: artifact, synty: [SM_Prop_Sprinkler_01], cap: 200}
+    art_tyre:            {role: artifact, synty: [SM_Prop_Tyre_01], cap: 400}
+    art_plough:          {role: artifact, synty: [SM_Veh_Attach_Plough_01], cap: 100}
+    art_wood_stack:      {role: artifact, synty: [SM_Prop_Wood_Stack_01], cap: 200}
   # Meadow and field (ground type field).
   field:
     tone_colours: ["#b7aa6c", "#7fa56d"]
@@ -496,12 +749,145 @@ detail:
       pebble: {spacing_m: 0.5, dirt: 0.1, edge: 0.005, scale: [0.6, 1.4]}
       rock:   {spacing_m: 4.0, edge: 0.06, dirt: 0.2, interior: 0.004, scale: [0.6, 1.6]}
       flower: {spacing_m: 2.0, tone: 0.08, interior: 0.012, scale: [0.8, 1.2]}
+  # Crop field (ground types crop_*; crop.py). Base values: a type's `detail` (ground.types) lays its own
+  # over them. Ground = flat tones (or a texture) over the patch; the edge blends into the colour of the ground that really
+  # lies outside it (other ground area, road, water; `surround` where there is none) over feather_m in `steps` noise-dithered
+  # bands, each band cut by the neighbour colour at that stretch of the edge (mode wall only makes the plants stop dead);
+  # plants (instances, crops.json) thin out toward the edge; artifacts are a few clustered at corners/edges; a baulk strip lies
+  # where two crop patches adjoin (their grounds blend over baulk.blend_m). Per patch (seeded by its id): `variety`, tramlines,
+  # stubble stripe with bales, weedy fallow, spots, a pick of artifacts. Cosmetic only. Patch rows have ONE flat colour per
+  # triangle (no vertex colours): a gradient is many small bands, so the cost is triangles ~ steps x perimeter.
+  crop:
+    ground_colours: ["#cdb055", "#c2a44a"]   # first: the base; the others: tone blobs (several = fallow)
+    texture: null            # a library texture (soil_rows, dirt) for the ground instead of flat tones; turned along the rows
+    tone_per_ha: 6           # blobs of each further ground colour (flat ground only)
+    tone_radius_m: [2.5, 7.0]
+    surround: "#72996b"      # the neighbour colour where nothing is known beside the edge (no ground unit there)
+    edge:
+      mode: feather          # feather | wall: plants thin out over plant_falloff_m | stop dead at plant_margin_m (corn). The ground blends in both.
+      feather_m: 12.0         # ground colour blends from the neighbour's over this width (0 = none)
+      steps: 14              # bands of the blend (8 or more reads as a gradient)
+      wobble_m: 0.8          # how far each band's edge wanders (value noise), about a band width or more: the bands interleave
+      wobble_lattice_m: 2.0
+      vertex_m: 1.5          # a band edge has a vertex this often
+      plant_margin_m: 0.4    # no plants this close to the edge (wall: the hard stop)
+      plant_falloff_m: 6.0   # plant density 0 -> full over this width beyond the margin (0 = abrupt)
+      plant_jitter_m: 1.2    # the plants' distance to the edge wanders by this (noise): a ragged thinning
+      plant_jitter_lattice_m: 2.5
+      # What lies beside the edge: a probe `probe_m` outside it every `sample_m`; its colour averaged over +-`smooth` samples
+      # (so two neighbours blend along the edge) and grouped in steps of `colour_step` (levels) to keep the pieces few.
+      neighbour:
+        probe_m: 1.0
+        sample_m: 2.0
+        smooth: 2
+        colour_step: 6
+        road: "#8a7a58"      # beside a road: dry verge
+        water: "#6b6446"     # beside water: damp bank
+    # Dirt headland along the edge: blobs, kept in part, so the strip is broken. Not along a baulk.
+    headland: {spacing_m: 2.5, keep: 0.5, radius_m: [0.9, 1.9], stretch: 2.0, vertices: 10, texture: dirt}
+    # Between two adjoining crop patches: a strip of grass (or dirt), `width_m` in all (each side takes half), edge from noise.
+    # The grounds of the two blend towards each other over blend_m (instead of edge.feather_m).
+    baulk:
+      width_m: [0.5, 1.0]
+      shared_tol_m: 0.3      # patches this close count as adjoining
+      min_shared_m: 3.0      # ... along at least this much of the edge
+      step_m: 0.4
+      blend_m: 12.0
+      colours: ["#6f9a52", "#7da25a"]
+      dirt_share: 0.3        # share of baulks that are bare dirt (one per pair)
+      dirt_colour: "#8a7a58"
+    # Per-patch variation (seeded by the patch id). Colour and height jitter only: no growth stages, no seasons.
+    variety:
+      tone_shift: 0.07       # ground colours x (1 +- this), plus a little per-channel drift
+      plant_scale: [0.85, 1.15]   # every plant of the patch is this much taller/shorter
+      # Row (and tramline, stubble) direction: the long side, rotated by a quarter turn (cross_share), or any angle (free_share);
+      # then +- jitter_deg. Only rows (row_m > 0) and the turned textures show it.
+      row_angle: {cross_share: 0.2, free_share: 0.25, jitter_deg: 10}
+    # Tractor tracks: pairs of dark strips every spacing_m (one value per patch) through the rows, no plants on them, and dirt
+    # strips along some edges. Off unless a type turns it on.
+    tramlines:
+      enabled: false
+      spacing_m: [18.0, 24.0]
+      track_width_m: 0.5
+      track_gap_m: 1.8       # between the two tracks of a pair
+      margin_m: 1.2          # they stop this far from the edge
+      min_area_m2: 900
+      colour: "#6e5a3c"
+      mix: 0.6               # share of `colour` over the ground colour
+      edge_strip: {probability: 0.6, edges: [1, 2], width_m: [1.2, 2.2], min_edge_m: 10.0, wobble_m: 0.3}
+    # A harvested stripe: straw-coloured ground, no plants, round or square bales in a line on it. Off (0) unless a type sets it.
+    stubble:
+      probability: 0.0
+      min_area_m2: 900
+      coverage: [0.25, 0.5]  # share of the patch's area, a stripe along the rows from one side, noise-edged
+      wobble_m: 1.5
+      colours: ["#d3bd78", "#c9b068"]   # base, then the darker lines of the lanes
+      row_spacing_m: 2.8     # lanes (a darker line every this far)
+      row_width_m: 0.5
+      bales: {lines: [1, 2], max: 16, round_share: 0.6, round: {spacing_m: 3.2, scale: [0.95, 1.1], radius_m: 1.2}, square: {spacing_m: 2.2, scale: [0.95, 1.05], radius_m: 0.9}}
+    # Fallow: the patch draws as weedy grass-green ground, no crop plants (its type stays what it is, for the editor).
+    fallow:
+      probability: 0.15
+      colours: ["#82a051", "#93a85a", "#7a8f4a"]   # base, then tone blobs of each
+      tone_per_ha: 14
+      tone_radius_m: [2.0, 6.0]
+      flowers: {per_ha: 90, radius_m: [0.35, 0.6], colours: ["#e6d24a", "#eeece0", "#a47ab8", "#d4684a"]}
+      max_artifacts: 2
+    # Spots inside the field, placed where a noise is high (clumped): wet = darker ground, bare = soil, weeds = green clumps
+    # (the crop plants in a clump stand `plant_scale` as tall). per_ha of the patch; radius_m; the lattice of the placement noise.
+    spots:
+      lattice_m: 16.0
+      wet: {per_ha: 4.0, radius_m: [2.0, 5.0], darken: 0.82}
+      bare: {per_ha: 3.0, radius_m: [0.8, 2.2], colour: "#8a7050"}
+      weeds: {per_ha: 5.0, radius_m: [1.0, 3.0], colour: "#6f8c3e", plant_scale: 0.35}
+    # Plants: one instance kind each (crops.json). spacing_m: step along the row (row_m > 0: rows row_m apart, along the
+    # patch's row direction) or the jittered grid (row_m 0). density: share kept; noise_amp: patches of thinner growth.
+    plants:
+      - {kind: crop_wheat, spacing_m: 1.0, row_m: 0.0, scale: [0.85, 1.25], density: 0.95, noise_amp: 0.3}
+    # Artifacts: each patch deals `kinds_per_patch` of the items' kinds, by weight; per_ha of the patch (min..max, at least `min` when
+    # the patch is >= min_area_m2). place: corner (a cluster at a corner of the patch), edge (a spot on the edge), interior (alone
+    # inside). group: how many in a cluster; sep_m: least distance between two of this kind; radius_m: plants stay this far from it.
+    # extras: each tried once per patch with its probability (a lone tractor, a sprinkler line, a hay stack), on top of the count.
+    artifacts:
+      per_ha: 4.0
+      min: 2
+      max: 10
+      min_area_m2: 400
+      inset_m: 2.0
+      cluster_m: 3.0
+      kinds_per_patch: [1, 2]
+      extras: []          # a type lists its own (grain: tractor, hay stack; rapeseed: tractor, sprinkler line)
+      items: []
   forest:
-    tone_colours: ["#3f7444", "#26512f"]
-    tone_shades: [1.25, 0.75]
-    tone_per_ha: 4
+    # Flat tone patches: the ground colour times tone_shades (tone_colours only when a forest has no ground colour).
+    tone_colours: ["#5a9a48", "#2a5c32"]
+    tone_shades: [1.2, 0.8]
+    tone_per_ha: 9
     tone_radius_m: [2.5, 6.0]
-    litter: {radius_factor: 0.5, blobs_per_tree: 1, keep: 0.22}
+    # Leaf litter (leaf_litter texture) under the trees: `blobs_per_tree` blobs of canopy_m * scale * radius_factor, each kept
+    # with probability `keep`. Merged blobs make the thick litter stretches.
+    litter: {radius_factor: 0.55, blobs_per_tree: 1, keep: 0.12}
+    # Moss (moss texture, bright green): small irregular blobs, thick in the clumps of a noise (clump: 0 = even, 1 = bare gaps
+    # between thick clumps; clump_m: size of a clump) and thin in the gaps. `tree`: at the feet of the trees (keep per tree, blob
+    # radius, distance from the trunk); `interior`: over the open floor (one candidate per spacing_m cell, `keep` of them in a
+    # thick clump, radius, stretch along a random axis). None within edge_m of the carriageway and its verges.
+    moss:
+      edge_m: 3.0
+      clump: 0.9
+      clump_m: 12.0
+      tree: {keep: 0.04, radius_m: [0.6, 1.3], reach_m: [0.3, 1.4]}
+      interior: {spacing_m: 9.0, keep: 0.25, radius_m: [1.5, 3.0], stretch: 1.5}
+    # Mud (mud texture) outside the swamp, a few patches per hectare: in damp spots (one candidate per spacing_m cell, kept with keep times a
+    # noise like moss's, times 1 + gain * hollow, see detail.hollow) and along the edge of the ways of `highways` (one candidate every
+    # about spacing_m metres of the way, kept with `keep`, on a random side). Radius, stretch; a puddle (puddle texture) of
+    # puddle_scale times the mud's radius sits in the middle of puddle_share of the patches.
+    mud:
+      damp: {spacing_m: 10.0, keep: 0.02, clump: 0.9, clump_m: 25.0}
+      track: {highways: [track, path, footway], spacing_m: 30.0, keep: 0.5}
+      radius_m: [1.4, 2.8]
+      stretch: 1.5
+      puddle_share: 0.33
+      puddle_scale: [0.35, 0.65]
     dirt: {per_ha: 3, radius_m: [0.6, 1.4]}
     clutter:
       leaf:   {spacing_m: 0.8, litter: 0.1, tone: 0.01, interior: 0.003, scale: [0.8, 1.2]}
@@ -551,8 +937,8 @@ detail:
     fresh_unmown: 3
     fresh_water: 4
     zones:
-      field:  {mixes: [[0, 0.28], [1, 0.17], [2, 0.10], [3, 0.10], [6, 0.10], [7, 0.10], [8, 0.15]], unmown_mix: 1, wet_mix: 4, edge_dry_mix: 2, edge_dry_share: 0.5, dry_edge: 4}
-      forest: {mixes: [[5, 1.0]]}
+      field:  {mixes: [[0, 0.28], [1, 0.17], [2, 0.10], [3, 0.10], [6, 0.10], [7, 0.10], [8, 0.15]], unmown_mix: 1, wet_mix: 4, edge_dry_mix: 2, edge_dry_share: 0.5, dry_edge: 4, swamp_mix: 9}
+      forest: {mixes: [[5, 1.0]], swamp_mix: 9}
     # Per layer: kinds = what it makes and in what shares by default; `mixes` entries list the layers they change.
     layers:
       tuft:   {kinds: [[tuft, 1.0]], max_per_cell: 3.0, scale: [0.8, 1.4], clump: 0.75, unmown: 1.3}
@@ -560,6 +946,11 @@ detail:
       fern:   {kinds: [[fern, 1.0]], max_per_cell: 1.5, scale: [0.8, 1.3], clump: 0.5}
       pebble: {kinds: [[pebble, 1.0]], max_per_cell: 2.0, scale: [0.6, 1.4]}
       litter: {kinds: [[leaf, 0.8], [stick, 0.2]], max_per_cell: 3.0, scale: [0.8, 1.2], clump: 0.4}
+      # Forest floor (only the forest section below gives it a density): moss mounds, fallen branches and big ferns.
+      # A layer is at least one draw per 24 m tile in its reach (the farthest of its kinds, ClutterSettings.KindRangeM), merged into one mesh
+      # while no kind has 48 instances in the tile: so the 60 m kinds share this one layer and the small ones (mushroom, stump_small, 40 m)
+      # ride the litter layer's draws instead of a layer of their own. Dense near trunks (tree) and on leaf litter (litter) via the forest section below.
+      floor:  {kinds: [[moss_mound, 0.4], [branch, 0.35], [fern_big, 0.25]], max_per_cell: 2.0, scale: [0.8, 1.3], clump: 0.7}
     mixes:
       # Grass profile and the flowers that dominate the patch (one species with strays); ids are what zones.<type>.mixes refer to.
       - {name: meadow, tuft: [[tuft, 0.65], [clover, 0.35]], flower: [[daisy, 0.55], [dandelion, 0.25], [buttercup, 0.2]]}                       # 0
@@ -567,10 +958,13 @@ detail:
       - {name: dry, tuft: [[straw, 0.7], [tall_grass, 0.2], [tuft, 0.1]], flower: [[poppy, 0.6], [cornflower, 0.3], [daisy, 0.1]]}                # 2
       - {name: weedy, tuft: [[weed, 0.5], [tall_grass, 0.3], [tuft, 0.2]], flower: [[dandelion, 0.65], [yarrow, 0.2], [buttercup, 0.15]]}        # 3
       - {name: wet, tuft: [[reed, 0.55], [tall_grass, 0.3], [tuft, 0.15]], flower: [[buttercup, 0.8], [daisy, 0.2]]}                             # 4
-      - {name: woodland, tuft: [[tuft, 0.85], [tall_grass, 0.15]], flower: [[daisy, 1.0]]}                                                          # 5
+      # woodland: the litter layer also grows toadstools and rotten stumps (the pack's undergrowth replaces toadstools, MeadowSettings.PackUndergrowthKinds)
+      - {name: woodland, tuft: [[tuft, 0.85], [tall_grass, 0.15]], flower: [[daisy, 1.0]], litter: [[leaf, 0.74], [stick, 0.12], [mushroom, 0.10], [stump_small, 0.04]]}  # 5
       - {name: cornflower meadow, tuft: [[tuft, 0.5], [tall_grass, 0.5]], flower: [[cornflower, 0.7], [poppy, 0.2], [daisy, 0.1]]}               # 6
       - {name: yarrow meadow, tuft: [[tall_grass, 0.5], [tuft, 0.5]], flower: [[yarrow, 0.7], [red_clover, 0.2], [daisy, 0.1]]}                  # 7
       - {name: dandelion meadow, tuft: [[tuft, 0.7], [clover, 0.3]], flower: [[dandelion, 0.75], [daisy, 0.15], [buttercup, 0.1]]}               # 8
+      # swamp ground (detail.swamp): reeds and tall grass, the odd buttercup, little else
+      - {name: swamp, tuft: [[reed, 0.6], [tall_grass, 0.4]], flower: [[buttercup, 1.0]], fern: [[fern, 1.0]], litter: [[leaf, 0.7], [stick, 0.3]], floor: [[moss_mound, 0.7], [branch, 0.3]]}  # 9
     field:
       tuft:   {interior: 0.40, edge: 0.65, tone: 0.5, bare: 0.0}
       flower: {interior: 0.10, tone: 0.25}
@@ -579,7 +973,10 @@ detail:
       tuft:   {interior: 0.08, tone: 0.15, tree: 0.15, bare: 0.0}
       fern:   {interior: 0.05, tone: 0.1, tree: 0.4}
       pebble: {interior: 0.03, bare: 0.25}
-      litter: {interior: 0.14, litter: 0.6, tree: 0.25, tone: 0.2}
+      # Per 100 m2 of plain forest floor (a cell is 4 m2, noise and clump average 1): tuft 6.0, fern 1.9, pebble 1.5, litter 7.5, floor 4.5 = 21.4. Under trees and on
+      # litter it is denser (litter 0.6 = 45 per 100 m2 there, as before).
+      litter: {interior: 0.10, litter: 0.6, tree: 0.25, tone: 0.2}
+      floor:  {interior: 0.09, tree: 0.35, litter: 0.3, tone: 0.12}
 
 # --- Spawn points (props stage, spawns.json) -----------------------------------------------
 # Players spawn inside the `player_spawn` zones (`zones` below) and nowhere else: the drawn zones and the rule zone's ground
@@ -600,12 +997,14 @@ spawns:
 #
 # The game never sees ground areas or zones, so for every kind with zones the export stage draws candidate points
 # (inside the terrain, clear of buildings and water) and writes them to zone_points.json; the server picks one. Every kind
-# but player_spawn has all of these keys:
+# but player_spawn and plantation have all of these keys:
 #   m2_per_point         one point per this many m2 of usable ground (the zones inside the terrain, minus the clearances),
 #   min_points, max_points  but at least min_points and at most max_points. No usable ground: no points.
 #   building_clearance_m, water_clearance_m  clear of buildings and of water (and its shore), in metres.
 #   where_ground         optional: the rule zone, the ground types the kind applies to.
 # player_spawn has no points here: the props stage draws the spawn points inside its zones (spawns above).
+# plantation has no points either: the export writes its polygons (zone_polygons.json) and the server asks whether a player
+# stands inside one.
 zones:
   # The Bigfoot event starts at one of its points. No rule zone: it is drawn only. Clear of buildings (solid for it) and of
   # water; not of trees: it walks through them.
@@ -615,9 +1014,21 @@ zones:
     max_points: 300
     building_clearance_m: 10
     water_clearance_m: 5
+  # The Scud event hides its truck at one of these points (the truck is 12 m long and 3 m wide, so a point wants room: clear of
+  # buildings by 15 m and of water by 10 m). No rule zone: it is drawn only (open ground, a field track, a road verge). A map with
+  # no scud zone gets a runtime fallback (the server picks open ground away from the players), so drawing one is optional.
+  scud:
+    m2_per_point: 2000
+    min_points: 10
+    max_points: 200
+    building_clearance_m: 15
+    water_clearance_m: 10
   # Players may spawn on open ground: the village and the fields.
   player_spawn:
     where_ground: [allotments, orchard, meadow, village, field]
+  # The marijuana plantation: a player on foot inside one who holds the interact key for 1.5 s gets high (godot/shooter/data/plantation.json).
+  # Drawn only; no rule zone, no numbers here (the game reads the polygons, not points).
+  plantation: {}
   # Wildlife: one point pool per species (the server picks a spawn point for that species from it). The numbers are shared
   # by every species (YAML anchor); the ground types are where the species lives. Species ids: godot/shooter/data/animals.json.
   deer: &wildlife_rule

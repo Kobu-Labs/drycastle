@@ -14,7 +14,8 @@ namespace Drycastle.Shooter;
 /// Rules: bots are in the match only while a human is (an empty server runs no bot rounds). They count as players for
 /// <c>min_players</c>, the score and the round end. They earn no XP and have no stats, and killing one grants no XP and
 /// writes no kill stat; the streak counter does advance. They do not use vehicles or killstreaks, and they ignore target
-/// dummies and the citizens.
+/// dummies and the citizens. A share of them (<see cref="BotTuning.LauncherShare"/>) carries the RPG as its secondary weapon
+/// and fires it with a far steadier aim than its gun (#348).
 /// </para>
 /// <para>
 /// Moving: each bot heads for the nearest living enemy (<see cref="BotGoal"/>) along a route from
@@ -163,9 +164,9 @@ public partial class NetServer
     /// <summary>Once a tick, before the players are simulated: keeps the roster at the wanted size and queues one input per living bot.</summary>
     void BotsTick(float dt)
     {
-        if (Bots <= 0 && _byId.Values.All(c => !c.IsBot)) return; // no bots wanted and none to send away: the usual server
-        var bots = _byId.Values.Where(c => c.IsBot).ToList();
-        var humans = _byId.Count - bots.Count;
+        if (Bots <= 0 && _byId.Values.All(c => !c.IsBot || c.HarvesterDriver)) return; // no bots wanted and none to send away: the usual server
+        var bots = _byId.Values.Where(c => c.IsBot && !c.HarvesterDriver).ToList(); // the harvester's driver is no roster bot (#331)
+        var humans = _byId.Values.Count(c => !c.IsBot);
         var want = humans > 0 ? Math.Min(Bots, MaxBots) : 0;
         if (bots.Count < want) AddBot(); // one a tick: a join builds a body
         else if (bots.Count > want)
@@ -191,12 +192,26 @@ public partial class NetServer
             b.BotWasAlive = alive;
             if (!alive) continue; // dead or waiting for the round: no input, as a dead player's is ignored
             var w = b.W;
-            var self = new BotSelf(b.Id, N(b.Body.GlobalPosition), b.Body.State.Stance, w.Mag(w.Slot), w.Current.MagazineSize, w.Reserve(w.Slot), w.Reloading, w.Current.FullAuto);
+            var self = new BotSelf(b.Id, N(b.Body.GlobalPosition), b.Body.State.Stance, w.Mag(w.Slot), w.Current.MagazineSize, w.Reserve(w.Slot), w.Reloading, w.Current.FullAuto,
+                w.Slot, b.BotLauncher ? w.HotbarWeapon(0) + 1 : 0, b.BotLauncher ? BotLauncherOf(w) : null);
             var cmd = b.Brain!.Tick(_elapsed, dt, self, _botWorld);
             var move = new MoveInput { MoveX = cmd.MoveX, MoveY = cmd.MoveY, Yaw = cmd.Yaw, Buttons = cmd.Buttons, SpeedScale = 1f };
-            b.Inputs.Enqueue(NetInput.From(++b.BotSeq, move, cmd.Pitch, 0)); // slot 0: the weapon it spawned with
+            b.Inputs.Enqueue(NetInput.From(++b.BotSeq, move, cmd.Pitch, (byte)cmd.Slot)); // slot 0 (a bot with no launcher): the weapon it spawned with
         }
         ServeBotRoute(bots);
+    }
+
+    /// <summary>The weapon slot of the unguided rocket launcher (the RPG: a secondary projectile weapon with a blast and no Lock), 0 when weapons.json has none.</summary>
+    int RpgSlot => Weapons.Weapons.FindIndex(x => x.Kind == WeaponKind.Projectile && x.Lock == null && x.Splash != null && x.Slot == WeaponSlot.Secondary) + 1;
+
+    /// <summary>The launcher on a bot's hotbar as its brain sees it, or null: used no closer than its own blast reaches (plus a margin), no farther than the rocket flies or the bot sees.</summary>
+    BotLauncher? BotLauncherOf(PlayerWeapons w)
+    {
+        var slot = RpgSlot;
+        if (slot == 0 || !w.OnHotbar(slot)) return null;
+        var def = Weapons.Weapons[slot - 1];
+        var far = MathF.Min(def.ProjectileSpeed * def.ProjectileLife * 0.9f, BotTuning.Default.SightRangeM);
+        return new BotLauncher(slot, w.Mag(slot), w.Reserve(slot), def.Splash!.Radius + 3f, far, def.ProjectileSpeed);
     }
 
     /// <summary>A new bot: an id, a free name, a guest profile with a random starter loadout, then the same join as a player.</summary>
@@ -209,6 +224,12 @@ public partial class NetServer
         var c = new Client { Id = id, Name = name, ConnectedAt = _elapsed, Brain = new BotBrain(BotTuning.Default, id) };
         var profile = GuestProfile();
         profile.Active = _rng.Next(Loadout.SlotCount);
+        // a share of the bots carries the RPG instead of a pistol, whatever level gates it for players (#348)
+        if (RpgSlot is > 0 and var rpg && _rng.NextDouble() < BotTuning.Default.LauncherShare)
+        {
+            c.BotLauncher = true;
+            for (var i = 0; i < profile.Loadouts.Length; i++) profile.Loadouts[i] = profile.Loadouts[i] with { SecondaryWeapon = Weapons.Weapons[rpg - 1].Id };
+        }
         AttachProfile(c, profile);
         Join(c);
     }

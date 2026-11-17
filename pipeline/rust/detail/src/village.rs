@@ -49,7 +49,7 @@ pub fn village(ctx: &Ctx, cfg: Cfg) -> Res {
     layers.insert("verge_gravel", geom::dup(&ctx.verge_g));
     layers.insert("verge_dirt", geom::dup(&ctx.verge_d));
     layers.insert("lawn", geom::dup(free));
-    let flat = Flat { lawn: &cols, tone_a: None, tone_b: None };
+    let flat = Flat { lawn: &cols, swamp: &[], tone_a: None, tone_b: None };
     let rects: BTreeMap<&'static str, Vec<Rect>> = BTreeMap::new();
     let got = assemble(&mut res.patches, free, &layers, &flat, &rects, &mut Rng::keyed(&format!("{pid}:detail:colours")));
     let (gravel, dirt, grass) = (layer_region(&got, "verge_gravel"), layer_region(&got, "verge_dirt"), layer_region(&got, "lawn"));

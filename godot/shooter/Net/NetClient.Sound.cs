@@ -37,11 +37,6 @@ public partial class NetClient
         if (l.Owner == _myId) Sfx.Play2D(id); else Sfx.Play3D(id, G(l.Origin));
     }
 
-    void SfxExplosion(ExplosionMsg ex)
-    {
-        if (Sfx.Enabled) Sfx.Play3D(SoundRules.Event("explosion", WeaponId(ex.Weapon)), G(ex.Position));
-    }
-
     void SfxHit(HitMsg h)
     {
         if (!Sfx.Enabled) return;
@@ -74,6 +69,7 @@ public partial class NetClient
     /// <summary>The round start and end sounds, on a phase change (<see cref="ClientMatchState.PhaseChanged"/>; the first state of a connection is no round start).</summary>
     void SfxPhase(MatchPhase? prev, MatchPhase p)
     {
+        if (p == MatchPhase.Running) ScudRoundStart(); // the burnt ground and the missiles in the air of the last round
         if (prev == null || !Sfx.Enabled) return;
         if (p == MatchPhase.Running) Sfx.Play2D("round.start");
         else if (p == MatchPhase.Ending) Sfx.Play2D("round.end");
@@ -109,12 +105,54 @@ public partial class NetClient
         r.Snd?.Update(at);
     }
 
+    /// <summary>True while the local player rides this vehicle in any seat. The listener is the camera (there is no AudioListener3D), and the chase camera sits metres behind and above, so a sound at a point of this vehicle changes with the camera's distance and orbit: its sounds go through <see cref="PlayCarSound"/>, never to a point on it (docs/standards/car-design.md section 9).</summary>
+    bool RidesCar(CarView v) => _driving && (v.Driver == _myId || (_seats is { Mine: >= 0 } st && st.CarId == v.Id));
+
+    /// <summary>A one-shot of a vehicle (<paramref name="car"/>; null when it is not known) heard at <paramref name="at"/>: when the local player rides it, at the listener with an exact level and no range cull (like its engine), else a plain positional sound.</summary>
+    void PlayCarSound(string id, Vector3 at, CarView? car, float dbOffset = 0f)
+    {
+        if (!Sfx.Enabled) return;
+        if (car != null && RidesCar(car)) Sfx.Play3D(id, Sfx.ListenerPosition(at), dbOffset, exact: true);
+        else Sfx.Play3D(id, at, dbOffset);
+    }
+
+    /// <summary>A sound of a vehicle that lasts (the harvester's reel and chew, seconds long) and rides with it: <see cref="StepCarVoices"/> keeps it on the moving machine, or at the listener when the local player rides it. It ends with the file.</summary>
+    sealed class CarVoice
+    {
+        public required LoopVoice Voice;
+        public required CarView Car;
+        /// <summary>Where on the vehicle it is, in the vehicle's own frame.</summary>
+        public Vector3 Local;
+    }
+    readonly List<CarVoice> _carVoices = new();
+
+    /// <summary>Starts a long sound of <paramref name="car"/> at the world point <paramref name="at"/> on it, and keeps it there as the vehicle moves (<see cref="StepCarVoices"/>).</summary>
+    void PlayCarVoice(string id, Vector3 at, CarView car)
+    {
+        if (!Sfx.Enabled || !GodotObject.IsInstanceValid(car.Node)) return;
+        var rides = RidesCar(car);
+        if (Sfx.Loop(id, rides ? Sfx.ListenerPosition(at) : at) is not { } voice) { Sfx.Play3D(id, at); return; } // no loop voice free: a plain one-shot
+        _carVoices.Add(new CarVoice { Voice = voice, Car = car, Local = car.Node.ToLocal(at) });
+    }
+
+    /// <summary>Per frame: moves the vehicles' long sounds with them and frees the voices whose file has ended or whose vehicle is gone.</summary>
+    void StepCarVoices()
+    {
+        for (var i = _carVoices.Count - 1; i >= 0; i--)
+        {
+            var cv = _carVoices[i];
+            if (!cv.Voice.Playing || cv.Car.Destroyed || !GodotObject.IsInstanceValid(cv.Car.Node)) { cv.Voice.Release(); _carVoices.RemoveAt(i); continue; }
+            var rides = RidesCar(cv.Car);
+            cv.Voice.Update(rides ? Sfx.ListenerPosition(cv.Car.Node.GlobalPosition) : cv.Car.Node.ToGlobal(cv.Local), exact: rides);
+        }
+    }
+
     void SfxCar(CarView v, Vector3 at, float dt)
     {
         if (!Sfx.Enabled) return;
         var def = Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null;
         // the vehicle this player rides (any seat) is heard from the inside: placed at the listener, so the chase camera's distance and the car's turning never pan or fade it
-        var mine = _driving && (v.Driver == _myId || (_seats is { Mine: >= 0 } st && st.CarId == v.Id));
+        var mine = RidesCar(v);
         if (mine) at = Sfx.ListenerPosition(at);
         if (def?.Sounds is { } set)
         {
@@ -132,6 +170,8 @@ public partial class NetClient
     void SfxTeardown()
     {
         foreach (var r in _rockets.Values) r.Snd?.Release();
+        foreach (var cv in _carVoices) cv.Voice.Release();
+        _carVoices.Clear();
         foreach (var c in _cars.Values) { c.Snd?.Release(); c.Engine?.Release(); }
     }
 }

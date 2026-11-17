@@ -56,9 +56,10 @@ public static class RiderPose
 
 /// <summary>
 /// Who sits in the seats of a vehicle, as it travels in a snapshot (entity type <see cref="EntityType.Seats"/>), one record per vehicle with more than one
-/// seat. The driver is in the vehicle's own record (<see cref="VehicleRecord.Driver"/>); this carries seats 1..3 so every client knows who sits where by
-/// id, and draws each rider on their seat instead of guessing it from where their body is. The three ids are the record's yaw, pitch and the health and
-/// weapon bytes; the position stays at the origin so the record is only sent when somebody changes seat. The record id is the vehicle's index in the id
+/// seat. The driver is in the vehicle's own record (<see cref="VehicleRecord.Driver"/>); this carries seats 1..4 so every client knows who sits where by
+/// id, and draws each rider on their seat instead of guessing it from where their body is. The first three ids are the record's yaw, pitch and the health
+/// and weapon bytes, the fourth (protocol 66) is its position X (a raw field value, not metres); the position is otherwise the origin and fixed, so the record
+/// is only sent when somebody changes seat. The record id is the vehicle's index in the id
 /// range <see cref="FirstId"/>.
 /// </summary>
 public static class SeatsRecord
@@ -69,26 +70,28 @@ public static class SeatsRecord
     public static ushort IdOf(ushort carId) => (ushort)(FirstId + (carId - VehicleRecord.FirstId));
     public static ushort CarOf(ushort recordId) => (ushort)(VehicleRecord.FirstId + (recordId - FirstId));
 
-    /// <summary>The record for the occupants of seats 1..3 (<paramref name="occupants"/>[0] is the driver's and is left out).</summary>
+    /// <summary>The record for the occupants of seats 1..4 (<paramref name="occupants"/>[0] is the driver's and is left out).</summary>
     public static EntityRecord Make(ushort carId, IReadOnlyList<ushort> occupants)
     {
         ushort At(int seat) => seat < occupants.Count ? occupants[seat] : (ushort)0;
-        var any = At(1) != 0 || At(2) != 0 || At(3) != 0;
+        var any = At(1) != 0 || At(2) != 0 || At(3) != 0 || At(4) != 0;
         var r = EntityRecord.Make(IdOf(carId), EntityType.Seats, System.Numerics.Vector3.Zero, 0, 0, 0, any ? EntityState.InVehicle : EntityState.Alive, 0);
         r.Yaw = At(1);
         r.Pitch = unchecked((short)At(2));
         var third = At(3);
         r.Health = (byte)(third & 0xFF);
         r.Weapon = (byte)(third >> 8);
+        r.X = At(4); // the fifth seat: the id as the raw position X (the position carries nothing else), 0 for a vehicle with four seats or fewer
         return r;
     }
 
-    /// <summary>The occupant of <paramref name="seat"/> (1..3) in a record, 0 when empty.</summary>
+    /// <summary>The occupant of <paramref name="seat"/> (1..4) in a record, 0 when empty.</summary>
     public static ushort Occupant(in EntityRecord r, int seat) => seat switch
     {
         1 => r.Yaw,
         2 => unchecked((ushort)r.Pitch),
         3 => (ushort)(r.Health | (r.Weapon << 8)),
+        4 => (ushort)r.X,
         _ => 0,
     };
 }

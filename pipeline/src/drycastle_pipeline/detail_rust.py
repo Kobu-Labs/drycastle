@@ -73,6 +73,8 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
     cfgs: dict[str, dict] = {}
     for p in sorted(units, key=lambda u: u["id"]):
         recipe = D.area_type(p)
+        if recipe in D.PYTHON_RECIPES:  # the engine skips these units; ``D.append_crops`` builds them after it
+            recipe = None
         out_units.append({
             "id": p["id"], "kind": p["kind"], "recipe": recipe or "",
             "whole_dike": bool(p["id"] in D.dike_parcels() or p["kind"] == "dike"),
@@ -95,6 +97,8 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
 
     plan = plan_patches(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), terrain, types)
     water_patches = [q for p in plan.patches.values() if p.water_y is not None for q in _polys(p.polygon)]
+    stands = tree_cfg.get("stands")
+    swamp = D.swamp_zone(units, types, plan, terrain, float(stands["swamp"]["reach_m"])) if stands and "swamp" in stands else None
 
     lib = load_textures()
     tex_list = sorted(set(D.PATCH_TEXTURE.values()))
@@ -119,6 +123,7 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
                   for e in graph["edges"]],
         "objects": discs,
         "regions": water_patches,  # the engine calls the polygons it keeps detail out of "regions"
+        "swamp": _polys(swamp) if swamp is not None else [],  # swamp ground: where the swamp stand of trees stands (detail.swamp_zone)
         "coverage": [list(c) for c in terrain.coverage.exterior.coords],
         "textures": {t: [lib[t].tile_w, lib[t].tile_h] for t in tex_list},
         "tex_list": tex_list,
@@ -161,6 +166,14 @@ def run(force: bool = False, edits: str | None = None, work: str | None = None, 
         return 1
     for w in warnings:
         print(f"detail: warning: {w}", file=sys.stderr)
+    try:
+        crops = D.append_crops(work_dir, edits_path=edits_path)
+    except EditsError as exc:
+        for error in exc.errors:
+            print(f"detail: error: {edits_path.name}: {error}", file=sys.stderr)
+        return 1
+    if crops:
+        print("detail: crops: " + ", ".join(f"{k}: {n}" for k, n in crops["crops"].items() if n), file=sys.stderr)
     for f in stats["failed"]:
         print(f"detail: warning: a unit failed and has no detail: {f}", file=sys.stderr)
     print(
@@ -171,6 +184,7 @@ def run(force: bool = False, edits: str | None = None, work: str | None = None, 
     print(f"detail: meadow: {stats['meadow_cells']} cells; expected instances " + ", ".join(f"{k}: {n}" for k, n in stats["meadow_expected"].items()),
           file=sys.stderr)
     print("detail: patch triangles by area type: "
-          + "; ".join(f"{a} {sum(l.values())}" for a, l in sorted(stats["patch_triangles_by_type"].items())), file=sys.stderr)
+          + "; ".join(f"{a} {sum(l.values())} (" + ", ".join(f"{k} {n}" for k, n in sorted(l.items())) + ")"
+                      for a, l in sorted(stats["patch_triangles_by_type"].items())), file=sys.stderr)
     print("detail: seconds by step: " + ", ".join(f"{k} {v:.1f}" for k, v in stats["timing_s"].items()), file=sys.stderr)
     return 0

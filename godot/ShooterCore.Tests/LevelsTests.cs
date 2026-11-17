@@ -62,7 +62,7 @@ public class LevelsTests
         Assert.Equal(0, t.RequiredLevel(UnlockKind.Perk, "fleet_foot"));
         Assert.Equal(20, t.RequiredLevel(UnlockKind.Perk, "ghost"));
         Assert.Null(t.RequiredLevel(UnlockKind.Weapon, "knife"));     // special: not a loadout item
-        Assert.Null(t.RequiredLevel(UnlockKind.Weapon, "bazooka"));
+        Assert.Equal(8, t.RequiredLevel(UnlockKind.Weapon, "rpg"));       // a secondary since #348
     }
 
     [Fact]

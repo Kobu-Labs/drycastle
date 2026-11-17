@@ -263,6 +263,18 @@ public partial class Viewer : Node3D
             }
         }
 
+        // pack trees (#287): only in a project with data/pack_trees.json and a machine with the nature pack
+        if (_map.PackTreesActive)
+        {
+            var sp = spawns.FirstOrDefault(s => s.Kind is "other" or "forest");
+            if (sp != null)
+            {
+                for (var i = 0; i < 60; i++) { _map.SetClutterFocus(sp.Position); await Physics(1); }
+                var st = _map.PackTreeDrawn;
+                GD.Print($"pack trees at {sp.Id} ({sp.Kind}): tiles={st.Tiles} draws={st.Draws} trees={st.Instances} triangles={st.Triangles}");
+            }
+        }
+
         // parcel replacement
         var id = _map.Parcels.Values.Where(p => p.HasModel && p.BuildingIds.Count > 0)
             .Select(p => p.Id).OrderBy(x => x).FirstOrDefault();

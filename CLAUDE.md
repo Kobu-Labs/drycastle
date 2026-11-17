@@ -14,7 +14,7 @@ Every state machine has a `StateMachineSpec<T>` (godot/ShooterCore/Fsm/) and is 
 
 ### Vehicles
 
-Anything that draws, attaches to or measures a vehicle (glass, lamps, wheels, cockpit, seats, smoke, holes) follows `docs/standards/car-design.md`: body parts hang under the `hull`, not the root. Read it first.
+Vehicle design or mechanics only (a vehicle model or its build script, `vehicles.json`, seats, cover, glass, wheels, lamps, cockpit/chase views, seat panel, anything attached to or measured from a vehicle): read `docs/standards/car-design.md` first, starting with its "Agent quick start" (which part to read, import / from-scratch / change flows, when to ask). Do not read it for other work. Enforced by `VehicleContractTests`.
 
 ### Buildings from photos
 

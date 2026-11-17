@@ -29,6 +29,21 @@ public static class TacticalMapMath
     public static int Cells(float extentMetres, float cellMetres) =>
         cellMetres > 0 ? Math.Max(1, (int)MathF.Ceiling(extentMetres / cellMetres - 1e-4f)) : 1;
 
+    /// <summary>Metres of padding the tactical map's sheet leaves round the terrain and the parcels.</summary>
+    public const float SheetPad = 10f;
+
+    /// <summary>
+    /// The square sheet of the world map (the tactical map, <c>MapBase.World</c>) over the box (<paramref name="minX"/>, <paramref name="minZ"/>) to (<paramref name="maxX"/>, <paramref name="maxZ"/>) of ground
+    /// metres (the parcels' box merged with the terrain's): its side is the longer side of the box plus the padding both ways, centred on the box. <c>Origin</c> is the ground (x, z) of the north-west corner;
+    /// the south edge is <c>Origin.Y + Side</c>. The server asks for the same sheet so it measures the same grid cells the clients draw.
+    /// </summary>
+    public static (Vector2 Origin, float Side) Sheet(float minX, float minZ, float maxX, float maxZ)
+    {
+        var side = MathF.Max(maxX - minX, maxZ - minZ) + 2 * SheetPad;
+        var centre = new Vector2((minX + maxX) / 2f, (minZ + maxZ) / 2f);
+        return (centre - new Vector2(side / 2f, side / 2f), side);
+    }
+
     /// <summary>Column label for a zero-based column: A..Z, then AA, AB, ...</summary>
     public static string ColumnLabel(int column)
     {

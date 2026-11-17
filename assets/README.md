@@ -27,13 +27,6 @@ the full packs are not.
 | `kaykit-character-animations` (1.2) | Kay Lousberg, https://opengameart.org/content/kaykit-character-animations | 1 animated character GLB (Prototype Pete: head and torso, 6 bones, 30 clips incl. Idle, Walk, Run, Shooting, Defeat) | OpenGameArt (publisher's own listing) |
 | `quaternius-ultimate-gun-pack` (July 2019) | Quaternius, https://opengameart.org/content/low-poly-guns-pack | pistols, assault rifles, bullpups, SMGs, shotguns, snipers, bayonet (OBJ converted to GLB); sniper-rifle.glb is from a later separate download of the same author | OpenGameArt |
 
-**Unverified, user-provided (2026-11-11):** `zsky-vehicles/` holds two vehicle models by Zsky supplied by the project owner as local files:
-`motorbike.glb` ("Military Motorbike", 5 colour materials Green/Black/Silver/Yellow/Red_Motor) and `bicycle.glb` ("Bike", 4: Silver/Black/Green/Yellow_Bike).
-The source page and licence are **not confirmed** and they are not claimed to be CC0; the owner must confirm the licence and attribution before release
-(see `zsky-vehicles/NOTICE.txt`). They are listed in the manifest's top-level `unverified_models` array (not in `packs`/`assets`, which stay CC0-only for the
-pipeline tests and the editor). Used by `godot/shooter` as the motorcycle and bicycle (`data/vehicles.json`); the raw models are authored at 1/100 scale
-(node scale 100, rotated -90 about X), so vehicles.json carries the fit (scale, yaw, offset). The motorcycle faces +Z (turned 180 degrees), the bicycle -Z.
-
 **Unverified, user-provided (2026-11-11):** `animated-characters/` holds four player bodies picked from a 50-model archive of low-poly animated characters the
 owner downloaded (`soldier-male`, `soldier-female`, `rifleman-male` = BlueSoldier_Male, `operator` = Ninja_Sand), repacked from glTF to GLB without changes.
 All share one 23-bone rig authored in a T-pose (about 3.15 units tall; arms along x) with 17 clips (Idle, Walk, Run, Death, SwordSlash, ...). They are flat
@@ -96,26 +89,23 @@ Z), `gun_mount` (the ring's carriage, yaw about Y from the ring centre, all the 
 `seat_gunner`, the lights (`light_head_l`/`_r`, `light_tail_l`/`_r`), `smoke_engine` (the engine is in the stern) and the wake points at the waterline
 (`wake_bow`, `wake_stern_l`/`_r`; the waterline afloat is 0.56 m above the origin, under the cockpit floor).
 
-`drycastle-generated-models/bigfoot_head.glb` (2026-11-13) is the Bigfoot head, the headgear item of the Bigfoot event (`godot/shooter` item id `bigfoot_head`,
-`data/items.json` `model`): a faceted, ape-like head with a sagittal crest, a heavy arched brow, a dark face plate with amber eyes, nose and bared teeth, and a
-shaggy mane of spikes round the back, cheeks and jaw. Original geometry written as code in `scripts/make_bigfoot_head_model.py` (standard library only; it
-loads the flak script's mesh helpers from the file beside it; `python3 -I scripts/make_bigfoot_head_model.py` rebuilds the file byte for byte), CC0, 8
-flat-colour materials, no texture, one mesh node, about 1100 triangles. Frame of a worn headgear item: metres, forward -Z, origin at the middle of the
-wearer's head (it is not a vehicle). About 0.88 x 1.12 x 0.87 m with the mane, sized to swallow the head of every player body; the game turns it to the
-rig's +Z face and scales it to rig units (`CharacterView.Worn.cs`). Not meant to be placed on the map, though it is listed like the other generated models.
+`drycastle-generated-models/bigfoot.glb` and `bigfoot_head.glb` (2026-11-16, #286) are the Bigfoot of the Bigfoot event (`godot/shooter/data/bigfoot.json` `model`)
+and its head as the headgear item (item id `bigfoot_head`, `data/items.json` `model`). Both come from `scripts/make_bigfoot_model.py` (original geometry and
+animation written as code, needs numpy; `python3 scripts/make_bigfoot_model.py` rebuilds both files byte for byte), CC0, 12 flat-colour materials, no texture.
+The body: a hunched, near-black giant with a spiked ridge down its back, forearms thicker than its upper arms, clawed hands at knee height, a head slung low
+with a scowling brow, burning eyes, fangs and tusks. Metres, stands on y 0, faces -Z, 3.6 m to the crest; one skinned mesh of 2336 triangles on 26 bones
+whose rest rotations are identity (`Root > Hips > Spine > Chest > Neck > Head > Jaw`, arms `Clavicle/UpperArm/Forearm/Hand/Fingers`, legs
+`Thigh/Shin/Foot/Toe`, `.L` and `.R`), and 14 clips: Idle, Walk, Run, Death, Hit, Roar, TrunkThrow, StompWindup, Stomp, VehicleLift, Launch, GrabReach,
+Hold, Hurl. Walk and Run cover 2.8 m and 8.4 m a loop (`movement.walk_stride_m`, `run_stride_m`). `python3 scripts/preview_glb_clips.py <glb> <out_dir>` draws
+a turnaround and a contact sheet per clip from the file itself, without the game. The head: the same head at 1 / 1.25, the jaw hanging open, 732 triangles,
+one mesh node, in the frame of a worn headgear item (metres, forward -Z, origin at the middle of the wearer's head), about 1.14 x 1.22 x 1.17 m with the
+mane, so it swallows the head of every player body. Its icon (`ui/icons/items/bigfoot_head.png`) is a render of the model: `make shooter-icons` redraws it.
 
 `drycastle-generated-models/gold_chain.glb` (2026-11-15) is the Gold chain, the neck item of the Thieves event (item id `gold_chain`, `data/items.json` `model`): a chunky necklace of 38 interlocked
 links (every other one on its edge, two golds) round the neck and over the collar, drooping to a diamond pendant on the chest. Original geometry written as code in `scripts/make_gold_chain_model.py`
 (standard library only; it loads the flak script's mesh helpers; `python3 -I scripts/make_gold_chain_model.py` rebuilds the file byte for byte), CC0, 3 flat-colour materials, no texture, one mesh
 node, about 2400 triangles, 0.24 x 0.26 x 0.27 m. Frame of a worn neck item: metres, forward -Z, origin at the origin of the rig's Neck bone (`CharacterView.Worn.cs`); the placement is from the bone
 origins, not checked on a render. The Gang Warfare pack may replace it later (point `model` at it).
-
-**Unverified, user-provided (2026-11-13):** `quaternius-giant/giant.glb` is the placeholder model of the Bigfoot event (#264, `godot/shooter/data/bigfoot.json`): "Giant" by
-Quaternius, a free rigged model (3812 triangles, one texture atlas, an `EnemyArmature` skeleton of 12 joints) the owner downloaded as a local file. It comes with seven clips
-(Attack, Death, HitRecieve, Idle, Jump, Run, Walk, each prefixed `EnemyArmature|EnemyArmature|EnemyArmature|`). As Godot imports it, it is 4.53 units tall, 6.47 wide with the arms out
-and 2.34 deep, feet at y 0.03, facing +Z (measured with `make assets-check`'s script); the game scales it by 0.8 to the Bigfoot's 3.6 m. Quaternius publishes its free models as CC0, but
-nobody checked this model's page, so it is listed as `UNVERIFIED` under `unverified_models` (`shooter:quaternius-giant/giant`) with a `NOTICE.txt`, like the other user-provided models, and
-**not** among the project's own generated models (whose licence says every file there is original code). The final model and animations are a separate follow-up.
 
 **Unverified, user-provided artwork (2026-11-13):** `welcome-sign/welcome_sign.glb` is the village welcome sign ("VITAJTE V OBCI", coat of arms, village name):
 an arched board between two light-blue posts that bend in to two legs with two cross rails, a cap and a ball on each post (about 1.05 x 3.35 x 0.12 m, origin on
@@ -133,7 +123,7 @@ Shooter models (2026-11-11): used by `godot/shooter` (`CharacterFx.cs`, `WeaponF
 character pack (itch.io, CC0 on the publisher's page) needs itch's download flow and was not fetched, so the
 remote player is the animated character bundled in the KayKit Animations pack (same rig and clips). The Quaternius
 pack ships OBJ/FBX/Blend only, so the three used guns were converted OBJ+MTL to GLB (geometry and diffuse colours
-unchanged). It has no knife (the bayonet stands in) and no launcher (the bazooka is a code-built tube). The pack
+unchanged). It has no knife (the bayonet stands in) and no launcher (the rpg is a code-built tube). The pack
 archive has no licence file; `LICENSE.txt` records the CC0 shown on its OpenGameArt page. No first-person arms pack
 is used: the viewmodel is the weapon alone, lower right.
 
@@ -152,10 +142,10 @@ the manifest's top-level `sounds` array (id `sfx:<pack>/<file>`, pack, source, l
 | `kenney-interface-sounds` | opengameart.org/content/interface-sounds (Kenney) | UI sounds, hit tick, kill confirm, dry-fire click |
 | `kenney-music-jingles` | opengameart.org/node/22000 (Kenney) | round start and end stingers |
 | `free-firearm-sound-library` | opengameart.org/content/the-free-firearm-sound-library | pistol and AK shots (single shots cut from long takes); shooter v2 shots: ar15, ppsh, model12, nova, mossberg, walther_ppq, tikka, savage10, sks (see "Shooter v2 weapons") |
-| `oga-combat-sound-effects-150` | opengameart.org/node/195932 (compilation, per-file sources in its `LICENSE.txt`) | knife, impacts, death, weapon switch, bazooka explosion (layered) |
+| `oga-combat-sound-effects-150` | opengameart.org/node/195932 (compilation, per-file sources in its `LICENSE.txt`) | knife, impacts, death, weapon switch, rpg explosion (layered) |
 | `fantozzi-footsteps` | opengameart.org/content/fantozzis-footsteps-grasssand-stone | footsteps (one surface) |
 | `oga-chiptune-adventures` | opengameart.org/node/74001 (Juhani Junkala) | menu music loop |
-| `drycastle-generated-sounds` | generated by a script (not in the repo) | PLACEHOLDERS: vehicle engine loop, rocket flight loop, bazooka launch, three reloads (script not in the repo); church bells of the Holy Mass (`scripts/make_church_bells.py`, not a placeholder); the electric shock of a Thief on a pole (`scripts/make_shock_crackle.py`, not a placeholder); the sniper's heartbeat, inhale and exhale (`scripts/make_breath_sounds.py`, not placeholders); the clink of a spent casing, four variants (`scripts/make_casing_clinks.py`, not placeholders) |
+| `drycastle-generated-sounds` | generated by a script (not in the repo) | PLACEHOLDERS: vehicle engine loop, rocket flight loop, rpg launch, three reloads (script not in the repo); church bells of the Holy Mass (`scripts/make_church_bells.py`, not a placeholder); the electric shock of a Thief on a pole (`scripts/make_shock_crackle.py`, not a placeholder); the sniper's heartbeat, inhale and exhale (`scripts/make_breath_sounds.py`, not placeholders); the clink of a spent casing, four variants (`scripts/make_casing_clinks.py`, not placeholders); the harvester catching a player: reel whirr, muffled chewing, chute pop (`scripts/make_harvester_sounds.py`, not placeholders); the Lock-on launcher's seeker beep, solid lock tone and the Aircraft owner's warning chirp (`scripts/make_lock_sounds.py`, not placeholders) |
 | `drycastle-rozhlas` | own recordings and a song baked by `scripts/make_rozhlas.py` (see its README; song licence unverified) | the village loudspeaker broadcast |
 
 Not downloaded: kenney.nl itself answers automated requests with 403 (the OpenGameArt copies above were used); the muted.io Performance Cars
@@ -193,8 +183,8 @@ events (`godot/shooter/data/sounds.json`). All CC0 (OpenGameArt pages above, che
 
 `drycastle-generated-textures/` holds the tileable textures that map meshes can use by id: `brick_red`, `brick_white`,
 `stone`, `concrete`, `picket`, `wire`, and the ground textures of the detail stage `dirt`, `gravel`, `leaf_litter`,
-`soil_rows` (256 x 256 RGBA PNG each; the four ground ones are opaque, carry their own colours (a white tint shows them as drawn) and
-tile in 1 to 2 m: `dirt` 2 m, `gravel` 1 m, `leaf_litter` 1.5 m, `soil_rows` 1 m with the rows along u). They are original pixels computed by
+`moss`, `mud`, `puddle`, `soil_rows` (256 x 256 RGBA PNG each; the seven ground ones are opaque, carry their own colours (a white tint shows them as drawn) and
+tile in 1 to 3 m: `dirt` 2 m, `gravel` 1 m, `leaf_litter` 1.5 m, `moss` 1.5 m, `mud` 2 m, `puddle` 3 m, `soil_rows` 1 m with the rows along u). They are original pixels computed by
 `scripts/make_textures.py` (standard library only; `python3 -I scripts/make_textures.py` rebuilds them byte for byte,
 `--meta` prints the manifest entries, `--sheet FILE` writes a contact sheet), CC0, in a flat style: a few tones, hard
 edges, little noise. The manifest's top-level `textures` array lists them: `id` (lower case, digits and underscores:

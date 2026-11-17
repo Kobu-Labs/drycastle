@@ -58,6 +58,9 @@ pub struct Shared {
     pub reg_idx: BoxIndex,
     pub water: Vec<PolyC>,
     pub w_idx: BoxIndex,
+    /// Swamp ground: where the swamp stand of trees stands (``detail.swamp_zone``), already buffered by its reach.
+    pub swamp: Vec<PolyC>,
+    pub sw_idx: BoxIndex,
     pub verge: [Vec<PolyC>; 2],
     pub v_idx: [BoxIndex; 2],
     pub coverage: PolyC,
@@ -159,6 +162,7 @@ impl Shared {
         let regions: Vec<PolyC> = input["regions"].as_array().ok_or("regions")?.iter().map(polyc_ext_holes).collect();
         let water_kinds: Vec<&str> = input["water_kinds"].as_array().map(|a| a.iter().filter_map(|v| v.as_str()).collect()).unwrap_or_default();
         let water: Vec<PolyC> = units.iter().filter(|u| water_kinds.contains(&u.kind.as_str())).flat_map(|u| u.polys.clone()).collect();
+        let swamp: Vec<PolyC> = input["swamp"].as_array().map(|a| a.iter().map(polyc_ext_holes).collect()).unwrap_or_default();
         let mut osm_lines: HashMap<String, Vec<usize>> = HashMap::new();
         for (i, r) in roads.iter().enumerate() {
             osm_lines.entry(r.osm_id.clone()).or_default().push(i);
@@ -193,6 +197,7 @@ impl Shared {
             o_idx: boxes(&objects, polyc_box),
             reg_idx: boxes(&regions, polyc_box),
             w_idx: boxes(&water, polyc_box),
+            sw_idx: boxes(&swamp, polyc_box),
             v_idx: [boxes(&verge[0], polyc_box), boxes(&verge[1], polyc_box)],
             cfg,
             cfgs,
@@ -207,6 +212,7 @@ impl Shared {
             objects,
             regions,
             water,
+            swamp,
             verge,
             coverage,
             osm_lines,
@@ -245,6 +251,10 @@ pub struct Ctx<'a> {
     pub verge_d: G,
     pub water: Option<G>,
     pub road_lines: Vec<(G, f64)>,
+    /// The part of this ground within the reach of water, for the ground types of ``detail.swamp.kinds``.
+    pub swamp: Option<G>,
+    /// Indices (``Shared::roads``) of the path and track edges near it (``detail.forest.mud.track.highways``).
+    pub tracks: Vec<usize>,
     pub colour: Option<[u8; 3]>,
     free: [OnceCell<G>; 2],
 }
@@ -307,6 +317,15 @@ impl<'a> Ctx<'a> {
             .map(|i| (geom::line(&sh.roads[i].line), sh.roads[i].width))
             .filter(|(g, _)| hit(g))
             .collect();
+        let ways = cfg.p("forest.mud.track.highways").svec();
+        let tracks: Vec<usize> = sh.rl_idx.query(nb).into_iter().filter(|&i| ways.contains(&sh.roads[i].highway.as_str()) && hit(&geom::line(&sh.roads[i].line))).collect();
+        let swamp = if cfg.p("swamp.kinds").svec().contains(&kind) {
+            let ids = sh.sw_idx.query(pb);
+            let part = if ids.is_empty() { geom::empty() } else { geom::inter(&geom::union_all(ids.iter().map(|&i| geom::from_polyc(&sh.swamp[i])).collect()), &polygon) };
+            if geom::area(&part) > 1e-6 { Some(part) } else { None }
+        } else {
+            None
+        };
         let water_m = cfg.p("tint.water_m").f();
         let water = {
             let ids = sh.w_idx.query(util::grow(pb, water_m));
@@ -331,6 +350,8 @@ impl<'a> Ctx<'a> {
             verge_d,
             water,
             road_lines,
+            swamp,
+            tracks,
             colour,
             free: [OnceCell::new(), OnceCell::new()],
         }

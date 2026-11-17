@@ -49,7 +49,7 @@ public class VehicleContactTests
     [Fact]
     public void GroundVehiclesNeverMeetVertically()
     {
-        // a bicycle on a bus: deep overlap in the plane, so the way out is sideways, never up
+        // a motorcycle on a bus: deep overlap in the plane, so the way out is sideways, never up
         var bus = new ContactShape(Vector3.Zero, 0, 1.28f, 6.03f, 3.1f);
         var bike = new ContactShape(new Vector3(0, 0, 0.1f), 0, 0.3f, 0.85f, 1f);
         var hit = VehicleContact.Test(bus, bike, false);
@@ -161,9 +161,9 @@ public class VehicleContactTests
     }
 
     [Fact]
-    public void ABusRammingABicycleWrecksTheBicycleOnly()
+    public void ABusRammingAMotorcycleWrecksTheMotorcycleOnly()
     {
-        var bus = Shipped.Vehicles.First(v => v.Id == "bus"); var bike = Shipped.Vehicles.First(v => v.Id == "bicycle");
+        var bus = Shipped.Vehicles.First(v => v.Id == "bus"); var bike = Shipped.Vehicles.First(v => v.Id == "motorcycle");
         var hit = new VehicleContactHit(Vector3.UnitZ, 0.3f);
         var bump = VehicleContact.Bump(hit, Moving(bus.Mass, 0, 20), Moving(bike.Mass, 0, 0), Shipped.BumpRestitution);
         var busHurt = MathF.Max(0, bump.SpeedLossA - Shipped.CrashMinSpeedLoss) * Shipped.CrashDamagePerSpeed;

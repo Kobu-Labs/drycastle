@@ -79,9 +79,9 @@ public partial class NetClient
     {
         if (reason != WorldDespawnReason.Destroyed || !_aircraft.TryGetValue(id, out var v)) return;
         var at = v.Model.GlobalPosition;
+        if (HomingKillShown(at)) return; // a homing missile's kill blast (the Explosion event, with its Blast wave) is already there
         RocketFx.Explode(Owned, at, AircraftCrashRadius);
-        if (Sfx.Enabled) Sfx.Play3D("explosion.vehicle", at);
-        ShakeFor(at, AircraftCrashRadius);
+        BlastFelt(at, AircraftCrashRadius, "explosion.vehicle");
     }
 
     /// <summary>The size of the blast of a shot-down aircraft (the vehicle blast is 9 m).</summary>

@@ -26,7 +26,7 @@ public partial class NetClient
         ("pistol idle", "pistol", 0, false, false, Stance.Stand),
         ("knife idle", "knife", 0, false, false, Stance.Stand),
         ("knife swing", "knife", 0, true, false, Stance.Stand),
-        ("bazooka idle", "bazooka", 0, false, false, Stance.Stand),
+        ("rpg idle", "rpg", 0, false, false, Stance.Stand),
         ("rifle crouch", "ak47", 0, false, false, Stance.Crouch),
         ("rifle prone", "ak47", 0, false, false, Stance.Prone),
         ("no weapon", "", 0, false, false, Stance.Stand),

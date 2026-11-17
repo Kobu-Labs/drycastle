@@ -211,6 +211,7 @@ public sealed partial class EquipmentScreen : Control
 
     public override void _Process(double delta)
     {
+        _avatar.SetHigh(_client.OwnHigh ? _client.Plantation : null); // the figure shows the high (cigarette, red eyes) as the others see it
         var (changed, finished) = _fade.Tick((float)delta, UiShell.FadeTime);
         if (changed) ApplyAlpha();
         if (finished) { FinishClose(); return; }

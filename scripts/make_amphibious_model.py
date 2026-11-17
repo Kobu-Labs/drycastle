@@ -30,6 +30,7 @@ Node tree (every moving part is its own node, its origin is its pivot):
         smoke_engine             empty: the smoke point over the engine (it is in the stern)
         wake_bow                 empty: where the bow cuts the water, at the waterline
         wake_stern_l/r           empties: the stern's corners at the waterline
+        steering_wheel_rim, steering_wheel_spokes   the driver's wheel, at its centre (hidden in the cockpit view, the rig draws a turning one)
       wheel_fl_steer, wheel_fr_steer   front steering pivots, origin at the wheel centre (rotate about Y)
         wheel_fl, wheel_fr       front wheels, origin at the wheel centre (spin about X)
       wheel_rl, wheel_rr         rear wheels, origin at the wheel centre (spin about X)
@@ -216,13 +217,15 @@ def build():
         hull.add(lathe((x, 0.99, COCKPIT0 + 0.06), (0, 0, 1), [(0, 0.0, "Steel"), (0, 0.055), (0.012, 0.055, "Lamp"), (0.014, 0.0)], 10))
     col0, col1 = (-SEAT_X, 0.96, COCKPIT0 + 0.06), (-SEAT_X, 1.10, -0.72)
     hull.add(cyl("DarkMetal", col0, col1, 0.018, 6))
-    hull.add(torus("Rubber", col1, sub(col1, col0), 0.17, 0.016, 14, 5))
+    rim = hull.child("steering_wheel_rim", col1)      # its own nodes: the cockpit rig measures the rim and hides both (docs/standards/car-design.md 5)
+    rim.add(torus("Rubber", col1, sub(col1, col0), 0.17, 0.016, 14, 5))
+    spokes = hull.child("steering_wheel_spokes", col1)
     for k in range(3):
         a = math.radians(90 + 120 * k)
         d = unit(sub(col1, col0))
         u = unit(cross(d, (1, 0, 0)))
         v = cross(d, u)
-        hull.add(cyl("DarkMetal", col1, add(col1, add(mul(u, 0.17 * math.cos(a)), mul(v, 0.17 * math.sin(a)))), 0.01, 4, smooth=False))
+        spokes.add(cyl("DarkMetal", col1, add(col1, add(mul(u, 0.17 * math.cos(a)), mul(v, 0.17 * math.sin(a)))), 0.01, 4, smooth=False))
     hull.add(cyl("DarkMetal", (0.0, FLOOR, -0.80), (0.0, 0.98, -0.74), 0.014, 5, smooth=False))                     # gear lever
     hull.add(lathe((0.0, 0.98, -0.74), (0, 1, 0), [(0, 0.0, "Rubber"), (0, 0.025), (0.04, 0.025), (0.05, 0.0)], 6))
 

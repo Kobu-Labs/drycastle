@@ -53,6 +53,11 @@ public class SoundDef
     public bool Loop { get; set; }
     /// <summary>The files may be missing (a set still being recorded): the game starts and the sound is silent, instead of refusing to start.</summary>
     public bool Optional { get; set; }
+    /// <summary>
+    /// The files are in order of preference and only the first one that exists is used (the others are not variants): a sound whose better take lives in the private asset folder (not in the repo)
+    /// lists it first and a generated one after it, so the game sounds the same without the pack (#352).
+    /// </summary>
+    public bool FirstFound { get; set; }
     /// <summary>Seconds into a looping file where the loop starts: it plays through from the beginning once, then repeats from here (0: the whole file loops).</summary>
     public float LoopStart { get; set; }
     /// <summary>Voice priority when the pool is full: a new sound steals the lowest-priority (then oldest) voice, and is dropped when every playing voice outranks it.</summary>
@@ -61,6 +66,9 @@ public class SoundDef
     public float MinGap { get; set; }
 
     public bool Positional => MaxDistance > 0;
+
+    /// <summary>The files the game plays, given which of them <paramref name="exists"/>: all that exist (variants), or with <see cref="FirstFound"/> the first that does.</summary>
+    public List<string> Usable(Func<string, bool> exists) => FirstFound ? Files.Where(exists).Take(1).ToList() : Files.Where(exists).ToList();
 }
 
 /// <summary>Pure rules behind the audio system (testable without Godot).</summary>

@@ -51,7 +51,7 @@ public class HeadlightsTests
     public void ShippedVehiclesHaveLamps()
     {
         var f = Shipped();
-        foreach (var id in new[] { "car", "motorcycle", "bicycle" })
+        foreach (var id in new[] { "car", "motorcycle", "quad" })
         {
             var l = f.Vehicles.Single(v => v.Id == id).Lights;
             Assert.NotNull(l);
@@ -110,5 +110,17 @@ public class HeadlightsTests
         Assert.False(VehicleRecord.Lights(off));
         Assert.Equal(3, VehicleRecord.Stage(off));
         Assert.Equal(EntityState.Alive, off.State);
+    }
+
+    [Fact]
+    public void TheHumveeHasTwoHeadAndTwoTailLampsAtItsEndsInsideItsBox()
+    {
+        var v = Shipped().Vehicles.Single(x => x.Id == "humvee");
+        var l = v.Lights!;
+        Assert.Equal(2, l.Head.Count);
+        Assert.Equal(2, l.Tail.Count);
+        Assert.All(l.Head, p => { Assert.True(p[2] < -2f && p[2] >= -v.HalfLength); Assert.InRange(MathF.Abs(p[0]), 0.3f, v.HalfWidth); });
+        Assert.All(l.Tail, p => { Assert.True(p[2] > 2f && p[2] <= v.HalfLength); Assert.InRange(MathF.Abs(p[0]), 0.3f, v.HalfWidth); });
+        Assert.InRange(l.BeamRange, 30f, 60f); // the model carries its own lamp materials (no extra lenses); the spots are the data's
     }
 }

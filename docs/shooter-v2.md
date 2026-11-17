@@ -17,8 +17,8 @@ simulation, the data files and the wire codecs; the Godot scenes, shaders and HU
   alive takes effect on death.
 - The server validates every loadout against the data files (weapon slots and unlock levels, perk and streak ids) before
   it stores it (`LoadoutRules`, `LoadoutEditor`).
-- Hotbar: primary, secondary and knife (`LoadoutHotbar`). Keys 1-3 and the next-weapon cycle use it. The bazooka is not a
-  loadout item, so players cannot select it; see section 9. Smoke arenas and `--debug-cmds` servers keep every weapon on
+- Hotbar: primary, secondary and knife (`LoadoutHotbar`). Keys 1-3 and the next-weapon cycle use it. The RPG (`rpg`) is a secondary since #348
+  (level 8), as the Lock-on launcher is. Smoke arenas and `--debug-cmds` servers keep every weapon on
   the hotbar (`LoadoutHotbar.All`).
 - Corpses (#130): a killed player leaves a corpse holding its primary. Walking onto it and pressing E swaps the corpse's
   weapon into the primary or the secondary position. A corpse also carries the item its player wore (section 7b).
@@ -31,8 +31,19 @@ simulation, the data files and the wire codecs; the Godot scenes, shaders and HU
 ## 2. Weapons
 
 Registry: `godot/shooter/data/weapons.json` (version 2). Categories and their recoil defaults are in `category_defaults`.
-Weapon categories: machine guns, assault rifles, SMGs, shotguns, snipers (primary); pistols (secondary); the bazooka and the
-knife are special.
+Weapon categories: machine guns, assault rifles, SMGs, shotguns, snipers (primary); pistols and the two launchers, the RPG (`rpg`) and the Lock-on launcher (`strela`) (secondary); the
+knife is special.
+
+RPG (#348, replaces the bazooka): unguided, one rocket in the tube and two in reserve, 4 s reload, 60 m/s for 4 s (240 m), 120 damage,
+10 m blast (at or above `DustRules.FrontMinRadius`, so a Dust cloud and a Blast wave, which leaves at 200 m/s: `splash.wave_speed`, carried by the
+Explosion event; the same as `/explode 10 <distance> 200`), half damage to its owner. It is the bazooka's rocket path
+unchanged (`Rocket`, `RocketFlight.Step`, `ProjectileMath`); only the numbers and the look are new. On the client (`RocketFx`, `WeaponFx`):
+the paid pack's launcher (`props/rpg_01`, its rocket head hidden while the tube is empty) and rocket head in flight (`props/rpg_rocket_01`),
+a cloud trail from a pooled emitter laid only within 220 m of the camera, a backblast out of the tube's rear and the tube's jump
+(`recoil.vertical_per_shot`, first-person view only). Without the pack: the code-built tube and rocket. Bots: a share of them
+(`BotTuning.LauncherShare`) carries it as secondary; a bot takes it out for a target in sight between blast radius + 3 m and the rocket's
+reach, aims at the ground under the target ahead of where it runs with a far smaller error than a gun's (`LauncherAimErrorDeg`), fires
+once, goes back to its gun and reloads the tube when nobody is in sight.
 
 | Category | Weapons (unlock level) |
 |---|---|
@@ -145,7 +156,7 @@ and each weight is 1 or more.
 ## 4. Killstreaks
 
 Data: `godot/shooter/data/killstreaks.json`. The Streak counter counts the owner's kills (not suicides), resets on death,
-and kills made with a streak's own weapon do not advance it (`StreakWeapons`). The jeep's roof gun (vehicle gun, 250) is
+and kills made with a streak's own weapon do not advance it (`StreakWeapons`). The vehicle machine gun (the Humvee's roof gun, vehicle gun, 250; the jeep lost its gun in #325) is
 not a streak weapon, so its kills do count (correction on #133).
 
 | Streak | Kills | Unlock | Duration | Control | Notes |
@@ -182,7 +193,7 @@ on a body (the hit point), and rounds to destroy a 300 hp car (direct hit, rocke
 | Helicopter cannon (m82) | 0.15 s | 75 | 500 | 3 m | 3 |
 | AC-130 25 mm (m249) | 0.04 s | 50 | 1250 | 3 m | 4 |
 | AC-130 40 mm (m82) | 0.2 s | 80 | 400 | 6 m | 3 |
-| AC-130 105 mm shell (bazooka) | 1.0 s | 150 | 150 | 14 m | 2 |
+| AC-130 105 mm shell (rpg) | 1.0 s | 150 | 150 | 14 m | 2 |
 
 Turret aim is world space and ground-stabilised (#160). The aim is a world point: the look (the mouse's world yaw and pitch) meets
 the ground plane at the orbit centre's height (`GunshipAim.AimPoint`; a plane, not a physics raycast, so the client and the server
@@ -220,15 +231,15 @@ the air is lost on a round start or end (`_shells.Clear()`); its owner leaving d
 is resolved at once.
 
 Gunship rockets (#159) have their own 8 m blast: a `splash` block on the rockets entry in killstreaks.json (radius 8, full damage
-to 2 m, edge 20, no self damage). The rocket sim takes it per launch (`Rocket.Blast`, `ProjectileMath.WithBlast`), so the bazooka
-keeps weapons.json's 6 m, and the explosion's radius rides the Explosion event (protocol 12).
+to 2 m, edge 20, no self damage). The rocket sim takes it per launch (`Rocket.Blast`, `ProjectileMath.WithBlast`), so the rpg
+keeps weapons.json's 10 m, and the explosion's radius rides the Explosion event (protocol 12).
 
 Gunship rocket flight (protocol 16): the rockets entry has `projectile_speed_mps` (250, default 250). A rocket launched with it flies
 at that speed and lives out its whole range: its life is `RocketFlight.LifeFor(range_m, speed)` (range over speed, plus 0.5 s), carried
-in the server's `Rocket` (`Speed`, `Life`; zero keeps the weapon's own). Before this, a gunship rocket flew the bazooka's 40 m/s and
+in the server's `Rocket` (`Speed`, `Life`; zero keeps the weapon's own). Before this, a gunship rocket flew the hand-held launcher's 40 m/s and
 expired after 3.75 s, about 150 m out, so it never reached a target 400 m or more away. The Launch event's velocity is the flight
-(speed and direction), so clients animate it at that speed; a snapshot no longer resets a rocket's speed to the bazooka's. The
-per-tick rule is `RocketFlight.Step` (pure, tested in `RocketFlightTests`); the bazooka keeps weapons.json's 40 m/s and 3.75 s. The enemy markers are a red diamond
+(speed and direction), so clients animate it at that speed; a snapshot no longer resets a rocket's speed to the rpg's. The
+per-tick rule is `RocketFlight.Step` (pure, tested in `RocketFlightTests`); the rpg keeps weapons.json's 60 m/s and 4 s. The enemy markers are a red diamond
 per visible enemy player and target dummy, the nearest to the reticle larger. One helper draws them for both the gunship overlay
 and the attack missile's infrared view (`EnemyMarkers`, from the remote replicas), so the two cannot drift apart.
 
@@ -290,13 +301,14 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 - Vehicles (`vehicles.json`): car, motorcycle, bicycle (v1), war jeep and quad bike (#131), and the amphibious transport
   (#132; a boat type was shipped with it and later removed). Handling was reworked in #134 (max speed, turn radius, braking, hp). Headlights and tail lights come from the
   optional `lights` block (#137).
-- Seat switch: while seated in any vehicle the number keys (the `slot_1` to `slot_4` actions, rebindable) take that seat, and a seat
+- Seat switch: while seated in any vehicle the number keys (the `slot_1` to `slot_5` actions, rebindable) take that seat, and a seat
   schematic shows the seats (bottom right). Client request: event kind 161 (u8 seat index); the server answers the riders with kind 162 (who
   sits in each seat) whenever that changes; protocol 20. `VehicleSeat.TrySwitch` is the rule, `SeatSchematic` the layout.
 - Bus (`bus`): a 12 m land vehicle with a generated model (`scripts/make_bus_model.py`), one on the map and in the sandbox vehicle list. It is data
-  only: a driver seat and three passenger seats (the seat limit is four), the usual driving model with a wide turn circle (`turn_radius` 9.5), smoke
+  only: a driver seat and three passenger seats (the seat limit is five since protocol 66), the usual driving model with a wide turn circle (`turn_radius` 9.5), smoke
   from the rear where its engine is. It is boarded like a car, within 3 m of its centre, so along the middle of either side (the middle door is there),
   not at the front door. Its doors are separate model nodes that nothing moves yet.
+- Scud truck (`scud`, `scud.json`, GLOSSARY "Scud truck"): a 11.9 m launcher (3.13 m wide, 8 wheels) with a driver and an operator seat in two half cabs, spawned by the Scud event or `/scud spawn`, never dealt, never returning once destroyed (`returns: false`). `NetServer.Scud.cs` is the server (launcher machine per truck, brakes while the rack moves, the missile entity, `ScudBlast`), `NetClient.Scud.cs` + `ScudOverlay.cs` the client (rack animation by node name, the targeting screen, the feed, the warning, the blast). Hooks for the rocket cart: `SpawnScudTruck(position, yaw)`, `TryReloadScud(truck)`, `ReloadScudNow(truck)` and `ScudBlast(position, attackerId)`. Model ids `pack:synty-simple-military/scud` (nodes hull, rack > missile, `wheel_l1..l4` / `wheel_r1..r4` with the front two axles under `wheel_lN_steer` / `wheel_rN_steer`, glass) and `.../scud_missile` (nose along -Z); grey boxes without the pack. The numbers are the model's (`docs/research/scud-models-facts.md`, pinned by `ScudModelTests`). The missile entity spawns at `launcher.muzzle`, the centre of the erected rocket on the raised rack. Loading from a rocket cart (`scud.json` `reload`, `ScudReloadRules`, `ScudReloadKey`, `NetServer.Scud.cs`): with the rack Empty and a loaded, live cart within `cart_reach_m` of the truck's box (box to box, hitched or not), a player in the truck or within `player_reach_m` of it on foot holds interact for `hold_seconds`; a tap still gets in or out (the key's action then runs on the release, only while such an offer stands, and never while Loot lies in reach). The launcher goes to `Loading` (first `transfer_share` of `launcher.reload_seconds`, the truck braked, the rocket still on the cart, which must stay alive, loaded and in reach and neither it nor the truck may move `moved_cancel_m`), then at the transfer point the host empties the cart (`SetRocketCartLoaded`) and the launcher is `Reloading` with the rocket on the rack for the rest. A shot loaded cart is the Scud blast (`OnRocketCartDetonated` calls `ScudBlast`); loaded carts in another Scud blast's damage are doomed with a delay (`blast.chain_delay_seconds`, the wave's travel included) and go up once each. Protocol 69: launcher state 10 `Loading`, notices 11, 12 and 13 (`EventFound`), and an intel board entry's place may be an AREA (flags bit 4: a f32 radius in metres after the centre; `IntelEvent.Radius`, `IntelCodec`).
 - Utility helicopter (ADR 0006): the flown vehicle (`utility_helicopter`, medium `air`), see "Utility helicopter" below.
 - Amphibious transport (ADR 0010, 0011, 0012): an open three-seat vehicle with its own driving model on land and water, an armed seat and a
   ring gun, and riders the hull does not cover (`amphibious`, medium `amphibious`), see "Amphibious transport" below.
@@ -347,7 +359,7 @@ times and distances without the game; `FlightTests` holds the limits.
 rest direction, arc; `DoorGunRules`). The gunner's view is what the gun is asked to point at, and it stays world-stable while the helicopter
 turns under it; the gun points there as far as its arc allows (70 degrees either side of straight out, 55 down, 12 up), and the view is held to
 the arc as well. The arc is in the airframe's frame, so it banks with it, and it clears the hull, the skids, the tail and the full sweep of the
-blades (`DoorGunTests` checks every aim). The rounds are the jeep's roof gun's (`gun`: the same damage, interval, spread and range, a 100-round
+blades (`DoorGunTests` checks every aim). The rounds are the vehicle gun round (`gun`: the same damage, interval, spread and range, a 100-round
 belt), hitscan from the muzzle, and its kills are ordinary kills (kill-feed weapon "Mounted MG", special weapon 250). The aim reaches every
 client as a turret record (entity type 4, as the flak's, here the mount's yaw and the gun's pitch against the airframe), so the gun follows the
 aim on everyone's model; the tracer leaves the drawn muzzle, the barrel recoils and the muzzle flashes. The gunner's ammo is event 160.
@@ -446,7 +458,7 @@ so the bus's passengers stay unarmed.
   at `spread_full_speed` (16 m/s). The seat gives no stance bonus. The crosshair shows it.
 - *The knife:* as on foot, from the seat, against anyone in reach who is not aboard.
 
-**Ring gun** (seat 3). The vehicle gun and door gun rules (`gun`, `door_gun`; the helicopter's belt and the jeep's round), on a ring: the gun
+**Ring gun** (seat 3). The vehicle gun and door gun rules (`gun`, `door_gun`; the helicopter's belt and the vehicle gun round), on a ring: the gun
 rides `ring_radius` out from the ring's centre and swings round the gunner, who stands there and turns with it. The gunner's view aims it, all
 the way round, 35 down and 55 up; within `guard_arc_deg` (50) of the nose it goes no lower than `guard_min_pitch_deg` (-4), coming down to the
 full depression over the next `guard_blend_deg` (20), so the barrel rides up over the two in front (`AmphibiousTransportTests` sweeps every aim
@@ -463,13 +475,54 @@ unchanged; when the vehicle blows up, everyone aboard dies with it.
 
 **Decisions on the edges.**
 
-- *The flak truck and the helicopter.* Their gunner's exposure is unchanged, including that the jeep's roof gun and the killstreak guns do not
+- *The flak truck and the helicopter.* Their gunner's exposure is unchanged, including that the Humvee's roof gun and the killstreak guns do not
   reach them through the hull; those weapons do reach the transport's riders. One to unify later, if wanted.
 - *A rider's own rocket.* It passes their vehicle's hull and spares their fellow riders, direct hit and blast, while the shooter still rides
   it. The shooter takes their own blast as on foot, and so does the vehicle.
 - *Shallow water.* In a pond shallower than its draft it still floats; its wheels are drawn under the bed.
 - *No driver.* It is stepped hands off every tick and coasts, on land or water. A driver whose inputs stop arriving for 6 ticks is driven the
   same way until they resume.
+
+### Towing and the rocket cart
+
+A **trailer** (vehicles.json `trailer`: drawbar `eye`, `axle`, `mass`, `grip`, `loaded_hp`; no seats) is pulled by a **tractor** (a type with a `tow` block: the jeep, the Humvee, the flak truck). The model is
+ShooterCore's (`TowModel`, `TowLink`, `TowRules`; the numbers and the maths are in their doc comments, the machines in `docs/state-machines.md`). The **rocket cart** is the first trailer:
+the model's numbers (12.6 m with the drawbar because it carries the whole 11.1 m missile, 2.46 m wide, drawbar 7.6 m, eye height 0.62, 3000 kg loaded and 1000 kg empty: `trailer.mass` / `trailer.empty_mass`, `TowLoad.Of(tractor, trailer, loaded)`), `spawn_count` 0, `returns` false, model `pack:synty-simple-military/rocket_cart` (a grey box without the pack). A cart emptied by a launcher stays empty when it falls out of the world and is put back (`ServerCar.Reset(repair: false)`); only a return after destruction loads it again.
+
+- **A trailer is a vehicle.** A `ServerCar` in the vehicle list with an id, a record, hit points, a hit box and a solid; it has no seats, so nobody enters it (server: `TryEnterCar`; client: `NearestFreeCar`),
+  bots never see a vehicle, `VehicleSeat` accepts 0 seats and its driver is 0. What moves it is its `TowLink` (`ServerCar.PlaceTrailer`: the node on the ground under the link's body).
+- **Auto-latch (no key).** Every tick `TrailerLatchTick` asks each loose trailer against every tractor within 14 m that has no trailer and can tow it: the tractor reverses faster than 0.3 m/s, its hitch is within
+  0.8 m of the eye (and 1 m up) and the headings differ by less than 35 degrees (`TowRules.CheckLatch`). A tractor tows at most one trailer.
+- **The tick.** The tractor steps with the `TowEffect` of its trailer (`CarModel.Step` or `DriveModel.Step`: mass over the pair's, 60 % top speed, less lateral grip, the jackknife block), then
+  `ServerCar.StepTowed` steps the trailer (`TowLink.StepHitched`) against the world. A trailer that is blocked stops its tractor: the drive-model path `TowModel.Hold`s the state, the car-model path restores
+  the physics body, and the wall's speed loss goes to the tractor's crash damage as any wall does. Loose, the trailer rolls to a stop (`StepFree`).
+- **The world.** `TrailerProbe` is the trailer's `ITrailerWorld`: its whole box (drawbar included), swept 0.5 m above the ground and pitched with the ground under its ends, against terrain, buildings,
+  trunks, placed solids, closed doors and the demon (the ground vehicle row of the rule table, `CollisionRules.SweepMask`). It asks for **no vehicle solid**, so its own tractor, whose box it overlaps at a deep
+  articulation, never blocks it. Other vehicles are the vehicle contact pass's (`ResolveVehicleContacts`), which skips a tractor and its own trailer; a hitched trailer is pinned to its tractor and does not
+  move in a bump (the other vehicle takes the push back), a loose one is shoved and takes speed.
+- **Run over.** A moving trailer runs over what its row says (`TrailerRunOver`, the same `RunOverTargets` as a vehicle) over its whole box, hurt by its axle speed and its `run_over_mass`, credited to the
+  tractor's driver (nobody when loose). The swing of its tail in a turn is in the swept path, not in the speed (approximation).
+- **Unhitch.** The tractor's driver holds interact for 0.6 s (`UnhitchKey`, machine `Trailer.UnhitchKey`, counted by the server). With a trailer on the hook the interact key leaves the vehicle on its release
+  (a tap, under 0.6 s) instead of on its press, so the same key does both; any other seat leaves on the press as always. The trailer is then Released (it rolls on, 2 s lockout, then Loose). A destroyed tractor or
+  trailer, a reset of either, or the Bigfoot lifting either, unhitches too.
+- **The load.** `CartCargo` (machine `RocketCart.Load`: Loaded, Empty; starts Loaded; a reset or a return loads it again) sets the hit points: `trailer.loaded_hp` (150) loaded, the type's `hp` (200) empty, a cart
+  keeping its share of health when the load changes (`VehicleLifecycle.SetMaxHp`). A loaded cart that is destroyed (bullets, a blast, a crash, a chain reaction) calls `NetServer.OnRocketCartDetonated(cart,
+  position, attackerId)`, whose body for now is the ordinary vehicle explosion (`VehicleBlast`); an empty one goes through `Detonate` as any vehicle. For the Scud event: `SpawnRocketCart(position, yaw, loaded)`,
+  `RemoveRocketCarts()`, `SetRocketCartLoaded(cart, loaded)`, `LoadedRocketCartsNear(point, radius)`. A removed cart is retired, not deleted: it stays in the vehicle list (ids are list indices) as a
+  destroyed vehicle that never returns, is left out of the snapshot (clients drop it) and out of the round reset. `/spawn rocket_cart` (admin) puts one down in front of the admin.
+- **On the wire (protocol 67).** The trailer's vehicle record is a vehicle's with two fields read differently (`VehicleRecord.MakeTrailer`): the pitch field (a driver's id on any other vehicle) is the id of the tractor
+  it is hitched to, 0 when loose, and bit 6 of the health byte (free until then) is the loaded flag. Position and yaw are the trailer's own, so everything that reads a vehicle record (the hit box, the solid, bullet
+  holes) works on it; nothing else is sent. The articulation of a hitched trailer is its record's yaw less its tractor's yaw in the same snapshot (the two are within a quantum of the server's `Phi`).
+- **Client.** `NetClient.Tow.cs`. A trailer is never drawn from its own raw record while hitched: `RenderTrailers` runs after every tractor has its drawn pose and places the trailer from the drawn tractor's hitch
+  (`tractor.Node.GlobalTransform * hitch`, so it leans with the tractor) and the articulation, then fits the ground (pitch from the hitch's height over the axle's ground, `TowModel.PitchFor`; roll from the ground
+  under the wheels; smoothed), rolls `wheel_l`/`wheel_r` with the drawn speed and shows `missile` while loaded. Loose, it is drawn at its record on the ground. A tractor's driver sees the tractor as that type is
+  seen: the jeep and the flak truck are `CarModel` types, interpolated for everyone, so their trailer's articulation is the interpolated snapshot's (it cannot lag its tractor, both come from the same
+  render tick); a `DriveModel` type with a `tow` block (none yet) is predicted by its driver, who also steps a copy of the trailer's body with `TowModel` after it (`DrivePrediction.AttachTrailer`, the effect
+  and the blocked-trailer hold as the server's) and reconciles it from the articulation the snapshot gives. A coupling or an uncoupling (the record's tractor id changes) plays `tow.clunk` through `PlayCarSound`
+  (car-design section 9) and toasts the driver ("Trailer hitched" / "Trailer unhitched"); while towing the driver's prompt adds "Hold E  Unhitch trailer".
+
+Approximations and open points: the trailer's mass is its loaded one whether or not the missile is on; the tractor's crash damage from a blocked trailer is the wall's rule on the pair's speed; a hitched
+trailer ignores bumps; the trailer's wheels and missile are not tested without the model (the grey box has none of the nodes); no trailer sound beyond the clunk.
 
 ## 7b. Items and equipment (#261)
 
@@ -526,8 +579,8 @@ items, ADR 0018 (#267, protocol 31).
   the origin is the middle of the head). `CharacterView.SetWorn(slot, item)` (`CharacterView.Worn.cs`) hangs it on the head bone, so it follows every
   clip, stance, the prone roll and the ragdoll, and hides what it replaces: the helmet and the hair, the head's foliage and the face paint. The same call
   dresses remote players (from event 194), the local player's seat view, a corpse that carries the item (from event 191: gone again once taken or crumbled)
-  and the menu figure (`CamoPreview.ShowWorn(slot, item)`). The Bigfoot head is `scripts/make_bigfoot_head_model.py` (a faceted ape-like head, 1142
-  triangles, about 30 % bigger than the head it covers). An item without a model is worn but not drawn.
+  and the menu figure (`CamoPreview.ShowWorn(slot, item)`). The Bigfoot head is the giant's own head from `scripts/make_bigfoot_model.py` (732
+  triangles, about twice the width of the head it covers). An item without a model is worn but not drawn.
 - **Icons.** `IconRegistry` has `IconKind.Item`: `ui/icons/items/<id>.png` (128x128, a render of `model` from `tools/render_icons.gd`); an item without a
   file shows `item_fallback.png` (a plain box glyph from `make_icons.py`), not the crossed placeholder.
 - **Granting it for tests.** An admin's `/give <item> [player]` gives a fresh item (no pickups counted) to a living player, or to the admin: worn when the slot is empty, else in the bag; refused when both are full.
@@ -552,9 +605,22 @@ despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: 
   `/event current end` kills it (a win, for testing), `/event current cancel` removes it with no reward. The first version announces nothing but a system chat line:
   it does not use the intel board (`AnnounceIntel` is the one call that would).
 - **A world entity, not a bot** (wire type 60). The state byte is the act (`BigfootAct`, bits 0-3), a bit that flips on every hit that did not kill, the phase (bits 5-6) and
-  the enrage (bit 7); the owner field is the player it holds; the hp byte is the hit count left in percent. The client draws the placeholder giant
-  (`quaternius-giant/giant.glb`, `assets/quaternius-giant/NOTICE.txt`) and picks the clip from the act. Idle, Walk, Run, Death and HitRecieve map directly; every attack
-  reuses the Attack clip stretched over the wind-up, plus a procedural lean, rise and wobble of the whole figure (`MoveBigfoot`). The model and the sounds are placeholders
+  the enrage (bit 7); the owner field is the player it holds; the hp byte is the hit count left in percent. The client draws the generated giant
+  (`drycastle-generated-models/bigfoot.glb`, `scripts/make_bigfoot_model.py`: a skinned mesh, 26 bones, 14 clips) and picks the clip from the act (`ClipFor`): every act
+  has its own, and a wind-up is stretched over its act's time so the blow lands with the server's. Walk and Run play at the speed it moves (`PaceGait`: ground speed over
+  the clip's stride, `movement.walk_stride_m` / `run_stride_m`). A hit makes it flinch only while it stands. When a phase begins or it enrages it owes a roar: the first tick it has no
+  attack to make it stops, faces its target and roars for `BigfootRules.RoarSeconds` (the act `Roar`); its arrival plays the same clip on the client. A launch out of a
+  hold is the one-handed Hurl clip, any other the two-handed Launch. The chase (#285): it runs until its target is within 0.8 x `run_beyond_m` and stands until the
+  target is 1.2 m beyond `stop_distance_m`, gathers and sheds speed, turns on the spot at a walk, keeps a way round a building for 0.6 s and faces it, treats under
+  0.3 s of no way through as still moving, and its height follows the ground at up to 20 m/s; the client turns the figure to the server's yaw quickly instead of
+  jumping. The hunt (`bigfoot.json` `hunt`): every `roar_every_seconds` of the fight, and at a new phase or
+  the enrage, it stops and roars (the players' breather), then picks one player within `radius_m` at random and sprints at them whatever the distance, with no log and
+  no stomp on the way; on them it lunges (the grab, its cooldown ignored, made on the move at 0.7 x its run, faster than a player sprints), and a miss sprints on, until
+  it holds them, they are dead or gone, or `max_seconds` pass; the clock to the next roar starts when the hunt ends. Between hunts it walks faster than a player walks
+  (`walk_speed` 6 against 5) and throws logs only from 18 m. Its corpse is over five metres long and is looted for its head, so the reach (`CorpseRules.ReachMetres`) is measured from where
+  the head lies (`reward.corpse_head_m`, `Corpse.ReachPoint`), on the server and for the prompt; once the head is taken the Head bone is shrunk away and the stump of the
+  neck (part of the model, inside the skull until then) shows. The log it winds up with rides its right hand; the fist that holds a player rocks the whole figure
+  (`MoveBigfoot`). The sounds are still placeholders
   (`BigfootSounds` names the sounds the game already has).
 - **Hit count, not hit points.** It dies after `hits.per_player` x participants hits (participants: living players within `participant_radius_m`; the number only goes
   up while it fights). Shots reach it through the normal pipeline: it is a `HitTarget` (id `BigfootRules.TargetId` 60000) with `Scale` 2, a player capsule twice as tall
@@ -615,7 +681,7 @@ Not verified (compiled, not run; the brief for these tickets forbade running the
 - Shaders: `water_surface.gdshader` (compiles on Forward+; its look is not checked in the game), `sky_daynight.gdshader`, `camo_suit.gdshader`,
   `camo_tuft.gdshader`, `gunship_thermal.gdshader`. The first real compile is the first check.
 - Layout, scenes and HUD positions: streak panel, minimap texture size, XP strip, breath bar, care package prompt, gunship
-  overlay, the aircraft overlays. Visual fit of the jeep and quad models.
+  overlay, the aircraft overlays. Visual fit of the jeep and quad models (the jeep is the Synty cargo truck now, #325).
 - Lamp energy (2.2 peak), headlight cones and offsets, day curve tuning.
 
 ui-work definition of done not met on most UI tickets (#118, #119, #122, #123, #124, #126, #127, #128, #129, #130, #139,
@@ -655,6 +721,17 @@ The board goes to every client whole in event kind 185 (`IntelSync`, `IntelCodec
 The intel room is the floor of the military hangar: the first placed object of `data/intel.json` `base_asset` (`pack:synty-military/SM_Bld_Hangar_01`; `MapLoader.FirstObjectOfAsset`, lowest object id). `room` in that file lays the screen out in the object's own frame (`floor_m`, `at` [x, z], `facing`, `bottom_m`, `width_m`, `height_m`), and `IntelRoom.Place` (`ShooterCore/Intel`) turns it into a world anchor from the object's position, turn and scale in objects.json, never from the model, so it is the same for a player who has only the placeholder box. The screen is on the -z end wall, on the door panel x 0 to 4.56 (inner face z = -16.006), facing the +z end; the prefab's doors are solid, so `room.open_parts` (`SM_Bld_Hangar_Door_Small_01`, the small door of the +z end) is hidden and stops colliding (`IntelScreen.OpenEntrance`, `MapLoader.OpenObjectParts`, client and server). A map without such an object uses the command post of `base_bunker` (the wall the pipeline reserves, `bunkers.json` `intel`; `docs/pipeline.md`); with neither there is no intel room. The game draws the screen (`IntelScreen`, content in `IntelScreenView`) only within `view_range_m` of the camera. With several events the screen shows each for `rotate_seconds` in turn. `make shooter-intel-shots` renders the content with made-up events for review.
 
 ## 9. Wire protocol
+
+(Version 67 is towing, section 7 "Towing and the rocket cart": a trailer's vehicle record carries the id of the tractor it is hitched to in the pitch field (0 loose, the field a driver's id is in for every other vehicle) and bit 6 of the health byte says it is loaded (`VehicleRecord.MakeTrailer`, `Tractor`, `Loaded`). Nothing else is new: a hitched trailer's articulation is the difference of its yaw and the tractor's yaw in the same snapshot, so the pose is the same bytes as any vehicle's.)
+(Version 69 is loading a Scud truck from a rocket cart and the Scud event: launcher state 10 `Loading`, `ScudNotice` codes 11-13, and an intel board entry's place may be an area, a centre and a radius in metres, `IntelCodec` flags bit 4. Summary on `Wire.ProtocolVersion`, docs/events/scud.md, ADR 0034.)
+(Version 70 is the plantation: player status bit 2 `High` in the status mask, issue 364. Summary on `Wire.ProtocolVersion`, GLOSSARY "High".)
+(Version 68 is the Scud truck (the concurrent towing work takes 67): event kinds 80-85 (`ScudCommand` client to server; `ScudState`, `ScudView`, `ScudLaunch`, `ScudImpact` and `ScudNotice` to the clients, payloads in `ScudCodec`), world entity type 11 (the Scud missile, not an Interest type), special weapon 237, vehicles.json `launcher` and `returns`, scud.json.)
+
+(Version 66 raised the seat limit to five: the seats record (entity type 7) carries the occupant of seat 4 in its position X, the seat switch request and state accept up to 5 seats, `VehicleSeat.MaxSeats`; ADR 0026.)
+
+(Version 65 is the harvester catch, #351, in the summary on `Wire.ProtocolVersion`.)
+
+(Version 64 added the Lock-on launcher's event kinds 246-248, ADR 0031.)
 
 (This section was written at version 24; the later bumps are in the summary on `Wire.ProtocolVersion`. Version 29 added event kind 185, `IntelSync`, section 8c; version 30 added kind 194, `WornItems`, section 7b; version 32 the Bigfoot event, section 7c.)
 
@@ -718,6 +795,15 @@ Event kinds (`EventKind`, one byte in the event message):
 | | | 203 | TakeGroundItem (client to server) |
 | | | 210 | BigfootFx (server to everyone: the Bigfoot's one-shot effects, kinds 210-219 are the events, #264) |
 | | | 211 | BigfootTrail (server to everyone, and to a joiner: the footprints to its corpse) |
+| | | 246 | LockState (server to the shooter: u8 `LockPhase`, u16 Aircraft entity, u8 tracking, f32 progress, f32 lock seconds; 12 bytes; kinds 246-248 are the Lock-on launcher, #347, ADR 0031, protocol 64) |
+| | | 247 | LockAlert (server to the Aircraft's owner: u8 `LockAlert` level, u16 Aircraft entity; 3 bytes) |
+| | | 248 | HomingLaunch (server to everyone: u16 id, u16 owner, u8 weapon, f32 x, y, z origin, u16 Aircraft entity, f32 flight seconds; 23 bytes; the Explosion with the same id ends it) |
+| | | 80 | ScudCommand (client to server: u8 cmd (Open, Close, View, Lock, Confirm, Withdraw, Abort), f32 x, f32 z, f32 zoom; 13 bytes; kinds 80-85 are the Scud truck, protocol 68) |
+| | | 81 | ScudState (server to everyone on a change, and to a joiner for each launcher that is not stowed: u16 car, u8 `ScudLauncherState`, f32 elapsed, f32 left (-1 none), u8 rack angle at the state's start, u16 operator, u8 has lock, 3 x f32 lock, u8 confirmed seats, u8 seats that must; 29 bytes) |
+| | | 82 | ScudView (server to the rest of the crew while the operator's screen is open: u16 car, f32 x, f32 z, f32 zoom, at most 5 a second; 14 bytes) |
+| | | 83 | ScudLaunch (server to everyone: u16 missile entity, u16 car, u16 placer, 3 x f32 from, 3 x f32 target, f32 flight seconds; 34 bytes) |
+| | | 84 | ScudImpact (server to everyone: u16 missile entity, u16 placer, 3 x f32 at; 16 bytes) |
+| | | 85 | ScudNotice (server to the crew: u8 `ScudNoticeCode`, why a command did nothing or a proposal ended) |
 
 Message tags (`Wire.T*`): Hello 1, Welcome 2, Join 3, Leave 4, Event 5, Profile 6, SaveLoadout 7, SelectSlot 8, Error 9,
 SaveCamo 10, Input 11, Snapshot 20, WorldSnapshot 21. SaveLoadout is slot, six item strings, name (string), seq (u32 LE).

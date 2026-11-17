@@ -81,6 +81,23 @@ public partial class Player : CharacterBody3D
     /// crosshair stays on the aim the server resolves. Never sent, never part of the state; zero in the chase and seat cameras.
     /// </summary>
     public float ViewDip { get; set; }
+    /// <summary>
+    /// Cosmetic change of the on-foot field of view, degrees: the breathing FOV of a high player's nausea. Never sent. Not applied while a scope (<see cref="ZoomFov"/>) or a chase, cockpit or flight camera
+    /// owns the FOV.
+    /// </summary>
+    public float FovWobble { get; set; }
+
+    /// <summary>
+    /// Turns the real look by these radians (the high player's nausea): unlike the cosmetic offsets above this IS the aim, so the look that is sent, the shots and the crosshair all move with it. The pitch
+    /// stays within the mouse's range. Not while the camera is not the body's (<c>_chase</c>) or is locked.
+    /// </summary>
+    public void NudgeLook(float yawRad, float pitchRad)
+    {
+        if (_chase || LookLocked || (yawRad == 0 && pitchRad == 0)) return;
+        _yaw += yawRad;
+        _pitch = Mathf.Clamp(_pitch + pitchRad, -1.55f, 1.55f);
+    }
+
     float _lookYaw, _lookPitch;
     /// <summary>The mouse does not turn the view (the demon's pounce locks the camera on it).</summary>
     public bool LookLocked { get; set; }
@@ -146,7 +163,7 @@ public partial class Player : CharacterBody3D
         if (!_chase) _camera.Position = _eyeLocal + ViewOffset + Vector3.Down * ViewDip; // the eye glides over a reconcile (ViewOffset) and dips on a landing (ViewDip); the physics sets the eye's place per tick
         if (!_chase) _camera.Rotation = new Vector3(RecoilState.ClampPitch(_pitch + AimKick.X + ViewSway.X), _yaw + AimKick.Y + ViewSway.Y, ViewRoll);
         if (!_chase && CutCamera?.Invoke(_camera.GlobalTransform) is { } cut) _camera.GlobalTransform = cut;
-        var target = ZoomFov > 0 ? ZoomFov : (GameSettings.Current.Fov + FovBoost) * (IronSightZoom ? IronSightFovScale : 1f);
+        var target = ZoomFov > 0 ? ZoomFov : (GameSettings.Current.Fov + FovBoost + (_chase ? 0f : FovWobble)) * (IronSightZoom ? IronSightFovScale : 1f);
         if (Mathf.IsEqualApprox(_fovNow, target)) return;
         _fovNow = Mathf.Lerp(_fovNow, target, 1f - Mathf.Exp(-18f * (float)delta));
         _camera.Fov = _fovNow;
@@ -296,7 +313,8 @@ public partial class Player : CharacterBody3D
     public void SeatView(Vector3 feet, float eyeHeight)
     {
         GlobalPosition = feet;
-        _camera.Position = new Vector3(0, eyeHeight, 0);
+        _eyeLocal = new Vector3(0, eyeHeight, 0); // _Process puts the camera at _eyeLocal each frame: without this it would be back at the standing eye
+        _camera.Position = _eyeLocal;
     }
 
     /// <summary>Turret camera (a gunship's owner): the camera sits at the turret and looks along the given world yaw and pitch. The body does not move; <see cref="EndChase"/> ends it.</summary>

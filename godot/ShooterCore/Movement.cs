@@ -78,7 +78,7 @@ public struct MoveInput
     /// <summary>Yaw in radians, Godot convention: 0 faces -Z, positive turns left (counter-clockwise seen from above).</summary>
     public float Yaw;
     public MoveButtons Buttons;
-    /// <summary>Weapon speed multiplier (bazooka 0.85); 1 for none.</summary>
+    /// <summary>Weapon speed multiplier (rpg 0.85); 1 for none.</summary>
     public float SpeedScale;
 
     public readonly bool Has(MoveButtons b) => (Buttons & b) != 0;

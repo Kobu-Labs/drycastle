@@ -235,6 +235,31 @@ public class MeadowDataTests
     }
 
     [Fact]
+    public void ForestFloorLayersReachAsFarAsTheirFarthestKind()
+    {
+        MeadowLayer Layer(string name, params string[] kinds) => new(name, 1f, 1f, 1f, [[.. kinds.Select(k => new MixEntry(k, 1f / kinds.Length))]]);
+        // "floor" shows the 60 m kinds; toadstools and stumps ride "litter" (leaf, stick), which stays at 40 m
+        Assert.Equal(60f, MeadowSettings.RangeOf(Layer("floor", "moss_mound", "branch", "fern_big"), 1f));
+        Assert.Equal(40f, MeadowSettings.RangeOf(Layer("litter", "leaf", "stick", "mushroom", "stump_small"), 1f));
+        Assert.Equal(30f, MeadowSettings.RangeOf(Layer("floor", "moss_mound", "branch", "fern_big"), 0.5f));
+        // the pack's undergrowth draws to 70 m: everything suppressed under it is inside that
+        Assert.All(MeadowSettings.PackUndergrowthKinds, k => Assert.InRange(ClutterSettings.RangeOf(k), 30f, 60f));
+    }
+
+    [Fact]
+    public void PackUndergrowthReplacesToadstoolsBranchesAndBigFernsOnly()
+    {
+        foreach (var kind in new[] { "mushroom", "branch", "fern_big" })
+        {
+            Assert.True(MeadowSettings.IsSuppressed(kind, true), kind);
+            Assert.False(MeadowSettings.IsSuppressed(kind, false), kind);
+        }
+        // no twin in the pack's undergrowth (its stumps are solid ground objects, there are no moss mounds), and the older kinds are not this change's to remove
+        foreach (var kind in new[] { "moss_mound", "stump_small", "fern", "leaf", "stick", "tuft" })
+            Assert.False(MeadowSettings.IsSuppressed(kind, true), kind);
+    }
+
+    [Fact]
     public void BadFilesAreRefused()
     {
         Assert.Throws<FormatException>(() => MeadowFile.Parse(new byte[] { 1, 2, 3 }));

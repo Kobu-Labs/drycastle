@@ -16,6 +16,19 @@ BR=$(git branch -r --list 'origin/release-*v' --sort=-version:refname | tr -d ' 
 LB=rc-${BR#release-}                                                                    # rc-0.10v
 ```
 
+**Project board** (https://github.com/orgs/Kobu-Labs/projects/7, field `Tested` = No/Yes/Failed). Helper, run for an issue N and value V (No|Yes|Failed); adds it to the project if missing (idempotent), then sets the field:
+```bash
+PJ=PVT_kwDOBbn3Qs4BsAfd; FD=PVTSSF_lADOBbn3Qs4BsAfdzhqQmVg
+declare -A OPT=([No]=693d3fcb [Yes]=aa5fbb44 [Failed]=229d2260)
+tested() { # tested N V
+  local item=$(gh project item-add 7 --owner Kobu-Labs --url "$(gh issue view $1 --json url -q .url)" --format json -q .id)
+  gh project item-edit --project-id $PJ --id "$item" --field-id $FD --single-select-option-id ${OPT[$2]}
+  # entering the RC (No) = work started: Status -> In Progress (not Todo)
+  [ "$2" = No ] && gh project item-edit --project-id $PJ --id "$item" --field-id PVTSSF_lADOBbn3Qs4BsAfdzhqQjLM --single-select-option-id 47fc9ee4
+}
+```
+The board view per RC: filter `label:rc-<ver>v`. `Tested` is per issue, not per RC: carried-over issues keep their value; reset by hand if retest needed.
+
 ## Actions
 
 **Add to latest RC** ("put it in the RC", "add #N"):
@@ -27,7 +40,7 @@ LB=rc-${BR#release-}                                                            
    SHA=$(git -C $WT rev-parse --short HEAD); git worktree remove --force $WT
    ```
    Conflict: resolve in `$WT`, never in the main checkout. Local `$BR`, if any, is stale; do not touch it.
-3. `gh issue edit N --add-label $LB`
+3. `gh issue edit N --add-label $LB`; `tested N No` (project helper above; also sets Status=In Progress)
 4. `gh issue comment N --body "In release candidate ${BR#release-} (branch $BR, merge <sha>). <one line what changed>. To test: <concrete steps>"`. The checklist reads the text after "To test: ".
 5. Report branch, merge sha, label.
 
@@ -40,7 +53,7 @@ gh issue list --label $LB --state all --limit 200 --json number,title,state,comm
 ```
 End with counts: passed / untested.
 
-**Result** ("#N passed" / "#N failed: why"): `gh issue comment N --body "RC pass: <what was checked>"`, or `"RC fail: <what>"` and `gh issue reopen N` if closed. A fix goes on the issue branch and is merged into `$BR` again and pushed (re-run the Add steps 2 and 4, comment "RC fix merged <sha>").
+**Result** ("#N passed" / "#N failed: why"): `gh issue comment N --body "RC pass: <what was checked>"`, or `"RC fail: <what>"` and `gh issue reopen N` if closed. Also `tested N Yes` (pass) / `tested N Failed` (fail). A fix merged again: `tested N No`. A fix goes on the issue branch and is merged into `$BR` again and pushed (re-run the Add steps 2 and 4, comment "RC fix merged <sha>").
 
 **New RC** ("start RC 0.11v"): `git fetch -q origin && git push origin origin/main:refs/heads/release-0.11v`, `gh label create rc-0.11v --color fbca04 --description "In release candidate 0.11v (branch release-0.11v): to test"`. From then on that is the latest.
 

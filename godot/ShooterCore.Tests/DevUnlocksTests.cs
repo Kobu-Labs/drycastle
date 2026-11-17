@@ -54,7 +54,7 @@ public class DevUnlocksTests
         Assert.Contains(new Unlock("streak", "moab"), all);
         Assert.Contains(DevUnlocks.Marker, all);
         Assert.Equal(all.Count, all.Distinct().Count());
-        Assert.DoesNotContain(new Unlock("weapon", "bazooka"), all);
+        Assert.Contains(new Unlock("weapon", "rpg"), all); // a secondary since #348
         Assert.DoesNotContain(new Unlock("weapon", "knife"), all);
         Assert.True(DevUnlocks.IsMarked(all));
         Assert.False(DevUnlocks.IsMarked(owned));

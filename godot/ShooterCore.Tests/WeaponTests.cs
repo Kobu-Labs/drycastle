@@ -33,7 +33,7 @@ public class WeaponTests
         Assert.Equal("pistol", r.W.Current.Id);
         for (var s = 1; s <= File.Weapons.Count; s++) { Assert.Equal(File.Weapons[s - 1].MagazineSize, r.W.Mag(s)); Assert.Equal(File.Weapons[s - 1].ReserveAmmo, r.W.Reserve(s)); }
         Assert.Equal(File.Weapons.Count, r.W.Hotbar.Count);
-        Assert.Equal("bazooka", r.W.Hotbar[2].Id);
+        Assert.Equal("rpg", r.W.Hotbar[2].Id);
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public class WeaponTests
         r.W.RefillReserves();
         Assert.Equal(60, r.W.Reserve(1));
         Assert.Equal(90, r.W.Reserve(2));
-        Assert.Equal(4, r.W.Reserve(3));
+        Assert.Equal(2, r.W.Reserve(3));
         Assert.True(r.W.Changed);
     }
 

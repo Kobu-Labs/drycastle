@@ -44,12 +44,12 @@ public partial class NetClient
 
     /// <summary>
     /// The input carries the view as the head's look (<see cref="MoveButtons.HeadLook"/>): seated in a first-person view, a passenger's own eyes or the
-    /// driver's cockpit view. In the chase view the yaw is the camera's orbit, and a gun's rider aims instead, so the bit stays clear there.
+    /// driver's cockpit view, or a gun's sight (<see cref="RiderViewMode"/>). In the chase view the yaw is the camera's orbit, and a gun's rider aims instead, so the bit stays clear there.
     /// </summary>
     bool HeadLookWanted()
     {
-        if (!_driving || Dead || _me == null || _gunship != null || _controlling || !Mode.ViewIsBody || MySeat() is not { } s) return false;
-        return s.Index > 0 || _cockpitView && CockpitOf(s.Car) != null;
+        if (!_driving || Dead || _me == null || _gunship != null || _controlling || !Mode.ViewIsBody || MySeat() == null) return false;
+        return _view.FirstPerson;
     }
 
     /// <summary>The local player is not in a vehicle any more: the schematic goes with them.</summary>
@@ -84,8 +84,9 @@ public partial class NetClient
     }
 
     /// <summary>
-    /// A rider who is not the driver (the chase camera) and not the flak gunner (the turret camera) sees from their seat: the camera sits at the seat's
-    /// position on the moving vehicle and the mouse look is their own, as in first person. A chase or turret camera from the seat before ends here.
+    /// A rider of a sight seat (an armed seat, a gunner's the flak and the door gun do not use this, the Scud operator's: <see cref="RiderView.Sight"/>) sees from their seat: the camera sits at the
+    /// seat's position on the moving vehicle and the mouse look is their own, as in first person. A chase or turret camera from the seat before ends here.
+    /// The other seats' first-person view is <see cref="CockpitFrame"/>.
     /// </summary>
     void RideSeat(CarView v, int seat)
     {
@@ -96,7 +97,10 @@ public partial class NetClient
         _me.EndChase(_me.Yaw); // no-op unless a chase or turret camera was on
         var feet = SeatAnchor(v).GlobalTransform * new Vector3(o[0], o[1], o[2]); // on the body as it is drawn: the seat leans and bobs with it
         // a seat in the open is drawn and hit seated (or standing in the ring): the eye is that figure's, not a standing body's on the seat
-        if (seats[seat].Exposed) _me.SeatView(feet, SeatAimRules.EyeHeight(seats[seat])); else _me.GlobalPosition = feet;
+        // (a covered seat that sets eye_height has the eye at that height over its feet: the Humvee's roof is under a standing eye)
+        if (seats[seat].Exposed) _me.SeatView(feet, SeatAimRules.EyeHeight(seats[seat]));
+        else if (seats[seat].EyeHeight is { } eye) _me.SeatView(feet, eye);
+        else _me.GlobalPosition = feet;
         if (seats[seat].Armed)
         {
             // the look is the aim, and it is held inside the seat's arc, which turns and tilts with the vehicle: the view cannot go where the shots cannot

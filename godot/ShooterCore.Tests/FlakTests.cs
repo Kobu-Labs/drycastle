@@ -304,4 +304,26 @@ public class FlakTests
         world.Damage(id, 1_000_000, 8);
         Assert.Null(world.StateOf(id)); // shot down: despawned as Destroyed
     }
+
+    // ---- the model (scripts/make_flak_model.py; docs/standards/car-design.md part A) ----
+
+    [Fact]
+    public void Its_model_has_a_hull_the_wheels_are_siblings_of_a_hollow_cab_with_a_wheel_and_a_pane_in_every_opening()
+    {
+        var def = Shipped.Vehicles.Vehicles.Single(v => v.Id == "flak");
+        var n = AmphibiousModelTests.Nodes(def.Model);
+        foreach (var name in new[] { "hull", "cab", "turret", "seat_driver", "seat_gunner", "steering_wheel_rim", "steering_wheel_spokes", "light_head_l", "light_tail_r",
+                     "wheel_fl_steer", "wheel_fr_steer", "wheel_fl", "wheel_fr", "wheel_ml", "wheel_mr", "wheel_rl", "wheel_rr" })
+            Assert.True(n.ContainsKey(name), $"the model has no node {name}");
+        for (var i = 0; i < def.Glass.Count; i++) Assert.True(n.ContainsKey($"glass_{i}"), $"the model has no node for pane {i}");
+        Assert.Equal(Vector3.Zero, n["hull"]);
+        foreach (var w in new[] { "wheel_fl", "wheel_fr", "wheel_ml", "wheel_mr", "wheel_rl", "wheel_rr" }) Assert.Equal(0.56f, n[w].Y, 2); // the radius: the wheels stand on the ground
+        Assert.Equal(new Vector3(def.Seats[0].Offset[0], def.Seats[0].Offset[1], def.Seats[0].Offset[2]), n["seat_driver"]);
+        // the driver's wheel is in front of the driver's eye, inside the cab, where the rig draws its own
+        var eye = SeatEye.For(def, 0);
+        Assert.InRange(n["steering_wheel_rim"].Z, -2.1f, eye.Z);
+        Assert.InRange(MathF.Abs(n["steering_wheel_rim"].X - eye.X), 0f, 0.1f);
+        // the panes of the driver's view are in front of the eye
+        Assert.All(def.Glass.Where(g => g.Id.StartsWith("windscreen")), g => Assert.True(g.Centre[2] < eye.Z));
+    }
 }

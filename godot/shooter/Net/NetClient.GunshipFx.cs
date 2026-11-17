@@ -33,7 +33,7 @@ public partial class NetClient
         if (marks) BulletSurfaceHit(originV, endV);
     }
 
-    /// <summary>The casing a weapon byte ejects: the jeep's roof gun a big one, a hand weapon by its category, none for melee, launchers and the rest.</summary>
+    /// <summary>The casing a weapon byte ejects: a vehicle machine gun a big one, a hand weapon by its category, none for melee, launchers and the rest.</summary>
     CasingKind? CasingKindOf(byte weapon) => weapon == SpecialWeapons.VehicleGun ? CasingKind.Heavy : Weapons != null && weapon < Weapons.Weapons.Count ? CasingFx.KindOf(Weapons.Weapons[weapon]) : null;
 
     /// <summary>One gunner's tracers this tick: each one drawn as its own shot.</summary>
@@ -64,7 +64,7 @@ public partial class NetClient
         {
             var b = m.Blasts[i];
             var at = new Vector3(b.At.X, b.At.Y, b.At.Z);
-            if (i == 0 && Sfx.Enabled) Sfx.Play3D(SoundRules.Event("explosion", "bazooka"), at);
+            if (i == 0 && Sfx.Enabled) Sfx.Play3D(SoundRules.Event("explosion", "rpg"), at);
             if (Mathf.Abs(b.Radius - FlakPuffRadius) < 0.05f) FlakFx.Burst(Owned, at, b.Radius); // an airburst: black flak smoke, not a fireball
             else RocketFx.Explode(Owned, at, b.Radius);
             ShakeFor(at, b.Radius);

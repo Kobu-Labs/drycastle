@@ -13,7 +13,7 @@ nothing is sent over the network.
   trunk's reach from ``trees.json``).
 * **How much** (per layer and parcel type, 0..1 of ``max_per_cell``): ``interior`` everywhere, ``edge`` within the
   recipe's edge band of the boundary, ``tone`` on tone patches, ``litter`` on leaf litter, ``tree`` near a trunk,
-  ``bare`` on dirt and gravel (replaces: no tufts on a patch of soil, pebbles instead); furrows get nothing.
+  ``bare`` on dirt and gravel (replaces: no tufts on a patch of soil, pebbles instead); furrows and puddles get nothing.
   Then a smooth value noise (``noise_m`` lattice, ``noise_amp``) makes patches of thicker and thinner growth.
 * **Zones** (format 3): one more plane per chunk, the *zone byte* of a cell. Its high nibble is the *mix* (0..15): a patch of
   ground where one species dominates, 3 to 8 m across (a Voronoi patch per ``patch_m``, so the shares are exact), with
@@ -238,8 +238,9 @@ def zone_cells(meadow: Meadow, ctx, atype: str, gx: np.ndarray, gy: np.ndarray, 
     ``unmown_m`` of a fence, a wall or the edge of a building) and of those beside water. Mix: a Voronoi patch of
     ``patch_m`` picks it from the type's shares (``zones.<type>.mixes``, ``[[mix id, share], ...]``); the rules'
     ``unmown_mix`` overrides it where nobody mows, ``wet_mix`` beside water (``wet_m``), ``edge_dry_mix`` in half of the
-    edge band (``edge_dry_share``), when the type has them. Dryness: neutral 8, plus ``dry_edge`` in the edge band, minus
-    ``fresh_unmown`` where nobody mows and ``fresh_water`` beside water."""
+    edge band (``edge_dry_share``), ``swamp_mix`` on swamp ground (``ctx.swamp``, see detail.py: last, over all of them), when the type
+    has them. Dryness: neutral 8, plus ``dry_edge`` in the edge band, minus ``fresh_unmown`` where nobody mows and ``fresh_water``
+    beside water and on swamp ground."""
     zc, cell = cfg["zones"][atype], meadow.cell_m
     cx, cy = (gx + 0.5) * cell, (gy + 0.5) * cell
     owner = voronoi01(gx + 0.5, gy + 0.5, float(cfg["patch_m"]) / cell, 3000)
@@ -267,9 +268,13 @@ def zone_cells(meadow: Meadow, ctx, atype: str, gx: np.ndarray, gy: np.ndarray, 
         mix = np.where(wet, int(zc["wet_mix"]), mix)
     if "unmown_mix" in zc:
         mix = np.where(unmown, int(zc["unmown_mix"]), mix)
+    swamp = np.zeros(len(gx), bool)
+    if "swamp_mix" in zc and getattr(ctx, "swamp", None) is not None:
+        swamp = _inside(ctx.swamp, cx, cy)
+        mix = np.where(swamp, int(zc["swamp_mix"]), mix)
     if "dry_edge" in zc:
         dry = dry + np.where(edge, int(zc["dry_edge"]), 0)
-    dry = dry - np.where(unmown, int(cfg["fresh_unmown"]), 0) - np.where(wet, int(cfg["fresh_water"]), 0)
+    dry = dry - np.where(unmown, int(cfg["fresh_unmown"]), 0) - np.where(wet | swamp, int(cfg["fresh_water"]), 0)
     zone = (mix.astype(np.int64) << 4) | np.clip(dry, 0, 15)
     return zone.astype(np.uint8), unmown, wet
 
@@ -301,7 +306,7 @@ def add_parcel(meadow: Meadow, ctx, res, atype: str, free: BaseGeometry, cfg: di
         g = unary_union([p.geom for p in res.patches if p.layer in layers])
         return _inside(g, cx, cy)
 
-    bare, furrow, litter = zone(_BARE_LAYERS), zone(("furrow", "bed")), zone(("litter",))
+    bare, furrow, litter = zone(_BARE_LAYERS), zone(("furrow", "bed", "puddle")), zone(("litter",))  # nothing grows in a puddle
     tone = zone(("tone_a", "tone_b"))
     edge = np.zeros(len(gx), bool)
     if edge_band_m > 0:

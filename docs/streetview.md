@@ -54,13 +54,9 @@ cd pipeline
 uv run python -m drycastle_pipeline.streetview_follow --launch     # opens its own Chrome (signed out) on the village
 ```
 
-Open Street View in that window and walk. With `--points` (off by default) **stopping to look at a spot for about two
-seconds** drops a permanent point in the sketch `POLES` of `~/.local/state/drycastle/sketch.json`, where you are looking (8 m along the view;
-`--ahead M` changes it, `--at camera` puts it where you stand, `--dwell S` the wait, `--min-gap M` stops a second point
-close to the last one). Walking or turning drops nothing. The points show in the editor's Sketch tool (key 9) as
-A, B, C ... and Claude reads them with `get_sketch`; place poles on them later (`place_object` at each point). Each point is one
-undo step in the editor, and Ctrl+Z removes the last one. Without `--launch` it attaches to any Chrome started with
-`--remote-debugging-port=9222` (`--port` changes it). It only reads the address of the tab, never the imagery.
+Open Street View in that window and walk. Nothing is added to the sketches automatically. Without `--launch` it
+attaches to any Chrome started with `--remote-debugging-port=9222` (`--port` changes it). It only reads the address of the tab,
+never the imagery.
 Options: `--position-file PATH`, `--interval SECONDS`, `--start LAT,LON`, and `--sketch [PATH]`, which also keeps
 the position as a point and a view line in the sketch `STREETVIEW` (what Claude reads for "pole here"; every
 move is then an undo step in the editor, so it is off by default).

@@ -4,7 +4,7 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The seat panel (vehicle seat switch): a small top-down schematic of the vehicle the player sits in, bottom right above the vehicle readout, with the
+/// The seat panel (vehicle seat switch): the real top-view outline of the vehicle the player sits in, bottom right above the vehicle readout, with the
 /// seat they are in named above it ("Seat 2: Gunner") and the number keys that take another below it. It is text and shape, never colour alone, and
 /// ignores the mouse. State is set on change only (<see cref="SetSeats"/> compares references), so a frame costs a few comparisons.
 /// </summary>
@@ -21,7 +21,7 @@ public partial class Hud
     {
         // above the vehicle speed readout, which sits above the ammo panel and the progress strip
         const float above = 112 + 72 + 40 + 3 * ShooterTheme.Space;
-        _seatsPanel = Place(P("HudPanel"), 1, 1, -ShooterTheme.Margin, -ShooterTheme.Margin - above, SeatSchematicView.W + 2 * ShooterTheme.Space, 248);
+        _seatsPanel = Place(P("HudPanel"), 1, 1, -ShooterTheme.Margin, -ShooterTheme.Margin - above, SeatSchematicView.W + 2 * ShooterTheme.Space, 296);
         _seatsPanel.Visible = false;
         _root.AddChild(_seatsPanel);
         var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };

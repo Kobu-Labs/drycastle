@@ -16,12 +16,17 @@ namespace Drycastle.ShooterCore;
 /// <param name="Description">What it is, in a few sentences.</param>
 /// <param name="Risks">The dangers, one short line each.</param>
 /// <param name="StartsAt">When it begins, in seconds; a time in the past is an event that is under way.</param>
-/// <param name="Where">Ground position (x, z in the game's axes) when the event has a place; null when it has none (village-wide).</param>
+/// <param name="Where">Ground position (x, z in the game's axes) when the event has a place; null when it has none (village-wide). With <paramref name="Radius"/> it is the centre of an area, not the place itself.</param>
 /// <param name="Test">An admin's test event: the screen marks it as not real.</param>
 /// <param name="EndsAt">Server only, never sent: when the board drops the event by itself. Null: it stays until it is removed.</param>
+/// <param name="Radius">Metres: the place is an AREA of this radius round <paramref name="Where"/> (the event is somewhere inside it, the centre is not the event); null: <paramref name="Where"/> is the exact place. Needs a <paramref name="Where"/>.</param>
 public sealed record IntelEvent(
     string Id, string Kind, string Name, string Description, IReadOnlyList<string> Risks,
-    double StartsAt, Vector2? Where = null, bool Test = false, double? EndsAt = null);
+    double StartsAt, Vector2? Where = null, bool Test = false, double? EndsAt = null, float? Radius = null)
+{
+    /// <summary>The place is an area (a centre and a radius), not a point.</summary>
+    public bool IsArea => Where != null && Radius is > 0;
+}
 
 /// <summary>Where an event stands relative to its start time.</summary>
 public enum IntelStatus { Upcoming, Underway }
@@ -117,7 +122,7 @@ public sealed record IntelUpdate(IReadOnlyList<IntelEvent> Events, string Announ
 
 /// <summary>
 /// Payload of <see cref="EventKind.IntelBoard"/>: the whole board each time (so a late joiner and a refresh are the same
-/// message) plus which event, if any, is being announced now. Text is cut to the limits below and stripped of control
+/// message) plus which event, if any, is being announced now. A place is a point (flags bit 2) or an area, a centre and a radius in metres (bits 2 and 4: the radius follows the centre). Text is cut to the limits below and stripped of control
 /// characters, so what arrives is always short enough to fit the screen. Decoders return null for a payload that is cut short.
 /// </summary>
 public static class IntelCodec
@@ -126,6 +131,8 @@ public static class IntelCodec
     public const int MaxId = 32, MaxKind = 24, MaxName = 40, MaxDescription = 240, MaxRisks = 5, MaxRisk = 48;
     /// <summary>Time left is clamped to a day either way, which keeps a wrong clock from drawing nonsense.</summary>
     const float MaxSeconds = 86400f;
+    /// <summary>The largest search area a board may carry, metres (the map is a few kilometres across).</summary>
+    public const float MaxRadius = 20000f;
 
     /// <summary>Control characters out, trimmed, cut to <paramref name="max"/> characters without splitting a surrogate pair.</summary>
     public static string Clean(string? s, int max)
@@ -151,9 +158,11 @@ public static class IntelCodec
             PutText8(o, Clean(e.Kind, MaxKind));
             PutText8(o, Clean(e.Name, MaxName));
             PutText16(o, Clean(e.Description, MaxDescription));
-            o.Add((byte)((e.Test ? 1 : 0) | (e.Where != null ? 2 : 0)));
+            var area = e.IsArea;
+            o.Add((byte)((e.Test ? 1 : 0) | (e.Where != null ? 2 : 0) | (area ? 4 : 0)));
             PutF32(o, (float)Math.Clamp(e.StartsAt - now, -MaxSeconds, MaxSeconds));
             if (e.Where is { } w) { PutF32(o, w.X); PutF32(o, w.Y); }
+            if (area) PutF32(o, e.Radius!.Value);
             var risks = e.Risks.Select(r => Clean(r, MaxRisk)).Where(r => r.Length > 0).Take(MaxRisks).ToList();
             o.Add((byte)risks.Count);
             foreach (var r in risks) PutText8(o, r);
@@ -186,6 +195,14 @@ public static class IntelCodec
                 if (!float.IsFinite(x) || !float.IsFinite(z)) return null;
                 where = new Vector2(x, z);
             }
+            float? radius = null;
+            if ((flags & 4) != 0)
+            {
+                if (where == null || at + 4 > d.Length) return null; // an area needs its centre
+                var r = GetF32(d, ref at);
+                if (!float.IsFinite(r) || r <= 0 || r > MaxRadius) return null;
+                radius = r;
+            }
             if (at >= d.Length) return null;
             int n = d[at++];
             var risks = new List<string>(n);
@@ -194,7 +211,7 @@ public static class IntelCodec
                 if (GetText8(d, ref at) is not { } risk) return null;
                 risks.Add(risk);
             }
-            list.Add(new IntelEvent(id, kind, name, description, risks, now + Math.Clamp(left, -MaxSeconds, MaxSeconds), where, (flags & 1) != 0));
+            list.Add(new IntelEvent(id, kind, name, description, risks, now + Math.Clamp(left, -MaxSeconds, MaxSeconds), where, (flags & 1) != 0, Radius: radius));
         }
         return new IntelUpdate(list, announced);
     }

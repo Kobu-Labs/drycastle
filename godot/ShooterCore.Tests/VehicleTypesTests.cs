@@ -13,24 +13,28 @@ public class VehicleTypesTests
     // ---- the types ----
 
     [Fact]
-    public void JeepHasADriverSeatAGunnerSeatAndAGun()
+    public void JeepIsTheCargoTruckWithABenchOfThreeNoGunAndSixSkinsAndItStillTows()
     {
         var j = Type("jeep");
-        Assert.Equal(new[] { "driver", "gunner" }, j.Seats.Select(s => s.Role));
-        Assert.NotNull(j.Gun);
-        Assert.Equal(60, j.Gun!.Magazine);
-        Assert.True(j.Gun.Reserve > 0);
-        Assert.Equal(1, j.Variants); // one fixed olive drab, no colour variants
+        Assert.Equal(new[] { "driver", "passenger", "passenger" }, j.Seats.Select(s => s.Role));
+        Assert.Null(j.Gun);
+        Assert.Null(j.DoorGun);
+        Assert.NotNull(j.Tow);
+        Assert.StartsWith("pack:synty-vehicles/truck_", j.Model);
+        Assert.Equal(6, j.Variants); // the six Battle Royale atlases (#325)
+        Assert.Null(j.Tint);
     }
 
     [Fact]
-    public void QuadIsDriverOnlyWithNoGunAndNoModelFile()
+    public void QuadIsOneExposedRiderWithNoGunAndFourSkinsOfTheQuadBikeModel()
     {
         var q = Type("quad");
         Assert.Single(q.Seats);
+        Assert.True(q.SeatExposed(0)); // a rider in the open (ADR 0012)
         Assert.Null(q.Gun);
-        Assert.Equal("", q.Model);
-        Assert.NotNull(q.Tint);
+        Assert.StartsWith("pack:synty-vehicles/quad_", q.Model);
+        Assert.Equal(4, q.Variants);
+        Assert.Null(q.Tint);
     }
 
     [Theory]
@@ -54,11 +58,11 @@ public class VehicleTypesTests
     }
 
     [Fact]
-    public void QuadIsFasterThanABicycleButSlowerThanTheMotorcycle()
+    public void QuadIsSlowerThanTheMotorcycle()
     {
-        var f = Shipped(); var quad = Type("quad"); var moto = f.Vehicles[1]; var bike = f.Vehicles[2];
+        var f = Shipped(); var quad = Type("quad"); var moto = f.Vehicles[1];
         Assert.InRange(quad.TopSpeed * 3.6f, 80f, 100f);
-        Assert.True(bike.TopSpeed < quad.TopSpeed && quad.TopSpeed < moto.TopSpeed, "the quad sits between the bicycle and the motorcycle");
+        Assert.True(quad.TopSpeed < moto.TopSpeed, "the quad is slower than the motorcycle");
     }
 
     [Fact]
@@ -136,6 +140,63 @@ public class VehicleTypesTests
         Assert.False(s.TryEnter(5, 1));        // already seated
         Assert.Equal(1, s.SeatOf(6));
         Assert.False(s.HasFree);
+    }
+
+    [Fact]
+    public void AVehicleHasAtMostFiveSeats()
+    {
+        Assert.Equal(5, VehicleSeat.MaxSeats);
+        var s = new VehicleSeat(5);
+        for (ushort p = 1; p <= 5; p++) Assert.True(s.TryEnter(p)); // each takes the first free seat, in order
+        for (ushort p = 1; p <= 5; p++) Assert.Equal(p - 1, s.SeatOf(p));
+        Assert.False(s.HasFree);
+        Assert.False(s.TryEnter(6));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new VehicleSeat(6));
+    }
+
+    [Fact]
+    public void AFiveSeatedVehicleIsAcceptedAndASixSeatedOneIsNot()
+    {
+        VehiclesFile Cfg(int seats)
+        {
+            var v = new VehicleDef { Id = "x", TopSpeed = 10, Acceleration = 1, Brake = 1, TurnRadius = 1, MaxLateralAccel = 1, Hp = 10 };
+            v.Seats = new List<VehicleSeatDef> { new() { Role = "driver" } };
+            for (var i = 1; i < seats; i++) v.Seats.Add(new() { Role = "passenger", Offset = new float[] { 0, 1, i } });
+            return new VehiclesFile { Vehicles = { v } };
+        }
+        var ok = Cfg(5);
+        Assert.Same(ok, VehiclesFile.Validate(ok));
+        Assert.Throws<DataFileException>(() => VehiclesFile.Validate(Cfg(6)));
+    }
+
+    [Fact]
+    public void TheNearestFreeSeatOfAFiveSeatVehicleIsPickedAndTheCorpseSeatIsKicked()
+    {
+        var def = new VehicleDef { Id = "x", HalfWidth = 1, HalfLength = 2.5f };
+        def.Seats = new List<VehicleSeatDef>
+        {
+            new() { Role = "driver", Offset = new float[] { -0.5f, 1, -0.5f } },
+            new() { Role = "passenger", Offset = new float[] { 0.5f, 1, -0.5f } },
+            new() { Role = "passenger", Offset = new float[] { -0.5f, 1, 1f } },
+            new() { Role = "passenger", Offset = new float[] { 0.5f, 1, 1f } },
+            new() { Role = "gunner", Offset = new float[] { 0, 1.6f, 0.2f } },
+        };
+        var s = new VehicleSeat(5);
+        s.TryEnter(1, 0);
+        // standing at the rear right: seat 3 (0.5, 1) is nearest; take it
+        Assert.Equal(3, s.NearestFreeSeat(def, Vector3.Zero, 0, new Vector3(0.6f, 0, 1.2f), float.MaxValue));
+        s.TryEnter(2, 3);
+        // by the roof gunner's seat (0, 0.2) that one is the nearest free one
+        var from = new Vector3(0.1f, 0, 0.3f);
+        Assert.Equal(4, s.NearestFreeSeat(def, Vector3.Zero, 0, from, float.MaxValue));
+        s.TryEnter(3, 4);
+        // a corpse in seat 4 (the last): only a boarder who kicks corpses can take it
+        s.Exit(3); s.Block(4);
+        Assert.NotEqual(4, s.NearestFreeSeat(def, Vector3.Zero, 0, from, float.MaxValue));
+        Assert.Equal(4, s.NearestFreeSeat(def, Vector3.Zero, 0, from, float.MaxValue, kickCorpses: true));
+        Assert.True(s.TryBoard(9, 4, out var kicked));
+        Assert.True(kicked);
+        Assert.Equal(9, s.Occupant(4));
     }
 
     [Fact]

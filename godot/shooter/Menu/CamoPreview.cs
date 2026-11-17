@@ -102,6 +102,9 @@ public sealed partial class CamoPreview
         _overlay.Dropped = dropped;
     }
 
+    /// <summary>The figure is drawn high (the cigarette and the red eyes of plantation.json), or sober with null.</summary>
+    public void SetHigh(Drycastle.ShooterCore.PlantationFile? data) => _view?.SetHigh(data);
+
     /// <summary>Shows a look. A look that camo.json rejects leaves the previous one on screen.</summary>
     public void Show(CamoSpec spec, CamoFile data) => _view?.SetCamo(spec, data);
 

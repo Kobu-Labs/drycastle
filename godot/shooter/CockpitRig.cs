@@ -13,19 +13,90 @@ namespace Drycastle.Shooter;
 /// </summary>
 public sealed partial class CockpitRig : Node3D
 {
-    /// <summary>One vehicle's cockpit: where the camera sits, which model nodes the rig replaces, and what builds the rig.</summary>
-    public sealed record Spec(Vector3 Eye, string[] Hide, Action<CockpitRig> Build);
+    /// <summary>One vehicle's driver rig: which model nodes the rig replaces, and what builds it. The eye is the seat's (<see cref="SeatEye"/>, #339), not the rig's.</summary>
+    /// <param name="OnModel">Parts the rig hangs on the vehicle's own model (hands on the model's turning handlebars); they go with the rig.</param>
+    public sealed record Spec(string[] Hide, Action<CockpitRig> Build, Action<CockpitRig, Node3D>? OnModel = null);
 
     static readonly Dictionary<string, Spec> Specs = new()
     {
-        ["golf_mk2"] = new Spec(new Vector3(-0.4875f, 1.50f, 0.30f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildGolf),
-        ["bus"] = new Spec(new Vector3(-0.70f, 1.60f, -4.75f), System.Array.Empty<string>(), BuildBus),
-        ["flak"] = new Spec(new Vector3(-0.50f, 2.05f, -1.25f), new[] { "cab" }, BuildFlak),
-        ["utility_helicopter"] = new Spec(new Vector3(0.55f, 1.78f, -1.80f), new[] { "fuselage" }, BuildHelicopter),
+        ["golf_mk2"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildGolf),
+        // the Humvee: eye = seat_driver [-0.62, 0.6, -0.22] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/make_humvee_model.py): inside the cab (roof 1.83 inside, windscreen top 1.79), behind the wheel.
+        ["humvee"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildHumvee),
+        ["bus"] = new Spec(System.Array.Empty<string>(), BuildBus),
+        ["flak"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildFlak),
+        // the harvester (#331): the combine's cab, after SM_Veh_Harvester_01, standardized (scripts/vehicles/harvester.json: the model is in the game frame, its wheel is at x -0.787, y 2.741, z -1.21, the standardizer's steering_wheel_rim/_spokes).
+        // The eye sits 1 m over the seat (y 2.0, vehicles.json seats) just behind the wheel, inside the cab; the model's own wheel and glass are not drawn for the driver, the reel is in front below the sill.
+        ["harvester"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes", "SM_Veh_Harvester_Glass" }, BuildHarvester),
+        // the Scud truck: eye = seat_driver [-0.892, 1.15, -4.328] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/make_scud_model.py): inside the left half cab (roof inside 2.66, windscreen 1.99-2.42), behind the
+        // wheel. The operator's seat has the same eye over its own seat (+0.892) but no cockpit rig: its view is the seat's (vehicles.json eye_height 1.05).
+        ["scud"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildScud),
+        ["utility_helicopter"] = new Spec(new[] { "hull" }, BuildHelicopter), // the model's own body mesh (the rig draws its own interior over it): the node was called fuselage until #325
     };
 
-    /// <summary>The cockpit of a vehicle type (vehicles.json id), or null when it has none.</summary>
+    /// <summary>The hand-built cockpit of a vehicle type (vehicles.json id), or null when it has none.</summary>
     public static Spec? For(string vehicleId) => Specs.GetValueOrDefault(vehicleId);
+
+    static readonly Dictionary<string, Spec?> Measured = new();
+
+    /// <summary>
+    /// The cockpit of a vehicle type: its hand-built one, else one measured from the model (#325): a model with a <c>steering_wheel_rim</c> node gets a
+    /// turning wheel on that spot (<see cref="SteeringWheelFit"/>) and the hands, with the model's own wheel nodes hidden; a model with <c>steer_bars</c>
+    /// (a quad, a motorcycle: handlebars the model's animator already turns) gets only the hands, on the bars' two grips (<see cref="HandlebarFit"/>), and
+    /// nothing is hidden. Null for a vehicle with neither, or drawn without its model. <paramref name="host"/> is the node the rig hangs under (the vehicle's frame),
+    /// <paramref name="eye"/> the driver's eye in it. Measured once per type: every skin is the same mesh.
+    /// </summary>
+    public static Spec? For(string vehicleId, Node3D vehicle, Node3D host, System.Numerics.Vector3 eye)
+    {
+        if (Specs.TryGetValue(vehicleId, out var built)) return built;
+        if (Measured.TryGetValue(vehicleId, out var spec)) return spec;
+        return Measured[vehicleId] = Measure(vehicle, host, eye);
+    }
+
+    static Spec? Measure(Node3D vehicle, Node3D host, System.Numerics.Vector3 eye)
+    {
+        if (vehicle.FindChild("steering_wheel_rim", true, false) is not MeshInstance3D { Mesh: { } mesh } rim) return MeasureBars(vehicle, eye);
+        var toHost = host.GlobalTransform.AffineInverse() * rim.GlobalTransform;
+        var points = new List<System.Numerics.Vector3>();
+        foreach (var p in mesh.GetFaces())
+        {
+            var q = toHost * p;
+            points.Add(new System.Numerics.Vector3(q.X, q.Y, q.Z));
+        }
+        if (Drycastle.ShooterCore.SteeringWheelFit.From(points) is not { } fit) return null;
+        var (centre, elbows) = (new Vector3(fit.Centre.X, fit.Centre.Y, fit.Centre.Z), fit.Elbows(eye));
+        var hide = vehicle.FindChild("steering_wheel_spokes", true, false) is GeometryInstance3D
+            ? new[] { "steering_wheel_rim", "steering_wheel_spokes" } : new[] { "steering_wheel_rim" };
+        return new Spec(hide, r => r.SteeringWheel(centre, fit.Radius, fit.LeanDeg, new Vector3(elbows.X, elbows.Y, elbows.Z), 0.30f));
+    }
+
+    /// <summary>The handlebar rig: the grips in the bars' own frame (they turn with the bars), the elbows under the rider's eye.</summary>
+    static Spec? MeasureBars(Node3D vehicle, System.Numerics.Vector3 eye)
+    {
+        if (vehicle.FindChild("steer_bars", true, false) is not Node3D bars) return null;
+        var points = new List<System.Numerics.Vector3>();
+        var toBars = bars.GlobalTransform.AffineInverse();
+        void Collect(Node n)
+        {
+            if (n is MeshInstance3D { Mesh: { } m } mi)
+            {
+                var t = toBars * mi.GlobalTransform;
+                foreach (var p in m.GetFaces()) { var q = t * p; points.Add(new System.Numerics.Vector3(q.X, q.Y, q.Z)); }
+            }
+            foreach (var c in n.GetChildren()) Collect(c);
+        }
+        Collect(bars);
+        if (Drycastle.ShooterCore.HandlebarFit.From(points) is not { } fit) return null;
+        var e = Drycastle.ShooterCore.HandlebarFit.Elbows(eye);
+        var elbows = new Vector3(e.X, e.Y, e.Z);
+        var (left, right) = (new Vector3(fit.Left.X, fit.Left.Y, fit.Left.Z), new Vector3(fit.Right.X, fit.Right.Y, fit.Right.Z));
+        var spread = Mathf.Max(0.26f, (right.X - left.X) * 0.42f);
+        return new Spec(System.Array.Empty<string>(), _ => { }, (r, model) =>
+        {
+            if (model.FindChild("steer_bars", true, false) is not Node3D b) return;
+            r.Hand(b, b, left, elbows + new Vector3(-spread, 0, 0), onModel: true);
+            r.Hand(b, b, right, elbows + new Vector3(spread, 0, 0), onModel: true);
+        });
+    }
 
     public static CockpitRig Make(Spec spec)
     {
@@ -61,14 +132,17 @@ public sealed partial class CockpitRig : Node3D
         if (_collective != null) _collective.Rotation = new Vector3(_lift * LeverLift, 0, 0);
         foreach (var a in _arms)
         {
-            var hand = a.Mount == a.Carrier ? a.Mount.Transform * a.Grip : a.Mount.Transform * (a.Carrier.Transform * a.Grip);
-            Span(a.Forearm, a.Elbow, hand);
+            if (!IsInstanceValid(a.Carrier)) continue;
+            Span(a.Forearm, a.Elbow, ToLocal(a.Carrier.ToGlobal(a.Grip))); // the carrier is the rig's own (a wheel, a stick) or the model's turning handlebars
         }
     }
 
     // ------------------------------------------------------------------ hiding the model
 
     readonly List<(GeometryInstance3D Node, GeometryInstance3D.ShadowCastingSetting Was)> _hidden = new();
+
+    /// <summary>The rig's parts that hang on the model (hands on its handlebars): freed with the rig.</summary>
+    readonly List<Node> _onModel = new();
 
     /// <summary>The named nodes of the vehicle's model are not drawn (their own mesh only: they keep casting their shadow, and their children stay).</summary>
     public void HideModel(Node3D vehicle, string[] names)
@@ -89,6 +163,9 @@ public sealed partial class CockpitRig : Node3D
         foreach (var (g, was) in _hidden)
             if (IsInstanceValid(g)) g.CastShadow = was;
         _hidden.Clear();
+        foreach (var n in _onModel)
+            if (IsInstanceValid(n)) n.QueueFree();
+        _onModel.Clear();
     }
 
     // ------------------------------------------------------------------ parts
@@ -193,12 +270,16 @@ public sealed partial class CockpitRig : Node3D
             Hand(_wheelPivot, _wheelSpin, new Vector3(side * radius * 0.87f, 0.02f, -radius * 0.5f), elbows + new Vector3(side * elbowSpread, 0, 0));
     }
 
-    /// <summary>A gloved hand at <paramref name="grip"/> on <paramref name="carrier"/> and its forearm from <paramref name="elbow"/> (rig frame).</summary>
-    void Hand(Node3D mount, Node3D carrier, Vector3 grip, Vector3 elbow)
+    /// <summary>
+    /// A gloved hand at <paramref name="grip"/> on <paramref name="carrier"/> and its forearm from <paramref name="elbow"/> (rig frame). With
+    /// <paramref name="onModel"/> the carrier is a node of the vehicle's model, not the rig's: the hand is taken off it when the rig goes.
+    /// </summary>
+    void Hand(Node3D mount, Node3D carrier, Vector3 grip, Vector3 elbow, bool onModel = false)
     {
         var hand = Box(Glove, -0.05f, 0.05f, -0.035f, 0.035f, -0.06f, 0.06f);
         hand.Position = grip;
         carrier.AddChild(hand);
+        if (onModel) _onModel.Add(hand);
         var forearm = Part(new BoxMesh { Size = new Vector3(0.085f, 0.085f, 1) }, Sleeve);
         AddChild(forearm);
         _arms.Add(new Arm(mount, carrier, grip, forearm, elbow));
@@ -225,38 +306,31 @@ public sealed partial class CockpitRig : Node3D
     static void BuildGolf(CockpitRig r) =>
         r.SteeringWheel(new Vector3(-0.4875f, 1.175f, -0.225f), 0.206f, 90f, new Vector3(-0.4875f, 0.95f, 0.55f), 0.30f);
 
-    // ------------------------------------------------------------------ the flak truck
-    // After scripts/make_flak_model.py: the cab is a box x +-1.2, y 0.95 .. 1.78, z -2.15 .. -0.80 with a glasshouse over it that narrows to
-    // x +-1.03 at its top and leans back at the front; the bonnet runs from z -3.36 (top 1.48) to the cab (top 1.76). The rig's glasshouse is
-    // 0.1 m taller than the model's, for the view.
+    // ------------------------------------------------------------------ the Humvee
+    // The model has its interior (scripts/make_humvee_model.py: dash, tunnel, four seats, door cards, rear partition): nothing is built round the driver but
+    // the steering wheel, which the model draws as a rim and spokes (two nodes, hidden here) so the rig's own can turn, and the hands. The wheel's face is
+    // tilted 25 degrees from upright towards the driver (a lean of 65 from level), centre x -0.62, y 1.10, z -0.60, 0.185 m to the rim's middle.
 
-    static void BuildFlak(CockpitRig r)
-    {
-        const float sill = 1.78f, top = 2.38f, xs = 1.17f, xt = 1.03f, zf = -2.12f, zft = -1.76f, zb = -0.83f, zbt = -0.90f;
-        // floor, bonnet, snorkel
-        r.Add(Box(OliveDark, -xs, xs, 0.90f, 0.95f, -2.15f, -0.80f));
-        r.Add(Bar(Olive, new Vector3(0, 1.61f, -2.13f), new Vector3(0, 1.33f, -3.36f), 1.60f, 0.30f));
-        r.Add(Bar(DarkMetal, new Vector3(0.62f, 1.60f, -2.75f), new Vector3(0.62f, 2.02f, -2.75f), 0.11f), Box(OliveDark, 0.50f, 0.74f, 2.02f, 2.12f, -2.87f, -2.63f));
-        // dash under the windscreen, the instrument cluster in front of the driver
-        r.Add(Box(OliveDark, -1.15f, 1.15f, 1.40f, sill, zf, -1.88f), Box(Black, -0.80f, -0.20f, 1.48f, 1.74f, -1.88f, -1.87f));
-        r.Add(Gauge(-0.62f, 1.61f, -1.868f, 0.085f), Gauge(-0.38f, 1.61f, -1.868f, 0.085f));
+    static void BuildHumvee(CockpitRig r) =>
+        r.SteeringWheel(new Vector3(-0.62f, 1.10f, -0.60f), 0.185f, 65f, new Vector3(-0.62f, 0.90f, 0.12f), 0.30f);
+
+    static void BuildHarvester(CockpitRig r) =>
+        r.SteeringWheel(new Vector3(-0.787f, 2.741f, -1.21f), 0.22f, 45f, new Vector3(-0.79f, 2.486f, -0.45f), 0.30f);
+
+    // ------------------------------------------------------------------ the flak truck
+    // After scripts/make_flak_model.py: the cab is hollow (floor, dash with its gauges, the driver's seat, doors, pillars and roof round the window openings of the panes), so nothing is built round
+    // the driver but the steering wheel, which the model draws as a rim and spokes (two nodes, hidden here) so the rig's own can turn, and the hands. Centre x -0.50, y 1.66, z -1.72, 45 degrees from level.
+
+    static void BuildFlak(CockpitRig r) =>
         r.SteeringWheel(new Vector3(-0.50f, 1.66f, -1.72f), 0.20f, 45f, new Vector3(-0.50f, 1.50f, -1.30f), 0.28f);
-        // windscreen: side posts, the centre post of the split screen, the header; then the roof
-        r.Both(s => Bar(Olive, new Vector3(s * xs, sill, zf), new Vector3(s * xt, top, zft), 0.10f));
-        r.Add(Bar(Olive, new Vector3(0, sill, zf), new Vector3(0, top, zft), 0.07f), Bar(Olive, new Vector3(-xt, top, zft), new Vector3(xt, top, zft), 0.09f));
-        r.Add(Box(OliveLight, -xt, xt, top, top + 0.06f, zft, zbt));
-        // doors: the panel under the window, the rail over it, the post behind
-        r.Both(s => Box(OliveLight, s * xs, s * (xs + 0.03f), 0.95f, sill, -2.15f, -0.80f));
-        r.Both(s => Bar(Olive, new Vector3(s * xt, top, zft), new Vector3(s * xt, top, zbt), 0.09f));
-        r.Both(s => Bar(Olive, new Vector3(s * xs, sill, zb), new Vector3(s * xt, top, zbt), 0.10f));
-        // glass: the two panes of the windscreen, the door windows, the rear window
-        r.Both(s => Pane(new Vector3(0, sill, zf), new Vector3(s * xs, sill, zf), new Vector3(s * xt, top, zft), new Vector3(0, top, zft)));
-        r.Both(s => Pane(new Vector3(s * xs, sill, zf), new Vector3(s * xs, sill, zb), new Vector3(s * xt, top, zbt), new Vector3(s * xt, top, zft)));
-        r.Add(Pane(new Vector3(-0.47f, sill + 0.09f, -0.865f), new Vector3(0.47f, sill + 0.09f, -0.865f), new Vector3(0.47f, top - 0.12f, -0.865f), new Vector3(-0.47f, top - 0.12f, -0.865f)));
-        // back wall with the rear window (the turret shows through it)
-        r.Add(Box(OliveLight, -xs, xs, 0.95f, sill + 0.09f, zb, zb + 0.03f), Box(OliveLight, -xt, xt, top - 0.12f, top, zbt, zbt + 0.03f));
-        r.Both(s => Box(OliveLight, s * 0.47f, s * 1.10f, sill, top, -0.88f, -0.85f));
-    }
+
+    // ------------------------------------------------------------------ the Scud truck
+    // The model has its cab (scripts/make_scud_model.py: floor, dash, seats, door cards, the left half cab's steering wheel as a rim and spokes, two nodes hidden here): nothing is built round the driver but
+    // the steering wheel, so the rig's own turns, and the hands. The wheel's centre is x -0.892, y 1.88, z -4.962, its face tilted 20 degrees from upright towards the driver (a lean of 70 from level),
+    // 0.21 m to the rim's outer edge.
+
+    static void BuildScud(CockpitRig r) =>
+        r.SteeringWheel(new Vector3(-0.892f, 1.88f, -4.962f), 0.2f, 70f, new Vector3(-0.892f, 1.66f, -4.25f), 0.30f);
 
     // ------------------------------------------------------------------ the utility helicopter
     // After scripts/make_utility_helicopter_model.py: floor 0.72, instrument panel at z -2.75, the cabin from z -1.20 to 1.30, half width 1.2,

@@ -180,8 +180,48 @@ public enum EventKind : byte
     DemonPounce = 223,
     /// <summary>Server to everyone: a one-shot effect of the Thieves event (<see cref="ThievesFxCodec"/>: u8 <see cref="ThievesFxKind"/>, a point, a u16 id): the Raid van's honk, a Thief's electrocution. Kinds 232-239 belong to the Thieves event.</summary>
     ThievesFx = 232,
+    /// <summary>Client to server: one page of the Hunter's Log table (<see cref="HuntEvents.EncodeRequest"/>, <see cref="HuntsRequest"/>). Kinds 100-106 belong to the Hunter's Log (#336).</summary>
+    HuntsRequest = 100,
+    /// <summary>Server to the asker: that page, redacted for them (<see cref="HuntsAnswer"/>).</summary>
+    HuntsPage = 101,
+    /// <summary>Client to server: the records of every species (u16 request id, <see cref="HuntEvents.EncodeRecordsRequest"/>).</summary>
+    RecordsRequest = 102,
+    /// <summary>Server to the asker: the records, redacted for them (<see cref="RecordsAnswer"/>).</summary>
+    Records = 103,
+    /// <summary>Client to server: one player's log (<see cref="PlayerLogRequest"/>; player 0 is the asker's own).</summary>
+    PlayerLogRequest = 104,
+    /// <summary>Server to the asker: that log, redacted for them (<see cref="PlayerLogAnswer"/>).</summary>
+    PlayerLog = 105,
+    /// <summary>Server to everyone: a new record, a player's first of a species, or both in one (<see cref="HuntAnnounceMsg"/>); the same hunt is redacted separately for each recipient.</summary>
+    HuntAnnounce = 106,
     /// <summary>Server to everyone, and to a joiner: the satellite dishes taken so far (<see cref="DishCodec"/>: the whole set of object ids, also when it is empty after a round reset). The client hides those objects' nodes.</summary>
     DishTaken = 233,
+    /// <summary>Server to everyone, about twice a second while a harvester job runs and once when it ends (<see cref="HarvesterCodec.StateMsg"/>): the phase, the field and how far the AI's plan has come (the cut itself is <see cref="HarvesterCut"/>). Kinds 234-235 belong to the harvester (#331).</summary>
+    HarvesterState = 234,
+    /// <summary>Server to everyone: a one-shot effect of the harvester event (<see cref="HarvesterCodec.FxMsg"/>): a bale caught fire or burnt out, a victim drawn in, a bale left the unloader.</summary>
+    HarvesterFx = 235,
+    /// <summary>Server to everyone, and the history to a joiner: a stretch of the path the harvester's reel cut (<see cref="SwathCodec"/>: field, width, a polyline of quarter-metre points, the time since the field was last cut). The client squashes the crop along it and derives the bales it dropped; nothing per plant.</summary>
+    HarvesterCut = 237,
+    /// <summary>Server to everyone, and the mask to a joiner: the 1 m cells of a crop field that vehicles crushed (<see cref="CrushCodec"/>: field, ascending cell indices as deltas, or runs of the whole mask). The client lays the plants there flat and darkens the ground; nothing per plant, no gameplay (#328).</summary>
+    CropCrush = 238,
+    /// <summary>Server to the shooter only: their own Lock (Lock-on launcher, ADR 0031): phase, Aircraft, tracking, progress and lock seconds (<see cref="LockCodec"/>).</summary>
+    LockState = 246,
+    /// <summary>Server to an Aircraft's owner only: the worst of the launchers on their Aircraft (a <see cref="Drycastle.ShooterCore.LockAlert"/> level) and the Aircraft.</summary>
+    LockAlert = 247,
+    /// <summary>Server to everyone: a homing missile left a Lock-on launcher, the Aircraft it homes on and its flight seconds; the Explosion with its id ends it.</summary>
+    HomingLaunch = 248,
+    /// <summary>Client to server: a crew member's command to a Scud truck's launcher (<see cref="ScudCodec"/>: open or close the screen, the camera, lock a point, confirm, withdraw, abort). Kinds 80-85 belong to the Scud truck.</summary>
+    ScudCommand = 80,
+    /// <summary>Server to everyone, and to a joiner for each truck: one launcher's state, its clock, who is the operator, the locked point and who confirmed (<see cref="ScudStateMsg"/>). Sent when anything of that changes.</summary>
+    ScudState = 81,
+    /// <summary>Server to the crew of a truck: the operator's camera centre and zoom while their targeting screen is open (<see cref="ScudViewMsg"/>), the read-only feed.</summary>
+    ScudView = 82,
+    /// <summary>Server to everyone: a Scud missile left its rack (<see cref="ScudLaunchMsg"/>): its entity, where it left and where it lands, and its flight seconds. The siren and the tactical map's marker start from it.</summary>
+    ScudLaunch = 83,
+    /// <summary>Server to everyone: a Scud missile landed (<see cref="ScudImpactMsg"/>): the blast's look, sound, shake and scorch.</summary>
+    ScudImpact = 84,
+    /// <summary>Server to the crew of a truck: why a command did nothing or a proposal ended (<see cref="ScudNoticeCode"/>).</summary>
+    ScudNotice = 85,
 }
 
 public abstract record ReliableMsg;
@@ -286,8 +326,18 @@ public static class Wire
     //   v58 aircraft state byte (#303): kind in bits 6-7 (was bit 7), bank in bits 0-5 (was 0-6); a third kind, the UAV
     //   v55 world interest (ADR 0025): world record flag FDormant 64 (the entity left this client's interest, no fields); animals, flocks and poop outside 800 m are not sent
     //   v56 wild animal size and weight (ticket #309): the animal state byte's bits 5-7 are the size step; event 25 ends in the animal's weight (u16, tenths of a kg)
+    //   v65 the harvester catch (#351): the harvester effect (event 235) ends in the victim's player id (u16), the bale thrown out rolls (corpse pitch 0.25 while it rolls); the swath message (237) has a replay flag bit (#352, old readers ignore it)
+    //   v63 the harvester's cut is its real path: events 237 HarvesterCut and 238 CropCrush (vehicles flatten crops); the state message no longer says what is cut
+    //   v62 the harvester event (#331): events 234 HarvesterState and 235 HarvesterFx, special weapon 238, a corpse owned by 60002 is a hay bale
     //   v61 the bus garage: event 245 GarageDoor (its doors open or closed)
-    public const byte ProtocolVersion = 61;
+    //   v62 the Hunter's Log (#336): events 100-106 (requests for a page of hunts, the records and a player's log, their redacted answers, and the server-wide announcement)
+    //   v64 the Lock-on launcher (ADR 0031): events 246 LockState (the shooter's Lock), 247 LockAlert (to the Aircraft's owner) and 248 HomingLaunch (a homing missile, broadcast)
+    //   v66 a fifth seat (the Humvee, ADR 0026): the seats record carries the occupant of seat 4 in its position X (seats 1..3 are unchanged); the seat switch request and state accept up to 5 seats
+    //   v67 trailers (the rocket cart, towing): a trailer's vehicle record carries the id of the tractor it is hitched to in the pitch field (0: loose) in place of a driver's, and bit 6 of its health byte says it is loaded (VehicleRecord.MakeTrailer); a hitched trailer's articulation is its record's yaw less the tractor's
+    //   v68 the Scud truck: events 80-85 (the launcher's command, state, the operator's camera, the launch, the impact and a notice), world entity 11 (the Scud missile), special weapon 237, vehicles.json "launcher"
+    //   v69 loading a Scud truck from a rocket cart: the launcher state byte may be 10 (Loading) and the Scud notice codes 11 (LoadStarted), 12 (LoadCancelled) and 13 (EventFound); the Scud event (/event scud): an intel board entry may carry an AREA, a centre and a radius in metres (flags bit 4, a f32 radius after the centre)
+    //   v70 the plantation (#364): bit 2 of the player status mask (EventKind.StatusState, StatusKind.High): the player is high; the others draw a lit cigarette and red eyes on the figure, the player's own camera sways
+    public const byte ProtocolVersion = 70;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

@@ -23,10 +23,11 @@ public partial class PerfRoute : Node
     public float ShadowDist = -1;
     public float BlastRate;
     public string Tag = "";
+    public List<Vector3> Anchors = new(); // --perf-anchors "x,y,z;x,y,z" (Godot axes): the viewpoints, e.g. deep in a forest, where no spawn point is
     double _blastAcc;
     readonly Random _rng = new(7);
 
-    record struct Sample(int View, double T, double Ms, double Draws, double Prims, double Objects, double CpuMs, double GpuMs, double Nodes);
+    record struct Sample(int View, double T, double Ms, double Draws, double Prims, double Objects, double CpuMs, double GpuMs, double Nodes, double PackTiles, double PackDraws, double PackInstances, double PackTris, double PackObjects, double PackUnder);
 
     readonly List<Sample> _warm = new(), _s = new();
     readonly List<Vector3> _anchors = new();
@@ -43,7 +44,8 @@ public partial class PerfRoute : Node
         _startMs = Time.GetTicksMsec();
         var sp = Map.SpawnPoints.Select(s => s.Position).OrderBy(p => p.X + p.Z * 0.37f).ToList();
         var n = Math.Max(1, Views / 4);
-        for (var i = 0; i < n; i++) _anchors.Add(sp[Math.Min(sp.Count - 1, (int)((i + 0.5) * sp.Count / n))]);
+        if (Anchors.Count > 0) _anchors.AddRange(Anchors); // given viewpoints (--perf-anchors) instead of the spawn points
+        else for (var i = 0; i < n; i++) _anchors.Add(sp[Math.Min(sp.Count - 1, (int)((i + 0.5) * sp.Count / n))]);
         _vp = GetViewport().GetViewportRid();
         RenderingServer.ViewportSetMeasureRenderTime(_vp, true);
     }
@@ -64,8 +66,10 @@ public partial class PerfRoute : Node
     Sample Take(int view, double dt)
     {
         double M(Performance.Monitor m) => Performance.GetMonitor(m);
+        var pack = Map.PackTreeDrawn; // pack tree counters (all 0 without pack trees), next to the draw calls they cost
         return new Sample(view, Time.GetTicksMsec() / 1000.0, dt * 1000, M(Performance.Monitor.RenderTotalDrawCallsInFrame), M(Performance.Monitor.RenderTotalPrimitivesInFrame),
-            M(Performance.Monitor.RenderTotalObjectsInFrame), RenderingServer.ViewportGetMeasuredRenderTimeCpu(_vp), RenderingServer.ViewportGetMeasuredRenderTimeGpu(_vp), M(Performance.Monitor.ObjectNodeCount));
+            M(Performance.Monitor.RenderTotalObjectsInFrame), RenderingServer.ViewportGetMeasuredRenderTimeCpu(_vp), RenderingServer.ViewportGetMeasuredRenderTimeGpu(_vp), M(Performance.Monitor.ObjectNodeCount),
+            pack.Tiles, pack.Draws, pack.Instances, pack.Triangles, pack.Objects, pack.Undergrowth);
     }
 
     public override void _Process(double delta)
@@ -127,10 +131,10 @@ public partial class PerfRoute : Node
     void Finish()
     {
         Directory.CreateDirectory(OutDir);
-        var sb = new StringBuilder("view,t,frame_ms,draws,prims,objects,render_cpu_ms,render_gpu_ms,nodes\n");
+        var sb = new StringBuilder("view,t,frame_ms,draws,prims,objects,render_cpu_ms,render_gpu_ms,nodes,pack_tiles,pack_draws,pack_instances,pack_triangles,pack_objects,pack_undergrowth\n");
         foreach (var s in _warm.Concat(_s))
             sb.Append(s.View).Append(',').Append(s.T.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.Ms.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.Draws).Append(',').Append(s.Prims)
-              .Append(',').Append(s.Objects).Append(',').Append(s.CpuMs.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.GpuMs.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.Nodes).Append('\n');
+              .Append(',').Append(s.Objects).Append(',').Append(s.CpuMs.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.GpuMs.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.Nodes).Append(',').Append(s.PackTiles).Append(',').Append(s.PackDraws).Append(',').Append(s.PackInstances).Append(',').Append(s.PackTris).Append(',').Append(s.PackObjects).Append(',').Append(s.PackUnder).Append('\n');
         File.WriteAllText(Path.Combine(OutDir, "route-frames.csv"), sb.ToString());
         var perView = _s.GroupBy(x => x.View).Select(g => new { v = g.Key, draws = g.Average(x => x.Draws), ms = g.Average(x => x.Ms), prims = g.Average(x => x.Prims), p99 = P(g.Select(x => x.Ms).ToList(), 99) }).ToList();
         var warmMs = _warm.Select(x => x.Ms).ToList();
@@ -146,9 +150,10 @@ public partial class PerfRoute : Node
             ["worst_views_by_draws"] = perView.OrderByDescending(x => x.draws).Take(5).Select(x => new { view = x.v, draws = x.draws, frame_ms = x.ms }).ToList(),
             ["warmup_frame_ms"] = Stats(warmMs), ["warmup_frames_over_33ms"] = warmMs.Count(x => x > 33.3), ["warmup_frames_over_100ms"] = warmMs.Count(x => x > 100), ["warmup_first_frames_ms"] = warmMs.Take(8).ToList(),
             ["frames_over_16_7ms"] = _s.Count(x => x.Ms > 16.7), ["frames_over_33ms"] = _s.Count(x => x.Ms > 33.3), ["frames_over_50ms"] = _s.Count(x => x.Ms > 50),
+            ["pack_trees"] = new { active = Map.PackTreesActive, tiles = Stats(_s.Select(x => x.PackTiles).ToList()), draws = Stats(_s.Select(x => x.PackDraws).ToList()), instances = Stats(_s.Select(x => x.PackInstances).ToList()), triangles = Stats(_s.Select(x => x.PackTris).ToList()), objects = Stats(_s.Select(x => x.PackObjects).ToList()), undergrowth = Stats(_s.Select(x => x.PackUnder).ToList()) },
             ["nodes"] = _s.Count == 0 ? 0 : _s[^1].Nodes, ["mem_static_mb"] = Performance.GetMonitor(Performance.Monitor.MemoryStatic) / 1048576.0, ["video_mem_mb"] = Performance.GetMonitor(Performance.Monitor.RenderVideoMemUsed) / 1048576.0,
             ["textures_mb"] = Performance.GetMonitor(Performance.Monitor.RenderTextureMemUsed) / 1048576.0, ["buffers_mb"] = Performance.GetMonitor(Performance.Monitor.RenderBufferMemUsed) / 1048576.0,
-            ["gc_heap_mb"] = GC.GetTotalMemory(false) / 1048576.0, ["gc_gen0"] = GC.CollectionCount(0), ["gc_gen1"] = GC.CollectionCount(1), ["gc_gen2"] = GC.CollectionCount(2),
+            ["gc_heap_mb"] = GC.GetTotalMemory(false) / 1048576.0, ["gc_allocated_mb"] = GC.GetTotalAllocatedBytes() / 1048576.0, ["gc_live_mb"] = GC.GetTotalMemory(true) / 1048576.0, ["gc_gen0"] = GC.CollectionCount(0), ["gc_gen1"] = GC.CollectionCount(1), ["gc_gen2"] = GC.CollectionCount(2),
         };
         File.WriteAllText(Path.Combine(OutDir, "route-summary.json"), System.Text.Json.JsonSerializer.Serialize(res, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         GD.Print("PERF_ROUTE_DONE");
@@ -162,10 +167,12 @@ public partial class Shooter
     {
         static int I(string s, int d) => int.TryParse(s, out var v) ? v : d;
         static float F(string s, float d) => float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : d;
+        _capFps = false; // no frame cap while measuring: the 20 fps cap of an unfocused window would be all the route records
         AddChild(new PerfRoute
         {
             Player = player, Map = _map, OutDir = cfg.Str("perf-out", "out/perf/route"), Views = I(cfg.Str("perf-views"), 96), Msaa = I(cfg.Str("perf-msaa"), -1),
-            Dwell = F(cfg.Str("perf-dwell"), 2f), NoShadow = cfg.Flag("perf-noshadow"), ShadowDist = F(cfg.Str("perf-shadow-dist"), -1f), BlastRate = F(cfg.Str("perf-blasts"), 0f), Vsync = cfg.Flag("perf-vsync"), Tag = cfg.Str("perf-tag"),
+            Dwell = F(cfg.Str("perf-dwell"), 2f), NoShadow = cfg.Flag("perf-noshadow"), ShadowDist = F(cfg.Str("perf-shadow-dist"), -1f), BlastRate = F(cfg.Str("perf-blasts"), 0f), Vsync = cfg.Flag("perf-vsync"), Tag = cfg.Str("perf-tag"), Settle = F(cfg.Str("perf-settle"), 0.6f),
+            Anchors = cfg.Str("perf-anchors").Split(';', StringSplitOptions.RemoveEmptyEntries).Select(a => a.Split(',')).Where(a => a.Length == 3).Select(a => new Vector3(F(a[0], 0f), F(a[1], 0f), F(a[2], 0f))).ToList(),
         });
     }
 }

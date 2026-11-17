@@ -104,18 +104,21 @@ stateDiagram-v2
     Idle --> StompWindup
     Idle --> VehicleWindup
     Idle --> GrabReach
+    Idle --> Roar
     Walk --> Idle
     Walk --> Run
     Walk --> TrunkWindup
     Walk --> StompWindup
     Walk --> VehicleWindup
     Walk --> GrabReach
+    Walk --> Roar
     Run --> Idle
     Run --> Walk
     Run --> TrunkWindup
     Run --> StompWindup
     Run --> VehicleWindup
     Run --> GrabReach
+    Run --> Roar
     StompWindup --> Stomp
     VehicleWindup --> Launch
     GrabReach --> Hold
@@ -127,6 +130,7 @@ stateDiagram-v2
     GrabReach --> Idle
     Hold --> Idle
     Launch --> Idle
+    Roar --> Idle
     Dead --> [*]
 ```
 
@@ -141,6 +145,32 @@ From any state: Dead
 - **Hold**: Holds one player in its hand until the hold time runs out (launch) or the player dies or leaves (Idle).
 - **Launch**: The short swing after a throw or a launch.
 - **Dead**: Reachable from every act (a killing hit, or an admin ending the event).
+- **Roar**: A phase began or it enraged: it stands and roars (BigfootRules.RoarSeconds), facing its target. Owed while it is busy or has an attack to make, paid the first tick it would only chase.
+
+## Bigfoot.BodyFling
+
+A player the Bigfoot grabbed, as a client draws them: held in the fist, flying after the throw, getting up after the landing.
+
+```mermaid
+stateDiagram-v2
+    [*] --> None
+    None --> Held
+    Held --> Flying
+    Held --> None
+    Flying --> Lying
+    Flying --> Held
+    Flying --> None
+    Lying --> Landing
+    Lying --> Held
+    Lying --> None
+    Landing --> None
+    Landing --> Held
+```
+
+- **Held**: In the fist (Bigfoot act Hold): limbs loose, the body swung by the hand. Released without a throw, the Bigfoot dying or the player dying or leaving ends it at None.
+- **Flying**: The throw (Bigfoot act Launch): tumbling, limbs flailing, until the body is on the ground and slow (after MinAirSeconds), or has been slow for SettleSeconds where the ground cannot be told (a roof), or MaxAirSeconds.
+- **Lying**: Landed alive: the ragdoll lies limp on the ground for LieSeconds.
+- **Landing**: Getting up: the body turns upright and the limbs go slack, then the normal figure (a dead one is the corpse's, not this machine's).
 
 ## Bigfoot.Event
 
@@ -337,9 +367,25 @@ stateDiagram-v2
 - **Spawned**: Goes back to Welcomed at each respawn, until the new spawn position arrives.
 - **Failed**: Frames and bot scripts stop; the menu was told.
 
+## Corpse.Collapse
+
+A killed body that was not thrown topples to the ground from the killing hit's impulse, bounces and lies still (client look only; the server's point does not move).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Falling
+    Falling --> Settling
+    Settling --> AtRest
+    AtRest --> [*]
+```
+
+- **Falling**: Turning over about the feet's side, faster each moment (gravity), from a start speed that grows with the hit's impulse. Ends when the body is flat.
+- **Settling**: Rebounds off the ground and damps out for SettleSeconds; the limbs go loose.
+- **AtRest**: Flat and still, limbs loose. Stays so until the corpse is removed.
+
 ## Corpse.Flight
 
-A thrown body (corpse or target dummy): at rest on the ground, airborne after a launch or a drop until it lands, seated in a vehicle (a dead pilot or driver), or floating on water.
+A thrown body (corpse or target dummy): at rest on the ground, airborne after a launch or a drop until it lands, seated in a vehicle (a dead pilot or driver), floating on water, or rolling along the ground (a bale).
 
 ```mermaid
 stateDiagram-v2
@@ -352,12 +398,17 @@ stateDiagram-v2
     Seated --> Grounded
     Floating --> Airborne
     Floating --> Grounded
+    Airborne --> Rolling
+    Rolling --> Grounded
+    Rolling --> Airborne
+    Rolling --> Floating
 ```
 
 - **Grounded**: At rest. A launch (a push that is not zero) or a drop throws it; a dummy standing up again (Reset) comes back here.
 - **Airborne**: Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens (it then snaps to the ground under it). Lands Grounded, or Floating when it lands in water. A new launch while airborne restarts the count.
-- **Seated**: A dead pilot or driver still in the seat: the server moves it with the vehicle (Follow), it is not flown. Leaves by a drop or a throw (the vehicle at rest for CorpseRules.SeatedRestSeconds, or destroyed).
+- **Seated**: A dead pilot or driver still in the seat: the server moves it with the vehicle (Follow), it is not flown. Leaves by a drop or a throw (the vehicle at rest for CorpseRules.SeatedRestSeconds, or destroyed) or when a player boards its seat, which flings it out sideways.
 - **Floating**: Lies at the water surface height where it landed, not flown. The client bobs and drifts it on the waves (cosmetic, nothing on the wire); it stays lootable until its lifetime ends.
+- **Rolling**: Only a body launched with rolls (a harvester's bale): it landed with speed and keeps going along the ground, slowing by CorpseRules.RollFriction, the ground followed under it. Stops (Grounded) when slow enough, against a wall or after CorpseRules.RollMaxSeconds; flies on (Airborne) when the ground drops away; Floating in water.
 
 ## Demon.Phase
 
@@ -710,6 +761,65 @@ stateDiagram-v2
 - **Shut**: Closed and solid (the start state, and every new server): the leaves fill the doorway.
 - **Open**: The leaves are swung out into the yard and nothing is solid. Stays open until a player closes it; it does not close while a vehicle stands in the doorway.
 
+## Harvester.Ai
+
+The AI harvester's job: drive to the field's first pass, cut the passes with turns between, leave along the edge; stops when its driver is killed.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Approach
+    Approach --> Cut
+    Approach --> Leave
+    Cut --> Turn
+    Cut --> Leave
+    Turn --> Cut
+    Turn --> Leave
+    Leave --> Gone
+    Gone --> [*]
+    Stopped --> [*]
+```
+
+From any state: Stopped
+
+- **Approach**: Appeared just inside the field's outline, facing the first pass.
+- **Cut**: Driving a pass at cutting speed; the cut progress (pass, metres) is what the clients draw the stubble from.
+- **Turn**: A half circle to a lane several lanes over (the lanes between are cut on the way back), or a bulb turn of three arcs for the last lanes: never tighter than the machine's turning radius.
+- **Leave**: The edge route to where it came in, then past it. A plan whose passes were all given up goes straight here.
+- **Gone**: Reached the exit: the event is over (cooldown starts).
+- **Stopped**: Its driver died, or an admin ended the event: from any phase. The brain gives no more commands.
+
+## Harvester.Corpse
+
+A victim of the harvester: spun round the reel at the front, inside the machine for a few seconds, then thrown out of the unloader inside a bale that rolls to a stop.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Drawn
+    Drawn --> Inside
+    Inside --> Baled
+    Baled --> [*]
+```
+
+- **Drawn**: The body is carried from where it fell to the reel's axis and spins round it for DrawSeconds (clients draw the orbit); it cannot be looted meanwhile.
+- **Inside**: Gone from the world (the corpse entity is removed, its Items are kept for the bale).
+- **Baled**: One bale (the victim's body inside it, Items on it) is spawned at the unloader and thrown out backwards: it flies, lands and rolls to a stop (Corpse.Flight Rolling). The end of this machine; the bale is an ordinary bale after that.
+
+## Hay.Bale
+
+A hay bale: whole, set alight by a shot, burning for a few seconds, then ash.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Intact
+    Intact --> Burning
+    Burning --> Ash
+    Ash --> [*]
+```
+
+- **Intact**: Any shot that reaches it ignites it (a bullet, a pellet). A harvester's bale starts here too.
+- **Burning**: Fire for BaleBurnSeconds; everyone close enough is ignited each tick. Nobody is credited for those burns.
+- **Ash**: Burnt out: a dark heap. Stays until the bale despawns (a corpse's lifetime) or the round ends; it cannot be lit again.
+
 ## HelicopterGunner.Phase
 
 The helicopter's gun cycle: wait, warn the picked enemy, fire a burst, wait again.
@@ -776,6 +886,51 @@ stateDiagram-v2
 - **Opening**: Wanted open, alpha ramping up (the fade is 150 ms, none with reduce motion).
 - **Open**: Wanted open at full alpha. Reduce motion jumps Closed -> Open and Open -> Closed.
 - **Closing**: Not wanted, alpha ramping down; Show during it turns back to Opening from the current alpha.
+
+## HuntersLog.Load
+
+One query of the Hunter's Log: asked, answered, failed (Retry) or no such player.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Loading
+    Loading --> Ready
+    Loading --> Failed
+    Loading --> Missing
+    Ready --> Loading
+    Failed --> Loading
+    Missing --> Loading
+```
+
+- **Loading**: Waiting for the answer carrying this request id; an answer to an older request is dropped. Gives up (Failed) after the timeout.
+- **Failed**: The server could not read it, or never answered: the screen offers Retry.
+- **Missing**: The server knows no such player (a guest's own log, or a player that was never logged).
+
+## HuntersLog.Page
+
+Which page of the Hunter's Log shows: the first tab (own log, or another player's), Records, All hunts.
+
+```mermaid
+stateDiagram-v2
+    [*] --> MyLog
+    MyLog --> PlayerLog
+    MyLog --> Records
+    MyLog --> AllHunts
+    PlayerLog --> MyLog
+    PlayerLog --> PlayerLog
+    PlayerLog --> Records
+    PlayerLog --> AllHunts
+    Records --> MyLog
+    Records --> PlayerLog
+    Records --> AllHunts
+    AllHunts --> MyLog
+    AllHunts --> PlayerLog
+    AllHunts --> Records
+```
+
+- **MyLog**: The default, and where a screen opens. The asker's own log.
+- **PlayerLog**: Another player's log, opened from a name. Esc goes up to My Log; another tab keeps it parked on the first tab.
 
 ## Interact.Hold
 
@@ -854,6 +1009,23 @@ stateDiagram-v2
 - **Open**: Accepted and running until its duration, its own End, its owner's death or leaving, a round reset, or its aircraft's destruction.
 - **Refused**: Activate returned false: dropped by the service, the streak stays held. Never ended by the framework.
 - **Ended**: Over: EndReason is set, StreakEnded sent, callbacks run.
+
+## Launcher.Lock
+
+The Lock of a Lock-on launcher on one Aircraft: it builds while the Aircraft stays in the lock circle and in sight, and only a complete Lock lets the launcher fire.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Locking
+    Locking --> Locked
+    Locking --> Idle
+    Locked --> Idle
+```
+
+- **Idle**: No Aircraft is held: the launcher is stowed, the player is dead or seated at a gun, or nothing lockable is in the circle.
+- **Locking**: One Aircraft is in the circle; the progress runs for lock.seconds and waits (up to lock.grace_seconds) while the Aircraft is out of the circle or out of sight.
+- **Locked**: The Lock is complete: a pull fires a missile that homes on the Aircraft, and the Lock starts over.
 
 ## Loadout.Autosave
 
@@ -1107,6 +1279,28 @@ stateDiagram-v2
 - **Tracking**: The drawn tick follows the estimate (it never moves backwards).
 - **Holding**: The estimate moved behind the drawn tick: the drawn tick stays put until the estimate passes it again. One episode counts once in HoldEvents.
 
+## PackTile.Layer
+
+One mesh of a pack tree tile (its trees, its undergrowth, its far undergrowth, or the tree cards of a far tile): built on a worker, handed to the renderer a surface at a time, drawn, freed when far.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Building
+    Idle --> Ready
+    Building --> Handing
+    Building --> Ready
+    Building --> Idle
+    Handing --> Ready
+    Handing --> Idle
+    Ready --> Idle
+```
+
+- **Idle**: Nothing held. Straight to Ready when the tile has nothing of this layer to make.
+- **Building**: A worker makes the triangles. Ready at once when it made none or failed (a warning); Idle when the tile is freed first (the result is dropped).
+- **Handing**: Surfaces are added to the mesh within budget_ms per frame; the mesh is not shown yet.
+- **Ready**: Shown inside its radius. The cut radius never passes a layer that is not Ready.
+
 ## Player.DeathView
 
 The local player's death screen: the legs give way, the body goes over and the blood spatters, then it lies there under the respawn scrim until the spawn.
@@ -1122,6 +1316,21 @@ stateDiagram-v2
 - **Buckling**: Clock: the buckle length. The knees or the lean give way and the view sinks part of the way; a little blood. Zero seconds for a death that does not move the camera.
 - **Falling**: Clock: the fall length. The body goes over (forward, back, left or right by the plan) and the view hits the ground; the blood grows to full. Zero seconds for a plain fade.
 - **Lying**: Held until the spawn ends it. Clock (elapsed): the impact shake, then the scrim fade-in with the "eliminated by" text and the countdown.
+
+## Player.High
+
+Whether a player is high from the plantation: sober, or high for a while with a clock that a new hold restarts.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Sober
+    Sober --> High
+    High --> Sober
+    High --> High
+```
+
+- **Sober**: The default, and what a death, a round reset or the clock running out leaves.
+- **High**: A completed hold in a plantation started it: the cigarette, the eyes and (for the player themselves) the nausea show. High to High is the restart: another completed hold starts the clock over.
 
 ## Pounce.View
 
@@ -1173,6 +1382,39 @@ From any state: Destroyed
 - **Closing**: The door slides shut (clock: door seconds), then the van drives off.
 - **Leaving**: Drives the way out to the map edge, accelerating; the entity ends at its end (no state follows).
 - **Destroyed**: Hit count taken, from any state: the Raid is over. The wreck lies where it stopped (clock: wreck seconds), then the entity ends. Never left.
+
+## Rider.View
+
+How the local rider of a vehicle seat sees: chase camera, first person from the seat, or the gun's own sight.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Chase
+    Chase --> Cockpit
+    Chase --> Sight
+    Cockpit --> Chase
+    Cockpit --> Sight
+    Sight --> Chase
+    Sight --> Cockpit
+```
+
+- **Chase**: the vehicle's chase camera; the figure is drawn on the seat. The view key goes to Cockpit.
+- **Cockpit**: first person from the seat's eye in the hull frame, the own figure hidden for the viewer (its shadow stays); the driver's rig only on the driver's seat. The view key goes to Chase.
+- **Sight**: an armed, gunner or operator seat: the gun's or the screen's own first-person view; the view key does nothing. A seat switch leaves it for the last choice.
+
+## RocketCart.Load
+
+A rocket cart: carrying its missile, or empty.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Loaded
+    Loaded --> Empty
+    Empty --> Loaded
+```
+
+- **Loaded**: The missile is on the cart: low hit points (loaded_hp), and when the cart is destroyed it detonates (the Scud blast).
+- **Empty**: Nothing on it: the type's own hit points, and a destroyed cart blows up like a small ordinary vehicle.
 
 ## Rozhlas.Phase
 
@@ -1242,6 +1484,117 @@ stateDiagram-v2
 - **Draining**: Stop() ran: no new input; what was written still plays out, then the echo tail, then ffmpeg ends. A Start() here cuts the tail short.
 - **Failed**: ffmpeg missing, died, or stopped producing audio: logged once, the feed is silent until the next phase. Never unprocessed audio.
 
+## Scud.CartSlot
+
+One bunker's rocket cart during a Scud event: standing loaded, waiting to be replaced, or closed with the truck.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Stocked
+    Closed --> Restocking
+    Stocked --> Restocking
+    Stocked --> Closed
+    Restocking --> Stocked
+    Restocking --> Closed
+```
+
+- **Closed**: No truck is out: no cart is put at the bunker.
+- **Stocked**: A loaded cart was put at the bunker. It stays the slot's until it is emptied, destroyed or removed, wherever it is towed to.
+- **Restocking**: The cart is gone or empty: the slot counts the cooldown (clock: cart_cooldown_seconds), then the host puts a new loaded cart at the bunker. A blocked place is tried again after a short wait.
+
+## Scud.Event
+
+The Scud event: the truck hidden in its search area, found when a player boards it, or gone.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Searching
+    Searching --> Found
+    Searching --> Over
+    Found --> Over
+    Over --> Searching
+```
+
+- **Idle**: No Scud event has run on this server yet.
+- **Searching**: The truck stands hidden and the search area is on the intel board and the tactical map (clock: the despawn time). The first player to board it finds it; nobody within the time, a destroyed truck, a cancel or a new round ends it with no reward.
+- **Found**: A player boarded the truck: the reward is paid, the intel entry and the search circle are gone and the event slot is free. The truck stays as an ordinary vehicle and the rocket carts keep standing at the bunkers until it is destroyed (or the round ends).
+- **Over**: The truck is gone (destroyed, despawned, or retired by a new round) and the carts with it. A new event may begin.
+
+## Scud.Launcher
+
+A Scud truck's launcher: the rocket on its rack, the operator's lock, the crew's confirmations, the rack rising, the launch, the empty rack and the reload.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Stowed
+    Stowed --> Targeting
+    Targeting --> Stowed
+    Targeting --> Proposed
+    Proposed --> Targeting
+    Proposed --> Stowed
+    Proposed --> Erecting
+    Erecting --> Launching
+    Erecting --> Aborting
+    Launching --> Spent
+    Spent --> Lowering
+    Lowering --> Empty
+    Empty --> Reloading
+    Empty --> Stowed
+    Empty --> Loading
+    Loading --> Reloading
+    Loading --> Empty
+    Reloading --> Stowed
+    Aborting --> Stowed
+```
+
+- **Stowed**: A rocket on the rack, the rack down, the truck drives. Where a launcher starts and where every cancel ends when nobody has the screen open.
+- **Targeting**: The operator (the player in the operator seat) has the targeting screen open (clock: none). Closing it, or leaving the seat, goes back to Stowed.
+- **Proposed**: A point is locked (the placer is the operator). Every occupied seat must confirm (clock: the proposal timeout). Any cancel goes back to Targeting while the operator is still at the screen, else Stowed.
+- **Erecting**: Everybody confirmed. The truck is immobilised (brakes on, the driver's input ignored) and the rack rises (clock: erect seconds). The operator may abort until the ignition.
+- **Launching**: The rack is up and the rocket ignites (clock: ignition seconds). When it runs out the missile entity spawns and the rack is empty. Cannot be aborted.
+- **Spent**: The rack is up and empty for a moment (clock: spent hold seconds), the launch smoke clears, then the rack lowers.
+- **Lowering**: The empty rack lowers (clock: lower seconds). The truck is still immobilised.
+- **Empty**: The rack is down with no rocket. The truck drives again but cannot fire until a reload: a hold on a loaded rocket cart beside it (BeginLoad), TryReloadScud, or an admin's instant reload (Empty to Stowed).
+- **Reloading**: A rocket is being loaded (clock: reload seconds, or what is left of it after the transfer). The truck is immobilised; the rocket shows on the rack for the last half of the reload.
+- **Aborting**: The operator aborted the erect: the rack lowers again from where it got to, at the lowering rate, and the rocket is kept. Then Stowed.
+- **Loading**: The first half of a reload from a rocket cart (clock: reload seconds x transfer share). The truck is immobilised and the rack still empty; the bound cart keeps its rocket and must stay alive, loaded and in reach and neither it nor the truck may move, else back to Empty with the cart untouched. When the clock runs out the rocket leaves the cart (the host's order) and the second half begins.
+
+## Scud.ReloadKey
+
+The interact key beside a truck with an empty rack and a loaded cart: a tap gets in or out, a hold starts loading the rocket.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Holding
+    Holding --> Idle
+    Holding --> Spent
+    Spent --> Idle
+```
+
+- **Idle**: Key up. A press starts the hold.
+- **Holding**: Key down, counting the hold. Let go early: a tap, the key does what it always does (get in or out). Held to the end: the loading starts.
+- **Spent**: The hold did its work (or the key was down when the offer appeared): nothing happens until the key is let go.
+
+## Scud.Screen
+
+Which screen of a Scud truck the local player has up: their own view, the operator's targeting screen, or the read-only feed of it.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Operating
+    Closed --> Watching
+    Operating --> Closed
+    Watching --> Closed
+```
+
+- **Closed**: The player's own view. Where every end goes: the screen key again, leaving the truck, the launcher leaving its live states.
+- **Operating**: The operator pans, zooms and locks. After the open request the screen waits for the server's answer (a pending answer) and gives up if it does not come.
+- **Watching**: Another seat's read-only view of the operator's camera and lock, where it confirms or withdraws. The operator's own seat watches once the rack rises.
+
 ## Session.Phase
 
 A connection on the server: connected, said hello (profile loading) or refused, then joined.
@@ -1293,6 +1646,39 @@ stateDiagram-v2
 - **Idle**: Nothing runs: never started, or a round reset cleared it.
 - **Raiding**: The convoy's vans are launched one after another (no clock of its own: the convoy-gap clock runs beside) and come and go. Left by Finish (won when every van of the wave is gone, or an admin's end or cancel) or by a round reset.
 - **Over**: Won or cancelled; what was stolen stays stolen. A new /event thieves starts it again, a round reset clears it.
+
+## Trailer.Tow
+
+A trailer: standing loose, pulled by a tractor, or just released and not yet to be latched again.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Loose
+    Loose --> Hitched
+    Hitched --> Released
+    Released --> Loose
+```
+
+- **Loose**: Stands still. The first tractor that reverses its hitch onto the eye (close, lined up) latches it.
+- **Hitched**: The eye is pinned to the tractor's hitch and the trailer follows it (TowModel.Step). Ends on the driver's unhitch request.
+- **Released**: Just unhitched: rolls to a stop, and cannot be latched until the lockout (the tractor's relatch_lockout) has run out; then Loose.
+
+## Trailer.UnhitchKey
+
+The driver's interact key while towing: a tap leaves the vehicle, a hold unhitches the trailer.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Holding
+    Holding --> Idle
+    Holding --> Spent
+    Spent --> Idle
+```
+
+- **Idle**: Key up. A press starts the hold.
+- **Holding**: Key down, counting HoldSeconds. Let go before the end: a tap, the driver leaves the vehicle. Held to the end: the trailer is unhitched.
+- **Spent**: The hold did its work (or the key was down when the trailer latched): nothing happens until the key is let go.
 
 ## Turret.State
 

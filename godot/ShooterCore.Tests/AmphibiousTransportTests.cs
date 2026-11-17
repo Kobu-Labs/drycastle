@@ -60,17 +60,18 @@ public class AmphibiousTransportTests
         Assert.NotNull(v.Gun);
         Assert.NotNull(v.DoorGun);
         Assert.Null(v.Flak);
-        var jeep = Shipped.Vehicles.Single(x => x.Id == "jeep").Gun!;
-        Assert.Equal(jeep.Damage, v.Gun!.Damage);            // the jeep's round, the helicopter's belt
-        Assert.Equal(jeep.FireInterval, v.Gun.FireInterval);
+        VehicleGunRound.AssertIsTheRound(v.Gun!);            // the vehicle machine gun round, the helicopter's belt
+        Assert.Null(Shipped.Vehicles.Single(x => x.Id == "jeep").Gun); // the truck has no gun (#325)
         Assert.Equal(Shipped.Vehicles.Single(x => x.Id == "utility_helicopter").Gun!.Magazine, v.Gun.Magazine);
     }
 
     [Fact]
     public void Armed_and_exposed_are_properties_of_a_seat_and_no_other_vehicle_has_them()
     {
-        foreach (var v in Shipped.Vehicles.Where(v => v.Id != "amphibious"))
+        foreach (var v in Shipped.Vehicles.Where(v => v.Id is not ("amphibious" or "harvester" or "humvee" or "quad" or "motorcycle"))) // the Humvee (a standing exposed roof gunner, HumveeTests), the harvester (#331) and the quad and motorcycle (#325) have an exposed seat: an open cab, a rider in the open
             Assert.All(v.Seats, s => Assert.False(s.Armed || s.Exposed || s.Standing || s.Aim != null, $"{v.Id}"));
+        foreach (var id in new[] { "quad", "motorcycle" }) // one exposed driver, seated, not armed
+            Assert.All(Shipped.Vehicles.Single(v => v.Id == id).Seats, s => Assert.True(s.Exposed && !s.Armed && !s.Standing && s.Aim == null, id));
         // the bus's passengers stay unarmed: their input does nothing to their weapons
         var bus = Shipped.Vehicles.Single(v => v.Id == "bus");
         var fire = new NetInput { Buttons = (ushort)(MoveButtons.Fire | MoveButtons.Reload), Slot = 2 };

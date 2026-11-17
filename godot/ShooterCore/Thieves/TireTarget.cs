@@ -3,9 +3,9 @@ using System.Numerics;
 namespace Drycastle.ShooterCore;
 
 /// <summary>
-/// The <c>loot.tire</c> sub-section of thieves.json. Tires are taken off the cars listed in <see cref="VehicleIds"/> (the ones drawn with the Kenney sedan, whose wheels are nodes
-/// <c>wheel-front-left</c>, <c>wheel-front-right</c>, <c>wheel-back-left</c>, <c>wheel-back-right</c>): the wheel centres are <see cref="WheelSideM"/> either side of the car's middle and
-/// <see cref="WheelEndM"/> ahead of and behind it (the sedan's wheels at the game's scale of 1.7), the Thief kneels <see cref="WorkSideM"/> out from the middle beside the wheel. A car counts as at rest
+/// The <c>loot.tire</c> sub-section of thieves.json. Tires are taken off the cars listed in <see cref="VehicleIds"/> (the ones whose model has the wheel nodes
+/// <c>wheel_fl</c>, <c>wheel_fr</c>, <c>wheel_rl</c>, <c>wheel_rr</c>, the vehicle contract's names): the wheel centres are <see cref="WheelSideM"/> either side of the car's middle and
+/// <see cref="WheelEndM"/> ahead of and behind it (the small car's tyre centres, mean of its two axles), the Thief kneels <see cref="WorkSideM"/> out from the middle beside the wheel. A car counts as at rest
 /// when nobody sits in it and it moves slower than <see cref="RestSpeedMps"/>.
 /// </summary>
 public sealed class TireLootConfig : LootKindConfig
@@ -14,8 +14,8 @@ public sealed class TireLootConfig : LootKindConfig
 
     public List<string> VehicleIds { get; set; } = new() { "car" };
     public float WheelSideM { get; set; } = 0.72f;
-    public float WheelEndM { get; set; } = 1.12f;
-    public float WorkSideM { get; set; } = 1.15f;
+    public float WheelEndM { get; set; } = 1.32f;
+    public float WorkSideM { get; set; } = 1.25f;
     public float RestSpeedMps { get; set; } = 0.5f;
     public override void Validate(string file, string kind)
     {

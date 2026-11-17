@@ -193,4 +193,20 @@ public class OverlayTests
         Assert.False(p.Active);
         Assert.False(p.Dimmed(9, 0.12));
     }
+
+    [Theory, MemberData(nameof(Contexts))]
+    public void Hunters_log_is_ruled_like_the_equipment_screen(int i)
+    {
+        var c = Ctx(i);
+        Assert.Equal(OverlayArbiter.YieldsToMenu(Overlay.Equipment, c), OverlayArbiter.YieldsToMenu(Overlay.HuntersLog, c));
+        Assert.Equal(OverlayArbiter.Key(Overlay.Equipment, false, c), OverlayArbiter.Key(Overlay.HuntersLog, false, c));
+        Assert.Equal(OverlayArbiter.Key(Overlay.Equipment, true, c), OverlayArbiter.Key(Overlay.HuntersLog, true, c));
+    }
+
+    [Fact]
+    public void An_open_hunters_log_frees_the_mouse()
+    {
+        Assert.True(new MouseOwners(false, false, false, false, false, HuntersLogOpen: true).WantsFreeMouse);
+        Assert.False(new MouseOwners(false, false, false, false, false).WantsFreeMouse);
+    }
 }

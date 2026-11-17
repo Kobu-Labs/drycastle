@@ -22,6 +22,7 @@ from drycastle_pipeline.zones import (
     WILDLIFE,
     ZonesError,
     build_zone_points,
+    build_zone_polygons,
     check_ground_types,
     drawn_zones,
     kind_areas,
@@ -66,8 +67,8 @@ def inside(points: list, geom) -> bool:
 # --- the catalog and the rules -----------------------------------------------------------------------
 
 
-def test_the_catalog_is_bigfoot_player_spawn_and_every_species() -> None:
-    assert KIND_NAMES == ("bigfoot", "player_spawn", *WILDLIFE, *FLOCKS)
+def test_the_catalog_is_the_event_kinds_the_player_kinds_and_every_species() -> None:
+    assert KIND_NAMES == ("bigfoot", "scud", "player_spawn", "plantation", *WILDLIFE, *FLOCKS)
     assert {k.group for k in KINDS} == {"event", "player", "wildlife"}
     assert all(k.label and k.tint.startswith("#") for k in KINDS)
 
@@ -92,6 +93,8 @@ def test_the_shipped_rules_cover_the_catalog_with_rule_zones() -> None:
     types = rules_ground_types()
     check_ground_types(section, types)
     assert "where_ground" not in section["bigfoot"]  # drawn only
+    assert "where_ground" not in section["scud"]  # drawn only; the server falls back to open ground when none is drawn
+    assert section["scud"]["building_clearance_m"] >= 12  # a 12 m truck needs room
     assert set(section["player_spawn"]["where_ground"]) == {"allotments", "orchard", "meadow", "village", "field"}
     assert section["stag"]["where_ground"] == ["forest"]
     assert set(section["deer"]["where_ground"]) == {"forest", "meadow", "field"}
@@ -104,8 +107,10 @@ def test_kind_rows_are_the_catalog_in_order_with_the_rule_zone() -> None:
     assert [r["name"] for r in rows] == list(KIND_NAMES)
     by = {r["name"]: r for r in rows}
     assert by["bigfoot"]["where_ground"] is None and by["bigfoot"]["group"] == "event"
+    assert by["scud"]["where_ground"] is None and by["scud"]["group"] == "event" and by["scud"]["label"] == "Scud truck"
     assert by["stag"]["where_ground"] == ["forest"] and by["stag"]["group"] == "wildlife"
     assert set(by["player_spawn"]) == {"name", "label", "group", "tint", "where_ground"}
+    assert by["plantation"]["group"] == "player" and by["plantation"]["where_ground"] is None
 
 
 @pytest.mark.parametrize(
@@ -120,6 +125,7 @@ def test_kind_rows_are_the_catalog_in_order_with_the_rule_zone() -> None:
         ({"bigfoot": {**RULE, "where_ground": []}}, "where_ground"),
         ({"bigfoot": {**RULE, "where_ground": ["forest", "forest"]}}, "where_ground"),
         ({"player_spawn": {**RULE, "where_ground": ["field"]}}, "exactly the keys"),  # no points: no density keys
+        ({"plantation": RULE}, "exactly the keys"),  # polygons, not points: no density keys
         ({"bigfoot": 5}, "expected an object"),
     ],
 )
@@ -479,3 +485,65 @@ def test_ground_areas_are_clipped_to_the_terrain() -> None:
     assert [a["id"] for a in out] == ["A-0001", "A-0002"]
     assert out[0] is inside  # untouched
     assert out[1]["area"] == 800.0 and max(c[0] for c in out[1]["polygon"]["coordinates"][0]) == 100.0
+
+
+# --- the polygons of the plantation (zone_polygons.json) --------------------------------------------------
+
+
+def test_the_shipped_rules_have_a_plantation_with_no_numbers_and_no_rule_zone() -> None:
+    assert rules(load_section("zones"))["plantation"] == {}
+
+
+def test_a_plantation_has_no_points_but_its_polygons_in_game_axes() -> None:
+    d = drawn(zone("Z-0001", "plantation", box(30, 120, 150, 180)), zone("Z-0002", "deer", box(0, 0, 10, 10)))
+    section = rules({"plantation": {}, "bigfoot": RULE})
+    points, _ = build_zone_points({}, d, [], make_terrain(), {"bodies": []}, section)
+    assert points is None  # no kind that has a zone has points
+    doc = build_zone_polygons({}, d, section)
+    assert doc is not None and doc["version"] == 1
+    (entry,) = doc["zones"]
+    assert (entry["kind"], entry["areas"]) == ("plantation", ["Z-0001"])
+    (ring,) = entry["rings"]
+    # x stays, z = -north: the box 30..150 east, 120..180 north is x 30..150, z -180..-120
+    assert sorted({tuple(p) for p in ring}) == [(30, -180), (30, -120), (150, -180), (150, -120)]
+
+
+def test_no_plantation_zone_means_no_polygons() -> None:
+    section = rules({"plantation": {}})
+    assert build_zone_polygons({}, drawn(zone("Z-0001", "deer", box(0, 0, 10, 10))), section) is None
+    assert build_zone_polygons({}, {}, section) is None
+    assert build_zone_polygons({}, drawn(zone("Z-0001", "plantation", box(0, 0, 10, 10))), rules({"bigfoot": RULE})) is None  # no rule for the kind
+
+
+def test_a_cut_takes_its_part_out_of_the_polygons_of_a_rule_zone() -> None:
+    doc = {"ground": [ground("A-0001", "field", box(0, 0, 100, 100))]}
+    section = rules({"plantation": {"where_ground": ["field"]}})
+    whole = build_zone_polygons(doc, {}, section)
+    assert whole is not None and whole["zones"][0]["areas"] == ["A-0001"]
+    cut = zone_cuts({"ZC-0001": {"kind": "plantation", "polygon": [list(c) for c in box(0, 0, 100, 100).exterior.coords][:-1]}}, ORIGIN)
+    assert build_zone_polygons(doc, {}, section, cut) is None  # all cut away
+
+
+def test_export_writes_the_plantation_polygons_and_lists_them_in_the_manifest(tmp_path) -> None:
+    area = box(40, 110, 200, 190)
+    ws = write_world(tmp_path, None)
+    ws["edits"].write_text(json.dumps({"version": 1, "zones": {"Z-0001": {"kind": "plantation", "polygon": absolute(ws, area)}}}))
+    manifest = export(ws, ws["out"])
+    assert manifest["files"]["zone_polygons"] == "zone_polygons.json"
+    assert "zone_points" not in manifest["files"]  # the kind has no points
+    doc = json.loads((ws["out"] / "zone_polygons.json").read_text())
+    (entry,) = doc["zones"]
+    assert (entry["kind"], entry["areas"]) == ("plantation", ["Z-0001"])
+    (ring,) = entry["rings"]
+    xs, zs = [p[0] for p in ring], [p[1] for p in ring]
+    assert (min(xs), max(xs)) == pytest.approx((40, 200), abs=0.01) and (min(zs), max(zs)) == pytest.approx((-190, -110), abs=0.01)
+
+
+def test_a_map_without_a_plantation_has_no_polygon_file_and_a_stale_one_goes(tmp_path) -> None:
+    ws = write_world(tmp_path, None)
+    out = ws["out"]
+    out.mkdir()
+    (out / "zone_polygons.json").write_text("{}")
+    manifest = export(ws, out)
+    assert "zone_polygons" not in manifest["files"]
+    assert not (out / "zone_polygons.json").exists()

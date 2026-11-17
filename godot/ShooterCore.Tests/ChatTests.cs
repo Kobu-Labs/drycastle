@@ -305,4 +305,23 @@ public class ChatTests
         Assert.True(set.Frozen);
         Assert.InRange(set.HourAt(99999), 21.48, 21.52);
     }
+
+    [Fact]
+    public void ExplodeTakesASizeAndADistance()
+    {
+        var p = ChatCommands.Parse("/explode 12 80", Admin);
+        Assert.True(p.Ok);
+        Assert.Equal(new[] { "12", "80" }, p.Args);
+        Assert.True(ChatCommands.Parse("/explode 1 0", Admin).Ok);
+        Assert.Equal(new[] { "12", "80", "40" }, ChatCommands.Parse("/explode 12 80 40", Admin).Args); // the wave's speed is optional
+        Assert.False(ChatCommands.Parse($"/explode 12 80 {ChatCommands.MinExplodeSpeed - 1}", Admin).Ok);
+        Assert.False(ChatCommands.Parse($"/explode 12 80 {ChatCommands.MaxExplodeSpeed + 1}", Admin).Ok);
+        Assert.False(ChatCommands.Parse("/explode 12 80 40 1", Admin).Ok);
+        Assert.False(ChatCommands.Parse("/explode 12", Admin).Ok);
+        Assert.False(ChatCommands.Parse("/explode 0 10", Admin).Ok);
+        Assert.False(ChatCommands.Parse($"/explode {ChatCommands.MaxExplodeSize + 1} 10", Admin).Ok);
+        Assert.False(ChatCommands.Parse($"/explode 12 {ChatCommands.MaxExplodeDistance + 1}", Admin).Ok);
+        Assert.False(ChatCommands.Parse("/explode big far", Admin).Ok);
+        Assert.Contains("admin", ChatCommands.Parse("/explode 12 80", Guest).Error);
+    }
 }

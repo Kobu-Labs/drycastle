@@ -20,7 +20,7 @@ public partial class NetServer
         var l = p.Loadouts[p.Active];
         c.Perks = PerkModifiers.Of(Perks.Find(l.Perk));
         // Dev servers (smoke arenas, --debug-cmds) keep every weapon on the hotbar: the scripted bots and --fx-demo pick
-        // by weapons.json slot, e.g. the bazooka at slot 3 (#133). A public server (no debug commands) gets the loadout hotbar.
+        // by weapons.json slot, e.g. the rpg at slot 3 (#133). A public server (no debug commands) gets the loadout hotbar.
         c.W = new PlayerWeapons(Weapons, c.Perks, ArenaMode || DebugCommands || c.Sandbox ? LoadoutHotbar.All(Weapons) : LoadoutHotbar.Build(Weapons, l))
         {
             Unlimited = c.Sandbox, // sandbox (#156): unlimited ammo, the whole hotbar
@@ -87,5 +87,5 @@ public partial class NetServer
 
     /// <summary>The stats key of a weapon byte: its weapons.json id, or a name for the special causes (vehicle, debug, void, fall).</summary>
     string WeaponKey(byte weapon) =>
-        weapon < Weapons.Weapons.Count ? Weapons.Weapons[weapon].Id : weapon == SpecialWeapons.Vehicle ? "vehicle" : weapon == SpecialWeapons.VehicleGun ? "vehicle_gun" : weapon == SpecialWeapons.Flak ? "flak" : weapon == SpecialWeapons.Moab ? MoabStreak.OwnedWeapon : weapon == SpecialWeapons.Missile ? AttackMissileStreak.StreakId : weapon == SpecialWeapons.Turret ? TurretStreak.WeaponId : weapon == SpecialWeapons.AttackHelicopter ? AttackHelicopterStreak.StreakId : weapon == SpecialWeapons.Ac130 ? Ac130Streak.StreakId : weapon == SpecialWeapons.Helper ? HelicopterHelperStreak.WeaponId : "other";
+        weapon < Weapons.Weapons.Count ? Weapons.Weapons[weapon].Id : weapon == SpecialWeapons.Vehicle ? "vehicle" : weapon == SpecialWeapons.VehicleGun ? "vehicle_gun" : weapon == SpecialWeapons.Flak ? "flak" : weapon == SpecialWeapons.Moab ? MoabStreak.OwnedWeapon : weapon == SpecialWeapons.Scud ? "scud" : weapon == SpecialWeapons.Missile ? AttackMissileStreak.StreakId : weapon == SpecialWeapons.Turret ? TurretStreak.WeaponId : weapon == SpecialWeapons.AttackHelicopter ? AttackHelicopterStreak.StreakId : weapon == SpecialWeapons.Ac130 ? Ac130Streak.StreakId : weapon == SpecialWeapons.Helper ? HelicopterHelperStreak.WeaponId : "other";
 }

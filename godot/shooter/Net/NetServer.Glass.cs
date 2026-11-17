@@ -36,7 +36,7 @@ public partial class NetServer
         }
     }
 
-    float VehiclePaneHp(VehicleDef def, int index) => def.Glass[index].Hp ?? GlassData.VehiclePaneHp;
+    float VehiclePaneHp(VehicleDef def, int index) => def.Glass[index].Hp ?? GlassData.PaneHp(def.Glass[index].Kind);
 
     /// <summary>
     /// A bullet, pellet or gun round that hit no player stopped <paramref name="wall"/> metres along the ray, on <paramref name="car"/> or
@@ -98,21 +98,29 @@ public partial class NetServer
             car = hull;
             var wall = off + hullD;
             if (car == solid || pass >= MaxGlassPasses) return wall;
-            var panes = car.Def.GlassRects; var open = car.Def.OpenSideRects;
-            if (panes.Count == 0 && open.Count == 0) return wall;
             var (pitch, roll) = car.Def.TiltOf(pose.Pitch, pose.Roll);
             var lo = GlassRules.ToVehicle(n, pose.Feet, pose.Yaw, pitch, roll); var ld = GlassRules.DirToVehicle(nd, pose.Yaw, pitch, roll);
-            var way = GlassRules.Through(panes, open, lo, ld, wall, GlassData.VehicleReach);
-            if (!way.Enters || way.EntryT > max) return wall; // the body where the ray met it, or the round's range ends before the pane
-            if (way.EntryPane >= 0) (crossed ??= new()).Add(new GlassCross(car, way.EntryPane, way.EntryT));
-            // no way out, or the round's range ends inside: the hull takes the round on its far side
-            if (!way.Leaves || way.ExitT + 0.02f >= max)
-                return MathF.Min(MathF.Max(VehicleBox.ExitDistance(lo, ld, car.Def), way.EntryT), max);
+            var hit = car; // (an out parameter cannot be captured)
+            // the pane kinds decide (ADR 0035): a reinforced pane that holds stops the round, a normal one lets it through; the pane it stopped on
+            // takes its damage as any pane a round stopped on (ShotGlass), so it is not put in the crossed list
+            var way = PaneRules.Pass(car.Def, i => _glass.IsShattered(new GlassPaneKey(hit.Id, (ushort)i)), lo, ld, wall, GlassData.VehicleReach, max);
+            if (way.Kind == HullPassKind.Hull) return wall;
+            if (way.EntryPane >= 0) (crossed ??= new()).Add(new GlassCross(car, way.EntryPane, way.EntryT)); // (-1: an open side, nothing to damage)
+            if (way.Kind != HullPassKind.Through) return way.T;
             if (way.ExitPane >= 0) (crossed ??= new()).Add(new GlassCross(car, way.ExitPane, way.ExitT));
             off = way.ExitT + 0.02f;
             (passed ??= new()).Add(car);
         }
     }
+
+    /// <summary>
+    /// Takes out of <paramref name="targets"/> the riders of armoured seats (ADR 0035): no bullet, pellet or mounted-gun round reaches them. Their hit
+    /// targets stay in the lists blasts read (<see cref="LiveTargets"/>), which hurt them as every body in range.
+    /// </summary>
+    void DropArmoured(List<HitTarget> targets) => targets.RemoveAll(IsArmouredRider);
+
+    bool IsArmouredRider(HitTarget t) =>
+        _byId.TryGetValue(t.Id, out var o) && o.Car is { } car && o.CarSeat >= 0 && o.CarSeat < car.Def.Seats.Count && !RiderRules.BulletsReach(car.Def, o.CarSeat);
 
     /// <summary>The panes a bullet went through that lie nearer than <paramref name="before"/> (where it hit a player, else infinity) take <paramref name="damage"/> of their distance each.</summary>
     void DamageCrossed(List<GlassCross>? crossed, float before, Func<float, float> damage)
@@ -128,15 +136,16 @@ public partial class NetServer
     }
 
     /// <summary>A blast at <paramref name="at"/> with <paramref name="radius"/>: every pane in it takes the blast damage of glass.json by its distance.</summary>
-    void BlastGlass(Vector3 at, float radius)
+    void BlastGlass(Vector3 at, float radius, float? centreDamage = null)
     {
-        if (radius <= 0 || GlassData.BlastDamage <= 0) return;
+        var blastDamage = centreDamage ?? GlassData.BlastDamage; // the Scud blast passes a damage far above any pane's hit points, so every pane in its radius shatters
+        if (radius <= 0 || blastDamage <= 0) return;
         var c = N(at);
         var panes = MapPanes;
         for (var i = 0; i < panes.Count; i++)
         {
             if (!panes[i].Breakable) continue;
-            var dmg = GlassRules.BlastDamage(NVec3.Distance(c, panes[i].Rect.Centre), radius, GlassData.BlastDamage);
+            var dmg = GlassRules.BlastDamage(NVec3.Distance(c, panes[i].Rect.Centre), radius, blastDamage);
             if (dmg > 0 && _glass.Damage(new GlassPaneKey(GlassPaneKey.Map, (ushort)i), dmg, panes[i].Hp ?? GlassData.BuildingPaneHp)) _glassHits++;
         }
         foreach (var car in _cars)
@@ -150,7 +159,7 @@ public partial class NetServer
             var (tiltPitch, tiltRoll) = car.Def.TiltOf(attPitch, attRoll);
             for (var i = 0; i < rects.Count; i++)
             {
-                var dmg = GlassRules.BlastDamage(NVec3.Distance(c, GlassRules.FromVehicle(rects[i].Centre, feet, car.State.Yaw, tiltPitch, tiltRoll)), radius, GlassData.BlastDamage);
+                var dmg = GlassRules.BlastDamage(NVec3.Distance(c, GlassRules.FromVehicle(rects[i].Centre, feet, car.State.Yaw, tiltPitch, tiltRoll)), radius, blastDamage);
                 if (dmg > 0 && _glass.Damage(new GlassPaneKey(car.Id, (ushort)i), dmg, VehiclePaneHp(car.Def, i))) _glassHits++;
             }
         }

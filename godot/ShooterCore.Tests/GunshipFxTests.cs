@@ -7,7 +7,7 @@ namespace Drycastle.ShooterCore.Tests;
 /// <summary>
 /// Ticket #159: the gunship FX is coalesced per server tick. These tests cover the codecs (round trips and malformed payloads), the
 /// caps (tracers, impacts with kills always kept, blasts), the batch's flush order, the hit-marker flags, a byte budget for a full-rate
-/// AC-130 burst driven by the real turret cadence, and the gunship rocket's own 8 m blast (killstreaks.json) against the bazooka's 6 m.
+/// AC-130 burst driven by the real turret cadence, and the gunship rocket's own 8 m blast (killstreaks.json) against the rpg's 6 m.
 /// </summary>
 public class GunshipFxTests
 {
@@ -225,23 +225,26 @@ public class GunshipFxTests
     // --- the gunship rocket's blast --------------------------------------------------------------------------
 
     [Fact]
-    public void Gunship_rockets_carry_their_own_8_metre_blast_and_the_bazooka_keeps_6()
+    public void Gunship_rockets_carry_their_own_8_metre_blast_and_the_rpg_keeps_10()
     {
         var rockets = Shipped.Killstreaks.Gunship!.Weapons.Single(w => w.Id == "rockets");
         Assert.Equal(8f, rockets.Splash!.Radius);
-        var bazooka = Shipped.Weapons.Weapons.Single(w => w.Id == "bazooka");
-        Assert.Equal(6f, bazooka.Splash!.Radius);
+        var rpg = Shipped.Weapons.Weapons.Single(w => w.Id == "rpg");
+        Assert.Equal(10f, rpg.Splash!.Radius);
+        Assert.Equal(200f, rpg.Splash.WaveSpeed); // its Blast wave (#348); the gunship rockets name none
+        Assert.Equal(0f, rockets.Splash.WaveSpeed);
     }
 
     [Fact]
-    public void A_gunship_rocket_hurts_at_7_metres_and_a_bazooka_rocket_does_not()
+    public void A_gunship_rocket_keeps_its_own_8_metre_blast_whatever_the_rpgs_is()
     {
         var rockets = Shipped.Killstreaks.Gunship!.Weapons.Single(w => w.Id == "rockets");
-        var bazooka = Shipped.Weapons.Weapons.Single(w => w.Id == "bazooka");
-        var gunship = ProjectileMath.WithBlast(bazooka, rockets.Splash);
+        var rpg = Shipped.Weapons.Weapons.Single(w => w.Id == "rpg");
+        var gunship = ProjectileMath.WithBlast(rpg, rockets.Splash);
         Assert.True(ProjectileMath.SplashDamage(gunship, 7f, false) > 0);
-        Assert.Equal(0f, ProjectileMath.SplashDamage(bazooka, 7f, false));
         Assert.Equal(0f, ProjectileMath.SplashDamage(gunship, 8f, false)); // the edge of the 8 m blast
-        Assert.Same(bazooka, ProjectileMath.WithBlast(bazooka, null));       // no override: the weapon's own blast
+        Assert.True(ProjectileMath.SplashDamage(rpg, 9f, false) > 0);      // the rpg's own reaches 10 m (#348)
+        Assert.Equal(0f, ProjectileMath.SplashDamage(rpg, 10f, false));
+        Assert.Same(rpg, ProjectileMath.WithBlast(rpg, null));       // no override: the weapon's own blast
     }
 }

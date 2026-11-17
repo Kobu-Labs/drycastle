@@ -178,8 +178,8 @@ public static class HitMath
         return MathF.Max(1f, MathF.Round(dmg));
     }
 
-    /// <summary>Damage one target took from a pellet fan: the summed pellet damage, and whether any pellet hit the head.</summary>
-    public readonly record struct PelletTotal(float Damage, bool Head);
+    /// <summary>What a fan did to one target: the damage, whether a pellet met the head, and the first pellet that hit (its index, how far it flew, whether it met the head shape): the hit diagram of a wild animal the fan killed.</summary>
+    public readonly record struct PelletTotal(float Damage, bool Head, int First = -1, float FirstDistance = 0, bool FirstShapeHead = false);
 
     /// <summary>
     /// Pellet directions of one shotgun shot: <paramref name="pellets"/> unit vectors uniform by area in a cone of half angle
@@ -243,8 +243,9 @@ public static class HitMath
             // a pellet that stopped on a vehicle with riders in the open may still reach one of them (GunnerCover)
             var found = exposed?[i] is { } g ? GunnerCover.Raycast(origin, dirs[i], maxDistance, walls[i], targets, shooter, g, wallsPastHull![i]) : Raycast(origin, dirs[i], maxDistance, walls[i], targets, shooter);
             if (found is not { } hit) continue;
-            var prev = totals.GetValueOrDefault(hit.Id);
-            totals[hit.Id] = new PelletTotal(prev.Damage + PelletDamage(w, hit.Distance, hit.Head), prev.Head || hit.Head);
+            var seen = totals.TryGetValue(hit.Id, out var prev);
+            totals[hit.Id] = new PelletTotal(prev.Damage + PelletDamage(w, hit.Distance, hit.Head), prev.Head || hit.Head,
+                seen ? prev.First : i, seen ? prev.FirstDistance : hit.Distance, seen ? prev.FirstShapeHead : hit.ShapeHead);
         }
         return totals;
     }

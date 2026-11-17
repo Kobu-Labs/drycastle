@@ -19,7 +19,7 @@ public static class LoadoutHotbar
 
     /// <summary>
     /// Every weapon in weapons.json order. Only for the scripted smoke arenas (#133): the bots pick weapons by their
-    /// weapons.json slot (the bazooka is slot 3), which a player's loadout hotbar no longer offers. Never used for players.
+    /// weapons.json slot (the rpg is slot 3), which a player's loadout hotbar no longer offers. Never used for players.
     /// </summary>
     public static int[] All(WeaponsFile weapons) => Enumerable.Range(0, weapons.Weapons.Count).ToArray();
 

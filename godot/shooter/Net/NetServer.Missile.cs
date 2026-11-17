@@ -6,7 +6,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// The attack missile on the server (killstreak "attack_missile"): the adapter the streak flies in (world sweeps, live
-/// players, the owner's facing) and the blast. The blast is the bazooka's splash code with the missile's own tuning, and
+/// players, the owner's facing) and the blast. The blast is the rpg's splash code with the missile's own tuning, and
 /// its kills are credited to the missile (<see cref="SpecialWeapons.Missile"/>).
 /// </summary>
 public partial class NetServer

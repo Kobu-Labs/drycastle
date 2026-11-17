@@ -7,6 +7,7 @@ glTF (x, y, z) = local (east, up, -north). parcels.json keeps local metres (x ea
 import hashlib
 import json
 import math
+import struct
 import sys
 from pathlib import Path
 
@@ -29,14 +30,17 @@ from drycastle_pipeline.meshes import Mesh
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
 from drycastle_pipeline.patches import patch_rank
 from drycastle_pipeline.primitives import PRIMITIVES, build_primitive
+from drycastle_pipeline.propmeshes import GROUND_BAKED_ONLY, is_forest
 from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from drycastle_pipeline.scene import build_scene
 from drycastle_pipeline.textures import TexturedMesh, tex_node_name
 from drycastle_pipeline.water import water_doc, water_rules
 from drycastle_pipeline.zones import FILE_NAME as ZONE_POINTS_FILE
+from drycastle_pipeline.zones import POLYGONS_FILE_NAME as ZONE_POLYGONS_FILE
 from drycastle_pipeline.zones import (
     ZonesError,
     build_zone_points,
+    build_zone_polygons,
     check_ground_types,
     drawn_zones,
     kind_rows,
@@ -65,7 +69,22 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # "tint" flag; meadow.bin is format 2 (a tint flag per layer) and then 3 (a species-zone plane and kind mixes); more
 # clutter kinds (grasses, wild and garden flowers) in clutter_meshes.glb. A loader that reads only 0.9.0 clutter would refuse
 # meadow.bin's new format and draw no meadow.
+# (no bump) crops.json (files.crops): instances of the crop fields (ground types crop_*): per chunk and kind rows [x, y, z, rot,
+# scale] of plants (crop_wheat, ...) and artifacts (art_hay_bale_round, ...), and per kind what to draw it with (role, asset or
+# synty names). Cosmetic: no collision. Only maps with a crop patch have it; a loader that does not know it draws none.
 # (no bump) garage.json (files.garage): the bus garage: the doorway its doors hang in, the bay, where the bus stands.
+# 0.11.0: forest trees (props.trees.forest): trees.json's model carries a "forest" block (tapered trunk, crown tiers) and each
+# forest tree a "forest": 1 flag; the chunk meshes draw them with it. A loader that does not know it builds the old trunk and
+# crown solids for them, which no longer match the drawn tree. Trees without the flag are drawn and built as before.
+# 0.12.0: baked trees can be hidden one by one on the GPU. A props mesh with tree triangles (parcel_<ID>_props, the chunk-level
+# props) carries a second UV set (TEXCOORD_1, two floats per vertex): for a tree's vertices the tree's base (trees.json x, y) as
+# (POSITION x, POSITION z) of the same mesh, so MODEL_MATRIX * vec4(uv2.x, vertex.y, uv2.y, 1) is the base's world point; for all
+# other vertices (fences) NO_TREE_UV2, a point no player is near. Meshes without trees have no TEXCOORD_1, and trees.json's model
+# says "base_uv2": true. A loader that does not know it ignores the attribute and draws every tree; maps before 0.12.0 have none.
+# 0.13.0: ground objects (props.ground_objects): ground_objects.json (files.ground_objects) lists the fallen logs, stumps, boulders, anthills, burrows and
+# root plates of the forest ("kind", x, y, z, rot, scale, "len" for a log, chunk) and the model numbers of each kind; the game builds
+# their solid colliders from it. Their low-poly meshes are baked into the same props meshes as the trees, with the object's base as
+# TEXCOORD_1 (the model says "base_uv2": true). A loader that does not know the file draws them but walks and shoots through them.
 # (no bump) urad.json (files.urad): the inside of the municipal office: entrance, rooms, worker seats, dictation desk.
 # (no bump) church.json (files.church): the inside of the church: door, seats with routes, spots, anchors, rooms.
 # (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
@@ -74,6 +93,9 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # (no bump) zone_points.json (files.zone_points): candidate points per zone kind (rules.yaml zones: bigfoot, one kind per wild
 # species) that the server picks from. Only maps where some zone has an area have it; a loader that does not know it, or a map
 # without it, means "no points".
+# (no bump) zone_polygons.json (files.zone_polygons): the outlines of the zones of the kinds the server asks "is a player inside" of
+# (the plantation), rings in game axes [x, z]. Only maps with such a zone have it; a loader that does not know it, or a map without
+# it, means "no such zone".
 # (no bump) patches.json (files.patches): the ground patches of the edits in the colour of their type, for the minimap; the
 # patch_<ID> nodes of the chunk files are the water patches only (the other patches are ground, baked into terrain and detail).
 # (no bump) groups.json (files.groups): the property groups of the edits (group id -> parcel ids), for the game server's pets.
@@ -82,13 +104,17 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # for the game server's pets (the fence hop). A loader that does not know it, or a map without it, means "no fence data".
 # (no bump) NORMAL on every drawn mesh of the chunk files, clutter_meshes.glb and prims (the face normal, flat shading);
 # collision meshes have none. Maps built before this shade with one constant normal (lights cut off by heading).
-MAP_VERSION_BASE = "0.10.0"
+MAP_VERSION_BASE = "0.14.0"
+NO_TREE_UV2 = 1.0e6  # TEXCOORD_1 of a vertex that is no tree
+BASE_UV2_ATTRIBUTE = "_UV2"  # trimesh writes custom attributes with a leading underscore; export_glb renames it
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 TREES_FORMAT_VERSION = 1
+GROUND_OBJECTS_FORMAT_VERSION = 1
+TREES_AXES = "map metres: x east, y north, z up (ground height at the trunk foot)"
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
                "props.json", "spawns.json", "lamps.json", "detail.json", "detail_patches.npy",
-               "detail_patches.json", "detail_meadow.bin")
+               "detail_patches.json", "detail_meadow.bin", "detail_crops.json")
 NOT_GENERATED_NOTE = "Landmarks, navmesh and water surface meshes are not generated (water.json holds the water bodies). Textures are not in the map: textured nodes name a texture of the asset library."
 
 
@@ -123,13 +149,19 @@ def to_trimesh(mesh: Mesh, normals: bool = True) -> trimesh.Trimesh:
     verts = to_gltf_axes(mesh.tris).reshape(-1, 3)
     faces = np.arange(len(verts)).reshape(-1, 3)
     rgba = np.concatenate([mesh.colours, np.full((len(mesh.colours), 1), 255, np.uint8)], axis=1)
-    return trimesh.Trimesh(
+    tm = trimesh.Trimesh(
         vertices=verts,
         faces=faces,
         vertex_colors=np.repeat(rgba, 3, axis=0),
         vertex_normals=flat_normals(verts) if normals and len(verts) else None,
         process=False,
     )
+    if mesh.bases is not None and not np.isnan(mesh.bases).all():
+        # (POSITION x, POSITION z) of the tree base: glTF axes of (x, y, z) are (x, z, -y); same rounding as the positions
+        uv2 = np.round(np.stack([mesh.bases[:, 0], -mesh.bases[:, 1]], axis=1), 4)
+        uv2[np.isnan(uv2).any(axis=1)] = NO_TREE_UV2
+        tm.vertex_attributes[BASE_UV2_ATTRIBUTE] = np.repeat(uv2, 3, axis=0).astype(np.float32)
+    return tm
 
 
 def to_trimesh_textured(mesh: TexturedMesh, tid: str) -> trimesh.Trimesh:
@@ -156,6 +188,29 @@ def node_trimesh(name: str, mesh: Mesh | TexturedMesh) -> trimesh.Trimesh:
     if isinstance(mesh, TexturedMesh):
         return to_trimesh_textured(mesh, name.partition("_tex_")[2])
     return to_trimesh(mesh, normals=not name.endswith("collision"))
+
+
+def export_glb(scene: trimesh.Scene) -> bytes:
+    """``scene`` as GLB bytes, with the base attribute (``_UV2``, see ``to_trimesh``) renamed to ``TEXCOORD_1``.
+
+    trimesh can only write TEXCOORD_0 itself. Every GLB that may carry tree meshes goes through here.
+    """
+    data = scene.export(file_type="glb")
+    jlen, jtype = struct.unpack_from("<II", data, 12)
+    assert jtype == 0x4E4F534A  # "JSON"
+    doc = json.loads(data[20 : 20 + jlen])
+    found = False
+    for mesh in doc.get("meshes", []):
+        for prim in mesh["primitives"]:
+            if BASE_UV2_ATTRIBUTE in prim["attributes"]:
+                prim["attributes"]["TEXCOORD_1"] = prim["attributes"].pop(BASE_UV2_ATTRIBUTE)
+                found = True
+    if not found:
+        return data
+    blob = json.dumps(doc, separators=(",", ":")).encode()
+    blob += b" " * (-len(blob) % 4)
+    rest = data[20 + jlen :]
+    return struct.pack("<4sIIII", b"glTF", 2, 20 + len(blob) + len(rest), len(blob), jtype) + blob + rest
 
 
 def parcel_props_nodes(
@@ -228,6 +283,49 @@ def _sha256(path: Path) -> str:
 def _on_terrain(areas: list[dict], terrain) -> list[dict]:
     """The ground areas limited to the terrain: nothing is defined off the playing area (no terrain: as they are)."""
     return areas if terrain is None else clip_areas(areas, terrain.coverage)
+
+
+def forest_fields(tree: dict) -> dict:
+    """A forest tree's trees.json fields: the flag, its stand (props.Stands; mixed when the props.json has none) and, where true, ``edge``."""
+    if not is_forest(tree):
+        return {}
+    return {"forest": 1, "stand": tree.get("stand", "mixed"), **({"edge": True} if tree.get("edge") else {})}
+
+
+def forest_model(tree_cfg: dict) -> dict:
+    """The forest tree numbers of trees.json's model block (metres at scale 1; the same ones ``tree_mesh`` draws)."""
+    f = tree_cfg["forest"]
+    return {
+        "trunk_width_m": float(f["trunk_width_m"]),
+        "trunk_height_m": float(f["trunk_height_m"]),
+        "trunk_top_ratio": float(f["trunk_top_ratio"]),
+        "cone_tiers": [[float(v) for v in t] for t in f["cone_tiers"]],
+        "box_tiers": [[float(v) for v in t] for t in f["box_tiers"]],
+    }
+
+
+def ground_model(cfg: dict) -> dict:
+    """The ground object numbers of ground_objects.json's model block (metres at scale 1; the same ones ``ground_object_mesh`` draws)."""
+    return {kind: {k: float(v) for k, v in cfg["model"][kind].items()} for kind in ("log", "stump", "boulder", "rootplate", "anthill", "burrow")}
+
+
+def ground_objects_doc(objects: list[dict], cfg: dict, chunk_m: float) -> dict:
+    """The ``ground_objects.json`` document. ``rot`` is the yaw as for trees: u = (cos rot, sin rot). A log lies along u (thick end at -u,
+    ``len`` metres long, its midpoint at x, y); a root plate's flat faces are across u (a log's plate stands at its -u end)."""
+    return {
+        "format_version": GROUND_OBJECTS_FORMAT_VERSION,
+        "axes": TREES_AXES,
+        "chunk_size_m": chunk_m,
+        "model": {"base_uv2": True, "baked_only": sorted(GROUND_BAKED_ONLY), "kinds": ground_model(cfg)},
+        "objects": [
+            {
+                "kind": o["kind"], "x": o["x"], "y": o["y"], "z": round(o["z"], 3), "rot": o["rot"], "scale": o["scale"],
+                **({"len": o["len"]} if o["kind"] == "log" else {}),
+                "chunk": [int(math.floor(o["x"] / chunk_m)), int(math.floor(o["y"] / chunk_m))],
+            }
+            for o in objects
+        ],
+    }
 
 
 def _dump(path: Path, doc: dict) -> None:
@@ -310,7 +408,7 @@ def run_export(
             **parcel_props_nodes(scene.parcel_props.get((ix, iy), [])),
         }
         rel = f"chunks/{chunk_name(ix, iy)}.glb"
-        data = build_chunk_scene(items, extra).export(file_type="glb")
+        data = export_glb(build_chunk_scene(items, extra))
         (out_dir / rel).write_bytes(data)
         triangles = {f"parcel_{pid}_{sfx}": m.face_count for pid, v, c in items
                      for sfx, m in (("visual", v), ("collision", c))}
@@ -344,23 +442,35 @@ def run_export(
         chunk_m = float(parcels_doc["chunk_size_m"])
         _dump(out_dir / "trees.json", {
             "format_version": TREES_FORMAT_VERSION,
-            "axes": "map metres: x east, y north, z up (ground height at the trunk foot)",
+            "axes": TREES_AXES,
             "chunk_size_m": chunk_m,
             "model": {
                 "trunk_width_m": float(tree_cfg["trunk_width_m"]),
                 "trunk_height_m": float(tree_cfg["trunk_height_m"]),
                 "canopy_m": float(tree_cfg["canopy_m"]),
+                "base_uv2": True,  # the chunk props meshes carry each tree's base as TEXCOORD_1 (map 0.12.0)
+                **({"forest": forest_model(tree_cfg)} if "forest" in tree_cfg else {}),
             },
             "trees": [
                 {
                     "x": t["x"], "y": t["y"], "z": round(t["z"], 3), "scale": t["scale"], "rot": t["rot"],
                     "shape": t["shape"],
+                    **({"colour": t["colour"]} if t.get("colour") else {}),  # the canopy colour: the game's detailed tree takes it, so the swap keeps the green
+                    **forest_fields(t),
                     "chunk": [int(math.floor(t["x"] / chunk_m)), int(math.floor(t["y"] / chunk_m))],
                 }
                 for t in scene.trees
             ],
         })
         files["trees"] = "trees.json"
+    ground_file = out_dir / "ground_objects.json"
+    if scene.ground_objects is not None:
+        # solid ground objects of the forest (props stage): the game builds colliders from the records and the model numbers
+        _dump(ground_file, ground_objects_doc(
+            scene.ground_objects, load_section("props", rules_path)["ground_objects"], float(parcels_doc["chunk_size_m"])))
+        files["ground_objects"] = "ground_objects.json"
+    else:
+        ground_file.unlink(missing_ok=True)  # props.json from before this file existed: no objects
     fences_src = work_dir / "fences.json"
     if fences_src.is_file():
         # fence sections (props stage); copied verbatim, the game server hops pets over them
@@ -382,6 +492,13 @@ def run_export(
     else:
         for stale in ("clutter.json", "clutter_meshes.glb"):
             (out_dir / stale).unlink(missing_ok=True)
+    crops_src = work_dir / "detail_crops.json"
+    if crops_src.is_file():
+        # crop plants and artifacts (detail stage, crop recipe); copied verbatim, the game draws each kind with its own model
+        (out_dir / "crops.json").write_bytes(crops_src.read_bytes())
+        files["crops"] = "crops.json"
+    else:
+        (out_dir / "crops.json").unlink(missing_ok=True)
     meadow_src = work_dir / "detail_meadow.bin"
     if meadow_src.is_file():
         # density raster of the meadow clutter (detail stage); copied verbatim, the game generates the instances from it
@@ -471,6 +588,10 @@ def run_export(
     parcels_file["zone_kinds"] = kind_rows(zrules)
     _dump(out_dir / "parcels.json", parcels_file)
     water_file = out_dir / "water.json"
+    zone_edits = load_edits(edits_path)
+    origin = parcels_doc.get("origin_epsg5514")
+    drawn = drawn_zones(zone_edits.zones, origin) if origin else {}
+    cuts = zone_cuts(zone_edits.zone_cuts, origin) if origin else {}
     if scene.water is not None:
         for pid in scene.water.skipped:
             print(f"export: warning: water parcel/patch {pid} has no terrain under it (or none below its surface); no water body", file=sys.stderr)
@@ -478,10 +599,6 @@ def run_export(
         _dump(water_file, water)
         files["water"] = "water.json"
         # candidate points of the zone kinds, drawn clear of the buildings and of the water just built
-        zone_edits = load_edits(edits_path)
-        origin = parcels_doc.get("origin_epsg5514")
-        drawn = drawn_zones(zone_edits.zones, origin) if origin else {}
-        cuts = zone_cuts(zone_edits.zone_cuts, origin) if origin else {}
         points_doc, points_warnings = build_zone_points(
             parcels_doc, drawn, list(buildings.values()), scene.terrain, water, zrules, cuts
         )
@@ -497,6 +614,13 @@ def run_export(
         files["zone_points"] = ZONE_POINTS_FILE
     else:
         points_file.unlink(missing_ok=True)  # no zone has an area (any more): no file, "no points"
+    polygons_doc = build_zone_polygons(parcels_doc, drawn, zrules, cuts)
+    polygons_file = out_dir / ZONE_POLYGONS_FILE
+    if polygons_doc is not None:
+        _dump(polygons_file, polygons_doc)
+        files["zone_polygons"] = ZONE_POLYGONS_FILE
+    else:
+        polygons_file.unlink(missing_ok=True)  # no plantation zone (any more): no file, the feature is off
     groups_doc = build_groups(edits_path, (p["id"] for p in parcels_doc["parcels"]))
     groups_file = out_dir / GROUPS_FILE
     if groups_doc is not None:
@@ -538,6 +662,8 @@ def run_export(
             generated |= {"roads", "roads_graph"}
         if scene.props is not None:
             generated |= {"fences", "trees"}
+            if "ground_objects" in files:
+                generated.add("ground_objects")
         if scene.spawns is not None:
             generated |= {"spawns"}
     if any(name.startswith("patch_") for nodes in scene.nodes.values() for name in nodes):

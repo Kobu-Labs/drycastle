@@ -144,6 +144,10 @@ public sealed class CarePackageBook
 
     public int Count => _crates.Count;
 
+    /// <summary>A landed, live crate a player at <paramref name="player"/> could open (in reach, with the latency slack): it owns the interact key.</summary>
+    public bool AnyInReach(Vector3 player, float slack = CarePackageRules.LatencySlackMetres) =>
+        _crates.Values.Any(c => c.Ended == null && c.Landed && CarePackageRules.InReach(player, c.Position, slack));
+
     /// <summary>Drops a crate at <paramref name="landing"/>. Null when the world refuses it (cap reached).</summary>
     public ushort? Drop(ushort owner, Vector3 landing)
     {

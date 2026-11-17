@@ -50,7 +50,7 @@ public sealed class GunshipWeaponDef
     /// <summary>
     /// The blast of a round (its own tuning, not weapons.json): a shell always has one, a cannon round may have one (its hit
     /// point takes the full damage, everything in the radius the falloff). A rocket may have one too: it then replaces the
-    /// weapons.json blast for that launch (the gunship's rockets 8 m; the bazooka keeps its 6 m). Null uses the weapon's own.
+    /// weapons.json blast for that launch (the gunship's rockets 8 m; the rpg keeps its 6 m). Null uses the weapon's own.
     /// </summary>
     public SplashDef? Splash { get; init; }
     /// <summary>
@@ -60,7 +60,7 @@ public sealed class GunshipWeaponDef
     public float? TracerSpeedMps { get; init; }
     public float? TracerLengthM { get; init; }
     /// <summary>
-    /// A rocket's flight speed, m/s (killstreaks.json <c>projectile_speed_mps</c>, default 250). It replaces the bazooka's 40 m/s for this
+    /// A rocket's flight speed, m/s (killstreaks.json <c>projectile_speed_mps</c>, default 250). It replaces the rpg's 40 m/s for this
     /// launch, so a rocket can reach a target across the map; its life is <see cref="RocketFlight.LifeFor"/> of its range and this speed.
     /// Zero for the other kinds.
     /// </summary>

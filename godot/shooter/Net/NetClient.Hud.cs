@@ -18,7 +18,7 @@ public partial class NetClient
     void InitMatchEdges()
     {
         Match.PhaseChanged += SfxPhase;
-        Match.RoundRestarted += () => _hud?.ClearKills();
+        Match.RoundRestarted += () => { _hud?.ClearKills(); HarvesterRoundRestart(); };
     }
 
     WeaponDef? CurrentWeapon => Ammo is { } a && Weapons != null && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1] : null;
@@ -42,6 +42,8 @@ public partial class NetClient
         _hud.SetSandbox(SandboxGranted, SandboxHeldStreak, SandboxTakesDamage); // the SANDBOX badge (#156)
         WireLoadoutHud(_hud);
         _hud.AttachEquipment(this); // F (#268)
+        _hud.AttachHuntersLog(HuntLogEnvironment()); // J (#336)
+        HuntData.RequestLog(0); // learns the player's own id in the log (their own announcements say "you"), and warms My Log
         _hud.Minimap.Build(Map); // once per connection; the texture comes from the map's parcels and roads (ticket #119)
         _hud.PrewarmTacticalMap(GetViewport().GetVisibleRect().Size); // the full-screen map's picture is made on a worker meanwhile
     }
@@ -69,26 +71,10 @@ public partial class NetClient
         _hud.SetAmmo(Math.Max(1, HotbarPos(a.Slot) + 1), w.MagazineSize == 0 ? -1 : mag, reserve, all, a.ReloadRemaining, w.ReloadTime);
     }
 
-    readonly Dictionary<string, Texture2D?> _silhouettes = new();
+    HuntArtResolver? _huntArt;
 
-    /// <summary>
-    /// A species' side view for the hit diagram: <c>res://ui/icons/animals/&lt;id&gt;.png</c> (the free packs' models, in the repository), else
-    /// <c>animal-silhouettes/&lt;id&gt;.png</c> of the private asset folder (the paid packs'); null when it has neither (the diagram draws a plain body).
-    /// Both are baked by <c>scripts/make_animal_silhouettes.py</c>. Loaded once per species.
-    /// </summary>
-    Texture2D? Silhouette(string speciesId)
-    {
-        if (_silhouettes.TryGetValue(speciesId, out var known)) return known;
-        Texture2D? tex = null;
-        var res = $"{IconRegistry.Root}animals/{speciesId}.png";
-        if (ResourceLoader.Exists(res)) tex = GD.Load<Texture2D>(res);
-        else
-        {
-            var file = System.IO.Path.Combine(GamePaths.PrivateAssets(), "animal-silhouettes", speciesId + ".png");
-            if (System.IO.File.Exists(file) && Image.LoadFromFile(file) is { } img) tex = ImageTexture.CreateFromImage(img);
-        }
-        return _silhouettes[speciesId] = tex;
-    }
+    /// <summary>What the hit diagram and the Hunter's Log draw an animal from (shapes, baked pictures, plain bodies).</summary>
+    HuntArtResolver HuntArtOf => _huntArt ??= new HuntArtResolver(AnimalShapes, AnimalData);
 
     /// <summary>The hit diagram of an animal this player just killed with a sniper rifle.</summary>
     void HudHuntShot(HuntShotMsg m)
@@ -108,7 +94,7 @@ public partial class NetClient
         // the species and what it weighed (a species with no weight: the name alone)
         var name = def.Name.ToUpperInvariant();
         var title = m.WeightKg > 0 ? Strings.F("hud.hunt.title", name, m.WeightKg.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)) : name;
-        _hud.ShowHuntShot(title, standing, standing == null ? Silhouette(def.Id) : null, along, height, line);
+        _hud.ShowHuntShot(title, HuntArtOf.Art(standing, def.Id), along, height, line);
     }
 
     void HudHit(HitMsg h)
@@ -143,12 +129,13 @@ public partial class NetClient
         _hud?.SetControlMode(Mode.RemoteViewOwnsScreen); // one mode switch: a turret or the missile owns the screen (ticket #152)
         _hud?.SetHealth(Mathf.CeilToInt(_me?.Health ?? 100));
         _hud?.CoverCrosshair(_chooser.IsOpen);
-        if (_me != null) _me.MoveWithFreeMouse = (_hud?.EquipmentOpen ?? false) || (_hud?.TacticalMapOpen ?? false); // the Equipment screen and the tactical map free the mouse, not the legs (#268)
-        if (_hud is { EquipmentOpen: true } or { TacticalMapOpen: true })
+        if (_me != null) _me.MoveWithFreeMouse = (_hud?.EquipmentOpen ?? false) || (_hud?.TacticalMapOpen ?? false) || (_hud?.HuntersLogOpen ?? false); // the Equipment screen, the tactical map and the Hunter's Log free the mouse, not the legs (#268, #336)
+        if (_hud is { EquipmentOpen: true } or { TacticalMapOpen: true } or { HuntersLogOpen: true })
         {
             var overlays = _hud.Overlays(MenuOpen?.Invoke() == true, ChooserOpen); // a menu or the corpse chooser takes the screen from the Equipment screen, a menu from the map
             if (_hud.EquipmentOpen && OverlayArbiter.YieldsToMenu(Overlay.Equipment, overlays)) _hud.CloseEquipment();
             if (_hud.TacticalMapOpen && OverlayArbiter.YieldsToMenu(Overlay.TacticalMap, overlays)) _hud.CloseTacticalMap();
+            if (_hud.HuntersLogOpen && OverlayArbiter.YieldsToMenu(Overlay.HuntersLog, overlays)) _hud.CloseHuntersLog();
         }
         UavTick();
         if (_me != null) RozhlasFeedPlayer.Current?.SetListener(_me.GlobalPosition);
@@ -164,6 +151,7 @@ public partial class NetClient
                 if (c.Destroyed) continue;
                 _seatOccupants.TryGetValue(c.Id, out var others); // an enemy on any seat: not on the map (#313)
                 if (HudLogic.HideEnemyOccupiedVehicle(c.Driver, others, _myId, IsMapEnemy)) continue;
+                if (Vehicles != null && c.Kind < Vehicles.Vehicles.Count && ScudTruckHidden(Vehicles.Vehicles[c.Kind])) continue; // the Scud event's truck is not on any map until it is found
                 _carDots.Add(new Vector2(c.Node.GlobalPosition.X, c.Node.GlobalPosition.Z));
             }
             _hud.Minimap.SetVehicleDots(_carDots);

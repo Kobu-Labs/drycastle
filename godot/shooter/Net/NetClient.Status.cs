@@ -54,10 +54,11 @@ public partial class NetClient
         if ((gained & (1 << (int)StatusKind.Curse)) != 0) UiShell.Instance?.Toast(Strings.T("toast.status.cursed"), ToastKind.Warn);
     }
 
-    /// <summary>Puts the flames on (or takes them off) a remote player's body to match what the server said. Also called for a body made after the message.</summary>
+    /// <summary>Puts the flames and the high's cigarette and eyes on (or takes them off) a remote player's body to match what the server said. Also called for a body made after the message.</summary>
     void SyncStatusFx(ushort player)
     {
         if (player == _myId || !_remotes.TryGetValue(player, out var r)) return;
+        r.View?.SetHigh(HasStatus(player, StatusKind.High) ? Plantation : null); // the cigarette and the red eyes (CharacterView.High.cs)
         var burning = _statusOf.TryGetValue(player, out var s) && s.Burning;
         if (_flames.TryGetValue(player, out var flames) && !GodotObject.IsInstanceValid(flames)) { _flames.Remove(player); flames = null; }
         if (flames == null && burning)

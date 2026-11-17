@@ -7,7 +7,7 @@ namespace Drycastle.Shooter;
 /// <summary>
 /// Vehicle blast smoke scripts (ticket #103; headless, flat arena, three cars: car 0 and car 1 side by side, car 2 far away). Alice empties an AK-47 into car 0 from 6.5 m
 /// (damage stages 1, 2, 3 must show in the snapshots in order, then the blast event arrives and the car disappears); bob stands 4 m beside it and takes the blast
-/// with alice credited, alice takes her own self-reduced share, car 1 takes chain damage and survives, car 2 is untouched. A bazooka rocket then hits car 2 (rocket damage
+/// with alice credited, alice takes her own self-reduced share, car 1 takes chain damage and survives, car 2 is untouched. A rpg rocket then hits car 2 (rocket damage
 /// stage). Car 0 comes back after the shortened return time at full health. Last, alice drives car 0 and a debug command destroys it under her: the driver dies in the blast.
 /// Both bots print SHOOTER_BLAST_CLIENT_OK.
 /// </summary>
@@ -71,7 +71,7 @@ public partial class NetClient
         foreach (var x in Place(a2, c + new NVec3(-60, 0, -20), 0.9f)) yield return x;
         _wbYaw = 0; _wbPitch = AimPitch(a2, _cars[car2].Pos, 0.75f);
         _wbSlot = 3;
-        foreach (var x in WaitFor(() => Ammo is { Slot: 3 }, 2, "ammo state for the bazooka")) yield return x;
+        foreach (var x in WaitFor(() => Ammo is { Slot: 3 }, 2, "ammo state for the rpg")) yield return x;
         foreach (var x in Wait(0.9)) yield return x;
         var explosions = _explosionLog.Count;
         _wbPulse = MoveButtons.Fire;

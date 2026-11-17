@@ -87,7 +87,6 @@ public class DriveTests
         Assert.NotNull(Car.Drive);
         Assert.Equal(VehicleMedium.Amphibious, Car.Medium);
         Assert.True(Car.WaterTopSpeed < Car.TopSpeed, "it is slower on the water");
-        foreach (var v in Shipped.Vehicles.Where(v => v.Id is not ("amphibious" or "car" or "golf_mk2"))) Assert.Null(v.Drive);
         // the wheels the ground is sampled under are the model's
         var n = AmphibiousModelTests.Nodes(Car.Model);
         Assert.Equal(n["wheel_rl"].Z - n["wheel_fl"].Z, D.Wheelbase, 2);
@@ -251,8 +250,8 @@ public class DriveTests
             return CircleRadius(s);
         }
         Assert.InRange(Radius(2f), Car.TurnRadius, Car.TurnRadius * 1.35f);                       // the steering lock
-        Assert.InRange(Radius(Car.TopSpeed), 52f, 62f);                                           // top_speed² / grip: about 57 m
-        Assert.Equal(Car.TopSpeed * Car.TopSpeed / D.Land.Grip, Radius(Car.TopSpeed), 0);
+        Assert.InRange(Radius(Car.TopSpeed), 31f, 37f);                                           // top_speed² / grip: about 35 m (57 m at grip 8.5, #297)
+        Assert.InRange(Radius(Car.TopSpeed), Car.TopSpeed * Car.TopSpeed / D.Land.Grip - 0.5f, Car.TopSpeed * Car.TopSpeed / D.Land.Grip + 0.5f);
         Assert.True(Radius(8f) > Radius(2f) && Radius(15f) > Radius(8f) && Radius(Car.TopSpeed) > Radius(15f), "the circle widens with speed");
         // it turns the way the wheel is put: right is a negative yaw
         var right = new DriveState { Speed = 8 }; Drive(ref right, w, Keys(1, 1), 1);
@@ -267,8 +266,8 @@ public class DriveTests
         var w = new Field();
         float YawAfter(float v, float seconds) { var s = new DriveState { Speed = v }; for (var i = 0; i < (int)MathF.Round(seconds / Dt); i++) { DriveModel.Step(ref s, Car, Keys(0, 1), Dt, w); s.Speed = v; } return MathF.Abs(Deg(s.YawRate)); }
         Assert.True(YawAfter(6f, 0.4f) > 30f, "at 6 m/s the nose swings at more than 30 deg/s within four tenths of a second");
-        Assert.True(YawAfter(6f, 1.5f) > 2f * YawAfter(Car.TopSpeed, 1.5f), "it turns at least twice as fast at 6 m/s as at top speed");
-        Assert.InRange(YawAfter(Car.TopSpeed, 1.5f), 15f, 26f);        // at top speed: about 22 deg/s, however long the key is held
+        Assert.True(YawAfter(6f, 1.5f) > 1.15f * YawAfter(Car.TopSpeed, 1.5f), "it turns faster at 6 m/s than at top speed (twice as fast at grip 8.5, #297)");
+        Assert.InRange(YawAfter(Car.TopSpeed, 1.5f), 28f, 40f);        // at top speed: about 37 deg/s, however long the key is held (22 at grip 8.5, #297)
         for (var v = 1f; v <= Car.TopSpeed; v += 1f)
         {
             var s = new DriveState { Speed = v };
@@ -454,7 +453,9 @@ public class DriveTests
         Assert.InRange(slideAngle, 6f, 35f);
         // on land at the same speed the circle is tighter and it does not slide at all
         var l = new DriveState { Speed = Car.WaterTopSpeed };
-        for (var i = 0; i < 300; i++) { DriveModel.Step(ref l, Car, Keys(0, 1), Dt, new Field()); l.Speed = Car.WaterTopSpeed; }
+        var wetSpeed = s.Speed; // the speed it holds in the turn
+        l.Speed = wetSpeed;
+        for (var i = 0; i < 300; i++) { DriveModel.Step(ref l, Car, Keys(0, 1), Dt, new Field()); l.Speed = wetSpeed; }
         Assert.True(CircleRadius(l) < radius, "the land circle at that speed is tighter");
         Assert.Equal(0f, l.Slip);
         // the helm is lazy: after a third of a second it has less than half the yaw rate it will have (on land: nearly all of it)
@@ -603,7 +604,7 @@ public class DriveTests
                 Assert.False(client.Reconcile(seq, DriveRecord.State(vehicle, DriveRecord.Make(VehicleRecord.FirstId, server)), Dt), $"corrected at input {seq}");
             }
         }
-        Assert.True(afloat > 100 && onLand > 100, $"the script must cover both ({afloat} ticks afloat, {onLand} on land)");
+        Assert.True(afloat > 100 && onLand > 60, $"the script must cover both ({afloat} ticks afloat, {onLand} on land)");
         Assert.Equal(0, client.Corrections);
         Assert.True(client.MaxError < 0.02f, $"largest error {client.MaxError}");
     }

@@ -27,8 +27,6 @@ Node tree (every moving part is its own node, its origin is its pivot):
 
     bus
       hull                         shell, glazing, floor, seats, handrails, driver's cab (static)
-        wheel_fl, wheel_fr         front wheels (l = -x), origin at the wheel centre, spin about X
-        wheel_rl, wheel_rr         rear wheels (twin tyres)
         door_front_1, _2           front door leaves (1 is the forward one), origin at the leaf's outer edge on the sill
         door_mid_1, _2             middle door leaves
         glass_0 .. glass_17        the breakable glass panes, one node each, numbered as the `glass` list of vehicles.json (the
@@ -36,6 +34,9 @@ Node tree (every moving part is its own node, its origin is its pivot):
         seat_driver                empty: driver seat (feet)
         seat_passenger_1 .. _3     empties: the three passenger seats of vehicles.json (feet)
         light_head_l/r, light_tail_l/r, smoke_engine   empties: lamp positions and the smoke point (the engine is at the rear)
+      wheel_fl_steer, _fr_steer    steering parents of the front wheels, at the wheel centre (turn about Y), SIBLINGS of the hull
+        wheel_fl, wheel_fr         front wheels (l = -x), origin at the wheel centre, spin about X
+      wheel_rl, wheel_rr           rear wheels (twin tyres), siblings of the hull
 """
 import importlib.util
 import json
@@ -380,7 +381,9 @@ def build():
     hull.add(box("Trim", -XI, XI, SKIRT, 1.28, ENGINE, ZR))                                  # engine cover
     hull.add(box("DarkMetal", -WHEEL_XF + 0.15, WHEEL_XF - 0.15, 0.20, 0.29, AXLE_F - 0.06, AXLE_F + 0.06))   # dropped front axle beam, under the floor
     for name, x, z, twin in (("wheel_fl", -WHEEL_XF, AXLE_F, False), ("wheel_fr", WHEEL_XF, AXLE_F, False), ("wheel_rl", -WHEEL_XR, AXLE_R, True), ("wheel_rr", WHEEL_XR, AXLE_R, True)):
-        n = hull.child(name, (x, WHEEL_R, z))
+        at = (x, WHEEL_R, z)
+        # the front wheels steer: their parent sits at the wheel centre (turn about Y), the wheel under it rolls about X
+        n = (root.child(name + "_steer", at) if name.startswith("wheel_f") else root).child(name, at)   # siblings of the hull
         w = wheel(twin)
         n.add(move(w if x > 0 else mirror(w), n.origin))
 
