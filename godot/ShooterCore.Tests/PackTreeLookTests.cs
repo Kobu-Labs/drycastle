@@ -241,7 +241,7 @@ public class PackTreeLookTests
     public void BoxOfIsTheColliderOfTheLog()
     {
         var o = Rec(scale: 1f);
-        var part = GroundObjectColliders.Parts(new GroundObject(GroundKind.Log, o.X, o.Y, o.Z, o.Rot, o.Scale, o.Len, 0, 0), new GroundModel())[0];
+        var part = GroundObjectColliders.LogBox(new GroundObject(GroundKind.Log, o.X, o.Y, o.Z, o.Rot, o.Scale, o.Len, 0, 0), new GroundModel());
         var box = GroundObjectMath.BoxOf(o, new GroundModel());
         Assert.Equal(part.HalfV, box.HalfWidth); Assert.Equal(part.Z1 - 7f, box.Top, 4);
         Assert.InRange(box.Top, 0.2f, 0.4f); // a 0.45 m log: knee height at most

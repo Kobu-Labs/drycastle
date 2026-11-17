@@ -309,7 +309,7 @@ buildings or the carriageway), and trees planted from the orthophoto detector on
 canopy, or stacked pyramids in forests). Fences also get a simple closed-box
 collision node. Trees are not in the chunk collision: `trees.json` (map 0.6.0, `files.trees`) lists every tree (position,
 ground height, scale, rotation, broadleaf or conifer, chunk) and the game builds the solids from it (see below).
-The forest floor also gets solid **ground objects** (fallen logs, stumps, boulders, root plates, anthills and burrows; `ground_objects.json`, map 0.13.0; see below).
+The forest floor also gets **ground objects** (fallen logs (not solid), stumps, boulders, root plates, anthills and burrows; `ground_objects.json`, map 0.13.0; see below).
 
 **Fence types and the texture library.** A fence section with a `type` is drawn in that type's style
 (`fencestyles.py`) instead of the plain box: `picket` and `wire` are one thin two-sided quad with a
@@ -434,8 +434,8 @@ of the tree base, and a vertex shader can drop a whole tree near the player with
 no UV2. It is written by `export.to_trimesh` from `Mesh.bases` (set by `propmeshes.trees_mesh`) and renamed from trimesh's
 `_UV2` by `export.export_glb`, which every GLB that may hold trees (chunks, `parcel-run --glb`) goes through.
 
-**Ground objects (`ground_objects.json`, map 0.13.0, `files.ground_objects`; `props.ground_objects` in `rules.yaml`).** Solid objects
-on the forest floor, placed by the props stage (`groundobjects.py`, seeded per 25 m cell of the canopy mask, so reruns are identical;
+**Ground objects (`ground_objects.json`, map 0.13.0, `files.ground_objects`; `props.ground_objects` in `rules.yaml`).** Objects
+on the forest floor (all solid but the fallen logs, #359), placed by the props stage (`groundobjects.py`, seeded per 25 m cell of the canopy mask, so reruns are identical;
 `props.json` carries them under `ground_objects`). Only on the canopy of the orthophoto that lies on ground of a `ground_kinds` type
 (forest), never on a property (building plot or garden), nor within the clearances of a building, road or path, placed object or
 water, never within `trunk_clearance_m` of a tree trunk, and never on another ground object. Densities are per hectare of canopy and
@@ -462,7 +462,7 @@ at (`x`, `y`), `len` metres long, thick end at -u, `scale` multiplying only its 
 stump, boulder, root plate, anthill and burrow dimensions (`model.kinds`) are metres at scale 1 and multiply with `scale`
 (`anthill`: `width_m` 1.2 across the base, `height_m` 0.8; `burrow`: `width_m` 1.3, `height_m` 0.4; a burrow's hole faces u). The model numbers feed the
 mesh, the file and the solids alike. Collision (`ShooterCore/Colliders/GroundObjectColliders.cs`, wired by
-`MapLoader.GroundObjects.cs`): one box per object on the world layer (solid for players, cars and shots), a little inside the mesh;
+`MapLoader.GroundObjects.cs`): one box per object on the world layer (solid for players, cars and shots), a little inside the mesh; a fallen log has none (#359: everything passes through it; its box, `GroundObjectColliders.LogBox`, only sizes the laid model);
 one static body per chunk and surface (wood: logs, stumps, plates; rock: boulders; ground: anthills and burrows, a square frustum inside the cone, 0.55 and 0.7 of the height). Walking into a ledge up to `MoveConsts.StepHeight`
 (0.3 m) lifts the player onto it, so a log thinner than about 0.35 m is stepped over; thicker logs, stumps and boulders are jumped onto
 (jump peak about 1.1 m) and stood on (flat tops). The collider and the mesh are checked against each other by

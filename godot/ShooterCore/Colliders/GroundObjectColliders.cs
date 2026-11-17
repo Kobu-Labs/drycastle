@@ -25,10 +25,10 @@ public sealed record GroundModel(
     float BurrowWidthM = 1.3f, float BurrowHeightM = 0.4f);
 
 /// <summary>
-/// Collision solids of the forest's ground objects (ground_objects.json), pure like <see cref="TreeColliders"/>: logs and stumps are boxes
-/// a player can stand on, a boulder a box a little smaller than the rock, a root plate a thin box, an ant mound and a burrow mound a frustum
+/// Collision solids of the forest's ground objects (ground_objects.json), pure like <see cref="TreeColliders"/>: a stump is a box
+/// a player can stand on, a fallen log has none (#359: everything passes through it, <see cref="LogBox"/> only sizes its model), a boulder a box a little smaller than the rock, a root plate a thin box, an ant mound and a burrow mound a frustum
 /// (a square taper) inside the cone. All are solid for movement and shots
-/// (<see cref="CollisionLayers.World"/>). Every box lies inside the drawn mesh (the tests check it against the pipeline's meshes), so a
+/// (<see cref="CollisionLayers.World"/>). Every solid lies inside the drawn mesh (the tests check it against the pipeline's meshes), so a
 /// player never meets an invisible wall, and the foot is not below the ground, where nothing can be reached.
 /// </summary>
 public static class GroundObjectColliders
@@ -87,19 +87,25 @@ public static class GroundObjectColliders
     /// <summary>The surface group of a hit on the object ("wood" for the timber kinds, "rock" for a boulder, "ground" for the earth mounds; the impact classifier treats an unknown group as ground).</summary>
     public static string Surface(GroundKind kind) => kind switch { GroundKind.Boulder => "rock", GroundKind.Anthill or GroundKind.Burrow => "ground", _ => "wood" };
 
-    /// <summary>The solid of one object (always a single box, solid for players and shots), built with the arithmetic of the drawn mesh.</summary>
+    /// <summary>
+    /// The box a fallen log's drawn trunk fits (not solid, see <see cref="Parts"/>): along the heading as long as the log less a hand at the ends; as wide and as high as the
+    /// thin end, so no corner is outside the mesh. Sizes the laid models (<c>PackGroundData.BoxOf</c>, <c>FitLaid</c>).
+    /// </summary>
+    public static SolidPart LogBox(GroundObject o, GroundModel m)
+    {
+        var r0 = m.LogDiameterM * o.Scale / 2;
+        var top = (-LogSink + 2 * HexHalfHeight * m.LogTopRatio) * r0; // height of the thin end's flat top above the ground
+        return new(PartRole.Trunk, PartShape.Box, o.X, o.Y, o.Z - 0.1f, o.Z + 0.97f * top, MathF.Max(0.1f, o.Len / 2 - 0.05f), 0.9f * r0 * m.LogTopRatio, o.Rot);
+    }
+
+    /// <summary>The solids of one object, built with the arithmetic of the drawn mesh: a single box or taper, solid for players and shots; none for a fallen log (#359).</summary>
     public static List<SolidPart> Parts(GroundObject o, GroundModel m)
     {
         var s = o.Scale;
         switch (o.Kind)
         {
             case GroundKind.Log:
-            {
-                // along the heading, as long as the log less a hand at the ends; as wide and as high as the thin end, so no corner is outside
-                var r0 = m.LogDiameterM * s / 2;
-                var top = (-LogSink + 2 * HexHalfHeight * m.LogTopRatio) * r0; // height of the thin end's flat top above the ground
-                return [new(PartRole.Trunk, PartShape.Box, o.X, o.Y, o.Z - 0.1f, o.Z + 0.97f * top, MathF.Max(0.1f, o.Len / 2 - 0.05f), 0.9f * r0 * m.LogTopRatio, o.Rot)];
-            }
+                return []; // a fallen log is not solid (#359): walk, drive and shoot through it; LogBox still sizes the model
             case GroundKind.Stump:
             {
                 var half = 0.27f * m.StumpWidthM * s; // the hexagon's section at the top is 0.37 of the width in half-size

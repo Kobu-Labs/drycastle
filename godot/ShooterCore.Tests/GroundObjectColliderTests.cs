@@ -38,8 +38,8 @@ public class GroundObjectColliderTests
         {
             var name = samples[i].GetProperty("name").GetString();
             var (lo, hi) = (V(samples[i].GetProperty("bbox")[0]), V(samples[i].GetProperty("bbox")[1]));
-            var parts = GroundObjectColliders.Parts(objects[i], model);
-            Assert.Single(parts);
+            var parts = objects[i].Kind == GroundKind.Log ? [GroundObjectColliders.LogBox(objects[i], model)] : GroundObjectColliders.Parts(objects[i], model);
+            Assert.Single(parts); // a log's is its size box (not solid, below)
             Assert.All(parts, p => Assert.Equal(CollisionLayers.World, p.Layer)); // solid for movement and shots
             var pts = parts[0].Points();
             var (blo, bhi) = (pts.Aggregate(Vector3.Min), pts.Aggregate(Vector3.Max));
@@ -53,23 +53,14 @@ public class GroundObjectColliderTests
     }
 
     [Fact]
-    public void LogsAndStumpsAreBoxesAPlayerCanStandOnAndBoulderAndPlateAreSolid()
+    public void FallenLogsAreNotSolidButStillSizeTheirModelAndStumpsBouldersAndPlatesAreSolid()
     {
         var model = new GroundModel();
         var log = new GroundObject(GroundKind.Log, 10, 20, 5, 0.5f, 1.0f, 6, 0, 0);
-        var box = GroundObjectColliders.Parts(log, model)[0];
-        Assert.Equal((PartRole.Trunk, PartShape.Box), (box.Role, box.Shape));
-        Assert.InRange(box.HalfU, 2.9f, 3.0f);               // along the heading, nearly its whole length
-        Assert.InRange(box.Z1 - log.Z, 0.25f, 0.4f);         // a 0.45 m log is about 0.37 m high: a jump, not a stride, over the 0.3 m step
-        Assert.True(box.Contains(new Vector3(10, 20, 5.2f))); // the log's middle is solid, and has a flat top at Z1 to land on
-        Assert.False(box.Contains(new Vector3(10, 20, box.Z1 + 0.05f)));
-        // a long way along the heading it is still solid, across it is only as wide as the log
-        var u = new Vector3(MathF.Cos(0.5f), MathF.Sin(0.5f), 0);
-        Assert.True(box.Contains(new Vector3(10, 20, 5.2f) + u * 2.8f));
-        Assert.False(box.Contains(new Vector3(10, 20, 5.2f) + u * 3.2f));
-        // thin logs are a step: 0.3 m thick (scale 0.67) tops out under the 0.3 m ledge the controller walks onto
-        var thin = GroundObjectColliders.Parts(log with { Scale = 0.3f / 0.45f }, model)[0];
-        Assert.True(thin.Z1 - log.Z <= MoveConsts.StepHeight);
+        Assert.Empty(GroundObjectColliders.Parts(log, model)); // #359: walk, drive and shoot through it
+        var box = GroundObjectColliders.LogBox(log, model);    // the size box the laid model is fitted into
+        Assert.InRange(box.HalfU, 2.9f, 3.0f);
+        Assert.InRange(box.Z1 - log.Z, 0.25f, 0.4f);
 
         var stump = GroundObjectColliders.Parts(new GroundObject(GroundKind.Stump, 0, 0, 0, 0, 1f, 0, 0, 0), model)[0];
         Assert.Equal(0.6f, stump.Z1, 3);
@@ -84,7 +75,7 @@ public class GroundObjectColliderTests
         var plate = GroundObjectColliders.Parts(new GroundObject(GroundKind.RootPlate, 0, 0, 0, 0, 1f, 0, 0, 0), model)[0];
         Assert.True(plate.HalfU < 0.25f && plate.HalfV > 0.7f);              // thin across the heading, a metre wide
         Assert.InRange(plate.Z1, 1.5f, 1.9f);                                // about two metres tall at most
-        Assert.NotNull(plate.Ray(new Vector3(-5, 0, 1), new Vector3(1, 0, 0), 20)); // a shot along the log meets the plate
+        Assert.NotNull(plate.Ray(new Vector3(-5, 0, 1), new Vector3(1, 0, 0), 20)); // a shot along the plate's face meets it
 
         // the earth mounds are tapered solids: wider at the foot than at the top, solid for the world layer
         var hill = GroundObjectColliders.Parts(new GroundObject(GroundKind.Anthill, 0, 0, 0, 0, 1f, 0, 0, 0), model)[0];

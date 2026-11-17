@@ -4,8 +4,8 @@ using Drycastle.ShooterCore;
 namespace Drycastle.MapLoader;
 
 /// <summary>
-/// Collision of the forest's ground objects (ground_objects.json, map 0.13.0+): fallen logs, stumps, boulders and root plates are solid
-/// for players and shots (world layer), built from the pure <see cref="GroundObjectColliders"/>, so the server and the client agree. One
+/// Collision of the forest's ground objects (ground_objects.json, map 0.13.0+): stumps, boulders, root plates and the earth mounds are solid
+/// for players and shots (world layer); fallen logs are not (#359: drawn only), built from the pure <see cref="GroundObjectColliders"/>, so the server and the client agree. One
 /// static body per chunk and surface ("wood" or "rock") holds the boxes, like the tree trunks. A map without the file has none.
 /// </summary>
 public sealed partial class MapLoader
