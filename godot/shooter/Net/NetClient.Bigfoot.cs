@@ -81,7 +81,7 @@ public partial class NetClient
     readonly Dictionary<ushort, BigfootView> _holders = new();
     Vector3 _ownFlingLast;
     /// <summary>This client's own body is in the fist or flying: its arms and weapon are not drawn.</summary>
-    bool OwnBodyFlung => _myId != 0 && _flings.TryGetValue(_myId, out var f) && f.Phase is BodyFling.Held or BodyFling.Flying;
+    bool OwnBodyFlung => _myId != 0 && _flings.TryGetValue(_myId, out var f) && f.Phase is BodyFling.Held or BodyFling.Flying or BodyFling.Lying;
 
     /// <summary>True while the Bigfoot's throw has the vehicle (the driver's client does not predict it).</summary>
     bool CarThrown(ushort car) => _thrownCars.TryGetValue(car, out var until) && Now < until;
@@ -291,7 +291,7 @@ public partial class NetClient
         if (Dead) { f.Ended(); return; }
         var dt = (float)GetProcessDeltaTime();
         var at = _me.GlobalPosition;
-        f.Tick(dt, dt > 0 ? (at - _ownFlingLast).Length() / dt : 0);
+        f.Tick(dt, dt > 0 ? (at - _ownFlingLast).Length() / dt : 0, _me.State.OnFloor);
         _ownFlingLast = at;
         if (f.Phase == BodyFling.Landing && f.Elapsed >= GetUpSeconds) f.StoodUp();
     }
@@ -309,8 +309,8 @@ public partial class NetClient
         var t = r.Tumble;
         var speed = dt > 0 ? (at - r.TumbleLast).Length() / dt : 0;
         r.TumbleLast = at;
-        f.Tick(dt, speed);
-        t.Thrown = true; t.StandUp = true; // the tumble owns the ragdoll flag: when the machine is over, TumbleRemote's normal path puts the figure back
+        f.Tick(dt, speed, Map is not { } map || at.Y - map.GroundHeight(at.X, at.Z) < 0.35f);
+        t.Thrown = true; t.StandUp = f.Phase == BodyFling.Landing; // lying on the ground first, then it turns upright // the tumble owns the ragdoll flag: when the machine is over, TumbleRemote's normal path puts the figure back
         var middle = Vector3.Up * RagdollTumble.Half;
         if (f.Phase == BodyFling.Held && _holders.TryGetValue(id, out var h))
         {

@@ -157,16 +157,20 @@ stateDiagram-v2
     None --> Held
     Held --> Flying
     Held --> None
-    Flying --> Landing
+    Flying --> Lying
     Flying --> Held
     Flying --> None
+    Lying --> Landing
+    Lying --> Held
+    Lying --> None
     Landing --> None
     Landing --> Held
 ```
 
 - **Held**: In the fist (Bigfoot act Hold): limbs loose, the body swung by the hand. Released without a throw, the Bigfoot dying or the player dying or leaving ends it at None.
-- **Flying**: The throw (Bigfoot act Launch): tumbling, limbs flailing, until the body is slow again after MinAirSeconds (or MaxAirSeconds).
-- **Landing**: Landed alive: the body turns upright and the limbs go slack, then the normal figure (a dead one is the corpse's, not this machine's).
+- **Flying**: The throw (Bigfoot act Launch): tumbling, limbs flailing, until the body is on the ground and slow (after MinAirSeconds), or has been slow for SettleSeconds where the ground cannot be told (a roof), or MaxAirSeconds.
+- **Lying**: Landed alive: the ragdoll lies limp on the ground for LieSeconds.
+- **Landing**: Getting up: the body turns upright and the limbs go slack, then the normal figure (a dead one is the corpse's, not this machine's).
 
 ## Bigfoot.Event
 
