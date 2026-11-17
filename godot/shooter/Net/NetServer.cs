@@ -346,7 +346,11 @@ public partial class NetServer : Node
         if (_clients.Count > _peakPlayers) _peakPlayers = _clients.Count;
         if (QuitAfter > 0) foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved; // only the smoke verdict reads it; a production server keeps no per-name history
         if (_tick % (Wire.TickRate * 2) == 0 && _clients.Count > 0)
-            GD.Print($"server: tick {_tick}, players {string.Join(", ", _byId.Values.Select(c => $"{c.Name}#{c.Id}@({c.Body.GlobalPosition.X:F1},{c.Body.GlobalPosition.Y:F1},{c.Body.GlobalPosition.Z:F1}) ack={c.Ack}"))}");
+        {
+            var logT = Prof.Begin(Prof.S.LogPlayers); // after the tick's clock stopped: this line is in no phase
+                GD.Print($"server: tick {_tick}, players {string.Join(", ", _byId.Values.Select(c => $"{c.Name}#{c.Id}@({c.Body.GlobalPosition.X:F1},{c.Body.GlobalPosition.Y:F1},{c.Body.GlobalPosition.Z:F1}) ack={c.Ack}"))}");
+            Prof.End(Prof.S.LogPlayers, logT);
+        }
         if (RpgSmoke)
         {
             if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishRpg();
@@ -656,6 +660,7 @@ public partial class NetServer : Node
     /// <summary>Broadcast an event envelope to every joined client (shot, hit, kill, ... from later issues).</summary>
     public void BroadcastEvent(EventKind kind, byte[] payload)
     {
+        var profT = Prof.Begin(Prof.S.BroadcastEvent);
         ReliableMsg m = new EventMsg((byte)kind, payload);
         PerfEventSent(kind, payload);
         RozhlasCombatEvent(kind, payload); // shots, launches and blasts inside the Urad go to the rozhlas live feed while the mic is live
@@ -664,6 +669,7 @@ public partial class NetServer : Node
         var effect = Wire.IsEffect(kind);
         foreach (var c in _clients.Values)
             if (c.Joined) Tx(c.Peer!, effect ? Wire.ChanEffects : Wire.ChanReliable, bytes, effect ? 0 : (int)ENetPacketPeer.FlagReliable);
+        Prof.End(Prof.S.BroadcastEvent, profT);
     }
 
     void OnDebug(Client c, byte[] payload)
@@ -843,7 +849,7 @@ public partial class NetServer : Node
             if (useAct && LootInReach(c) == null && (MassSit(c) || GarageUse(c) || TryEnterCar(c))) continue; // the use key on lying Loot sends it back, it does not take a seat
             c.Body.Yaw = Quant.Yaw(i.Yaw);
             c.Body.Pitch = Quant.Pitch(i.Pitch);
-            var moveT = Prof.Begin();
+            var moveT = Prof.Begin(Prof.S.PlayerMove);
             c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
             Prof.End(Prof.S.PlayerMove, moveT);
             c.StepTicks++;
@@ -855,7 +861,7 @@ public partial class NetServer : Node
             if (c.W.Update(_elapsed, wi) is { } shot)
             {
                 if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++; // spawn protection ends on a real shot, not on Fire held with an empty magazine
-                { var fireT = Prof.Begin(); FireWeapon(c, i, shot); Prof.End(Prof.S.Fire, fireT); }
+                { var fireT = Prof.Begin(Prof.S.Fire); FireWeapon(c, i, shot); Prof.End(Prof.S.Fire, fireT); }
             }
             if (c.W.Changed) SendAmmo(c);
             c.Slot = (byte)(c.W.Slot - 1);
@@ -885,7 +891,7 @@ public partial class NetServer : Node
         if (c.W.Update(_elapsed, input with { Locked = HasLock(c) }) is { } shot)
         {
             if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++;
-            { var fireT = Prof.Begin(); FireWeapon(c, i, shot, car); Prof.End(Prof.S.Fire, fireT); }
+            { var fireT = Prof.Begin(Prof.S.Fire); FireWeapon(c, i, shot, car); Prof.End(Prof.S.Fire, fireT); }
         }
         if (c.W.Changed) SendAmmo(c);
         c.Slot = (byte)(c.W.Slot - 1);
@@ -928,7 +934,7 @@ public partial class NetServer : Node
     /// </summary>
     List<HitTarget> LiveTargets()
     {
-        var profT = Prof.Begin();
+        var profT = Prof.Begin(Prof.S.LiveTargets);
         var list = _targetLists.Count > 0 ? _targetLists.Pop() : new List<HitTarget>(_byId.Count + 4);
         foreach (var o in _byId.Values)
             if (_match.Get(o.Id)?.Life == PlayerLife.Alive && !_pins.ContainsKey(o.Id)) list.Add(HitTargetOf(o)); // a pinned player is under the demon and untouchable: not a target, so no shot stops on them
@@ -1037,7 +1043,7 @@ public partial class NetServer : Node
             var held = SeatAimRules.Aim(seat!.Aim, carYaw, carPitch, carRoll, yaw, pitch);
             yaw = held.ViewYaw; pitch = held.ViewPitch;
         }
-        var targetsT = Prof.Begin();
+        var targetsT = Prof.Begin(Prof.S.ShotTargets);
         var targets = seatCar != null ? RiderRules.NotAboard(ShotTargets(c), seatCar.Seat) : ShotTargets(c); // players where the shooter's screen showed them (ADR 0013)
         Prof.End(Prof.S.ShotTargets, targetsT);
         _shotsFired++;
@@ -1045,7 +1051,7 @@ public partial class NetServer : Node
         var body = c.Body.State;
         float Spread(float degrees) => seat != null ? SeatAimRules.ShotSpread(degrees, w, aiming, seatCar!.State.Speed, seat) : HitMath.ShotSpread(degrees, w, body, aiming);
         var stance = seat != null ? Stance.Stand : body.Stance; // a seat steadies the recoil no more than standing does
-        if (w.Kind == WeaponKind.Hitscan && w.Pellets > 1) FirePellets(c, eye, yaw, pitch, w, (byte)shot.WeaponIndex, Spread(w.PelletSpread), targets, seatCar);
+        if (w.Kind == WeaponKind.Hitscan && w.Pellets > 1) { var pelT = Prof.Begin(Prof.S.FirePellets); FirePellets(c, eye, yaw, pitch, w, (byte)shot.WeaponIndex, Spread(w.PelletSpread), targets, seatCar); Prof.End(Prof.S.FirePellets, pelT); }
         else if (w.Kind == WeaponKind.Hitscan)
         {
             var kick = c.Recoil.Shot(w.Recoil, RecoilState.Multiplier(w.Recoil, aiming, stance));
@@ -1070,10 +1076,16 @@ public partial class NetServer : Node
                     along = len > 1e-4f ? new Vector3(piece.X, piece.Y, piece.Z) / len : dir;
                 }
                 crossed = null;
+                var partT = Prof.Begin(Prof.S.FireBulletHit);
                 wall = BulletHit(from, along, len, out shotCar, ref crossed, seatCar);
+                Prof.End(Prof.S.FireBulletHit, partT);
+                partT = Prof.Begin(Prof.S.FireRaycast);
                 var (exposedGunner, pastHull) = ExposedGunnerBehind(shotCar, from, along, len, targets, skip: seatCar);
                 hit = GunnerCover.Raycast(N(from), N(along), len, wall, targets, c.Id, exposedGunner, pastHull); // a flak gunner in the open is hit through his hull
+                Prof.End(Prof.S.FireRaycast, partT);
+                partT = Prof.Begin(Prof.S.FireMissCheck);
                 if (hit == null && HitMath.Raycast(N(from), N(along), len, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
+                Prof.End(Prof.S.FireMissCheck, partT);
                 if (!drops || hit != null || wall <= len || before + BulletDrop.SegmentM >= range) break;
                 var passed = before;
                 DamageCrossed(crossed, float.PositiveInfinity, at => HitMath.HitscanDamage(w, passed + at, false)); // the panes of a piece the bullet flew through
@@ -1087,7 +1099,9 @@ public partial class NetServer : Node
             {
                 // a wild animal under any hitscan weapon: where the bullet entered its body, taken before the hit can remove it (the hunter's log keeps it; a sniper's shooter is also shown it)
                 var hunt = WildlifeRules.IsHitId(h.Id) ? HuntShotOf(targets, h.Id, N(from + along * h.Distance), before + h.Distance, (byte)shot.WeaponIndex, h.ShapeHead) : null;
+                var dealT = Prof.Begin(Prof.S.FireDeal);
                 var dealt = Deal(c.Id, (byte)shot.WeaponIndex, h.Id, HitMath.HitscanDamage(w, before + h.Distance, h.Head), h.Head, false, shot: hunt, shotDistance: before + h.Distance);
+                Prof.End(Prof.S.FireDeal, dealT);
                 if (dealt == DamageResult.Killed && hunt is { } shown && w.Category == WeaponCategory.Sniper) Send(c, new EventMsg((byte)EventKind.HuntShot, HuntShot.Encode(shown)));
             }
             else if (shotCar != null && Vehicles != null && wall <= len)

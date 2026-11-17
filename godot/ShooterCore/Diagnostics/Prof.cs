@@ -24,6 +24,12 @@ public static class Prof
         WorldShot, NearestHull, PhysicsRay,
         // vehicles
         VehicleStep, VehicleContacts,
+        // the parts of a player's move
+        MoveHead, MoveLogic, MoveStepUp, MoveSlide, MoveBodies, MovePost,
+        // the parts of a shot
+        FireBulletHit, FireRaycast, FireMissCheck, FirePellets, FireDeal,
+        // sending an event to every client, and the players line of the log
+        BroadcastEvent, LogPlayers,
         Count,
     }
 
@@ -34,24 +40,46 @@ public static class Prof
         "player_move", "fire", "shot_targets", "live_targets", "bot_brain", "bot_sight",
         "world_shot", "nearest_hull", "physics_ray",
         "vehicle_step", "vehicle_contacts",
+        "move_head", "move_logic", "move_step_up", "move_slide", "move_bodies", "move_post",
+        "fire_bullet_hit", "fire_raycast", "fire_miss_check", "fire_pellets", "fire_deal",
+        "broadcast_event", "log_players",
     };
 
     const int N = (int)S.Count;
     static readonly long[] WinTicks = new long[N], WinCalls = new long[N], TickTicks = new long[N], WorstTicks = new long[N];
+    /// <summary>Bytes the game thread allocated inside each scope in the period, and (per scope) the thread's count when the scope began (-1: not asked).</summary>
+    static readonly long[] WinAlloc = new long[N], AllocAt = NewAllocAt();
+    static long _lapAlloc;
+    static long[] NewAllocAt() { var a = new long[N]; Array.Fill(a, -1L); return a; }
     static double _worstMs = -1;
-    static long _navSnapTicks, _navSnapCalls, _navPathTicks, _navPathCalls;
+    static long _navSnapTicks, _navSnapCalls, _navPathTicks, _navPathCalls, _navRawTicks, _navRawCalls, _navSame, _navDiff, _navMaxDiffMm;
 
     /// <summary>The name of a scope in the log.</summary>
     public static string Name(S s) => Names[(int)s];
 
-    /// <summary>Start of a scope: the timestamp to hand to <see cref="End"/> or <see cref="Lap"/>.</summary>
-    public static long Begin() => Stopwatch.GetTimestamp();
+    /// <summary>Start of a scope: the timestamp to hand to <see cref="End"/> or <see cref="Lap"/>. For a chain of laps (the bytes allocated are counted from here).</summary>
+    public static long Begin()
+    {
+        _lapAlloc = GC.GetAllocatedBytesForCurrentThread();
+        return Stopwatch.GetTimestamp();
+    }
+
+    /// <summary>Start of the scope <paramref name="s"/>, which also counts the bytes the thread allocates until its <see cref="End"/>. A scope does not nest in itself.</summary>
+    public static long Begin(S s)
+    {
+        AllocAt[(int)s] = GC.GetAllocatedBytesForCurrentThread();
+        return Stopwatch.GetTimestamp();
+    }
 
     /// <summary>End of a scope that began at <paramref name="t0"/>.</summary>
     public static void End(S s, long t0)
     {
         var d = Stopwatch.GetTimestamp() - t0;
         WinTicks[(int)s] += d; TickTicks[(int)s] += d; WinCalls[(int)s]++;
+        var at = AllocAt[(int)s];
+        if (at < 0) return;
+        WinAlloc[(int)s] += GC.GetAllocatedBytesForCurrentThread() - at;
+        AllocAt[(int)s] = -1;
     }
 
     /// <summary>Ends a scope and starts the next one: returns the timestamp the next <see cref="Lap"/> or <see cref="End"/> takes.</summary>
@@ -60,6 +88,9 @@ public static class Prof
         var now = Stopwatch.GetTimestamp();
         var d = now - t0;
         WinTicks[(int)s] += d; TickTicks[(int)s] += d; WinCalls[(int)s]++;
+        var alloc = GC.GetAllocatedBytesForCurrentThread();
+        WinAlloc[(int)s] += alloc - _lapAlloc;
+        _lapAlloc = alloc;
         return now;
     }
 
@@ -81,10 +112,24 @@ public static class Prof
     /// <summary>The navigation worker: one path search took the time since <paramref name="t0"/>. Any thread.</summary>
     public static void NavPath(long t0) { Interlocked.Add(ref _navPathTicks, Stopwatch.GetTimestamp() - t0); Interlocked.Increment(ref _navPathCalls); }
 
+    /// <summary>
+    /// The navigation worker's shadow check (DRYCASTLE_NAV_COMPARE): the same route asked without the snaps took the time since <paramref name="t0"/>, and
+    /// its points lie at most <paramref name="maxDiffM"/> from the snapped route's (negative: another number of points). Any thread.
+    /// </summary>
+    public static void NavRaw(long t0, float maxDiffM)
+    {
+        Interlocked.Add(ref _navRawTicks, Stopwatch.GetTimestamp() - t0); Interlocked.Increment(ref _navRawCalls);
+        if (maxDiffM >= 0 && maxDiffM <= 0.05f) { Interlocked.Increment(ref _navSame); return; }
+        Interlocked.Increment(ref _navDiff);
+        var mm = maxDiffM < 0 ? long.MaxValue / 2 : (long)(maxDiffM * 1000);
+        long seen;
+        while (mm > (seen = Interlocked.Read(ref _navMaxDiffMm)) && Interlocked.CompareExchange(ref _navMaxDiffMm, mm, seen) != seen) { }
+    }
+
     static double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
 
     /// <summary>
-    /// The scopes of the period as <c>name=ms_per_second|calls_per_second</c> (10 ms/s is 1 % of a core), scopes that never ran left out.
+    /// The scopes of the period as <c>name=ms_per_second|calls_per_second|kilobytes_allocated_per_second</c> (10 ms/s is 1 % of a core), scopes that never ran left out.
     /// Does not reset: <see cref="Reset"/> does, after the other lines are read.
     /// </summary>
     public static string Scopes(double seconds)
@@ -96,7 +141,8 @@ public static class Prof
         {
             if (WinCalls[i] == 0) continue;
             if (sb.Length > 0) sb.Append(' ');
-            sb.Append(Names[i]).Append('=').Append((Ms(WinTicks[i]) / seconds).ToString("F2", inv)).Append('|').Append((WinCalls[i] / seconds).ToString("F0", inv));
+            sb.Append(Names[i]).Append('=').Append((Ms(WinTicks[i]) / seconds).ToString("F2", inv)).Append('|').Append((WinCalls[i] / seconds).ToString("F0", inv))
+              .Append('|').Append((WinAlloc[i] / 1000.0 / seconds).ToString("F0", inv));
         }
         return sb.ToString();
     }
@@ -122,13 +168,18 @@ public static class Prof
         seconds = Math.Max(seconds, 1e-3);
         long st = Interlocked.Exchange(ref _navSnapTicks, 0), sc = Interlocked.Exchange(ref _navSnapCalls, 0);
         long pt = Interlocked.Exchange(ref _navPathTicks, 0), pc = Interlocked.Exchange(ref _navPathCalls, 0);
-        return $"snap={(Ms(st) / seconds).ToString("F2", inv)}|{(sc / seconds).ToString("F1", inv)} path={(Ms(pt) / seconds).ToString("F2", inv)}|{(pc / seconds).ToString("F1", inv)}";
+        var line = $"snap={(Ms(st) / seconds).ToString("F2", inv)}|{(sc / seconds).ToString("F1", inv)} path={(Ms(pt) / seconds).ToString("F2", inv)}|{(pc / seconds).ToString("F1", inv)}";
+        long rt = Interlocked.Exchange(ref _navRawTicks, 0), rc = Interlocked.Exchange(ref _navRawCalls, 0);
+        long same = Interlocked.Exchange(ref _navSame, 0), diff = Interlocked.Exchange(ref _navDiff, 0), mm = Interlocked.Exchange(ref _navMaxDiffMm, 0);
+        if (rc == 0) return line;
+        var worst = mm >= long.MaxValue / 2 ? "points" : (mm / 1000.0).ToString("F2", inv); // "points": a route with another number of points
+        return line + $" raw={(Ms(rt) / seconds).ToString("F2", inv)}|{(rc / seconds).ToString("F1", inv)} raw_same={same} raw_diff={diff} raw_maxdiff_m={worst}";
     }
 
     /// <summary>Start of the next period.</summary>
     public static void Reset()
     {
-        Array.Clear(WinTicks); Array.Clear(WinCalls); Array.Clear(WorstTicks);
+        Array.Clear(WinTicks); Array.Clear(WinCalls); Array.Clear(WorstTicks); Array.Clear(WinAlloc);
         _worstMs = -1;
     }
 }

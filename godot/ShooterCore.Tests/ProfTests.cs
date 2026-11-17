@@ -9,7 +9,7 @@ public class ProfTests
     public void Every_scope_has_a_name()
     {
         for (var s = (Prof.S)0; s < Prof.S.Count; s++) Assert.False(string.IsNullOrEmpty(Prof.Name(s)));
-        Assert.Equal("vehicle_contacts", Prof.Name(Prof.S.Count - 1));
+        Assert.Equal("log_players", Prof.Name(Prof.S.Count - 1));
     }
 
     [Fact]
@@ -21,7 +21,7 @@ public class ProfTests
         t = Prof.Lap(Prof.S.Pets, t);
         Prof.End(Prof.S.Pets, t);
         Assert.Contains("pets=", Prof.Scopes(1));
-        Assert.Contains("|2", Prof.Scopes(1)); // two calls in one second
+        Assert.Contains("|2|", Prof.Scopes(1)); // two calls in one second, then the kilobytes
         Assert.True(Prof.TickEnd(5));
         Assert.False(Prof.TickEnd(4)); // not slower than the slowest
         Prof.Reset();

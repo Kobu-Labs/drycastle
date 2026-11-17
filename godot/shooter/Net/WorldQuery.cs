@@ -60,7 +60,7 @@ public sealed class WorldQuery
     Godot.Collections.Dictionary Cast(Vector3 from, Vector3 to, uint mask)
     {
         _ray.From = from; _ray.To = to; _ray.CollisionMask = mask;
-        var t = Prof.Begin();
+        var t = Prof.Begin(Prof.S.PhysicsRay);
         var hit = Space.PerfRay(_ray);
         Prof.End(Prof.S.PhysicsRay, t);
         return hit;
@@ -143,10 +143,10 @@ public sealed class WorldQuery
     /// </summary>
     public ShotStop Shot(Vector3 from, Vector3 dir, float max, ServerCar? skipA = null, ServerCar? skipB = null, List<ServerCar>? passed = null)
     {
-        var shotT = Prof.Begin();
+        var shotT = Prof.Begin(Prof.S.WorldShot);
         var r = Cast(from, from + dir * max, _static[(int)MoverKind.Shot]);
         var wall = r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3());
-        var hullT = Prof.Begin();
+        var hullT = Prof.Begin(Prof.S.NearestHull);
         var car = _hull(from, dir, max, skipA, skipB, passed, out var d, out var pose);
         Prof.End(Prof.S.NearestHull, hullT);
         var stop = car != null && d < wall ? new ShotStop(d, car, pose, HullNormal(from, dir, max, car, pose))

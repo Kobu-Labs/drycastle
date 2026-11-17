@@ -27,7 +27,7 @@ public partial class NetServer
 
         public float? GroundY(float x, float z)
         {
-            var t = Prof.Begin();
+            var t = Prof.Begin(Prof.S.AnimalGround);
             float? ground = null;
             if (_s.Map != null && _s.Water.Depth(x, z) <= WadeM)
             {
@@ -44,7 +44,7 @@ public partial class NetServer
 
         public bool Watched(NVec3 at)
         {
-            var t = Prof.Begin();
+            var t = Prof.Begin(Prof.S.AnimalWatched);
             var watched = _s.AnimalWatched(at);
             Prof.End(Prof.S.AnimalWatched, t);
             return watched;
@@ -56,7 +56,7 @@ public partial class NetServer
         /// </summary>
         public float SolidAhead(NVec3 from, NVec3 dir, float maxM, float height)
         {
-            var t = Prof.Begin();
+            var t = Prof.Begin(Prof.S.AnimalSolid);
             var d = _s.GroundHugRay(from, dir, maxM, height, out var a, out var b) ? _s.Query.SolidDistance(MoverKind.Animal, a, b) : float.PositiveInfinity;
             Prof.End(Prof.S.AnimalSolid, t);
             return d;
@@ -65,7 +65,7 @@ public partial class NetServer
         /// <summary>Ground, and a sphere of the body's radius resting on it touches no building, fence, placed solid, trunk, closed door, parked vehicle or player.</summary>
         public bool Fits(float x, float z, float radius)
         {
-            var t = Prof.Begin();
+            var t = Prof.Begin(Prof.S.AnimalFits);
             var fits = GroundY(x, z) is { } y && !_s.Query.Overlaps(MoverKind.Animal, new Vector3(x, y + radius + 0.2f, z), radius);
             Prof.End(Prof.S.AnimalFits, t);
             return fits;
@@ -74,7 +74,7 @@ public partial class NetServer
         /// <summary>The players on foot and alive (one in a seat is part of its vehicle, whose solid box the ray finds).</summary>
         public void PlayersNear(NVec3 at, float radius, List<NVec3> into)
         {
-            var t = Prof.Begin();
+            var t = Prof.Begin(Prof.S.AnimalPlayersNear);
             var r2 = radius * radius;
             foreach (var c in _s._byId.Values)
             {

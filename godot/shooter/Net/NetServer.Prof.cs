@@ -20,13 +20,30 @@ public partial class NetServer
     /// <summary>CPU clock ticks (user + system) of each thread at the last report, by thread id.</summary>
     Dictionary<int, long> _threadCpu = new();
     long _raysLast, _liveTargetsLast;
+    /// <summary>The garbage collector's counters at the start of the tick, and of the slowest tick: the collections and the pause that fell in it.</summary>
+    int _tickGc0, _tickGc1, _tickGc2, _worstGc0, _worstGc1, _worstGc2;
+    double _tickPauseMs, _worstPauseMs;
+    /// <summary>Ticks of the period in which a collection ran, and the slowest tick in which none did.</summary>
+    int _gcTicks;
+    double _worstNoGcMs;
+
+    void ProfTickBegin()
+    {
+        _tickGc0 = GC.CollectionCount(0); _tickGc1 = GC.CollectionCount(1); _tickGc2 = GC.CollectionCount(2);
+        _tickPauseMs = GC.GetTotalPauseDuration().TotalMilliseconds;
+    }
     int _profReports;
 
     /// <summary>End of a tick that took <paramref name="ms"/>: remembered when it is the slowest of the period.</summary>
     void ProfTickEnd(double ms)
     {
+        var gc0 = GC.CollectionCount(0) - _tickGc0;
+        if (gc0 > 0) _gcTicks++;
+        else if (ms > _worstNoGcMs) _worstNoGcMs = ms;
         if (!Prof.TickEnd(ms)) return;
         _profWorstMs = ms; _profWorstTick = _tick;
+        _worstGc0 = gc0; _worstGc1 = GC.CollectionCount(1) - _tickGc1; _worstGc2 = GC.CollectionCount(2) - _tickGc2;
+        _worstPauseMs = GC.GetTotalPauseDuration().TotalMilliseconds - _tickPauseMs;
         for (var i = 0; i < _profWorstPhaseUs.Length; i++)
             _profWorstPhaseUs[i] = i == (int)ServerPerf.Ph.Telemetry || _phaseUs[i].Count == 0 ? 0 : _phaseUs[i][^1]; // the telemetry phase of this tick is not over yet
     }
@@ -40,21 +57,31 @@ public partial class NetServer
         var threads = ThreadCpu(seconds); // likewise: the baseline moves every period
         if (active)
         {
-            GD.Print("server: prof scopes ms/s|calls/s " + Prof.Scopes(seconds));
+            GD.Print("server: prof scopes ms/s|calls/s|kb/s " + Prof.Scopes(seconds));
             var sb = new StringBuilder();
             for (var i = 0; i < _profWorstPhaseUs.Length; i++)
             {
                 if (_profWorstPhaseUs[i] < 50) continue;
                 sb.Append(' ').Append(((ServerPerf.Ph)i).ToString().ToLowerInvariant()).Append('=').Append(_profWorstPhaseUs[i].ToString("F0", inv));
             }
-            GD.Print($"server: prof worst tick={_profWorstTick} ms={_profWorstMs.ToString("F2", inv)} phases_us{sb} | scopes_us {Prof.Worst()}");
+            GD.Print($"server: prof worst tick={_profWorstTick} ms={_profWorstMs.ToString("F2", inv)} gc0={_worstGc0} gc1={_worstGc1} gc2={_worstGc2} gc_pause_ms={_worstPauseMs.ToString("F1", inv)}" +
+                $" ticks_with_gc={_gcTicks} worst_without_gc_ms={_worstNoGcMs.ToString("F2", inv)} phases_us{sb} | scopes_us {Prof.Worst()}");
+            var al = new StringBuilder();
+            for (var i = 0; i < _phaseAlloc.Length; i++)
+            {
+                var kb = _phaseAlloc[i] / 1000.0 / Math.Max(seconds, 1e-3);
+                if (kb < 1) continue;
+                al.Append(' ').Append(((ServerPerf.Ph)i).ToString().ToLowerInvariant()).Append('=').Append(kb.ToString("F0", inv));
+            }
+            GD.Print("server: prof alloc kb/s" + al);
             GD.Print("server: prof nav ms/s|calls/s " + nav);
         }
         if (threads.Length > 0 && (active || _profReports % 6 == 0)) GD.Print("server: prof threads cpu_pct " + threads);
         GD.Print("server: prof mem " + MemoryLine(seconds));
         _profReports++;
         Prof.Reset();
-        _profWorstMs = 0;
+        _profWorstMs = 0; _gcTicks = 0; _worstNoGcMs = 0;
+        Array.Clear(_phaseAlloc);
     }
 
     /// <summary>

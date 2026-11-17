@@ -158,7 +158,7 @@ public partial class NetServer
         var len = d.Length();
         if (len < 0.01f) return true;
         var dir = d / len;
-        var t = Prof.Begin();
+        var t = Prof.Begin(Prof.S.BotSight);
         var clear = WorldDistance(new Vector3(from.X, from.Y, from.Z), new Vector3(dir.X, dir.Y, dir.Z), len) >= len - 0.05f;
         Prof.End(Prof.S.BotSight, t);
         return clear;
@@ -197,7 +197,7 @@ public partial class NetServer
             var w = b.W;
             var self = new BotSelf(b.Id, N(b.Body.GlobalPosition), b.Body.State.Stance, w.Mag(w.Slot), w.Current.MagazineSize, w.Reserve(w.Slot), w.Reloading, w.Current.FullAuto,
                 w.Slot, b.BotLauncher ? w.HotbarWeapon(0) + 1 : 0, b.BotLauncher ? BotLauncherOf(w) : null);
-            var brainT = Prof.Begin();
+            var brainT = Prof.Begin(Prof.S.BotBrain);
             var cmd = b.Brain!.Tick(_elapsed, dt, self, _botWorld);
             Prof.End(Prof.S.BotBrain, brainT);
             var move = new MoveInput { MoveX = cmd.MoveX, MoveY = cmd.MoveY, Yaw = cmd.Yaw, Buttons = cmd.Buttons, SpeedScale = 1f };
