@@ -207,7 +207,10 @@ public sealed class Animal : IWorldEntity
     public BodyBox Body => BodyBox.Of(Position, Yaw, _bodyW, _bodyL, _bodyAhead);
     /// <summary>Radius of the sphere that asks the world whether it fits at a spot.</summary>
     public float BodyRadius => Def.BodyRadiusOf(Variant);
-    public Vector3 Position { get; private set; }
+    public Vector3 Position { get => _position; private set { _position = value; Crowd?.Moved(this); } }
+    Vector3 _position;
+    /// <summary>The crowd's own notes on this animal: the cell of its grid it is filed under, and its place in the order the animals joined.</summary>
+    internal int CrowdCx, CrowdCz, CrowdSeq;
     /// <summary>Godot convention: 0 faces -Z.</summary>
     public float Yaw { get; private set; }
     public float Hp { get; private set; }

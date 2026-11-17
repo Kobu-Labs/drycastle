@@ -93,13 +93,33 @@ public sealed class WorldHistory
     /// <summary>The complete state of a tick, or null when it is not kept.</summary>
     public IReadOnlyDictionary<ushort, WorldEntry>? Get(uint tick) => _byTick.GetValueOrDefault(tick);
 
-    /// <summary>Keeps the state of a tick from its entity list (a tick already kept is left as it is).</summary>
+    /// <summary>
+    /// The dictionaries <see cref="Record"/> made that are still kept, and those that fell out of the history, emptied, for the next tick (a tick's state lives
+    /// two seconds, long enough to be costly garbage). One that somebody still reads when it falls out (<see cref="Hold"/>) is left alone, for good.
+    /// </summary>
+    readonly HashSet<Dictionary<ushort, WorldEntry>> _own = new(ReferenceEqualityComparer.Instance);
+    readonly Dictionary<IReadOnlyDictionary<ushort, WorldEntry>, int> _held = new(ReferenceEqualityComparer.Instance);
+    readonly Stack<Dictionary<ushort, WorldEntry>> _spare = new();
+    readonly List<uint> _old = new();
+
+    /// <summary>Keeps the state of a tick from its entity list (a tick already kept is left as it is). What <see cref="Get"/> returned is read only while the tick is kept, or under a <see cref="Hold"/>: its dictionary is used again afterwards.</summary>
     public void Record(uint tick, IReadOnlyList<WorldEntry> entities)
     {
         if (Has(tick)) return;
-        var d = new Dictionary<ushort, WorldEntry>(entities.Count);
+        var d = _spare.Count > 0 ? _spare.Pop() : new Dictionary<ushort, WorldEntry>(entities.Count);
         foreach (var e in entities) d[e.Id] = e;
+        _own.Add(d);
         Store(tick, d);
+    }
+
+    /// <summary>A reader keeps <paramref name="states"/> (from <see cref="Get"/>) past its tick's time in the history: it is not used again while held. Ended by <see cref="Release"/>.</summary>
+    public void Hold(IReadOnlyDictionary<ushort, WorldEntry> states) => _held[states] = _held.GetValueOrDefault(states) + 1;
+
+    /// <summary>The reader of a <see cref="Hold"/> is done with <paramref name="states"/>.</summary>
+    public void Release(IReadOnlyDictionary<ushort, WorldEntry> states)
+    {
+        if (!_held.TryGetValue(states, out var n)) return; // it fell out of the history while held: nobody uses it again
+        if (n <= 1) _held.Remove(states); else _held[states] = n - 1;
     }
 
     /// <summary>Keeps the state of a tick. The dictionary must not change afterwards.</summary>
@@ -107,7 +127,14 @@ public sealed class WorldHistory
     {
         _byTick[tick] = states;
         if (_byTick.Count <= Depth) return;
-        foreach (var k in _byTick.Keys.ToList()) if (k + Depth <= tick) _byTick.Remove(k);
+        _old.Clear();
+        foreach (var k in _byTick.Keys) if (k + Depth <= tick) _old.Add(k);
+        foreach (var k in _old)
+        {
+            if (!_byTick.Remove(k, out var gone)) continue;
+            var held = _held.Remove(gone); // still read by somebody: theirs from now on
+            if (gone is Dictionary<ushort, WorldEntry> d && _own.Remove(d) && !held) { d.Clear(); _spare.Push(d); }
+        }
     }
 }
 
@@ -170,6 +197,11 @@ public sealed class WorldSnapshotEncoder
         if (baseTick != Wire.NoTick && baseTick < tick)
         {
             b = baseTick == _keptTick ? _kept : _history.Get(baseTick);
+            if (b != null && !ReferenceEquals(b, _kept))
+            {
+                if (_kept != null) _history.Release(_kept);
+                _history.Hold(b); // kept past the history's depth (see _kept): the history must not hand its dictionary to a later tick
+            }
             if (b != null) { _keptTick = baseTick; _kept = b; }
         }
         var headerBase = b != null ? baseTick : Wire.NoTick;

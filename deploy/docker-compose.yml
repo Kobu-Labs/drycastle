@@ -61,6 +61,7 @@ services:
     # the animal hit shapes. An empty folder is fine: the server then uses boxes, as a client without the pack does.
     volumes:
       - ../assets-private:/app/assets-private:ro
+      - navcache:/navcache # the bots' baked navigation tiles, kept across images (see the Dockerfile)
 
   # Static file server for the ENCRYPTED private asset pack (../pack/assets-private-<id>.zip.enc), fetched by launchers that have the pack
   # password. Plain HTTP on purpose: the file is useless without the password, which never travels, and the launcher checks its sha256
@@ -77,3 +78,4 @@ services:
 
 volumes:
   pgdata:
+  navcache:

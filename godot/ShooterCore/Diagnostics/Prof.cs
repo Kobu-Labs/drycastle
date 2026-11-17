@@ -30,6 +30,8 @@ public static class Prof
         FireBulletHit, FireRaycast, FireMissCheck, FirePellets, FireDeal,
         // sending an event to every client, and the players line of the log
         BroadcastEvent, LogPlayers,
+        // the parts of a target list: the players, the animals (wild and pets), and taking the armoured riders out
+        TargetsPlayers, TargetsAnimals, TargetsArmoured,
         Count,
     }
 
@@ -43,6 +45,7 @@ public static class Prof
         "move_head", "move_logic", "move_step_up", "move_slide", "move_bodies", "move_post",
         "fire_bullet_hit", "fire_raycast", "fire_miss_check", "fire_pellets", "fire_deal",
         "broadcast_event", "log_players",
+        "targets_players", "targets_animals", "targets_armoured",
     };
 
     const int N = (int)S.Count;

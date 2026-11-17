@@ -78,6 +78,7 @@ public partial class NetServer
         }
         if (threads.Length > 0 && (active || _profReports % 6 == 0)) GD.Print("server: prof threads cpu_pct " + threads);
         GD.Print("server: prof mem " + MemoryLine(seconds));
+        GD.Print("server: prof gc " + GcLine());
         _profReports++;
         Prof.Reset();
         _profWorstMs = 0; _gcTicks = 0; _worstNoGcMs = 0;
@@ -146,5 +147,21 @@ public partial class NetServer
             $" rays_s={((rays - _raysLast) / seconds).ToString("F0", inv)} live_targets_s={((lt - _liveTargetsLast) / seconds).ToString("F0", inv)}";
         _raysLast = rays; _liveTargetsLast = lt;
         return line;
+    }
+
+    /// <summary>
+    /// The last garbage collection of the young generations: which generation it was, how long it paused, how much it found alive and moved up
+    /// (<c>promoted_kb</c>: what a pause is paid for), the sizes of generations 0 and 1 before and after it, and the pinned objects it met.
+    /// </summary>
+    static string GcLine()
+    {
+        var inv = CultureInfo.InvariantCulture;
+        var g = GC.GetGCMemoryInfo(GCKind.Ephemeral);
+        string Kb(long bytes) => (bytes / 1000.0).ToString("F0", inv);
+        var pause = g.PauseDurations.Length > 0 ? g.PauseDurations[0].TotalMilliseconds : 0;
+        var gen = g.GenerationInfo;
+        return $"last_index={g.Index} gen={g.Generation} pause_ms={pause.ToString("F1", inv)} promoted_kb={Kb(g.PromotedBytes)} gen0_kb={Kb(gen[0].SizeBeforeBytes)}>{Kb(gen[0].SizeAfterBytes)}" +
+            $" gen1_kb={Kb(gen[1].SizeBeforeBytes)}>{Kb(gen[1].SizeAfterBytes)} gen2_mb={(gen[2].SizeAfterBytes / 1e6).ToString("F0", inv)} pinned={g.PinnedObjectsCount} finalize_pending={g.FinalizationPendingCount}" +
+            $" compacted={(g.Compacted ? 1 : 0)} concurrent={(g.Concurrent ? 1 : 0)} fragmented_mb={(g.FragmentedBytes / 1e6).ToString("F0", inv)}";
     }
 }

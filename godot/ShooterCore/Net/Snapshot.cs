@@ -18,12 +18,18 @@ public sealed class SnapshotHistory
     /// <summary>The complete state of a tick, or null when it is not kept.</summary>
     public IReadOnlyDictionary<ushort, EntityRecord>? Get(uint tick) => _byTick.GetValueOrDefault(tick);
 
-    /// <summary>Keeps the state of a tick from its entity list (a tick already kept is left as it is).</summary>
+    /// <summary>The dictionaries <see cref="Record"/> made that are still kept, and those that fell out of the history, emptied, for the next tick: a tick's state lives two seconds, long enough to be costly garbage.</summary>
+    readonly HashSet<Dictionary<ushort, EntityRecord>> _own = new(ReferenceEqualityComparer.Instance);
+    readonly Stack<Dictionary<ushort, EntityRecord>> _spare = new();
+    readonly List<uint> _old = new();
+
+    /// <summary>Keeps the state of a tick from its entity list (a tick already kept is left as it is). What <see cref="Get"/> returned for a tick is read only while the tick is kept: its dictionary is used again afterwards.</summary>
     public void Record(uint tick, IReadOnlyList<EntityRecord> entities)
     {
         if (Has(tick)) return;
-        var d = new Dictionary<ushort, EntityRecord>(entities.Count);
+        var d = _spare.Count > 0 ? _spare.Pop() : new Dictionary<ushort, EntityRecord>(entities.Count);
         foreach (var e in entities) d[e.Id] = e;
+        _own.Add(d);
         Store(tick, d);
     }
 
@@ -32,7 +38,12 @@ public sealed class SnapshotHistory
     {
         _byTick[tick] = states;
         if (_byTick.Count <= Depth) return;
-        foreach (var k in _byTick.Keys.ToList()) if (k + Depth <= tick) _byTick.Remove(k);
+        _old.Clear();
+        foreach (var k in _byTick.Keys) if (k + Depth <= tick) _old.Add(k);
+        foreach (var k in _old)
+        {
+            if (_byTick.Remove(k, out var gone) && gone is Dictionary<ushort, EntityRecord> d && _own.Remove(d)) { d.Clear(); _spare.Push(d); }
+        }
     }
 }
 

@@ -162,35 +162,97 @@ public struct ClearPath
 /// </summary>
 public sealed class AnimalCrowd : IStandingBodies
 {
+    /// <summary>Side of a cell of the grid the animals are filed in, metres: a few bodies wide, so a question reads four to nine cells.</summary>
+    const float CellM = 4f;
+
     readonly List<Animal> _all = new();
+    /// <summary>The animals by the cell they stand in (kept as they move, <see cref="Moved"/>): a question looks at the cells its reach covers, not at every animal. The answers are the ones the whole list gave.</summary>
+    readonly Dictionary<long, List<Animal>> _cells = new(CellKeys.Instance);
+    readonly List<Animal> _found = new();
+    /// <summary>The widest <see cref="Animal.BodyReach"/> that ever joined: how far past its own reach a question has to look.</summary>
+    float _maxReach;
+    int _seq;
 
     public int Count => _all.Count;
 
-    /// <summary>The animals that stand (<see cref="Animal.Stands"/>) near a point, as boxes with the heights they span: what stops a player on foot. A walking or fleeing animal is not one, see <see cref="AnimalRules.Stands"/>.</summary>
+    static int Cell(float v) => (int)MathF.Floor(v / CellM);
+    static long Key(int cx, int cz) => ((long)cx << 32) | (uint)cz;
+
+    sealed class CellKeys : IEqualityComparer<long>
+    {
+        public static readonly CellKeys Instance = new();
+        public bool Equals(long a, long b) => a == b;
+        public int GetHashCode(long key) => (int)(((ulong)key * 0x9E3779B97F4A7C15UL) >> 32); // the default folds the two halves together, and neighbours collide
+    }
+
+    void File(Animal a)
+    {
+        var p = a.Position;
+        a.CrowdCx = Cell(p.X); a.CrowdCz = Cell(p.Z);
+        var key = Key(a.CrowdCx, a.CrowdCz);
+        if (!_cells.TryGetValue(key, out var cell)) _cells[key] = cell = new List<Animal>(4);
+        cell.Add(a);
+    }
+
+    void Unfile(Animal a)
+    {
+        var key = Key(a.CrowdCx, a.CrowdCz);
+        if (!_cells.TryGetValue(key, out var cell)) return;
+        cell.Remove(a);
+        if (cell.Count == 0) _cells.Remove(key);
+    }
+
+    /// <summary>An animal of this crowd moved (its <see cref="Animal.Position"/> was set): filed under its new cell when it crossed into one.</summary>
+    internal void Moved(Animal a)
+    {
+        var p = a.Position;
+        if (Cell(p.X) == a.CrowdCx && Cell(p.Z) == a.CrowdCz) return;
+        Unfile(a);
+        File(a);
+    }
+
+    /// <summary>The animals near a point, as boxes with the heights they span, for those that stand (<see cref="Animal.Stands"/>): what stops a player on foot. A walking or fleeing animal is not one, see <see cref="AnimalRules.Stands"/>. In the order they joined.</summary>
     public void Near(float x, float z, float radius, List<BodyObstacle> into)
     {
-        foreach (var a in _all)
-        {
-            // the distance first: nearly every animal is far away, and the test is two fields (the answer is the same in either order)
-            var reach = a.BodyReach + radius;
-            var p = a.Position;
-            float dx = p.X - x, dz = p.Z - z;
-            if (dx * dx + dz * dz > reach * reach) continue;
-            if (!a.Stands) continue;
-            into.Add(new BodyObstacle(a.Body, a.Position.Y, a.Position.Y + a.HitBox[1]));
-        }
+        var r = radius + _maxReach;
+        int x0 = Cell(x - r), x1 = Cell(x + r), z0 = Cell(z - r), z1 = Cell(z + r);
+        _found.Clear();
+        for (var cx = x0; cx <= x1; cx++)
+            for (var cz = z0; cz <= z1; cz++)
+            {
+                if (!_cells.TryGetValue(Key(cx, cz), out var cell)) continue;
+                foreach (var a in cell)
+                {
+                    var reach = a.BodyReach + radius;
+                    var p = a.Position;
+                    float dx = p.X - x, dz = p.Z - z;
+                    if (dx * dx + dz * dz > reach * reach) continue;
+                    if (!a.Stands) continue;
+                    _found.Add(a);
+                }
+            }
+        if (_found.Count > 1) _found.Sort(static (a, b) => a.CrowdSeq.CompareTo(b.CrowdSeq)); // the order matters to who pushes the player out last
+        foreach (var a in _found) into.Add(new BodyObstacle(a.Body, a.Position.Y, a.Position.Y + a.HitBox[1]));
+        _found.Clear();
     }
 
     public void Add(Animal a)
     {
-        if (_all.Contains(a)) return;
+        if (ReferenceEquals(a.Crowd, this)) return;
+        a.Crowd?.Remove(a);
         _all.Add(a);
+        a.CrowdSeq = _seq++;
+        _maxReach = MathF.Max(_maxReach, a.BodyReach);
+        File(a);
         a.Crowd = this;
     }
 
     public void Remove(Animal a)
     {
-        if (_all.Remove(a) && ReferenceEquals(a.Crowd, this)) a.Crowd = null;
+        if (!ReferenceEquals(a.Crowd, this)) return;
+        _all.Remove(a);
+        Unfile(a);
+        a.Crowd = null;
     }
 
     /// <summary>
@@ -201,18 +263,24 @@ public sealed class AnimalCrowd : IStandingBodies
     {
         var selfReach = self.BodyReach;
         var herd = self.Herd;
-        foreach (var o in _all)
-        {
-            // the distance first: nearly every animal is far away, and the test is two fields (the answer is the same in either order)
-            var p = o.Position;
-            var dx = p.X - to.X; var dz = p.Z - to.Z;
-            var reach = selfReach + o.BodyReach + 0.5f;
-            if (dx * dx + dz * dz > reach * reach) continue;
-            if (ReferenceEquals(o, self) || !o.Obstructs || (herd != null && ReferenceEquals(o.Herd, herd))) continue;
-            var theirs = o.Body;
-            if (!to.Overlaps(theirs)) continue;
-            if (!from.Overlaps(theirs) || to.DistanceBetweenCentres(theirs) < from.DistanceBetweenCentres(theirs)) return true;
-        }
+        var r = selfReach + _maxReach + 0.5f;
+        int x0 = Cell(to.X - r), x1 = Cell(to.X + r), z0 = Cell(to.Z - r), z1 = Cell(to.Z + r);
+        for (var cx = x0; cx <= x1; cx++)
+            for (var cz = z0; cz <= z1; cz++)
+            {
+                if (!_cells.TryGetValue(Key(cx, cz), out var cell)) continue;
+                foreach (var o in cell)
+                {
+                    var p = o.Position;
+                    var dx = p.X - to.X; var dz = p.Z - to.Z;
+                    var reach = selfReach + o.BodyReach + 0.5f;
+                    if (dx * dx + dz * dz > reach * reach) continue;
+                    if (ReferenceEquals(o, self) || !o.Obstructs || (herd != null && ReferenceEquals(o.Herd, herd))) continue;
+                    var theirs = o.Body;
+                    if (!to.Overlaps(theirs)) continue;
+                    if (!from.Overlaps(theirs) || to.DistanceBetweenCentres(theirs) < from.DistanceBetweenCentres(theirs)) return true;
+                }
+            }
         return false;
     }
 }
