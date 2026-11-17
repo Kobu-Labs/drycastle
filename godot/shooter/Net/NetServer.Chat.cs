@@ -71,6 +71,7 @@ public partial class NetServer
             case "rozhlas": ChatRozhlas(c, args); break;
             case "status": ChatStatus(c, args); break;
             case "scud": ChatScud(c, args); break;
+            case "squad": ChatSquad(c, args); break;
         }
         GD.Print($"server: {c.Name} #{c.Id} ran {text}");
     }
@@ -83,7 +84,7 @@ public partial class NetServer
             ChatTo(c, ChatLineKind.Info, $"{one.Usage}: {one.Summary}.");
             return;
         }
-        ChatTo(c, ChatLineKind.Info, ctx.IsAdmin ? "Commands (Tab completes, Up and Down bring back what you sent):" : "Commands are for admins. You can use:");
+        ChatTo(c, ChatLineKind.Info, ctx.IsAdmin ? "Commands (Tab completes, Up and Down bring back what you sent):" : "Most commands are for admins. You can use:");
         foreach (var cmd in ChatCommands.Visible(ctx)) ChatTo(c, ChatLineKind.Info, $"{cmd.Usage}: {cmd.Summary}.");
     }
 
@@ -191,6 +192,39 @@ public partial class NetServer
         if (TeamAssignRules.Apply(_match, a, c.Name) is not { } line) return;
         ChatToAll(ChatLineKind.System, "", line);
         GD.Print($"server: {c.Name} #{c.Id} team {a.Action} {a.Id} {a.Team}");
+    }
+
+    /// <summary>A player's squad request from the Squads screen (#379, <see cref="SquadAssign"/>). The scoreboard carries the result; a refusal comes back as a chat line.</summary>
+    void OnSquadAssign(Client c, byte[] payload)
+    {
+        if (SquadAssignCodec.Decode(payload) is not { } a) return;
+        RunSquad(c, a);
+        GD.Print($"server: {c.Name} #{c.Id} squad {a.Action} {a.Squad} '{a.Name}'");
+    }
+
+    /// <summary>"/squad create [name] | join name-or-number | leave | list" (#379): the same requests as the Squads screen.</summary>
+    void ChatSquad(Client c, IReadOnlyList<string> args)
+    {
+        var name = args.Count > 1 ? args[1] : "";
+        switch (args[0])
+        {
+            case "list": foreach (var line in SquadRules.List(_match, c.Id)) ChatTo(c, ChatLineKind.Info, line); break;
+            case "create": RunSquad(c, new SquadAssign(SquadAction.Create, 0, name)); break;
+            case "leave": RunSquad(c, new SquadAssign(SquadAction.Leave)); break;
+            case "join":
+                if (name == "") { ChatTo(c, ChatLineKind.Error, "Say which squad: /squad join <name or number>. /squad list shows them."); break; }
+                if (SquadRules.Find(_match, c.Id, name) is var squad && squad == 0) { ChatTo(c, ChatLineKind.Error, $"Your team has no squad '{name}'. /squad list shows them."); break; }
+                RunSquad(c, new SquadAssign(SquadAction.Join, squad));
+                break;
+        }
+    }
+
+    void RunSquad(Client c, SquadAssign a)
+    {
+        if (!c.Joined || c.IsBot) return;
+        var reply = SquadRules.Apply(_match, c.Id, a);
+        ChatTo(c, reply.Ok ? ChatLineKind.Info : ChatLineKind.Error, reply.Text);
+        foreach (var (id, text) in reply.Tell) if (_byId.TryGetValue(id, out var mate)) ChatTo(mate, ChatLineKind.Info, text);
     }
 
     /// <summary>"/restart [ffa|tdm]": a new round now, in the current mode or the named one. Everyone is told which.</summary>

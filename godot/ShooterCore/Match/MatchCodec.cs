@@ -6,11 +6,13 @@ namespace Drycastle.ShooterCore;
 
 /// <param name="Sandbox">A sandbox player (no team, but playing: not "unassigned"). Bit 2 of the row's team byte (#312).</param>
 /// <param name="Bot">The player is a bot. Bit 3 of the team byte.</param>
-public readonly record struct ScoreRow(ushort Id, string Name, int Kills, int Deaths, ushort Ping, byte Team = Teams.None, bool Sandbox = false, bool Bot = false);
+/// <param name="Squad">The player's squad (#379), 0 for none; its name is in <see cref="MatchStateMsg.Squads"/>. Its own byte per row in the squad tail.</param>
+public readonly record struct ScoreRow(ushort Id, string Name, int Kills, int Deaths, ushort Ping, byte Team = Teams.None, bool Sandbox = false, bool Bot = false, byte Squad = 0);
 
 /// <param name="Mode">Free-for-all or team deathmatch; in team deathmatch <paramref name="ScoreA"/> and <paramref name="ScoreB"/> are the team totals and each row carries its team.</param>
+/// <param name="Squads">The squads that have a member (null: none, as from an older server).</param>
 public sealed record MatchStateMsg(MatchPhase Phase, float TimeRemaining, IReadOnlyList<ushort> Winners, IReadOnlyList<ScoreRow> Rows,
-    MatchMode Mode = MatchMode.FreeForAll, int ScoreA = 0, int ScoreB = 0);
+    MatchMode Mode = MatchMode.FreeForAll, int ScoreA = 0, int ScoreB = 0, IReadOnlyList<SquadName>? Squads = null);
 /// <summary>A kill for the feed. <paramref name="Cause"/> travels as an optional sixth byte (old 5-byte messages decode as Standard).</summary>
 public sealed record KillMsg(ushort Killer, ushort Victim, byte Weapon, KillCause Cause = KillCause.Standard);
 public sealed record SpawnMsg(ushort Id, Vector3 Position, float Protection);
@@ -24,6 +26,7 @@ public sealed record DeathMsg(ushort Victim, ushort Killer, float RespawnDelay)
 /// Payload codecs for the match event kinds (little-endian), carried in the reliable event envelope.
 ///   MatchState: u8 phase, f32 timeRemaining, u8 nWinners, u16*n ids, u8 nRows, rows (u16 id, u8 nameLen, name, u16 kills, u16 deaths, u16 ping)
 ///     then an optional team tail (older messages end after the rows): u8 mode, u16 scoreA, u16 scoreB, u8 per row in row order (bits 0-1 team, bit 2 sandbox, bit 3 bot)
+///       then an optional squad tail (#379; older messages end after the team tail): u8 squad per row in row order, u8 nSquads, squads (u8 id, u8 nameLen, name)
 ///   Kill: u16 killer, u16 victim, u8 weapon          (killer == victim: suicide)
 ///   Spawn: u16 id, f32 x, y, z, f32 protectionSeconds
 ///   Death: u16 victim, u16 killer, f32 respawnDelay
@@ -33,9 +36,19 @@ public static class MatchCodec
 {
     public const byte DebugKill = 1;
     const byte TeamMask = 3, SandboxBit = 4, BotBit = 8;
+    /// <summary>A squad name is at most 32 characters (<see cref="Squads"/>); this many utf8 bytes is a safe cap.</summary>
+    const int MaxSquadNameBytes = 120;
 
     static ScoreRow DecodeTeamByte(ScoreRow row, byte b) =>
         row with { Team = (b & TeamMask) is var tm and (Teams.A or Teams.B) ? (byte)tm : Teams.None, Sandbox = (b & SandboxBit) != 0, Bot = (b & BotBit) != 0 };
+
+    /// <summary>u8 length, utf8; a message that ends inside the name is rejected (EndOfStreamException).</summary>
+    static string ReadName(BinaryReader r)
+    {
+        var n = r.ReadByte();
+        var b = r.ReadBytes(n);
+        return b.Length == n ? Encoding.UTF8.GetString(b) : throw new EndOfStreamException();
+    }
 
     public static byte[] Encode(MatchStateMsg m)
     {
@@ -54,6 +67,15 @@ public static class MatchCodec
         }
         w.Write((byte)m.Mode); w.Write((ushort)m.ScoreA); w.Write((ushort)m.ScoreB);
         foreach (var r in m.Rows) w.Write((byte)((r.Team & TeamMask) | (r.Sandbox ? SandboxBit : 0) | (r.Bot ? BotBit : 0)));
+        foreach (var r in m.Rows) w.Write(r.Squad);
+        var squads = (m.Squads ?? Array.Empty<SquadName>()).Take(byte.MaxValue).ToList();
+        w.Write((byte)squads.Count);
+        foreach (var q in squads)
+        {
+            var nb = Encoding.UTF8.GetBytes(q.Name);
+            if (nb.Length > MaxSquadNameBytes) nb = nb[..MaxSquadNameBytes];
+            w.Write(q.Id); w.Write((byte)nb.Length); w.Write(nb);
+        }
         return ms.ToArray();
     }
 
@@ -74,13 +96,20 @@ public static class MatchCodec
                 rows.Add(new ScoreRow(id, name, r.ReadUInt16(), r.ReadUInt16(), r.ReadUInt16()));
             }
             var mode = MatchMode.FreeForAll; int scoreA = 0, scoreB = 0;
+            List<SquadName>? squads = null;
             if (r.BaseStream.Position < r.BaseStream.Length) // the team tail; absent from older servers
             {
                 mode = r.ReadByte() == (byte)MatchMode.TeamDeathmatch ? MatchMode.TeamDeathmatch : MatchMode.FreeForAll;
                 scoreA = r.ReadUInt16(); scoreB = r.ReadUInt16();
                 for (var i = 0; i < rows.Count; i++) rows[i] = DecodeTeamByte(rows[i], r.ReadByte());
+                if (r.BaseStream.Position < r.BaseStream.Length) // the squad tail; absent from older servers
+                {
+                    for (var i = 0; i < rows.Count; i++) rows[i] = rows[i] with { Squad = r.ReadByte() };
+                    squads = new List<SquadName>();
+                    for (int i = 0, n = r.ReadByte(); i < n; i++) squads.Add(new SquadName(r.ReadByte(), ReadName(r)));
+                }
             }
-            return new MatchStateMsg(phase, t, winners, rows, mode, scoreA, scoreB);
+            return new MatchStateMsg(phase, t, winners, rows, mode, scoreA, scoreB, squads);
         }
         catch (Exception e) when (e is EndOfStreamException or ArgumentException) { return null; }
     }
@@ -161,6 +190,21 @@ public sealed class ClientMatchState
         foreach (var r in Rows) if (r.Id == id) return r.Team;
         return Teams.None;
     }
+    /// <summary>The squads that have a member, as the last scoreboard listed them (#379).</summary>
+    public IReadOnlyList<SquadName> Squads { get; private set; } = Array.Empty<SquadName>();
+    /// <summary>Squad of a player on the scoreboard, 0 for none or an unknown id.</summary>
+    public byte SquadOf(ushort id)
+    {
+        foreach (var r in Rows) if (r.Id == id) return r.Squad;
+        return 0;
+    }
+    public string SquadNameOf(byte squad)
+    {
+        foreach (var q in Squads) if (q.Id == squad) return q.Name;
+        return "";
+    }
+    /// <summary>Two different players in the same squad (a squad is within a team, so they are friends too).</summary>
+    public bool AreSquadMates(ushort a, ushort b) => IsTeamMode && a != b && SquadOf(a) is var s && s != 0 && s == SquadOf(b);
     /// <summary>Two different players on the same real team (never in free-for-all).</summary>
     public bool AreFriends(ushort a, ushort b) => IsTeamMode && a != b && TeamOf(a) is var t && t != Teams.None && t == TeamOf(b);
     public List<KillMsg> KillFeed { get; } = new();
@@ -226,7 +270,7 @@ public sealed class ClientMatchState
                 if (Phase != MatchPhase.Ending && m.Phase == MatchPhase.Ending) RoundsEnded++;
                 var hadPhase = _phaseSeen.HasValue;
                 var changed = _phaseSeen.Update((byte)m.Phase, out var before);
-                Phase = m.Phase; Rows = m.Rows; Winners = m.Winners; Mode = m.Mode; ScoreA = m.ScoreA; ScoreB = m.ScoreB; _timeLeft = m.TimeRemaining; _timeAt = now;
+                Phase = m.Phase; Rows = m.Rows; Winners = m.Winners; Mode = m.Mode; ScoreA = m.ScoreA; ScoreB = m.ScoreB; Squads = m.Squads ?? Array.Empty<SquadName>(); _timeLeft = m.TimeRemaining; _timeAt = now;
                 if (changed) PhaseChanged?.Invoke(hadPhase ? (MatchPhase)before : null, m.Phase);
                 if (restarted) RoundRestarted?.Invoke();
                 return true;
