@@ -59,7 +59,7 @@ public partial class NetClient
         if (!ShotFx.Enabled) return;
         if (s.Hp == GlassRules.Whole) { DropGlassOverlay(s.Key); return; }
         if (!GlassPlace(s.Key, out var parent, out var rect, out var hole)) return;
-        if (HasPaneNode(s.Key) && !SolidBehindPane(s.Key) || IsGaragePlate(s.Key)) hole = 0; // the model has a real opening: nothing to darken (nor the garage's, the room behind is real)
+        if (HasPaneNode(s.Key) || IsGaragePlate(s.Key)) hole = 0; // the model has a real opening: nothing to darken (nor the garage's, the room behind is real)
         if (!_glassOverlays.TryGetValue(s.Key, out var overlay) || !GodotObject.IsInstanceValid(overlay))
             _glassOverlays[s.Key] = overlay = GlassFx.MakeOverlay(parent, rect, s.Key, hole, IsGaragePlate(s.Key) ? GlassFx.OsbShards : null);
         SetPaneGeometry(s.Key, !s.Shattered, animate);
@@ -114,9 +114,6 @@ public partial class NetClient
 
     bool HasPaneNode(GlassPaneKey key) =>
         key.Owner != GlassPaneKey.Map && _cars.TryGetValue(key.Owner, out var v) && GodotObject.IsInstanceValid(v.Node) && v.Node.FindChild(PaneNodeName(key.Index), true, false) != null;
-
-    /// <summary>The flak truck's glasshouse is solid olive under its panes (make_flak_model.py), so its opening keeps a dark fill.</summary>
-    bool SolidBehindPane(GlassPaneKey key) => Vehicles != null && _cars.TryGetValue(key.Owner, out var v) && v.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[v.Kind].Id == "flak";
 
     /// <summary>The pane is the mechanic garage's breakable plate (a map pane of the shared list).</summary>
     bool IsGaragePlate(GlassPaneKey key) => key.Owner == GlassPaneKey.Map && key.Index < MapPanes.Count && MapPanes[key.Index].Node == MechanicGarageSite.PlateNode;

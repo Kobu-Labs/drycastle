@@ -42,7 +42,7 @@ The motorcycle, quad and amphibious transport have no glass. The utility helicop
 - A round only gets into a vehicle by a pane or an open side. Where it meets the hit box anywhere else (a door, the roof, the helicopter's belly, engine housing, cabin rear wall, nose and tail) the hull stops it there, also when a pane lies further along the ray: a pane on the far side is no way out for a round that had no way in.
 - The client's own tracer, pellet sparks and bullet holes follow the same rule (`VehicleAlong` in `NetClient.Cars.cs`): nothing is drawn on a vehicle the round went through, and a round stopped inside is drawn on the far side.
 - The roof gunner's own car stops his rounds as a hull (its glass is not passed or damaged); the door gunner's own helicopter is left out of his ray altogether.
-- A shattered pane of a model with its own `glass_N` node leaves a real opening (no dark fill); the flak truck (solid glasshouse) keeps a dark fill.
+- A shattered pane of a model with its own `glass_N` node leaves a real opening (no dark fill), the flak truck's included (its cab is hollow since #325).
 - A new round and a repaired vehicle make panes whole again.
 
 ## Code
