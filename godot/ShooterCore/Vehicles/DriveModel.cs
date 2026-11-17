@@ -246,7 +246,14 @@ public static class DriveModel
         }
         else if (!Fit(world, d, pos, s.Yaw, out var wheels))
         {
-            // nothing under it: it falls
+            // nothing under it. If the ground is just over it the origin has sunk into a slope (the rays start inside it and miss): it is lifted out, never dropped through the map
+            if (FitFromAbove(world, d, pos, s.Yaw, out var lifted))
+            {
+                pos.Y = lifted.Y; s.Airborne = false; s.Sink = 0; s.VerticalSpeed = 0; s.Pitch = lifted.Pitch; s.Roll = lifted.Roll;
+                s.Position = pos; s.Speed = u; s.Slip = w;
+                return;
+            }
+            // nothing there at all: it falls
             s.Airborne = true; s.Sink = 0;
             s.VerticalSpeed -= MoveConsts.Gravity * dt;
             pos.Y += s.VerticalSpeed * dt;
@@ -325,8 +332,9 @@ public static class DriveModel
     /// The ground under the four wheels at <paramref name="pos"/>. A wheel with nothing under it, or over a drop, hangs. False when no wheel has
     /// ground in reach.
     /// </summary>
-    static bool Fit(IDriveWorld world, VehicleDriveDef d, Vector3 pos, float yaw, out Wheels wheels)
+    static bool Fit(IDriveWorld world, VehicleDriveDef d, Vector3 pos, float yaw, out Wheels wheels, float lift = 0f)
     {
+        pos.Y += lift;
         var (sy, cy) = MathF.SinCos(yaw);
         var ahead = new Vector3(-sy, 0, -cy) * (d.Wheelbase / 2f); var side = new Vector3(cy, 0, -sy) * (d.Track / 2f);
         pos -= new Vector3(-sy, 0, -cy) * d.AxleCentre; // the point between the axles (the model's z, positive: behind the origin)
@@ -349,6 +357,17 @@ public static class DriveModel
             pitch,
             d.Track > 0 ? Math.Clamp(MathF.Atan2((fr + rr - fl - rl) / 2f, d.Track), -MaxTilt, MaxTilt) : 0f); // a single-track vehicle stands upright across the slope
         return true;
+    }
+
+    /// <summary>Metres over the origin the ground is looked for again when the wheels found none under it (the origin is inside a slope).</summary>
+    static readonly float[] SunkLifts = { 2f, 4f, 6f };
+
+    static bool FitFromAbove(IDriveWorld world, VehicleDriveDef d, Vector3 pos, float yaw, out Wheels wheels)
+    {
+        foreach (var lift in SunkLifts)
+            if (Fit(world, d, pos, yaw, out wheels, lift) && wheels.Y > pos.Y) return true;
+        wheels = default;
+        return false;
     }
 
     /// <summary>
