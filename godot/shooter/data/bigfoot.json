@@ -1,7 +1,7 @@
 {
   "version": 1,
   // The Bigfoot event (issue #264): every number of the fight. Lengths are metres, speeds metres per second, times seconds.
-  // These are first guesses made by reading, not by playing: the fight is meant to take about a minute and has never been run.
+  // These are first guesses made by reading, not by playing: the fight is meant to take about 15 s of rifle fire alone (80 hits, #376) and has never been tuned by play.
   // `/event bigfoot` starts it (admin), `/event current end` wins it, `/event current cancel` removes it with no reward.
 
   // The model: built by scripts/make_bigfoot_model.py (skinned, a clip per act, a flinch, a roar, the death), at height_m (twice a
@@ -21,7 +21,7 @@
   // living players within participant_radius_m (at least min_players; the count only goes up while it fights). A bullet hit counts 1,
   // a headshot no more, a pellet fan that hits it counts 1; an explosive or vehicle-weapon hit counts its weight. Ramming it does nothing.
   "hits": {
-    "per_player": 300,
+    "per_player": 80,
     "min_players": 1,
     "participant_radius_m": 90,
     "explosive_weight": 25,
@@ -31,6 +31,8 @@
     "second_phase_at": 0.30,
     "third_phase_at": 0.60,
     "enrage_at": 0.85,
+    // (80 hits per player: a rifle at 5-10 hits a second reaches phase two in 2-5 s, three in 5-10 s, enrage in 7-14 s; the clock below only
+    // matters for a slow weapon such as a sniper, 0.7 hits a second)
     // the same steps by the clock, whichever comes first: seconds of the fight (awake, with a target) after which each begins even
     // if nobody shot it (0: never by time)
     "second_phase_after_seconds": 20,
