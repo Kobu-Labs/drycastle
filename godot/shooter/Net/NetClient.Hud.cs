@@ -120,6 +120,7 @@ public partial class NetClient
     }
 
     readonly List<Vector2> _friendDots = new();
+    readonly List<(Vector2 At, string Name)> _squadDots = new();
 
     /// <summary>Anyone but me who is not a teammate (FFA: everyone else).</summary>
     bool IsMapEnemy(ushort id) => id != _myId && !Match.AreFriends(_myId, id);
@@ -157,11 +158,17 @@ public partial class NetClient
             }
             _hud.Minimap.SetVehicleDots(_carDots);
             _friendDots.Clear();
+            _squadDots.Clear();
             if (Match.IsTeamMode)
                 foreach (var (id, r) in _remotes)
                     if (r.State != EntityState.Dead && Match.AreFriends(_myId, id) && GodotObject.IsInstanceValid(r.Node))
-                        _friendDots.Add(new Vector2(r.Node.GlobalPosition.X, r.Node.GlobalPosition.Z));
+                    {
+                        var at = new Vector2(r.Node.GlobalPosition.X, r.Node.GlobalPosition.Z);
+                        if (Match.AreSquadMates(_myId, id)) _squadDots.Add((at, Match.NameOf(id))); // squad mates are blue with a name, the other teammates green
+                        else _friendDots.Add(at);
+                    }
             _hud.Minimap.SetFriendDots(_friendDots);
+            _hud.Minimap.SetSquadDots(_squadDots);
         }
     }
 }

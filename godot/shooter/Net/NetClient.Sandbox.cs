@@ -62,7 +62,10 @@ public partial class NetClient
             case EventKind.SandboxState when SandboxEvents.DecodeState(payload) is { } st:
                 if (st.On) _sandboxPlayers.Add(st.Id); else _sandboxPlayers.Remove(st.Id);
                 if (_remotes.TryGetValue(st.Id, out var r) && _names.TryGetValue(st.Id, out var n))
+                {
+                    r.TagSquad = 0; // the squad tag, if any, is added again by the next frame
                     foreach (var label in r.Node.GetChildren().OfType<Label3D>()) label.Text = NameTag(st.Id, n);
+                }
                 SandboxChanged?.Invoke();
                 break;
             case EventKind.SandboxHeld when SandboxEvents.DecodeText(payload) is { } held:

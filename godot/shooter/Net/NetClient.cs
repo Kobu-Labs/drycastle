@@ -15,7 +15,8 @@ public partial class NetClient : Node
     sealed class Pending { public NetInput Input; public MoveState After; }
     sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc, WadeAcc; public double RippleDue; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
         /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the vehicle and seat this player sits in (<see cref="SeatRiders"/>).</summary>
-        public float ShownYaw, ShownPitch; public bool Binoculars; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
+        public float ShownYaw, ShownPitch; public bool Binoculars; /// <summary>The squad whose name the name tag shows after the name (0: none); the tag is rebuilt when it changes (#379).</summary>
+        public byte TagSquad; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;

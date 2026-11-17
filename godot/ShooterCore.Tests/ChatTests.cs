@@ -124,7 +124,7 @@ public class ChatTests
     [Fact]
     public void AGuestOnlySeesTheCommandsForEveryone()
     {
-        Assert.Equal(new[] { "help", "fps" }, ChatCommands.Hint("/", Guest).Suggestions.Select(s => s.Insert));
+        Assert.Equal(new[] { "help", "fps", "squad" }, ChatCommands.Hint("/", Guest).Suggestions.Select(s => s.Insert));
         Assert.NotNull(ChatCommands.Hint("/bots", Guest).Error);
     }
 
