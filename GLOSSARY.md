@@ -249,8 +249,12 @@ Forest or meadow ground within 25 m of water (a water ground area or a water pat
 _Avoid_: marsh, bog, wetland (those are not terms of this map)
 
 **Shot-only cover**:
-Collision that stops bullets, pellets, rockets and sight lines but not players or cars: tree crowns and bushes. Tree trunks and placed solids are solid for everyone.
+Collision that stops bullets, pellets, rockets and sight lines but not players or cars: bushes, and the crown of a tree that is not drawn as a pack model (a hand-placed tree, a tree of a map without pack trees). The leaves of a pack tree stop nothing (ADR 0037). Tree trunks, limbs and placed solids are solid for everyone.
 _Avoid_: hitbox (for a prop), foliage collision
+
+**Limb**:
+One stretch of the wood of a pack tree model, a trunk or a branch, and the solid that stands where it is: a square ring below and a square ring above, each with its own centre, so it leans as the wood does. A forked trunk is a limb per arm. A tree drawn as a pack model is solid for everyone exactly at its limbs (`tree_limbs.json`, ADR 0037); a limb is followed up until it is hidden in the leaves.
+_Avoid_: branch collider, trunk box, hitbox
 
 **Concealment**:
 The factor (stance, stillness, movement) by which camouflage reduces how far away a player can be spotted. Only the number exists; it is not yet applied in the server tick.

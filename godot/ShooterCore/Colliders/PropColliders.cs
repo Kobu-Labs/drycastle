@@ -5,7 +5,7 @@ namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Physics layers of the world. Solid world (players, vehicles and bullets stop on it) is layer 1; vehicles are layer 2 (as
-/// before). Shot-only cover (tree crowns, bushes) is layer 4: bullets, pellets, rockets and sight lines stop on it, while
+/// before). Shot-only cover (bushes, the crown of a tree that is not drawn as a pack model) is layer 4: bullets, pellets, rockets and sight lines stop on it, while
 /// players and cars move through it. Layer 8 is the box of a vehicle that on-foot players are stopped by: a body of its own
 /// beside the vehicle's (see <see cref="VehicleSolid"/>). Layer 16 is the player and bot bodies (<see cref="Players"/>): no world ray queries it, so none
 /// has to exclude them by hand.
@@ -49,16 +49,20 @@ public static class CollisionLayers
 /// <summary>Whether a solid part is a trunk (wood, solid) or a crown (foliage, shot-only).</summary>
 public enum PartRole : byte { Trunk = 0, Crown = 1 }
 
-/// <summary>Box (rectangle in plan, yawed), a four-sided pyramid with a square base, or a four-sided taper (frustum) with square rings.</summary>
-public enum PartShape : byte { Box = 0, Pyramid = 1, Frustum = 2 }
+/// <summary>
+/// Box (rectangle in plan, yawed), a four-sided pyramid with a square base, a four-sided taper (frustum) with square rings, or a limb: a taper whose
+/// top ring has a centre of its own, so it leans (a stretch of a trunk or a branch, <see cref="TreeLimbs"/>).
+/// </summary>
+public enum PartShape : byte { Box = 0, Pyramid = 1, Frustum = 2, Limb = 3 }
 
 /// <summary>
 /// One collision solid of a prop, in map metres (x east, y north, z up). Box: centre (X, Y), vertical extent Z0..Z1, half
 /// sizes along the yaw axes (HalfU along (cos, sin), HalfV along (-sin, cos)). Pyramid: base at Z0 with ring half-size
 /// HalfU (= HalfV), apex at (X, Y, Z1). Frustum: square ring of half-size HalfU (= HalfV) at Z0, of half-size HalfTop at Z1.
+/// Limb: a frustum whose top ring is centred TopU along (cos, sin) and TopV along (-sin, cos) from (X, Y).
 /// The same numbers build the Godot shapes, so the tests and the game agree.
 /// </summary>
-public readonly record struct SolidPart(PartRole Role, PartShape Shape, float X, float Y, float Z0, float Z1, float HalfU, float HalfV, float Yaw, float HalfTop = 0)
+public readonly record struct SolidPart(PartRole Role, PartShape Shape, float X, float Y, float Z0, float Z1, float HalfU, float HalfV, float Yaw, float HalfTop = 0, float TopU = 0, float TopV = 0)
 {
     /// <summary>Physics layer: trunks stop walking, crowns only shots.</summary>
     public uint Layer => Role == PartRole.Trunk ? CollisionLayers.World : CollisionLayers.ShotOnly;
@@ -74,9 +78,9 @@ public readonly record struct SolidPart(PartRole Role, PartShape Shape, float X,
             var ring = Ring(HalfU, Z0);
             return [ring[0], ring[1], ring[2], ring[3], new Vector3(X, Y, Z1)];
         }
-        if (Shape == PartShape.Frustum)
+        if (Shape is PartShape.Frustum or PartShape.Limb)
         {
-            var (lo, hi) = (Ring(HalfU, Z0), Ring(HalfTop, Z1));
+            var (lo, hi) = (Ring(HalfU, Z0), Ring(HalfTop, Z1, TopU, TopV));
             return [lo[0], lo[1], lo[2], lo[3], hi[0], hi[1], hi[2], hi[3]];
         }
         var (ux, uy) = (MathF.Cos(Yaw), MathF.Sin(Yaw));
@@ -90,13 +94,13 @@ public readonly record struct SolidPart(PartRole Role, PartShape Shape, float X,
         return pts;
     }
 
-    /// <summary>The square ring of half-size <paramref name="half"/> at height <paramref name="z"/>, in the solid's yawed frame.</summary>
-    Vector3[] Ring(float half, float z)
+    /// <summary>The square ring of half-size <paramref name="half"/> at height <paramref name="z"/>, in the solid's yawed frame, its centre (ou, ov) from the solid's.</summary>
+    Vector3[] Ring(float half, float z, float ou = 0, float ov = 0)
     {
         var (c, s) = (MathF.Cos(Yaw), MathF.Sin(Yaw));
         var ring = new Vector3[4];
         var k = 0;
-        foreach (var (dx, dy) in new[] { (-half, -half), (half, -half), (half, half), (-half, half) })
+        foreach (var (dx, dy) in new[] { (ou - half, ov - half), (ou + half, ov - half), (ou + half, ov + half), (ou - half, ov + half) })
             ring[k++] = new Vector3(X + c * dx - s * dy, Y + s * dx + c * dy, z);
         return ring;
     }
@@ -123,9 +127,10 @@ public readonly record struct SolidPart(PartRole Role, PartShape Shape, float X,
 
         var ring = Ring(HalfU, Z0);
         var inside = new Vector3(X, Y, Z0 + (Z1 - Z0) * 0.1f); // on the axis, above the base: strictly inside
-        if (Shape == PartShape.Frustum)
+        if (Shape is PartShape.Frustum or PartShape.Limb)
         {
-            var top = Ring(HalfTop, Z1);
+            var top = Ring(HalfTop, Z1, TopU, TopV);
+            if (Shape == PartShape.Limb) inside = (ring[0] + ring[2] + top[0] + top[2]) / 4; // the middle of the two ring centres: the axis leans
             var sides = new (Vector3 N, float D)[6];
             for (var k = 0; k < 4; k++)
                 sides[k] = Side(ring[k], ring[(k + 1) % 4], top[k], inside); // a side face is planar: a base edge and the top corner above its start
@@ -184,8 +189,10 @@ public readonly record struct SolidPart(PartRole Role, PartShape Shape, float X,
 /// A tree from trees.json (map metres; Z is the ground height at the trunk foot, Cone the conifer crown). A forest tree
 /// belongs to a <c>Stand</c> (pine, birch, mixed, thicket, swamp; a map without stands: mixed) and is an <c>Edge</c> tree
 /// within the outer fringe of the forest. Both only pick its look: the size is already in Scale, so the solids ignore them.
+/// <c>Model</c> is the pack model the tree is drawn as near the player (an index into <see cref="TreeModel.Limbs"/>; -1 = none, the tree is the
+/// code-built one): its solids are then that model's wood (<see cref="TreeLimbs"/>).
 /// </summary>
-public readonly record struct TreeInstance(float X, float Y, float Z, float Scale, float Rot, bool Cone, int ChunkX, int ChunkY, bool Forest = false, string Stand = "mixed", bool Edge = false);
+public readonly record struct TreeInstance(float X, float Y, float Z, float Scale, float Rot, bool Cone, int ChunkX, int ChunkY, bool Forest = false, string Stand = "mixed", bool Edge = false, int Model = -1);
 
 /// <summary>One crown tier of a forest tree, metres at scale 1 above the ground: <c>Lo</c> is the base (pyramid) or bottom (box), <c>Hi</c> the apex or top.</summary>
 public readonly record struct CrownTier(float Lo, float Half, float Hi);
@@ -198,12 +205,13 @@ public readonly record struct CrownTier(float Lo, float Half, float Hi);
 public sealed record ForestModel(float TrunkWidthM, float TrunkHeightM, float TrunkTopRatio, IReadOnlyList<CrownTier> Cone, IReadOnlyList<CrownTier> Box);
 
 /// <summary>The tree model numbers of the rules (trunk width and height, canopy edge, metres at scale 1; Forest only in maps 0.11.0+).</summary>
-public readonly record struct TreeModel(float TrunkWidthM, float TrunkHeightM, float CanopyM, ForestModel? Forest = null);
+public readonly record struct TreeModel(float TrunkWidthM, float TrunkHeightM, float CanopyM, ForestModel? Forest = null, IReadOnlyList<LimbModel>? Limbs = null);
 
 /// <summary>
-/// Collision solids of the base map's trees, mirroring the drawn tree (pipeline <c>propmeshes.tree_mesh</c>): a trunk box
-/// (solid) and either two stacked boxes (broadleaf) or two stacked pyramids (conifer) as the crown (shot-only). A forest tree
-/// (record flag, and the model's forest block) has a tapered trunk and tiers from the forest block instead.
+/// Collision solids of the base map's trees. A tree that is drawn as a pack model (<see cref="TreeInstance.Model"/>) is solid where that model's wood
+/// is, limb by limb, and its leaves stop nothing (<see cref="TreeLimbs"/>, #375). Any other tree mirrors the code-built tree (pipeline
+/// <c>propmeshes.tree_mesh</c>): a trunk box (solid) and either two stacked boxes (broadleaf) or two stacked pyramids (conifer) as the crown
+/// (shot-only); a forest tree (record flag, and the model's forest block) has a tapered trunk and tiers from the forest block instead.
 /// </summary>
 public static class TreeColliders
 {
@@ -258,8 +266,20 @@ public static class TreeColliders
     static float F(JsonElement e, string name, float fallback) =>
         e.TryGetProperty(name, out var v) && v.TryGetSingle(out var f) ? f : fallback;
 
-    /// <summary>The trunk and the crown solids of one tree, built with the same arithmetic as the drawn tree.</summary>
+    /// <summary>The solids of one tree: its pack model's limbs when it has one, else the code-built trunk and crown.</summary>
     public static List<SolidPart> Parts(TreeInstance t, TreeModel m)
+        => t.Model >= 0 && m.Limbs is { } limbs && t.Model < limbs.Count ? TreeLimbs.Parts(t, limbs[t.Model], CodeHeight(t, m)) : CodeParts(t, m);
+
+    /// <summary>The height of the code-built tree above its foot (the top of its highest solid): what a pack model is scaled to.</summary>
+    public static float CodeHeight(TreeInstance t, TreeModel m)
+    {
+        var top = float.MinValue;
+        foreach (var p in CodeParts(t, m)) top = MathF.Max(top, p.Z1);
+        return top - t.Z;
+    }
+
+    /// <summary>The trunk and the crown solids of the code-built tree, built with the same arithmetic as the drawn (baked) tree.</summary>
+    public static List<SolidPart> CodeParts(TreeInstance t, TreeModel m)
     {
         var s = t.Scale;
         if (t.Forest && m.Forest is { } f) return ForestParts(t, f);
@@ -313,7 +333,13 @@ public static class TreeColliders
     }
 
     /// <summary>No part of this tree lies further out than this, metres from its trunk.</summary>
-    static float Reach(TreeModel m, TreeInstance t) => m.CanopyM * t.Scale * 1.6f + 0.5f;
+    static float Reach(TreeModel m, TreeInstance t)
+    {
+        var reach = m.CanopyM * t.Scale * 1.6f + 0.5f;
+        if (t.Model >= 0 && m.Limbs is { } limbs && t.Model < limbs.Count)
+            reach = MathF.Max(reach, TreeLimbs.Reach(limbs[t.Model], CodeHeight(t, m)) + 0.5f);
+        return reach;
+    }
 
     /// <summary>
     /// The trees bucketed into a uniform grid (ticket perf T3-003), so a surface lookup reads the few trees near a point
@@ -375,8 +401,11 @@ public static class TreeColliders
 /// </summary>
 public static class SolidShapeKeys
 {
-    /// <summary>Kind 0 is a box (A = width, B = height, C = depth); kind 1 a pyramid (A = base half-size, B = height, C unused); kind 2 a frustum (A = base half-size, B = height, C = top half-size). Values in millimetres.</summary>
-    public readonly record struct Key(byte Kind, long A, long B, long C);
+    /// <summary>
+    /// Kind 0 is a box (A = width, B = height, C = depth); kind 1 a pyramid (A = base half-size, B = height, C unused); kind 2 a frustum (A = base half-size,
+    /// B = height, C = top half-size); kind 3 a limb (a frustum whose top ring is centred D along u and E along v from the base's). Values in millimetres.
+    /// </summary>
+    public readonly record struct Key(byte Kind, long A, long B, long C, long D = 0, long E = 0);
 
     public static Key Of(SolidPart p)
     {
@@ -385,6 +414,7 @@ public static class SolidShapeKeys
         {
             PartShape.Pyramid => new Key(1, Quantise(p.HalfU), height, 0),
             PartShape.Frustum => new Key(2, Quantise(p.HalfU), height, Quantise(p.HalfTop)),
+            PartShape.Limb => new Key(3, Quantise(p.HalfU), height, Quantise(p.HalfTop), Quantise(p.TopU), Quantise(p.TopV)),
             _ => new Key(0, Quantise(2 * p.HalfU), height, Quantise(2 * p.HalfV)),
         };
     }
