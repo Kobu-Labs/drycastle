@@ -16,6 +16,40 @@ public partial class NetClient
 
     Nausea? _nausea;
     float _nauseaRoll;
+    Node3D? _ownCigarette;      // the first-person copy on the camera (the figure itself is not drawn in the own view)
+    CpuParticles3D? _ownSmoke;
+
+    /// <summary>
+    /// The high player's own cigarette: a copy fixed to the first-person camera where the mouth is, so the tip, its ember and the smoke show at the bottom of the view (plantation.json
+    /// <c>view.cigarette.first_person</c>). Only while the view is the body's own eye on foot and no scope is up; gone at once otherwise (the smoke with it).
+    /// </summary>
+    void UpdateOwnCigarette(bool show)
+    {
+        if (!show || _me == null)
+        {
+            if (_ownCigarette != null && GodotObject.IsInstanceValid(_ownCigarette)) _ownCigarette.QueueFree();
+            _ownCigarette = null; _ownSmoke = null;
+            return;
+        }
+        if (_ownCigarette != null && GodotObject.IsInstanceValid(_ownCigarette)) return;
+        var c = Plantation.View.Cigarette;
+        var fp = c.FirstPerson;
+        // the model points +Z, the camera looks down -Z: turned round, then tilted
+        var tilt = Basis.FromEuler(new Vector3(Mathf.DegToRad((float)fp.RotationDeg[0]), Mathf.DegToRad((float)fp.RotationDeg[1]), Mathf.DegToRad((float)fp.RotationDeg[2])));
+        _ownCigarette = new Node3D
+        {
+            Name = "OwnCigarette",
+            Transform = new Transform3D(tilt * new Basis(Vector3.Up, Mathf.Pi), new Vector3((float)fp.Offset[0], (float)fp.Offset[1], (float)fp.Offset[2])),
+        };
+        _ownCigarette.AddChild(CharacterView.CigaretteModel(c, out var tip));
+        if (ShotFx.Enabled)
+        {
+            _ownSmoke = CharacterView.CigaretteSmoke(c.Smoke, fp.SmokeAmount, (float)fp.SmokeSizeM);
+            tip.AddChild(_ownSmoke); // world-space particles: they stay where they were let out while the camera moves on
+            ParticleFx.Run(_ownSmoke, true);
+        }
+        _me.Camera.AddChild(_ownCigarette);
+    }
 
     /// <summary>The local player is high according to the last status message.</summary>
     public bool OwnHigh => HasStatus(_myId, StatusKind.High);
@@ -26,10 +60,12 @@ public partial class NetClient
         if (_me == null || !GodotObject.IsInstanceValid(_me)) return;
         if (Dead || !OwnSpawned)
         {
+            UpdateOwnCigarette(false);
             if (_nausea != null) { _nausea = null; _nauseaRoll = 0; _me.FovWobble = 0; } // dead: the high is gone with the life (the status bit too); nothing lingers into the respawn
             return;
         }
         var high = OwnHigh;
+        UpdateOwnCigarette(high && Mode.OnFoot && _me.ZoomFov <= 0 && _me.CutCamera == null);
         if (!high && _nausea is not { Active: true }) { _nauseaRoll = 0; return; }
         _nausea ??= new Nausea(Plantation.Nausea);
         var owned = Mode.OnFoot;
