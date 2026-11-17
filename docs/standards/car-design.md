@@ -42,21 +42,21 @@ Status marks: **[code]** checked by `VehicleContractTests` or already enforced; 
 - 1..5 seats (`VehicleSeat.MaxSeats`), seat 0 the driver, `seats` block written (a trailer writes `[]`). **[code]** (`has_seats_block`, `seat_count`, `seats_inside_hit_box`)
 - Each seat has an **eye** for the cockpit view: the rider's feet + `eye_height` (or the standing eye 1.65 m). The eye of a covered seat is inside the hit box, inside the cabin, above the seat, not in a pillar, and sees a pane (`HumveeTests` does the pane check for the Humvee). **[code]** eye inside the hit box (`covered_seat_eye_inside_hit_box`); sees-a-pane and in-cabin: **[model]**, Humvee only.
 - Every seat has a switchable cockpit / chase view. Today only the driver of golf_mk2, humvee, bus, flak, utility_helicopter, harvester and scud has a cockpit (`CockpitRig.Specs[vehicleId]`, section 5). **[NOT YET]** per-seat, data-driven views: #339.
-- Every seat declares its **cover** (the rider's protection): **[NOT YET]**, #301 (ADR to revise 0007 / 0012). Today: `exposed` true/false on the seat (ADR 0012) and the flak/helicopter `exposed_gunner`; closed seats are hit through the panes (`GlassRules.Through`), explosions hurt everybody in range.
+- Every seat declares its **cover** (the rider's protection), `"cover"` on the seat in `vehicles.json` (ADR 0035): **[code]** (`every_seat_has_a_cover`). `exposed_gunner` on the vehicle stands for its gunner seat's `exposed`; `"exposed": true` is the old spelling.
 
 | `cover` | Rider | Hit by |
 |---|---|---|
 | `armoured` | hidden | explosive damage only |
-| `glass` | protected by the panes in front of it | a normal pane: bullet passes at once, full damage; a reinforced pane stops it until it shatters, then full damage |
-| `exposed` | a target of its own (ADR 0012, today `exposed: true`) | rounds that reach the body |
+| `glass` | protected by the panes in front of it (the shot's geometry says which) | a normal pane: bullet passes at once, full damage; a reinforced pane stops it until it shatters, then full damage |
+| `exposed` | a target of its own (ADR 0012) | rounds that reach the body |
 
-- The vehicle exploding kills everybody aboard, whatever the seat: today the blast reaches every body in range, closed seats included (ADR 0012 "Blast"); the contract makes it explicit for all covers. **[NOT YET]** as a rule on the seat (#301).
-- A hit volume from the seat pose for covered riders is needed before cover reads right (#301 slice 4).
+- The vehicle exploding kills everybody aboard, whatever the seat (`DriverDamage` to every occupant); a blast from outside hurts a covered rider (glass or armoured) at half, an exposed one in full (`SplashShare`). **[code]** (ADR 0035).
+- A covered rider is hit as the server body's stance, not a volume from the seat pose: a hit volume from the seat pose for every seat is **[NOT YET]** (#301 slice 4), needed before cover reads exactly right.
 
 ### A4. Glass
 
 - Panes are declared in `vehicles.json` `glass` (`centre`, `normal`, `size`, convex CCW `outline`, optional `hp`), max 24, inside the hit box, each with an outline and a `glass_N` node (section 2). **[code]** inside box, outline (`glass_inside_hit_box`, `glass_has_outline`); node: **[model]**
-- Each pane has a **kind**: **[NOT YET]**, #301.
+- Each pane has a **kind** (`"kind"`, default `normal`; hit points in `glass.json` `kinds`, a pane's own `hp` wins): **[code]** (`every_pane_has_a_known_kind`, ADR 0035).
 
 | `kind` | Rule |
 |---|---|

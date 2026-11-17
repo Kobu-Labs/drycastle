@@ -152,6 +152,10 @@ _Avoid_: shotgun seat, gunner seat (that seat works the vehicle's own gun), figh
 A seat the hull does not cover: a shot that reaches its rider's body hits the rider and not the hull, and a shot that misses them hits the hull. The flak truck's, the utility helicopter's and the Humvee's gunner seats are exposed, and all three seats of the amphibious transport. Riders of one vehicle never hit each other.
 _Avoid_: open seat, unprotected seat
 
+**Seat cover**:
+What protects a seat's rider from a bullet, declared by every seat (`vehicles.json` seat `cover`, ADR 0035): **armoured** (hidden; no bullet, pellet or mounted-gun round reaches them, only explosive damage and the vehicle blowing up do: the flak truck's driver), **glass** (behind panes; a round reaches them only through a pane, an open side or a shattered pane, as the pane's Pane kind says: every closed seat), or **exposed** (see Exposed seat). Which pane guards which seat is the geometry of the shot, not a list. When the vehicle explodes everybody aboard dies, whatever the cover; a blast from outside hurts a covered rider at half.
+_Avoid_: protection level, armour flag
+
 **Ring gun**:
 The amphibious transport's and the Humvee's machine gun, on a ring mount (over the rear compartment; on the Humvee's roof) and worked from the gunner seat by a gunner who stands inside the ring. The gunner's view aims it all the way round; over the two riders in front of the transport's it cannot be depressed. Its rounds are the jeep's roof gun's, and its kills are ordinary kills.
 _Avoid_: turret (alone), pintle gun, rear gun
@@ -451,8 +455,12 @@ A window, door or garage door in a wall of a building with a detail: a real hole
 **Window pane**:
 The glass of a window opening, exported as its own node `window_<building>_<id>` and listed in `windows.json` (position, size, facade, `breakable`), so the game can make it transparent or breakable. In the shooter it is a glass pane. Doors and garage doors are part of the building and have no pane node.
 
+**Pane kind**:
+How a vehicle's glass pane treats a bullet (`vehicles.json` glass `kind`, hit points in `glass.json` `kinds`, ADR 0035): **normal** (the default: the bullet damages the pane and goes on, full damage to what is behind) or **reinforced** (more hit points; while it holds it stops the bullet, the pane takes the damage and the rider behind none; once shattered, shots go through with full damage). There is no reduced-damage kind.
+_Avoid_: bulletproof glass, armoured glass
+
 **Glass pane**:
-A flat piece of breakable glass with hit points that the server owns: a window pane of a building (`windows.json`, unless its `breakable` is false) or a pane of a vehicle type (the `glass` list in `vehicles.json`). It is a rectangle, or, for the generated vehicles (bus, flak truck, helicopter), a convex outline polygon inside its bounding rectangle, and there it is also its own node `glass_N` in the model. Bullets and blasts take its hit points; below full it shows a crack (see Crack stage), at zero it is shattered. It has no collider of its own.
+A flat piece of breakable glass with hit points that the server owns: a window pane of a building (`windows.json`, unless its `breakable` is false) or a pane of a vehicle type (the `glass` list in `vehicles.json`). It is a rectangle, or, for the generated vehicles (bus, flak truck, helicopter), a convex outline polygon inside its bounding rectangle, and there it is also its own node `glass_N` in the model. Bullets and blasts take its hit points; below full it shows a crack (see Crack stage), at zero it is shattered. It has no collider of its own. A vehicle's pane has a Pane kind.
 _Avoid_: window (for a vehicle's), glass (alone), windowpane
 
 **Open side**:
@@ -464,7 +472,7 @@ How far the crack of a standing glass pane has spread, from the fraction of its 
 _Avoid_: damage stage (that is a vehicle's smoke), crack level
 
 **Shattered**:
-The state of a glass pane with no hit points left: its fragments fly out once, and it then shows an opening (the model's own glass node of the pane is hidden). A bullet goes through a vehicle's pane whether it is shattered or not. It stays shattered until its vehicle returns repaired or a new round starts.
+The state of a glass pane with no hit points left: its fragments fly out once, and it then shows an opening (the model's own glass node of the pane is hidden). A bullet goes through a shattered vehicle pane; a standing one lets it through or stops it by its Pane kind. It stays shattered until its vehicle returns repaired or a new round starts.
 _Avoid_: broken, destroyed (that is a vehicle or an aircraft)
 
 **Bunker**:

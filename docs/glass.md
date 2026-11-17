@@ -1,6 +1,6 @@
 # Glass panes
 
-Glass panes on vehicles and buildings have hit points, crack as they lose them and shatter at zero. The decisions are in ADR 0007 (`docs/adr/0007-glass-panes-are-declared-rectangles-with-server-owned-hit-points.md`) and, for the generated vehicles, ADR 0008 (`docs/adr/0008-generated-vehicle-glass-is-a-node-per-pane-with-an-outline.md`); the terms are in `GLOSSARY.md` (Glass pane, Crack stage, Shattered).
+Glass panes on vehicles and buildings have hit points, crack as they lose them and shatter at zero. The decisions are in ADR 0035 (pane kinds and seat cover), ADR 0007 (`docs/adr/0007-glass-panes-are-declared-rectangles-with-server-owned-hit-points.md`) and, for the generated vehicles, ADR 0008 (`docs/adr/0008-generated-vehicle-glass-is-a-node-per-pane-with-an-outline.md`); the terms are in `GLOSSARY.md` (Glass pane, Pane kind, Seat cover, Crack stage, Shattered).
 
 ## What exists
 
@@ -36,7 +36,8 @@ The motorcycle, quad and amphibious transport have no glass. The utility helicop
 - A rpg rocket, an attack missile and a vehicle explosion damage every pane in the blast radius (`blast_damage` at the centre, nothing at the edge).
 - Crack stage from the fraction of hit points left: 1 when damaged, 2 at 66 %, 3 at 33 % (`crack_stages`).
 - At zero the pane is shattered. The fragments fly once, on the clients that see it happen.
-- A bullet, pellet, roof gun or door gun round goes through a vehicle's glass, whole or shattered (`BulletHit`, the geometry in `GlassRules.Through`): it damages the pane it enters by, goes on inside (riders are open to it) and leaves by the next pane it crosses from inside, then on to whatever is beyond, through further vehicles the same way. With no way out the hull stops it on its far side, where the ray leaves the hit box (or where the round's range ends), so every rider on the way is open to it, not only those near the pane. A building's wall stays solid. This replaces ADR 0007 decision 3; `shattered_exposes_riders` in `glass.json` is no longer read.
+- A bullet, pellet, roof gun or door gun round goes through a vehicle's glass by the pane's **kind** (`BulletHit`, `PaneRules.Pass`, the geometry in `GlassRules.Through`, ADR 0035): it damages the pane it enters by, goes on inside and leaves by the next pane it crosses from inside, then on to whatever is beyond, through further vehicles the same way. A `normal` pane (the default) lets it through at once, whole or shattered. A `reinforced` pane (`kinds` in `glass.json`, more hit points) stops it while it holds: the pane takes the damage and nothing behind it is reached; shattered, it is a hole. A reinforced pane met from inside stops it there, after the riders on the way. With no way out the hull stops a round on its far side (where the ray leaves the hit box, or where its range ends). A building's wall stays solid. This replaces ADR 0007 decision 3; `shattered_exposes_riders` in `glass.json` is no longer read.
+- Who inside is reached is the **seat's cover** (`cover` in `vehicles.json`, ADR 0035): `glass` riders are open to a round that got in, `armoured` riders are never a target of a bullet (`RiderRules.BulletsReach`; only explosive damage and the vehicle exploding reach them), `exposed` riders are ADR 0012's. Which pane guards which seat is the geometry of the shot, not a list.
 - An open side (`open_sides` in `vehicles.json`, written like a pane: centre, outward normal, size) is a place where the body has no wall: the two sides of the utility helicopter's cabin. A round gets in and out by an open side exactly as by a pane, only nothing is damaged there. So a shot into the helicopter's cabin can hit the gunner, leave by a cockpit door's pane or the windscreen from the inside (damaging it) or by the other open side, and go on.
 - A round only gets into a vehicle by a pane or an open side. Where it meets the hit box anywhere else (a door, the roof, the helicopter's belly, engine housing, cabin rear wall, nose and tail) the hull stops it there, also when a pane lies further along the ray: a pane on the far side is no way out for a round that had no way in.
 - The client's own tracer, pellet sparks and bullet holes follow the same rule (`VehicleAlong` in `NetClient.Cars.cs`): nothing is drawn on a vehicle the round went through, and a round stopped inside is drawn on the far side.
@@ -56,7 +57,8 @@ The motorcycle, quad and amphibious transport have no glass. The utility helicop
 | Client state | `godot/shooter/Net/NetClient.Glass.cs` |
 | Client visuals | `godot/shooter/GlassFx.cs` (`WarmUp` draws both shaders once at join so their pipelines compile before the first hit), `shaders/glass_crack.gdshader`, `shaders/glass_shards.gdshader` |
 | Model scripts that write the pane list | `scripts/make_bus_model.py`, `make_flak_model.py`, `make_utility_helicopter_model.py`, `make_golf_mk2_model.py` (`GlassSet` in the flak script) |
-| Tests | `godot/ShooterCore.Tests/GlassTests.cs` |
+| Pane kind and cover rules | `godot/ShooterCore/Vehicles/PaneRules.cs`, `RiderRules.BulletsReach` |
+| Tests | `godot/ShooterCore.Tests/GlassTests.cs`, `SeatCoverTests.cs` |
 
 ## Not done
 
@@ -66,6 +68,7 @@ The motorcycle, quad and amphibious transport have no glass. The utility helicop
 - A door leaf's crack overlay stays where the leaf is closed when the door is open.
 - Outlines must be convex; the crack shader takes at most 12 points per pane.
 - Buildings without a detail file, the flats and the loggia houses (their panes are part of the wall mesh) and the landmarks (but the church, whose 23 window openings are panes) have no panes.
+- No vehicle has a reinforced pane yet; the flak truck's armoured driver is set by seat cover, not by its panes.
 - Gunship rounds, flak bursts, the MOAB, a vehicle crash and a knife do not damage glass.
 - No sound for a crack or a shatter.
 - The server tests a vehicle's panes and open sides in its upright hit box frame (yaw only), so a banking helicopter's are tested level.
