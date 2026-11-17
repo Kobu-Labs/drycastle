@@ -332,7 +332,7 @@ A value from the day clock that drives street lamp light, headlight and window g
 _Avoid_: darkness, night mode
 
 **Aircraft**:
-A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper, the AC-130 gunship and the UAV. Nobody boards or flies it; its owner only works its guns (the UAV has none). It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship, 200 for the UAV) and can be shot down by flak, the Lock-on launcher and any other anti-aircraft (ADR 0005, ADR 0031): its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
+A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper, the AC-130 gunship and the UAV. Nobody boards or flies it; its owner only works its guns (the UAV has none). It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship, 200 for the UAV) and can be shot down by flak, the Lock-on launcher and any other anti-aircraft (ADR 0005, ADR 0031): its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle, but the Lock-on launcher locks it like one while it is flown (ADR 0031).
 _Avoid_: plane (for helicopters), drone, helicopter (alone)
 
 **Utility helicopter**:
@@ -376,11 +376,11 @@ A secondary weapon carried on the shoulder (`weapons.json` `rpg`, unlocked at le
 _Avoid_: bazooka, rocket launcher (alone: the Lock-on launcher is one too)
 
 **Lock-on launcher**:
-A secondary weapon carried on the shoulder (`weapons.json` `strela`) that shoots down Aircraft and nothing else (ADR 0031). It fires only on a complete Lock; without one the trigger clicks. One Homing missile in the tube and two in reserve, 500 damage each: one for the UAV, two for a helicopter, three for the AC-130. Its sight replaces the crosshair while it is in the hand. Bots do not carry it.
+A secondary weapon carried on the shoulder (`weapons.json` `strela`) that shoots down Aircraft and flown helicopters (air vehicles) and nothing else (ADR 0031). It fires only on a complete Lock; without one the trigger clicks. One Homing missile in the tube and two in reserve, 500 damage each: one for the UAV, two for a helicopter, three for the AC-130. Its sight replaces the crosshair while it is in the hand. Bots do not carry it.
 _Avoid_: AA launcher, MANPADS, Stinger, rocket launcher (that is the RPG)
 
 **Lock**:
-What a Lock-on launcher builds on one enemy Aircraft before it may fire: the Aircraft has to stay inside the lock circle (wider than the aim), within range (the UAV at any distance) and in sight for 2.5 seconds. Out of the circle or behind a wall the progress waits 0.4 seconds, then the Lock is lost. The server decides it; the shooter hears beeps that quicken and a solid tone when it is complete.
+What a Lock-on launcher builds on one enemy Aircraft or flown helicopter (a piloted air vehicle off the ground; a landed or empty one is not lockable) before it may fire: the Aircraft has to stay inside the lock circle (wider than the aim), within range (the UAV at any distance) and in sight for 2.5 seconds. Out of the circle or behind a wall the progress waits 0.4 seconds, then the Lock is lost. The server decides it; the shooter hears beeps that quicken and a solid tone when it is complete.
 _Avoid_: target lock, aim assist, tracking (that is a Lock whose Aircraft is in the circle right now)
 
 **Lock alert**:

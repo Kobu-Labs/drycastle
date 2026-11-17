@@ -317,6 +317,7 @@ public partial class NetServer : Node
         PlantationTick((float)delta); // highs run out
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
         DetonateFlak();    // flak shells that have arrived burst now
+        StepVehicleHoming((float)delta); // missiles homing on flown helicopters fly and hit now
         DetonateHoming();  // homing missiles that have arrived hit their Aircraft now
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
