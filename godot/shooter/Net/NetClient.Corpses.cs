@@ -31,11 +31,23 @@ public partial class NetClient
         public Vector3? ReachFrom;
         /// <summary>A hay bale (#331): a corpse owned by <see cref="HarvesterRules.BaleOwner"/>, drawn as a bale; only its Items to take.</summary>
         public bool Bale;
+        /// <summary>A bale's drawing state (smoothed position, roll, the body inside it, #351); null for anything else.</summary>
+        public BaleMotion? Motion;
         public string Weapon = "";
         /// <summary>The ragdoll: the spin, limb flail and settling of a body thrown by a blast or a car.</summary>
         public readonly RagdollTumble Tumble = new();
         /// <summary>The feet, from the last render (the node sits at the body's turning point).</summary>
         public Vector3 Feet;
+    }
+
+    /// <summary>How a bale corpse is drawn (#351): its model hangs under <see cref="Spin"/>; <see cref="Shown"/> is the smoothed position, <see cref="Angle"/> the turn about <see cref="Axis"/>, <see cref="Body"/> the caught body inside it.</summary>
+    sealed class BaleMotion
+    {
+        public Node3D? Spin;
+        public Vector3 Shown, Axis = Vector3.Right;
+        public float Angle;
+        public bool Seen;
+        public CharacterView? Body;
     }
 
     readonly Dictionary<ushort, CorpseView> _corpses = new();
@@ -102,14 +114,13 @@ public partial class NetClient
             var s = e.State;
             var p = s.Position;
             var at = new Vector3(p.X, p.Y, p.Z);
-            if (v.Giant || v.Bale)
+            if (v.Bale) { RenderBale(id, v, s, at, (float)GetProcessDeltaTime()); continue; }
+            if (v.Giant)
             {
                 v.Feet = at; v.Node.GlobalPosition = at; v.Node.Basis = new Basis(Vector3.Up, s.YawRad);
-                if (v.Giant) // it is looted at its head: the same point the server measures from (CorpseRules.ReachPoint)
-                {
-                    var head = BigfootData.Reward.CorpseHead;
-                    v.ReachFrom = at + v.Node.Basis * new Vector3(head.X, head.Y, head.Z);
-                }
+                // it is looted at its head: the same point the server measures from (CorpseRules.ReachPoint)
+                var head = BigfootData.Reward.CorpseHead;
+                v.ReachFrom = at + v.Node.Basis * new Vector3(head.X, head.Y, head.Z);
                 continue;
             }
             var view = v.View!;

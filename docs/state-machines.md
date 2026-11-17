@@ -344,7 +344,7 @@ stateDiagram-v2
 
 ## Corpse.Flight
 
-A thrown body (corpse or target dummy): at rest on the ground, airborne after a launch or a drop until it lands, seated in a vehicle (a dead pilot or driver), or floating on water.
+A thrown body (corpse or target dummy): at rest on the ground, airborne after a launch or a drop until it lands, seated in a vehicle (a dead pilot or driver), floating on water, or rolling along the ground (a bale).
 
 ```mermaid
 stateDiagram-v2
@@ -357,12 +357,17 @@ stateDiagram-v2
     Seated --> Grounded
     Floating --> Airborne
     Floating --> Grounded
+    Airborne --> Rolling
+    Rolling --> Grounded
+    Rolling --> Airborne
+    Rolling --> Floating
 ```
 
 - **Grounded**: At rest. A launch (a push that is not zero) or a drop throws it; a dummy standing up again (Reset) comes back here.
 - **Airborne**: Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens (it then snaps to the ground under it). Lands Grounded, or Floating when it lands in water. A new launch while airborne restarts the count.
 - **Seated**: A dead pilot or driver still in the seat: the server moves it with the vehicle (Follow), it is not flown. Leaves by a drop or a throw (the vehicle at rest for CorpseRules.SeatedRestSeconds, or destroyed) or when a player boards its seat, which flings it out sideways.
 - **Floating**: Lies at the water surface height where it landed, not flown. The client bobs and drifts it on the waves (cosmetic, nothing on the wire); it stays lootable until its lifetime ends.
+- **Rolling**: Only a body launched with rolls (a harvester's bale): it landed with speed and keeps going along the ground, slowing by CorpseRules.RollFriction, the ground followed under it. Stops (Grounded) when slow enough, against a wall or after CorpseRules.RollMaxSeconds; flies on (Airborne) when the ground drops away; Floating in water.
 
 ## Demon.Phase
 
@@ -744,7 +749,7 @@ From any state: Stopped
 
 ## Harvester.Corpse
 
-A victim of the harvester: drawn in at the front, inside the machine for a few seconds, then ejected as a bale at the unloader.
+A victim of the harvester: spun round the reel at the front, inside the machine for a few seconds, then thrown out of the unloader inside a bale that rolls to a stop.
 
 ```mermaid
 stateDiagram-v2
@@ -754,9 +759,9 @@ stateDiagram-v2
     Baled --> [*]
 ```
 
-- **Drawn**: The body slides from where it fell to the intake at the front; it cannot be looted meanwhile.
+- **Drawn**: The body is carried from where it fell to the reel's axis and spins round it for DrawSeconds (clients draw the orbit); it cannot be looted meanwhile.
 - **Inside**: Gone from the world (the corpse entity is removed, its Items are kept for the bale).
-- **Baled**: The bale is spawned at the unloader with the Items. The end.
+- **Baled**: One bale (the victim's body inside it, Items on it) is spawned at the unloader and thrown out backwards: it flies, lands and rolls to a stop (Corpse.Flight Rolling). The end of this machine; the bale is an ordinary bale after that.
 
 ## Hay.Bale
 

@@ -116,7 +116,9 @@ public sealed class HayBale
         Position = position; _cfg = cfg; Id = id;
     }
 
-    public Vector3 Position { get; }
+    /// <summary>Where it lies (the foot of it). A bale that was thrown (#351) follows its corpse (<see cref="MoveTo"/>) until it stops, so fire, scorch and shots use where it is.</summary>
+    public Vector3 Position { get; private set; }
+    public void MoveTo(Vector3 position) => Position = position;
     /// <summary>The host's handle: the corpse's id for a made bale, the index in the field's list for a static one.</summary>
     public ushort Id { get; }
     public BaleState State => _fsm.Current;
@@ -154,30 +156,32 @@ public sealed class HayBale
 public enum MachineCorpsePhase : byte { Drawn = 0, Inside = 1, Baled = 2 }
 
 /// <summary>
-/// A player the harvester killed, on the way to a bale (#331): the corpse is drawn in at the front (<see cref="HarvesterConfig.DrawSeconds"/>, <see cref="DrawFraction"/> says how far),
-/// spends <see cref="HarvesterConfig.ChewSeconds"/> inside, and then the bale leaves the unloader. Pure timing; the host moves the corpse, carries its Items into the bale and spawns it.
+/// A player the harvester killed, on the way to a bale (#331): the corpse is drawn in at the front and spins round the reel (<see cref="HarvesterConfig.DrawSeconds"/>, <see cref="DrawFraction"/> says how far),
+/// spends <see cref="HarvesterConfig.ChewSeconds"/> inside, and then the bale leaves the unloader, thrown. Pure timing; the host moves the corpse, carries its Items into the bale and spawns it.
 /// </summary>
 public sealed class MachineCorpse
 {
     public static readonly StateMachineSpec<MachineCorpsePhase> Spec = StateMachineSpec<MachineCorpsePhase>
-        .Define("Harvester.Corpse", "A victim of the harvester: drawn in at the front, inside the machine for a few seconds, then ejected as a bale at the unloader.", MachineCorpsePhase.Drawn)
+        .Define("Harvester.Corpse", "A victim of the harvester: spun round the reel at the front, inside the machine for a few seconds, then thrown out of the unloader inside a bale that rolls to a stop.", MachineCorpsePhase.Drawn)
         .Allow(MachineCorpsePhase.Drawn, MachineCorpsePhase.Inside)
         .Allow(MachineCorpsePhase.Inside, MachineCorpsePhase.Baled)
-        .Note(MachineCorpsePhase.Drawn, "The body slides from where it fell to the intake at the front; it cannot be looted meanwhile.")
+        .Note(MachineCorpsePhase.Drawn, "The body is carried from where it fell to the reel's axis and spins round it for DrawSeconds (clients draw the orbit); it cannot be looted meanwhile.")
         .Note(MachineCorpsePhase.Inside, "Gone from the world (the corpse entity is removed, its Items are kept for the bale).")
-        .Note(MachineCorpsePhase.Baled, "The bale is spawned at the unloader with the Items. The end.")
+        .Note(MachineCorpsePhase.Baled, "One bale (the victim's body inside it, Items on it) is spawned at the unloader and thrown out backwards: it flies, lands and rolls to a stop (Corpse.Flight Rolling). The end of this machine; the bale is an ordinary bale after that.")
         .Build();
 
     readonly StateMachine<MachineCorpsePhase> _fsm = new(Spec);
     readonly HarvesterConfig _cfg;
 
-    public MachineCorpse(ushort corpse, HarvesterConfig cfg)
+    public MachineCorpse(ushort corpse, HarvesterConfig cfg, ushort victim = 0)
     {
-        Corpse = corpse; _cfg = cfg;
+        Corpse = corpse; Victim = victim; _cfg = cfg;
         _fsm.Restart(cfg.DrawSeconds);
     }
 
     public ushort Corpse { get; }
+    /// <summary>The player it was: rides in the effects so the clients can hide the dead avatar and draw the body in the bale.</summary>
+    public ushort Victim { get; }
     public MachineCorpsePhase Phase => _fsm.Current;
     public bool Done => _fsm.Is(MachineCorpsePhase.Baled);
 
@@ -236,7 +240,7 @@ public static class HarvesterCodec
             System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[6..]) / 10f, (d[8] & 1) != 0, (d[8] & 2) != 0, d[9] / 10f, d[10] / 10f, d[11] / 10f);
     }
 
-    public const int FxBytes = 15;
+    public const int FxBytes = 17;
 
     public enum FxKind : byte
     {
@@ -244,17 +248,18 @@ public static class HarvesterCodec
         BaleLit = 0,
         /// <summary>A bale burnt out.</summary>
         BaleAsh = 1,
-        /// <summary>The reel took a victim and draws the body in (the id is the corpse's): the reel's whirr and the strain of the engine.</summary>
+        /// <summary>The reel took a victim and spins the body round it (the id is the corpse's): the reel's whirr and the strain of the engine.</summary>
         Drawn = 2,
-        /// <summary>A bale left the unloader (the id is the bale corpse's).</summary>
+        /// <summary>A bale left the unloader, thrown, with the victim's body inside it (the id is the bale corpse's, the position where it left).</summary>
         BaleOut = 3,
         /// <summary>The victim went into the machine: the body is gone from the world, the machine labours for <see cref="HarvesterConfig.ChewSeconds"/> (the id is the corpse's, the position is the intake).</summary>
         Swallowed = 4,
     }
 
-    public readonly record struct FxMsg(FxKind Kind, Vector3 Position, ushort Id);
+    /// <summary><paramref name="Victim"/>: the player the catch is about (<see cref="FxKind.Drawn"/>, <see cref="FxKind.Swallowed"/>, <see cref="FxKind.BaleOut"/>; 0 for a bale's fire): the client hides that player's dead avatar and draws the body inside the bale.</summary>
+    public readonly record struct FxMsg(FxKind Kind, Vector3 Position, ushort Id, ushort Victim = 0);
 
-    /// <summary>Server to everyone, <see cref="EventKind.HarvesterFx"/>: u8 kind, three i32 position in 1/128 m, u16 id.</summary>
+    /// <summary>Server to everyone, <see cref="EventKind.HarvesterFx"/>: u8 kind, three i32 position in 1/128 m, u16 id, u16 victim.</summary>
     public static byte[] EncodeFx(FxMsg m)
     {
         var b = new byte[FxBytes];
@@ -263,6 +268,7 @@ public static class HarvesterCodec
         System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(5), Quant.Pos(m.Position.Y));
         System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(9), Quant.Pos(m.Position.Z));
         System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(13), m.Id);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(15), m.Victim);
         return b;
     }
 
@@ -270,7 +276,7 @@ public static class HarvesterCodec
     {
         if (d.Length != FxBytes || !Enum.IsDefined((FxKind)d[0])) return null;
         var p = new Vector3(Quant.Pos(System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(d[1..])), Quant.Pos(System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(d[5..])), Quant.Pos(System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(d[9..])));
-        return new FxMsg((FxKind)d[0], p, System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[13..]));
+        return new FxMsg((FxKind)d[0], p, System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[13..]), System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(d[15..]));
     }
 
     /// <summary>The id a static field bale (index in the list) goes by in an effect: the high bit says it is not a corpse.</summary>
@@ -284,4 +290,34 @@ public static class HarvesterCodec
     public static int DroppedBaleIndex(ushort id) => id & 0x3FFF;
     /// <summary>Not a corpse: a bale of the world (the field's own or a dropped one), drawn and burnt on its own.</summary>
     public static bool IsWorldBale(ushort id) => (id & 0x8000) != 0;
+}
+
+/// <summary>The pure geometry of the catch (#351), in machine space (x right, y up, z behind: the machine faces -z).</summary>
+public static class HarvesterCatch
+{
+    /// <summary>
+    /// Where a body orbiting the reel is, relative to the reel's axis, at <paramref name="angle"/> radians: 0 is straight above the axis, and the angle grows the way the reel turns, the top moving
+    /// forward (towards -z) into the machine, so 90 degrees is in front of the axis and 180 below it.
+    /// </summary>
+    public static Vector3 OrbitOffset(float angle, float radius) => new(0, MathF.Cos(angle) * radius, -MathF.Sin(angle) * radius);
+
+    /// <summary>The orbit angle <paramref name="seconds"/> after the catch began: the reel's turn (<paramref name="spinRadPerS"/>) from <paramref name="startAngle"/>.</summary>
+    public static float OrbitAngle(float startAngle, float spinRadPerS, float seconds) => startAngle + spinRadPerS * seconds;
+
+    /// <summary>
+    /// The velocity the bale leaves the unloader with: the machine's own <paramref name="vehicleVelocity"/> plus <see cref="HarvesterConfig.BaleThrowBackMps"/> backwards,
+    /// <see cref="HarvesterConfig.BaleThrowLeftMps"/> to the left and <see cref="HarvesterConfig.BaleThrowUpMps"/> up. <paramref name="forward"/> is the machine's horizontal heading (unit).
+    /// </summary>
+    public static Vector3 BaleVelocity(Vector3 forward, Vector3 vehicleVelocity, HarvesterConfig cfg)
+    {
+        var right = new Vector3(-forward.Z, 0, forward.X);
+        return vehicleVelocity - forward * cfg.BaleThrowBackMps - right * cfg.BaleThrowLeftMps + Vector3.UnitY * cfg.BaleThrowUpMps;
+    }
+
+    /// <summary>The unloader's spot: behind and to the left of the machine (<paramref name="origin"/> its position, <paramref name="forward"/> its horizontal heading, <paramref name="halfLength"/> its half length), <see cref="HarvesterConfig.UnloaderHeightM"/> up.</summary>
+    public static Vector3 UnloaderAt(Vector3 origin, Vector3 forward, float halfLength, HarvesterConfig cfg)
+    {
+        var right = new Vector3(-forward.Z, 0, forward.X);
+        return origin - forward * (halfLength + 1.6f) - right * cfg.DroppedBaleLeftM + Vector3.UnitY * cfg.UnloaderHeightM;
+    }
 }

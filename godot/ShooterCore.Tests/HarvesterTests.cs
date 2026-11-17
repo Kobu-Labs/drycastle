@@ -586,6 +586,15 @@ public class HarvesterTests
         Assert.Null(SwathCodec.Decode(new byte[5]));
     }
 
+    [Fact]
+    public void A_stretch_for_a_joiner_says_it_is_a_replay_and_a_live_one_does_not()
+    {
+        var stroke = new[] { new SwathPt(0, 0), new SwathPt(8, 0) };
+        Assert.False(SwathCodec.Decode(SwathCodec.Pack(1, 4.8f, 0, false, stroke)[0])!.Value.Replay);
+        var replay = SwathCodec.Decode(SwathCodec.Pack(1, 4.8f, 0, true, stroke, replay: true)[0])!.Value;
+        Assert.True(replay.Replay); Assert.True(replay.NoBales); // the two flag bits are independent
+    }
+
     // ---- the wire ----
 
     [Fact]
@@ -601,6 +610,10 @@ public class HarvesterTests
         var fx = new HarvesterCodec.FxMsg(HarvesterCodec.FxKind.BaleLit, new Vector3(12.5f, 3f, -40.25f), HarvesterCodec.StaticBaleId(300));
         var fb = HarvesterCodec.DecodeFx(HarvesterCodec.EncodeFx(fx))!.Value;
         Assert.Equal(fx, fb);
+        var out2 = new HarvesterCodec.FxMsg(HarvesterCodec.FxKind.BaleOut, new Vector3(1.5f, 2f, 3f), 41, 7); // the victim rides along (#351)
+        Assert.Equal(out2, HarvesterCodec.DecodeFx(HarvesterCodec.EncodeFx(out2))!.Value);
+        Assert.Equal((ushort)7, HarvesterCodec.DecodeFx(HarvesterCodec.EncodeFx(out2))!.Value.Victim);
+        Assert.Null(HarvesterCodec.DecodeFx(new byte[15])); // the old, shorter message is refused
         Assert.True(HarvesterCodec.IsStaticBale(fb.Id));
         Assert.Equal(300, HarvesterCodec.StaticBaleIndex(fb.Id));
         Assert.False(HarvesterCodec.IsStaticBale(77));
@@ -609,7 +622,112 @@ public class HarvesterTests
         Assert.Equal(23, HarvesterCodec.DroppedBaleIndex(dropped));
         Assert.True(HarvesterCodec.IsWorldBale(HarvesterCodec.StaticBaleId(5)) && !HarvesterCodec.IsDroppedBale(HarvesterCodec.StaticBaleId(5)));
         Assert.False(HarvesterCodec.IsWorldBale(77));
-        Assert.Null(HarvesterCodec.DecodeFx(new byte[15].Select((_, i) => i == 0 ? (byte)99 : (byte)0).ToArray()));
+        Assert.Null(HarvesterCodec.DecodeFx(new byte[HarvesterCodec.FxBytes].Select((_, i) => i == 0 ? (byte)99 : (byte)0).ToArray()));
+    }
+
+    // ---- the catch: the orbit and the throw (#351) ----
+
+    [Fact]
+    public void The_drawn_in_body_orbits_the_reel_axis_the_way_the_reel_turns()
+    {
+        const float r = 0.95f;
+        Assert.Equal(new Vector3(0, r, 0), HarvesterCatch.OrbitOffset(0, r));                      // straight above the axis
+        var front = HarvesterCatch.OrbitOffset(MathF.PI / 2, r);
+        Assert.Equal(0f, front.Y, 4); Assert.Equal(-r, front.Z, 4);                                 // 90 degrees on: in front (the machine faces -z), the top moved forward
+        Assert.Equal(-r, HarvesterCatch.OrbitOffset(MathF.PI, r).Y, 4);                             // then below
+        Assert.All(Enumerable.Range(0, 40), i => Assert.Equal(r, HarvesterCatch.OrbitOffset(i * 0.37f, r).Length(), 4)); // always a radius away
+        // 3.6 s at the reel's 3.4 rad/s is about two turns, not the one and a quarter of the old 1.2 s draw
+        Assert.True(HarvesterCatch.OrbitAngle(1.8f, 3.4f, Cfg.DrawSeconds) - 1.8f > 2 * MathF.Tau * 0.95f);
+        Assert.Equal(3.6f, Cfg.DrawSeconds);
+        Assert.Equal(2.5f, Cfg.ChewSeconds); // the chew stays
+        // the reel's axis is where the model has it: 3.66 m ahead, 0.81 m up
+        Assert.Equal(3.66f, Cfg.HeaderForwardM); Assert.Equal(0.81f, Cfg.ReelAxisUpM);
+    }
+
+    [Fact]
+    public void The_bale_is_thrown_back_left_and_up_on_top_of_the_machines_velocity_from_the_unloader()
+    {
+        var fwd = new Vector3(0, 0, -1); // facing -z: right is +x
+        var v = HarvesterCatch.BaleVelocity(fwd, new Vector3(0, 0, -3), Cfg);
+        Assert.Equal(-3f + Cfg.BaleThrowBackMps, v.Z, 3);   // backwards (+z) against the machine's own 3 m/s forward
+        Assert.Equal(-Cfg.BaleThrowLeftMps, v.X, 3);        // to the left (-x)
+        Assert.Equal(Cfg.BaleThrowUpMps, v.Y, 3);
+        var at = HarvesterCatch.UnloaderAt(new Vector3(10, 0, 20), fwd, 4.3f, Cfg);
+        Assert.Equal(10 - Cfg.DroppedBaleLeftM, at.X, 3); Assert.Equal(20 + 4.3f + 1.6f, at.Z, 3); Assert.Equal(Cfg.UnloaderHeightM, at.Y, 3);
+    }
+
+    [Fact]
+    public void A_thrown_bale_flies_lands_rolls_with_friction_and_stops_where_its_hay_bale_ends()
+    {
+        var cfg = Cfg;
+        var bale = new Corpse(HarvesterRules.BaleOwner, new Vector3(0, 1.6f, 0), 0, 0, 0, null, cfg.BaleLifetimeS);
+        var hay = new HayBale(bale.Position, cfg);
+        bale.Launch(HarvesterCatch.BaleVelocity(new Vector3(0, 0, -1), Vector3.Zero, cfg), rolls: true);
+        Assert.True(bale.Airborne);
+        Assert.Equal(CorpseRules.FlightPitch, bale.Serialize().PitchRad, 1);
+        var sawRoll = false; var lastZ = bale.Position.Z; var steps = 0;
+        for (; steps < 600 && (bale.Airborne || bale.Rolling); steps++)
+        {
+            bale.Fly(1f / 30, Flat);
+            if (bale.Rolling)
+            {
+                sawRoll = true;
+                Assert.Equal(CorpseRules.RollPitch, bale.Serialize().PitchRad, 2); // replicated as rolling
+                Assert.True(bale.Position.Z >= lastZ - 1e-4f);                      // it keeps going backwards (+z), never back
+                Assert.InRange(bale.Position.Y, -0.01f, 0.01f);                     // on the ground
+            }
+            lastZ = bale.Position.Z;
+            hay.MoveTo(bale.Position);
+        }
+        Assert.True(sawRoll); Assert.True(steps < 600);
+        Assert.False(bale.Airborne); Assert.False(bale.Rolling);
+        Assert.Equal(0f, bale.Serialize().PitchRad);
+        Assert.Equal(Vector3.Zero, bale.Velocity);
+        Assert.Equal(bale.Position, hay.Position);
+        // it flew about 0.7 s at 7 m/s back (about 5 m), then rolled v^2 / (2 * friction) more (about 4 m): well past where it landed
+        Assert.InRange(bale.Position.Z, 8f, 12f);
+    }
+
+    [Fact]
+    public void A_rolling_bale_stops_dead_against_a_wall_and_flies_on_when_the_ground_ends()
+    {
+        // a wall 3 m behind the landing: stops at it, never through
+        float? WallAt(Vector3 from, Vector3 dir, float len) => dir.Z > 0.5f && 6f - from.Z is var d && d >= 0 && d <= len ? d : Flat(from, dir, len);
+        var b = new ThrownBody(new Vector3(0, 0.3f, 0));
+        b.Launch(new Vector3(0, 1, 8), rolls: true);
+        for (var i = 0; i < 600 && (b.Airborne || b.Rolling); i++) b.Fly(1f / 30, WallAt);
+        Assert.False(b.Rolling);
+        Assert.True(b.Position.Z <= 6f, $"{b.Position.Z:F2}");
+        // a ledge at z = 5: the ground is gone beyond it, the rolling body drops
+        float? Ledge(Vector3 from, Vector3 dir, float len) => dir.Y < -0.5f ? (from.Z > 5f ? null : Flat(from, dir, len)) : Flat(from, dir, len);
+        var c = new ThrownBody(new Vector3(0, 0.3f, 0));
+        c.Launch(new Vector3(0, 1, 12), rolls: true);
+        var dropped = false;
+        for (var i = 0; i < 300 && (c.Airborne || c.Rolling); i++)
+        {
+            var was = c.Rolling;
+            c.Fly(1f / 30, Ledge);
+            if (was && c.Airborne) dropped = true;
+            if (dropped) break;
+        }
+        Assert.True(dropped);
+    }
+
+    [Fact]
+    public void Without_rolls_a_thrown_body_still_stops_dead_on_landing()
+    {
+        var b = new ThrownBody(new Vector3(0, 0.3f, 0));
+        b.Launch(new Vector3(0, 1, 8));
+        for (var i = 0; i < 300 && b.Airborne; i++) b.Fly(1f / 30, Flat);
+        Assert.False(b.Rolling); Assert.False(b.Airborne);
+    }
+
+    /// <summary>The ground at y = 0 (a ray cast down from above, or sideways: nothing).</summary>
+    static float? Flat(Vector3 from, Vector3 dir, float len)
+    {
+        if (dir.Y > -0.5f) return null;
+        var d = from.Y / -dir.Y;
+        return d >= 0 && d <= len ? d : null;
     }
 
     // ---- the vehicle ----

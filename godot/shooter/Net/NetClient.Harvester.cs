@@ -33,12 +33,24 @@ public partial class NetClient
     readonly List<(Node3D Root, BaleState State)> _orphanBales = new();
     double _baleFadeCheck;
     readonly Dictionary<ushort, Node3D> _reels = new();
-    /// <summary>The catch as one transformation: corpses being drawn in (id to when and by which machine), bales just out of the chute (id to when), machines that rumble while they work (car id to until).</summary>
-    readonly Dictionary<ushort, (double Start, CarView? Car)> _drawIn = new();
+    /// <summary>The catch as one transformation: corpses spinning round the reel (id to when, from where and by which machine), bales just out of the chute (id to when), machines that rumble while they work (car id to until).</summary>
+    sealed class DrawIn
+    {
+        public double Start;
+        public CarView? Car;
+        /// <summary>Where the body lay when the reel took it (the first frame it is drawn).</summary>
+        public Vector3? From;
+    }
+    readonly Dictionary<ushort, DrawIn> _drawIn = new();
     readonly Dictionary<ushort, double> _baleEmerge = new();
+    /// <summary>Players the harvester caught (id to when): their dead avatar stays hidden through the machine and while the body is inside its bale (the corpse entity is gone at Swallowed), and the bale (corpse id to victim) draws the body inside.</summary>
+    readonly Dictionary<ushort, double> _harvHidden = new();
+    readonly Dictionary<ushort, ushort> _baleBody = new();
     readonly Dictionary<ushort, double> _shakeUntil = new();
     static readonly float HarvesterConfigDraw = new HarvesterConfig().DrawSeconds, HarvesterConfigChew = new HarvesterConfig().ChewSeconds;
-    const float EmergeSeconds = 0.9f;
+    const float EmergeSeconds = 0.25f;
+    /// <summary>The orbit's angle when the body first reaches it (in front of the axis, a little below), and how fast the body is pulled in over the first seconds.</summary>
+    const float OrbitStartAngle = 1.8f, OrbitGatherSeconds = 0.45f;
     /// <summary>A harvester's wheels (SM_Veh_Harvester_Wheel_fl, fr, rl, rr; the model has no hull to hang them under) and how far they have rolled and steered.</summary>
     sealed class HarvWheels
     {
@@ -95,7 +107,7 @@ public partial class NetClient
             Map.CropCut(new Vector2(a.X, a.Y), new Vector2(b.X, b.Y), m.WidthM / 2f);
             if (!m.NoBales) sw.Swath.Add(m.Points[i - 1], m.Points[i]);
         }
-        for (var i = sw.Bales.Count; i < sw.Swath.Bales.Count; i++) SpawnDroppedBale(sw, i);
+        for (var i = sw.Bales.Count; i < sw.Swath.Bales.Count; i++) SpawnDroppedBale(sw, i, pop: !m.Replay);
     }
 
     /// <summary>Per frame: the reel of every harvester somebody drives turns.</summary>
@@ -103,6 +115,7 @@ public partial class NetClient
     {
         if (!ShotFx.Enabled || Vehicles == null) return;
         FadeDroppedBales();
+        StepCarVoices();
         StampCrush(); // after RenderCars: from the drawn poses
         FlushCrush();
         foreach (var v in _cars.Values)
@@ -134,22 +147,30 @@ public partial class NetClient
     }
 
     /// <summary>
-    /// After the corpses and the cars are placed: the body being drawn in is lifted in an arc, tumbles about the reel's axis and shrinks into the intake (the server moves it there in
-    /// <see cref="HarvesterConfig.DrawSeconds"/>); the machine rumbles while it chews; the bale that leaves the chute grows from nothing with a hop and a roll. Cosmetic: nothing here touches the server positions.
+    /// After the corpses and the cars are placed: the body the reel caught spins round the reel's axis at the reel's speed (<see cref="ReelSpin"/>, tumbling with it, <see cref="HarvesterCatch.OrbitOffset"/>), gathered
+    /// onto the orbit in the first moments and drawn into the machine at the end (the server holds it at the axis for <see cref="HarvesterConfig.DrawSeconds"/>); the machine rumbles while it chews; the bale
+    /// that leaves the chute grows in quickly and the server throws it from there. Cosmetic: nothing here touches the server positions.
     /// </summary>
     void AnimateCatch()
     {
         if (!ShotFx.Enabled) return;
+        var cfg = new HarvesterConfig();
         foreach (var (id, d) in _drawIn.ToArray())
         {
-            var k = (float)((Now - d.Start) / HarvesterConfigDraw);
-            if (k > 1.6f || !_corpses.TryGetValue(id, out var v) || !GodotObject.IsInstanceValid(v.Node)) { if (k > 1.6f) _drawIn.Remove(id); continue; }
-            k = Mathf.Clamp(k, 0f, 1f);
-            var axis = d.Car != null && GodotObject.IsInstanceValid(d.Car.Node) ? d.Car.Node.GlobalBasis.X.Normalized() : Vector3.Right;
-            var turn = new Basis(axis, -k * k * Mathf.Tau * 1.25f); // forward over the reel: the top moves into the machine
-            var size = Mathf.Lerp(1f, 0.18f, k * k);
-            v.Node.Basis = (turn * v.Node.Basis).Scaled(Vector3.One * size);
-            v.Node.GlobalPosition += Vector3.Up * (MathF.Sin(k * Mathf.Pi) * 0.9f);
+            var t = (float)(Now - d.Start);
+            if (t > HarvesterConfigDraw * 1.6f || !_corpses.TryGetValue(id, out var v) || !GodotObject.IsInstanceValid(v.Node)) { if (t > HarvesterConfigDraw * 1.6f) _drawIn.Remove(id); continue; }
+            if (d.Car == null || !GodotObject.IsInstanceValid(d.Car.Node)) continue;
+            d.From ??= v.Node.GlobalPosition;
+            var machine = d.Car.Node.GlobalBasis;
+            var axis = d.Car.Node.ToGlobal(new Vector3(0, cfg.ReelAxisUpM, -cfg.HeaderForwardM));
+            var k = Mathf.Clamp(t / HarvesterConfigDraw, 0f, 1f);
+            var tail = Mathf.SmoothStep(0f, 1f, Mathf.Clamp((k - 0.75f) / 0.25f, 0f, 1f)); // the last quarter: into the machine, smaller
+            var o = HarvesterCatch.OrbitOffset(HarvesterCatch.OrbitAngle(OrbitStartAngle, ReelSpin, t), cfg.OrbitRadiusM * (1f - 0.5f * tail));
+            var orbit = axis + machine * new Vector3(o.X, o.Y, o.Z + 1.3f * tail);
+            var gather = Mathf.SmoothStep(0f, 1f, Mathf.Clamp(t / OrbitGatherSeconds, 0f, 1f));
+            v.Node.GlobalPosition = d.From.Value.Lerp(orbit, gather);
+            var turn = new Basis(machine.X.Normalized(), -ReelSpin * t); // forward over the reel, as the reel turns: the top moves into the machine
+            v.Node.Basis = (turn * v.Node.Basis).Scaled(Vector3.One * (1f - 0.8f * tail));
         }
         foreach (var (id, start) in _baleEmerge.ToArray())
         {
@@ -157,10 +178,7 @@ public partial class NetClient
             if (t >= 1f || !_corpses.TryGetValue(id, out var v) || !GodotObject.IsInstanceValid(v.Node)) { if (t >= 1f) _baleEmerge.Remove(id); continue; }
             const float c1 = 1.70158f, c3 = c1 + 1f;
             var grow = t <= 0 ? 0.01f : 1f + c3 * MathF.Pow(t - 1f, 3f) + c1 * MathF.Pow(t - 1f, 2f); // ease out back: a little overshoot
-            var hop = 4f * 0.55f * t * (1f - t);
-            var roll = new Basis(Vector3.Right, (1f - t) * -3.0f);
-            v.Node.Basis = (v.Node.Basis * roll).Scaled(Vector3.One * Mathf.Max(0.01f, grow));
-            v.Node.GlobalPosition += Vector3.Up * hop;
+            v.Node.Basis = v.Node.Basis.Scaled(Vector3.One * Mathf.Max(0.01f, grow));
         }
         foreach (var (carId, until) in _shakeUntil.ToArray())
         {
@@ -211,17 +229,23 @@ public partial class NetClient
             case HarvesterCodec.FxKind.BaleLit: LightBale(m.Id, at); break;
             case HarvesterCodec.FxKind.BaleAsh: BurnOutBale(m.Id, at); break;
             case HarvesterCodec.FxKind.Drawn: // the reel took somebody: it whirrs up, the engine strains, the body is lifted and tumbled in
-                if (Sfx.Enabled) Sfx.Play3D("harvester.reel_in", at);
-                _drawIn[m.Id] = (Now, NearestHarvester(at));
-                if (NearestHarvester(at) is { } car) _shakeUntil[car.Id] = Now + HarvesterConfigDraw + HarvesterConfigChew;
+                var catcher = NearestHarvester(at);
+                if (catcher != null) PlayCarVoice("harvester.reel_in", at, catcher); else if (Sfx.Enabled) Sfx.Play3D("harvester.reel_in", at); // on the machine, heard the same from any camera
+                _drawIn[m.Id] = new DrawIn { Start = Now, Car = catcher };
+                if (m.Victim != 0) _harvHidden[m.Victim] = Now;
+                if (catcher != null) _shakeUntil[catcher.Id] = Now + HarvesterConfigDraw + HarvesterConfigChew;
                 break;
             case HarvesterCodec.FxKind.Swallowed: // gone into the machine: a muffled chewing while it works
-                if (Sfx.Enabled) Sfx.Play3D("harvester.chew", at);
+                if (NearestHarvester(at) is { } chewer) PlayCarVoice("harvester.chew", at, chewer); else if (Sfx.Enabled) Sfx.Play3D("harvester.chew", at);
                 _drawIn.Remove(m.Id);
+                if (m.Victim != 0) _harvHidden[m.Victim] = Now;
                 break;
-            case HarvesterCodec.FxKind.BaleOut: // the chute pops the bale out: it grows from nothing with a hop and a roll
-                if (Sfx.Enabled) Sfx.Play3D("harvester.eject", at);
+            case HarvesterCodec.FxKind.BaleOut: // the chute throws the bale out with the body inside: it flies, lands and rolls (the server moves it)
+                var chute = NearestHarvester(at);
+                PlayCarSound("harvester.eject", at, chute);
+                PlayCarSound("harvester.pop", at, chute);
                 _baleEmerge[m.Id] = Now;
+                if (m.Victim != 0) { _baleBody[m.Id] = m.Victim; _harvHidden[m.Victim] = Now; }
                 break;
         }
     }
@@ -249,12 +273,73 @@ public partial class NetClient
     CorpseView MakeBaleCorpse(WorldReplica.Entity e)
     {
         var node = new Node3D { Name = $"Bale{e.Id}" };
-        if (ShotFx.Enabled) node.AddChild(MakeBaleModel());
+        Node3D? spin = null;
+        if (ShotFx.Enabled) { spin = new Node3D { Name = "Spin" }; spin.AddChild(MakeBaleModel()); node.AddChild(spin); } // the bale tumbles about its middle: the model hangs under a node that turns
         Owned.AddChild(node);
-        return new CorpseView { Node = node, View = null, Bale = true };
+        return new CorpseView { Node = node, View = null, Bale = true, Motion = new BaleMotion { Spin = spin } };
     }
 
     bool IsBaleCorpse(ushort corpse) => WorldEntities.Entities.TryGetValue(corpse, out var e) && HarvesterRules.IsBale(e.State.Owner);
+
+    /// <summary>
+    /// A bale corpse as drawn (#351): the server throws it from the unloader, it lands and rolls to a stop; the position arrives at snapshot rate, so the picture follows it smoothly. In the air it tumbles, rolling it turns by
+    /// the distance covered, at rest it comes to a standstill turned the way it lies. The caught body is drawn small at its centre while it moves (inside the bale at rest). The server position is where it is looted.
+    /// </summary>
+    void RenderBale(ushort id, CorpseView v, WorldState s, Vector3 at, float dt)
+    {
+        var m = v.Motion!;
+        v.Feet = at;
+        var moving = s.PitchRad > CorpseRules.RollPitch * 0.5f;
+        var flying = s.PitchRad > CorpseRules.FlightPitch * 0.5f;
+        var before = m.Seen ? m.Shown : at;
+        m.Shown = !m.Seen || before.DistanceTo(at) > 6f ? at : before.Lerp(at, 1f - Mathf.Exp(-24f * dt));
+        if (!moving && m.Shown.DistanceSquaredTo(at) < 1e-3f) m.Shown = at;
+        m.Seen = true;
+        var step = m.Shown - before;
+        var along = new Vector3(step.X, 0, step.Z);
+        var ds = along.Length();
+        var yaw = new Basis(Vector3.Up, s.YawRad);
+        if (ds > 1e-4f) m.Axis = Vector3.Up.Cross(along / ds).Normalized(); // about the horizontal axis across the way it goes
+        if (flying) m.Angle += Mathf.Clamp(dt > 0 ? ds / dt / BaleRadius : 0f, 3f, 10f) * dt;
+        else if (moving) m.Angle += ds / BaleRadius; // rolling: a turn for each circumference
+        else m.Angle = Mathf.Lerp(m.Angle, Mathf.Round(m.Angle / Mathf.Tau) * Mathf.Tau, 1f - Mathf.Exp(-8f * dt));
+        v.Node.GlobalPosition = m.Shown;
+        v.Node.Basis = yaw;
+        if (m.Spin is { } spin && GodotObject.IsInstanceValid(spin))
+        {
+            var turn = new Basis(yaw.Inverse() * m.Axis, m.Angle);
+            spin.Transform = new Transform3D(turn, BaleCentre - turn * BaleCentre); // turns about the bale's middle, not its foot
+            if (_baleBody.TryGetValue(id, out var victim) && victim != 0)
+            {
+                if (m.Body == null && moving) m.Body = MakeBaleBody(spin, victim);
+                if (m.Body != null && GodotObject.IsInstanceValid(m.Body)) m.Body.Visible = moving;
+            }
+        }
+    }
+
+    const float BaleRadius = 0.8f;
+    static readonly Vector3 BaleCentre = new(0, 0.6f, 0);
+
+    /// <summary>The body the reel caught, small, at the bale's centre, limbs loose (the dead player's look).</summary>
+    CharacterView MakeBaleBody(Node3D parent, ushort victim)
+    {
+        var view = CharacterView.Make();
+        if (Appearances.TryGetValue(victim, out var look)) view.SetCamo(look, CamoData);
+        view.Scale = Vector3.One * 0.4f;
+        view.Position = BaleCentre + new Vector3(0, -RagdollTumble.Half * 0.4f, 0);
+        view.ShowThrown("");
+        view.SetRagdoll(true, 1f);
+        parent.AddChild(view);
+        return view;
+    }
+
+    /// <summary>Whether the dead avatar of <paramref name="id"/> stays hidden: the harvester caught the player (a few seconds from the effects, until the player is alive again).</summary>
+    bool HarvestVictimHidden(ushort id, bool dead)
+    {
+        if (!_harvHidden.TryGetValue(id, out var t)) return false;
+        if (!dead && Now - t > 2) { _harvHidden.Remove(id); return false; }
+        return dead;
+    }
 
     /// <summary>A flame on a bale (the corpse's node, or a node of its own in the world for a field's bale); a warm light, no shadows.</summary>
     void LightBale(ushort id, Vector3 at)
@@ -298,17 +383,17 @@ public partial class NetClient
         }
         else if (_corpses.TryGetValue(id, out var v))
         {
-            if (v.Node.FindChild("Model", false, false) is Node3D model) model.Visible = false;
+            if (v.Node.FindChild("Model", true, false) is Node3D model) model.Visible = false;
             v.Node.AddChild(ash);
         }
     }
 
-    void HarvesterCorpseGone(ushort id) => _baleFires.Remove(id);
+    void HarvesterCorpseGone(ushort id) { _baleFires.Remove(id); _baleBody.Remove(id); _baleEmerge.Remove(id); _drawIn.Remove(id); }
 
     // ---- bales the machine dropped ----
 
     /// <summary>Puts bale <paramref name="i"/> of the field's derived list on the ground (adopting fire or ash that arrived first).</summary>
-    void SpawnDroppedBale(ClientSwath sw, int i)
+    void SpawnDroppedBale(ClientSwath sw, int i, bool pop)
     {
         var (pos, yaw) = sw.Swath.Bales[i];
         var ground = Map!.GroundHeight(pos.X, pos.Y);
@@ -326,6 +411,7 @@ public partial class NetClient
         root.Rotation = new Vector3(0, yaw, 0);
         if (state != BaleState.Ash) { var model = MakeBaleModel(); root.AddChild(model); }
         sw.Bales.Add(root); sw.States.Add(state);
+        if (pop) PlayCarSound("harvester.pop", at, NearestHarvester(at)); // a live message, not the joiner's replay: the machine's unloader (heard from inside when it is the one we ride)
     }
 
     /// <summary>The server's bale fire or ash at <paramref name="at"/>: the nearest dropped bale there (or a node of its own that the bale adopts when its stretch arrives).</summary>
@@ -399,6 +485,7 @@ public partial class NetClient
     /// <summary>A new round: the server forgot every cut and bale.</summary>
     void HarvesterRoundRestart()
     {
+        _harvHidden.Clear(); _baleBody.Clear(); _drawIn.Clear(); _baleEmerge.Clear();
         CropCrushRestart(); // the masks and every vehicle's path start afresh
         Map?.CropReset(); // plants stand again, the ground marks go
         foreach (var sw in _swathsC.Values) ClearDroppedBales(sw, false);
