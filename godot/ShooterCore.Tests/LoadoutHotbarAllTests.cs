@@ -17,10 +17,10 @@ public class LoadoutHotbarAllTests
     }
 
     [Fact]
-    public void APlayerHotbarIsPrimarySecondaryKnifeAndHasNoRpg()
+    public void APlayerHotbarIsPrimarySecondaryKnifeGrenadeAndHasNoRpg()
     {
         var hotbar = LoadoutHotbar.Build(Weapons, new Loadout(0, "", "ak47", "pistol", "", "", ""));
-        Assert.Equal(3, hotbar.Length);
+        Assert.Equal(4, hotbar.Length);
         Assert.DoesNotContain(Weapons.Weapons.FindIndex(w => w.Id == "rpg"), hotbar);
     }
 }

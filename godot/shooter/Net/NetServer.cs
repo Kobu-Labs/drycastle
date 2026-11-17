@@ -184,8 +184,10 @@ public partial class NetServer : Node
     // rockets: server-owned projectile entities, ids from 0x8000 up (player ids count up from 1)
     /// <summary>A rocket in flight. Speed and Life are per launch when set (a gunship's, killstreaks.json); zero keeps the weapon's own.</summary>
     /// <summary>FromCar is the vehicle its owner fired it from, in an armed seat (null on foot): while the owner still rides it, the rocket passes its hull and spares its riders.</summary>
-    sealed class Rocket { public ushort Id, Owner; public byte Weapon; public Vector3 Pos, Dir; public float Age; public SplashDef? Blast; public float Speed, Life; public ServerCar? FromCar; public int ViewBack = -1; public uint ViewLife; }
+    sealed class Rocket { public ushort Id, Owner; public byte Weapon; public Vector3 Pos, Dir; public float Age; public SplashDef? Blast; public float Speed, Life; public ServerCar? FromCar; public int ViewBack = -1; public uint ViewLife; /* a thrown grenade (weapons.json grenade): its velocity and fuse; Dir is then the velocity's direction */ public GrenadeDef? Grenade; public Vector3 Vel; public Countdown Fuse; }
     readonly List<Rocket> _rockets = new();
+    /// <summary>A grenade's speed in the health byte of its snapshot record, per m/s (the client divides it back out).</summary>
+    public const float GrenadeSpeedScale = 8f;
     ushort _nextRocket = 0x8000;
     public bool RpgSmoke;
     /// <summary>Car smoke: flat arena, three cars at fixed spots, debug commands, judges the vehicle scenario.</summary>
@@ -1091,6 +1093,7 @@ public partial class NetServer : Node
             var dir = HitMath.Forward(yaw, pitch);
             if (w.Lock != null && FireHoming(c, shot, eye)) { _vehicleView = null; return; } // a Lock-on launcher's missile homes on its Aircraft (ADR 0031)
             var rocket = new Rocket { Id = _nextRocket, Owner = c.Id, Weapon = (byte)shot.WeaponIndex, Pos = eye, Dir = new Vector3(dir.X, dir.Y, dir.Z), FromCar = seatCar };
+            if (w.Grenade is { } gren) { rocket.Grenade = gren; rocket.Vel = rocket.Dir * w.ProjectileSpeed; rocket.Fuse.Start(gren.FuseSeconds); }
             _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
             rocket.ViewBack = back; rocket.ViewLife = c.LifeStart; // a rocket rewinds vehicles by the shooter's lag at each step (B-02)
             _rockets.Add(rocket);
@@ -1156,6 +1159,7 @@ public partial class NetServer : Node
         {
             var r = _rockets[k];
             var w = Weapons.Weapons[r.Weapon];
+            if (r.Grenade != null) { if (StepGrenade(r, w, dt)) _rockets.RemoveAt(k); continue; }
             var speed = r.Speed > 0 ? r.Speed : w.ProjectileSpeed;
             var life = r.Life > 0 ? r.Life : w.ProjectileLife;
             var len = speed * dt;
@@ -1187,6 +1191,29 @@ public partial class NetServer : Node
             r.Age += dt;
             if (step.Outcome == RocketOutcome.Expired) { _rockets.RemoveAt(k); _expiredRockets++; Explode(r, w, r.Pos, null); }
         }
+    }
+
+    /// <summary>
+    /// Moves a thrown grenade one tick (<see cref="GrenadeFlight"/>): it bounces off the world and vehicles (as they stood where its thrower's screen showed them, B-02) and
+    /// flies through players; its fuse runs out into the rpg's own <see cref="Explode"/>. True when it blew up (the caller drops it).
+    /// </summary>
+    bool StepGrenade(Rocket r, WeaponDef w, float dt)
+    {
+        var own = RocketCar(r);
+        _vehicleView = ViewOf(r.ViewBack, r.ViewLife);
+        var step = GrenadeFlight.Step(r.Grenade!, N(r.Pos), N(r.Vel), dt, (from, dir, len) =>
+        {
+            var stop = Query.Shot(new Vector3(from.X, from.Y, from.Z), new Vector3(dir.X, dir.Y, dir.Z), len, own);
+            return new GrenadeStop(stop.Distance, new NVec3(stop.Normal.X, stop.Normal.Y, stop.Normal.Z));
+        });
+        _vehicleView = null;
+        r.Pos = new Vector3(step.Pos.X, step.Pos.Y, step.Pos.Z);
+        r.Vel = new Vector3(step.Vel.X, step.Vel.Y, step.Vel.Z);
+        if (r.Vel.LengthSquared() > 1e-4f) r.Dir = r.Vel.Normalized();
+        r.Age += dt;
+        if (!r.Fuse.Tick(dt)) return false;
+        Explode(r, w, r.Pos + Vector3.Up * 0.1f, null); // a hair above where it lies: the blast centre is not in the floor
+        return true;
     }
 
     /// <summary>The vehicle a rocket was fired from, while its owner still rides it; null otherwise (fired on foot, or the owner has got out or died).</summary>
@@ -1260,7 +1287,7 @@ public partial class NetServer : Node
         ents.AddRange(TargetRecords()); // target dummies (#148)
         foreach (var r in _rockets)
             ents.Add(EntityRecord.Make(r.Id, EntityType.Projectile, N(r.Pos),
-                MathF.Atan2(-r.Dir.X, -r.Dir.Z), MathF.Asin(Math.Clamp(r.Dir.Y, -1f, 1f)), 0, EntityState.Alive, r.Weapon));
+                MathF.Atan2(-r.Dir.X, -r.Dir.Z), MathF.Asin(Math.Clamp(r.Dir.Y, -1f, 1f)), r.Grenade != null ? r.Vel.Length() * GrenadeSpeedScale : 0, EntityState.Alive, r.Weapon)); // a grenade's speed rides the health byte (the rocket has none)
         // an empty tick (nothing changed for this client) sends no packet except the heartbeat, which carries the input ack (A-05)
         var heartbeat = _tick % Wire.EmptyTickHeartbeat == 0;
         foreach (var c in _clients.Values)
