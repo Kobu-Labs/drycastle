@@ -180,10 +180,13 @@ public partial class Player : CharacterBody3D
 
     /// <summary>How many times the body was put somewhere else (spawn, seat, exit, debug). The server's lag compensation starts a new life at each one (ADR 0013).</summary>
     public int Teleports { get; private set; }
+    /// <summary>Teleports of every body together: a count that moved says some player is no longer where a per-tick list of positions has them.</summary>
+    public static int TeleportsAll { get; private set; }
 
     public void Teleport(Vector3 feet)
     {
         Teleports++;
+        TeleportsAll++;
         GlobalPosition = feet;
         Velocity = Vector3.Zero;
         _state = new MoveState { Position = ToN(feet), OnFloor = false, FallPeakY = feet.Y };

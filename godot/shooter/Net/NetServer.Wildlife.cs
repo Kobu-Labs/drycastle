@@ -39,10 +39,19 @@ public partial class NetServer
                 var d = dx * dx + dz * dz;
                 if (d < bestSq) { bestSq = d; best = p; }
             }
-            foreach (var c in _s._byId.Values)
-                if (_s._match.Get(c.Id)?.Life == PlayerLife.Alive) Consider(N(c.Body.GlobalPosition));
-            foreach (var car in _s._cars)
-                if (!car.Destroyed && MathF.Abs(car.State.Speed) > WildlifeCarThreatSpeed) Consider(N(car.GlobalPosition));
+            if (_s._animalsPrepared)
+            {
+                foreach (var a in _s._animalPlayers)
+                    if (a.Alive) Consider(a.Pos);
+                foreach (var p in _s._animalCarThreats) Consider(p);
+            }
+            else
+            {
+                foreach (var c in _s._byId.Values)
+                    if (_s._match.Get(c.Id)?.Life == PlayerLife.Alive) Consider(N(c.Body.GlobalPosition));
+                foreach (var car in _s._cars)
+                    if (!car.Destroyed && MathF.Abs(car.State.Speed) > WildlifeCarThreatSpeed) Consider(N(car.GlobalPosition));
+            }
             Prof.End(Prof.S.AnimalThreat, t);
             return best;
         }
@@ -55,6 +64,15 @@ public partial class NetServer
     bool AnimalWatched(NVec3 at)
     {
         const float r2 = WorldInterest.LeaveM * WorldInterest.LeaveM;
+        if (_animalsPrepared)
+        {
+            foreach (var a in _animalPlayers)
+            {
+                var dx = a.Pos.X - at.X; var dz = a.Pos.Z - at.Z;
+                if (dx * dx + dz * dz <= r2) return true;
+            }
+            return false;
+        }
         foreach (var c in _byId.Values)
         {
             var p = c.Body.GlobalPosition;
