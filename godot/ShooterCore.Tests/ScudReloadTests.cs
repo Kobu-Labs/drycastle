@@ -318,7 +318,7 @@ public class ScudReloadTests
         Assert.Null(ScudCodec.DecodeState(bad));
         Assert.Equal(ScudNoticeCode.LoadStarted, ScudCodec.DecodeNotice(ScudCodec.Encode(ScudNoticeCode.LoadStarted)));
         Assert.Equal(ScudNoticeCode.LoadCancelled, ScudCodec.DecodeNotice(ScudCodec.Encode(ScudNoticeCode.LoadCancelled)));
-        Assert.Null(ScudCodec.DecodeNotice(new byte[] { (byte)ScudNoticeCode.LoadCancelled + 1 }));
+        Assert.Null(ScudCodec.DecodeNotice(new byte[] { (byte)ScudNoticeCode.EventFound + 1 }));
         Assert.Equal(ScudNoticeCode.LoadCancelled, ScudCodec.NoticeOf(ScudLoadCancel.Moved));
         Assert.True(Wire.ProtocolVersion >= 69);
     }

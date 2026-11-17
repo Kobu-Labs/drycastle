@@ -17,6 +17,8 @@ public partial class Hud
     public Minimap Minimap => _minimap;
     /// <summary>The Scud strikes the maps show (<see cref="MapStrikes"/>).</summary>
     public MapStrikes Strikes => _mapMarkers.Strikes;
+    /// <summary>The search areas of announced events (the Scud event) the tactical map draws.</summary>
+    public MapSearchAreas SearchAreas => _mapMarkers.SearchAreas;
 
     /// <summary>Minimap placement in the HUD: top-left, under the control hint line.</summary>
     void BuildMinimap()

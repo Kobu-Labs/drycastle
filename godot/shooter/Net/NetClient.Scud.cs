@@ -122,7 +122,7 @@ public partial class NetClient
                 OnScudImpact(i);
                 break;
             case EventKind.ScudNotice when ScudCodec.DecodeNotice(payload) is { } n:
-                UiShell.Instance?.Toast(NoticeText(n), n is ScudNoticeCode.Retarget or ScudNoticeCode.LoadStarted ? ToastKind.Info : ToastKind.Warn);
+                UiShell.Instance?.Toast(NoticeText(n), n is ScudNoticeCode.Retarget or ScudNoticeCode.LoadStarted or ScudNoticeCode.EventFound ? ToastKind.Info : ToastKind.Warn);
                 break;
         }
     }
@@ -146,6 +146,7 @@ public partial class NetClient
         ScudNoticeCode.Retarget => Strings.T("scud.notice.retarget"),
         ScudNoticeCode.LoadStarted => Strings.T("scud.notice.load_started"),
         ScudNoticeCode.LoadCancelled => Strings.T("scud.notice.load_cancelled"),
+        ScudNoticeCode.EventFound => Strings.F("scud.notice.event_found", (int)Scud.Event.XpReward),
         _ => Strings.T("scud.notice.wrong_state"),
     };
 

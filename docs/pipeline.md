@@ -144,7 +144,7 @@ attribute (the flat surface of the body of water, metres on the terrain datum) a
 ### Zones (ADR 0022)
 
 A **zone kind** says what a marked area means in play. The kinds are a fixed catalog in code (`zones.KINDS`; a kind needs
-something in the pipeline or the game that reads it): `bigfoot` (group event), `player_spawn` (group player), and one kind per
+something in the pipeline or the game that reads it): `bigfoot` and `scud` (group event), `player_spawn` (group player), and one kind per
 wild species (group wildlife: `deer`, `doe`, `stag`, `moose`, `boar`, `bear`, `fox`, `wolf`, `rabbit`, `raccoon`, `skunk`;
 the ids of `godot/shooter/data/animals.json`, a test checks it). A **zone** is an area of one kind. A zone never changes the
 terrain (a zone over a forest does not cut the forest), and zones overlap freely and add up. Zones come from two places that
@@ -798,7 +798,7 @@ it, rounded to a millimetre and kept only if still inside). Rules per kind:
 | `building_clearance_m`, `water_clearance_m` | metres kept clear of buildings and of the water bodies of `water.json` (shore included) |
 
 There is no clearance from trees (the Bigfoot walks through and tramples them) and none from fences, roads or placed objects.
-Today `bigfoot` has 1000 m2 per point, 30 to 300 points, 10 m from buildings and 5 m from water; the wildlife species have
+Today `bigfoot` has 1000 m2 per point, 30 to 300 points, 10 m from buildings and 5 m from water; `scud` (the Scud event's hidden truck, 12 m long) has 2000 m2 per point, 10 to 200 points, 15 m from buildings and 10 m from water, no rule zone (drawn only: the village map has none yet, and the server then falls back to open ground, docs/events/scud.md); the wildlife species have
 20000 m2 per point, 5 to 80 points, 15 m from buildings and 5 m from water.
 
 The file is listed under `files.zone_points` in `manifest.json` and written **only when some zone has an area**; otherwise it
@@ -815,7 +815,7 @@ ground is listed with `points: []` and the export warns. `player_spawn` has no e
 order, for the editor's Zones tool; the drawn zones are not in it (the editor reads them from `edits.json`).
 
 The server reads the points as `ShooterCore.ZonePoints` (`Points(kind)`, `Count(kind)`, `Pick(kind, rng)`; the map loader
-keeps the text as `MapLoader.ZonePointsJson`, empty without the file): `NetServer.PickEventSpawn("bigfoot")` returns a random
+keeps the text as `MapLoader.ZonePointsJson`, empty without the file): `NetServer.PickEventSpawn("bigfoot")` (or `"scud"`) returns a random
 point in Godot ground axes (x east, y the terrain height, z = -north), or `null` when there is none (the map has no file, no
 zone of the kind, or nothing usable was left): the caller must handle it, and the wildlife keeper takes the points of each
 species. A broken or newer file is logged and counts as no points.

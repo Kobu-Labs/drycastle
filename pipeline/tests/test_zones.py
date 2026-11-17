@@ -66,8 +66,8 @@ def inside(points: list, geom) -> bool:
 # --- the catalog and the rules -----------------------------------------------------------------------
 
 
-def test_the_catalog_is_bigfoot_player_spawn_and_every_species() -> None:
-    assert KIND_NAMES == ("bigfoot", "player_spawn", *WILDLIFE, *FLOCKS)
+def test_the_catalog_is_the_event_kinds_player_spawn_and_every_species() -> None:
+    assert KIND_NAMES == ("bigfoot", "scud", "player_spawn", *WILDLIFE, *FLOCKS)
     assert {k.group for k in KINDS} == {"event", "player", "wildlife"}
     assert all(k.label and k.tint.startswith("#") for k in KINDS)
 
@@ -92,6 +92,8 @@ def test_the_shipped_rules_cover_the_catalog_with_rule_zones() -> None:
     types = rules_ground_types()
     check_ground_types(section, types)
     assert "where_ground" not in section["bigfoot"]  # drawn only
+    assert "where_ground" not in section["scud"]  # drawn only; the server falls back to open ground when none is drawn
+    assert section["scud"]["building_clearance_m"] >= 12  # a 12 m truck needs room
     assert set(section["player_spawn"]["where_ground"]) == {"allotments", "orchard", "meadow", "village", "field"}
     assert section["stag"]["where_ground"] == ["forest"]
     assert set(section["deer"]["where_ground"]) == {"forest", "meadow", "field"}
@@ -104,6 +106,7 @@ def test_kind_rows_are_the_catalog_in_order_with_the_rule_zone() -> None:
     assert [r["name"] for r in rows] == list(KIND_NAMES)
     by = {r["name"]: r for r in rows}
     assert by["bigfoot"]["where_ground"] is None and by["bigfoot"]["group"] == "event"
+    assert by["scud"]["where_ground"] is None and by["scud"]["group"] == "event" and by["scud"]["label"] == "Scud truck"
     assert by["stag"]["where_ground"] == ["forest"] and by["stag"]["group"] == "wildlife"
     assert set(by["player_spawn"]) == {"name", "label", "group", "tint", "where_ground"}
 

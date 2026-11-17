@@ -573,6 +573,7 @@ public sealed partial class TacticalMap : Control
         {
             if (_o._base is not { } b || !_o._m.HasPlayer || _o._side <= 0) return;
             var m = _o._m;
+            foreach (var area in m.SearchAreas.Items) MapGlyphs.SearchArea(this, At(area.Centre, b), area.RadiusM * _o._k, area.Label); // under the markers: a big translucent circle
             for (var i = 0; i < m.Vehicles.Count; i++) MapGlyphs.Vehicle(this, At(m.Vehicles[i], b));
             if (m.TeamColours)
                 for (var i = 0; i < m.Friends.Count; i++) MapGlyphs.Friend(this, At(m.Friends[i], b));
@@ -715,6 +716,36 @@ static class MapGlyphs
             c.DrawLine(p - d * x, p + d * x, ShooterTheme.Outline, 5f);
             c.DrawLine(p - d * x, p + d * x, ShooterTheme.Danger, 2.5f);
         }
+    }
+
+    /// <summary>
+    /// A search area (the Scud event): a translucent disc with a dashed ring and a small cross at its centre, the label on its upper edge. The event is somewhere inside it, the centre is not the event. The dashes and the
+    /// label are the shape and the words no other marker has (never colour only). <paramref name="radiusPx"/> is the radius at the map's scale; <paramref name="label"/> null draws none.
+    /// </summary>
+    public static void SearchArea(Control c, Vector2 p, float radiusPx, string? label)
+    {
+        var r = Mathf.Max(radiusPx, 14f);
+        var fill = ShooterTheme.Warn; fill.A = 0.10f;
+        c.DrawCircle(p, r, fill);
+        const int dashes = 48;
+        for (var i = 0; i < dashes; i += 2)
+        {
+            var a0 = i * Mathf.Tau / dashes; var a1 = (i + 1) * Mathf.Tau / dashes;
+            c.DrawArc(p, r, a0, a1, 4, ShooterTheme.Outline, 6f, true);
+            c.DrawArc(p, r, a0, a1, 4, ShooterTheme.Warn, 3f, true);
+        }
+        foreach (var d in new[] { Vector2.Left, Vector2.Right, Vector2.Up, Vector2.Down })
+        {
+            c.DrawLine(p + d * 3f, p + d * 12f, ShooterTheme.Outline, 4f);
+            c.DrawLine(p + d * 3f, p + d * 12f, ShooterTheme.Warn, 2f);
+        }
+        if (string.IsNullOrEmpty(label)) return;
+        var font = c.GetThemeDefaultFont();
+        const int fs = ShooterTheme.FontSmall;
+        var w = font.GetStringSize(label, HorizontalAlignment.Left, -1, fs).X;
+        var at = new Vector2(p.X - w / 2f, p.Y - r - 8f);
+        c.DrawStringOutline(font, at, label, HorizontalAlignment.Left, -1, fs, 6, ShooterTheme.Outline);
+        c.DrawString(font, at, label, HorizontalAlignment.Left, -1, fs, ShooterTheme.Warn);
     }
 
     /// <summary>The waypoint: a downward triangle whose tip is the point, in the waypoint green (a shape no other marker has; never colour only).</summary>

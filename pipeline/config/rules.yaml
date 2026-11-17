@@ -1012,6 +1012,15 @@ zones:
     max_points: 300
     building_clearance_m: 10
     water_clearance_m: 5
+  # The Scud event hides its truck at one of these points (the truck is 12 m long and 3 m wide, so a point wants room: clear of
+  # buildings by 15 m and of water by 10 m). No rule zone: it is drawn only (open ground, a field track, a road verge). A map with
+  # no scud zone gets a runtime fallback (the server picks open ground away from the players), so drawing one is optional.
+  scud:
+    m2_per_point: 2000
+    min_points: 10
+    max_points: 200
+    building_clearance_m: 15
+    water_clearance_m: 10
   # Players may spawn on open ground: the village and the fields.
   player_spawn:
     where_ground: [allotments, orchard, meadow, village, field]

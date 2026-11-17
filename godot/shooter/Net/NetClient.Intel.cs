@@ -12,10 +12,21 @@ namespace Drycastle.Shooter;
 /// </summary>
 public partial class NetClient
 {
+    /// <summary>The announced events as the server last sent them (also where there is no intel screen): the Scud event's search area is drawn on the tactical map from them, and its truck is kept off the maps' vehicle dots.</summary>
+    IReadOnlyList<IntelEvent> _intelEvents = Array.Empty<IntelEvent>();
+
+    /// <summary>
+    /// The Scud event is on: its intel entry (a search area) is on the board. An unfound truck must not show as a vehicle dot on the minimap or the tactical map, or the circle would be pointless; the entry is
+    /// withdrawn the moment somebody boards it. A modified client can still read its position from the vehicle records, which every client gets (docs/events/scud.md).
+    /// </summary>
+    bool ScudTruckHidden(VehicleDef def) => def.Launcher != null && _intelEvents.Any(e => e.Kind == "scud" && e.IsArea);
+
     void OnIntelEvent(EventKind kind, byte[] payload)
     {
         if (kind != EventKind.IntelSync || IntelCodec.Decode(payload, Now) is not { } update) return;
         IntelScreen.Current?.Board.Replace(update.Events);
+        _intelEvents = update.Events;
+        _hud?.SearchAreas.Set(update.Events.Where(e => e.IsArea).Select(e => new MapSearchAreas.Area(Strings.T("intel.map.search"), e.Where!.Value, e.Radius!.Value)));
         if (update.Announced is { } e)
         {
             GD.Print($"client {PlayerName}: announcement, '{e.Name}' begins in {e.StartsAt - Now:F0} s");

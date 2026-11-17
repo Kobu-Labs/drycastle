@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_note": "The Scud truck (GLOSSARY: Scud truck, Launcher, Lock point, Scud missile, Scud blast). Parsed by ScudFile (ShooterCore/Scud/ScudData.cs); every field is checked at load. launcher: the timings of the launcher machine and the targeting rules. targeting: the operator's bird's-eye screen. missile: the planned flight (a vertical boost, then one arc down onto the point) and who is warned. reload: loading a rocket from a rocket cart onto an empty truck (hold the interact key hold_seconds beside a truck with an empty rack and a loaded cart within cart_reach_m of its hull; a player on foot must be within player_reach_m; the truck or cart moving moved_cancel_m cancels it until the rocket leaves the cart at transfer_share of launcher.reload_seconds). blast: the impact (metres, hit points, seconds; chain_delay_seconds: a loaded cart doomed by a blast goes up that long after it). The numbers are a first guess and want a feel pass.",
+  "_note": "The Scud truck (GLOSSARY: Scud truck, Launcher, Lock point, Scud missile, Scud blast). Parsed by ScudFile (ShooterCore/Scud/ScudData.cs); every field is checked at load. launcher: the timings of the launcher machine and the targeting rules. targeting: the operator's bird's-eye screen. missile: the planned flight (a vertical boost, then one arc down onto the point) and who is warned. event: the Scud event (/event scud; spawn_weight is for a future scheduler; search_radius_cells: the intel board's search circle in tactical map grid cells; despawn_minutes: nobody boarded the truck in that long and it is removed; xp_reward: for the first player aboard; min_player_distance_m: the truck's place is that far from every human; cart_cooldown_seconds: a bunker's emptied or destroyed cart is replaced after it; cart_standoff_m: the cart's rear end that far off the bunker; spot_clearance_m: the footprint's margin of free ground). reload: loading a rocket from a rocket cart onto an empty truck (hold the interact key hold_seconds beside a truck with an empty rack and a loaded cart within cart_reach_m of its hull; a player on foot must be within player_reach_m; the truck or cart moving moved_cancel_m cancels it until the rocket leaves the cart at transfer_share of launcher.reload_seconds). blast: the impact (metres, hit points, seconds; chain_delay_seconds: a loaded cart doomed by a blast goes up that long after it). The numbers are a first guess and want a feel pass.",
   "launcher": {
     "erect_seconds": 8,
     "ignition_seconds": 2,
@@ -31,6 +31,16 @@
     "dive_deg": 70,
     "warn_seconds": 8,
     "warn_radius_m": 600
+  },
+  "event": {
+    "spawn_weight": 1,
+    "search_radius_cells": 9,
+    "despawn_minutes": 20,
+    "xp_reward": 400,
+    "min_player_distance_m": 250,
+    "cart_cooldown_seconds": 600,
+    "cart_standoff_m": 3,
+    "spot_clearance_m": 1.5
   },
   "reload": {
     "hold_seconds": 1.0,

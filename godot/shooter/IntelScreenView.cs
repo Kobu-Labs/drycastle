@@ -177,8 +177,9 @@ public sealed partial class IntelScreenView : PanelContainer
         Set(_desc, e.Description);
         Set(_whereValue, e.Where is null ? Strings.T("intel.where.none")
             : map is null ? Strings.T("intel.where.nomap")
+            : e.IsArea ? Strings.F("intel.where.area", TacticalMapMath.ReferenceOf(e.Where.Value, map.World.Origin.X, map.World.SouthZ, map.World.SideMetres), ScudSearch.Cells(e.Radius!.Value, map.World.SideMetres))
             : Strings.F("intel.where.grid", TacticalMapMath.ReferenceOf(e.Where.Value, map.World.Origin.X, map.World.SouthZ, map.World.SideMetres)));
-        _map.Set(map, e.Where);
+        _map.Set(map, e.Where, e.Radius);
 
         Clear(_risks, _riskCaption);
         _risks.AddChild(_riskCaption);
@@ -285,6 +286,7 @@ sealed partial class IntelMapTile : Control
 
     MapBase? _map;
     NVec2? _at;
+    float? _radius;
     ImageTexture? _tex;
 
     public IntelMapTile(int side)
@@ -295,11 +297,12 @@ sealed partial class IntelMapTile : Control
         ClipContents = true;
     }
 
-    public void Set(MapBase? map, NVec2? at)
+    public void Set(MapBase? map, NVec2? at, float? radius = null)
     {
         if (!ReferenceEquals(map, _map)) _tex = null;
         _map = map;
         _at = at;
+        _radius = radius;
         QueueRedraw();
     }
 
@@ -314,7 +317,7 @@ sealed partial class IntelMapTile : Control
 
     void DrawSurroundings(MapBase b, NVec2 g, Rect2 r)
     {
-        var window = Math.Min(WindowM, b.SideMetres);
+        var window = Math.Min(_radius is { } rad ? Math.Max(WindowM, rad * 2.6f) : WindowM, b.SideMetres); // an area shows whole when it fits
         var x0 = Math.Clamp(g.X - window / 2, b.Origin.X, b.Origin.X + b.SideMetres - window); // the window stays on the map
         var z0 = Math.Clamp(g.Y - window / 2, b.Origin.Y, b.Origin.Y + b.SideMetres - window);
         _tex ??= b.Texture(TextureSide);
@@ -334,6 +337,13 @@ sealed partial class IntelMapTile : Control
         foreach (var (road, pts) in roads) DrawPolyline(pts, ShooterTheme.MapRoadCasing, Math.Max(1.5f, road.WidthM * px) + 2f, true);
         foreach (var (road, pts) in roads) DrawPolyline(pts, road.Colour, Math.Max(1.5f, road.WidthM * px), true);
 
+        if (_radius is { } areaM)
+        {
+            // an area: the event is somewhere inside the dashed circle; the middle is only the middle (a small cross, no ring)
+            MapGlyphs.SearchArea(this, (new Vector2(g.X, g.Y) - origin) * px, areaM * px, null);
+            DrawNorth(r);
+            return;
+        }
         // the place: a ring with a gap-toothed cross, dark outlined so it reads on any ground
         var m = (new Vector2(g.X, g.Y) - origin) * px;
         const float ring = 14f, reach = 30f;

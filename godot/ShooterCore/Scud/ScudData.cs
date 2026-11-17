@@ -12,6 +12,7 @@ public sealed class ScudFile : IVersioned
     public ScudMissileData Missile { get; set; } = new();
     public ScudBlastData Blast { get; set; } = new();
     public ScudReloadData Reload { get; set; } = new();
+    public ScudEventData Event { get; set; } = new();
 
     public static ScudFile Parse(string json) => DataFile.Parse<ScudFile>(json, "scud.json").Validate();
 
@@ -51,6 +52,12 @@ public sealed class ScudFile : IVersioned
         if (!(m.DiveDeg is >= 30 and <= 89)) throw new DataFileException("scud.json: missile.dive_deg must be between 30 and 89");
         NonNeg(m.WarnSeconds, "missile.warn_seconds"); NonNeg(m.WarnRadiusM, "missile.warn_radius_m");
         if (m.WarnSeconds >= m.FlightMinSeconds) throw new DataFileException("scud.json: missile.warn_seconds must be shorter than the shortest flight (flight_min_seconds)");
+
+        var ev = Event;
+        NonNeg(ev.SpawnWeight, "event.spawn_weight"); NonNeg(ev.XpReward, "event.xp_reward");
+        if (!(ev.SearchRadiusCells is >= 1 and <= 40)) throw new DataFileException("scud.json: event.search_radius_cells must be between 1 and 40");
+        Pos(ev.DespawnMinutes, "event.despawn_minutes"); Pos(ev.CartCooldownSeconds, "event.cart_cooldown_seconds"); NonNeg(ev.MinPlayerDistanceM, "event.min_player_distance_m");
+        NonNeg(ev.CartStandoffM, "event.cart_standoff_m"); Pos(ev.SpotClearanceM, "event.spot_clearance_m");
 
         var r = Reload;
         Pos(r.HoldSeconds, "reload.hold_seconds"); Pos(r.CartReachM, "reload.cart_reach_m"); Pos(r.PlayerReachM, "reload.player_reach_m"); Pos(r.MovedCancelM, "reload.moved_cancel_m");
@@ -164,6 +171,27 @@ public sealed class ScudBlastData
     public double ScorchRadiusM { get; set; } = 32;
     /// <summary>A loaded rocket cart in the damage chain of a Scud blast goes up this long after the blast that doomed it (plus the wave's travel), so a row of carts does not all go in one tick. Seconds.</summary>
     public double ChainDelaySeconds { get; set; } = 0.8;
+}
+
+/// <summary>scud.json "event": the Scud event (<see cref="ScudEventRun"/>, GLOSSARY "Scud event").</summary>
+public sealed class ScudEventData
+{
+    /// <summary>The weight of this event in a future scheduler's draw (no scheduler runs events yet: <c>/event scud</c> starts it). 0: never drawn.</summary>
+    public double SpawnWeight { get; set; } = 1;
+    /// <summary>The search area's radius, in grid cells of the tactical map (<see cref="ScudSearch.RadiusM"/>).</summary>
+    public int SearchRadiusCells { get; set; } = 9;
+    /// <summary>Nobody boarded the truck in this long: it is removed with its carts, no reward. Minutes.</summary>
+    public double DespawnMinutes { get; set; } = 20;
+    /// <summary>The XP of the player who first boards the truck (<c>XpReason.EventWin</c>).</summary>
+    public double XpReward { get; set; } = 400;
+    /// <summary>The truck's place is at least this far from every human player. Metres.</summary>
+    public double MinPlayerDistanceM { get; set; } = 250;
+    /// <summary>A bunker's cart that was emptied or destroyed is replaced by a new loaded one after this long. Seconds.</summary>
+    public double CartCooldownSeconds { get; set; } = 600;
+    /// <summary>A bunker's cart stands this far beyond the bunker's footprint (its rear end), metres.</summary>
+    public double CartStandoffM { get; set; } = 3;
+    /// <summary>A place for the truck or a cart needs its footprint grown by this much to be clear of solids (walls, trees, rocks), metres.</summary>
+    public double SpotClearanceM { get; set; } = 1.5;
 }
 
 /// <summary>scud.json "reload": loading a rocket from a rocket cart onto an empty truck (<see cref="ScudReloadRules"/>, the launcher's Loading state).</summary>

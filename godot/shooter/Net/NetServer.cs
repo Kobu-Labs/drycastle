@@ -288,6 +288,7 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Streaks);
         BotsTick((float)delta); // fills the roster and queues each bot's input for this tick (#214)
         HarvesterTick((float)delta); // the harvester event: its spawn, its driver's pedals
+        ScudEventTick((float)delta); // the Scud event: who boarded the truck, the search time, the bunkers' carts
         PerfLap(ServerPerf.Ph.Bots);
         foreach (var car in _cars) car.PlaceSolid(); // the boxes on-foot players are stopped by, where the vehicles stand after the last tick (#217)
         PlaceVanSolids(); // and the Raid vans' (a van that stands is solid)

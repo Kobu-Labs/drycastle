@@ -1,0 +1,15 @@
+# An event may say an area, and the Scud event hides its truck in one
+
+Decided for the Scud event (GLOSSARY "Scud event", "Search area"). Builds on ADR 0017 (the intel room and the board), ADR 0022 (zones), ADR 0033 (the Scud truck), ADR 0025 (world interest).
+
+**The intel board's place can be an area.** `IntelEvent.Where` stays the only place; an optional `Radius` (metres) makes it the centre of an area (`IsArea`). It rides the wire as one more flag bit and a float after the centre, so a point event is byte for byte what it was. The screen says the centre's grid reference and the radius in cells and draws a dashed circle with a small cross; the tactical map draws the circle from the same entries. Nothing else about the board changes.
+
+**The radius is in grid cells, the maths are shared.** The designer's unit is the tactical map's grid cell (`search_radius_cells`: 9), which depends on the size of the world sheet. The server must therefore measure the same sheet the clients draw: `TacticalMapMath.Sheet` is now the one place that works it out (the parcels' box merged with the terrain's, padded), used by `MapBase` and by the server (which has no terrain visuals but has the terrain's box). The wire carries metres, so a client never has to agree with the server about a cell, only about where a circle is.
+
+**The centre must not be the truck.** The truck is placed first (a zone point, else open ground), then the centre is the truck plus a random vector: uniform over a disc of 97 % of the radius, so the truck is always inside, never on the edge, and, seen from the centre, is uniformly anywhere in a disc. A player who guesses the middle of the circle gains nothing.
+
+**Nothing but the circle says where, and the limit is said.** The truck is a vehicle and every vehicle is replicated to everyone (ADR 0025), so the server cannot hide it from a client that reads the snapshot. What it can do is not draw it: the maps' vehicle dots skip launcher trucks while an area entry of that kind is on the board. A modified client can still see it; that is accepted (a private group of friends), and noted in docs/events/scud.md rather than half-solved with interest filtering for one vehicle.
+
+**One event, then a long tail.** The event is won when a human first boards the truck (the event slot is free then, `EventBook`), but the truck and the rocket carts stay until it is destroyed, so a second event is refused until it is. The carts and their replacement are a machine per bunker (`Scud.CartSlot`), not flags on the event; the event's own phases are `Scud.Event` (searching, found, over). A new round ends everything (the truck never returns, ADR 0033): nothing is carried over.
+
+**The doorway is found, not stored.** `bunkers.json` has no door, and adding one means a pipeline change and a re-export for a heuristic the server can compute. The server sends rays through the physics world from the middle of the ground floor at three heights and takes the direction that is open all the way out; the cart's places are tried along it, then fanned, then all round, so a wrong guess costs a slightly different spot, never a failure.

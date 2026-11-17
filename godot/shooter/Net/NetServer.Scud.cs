@@ -192,6 +192,7 @@ public partial class NetServer
     /// <summary>A new round: the launchers start over, and a truck that never returns is retired instead of reset (hidden, out of its seats).</summary>
     void ScudRoundReset()
     {
+        ScudEventRoundReset(); // the Scud event is over with the round (no reward); the loop below retires its truck and carts
         _scudRigs.Clear();
         foreach (var car in _cars)
         {

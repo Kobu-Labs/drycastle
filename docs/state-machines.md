@@ -1387,6 +1387,44 @@ stateDiagram-v2
 - **Draining**: Stop() ran: no new input; what was written still plays out, then the echo tail, then ffmpeg ends. A Start() here cuts the tail short.
 - **Failed**: ffmpeg missing, died, or stopped producing audio: logged once, the feed is silent until the next phase. Never unprocessed audio.
 
+## Scud.CartSlot
+
+One bunker's rocket cart during a Scud event: standing loaded, waiting to be replaced, or closed with the truck.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Stocked
+    Closed --> Restocking
+    Stocked --> Restocking
+    Stocked --> Closed
+    Restocking --> Stocked
+    Restocking --> Closed
+```
+
+- **Closed**: No truck is out: no cart is put at the bunker.
+- **Stocked**: A loaded cart was put at the bunker. It stays the slot's until it is emptied, destroyed or removed, wherever it is towed to.
+- **Restocking**: The cart is gone or empty: the slot counts the cooldown (clock: cart_cooldown_seconds), then the host puts a new loaded cart at the bunker. A blocked place is tried again after a short wait.
+
+## Scud.Event
+
+The Scud event: the truck hidden in its search area, found when a player boards it, or gone.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Searching
+    Searching --> Found
+    Searching --> Over
+    Found --> Over
+    Over --> Searching
+```
+
+- **Idle**: No Scud event has run on this server yet.
+- **Searching**: The truck stands hidden and the search area is on the intel board and the tactical map (clock: the despawn time). The first player to board it finds it; nobody within the time, a destroyed truck, a cancel or a new round ends it with no reward.
+- **Found**: A player boarded the truck: the reward is paid, the intel entry and the search circle are gone and the event slot is free. The truck stays as an ordinary vehicle and the rocket carts keep standing at the bunkers until it is destroyed (or the round ends).
+- **Over**: The truck is gone (destroyed, despawned, or retired by a new round) and the carts with it. A new event may begin.
+
 ## Scud.Launcher
 
 A Scud truck's launcher: the rocket on its rack, the operator's lock, the crew's confirmations, the rack rising, the launch, the empty rack and the reload.

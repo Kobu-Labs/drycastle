@@ -46,6 +46,8 @@ public enum ScudNoticeCode : byte
     LoadStarted = 11,
     /// <summary>The loading from a cart was dropped: the cart or the truck moved, or the cart was lost; the cart keeps its rocket.</summary>
     LoadCancelled = 12,
+    /// <summary>The player found the Scud truck (boarded it first): the reward is paid.</summary>
+    EventFound = 13,
 }
 
 /// <summary>
@@ -154,7 +156,7 @@ public static class ScudCodec
 
     public static byte[] Encode(ScudNoticeCode n) => new[] { (byte)n };
 
-    public static ScudNoticeCode? DecodeNotice(ReadOnlySpan<byte> d) => d.Length == 1 && d[0] is >= (byte)ScudNoticeCode.TooClose and <= (byte)ScudNoticeCode.LoadCancelled ? (ScudNoticeCode)d[0] : null;
+    public static ScudNoticeCode? DecodeNotice(ReadOnlySpan<byte> d) => d.Length == 1 && d[0] is >= (byte)ScudNoticeCode.TooClose and <= (byte)ScudNoticeCode.EventFound ? (ScudNoticeCode)d[0] : null;
 
     /// <summary>The notice a refused command gets, or null for an Ok.</summary>
     public static ScudNoticeCode? NoticeOf(ScudAnswer a) => a switch
