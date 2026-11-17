@@ -14,8 +14,8 @@ public sealed class CropCrushConfig
     public float WidthShare { get; set; } = 0.95f;
     /// <summary>Side of a mask cell, metres.</summary>
     public float CellM { get; set; } = 1;
-    /// <summary>A field's mask has at most this many cells (its bounding box); a bigger field is not tracked. All fields together keep at most <see cref="MaxCellsTotal"/> crushed cells.</summary>
-    public int MaxCellsPerField { get; set; } = 262144;
+    /// <summary>A field's mask has at most this many cells (its bounding box); a bigger field is not tracked (the village's largest, GP-0084 at ~273k, is). All fields together keep at most <see cref="MaxCellsTotal"/> crushed cells.</summary>
+    public int MaxCellsPerField { get; set; } = 1 << 20; // 1 MB of bools: the village's largest field is ~273k cells
     public int MaxCellsTotal { get; set; } = 120000;
     /// <summary>The most bytes of one crush message (a late joiner's history comes in these).</summary>
     public int MaxMessageBytes { get; set; } = 200;
