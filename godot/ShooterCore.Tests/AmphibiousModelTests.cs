@@ -51,7 +51,7 @@ public class AmphibiousModelTests
                  {
                      "hull", "wheel_fl_steer", "wheel_fr_steer", "wheel_fl", "wheel_fr", "wheel_rl", "wheel_rr", "propeller", "gun_mount", "gun", "barrel", "muzzle",
                      "gunner_sight", "seat_driver", "seat_passenger", "seat_gunner", "light_head_l", "light_head_r", "light_tail_l", "light_tail_r", "smoke_engine",
-                     "wake_bow", "wake_stern_l", "wake_stern_r",
+                     "wake_bow", "wake_stern_l", "wake_stern_r", "steering_wheel_rim", "steering_wheel_spokes", // the wheel's two nodes: the cockpit rig measures the rim and hides both
                  })
             Assert.True(n.ContainsKey(name), $"the model has no node {name}");
         // the wheels turn about their centres, the steering pivots are at the front wheel centres, and all four stand on the ground

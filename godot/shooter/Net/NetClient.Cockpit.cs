@@ -8,7 +8,8 @@ namespace Drycastle.Shooter;
 /// (<see cref="SeatEye"/>, in the hull frame so the sway is in the view), and the vehicle view key switches between them. Seats that work a gun or a
 /// screen keep the gun's own sight as their first-person view and ignore the key. The mode is a declared machine (<see cref="RiderViewMode"/>, "Rider.View"):
 /// the choice is kept across seat switches and vehicles for the session. Nothing is sent and nobody else sees it. The driver's cockpit rig
-/// (<see cref="CockpitRig"/>, hands and a turning wheel) is drawn on the driver's seat only, and only where the vehicle has one; any other seat sees the
+/// (<see cref="CockpitRig"/>, hands and a turning wheel) is drawn on the driver's seat only, and only where the vehicle has one (hand-built, or measured from the
+/// model's steering wheel or handlebars); any other seat sees the
 /// model's own interior. A killstreak's point of view takes the camera as before; the rig is put away for as long as it lasts.
 /// </summary>
 public partial class NetClient
@@ -20,7 +21,13 @@ public partial class NetClient
     CockpitRig? _rig;
     CarView? _rigCar;
 
-    CockpitRig.Spec? CockpitOf(CarView v) => Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? CockpitRig.For(Vehicles.Vehicles[v.Kind].Id) : null;
+    /// <summary>The driver's rig of <paramref name="v"/>: its hand-built one, else one measured from the model's steering wheel or handlebars (<see cref="CockpitRig.For(string, Node3D, Node3D, System.Numerics.Vector3)"/>).</summary>
+    CockpitRig.Spec? CockpitOf(CarView v)
+    {
+        if (Vehicles == null || v.Kind >= Vehicles.Vehicles.Count) return null;
+        var def = Vehicles.Vehicles[v.Kind];
+        return CockpitRig.For(def.Id, v.Node, GlassHost(v.Node), SeatEye.For(def, 0));
+    }
 
     /// <summary>The seat of <paramref name="v"/> the local player sits in (the driver is the vehicle's record, the rest the seat state), or -1.</summary>
     int OwnSeatIn(CarView v) => v.Driver == _myId ? 0 : _seats is { Mine: > 0 } st && st.CarId == v.Id ? st.Mine : -1;
@@ -66,6 +73,7 @@ public partial class NetClient
             _rig = CockpitRig.Make(spec);
             GlassHost(v.Node).AddChild(_rig); // on the body, in the vehicle's frame (docs/standards/car-design.md 0): the rig and the eye lean with the hull
             _rig.HideModel(v.Node, spec.Hide);
+            spec.OnModel?.Invoke(_rig, v.Node);
             _rigCar = v;
         }
         if (_rig != null)
