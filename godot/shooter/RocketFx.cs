@@ -99,6 +99,13 @@ public static class RocketFx
             var c = C;
             var off = GeometryInstance3D.ShadowCastingSetting.Off;
             var tail = 0.62f;
+            if (weaponId == "grenade") // a thrown grenade: the pack's model, no flame, light or trail
+            {
+                if (SyntyLib.Instance("props/grenade_01", "glb/atlas/military_weapons_01.png") is { } nade) node.AddChild(nade);
+                else node.AddChild(new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.05f, Height = 0.1f } });
+                world.AddChild(node);
+                return node;
+            }
             if (weaponId == "rpg" && SyntyLib.Instance(PackRocket, "glb/atlas/military_weapons_01.png") is { } head)
             {
                 // the pack's props face +Z: turned half round so the nose leads

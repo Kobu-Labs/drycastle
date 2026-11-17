@@ -367,6 +367,10 @@ _Avoid_: parking spot, spawn point (that is where a player appears)
 A flak shell's end by an aircraft: the shell flies straight at 700 m/s, and once it passes within 12 m of an aircraft it bursts at the closest approach. An aircraft within 15 m of the burst takes 150 damage out to 4 m, falling to 40 at the edge. The gunner has to lead the aircraft, which flies a known circle. A shell that meets no aircraft ends on the ground with a small blast (4 m, weak), or runs out of range.
 _Avoid_: proximity fuse (the fuse is how it works, the burst is the thing), flak burst
 
+**Grenade**:
+A Special-slot weapon (`weapons.json` `grenade`, fourth on the hotbar after the knife) thrown by hand: it leaves at 17 m/s, falls and bounces off the world and vehicles (flying through players), and bursts when its fixed 3 s fuse runs out (no cooking). The blast is the RPG's own explosion path with a 5.5 m Splash (half as harmful to the thrower), so it raises a Dust cloud but, being under the Blast wave's 9 m minimum, no Blast wave. One in hand and two in reserve; a kill refills the reserve. Not carried by bots.
+_Avoid_: frag, bomb
+
 **RPG**:
 A secondary weapon carried on the shoulder (`weapons.json` `rpg`, unlocked at level 8) that fires one unguided rocket where it is aimed: it flies straight at 60 m/s for up to 240 m and bursts on what it meets with a 10 m blast (a Dust cloud and a Blast wave at 200 m/s), half as harmful to the one who fired it. One rocket in the tube and two in reserve. A share of the bots carries it and aims it far more steadily than a gun. It replaced the bazooka (#348).
 _Avoid_: bazooka, rocket launcher (alone: the Lock-on launcher is one too)
