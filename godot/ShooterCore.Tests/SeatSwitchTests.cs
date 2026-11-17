@@ -51,6 +51,33 @@ public class SeatSwitchTests
         Assert.True(s.IsFree(2));
     }
 
+    [Fact]
+    public void AFiveSeatVehicleSwitchesToItsLastSeatAndBack()
+    {
+        var s = new VehicleSeat(5);
+        for (ushort p = 1; p <= 4; p++) s.TryEnter(p, p - 1);
+        Assert.True(s.TrySwitch(1, 4));    // the driver to the fifth seat (key 5)
+        Assert.True(s.IsFree(0));
+        Assert.Equal(1, s.Occupant(4));
+        Assert.False(s.TrySwitch(2, 4));   // taken
+        Assert.False(s.TrySwitch(2, 5));   // no sixth seat
+        Assert.True(s.TrySwitch(1, 0));
+        Assert.True(s.IsFree(4));
+    }
+
+    [Fact]
+    public void ADeadRidersCorpseBlocksTheFifthSeatAsAnyOther()
+    {
+        var s = new VehicleSeat(5);
+        s.TryEnter(1, 0);
+        s.Block(4);
+        Assert.False(s.TrySwitch(1, 4));
+        Assert.True(s.HoldsCorpse(4));
+        Assert.False(s.IsFree(4));
+        s.Unblock(4);
+        Assert.True(s.TrySwitch(1, 4));
+    }
+
     // ---- the wire ----
 
     [Fact]
@@ -60,6 +87,17 @@ public class SeatSwitchTests
         Assert.Null(SeatCodec.DecodeSwitch(new byte[] { VehicleSeat.MaxSeats }));
         Assert.Null(SeatCodec.DecodeSwitch(ReadOnlySpan<byte>.Empty));
         Assert.Null(SeatCodec.DecodeSwitch(new byte[] { 0, 0 }));
+    }
+
+    [Fact]
+    public void AFiveSeatRequestAndStateRoundTrip()
+    {
+        Assert.Equal(4, SeatCodec.DecodeSwitch(SeatCodec.EncodeSwitch(4)));
+        Assert.Null(SeatCodec.DecodeSwitch(SeatCodec.EncodeSwitch(5)));
+        var back = SeatCodec.DecodeState(SeatCodec.EncodeState(0x4001, new ushort[] { 3, 0, 12, 40000, 7 }));
+        Assert.NotNull(back);
+        Assert.Equal(new ushort[] { 3, 0, 12, 40000, 7 }, back!.Occupants);
+        Assert.Null(SeatCodec.DecodeState(SeatCodec.EncodeState(1, new ushort[] { 1, 2, 3, 4, 5, 6 }))); // six
     }
 
     [Fact]
@@ -143,6 +181,29 @@ public class SeatSwitchTests
             {
                 var d = MathF.Sqrt(MathF.Pow(l.Seats[i].X - l.Seats[j].X, 2) + MathF.Pow(l.Seats[i].Y - l.Seats[j].Y, 2));
                 Assert.True(d >= 2 * r, $"{id}: seats {i + 1} and {j + 1} overlap ({d:F1} px apart)");
+            }
+    }
+
+    [Fact]
+    public void AFiveSeatVehicleGetsFiveNumberedMarkersThatDoNotOverlap()
+    {
+        const float r = 16;
+        var def = new VehicleDef { Id = "x", HalfWidth = 1.1f, HalfLength = 2.5f };
+        def.Seats = new List<VehicleSeatDef>
+        {
+            new() { Role = "driver", Offset = new float[] { -0.5f, 1, -0.6f } },
+            new() { Role = "passenger", Offset = new float[] { 0.5f, 1, -0.6f } },
+            new() { Role = "passenger", Offset = new float[] { -0.5f, 1, 0.5f } },
+            new() { Role = "passenger", Offset = new float[] { 0.5f, 1, 0.5f } },
+            new() { Role = "gunner", Offset = new float[] { 0, 1.6f, 0.5f } }, // the roof gunner sits on top of the rear seats
+        };
+        var l = SeatSchematic.Layout(def, 184, 168, 12, r);
+        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, l.Seats.Select(s => s.Number));
+        for (var i = 0; i < 5; i++)
+            for (var j = i + 1; j < 5; j++)
+            {
+                var d = MathF.Sqrt(MathF.Pow(l.Seats[i].X - l.Seats[j].X, 2) + MathF.Pow(l.Seats[i].Y - l.Seats[j].Y, 2));
+                Assert.True(d >= 2 * r, $"seats {i + 1} and {j + 1} overlap ({d:F1} px apart)");
             }
     }
 

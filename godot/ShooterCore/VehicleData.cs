@@ -69,7 +69,7 @@ public class VehiclesFile : IVersioned
                 if (side.OutlineProblem() is { } problem) throw new DataFileException($"vehicles.json: {v.Id}: open side {side.Id}: {problem}");
             }
             if (v.Tint is { Length: not 3 } || v.Tint != null && v.Paints.Count > 0) throw new DataFileException($"vehicles.json: {v.Id}: tint is [r, g, b] and excludes paints");
-            if (v.Seats.Count is < 1 or > 4 || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..4 and the first is the driver");
+            if (v.Seats.Count is < 1 or > VehicleSeat.MaxSeats || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..{VehicleSeat.MaxSeats} and the first is the driver");
             foreach (var seat in v.Seats)
             {
                 if (seat.Role is not ("driver" or "gunner" or "passenger")) throw new DataFileException($"vehicles.json: {v.Id}: seat role {seat.Role} is not driver, gunner or passenger");
@@ -737,7 +737,7 @@ public class VehicleDef
     public int SpawnCount { get; set; }
     /// <summary>
     /// Places this type always stands at (vehicles.json "fixed_spots"), one vehicle each, in addition to the <see cref="SpawnCount"/> dealt at random.
-    /// A vehicle that returns (abandoned or destroyed) comes back to its spot. See <see cref="VehicleSpotDef"/>.
+    /// A vehicle that returns (destroyed, or out of the world; an abandoned one stays) comes back to its spot. See <see cref="VehicleSpotDef"/>.
     /// </summary>
     public List<VehicleSpotDef> FixedSpots { get; set; } = new();
     /// <summary>Half extents of the footprint (server collision box and run-over test), metres.</summary>

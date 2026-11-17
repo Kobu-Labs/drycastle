@@ -71,6 +71,7 @@ public partial class NetServer
                 var gy = ServerCar.RestHeight(space, new Vector3(spot.X, terrain, spot.Z), yaw, def.HalfWidth, def.HalfLength, terrain) ?? terrain;
                 planned.Add((new NVec3(spot.X, gy, spot.Z), yaw, kind));
                 GD.Print($"server: fixed spot {def.Id} at ({spot.X:F1},{gy:F1},{spot.Z:F1}) facing {yaw * 180f / MathF.PI:F0} deg");
+                if (def.Flight != null) WarnIfAircraftDoesNotFit(def, new Vector3(spot.X, gy, spot.Z), yaw);
             }
         }
         if (GarageParking() is { } park) // the bus garage's own vehicle, nose to the doors (garage.json)
@@ -81,6 +82,18 @@ public partial class NetServer
             GD.Print($"server: {def.Id} parked in the garage at ({park.Pos.X:F1},{gy:F1},{park.Pos.Z:F1})");
         }
         return planned;
+    }
+
+    /// <summary>
+    /// A helicopter dealt at random only takes a place where its hull and rotor disc fit (<see cref="FlightProbe.Fits"/>); one at a fixed spot is put there
+    /// whatever is around it, as placed by hand, so a spot that touches something solid (a hangar, a pole) is said in the log. It is still used.
+    /// </summary>
+    void WarnIfAircraftDoesNotFit(VehicleDef def, Vector3 at, float yaw)
+    {
+        var probe = FlightProbe.Make(def, Water, FlightBounds.None);
+        World.AddChild(probe);
+        if (!probe.Fits(at, yaw)) GD.PrintErr($"server: fixed spot of {def.Id} at ({at.X:F1},{at.Z:F1}): its hull or rotor disc touches something solid there (it stands there anyway)");
+        probe.QueueFree();
     }
 
     /// <summary>Places the cars once the spawn candidates are validated: near the spawn zones, at least 12 m apart, random colours; the types' fixed spots stand last in the list.</summary>

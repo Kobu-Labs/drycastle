@@ -143,7 +143,7 @@ public static class VehicleBlastFx
 /// </summary>
 public sealed class VehicleSeat
 {
-    public const int MaxSeats = 4;
+    public const int MaxSeats = 5;
     readonly ushort[] _occupant;
 
     public VehicleSeat(int seats = 1)

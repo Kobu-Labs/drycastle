@@ -290,11 +290,11 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 - Vehicles (`vehicles.json`): car, motorcycle, bicycle (v1), war jeep and quad bike (#131), and the amphibious transport
   (#132; a boat type was shipped with it and later removed). Handling was reworked in #134 (max speed, turn radius, braking, hp). Headlights and tail lights come from the
   optional `lights` block (#137).
-- Seat switch: while seated in any vehicle the number keys (the `slot_1` to `slot_4` actions, rebindable) take that seat, and a seat
+- Seat switch: while seated in any vehicle the number keys (the `slot_1` to `slot_5` actions, rebindable) take that seat, and a seat
   schematic shows the seats (bottom right). Client request: event kind 161 (u8 seat index); the server answers the riders with kind 162 (who
   sits in each seat) whenever that changes; protocol 20. `VehicleSeat.TrySwitch` is the rule, `SeatSchematic` the layout.
 - Bus (`bus`): a 12 m land vehicle with a generated model (`scripts/make_bus_model.py`), one on the map and in the sandbox vehicle list. It is data
-  only: a driver seat and three passenger seats (the seat limit is four), the usual driving model with a wide turn circle (`turn_radius` 9.5), smoke
+  only: a driver seat and three passenger seats (the seat limit is five since protocol 66), the usual driving model with a wide turn circle (`turn_radius` 9.5), smoke
   from the rear where its engine is. It is boarded like a car, within 3 m of its centre, so along the middle of either side (the middle door is there),
   not at the front door. Its doors are separate model nodes that nothing moves yet.
 - Utility helicopter (ADR 0006): the flown vehicle (`utility_helicopter`, medium `air`), see "Utility helicopter" below.
@@ -668,6 +668,10 @@ The board goes to every client whole in event kind 185 (`IntelSync`, `IntelCodec
 The intel room is the floor of the military hangar: the first placed object of `data/intel.json` `base_asset` (`pack:synty-military/SM_Bld_Hangar_01`; `MapLoader.FirstObjectOfAsset`, lowest object id). `room` in that file lays the screen out in the object's own frame (`floor_m`, `at` [x, z], `facing`, `bottom_m`, `width_m`, `height_m`), and `IntelRoom.Place` (`ShooterCore/Intel`) turns it into a world anchor from the object's position, turn and scale in objects.json, never from the model, so it is the same for a player who has only the placeholder box. The screen is on the -z end wall, on the door panel x 0 to 4.56 (inner face z = -16.006), facing the +z end; the prefab's doors are solid, so `room.open_parts` (`SM_Bld_Hangar_Door_Small_01`, the small door of the +z end) is hidden and stops colliding (`IntelScreen.OpenEntrance`, `MapLoader.OpenObjectParts`, client and server). A map without such an object uses the command post of `base_bunker` (the wall the pipeline reserves, `bunkers.json` `intel`; `docs/pipeline.md`); with neither there is no intel room. The game draws the screen (`IntelScreen`, content in `IntelScreenView`) only within `view_range_m` of the camera. With several events the screen shows each for `rotate_seconds` in turn. `make shooter-intel-shots` renders the content with made-up events for review.
 
 ## 9. Wire protocol
+
+(Version 66 raised the seat limit to five: the seats record (entity type 7) carries the occupant of seat 4 in its position X, the seat switch request and state accept up to 5 seats, `VehicleSeat.MaxSeats`; ADR 0026.)
+
+(Version 65 is the harvester catch, #351, in the summary on `Wire.ProtocolVersion`.)
 
 (Version 64 added the Lock-on launcher's event kinds 246-248, ADR 0031.)
 
