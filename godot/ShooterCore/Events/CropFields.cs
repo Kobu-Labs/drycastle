@@ -33,11 +33,12 @@ public sealed class CropField
 public static class CropFields
 {
     /// <summary>The harvestable fields among <paramref name="patches"/> (id, ground type, ring), in the given order (client and server list them the same way: the index is the field's wire id).</summary>
-    public static List<CropField> From(IEnumerable<(string Id, string Type, IReadOnlyList<Vector2> Ring)> patches)
+    /// <param name="includeBare">Also the bare ploughed fields (<c>crop_bare</c>): they take vehicle tracks but are not harvested.</param>
+    public static List<CropField> From(IEnumerable<(string Id, string Type, IReadOnlyList<Vector2> Ring)> patches, bool includeBare = false)
     {
         var list = new List<CropField>();
         foreach (var (id, type, ring) in patches)
-            if (CropField.IsHarvestable(type) && ring.Count >= 3) list.Add(new CropField(id, type, ring));
+            if ((CropField.IsHarvestable(type) || includeBare && type == "crop_bare") && ring.Count >= 3) list.Add(new CropField(id, type, ring));
         return list;
     }
 

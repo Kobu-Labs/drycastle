@@ -24,6 +24,11 @@ public class HarvesterTests
             ("GP-0001", "paint_1f7d0c", ring), ("GP-0051", "crop_grain", ring), ("GP-0052", "crop_bare", ring), ("GP-0053", "crop_corn", ring), ("GP-0054", "crop_potato", new[] { Vector2.Zero, Vector2.One }),
         });
         Assert.Equal(new[] { "GP-0051", "GP-0053" }, fields.Select(f => f.Id));
+        // the bare field takes tracks but is not harvested
+        Assert.Equal(new[] { "GP-0051", "GP-0052", "GP-0053" }, CropFields.From(new (string, string, IReadOnlyList<Vector2>)[]
+        {
+            ("GP-0051", "crop_grain", ring), ("GP-0052", "crop_bare", ring), ("GP-0053", "crop_corn", ring),
+        }, includeBare: true).Select(f => f.Id));
         Assert.Equal(100f, fields[0].Area, 3);
         Assert.Equal(new Vector2(5, 5), fields[0].Centroid);
     }

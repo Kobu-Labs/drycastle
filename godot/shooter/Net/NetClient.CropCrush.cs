@@ -19,12 +19,12 @@ public partial class NetClient
     readonly List<Vector2> _crushCentres = new();
     readonly List<int> _crushFresh = new();
 
-    CropCrushMask? CrushMask => _crushMask ??= Map == null ? null : new CropCrushMask(CrushCfg, HarvFields);
+    CropCrushMask? CrushMask => _crushMask ??= Map == null ? null : new CropCrushMask(CrushCfg, CrushFields);
 
     /// <summary>Per frame, after <c>RenderCars</c>: every ground vehicle stamps from the pose it was drawn in. Nothing is allocated after a vehicle's first step.</summary>
     void StampCrush()
     {
-        if (CrushMask is not { } mask || Vehicles == null || HarvFields.Count == 0) return;
+        if (CrushMask is not { } mask || Vehicles == null || CrushFields.Count == 0) return;
         foreach (var v in _cars.Values)
         {
             if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count || !GodotObject.IsInstanceValid(v.Node)) continue;
