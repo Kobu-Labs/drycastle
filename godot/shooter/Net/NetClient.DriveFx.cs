@@ -161,7 +161,7 @@ public partial class NetClient
     /// <summary>The node riders stand on: the body of a driven vehicle (it leans over its wheels), else the vehicle itself.</summary>
     static Node3D SeatAnchor(CarView v) => v.Drive?.Hull is { } hull && GodotObject.IsInstanceValid(hull) ? hull : v.Node;
 
-    /// <summary>Who sits in seats 1..3 of each vehicle, from the seats records (<see cref="SeatsRecord"/>); the driver is the vehicle record's.</summary>
+    /// <summary>Who sits in seats 1..4 of each vehicle, from the seats records (<see cref="SeatsRecord"/>); the driver is the vehicle record's.</summary>
     readonly Dictionary<ushort, ushort[]> _seatOccupants = new();
     /// <summary>The vehicle and seat each seated player is in this frame, rebuilt by <see cref="SeatRiders"/>.</summary>
     readonly Dictionary<ushort, (CarView Car, int Seat)> _rideOf = new();

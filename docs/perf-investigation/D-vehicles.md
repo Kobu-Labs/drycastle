@@ -26,7 +26,7 @@ Vehicle counts from `vehicles.json` `spawn_count`: car 12, motorcycle 3, bicycle
 - **Collision exceptions are removed on leave.** T3-014 is fixed: `NetServer.cs:450` removes the car's exception with a dropped player's body, with the comment that the exception would outlive the freed body. Verified in code.
 - **Client beam selection has no per-frame LINQ.** T3-031 is fixed for the car path: `NetClient.Cars.cs` `PickBeams` reuses its buffers (`godot/shooter/Net/NetClient.Cars.cs:~131-140`, comment cites T3-031).
 - **Glass hit test is bounded.** A shot is tested against at most the panes of one vehicle (at most 24 by the ADR 0008 limit), by a few cross products each (ADR 0008, `GlassPaneRect.Contains`).
-- **Seat arrays are fixed size.** `VehicleSeat` holds `MaxSeats = 4` in an array (`godot/ShooterCore/Vehicles/VehicleRules.cs:104-110`); no allocation per seat.
+- **Seat arrays are fixed size.** `VehicleSeat` holds `MaxSeats = 5` in an array (`godot/ShooterCore/Vehicles/VehicleRules.cs:104-110`); no allocation per seat.
 - **Record id spaces are disjoint and cheap to map.** Vehicle 0x4000+index, drive 0x5000, flight 0x6000, turret aim 0x7000 (`godot/ShooterCore/Vehicles/FlightModel.cs:~367`, `DriveModel.cs:~371`); the id is an offset, no lookup.
 
 ---

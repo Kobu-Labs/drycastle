@@ -141,7 +141,7 @@ The amphibious transport's machine gun, on a ring mount over the rear compartmen
 _Avoid_: turret (alone), pintle gun, rear gun
 
 **Fixed seat**:
-Where a rider sits, in every vehicle: the seat's offset in the vehicle's frame (`vehicles.json` `seats`; a vehicle with none has one driver seat at its origin). Its rider is drawn on it, turning and tilting with the hull as it is drawn this frame, and never as a free figure beside the vehicle. The server tells every client who sits in each seat (the driver in the vehicle's record, seats 1..3 in its seats record), so a rider is placed by id.
+Where a rider sits, in every vehicle: the seat's offset in the vehicle's frame (`vehicles.json` `seats`; a vehicle with none has one driver seat at its origin). Its rider is drawn on it, turning and tilting with the hull as it is drawn this frame, and never as a free figure beside the vehicle. The server tells every client who sits in each seat (the driver in the vehicle's record, seats 1..4 in its seats record; a vehicle has at most five seats), so a rider is placed by id.
 _Avoid_: rider offset, seat anchor
 
 **Head look**:
