@@ -78,4 +78,29 @@ public class CropDataTests
         Assert.Equal(1f, CropSettings.Grow(mid, 0.9f, r, band));
         Assert.Equal(0f, CropSettings.Grow(mid, 0.1f, r, band));
     }
+
+    [Fact]
+    public void FarTuftsComeInWhereThePlantsGoOut()
+    {
+        const float r = CropSettings.PlantRangeM, band = CropSettings.PlantFadeM;
+        foreach (var t in new[] { 0f, 0.3f, 0.7f, 0.999f })
+        {
+            Assert.Equal(0f, CropSettings.FarGrow(r - band, t, r, band));     // no tuft among whole plants
+            Assert.Equal(1f, CropSettings.FarGrow(r, t, r, band));            // every tuft stands where the last plant is gone
+            Assert.Equal(1f, CropSettings.FarGrow(r + 200f, t, r, band));
+            // never both gone: something stands at every distance
+            for (var d = r - band; d <= r; d += 1f)
+                Assert.True(CropSettings.Grow(d, t, r, band) + CropSettings.FarGrow(d, t, r, band) > 0f);
+        }
+    }
+
+    [Fact]
+    public void AboutOnePlantInFarEveryIsATuft()
+    {
+        var n = 0;
+        for (var x = 0; x < 100; x++)
+            for (var y = 0; y < 100; y++)
+                if (CropSettings.IsFar(new ClutterInstance(700f + x * 0.8f, -300f + y * 0.8f, 0f, 0f, 1f))) n++;
+        Assert.InRange(n, 10000 / CropSettings.FarEvery * 0.85, 10000 / CropSettings.FarEvery * 1.15);
+    }
 }
