@@ -32,6 +32,45 @@ public partial class NetClient
         public readonly RagdollTumble Tumble = new();
         /// <summary>The feet, from the last render (the node sits at the body's turning point).</summary>
         public Vector3 Feet;
+        /// <summary>When the entity first came (client clock), and whether the collapse question is settled (<see cref="DecideCollapse"/>).</summary>
+        public double Born;
+        public bool Decided;
+    }
+
+    /// <summary>The latest death each player had (when, killer): a corpse that appears just after it is a fresh kill and collapses (#357).</summary>
+    readonly Dictionary<ushort, (double At, ushort Killer)> _deathSeen = new();
+    /// <summary>The last time each player was seen riding a vehicle: a rider's corpse stays seated or is thrown, it does not collapse.</summary>
+    readonly Dictionary<ushort, double> _lastRode = new();
+    /// <summary>A corpse younger than this waits for its death event; one older with none is an old corpse (a join), and lies in the death pose.</summary>
+    const double CollapseWaitSeconds = 0.25, CollapseWindowSeconds = 2.0;
+
+    void NoteDeath(DeathMsg d) => _deathSeen[d.Victim] = (Now, d.Killer);
+
+    /// <summary>
+    /// Settles whether a new corpse collapses. True once decided. A fresh kill (its death event within <see cref="CollapseWindowSeconds"/>) of a player on foot
+    /// topples away from the killer; a thrown body flies, a rider's stays seated, an old one lies. Hidden until decided (at most <see cref="CollapseWaitSeconds"/>).
+    /// </summary>
+    bool DecideCollapse(ushort id, CorpseView v, ushort owner, Vector3 at, float yaw, bool flying)
+    {
+        var fresh = _deathSeen.TryGetValue(owner, out var death) && Now - death.At < CollapseWindowSeconds;
+        if (!fresh && Now - v.Born < CollapseWaitSeconds) return false;
+        v.Decided = true;
+        v.Node.Visible = true;
+        var rode = _lastRode.TryGetValue(owner, out var when) && Now - when < 1.5;
+        if (!fresh || flying || rode) return true;
+        var away = new Basis(Vector3.Up, yaw) * Vector3.Back; // no killer to push it (a fall, a suicide): backwards
+        Vector3? from = death.Killer == owner ? null : death.Killer == _myId ? _me?.GlobalPosition : _remotes.TryGetValue(death.Killer, out var k) ? k.Node.GlobalPosition : null;
+        if (from is { } f) { var d = at - f; d.Y = 0; if (d.LengthSquared() > 0.04f) away = d.Normalized(); }
+        v.Tumble.BeginCollapse(away, 0.6f);
+        return true;
+    }
+
+    /// <summary>The up of the ground under a body (the slope it lies on): a short ray from above its feet. Up when there is none.</summary>
+    Vector3 GroundUpAt(Vector3 at)
+    {
+        var q = PhysicsRayQueryParameters3D.Create(at + Vector3.Up * 1f, at + Vector3.Down * 1.5f, CollisionRules.StaticMask(MoverKind.Drop));
+        var hit = Owned.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        return hit.Count > 0 ? hit["normal"].AsVector3() : Vector3.Up;
     }
 
     readonly Dictionary<ushort, CorpseView> _corpses = new();
@@ -75,7 +114,8 @@ public partial class NetClient
         view.Position = new Vector3(0, -RagdollTumble.Half, 0); // the node sits at the body's middle, so a thrown body spins about its centre
         node.AddChild(view);
         Owned.AddChild(node);
-        _corpses[e.Id] = new CorpseView { Node = node, View = view };
+        node.Visible = false; // until RenderCorpses knows whether this body collapses (DecideCollapse)
+        _corpses[e.Id] = new CorpseView { Node = node, View = view, Born = Now };
         DressCorpse(e.Id); // the item the corpse carries, when its event came first (#266)
     }
 
@@ -100,8 +140,10 @@ public partial class NetClient
             var view = v.View!;
             var flying = s.PitchRad > CorpseRules.FlightPitch * 0.5f; // a thrown body (blast, car): the server flies it, we turn it and flail its limbs
             var t = v.Tumble;
+            if (!v.Decided && !DecideCollapse(id, v, s.Owner, at, s.YawRad, flying)) continue;
             var wasThrown = t.Thrown;
             t.Update(at, flying, (float)GetProcessDeltaTime());
+            if (t.Collapsing && !t.AtRest) t.GroundUp = GroundUpAt(at);
             var weapon = WeaponId(s.State);
             if (t.Thrown)
             {
