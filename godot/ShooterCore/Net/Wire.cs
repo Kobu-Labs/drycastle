@@ -210,6 +210,18 @@ public enum EventKind : byte
     LockAlert = 247,
     /// <summary>Server to everyone: a homing missile left a Lock-on launcher, the Aircraft it homes on and its flight seconds; the Explosion with its id ends it.</summary>
     HomingLaunch = 248,
+    /// <summary>Client to server: a crew member's command to a Scud truck's launcher (<see cref="ScudCodec"/>: open or close the screen, the camera, lock a point, confirm, withdraw, abort). Kinds 80-85 belong to the Scud truck.</summary>
+    ScudCommand = 80,
+    /// <summary>Server to everyone, and to a joiner for each truck: one launcher's state, its clock, who is the operator, the locked point and who confirmed (<see cref="ScudStateMsg"/>). Sent when anything of that changes.</summary>
+    ScudState = 81,
+    /// <summary>Server to the crew of a truck: the operator's camera centre and zoom while their targeting screen is open (<see cref="ScudViewMsg"/>), the read-only feed.</summary>
+    ScudView = 82,
+    /// <summary>Server to everyone: a Scud missile left its rack (<see cref="ScudLaunchMsg"/>): its entity, where it left and where it lands, and its flight seconds. The siren and the tactical map's marker start from it.</summary>
+    ScudLaunch = 83,
+    /// <summary>Server to everyone: a Scud missile landed (<see cref="ScudImpactMsg"/>): the blast's look, sound, shake and scorch.</summary>
+    ScudImpact = 84,
+    /// <summary>Server to the crew of a truck: why a command did nothing or a proposal ended (<see cref="ScudNoticeCode"/>).</summary>
+    ScudNotice = 85,
 }
 
 public abstract record ReliableMsg;
@@ -322,7 +334,8 @@ public static class Wire
     //   v64 the Lock-on launcher (ADR 0031): events 246 LockState (the shooter's Lock), 247 LockAlert (to the Aircraft's owner) and 248 HomingLaunch (a homing missile, broadcast)
     //   v66 a fifth seat (the Humvee, ADR 0026): the seats record carries the occupant of seat 4 in its position X (seats 1..3 are unchanged); the seat switch request and state accept up to 5 seats
     //   v67 trailers (the rocket cart, towing): a trailer's vehicle record carries the id of the tractor it is hitched to in the pitch field (0: loose) in place of a driver's, and bit 6 of its health byte says it is loaded (VehicleRecord.MakeTrailer); a hitched trailer's articulation is its record's yaw less the tractor's
-    public const byte ProtocolVersion = 67;
+    //   v68 the Scud truck: events 80-85 (the launcher's command, state, the operator's camera, the launch, the impact and a notice), world entity 11 (the Scud missile), special weapon 237, vehicles.json "launcher"
+    public const byte ProtocolVersion = 68;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

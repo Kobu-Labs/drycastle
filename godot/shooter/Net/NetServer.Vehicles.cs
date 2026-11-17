@@ -559,7 +559,7 @@ public partial class NetServer
         var weapon = car.LastWeapon != 0 ? car.LastWeapon : SpecialWeapons.Vehicle;
         var carVelocity = CarVelocity(car); // before Destroy zeroes it: the riders' bodies fly on with it
         var loadedCart = car.Cargo?.Detonates(car.Def) ?? false; // before the destruction: a rocket cart that still carries its missile
-        car.Destroy(_elapsed + Vehicles!.DestroyedReturnTime);
+        car.Destroy(car.Def.Returns ? _elapsed + Vehicles.DestroyedReturnTime : double.MaxValue); // a type that never returns (the Scud truck) is gone for the match
         _vehicleBlasts++;
         if (loadedCart) OnRocketCartDetonated(car, N(car.GlobalPosition), attacker); // it does not blow up like a vehicle: the Scud's blast is the hook's
         else VehicleBlast(car, at, attacker, weapon, carVelocity);

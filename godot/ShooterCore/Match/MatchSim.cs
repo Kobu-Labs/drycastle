@@ -39,6 +39,8 @@ public static class SpecialWeapons
     public const byte Redeploy = 239;
     /// <summary>The harvester's reel (#331): a player drawn into it; the kill feed names it. A run-over by the harvester is a plain Vehicle kill.</summary>
     public const byte Harvester = 238;
+    /// <summary>The Scud missile's blast (GLOSSARY "Scud blast"): ordinary kills credited to the player who placed the lock; the kill feed names it.</summary>
+    public const byte Scud = 237;
 }
 
 public abstract record MatchEvent;

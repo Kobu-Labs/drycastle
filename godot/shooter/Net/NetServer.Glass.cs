@@ -128,15 +128,16 @@ public partial class NetServer
     }
 
     /// <summary>A blast at <paramref name="at"/> with <paramref name="radius"/>: every pane in it takes the blast damage of glass.json by its distance.</summary>
-    void BlastGlass(Vector3 at, float radius)
+    void BlastGlass(Vector3 at, float radius, float? centreDamage = null)
     {
-        if (radius <= 0 || GlassData.BlastDamage <= 0) return;
+        var blastDamage = centreDamage ?? GlassData.BlastDamage; // the Scud blast passes a damage far above any pane's hit points, so every pane in its radius shatters
+        if (radius <= 0 || blastDamage <= 0) return;
         var c = N(at);
         var panes = MapPanes;
         for (var i = 0; i < panes.Count; i++)
         {
             if (!panes[i].Breakable) continue;
-            var dmg = GlassRules.BlastDamage(NVec3.Distance(c, panes[i].Rect.Centre), radius, GlassData.BlastDamage);
+            var dmg = GlassRules.BlastDamage(NVec3.Distance(c, panes[i].Rect.Centre), radius, blastDamage);
             if (dmg > 0 && _glass.Damage(new GlassPaneKey(GlassPaneKey.Map, (ushort)i), dmg, panes[i].Hp ?? GlassData.BuildingPaneHp)) _glassHits++;
         }
         foreach (var car in _cars)
@@ -150,7 +151,7 @@ public partial class NetServer
             var (tiltPitch, tiltRoll) = car.Def.TiltOf(attPitch, attRoll);
             for (var i = 0; i < rects.Count; i++)
             {
-                var dmg = GlassRules.BlastDamage(NVec3.Distance(c, GlassRules.FromVehicle(rects[i].Centre, feet, car.State.Yaw, tiltPitch, tiltRoll)), radius, GlassData.BlastDamage);
+                var dmg = GlassRules.BlastDamage(NVec3.Distance(c, GlassRules.FromVehicle(rects[i].Centre, feet, car.State.Yaw, tiltPitch, tiltRoll)), radius, blastDamage);
                 if (dmg > 0 && _glass.Damage(new GlassPaneKey(car.Id, (ushort)i), dmg, VehiclePaneHp(car.Def, i))) _glassHits++;
             }
         }

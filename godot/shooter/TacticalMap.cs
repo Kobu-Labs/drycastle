@@ -584,6 +584,7 @@ public sealed partial class TacticalMap : Control
                 var still = GameSettings.Current.ReduceMotion;
                 foreach (var bl in _blipScratch) MapGlyphs.Blip(this, At(bl.Position, b), bl, still, 1.3f);
             }
+            foreach (var strike in m.Strikes.Live(Time.GetTicksMsec() / 1000.0)) MapGlyphs.Strike(this, At(strike.At, b), strike.RadiusM * _o._k);
             if (m.Waypoint.At is { } wp) MapGlyphs.Waypoint(this, At(wp, b), 1.3f);
             var me = At(new System.Numerics.Vector2(m.Player.X, m.Player.Y), b);
             MapGlyphs.Player(this, me, TacticalMapMath.HeadingRadians(m.Yaw));
@@ -697,6 +698,23 @@ static class MapGlyphs
         var ink = ShooterTheme.Enemy; ink.A = a;
         c.DrawPolyline(pts, shell, 4f * scale, true);
         c.DrawPolyline(pts, ink, 2f * scale, true);
+    }
+
+    /// <summary>
+    /// A Scud strike: a ring the size of the lethal radius (at least a small one so it reads) with a cross through it, in the danger colour over a dark ring (never colour only: the ring and the cross are the
+    /// shape no other marker has). <paramref name="radiusPx"/> is the lethal radius at the map's scale.
+    /// </summary>
+    public static void Strike(CanvasItem c, Vector2 p, float radiusPx)
+    {
+        var r = Mathf.Max(radiusPx, 12f);
+        c.DrawArc(p, r, 0f, Mathf.Tau, 48, ShooterTheme.Outline, 6f, true);
+        c.DrawArc(p, r, 0f, Mathf.Tau, 48, ShooterTheme.Danger, 3f, true);
+        var x = r * 0.6f;
+        foreach (var d in new[] { new Vector2(1, 1), new Vector2(1, -1) })
+        {
+            c.DrawLine(p - d * x, p + d * x, ShooterTheme.Outline, 5f);
+            c.DrawLine(p - d * x, p + d * x, ShooterTheme.Danger, 2.5f);
+        }
     }
 
     /// <summary>The waypoint: a downward triangle whose tip is the point, in the waypoint green (a shape no other marker has; never colour only).</summary>

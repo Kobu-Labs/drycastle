@@ -22,6 +22,9 @@ public static class CarFx
     public static Func<string, Node3D?>? PackLoader;
     static readonly HashSet<string> PackWarned = new();
 
+    /// <summary>A model of the private pack by its id ("pack:..."), the cached template (duplicate it before use), or null without the pack. For the models that are not a vehicle's body (the Scud missile).</summary>
+    public static Node3D? PackTemplate(string model) => LoadPack(model);
+
     static Node3D? LoadPack(string model)
     {
         if (Templates.TryGetValue(model, out var t) && t != null) return t;
@@ -72,7 +75,7 @@ public static class CarFx
                 }
                 else PaintVariant(m, def, colour);
             }
-            else visual.AddChild(Box(def, new Color(0.6f, 0.6f, 0.6f)));
+            else visual.AddChild(def.Launcher != null ? ScudFx.GreyTruck(def) : Box(def, new Color(0.6f, 0.6f, 0.6f))); // a launcher truck's grey box has its rack and rocket under the model's node names
             return root;
         }
         if (def.Tint is { } tint0)

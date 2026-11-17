@@ -26,6 +26,10 @@ public sealed partial class CockpitRig : Node3D
         // the harvester (#331): the combine's cab, after SM_Veh_Harvester_01 (model +Z is forward, the model faces yaw 180, so its steering wheel at x 0.79, y 2.70, z 1.21 is x -0.79, z -1.21 here; no hull: the rig hangs under the root).
         // The eye sits 1 m over the seat (y 2.0, vehicles.json seats) just behind the wheel, inside the cab; the model's own wheel and glass are not drawn for the driver, the reel is in front below the sill.
         ["harvester"] = new Spec(new Vector3(-0.79f, 3.0f, -0.55f), new[] { "SM_Veh_Harvester_SteeringW", "SM_Veh_Harvester_Glass" }, BuildHarvester),
+        // the Scud truck: PLACEHOLDER eye and cab, from the placeholder size of vehicles.json (13 x 3 x 3.3 m, the driver's seat at x -0.6, y 1.55, z -4.9). The cab is a box 2.8 m long behind the
+        // grey-box hood (z -5.9 .. -3.1). Replace the eye, the cab numbers and the hidden node from the model facts file docs/research/scud-models-facts.md when it lands (and set them beside the
+        // model script's numbers, docs/standards/car-design.md section 5).
+        ["scud"] = new Spec(new Vector3(-0.60f, 2.65f, -4.60f), new[] { "cab" }, BuildScud),
         ["utility_helicopter"] = new Spec(new Vector3(0.55f, 1.78f, -1.80f), new[] { "fuselage" }, BuildHelicopter),
     };
 
@@ -272,6 +276,26 @@ public sealed partial class CockpitRig : Node3D
         // back wall with the rear window (the turret shows through it)
         r.Add(Box(OliveLight, -xs, xs, 0.95f, sill + 0.09f, zb, zb + 0.03f), Box(OliveLight, -xt, xt, top - 0.12f, top, zbt, zbt + 0.03f));
         r.Both(s => Box(OliveLight, s * 0.47f, s * 1.10f, sill, top, -0.88f, -0.85f));
+    }
+
+    // ------------------------------------------------------------------ the Scud truck
+    // PLACEHOLDER numbers (see the Spec above): the cab's floor 1.6, sill 2.35, roof 3.15; the dash at z -5.55; the A-pillars from the sill at z -5.55 to the roof at z -5.3; the back wall at z -3.1.
+
+    static void BuildScud(CockpitRig r)
+    {
+        const float floor = 1.60f, sill = 2.35f, top = 3.15f, xs = 1.45f, zf = -5.55f, zft = -5.30f, zb = -3.10f;
+        r.Add(Box(OliveDark, -xs, xs, floor - 0.05f, floor, -5.85f, zb));
+        r.Add(Box(OliveDark, -xs, xs, 1.95f, sill, -5.85f, zf), Box(Black, -0.95f, -0.25f, 2.02f, 2.28f, zf, zf + 0.01f));
+        r.Add(Gauge(-0.80f, 2.15f, zf + 0.012f, 0.085f), Gauge(-0.55f, 2.15f, zf + 0.012f, 0.085f));
+        r.SteeringWheel(new Vector3(-0.60f, 2.20f, -5.15f), 0.24f, 35f, new Vector3(-0.60f, 2.05f, -4.75f), 0.30f);
+        r.Both(s => Bar(Olive, new Vector3(s * xs, sill, zf), new Vector3(s * (xs - 0.1f), top, zft), 0.10f));
+        r.Add(Bar(Olive, new Vector3(0, sill, zf), new Vector3(0, top, zft), 0.08f), Bar(Olive, new Vector3(-xs + 0.1f, top, zft), new Vector3(xs - 0.1f, top, zft), 0.10f));
+        r.Add(Box(OliveLight, -xs + 0.1f, xs - 0.1f, top, top + 0.06f, zft, zb));
+        r.Both(s => Box(OliveLight, s * xs, s * (xs + 0.03f), floor, sill, -5.85f, zb));
+        r.Both(s => Bar(Olive, new Vector3(s * xs, sill, zb), new Vector3(s * (xs - 0.1f), top, zb), 0.10f));
+        r.Both(s => Pane(new Vector3(0, sill, zf), new Vector3(s * xs, sill, zf), new Vector3(s * (xs - 0.1f), top, zft), new Vector3(0, top, zft)));
+        r.Both(s => Pane(new Vector3(s * xs, sill, zf), new Vector3(s * xs, sill, zb), new Vector3(s * (xs - 0.1f), top, zb), new Vector3(s * (xs - 0.1f), top, zft)));
+        r.Add(Box(OliveLight, -xs, xs, floor, top, zb, zb + 0.03f)); // the back wall: the rack and the load are not seen from the cab
     }
 
     // ------------------------------------------------------------------ the utility helicopter

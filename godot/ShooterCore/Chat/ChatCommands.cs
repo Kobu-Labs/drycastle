@@ -99,6 +99,8 @@ public static class ChatCommands
         new("status", "Give a player (name or #id), or yourself, the divine blessing or the devil's curse, or clear their statuses", new[] { new ChatArg("status", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
         new("explode", "TEST: a blast of that radius (metres) on the ground that many metres in front of you. The look, the sound and the dust only: it hurts nobody. The speed is how fast its blast wave leaves, metres a second (a blast of 9 m and larger has one)",
             new[] { new ChatArg("size", ChatArgKind.Int, true, 1, MaxExplodeSize), new ChatArg("distance", ChatArgKind.Int, true, 0, MaxExplodeDistance), new ChatArg("speed", ChatArgKind.Int, false, MinExplodeSpeed, MaxExplodeSpeed) }),
+        new("scud", "TEST: the Scud truck. spawn: a truck stands in front of you; reload: the truck you ride or the nearest within 40 m is loaded at once; blast: a Scud blast 200 m ahead of you (kills, destroys, shatters glass); state: its launcher's state",
+            new[] { new ChatArg("action", ChatArgKind.Choice) }),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
     };
 
@@ -137,6 +139,7 @@ public static class ChatCommands
                 ("end", "conclude the running event as if it was completed (with current)"),
                 ("cancel", "remove the running event with no reward (with current; the Holy Mass cannot be cancelled)"),
             },
+            ChatArgKind.Choice when cmd.Name == "scud" => new[] { ("spawn", "a Scud truck stands in front of you"), ("reload", "the truck you ride (or the nearest within 40 m) is loaded at once, when its rack is down"), ("blast", "TEST: a Scud blast 200 m ahead of you, credited to you"), ("state", "say the launcher's state of the truck") },
             ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },
             ChatArgKind.Choice when cmd.Name == "rozhlas" => new[] { ("hijack", "the announcement cuts and the mic stays live for 3 minutes (only while a detour broadcast is on air)"), ("take", "TEST: hold the set yourself (stands in for holding E at the dictation table; only while hijacked)"), ("release", "TEST: let the set holder go"), ("goto", "TEST: stand at the dictation table (where E takes the set during a hijack)"), ("feedtest", "TEST: push a few seconds of test voice and a shot through the live feed (ffmpeg voice chain, 2 s delay) to every megaphone"), ("combattest", "TEST: push a shot, a blast and a death sound through the live feed, wherever you stand") },
             ChatArgKind.IntOrChoice when cmd.Name == "citizens" => new[] { ("clear", "remove every citizen") },

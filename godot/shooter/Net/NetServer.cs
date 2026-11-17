@@ -217,6 +217,7 @@ public partial class NetServer : Node
         InitWildlife();
         InitThieves();
         InitHarvester();
+        InitScud();
         InitEvents(); // after the kinds above: the handler table names their start, end and cancel
         InitAircraft();
         BuildCarePackages();
@@ -297,6 +298,7 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Rockets);
         StepCorpses((float)delta);
         PerfLap(ServerPerf.Ph.Corpses);
+        StepScud((float)delta); // the Scud trucks' launchers: the crew's lock, the rack, the brakes (before the vehicles step)
         StepVehicles((float)delta);
         StepRidingCorpses((float)delta); // the dead pilots and drivers move with the vehicles that just moved
         HarvesterAfterVehicles((float)delta); // what the harvester ran over, the corpses it draws in, the bales' fire
@@ -470,6 +472,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) OnSandboxTeleportTo(c, st.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SeatSwitch } sw && c.Joined) OnSeatSwitch(c, sw.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.ScudCommand } sc && c.Joined) OnScudCommand(c, sc.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.TeamAssign } ta && c.Joined) OnTeamAssign(c, ta.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) OnHuntRequest(c, hq);
             else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) OnChatSend(c, cs.Payload);
@@ -555,6 +558,7 @@ public partial class NetServer : Node
         SendUradDoorOnJoin(c); // and the Urad door, when it is open
         SendGarageDoorOnJoin(c); // and the garage doors, when they are open
         SendHarvesterOnJoin(c); // the harvester's job and the bales that burn
+        SendScudOnJoin(c); // the Scud trucks' racks and proposals
         SendPounceOnJoin(c); // and the demon's pounce, when one is on
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
@@ -680,6 +684,7 @@ public partial class NetServer : Node
         WorkersAfterRoundReset(); // the Urad workers of a detour still open sit down again
         ResetCars();
         HarvesterRoundReset(); // the car reset brought the harvester back to its old field: hidden again
+        ScudRoundReset(); // the launchers start over; a Scud truck, which never returns, is retired
         StatusRoundStart();
         LockRoundReset();
         RoundStarted();

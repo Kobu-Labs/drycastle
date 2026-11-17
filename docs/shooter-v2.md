@@ -297,6 +297,7 @@ one match and level 20 after about six good matches. No telemetry exists yet.
   only: a driver seat and three passenger seats (the seat limit is five since protocol 66), the usual driving model with a wide turn circle (`turn_radius` 9.5), smoke
   from the rear where its engine is. It is boarded like a car, within 3 m of its centre, so along the middle of either side (the middle door is there),
   not at the front door. Its doors are separate model nodes that nothing moves yet.
+- Scud truck (`scud`, `scud.json`, GLOSSARY "Scud truck"): a 13 m launcher with a driver and an operator seat, spawned by the Scud event or `/scud spawn`, never dealt, never returning once destroyed (`returns: false`). `NetServer.Scud.cs` is the server (launcher machine per truck, brakes while the rack moves, the missile entity, `ScudBlast`), `NetClient.Scud.cs` + `ScudOverlay.cs` the client (rack animation by node name, the targeting screen, the feed, the warning, the blast). Hooks for the rocket cart: `SpawnScudTruck(position, yaw)`, `TryReloadScud(truck)`, `ReloadScudNow(truck)` and `ScudBlast(position, attackerId)`. Model ids `pack:synty-simple-military/scud_truck` (nodes hull, rack, missile, wheels, cab glass) and `.../scud_missile` (nose along -Z); grey boxes without the pack. Placeholder size and numbers until `docs/research/scud-models-facts.md` lands.
 - Utility helicopter (ADR 0006): the flown vehicle (`utility_helicopter`, medium `air`), see "Utility helicopter" below.
 - Amphibious transport (ADR 0010, 0011, 0012): an open three-seat vehicle with its own driving model on land and water, an armed seat and a
   ring gun, and riders the hull does not cover (`amphibious`, medium `amphibious`), see "Amphibious transport" below.
@@ -711,6 +712,7 @@ The intel room is the floor of the military hangar: the first placed object of `
 ## 9. Wire protocol
 
 (Version 67 is towing, section 7 "Towing and the rocket cart": a trailer's vehicle record carries the id of the tractor it is hitched to in the pitch field (0 loose, the field a driver's id is in for every other vehicle) and bit 6 of the health byte says it is loaded (`VehicleRecord.MakeTrailer`, `Tractor`, `Loaded`). Nothing else is new: a hitched trailer's articulation is the difference of its yaw and the tractor's yaw in the same snapshot, so the pose is the same bytes as any vehicle's.)
+(Version 68 is the Scud truck (the concurrent towing work takes 67): event kinds 80-85 (`ScudCommand` client to server; `ScudState`, `ScudView`, `ScudLaunch`, `ScudImpact` and `ScudNotice` to the clients, payloads in `ScudCodec`), world entity type 11 (the Scud missile, not an Interest type), special weapon 237, vehicles.json `launcher` and `returns`, scud.json.)
 
 (Version 66 raised the seat limit to five: the seats record (entity type 7) carries the occupant of seat 4 in its position X, the seat switch request and state accept up to 5 seats, `VehicleSeat.MaxSeats`; ADR 0026.)
 
@@ -783,6 +785,12 @@ Event kinds (`EventKind`, one byte in the event message):
 | | | 246 | LockState (server to the shooter: u8 `LockPhase`, u16 Aircraft entity, u8 tracking, f32 progress, f32 lock seconds; 12 bytes; kinds 246-248 are the Lock-on launcher, #347, ADR 0031, protocol 64) |
 | | | 247 | LockAlert (server to the Aircraft's owner: u8 `LockAlert` level, u16 Aircraft entity; 3 bytes) |
 | | | 248 | HomingLaunch (server to everyone: u16 id, u16 owner, u8 weapon, f32 x, y, z origin, u16 Aircraft entity, f32 flight seconds; 23 bytes; the Explosion with the same id ends it) |
+| | | 80 | ScudCommand (client to server: u8 cmd (Open, Close, View, Lock, Confirm, Withdraw, Abort), f32 x, f32 z, f32 zoom; 13 bytes; kinds 80-85 are the Scud truck, protocol 68) |
+| | | 81 | ScudState (server to everyone on a change, and to a joiner for each launcher that is not stowed: u16 car, u8 `ScudLauncherState`, f32 elapsed, f32 left (-1 none), u8 rack angle at the state's start, u16 operator, u8 has lock, 3 x f32 lock, u8 confirmed seats, u8 seats that must; 29 bytes) |
+| | | 82 | ScudView (server to the rest of the crew while the operator's screen is open: u16 car, f32 x, f32 z, f32 zoom, at most 5 a second; 14 bytes) |
+| | | 83 | ScudLaunch (server to everyone: u16 missile entity, u16 car, u16 placer, 3 x f32 from, 3 x f32 target, f32 flight seconds; 34 bytes) |
+| | | 84 | ScudImpact (server to everyone: u16 missile entity, u16 placer, 3 x f32 at; 16 bytes) |
+| | | 85 | ScudNotice (server to the crew: u8 `ScudNoticeCode`, why a command did nothing or a proposal ended) |
 
 Message tags (`Wire.T*`): Hello 1, Welcome 2, Join 3, Leave 4, Event 5, Profile 6, SaveLoadout 7, SelectSlot 8, Error 9,
 SaveCamo 10, Input 11, Snapshot 20, WorldSnapshot 21. SaveLoadout is slot, six item strings, name (string), seq (u32 LE).
