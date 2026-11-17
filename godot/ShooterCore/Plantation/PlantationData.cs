@@ -121,9 +121,9 @@ public sealed class CigaretteData
     /// <summary>Length of the model from its origin to the tip, metres: where the ember, the light and the smoke are.</summary>
     public double LengthM { get; set; } = 0.186;
     public string EmberColour { get; set; } = "#ff6a1a";
-    public double EmberRadiusM { get; set; } = 0.011;
+    public double EmberRadiusM { get; set; } = 0.009;
     /// <summary>Emission energy of the ember: above the bloom threshold of 2 on purpose (ADR 0030).</summary>
-    public double EmberEnergy { get; set; } = 6;
+    public double EmberEnergy { get; set; } = 9;
     public CigaretteLightData Light { get; set; } = new();
     public CigaretteSmokeData Smoke { get; set; } = new();
     public CigaretteFirstPersonData FirstPerson { get; set; } = new();
