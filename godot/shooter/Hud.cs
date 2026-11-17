@@ -958,7 +958,9 @@ public partial class Hud : CanvasLayer
             var mine = r.Id == MyId;
             col.Row[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
             var c = col.Cells[i];
-            Set(c[0], mine ? Strings.F("score.you", r.Name) : r.Name); // the team is the table's heading
+            var who = mine ? Strings.F("score.you", r.Name) : r.Name; // the team is the table's heading
+            if (r.Squad != 0 && _team?.SquadNameOf(r.Squad) is { Length: > 0 } squad) who = Strings.F("squad.tag", who, squad); // the squad's members sit together, the name says which
+            Set(c[0], who);
             Tint(c[0], RelationColor(r.Team));
             Set(c[1], r.Kills.ToString()); Set(c[2], r.Deaths.ToString()); Set(c[3], Strings.F("score.ping", r.Ping));
             col.Row[i].Visible = true;
