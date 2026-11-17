@@ -20,6 +20,11 @@ public static class CorpseRules
     public const float ThrowScale = 3f, ThrowLift = 0.4f, MaxThrowSpeed = 30f, Gravity = 20f, BodyRadius = 0.4f, MaxFlightSeconds = 6f;
     /// <summary>Pitch value (rad) a flying corpse carries in its replicated state; a corpse at rest carries 0.</summary>
     public const float FlightPitch = 1f;
+    /// <summary>
+    /// A body that rolls on landing (a harvester's bale, #351): the pitch it carries while it rolls, the deceleration (m/s2), the share of its horizontal speed it keeps on landing, the speed (m/s) under which it stops,
+    /// the longest roll (s), and how far the ground may drop under it before it flies on.
+    /// </summary>
+    public const float RollPitch = 0.25f, RollFriction = 3.5f, RollLandingKeep = 0.7f, RollStopSpeed = 0.4f, RollMaxSeconds = 6f, RollStepDown = 0.6f;
     /// <summary>A pilot's or driver's corpse stays seated until its vehicle has been at rest (no faster than <see cref="RestSpeed"/>, a helicopter also on the ground) for <see cref="SeatedRestSeconds"/>, then it drops (ADR 0026).</summary>
     public const float RestSpeed = 0.5f, SeatedRestSeconds = 1f;
 
@@ -133,6 +138,8 @@ public sealed class Corpse : IWorldEntity
     public Vector3 Velocity => _body.Velocity;
     /// <summary>True while the body is thrown and has not landed. Replicated in the pitch field (<see cref="CorpseRules.FlightPitch"/>) so the client tumbles it.</summary>
     public bool Airborne => _body.Airborne;
+    /// <summary>True while the body rolls along the ground after a landing (see <see cref="Launch"/>, <c>rolls</c>): it slows by <see cref="CorpseRules.RollFriction"/> and stops. Replicated in the pitch field (<see cref="CorpseRules.RollPitch"/>).</summary>
+    public bool Rolling => _body.Rolling;
     /// <summary>True while the body still sits in its vehicle's pilot or driver seat (ADR 0026): its position follows the vehicle.</summary>
     public bool Seated => _body.Seated;
     /// <summary>True while the body floats on water (ADR 0026): at the surface height, not stepped; the client bobs it cosmetically.</summary>
@@ -154,10 +161,10 @@ public sealed class Corpse : IWorldEntity
 
     public void OnDamage(float amount, ushort attacker) { }
 
-    public WorldState Serialize() => WorldState.Make(Position, _yaw, Airborne ? CorpseRules.FlightPitch : 0, Owner, (byte)Weapon, Rounds);
+    public WorldState Serialize() => WorldState.Make(Position, _yaw, Airborne ? CorpseRules.FlightPitch : Rolling ? CorpseRules.RollPitch : 0, Owner, (byte)Weapon, Rounds);
 
-    /// <summary>Throws the body with <paramref name="velocity"/> (m/s). A zero push leaves it lying where it fell.</summary>
-    public void Launch(Vector3 velocity) => _body.Launch(velocity);
+    /// <summary>Throws the body with <paramref name="velocity"/> (m/s). A zero push leaves it lying where it fell. <paramref name="rolls"/>: it rolls on after landing (a bale) instead of stopping dead.</summary>
+    public void Launch(Vector3 velocity, bool rolls = false) => _body.Launch(velocity, rolls);
 
     /// <summary>One step of the flight, see <see cref="ThrownBody.Fly"/>.</summary>
     public void Fly(float dt, Func<Vector3, Vector3, float, float?> cast, Func<Vector3, float?>? waterSurface = null) => _body.Fly(dt, cast, waterSurface);
@@ -412,8 +419,8 @@ public static class CorpseCodec
     }
 }
 
-/// <summary>Where a <see cref="ThrownBody"/> is: at rest, in flight, seated in a vehicle (a dead pilot or driver, ADR 0026) or floating on water.</summary>
-public enum BodyFlightState : byte { Grounded, Airborne, Seated, Floating }
+/// <summary>Where a <see cref="ThrownBody"/> is: at rest, in flight, seated in a vehicle (a dead pilot or driver, ADR 0026), floating on water or rolling along the ground (a harvester's bale, #351).</summary>
+public enum BodyFlightState : byte { Grounded, Airborne, Seated, Floating, Rolling }
 
 /// <summary>
 /// A body in flight (the ragdoll): thrown with a velocity, falls under gravity, stops against walls and lands. Used by corpses and by
@@ -422,7 +429,7 @@ public enum BodyFlightState : byte { Grounded, Airborne, Seated, Floating }
 public sealed class ThrownBody
 {
     public static readonly StateMachineSpec<BodyFlightState> Spec = StateMachineSpec<BodyFlightState>
-        .Define("Corpse.Flight", "A thrown body (corpse or target dummy): at rest on the ground, airborne after a launch or a drop until it lands, seated in a vehicle (a dead pilot or driver), or floating on water.", BodyFlightState.Grounded)
+        .Define("Corpse.Flight", "A thrown body (corpse or target dummy): at rest on the ground, airborne after a launch or a drop until it lands, seated in a vehicle (a dead pilot or driver), floating on water, or rolling along the ground (a bale).", BodyFlightState.Grounded)
         .Allow(BodyFlightState.Grounded, BodyFlightState.Airborne)
         .Allow(BodyFlightState.Grounded, BodyFlightState.Seated)
         .Allow(BodyFlightState.Airborne, BodyFlightState.Grounded)
@@ -431,10 +438,15 @@ public sealed class ThrownBody
         .Allow(BodyFlightState.Seated, BodyFlightState.Grounded)
         .Allow(BodyFlightState.Floating, BodyFlightState.Airborne)
         .Allow(BodyFlightState.Floating, BodyFlightState.Grounded)
+        .Allow(BodyFlightState.Airborne, BodyFlightState.Rolling)
+        .Allow(BodyFlightState.Rolling, BodyFlightState.Grounded)
+        .Allow(BodyFlightState.Rolling, BodyFlightState.Airborne)
+        .Allow(BodyFlightState.Rolling, BodyFlightState.Floating)
         .Note(BodyFlightState.Grounded, "At rest. A launch (a push that is not zero) or a drop throws it; a dummy standing up again (Reset) comes back here.")
         .Note(BodyFlightState.Airborne, "Flying: the time in flight counts up and the flight ends after CorpseRules.MaxFlightSeconds whatever happens (it then snaps to the ground under it). Lands Grounded, or Floating when it lands in water. A new launch while airborne restarts the count.")
         .Note(BodyFlightState.Seated, "A dead pilot or driver still in the seat: the server moves it with the vehicle (Follow), it is not flown. Leaves by a drop or a throw (the vehicle at rest for CorpseRules.SeatedRestSeconds, or destroyed) or when a player boards its seat, which flings it out sideways.")
         .Note(BodyFlightState.Floating, "Lies at the water surface height where it landed, not flown. The client bobs and drifts it on the waves (cosmetic, nothing on the wire); it stays lootable until its lifetime ends.")
+        .Note(BodyFlightState.Rolling, "Only a body launched with rolls (a harvester's bale): it landed with speed and keeps going along the ground, slowing by CorpseRules.RollFriction, the ground followed under it. Stops (Grounded) when slow enough, against a wall or after CorpseRules.RollMaxSeconds; flies on (Airborne) when the ground drops away; Floating in water.")
         .Build();
 
     readonly StateMachine<BodyFlightState> _fsm = new(Spec);
@@ -446,13 +458,20 @@ public sealed class ThrownBody
     public bool Airborne => _fsm.Is(BodyFlightState.Airborne);
     public bool Seated => _fsm.Is(BodyFlightState.Seated);
     public bool Floating => _fsm.Is(BodyFlightState.Floating);
+    public bool Rolling => _fsm.Is(BodyFlightState.Rolling);
+    /// <summary>The body rolls on after landing instead of stopping dead (set by <see cref="Launch"/>).</summary>
+    public bool Rolls { get; private set; }
 
-    /// <summary>Throws the body with <paramref name="velocity"/> (m/s), capped at <see cref="CorpseRules.MaxThrowSpeed"/>. A zero push does nothing (<see cref="Drop"/> makes it fall).</summary>
-    public void Launch(Vector3 velocity)
+    /// <summary>
+    /// Throws the body with <paramref name="velocity"/> (m/s), capped at <see cref="CorpseRules.MaxThrowSpeed"/>. A zero push does nothing (<see cref="Drop"/> makes it fall).
+    /// <paramref name="rolls"/>: on landing it keeps part of its horizontal speed and rolls with friction until it stops (<see cref="BodyFlightState.Rolling"/>).
+    /// </summary>
+    public void Launch(Vector3 velocity, bool rolls = false)
     {
         var v = velocity.Length() > CorpseRules.MaxThrowSpeed ? Vector3.Normalize(velocity) * CorpseRules.MaxThrowSpeed : velocity;
         if (v.LengthSquared() < 1e-4f) return;
         Velocity = v;
+        Rolls = rolls;
         TakeOff();
     }
 
@@ -488,6 +507,7 @@ public sealed class ThrownBody
     {
         Position = position;
         Velocity = Vector3.Zero;
+        Rolls = false;
         _fsm.Enter(BodyFlightState.Grounded);
     }
 
@@ -500,6 +520,7 @@ public sealed class ThrownBody
     /// </summary>
     public void Fly(float dt, Func<Vector3, Vector3, float, float?> cast, Func<Vector3, float?>? waterSurface = null)
     {
+        if (Rolling) { Roll(dt, cast, waterSurface); return; }
         if (!Airborne) return;
         _fsm.Tick(dt); // Elapsed is the flight time: the same float running sum as before
         var v = Velocity;
@@ -519,9 +540,9 @@ public sealed class ThrownBody
         var dy = v.Y * dt;
         if (dy < 0)
         {
-            if (waterSurface?.Invoke(p) is { } w && p.Y + dy <= w) { Settle(new Vector3(p.X, p.Y + dy, p.Z), w); return; } // reached the surface
+            if (waterSurface?.Invoke(p) is { } w && p.Y + dy <= w) { Settle(new Vector3(p.X, p.Y + dy, p.Z), w, v); return; } // reached the surface
             var hit = cast(p + Vector3.UnitY * 0.3f, -Vector3.UnitY, 0.3f - dy);
-            if (hit is { } d) { p.Y += 0.3f - d; Settle(p, waterSurface?.Invoke(p)); return; }
+            if (hit is { } d) { p.Y += 0.3f - d; Settle(p, waterSurface?.Invoke(p), v); return; }
             p.Y += dy;
         }
         else
@@ -534,15 +555,18 @@ public sealed class ThrownBody
         if (_fsm.Elapsed >= CorpseRules.MaxFlightSeconds)
         {
             if (cast(p + Vector3.UnitY * 0.3f, -Vector3.UnitY, GroundSearchMetres) is { } g) p.Y += 0.3f - g; // out of time with ground below: down on it, not frozen in mid-air
-            Settle(p, waterSurface?.Invoke(p));
+            Settle(p, waterSurface?.Invoke(p), Vector3.Zero);
         }
     }
 
     /// <summary>How far under a body that ran out of flight time the ground is looked for.</summary>
     const float GroundSearchMetres = 500f;
 
-    /// <summary>Comes to rest at <paramref name="at"/>: on the ground, or floating at <paramref name="surface"/> when that is at or above it.</summary>
-    void Settle(Vector3 at, float? surface)
+    /// <summary>
+    /// Comes to rest at <paramref name="at"/>: on the ground, or floating at <paramref name="surface"/> when that is at or above it. A body that <see cref="Rolls"/> and lands with enough
+    /// horizontal speed (<paramref name="velocity"/>) starts rolling instead.
+    /// </summary>
+    void Settle(Vector3 at, float? surface, Vector3 velocity)
     {
         Velocity = Vector3.Zero;
         if (surface is { } s && at.Y <= s)
@@ -551,6 +575,49 @@ public sealed class ThrownBody
             _fsm.Enter(BodyFlightState.Floating);
             return;
         }
+        Position = at;
+        var keep = new Vector3(velocity.X, 0, velocity.Z) * CorpseRules.RollLandingKeep;
+        if (Rolls && keep.Length() >= CorpseRules.RollStopSpeed)
+        {
+            Velocity = keep;
+            _fsm.Enter(BodyFlightState.Rolling);
+            return;
+        }
+        _fsm.Enter(BodyFlightState.Grounded);
+    }
+
+    /// <summary>
+    /// One step of a roll: friction slows the horizontal speed, the body moves along its heading (stops dead against a wall) and follows the ground under it (up to
+    /// <see cref="CorpseRules.RollStepDown"/> down; further and it flies on). It stops when slow enough or after <see cref="CorpseRules.RollMaxSeconds"/>; in water it floats.
+    /// </summary>
+    void Roll(float dt, Func<Vector3, Vector3, float, float?> cast, Func<Vector3, float?>? waterSurface)
+    {
+        _fsm.Tick(dt);
+        var p = Position;
+        var h = new Vector3(Velocity.X, 0, Velocity.Z);
+        var old = h.Length();
+        var speed = MathF.Max(0, old - CorpseRules.RollFriction * dt);
+        if (old < 1e-4f || speed < CorpseRules.RollStopSpeed || _fsm.Elapsed >= CorpseRules.RollMaxSeconds) { Stop(p); return; }
+        var dir = h / old;
+        var step = speed * dt;
+        if (cast(p + Vector3.UnitY * 0.6f, dir, step + CorpseRules.BodyRadius) is { } wall) { Stop(p + dir * MathF.Max(0, wall - CorpseRules.BodyRadius)); return; }
+        p += dir * step;
+        Velocity = dir * speed;
+        if (cast(p + Vector3.UnitY * 0.3f, -Vector3.UnitY, 0.3f + CorpseRules.RollStepDown) is not { } down)
+        {
+            Position = p;
+            _fsm.Enter(BodyFlightState.Airborne); // the ground fell away: flies on
+            _fsm.Restart();
+            return;
+        }
+        p.Y += 0.3f - down;
+        if (waterSurface?.Invoke(p) is { } w && p.Y <= w) { Position = new Vector3(p.X, w, p.Z); Velocity = Vector3.Zero; _fsm.Enter(BodyFlightState.Floating); return; }
+        Position = p;
+    }
+
+    void Stop(Vector3 at)
+    {
+        Velocity = Vector3.Zero;
         Position = at;
         _fsm.Enter(BodyFlightState.Grounded);
     }

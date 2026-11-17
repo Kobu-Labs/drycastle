@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Synthesises the sounds of the harvester catching a player (#331), stylised, no screams: assets/drycastle-generated-sounds/harvester_{reel_in,chew,eject,pop}.ogg (mono, CC0).
 
-  reel_in  1.3 s  the reel grabs: a whirr rising in pitch with a chopping rhythm that speeds up, the engine straining underneath (its pitch dropping under load), a clank at the start
+  reel_in  3.7 s  the reel grabs and spins the body round for HarvesterConfig.DrawSeconds (3.6 s, #351): a whirr rising in pitch with a chopping rhythm that speeds up, the engine straining underneath (its pitch dropping under load), a clank at the start
   chew     2.6 s  inside the machine, muffled (everything under ~900 Hz): a labouring rumble, irregular crunching thuds, the grinding pulsing about 8 times a second, easing off at the end
   eject    0.8 s  the chute pops the bale out: a pneumatic whoomp (a short falling sine and a puff of filtered noise) and a dull clank
   pop      0.4 s  a bale comes out (#352): a hollow "pop", a quick falling sine with a click of noise. The fallback of harvester.pop: when the private clip audio/harvester/pop.ogg is installed it plays instead
@@ -64,14 +64,14 @@ def save(mix: np.ndarray, out: Path) -> None:
 
 
 def reel_in(rng: np.random.Generator) -> np.ndarray:
-    secs = 1.3
+    secs = 3.7
     n = int(secs * RATE); t = np.arange(n) / RATE; u = t / secs
-    env = np.minimum(1, t / 0.03) * np.clip((secs - t) / 0.25, 0, 1)
+    env = np.minimum(1, t / 0.03) * np.clip((secs - t) / 0.5, 0, 1)
     # the whirr: a saw rising 140 -> 620 Hz, then thin it with a band so it reads as a spinning blade, not a siren
     f = 140 + 480 * u ** 1.6
     whirr = lowpass(saw(2 * np.pi * np.cumsum(f) / RATE), 2500) * 0.5
-    # the chop: the reel's blades, a pulse train from 6 to 22 per second, as amplitude modulation
-    rate = 6 + 16 * u
+    # the chop: the reel's blades, a pulse train from 6 to 16 per second, as amplitude modulation
+    rate = 6 + 10 * u
     chop = 0.55 + 0.45 * np.maximum(0, np.sin(2 * np.pi * np.cumsum(rate) / RATE)) ** 2
     # the engine under load: a rumble whose pitch falls 95 -> 62 Hz as it strains, harmonics up to 6
     fe = 95 - 33 * u

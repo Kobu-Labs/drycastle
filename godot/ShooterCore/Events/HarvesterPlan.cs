@@ -38,9 +38,20 @@ public sealed class HarvesterConfig
 
     public float ReelDamage { get; set; } = 500;
 
-    /// <summary>A corpse drawn in at the front, and the time it spends in the machine before the bale leaves the unloader.</summary>
-    public float DrawSeconds { get; set; } = 1.2f;
+    /// <summary>A corpse drawn in at the front (it orbits the reel for this long, #351), and the time it spends in the machine before the bale leaves the unloader.</summary>
+    public float DrawSeconds { get; set; } = 3.6f;
     public float ChewSeconds { get; set; } = 2.5f;
+    /// <summary>The reel's axis in machine space (x 0, y up, z ahead: the model's reel is 3.66 m ahead, 0.81 m up, 0.68 m radius) and the radius the drawn-in body orbits it at.</summary>
+    public float ReelAxisUpM { get; set; } = 0.81f;
+    public float OrbitRadiusM { get; set; } = 0.95f;
+    /// <summary>
+    /// The bale of a victim leaves the unloader (behind and to the left of the machine, this high) thrown: backwards, to the left and up (m/s) on top of the machine's own velocity, and rolls on
+    /// after it lands (<see cref="CorpseRules.RollFriction"/>).
+    /// </summary>
+    public float UnloaderHeightM { get; set; } = 1.6f;
+    public float BaleThrowBackMps { get; set; } = 7f;
+    public float BaleThrowLeftMps { get; set; } = 2.5f;
+    public float BaleThrowUpMps { get; set; } = 5f;
 
     /// <summary>A bale burns this long and ignites players within <see cref="BaleFireRadiusM"/> of it; the burn of such a player (<see cref="BaleBurn"/>) is credited to nobody.</summary>
     public float BaleBurnSeconds { get; set; } = 6;

@@ -316,6 +316,7 @@ public partial class NetServer
         foreach (var car in _cars) if (car.Def.Id == HarvesterRules.VehicleId && (car.Destroyed || car.Seat.Occupant(0) == 0)) _samplers.Remove(car.Id);
         FlushSwaths();
         StepMachineCorpses(dt);
+        FollowMadeBales();
         StepBales(dt);
     }
 
@@ -361,8 +362,8 @@ public partial class NetServer
     {
         if (!_harvVictims.Remove(victim, out var car) || car.Destroyed) return;
         corpse.Attach(corpse.Position); // seated: it cannot be looted and is moved by the machine
-        _machineCorpses.Add((new MachineCorpse(corpseId, Harvester), corpse.Position, car));
-        HarvesterFx(HarvesterCodec.FxKind.Drawn, corpse.Position, corpseId);
+        _machineCorpses.Add((new MachineCorpse(corpseId, Harvester, victim), corpse.Position, car));
+        HarvesterFx(HarvesterCodec.FxKind.Drawn, corpse.Position, corpseId, victim);
     }
 
     void StepMachineCorpses(float dt)
@@ -382,7 +383,7 @@ public partial class NetServer
                     continue;
                 }
                 var fwd0 = new NVec3(car.Forward.X, 0, car.Forward.Z);
-                var intake0 = N(car.GlobalPosition) + fwd0 * (car.HalfLength - 0.2f) + NVec3.UnitY * 0.9f;
+                var intake0 = N(car.GlobalPosition) + fwd0 * Harvester.HeaderForwardM + NVec3.UnitY * Harvester.ReelAxisUpM; // the reel's axis: the clients spin the body round it
                 var k = m.DrawFraction;
                 body.Follow(NVec3.Lerp(from, intake0, k * k * (3f - 2f * k)));
             }
@@ -393,34 +394,46 @@ public partial class NetServer
                     if (_corpses.Get(m.Corpse) is { } swallowed)
                     {
                         _machineItems[m.Corpse] = swallowed.Items.ToList();
-                        HarvesterFx(HarvesterCodec.FxKind.Swallowed, swallowed.Position, m.Corpse);
+                        HarvesterFx(HarvesterCodec.FxKind.Swallowed, swallowed.Position, m.Corpse, m.Victim);
                         _match.Entities.Despawn(m.Corpse, WorldDespawnReason.Removed);
                     }
                     break;
                 case MachineCorpsePhase.Baled:
-                    EjectBale(car, _machineItems.Remove(m.Corpse, out var items) ? items : new List<ItemStack>());
+                    EjectBale(car, _machineItems.Remove(m.Corpse, out var items) ? items : new List<ItemStack>(), m.Victim);
                     _machineCorpses.RemoveAt(i);
                     break;
             }
         }
     }
 
-    /// <summary>The bale leaves the unloader (rear, on the left of the machine) with the victim's Items and lies on the ground there for as long as a corpse does.</summary>
-    void EjectBale(ServerCar car, List<ItemStack> items)
+    /// <summary>
+    /// The bale leaves the unloader (rear, on the left of the machine, <see cref="HarvesterConfig.UnloaderHeightM"/> up) with the victim's Items, thrown backwards and up on top of the machine's velocity
+    /// (<see cref="HarvesterCatch.BaleVelocity"/>): it flies, lands and rolls to a stop (<see cref="Corpse.Launch"/> with <c>rolls</c>, stepped by <see cref="StepCorpses"/>). One entity, the body inside it
+    /// is drawn by the clients (<paramref name="victim"/> rides in the effect). It lies for as long as a corpse does; its <see cref="HayBale"/> follows it (<see cref="FollowMadeBales"/>).
+    /// </summary>
+    void EjectBale(ServerCar car, List<ItemStack> items, ushort victim)
     {
         var fwd = new NVec3(car.Forward.X, 0, car.Forward.Z);
-        var right = new NVec3(-fwd.Z, 0, fwd.X);
-        var at = N(car.GlobalPosition) - fwd * (car.HalfLength + 1.6f) - right * 1.6f;
+        if (fwd.LengthSquared() < 1e-6f) fwd = -NVec3.UnitZ; else fwd = NVec3.Normalize(fwd);
+        var at = HarvesterCatch.UnloaderAt(N(car.GlobalPosition), fwd, car.HalfLength, Harvester);
         var ground = Map?.GroundHeight(at.X, at.Z) ?? float.NaN;
-        at.Y = float.IsNaN(ground) ? car.GlobalPosition.Y : ground;
+        if (!float.IsNaN(ground)) at.Y = MathF.Max(at.Y, ground + 0.2f); // never spawned inside the ground
         var knife = Math.Max(0, Weapons.Weapons.FindIndex(w => w.Kind == WeaponKind.Melee)); // a weapon nobody can swap into a hotbar position: the bale is for its Items
         var bale = new Corpse(HarvesterRules.BaleOwner, at, car.State.Yaw, knife, 0, items, Harvester.BaleLifetimeS);
+        bale.Launch(HarvesterCatch.BaleVelocity(fwd, CarVelocity(car), Harvester), rolls: true);
         var id = _corpses.Add(bale);
         if (id is not { } cid) return;
         if (items.Count > 0) BroadcastCorpseItems(cid);
-        _madeBales[cid] = new HayBale(at, Harvester, cid);
-        HarvesterFx(HarvesterCodec.FxKind.BaleOut, at, cid);
-        GD.Print($"server: harvester bale {cid} at ({at.X:F1},{at.Y:F1},{at.Z:F1}) with {items.Count} items");
+        _madeBales[cid] = new HayBale(bale.Position, Harvester, cid);
+        HarvesterFx(HarvesterCodec.FxKind.BaleOut, at, cid, victim);
+        GD.Print($"server: harvester bale {cid} of #{victim} thrown from ({at.X:F1},{at.Y:F1},{at.Z:F1}) with {items.Count} items");
+    }
+
+    /// <summary>A thrown bale's <see cref="HayBale"/> lies where its corpse is (fire, scorch and shots follow it until it has stopped).</summary>
+    void FollowMadeBales()
+    {
+        foreach (var kv in _madeBales)
+            if (_corpses.Get(kv.Key) is { } body && kv.Value.Position != body.Position) kv.Value.MoveTo(body.Position);
     }
 
     // ---- the cut: the real path of the reel ----
@@ -565,6 +578,6 @@ public partial class NetServer
         if (gone != null) foreach (var id in gone) _madeBales.Remove(id);
     }
 
-    void HarvesterFx(HarvesterCodec.FxKind kind, NVec3 at, ushort id) =>
-        BroadcastEvent(EventKind.HarvesterFx, HarvesterCodec.EncodeFx(new HarvesterCodec.FxMsg(kind, at, id)));
+    void HarvesterFx(HarvesterCodec.FxKind kind, NVec3 at, ushort id, ushort victim = 0) =>
+        BroadcastEvent(EventKind.HarvesterFx, HarvesterCodec.EncodeFx(new HarvesterCodec.FxMsg(kind, at, id, victim)));
 }

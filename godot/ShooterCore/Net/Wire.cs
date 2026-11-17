@@ -308,11 +308,12 @@ public static class Wire
     //   v58 aircraft state byte (#303): kind in bits 6-7 (was bit 7), bank in bits 0-5 (was 0-6); a third kind, the UAV
     //   v55 world interest (ADR 0025): world record flag FDormant 64 (the entity left this client's interest, no fields); animals, flocks and poop outside 800 m are not sent
     //   v56 wild animal size and weight (ticket #309): the animal state byte's bits 5-7 are the size step; event 25 ends in the animal's weight (u16, tenths of a kg)
+    //   v64 the harvester catch (#351): the harvester effect (event 235) ends in the victim's player id (u16), the bale thrown out rolls (corpse pitch 0.25 while it rolls); the swath message (237) has a replay flag bit (#352, old readers ignore it)
     //   v63 the harvester's cut is its real path: events 237 HarvesterCut and 238 CropCrush (vehicles flatten crops); the state message no longer says what is cut
     //   v62 the harvester event (#331): events 234 HarvesterState and 235 HarvesterFx, special weapon 238, a corpse owned by 60002 is a hay bale
     //   v61 the bus garage: event 245 GarageDoor (its doors open or closed)
     //   v62 the Hunter's Log (#336): events 100-106 (requests for a page of hunts, the records and a player's log, their redacted answers, and the server-wide announcement)
-    public const byte ProtocolVersion = 63;
+    public const byte ProtocolVersion = 64;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {
