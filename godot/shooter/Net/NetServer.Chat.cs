@@ -54,6 +54,7 @@ public partial class NetServer
             ChatTo(c, ChatLineKind.Error, parsed.Error ?? "That did not work.");
             return;
         }
+        if (parsed.Command!.ClientSide) { ChatTo(c, ChatLineKind.Info, $"/{parsed.Command.Name} runs on your own client."); return; } // a modified client sent it: nothing to do here
         var args = parsed.Args;
         switch (parsed.Command!.Name)
         {
