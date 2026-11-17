@@ -125,7 +125,7 @@ An open three-seat vehicle, a boat-shaped hull on four wheels: a driver, an arme
 _Avoid_: APC, amphib, Schwimmwagen, duck
 
 **Predicted vehicle**:
-A vehicle whose driver's client steps its own copy with the driver's inputs, so the driver sees it in the present rather than about 100 ms late: the utility helicopter (ADR 0006), the amphibious transport (ADR 0010) and the car (ADR 0014). Everyone else, the riders included, sees a predicted vehicle drawn from the snapshots; the other ground vehicles are drawn from the snapshots for the driver too.
+A vehicle whose driver's client steps its own copy with the driver's inputs, so the driver sees it in the present rather than about 100 ms late: the utility helicopter (ADR 0006), the amphibious transport (ADR 0010) and the car (ADR 0014) and the vehicles that carry a `drive` block after it (the Golf Mk2, the Humvee). Everyone else, the riders included, sees a predicted vehicle drawn from the snapshots; the other ground vehicles are drawn from the snapshots for the driver too.
 _Avoid_: client-side vehicle, smooth vehicle
 
 **Trailer**:
@@ -133,7 +133,7 @@ A single-axle vehicle with no seats that a tractor pulls (vehicles.json `trailer
 _Avoid_: cart (alone), caravan, wagon
 
 **Tow hitch / Hitched**:
-The tow hitch is the ball at the rear of a vehicle whose type has a `tow` block (the jeep, the flak truck); only data decides who tows. A tractor latches a loose trailer by itself when it reverses with its hitch within 0.8 m of the drawbar eye and headings within 35 degrees; the driver unhitches by holding interact, and the trailer cannot be latched again for 2 s (Released). Hitched, the tractor accelerates and brakes by its mass over the pair's, tops out at 60 % of its speed and holds less sideways acceleration; a turn taken too fast lets the trailer swing out.
+The tow hitch is the ball at the rear of a vehicle whose type has a `tow` block (the jeep, the Humvee, the flak truck); only data decides who tows. A tractor latches a loose trailer by itself when it reverses with its hitch within 0.8 m of the drawbar eye and headings within 35 degrees; the driver unhitches by holding interact, and the trailer cannot be latched again for 2 s (Released). Hitched, the tractor accelerates and brakes by its mass over the pair's, tops out at 60 % of its speed and holds less sideways acceleration; a turn taken too fast lets the trailer swing out.
 _Avoid_: coupled, attached, trailer lock
 
 **Jackknife limit**:
@@ -145,11 +145,11 @@ A passenger seat whose rider keeps their own loadout and fights with it from the
 _Avoid_: shotgun seat, gunner seat (that seat works the vehicle's own gun), fighting seat
 
 **Exposed seat**:
-A seat the hull does not cover: a shot that reaches its rider's body hits the rider and not the hull, and a shot that misses them hits the hull. The flak truck's and the utility helicopter's gunner seats are exposed, and all three seats of the amphibious transport. Riders of one vehicle never hit each other.
+A seat the hull does not cover: a shot that reaches its rider's body hits the rider and not the hull, and a shot that misses them hits the hull. The flak truck's, the utility helicopter's and the Humvee's gunner seats are exposed, and all three seats of the amphibious transport. Riders of one vehicle never hit each other.
 _Avoid_: open seat, unprotected seat
 
 **Ring gun**:
-The amphibious transport's machine gun, on a ring mount over the rear compartment and worked from the gunner seat by a gunner who stands inside the ring. The gunner's view aims it all the way round; over the two riders in front it cannot be depressed. Its rounds are the jeep's roof gun's, and its kills are ordinary kills.
+The amphibious transport's and the Humvee's machine gun, on a ring mount (over the rear compartment; on the Humvee's roof) and worked from the gunner seat by a gunner who stands inside the ring. The gunner's view aims it all the way round; over the two riders in front of the transport's it cannot be depressed. Its rounds are the jeep's roof gun's, and its kills are ordinary kills.
 _Avoid_: turret (alone), pintle gun, rear gun
 
 **Fixed seat**:
@@ -330,6 +330,10 @@ _Avoid_: AA gun, anti-air vehicle, SPAAG
 **Bus**:
 A 12 m land vehicle modelled on the regional bus that serves the village: a driver seat and three passenger seats, no weapon, slow to turn and heavy to run into. It is boarded, left and destroyed like any other vehicle; its doors do not open, riders are placed on their seats.
 _Avoid_: coach, autobus, transport (that is the amphibious one)
+
+**Humvee**:
+A heavier, tougher jeep (a 4.6 m troop car, 2400 kg, 550 hp, 100 km/h) with five seats: a driver, a front passenger, two rear passengers and a roof gunner. Dealt at random (two), driven by the drive model like the car (wheels roll and steer, the body leans, the driver predicts it) and able to tow. The passengers sit under the hull, in plain seats; the gunner stands in the roof ring, an exposed seat working a ring gun with the jeep's roof gun's rounds that turns all the way round. Its model is from the private SIMPLE Military pack (a grey box without it).
+_Avoid_: Hummer, HMMWV, troop car, jeep (that is the Kenney one)
 
 **Golf Mk2**:
 A small black three-door hatchback (4.3 m) with four seats (left-hand drive) that tops out at 200 km/h, the fastest vehicle. Driven by the drive model like the car; no weapon. It is never dealt at random: it stands at its fixed spot.

@@ -65,11 +65,11 @@ public class TowTests
     // ---- data ----
 
     [Fact]
-    public void The_jeep_and_the_flak_truck_tow_and_nobody_else_does()
+    public void The_jeep_the_humvee_and_the_flak_truck_tow_and_nobody_else_does()
     {
-        Assert.Equal(new[] { "flak", "jeep" }, Shipped.Vehicles.Where(v => v.Tow != null).Select(v => v.Id).OrderBy(x => x).ToArray());
+        Assert.Equal(new[] { "flak", "humvee", "jeep" }, Shipped.Vehicles.Where(v => v.Tow != null).Select(v => v.Id).OrderBy(x => x).ToArray());
         Assert.All(Shipped.Vehicles, v => Assert.Null(v.Trailer));
-        foreach (var v in new[] { Jeep, Flak })
+        foreach (var v in new[] { Jeep, Flak, Shipped.Vehicles.Single(x => x.Id == "humvee") })
             Assert.True(v.Tow!.Hitch[2] > v.HalfLength, $"{v.Id}: the hitch is behind the footprint");
     }
 

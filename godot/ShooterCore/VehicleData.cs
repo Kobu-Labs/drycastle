@@ -89,6 +89,7 @@ public class VehiclesFile : IVersioned
                 if (seat.Offset.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: seat offset is [x, y, z]");
                 if (seat.Armed && seat.Role != "passenger") throw new DataFileException($"vehicles.json: {v.Id}: only a passenger seat can be armed (a driver drives, a gunner has the vehicle's gun)");
                 if (seat.Standing && !seat.Exposed) throw new DataFileException($"vehicles.json: {v.Id}: a standing seat is an exposed seat");
+                if (seat.EyeHeight is { } eh && !(eh is >= 0.3f and <= 2.2f)) throw new DataFileException($"vehicles.json: {v.Id}: a seat's eye_height is 0.3..2.2 m above its feet");
                 if (seat.Aim is { } aim)
                 {
                     if (!seat.Armed) throw new DataFileException($"vehicles.json: {v.Id}: a seat's aim is for an armed seat");
@@ -207,6 +208,11 @@ public class VehicleSeatDef
     public bool Standing { get; set; }
     /// <summary>How far round and up and down an armed seat's rider can aim. Null: all the way round.</summary>
     public VehicleSeatAimDef? Aim { get; set; }
+    /// <summary>
+    /// Metres from the seat's feet to the eye of the rider's own first-person view from a seat the hull covers (the client rides the camera on the seat). Null: the
+    /// body's own standing eye, which is right in a tall cabin (the bus) and above the roof of a low one (the Humvee's seats: 0.6 + 1.65 is over its 1.86 m roof, hence 1.05). An exposed seat has its own (<see cref="RiderStance"/>).
+    /// </summary>
+    public float? EyeHeight { get; set; }
 
     /// <summary>The stance an exposed rider has to a bullet and to the eye: seated riders have the crouch's height.</summary>
     public Stance RiderStance => Standing ? Stance.Stand : Stance.Crouch;

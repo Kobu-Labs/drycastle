@@ -87,7 +87,7 @@ public class DriveTests
         Assert.NotNull(Car.Drive);
         Assert.Equal(VehicleMedium.Amphibious, Car.Medium);
         Assert.True(Car.WaterTopSpeed < Car.TopSpeed, "it is slower on the water");
-        foreach (var v in Shipped.Vehicles.Where(v => v.Id is not ("amphibious" or "car" or "golf_mk2"))) Assert.Null(v.Drive);
+        foreach (var v in Shipped.Vehicles.Where(v => v.Id is not ("amphibious" or "car" or "golf_mk2" or "humvee"))) Assert.Null(v.Drive);
         // the wheels the ground is sampled under are the model's
         var n = AmphibiousModelTests.Nodes(Car.Model);
         Assert.Equal(n["wheel_rl"].Z - n["wheel_fl"].Z, D.Wheelbase, 2);

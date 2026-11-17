@@ -550,7 +550,7 @@ public class GlassTests
     [Fact]
     public void TheGeneratedVehiclesHaveAnOutlineOnEveryPaneAndTheirCountsMatchTheModels()
     {
-        var counts = new Dictionary<string, int> { ["bus"] = 18, ["flak"] = 6, ["utility_helicopter"] = 4, ["golf_mk2"] = 6 };
+        var counts = new Dictionary<string, int> { ["bus"] = 18, ["flak"] = 6, ["utility_helicopter"] = 4, ["golf_mk2"] = 6, ["humvee"] = 6 };
         foreach (var v in Shipped().Vehicles.Where(v => counts.ContainsKey(v.Id)))
         {
             Assert.Equal(counts[v.Id], v.Glass.Count);
