@@ -4817,6 +4817,27 @@
     ]
    ],
    "type": "crop_grain"
+  },
+  "GP-0085": {
+   "polygon": [
+    [
+     -588412.0,
+     -1248903.5
+    ],
+    [
+     -588408.0,
+     -1248922.5
+    ],
+    [
+     -588386.5,
+     -1248921.5
+    ],
+    [
+     -588388.5,
+     -1248899.0
+    ]
+   ],
+   "type": "plantation_dirt"
   }
  },
  "ground_types": {
@@ -4923,6 +4944,36 @@
     "colours": [
      "#ededed"
     ]
+   }
+  },
+  "plantation_dirt": {
+   "attributes": {
+    "colours": [
+     "#6f5a40",
+     "#665238",
+     "#786247"
+    ],
+    "detail": {
+     "artifacts": {
+      "extras": null,
+      "items": []
+     },
+     "edge": {
+      "feather_m": 2,
+      "mode": "feather",
+      "plant_falloff_m": 0
+     },
+     "fallow": {
+      "probability": 0
+     },
+     "ground_colours": [
+      "#6f5a40",
+      "#665238"
+     ],
+     "plants": [],
+     "texture": "dirt"
+    },
+    "recipe": "crop"
    }
   }
  },
@@ -15789,6 +15840,1435 @@
    ],
    "rotation_deg": 233.0,
    "z": 195.575
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_CamoNet_Tent_04",
+   "id": "o-0991",
+   "position": [
+    -588393.0,
+    -1248908.0
+   ],
+   "rotation_deg": 78.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Table_Metal_Preset_03",
+   "id": "o-0992",
+   "position": [
+    -588393.4,
+    -1248906.4
+   ],
+   "rotation_deg": 84.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_CamoNet_Tent_02",
+   "id": "o-1037",
+   "position": [
+    -588392.3,
+    -1248917.6
+   ],
+   "rotation_deg": 346.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_CamoNet_Tent_01",
+   "id": "o-1038",
+   "position": [
+    -588404.6,
+    -1248917.4
+   ],
+   "rotation_deg": 31.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_CamoNet_Tent_03",
+   "id": "o-1039",
+   "position": [
+    -588400.2,
+    -1248913.2
+   ],
+   "rotation_deg": 96.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Table_Metal_Preset_05",
+   "id": "o-1040",
+   "position": [
+    -588392.5,
+    -1248910.3
+   ],
+   "rotation_deg": 68.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Shelf_Preset_01",
+   "id": "o-1041",
+   "position": [
+    -588391.4,
+    -1248907.9
+   ],
+   "rotation_deg": 352.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Chair_02",
+   "id": "o-1042",
+   "position": [
+    -588394.3,
+    -1248909.2
+   ],
+   "rotation_deg": 200.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_ZipBag_Green_L_01",
+   "id": "o-1043",
+   "position": [
+    -588393.9,
+    -1248907.9
+   ],
+   "rotation_deg": 40.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_ZipBag_Green_L_02",
+   "id": "o-1044",
+   "position": [
+    -588393.6,
+    -1248908.5
+   ],
+   "rotation_deg": 120.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_ZipBag_Green_L_03",
+   "id": "o-1045",
+   "position": [
+    -588394.2,
+    -1248908.4
+   ],
+   "rotation_deg": 300.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_ZipBag_Green_S_01",
+   "id": "o-1046",
+   "position": [
+    -588393.2,
+    -1248908.9
+   ],
+   "rotation_deg": 15.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_ZipBag_Green_L_01",
+   "id": "o-1047",
+   "position": [
+    -588391.9,
+    -1248909.3
+   ],
+   "rotation_deg": 75.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Scales_01",
+   "id": "o-1048",
+   "position": [
+    -588393.0,
+    -1248909.3
+   ],
+   "rotation_deg": 160.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_CardboardBox_Open_02",
+   "id": "o-1049",
+   "position": [
+    -588391.6,
+    -1248905.5
+   ],
+   "rotation_deg": 20.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_Light_01",
+   "id": "o-1050",
+   "position": [
+    -588395.4,
+    -1248910.6
+   ],
+   "rotation_deg": 160.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_Light_01",
+   "id": "o-1051",
+   "position": [
+    -588396.2,
+    -1248907.6
+   ],
+   "rotation_deg": 30.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Bed_SleepingBag_01",
+   "id": "o-1052",
+   "position": [
+    -588393.3,
+    -1248918.2
+   ],
+   "rotation_deg": 95.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Alcohol_Bottle_Empty_01",
+   "id": "o-1053",
+   "position": [
+    -588392.9,
+    -1248916.6
+   ],
+   "rotation_deg": 0.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Alcohol_Bottle_Half_01",
+   "id": "o-1054",
+   "position": [
+    -588391.5,
+    -1248918.4
+   ],
+   "rotation_deg": 0.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Chair_01",
+   "id": "o-1055",
+   "position": [
+    -588394.4,
+    -1248916.3
+   ],
+   "rotation_deg": 310.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_CardboardBox_Stack_02",
+   "id": "o-1056",
+   "position": [
+    -588390.9,
+    -1248916.0
+   ],
+   "rotation_deg": 15.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Rubbish_Bag_02",
+   "id": "o-1057",
+   "position": [
+    -588390.4,
+    -1248918.8
+   ],
+   "rotation_deg": 70.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Barrel_Plastic_01",
+   "id": "o-1058",
+   "position": [
+    -588395.6,
+    -1248904.9
+   ],
+   "rotation_deg": 25.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Barrel_Plastic_02",
+   "id": "o-1059",
+   "position": [
+    -588394.7,
+    -1248904.5
+   ],
+   "rotation_deg": 140.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Barrel_Plastic_03",
+   "id": "o-1060",
+   "position": [
+    -588396.5,
+    -1248919.7
+   ],
+   "rotation_deg": 40.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Bed_Mattress_02",
+   "id": "o-1061",
+   "position": [
+    -588392.0,
+    -1248917.2
+   ],
+   "rotation_deg": 80.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Barrel_02",
+   "id": "o-1062",
+   "position": [
+    -588389.9,
+    -1248910.9
+   ],
+   "rotation_deg": 0.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Rusted_Barrel_01",
+   "id": "o-1063",
+   "position": [
+    -588390.6,
+    -1248911.7
+   ],
+   "rotation_deg": 55.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Barrel_Metal_01",
+   "id": "o-1064",
+   "position": [
+    -588407.4,
+    -1248909.0
+   ],
+   "rotation_deg": 0.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Generator_Small_01",
+   "id": "o-1065",
+   "position": [
+    -588390.2,
+    -1248904.3
+   ],
+   "rotation_deg": 30.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_GasCan_01",
+   "id": "o-1066",
+   "position": [
+    -588390.9,
+    -1248903.9
+   ],
+   "rotation_deg": 110.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Pallet_01",
+   "id": "o-1067",
+   "position": [
+    -588393.2,
+    -1248912.9
+   ],
+   "rotation_deg": 12.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_ZipBag_Green_L_02",
+   "id": "o-1068",
+   "position": [
+    -588394.3,
+    -1248912.4
+   ],
+   "rotation_deg": 200.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Bag_Green_01",
+   "id": "o-1069",
+   "position": [
+    -588392.1,
+    -1248912.2
+   ],
+   "rotation_deg": 60.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_WateringCan_01",
+   "id": "o-1070",
+   "position": [
+    -588400.0,
+    -1248910.3
+   ],
+   "rotation_deg": 70.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_WateringCan_01",
+   "id": "o-1071",
+   "position": [
+    -588403.5,
+    -1248915.6
+   ],
+   "rotation_deg": 250.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Bucket_01",
+   "id": "o-1072",
+   "position": [
+    -588398.2,
+    -1248916.9
+   ],
+   "rotation_deg": 0.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Bucket_Tin_01",
+   "id": "o-1073",
+   "position": [
+    -588405.2,
+    -1248910.1
+   ],
+   "rotation_deg": 0.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_Bucket_01",
+   "id": "o-1074",
+   "position": [
+    -588396.0,
+    -1248912.0
+   ],
+   "rotation_deg": 45.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_Bucket_01",
+   "id": "o-1075",
+   "position": [
+    -588395.7,
+    -1248913.2
+   ],
+   "rotation_deg": 190.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_Bucket_01",
+   "id": "o-1076",
+   "position": [
+    -588396.6,
+    -1248905.6
+   ],
+   "rotation_deg": 300.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Rubbish_Pile_02",
+   "id": "o-1077",
+   "position": [
+    -588389.4,
+    -1248914.0
+   ],
+   "rotation_deg": 60.0,
+   "scale": 0.7
+  },
+  {
+   "asset": "pack:synty-military/SM_Prop_Tire_01",
+   "id": "o-1078",
+   "position": [
+    -588396.5,
+    -1248909.6
+   ],
+   "rotation_deg": 0.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_PlasticBottle_01",
+   "id": "o-1079",
+   "position": [
+    -588399.9,
+    -1248917.0
+   ],
+   "rotation_deg": 0.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Bag_White_01",
+   "id": "o-1080",
+   "position": [
+    -588407.2,
+    -1248912.0
+   ],
+   "rotation_deg": 10.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Bag_White_01",
+   "id": "o-1081",
+   "position": [
+    -588407.1,
+    -1248912.6
+   ],
+   "rotation_deg": 50.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_CardboardBox_01",
+   "id": "o-1082",
+   "position": [
+    -588396.0,
+    -1248917.9
+   ],
+   "rotation_deg": 33.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_FlatPackCardboardBoxes_03",
+   "id": "o-1084",
+   "position": [
+    -588389.9,
+    -1248907.2
+   ],
+   "rotation_deg": 80.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1085",
+   "position": [
+    -588397.71,
+    -1248916.3
+   ],
+   "rotation_deg": 305.0,
+   "scale": 1.02
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1086",
+   "position": [
+    -588398.39,
+    -1248916.47
+   ],
+   "rotation_deg": 310.0,
+   "scale": 1.14
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1087",
+   "position": [
+    -588399.17,
+    -1248916.49
+   ],
+   "rotation_deg": 260.0,
+   "scale": 0.95
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1088",
+   "position": [
+    -588400.56,
+    -1248916.77
+   ],
+   "rotation_deg": 235.0,
+   "scale": 1.19
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1089",
+   "position": [
+    -588401.18,
+    -1248916.83
+   ],
+   "rotation_deg": 155.0,
+   "scale": 1.17
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1090",
+   "position": [
+    -588401.82,
+    -1248916.69
+   ],
+   "rotation_deg": 80.0,
+   "scale": 1.25
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1091",
+   "position": [
+    -588397.95,
+    -1248915.6
+   ],
+   "rotation_deg": 10.0,
+   "scale": 1.25
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1092",
+   "position": [
+    -588398.49,
+    -1248915.74
+   ],
+   "rotation_deg": 175.0,
+   "scale": 1.13
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1093",
+   "position": [
+    -588399.21,
+    -1248915.81
+   ],
+   "rotation_deg": 300.0,
+   "scale": 0.96
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1094",
+   "position": [
+    -588400.68,
+    -1248915.86
+   ],
+   "rotation_deg": 320.0,
+   "scale": 1.12
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1095",
+   "position": [
+    -588401.33,
+    -1248916.07
+   ],
+   "rotation_deg": 155.0,
+   "scale": 1.12
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1096",
+   "position": [
+    -588402.04,
+    -1248916.14
+   ],
+   "rotation_deg": 55.0,
+   "scale": 0.97
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1097",
+   "position": [
+    -588397.95,
+    -1248915.01
+   ],
+   "rotation_deg": 0.0,
+   "scale": 0.99
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1098",
+   "position": [
+    -588398.68,
+    -1248914.93
+   ],
+   "rotation_deg": 0.0,
+   "scale": 0.96
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1099",
+   "position": [
+    -588399.25,
+    -1248915.0
+   ],
+   "rotation_deg": 30.0,
+   "scale": 1.2
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1100",
+   "position": [
+    -588400.78,
+    -1248915.25
+   ],
+   "rotation_deg": 80.0,
+   "scale": 0.98
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1101",
+   "position": [
+    -588401.41,
+    -1248915.32
+   ],
+   "rotation_deg": 275.0,
+   "scale": 1.22
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1102",
+   "position": [
+    -588402.08,
+    -1248915.27
+   ],
+   "rotation_deg": 0.0,
+   "scale": 1.24
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1103",
+   "position": [
+    -588398.09,
+    -1248914.12
+   ],
+   "rotation_deg": 90.0,
+   "scale": 1.02
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1104",
+   "position": [
+    -588398.69,
+    -1248914.29
+   ],
+   "rotation_deg": 260.0,
+   "scale": 1.1
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1105",
+   "position": [
+    -588399.38,
+    -1248914.35
+   ],
+   "rotation_deg": 175.0,
+   "scale": 1.18
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1106",
+   "position": [
+    -588400.84,
+    -1248914.63
+   ],
+   "rotation_deg": 355.0,
+   "scale": 1.12
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1107",
+   "position": [
+    -588401.41,
+    -1248914.48
+   ],
+   "rotation_deg": 20.0,
+   "scale": 1.02
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1108",
+   "position": [
+    -588402.09,
+    -1248914.67
+   ],
+   "rotation_deg": 200.0,
+   "scale": 0.95
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1109",
+   "position": [
+    -588398.21,
+    -1248913.62
+   ],
+   "rotation_deg": 125.0,
+   "scale": 1.2
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1110",
+   "position": [
+    -588398.8,
+    -1248913.69
+   ],
+   "rotation_deg": 25.0,
+   "scale": 1.28
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1111",
+   "position": [
+    -588399.42,
+    -1248913.72
+   ],
+   "rotation_deg": 165.0,
+   "scale": 0.99
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1112",
+   "position": [
+    -588400.93,
+    -1248913.7
+   ],
+   "rotation_deg": 115.0,
+   "scale": 1.06
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1113",
+   "position": [
+    -588401.63,
+    -1248913.79
+   ],
+   "rotation_deg": 95.0,
+   "scale": 1.06
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1114",
+   "position": [
+    -588402.24,
+    -1248913.87
+   ],
+   "rotation_deg": 75.0,
+   "scale": 1.29
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1115",
+   "position": [
+    -588398.07,
+    -1248912.79
+   ],
+   "rotation_deg": 280.0,
+   "scale": 1.14
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1116",
+   "position": [
+    -588398.7,
+    -1248912.94
+   ],
+   "rotation_deg": 75.0,
+   "scale": 1.13
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1117",
+   "position": [
+    -588399.59,
+    -1248912.86
+   ],
+   "rotation_deg": 175.0,
+   "scale": 1.12
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1118",
+   "position": [
+    -588400.86,
+    -1248913.01
+   ],
+   "rotation_deg": 115.0,
+   "scale": 0.96
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1119",
+   "position": [
+    -588401.5,
+    -1248913.26
+   ],
+   "rotation_deg": 110.0,
+   "scale": 1.25
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1120",
+   "position": [
+    -588402.29,
+    -1248913.11
+   ],
+   "rotation_deg": 230.0,
+   "scale": 1.03
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1121",
+   "position": [
+    -588398.34,
+    -1248912.0
+   ],
+   "rotation_deg": 285.0,
+   "scale": 0.98
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1122",
+   "position": [
+    -588398.93,
+    -1248912.05
+   ],
+   "rotation_deg": 235.0,
+   "scale": 1.08
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1123",
+   "position": [
+    -588399.51,
+    -1248912.2
+   ],
+   "rotation_deg": 230.0,
+   "scale": 1.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1124",
+   "position": [
+    -588400.93,
+    -1248912.39
+   ],
+   "rotation_deg": 340.0,
+   "scale": 1.28
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1125",
+   "position": [
+    -588401.77,
+    -1248912.44
+   ],
+   "rotation_deg": 315.0,
+   "scale": 1.27
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1126",
+   "position": [
+    -588402.23,
+    -1248912.45
+   ],
+   "rotation_deg": 230.0,
+   "scale": 1.16
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1127",
+   "position": [
+    -588398.36,
+    -1248911.45
+   ],
+   "rotation_deg": 285.0,
+   "scale": 1.01
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1128",
+   "position": [
+    -588398.99,
+    -1248911.36
+   ],
+   "rotation_deg": 80.0,
+   "scale": 1.3
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1129",
+   "position": [
+    -588399.67,
+    -1248911.52
+   ],
+   "rotation_deg": 150.0,
+   "scale": 1.09
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1130",
+   "position": [
+    -588401.2,
+    -1248911.59
+   ],
+   "rotation_deg": 105.0,
+   "scale": 1.01
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1131",
+   "position": [
+    -588401.78,
+    -1248911.6
+   ],
+   "rotation_deg": 120.0,
+   "scale": 1.17
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1132",
+   "position": [
+    -588402.29,
+    -1248911.8
+   ],
+   "rotation_deg": 45.0,
+   "scale": 1.16
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1133",
+   "position": [
+    -588398.36,
+    -1248910.59
+   ],
+   "rotation_deg": 255.0,
+   "scale": 1.12
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1134",
+   "position": [
+    -588399.14,
+    -1248910.73
+   ],
+   "rotation_deg": 55.0,
+   "scale": 1.23
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1135",
+   "position": [
+    -588399.81,
+    -1248910.88
+   ],
+   "rotation_deg": 150.0,
+   "scale": 1.02
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1136",
+   "position": [
+    -588401.16,
+    -1248910.92
+   ],
+   "rotation_deg": 345.0,
+   "scale": 0.96
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1137",
+   "position": [
+    -588401.8,
+    -1248911.06
+   ],
+   "rotation_deg": 210.0,
+   "scale": 1.11
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1138",
+   "position": [
+    -588402.45,
+    -1248911.05
+   ],
+   "rotation_deg": 330.0,
+   "scale": 1.29
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1139",
+   "position": [
+    -588398.56,
+    -1248909.82
+   ],
+   "rotation_deg": 185.0,
+   "scale": 1.05
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1140",
+   "position": [
+    -588399.13,
+    -1248910.1
+   ],
+   "rotation_deg": 330.0,
+   "scale": 1.22
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1141",
+   "position": [
+    -588399.75,
+    -1248910.0
+   ],
+   "rotation_deg": 225.0,
+   "scale": 1.01
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1142",
+   "position": [
+    -588401.36,
+    -1248910.31
+   ],
+   "rotation_deg": 180.0,
+   "scale": 1.26
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1143",
+   "position": [
+    -588401.8,
+    -1248910.37
+   ],
+   "rotation_deg": 305.0,
+   "scale": 1.29
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1144",
+   "position": [
+    -588402.63,
+    -1248910.29
+   ],
+   "rotation_deg": 210.0,
+   "scale": 1.19
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1145",
+   "position": [
+    -588405.09,
+    -1248919.91
+   ],
+   "rotation_deg": 280.0,
+   "scale": 1.21
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1146",
+   "position": [
+    -588405.48,
+    -1248919.22
+   ],
+   "rotation_deg": 335.0,
+   "scale": 1.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1147",
+   "position": [
+    -588405.96,
+    -1248918.53
+   ],
+   "rotation_deg": 310.0,
+   "scale": 1.1
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1148",
+   "position": [
+    -588406.43,
+    -1248918.03
+   ],
+   "rotation_deg": 210.0,
+   "scale": 1.22
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1149",
+   "position": [
+    -588406.62,
+    -1248917.44
+   ],
+   "rotation_deg": 335.0,
+   "scale": 0.99
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1150",
+   "position": [
+    -588407.08,
+    -1248916.81
+   ],
+   "rotation_deg": 260.0,
+   "scale": 1.14
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1151",
+   "position": [
+    -588404.68,
+    -1248919.56
+   ],
+   "rotation_deg": 240.0,
+   "scale": 1.1
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1152",
+   "position": [
+    -588404.93,
+    -1248918.98
+   ],
+   "rotation_deg": 40.0,
+   "scale": 1.04
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1153",
+   "position": [
+    -588405.23,
+    -1248918.31
+   ],
+   "rotation_deg": 70.0,
+   "scale": 0.99
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1154",
+   "position": [
+    -588405.65,
+    -1248917.62
+   ],
+   "rotation_deg": 75.0,
+   "scale": 1.1
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1155",
+   "position": [
+    -588406.1,
+    -1248917.02
+   ],
+   "rotation_deg": 265.0,
+   "scale": 1.17
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1156",
+   "position": [
+    -588406.55,
+    -1248916.34
+   ],
+   "rotation_deg": 105.0,
+   "scale": 1.19
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1157",
+   "position": [
+    -588403.92,
+    -1248919.04
+   ],
+   "rotation_deg": 310.0,
+   "scale": 1.01
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1158",
+   "position": [
+    -588404.34,
+    -1248918.64
+   ],
+   "rotation_deg": 275.0,
+   "scale": 1.28
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1159",
+   "position": [
+    -588404.67,
+    -1248917.82
+   ],
+   "rotation_deg": 240.0,
+   "scale": 1.07
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1160",
+   "position": [
+    -588405.08,
+    -1248917.13
+   ],
+   "rotation_deg": 40.0,
+   "scale": 1.24
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1161",
+   "position": [
+    -588405.52,
+    -1248916.69
+   ],
+   "rotation_deg": 20.0,
+   "scale": 1.04
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1162",
+   "position": [
+    -588405.75,
+    -1248916.06
+   ],
+   "rotation_deg": 340.0,
+   "scale": 1.23
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1163",
+   "position": [
+    -588403.35,
+    -1248918.72
+   ],
+   "rotation_deg": 135.0,
+   "scale": 1.24
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1164",
+   "position": [
+    -588403.84,
+    -1248918.13
+   ],
+   "rotation_deg": 130.0,
+   "scale": 1.08
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1165",
+   "position": [
+    -588404.01,
+    -1248917.58
+   ],
+   "rotation_deg": 65.0,
+   "scale": 1.23
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1166",
+   "position": [
+    -588404.54,
+    -1248917.0
+   ],
+   "rotation_deg": 250.0,
+   "scale": 1.21
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1167",
+   "position": [
+    -588404.92,
+    -1248916.33
+   ],
+   "rotation_deg": 90.0,
+   "scale": 1.22
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1168",
+   "position": [
+    -588405.31,
+    -1248915.69
+   ],
+   "rotation_deg": 275.0,
+   "scale": 1.2
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1169",
+   "position": [
+    -588402.87,
+    -1248918.33
+   ],
+   "rotation_deg": 35.0,
+   "scale": 1.01
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1170",
+   "position": [
+    -588403.19,
+    -1248917.81
+   ],
+   "rotation_deg": 335.0,
+   "scale": 1.04
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1171",
+   "position": [
+    -588403.42,
+    -1248917.11
+   ],
+   "rotation_deg": 260.0,
+   "scale": 1.01
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1172",
+   "position": [
+    -588403.88,
+    -1248916.43
+   ],
+   "rotation_deg": 250.0,
+   "scale": 1.22
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1173",
+   "position": [
+    -588404.18,
+    -1248915.84
+   ],
+   "rotation_deg": 225.0,
+   "scale": 1.05
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1174",
+   "position": [
+    -588404.66,
+    -1248915.23
+   ],
+   "rotation_deg": 190.0,
+   "scale": 1.02
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_01",
+   "id": "o-1175",
+   "position": [
+    -588402.04,
+    -1248918.07
+   ],
+   "rotation_deg": 140.0,
+   "scale": 1.2
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1176",
+   "position": [
+    -588402.58,
+    -1248917.34
+   ],
+   "rotation_deg": 20.0,
+   "scale": 1.29
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1177",
+   "position": [
+    -588402.96,
+    -1248916.84
+   ],
+   "rotation_deg": 140.0,
+   "scale": 1.24
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1178",
+   "position": [
+    -588403.31,
+    -1248916.23
+   ],
+   "rotation_deg": 125.0,
+   "scale": 1.13
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1179",
+   "position": [
+    -588403.68,
+    -1248915.45
+   ],
+   "rotation_deg": 115.0,
+   "scale": 1.17
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Plant_02",
+   "id": "o-1180",
+   "position": [
+    -588403.89,
+    -1248914.92
+   ],
+   "rotation_deg": 200.0,
+   "scale": 1.25
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Light_Portable_01",
+   "id": "o-1181",
+   "position": [
+    -588396.6,
+    -1248914.6
+   ],
+   "rotation_deg": 248.7
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Light_Portable_01",
+   "id": "o-1182",
+   "position": [
+    -588400.8,
+    -1248908.4
+   ],
+   "rotation_deg": 7.0
+  },
+  {
+   "asset": "pack:synty-gang-warfare/SM_Prop_Light_Portable_01",
+   "id": "o-1183",
+   "position": [
+    -588402.0,
+    -1248920.3
+   ],
+   "rotation_deg": 221.8
   }
  ],
  "parcels": {
@@ -44570,6 +46050,27 @@
     [
      -588821.5,
      -1249660.0
+    ]
+   ]
+  },
+  "Z-0053": {
+   "kind": "plantation",
+   "polygon": [
+    [
+     -588412.0,
+     -1248903.5
+    ],
+    [
+     -588408.0,
+     -1248922.5
+    ],
+    [
+     -588386.5,
+     -1248921.5
+    ],
+    [
+     -588388.5,
+     -1248899.0
     ]
    ]
   }
