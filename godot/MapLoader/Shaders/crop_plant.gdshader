@@ -15,18 +15,44 @@ uniform float vertex_colour = 0.0; // 1: the vertex colour multiplies the albedo
 uniform float vertex_srgb = 0.0;   // 1: it is in sRGB (VertexColorIsSrgb)
 // x: radius (m) beyond which no plant stands; y: the band inside it over which they thin out; z: the share of the band one plant takes to grow
 uniform vec3 crop_cut = vec3(110.0, 50.0, 0.3);
+// The far layer (a few plants as wide flat-coloured tufts, so a field far away still reads as planted): x: radius beyond which no tuft stands, negative = this
+// is a plant, not a tuft; y: the band inside it; z: how much wider than its mesh a tuft is drawn; w: how much its brightness varies from tuft to tuft.
+// A tuft comes in over the band where the plants go out (crop_cut), at a distance of its own, and goes out at its own radius the way the plants do at theirs.
+uniform vec4 crop_far = vec4(-1.0, 0.0, 1.0, 0.0);
+
+varying flat float shade;
+
+// 0 inside radius - band, 1 at the radius and beyond
+float far_share(float d, float radius, float band) {
+	band = max(band, 0.001);
+	return d >= radius ? 1.0 : clamp((d - (radius - band)) / band, 0.0, 1.0);
+}
+
+// How much stands at a far share, 0 to 1, for a threshold in [0, 1): whole at share 0, gone at share 1 (CropSettings.Grow)
+float grow_out(float far, float threshold, float span) {
+	float g = clamp((span + (1.0 - span) * threshold - far) / span, 0.0, 1.0);
+	return g * g * (3.0 - 2.0 * g);
+}
 
 void vertex() {
 	vec3 foot = MODEL_MATRIX[3].xyz; // the instance's origin in the world
-	float band = max(crop_cut.y, 0.001);
 	float d = distance(foot, CAMERA_POSITION_WORLD);
-	float far = d >= crop_cut.x ? 1.0 : clamp((d - (crop_cut.x - band)) / band, 0.0, 1.0);
 	// the plant's own threshold: interleaved-gradient noise of its 25 cm cell
 	vec2 cell = floor(foot.xz * 4.0 + vec2(0.4137, 0.2719));
 	float threshold = fract(52.9829189 * fract(dot(cell, vec2(0.06711056, 0.00583715))));
 	float span = max(crop_cut.z, 0.001);
-	float g = clamp((span + (1.0 - span) * threshold - far) / span, 0.0, 1.0);
-	VERTEX *= g * g * (3.0 - 2.0 * g);
+	float near_far = far_share(d, crop_cut.x, crop_cut.y);
+	shade = 1.0;
+	if (crop_far.x < 0.0) {
+		VERTEX *= grow_out(near_far, threshold, span);
+	} else {
+		// in where the plants go out (CropSettings.FarGrow), out at the tufts' own radius
+		float g = clamp((near_far - (1.0 - span) * threshold) / span, 0.0, 1.0);
+		g = g * g * (3.0 - 2.0 * g) * grow_out(far_share(d, crop_far.x, crop_far.y), threshold, span);
+		VERTEX.xz *= crop_far.z;
+		VERTEX *= g;
+		shade = 1.0 + crop_far.w * (fract(threshold * 7.31) * 2.0 - 1.0);
+	}
 
 	if (vertex_colour < 0.5) {
 		COLOR = vec4(1.0);
@@ -40,7 +66,7 @@ void fragment() {
 	if (scissor >= 0.0 && c.a < scissor) {
 		discard;
 	}
-	ALBEDO = c.rgb * COLOR.rgb;
+	ALBEDO = c.rgb * COLOR.rgb * shade;
 	ROUGHNESS = roughness;
 	METALLIC = metallic;
 	SPECULAR = specular;

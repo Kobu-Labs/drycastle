@@ -25,6 +25,8 @@ public sealed class CropDoc
     public const int SupportedFormat = 1;
 
     public int FormatVersion { get; init; }
+    /// <summary>The side of a chunk (<c>chunk_size_m</c>; 250 when the file does not say).</summary>
+    public float ChunkSizeM { get; init; } = 250f;
     public IReadOnlyDictionary<string, CropKind> Kinds { get; init; } = new Dictionary<string, CropKind>();
     public IReadOnlyList<CropGroup> Groups { get; init; } = Array.Empty<CropGroup>();
     public int InstanceCount => Groups.Sum(g => g.Instances.Count);
@@ -67,7 +69,8 @@ public sealed class CropDoc
                     if (list.Count > 0) groups.Add(new CropGroup(ix, iy, kind.Name, list));
                 }
             }
-        return new CropDoc { FormatVersion = version, Kinds = kinds, Groups = groups };
+        var chunkM = root.TryGetProperty("chunk_size_m", out var cs) && cs.TryGetSingle(out var csm) && csm > 0f ? csm : 250f;
+        return new CropDoc { FormatVersion = version, ChunkSizeM = chunkM, Kinds = kinds, Groups = groups };
     }
 }
 
@@ -97,7 +100,43 @@ public static class CropSettings
         return g * g * (3f - 2f * g);
     }
 
-    /// <summary>The same for an artifact (bale, tractor, scarecrow): few and big.</summary>
+    /// <summary>
+    /// How much of a far tuft stands by the plants' radius: nothing inside <c>radius - band</c>, whole at the radius, coming in where the plants go out
+    /// (<see cref="Grow"/>), so the field never stands empty in between. Mirrors crop_plant.gdshader (its far layer, before the tufts' own outer radius).
+    /// </summary>
+    public static float FarGrow(float distance, float threshold, float radius, float band, float grow = PlantGrow)
+    {
+        band = MathF.Max(band, 0.001f);
+        var far = distance >= radius ? 1f : Math.Clamp((distance - (radius - band)) / band, 0f, 1f);
+        var span = MathF.Max(grow, 0.001f);
+        var g = Math.Clamp((far - (1f - span) * threshold) / span, 0f, 1f);
+        return g * g * (3f - 2f * g);
+    }
+
+    /// <summary>The far layer: beyond the plants' range a share of them is drawn as wide flat-coloured tufts, so a field far away still reads as planted.
+    /// Distance (metres) at which the last tuft is gone, before the chunk allowance and the clutter scale.</summary>
+    public const float FarRangeM = 800f;
+    /// <summary>The band inside <see cref="FarRangeM"/> over which the tufts thin out.</summary>
+    public const float FarFadeM = 150f;
+    /// <summary>One plant in this many is also a tuft.</summary>
+    public const int FarEvery = 4;
+    /// <summary>How much wider than the plant a tuft is: it stands for <see cref="FarEvery"/> plants.</summary>
+    public const float FarWiden = 2.2f;
+    /// <summary>How much a tuft's brightness varies from the next one's (a share either way).</summary>
+    public const float FarShade = 0.12f;
+
+    /// <summary>Whether a plant is also a tuft of the far layer: a hash of its position (not the one <see cref="Variant"/> uses), the same on every load.</summary>
+    public static bool IsFar(ClutterInstance i)
+    {
+        unchecked
+        {
+            var h = (uint)((int)MathF.Round(i.X * 8f) * 83492791) ^ (uint)((int)MathF.Round(i.Y * 8f) * 2971215073u);
+            h ^= h >> 15; h *= 0x2c1b3c6d; h ^= h >> 12;
+            return h % FarEvery == 0;
+        }
+    }
+
+
     public const float ArtifactRangeM = 220f;
 
     public static float RangeOf(CropKind kind) => kind.IsPlant ? PlantRangeM : ArtifactRangeM;

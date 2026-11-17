@@ -139,7 +139,10 @@ Maps with `files.crops` (`crops.json`, only maps with a crop ground patch; forma
 wheat, corn, potato, rapeseed; hay bales, tractor, scarecrow and so on. Rows are `[x, y, z, rot_rad, scale]` in map axes, placed exactly like clutter (`ToGodot`).
 `MapLoader.Crops.cs` builds one `MultiMeshInstance3D` per 48 m cell, kind and variant (`crop_<kind>[_<variant>]`) in the chunk's node, with a visibility range
 (`CropSettings`: plants 110 m, artifacts 220 m, times `ClutterScale`, plus half a cell; artifacts fade over 8 m). Plants have no edge where they end: over the outer 50 m of their range (`CropSettings.PlantFadeM`) each plant grows in at a
-distance of its own (`crop_plant.gdshader`, the plant's own material with the grow-in, around the camera), so the crop thins out and shrinks towards the range. **Cosmetic only: no collision shape, nothing blocks a
+distance of its own (`crop_plant.gdshader`, the plant's own material with the grow-in, around the camera), so the crop thins out and shrinks towards the range. Beyond it the far layer keeps the field planted: one plant in 4 (`CropSettings.FarEvery`, a position hash) is also a
+tuft, a four-triangle pyramid 2.2 times the plant's width in the plant's own colour (the model's vertices, the upper ones counting more), one MultiMesh per chunk and
+kind (`crop_<kind>_far`), coming in where the plants go out and gone at 800 m (`FarRangeM`, thinning over the last 150 m). The village: about 310k tufts, 1.2M triangles
+if every field were in view. Tufts are cut and crushed like plants. **Cosmetic only: no collision shape, nothing blocks a
 bullet**; a headless load (`CollisionOnly`) builds nothing. `DRYCASTLE_CLUTTER=0` turns it off with the clutter. `MapLoader.CropNodes` lists the nodes.
 
 Models, per kind in `crops.json` `kinds`: `asset` (an id of `assets/manifest.json`; rapeseed: `pack:drycastle-generated-models/rapeseed_plant`) or `synty` (prefab names of the
