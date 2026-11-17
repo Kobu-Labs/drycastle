@@ -1036,6 +1036,13 @@ public partial class NetServer : Node
     /// </summary>
     void FireWeapon(Client c, in NetInput i, FireOutcome shot, ServerCar? seatCar = null)
     {
+        List<HitTarget>? pooled = null;
+        try { FireWeaponWith(c, i, shot, seatCar, ref pooled); }
+        finally { if (pooled != null) ReturnTargets(pooled); } // the shot is resolved: its target list goes back for the next one (it was a new list of every target per shot)
+    }
+
+    void FireWeaponWith(Client c, in NetInput i, FireOutcome shot, ServerCar? seatCar, ref List<HitTarget>? pooled)
+    {
         var w = shot.Weapon;
         var back = VehicleBackOf(c); // the vehicles this shot rewinds (B-02): the same view tick as the players (ADR 0013)
         _vehicleView = ViewOf(back, c.LifeStart);
@@ -1050,7 +1057,9 @@ public partial class NetServer : Node
             yaw = held.ViewYaw; pitch = held.ViewPitch;
         }
         var targetsT = Prof.Begin(Prof.S.ShotTargets);
-        var targets = seatCar != null ? RiderRules.NotAboard(ShotTargets(c), seatCar.Seat) : ShotTargets(c); // players where the shooter's screen showed them (ADR 0013)
+        var all = ShotTargets(c); // players where the shooter's screen showed them (ADR 0013)
+        pooled = all;
+        var targets = seatCar != null ? RiderRules.NotAboard(all, seatCar.Seat) : all; // (NotAboard copies its own)
         Prof.End(Prof.S.ShotTargets, targetsT);
         _shotsFired++;
         var aiming = (i.Buttons & (ushort)MoveButtons.Aim) != 0;
@@ -1090,7 +1099,7 @@ public partial class NetServer : Node
                 hit = GunnerCover.Raycast(N(from), N(along), len, wall, targets, c.Id, exposedGunner, pastHull); // a flak gunner in the open is hit through his hull
                 Prof.End(Prof.S.FireRaycast, partT);
                 partT = Prof.Begin(Prof.S.FireMissCheck);
-                if (hit == null && HitMath.Raycast(N(from), N(along), len, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
+                if (WeaponsSmoke && hit == null && HitMath.Raycast(N(from), N(along), len, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++; // only the weapons smoke reads the count: a second ray over every target on each miss otherwise
                 Prof.End(Prof.S.FireMissCheck, partT);
                 if (!drops || hit != null || wall <= len || before + BulletDrop.SegmentM >= range) break;
                 var passed = before;
