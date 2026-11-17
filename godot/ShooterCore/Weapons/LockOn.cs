@@ -22,6 +22,12 @@ public readonly record struct LockCandidate(ushort Id, Vector3 Position, string 
 /// </summary>
 public static class LockRules
 {
+    /// <summary>
+    /// Whether a seat lets its holder use a launcher at all (#373): on foot, or in an armed seat. A driver and an unarmed passenger cannot fire from the seat,
+    /// so no Lock builds for them, the server says nothing, and the client draws no sight and plays no seeker beep. The server and the client both ask here.
+    /// </summary>
+    public static bool SeatAllows(bool seated, bool armedSeat) => !seated || armedSeat;
+
     public static readonly StateMachineSpec<LockPhase> Spec = StateMachineSpec<LockPhase>
         .Define("Launcher.Lock", "The Lock of a Lock-on launcher on one Aircraft: it builds while the Aircraft stays in the lock circle and in sight, and only a complete Lock lets the launcher fire.", LockPhase.Idle)
         .Allow(LockPhase.Idle, LockPhase.Locking)
