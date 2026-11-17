@@ -14,6 +14,7 @@ Node tree (every moving part is its own node, its origin is its pivot):
       chassis                      frame, bed, fittings (static)
         cab                        bonnet and driver cab
         wheel_fl .. wheel_rr       6 wheels (f, m, r axle; l = -x), origin at the wheel centre, spin about X
+          wheel_fl_steer, _fr_steer  the front axle's steering parents (turn about Y), at the wheel centre; the front wheels are their children
         outrigger_fl .. _rr        4 stabiliser jacks, origin at the jack top (lower them along -Y)
         turret                     yaw pivot (rotate about Y), origin at the ring centre on the deck
           radar                    dish, origin on top of its mast (spin about Y)
@@ -560,7 +561,9 @@ def build():
     # ---- wheels
     for ax, z in AXLES.items():
         for side, sx in (("l", -1), ("r", 1)):
-            n = chassis.child(f"wheel_{ax}{side}", (sx * WHEEL_X, WHEEL_R, z))
+            at = (sx * WHEEL_X, WHEEL_R, z)
+            # the front axle steers: its steering parent sits at the wheel centre (turn about Y), the wheel under it rolls about X
+            n = (chassis.child(f"wheel_{ax}{side}_steer", at) if ax == "f" else chassis).child(f"wheel_{ax}{side}", at)
             w = wheel()
             n.add(move(w if sx > 0 else mirror(w), n.origin))
 
