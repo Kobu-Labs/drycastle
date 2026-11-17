@@ -669,6 +669,8 @@ The intel room is the floor of the military hangar: the first placed object of `
 
 ## 9. Wire protocol
 
+(Version 64 added the Lock-on launcher's event kinds 246-248, ADR 0031.)
+
 (This section was written at version 24; the later bumps are in the summary on `Wire.ProtocolVersion`. Version 29 added event kind 185, `IntelSync`, section 8c; version 30 added kind 194, `WornItems`, section 7b; version 32 the Bigfoot event, section 7c.)
 
 Protocol version: **24** (`Wire.ProtocolVersion`, whose summary lists every bump). The hello carries it; a mismatch is refused with a message naming both
@@ -731,6 +733,9 @@ Event kinds (`EventKind`, one byte in the event message):
 | | | 203 | TakeGroundItem (client to server) |
 | | | 210 | BigfootFx (server to everyone: the Bigfoot's one-shot effects, kinds 210-219 are the events, #264) |
 | | | 211 | BigfootTrail (server to everyone, and to a joiner: the footprints to its corpse) |
+| | | 246 | LockState (server to the shooter: u8 `LockPhase`, u16 Aircraft entity, u8 tracking, f32 progress, f32 lock seconds; 12 bytes; kinds 246-248 are the Lock-on launcher, #347, ADR 0031, protocol 64) |
+| | | 247 | LockAlert (server to the Aircraft's owner: u8 `LockAlert` level, u16 Aircraft entity; 3 bytes) |
+| | | 248 | HomingLaunch (server to everyone: u16 id, u16 owner, u8 weapon, f32 x, y, z origin, u16 Aircraft entity, f32 flight seconds; 23 bytes; the Explosion with the same id ends it) |
 
 Message tags (`Wire.T*`): Hello 1, Welcome 2, Join 3, Leave 4, Event 5, Profile 6, SaveLoadout 7, SelectSlot 8, Error 9,
 SaveCamo 10, Input 11, Snapshot 20, WorldSnapshot 21. SaveLoadout is slot, six item strings, name (string), seq (u32 LE).

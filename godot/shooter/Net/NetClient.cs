@@ -83,7 +83,7 @@ public partial class NetClient : Node
     readonly List<(double T, ExplosionMsg M)> _explosionLog = new();
     /// <summary>The event logs are read only by the scripted bots (the weapons, bazooka, blast and car checks), so a normal match keeps none of them: they grew for the whole match (#173, T3-028).</summary>
     bool KeepEventLogs => WeaponsBot != "" || BazookaBot != "" || BlastBot != "" || CarBot != "";
-    sealed class Rocket { public double Born; public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; }
+    sealed class Rocket { public double Born; public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; /* a homing missile (NetClient.LockOn.cs): the Aircraft it closes on and when it gets there */ public bool Homing; public ushort Target; public double Arrive; }
     readonly Dictionary<ushort, Rocket> _rockets = new();
     readonly HashSet<ushort> _deadRockets = new();
     readonly List<(double T, AmmoMsg M)> _ammoLog = new();
@@ -139,6 +139,7 @@ public partial class NetClient : Node
         InitThieves();
         InitDemon();
         InitAircraft();
+        InitLockOn();
         InitFlak();
         InitSeats();
         InitMatchEdges();
@@ -273,6 +274,7 @@ public partial class NetClient : Node
         RenderHarvester((float)delta);
         RenderAircraft(delta);
         RenderRockets();
+        RenderLockOn();
         RenderMissiles();
         RenderMissilePov();
         RenderWater();
@@ -475,7 +477,8 @@ public partial class NetClient : Node
         foreach (var r in _rockets.Values)
         {
             if (r.Node == null) continue;
-            var p = r.Pos + r.Dir * (r.Speed * (float)Math.Min(0.1, Now - r.At));
+            if (r.Homing) StepHoming(r);
+            var p = r.Homing ? r.Pos : r.Pos + r.Dir * (r.Speed * (float)Math.Min(0.1, Now - r.At));
             // visual only: the server rocket starts at the eye; draw it leaving the muzzle (0.8 m ahead, right and down) and blend onto the true path
             var k = Mathf.Max(0f, 1f - (float)(Now - r.Born) / 0.35f);
             var d = new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z);
@@ -967,7 +970,7 @@ public partial class NetClient : Node
                 break;
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
                 if (KeepEventLogs) _explosionLog.Add((Now, ex));
-                if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(Owned, rk.Node); }
+                if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(Owned, rk.Node); if (rk.Homing) NoteHomingBlast(new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z), ex.Radius); }
                 _dec.Forget(ex.Id);
                 _deadRockets.Add(ex.Id);
                 if (_deadRockets.Count > 256) _deadRockets.Clear();

@@ -300,7 +300,7 @@ A value from the day clock that drives street lamp light, headlight and window g
 _Avoid_: darkness, night mode
 
 **Aircraft**:
-A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper, the AC-130 gunship and the UAV. Nobody boards or flies it; its owner only works its guns (the UAV has none). It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship, 200 for the UAV) and can be shot down by flak and any other anti-aircraft (ADR 0005): its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
+A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper, the AC-130 gunship and the UAV. Nobody boards or flies it; its owner only works its guns (the UAV has none). It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship, 200 for the UAV) and can be shot down by flak, the Lock-on launcher and any other anti-aircraft (ADR 0005, ADR 0031): its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
 _Avoid_: plane (for helicopters), drone, helicopter (alone)
 
 **Utility helicopter**:
@@ -330,6 +330,22 @@ _Avoid_: parking spot, spawn point (that is where a player appears)
 **Airburst**:
 A flak shell's end by an aircraft: the shell flies straight at 700 m/s, and once it passes within 12 m of an aircraft it bursts at the closest approach. An aircraft within 15 m of the burst takes 150 damage out to 4 m, falling to 40 at the edge. The gunner has to lead the aircraft, which flies a known circle. A shell that meets no aircraft ends on the ground with a small blast (4 m, weak), or runs out of range.
 _Avoid_: proximity fuse (the fuse is how it works, the burst is the thing), flak burst
+
+**Lock-on launcher**:
+A secondary weapon carried on the shoulder (`weapons.json` `strela`) that shoots down Aircraft and nothing else (ADR 0031). It fires only on a complete Lock; without one the trigger clicks. One Homing missile in the tube and two in reserve, 500 damage each: one for the UAV, two for a helicopter, three for the AC-130. Its sight replaces the crosshair while it is in the hand. Bots do not carry it.
+_Avoid_: AA launcher, MANPADS, Stinger, rocket launcher (that is the bazooka)
+
+**Lock**:
+What a Lock-on launcher builds on one enemy Aircraft before it may fire: the Aircraft has to stay inside the lock circle (wider than the aim), within range (the UAV at any distance) and in sight for 2.5 seconds. Out of the circle or behind a wall the progress waits 0.4 seconds, then the Lock is lost. The server decides it; the shooter hears beeps that quicken and a solid tone when it is complete.
+_Avoid_: target lock, aim assist, tracking (that is a Lock whose Aircraft is in the circle right now)
+
+**Lock alert**:
+What an Aircraft's owner is told while a Lock-on launcher is on their Aircraft: an icon and a beep from 40 % of a Lock, a second icon and faster beeps at a complete Lock, a third when a Homing missile is in the air.
+_Avoid_: missile warning, RWR
+
+**Homing missile**:
+What a Lock-on launcher fires: it flies at 160 m/s after the Aircraft it was locked on and always reaches it, unless the Aircraft is gone first (then it bursts in the air). Its hit is an explosion with no Dust cloud; the one that shoots the Aircraft down is 20 m and raises a Blast wave.
+_Avoid_: rocket (the bazooka's and the gunship's fly straight), attack missile (that is the killstreak)
 
 **Sentry turret**:
 The killstreak that places a 500 hp gun on the ground for 15 seconds. It turns to targets within its sight range and shoots them. It is removed when its owner dies or leaves the match, so it never fires or credits kills for an absent owner.

@@ -12,4 +12,4 @@ Decided for the anti-aircraft work after Shooter v2. **Reverses** the v2 rule th
 
 **Any anti-aircraft (#303).** Hit points and the Destroyed end are not flak-only: any anti-aircraft weapon that damages an aircraft (`Aircraft.OnDamage`, `NetServer.DamageAircraft`) shoots it down, and flak is just the first. The UAV (an aircraft kind with no guns) is shot down the same way and its streak ends.
 
-**Consequences.** Killstreak aircraft are no longer safe: a team with a flak truck can end an enemy's helicopter or AC-130, which changes what a streak is worth (a balance question, see the balance pass #211). A counter for the aircraft (flares) and a hand-held lock-on launcher are not part of this decision.
+**Consequences.** Killstreak aircraft are no longer safe: a team with a flak truck can end an enemy's helicopter or AC-130, which changes what a streak is worth (a balance question, see the balance pass #211). A counter for the aircraft (flares) and a hand-held lock-on launcher are not part of this decision (the launcher came with ADR 0031).

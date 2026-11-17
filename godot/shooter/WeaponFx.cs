@@ -4,7 +4,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// Held weapon visuals. Models come from the Quaternius Ultimate Gun Pack: pistol = Pistol_1, ak47 = AssaultRifle_1,
-/// knife = Bayonet (stand-in, the pack has no knife). The pack has no launcher, so the bazooka is a code-built tube.
+/// knife = Bayonet (stand-in, the pack has no knife). The pack has no launcher, so the bazooka is a code-built tube; the Lock-on launcher is the paid pack's model, or a code-built one without the pack.
 /// The shooter v2 weapons map to the other OBJ models of the same pack (see assets/README.md, "Shooter v2 weapons").
 /// Every model is returned with its muzzle toward -Z and its origin at the grip end.
 /// </summary>
@@ -63,9 +63,14 @@ public static class WeaponFx
             root.SetMeta(SightHeightMeta, box.Size.Y * 0.2f * s); // top of the model (its iron sight) above the grip origin
         }
         else if (weaponId == "bazooka") { BuildTube(root); root.SetMeta(SightHeightMeta, 0.05f); }
+        else if (weaponId == "strela")
+        {
+            if (!AddPackLauncher(root)) BuildLockOnLauncher(root);
+            root.SetMeta(SightHeightMeta, 0.11f);
+        }
         else return null;
         // muzzle marker: the barrel tip (0.7 of the length in front of the grip; the tube ends at -0.81)
-        var z = weaponId == "bazooka" ? -0.82f : Models.TryGetValue(weaponId, out var mm) ? -mm.Length * 0.7f : -0.3f;
+        var z = weaponId == "bazooka" ? -0.82f : weaponId == "strela" ? (root.HasNode(PackLauncherNode) ? -PackLauncherMuzzle : -0.9f) : Models.TryGetValue(weaponId, out var mm) ? -mm.Length * 0.7f : -0.3f;
         var muzzle = new Node3D { Name = "Muzzle", Position = new Vector3(0, 0.02f, z) };
         if (weaponId != "knife") muzzle.AddChild(new MuzzleFlash());
         root.AddChild(muzzle);
@@ -81,6 +86,48 @@ public static class WeaponFx
         root.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.08f, Height = 0.12f, Material = dark }, Position = new Vector3(0, 0, 0.18f), RotationDegrees = new Vector3(90, 0, 0) });
         root.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.0f, BottomRadius = 0.045f, Height = 0.16f, Material = tip }, Position = new Vector3(0, 0, -0.73f), RotationDegrees = new Vector3(-90, 0, 0) });
         root.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(0.05f, 0.14f, 0.06f), Material = dark }, Position = new Vector3(0, -0.12f, -0.1f) });
+    }
+
+    const string PackLauncherNode = "PackLauncher";
+    /// <summary>The paid pack's launcher is drawn at this share of its authored size (1.44 m long, 0.24 m across: too fat in the first-person view at full size).</summary>
+    const float PackLauncherScale = 0.75f;
+    /// <summary>Authored distances along the launcher: the pistol grip behind the model's origin, and the mouth in front of it.</summary>
+    const float PackLauncherGrip = 0.2f, PackLauncherMouth = 0.627f;
+    /// <summary>How far in front of the grip the mouth ends up, metres.</summary>
+    const float PackLauncherMuzzle = (PackLauncherGrip + PackLauncherMouth) * PackLauncherScale;
+
+    /// <summary>
+    /// The Lock-on launcher of the paid pack (SM_Wep_RocketLauncher_01: tube, two handles and trigger, converted to glb/props/lock_on_launcher_01.glb
+    /// by the pack's tools/export_multi_glb.gd; atlas Weapons_01). The pack's props face +Z with the grips under the tube, the hands hold things
+    /// facing -Z: turned half round, with the pistol grip at the origin. False when the pack is not there.
+    /// </summary>
+    static bool AddPackLauncher(Node3D root)
+    {
+        if (SyntyLib.Instance("props/lock_on_launcher_01", "glb/atlas/military_weapons_01.png") is not { } model) return false;
+        model.Name = PackLauncherNode;
+        model.Transform = new Transform3D(new Basis(Vector3.Up, Mathf.Pi).Scaled(Vector3.One * PackLauncherScale), new Vector3(0, 0, -PackLauncherGrip * PackLauncherScale));
+        root.AddChild(model);
+        return true;
+    }
+
+    /// <summary>
+    /// Stand-in Lock-on launcher (issue #347) for a build without the paid pack, laid along -Z: a long thin tube with a glass seeker in its mouth, a
+    /// sight box on top, a grip with the battery ball under the front and a flared rear.
+    /// </summary>
+    static void BuildLockOnLauncher(Node3D root)
+    {
+        var olive = new StandardMaterial3D { AlbedoColor = new Color(0.27f, 0.31f, 0.2f), Roughness = 0.75f };
+        var dark = new StandardMaterial3D { AlbedoColor = new Color(0.12f, 0.13f, 0.12f), Roughness = 0.7f };
+        var glass = new StandardMaterial3D { AlbedoColor = new Color(0.25f, 0.4f, 0.45f), Roughness = 0.15f, Metallic = 0.4f };
+        var along = new Vector3(90, 0, 0);
+        root.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.045f, BottomRadius = 0.045f, Height = 1.3f, Material = olive }, Position = new Vector3(0, 0, -0.22f), RotationDegrees = along });
+        root.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.045f, BottomRadius = 0.07f, Height = 0.1f, Material = dark }, Position = new Vector3(0, 0, 0.48f), RotationDegrees = along });
+        root.AddChild(new MeshInstance3D { Mesh = new CylinderMesh { TopRadius = 0.052f, BottomRadius = 0.052f, Height = 0.06f, Material = dark }, Position = new Vector3(0, 0, -0.85f), RotationDegrees = along });
+        root.AddChild(new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.04f, Height = 0.08f, Material = glass }, Position = new Vector3(0, 0, -0.87f) });
+        root.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(0.05f, 0.07f, 0.16f), Material = dark }, Position = new Vector3(0.03f, 0.075f, -0.25f) });
+        root.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(0.04f, 0.13f, 0.05f), Material = dark }, Position = new Vector3(0, -0.11f, -0.05f) });
+        root.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(0.04f, 0.1f, 0.05f), Material = dark }, Position = new Vector3(0, -0.095f, -0.5f) });
+        root.AddChild(new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.045f, Height = 0.09f, Material = olive }, Position = new Vector3(0, -0.07f, -0.68f) });
     }
 
     static Aabb Bounds(Node n)
