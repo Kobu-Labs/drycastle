@@ -16,8 +16,8 @@ public sealed partial class TrailerProbe : Node3D, ITrailerWorld
     /// <summary>The box is swept this far above the ground under it, metres (the wheels' business: kerbs and banks pass under).</summary>
     public const float Clearance = 0.5f;
     const float RayLift = 1.5f, RayReach = 8f;
-    /// <summary>A box longer than this (half length, metres) also samples the ground under its middle (a crest between the two ends).</summary>
-    const float MidSampleFrom = 4f;
+    /// <summary>The ground under a box is sampled this far apart along its length (a crest or a dyke between its two ends), metres.</summary>
+    const float SampleEvery = 1.5f;
 
     static readonly uint WorldMask = CollisionRules.StaticMask(MoverKind.GroundVehicle);
     static readonly uint SweepMask = CollisionRules.SweepMask(MoverKind.GroundVehicle);
@@ -55,9 +55,17 @@ public sealed partial class TrailerProbe : Node3D, ITrailerWorld
         var pitch = MathF.Atan2(gf - gr, 2 * to.HalfL);
         var height = _box.Size.Y;
         var basis = Basis.FromEuler(new Vector3(pitch, to.Yaw, 0));
-        // a long box (the rocket cart's 12.6 m) over a crest between its ends would sit in the ground: the middle's ground lifts the whole box
-        var mid = (gf + gr) / 2;
-        if (to.HalfL > MidSampleFrom) mid = MathF.Max(mid, GroundY(to.X, to.Z, y));
+        // a long box (the rocket cart's 12.6 m) over a crest or a dyke between its ends would sit in the ground: the ground is sampled along its length and the whole box lifted by the most
+        // any sample stands over the line between the two ends
+        var lift = 0f;
+        var n = Math.Max(1, (int)MathF.Ceiling(2 * to.HalfL / SampleEvery));
+        for (var i = 1; i < n; i++)
+        {
+            var t = i / (float)n; // 0 at the rear, 1 at the front
+            var x = rear.X + (front.X - rear.X) * t; var z = rear.Z + (front.Z - rear.Z) * t;
+            lift = MathF.Max(lift, GroundY(x, z, y) - (gr + (gf - gr) * t));
+        }
+        var mid = (gf + gr) / 2 + lift;
         var centre = new Vector3(to.X, mid + Clearance + height / 2, to.Z);
         _query.Transform = new Transform3D(basis, centre);
         return GetWorld3D().DirectSpaceState.IntersectShape(_query, 1).Count > 0;
