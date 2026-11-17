@@ -26,6 +26,9 @@ public partial class NetServer
     readonly List<double>[] _phaseUs = MakePhaseLists();
     /// <summary>Stopwatch timestamp of the last phase boundary of the current tick.</summary>
     long _phaseClock;
+    /// <summary>Bytes the game thread allocated in each phase since the last report, and the thread's count at the last phase boundary.</summary>
+    readonly long[] _phaseAlloc = new long[(int)ServerPerf.Ph.Count];
+    long _phaseAllocAt;
     /// <summary>The GC counters at the last report, for the report's deltas.</summary>
     int _gc0Last, _gc1Last, _gc2Last;
     long _allocLast;
@@ -39,7 +42,12 @@ public partial class NetServer
     }
 
     /// <summary>Start of a tick's phases: <see cref="PhaseLap"/> charges each phase from here.</summary>
-    void PhasesBegin() => _phaseClock = Stopwatch.GetTimestamp();
+    void PhasesBegin()
+    {
+        _phaseClock = Stopwatch.GetTimestamp();
+        _phaseAllocAt = GC.GetAllocatedBytesForCurrentThread();
+        ProfTickBegin();
+    }
 
     /// <summary>Ends a phase of the tick (always on, a timestamp and a list add: no allocation once the lists have grown).</summary>
     void PhaseLap(ServerPerf.Ph p)
@@ -47,6 +55,9 @@ public partial class NetServer
         var now = Stopwatch.GetTimestamp();
         _phaseUs[(int)p].Add((now - _phaseClock) * 1_000_000.0 / Stopwatch.Frequency);
         _phaseClock = now;
+        var alloc = GC.GetAllocatedBytesForCurrentThread();
+        _phaseAlloc[(int)p] += alloc - _phaseAllocAt;
+        _phaseAllocAt = alloc;
     }
 
     /// <summary>True when this tick started right after the previous one, i.e. the engine is catching up after a slow tick.</summary>

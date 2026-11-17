@@ -569,7 +569,7 @@ public sealed class Animal : IWorldEntity
     /// </summary>
     Block Step(float want, float speed, float dt)
     {
-        var t = Prof.Begin();
+        var t = Prof.Begin(Prof.S.AnimalStep);
         var block = StepInner(want, speed, dt);
         Prof.End(Prof.S.AnimalStep, t);
         return block;
@@ -587,7 +587,7 @@ public sealed class Animal : IWorldEntity
         var z = Position.Z + f.Z * speed * dt;
         var world = _open ?? _world;
         if (world.GroundY(x, z) is not { } y || MathF.Abs(y - Position.Y) > _file.MaxStepM) return Block.Ground;
-        var bodyT = Prof.Begin();
+        var bodyT = Prof.Begin(Prof.S.AnimalBodyAhead);
         var body = BodyAhead(x, z);
         Prof.End(Prof.S.AnimalBodyAhead, bodyT);
         if (body) return Block.Body;
@@ -609,7 +609,7 @@ public sealed class Animal : IWorldEntity
     {
         var to = BodyBox.Of(new Vector3(x, Position.Y, z), Yaw, _bodyW, _bodyL, _bodyAhead);
         var from = Body;
-        var crowdT = Prof.Begin();
+        var crowdT = Prof.Begin(Prof.S.AnimalCrowd);
         var crowded = Crowd?.Blocks(this, from, to) == true;
         Prof.End(Prof.S.AnimalCrowd, crowdT);
         if (crowded) return true;

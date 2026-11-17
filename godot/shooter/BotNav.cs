@@ -103,6 +103,8 @@ public sealed class BotNav
         // its own query and result: the tick thread's pair (Route) is never touched from here
         var query = new NavigationPathQueryParameters3D { Map = _map, PathSearchMaxPolygons = 0 };
         var result = new NavigationPathQueryResult3D();
+        var compare = System.Environment.GetEnvironmentVariable("DRYCASTLE_NAV_COMPARE") == "1"; // measurement only: is the route the same without the snaps?
+        var asked = 0;
         while (true)
         {
             _wake.Wait();
@@ -110,7 +112,11 @@ public sealed class BotNav
             if (!_jobs.TryDequeue(out var job)) continue;
             var t0 = Stopwatch.GetTimestamp();
             Vector3[] path;
-            try { path = Query(_map, query, result, job.From, job.To); }
+            try
+            {
+                path = Query(_map, query, result, job.From, job.To);
+                if (compare && ++asked % 4 == 0) CompareRaw(query, result, job.From, job.To, path); // every fourth route: the check must not load the worker
+            }
             catch (Exception e) { GD.PrintErr($"server: bot navigation worker: {e.Message}"); path = Array.Empty<Vector3>(); }
             _answers.Enqueue(new Answer(job.Ticket, path, Stopwatch.GetElapsedTime(t0).TotalMilliseconds));
         }
@@ -118,15 +124,32 @@ public sealed class BotNav
         result.Dispose();
     }
 
+    /// <summary>The same route asked with the raw ends (no snap to the mesh first), timed and compared with <paramref name="snapped"/>, point by point (DRYCASTLE_NAV_COMPARE).</summary>
+    static void CompareRaw(NavigationPathQueryParameters3D query, NavigationPathQueryResult3D result, Vector3 from, Vector3 to, Vector3[] snapped)
+    {
+        var t = Stopwatch.GetTimestamp();
+        query.StartPosition = from;
+        query.TargetPosition = to;
+        NavigationServer3D.QueryPath(query, result);
+        var raw = result.Path;
+        var worst = -1f; // another number of points
+        if (raw.Length == snapped.Length)
+        {
+            worst = 0;
+            for (var i = 0; i < raw.Length; i++) worst = Mathf.Max(worst, raw[i].DistanceTo(snapped[i]));
+        }
+        Prof.NavRaw(t, worst);
+    }
+
     static Vector3[] Query(Rid map, NavigationPathQueryParameters3D query, NavigationPathQueryResult3D result, Vector3 from, Vector3 to)
     {
-        var t = Prof.Begin();
+        var t = Stopwatch.GetTimestamp();
         query.StartPosition = NavigationServer3D.MapGetClosestPoint(map, from);
         Prof.NavSnap(t);
-        t = Prof.Begin();
+        t = Stopwatch.GetTimestamp();
         query.TargetPosition = NavigationServer3D.MapGetClosestPoint(map, to);
         Prof.NavSnap(t);
-        t = Prof.Begin();
+        t = Stopwatch.GetTimestamp();
         NavigationServer3D.QueryPath(query, result);
         Prof.NavPath(t);
         return result.Path;
