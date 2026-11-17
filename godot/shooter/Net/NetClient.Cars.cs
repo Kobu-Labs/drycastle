@@ -24,6 +24,8 @@ public partial class NetClient
         public RotorFx? Rotor;
         /// <summary>A driven vehicle's moving nodes and water effects (the amphibious transport; null for every other type, or a model without them).</summary>
         public DriveNodes? Drive;
+        /// <summary>The generic wheel animation of a ground vehicle that is neither predicted nor has its own (null otherwise, or a model without wheels).</summary>
+        public VehicleWheels? Roller;
         public readonly Interpolator Buf = new();
         /// <summary>The vehicle's visible parts (<see cref="CarFx.VisualName"/>): a boat's wave bob and tilt move this, not the root.</summary>
         public Node3D? Visual;
@@ -56,6 +58,9 @@ public partial class NetClient
         public TrailerView? Trailer;
     }
 
+    /// <summary>A ground vehicle whose wheels the generic animator turns: not predicted (DriveNodes), not flying, and not the Scud or a trailer (their own, see car-design section 3).</summary>
+    static bool GenericWheels(VehicleDef d) => d.Drive == null && d.Flight == null && d.Trailer == null && d.Launcher == null;
+
     readonly Dictionary<ushort, CarView> _cars = new();
     bool _driving;
     float _carYaw;
@@ -75,6 +80,7 @@ public partial class NetClient
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flight != null) v.Rotor = RotorFx.Find(v.Node);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Drive != null) v.Drive = DriveNodes.Find(v.Node);
             if (ShotFx.Enabled) v.Wheels = FindWheels(v.Node);
+            if (ShotFx.Enabled && GenericWheels(Vehicles.Vehicles[v.Kind])) v.Roller = VehicleWheels.Find(v.Node);
             if (Vehicles.Vehicles[v.Kind].Trailer != null) v.Trailer = MakeTrailerView(v);
             _cars[id] = v;
             ShowGlassOf(id); // panes whose state arrived before the vehicle was drawn (ADR 0007)
@@ -213,6 +219,7 @@ public partial class NetClient
             if (flies) StepFlightFx(v, FlightDef(v)!, p, rot, dt); // rotors, their sound, the downwash
             else SfxCar(v, p, dt);
             if (drive != null) StepDriveFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
+            else v.Roller?.Step(p, rot.Y, dt); // wheels of a vehicle that is not predicted: from its drawn motion
             var seat = _driving && _me != null ? OwnSeatIn(v) : -1; // the seat the local player has in this vehicle
             if (seat >= 0) TrackView(v, seat);
             if (seat == 0 || seat > 0 && !flakMine)
