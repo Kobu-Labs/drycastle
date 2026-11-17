@@ -16,33 +16,24 @@ remove:
     radius: 0.5
     note: mechanic garage, north wall
   # The plantation (issue 364, ground patch GP-0085): the trees that stand inside it.
-  - at: [-588402.84, -1248909.34]
-    radius: 0.6
-    note: plantation
-  - at: [-588405.56, -1248905.86]
-    radius: 0.6
-    note: plantation
-  - at: [-588398.47, -1248904.18]
-    radius: 0.6
-    note: plantation
   - at: [-588390.7, -1248906.51]
     radius: 0.6
     note: plantation
   - at: [-588406.61, -1248921.74]
     radius: 0.6
     note: plantation
-  - at: [-588399.18, -1248912.44]
-    radius: 0.6
-    note: plantation
-  - at: [-588409.42, -1248912.53]
-    radius: 0.6
-    note: plantation
-  - at: [-588395.51, -1248914.54]
-    radius: 0.6
-    note: plantation
   - at: [-588392.52, -1248921.76]
     radius: 0.6
     note: plantation
-  - at: [-588390.07, -1248913.54]
+  - at: [-588402.43, -1248908.05]
+    radius: 0.6
+    note: plantation
+  - at: [-588401.41, -1248902.48]
+    radius: 0.6
+    note: plantation
+  - at: [-588399.94, -1248918.34]
+    radius: 0.6
+    note: plantation
+  - at: [-588388.64, -1248916.61]
     radius: 0.6
     note: plantation
