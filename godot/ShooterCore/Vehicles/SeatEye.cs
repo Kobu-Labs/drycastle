@@ -17,16 +17,12 @@ public static class SeatEye
 {
     /// <summary>
     /// Eyes set by hand for a seat (vehicle id, seat index), in the hull frame: the driver's of the seven vehicles that had a hand-built cockpit rig
-    /// (<c>CockpitRig</c>), and the Golf's passengers (its seats carry no eye_height). They were measured against the rig and the model, and stay exactly as they were (the Humvee's view must not change). The generic
+    /// (<c>CockpitRig</c>). They were measured against the rig and the model, and stay exactly as they were (the Humvee's view must not change). The generic
     /// rule would put most of them within a hand's width of these, but not on them. The numbers sit beside the model scripts' (scripts/make_*_model.py).
     /// </summary>
     public static readonly IReadOnlyDictionary<(string Vehicle, int Seat), Vector3> HandSetEyes = new Dictionary<(string, int), Vector3>
     {
         [("golf_mk2", 0)] = new(-0.4875f, 1.50f, 0.30f),
-        // the Golf's other seats (no eye_height in the data: the standing eye would be over its 1.79 m box): the seat + 1.05 m, the crouch's eye
-        [("golf_mk2", 1)] = new(0.4875f, 1.50f, 0.2125f),
-        [("golf_mk2", 2)] = new(-0.45f, 1.50f, 1.25f),
-        [("golf_mk2", 3)] = new(0.45f, 1.50f, 1.25f),
         // the Humvee: seat_driver [-0.62, 0.6, -0.22] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/make_humvee_model.py): inside the cab (roof 1.83 inside, windscreen top 1.79), behind the wheel
         [("humvee", 0)] = new(-0.62f, 1.65f, -0.13f),
         [("bus", 0)] = new(-0.70f, 1.60f, -4.75f),

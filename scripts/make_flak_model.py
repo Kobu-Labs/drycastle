@@ -8,13 +8,14 @@ Original geometry written by hand as code (no third-party model, no texture); st
 Frame: the game's vehicle frame, metres. x right, y up, z back (forward is -Z), origin on the ground at the centre.
 So vehicles.json uses model_scale 1, model_yaw_deg 0, model_offset [0, 0, 0].
 
-Node tree (every moving part is its own node, its origin is its pivot):
+Node tree (every moving part is its own node, its origin is its pivot; the contract is docs/standards/car-design.md part A):
 
     flak
-      chassis                      frame, bed, fittings (static)
-        cab                        bonnet and driver cab
-        wheel_fl .. wheel_rr       6 wheels (f, m, r axle; l = -x), origin at the wheel centre, spin about X
-          wheel_fl_steer, _fr_steer  the front axle's steering parents (turn about Y), at the wheel centre; the front wheels are their children
+      hull                         frame, bed, fittings (static)
+        cab                        bonnet and a HOLLOW driver cab: floor, firewall, doors, back wall, pillars and roof round real window openings,
+                                   dash with gauges, steering column, driver's seat (the cockpit view sees this room from inside)
+        glass_0 .. glass_5         the breakable panes (GlassSet), one node each, in the window openings of the cab
+        steering_wheel_rim, _spokes   the wheel (meshes): the cockpit view hides them and draws its own wheel that turns (CockpitRig)
         outrigger_fl .. _rr        4 stabiliser jacks, origin at the jack top (lower them along -Y)
         turret                     yaw pivot (rotate about Y), origin at the ring centre on the deck
           radar                    dish, origin on top of its mast (spin about Y)
@@ -25,6 +26,9 @@ Node tree (every moving part is its own node, its origin is its pivot):
           seat_gunner              empty: gunner seat (feet)
         seat_driver                empty: driver seat (feet)
         light_head_l/r, light_tail_l/r, smoke_hood   empties: lamp positions and the smoke point
+      wheel_fl_steer, _fr_steer    the front axle's steering parents (turn about Y), at the wheel centre, SIBLINGS of the hull
+        wheel_fl, wheel_fr         the front wheels, origin at the wheel centre, spin about X
+      wheel_ml, _mr, _rl, _rr      the other four wheels (f, m, r axle; l = -x), siblings of the hull
 """
 import json
 import math
@@ -421,7 +425,7 @@ GLASS = GlassSet("flak")
 
 def build():
     root = Node("flak")
-    chassis = root.child("chassis")
+    chassis = root.child("hull")
     cab = chassis.child("cab")
 
     # ---- frame and running gear (chassis)
@@ -470,25 +474,81 @@ def build():
     cab.add(both(box("Olive", 0.95, 1.01, 1.30, 1.36, -3.02, -2.92)))                # lamp stalk
     cab.add(both(box("Amber", 1.14, 1.24, 1.27, 1.33, -3.10, -3.04)))                # indicator
 
-    # ---- cab: lower body and glasshouse
-    cab.add(box("Olive", -1.20, 1.20, 0.95, 1.78, -2.15, -0.80, c=0.05, axis='x', e=0.03))
+    # ---- cab: a hollow body (floor, firewall, doors, back wall) under a glasshouse of pillars, header and roof round real window openings
+    cc = (0, 2.0, -1.4)                  # a point inside the cab: faces look away from it
+    W = 0.06                             # wall thickness of the body
+    cab.add(box("Olive", -1.20, 1.20, 0.95, 1.78, -2.15, -2.15 + W))                       # firewall
+    cab.add(both(box("Olive", 1.20 - W, 1.20, 0.95, 1.78, -2.15, -0.80)))                    # door sides
+    cab.add(box("Olive", -1.20, 1.20, 0.95, 1.78, -0.80 - W, -0.80))                        # back wall
+    cab.add(box("OliveDark", -1.14, 1.14, 0.93, 0.97, -2.09, -0.86))                         # floor
+    cab.add(both(box("OliveDark", 1.08, 1.14, 1.00, 1.62, -1.98, -1.04, c=0.02, axis='x', e=0)))  # door cards
+    cab.add(both(box("DarkMetal", 1.02, 1.08, 1.50, 1.56, -1.30, -1.12)))                    # door pulls
 
     def ring(y, xh, zf, zb):
         return [(-xh, y, zf), (xh, y, zf), (xh, y, zb), (-xh, y, zb)]
     g0, g1, g2 = ring(1.78, 1.17, -2.12, -0.83), ring(2.28, 1.03, -1.80, -0.90), ring(2.36, 0.93, -1.68, -1.00)
-    cab.add(loft("Olive", [g0, g1, g2], cap0=False))
-    cc = (0, 2.0, -1.4)
+
+    def facing(a, b, c, d):
+        n = unit(cross(sub(b, a), sub(d, a)))
+        mid = mul(add(add(a, b), add(c, d)), 0.25)
+        return n if dot(n, sub(mid, cc)) >= 0 else mul(n, -1)
+
+    def bil(f, u, v):
+        a, b, c, d = f
+        return add(mul(add(mul(a, 1 - u), mul(b, u)), 1 - v), mul(add(mul(d, 1 - u), mul(c, u)), v))
+
+    def rect(f, u0, u1, v0, v1, t=0.05):
+        """The part u0..u1, v0..v1 of the face f as a closed slab t thick, pushed inwards: a frame piece seen from both sides."""
+        if u1 - u0 < 1e-6 or v1 - v0 < 1e-6:
+            return []
+        n = facing(*f)
+        q = [bil(f, u, v) for u, v in ((u0, v0), (u1, v0), (u1, v1), (u0, v1))]
+        return loft("Olive", [q, [sub(p, mul(n, t)) for p in q]])
+
+    def framed(f, windows, v0, v1):
+        """The face f without the window openings (u ranges `windows`, all between v0 and v1): sill, header and the pillars between."""
+        out = rect(f, 0, 1, 0, v0) + rect(f, 0, 1, v1, 1)
+        edge = 0.0
+        for u0, u1 in sorted(windows):
+            out += rect(f, edge, u0, v0, v1)
+            edge = u1
+        return out + rect(f, edge, 1, v0, v1)
+
     f = (g0[0], g0[1], g1[1], g1[0])     # windscreen face
-    # the breakable panes are nodes of their own (glass_N, see GlassSet): two windscreen halves, and on each side a door window and a quarter light
+    cab.add(framed(f, ((0.045, 0.485), (0.515, 0.955)), 0.10, 0.90))
+    # the breakable panes are nodes of their own (glass_N, see GlassSet), in the openings: two windscreen halves, and on each side a door window and a quarter light
     for pid, u0, u1 in (("windscreen_left", 0.045, 0.485), ("windscreen_right", 0.515, 0.955)):
-        GLASS.pane(cab, pid, [panel("Glass", *f, u0, u1, 0.10, 0.90, 0.012, cc)], panel_face(*f, u0, u1, 0.10, 0.90, 0.012, cc))
+        GLASS.pane(chassis, pid, [panel("Glass", *f, u0, u1, 0.10, 0.90, 0.012, cc)], panel_face(*f, u0, u1, 0.10, 0.90, 0.012, cc))
     for i0, i1, s in ((1, 2, 1), (3, 0, -1)):  # side windows: door glass and a quarter light (u runs along the face)
         q = (g0[i0], g0[i1], g1[i1], g1[i0])
         d1, d2, q1, q2 = (0.06, 0.60, 0.68, 0.93) if s > 0 else (0.40, 0.94, 0.07, 0.32)
         side = "right" if s > 0 else "left"
+        cab.add(framed(q, ((d1, d2), (q1, q2)), 0.10, 0.88))
         for pid, u0, u1 in (("door_" + side, d1, d2), ("quarter_" + side, q1, q2)):
-            GLASS.pane(cab, pid, [panel("Glass", *q, u0, u1, 0.10, 0.88, 0.012, cc)], panel_face(*q, u0, u1, 0.10, 0.88, 0.012, cc))
-    cab.add(panel("Glass", g0[2], g0[3], g1[3], g1[2], 0.28, 0.72, 0.15, 0.80, 0.012, cc))  # rear window
+            GLASS.pane(chassis, pid, [panel("Glass", *q, u0, u1, 0.10, 0.88, 0.012, cc)], panel_face(*q, u0, u1, 0.10, 0.88, 0.012, cc))
+    rear = (g0[2], g0[3], g1[3], g1[2])
+    cab.add(framed(rear, ((0.28, 0.72),), 0.15, 0.80))
+    cab.add(panel("Glass", *rear, 0.28, 0.72, 0.15, 0.80, 0.012, cc))                       # rear window (not a pane: the turret shows through it)
+    for a, b, c, d in ((0, 1, 1, 0), (1, 2, 2, 1), (2, 3, 3, 2), (3, 0, 0, 3)):             # the narrow band up to the roof, and the roof
+        cab.add(rect((g1[a], g1[b], g2[c], g2[d]), 0, 1, 0, 1))
+    cab.add(rect((g2[0], g2[1], g2[2], g2[3]), 0, 1, 0, 1))
+    # ---- inside the cab: dash with the instruments, steering column and wheel, the driver's seat (the cockpit view looks at these)
+    cab.add(box("OliveDark", -1.14, 1.14, 1.40, 1.76, -2.09, -1.86, c=0.04, axis='x', e=0))                                   # dash
+    cab.add(box("DarkMetal", -0.80, -0.20, 1.48, 1.74, -1.88, -1.855))                                                            # instrument panel
+    for x in (-0.62, -0.38):
+        cab.add(cyl("Steel", (x, 1.61, -1.858), (x, 1.61, -1.845), 0.085, 12))                                                # gauges
+    cab.add(cyl("DarkMetal", (-0.50, 1.50, -1.86), (-0.50, 1.66, -1.72), 0.03, 6))                                                # steering column
+    cab.add(box("DarkMetal", -0.55, -0.45, 0.95, 1.30, -1.46, -1.24))                                                         # seat pedestal
+    cab.add(box("Khaki", -0.76, -0.24, 1.30, 1.40, -1.60, -1.08, c=0.03, axis='x', e=0))                                      # seat cushion
+    cab.add(rot(box("Khaki", -0.76, -0.24, 1.40, 2.00, -1.10, -1.02, c=0.03, axis='y', e=0), 'x', 10, (0, 1.40, -1.06)))     # backrest
+    # the steering wheel: face up and back at the driver (45 degrees from level), the cockpit view hides it and draws a wheel that turns
+    wc, wax = (-0.50, 1.66, -1.72), (0.0, math.sin(math.radians(45)), math.cos(math.radians(45)))
+    wv = (0.0, -wax[2], wax[1])          # the wheel's own "down the face" direction
+    rim = chassis.child("steering_wheel_rim", wc)
+    rim.add(lathe(wc, wax, [(0.02 * math.sin(a), 0.20 + 0.02 * math.cos(a), "DarkMetal") for a in [k * math.pi / 4 for k in range(9)]], 12))
+    spokes = chassis.child("steering_wheel_spokes", wc)
+    spokes.add(cyl("DarkMetal", add(wc, (-0.20, 0, 0)), add(wc, (0.20, 0, 0)), 0.022, 6), cyl("DarkMetal", wc, add(wc, mul(wv, 0.20)), 0.022, 6),
+               cyl("DarkMetal", sub(wc, mul(wax, 0.02)), add(wc, mul(wax, 0.03)), 0.055, 8))
     cab.add(extrude("OliveDark", [(-2.02, 2.20), (-1.76, 2.30), (-1.76, 2.335), (-2.04, 2.23)], 'x', -1.02, 1.02))  # sun visor
     cab.add(lathe((0.42, 2.36, -1.34), (0, 1, 0), [(0, 0), (0, 0.30), (0.035, 0.30), (0.06, 0.25), (0.06, 0)], 8, mat="OliveDark"))  # roof hatch
     cab.add(both(box("Amber", 0.62, 0.74, 2.33, 2.375, -1.72, -1.66)))               # roof marker lamps
@@ -563,7 +623,7 @@ def build():
         for side, sx in (("l", -1), ("r", 1)):
             at = (sx * WHEEL_X, WHEEL_R, z)
             # the front axle steers: its steering parent sits at the wheel centre (turn about Y), the wheel under it rolls about X
-            n = (chassis.child(f"wheel_{ax}{side}_steer", at) if ax == "f" else chassis).child(f"wheel_{ax}{side}", at)
+            n = (root.child(f"wheel_{ax}{side}_steer", at) if ax == "f" else root).child(f"wheel_{ax}{side}", at)   # siblings of the hull
             w = wheel()
             n.add(move(w if sx > 0 else mirror(w), n.origin))
 

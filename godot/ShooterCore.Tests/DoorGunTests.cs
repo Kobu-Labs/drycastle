@@ -228,7 +228,7 @@ public class DoorGunTests
     public void The_generated_model_has_every_moving_part_and_marker_as_its_own_node()
     {
         var nodes = ModelNodes();
-        foreach (var name in new[] { "fuselage", "rotor_main", "rotor_tail", "gun_mount", "gun", "barrel", "muzzle", "gunner_sight", "seat_pilot", "seat_gunner",
+        foreach (var name in new[] { "hull", "rotor_main", "rotor_tail", "gun_mount", "gun", "barrel", "muzzle", "gunner_sight", "seat_pilot", "seat_gunner",
                                      "light_head", "light_tail", "light_nav_l", "light_nav_r", "smoke_engine" })
             Assert.True(nodes.ContainsKey(name), $"the model has no node {name}");
     }

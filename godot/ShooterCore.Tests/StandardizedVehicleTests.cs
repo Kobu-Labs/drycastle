@@ -78,7 +78,8 @@ public class StandardizedVehicleTests
         }
 
         var lamps = facts.GetProperty("lamps").EnumerateObject().Select(p => p.Value).ToList();
-        foreach (var kind in new[] { "head", "tail" })
+        if (lamps.Count == 0) Assert.Null(d.Lights); // a vehicle without lamps (the harvester) has no lights block
+        else foreach (var kind in new[] { "head", "tail" })
         {
             var want = lamps.Where(l => l.GetProperty("kind").GetString() == kind).Select(l => V(l.GetProperty("pos"))).OrderBy(p => p.X).ToList();
             var got = (kind == "head" ? d.Lights!.Head : d.Lights!.Tail).Select(V).OrderBy(p => p.X).ToList();
@@ -141,7 +142,7 @@ public class StandardizedVehicleTests
     [Fact]
     public void A_type_without_skins_draws_its_model()
     {
-        var harvester = Shipped.Vehicles.Single(v => v.Id == "harvester");
+        var harvester = Shipped.Vehicles.Single(v => v.Id == "bus"); // a generated model: no skins
         Assert.Empty(harvester.Skins);
         Assert.Equal(harvester.Model, harvester.SkinModel(3));
     }

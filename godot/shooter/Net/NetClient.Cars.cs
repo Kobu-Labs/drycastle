@@ -133,7 +133,7 @@ public partial class NetClient
         // a live record after the blast means the server returned it (30 s later): it is shown again, and only then
         if (v.Destroyed) { v.Destroyed = false; v.Exploded = false; v.Node.Visible = true; }
         if (!ShotFx.Enabled) return;
-        if (stage > 0 && v.Smoke == null && Vehicles != null) v.Smoke = VehicleFx.Damage.Make(v.Node, Vehicles.Vehicles[v.Kind]);
+        if (stage > 0 && v.Smoke == null && Vehicles != null) v.Smoke = VehicleFx.Damage.Make(GlassHost(v.Node), Vehicles.Vehicles[v.Kind]); // under the hull (in its rest frame): the smoke sways with the body
         v.Smoke?.Set(stage);
     }
 
@@ -355,7 +355,7 @@ public partial class NetClient
         if (len < 0.05f) return;
         if (VehicleAlong(from, d / len, len + 0.5f, out var car, out var hit) && hit.Distance >= len - 0.5f)
         {
-            BulletHoles.PlaceOn(Owned, car.Node, G(hit.Local), G(hit.LocalNormal));
+            BulletHoles.PlaceOn(Owned, GlassHost(car.Node), G(hit.Local), G(hit.LocalNormal));
             return;
         }
         BulletHoles.PlaceFromShot(Owned, from, end);

@@ -199,7 +199,7 @@
       "id": "bus", "top_speed": 25, "acceleration": 2.6, "brake": 7, "turn_radius": 9.5, "max_lateral_accel": 5, "mass": 13000, "run_over_mass": 3000, "hp": 900, "hood": [0, 1.3, 6.13], "spawn_count": 1, "half_width": 1.28, "half_length": 6.03, "height": 3.1,
       "model": "drycastle-generated-models/bus.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Red", "paints": ["Red"],
-      "seats": [{ "role": "driver", "offset": [-0.7, 0.62, -4.825], "cover": "glass" }, { "role": "passenger", "offset": [0.53, 0.38, -2.175], "cover": "glass" }, { "role": "passenger", "offset": [-0.97, 0.86, 1.825], "cover": "glass" }, { "role": "passenger", "offset": [0, 0.86, 4.905], "cover": "glass" }],
+      "seats": [{ "role": "driver", "offset": [-0.7, 0.62, -4.825], "cover": "glass" }, { "role": "passenger", "offset": [0.53, 0.38, -2.175], "cover": "glass", "eye_height": 1.05 }, { "role": "passenger", "offset": [-0.97, 0.86, 1.825], "cover": "glass", "eye_height": 1.05 }, { "role": "passenger", "offset": [0, 0.86, 4.905], "cover": "glass", "eye_height": 1.05 }],
       "glass": [
         { "id": "left_1", "centre": [-1.263, 1.805, -4.838], "normal": [-1, 0, 0], "size": [1.325, 1.51], "outline": [[-0.662, -0.755], [0.662, -0.755], [0.662, 0.755], [-0.662, 0.755]] },
         { "id": "left_2", "centre": [-1.263, 1.805, -3.235], "normal": [-1, 0, 0], "size": [1.88, 1.51], "outline": [[-0.94, -0.755], [-0.786, -0.755], [0.94, -0.405], [0.94, 0.755], [-0.94, 0.755]] },
@@ -276,9 +276,9 @@
       "paint_material": "Black paint", "paints": ["Black paint"],
       "seats": [
         { "role": "driver", "offset": [-0.4875, 0.45, 0.2125], "cover": "glass" },
-        { "role": "passenger", "offset": [0.4875, 0.45, 0.2125], "cover": "glass" },
-        { "role": "passenger", "offset": [-0.45, 0.45, 1.25], "cover": "glass" },
-        { "role": "passenger", "offset": [0.45, 0.45, 1.25], "cover": "glass" }
+        { "role": "passenger", "offset": [0.4875, 0.45, 0.2125], "cover": "glass", "eye_height": 1.05 },
+        { "role": "passenger", "offset": [-0.45, 0.45, 1.25], "cover": "glass", "eye_height": 1.05 },
+        { "role": "passenger", "offset": [0.45, 0.45, 1.25], "cover": "glass", "eye_height": 1.05 }
       ],
       "glass": [
         { "id": "windscreen", "centre": [0, 1.462, -0.662], "normal": [0, 0.737, -0.676], "size": [1.963, 0.814], "outline": [[0.812, 0.407], [-0.812, 0.407], [-0.981, -0.407], [0.981, -0.407]] },
@@ -299,16 +299,17 @@
     },
     {
       "id": "harvester",
-      "comment": "The harvester event (#331): the Synty Farm combine (SM_Veh_Harvester_01, private pack; a grey box without it). Unity forward is +Z, hence model_yaw_deg 180. Its reel node SM_Veh_Harvester_Reel spins on X. Run-over is the event's own (run_over false): NetServer.Harvester.cs, because the field speed is far below run_over_min_speed. turn_radius (7 m, a real combine's) is what the AI's turns between passes are planned with (HarvesterConfig.TurnRadiusM, FieldPlanner: half circles between lanes k apart, a bulb turn for the last lanes).",
+      "comment": "The harvester event (#331): the Synty Farm combine (SM_Veh_Harvester_01) standardized by scripts/standardize_vehicle.py (scripts/vehicles/harvester.json; private pack synty-vehicles, a grey box without it): hull, wheel_fl/fr/rl/rr (front pair under wheel_*_steer, rolled and steered by the generic VehicleWheels), steering_wheel_rim/_spokes, seat_driver. Its reel node SM_Veh_Harvester_Reel spins on X. Run-over is the event's own (run_over false): NetServer.Harvester.cs, because the field speed is far below run_over_min_speed. turn_radius (7 m, a real combine's) is what the AI's turns between passes are planned with (HarvesterConfig.TurnRadiusM, FieldPlanner: half circles between lanes k apart, a bulb turn for the last lanes).",
       "top_speed": 6.5, "acceleration": 1.3, "brake": 4, "turn_radius": 7, "high_speed_radius_factor": 1, "max_lateral_accel": 4,
       "mass": 14000, "run_over_mass": 8000, "run_over": false, "hp": 1400,
       "hood": [0, 2.2, -4.3], "spawn_count": 0,
-      "half_width": 2.5, "half_length": 4.3, "height": 3.8,
+      "half_width": 2.56, "half_length": 4.34, "height": 3.87,
       "chase_distance": 15, "chase_height": 5.5,
-      "model": "pack:synty-farm/SM_Veh_Harvester_01", "model_scale": 1, "model_yaw_deg": 180, "model_offset": [0, 0, 0],
+      "model": "pack:synty-vehicles/harvester_farm", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "seats": [
-        { "role": "driver", "offset": [-0.79, 2.0, -0.95], "cover": "exposed" }
-      ]
+        { "role": "driver", "offset": [-0.79, 2, -0.95], "cover": "exposed" }
+      ],
+      "skins": ["pack:synty-vehicles/harvester_farm"]
     },
     {
       "id": "rocket_cart",
