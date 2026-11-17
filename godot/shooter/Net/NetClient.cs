@@ -422,6 +422,7 @@ public partial class NetClient : Node
                 var d = Match.LatestDeath!;
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 SfxDeath(d);
+                NoteDeath(d);
                 if (d.Victim == _myId) { _deaths++; BeginDeathView(d.RespawnDelay); Dead = true; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); _hud?.SetProtection(0); OnStreakDeath(); }
                 break;
         }
@@ -710,6 +711,7 @@ public partial class NetClient : Node
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
                 r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && (CorpseOf(id) || HarvestVictimHidden(id, dead))); // the harvester's victim is in the machine, then inside its bale: no body at the spot where it died // riders are drawn in their seat (the server puts the body there), seated rather than standing
                 r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
+                if (r.State == EntityState.InVehicle) _lastRode[id] = Now;
                 AnimateRemote(r, s.Pos);
                 UpdateNameTag(id, r);
             }

@@ -342,6 +342,22 @@ stateDiagram-v2
 - **Spawned**: Goes back to Welcomed at each respawn, until the new spawn position arrives.
 - **Failed**: Frames and bot scripts stop; the menu was told.
 
+## Corpse.Collapse
+
+A killed body that was not thrown topples to the ground from the killing hit's impulse, bounces and lies still (client look only; the server's point does not move).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Falling
+    Falling --> Settling
+    Settling --> AtRest
+    AtRest --> [*]
+```
+
+- **Falling**: Turning over about the feet's side, faster each moment (gravity), from a start speed that grows with the hit's impulse. Ends when the body is flat.
+- **Settling**: Rebounds off the ground and damps out for SettleSeconds; the limbs go loose.
+- **AtRest**: Flat and still, limbs loose. Stays so until the corpse is removed.
+
 ## Corpse.Flight
 
 A thrown body (corpse or target dummy): at rest on the ground, airborne after a launch or a drop until it lands, seated in a vehicle (a dead pilot or driver), floating on water, or rolling along the ground (a bale).
