@@ -15,11 +15,12 @@ store keeps collecting, and the history is there when Grafana starts again.
 ## Opening it
 
 ```
-ssh -i ~/.ssh/drycastle-vps -o IdentitiesOnly=yes -L 3000:127.0.0.1:3000 root@<vps>
+make monitor
 ```
 
-then http://localhost:3000, user `admin`, password `GRAFANA_PASSWORD` from `/opt/drycastle/deploy/.env` on the VPS. The home page is the
-"Drycastle server" dashboard.
+It opens an ssh tunnel to the VPS (key `~/.ssh/drycastle-vps`) and the dashboard in the browser, at http://localhost:3300; Ctrl+C closes the tunnel.
+No login to look (the port is on the VPS's loopback only, so whoever reaches it already has ssh to the machine). To change anything in Grafana:
+sign in as `admin` with `GRAFANA_PASSWORD` from `/opt/drycastle/deploy/.env` on the VPS.
 
 ## What is on the dashboard
 
