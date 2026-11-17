@@ -737,7 +737,7 @@ public class VehicleDef
     public int SpawnCount { get; set; }
     /// <summary>
     /// Places this type always stands at (vehicles.json "fixed_spots"), one vehicle each, in addition to the <see cref="SpawnCount"/> dealt at random.
-    /// A vehicle that returns (abandoned or destroyed) comes back to its spot. See <see cref="VehicleSpotDef"/>.
+    /// A vehicle that returns (destroyed, or out of the world; an abandoned one stays) comes back to its spot. See <see cref="VehicleSpotDef"/>.
     /// </summary>
     public List<VehicleSpotDef> FixedSpots { get; set; } = new();
     /// <summary>Half extents of the footprint (server collision box and run-over test), metres.</summary>

@@ -304,7 +304,7 @@ A killstreak's flying entity that circles the map at a set altitude and radius: 
 _Avoid_: plane (for helicopters), drone, helicopter (alone)
 
 **Utility helicopter**:
-The vehicle a player flies: boarded, left and destroyed like any other vehicle, and flown freely by whoever sits in its pilot seat (the vehicle's driver seat). Its second seat is the door gunner's. Hands off it levels itself, stops and holds a hover; with nobody in the pilot seat it hovers briefly, then sets itself down.
+The vehicle a player flies: boarded, left and destroyed like any other vehicle, and flown freely by whoever sits in its pilot seat (the vehicle's driver seat). Its second seat is the door gunner's. Hands off it levels itself, stops and holds a hover; with nobody in the pilot seat it hovers briefly, then sets itself down. There is one, standing at its fixed spot on the military base's heliport (square to the two open hangars beside it), never dealt at random; a destroyed one comes back there.
 _Avoid_: helicopter (alone), chopper, Huey, aircraft (that is the circling killstreak entity), flyable helicopter
 
 **Door gun**:
@@ -324,7 +324,7 @@ A small black three-door hatchback (4.3 m) with four seats (left-hand drive) tha
 _Avoid_: Golf (alone), VW
 
 **Fixed spot**:
-A place in a vehicle type's `fixed_spots` list in `vehicles.json` (world x and z, an optional `yaw_deg`) where one vehicle of that type always stands. It is placed on the ground there before the random deal, which keeps 12 m clear of it, and faces along the nearest road within 15 m (yaw 0 when there is none) unless the spot gives a yaw. An abandoned or destroyed vehicle returns to its fixed spot, as every vehicle returns to where it started.
+A place in a vehicle type's `fixed_spots` list in `vehicles.json` (world x and z, an optional `yaw_deg`) where one vehicle of that type always stands. It is placed on the ground there before the random deal, which keeps 12 m clear of it, and faces along the nearest road within 15 m (yaw 0 when there is none) unless the spot gives a yaw. A destroyed vehicle (or one that falls out of the world) returns to its fixed spot, as every vehicle returns to where it started; an abandoned one stays where it was left. An air type stands on the ground there like any other, and the server logs a spot where its hull or rotor disc touches something solid.
 _Avoid_: parking spot, spawn point (that is where a player appears)
 
 **Airburst**:
