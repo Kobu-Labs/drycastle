@@ -460,6 +460,9 @@ props:
       trunk_width_m: 0.3
       trunk_height_m: 4.4
       trunk_top_ratio: 0.55
+      # Far (baked) trunk colour, close to the near pack bark (pines, TallRound, Tree_04 #584b3a; Round_01..05 #473c30, Tree_01..03 #6b5c48,
+      # sampled median) so the swap at near_m does not show (#350). Unset: the global trunk_colour above (standalone trees keep that).
+      trunk_colour: "#584b3a"
       # Conifer crown: stacked four-sided pyramids, [base height, base half-width, apex height]. 6 triangles each, base included.
       cone_tiers: [[2.4, 1.25, 5.4], [4.2, 0.95, 7.6], [6.2, 0.62, 9.5]]
       # Broadleaf crown: stacked boxes, [bottom height, half-width, top height]. Only the lowest has a drawn underside.

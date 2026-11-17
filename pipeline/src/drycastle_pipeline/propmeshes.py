@@ -112,13 +112,14 @@ def forest_tree_mesh(tree: dict, cfg: dict) -> Mesh:
     """Forest tree: a tapered trunk with a clear stem, then stacked pyramids (conifer) or boxes (broadleaf).
 
     Numbers: ``cfg["forest"]`` (rules.yaml props.trees.forest), metres at scale 1 times the tree's scale.
+    Trunk colour: ``forest.trunk_colour`` (matches the near pack bark), else the global ``trunk_colour``.
     """
     f = cfg["forest"]
     s = float(tree["scale"])
     x, y, z = tree["x"], tree["y"], tree["z"]
     rot = float(tree["rot"])
     ux, uy = math.cos(rot), math.sin(rot)
-    trunk_c, canopy_c = hex_to_rgb(cfg["trunk_colour"]), hex_to_rgb(tree["colour"])
+    trunk_c, canopy_c = hex_to_rgb(f.get("trunk_colour", cfg["trunk_colour"])), hex_to_rgb(tree["colour"])
     half0 = float(f["trunk_width_m"]) * s / 2
     t = frustum_tris((x, y), half0, half0 * float(f["trunk_top_ratio"]), z - 0.2, z + float(f["trunk_height_m"]) * s, rot)
     tris, cols = t, [trunk_c] * len(t)

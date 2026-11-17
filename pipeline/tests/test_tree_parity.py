@@ -12,6 +12,7 @@ import os
 import numpy as np
 import pytest
 
+from drycastle_pipeline.buildings import hex_to_rgb
 from drycastle_pipeline.config import REPO_ROOT
 from drycastle_pipeline.export import forest_model
 from drycastle_pipeline.propmeshes import is_forest, tree_mesh
@@ -118,3 +119,13 @@ def test_age_classes_follow_their_shares_and_are_stable() -> None:
         assert got == pytest.approx(share / total, abs=0.03)
         assert {f for n, f in draws if n == name} == {factor}
     assert age_class([], seeded("x")) == ("", 1.0)
+
+
+def test_forest_trunk_colour_is_its_own_and_standalone_trees_keep_the_global_one() -> None:
+    f, s = TREES["forest_box"], TREES["standalone_box"]
+    trunk = lambda m: tuple(m.colours[0])  # noqa: E731 - the trunk is the first piece
+    assert trunk(tree_mesh(f, TREE)) == tuple(hex_to_rgb(TREE["forest"]["trunk_colour"]))
+    assert trunk(tree_mesh(s, TREE)) == tuple(hex_to_rgb(TREE["trunk_colour"]))
+    # unset: the forest tree falls back to the global trunk colour
+    plain = {**TREE, "forest": {k: v for k, v in TREE["forest"].items() if k != "trunk_colour"}}
+    assert trunk(tree_mesh(f, plain)) == tuple(hex_to_rgb(TREE["trunk_colour"]))
