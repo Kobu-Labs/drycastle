@@ -1,0 +1,77 @@
+{
+ "model": "pack:synty-simple-military/rocket_cart",
+ "file": "synty/glb/simple-military/rocket_cart.glb",
+ "bounds": {
+  "min": [
+   -1.23,
+   0.0,
+   -6.298
+  ],
+  "max": [
+   1.23,
+   2.355,
+   6.207
+  ]
+ },
+ "suggested": {
+  "half_width": 1.23,
+  "half_length": 6.3,
+  "height": 2.35,
+  "hit_box_note": "the box is centred on the model origin; the missile's tail and the drawbar are the two ends"
+ },
+ "wheels": {
+  "radius": 0.46,
+  "width": 0.26,
+  "track": 2.04,
+  "centres": {
+   "wheel_l": [
+    -1.02,
+    0.46,
+    1.4
+   ],
+   "wheel_r": [
+    1.02,
+    0.46,
+    1.4
+   ]
+  }
+ },
+ "axle": [
+  0.0,
+  0.46,
+  1.4
+ ],
+ "tow_eye": [
+  0.0,
+  0.62,
+  -6.2
+ ],
+ "drawbar_length_axle_to_eye": 7.6,
+ "eye_height": 0.62,
+ "missile": {
+  "node": "missile",
+  "origin_com": [
+   0.0,
+   1.45,
+   1.4
+  ],
+  "nose_z": -4.918,
+  "tail_z": 6.207,
+  "length": 11.126,
+  "axis_height": 1.45,
+  "fin_height_above_axis": 0.905
+ },
+ "lamps": {
+  "light_tail_l": [
+   -0.92,
+   0.82,
+   4.95
+  ],
+  "light_tail_r": [
+   0.92,
+   0.82,
+   4.95
+  ]
+ },
+ "coupling": "a tower's tow_hitch must meet this model's tow_eye: cart origin = tower origin + R(yaw) * (tower.tow_hitch - cart.tow_eye) (both vehicle frames, y equal at 0.62)"
+}
