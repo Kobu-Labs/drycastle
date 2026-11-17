@@ -6,11 +6,6 @@ changes the position is written to ``out/streetview-position.json``; the viewer 
 file, puts the character there and, in the top-down view (T), draws a red point under it
 (``godot/viewer/StreetViewFollow.cs``). No model and no MCP server is involved.
 
-Points (only with ``--points``): when you stop and look at something (the view stays put for ``--dwell``
-seconds), a permanent point is dropped in the sketch ``POLES`` of the shared sketch file (``~/.local/state/drycastle/sketch.json``), at the spot you are
-looking at (``--ahead`` metres along the view; ``--at camera`` puts it where you stand instead). Place the poles
-on them later (the editor's Sketch tool shows them, Claude reads them with get_sketch).
-
 With ``--sketch`` the position is also kept as one moving point and a short view line in the sketch
 ``STREETVIEW`` (each move is then one undo step in the editor, so it is off by default).
 
@@ -42,7 +37,6 @@ from pyproj import Transformer
 from drycastle_pipeline import sketchfile
 
 SKETCH_NAME = "STREETVIEW"
-POINTS_SKETCH = "POLES"
 OUT_DIR = Path(__file__).resolve().parents[3] / "out"
 DEFAULT_SKETCH_FILE = sketchfile.default_path()
 DEFAULT_POSITION_FILE = OUT_DIR / "streetview-position.json"
@@ -144,59 +138,9 @@ def update_sketch(path: Path, point: list[float], view: list[list[float]] | None
         sketchfile.write(path, doc)
 
 
-def add_point(path: Path, point: list[float], sketch: str = POINTS_SKETCH) -> str:
-    """Append a permanent point to ``sketch`` (made when new) of the sketch file; its id (A, B, ...)."""
-    with sketchfile.lock(path):
-        try:
-            doc = sketchfile.read(path) or sketchfile.empty_doc()
-        except sketchfile.SketchFileError:
-            doc = sketchfile.empty_doc()
-        name = sketchfile.sketch_of(doc, sketch)
-        if name is None:
-            name = sketch
-            doc["sketches"].append(name)
-        pid = sketchfile.new_point_id(doc)
-        doc["points"].append({"id": pid, "x": point[0], "y": point[1], "sketch": name})
-        sketchfile.write(path, doc)
-    return pid
-
-
-class PointDropper:
-    """Decides when a view is a point: it has stayed put for ``dwell_s`` and is not where the last point went.
-
-    ``feed`` is called every poll with the current address of the tab (parsed) and the time; it returns the S-JTSK
-    point to drop, or None. A view that changes starts the wait again, so walking or turning drops nothing; stopping
-    and looking at a pole does. ``at`` is "aim" (``ahead_m`` along the view, needs a heading) or "camera".
-    """
-
-    def __init__(self, dwell_s: float = 2.0, min_gap_m: float = 1.5, at: str = "aim", ahead_m: float = VIEW_LINE_M) -> None:
-        self.dwell_s, self.min_gap_m, self.at, self.ahead_m = dwell_s, min_gap_m, at, ahead_m
-        self._cur: tuple[float, float, float | None] | None = None
-        self._since = 0.0
-        self._done = False
-        self._last: list[float] | None = None
-
-    def feed(self, parsed: tuple[float, float, float | None] | None, now: float) -> list[float] | None:
-        if parsed != self._cur:
-            self._cur, self._since, self._done = parsed, now, False
-            return None
-        if parsed is None or self._done or now - self._since < self.dwell_s:
-            return None
-        self._done = True
-        lat, lon, heading = parsed
-        if self.at == "aim" and heading is None:
-            return None  # not in Street View: there is no direction to look along
-        point, view = to_sketch(lat, lon, heading, self.ahead_m)
-        target = view[1] if self.at == "aim" and view is not None else point
-        if self._last is not None and math.hypot(target[0] - self._last[0], target[1] - self._last[1]) < self.min_gap_m:
-            return None
-        self._last = target
-        return target
-
-
 def tab_urls(port: int) -> list[str]:
     """Addresses of the page tabs of the Chrome on ``port`` (its DevTools HTTP endpoint)."""
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=2) as resp:
+    with urllib.request.urlopen(f"http://localhost:{port}/json", timeout=2) as resp:
         return [t["url"] for t in json.load(resp) if t.get("type") == "page"]
 
 
@@ -215,7 +159,6 @@ def launch_chrome(port: int, lat: float, lon: float) -> subprocess.Popen:
 
 def follow(
     port: int, position_path: Path, sketch_path: Path | None, interval: float,
-    points_path: Path | None = None, dropper: PointDropper | None = None, points_sketch: str = POINTS_SKETCH,
     capturer=None,
 ) -> None:
     last: tuple[float, float, float | None] | None = None
@@ -233,11 +176,6 @@ def follow(
         if capturer is not None:  # a press of the capture key in the tab since the last look
             capturer.poll()
         current = next((p for p in (parse_maps_url(u) for u in urls) if p), None)
-        if dropper is not None and points_path is not None:
-            spot = dropper.feed(current, time.monotonic())
-            if spot is not None:
-                pid = add_point(points_path, spot, points_sketch)
-                print(f"point {pid} in {points_sketch} at S-JTSK {spot[0]}, {spot[1]}", flush=True)
         for url in urls:
             parsed = parse_maps_url(url)
             if parsed and parsed != last:
@@ -260,12 +198,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sketch", nargs="?", type=Path, const=DEFAULT_SKETCH_FILE, default=None,
                     help="also keep the position as a point and a view line in this sketch.json (default ~/.local/state/drycastle/sketch.json)")
     ap.add_argument("--interval", type=float, default=0.5, help="seconds between looks at the tab (default 0.5)")
-    ap.add_argument("--points", action="store_true", help="drop a permanent point when the view stays put (off by default)")
-    ap.add_argument("--points-sketch", default=POINTS_SKETCH, help=f"the sketch the points go to (default {POINTS_SKETCH})")
-    ap.add_argument("--dwell", type=float, default=2.0, help="seconds the view must stay put to drop a point (default 2)")
-    ap.add_argument("--ahead", type=float, default=VIEW_LINE_M, help=f"metres along the view where the point goes (default {VIEW_LINE_M:g})")
-    ap.add_argument("--at", choices=("aim", "camera"), default="aim", help="a point where you look (aim) or where you stand (camera)")
-    ap.add_argument("--min-gap", type=float, default=1.5, help="no new point within this many metres of the last one (default 1.5)")
     ap.add_argument("--capture", action="store_true", help="pressing the capture key in the Street View tab saves its picture and camera (photo_capture.py)")
     ap.add_argument("--capture-key", default="c", help="the capture key (default c)")
     ap.add_argument("--launch", action="store_true", help="start a Chrome with its own profile on the village")
@@ -277,12 +209,6 @@ def main(argv: list[str] | None = None) -> int:
         chrome = launch_chrome(args.port, lat, lon)
     print(f"following Street View tabs on port {args.port} into {args.position_file}"
           + (f" and {args.sketch}" if args.sketch else "") + " (Ctrl-C stops)")
-    if not sketchfile.SKETCH_NAME.fullmatch(args.points_sketch):
-        sys.exit(f"{args.points_sketch!r} is not a sketch name: 1 to 24 letters, digits, _ or -")
-    dropper = PointDropper(args.dwell, args.min_gap, args.at, args.ahead) if args.points else None
-    points_path = args.sketch or DEFAULT_SKETCH_FILE
-    if dropper is not None:
-        print(f"points: stop and look for {args.dwell:g} s to drop one in sketch {args.points_sketch} ({args.at}) of {points_path}")
     capturer = None
     if args.capture:
         from drycastle_pipeline.photo_capture import PHOTOS_DIR, Capturer
@@ -290,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         capturer = Capturer(args.port, args.capture_key)
         print(f"capture: aim the middle of the view at a building and press {args.capture_key.upper()} in the Street View tab; pictures go to {PHOTOS_DIR}")
     try:
-        follow(args.port, args.position_file, args.sketch, args.interval, points_path, dropper, args.points_sketch, capturer)
+        follow(args.port, args.position_file, args.sketch, args.interval, capturer)
     except KeyboardInterrupt:
         pass
     finally:
