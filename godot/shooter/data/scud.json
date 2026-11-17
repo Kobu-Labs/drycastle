@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_note": "The Scud truck (GLOSSARY: Scud truck, Launcher, Lock point, Scud missile, Scud blast). Parsed by ScudFile (ShooterCore/Scud/ScudData.cs); every field is checked at load. launcher: the timings of the launcher machine and the targeting rules. targeting: the operator's bird's-eye screen. missile: the planned flight (a vertical boost, then one arc down onto the point) and who is warned. blast: the impact (metres, hit points, seconds). The numbers are a first guess and want a feel pass.",
+  "_note": "The Scud truck (GLOSSARY: Scud truck, Launcher, Lock point, Scud missile, Scud blast). Parsed by ScudFile (ShooterCore/Scud/ScudData.cs); every field is checked at load. launcher: the timings of the launcher machine and the targeting rules. targeting: the operator's bird's-eye screen. missile: the planned flight (a vertical boost, then one arc down onto the point) and who is warned. reload: loading a rocket from a rocket cart onto an empty truck (hold the interact key hold_seconds beside a truck with an empty rack and a loaded cart within cart_reach_m of its hull; a player on foot must be within player_reach_m; the truck or cart moving moved_cancel_m cancels it until the rocket leaves the cart at transfer_share of launcher.reload_seconds). blast: the impact (metres, hit points, seconds; chain_delay_seconds: a loaded cart doomed by a blast goes up that long after it). The numbers are a first guess and want a feel pass.",
   "launcher": {
     "erect_seconds": 8,
     "ignition_seconds": 2,
@@ -32,6 +32,13 @@
     "warn_seconds": 8,
     "warn_radius_m": 600
   },
+  "reload": {
+    "hold_seconds": 1.0,
+    "cart_reach_m": 5,
+    "player_reach_m": 4,
+    "moved_cancel_m": 1.0,
+    "transfer_share": 0.5
+  },
   "blast": {
     "lethal_radius_m": 60,
     "damage_radius_m": 150,
@@ -46,6 +53,7 @@
     "wave_speed_mps": 260,
     "shake_range_m": 3000,
     "shake_amplitude": 0.45,
-    "scorch_radius_m": 32
+    "scorch_radius_m": 32,
+    "chain_delay_seconds": 0.8
   }
 }

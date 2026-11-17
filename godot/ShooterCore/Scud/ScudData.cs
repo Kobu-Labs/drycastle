@@ -11,6 +11,7 @@ public sealed class ScudFile : IVersioned
     public ScudTargetingData Targeting { get; set; } = new();
     public ScudMissileData Missile { get; set; } = new();
     public ScudBlastData Blast { get; set; } = new();
+    public ScudReloadData Reload { get; set; } = new();
 
     public static ScudFile Parse(string json) => DataFile.Parse<ScudFile>(json, "scud.json").Validate();
 
@@ -51,7 +52,12 @@ public sealed class ScudFile : IVersioned
         NonNeg(m.WarnSeconds, "missile.warn_seconds"); NonNeg(m.WarnRadiusM, "missile.warn_radius_m");
         if (m.WarnSeconds >= m.FlightMinSeconds) throw new DataFileException("scud.json: missile.warn_seconds must be shorter than the shortest flight (flight_min_seconds)");
 
+        var r = Reload;
+        Pos(r.HoldSeconds, "reload.hold_seconds"); Pos(r.CartReachM, "reload.cart_reach_m"); Pos(r.PlayerReachM, "reload.player_reach_m"); Pos(r.MovedCancelM, "reload.moved_cancel_m");
+        if (!(r.TransferShare is > 0 and < 1)) throw new DataFileException("scud.json: reload.transfer_share must be between 0 and 1");
+
         var b = Blast;
+        NonNeg(b.ChainDelaySeconds, "blast.chain_delay_seconds");
         Pos(b.LethalRadiusM, "blast.lethal_radius_m");
         if (!(b.DamageRadiusM > b.LethalRadiusM)) throw new DataFileException("scud.json: blast.damage_radius_m must be more than lethal_radius_m");
         NonNeg(b.OuterDamage, "blast.outer_damage"); NonNeg(b.EdgeDamage, "blast.edge_damage");
@@ -156,4 +162,21 @@ public sealed class ScudBlastData
     public double ShakeAmplitude { get; set; } = 0.45;
     /// <summary>The burnt ground left at the impact. Metres.</summary>
     public double ScorchRadiusM { get; set; } = 32;
+    /// <summary>A loaded rocket cart in the damage chain of a Scud blast goes up this long after the blast that doomed it (plus the wave's travel), so a row of carts does not all go in one tick. Seconds.</summary>
+    public double ChainDelaySeconds { get; set; } = 0.8;
+}
+
+/// <summary>scud.json "reload": loading a rocket from a rocket cart onto an empty truck (<see cref="ScudReloadRules"/>, the launcher's Loading state).</summary>
+public sealed class ScudReloadData
+{
+    /// <summary>The interact key is held this long near a truck with an empty rack and a loaded cart to start the loading (a tap still gets in or out). Seconds.</summary>
+    public double HoldSeconds { get; set; } = 1.0;
+    /// <summary>A loaded cart within this gap of the truck's hull (box to box, hitched or not) can be unloaded onto it. Metres.</summary>
+    public double CartReachM { get; set; } = 5;
+    /// <summary>A player on foot within this of the truck's hull may start it (one in the truck always may). Metres.</summary>
+    public double PlayerReachM { get; set; } = 4;
+    /// <summary>The truck or the cart moving this far from where the loading began cancels it. Metres.</summary>
+    public double MovedCancelM { get; set; } = 1.0;
+    /// <summary>The share of the reload (launcher.reload_seconds) the transfer waits for: until then the cart still holds its rocket and the loading can be cancelled; after it the rocket is on the rack. 0 to 1, exclusive.</summary>
+    public double TransferShare { get; set; } = 0.5;
 }

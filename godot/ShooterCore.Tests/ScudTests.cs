@@ -333,6 +333,10 @@ public class ScudTests
         Full(abort: false);
         l.BeginReload(); Run(l, crew, (float)T.ReloadSeconds + 1);
         Full(abort: false);
+        l.BeginLoad(1, Truck, Truck); l.Tick(0.1f, crew, Truck, null); // Loading to Empty: the cart was lost
+        l.BeginLoad(1, Truck, Truck);
+        for (var t = 0f; t < T.ReloadSeconds + 1; t += 0.1f) l.Tick(0.1f, crew, Truck, new ScudCartSense(true, Truck)); // Loading to Reloading to Stowed
+        Full(abort: false);
         l.ReloadNow();
         foreach (var (a, b) in edges) Assert.True(ScudLauncher.Spec.Allows(a, b), $"{a} -> {b} is not declared");
         // and the declared edges are all taken somewhere (the machine has no dead declaration)
@@ -366,8 +370,11 @@ public class ScudTests
             Assert.True(ScudRules.RocketOnRack(s, 0, T), s.ToString());
         foreach (var s in new[] { ScudLauncherState.Spent, ScudLauncherState.Lowering, ScudLauncherState.Empty })
             Assert.False(ScudRules.RocketOnRack(s, 5, T), s.ToString());
-        Assert.False(ScudRules.RocketOnRack(ScudLauncherState.Reloading, 1, T));
-        Assert.True(ScudRules.RocketOnRack(ScudLauncherState.Reloading, (float)T.ReloadSeconds * 0.8f, T));
+        // the clock LEFT decides in a reload: the admin's starts with all of it, one from a cart with the second half
+        Assert.False(ScudRules.RocketOnRack(ScudLauncherState.Reloading, (float)T.ReloadSeconds, T));
+        Assert.True(ScudRules.RocketOnRack(ScudLauncherState.Reloading, (float)T.ReloadSeconds * 0.4f, T));
+        Assert.True(ScudRules.RocketOnRack(ScudLauncherState.Reloading, (float)T.ReloadSeconds * 0.5f, T));
+        Assert.False(ScudRules.RocketOnRack(ScudLauncherState.Loading, (float)T.ReloadSeconds * 0.4f, T)); // still on the cart
     }
 
     [Fact]
@@ -375,7 +382,7 @@ public class ScudTests
     {
         foreach (var s in Enum.GetValues<ScudLauncherState>())
         {
-            var want = s is ScudLauncherState.Erecting or ScudLauncherState.Launching or ScudLauncherState.Spent or ScudLauncherState.Lowering or ScudLauncherState.Aborting or ScudLauncherState.Reloading;
+            var want = s is ScudLauncherState.Erecting or ScudLauncherState.Launching or ScudLauncherState.Spent or ScudLauncherState.Lowering or ScudLauncherState.Aborting or ScudLauncherState.Reloading or ScudLauncherState.Loading;
             Assert.Equal(want, ScudRules.Immobilises(s));
         }
     }
@@ -709,9 +716,9 @@ public class ScudTests
     }
 
     [Fact]
-    public void The_protocol_is_68_and_the_events_are_where_the_docs_say()
+    public void The_protocol_is_69_and_the_events_are_where_the_docs_say()
     {
-        Assert.Equal(68, Wire.ProtocolVersion);
+        Assert.Equal(69, Wire.ProtocolVersion);
         Assert.Equal(80, (int)EventKind.ScudCommand);
         Assert.Equal(85, (int)EventKind.ScudNotice);
         Assert.Equal(237, SpecialWeapons.Scud);

@@ -122,7 +122,7 @@ public partial class NetClient
                 OnScudImpact(i);
                 break;
             case EventKind.ScudNotice when ScudCodec.DecodeNotice(payload) is { } n:
-                UiShell.Instance?.Toast(NoticeText(n), n is ScudNoticeCode.Retarget ? ToastKind.Info : ToastKind.Warn);
+                UiShell.Instance?.Toast(NoticeText(n), n is ScudNoticeCode.Retarget or ScudNoticeCode.LoadStarted ? ToastKind.Info : ToastKind.Warn);
                 break;
         }
     }
@@ -144,6 +144,8 @@ public partial class NetClient
         ScudNoticeCode.Moved => Strings.T("scud.notice.moved"),
         ScudNoticeCode.Timeout => Strings.T("scud.notice.timeout"),
         ScudNoticeCode.Retarget => Strings.T("scud.notice.retarget"),
+        ScudNoticeCode.LoadStarted => Strings.T("scud.notice.load_started"),
+        ScudNoticeCode.LoadCancelled => Strings.T("scud.notice.load_cancelled"),
         _ => Strings.T("scud.notice.wrong_state"),
     };
 
@@ -226,6 +228,9 @@ public partial class NetClient
     /// <summary>The current state of a truck's launcher for drawing: the last message, its clock counted on from when it arrived.</summary>
     (ScudLauncherState State, float Elapsed, float RackFrom) ScudNow(ScudTruck t) => (t.Msg.State, t.Msg.Elapsed + (float)(Now - t.At), t.Msg.RackFrom);
 
+    /// <summary>The seconds left of the state's clock, counted on from the last message (infinity: no clock).</summary>
+    float ScudLeft(ScudTruck t) => float.IsFinite(t.Msg.Left) ? t.Msg.Left - (float)(Now - t.At) : float.PositiveInfinity;
+
     void AnimateScudTrucks(float dt)
     {
         if (Vehicles == null) return;
@@ -258,7 +263,7 @@ public partial class NetClient
                 var angle = ScudRules.RackAngle(state, elapsed, from, Scud.Launcher);
                 t.Rack.Basis = new Basis(Vector3.Right, angle) * t.RackRest; // up about the rear hinge: positive about X lifts a rack that lies forward (-Z)
             }
-            if (t.MissileOnRack != null) t.MissileOnRack.Visible = ScudRules.RocketOnRack(state, elapsed, Scud.Launcher);
+            if (t.MissileOnRack != null) t.MissileOnRack.Visible = ScudRules.RocketOnRack(state, ScudLeft(t), Scud.Launcher);
             if (t.Ignition != null) ParticleFx.Run(t.Ignition, state == ScudLauncherState.Launching);
             // all eight wheels roll by the distance driven along the truck's own heading, and the front two axles steer by the path's curvature (the drawn yaw over the drawn distance; the truck is not predicted)
             var pos = v.Node.GlobalPosition;
@@ -514,7 +519,7 @@ public partial class NetClient
         if (ScudScreenOn || MyScudSeat() is not { } s) return basePrompt ?? "";
         var (state, elapsed, _) = ScudNow(s.Truck);
         var left = float.IsFinite(s.Truck.Msg.Left) ? Math.Max(0, (int)MathF.Ceiling(s.Truck.Msg.Left - (elapsed - s.Truck.Msg.Elapsed))) : 0;
-        if (_scudPromptKey.Update((int)state * 1000 + left + (s.IsOperator ? 100000 : 0) + (s.Truck.Msg.Operator != 0 ? 200000 : 0)))
+        if (_scudPromptKey.Update((int)state * 1000 + left + (s.IsOperator ? 100000 : 0) + (s.Truck.Msg.Operator != 0 ? 200000 : 0) + (state == ScudLauncherState.Empty && ScudLoadOffer() ? 400000 : 0)))
         {
             var screen = InputBindings.Name("scud_screen");
             _scudPrompt = state switch
@@ -526,12 +531,48 @@ public partial class NetClient
                 ScudLauncherState.Launching => Strings.F("scud.line.launching", left),
                 ScudLauncherState.Spent => Strings.T("scud.line.spent"),
                 ScudLauncherState.Lowering => Strings.T("scud.line.lowering"),
-                ScudLauncherState.Empty => Strings.T("scud.line.empty"),
+                ScudLauncherState.Empty => Strings.T("scud.line.empty") + (ScudLoadOffer() ? "   " + Strings.F("scud.hint.load", InputBindings.Name("interact")) : ""),
+                ScudLauncherState.Loading => Strings.F("scud.line.loading", left),
                 ScudLauncherState.Reloading => Strings.F("scud.line.reloading", left),
                 _ => Strings.T("scud.line.aborting"),
             };
         }
         return basePrompt is { Length: > 0 } ? _scudPrompt + "     " + basePrompt : _scudPrompt;
+    }
+
+    /// <summary>
+    /// Whether the local player may start loading a rocket from a cart now: the truck they ride (any seat) or one within reach on foot has an empty rack and a loaded, live cart stands within reach of its box
+    /// (<see cref="ScudReloadRules"/>, the server's own rules on the vehicles as drawn; the server decides).
+    /// </summary>
+    bool ScudLoadOffer()
+    {
+        if (Dead || _me == null || Vehicles == null) return false;
+        var mine = MyScudSeat()?.Car;
+        foreach (var v in _cars.Values)
+        {
+            if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count || Vehicles.Vehicles[v.Kind].Launcher == null || !_scudTrucks.TryGetValue(v.Id, out var truck)) continue;
+            var box = ScudBox(v);
+            var p = _me.GlobalPosition;
+            if (!ScudReloadRules.MayStart(truck.Msg.State, mine == v, box, p.X, p.Z, Scud.Reload)) continue;
+            var carts = _cars.Values.Where(c => c.Trailer != null && !c.Destroyed && c.Kind < Vehicles.Vehicles.Count).Select(c => new ScudCartCandidate(c.Id, ScudBox(c), c.Trailer!.Loaded, true));
+            if (ScudReloadRules.NearestCart(box, carts, (float)Scud.Reload.CartReachM) != null) return true;
+        }
+        return false;
+    }
+
+    BodyBox ScudBox(CarView v)
+    {
+        var def = Vehicles!.Vehicles[v.Kind];
+        var p = v.Node.GlobalPosition;
+        return new BodyBox(p.X, p.Z, def.HalfWidth, def.HalfLength, v.Node.Rotation.Y);
+    }
+
+    /// <summary>The prompt of a player on foot beside a truck with an empty rack and a loaded cart: the hold that loads it, then whatever the key does anyway (getting in). Null when there is no such offer or the player rides.</summary>
+    string? ScudLoadPrompt(string? basePrompt)
+    {
+        if (_driving || !ScudLoadOffer()) return null;
+        var hint = Strings.F("scud.hint.load", InputBindings.Name("interact"));
+        return basePrompt is { Length: > 0 } ? hint + "     " + basePrompt : hint;
     }
 
     // ---- the warning for everyone near the target ----

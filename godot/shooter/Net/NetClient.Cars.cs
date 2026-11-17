@@ -247,7 +247,7 @@ public partial class NetClient
         if (_driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
         if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
-        _hud?.SetPrompt(TurretPrompt() ?? LootPrompt() ?? GarageDoorPrompt() ?? prompt ?? MassPrompt() ?? RozhlasSetPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
+        _hud?.SetPrompt(TurretPrompt() ?? LootPrompt() ?? GarageDoorPrompt() ?? ScudLoadPrompt(prompt) ?? prompt ?? MassPrompt() ?? RozhlasSetPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
     }
 
     CharacterView? _selfView;

@@ -1407,6 +1407,9 @@ stateDiagram-v2
     Lowering --> Empty
     Empty --> Reloading
     Empty --> Stowed
+    Empty --> Loading
+    Loading --> Reloading
+    Loading --> Empty
     Reloading --> Stowed
     Aborting --> Stowed
 ```
@@ -1418,9 +1421,27 @@ stateDiagram-v2
 - **Launching**: The rack is up and the rocket ignites (clock: ignition seconds). When it runs out the missile entity spawns and the rack is empty. Cannot be aborted.
 - **Spent**: The rack is up and empty for a moment (clock: spent hold seconds), the launch smoke clears, then the rack lowers.
 - **Lowering**: The empty rack lowers (clock: lower seconds). The truck is still immobilised.
-- **Empty**: The rack is down with no rocket. The truck drives again but cannot fire until a reload: the rocket cart's TryReloadScud, or an admin's instant reload (Empty to Stowed).
-- **Reloading**: A rocket is being loaded (clock: reload seconds). The truck is immobilised; the rocket shows on the rack for the second half.
+- **Empty**: The rack is down with no rocket. The truck drives again but cannot fire until a reload: a hold on a loaded rocket cart beside it (BeginLoad), TryReloadScud, or an admin's instant reload (Empty to Stowed).
+- **Reloading**: A rocket is being loaded (clock: reload seconds, or what is left of it after the transfer). The truck is immobilised; the rocket shows on the rack for the last half of the reload.
 - **Aborting**: The operator aborted the erect: the rack lowers again from where it got to, at the lowering rate, and the rocket is kept. Then Stowed.
+- **Loading**: The first half of a reload from a rocket cart (clock: reload seconds x transfer share). The truck is immobilised and the rack still empty; the bound cart keeps its rocket and must stay alive, loaded and in reach and neither it nor the truck may move, else back to Empty with the cart untouched. When the clock runs out the rocket leaves the cart (the host's order) and the second half begins.
+
+## Scud.ReloadKey
+
+The interact key beside a truck with an empty rack and a loaded cart: a tap gets in or out, a hold starts loading the rocket.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Holding
+    Holding --> Idle
+    Holding --> Spent
+    Spent --> Idle
+```
+
+- **Idle**: Key up. A press starts the hold.
+- **Holding**: Key down, counting the hold. Let go early: a tap, the key does what it always does (get in or out). Held to the end: the loading starts.
+- **Spent**: The hold did its work (or the key was down when the offer appeared): nothing happens until the key is let go.
 
 ## Scud.Screen
 
