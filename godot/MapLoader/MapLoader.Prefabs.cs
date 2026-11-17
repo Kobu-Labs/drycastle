@@ -134,6 +134,7 @@ public sealed partial class MapLoader
             mat.EmissionEnabled = true;
             mat.Emission = Color.FromHtml(e);
             mat.EmissionEnergyMultiplier = Num("emission_energy", 1f);
+            mat.EmissionOperator = (BaseMaterial3D.EmissionOperatorEnum)(int)Num("emission_operator", 0); // 1: the colour times the texture (a white colour with a texture glows only where the texture does)
             mat.EmissionTexture = Tex("emission_texture");
         }
         return mat;

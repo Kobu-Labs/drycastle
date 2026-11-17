@@ -232,6 +232,8 @@ func _describe(mat: Material) -> Dictionary:
 	if m.emission_enabled:
 		d["emission_color"] = "#" + m.emission.to_html(false)
 		d["emission_energy"] = m.emission_energy_multiplier
+		if m.emission_operator == BaseMaterial3D.EMISSION_OP_MULTIPLY:
+			d["emission_operator"] = 1  # the colour times the texture (the default, 0, adds them: a white colour would glow all over)
 		var emission := _texture(m.emission_texture)
 		if emission != "":
 			d["emission_texture"] = emission
