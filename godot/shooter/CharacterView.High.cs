@@ -108,7 +108,8 @@ public sealed partial class CharacterView
             Mesh = new SphereMesh { Radius = (float)c.EmberRadiusM, Height = 2f * (float)c.EmberRadiusM, RadialSegments = 8, Rings = 4 },
             MaterialOverride = new StandardMaterial3D
             {
-                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = ember, EmissionEnabled = true, Emission = ember, EmissionEnergyMultiplier = (float)c.EmberEnergy,
+                // shaded on purpose, as the car lamps are (CarLights): an unshaded material draws its albedo only, the emission is dropped and nothing reaches the bloom threshold
+                AlbedoColor = ember, EmissionEnabled = true, Emission = ember, EmissionEnergyMultiplier = (float)c.EmberEnergy,
             },
         });
         return root;
