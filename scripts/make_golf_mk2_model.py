@@ -19,14 +19,14 @@ Node tree (the names the client looks for, NetClient.DriveFx.cs DriveNodes and N
 
     golf_mk2
       hull                         body, interior, glazing (the body leans on it over the wheels)
-        wheel_fl_steer, _fr_steer  front steering pivots (turn about Y), origin at the wheel centre
-          wheel_fl, wheel_fr       front wheels (l = -x), origin at the wheel centre, roll about X
-        wheel_rl, wheel_rr         rear wheels
         glass_0 .. glass_5         the breakable panes, one node each, numbered as the `glass` list of vehicles.json (the script
                                    rewrites that list): windscreen, rear, then door and rear quarter light of the left and the right
         seat_driver, seat_passenger_1 .. _3   empties: the four seats of vehicles.json (feet)
         light_head_l/r, light_tail_l/r        empties: the lamp positions of vehicles.json
         steering_wheel_rim, steering_wheel_spokes   (meshes, in hull) the wheel: the cockpit view hides them and draws its own wheel that turns (CockpitRig)
+      wheel_fl_steer, _fr_steer    front steering pivots (turn about Y), origin at the wheel centre; SIBLINGS of the hull: the wheels follow the ground, the body leans over them
+        wheel_fl, wheel_fr         front wheels (l = -x), origin at the wheel centre, roll about X
+      wheel_rl, wheel_rr           rear wheels, siblings of the hull
 """
 import importlib.util
 import json, math, struct, sys
@@ -308,8 +308,8 @@ def export(path):
     pids={None:hull}
     for name,pos in PIVOTS.items():
         if name[-2]=='f':  # front: a steering pivot (turns about Y) holding the wheel (rolls about X)
-            steer=node(name+'_steer',hull,pos);pids[name]=node(name,steer)
-        else:pids[name]=node(name,hull,pos)
+            steer=node(name+'_steer',root,pos);pids[name]=node(name,steer)
+        else:pids[name]=node(name,root,pos)   # the wheels are siblings of the hull: they follow the ground, the body leans over them
     for name,pos in {**SEATS,**LAMPS}.items():node(name,hull,pos)
     tris=0
     grouped={}

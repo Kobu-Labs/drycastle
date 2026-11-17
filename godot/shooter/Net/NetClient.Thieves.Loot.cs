@@ -5,7 +5,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// The Loot of the Thieves event on the client (GLOSSARY "Loot"; docs/events/thieves/04): Loot that lies on the ground (world entity <see cref="LootRules.TypeId"/>, drawn with the kind's prop,
-/// <see cref="LootProp.Lying"/>), the use prompt and the hold ring that sends it back, and the wheels the Thieves took off cars (the vehicle record's wheel bits hide the wheel nodes of the sedan model; a model
+/// <see cref="LootProp.Lying"/>), the use prompt and the hold ring that sends it back, and the wheels the Thieves took off cars (the vehicle record's wheel bits hide the model's wheel_fl/fr/rl/rr nodes; a model
 /// without wheel nodes shows nothing hidden). The hold is the care package's (the ring is the same <see cref="RadialProgress"/>, the prompt the same line under the crosshair): while held within
 /// reach the ring fills over <see cref="LootConfig.ReturnSeconds"/> and the server, which counts the same hold from the inputs, sends the Loot back. Moving off, releasing the key or taking a hit starts it over.
 /// </summary>
@@ -92,7 +92,7 @@ public partial class NetClient
 
     // ---- the wheels the Thieves took ----
 
-    static readonly string[] WheelNodeNames = { "wheel-front-left", "wheel-front-right", "wheel-back-left", "wheel-back-right" };
+    static readonly string[] WheelNodeNames = { "wheel_fl", "wheel_fr", "wheel_rl", "wheel_rr" };
 
     /// <summary>The wheel nodes of a vehicle model by wheel index (front left, front right, back left, back right; null where the model has none).</summary>
     static Node3D?[] FindWheels(Node3D car)

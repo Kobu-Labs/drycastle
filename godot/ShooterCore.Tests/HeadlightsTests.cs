@@ -51,7 +51,7 @@ public class HeadlightsTests
     public void ShippedVehiclesHaveLamps()
     {
         var f = Shipped();
-        foreach (var id in new[] { "car", "motorcycle", "bicycle" })
+        foreach (var id in new[] { "car", "motorcycle", "quad" })
         {
             var l = f.Vehicles.Single(v => v.Id == id).Lights;
             Assert.NotNull(l);

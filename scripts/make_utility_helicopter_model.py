@@ -13,7 +13,7 @@ So vehicles.json uses model_scale 1, model_yaw_deg 0, model_offset [0, 0, 0].
 Node tree (every moving part is its own node, its origin is its pivot):
 
     utility_helicopter
-      fuselage                   hull: nose, cockpit, open cabin, engine cowl, tail boom, fin, skids (static)
+      hull                       nose, cockpit, open cabin, engine cowl, tail boom, fin, skids (static; was `fuselage`, renamed for the contract: #325)
         rotor_main               main rotor, origin at the hub on the mast (spin about Y)
         rotor_tail               tail rotor, origin at its hub on the left of the fin (spin about X)
         gun_mount                door gun yaw pivot on top of the pintle (rotate about Y). The node is turned so that its
@@ -129,7 +129,7 @@ GLASS = kit.GlassSet("utility_helicopter")
 
 def build():
     root = Node("utility_helicopter")
-    hull = root.child("fuselage")
+    hull = root.child("hull")
 
     # ---- belly and floor: one tub under the cockpit and the cabin
     tub = [octagon(COCKPIT, 1.14, 0.56, FLOOR, 0.16, 0.01), octagon(-2.20, HALF, BELLY, FLOOR, 0.16, 0.01),

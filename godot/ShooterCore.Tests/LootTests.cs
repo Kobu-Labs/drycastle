@@ -230,11 +230,11 @@ public class LootTests
         Assert.Equal(4, found.Count);
         var fl = found.First(t => TireSource.WheelOf(t.Id) == 0);
         Assert.Equal(TireSource.IdOf(0x4001, 0), fl.Id);
-        Assert.Equal(new Vector3(10 - 0.72f, 0, 20 - 1.12f), fl.Position); // front left: the car faces -Z
-        Assert.Equal(new Vector3(10 - 1.15f, 0, 20 - 1.12f), fl.WorkSpot); // kneels outside the wheel
+        Assert.Equal(new Vector3(10 - 0.72f, 0, 20 - 1.32f), fl.Position); // front left: the car faces -Z
+        Assert.Equal(new Vector3(10 - 1.25f, 0, 20 - 1.32f), fl.WorkSpot); // kneels outside the wheel
         Assert.False(fl.NeedsClimb);
         var br = found.First(t => TireSource.WheelOf(t.Id) == 3);
-        Assert.Equal(new Vector3(10 + 0.72f, 0, 20 + 1.12f), br.Position);
+        Assert.Equal(new Vector3(10 + 0.72f, 0, 20 + 1.32f), br.Position);
         src.Take(fl.Id);
         Assert.Equal((byte)1, cars.Off(0x4001));
         Assert.False(src.TryFind(fl.Id, out _));

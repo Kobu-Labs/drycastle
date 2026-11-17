@@ -123,7 +123,7 @@ public class SeatSwitchTests
     [Fact]
     public void AVehicleWithoutASeatsListHasOneSeatNumberedOne()
     {
-        var car = Type("car"); // no "seats" in vehicles.json: the one default driver seat
+        var car = Type("quad"); // no "seats" in vehicles.json: the one default driver seat
         var l = SeatSchematic.Layout(car, 184, 168, 12, 16);
         var seat = Assert.Single(l.Seats);
         Assert.Equal(1, seat.Number);
@@ -161,7 +161,6 @@ public class SeatSwitchTests
     [Theory]
     [InlineData("car")]
     [InlineData("motorcycle")]
-    [InlineData("bicycle")]
     [InlineData("jeep")]
     [InlineData("quad")]
     [InlineData("amphibious")]
@@ -209,10 +208,103 @@ public class SeatSwitchTests
     }
 
     [Fact]
-    public void TheJeepsRoofGunnerIsPushedClearOfItsDriver()
+    public void ARoofGunnerIsPushedClearOfItsDriver()
     {
-        var jeep = Type("jeep"); // driver at the centre, gunner 0.25 m behind it: under a marker's width on the panel
-        var l = SeatSchematic.Layout(jeep, 184, 168, 12, 16);
+        // driver at the centre, gunner 0.25 m behind it: under a marker's width on the panel (the old jeep's seats, gone with its gun, #325)
+        var def = new VehicleDef { Id = "x", HalfWidth = 1.28f, HalfLength = 2.3f, Height = 2.2f };
+        def.Seats = new List<VehicleSeatDef> { new() { Role = "driver", Offset = new float[] { 0, 0, 0 } }, new() { Role = "gunner", Offset = new float[] { 0, 1.25f, 0.25f } } };
+        var l = SeatSchematic.Layout(def, 184, 168, 12, 16);
         Assert.True(l.Seats[0].Y < l.Seats[1].Y); // the order along the vehicle is kept: the driver in front
+    }
+
+    // ---- the outlines (#334) ----
+
+    static VehicleOutlinesFile Outlines() => VehicleOutlinesFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "vehicle_outlines.json"));
+    // the panel's drawing area (SeatSchematicView.W x H, Pad, Radius)
+    const float PanelW = 184, PanelH = 216, PanelPad = 12, PanelR = 16;
+
+    static IEnumerable<VehicleDef> Seated() => Shipped().Vehicles.Where(v => v.Seats.Count > 0);
+
+    [Fact]
+    public void EveryShippedVehicleWithSeatsHasAnOutlineOfAUsablePointCount()
+    {
+        var o = Outlines();
+        foreach (var v in Seated())
+        {
+            var poly = o.For(v.Id);
+            Assert.True(poly != null, $"{v.Id}: no outline (python3 scripts/make_vehicle_outlines.py)");
+            Assert.InRange(poly!.Count, 20, 60);
+        }
+    }
+
+    [Fact]
+    public void EverySeatLiesInsideItsVehiclesOutlineOrWithinAStandingRidersMargin()
+    {
+        var o = Outlines();
+        foreach (var v in Seated())
+            for (var i = 0; i < v.Seats.Count; i++)
+            {
+                var s = v.Seats[i].Offset;
+                var poly = o.For(v.Id)!;
+                var ok = OutlineGeometry.Contains(poly, s[0], s[2]) || OutlineGeometry.EdgeDistance(poly, s[0], s[2]) <= 0.3f;
+                Assert.True(ok, $"{v.Id}: seat {i + 1} at x {s[0]}, z {s[2]} is outside the outline");
+            }
+    }
+
+    [Fact]
+    public void AnOutlineFitsThePanelAndSeatsKeepTheirRealPlaceWhenNothingTouches()
+    {
+        var car = Type("car");
+        var poly = Outlines().For("car")!;
+        var l = SeatSchematic.Layout(car, PanelW, PanelH, PanelPad, PanelR, poly);
+        Assert.NotNull(l.Outline);
+        Assert.Equal(poly.Count, l.Outline!.Count);
+        Assert.All(l.Outline, p => { Assert.InRange(p.X, PanelPad - 0.01f, PanelW - PanelPad + 0.01f); Assert.InRange(p.Y, PanelPad - 0.01f, PanelH - PanelPad + 0.01f); });
+        // the front seats sit 0.75 m apart; the rear pair is closer than a marker pair and is nudged, which moves the front ones by a few pixels at most
+        var scale = Math.Min((PanelW - 2 * PanelPad) / (poly.Max(p => p[0]) - poly.Min(p => p[0])), (PanelH - 2 * PanelPad) / (poly.Max(p => p[1]) - poly.Min(p => p[1])));
+        Assert.InRange(l.Seats[1].X - l.Seats[0].X, (car.Seats[1].Offset[0] - car.Seats[0].Offset[0]) * scale - 4, (car.Seats[1].Offset[0] - car.Seats[0].Offset[0]) * scale + 4);
+        Assert.InRange(Math.Abs(l.Seats[0].Y - l.Seats[1].Y), 0, 6); // still abreast
+        Assert.True(l.Seats[0].Y < l.Seats[2].Y); // the rear seats stay behind the front ones
+    }
+
+    [Fact]
+    public void WithoutAnOutlineTheHitBoxIsDrawnAsBefore()
+    {
+        var def = Type("car");
+        var a = SeatSchematic.Layout(def, 184, 168, 12, 16);
+        Assert.Null(a.Outline);
+        Assert.Equal(a.Seats, SeatSchematic.Layout(def, 184, 168, 12, 16, null).Seats);
+        Assert.Null(SeatSchematic.Layout(def, 184, 168, 12, 16, new List<float[]>()).Outline); // an empty outline is no outline
+        Assert.Null(new VehicleOutlinesFile().For("nothing"));
+    }
+
+    [Fact]
+    public void EveryOutlinedVehicleKeepsItsMarkersApartInThePanel()
+    {
+        var o = Outlines();
+        foreach (var v in Seated())
+        {
+            var l = SeatSchematic.Layout(v, PanelW, PanelH, PanelPad, PanelR, o.For(v.Id));
+            for (var i = 0; i < l.Seats.Count; i++)
+            {
+                Assert.InRange(l.Seats[i].X, l.BodyLeft - 0.01f, l.BodyLeft + l.BodyWidth + 0.01f);
+                Assert.InRange(l.Seats[i].Y, l.BodyTop - 0.01f, l.BodyTop + l.BodyHeight + 0.01f);
+                for (var j = i + 1; j < l.Seats.Count; j++)
+                {
+                    var d = MathF.Sqrt(MathF.Pow(l.Seats[i].X - l.Seats[j].X, 2) + MathF.Pow(l.Seats[i].Y - l.Seats[j].Y, 2));
+                    Assert.True(d >= 2 * PanelR, $"{v.Id}: seats {i + 1} and {j + 1} overlap ({d:F1} px apart)");
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void ThePointInPolygonAndEdgeDistanceHelpersAgree()
+    {
+        var sq = new List<float[]> { new[] { -1f, -1f }, new[] { 1f, -1f }, new[] { 1f, 1f }, new[] { -1f, 1f } };
+        Assert.True(OutlineGeometry.Contains(sq, 0, 0));
+        Assert.False(OutlineGeometry.Contains(sq, 1.5f, 0));
+        Assert.Equal(0.5f, OutlineGeometry.EdgeDistance(sq, 1.5f, 0), 3);
+        Assert.Equal(1f, OutlineGeometry.EdgeDistance(sq, 0, 0), 3);
     }
 }

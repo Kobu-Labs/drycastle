@@ -1,0 +1,164 @@
+{
+ "model": "pack:synty-vehicles/quad_red",
+ "out_dir": "synty/glb/vehicles-std",
+ "skins": [
+  {
+   "id": "red",
+   "model": "pack:synty-vehicles/quad_red",
+   "atlas": "PolygonQuadBike_01"
+  },
+  {
+   "id": "blue",
+   "model": "pack:synty-vehicles/quad_blue",
+   "atlas": "PolygonQuadBike_02"
+  },
+  {
+   "id": "olive",
+   "model": "pack:synty-vehicles/quad_olive",
+   "atlas": "PolygonQuadBike_03"
+  },
+  {
+   "id": "sand",
+   "model": "pack:synty-vehicles/quad_sand",
+   "atlas": "PolygonQuadBike_04"
+  }
+ ],
+ "bounds": {
+  "min": [
+   -0.595,
+   0.0,
+   -1.14
+  ],
+  "max": [
+   0.595,
+   1.319,
+   1.14
+  ]
+ },
+ "suggested": {
+  "half_width": 0.6,
+  "half_length": 1.15,
+  "height": 1.32
+ },
+ "origin": {
+  "ground_shift_y": -0.0113,
+  "centre_shift_z": 0.0177
+ },
+ "wheels": {
+  "radius": 0.307,
+  "wheelbase": 1.459,
+  "track": 0.908,
+  "tyre_x": 0.454,
+  "axle_z_mean_abs": 0.73,
+  "centres": {
+   "fl": {
+    "centre": [
+     -0.454,
+     0.307,
+     -0.748
+    ],
+    "radius": 0.307,
+    "width": 0.281,
+    "steer": true
+   },
+   "fr": {
+    "centre": [
+     0.454,
+     0.307,
+     -0.748
+    ],
+    "radius": 0.307,
+    "width": 0.281,
+    "steer": true
+   },
+   "rl": {
+    "centre": [
+     -0.454,
+     0.307,
+     0.711
+    ],
+    "radius": 0.307,
+    "width": 0.281,
+    "steer": false
+   },
+   "rr": {
+    "centre": [
+     0.454,
+     0.307,
+     0.711
+    ],
+    "radius": 0.307,
+    "width": 0.281,
+    "steer": false
+   }
+  }
+ },
+ "controls": {
+  "steer_bars": {
+   "axis": [
+    0.0,
+    0.709,
+    0.706
+   ],
+   "pivot": [
+    0.0,
+    1.02,
+    -0.356
+   ],
+   "under": "hull"
+  }
+ },
+ "seats": {
+  "seat_driver": {
+   "role": "driver",
+   "feet": [
+    0.0,
+    0.419,
+    0.168
+   ],
+   "exposed": true
+  }
+ },
+ "lamps": {
+  "light_head_l": {
+   "kind": "head",
+   "pos": [
+    -0.236,
+    0.705,
+    -1.031
+   ]
+  },
+  "light_head_r": {
+   "kind": "head",
+   "pos": [
+    0.236,
+    0.705,
+    -1.031
+   ]
+  },
+  "light_tail_c": {
+   "kind": "tail",
+   "pos": [
+    0.0,
+    0.779,
+    1.017
+   ]
+  }
+ },
+ "glass": [],
+ "nodes": [
+  "hull",
+  "light_head_l",
+  "light_head_r",
+  "light_tail_c",
+  "quad",
+  "seat_driver",
+  "steer_bars",
+  "wheel_fl",
+  "wheel_fl_steer",
+  "wheel_fr",
+  "wheel_fr_steer",
+  "wheel_rl",
+  "wheel_rr"
+ ]
+}

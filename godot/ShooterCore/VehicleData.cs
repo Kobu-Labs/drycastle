@@ -46,6 +46,8 @@ public class VehiclesFile : IVersioned
             if (v.Hood.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: hood is [x, y, z]");
             if (v.Variants is < 1 or > 16) throw new DataFileException($"vehicles.json: {v.Id}: variants must be 1..16");
             if (v.Paints.Count > 0 && v.PaintMaterial == "") throw new DataFileException($"vehicles.json: {v.Id}: paints need paint_material");
+            if (v.Skins.Count > 0 && (v.Skins[0] != v.Model || v.Skins.Any(k => !k.StartsWith("pack:", StringComparison.Ordinal)) || v.Paints.Count > 0 || v.Tint != null))
+                throw new DataFileException($"vehicles.json: {v.Id}: skins are pack: models, the first is the model, and they exclude paints and tint");
             if (v.Lights is { } l)
             {
                 if (l.Head.Count is < 1 or > 4 || l.Tail.Count > 4) throw new DataFileException($"vehicles.json: {v.Id}: lights need 1 to 4 head and 0 to 4 tail lamps");
@@ -98,6 +100,9 @@ public class VehiclesFile : IVersioned
                         throw new DataFileException($"vehicles.json: {v.Id}: a seat's aim needs arc_deg 0..180, min_pitch_deg below max_pitch_deg (within -89..89) and a positive spread_full_speed");
                 }
             }
+            for (var si = 0; si < v.Seats.Count; si++)
+                if (v.ExposedGunner && v.Seats[si].Role == "gunner" && v.Seats[si].Cover is { } gc && gc != SeatCover.Exposed)
+                    throw new DataFileException($"vehicles.json: {v.Id}: exposed_gunner makes the gunner seat exposed, its cover says {gc}");
             if (v.ExposedGunner && !v.Seats.Any(x => x.Role == "gunner")) throw new DataFileException($"vehicles.json: {v.Id}: exposed_gunner needs a gunner seat");
             if (v.Gun is { } g)
             {
@@ -188,6 +193,17 @@ public class VehicleSpotDef
     public float? YawDeg { get; set; }
 }
 
+/// <summary>What protects a seat's rider from a shot (ADR 0035). Glass is the default of a seat that says nothing.</summary>
+public enum SeatCover
+{
+    /// <summary>Behind panes: a bullet reaches the rider only through a pane or an opening of the hull, as that pane's kind lets it.</summary>
+    Glass,
+    /// <summary>Hidden behind armour: no bullet, pellet or mounted-gun round reaches the rider; explosive damage and the vehicle blowing up do.</summary>
+    Armoured,
+    /// <summary>In the open (ADR 0012): a round that reaches the rider's body hits them, whatever the hull is.</summary>
+    Exposed,
+}
+
 /// <summary>One seat of a vehicle (vehicles.json "seats"). Seat 0 is always the driver. Offset is in the vehicle's frame, metres: x right, y up, z back (forward is -Z), origin on the ground at the car's centre.</summary>
 public class VehicleSeatDef
 {
@@ -200,11 +216,16 @@ public class VehicleSeatDef
     /// </summary>
     public bool Armed { get; set; }
     /// <summary>
-    /// The hull does not cover this seat's rider (ADR 0012): a shot that reaches their body hits them and not the hull (<see cref="GunnerCover"/>).
-    /// False keeps the rider behind the hull, as in every closed vehicle. (The flak truck and the utility helicopter say it for their gunner with the
-    /// vehicle's <see cref="VehicleDef.ExposedGunner"/>.)
+    /// What protects this seat's rider (vehicles.json seat <c>cover</c>, ADR 0035): <see cref="SeatCover.Armoured"/>, <see cref="SeatCover.Glass"/> or
+    /// <see cref="SeatCover.Exposed"/> (ADR 0012). Null: not declared (the contract test wants every seat to declare it; <see cref="VehicleDef.CoverOf"/> reads Glass then).
     /// </summary>
-    public bool Exposed { get; set; }
+    public SeatCover? Cover { get; set; }
+    /// <summary>
+    /// The hull does not cover this seat's rider (ADR 0012): a shot that reaches their body hits them and not the hull (<see cref="GunnerCover"/>).
+    /// Its own spelling in vehicles.json is <c>"cover": "exposed"</c>; <c>"exposed": true</c> is read as the same (the old spelling). (The flak truck and the
+    /// utility helicopter say it for their gunner with the vehicle's <see cref="VehicleDef.ExposedGunner"/>.)
+    /// </summary>
+    public bool Exposed { get => Cover == SeatCover.Exposed; set { if (value) Cover = SeatCover.Exposed; else if (Cover == SeatCover.Exposed) Cover = SeatCover.Glass; } }
     /// <summary>The rider of an exposed seat stands (the gunner in a ring) instead of sitting: that is how they are drawn, and how tall they are to a bullet.</summary>
     public bool Standing { get; set; }
     /// <summary>How far round and up and down an armed seat's rider can aim. Null: all the way round.</summary>
@@ -481,8 +502,10 @@ public class VehicleGlassDef
     /// counter-clockwise seen from outside, inside the <see cref="Size"/> box. Null: the whole rectangle.
     /// </summary>
     public float[][]? Outline { get; set; }
-    /// <summary>Hit points of this pane; null takes glass.json vehicle_pane_hp.</summary>
+    /// <summary>Hit points of this pane; null takes its <see cref="Kind"/>'s from glass.json (<see cref="GlassConfig.PaneHp"/>).</summary>
     public float? Hp { get; set; }
+    /// <summary>How the pane treats a bullet (ADR 0035): Normal (the default) lets it through at once, Reinforced stops it while it holds.</summary>
+    public GlassKind Kind { get; set; } = GlassKind.Normal;
 
     public GlassPaneRect Rect() => GlassPaneRect.Make(new System.Numerics.Vector3(Centre[0], Centre[1], Centre[2]), new System.Numerics.Vector3(Normal[0], Normal[1], Normal[2]), Size[0], Size[1],
         Outline?.Select(p => new System.Numerics.Vector2(p[0], p[1])).ToList());
@@ -503,6 +526,15 @@ public class VehicleGlassDef
         }
         return area > 1e-4f ? null : "the outline must be counter-clockwise and have an area";
     }
+}
+
+/// <summary>The kind of a vehicle's glass pane (vehicles.json glass <c>kind</c>, the table in glass.json <c>kinds</c>, ADR 0035).</summary>
+public enum GlassKind
+{
+    /// <summary>A bullet damages the pane and goes on, full damage to what is behind it.</summary>
+    Normal,
+    /// <summary>More hit points; while it holds it stops a bullet (the pane takes the damage, whatever is behind none), once shattered a shot goes through.</summary>
+    Reinforced,
 }
 
 /// <summary>
@@ -832,19 +864,26 @@ public class VehicleDef
     public VehicleGunDef? Gun { get; set; }
     /// <summary>
     /// The gunner sits in the open (the flak truck's turret): shots that reach his body hit him, not the hull around him (<see cref="GunnerCover"/>).
-    /// False keeps every rider behind the hull, as the jeep's roof gunner is.
+    /// False keeps every rider behind the hull, as the Humvee's covered seats are.
     /// </summary>
     public bool ExposedGunner { get; set; }
     /// <summary>
     /// Whether the hull leaves the rider of <paramref name="seat"/> uncovered: the seat says so itself (<see cref="VehicleSeatDef.Exposed"/>, the
     /// amphibious transport's three), or it is the gunner seat of a vehicle with <see cref="ExposedGunner"/> (the flak truck, the utility helicopter).
     /// </summary>
-    public bool SeatExposed(int seat) => seat >= 0 && seat < Seats.Count && (Seats[seat].Exposed || ExposedGunner && Seats[seat].Role == "gunner");
+    public bool SeatExposed(int seat) => CoverOf(seat) == SeatCover.Exposed;
+    /// <summary>
+    /// The cover a seat declares: its own <see cref="VehicleSeatDef.Cover"/>, else Exposed for the gunner seat of a vehicle with <see cref="ExposedGunner"/>
+    /// (the shorthand for that seat), else null (not declared).
+    /// </summary>
+    public SeatCover? DeclaredCover(int seat) => seat < 0 || seat >= Seats.Count ? null : Seats[seat].Cover ?? (ExposedGunner && Seats[seat].Role == "gunner" ? SeatCover.Exposed : null);
+    /// <summary>The cover of a seat as the rules read it: the declared one, Glass for a seat that declares none.</summary>
+    public SeatCover CoverOf(int seat) => DeclaredCover(seat) ?? SeatCover.Glass;
     /// <summary>An anti-aircraft turret worked from the gunner seat (the flak truck). Null: none. Excludes <see cref="Gun"/>.</summary>
     public VehicleFlakDef? Flak { get; set; }
     /// <summary>
     /// Where the <see cref="Gun"/> is mounted and how far it swings (the utility helicopter's door gun). Null: the gun fires along the gunner's
-    /// view from above the seat, as the jeep's does. With it, the gun is on a pintle and the aim is held inside its arc (<see cref="DoorGunRules"/>).
+    /// view from above the seat (the roof gun of a covered seat). With it, the gun is on a pintle and the aim is held inside its arc (<see cref="DoorGunRules"/>).
     /// </summary>
     public VehicleDoorGunDef? DoorGun { get; set; }
     /// <summary>Mass (kg) for run-over damage. Unset: the v1 run-over numbers (see <see cref="VehiclesFile.RunOverScale"/>).</summary>
@@ -882,7 +921,7 @@ public class VehicleDef
     public VehicleTrailerDef? Trailer { get; set; }
     /// <summary>A single fixed body colour [r, g, b] (sRGB) for a type with one look (olive drab). Replaces the colour variants: such a type has one variant.</summary>
     public float[]? Tint { get; set; }
-    /// <summary>Model file relative to assets/ (empty: the code-built car with the Kenney sedan). Scale, yaw and offset fit the raw node to the game (forward -Z, origin at the ground centre).</summary>
+    /// <summary>Model file relative to assets/, or a private-pack model id (empty: no model, a box). Scale, yaw and offset fit the raw node to the game (forward -Z, origin at the ground centre).</summary>
     public string Model { get; set; } = "";
     public float ModelScale { get; set; } = 1;
     public float ModelYawDeg { get; set; }
@@ -909,6 +948,13 @@ public class VehicleDef
     /// <summary>The model's own material that takes the colour variants, and the model's own materials whose colours the variants are (index = colour byte).</summary>
     public string PaintMaterial { get; set; } = "";
     public List<string> Paints { get; set; } = new();
-    /// <summary>Number of colour variants: the model's paints, or the shared car palette.</summary>
-    public int Variants => Tint != null ? 1 : Paints.Count > 0 ? Paints.Count : VehicleColours.Palette.Length;
+    /// <summary>
+    /// Colour variants of a Synty model (#325): one standardized model per body colour (`pack:` ids, the first is <see cref="Model"/>), each wearing another atlas. An atlas swap, never a tint.
+    /// The colour index of the vehicle record picks the skin (<see cref="SkinModel"/>), so every client draws the same one without a new wire field.
+    /// </summary>
+    public List<string> Skins { get; set; } = new();
+    /// <summary>The model to draw for a colour index: its skin, or <see cref="Model"/> when the type has no skins.</summary>
+    public string SkinModel(int colour) => Skins.Count > 0 ? Skins[colour % Skins.Count] : Model;
+    /// <summary>Number of colour variants: the skins, the model's paints, or the shared car palette.</summary>
+    public int Variants => Skins.Count > 0 ? Skins.Count : Tint != null ? 1 : Paints.Count > 0 ? Paints.Count : VehicleColours.Palette.Length;
 }

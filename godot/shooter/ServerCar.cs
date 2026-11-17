@@ -42,7 +42,7 @@ public partial class ServerCar : CharacterBody3D
     }
 
     public ushort Id;
-    /// <summary>Type: index into vehicles.json and its def (car, motorcycle, bicycle share this class).</summary>
+    /// <summary>Type: index into vehicles.json and its def (car and motorcycle share this class).</summary>
     public int Kind;
     public VehicleDef Def = null!;
     /// <summary>Weapon byte of the entity record: type index and colour variant (<see cref="VehicleRecord.Pack"/>).</summary>

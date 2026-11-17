@@ -320,12 +320,12 @@ public class HelicopterHullTests
         ContactShape CarAt(float x, float z) => new(new Vector3(x, 0, z), 0f, Car.HalfWidth, Car.HalfLength, Car.Height);
         Assert.Null(VehicleContact.Test(old, CarAt(0, 9.5f), true));
         Assert.NotNull(VehicleContact.Test(heli, CarAt(0, 9.5f), true));
-        // beside the boom's width: a car at x 2.0 is clear of the 0.35 m boom, at 1.4 it is in it
+        // beside the boom's width: a car at x 2.0 is clear of the 0.35 m boom, at 1.1 it is in it
         Assert.Null(VehicleContact.Test(heli, CarAt(2.0f, 6.0f), true));
-        var hit = VehicleContact.Test(heli, CarAt(1.4f, 6.0f), true);
+        var hit = VehicleContact.Test(heli, CarAt(1.1f, 6.0f), true); // the car is 2.06 m wide: at 1.1 its side is in the boom
         Assert.NotNull(hit);
         // the hull is a body: a car in the cabin's side is pushed out sideways (the normal points from the helicopter to the car)
-        var side = VehicleContact.Test(heli, CarAt(2.4f, -0.5f), true)!.Value;
+        var side = VehicleContact.Test(heli, CarAt(2.1f, -0.5f), true)!.Value;
         Assert.True(side.Normal.X > 0.9f, side.Normal.ToString());
     }
 

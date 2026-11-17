@@ -43,11 +43,12 @@ public readonly record struct SeatMarker(int Index, string Role, float X, float 
     public int Number => Index + 1;
 }
 
-/// <summary>The seat schematic's geometry in panel pixels: the vehicle's body rectangle (forward is up) and a marker per seat.</summary>
-public sealed record SeatLayout(float BodyLeft, float BodyTop, float BodyWidth, float BodyHeight, IReadOnlyList<SeatMarker> Seats);
+/// <summary>The seat schematic's geometry in panel pixels: the vehicle's bounding rectangle (forward is up), its outline polygon (null: the rectangle is the body) and a marker per seat.</summary>
+public sealed record SeatLayout(float BodyLeft, float BodyTop, float BodyWidth, float BodyHeight, IReadOnlyList<SeatMarker> Seats, IReadOnlyList<(float X, float Y)>? Outline = null);
 
 /// <summary>
-/// The top-down seat schematic's layout (pure, so it is tested): the vehicle drawn to scale from its half width and half length, forward up the panel,
+/// The top-down seat schematic's layout (pure, so it is tested): the vehicle drawn to scale from its top-view outline (vehicle_outlines.json; without one its
+/// hit box from half width and half length), forward up the panel,
 /// each seat at its vehicle-frame offset (x to the right, z backward, so a forward seat is higher up). A vehicle without a <c>seats</c> list has the one
 /// default driver seat, so it gets a single marker, number 1.
 /// </summary>
@@ -55,21 +56,30 @@ public static class SeatSchematic
 {
     /// <summary>
     /// Lays the vehicle out in a <paramref name="width"/> x <paramref name="height"/> panel, centred, as large as fits inside <paramref name="pad"/>.
-    /// Markers (radius <paramref name="markerRadius"/>) that would touch, such as the jeep's roof gunner above its driver, are pushed apart, then every
+    /// Seats keep their real positions on the outline; markers (radius <paramref name="markerRadius"/>) that would touch, such as a roof gunner above its driver, are pushed apart, then every
     /// marker is kept inside the body outline, so each number stays readable and no seat is hidden under another.
     /// </summary>
-    public static SeatLayout Layout(VehicleDef def, float width, float height, float pad, float markerRadius)
+    public static SeatLayout Layout(VehicleDef def, float width, float height, float pad, float markerRadius, IReadOnlyList<float[]>? outline = null)
     {
-        var scale = MathF.Min((width - 2 * pad) / (2 * def.HalfWidth), (height - 2 * pad) / (2 * def.HalfLength));
+        // the vehicle-frame box that is fitted into the panel: the outline's bounds, or the hit box centred on the origin
+        float minX = -def.HalfWidth, maxX = def.HalfWidth, minZ = -def.HalfLength, maxZ = def.HalfLength;
+        if (outline is { Count: >= 3 })
+        {
+            minX = outline.Min(p => p[0]); maxX = outline.Max(p => p[0]);
+            minZ = outline.Min(p => p[1]); maxZ = outline.Max(p => p[1]);
+        }
+        else outline = null;
+        float bw = maxX - minX, bh = maxZ - minZ, mx = (minX + maxX) / 2, mz = (minZ + maxZ) / 2;
+        var scale = MathF.Min((width - 2 * pad) / bw, (height - 2 * pad) / bh);
         float cx = width / 2, cy = height / 2;
-        float hx = def.HalfWidth * scale, hy = def.HalfLength * scale;
+        float hx = bw / 2 * scale, hy = bh / 2 * scale;
         var n = def.Seats.Count;
         var x = new float[n]; var y = new float[n];
         for (var i = 0; i < n; i++)
         {
             var o = def.Seats[i].Offset;
-            x[i] = cx + o[0] * scale;
-            y[i] = cy + o[2] * scale;
+            x[i] = cx + (o[0] - mx) * scale;
+            y[i] = cy + (o[2] - mz) * scale;
         }
         var min = 2 * markerRadius + 4;
         for (var pass = 0; pass < 12; pass++)
@@ -83,6 +93,8 @@ public static class SeatSchematic
                     if (d >= min) continue;
                     // exactly on top of each other (a roof gunner above its driver): split along the vehicle, the lower seat number in front
                     if (d < 0.001f) { dx = 0; dy = 1; d = 1; }
+                    // a body too narrow to split them sideways (a three-seat bench in a wide, long truck): split along the vehicle instead, the lower seat number in front
+                    if (MathF.Abs(dx) > MathF.Abs(dy) && (cx + hx - markerRadius) - (cx - hx + markerRadius) < 2 * min) { dy = dy != 0 ? MathF.Sign(dy) : 1; dx = dx * 0.01f; d = MathF.Sqrt(dx * dx + dy * dy); }
                     var push = (min - d) / 2 + 0.01f;
                     x[i] -= dx / d * push; y[i] -= dy / d * push;
                     x[j] += dx / d * push; y[j] += dy / d * push;
@@ -97,7 +109,8 @@ public static class SeatSchematic
         }
         var seats = new SeatMarker[n];
         for (var i = 0; i < n; i++) seats[i] = new SeatMarker(i, def.Seats[i].Role, x[i], y[i]);
-        return new SeatLayout(cx - hx, cy - hy, 2 * hx, 2 * hy, seats);
+        var poly = outline?.Select(p => (cx + (p[0] - mx) * scale, cy + (p[1] - mz) * scale)).ToArray();
+        return new SeatLayout(cx - hx, cy - hy, 2 * hx, 2 * hy, seats, poly);
     }
 
     /// <summary>Clamps into [lo, hi]; a range turned inside out (a body narrower than a marker) gives the centre.</summary>

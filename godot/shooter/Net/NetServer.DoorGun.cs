@@ -6,7 +6,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// The utility helicopter's door gun on the server (<see cref="DoorGunRules"/>). The gunner's view is what the gun is asked to point at; the gun
-/// points there as far as its arc allows, and a round goes where the gun points: hitscan from the muzzle by the vehicle gun's rules (the jeep's
+/// points there as far as its arc allows, and a round goes where the gun points: hitscan from the muzzle by the vehicle gun's rules (the vehicle gun round's
 /// magazine, reserve, reload and spread, <see cref="VehicleGun"/>), so its kills are ordinary kills. The aim goes to every client in a turret
 /// record, as the flak's does, here as the mount's yaw and the gun's pitch against the airframe; the gunner's ammo goes to the gunner.
 /// </summary>
@@ -62,7 +62,7 @@ public partial class NetServer
         // the world without the gunner's own vehicle
         List<GlassCross>? crossed = null;
         var wall = BulletHit(from, dir, gun.Range, out var shotCar, ref crossed, car);
-        var targets = LiveTargets().Where(t => car.Seat.SeatOf(t.Id) < 0).ToList();
+        var targets = LiveTargets().Where(t => car.Seat.SeatOf(t.Id) < 0 && !IsArmouredRider(t)).ToList();
         var (exposedGunner, pastHull) = ExposedGunnerBehind(shotCar, from, dir, gun.Range, targets);
         var hit = GunnerCover.Raycast(muzzle, d, gun.Range, wall, targets, c.Id, exposedGunner, pastHull);
         var end = from + dir * (hit?.Distance ?? Math.Min(wall, gun.Range));

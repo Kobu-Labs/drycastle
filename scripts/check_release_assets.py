@@ -6,6 +6,8 @@
 Checks, each printed as ok / REPUBLISH / warn:
   private pack  the pack built now from assets-private/ against private-pack.json (the one players would get), and that the
                 encrypted file is still served at its URL with the right size        -> scripts/publish-private-pack.sh user@host
+  vehicle models  every `pack:` model vehicles.json names (`model` and each of `skins`) is a row of assets-private/manifest.json with its file there, and the
+                file is in the pack zip built above (a skin that was never standardized, or left out of the pack, would draw a box)
   map           the files of out/village/map against the map named in map-version.txt (tactical-map.png is ignored: it is
                 rendered at publish time)                                             -> scripts/publish-map.sh
   launcher      godot/launcher, godot/LauncherCore and the launcher readme against the newest launcher-v* tag
@@ -80,6 +82,43 @@ def check_pack() -> None:
     report("ok", name, f"{pub['id']} is current and served")
 
 
+def vehicle_model_refs() -> list[str]:
+    """Every `pack:` model id the vehicles of vehicles.json draw: `model` and each of `skins`, in file order, once."""
+    refs: list[str] = []
+    for v in json.loads((ROOT / "godot/shooter/data/vehicles.json").read_text())["vehicles"]:
+        for ref in [v.get("model", "")] + list(v.get("skins", [])):
+            if ref.startswith("pack:") and ref not in refs:
+                refs.append(ref)
+    return refs
+
+
+def check_vehicle_models() -> None:
+    """Per-model coverage (#325): the private pack must hold every model (and skin) the vehicles use. Run after check_pack, which builds the zip."""
+    name = "vehicle models"
+    refs = vehicle_model_refs()
+    private = ROOT / "assets-private"
+    if not private.is_dir():
+        report("warn", name, f"no assets-private/ on this machine: cannot tell whether the {len(refs)} vehicle models are in the pack")
+        return
+    manifest = {a["id"]: a for a in json.loads((private / "manifest.json").read_text())["assets"]}
+    zip_path = ROOT / "out/private-pack/assets-private.zip"
+    packed = set(zipfile.ZipFile(zip_path).namelist()) if zip_path.is_file() else None
+    missing = []
+    for ref in refs:
+        row = manifest.get(ref)
+        if row is None:
+            missing.append(f"{ref} (no manifest row)")
+        elif not (private / row["file"]).is_file():
+            missing.append(f"{ref} (no file {row['file']})")
+        elif packed is not None and row["file"] not in packed:
+            missing.append(f"{ref} (not in the pack zip)")
+    if missing:
+        shown = "; ".join(missing[:4]) + (f" and {len(missing) - 4} more" if len(missing) > 4 else "")
+        report("REPUBLISH", name, f"{len(missing)} of {len(refs)} vehicle models are not in the private pack: {shown}. Run scripts/build_vehicle_packs.sh, then publish the pack")
+    else:
+        report("ok", name, f"all {len(refs)} vehicle models (skins included) are in the pack" + ("" if packed is not None else " tree (no zip to check)"))
+
+
 def published_map_zip(tag: str) -> Path | None:
     """The zip of the published map: the local out/village/map.zip when it is that one, else a cached download."""
     got = run("gh", "release", "download", tag, "--pattern", "map.json", "--output", "-")
@@ -150,6 +189,7 @@ def check_committed() -> None:
 
 def main() -> int:
     check_pack()
+    check_vehicle_models()
     check_map()
     check_launcher()
     check_committed()

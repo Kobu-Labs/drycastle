@@ -1,5 +1,7 @@
 # Glass panes are declared rectangles with server-owned hit points
 
+> **Decision 3's rule for riders is replaced by ADR 0035** (`0035-every-seat-declares-its-cover-and-every-pane-its-kind.md`): a bullet goes through a pane by the pane's kind (normal lets it through, reinforced stops it while it holds), and the rider behind it is reached by the seat's cover (armoured: never).
+
 > **Partly superseded by ADR 0008** (`0008-generated-vehicle-glass-is-a-node-per-pane-with-an-outline.md`): the vehicle panes of our generated models (bus, flak truck, utility helicopter) are now a node per pane with an outline polygon, and the "darkened, not removed" consequence below no longer holds for them. A building's pane and the Kenney vehicles' panes are still rectangles as described here.
 
 Decided while implementing shatterable glass (map #225, tickets #226 and #227). The tickets were never grilled with the user: these are the conservative defaults the implementation chose, written down so they can be challenged. The numbers live in `glass.json` and are cheap to change; the three decisions below are the ones that are hard to reverse.

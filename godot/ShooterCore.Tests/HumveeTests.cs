@@ -63,10 +63,11 @@ public class HumveeTests
     }
 
     [Fact]
-    public void Its_roof_gun_has_the_jeeps_numbers_and_turns_all_the_way_round()
+    public void Its_roof_gun_fires_the_vehicle_machine_gun_round_and_turns_all_the_way_round()
     {
-        var g = Humvee.Gun!; var j = Jeep.Gun!;
-        Assert.Equal((j.Damage, j.FireInterval, j.Range, j.SpreadDegrees, j.Magazine, j.Reserve, j.ReloadTime), (g.Damage, g.FireInterval, g.Range, g.SpreadDegrees, g.Magazine, g.Reserve, g.ReloadTime));
+        var g = Humvee.Gun!;
+        Assert.Equal((VehicleGunRound.Damage, VehicleGunRound.FireInterval, VehicleGunRound.Range, VehicleGunRound.SpreadDegrees, VehicleGunRound.HumveeMagazine, VehicleGunRound.HumveeReserve, VehicleGunRound.HumveeReloadTime),
+            (g.Damage, g.FireInterval, g.Range, g.SpreadDegrees, g.Magazine, g.Reserve, g.ReloadTime));
         var d = Humvee.DoorGun!;
         Assert.Equal(180f, d.YawArcDeg);
         Assert.Equal(0f, d.OutwardYawDeg);

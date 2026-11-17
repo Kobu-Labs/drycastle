@@ -278,7 +278,7 @@ shooter-blast-smoke:
 
 shooter-bike-smoke:
 	dotnet build godot/shooter/shooter.csproj
-	$(UNLOCK_ENV) python3 godot/shooter/run_car_smoke.py --kind motorcycle bicycle $(if $(MAP),--map $(abspath $(MAP)),)
+	$(UNLOCK_ENV) python3 godot/shooter/run_car_smoke.py --kind motorcycle $(if $(MAP),--map $(abspath $(MAP)),)
 
 # Netcode loss/latency gate (issue #93, docs/spikes/shooter-loss-test.md): one server + 16 headless bots per scenario, about 2 min each.
 # SCENARIOS=clean,rtt100 (also rtt200, loss10 or name=latency_ms=..,jitter_ms=..,loss=..), BOTS=16, MEASURE=30 (seconds). Results in out/shooter-loss/<timestamp>/.

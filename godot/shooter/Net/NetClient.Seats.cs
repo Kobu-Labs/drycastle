@@ -44,12 +44,12 @@ public partial class NetClient
 
     /// <summary>
     /// The input carries the view as the head's look (<see cref="MoveButtons.HeadLook"/>): seated in a first-person view, a passenger's own eyes or the
-    /// driver's cockpit view. In the chase view the yaw is the camera's orbit, and a gun's rider aims instead, so the bit stays clear there.
+    /// driver's cockpit view, or a gun's sight (<see cref="RiderViewMode"/>). In the chase view the yaw is the camera's orbit, and a gun's rider aims instead, so the bit stays clear there.
     /// </summary>
     bool HeadLookWanted()
     {
-        if (!_driving || Dead || _me == null || _gunship != null || _controlling || !Mode.ViewIsBody || MySeat() is not { } s) return false;
-        return s.Index > 0 || _cockpitView && CockpitOf(s.Car) != null;
+        if (!_driving || Dead || _me == null || _gunship != null || _controlling || !Mode.ViewIsBody || MySeat() == null) return false;
+        return _view.FirstPerson;
     }
 
     /// <summary>The local player is not in a vehicle any more: the schematic goes with them.</summary>
@@ -84,8 +84,9 @@ public partial class NetClient
     }
 
     /// <summary>
-    /// A rider who is not the driver (the chase camera) and not the flak gunner (the turret camera) sees from their seat: the camera sits at the seat's
-    /// position on the moving vehicle and the mouse look is their own, as in first person. A chase or turret camera from the seat before ends here.
+    /// A rider of a sight seat (an armed seat, a gunner's the flak and the door gun do not use this, the Scud operator's: <see cref="RiderView.Sight"/>) sees from their seat: the camera sits at the
+    /// seat's position on the moving vehicle and the mouse look is their own, as in first person. A chase or turret camera from the seat before ends here.
+    /// The other seats' first-person view is <see cref="CockpitFrame"/>.
     /// </summary>
     void RideSeat(CarView v, int seat)
     {

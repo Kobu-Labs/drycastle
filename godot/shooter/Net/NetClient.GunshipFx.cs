@@ -33,7 +33,7 @@ public partial class NetClient
         if (marks) BulletSurfaceHit(originV, endV);
     }
 
-    /// <summary>The casing a weapon byte ejects: the jeep's roof gun a big one, a hand weapon by its category, none for melee, launchers and the rest.</summary>
+    /// <summary>The casing a weapon byte ejects: a vehicle machine gun a big one, a hand weapon by its category, none for melee, launchers and the rest.</summary>
     CasingKind? CasingKindOf(byte weapon) => weapon == SpecialWeapons.VehicleGun ? CasingKind.Heavy : Weapons != null && weapon < Weapons.Weapons.Count ? CasingFx.KindOf(Weapons.Weapons[weapon]) : null;
 
     /// <summary>One gunner's tracers this tick: each one drawn as its own shot.</summary>

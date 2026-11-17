@@ -323,7 +323,7 @@ public sealed class VehicleGun
 
 public static class VehicleColours
 {
-    /// <summary>Paint palette (sRGB): tints the Kenney body material. Kept bright so the palette texture's shading still reads.</summary>
+    /// <summary>Default colour variants (sRGB) of a type with no skins, paints or tint: how many there are (the colour index of the record). No model is tinted with them any more.</summary>
     public static readonly (float R, float G, float B)[] Palette =
     {
         (0.90f, 0.20f, 0.18f), (0.20f, 0.45f, 0.90f), (0.95f, 0.80f, 0.15f), (0.25f, 0.75f, 0.35f),
@@ -391,7 +391,7 @@ public static class VehicleRecord
 }
 
 /// <summary>
-/// Planar arcade vehicle model (car, motorcycle, bicycle: same model, different constants in vehicles.json), Godot-free.
+/// Planar arcade vehicle model (car, motorcycle: same model, different constants in vehicles.json), Godot-free.
 /// Only the server runs it: clients render snapshots, so there is no client-side mirror to keep in step.
 /// The host supplies collision (the real speed after the physics move is fed back).
 /// </summary>

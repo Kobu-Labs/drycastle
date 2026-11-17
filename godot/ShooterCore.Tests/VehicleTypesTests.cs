@@ -13,24 +13,28 @@ public class VehicleTypesTests
     // ---- the types ----
 
     [Fact]
-    public void JeepHasADriverSeatAGunnerSeatAndAGun()
+    public void JeepIsTheCargoTruckWithABenchOfThreeNoGunAndSixSkinsAndItStillTows()
     {
         var j = Type("jeep");
-        Assert.Equal(new[] { "driver", "gunner" }, j.Seats.Select(s => s.Role));
-        Assert.NotNull(j.Gun);
-        Assert.Equal(60, j.Gun!.Magazine);
-        Assert.True(j.Gun.Reserve > 0);
-        Assert.Equal(1, j.Variants); // one fixed olive drab, no colour variants
+        Assert.Equal(new[] { "driver", "passenger", "passenger" }, j.Seats.Select(s => s.Role));
+        Assert.Null(j.Gun);
+        Assert.Null(j.DoorGun);
+        Assert.NotNull(j.Tow);
+        Assert.StartsWith("pack:synty-vehicles/truck_", j.Model);
+        Assert.Equal(6, j.Variants); // the six Battle Royale atlases (#325)
+        Assert.Null(j.Tint);
     }
 
     [Fact]
-    public void QuadIsDriverOnlyWithNoGunAndNoModelFile()
+    public void QuadIsOneExposedRiderWithNoGunAndFourSkinsOfTheQuadBikeModel()
     {
         var q = Type("quad");
         Assert.Single(q.Seats);
+        Assert.True(q.SeatExposed(0)); // a rider in the open (ADR 0012)
         Assert.Null(q.Gun);
-        Assert.Equal("", q.Model);
-        Assert.NotNull(q.Tint);
+        Assert.StartsWith("pack:synty-vehicles/quad_", q.Model);
+        Assert.Equal(4, q.Variants);
+        Assert.Null(q.Tint);
     }
 
     [Theory]
@@ -54,11 +58,11 @@ public class VehicleTypesTests
     }
 
     [Fact]
-    public void QuadIsFasterThanABicycleButSlowerThanTheMotorcycle()
+    public void QuadIsSlowerThanTheMotorcycle()
     {
-        var f = Shipped(); var quad = Type("quad"); var moto = f.Vehicles[1]; var bike = f.Vehicles[2];
+        var f = Shipped(); var quad = Type("quad"); var moto = f.Vehicles[1];
         Assert.InRange(quad.TopSpeed * 3.6f, 80f, 100f);
-        Assert.True(bike.TopSpeed < quad.TopSpeed && quad.TopSpeed < moto.TopSpeed, "the quad sits between the bicycle and the motorcycle");
+        Assert.True(quad.TopSpeed < moto.TopSpeed, "the quad is slower than the motorcycle");
     }
 
     [Fact]

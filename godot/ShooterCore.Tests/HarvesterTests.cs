@@ -739,9 +739,9 @@ public class HarvesterTests
         Assert.False(def.RunOver); // NetServer.Harvester.cs runs it over at field speed
         Assert.True(def.Seats[0].Exposed && def.Seats[0].Role == "driver"); // a shot reaches the driver
         Assert.True(def.TurnRadius <= Cfg.TurnRadiusM);
-        Assert.StartsWith("pack:synty-farm/", def.Model);
+        Assert.StartsWith("pack:synty-vehicles/harvester", def.Model); // standardized (#325)
         Assert.True(def.TopSpeed > Cfg.TransitSpeedMps);
-        Assert.Equal(180f, def.ModelYawDeg); // Unity's forward is +Z
+        Assert.Equal(0f, def.ModelYawDeg); // the standardizer turned the prefab (Unity forward is +Z) to forward -Z
     }
 
     [Fact]

@@ -27,13 +27,6 @@ the full packs are not.
 | `kaykit-character-animations` (1.2) | Kay Lousberg, https://opengameart.org/content/kaykit-character-animations | 1 animated character GLB (Prototype Pete: head and torso, 6 bones, 30 clips incl. Idle, Walk, Run, Shooting, Defeat) | OpenGameArt (publisher's own listing) |
 | `quaternius-ultimate-gun-pack` (July 2019) | Quaternius, https://opengameart.org/content/low-poly-guns-pack | pistols, assault rifles, bullpups, SMGs, shotguns, snipers, bayonet (OBJ converted to GLB); sniper-rifle.glb is from a later separate download of the same author | OpenGameArt |
 
-**Unverified, user-provided (2026-11-11):** `zsky-vehicles/` holds two vehicle models by Zsky supplied by the project owner as local files:
-`motorbike.glb` ("Military Motorbike", 5 colour materials Green/Black/Silver/Yellow/Red_Motor) and `bicycle.glb` ("Bike", 4: Silver/Black/Green/Yellow_Bike).
-The source page and licence are **not confirmed** and they are not claimed to be CC0; the owner must confirm the licence and attribution before release
-(see `zsky-vehicles/NOTICE.txt`). They are listed in the manifest's top-level `unverified_models` array (not in `packs`/`assets`, which stay CC0-only for the
-pipeline tests and the editor). Used by `godot/shooter` as the motorcycle and bicycle (`data/vehicles.json`); the raw models are authored at 1/100 scale
-(node scale 100, rotated -90 about X), so vehicles.json carries the fit (scale, yaw, offset). The motorcycle faces +Z (turned 180 degrees), the bicycle -Z.
-
 **Unverified, user-provided (2026-11-11):** `animated-characters/` holds four player bodies picked from a 50-model archive of low-poly animated characters the
 owner downloaded (`soldier-male`, `soldier-female`, `rifleman-male` = BlueSoldier_Male, `operator` = Ninja_Sand), repacked from glTF to GLB without changes.
 All share one 23-bone rig authored in a T-pose (about 3.15 units tall; arms along x) with 17 clips (Idle, Walk, Run, Death, SwordSlash, ...). They are flat

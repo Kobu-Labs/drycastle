@@ -5,9 +5,9 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// Vehicle smoke scripts (car, motorcycle or bicycle: the server's --car-kind; headless, on the flat arena with three of that type). Alice teleports next to car 0, enters it (E), tries to fire (must do
+/// Vehicle smoke scripts (car or motorcycle: the server's --car-kind; headless, on the flat arena with three of that type). Alice teleports next to car 0, enters it (E), tries to fire (must do
 /// nothing), drives straight ahead with full throttle (must cover more than 20 m) into bob, who stands 40 m ahead and must take the run-over damage of the type's top speed
-/// (capped at 100 and a kill for car and motorcycle, 30 for the slow bicycle); she brakes with the handbrake, exits with E (to a free side, on foot again) and the empty car stays where it was left
+/// (capped at 100 and a kill for car and motorcycle); she brakes with the handbrake, exits with E (to a free side, on foot again) and the empty car stays where it was left
 /// (it never despawns). Bob checks the hit event he received. Both print SHOOTER_CAR_CLIENT_OK.
 /// </summary>
 public partial class NetClient

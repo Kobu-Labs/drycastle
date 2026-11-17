@@ -27,7 +27,7 @@ public class GunnerCoverTests
     }
 
     [Fact]
-    public void The_shipped_flak_has_an_exposed_gunner_and_1200_hp_and_the_jeeps_roof_gunner_stays_covered()
+    public void The_shipped_flak_has_an_exposed_gunner_and_1200_hp_and_every_other_vehicle_keeps_its_gunner_covered()
     {
         Assert.True(Flak.ExposedGunner);
         Assert.Equal(1200f, Flak.Hp);
@@ -52,7 +52,7 @@ public class GunnerCoverTests
         Assert.True(hull < 20f, "the ray meets the hull's tail first");
         var targets = new[] { GunnerOnTurret };
         Assert.Null(HitMath.Raycast(Muzzle, Back, 300f, hull, targets, Shooter)); // the old rule: the hull stops it
-        Assert.Null(GunnerCover.Raycast(Muzzle, Back, 300f, hull, targets, Shooter, null, float.PositiveInfinity)); // covered (jeep): unchanged
+        Assert.Null(GunnerCover.Raycast(Muzzle, Back, 300f, hull, targets, Shooter, null, float.PositiveInfinity)); // covered (a hull gunner): unchanged
         var hit = GunnerCover.Raycast(Muzzle, Back, 300f, hull, targets, Shooter, GunnerOnTurret, float.PositiveInfinity);
         Assert.NotNull(hit);
         Assert.Equal(Gunner, hit!.Value.Id);

@@ -1,5 +1,7 @@
 # A seat can leave its rider uncovered by the hull, and the amphibious transport's all do
 
+> **Revised by ADR 0035** (`0035-every-seat-declares-its-cover-and-every-pane-its-kind.md`): a seat's exposure is now one value of its `cover` (`exposed`; `armoured` and `glass` are the others), `"exposed": true` reads as `"cover": "exposed"`. The behaviour of an exposed seat is unchanged.
+
 Decided for the amphibious transport's rework. **Extends** the exposed gunner of ADR 0005's flak truck (and the utility helicopter's door gunner): there exposure was one flag on the vehicle (`exposed_gunner`) that looked up the single gunner seat and handed one target to `GunnerCover`. **Changes** the rule stated with it, that "the driver and a passenger stay behind the hull, as in every other vehicle".
 
 **What changes.** Exposure is a property of a seat (`vehicles.json` seat `"exposed": true`). A rider in such a seat is a target of their own: a bullet, a pellet or a rocket that reaches their body hits them and not the hull, wherever the hull's box was along the way, and the hull takes nothing from that shot; a shot that misses them hits the hull as before. All three seats of the amphibious transport are exposed, the driver's included. `GunnerCover` takes the riders of the vehicle the shot stopped on (`ExposedRiders`), one or several, and the nearest body on the ray wins.

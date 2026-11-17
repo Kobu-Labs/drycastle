@@ -156,7 +156,7 @@ and each weight is 1 or more.
 ## 4. Killstreaks
 
 Data: `godot/shooter/data/killstreaks.json`. The Streak counter counts the owner's kills (not suicides), resets on death,
-and kills made with a streak's own weapon do not advance it (`StreakWeapons`). The jeep's roof gun (vehicle gun, 250) is
+and kills made with a streak's own weapon do not advance it (`StreakWeapons`). The vehicle machine gun (the Humvee's roof gun, vehicle gun, 250; the jeep lost its gun in #325) is
 not a streak weapon, so its kills do count (correction on #133).
 
 | Streak | Kills | Unlock | Duration | Control | Notes |
@@ -359,7 +359,7 @@ times and distances without the game; `FlightTests` holds the limits.
 rest direction, arc; `DoorGunRules`). The gunner's view is what the gun is asked to point at, and it stays world-stable while the helicopter
 turns under it; the gun points there as far as its arc allows (70 degrees either side of straight out, 55 down, 12 up), and the view is held to
 the arc as well. The arc is in the airframe's frame, so it banks with it, and it clears the hull, the skids, the tail and the full sweep of the
-blades (`DoorGunTests` checks every aim). The rounds are the jeep's roof gun's (`gun`: the same damage, interval, spread and range, a 100-round
+blades (`DoorGunTests` checks every aim). The rounds are the vehicle gun round (`gun`: the same damage, interval, spread and range, a 100-round
 belt), hitscan from the muzzle, and its kills are ordinary kills (kill-feed weapon "Mounted MG", special weapon 250). The aim reaches every
 client as a turret record (entity type 4, as the flak's, here the mount's yaw and the gun's pitch against the airframe), so the gun follows the
 aim on everyone's model; the tracer leaves the drawn muzzle, the barrel recoils and the muzzle flashes. The gunner's ammo is event 160.
@@ -458,7 +458,7 @@ so the bus's passengers stay unarmed.
   at `spread_full_speed` (16 m/s). The seat gives no stance bonus. The crosshair shows it.
 - *The knife:* as on foot, from the seat, against anyone in reach who is not aboard.
 
-**Ring gun** (seat 3). The vehicle gun and door gun rules (`gun`, `door_gun`; the helicopter's belt and the jeep's round), on a ring: the gun
+**Ring gun** (seat 3). The vehicle gun and door gun rules (`gun`, `door_gun`; the helicopter's belt and the vehicle gun round), on a ring: the gun
 rides `ring_radius` out from the ring's centre and swings round the gunner, who stands there and turns with it. The gunner's view aims it, all
 the way round, 35 down and 55 up; within `guard_arc_deg` (50) of the nose it goes no lower than `guard_min_pitch_deg` (-4), coming down to the
 full depression over the next `guard_blend_deg` (20), so the barrel rides up over the two in front (`AmphibiousTransportTests` sweeps every aim
@@ -475,7 +475,7 @@ unchanged; when the vehicle blows up, everyone aboard dies with it.
 
 **Decisions on the edges.**
 
-- *The flak truck and the helicopter.* Their gunner's exposure is unchanged, including that the jeep's roof gun and the killstreak guns do not
+- *The flak truck and the helicopter.* Their gunner's exposure is unchanged, including that the Humvee's roof gun and the killstreak guns do not
   reach them through the hull; those weapons do reach the transport's riders. One to unify later, if wanted.
 - *A rider's own rocket.* It passes their vehicle's hull and spares their fellow riders, direct hit and blast, while the shooter still rides
   it. The shooter takes their own blast as on foot, and so does the vehicle.
@@ -681,7 +681,7 @@ Not verified (compiled, not run; the brief for these tickets forbade running the
 - Shaders: `water_surface.gdshader` (compiles on Forward+; its look is not checked in the game), `sky_daynight.gdshader`, `camo_suit.gdshader`,
   `camo_tuft.gdshader`, `gunship_thermal.gdshader`. The first real compile is the first check.
 - Layout, scenes and HUD positions: streak panel, minimap texture size, XP strip, breath bar, care package prompt, gunship
-  overlay, the aircraft overlays. Visual fit of the jeep and quad models.
+  overlay, the aircraft overlays. Visual fit of the jeep and quad models (the jeep is the Synty cargo truck now, #325).
 - Lamp energy (2.2 peak), headlight cones and offsets, day curve tuning.
 
 ui-work definition of done not met on most UI tickets (#118, #119, #122, #123, #124, #126, #127, #128, #129, #130, #139,

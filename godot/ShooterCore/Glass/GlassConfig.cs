@@ -12,6 +12,11 @@ public sealed class GlassConfig : IVersioned
     /// <summary>Hit points of a vehicle's pane (vehicles.json "glass"), unless the pane sets its own.</summary>
     public float VehiclePaneHp { get; set; } = 60;
     /// <summary>
+    /// The numbers of each pane kind of a vehicle (<see cref="GlassKind"/>, ADR 0035), keyed "normal" and "reinforced". A kind that is not listed has
+    /// <see cref="VehiclePaneHp"/> (the whole look is shared: the crack follows the hit-point fraction, <see cref="CrackStages"/>).
+    /// </summary>
+    public Dictionary<string, GlassKindDef> Kinds { get; set; } = new() { ["reinforced"] = new GlassKindDef { Hp = 300 } };
+    /// <summary>
     /// HP fractions at which a damaged pane's crack grows, highest first (as vehicles.json damage_stages). A pane below full HP is at
     /// crack stage 1; each fraction it has fallen to adds one. With [0.66, 0.33] there are three crack stages before the pane shatters.
     /// </summary>
@@ -37,6 +42,9 @@ public sealed class GlassConfig : IVersioned
     /// <summary>Client: beyond this many metres from the camera a shatter is not animated.</summary>
     public float ShatterEffectRange { get; set; } = 150;
 
+    /// <summary>Hit points of a vehicle pane of <paramref name="kind"/> that sets none of its own.</summary>
+    public float PaneHp(GlassKind kind) => Kinds.TryGetValue(kind == GlassKind.Reinforced ? "reinforced" : "normal", out var k) && k.Hp > 0 ? k.Hp : VehiclePaneHp;
+
     public static GlassConfig Parse(string json) => DataFile.Parse<GlassConfig>(json, "glass.json").Validate();
 
     public static GlassConfig Load(string path) => DataFile.Load<GlassConfig>(path).Validate();
@@ -44,6 +52,11 @@ public sealed class GlassConfig : IVersioned
     GlassConfig Validate()
     {
         if (!(BuildingPaneHp > 0) || !(VehiclePaneHp > 0)) throw new DataFileException("glass.json: building_pane_hp and vehicle_pane_hp must be positive");
+        foreach (var (name, k) in Kinds)
+        {
+            if (name is not ("normal" or "reinforced")) throw new DataFileException($"glass.json: kinds has normal and reinforced, not {name}");
+            if (!(k.Hp > 0)) throw new DataFileException($"glass.json: kinds.{name}.hp must be positive");
+        }
         if (CrackStages.Count > 6) throw new DataFileException("glass.json: at most 6 crack_stages");
         for (var i = 0; i < CrackStages.Count; i++)
             if (!(CrackStages[i] > 0 && CrackStages[i] < 1) || i > 0 && CrackStages[i] >= CrackStages[i - 1])
@@ -54,4 +67,11 @@ public sealed class GlassConfig : IVersioned
         if (MaxShatterEffects < 0 || ShatterEffectRange < 0) throw new DataFileException("glass.json: max_shatter_effects and shatter_effect_range must not be negative");
         return this;
     }
+}
+
+/// <summary>One entry of glass.json <c>kinds</c>.</summary>
+public sealed class GlassKindDef
+{
+    /// <summary>Hit points of a vehicle pane of this kind, unless the pane sets its own.</summary>
+    public float Hp { get; set; }
 }
