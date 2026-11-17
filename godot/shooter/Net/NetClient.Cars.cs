@@ -252,13 +252,13 @@ public partial class NetClient
         _hud?.SetSeats(SeatPanel());
         if (flakGunner) _hud?.SetVehicleReadout(doorGunner ? DoorGunReadout() : FlakReadout());
         else if (flown is { } fr) _hud?.SetVehicleReadout(FlightReadout(fr));
-        else _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
+        else _hud?.SetVehicleSpeed(_driving && MyRadarSeat() == null ? kmh ?? 0f : null); // the radar operator has no speed to read
         string? prompt = null;
-        if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : MyRadarSeat() != null ? RadarPrompt() : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         if (driven != null && prompt != null && TowHint(driven) is { } towHint) prompt += "     " + towHint; // a trailer on the hook: the key that unhitches it
         if (_driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
         if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);
-        else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
+        else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(EnterPromptKey(free), InputBindings.Name("interact"));
         _hud?.SetPrompt(TurretPrompt() ?? LootPrompt() ?? GarageDoorPrompt() ?? ScudLoadPrompt(prompt) ?? prompt ?? MassPrompt() ?? RozhlasSetPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
     }
 
@@ -370,6 +370,7 @@ public partial class NetClient
             if (v.Driver != 0 || v.Destroyed) continue;
             var def = Vehicles.Vehicles[v.Kind];
             if (def.Seats.Count == 0) continue; // a trailer has no seat to take: nothing to enter
+            if (v.Trailer is { TractorId: 0 }) continue; // the radar unit's operator seat is boardable only while hitched (the server's ServerCar.Boardable)
             var np = new NVec3(p.X, p.Y, p.Z);
             if (!VehicleReach.CanEnter(v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, np, Vehicles.EnterRadiusOf(def))) continue; // as the server: within the radius of the footprint, not one hovering overhead
             var d = VehicleReach.DistanceToFootprint(v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, np);

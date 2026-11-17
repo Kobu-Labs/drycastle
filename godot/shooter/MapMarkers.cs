@@ -28,6 +28,8 @@ public sealed class MapMarkers
     public MapSearchAreas SearchAreas { get; } = new();
     /// <summary>Gunfire blips (enemy shots near the player); null until the client has the match data's radius and lifetime.</summary>
     public GunfireBlips? Blips { get; set; }
+    /// <summary>The radar unit's screen (GLOSSARY "Radar unit"): while the local player is its operator the tactical map draws the sweep, the swept enemies and the live friendlies over the sheet.</summary>
+    public RadarDisplay Radar { get; } = new();
     /// <summary>The player's waypoint (set by clicking the tactical map): drawn on both maps and in the world.</summary>
     public Waypoint Waypoint { get; } = new();
     /// <summary>Team deathmatch: pings use the enemy colour (orange) and friends are drawn, as outlined circles in the friend colour.</summary>

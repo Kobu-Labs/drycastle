@@ -40,7 +40,7 @@ public class GolfMk2Tests
         Assert.Equal(site.X, spot.X, 2);
         Assert.Equal(site.Z, spot.Z, 2);
         Assert.Equal(site.YawDeg, spot.YawDeg!.Value, 1);
-        Assert.Equal(new[] { "utility_helicopter" }, Shipped.Vehicles.Where(v => v.Id != "golf_mk2" && v.FixedSpots.Count > 0).Select(v => v.Id)); // the heliport (HeliportTests)
+        Assert.Equal(new[] { "utility_helicopter", "radar_unit" }, Shipped.Vehicles.Where(v => v.Id != "golf_mk2" && v.FixedSpots.Count > 0).Select(v => v.Id)); // the heliport (HeliportTests) and the radar unit beside it (RadarTests)
     }
 
     [Fact]

@@ -43,8 +43,8 @@ public class VehicleContractTests
         ["public_model_file_exists"] = v => v.Model == "" || v.Model.StartsWith("pack:") || AssetsDir() is not { } a || File.Exists(Path.Combine(a, v.Model)) ? null : $"{v.Model} is not under assets/",
         // A: every vehicle writes its seats (the data model defaults one driver seat, which hides a missing block). A trailer writes an empty list.
         ["has_seats_block"] = v => Raw[v.Id].TryGetProperty("seats", out _) ? null : "no seats block (the default single driver seat applies)",
-        // A: 1..MaxSeats seats, the first the driver; a trailer has none and a trailer block
-        ["seat_count"] = v => v.Trailer != null ? (v.Seats.Count == 0 ? null : "a trailer has no seats")
+        // A: 1..MaxSeats seats, the first the driver; a trailer has none and a trailer block (a radar unit: its one radar_operator seat, ADR 0037)
+        ["seat_count"] = v => v.Trailer != null ? (v.Seats.Count == (v.Radar != null ? 1 : 0) ? null : "a trailer has no seats (but a radar unit's operator seat)")
             : v.Seats.Count is >= 1 and <= VehicleSeat.MaxSeats && v.Seats[0].Role == "driver" ? null : $"{v.Seats.Count} seats (1..{VehicleSeat.MaxSeats}, seat 0 the driver)",
         // A: every seat point is inside the hit box
         ["seats_inside_hit_box"] = v => v.Seats.Select((s, i) => (s, i)).Where(t => !In(v, t.s.Offset[0], t.s.Offset[1], t.s.Offset[2])).Select(t => $"seat {t.i} at [{string.Join(", ", t.s.Offset)}]").FirstOrDefault(),

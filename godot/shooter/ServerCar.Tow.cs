@@ -6,7 +6,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// Towing on the server's vehicle (docs/shooter-v2.md "Towing and the rocket cart"). A trailer (a type with a <c>trailer</c> block) is a vehicle like any other here: in <c>_cars</c>, with
-/// an id, a record, hit points, a hit box and a solid; it has no seats and no driver. What moves it is its <see cref="TowLink"/> (the model in ShooterCore), not the car model or the
+/// an id, a record, hit points, a hit box and a solid; it has no driver, and no seats but the radar unit's operator's (<see cref="Boardable"/> only while hitched). What moves it is its <see cref="TowLink"/> (the model in ShooterCore), not the car model or the
 /// physics body: <see cref="PlaceTrailer"/> puts the node where the link's body says, on the ground under it. A tractor (a type with a <c>tow</c> block) steps the trailer hitched to it from
 /// its own step (<see cref="StepTowed"/>), so the trailer follows the tractor whoever drives it (a client's input, hands off, parked).
 /// </summary>
@@ -18,8 +18,17 @@ public partial class ServerCar
     /// <summary>A trailer's link: the machine (loose, hitched, released) and the body the model steps. Null for every other type.</summary>
     public TowLink? Tow { get; private set; }
 
-    /// <summary>A trailer's load (the rocket cart's missile): server-owned, replicated in the record's health byte. Null for every other type.</summary>
+    /// <summary>A trailer's load (the rocket cart's missile): server-owned, replicated in the record's health byte. Null for every other type, and for a trailer with no load (the radar unit).</summary>
     public CartCargo? Cargo { get; private set; }
+
+    /// <summary>A radar unit's sweep (<see cref="RadarSweep"/>): turning exactly while the unit is hitched. Null for every other type.</summary>
+    public RadarSweep? Radar { get; private set; }
+
+    /// <summary>
+    /// Whether somebody may take a seat now: alive, with a seat, and for a trailer (the radar unit's operator seat) only while it is hitched (<see cref="TrailerState.Hitched"/>; no flag of its own).
+    /// A seat held by a corpse counts as boardable (it is kicked out, #330), as <see cref="VehicleSeat.HasBoardable"/> says.
+    /// </summary>
+    public bool Boardable => !Destroyed && Seat.Count > 0 && Seat.HasBoardable && (Tow == null || Tow.Hitched);
 
     /// <summary>A trailer's view of the world for its own step (the world's solids under its box, the ground under it); null for every other type.</summary>
     public TrailerProbe? TrailerWorld { get; private set; }
@@ -42,7 +51,8 @@ public partial class ServerCar
     /// <summary>Builds what a trailer needs; called once from <c>_Ready</c> before the first <see cref="Reset"/>.</summary>
     void ReadyTrailer()
     {
-        Cargo = new CartCargo();
+        if (Def.Trailer!.HasCargo) Cargo = new CartCargo();
+        if (Def.Radar is { } radar) Radar = new RadarSweep(radar.RevolutionSeconds);
         Tow = new TowLink(OriginPos.ToNumerics(), OriginYaw);
         TowGeo = TowGeometry.ForTrailer(Def);
         TrailerWorld = TrailerProbe.Make(Def);
@@ -56,8 +66,9 @@ public partial class ServerCar
     void ResetTrailer(bool repair)
     {
         DropLinks();
-        if (repair) Cargo!.Reset();
-        Life.SetMaxHp(Cargo.MaxHp(Def));
+        if (repair) Cargo?.Reset();
+        Radar?.Power(false);
+        Life.SetMaxHp(Cargo?.MaxHp(Def) ?? Def.Hp);
         Tow = new TowLink(OriginPos.ToNumerics(), OriginYaw);
         TowGeo = TowGeometry.ForTrailer(Def);
     }

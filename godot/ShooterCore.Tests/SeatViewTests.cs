@@ -61,6 +61,7 @@ public class SeatViewTests
         Assert.Equal(SeatViewKind.Sight, RiderViewMode.KindOf(Def("utility_helicopter"), 1)); // the door gun
         Assert.Equal(SeatViewKind.Sight, RiderViewMode.KindOf(Def("amphibious"), 1)); // armed
         Assert.Equal(SeatViewKind.Sight, RiderViewMode.KindOf(Def("scud"), 1));     // the operator's screen
+        Assert.Equal(SeatViewKind.Sight, RiderViewMode.KindOf(Def("radar_unit"), 0)); // the radar operator's screen
         Assert.Equal(SeatViewKind.Open, RiderViewMode.KindOf(Def("motorcycle"), 0));
         Assert.Equal(SeatViewKind.Open, RiderViewMode.KindOf(Def("amphibious"), 0));
         Assert.Equal(SeatViewKind.Covered, RiderViewMode.KindOf(Def("scud"), 0));

@@ -219,6 +219,7 @@ public static class Strings
         foreach (var (k, v) in IntelStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in MassStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in ScudStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in RadarStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in HuntersLogStrings.Table) tr.AddMessage(k, v);
         TranslationServer.AddTranslation(tr);
         TranslationServer.SetLocale("en");

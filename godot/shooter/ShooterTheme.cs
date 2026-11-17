@@ -83,6 +83,10 @@ public static class ShooterTheme
     public const float MapTrailCasing = 3.5f;
     /// <summary>The waypoint's ink in the world and on the maps: a light green (friendly, as in other shooters), never on a dark plate; its text is outlined instead.</summary>
     public static readonly Color Waypoint = new(0.70f, 1.00f, 0.66f);
+    /// <summary>The radar screen over the sheet (the radar unit's operator): a dark wash so the sweep and the blips read on any ground. The sweep is the Accent, an enemy the Danger and a friendly the Good token; shapes carry the meaning too.</summary>
+    public static readonly Color RadarWash = new(0.02f, 0.04f, 0.03f, 0.45f);
+    /// <summary>The strongest the sweep's trail glows (its light at the arm), over <see cref="RadarWash"/>.</summary>
+    public const float RadarTrailAlpha = 0.55f;
     public const int MapGutter = 28;
     public const float MapFadeSeconds = 0.15f;
 

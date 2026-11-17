@@ -600,7 +600,7 @@ public class ScudTests
         Assert.True(truck.Hp >= 1000);
         Assert.Equal("pack:synty-simple-military/scud", truck.Model);
         // every other type returns, as before
-        Assert.All(data.Vehicles.Vehicles.Where(v => v.Id is not ("scud" or "rocket_cart")), v => Assert.True(v.Returns)); // the cart is the event's to replace
+        Assert.All(data.Vehicles.Vehicles.Where(v => v.Id is not ("scud" or "rocket_cart" or "radar_unit")), v => Assert.True(v.Returns)); // the cart is the event's to replace; a destroyed radar unit stays gone
     }
 
     [Theory]
@@ -716,9 +716,9 @@ public class ScudTests
     }
 
     [Fact]
-    public void The_protocol_is_70_and_the_events_are_where_the_docs_say()
+    public void The_protocol_is_71_and_the_events_are_where_the_docs_say()
     {
-        Assert.Equal(70, Wire.ProtocolVersion);
+        Assert.Equal(71, Wire.ProtocolVersion);
         Assert.Equal(80, (int)EventKind.ScudCommand);
         Assert.Equal(85, (int)EventKind.ScudNotice);
         Assert.Equal(237, SpecialWeapons.Scud);

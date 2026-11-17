@@ -143,6 +143,7 @@ public partial class NetClient : Node
         InitFlak();
         InitSeats();
         InitScud();
+        InitRadar();
         InitMatchEdges();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
@@ -280,6 +281,7 @@ public partial class NetClient : Node
         RenderMissiles();
         RenderMissilePov();
         RenderScud(delta);
+        RenderRadar();
         RenderWater();
         UpdateViewmodel();
         UpdateDemonQuake(delta);

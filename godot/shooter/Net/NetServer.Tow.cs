@@ -6,7 +6,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// Towing and the rocket cart on the server (docs/shooter-v2.md "Towing and the rocket cart"; the model is ShooterCore's <see cref="TowLink"/>, <see cref="TowModel"/>, <see cref="TowRules"/>).
-/// A trailer is a <see cref="ServerCar"/> with no seats; this file is what the vehicle step does about it: the auto-latch (no key: a tractor that reverses its hitch onto a loose trailer's eye
+/// A trailer is a <see cref="ServerCar"/> with no seats (the radar unit has its operator's one, NetServer.Radar.cs); this file is what the vehicle step does about it: the auto-latch (no key: a tractor that reverses its hitch onto a loose trailer's eye
 /// couples), the trailer's own tick (it rolls free, or follows its tractor, whose step moved it), the run-over of its box, the unhitch key, and the explosive load. Server methods for the Scud
 /// event are at the end (<see cref="SpawnRocketCart"/>, <see cref="RemoveRocketCarts"/>, <see cref="SetRocketCartLoaded"/>, <see cref="LoadedRocketCartsNear"/>), and the one hook it fills
 /// in (<see cref="OnRocketCartDetonated"/>).
@@ -45,16 +45,37 @@ public partial class NetServer
     /// </summary>
     void StepTrailerCar(ServerCar car, float dt)
     {
+        TrailerSeatsTick(car); // a radar unit's operator: freed when gone, put out when it is no longer hitched
         if (car.Thrown != null) { car.Unhitch(); StepThrownVehicle(car, dt); car.SyncTrailerFromNode(); return; }
         car.PrevPos = car.TickEndPos;
         if (car.Tractor == null) car.StepFree(dt);
         else car.Wake(); // pulled: never rests (it is not stepped by its own turn, but it is not asleep either)
         var here = car.GlobalPosition;
         car.TickEndPos = here;
-        if (here.Y < KillY) { car.Reset(false); return; }
+        if (here.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); return; }
         if (car.Life.DetonationDue(_elapsed)) { Detonate(car); return; }
+        if (OccupantAt(car, 0) is { } rider) // the operator sits on the unit as it moves
+        {
+            var at = SeatPos(car, 0);
+            rider.Body.Teleport(at);
+            _match.SetPosition(rider.Id, N(at));
+            ApplyHeadLook(rider, car);
+        }
+        StepRadarUnit(car, dt);
         var speed = car.Tow!.Body.Speed;
         if (car.Def.RunOver && RunOver.Contacts(speed)) TrailerRunOver(car, speed);
+    }
+
+    /// <summary>
+    /// The seats of a trailer (only the radar unit has one), as <see cref="StepVehicles"/> keeps a vehicle's: a seat of a player who has gone is freed, the operator of a unit that is not hitched any more (the driver
+    /// unhitched, the tractor was destroyed or reset) is put out beside it, and the riders are told who sits where when that changed. The seat's availability is the tow machine's: <see cref="ServerCar.Boardable"/>.
+    /// </summary>
+    void TrailerSeatsTick(ServerCar car)
+    {
+        if (car.Seat.Count == 0) return;
+        for (var s = 0; s < car.Seat.Count; s++) if (car.Seat.Occupant(s) != 0 && OccupantAt(car, s) == null) car.Seat.Clear(s);
+        if (!car.Tow!.Hitched && OccupantAt(car, 0) is { } operatorSeated) { GD.Print($"server: {operatorSeated.Name} #{operatorSeated.Id} put out of {car.Def.Id} {car.Id}: it is not hitched"); LeaveSeat(operatorSeated, true); }
+        SendSeatState(car);
     }
 
     /// <summary>

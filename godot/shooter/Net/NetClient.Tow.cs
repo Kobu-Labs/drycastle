@@ -22,6 +22,9 @@ public partial class NetClient
         public bool Loaded = true, Seen;
         /// <summary>The model's nodes by name (null where it has none, and on a headless client): wheels roll, the missile is shown while loaded.</summary>
         public Node3D? WheelL, WheelR, Missile;
+        /// <summary>A radar unit's <c>dish</c> node (null on a model without one) and how fast it turns now, rad/s (<see cref="NetClient.SpinDish"/>).</summary>
+        public Node3D? Dish;
+        public float DishSpeed;
         public float RadiusL = 0.45f, RadiusR = 0.45f;
         /// <summary>The ground fit as drawn (smoothed), the drawn speed along the heading (from the drawn motion) and where it was drawn last frame.</summary>
         public float Pitch, Roll, Speed;
@@ -54,6 +57,7 @@ public partial class NetClient
         t.WheelL = v.Node.FindChild("wheel_l", true, false) as Node3D;
         t.WheelR = v.Node.FindChild("wheel_r", true, false) as Node3D;
         t.Missile = v.Node.FindChild("missile", true, false) as Node3D;
+        if (Vehicles!.Vehicles[v.Kind].Radar != null) t.Dish = v.Node.FindChild("dish", true, false) as Node3D;
         if (t.WheelL is { Position.Y: > 0.05f }) t.RadiusL = t.WheelL.Position.Y; // the wheel's centre is at its axle: its height is the radius (car-design section 3)
         if (t.WheelR is { Position.Y: > 0.05f }) t.RadiusR = t.WheelR.Position.Y;
         _trailerGround ??= TrailerProbe.Make(Vehicles!.Vehicles[v.Kind]);
@@ -128,6 +132,7 @@ public partial class NetClient
             else PoseLoose(t, def, s, dt, out pos, out rot);
             v.Node.GlobalPosition = pos; v.Node.Rotation = rot;
             Roll(v, t, pos, rot, dt);
+            if (def.Radar != null) SpinDish(t, tractor != null, dt);
             v.Smoke?.Near(Sfx.ListenerDistance(pos) < 90f);
         }
     }

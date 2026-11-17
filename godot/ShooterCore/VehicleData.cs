@@ -73,12 +73,14 @@ public class VehiclesFile : IVersioned
             if (v.Tint is { Length: not 3 } || v.Tint != null && v.Paints.Count > 0) throw new DataFileException($"vehicles.json: {v.Id}: tint is [r, g, b] and excludes paints");
             if (v.Trailer is { } trl)
             {
-                if (v.Seats.Count != 0) throw new DataFileException($"vehicles.json: {v.Id}: a trailer has no seats (\"seats\": [])");
+                if (v.Seats.Count != (v.Radar != null ? 1 : 0)) throw new DataFileException($"vehicles.json: {v.Id}: a trailer has no seats (\"seats\": []), except a radar unit's one operator seat");
                 if (v.Tow != null) throw new DataFileException($"vehicles.json: {v.Id}: a trailer does not tow: tow and trailer exclude each other");
                 if (v.Medium != VehicleMedium.Land || v.Drive != null || v.Gun != null || v.Flak != null || v.DoorGun != null) throw new DataFileException($"vehicles.json: {v.Id}: a trailer is a land type with no drive, gun, flak or door_gun block");
                 if (trl.Validate() is { } why) throw new DataFileException($"vehicles.json: {v.Id}: trailer: {why}");
             }
+            else if (v.Radar != null) throw new DataFileException($"vehicles.json: {v.Id}: a radar block is for a trailer");
             else if (v.Seats.Count is < 1 or > VehicleSeat.MaxSeats || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..{VehicleSeat.MaxSeats} and the first is the driver");
+            if (v.Radar is { } rdr && rdr.Validate(v) is { } rwhy) throw new DataFileException($"vehicles.json: {v.Id}: radar: {rwhy}");
             if (v.Launcher is { } lch && lch.Validate(v) is { } lwhy) throw new DataFileException($"vehicles.json: {v.Id}: launcher: {lwhy}");
             if (v.Tow is { } tw)
             {
@@ -87,7 +89,8 @@ public class VehiclesFile : IVersioned
             }
             foreach (var seat in v.Seats)
             {
-                if (seat.Role is not ("driver" or "gunner" or "passenger")) throw new DataFileException($"vehicles.json: {v.Id}: seat role {seat.Role} is not driver, gunner or passenger");
+                if (seat.Role is not (VehicleSeatDef.Driver or "gunner" or "passenger" or VehicleSeatDef.RadarOperator)) throw new DataFileException($"vehicles.json: {v.Id}: seat role {seat.Role} is not driver, gunner, passenger or radar_operator");
+                if (seat.Role == VehicleSeatDef.RadarOperator && v.Radar == null) throw new DataFileException($"vehicles.json: {v.Id}: a radar_operator seat needs a radar block");
                 if (seat.Role == "driver" && v.Seats.Count(x => x.Role == "driver") != 1) throw new DataFileException($"vehicles.json: {v.Id}: one driver seat");
                 if (seat.Offset.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: seat offset is [x, y, z]");
                 if (seat.Armed && seat.Role != "passenger") throw new DataFileException($"vehicles.json: {v.Id}: only a passenger seat can be armed (a driver drives, a gunner has the vehicle's gun)");
@@ -207,7 +210,10 @@ public enum SeatCover
 /// <summary>One seat of a vehicle (vehicles.json "seats"). Seat 0 is always the driver. Offset is in the vehicle's frame, metres: x right, y up, z back (forward is -Z), origin on the ground at the car's centre.</summary>
 public class VehicleSeatDef
 {
-    /// <summary>"driver" (seat 0 only, drives), "gunner" (fires the vehicle's gun) or "passenger".</summary>
+    /// <summary>The role of the seat a radar unit's operator sits in (<see cref="VehicleRadarDef"/>): the only seat of that trailer, boardable while it is hitched.</summary>
+    public const string RadarOperator = "radar_operator";
+    public const string Driver = "driver";
+    /// <summary>"driver" (seat 0 only, drives), "gunner" (fires the vehicle's gun), "passenger", or "radar_operator" (a radar unit's only seat).</summary>
     public string Role { get; set; } = "passenger";
     public float[] Offset { get; set; } = { 0, 0, 0 };
     /// <summary>
@@ -772,6 +778,25 @@ public class VehicleHandling
     public float HandbrakeSteerBoost { get; set; } = 1.5f;
 }
 
+/// <summary>
+/// vehicles.json "radar": a radar unit (GLOSSARY "Radar unit"; ADR 0037), a trailer whose one seat (role <see cref="VehicleSeatDef.RadarOperator"/>) is its operator's. While it is hitched its dish turns
+/// (<see cref="RadarSweep"/>) and the operator sees the enemies the sweep finds.
+/// </summary>
+public class VehicleRadarDef
+{
+    /// <summary>Seconds for the sweep to go once round the unit.</summary>
+    public float RevolutionSeconds { get; set; } = RadarSweep.DefaultRevolution;
+
+    /// <summary>Why the block is bad, or null.</summary>
+    public string? Validate(VehicleDef v)
+    {
+        if (v.Trailer == null) return "a radar unit is a trailer";
+        if (!(RevolutionSeconds is >= 1f and <= 30f)) return "revolution_seconds must be between 1 and 30";
+        if (v.Seats.Count != 1 || v.Seats[0].Role != VehicleSeatDef.RadarOperator) return "a radar unit has one seat, the radar_operator";
+        return null;
+    }
+}
+
 /// <summary>vehicles.json "launcher": the Scud truck's launcher (<see cref="ScudLauncher"/>). Offsets are in the vehicle's frame (x right, y up, forward is -Z, origin on the ground at the centre).</summary>
 public class VehicleLauncherDef
 {
@@ -923,6 +948,8 @@ public class VehicleDef
     public bool Returns { get; set; } = true;
     /// <summary>A missile launcher (vehicles.json "launcher", the Scud truck): which seat is the operator's and where the rocket leaves. Null: none. See <see cref="ScudLauncher"/>.</summary>
     public VehicleLauncherDef? Launcher { get; set; }
+    /// <summary>A radar unit (vehicles.json "radar"): a trailer with one operator seat and a turning dish. Null: it is not. See <see cref="RadarSweep"/>.</summary>
+    public VehicleRadarDef? Radar { get; set; }
     /// <summary>The type can pull a trailer (vehicles.json "tow": the hitch and what the load does to it). Null: it cannot. See <see cref="TowModel"/>.</summary>
     public VehicleTowDef? Tow { get; set; }
     /// <summary>The type is a single-axle trailer (vehicles.json "trailer": drawbar eye, axle, mass) with no seats, pulled by a type with a <see cref="Tow"/> block. Null: it is not.</summary>

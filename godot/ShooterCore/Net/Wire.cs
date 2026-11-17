@@ -71,6 +71,8 @@ public enum EventKind : byte
     ImpactFx = 61,
     /// <summary>Server to the owner only: the UAV's enemy pulse and seconds left (<see cref="UavEvents"/>), every second while up.</summary>
     UavPing = 90,
+    /// <summary>Server to the operator of a radar unit only: the sweep arm, the contacts it has found and the operator's teammates, about ten times a second (<see cref="RadarCodec"/>, <see cref="RadarSweepMsg"/>).</summary>
+    RadarSweep = 91,
     // 120 was Ac130Blast (one message per shell, protocol 11); protocol 12 coalesces the gunship FX into 121-123, so 120 is not reused.
     /// <summary>Server broadcast: one gunner's cannon tracers this tick (<see cref="GunshipFxCodec"/>). Kinds 120-129 belong to the gunship streaks; 120 is retired.</summary>
     GunshipShots = 121,
@@ -337,7 +339,8 @@ public static class Wire
     //   v68 the Scud truck: events 80-85 (the launcher's command, state, the operator's camera, the launch, the impact and a notice), world entity 11 (the Scud missile), special weapon 237, vehicles.json "launcher"
     //   v69 loading a Scud truck from a rocket cart: the launcher state byte may be 10 (Loading) and the Scud notice codes 11 (LoadStarted), 12 (LoadCancelled) and 13 (EventFound); the Scud event (/event scud): an intel board entry may carry an AREA, a centre and a radius in metres (flags bit 4, a f32 radius after the centre)
     //   v70 the plantation (#364): bit 2 of the player status mask (EventKind.StatusState, StatusKind.High): the player is high; the others draw a lit cigarette and red eyes on the figure, the player's own camera sways
-    public const byte ProtocolVersion = 70;
+    //   v71 the radar unit (#371, ADR 0037): a trailer with one seat (role radar_operator, vehicles.json "radar"); event 91 RadarSweep (to the operator only); a trailer without a load (no loaded_hp) sends its loaded bit clear
+    public const byte ProtocolVersion = 71;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

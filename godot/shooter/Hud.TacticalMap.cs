@@ -58,6 +58,15 @@ public partial class Hud
         }
     }
 
+    /// <summary>
+    /// Opens the map if it is closed and nothing keeps it from opening (the same arbiter as the key): the radar operator's screen comes up when they take the seat. False when it was already open or could not.
+    /// </summary>
+    public bool OpenTacticalMap(bool menuOpen = false)
+    {
+        if (_tacticalMap.IsOpen) return false;
+        return ToggleTacticalMap(menuOpen);
+    }
+
     /// <summary>Closes the map (Esc). True when it was open, so the Esc is used and Pause does not open.</summary>
     public bool CloseTacticalMap()
     {

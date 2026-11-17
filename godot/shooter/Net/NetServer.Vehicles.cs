@@ -203,7 +203,7 @@ public partial class NetServer
         ServerCar? best = null; var bd = float.MaxValue;
         foreach (var car in _cars)
         {
-            if (car.Destroyed || car.Seat.Count == 0 || !car.Seat.HasBoardable) continue; // a seat held by a corpse counts: it is kicked out (#330); a trailer has no seat at all
+            if (!car.Boardable) continue; // a seat held by a corpse counts: it is kicked out (#330); a trailer has no seat at all, a radar unit's only while it is hitched
             // within the vehicle's enter radius of its footprint (#217), not of its centre
             if (!VehicleReach.CanEnter(N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(p), Vehicles!.EnterRadiusOf(car.Def))) continue;
             var d = VehicleReach.DistanceToFootprint(N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(p));
@@ -492,7 +492,7 @@ public partial class NetServer
     void BumpDamage(ServerCar car, float speedLoss, ServerCar other)
     {
         if (!car.Def.CrashDamage || speedLoss <= Vehicles!.CrashMinSpeedLoss) return;
-        var attacker = OccupantAt(other, 0)?.Id ?? 0;
+        var attacker = OccupantAt(other.Tractor ?? other, 0)?.Id ?? 0; // a trailer's bump is its tractor's driver's (the radar unit's operator does not drive it)
         DamageVehicle(car, (speedLoss - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, attacker, SpecialWeapons.Vehicle, 0);
     }
 
@@ -566,7 +566,7 @@ public partial class NetServer
     void Detonate(ServerCar car)
     {
         var at = car.GlobalPosition + Vector3.Up * 0.8f;
-        var driver = OccupantAt(car, 0);
+        var driver = car.IsTrailer ? null : OccupantAt(car, 0); // a radar unit's operator is not its driver: no credit for his own death
         var attacker = car.LastAttacker != 0 ? car.LastAttacker : driver?.Id ?? (ushort)0;
         var weapon = car.LastWeapon != 0 ? car.LastWeapon : SpecialWeapons.Vehicle;
         var carVelocity = CarVelocity(car); // before Destroy zeroes it: the riders' bodies fly on with it

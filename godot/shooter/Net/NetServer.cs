@@ -818,7 +818,7 @@ public partial class NetServer : Node
                 // The pilot of a helicopter steps it here, once per input, as the body on foot is: the pilot's client predicts the same steps (ADR 0006).
                 if (c.CarSeat == 0 && c.Car.Flies) c.Car.StepFlight(FlightInput.FromNet(i, handsOff: controlled), dt, _tick);
                 else if (c.CarSeat == 0 && c.Car.Drives) { c.Car.Wake(); c.Car.StepDrive(DriveInput.FromNet(i, handsOff: controlled), dt); c.Car.DriveTick = _tick; } // the same for a driven vehicle (ADR 0010, ADR 0014): a driver's input wakes a parked one
-                else if (c.CarSeat == 0) { c.Throttle = Quant.Axis(i.MoveY); c.Steer = Quant.Axis(i.MoveX); c.Handbrake = (i.Buttons & (ushort)MoveButtons.Jump) != 0; }
+                else if (c.CarSeat == 0 && !c.Car.IsTrailer) { c.Throttle = Quant.Axis(i.MoveY); c.Steer = Quant.Axis(i.MoveX); c.Handbrake = (i.Buttons & (ushort)MoveButtons.Jump) != 0; }
                 else if (c.Car.Gun != null && c.Car.Def.Seats[c.CarSeat].Role == "gunner")
                 {
                     GunnerInput(c, i);
@@ -1245,7 +1245,7 @@ public partial class NetServer : Node
             if (car.Retired) continue; // removed for good (RemoveRocketCarts): not sent, so every client drops it
             var stage = Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Life.MaxHp, Vehicles.DamageStages);
             ents.Add(car.IsTrailer
-                ? VehicleRecord.MakeTrailer(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Tractor?.Id ?? (ushort)0, car.Colour, car.Cargo!.Loaded, stage, car.Destroyed) // a trailer: its tractor in the driver's field, its load in a health bit (protocol 67)
+                ? VehicleRecord.MakeTrailer(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Tractor?.Id ?? (ushort)0, car.Colour, car.Cargo?.Loaded ?? false, stage, car.Destroyed) // a trailer: its tractor in the driver's field, its load in a health bit (protocol 67); one with no load (the radar unit) never says loaded, so no client takes it for a cart
                 : VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, stage, car.Destroyed, car.Lights, car.Life.WheelsOff));
         }
         foreach (var car in _cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model

@@ -54,12 +54,12 @@ public sealed class RiderViewMode
     /// <summary>The view is first person (head look): the cockpit, or a sight.</summary>
     public bool FirstPerson => !_fsm.Is(RiderView.Chase);
 
-    /// <summary>What a seat's view can be: a gunner's, an armed seat and the Scud operator's are sights; a seat in the open is Open; the rest Covered.</summary>
+    /// <summary>What a seat's view can be: a gunner's, an armed seat, the Scud operator's and the radar operator's are sights; a seat in the open is Open; the rest Covered.</summary>
     public static SeatViewKind KindOf(VehicleDef v, int seat)
     {
         if (seat < 0 || seat >= v.Seats.Count) return SeatViewKind.Covered;
         var s = v.Seats[seat];
-        if (s.Armed || s.Role == "gunner" || v.Launcher is { } l && l.OperatorSeat == seat) return SeatViewKind.Sight;
+        if (s.Armed || s.Role == "gunner" || s.Role == VehicleSeatDef.RadarOperator || v.Launcher is { } l && l.OperatorSeat == seat) return SeatViewKind.Sight;
         return v.SeatExposed(seat) ? SeatViewKind.Open : SeatViewKind.Covered;
     }
 

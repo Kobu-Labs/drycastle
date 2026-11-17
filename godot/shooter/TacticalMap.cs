@@ -40,7 +40,10 @@ public sealed partial class TacticalMap : Control
     string[] _colLabels = Array.Empty<string>(), _rowLabels = Array.Empty<string>();
 
     readonly SheetLayer _sheet;
+    readonly RadarLayer _radar;
     readonly MarkerLayer _markers;
+    readonly CenterContainer _roseRow;
+    readonly Label _gridCaption, _zoomHint;
     readonly PanelContainer _right;
     readonly Label _gridValue;
     readonly CompassRose _rose = new();
@@ -67,28 +70,32 @@ public sealed partial class TacticalMap : Control
         SetProcessInput(false);
 
         _sheet = new SheetLayer(this) { MouseFilter = MouseFilterEnum.Ignore, ClipContents = true, TextureFilter = TextureFilterEnum.LinearWithMipmaps };
+        _radar = new RadarLayer(this) { MouseFilter = MouseFilterEnum.Ignore, ClipContents = true }; // the radar operator's sweep and blips, clipped to the sheet; under the markers
         _markers = new MarkerLayer(this) { MouseFilter = MouseFilterEnum.Stop };
         AddChild(_sheet);
+        AddChild(_radar);
         AddChild(_markers);
 
         // right: the compass rose and the current grid reference
         _right = Panel();
         var r = Column(_right);
-        var roseRow = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
-        roseRow.AddChild(_rose);
-        r.AddChild(roseRow);
+        _roseRow = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
+        _roseRow.AddChild(_rose);
+        r.AddChild(_roseRow);
         r.AddChild(Gap());
-        r.AddChild(Text(Strings.T("map.grid"), "HudSmall"));
+        _gridCaption = Text(Strings.T("map.grid"), "HudSmall");
+        r.AddChild(_gridCaption);
         _gridValue = Text("", "HudBig");
         r.AddChild(_gridValue);
         r.AddChild(Gap());
         r.AddChild(Text(Strings.T("map.zoom"), "HudSmall"));
         _zoomValue = Text("1.0x", "HudBig");
         r.AddChild(_zoomValue);
-        var hint = Text(Strings.T("map.zoom.hint"), "HudSmall");
-        hint.ClipText = false;
-        hint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        r.AddChild(hint);
+        _zoomHint = Text(Strings.T("map.zoom.hint"), "HudSmall");
+        _zoomHint.ClipText = false;
+        _zoomHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        r.AddChild(_zoomHint);
+        BuildRadarRows(r);
         AddChild(_right);
     }
 
@@ -165,6 +172,7 @@ public sealed partial class TacticalMap : Control
         if (_layoutDirty || Size != _laidOutFor) Layout();
         else if (_base is { } nb && (_tex == null || MinimapView.NeedsRebuild(_texSide, _wantedSide)) && _wantedSide > 0 && nb.TryTexture(_wantedSide, out var built) is { } ready) { _tex = ready; _texSide = built; _sheet.QueueRedraw(); } // the picture a worker was making is ready
         UpdateReadouts();
+        UpdateRadar();
         _markers.QueueRedraw();
     }
 
@@ -300,6 +308,8 @@ public sealed partial class TacticalMap : Control
             layer.Position = frame.Position;
             layer.Size = frame.Size;
         }
+        _radar.Position = origin; // exactly the sheet's square: the sweep is clipped to it
+        _radar.Size = new Vector2(_side, _side);
         var panelW = Math.Clamp(frame.Position.X - PanelGap - ShooterTheme.Margin, PanelMin, PanelMax);
         _right.Position = new Vector2(frame.End.X + PanelGap, frame.Position.Y);
         _right.Size = new Vector2(panelW, 0);
@@ -779,6 +789,44 @@ static class MapGlyphs
         var at = new Vector2(p.X - w / 2f, p.Y - r - 8f);
         c.DrawStringOutline(font, at, label, HorizontalAlignment.Left, -1, fs, 6, ShooterTheme.Outline);
         c.DrawString(font, at, label, HorizontalAlignment.Left, -1, fs, ShooterTheme.Warn);
+    }
+
+    /// <summary>
+    /// A radar contact (the radar unit's screen): an enemy on foot is a filled diamond, an enemy vehicle a larger square crossed by two bars, in the danger colour over a dark casing, as faint as <paramref name="alpha"/>
+    /// (the sweep found it that long ago). Shapes, not colour, tell the kinds apart.
+    /// </summary>
+    public static void RadarContact(CanvasItem c, Vector2 p, RadarKind kind, float alpha)
+    {
+        var ink = ShooterTheme.Danger; ink.A = alpha;
+        var shell = ShooterTheme.Outline; shell.A *= alpha;
+        if (kind == RadarKind.Vehicle)
+        {
+            c.DrawRect(new Rect2(p - new Vector2(10, 10), new Vector2(20, 20)), shell);
+            c.DrawRect(new Rect2(p - new Vector2(8, 8), new Vector2(16, 16)), ink);
+            c.DrawLine(p + new Vector2(-6, -6), p + new Vector2(6, 6), shell, 2f);
+            c.DrawLine(p + new Vector2(-6, 6), p + new Vector2(6, -6), shell, 2f);
+            return;
+        }
+        c.DrawColoredPolygon(new[] { p + new Vector2(0, -12), p + new Vector2(12, 0), p + new Vector2(0, 12), p + new Vector2(-12, 0) }, shell);
+        c.DrawColoredPolygon(new[] { p + new Vector2(0, -9), p + new Vector2(9, 0), p + new Vector2(0, 9), p + new Vector2(-9, 0) }, ink);
+    }
+
+    /// <summary>A teammate on the radar (live): the map's friend disc, and for a vehicle the disc inside a square (the same two shapes as the enemies', never colour alone).</summary>
+    public static void RadarFriend(CanvasItem c, Vector2 p, RadarKind kind)
+    {
+        Friend(c, p);
+        if (kind != RadarKind.Vehicle) return;
+        c.DrawRect(new Rect2(p - new Vector2(13, 13), new Vector2(26, 26)), ShooterTheme.Outline, false, 4f);
+        c.DrawRect(new Rect2(p - new Vector2(13, 13), new Vector2(26, 26)), ShooterTheme.Good, false, 2f);
+    }
+
+    /// <summary>The radar unit itself, the arm's pivot: a ring with a solid centre (the operator's arrow, drawn over it by the map, is the player).</summary>
+    public static void RadarUnit(CanvasItem c, Vector2 p)
+    {
+        c.DrawArc(p, 26f, 0f, Mathf.Tau, 40, ShooterTheme.Outline, 5f, true);
+        c.DrawArc(p, 26f, 0f, Mathf.Tau, 40, ShooterTheme.Accent, 3f, true);
+        c.DrawRect(new Rect2(p - new Vector2(4, 4), new Vector2(8, 8)), ShooterTheme.Outline);
+        c.DrawRect(new Rect2(p - new Vector2(3, 3), new Vector2(6, 6)), ShooterTheme.Accent);
     }
 
     /// <summary>The waypoint: a downward triangle whose tip is the point, in the waypoint green (a shape no other marker has; never colour only).</summary>

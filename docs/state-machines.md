@@ -1356,6 +1356,20 @@ stateDiagram-v2
 - **Pinned**: The victim lies pinned. Locally: the body is the server's (no prediction, no weapon), the camera is on the floor. A joiner can start here.
 - **Rising**: The local victim was let go: the camera rises back to standing height while the red fades. Only after a pin of the local player.
 
+## RadarUnit.Sweep
+
+A radar unit's dish: still, or turning and stamping the contacts its arm passes.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Off
+    Off --> Sweeping
+    Sweeping --> Off
+```
+
+- **Off**: Not hitched to a tractor: the dish is still, nothing is stamped. Hitching it starts the sweep from bearing 0.
+- **Sweeping**: Hitched: the arm turns once per revolution (6 s) and stamps every contact it passes. Its clock restarts each revolution. Unhitching stops it and forgets every stamp.
+
 ## RaidVan.State
 
 What a Raid van is doing; the replicated state byte.
