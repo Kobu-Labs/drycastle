@@ -58,6 +58,12 @@ public partial class NetClient
         ? new List<CropField>()
         : CropFields.From(Map.PatchPaints.Select(p => (p.Id, p.Type, (IReadOnlyList<NVec2>)p.Ring.Select(v => new NVec2(v.X, v.Y)).ToList())));
 
+    /// <summary>The fields vehicles leave tracks on, the same list the server builds (the wire index is its index).</summary>
+    List<CropField> CrushFields => _crushFields ??= Map == null
+        ? new List<CropField>()
+        : CropFields.From(Map.PatchPaints.Select(p => (p.Id, p.Type, (IReadOnlyList<NVec2>)p.Ring.Select(v => new NVec2(v.X, v.Y)).ToList())), includeBare: true);
+    List<CropField>? _crushFields;
+
     void OnHarvesterEvent(EventKind kind, byte[] payload)
     {
         switch (kind)

@@ -72,6 +72,12 @@ public partial class NetServer
         ? new List<CropField>()
         : CropFields.From(Map.PatchPaints.Select(p => (p.Id, p.Type, (IReadOnlyList<NVec2>)p.Ring.Select(v => new NVec2(v.X, v.Y)).ToList())));
 
+    /// <summary>The fields vehicles leave tracks on (the harvestable ones and the bare ploughed ones); the crush mask's indices are these.</summary>
+    List<CropField> CrushFieldList => _crushFields ??= Map == null
+        ? new List<CropField>()
+        : CropFields.From(Map.PatchPaints.Select(p => (p.Id, p.Type, (IReadOnlyList<NVec2>)p.Ring.Select(v => new NVec2(v.X, v.Y)).ToList())), includeBare: true);
+    List<CropField>? _crushFields;
+
     bool HarvesterRunning => _harvBrain != null;
 
     // ---- the lifecycle ----
@@ -483,7 +489,7 @@ public partial class NetServer
     void StepCrush()
     {
         if (Map == null) return;
-        var mask = _crushMask ??= new CropCrushMask(CropCrush, CropFieldList);
+        var mask = _crushMask ??= new CropCrushMask(CropCrush, CrushFieldList);
         foreach (var car in _cars)
         {
             var ground = !car.Destroyed && car.Def.Flight == null && !car.Afloat;
