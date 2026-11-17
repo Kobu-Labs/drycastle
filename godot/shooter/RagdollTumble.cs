@@ -17,6 +17,8 @@ public sealed class RagdollTumble
     public float Spin, Amount;
     public Vector3 Axis = Vector3.Right;
     public bool Thrown;
+    /// <summary>A body that lands alive turns upright and goes slack (a player the Bigfoot threw) instead of lying flat (a corpse, a dummy).</summary>
+    public bool StandUp;
     Vector3 _last;
     CorpseCollapse? _collapse;
     /// <summary>The ground's up under the body (the slope it lies on): a collapsed body leans onto it as it goes flat.</summary>
@@ -53,7 +55,7 @@ public sealed class RagdollTumble
     public void Reset()
     {
         _collapse = null; GroundUp = Vector3.Up;
-        Spin = 0; Amount = 0; Thrown = false; AtRest = false; _wasFlying = false; _seen = false;
+        Spin = 0; Amount = 0; Thrown = false; StandUp = false; AtRest = false; _wasFlying = false; _seen = false;
     }
 
     /// <param name="at">The body's feet this frame.</param>
@@ -83,10 +85,12 @@ public sealed class RagdollTumble
         else if (Thrown)
         {
             if (_wasFlying) Spin = Mathf.PosMod(Spin, Mathf.Tau); // landed: turn the shortest way to lying
-            var target = Mathf.Round((Spin - Quarter) / Mathf.Pi) * Mathf.Pi + Quarter; // flat on the back or the front, whichever is nearer
+            var rest = StandUp ? 0f : RestAmount;
+            var target = StandUp ? Mathf.Round(Spin / Mathf.Tau) * Mathf.Tau // upright again, the nearest turn
+                : Mathf.Round((Spin - Quarter) / Mathf.Pi) * Mathf.Pi + Quarter; // flat on the back or the front, whichever is nearer
             Spin = Mathf.MoveToward(Spin, target, SettleRate * dt);
-            Amount = Mathf.MoveToward(Amount, RestAmount, dt * 2f);
-            AtRest = Mathf.IsEqualApprox(Spin, target) && Mathf.IsEqualApprox(Amount, RestAmount);
+            Amount = Mathf.MoveToward(Amount, rest, dt * (StandUp ? 4f : 2f));
+            AtRest = Mathf.IsEqualApprox(Spin, target) && Mathf.IsEqualApprox(Amount, rest);
         }
         _wasFlying = flying;
     }

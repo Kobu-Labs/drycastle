@@ -264,13 +264,14 @@ public sealed partial class CharacterView : Node3D
         SetWeapon(dead ? "" : weaponId);
         if (!HasModel) return;
         var knife = weaponId == "knife";
-        var swing = firing && knife && !dead;
-        var armed = !dead && weaponId != "" && !swing;
+        var swing = firing && knife && !dead && !_ragdoll;
+        var armed = !dead && !_ragdoll && weaponId != "" && !swing; // a ragdoll holds its weapon in the fist, not aimed
         var twoHanded = weaponId is not ("pistol" or "glock17" or "deagle" or "knife"); // pistols are one-handed, every long gun is two-handed
         if (_arms != null) _arms.TwoHanded = twoHanded;
         SetAimed(armed);
         _shooting = armed && firing;
-        Play(dead ? (_ragdoll ? "Idle" : "Death")
+        Play(_ragdoll ? "Idle" // loose limbs over a neutral clip (a thrown corpse, a player in the Bigfoot's hand)
+            : dead ? "Death"
             : swing ? "SwordSlash"
             : _swim ? (speed > 0.6f ? "Walk" : "Idle") // no swim clip in the rig: the slow walk, see SetSwim
             : speed > 6.2f ? "Run" : speed > 0.6f ? "Walk" : "Idle");

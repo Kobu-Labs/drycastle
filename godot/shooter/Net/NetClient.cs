@@ -706,7 +706,8 @@ public partial class NetClient : Node
                 var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 var dead = r.State == EntityState.Dead;
                 r.ShownYaw = s.Yaw; r.ShownPitch = s.Pitch;
-                TumbleRemote(r, at, s.Yaw, dead && TargetDummies.IsDummyId(id), dt);
+                if (dead) EndFling(id);
+                TumbleRemote(id, r, at, s.Yaw, dead && TargetDummies.IsDummyId(id), dt);
                 PounceLieRemote(id, r, at); // the one the demon has pinned lies on its back
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
                 r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && (CorpseOf(id) || HarvestVictimHidden(id, dead))); // the harvester's victim is in the machine, then inside its bale: no body at the spot where it died // riders are drawn in their seat (the server puts the body there), seated rather than standing
@@ -722,9 +723,10 @@ public partial class NetClient : Node
     /// The ragdoll of a killed dummy: while it is thrown (dead and moving fast) it spins about its middle with its limbs flailing, then lies flat with
     /// them loose. A dummy that fell where it stood plays the death clip; everything else stands upright at its feet. Corpses do the same in <see cref="RenderCorpses"/>.
     /// </summary>
-    void TumbleRemote(Remote r, Vector3 at, float yaw, bool dummyDown, float dt)
+    void TumbleRemote(ushort id, Remote r, Vector3 at, float yaw, bool dummyDown, float dt)
     {
         var t = r.Tumble;
+        if (_flings.TryGetValue(id, out var fling) && fling.Active && !dummyDown) { FlingRemote(id, r, fling, at, yaw, dt); return; } // in the Bigfoot's fist or flying from it (#360)
         if (!dummyDown) { if (t.Thrown) { t.Reset(); r.View?.SetRagdoll(false); } }
         else
         {
@@ -753,7 +755,7 @@ public partial class NetClient : Node
         var slot = Ammo?.Slot ?? _wantSlot;
         var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
         _viewmodel.Show(id);
-        _viewmodel.Visible = Mode.ShowsViewmodel && _me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
+        _viewmodel.Visible = Mode.ShowsViewmodel && !OwnBodyFlung && _me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
     }
 
     /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
