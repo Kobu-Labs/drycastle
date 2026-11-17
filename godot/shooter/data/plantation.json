@@ -40,7 +40,7 @@
     "cigarette": {
       "model": "props/cigarette_long_01",
       "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png",
-      "mouth": [0.1, -0.3],
+      "mouth": [0.08, -0.5],
       "out_m": 0.015,
       "rotation_deg": [6, 0, 0],
       "scale": 1.0,

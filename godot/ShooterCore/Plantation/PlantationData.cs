@@ -114,7 +114,7 @@ public sealed class CigaretteData
 {
     public string Model { get; set; } = "props/cigarette_long_01";
     public string Atlas { get; set; } = "gang-warfare/textures/PolygonGangWarfare_01_A.png";
-    public double[] Mouth { get; set; } = { 0.1, -0.3 };
+    public double[] Mouth { get; set; } = { 0.08, -0.5 };
     public double OutM { get; set; } = 0.015;
     public double[] RotationDeg { get; set; } = { 6, 0, 0 };
     public double Scale { get; set; } = 1;
