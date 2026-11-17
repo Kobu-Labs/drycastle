@@ -24,9 +24,13 @@ public class BodyFlingTests
         Assert.Equal(BodyFling.Held, f.Phase);
         f.Flung();
         Assert.Equal(BodyFling.Flying, f.Phase);
-        for (var i = 0; i < 30; i++) f.Tick(Dt, 15f);
+        for (var i = 0; i < 30; i++) f.Tick(Dt, 15f, false);
         Assert.Equal(BodyFling.Flying, f.Phase); // fast: still in the air
-        for (var i = 0; i < 3; i++) f.Tick(Dt, 0.5f);
+        for (var i = 0; i < 3; i++) f.Tick(Dt, 0.5f, true);
+        Assert.Equal(BodyFling.Lying, f.Phase);
+        for (var t = 0f; t < BodyFlingTracker.LieSeconds - 3 * Dt; t += Dt) f.Tick(Dt, 0f, true);
+        Assert.Equal(BodyFling.Lying, f.Phase); // limp on the ground first
+        for (var i = 0; i < 6; i++) f.Tick(Dt, 0f, true);
         Assert.Equal(BodyFling.Landing, f.Phase);
         f.StoodUp();
         Assert.Equal(BodyFling.None, f.Phase);
@@ -36,7 +40,7 @@ public class BodyFlingTests
     public void Slow_apex_start_is_not_a_landing()
     {
         var f = Flying();
-        f.Tick(Dt, 0f); // the first frame of the throw: the guard time has not run
+        f.Tick(Dt, 0f, true); // the first frame of the throw: the guard time has not run
         Assert.Equal(BodyFling.Flying, f.Phase);
     }
 
@@ -44,8 +48,29 @@ public class BodyFlingTests
     public void Flight_has_a_cap()
     {
         var f = Flying();
-        for (var t = 0f; t < BodyFlingTracker.MaxAirSeconds + 0.2f; t += Dt) f.Tick(Dt, 20f);
-        Assert.Equal(BodyFling.Landing, f.Phase);
+        for (var t = 0f; t < BodyFlingTracker.MaxAirSeconds + 0.2f; t += Dt) f.Tick(Dt, 20f, false);
+        Assert.Equal(BodyFling.Lying, f.Phase);
+    }
+
+    [Fact]
+    public void Slow_apex_in_the_air_is_not_a_landing()
+    {
+        var f = Flying();
+        for (var t = 0f; t < 0.5f; t += Dt) f.Tick(Dt, 0.3f, false); // a steep throw hangs at the top, slow but high
+        Assert.Equal(BodyFling.Flying, f.Phase);
+        f.Tick(Dt, 8f, false); // and falls again
+        for (var t = 0f; t < 0.5f; t += Dt) f.Tick(Dt, 0.3f, false);
+        Assert.Equal(BodyFling.Flying, f.Phase);
+        f.Tick(Dt, 0.3f, true);
+        Assert.Equal(BodyFling.Lying, f.Phase);
+    }
+
+    [Fact]
+    public void Slow_for_long_without_a_ground_reading_still_lands()
+    {
+        var f = Flying();
+        for (var t = 0f; t < BodyFlingTracker.SettleSeconds + 0.2f; t += Dt) f.Tick(Dt, 0f, false); // on a roof the terrain height cannot tell
+        Assert.Equal(BodyFling.Lying, f.Phase);
     }
 
     [Fact]
@@ -73,8 +98,8 @@ public class BodyFlingTests
         f.Grabbed();
         Assert.Equal(BodyFling.Held, f.Phase);
         f.Flung();
-        for (var i = 0; i < 20; i++) f.Tick(Dt, 0f);
-        Assert.Equal(BodyFling.Landing, f.Phase);
+        for (var i = 0; i < 20; i++) f.Tick(Dt, 0f, true);
+        Assert.Equal(BodyFling.Lying, f.Phase);
         f.Grabbed();
         Assert.Equal(BodyFling.Held, f.Phase);
     }

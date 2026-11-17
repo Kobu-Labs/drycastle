@@ -4,7 +4,7 @@ namespace Drycastle.ShooterCore;
 /// Where a player is in the Bigfoot's grab, as a client draws the body: held in the fist, flying after the throw, or getting up after the landing.
 /// None means the normal figure. Cosmetic: the server's movement and damage know nothing of it (#360).
 /// </summary>
-public enum BodyFling : byte { None, Held, Flying, Landing }
+public enum BodyFling : byte { None, Held, Flying, Lying, Landing }
 
 /// <summary>
 /// The ragdoll phase of one player the Bigfoot picked up (client only). Held and thrown follow the Bigfoot's <see cref="BigfootAct"/> (Hold, then
@@ -12,26 +12,33 @@ public enum BodyFling : byte { None, Held, Flying, Landing }
 /// </summary>
 public sealed class BodyFlingTracker
 {
-    /// <summary>Held: grabbed. Flying: the throw (the Bigfoot's Launch). Landing: the flight ended, the body turns upright again. None: any end (released, died, left, round reset).</summary>
+    /// <summary>Held: grabbed. Flying: the throw (the Bigfoot's Launch). Lying: landed, the ragdoll lies on the ground. Landing: it turns upright again. None: any end (released, died, left, round reset).</summary>
     public static readonly StateMachineSpec<BodyFling> Spec = StateMachineSpec<BodyFling>
         .Define("Bigfoot.BodyFling", "A player the Bigfoot grabbed, as a client draws them: held in the fist, flying after the throw, getting up after the landing.", BodyFling.None)
         .Allow(BodyFling.None, BodyFling.Held)
         .Allow(BodyFling.Held, BodyFling.Flying, BodyFling.None)
-        .Allow(BodyFling.Flying, BodyFling.Landing, BodyFling.Held, BodyFling.None)
+        .Allow(BodyFling.Flying, BodyFling.Lying, BodyFling.Held, BodyFling.None)
+        .Allow(BodyFling.Lying, BodyFling.Landing, BodyFling.Held, BodyFling.None)
         .Allow(BodyFling.Landing, BodyFling.None, BodyFling.Held)
         .Note(BodyFling.Held, "In the fist (Bigfoot act Hold): limbs loose, the body swung by the hand. Released without a throw, the Bigfoot dying or the player dying or leaving ends it at None.")
-        .Note(BodyFling.Flying, "The throw (Bigfoot act Launch): tumbling, limbs flailing, until the body is slow again after MinAirSeconds (or MaxAirSeconds).")
-        .Note(BodyFling.Landing, "Landed alive: the body turns upright and the limbs go slack, then the normal figure (a dead one is the corpse's, not this machine's).")
+        .Note(BodyFling.Flying, "The throw (Bigfoot act Launch): tumbling, limbs flailing, until the body is on the ground and slow (after MinAirSeconds), or has been slow for SettleSeconds where the ground cannot be told (a roof), or MaxAirSeconds.")
+        .Note(BodyFling.Lying, "Landed alive: the ragdoll lies limp on the ground for LieSeconds.")
+        .Note(BodyFling.Landing, "Getting up: the body turns upright and the limbs go slack, then the normal figure (a dead one is the corpse's, not this machine's).")
         .Build();
 
     /// <summary>The flight is not judged landed before this (the apex of a throw is slow upwards but not in speed; this is only a guard at the start).</summary>
     public const float MinAirSeconds = 0.4f;
     /// <summary>The speed (m/s) under which a flying body counts as landed. A thrown body moves at ten metres a second or more.</summary>
     public const float LandedSpeedMps = 2.5f;
+    /// <summary>Slow for this long without a ground reading (a roof, a ledge the terrain height does not know) also counts as landed. Longer than a steep throw's apex is slow.</summary>
+    public const float SettleSeconds = 0.8f;
+    /// <summary>How long the body lies limp on the ground before it gets up.</summary>
+    public const float LieSeconds = 0.5f;
     /// <summary>A flight never lasts longer (the server's launch grace is five seconds).</summary>
     public const float MaxAirSeconds = 8f;
 
     readonly StateMachine<BodyFling> _fsm = new(Spec);
+    float _slowFor;
 
     public BodyFling Phase => _fsm.Current;
     /// <summary>Seconds in the phase.</summary>
@@ -43,7 +50,7 @@ public sealed class BodyFlingTracker
     public void Grabbed() => _fsm.Enter(BodyFling.Held);
 
     /// <summary>The Hold ended in a throw (act Launch). Only a held body is thrown.</summary>
-    public void Flung() { if (_fsm.Is(BodyFling.Held)) _fsm.Enter(BodyFling.Flying); }
+    public void Flung() { if (_fsm.Is(BodyFling.Held)) { _slowFor = 0; _fsm.Enter(BodyFling.Flying); } }
 
     /// <summary>The hold ended with no throw, the Bigfoot is gone, or the player died, left or respawned.</summary>
     public void Ended() => _fsm.Enter(BodyFling.None);
@@ -51,10 +58,19 @@ public sealed class BodyFlingTracker
     /// <summary>The upright turn after a landing is done: the normal figure.</summary>
     public void StoodUp() { if (_fsm.Is(BodyFling.Landing)) _fsm.Enter(BodyFling.None); }
 
-    /// <summary>Advances the clock. <paramref name="speedMps"/> is the body's speed this frame (what the flight reads its landing from).</summary>
-    public void Tick(float dt, float speedMps)
+    /// <summary>
+    /// Advances the clock. <paramref name="speedMps"/> is the body's speed this frame, <paramref name="grounded"/> whether its feet are on the ground.
+    /// Slow alone is not a landing: the apex of a steep throw is slow too.
+    /// </summary>
+    public void Tick(float dt, float speedMps, bool grounded)
     {
         _fsm.Tick(dt);
-        if (_fsm.Is(BodyFling.Flying) && (_fsm.Elapsed >= MaxAirSeconds || _fsm.Elapsed >= MinAirSeconds && speedMps < LandedSpeedMps)) _fsm.Enter(BodyFling.Landing);
+        if (_fsm.Is(BodyFling.Flying))
+        {
+            var slow = speedMps < LandedSpeedMps;
+            _slowFor = slow ? _slowFor + dt : 0;
+            if (_fsm.Elapsed >= MaxAirSeconds || _fsm.Elapsed >= MinAirSeconds && slow && (grounded || _slowFor >= SettleSeconds)) _fsm.Enter(BodyFling.Lying);
+        }
+        else if (_fsm.Is(BodyFling.Lying) && _fsm.Elapsed >= LieSeconds) _fsm.Enter(BodyFling.Landing);
     }
 }
