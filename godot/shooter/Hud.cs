@@ -41,7 +41,7 @@ public partial class Hud : CanvasLayer
     // crosshair, hit marker, indicators
     readonly ColorRect[] _arms = new ColorRect[4], _armsBack = new ColorRect[4];
     float _gap = -1;
-    Control _hit = null!, _crossRoot = null!;
+    Control _hit = null!, _crossRoot = null!, _ammoBox = null!;
     readonly Line2D[] _hitLines = new Line2D[4];
     double _hitUntil, _hitFade;
     readonly Control[] _ind = new Control[Indicators];
@@ -166,6 +166,16 @@ public partial class Hud : CanvasLayer
         ApplyCrosshairVisibility();
     }
 
+    bool _crossUnarmed;
+    /// <summary>The local player sits where nothing can be fired (a driver's or an unarmed passenger's seat, #373): no crosshair and no weapon/ammo readout meanwhile.</summary>
+    public void SetUnarmedSeat(bool on)
+    {
+        if (_crossUnarmed == on) return;
+        _crossUnarmed = on;
+        if (_ammoBox != null) _ammoBox.Visible = !on;
+        ApplyCrosshairVisibility();
+    }
+
     bool _crossLauncher;
     /// <summary>The Lock-on launcher's sight is up (<see cref="LockOnOverlay"/>): it has its own aim pip, so the crosshair is hidden meanwhile.</summary>
     public void SetLauncherHidesCrosshair(bool hide)
@@ -179,7 +189,7 @@ public partial class Hud : CanvasLayer
     void ApplyCrosshairVisibility()
     {
         if (_crossRoot == null) return;
-        _crossRoot.Visible = CrosshairRules.Visible(Settings.ShowCrosshair, _crossCovered || _crossLauncher, _scope?.Visible ?? false, _bino?.Visible ?? false, _pounceHide || _flungHide);
+        _crossRoot.Visible = CrosshairRules.Visible(Settings.ShowCrosshair, _crossCovered || _crossLauncher, _scope?.Visible ?? false, _bino?.Visible ?? false, _pounceHide || _flungHide, _crossUnarmed);
     }
 
     public override void _ExitTree() => GameSettings.Changed -= OnSettingsChanged;
@@ -302,6 +312,7 @@ public partial class Hud : CanvasLayer
         _root.AddChild(_radial);
         // weapon name and ammo only: no panel, no border
         var v = Place(new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore }, 1, 1, -ShooterTheme.Margin, -ShooterTheme.Margin, 320, 88);
+        _ammoBox = v;
         v.AddThemeConstantOverride("separation", 0);
         _root.AddChild(v);
         _wName = L("", "HudHead", HorizontalAlignment.Right); v.AddChild(_wName);
