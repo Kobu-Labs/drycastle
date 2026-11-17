@@ -586,6 +586,7 @@ public class VehicleDriveDef
             return "land: launch_boost at least 1; launch_speed, power_curve, grip, yaw_response, handbrake_decel, handbrake_steer, step_height and snap_down positive; coast_decel and coast_drag not negative";
         if (l.BrakeBite is < 0 or > 1 || l.HandbrakeGrip is <= 0 or > 1 || l.ReverseTopFraction is <= 0 or > 1) return "land: brake_bite 0..1, handbrake_grip and reverse_top_fraction above 0 and at most 1";
         if (l.MaxClimbDeg is <= 0 or >= 80) return "land: max_climb_deg is 1..79";
+        if (l.PivotBehind is { } pivot && MathF.Abs(pivot) > v.HalfLength + 0.5f) return "land: pivot_behind puts the pivot outside the vehicle's length";
         if (!v.CanFloat) return Body.Validate() ?? Camera.Validate(); // a land type never reads the water numbers, so they are not checked
         var w = Water;
         if (w.Draft < 0 || w.FloatDepth <= 0 || w.ReverseThrust is <= 0 or > 1 || w.CoastDrag < 0 || w.TurnRadius <= 0 || w.PropSteer < 0 || w.YawResponse <= 0 || w.SideDrag <= 0
@@ -626,6 +627,12 @@ public class DriveLandDef
     public float MaxClimbDeg { get; set; } = 48;
     /// <summary>A drop up to this deep (m) keeps the wheels on the ground; a deeper one and it is in the air until it lands.</summary>
     public float SnapDown { get; set; } = 0.3f;
+    /// <summary>
+    /// Where it turns about on its wheels, metres behind the origin (the model's z): the axle that does not steer, or the mean of several (flak, Scud). The pivot
+    /// goes round <c>turn_radius</c>; the origin ahead of it sweeps wider, the nose wider still. Every shipped drive block sets it (<c>EveryVehicleDrivesTests</c>);
+    /// unset is 0: it turns about its origin.
+    /// </summary>
+    public float? PivotBehind { get; set; }
 }
 
 /// <summary>The drive afloat (vehicles.json "drive.water").</summary>

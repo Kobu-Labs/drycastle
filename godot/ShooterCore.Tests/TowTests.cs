@@ -217,7 +217,7 @@ public class TowTests
         var s = new DriveState { Position = new Vector3(0, 0, 0) };
         DriveModel.Settle(ref s, def, world);
         var link = new TowLink(Vector3.Zero, 0f);
-        link.Body = AtHitch(g, TractorMotion.From(s), 0.03f);
+        link.Body = AtHitch(g, TractorMotion.From(s, def), 0.03f);
         Assert.True(link.TryLatch(g, new TractorMotion(s.Position, s.Yaw, -1f, 0, 0))); // reversing onto it
         var effect = default(TowEffect);
         var minSpeed = 0f;
@@ -226,7 +226,7 @@ public class TowTests
             effect = link.Effect(def, cart, g);
             DriveModel.Step(ref s, def, new DriveInput { Throttle = -1f }, Dt, world, effect);
             minSpeed = MathF.Min(minSpeed, s.Speed);
-            link.StepHitched(g, TractorMotion.From(s), Dt);
+            link.StepHitched(g, TractorMotion.From(s, def), Dt);
             Assert.True(MathF.Abs(link.Body.Phi) <= g.Limit + 1e-4f);
         }
         Assert.True(minSpeed < -1f, "it did reverse until it folded");
@@ -236,7 +236,7 @@ public class TowTests
         for (var i = 0; i < 30 * 12; i++)
         {
             DriveModel.Step(ref s, def, new DriveInput { Throttle = 1f }, Dt, world, link.Effect(def, cart, g));
-            link.StepHitched(g, TractorMotion.From(s), Dt);
+            link.StepHitched(g, TractorMotion.From(s, def), Dt);
         }
         Assert.True(s.Speed > 3f);
         Assert.True(MathF.Abs(link.Body.Phi) < 0.2f, "pulled forwards the trailer straightens");
@@ -389,7 +389,7 @@ public class TowTests
         var def = Tractor(); var cart = Cart(); var g = TowGeometry.Of(def, cart);
         var world = new Flat();
         var s = new DriveState(); DriveModel.Settle(ref s, def, world);
-        var link = new TowLink(Vector3.Zero, 0f) { Body = AtHitch(g, TractorMotion.From(s), 0f) };
+        var link = new TowLink(Vector3.Zero, 0f) { Body = AtHitch(g, TractorMotion.From(s, def), 0f) };
         link.TryLatch(g, new TractorMotion(s.Position, s.Yaw, -1f, 0, 0));
         var wall = new Wall(); // the trailer can go back no further than z = 8
         wall.MinZ = 8f;
@@ -398,7 +398,7 @@ public class TowTests
         {
             var before = s; var bodyBefore = link.Body;
             DriveModel.Step(ref s, def, new DriveInput { Throttle = -1f }, Dt, world, link.Effect(def, cart, g));
-            if (!link.StepHitched(g, TractorMotion.From(s), Dt, wall))
+            if (!link.StepHitched(g, TractorMotion.From(s, def), Dt, wall))
             {
                 held = true;
                 TowModel.Hold(ref s, before);

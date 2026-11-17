@@ -22,4 +22,10 @@ Decided with the user during #325 (Unify all vehicle models), ending the migrati
 - Seats, guns, panes and holes of the seven now lie on the slope with the hull (`AttitudeOf`); the hit box stays upright, as for every driven vehicle.
 - `CarModel.Step`, `ServerCar.Step` / `StepParked` and the client's `VehicleWheels.Step` have no shipped user left. They are not removed here (tests and the shared turn-radius rule still reference `CarModel`); removing them is a follow-up.
 
+**Amendment (#295, Vehicles turn about the rear axle).** On its wheels a vehicle turns about its fixed axle, not its origin: `drive.land.pivot_behind` is that axle's z in the model (the mean of several: flak, Scud), set on every drive block (`EveryVehicleDrivesTests`).
+- In the shared `DriveModel.Step` the origin gets the sideways speed `-yaw rate x pivot_behind` (the same form as `stern_swing` afloat, opposite sign), so the server and the driver's prediction agree and the reference position (hull sweep, seats, hit volumes, snapshot record, rewind) is where it was. `Slip` on the wire stays the slide alone.
+- `turn_radius` is now the radius of the fixed axle's path, numbers unchanged: the origin goes round `sqrt(turn_radius^2 + pivot_behind^2)` (the car 3.6 -> 3.85 m, the bus 9.5 -> 9.9 m) and the nose wider still. This also changes ADR 0014's "the car's numbers reproduce `CarModel`": the yaw rate at a speed is the same, the origin's circle is not.
+- A trailer is pulled by the origin's sideways speed (`DriveModel.OriginSlip`), and the jackknife block measures the hitch's swing from the pivot: a hitch near the fixed axle hardly swings, as on a real tractor.
+- Afloat and in the air nothing changes (the boat's pivot is `stern_swing`; in the air it turns about its origin).
+
 **Considered.** Porting only the truck (the report), leaving six types on a model nobody should add to. Tilting the old model's box to the ground (a second slope fit, still no prediction, still two models).
