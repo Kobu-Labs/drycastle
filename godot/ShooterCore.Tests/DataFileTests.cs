@@ -16,7 +16,7 @@ public class DataFileTests
         Assert.Equal(3, d.Match.RespawnDelay);
         Assert.Equal(3, d.Match.SpawnProtection);
 
-        Assert.Equal(new[] { "pistol", "ak47", "bazooka", "knife", "sniper", "m4a1", "aug", "g36", "rpk", "m249", "m60", "pkm", "mp5", "ump45", "p90", "remington870", "spas12", "benelli_m4", "aa12", "glock17", "deagle", "m82", "awm", "svd", "strela" }, d.Weapons.Weapons.Select(w => w.Id));
+        Assert.Equal(new[] { "pistol", "ak47", "rpg", "knife", "sniper", "m4a1", "aug", "g36", "rpk", "m249", "m60", "pkm", "mp5", "ump45", "p90", "remington870", "spas12", "benelli_m4", "aa12", "glock17", "deagle", "m82", "awm", "svd", "strela" }, d.Weapons.Weapons.Select(w => w.Id));
         Assert.Equal("pistol", d.Weapons.StartingWeapon);
         var ak = d.Weapons.Find("ak47")!;
         Assert.Equal(WeaponKind.Hitscan, ak.Kind);
@@ -25,9 +25,9 @@ public class DataFileTests
         Assert.Equal(0.10f, ak.FireInterval);
         Assert.Equal(30, ak.MagazineSize);
         Assert.Equal(90, ak.ReserveAmmo);
-        var bz = d.Weapons.Find("bazooka")!;
+        var bz = d.Weapons.Find("rpg")!;
         Assert.Equal(WeaponKind.Projectile, bz.Kind);
-        Assert.Equal(6, bz.Splash!.Radius);
+        Assert.Equal(7, bz.Splash!.Radius);
         Assert.Equal(0.5f, bz.Splash.SelfDamageMultiplier);
         Assert.Equal(100, d.Weapons.Find("knife")!.BackstabDamage);
 

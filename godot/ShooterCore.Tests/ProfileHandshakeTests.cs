@@ -97,8 +97,8 @@ public class ProfileHandshakeTests
     [Fact]
     public void UnknownWeaponIsRejected()
     {
-        var bad = new Loadout(0, "bazooka9000", "pistol", "", "", "", "");
-        Assert.Contains("unknown primary weapon \"bazooka9000\"", LoadoutRules.ValidateLoadout(bad, Weapons(), 1, Array.Empty<Unlock>(), Empty(), Empty()));
+        var bad = new Loadout(0, "rpg9000", "pistol", "", "", "", "");
+        Assert.Contains("unknown primary weapon \"rpg9000\"", LoadoutRules.ValidateLoadout(bad, Weapons(), 1, Array.Empty<Unlock>(), Empty(), Empty()));
     }
 
     [Fact]

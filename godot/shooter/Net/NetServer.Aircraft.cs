@@ -116,7 +116,7 @@ public partial class NetServer
         var by = credit ?? (byte)weapon;
         if (def.Kind == GunshipWeaponKind.Rocket)
         {
-            // the rocket flies at the gunship's own speed and lives out its whole range (the bazooka's 40 m/s would burst it ~150 m out)
+            // the rocket flies at the gunship's own speed and lives out its whole range (the rpg's 40 m/s would burst it ~150 m out)
             var rocket = new Rocket
             {
                 Id = _nextRocket, Owner = owner, Weapon = (byte)weapon, Blast = def.Splash,

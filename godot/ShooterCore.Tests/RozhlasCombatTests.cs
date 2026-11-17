@@ -12,8 +12,8 @@ public class RozhlasCombatTests
     [InlineData(CombatKind.Shot, "ak47", "shot.ak47")]
     [InlineData(CombatKind.Shot, "knife", "shot.knife")]
     [InlineData(CombatKind.Shot, "", "shot.")] // the jeep's roof gun: the client plays the table's "shot." too
-    [InlineData(CombatKind.Launch, "bazooka", "launch.bazooka")]
-    [InlineData(CombatKind.Explosion, "bazooka", "explosion.bazooka")]
+    [InlineData(CombatKind.Launch, "rpg", "launch.rpg")]
+    [InlineData(CombatKind.Explosion, "rpg", "explosion.rpg")]
     [InlineData(CombatKind.VehicleExplosion, "", "explosion.vehicle")]
     [InlineData(CombatKind.Death, "", "death")]
     public void EventsMapToTheClientsSoundIds(CombatKind kind, string weapon, string id)
@@ -26,7 +26,7 @@ public class RozhlasCombatTests
     public void EveryPreloadedIdIsInTheTableAndFootstepsAreNot()
     {
         var ids = RozhlasCombat.PreloadIds(Table).ToList();
-        Assert.Contains("shot.ak47", ids); Assert.Contains("death", ids); Assert.Contains("explosion.bazooka", ids);
+        Assert.Contains("shot.ak47", ids); Assert.Contains("death", ids); Assert.Contains("explosion.rpg", ids);
         Assert.DoesNotContain(ids, i => i.StartsWith("footstep") || i.StartsWith("reload") || i.StartsWith("switch") || i.StartsWith("hit"));
     }
 

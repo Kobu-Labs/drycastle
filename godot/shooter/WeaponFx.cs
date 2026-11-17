@@ -4,7 +4,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// Held weapon visuals. Models come from the Quaternius Ultimate Gun Pack: pistol = Pistol_1, ak47 = AssaultRifle_1,
-/// knife = Bayonet (stand-in, the pack has no knife). The pack has no launcher, so the bazooka is a code-built tube; the Lock-on launcher is the paid pack's model, or a code-built one without the pack.
+/// knife = Bayonet (stand-in, the pack has no knife). The pack has no launcher: the RPG and the Lock-on launcher are the paid pack's models, or code-built ones without the pack.
 /// The shooter v2 weapons map to the other OBJ models of the same pack (see assets/README.md, "Shooter v2 weapons").
 /// Every model is returned with its muzzle toward -Z and its origin at the grip end.
 /// </summary>
@@ -62,7 +62,12 @@ public static class WeaponFx
             root.AddChild(holder);
             root.SetMeta(SightHeightMeta, box.Size.Y * 0.2f * s); // top of the model (its iron sight) above the grip origin
         }
-        else if (weaponId == "bazooka") { BuildTube(root); root.SetMeta(SightHeightMeta, 0.05f); }
+        else if (weaponId == "rpg")
+        {
+            var pack = AddPackRpg(root);
+            if (!pack) BuildTube(root);
+            root.SetMeta(SightHeightMeta, pack ? PackRpgSight : 0.05f);
+        }
         else if (weaponId == "strela")
         {
             if (!AddPackLauncher(root)) BuildLockOnLauncher(root);
@@ -70,14 +75,43 @@ public static class WeaponFx
         }
         else return null;
         // muzzle marker: the barrel tip (0.7 of the length in front of the grip; the tube ends at -0.81)
-        var z = weaponId == "bazooka" ? -0.82f : weaponId == "strela" ? (root.HasNode(PackLauncherNode) ? -PackLauncherMuzzle : -0.9f) : Models.TryGetValue(weaponId, out var mm) ? -mm.Length * 0.7f : -0.3f;
-        var muzzle = new Node3D { Name = "Muzzle", Position = new Vector3(0, 0.02f, z) };
+        var z = weaponId == "rpg" ? (root.HasNode(PackRpgNode) ? -PackRpgMouth : -0.82f) : weaponId == "strela" ? (root.HasNode(PackLauncherNode) ? -PackLauncherMuzzle : -0.9f) : Models.TryGetValue(weaponId, out var mm) ? -mm.Length * 0.7f : -0.3f;
+        var muzzle = new Node3D { Name = "Muzzle", Position = new Vector3(0, root.HasNode(PackRpgNode) ? PackRpgAxis : 0.02f, z) };
         if (weaponId != "knife") muzzle.AddChild(new MuzzleFlash());
         root.AddChild(muzzle);
         return root;
     }
 
-    /// <summary>Stand-in bazooka: dark tube with a flared rear, laid along -Z.</summary>
+    const string PackRpgNode = "PackRpg";
+    /// <summary>The loaded rocket head inside the pack's RPG (a child mesh), hidden while the tube is empty (<see cref="SetLoaded"/>).</summary>
+    const string PackRpgRocket = "SM_Wep_RPG_Rocket_01";
+    /// <summary>The paid pack's RPG is drawn at this share of its authored size (1.27 m of tube, 1.84 m with the rocket in).</summary>
+    const float PackRpgScale = 0.75f;
+    /// <summary>Scaled distances of the pack's RPG from its pistol grip (the model's origin): the tube's axis above it, the tube's mouth in front of it, its sights above it.</summary>
+    const float PackRpgAxis = 0.088f * PackRpgScale, PackRpgMouth = 0.27f * PackRpgScale, PackRpgSight = 0.2f * PackRpgScale;
+    /// <summary>How far behind the grip a held launcher's rear opening is, metres (the backblast leaves there).</summary>
+    public const float LauncherRear = 0.75f;
+
+    /// <summary>
+    /// The RPG of the paid pack (SM_Wep_RPG_01: tube, loaded rocket head, two sights and trigger, converted to glb/props/rpg_01.glb by the pack's
+    /// tools/export_multi_glb.gd; atlas Weapons_01). Faces +Z with the grip under its origin: turned half round. False when the pack is not there.
+    /// </summary>
+    static bool AddPackRpg(Node3D root)
+    {
+        if (SyntyLib.Instance("props/rpg_01", "glb/atlas/military_weapons_01.png") is not { } model) return false;
+        model.Name = PackRpgNode;
+        model.Transform = new Transform3D(new Basis(Vector3.Up, Mathf.Pi).Scaled(Vector3.One * PackRpgScale), Vector3.Zero);
+        root.AddChild(model);
+        return true;
+    }
+
+    /// <summary>Shows or hides the rocket head in a held RPG's tube (the tube is empty between the launch and the end of the reload). No-op for any other weapon node.</summary>
+    public static void SetLoaded(Node3D? held, bool loaded)
+    {
+        if (held?.GetNodeOrNull<Node3D>(PackRpgNode)?.FindChild(PackRpgRocket, true, false) is Node3D rocket && rocket.Visible != loaded) rocket.Visible = loaded;
+    }
+
+    /// <summary>Stand-in RPG for a build without the paid pack: dark tube with a flared rear, laid along -Z.</summary>
     static void BuildTube(Node3D root)
     {
         var dark = new StandardMaterial3D { AlbedoColor = new Color(0.22f, 0.25f, 0.2f), Roughness = 0.8f };

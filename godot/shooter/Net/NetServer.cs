@@ -22,6 +22,8 @@ public partial class NetServer : Node
         /// <summary>Sequence number of the bot's last input, and whether it was alive last tick (a respawn resets the brain).</summary>
         public ushort BotSeq;
         public bool BotWasAlive;
+        /// <summary>This bot carries the RPG as its secondary weapon (#348); decided when it joins.</summary>
+        public bool BotLauncher;
         public ushort Id;
         public string Name = "";
         /// <summary>Where this connection is: connected (hello awaited), rejected, loading its profile, joined. <see cref="Joined"/> and <see cref="Loading"/> follow it.</summary>
@@ -178,12 +180,12 @@ public partial class NetServer : Node
     sealed class Rocket { public ushort Id, Owner; public byte Weapon; public Vector3 Pos, Dir; public float Age; public SplashDef? Blast; public float Speed, Life; public ServerCar? FromCar; public int ViewBack = -1; public uint ViewLife; }
     readonly List<Rocket> _rockets = new();
     ushort _nextRocket = 0x8000;
-    public bool BazookaSmoke;
+    public bool RpgSmoke;
     /// <summary>Car smoke: flat arena, three cars at fixed spots, debug commands, judges the vehicle scenario.</summary>
     public bool CarSmoke;
     /// <summary>Blast smoke (ticket #103): flat arena with three cars (two side by side, one far), judges vehicle damage, the blast and the chain reaction.</summary>
     public bool BlastSmoke;
-    bool ArenaMode => WeaponsSmoke || BazookaSmoke || CarSmoke || BlastSmoke;
+    bool ArenaMode => WeaponsSmoke || RpgSmoke || CarSmoke || BlastSmoke;
     int _rocketsFired, _explosions, _directHits, _splashHits, _selfHits, _worldExplosions, _expiredRockets, _knocked;
     public const float ArenaX = 20000f, ArenaZ = 20000f;
 
@@ -325,9 +327,9 @@ public partial class NetServer : Node
         if (QuitAfter > 0) foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved; // only the smoke verdict reads it; a production server keeps no per-name history
         if (_tick % (Wire.TickRate * 2) == 0 && _clients.Count > 0)
             GD.Print($"server: tick {_tick}, players {string.Join(", ", _byId.Values.Select(c => $"{c.Name}#{c.Id}@({c.Body.GlobalPosition.X:F1},{c.Body.GlobalPosition.Y:F1},{c.Body.GlobalPosition.Z:F1}) ack={c.Ack}"))}");
-        if (BazookaSmoke)
+        if (RpgSmoke)
         {
-            if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishBazooka();
+            if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishRpg();
         }
         else if (BlastSmoke)
         {
@@ -386,11 +388,11 @@ public partial class NetServer : Node
         Box("ArenaWall", new Vector3(ArenaX + 20, 2, ArenaZ - 3), new Vector3(14, 4, 0.5f));
     }
 
-    void FinishBazooka()
+    void FinishRpg()
     {
         var ok = _rocketsFired >= 3 && _explosions >= 3 && _directHits >= 1 && _splashHits >= 1 && _selfHits >= 1 && _worldExplosions >= 2 && _kills >= 1 && _refills >= 1 && _knocked >= 1;
-        GD.Print($"server: bazooka smoke rockets={_rocketsFired} explosions={_explosions} direct={_directHits} splash={_splashHits} self={_selfHits} world={_worldExplosions} expired={_expiredRockets} knocked={_knocked} kills={_kills} refills={_refills}");
-        GD.Print(ok ? "SHOOTER_BAZOOKA_SERVER_OK" : "SHOOTER_BAZOOKA_SERVER_FAIL");
+        GD.Print($"server: rpg smoke rockets={_rocketsFired} explosions={_explosions} direct={_directHits} splash={_splashHits} self={_selfHits} world={_worldExplosions} expired={_expiredRockets} knocked={_knocked} kills={_kills} refills={_refills}");
+        GD.Print(ok ? "SHOOTER_RPG_SERVER_OK" : "SHOOTER_RPG_SERVER_FAIL");
         GetTree().Quit(ok ? 0 : 2);
         SetPhysicsProcess(false);
     }
@@ -730,7 +732,7 @@ public partial class NetServer : Node
                 _kills += k.Killer != k.Victim ? 1 : 0;
                 BotKillLog(k);
                 if (WeaponsSmoke && _kills >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5;
-                if (BazookaSmoke && _kills >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.5;
+                if (RpgSmoke && _kills >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.5;
                 LossKill(k.Killer, k.Victim);
                 RecordKill(k);
                 var fromStreak = StreakKill(k);
@@ -1175,7 +1177,7 @@ public partial class NetServer : Node
     /// </summary>
     void Explode(Rocket r, WeaponDef weapon, Vector3 pos, ushort? direct, ServerCar? directCar = null)
     {
-        var w = ProjectileMath.WithBlast(weapon, r.Blast); // a gunship's rocket has its own blast (killstreaks.json); the bazooka keeps weapons.json's
+        var w = ProjectileMath.WithBlast(weapon, r.Blast); // a gunship's rocket has its own blast (killstreaks.json); the rpg keeps weapons.json's
         _explosions++;
         if (Vehicles != null) RocketVsVehicles(pos, w, r.Owner, r.Weapon, directCar);
         BlastGlass(pos, w.Splash?.Radius ?? 0);

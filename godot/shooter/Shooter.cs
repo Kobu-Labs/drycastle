@@ -32,8 +32,8 @@ namespace Drycastle.Shooter;
 ///   --blast-smoke             server: flat arena with three cars, judges vehicle damage stages, the blast and the chain reaction; --blast-bot a|b client roles (ticket #103)
 ///   --car-smoke               server: flat test arena with three cars, judges the vehicle scenario; --car-bot a|b client roles; --car-kind car|motorcycle|bicycle picks the vehicle type of the smoke (default car); --vehicle-set destroyed_return_time=3 overrides vehicles.json
 ///   --weapons-smoke           server: flat test arena with a wall (far from the map), honours debug commands, judges the weapons scenario
-///   --bazooka-smoke           server: same flat arena, judges the bazooka scenario
-///   --bazooka-bot a|b         client: scripted bazooka smoke role (a shoots, b is the target)
+///   --rpg-smoke           server: same flat arena, judges the rpg scenario
+///   --rpg-bot a|b         client: scripted rpg smoke role (a shoots, b is the target)
 ///   --weapons-bot a|b         client: scripted weapons smoke role (a shoots, b stands still)
 ///   --menu-shots DIR          render main menu, connect (empty, error), settings tabs, pause, loading and a dialog at 1280x720 and 3840x2160 into DIR as PNGs, then exit (needs a display)
 ///   --intel-shots DIR         render the intel screen's content (no events, one, under way, a test event, several) at the 3.0 m and 1.6 m screens' texture sizes into DIR as PNGs, then exit (needs a display)
@@ -460,7 +460,7 @@ public partial class Shooter : Node3D
             MatchConfig = WithTargets(ApplyOverrides(_data.Match, cfg.Str("match-set")), cfg.Str("targets")),
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")),
             CarSmoke = cfg.Flag("car-smoke"), BlastSmoke = cfg.Flag("blast-smoke"), SmokeKind = cfg.Str("car-kind", "car"),
-            Weapons = _data.Weapons, Items = _data.Items, HolyMass = _data.HolyMass, Demon = _data.Demon, BigfootData = _data.Bigfoot, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, PetsData = _data.Pets, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, WeaponsSmoke = cfg.Flag("weapons-smoke"), BazookaSmoke = cfg.Flag("bazooka-smoke"),
+            Weapons = _data.Weapons, Items = _data.Items, HolyMass = _data.HolyMass, Demon = _data.Demon, BigfootData = _data.Bigfoot, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, PetsData = _data.Pets, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, WeaponsSmoke = cfg.Flag("weapons-smoke"), RpgSmoke = cfg.Flag("rpg-smoke"),
             MatchSmoke = cfg.Flag("match-smoke"), DebugCommands = cfg.Flag("debug-cmds") || cfg.Flag("match-smoke"),
             Clock = ServerClock(cfg),
             Port = int.TryParse(cfg.Str("port", "27015"), out var port) ? port : 27015,
@@ -573,7 +573,7 @@ public partial class Shooter : Node3D
             BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6, BotChat = cfg.Str("bot-chat"),
             Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"), PerfStreaks = cfg.Str("perf-streaks"), PerfOut = cfg.Str("perf-out"), PerfStreakPeriod = double.TryParse(cfg.Str("perf-streak-period", "2"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var psp) ? psp : 2, PerfVehicles = cfg.Str("perf-vehicles"),
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
-            FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), CarLoop = cfg.Flag("car-loop"), CarLoopSeconds = double.TryParse(cfg.Str("car-loop-seconds", "120"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var cls) ? cls : 120, BazookaBot = cfg.Str("bazooka-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("bazooka-bot") != "" ? cfg.Str("bazooka-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, Map = _map,
+            FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), CarLoop = cfg.Flag("car-loop"), CarLoopSeconds = double.TryParse(cfg.Str("car-loop-seconds", "120"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var cls) ? cls : 120, RpgBot = cfg.Str("rpg-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("rpg-bot") != "" ? cfg.Str("rpg-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, Map = _map,
         });
     }
 

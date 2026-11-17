@@ -228,7 +228,7 @@ public class BigfootTests
     public void WhatAHitCountsDependsOnWhatMadeIt()
     {
         var h = Shipped.Hits;
-        bool Proj(byte w) => w == 2; // weapon 2 is the bazooka in this test
+        bool Proj(byte w) => w == 2; // weapon 2 is the rpg in this test
         Assert.Equal(HitSource.Bullet, BigfootRules.SourceOf(0, 5, Proj));
         Assert.Equal(HitSource.Explosive, BigfootRules.SourceOf(2, 5, Proj));
         Assert.Equal(HitSource.Explosive, BigfootRules.SourceOf(SpecialWeapons.Missile, 5, Proj));

@@ -2,7 +2,7 @@
 # MAP: the map folder the viewer, editor and shooter targets load (override with MAP=<dir>).
 MAP ?= out/village/map
 
-.PHONY: viewer-pack-trees rozhlas thief-voices private-pack release-check editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run patch-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-patches-smoke viewer-editor-smoke viewer-panel-smoke viewer-shape-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-bazooka-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: viewer-pack-trees rozhlas thief-voices private-pack release-check editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run patch-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-patches-smoke viewer-editor-smoke viewer-panel-smoke viewer-shape-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-rpg-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -263,10 +263,10 @@ shooter-weapons-smoke:
 	dotnet build godot/shooter/shooter.csproj
 	$(UNLOCK_ENV) python3 godot/shooter/run_weapons_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
 
-# Same flat arena: bazooka rocket vs wall, splash falloff, direct hit, self damage and knockback, explosion events, reload and ammo refill.
-shooter-bazooka-smoke:
+# Same flat arena: rpg rocket vs wall, splash falloff, direct hit, self damage and knockback, explosion events, reload and ammo refill.
+shooter-rpg-smoke:
 	dotnet build godot/shooter/shooter.csproj
-	$(UNLOCK_ENV) python3 godot/shooter/run_bazooka_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
+	$(UNLOCK_ENV) python3 godot/shooter/run_rpg_smoke.py $(if $(MAP),--map $(abspath $(MAP)),)
 
 shooter-car-smoke:
 	dotnet build godot/shooter/shooter.csproj

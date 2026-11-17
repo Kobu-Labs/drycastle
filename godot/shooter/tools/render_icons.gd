@@ -35,7 +35,7 @@ const MODELS := {
 	"m82": ["sniper-rifle-2.glb", 1.3],
 	"awm": ["sniper-rifle-3.glb", 1.2],
 	"svd": ["sniper-rifle-4.glb", 1.2],
-	"bazooka": ["", 0.0],
+	"rpg": ["", 0.0],
 	"strela": ["", 0.0],
 }
 
@@ -91,8 +91,8 @@ func _initialize() -> void:
 		var holder := Node3D.new()
 		_world.add_child(holder)
 		var model: Node3D = null
-		if id == "bazooka":
-			model = _bazooka()
+		if id == "rpg":
+			model = _rpg()
 			holder.add_child(model)
 		elif id == "strela":
 			model = _strela()
@@ -186,7 +186,7 @@ func _load_glb(path: String) -> Node3D:
 
 
 # The tube stand-in used by WeaponFx.BuildTube: a dark cylinder laid along -Z, 0.82 m long.
-func _bazooka() -> Node3D:
+func _rpg() -> Node3D:
 	var n := Node3D.new()
 	var mi := MeshInstance3D.new()
 	var cyl := CylinderMesh.new()

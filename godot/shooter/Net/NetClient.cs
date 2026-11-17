@@ -71,8 +71,8 @@ public partial class NetClient : Node
     public MatchConfig? BlipConfig;
     /// <summary>Weapons smoke role: "a" (shoots) or "b" (stands still and counts hits); empty = none.</summary>
     public string WeaponsBot = "";
-    /// <summary>Bazooka smoke role ("a"/"b"); WeaponsBot carries the same letter so the shared bot plumbing runs.</summary>
-    public string BazookaBot = "";
+    /// <summary>Rpg smoke role ("a"/"b"); WeaponsBot carries the same letter so the shared bot plumbing runs.</summary>
+    public string RpgBot = "";
     /// <summary>Vehicle blast smoke role ("a"/"b"); WeaponsBot carries the same letter.</summary>
     public string BlastBot = "";
     /// <summary>Latest owner ammo state from the server (null before the first one).</summary>
@@ -81,8 +81,8 @@ public partial class NetClient : Node
     readonly List<(double T, HitMsg M)> _hitLog = new();
     readonly List<(double T, LaunchMsg M)> _launchLog = new();
     readonly List<(double T, ExplosionMsg M)> _explosionLog = new();
-    /// <summary>The event logs are read only by the scripted bots (the weapons, bazooka, blast and car checks), so a normal match keeps none of them: they grew for the whole match (#173, T3-028).</summary>
-    bool KeepEventLogs => WeaponsBot != "" || BazookaBot != "" || BlastBot != "" || CarBot != "";
+    /// <summary>The event logs are read only by the scripted bots (the weapons, rpg, blast and car checks), so a normal match keeps none of them: they grew for the whole match (#173, T3-028).</summary>
+    bool KeepEventLogs => WeaponsBot != "" || RpgBot != "" || BlastBot != "" || CarBot != "";
     sealed class Rocket { public double Born; public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; /* a homing missile (NetClient.LockOn.cs): the Aircraft it closes on and when it gets there */ public bool Homing; public ushort Target; public double Arrive; }
     readonly Dictionary<ushort, Rocket> _rockets = new();
     readonly HashSet<ushort> _deadRockets = new();
@@ -275,6 +275,7 @@ public partial class NetClient : Node
         RenderAircraft(delta);
         RenderRockets();
         RenderLockOn();
+        RenderLauncherLoaded();
         RenderMissiles();
         RenderMissilePov();
         RenderWater();
@@ -467,13 +468,14 @@ public partial class NetClient : Node
         if (!_rockets.TryGetValue(id, out var r))
         {
             var speed = Weapons != null && rec.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[rec.Weapon].ProjectileSpeed : 40f;
-            r = new Rocket { Node = RocketFx.Make(Owned), Born = Now, Speed = speed }; _rockets[id] = r;
+            r = new Rocket { Node = RocketFx.Make(Owned, WeaponId(rec.Weapon)), Born = Now, Speed = speed }; _rockets[id] = r;
         }
         r.Pos = rec.Position; r.Dir = dir; r.At = Now;
     }
 
     void RenderRockets()
     {
+        var camAt = GetViewport()?.GetCamera3D()?.GlobalPosition;
         foreach (var r in _rockets.Values)
         {
             if (r.Node == null) continue;
@@ -485,6 +487,7 @@ public partial class NetClient : Node
             var side = d.Cross(Vector3.Up).Normalized();
             r.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z) + (d * 0.8f + side * 0.25f + Vector3.Down * 0.2f) * k;
             SfxRocket(r, r.Node.GlobalPosition);
+            if (camAt is { } eye) RocketFx.GateTrail(r.Node, eye);
             if (Mathf.Abs(r.Dir.Y) < 0.99f) r.Node.LookAt(r.Node.GlobalPosition + new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z));
         }
     }
@@ -958,15 +961,21 @@ public partial class NetClient : Node
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
                 if (KeepEventLogs) _launchLog.Add((Now, l));
                 if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
-                // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the bazooka's)
+                // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the rpg's)
                 if (_rockets.TryGetValue(l.Id, out var known)) known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length();
                 else if (!_deadRockets.Contains(l.Id) && ShotFx.Enabled && Weapons != null)
                 {
                     // show the rocket at once from the launch event; snapshots take over
                     var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);
-                    _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length() };
+                    _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned, WeaponId(l.Weapon)), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length() };
                 }
-                if (!EchoOfPredicted(l.Owner)) { SfxLaunch(l); if (l.Owner == _myId) _viewmodel?.Flash(0.5f); else if (_remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f); }
+                if (!EchoOfPredicted(l.Owner))
+                {
+                    SfxLaunch(l);
+                    if (l.Owner == _myId) _viewmodel?.Flash(0.5f); else if (_remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
+                    // a held launcher's backblast, behind the shooter's shoulder (a gunship's rocket has no owner on foot: its owner is not a remote here)
+                    if (_remotes.ContainsKey(l.Owner) && l.Velocity.LengthSquared() > 1e-4f) { var ld = G(NVec3.Normalize(l.Velocity)); RocketFx.Backblast(Owned, G(l.Origin) - ld * WeaponFx.LauncherRear + Vector3.Down * 0.15f, ld); }
+                }
                 break;
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
                 if (KeepEventLogs) _explosionLog.Add((Now, ex));

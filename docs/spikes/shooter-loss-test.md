@@ -47,5 +47,5 @@ Assertions in the runner (thresholds at the top of `run_loss_test.py`): all bots
 - Single run per scenario, one machine, shared with other work. Server tick work excludes the engine's physics step. The numbers show orders of magnitude, not benchmarks.
 - Loopback with an application-level simulator: no real bursts of loss, no reordering, no bandwidth cap, no reliable-packet loss or retransmit timeouts, and the simulated delay is quantised by the server's tick (30 Hz) and the clients' frame rate (60 Hz).
 - 16 bots on a 12-core pin share CPU with the server, so client frame hitches add to the measured gaps.
-- Hits come from simple chasing bots: 81 to 89 hits per run, not a full gameplay mix (no bazooka, no cars, no joins or leaves under loss).
+- Hits come from simple chasing bots: 81 to 89 hits per run, not a full gameplay mix (no rpg, no cars, no joins or leaves under loss).
 - `rtt200` and `loss10` scenarios and the loss-recovery stopgap were not run.

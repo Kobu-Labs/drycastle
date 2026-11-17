@@ -26,12 +26,13 @@
       "recoil": { "vertical_per_shot": 0.9, "pattern": [0.3, -0.4, 0.5, -0.3, 0.2, -0.5] }
     },
     {
-      "id": "bazooka", "category": "launcher", "slot": "special", "unlock_level": 0, "kind": "projectile", "full_auto": false,
-      "damage": 100, "fire_interval": 1.0,
-      "magazine_size": 1, "reserve_ammo": 4, "reload_time": 3.5,
+      "id": "rpg", "category": "launcher", "slot": "secondary", "unlock_level": 8, "kind": "projectile", "full_auto": false,
+      "damage": 120, "fire_interval": 1.0,
+      "magazine_size": 1, "reserve_ammo": 2, "reload_time": 4.0,
       "move_speed_multiplier": 0.85,
-      "projectile_speed": 40, "projectile_life": 3.75,
-      "splash": { "radius": 6, "full_damage_radius": 1.5, "edge_damage": 20, "self_damage_multiplier": 0.5, "knockback_speed": 4.5 }
+      "projectile_speed": 60, "projectile_life": 4.0,
+      "recoil": { "vertical_per_shot": 12 },
+      "splash": { "radius": 7, "full_damage_radius": 1.5, "edge_damage": 20, "self_damage_multiplier": 0.5, "knockback_speed": 5 }
     },
     {
       "id": "knife", "category": "melee", "slot": "special", "unlock_level": 0, "kind": "melee", "full_auto": false,

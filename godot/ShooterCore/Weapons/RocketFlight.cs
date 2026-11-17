@@ -11,7 +11,7 @@ public readonly record struct RocketStep(RocketOutcome Outcome, float Distance, 
 /// <summary>
 /// The rocket sim's per-tick rule, pure so the tests run the server's own arithmetic. A rocket moves <c>speed * dt</c> a tick, sweeping
 /// players (not its owner) and the world; it explodes on the first hit, or when its life (seconds) runs out.
-/// A gunship's rocket has its own speed and a life that covers its whole range (<see cref="LifeFor"/>); the bazooka keeps weapons.json's.
+/// A gunship's rocket has its own speed and a life that covers its whole range (<see cref="LifeFor"/>); the rpg keeps weapons.json's.
 /// </summary>
 public static class RocketFlight
 {

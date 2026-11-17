@@ -69,7 +69,7 @@ public static class HudShots
     {
         var rows = new List<ScoreRow>();
         for (var i = 0; i < Names.Length; i++) rows.Add(new ScoreRow((ushort)(i + 1), Names[i], new[] { 5, 9, 3, 7, 1 }[i], new[] { 2, 4, 6, 3, 8 }[i], (ushort)(12 + i * 9)));
-        var weapons = new[] { "Pistol", "AK-47", "Bazooka", "Knife" };
+        var weapons = new[] { "Pistol", "AK-47", "RPG-7", "Knife" };
         hud.SetWeapons(weapons);
         hud.SetHealth(state == "play" || state == "protected" ? 64 : 100);
         var all = new List<(int, int, bool)> { (15, 60, false), (23, 90, false), (1, 4, false), (0, 0, true) };

@@ -25,7 +25,7 @@ The motorcycle, bicycle, quad and amphibious transport have no glass. The utilit
 
 - Server owns the hit points (`GlassPanes`). A whole pane is not stored.
 - A bullet, pellet, roof gun or door gun round that hit no player damages the pane it crossed where it stopped, by its damage at that range.
-- A bazooka rocket, an attack missile and a vehicle explosion damage every pane in the blast radius (`blast_damage` at the centre, nothing at the edge).
+- A rpg rocket, an attack missile and a vehicle explosion damage every pane in the blast radius (`blast_damage` at the centre, nothing at the edge).
 - Crack stage from the fraction of hit points left: 1 when damaged, 2 at 66 %, 3 at 33 % (`crack_stages`).
 - At zero the pane is shattered. The fragments fly once, on the clients that see it happen.
 - A bullet, pellet, roof gun or door gun round goes through a vehicle's glass, whole or shattered (`BulletHit`, the geometry in `GlassRules.Through`): it damages the pane it enters by, goes on inside (riders are open to it) and leaves by the next pane it crosses from inside, then on to whatever is beyond, through further vehicles the same way. With no way out the hull stops it on its far side, where the ray leaves the hit box (or where the round's range ends), so every rider on the way is open to it, not only those near the pane. A building's wall stays solid. This replaces ADR 0007 decision 3; `shattered_exposes_riders` in `glass.json` is no longer read.

@@ -12,7 +12,7 @@ public readonly record struct FireOutcome(WeaponDef Weapon, int WeaponIndex, flo
 /// <summary>
 /// Weapon state of one player: hotbar, ammo per weapon, reload, switch and fire timers, spread. Godot-free and
 /// deterministic: time is passed in (seconds), the host calls <see cref="Update"/> once per processed input. A projectile
-/// pull (bazooka) consumes a round and returns the outcome; the host spawns the rocket.
+/// pull (rpg) consumes a round and returns the outcome; the host spawns the rocket.
 /// <para>
 /// Slots are 1-based indexes into weapons.json (the wire uses them). The hotbar is the player's loadout (primary,
 /// secondary, knife) when one is given; without one it is every weapon in file order. Only hotbar weapons can be
