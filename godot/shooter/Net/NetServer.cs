@@ -91,6 +91,8 @@ public partial class NetServer : Node
         public bool LightsHeld, Handbrake;
         /// <summary>Held-key edges of Use and Killstreak. Fed every input (also while dead), so a key held across a respawn is not a fresh press.</summary>
         public Edge UseKey, StreakKey;
+        /// <summary>The interact key beside a Scud truck with an empty rack and a loaded rocket cart: a tap gets in or out, a hold loads the rocket (NetServer.Scud.cs).</summary>
+        public readonly ScudReloadKey ReloadKey = new();
         /// <summary>The interact key's hold at the rozhlas dictation table (NetServer.RozhlasSet.cs).</summary>
         public InteractHold SetHold;
         /// <summary>The use key's hold on lying Loot (NetServer.Thieves.Loot.cs) and the health it was last seen at (a drop is a hit taken).</summary>
@@ -219,6 +221,7 @@ public partial class NetServer : Node
         InitWildlife();
         InitThieves();
         InitHarvester();
+        InitScud();
         InitEvents(); // after the kinds above: the handler table names their start, end and cancel
         InitAircraft();
         BuildCarePackages();
@@ -287,6 +290,7 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Streaks);
         BotsTick((float)delta); // fills the roster and queues each bot's input for this tick (#214)
         HarvesterTick((float)delta); // the harvester event: its spawn, its driver's pedals
+        ScudEventTick((float)delta); // the Scud event: who boarded the truck, the search time, the bunkers' carts
         PerfLap(ServerPerf.Ph.Bots);
         foreach (var car in _cars) car.PlaceSolid(); // the boxes on-foot players are stopped by, where the vehicles stand after the last tick (#217)
         PlaceVanSolids(); // and the Raid vans' (a van that stands is solid)
@@ -299,6 +303,7 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Rockets);
         StepCorpses((float)delta);
         PerfLap(ServerPerf.Ph.Corpses);
+        StepScud((float)delta); // the Scud trucks' launchers: the crew's lock, the rack, the brakes (before the vehicles step)
         StepVehicles((float)delta);
         StepRidingCorpses((float)delta); // the dead pilots and drivers move with the vehicles that just moved
         HarvesterAfterVehicles((float)delta); // what the harvester ran over, the corpses it draws in, the bales' fire
@@ -472,6 +477,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) OnSandboxTeleportTo(c, st.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SeatSwitch } sw && c.Joined) OnSeatSwitch(c, sw.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.ScudCommand } sc && c.Joined) OnScudCommand(c, sc.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.TeamAssign } ta && c.Joined) OnTeamAssign(c, ta.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) OnHuntRequest(c, hq);
             else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) OnChatSend(c, cs.Payload);
@@ -557,6 +563,7 @@ public partial class NetServer : Node
         SendUradDoorOnJoin(c); // and the Urad door, when it is open
         SendGarageDoorOnJoin(c); // and the garage doors, when they are open
         SendHarvesterOnJoin(c); // the harvester's job and the bales that burn
+        SendScudOnJoin(c); // the Scud trucks' racks and proposals
         SendPounceOnJoin(c); // and the demon's pounce, when one is on
         SendTargetRoster(c); // target dummies' names (#148)
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
@@ -682,6 +689,7 @@ public partial class NetServer : Node
         WorkersAfterRoundReset(); // the Urad workers of a detour still open sit down again
         ResetCars();
         HarvesterRoundReset(); // the car reset brought the harvester back to its old field: hidden again
+        ScudRoundReset(); // the launchers start over; a Scud truck, which never returns, is retired
         StatusRoundStart();
         LockRoundReset();
         RoundStarted();
@@ -811,10 +819,11 @@ public partial class NetServer : Node
                 else if (!controlled && RiderRules.Weapons(c.Car.Def, c.CarSeat, i) is { } seated) SeatWeapons(c, c.Car, i, seated); // an armed seat: the rider's own weapons (ADR 0011)
                 if (!RiderPose.FollowsAim(c.Car.Def.Seats[c.CarSeat])) SeatLook(c, c.Car, i); // every other seat: the body is the vehicle's and the head looks where the rider's first-person view does (ADR 0026)
                 if (lightsEdge) c.Car.Lights = Headlights.Toggle(c.Car.Lights);
-                if (useEdge) ExitCar(c);
+                if (c.Car.Def.Launcher != null ? ScudUseKey(c, useDown, useEdge, dt) : TowUseKey(c, c.Car, useDown, useEdge, dt)) ExitCar(c); // a Scud truck: a tap leaves, a hold loads a cart's rocket (a truck does not tow); with a trailer on the hook a tap leaves and a hold unhitches (UnhitchKey); otherwise the press leaves
                 continue;
             }
-            if (useEdge && LootInReach(c) == null && (MassSit(c) || GarageUse(c) || TryEnterCar(c))) continue; // the use key on lying Loot sends it back, it does not take a seat
+            var useAct = ScudUseKey(c, useDown, useEdge, dt); // beside a truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket)
+            if (useAct && LootInReach(c) == null && (MassSit(c) || GarageUse(c) || TryEnterCar(c))) continue; // the use key on lying Loot sends it back, it does not take a seat
             c.Body.Yaw = Quant.Yaw(i.Yaw);
             c.Body.Pitch = Quant.Pitch(i.Pitch);
             c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
@@ -1222,8 +1231,15 @@ public partial class NetServer : Node
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot,
                     c.Car != null ? RiderRules.HitStance(c.Car.Def, c.CarSeat, c.Body.State.Stance) : BodyStanceOf(c)));
-        foreach (var car in _cars) if (car.Seat.Count > 1) ents.Add(SeatsRecord.Make(car.Id, SeatOccupants(car))); // who sits in seats 1..3, for every client (ADR 0026)
-        foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed, car.Lights, car.Life.WheelsOff));
+        foreach (var car in _cars) if (car.Seat.Count > 1) ents.Add(SeatsRecord.Make(car.Id, SeatOccupants(car))); // who sits in seats 1..4, for every client (ADR 0026)
+        foreach (var car in _cars)
+        {
+            if (car.Retired) continue; // removed for good (RemoveRocketCarts): not sent, so every client drops it
+            var stage = Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Life.MaxHp, Vehicles.DamageStages);
+            ents.Add(car.IsTrailer
+                ? VehicleRecord.MakeTrailer(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Tractor?.Id ?? (ushort)0, car.Colour, car.Cargo!.Loaded, stage, car.Destroyed) // a trailer: its tractor in the driver's field, its load in a health bit (protocol 67)
+                : VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, stage, car.Destroyed, car.Lights, car.Life.WheelsOff));
+        }
         foreach (var car in _cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model
         foreach (var car in _cars) if (car.Flies) ents.Add(FlightRecord.Make(car.Id, car.Flight)); // a helicopter's velocity, tilt and rotor (ADR 0006)
         foreach (var car in _cars) if (car.Drives) ents.Add(DriveRecord.Make(car.Id, car.Drive)); // a driven vehicle's speeds, slope, steering and whether it floats (ADR 0010)

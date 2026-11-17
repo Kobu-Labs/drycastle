@@ -22,7 +22,7 @@ public static class SandboxStrings
         ("sandbox.panel.heal", "Heal and refill"), ("sandbox.panel.teleport", "Teleport to a spawn"),
         ("sandbox.panel.vehicles", "Spawn a vehicle in front"),
         ("sandbox.panel.respawn_on", "Target dummies respawn: on"), ("sandbox.panel.respawn_off", "Target dummies respawn: off"),
-        ("sandbox.vehicle.car", "Car"), ("sandbox.vehicle.jeep", "Jeep"), ("sandbox.vehicle.quad", "Quad bike"),
+        ("sandbox.vehicle.car", "Car"), ("sandbox.vehicle.jeep", "Jeep"), ("sandbox.vehicle.humvee", "Humvee"), ("sandbox.vehicle.quad", "Quad bike"),
         ("sandbox.vehicle.amphibious", "Amphibious"), ("sandbox.vehicle.flak", "Flak truck"), ("sandbox.vehicle.bus", "Bus"),
         ("sandbox.vehicle.utility_helicopter", "Utility helicopter"),
         ("sandbox.connect", "Sandbox mode"),

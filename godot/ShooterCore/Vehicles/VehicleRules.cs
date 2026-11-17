@@ -143,12 +143,12 @@ public static class VehicleBlastFx
 /// </summary>
 public sealed class VehicleSeat
 {
-    public const int MaxSeats = 4;
+    public const int MaxSeats = 5;
     readonly ushort[] _occupant;
 
     public VehicleSeat(int seats = 1)
     {
-        if (seats < 1 || seats > MaxSeats) throw new ArgumentOutOfRangeException(nameof(seats));
+        if (seats < 0 || seats > MaxSeats) throw new ArgumentOutOfRangeException(nameof(seats)); // 0 seats: a trailer, which nobody can board
         _occupant = new ushort[seats];
         _blocked = new bool[seats];
     }
@@ -161,8 +161,8 @@ public sealed class VehicleSeat
     public void Unblock(int seat) => _blocked[seat] = false;
 
     public int Count => _occupant.Length;
-    /// <summary>Player id of the driver (seat 0), 0 when empty.</summary>
-    public ushort Driver => _occupant[0];
+    /// <summary>Player id of the driver (seat 0), 0 when empty (and for a type with no seats).</summary>
+    public ushort Driver => _occupant.Length > 0 ? _occupant[0] : (ushort)0;
     /// <summary>Player id in <paramref name="seat"/>, 0 when empty.</summary>
     public ushort Occupant(int seat) => _occupant[seat];
     public bool Occupied => _occupant.Any(p => p != 0);
@@ -345,7 +345,7 @@ public static class VehicleRecord
 {
     public const ushort FirstId = 0x4000;
 
-    /// <summary>Health byte bit 0x80: headlights on (one bit, see <see cref="Headlights"/>). Bits 0..1 are the damage stage, bits 2..5 the wheels the Thieves have taken (<see cref="WheelsMask"/>), bit 6 is free.</summary>
+    /// <summary>Health byte bit 0x80: headlights on (one bit, see <see cref="Headlights"/>). Bits 0..1 are the damage stage, bits 2..5 the wheels the Thieves have taken (<see cref="WheelsMask"/>), bit 6 is a trailer's loaded flag (<see cref="LoadedBit"/>, <see cref="MakeTrailer"/>).</summary>
     public const byte LightsBit = 0x80, StageMask = 0x03, WheelsMask = 0x3C;
     const int WheelsShift = 2;
 
@@ -361,7 +361,27 @@ public static class VehicleRecord
     /// <summary>Weapon byte of a vehicle record: type index in the high nibble, colour variant in the low one.</summary>
     public static byte Pack(int kind, byte colour) => (byte)((kind << 4) | (colour & 0xF));
 
+    /// <summary>
+    /// A trailer's record (a type with a <c>trailer</c> block; protocol 67). It has no seats, so the pitch field that carries a driver's id carries the id of the tractor it is hitched to
+    /// (0: loose), and bit 6 of the health byte, free until then, says it is <see cref="LoadedBit">loaded</see> (the rocket cart's missile). Position and yaw are the trailer's own, as
+    /// any vehicle's; a client draws a hitched one from its tractor as it draws it (<see cref="TowModel.Pose"/>) and the articulation, which is the two yaws' difference.
+    /// </summary>
+    public static EntityRecord MakeTrailer(ushort id, Vector3 pos, float yaw, ushort tractor, byte colourAndKind, bool loaded, int stage = 0, bool destroyed = false)
+    {
+        var health = (stage & StageMask) | (loaded ? LoadedBit : 0);
+        var r = EntityRecord.Make(id, EntityType.Vehicle, pos, yaw, 0, health, destroyed ? EntityState.Dead : EntityState.Alive, colourAndKind);
+        r.Pitch = unchecked((short)tractor);
+        return r;
+    }
+
+    /// <summary>Health byte bit 6 of a trailer's record: the load is on it. Bit 7 (<see cref="LightsBit"/>) and the wheel bits are a driven vehicle's; a trailer has neither.</summary>
+    public const byte LoadedBit = 0x40;
+
     public static ushort Driver(in EntityRecord r) => unchecked((ushort)r.Pitch);
+    /// <summary>The vehicle a trailer's record says it is hitched to, 0 when loose (the same field as <see cref="Driver"/>: a trailer has none).</summary>
+    public static ushort Tractor(in EntityRecord r) => unchecked((ushort)r.Pitch);
+    /// <summary>Whether a trailer's record says it carries its load.</summary>
+    public static bool Loaded(in EntityRecord r) => (r.Health & LoadedBit) != 0;
     public static int Stage(in EntityRecord r) => r.Health & StageMask;
     public static bool Lights(in EntityRecord r) => (r.Health & LightsBit) != 0;
     /// <summary>The wheels taken, one bit each (0 front left, 1 front right, 2 back left, 3 back right).</summary>
@@ -405,7 +425,8 @@ public static class CarModel
     /// only moderately wider at top speed; the actual yaw rate chases that target at a limited slew rate.
     /// <paramref name="onWater"/> is set while the vehicle floats: an amphibious then drives at its water speed.
     /// </summary>
-    public static void Step(ref CarState s, VehicleDef def, float throttle, float steer, bool handbrake, float dt, bool onWater = false)
+    /// <param name="tow">What a trailer on the hook does to the step (<see cref="TowLoad"/>, <see cref="TowBlock"/>); the default is no trailer and changes nothing.</param>
+    public static void Step(ref CarState s, VehicleDef def, float throttle, float steer, bool handbrake, float dt, bool onWater = false, in TowEffect tow = default)
     {
         var h = def.Handling;
         var v = s.Speed;
@@ -416,19 +437,23 @@ public static class CarModel
         {
             top = def.WaterTopSpeed; accel = def.WaterAcceleration;
         }
+        var brake = def.Brake;
+        if (tow.Hitched) { top *= tow.Load.TopSpeedScale; accel *= tow.Load.AccelScale; brake *= tow.Load.BrakeScale; }
         // the launch boost: more thrust near a standstill, fading to the plain acceleration at h.LaunchSpeed (either direction of travel)
         accel *= 1f + (h.LaunchBoost - 1f) * MathF.Max(0f, 1f - MathF.Abs(v) / MathF.Max(0.1f, h.LaunchSpeed));
         if (handbrake) v = Approach(v, 0, h.HandbrakeDecel * dt);
         else if (throttle > 0.05f)
-            v = v < 0 ? Approach(v, 0, def.Brake * dt) : MathF.Min(top, v + accel * throttle * dt);
+            v = v < 0 ? Approach(v, 0, brake * dt) : tow.Hitched && v > top ? Approach(v, top, brake * dt) : MathF.Min(top, v + accel * throttle * dt);
         else if (throttle < -0.05f)
-            v = v > 0 ? Approach(v, 0, def.Brake * dt) : MathF.Max(-top * h.ReverseTopFraction, v + accel * throttle * dt);
+            v = v > 0 ? Approach(v, 0, brake * dt) : MathF.Max(-top * h.ReverseTopFraction, v + accel * throttle * dt);
         else v = Approach(v, 0, coast * dt);
         s.Speed = v;
 
         // steering: the wheel input sets the curvature; the handbrake sharpens it for a slide
         var target = -steer * v / TurnRadiusAt(def, v) * (handbrake ? h.HandbrakeSteerBoost : 1f);
+        if (tow.Hitched && MathF.Abs(v) > 0.5f) { var hold = def.MaxLateralAccel * tow.Load.LateralScale / MathF.Abs(v); target = Math.Clamp(target, -hold, hold); } // the trailer's weight: the bend must be wider
         s.YawRate = Approach(s.YawRate, target, h.YawSlew * dt);
+        if (tow.Block.Active) { var slip = 0f; tow.Block.Clamp(ref s.Speed, ref slip, ref s.YawRate); } // the trailer is at its limit: what would fold it further is taken
         s.Yaw += s.YawRate * dt;
     }
 

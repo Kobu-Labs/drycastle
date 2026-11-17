@@ -36,7 +36,7 @@ public sealed class VehicleLifecycle
         .Note(VehicleLife.Destroyed, "Blown up, no collision, nobody aboard. ReturnAt is set; the return repairs it and puts it back at its origin.")
         .Build();
 
-    readonly float _maxHp;
+    float _maxHp;
     readonly StateMachine<VehicleLife> _life = new(Spec);
     double _detonateAt, _returnAt;
 
@@ -48,6 +48,20 @@ public sealed class VehicleLifecycle
 
     /// <summary>Hidden hit points (ticket #103): only the damage stage derived from them ever reaches clients.</summary>
     public float Hp { get; private set; }
+
+    /// <summary>The hit points a repair restores, and the damage stages' scale: the type's, or a trailer's for its present load (<see cref="SetMaxHp"/>).</summary>
+    public float MaxHp => _maxHp;
+
+    /// <summary>
+    /// A new full value (a rocket cart loaded or emptied): the hit points keep their share of it, so a cart at half health stays at half, and it never has more than the new maximum.
+    /// A destroyed vehicle keeps its zero.
+    /// </summary>
+    public void SetMaxHp(float maxHp)
+    {
+        if (!(maxHp > 0) || maxHp == _maxHp) return;
+        Hp = Hp <= 0 ? 0 : MathF.Min(maxHp, MathF.Max(1f, Hp / _maxHp * maxHp));
+        _maxHp = maxHp;
+    }
 
     /// <summary>
     /// The wheels the Thieves have taken (GLOSSARY "Loot", docs/events/thieves/04): bit 0 front left, 1 front right, 2 back left, 3 back right. Not part of the machine (a car drives exactly as before) but it

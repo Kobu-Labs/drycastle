@@ -27,6 +27,7 @@ public static class Strings
         ("hud.seat.driver", "Driver"), ("hud.seat.gunner", "Gunner"), ("hud.seat.passenger", "Passenger"),
         ("hud.vehicle.speed", "{0} km/h"), ("hud.flak.ammo", "FLAK  {0} / {1}"), ("hud.flak.reload", "FLAK  RELOADING"), ("weapon.flak", "Flak"), ("weapon.burn", "Burning"), ("status.blessed", "BLESSED"), ("status.cursed", "CURSED"), ("status.burning", "BURNING"), ("toast.status.blessed", "A blessing watches over you: it will save you from one lethal hit"), ("toast.status.cursed", "You are cursed: your bullets set enemies ablaze"), ("toast.status.saved", "The blessing saved your life"), ("hud.vehicle.enter", "{0}  Enter car"), ("hud.garage.open", "{0}  Open the garage doors"), ("hud.garage.close", "{0}  Close the garage doors"), ("hud.vehicle.exit", "{0}  Exit car     Space  Handbrake"),
         ("hud.rozhlas.hint", "You are at the radio set.   Hold {0} to talk"), ("hud.rozhlas.onair", "ON AIR"), ("hud.rozhlas.take", "Hold {0}  sit at the radio set"),
+        ("hud.tow.unhitch", "Hold {0}  Unhitch trailer"), ("toast.tow.hitched", "Trailer hitched"), ("toast.tow.unhitched", "Trailer unhitched"),
         ("hud.vehicle.view.cockpit", "{0}  Cockpit view"), ("hud.vehicle.view.chase", "{0}  Chase view"),
         ("hud.seat.pilot", "Pilot"), ("hud.flight.enter", "{0}  Board helicopter"), ("hud.flight.readout", "{0} km/h  ALT {1}"),
         ("hud.flight.spool", "Rotor starting     {0}  Exit"), ("hud.flight.takeoff", "{0}  Take off     {1}  Exit"),
@@ -113,7 +114,7 @@ public static class Strings
         ("bind.move_forward", "Move forward"), ("bind.move_back", "Move back"), ("bind.move_left", "Move left"), ("bind.move_right", "Move right"),
         ("bind.jump", "Jump / helicopter climb"), ("bind.sprint", "Sprint"), ("bind.crouch", "Crouch / helicopter descend"), ("bind.prone", "Prone"), ("bind.fire", "Fire"), ("bind.reload", "Reload"),
         ("bind.interact", "Interact"), ("bind.scoreboard", "Scoreboard (hold)"),
-        ("bind.slot_1", "Weapon slot 1 / vehicle seat 1"), ("bind.slot_2", "Weapon slot 2 / vehicle seat 2"), ("bind.slot_3", "Weapon slot 3 / vehicle seat 3"), ("bind.slot_4", "Weapon slot 4 / vehicle seat 4"), ("bind.slot_5", "Weapon slot 5"), ("bind.zoom", "Scope zoom"), ("bind.headlights", "Vehicle headlights"), ("bind.vehicle_view", "Vehicle view (chase / cockpit)"), ("bind.rozhlas_talk", "Talk on the rozhlas (hold, set holder)"), ("bind.killstreak", "Use killstreak"), ("bind.inventory", "Equipment screen (toggle)"),
+        ("bind.slot_1", "Weapon slot 1 / vehicle seat 1"), ("bind.slot_2", "Weapon slot 2 / vehicle seat 2"), ("bind.slot_3", "Weapon slot 3 / vehicle seat 3"), ("bind.slot_4", "Weapon slot 4 / vehicle seat 4"), ("bind.slot_5", "Weapon slot 5 / vehicle seat 5"), ("bind.zoom", "Scope zoom"), ("bind.headlights", "Vehicle headlights"), ("bind.vehicle_view", "Vehicle view (chase / cockpit)"), ("bind.rozhlas_talk", "Talk on the rozhlas (hold, set holder)"), ("bind.killstreak", "Use killstreak"), ("bind.inventory", "Equipment screen (toggle)"),
         ("weapon.m4a1", "M4A1"), ("weapon.aug", "AUG"), ("weapon.g36", "G36"), ("weapon.rpk", "RPK"), ("weapon.m249", "M249"), ("weapon.m60", "M60"), ("weapon.pkm", "PKM"),
         ("weapon.mp5", "MP5"), ("weapon.ump45", "UMP45"), ("weapon.p90", "P90"), ("weapon.remington870", "Remington 870"), ("weapon.spas12", "SPAS-12"), ("weapon.benelli_m4", "Benelli M4"), ("weapon.aa12", "AA-12"),
         ("streak.uav", "UAV"), ("streak.attack_missile", "Attack missile"), ("streak.turret", "Turret"), ("streak.care_package", "Care package"),
@@ -217,6 +218,7 @@ public static class Strings
         foreach (var (k, v) in TacticalMapStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in IntelStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in MassStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in ScudStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in HuntersLogStrings.Table) tr.AddMessage(k, v);
         TranslationServer.AddTranslation(tr);
         TranslationServer.SetLocale("en");

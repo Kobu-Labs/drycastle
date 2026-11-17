@@ -69,7 +69,7 @@ public class AmphibiousTransportTests
     [Fact]
     public void Armed_and_exposed_are_properties_of_a_seat_and_no_other_vehicle_has_them()
     {
-        foreach (var v in Shipped.Vehicles.Where(v => v.Id is not ("amphibious" or "harvester"))) // the harvester (#331) has one exposed driver seat: an open cab
+        foreach (var v in Shipped.Vehicles.Where(v => v.Id is not ("amphibious" or "harvester" or "humvee"))) // the Humvee (a standing exposed roof gunner, HumveeTests) and the harvester (#331) has one exposed driver seat: an open cab
             Assert.All(v.Seats, s => Assert.False(s.Armed || s.Exposed || s.Standing || s.Aim != null, $"{v.Id}"));
         // the bus's passengers stay unarmed: their input does nothing to their weapons
         var bus = Shipped.Vehicles.Single(v => v.Id == "bus");

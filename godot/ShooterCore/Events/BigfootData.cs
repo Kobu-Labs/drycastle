@@ -390,7 +390,7 @@ public static class BigfootRules
         if (weapon < weaponCount) return isProjectile(weapon) ? HitSource.Explosive : HitSource.Bullet;
         return weapon switch
         {
-            SpecialWeapons.Missile or SpecialWeapons.Moab => HitSource.Explosive,
+            SpecialWeapons.Missile or SpecialWeapons.Moab or SpecialWeapons.Scud => HitSource.Explosive,
             SpecialWeapons.VehicleGun or SpecialWeapons.Flak or SpecialWeapons.Ac130 or SpecialWeapons.AttackHelicopter or SpecialWeapons.Helper => HitSource.VehicleWeapon,
             SpecialWeapons.Turret or SpecialWeapons.Debug => HitSource.Bullet,
             _ => HitSource.None,

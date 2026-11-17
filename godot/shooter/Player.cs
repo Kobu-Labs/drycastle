@@ -296,7 +296,8 @@ public partial class Player : CharacterBody3D
     public void SeatView(Vector3 feet, float eyeHeight)
     {
         GlobalPosition = feet;
-        _camera.Position = new Vector3(0, eyeHeight, 0);
+        _eyeLocal = new Vector3(0, eyeHeight, 0); // _Process puts the camera at _eyeLocal each frame: without this it would be back at the standing eye
+        _camera.Position = _eyeLocal;
     }
 
     /// <summary>Turret camera (a gunship's owner): the camera sits at the turret and looks along the given world yaw and pitch. The body does not move; <see cref="EndChase"/> ends it.</summary>

@@ -96,7 +96,10 @@ public partial class NetClient
         _me.EndChase(_me.Yaw); // no-op unless a chase or turret camera was on
         var feet = SeatAnchor(v).GlobalTransform * new Vector3(o[0], o[1], o[2]); // on the body as it is drawn: the seat leans and bobs with it
         // a seat in the open is drawn and hit seated (or standing in the ring): the eye is that figure's, not a standing body's on the seat
-        if (seats[seat].Exposed) _me.SeatView(feet, SeatAimRules.EyeHeight(seats[seat])); else _me.GlobalPosition = feet;
+        // (a covered seat that sets eye_height has the eye at that height over its feet: the Humvee's roof is under a standing eye)
+        if (seats[seat].Exposed) _me.SeatView(feet, SeatAimRules.EyeHeight(seats[seat]));
+        else if (seats[seat].EyeHeight is { } eye) _me.SeatView(feet, eye);
+        else _me.GlobalPosition = feet;
         if (seats[seat].Armed)
         {
             // the look is the aim, and it is held inside the seat's arc, which turns and tilts with the vehicle: the view cannot go where the shots cannot

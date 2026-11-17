@@ -1305,6 +1305,20 @@ From any state: Destroyed
 - **Leaving**: Drives the way out to the map edge, accelerating; the entity ends at its end (no state follows).
 - **Destroyed**: Hit count taken, from any state: the Raid is over. The wreck lies where it stopped (clock: wreck seconds), then the entity ends. Never left.
 
+## RocketCart.Load
+
+A rocket cart: carrying its missile, or empty.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Loaded
+    Loaded --> Empty
+    Empty --> Loaded
+```
+
+- **Loaded**: The missile is on the cart: low hit points (loaded_hp), and when the cart is destroyed it detonates (the Scud blast).
+- **Empty**: Nothing on it: the type's own hit points, and a destroyed cart blows up like a small ordinary vehicle.
+
 ## Rozhlas.Phase
 
 The village loudspeaker: a detour broadcast, and the hijack after the announcer is killed.
@@ -1373,6 +1387,117 @@ stateDiagram-v2
 - **Draining**: Stop() ran: no new input; what was written still plays out, then the echo tail, then ffmpeg ends. A Start() here cuts the tail short.
 - **Failed**: ffmpeg missing, died, or stopped producing audio: logged once, the feed is silent until the next phase. Never unprocessed audio.
 
+## Scud.CartSlot
+
+One bunker's rocket cart during a Scud event: standing loaded, waiting to be replaced, or closed with the truck.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Stocked
+    Closed --> Restocking
+    Stocked --> Restocking
+    Stocked --> Closed
+    Restocking --> Stocked
+    Restocking --> Closed
+```
+
+- **Closed**: No truck is out: no cart is put at the bunker.
+- **Stocked**: A loaded cart was put at the bunker. It stays the slot's until it is emptied, destroyed or removed, wherever it is towed to.
+- **Restocking**: The cart is gone or empty: the slot counts the cooldown (clock: cart_cooldown_seconds), then the host puts a new loaded cart at the bunker. A blocked place is tried again after a short wait.
+
+## Scud.Event
+
+The Scud event: the truck hidden in its search area, found when a player boards it, or gone.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Searching
+    Searching --> Found
+    Searching --> Over
+    Found --> Over
+    Over --> Searching
+```
+
+- **Idle**: No Scud event has run on this server yet.
+- **Searching**: The truck stands hidden and the search area is on the intel board and the tactical map (clock: the despawn time). The first player to board it finds it; nobody within the time, a destroyed truck, a cancel or a new round ends it with no reward.
+- **Found**: A player boarded the truck: the reward is paid, the intel entry and the search circle are gone and the event slot is free. The truck stays as an ordinary vehicle and the rocket carts keep standing at the bunkers until it is destroyed (or the round ends).
+- **Over**: The truck is gone (destroyed, despawned, or retired by a new round) and the carts with it. A new event may begin.
+
+## Scud.Launcher
+
+A Scud truck's launcher: the rocket on its rack, the operator's lock, the crew's confirmations, the rack rising, the launch, the empty rack and the reload.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Stowed
+    Stowed --> Targeting
+    Targeting --> Stowed
+    Targeting --> Proposed
+    Proposed --> Targeting
+    Proposed --> Stowed
+    Proposed --> Erecting
+    Erecting --> Launching
+    Erecting --> Aborting
+    Launching --> Spent
+    Spent --> Lowering
+    Lowering --> Empty
+    Empty --> Reloading
+    Empty --> Stowed
+    Empty --> Loading
+    Loading --> Reloading
+    Loading --> Empty
+    Reloading --> Stowed
+    Aborting --> Stowed
+```
+
+- **Stowed**: A rocket on the rack, the rack down, the truck drives. Where a launcher starts and where every cancel ends when nobody has the screen open.
+- **Targeting**: The operator (the player in the operator seat) has the targeting screen open (clock: none). Closing it, or leaving the seat, goes back to Stowed.
+- **Proposed**: A point is locked (the placer is the operator). Every occupied seat must confirm (clock: the proposal timeout). Any cancel goes back to Targeting while the operator is still at the screen, else Stowed.
+- **Erecting**: Everybody confirmed. The truck is immobilised (brakes on, the driver's input ignored) and the rack rises (clock: erect seconds). The operator may abort until the ignition.
+- **Launching**: The rack is up and the rocket ignites (clock: ignition seconds). When it runs out the missile entity spawns and the rack is empty. Cannot be aborted.
+- **Spent**: The rack is up and empty for a moment (clock: spent hold seconds), the launch smoke clears, then the rack lowers.
+- **Lowering**: The empty rack lowers (clock: lower seconds). The truck is still immobilised.
+- **Empty**: The rack is down with no rocket. The truck drives again but cannot fire until a reload: a hold on a loaded rocket cart beside it (BeginLoad), TryReloadScud, or an admin's instant reload (Empty to Stowed).
+- **Reloading**: A rocket is being loaded (clock: reload seconds, or what is left of it after the transfer). The truck is immobilised; the rocket shows on the rack for the last half of the reload.
+- **Aborting**: The operator aborted the erect: the rack lowers again from where it got to, at the lowering rate, and the rocket is kept. Then Stowed.
+- **Loading**: The first half of a reload from a rocket cart (clock: reload seconds x transfer share). The truck is immobilised and the rack still empty; the bound cart keeps its rocket and must stay alive, loaded and in reach and neither it nor the truck may move, else back to Empty with the cart untouched. When the clock runs out the rocket leaves the cart (the host's order) and the second half begins.
+
+## Scud.ReloadKey
+
+The interact key beside a truck with an empty rack and a loaded cart: a tap gets in or out, a hold starts loading the rocket.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Holding
+    Holding --> Idle
+    Holding --> Spent
+    Spent --> Idle
+```
+
+- **Idle**: Key up. A press starts the hold.
+- **Holding**: Key down, counting the hold. Let go early: a tap, the key does what it always does (get in or out). Held to the end: the loading starts.
+- **Spent**: The hold did its work (or the key was down when the offer appeared): nothing happens until the key is let go.
+
+## Scud.Screen
+
+Which screen of a Scud truck the local player has up: their own view, the operator's targeting screen, or the read-only feed of it.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Operating
+    Closed --> Watching
+    Operating --> Closed
+    Watching --> Closed
+```
+
+- **Closed**: The player's own view. Where every end goes: the screen key again, leaving the truck, the launcher leaving its live states.
+- **Operating**: The operator pans, zooms and locks. After the open request the screen waits for the server's answer (a pending answer) and gives up if it does not come.
+- **Watching**: Another seat's read-only view of the operator's camera and lock, where it confirms or withdraws. The operator's own seat watches once the rack rises.
+
 ## Session.Phase
 
 A connection on the server: connected, said hello (profile loading) or refused, then joined.
@@ -1424,6 +1549,39 @@ stateDiagram-v2
 - **Idle**: Nothing runs: never started, or a round reset cleared it.
 - **Raiding**: The convoy's vans are launched one after another (no clock of its own: the convoy-gap clock runs beside) and come and go. Left by Finish (won when every van of the wave is gone, or an admin's end or cancel) or by a round reset.
 - **Over**: Won or cancelled; what was stolen stays stolen. A new /event thieves starts it again, a round reset clears it.
+
+## Trailer.Tow
+
+A trailer: standing loose, pulled by a tractor, or just released and not yet to be latched again.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Loose
+    Loose --> Hitched
+    Hitched --> Released
+    Released --> Loose
+```
+
+- **Loose**: Stands still. The first tractor that reverses its hitch onto the eye (close, lined up) latches it.
+- **Hitched**: The eye is pinned to the tractor's hitch and the trailer follows it (TowModel.Step). Ends on the driver's unhitch request.
+- **Released**: Just unhitched: rolls to a stop, and cannot be latched until the lockout (the tractor's relatch_lockout) has run out; then Loose.
+
+## Trailer.UnhitchKey
+
+The driver's interact key while towing: a tap leaves the vehicle, a hold unhitches the trailer.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Holding
+    Holding --> Idle
+    Holding --> Spent
+    Spent --> Idle
+```
+
+- **Idle**: Key up. A press starts the hold.
+- **Holding**: Key down, counting HoldSeconds. Let go before the end: a tap, the driver leaves the vehicle. Held to the end: the trailer is unhitched.
+- **Spent**: The hold did its work (or the key was down when the trailer latched): nothing happens until the key is let go.
 
 ## Turret.State
 

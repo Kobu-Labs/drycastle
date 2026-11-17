@@ -112,8 +112,9 @@ public partial class ServerCar : CharacterBody3D
     public override void _Ready()
     {
         CollisionLayer = 2; CollisionMask = SweepMask;
-        Life = new VehicleLifecycle(Def.Hp);
-        Seat = new VehicleSeat(Def.Seats.Count);
+        if (IsTrailer) ReadyTrailer(); // before the life: a loaded trailer's hit points are its load's
+        Life = new VehicleLifecycle(Cargo?.MaxHp(Def) ?? Def.Hp);
+        Seat = new VehicleSeat(Def.Seats.Count); // a trailer has none
         // the hit volume (VehicleBox): ground to the top of the body; a type with a hull list has a shape for each of its boxes (the body itself stays upright, it turns with the yaw only)
         if (Def.Tilts)
             foreach (var b in Def.HullBoxes) AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(b.HalfWidth * 2, b.Y1 - b.Y0, b.HalfLength * 2) }, Position = new Vector3(b.Cx, (b.Y0 + b.Y1) / 2, b.Cz) });
@@ -165,6 +166,7 @@ public partial class ServerCar : CharacterBody3D
     /// <summary>Gone from the world after the blast: no collision, no driving; comes back through <see cref="Reset"/> once the server's clock reaches <paramref name="returnAt"/>.</summary>
     public void Destroy(double returnAt)
     {
+        DropLinks(); // a destroyed tractor lets its trailer go, a destroyed trailer its tractor
         Life.Destroy(returnAt); Asleep = false; RestCount = 0;
         CollisionLayer = 0;
         Velocity = Vector3.Zero; State.Speed = 0;
@@ -175,6 +177,9 @@ public partial class ServerCar : CharacterBody3D
     /// <summary>Back to the origin. <paramref name="repair"/> restores the HP too: not on a fall out of the world (a smoking vehicle stays damaged), but a doomed or destroyed one always comes back repaired (<see cref="VehicleLifecycle.Reset"/>).</summary>
     public void Reset(bool repair = true)
     {
+        if (Retired) return; // taken out of the world for good: nothing brings it back
+        DropLinks(); // a tractor that returns lets its trailer go
+        if (IsTrailer) ResetTrailer(repair);
         Asleep = false; RestCount = 0;
         Lives++; // a new life for the lag compensation's pose history (NetServer.SyncCarLife)
         if (Life.Reset(repair))
@@ -244,6 +249,7 @@ public partial class ServerCar : CharacterBody3D
     /// </summary>
     public void ApplyBump(System.Numerics.Vector3 move, System.Numerics.Vector3 deltaV)
     {
+        if (IsTrailer) { BumpTrailer(move, deltaV); return; }
         Wake();
         if (Flies)
         {
@@ -293,7 +299,9 @@ public partial class ServerCar : CharacterBody3D
     /// </summary>
     public void StepDrive(in DriveInput input, float dt)
     {
-        DriveModel.Step(ref Drive, Def, input, dt, DriveWorld!);
+        var before = Drive;
+        DriveModel.Step(ref Drive, Def, input, dt, DriveWorld!, TowEffectNow());
+        if (Towing != null && !StepTowed(dt)) TowModel.Hold(ref Drive, before); // the trailer is blocked: the tractor stops where it was
         DriveImpact = MathF.Max(DriveImpact, Drive.Impact);
         FollowDrive();
     }
@@ -403,7 +411,8 @@ public partial class ServerCar : CharacterBody3D
         var body = def.CanFloat ? water.BodyAt(GlobalPosition.X, GlobalPosition.Z) : null;
         var wasAfloat = Afloat;
         Afloat = body != null;
-        CarModel.Step(ref State, def, throttle, steer, handbrake, dt, Afloat);
+        var placeBefore = GlobalPosition; var yawBefore = State.Yaw;
+        CarModel.Step(ref State, def, throttle, steer, handbrake, dt, Afloat, TowEffectNow());
         var fwd = Forward;
         Rotation = new Vector3(0, State.Yaw, 0);
         if (Afloat)
@@ -422,5 +431,12 @@ public partial class ServerCar : CharacterBody3D
         var real = new Vector3(Velocity.X, 0, Velocity.Z).Dot(fwd);
         LastImpact = Mathf.Abs(State.Speed) - Mathf.Abs(real);
         if (Mathf.Abs(real) < Mathf.Abs(State.Speed)) State.Speed = real;
+        if (Towing != null && !StepTowed(dt))
+        {
+            // the trailer is blocked (a wall, a tree behind it): the tractor stops where it was, with the crash's speed loss, as a wall stops it
+            LastImpact = Mathf.Max(LastImpact, Mathf.Abs(State.Speed));
+            GlobalPosition = placeBefore; State.Yaw = yawBefore; State.Speed = 0; State.YawRate = 0;
+            Rotation = new Vector3(0, yawBefore, 0); Velocity = Vector3.Zero;
+        }
     }
 }

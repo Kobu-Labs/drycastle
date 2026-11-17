@@ -133,6 +133,29 @@ public class RiderPoseTests
     }
 
     [Fact]
+    public void TheSeatsRecordCarriesAFifthSeatAndItSurvivesTheSnapshotWire()
+    {
+        var car = (ushort)(VehicleRecord.FirstId + 1);
+        var r = SeatsRecord.Make(car, new ushort[] { 9, 0x1234, 77, 0xABCD, 0xFEDC });
+        Assert.Equal(0xFEDC, SeatsRecord.Occupant(r, 4));
+        Assert.Equal(0xABCD, SeatsRecord.Occupant(r, 3));
+        Assert.Equal(EntityState.InVehicle, r.State);
+        var onlyFifth = SeatsRecord.Make(car, new ushort[] { 9, 0, 0, 0, 5 });
+        Assert.Equal(EntityState.InVehicle, onlyFifth.State); // somebody sits: not just "alive"
+        var enc = new SnapshotEncoder(); var dec = new SnapshotDecoder();
+        SnapshotHeader h = default; var committed = false;
+        foreach (var p in enc.Encode(10, 1, Wire.NoTick, new[] { r })) committed |= dec.Apply(p, out h);
+        Assert.True(committed);
+        var got = dec.States[SeatsRecord.IdOf(car)];
+        Assert.Equal(0xFEDC, SeatsRecord.Occupant(got, 4));
+        Assert.Equal(0x1234, SeatsRecord.Occupant(got, 1));
+        var left = SeatsRecord.Make(car, new ushort[] { 9, 0x1234, 77, 0xABCD, 0 });
+        foreach (var p in enc.Encode(11, 2, 10, new[] { left })) dec.Apply(p, out h);
+        Assert.Equal(0, SeatsRecord.Occupant(dec.States[SeatsRecord.IdOf(car)], 4));
+        Assert.Equal(0xABCD, SeatsRecord.Occupant(dec.States[SeatsRecord.IdOf(car)], 3));
+    }
+
+    [Fact]
     public void AVehicleWithTwoSeatsLeavesTheOthersEmpty()
     {
         var r = SeatsRecord.Make(VehicleRecord.FirstId, new ushort[] { 4, 5 });
@@ -153,7 +176,7 @@ public class RiderPoseTests
     public void EveryShippedVehicleHasAFixedDriverSeat()
     {
         var all = VehiclesFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "vehicles.json")).Vehicles;
-        foreach (var v in all)
+        foreach (var v in all.Where(x => x.Trailer == null)) // a trailer has no seats at all
         {
             Assert.NotEmpty(v.Seats);
             Assert.Equal("driver", v.Seats[0].Role);

@@ -375,3 +375,7 @@ Terms: **Detour** = the Urad being open during a broadcast. **Hijack** = the 3 m
 5. Mic capture, upstream, hold-V, set holder.
 
 1 and 3 don't depend on the building. 4 and 5 need the Urad volume and the dictation-table spot from 2.
+
+
+# Scud
+See scud.md (the Scud event: a hidden truck, a search area on the intel board, rocket carts at the bunkers).

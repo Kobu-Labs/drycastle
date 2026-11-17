@@ -70,6 +70,7 @@ public partial class NetServer
             case "church": ChatChurch(c, args); break;
             case "rozhlas": ChatRozhlas(c, args); break;
             case "status": ChatStatus(c, args); break;
+            case "scud": ChatScud(c, args); break;
         }
         GD.Print($"server: {c.Name} #{c.Id} ran {text}");
     }

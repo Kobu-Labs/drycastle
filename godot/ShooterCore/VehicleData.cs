@@ -69,7 +69,20 @@ public class VehiclesFile : IVersioned
                 if (side.OutlineProblem() is { } problem) throw new DataFileException($"vehicles.json: {v.Id}: open side {side.Id}: {problem}");
             }
             if (v.Tint is { Length: not 3 } || v.Tint != null && v.Paints.Count > 0) throw new DataFileException($"vehicles.json: {v.Id}: tint is [r, g, b] and excludes paints");
-            if (v.Seats.Count is < 1 or > 4 || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..4 and the first is the driver");
+            if (v.Trailer is { } trl)
+            {
+                if (v.Seats.Count != 0) throw new DataFileException($"vehicles.json: {v.Id}: a trailer has no seats (\"seats\": [])");
+                if (v.Tow != null) throw new DataFileException($"vehicles.json: {v.Id}: a trailer does not tow: tow and trailer exclude each other");
+                if (v.Medium != VehicleMedium.Land || v.Drive != null || v.Gun != null || v.Flak != null || v.DoorGun != null) throw new DataFileException($"vehicles.json: {v.Id}: a trailer is a land type with no drive, gun, flak or door_gun block");
+                if (trl.Validate() is { } why) throw new DataFileException($"vehicles.json: {v.Id}: trailer: {why}");
+            }
+            else if (v.Seats.Count is < 1 or > VehicleSeat.MaxSeats || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..{VehicleSeat.MaxSeats} and the first is the driver");
+            if (v.Launcher is { } lch && lch.Validate(v) is { } lwhy) throw new DataFileException($"vehicles.json: {v.Id}: launcher: {lwhy}");
+            if (v.Tow is { } tw)
+            {
+                if (v.Medium == VehicleMedium.Air) throw new DataFileException($"vehicles.json: {v.Id}: a tow block is for a land or amphibious vehicle");
+                if (tw.Validate() is { } why) throw new DataFileException($"vehicles.json: {v.Id}: tow: {why}");
+            }
             foreach (var seat in v.Seats)
             {
                 if (seat.Role is not ("driver" or "gunner" or "passenger")) throw new DataFileException($"vehicles.json: {v.Id}: seat role {seat.Role} is not driver, gunner or passenger");
@@ -77,6 +90,7 @@ public class VehiclesFile : IVersioned
                 if (seat.Offset.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: seat offset is [x, y, z]");
                 if (seat.Armed && seat.Role != "passenger") throw new DataFileException($"vehicles.json: {v.Id}: only a passenger seat can be armed (a driver drives, a gunner has the vehicle's gun)");
                 if (seat.Standing && !seat.Exposed) throw new DataFileException($"vehicles.json: {v.Id}: a standing seat is an exposed seat");
+                if (seat.EyeHeight is { } eh && !(eh is >= 0.3f and <= 2.2f)) throw new DataFileException($"vehicles.json: {v.Id}: a seat's eye_height is 0.3..2.2 m above its feet");
                 if (seat.Aim is { } aim)
                 {
                     if (!seat.Armed) throw new DataFileException($"vehicles.json: {v.Id}: a seat's aim is for an armed seat");
@@ -195,6 +209,11 @@ public class VehicleSeatDef
     public bool Standing { get; set; }
     /// <summary>How far round and up and down an armed seat's rider can aim. Null: all the way round.</summary>
     public VehicleSeatAimDef? Aim { get; set; }
+    /// <summary>
+    /// Metres from the seat's feet to the eye of the rider's own first-person view from a seat the hull covers (the client rides the camera on the seat). Null: the
+    /// body's own standing eye, which is right in a tall cabin (the bus) and above the roof of a low one (the Humvee's seats: 0.6 + 1.65 is over its 1.86 m roof, hence 1.05). An exposed seat has its own (<see cref="RiderStance"/>).
+    /// </summary>
+    public float? EyeHeight { get; set; }
 
     /// <summary>The stance an exposed rider has to a bullet and to the eye: seated riders have the crouch's height.</summary>
     public Stance RiderStance => Standing ? Stance.Stand : Stance.Crouch;
@@ -712,6 +731,36 @@ public class VehicleHandling
     public float HandbrakeSteerBoost { get; set; } = 1.5f;
 }
 
+/// <summary>vehicles.json "launcher": the Scud truck's launcher (<see cref="ScudLauncher"/>). Offsets are in the vehicle's frame (x right, y up, forward is -Z, origin on the ground at the centre).</summary>
+public class VehicleLauncherDef
+{
+    /// <summary>The seat whose occupant is the operator (the targeting screen is theirs); the others only watch and confirm.</summary>
+    public int OperatorSeat { get; set; } = 1;
+    /// <summary>Where the missile entity spawns: the centre of the ERECTED rocket on the raised rack (the model's <c>missile</c> node with the rack at 90 degrees), so it leaves from where it stands.</summary>
+    public float[] Muzzle { get; set; } = { 0, 5.89f, 4.111f };
+    /// <summary>Where the launch smoke and the ignition flame come from (the erected rocket's tail end).</summary>
+    public float[] Exhaust { get; set; } = { 0, 1.1f, 4.111f };
+    /// <summary>The wheels' radius, metres: they roll by the distance driven (the model's wheel centres are at this height).</summary>
+    public float WheelRadius { get; set; } = 0.736f;
+    /// <summary>
+    /// The steered axles, front first: the distance from the middle of the fixed axles to each steered axle, metres. An axle's wheels turn by atan(arm / turn radius) (the truck turns about a point on the fixed axles' line),
+    /// so the front axle turns more than the second. Empty: no wheel steers.
+    /// </summary>
+    public float[] SteerArms { get; set; } = { 6.431f, 4.272f };
+
+    /// <summary>Why the block is bad, or null.</summary>
+    public string? Validate(VehicleDef v)
+    {
+        if (OperatorSeat < 1 || OperatorSeat >= v.Seats.Count) return "operator_seat must be a seat of the vehicle other than the driver's";
+        if (Muzzle.Length != 3 || Exhaust.Length != 3 || Muzzle.Concat(Exhaust).Any(x => !float.IsFinite(x))) return "muzzle and exhaust are [x, y, z]";
+        if (!(WheelRadius > 0.1f && WheelRadius < 2f)) return "wheel_radius must be between 0.1 and 2 metres";
+        if (SteerArms.Any(a => !(a > 0.5f && a < 20f))) return "steer_arms are distances in metres between 0.5 and 20";
+        if (v.Flight != null || v.Gun != null || v.Flak != null || v.DoorGun != null) return "a launcher truck is a ground vehicle with no gun, flak or door gun";
+        if (v.Drive != null) return "a launcher truck has no drive block: the server steps it and brakes it while its rack moves, its driver's client does not predict it";
+        return null;
+    }
+}
+
 public class VehicleDef
 {
     public string Id { get; set; } = "";
@@ -737,7 +786,7 @@ public class VehicleDef
     public int SpawnCount { get; set; }
     /// <summary>
     /// Places this type always stands at (vehicles.json "fixed_spots"), one vehicle each, in addition to the <see cref="SpawnCount"/> dealt at random.
-    /// A vehicle that returns (abandoned or destroyed) comes back to its spot. See <see cref="VehicleSpotDef"/>.
+    /// A vehicle that returns (destroyed, or out of the world; an abandoned one stays) comes back to its spot. See <see cref="VehicleSpotDef"/>.
     /// </summary>
     public List<VehicleSpotDef> FixedSpots { get; set; } = new();
     /// <summary>Half extents of the footprint (server collision box and run-over test), metres.</summary>
@@ -823,6 +872,14 @@ public class VehicleDef
     /// <see cref="DriveModel"/> and never by <see cref="CarModel"/>. Null for every other type. A land type's block has no water numbers in use (see <see cref="VehicleDriveDef.Validate"/>).
     /// </summary>
     public VehicleDriveDef? Drive { get; set; }
+    /// <summary>True (default): a destroyed vehicle of this type comes back after <see cref="VehiclesFile.DestroyedReturnTime"/>. False (the Scud truck): it is gone for the match, and a new round retires it instead of resetting it.</summary>
+    public bool Returns { get; set; } = true;
+    /// <summary>A missile launcher (vehicles.json "launcher", the Scud truck): which seat is the operator's and where the rocket leaves. Null: none. See <see cref="ScudLauncher"/>.</summary>
+    public VehicleLauncherDef? Launcher { get; set; }
+    /// <summary>The type can pull a trailer (vehicles.json "tow": the hitch and what the load does to it). Null: it cannot. See <see cref="TowModel"/>.</summary>
+    public VehicleTowDef? Tow { get; set; }
+    /// <summary>The type is a single-axle trailer (vehicles.json "trailer": drawbar eye, axle, mass) with no seats, pulled by a type with a <see cref="Tow"/> block. Null: it is not.</summary>
+    public VehicleTrailerDef? Trailer { get; set; }
     /// <summary>A single fixed body colour [r, g, b] (sRGB) for a type with one look (olive drab). Replaces the colour variants: such a type has one variant.</summary>
     public float[]? Tint { get; set; }
     /// <summary>Model file relative to assets/ (empty: the code-built car with the Kenney sedan). Scale, yaw and offset fit the raw node to the game (forward -Z, origin at the ground centre).</summary>

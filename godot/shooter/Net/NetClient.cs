@@ -64,7 +64,7 @@ public partial class NetClient : Node
     /// The mode flags (dead, in a vehicle, at a turret, steering the missile, held by the Mass, the demon or the Bigfoot) as one value to ask named questions of
     /// (<see cref="ClientModeInputs"/>); build it where it is used, it is a few bools. <c>InArmedSeat</c> is only ever true while driving (<see cref="MySeat"/> needs it).
     /// </summary>
-    ClientModeInputs Mode => new(Dead, _driving, _gunship != null, _controlling, _massSeated, _pinned, _heldByBigfoot, _pRising, _myState == EntityState.InVehicle, _driving && InArmedSeat);
+    ClientModeInputs Mode => new(Dead, _driving, _gunship != null || ScudScreenOn, _controlling, _massSeated, _pinned, _heldByBigfoot, _pRising, _myState == EntityState.InVehicle, _driving && InArmedSeat);
     /// <summary>weapons.json: hotbar order and the per-weapon movement speed multiplier used by prediction.</summary>
     public WeaponsFile Weapons = null!;
     /// <summary>match.json as the client shipped it: the gunfire blips' radius, lifetime and rate limit (null: no blips, e.g. headless bots).</summary>
@@ -142,6 +142,7 @@ public partial class NetClient : Node
         InitLockOn();
         InitFlak();
         InitSeats();
+        InitScud();
         InitMatchEdges();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
@@ -278,6 +279,7 @@ public partial class NetClient : Node
         RenderLauncherLoaded();
         RenderMissiles();
         RenderMissilePov();
+        RenderScud(delta);
         RenderWater();
         UpdateViewmodel();
         UpdateDemonQuake(delta);
@@ -664,6 +666,7 @@ public partial class NetClient : Node
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
         if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); TickLootReturn(dt); }
         FxDemoInput(ref mi);
+        ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         _aimHeld = mi.Has(MoveButtons.Aim);
         if (HeadLookWanted()) mi.Buttons |= MoveButtons.HeadLook; // seated and looking out of their own eyes: the view is the head's, shown to everyone (ADR 0026)
         TickRecoil(mi);
@@ -884,7 +887,7 @@ public partial class NetClient : Node
     /// <summary>Holding zoom with a scoped weapon (sniper) narrows the camera; never while dead or with the mouse released.</summary>
     void ApplyScope()
     {
-        if (_me == null || _gunship != null) return; // at a turret the zoom is the gunship's
+        if (_me == null || _gunship != null || ScudScreenOn) return; // at a turret the zoom is the gunship's; on a Scud screen it is the screen's
         if (Mode.ScopeSuppressed)
         {
             // seated (roof/door gun, turret, any seat) or steering a missile: the held weapon's scope and iron-sight zoom stay off (#241)
@@ -929,6 +932,7 @@ public partial class NetClient : Node
         if (HandleEquipmentInput(e)) return; // F: the Equipment screen (#268)
         if (HandleHuntersLogInput(e)) return; // J: the Hunter's Log (#336)
         if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
+        if (HandleScudInput(e)) return; // the Scud screen's keys (open, confirm, abort, lock, the wheel's zoom)
         if (HandleSeatInput(e)) return; // a number key while seated takes that seat
         if (HandleViewInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
         if (HandleBinocularsInput(e)) return; // B: the binoculars from the bag

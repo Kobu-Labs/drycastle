@@ -19,11 +19,16 @@ public sealed partial class CockpitRig : Node3D
     static readonly Dictionary<string, Spec> Specs = new()
     {
         ["golf_mk2"] = new Spec(new Vector3(-0.4875f, 1.50f, 0.30f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildGolf),
+        // the Humvee: eye = seat_driver [-0.62, 0.6, -0.22] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/make_humvee_model.py): inside the cab (roof 1.83 inside, windscreen top 1.79), behind the wheel.
+        ["humvee"] = new Spec(new Vector3(-0.62f, 1.65f, -0.13f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildHumvee),
         ["bus"] = new Spec(new Vector3(-0.70f, 1.60f, -4.75f), System.Array.Empty<string>(), BuildBus),
         ["flak"] = new Spec(new Vector3(-0.50f, 2.05f, -1.25f), new[] { "cab" }, BuildFlak),
         // the harvester (#331): the combine's cab, after SM_Veh_Harvester_01 (model +Z is forward, the model faces yaw 180, so its steering wheel at x 0.79, y 2.70, z 1.21 is x -0.79, z -1.21 here; no hull: the rig hangs under the root).
         // The eye sits 1 m over the seat (y 2.0, vehicles.json seats) just behind the wheel, inside the cab; the model's own wheel and glass are not drawn for the driver, the reel is in front below the sill.
         ["harvester"] = new Spec(new Vector3(-0.79f, 3.0f, -0.55f), new[] { "SM_Veh_Harvester_SteeringW", "SM_Veh_Harvester_Glass" }, BuildHarvester),
+        // the Scud truck: eye = seat_driver [-0.892, 1.15, -4.328] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/make_scud_model.py): inside the left half cab (roof inside 2.66, windscreen 1.99-2.42), behind the
+        // wheel. The operator's seat has the same eye over its own seat (+0.892) but no cockpit rig: its view is the seat's (vehicles.json eye_height 1.05).
+        ["scud"] = new Spec(new Vector3(-0.892f, 2.2f, -4.238f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildScud),
         ["utility_helicopter"] = new Spec(new Vector3(0.55f, 1.78f, -1.80f), new[] { "fuselage" }, BuildHelicopter),
     };
 
@@ -228,6 +233,14 @@ public sealed partial class CockpitRig : Node3D
     static void BuildGolf(CockpitRig r) =>
         r.SteeringWheel(new Vector3(-0.4875f, 1.175f, -0.225f), 0.206f, 90f, new Vector3(-0.4875f, 0.95f, 0.55f), 0.30f);
 
+    // ------------------------------------------------------------------ the Humvee
+    // The model has its interior (scripts/make_humvee_model.py: dash, tunnel, four seats, door cards, rear partition): nothing is built round the driver but
+    // the steering wheel, which the model draws as a rim and spokes (two nodes, hidden here) so the rig's own can turn, and the hands. The wheel's face is
+    // tilted 25 degrees from upright towards the driver (a lean of 65 from level), centre x -0.62, y 1.10, z -0.60, 0.185 m to the rim's middle.
+
+    static void BuildHumvee(CockpitRig r) =>
+        r.SteeringWheel(new Vector3(-0.62f, 1.10f, -0.60f), 0.185f, 65f, new Vector3(-0.62f, 0.90f, 0.12f), 0.30f);
+
     static void BuildHarvester(CockpitRig r) =>
         r.SteeringWheel(new Vector3(-0.787f, 2.705f, -1.21f), 0.22f, 45f, new Vector3(-0.79f, 2.45f, -0.45f), 0.30f);
 
@@ -263,6 +276,14 @@ public sealed partial class CockpitRig : Node3D
         r.Add(Box(OliveLight, -xs, xs, 0.95f, sill + 0.09f, zb, zb + 0.03f), Box(OliveLight, -xt, xt, top - 0.12f, top, zbt, zbt + 0.03f));
         r.Both(s => Box(OliveLight, s * 0.47f, s * 1.10f, sill, top, -0.88f, -0.85f));
     }
+
+    // ------------------------------------------------------------------ the Scud truck
+    // The model has its cab (scripts/make_scud_model.py: floor, dash, seats, door cards, the left half cab's steering wheel as a rim and spokes, two nodes hidden here): nothing is built round the driver but
+    // the steering wheel, so the rig's own turns, and the hands. The wheel's centre is x -0.892, y 1.88, z -4.962, its face tilted 20 degrees from upright towards the driver (a lean of 70 from level),
+    // 0.21 m to the rim's outer edge.
+
+    static void BuildScud(CockpitRig r) =>
+        r.SteeringWheel(new Vector3(-0.892f, 1.88f, -4.962f), 0.2f, 70f, new Vector3(-0.892f, 1.66f, -4.25f), 0.30f);
 
     // ------------------------------------------------------------------ the utility helicopter
     // After scripts/make_utility_helicopter_model.py: floor 0.72, instrument panel at z -2.75, the cabin from z -1.20 to 1.30, half width 1.2,

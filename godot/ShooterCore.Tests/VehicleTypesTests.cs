@@ -139,6 +139,63 @@ public class VehicleTypesTests
     }
 
     [Fact]
+    public void AVehicleHasAtMostFiveSeats()
+    {
+        Assert.Equal(5, VehicleSeat.MaxSeats);
+        var s = new VehicleSeat(5);
+        for (ushort p = 1; p <= 5; p++) Assert.True(s.TryEnter(p)); // each takes the first free seat, in order
+        for (ushort p = 1; p <= 5; p++) Assert.Equal(p - 1, s.SeatOf(p));
+        Assert.False(s.HasFree);
+        Assert.False(s.TryEnter(6));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new VehicleSeat(6));
+    }
+
+    [Fact]
+    public void AFiveSeatedVehicleIsAcceptedAndASixSeatedOneIsNot()
+    {
+        VehiclesFile Cfg(int seats)
+        {
+            var v = new VehicleDef { Id = "x", TopSpeed = 10, Acceleration = 1, Brake = 1, TurnRadius = 1, MaxLateralAccel = 1, Hp = 10 };
+            v.Seats = new List<VehicleSeatDef> { new() { Role = "driver" } };
+            for (var i = 1; i < seats; i++) v.Seats.Add(new() { Role = "passenger", Offset = new float[] { 0, 1, i } });
+            return new VehiclesFile { Vehicles = { v } };
+        }
+        var ok = Cfg(5);
+        Assert.Same(ok, VehiclesFile.Validate(ok));
+        Assert.Throws<DataFileException>(() => VehiclesFile.Validate(Cfg(6)));
+    }
+
+    [Fact]
+    public void TheNearestFreeSeatOfAFiveSeatVehicleIsPickedAndTheCorpseSeatIsKicked()
+    {
+        var def = new VehicleDef { Id = "x", HalfWidth = 1, HalfLength = 2.5f };
+        def.Seats = new List<VehicleSeatDef>
+        {
+            new() { Role = "driver", Offset = new float[] { -0.5f, 1, -0.5f } },
+            new() { Role = "passenger", Offset = new float[] { 0.5f, 1, -0.5f } },
+            new() { Role = "passenger", Offset = new float[] { -0.5f, 1, 1f } },
+            new() { Role = "passenger", Offset = new float[] { 0.5f, 1, 1f } },
+            new() { Role = "gunner", Offset = new float[] { 0, 1.6f, 0.2f } },
+        };
+        var s = new VehicleSeat(5);
+        s.TryEnter(1, 0);
+        // standing at the rear right: seat 3 (0.5, 1) is nearest; take it
+        Assert.Equal(3, s.NearestFreeSeat(def, Vector3.Zero, 0, new Vector3(0.6f, 0, 1.2f), float.MaxValue));
+        s.TryEnter(2, 3);
+        // by the roof gunner's seat (0, 0.2) that one is the nearest free one
+        var from = new Vector3(0.1f, 0, 0.3f);
+        Assert.Equal(4, s.NearestFreeSeat(def, Vector3.Zero, 0, from, float.MaxValue));
+        s.TryEnter(3, 4);
+        // a corpse in seat 4 (the last): only a boarder who kicks corpses can take it
+        s.Exit(3); s.Block(4);
+        Assert.NotEqual(4, s.NearestFreeSeat(def, Vector3.Zero, 0, from, float.MaxValue));
+        Assert.Equal(4, s.NearestFreeSeat(def, Vector3.Zero, 0, from, float.MaxValue, kickCorpses: true));
+        Assert.True(s.TryBoard(9, 4, out var kicked));
+        Assert.True(kicked);
+        Assert.Equal(9, s.Occupant(4));
+    }
+
+    [Fact]
     public void ExitFreesOnlyThePlayersOwnSeat()
     {
         var s = new VehicleSeat(2);

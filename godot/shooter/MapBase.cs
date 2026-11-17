@@ -24,7 +24,6 @@ public sealed class MapRoad
 /// </summary>
 public sealed class MapBase
 {
-    const float PadMetres = 10f;
     /// <summary>Terrain textures kept per map. The views hold their own reference, so dropping an entry from the cache never frees a texture in use.</summary>
     const int MaxTextures = 3;
 
@@ -97,8 +96,9 @@ public sealed class MapBase
                 var a = (mi.IsInsideTree() ? mi.GlobalTransform : mi.Transform) * mesh.GetAabb();
                 box = box.Merge(new Rect2(a.Position.X, a.Position.Z, a.Size.X, a.Size.Z));
             }
-        SideMetres = Math.Max(box.Size.X, box.Size.Y) + 2 * PadMetres;
-        Origin = box.GetCenter() - new Vector2(SideMetres / 2, SideMetres / 2);
+        var sheet = TacticalMapMath.Sheet(box.Position.X, box.Position.Y, box.End.X, box.End.Y); // the same sheet the server measures the Scud event's search area on
+        SideMetres = sheet.Side;
+        Origin = new Vector2(sheet.Origin.X, sheet.Origin.Y);
         var extent = new Rect2(Origin, new Vector2(SideMetres, SideMetres));
         foreach (var r in roads)
         {

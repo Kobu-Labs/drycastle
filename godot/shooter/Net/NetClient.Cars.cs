@@ -52,6 +52,8 @@ public partial class NetClient
         /// <summary>The model's wheel nodes (front left, front right, back left, back right; null entries where it has none, the array null on a headless client) and the wheels the Thieves took, as last applied (NetClient.Thieves.Loot.cs).</summary>
         public Node3D?[]? Wheels;
         public byte WheelsOff;
+        /// <summary>A trailer's tractor, load and moving nodes (null for every type that is not a trailer): it is drawn from its tractor, <see cref="RenderTrailers"/>.</summary>
+        public TrailerView? Trailer;
     }
 
     readonly Dictionary<ushort, CarView> _cars = new();
@@ -73,12 +75,14 @@ public partial class NetClient
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flight != null) v.Rotor = RotorFx.Find(v.Node);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Drive != null) v.Drive = DriveNodes.Find(v.Node);
             if (ShotFx.Enabled) v.Wheels = FindWheels(v.Node);
+            if (Vehicles.Vehicles[v.Kind].Trailer != null) v.Trailer = MakeTrailerView(v);
             _cars[id] = v;
             ShowGlassOf(id); // panes whose state arrived before the vehicle was drawn (ADR 0007)
         }
         v.Solid ??= VehicleCollider.Make(Owned, Vehicles.Vehicles[v.Kind]);
         v.Lamps ??= ShotFx.Enabled ? CarLights.Attach(v.Node, Vehicles!.Vehicles[v.Kind]) : null;
-        v.Driver = VehicleRecord.Driver(rec);
+        if (v.Trailer != null) { OnTrailerRecord(v, rec); v.Driver = 0; } // a trailer's pitch field is its tractor's id, not a driver's (protocol 67)
+        else v.Driver = VehicleRecord.Driver(rec);
         v.Lights = VehicleRecord.Lights(rec);
         SetVehicleDamage(v, VehicleRecord.Stage(rec), rec.State == EntityState.Dead);
         ApplyWheels(v, VehicleRecord.Wheels(rec)); // the wheels the Thieves took
@@ -90,7 +94,7 @@ public partial class NetClient
             v.Braking = before - v.Kmh > 0.5f; // the record has no brake bit: a clear fall in speed reads as braking
         }
         v.LastTick = tick; v.Pos = rec.Position; v.Yaw = rec.YawRad;
-        v.Buf.Push(tick, rec.Position, rec.YawRad, 0);
+        v.Buf.Push(tick, rec.Position, rec.YawRad, v.Trailer != null ? VehicleRecord.Tractor(rec) : 0); // a trailer's pitch slot carries its tractor's id, so it is drawn hitched exactly while the sample at the render tick says so (RenderTrailers)
         PlaceCarSolid(v);
     }
 
@@ -182,9 +186,11 @@ public partial class NetClient
         var chased = false;        // the local player flies: the helicopter's chase camera (or its cockpit view) is on this frame
         var cockpit = false;       // the local player drives in the cockpit view this frame
         var hasCockpit = false;    // the local player drives a vehicle that has a cockpit view: the prompt names the view key
+        CarView? driven = null;    // the vehicle the local player drives (for the unhitch hint while it tows)
         var dt = (float)GetProcessDeltaTime();
         foreach (var v in _cars.Values)
         {
+            if (v.Trailer != null) continue; // a trailer is drawn after the tractors, from the tractor as it is drawn (RenderTrailers)
             v.Lamps?.Set(v.Lights && !v.Destroyed, v.Braking, beams.Contains(v), DriveOf(v) is { Speed: < -0.3f }); // reverse lamps: the drawn signed speed
             if (v.Buf.At(rt) is not { } s) continue;
             var p = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
@@ -209,7 +215,7 @@ public partial class NetClient
             if (drive != null) StepDriveFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
             if (v.Driver == _myId && _driving && _me != null)
             {
-                _carYaw = rot.Y;
+                _carYaw = rot.Y; driven = v;
                 hasCockpit = CockpitOf(v) != null;
                 if (CockpitFrame(v, p, rot, dt)) cockpit = true; // the view from the seat, in the place of the chase camera
                 else
@@ -225,6 +231,7 @@ public partial class NetClient
             }
             else if (!flakMine && _driving && _me != null && _seats is { Mine: > 0 } st && st.CarId == v.Id) { RideSeat(v, st.Mine); kmh = DriveOf(v) is { } rs ? MathF.Abs(rs.Speed) * 3.6f : v.Kmh; } // another seat: first person from it, the speed shown as the driver's is
         }
+        RenderTrailers(rt, dt); // every trailer, from its tractor as drawn just now (the hitch, the articulation, the ground fit, the wheels)
         SeatRiders(); // the riders of every vehicle, on their seats as the vehicles are drawn this frame (ADR 0026)
         if (!_driving) HideSelfInCar();
         if (!cockpit) EndCockpit();
@@ -236,9 +243,11 @@ public partial class NetClient
         else _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
         string? prompt = null;
         if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        if (driven != null && prompt != null && TowHint(driven) is { } towHint) prompt += "     " + towHint; // a trailer on the hook: the key that unhitches it
+        if (_driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
         if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
-        _hud?.SetPrompt(TurretPrompt() ?? LootPrompt() ?? GarageDoorPrompt() ?? prompt ?? MassPrompt() ?? RozhlasSetPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
+        _hud?.SetPrompt(TurretPrompt() ?? LootPrompt() ?? GarageDoorPrompt() ?? ScudLoadPrompt(prompt) ?? prompt ?? MassPrompt() ?? RozhlasSetPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
     }
 
     CharacterView? _selfView;
@@ -335,6 +344,7 @@ public partial class NetClient
         {
             if (v.Driver != 0 || v.Destroyed) continue;
             var def = Vehicles.Vehicles[v.Kind];
+            if (def.Seats.Count == 0) continue; // a trailer has no seat to take: nothing to enter
             var np = new NVec3(p.X, p.Y, p.Z);
             if (!VehicleReach.CanEnter(v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, np, Vehicles.EnterRadiusOf(def))) continue; // as the server: within the radius of the footprint, not one hovering overhead
             var d = VehicleReach.DistanceToFootprint(v.Pos, v.Yaw, def.HalfWidth, def.HalfLength, np);

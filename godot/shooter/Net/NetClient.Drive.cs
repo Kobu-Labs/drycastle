@@ -42,6 +42,10 @@ public partial class NetClient
         public Vector3 Smooth;
         /// <summary>What a correction turned the picture by (yaw x, pitch y, roll z; radians), faded out the same way (I-rubber-banding).</summary>
         public Vector3 AngleFix;
+        /// <summary>The trailer this client predicts with the vehicle (the one hitched to it; 0: none), its world view, and the articulation drawn this frame (the prediction stepped on by the part of a tick the frame is ahead).</summary>
+        public ushort TrailerId;
+        public TrailerProbe? TrailerWorld;
+        public float DrawnPhi;
     }
 
     readonly Dictionary<ushort, DriveView> _drives = new();
@@ -51,7 +55,7 @@ public partial class NetClient
     /// The newest snapshot's acknowledgement and server state, waiting for the next physics tick (C-02): a reconcile replays the unacknowledged
     /// inputs with the steps the server runs, so it runs where they run. A newer snapshot replaces an older one that has not been applied yet.
     /// </summary>
-    (ushort Ack, DriveState Server)? _driveReconcile;
+    (ushort Ack, DriveState Server, float Phi)? _driveReconcile;
 
     void OnDriveState(EntityRecord rec, uint tick)
     {
@@ -87,9 +91,39 @@ public partial class NetClient
             _drive = new Driving { CarId = mine.Id, Def = def, Probe = probe, Predict = new DrivePrediction(def, probe, server) };
             // what was drawn until now is the interpolated past: fade from there to the predicted present
             _drive.Smooth = mine.Node.GlobalPosition - new Vector3(server.Position.X, server.Position.Y, server.Position.Z);
+            SyncPredictedTrailer(mine, server, vehicle);
             return;
         }
-        _driveReconcile = (ack, server); // applied in the next physics tick (ReplayDriveReconcile)
+        var phi = SyncPredictedTrailer(mine, server, vehicle);
+        _driveReconcile = (ack, server, phi); // applied in the next physics tick (ReplayDriveReconcile)
+    }
+
+    /// <summary>
+    /// Keeps the driver's prediction in step with what the server says is on the hook (towing, ADR 0014): a trailer hitched to this vehicle is attached to the prediction (a copy of its body from the records'
+    /// articulation, stepped after the vehicle with <see cref="TowModel"/>, against the world through its own probe), and one that is let go is detached. Returns the articulation the server says (the trailer's record
+    /// yaw less the vehicle's), 0 with none.
+    /// </summary>
+    float SyncPredictedTrailer(CarView mine, DriveState server, EntityRecord vehicle)
+    {
+        var trailer = TrailerOf(mine.Id);
+        if (trailer == null || Vehicles == null || Vehicles.Vehicles[mine.Kind].Tow == null || !_dec.States.TryGetValue(trailer.Id, out var rec))
+        {
+            if (_drive!.TrailerId != 0 || _drive.Predict.HasTrailer) { _drive.Predict.DetachTrailer(); _drive.TrailerId = 0; _drive.TrailerWorld?.QueueFree(); _drive.TrailerWorld = null; }
+            return 0f;
+        }
+        var phi = FlightMath.Wrap(rec.YawRad - vehicle.YawRad);
+        if (_drive!.TrailerId != trailer.Id || !_drive.Predict.HasTrailer)
+        {
+            _drive.TrailerWorld?.QueueFree();
+            var tdef = Vehicles.Vehicles[trailer.Kind];
+            var probe = TrailerProbe.Make(tdef);
+            Owned.AddChild(probe);
+            var g = GeometryOf(mine.Kind, trailer.Kind);
+            _drive.TrailerWorld = probe; _drive.TrailerId = trailer.Id;
+            _drive.Predict.AttachTrailer(tdef, g, TowModel.Pose(g, server.Position, server.Yaw, phi), probe);
+        }
+        _drive.Predict.TrailerLoaded = trailer.Trailer?.Loaded ?? true; // a cart emptied under way weighs less from the next step on, as the server's does
+        return phi;
     }
 
     /// <summary>
@@ -104,7 +138,7 @@ public partial class NetClient
         var before = _drive.Predict.State.Position;
         var yawBefore = _drive.Predict.State.Yaw;
         var attBefore = new Vector3(_drive.Predict.State.Yaw, _drive.Predict.State.Pitch, _drive.Predict.State.Roll);
-        if (!_drive.Predict.Reconcile(r.Ack, r.Server, 1f / Wire.TickRate)) return;
+        if (!_drive.Predict.Reconcile(r.Ack, r.Server, 1f / Wire.TickRate, r.Phi)) return;
         _driveCorrections++;
         _recon++;
         var moved = before - _drive.Predict.State.Position;
@@ -118,6 +152,7 @@ public partial class NetClient
         _driveReconcile = null;
         if (_drive == null) return;
         if (GodotObject.IsInstanceValid(_drive.Probe)) _drive.Probe.QueueFree();
+        if (_drive.TrailerWorld != null && GodotObject.IsInstanceValid(_drive.TrailerWorld)) _drive.TrailerWorld.QueueFree();
         _drive = null;
     }
 
@@ -154,11 +189,13 @@ public partial class NetClient
         if (_drive != null && _drive.CarId == v.Id && _me != null)
         {
             s = _drive.Predict.State;
+            _drive.DrawnPhi = _drive.Predict.TrailerBody.Phi;
             var ahead = (float)Engine.GetPhysicsInterpolationFraction();
             if (ahead > 0.001f && !Dead)
             {
                 var now = NetInput.From(0, _me.Sample(), 0, 0);
-                DriveModel.Step(ref s, _drive.Def, DriverInput(now), ahead / Wire.TickRate, _drive.Probe);
+                var stepped = _drive.Predict.Ahead(DriverInput(now), ahead / Wire.TickRate); // the vehicle and, with a trailer on the hook, the trailer after it
+                s = stepped.State; _drive.DrawnPhi = stepped.Trailer.Phi;
             }
             if (_latSeq >= 0 && (MathF.Abs(s.Speed - _latSpeed) > 1e-3f || MathF.Abs(FlightMath.Wrap(s.Yaw - _latYaw)) > 1e-4f))
             {
