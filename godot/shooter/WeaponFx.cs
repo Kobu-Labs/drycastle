@@ -87,20 +87,27 @@ public static class WeaponFx
     const string PackRpgRocket = "SM_Wep_RPG_Rocket_01";
     /// <summary>The paid pack's RPG is drawn at this share of its authored size (1.27 m of tube, 1.84 m with the rocket in).</summary>
     const float PackRpgScale = 0.75f;
-    /// <summary>Scaled distances of the pack's RPG from its pistol grip (the model's origin): the tube's axis above it, the tube's mouth in front of it, its sights above it.</summary>
-    const float PackRpgAxis = 0.088f * PackRpgScale, PackRpgMouth = 0.27f * PackRpgScale, PackRpgSight = 0.2f * PackRpgScale;
+    /// <summary>
+    /// The pack's RPG has sights that do not look along its tube: the rear sight's notch is at authored y 0.211 (0.22 m behind the grip), the front
+    /// sight's post ends at y 0.201 (0.21 m in front of it), so the line over them drops 0.010 m in 0.43 m. The model is held with its mouth raised by
+    /// that angle, which lays the line of sight level, 0.206 m (authored) above the grip: aimed down the sights, the post's tip in the notch is the
+    /// point the rocket flies to (the screen's centre).
+    /// </summary>
+    const float PackRpgSightTilt = 0.0233f;
+    /// <summary>Scaled distances of the pack's RPG from its pistol grip (the model's origin): the tube's axis above it, the tube's mouth in front of it, and its line of sight above it.</summary>
+    const float PackRpgAxis = 0.088f * PackRpgScale, PackRpgMouth = 0.27f * PackRpgScale, PackRpgSight = 0.206f * PackRpgScale;
     /// <summary>How far behind the grip a held launcher's rear opening is, metres (the backblast leaves there).</summary>
     public const float LauncherRear = 0.75f;
 
     /// <summary>
     /// The RPG of the paid pack (SM_Wep_RPG_01: tube, loaded rocket head, two sights and trigger, converted to glb/props/rpg_01.glb by the pack's
-    /// tools/export_multi_glb.gd; atlas Weapons_01). Faces +Z with the grip under its origin: turned half round. False when the pack is not there.
+    /// tools/export_multi_glb.gd; atlas Weapons_01). Faces +Z with the grip under its origin: turned half round, and its mouth raised so its sights look level (<see cref="PackRpgSightTilt"/>). False when the pack is not there.
     /// </summary>
     static bool AddPackRpg(Node3D root)
     {
         if (SyntyLib.Instance("props/rpg_01", "glb/atlas/military_weapons_01.png") is not { } model) return false;
         model.Name = PackRpgNode;
-        model.Transform = new Transform3D(new Basis(Vector3.Up, Mathf.Pi).Scaled(Vector3.One * PackRpgScale), Vector3.Zero);
+        model.Transform = new Transform3D((new Basis(Vector3.Right, PackRpgSightTilt) * new Basis(Vector3.Up, Mathf.Pi)).Scaled(Vector3.One * PackRpgScale), Vector3.Zero);
         root.AddChild(model);
         return true;
     }
