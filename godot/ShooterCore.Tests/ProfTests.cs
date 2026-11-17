@@ -9,7 +9,7 @@ public class ProfTests
     public void Every_scope_has_a_name()
     {
         for (var s = (Prof.S)0; s < Prof.S.Count; s++) Assert.False(string.IsNullOrEmpty(Prof.Name(s)));
-        Assert.Equal("log_players", Prof.Name(Prof.S.Count - 1));
+        Assert.Equal("targets_armoured", Prof.Name(Prof.S.Count - 1));
     }
 
     [Fact]

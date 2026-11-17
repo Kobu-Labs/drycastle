@@ -43,11 +43,14 @@ public sealed partial class DriveProbe : CharacterBody3D, IDriveWorld
     public float GroundY(NVec3 from)
     {
         var top = new Vector3(from.X, from.Y + RayLift, from.Z);
-        var q = PhysicsRayQueryParameters3D.Create(top, top + Vector3.Down * (RayLift + RayReach));
-        q.CollisionMask = WorldMask;
-        var r = GetWorld3D().DirectSpaceState.IntersectRay(q);
-        return r.Count == 0 ? float.NegativeInfinity : r["position"].AsVector3().Y;
+        _groundRay.From = top; _groundRay.To = top + Vector3.Down * (RayLift + RayReach);
+        using var r = GetWorld3D().DirectSpaceState.IntersectRay(_groundRay); // freed here, not left to the finalizer (a wheel asks every tick)
+        return r.Count == 0 ? float.NegativeInfinity : r[HitPosition].AsVector3().Y;
     }
+
+    /// <summary>The ground ray's query, made once (a new one per ray was an object for the finalizer each), and the key of its answer.</summary>
+    readonly PhysicsRayQueryParameters3D _groundRay = new() { CollisionMask = WorldMask };
+    static readonly Variant HitPosition = "position";
 
     public float WaterY(float x, float z) => _water.BodyAt(x, z)?.SurfaceY ?? float.NegativeInfinity;
 

@@ -51,11 +51,14 @@ public sealed partial class FlightProbe : CharacterBody3D, IFlightWorld
     public float GroundY(NVec3 position)
     {
         var from = new Vector3(position.X, position.Y + ProbeLift, position.Z);
-        var q = PhysicsRayQueryParameters3D.Create(from, from + Vector3.Down * (_reach + ProbeLift));
-        q.CollisionMask = WorldMask;
-        var r = GetWorld3D().DirectSpaceState.IntersectRay(q);
-        return r.Count == 0 ? float.NegativeInfinity : r["position"].AsVector3().Y;
+        _groundRay.From = from; _groundRay.To = from + Vector3.Down * (_reach + ProbeLift);
+        using var r = GetWorld3D().DirectSpaceState.IntersectRay(_groundRay); // freed here, not left to the finalizer
+        return r.Count == 0 ? float.NegativeInfinity : r[HitPosition].AsVector3().Y;
     }
+
+    /// <summary>The ground ray's query, made once (a new one per ray was an object for the finalizer each), and the key of its answer.</summary>
+    readonly PhysicsRayQueryParameters3D _groundRay = new() { CollisionMask = WorldMask };
+    static readonly Variant HitPosition = "position";
 
     public float WaterY(float x, float z) => _water.BodyAt(x, z)?.SurfaceY ?? float.NegativeInfinity;
 

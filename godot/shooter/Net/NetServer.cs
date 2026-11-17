@@ -938,8 +938,10 @@ public partial class NetServer : Node
     {
         var profT = Prof.Begin(Prof.S.LiveTargets);
         var list = _targetLists.Count > 0 ? _targetLists.Pop() : new List<HitTarget>(_byId.Count + 4);
+        var partT = Prof.Begin(Prof.S.TargetsPlayers);
         foreach (var o in _byId.Values)
             if (_match.Get(o.Id)?.Life == PlayerLife.Alive && !_pins.ContainsKey(o.Id)) list.Add(HitTargetOf(o)); // a pinned player is under the demon and untouchable: not a target, so no shot stops on them
+        Prof.End(Prof.S.TargetsPlayers, partT);
         var dummies = _match.Targets.All; // living target dummies: an index loop, no enumerator object
         for (var i = 0; i < dummies.Count; i++)
         {
@@ -950,8 +952,10 @@ public partial class NetServer : Node
         _crowd?.AddTargets(list); // the citizens of the Holy Mass
         AddGangTargets(list); // the Gang members of the Thieves event
         AddVanTargets(list); // and their Raid vans
+        partT = Prof.Begin(Prof.S.TargetsAnimals);
         AddPetTargets(list);
         AddWildlifeTargets(list);
+        Prof.End(Prof.S.TargetsAnimals, partT);
         _workers?.AddTargets(list); // the workers of the Urad
         AddDemonTarget(list);
         PerfCounters.LiveTargetsCalls++; PerfCounters.LiveTargetsElems += list.Count;

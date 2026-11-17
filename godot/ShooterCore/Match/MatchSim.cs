@@ -601,10 +601,26 @@ public static class SpawnChooser
     public static Vector3 Choose(IReadOnlyList<Vector3> candidates, IEnumerable<Vector3> living, float minDistance, Random rng)
     {
         if (candidates.Count == 0) return Vector3.Zero;
-        var l = living.ToList();
-        float Nearest(Vector3 c) => l.Count == 0 ? float.PositiveInfinity : l.Min(o => Vector3.Distance(c, o));
-        var ok = candidates.Where(c => Nearest(c) >= minDistance).ToList();
-        if (ok.Count > 0) return ok[rng.Next(ok.Count)];
-        return candidates.OrderByDescending(Nearest).First();
+        // plain loops over lists kept between calls: a spawn asks every candidate about every living player (700 x 64 on the village map), and a round start asks for everyone at once
+        var l = t_living ??= new List<Vector3>(); l.Clear(); l.AddRange(living);
+        var nearest = t_nearest ??= new List<float>(); nearest.Clear();
+        var ok = t_ok ??= new List<int>(); ok.Clear();
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var c = candidates[i];
+            var d2 = float.PositiveInfinity;
+            foreach (var o in l) d2 = MathF.Min(d2, Vector3.DistanceSquared(c, o));
+            var d = MathF.Sqrt(d2); // the distance to the nearest: the root of the least square is the least root
+            nearest.Add(d);
+            if (d >= minDistance) ok.Add(i);
+        }
+        if (ok.Count > 0) return candidates[ok[rng.Next(ok.Count)]];
+        var best = 0;
+        for (var i = 1; i < nearest.Count; i++) if (nearest[i] > nearest[best]) best = i; // the first of the farthest, as a stable sort gives
+        return candidates[best];
     }
+
+    [ThreadStatic] static List<Vector3>? t_living;
+    [ThreadStatic] static List<float>? t_nearest;
+    [ThreadStatic] static List<int>? t_ok;
 }
