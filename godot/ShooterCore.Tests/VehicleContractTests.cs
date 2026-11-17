@@ -8,7 +8,7 @@ namespace Drycastle.ShooterCore.Tests;
 /// The vehicle contract (docs/standards/car-design.md part A, issue "Unify all vehicle models") over EVERY vehicle in vehicles.json, as far as it can be checked
 /// from data without Godot. Each rule is one Theory case. A vehicle that fails a rule today is on <see cref="Allowed"/> with a reason; the test fails for a vehicle
 /// that fails and is not listed, and for a listed one that now passes (delete the entry: the list only shrinks, the goal is empty).
-/// Not checkable here (needs the .glb): node names, wheels, `hull`, interior. Seat cover and pane kind are rules here (ADR 0035).
+/// The allow-list is empty (#325 conform: the harvester was the last entry). Not checkable here (needs the .glb): node names, wheels, `hull`, interior. Seat cover and pane kind are rules here (ADR 0035).
 /// </summary>
 public class VehicleContractTests
 {
@@ -65,13 +65,7 @@ public class VehicleContractTests
     };
 
     /// <summary>rule -> vehicle id -> why it fails today. Shrinks to empty (issue #325 step 7 and the model swaps).</summary>
-    static readonly Dictionary<string, Dictionary<string, string>> Allowed = new()
-    {
-        ["default_model_transform"] = new()
-        {
-            ["harvester"] = "Synty farm prefab turned 180 degrees by model_yaw_deg; standardize it (#325 conform)",
-        },
-    };
+    static readonly Dictionary<string, Dictionary<string, string>> Allowed = new();
 
     public static IEnumerable<object[]> RuleNames() => Rules.Keys.Select(k => new object[] { k });
 

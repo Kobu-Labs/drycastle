@@ -23,9 +23,9 @@ public sealed partial class CockpitRig : Node3D
         ["humvee"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildHumvee),
         ["bus"] = new Spec(System.Array.Empty<string>(), BuildBus),
         ["flak"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildFlak),
-        // the harvester (#331): the combine's cab, after SM_Veh_Harvester_01 (model +Z is forward, the model faces yaw 180, so its steering wheel at x 0.79, y 2.70, z 1.21 is x -0.79, z -1.21 here; no hull: the rig hangs under the root).
+        // the harvester (#331): the combine's cab, after SM_Veh_Harvester_01, standardized (scripts/vehicles/harvester.json: the model is in the game frame, its wheel is at x -0.787, y 2.741, z -1.21, the standardizer's steering_wheel_rim/_spokes).
         // The eye sits 1 m over the seat (y 2.0, vehicles.json seats) just behind the wheel, inside the cab; the model's own wheel and glass are not drawn for the driver, the reel is in front below the sill.
-        ["harvester"] = new Spec(new[] { "SM_Veh_Harvester_SteeringW", "SM_Veh_Harvester_Glass" }, BuildHarvester),
+        ["harvester"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes", "SM_Veh_Harvester_Glass" }, BuildHarvester),
         // the Scud truck: eye = seat_driver [-0.892, 1.15, -4.328] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/make_scud_model.py): inside the left half cab (roof inside 2.66, windscreen 1.99-2.42), behind the
         // wheel. The operator's seat has the same eye over its own seat (+0.892) but no cockpit rig: its view is the seat's (vehicles.json eye_height 1.05).
         ["scud"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildScud),
@@ -242,7 +242,7 @@ public sealed partial class CockpitRig : Node3D
         r.SteeringWheel(new Vector3(-0.62f, 1.10f, -0.60f), 0.185f, 65f, new Vector3(-0.62f, 0.90f, 0.12f), 0.30f);
 
     static void BuildHarvester(CockpitRig r) =>
-        r.SteeringWheel(new Vector3(-0.787f, 2.705f, -1.21f), 0.22f, 45f, new Vector3(-0.79f, 2.45f, -0.45f), 0.30f);
+        r.SteeringWheel(new Vector3(-0.787f, 2.741f, -1.21f), 0.22f, 45f, new Vector3(-0.79f, 2.486f, -0.45f), 0.30f);
 
     // ------------------------------------------------------------------ the flak truck
     // After scripts/make_flak_model.py: the cab is hollow (floor, dash with its gauges, the driver's seat, doors, pillars and roof round the window openings of the panes), so nothing is built round

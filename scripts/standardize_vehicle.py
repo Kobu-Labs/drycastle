@@ -19,6 +19,8 @@ What is generic (this file; no vehicle's numbers in it):
   - `controls`: the parts that turn with the steering and are not a steering wheel (handlebars, fork): node `steer_bars`, hung under the hull and turning about its own tilted
     axis (a quad's column), or, with `parent_wheel`, under that wheel's steer parent (a bike: fork, bars and front wheel turn together)
   - `parts`: more prefab meshes that join the body in the hull (racks, a swing arm)
+  - `nodes`: prefab meshes that keep a node of their own under the hull, under the name given (a harvester's reel that spins about its `pivot`; a glass mesh that is
+    not a breakable pane, `glass: true`: drawn in the standard glass material, hidden by the cockpit rig). Nothing is split or renamed
   - seat empties (`seat_*`, at the rider's feet), lamp empties (`light_*`) + emissive lens plates, optional extra empties
   - colour variants: the same model once per skin, only the atlas material name differs (`<id>_<skin>.glb`); materials.json gets the atlases
   - the pack manifest rows, the measured numbers (docs/research/vehicle-facts.d/<id>.json) and, with --vehicles-json, the model-owned keys of the
@@ -170,6 +172,7 @@ def build(cfg, parts, skin_mat, info=None):
     body_l, body_w = parts[cfg["body"]]
     wheel_src = {w["name"]: parts[w["node"]] for w in cfg["wheels"]}
     extra_src = [parts[n] for n in cfg.get("parts", [])]
+    node_src = [(n, parts[n["node"]]) for n in cfg.get("nodes", [])]
     control_src = {c["name"]: [parts[n] for n in c["nodes"]] for c in cfg.get("controls", [])}
     glass_src = parts[cfg["glass"]["node"]] if cfg.get("glass") else None
     steer_src = parts[cfg["steering"]["node"]] if cfg.get("steering") else None
@@ -178,12 +181,12 @@ def build(cfg, parts, skin_mat, info=None):
     # frame: yaw, then ground = lowest wheel point, then the footprint centre
     wm = {n: m.apply(yaw @ w) for n, (m, w) in wheel_src.items()}
     ground = -min(bbox(m)[0][1] for m in wm.values())
-    drawn = [parts[cfg["body"]]] + extra_src + [t for ts in control_src.values() for t in ts] + [t for t in (glass_src, steer_src) if t] + list(wheel_src.values())
+    drawn = [parts[cfg["body"]]] + extra_src + [t for ts in control_src.values() for t in ts] + [t for t in (glass_src, steer_src) if t] + [t for _, t in node_src] + list(wheel_src.values())
     pts = np.vstack([m.apply(yaw @ w).v for m, w in drawn])
     lo, hi = pts.min(axis=0), pts.max(axis=0)
     cz = -(lo[2] + hi[2]) / 2 if cfg["origin"]["centre"] == "bounds" else 0.0
     cx = -(lo[0] + hi[0]) / 2
-    assert abs(cx) < 0.02, f"the model is not symmetric in x (centre {-cx:.3f}): set origin.centre explicitly"
+    assert abs(cx) < cfg["origin"].get("x_tolerance", 0.02), f"the model is not symmetric in x (centre {-cx:.3f}): set origin.centre explicitly"
     M = translate([0.0, ground, cz]) @ yaw
 
     def put(p):
@@ -207,6 +210,13 @@ def build(cfg, parts, skin_mat, info=None):
     mdl.add(hull, final(body_l, body_w))
     for e in extra_src:
         mdl.add(hull, final(*e))
+
+    for n, src in node_src:
+        mdl.node(n["name"], hull, put(n["pivot"]) if n.get("pivot") else (0, 0, 0))
+        m = final(*src)
+        if n.get("glass"):
+            m.mat, m.n, m.uv = GLASS_MAT, None, None
+        mdl.add(n["name"], m)
 
     def frame_of(axis):
         """The orientation (in the game frame) of a node whose local Y is the source-frame `axis`."""
@@ -409,9 +419,10 @@ def entry_fields(cfg, info, facts, has_drive=True):
         "model": json.dumps(ids[0]), "skins": json.dumps(ids), "model_scale": "1", "model_yaw_deg": "0", "model_offset": "[0, 0, 0]",
         "half_width": num(facts["suggested"]["half_width"]), "half_length": num(facts["suggested"]["half_length"]), "height": num(facts["suggested"]["height"]),
         "seats": "[\n" + ",\n".join("        " + s for s in seats) + "\n      ]",
-        "lights": '{ "head": [%s], "tail": [%s], "beam_range": %s, "beam_angle": %s }' % (", ".join(vec(p) for p in head), ", ".join(vec(p) for p in tail),
-                                                                                       num(cfg.get("beam_range", 40)), num(cfg.get("beam_angle", 26))),
     }
+    if head:                     # a vehicle without lamps (the harvester) writes no `lights` block: vehicles.json wants 1 to 4 head lamps when it is there
+        out["lights"] = '{ "head": [%s], "tail": [%s], "beam_range": %s, "beam_angle": %s }' % (", ".join(vec(p) for p in head), ", ".join(vec(p) for p in tail),
+                                                                                              num(cfg.get("beam_range", 40)), num(cfg.get("beam_angle", 26)))
     if has_drive:
         out["drive.wheelbase"], out["drive.track"] = num(facts["wheels"]["wheelbase"]), num(facts["wheels"]["track"])
     if info["gl"].panes:
