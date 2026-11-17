@@ -26,6 +26,18 @@ public class WildlifeTests
         }
 
         public Vector3? PositionOf(ushort player) => Vector3.Zero;
+
+        /// <summary>The map's box (null: none) and the buildings as points: for the rare species.</summary>
+        public FlightBounds? Box;
+        public readonly List<(float X, float Z)> Buildings = new();
+        public FlightBounds? MapBounds => Box;
+
+        public float NearestBuildingM(float x, float z, float maxM)
+        {
+            var best = float.PositiveInfinity;
+            foreach (var (bx, bz) in Buildings) best = MathF.Min(best, MathF.Sqrt((bx - x) * (bx - x) + (bz - z) * (bz - z)));
+            return best <= maxM ? best : float.PositiveInfinity;
+        }
     }
 
     static (WildlifeKeeper Keeper, WorldEntityManager Entities, AnimalsFile Animals) Make(string json, int seed = 1)
@@ -50,6 +62,7 @@ public class WildlifeTests
         Assert.True(data.Wildlife.MaxAnimals > 0);
         Assert.NotEmpty(data.Wildlife.Species);
         Assert.All(data.Wildlife.Species, s => Assert.True(data.Animals.Find(s.Id)!.Flees, s.Id));
+        Assert.All(data.Wildlife.Rare, r => Assert.True(data.Animals.Find(r.Id)!.Flees, r.Id));
         Assert.True(data.Wildlife.MaxAnimals + data.Pets.MaxPets < WorldEntityManager.MaxEntities / 2, "wildlife and pets must leave room for every other entity");
     }
 
@@ -60,6 +73,27 @@ public class WildlifeTests
     [InlineData("""{"version":1,"max_animals":5,"species":[{"id":"bear","count":0}]}""", "count")]
     public void BadFilesAreRefused(string json, string why) =>
         Assert.Contains(why, Assert.Throws<DataFileException>(() => WildlifeFile.Parse(json)).Message);
+
+    [Theory]
+    [InlineData("""{"version":1,"max_animals":5,"rare":[{"id":"","count":1}]}""", "no id")]
+    [InlineData("""{"version":1,"max_animals":5,"rare":[{"id":"fox"},{"id":"fox"}]}""", "twice")]
+    [InlineData("""{"version":1,"max_animals":5,"species":[{"id":"fox","count":1}],"rare":[{"id":"fox"}]}""", "twice")]
+    [InlineData("""{"version":1,"max_animals":5,"rare":[{"id":"fox","count":0}]}""", "count")]
+    [InlineData("""{"version":1,"max_animals":5,"rare":[{"id":"fox","min_building_m":-1}]}""", "min_building_m")]
+    [InlineData("""{"version":1,"max_animals":5,"rare":[{"id":"fox","respawn_seconds":0}]}""", "respawn_seconds")]
+    public void BadRareEntriesAreRefused(string json, string why) =>
+        Assert.Contains(why, Assert.Throws<DataFileException>(() => WildlifeFile.Parse(json)).Message);
+
+    [Fact]
+    public void ARareEntryHasDefaultsAndMustBeAFleeingSpeciesOfAnimalsJson()
+    {
+        var animals = GameData.Load(DataDir).Animals;
+        var f = WildlifeFile.Parse("""{"version":1,"max_animals":5,"rare":[{"id":"fox"}]}""");
+        Assert.Equal((1, 60f, 60f), (f.Rare[0].Count, f.Rare[0].MinBuildingM, f.Rare[0].RespawnSeconds));
+        f.CheckAgainst(animals);
+        Assert.Contains("not in animals.json", Assert.Throws<DataFileException>(() => WildlifeFile.Parse("""{"version":1,"max_animals":5,"rare":[{"id":"dragon"}]}""").CheckAgainst(animals)).Message);
+        Assert.Contains("is a pet", Assert.Throws<DataFileException>(() => WildlifeFile.Parse("""{"version":1,"max_animals":5,"rare":[{"id":"dog"}]}""").CheckAgainst(animals)).Message);
+    }
 
     [Fact]
     public void AnUnknownSpeciesOrAPetIsRefused()
@@ -535,5 +569,208 @@ public class WildlifeTests
         }
         Assert.Equal(Run(null).Positions, Run(Array.Empty<BoidObstacle>()).Positions);
         Assert.Equal(Run(null).Positions, Run(new[] { new BoidObstacle(new Vector3(9999, 0, 0), Vector3.Zero, 10) }).Positions); // far away: no effect
+    }
+
+    // ---- rare species (the Unicorn) ----
+
+    const string Rare = """{"version":1,"max_animals":10,"rare":[{"id":"fox","count":1,"min_building_m":60,"respawn_seconds":60}]}""";
+    static readonly Func<string, IReadOnlyList<Vector3>> NoHabitat = _ => Array.Empty<Vector3>();
+
+    static Flat RareWorld() => new() { Box = new FlightBounds(0, 300, 0, 300) };
+
+    static int RareAlive(WildlifeKeeper k) => k.Animals.Count(a => a.Alive && a.Def.Id == "fox");
+
+    static void Kill(WildlifeKeeper k)
+    {
+        var living = new List<(ushort HitId, Animal Animal)>();
+        k.Living(living);
+        Assert.Equal(DamageResult.Killed, k.Hit(living.Single().HitId, 1, 9999));
+    }
+
+    static void Run(WildlifeKeeper k, IAnimalWorld w, float seconds) { for (var t = 0f; t < seconds - 0.001f; t += Dt) k.Update(Dt, w); }
+
+    [Fact]
+    public void ARareAnimalSpawnsOnGroundAndAtLeastMinBuildingMFromEveryBuilding()
+    {
+        for (var seed = 1; seed <= 40; seed++)
+        {
+            var (keeper, _, _) = Make(Rare, seed);
+            var world = RareWorld();
+            world.NoGround = (x, _) => x < 100; // water in the west
+            world.Buildings.Add((150, 150));
+            world.Buildings.Add((250, 40));
+            Assert.Equal(1, keeper.Populate(NoHabitat, world));
+            var home = keeper.Animals.Single().Home;
+            Assert.True(home.X >= 100 && home.X <= 300 && home.Z >= 0 && home.Z <= 300, $"seed {seed}: {home}");
+            foreach (var (bx, bz) in world.Buildings)
+                Assert.True(MathF.Sqrt((bx - home.X) * (bx - home.X) + (bz - home.Z) * (bz - home.Z)) >= 60, $"seed {seed}: {home} too near a building");
+        }
+    }
+
+    [Fact]
+    public void ARareAnimalIsNotAZoneSpeciesAndCountsTowardMaxAnimals()
+    {
+        var (keeper, _, _) = Make("""{"version":1,"max_animals":1,"species":[{"id":"bear","count":3}],"rare":[{"id":"fox"}]}""");
+        var asked = new List<string>();
+        Assert.Equal(1, keeper.Populate(s => { asked.Add(s); return Points((5, 5)); }, RareWorld()));
+        Assert.DoesNotContain("fox", asked);
+        Assert.Equal(1, RareAlive(keeper)); // the rare one is placed first: the cap never starves it
+        Assert.Equal(0, keeper.Animals.Count(a => a.Def.Id == "bear"));
+    }
+
+    [Fact]
+    public void OnlyOneRareAnimalLivesAtATimeAndAKilledOneIsReplacedAfterRespawnSeconds()
+    {
+        var (keeper, _, _) = Make(Rare);
+        var world = RareWorld();
+        var killed = 0;
+        keeper.Killed += (_, _) => killed++;
+        keeper.Populate(NoHabitat, world);
+        Run(keeper, world, 500);
+        Assert.Equal((1, 0), (RareAlive(keeper), keeper.RareWaiting)); // nothing spawns a second one
+
+        Kill(keeper);
+        Assert.Equal((1, 0, 1), (killed, RareAlive(keeper), keeper.RareWaiting));
+        Run(keeper, world, 59.5f);
+        Assert.Equal(0, RareAlive(keeper));
+        Run(keeper, world, 1f);
+        Assert.Equal((1, 0), (RareAlive(keeper), keeper.RareWaiting));
+        Assert.Equal(2, keeper.Count); // the corpse of the first still lies there
+        Run(keeper, world, 500);
+        Assert.Equal(1, RareAlive(keeper));
+    }
+
+    [Fact]
+    public void AKilledRareAnimalsCorpseGoingAwayDoesNotSpawnAnotherOne()
+    {
+        var (keeper, entities, _) = Make(Rare);
+        var world = RareWorld();
+        keeper.Populate(NoHabitat, world);
+        var first = keeper.Animals.Single();
+        Kill(keeper);
+        for (var t = 0f; t < 45f; t += Dt) { entities.Tick(Dt); keeper.Update(Dt, world); } // corpse_seconds (30) pass; the 60 s have not
+        Assert.Equal(0, keeper.Count);
+        Assert.Equal(1, keeper.RareWaiting);
+        for (var t = 0f; t < 16f; t += Dt) { entities.Tick(Dt); keeper.Update(Dt, world); }
+        Assert.Equal(1, RareAlive(keeper));
+        Assert.NotSame(first, keeper.Animals.Single());
+    }
+
+    [Fact]
+    public void WithNoValidPointThereIsNoRareAnimalItIsLoggedAndTheNextCountdownTriesAgain()
+    {
+        var (keeper, _, _) = Make(Rare);
+        var world = RareWorld();
+        for (var x = 0; x <= 300; x += 50) for (var z = 0; z <= 300; z += 50) world.Buildings.Add((x, z)); // every point is within 60 m of one
+        var log = new List<string>();
+        keeper.Log = log.Add;
+        Assert.Equal(0, keeper.Populate(NoHabitat, world));
+        Assert.Contains(log, l => l.Contains("no point") && l.Contains("fox"));
+        Assert.Equal(1, keeper.RareWaiting);
+        Run(keeper, world, 61);
+        Assert.Equal((0, 1), (RareAlive(keeper), keeper.RareWaiting)); // tried at 60 s, found none, waits another period
+
+        world.Buildings.Clear();
+        Run(keeper, world, 59);
+        Assert.Equal(0, RareAlive(keeper));
+        Run(keeper, world, 2);
+        Assert.Equal((1, 0), (RareAlive(keeper), keeper.RareWaiting));
+    }
+
+    [Fact]
+    public void AWorldWithoutAMapBoxSpawnsNoRareAnimal()
+    {
+        var (keeper, _, _) = Make(Rare);
+        Assert.Equal(0, keeper.Populate(NoHabitat, new Flat()));
+        Assert.Equal(1, keeper.RareWaiting);
+    }
+
+    [Fact]
+    public void ARoundStartRestartsTheRareSlotsAndClearStopsTheCountdowns()
+    {
+        var (keeper, _, _) = Make(Rare);
+        var world = RareWorld();
+        keeper.Populate(NoHabitat, world);
+        Kill(keeper);
+        Assert.Equal(1, keeper.RareWaiting);
+        keeper.Populate(NoHabitat, world);
+        Assert.Equal((1, 0), (RareAlive(keeper), keeper.RareWaiting));
+        keeper.Clear();
+        Run(keeper, world, 200);
+        Assert.Equal((0, 0), (keeper.Count, keeper.RareWaiting));
+    }
+
+    [Fact]
+    public void BuildingFootprintsAnswerTheFlatDistanceToTheNearestPolygonAndZeroInside()
+    {
+        var f = new BuildingFootprints();
+        f.Add(new[] { new[] { (0f, 0f), (10f, 0f), (10f, 10f), (0f, 10f) } });
+        f.Add(new[] { new[] { (100f, 0f), (110f, 0f), (110f, 10f), (100f, 10f) }, new[] { (103f, 3f), (107f, 3f), (107f, 7f), (103f, 7f) } }); // with a hole
+        Assert.Equal(0f, f.Nearest(5, 5, 60));
+        Assert.Equal(20f, f.Nearest(30, 5, 60), 3);
+        Assert.Equal(MathF.Sqrt(2) * 10, f.Nearest(20, 20, 60), 3); // off a corner
+        Assert.Equal(40f, f.Nearest(60, 5, 60), 3); // the nearer of two
+        Assert.Equal(float.PositiveInfinity, f.Nearest(300, 300, 60)); // none within the limit
+        Assert.Equal(float.PositiveInfinity, f.Nearest(30, 5, 10));
+        Assert.Equal(float.PositiveInfinity, new BuildingFootprints().Nearest(0, 0, 60));
+    }
+
+    // ---- the Unicorn vanishes ----
+
+    const string RareUnicorn = """{"version":1,"max_animals":10,"rare":[{"id":"unicorn","count":1,"min_building_m":60,"respawn_seconds":60}]}""";
+
+    [Fact]
+    public void AStartledUnicornIsNoTargetAndTakesNoHitThenReappearsFarAwayOnValidGround()
+    {
+        for (var seed = 1; seed <= 20; seed++)
+        {
+            var (keeper, _, animals) = Make(RareUnicorn, seed);
+            var world = RareWorld();
+            world.NoGround = (x, _) => x < 100;
+            world.Buildings.Add((150, 150));
+            keeper.Populate(NoHabitat, world);
+            var u = keeper.Animals.Single();
+            var from = u.Position;
+            var hp = u.Hp;
+
+            var living = new List<(ushort HitId, Animal Animal)>();
+            keeper.Living(living);
+            var id = living.Single().HitId;
+            Assert.Equal(DamageResult.Damaged, keeper.Hit(id, 1, 1)); // startled by a hit that does not kill
+            Assert.Equal(AnimalState.Vanish, u.State);
+            var targets = new List<HitTarget>();
+            keeper.AddTargets(targets);
+            Assert.Empty(targets); // bullets and vehicles pass through
+            Assert.Equal(DamageResult.Ignored, keeper.Hit(id, 1, 9999));
+            Assert.True(u.Alive);
+            Assert.Equal(hp - 1, u.Hp);
+
+            var wait = animals.Find("unicorn")!.VanishSeconds + 0.5f;
+            for (var t = 0f; t < wait; t += Dt) u.Tick(Dt);
+            Assert.Equal(AnimalState.Idle, u.State);
+            Assert.True(Vector3.Distance(new Vector3(from.X, 0, from.Z), new Vector3(u.Position.X, 0, u.Position.Z)) >= animals.Find("unicorn")!.VanishMinM, $"seed {seed}");
+            Assert.True(u.Position.X >= 100 && u.Position.X <= 300 && u.Position.Z >= 0 && u.Position.Z <= 300);
+            Assert.True(world.NearestBuildingM(u.Position.X, u.Position.Z, 60) >= 60, $"seed {seed}: too near a building");
+            keeper.AddTargets(targets);
+            Assert.Single(targets); // a target again
+            Assert.Equal(1, RareAlive(keeper, "unicorn"));
+            Assert.Equal(0, keeper.RareWaiting); // the slot is untouched
+        }
+    }
+
+    static int RareAlive(WildlifeKeeper k, string id) => k.Animals.Count(a => a.Alive && a.Def.Id == id);
+
+    [Fact]
+    public void AUnicornThatFindsNoNewPlaceStaysWhereItWas()
+    {
+        var (keeper, _, _) = Make(RareUnicorn);
+        var world = RareWorld();
+        keeper.Populate(NoHabitat, world);
+        var u = keeper.Animals.Single();
+        var from = u.Position;
+        world.Box = new FlightBounds(from.X - 5, from.X + 5, from.Z - 5, from.Z + 5); // nowhere 150 m away
+        u.OnDamage(1, 1);
+        for (var t = 0f; t < 3f; t += Dt) u.Tick(Dt);
+        Assert.Equal((AnimalState.Idle, from), (u.State, u.Position));
     }
 }

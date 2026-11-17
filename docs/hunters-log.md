@@ -17,7 +17,8 @@ Design source for the Hunter's Log: a server-wide, browsable book of every wild 
 The row stores both the index id and the exact species id (and variant, e.g. moose bull). Mapping lives in one table in ShooterCore.
 
 ## Mystery creatures
-Bigfoot (live: an Event, caught when the Event is won and the player is credited), Unicorn (todo, no data yet), Scylla (todo, no data yet). Registry in ShooterCore so Unicorn/Scylla only need a catch hook later. No kg (null).
+Bigfoot (live: an Event, caught when the Event is won and the player is credited), Unicorn (live: a rare wild animal, caught by killing it, see below), Scylla (todo, no data yet). Registry in ShooterCore so Scylla only needs a catch hook later. No kg (null).
+- **Unicorn:** a rare wild animal (`rare` in `wildlife.json`, GLOSSARY "Unicorn"; one on the map at a time, respawns `respawn_seconds` after a kill). It is killed like any animal and goes through `OnWildKilled`: `HuntRecord.ForUnicorn` makes the row (species and exact `unicorn`, variant "", kg null, distance rounded, none for a run over, hit diagram unless run over, any weapon). It holds a first catch and a longest shot like any mystery; redaction of a hidden row drops the name, variant and diagram as before. No announcement of its spawn.
 - **Redaction (server-side rule):** a viewer who has not caught creature X is never sent X's name or shape: the server sends a hidden id and the client draws only a "?" (no shape) and a blurred placeholder name. Applies to Life List tiles, Records cards, All hunts (species column, filter, hit card), kill feed / announcements.
 - Viewer/owner cases: both caught = full; viewer caught, owner not = real name/outline; viewer not caught, owner caught = hidden, the "?" in the accent; neither = hidden, the "?" dim.
 - Hunter, time, distance, weapon stay visible on a hidden row. Hidden species sort last and share one filter option ("Mystery hunts").

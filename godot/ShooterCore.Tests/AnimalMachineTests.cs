@@ -61,7 +61,7 @@ public class AnimalMachineTests
             seen.Add(a.State);
         }
         // every state this species can be in: Sit and Bark are for the species that opt in (see PetBehaviourTests), Carried for a Thief to cause (PetLootTests)
-        Assert.Equal(Enum.GetValues<AnimalState>().Where(s => s is not (AnimalState.Sit or AnimalState.Bark or AnimalState.Carried or AnimalState.Thrown or AnimalState.Down)).Order(), seen.Order()); // Carried is the Thieves event's (PetLootTests); Thrown and Down a vehicle's (AnimalTests)
+        Assert.Equal(Enum.GetValues<AnimalState>().Where(s => s is not (AnimalState.Sit or AnimalState.Bark or AnimalState.Carried or AnimalState.Thrown or AnimalState.Down or AnimalState.Vanish)).Order(), seen.Order()); // Vanish is for a species with vanish_seconds (AnimalTests); Carried is the Thieves event's (PetLootTests); Thrown and Down a vehicle's (AnimalTests)
     }
 
     [Fact]
