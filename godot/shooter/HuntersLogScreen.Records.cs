@@ -39,7 +39,7 @@ public sealed partial class HuntersLogScreen
         switch (m.Kind)
         {
             case RecordKind.Hidden:
-                // a creature the viewer has not caught: the blurred blob and a "?", nothing else
+                // a creature the viewer has not caught: a "?", nothing else
                 v.AddChild(HiddenFigure(new Vector2(ShooterTheme.LogCardW - 4 * ShooterTheme.Space, ShooterTheme.LogFigureH * 2), m.HiddenLook == TileLook.Filled));
                 break;
             case RecordKind.Unhunted:
@@ -95,10 +95,10 @@ public sealed partial class HuntersLogScreen
         return string.Join("  |  ", parts);
     }
 
-    /// <summary>A hunt's recorded picture: the blurred blob and a "?" when hidden, else the animal with the entry marked (none for a run over or a catch: no diagram).</summary>
+    /// <summary>A hunt's recorded picture: a "?" when hidden, else the animal with the entry marked (none for a run over or a catch: no diagram).</summary>
     Control HitFigure(HuntView? h, Vector2 size)
     {
-        if (h is { Hidden: true }) return HiddenFigure(size, filled: true);
+        if (h is { Hidden: true }) return HiddenFigure(size, caught: true);
         var pic = new AnimalPicture(size);
         if (h == null) { pic.SetSpecies(AnimalArt.Box, filled: false); return pic; }
         var spec = HuntPicture.Resolve(_env.Art.Shapes, h);

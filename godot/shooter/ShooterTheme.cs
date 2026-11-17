@@ -31,7 +31,7 @@ public static class ShooterTheme
     /// <summary>The drag preview's opacity and the opacity of a cell that is the source of a drag or cannot take the item being dragged.</summary>
     public const float DragPreviewAlpha = 0.85f, DragDimAlpha = 0.45f;
 
-    // the Hunter's Log (a side panel over the right of the screen, the world stays visible): its share of the screen, a Life List tile, a record card's pictures,
+    // the Hunter's Log (a panel centred on the screen on its own top layer, the world stays visible around it): its share of the screen, a Life List tile, a record card's pictures,
     // the hit card beside the table, a table row; below LogStackBelow reference pixels of panel width the hit card goes under the table instead of beside it
     public const float LogWidthShare = 0.6f, LogHeightShare = 0.85f;
     public const int LogTileW = 22 * Space, LogTileArtH = 7 * Space, LogCardW = 40 * Space, LogFigureH = 12 * Space;
@@ -242,6 +242,7 @@ public static class ShooterTheme
         PanelVariation(t, "LogStat", Box(Raised, pad, Line));
         PanelVariation(t, "LogCard", Box(Raised, pad + Space / 2, Line));
         PanelVariation(t, "LogHit", Box(Raised, pad + Space / 2, Line));
+        PanelVariation(t, "LogNotice", Box(Raised, Space, Warn));
         PanelVariation(t, "LogPill", Box(Colors.Transparent, Space / 4, Accent, Border, Radius));
         Variation(t, "LogCaption", FontSmall, Dim);
 
@@ -255,7 +256,7 @@ public static class ShooterTheme
 
         var none = Box(Colors.Transparent, Space / 2, null, 0);
         var mine = Box(new Color(Accent, LogMineTint), Space / 2, null, 0);
-        var hover = Box(Hover, Space / 2, null, 0);
+        var hover = Box(Hover, Space / 2, Accent); // the border only shows on hover: the margins are the same, nothing moves
         var selected = Box(Active, Space / 2, Accent, BorderStrong);
         VariationButton(t, "LogRow", none, hover, selected);
         VariationButton(t, "LogRowMine", mine, hover, selected);
@@ -265,8 +266,8 @@ public static class ShooterTheme
             t.SetStylebox("disabled", n, none);
         }
 
-        VariationButton(t, "LogHead", Box(Raised, Space / 2, null, 0), Box(Hover, Space / 2, null, 0), Box(Active, Space / 2, null, 0));
-        VariationButton(t, "LogHeadSorted", Box(Raised, Space / 2, null, 0), Box(Hover, Space / 2, null, 0), Box(Active, Space / 2, null, 0));
+        VariationButton(t, "LogHead", Box(Raised, Space / 2, null, 0), Box(Hover, Space / 2, Accent), Box(Active, Space / 2, null, 0));
+        VariationButton(t, "LogHeadSorted", Box(Raised, Space / 2, null, 0), Box(Hover, Space / 2, Accent), Box(Active, Space / 2, null, 0));
         foreach (var n in new[] { "LogHead", "LogHeadSorted" })
         {
             t.SetStylebox("focus", n, Ring(Space / 2));

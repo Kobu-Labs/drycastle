@@ -395,21 +395,4 @@ public class HuntLogUiTests
         Assert.Equal(0, edge[0]);           // outside
         Assert.True(edge.Count(b => b == 255) < mask.Count(b => b == 255));
     }
-
-    [Fact]
-    public void The_blob_is_soft_filled_or_a_ring_and_has_no_hard_edge()
-    {
-        const int w = 160, h = 128;
-        var filled = HuntArtMath.Blob(w, h, true);
-        var ring = HuntArtMath.Blob(w, h, false);
-        int At(byte[] a, float u, float v) => a[(int)(v * h) * w + (int)(u * w)];
-        // the body's middle (x = 0.72 heights, y = 0.42)
-        Assert.Equal(255, At(filled, 0.72f / 1.25f, 0.42f));
-        Assert.True(At(ring, 0.72f / 1.25f, 0.42f) < 40);
-        Assert.Equal(0, At(filled, 0.98f, 0.05f)); // a corner
-        Assert.Equal(0, At(ring, 0.98f, 0.05f));
-        Assert.Contains(ring, b => b > 200); // the ring is there
-        // soft: between 0 and 255 there are many values, not a step
-        Assert.True(filled.Count(b => b is > 20 and < 235) > filled.Count(b => b == 255) / 20);
-    }
 }

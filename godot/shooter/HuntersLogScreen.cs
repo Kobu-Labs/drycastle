@@ -4,17 +4,17 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>What the Hunter's Log screen needs from the match: the queries, the pictures and the names (docs/hunters-log.md).</summary>
-public sealed record HuntLogEnv(HuntLogData Data, HuntArtResolver Art, Func<string, string> SpeciesName, Func<string, string> WeaponName, Func<IReadOnlyList<string>> WeaponIds);
+public sealed record HuntLogEnv(HuntLogData Data, HuntArtResolver Art, Func<string, string> SpeciesName, Func<string, string> WeaponName, Func<IReadOnlyList<string>> WeaponIds, Func<bool> InSandbox);
 
 /// <summary>
 /// The Hunter's Log (#336, J, rebindable action "hunters_log", also in the pause menu): the book of every wild animal a player hunted. A non-pausing overlay like the
-/// Equipment screen, but a side panel over about the right 60 % of the screen so the world stays visible and live on its left: the mouse is released (the shell
+/// Equipment screen, but a panel centred on about 60 % of the screen's width (on its own top layer, above the kill feed) so the world stays visible and live around it: the mouse is released (the shell
 /// asks <see cref="Hud.HuntersLogOpen"/>), the movement keys still work (<see cref="Player.MoveWithFreeMouse"/>), firing does not, nothing pauses. It closes with its key,
 /// Esc, death, the end of the match and a turret or missile view; Esc on another player's log first goes up to My Log (<see cref="HuntLogNav"/>).
 /// Tabs, in order: My Log (the Life List of 10 index species and 3 Mystery creatures, one grid), Records (a card per species with its heaviest and its longest shot as
 /// recorded hit pictures), All hunts (a sortable, filterable, paged table with the selected hunt's hit card beside it). Q / E, the bumpers and Page Up / Down change tab; the
 /// arrows move focus. There is no hint text: every control is labelled by what it is. The server answers every query redacted (a Mystery creature the viewer has not caught is
-/// a hidden id: a blurred blob, a "?" and no name); every query has a designed loading, empty and error (Retry) state, a late answer to an older request is dropped
+/// a hidden id: a "?" and a blurred placeholder name); every query has a designed loading, empty and error (Retry) state, a late answer to an older request is dropped
 /// (<see cref="HuntLoader{T}"/>), and nothing is rebuilt per frame (a pane is rebuilt when its answer arrives, the table's rows are pooled).
 /// </summary>
 public sealed partial class HuntersLogScreen : Control
@@ -27,6 +27,7 @@ public sealed partial class HuntersLogScreen : Control
     readonly Button[] _tabs = new Button[Tabs];
     readonly Control[] _panes = new Control[Tabs];
     Label _title = null!;
+    Control _sandboxNote = null!;
     Button _back = null!, _close = null!;
     PanelFade _fade;
     bool _logStale, _recordsStale, _huntsStale;
@@ -56,9 +57,9 @@ public sealed partial class HuntersLogScreen : Control
 
     void BuildFrame()
     {
-        _panel.AnchorLeft = 1f - ShooterTheme.LogWidthShare; _panel.AnchorRight = 1;
+        _panel.AnchorLeft = (1f - ShooterTheme.LogWidthShare) / 2; _panel.AnchorRight = 1f - _panel.AnchorLeft;
         _panel.AnchorTop = (1f - ShooterTheme.LogHeightShare) / 2; _panel.AnchorBottom = 1f - _panel.AnchorTop;
-        _panel.OffsetLeft = 0; _panel.OffsetTop = 0; _panel.OffsetBottom = 0; _panel.OffsetRight = -ShooterTheme.Margin;
+        _panel.OffsetLeft = 0; _panel.OffsetTop = 0; _panel.OffsetBottom = 0; _panel.OffsetRight = 0;
         AddChild(_panel);
 
         var col = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
@@ -90,6 +91,11 @@ public sealed partial class HuntersLogScreen : Control
         _tabs[1].Text = Strings.T("log.tab.records");
         _tabs[2].Text = Strings.T("log.tab.hunts");
         col.AddChild(tabs);
+
+        // sandbox writes nothing to the database, so no hunt is logged: a line under the tabs says so on every tab while it holds (text, not colour alone)
+        _sandboxNote = new PanelContainer { ThemeTypeVariation = "LogNotice", Visible = false, MouseFilter = MouseFilterEnum.Ignore };
+        _sandboxNote.AddChild(Text(Strings.T("log.sandbox"), "HudWarn"));
+        col.AddChild(_sandboxNote);
 
         // the panes share one space; the shown one is visible
         var stack = new MarginContainer { SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
@@ -167,7 +173,14 @@ public sealed partial class HuntersLogScreen : Control
         var (changed, finished) = _fade.Tick((float)delta, UiShell.FadeTime);
         if (changed) ApplyAlpha();
         if (finished) { FinishClose(); return; }
-        if (_open) Data.Tick((float)delta);
+        if (_open) { Data.Tick((float)delta); SyncSandbox(); }
+    }
+
+    /// <summary>Shows the sandbox line while the player is in sandbox (a flag read per frame while open; the line only changes when it flips).</summary>
+    void SyncSandbox()
+    {
+        var on = _env.InSandbox();
+        if (_sandboxNote.Visible != on) _sandboxNote.Visible = on;
     }
 
     // ---- tabs ----
@@ -202,6 +215,7 @@ public sealed partial class HuntersLogScreen : Control
             _tabs[i].SetPressedNoSignal(i == _nav.TabIndex);
             _panes[i].Visible = i == _nav.TabIndex;
         }
+        SyncSandbox();
         var title = TitleText();
         _tabs[0].Text = title;
         _title.Text = title;
@@ -285,8 +299,8 @@ public sealed partial class HuntersLogScreen : Control
     }
 
     /// <summary>
-    /// A loading, empty, error or missing state in the middle of its pane: a spinner (loading), the title, what happened, and a button (Retry, or the action that
-    /// leaves the state). <paramref name="action"/> null: no button.
+    /// A loading, empty, error or missing state in the middle of its pane: a spinner (loading), the title, what happened (<paramref name="body"/> empty: just the title), and a
+    /// button (Retry, or the action that leaves the state). <paramref name="action"/> null: no button.
     /// </summary>
     Control StateBox(string title, string body, bool spinner = false, string? actionText = null, Action? action = null)
     {
@@ -300,7 +314,7 @@ public sealed partial class HuntersLogScreen : Control
             v.AddChild(s);
         }
         v.AddChild(Text(title, "HudHead", HorizontalAlignment.Center));
-        v.AddChild(Text(body, "HudDim", HorizontalAlignment.Center, wrap: true));
+        if (body != "") v.AddChild(Text(body, "HudDim", HorizontalAlignment.Center, wrap: true));
         if (actionText != null && action != null)
         {
             var b = Ui.Btn(actionText, action, "MenuPrimary", ShooterTheme.Space * 16);
@@ -310,15 +324,12 @@ public sealed partial class HuntersLogScreen : Control
         return center;
     }
 
-    /// <summary>The Mystery creature's picture: the blurred blob with a "?" over it, nothing else (the name stays unsent).</summary>
-    static Control HiddenFigure(Vector2 size, bool filled)
+    /// <summary>The Mystery creature's picture: a "?" and nothing else (no shape, the name stays unsent). The accent when the log's owner caught it, the dim ink when nobody did.</summary>
+    static Control HiddenFigure(Vector2 size, bool caught)
     {
         var holder = new Control { CustomMinimumSize = size, MouseFilter = MouseFilterEnum.Ignore };
-        var pic = new AnimalPicture(size);
-        pic.SetBlob(filled);
-        pic.SetAnchorsPreset(LayoutPreset.FullRect);
-        holder.AddChild(pic);
         var mark = Text(Strings.T("log.hidden.mark"), size.Y < ShooterTheme.Space * 12 ? "HudBig" : "HudDisplay", HorizontalAlignment.Center);
+        mark.AddThemeColorOverride("font_color", caught ? ShooterTheme.Accent : ShooterTheme.Dim);
         mark.VerticalAlignment = VerticalAlignment.Center;
         mark.SetAnchorsPreset(LayoutPreset.FullRect);
         holder.AddChild(mark);

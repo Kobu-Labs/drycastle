@@ -34,7 +34,7 @@ public partial class NetClient
     }
 
     /// <summary>What the screen draws with and asks through.</summary>
-    HuntLogEnv HuntLogEnvironment() => new(HuntData, HuntArtOf, HuntSpeciesName, WeaponName, () => Weapons?.Weapons.Select(w => w.Id).ToList() ?? new List<string>());
+    HuntLogEnv HuntLogEnvironment() => new(HuntData, HuntArtOf, HuntSpeciesName, WeaponName, () => Weapons?.Weapons.Select(w => w.Id).ToList() ?? new List<string>(), () => SandboxGranted);
 
     /// <summary>The name of a species key of the log: a Mystery creature's, or the animal's. Never asked for a hidden id.</summary>
     string HuntSpeciesName(string key) => Mysteries.Is(key) ? Strings.T("hunt.species." + key) : AnimalData.Find(key)?.Name ?? key;

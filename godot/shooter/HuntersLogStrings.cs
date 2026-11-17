@@ -10,13 +10,13 @@ public static class HuntersLogStrings
         // frame
         ("log.title.my", "My Log"), ("log.title.other", "{0}'s Log"), ("log.tab.records", "Records"), ("log.tab.hunts", "All hunts"),
         ("log.close", "Close"), ("log.back", "Back"),
+        ("log.sandbox", "Sandbox: hunts are not logged"),
         // my log
         ("log.stat.hunts", "Hunts"), ("log.stat.species", "Species"), ("log.stat.heaviest", "Heaviest"), ("log.stat.longest", "Longest shot"), ("log.none", "-"),
         ("log.life.title", "Life List"), ("log.life.count", "{0} of {1}"),
         ("log.tile.best", "Best {0} kg"), ("log.tile.longest", "Longest {0}"), ("log.tile.caught", "Caught {0}"), ("log.tile.todo", "Not hunted yet"),
         ("log.hunts.own", "All my hunts"), ("log.hunts.other", "All {0}'s hunts"),
         ("log.hidden.mark", "?"), ("hunt.hidden.name", "Xxxxxxxx"),
-        ("log.book.empty", "No hunts yet. Shoot a deer, a boar or any wild animal. The first kill of each species takes its record."),
         // records
         ("log.rec.heaviest", "Heaviest"), ("log.rec.longest", "Longest shot"), ("log.rec.first", "First caught"), ("log.rec.todo", "Not hunted yet. The first kill takes the record."),
         ("log.rec.open", "All {0} hunts"), ("log.head", "HEAD"),
@@ -27,7 +27,7 @@ public static class HuntersLogStrings
         ("log.filter.mystery", "Mystery hunts"), ("log.filter.clear", "Clear filters"),
         ("log.page.prev", "Prev"), ("log.page.next", "Next"), ("log.page.tip", "Page {0}"), ("log.range", "{0}-{1} of {2}"), ("log.gap", "..."),
         ("log.pill.kg", "Record kg"), ("log.pill.shot", "Record shot"),
-        ("log.hit.pick", "Select a hunt to see where the bullet went."), ("log.hit.none", "No hit diagram"),
+        ("log.hit.none", "No hit diagram"),
         ("log.hit.distance", "Distance"), ("log.hit.weapon", "Weapon"), ("log.hit.hunter", "Hunter"), ("log.hit.when", "When"), ("log.hit.open", "{0}'s log"),
         ("log.kg", "{0} kg"), ("log.m", "{0} m"),
         ("log.ago.now", "just now"), ("log.ago.min", "{0} min ago"), ("log.ago.h", "{0} h ago"), ("log.ago.d", "{0} d ago"),

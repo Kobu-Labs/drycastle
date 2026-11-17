@@ -16,7 +16,7 @@ public readonly record struct MouseOwners(bool Dead, bool ChatOpen, bool Equipme
     public bool CapturesWhenMapCloses(bool menuOpen) => !menuOpen && !WantsFreeMouse;
 }
 
-/// <summary>The overlays of the HUD that never show together (the Hunter's Log is a side panel, not full-screen).</summary>
+/// <summary>The overlays of the HUD that never show together (the Hunter's Log is a centred panel on its own top layer, not full-screen).</summary>
 public enum Overlay { Equipment, TacticalMap, HuntersLog }
 
 /// <summary>What the arbiter needs to know. <c>ControlMode</c>: a turret or the missile owns the screen. <c>Ending</c>: the match is over.</summary>

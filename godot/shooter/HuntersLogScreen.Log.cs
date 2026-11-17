@@ -51,8 +51,6 @@ public sealed partial class HuntersLogScreen
         all.Disabled = log.Hunts == 0;
         _logHost.AddChild(all);
 
-        if (own && log.Hunts == 0) _logHost.AddChild(Text(Strings.T("log.book.empty"), "HudDim", wrap: true));
-
         // the Life List: the index species and the mysteries in one grid
         var sub = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         sub.AddChild(Text(Strings.T("log.life.title"), "HudHead"));
@@ -85,13 +83,13 @@ public sealed partial class HuntersLogScreen
 
     /// <summary>
     /// A Life List tile: the animal outlined until hunted, filled once, its name, then "Best N kg" and "Longest N m" (a Mystery creature: when it was caught, and its longest
-    /// shot). A hidden Mystery creature is a blurred blob (filled when the log's owner caught it) with a "?" and a blurred name, and no other text. Pressing it lists that
+    /// shot). A hidden Mystery creature is a "?" (the accent when the log's owner caught it, else dim) and a blurred name, and no other text. Pressing it lists that
     /// species' hunts.
     /// </summary>
     Control Tile(LifeTileModel m)
     {
         var width = ShooterTheme.LogTileW;
-        var btn = new ContentButton { ThemeTypeVariation = m.Caught ? "LogTile" : "LogTileTodo", CustomMinimumSize = new Vector2(width, 0) };
+        var btn = new ContentButton { ThemeTypeVariation = m.Caught ? "LogTile" : "LogTileTodo", MinSize = new Vector2(width, 0) };
         var v = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         v.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
         var artSize = new Vector2(width - 4 * ShooterTheme.Space, ShooterTheme.LogTileArtH);

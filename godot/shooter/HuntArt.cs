@@ -36,17 +36,15 @@ public sealed class SilhouetteArt
 
 /// <summary>
 /// The pictures of the Hunter's Log, made once and shared: a species' silhouette from the pictures baked into animal_shapes.json (the hit diagram's own),
-/// else the species' baked <c>animals/&lt;id&gt;.png</c> (the repository's, then the private asset folder's), and the generic blurred blob a hidden Mystery creature is drawn as.
+/// else the species' baked <c>animals/&lt;id&gt;.png</c> (the repository's, then the private asset folder's), and the sort arrows of the table's headers.
 /// </summary>
 public static class HuntArt
 {
     static readonly Dictionary<AnimalShape, SilhouetteArt?> ByShape = new();
     static readonly Dictionary<string, SilhouetteArt?> BySpecies = new();
-    static Texture2D? _blobFilled, _blobOutline, _arrowUp, _arrowDown, _arrowNone;
+    static Texture2D? _arrowUp, _arrowDown, _arrowNone;
 
-    /// <summary>Pixel size of the blob masks (the picture's aspect is 1.25).</summary>
-    const int BlobW = 160, BlobH = 128, ArrowPx = 48;
-    public const float BlobAspect = (float)BlobW / BlobH;
+    const int ArrowPx = 48;
 
     public static SilhouetteArt? Of(AnimalShape shape)
     {
@@ -74,10 +72,6 @@ public static class HuntArt
         }
         return BySpecies[speciesId] = img == null ? null : new SilhouetteArt(img);
     }
-
-    public static Texture2D Blob(bool filled) => filled
-        ? _blobFilled ??= MaskTexture(HuntArtMath.Blob(BlobW, BlobH, true), BlobW, BlobH)
-        : _blobOutline ??= MaskTexture(HuntArtMath.Blob(BlobW, BlobH, false), BlobW, BlobH);
 
     /// <summary>A white picture with this alpha mask (one byte per pixel), mipmapped.</summary>
     public static Texture2D MaskTexture(byte[] alpha, int w, int h)
