@@ -87,7 +87,7 @@ public sealed partial class MapLoader
         foreach (var id in ids)
         {
             if (!_cropMeshes.TryGetValue(id, out var mesh))
-                _cropMeshes[id] = mesh = known.ContainsKey(id) && GetAssetTemplate(id, out _) is { } scene ? FlattenModel(scene) : null;
+                _cropMeshes[id] = mesh = known.ContainsKey(id) && GetAssetTemplate(id, out _) is { } scene ? FlattenModel(scene, onGround: !spec.IsPlant, onSide: kind == "art_hay_bale_round") : null;
             if (mesh != null) found.Add(mesh);
         }
         if (found.Count > 0) return found;
@@ -97,11 +97,20 @@ public sealed partial class MapLoader
 
     /// <summary>Every visible mesh of a model scene (not in the tree) in one ArrayMesh, relative to the scene root, one surface per material.
     /// Null when it holds no triangles. Collision bodies and shapes are ignored: crops never collide.</summary>
-    static ArrayMesh? FlattenModel(Node3D root)
+    /// <paramref name="onGround"/> (artifacts): a model centred on its origin (the pack's hay bales: half of it would be under the ground) is lifted to stand on y = 0; one whose origin is
+    /// already at its foot (a pile) or that is meant to go into the ground (a scarecrow's post) is left. <paramref name="onSide"/>: such a model (the round bale, a cylinder along y) is laid on its side first, its axis along x.
+    static ArrayMesh? FlattenModel(Node3D root, bool onGround = false, bool onSide = false)
     {
         var flat = new ModelFlattener();
         flat.Walk(root, Transform3D.Identity, true);
-        return flat.Build();
+        var mesh = flat.Build();
+        if (!onGround || mesh == null) return mesh;
+        var box = mesh.GetAabb();
+        if (Mathf.Abs(box.Position.Y + box.End.Y) > 0.1f * box.Size.Y) return mesh; // not centred
+        var stand = onSide ? new Transform3D(new Basis(Vector3.Back, Mathf.Pi / 2f), new Vector3(0, -box.Position.X, 0)) : new Transform3D(Basis.Identity, new Vector3(0, -box.Position.Y, 0));
+        var lifted = new ModelFlattener();
+        lifted.Walk(root, stand, true);
+        return lifted.Build();
     }
 
     /// <summary>Collects the surfaces of a scene's meshes (with their node transforms) per material.</summary>

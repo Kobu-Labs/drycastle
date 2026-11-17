@@ -253,20 +253,26 @@ public partial class NetClient
     // ---- bales ----
 
     /// <summary>The corpse a bale is drawn as: the Synty bale (a cylinder without the pack), lying on the ground where the unloader put it.</summary>
-    /// <summary>The picture of a bale (Synty round bale, a cylinder without the pack); no collision.</summary>
+    /// <summary>
+    /// The picture of a bale (Synty round bale, a cylinder without the pack), lying on its side on y = 0, its axis along x; no collision. The Synty mesh is centred on its origin, a cylinder along y
+    /// (1.26 x 1.58 x 1.22 m): it is turned onto its side and lifted by its radius. Placed as it comes, its lower half is under the ground.
+    /// </summary>
     Node3D MakeBaleModel()
     {
+        var onSide = new Basis(Vector3.Back, Mathf.Pi / 2f); // the mesh's y (its axis) to -x, its x up
         var model = Map?.InstantiateAsset(BaleAsset);
         if (model != null)
         {
             foreach (var co in model.FindChildren("*", "CollisionObject3D", true, false).OfType<CollisionObject3D>()) { co.CollisionLayer = 0; co.CollisionMask = 0; }
             model.Name = "Model";
+            var mi = model as MeshInstance3D ?? model.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>().FirstOrDefault(); // the prefab: a plain root over the mesh, no transforms
+            model.Transform = new Transform3D(onSide, new Vector3(0, mi?.Mesh is { } mesh ? -mesh.GetAabb().Position.X : BaleRadius, 0));
             return model;
         }
         return new MeshInstance3D
         {
-            Name = "Model", Mesh = new CylinderMesh { TopRadius = 0.8f, BottomRadius = 0.8f, Height = 1.2f, RadialSegments = 12 },
-            Position = new Vector3(0, 0.6f, 0), MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color("#c9a748"), Roughness = 1f },
+            Name = "Model", Mesh = new CylinderMesh { TopRadius = BaleRadius, BottomRadius = BaleRadius, Height = 1.6f, RadialSegments = 12 },
+            Transform = new Transform3D(onSide, new Vector3(0, BaleRadius, 0)), MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color("#c9a748"), Roughness = 1f },
         };
     }
 
@@ -282,8 +288,9 @@ public partial class NetClient
     bool IsBaleCorpse(ushort corpse) => WorldEntities.Entities.TryGetValue(corpse, out var e) && HarvesterRules.IsBale(e.State.Owner);
 
     /// <summary>
-    /// A bale corpse as drawn (#351): the server throws it from the unloader, it lands and rolls to a stop; the position arrives at snapshot rate, so the picture follows it smoothly. In the air it tumbles, rolling it turns by
-    /// the distance covered, at rest it comes to a standstill turned the way it lies. The caught body is drawn small at its centre while it moves (inside the bale at rest). The server position is where it is looted.
+    /// A bale corpse as drawn (#351): the server throws it from the unloader, it lands and rolls to a stop; the position arrives at snapshot rate, so the picture follows it smoothly. It lies on its side with its
+    /// axis across the way it goes and turns about that axis like a wheel (spinning in the air, by the distance covered on the ground), so it never dips into the ground; on the ground it leans with the slope
+    /// under it. The caught body stands out of its top, swaying as the bale turns, upright at rest, for as long as the bale lies (until it burns). The server position is where it is looted.
     /// </summary>
     void RenderBale(ushort id, CorpseView v, WorldState s, Vector3 at, float dt)
     {
@@ -291,6 +298,7 @@ public partial class NetClient
         v.Feet = at;
         var moving = s.PitchRad > CorpseRules.RollPitch * 0.5f;
         var flying = s.PitchRad > CorpseRules.FlightPitch * 0.5f;
+        if (!m.Seen) m.Yaw = s.YawRad;
         var before = m.Seen ? m.Shown : at;
         m.Shown = !m.Seen || before.DistanceTo(at) > 6f ? at : before.Lerp(at, 1f - Mathf.Exp(-24f * dt));
         if (!moving && m.Shown.DistanceSquaredTo(at) < 1e-3f) m.Shown = at;
@@ -298,35 +306,57 @@ public partial class NetClient
         var step = m.Shown - before;
         var along = new Vector3(step.X, 0, step.Z);
         var ds = along.Length();
-        var yaw = new Basis(Vector3.Up, s.YawRad);
-        if (ds > 1e-4f) m.Axis = Vector3.Up.Cross(along / ds).Normalized(); // about the horizontal axis across the way it goes
+        if (moving && ds > 1e-4f)
+        {
+            var axis = Vector3.Up.Cross(along / ds).Normalized(); // the horizontal axis across the way it goes: the bale's own axis (its local x)
+            m.Yaw = Mathf.Atan2(-axis.Z, axis.X);
+        }
         if (flying) m.Angle += Mathf.Clamp(dt > 0 ? ds / dt / BaleRadius : 0f, 3f, 10f) * dt;
         else if (moving) m.Angle += ds / BaleRadius; // rolling: a turn for each circumference
         else m.Angle = Mathf.Lerp(m.Angle, Mathf.Round(m.Angle / Mathf.Tau) * Mathf.Tau, 1f - Mathf.Exp(-8f * dt));
+        if (flying) { m.UpTarget = Vector3.Up; m.Leaned = false; }
+        else if (moving || !m.Leaned) { m.UpTarget = GroundUp(at); m.Leaned = !moving; } // at rest the slope is looked up once
+        m.Up = m.Up.Lerp(m.UpTarget, 1f - Mathf.Exp(-10f * dt)).Normalized();
         v.Node.GlobalPosition = m.Shown;
-        v.Node.Basis = yaw;
+        v.Node.Basis = new Basis(new Quaternion(Vector3.Up, m.Up)) * new Basis(Vector3.Up, m.Yaw);
         if (m.Spin is { } spin && GodotObject.IsInstanceValid(spin))
         {
-            var turn = new Basis(yaw.Inverse() * m.Axis, m.Angle);
-            spin.Transform = new Transform3D(turn, BaleCentre - turn * BaleCentre); // turns about the bale's middle, not its foot
+            var turn = new Basis(Vector3.Right, m.Angle); // about its own axis; the top goes the way it rolls
+            spin.Transform = new Transform3D(turn, BaleCentre - turn * BaleCentre);
             if (_baleBody.TryGetValue(id, out var victim) && victim != 0)
             {
-                if (m.Body == null && moving) m.Body = MakeBaleBody(spin, victim);
-                if (m.Body != null && GodotObject.IsInstanceValid(m.Body)) m.Body.Visible = moving;
+                m.Body ??= MakeBaleBody(v.Node, victim);
+                if (!GodotObject.IsInstanceValid(m.Body)) return;
+                if (m.BodyLoose != moving) { m.BodyLoose = moving; m.Body.SetRagdoll(true, moving ? 1f : BaleBodyRestFlail, frozen: !moving); } // limbs fly while it moves, hang still at rest
+                var sway = new Basis(Vector3.Right, BaleBodySwayRad * Mathf.Sin(m.Angle)); // it does not go round with the bale (the head would go under the ground): it rocks about the bale's middle
+                m.Body.Transform = new Transform3D(sway, BaleCentre + sway * (new Vector3(0, BaleBodyFeetM, 0) - BaleCentre));
             }
         }
     }
 
-    const float BaleRadius = 0.8f;
-    static readonly Vector3 BaleCentre = new(0, 0.6f, 0);
+    /// <summary>The terrain's up at <paramref name="at"/> (from four heights 0.6 m around it); straight up where the bale is not on the terrain (a roof, a road deck, no terrain).</summary>
+    Vector3 GroundUp(Vector3 at)
+    {
+        if (Map is not { } map) return Vector3.Up;
+        const float e = 0.6f;
+        float c = map.GroundHeight(at.X, at.Z), x0 = map.GroundHeight(at.X - e, at.Z), x1 = map.GroundHeight(at.X + e, at.Z), z0 = map.GroundHeight(at.X, at.Z - e), z1 = map.GroundHeight(at.X, at.Z + e);
+        if (float.IsNaN(c + x0 + x1 + z0 + z1) || Mathf.Abs(c - at.Y) > 0.4f) return Vector3.Up;
+        var up = new Vector3(x0 - x1, 2f * e, z0 - z1).Normalized();
+        return up.Y < 0.7f ? Vector3.Up : up; // steeper than about 45 degrees: a step or a wall of the terrain, not a slope to lie on
+    }
 
-    /// <summary>The body the reel caught, small, at the bale's centre, limbs loose (the dead player's look).</summary>
+    /// <summary>The bale lies on its side: a cylinder of this radius, 1.6 m long along its local x; its middle is a radius up.</summary>
+    const float BaleRadius = 0.63f;
+    static readonly Vector3 BaleCentre = new(0, BaleRadius, 0);
+
+    /// <summary>How high the caught body's feet are in the bale (m): the legs are in the hay, the body from the hips up stands out of the top (1.26 m). How loose its limbs hang at rest, how far it rocks (rad) as the bale turns.</summary>
+    const float BaleBodyFeetM = 0.3f, BaleBodyRestFlail = 0.35f, BaleBodySwayRad = 0.5f;
+
+    /// <summary>The body the reel caught, full size, stuck in the bale from the hips down, limbs loose (the dead player's look). It stays for as long as the bale does; <see cref="RenderBale"/> rocks it.</summary>
     CharacterView MakeBaleBody(Node3D parent, ushort victim)
     {
         var view = CharacterView.Make();
         if (Appearances.TryGetValue(victim, out var look)) view.SetCamo(look, CamoData);
-        view.Scale = Vector3.One * 0.4f;
-        view.Position = BaleCentre + new Vector3(0, -RagdollTumble.Half * 0.4f, 0);
         view.ShowThrown("");
         view.SetRagdoll(true, 1f);
         parent.AddChild(view);
@@ -384,6 +414,8 @@ public partial class NetClient
         else if (_corpses.TryGetValue(id, out var v))
         {
             if (v.Node.FindChild("Model", true, false) is Node3D model) model.Visible = false;
+            _baleBody.Remove(id); // burnt with the bale
+            if (v.Motion?.Body is { } burnt && GodotObject.IsInstanceValid(burnt)) burnt.QueueFree();
             v.Node.AddChild(ash);
         }
     }

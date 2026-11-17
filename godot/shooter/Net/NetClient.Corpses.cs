@@ -40,14 +40,18 @@ public partial class NetClient
         public Vector3 Feet;
     }
 
-    /// <summary>How a bale corpse is drawn (#351): its model hangs under <see cref="Spin"/>; <see cref="Shown"/> is the smoothed position, <see cref="Angle"/> the turn about <see cref="Axis"/>, <see cref="Body"/> the caught body inside it.</summary>
+    /// <summary>How a bale corpse is drawn (#351): its model hangs under <see cref="Spin"/>; <see cref="Shown"/> is the smoothed position, <see cref="Angle"/> the turn about its own axis, <see cref="Body"/> the caught body inside it.</summary>
     sealed class BaleMotion
     {
         public Node3D? Spin;
-        public Vector3 Shown, Axis = Vector3.Right;
-        public float Angle;
+        /// <summary>The way it leans with the ground (<see cref="Up"/> eases to <see cref="UpTarget"/>; <see cref="Leaned"/>: looked up at rest), and the heading of its axis (<see cref="Yaw"/>: across the way it last moved).</summary>
+        public Vector3 Shown, Up = Vector3.Up, UpTarget = Vector3.Up;
+        public float Angle, Yaw;
+        public bool Leaned;
         public bool Seen;
         public CharacterView? Body;
+        /// <summary>Whether <see cref="Body"/>'s limbs fly (the bale moves) or hang still; null before the first frame.</summary>
+        public bool? BodyLoose;
     }
 
     readonly Dictionary<ushort, CorpseView> _corpses = new();

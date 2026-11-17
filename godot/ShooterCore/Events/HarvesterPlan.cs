@@ -40,7 +40,7 @@ public sealed class HarvesterConfig
 
     /// <summary>A corpse drawn in at the front (it orbits the reel for this long, #351), and the time it spends in the machine before the bale leaves the unloader.</summary>
     public float DrawSeconds { get; set; } = 3.6f;
-    public float ChewSeconds { get; set; } = 2.5f;
+    public float ChewSeconds { get; set; } = 1f;
     /// <summary>The reel's axis in machine space (x 0, y up, z ahead: the model's reel is 3.66 m ahead, 0.81 m up, 0.68 m radius) and the radius the drawn-in body orbits it at.</summary>
     public float ReelAxisUpM { get; set; } = 0.81f;
     public float OrbitRadiusM { get; set; } = 0.95f;
