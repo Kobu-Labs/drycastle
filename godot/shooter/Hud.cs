@@ -179,7 +179,7 @@ public partial class Hud : CanvasLayer
     void ApplyCrosshairVisibility()
     {
         if (_crossRoot == null) return;
-        _crossRoot.Visible = CrosshairRules.Visible(Settings.ShowCrosshair, _crossCovered || _crossLauncher, _scope?.Visible ?? false, _bino?.Visible ?? false, _pounceHide);
+        _crossRoot.Visible = CrosshairRules.Visible(Settings.ShowCrosshair, _crossCovered || _crossLauncher, _scope?.Visible ?? false, _bino?.Visible ?? false, _pounceHide || _flungHide);
     }
 
     public override void _ExitTree() => GameSettings.Changed -= OnSettingsChanged;
@@ -857,7 +857,7 @@ public partial class Hud : CanvasLayer
 
     void UpdateCrosshair()
     {
-        if (_pounceHide) return; // lying under the demon: no crosshair
+        if (_pounceHide || _flungHide) return; // lying under the demon, or in the Bigfoot's fist or flying from it: no crosshair
         if (UpdateBinoculars())
         {
             // the binoculars are up: their own view, no crosshair, and no scope left over from the moment they were raised

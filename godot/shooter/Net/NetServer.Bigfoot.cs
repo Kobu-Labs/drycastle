@@ -337,7 +337,7 @@ public partial class NetServer
             if (!_s._byId.TryGetValue(player, out var c)) return;
             c.HeldUntilTick = 0; // let go
             if (velocity == NVec3.Zero) return;
-            c.LaunchGraceUntil = _s._elapsed + graceSeconds;
+            c.LaunchGraceUntil = _s._elapsed + graceSeconds; c.LaunchedAt = _s._elapsed;
             c.Body.AddImpulse(new Vector3(velocity.X, velocity.Y, velocity.Z));
         }
 
