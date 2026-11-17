@@ -77,6 +77,7 @@ public class VehiclesFile : IVersioned
                 if (trl.Validate() is { } why) throw new DataFileException($"vehicles.json: {v.Id}: trailer: {why}");
             }
             else if (v.Seats.Count is < 1 or > VehicleSeat.MaxSeats || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..{VehicleSeat.MaxSeats} and the first is the driver");
+            if (v.Launcher is { } lch && lch.Validate(v) is { } lwhy) throw new DataFileException($"vehicles.json: {v.Id}: launcher: {lwhy}");
             if (v.Tow is { } tw)
             {
                 if (v.Medium == VehicleMedium.Air) throw new DataFileException($"vehicles.json: {v.Id}: a tow block is for a land or amphibious vehicle");
@@ -724,6 +725,26 @@ public class VehicleHandling
     public float HandbrakeSteerBoost { get; set; } = 1.5f;
 }
 
+/// <summary>vehicles.json "launcher": the Scud truck's launcher (<see cref="ScudLauncher"/>). Offsets are in the vehicle's frame (x right, y up, forward is -Z, origin on the ground at the centre).</summary>
+public class VehicleLauncherDef
+{
+    /// <summary>The seat whose occupant is the operator (the targeting screen is theirs); the others only watch and confirm.</summary>
+    public int OperatorSeat { get; set; } = 1;
+    /// <summary>Where the missile leaves, with the rack up: the rocket's base on the rack.</summary>
+    public float[] Muzzle { get; set; } = { 0, 3.2f, 5.2f };
+    /// <summary>Where the launch smoke and the ignition flame come from (the rack's foot).</summary>
+    public float[] Exhaust { get; set; } = { 0, 1.4f, 6.2f };
+
+    /// <summary>Why the block is bad, or null.</summary>
+    public string? Validate(VehicleDef v)
+    {
+        if (OperatorSeat < 1 || OperatorSeat >= v.Seats.Count) return "operator_seat must be a seat of the vehicle other than the driver's";
+        if (Muzzle.Length != 3 || Exhaust.Length != 3 || Muzzle.Concat(Exhaust).Any(x => !float.IsFinite(x))) return "muzzle and exhaust are [x, y, z]";
+        if (v.Flight != null || v.Gun != null || v.Flak != null || v.DoorGun != null) return "a launcher truck is a ground vehicle with no gun, flak or door gun";
+        return null;
+    }
+}
+
 public class VehicleDef
 {
     public string Id { get; set; } = "";
@@ -835,6 +856,10 @@ public class VehicleDef
     /// <see cref="DriveModel"/> and never by <see cref="CarModel"/>. Null for every other type. A land type's block has no water numbers in use (see <see cref="VehicleDriveDef.Validate"/>).
     /// </summary>
     public VehicleDriveDef? Drive { get; set; }
+    /// <summary>True (default): a destroyed vehicle of this type comes back after <see cref="VehiclesFile.DestroyedReturnTime"/>. False (the Scud truck): it is gone for the match, and a new round retires it instead of resetting it.</summary>
+    public bool Returns { get; set; } = true;
+    /// <summary>A missile launcher (vehicles.json "launcher", the Scud truck): which seat is the operator's and where the rocket leaves. Null: none. See <see cref="ScudLauncher"/>.</summary>
+    public VehicleLauncherDef? Launcher { get; set; }
     /// <summary>The type can pull a trailer (vehicles.json "tow": the hitch and what the load does to it). Null: it cannot. See <see cref="TowModel"/>.</summary>
     public VehicleTowDef? Tow { get; set; }
     /// <summary>The type is a single-axle trailer (vehicles.json "trailer": drawbar eye, axle, mass) with no seats, pulled by a type with a <see cref="Tow"/> block. Null: it is not.</summary>

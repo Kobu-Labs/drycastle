@@ -1373,6 +1373,41 @@ stateDiagram-v2
 - **Draining**: Stop() ran: no new input; what was written still plays out, then the echo tail, then ffmpeg ends. A Start() here cuts the tail short.
 - **Failed**: ffmpeg missing, died, or stopped producing audio: logged once, the feed is silent until the next phase. Never unprocessed audio.
 
+## Scud.Launcher
+
+A Scud truck's launcher: the rocket on its rack, the operator's lock, the crew's confirmations, the rack rising, the launch, the empty rack and the reload.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Stowed
+    Stowed --> Targeting
+    Targeting --> Stowed
+    Targeting --> Proposed
+    Proposed --> Targeting
+    Proposed --> Stowed
+    Proposed --> Erecting
+    Erecting --> Launching
+    Erecting --> Aborting
+    Launching --> Spent
+    Spent --> Lowering
+    Lowering --> Empty
+    Empty --> Reloading
+    Empty --> Stowed
+    Reloading --> Stowed
+    Aborting --> Stowed
+```
+
+- **Stowed**: A rocket on the rack, the rack down, the truck drives. Where a launcher starts and where every cancel ends when nobody has the screen open.
+- **Targeting**: The operator (the player in the operator seat) has the targeting screen open (clock: none). Closing it, or leaving the seat, goes back to Stowed.
+- **Proposed**: A point is locked (the placer is the operator). Every occupied seat must confirm (clock: the proposal timeout). Any cancel goes back to Targeting while the operator is still at the screen, else Stowed.
+- **Erecting**: Everybody confirmed. The truck is immobilised (brakes on, the driver's input ignored) and the rack rises (clock: erect seconds). The operator may abort until the ignition.
+- **Launching**: The rack is up and the rocket ignites (clock: ignition seconds). When it runs out the missile entity spawns and the rack is empty. Cannot be aborted.
+- **Spent**: The rack is up and empty for a moment (clock: spent hold seconds), the launch smoke clears, then the rack lowers.
+- **Lowering**: The empty rack lowers (clock: lower seconds). The truck is still immobilised.
+- **Empty**: The rack is down with no rocket. The truck drives again but cannot fire until a reload: the rocket cart's TryReloadScud, or an admin's instant reload (Empty to Stowed).
+- **Reloading**: A rocket is being loaded (clock: reload seconds). The truck is immobilised; the rocket shows on the rack for the second half.
+- **Aborting**: The operator aborted the erect: the rack lowers again from where it got to, at the lowering rate, and the rocket is kept. Then Stowed.
+
 ## Session.Phase
 
 A connection on the server: connected, said hello (profile loading) or refused, then joined.

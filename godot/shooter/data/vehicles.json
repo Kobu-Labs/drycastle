@@ -242,6 +242,22 @@
       "seats": [
         { "role": "driver", "offset": [-0.79, 2.0, -0.95], "exposed": true }
       ]
+    },
+    {
+      "id": "scud",
+      "comment": "The Scud launcher truck (GLOSSARY Scud truck): a heavy 8-wheel launcher, two seats (driver, operator) under one cab. Spawned by the event or /scud spawn, never dealt (spawn_count 0, no fixed spot), cannot tow, and never returns once destroyed (returns false). The model is the private pack's pack:synty-simple-military/scud_truck (nodes hull, rack on the rear hinge, missile under rack, 8 wheels, cab glass); a grey box with a rack stands in without it. PLACEHOLDER SIZE (13 x 3 x 3.3 m): replace half_width, half_length, height, seats, glass and the launcher offsets from docs/research/scud-models-facts.md when it lands. Flak-truck handling, slower: no drive block (the server steps it, the driver's client does not predict it).",
+      "top_speed": 13, "acceleration": 1.6, "brake": 5, "turn_radius": 11, "high_speed_radius_factor": 3, "max_lateral_accel": 5,
+      "mass": 18000, "run_over_mass": 9000, "hp": 1500, "returns": false,
+      "hood": [0, 2.4, -6.2], "spawn_count": 0,
+      "half_width": 1.5, "half_length": 6.5, "height": 3.3,
+      "chase_distance": 17, "chase_height": 6,
+      "model": "pack:synty-simple-military/scud_truck", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
+      "seats": [
+        { "role": "driver", "offset": [-0.6, 1.55, -4.9] },
+        { "role": "passenger", "offset": [0.6, 1.55, -4.9] }
+      ],
+      "launcher": { "operator_seat": 1, "muzzle": [0, 3.2, 5.2], "exhaust": [0, 1.4, 6.2] },
+      "lights": { "head": [[-1.1, 1.7, -6.45], [1.1, 1.7, -6.45]], "tail": [[-1.2, 1.0, 6.45], [1.2, 1.0, 6.45]], "beam_range": 45, "beam_angle": 26 }
     }
   ]
 }
