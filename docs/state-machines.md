@@ -1275,6 +1275,28 @@ stateDiagram-v2
 - **Tracking**: The drawn tick follows the estimate (it never moves backwards).
 - **Holding**: The estimate moved behind the drawn tick: the drawn tick stays put until the estimate passes it again. One episode counts once in HoldEvents.
 
+## PackTile.Layer
+
+One mesh of a pack tree tile (its trees, its undergrowth, its far undergrowth, or the tree cards of a far tile): built on a worker, handed to the renderer a surface at a time, drawn, freed when far.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Building
+    Idle --> Ready
+    Building --> Handing
+    Building --> Ready
+    Building --> Idle
+    Handing --> Ready
+    Handing --> Idle
+    Ready --> Idle
+```
+
+- **Idle**: Nothing held. Straight to Ready when the tile has nothing of this layer to make.
+- **Building**: A worker makes the triangles. Ready at once when it made none or failed (a warning); Idle when the tile is freed first (the result is dropped).
+- **Handing**: Surfaces are added to the mesh within budget_ms per frame; the mesh is not shown yet.
+- **Ready**: Shown inside its radius. The cut radius never passes a layer that is not Ready.
+
 ## Player.DeathView
 
 The local player's death screen: the legs give way, the body goes over and the blood spatters, then it lies there under the respawn scrim until the spawn.

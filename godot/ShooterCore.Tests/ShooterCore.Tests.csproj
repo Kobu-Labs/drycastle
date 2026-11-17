@@ -20,6 +20,7 @@
     <Compile Include="../MapLoader/MeadowData.cs" Link="MapLoader/MeadowData.cs" />
     <Compile Include="../MapLoader/PackTreeData.cs" Link="MapLoader/PackTreeData.cs" />
     <Compile Include="../MapLoader/PackGroundData.cs" Link="MapLoader/PackGroundData.cs" />
+    <Compile Include="../MapLoader/PackCardData.cs" Link="MapLoader/PackCardData.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -362,7 +362,7 @@ public sealed partial class MapLoader
             else if (GetViewport()?.GetCamera3D() is { } cam) focus = cam.GlobalPosition;
             else return;
             Map.MeadowStep(focus);
-            Map.PackTreeStep(focus);
+            Map.PackTreeStep(focus, (float)delta);
         }
     }
 }
