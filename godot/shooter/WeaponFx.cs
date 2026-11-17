@@ -68,6 +68,14 @@ public static class WeaponFx
             if (!pack) BuildTube(root);
             root.SetMeta(SightHeightMeta, pack ? PackRpgSight : 0.05f);
         }
+        else if (weaponId == "grenade")
+        {
+            // the pack's grenade (SM_Wep_Grenade_01, 0.15 m tall), held upright in the hand: nothing to aim, so the muzzle marker sits at its top
+            var nade = SyntyLib.Instance("props/grenade_01", "glb/atlas/military_weapons_01.png") ?? new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.05f, Height = 0.1f } };
+            if (nade is Node3D n3) n3.Scale = Vector3.One * 1.3f;
+            root.AddChild(nade);
+            root.SetMeta(SightHeightMeta, 0f);
+        }
         else if (weaponId == "strela")
         {
             if (!AddPackLauncher(root)) BuildLockOnLauncher(root);
@@ -77,7 +85,7 @@ public static class WeaponFx
         // muzzle marker: the barrel tip (0.7 of the length in front of the grip; the tube ends at -0.81)
         var z = weaponId == "rpg" ? (root.HasNode(PackRpgNode) ? -PackRpgMouth : -0.82f) : weaponId == "strela" ? (root.HasNode(PackLauncherNode) ? -PackLauncherMuzzle : -0.9f) : Models.TryGetValue(weaponId, out var mm) ? -mm.Length * 0.7f : -0.3f;
         var muzzle = new Node3D { Name = "Muzzle", Position = new Vector3(0, root.HasNode(PackRpgNode) ? PackRpgAxis : 0.02f, z) };
-        if (weaponId != "knife") muzzle.AddChild(new MuzzleFlash());
+        if (weaponId is not ("knife" or "grenade")) muzzle.AddChild(new MuzzleFlash());
         root.AddChild(muzzle);
         return root;
     }
@@ -115,6 +123,7 @@ public static class WeaponFx
     /// <summary>Shows or hides the rocket head in a held RPG's tube (the tube is empty between the launch and the end of the reload). No-op for any other weapon node.</summary>
     public static void SetLoaded(Node3D? held, bool loaded)
     {
+        if (held.Name == "Held_grenade") { if (held.GetChildCount() > 0 && held.GetChild(0) is Node3D nade && nade.Visible != loaded) nade.Visible = loaded; return; } // the hand is empty between the throw and the next one
         if (held?.GetNodeOrNull<Node3D>(PackRpgNode)?.FindChild(PackRpgRocket, true, false) is Node3D rocket && rocket.Visible != loaded) rocket.Visible = loaded;
     }
 

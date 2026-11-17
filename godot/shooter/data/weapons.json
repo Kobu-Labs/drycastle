@@ -190,6 +190,14 @@
       "splash": { "radius": 6, "full_damage_radius": 1.5, "edge_damage": 20, "self_damage_multiplier": 0.5, "knockback_speed": 4.5 },
       "lock": { "seconds": 2.5, "range_m": 450, "cone_deg": 9, "alert_at_fraction": 0.4, "grace_seconds": 0.4,
         "unlimited_range": ["uav"], "hit_blast_radius": 6, "kill_blast_radius": 20 }
+    },
+    {
+      "id": "grenade", "category": "grenade", "slot": "special", "unlock_level": 0, "kind": "projectile", "full_auto": false,
+      "damage": 100, "fire_interval": 1.0,
+      "magazine_size": 1, "reserve_ammo": 2, "reload_time": 1.2,
+      "projectile_speed": 17,
+      "splash": { "radius": 5.5, "full_damage_radius": 1.0, "edge_damage": 15, "self_damage_multiplier": 0.5, "knockback_speed": 5 },
+      "grenade": { "fuse_seconds": 3.0, "gravity": 20, "bounce": 0.35, "ground_friction": 0.3 }
     }
   ]
 }

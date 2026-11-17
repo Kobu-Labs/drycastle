@@ -176,7 +176,8 @@ public partial class NetClient
         var from = cam.GlobalPosition;
         var dir = -cam.GlobalTransform.Basis.Z;
         var muzzle = _me.ZoomFov > 0 ? from + dir * 0.6f : _viewmodel?.MuzzlePosition ?? from + dir * 0.8f; // scoped: the streak leaves the crosshair, the gun is hidden
-        _viewmodel?.Flash(projectile ? 0.5f : 0.4f);
+        if (w.Grenade == null) _viewmodel?.Flash(projectile ? 0.5f : 0.4f);
+        if (w.Grenade != null) { _viewmodel?.Kick(6f); return; } // a throw: the hand jumps, nothing blows back
         if (projectile)
         {
             // a launcher: the tube jumps (weapons.json recoil, the viewmodel only: a rocket has no spread to climb) and throws its backblast out of the rear

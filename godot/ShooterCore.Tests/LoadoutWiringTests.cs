@@ -19,7 +19,7 @@ public class LoadoutWiringTests
     public void HotbarIsPrimarySecondaryAndKnifeInThatOrder()
     {
         var hotbar = LoadoutHotbar.Build(Shipped.Weapons, Kit("m4a1", "glock17"));
-        Assert.Equal(new[] { IndexOf("m4a1"), IndexOf("glock17"), IndexOf("knife") }, hotbar);
+        Assert.Equal(new[] { IndexOf("m4a1"), IndexOf("glock17"), IndexOf("knife"), IndexOf("grenade") }, hotbar);
     }
 
     [Fact]
@@ -27,11 +27,12 @@ public class LoadoutWiringTests
     {
         // a sniper in the secondary position is the wrong slot type; a missing primary falls back to an unlock-0 primary
         var hotbar = LoadoutHotbar.Build(Shipped.Weapons, new Loadout(0, "", "sniper", "", "", "", ""));
-        Assert.Equal(3, hotbar.Length);
+        Assert.Equal(4, hotbar.Length);
         Assert.Equal(Shipped.Weapons.Weapons[hotbar[0]].Slot, WeaponSlot.Primary);
         Assert.Equal(0, Shipped.Weapons.Weapons[hotbar[0]].UnlockLevel);
         Assert.Equal(WeaponSlot.Secondary, Shipped.Weapons.Weapons[hotbar[1]].Slot);
         Assert.Equal("knife", Shipped.Weapons.Weapons[hotbar[2]].Id);
+        Assert.Equal("grenade", Shipped.Weapons.Weapons[hotbar[3]].Id);
     }
 
     [Fact]
@@ -41,13 +42,13 @@ public class LoadoutWiringTests
         var w = new PlayerWeapons(Shipped.Weapons, null, hotbar);
         w.Reset(0);
         Assert.Equal("ak47", w.Current.Id); // spawn with the primary
-        Assert.Equal(3, w.Hotbar.Count);
+        Assert.Equal(4, w.Hotbar.Count);
 
         // the rpg is in weapons.json but not on the hotbar: selecting it does nothing
         w.Update(1, new WeaponInput(false, false, IndexOf("rpg") + 1, false));
         Assert.Equal("ak47", w.Current.Id);
 
-        // the cycle goes primary -> secondary -> knife -> primary, skipping every other weapon
+        // the cycle goes primary -> secondary -> knife -> grenade -> primary, skipping every other weapon
         var ids = new List<string>();
         var now = 2.0;
         for (var i = 0; i < 4; i++)
@@ -58,7 +59,7 @@ public class LoadoutWiringTests
             w.Update(now, new WeaponInput(false, false, 0, false)); // the next edge is per press
             now += 1;
         }
-        Assert.Equal(new[] { "pistol", "knife", "ak47", "pistol" }, ids);
+        Assert.Equal(new[] { "pistol", "knife", "grenade", "ak47" }, ids);
     }
 
     [Fact]
