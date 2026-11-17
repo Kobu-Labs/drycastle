@@ -26,10 +26,9 @@ public sealed partial class CockpitRig : Node3D
         // the harvester (#331): the combine's cab, after SM_Veh_Harvester_01 (model +Z is forward, the model faces yaw 180, so its steering wheel at x 0.79, y 2.70, z 1.21 is x -0.79, z -1.21 here; no hull: the rig hangs under the root).
         // The eye sits 1 m over the seat (y 2.0, vehicles.json seats) just behind the wheel, inside the cab; the model's own wheel and glass are not drawn for the driver, the reel is in front below the sill.
         ["harvester"] = new Spec(new Vector3(-0.79f, 3.0f, -0.55f), new[] { "SM_Veh_Harvester_SteeringW", "SM_Veh_Harvester_Glass" }, BuildHarvester),
-        // the Scud truck: PLACEHOLDER eye and cab, from the placeholder size of vehicles.json (13 x 3 x 3.3 m, the driver's seat at x -0.6, y 1.55, z -4.9). The cab is a box 2.8 m long behind the
-        // grey-box hood (z -5.9 .. -3.1). Replace the eye, the cab numbers and the hidden node from the model facts file docs/research/scud-models-facts.md when it lands (and set them beside the
-        // model script's numbers, docs/standards/car-design.md section 5).
-        ["scud"] = new Spec(new Vector3(-0.60f, 2.65f, -4.60f), new[] { "cab" }, BuildScud),
+        // the Scud truck: eye = seat_driver [-0.892, 1.15, -4.328] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/make_scud_model.py): inside the left half cab (roof inside 2.66, windscreen 1.99-2.42), behind the
+        // wheel. The operator's seat has the same eye over its own seat (+0.892) but no cockpit rig: its view is the seat's (vehicles.json eye_height 1.05).
+        ["scud"] = new Spec(new Vector3(-0.892f, 2.2f, -4.238f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildScud),
         ["utility_helicopter"] = new Spec(new Vector3(0.55f, 1.78f, -1.80f), new[] { "fuselage" }, BuildHelicopter),
     };
 
@@ -279,24 +278,12 @@ public sealed partial class CockpitRig : Node3D
     }
 
     // ------------------------------------------------------------------ the Scud truck
-    // PLACEHOLDER numbers (see the Spec above): the cab's floor 1.6, sill 2.35, roof 3.15; the dash at z -5.55; the A-pillars from the sill at z -5.55 to the roof at z -5.3; the back wall at z -3.1.
+    // The model has its cab (scripts/make_scud_model.py: floor, dash, seats, door cards, the left half cab's steering wheel as a rim and spokes, two nodes hidden here): nothing is built round the driver but
+    // the steering wheel, so the rig's own turns, and the hands. The wheel's centre is x -0.892, y 1.88, z -4.962, its face tilted 20 degrees from upright towards the driver (a lean of 70 from level),
+    // 0.21 m to the rim's outer edge.
 
-    static void BuildScud(CockpitRig r)
-    {
-        const float floor = 1.60f, sill = 2.35f, top = 3.15f, xs = 1.45f, zf = -5.55f, zft = -5.30f, zb = -3.10f;
-        r.Add(Box(OliveDark, -xs, xs, floor - 0.05f, floor, -5.85f, zb));
-        r.Add(Box(OliveDark, -xs, xs, 1.95f, sill, -5.85f, zf), Box(Black, -0.95f, -0.25f, 2.02f, 2.28f, zf, zf + 0.01f));
-        r.Add(Gauge(-0.80f, 2.15f, zf + 0.012f, 0.085f), Gauge(-0.55f, 2.15f, zf + 0.012f, 0.085f));
-        r.SteeringWheel(new Vector3(-0.60f, 2.20f, -5.15f), 0.24f, 35f, new Vector3(-0.60f, 2.05f, -4.75f), 0.30f);
-        r.Both(s => Bar(Olive, new Vector3(s * xs, sill, zf), new Vector3(s * (xs - 0.1f), top, zft), 0.10f));
-        r.Add(Bar(Olive, new Vector3(0, sill, zf), new Vector3(0, top, zft), 0.08f), Bar(Olive, new Vector3(-xs + 0.1f, top, zft), new Vector3(xs - 0.1f, top, zft), 0.10f));
-        r.Add(Box(OliveLight, -xs + 0.1f, xs - 0.1f, top, top + 0.06f, zft, zb));
-        r.Both(s => Box(OliveLight, s * xs, s * (xs + 0.03f), floor, sill, -5.85f, zb));
-        r.Both(s => Bar(Olive, new Vector3(s * xs, sill, zb), new Vector3(s * (xs - 0.1f), top, zb), 0.10f));
-        r.Both(s => Pane(new Vector3(0, sill, zf), new Vector3(s * xs, sill, zf), new Vector3(s * (xs - 0.1f), top, zft), new Vector3(0, top, zft)));
-        r.Both(s => Pane(new Vector3(s * xs, sill, zf), new Vector3(s * xs, sill, zb), new Vector3(s * (xs - 0.1f), top, zb), new Vector3(s * (xs - 0.1f), top, zft)));
-        r.Add(Box(OliveLight, -xs, xs, floor, top, zb, zb + 0.03f)); // the back wall: the rack and the load are not seen from the cab
-    }
+    static void BuildScud(CockpitRig r) =>
+        r.SteeringWheel(new Vector3(-0.892f, 1.88f, -4.962f), 0.2f, 70f, new Vector3(-0.892f, 1.66f, -4.25f), 0.30f);
 
     // ------------------------------------------------------------------ the utility helicopter
     // After scripts/make_utility_helicopter_model.py: floor 0.72, instrument panel at z -2.75, the cabin from z -1.20 to 1.30, half width 1.2,

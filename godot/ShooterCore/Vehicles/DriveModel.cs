@@ -430,6 +430,9 @@ public sealed class DrivePrediction
     sealed record TrailerRig(VehicleDef TrailerDef, TowGeometry Geometry, ITrailerWorld? World);
     TrailerRig? _rig;
 
+    /// <summary>The trailer on the hook carries its load (a rocket cart with its missile): its mass is the loaded one's. The client sets it from the trailer's record as it changes.</summary>
+    public bool TrailerLoaded = true;
+
     public DriveState State;
     /// <summary>The driver's own copy of the hitched trailer's body, stepped with the tractor (valid while <see cref="HasTrailer"/>).</summary>
     public TrailerBody TrailerBody;
@@ -465,7 +468,7 @@ public sealed class DrivePrediction
     {
         if (_rig is not { } rig) { DriveModel.Step(ref s, _def, input, dt, _world); return; }
         var before = s;
-        DriveModel.Step(ref s, _def, input, dt, _world, new TowEffect(TowLoad.Of(_def, rig.TrailerDef), TowModel.BlockOf(rig.Geometry, trailer)));
+        DriveModel.Step(ref s, _def, input, dt, _world, new TowEffect(TowLoad.Of(_def, rig.TrailerDef, TrailerLoaded), TowModel.BlockOf(rig.Geometry, trailer)));
         if (rig.World == null) TowModel.Step(ref trailer, rig.Geometry, TractorMotion.From(s), dt);
         else if (!TowModel.StepChecked(ref trailer, rig.Geometry, TractorMotion.From(s), dt, rig.World)) TowModel.Hold(ref s, before);
     }

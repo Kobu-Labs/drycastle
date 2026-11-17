@@ -33,15 +33,19 @@ public class RocketCartTests
         Assert.Null(Cart.Lights); Assert.Null(Cart.Sounds); Assert.Empty(Cart.Glass);
         Assert.True(TowGeometry.CanTow(Jeep, Cart));
         Assert.True(TowGeometry.CanTow(Flak, Cart));
-        Assert.Equal(6.5f, Cart.HalfLength * 2, 2); // about 6.5 m long including the drawbar
-        Assert.Equal(2.2f, Cart.HalfWidth * 2, 2);
-        Assert.InRange(Cart.Trailer.Mass, 1400, 1600);
+        Assert.True(TowGeometry.CanTow(Shipped.Vehicles.Single(v => v.Id == "humvee"), Cart));
+        Assert.Equal(12.6f, Cart.HalfLength * 2, 2); // the model's 12.6 m including the drawbar (it carries the whole 11.1 m missile)
+        Assert.Equal(2.46f, Cart.HalfWidth * 2, 2);
+        Assert.Equal(7.6f, Cart.Trailer.Drawbar, 2);
+        Assert.False(Cart.Returns); // the Scud event decides when a new cart stands at a bunker
+        Assert.InRange(Cart.Trailer.Mass, 2500, 3500);
+        Assert.InRange(Cart.Trailer.EmptyMass, 800, 1500);
     }
 
     [Fact]
     public void The_cart_fits_the_jeeps_and_the_flaks_hitch_without_starting_inside_them()
     {
-        foreach (var tractor in new[] { Jeep, Flak })
+        foreach (var tractor in new[] { Jeep, Flak, Shipped.Vehicles.Single(v => v.Id == "humvee") })
         {
             var g = TowGeometry.Of(tractor, Cart);
             var b = TowModel.Pose(g, Vector3.Zero, 0f, 0f);
@@ -413,16 +417,16 @@ public class RocketCartTests
         var client = new DrivePrediction(car, world, start);
         client.AttachTrailer(Cart, g, TowModel.Pose(g, start.Position, start.Yaw, 0f), new Wall());
         for (ushort seq = 1; seq <= 90; seq++) client.Step(seq, Keys(-1, 0), Dt); // reversing: the trailer meets the wall behind
-        Assert.InRange(client.State.Position.Z, 1f, 4f); // the cart's rear edge was at 8.75 m: it stops about 3.2 m back, not at the full run of 90 ticks
+        Assert.InRange(client.State.Position.Z, 1f, 4f); // the cart's rear edge was at about 15 m: it stops about 3 m back, not at the full run of 90 ticks
         Assert.Equal(0f, client.State.Speed);
         var ahead = client.Ahead(Keys(-1, 0), Dt);
         Assert.Equal(client.State.Position, ahead.State.Position, new VectorComparer());
     }
 
-    /// <summary>A wall across the world at z = 12 (the tractor's z grows as it reverses): the trailer is blocked when its box would reach it.</summary>
+    /// <summary>A wall across the world at z = 18 (the tractor's z grows as it reverses): the trailer is blocked when its box would reach it.</summary>
     sealed class Wall : ITrailerWorld
     {
-        public bool Blocked(in BodyBox from, in BodyBox to, float y) => to.Z + to.HalfL > 12f;
+        public bool Blocked(in BodyBox from, in BodyBox to, float y) => to.Z + to.HalfL > 18f;
     }
 
     sealed class VectorComparer : IEqualityComparer<Vector3>

@@ -32,10 +32,13 @@ public partial class NetClient
         public Basis RackRest = Basis.Identity;
         public bool Looked;
         public CpuParticles3D? Ignition;
+        /// <summary>The eight wheels (<c>wheel_l1..l4</c>, <c>wheel_r1..r4</c>) and their rest poses, and the steering parents of the front two axles (<c>wheel_l1_steer</c>, <c>wheel_r1_steer</c>, <c>wheel_l2_steer</c>, <c>wheel_r2_steer</c>) with the axle each belongs to (an index into the type's <c>steer_arms</c>).</summary>
         public Node3D[] Wheels = Array.Empty<Node3D>();
         public Basis[] WheelRest = Array.Empty<Basis>();
+        public Node3D[] Steers = Array.Empty<Node3D>();
+        public int[] SteerAxle = Array.Empty<int>();
         public Vector3 LastPos;
-        public float WheelSpin;
+        public float WheelSpin, LastYaw, Curvature;
         /// <summary>The operator's camera as last sent (the feed), and when.</summary>
         public float ViewX, ViewZ, ViewZoom = 1f;
         public double ViewAt;
@@ -240,6 +243,12 @@ public partial class NetClient
                 t.MissileOnRack = t.Rack?.FindChild("missile", true, false) as Node3D;
                 t.Wheels = v.Node.FindChildren("wheel_*", "Node3D", true, false).OfType<Node3D>().Where(w => !w.Name.ToString().EndsWith("_steer")).ToArray();
                 t.WheelRest = t.Wheels.Select(w => w.Basis).ToArray();
+                var steers = new List<Node3D>(); var axles = new List<int>();
+                for (var axle = 0; axle < launcher.SteerArms.Length; axle++)
+                    foreach (var side in new[] { "l", "r" })
+                        if (v.Node.FindChild("wheel_" + side + (axle + 1) + "_steer", true, false) is Node3D steer) { steers.Add(steer); axles.Add(axle); }
+                t.Steers = steers.ToArray(); t.SteerAxle = axles.ToArray();
+                t.LastYaw = v.Node.Rotation.Y;
                 t.Ignition = ScudFx.IgnitionSmoke(v.Node, new Vector3(launcher.Exhaust[0], launcher.Exhaust[1], launcher.Exhaust[2]));
                 t.LastPos = v.Node.GlobalPosition;
             }
@@ -251,16 +260,21 @@ public partial class NetClient
             }
             if (t.MissileOnRack != null) t.MissileOnRack.Visible = ScudRules.RocketOnRack(state, elapsed, Scud.Launcher);
             if (t.Ignition != null) ParticleFx.Run(t.Ignition, state == ScudLauncherState.Launching);
-            // wheels roll with the ground speed along the truck's own heading
+            // all eight wheels roll by the distance driven along the truck's own heading, and the front two axles steer by the path's curvature (the drawn yaw over the drawn distance; the truck is not predicted)
             var pos = v.Node.GlobalPosition;
-            if (t.Wheels.Length > 0 && dt > 1e-4f)
+            var yaw = v.Node.Rotation.Y;
+            if (dt > 1e-4f)
             {
                 var fwd = -v.Node.GlobalTransform.Basis.Z;
-                var speed = (pos - t.LastPos).Dot(fwd) / dt;
-                t.WheelSpin -= speed / 0.62f * dt;
+                var ds = (pos - t.LastPos).Dot(fwd);
+                if (MathF.Abs(ds) > 5f) ds = 0f; // a jump (a return to its place) is not driving
+                t.WheelSpin = Mathf.Wrap(t.WheelSpin - ds / launcher.WheelRadius, -Mathf.Pi, Mathf.Pi);
+                var target = MathF.Abs(ds) > 0.005f ? Math.Clamp(FlightMath.Wrap(yaw - t.LastYaw) / ds, -0.25f, 0.25f) : 0f; // 1 / radius, positive to the left
+                t.Curvature += (target - t.Curvature) * (1f - MathF.Exp(-8f * dt));
                 for (var i = 0; i < t.Wheels.Length; i++) if (GodotObject.IsInstanceValid(t.Wheels[i])) t.Wheels[i].Basis = new Basis(Vector3.Right, t.WheelSpin) * t.WheelRest[i]; // about the truck's own lateral axis, over the wheel's rest pose
+                for (var i = 0; i < t.Steers.Length; i++) if (GodotObject.IsInstanceValid(t.Steers[i])) t.Steers[i].Rotation = new Vector3(0, ScudRules.WheelAngle(launcher.SteerArms[t.SteerAxle[i]], t.Curvature), 0);
             }
-            t.LastPos = pos;
+            t.LastPos = pos; t.LastYaw = yaw;
         }
     }
 

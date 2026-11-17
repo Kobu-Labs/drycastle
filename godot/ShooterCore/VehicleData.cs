@@ -736,16 +736,25 @@ public class VehicleLauncherDef
 {
     /// <summary>The seat whose occupant is the operator (the targeting screen is theirs); the others only watch and confirm.</summary>
     public int OperatorSeat { get; set; } = 1;
-    /// <summary>Where the missile leaves, with the rack up: the rocket's base on the rack.</summary>
-    public float[] Muzzle { get; set; } = { 0, 3.2f, 5.2f };
-    /// <summary>Where the launch smoke and the ignition flame come from (the rack's foot).</summary>
-    public float[] Exhaust { get; set; } = { 0, 1.4f, 6.2f };
+    /// <summary>Where the missile entity spawns: the centre of the ERECTED rocket on the raised rack (the model's <c>missile</c> node with the rack at 90 degrees), so it leaves from where it stands.</summary>
+    public float[] Muzzle { get; set; } = { 0, 5.89f, 4.111f };
+    /// <summary>Where the launch smoke and the ignition flame come from (the erected rocket's tail end).</summary>
+    public float[] Exhaust { get; set; } = { 0, 1.1f, 4.111f };
+    /// <summary>The wheels' radius, metres: they roll by the distance driven (the model's wheel centres are at this height).</summary>
+    public float WheelRadius { get; set; } = 0.736f;
+    /// <summary>
+    /// The steered axles, front first: the distance from the middle of the fixed axles to each steered axle, metres. An axle's wheels turn by atan(arm / turn radius) (the truck turns about a point on the fixed axles' line),
+    /// so the front axle turns more than the second. Empty: no wheel steers.
+    /// </summary>
+    public float[] SteerArms { get; set; } = { 6.431f, 4.272f };
 
     /// <summary>Why the block is bad, or null.</summary>
     public string? Validate(VehicleDef v)
     {
         if (OperatorSeat < 1 || OperatorSeat >= v.Seats.Count) return "operator_seat must be a seat of the vehicle other than the driver's";
         if (Muzzle.Length != 3 || Exhaust.Length != 3 || Muzzle.Concat(Exhaust).Any(x => !float.IsFinite(x))) return "muzzle and exhaust are [x, y, z]";
+        if (!(WheelRadius > 0.1f && WheelRadius < 2f)) return "wheel_radius must be between 0.1 and 2 metres";
+        if (SteerArms.Any(a => !(a > 0.5f && a < 20f))) return "steer_arms are distances in metres between 0.5 and 20";
         if (v.Flight != null || v.Gun != null || v.Flak != null || v.DoorGun != null) return "a launcher truck is a ground vehicle with no gun, flak or door gun";
         if (v.Drive != null) return "a launcher truck has no drive block: the server steps it and brakes it while its rack moves, its driver's client does not predict it";
         return null;

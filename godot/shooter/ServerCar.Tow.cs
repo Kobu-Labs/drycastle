@@ -49,11 +49,14 @@ public partial class ServerCar
         AddChild(TrailerWorld);
     }
 
-    /// <summary>A trailer back at its origin, loose, loaded: any hitch is dropped without a lockout (it was not the driver's doing). Called from <see cref="Reset"/>.</summary>
-    void ResetTrailer()
+    /// <summary>
+    /// A trailer back at its origin, loose: any hitch is dropped without a lockout (it was not the driver's doing). Called from <see cref="Reset"/>. A return after destruction (<paramref name="repair"/>) loads it
+    /// again; a fall out of the world does not: a cart that was emptied (a Scud truck took its missile) stays empty.
+    /// </summary>
+    void ResetTrailer(bool repair)
     {
         DropLinks();
-        Cargo!.Reset();
+        if (repair) Cargo!.Reset();
         Life.SetMaxHp(Cargo.MaxHp(Def));
         Tow = new TowLink(OriginPos.ToNumerics(), OriginYaw);
         TowGeo = TowGeometry.ForTrailer(Def);
@@ -67,7 +70,7 @@ public partial class ServerCar
     }
 
     /// <summary>The tractor's step is told what the trailer on it does (its load and the jackknife block); none when nothing is hitched.</summary>
-    public TowEffect TowEffectNow() => Towing is { Tow: { } link } trailer ? link.Effect(Def, trailer.Def, trailer.TowGeo) : TowEffect.None;
+    public TowEffect TowEffectNow() => Towing is { Tow: { } link } trailer ? link.Effect(Def, trailer.Def, trailer.TowGeo, trailer.Cargo?.Loaded ?? true) : TowEffect.None;
 
     /// <summary>What the tractor did this tick, as the trailer needs it: the drive state's, or the car state with the physics body's place.</summary>
     public TractorMotion TowMotion()

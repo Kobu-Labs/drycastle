@@ -377,6 +377,13 @@ public static class ScudRules
         _ => false,
     };
 
+    /// <summary>
+    /// The angle a steered axle's wheels take, radians (positive: to the left, as Godot's Y turn): the truck turns about a point on the line of its fixed axles, so a wheel
+    /// <paramref name="arm"/> metres ahead of that line turns by atan(arm x curvature). <paramref name="curvature"/> is the path's, 1 / radius, positive to the left, negative reversing into
+    /// the same wheel angle (the caller signs it by the direction of travel). Held to <paramref name="max"/>.
+    /// </summary>
+    public static float WheelAngle(float arm, float curvature, float max = 0.6f) => Math.Clamp(MathF.Atan(arm * curvature), -max, max);
+
     /// <summary>Whether the screen may be opened in this state (the operator's key, the driver's feed).</summary>
     public static bool ScreenAvailable(ScudLauncherState s) => s is ScudLauncherState.Stowed or ScudLauncherState.Targeting or ScudLauncherState.Proposed;
 

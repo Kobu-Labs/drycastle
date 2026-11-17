@@ -368,7 +368,7 @@ What a Lock-on launcher fires: it flies at 160 m/s after the Aircraft it was loc
 _Avoid_: rocket (the bazooka's and the gunship's fly straight), attack missile (that is the killstreak)
 
 **Scud truck**:
-The heavy 8-wheel launcher vehicle (`scud` in `vehicles.json`) of the Scud event: a driver and an operator under one cab, a rack on its back that rises about the rear hinge, and one rocket. It is not dealt at the match start and has no fixed spot (the event, or `/scud spawn`, brings it), cannot tow, and once destroyed it never returns for the match (`returns: false`). Its Launcher fires the Scud missile; its model is the private pack's `scud_truck`, a grey box without it.
+The heavy 8-wheel launcher vehicle (`scud` in `vehicles.json`) of the Scud event: a driver and an operator under one cab, a rack on its back that rises about the rear hinge, and one rocket. It is not dealt at the match start and has no fixed spot (the event, or `/scud spawn`, brings it), cannot tow, and once destroyed it never returns for the match (`returns: false`). Its Launcher fires the Scud missile; its model is the private pack's `scud` (8 wheels, the front two axles steer; two half cabs with the rocket's nose between them), a grey box without it.
 _Avoid_: launcher (that is the machine on it), Scud (alone: the missile)
 
 **Launcher**:
