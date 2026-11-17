@@ -468,8 +468,8 @@ public static class PackTreeMath
 
     /// <summary>
     /// How far a tree whose base is <paramref name="dist"/> from the focus is from being a pack tree: 0 inside radius - band, 1 beyond the radius,
-    /// linear between. The pack tree is drawn with share 1 - this and the baked tree with this, dithered against the same noise, so exactly one of the
-    /// two is drawn at every pixel. Mirrors <c>tree_far</c> in tree_cut.gdshaderinc.
+    /// linear between. It is compared with the tree's own <see cref="Threshold"/> (<see cref="IsBaked"/>), so over the band the trees swap whole, one by one.
+    /// Mirrors <c>tree_far</c> in tree_cut.gdshaderinc.
     /// </summary>
     public static float FarShare(float dist, float radius, float band)
     {
@@ -477,6 +477,24 @@ public static class PackTreeMath
         band = MathF.Max(band, 0.001f);
         return Math.Clamp((dist - (radius - band)) / band, 0f, 1f);
     }
+
+    /// <summary>
+    /// The tree's own threshold in [0, 1): a hash of its world base point on a 1 m grid shifted off the centimetre lattice (interleaved-gradient noise of the cell).
+    /// Mirrors <c>tree_threshold</c> in tree_cut.gdshaderinc: the baked mesh and the pack tile both derive it from the same world base, so they agree.
+    /// </summary>
+    public static float Threshold(float worldX, float worldZ)
+    {
+        static float Fract(float v) => v - MathF.Floor(v);
+        var cx = MathF.Floor(worldX + 0.4137f);
+        var cz = MathF.Floor(worldZ + 0.2719f);
+        return Fract(52.9829189f * Fract(cx * 0.06711056f + cz * 0.00583715f));
+    }
+
+    /// <summary>
+    /// Whether the baked tree stands (true) or the pack tree (false): the whole tree switches when its far share passes its threshold, so exactly one of the two is
+    /// drawn, never a mix. Far 0 is always pack, far 1 always baked. Mirrors <c>tree_is_baked</c> in tree_cut.gdshaderinc.
+    /// </summary>
+    public static bool IsBaked(float far, float worldX, float worldZ) => far > Threshold(worldX, worldZ);
 
     /// <summary>
     /// The radius of the cut: the near radius, but no further than the nearest tile that has pack trees to draw and is not built yet (distances from

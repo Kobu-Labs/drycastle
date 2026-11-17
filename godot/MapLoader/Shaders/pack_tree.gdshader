@@ -1,9 +1,9 @@
 shader_type spatial;
 // One material of the pack's trees (materials.json: albedo texture and colour, alpha scissor, cull mode, roughness), drawn from a tile mesh that holds
 // many trees. UV2 holds the base point of the tree a vertex belongs to (PackTileMesher). A tree whose base is beyond the radius is dropped whole
-// (its vertices collapse into one point), and in the fade band it is dithered against the baked tree. MapLoader.PackTrees.cs replaces CULL_MODE.
+// (its vertices collapse into one point); in the fade band each tree swaps whole against its baked twin, at a distance of its own (no per-pixel dither). MapLoader.PackTrees.cs replaces CULL_MODE.
 // COLOR (PackTileMesher): rgb = the tree's foliage tint halved, a = what it is: 1 tree, 0.5 ground object (cut like a tree, no tint), 0 undergrowth
-// (own radius, tree_cut_under: nothing stands behind it, so it just dithers out).
+// (own radius, tree_cut_under: nothing stands behind it, so each piece just drops out at a distance of its own in the band).
 render_mode diffuse_burley, specular_schlick_ggx, CULL_MODE;
 
 // @include tree_cut
@@ -25,14 +25,12 @@ uniform float leaf_ref = 0.2;
 uniform float shade_min = 0.75;
 uniform float shade_max = 1.25;
 
-varying flat float far_share;
 varying flat vec3 tint;
 varying flat float tinted;
 
 void vertex() {
 	float kind = COLOR.a;
-	far_share = tree_far(UV2, VERTEX.y, MODEL_MATRIX, kind < 0.25 ? tree_cut_under : tree_cut);
-	if (far_share >= 1.0) {
+	if (tree_is_baked(tree_far(UV2, VERTEX.y, MODEL_MATRIX, kind < 0.25 ? tree_cut_under : tree_cut))) {
 		VERTEX = vec3(0.0);
 	}
 	tint = COLOR.rgb * 2.0;
@@ -44,9 +42,6 @@ void vertex() {
 }
 
 void fragment() {
-	if (far_share > 0.0 && tree_noise(FRAGCOORD.xy) >= 1.0 - far_share) {
-		discard;
-	}
 	vec4 c = texture(albedo_tex, UV) * albedo_colour;
 	if (scissor >= 0.0 && c.a < scissor) {
 		discard;
