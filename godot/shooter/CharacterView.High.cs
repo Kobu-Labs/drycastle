@@ -76,22 +76,8 @@ public sealed partial class CharacterView
         var rot = Basis.FromEuler(new Vector3(Mathf.DegToRad((float)c.RotationDeg[0]), Mathf.DegToRad((float)c.RotationDeg[1]), Mathf.DegToRad((float)c.RotationDeg[2])));
         // the model is in metres facing +Z with its filter end at the origin; the rig is in rig units: the wrapper scales
         var wrap = new Node3D { Name = "Cigarette", Scale = Vector3.One * ((float)c.Scale / Scale) };
-        wrap.AddChild(SyntyLib.Instance(c.Model, c.Atlas) ?? Stick(c));
-        _tip = new Node3D { Name = "Tip", Position = new Vector3(0, 0, (float)c.LengthM) };
-        wrap.AddChild(_tip);
-        if (ShotFx.Enabled)
-        {
-            var ember = new Color(c.EmberColour);
-            _tip.AddChild(new MeshInstance3D
-            {
-                Name = "Ember", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                Mesh = new SphereMesh { Radius = (float)c.EmberRadiusM, Height = 2f * (float)c.EmberRadiusM, RadialSegments = 8, Rings = 4 },
-                MaterialOverride = new StandardMaterial3D
-                {
-                    ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = ember, EmissionEnabled = true, Emission = ember, EmissionEnergyMultiplier = (float)c.EmberEnergy,
-                },
-            });
-        }
+        wrap.AddChild(CigaretteModel(c, out var tip));
+        _tip = tip;
         var holder = new Node3D { Name = "Holder", Transform = _bind[head].AffineInverse() * new Transform3D(rot, at) };
         holder.AddChild(wrap);
         _cigarette = new BoneAttachment3D { Name = "Cigarette", BoneName = "Head" };
@@ -103,17 +89,43 @@ public sealed partial class CharacterView
             Name = "CigaretteGlow", LightColor = new Color(c.Light.Colour), LightEnergy = (float)c.Light.Energy, OmniRange = (float)c.Light.Range, ShadowEnabled = false, Visible = false,
         };
         AddChild(_glow);
-        var s = c.Smoke;
+        _smoke = CigaretteSmoke(c.Smoke, c.Smoke.Amount, (float)c.Smoke.SizeM);
+        AddChild(_smoke);
+    }
+
+    /// <summary>The cigarette in metres, facing +Z with its filter end at the origin: the pack model (or the stick), and <paramref name="tip"/> at its end with the glowing ember (no ember headless).</summary>
+    internal static Node3D CigaretteModel(CigaretteData c, out Node3D tip)
+    {
+        var root = new Node3D { Name = "CigaretteModel" };
+        root.AddChild(SyntyLib.Instance(c.Model, c.Atlas) ?? Stick(c));
+        tip = new Node3D { Name = "Tip", Position = new Vector3(0, 0, (float)c.LengthM) };
+        root.AddChild(tip);
+        if (!ShotFx.Enabled) return root;
+        var ember = new Color(c.EmberColour);
+        tip.AddChild(new MeshInstance3D
+        {
+            Name = "Ember", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            Mesh = new SphereMesh { Radius = (float)c.EmberRadiusM, Height = 2f * (float)c.EmberRadiusM, RadialSegments = 8, Rings = 4 },
+            MaterialOverride = new StandardMaterial3D
+            {
+                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = ember, EmissionEnabled = true, Emission = ember, EmissionEnergyMultiplier = (float)c.EmberEnergy,
+            },
+        });
+        return root;
+    }
+
+    /// <summary>The smoke of a cigarette tip: a world-space emitter (the smoke stays where it was let out), off until it is run.</summary>
+    internal static CpuParticles3D CigaretteSmoke(CigaretteSmokeData s, int amount, float size)
+    {
         var rc = RocketFx.C;
-        _smoke = new CpuParticles3D
+        return new CpuParticles3D
         {
             Name = "CigaretteSmoke", LocalCoords = false, Emitting = false, Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-            Mesh = new SphereMesh { Radius = (float)s.SizeM, Height = 2f * (float)s.SizeM, RadialSegments = 8, Rings = 4, Material = RocketFx.Part(new Color(1, 1, 1)) },
-            Amount = s.Amount, Lifetime = s.LifetimeS, Direction = Vector3.Up, Spread = 40f,
+            Mesh = new SphereMesh { Radius = size, Height = 2f * size, RadialSegments = 8, Rings = 4, Material = RocketFx.Part(new Color(1, 1, 1)) },
+            Amount = amount, Lifetime = s.LifetimeS, Direction = Vector3.Up, Spread = 40f,
             InitialVelocityMin = (float)s.SpeedMps * 0.5f, InitialVelocityMax = (float)s.SpeedMps, Gravity = new Vector3(0, (float)s.RiseMps2, 0),
             ColorRamp = rc.SmokeTrail, ScaleAmountCurve = rc.TrailGrow, ScaleAmountMin = 0.8f, ScaleAmountMax = 1.3f,
         };
-        AddChild(_smoke);
     }
 
     /// <summary>The stand-in without the private pack: a thin white stick of the cigarette's length along +Z from the filter end.</summary>

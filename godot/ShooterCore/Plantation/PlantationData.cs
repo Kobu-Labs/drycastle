@@ -59,6 +59,10 @@ public sealed class PlantationFile : IVersioned
         if (s.Amount < 1) throw new DataFileException("plantation.json: view.cigarette.smoke.amount must be at least 1");
         Pos(s.LifetimeS, "view.cigarette.smoke.lifetime_s"); Pos(s.SizeM, "view.cigarette.smoke.size_m"); NonNeg(s.SpeedMps, "view.cigarette.smoke.speed_mps"); NonNeg(s.RiseMps2, "view.cigarette.smoke.rise_mps2");
         Pos(s.CullM, "view.cigarette.smoke.cull_m");
+        var fp = c.FirstPerson;
+        if (fp.Offset.Length != 3 || fp.RotationDeg.Length != 3) throw new DataFileException("plantation.json: view.cigarette.first_person.offset and rotation_deg need 3 numbers");
+        if (fp.SmokeAmount < 1) throw new DataFileException("plantation.json: view.cigarette.first_person.smoke_amount must be at least 1");
+        Pos(fp.SmokeSizeM, "view.cigarette.first_person.smoke_size_m");
         var e = v.Eyes;
         Pos(e.Width, "view.eyes.width"); Pos(e.Height, "view.eyes.height"); Unit(e.PupilWidth, "view.eyes.pupil_width"); Unit(e.PupilHeight, "view.eyes.pupil_height");
         Pos(e.Spread, "view.eyes.spread");
@@ -83,10 +87,10 @@ public sealed class NauseaData
     public double FadeS { get; set; } = 4;
     public double LagS { get; set; } = 0.35;
     public double ReducedScale { get; set; } = 0.15;
-    public List<SwayWave> Yaw { get; set; } = new() { new() { Deg = 3.0, PeriodS = 7.3 }, new() { Deg = 1.1, PeriodS = 3.1 } };
-    public List<SwayWave> Pitch { get; set; } = new() { new() { Deg = 2.2, PeriodS = 5.9 }, new() { Deg = 0.8, PeriodS = 2.3 } };
-    public List<SwayWave> Roll { get; set; } = new() { new() { Deg = 4.5, PeriodS = 9.1 }, new() { Deg = 1.5, PeriodS = 3.7 } };
-    public List<SwayWave> Fov { get; set; } = new() { new() { Deg = 6.0, PeriodS = 6.4 }, new() { Deg = 2.0, PeriodS = 2.7 } };
+    public List<SwayWave> Yaw { get; set; } = new() { new() { Deg = 9.0, PeriodS = 7.3 }, new() { Deg = 3.5, PeriodS = 3.1 } };
+    public List<SwayWave> Pitch { get; set; } = new() { new() { Deg = 6.0, PeriodS = 5.9 }, new() { Deg = 2.5, PeriodS = 2.3 } };
+    public List<SwayWave> Roll { get; set; } = new() { new() { Deg = 14.0, PeriodS = 9.1 }, new() { Deg = 5.0, PeriodS = 3.7 } };
+    public List<SwayWave> Fov { get; set; } = new() { new() { Deg = 16.0, PeriodS = 6.4 }, new() { Deg = 6.0, PeriodS = 2.7 } };
 }
 
 /// <summary>plantation.json "view": what every client draws on a high player's figure.</summary>
@@ -117,6 +121,19 @@ public sealed class CigaretteData
     public double EmberEnergy { get; set; } = 6;
     public CigaretteLightData Light { get; set; } = new();
     public CigaretteSmokeData Smoke { get; set; } = new();
+    public CigaretteFirstPersonData FirstPerson { get; set; } = new();
+}
+
+/// <summary>
+/// The high player's own cigarette in the first-person view: a copy of the model fixed to the camera where the mouth is. <see cref="Offset"/> is the filter end in the camera's frame, metres (x right, y up,
+/// z back: forward is negative); <see cref="RotationDeg"/> tilts it from pointing straight ahead (x negative: tip down; y: tip to the left). Its smoke is thinner than the figure's so it does not hide the aim.
+/// </summary>
+public sealed class CigaretteFirstPersonData
+{
+    public double[] Offset { get; set; } = { 0.03, -0.11, -0.05 };
+    public double[] RotationDeg { get; set; } = { -10, 6, 0 };
+    public int SmokeAmount { get; set; } = 28;
+    public double SmokeSizeM { get; set; } = 0.018;
 }
 
 /// <summary>The small warm shadowless light at the tip that lights the wearer's face; only while the figure is within <see cref="CullM"/> of the camera.</summary>

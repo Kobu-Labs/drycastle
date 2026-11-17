@@ -259,8 +259,8 @@ public class PlantationTests
     public void The_nausea_moves_the_real_look_and_draws_a_roll_and_a_breathing_fov()
     {
         var (yaw, pitch, roll, fov) = Run(new Nausea(Data.Nausea), 30f, true, true, false);
-        Assert.InRange(yaw * 180 / Math.PI, 1.0, 5.0); // degrees of real aim moved
-        Assert.InRange(pitch * 180 / Math.PI, 0.5, 4.0);
+        Assert.InRange(yaw * 180 / Math.PI, 5.0, 14.0); // degrees of real aim moved
+        Assert.InRange(pitch * 180 / Math.PI, 3.0, 10.0);
         Assert.True(roll > 0.02f); // radians
         Assert.True(fov > 1f); // degrees
     }

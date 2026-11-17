@@ -8,13 +8,13 @@
   // shots go where the swayed crosshair points), roll and fov are only drawn. lag_s: how slowly the view follows the sway; fade_s: how long it takes to come on and to go; reduced_scale: the share left with
   // the reduce-motion setting. Nothing here was seen in the game: tune by feel.
   "nausea": {
-    "fade_s": 4,
+    "fade_s": 2.5,
     "lag_s": 0.35,
     "reduced_scale": 0.15,
-    "yaw":   [ { "deg": 3.0, "period_s": 7.3 }, { "deg": 1.1, "period_s": 3.1 } ],
-    "pitch": [ { "deg": 2.2, "period_s": 5.9 }, { "deg": 0.8, "period_s": 2.3 } ],
-    "roll":  [ { "deg": 4.5, "period_s": 9.1 }, { "deg": 1.5, "period_s": 3.7 } ],
-    "fov":   [ { "deg": 6.0, "period_s": 6.4 }, { "deg": 2.0, "period_s": 2.7 } ]
+    "yaw":   [ { "deg": 9.0, "period_s": 7.3 }, { "deg": 3.5, "period_s": 3.1 } ],
+    "pitch": [ { "deg": 6.0, "period_s": 5.9 }, { "deg": 2.5, "period_s": 2.3 } ],
+    "roll":  [ { "deg": 14.0, "period_s": 9.1 }, { "deg": 5.0, "period_s": 3.7 } ],
+    "fov":   [ { "deg": 16.0, "period_s": 6.4 }, { "deg": 6.0, "period_s": 2.7 } ]
   },
   // What every client draws on a high player's figure (CharacterView.High.cs). Nothing here was seen in the game: nudge freely.
   "view": {
@@ -34,7 +34,11 @@
       "ember_radius_m": 0.011,
       "ember_energy": 6,
       "light": { "colour": "#ff9a4d", "energy": 0.7, "range": 1.6, "cull_m": 30 },
-      "smoke": { "amount": 60, "lifetime_s": 2.6, "size_m": 0.045, "speed_mps": 0.3, "rise_mps2": 0.3, "cull_m": 80 }
+      "smoke": { "amount": 60, "lifetime_s": 2.6, "size_m": 0.045, "speed_mps": 0.3, "rise_mps2": 0.3, "cull_m": 80 },
+      // The high player's own view: a copy of the cigarette fixed to the camera where the mouth is, so its tip and smoke show at the bottom of the screen (NetClient.High.cs). offset: the filter end in
+      // the camera's frame, metres (x right, y up, z back: forward is negative); rotation_deg tilts it from straight ahead (x negative: tip down; y: tip to the left). Its smoke is thinner than the
+      // figure's so it does not hide the aim. Not seen in the game.
+      "first_person": { "offset": [0.03, -0.11, -0.05], "rotation_deg": [-10, 6, 0], "smoke_amount": 28, "smoke_size_m": 0.018 }
     },
     // The eyes: two rectangles on the face plate instead of the normal dark boxes. width and height: shares of the plate's width and height; spread: how far from the middle each sits (share of the width);
     // lift: how far above the middle (share of the height). White with a clear red tint (colour), each with a small dark pupil (a share of the eye).
