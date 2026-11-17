@@ -203,6 +203,8 @@ Every 10 s the server prints one `server: stats` line (tick p50/p99, the phases,
 | `server: prof mem rss_mb=.. heap_mb=.. gc_committed_mb=.. objects=.. nodes=.. orphans=.. rays_s=.. live_targets_s=..` | process memory, the managed heap, the engine's object and node counts (a count that only grows is a leak), physics rays and target lists per second. `godot_static_mb` is 0 in a release export (the engine does not count it there) |
 | `server: prof gc last_index=.. gen=.. pause_ms=.. promoted_kb=.. gen0_kb=A>B gen1_kb=A>B gen2_mb=.. pinned=..` | the last collection of the young generations: its generation, its pause, the kilobytes it found alive and moved up (what a pause is paid for), generations 0 and 1 before and after it |
 
+The same numbers go to the metrics store and its Grafana dashboard when `DRYCASTLE_METRICS_URL` is set: `docs/monitoring.md`.
+
 A new scope: a value in `Prof.S` with its name in `Prof.Names`, then `var t = Prof.Begin(); ...; Prof.End(Prof.S.X, t);` around the code (game thread only).
 
 Function-level profile on the VPS (`linux-perf` is installed): start the server with `DOTNET_PerfMapEnabled=1` and `DOTNET_EnableWriteXorExecute=0`
