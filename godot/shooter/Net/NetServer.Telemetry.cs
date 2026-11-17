@@ -62,10 +62,12 @@ public partial class NetServer
         var ms = (Time.GetTicksUsec() - startUs) / 1000.0;
         _tickMs.Add(ms);
         if (ms > TickMs) _overruns++;
+        ProfTickEnd(ms);
         foreach (var c in _clients.Values) c.SaveTokens = Math.Min(SaveBurst, c.SaveTokens + delta * SavesPerSecond);
         _reportClock += delta;
         if (_reportClock < ReportSeconds) return;
         GD.Print(Report(_reportClock));
+        ProfReport(_reportClock);
         _reportClock = 0; _tickMs.Clear();
         _overruns = _skippedSnapshots = _droppedPackets = _rejectedSaves = 0;
         foreach (var c in _clients.Values) c.BytesOut = 0;

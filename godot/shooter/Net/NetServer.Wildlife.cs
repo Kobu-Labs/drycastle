@@ -30,6 +30,7 @@ public partial class NetServer
         /// <summary>The nearest living player or moving vehicle within the radius (flat distance).</summary>
         public override NVec3? NearestThreat(NVec3 from, float radius)
         {
+            var t = Prof.Begin();
             NVec3? best = null;
             var bestSq = radius * radius;
             void Consider(NVec3 p)
@@ -42,6 +43,7 @@ public partial class NetServer
                 if (_s._match.Get(c.Id)?.Life == PlayerLife.Alive) Consider(N(c.Body.GlobalPosition));
             foreach (var car in _s._cars)
                 if (!car.Destroyed && MathF.Abs(car.State.Speed) > WildlifeCarThreatSpeed) Consider(N(car.GlobalPosition));
+            Prof.End(Prof.S.AnimalThreat, t);
             return best;
         }
     }
