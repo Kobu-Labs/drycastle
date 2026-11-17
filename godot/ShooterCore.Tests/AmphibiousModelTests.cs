@@ -101,10 +101,9 @@ public class AmphibiousModelTests
         Assert.InRange(v.Height, 1.1f, 1.3f);
         foreach (var seat in v.Seats.Take(2))
             Assert.True(seat.Offset[1] + MovementStep.CapsuleHeight(Stance.Crouch) > v.Height + 0.4f, "a seated rider stands at least 0.4 m out of the hull");
-        // it is about the size of the jeep, and a little lower
-        var jeep = Shipped.Vehicles.Single(x => x.Id == "jeep");
-        Assert.InRange(v.HalfLength / jeep.HalfLength, 0.9f, 1.1f);
-        Assert.InRange(v.HalfWidth / jeep.HalfWidth, 0.8f, 1.1f);
-        Assert.True(v.Height < jeep.Height);
+        // it is about the size of the old Kenney jeep (half length 2.3, half width 1.28, height 2.2: the jeep is the real-size truck since #325), and a little lower
+        Assert.InRange(v.HalfLength / 2.3f, 0.9f, 1.1f);
+        Assert.InRange(v.HalfWidth / 1.28f, 0.8f, 1.1f);
+        Assert.True(v.Height < 2.2f);
     }
 }

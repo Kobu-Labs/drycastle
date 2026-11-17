@@ -650,6 +650,9 @@ public class GlassTests
         {
             // the server only looks for a pane where a bullet stopped on the hit box, so a pane outside it could never be hit
             Assert.True(MathF.Abs(r.Centre.X) <= v.HalfWidth + 0.01f && MathF.Abs(r.Centre.Z) <= v.HalfLength + 0.01f && r.Centre.Y > 0 && r.Centre.Y <= v.Height, $"{v.Id} {g.Id} is outside the hit box");
+            // the truck's two cab-back windows look from the cab into the bed: a partition inside the box that no bullet from outside reaches (the bed is in the way);
+            // explosions still break them (#325). Every other pane faces away from the middle of the vehicle and is reachable
+            if (v.Id == "jeep" && g.Id.StartsWith("rear_")) { Assert.True(r.Normal.Z > 0.9f, "the cab-back windows face the bed"); continue; }
             // a pane faces away from the middle of the vehicle (a partition inside would not)
             var fromMiddle = r.Centre - new Vector3(0, r.Centre.Y, 0);
             Assert.True(Vector3.Dot(r.Normal, fromMiddle) > 0 || r.Normal.Y > 0.5f, $"{v.Id} {g.Id} faces inwards");

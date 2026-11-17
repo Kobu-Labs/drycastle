@@ -55,7 +55,7 @@ public static class SeatSchematic
 {
     /// <summary>
     /// Lays the vehicle out in a <paramref name="width"/> x <paramref name="height"/> panel, centred, as large as fits inside <paramref name="pad"/>.
-    /// Markers (radius <paramref name="markerRadius"/>) that would touch, such as the jeep's roof gunner above its driver, are pushed apart, then every
+    /// Markers (radius <paramref name="markerRadius"/>) that would touch, such as a roof gunner above its driver, are pushed apart, then every
     /// marker is kept inside the body outline, so each number stays readable and no seat is hidden under another.
     /// </summary>
     public static SeatLayout Layout(VehicleDef def, float width, float height, float pad, float markerRadius)
@@ -83,6 +83,8 @@ public static class SeatSchematic
                     if (d >= min) continue;
                     // exactly on top of each other (a roof gunner above its driver): split along the vehicle, the lower seat number in front
                     if (d < 0.001f) { dx = 0; dy = 1; d = 1; }
+                    // a body too narrow to split them sideways (a three-seat bench in a wide, long truck): split along the vehicle instead, the lower seat number in front
+                    if (MathF.Abs(dx) > MathF.Abs(dy) && (cx + hx - markerRadius) - (cx - hx + markerRadius) < 2 * min) { dy = dy != 0 ? MathF.Sign(dy) : 1; dx = dx * 0.01f; d = MathF.Sqrt(dx * dx + dy * dy); }
                     var push = (min - d) / 2 + 0.01f;
                     x[i] -= dx / d * push; y[i] -= dy / d * push;
                     x[j] += dx / d * push; y[j] += dy / d * push;

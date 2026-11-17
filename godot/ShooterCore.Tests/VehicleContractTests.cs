@@ -69,20 +69,7 @@ public class VehicleContractTests
     {
         ["default_model_transform"] = new()
         {
-            ["jeep"] = "Kenney suv.glb, replaced by SM_Veh_Truck_01 (#325 swap)",
             ["harvester"] = "Synty farm prefab turned 180 degrees by model_yaw_deg; standardize it (#325 conform)",
-        },
-        ["covered_seat_eye_inside_hit_box"] = new()
-        {
-            ["jeep"] = "gunner seat (y 1.25) default eye 2.9 m over a 2.2 m box; becomes the truck with no gunner seat (#325 swap)",
-        },
-        ["every_seat_has_a_cover"] = new()
-        {
-            ["jeep"] = "becomes SM_Veh_Truck_01 with seats that declare cover (#325 swap); remove this entry when that lands",
-        },
-        ["glass_has_outline"] = new()
-        {
-            ["jeep"] = "same; becomes SM_Veh_Truck_01 (#325 swap)",
         },
     };
 

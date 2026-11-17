@@ -34,10 +34,9 @@ public class DoorGunTests
         Assert.NotNull(v.DoorGun);
         Assert.Null(v.Flak);
         Assert.True(v.ExposedGunner, "the door gunner sits in the open door");
-        var jeep = Shipped.Vehicles.Single(x => x.Id == "jeep").Gun!;
-        Assert.True(v.Gun!.Damage > jeep.Damage);                 // a belt-fed door gun hits harder than the jeep's round (30 vs 14)
-        Assert.Equal(jeep.FireInterval, v.Gun.FireInterval);
-        Assert.True(v.Gun.Magazine >= jeep.Magazine);
+        Assert.True(v.Gun!.Damage > VehicleGunRound.Damage);      // a belt-fed door gun hits harder than the vehicle machine gun round (30 vs 14)
+        Assert.Equal(VehicleGunRound.FireInterval, v.Gun.FireInterval);
+        Assert.True(v.Gun.Magazine >= VehicleGunRound.HumveeMagazine);
         // the gunner sits on the gun's side, inside the hull, behind the pivot
         var seat = v.Seats[1].Offset;
         Assert.True(seat[0] > 0 && seat[0] < Gun.Pivot[0] && MathF.Abs(seat[0]) < v.HalfWidth);

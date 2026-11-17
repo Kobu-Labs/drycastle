@@ -5,7 +5,7 @@ namespace Drycastle.ShooterCore;
 /// counter, on the server (<see cref="KillstreakService"/>) or in the HUD tracker (<see cref="KillstreakTracker"/>).
 /// The ids are the ones <see cref="SpecialWeapons"/> already names (turret 247, missile 248, moab 249), plus the three
 /// aircraft streaks (helper 245, heli 246, ac130 244), reserved here so the aircraft tickets use the same ids.
-/// The jeep's roof gun (<see cref="SpecialWeapons.VehicleGun"/>, 250) is NOT a streak weapon: its kills advance the
+/// The vehicle machine gun (<see cref="SpecialWeapons.VehicleGun"/>, 250) is NOT a streak weapon: its kills advance the
 /// counter (correction on #133).
 /// </summary>
 public static class StreakWeapons
