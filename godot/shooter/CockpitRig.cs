@@ -14,7 +14,8 @@ namespace Drycastle.Shooter;
 public sealed partial class CockpitRig : Node3D
 {
     /// <summary>One vehicle's driver rig: which model nodes the rig replaces, and what builds it. The eye is the seat's (<see cref="SeatEye"/>, #339), not the rig's.</summary>
-    public sealed record Spec(string[] Hide, Action<CockpitRig> Build);
+    /// <param name="OnModel">Parts the rig hangs on the vehicle's own model (hands on the model's turning handlebars); they go with the rig.</param>
+    public sealed record Spec(string[] Hide, Action<CockpitRig> Build, Action<CockpitRig, Node3D>? OnModel = null);
 
     static readonly Dictionary<string, Spec> Specs = new()
     {
@@ -32,8 +33,70 @@ public sealed partial class CockpitRig : Node3D
         ["utility_helicopter"] = new Spec(new[] { "hull" }, BuildHelicopter), // the model's own body mesh (the rig draws its own interior over it): the node was called fuselage until #325
     };
 
-    /// <summary>The cockpit of a vehicle type (vehicles.json id), or null when it has none.</summary>
+    /// <summary>The hand-built cockpit of a vehicle type (vehicles.json id), or null when it has none.</summary>
     public static Spec? For(string vehicleId) => Specs.GetValueOrDefault(vehicleId);
+
+    static readonly Dictionary<string, Spec?> Measured = new();
+
+    /// <summary>
+    /// The cockpit of a vehicle type: its hand-built one, else one measured from the model (#325): a model with a <c>steering_wheel_rim</c> node gets a
+    /// turning wheel on that spot (<see cref="SteeringWheelFit"/>) and the hands, with the model's own wheel nodes hidden; a model with <c>steer_bars</c>
+    /// (a quad, a motorcycle: handlebars the model's animator already turns) gets only the hands, on the bars' two grips (<see cref="HandlebarFit"/>), and
+    /// nothing is hidden. Null for a vehicle with neither, or drawn without its model. <paramref name="host"/> is the node the rig hangs under (the vehicle's frame),
+    /// <paramref name="eye"/> the driver's eye in it. Measured once per type: every skin is the same mesh.
+    /// </summary>
+    public static Spec? For(string vehicleId, Node3D vehicle, Node3D host, System.Numerics.Vector3 eye)
+    {
+        if (Specs.TryGetValue(vehicleId, out var built)) return built;
+        if (Measured.TryGetValue(vehicleId, out var spec)) return spec;
+        return Measured[vehicleId] = Measure(vehicle, host, eye);
+    }
+
+    static Spec? Measure(Node3D vehicle, Node3D host, System.Numerics.Vector3 eye)
+    {
+        if (vehicle.FindChild("steering_wheel_rim", true, false) is not MeshInstance3D { Mesh: { } mesh } rim) return MeasureBars(vehicle, eye);
+        var toHost = host.GlobalTransform.AffineInverse() * rim.GlobalTransform;
+        var points = new List<System.Numerics.Vector3>();
+        foreach (var p in mesh.GetFaces())
+        {
+            var q = toHost * p;
+            points.Add(new System.Numerics.Vector3(q.X, q.Y, q.Z));
+        }
+        if (Drycastle.ShooterCore.SteeringWheelFit.From(points) is not { } fit) return null;
+        var (centre, elbows) = (new Vector3(fit.Centre.X, fit.Centre.Y, fit.Centre.Z), fit.Elbows(eye));
+        var hide = vehicle.FindChild("steering_wheel_spokes", true, false) is GeometryInstance3D
+            ? new[] { "steering_wheel_rim", "steering_wheel_spokes" } : new[] { "steering_wheel_rim" };
+        return new Spec(hide, r => r.SteeringWheel(centre, fit.Radius, fit.LeanDeg, new Vector3(elbows.X, elbows.Y, elbows.Z), 0.30f));
+    }
+
+    /// <summary>The handlebar rig: the grips in the bars' own frame (they turn with the bars), the elbows under the rider's eye.</summary>
+    static Spec? MeasureBars(Node3D vehicle, System.Numerics.Vector3 eye)
+    {
+        if (vehicle.FindChild("steer_bars", true, false) is not Node3D bars) return null;
+        var points = new List<System.Numerics.Vector3>();
+        var toBars = bars.GlobalTransform.AffineInverse();
+        void Collect(Node n)
+        {
+            if (n is MeshInstance3D { Mesh: { } m } mi)
+            {
+                var t = toBars * mi.GlobalTransform;
+                foreach (var p in m.GetFaces()) { var q = t * p; points.Add(new System.Numerics.Vector3(q.X, q.Y, q.Z)); }
+            }
+            foreach (var c in n.GetChildren()) Collect(c);
+        }
+        Collect(bars);
+        if (Drycastle.ShooterCore.HandlebarFit.From(points) is not { } fit) return null;
+        var e = Drycastle.ShooterCore.HandlebarFit.Elbows(eye);
+        var elbows = new Vector3(e.X, e.Y, e.Z);
+        var (left, right) = (new Vector3(fit.Left.X, fit.Left.Y, fit.Left.Z), new Vector3(fit.Right.X, fit.Right.Y, fit.Right.Z));
+        var spread = Mathf.Max(0.26f, (right.X - left.X) * 0.42f);
+        return new Spec(System.Array.Empty<string>(), _ => { }, (r, model) =>
+        {
+            if (model.FindChild("steer_bars", true, false) is not Node3D b) return;
+            r.Hand(b, b, left, elbows + new Vector3(-spread, 0, 0), onModel: true);
+            r.Hand(b, b, right, elbows + new Vector3(spread, 0, 0), onModel: true);
+        });
+    }
 
     public static CockpitRig Make(Spec spec)
     {
@@ -69,14 +132,17 @@ public sealed partial class CockpitRig : Node3D
         if (_collective != null) _collective.Rotation = new Vector3(_lift * LeverLift, 0, 0);
         foreach (var a in _arms)
         {
-            var hand = a.Mount == a.Carrier ? a.Mount.Transform * a.Grip : a.Mount.Transform * (a.Carrier.Transform * a.Grip);
-            Span(a.Forearm, a.Elbow, hand);
+            if (!IsInstanceValid(a.Carrier)) continue;
+            Span(a.Forearm, a.Elbow, ToLocal(a.Carrier.ToGlobal(a.Grip))); // the carrier is the rig's own (a wheel, a stick) or the model's turning handlebars
         }
     }
 
     // ------------------------------------------------------------------ hiding the model
 
     readonly List<(GeometryInstance3D Node, GeometryInstance3D.ShadowCastingSetting Was)> _hidden = new();
+
+    /// <summary>The rig's parts that hang on the model (hands on its handlebars): freed with the rig.</summary>
+    readonly List<Node> _onModel = new();
 
     /// <summary>The named nodes of the vehicle's model are not drawn (their own mesh only: they keep casting their shadow, and their children stay).</summary>
     public void HideModel(Node3D vehicle, string[] names)
@@ -97,6 +163,9 @@ public sealed partial class CockpitRig : Node3D
         foreach (var (g, was) in _hidden)
             if (IsInstanceValid(g)) g.CastShadow = was;
         _hidden.Clear();
+        foreach (var n in _onModel)
+            if (IsInstanceValid(n)) n.QueueFree();
+        _onModel.Clear();
     }
 
     // ------------------------------------------------------------------ parts
@@ -201,12 +270,16 @@ public sealed partial class CockpitRig : Node3D
             Hand(_wheelPivot, _wheelSpin, new Vector3(side * radius * 0.87f, 0.02f, -radius * 0.5f), elbows + new Vector3(side * elbowSpread, 0, 0));
     }
 
-    /// <summary>A gloved hand at <paramref name="grip"/> on <paramref name="carrier"/> and its forearm from <paramref name="elbow"/> (rig frame).</summary>
-    void Hand(Node3D mount, Node3D carrier, Vector3 grip, Vector3 elbow)
+    /// <summary>
+    /// A gloved hand at <paramref name="grip"/> on <paramref name="carrier"/> and its forearm from <paramref name="elbow"/> (rig frame). With
+    /// <paramref name="onModel"/> the carrier is a node of the vehicle's model, not the rig's: the hand is taken off it when the rig goes.
+    /// </summary>
+    void Hand(Node3D mount, Node3D carrier, Vector3 grip, Vector3 elbow, bool onModel = false)
     {
         var hand = Box(Glove, -0.05f, 0.05f, -0.035f, 0.035f, -0.06f, 0.06f);
         hand.Position = grip;
         carrier.AddChild(hand);
+        if (onModel) _onModel.Add(hand);
         var forearm = Part(new BoxMesh { Size = new Vector3(0.085f, 0.085f, 1) }, Sleeve);
         AddChild(forearm);
         _arms.Add(new Arm(mount, carrier, grip, forearm, elbow));
