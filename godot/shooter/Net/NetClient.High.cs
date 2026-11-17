@@ -76,7 +76,7 @@ public partial class NetClient
             return;
         }
         var high = OwnHigh;
-        UpdateOwnCigarette(high && Mode.OnFoot && _me.ZoomFov <= 0 && _me.CutCamera == null);
+        UpdateOwnCigarette(high && Mode.OnFoot && _me.ZoomFov <= 0); // OnFoot is the same test the sway uses (CutCamera is always set: it is the one composed hook, not a sign of a cut-scene)
         if (!high && _nausea is not { Active: true }) { _nauseaRoll = 0; return; }
         _nausea ??= new Nausea(Plantation.Nausea);
         var owned = Mode.OnFoot;
