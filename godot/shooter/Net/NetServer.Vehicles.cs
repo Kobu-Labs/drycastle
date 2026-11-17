@@ -4,7 +4,7 @@ using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;
 
-/// <summary>Server side of vehicles (#91, #92: car, motorcycle, bicycle share it): spawning, enter/exit, driving from the driver's inputs, run-over, resets. A vehicle never despawns while abandoned (#294): it returns to its origin only when destroyed, or out of the world.</summary>
+/// <summary>Server side of vehicles (#91, #92: car and motorcycle share it): spawning, enter/exit, driving from the driver's inputs, run-over, resets. A vehicle never despawns while abandoned (#294): it returns to its origin only when destroyed, or out of the world.</summary>
 public partial class NetServer
 {
     /// <summary>vehicles.json (run-over numbers, spawn count, car stats).</summary>
@@ -658,7 +658,7 @@ public partial class NetServer
     void FinishCar()
     {
         var maxHit = RunOver.Damage(Vehicles!, Vehicles!.Vehicles.First(v => v.Id == SmokeKind).TopSpeed);
-        var needKill = maxHit >= Vehicles.RunOverMaxDamage; // a bicycle at 11 m/s cannot kill a full-health player in one pass
+        var needKill = maxHit >= Vehicles.RunOverMaxDamage; // a slow vehicle cannot kill a full-health player in one pass
         var ok = _carEnters >= 1 && _carExits >= 1 && _runOvers >= 1 && (_runOverKills >= 1 || !needKill) && _shotsFired == 0 && _cars.Count >= 3;
         GD.Print($"server: car smoke kind={SmokeKind} cars={_cars.Count} enters={_carEnters} exits={_carExits} runOvers={_runOvers} runOverKills={_runOverKills} shotsWhileDriving={_shotsFired}");
         GD.Print(ok ? "SHOOTER_CAR_SERVER_OK" : "SHOOTER_CAR_SERVER_FAIL");

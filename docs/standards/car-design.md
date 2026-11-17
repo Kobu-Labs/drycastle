@@ -1,8 +1,142 @@
 # Vehicle design standard
 
-Guiderail for anything that draws, attaches to, or measures a vehicle. Read before touching vehicle models, `vehicles.json`, `NetClient.Cars/Drive*/Glass/Cockpit`, `CarLights`, `GlassFx`, `CockpitRig`, `make_*_model.py`. Origin of this file: #326 (glass shards and overlays stayed put while the Golf's body swayed).
+Guiderail for anything that draws, attaches to, or measures a vehicle. Read before touching vehicle models, `vehicles.json`, `NetClient.Cars/Drive*/Glass/Cockpit`, `CarLights`, `GlassFx`, `CockpitRig`, `make_*_model.py`. Origin of the frames rule: #326 (glass shards and overlays stayed put while the Golf's body swayed). The contract and pipelines (parts A to C): issue "Unify all vehicle models" (#325).
 
-Related: `docs/glass.md`, ADR 0007/0008 (glass), ADR 0010/0014 (prediction), ADR 0012 (seats), `docs/vehicle-collision-and-entering.md`, `docs/vehicle-chase-camera.md`.
+Related: `docs/glass.md`, ADR 0007/0008 (glass), ADR 0010/0014 (prediction), ADR 0011/0012 (armed and exposed seats), `docs/vehicle-collision-and-entering.md`, `docs/vehicle-chase-camera.md`.
+
+Layout: A contract (every vehicle) | B Synty import | C from scratch | Definition of done | Reference (sections 0 to 13: the detail behind the contract, node table, per-system rules).
+
+Status marks: **[code]** checked by `VehicleContractTests` or already enforced; **[model]** a rule on the .glb, checked by the model script / the manual pass; **[NOT YET]** the contract says it, the code does not do it. Do not read a [NOT YET] item as current behaviour.
+
+## A. The contract (Synty-derived or generated, same rules)
+
+### A1. Frames and nodes
+
+- Three frames: root, `hull`, parts (section 0). Everything of the body hangs under `hull`, never the root. **[model]**
+- Origin on the ground at the centre, forward -Z, +Y up, metres. `model_scale` 1, `model_offset` [0,0,0], `model_yaw_deg` 0: a model is authored (or standardized) in the game frame; no fitting numbers in `vehicles.json`. **[code]** (`default_model_transform`)
+- Required nodes (names are API, node table in section 1):
+
+| Node | Rule |
+|---|---|
+| `hull` | body, interior, glass, lamps, seats, steering wheel; sways on springs |
+| wheels | one node per wheel, centre at the axle, roll about X, `Position.Y` = radius; siblings of `hull` (they follow the ground, the hull leans) |
+| `_steer` parents | one per steered wheel (`wheel_fl_steer` > `wheel_fl`); turn about Y; the roll stays on the wheel. A fork with a rake (a bike): the parent is oriented so its local Y is the tilted steering axis and the animator turns it about its local Y, never about world Y |
+| `steer_bars` | handlebars (and fork) of an open vehicle: the steering control instead of a steering wheel. Bike: under `wheel_f_steer`, turns with the front wheel (so it follows the ground like a wheel and does not lean with the hull). Quad: under `hull`, turns about its own tilted column axis (local Y) |
+| `glass_N` | one per declared pane, N = index in `vehicles.json` `glass`; under `hull` (a door-leaf pane under the leaf) |
+| `seat_*` | one empty per seat at the rider's feet on the seat, under `hull` |
+| `steering_wheel_rim` / `_spokes` (or a vehicle's own control) | hidden in the cockpit view, the rig draws a turning wheel |
+| `light_head_*`, `light_tail_*` or the emissive materials | lamps (section 4) |
+
+- Two wheels is legal: `wheel_f` (steered, `wheel_f_steer`) and `wheel_r`, each with its own radius (the bike's 0.350 and 0.321); `Position.Y` of each is its own radius, measured through the steer parent. More than four wheels is legal: names `wheel_l1..lN`, `wheel_r1..rN` (axle 1 at the front, the Scud's pattern); the animator takes the list from the model, not a fixed four. Steered axles get `_steer` parents. **[model]**; the animator for more than four is only done for the Scud (`NetClient.Scud`), the generic `DriveNodes` finds four: **[NOT YET]** for a six-wheel truck (#325 swap).
+- Wheel stealing (Thieves) hides the nodes `wheel_fl/fr/rl/rr` (`WheelNodeNames`): a model with other names (the jeep's Kenney `wheel-front-left`, legacy) ignores it. `loot.tire` in thieves.json holds the wheel positions of the car (`wheel_side_m`, `wheel_end_m` = the mean of its two axles).
+
+### A2. Interior (minimum)
+
+- Floor, dash, a seat per `seats` entry, a steering control (wheel, bars, stick). **[model]**
+- Visible from every seat: from each seat's eye the cabin reads as a room (no see-through shell, no missing back faces). **[model]**
+- A shell that is one skin (every Synty prefab) is drawn **two-sided** (`..._2s` material, section 1), or the inside of the walls shows through the cut windows.
+- Open vehicles (quad, motorcycle, amphibious) need the control (`steer_bars`) and seats, not floor and dash. Their riders are `exposed` (ADR 0012): the seat has no `eye_height` (the crouch stance gives the eye) and no cabin check applies; the rider is seated with the hips on the saddle (feet = saddle top - 0.45 m, the crouch figure).
+
+### A3. Seats
+
+- 1..5 seats (`VehicleSeat.MaxSeats`), seat 0 the driver, `seats` block written (a trailer writes `[]`). **[code]** (`has_seats_block`, `seat_count`, `seats_inside_hit_box`)
+- Each seat has an **eye** for the cockpit view: the rider's feet + `eye_height` (or the standing eye 1.65 m). The eye of a covered seat is inside the hit box, inside the cabin, above the seat, not in a pillar, and sees a pane (`HumveeTests` does the pane check for the Humvee). **[code]** eye inside the hit box (`covered_seat_eye_inside_hit_box`); sees-a-pane and in-cabin: **[model]**, Humvee only.
+- Every seat has a switchable cockpit / chase view. Today only the driver of golf_mk2, humvee, bus, flak, utility_helicopter, harvester and scud has a cockpit (`CockpitRig.Specs[vehicleId]`, section 5). **[NOT YET]** per-seat, data-driven views: #339.
+- Every seat declares its **cover** (the rider's protection): **[NOT YET]**, #301 (ADR to revise 0007 / 0012). Today: `exposed` true/false on the seat (ADR 0012) and the flak/helicopter `exposed_gunner`; closed seats are hit through the panes (`GlassRules.Through`), explosions hurt everybody in range.
+
+| `cover` | Rider | Hit by |
+|---|---|---|
+| `armoured` | hidden | explosive damage only |
+| `glass` | protected by the panes in front of it | a normal pane: bullet passes at once, full damage; a reinforced pane stops it until it shatters, then full damage |
+| `exposed` | a target of its own (ADR 0012, today `exposed: true`) | rounds that reach the body |
+
+- The vehicle exploding kills everybody aboard, whatever the seat: today the blast reaches every body in range, closed seats included (ADR 0012 "Blast"); the contract makes it explicit for all covers. **[NOT YET]** as a rule on the seat (#301).
+- A hit volume from the seat pose for covered riders is needed before cover reads right (#301 slice 4).
+
+### A4. Glass
+
+- Panes are declared in `vehicles.json` `glass` (`centre`, `normal`, `size`, convex CCW `outline`, optional `hp`), max 24, inside the hit box, each with an outline and a `glass_N` node (section 2). **[code]** inside box, outline (`glass_inside_hit_box`, `glass_has_outline`); node: **[model]**
+- Each pane has a **kind**: **[NOT YET]**, #301.
+
+| `kind` | Rule |
+|---|---|
+| `normal` | a bullet passes at once, full damage to what is behind (today's rule for every pane) |
+| `reinforced` | the pane stops bullets until it shatters (more `hp`), then full damage |
+
+- Explosions damage every pane in the radius, whatever the kind (unchanged, `docs/glass.md`).
+
+### A5. Hit box fit
+
+- `half_width`, `half_length`, `height` = server body = hit box = on-foot solid = run-over footprint (section 7). The model fits it (roof, mirrors, bumpers); panes, seats and eyes are inside it. **[code]** seats, panes, eyes; the model fit **[model]** (the model script prints the bounds; the Humvee squeezes its mirrors in).
+- Changing the box (every model swap): re-check seats, lamps, glass, spawn clearance, `fixed_spots`, chase camera, tow hitch, Thieves.
+
+### A6. Materials and colour variants
+
+- Materials by name, matched in code: lamp materials (section 4), the Synty palette material (`Military_Green` and `_2s`), the paint material. Never rename one without the code.
+- Generated model: `paint_material` + `paints` in `vehicles.json` (only that material is recoloured; `Variants` = `paints` count).
+- Synty model: colour variants are an **atlas swap** (another palette texture), **never a tint** (a tint multiplies the whole atlas). **[code]** no `tint`/`paint_material`/`paints` on a `pack:` model (`synty_not_tinted`). The skin list is `skins` in `vehicles.json` (one standardized model per colour, the first is `model`); every client picks the same one from the colour index of the vehicle record (`VehicleDef.SkinModel(colour)`, the server deals the index: `VehicleColours.Pick`, `Variants` = the skins), no wire field. **[code]** (`StandardizedVehicleTests`). The car has five (yellow, blue, green, red, grey).
+- Model source: `pack:<pack>/<name>` (private) or `drycastle-generated-models/<name>.glb`; no third-party loose models (Kenney is legacy, to be removed with the jeep; the Zsky bike models are gone). `has_model`, `public_model_file_exists` **[code]**.
+
+### A7. Wheels and drive
+
+- Roll by the drawn speed, steer by the drawn steer (section 3). A type that rolls/steers/leans needs a `drive` block (`DriveNodes` is found only for a type with one). Tuning: #295, #297, on the final models. The car, quad and motorcycle models carry the nodes (`wheel_*`, `_steer` parents, `steer_bars`) but have no `drive` block (adding one switches the type to the predicted drive model, ADR 0010/0014), so nothing rolls or steers them until the generic animator of #295 slice 3 exists (it reads the drawn speed and yaw rate, `atan(wheelbase * yawRate / v)`, and must turn a tilted `_steer` parent about its local Y).
+
+### Where this stands (the allow-lists)
+
+`VehicleContractTests` (`godot/ShooterCore.Tests/`) lists, per rule, the vehicles that fail today and why; the list only shrinks, an entry that starts passing fails the test until it is deleted. Goal: empty.
+
+## B. Synty import pipeline
+
+One standardization step per pack prefab: **`scripts/standardize_vehicle.py`**, driven by a committed facts file `scripts/vehicles/<id>.json`. One command rebuilds it: `scripts/build_vehicle_packs.sh` (its last step runs the standardizer for every `scripts/vehicles/*.json` and checks the output with `scripts/vehicle_std_check.gd`). The first vehicle through it is the car (`SM_Veh_Car_Small_01`, `scripts/vehicles/car_small.json`). The Humvee (`scripts/make_humvee_model.py`, `scripts/build_simple_military.sh`) predates it and is built by hand from the kit; the Scud and rocket cart use the same kit.
+
+### B1. Steps
+
+1. **Import the pack** once: `.unitypackage` / Godot zip > prefab GLBs under `assets-private/synty/glb/<pack>/` (`scripts/private_pack_glb.gd`, `quadbike_export.gd`, `build_vehicle_packs.sh`). Measure the model (`scripts/vehicle_model_probe.gd`, `vehicle_model_dump.gd` + `vehicle_model_analyze.py`) and write the facts into `docs/research/vehicle-models-facts.md`. Nothing of the pack is committed.
+2. **Write the facts file** `scripts/vehicles/<id>.json`, positions in the SOURCE frame (as imported): the source node names (body, glass, steering wheel, each wheel and whether it steers), seat feet and eye heights, lamp positions and lens sizes, the skins (atlas names), `two_sided_shell`.
+3. **Run the standardizer** (it does all of the following, no per-vehicle code):
+   - **Reorient**: `facing` +Z (every Synty prefab) is turned half a circle about Y to forward -Z; **ground origin**: the lowest wheel point is y 0, the footprint centre is x 0 / z 0. `model_scale` 1, `model_offset` 0, `model_yaw_deg` 0 in `vehicles.json`.
+   - **Strip** the prefab's collision bodies (`OMI_physics_*`): the vehicle's solid is the server's box.
+   - **`hull`**: body (interior included), glass panes, steering wheel, seat and lamp empties, lamp lenses, extra empties. Wheels are **siblings** of `hull`.
+   - **Wheels**: any number, named `wheel_<name>` (fl/fr/rl/rr for four, `l1..r3` for six, the Scud's pattern), each **centred on its tyre** (measured from the wheel mesh: the pack's pivots are off the tyre centre), `Position.Y` = radius; a steered wheel hangs under `wheel_<name>_steer`. Per-wheel radii are kept (a bike's two differ). Two and six wheels need no change here, only the animator (`DriveNodes` finds four). A wheel the pack lets float or sink by more than 2 mm is moved to stand on the ground (`Position.Y` = radius); `dx` in the facts file moves a wheel the pack put off its pair's x (the quad's front-left).
+   - **Steering assembly**: a steered wheel with `axis` + `pivot` (source frame) gets a TILTED parent `wheel_<name>_steer` (the bike: the HandleBars node's local Y, raked -31.9 degrees); `controls` lists the meshes that turn with the steering and become `steer_bars`: `parent_wheel` puts them under that wheel's parent (bike: HandleBars + Front_Shock, the wheel turns under them), without it they hang under the hull and turn about their own `axis` + `pivot` (quad: the column, measured by the principal axis of the stem component of the handlebar mesh, 45 degrees back). `parts` joins more prefab meshes to the hull (racks, swing arm). Glass and steering wheel are optional (an open vehicle has neither).
+   - **Glass**: the pack's glass is one mesh of welded pieces: each piece is a pane, a `glass_N` node (double-sided `Transparent blue glass`) with its centre, outward normal, size and convex outline (3..12 corners, hull of the real vertices). Ids: `windscreen`, `rear`, `side_left_N`, `side_right_N`. A concave piece must be cut by hand (the script asserts convexity).
+   - **Steering wheel**: split by radius from its axis into `steering_wheel_rim` and `steering_wheel_spokes` (the names the cockpit rig hides).
+   - **Seats and lamps**: `seat_*` empties at the rider's feet, `light_head_l/r`, `light_tail_l/r` empties plus thin emissive lens plates wearing the contract's lamp materials (`CarLights` then lights the model's own lens). The eye is checked against the roof lining of the body mesh (a ray up from each eye: it must stay 3 cm under it).
+   - **Skins**: the same model written once per skin, `<id>_<skin>.glb`, only the atlas material name differs; `materials.json` of the output pack gets one atlas material per skin.
+   - **Outputs**: GLBs + `materials.json` + manifest rows (`pack:synty-vehicles/<id>_<skin>`) in `assets-private/synty/glb/vehicles-std/` (private, shipped by `glb/**`), the measured numbers in **`docs/research/vehicle-facts.d/<id>.json`** (committed: bounds, suggested hit box, wheels, seats with eyes and the ceiling above them, lamps, panes with outlines, node list), and with `--vehicles-json godot/shooter/data/vehicles.json` the model-owned keys of the vehicle's entry (`model`, `skins`, `model_*`, `half_width/length`, `height`, `drive.wheelbase/track`, `seats`, `glass`, `lights`), spliced in place: **generated, never hand-copied**. `StandardizedVehicleTests` fails when the entry and the facts drift.
+4. **Interior**: a prefab that has none (bike, quad: no floor or dash needed, open vehicles) gets only the control and seat points; a prefab with a modelled cabin (the small car: floor, seats, bench, dash, double-skinned shell) needs nothing. Building an interior the pack lacks is still per vehicle (the Humvee: `make_humvee_model.py`, from the kit's `box/beam/ring/cylinder/loft`).
+5. **Gameplay numbers stay by hand** in the entry (speed, hp, mass, spawn, `drive` tuning, `hood`, `tow`, guns): only the keys above are overwritten.
+6. **Check**: `scripts/vehicle_std_check.gd` (reloads the GLBs like the game: hull a direct child of the root, wheels its siblings with `Position.Y` = radius and the right `_steer` parents, panes/seats/lamps under the hull, no collision bodies, every material in `materials.json`, bounds = the facts), `VehicleContractTests`, `StandardizedVehicleTests`, the per-vehicle tests, then the manual pass (section 13).
+
+### B2. Generic and per vehicle
+
+| Generic (`scripts/standardize_vehicle.py`, `scripts/simple_military_kit.py`) | Per vehicle (`scripts/vehicles/<id>.json`) |
+|---|---|
+| prefab reader, collision strip, reorient, ground and footprint centre, `hull` regrouping, wheel naming/centring/`_steer` (also on a tilted axis), `steer_bars`, any wheel count and radii, glass cut into panes with outlines and the `glass` list, steering wheel split, seat and lamp empties and lenses, eye-under-ceiling check, skins as atlas swaps, `materials.json`, manifest, facts file, the `vehicles.json` splice, GLB writer, `outline_of`, `glass_faces` (Humvee) | source node names, which wheels steer, seat feet and eye heights, lamp points and lens sizes, skin atlases, `two_sided_shell`, the interior of a vehicle that has none (not done by the standardizer), a steering assembly (`axis`/`pivot`/`controls`/`parts`/`dx`), exposed seats, the gameplay numbers |
+
+- Not done by the standardizer yet (later #325 steps): the truck's `tow_hitch` empty (`empties` in the facts file is the hook), the two-sided shell material for a one-skin shell (`two_sided_shell: true` writes the `_2s` materials, not exercised by the car), seat cover and pane kinds (#301), per-seat views (#339).
+
+## C. A vehicle designed from scratch (`scripts/make_<type>_model.py`)
+
+1. **Reference first**: real dimensions of the real vehicle (length, width, height, wheelbase, track, wheel radius, seat positions, roof height inside). Put them in the script header with the source. The hit box = the real footprint, not a guess.
+2. **Contract**: all of A. The script writes `hull`, wheels with `_steer` parents (more than four allowed), `glass_N` panes with outlines, `seat_*` empties, the steering control, lamp materials/empties; origin on the ground at the centre, forward -Z, metres, scale 1.
+3. **Pivots at axes**: wheels at the axle, rotors at the hub, doors at the hinge, a rack at its hinge, a gun at its pitch axis. **One mesh per moving part**.
+4. **Materials by name**: lamp materials (section 4), `paint_material` (the body colour only) + `paints`; a two-sided material where a shell is one skin.
+5. **Interior**: floor, dash, seats, steering control; check from every seat eye that you see the room, not the back of a face.
+6. **Poly budget**: the generated vehicles are 3.3k (utility helicopter), 5.9k (amphibious, flak), 8.2k (bus), 9.7k (Golf, the most detailed) triangles, 155 to 710 KB. Budget: aim at 6k, 10k is the ceiling (a village has several on screen), no hidden detail inside a mesh nobody sees.
+7. **`vehicles.json`**: size from the model, `glass` written by the script when run without an output path (do not hand-edit it), `seats` with `eye_height`, `lights`, `drive`, paints. **The .glb and `vehicles.json` in one commit.**
+8. A model test next to the others if the vehicle has its own rules (`GolfMk2Tests`, `AmphibiousModelTests`).
+9. Update `docs/glass.md` pane table and this file's node table.
+
+## Definition of done (both paths)
+
+- [ ] `VehicleContractTests` passes and the vehicle is **not** on any allow-list.
+- [ ] Contract A met: nodes and frames, interior, seats (eye, cover, views once they exist), panes (kind once it exists), box fit, `model_scale` 1 / `model_offset` 0 / `model_yaw_deg` 0, material names, colour variants.
+- [ ] .glb (public, or private under `assets-private/synty/glb/<pack>/` with a manifest row) and `vehicles.json` in one commit; the facts file / the script committed; `make release-check` covers a private model.
+- [ ] Per-vehicle test and `VehicleTypesTests`, `GlassTests`, `HeadlightsTests` green; `docs/glass.md` and the node table updated.
+- [ ] Manual pass on the full village map (section 13, item 6).
+
+## Reference (sections 0 to 13)
 
 ## 0. The rule that caused #326: which node moves?
 
@@ -29,10 +163,10 @@ A vehicle has **three frames**. Pick the right one for every attachment.
 
 ## 1. Model (.glb) contract
 
-Generated by `scripts/make_<type>_model.py`; the .glb in `assets/drycastle-generated-models/` and `vehicles.json` ship in **one commit**. Do not hand-edit the generated `glass` list.
+Generated by `scripts/make_<type>_model.py`; the .glb in `assets/drycastle-generated-models/` and `vehicles.json` ship in **one commit**. Do not hand-edit the generated `glass` list. The rules are part A; this section is the node table and details.
 
-- A model that carries geometry of a paid pack (Humvee, Scud, rocket cart: `scripts/build_simple_military.sh`) is private: the .glb lives in `assets-private/synty/glb/<pack>/` and `vehicles.json` names it `pack:<pack>/<name>`; only the script and `docs/research/scud-models-facts.md` are committed. Its glass list is written by hand from the facts file.
-- Origin on the ground at the centre, forward -Z, +Y up, metres. `model_scale`, `model_yaw_deg`, `model_offset` only for imported (Kenney) models.
+- A model that carries geometry of a paid pack (Humvee, Scud, rocket cart: `scripts/build_simple_military.sh`) is private: the .glb lives in `assets-private/synty/glb/<pack>/` and `vehicles.json` names it `pack:<pack>/<name>`; only the script and `docs/research/scud-models-facts.md` are committed. Its glass list is written by hand from the facts file (part B).
+- Origin on the ground at the centre, forward -Z, +Y up, metres. `model_scale` 1, `model_yaw_deg` 0, `model_offset` 0 are the contract (A1). Non-default values exist only on legacy models (jeep, harvester yaw) and are on the allow-list of `VehicleContractTests`.
 - Node names are API. Code finds them with `FindChild(name, true, false)`; a missing node silently disables the feature. Names in use:
 
 | Name | Used by | Notes |
@@ -40,7 +174,9 @@ Generated by `scripts/make_<type>_model.py`; the .glb in `assets/drycastle-gener
 | `hull` | lean, lamps, riders | body group; everything that sways goes under it |
 | `wheel_fl/fr/rl/rr` | roll animation (`DriveNodes`) | centre at wheel axle; `rear.Position.Y` = radius |
 | `wheel_fl_steer`, `wheel_fr_steer` | steering angle (Y rot) | parent of the rolling wheel node; wheel keeps its own X roll |
-| `wheel-front-left/-front-right/-back-left/-back-right` | Thieves taking wheels (`WheelNodeNames`) | Kenney names; toggles `Visible` |
+| `wheel_f`, `wheel_r`, `wheel_f_steer`, `steer_bars` | the bike (two wheels, radii 0.350 / 0.321) | `wheel_f_steer` sits on the steering head, oriented so its local Y is the raked axis (0, 0.849, 0.528); `wheel_f` and `steer_bars` (HandleBars + Front_Shock) are its children; turn it about its local Y. `wheel_r` is a sibling of `hull`. Nothing animates them yet (#295) |
+| `steer_bars` (quad) | the quad's handlebars (SM_Veh_QuadBike_HandleBar_01) | under `hull`, oriented so its local Y is the column axis (0, 0.709, 0.706); turn about local Y. The front wheels use `wheel_fl_steer` / `wheel_fr_steer` (Y). Nothing animates them yet (#295) |
+| `wheel_fl/fr/rl/rr` | Thieves taking wheels (`WheelNodeNames`, the bit order fl, fr, rl, rr) | the contract's four wheel names; toggles `Visible` of the wheel (under its `_steer` parent when it has one) |
 | `glass_N` | shatter hides it | N = index in `vehicles.json` `glass`; door-leaf pane is a child of the leaf |
 | `steering_wheel_rim`, `steering_wheel_spokes`, `cab`, `fuselage` | hidden in the cockpit view (`CockpitRig.Spec.Hide`) | hide = invisible but still casts shadow |
 | `propeller`, `wake_bow`, `wake_stern_l/r` | amphibious FX | |
@@ -53,6 +189,8 @@ Generated by `scripts/make_<type>_model.py`; the .glb in `assets/drycastle-gener
 | `wheel_l`, `wheel_r` | trailer wheels (`NetClient.Tow`: roll with the drawn speed about the parent's X; radius = the node's `Position.Y`, 0.45 m without) | rocket cart: no hull, no steering, parts under the model root; `scripts/make_rocket_cart_model.py` |
 | `rack`, `missile` | the Scud's missile rack and the missile on it (also the rocket cart's `missile`) | `rack` pivot on the rear hinge axis, rotate about X: 0 lying, +90 deg vertical; `missile` under it (on the cart: under `hull`) with its origin at the missile's centre of mass, nose -Z; hidden when launched / when the cart is empty. Both under the hull |
 | `tow_hitch`, `tow_hook`, `tow_eye`, `axle` | towing: the Humvee's pintle point and hook mesh, the cart's drawbar eye and axle centre | empties under the hull; a tower's `tow_hitch` meets the towed vehicle's `tow_eye` (heights equal) |
+| `car_small_<skin>` node tree | the car (`scripts/standardize_vehicle.py`, `scripts/vehicles/car_small.json`, private) | `hull` (body with its interior, `glass_0..5`, `steering_wheel_rim`/`_spokes`, `seat_driver`, `seat_passenger_1..3`, `light_head_l/r`, `light_tail_l/r` and their lens plates) with `wheel_fl_steer` > `wheel_fl`, `wheel_fr_steer` > `wheel_fr`, `wheel_rl`, `wheel_rr` as siblings (l = -x, centred on the tyre, `Position.Y` 0.314). One GLB per skin (`pack:synty-vehicles/car_small_yellow/blue/green/red/grey`), only the atlas material differs (`Land_Vehicles_03/01/02/04/09_mat`, `glb/vehicles-std/materials.json`) |
+| `bike_<skin>`, `quad_<skin>` node trees | the motorcycle and the quad (`scripts/standardize_vehicle.py`, `scripts/vehicles/bike.json` / `quad.json`, private) | bike: `hull` (frame, swing arm, `seat_driver`, `light_head_c`, `light_tail_c` and their lenses) with `wheel_f_steer` (> `wheel_f`, `steer_bars`) and `wheel_r` as siblings; quad: `hull` (frame, racks, shovel, `steer_bars`, `seat_driver`, `light_head_l/r`, `light_tail_c`) with `wheel_fl_steer` > `wheel_fl`, `wheel_fr_steer` > `wheel_fr`, `wheel_rl`, `wheel_rr`. Skins: bike woodland, desert, khaki, black, sand, grey (Battle Royale atlases 01..06); quad red, blue, olive, sand (QuadBike atlases 01..04). One rider, `exposed` |
 | `humvee` node tree | the Humvee (`scripts/make_humvee_model.py`, private) | `hull` (body, interior, `glass_0..5`, `steering_wheel_rim`/`_spokes`, the seats, `gun_mount` and the lamps, `tow_hitch`, `tow_hook`) with `wheel_fl_steer` > `wheel_fl`, `wheel_fr_steer` > `wheel_fr`, `wheel_rl`, `wheel_rr` as siblings; roll/steer/lean need the `drive` block (`DriveNodes` is only found for a type that has one) |
 | `Military_Green`, `Military_Green_2s` | the Synty palette material of the private SIMPLE Military models (`pack:synty-simple-military/*`) | name-only in the GLB, built from `glb/simple-military/materials.json` (`_2s` = two-sided: the pack's shells are one skin, so the inside of the walls shows through the cut windows). Not for `paint_material` (a tint multiplies the whole atlas) |
 | `rack` | Scud truck (`NetClient.Scud`: `ScudRules.RackAngle`) | pivot on the rear hinge, lying along -Z from it; rotating about X from 0 to 90 degrees raises it. Hangs under `hull`. A model without it is not animated |
@@ -156,6 +294,8 @@ Generated by `scripts/make_<type>_model.py`; the .glb in `assets/drycastle-gener
 - Checklist for a new trailer type: `trailer` block numbers fit the model (eye, axle, drawbar at least 0.5 m), `half_length`/`half_width`/`height` the box, `loaded_hp` only for a type with a load, nodes above, `spawn_count` 0 unless it is dealt, `RocketCartTests` and `ScudModelTests` show what a shipped one must satisfy. The rocket cart: 12.6 m long (it carries the whole 11.1 m missile), drawbar 7.6 m, `trailer.eye` [0, 0.62, -6.2] (the Humvee's hitch height; the jeep's 0.5 and the flak's 0.7 pitch the drawn cart by under 1 degree), `trailer.mass` the loaded cart's, `trailer.empty_mass` the empty one's (`TowLoad.Of(..., loaded)`), `returns` false (the Scud event replaces it). A trailer as long as this samples the ground under its middle too (`TrailerProbe`: a crest between the ends lifts the swept box).
 
 ## 13. Checklist: new or changed vehicle
+
+See also the definition of done above and part B/C.
 
 1. `scripts/make_<type>_model.py` produces: `hull`, wheel nodes, `glass_N`, seat nodes, lamp materials. Run it; commit .glb + `vehicles.json` together.
 2. `vehicles.json`: size, hp, mass, glass, lights, seats, paint, sounds, spots. `VehicleTypesTests` stays green.

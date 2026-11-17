@@ -46,6 +46,8 @@ public class VehiclesFile : IVersioned
             if (v.Hood.Length != 3) throw new DataFileException($"vehicles.json: {v.Id}: hood is [x, y, z]");
             if (v.Variants is < 1 or > 16) throw new DataFileException($"vehicles.json: {v.Id}: variants must be 1..16");
             if (v.Paints.Count > 0 && v.PaintMaterial == "") throw new DataFileException($"vehicles.json: {v.Id}: paints need paint_material");
+            if (v.Skins.Count > 0 && (v.Skins[0] != v.Model || v.Skins.Any(k => !k.StartsWith("pack:", StringComparison.Ordinal)) || v.Paints.Count > 0 || v.Tint != null))
+                throw new DataFileException($"vehicles.json: {v.Id}: skins are pack: models, the first is the model, and they exclude paints and tint");
             if (v.Lights is { } l)
             {
                 if (l.Head.Count is < 1 or > 4 || l.Tail.Count > 4) throw new DataFileException($"vehicles.json: {v.Id}: lights need 1 to 4 head and 0 to 4 tail lamps");
@@ -882,7 +884,7 @@ public class VehicleDef
     public VehicleTrailerDef? Trailer { get; set; }
     /// <summary>A single fixed body colour [r, g, b] (sRGB) for a type with one look (olive drab). Replaces the colour variants: such a type has one variant.</summary>
     public float[]? Tint { get; set; }
-    /// <summary>Model file relative to assets/ (empty: the code-built car with the Kenney sedan). Scale, yaw and offset fit the raw node to the game (forward -Z, origin at the ground centre).</summary>
+    /// <summary>Model file relative to assets/, or a private-pack model id (empty: no model, a box). Scale, yaw and offset fit the raw node to the game (forward -Z, origin at the ground centre).</summary>
     public string Model { get; set; } = "";
     public float ModelScale { get; set; } = 1;
     public float ModelYawDeg { get; set; }
@@ -909,6 +911,13 @@ public class VehicleDef
     /// <summary>The model's own material that takes the colour variants, and the model's own materials whose colours the variants are (index = colour byte).</summary>
     public string PaintMaterial { get; set; } = "";
     public List<string> Paints { get; set; } = new();
-    /// <summary>Number of colour variants: the model's paints, or the shared car palette.</summary>
-    public int Variants => Tint != null ? 1 : Paints.Count > 0 ? Paints.Count : VehicleColours.Palette.Length;
+    /// <summary>
+    /// Colour variants of a Synty model (#325): one standardized model per body colour (`pack:` ids, the first is <see cref="Model"/>), each wearing another atlas. An atlas swap, never a tint.
+    /// The colour index of the vehicle record picks the skin (<see cref="SkinModel"/>), so every client draws the same one without a new wire field.
+    /// </summary>
+    public List<string> Skins { get; set; } = new();
+    /// <summary>The model to draw for a colour index: its skin, or <see cref="Model"/> when the type has no skins.</summary>
+    public string SkinModel(int colour) => Skins.Count > 0 ? Skins[colour % Skins.Count] : Model;
+    /// <summary>Number of colour variants: the skins, the model's paints, or the shared car palette.</summary>
+    public int Variants => Skins.Count > 0 ? Skins.Count : Tint != null ? 1 : Paints.Count > 0 ? Paints.Count : VehicleColours.Palette.Length;
 }

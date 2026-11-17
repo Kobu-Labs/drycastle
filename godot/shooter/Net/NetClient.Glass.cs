@@ -104,7 +104,7 @@ public partial class NetClient
     /// <summary>The name of the node of a vehicle model that holds the glass of pane <paramref name="index"/> (the pane's place in vehicles.json "glass").</summary>
     public static string PaneNodeName(int index) => $"glass_{index}";
 
-    /// <summary>Shows or hides the model's own glass of a vehicle's pane. A model without a node for it (the Kenney cars) and a pane of the map are left as they are.</summary>
+    /// <summary>Shows or hides the model's own glass of a vehicle's pane. A model without a node for it (the loose legacy models) and a pane of the map are left as they are.</summary>
     void SetPaneGeometry(GlassPaneKey key, bool visible, bool animate = false)
     {
         if (IsGaragePlate(key)) MechanicGarage.Current?.SetPlate(standing: visible, animate); // the plate's box and mesh go with its pane, and the room's lights start

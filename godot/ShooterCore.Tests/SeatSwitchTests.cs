@@ -123,7 +123,7 @@ public class SeatSwitchTests
     [Fact]
     public void AVehicleWithoutASeatsListHasOneSeatNumberedOne()
     {
-        var car = Type("car"); // no "seats" in vehicles.json: the one default driver seat
+        var car = Type("quad"); // no "seats" in vehicles.json: the one default driver seat
         var l = SeatSchematic.Layout(car, 184, 168, 12, 16);
         var seat = Assert.Single(l.Seats);
         Assert.Equal(1, seat.Number);
@@ -161,7 +161,6 @@ public class SeatSwitchTests
     [Theory]
     [InlineData("car")]
     [InlineData("motorcycle")]
-    [InlineData("bicycle")]
     [InlineData("jeep")]
     [InlineData("quad")]
     [InlineData("amphibious")]

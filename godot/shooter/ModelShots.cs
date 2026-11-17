@@ -4,7 +4,7 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// <c>--model-shots DIR</c>: renders the vehicles (car, each motorcycle and bicycle colour), the remote character in each animation (with each weapon in hand) and the first-person
+/// <c>--model-shots DIR</c>: renders the vehicles (car, each colour of every type), the remote character in each animation (with each weapon in hand) and the first-person
 /// viewmodel per weapon over a plain floor, saves PNGs and prints the clip names. Needs a display (not --headless).
 /// </summary>
 public static class ModelShots
@@ -41,13 +41,13 @@ public static class ModelShots
             ok &= Save(vp, Path.Combine(dir, $"characters_{f}.png"));
         }
         foreach (var v in views) v.QueueFree();
-        // vehicles: the car, then each colour variant of the motorcycle and the bicycle, with a 1.8 m post as the player's height; they face -Z (away from the camera is wrong, so turned to show the side)
+        // vehicles: each colour variant of every type, with a 1.8 m post as the player's height; they face -Z (away from the camera is wrong, so turned to show the side)
         var vf = VehiclesFile.Load(ProjectSettings.GlobalizePath("res://data/vehicles.json"));
         var vnodes = new List<Node3D>();
         var vx = -7f;
         vp.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(0.2f, 1.8f, 0.2f) }, Position = new Vector3(vx - 1.5f, 0.9f, 0) });
         foreach (var def in vf.Vehicles)
-            for (var c = 0; c < (def.Id == "car" ? 1 : def.Variants); c++)
+            for (var c = 0; c < def.Variants; c++)
             {
                 var n = CarFx.Make(vp, def, (byte)c);
                 n.Position = new Vector3(vx += 2.4f, 0, 0);

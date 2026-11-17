@@ -17,7 +17,7 @@
   "vehicles": [
     { "id": "car",
       "drive": {
-        "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 2.6, "track": 2.0,
+        "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 2.645, "track": 1.432,
         "land": {
           "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
           "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
@@ -29,25 +29,38 @@
         },
         "camera": { "distance": 6.5, "height": 1.5, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 7, "turn_follow": 0, "turn_response": 5 }
       },
-      "top_speed": 44.4, "acceleration": 5.5, "brake": 9.5, "turn_radius": 3.6, "high_speed_radius_factor": 10, "max_lateral_accel": 10, "mass": 1200, "hp": 300, "hood": [0, 0.95, -1.3], "spawn_count": 12, "half_width": 1.28, "half_length": 2.18, "height": 2.2,
+      "top_speed": 44.4, "acceleration": 5.5, "brake": 9.5, "turn_radius": 3.6, "high_speed_radius_factor": 10, "max_lateral_accel": 10, "mass": 1200, "hp": 300, "hood": [0, 0.95, -1.3], "spawn_count": 12, "half_width": 1.03, "half_length": 1.93, "height": 1.62,
       "glass": [
-        { "id": "windscreen", "centre": [0, 1.72, -0.65], "normal": [0, 0.625, -0.781], "size": [1.46, 0.92] },
-        { "id": "rear", "centre": [0, 1.785, 1.105], "normal": [0, 0.371, 0.928], "size": [1.44, 0.57] },
-        { "id": "side_left", "centre": [-0.867, 1.7, -0.24], "normal": [-0.981, 0.196, 0], "size": [0.96, 0.7] },
-        { "id": "side_right", "centre": [0.867, 1.7, -0.24], "normal": [0.981, 0.196, 0], "size": [0.96, 0.7] }
+        { "id": "windscreen", "centre": [0, 1.282, -0.52], "normal": [0, 0.759, -0.651], "size": [1.475, 0.664], "outline": [[-0.737, -0.332], [0.737, -0.332], [0.676, -0.01], [0.595, 0.332], [-0.595, 0.332], [-0.676, -0.01]] },
+        { "id": "rear", "centre": [0, 1.29, 1.636], "normal": [0, 0.468, 0.884], "size": [1.308, 0.56], "outline": [[-0.654, -0.245], [-0.572, -0.265], [0, -0.28], [0.572, -0.265], [0.654, -0.245], [0.53, 0.256], [0.44, 0.271], [0, 0.28], [-0.44, 0.271], [-0.53, 0.256]] },
+        { "id": "side_left_1", "centre": [-0.693, 1.243, -0.06], "normal": [-0.939, 0.343, -0.013], "size": [1.25, 0.515], "outline": [[-0.625, -0.257], [0.613, -0.206], [0.625, 0.257], [-0.15, 0.238], [-0.401, -0.015]] },
+        { "id": "side_left_2", "centre": [-0.697, 1.271, 1.082], "normal": [-0.939, 0.345, -0.009], "size": [0.889, 0.464], "outline": [[-0.445, 0.229], [-0.436, -0.232], [0.445, -0.218], [0.374, 0.002], [0.287, 0.232]] },
+        { "id": "side_right_1", "centre": [0.693, 1.243, -0.06], "normal": [0.939, 0.343, -0.013], "size": [1.25, 0.515], "outline": [[-0.625, 0.257], [-0.613, -0.206], [0.625, -0.257], [0.401, -0.015], [0.15, 0.238]] },
+        { "id": "side_right_2", "centre": [0.697, 1.271, 1.082], "normal": [0.939, 0.345, -0.009], "size": [0.889, 0.464], "outline": [[-0.445, -0.218], [0.436, -0.232], [0.445, 0.229], [-0.287, 0.232], [-0.374, 0.002]] }
       ],
-      "lights": { "head": [[-0.75, 0.62, -2.12], [0.75, 0.62, -2.12]], "tail": [[-0.75, 0.66, 2.12], [0.75, 0.66, 2.12]], "beam_range": 40, "beam_angle": 26 } },
+      "lights": { "head": [[-0.545, 0.774, -1.726], [0.545, 0.774, -1.726]], "tail": [[-0.657, 0.739, 1.872], [0.657, 0.739, 1.872]], "beam_range": 40, "beam_angle": 26 },
+      "model": "pack:synty-vehicles/car_small_yellow",
+      "skins": ["pack:synty-vehicles/car_small_yellow", "pack:synty-vehicles/car_small_blue", "pack:synty-vehicles/car_small_green", "pack:synty-vehicles/car_small_red", "pack:synty-vehicles/car_small_grey"],
+      "model_scale": 1,
+      "model_yaw_deg": 0,
+      "model_offset": [0, 0, 0],
+      "seats": [
+        { "role": "driver", "offset": [-0.387, 0.374, 0.244], "eye_height": 1 },
+        { "role": "passenger", "offset": [0.362, 0.374, 0.244], "eye_height": 1 },
+        { "role": "passenger", "offset": [-0.33, 0.444, 1.134], "eye_height": 0.95 },
+        { "role": "passenger", "offset": [0.3, 0.444, 1.134], "eye_height": 0.95 }
+      ] },
     {
-      "id": "motorcycle", "top_speed": 36.1, "acceleration": 8.5, "brake": 10, "turn_radius": 2.8, "max_lateral_accel": 11, "mass": 230, "hp": 120, "hood": [0, 0.8, -0.45], "spawn_count": 3, "half_width": 0.42, "half_length": 1.05, "height": 0.9,
-      "model": "zsky-vehicles/motorbike.glb", "model_scale": 0.403, "model_yaw_deg": 180, "model_offset": [-0.005, 1.1578, 0.1775],
-      "paint_material": "Green_Motor", "paints": ["Green_Motor", "Red_Motor", "Yellow_Motor"],
-      "lights": { "head": [[0, 0.95, -1.0]], "tail": [[0, 0.9, 1.0]], "beam_range": 35, "beam_angle": 30 }
-    },
-    {
-      "id": "bicycle", "top_speed": 8.33, "acceleration": 1.5, "brake": 4, "turn_radius": 2.2, "max_lateral_accel": 4, "mass": 15, "hp": 60, "hood": [0, 0.75, -0.35], "spawn_count": 3, "half_width": 0.3, "half_length": 0.85, "height": 1.0,
-      "model": "zsky-vehicles/bicycle.glb", "model_scale": 0.352, "model_yaw_deg": 0, "model_offset": [0.017, 1.5547, -0.072],
-      "paint_material": "Green_Bike", "paints": ["Green_Bike", "Yellow_Bike", "Silver_Bike"],
-      "lights": { "head": [[0, 0.85, -0.9]], "tail": [[0, 0.8, 0.9]], "beam_range": 25, "beam_angle": 30 }
+      "id": "motorcycle", "top_speed": 36.1, "acceleration": 8.5, "brake": 10, "turn_radius": 2.8, "max_lateral_accel": 11, "mass": 230, "hp": 120, "hood": [0, 0.8, -0.45], "spawn_count": 3, "half_width": 0.42, "half_length": 1.1, "height": 1.19,
+      "lights": { "head": [[0, 1.021, -0.468]], "tail": [[0, 0.904, 0.993]], "beam_range": 35, "beam_angle": 30 },
+      "model": "pack:synty-vehicles/bike_woodland",
+      "skins": ["pack:synty-vehicles/bike_woodland", "pack:synty-vehicles/bike_desert", "pack:synty-vehicles/bike_khaki", "pack:synty-vehicles/bike_black", "pack:synty-vehicles/bike_sand", "pack:synty-vehicles/bike_grey"],
+      "model_scale": 1,
+      "model_yaw_deg": 0,
+      "model_offset": [0, 0, 0],
+      "seats": [
+        { "role": "driver", "offset": [0, 0.436, 0.477], "exposed": true }
+      ]
     },
     {
       "id": "jeep", "top_speed": 30, "acceleration": 4.8, "brake": 8, "turn_radius": 3.6, "max_lateral_accel": 9, "mass": 1800, "run_over_mass": 1500, "hp": 380, "hood": [0, 0.95, -1.4], "spawn_count": 3, "half_width": 1.28, "half_length": 2.3, "height": 2.2,
@@ -103,9 +116,16 @@
       "lights": { "head": [[-0.77, 0.96, -2.28], [0.77, 0.96, -2.28]], "tail": [[-0.8, 0.88, 2.29], [0.8, 0.88, 2.29]], "beam_range": 40, "beam_angle": 26 }
     },
     {
-      "id": "quad", "top_speed": 25, "acceleration": 7.0, "brake": 11, "turn_radius": 2.3, "max_lateral_accel": 11, "mass": 300, "run_over_mass": 300, "hp": 90, "hood": [0, 0.7, -0.6], "spawn_count": 4, "half_width": 0.6, "half_length": 1.0, "height": 1.2,
-      "tint": [0.36, 0.42, 0.26],
-      "lights": { "head": [[-0.4, 0.55, -0.95], [0.4, 0.55, -0.95]], "tail": [[-0.4, 0.6, 0.95], [0.4, 0.6, 0.95]], "beam_range": 25, "beam_angle": 30 }
+      "id": "quad", "top_speed": 25, "acceleration": 7.0, "brake": 11, "turn_radius": 2.3, "max_lateral_accel": 11, "mass": 300, "run_over_mass": 300, "hp": 90, "hood": [0, 0.7, -0.6], "spawn_count": 4, "half_width": 0.6, "half_length": 1.15, "height": 1.32,
+      "lights": { "head": [[-0.236, 0.705, -1.031], [0.236, 0.705, -1.031]], "tail": [[0, 0.779, 1.017]], "beam_range": 25, "beam_angle": 30 },
+      "model": "pack:synty-vehicles/quad_red",
+      "skins": ["pack:synty-vehicles/quad_red", "pack:synty-vehicles/quad_blue", "pack:synty-vehicles/quad_olive", "pack:synty-vehicles/quad_sand"],
+      "model_scale": 1,
+      "model_yaw_deg": 0,
+      "model_offset": [0, 0, 0],
+      "seats": [
+        { "role": "driver", "offset": [0, 0.419, 0.168], "exposed": true }
+      ]
     },
     {
       "id": "amphibious", "medium": "amphibious", "top_speed": 22, "acceleration": 5.2, "brake": 9.5, "turn_radius": 4.2, "high_speed_radius_factor": 4, "max_lateral_accel": 8.5, "mass": 2500, "run_over_mass": 1800, "hp": 420, "hood": [0, 1.16, 1.88], "spawn_count": 2, "half_width": 1.15, "half_length": 2.3, "height": 1.2,

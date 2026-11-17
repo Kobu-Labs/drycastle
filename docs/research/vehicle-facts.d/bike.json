@@ -1,0 +1,152 @@
+{
+ "model": "pack:synty-vehicles/bike_woodland",
+ "out_dir": "synty/glb/vehicles-std",
+ "skins": [
+  {
+   "id": "woodland",
+   "model": "pack:synty-vehicles/bike_woodland",
+   "atlas": "PolygonBattleRoyale_Vehicles_01"
+  },
+  {
+   "id": "desert",
+   "model": "pack:synty-vehicles/bike_desert",
+   "atlas": "PolygonBattleRoyale_Vehicles_02"
+  },
+  {
+   "id": "khaki",
+   "model": "pack:synty-vehicles/bike_khaki",
+   "atlas": "PolygonBattleRoyale_Vehicles_03"
+  },
+  {
+   "id": "black",
+   "model": "pack:synty-vehicles/bike_black",
+   "atlas": "PolygonBattleRoyale_Vehicles_04"
+  },
+  {
+   "id": "sand",
+   "model": "pack:synty-vehicles/bike_sand",
+   "atlas": "PolygonBattleRoyale_Vehicles_05"
+  },
+  {
+   "id": "grey",
+   "model": "pack:synty-vehicles/bike_grey",
+   "atlas": "PolygonBattleRoyale_Vehicles_06"
+  }
+ ],
+ "bounds": {
+  "min": [
+   -0.412,
+   0.0,
+   -1.092
+  ],
+  "max": [
+   0.412,
+   1.187,
+   1.092
+  ]
+ },
+ "suggested": {
+  "half_width": 0.42,
+  "half_length": 1.1,
+  "height": 1.19
+ },
+ "origin": {
+  "ground_shift_y": 0.0061,
+  "centre_shift_z": 0.0767
+ },
+ "wheels": {
+  "radius": 0.335,
+  "wheelbase": 1.469,
+  "track": 0.0,
+  "tyre_x": 0.0,
+  "axle_z_mean_abs": 0.734,
+  "centres": {
+   "f": {
+    "centre": [
+     0.0,
+     0.35,
+     -0.742
+    ],
+    "radius": 0.35,
+    "width": 0.105,
+    "steer": true,
+    "steer_axis": [
+     0.0,
+     0.849,
+     0.528
+    ],
+    "steer_pivot": [
+     0.0,
+     0.954,
+     -0.285
+    ]
+   },
+   "r": {
+    "centre": [
+     0.0,
+     0.321,
+     0.727
+    ],
+    "radius": 0.321,
+    "width": 0.105,
+    "steer": false
+   }
+  }
+ },
+ "controls": {
+  "steer_bars": {
+   "axis": [
+    0.0,
+    0.849,
+    0.528
+   ],
+   "pivot": [
+    0.0,
+    0.954,
+    -0.285
+   ],
+   "under": "wheel_f_steer"
+  }
+ },
+ "seats": {
+  "seat_driver": {
+   "role": "driver",
+   "feet": [
+    0.0,
+    0.436,
+    0.477
+   ],
+   "exposed": true
+  }
+ },
+ "lamps": {
+  "light_head_c": {
+   "kind": "head",
+   "pos": [
+    0.0,
+    1.021,
+    -0.468
+   ]
+  },
+  "light_tail_c": {
+   "kind": "tail",
+   "pos": [
+    0.0,
+    0.904,
+    0.993
+   ]
+  }
+ },
+ "glass": [],
+ "nodes": [
+  "bike",
+  "hull",
+  "light_head_c",
+  "light_tail_c",
+  "seat_driver",
+  "steer_bars",
+  "wheel_f",
+  "wheel_f_steer",
+  "wheel_r"
+ ]
+}

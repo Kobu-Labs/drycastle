@@ -4,6 +4,7 @@
 #
 #   godot --headless --path assets-private/synty/military/polygon-military-01 --script ../../../../scripts/private_pack_glb.gd -- <assets-private dir> [name filter]
 #   godot --headless --path assets-private/synty/farm/polygon-farm-01 --script ../../../../scripts/private_pack_glb.gd -- <assets-private dir>
+#   godot --headless --path assets-private/synty/battle-royale/polygon-battle-royale-01 --script ../../../../scripts/private_pack_glb.gd -- <assets-private dir>
 #
 # One run converts the pack(s) of the project it runs in; manifest.json keeps the entries of the other packs (each pack has its own project).
 #
@@ -18,7 +19,8 @@
 # The packs are paid and never enter the repository; only this script does.
 extends SceneTree
 
-const ROOT := "res://Assets/Synty"
+# Military and Farm ship as res://Assets/Synty/Polygon<Name>; Battle Royale as res://Assets/Polygon<Name> (no Synty folder).
+var ROOT := "res://Assets/Synty"
 # Prefab folders worth placing on a map. Characters, FX and weapons are not map objects.
 # (Military: Environment; Farm: Environments and Plants, the crop plants of crops.json are in Plants and Props.)
 const GROUPS := ["Buildings", "Props", "Environment", "Environments", "Plants", "Vehicles", "Items", "Generic"]
@@ -41,6 +43,9 @@ func _init() -> void:
 	var filter: String = args[1] if args.size() > 1 else ""
 	var root := DirAccess.open(ROOT)
 	if root == null:
+		ROOT = "res://Assets"
+		root = DirAccess.open(ROOT)
+	if root == null:
 		push_error("no pack at %s (run inside the pack's Godot project)" % ROOT)
 		quit(1)
 		return
@@ -49,6 +54,8 @@ func _init() -> void:
 	var names := Array(root.get_directories())
 	names.sort()
 	for pack_dir in names:
+		if not String(pack_dir).begins_with("Polygon"):
+			continue
 		var short: String = String(pack_dir).trim_prefix("Polygon").to_snake_case().replace("_", "-")
 		var pack := "synty-" + short
 		var dir := "synty/glb/" + short

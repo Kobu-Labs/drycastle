@@ -341,21 +341,48 @@ def gltf_mat(name, color, metal=0.0, rough=0.8, alpha=1.0, emission=None, double
     return m
 
 
+def frame_from_axis(axis):
+    """A right-handed 3x3 whose columns are (x, axis, z): local Y is `axis`, local X the world X made perpendicular to it (a tilt about X keeps X)."""
+    y = np.asarray(axis, float)
+    y = y / np.linalg.norm(y)
+    x = np.array([1.0, 0, 0]) - y[0] * y
+    x /= np.linalg.norm(x)
+    return np.stack([x, y, np.cross(x, y)], axis=1)
+
+
+def quat_of(r):
+    """(x, y, z, w) of a rotation matrix."""
+    t = np.trace(r)
+    if t > 0:
+        s = math.sqrt(t + 1) * 2
+        return [(r[2, 1] - r[1, 2]) / s, (r[0, 2] - r[2, 0]) / s, (r[1, 0] - r[0, 1]) / s, s / 4]
+    i = int(np.argmax(np.diag(r)))
+    j, k = (i + 1) % 3, (i + 2) % 3
+    s = math.sqrt(1 + r[i, i] - r[j, j] - r[k, k]) * 2
+    q = [0.0] * 4
+    q[i] = s / 4
+    q[j] = (r[j, i] + r[i, j]) / s
+    q[k] = (r[k, i] + r[i, k]) / s
+    q[3] = (r[k, j] - r[j, k]) / s
+    return q
+
+
 class Model:
-    """Node tree of translation-only nodes. add(node, mesh): the mesh is in the vehicle frame (the node's pivot is taken off on export)."""
+    """Node tree of nodes with a pivot and, optionally, an orientation (`rot`, a steering axis that is not vertical). add(node, mesh): the mesh is in the vehicle frame
+    (the node's pivot and orientation are taken off on export)."""
 
     def __init__(self, name):
         self.name = name
-        self.nodes = {name: {"parent": None, "pos": np.zeros(3), "meshes": []}}
+        self.nodes = {name: {"parent": None, "pos": np.zeros(3), "meshes": [], "rot": np.eye(3)}}
         self.order = [name]
         self.materials = {}   # name -> glTF material dict, or None for a name-only pack material
         self.glass = None
         self.tris = 0
 
-    def node(self, name, parent, pos=(0, 0, 0)):
-        """pos: the pivot in the VEHICLE frame (not relative to the parent)."""
+    def node(self, name, parent, pos=(0, 0, 0), rot=None):
+        """pos: the pivot in the VEHICLE frame (not relative to the parent). rot: the node's orientation in the VEHICLE frame (3x3), default none (identity)."""
         assert name not in self.nodes, name
-        self.nodes[name] = {"parent": parent, "pos": np.array(pos, float), "meshes": []}
+        self.nodes[name] = {"parent": parent, "pos": np.array(pos, float), "meshes": [], "rot": np.eye(3) if rot is None else np.asarray(rot, float)}
         self.order.append(name)
         return name
 
@@ -422,13 +449,17 @@ class Model:
         for nm in self.order:
             nd = self.nodes[nm]
             p = nd["parent"]
+            rp = self.nodes[p]["rot"] if p is not None else np.eye(3)
             if p is not None:
                 nodes_json[index[p]].setdefault("children", []).append(index[nm])
-                t = nd["pos"] - self.nodes[p]["pos"]
+                t = rp.T @ (nd["pos"] - self.nodes[p]["pos"])
             else:
                 t = nd["pos"]
             if np.any(np.abs(t) > 1e-9):
                 nodes_json[index[nm]]["translation"] = [round(float(x), 5) + 0.0 for x in t]
+            rl = rp.T @ nd["rot"]
+            if np.abs(rl - np.eye(3)).max() > 1e-9:
+                nodes_json[index[nm]]["rotation"] = [round(float(x), 6) + 0.0 for x in quat_of(rl)]
         for nm in self.order:
             nd = self.nodes[nm]
             if not nd["meshes"]:
@@ -440,9 +471,11 @@ class Model:
             pivot = nd["pos"]
             for mname, group in by_mat.items():
                 g = merge(group, mname) if len(group) > 1 else group[0]
-                v = g.v - pivot
+                rot = nd["rot"]
+                v = (g.v - pivot) @ rot                  # rot.T applied to each point
+                gn = g.n @ rot
                 self.tris += len(g.f)
-                at = {"POSITION": acc(v, "VEC3"), "NORMAL": acc(g.n, "VEC3")}
+                at = {"POSITION": acc(v, "VEC3"), "NORMAL": acc(gn, "VEC3")}
                 if g.uv is not None:
                     at["TEXCOORD_0"] = acc(g.uv, "VEC2")
                 ix = acc(g.f.reshape(-1), "SCALAR", "<u4", 34963)

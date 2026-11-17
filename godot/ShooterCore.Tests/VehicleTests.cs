@@ -158,30 +158,27 @@ public class VehicleTests
     }
 
     [Fact]
-    public void ShippedFileHasCarMotorcycleAndBicycleWithTheAgreedSpawnCounts()
+    public void ShippedFileHasCarAndMotorcycleWithTheAgreedSpawnCounts()
     {
         var f = Shipped();
-        // the three v1 types keep their order and counts (the v2 jeep and quad are checked in VehicleTypesTests)
-        Assert.Equal(new[] { "car", "motorcycle", "bicycle" }, f.Vehicles.Take(3).Select(v => v.Id));
-        Assert.Equal(new[] { 12, 3, 3 }, f.Vehicles.Take(3).Select(v => v.SpawnCount)); // 12 cars: clustered around the spawn areas (c2c7cc9)
-        Assert.All(f.Vehicles.Skip(1).Take(2), v => { Assert.NotEqual("", v.Model); Assert.Equal(3, v.Variants); Assert.Contains(v.PaintMaterial, v.Paints); });
-        Assert.Equal(VehicleColours.Palette.Length, f.Vehicles[0].Variants);
+        // the two v1 types keep their order and counts (the v2 jeep and quad are checked in VehicleTypesTests; the bicycle is dropped, #325)
+        Assert.Equal(new[] { "car", "motorcycle" }, f.Vehicles.Take(2).Select(v => v.Id));
+        Assert.Equal(new[] { 12, 3 }, f.Vehicles.Take(2).Select(v => v.SpawnCount)); // 12 cars: clustered around the spawn areas (c2c7cc9)
+        Assert.NotEqual("", f.Vehicles[1].Model);
+        Assert.Equal(5, f.Vehicles[0].Variants); // the car's five Synty body colours (skins)
+        Assert.Equal(6, f.Vehicles[1].Variants); // the bike's six Battle Royale atlases
     }
 
     [Fact]
-    public void BikesDifferFromTheCarAsSpecified()
+    public void TheMotorcycleDiffersFromTheCarAsSpecified()
     {
-        var f = Shipped(); var car = f.Vehicles[0]; var moto = f.Vehicles[1]; var bike = f.Vehicles[2];
-        Assert.True(car.TopSpeed > moto.TopSpeed && moto.TopSpeed > bike.TopSpeed, "bikes never outrun the car");
+        var f = Shipped(); var car = f.Vehicles[0]; var moto = f.Vehicles[1];
+        Assert.True(car.TopSpeed > moto.TopSpeed, "the motorcycle never outruns the car");
         Assert.InRange(car.TopSpeed * 3.6f, 150f, 170f);    // about 160 km/h
         Assert.InRange(moto.TopSpeed * 3.6f, 110f, 150f);
-        Assert.InRange(bike.TopSpeed * 3.6f, 25f, 35f);     // a bicycle: 25 to 35 km/h
-        Assert.True(moto.Acceleration > car.Acceleration && car.Acceleration > bike.Acceleration);
+        Assert.True(moto.Acceleration > car.Acceleration);
         Assert.True(moto.TurnRadius < car.TurnRadius, "the motorcycle turns in tighter");
-        Assert.True(moto.Mass > bike.Mass);
-        Assert.True(bike.TopSpeed > f.RunOverMinSpeed, "the bicycle must be able to run someone over");
         Assert.True(RunOver.Damage(f, moto.TopSpeed) >= f.RunOverMaxDamage, "the motorcycle kills at top speed");
-        Assert.InRange(RunOver.Damage(f, bike.TopSpeed), 1f, 99f); // the bicycle hurts but does not one-shot
     }
 
     [Theory]

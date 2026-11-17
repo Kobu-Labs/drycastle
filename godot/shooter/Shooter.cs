@@ -30,7 +30,7 @@ namespace Drycastle.Shooter;
 ///   --debug-cmds              server: honour the client debug kill command; --match-smoke makes the server judge one full round (implies --debug-cmds)
 ///   --match-bot alice|bob     client: scripted match smoke role (alice kills bob with the debug command, bob fires after each spawn)
 ///   --blast-smoke             server: flat arena with three cars, judges vehicle damage stages, the blast and the chain reaction; --blast-bot a|b client roles (ticket #103)
-///   --car-smoke               server: flat test arena with three cars, judges the vehicle scenario; --car-bot a|b client roles; --car-kind car|motorcycle|bicycle picks the vehicle type of the smoke (default car); --vehicle-set destroyed_return_time=3 overrides vehicles.json
+///   --car-smoke               server: flat test arena with three cars, judges the vehicle scenario; --car-bot a|b client roles; --car-kind car|motorcycle picks the vehicle type of the smoke (default car); --vehicle-set destroyed_return_time=3 overrides vehicles.json
 ///   --weapons-smoke           server: flat test arena with a wall (far from the map), honours debug commands, judges the weapons scenario
 ///   --rpg-smoke           server: same flat arena, judges the rpg scenario
 ///   --rpg-bot a|b         client: scripted rpg smoke role (a shoots, b is the target)
@@ -253,8 +253,8 @@ public partial class Shooter : Node3D
         foreach (var v in _data!.Vehicles.Vehicles)
         {
             if (v.Model == "") continue;
-            var model = v.Model;
-            steps.Add(() => CarFx.Warm(model));
+            var def = v;
+            steps.Add(() => CarFx.Warm(def)); // the model and every skin
         }
         steps.Add(GlassFx.Load);
         foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, DayNightCycle.SkyShaderPath })

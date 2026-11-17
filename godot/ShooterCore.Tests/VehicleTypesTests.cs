@@ -24,13 +24,15 @@ public class VehicleTypesTests
     }
 
     [Fact]
-    public void QuadIsDriverOnlyWithNoGunAndNoModelFile()
+    public void QuadIsOneExposedRiderWithNoGunAndFourSkinsOfTheQuadBikeModel()
     {
         var q = Type("quad");
         Assert.Single(q.Seats);
+        Assert.True(q.SeatExposed(0)); // a rider in the open (ADR 0012)
         Assert.Null(q.Gun);
-        Assert.Equal("", q.Model);
-        Assert.NotNull(q.Tint);
+        Assert.StartsWith("pack:synty-vehicles/quad_", q.Model);
+        Assert.Equal(4, q.Variants);
+        Assert.Null(q.Tint);
     }
 
     [Theory]
@@ -54,11 +56,11 @@ public class VehicleTypesTests
     }
 
     [Fact]
-    public void QuadIsFasterThanABicycleButSlowerThanTheMotorcycle()
+    public void QuadIsSlowerThanTheMotorcycle()
     {
-        var f = Shipped(); var quad = Type("quad"); var moto = f.Vehicles[1]; var bike = f.Vehicles[2];
+        var f = Shipped(); var quad = Type("quad"); var moto = f.Vehicles[1];
         Assert.InRange(quad.TopSpeed * 3.6f, 80f, 100f);
-        Assert.True(bike.TopSpeed < quad.TopSpeed && quad.TopSpeed < moto.TopSpeed, "the quad sits between the bicycle and the motorcycle");
+        Assert.True(quad.TopSpeed < moto.TopSpeed, "the quad is slower than the motorcycle");
     }
 
     [Fact]

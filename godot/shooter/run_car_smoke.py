@@ -3,7 +3,7 @@
 
 alice enters a car (E), cannot shoot, drives 20+ m with full throttle into bob (run-over, capped damage, kill credited to the car),
 stops with the handbrake, exits to a free side, and the abandoned car stays where it was left.
-Usage: run_car_smoke.py [--map DIR] [--port N] [--kind car|motorcycle|bicycle ...]  (several kinds run one after another; default car)
+Usage: run_car_smoke.py [--map DIR] [--port N] [--kind car|motorcycle ...]  (several kinds run one after another; default car)
 """
 import argparse, os, subprocess, sys, time
 from pathlib import Path
@@ -12,7 +12,7 @@ HERE = Path(__file__).resolve().parent
 ap = argparse.ArgumentParser()
 ap.add_argument("--map", default=os.environ.get("DRYCASTLE_MAP", ""))
 ap.add_argument("--port", type=int, default=27936)
-ap.add_argument("--kind", nargs="+", default=["car"], choices=["car", "motorcycle", "bicycle"])
+ap.add_argument("--kind", nargs="+", default=["car"], choices=["car", "motorcycle"])
 a = ap.parse_args()
 godot = os.environ.get("GODOT", str(Path.home() / ".local/bin/godot"))
 mapargs = ["--map", str(Path(a.map).resolve())] if a.map else []
