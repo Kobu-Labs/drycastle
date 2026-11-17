@@ -88,6 +88,52 @@ public class EveryVehicleDrivesTests
         Assert.InRange(radius, DriveModel.TurnRadiusAt(def, s.Speed) * 0.9f, DriveModel.TurnRadiusAt(def, s.Speed) * 1.25f);
     }
 
+    [Theory]
+    [MemberData(nameof(Ground))]
+    public void Its_drive_block_says_where_it_turns_about_and_that_is_at_its_fixed_axles(string id)
+    {
+        var def = Def(id); var d = def.Drive!;
+        Assert.True(d.Land.PivotBehind != null, $"{id}: drive.land.pivot_behind is not set (the z of the axle that does not steer, the mean of several): it would turn about its origin (#295)");
+        var pivot = d.Land.PivotBehind!.Value;
+        // behind the point between the axles, and no further back than the last axle (the data's wheelbase is to the mean of the fixed axles on some: a little slack)
+        Assert.InRange(pivot, d.AxleCentre, d.AxleCentre + d.Wheelbase / 2f + 0.15f);
+        // a model that is in the repository: the number is the model's (the mean z of the wheels without a steering parent)
+        if (!def.Model.StartsWith("drycastle-generated-models/")) return;
+        var nodes = AmphibiousModelTests.Nodes(def.Model);
+        var wheels = WheelMath.AllNames().Where(nodes.ContainsKey).ToList();
+        var z = wheels.Select(w => nodes[w].Z).ToArray();
+        var steered = wheels.Select(w => nodes.ContainsKey(w + WheelMath.SteerSuffix)).ToArray();
+        Assert.InRange(pivot - WheelMath.PivotZ(z, steered), -0.005f, 0.005f);
+    }
+
+    [Theory]
+    [MemberData(nameof(Ground))]
+    public void It_turns_about_its_fixed_axle_the_origin_ahead_of_it_sweeps_wider(string id)
+    {
+        var def = Def(id);
+        var pivot = def.Drive!.Land.PivotBehind!.Value;
+        var flat = new Hill();
+        var s = new DriveState(); DriveModel.Settle(ref s, def, flat);
+        Vector3 Fwd(float yaw) => new(-MathF.Sin(yaw), 0, -MathF.Cos(yaw));
+        Vector3 Right(float yaw) => new(MathF.Cos(yaw), 0, -MathF.Sin(yaw));
+        for (var i = 0; i < 60; i++) { s.Speed = 2f; DriveModel.Step(ref s, def, Keys(steer: 1), Dt, flat); }
+        var before = s;
+        s.Speed = 2f; DriveModel.Step(ref s, def, Keys(steer: 1), Dt, flat);
+        Assert.True(MathF.Abs(s.YawRate) > 0.05f, $"{id} does not turn");
+        // the point on the fixed axle goes straight ahead along the heading: no sideways speed, so its circle is the turn radius
+        var axle = (s.Position - Fwd(s.Yaw) * pivot) - (before.Position - Fwd(before.Yaw) * pivot);
+        Assert.InRange(Vector3.Dot(axle, Right(s.Yaw)) / Dt, -0.03f, 0.03f); // (what is left is the tick's own arc)
+        Assert.InRange(Vector3.Dot(axle, Fwd(s.Yaw)) / Dt, s.Speed - 0.03f, s.Speed + 0.03f);
+        // the origin goes sideways into the turn by the yaw rate times its distance ahead of the axle; that is what a trailer on the hitch is pulled by
+        var origin = s.Position - before.Position;
+        Assert.Equal(-s.YawRate * pivot, Vector3.Dot(origin, Right(s.Yaw)) / Dt, 2);
+        Assert.Equal(-s.YawRate * pivot, DriveModel.OriginSlip(s, def), 4);
+        Assert.Equal(0f, s.Slip, 3); // the tyres hold: the slide itself is none
+        // in the air nothing holds the axle: it turns about its origin
+        var air = s; air.Airborne = true;
+        Assert.Equal(0f, DriveModel.PivotBehind(air, def));
+    }
+
     [Fact]
     public void A_held_vehicle_brakes_to_a_stop_whatever_the_driver_presses()
     {

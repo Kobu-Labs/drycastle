@@ -75,7 +75,7 @@ public partial class ServerCar
     /// <summary>What the tractor did this tick, as the trailer needs it: the drive state's, or the car state with the physics body's place.</summary>
     public TractorMotion TowMotion()
     {
-        if (Drives) return TractorMotion.From(Drive);
+        if (Drives) return TractorMotion.From(Drive, Def);
         var p = GlobalPosition;
         return TractorMotion.From(new NVec3(p.X, p.Y, p.Z), State);
     }
