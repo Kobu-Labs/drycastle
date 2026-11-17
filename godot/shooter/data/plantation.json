@@ -16,6 +16,21 @@
     "roll":  [ { "deg": 14.0, "period_s": 9.1 }, { "deg": 5.0, "period_s": 3.7 } ],
     "fov":   [ { "deg": 16.0, "period_s": 6.4 }, { "deg": 6.0, "period_s": 2.7 } ]
   },
+  // The reflector stands (PlantationReflectors.cs): every placed object of `asset` shines a real spot light from its lamp bar (the kind a headlamp is: no shadow), on by itself at night (the street
+  // lamps' curve). head: the lamp bar in the model's frame, metres (x right, y up, z ahead: the model shines along +Z); pitch_deg tips the beam (negative: down); lens: width and height of the lit
+  // bar drawn in front of the lamps, lens_energy above the bloom threshold (2) on purpose (ADR 0030); the light runs only within cull_m of the camera. Not seen in the game.
+  "reflectors": {
+    "asset": "pack:synty-gang-warfare/SM_Prop_Light_Portable_01",
+    "head": [0, 1.99, 0.07],
+    "pitch_deg": -24,
+    "range_m": 18,
+    "angle_deg": 40,
+    "energy": 5,
+    "colour": "#fff1d2",
+    "lens": [0.54, 0.11],
+    "lens_energy": 7,
+    "cull_m": 150
+  },
   // What every client draws on a high player's figure (CharacterView.High.cs). Nothing here was seen in the game: nudge freely.
   "view": {
     // The lit cigarette in the mouth: the Synty Gang Warfare SM_Prop_Cigarette_Long_01 (assets-private/synty/glb/props/cigarette_long_01.glb: 0.215 m long, filter end at z -0.029, tip at +Z 0.186),
