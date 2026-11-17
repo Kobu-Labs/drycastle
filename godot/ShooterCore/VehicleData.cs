@@ -100,6 +100,9 @@ public class VehiclesFile : IVersioned
                         throw new DataFileException($"vehicles.json: {v.Id}: a seat's aim needs arc_deg 0..180, min_pitch_deg below max_pitch_deg (within -89..89) and a positive spread_full_speed");
                 }
             }
+            for (var si = 0; si < v.Seats.Count; si++)
+                if (v.ExposedGunner && v.Seats[si].Role == "gunner" && v.Seats[si].Cover is { } gc && gc != SeatCover.Exposed)
+                    throw new DataFileException($"vehicles.json: {v.Id}: exposed_gunner makes the gunner seat exposed, its cover says {gc}");
             if (v.ExposedGunner && !v.Seats.Any(x => x.Role == "gunner")) throw new DataFileException($"vehicles.json: {v.Id}: exposed_gunner needs a gunner seat");
             if (v.Gun is { } g)
             {
@@ -190,6 +193,17 @@ public class VehicleSpotDef
     public float? YawDeg { get; set; }
 }
 
+/// <summary>What protects a seat's rider from a shot (ADR 0035). Glass is the default of a seat that says nothing.</summary>
+public enum SeatCover
+{
+    /// <summary>Behind panes: a bullet reaches the rider only through a pane or an opening of the hull, as that pane's kind lets it.</summary>
+    Glass,
+    /// <summary>Hidden behind armour: no bullet, pellet or mounted-gun round reaches the rider; explosive damage and the vehicle blowing up do.</summary>
+    Armoured,
+    /// <summary>In the open (ADR 0012): a round that reaches the rider's body hits them, whatever the hull is.</summary>
+    Exposed,
+}
+
 /// <summary>One seat of a vehicle (vehicles.json "seats"). Seat 0 is always the driver. Offset is in the vehicle's frame, metres: x right, y up, z back (forward is -Z), origin on the ground at the car's centre.</summary>
 public class VehicleSeatDef
 {
@@ -202,11 +216,16 @@ public class VehicleSeatDef
     /// </summary>
     public bool Armed { get; set; }
     /// <summary>
-    /// The hull does not cover this seat's rider (ADR 0012): a shot that reaches their body hits them and not the hull (<see cref="GunnerCover"/>).
-    /// False keeps the rider behind the hull, as in every closed vehicle. (The flak truck and the utility helicopter say it for their gunner with the
-    /// vehicle's <see cref="VehicleDef.ExposedGunner"/>.)
+    /// What protects this seat's rider (vehicles.json seat <c>cover</c>, ADR 0035): <see cref="SeatCover.Armoured"/>, <see cref="SeatCover.Glass"/> or
+    /// <see cref="SeatCover.Exposed"/> (ADR 0012). Null: not declared (the contract test wants every seat to declare it; <see cref="VehicleDef.CoverOf"/> reads Glass then).
     /// </summary>
-    public bool Exposed { get; set; }
+    public SeatCover? Cover { get; set; }
+    /// <summary>
+    /// The hull does not cover this seat's rider (ADR 0012): a shot that reaches their body hits them and not the hull (<see cref="GunnerCover"/>).
+    /// Its own spelling in vehicles.json is <c>"cover": "exposed"</c>; <c>"exposed": true</c> is read as the same (the old spelling). (The flak truck and the
+    /// utility helicopter say it for their gunner with the vehicle's <see cref="VehicleDef.ExposedGunner"/>.)
+    /// </summary>
+    public bool Exposed { get => Cover == SeatCover.Exposed; set { if (value) Cover = SeatCover.Exposed; else if (Cover == SeatCover.Exposed) Cover = SeatCover.Glass; } }
     /// <summary>The rider of an exposed seat stands (the gunner in a ring) instead of sitting: that is how they are drawn, and how tall they are to a bullet.</summary>
     public bool Standing { get; set; }
     /// <summary>How far round and up and down an armed seat's rider can aim. Null: all the way round.</summary>
@@ -483,8 +502,10 @@ public class VehicleGlassDef
     /// counter-clockwise seen from outside, inside the <see cref="Size"/> box. Null: the whole rectangle.
     /// </summary>
     public float[][]? Outline { get; set; }
-    /// <summary>Hit points of this pane; null takes glass.json vehicle_pane_hp.</summary>
+    /// <summary>Hit points of this pane; null takes its <see cref="Kind"/>'s from glass.json (<see cref="GlassConfig.PaneHp"/>).</summary>
     public float? Hp { get; set; }
+    /// <summary>How the pane treats a bullet (ADR 0035): Normal (the default) lets it through at once, Reinforced stops it while it holds.</summary>
+    public GlassKind Kind { get; set; } = GlassKind.Normal;
 
     public GlassPaneRect Rect() => GlassPaneRect.Make(new System.Numerics.Vector3(Centre[0], Centre[1], Centre[2]), new System.Numerics.Vector3(Normal[0], Normal[1], Normal[2]), Size[0], Size[1],
         Outline?.Select(p => new System.Numerics.Vector2(p[0], p[1])).ToList());
@@ -505,6 +526,15 @@ public class VehicleGlassDef
         }
         return area > 1e-4f ? null : "the outline must be counter-clockwise and have an area";
     }
+}
+
+/// <summary>The kind of a vehicle's glass pane (vehicles.json glass <c>kind</c>, the table in glass.json <c>kinds</c>, ADR 0035).</summary>
+public enum GlassKind
+{
+    /// <summary>A bullet damages the pane and goes on, full damage to what is behind it.</summary>
+    Normal,
+    /// <summary>More hit points; while it holds it stops a bullet (the pane takes the damage, whatever is behind none), once shattered a shot goes through.</summary>
+    Reinforced,
 }
 
 /// <summary>
@@ -841,7 +871,14 @@ public class VehicleDef
     /// Whether the hull leaves the rider of <paramref name="seat"/> uncovered: the seat says so itself (<see cref="VehicleSeatDef.Exposed"/>, the
     /// amphibious transport's three), or it is the gunner seat of a vehicle with <see cref="ExposedGunner"/> (the flak truck, the utility helicopter).
     /// </summary>
-    public bool SeatExposed(int seat) => seat >= 0 && seat < Seats.Count && (Seats[seat].Exposed || ExposedGunner && Seats[seat].Role == "gunner");
+    public bool SeatExposed(int seat) => CoverOf(seat) == SeatCover.Exposed;
+    /// <summary>
+    /// The cover a seat declares: its own <see cref="VehicleSeatDef.Cover"/>, else Exposed for the gunner seat of a vehicle with <see cref="ExposedGunner"/>
+    /// (the shorthand for that seat), else null (not declared).
+    /// </summary>
+    public SeatCover? DeclaredCover(int seat) => seat < 0 || seat >= Seats.Count ? null : Seats[seat].Cover ?? (ExposedGunner && Seats[seat].Role == "gunner" ? SeatCover.Exposed : null);
+    /// <summary>The cover of a seat as the rules read it: the declared one, Glass for a seat that declares none.</summary>
+    public SeatCover CoverOf(int seat) => DeclaredCover(seat) ?? SeatCover.Glass;
     /// <summary>An anti-aircraft turret worked from the gunner seat (the flak truck). Null: none. Excludes <see cref="Gun"/>.</summary>
     public VehicleFlakDef? Flak { get; set; }
     /// <summary>
