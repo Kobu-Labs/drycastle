@@ -134,11 +134,11 @@
         "throttle_rise": 4, "throttle_fall": 7, "steer_rise": 4.5, "steer_fall": 8, "steer_calm": 0.45, "wheelbase": 2.72, "track": 1.96,
         "land": {
           "launch_boost": 1.7, "launch_speed": 9, "power_curve": 2.5, "coast_decel": 1.3, "coast_drag": 0.07, "brake_bite": 0.55, "reverse_top_fraction": 0.3,
-          "grip": 8.5, "yaw_response": 9, "handbrake_decel": 9, "handbrake_grip": 0.3, "handbrake_steer": 1.3,
+          "grip": 14, "yaw_response": 9, "handbrake_decel": 9, "handbrake_grip": 0.3, "handbrake_steer": 1.3,
           "step_height": 0.4, "max_climb_deg": 48, "snap_down": 0.3
         },
         "water": {
-          "draft": 0.56, "float_depth": 0.12, "reverse_thrust": 0.6, "coast_drag": 0.12, "turn_radius": 16, "prop_steer": 0.15, "yaw_response": 1.6, "side_drag": 1.5, "stern_swing": 1.2,
+          "draft": 0.56, "float_depth": 0.12, "reverse_thrust": 0.6, "coast_drag": 0.12, "turn_radius": 14, "prop_steer": 0.3, "yaw_response": 2, "side_drag": 2.5, "stern_swing": 1.2,
           "buoyancy_response": 5, "buoyancy_damping": 0.4, "climb_out_rate": 1.4
         },
         "body": {
