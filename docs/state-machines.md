@@ -142,6 +142,27 @@ From any state: Dead
 - **Launch**: The short swing after a throw or a launch.
 - **Dead**: Reachable from every act (a killing hit, or an admin ending the event).
 
+## Bigfoot.BodyFling
+
+A player the Bigfoot grabbed, as a client draws them: held in the fist, flying after the throw, getting up after the landing.
+
+```mermaid
+stateDiagram-v2
+    [*] --> None
+    None --> Held
+    Held --> Flying
+    Held --> None
+    Flying --> Landing
+    Flying --> Held
+    Flying --> None
+    Landing --> None
+    Landing --> Held
+```
+
+- **Held**: In the fist (Bigfoot act Hold): limbs loose, the body swung by the hand. Released without a throw, the Bigfoot dying or the player dying or leaving ends it at None.
+- **Flying**: The throw (Bigfoot act Launch): tumbling, limbs flailing, until the body is slow again after MinAirSeconds (or MaxAirSeconds).
+- **Landing**: Landed alive: the body turns upright and the limbs go slack, then the normal figure (a dead one is the corpse's, not this machine's).
+
 ## Bigfoot.Event
 
 The server's Bigfoot event: none, a living Bigfoot, or the dead one lying out its death clip before it becomes the reward.
