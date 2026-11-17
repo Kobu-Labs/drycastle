@@ -187,3 +187,23 @@ The client needs the same `--map`/`DRYCASTLE_MAP` and `DRYCASTLE_ASSETS` as desc
 - Export is unverified (see the top). If the dedicated-server preset needs tuning, edit it in the Godot editor
   (Project > Export) and commit the resulting `export_presets.cfg`.
 - No automatic asset or map download: clients need the map folder installed by hand.
+
+## Performance log
+
+Every 10 s the server prints one `server: stats` line (tick p50/p99, the phases, GC) and, since the `Prof` timers, these `key=value` lines
+(`NetServer.Prof.cs`, `ShooterCore/Diagnostics/Prof.cs`). The tick lines are only printed while somebody plays; the memory line always.
+
+| Line | Meaning |
+|---|---|
+| `server: prof scopes ms/s\|calls/s name=A\|B ...` | each timed part of the tick: A milliseconds of it per second of play (10 ms/s is 1 % of a core), B calls per second. Scopes nest: `entities` holds `animal_step`, which holds `animal_body_ahead`, which holds `animal_crowd`; `fire` holds `shot_targets`; `bot_brain` holds `bot_sight`, which holds `world_shot`. They do not sum to the tick |
+| `server: prof worst tick=N ms=X phases_us ... \| scopes_us ...` | the slowest tick of the period: its phases and scopes in microseconds (those under 50 us left out). Says what a hitch was made of |
+| `server: prof nav ms/s\|calls/s snap=A\|B path=A\|B` | the bot navigation thread: snapping points to the mesh, and the path searches |
+| `server: prof threads cpu_pct main=.. bot_nav=.. total=..` | CPU of each kind of thread in percent of one core (from `/proc/self/task`; Linux only) |
+| `server: prof mem rss_mb=.. heap_mb=.. gc_committed_mb=.. objects=.. nodes=.. orphans=.. rays_s=.. live_targets_s=..` | process memory, the managed heap, the engine's object and node counts (a count that only grows is a leak), physics rays and target lists per second. `godot_static_mb` is 0 in a release export (the engine does not count it there) |
+
+A new scope: a value in `Prof.S` with its name in `Prof.Names`, then `var t = Prof.Begin(); ...; Prof.End(Prof.S.X, t);` around the code (game thread only).
+
+Function-level profile on the VPS (`linux-perf` is installed): start the server with `DOTNET_PerfMapEnabled=1` and `DOTNET_EnableWriteXorExecute=0`
+in its environment (a compose override; one is kept in `/opt/drycastle/backups/pre-metrics-20261117/perf-test.override.yml`), then on the host
+`perf record -e cpu-clock -F 499 -g -p <server pid> -- sleep 60`. The profiler itself slows the server (the navigation worker's time doubled), so read the
+`prof` lines from a period without it.

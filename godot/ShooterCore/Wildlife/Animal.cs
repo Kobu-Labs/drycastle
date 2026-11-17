@@ -569,6 +569,14 @@ public sealed class Animal : IWorldEntity
     /// </summary>
     Block Step(float want, float speed, float dt)
     {
+        var t = Prof.Begin();
+        var block = StepInner(want, speed, dt);
+        Prof.End(Prof.S.AnimalStep, t);
+        return block;
+    }
+
+    Block StepInner(float want, float speed, float dt)
+    {
         var turned = TurretMath.StepAngle(Yaw, want, Def.TurnRateDegPerS * MathF.PI / 180f * dt);
         if (_recheck.Running && turned != Yaw && SolidAlong(_open ?? _world, turned)) turned = Yaw; // just blocked by a wall: it does not swing its nose into it
         Yaw = turned;
@@ -579,7 +587,10 @@ public sealed class Animal : IWorldEntity
         var z = Position.Z + f.Z * speed * dt;
         var world = _open ?? _world;
         if (world.GroundY(x, z) is not { } y || MathF.Abs(y - Position.Y) > _file.MaxStepM) return Block.Ground;
-        if (BodyAhead(x, z)) return Block.Body;
+        var bodyT = Prof.Begin();
+        var body = BodyAhead(x, z);
+        Prof.End(Prof.S.AnimalBodyAhead, bodyT);
+        if (body) return Block.Body;
         if (SolidAhead(world, step, speed, dt)) return Block.Solid;
         Position = new Vector3(x, y, z);
         return Block.None;
@@ -598,7 +609,10 @@ public sealed class Animal : IWorldEntity
     {
         var to = BodyBox.Of(new Vector3(x, Position.Y, z), Yaw, _bodyW, _bodyL, _bodyAhead);
         var from = Body;
-        if (Crowd?.Blocks(this, from, to) == true) return true;
+        var crowdT = Prof.Begin();
+        var crowded = Crowd?.Blocks(this, from, to) == true;
+        Prof.End(Prof.S.AnimalCrowd, crowdT);
+        if (crowded) return true;
         var near = s_players ??= new List<Vector3>();
         near.Clear();
         _world.PlayersNear(Position, BodyReach + PlayerRadius + 1f, near);

@@ -27,16 +27,28 @@ public partial class NetServer
 
         public float? GroundY(float x, float z)
         {
-            if (_s.Map == null || _s.Water.Depth(x, z) > WadeM) return null;
-            var y = _s.Map.GroundHeight(x, z);
-            return float.IsNaN(y) ? null : y;
+            var t = Prof.Begin();
+            float? ground = null;
+            if (_s.Map != null && _s.Water.Depth(x, z) <= WadeM)
+            {
+                var y = _s.Map.GroundHeight(x, z);
+                if (!float.IsNaN(y)) ground = y;
+            }
+            Prof.End(Prof.S.AnimalGround, t);
+            return ground;
         }
 
         public abstract NVec3? NearestThreat(NVec3 from, float radius);
 
         public NVec3? PositionOf(ushort player) => _s._byId.TryGetValue(player, out var c) ? N(c.Body.GlobalPosition) : null;
 
-        public bool Watched(NVec3 at) => _s.AnimalWatched(at);
+        public bool Watched(NVec3 at)
+        {
+            var t = Prof.Begin();
+            var watched = _s.AnimalWatched(at);
+            Prof.End(Prof.S.AnimalWatched, t);
+            return watched;
+        }
 
         /// <summary>
         /// One ray at <paramref name="height"/> above the ground, along the ground: it runs from the ground height under the start to the ground height under the end, raised
@@ -44,17 +56,25 @@ public partial class NetServer
         /// </summary>
         public float SolidAhead(NVec3 from, NVec3 dir, float maxM, float height)
         {
-            if (!_s.GroundHugRay(from, dir, maxM, height, out var a, out var b)) return float.PositiveInfinity;
-            return _s.Query.SolidDistance(MoverKind.Animal, a, b);
+            var t = Prof.Begin();
+            var d = _s.GroundHugRay(from, dir, maxM, height, out var a, out var b) ? _s.Query.SolidDistance(MoverKind.Animal, a, b) : float.PositiveInfinity;
+            Prof.End(Prof.S.AnimalSolid, t);
+            return d;
         }
 
         /// <summary>Ground, and a sphere of the body's radius resting on it touches no building, fence, placed solid, trunk, closed door, parked vehicle or player.</summary>
-        public bool Fits(float x, float z, float radius) =>
-            GroundY(x, z) is { } y && !_s.Query.Overlaps(MoverKind.Animal, new Vector3(x, y + radius + 0.2f, z), radius);
+        public bool Fits(float x, float z, float radius)
+        {
+            var t = Prof.Begin();
+            var fits = GroundY(x, z) is { } y && !_s.Query.Overlaps(MoverKind.Animal, new Vector3(x, y + radius + 0.2f, z), radius);
+            Prof.End(Prof.S.AnimalFits, t);
+            return fits;
+        }
 
         /// <summary>The players on foot and alive (one in a seat is part of its vehicle, whose solid box the ray finds).</summary>
         public void PlayersNear(NVec3 at, float radius, List<NVec3> into)
         {
+            var t = Prof.Begin();
             var r2 = radius * radius;
             foreach (var c in _s._byId.Values)
             {
@@ -63,6 +83,7 @@ public partial class NetServer
                 var dx = p.X - at.X; var dz = p.Z - at.Z;
                 if (dx * dx + dz * dz <= r2) into.Add(p);
             }
+            Prof.End(Prof.S.AnimalPlayersNear, t);
         }
     }
 }

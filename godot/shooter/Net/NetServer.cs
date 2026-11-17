@@ -262,6 +262,7 @@ public partial class NetServer : Node
         _elapsed += delta;
         _perf?.Begin();
         PhasesBegin();
+        Prof.TickBegin();
         foreach (var cl in _clients.Values) cl.PacketsThisTick = 0;
         Poll();
         PerfLap(ServerPerf.Ph.Poll);
@@ -272,26 +273,34 @@ public partial class NetServer : Node
         IntelTick(); // a made-up event whose time is up leaves the intel screen
         PerfLap(ServerPerf.Ph.Housekeeping);
         _audit?.Begin();
+        var pt = Prof.Begin();
         _match.Update();
         NavDrain(); // the routes the worker finished since the last tick, applied here and nowhere else
         _audit?.Lap(0);
+        pt = Prof.Lap(Prof.S.MatchUpdate, pt);
         BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
         GangsPrepare(); // the players the Gang members fight, and who each fights
         _audit?.Lap(1);
+        pt = Prof.Lap(Prof.S.Prepare, pt);
         _match.Entities.Tick((float)delta);
         _audit?.Lap(2);
+        pt = Prof.Lap(Prof.S.Entities, pt);
         CitizensTick((float)delta);
         _audit?.Lap(3);
+        pt = Prof.Lap(Prof.S.Citizens, pt);
         PetsTick((float)delta);
         _audit?.Lap(4);
+        pt = Prof.Lap(Prof.S.Pets, pt);
         WildlifeTick((float)delta);
         _audit?.Lap(5);
+        pt = Prof.Lap(Prof.S.Wildlife, pt);
         MassTick((float)delta); // the Holy Mass: its clock, the pastor, the seats
         _audit?.Lap(6);
         ThievesTick((float)delta); // the Thieves event: its phase clock
         _audit?.Lap(7);
         RozhlasTick((float)delta); // the village loudspeaker: the schedule and the hijack clock
         _audit?.Lap(8);
+        Prof.End(Prof.S.Events, pt);
         PerfLap(ServerPerf.Ph.Match);
         StreakTick((float)delta);
         PerfLap(ServerPerf.Ph.Streaks);
@@ -840,7 +849,9 @@ public partial class NetServer : Node
             if (useAct && LootInReach(c) == null && (MassSit(c) || GarageUse(c) || TryEnterCar(c))) continue; // the use key on lying Loot sends it back, it does not take a seat
             c.Body.Yaw = Quant.Yaw(i.Yaw);
             c.Body.Pitch = Quant.Pitch(i.Pitch);
+            var moveT = Prof.Begin();
             c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
+            Prof.End(Prof.S.PlayerMove, moveT);
             c.StepTicks++;
             c.Recoil.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Fire) != 0, c.W.Current.Recoil);
             // breath hold: sprint is cancelled while aiming, so the sprint bit with aim held is the breath key
@@ -850,7 +861,7 @@ public partial class NetServer : Node
             if (c.W.Update(_elapsed, wi) is { } shot)
             {
                 if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++; // spawn protection ends on a real shot, not on Fire held with an empty magazine
-                FireWeapon(c, i, shot);
+                { var fireT = Prof.Begin(); FireWeapon(c, i, shot); Prof.End(Prof.S.Fire, fireT); }
             }
             if (c.W.Changed) SendAmmo(c);
             c.Slot = (byte)(c.W.Slot - 1);
@@ -880,7 +891,7 @@ public partial class NetServer : Node
         if (c.W.Update(_elapsed, input with { Locked = HasLock(c) }) is { } shot)
         {
             if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++;
-            FireWeapon(c, i, shot, car);
+            { var fireT = Prof.Begin(); FireWeapon(c, i, shot, car); Prof.End(Prof.S.Fire, fireT); }
         }
         if (c.W.Changed) SendAmmo(c);
         c.Slot = (byte)(c.W.Slot - 1);
@@ -923,6 +934,7 @@ public partial class NetServer : Node
     /// </summary>
     List<HitTarget> LiveTargets()
     {
+        var profT = Prof.Begin();
         var list = _targetLists.Count > 0 ? _targetLists.Pop() : new List<HitTarget>(_byId.Count + 4);
         foreach (var o in _byId.Values)
             if (_match.Get(o.Id)?.Life == PlayerLife.Alive && !_pins.ContainsKey(o.Id)) list.Add(HitTargetOf(o)); // a pinned player is under the demon and untouchable: not a target, so no shot stops on them
@@ -941,6 +953,7 @@ public partial class NetServer : Node
         _workers?.AddTargets(list); // the workers of the Urad
         AddDemonTarget(list);
         PerfCounters.LiveTargetsCalls++; PerfCounters.LiveTargetsElems += list.Count;
+        Prof.End(Prof.S.LiveTargets, profT);
         return list;
     }
 
@@ -1030,7 +1043,9 @@ public partial class NetServer : Node
             var held = SeatAimRules.Aim(seat!.Aim, carYaw, carPitch, carRoll, yaw, pitch);
             yaw = held.ViewYaw; pitch = held.ViewPitch;
         }
+        var targetsT = Prof.Begin();
         var targets = seatCar != null ? RiderRules.NotAboard(ShotTargets(c), seatCar.Seat) : ShotTargets(c); // players where the shooter's screen showed them (ADR 0013)
+        Prof.End(Prof.S.ShotTargets, targetsT);
         _shotsFired++;
         var aiming = (i.Buttons & (ushort)MoveButtons.Aim) != 0;
         var body = c.Body.State;

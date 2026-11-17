@@ -120,9 +120,15 @@ public sealed class BotNav
 
     static Vector3[] Query(Rid map, NavigationPathQueryParameters3D query, NavigationPathQueryResult3D result, Vector3 from, Vector3 to)
     {
+        var t = Prof.Begin();
         query.StartPosition = NavigationServer3D.MapGetClosestPoint(map, from);
+        Prof.NavSnap(t);
+        t = Prof.Begin();
         query.TargetPosition = NavigationServer3D.MapGetClosestPoint(map, to);
+        Prof.NavSnap(t);
+        t = Prof.Begin();
         NavigationServer3D.QueryPath(query, result);
+        Prof.NavPath(t);
         return result.Path;
     }
 

@@ -158,7 +158,10 @@ public partial class NetServer
         var len = d.Length();
         if (len < 0.01f) return true;
         var dir = d / len;
-        return WorldDistance(new Vector3(from.X, from.Y, from.Z), new Vector3(dir.X, dir.Y, dir.Z), len) >= len - 0.05f;
+        var t = Prof.Begin();
+        var clear = WorldDistance(new Vector3(from.X, from.Y, from.Z), new Vector3(dir.X, dir.Y, dir.Z), len) >= len - 0.05f;
+        Prof.End(Prof.S.BotSight, t);
+        return clear;
     }
 
     /// <summary>Once a tick, before the players are simulated: keeps the roster at the wanted size and queues one input per living bot.</summary>
@@ -194,7 +197,9 @@ public partial class NetServer
             var w = b.W;
             var self = new BotSelf(b.Id, N(b.Body.GlobalPosition), b.Body.State.Stance, w.Mag(w.Slot), w.Current.MagazineSize, w.Reserve(w.Slot), w.Reloading, w.Current.FullAuto,
                 w.Slot, b.BotLauncher ? w.HotbarWeapon(0) + 1 : 0, b.BotLauncher ? BotLauncherOf(w) : null);
+            var brainT = Prof.Begin();
             var cmd = b.Brain!.Tick(_elapsed, dt, self, _botWorld);
+            Prof.End(Prof.S.BotBrain, brainT);
             var move = new MoveInput { MoveX = cmd.MoveX, MoveY = cmd.MoveY, Yaw = cmd.Yaw, Buttons = cmd.Buttons, SpeedScale = 1f };
             b.Inputs.Enqueue(NetInput.From(++b.BotSeq, move, cmd.Pitch, (byte)cmd.Slot)); // slot 0 (a bot with no launcher): the weapon it spawned with
         }

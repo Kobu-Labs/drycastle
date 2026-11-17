@@ -60,7 +60,10 @@ public sealed class WorldQuery
     Godot.Collections.Dictionary Cast(Vector3 from, Vector3 to, uint mask)
     {
         _ray.From = from; _ray.To = to; _ray.CollisionMask = mask;
-        return Space.PerfRay(_ray);
+        var t = Prof.Begin();
+        var hit = Space.PerfRay(_ray);
+        Prof.End(Prof.S.PhysicsRay, t);
+        return hit;
     }
 
     /// <summary>
@@ -140,11 +143,16 @@ public sealed class WorldQuery
     /// </summary>
     public ShotStop Shot(Vector3 from, Vector3 dir, float max, ServerCar? skipA = null, ServerCar? skipB = null, List<ServerCar>? passed = null)
     {
+        var shotT = Prof.Begin();
         var r = Cast(from, from + dir * max, _static[(int)MoverKind.Shot]);
         var wall = r.Count == 0 ? float.PositiveInfinity : from.DistanceTo(r["position"].AsVector3());
+        var hullT = Prof.Begin();
         var car = _hull(from, dir, max, skipA, skipB, passed, out var d, out var pose);
-        if (car != null && d < wall) return new ShotStop(d, car, pose, HullNormal(from, dir, max, car, pose));
-        return r.Count == 0 ? new ShotStop(float.PositiveInfinity, null, default, Vector3.Zero) : new ShotStop(wall, null, default, r["normal"].AsVector3());
+        Prof.End(Prof.S.NearestHull, hullT);
+        var stop = car != null && d < wall ? new ShotStop(d, car, pose, HullNormal(from, dir, max, car, pose))
+            : r.Count == 0 ? new ShotStop(float.PositiveInfinity, null, default, Vector3.Zero) : new ShotStop(wall, null, default, r["normal"].AsVector3());
+        Prof.End(Prof.S.WorldShot, shotT);
+        return stop;
     }
 
     /// <summary>The world normal of the face of the hull a ray enters (only asked for a hull that stops a shot).</summary>
