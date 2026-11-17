@@ -28,7 +28,15 @@ public enum ScudLauncherState : byte
     Reloading = 8,
     /// <summary>The operator aborted the erect: the rack lowers again with its rocket.</summary>
     Aborting = 9,
+    /// <summary>A hold on a loaded rocket cart began the reload: the first half, the rocket still on the cart.</summary>
+    Loading = 10,
 }
+
+/// <summary>Why a loading from a rocket cart was dropped.</summary>
+public enum ScudLoadCancel : byte { CartLost, Moved }
+
+/// <summary>What the host tells the launcher about the cart it is loading from, each tick: whether it can still be unloaded (alive, loaded, in reach) and where it stands.</summary>
+public readonly record struct ScudCartSense(bool Ok, Vector3 Position);
 
 /// <summary>Why a proposal was dropped (for the log and the crew's message).</summary>
 public enum ScudCancel : byte { Retarget, CrewChanged, Withdrawn, Moved, Timeout }
@@ -85,8 +93,8 @@ public sealed record ScudCrew(IReadOnlyList<ushort> Seats, int OperatorSeat)
     }
 }
 
-/// <summary>What the host must do after a <see cref="ScudLauncher.Tick"/>: spawn the missile when the ignition ends.</summary>
-public readonly record struct ScudTick(bool Launch, Vector3 Target, ushort Placer);
+/// <summary>What the host must do after a <see cref="ScudLauncher.Tick"/>: spawn the missile when the ignition ends, take the rocket off the cart (<see cref="TakeCart"/>, its vehicle id) at the transfer point.</summary>
+public readonly record struct ScudTick(bool Launch, Vector3 Target, ushort Placer, ushort TakeCart = 0);
 
 /// <summary>
 /// The launcher of one Scud truck: the machine of <see cref="ScudLauncherState"/> with its clock, and what rides with it (who is the operator, the locked point, who has confirmed).
@@ -107,7 +115,8 @@ public sealed class ScudLauncher
         .Allow(ScudLauncherState.Launching, ScudLauncherState.Spent)
         .Allow(ScudLauncherState.Spent, ScudLauncherState.Lowering)
         .Allow(ScudLauncherState.Lowering, ScudLauncherState.Empty)
-        .Allow(ScudLauncherState.Empty, ScudLauncherState.Reloading, ScudLauncherState.Stowed)
+        .Allow(ScudLauncherState.Empty, ScudLauncherState.Reloading, ScudLauncherState.Stowed, ScudLauncherState.Loading)
+        .Allow(ScudLauncherState.Loading, ScudLauncherState.Reloading, ScudLauncherState.Empty)
         .Allow(ScudLauncherState.Reloading, ScudLauncherState.Stowed)
         .Allow(ScudLauncherState.Aborting, ScudLauncherState.Stowed)
         .Note(ScudLauncherState.Stowed, "A rocket on the rack, the rack down, the truck drives. Where a launcher starts and where every cancel ends when nobody has the screen open.")
@@ -117,18 +126,24 @@ public sealed class ScudLauncher
         .Note(ScudLauncherState.Launching, "The rack is up and the rocket ignites (clock: ignition seconds). When it runs out the missile entity spawns and the rack is empty. Cannot be aborted.")
         .Note(ScudLauncherState.Spent, "The rack is up and empty for a moment (clock: spent hold seconds), the launch smoke clears, then the rack lowers.")
         .Note(ScudLauncherState.Lowering, "The empty rack lowers (clock: lower seconds). The truck is still immobilised.")
-        .Note(ScudLauncherState.Empty, "The rack is down with no rocket. The truck drives again but cannot fire until a reload: the rocket cart's TryReloadScud, or an admin's instant reload (Empty to Stowed).")
-        .Note(ScudLauncherState.Reloading, "A rocket is being loaded (clock: reload seconds). The truck is immobilised; the rocket shows on the rack for the second half.")
+        .Note(ScudLauncherState.Empty, "The rack is down with no rocket. The truck drives again but cannot fire until a reload: a hold on a loaded rocket cart beside it (BeginLoad), TryReloadScud, or an admin's instant reload (Empty to Stowed).")
+        .Note(ScudLauncherState.Loading, "The first half of a reload from a rocket cart (clock: reload seconds x transfer share). The truck is immobilised and the rack still empty; the bound cart keeps its rocket and must stay alive, loaded and in reach and neither it nor the truck may move, else back to Empty with the cart untouched. When the clock runs out the rocket leaves the cart (the host's order) and the second half begins.")
+        .Note(ScudLauncherState.Reloading, "A rocket is being loaded (clock: reload seconds, or what is left of it after the transfer). The truck is immobilised; the rocket shows on the rack for the last half of the reload.")
         .Note(ScudLauncherState.Aborting, "The operator aborted the erect: the rack lowers again from where it got to, at the lowering rate, and the rocket is kept. Then Stowed.")
         .Build();
 
     readonly ScudLauncherData _t;
+    readonly double _share, _moveLimit;
     readonly StateMachine<ScudLauncherState> _fsm = new(Spec);
     ScudCrew? _crewAtLock;
     Vector3 _lockedFrom;
     int _confirmed;
+    ushort _cart;
+    Vector3 _loadTruckAt, _loadCartAt;
 
-    public ScudLauncher(ScudLauncherData tuning) => _t = tuning;
+    /// <param name="tuning">scud.json launcher.</param>
+    /// <param name="reload">scud.json reload (the transfer share and how far a truck or cart may move while loading); the defaults when null.</param>
+    public ScudLauncher(ScudLauncherData tuning, ScudReloadData? reload = null) { _t = tuning; reload ??= new(); _share = reload.TransferShare; _moveLimit = reload.MovedCancelM; }
 
     public ScudLauncherState State => _fsm.Current;
     /// <summary>Seconds since the state was entered.</summary>
@@ -137,6 +152,11 @@ public sealed class ScudLauncher
     public float Left => _fsm.Left;
     /// <summary>A proposal was dropped (and why); the state has already gone back to Targeting or Stowed.</summary>
     public event Action<ScudCancel>? ProposalDropped;
+    /// <summary>A loading from a cart was dropped (and why); the state has already gone back to Empty and the cart keeps its rocket.</summary>
+    public event Action<ScudLoadCancel>? LoadDropped;
+
+    /// <summary>The vehicle id of the cart being loaded from (in Loading), else 0.</summary>
+    public ushort Cart => State == ScudLauncherState.Loading ? _cart : (ushort)0;
 
     /// <summary>The state changed (from, to), for the host to send it on.</summary>
     public event Action<ScudLauncherState, ScudLauncherState>? Changed { add => _fsm.Changed += value; remove => _fsm.Changed -= value; }
@@ -245,7 +265,19 @@ public sealed class ScudLauncher
         return ScudAnswer.Ok;
     }
 
-    /// <summary>Empty to Reloading (the rocket cart's job, <c>TryReloadScud</c>). False in any other state.</summary>
+    /// <summary>
+    /// Empty to Loading: the reload starts from the rocket cart <paramref name="cart"/> (vehicle id) standing at <paramref name="cartPos"/> beside the truck at <paramref name="truckPos"/>. False in any other
+    /// state or with no cart. The cart still has its rocket until the transfer point; see <see cref="Tick"/>.
+    /// </summary>
+    public bool BeginLoad(ushort cart, Vector3 truckPos, Vector3 cartPos)
+    {
+        if (State != ScudLauncherState.Empty || cart == 0) return false;
+        _cart = cart; _loadTruckAt = truckPos; _loadCartAt = cartPos;
+        _fsm.Enter(ScudLauncherState.Loading, (float)(_t.ReloadSeconds * _share));
+        return true;
+    }
+
+    /// <summary>Empty to Reloading (the admin's, <c>TryReloadScud</c>: no cart, the whole reload clock). False in any other state.</summary>
     public bool BeginReload()
     {
         if (State != ScudLauncherState.Empty) return false;
@@ -266,7 +298,7 @@ public sealed class ScudLauncher
     /// <summary>
     /// One server tick. Drops a proposal the crew or the truck broke, steps the countdowns, and tells the host to spawn the missile when the ignition ran out.
     /// </summary>
-    public ScudTick Tick(float dt, ScudCrew crew, Vector3 truckPos)
+    public ScudTick Tick(float dt, ScudCrew crew, Vector3 truckPos, ScudCartSense? cart = null)
     {
         switch (State)
         {
@@ -298,6 +330,17 @@ public sealed class ScudLauncher
             case ScudLauncherState.Lowering:
                 if (_fsm.Tick(dt)) _fsm.Enter(ScudLauncherState.Empty);
                 break;
+            case ScudLauncherState.Loading:
+                if (cart is not { Ok: true }) { DropLoad(ScudLoadCancel.CartLost); break; }
+                if (ScudRules.Range(truckPos, _loadTruckAt) > _moveLimit || ScudRules.Range(cart.Value.Position, _loadCartAt) > _moveLimit) { DropLoad(ScudLoadCancel.Moved); break; }
+                if (_fsm.Tick(dt))
+                {
+                    var taken = _cart;
+                    _cart = 0;
+                    _fsm.Enter(ScudLauncherState.Reloading, (float)(_t.ReloadSeconds * (1 - _share)));
+                    return new ScudTick(false, Vector3.Zero, 0, taken);
+                }
+                break;
             case ScudLauncherState.Aborting:
             case ScudLauncherState.Reloading:
                 if (_fsm.Tick(dt)) ToStowed();
@@ -315,6 +358,13 @@ public sealed class ScudLauncher
         if (atScreen) _fsm.Enter(ScudLauncherState.Targeting);
         else ToStowed();
         ProposalDropped?.Invoke(why);
+    }
+
+    void DropLoad(ScudLoadCancel why)
+    {
+        _cart = 0;
+        _fsm.Enter(ScudLauncherState.Empty);
+        LoadDropped?.Invoke(why);
     }
 
     void ToStowed()
@@ -338,7 +388,7 @@ public static class ScudRules
 
     /// <summary>States in which the truck's brakes are on and its driver's input is ignored.</summary>
     public static bool Immobilises(ScudLauncherState s) =>
-        s is ScudLauncherState.Erecting or ScudLauncherState.Launching or ScudLauncherState.Spent or ScudLauncherState.Lowering or ScudLauncherState.Aborting or ScudLauncherState.Reloading;
+        s is ScudLauncherState.Erecting or ScudLauncherState.Launching or ScudLauncherState.Spent or ScudLauncherState.Lowering or ScudLauncherState.Aborting or ScudLauncherState.Reloading or ScudLauncherState.Loading;
 
     /// <summary>Horizontal distance between two points, metres.</summary>
     public static float Range(Vector3 a, Vector3 b)
@@ -369,13 +419,23 @@ public static class ScudRules
         _ => 0f,
     };
 
-    /// <summary>Whether the rocket is drawn on the rack (the model's <c>missile</c> node): from the stowed rocket to the ignition, an aborted one, and a reload's second half.</summary>
-    public static bool RocketOnRack(ScudLauncherState s, float elapsed, ScudLauncherData t) => s switch
+    /// <summary>
+    /// Whether the rocket is drawn on the rack (the model's <c>missile</c> node): from the stowed rocket to the ignition, an aborted one, and the last half of a reload. <paramref name="left"/> is the state's
+    /// clock left (infinity when none): a reload from the admin starts with the whole of it, one from a cart (<see cref="ScudLauncherState.Loading"/> first) with the second half, so both show it for the last half.
+    /// </summary>
+    public static bool RocketOnRack(ScudLauncherState s, float left, ScudLauncherData t) => s switch
     {
         ScudLauncherState.Stowed or ScudLauncherState.Targeting or ScudLauncherState.Proposed or ScudLauncherState.Erecting or ScudLauncherState.Launching or ScudLauncherState.Aborting => true,
-        ScudLauncherState.Reloading => elapsed >= (float)t.ReloadSeconds * 0.5f,
+        ScudLauncherState.Reloading => left <= (float)t.ReloadSeconds * 0.5f + 1e-3f,
         _ => false,
     };
+
+    /// <summary>
+    /// The angle a steered axle's wheels take, radians (positive: to the left, as Godot's Y turn): the truck turns about a point on the line of its fixed axles, so a wheel
+    /// <paramref name="arm"/> metres ahead of that line turns by atan(arm x curvature). <paramref name="curvature"/> is the path's, 1 / radius, positive to the left, negative reversing into
+    /// the same wheel angle (the caller signs it by the direction of travel). Held to <paramref name="max"/>.
+    /// </summary>
+    public static float WheelAngle(float arm, float curvature, float max = 0.6f) => Math.Clamp(MathF.Atan(arm * curvature), -max, max);
 
     /// <summary>Whether the screen may be opened in this state (the operator's key, the driver's feed).</summary>
     public static bool ScreenAvailable(ScudLauncherState s) => s is ScudLauncherState.Stowed or ScudLauncherState.Targeting or ScudLauncherState.Proposed;

@@ -24,12 +24,12 @@ public readonly struct TowLoad
 
     public static TowLoad None => default;
 
-    /// <summary>The load of <paramref name="trailer"/> on <paramref name="tractor"/>.</summary>
-    public static TowLoad Of(VehicleDef tractor, VehicleDef trailer)
+    /// <summary>The load of <paramref name="trailer"/> on <paramref name="tractor"/>; <paramref name="loaded"/> false: the trailer's empty mass (a rocket cart without its missile).</summary>
+    public static TowLoad Of(VehicleDef tractor, VehicleDef trailer, bool loaded = true)
     {
         var tow = tractor.Tow ?? throw new ArgumentException($"{tractor.Id} has no tow block", nameof(tractor));
         var tr = trailer.Trailer ?? throw new ArgumentException($"{trailer.Id} has no trailer block", nameof(trailer));
-        var ratio = tractor.Mass / (tractor.Mass + tr.Mass);
+        var ratio = tractor.Mass / (tractor.Mass + tr.MassFor(loaded));
         return new TowLoad(ratio, ratio, tow.SpeedFraction, tow.LateralScale);
     }
 }

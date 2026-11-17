@@ -89,14 +89,14 @@ public partial class NetServer
 
     /// <summary>
     /// THE hook: a rocket cart that was carrying its missile is destroyed (bullets, a blast, a crash, a chain reaction; <paramref name="cart"/> is already destroyed, its return timer set and its tractor
-    /// let go) at <paramref name="position"/>, credited to <paramref name="attackerId"/> (0: nobody). For now it is an ordinary vehicle explosion; the Scud event replaces this body with the big blast.
-    /// An empty cart never comes here: it blows up as a small ordinary vehicle.
+    /// let go) at <paramref name="position"/>, credited to <paramref name="attackerId"/> (0: nobody). It is the Scud blast (<see cref="ScudBlast"/>) where the cart stood, credited to whoever shot it. Other loaded
+    /// carts in the blast's damage are doomed and go up in their turn (<see cref="ScudBlastRules.ChainDelay"/>), each once: a doomed or destroyed vehicle takes no second date. An empty cart never comes here: it blows
+    /// up as a small ordinary vehicle.
     /// </summary>
     void OnRocketCartDetonated(ServerCar cart, NVec3 position, ushort attackerId)
     {
-        var weapon = cart.LastWeapon != 0 ? cart.LastWeapon : SpecialWeapons.Vehicle;
         GD.Print($"server: rocket cart {cart.Id} detonated at ({position.X:F1},{position.Y:F1},{position.Z:F1}), credited to #{attackerId}");
-        VehicleBlast(cart, new Vector3(position.X, position.Y + 0.8f, position.Z), attackerId, weapon, NVec3.Zero);
+        ScudBlast(position, attackerId);
     }
 
     // ---- what the Scud event calls ----

@@ -42,6 +42,12 @@ public enum ScudNoticeCode : byte
 {
     TooClose = 1, OffMap = 2, Moving = 3, NotOperator = 4, WrongState = 5,
     CrewChanged = 6, Withdrawn = 7, Moved = 8, Timeout = 9, Retarget = 10,
+    /// <summary>A hold on a rocket cart began the reload (to the player who held, and the crew).</summary>
+    LoadStarted = 11,
+    /// <summary>The loading from a cart was dropped: the cart or the truck moved, or the cart was lost; the cart keeps its rocket.</summary>
+    LoadCancelled = 12,
+    /// <summary>The player found the Scud truck (boarded it first): the reward is paid.</summary>
+    EventFound = 13,
 }
 
 /// <summary>
@@ -89,7 +95,7 @@ public static class ScudCodec
 
     public static ScudStateMsg? DecodeState(ReadOnlySpan<byte> d)
     {
-        if (d.Length != StateBytes || d[2] > (byte)ScudLauncherState.Aborting) return null;
+        if (d.Length != StateBytes || d[2] > (byte)ScudLauncherState.Loading) return null;
         var elapsed = F(d, 3); var left = F(d, 7);
         var l = new Vector3(F(d, 15), F(d, 19), F(d, 23));
         if (!Finite(elapsed, left, l.X, l.Y, l.Z)) return null;
@@ -150,7 +156,7 @@ public static class ScudCodec
 
     public static byte[] Encode(ScudNoticeCode n) => new[] { (byte)n };
 
-    public static ScudNoticeCode? DecodeNotice(ReadOnlySpan<byte> d) => d.Length == 1 && d[0] is >= (byte)ScudNoticeCode.TooClose and <= (byte)ScudNoticeCode.Retarget ? (ScudNoticeCode)d[0] : null;
+    public static ScudNoticeCode? DecodeNotice(ReadOnlySpan<byte> d) => d.Length == 1 && d[0] is >= (byte)ScudNoticeCode.TooClose and <= (byte)ScudNoticeCode.EventFound ? (ScudNoticeCode)d[0] : null;
 
     /// <summary>The notice a refused command gets, or null for an Ok.</summary>
     public static ScudNoticeCode? NoticeOf(ScudAnswer a) => a switch
@@ -162,6 +168,9 @@ public static class ScudCodec
         ScudAnswer.WrongState or ScudAnswer.NotAboard => ScudNoticeCode.WrongState,
         _ => null,
     };
+
+    /// <summary>The notice for a dropped loading: the cart or the truck moved, or the cart was lost.</summary>
+    public static ScudNoticeCode NoticeOf(ScudLoadCancel c) => ScudNoticeCode.LoadCancelled;
 
     /// <summary>The notice for a dropped proposal.</summary>
     public static ScudNoticeCode NoticeOf(ScudCancel c) => c switch

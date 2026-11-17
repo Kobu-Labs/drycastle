@@ -35,7 +35,7 @@ A polygon of exactly one zone kind. It marks what the area means in play and nev
 _Avoid_: region, layer, attribute layer, ground type
 
 **Zone kind**:
-What a zone means in play, from a fixed list in code (each needs something in the pipeline or the game to read it): Bigfoot, deer, player spawn, ... Its numbers (density, clearances) are in `rules.yaml`, and it may have a zone for every ground area of some ground types (deer wherever there is forest) without anything drawn; the editor shows one count of all its zones.
+What a zone means in play, from a fixed list in code (each needs something in the pipeline or the game to read it): Bigfoot, Scud truck, deer, player spawn, ... Its numbers (density, clearances) are in `rules.yaml`, and it may have a zone for every ground area of some ground types (deer wherever there is forest) without anything drawn; the editor shows one count of all its zones.
 _Avoid_: event area, spawn area, marker type
 
 **Runtime zone**:
@@ -133,7 +133,7 @@ A single-axle vehicle with no seats that a tractor pulls (vehicles.json `trailer
 _Avoid_: cart (alone), caravan, wagon
 
 **Rocket cart**:
-The trailer that carries one large missile (vehicles.json `rocket_cart`, 6.5 m with its drawbar, about 1500 kg loaded, no seats, never dealt: the Scud event or `/spawn rocket_cart` puts one down). It is Loaded or Empty (machine `RocketCart.Load`, server-owned, one bit of its vehicle record): loaded it has low hit points (`trailer.loaded_hp`, 150) and, destroyed, detonates (the server's `OnRocketCartDetonated`: the Scud blast); empty it has the type's own hit points and blows up as a small ordinary vehicle. A destroyed cart returns to where it was put, loaded.
+The trailer that carries one large missile (vehicles.json `rocket_cart`, 12.6 m with its drawbar because it carries the whole 11.1 m missile, about 3000 kg loaded and 1000 kg empty, no seats, never dealt: the Scud event or `/spawn rocket_cart` puts one down). It is Loaded or Empty (machine `RocketCart.Load`, server-owned, one bit of its vehicle record): loaded it has low hit points (`trailer.loaded_hp`, 150) and, destroyed, detonates (the server's `OnRocketCartDetonated`: the Scud blast); empty it has the type's own hit points and blows up as a small ordinary vehicle. A shot loaded cart detonates with the full Scud blast, credited to its shooter, and a loaded cart in the damage of another Scud blast goes up in its turn (`blast.chain_delay_seconds`), each once. A cart that is emptied (a truck took its rocket) stays empty when it falls out of the world and is put back; it never returns by itself after destruction (`returns` false: the Scud event decides when a new loaded one stands at a bunker). Standing within 5 m of an empty Scud truck, it can be unloaded onto it (see Launcher).
 _Avoid_: missile trailer, Scud trailer, wagon
 
 **Tow hitch / Hitched**:
@@ -368,11 +368,11 @@ What a Lock-on launcher fires: it flies at 160 m/s after the Aircraft it was loc
 _Avoid_: rocket (the bazooka's and the gunship's fly straight), attack missile (that is the killstreak)
 
 **Scud truck**:
-The heavy 8-wheel launcher vehicle (`scud` in `vehicles.json`) of the Scud event: a driver and an operator under one cab, a rack on its back that rises about the rear hinge, and one rocket. It is not dealt at the match start and has no fixed spot (the event, or `/scud spawn`, brings it), cannot tow, and once destroyed it never returns for the match (`returns: false`). Its Launcher fires the Scud missile; its model is the private pack's `scud_truck`, a grey box without it.
+The heavy 8-wheel launcher vehicle (`scud` in `vehicles.json`) of the Scud event: a driver and an operator under one cab, a rack on its back that rises about the rear hinge, and one rocket. It is not dealt at the match start and has no fixed spot (the event, or `/scud spawn`, brings it), cannot tow, and once destroyed it never returns for the match (`returns: false`). Its Launcher fires the Scud missile; its model is the private pack's `scud` (8 wheels, the front two axles steer; two half cabs with the rocket's nose between them), a grey box without it.
 _Avoid_: launcher (that is the machine on it), Scud (alone: the missile)
 
 **Launcher**:
-The machine on a Scud truck (`Scud.Launcher`, `ScudLauncher`, server-owned): the rocket on its rack, the operator's lock, the crew's confirmations and the rack's clock. Stowed, then Targeting (the operator has the targeting screen open), Proposed (a Lock point is placed), Erecting (about 8 s, the truck brakes and ignores its driver), Launching (about 2 s of ignition), Spent, Lowering, Empty (needs a reload), Reloading, back to Stowed; an aborted erect goes through Aborting back to Stowed with the rocket kept. One rocket only: after the launch the truck is Empty until a rocket cart reloads it (`TryReloadScud`, about 10 s) or an admin does (`/scud reload`). The client's own screen mode is `Scud.Screen` (closed, the operator's targeting screen, or the read-only feed).
+The machine on a Scud truck (`Scud.Launcher`, `ScudLauncher`, server-owned): the rocket on its rack, the operator's lock, the crew's confirmations and the rack's clock. Stowed, then Targeting (the operator has the targeting screen open), Proposed (a Lock point is placed), Erecting (about 8 s, the truck brakes and ignores its driver), Launching (about 2 s of ignition), Spent, Lowering, Empty (needs a reload), Loading and Reloading, back to Stowed; an aborted erect goes through Aborting back to Stowed with the rocket kept. One rocket only: after the launch the truck is Empty until it is reloaded: from a loaded Rocket cart within 5 m of its hull (a player in the truck, or on foot within 4 m of it, holds interact for 1 s: Loading for the first half of the reload with the cart still loaded, the truck braked, cancelled back to Empty with the cart untouched if the truck or cart moves away or either is destroyed; at the half way point the rocket leaves the cart, which is Empty from then on, and appears on the rack through Reloading), or by `TryReloadScud` (the same 10 s with no cart) or an admin (`/scud reload`, at once). The client's own screen mode is `Scud.Screen` (closed, the operator's targeting screen, or the read-only feed).
 _Avoid_: rack (that is the part that rises), silo
 
 **Lock point**:
@@ -579,11 +579,11 @@ The floor of the base, with the intel screen on the wall of its far end, facing 
 _Avoid_: briefing room, war room, control room
 
 **Intel screen**:
-The big military-styled wall screen in the intel room. For each announced event it shows what it is, when it begins (a countdown, then "under way"), the risks, where (a grid reference and a map of the surroundings; none for an event with no place) and an emblem of its kind. With several events it shows one at a time. With none it says all is quiet. An admin's test event carries a "not a real event" tag. It is a client-only texture; nothing on it can be used or shot.
+The big military-styled wall screen in the intel room. For each announced event it shows what it is, when it begins (a countdown, then "under way"), the risks, where (a grid reference and a map of the surroundings; for an event whose place is an area, the centre's reference with the radius in cells and the dashed **Search area** circle on the map; none for an event with no place) and an emblem of its kind. With several events it shows one at a time. With none it says all is quiet. An admin's test event carries a "not a real event" tag. It is a client-only texture; nothing on it can be used or shot.
 _Avoid_: terminal, monitor, TV
 
 **Intel board**:
-The server's list of announced events (each: name, kind, start time, description, risks, an optional place), sent whole to every client at each change and to a joiner. The intel screen draws it. An event is on it from its announcement until it is over. This is the one thing an event gives the announcement; the event itself is none of its business.
+The server's list of announced events (each: name, kind, start time, description, risks, an optional place: a point, or an area, a centre and a radius in metres, the **Search area**), sent whole to every client at each change and to a joiner. The intel screen draws it. An event is on it from its announcement until it is over. This is the one thing an event gives the announcement; the event itself is none of its business.
 _Avoid_: event list, schedule
 
 **Event announcement**:
@@ -593,6 +593,14 @@ _Avoid_: alert, notification, warning (the HUD's helicopter warning is another t
 **Event**:
 A short, time-limited happening in the village with a challenge and a reward, such as the Bigfoot. An Event is started by an admin with `/event <name>` (there is no scheduler yet), and only one runs at a time. It is active until it is **won** (its challenge is beaten: the reward is given) or **despawned** (it timed out or an admin cancelled it: no reward). What it does belongs to its kind; the lifecycle is the same for all (`EventRun`, `EventBook`). It can be announced on the Intel board; the Bigfoot's first version is not.
 _Avoid_: quest, mission, mode (a match mode is another thing), wave
+
+**Scud event**:
+The Event started with `/event scud` (`ScudEventRun`, `NetServer.ScudEvent.cs`, docs/events/scud.md): a Scud truck is hidden at a baked point of a `scud` zone (or, on a map with none, on open ground away from the players), a loaded Rocket cart is put beside each Bunker, and the Intel board says "Top secret weapon located" with a **Search area**. It is **won** by the first human player to board the truck: XP to them, the board entry and the circle withdrawn, the slot free; the truck then stays as an ordinary vehicle, and the carts (replaced at their bunkers 10 minutes after one is emptied or destroyed) stay with it, until it is destroyed. Nobody boards it within 20 minutes, or it is destroyed unfound, or a round ends: truck and carts are removed and nothing is paid. Nothing shows the truck on a map until it is found.
+_Avoid_: Scud mission, Scud hunt
+
+**Search area**:
+A circle on the Intel board and the tactical map that an event is somewhere inside (the Scud truck): `search_radius_cells` (9) grid cells of the tactical map's grid, drawn as a dashed ring with a small cross at its centre. The centre is the truck's place moved by a random vector of up to 97 % of the radius, so the truck is uniformly anywhere inside and the centre says nothing about where; the board gives the centre's grid reference and the radius in cells. It is the only place an event may have besides an exact point.
+_Avoid_: zone (that is a map polygon), radius (alone), marker
 
 **Bigfoot**:
 The first Event: a giant, twice a player's height, that spawns at a baked point of an area with `event spawn: bigfoot` (or, on a map with none, near a random player as a dev fallback) and hunts the players. It is a **world entity** with its own brain (`Bigfoot`), not a bot: it has no player health or weapons, ignores the navmesh, walks a straight line over the terrain towards the nearest player (trees do not stop it, buildings do), and has a **Hit count** instead of hit points. Its attacks come with its phases: it hurls tree trunks (phase one); stomps and throws vehicles (two); grabs a player, flails with them and launches them, at another player when there is one (three); everything it does to a player is 2 to 5 damage. When it dies the Event is won: players credited get XP, and footsteps lead to a Corpse that carries the Bigfoot head. Every number is in `bigfoot.json`.

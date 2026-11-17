@@ -11,6 +11,7 @@ Glass panes on vehicles and buildings have hit points, crack as they lose them a
 | Car | `vehicles.json` `glass` | windscreen, rear, two side |
 | War jeep | `vehicles.json` `glass` | windscreen, rear, two side |
 | Humvee | `vehicles.json` `glass` (written by hand from `docs/research/scud-models-facts.md`; the private model has the `glass_N` nodes) | two windscreen halves, a front and a rear door window on each side (6) |
+| Scud truck | `vehicles.json` `glass` (written by hand from `docs/research/scud-models-facts.md` with the glass nodes' 0.37 m offset, see below; the private model has the `glass_N` nodes) | two windscreen halves, a front and a rear door window on each side, a corner window on each side (8; the two small windows on the inner walls beside the missile are painted, not panes) |
 | Bus | `vehicles.json` `glass` | windscreen and its two wrapped corners, rear, six left windows, four right windows, four door leaves (18) |
 | Flak truck | `vehicles.json` `glass` | two windscreen halves, a door window and a quarter light on each side (6) |
 | Utility helicopter | `vehicles.json` `glass` | two windscreen halves, two cockpit doors |
@@ -19,6 +20,8 @@ Glass panes on vehicles and buildings have hit points, crack as they lose them a
 The motorcycle, bicycle, quad and amphibious transport have no glass. The utility helicopter also has two open sides (its cabin has no doors; `open_sides` in `vehicles.json`, written by hand next to the generated `glass` list, which the model script leaves alone).
 
 **Generated models (bus, flak truck, helicopter).** The model script builds every pane as its own node `glass_N` (N = the pane's place in the vehicle's `glass` list) and, when run without an output path, rewrites that list in `vehicles.json`: `centre`, `normal`, `size` (the bounding rectangle) and `outline` (a convex counter-clockwise polygon `[u, v]` in metres from the centre, so a trapezoid or a triangle is its real shape). Do not edit those lists by hand; change the script and run it (`python3 -I scripts/make_bus_model.py`, and the same for `make_flak_model.py` and `make_utility_helicopter_model.py`; the Golf's `python3 scripts/make_golf_mk2_model.py` needs numpy, so no `-I`). The client hides the `glass_N` node while the pane is shattered. Shots, the crack overlay and the fragments use the outline.
+
+**Scud truck.** Same as the Humvee (`glass_0..7`, a list copied from the facts file, windows are real openings), with one correction: the Scud model puts every `glass_N` node 0.37 m towards +z (checked against the GLB), and the facts file gives the panes' centres without it, so `vehicles.json` has the facts' z plus 0.37 (`ScudModelTests` pins it). The cab is covered: both seats are behind the hull.
 
 **Humvee.** Its model (`scripts/make_humvee_model.py`, private pack) builds every pane as a `glass_N` node like the generated ones, but its list is not rewritten by the script: it is copied from the facts file (`scripts/make_scud_models_facts.py`) and `HumveeTests` checks it against `docs/research/scud-models-facts.d/humvee.json`. The windows are real openings, nothing stands behind a shattered pane. The roof gunner is in the open (an exposed seat): rounds that reach him hit him, the passengers stay behind the hull.
 

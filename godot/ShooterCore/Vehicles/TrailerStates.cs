@@ -57,8 +57,8 @@ public sealed class TowLink
     }
 
     /// <summary>What the tractor's step is told while this trailer is on it: the load and the jackknife block. None when not hitched.</summary>
-    public TowEffect Effect(VehicleDef tractor, VehicleDef trailer, in TowGeometry g) =>
-        Hitched ? new TowEffect(TowLoad.Of(tractor, trailer), TowModel.BlockOf(g, Body)) : TowEffect.None;
+    public TowEffect Effect(VehicleDef tractor, VehicleDef trailer, in TowGeometry g, bool loaded = true) =>
+        Hitched ? new TowEffect(TowLoad.Of(tractor, trailer, loaded), TowModel.BlockOf(g, Body)) : TowEffect.None;
 
     /// <summary>The tick of a hitched trailer, after the tractor's own step. False when the world blocks the trailer's new place (the body stays and the caller holds the tractor, <see cref="TowModel.Hold(ref DriveState, in DriveState)"/>).</summary>
     public bool StepHitched(in TowGeometry g, in TractorMotion tractor, float dt, ITrailerWorld? world = null)

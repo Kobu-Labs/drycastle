@@ -38,6 +38,8 @@ public static class ScudStrings
         ("scud.notice.wrong_state", "The launcher cannot do that now"),
         ("scud.notice.crew_changed", "Launch proposal cancelled: the crew changed"), ("scud.notice.withdrawn", "Launch proposal cancelled: a confirmation was withdrawn"),
         ("scud.notice.moved", "Launch proposal cancelled: the truck moved"), ("scud.notice.timeout", "Launch proposal timed out"), ("scud.notice.retarget", "Lock moved: confirm again"),
+        ("scud.notice.load_started", "Loading the rocket from the cart: stay put"), ("scud.notice.load_cancelled", "Loading cancelled: the cart or the truck moved. The cart keeps its rocket"),
+        ("scud.hint.load", "Hold {0}: load the rocket from the cart"), ("scud.notice.event_found", "You found the Scud truck! +{0} XP"), ("scud.line.loading", "Loading the rocket from the cart ({0} s)"),
         // the warning for everyone near the target
         ("scud.incoming", "INCOMING SCUD   {0} s"), ("scud.incoming.where", "GRID {0}   {1} m from you   Get clear or take shelter"),
         // kill feed

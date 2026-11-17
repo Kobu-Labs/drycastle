@@ -151,6 +151,7 @@ public partial class NetClient
                 if (c.Destroyed) continue;
                 _seatOccupants.TryGetValue(c.Id, out var others); // an enemy on any seat: not on the map (#313)
                 if (HudLogic.HideEnemyOccupiedVehicle(c.Driver, others, _myId, IsMapEnemy)) continue;
+                if (Vehicles != null && c.Kind < Vehicles.Vehicles.Count && ScudTruckHidden(Vehicles.Vehicles[c.Kind])) continue; // the Scud event's truck is not on any map until it is found
                 _carDots.Add(new Vector2(c.Node.GlobalPosition.X, c.Node.GlobalPosition.Z));
             }
             _hud.Minimap.SetVehicleDots(_carDots);

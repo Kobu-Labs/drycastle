@@ -1387,6 +1387,44 @@ stateDiagram-v2
 - **Draining**: Stop() ran: no new input; what was written still plays out, then the echo tail, then ffmpeg ends. A Start() here cuts the tail short.
 - **Failed**: ffmpeg missing, died, or stopped producing audio: logged once, the feed is silent until the next phase. Never unprocessed audio.
 
+## Scud.CartSlot
+
+One bunker's rocket cart during a Scud event: standing loaded, waiting to be replaced, or closed with the truck.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Stocked
+    Closed --> Restocking
+    Stocked --> Restocking
+    Stocked --> Closed
+    Restocking --> Stocked
+    Restocking --> Closed
+```
+
+- **Closed**: No truck is out: no cart is put at the bunker.
+- **Stocked**: A loaded cart was put at the bunker. It stays the slot's until it is emptied, destroyed or removed, wherever it is towed to.
+- **Restocking**: The cart is gone or empty: the slot counts the cooldown (clock: cart_cooldown_seconds), then the host puts a new loaded cart at the bunker. A blocked place is tried again after a short wait.
+
+## Scud.Event
+
+The Scud event: the truck hidden in its search area, found when a player boards it, or gone.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Searching
+    Searching --> Found
+    Searching --> Over
+    Found --> Over
+    Over --> Searching
+```
+
+- **Idle**: No Scud event has run on this server yet.
+- **Searching**: The truck stands hidden and the search area is on the intel board and the tactical map (clock: the despawn time). The first player to board it finds it; nobody within the time, a destroyed truck, a cancel or a new round ends it with no reward.
+- **Found**: A player boarded the truck: the reward is paid, the intel entry and the search circle are gone and the event slot is free. The truck stays as an ordinary vehicle and the rocket carts keep standing at the bunkers until it is destroyed (or the round ends).
+- **Over**: The truck is gone (destroyed, despawned, or retired by a new round) and the carts with it. A new event may begin.
+
 ## Scud.Launcher
 
 A Scud truck's launcher: the rocket on its rack, the operator's lock, the crew's confirmations, the rack rising, the launch, the empty rack and the reload.
@@ -1407,6 +1445,9 @@ stateDiagram-v2
     Lowering --> Empty
     Empty --> Reloading
     Empty --> Stowed
+    Empty --> Loading
+    Loading --> Reloading
+    Loading --> Empty
     Reloading --> Stowed
     Aborting --> Stowed
 ```
@@ -1418,9 +1459,27 @@ stateDiagram-v2
 - **Launching**: The rack is up and the rocket ignites (clock: ignition seconds). When it runs out the missile entity spawns and the rack is empty. Cannot be aborted.
 - **Spent**: The rack is up and empty for a moment (clock: spent hold seconds), the launch smoke clears, then the rack lowers.
 - **Lowering**: The empty rack lowers (clock: lower seconds). The truck is still immobilised.
-- **Empty**: The rack is down with no rocket. The truck drives again but cannot fire until a reload: the rocket cart's TryReloadScud, or an admin's instant reload (Empty to Stowed).
-- **Reloading**: A rocket is being loaded (clock: reload seconds). The truck is immobilised; the rocket shows on the rack for the second half.
+- **Empty**: The rack is down with no rocket. The truck drives again but cannot fire until a reload: a hold on a loaded rocket cart beside it (BeginLoad), TryReloadScud, or an admin's instant reload (Empty to Stowed).
+- **Reloading**: A rocket is being loaded (clock: reload seconds, or what is left of it after the transfer). The truck is immobilised; the rocket shows on the rack for the last half of the reload.
 - **Aborting**: The operator aborted the erect: the rack lowers again from where it got to, at the lowering rate, and the rocket is kept. Then Stowed.
+- **Loading**: The first half of a reload from a rocket cart (clock: reload seconds x transfer share). The truck is immobilised and the rack still empty; the bound cart keeps its rocket and must stay alive, loaded and in reach and neither it nor the truck may move, else back to Empty with the cart untouched. When the clock runs out the rocket leaves the cart (the host's order) and the second half begins.
+
+## Scud.ReloadKey
+
+The interact key beside a truck with an empty rack and a loaded cart: a tap gets in or out, a hold starts loading the rocket.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Holding
+    Holding --> Idle
+    Holding --> Spent
+    Spent --> Idle
+```
+
+- **Idle**: Key up. A press starts the hold.
+- **Holding**: Key down, counting the hold. Let go early: a tap, the key does what it always does (get in or out). Held to the end: the loading starts.
+- **Spent**: The hold did its work (or the key was down when the offer appeared): nothing happens until the key is let go.
 
 ## Scud.Screen
 

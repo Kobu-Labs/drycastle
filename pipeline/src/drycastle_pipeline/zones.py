@@ -1,6 +1,7 @@
 """Zones: what a marked area means in play (ADR 0022). The catalog of zone kinds and the candidate points for the server.
 
-A **zone kind** says what an area means in play: ``bigfoot`` (the event may start there), ``player_spawn`` (players may
+A **zone kind** says what an area means in play: ``bigfoot`` (the event may start there), ``scud`` (the Scud event hides its truck
+there), ``player_spawn`` (players may
 spawn there), one kind per wild species (``deer`` ... that species may live there). The kinds are a fixed catalog in code
 (:data:`KINDS`): a kind needs something in the pipeline or the game that reads it, so a new kind is one entry here, its
 section in ``rules.yaml`` ``zones`` and the code that reads it. The editor shows the catalog from ``parcels.json``
@@ -47,6 +48,8 @@ FILE_NAME = "zone_points.json"
 #: The kind that is read by ``props.make_spawns`` instead of being exported as points.
 PLAYER_SPAWN = "player_spawn"
 BIGFOOT = "bigfoot"
+#: The Scud event's truck hides at one of the points of this kind (``NetServer.PickEventSpawn("scud")``); with no zone drawn the server falls back to open ground.
+SCUD = "scud"
 
 #: The wildlife species that are zone kinds. They must match the species ids of godot/shooter/data/animals.json
 #: (a test checks it); the server spawns a species at the points of its kind.
@@ -77,6 +80,7 @@ WILDLIFE_TINT = "#6bc27a"
 #: The catalog, in order: the order of ``zone_kinds`` of parcels.json and of the entries of zone_points.json.
 KINDS: tuple[ZoneKind, ...] = (
     ZoneKind(BIGFOOT, "Bigfoot", "event", EVENT_TINT),
+    ZoneKind(SCUD, "Scud truck", "event", EVENT_TINT),
     ZoneKind(PLAYER_SPAWN, "Player spawn", "player", PLAYER_TINT),
     *(ZoneKind(w, w.capitalize(), "wildlife", WILDLIFE_TINT) for w in (*WILDLIFE, *FLOCKS)),
 )

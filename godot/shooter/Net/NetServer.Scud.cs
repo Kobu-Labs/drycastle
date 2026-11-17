@@ -24,6 +24,8 @@ public partial class NetServer
         public required ScudLauncher Launcher;
         public ScudStateMsg? Sent;
         public float ViewX, ViewZ, ViewZoom = 1f;
+        /// <summary>The player who held the key to start the loading from a cart (told how it went even when on foot).</summary>
+        public ushort Starter;
         public bool ViewDirty;
         public double ViewSentAt;
     }
@@ -46,10 +48,11 @@ public partial class NetServer
     {
         if (car.Def.Launcher == null) return null;
         if (_scudRigs.TryGetValue(car.Id, out var rig)) return rig;
-        rig = new ScudRig { Launcher = new ScudLauncher(Scud.Launcher) };
+        rig = new ScudRig { Launcher = new ScudLauncher(Scud.Launcher, Scud.Reload) };
         _scudRigs[car.Id] = rig;
         var id = car.Id;
         rig.Launcher.ProposalDropped += why => ScudNotifyCrew(id, ScudCodec.NoticeOf(why));
+        rig.Launcher.LoadDropped += why => { ScudNotifyCrew(id, ScudCodec.NoticeOf(why)); ScudNotifyStarter(rig, ScudCodec.NoticeOf(why)); };
         return rig;
     }
 
@@ -129,8 +132,9 @@ public partial class NetServer
             }
             var rig = ScudRigOf(car)!;
             var crew = ScudCrewOf(car);
-            var order = rig.Launcher.Tick(dt, crew, N(car.GlobalPosition));
+            var order = rig.Launcher.Tick(dt, crew, N(car.GlobalPosition), CartSenseOf(car, rig));
             if (order.Launch) LaunchScud(car, order);
+            if (order.TakeCart != 0) TakeRocketFromCart(order.TakeCart);
             if (rig.Launcher.Immobilised && OccupantAt(car, 0) is { } driver)
             {
                 driver.Throttle = 0; driver.Steer = 0; driver.Handbrake = true; // brakes on, the driver's input ignored while the rack moves
@@ -188,6 +192,7 @@ public partial class NetServer
     /// <summary>A new round: the launchers start over, and a truck that never returns is retired instead of reset (hidden, out of its seats).</summary>
     void ScudRoundReset()
     {
+        ScudEventRoundReset(); // the Scud event is over with the round (no reward); the loop below retires its truck and carts
         _scudRigs.Clear();
         foreach (var car in _cars)
         {
@@ -195,6 +200,84 @@ public partial class NetServer
             car.Seat.Clear();
             car.Destroy(double.MaxValue);
         }
+    }
+
+    // ---- loading a rocket from a cart ----
+
+    /// <summary>The box of a vehicle on the ground plane, as the reload rules measure it.</summary>
+    static BodyBox BoxOf(ServerCar car) => new(car.GlobalPosition.X, car.GlobalPosition.Z, car.HalfWidth, car.HalfLength, car.State.Yaw);
+
+    /// <summary>Every live rocket cart, as the rules want it.</summary>
+    IEnumerable<ScudCartCandidate> CartCandidates() =>
+        _cars.Where(c => c.Cargo != null && !c.Retired).Select(c => new ScudCartCandidate(c.Id, BoxOf(c), c.Cargo!.Loaded && !c.Life.Doomed, !c.Destroyed));
+
+    /// <summary>What the launcher is told about the cart it is loading from this tick: alive, still loaded, not doomed and in reach (null when it is loading from none).</summary>
+    ScudCartSense? CartSenseOf(ServerCar truck, ScudRig rig)
+    {
+        if (rig.Launcher.Cart == 0) return null;
+        var cart = ScudCarById(rig.Launcher.Cart);
+        if (cart == null) return new ScudCartSense(false, default);
+        var ok = ScudReloadRules.NearestCart(BoxOf(truck), CartCandidates().Where(k => k.Id == cart.Id), (float)Scud.Reload.CartReachM + 1f) != null; // a metre of slack: the cart settling is not leaving
+        return new ScudCartSense(ok, N(cart.GlobalPosition));
+    }
+
+    /// <summary>The transfer point: the rocket leaves the cart (it is empty from now on, and weighs and breaks like an empty one).</summary>
+    void TakeRocketFromCart(ushort cartId)
+    {
+        if (ScudCarById(cartId) is { } cart && SetRocketCartLoaded(cart, false)) GD.Print($"server: rocket cart {cartId} unloaded onto a Scud truck");
+    }
+
+    /// <summary>
+    /// The truck a player may load from a cart now, and the cart: the truck they ride (any seat), else the nearest launcher truck within <see cref="ScudReloadData.PlayerReachM"/> of the player on foot (not while loot lies in
+    /// reach: that key is the loot's); the rack must be empty and a loaded, live cart within <see cref="ScudReloadData.CartReachM"/> of the truck. Null when nothing is on offer.
+    /// </summary>
+    (ServerCar Truck, ServerCar Cart)? ScudReloadOffer(Client c)
+    {
+        if (_scudRigs.Count == 0) return null;
+        var p = c.Body.GlobalPosition;
+        IEnumerable<ServerCar> trucks;
+        if (c.Car != null) trucks = c.Car.Def.Launcher != null ? new[] { c.Car } : Array.Empty<ServerCar>();
+        else if (LootInReach(c) != null) return null;
+        else trucks = _cars.Where(t => t.Def.Launcher != null);
+        foreach (var truck in trucks)
+        {
+            if (truck.Destroyed || truck.Retired || !_scudRigs.TryGetValue(truck.Id, out var rig)) continue;
+            var box = BoxOf(truck);
+            if (!ScudReloadRules.MayStart(rig.Launcher.State, c.Car == truck, box, p.X, p.Z, Scud.Reload)) continue;
+            if (ScudReloadRules.NearestCart(box, CartCandidates(), (float)Scud.Reload.CartReachM) is { } near && ScudCarById(near.Id) is { } cart) return (truck, cart);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The interact key of a player who may be beside a loading offer (<see cref="ScudReloadOffer"/>): with one standing, a press waits to be a tap (true here: the key does what it always does, get in or out of the
+    /// truck) or a hold (the loading starts, false here); with none the key is the plain press. Returns whether the key's usual action runs now.
+    /// </summary>
+    bool ScudUseKey(Client c, bool useDown, bool useEdge, float dt)
+    {
+        var offer = ScudReloadOffer(c);
+        if (offer is not { } o) { c.ReloadKey.Disarm(useDown); return useEdge; }
+        switch (c.ReloadKey.Tick(useDown, dt, (float)Scud.Reload.HoldSeconds))
+        {
+            case ScudKeyAction.Hold: StartLoad(c, o.Truck, o.Cart); return false;
+            case ScudKeyAction.Tap: return true;
+            default: return false;
+        }
+    }
+
+    void StartLoad(Client c, ServerCar truck, ServerCar cart)
+    {
+        if (ScudRigOf(truck) is not { } rig || !rig.Launcher.BeginLoad(cart.Id, N(truck.GlobalPosition), N(cart.GlobalPosition))) return;
+        rig.Starter = c.Id;
+        GD.Print($"server: {c.Name} #{c.Id} began loading Scud truck {truck.Id} from rocket cart {cart.Id}");
+        ScudNotifyCrew(truck.Id, ScudNoticeCode.LoadStarted);
+        if (c.Car != truck) Send(c, new EventMsg((byte)EventKind.ScudNotice, ScudCodec.Encode(ScudNoticeCode.LoadStarted)));
+    }
+
+    void ScudNotifyStarter(ScudRig rig, ScudNoticeCode code)
+    {
+        if (rig.Starter != 0 && _byId.TryGetValue(rig.Starter, out var c) && c.Car == null) Send(c, new EventMsg((byte)EventKind.ScudNotice, ScudCodec.Encode(code))); // those aboard got it with the crew
+        rig.Starter = 0;
     }
 
     // ---- the crew's commands ----
@@ -318,6 +401,7 @@ public partial class NetServer
             if (dmg <= 0) continue;
             // the ones nearest go first, the wave reaching the farther ones a moment later
             var delay = dist <= b.VehicleDestroyRadiusM ? MathF.Min(1.5f, ScudBlastRules.ArrivalSeconds(b, dist)) : 0f;
+            if (car.Cargo?.Detonates(car.Def) == true) delay = ScudBlastRules.ChainDelay(b, dist); // a loaded rocket cart goes up in its turn, once (a doomed vehicle keeps its first date)
             DamageVehicle(car, dmg, attackerId, ScudWeapon, delay);
             if (dist <= b.VehicleDestroyRadiusM) destroyed++;
         }

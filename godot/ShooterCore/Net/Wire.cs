@@ -335,7 +335,8 @@ public static class Wire
     //   v66 a fifth seat (the Humvee, ADR 0026): the seats record carries the occupant of seat 4 in its position X (seats 1..3 are unchanged); the seat switch request and state accept up to 5 seats
     //   v67 trailers (the rocket cart, towing): a trailer's vehicle record carries the id of the tractor it is hitched to in the pitch field (0: loose) in place of a driver's, and bit 6 of its health byte says it is loaded (VehicleRecord.MakeTrailer); a hitched trailer's articulation is its record's yaw less the tractor's
     //   v68 the Scud truck: events 80-85 (the launcher's command, state, the operator's camera, the launch, the impact and a notice), world entity 11 (the Scud missile), special weapon 237, vehicles.json "launcher"
-    public const byte ProtocolVersion = 68;
+    //   v69 loading a Scud truck from a rocket cart: the launcher state byte may be 10 (Loading) and the Scud notice codes 11 (LoadStarted), 12 (LoadCancelled) and 13 (EventFound); the Scud event (/event scud): an intel board entry may carry an AREA, a centre and a radius in metres (flags bit 4, a f32 radius after the centre)
+    public const byte ProtocolVersion = 69;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

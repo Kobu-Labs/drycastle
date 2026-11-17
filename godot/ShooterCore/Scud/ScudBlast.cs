@@ -49,6 +49,9 @@ public static class ScudBlastRules
         return (float)b.ShakeAmplitude * k * k;
     }
 
+    /// <summary>When a loaded rocket cart that this blast dooms goes up, seconds after the blast: the wave's travel plus <see cref="ScudBlastData.ChainDelaySeconds"/>.</summary>
+    public static float ChainDelay(ScudBlastData b, float distance) => ArrivalSeconds(b, distance) + (float)b.ChainDelaySeconds;
+
     /// <summary>Seconds after the blast that its wave and sound reach a camera <paramref name="distance"/> away.</summary>
     public static float ArrivalSeconds(ScudBlastData b, float distance) => distance / (float)b.WaveSpeedMps;
 }

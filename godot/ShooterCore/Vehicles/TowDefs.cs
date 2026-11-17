@@ -49,8 +49,13 @@ public class VehicleTrailerDef
     public float[] Eye { get; set; } = { 0, 0.5f, -1.8f };
     /// <summary>The axle, [x, y, z], on the centre line (x 0). The trailer turns about it: the drawbar is the distance from the eye back to the axle.</summary>
     public float[] Axle { get; set; } = { 0, 0.4f, 0.4f };
-    /// <summary>Mass with its load, kg: the tractor's acceleration and braking scale with it.</summary>
+    /// <summary>Mass with its load, kg: the tractor's acceleration and braking scale with it. The mass of a trailer that carries nothing (or whose load is empty) is <see cref="EmptyMass"/>.</summary>
     public float Mass { get; set; } = 1500;
+    /// <summary>Mass of the trailer without its load (the rocket cart, <see cref="CartCargo"/>), kg. 0: the same as <see cref="Mass"/> (a trailer whose load does not change what it weighs).</summary>
+    public float EmptyMass { get; set; }
+
+    /// <summary>The mass the tractor feels: <see cref="Mass"/> loaded, <see cref="EmptyMass"/> when it is empty (and has one set).</summary>
+    public float MassFor(bool loaded) => loaded || EmptyMass <= 0 ? Mass : EmptyMass;
     /// <summary>Sideways acceleration the trailer's tyres hold, m/s²: a turn that asks more lets the trailer swing out.</summary>
     public float Grip { get; set; } = 5.5f;
     /// <summary>How fast the axle slides out per m/s² over <see cref="Grip"/> (m/s per m/s², that is seconds), and how fast the slide settles (seconds).</summary>
@@ -76,6 +81,7 @@ public class VehicleTrailerDef
         if (MathF.Abs(Eye[0]) > 0.01f || MathF.Abs(Axle[0]) > 0.01f) return "eye and axle are on the centre line (x 0)";
         if (Drawbar < 0.5f) return "the axle must be at least 0.5 m behind the drawbar eye (eye z below axle z)";
         if (Mass <= 0) return "mass must be positive";
+        if (EmptyMass < 0 || EmptyMass > Mass || !float.IsFinite(EmptyMass)) return "empty_mass must be 0 (same as mass) or between 0 and mass";
         if (Grip <= 0 || SwayGain < 0 || SwaySettle <= 0 || RollDecel < 0) return "grip and sway_settle must be positive, sway_gain and roll_decel not negative";
         if (LoadedHp < 0 || !float.IsFinite(LoadedHp)) return "loaded_hp must not be negative";
         return null;

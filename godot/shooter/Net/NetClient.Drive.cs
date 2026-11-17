@@ -122,6 +122,7 @@ public partial class NetClient
             _drive.TrailerWorld = probe; _drive.TrailerId = trailer.Id;
             _drive.Predict.AttachTrailer(tdef, g, TowModel.Pose(g, server.Position, server.Yaw, phi), probe);
         }
+        _drive.Predict.TrailerLoaded = trailer.Trailer?.Loaded ?? true; // a cart emptied under way weighs less from the next step on, as the server's does
         return phi;
     }
 

@@ -179,7 +179,7 @@ public partial class ServerCar : CharacterBody3D
     {
         if (Retired) return; // taken out of the world for good: nothing brings it back
         DropLinks(); // a tractor that returns lets its trailer go
-        if (IsTrailer) ResetTrailer();
+        if (IsTrailer) ResetTrailer(repair);
         Asleep = false; RestCount = 0;
         Lives++; // a new life for the lag compensation's pose history (NetServer.SyncCarLife)
         if (Life.Reset(repair))

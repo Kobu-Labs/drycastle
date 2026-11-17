@@ -136,7 +136,7 @@ All inputs and outputs are JSON. Write tools return `summary`, `warnings` and th
 | `move_patch_corner` | `id`, `index`, `position?` `[x,y]` or `offset?` `{dx,dy}` | exactly one of position / offset |
 | `delete_ground_patch` | `id` | |
 | `list_ground_patches` | `near?` `{x,y,radius_m?}` or `{parcel,radius_m?}`, `limit?` | id, `type`, `water_y?`, `area_m2`, `points`, `bbox`, `centroid`; `distance_m` when `near` |
-| `list_zone_kinds` | | the catalog of zone kinds (`bigfoot`, `player_spawn`, one per wild species): label, group, `where_ground` (the ground types the kind has a zone for wherever they lie, `null`: only the zones you create), the number of its `zones` and the density rule of its candidate points |
+| `list_zone_kinds` | | the catalog of zone kinds (`bigfoot`, `scud`, `player_spawn`, one per wild species): label, group, `where_ground` (the ground types the kind has a zone for wherever they lie, `null`: only the zones you create), the number of its `zones` and the density rule of its candidate points |
 | `create_zone` | `kind` (a kind of `list_zone_kinds`), and either `polygon` or `parcel` + `points` as for a patch | new `Z-NNNN`: an area of that kind; never changes the terrain, zones overlap freely; after the next full run the export draws candidate points inside it for the server (`player_spawn`: spawn candidates on the ground inside it) |
 | `set_zone_kind` | `id`, `kind`, `from_kind?` | for an `A-` zone (see `list_zones`) give its current kind as `from_kind`: it becomes a new `Z-` zone of `kind` |
 | `move_zone_corner` | `id`, `index`, `position?` or `offset?`, `kind?` | as `move_patch_corner`; an `A-` zone needs its `kind` and is returned as a new `Z-` zone |
