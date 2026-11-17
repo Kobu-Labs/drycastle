@@ -119,7 +119,8 @@ public static class DriveModel
     public static float WaterDrag(VehicleDef def) =>
         (def.WaterAcceleration - def.Drive!.Water.CoastDrag * def.WaterTopSpeed) / (def.WaterTopSpeed * def.WaterTopSpeed);
 
-    public static void Step(ref DriveState s, VehicleDef def, in DriveInput input, float dt, IDriveWorld world)
+    /// <param name="tow">What a trailer on the hook does to the step (<see cref="TowLoad"/>: the pull, the brake, the top speed and the grip it takes; <see cref="TowBlock"/>: no folding it further than its limit). The default is no trailer, and then the step is exactly what it is without the argument.</param>
+    public static void Step(ref DriveState s, VehicleDef def, in DriveInput input, float dt, IDriveWorld world, in TowEffect tow = default)
     {
         var d = def.Drive!;
         var land = d.Land; var wet = d.Water;
@@ -169,16 +170,16 @@ public static class DriveModel
             {
                 // the key against the travel: part of the brake bites at once, the rest comes in with the ramp
                 var bite = land.BrakeBite + (1f - land.BrakeBite) * Math.Clamp(-MathF.Sign(u) * s.Throttle, 0f, 1f);
-                u = FlightMath.Approach(u, 0, def.Brake * bite * dt);
+                u = FlightMath.Approach(u, 0, def.Brake * tow.Load.BrakeScale * bite * dt);
             }
             else if (MathF.Abs(s.Throttle) > Dead && key * s.Throttle >= 0)
             {
                 // driven (a released key's ramp still pushes while it runs out, so lifting off is not a step)
-                var limit = s.Throttle > 0 ? def.TopSpeed : def.TopSpeed * land.ReverseTopFraction;
+                var limit = s.Throttle > 0 ? def.TopSpeed * tow.Load.TopSpeedScale : def.TopSpeed * tow.Load.TopSpeedScale * land.ReverseTopFraction;
                 var along = u * MathF.Sign(s.Throttle); // the speed in the direction it is driven
                 var launch = 1f + (land.LaunchBoost - 1f) * MathF.Max(0f, 1f - MathF.Abs(u) / land.LaunchSpeed);
                 var fade = 1f - MathF.Pow(Math.Clamp(along / limit, 0f, 1f), land.PowerCurve);
-                if (along <= limit) u += def.Acceleration * launch * fade * s.Throttle * dt;
+                if (along <= limit) u += def.Acceleration * tow.Load.AccelScale * launch * fade * s.Throttle * dt;
                 else u = FlightMath.Approach(u, limit * MathF.Sign(s.Throttle), (land.CoastDecel + land.CoastDrag * MathF.Abs(u)) * dt); // faster than it can drive (out of a drop): it rolls down to it
             }
             else u = FlightMath.Approach(u, 0, (land.CoastDecel + land.CoastDrag * MathF.Abs(u)) * dt);
@@ -186,6 +187,7 @@ public static class DriveModel
             // the wheel sets a circle; the tyres hold only so much sideways, which caps the yaw rate at speed
             wantYaw = -s.Steer * u / TurnRadiusAt(def, u);
             var hold = MathF.Abs(u) > 0.5f ? land.Grip / MathF.Abs(u) : float.PositiveInfinity;
+            if (tow.Hitched && MathF.Abs(u) > 0.5f) hold = MathF.Min(hold, def.MaxLateralAccel * tow.Load.LateralScale / MathF.Abs(u)); // the trailer's weight: the bend must be wider
             wantYaw = Math.Clamp(wantYaw, -hold, hold) * (input.Handbrake ? land.HandbrakeSteer : 1f);
             yawResponse = land.YawResponse;
         }
@@ -193,6 +195,7 @@ public static class DriveModel
         // ---- yaw: the rate follows what the wheel or the helm asks for; the heading turns, the motion keeps its own way
         s.YawRate += (wantYaw - s.YawRate) * (1f - MathF.Exp(-yawResponse * dt));
         if (MathF.Abs(wantYaw) < StillRate && MathF.Abs(s.YawRate) < StillRate) s.YawRate = 0;
+        if (tow.Block.Active) tow.Block.Clamp(ref u, ref w, ref s.YawRate); // the trailer is at its limit: what would fold it further is taken
         var turn = s.YawRate * dt;
         s.Yaw = FlightMath.Wrap(s.Yaw + turn);
         var (st, ct) = MathF.SinCos(turn);

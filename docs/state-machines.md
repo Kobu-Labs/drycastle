@@ -1425,6 +1425,22 @@ stateDiagram-v2
 - **Raiding**: The convoy's vans are launched one after another (no clock of its own: the convoy-gap clock runs beside) and come and go. Left by Finish (won when every van of the wave is gone, or an admin's end or cancel) or by a round reset.
 - **Over**: Won or cancelled; what was stolen stays stolen. A new /event thieves starts it again, a round reset clears it.
 
+## Trailer.Tow
+
+A trailer: standing loose, pulled by a tractor, or just released and not yet to be latched again.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Loose
+    Loose --> Hitched
+    Hitched --> Released
+    Released --> Loose
+```
+
+- **Loose**: Stands still. The first tractor that reverses its hitch onto the eye (close, lined up) latches it.
+- **Hitched**: The eye is pinned to the tractor's hitch and the trailer follows it (TowModel.Step). Ends on the driver's unhitch request.
+- **Released**: Just unhitched: rolls to a stop, and cannot be latched until the lockout (the tractor's relatch_lockout) has run out; then Loose.
+
 ## Turret.State
 
 A sentry turret: the placing ghost, then armed and idle, acquiring a target (the outplay delay), or aiming and firing.
