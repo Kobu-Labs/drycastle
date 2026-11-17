@@ -55,4 +55,27 @@ public class CropDataTests
         foreach (var (name, spec) in doc.Kinds) Assert.True(CropPlaceholder.For(name, spec).Height > 0);
         Assert.True(CropPlaceholder.For("art_unlisted", new CropKind("artifact", null, Array.Empty<string>())).Height > 0);
     }
+
+    [Fact]
+    public void PlantsThinOutOverTheBandAndNoneStandsAtTheRadius()
+    {
+        const float r = CropSettings.PlantRangeM, band = CropSettings.PlantFadeM;
+        foreach (var t in new[] { 0f, 0.25f, 0.5f, 0.999f })
+        {
+            Assert.Equal(1f, CropSettings.Grow(r - band, t, r, band));        // whole where the band starts
+            Assert.Equal(0f, CropSettings.Grow(r, t, r, band));               // gone at the radius
+            Assert.Equal(0f, CropSettings.Grow(r + 30f, t, r, band));
+            var last = 1f;
+            for (var d = r - band; d <= r; d += 1f)
+            {
+                var g = CropSettings.Grow(d, t, r, band);
+                Assert.True(g <= last);                                       // never grows going away
+                last = g;
+            }
+        }
+        // in the middle of the band some plants stand and some do not: the crop thins, it does not end
+        var mid = r - band / 2f;
+        Assert.Equal(1f, CropSettings.Grow(mid, 0.9f, r, band));
+        Assert.Equal(0f, CropSettings.Grow(mid, 0.1f, r, band));
+    }
 }
