@@ -475,4 +475,9 @@ public class SplashDef
     /// kills the horizontal part within a few ticks. 0 disables knockback.
     /// </summary>
     public float KnockbackSpeed { get; set; } = 4.5f;
+    /// <summary>
+    /// The speed the blast's Blast wave leaves at, m/s (weapons.json <c>wave_speed</c>); 0 keeps the dust's own (<see cref="DustRules.FrontSpeedMps"/>).
+    /// It rides the Explosion event. Only a blast of <see cref="DustRules.FrontMinRadius"/> or more has a wave.
+    /// </summary>
+    public float WaveSpeed { get; set; }
 }

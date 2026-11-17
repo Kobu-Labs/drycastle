@@ -35,7 +35,8 @@ Weapon categories: machine guns, assault rifles, SMGs, shotguns, snipers (primar
 knife is special.
 
 RPG (#348, replaces the bazooka): unguided, one rocket in the tube and two in reserve, 4 s reload, 60 m/s for 4 s (240 m), 120 damage,
-7 m blast (below `DustRules.FrontMinRadius`, so a Dust cloud and no Blast wave), half damage to its owner. It is the bazooka's rocket path
+10 m blast (at or above `DustRules.FrontMinRadius`, so a Dust cloud and a Blast wave, which leaves at 200 m/s: `splash.wave_speed`, carried by the
+Explosion event; the same as `/explode 10 <distance> 200`), half damage to its owner. It is the bazooka's rocket path
 unchanged (`Rocket`, `RocketFlight.Step`, `ProjectileMath`); only the numbers and the look are new. On the client (`RocketFx`, `WeaponFx`):
 the paid pack's launcher (`props/rpg_01`, its rocket head hidden while the tube is empty) and rocket head in flight (`props/rpg_rocket_01`),
 a cloud trail from a pooled emitter laid only within 220 m of the camera, a backblast out of the tube's rear and the tube's jump
@@ -231,7 +232,7 @@ is resolved at once.
 
 Gunship rockets (#159) have their own 8 m blast: a `splash` block on the rockets entry in killstreaks.json (radius 8, full damage
 to 2 m, edge 20, no self damage). The rocket sim takes it per launch (`Rocket.Blast`, `ProjectileMath.WithBlast`), so the rpg
-keeps weapons.json's 7 m, and the explosion's radius rides the Explosion event (protocol 12).
+keeps weapons.json's 10 m, and the explosion's radius rides the Explosion event (protocol 12).
 
 Gunship rocket flight (protocol 16): the rockets entry has `projectile_speed_mps` (250, default 250). A rocket launched with it flies
 at that speed and lives out its whole range: its life is `RocketFlight.LifeFor(range_m, speed)` (range over speed, plus 0.5 s), carried

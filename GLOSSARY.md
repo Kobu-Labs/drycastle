@@ -332,7 +332,7 @@ A flak shell's end by an aircraft: the shell flies straight at 700 m/s, and once
 _Avoid_: proximity fuse (the fuse is how it works, the burst is the thing), flak burst
 
 **RPG**:
-A secondary weapon carried on the shoulder (`weapons.json` `rpg`, unlocked at level 8) that fires one unguided rocket where it is aimed: it flies straight at 60 m/s for up to 240 m and bursts on what it meets with a 7 m blast (a Dust cloud, no Blast wave), half as harmful to the one who fired it. One rocket in the tube and two in reserve. A share of the bots carries it and aims it far more steadily than a gun. It replaced the bazooka (#348).
+A secondary weapon carried on the shoulder (`weapons.json` `rpg`, unlocked at level 8) that fires one unguided rocket where it is aimed: it flies straight at 60 m/s for up to 240 m and bursts on what it meets with a 10 m blast (a Dust cloud and a Blast wave at 200 m/s), half as harmful to the one who fired it. One rocket in the tube and two in reserve. A share of the bots carries it and aims it far more steadily than a gun. It replaced the bazooka (#348).
 _Avoid_: bazooka, rocket launcher (alone: the Lock-on launcher is one too)
 
 **Lock-on launcher**:

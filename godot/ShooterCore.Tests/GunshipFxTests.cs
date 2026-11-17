@@ -225,23 +225,26 @@ public class GunshipFxTests
     // --- the gunship rocket's blast --------------------------------------------------------------------------
 
     [Fact]
-    public void Gunship_rockets_carry_their_own_8_metre_blast_and_the_rpg_keeps_7()
+    public void Gunship_rockets_carry_their_own_8_metre_blast_and_the_rpg_keeps_10()
     {
         var rockets = Shipped.Killstreaks.Gunship!.Weapons.Single(w => w.Id == "rockets");
         Assert.Equal(8f, rockets.Splash!.Radius);
         var rpg = Shipped.Weapons.Weapons.Single(w => w.Id == "rpg");
-        Assert.Equal(7f, rpg.Splash!.Radius);
+        Assert.Equal(10f, rpg.Splash!.Radius);
+        Assert.Equal(200f, rpg.Splash.WaveSpeed); // its Blast wave (#348); the gunship rockets name none
+        Assert.Equal(0f, rockets.Splash.WaveSpeed);
     }
 
     [Fact]
-    public void A_gunship_rocket_hurts_at_7_metres_and_a_rpg_rocket_does_not()
+    public void A_gunship_rocket_keeps_its_own_8_metre_blast_whatever_the_rpgs_is()
     {
         var rockets = Shipped.Killstreaks.Gunship!.Weapons.Single(w => w.Id == "rockets");
         var rpg = Shipped.Weapons.Weapons.Single(w => w.Id == "rpg");
         var gunship = ProjectileMath.WithBlast(rpg, rockets.Splash);
         Assert.True(ProjectileMath.SplashDamage(gunship, 7f, false) > 0);
-        Assert.Equal(0f, ProjectileMath.SplashDamage(rpg, 7f, false));
         Assert.Equal(0f, ProjectileMath.SplashDamage(gunship, 8f, false)); // the edge of the 8 m blast
+        Assert.True(ProjectileMath.SplashDamage(rpg, 9f, false) > 0);      // the rpg's own reaches 10 m (#348)
+        Assert.Equal(0f, ProjectileMath.SplashDamage(rpg, 10f, false));
         Assert.Same(rpg, ProjectileMath.WithBlast(rpg, null));       // no override: the weapon's own blast
     }
 }
