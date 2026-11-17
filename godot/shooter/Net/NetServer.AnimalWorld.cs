@@ -17,6 +17,23 @@ public partial class NetServer
     /// The geometry both kinds of animal ask: ground (the heightmap, as before: no ray), where a solid thing is (a bare ray, rarely, see <see cref="ClearPath"/>),
     /// whether a body fits at a spot and where the players on foot stand. The decisions (stop, steer, who yields) are the animal's own.
     /// </summary>
+    BuildingFootprints? _buildingFootprints;
+
+    /// <summary>The parcels that hold a building, as polygons (what a rare animal keeps away from, <see cref="IAnimalWorld.NearestBuildingM"/>). Built once per round start (<see cref="WildlifeRoundStart"/>).</summary>
+    BuildingFootprints BuildingFootprints
+    {
+        get
+        {
+            if (_buildingFootprints != null) return _buildingFootprints;
+            var f = new BuildingFootprints();
+            if (Map != null)
+                foreach (var p in Map.Parcels.Values)
+                    if (p.BuildingIds.Count > 0 && p.Rings.Count > 0)
+                        f.Add(p.Rings.Select(r => r.Select(v => (v.X, v.Y)).ToArray()).ToArray());
+            return _buildingFootprints = f;
+        }
+    }
+
     abstract class AnimalGroundBase : IAnimalWorld
     {
         protected readonly NetServer _s;
@@ -31,6 +48,11 @@ public partial class NetServer
             var y = _s.Map.GroundHeight(x, z);
             return float.IsNaN(y) ? null : y;
         }
+
+        /// <summary>The map's box, for the spawn point of a rare species.</summary>
+        public FlightBounds? MapBounds => _s.Map == null ? null : _s.MapFlightBounds;
+
+        public float NearestBuildingM(float x, float z, float maxM) => _s.BuildingFootprints.Nearest(x, z, maxM);
 
         public abstract NVec3? NearestThreat(NVec3 from, float radius);
 

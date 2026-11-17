@@ -20,6 +20,14 @@ public class CrosshairRulesTests
         Assert.False(CrosshairRules.Visible(true, covered, scoped, bino, pounce));
 
     [Fact]
+    public void AnUnarmedSeatHidesItAnArmedSeatLeavesItToTheOtherRules()
+    {
+        Assert.False(CrosshairRules.Visible(true, false, false, false, false, unarmedSeat: true));
+        Assert.True(CrosshairRules.Visible(true, false, false, false, false, unarmedSeat: false));
+        Assert.False(CrosshairRules.Visible(false, false, false, false, false, unarmedSeat: false)); // the setting still wins
+    }
+
+    [Fact]
     public void EndingOnePounceDoesNotRevealItUnderTheScope() =>
         Assert.False(CrosshairRules.Visible(true, false, scoped: true, binoculars: false, pounce: false));
 }

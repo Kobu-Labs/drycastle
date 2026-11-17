@@ -89,7 +89,7 @@ public partial class NetServer
 
     // ---- recording ----
 
-    /// <summary>The Killed event of the wild animal keeper: a player killed a weighed animal, with the weapon <see cref="Deal"/> noted.</summary>
+    /// <summary>The Killed event of the wild animal keeper: a player killed a weighed animal (or the Unicorn), with the weapon <see cref="Deal"/> noted.</summary>
     void OnWildKilled(Animal a, ushort by)
     {
         if (_wildHit is not { } hit || !_byId.TryGetValue(by, out var c) || c.IsBot || !Scores(by) || c.Profile is not { Persist: true } p) return;
@@ -97,7 +97,9 @@ public partial class NetServer
         var distance = hit.Distance ?? NVec3.Distance(N(c.Body.GlobalPosition), a.Position);
         var variant = a.Variant >= 1 && a.Variant <= a.Def.Variants.Count ? a.Def.Variants[a.Variant - 1].Id : "";
         var diagram = hit.Shot is { } shot ? HitDiagram.From(shot) : (HitDiagram?)null;
-        if (HuntRecord.ForAnimal(p.DbId, a.Def.Id, variant, a.WeightKg, distance, weapon, diagram, a.Position.X, a.Position.Y, a.Position.Z, DateTime.UtcNow) is { } h) RecordHunt(h);
+        var h = HuntRecord.ForAnimal(p.DbId, a.Def.Id, variant, a.WeightKg, distance, weapon, diagram, a.Position.X, a.Position.Y, a.Position.Z, DateTime.UtcNow)
+            ?? (a.Def.Id == Mysteries.Unicorn ? HuntRecord.ForUnicorn(p.DbId, distance, weapon, diagram, a.Position.X, a.Position.Y, a.Position.Z, DateTime.UtcNow) : null); // a mystery that is an animal: no weight
+        if (h != null) RecordHunt(h);
     }
 
     /// <summary>A mystery creature's Event was won: every credited player who has a stored profile has caught it.</summary>

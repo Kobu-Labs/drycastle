@@ -455,6 +455,7 @@ public sealed class WorldReplica
 
     static void Store(Entity e, uint tick, WorldState s)
     {
+        if (e.Type == AnimalRules.TypeId && Vector3.DistanceSquared(e.State.Position, s.Position) > AnimalRules.TeleportM * AnimalRules.TeleportM) e.Buf.Reset(); // a vanished animal reappeared far away: it does not slide across the map
         e.State = s;
         e.Buf.Push(tick, s.Position, s.YawRad, s.PitchRad);
     }

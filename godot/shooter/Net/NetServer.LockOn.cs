@@ -29,7 +29,7 @@ public partial class NetServer
         if (c.IsBot || c.W.Current.Lock is not { } def) return null;
         if (_match.Get(c.Id)?.Life != PlayerLife.Alive) return null;
         if (_streaks.ControlOf(c.Id) != null || _sitters.ContainsKey(c.Id) || _pins.ContainsKey(c.Id)) return null;
-        if (c.Car != null && (c.CarSeat < 0 || c.CarSeat >= c.Car.Def.Seats.Count || !c.Car.Def.Seats[c.CarSeat].Armed)) return null;
+        if (!LockRules.SeatAllows(c.Car != null, c.Car != null && c.CarSeat >= 0 && c.CarSeat < c.Car.Def.Seats.Count && c.Car.Def.Seats[c.CarSeat].Armed)) return null;
         return def;
     }
 

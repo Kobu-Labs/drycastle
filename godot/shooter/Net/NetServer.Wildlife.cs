@@ -76,16 +76,17 @@ public partial class NetServer
     {
         if (_wildlife == null) return;
         _wildlife.Clear();
-        if (_match.Phase != MatchPhase.Running || ArenaMode || MapDir == "" || Map == null || (WildlifeData.MaxAnimals <= 0 || WildlifeData.Species.Count == 0 && WildlifeData.Herds.Count == 0) && WildlifeData.Flocks.Count == 0) return;
+        _buildingFootprints = null;
+        if (_match.Phase != MatchPhase.Running || ArenaMode || MapDir == "" || Map == null || (WildlifeData.MaxAnimals <= 0 || WildlifeData.Species.Count == 0 && WildlifeData.Herds.Count == 0 && WildlifeData.Rare.Count == 0) && WildlifeData.Flocks.Count == 0) return;
         var points = MapZonePoints;
         var n = _wildlife.Populate(species => points.Points(species), _wildlifeGround ??= new WildlifeGround(this));
         GD.Print($"server: {n} wild animals, {_wildlife.Flocks.Count} bird flocks");
     }
 
-    /// <summary>Once a tick, after the entities: the herds drift.</summary>
+    /// <summary>Once a tick, after the entities: the herds drift and a rare species counts down to its next animal.</summary>
     void WildlifeTick(float dt)
     {
-        if (_wildlife != null && _wildlife.Count > 0 && _wildlifeGround != null) _wildlife.Update(dt, _wildlifeGround);
+        if (_wildlife != null && (_wildlife.Count > 0 || _wildlife.RareWaiting > 0) && _wildlifeGround != null) _wildlife.Update(dt, _wildlifeGround);
     }
 
     /// <summary>What the hit diagram shows of a bullet that met the wild animal <paramref name="hitId"/> at <paramref name="point"/>; null when the animal or its target is not there.</summary>

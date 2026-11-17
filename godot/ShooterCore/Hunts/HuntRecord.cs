@@ -18,7 +18,7 @@ public readonly record struct HitDiagram(byte Along, byte Height, bool RightFlan
 /// <summary>
 /// One hunt (GLOSSARY "Hunt"): a player's logged kill of a wild animal, or catch of a mystery creature. <see cref="Species"/> is the index id (or the
 /// mystery id), <see cref="Exact"/> the animals.json species and <see cref="Variant"/> its look ("" the base one, else a variant id: a moose bull).
-/// <see cref="Kg"/> is null for a mystery, <see cref="DistanceM"/> for a run over and a catch, <see cref="Diagram"/> where no shape was hit.
+/// <see cref="Kg"/> is null for a mystery, <see cref="DistanceM"/> for a run over and an Event catch (a Unicorn shot has one), <see cref="Diagram"/> where no shape was hit.
 /// <see cref="Id"/> is 0 until the store has the row.
 /// </summary>
 public sealed record HuntRecord(long Id, long PlayerId, string Species, string Exact, string Variant, float? Kg, float? DistanceM, string Weapon,
@@ -38,6 +38,15 @@ public sealed record HuntRecord(long Id, long PlayerId, string Species, string E
         if (IndexSpecies.Of(animalId) is not { } index || !(kg > 0)) return null;
         var run = weapon == HuntWeapons.RunOver;
         return new HuntRecord(0, player, index, animalId, variantId, Round(kg), run || distanceM is null ? null : Round(distanceM.Value), weapon, run ? null : diagram, x, y, z, atUtc);
+    }
+
+    /// <summary>
+    /// The kill of a Unicorn (GLOSSARY "Unicorn"): a mystery creature that is a wild animal, so it keeps a distance and a hit diagram like any hunt (same rules as <see cref="ForAnimal"/>: none for a run over), and no weight.
+    /// </summary>
+    public static HuntRecord ForUnicorn(long player, float? distanceM, string weapon, HitDiagram? diagram, float x, float y, float z, DateTime atUtc)
+    {
+        var run = weapon == HuntWeapons.RunOver;
+        return new HuntRecord(0, player, Mysteries.Unicorn, Mysteries.Unicorn, "", null, run || distanceM is null ? null : Round(distanceM.Value), weapon, run ? null : diagram, x, y, z, atUtc);
     }
 
     /// <summary>The catch of a mystery creature (its Event won): no weight, no distance, no hit diagram.</summary>

@@ -50,6 +50,8 @@ public partial class NetClient : IStandingBodies
         /// <summary>Where the snapshots had it last frame: how fast the server's body moves (a dead one still flying).</summary>
         public NVec3 LastServer;
         public bool SeenServer;
+        /// <summary>The client-only looks of a species whose animals.json entry has an <see cref="AnimalDef.Fx"/> (the Unicorn's horn, sparkles and rainbow trail); null for the rest.</summary>
+        public UnicornFx? Fx;
     }
 
     readonly Dictionary<ushort, AnimalView> _animals = new();
@@ -128,11 +130,13 @@ public partial class NetClient : IStandingBodies
         var flail = new List<AnimalFlail>();
         AnimationPlayer? anim = null;
         var clips = Array.Empty<string?>();
+        Node3D? modelRoot = null;
         if (ModelLib.Instance(def.ModelOf(variant)) is { } model)
         {
             model.Scale = Vector3.One * (def.Scale * size);
             model.RotationDegrees = new Vector3(0, def.ModelYawDeg, 0);
             node.AddChild(model);
+            modelRoot = model;
             anim = model.FindChildren("*", "AnimationPlayer", true, false).FirstOrDefault() as AnimationPlayer;
             foreach (var sk in model.FindChildren("*", "Skeleton3D", true, false).OfType<Skeleton3D>())
                 if (AnimalFlail.Create(sk) is { } f) { sk.AddChild(f); flail.Add(f); }
@@ -150,6 +154,7 @@ public partial class NetClient : IStandingBodies
         }
         Owned.AddChild(node);
         var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Size = size, Variant = variant, Flail = flail, Toggle = AnimalRules.HitToggled(e.State.State) };
+        if (def.Fx == UnicornFx.Id) view.Fx = UnicornFx.Attach(node, modelRoot, def.VanishSeconds);
         _animals[e.Id] = view;
         if (e.Dormant) SetAnimalDormant(view, e); // spawned outside the interest range: hidden until a keyframe shows it
     }
@@ -185,13 +190,14 @@ public partial class NetClient : IStandingBodies
             {
                 // the vehicle this player drives is drawn ahead of the server, so its run-over is shown here first and handed over to the server's when that shows
                 var thrown = state is AnimalState.Thrown or AnimalState.Down or AnimalState.Dead;
-                if (car is { } c && !thrown && state != AnimalState.Carried && v.Guess.Ready && !v.Def.OneHit && CarTouches(c.State, c.Def, v, s.Pos, s.Yaw))
+                if (car is { } c && !thrown && state is not (AnimalState.Carried or AnimalState.Vanish) && v.Guess.Ready && !v.Def.OneHit && CarTouches(c.State, c.Def, v, s.Pos, s.Yaw))
                     v.Guess.Start(s.Pos, CorpseRules.ThrowFromCar(new NVec3(-MathF.Sin(c.State.Yaw), 0, -MathF.Cos(c.State.Yaw)), c.State.Speed));
                 var serverSpeed = v.SeenServer && dt > 0 ? (s.Pos - v.LastServer).Length() / dt : 0f;
                 v.LastServer = s.Pos; v.SeenServer = true;
                 var inAir = state == AnimalState.Thrown || state == AnimalState.Dead && serverSpeed > AnimalFlyingSpeed;
                 var at = v.Guess.Step(dt, s.Pos, thrown, inAir, v.Guess.Active ? GroundUnder(v.Guess.Position) : null);
                 PlaceAnimal(v, GuessedState(v, state), new Vector3(at.X, at.Y, at.Z), s.Yaw, dt);
+                v.Fx?.Tick(dt, state != AnimalState.Dead, state == AnimalState.Vanish);
             }
             var shown = GuessedState(v, state);
             var toggle = AnimalRules.HitToggled(raw);

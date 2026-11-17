@@ -67,7 +67,7 @@ public partial class NetClient
 
     /// <summary>The Lock of the weapon in the local player's hand, when its sight should be up.</summary>
     LockDef? LauncherHeld() =>
-        !Dead && _me != null && _gunship == null && Weapons != null && Ammo is { } a && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1].Lock : null;
+        !Dead && _me != null && _gunship == null && !InUnarmedSeat && Weapons != null && Ammo is { } a && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1].Lock : null;
 
     /// <summary>Every frame: the shooter's sight and beeps, the owner's warning and beeps.</summary>
     void RenderLockOn()
