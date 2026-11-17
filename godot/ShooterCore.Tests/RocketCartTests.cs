@@ -353,7 +353,7 @@ public class RocketCartTests
             seq++;
             var effect = new TowEffect(TowLoad.Of(car, Cart), TowModel.BlockOf(g, serverBody));
             DriveModel.Step(ref server, car, keys, Dt, world, effect);
-            TowModel.Step(ref serverBody, g, TractorMotion.From(server), Dt);
+            TowModel.Step(ref serverBody, g, TractorMotion.From(server, car), Dt);
             client.Step(seq, keys, Dt);
             Assert.Equal(server.Position, client.State.Position);
             Assert.Equal(serverBody.Phi, client.TrailerBody.Phi);
@@ -387,7 +387,7 @@ public class RocketCartTests
         for (var i = 0; i < 4; i++)
         {
             DriveModel.Step(ref server, car, inputs[i], Dt, world, new TowEffect(TowLoad.Of(car, Cart), TowModel.BlockOf(g, body)));
-            TowModel.Step(ref body, g, TractorMotion.From(server), Dt);
+            TowModel.Step(ref body, g, TractorMotion.From(server, car), Dt);
         }
         var serverPhi = body.Phi + 0.3f;
         Assert.True(client.Reconcile(4, server, Dt, serverPhi));
@@ -399,7 +399,7 @@ public class RocketCartTests
         for (var i = 4; i < 10; i++)
         {
             DriveModel.Step(ref s2, car, inputs[i], Dt, world, new TowEffect(TowLoad.Of(car, Cart), TowModel.BlockOf(g, uncorrected)));
-            TowModel.Step(ref uncorrected, g, TractorMotion.From(s2), Dt);
+            TowModel.Step(ref uncorrected, g, TractorMotion.From(s2, car), Dt);
         }
         Assert.True(MathF.Abs(client.TrailerBody.Phi - uncorrected.Phi) > 0.05f, "the 0.3 rad the server gave it is still in it");
         // and with no trailer the prediction is the one it always was

@@ -151,8 +151,9 @@ The one file for vehicle work. Read it when the task is vehicle design or vehicl
 - **Every ground vehicle with a driver has a `drive` block** (ADR 0036, `EveryVehicleDrivesTests`): it runs on `DriveModel`, lies on the slope under its own wheels, tows on slopes, and its driver's client predicts it. There is no other driving model for a new vehicle. A trailer and a helicopter have none.
   - `drive.wheelbase` = first to last axle (the standardizer writes the front axle to the mean of the fixed ones), `drive.track` = between the wheels of an axle, **0 for a single-track vehicle** (a motorcycle: sampled under its two wheels, never rolls with the ground).
   - `drive.axle_centre` = the model z of the point half way between those axles when it is not under the origin (harvester 0.981, bus -0.305): the ground is sampled round it.
+  - `drive.land.pivot_behind` = the model z of the axle that does not steer (the mean of several: truck 1.548, flak 1.775, Scud 2.892): where it turns about on its wheels (ADR 0036 amendment, #295). Required on every drive block (`EveryVehicleDrivesTests`, which also checks it against the model for the generated ones); the standardizer writes it. `turn_radius` is the radius of that point's path, so the origin and the nose go wider.
   - Feel: start from the car's `land` block (it reproduces the old car model: instant ramps, `grip` 1000, `power_curve` 16, `brake_bite` 1) with the type's own `top_speed`, `acceleration`, `brake`, `turn_radius`; `step_height` and `max_climb_deg` by size; `camera` distance and height by length. Tune in game.
-  - Wheels are animated from the drive state (`DriveNodes` > `VehicleWheels.StepDriven`), any number of them (section 3). Tuning: #297 (amphibious), rear-axle pivot #295 slice 4.
+  - Wheels are animated from the drive state (`DriveNodes` > `VehicleWheels.StepDriven`), any number of them (section 3). Tuning: #297 (amphibious).
 
 ### Where this stands (the allow-lists)
 

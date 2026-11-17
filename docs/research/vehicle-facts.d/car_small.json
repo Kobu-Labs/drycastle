@@ -53,6 +53,7 @@
   "radius": 0.314,
   "wheelbase": 2.645,
   "track": 1.432,
+  "pivot_behind": 1.376,
   "tyre_x": 0.716,
   "axle_z_mean_abs": 1.322,
   "centres": {

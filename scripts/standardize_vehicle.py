@@ -24,7 +24,7 @@ What is generic (this file; no vehicle's numbers in it):
   - seat empties (`seat_*`, at the rider's feet), lamp empties (`light_*`) + emissive lens plates, optional extra empties
   - colour variants: the same model once per skin, only the atlas material name differs (`<id>_<skin>.glb`); materials.json gets the atlases
   - the pack manifest rows, the measured numbers (docs/research/vehicle-facts.d/<id>.json) and, with --vehicles-json, the model-owned keys of the
-    vehicle's entry (model, skins, box, drive.wheelbase/track, seats, glass, lights): generated, never hand-copied
+    vehicle's entry (model, skins, box, drive.wheelbase/track, drive.land.pivot_behind, seats, glass, lights): generated, never hand-copied
 What is per vehicle (the facts file): the source node names, which node is the body/glass/steering/each wheel and which wheels steer, the seat feet and
 eye heights, the lamp positions and lens sizes, the skins (atlas names), whether the shell is one skin (`two_sided_shell`).
 Not done here (later steps of #325): the interior of a vehicle that has none, seat cover, pane kinds, the client animator of a vehicle without a `drive` block (#295).
@@ -401,7 +401,7 @@ def update_manifest(cfg, private, entries):
     path.write_text(json.dumps(doc, indent=1) + "\n")
 
 
-def entry_fields(cfg, info, facts, has_drive=True):
+def entry_fields(cfg, info, facts, has_drive=True, has_land=True):
     """The model-owned keys of the vehicle's entry, as (key path, text). `drive.*` only for a type that has a drive block (every ground vehicle with a driver has one, ADR 0036)."""
     ids = [f"pack:{cfg['pack']}/{cfg['id']}_{s['id']}" for s in cfg["skins"]]
     seats = []
@@ -425,6 +425,8 @@ def entry_fields(cfg, info, facts, has_drive=True):
                                                                                               num(cfg.get("beam_range", 40)), num(cfg.get("beam_angle", 26)))
     if has_drive:
         out["drive.wheelbase"], out["drive.track"] = num(facts["wheels"]["wheelbase"]), num(facts["wheels"]["track"])
+        if has_land:
+            out["drive.land.pivot_behind"] = num(facts["wheels"]["pivot_behind"])
     if info["gl"].panes:
         out["glass"] = "[\n" + info["gl"].json_lines("        ") + "\n      ]"
     return out
@@ -533,6 +535,8 @@ def main():
     fixed = [v for v in w.values() if not v["steer"]]
     wheelbase = float(np.mean([v["centre"][2] for v in fixed]) - np.mean([v["centre"][2] for v in steered])) if steered and fixed else 0.0
     track = float(2 * np.mean([abs(v["centre"][0]) for v in w.values()]))
+    # where it turns about: the mean z of the wheels that do not steer (the rearmost when all do), as WheelMath.PivotZ
+    pivot = float(np.mean([v["centre"][2] for v in fixed])) if fixed else float(max(v["centre"][2] for v in w.values()))
     mdl, _ = build(cfg, parts, skin_material(cfg["skins"][0]))
     pts = mdl.all_points()
     lo, hi = pts.min(axis=0), pts.max(axis=0)
@@ -542,7 +546,7 @@ def main():
         "bounds": {"min": r3(lo), "max": r3(hi)},
         "suggested": {"half_width": up(max(-lo[0], hi[0])), "half_length": up(max(-lo[2], hi[2])), "height": up(hi[1])},
         "origin": {"ground_shift_y": round(float(info["ground"]), 4), "centre_shift_z": round(float(info["centre_z"]), 4)},
-        "wheels": {"radius": round(float(np.mean([v["radius"] for v in w.values()])), 3), "wheelbase": round(wheelbase, 3), "track": round(track, 3),
+        "wheels": {"radius": round(float(np.mean([v["radius"] for v in w.values()])), 3), "wheelbase": round(wheelbase, 3), "track": round(track, 3), "pivot_behind": round(pivot, 3),
                    "tyre_x": round(float(np.mean([abs(v["centre"][0]) for v in w.values()])), 3), "axle_z_mean_abs": round(float(np.mean([abs(v["centre"][2]) for v in w.values()])), 3),
                    "centres": {k: dict(centre=r3(v["centre"]), radius=round(float(v["radius"]), 3), width=round(float(v["width"]), 3), steer=v["steer"],
                                        **({"steer_axis": r3(v["axis"]), "steer_pivot": r3(v["pivot"])} if "axis" in v else {})) for k, v in w.items()}},
@@ -585,8 +589,10 @@ def main():
         path = Path(a.vehicles_json)
         text = path.read_text()
         at = text.index(f'"id": "{cfg["vehicle"]}"')
-        has_drive = '"drive"' in scan_object(text, text.rindex("{", 0, at))[0]
-        path.write_text(patch_entry(text, cfg["vehicle"], entry_fields(cfg, info, facts, has_drive)))
+        members = scan_object(text, text.rindex("{", 0, at))[0]
+        has_drive = "drive" in members
+        has_land = has_drive and "land" in scan_object(text, members["drive"][0])[0]
+        path.write_text(patch_entry(text, cfg["vehicle"], entry_fields(cfg, info, facts, has_drive, has_land)))
         print("vehicles.json entry", cfg["vehicle"], "updated:", path)
 
 
