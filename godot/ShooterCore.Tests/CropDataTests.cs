@@ -80,27 +80,24 @@ public class CropDataTests
     }
 
     [Fact]
-    public void FarTuftsComeInWhereThePlantsGoOut()
+    public void SheetGridCountsPlantsAndFeathersTheEdge()
     {
-        const float r = CropSettings.PlantRangeM, band = CropSettings.PlantFadeM;
-        foreach (var t in new[] { 0f, 0.3f, 0.7f, 0.999f })
-        {
-            Assert.Equal(0f, CropSettings.FarGrow(r - band, t, r, band));     // no tuft among whole plants
-            Assert.Equal(1f, CropSettings.FarGrow(r, t, r, band));            // every tuft stands where the last plant is gone
-            Assert.Equal(1f, CropSettings.FarGrow(r + 200f, t, r, band));
-            // never both gone: something stands at every distance
-            for (var d = r - band; d <= r; d += 1f)
-                Assert.True(CropSettings.Grow(d, t, r, band) + CropSettings.FarGrow(d, t, r, band) > 0f);
-        }
-    }
-
-    [Fact]
-    public void AboutOnePlantInFarEveryIsATuft()
-    {
-        var n = 0;
-        for (var x = 0; x < 100; x++)
-            for (var y = 0; y < 100; y++)
-                if (CropSettings.IsFar(new ClutterInstance(700f + x * 0.8f, -300f + y * 0.8f, 0f, 0f, 1f))) n++;
-        Assert.InRange(n, 10000 / CropSettings.FarEvery * 0.85, 10000 / CropSettings.FarEvery * 1.15);
+        // a block of 3 x 3 cells, 4 plants each, ground at 10 m; one more cell beside it with a single plant
+        var plants = new List<ClutterInstance>();
+        for (var cx = 0; cx < 3; cx++)
+            for (var cy = 0; cy < 3; cy++)
+                for (var k = 0; k < 4; k++)
+                    plants.Add(new ClutterInstance(cx * 4f + 0.5f + k * 0.8f, cy * 4f + 1f, 10f, 0f, 1f));
+        plants.Add(new ClutterInstance(13f, 1f, 12f, 0f, 1f));
+        var grid = new CropSheetGrid(plants, 4f);
+        Assert.Equal(10, grid.Cells.Count);
+        Assert.Equal(4, grid.Cells[(1, 1)].Count);
+        var full = CropSheetGrid.Full(grid.Cells.Values.Select(c => c.Count));
+        Assert.Equal(4f, full);
+        Assert.Equal((10f, 1f), grid.Corner(1, 1, full));        // inside: four full cells around
+        Assert.Equal(0.25f, grid.Corner(0, 0, full).Share);      // the block's outer corner: one cell of four
+        Assert.Equal(0.5f, grid.Corner(1, 0, full).Share);       // on its side: two of four
+        Assert.Equal(0f, grid.Corner(-5, -5, full).Share);       // nothing there
+        Assert.Equal(0f, CropSheetGrid.Full(Array.Empty<int>()));
     }
 }
