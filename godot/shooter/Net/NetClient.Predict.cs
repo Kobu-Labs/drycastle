@@ -196,7 +196,7 @@ public partial class NetClient
             var vnormal = car.Node.GlobalTransform.Basis * G(vh.LocalNormal);
             ShotFx.Spawn(Owned, muzzle, vat, false, true, vnormal);
             Sfx.Play3D("impact", vat);
-            BulletHoles.PlaceOn(Owned, car.Node, G(vh.Local), G(vh.LocalNormal));
+            BulletHoles.PlaceOn(Owned, GlassHost(car.Node), G(vh.Local), G(vh.LocalNormal));
             return;
         }
         var end = hit.Count > 0 ? hit["position"].AsVector3() : from + dir * 300f;

@@ -29,7 +29,7 @@ public sealed partial class CockpitRig : Node3D
         // the Scud truck: eye = seat_driver [-0.892, 1.15, -4.328] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/make_scud_model.py): inside the left half cab (roof inside 2.66, windscreen 1.99-2.42), behind the
         // wheel. The operator's seat has the same eye over its own seat (+0.892) but no cockpit rig: its view is the seat's (vehicles.json eye_height 1.05).
         ["scud"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildScud),
-        ["utility_helicopter"] = new Spec(new[] { "fuselage" }, BuildHelicopter),
+        ["utility_helicopter"] = new Spec(new[] { "hull" }, BuildHelicopter), // the model's own body mesh (the rig draws its own interior over it): the node was called fuselage until #325
     };
 
     /// <summary>The cockpit of a vehicle type (vehicles.json id), or null when it has none.</summary>
