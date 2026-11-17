@@ -145,53 +145,125 @@ public sealed partial class MapLoader
                 cell.Mesh.SetInstanceTransform(k, new Transform3D(Basis.Identity.Rotated(Vector3.Up, r.Rot).Scaled(new Vector3(r.Scale, r.Scale, r.Scale)), cell.Mesh.GetInstanceTransform(k).Origin));
             }
         }
-        _crushMarkTransforms.Clear();
-        if (_crushMarks != null) _crushMarks.VisibleInstanceCount = 0;
+        foreach (var chunk in _markChunks.Values)
+            if (chunk.Node != null && GodotObject.IsInstanceValid(chunk.Node)) chunk.Node.QueueFree();
+        _markChunks.Clear();
     }
 
     // ---- the flattened-ground strips (seen from beyond the plants' range) ----
 
-    const int MarkChunk = 2048;
-    MultiMesh? _crushMarks;
-    MultiMeshInstance3D? _crushMarkNode;
-    readonly List<Transform3D> _crushMarkTransforms = new();
+    /// <summary>Cells per side of one mark chunk: a chunk is one draped mesh, rebuilt when a cell is added to it.</summary>
+    const int MarkChunkCells = 32;
+    /// <summary>The marks float this far over the terrain (patches float 0.02, roads 0.05): over the field's own ground, under the plants' feet.</summary>
+    const float MarkLiftM = 0.06f;
+
+    sealed class MarkChunk
+    {
+        public readonly HashSet<(int X, int Z)> Cells = new();
+        public MeshInstance3D? Node;
+        public bool Dirty;
+    }
+
+    readonly Dictionary<(int X, int Z), MarkChunk> _markChunks = new();
+    /// <summary>Terrain heights at the lattice points (corners and cell middles, in half cells) so neighbouring cells share their corners exactly: no step, no gap.</summary>
+    readonly Dictionary<(int X, int Z), float> _markHeights = new();
+    Node3D? _markRoot;
+    ShaderMaterial? _markMaterial;
 
     /// <summary>
-    /// A darker flat patch on the ground for each crushed cell (<paramref name="centres"/>: game x, z of the cell's middle), so the mark reads from far beyond the plants' visibility range. One MultiMesh for all of them, grown in chunks;
-    /// the patches sit a hair over the terrain and cast no shadow. Returns how many it now shows.
+    /// A darker patch on the ground for each crushed cell (<paramref name="centres"/>: game x, z of the cell's middle), so the mark reads from far beyond the plants' visibility range. The cells of a 32 m chunk are one mesh that
+    /// follows the terrain: every cell is its own quad (four triangles round the middle's height) on corners shared with its neighbours, with no overlap, so an intersection is no darker and nothing leaves a gap. The
+    /// material pulls the mark a hair toward the camera so the ground does not win the depth test at a distance. Returns how many cells it shows.
     /// </summary>
     public int CropMarkGround(IReadOnlyList<Vector2> centres, float cellM)
     {
-        if (centres.Count == 0) return _crushMarkTransforms.Count;
+        if (centres.Count == 0) return MarkCellCount();
         foreach (var c in centres)
         {
-            var y = GroundHeight(c.X, c.Y);
-            if (float.IsNaN(y)) y = GroundHeightOrMean(c.X, c.Y);
-            _crushMarkTransforms.Add(new Transform3D(Basis.Identity.Scaled(new Vector3(cellM * 1.02f, 1f, cellM * 1.02f)), new Vector3(c.X, y + 0.04f, c.Y)));
+            var cell = ((int)Mathf.Floor(c.X / cellM), (int)Mathf.Floor(c.Y / cellM));
+            var key = (FloorDiv(cell.Item1, MarkChunkCells), FloorDiv(cell.Item2, MarkChunkCells));
+            if (!_markChunks.TryGetValue(key, out var chunk)) _markChunks[key] = chunk = new MarkChunk();
+            if (chunk.Cells.Add(cell)) chunk.Dirty = true;
         }
-        if (_crushMarks == null || _crushMarks.InstanceCount < _crushMarkTransforms.Count)
+        foreach (var chunk in _markChunks.Values)
+            if (chunk.Dirty) RebuildMarkChunk(chunk, cellM);
+        return MarkCellCount();
+    }
+
+    int MarkCellCount() { var n = 0; foreach (var c in _markChunks.Values) n += c.Cells.Count; return n; }
+
+    static int FloorDiv(int a, int b) => (int)Mathf.Floor((float)a / b);
+
+    float MarkHeight(int hx, int hz, float cellM)
+    {
+        if (_markHeights.TryGetValue((hx, hz), out var h)) return h;
+        float x = hx * cellM * 0.5f, z = hz * cellM * 0.5f;
+        h = GroundHeight(x, z);
+        if (float.IsNaN(h)) h = GroundHeightOrMean(x, z);
+        return _markHeights[(hx, hz)] = h + MarkLiftM;
+    }
+
+    void RebuildMarkChunk(MarkChunk chunk, float cellM)
+    {
+        chunk.Dirty = false;
+        var verts = new List<Vector3>(chunk.Cells.Count * 5);
+        var idx = new List<int>(chunk.Cells.Count * 12);
+        foreach (var (cx, cz) in chunk.Cells)
         {
-            var cap = MarkChunk;
-            while (cap < _crushMarkTransforms.Count) cap *= 2;
-            var mat = new StandardMaterial3D
-            {
-                AlbedoColor = new Color(0.16f, 0.14f, 0.07f, 0.55f), Transparency = BaseMaterial3D.TransparencyEnum.Alpha, Roughness = 1f,
-                CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-            };
-            _crushMarks = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = new PlaneMesh { Size = Vector2.One, Material = mat }, InstanceCount = cap, VisibleInstanceCount = 0 };
-            _crushMarks.CustomAabb = new Aabb(new Vector3(-20000, -500, -20000), new Vector3(40000, 1500, 40000));
-            if (_crushMarkNode == null || !GodotObject.IsInstanceValid(_crushMarkNode))
-            {
-                _crushMarkNode = new MultiMeshInstance3D { Name = "crop_crush_marks", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-                Root.AddChild(_crushMarkNode);
-            }
-            _crushMarkNode.Multimesh = _crushMarks;
-            for (var i = 0; i < _crushMarkTransforms.Count; i++) _crushMarks.SetInstanceTransform(i, _crushMarkTransforms[i]);
+            // half-cell lattice: corners at even, the middle at odd
+            int x0 = cx * 2, z0 = cz * 2;
+            float xa = cx * cellM, xb = (cx + 1) * cellM, za = cz * cellM, zb = (cz + 1) * cellM;
+            var b = verts.Count;
+            verts.Add(new Vector3(xa, MarkHeight(x0, z0, cellM), za));
+            verts.Add(new Vector3(xb, MarkHeight(x0 + 2, z0, cellM), za));
+            verts.Add(new Vector3(xb, MarkHeight(x0 + 2, z0 + 2, cellM), zb));
+            verts.Add(new Vector3(xa, MarkHeight(x0, z0 + 2, cellM), zb));
+            verts.Add(new Vector3((xa + xb) * 0.5f, MarkHeight(x0 + 1, z0 + 1, cellM), (za + zb) * 0.5f));
+            idx.AddRange(new[] { b, b + 4, b + 1, b + 1, b + 4, b + 2, b + 2, b + 4, b + 3, b + 3, b + 4, b });
         }
-        else
-            for (var i = _crushMarkTransforms.Count - centres.Count; i < _crushMarkTransforms.Count; i++) _crushMarks.SetInstanceTransform(i, _crushMarkTransforms[i]);
-        _crushMarks.VisibleInstanceCount = _crushMarkTransforms.Count;
-        return _crushMarkTransforms.Count;
+        var normals = new Vector3[verts.Count];
+        System.Array.Fill(normals, Vector3.Up);
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = verts.ToArray();
+        arrays[(int)Mesh.ArrayType.Normal] = normals;
+        arrays[(int)Mesh.ArrayType.Index] = idx.ToArray();
+        var mesh = new ArrayMesh();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        mesh.SurfaceSetMaterial(0, MarkMaterial());
+        if (chunk.Node == null || !GodotObject.IsInstanceValid(chunk.Node))
+        {
+            if (_markRoot == null || !GodotObject.IsInstanceValid(_markRoot)) { _markRoot = new Node3D { Name = "crop_crush_marks" }; Root.AddChild(_markRoot); }
+            chunk.Node = new MeshInstance3D { CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            _markRoot.AddChild(chunk.Node);
+        }
+        chunk.Node.Mesh = mesh;
+    }
+
+    ShaderMaterial MarkMaterial()
+    {
+        if (_markMaterial != null) return _markMaterial;
+        var shader = new Shader
+        {
+            Code = """
+                shader_type spatial;
+                render_mode blend_mix, depth_draw_never, cull_disabled, skip_vertex_transform;
+                uniform vec4 tint : source_color = vec4(0.16, 0.14, 0.07, 0.55);
+                void vertex() {
+                    vec3 v = (MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+                    // toward the camera by a sliver that grows with distance: the ground never wins the depth test, the plants and cars still do
+                    v -= normalize(v) * (0.04 + length(v) * 0.003);
+                    VERTEX = v;
+                    NORMAL = normalize((MODELVIEW_NORMAL_MATRIX * NORMAL));
+                }
+                void fragment() {
+                    ALBEDO = tint.rgb;
+                    ALPHA = tint.a;
+                    ROUGHNESS = 1.0;
+                }
+                """,
+        };
+        return _markMaterial = new ShaderMaterial { Shader = shader, RenderPriority = 1 };
     }
 
     static float DistanceToSegment(Vector2 p, Vector2 a, Vector2 b)
