@@ -10,7 +10,8 @@ namespace Drycastle.MapLoader;
 /// </summary>
 static class TreeCutShaders
 {
-    const string Param = "tree_cut", UnderParam = "tree_cut_under";
+    const string Param = "tree_cut", UnderParam = "tree_cut_under", FarParam = "tree_cut_far";
+    static readonly Vector4 FarOff = new(-1, 0, -1, 0);
     static readonly Vector4 Off = new(0, 0, -1, 0);
     static bool _added;
 
@@ -22,6 +23,7 @@ static class TreeCutShaders
         // no project declares it in its settings (and listing the globals is an editor-only call that logs an error in the game)
         RenderingServer.GlobalShaderParameterAdd(Param, RenderingServer.GlobalShaderParameterType.Vec4, Off);
         RenderingServer.GlobalShaderParameterAdd(UnderParam, RenderingServer.GlobalShaderParameterType.Vec4, Off);
+        RenderingServer.GlobalShaderParameterAdd(FarParam, RenderingServer.GlobalShaderParameterType.Vec4, FarOff);
     }
 
     static string ReadEmbedded(string resource)
@@ -42,21 +44,24 @@ static class TreeCutShaders
     }
 
     /// <summary>
-    /// Sets the cut for this frame: the focus (Godot axes), the radius inside which pack trees stand, and the fade band within it; and the same for the undergrowth,
-    /// which has no baked twin and so only needs its own, shorter radius.
+    /// Sets the cut for this frame: the focus (Godot axes), the radius inside which pack trees stand, and the fade band within it; the same for the undergrowth,
+    /// which has no baked twin and so only needs its own, shorter radius; the radius out to which the cards stand beyond the pack trees (negative: no cards, the
+    /// baked trees stand there); and the radius of the far kinds of undergrowth (negative: none).
     /// </summary>
-    public static void Set(Vector3 focus, float radius, float band, float underRadius, float underBand)
+    public static void Set(Vector3 focus, float radius, float band, float underRadius, float underBand, float cardRadius, float cardBand, float underFarRadius, float underFarBand)
     {
         if (!_added) return;
         RenderingServer.GlobalShaderParameterSet(Param, new Vector4(focus.X, focus.Z, radius, band));
         RenderingServer.GlobalShaderParameterSet(UnderParam, new Vector4(focus.X, focus.Z, underRadius, underBand));
+        RenderingServer.GlobalShaderParameterSet(FarParam, new Vector4(cardRadius, cardBand, underFarRadius, underFarBand));
     }
 
-    /// <summary>No cut: every baked tree is drawn, every pack tree and all undergrowth dropped.</summary>
+    /// <summary>No cut: every baked tree is drawn, every pack tree, card and all undergrowth dropped.</summary>
     public static void Disable()
     {
         if (!_added) return;
         RenderingServer.GlobalShaderParameterSet(Param, Off);
         RenderingServer.GlobalShaderParameterSet(UnderParam, Off);
+        RenderingServer.GlobalShaderParameterSet(FarParam, FarOff);
     }
 }

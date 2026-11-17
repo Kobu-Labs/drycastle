@@ -76,6 +76,8 @@ public sealed class UndergrowthKindConfig
     public float Clump { get; set; }
     /// <summary>Density factor right at a trunk (falls to 1 at foot_m).</summary>
     public float Foot { get; set; } = 1f;
+    /// <summary>A kind big enough to be seen appearing (saplings, shrubs, bushes): it is drawn out to <see cref="UndergrowthConfig.FarM"/> instead of the near radius.</summary>
+    public bool Far { get; set; }
     public List<PackTreeEntry> Models { get; set; } = new();
 }
 
@@ -98,6 +100,13 @@ public sealed class UndergrowthConfig
     public float FadeM { get; set; } = 12f;
     /// <summary>Tiles are built this far past <see cref="NearM"/> and freed twice as far.</summary>
     public float AheadM { get; set; } = 16f;
+    /// <summary>The radius of the kinds marked <c>far</c> (own mesh per tile, own fade band <see cref="FarFadeM"/>); at or under <see cref="NearM"/> = no far kinds, all on the near radius.</summary>
+    public float FarM { get; set; }
+    public float FarFadeM { get; set; } = 24f;
+    /// <summary>Share of the fade band over which one piece grows out of the ground (the rest of the band spreads the pieces' starts).</summary>
+    public float Grow { get; set; } = 0.35f;
+    /// <summary>How deep (m) a piece starts under the ground while it grows.</summary>
+    public float SinkM { get; set; } = 0.5f;
     /// <summary>Per meadow mix: its kinds. A mix no cell of the map has costs nothing; a cell of a mix not listed grows nothing.</summary>
     public List<UndergrowthMixConfig> Mixes { get; set; } = new();
     /// <summary>Most triangles of undergrowth in one tile; over it the scatter is thinned.</summary>
@@ -113,6 +122,7 @@ public sealed class UndergrowthConfig
     {
         if (TrisPerTile < 0) throw new DataFileException("pack_trees.json: undergrowth.tris_per_tile must not be negative");
         if (!(NearM > 0) || FadeM < 0 || AheadM < 0) throw new DataFileException("pack_trees.json: undergrowth near_m must be above 0, fade_m and ahead_m not negative");
+        if (FarM < 0 || FarFadeM < 0 || !(Grow > 0) || Grow > 1 || SinkM < 0) throw new DataFileException("pack_trees.json: undergrowth far_m, far_fade_m and sink_m must not be negative, grow within 0 and 1");
         if (!(ClumpM > 0) || FootM < 0 || TrunkClearM < 0) throw new DataFileException("pack_trees.json: undergrowth clump_m must be above 0, foot_m and trunk_clear_m not negative");
         var seen = new HashSet<int>();
         foreach (var mix in Mixes)
@@ -365,7 +375,7 @@ public static class GroundObjectMath
 public readonly record struct TreeFoot(float X, float Y, float Scale);
 
 /// <summary>One kind of undergrowth resolved against the loaded models.</summary>
-public sealed record UndergrowthKind(float PerM2, float ScaleMin, float ScaleMax, float Clump, float Foot, int[] ModelIds, float[] Weights, int[] Tris);
+public sealed record UndergrowthKind(float PerM2, float ScaleMin, float ScaleMax, float Clump, float Foot, int[] ModelIds, float[] Weights, int[] Tris, bool Far = false);
 
 /// <summary>The kinds that grow on the cells of one meadow mix in a tile; <see cref="SaltBase"/> keeps the hash of its pieces apart from another mix's (0 for the first, so a one-mix tile is as it was).</summary>
 public sealed record UndergrowthSet(ForestMask Cells, IReadOnlyList<UndergrowthKind> Kinds, int SaltBase);
@@ -455,7 +465,7 @@ public static class UndergrowthGen
                             if (clear) continue;
                             var z = groundZ(x, y);
                             if (float.IsNaN(z)) continue;
-                            all.Add((new PackPlacement(new Vector3(x, z, -y), rot, scale, k.ModelIds[pick]), k.Tris[pick], MeadowGen.Hash01((int)MathF.Round(x * 100f), (int)MathF.Round(y * 100f), Salt + 7)));
+                            all.Add((new PackPlacement(new Vector3(x, z, -y), rot, scale, k.ModelIds[pick], Kind: k.Far ? PackKind.UndergrowthFar : PackKind.Undergrowth), k.Tris[pick], MeadowGen.Hash01((int)MathF.Round(x * 100f), (int)MathF.Round(y * 100f), Salt + 7)));
                         }
                     }
                 }

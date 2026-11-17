@@ -60,6 +60,12 @@ public sealed class PackTreeConfig : IVersioned
     public GroundObjectsConfig GroundObjects { get; set; } = new();
     public UndergrowthConfig Undergrowth { get; set; } = new();
     public PackColourConfig Colour { get; set; } = new();
+    /// <summary>The far trees as cards of the pack models (#362).</summary>
+    public PackCardConfig Cards { get; set; } = new();
+    /// <summary>Tiles are built around the stretch from the focus to where it will be in this many seconds at its present speed, so a car does not outrun them (0 = around the focus only).</summary>
+    public float LeadS { get; set; } = 2f;
+    /// <summary>The most that stretch may be (m).</summary>
+    public float LeadMaxM { get; set; } = 100f;
 
     public static PackTreeConfig Parse(string json)
     {
@@ -81,6 +87,8 @@ public sealed class PackTreeConfig : IVersioned
         c.GroundObjects.Validate();
         c.Undergrowth.Validate();
         c.Colour.Validate();
+        c.Cards.Validate();
+        if (c.LeadS < 0 || c.LeadMaxM < 0) throw new DataFileException("pack_trees.json: lead_s and lead_max_m must not be negative");
         return c;
     }
 
@@ -208,10 +216,10 @@ public static class PackColourMath
     public static PackPlacement Undergrowth(PackPlacement p, PackColourConfig c)
     {
         float x = p.Base.X, y = -p.Base.Z;
-        if (!c.Enabled) return p with { Kind = PackKind.Undergrowth, Tint = Vector3.One };
+        if (!c.Enabled) return p with { Kind = p.Kind == PackKind.UndergrowthFar ? PackKind.UndergrowthFar : PackKind.Undergrowth, Tint = Vector3.One };
         var pick = (int)(MeadowGen.Hash01((int)MathF.Round(x * 100f), (int)MathF.Round(y * 100f), Salt + 9) * c.UndergrowthColours.Count);
         TryHex(c.UndergrowthColours[Math.Min(pick, c.UndergrowthColours.Count - 1)], out var green);
-        return p with { Kind = PackKind.Undergrowth, Tint = Vector3.Clamp(green * Tint(x, y, c, c.UndergrowthScale), Vector3.Zero, new Vector3(2f)) };
+        return p with { Kind = p.Kind == PackKind.UndergrowthFar ? PackKind.UndergrowthFar : PackKind.Undergrowth, Tint = Vector3.Clamp(green * Tint(x, y, c, c.UndergrowthScale), Vector3.Zero, new Vector3(2f)) };
     }
 }
 
@@ -497,6 +505,56 @@ public static class PackTreeMath
     public static bool IsBaked(float far, float worldX, float worldZ) => far > Threshold(worldX, worldZ);
 
     /// <summary>
+    /// How much of an undergrowth piece stands, 0 (not there) to 1 (whole): it has no baked twin to swap with, so it grows out of the ground. It starts when the far share
+    /// falls under the piece's threshold and is whole once the share has fallen <paramref name="grow"/> further; thresholds are squeezed into [grow, 1) so every piece
+    /// is whole at far share 0. Mirrors <c>tree_grow</c> in tree_cut.gdshaderinc.
+    /// </summary>
+    public static float Grow(float far, float threshold, float grow)
+    {
+        grow = MathF.Max(grow, 0.001f);
+        var g = Math.Clamp((grow + (1f - grow) * threshold - far) / grow, 0f, 1f);
+        return g * g * (3f - 2f * g);
+    }
+
+    /// <summary>
+    /// Where the focus will be in <paramref name="leadS"/> seconds at <paramref name="velocity"/> (m/s on the ground), no further than <paramref name="maxM"/>:
+    /// tiles are built around the stretch from the focus to there.
+    /// </summary>
+    public static Vector2 Lead(Vector2 focus, Vector2 velocity, float leadS, float maxM)
+    {
+        var off = velocity * leadS;
+        var len = off.Length();
+        if (!(len > 1e-3f) || maxM <= 0) return focus;
+        return focus + off * (MathF.Min(len, maxM) / len);
+    }
+
+    /// <summary>
+    /// The focus' speed on the ground, smoothed: follows the step from <paramref name="last"/> to <paramref name="now"/> over <paramref name="dt"/> with a half-second
+    /// lag. A jump faster than <paramref name="maxSpeed"/> is a teleport (a spawn, a camera cut), not a speed: it resets to 0.
+    /// </summary>
+    public static Vector2 Velocity(Vector2 smoothed, Vector2 last, Vector2 now, float dt, float maxSpeed = 150f)
+    {
+        if (!(dt > 1e-5f)) return smoothed;
+        var v = (now - last) / dt;
+        if (v.Length() > maxSpeed) return Vector2.Zero;
+        return Vector2.Lerp(smoothed, v, 1f - MathF.Exp(-dt * 4f));
+    }
+
+    /// <summary>Distance from the stretch (ax, ay)-(bx, by) to the box, sampled every half box side (0 when a sample is inside).</summary>
+    public static float DistToBoxAlong(float ax, float ay, float bx, float by, float x0, float y0, float x1, float y1)
+    {
+        var len = MathF.Sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
+        var steps = Math.Clamp((int)MathF.Ceiling(len / MathF.Max(0.5f * MathF.Min(x1 - x0, y1 - y0), 1f)), 1, 64);
+        var best = DistToBox(ax, ay, x0, y0, x1, y1);
+        for (var i = 1; i <= steps && len > 0; i++)
+        {
+            var t = i / (float)steps;
+            best = MathF.Min(best, DistToBox(ax + (bx - ax) * t, ay + (by - ay) * t, x0, y0, x1, y1));
+        }
+        return best;
+    }
+
+    /// <summary>
     /// The radius of the cut: the near radius, but no further than the nearest tile that has pack trees to draw and is not built yet (distances from
     /// the focus to those tiles), so the baked trees are never hidden before the pack trees that replace them exist.
     /// </summary>
@@ -556,7 +614,12 @@ public sealed class PackModelMesh
 }
 
 /// <summary>What a placement is: decides how the shader cuts it (tree_cut, or undergrowth's own radius) and whether it takes the tint (ground objects do not). Stored in the vertex colour's alpha.</summary>
-public enum PackKind : byte { Tree = 0, Object = 1, Undergrowth = 2 }
+public enum PackKind : byte
+{
+    Tree = 0, Object = 1, Undergrowth = 2,
+    /// <summary>Undergrowth of a kind marked <c>far</c> (saplings, shrubs, bushes): big enough to be seen appearing, so it has a longer radius of its own.</summary>
+    UndergrowthFar = 3,
+}
 
 /// <summary>
 /// A pack model to draw (tree, ground object, undergrowth): its base (Godot axes), turn about the up axis, uniform scale, the model's id and a stretch on top of the scale
@@ -632,28 +695,18 @@ public static class PackTileMesher
             }
         foreach (var t in trees)
         {
-            var (s, c) = MathF.SinCos(t.Rot);
-            var (sp, cp) = MathF.SinCos(t.Pitch);
-            var (sr, cr) = MathF.SinCos(t.Roll);
-            var origin = new Vector3(t.Base.X - centre.X, t.Base.Y, t.Base.Z - centre.Z);
-            var baseUv = new Vector2(origin.X, origin.Z);
-            var laid = t.Pitch != 0f;
-            var size = laid ? new Vector3(t.Scale, t.Scale * t.Stretch, t.Scale) : new Vector3(t.Scale, t.Scale, t.Scale * t.Stretch);
+            var pose = new PackPose(t, centre);
+            var baseUv = pose.BaseUv;
             var tint = t.Tint == default ? Vector3.One : t.Tint;
-            var col = new Vector4(tint * 0.5f, t.Kind switch { PackKind.Tree => 1f, PackKind.Object => 0.5f, _ => 0f });
-            Vector3 Pose(Vector3 v)
-            {
-                if (laid) v = Tip(Turn(v, sr, cr), sp, cp);
-                return Turn(v, s, c);
-            }
+            var col = new Vector4(tint * 0.5f, KindAlpha(t.Kind, card: false));
             foreach (var surface in models[t.Model].Surfaces)
             {
                 if (!byMaterial.TryGetValue(surface.Material, out var b)) byMaterial[surface.Material] = b = PackBucket.Rent(surface.Material, need[surface.Material].V, need[surface.Material].I);
                 var first = b.V.Count;
                 for (var i = 0; i < surface.Vertices.Length; i++)
                 {
-                    b.V.Add(Pose(surface.Vertices[i] * size) + origin);
-                    b.N.Add(Pose(surface.Normals[i]));
+                    b.V.Add(pose.Point(surface.Vertices[i]));
+                    b.N.Add(pose.Turned(surface.Normals[i]));
                     b.Uv.Add(surface.Uv[i]);
                     b.Uv2.Add(baseUv);
                     b.Col.Add(col);
@@ -664,9 +717,52 @@ public static class PackTileMesher
         return byMaterial.Values.ToList();
     }
 
+    /// <summary>
+    /// What a piece is, as the vertex colour's alpha (8 bits; pack_tree.gdshader reads it back with a margin): tree 1, object 0.5, undergrowth 0, far undergrowth 0.25;
+    /// a card of a tree 0.875, of an object 0.375.
+    /// </summary>
+    public static float KindAlpha(PackKind kind, bool card) => kind switch
+    {
+        PackKind.Tree => card ? 0.875f : 1f,
+        PackKind.Object => card ? 0.375f : 0.5f,
+        PackKind.UndergrowthFar => 0.25f,
+        _ => 0f,
+    };
+
     /// <summary>Rotation about +X (Y toward Z for a positive angle): a quarter turn lays an upright model down, its top toward +Z and its +Z side down.</summary>
-    static Vector3 Tip(Vector3 v, float s, float c) => new(v.X, v.Y * c - v.Z * s, v.Y * s + v.Z * c);
+    internal static Vector3 Tip(Vector3 v, float s, float c) => new(v.X, v.Y * c - v.Z * s, v.Y * s + v.Z * c);
 
     /// <summary>Rotation about +Y by the angle whose sine and cosine are given (Godot's <c>Basis.Rotated(Up, angle)</c>).</summary>
-    static Vector3 Turn(Vector3 v, float s, float c) => new(v.X * c + v.Z * s, v.Y, -v.X * s + v.Z * c);
+    internal static Vector3 Turn(Vector3 v, float s, float c) => new(v.X * c + v.Z * s, v.Y, -v.X * s + v.Z * c);
+}
+
+/// <summary>How a placement's model gets into its tile: scaled (and stretched), laid down when it has a pitch, turned by its Rot, moved to its base minus the tile centre.</summary>
+public readonly struct PackPose
+{
+    readonly float _s, _c, _sp, _cp, _sr, _cr;
+    readonly bool _laid;
+    readonly Vector3 _size, _origin;
+
+    public PackPose(PackPlacement t, Vector3 centre)
+    {
+        (_s, _c) = MathF.SinCos(t.Rot);
+        (_sp, _cp) = MathF.SinCos(t.Pitch);
+        (_sr, _cr) = MathF.SinCos(t.Roll);
+        _origin = new Vector3(t.Base.X - centre.X, t.Base.Y, t.Base.Z - centre.Z);
+        _laid = t.Pitch != 0f;
+        _size = _laid ? new Vector3(t.Scale, t.Scale * t.Stretch, t.Scale) : new Vector3(t.Scale, t.Scale, t.Scale * t.Stretch);
+    }
+
+    /// <summary>The base in the tile's frame (x, z): UV2 of every vertex of the piece.</summary>
+    public Vector2 BaseUv => new(_origin.X, _origin.Z);
+
+    /// <summary>A direction of the model in the tile (turned, not scaled or moved).</summary>
+    public Vector3 Turned(Vector3 v)
+    {
+        if (_laid) v = PackTileMesher.Tip(PackTileMesher.Turn(v, _sr, _cr), _sp, _cp);
+        return PackTileMesher.Turn(v, _s, _c);
+    }
+
+    /// <summary>A point of the model in the tile.</summary>
+    public Vector3 Point(Vector3 v) => Turned(v * _size) + _origin;
 }

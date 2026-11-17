@@ -17,7 +17,7 @@ public class PackTreeLookTests
     {
         var c = PackTreeConfig.Parse(Shipped);
         Assert.Equal((220f, 40f, 40f, 6), (c.NearM, c.FadeM, c.AheadM, c.MaxInFlight));
-        Assert.Equal((60f, 12f, 16f), (c.Undergrowth.NearM, c.Undergrowth.FadeM, c.Undergrowth.AheadM));
+        Assert.Equal((64f, 20f, 16f), (c.Undergrowth.NearM, c.Undergrowth.FadeM, c.Undergrowth.AheadM));
         Assert.True(c.Undergrowth.NearM < c.NearM && c.Undergrowth.FadeM < c.Undergrowth.NearM);
         var k = c.Colour;
         Assert.True(k.Enabled && k.Saturation > 0 && k.Gain > 0 && k.HueShift > 0 && k.Value > 0 && k.UndergrowthScale is > 0 and < 1);

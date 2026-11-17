@@ -7,6 +7,10 @@ global uniform vec4 tree_cut;
 // The same for the undergrowth, which has no baked twin and fades out on a radius of its own (shorter than the trees').
 global uniform vec4 tree_cut_under;
 
+// The outer radii, around the same focus (tree_cut.xy). x: radius inside which a tree beyond the pack radius is drawn as cards of its pack model (negative = no
+// cards: the baked trees stand there), y: its fade band; z: radius of the far kinds of undergrowth (saplings, shrubs: negative = none), w: its fade band.
+global uniform vec4 tree_cut_far;
+
 // A tree's distance from being a pack tree, by the distance of its base point to the focus: 0 inside radius - band, 1 beyond the radius.
 // base_xz is the tree's base in the mesh's own space (x, z), y any height: the model matrix takes it to the world. cut is tree_cut or tree_cut_under.
 // xy: the base in the world (what tree_threshold hashes: the baked mesh and the pack tile have different model matrices, the world base is the same); z: the far share.
@@ -29,4 +33,18 @@ float tree_threshold(vec2 base_world) {
 // Far 0 is always pack (threshold >= 0 is never below it), far 1 always baked (threshold < 1). Mirrors PackTreeMath.IsBaked.
 bool tree_is_baked(vec3 swap) {
 	return swap.z > tree_threshold(swap.xy);
+}
+
+// The cut of the cards: tree_cut's focus with the cards' radius and band.
+vec4 tree_card_cut() {
+	return vec4(tree_cut.xy, tree_cut_far.xy);
+}
+
+// How much of an undergrowth piece stands, 0 (gone) to 1 (whole). It has no baked twin to swap with, so it grows: it starts where the far share falls under the
+// piece's threshold and is whole once the share has fallen `grow` further (thresholds squeezed into [grow, 1), so every piece is whole at far share 0).
+// Mirrors PackTreeMath.Grow.
+float tree_grow(vec3 swap, float grow) {
+	float span = max(grow, 0.001);
+	float g = clamp((span + (1.0 - span) * tree_threshold(swap.xy) - swap.z) / span, 0.0, 1.0);
+	return g * g * (3.0 - 2.0 * g);
 }

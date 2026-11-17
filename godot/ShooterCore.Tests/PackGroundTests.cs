@@ -68,13 +68,13 @@ public class PackGroundTests
         // a key the class does not have is skipped without a word, so a typo is a setting that silently does nothing
         using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "pack_trees.json")));
         var u = doc.RootElement.GetProperty("undergrowth");
-        Assert.All(u.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "enabled", "near_m", "fade_m", "ahead_m", "tris_per_tile", "clump_m", "foot_m", "trunk_clear_m", "mixes" }));
+        Assert.All(u.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "enabled", "near_m", "fade_m", "ahead_m", "far_m", "far_fade_m", "grow", "sink_m", "tris_per_tile", "clump_m", "foot_m", "trunk_clear_m", "mixes" }));
         foreach (var mix in u.GetProperty("mixes").EnumerateArray())
         {
             Assert.All(mix.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "mix", "name", "kinds" }));
             foreach (var kind in mix.GetProperty("kinds").EnumerateArray())
             {
-                Assert.All(kind.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "name", "per_100m2", "scale_min", "scale_max", "clump", "foot", "models" }));
+                Assert.All(kind.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "name", "per_100m2", "scale_min", "scale_max", "clump", "foot", "far", "models" }));
                 foreach (var model in kind.GetProperty("models").EnumerateArray())
                     Assert.All(model.EnumerateObject(), p => Assert.Contains(p.Name, new[] { "pack", "name", "weight" }));
             }
