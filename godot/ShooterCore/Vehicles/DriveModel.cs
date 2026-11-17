@@ -424,9 +424,15 @@ public sealed class DrivePrediction
 
     readonly VehicleDef _def;
     readonly IDriveWorld _world;
-    readonly List<(ushort Seq, DriveInput Input, DriveState After)> _pending = new();
+    readonly List<(ushort Seq, DriveInput Input, DriveState After, TrailerBody TrailerAfter)> _pending = new();
+
+    /// <summary>The trailer on the hook, if any: what the tractor's step is told about it and how the copy of its body is stepped (<see cref="AttachTrailer"/>).</summary>
+    sealed record TrailerRig(VehicleDef TrailerDef, TowGeometry Geometry, ITrailerWorld? World);
+    TrailerRig? _rig;
 
     public DriveState State;
+    /// <summary>The driver's own copy of the hitched trailer's body, stepped with the tractor (valid while <see cref="HasTrailer"/>).</summary>
+    public TrailerBody TrailerBody;
     /// <summary>Corrections made so far, and the largest position error seen at an acknowledged input.</summary>
     public int Corrections { get; private set; }
     public float MaxError { get; private set; }
@@ -438,27 +444,66 @@ public sealed class DrivePrediction
 
     public int PendingCount => _pending.Count;
 
+    /// <summary>A trailer is on the hook of the vehicle being predicted.</summary>
+    public bool HasTrailer => _rig != null;
+
+    /// <summary>
+    /// The tractor has a trailer hitched (the server's record says so): from now every step passes its effect to the tractor and steps a copy of <paramref name="body"/> with <see cref="TowModel"/> after the
+    /// tractor, as the server does (ADR 0014). <paramref name="world"/> is the trailer's view of the solids (null: nothing blocks it). The inputs already pending are not replayed with it.
+    /// </summary>
+    public void AttachTrailer(VehicleDef trailerDef, in TowGeometry geometry, in TrailerBody body, ITrailerWorld? world)
+    {
+        _rig = new TrailerRig(trailerDef, geometry, world);
+        TrailerBody = body;
+    }
+
+    /// <summary>The trailer is no longer on the hook (the server's record says it is loose).</summary>
+    public void DetachTrailer() => _rig = null;
+
+    /// <summary>One tick of the tractor and, with a trailer, of the trailer after it: a blocked trailer holds the tractor where it was.</summary>
+    void StepBoth(ref DriveState s, ref TrailerBody trailer, in DriveInput input, float dt)
+    {
+        if (_rig is not { } rig) { DriveModel.Step(ref s, _def, input, dt, _world); return; }
+        var before = s;
+        DriveModel.Step(ref s, _def, input, dt, _world, new TowEffect(TowLoad.Of(_def, rig.TrailerDef), TowModel.BlockOf(rig.Geometry, trailer)));
+        if (rig.World == null) TowModel.Step(ref trailer, rig.Geometry, TractorMotion.From(s), dt);
+        else if (!TowModel.StepChecked(ref trailer, rig.Geometry, TractorMotion.From(s), dt, rig.World)) TowModel.Hold(ref s, before);
+    }
+
     /// <summary>Steps the prediction with the input just sent under <paramref name="seq"/>.</summary>
     public void Step(ushort seq, in DriveInput input, float dt)
     {
-        DriveModel.Step(ref State, _def, input, dt, _world);
-        _pending.Add((seq, input, State));
+        StepBoth(ref State, ref TrailerBody, input, dt);
+        _pending.Add((seq, input, State, TrailerBody));
         if (_pending.Count > MaxPending) _pending.RemoveAt(0);
+    }
+
+    /// <summary>
+    /// A copy of the prediction stepped on by <paramref name="dt"/> (the part of a tick a frame is past the last one) with <paramref name="input"/>: what is drawn between ticks. Nothing of the prediction itself changes.
+    /// </summary>
+    public (DriveState State, TrailerBody Trailer) Ahead(in DriveInput input, float dt)
+    {
+        var s = State; var t = TrailerBody;
+        StepBoth(ref s, ref t, input, dt);
+        return (s, t);
     }
 
     /// <summary>
     /// The server's state after it processed input <paramref name="ack"/>. Returns true when the prediction had to be corrected. Inputs up to the
     /// acknowledged one are forgotten; an acknowledgement of an input this prediction never stepped (sent before the driver sat down) is ignored.
+    /// With a trailer on the hook the server's articulation (<paramref name="serverPhi"/>, the record's yaw less the tractor's) is compared too; the slide, which is not on the wire, is kept as predicted.
     /// </summary>
-    public bool Reconcile(ushort ack, in DriveState server, float dt)
+    public bool Reconcile(ushort ack, in DriveState server, float dt, float serverPhi = 0f)
     {
         var index = _pending.FindIndex(p => p.Seq == ack);
         if (index < 0) return false;
         var predicted = _pending[index].After;
+        var predictedTrailer = _pending[index].TrailerAfter;
         _pending.RemoveRange(0, index + 1);
         var error = Vector3.Distance(predicted.Position, server.Position);
         MaxError = MathF.Max(MaxError, error);
-        if (error <= PositionEpsilon && MathF.Abs(predicted.Speed - server.Speed) <= SpeedEpsilon && MathF.Abs(predicted.Slip - server.Slip) <= SpeedEpsilon
+        var trailerOff = _rig != null && MathF.Abs(FlightMath.Wrap(predictedTrailer.Phi - serverPhi)) > AngleEpsilon;
+        if (!trailerOff && error <= PositionEpsilon && MathF.Abs(predicted.Speed - server.Speed) <= SpeedEpsilon && MathF.Abs(predicted.Slip - server.Slip) <= SpeedEpsilon
             && MathF.Abs(FlightMath.Wrap(predicted.Yaw - server.Yaw)) <= AngleEpsilon && predicted.Afloat == server.Afloat && predicted.Airborne == server.Airborne)
             return false;
         Corrections++;
@@ -469,12 +514,14 @@ public sealed class DrivePrediction
         s.Pitch = server.Pitch; s.Roll = server.Roll;
         s.Afloat = server.Afloat; s.Airborne = server.Airborne;
         s.Sink = server.Emerging ? MathF.Max(predicted.Sink, server.Sink) : 0f;
+        var trailer = predictedTrailer;
+        if (_rig is { } rig) { trailer = TowModel.Pose(rig.Geometry, s.Position, s.Yaw, serverPhi); trailer.Slide = predictedTrailer.Slide; trailer.Speed = predictedTrailer.Speed; }
         for (var i = 0; i < _pending.Count; i++)
         {
-            DriveModel.Step(ref s, _def, _pending[i].Input, dt, _world);
-            _pending[i] = (_pending[i].Seq, _pending[i].Input, s);
+            StepBoth(ref s, ref trailer, _pending[i].Input, dt);
+            _pending[i] = (_pending[i].Seq, _pending[i].Input, s, trailer);
         }
-        State = s;
+        State = s; TrailerBody = trailer;
         return true;
     }
 }

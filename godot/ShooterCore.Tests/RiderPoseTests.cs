@@ -176,7 +176,7 @@ public class RiderPoseTests
     public void EveryShippedVehicleHasAFixedDriverSeat()
     {
         var all = VehiclesFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "vehicles.json")).Vehicles;
-        foreach (var v in all)
+        foreach (var v in all.Where(x => x.Trailer == null)) // a trailer has no seats at all
         {
             Assert.NotEmpty(v.Seats);
             Assert.Equal("driver", v.Seats[0].Role);

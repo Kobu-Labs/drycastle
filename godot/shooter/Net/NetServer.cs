@@ -809,7 +809,7 @@ public partial class NetServer : Node
                 else if (!controlled && RiderRules.Weapons(c.Car.Def, c.CarSeat, i) is { } seated) SeatWeapons(c, c.Car, i, seated); // an armed seat: the rider's own weapons (ADR 0011)
                 if (!RiderPose.FollowsAim(c.Car.Def.Seats[c.CarSeat])) SeatLook(c, c.Car, i); // every other seat: the body is the vehicle's and the head looks where the rider's first-person view does (ADR 0026)
                 if (lightsEdge) c.Car.Lights = Headlights.Toggle(c.Car.Lights);
-                if (useEdge) ExitCar(c);
+                if (TowUseKey(c, c.Car, useDown, useEdge, dt)) ExitCar(c); // with a trailer on the hook a tap leaves and a hold unhitches (UnhitchKey); otherwise the press leaves
                 continue;
             }
             if (useEdge && LootInReach(c) == null && (MassSit(c) || GarageUse(c) || TryEnterCar(c))) continue; // the use key on lying Loot sends it back, it does not take a seat
@@ -1221,7 +1221,14 @@ public partial class NetServer : Node
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot,
                     c.Car != null ? RiderRules.HitStance(c.Car.Def, c.CarSeat, c.Body.State.Stance) : BodyStanceOf(c)));
         foreach (var car in _cars) if (car.Seat.Count > 1) ents.Add(SeatsRecord.Make(car.Id, SeatOccupants(car))); // who sits in seats 1..4, for every client (ADR 0026)
-        foreach (var car in _cars) ents.Add(VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Def.Hp, Vehicles.DamageStages), car.Destroyed, car.Lights, car.Life.WheelsOff));
+        foreach (var car in _cars)
+        {
+            if (car.Retired) continue; // removed for good (RemoveRocketCarts): not sent, so every client drops it
+            var stage = Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Life.MaxHp, Vehicles.DamageStages);
+            ents.Add(car.IsTrailer
+                ? VehicleRecord.MakeTrailer(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Tractor?.Id ?? (ushort)0, car.Colour, car.Cargo!.Loaded, stage, car.Destroyed) // a trailer: its tractor in the driver's field, its load in a health bit (protocol 67)
+                : VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, stage, car.Destroyed, car.Lights, car.Life.WheelsOff));
+        }
         foreach (var car in _cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model
         foreach (var car in _cars) if (car.Flies) ents.Add(FlightRecord.Make(car.Id, car.Flight)); // a helicopter's velocity, tilt and rotor (ADR 0006)
         foreach (var car in _cars) if (car.Drives) ents.Add(DriveRecord.Make(car.Id, car.Drive)); // a driven vehicle's speeds, slope, steering and whether it floats (ADR 0010)

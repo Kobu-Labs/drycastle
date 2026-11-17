@@ -242,6 +242,17 @@
       "seats": [
         { "role": "driver", "offset": [-0.79, 2.0, -0.95], "exposed": true }
       ]
+    },
+    {
+      "id": "rocket_cart",
+      "comment": "The rocket cart (towing): a single-axle military cart that carries one large missile, pulled by any type with a tow block (jeep, flak). No seats, nobody drives or boards it; spawn_count 0 (spawned by the Scud event, or /spawn rocket_cart). Placeholder dimensions (6.5 m long including the drawbar, 2.2 m wide, 1500 kg loaded); the model does not exist yet, so it is a grey box until pack:synty-simple-military/rocket_cart is built (nodes wheel_l, wheel_r roll, missile hidden when empty; origin on the ground at the centre of the footprint, drawbar to -Z). hp is the empty cart's; trailer.loaded_hp is the loaded cart's (the missile is the fragile part) and a loaded cart that is destroyed detonates (NetServer.OnRocketCartDetonated). trailer eye/axle: the eye is at the drawbar's tip, the axle under the body (drawbar 4.1 m).",
+      "top_speed": 20, "acceleration": 1, "brake": 1, "turn_radius": 5, "max_lateral_accel": 5,
+      "mass": 1500, "run_over_mass": 1000, "hp": 200, "hood": [0, 1.0, -3.25], "spawn_count": 0,
+      "half_width": 1.1, "half_length": 3.25, "height": 2.2,
+      "chase_distance": 12, "chase_height": 4.5,
+      "model": "pack:synty-simple-military/rocket_cart", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
+      "seats": [],
+      "trailer": { "eye": [0, 0.55, -3.2], "axle": [0, 0.45, 0.9], "mass": 1500, "grip": 5.5, "loaded_hp": 150 }
     }
   ]
 }

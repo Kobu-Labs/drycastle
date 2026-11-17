@@ -1305,6 +1305,20 @@ From any state: Destroyed
 - **Leaving**: Drives the way out to the map edge, accelerating; the entity ends at its end (no state follows).
 - **Destroyed**: Hit count taken, from any state: the Raid is over. The wreck lies where it stopped (clock: wreck seconds), then the entity ends. Never left.
 
+## RocketCart.Load
+
+A rocket cart: carrying its missile, or empty.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Loaded
+    Loaded --> Empty
+    Empty --> Loaded
+```
+
+- **Loaded**: The missile is on the cart: low hit points (loaded_hp), and when the cart is destroyed it detonates (the Scud blast).
+- **Empty**: Nothing on it: the type's own hit points, and a destroyed cart blows up like a small ordinary vehicle.
+
 ## Rozhlas.Phase
 
 The village loudspeaker: a detour broadcast, and the hijack after the announcer is killed.
@@ -1440,6 +1454,23 @@ stateDiagram-v2
 - **Loose**: Stands still. The first tractor that reverses its hitch onto the eye (close, lined up) latches it.
 - **Hitched**: The eye is pinned to the tractor's hitch and the trailer follows it (TowModel.Step). Ends on the driver's unhitch request.
 - **Released**: Just unhitched: rolls to a stop, and cannot be latched until the lockout (the tractor's relatch_lockout) has run out; then Loose.
+
+## Trailer.UnhitchKey
+
+The driver's interact key while towing: a tap leaves the vehicle, a hold unhitches the trailer.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Holding
+    Holding --> Idle
+    Holding --> Spent
+    Spent --> Idle
+```
+
+- **Idle**: Key up. A press starts the hold.
+- **Holding**: Key down, counting HoldSeconds. Let go before the end: a tap, the driver leaves the vehicle. Held to the end: the trailer is unhitched.
+- **Spent**: The hold did its work (or the key was down when the trailer latched): nothing happens until the key is let go.
 
 ## Turret.State
 

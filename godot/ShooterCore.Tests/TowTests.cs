@@ -68,7 +68,7 @@ public class TowTests
     public void The_jeep_and_the_flak_truck_tow_and_nobody_else_does()
     {
         Assert.Equal(new[] { "flak", "jeep" }, Shipped.Vehicles.Where(v => v.Tow != null).Select(v => v.Id).OrderBy(x => x).ToArray());
-        Assert.All(Shipped.Vehicles, v => Assert.Null(v.Trailer));
+        Assert.Equal(new[] { "rocket_cart" }, Shipped.Vehicles.Where(v => v.Trailer != null).Select(v => v.Id).ToArray()); // the only trailer shipped
         foreach (var v in new[] { Jeep, Flak })
             Assert.True(v.Tow!.Hitch[2] > v.HalfLength, $"{v.Id}: the hitch is behind the footprint");
     }
