@@ -197,10 +197,10 @@ public partial class NetServer
         _carResets += _cars.Count > 0 ? 1 : 0;
     }
 
-    bool TryEnterCar(Client c)
+    /// <summary>The vehicle the interact key would get a player at <paramref name="p"/> into: the nearest with a boardable seat within its enter radius, or null.</summary>
+    ServerCar? EnterableCar(Vector3 p)
     {
         ServerCar? best = null; var bd = float.MaxValue;
-        var p = c.Body.GlobalPosition;
         foreach (var car in _cars)
         {
             if (car.Destroyed || car.Seat.Count == 0 || !car.Seat.HasBoardable) continue; // a seat held by a corpse counts: it is kicked out (#330); a trailer has no seat at all
@@ -209,7 +209,13 @@ public partial class NetServer
             var d = VehicleReach.DistanceToFootprint(N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(p));
             if (d <= bd) { best = car; bd = d; }
         }
-        if (best == null) return false;
+        return best;
+    }
+
+    bool TryEnterCar(Client c)
+    {
+        var p = c.Body.GlobalPosition;
+        if (EnterableCar(p) is not { } best) return false;
         // the free seat nearest to the player (a roof gunner seat is a little further out than the car's centre)
         var seat = best.Seat.NearestFreeSeat(best.Def, N(best.GlobalPosition), best.State.Yaw, N(p), float.MaxValue, kickCorpses: true); // any free seat of a vehicle in reach: the nearest one
         var wasEmpty = !best.Seat.Occupied;

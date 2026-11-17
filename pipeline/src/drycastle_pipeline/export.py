@@ -36,9 +36,11 @@ from drycastle_pipeline.scene import build_scene
 from drycastle_pipeline.textures import TexturedMesh, tex_node_name
 from drycastle_pipeline.water import water_doc, water_rules
 from drycastle_pipeline.zones import FILE_NAME as ZONE_POINTS_FILE
+from drycastle_pipeline.zones import POLYGONS_FILE_NAME as ZONE_POLYGONS_FILE
 from drycastle_pipeline.zones import (
     ZonesError,
     build_zone_points,
+    build_zone_polygons,
     check_ground_types,
     drawn_zones,
     kind_rows,
@@ -91,6 +93,9 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # (no bump) zone_points.json (files.zone_points): candidate points per zone kind (rules.yaml zones: bigfoot, one kind per wild
 # species) that the server picks from. Only maps where some zone has an area have it; a loader that does not know it, or a map
 # without it, means "no points".
+# (no bump) zone_polygons.json (files.zone_polygons): the outlines of the zones of the kinds the server asks "is a player inside" of
+# (the plantation), rings in game axes [x, z]. Only maps with such a zone have it; a loader that does not know it, or a map without
+# it, means "no such zone".
 # (no bump) patches.json (files.patches): the ground patches of the edits in the colour of their type, for the minimap; the
 # patch_<ID> nodes of the chunk files are the water patches only (the other patches are ground, baked into terrain and detail).
 # (no bump) groups.json (files.groups): the property groups of the edits (group id -> parcel ids), for the game server's pets.
@@ -583,6 +588,10 @@ def run_export(
     parcels_file["zone_kinds"] = kind_rows(zrules)
     _dump(out_dir / "parcels.json", parcels_file)
     water_file = out_dir / "water.json"
+    zone_edits = load_edits(edits_path)
+    origin = parcels_doc.get("origin_epsg5514")
+    drawn = drawn_zones(zone_edits.zones, origin) if origin else {}
+    cuts = zone_cuts(zone_edits.zone_cuts, origin) if origin else {}
     if scene.water is not None:
         for pid in scene.water.skipped:
             print(f"export: warning: water parcel/patch {pid} has no terrain under it (or none below its surface); no water body", file=sys.stderr)
@@ -590,10 +599,6 @@ def run_export(
         _dump(water_file, water)
         files["water"] = "water.json"
         # candidate points of the zone kinds, drawn clear of the buildings and of the water just built
-        zone_edits = load_edits(edits_path)
-        origin = parcels_doc.get("origin_epsg5514")
-        drawn = drawn_zones(zone_edits.zones, origin) if origin else {}
-        cuts = zone_cuts(zone_edits.zone_cuts, origin) if origin else {}
         points_doc, points_warnings = build_zone_points(
             parcels_doc, drawn, list(buildings.values()), scene.terrain, water, zrules, cuts
         )
@@ -609,6 +614,13 @@ def run_export(
         files["zone_points"] = ZONE_POINTS_FILE
     else:
         points_file.unlink(missing_ok=True)  # no zone has an area (any more): no file, "no points"
+    polygons_doc = build_zone_polygons(parcels_doc, drawn, zrules, cuts)
+    polygons_file = out_dir / ZONE_POLYGONS_FILE
+    if polygons_doc is not None:
+        _dump(polygons_file, polygons_doc)
+        files["zone_polygons"] = ZONE_POLYGONS_FILE
+    else:
+        polygons_file.unlink(missing_ok=True)  # no plantation zone (any more): no file, the feature is off
     groups_doc = build_groups(edits_path, (p["id"] for p in parcels_doc["parcels"]))
     groups_file = out_dir / GROUPS_FILE
     if groups_doc is not None:

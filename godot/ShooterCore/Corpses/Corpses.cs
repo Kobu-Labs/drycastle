@@ -269,6 +269,14 @@ public sealed class CorpseBook
     /// <summary>The corpses on the map with their ids, oldest first.</summary>
     public IEnumerable<(ushort Id, Corpse Body)> WithIds => _order;
 
+    /// <summary>A corpse a player at <paramref name="player"/> could loot (in reach, with the latency slack): it owns the interact key (the plantation yields to it).</summary>
+    public bool AnyBodyInReach(Vector3 player, float slack = CorpseRules.LatencySlackMetres) =>
+        _order.Any(x => x.Body.CanLoot && CorpseRules.InReach(player, x.Body.ReachPoint, slack));
+
+    /// <summary>An item lying on the ground a player at <paramref name="player"/> could take (in reach, with the latency slack).</summary>
+    public bool AnyGroundInReach(Vector3 player, float slack = GroundItemRules.LatencySlackMetres) =>
+        _ground.Any(x => x.Item.Ended == null && GroundItemRules.InReach(player, x.Item.Position, slack));
+
     /// <summary>The corpse with this id, or null.</summary>
     public Corpse? Get(ushort id) => _order.FirstOrDefault(x => x.Id == id).Body;
 

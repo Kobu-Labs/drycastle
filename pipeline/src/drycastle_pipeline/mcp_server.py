@@ -84,7 +84,7 @@ from drycastle_pipeline.ground_attributes import (
 from drycastle_pipeline.patches import patch_rank
 from drycastle_pipeline.roads import edge_lines
 from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
-from drycastle_pipeline.zones import KIND_NAMES, PLAYER_SPAWN, RULE_KEYS, rule_part_is_cut, rule_parts, zone_cuts
+from drycastle_pipeline.zones import KIND_NAMES, PLANTATION, PLAYER_SPAWN, RULE_KEYS, rule_part_is_cut, rule_parts, zone_cuts
 from drycastle_pipeline.zones import kind_rows as zone_kind_rows
 from drycastle_pipeline.zones import rules as zone_rules
 
@@ -2371,7 +2371,7 @@ class ParcelEditTools:
             rows.append({
                 **{k: row[k] for k in ("name", "label", "group", "where_ground")},
                 "zones": len(self._zone_entries(edits, row["name"])),
-                "points": "none: read by the props stage as spawn candidates" if row["name"] == PLAYER_SPAWN else {k: rule[k] for k in RULE_KEYS if k in rule} or "no rule in rules.yaml zones",
+                "points": "none: read by the props stage as spawn candidates" if row["name"] == PLAYER_SPAWN else "none: the export writes its polygons (zone_polygons.json), the game tests who stands inside" if row["name"] == PLANTATION else {k: rule[k] for k in RULE_KEYS if k in rule} or "no rule in rules.yaml zones",
             })
         return {"summary": f"{len(rows)} zone kinds", "kinds": rows}
 
@@ -2675,11 +2675,11 @@ def build_server(settings: Settings) -> Any:
         return tools.list_ground_patches(near, limit)
 
     @server.tool(description=(
-        "List the zone kinds: what a marked area can mean in play (a fixed catalog: bigfoot, player_spawn and one per wild "
+        "List the zone kinds: what a marked area can mean in play (a fixed catalog: bigfoot, player_spawn, plantation and one per wild "
         "species). Per kind: label, group (event, player, wildlife), `where_ground` (a rule zone: the ground types the kind "
         "applies to wherever they lie; null: only the zones you create), the number of its `zones` and `points` (the density "
         "rule of the candidate points the server picks from; player_spawn has none, the props stage takes spawn "
-        "candidates on its ground). Use a name as the `kind` of create_zone."))
+        "candidates on its ground; plantation has none, the export writes its outlines for the server). Use a name as the `kind` of create_zone."))
     def list_zone_kinds() -> dict:
         return tools.list_zone_kinds()
 

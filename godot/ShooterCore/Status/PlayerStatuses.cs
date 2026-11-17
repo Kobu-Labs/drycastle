@@ -1,7 +1,7 @@
 namespace Drycastle.ShooterCore;
 
 /// <summary>
-/// A status a player carries: not an Item (no slot, no drop, no corpse). Append only, the value is a bit of <see cref="PlayerStatuses.Mask"/>.
+/// A status a player carries (High is one that also ends when its clock does, see <see cref="PlayerHigh"/>): not an Item (no slot, no drop, no corpse). Append only, the value is a bit of <see cref="PlayerStatuses.Mask"/>.
 /// </summary>
 public enum StatusKind : byte
 {
@@ -9,6 +9,8 @@ public enum StatusKind : byte
     Curse = 0,
     /// <summary>Divine blessing: one lethal hit is negated. The save is <see cref="BlessingRules"/>, hooked into <see cref="MatchSim.SaveFromDeath"/>. Until used up or the player dies.</summary>
     Blessing = 1,
+    /// <summary>High from the marijuana plantation (<see cref="PlayerHigh"/>): the cigarette and the red eyes on the figure for everyone, the nausea for the player. The server keeps the bit equal to <see cref="PlayerHigh.IsHigh"/>; it ends at death, when the time runs out and at a round reset.</summary>
+    High = 2,
 }
 
 /// <summary>

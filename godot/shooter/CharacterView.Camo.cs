@@ -359,7 +359,7 @@ public sealed partial class CharacterView
         return null;
     }
 
-    /// <summary>Two dark eyes on the face plate (the plate is blank in the model). They ride on the head bone and stay for the life of the model.</summary>
+    /// <summary>Two dark eyes on the face plate (the plate is blank in the model), or a high figure's red-tinted ones. They ride on the head bone; <see cref="SetHigh"/> swaps them.</summary>
     void BuildEyes(Skeleton3D sk, MeshInstance3D mi)
     {
         _bind = BindPoses(sk, mi.Skin!);
@@ -369,12 +369,15 @@ public sealed partial class CharacterView
         var dark = new StandardMaterial3D { AlbedoColor = new Color(0.04f, 0.04f, 0.05f), ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
         var toHead = _bind[head].AffineInverse();
         var carrier = new BoneAttachment3D { Name = "Eyes", BoneName = "Head" };
-        foreach (var side in new[] { -1f, 1f })
-        {
-            var at = new Vector3(plate.GetCenter().X + side * plate.Size.X * 0.2f, plate.GetCenter().Y + plate.Size.Y * 0.08f, plate.End.Z + 0.005f);
-            carrier.AddChild(new MeshInstance3D { Mesh = eye, MaterialOverride = dark, Transform = toHead * new Transform3D(Basis.Identity, at) });
-        }
+        if (_high is { } high) AddHighEyes(carrier, plate, toHead, high.View.Eyes); // a high figure's: bigger, white with a red tint, each with a pupil (CharacterView.High.cs)
+        else
+            foreach (var side in new[] { -1f, 1f })
+            {
+                var at = new Vector3(plate.GetCenter().X + side * plate.Size.X * 0.2f, plate.GetCenter().Y + plate.Size.Y * 0.08f, plate.End.Z + 0.005f);
+                carrier.AddChild(new MeshInstance3D { Mesh = eye, MaterialOverride = dark, Transform = toHead * new Transform3D(Basis.Identity, at) });
+            }
         sk.AddChild(carrier);
+        _eyes = carrier;
     }
 
     void BuildFacePaint(CamoSpec spec)

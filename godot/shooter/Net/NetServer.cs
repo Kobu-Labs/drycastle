@@ -95,6 +95,9 @@ public partial class NetServer : Node
         public readonly ScudReloadKey ReloadKey = new();
         /// <summary>The interact key's hold at the rozhlas dictation table (NetServer.RozhlasSet.cs).</summary>
         public InteractHold SetHold;
+        /// <summary>The high of the plantation (NetServer.Plantation.cs) and the interact key's hold inside one; the replicated bit is <see cref="StatusKind.High"/> of <see cref="Status"/>.</summary>
+        public readonly PlayerHigh High = new();
+        public InteractHold PlantHold;
         /// <summary>The use key's hold on lying Loot (NetServer.Thieves.Loot.cs) and the health it was last seen at (a drop is a hit taken).</summary>
         public LootReturnHold LootHold;
         public float LootHealth;
@@ -311,6 +314,7 @@ public partial class NetServer : Node
         HarvesterAfterVehicles((float)delta); // what the harvester ran over, the corpses it draws in, the bales' fire
         PerfLap(ServerPerf.Ph.Vehicles);
         StatusTick((float)delta); // burns tick
+        PlantationTick((float)delta); // highs run out
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
         DetonateFlak();    // flak shells that have arrived burst now
         DetonateHoming();  // homing missiles that have arrived hit their Aircraft now
@@ -796,6 +800,7 @@ public partial class NetServer : Node
             var useEdge = c.UseKey.Pressed(useDown);
             RozhlasSetUse(c, useDown);
             LootUse(c, useDown);
+            PlantationUse(c, useDown);
             var lightsEdge = Headlights.Edge((i.Buttons & (ushort)MoveButtons.Headlights) != 0, ref c.LightsHeld);
             var streakDown = (i.Buttons & (ushort)MoveButtons.Killstreak) != 0;
             var streakEdge = c.StreakKey.Pressed(streakDown);

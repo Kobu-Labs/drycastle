@@ -66,6 +66,7 @@ public sealed partial class CharacterView : Node3D
         _heldId = "";
         ClearCamo();
         Array.Clear(_wornNodes); // they hang on the old skeleton, which goes with the old model
+        DropHigh(true); // so do the eyes and the cigarette; the light and the smoke are the view's own and are made again for the new body
         _model?.QueueFree();
         _modelPath = path;
         HasModel = true;
@@ -86,6 +87,7 @@ public sealed partial class CharacterView : Node3D
             if (_look != null) _skeleton.AddChild(_look); // before the arms: a rider's look moves the body, the weapon's hands follow
             BuildHandSlot(_skeleton, _mesh.Skin);
             BuildEyes(_skeleton, _mesh);
+            BuildCigarette(); // a high figure's (CharacterView.High.cs)
             RebuildWorn(); // what is worn goes on the new body
         }
         _flail = _skeleton != null ? RagdollFlail.Create(_skeleton) : null;
@@ -280,6 +282,7 @@ public sealed partial class CharacterView : Node3D
     /// <summary>While a gun is firing the weapon kicks about every 0.11 s (a steady automatic rate; the real shots arrive as events, this is the pose only).</summary>
     public override void _Process(double delta)
     {
+        HighFrame(); // the light and the smoke of a high figure follow its cigarette
         if (!_shooting || _arms == null) { _fireTimer = 0; return; }
         _fireTimer -= (float)delta;
         if (_fireTimer > 0) return;

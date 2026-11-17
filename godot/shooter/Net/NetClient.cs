@@ -285,6 +285,7 @@ public partial class NetClient : Node
         UpdateDemonQuake(delta);
         UpdateDust(); // before the shake: a blast wave that arrives this frame shakes this frame
         UpdateShake(delta);
+        UpdateNausea(delta); // a high player's sway (NetClient.High.cs), before the roll is composed
         FadeOwnCorrection(delta);
         UpdateHud();
         RozhlasMicFrame(); // the set holder's mic and the ON AIR cue
@@ -616,7 +617,7 @@ public partial class NetClient : Node
         _viewFix *= Mathf.Exp(-CorrectionFade * (float)delta);
         if (_viewFix.LengthSquared() < 1e-6f) _viewFix = Vector3.Zero; // under a millimetre: done
         _me.ViewOffset = _viewFix + _heldSwing; // in the Bigfoot's hand the eye swings with the hand (#264)
-        _me.ViewRoll = _heldRoll;
+        _me.ViewRoll = _heldRoll + _nauseaRoll;
     }
 
     public override void _PhysicsProcess(double delta)

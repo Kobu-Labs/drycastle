@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  // The marijuana plantation (GLOSSARY "Plantation", "High"). A player on foot inside a `plantation` zone who holds the interact key (nothing else in reach of it) for hold_seconds is high for high_seconds;
+  // another completed hold while high starts the time over. Nothing is shown for the hold. The server counts it (NetServer.Plantation.cs); a map with no plantation zone has none of this.
+  "hold_seconds": 1.5,
+  "high_seconds": 120,
+  // The high player's own camera (ShooterCore Nausea; NetClient.High.cs). Each axis is a sum of sines: deg (the size of the sway) and period_s. yaw and pitch move the REAL look angles (the ones sent, so
+  // shots go where the swayed crosshair points), roll and fov are only drawn. lag_s: how slowly the view follows the sway; fade_s: how long it takes to come on and to go; reduced_scale: the share left with
+  // the reduce-motion setting. Nothing here was seen in the game: tune by feel.
+  "nausea": {
+    "fade_s": 4,
+    "lag_s": 0.35,
+    "reduced_scale": 0.15,
+    "yaw":   [ { "deg": 3.0, "period_s": 7.3 }, { "deg": 1.1, "period_s": 3.1 } ],
+    "pitch": [ { "deg": 2.2, "period_s": 5.9 }, { "deg": 0.8, "period_s": 2.3 } ],
+    "roll":  [ { "deg": 4.5, "period_s": 9.1 }, { "deg": 1.5, "period_s": 3.7 } ],
+    "fov":   [ { "deg": 6.0, "period_s": 6.4 }, { "deg": 2.0, "period_s": 2.7 } ]
+  },
+  // What every client draws on a high player's figure (CharacterView.High.cs). Nothing here was seen in the game: nudge freely.
+  "view": {
+    // The lit cigarette in the mouth: the Synty Gang Warfare SM_Prop_Cigarette_Long_01 (assets-private/synty/glb/props/cigarette_long_01.glb: 0.215 m long, filter end at z -0.029, tip at +Z 0.186),
+    // else a thin white stick. mouth: where the filter end sits on the face plate, as shares of the plate's width and height from its middle (x: + is the figure's left; y: + is up), and out_m metres in
+    // front of the plate; rotation_deg tilts the cigarette (x positive turns its tip down). ember_energy is above the bloom threshold (2) on purpose (ADR 0030). The light is one small shadowless OmniLight3D
+    // at the tip, only while the figure is within light.cull_m of the camera; the smoke is a world-space CpuParticles3D (it trails behind a walking player), only within smoke.cull_m.
+    "cigarette": {
+      "model": "props/cigarette_long_01",
+      "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png",
+      "mouth": [0.1, -0.3],
+      "out_m": 0.015,
+      "rotation_deg": [6, 0, 0],
+      "scale": 1.0,
+      "length_m": 0.186,
+      "ember_colour": "#ff6a1a",
+      "ember_radius_m": 0.011,
+      "ember_energy": 6,
+      "light": { "colour": "#ff9a4d", "energy": 0.7, "range": 1.6, "cull_m": 30 },
+      "smoke": { "amount": 60, "lifetime_s": 2.6, "size_m": 0.045, "speed_mps": 0.3, "rise_mps2": 0.3, "cull_m": 80 }
+    },
+    // The eyes: two rectangles on the face plate instead of the normal dark boxes. width and height: shares of the plate's width and height; spread: how far from the middle each sits (share of the width);
+    // lift: how far above the middle (share of the height). White with a clear red tint (colour), each with a small dark pupil (a share of the eye).
+    "eyes": {
+      "width": 0.2,
+      "height": 0.34,
+      "spread": 0.22,
+      "lift": 0.08,
+      "colour": "#f5b5ac",
+      "pupil_colour": "#0a0a0c",
+      "pupil_width": 0.38,
+      "pupil_height": 0.34
+    }
+  }
+}

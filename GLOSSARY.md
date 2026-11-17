@@ -35,11 +35,11 @@ A polygon of exactly one zone kind. It marks what the area means in play and nev
 _Avoid_: region, layer, attribute layer, ground type
 
 **Zone kind**:
-What a zone means in play, from a fixed list in code (each needs something in the pipeline or the game to read it): Bigfoot, Scud truck, deer, player spawn, ... Its numbers (density, clearances) are in `rules.yaml`, and it may have a zone for every ground area of some ground types (deer wherever there is forest) without anything drawn; the editor shows one count of all its zones.
+What a zone means in play, from a fixed list in code (each needs something in the pipeline or the game to read it): Bigfoot, Scud truck, deer, player spawn, plantation, ... Its numbers (density, clearances) are in `rules.yaml`, and it may have a zone for every ground area of some ground types (deer wherever there is forest) without anything drawn; the editor shows one count of all its zones.
 _Avoid_: event area, spawn area, marker type
 
 **Runtime zone**:
-A zone that the game server needs while it runs. The game never sees ground areas or zones, so the build exports **candidate points** instead: seeded points inside every zone of the kind, one per N m² between a minimum and a maximum, clear of buildings and water, in `attribute_points.json` of the map. The server picks one at random; a kind no zone covers has no point.
+A zone that the game server needs while it runs. The game never sees ground areas or zones, so the build exports one of two things instead. **Candidate points** (most kinds): seeded points inside every zone of the kind, one per N m² between a minimum and a maximum, clear of buildings and water, in `zone_points.json` of the map; the server picks one at random, and a kind no zone covers has no point. **Polygons** (a kind the server asks "is a player standing inside?" of, today the Plantation): the zones' outlines in game axes (x east, z = -north), in `zone_polygons.json`; a map without the file or without such a zone has the feature off, with no error.
 _Avoid_: exported attribute, spawn area (an area is not exported)
 
 **Replacement scene**:
@@ -658,8 +658,16 @@ _Avoid_: blast, explosion (those have a radius and damage falloff)
 The trail of giant footprints that appears where the Bigfoot fell and leads, a little over a hundred metres, to its corpse. They are drawn on every client for as long as the corpse lasts (`reward.corpse_seconds`, much longer than a player's corpse).
 _Avoid_: tracks, breadcrumbs
 **Status**:
-A condition a player carries that is not an Item: no slot, no bag cell, no drop, no corpse. Server session state beside the Equipment, never in the profile. Two kinds: the devil's curse (the player's hits set victims ablaze) and the divine blessing (one lethal hit is negated). A new round keeps it; the player's death ends it.
+A condition a player carries that is not an Item: no slot, no bag cell, no drop, no corpse. Server session state beside the Equipment, never in the profile. Three kinds: the devil's curse (the player's hits set victims ablaze), the divine blessing (one lethal hit is negated) and High (from a Plantation, with a clock of its own). A new round keeps the curse and the blessing (High ends); the player's death ends them all.
 _Avoid_: buff, effect, power-up, item (an Item is worn or carried)
+
+**Plantation**:
+A zone of the `plantation` kind: a marijuana field on the map (drawn like any zone; a Runtime zone, exported as polygons). A player on foot and alive inside one who holds the interact key (E) for 1.5 s, with nothing else in reach of the key, gets **High**. Nothing is shown for the hold (no prompt, no ring). The plantation has the lowest priority of the interact key: a corpse, a ground item, a crate, the garage doors, a ladder, a vehicle, the Mass seat, the rozhlas set and lying Loot all win it. The server counts the hold (`InteractHold`), and no bot gets high. Numbers: `plantation.json`.
+_Avoid_: weed field, drug zone
+
+**High**:
+A Status (bit 2 of the player status mask, `Player.High`: Sober or High) a player gets from a hold in a Plantation and keeps for 120 s (`high_seconds`); holding again while high starts the 120 s over. It ends when the time runs out, at the player's death (a respawned player is sober) and at a round reset. Everyone sees it on the figure: a lit cigarette with a glowing tip, a small warm light on the face and a dense smoke trail, and bigger white eyes with a red tint and a pupil each. Only the player themselves get the nausea: a slow sway of the real look yaw and pitch (so aiming gets harder and the sent look is the swayed one), a roll and a breathing field of view; the reduce-motion setting leaves a much weaker version, and no sway runs while a cut-scene camera, a turret or missile view, a seat or the death view owns the camera.
+_Avoid_: drunk, stoned, buff, effect
 
 **Burn**:
 Damage over time on a player who was set ablaze, by a cursed player's hit or by a demon's fireball: 0.5 hp/s for 10 s (`burn` in `holy_mass_demon.json`). A new ignition refreshes it and never stacks; a kill is credited to the cursed shooter, and a fireball's burn to nobody. It ends with the victim's death.
