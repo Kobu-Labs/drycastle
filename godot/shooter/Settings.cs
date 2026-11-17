@@ -27,6 +27,8 @@ public sealed class GameSettings
     public bool InvertY;
     public float Fov = 90;
     public bool ShowCrosshair = true;
+    /// <summary>The FPS counter in the HUD's top right corner, toggled by the /fps chat command (#340).</summary>
+    public bool ShowFps;
     /// <summary>Minimap side in pixels, opacity and zoom (ticket #143; ranges in <see cref="MinimapSettings"/>).</summary>
     public float MinimapSize = MinimapSettings.DefaultSize, MinimapOpacity = MinimapSettings.DefaultOpacity, MinimapZoom = MinimapSettings.DefaultZoom;
     // accessibility
@@ -55,7 +57,7 @@ public sealed class GameSettings
 
     public bool SameAs(GameSettings o) =>
         Fullscreen == o.Fullscreen && VSync == o.VSync && Msaa == o.Msaa && Brightness == o.Brightness && Volume.SequenceEqual(o.Volume)
-        && Sensitivity == o.Sensitivity && InvertY == o.InvertY && Fov == o.Fov && ShowCrosshair == o.ShowCrosshair
+        && Sensitivity == o.Sensitivity && InvertY == o.InvertY && Fov == o.Fov && ShowCrosshair == o.ShowCrosshair && ShowFps == o.ShowFps
         && MinimapSize == o.MinimapSize && MinimapOpacity == o.MinimapOpacity && MinimapZoom == o.MinimapZoom
         && UiScale == o.UiScale && ReduceMotion == o.ReduceMotion && ColorBlind == o.ColorBlind && Keys.SameAs(o.Keys);
 
@@ -75,6 +77,7 @@ public sealed class GameSettings
             s.InvertY = (bool)cf.GetValue("gameplay", "invert_y", false);
             s.Fov = SettingsRanges.ClampFov((float)(double)cf.GetValue("gameplay", "fov", 90.0));
             s.ShowCrosshair = (bool)cf.GetValue("gameplay", "crosshair", true);
+            s.ShowFps = (bool)cf.GetValue("gameplay", "show_fps", false);
             s.MinimapSize = MinimapSettings.ClampSize((float)(double)cf.GetValue("gameplay", "minimap_size", (double)MinimapSettings.DefaultSize));
             s.MinimapOpacity = MinimapSettings.ClampOpacity((float)(double)cf.GetValue("gameplay", "minimap_opacity", (double)MinimapSettings.DefaultOpacity));
             s.MinimapZoom = MinimapSettings.ClampZoom((float)(double)cf.GetValue("gameplay", "minimap_zoom", (double)MinimapSettings.DefaultZoom));
@@ -100,6 +103,7 @@ public sealed class GameSettings
         cf.SetValue("gameplay", "invert_y", InvertY);
         cf.SetValue("gameplay", "fov", (double)SettingsRanges.ClampFov(Fov));
         cf.SetValue("gameplay", "crosshair", ShowCrosshair);
+        cf.SetValue("gameplay", "show_fps", ShowFps);
         cf.SetValue("gameplay", "minimap_size", (double)MinimapSettings.ClampSize(MinimapSize));
         cf.SetValue("gameplay", "minimap_opacity", (double)MinimapSettings.ClampOpacity(MinimapOpacity));
         cf.SetValue("gameplay", "minimap_zoom", (double)MinimapSettings.ClampZoom(MinimapZoom));
