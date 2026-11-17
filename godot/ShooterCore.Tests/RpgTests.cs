@@ -13,18 +13,18 @@ public class RpgTests
     [Theory]
     [InlineData(0f, 120f)]
     [InlineData(1.5f, 120f)]
-    [InlineData(3f, 93f)]       // 120 - 100 * 1.5 / 5.5
-    [InlineData(4.5f, 65f)]     // 120 - 100 * 3 / 5.5
-    [InlineData(6.99f, 20f)]
-    [InlineData(7f, 0f)]
+    [InlineData(3f, 102f)]      // 120 - 100 * 1.5 / 8.5
+    [InlineData(4.5f, 85f)]     // 120 - 100 * 3 / 8.5
+    [InlineData(9.99f, 20f)]
     [InlineData(10f, 0f)]
+    [InlineData(14f, 0f)]
     public void SplashFalloffIsLinear(float d, float expected) => Assert.Equal(expected, ProjectileMath.SplashDamage(Bz, d, false), 0.6f);
 
     [Fact]
     public void SelfDamageIsHalf()
     {
         Assert.Equal(60f, ProjectileMath.SplashDamage(Bz, 0.5f, true));
-        Assert.Equal(46f, ProjectileMath.SplashDamage(Bz, 3f, true), 0.6f);
+        Assert.Equal(51f, ProjectileMath.SplashDamage(Bz, 3f, true), 0.6f);
     }
 
     [Fact]

@@ -27,7 +27,7 @@ public class DataFileTests
         Assert.Equal(90, ak.ReserveAmmo);
         var bz = d.Weapons.Find("rpg")!;
         Assert.Equal(WeaponKind.Projectile, bz.Kind);
-        Assert.Equal(7, bz.Splash!.Radius);
+        Assert.Equal(10, bz.Splash!.Radius);
         Assert.Equal(0.5f, bz.Splash.SelfDamageMultiplier);
         Assert.Equal(100, d.Weapons.Find("knife")!.BackstabDamage);
 

@@ -32,7 +32,7 @@
       "move_speed_multiplier": 0.85,
       "projectile_speed": 60, "projectile_life": 4.0,
       "recoil": { "vertical_per_shot": 12 },
-      "splash": { "radius": 7, "full_damage_radius": 1.5, "edge_damage": 20, "self_damage_multiplier": 0.5, "knockback_speed": 5 }
+      "splash": { "radius": 10, "full_damage_radius": 1.5, "edge_damage": 20, "self_damage_multiplier": 0.5, "knockback_speed": 5, "wave_speed": 200 }
     },
     {
       "id": "knife", "category": "melee", "slot": "special", "unlock_level": 0, "kind": "melee", "full_auto": false,

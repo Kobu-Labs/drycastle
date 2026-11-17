@@ -1181,7 +1181,7 @@ public partial class NetServer : Node
         _explosions++;
         if (Vehicles != null) RocketVsVehicles(pos, w, r.Owner, r.Weapon, directCar);
         BlastGlass(pos, w.Splash?.Radius ?? 0);
-        BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(r.Id, r.Owner, r.Weapon, N(pos), w.Splash?.Radius ?? 0)));
+        BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(r.Id, r.Owner, r.Weapon, N(pos), w.Splash?.Radius ?? 0, w.Splash?.WaveSpeed ?? 0)));
         BroadcastImpact(N(pos), ImpactSize.Plume, body: direct != null && directCar == null, vehicle: directCar != null); // rockets throw up a plume (ticket #154)
         var own = RocketCar(r);
         var targets = LiveTargets();

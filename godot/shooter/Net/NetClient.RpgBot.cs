@@ -5,7 +5,7 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// RPG smoke scripts (headless, on the weapons smoke's flat arena). Alice fires: a rocket into the wall with bob 3 m
+/// RPG smoke scripts (headless, on the weapons smoke's flat arena). Alice fires: a rocket into the wall with bob 6 m
 /// behind it (splash through the wall, stopped by the wall, flight time), the reload, a rocket at her own feet
 /// (self damage, knockback), a second reload and a direct hit on bob (kill, ammo refill). Bob checks the hits he received.
 /// Every expected number is read from weapons.json (the rpg is weapon 2, hotbar slot 3 in the arena).
@@ -13,15 +13,15 @@ namespace Drycastle.Shooter;
 public partial class NetClient
 {
     WeaponDef SmokeRpg => Weapons!.Weapons[2];
-    /// <summary>Splash 3 m from the blast, and the self damage of a rocket at the own feet.</summary>
-    int RpgSplash3 => (int)MathF.Round(ProjectileMath.SplashDamage(SmokeRpg, 3f, false));
+    /// <summary>Splash 6 m from the blast (bob behind the wall: far enough to live through it), and the self damage of a rocket at the own feet.</summary>
+    int RpgSplash6 => (int)MathF.Round(ProjectileMath.SplashDamage(SmokeRpg, 6f, false));
     int RpgSelf => (int)MathF.Round(ProjectileMath.SplashDamage(SmokeRpg, 0.5f, true));
 
     IEnumerable<int> BazBob()
     {
         foreach (var x in WaitFor(() => _hitLog.Count(h => h.M.Victim == _myId) >= 2, BotSeconds - 2, "2 hits on bob")) yield return x;
         var hits = _hitLog.Where(h => h.M.Victim == _myId).Select(h => h.M).ToList();
-        Check(Math.Abs(hits[0].Damage - RpgSplash3) <= 2 && !hits[0].Kill && hits[0].Weapon == 2, $"bob: first hit is splash through the wall, {RpgSplash3} damage (got {hits[0].Damage})");
+        Check(Math.Abs(hits[0].Damage - RpgSplash6) <= 2 && !hits[0].Kill && hits[0].Weapon == 2, $"bob: first hit is splash through the wall, {RpgSplash6} damage (got {hits[0].Damage})");
         Check(hits[1].Damage > 0 && hits[1].Kill, "bob: second hit is the direct hit, a kill");
         Check(_explosionLog.Count >= 3 && _launchLog.Count >= 3, $"bob saw {_launchLog.Count} launch and {_explosionLog.Count} explosion events");
         WeaponsResult(true, "");
@@ -36,8 +36,8 @@ public partial class NetClient
         foreach (var x in WaitBobAlive()) yield return x;
         foreach (var x in Wait(0.5)) yield return x;
 
-        // --- 1. rocket into the wall (face at z = c.Z - 2.75, x 13..27); bob 3 m behind it: splash ignores walls
-        var a1 = c + new NVec3(20, 0, 10); var b1 = c + new NVec3(20, 0, -6.05f);
+        // --- 1. rocket into the wall (face at z = c.Z - 2.75, x 13..27); bob 6 m behind it: splash ignores walls
+        var a1 = c + new NVec3(20, 0, 10); var b1 = c + new NVec3(20, 0, -9.05f);
         _wbSlot = 3;
         foreach (var x in Place(a1, b1, 0.9f)) yield return x;
         _wbYaw = 0; _wbPitch = 0;
@@ -55,8 +55,8 @@ public partial class NetClient
         Check(_rockets.Count == 0, "the rocket entity is gone after the explosion");
         foreach (var x in Wait(0.4)) yield return x;
         var hit = _hitLog.LastOrDefault().M;
-        Check(hit != null && hit.Victim == _wbBob && Math.Abs(hit.Damage - RpgSplash3) <= 2 && !hit.Kill, $"splash at 3 m from the blast: ~{RpgSplash3} damage through the wall (got {hit?.Damage})");
-        Check(Math.Abs(BobHealth - (100 - RpgSplash3)) <= 2, $"bob health {100 - RpgSplash3} in the snapshot (got {BobHealth})");
+        Check(hit != null && hit.Victim == _wbBob && Math.Abs(hit.Damage - RpgSplash6) <= 2 && !hit.Kill, $"splash at 6 m from the blast: ~{RpgSplash6} damage through the wall (got {hit?.Damage})");
+        Check(Math.Abs(BobHealth - (100 - RpgSplash6)) <= 2, $"bob health {100 - RpgSplash6} in the snapshot (got {BobHealth})");
         Check(Ammo!.Slots[2] == (0, full), $"mag 0/{full} after the shot (got {Ammo.Slots[2]})");
 
         // --- 2. reload: firing with an empty mag starts it, it takes reload_time, firing during it does nothing
