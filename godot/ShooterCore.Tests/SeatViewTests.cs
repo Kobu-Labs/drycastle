@@ -28,7 +28,7 @@ public class SeatViewTests
     public void A_seat_without_an_override_has_its_feet_plus_eye_height_or_the_standing_eye()
     {
         Near(new(0.62f, 0.6f + 1.05f, -0.22f), SeatEye.For(Def("humvee"), 1)); // eye_height 1.05
-        Near(new(0.53f, 0.38f + MoveConsts.EyeHeight, -2.175f), SeatEye.For(Def("bus"), 1)); // none: the standing eye
+        Near(new(0.53f, 0.38f + 1.05f, -2.175f), SeatEye.For(Def("bus"), 1)); // eye_height 1.05: the seated rider's head, not the standing eye (2.03, a head over the seat backs)
         Near(new(0.4875f, 1.50f, 0.2125f), SeatEye.For(Def("golf_mk2"), 1));
         Near(new(-0.387f, 0.374f + 1.0f, 0.244f), SeatEye.For(Def("car"), 0));
         Near(new(0.892f, 1.15f + 1.05f, -4.328f), SeatEye.For(Def("scud"), 1)); // the operator
