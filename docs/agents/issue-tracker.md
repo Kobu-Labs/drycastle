@@ -4,7 +4,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 ## Conventions
 
-- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
+- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies. Every new issue also gets a **Type** and goes on the **project board** (see **New-issue checklist**).
 - **Read an issue**: `gh issue view <number> --json number,title,body,labels,comments`.
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
 - **Make an issue a sub-issue of a parent**: `gh issue create --parent <parent> ...`, or `gh issue edit <parent> --add-sub-issue <child>` afterwards (`gh` 2.94+). Older `gh`: `gh api --method POST repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<child-db-id>` (database id, as in **Blocking** below). Without sub-issues, put `Part of #<parent>` at the top of the child body.
@@ -15,6 +15,20 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Close**: post the explanation with `gh issue comment <number> --body "..."`, then `gh issue close <number>`. On an already-closed issue, `gh issue close --comment` drops the comment and still exits 0.
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
+
+## New-issue checklist
+
+Every ticket created, by hand or by a skill, gets all three:
+
+1. **Create**: `gh issue create ...` prints the issue URL; `<n>` is its number.
+2. **Type** (GitHub issue type; `gh issue create` has no flag for it): `gh api -X PATCH repos/Kobu-Labs/drycastle/issues/<n> -f type=<Bug|Feature|Improvement>`. Exactly one:
+   - **Bug**: has steps to reproduce, or is a reminder to check a given thing.
+   - **Feature**: mainly a new piece of work; may build on something that exists.
+   - **Improvement**: mainly improving existing work.
+   - Unsure: new capability = Feature, reworking/tuning what exists = Improvement, "is X broken?" = Bug.
+3. **Project board** (https://github.com/orgs/Kobu-Labs/projects/7): `gh project item-add 7 --owner Kobu-Labs --url <issue-url>`. Needs the `project` token scope (`gh auth refresh -s project`). Idempotent. Status / `Tested` fields are set later by the `rc` skill.
+
+Retype an existing issue with the same PATCH; list types with `gh api orgs/Kobu-Labs/issue-types --jq '.[].name'`. Read one: `gh api repos/Kobu-Labs/drycastle/issues/<n> --jq .type.name`.
 
 File issues only into the user's own repo. Never file into `mattpocock/skills` (the repo these skills come from) unless the user owns it. In a fork, `gh` can default to the upstream parent, so before the first `gh issue create` of a session, check the target with `gh repo view --json nameWithOwner` and confirm it with the user if it is not their repo.
 
