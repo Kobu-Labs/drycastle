@@ -11,11 +11,8 @@ namespace Drycastle.MapLoader;
 /// <see cref="ArrayMesh"/> with one surface per pack material (a prefab's parts, e.g. a tractor and its wheels, are merged), so a MultiMesh draws it with
 /// the pack's own atlas material, shared. Each kind and variant of a ~48 m cell is one MultiMeshInstance3D with a visibility range
 /// (<see cref="CropSettings"/>). Plants wear crop_plant.gdshader (their own material's look): over the outer band of their range each plant grows in at a distance of
-/// its own, so the crop thins out towards the range instead of ending at a line of cells. Beyond it stands the far layer: one plant in <see cref="CropSettings.FarEvery"/>
-/// as a wide four-triangle tuft of the plant's own colour (<see cref="FarTuft"/>), one MultiMesh per chunk and kind, coming in where the plants go out, so a field
-/// far away still reads as planted. Tufts are crop cells like the plants: a harvester's cut and a vehicle's crush reach them too. Cosmetic only: no collision shape anywhere, nothing blocks a bullet. A kind whose model is missing (no pack on this
-/// machine) is drawn as a flat-coloured cone or box (<see cref="CropPlaceholder"/>). A map without crops.json builds nothing; a headless load
-/// (<see cref="CollisionOnly"/>) never builds it; <see cref="ClutterScale"/> 0 turns it off with the clutter.
+/// its own, so the crop thins out towards the range instead of ending at a line of cells. Beyond it the field is its sheet
+/// (MapLoader.CropSheet.cs): a picture of the crop over the planted ground, to the horizon.
 /// </summary>
 public sealed partial class MapLoader
 {
@@ -25,7 +22,6 @@ public sealed partial class MapLoader
     readonly HashSet<string> _cropWarned = new();
     readonly Dictionary<Material, Material> _cropPlantMaterials = new(); // a plant model's material -> the same look with the grow-in
     readonly Dictionary<string, Shader> _cropPlantShaders = new();       // by cull mode
-    readonly Dictionary<string, Mesh> _cropFarMeshes = new();            // plant kind -> its tuft
 
     /// <summary>Crop nodes built by the last load: one MultiMesh per cell, kind and variant.</summary>
     public IReadOnlyList<GeometryInstance3D> CropNodes => _cropNodes;
@@ -38,7 +34,7 @@ public sealed partial class MapLoader
         _cropCells.Clear();
         _cropMeshes.Clear();
         _cropPlantMaterials.Clear();
-        _cropFarMeshes.Clear();
+        FreeCropSheets();
         Stats.CropInstances = 0;
     }
 
@@ -66,6 +62,7 @@ public sealed partial class MapLoader
         if (doc.Groups.Count == 0) yield break;
 
         var meshes = new Dictionary<string, List<Mesh>>();
+        var sheets = new List<(Node3D Parent, CropGroup Group)>();
         var done = 0;
         foreach (var g in doc.Groups)
         {
@@ -80,9 +77,9 @@ public sealed partial class MapLoader
                 foreach (var cell in ClutterSettings.Cells(mine))
                     _cropNodes.Add(AddCropCell(parent, g.Kind, variants.Count > 1 ? v : -1, variants[v], cell, range, spec.IsPlant));
             }
-            if (spec.IsPlant && _cropFarMeshes.TryGetValue(g.Kind, out var tuft) && g.Instances.Where(CropSettings.IsFar).ToList() is { Count: > 0 } far)
-                _cropNodes.Add(AddCropCell(parent, g.Kind, -1, tuft, far, CropSettings.FarRangeM * ClutterScale + doc.ChunkSizeM * 0.7072f, true, farLayer: true));
+            if (spec.IsPlant) sheets.Add((parent, g));
         }
+        BuildCropSheets(sheets);
         if (_cropNodes.Count > 0)
             GD.Print($"crops: {Stats.CropInstances} instances in {_cropNodes.Count} nodes, scale {ClutterScale}");
     }
@@ -107,7 +104,7 @@ public sealed partial class MapLoader
         }
         if (spec.IsPlant)
         {
-            _cropFarMeshes[kind] = FarTuft(found); // before the materials are swapped: it reads their colours
+            _cropPaint[kind] = found.Select(PaintModelOf).ToList(); // before the materials are swapped: it reads their colours
             foreach (var mesh in found) GrowIn(mesh);
         }
         return found;
@@ -121,92 +118,7 @@ public sealed partial class MapLoader
                 mesh.SurfaceSetMaterial(s, CropPlantMaterial(source));
     }
 
-    /// <summary>
-    /// The far layer's stand-in for a kind's plants: a pyramid of four triangles as wide and tall as the plants (the mean of the variants; the shader widens it),
-    /// in their colour as seen from afar (<see cref="SeenColour"/>), normals leaning up so it is lit like the crop's top.
-    /// </summary>
-    Mesh FarTuft(List<Mesh> plants)
-    {
-        float half = 0f, height = 0f;
-        Vector3 sum = Vector3.Zero; var weight = 0f;
-        foreach (var m in plants)
-        {
-            var box = m.GetAabb();
-            half += Mathf.Max(box.Size.X, box.Size.Z) / 2f;
-            height += box.End.Y;
-            SeenColour(m, ref sum, ref weight);
-        }
-        half = Mathf.Max(half / plants.Count, 0.05f);
-        height = Mathf.Max(height / plants.Count, 0.1f);
-        var colour = weight > 0f ? new Color(sum.X / weight, sum.Y / weight, sum.Z / weight).LinearToSrgb() : Color.FromHtml("#6f9a3c");
-
-        var st = new SurfaceTool();
-        st.Begin(Mesh.PrimitiveType.Triangles);
-        var top = new Vector3(0f, height, 0f);
-        Vector3[] foot = { new(-half, 0f, -half), new(half, 0f, -half), new(half, 0f, half), new(-half, 0f, half) };
-        for (var k = 0; k < 4; k++)
-        {
-            Vector3 a = foot[k], b = foot[(k + 1) % 4];
-            var side = ((a + b) / 2f).Normalized();
-            st.SetNormal((side + Vector3.Up * 1.5f).Normalized());
-            st.AddVertex(a); st.AddVertex(top); st.AddVertex(b);
-        }
-        if (!_cropPlantShaders.TryGetValue("cull_disabled", out var shader))
-            _cropPlantShaders["cull_disabled"] = shader = TreeCutShaders.Load("crop_plant.gdshader", "cull_disabled");
-        var mat = new ShaderMaterial { Shader = shader };
-        mat.SetShaderParameter("albedo_colour", colour);
-        mat.SetShaderParameter("specular", 0f);
-        mat.SetShaderParameter("crop_cut", PlantCutParam());
-        mat.SetShaderParameter("crop_far", new Vector4(CropSettings.FarRangeM * ClutterScale, CropSettings.FarFadeM * ClutterScale, CropSettings.FarWiden, CropSettings.FarShade));
-        st.SetMaterial(mat);
-        return st.Commit();
-    }
-
     Vector3 PlantCutParam() => new(CropSettings.PlantRangeM * ClutterScale, CropSettings.PlantFadeM * ClutterScale, CropSettings.PlantGrow);
-
-    /// <summary>
-    /// Adds a plant mesh's colour as a field of it shows from afar (linear, into <paramref name="sum"/> and <paramref name="weight"/>): its vertices' albedo
-    /// (material colour, times the texel at the vertex, times the vertex colour where the material uses it), the upper ones counting more, since the tops are what is seen.
-    /// </summary>
-    static void SeenColour(Mesh mesh, ref Vector3 sum, ref float weight)
-    {
-        var box = mesh.GetAabb();
-        var tall = Mathf.Max(box.Size.Y, 0.01f);
-        for (var s = 0; s < mesh.GetSurfaceCount(); s++)
-        {
-            if (mesh.SurfaceGetMaterial(s) is not BaseMaterial3D mat) continue;
-            var arrays = mesh.SurfaceGetArrays(s);
-            var verts = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
-            var uvs = arrays[(int)Mesh.ArrayType.TexUV].VariantType == Variant.Type.PackedVector2Array ? arrays[(int)Mesh.ArrayType.TexUV].AsVector2Array() : null;
-            var cols = mat.VertexColorUseAsAlbedo && arrays[(int)Mesh.ArrayType.Color].VariantType == Variant.Type.PackedColorArray ? arrays[(int)Mesh.ArrayType.Color].AsColorArray() : null;
-            Image? img = null;
-            if (uvs != null && mat.AlbedoTexture?.GetImage() is { } source && !source.IsEmpty())
-            {
-                img = source;
-                if (img.IsCompressed() && img.Decompress() != Error.Ok) img = null;
-            }
-            var albedo = mat.AlbedoColor.SrgbToLinear();
-            for (var v = 0; v < verts.Length; v++)
-            {
-                var c = albedo;
-                if (img != null)
-                {
-                    var uv = uvs![v];
-                    var px = img.GetPixel(Mathf.PosMod((int)(uv.X * img.GetWidth()), img.GetWidth()), Mathf.PosMod((int)(uv.Y * img.GetHeight()), img.GetHeight())).SrgbToLinear();
-                    c = new Color(c.R * px.R, c.G * px.G, c.B * px.B);
-                }
-                if (cols != null && v < cols.Length)
-                {
-                    var vc = mat.VertexColorIsSrgb ? cols[v].SrgbToLinear() : cols[v];
-                    c = new Color(c.R * vc.R, c.G * vc.G, c.B * vc.B);
-                }
-                var up = Mathf.Clamp((verts[v].Y - box.Position.Y) / tall, 0f, 1f);
-                var w = 0.15f + up * up;
-                sum += new Vector3(c.R, c.G, c.B) * w;
-                weight += w;
-            }
-        }
-    }
 
     /// <summary>A plant material with the grow-in: the source's albedo, alpha scissor, cull mode and surface amounts, one per source material (shared by every cell).</summary>
     Material CropPlantMaterial(BaseMaterial3D source)
@@ -318,15 +230,15 @@ public sealed partial class MapLoader
     }
 
     /// <summary>One MultiMesh for the instances of a cell: the node sits at their centroid, the instances are relative to it (visibility range and culling box right).
-    /// No material override: the model keeps its own (shared) materials. No collision. <paramref name="farLayer"/>: the cell is a chunk's tufts (<see cref="FarTuft"/>).</summary>
-    MultiMeshInstance3D AddCropCell(Node3D parent, string kind, int variant, Mesh mesh, IReadOnlyList<ClutterInstance> cell, float rangeEnd, bool plant, bool farLayer = false)
+    /// No material override: the model keeps its own (shared) materials. No collision.</summary>
+    MultiMeshInstance3D AddCropCell(Node3D parent, string kind, int variant, Mesh mesh, IReadOnlyList<ClutterInstance> cell, float rangeEnd, bool plant)
     {
         var origin = Vector3.Zero;
         foreach (var i in cell) origin += ToGodot(i.X, i.Y, i.Z);
         origin /= cell.Count;
 
         var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = mesh, InstanceCount = cell.Count };
-        var reach = Mathf.Max(mesh.GetAabb().Size.Length(), 0.1f) * (farLayer ? CropSettings.FarWiden : 1f);
+        var reach = Mathf.Max(mesh.GetAabb().Size.Length(), 0.1f);
         Vector3 min = new(float.MaxValue, float.MaxValue, float.MaxValue), max = new(float.MinValue, float.MinValue, float.MinValue);
         for (var k = 0; k < cell.Count; k++)
         {
@@ -341,7 +253,7 @@ public sealed partial class MapLoader
         mm.CustomAabb = new Aabb(min, max - min);
         var node = new MultiMeshInstance3D
         {
-            Name = farLayer ? $"crop_{kind}_far" : variant < 0 ? $"crop_{kind}" : $"crop_{kind}_{variant}",
+            Name = variant < 0 ? $"crop_{kind}" : $"crop_{kind}_{variant}",
             Multimesh = mm,
             Position = origin,
             CastShadow = plant ? GeometryInstance3D.ShadowCastingSetting.Off : GeometryInstance3D.ShadowCastingSetting.On,

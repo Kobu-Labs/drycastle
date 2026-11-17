@@ -100,43 +100,17 @@ public static class CropSettings
         return g * g * (3f - 2f * g);
     }
 
-    /// <summary>
-    /// How much of a far tuft stands by the plants' radius: nothing inside <c>radius - band</c>, whole at the radius, coming in where the plants go out
-    /// (<see cref="Grow"/>), so the field never stands empty in between. Mirrors crop_plant.gdshader (its far layer, before the tufts' own outer radius).
-    /// </summary>
-    public static float FarGrow(float distance, float threshold, float radius, float band, float grow = PlantGrow)
-    {
-        band = MathF.Max(band, 0.001f);
-        var far = distance >= radius ? 1f : Math.Clamp((distance - (radius - band)) / band, 0f, 1f);
-        var span = MathF.Max(grow, 0.001f);
-        var g = Math.Clamp((far - (1f - span) * threshold) / span, 0f, 1f);
-        return g * g * (3f - 2f * g);
-    }
+    /// <summary>The far look of a field is a sheet over it with a picture of the crop (MapLoader.CropSheet.cs). Side of a sheet cell (m): the planted ground is covered in cells this wide.</summary>
+    public const float SheetCellM = 4f;
+    /// <summary>Side of the ground one picture covers (m), then it repeats.</summary>
+    public const float SheetTileM = 12f;
+    /// <summary>Side of the picture (px).</summary>
+    public const int SheetPx = 512;
+    /// <summary>The sheet floats this share of the plants' height above the ground, at most <see cref="SheetLiftMaxM"/>.</summary>
+    public const float SheetLift = 0.6f;
+    public const float SheetLiftMaxM = 0.5f;
 
-    /// <summary>The far layer: beyond the plants' range a share of them is drawn as wide flat-coloured tufts, so a field far away still reads as planted.
-    /// Distance (metres) at which the last tuft is gone, before the chunk allowance and the clutter scale.</summary>
-    public const float FarRangeM = 800f;
-    /// <summary>The band inside <see cref="FarRangeM"/> over which the tufts thin out.</summary>
-    public const float FarFadeM = 150f;
-    /// <summary>One plant in this many is also a tuft.</summary>
-    public const int FarEvery = 4;
-    /// <summary>How much wider than the plant a tuft is: it stands for <see cref="FarEvery"/> plants.</summary>
-    public const float FarWiden = 2.2f;
-    /// <summary>How much a tuft's brightness varies from the next one's (a share either way).</summary>
-    public const float FarShade = 0.12f;
-
-    /// <summary>Whether a plant is also a tuft of the far layer: a hash of its position (not the one <see cref="Variant"/> uses), the same on every load.</summary>
-    public static bool IsFar(ClutterInstance i)
-    {
-        unchecked
-        {
-            var h = (uint)((int)MathF.Round(i.X * 8f) * 83492791) ^ (uint)((int)MathF.Round(i.Y * 8f) * 2971215073u);
-            h ^= h >> 15; h *= 0x2c1b3c6d; h ^= h >> 12;
-            return h % FarEvery == 0;
-        }
-    }
-
-
+    /// <summary>The same for an artifact (bale, tractor, scarecrow): few and big.</summary>
     public const float ArtifactRangeM = 220f;
 
     public static float RangeOf(CropKind kind) => kind.IsPlant ? PlantRangeM : ArtifactRangeM;
@@ -180,4 +154,48 @@ public readonly record struct CropPlaceholder(bool Cone, float Width, float Heig
         ["art_plough"] = new(false, 1.6f, 1.2f, "#8c4a2e"),
         ["art_wood_stack"] = new(false, 1.8f, 1.2f, "#8a6338"),
     };
+}
+
+/// <summary>
+/// Where a chunk's plants of one kind stand, in cells of <see cref="CropSettings.SheetCellM"/>: what the far sheet of the field is cut from. Pure, so it is tested.
+/// </summary>
+public sealed class CropSheetGrid
+{
+    public float CellM { get; }
+    /// <summary>Cell (floor of map x, y over the cell side) -> how many plants stand in it and the sum of their ground heights.</summary>
+    public Dictionary<(int X, int Y), (int Count, float ZSum)> Cells { get; } = new();
+
+    public CropSheetGrid(IReadOnlyList<ClutterInstance> plants, float cellM = CropSettings.SheetCellM)
+    {
+        CellM = cellM;
+        foreach (var i in plants)
+        {
+            var key = ((int)MathF.Floor(i.X / cellM), (int)MathF.Floor(i.Y / cellM));
+            Cells[key] = Cells.TryGetValue(key, out var c) ? (c.Count + 1, c.ZSum + i.Z) : (1, i.Z);
+        }
+    }
+
+    /// <summary>The count of a cell that is full of plants: the upper quartile of the cells' counts (edges and tramlines hold fewer). 0 when there is none.</summary>
+    public static float Full(IEnumerable<int> counts)
+    {
+        var sorted = counts.OrderBy(c => c).ToList();
+        return sorted.Count == 0 ? 0f : sorted[Math.Min(sorted.Count - 1, sorted.Count * 3 / 4)];
+    }
+
+    /// <summary>
+    /// The grid corner at (x, y) (the low corner of cell (x, y)): the ground height there (the mean of the plants in the four cells around it) and how full
+    /// of plants the ground is (the mean of the four cells' counts over <paramref name="full"/>, each at most 1; an empty cell counts 0, so the field's edge feathers).
+    /// </summary>
+    public (float Z, float Share) Corner(int x, int y, float full)
+    {
+        var n = 0; var z = 0f; var share = 0f;
+        for (var dx = -1; dx <= 0; dx++)
+            for (var dy = -1; dy <= 0; dy++)
+                if (Cells.TryGetValue((x + dx, y + dy), out var c))
+                {
+                    n += c.Count; z += c.ZSum;
+                    share += MathF.Min(1f, c.Count / MathF.Max(full, 1f));
+                }
+        return (n > 0 ? z / n : 0f, share / 4f);
+    }
 }
