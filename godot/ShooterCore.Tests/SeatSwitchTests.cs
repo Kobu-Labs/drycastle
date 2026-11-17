@@ -208,10 +208,12 @@ public class SeatSwitchTests
     }
 
     [Fact]
-    public void TheJeepsRoofGunnerIsPushedClearOfItsDriver()
+    public void ARoofGunnerIsPushedClearOfItsDriver()
     {
-        var jeep = Type("jeep"); // driver at the centre, gunner 0.25 m behind it: under a marker's width on the panel
-        var l = SeatSchematic.Layout(jeep, 184, 168, 12, 16);
+        // driver at the centre, gunner 0.25 m behind it: under a marker's width on the panel (the old jeep's seats, gone with its gun, #325)
+        var def = new VehicleDef { Id = "x", HalfWidth = 1.28f, HalfLength = 2.3f, Height = 2.2f };
+        def.Seats = new List<VehicleSeatDef> { new() { Role = "driver", Offset = new float[] { 0, 0, 0 } }, new() { Role = "gunner", Offset = new float[] { 0, 1.25f, 0.25f } } };
+        var l = SeatSchematic.Layout(def, 184, 168, 12, 16);
         Assert.True(l.Seats[0].Y < l.Seats[1].Y); // the order along the vehicle is kept: the driver in front
     }
 }

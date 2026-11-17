@@ -128,7 +128,7 @@ public sealed class BigfootHits
     public float ParticipantRadiusM { get; set; } = 90;
     /// <summary>What one explosive hit counts (a rocket's blast, a missile, the MOAB): bullets count 1.</summary>
     public float ExplosiveWeight { get; set; } = 25;
-    /// <summary>What one hit of a vehicle weapon counts (the jeep's roof gun, the flak, the door gun, the gunship and the helicopters' guns).</summary>
+    /// <summary>What one hit of a vehicle weapon counts (the vehicle machine gun, the flak, the door gun, the gunship and the helicopters' guns).</summary>
     public float VehicleWeaponWeight { get; set; } = 4;
     /// <summary>The fraction of the hit count taken at which the second phase (adds the stomp and the vehicle throw) and the third (adds the grab and the launch) begin, and at which it enrages.</summary>
     public float SecondPhaseAt { get; set; } = 0.30f;

@@ -834,7 +834,7 @@ public class VehicleDef
     public VehicleGunDef? Gun { get; set; }
     /// <summary>
     /// The gunner sits in the open (the flak truck's turret): shots that reach his body hit him, not the hull around him (<see cref="GunnerCover"/>).
-    /// False keeps every rider behind the hull, as the jeep's roof gunner is.
+    /// False keeps every rider behind the hull, as the Humvee's covered seats are.
     /// </summary>
     public bool ExposedGunner { get; set; }
     /// <summary>
@@ -846,7 +846,7 @@ public class VehicleDef
     public VehicleFlakDef? Flak { get; set; }
     /// <summary>
     /// Where the <see cref="Gun"/> is mounted and how far it swings (the utility helicopter's door gun). Null: the gun fires along the gunner's
-    /// view from above the seat, as the jeep's does. With it, the gun is on a pintle and the aim is held inside its arc (<see cref="DoorGunRules"/>).
+    /// view from above the seat (the roof gun of a covered seat). With it, the gun is on a pintle and the aim is held inside its arc (<see cref="DoorGunRules"/>).
     /// </summary>
     public VehicleDoorGunDef? DoorGun { get; set; }
     /// <summary>Mass (kg) for run-over damage. Unset: the v1 run-over numbers (see <see cref="VehiclesFile.RunOverScale"/>).</summary>

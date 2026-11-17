@@ -1,0 +1,420 @@
+{
+ "model": "pack:synty-vehicles/truck_woodland",
+ "out_dir": "synty/glb/vehicles-std",
+ "skins": [
+  {
+   "id": "woodland",
+   "model": "pack:synty-vehicles/truck_woodland",
+   "atlas": "PolygonBattleRoyale_Vehicles_01"
+  },
+  {
+   "id": "desert",
+   "model": "pack:synty-vehicles/truck_desert",
+   "atlas": "PolygonBattleRoyale_Vehicles_02"
+  },
+  {
+   "id": "khaki",
+   "model": "pack:synty-vehicles/truck_khaki",
+   "atlas": "PolygonBattleRoyale_Vehicles_03"
+  },
+  {
+   "id": "black",
+   "model": "pack:synty-vehicles/truck_black",
+   "atlas": "PolygonBattleRoyale_Vehicles_04"
+  },
+  {
+   "id": "sand",
+   "model": "pack:synty-vehicles/truck_sand",
+   "atlas": "PolygonBattleRoyale_Vehicles_05"
+  },
+  {
+   "id": "grey",
+   "model": "pack:synty-vehicles/truck_grey",
+   "atlas": "PolygonBattleRoyale_Vehicles_06"
+  }
+ ],
+ "bounds": {
+  "min": [
+   -1.526,
+   0.0,
+   -3.527
+  ],
+  "max": [
+   1.526,
+   3.164,
+   3.539
+  ]
+ },
+ "suggested": {
+  "half_width": 1.53,
+  "half_length": 3.54,
+  "height": 3.17
+ },
+ "origin": {
+  "ground_shift_y": -0.0032,
+  "centre_shift_z": 0.2499
+ },
+ "wheels": {
+  "radius": 0.64,
+  "wheelbase": 3.489,
+  "track": 2.345,
+  "tyre_x": 1.172,
+  "axle_z_mean_abs": 1.679,
+  "centres": {
+   "l1": {
+    "centre": [
+     -1.172,
+     0.64,
+     -1.94
+    ],
+    "radius": 0.64,
+    "width": 0.334,
+    "steer": true
+   },
+   "r1": {
+    "centre": [
+     1.172,
+     0.64,
+     -1.94
+    ],
+    "radius": 0.64,
+    "width": 0.334,
+    "steer": true
+   },
+   "l2": {
+    "centre": [
+     -1.172,
+     0.64,
+     0.815
+    ],
+    "radius": 0.64,
+    "width": 0.334,
+    "steer": false
+   },
+   "r2": {
+    "centre": [
+     1.172,
+     0.64,
+     0.815
+    ],
+    "radius": 0.64,
+    "width": 0.334,
+    "steer": false
+   },
+   "l3": {
+    "centre": [
+     -1.172,
+     0.64,
+     2.281
+    ],
+    "radius": 0.64,
+    "width": 0.334,
+    "steer": false
+   },
+   "r3": {
+    "centre": [
+     1.172,
+     0.64,
+     2.281
+    ],
+    "radius": 0.64,
+    "width": 0.334,
+    "steer": false
+   }
+  }
+ },
+ "controls": {},
+ "seats": {
+  "seat_driver": {
+   "role": "driver",
+   "feet": [
+    -0.736,
+    1.647,
+    -2.24
+   ],
+   "eye_height": 1.0,
+   "eye": [
+    -0.736,
+    2.647,
+    -2.24
+   ],
+   "ceiling_above_eye": 2.815
+  },
+  "seat_passenger_1": {
+   "role": "passenger",
+   "feet": [
+    0.04,
+    1.647,
+    -2.24
+   ],
+   "eye_height": 1.0,
+   "eye": [
+    0.04,
+    2.647,
+    -2.24
+   ],
+   "ceiling_above_eye": 2.814
+  },
+  "seat_passenger_2": {
+   "role": "passenger",
+   "feet": [
+    0.81,
+    1.647,
+    -2.24
+   ],
+   "eye_height": 1.0,
+   "eye": [
+    0.81,
+    2.647,
+    -2.24
+   ],
+   "ceiling_above_eye": 2.815
+  }
+ },
+ "lamps": {
+  "light_head_l": {
+   "kind": "head",
+   "pos": [
+    -0.896,
+    1.357,
+    -3.335
+   ]
+  },
+  "light_head_r": {
+   "kind": "head",
+   "pos": [
+    0.896,
+    1.357,
+    -3.335
+   ]
+  },
+  "light_tail_l": {
+   "kind": "tail",
+   "pos": [
+    -0.914,
+    1.277,
+    3.527
+   ]
+  },
+  "light_tail_r": {
+   "kind": "tail",
+   "pos": [
+    0.914,
+    1.277,
+    3.527
+   ]
+  }
+ },
+ "glass": [
+  {
+   "id": "windscreen",
+   "centre": [
+    0.0,
+    2.45,
+    -3.041
+   ],
+   "normal": [
+    0.0,
+    0.306,
+    -0.952
+   ],
+   "size": [
+    2.265,
+    0.626
+   ],
+   "outline": [
+    [
+     -1.133,
+     -0.302
+    ],
+    [
+     -0.594,
+     -0.313
+    ],
+    [
+     0.594,
+     -0.313
+    ],
+    [
+     1.133,
+     -0.302
+    ],
+    [
+     1.101,
+     0.313
+    ],
+    [
+     -1.101,
+     0.313
+    ]
+   ]
+  },
+  {
+   "id": "rear_1",
+   "centre": [
+    -0.675,
+    2.606,
+    -1.528
+   ],
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "size": [
+    0.74,
+    0.325
+   ],
+   "outline": [
+    [
+     -0.37,
+     -0.163
+    ],
+    [
+     0.37,
+     -0.163
+    ],
+    [
+     0.37,
+     0.163
+    ],
+    [
+     -0.37,
+     0.163
+    ]
+   ]
+  },
+  {
+   "id": "rear_2",
+   "centre": [
+    0.675,
+    2.606,
+    -1.528
+   ],
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "size": [
+    0.74,
+    0.325
+   ],
+   "outline": [
+    [
+     -0.37,
+     -0.163
+    ],
+    [
+     0.37,
+     -0.163
+    ],
+    [
+     0.37,
+     0.163
+    ],
+    [
+     -0.37,
+     0.163
+    ]
+   ]
+  },
+  {
+   "id": "side_left",
+   "centre": [
+    -1.2,
+    2.413,
+    -2.55
+   ],
+   "normal": [
+    -0.993,
+    0.122,
+    0.0
+   ],
+   "size": [
+    0.865,
+    0.519
+   ],
+   "outline": [
+    [
+     -0.432,
+     -0.259
+    ],
+    [
+     0.432,
+     -0.259
+    ],
+    [
+     0.432,
+     0.259
+    ],
+    [
+     -0.275,
+     0.259
+    ]
+   ]
+  },
+  {
+   "id": "side_right",
+   "centre": [
+    1.2,
+    2.413,
+    -2.55
+   ],
+   "normal": [
+    0.993,
+    0.122,
+    0.0
+   ],
+   "size": [
+    0.865,
+    0.519
+   ],
+   "outline": [
+    [
+     -0.432,
+     -0.259
+    ],
+    [
+     0.432,
+     -0.259
+    ],
+    [
+     0.275,
+     0.259
+    ],
+    [
+     -0.432,
+     0.259
+    ]
+   ]
+  }
+ ],
+ "nodes": [
+  "glass_0",
+  "glass_1",
+  "glass_2",
+  "glass_3",
+  "glass_4",
+  "hull",
+  "light_head_l",
+  "light_head_r",
+  "light_tail_l",
+  "light_tail_r",
+  "seat_driver",
+  "seat_passenger_1",
+  "seat_passenger_2",
+  "steering_wheel_rim",
+  "steering_wheel_spokes",
+  "tow_hitch",
+  "truck",
+  "wheel_l1",
+  "wheel_l1_steer",
+  "wheel_l2",
+  "wheel_l3",
+  "wheel_r1",
+  "wheel_r1_steer",
+  "wheel_r2",
+  "wheel_r3"
+ ]
+}

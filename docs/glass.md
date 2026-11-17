@@ -9,7 +9,7 @@ Glass panes on vehicles and buildings have hit points, crack as they lose them a
 | Buildings | `windows.json` of the map (window openings of buildings with a detail file, `pipeline/config/buildings/`) | every pane whose `breakable` is not false (the village map lists 35 panes today) |
 | Mechanic garage plate | `MechanicGarageSite.AddPane` (not in `windows.json`: added to the map's pane list on the server and every client, sorted by node name `mechanic_garage_plate`) | one OSB plate, 240 hit points (`MapGlassPane.Hp`), black cracks, no rim of shards left in the opening and OSB-chip fragments (`GlassFx.OsbShards`, `glass_crack.gdshader` `crack_colour`/`edge_shards`), its box and mesh go when it shatters (`MechanicGarage.SetPlate`), ADR 0029 |
 | Car | `vehicles.json` `glass`, written by `scripts/standardize_vehicle.py` from the private model (numbers: `docs/research/vehicle-facts.d/car_small.json`; the model has the `glass_N` nodes) | windscreen, rear, a front and a rear side window on each side (6) |
-| War jeep | `vehicles.json` `glass` | windscreen, rear, two side |
+| Jeep (cargo truck) | `vehicles.json` `glass`, written by `scripts/standardize_vehicle.py` from the private model (`docs/research/vehicle-facts.d/truck.json`; `glass_N` nodes) | one wide windscreen, a side window on each side, two cab-back windows looking into the bed (5) |
 | Humvee | `vehicles.json` `glass` (written by hand from `docs/research/scud-models-facts.md`; the private model has the `glass_N` nodes) | two windscreen halves, a front and a rear door window on each side (6) |
 | Scud truck | `vehicles.json` `glass` (written by hand from `docs/research/scud-models-facts.md` with the glass nodes' 0.37 m offset, see below; the private model has the `glass_N` nodes) | two windscreen halves, a front and a rear door window on each side, a corner window on each side (8; the two small windows on the inner walls beside the missile are painted, not panes) |
 | Bus | `vehicles.json` `glass` | windscreen and its two wrapped corners, rear, six left windows, four right windows, four door leaves (18) |
@@ -27,7 +27,7 @@ The motorcycle, quad and amphibious transport have no glass. The utility helicop
 
 **Small car.** `SM_Veh_Car_Small_01` standardized by `scripts/standardize_vehicle.py`: the pack's one glass mesh is cut into its six welded pieces, each a `glass_N` node (double-sided glass material) with the convex outline of the real pane (raked windscreen, bent side panes). The script writes the `glass` list into `vehicles.json`; `StandardizedVehicleTests` pins it to `docs/research/vehicle-facts.d/car_small.json`. The cabin is a real opening behind a shattered pane (double-skinned shell, seats and dash modelled).
 
-**Kenney model (jeep).** Its glass is painted into one colour map, so the panes are rectangles measured from the glass cells and moved into the vehicle frame with the model's scale, yaw and offset; it has no pane node and no outline, and the original glass stays under a shattered pane.
+**Cargo truck (jeep).** `SM_Veh_Truck_01` standardized like the small car: the glass mesh (one, 16 triangles, flat translucent teal, offset -0.025 m in y in the prefab) is cut into its five welded pieces, each a `glass_N` node with its convex outline: `windscreen` (2.27 x 0.63, one bowed pane), `rear_1`/`rear_2` (the two cab-back windows, 0.74 x 0.33, facing the bed), `side_left`/`side_right`. The cab is a double-skinned closed shell with a modelled bench, dash and wheel, so a shattered pane is a real opening onto it.
 
 ## Rules
 
@@ -41,7 +41,7 @@ The motorcycle, quad and amphibious transport have no glass. The utility helicop
 - A round only gets into a vehicle by a pane or an open side. Where it meets the hit box anywhere else (a door, the roof, the helicopter's belly, engine housing, cabin rear wall, nose and tail) the hull stops it there, also when a pane lies further along the ray: a pane on the far side is no way out for a round that had no way in.
 - The client's own tracer, pellet sparks and bullet holes follow the same rule (`VehicleAlong` in `NetClient.Cars.cs`): nothing is drawn on a vehicle the round went through, and a round stopped inside is drawn on the far side.
 - The roof gunner's own car stops his rounds as a hull (its glass is not passed or damaged); the door gunner's own helicopter is left out of his ray altogether.
-- A shattered pane of a model with its own `glass_N` node leaves a real opening (no dark fill); the flak truck (solid glasshouse) and the Kenney jeep keep a dark fill.
+- A shattered pane of a model with its own `glass_N` node leaves a real opening (no dark fill); the flak truck (solid glasshouse) keeps a dark fill.
 - A new round and a repaired vehicle make panes whole again.
 
 ## Code
@@ -61,7 +61,6 @@ The motorcycle, quad and amphibious transport have no glass. The utility helicop
 ## Not done
 
 - The look has not been seen in the game: the shaders (the outline clip included) and the vehicle panes were written without running it or compiling the shaders. Ticket #227 (react to the look and cost) is still open.
-- The Kenney jeep has no pane nodes: its shattered panes are darkened, not removed, and are rectangles.
 - The bus's two cab partition glass and the helicopter's chin and overhead windows are not panes (they are glass that does not break), and the flak truck's rear window has none either.
 - A door leaf's crack overlay stays where the leaf is closed when the door is open.
 - Outlines must be convex; the crack shader takes at most 12 points per pane.

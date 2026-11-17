@@ -73,6 +73,18 @@ Every prefab also carries collision: a `MeshCollider` StaticBody3D with a Collis
 - Destroyed: `SM_Veh_Truck_Destroyed_01.glb`, ONE mesh (no separate wheels or glass), 12595 tris, 3.059 x 3.025 x 7.452 m, material `PolygonBattleRoyale_Veh_Destroyed_01_mat` (`Vehicles_01_Damaged.png`).
 - Hard for the contract: **6 wheels** (contract and `DriveNodes` have `wheel_fl/fr/rl/rr`; the Scud's `wheel_l1..r4` pattern fits, three axles with one steered); no `hull` (parts are children of the cab mesh); bed (`Trailer`) is a separate 3182-tri node: keep under the hull; **no tow hitch** (the jeep tows today): add an empty at the tail (bed tail z -3.28, bounds z -3.277); front-left pivot offsets; the origin is not the footprint centre (bounds centre z +0.25, axle midpoint (2.190 + (-0.565 - 2.031)/2)/2 = +0.446): hit box half_length 3.53 about z 0.25; width 3.05 (mirrors) vs cab 2.72 vs bed 2.77, height 3.16 (a roof item at y 3.0-3.17, x -0.38..0.02, z 1.5-1.9): new `half_width`/`half_length`/`height`; **seats are 1.9 m above the ground** (eye ~2.5 m): chase camera, ground-level hit boxes and rider cover heights change; the bed UVs run to u 2.64 (tiling: the atlas material needs repeat); lamps are texels (no lamp meshes/materials); two window panes the game does not have (cab back, into the bed); windscreen is one pane 2.27 m wide (split into several if a pane must stay roughly flat); no gun, no gunner seat wanted.
 
+### As standardized (the `jeep` type, #325)
+
+`scripts/vehicles/truck.json` -> `docs/research/vehicle-facts.d/truck.json`, `pack:synty-vehicles/truck_{woodland,desert,khaki,black,sand,grey}` (Battle Royale atlases 01..06, all valid swaps). Game frame (forward -Z, origin ground at the footprint centre, the bounds centre z +0.25 of the prefab moved to 0).
+- Box: half_width 1.53, half_length 3.54, height 3.17 (the old jeep: 1.28 / 2.3 / 2.2); the model is 3.053 x 3.164 x 7.07 m with lens plates. `model_scale` 1, no offset, no yaw. 12649 tris, 950 KB per skin.
+- Six wheels, r 0.640, tyre centres x +-1.172, front axle z -1.94, middle 0.815, rear 2.281: `wheel_l1`, `wheel_r1` (steered, under `wheel_l1_steer`, `wheel_r1_steer`), `wheel_l2`, `wheel_r2`, `wheel_l3`, `wheel_r3` (l = -x; the Scud's pattern; the pack's `_fl`, `_fr`, `_rl_01`, `_rr_03`, `_rl_02`, `_rr_02`). Steered pivots at the tyre centre (the pack's front pivot 0.116 inboard is corrected from the mesh).
+- Seats (feet = cushion top 1.88 - 0.23 like the car, `eye_height` 1.0, the eye 2.647 with 0.17 m to the roof lining 2.815): `seat_driver` (-0.736, 1.647, -2.24), `seat_passenger_1` (0.04, ...), `seat_passenger_2` (0.81, ...). The window band is y 2.16..2.77, the eyes sit in it.
+- Panes (5): `glass_0` windscreen (centre (0, 2.45, -3.041), 2.265 x 0.626, 6-corner outline), `glass_1`/`glass_2` the cab-back windows (+-0.675, 2.606, -1.528; 0.74 x 0.325, normal +Z into the bed), `glass_3`/`glass_4` sides (+-1.2, 2.413, -2.55; 0.865 x 0.519).
+- Lamps from the atlas texels (no lamp meshes): round headlights at x +-0.896, y 1.357, front z -3.335 (0.19 lens); red tail lamps x +-0.914, y 1.277, on the bed tail z 3.527 (the chassis lamps at z 3.24 are behind the bed's tail board).
+- `tow_hitch`: (0, 0.62, 3.66), 0.13 m behind the bed tail (a trailer's drawbar eye meets it at the rocket cart's `tow_eye` height 0.62; `VehicleTowDef.Hitch` is the same point).
+- Steering wheel at x -0.728 (the prefab's +0.728: a left-hand drive), column along its local -Y.
+- No gun, no gunner seat (the user's decision); the Humvee's, the amphibious transport's and the utility helicopter's guns carry their own `gun` blocks.
+
 ## SM_Veh_Bike_01 (battle royale)
 
 - File `glb/battle-royale/SM_Veh_Bike_01.glb`. A trail motorcycle. Tree (local position; world in brackets):
@@ -120,7 +132,7 @@ Every prefab also carries collision: a `MeshCollider` StaticBody3D with a Collis
 
 ```
 scripts/build_vehicle_packs.sh          # unpack, import, export, variants, check (~12 s)
-scripts/build_vehicle_packs.sh --standardize-only   # scripts/vehicles/*.json -> glb/vehicles-std/ + docs/research/vehicle-facts.d/ (car, bike, quad so far)
+scripts/build_vehicle_packs.sh --standardize-only   # scripts/vehicles/*.json -> glb/vehicles-std/ + docs/research/vehicle-facts.d/ (car, bike, quad, truck)
 python3 scripts/standardize_vehicle.py scripts/vehicles/car_small.json --vehicles-json godot/shooter/data/vehicles.json   # also splices the model-owned keys of the entry
 godot --headless --script scripts/vehicle_model_probe.gd -- [--tris] <glb> ...
 godot --headless --script scripts/vehicle_model_dump.gd -- <glb> <out.json>

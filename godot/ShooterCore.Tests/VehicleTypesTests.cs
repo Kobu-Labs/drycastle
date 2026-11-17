@@ -13,14 +13,16 @@ public class VehicleTypesTests
     // ---- the types ----
 
     [Fact]
-    public void JeepHasADriverSeatAGunnerSeatAndAGun()
+    public void JeepIsTheCargoTruckWithABenchOfThreeNoGunAndSixSkinsAndItStillTows()
     {
         var j = Type("jeep");
-        Assert.Equal(new[] { "driver", "gunner" }, j.Seats.Select(s => s.Role));
-        Assert.NotNull(j.Gun);
-        Assert.Equal(60, j.Gun!.Magazine);
-        Assert.True(j.Gun.Reserve > 0);
-        Assert.Equal(1, j.Variants); // one fixed olive drab, no colour variants
+        Assert.Equal(new[] { "driver", "passenger", "passenger" }, j.Seats.Select(s => s.Role));
+        Assert.Null(j.Gun);
+        Assert.Null(j.DoorGun);
+        Assert.NotNull(j.Tow);
+        Assert.StartsWith("pack:synty-vehicles/truck_", j.Model);
+        Assert.Equal(6, j.Variants); // the six Battle Royale atlases (#325)
+        Assert.Null(j.Tint);
     }
 
     [Fact]

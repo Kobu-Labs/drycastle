@@ -63,18 +63,12 @@ public class VehicleContractTests
     {
         ["default_model_transform"] = new()
         {
-            ["jeep"] = "Kenney suv.glb, replaced by SM_Veh_Truck_01 (#325 swap)",
             ["harvester"] = "Synty farm prefab turned 180 degrees by model_yaw_deg; standardize it (#325 conform)",
         },
         ["covered_seat_eye_inside_hit_box"] = new()
         {
-            ["jeep"] = "gunner seat (y 1.25) default eye 2.9 m over a 2.2 m box; becomes the truck with no gunner seat (#325 swap)",
             ["humvee"] = "driver seat has no eye_height (its eye is CockpitRig's, 1.65 m): seat 0 default eye is over the roof; per-seat eye data is #339",
             ["golf_mk2"] = "seats have no eye_height (the driver's eye is CockpitRig's): default eye 2.10 m over a 1.79 m box; per-seat eye data is #339 / conform",
-        },
-        ["glass_has_outline"] = new()
-        {
-            ["jeep"] = "same; becomes SM_Veh_Truck_01 (#325 swap)",
         },
     };
 

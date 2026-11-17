@@ -141,8 +141,8 @@ public class StandardizedVehicleTests
     [Fact]
     public void A_type_without_skins_draws_its_model()
     {
-        var jeep = Shipped.Vehicles.Single(v => v.Id == "jeep");
-        Assert.Empty(jeep.Skins);
-        Assert.Equal(jeep.Model, jeep.SkinModel(3));
+        var harvester = Shipped.Vehicles.Single(v => v.Id == "harvester");
+        Assert.Empty(harvester.Skins);
+        Assert.Equal(harvester.Model, harvester.SkinModel(3));
     }
 }

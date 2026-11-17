@@ -153,8 +153,12 @@ A seat the hull does not cover: a shot that reaches its rider's body hits the ri
 _Avoid_: open seat, unprotected seat
 
 **Ring gun**:
-The amphibious transport's and the Humvee's machine gun, on a ring mount (over the rear compartment; on the Humvee's roof) and worked from the gunner seat by a gunner who stands inside the ring. The gunner's view aims it all the way round; over the two riders in front of the transport's it cannot be depressed. Its rounds are the jeep's roof gun's, and its kills are ordinary kills.
+The amphibious transport's and the Humvee's machine gun, on a ring mount (over the rear compartment; on the Humvee's roof) and worked from the gunner seat by a gunner who stands inside the ring. The gunner's view aims it all the way round; over the two riders in front of the transport's it cannot be depressed. Its rounds are the vehicle gun round, and its kills are ordinary kills.
 _Avoid_: turret (alone), pintle gun, rear gun
+
+**Vehicle gun round**:
+The round the Humvee's roof gun, the amphibious transport's ring gun and the utility helicopter's door gun fire: 14 damage (30 from the helicopter's belt), one round every 0.1 s, 220 m range, 1.2 degrees of spread. There is no shared record: each of those types carries it in its own `gun` block in `vehicles.json`. It was "the jeep's roof gun" until the jeep became a gunless truck (#325).
+_Avoid_: jeep gun, roof gun (alone)
 
 **Fixed seat**:
 Where a rider sits, in every vehicle: the seat's offset in the vehicle's frame (`vehicles.json` `seats`; a vehicle with none has one driver seat at its origin). Its rider is drawn on it, turning and tilting with the hull as it is drawn this frame, and never as a free figure beside the vehicle. The server tells every client who sits in each seat (the driver in the vehicle's record, seats 1..4 in its seats record; a vehicle has at most five seats), so a rider is placed by id.
@@ -209,7 +213,7 @@ How many times an Item can be taken from a Corpse or the ground over its whole l
 _Avoid_: use count, durability, charges
 
 **Streak weapon**:
-A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the turret, the MOAB, the aircraft guns). Kills made with one do not advance the Streak counter. The jeep's roof gun, the utility helicopter's door gun and the amphibious transport's ring gun are not streak weapons.
+A weapon owned by a killstreak (the UAV's helper rounds, the attack missile, the turret, the MOAB, the aircraft guns). Kills made with one do not advance the Streak counter. The Humvee's roof gun, the utility helicopter's door gun and the amphibious transport's ring gun are not streak weapons.
 _Avoid_: killstreak weapon (ambiguous with the streak itself)
 
 **Pellet fan**:
@@ -269,7 +273,7 @@ The fall of a sniper rifle's bullet under gravity, as if it flew at the weapon's
 _Avoid_: falloff (that is damage), ballistics (the thrown arcs of the Bigfoot)
 
 **Casing**:
-The spent case a gun throws out when it fires (#307): every gun that fires a round has one (a pistol's, a rifle's, a shotgun's red hull, the big case of a door gun, the jeep's roof gun or a sentry turret, the 35 mm case of the flak), a knife, an RPG or a Lock-on launcher none. Seen by every client, drawn only near the camera, never sent over the network (each client throws its own from the same shot). It flies, bounces up to three times with a clink (`casing.tink`), lies on the floor for 20 s and fades. One that lands on a vehicle's roof goes after a second; one that goes under water sinks slowly, lies on the bed and makes no sound; one that lands on a steep face slides down it; it does not come to rest inside a vehicle (not yet, #316).
+The spent case a gun throws out when it fires (#307): every gun that fires a round has one (a pistol's, a rifle's, a shotgun's red hull, the big case of a door gun or a roof gun, a sentry turret, the 35 mm case of the flak), a knife, an RPG or a Lock-on launcher none. Seen by every client, drawn only near the camera, never sent over the network (each client throws its own from the same shot). It flies, bounces up to three times with a clink (`casing.tink`), lies on the floor for 20 s and fades. One that lands on a vehicle's roof goes after a second; one that goes under water sinks slowly, lies on the bed and makes no sound; one that lands on a steep face slides down it; it does not come to rest inside a vehicle (not yet, #316).
 _Avoid_: shell (a flak **shell** is the round, not the case), brass
 
 **Zero**:
@@ -324,11 +328,11 @@ The vehicle a player flies: boarded, left and destroyed like any other vehicle, 
 _Avoid_: helicopter (alone), chopper, Huey, aircraft (that is the circling killstreak entity), flyable helicopter
 
 **Door gun**:
-The utility helicopter's machine gun, on a pintle in its right door and worked from the gunner seat. The gunner's view aims it inside an arc that keeps its rounds off the helicopter itself; its rounds are the jeep's roof gun's, and its kills are ordinary kills. The door gunner sits in the open, like the flak truck's gunner: a shot that reaches the body hits it, while the pilot stays behind the hull.
+The utility helicopter's machine gun, on a pintle in its right door and worked from the gunner seat. The gunner's view aims it inside an arc that keeps its rounds off the helicopter itself; its rounds are the vehicle gun round, and its kills are ordinary kills. The door gunner sits in the open, like the flak truck's gunner: a shot that reaches the body hits it, while the pilot stays behind the hull.
 _Avoid_: turret (alone), minigun, side gun
 
 **Flak truck**:
-A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the jeep's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every closed vehicle.
+A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the Humvee's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every closed vehicle.
 _Avoid_: AA gun, anti-air vehicle, SPAAG
 
 **Bus**:
@@ -336,8 +340,12 @@ A 12 m land vehicle modelled on the regional bus that serves the village: a driv
 _Avoid_: coach, autobus, transport (that is the amphibious one)
 
 **Humvee**:
-A heavier, tougher jeep (a 4.6 m troop car, 2400 kg, 550 hp, 100 km/h) with five seats: a driver, a front passenger, two rear passengers and a roof gunner. Dealt at random (two), driven by the drive model like the car (wheels roll and steer, the body leans, the driver predicts it) and able to tow. The passengers sit under the hull, in plain seats; the gunner stands in the roof ring, an exposed seat working a ring gun with the jeep's roof gun's rounds that turns all the way round. Its model is from the private SIMPLE Military pack (a grey box without it).
-_Avoid_: Hummer, HMMWV, troop car, jeep (that is the Kenney one)
+A heavier, tougher military car (a 4.6 m troop car, 2400 kg, 550 hp, 100 km/h) with five seats: a driver, a front passenger, two rear passengers and a roof gunner. Dealt at random (two), driven by the drive model like the car (wheels roll and steer, the body leans, the driver predicts it) and able to tow. The passengers sit under the hull, in plain seats; the gunner stands in the roof ring, an exposed seat working a ring gun with the vehicle gun round that turns all the way round. Its model is from the private SIMPLE Military pack (a grey box without it).
+_Avoid_: Hummer, HMMWV, troop car, jeep (that is the cargo truck)
+
+**Jeep**:
+The vehicle type `jeep`: the six-wheeled Synty Battle Royale cargo truck (SM_Veh_Truck_01, 3.05 x 3.16 x 7.05 m, drawn at real size, six camo and colour skins), with a three-seat cab bench (a driver and two passengers) and a flat bed behind. It has no gun and no gunner seat. It tows. The id stays `jeep` because data, tests and chat commands name it; it replaced the Kenney SUV with a roof gun (#325).
+_Avoid_: truck (alone: the flak truck and the Scud truck are other vehicles), war jeep, Kenney jeep
 
 **Golf Mk2**:
 A small black three-door hatchback (4.3 m) with four seats (left-hand drive) that tops out at 200 km/h, the fastest vehicle. Driven by the drive model like the car; no weapon. It is never dealt at random: it stands at its fixed spot.

@@ -11,9 +11,9 @@ public enum DamageResult { Ignored, Damaged, Killed, Saved }
 /// <summary>Weapon ids for deaths that no weapon from weapons.json caused.</summary>
 public static class SpecialWeapons
 {
-    /// <summary>A vehicle run over or blown up; <see cref="VehicleGun"/> is the jeep's roof gun.</summary>
+    /// <summary>A vehicle run over or blown up; <see cref="VehicleGun"/> is the vehicle machine gun (the Humvee's, the ring gun's, the door gun's).</summary>
     public const byte Vehicle = 252, Debug = 253, Void = 254, Fall = 255;
-    /// <summary>The jeep's roof gun (a gunner's rounds).</summary>
+    /// <summary>The vehicle machine gun (a gunner's rounds).</summary>
     public const byte VehicleGun = 250;
     /// <summary>The MOAB's blast (ticket #129): its kills are streak kills.</summary>
     public const byte Moab = 249;
@@ -27,7 +27,7 @@ public static class SpecialWeapons
     public const byte Ac130 = 244;
     /// <summary>The helicopter helper's rounds (killstreak "helicopter_helper"); its kills count as the streak's, under the weapon id helicopter_gun.</summary>
     public const byte Helper = 245;
-    /// <summary>The flak truck's shells (a gunner's rounds): its kills are ordinary kills, not the streak's, like the jeep's roof gun.</summary>
+    /// <summary>The flak truck's shells (a gunner's rounds): its kills are ordinary kills, not the streak's, like the vehicle machine gun.</summary>
     public const byte Flak = 243;
     /// <summary>What a Gang member does to a player (a fist or a pipe, Thieves event): the kill feed names it.</summary>
     public const byte Gang = 240;
