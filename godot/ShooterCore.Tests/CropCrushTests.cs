@@ -15,7 +15,8 @@ public class CropCrushTests
         Assert.Equal(10, g.OriginX); Assert.Equal(-21, g.OriginZ);
         Assert.Equal(41, g.Width); Assert.Equal(31, g.Height);
         Assert.Equal(new Vector2(10.5f, -20.5f), g.CentreOf(0));
-        Assert.Null(CrushGrid.For(Rect(0, 0, 1000, 1000), Cfg));
+        Assert.Null(CrushGrid.For(Rect(0, 0, 2000, 2000), Cfg));
+        Assert.NotNull(CrushGrid.For(Rect(0, 0, 684, 400), Cfg)); // GP-0084 at H8 is ~273k cells
         Assert.Null(CrushGrid.For(new[] { Vector2.Zero, Vector2.One }, Cfg));
     }
 
