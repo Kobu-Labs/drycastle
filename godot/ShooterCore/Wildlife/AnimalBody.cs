@@ -171,10 +171,12 @@ public sealed class AnimalCrowd : IStandingBodies
     {
         foreach (var a in _all)
         {
-            if (!a.Stands) continue;
+            // the distance first: nearly every animal is far away, and the test is two fields (the answer is the same in either order)
             var reach = a.BodyReach + radius;
-            float dx = a.Position.X - x, dz = a.Position.Z - z;
+            var p = a.Position;
+            float dx = p.X - x, dz = p.Z - z;
             if (dx * dx + dz * dz > reach * reach) continue;
+            if (!a.Stands) continue;
             into.Add(new BodyObstacle(a.Body, a.Position.Y, a.Position.Y + a.HitBox[1]));
         }
     }
@@ -197,12 +199,16 @@ public sealed class AnimalCrowd : IStandingBodies
     /// </summary>
     public bool Blocks(Animal self, in BodyBox from, in BodyBox to)
     {
+        var selfReach = self.BodyReach;
+        var herd = self.Herd;
         foreach (var o in _all)
         {
-            if (ReferenceEquals(o, self) || !o.Obstructs || (self.Herd != null && ReferenceEquals(o.Herd, self.Herd))) continue;
-            var dx = o.Position.X - to.X; var dz = o.Position.Z - to.Z;
-            var reach = self.BodyReach + o.BodyReach + 0.5f;
+            // the distance first: nearly every animal is far away, and the test is two fields (the answer is the same in either order)
+            var p = o.Position;
+            var dx = p.X - to.X; var dz = p.Z - to.Z;
+            var reach = selfReach + o.BodyReach + 0.5f;
             if (dx * dx + dz * dz > reach * reach) continue;
+            if (ReferenceEquals(o, self) || !o.Obstructs || (herd != null && ReferenceEquals(o.Herd, herd))) continue;
             var theirs = o.Body;
             if (!to.Overlaps(theirs)) continue;
             if (!from.Overlaps(theirs) || to.DistanceBetweenCentres(theirs) < from.DistanceBetweenCentres(theirs)) return true;

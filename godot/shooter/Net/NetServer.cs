@@ -278,6 +278,7 @@ public partial class NetServer : Node
         pt = Prof.Lap(Prof.S.MatchUpdate, pt);
         BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
         GangsPrepare(); // the players the Gang members fight, and who each fights
+        AnimalsPrepare(); // the players and moving vehicles the animals look at, read once for all of them
         _audit?.Lap(1);
         pt = Prof.Lap(Prof.S.Prepare, pt);
         _match.Entities.Tick((float)delta);
@@ -290,6 +291,7 @@ public partial class NetServer : Node
         _audit?.Lap(4);
         pt = Prof.Lap(Prof.S.Pets, pt);
         WildlifeTick((float)delta);
+        AnimalsDone(); // the animals have ticked: the players move from here on
         _audit?.Lap(5);
         pt = Prof.Lap(Prof.S.Wildlife, pt);
         MassTick((float)delta); // the Holy Mass: its clock, the pastor, the seats
@@ -1152,6 +1154,7 @@ public partial class NetServer : Node
     /// <param name="shot">Where the bullet entered a wild animal it hit (the hit diagram), and <paramref name="shotDistance"/> how far it flew: for the hunter's log (<see cref="OnWildKilled"/>).</param>
     DamageResult Deal(ushort attackerId, byte weaponIdx, ushort victim, float damage, bool head, bool backstab, KillCause cause = KillCause.Standard, HuntShotMsg? shot = null, float? shotDistance = null)
     {
+        _animalsFresh = false; // a life may end here: the animals' list of players is asked anew
         if (victim == BigfootRules.TargetId) return DealBigfoot(attackerId, weaponIdx); // a hit count, not hit points (issue #264)
         if (_streaks.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
         if (DemonRules.IsHitId(victim)) return DemonHit(attackerId, weaponIdx, damage); // the demon: a hit count, no hit points

@@ -76,14 +76,58 @@ public partial class NetServer
         {
             var t = Prof.Begin(Prof.S.AnimalPlayersNear);
             var r2 = radius * radius;
-            foreach (var c in _s._byId.Values)
+            if (_s._animalsPrepared)
             {
-                if (c.Car != null || _s._match.Get(c.Id)?.Life != PlayerLife.Alive) continue;
-                var p = N(c.Body.GlobalPosition);
-                var dx = p.X - at.X; var dz = p.Z - at.Z;
-                if (dx * dx + dz * dz <= r2) into.Add(p);
+                foreach (var a in _s._animalPlayers)
+                {
+                    if (!a.OnFoot || !a.Alive) continue;
+                    var dx = a.Pos.X - at.X; var dz = a.Pos.Z - at.Z;
+                    if (dx * dx + dz * dz <= r2) into.Add(a.Pos);
+                }
+            }
+            else
+            {
+                foreach (var c in _s._byId.Values)
+                {
+                    if (c.Car != null || _s._match.Get(c.Id)?.Life != PlayerLife.Alive) continue;
+                    var p = N(c.Body.GlobalPosition);
+                    var dx = p.X - at.X; var dz = p.Z - at.Z;
+                    if (dx * dx + dz * dz <= r2) into.Add(p);
+                }
             }
             Prof.End(Prof.S.AnimalPlayersNear, t);
         }
     }
+
+    /// <summary>A player as the animals see them this tick.</summary>
+    readonly record struct AnimalPlayer(NVec3 Pos, bool Alive, bool OnFoot);
+
+    /// <summary>
+    /// Every player (bots too, in the order of <c>_byId</c>) and every moving vehicle as they stand while the entities tick, read once (<see cref="AnimalsPrepare"/>)
+    /// instead of once per animal: each animal asked the match and the engine about every player, every tick. Only good between <see cref="AnimalsPrepare"/> and
+    /// <see cref="AnimalsDone"/>, and only until a player is hurt or teleported in between (<see cref="_animalsPrepared"/>): the players are simulated later in
+    /// the tick, so the animals get the answers they got before. Otherwise the world is asked as before.
+    /// </summary>
+    readonly List<AnimalPlayer> _animalPlayers = new();
+    readonly List<NVec3> _animalCarThreats = new();
+    bool _animalsFresh;
+    int _animalsTeleports;
+    /// <summary>Whether the list is the world as it is: made this tick, and since then nobody was hurt (a life may have ended) or put somewhere else (the Bigfoot throws, the Gang shoots while the entities tick).</summary>
+    bool _animalsPrepared => _animalsFresh && Player.TeleportsAll == _animalsTeleports;
+
+    /// <summary>Before the entities tick, with <see cref="BigfootPrepare"/> and <see cref="GangsPrepare"/>: the players and the moving vehicles the animals look at this tick.</summary>
+    void AnimalsPrepare()
+    {
+        _animalPlayers.Clear();
+        _animalCarThreats.Clear();
+        foreach (var c in _byId.Values)
+            _animalPlayers.Add(new AnimalPlayer(N(c.Body.GlobalPosition), _match.Get(c.Id)?.Life == PlayerLife.Alive, c.Car == null));
+        foreach (var car in _cars)
+            if (!car.Destroyed && MathF.Abs(car.State.Speed) > WildlifeCarThreatSpeed) _animalCarThreats.Add(N(car.GlobalPosition));
+        _animalsTeleports = Player.TeleportsAll;
+        _animalsFresh = true;
+    }
+
+    /// <summary>After the animals have ticked: from here on the players move, so the world is asked directly again.</summary>
+    void AnimalsDone() => _animalsFresh = false;
 }
