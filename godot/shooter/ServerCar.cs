@@ -239,8 +239,8 @@ public partial class ServerCar : CharacterBody3D
             tilt ? Flight.Pitch : 0, tilt ? Flight.Roll : 0, Def.Tilts ? Def.HullBoxes : null);
     }
 
-    /// <summary>This vehicle as one side of a bump: its mass (a type with none counts as a car) and the velocity it is moving with.</summary>
-    public BumpBody BumpBody() => new(Def.Mass > 0 ? Def.Mass : 1200f, Flies ? Flight.Velocity : new System.Numerics.Vector3(Forward.X, 0, Forward.Z) * State.Speed, Flies);
+    /// <summary>This vehicle as one side of a bump: its mass (a type with none counts as a car; a trailer weighs what its load makes it) and the velocity it is moving with.</summary>
+    public BumpBody BumpBody() => new(Def.Trailer is { } tr ? tr.MassFor(Cargo?.Loaded ?? true) : Def.Mass > 0 ? Def.Mass : 1200f, Flies ? Flight.Velocity : new System.Numerics.Vector3(Forward.X, 0, Forward.Z) * State.Speed, Flies);
 
     /// <summary>
     /// Applies a bump (<see cref="VehicleContact.Bump"/>): moves the vehicle apart and changes its velocity. A ground vehicle is moved through the

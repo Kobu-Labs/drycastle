@@ -92,7 +92,7 @@
         "camera": { "distance": 9, "height": 2.8, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
       },
       "comment": "The type id stays `jeep`; the model is the Synty Battle Royale cargo truck SM_Veh_Truck_01 at real size (#325): six wheels, a three-seat cab bench (driver and two passengers), no gun and no gunner seat. It tows (hitch on the centre line 0.13 m behind the bed tail, 0.62 high like the rocket cart's eye). The tuning of the old jeep is kept. Skins are the six Battle Royale atlases (private pack, boxes without it); node names in docs/standards/car-design.md.",
-      "top_speed": 30, "acceleration": 4.8, "brake": 8, "turn_radius": 3.6, "max_lateral_accel": 9, "mass": 1800, "run_over_mass": 1500, "hp": 380, "hood": [0, 1.9, -3.3], "spawn_count": 3, "half_width": 1.53, "half_length": 3.54, "height": 3.17,
+      "top_speed": 30, "acceleration": 4.8, "brake": 8, "turn_radius": 3.6, "max_lateral_accel": 9, "mass": 6500, "run_over_mass": 1500, "hp": 380, "hood": [0, 1.9, -3.3], "spawn_count": 3, "half_width": 1.53, "half_length": 3.54, "height": 3.17,
       "model": "pack:synty-vehicles/truck_woodland", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "chase_distance": 9, "chase_height": 2.8,
       "tow": { "hitch": [0, 0.62, 3.66] },
@@ -227,7 +227,7 @@
         },
         "camera": { "distance": 8.1, "height": 2.05, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
       },
-      "top_speed": 15, "acceleration": 2.5, "brake": 6, "turn_radius": 7.5, "max_lateral_accel": 6, "mass": 6000, "run_over_mass": 3000, "hp": 1200, "exposed_gunner": true, "hood": [0, 1.8, -2.7], "spawn_count": 1, "half_width": 1.3, "half_length": 3.55, "height": 3.0,
+      "top_speed": 15, "acceleration": 2.5, "brake": 6, "turn_radius": 7.5, "max_lateral_accel": 6, "mass": 9000, "run_over_mass": 3000, "hp": 1200, "exposed_gunner": true, "hood": [0, 1.8, -2.7], "spawn_count": 1, "half_width": 1.3, "half_length": 3.55, "height": 3.0,
       "model": "drycastle-generated-models/flak.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
       "tow": { "hitch": [0, 0.7, 3.65] },

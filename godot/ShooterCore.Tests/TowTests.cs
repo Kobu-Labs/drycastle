@@ -527,7 +527,7 @@ public class TowTests
             if (a.Speed > 0) { CarModel.Step(ref a, jeep, -1f, 0f, false, Dt); da += a.Speed * Dt; }
             if (b.Speed > 0) { CarModel.Step(ref b, jeep, -1f, 0f, false, Dt, false, tow); db += b.Speed * Dt; }
         }
-        Assert.True(db > da * 1.5f);
+        Assert.True(db > da * 1.15f); // the jeep is a 6500 kg cargo truck: a 1500 kg cart takes a fifth of its braking
         // the bend is wider, and a block at the limit stops a reversing one
         var c = new CarState { Speed = 12 };
         CarModel.Step(ref c, jeep, 0f, 1f, false, 1f, false, tow);
