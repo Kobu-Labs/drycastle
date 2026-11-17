@@ -95,6 +95,10 @@ public partial class NetServer
         var line = $"server: stats tick p50 {P(50):F2} ms p99 {P(99):F2} ms (budget {TickMs:F1}), overruns {_overruns}, skipped snapshots {_skippedSnapshots}, " +
                $"players {joined.Count}, bots {_byId.Count - joined.Count}, out {perClient:F0} B/s per client, entities {entities}, db queue {Progression?.QueueDepth ?? 0}, " +
                $"dropped packets {_droppedPackets}, rejected saves {_rejectedSaves}";
+        Metrics?.Begin("drycastle_tick").Field("p50_ms", P(50)).Field("p99_ms", P(99)).Field("max_ms", s.Count == 0 ? 0 : s[^1]).Field("budget_ms", TickMs)
+            .Field("overruns", _overruns).Field("skipped_snapshots", _skippedSnapshots).End();
+        Metrics?.Begin("drycastle_match").Field("players", joined.Count).Field("bots", _byId.Count - joined.Count).Field("entities", entities)
+            .Field("out_bytes_s_per_client", perClient).Field("db_queue", Progression?.QueueDepth ?? 0).Field("dropped_packets", _droppedPackets).Field("rejected_saves", _rejectedSaves).End();
         return line + " | phases p50/p99 us " + PhaseSummary() + " | " + GcSummary(seconds);
     }
 
@@ -107,6 +111,7 @@ public partial class NetServer
             var s = _phaseUs[i].ToArray();
             Array.Sort(s);
             if (sb.Length > 0) sb.Append(' ');
+            if (s.Length > 0) Metrics?.Begin("drycastle_phase", "phase", ((ServerPerf.Ph)i).ToString().ToLowerInvariant()).Field("p50_us", Pct(s, 50)).Field("p99_us", Pct(s, 99)).End();
             sb.Append(((ServerPerf.Ph)i).ToString().ToLowerInvariant()).Append(' ')
               .Append(Pct(s, 50).ToString("F0", System.Globalization.CultureInfo.InvariantCulture)).Append('/')
               .Append(Pct(s, 99).ToString("F0", System.Globalization.CultureInfo.InvariantCulture));
@@ -126,6 +131,8 @@ public partial class NetServer
         var gc0 = GC.CollectionCount(0); var gc1 = GC.CollectionCount(1); var gc2 = GC.CollectionCount(2);
         var alloc = GC.GetTotalAllocatedBytes(); var pause = GC.GetTotalPauseDuration().TotalMilliseconds;
         var s = $"gc gen0 {gc0 - _gc0Last} gen1 {gc1 - _gc1Last} gen2 {gc2 - _gc2Last}, alloc {(alloc - _allocLast) / 1e6 / Math.Max(seconds, 1e-3):F2} MB/s, gc pause {pause - _pauseLast:F1} ms";
+        Metrics?.Begin("drycastle_gc_period").Field("gen0", gc0 - _gc0Last).Field("gen1", gc1 - _gc1Last).Field("gen2", gc2 - _gc2Last)
+            .Field("alloc_mb_s", (alloc - _allocLast) / 1e6 / Math.Max(seconds, 1e-3)).Field("pause_ms", pause - _pauseLast).End();
         _gc0Last = gc0; _gc1Last = gc1; _gc2Last = gc2; _allocLast = alloc; _pauseLast = pause;
         return s;
     }

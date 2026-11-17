@@ -57,7 +57,10 @@ public partial class NetServer
         var threads = ThreadCpu(seconds); // likewise: the baseline moves every period
         if (active)
         {
-            GD.Print("server: prof scopes ms/s|calls/s|kb/s " + Prof.Scopes(seconds));
+            var scopes = Prof.Scopes(seconds);
+            GD.Print("server: prof scopes ms/s|calls/s|kb/s " + scopes);
+            Metrics?.Tagged("drycastle_scope", "scope", scopes, "ms_s", "calls_s", "kb_s");
+            Metrics?.Begin("drycastle_worst_tick").Field("ms", _profWorstMs).Field("gc_pause_ms", _worstPauseMs).Field("ticks_with_gc", _gcTicks).Field("without_gc_ms", _worstNoGcMs).End();
             var sb = new StringBuilder();
             for (var i = 0; i < _profWorstPhaseUs.Length; i++)
             {
@@ -75,10 +78,17 @@ public partial class NetServer
             }
             GD.Print("server: prof alloc kb/s" + al);
             GD.Print("server: prof nav ms/s|calls/s " + nav);
+            Metrics?.Tagged("drycastle_phase", "phase", al.ToString(), "alloc_kb_s");
+            Metrics?.Tagged("drycastle_nav", "what", nav, "ms_s", "calls_s");
         }
         if (threads.Length > 0 && (active || _profReports % 6 == 0)) GD.Print("server: prof threads cpu_pct " + threads);
-        GD.Print("server: prof mem " + MemoryLine(seconds));
-        GD.Print("server: prof gc " + GcLine());
+        var mem = MemoryLine(seconds); var gc = GcLine();
+        GD.Print("server: prof mem " + mem);
+        GD.Print("server: prof gc " + gc);
+        if (threads.Length > 0) Metrics?.Tagged("drycastle_thread", "thread", threads, "cpu_pct");
+        Metrics?.Fields("drycastle_mem", mem);
+        Metrics?.Fields("drycastle_gc", gc);
+        MetricsFlush();
         _profReports++;
         Prof.Reset();
         _profWorstMs = 0; _gcTicks = 0; _worstNoGcMs = 0;

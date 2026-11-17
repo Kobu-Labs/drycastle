@@ -44,6 +44,8 @@ services:
         condition: service_healthy
     environment:
       DRYCASTLE_DB: postgres://shooter:${POSTGRES_PASSWORD}@db:5432/shooter
+      # where the server sends its numbers every 10 s (the metrics service below; docs/monitoring.md). The server runs the same without it.
+      DRYCASTLE_METRICS_URL: http://metrics:8428/write
     # Extra server flags (match options, time of day, ...) go here; see docs/shooter-server.md. --allow-sandbox is on by choice
     # (sandbox players are not scored and write nothing to the database); --unlock-all is on by choice (closed friends group; nothing is saved to the database); leave out --debug-cmds.
     # --admin-token takes ADMIN_TOKEN from .env (comma-separated player_tokens; see docs/shooter-v2.md, "Chat and admin commands"). Keep it out of git.
@@ -76,6 +78,69 @@ services:
     ports:
       - "${PACK_PORT:-27080}:8080/tcp"
 
+  # ---- monitoring (docs/monitoring.md): about 250 MB of memory in all, each service capped, none of them needed by the game ----
+
+  # The metrics store (VictoriaMetrics, one process). The game server pushes to it; it fetches the host's numbers from `node` itself.
+  # Not reachable from outside the compose network.
+  metrics:
+    image: victoriametrics/victoria-metrics:v1.156.0
+    restart: unless-stopped
+    logging: *logging
+    command:
+      - -storageDataPath=/storage
+      - -retentionPeriod=90d
+      - -memory.allowedBytes=64MiB
+      - -promscrape.config=/etc/metrics/scrape.yml
+      - -loggerLevel=WARN
+    mem_limit: 192m
+    volumes:
+      - metricsdata:/storage
+      - ./monitoring/scrape.yml:/etc/metrics/scrape.yml:ro
+
+  # The host's CPU (with the time the provider took: steal), memory, disk and load.
+  node:
+    image: prom/node-exporter:v1.12.1
+    restart: unless-stopped
+    logging: *logging
+    command:
+      - --path.rootfs=/host
+      - --collector.disable-defaults
+      - --collector.cpu
+      - --collector.meminfo
+      - --collector.loadavg
+      - --collector.filesystem
+      - --collector.diskstats
+      - --collector.netdev
+      - --collector.pressure
+    pid: host
+    mem_limit: 48m
+    volumes:
+      - /:/host:ro,rslave
+
+  # The dashboards. Listens on the VPS's own loopback only: open it through an ssh tunnel (docs/monitoring.md), never from the internet.
+  grafana:
+    image: grafana/grafana-oss:12.4.3
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/drycastle-server.json
+    mem_limit: 256m
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
 volumes:
   pgdata:
   navcache:
+  metricsdata:
+  grafanadata:
