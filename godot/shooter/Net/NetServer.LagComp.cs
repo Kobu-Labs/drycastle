@@ -119,6 +119,7 @@ public partial class NetServer
     {
         var t0 = _perf != null ? Stopwatch.GetTimestamp() : 0L;
         var list = NoLagComp || c.Peer == null ? LiveTargets() : RewoundTargets(c);
+        DropArmoured(list); // no bullet or pellet reaches an armoured seat (ADR 0035)
         if (_perf != null) _lagResolveUs = (Stopwatch.GetTimestamp() - t0) * 1_000_000.0 / Stopwatch.Frequency;
         return list;
     }

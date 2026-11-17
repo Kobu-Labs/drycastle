@@ -397,7 +397,8 @@ def entry_fields(cfg, info, facts, has_drive=True):
     seats = []
     for k, s in info["seats"].items():
         # an exposed rider (ADR 0012) has no cabin: the stance gives the eye, so no eye_height
-        tail = ', "exposed": true' if s["exposed"] else ', "eye_height": %s' % num(s["eye_height"])
+        # every seat declares its cover (ADR 0035): an open vehicle's rider is exposed, a closed one's sits behind glass (an armoured seat is set by hand)
+        tail = ', "cover": "exposed"' if s["exposed"] else ', "cover": "glass", "eye_height": %s' % num(s["eye_height"])
         seats.append('{ "role": "%s", "offset": %s%s }' % (s["role"], vec(s["feet"]), tail))
     lamps = info["lamps"]
     head = [lamps[k]["pos"] for k in sorted(lamps) if lamps[k]["kind"] == "head"]

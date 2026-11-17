@@ -45,10 +45,10 @@
       "model_yaw_deg": 0,
       "model_offset": [0, 0, 0],
       "seats": [
-        { "role": "driver", "offset": [-0.387, 0.374, 0.244], "eye_height": 1 },
-        { "role": "passenger", "offset": [0.362, 0.374, 0.244], "eye_height": 1 },
-        { "role": "passenger", "offset": [-0.33, 0.444, 1.134], "eye_height": 0.95 },
-        { "role": "passenger", "offset": [0.3, 0.444, 1.134], "eye_height": 0.95 }
+        { "role": "driver", "offset": [-0.387, 0.374, 0.244], "cover": "glass", "eye_height": 1 },
+        { "role": "passenger", "offset": [0.362, 0.374, 0.244], "cover": "glass", "eye_height": 1 },
+        { "role": "passenger", "offset": [-0.33, 0.444, 1.134], "cover": "glass", "eye_height": 0.95 },
+        { "role": "passenger", "offset": [0.3, 0.444, 1.134], "cover": "glass", "eye_height": 0.95 }
       ] },
     {
       "id": "motorcycle", "top_speed": 36.1, "acceleration": 8.5, "brake": 10, "turn_radius": 2.8, "max_lateral_accel": 11, "mass": 230, "hp": 120, "hood": [0, 0.8, -0.45], "spawn_count": 3, "half_width": 0.42, "half_length": 1.1, "height": 1.19,
@@ -59,7 +59,7 @@
       "model_yaw_deg": 0,
       "model_offset": [0, 0, 0],
       "seats": [
-        { "role": "driver", "offset": [0, 0.436, 0.477], "exposed": true }
+        { "role": "driver", "offset": [0, 0.436, 0.477], "cover": "exposed" }
       ]
     },
     {
@@ -97,11 +97,11 @@
       "model": "pack:synty-simple-military/humvee", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "tow": { "hitch": [0, 0.62, 2.44] },
       "seats": [
-        { "role": "driver", "offset": [-0.62, 0.6, -0.22] },
-        { "role": "passenger", "offset": [0.62, 0.6, -0.22], "eye_height": 1.05 },
-        { "role": "passenger", "offset": [-0.45, 0.6, 0.5], "eye_height": 1.05 },
-        { "role": "passenger", "offset": [0.45, 0.6, 0.5], "eye_height": 1.05 },
-        { "role": "gunner", "offset": [0, 0.73, 0.105], "exposed": true, "standing": true }
+        { "role": "driver", "offset": [-0.62, 0.6, -0.22], "cover": "glass" },
+        { "role": "passenger", "offset": [0.62, 0.6, -0.22], "cover": "glass", "eye_height": 1.05 },
+        { "role": "passenger", "offset": [-0.45, 0.6, 0.5], "cover": "glass", "eye_height": 1.05 },
+        { "role": "passenger", "offset": [0.45, 0.6, 0.5], "cover": "glass", "eye_height": 1.05 },
+        { "role": "gunner", "offset": [0, 0.73, 0.105], "cover": "exposed", "standing": true }
       ],
       "gun": { "damage": 14, "fire_interval": 0.1, "range": 220, "spread_degrees": 1.2, "magazine": 60, "reserve": 240, "reload_time": 2.5 },
       "door_gun": { "pivot": [0, 2.157, 0.105], "ring_radius": 0.55, "outward_yaw_deg": 0, "yaw_arc_deg": 180, "min_pitch_deg": -25, "max_pitch_deg": 55, "muzzle_length": 0.826, "eye": [0, 0.22, 0.55], "recoil_m": 0.05 },
@@ -124,7 +124,7 @@
       "model_yaw_deg": 0,
       "model_offset": [0, 0, 0],
       "seats": [
-        { "role": "driver", "offset": [0, 0.419, 0.168], "exposed": true }
+        { "role": "driver", "offset": [0, 0.419, 0.168], "cover": "exposed" }
       ]
     },
     {
@@ -152,9 +152,9 @@
       "model": "drycastle-generated-models/amphibious_transport.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
       "seats": [
-        { "role": "driver", "offset": [-0.45, 0.64, -0.37], "exposed": true },
-        { "role": "passenger", "offset": [0.45, 0.64, -0.37], "exposed": true, "armed": true, "aim": { "yaw_deg": -45, "arc_deg": 105, "min_pitch_deg": -40, "max_pitch_deg": 70, "spread_full_speed": 16 } },
-        { "role": "gunner", "offset": [0, 0.685, 1.0], "exposed": true, "standing": true }
+        { "role": "driver", "offset": [-0.45, 0.64, -0.37], "cover": "exposed" },
+        { "role": "passenger", "offset": [0.45, 0.64, -0.37], "cover": "exposed", "armed": true, "aim": { "yaw_deg": -45, "arc_deg": 105, "min_pitch_deg": -40, "max_pitch_deg": 70, "spread_full_speed": 16 } },
+        { "role": "gunner", "offset": [0, 0.685, 1.0], "cover": "exposed", "standing": true }
       ],
       "gun": { "damage": 14, "fire_interval": 0.1, "range": 220, "spread_degrees": 1.2, "magazine": 100, "reserve": 400, "reload_time": 3 },
       "door_gun": {
@@ -168,7 +168,7 @@
       "model": "drycastle-generated-models/flak.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
       "tow": { "hitch": [0, 0.7, 3.65] },
-      "seats": [{ "role": "driver", "offset": [-0.5, 0.95, -1.4] }, { "role": "gunner", "offset": [0, 1.59, 2.37] }],
+      "seats": [{ "role": "driver", "offset": [-0.5, 0.95, -1.4], "cover": "armoured" }, { "role": "gunner", "offset": [0, 1.59, 2.37] }],
       "flak": {
         "weapon_id": "m249", "pivot": [0, 2.55, 1.75], "muzzle_length": 3.65, "barrel_spacing": 0.27,
         "fire_interval": 0.25, "shell_speed": 700, "max_range": 2500, "spread_degrees": 0.25,
@@ -191,7 +191,7 @@
       "id": "bus", "top_speed": 25, "acceleration": 2.6, "brake": 7, "turn_radius": 9.5, "max_lateral_accel": 5, "mass": 13000, "run_over_mass": 3000, "hp": 900, "hood": [0, 1.3, 6.13], "spawn_count": 1, "half_width": 1.28, "half_length": 6.03, "height": 3.1,
       "model": "drycastle-generated-models/bus.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Red", "paints": ["Red"],
-      "seats": [{ "role": "driver", "offset": [-0.7, 0.62, -4.825] }, { "role": "passenger", "offset": [0.53, 0.38, -2.175] }, { "role": "passenger", "offset": [-0.97, 0.86, 1.825] }, { "role": "passenger", "offset": [0, 0.86, 4.905] }],
+      "seats": [{ "role": "driver", "offset": [-0.7, 0.62, -4.825], "cover": "glass" }, { "role": "passenger", "offset": [0.53, 0.38, -2.175], "cover": "glass" }, { "role": "passenger", "offset": [-0.97, 0.86, 1.825], "cover": "glass" }, { "role": "passenger", "offset": [0, 0.86, 4.905], "cover": "glass" }],
       "glass": [
         { "id": "left_1", "centre": [-1.263, 1.805, -4.838], "normal": [-1, 0, 0], "size": [1.325, 1.51], "outline": [[-0.662, -0.755], [0.662, -0.755], [0.662, 0.755], [-0.662, 0.755]] },
         { "id": "left_2", "centre": [-1.263, 1.805, -3.235], "normal": [-1, 0, 0], "size": [1.88, 1.51], "outline": [[-0.94, -0.755], [-0.786, -0.755], [0.94, -0.405], [0.94, 0.755], [-0.94, 0.755]] },
@@ -220,7 +220,7 @@
       "hull": [[0, -0.5, 1.3, 3.5, 0, 3.0], [0, 5.5, 0.35, 2.5, 1.45, 2.8], [0, 8.43, 0.35, 0.43, 1.5, 4.35]],
       "model": "drycastle-generated-models/utility_helicopter.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
-      "seats": [{ "role": "driver", "offset": [0.55, 0.72, -1.9] }, { "role": "gunner", "offset": [0.4, 0.72, 0.15] }],
+      "seats": [{ "role": "driver", "offset": [0.55, 0.72, -1.9], "cover": "glass" }, { "role": "gunner", "offset": [0.4, 0.72, 0.15] }],
       "gun": { "damage": 30, "fire_interval": 0.1, "range": 220, "spread_degrees": 1.2, "magazine": 100, "reserve": 400, "reload_time": 3 },
       "door_gun": { "pivot": [1.3, 1.5, 0.15], "outward_yaw_deg": -90, "yaw_arc_deg": 70, "min_pitch_deg": -55, "max_pitch_deg": 12, "muzzle_length": 0.88, "eye": [0, 0.22, 0.62], "recoil_m": 0.05 },
       "flight": {
@@ -267,10 +267,10 @@
       "model": "drycastle-generated-models/golf_mk2.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Black paint", "paints": ["Black paint"],
       "seats": [
-        { "role": "driver", "offset": [-0.4875, 0.45, 0.2125] },
-        { "role": "passenger", "offset": [0.4875, 0.45, 0.2125] },
-        { "role": "passenger", "offset": [-0.45, 0.45, 1.25] },
-        { "role": "passenger", "offset": [0.45, 0.45, 1.25] }
+        { "role": "driver", "offset": [-0.4875, 0.45, 0.2125], "cover": "glass" },
+        { "role": "passenger", "offset": [0.4875, 0.45, 0.2125], "cover": "glass" },
+        { "role": "passenger", "offset": [-0.45, 0.45, 1.25], "cover": "glass" },
+        { "role": "passenger", "offset": [0.45, 0.45, 1.25], "cover": "glass" }
       ],
       "glass": [
         { "id": "windscreen", "centre": [0, 1.462, -0.662], "normal": [0, 0.737, -0.676], "size": [1.963, 0.814], "outline": [[0.812, 0.407], [-0.812, 0.407], [-0.981, -0.407], [0.981, -0.407]] },
@@ -299,7 +299,7 @@
       "chase_distance": 15, "chase_height": 5.5,
       "model": "pack:synty-farm/SM_Veh_Harvester_01", "model_scale": 1, "model_yaw_deg": 180, "model_offset": [0, 0, 0],
       "seats": [
-        { "role": "driver", "offset": [-0.79, 2.0, -0.95], "exposed": true }
+        { "role": "driver", "offset": [-0.79, 2.0, -0.95], "cover": "exposed" }
       ]
     },
     {
@@ -323,8 +323,8 @@
       "chase_distance": 17, "chase_height": 6,
       "model": "pack:synty-simple-military/scud", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "seats": [
-        { "role": "driver", "offset": [-0.892, 1.15, -4.328], "eye_height": 1.05 },
-        { "role": "passenger", "offset": [0.892, 1.15, -4.328], "eye_height": 1.05 }
+        { "role": "driver", "offset": [-0.892, 1.15, -4.328], "cover": "glass", "eye_height": 1.05 },
+        { "role": "passenger", "offset": [0.892, 1.15, -4.328], "cover": "glass", "eye_height": 1.05 }
       ],
       "launcher": { "operator_seat": 1, "muzzle": [0, 5.89, 4.111], "exhaust": [0, 1.1, 4.111], "wheel_radius": 0.736, "steer_arms": [6.431, 4.272] },
       "glass": [

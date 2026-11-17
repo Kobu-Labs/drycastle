@@ -8,7 +8,7 @@ namespace Drycastle.ShooterCore.Tests;
 /// The vehicle contract (docs/standards/car-design.md part A, issue "Unify all vehicle models") over EVERY vehicle in vehicles.json, as far as it can be checked
 /// from data without Godot. Each rule is one Theory case. A vehicle that fails a rule today is on <see cref="Allowed"/> with a reason; the test fails for a vehicle
 /// that fails and is not listed, and for a listed one that now passes (delete the entry: the list only shrinks, the goal is empty).
-/// Not checkable here (needs the .glb or code not written yet): node names, wheels, `hull`, interior, seat cover, pane kind, per-seat views (issues 301, 339).
+/// Not checkable here (needs the .glb or code not written yet): node names, wheels, `hull`, interior, per-seat views (issue 339). Seat cover and pane kind are rules here (ADR 0035).
 /// </summary>
 public class VehicleContractTests
 {
@@ -17,6 +17,8 @@ public class VehicleContractTests
     // the raw JSON, for "is the block written" (the data model fills a default seats list)
     static readonly Dictionary<string, JsonElement> Raw = JsonDocument.Parse(File.ReadAllText(Path.Combine(DataDir, "vehicles.json"))).RootElement
         .GetProperty("vehicles").EnumerateArray().ToDictionary(e => e.GetProperty("id").GetString()!);
+
+    static readonly GlassConfig GlassData = GlassConfig.Load(Path.Combine(DataDir, "glass.json"));
 
     static string? AssetsDir()
     {
@@ -54,6 +56,10 @@ public class VehicleContractTests
         ["glass_inside_hit_box"] = v => v.Glass.Where(g => !In(v, g.Centre[0], g.Centre[1], g.Centre[2])).Select(g => $"pane {g.Id} centre [{string.Join(", ", g.Centre)}]").FirstOrDefault(),
         // A / ADR 0008: a pane is a node with an outline (a rectangle with no outline is a measured paint cell of an old model)
         ["glass_has_outline"] = v => v.Glass.Where(g => g.Outline == null).Select(g => $"pane {g.Id} has no outline").FirstOrDefault(),
+        // A / ADR 0035: every seat declares its cover (armoured, glass or exposed; exposed_gunner stands for its gunner seat's)
+        ["every_seat_has_a_cover"] = v => Enumerable.Range(0, v.Seats.Count).Where(i => v.DeclaredCover(i) == null).Select(i => $"seat {i} ({v.Seats[i].Role}) declares no cover").FirstOrDefault(),
+        // A / ADR 0035: every pane has a kind the glass table knows (a pane that says none is normal; an unknown name does not load) with positive hit points
+        ["every_pane_has_a_known_kind"] = v => v.Glass.Where(g => !Enum.IsDefined(g.Kind) || (g.Hp ?? GlassData.PaneHp(g.Kind)) <= 0).Select(g => $"pane {g.Id} kind {g.Kind}").FirstOrDefault(),
         // A: a Synty model is recoloured by an atlas swap, never a tint or paint_material (a tint multiplies the whole atlas)
         ["synty_not_tinted"] = v => !v.Model.StartsWith("pack:") || v.Tint == null && v.PaintMaterial == "" && v.Paints.Count == 0 ? null : "tint/paint_material on a pack model",
     };
@@ -71,6 +77,10 @@ public class VehicleContractTests
             ["jeep"] = "gunner seat (y 1.25) default eye 2.9 m over a 2.2 m box; becomes the truck with no gunner seat (#325 swap)",
             ["humvee"] = "driver seat has no eye_height (its eye is CockpitRig's, 1.65 m): seat 0 default eye is over the roof; per-seat eye data is #339",
             ["golf_mk2"] = "seats have no eye_height (the driver's eye is CockpitRig's): default eye 2.10 m over a 1.79 m box; per-seat eye data is #339 / conform",
+        },
+        ["every_seat_has_a_cover"] = new()
+        {
+            ["jeep"] = "becomes SM_Veh_Truck_01 with seats that declare cover (#325 swap); remove this entry when that lands",
         },
         ["glass_has_outline"] = new()
         {

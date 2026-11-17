@@ -25,6 +25,13 @@ public static class RiderRules
         return riders == null ? null : new ExposedRiders(riders);
     }
 
+    /// <summary>
+    /// Whether a bullet, a pellet or a mounted-gun round can reach the rider of <paramref name="seat"/> at all (ADR 0035): never in an armoured seat (only
+    /// explosive damage and the vehicle blowing up do); in a glass seat through a pane or an opening (<see cref="PaneRules"/>); in the open as the rounds
+    /// that reach the body (<see cref="GunnerCover"/>). A seat of no vehicle (a body on foot) is reachable.
+    /// </summary>
+    public static bool BulletsReach(VehicleDef def, int seat) => def.CoverOf(seat) != SeatCover.Armoured;
+
     /// <summary>The targets of a shot fired from aboard: everyone but the riders of the shooter's own vehicle, who never hit each other.</summary>
     public static List<HitTarget> NotAboard(IReadOnlyList<HitTarget> targets, VehicleSeat seats)
     {
