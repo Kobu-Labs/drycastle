@@ -4,17 +4,31 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The seat schematic's drawing (the vehicle seat switch): a top-down body outline to scale, forward up (a small arrow above the nose), and one numbered
+/// The seat schematic's drawing (the vehicle seat switch): the vehicle's real top-view outline (vehicle_outlines.json, generated from its model; the hit box when it has none) to scale, forward up (a small arrow above the nose), and one numbered
 /// marker per seat (<see cref="SeatSchematic"/> places them). The three seat states differ in shape and mark, never in colour alone: free is an outlined
 /// disc, yours a filled disc in a double ring, taken a dimmed disc with a strike through its number. Redrawn only when the vehicle or the seating
 /// changes (<see cref="Set"/>); it never takes the mouse.
 /// </summary>
 public sealed partial class SeatSchematicView : Control
 {
-    public const float W = 184, H = 168;
+    public const float W = 184, H = 216;
     const float Pad = 12, Radius = 16;
 
+    static VehicleOutlinesFile? _outlines;
+    static VehicleOutlinesFile Outlines
+    {
+        get
+        {
+            if (_outlines != null) return _outlines;
+            try { _outlines = VehicleOutlinesFile.Parse(Godot.FileAccess.Open("res://data/vehicle_outlines.json", Godot.FileAccess.ModeFlags.Read).GetAsText()); }
+            catch (Exception e) { GD.PushWarning($"vehicle_outlines.json: {e.Message}; the seat panel draws hit boxes"); _outlines = new VehicleOutlinesFile(); }
+            return _outlines;
+        }
+    }
+
     SeatLayout? _layout;
+    Vector2[]? _poly;
+    bool _fill;
     VehicleDef? _def;
     ushort[] _occupants = Array.Empty<ushort>();
     int _mine = -1;
@@ -28,10 +42,18 @@ public sealed partial class SeatSchematicView : Control
     /// <summary>Shows <paramref name="def"/> with who sits in each seat (0 = free) and which seat is the player's. The layout is rebuilt only for another vehicle.</summary>
     public void Set(VehicleDef def, ushort[] occupants, int mine)
     {
-        if (!ReferenceEquals(def, _def)) { _def = def; _layout = SeatSchematic.Layout(def, W, H, Pad, Radius); }
+        if (!ReferenceEquals(def, _def)) { _def = def; _layout = SeatSchematic.Layout(def, W, H, Pad, Radius, Outlines.For(def.Id)); BuildOutline(); }
         _occupants = occupants;
         _mine = mine;
         QueueRedraw();
+    }
+
+    void BuildOutline()
+    {
+        _poly = _layout?.Outline?.Select(p => new Vector2(p.X, p.Y)).ToArray();
+        // a polygon the engine cannot triangulate is only stroked, never filled (no error spam)
+        _fill = _poly != null && Geometry2D.TriangulatePolygon(_poly).Length > 0;
+        if (_poly != null) _poly = _poly.Append(_poly[0]).ToArray(); // closed for the stroke
     }
 
     public override void _Draw()
@@ -39,8 +61,16 @@ public sealed partial class SeatSchematicView : Control
         if (_layout is not { } l) return;
         var font = GetThemeDefaultFont();
         var body = new Rect2(l.BodyLeft, l.BodyTop, l.BodyWidth, l.BodyHeight);
-        DrawRect(body, ShooterTheme.Raised);
-        DrawRect(body, ShooterTheme.Line, false, 2);
+        if (_poly != null)
+        {
+            if (_fill) DrawColoredPolygon(_poly[..^1], ShooterTheme.Raised);
+            DrawPolyline(_poly, ShooterTheme.Line, 2, true);
+        }
+        else
+        {
+            DrawRect(body, ShooterTheme.Raised);
+            DrawRect(body, ShooterTheme.Line, false, 2);
+        }
         // the nose: an arrow above the top edge, so "up" is forward at a glance
         var mid = l.BodyLeft + l.BodyWidth / 2;
         DrawColoredPolygon(new[] { new Vector2(mid - 8, l.BodyTop - 3), new Vector2(mid + 8, l.BodyTop - 3), new Vector2(mid, l.BodyTop - 11) }, ShooterTheme.Dim);
