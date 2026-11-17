@@ -48,7 +48,7 @@
       "ember_colour": "#ff6a1a",
       "ember_radius_m": 0.009,
       "ember_energy": 9,
-      "light": { "colour": "#ff9a4d", "energy": 0.7, "range": 1.6, "cull_m": 30 },
+      "light": { "colour": "#ff9a4d", "energy": 1.1, "range": 4.0, "cull_m": 30 },
       "smoke": { "amount": 60, "lifetime_s": 2.6, "size_m": 0.045, "speed_mps": 0.3, "rise_mps2": 0.3, "cull_m": 80 },
       // The high player's own view: a copy of the cigarette fixed to the camera where the mouth is, so its tip and smoke show at the bottom of the screen (NetClient.High.cs). offset: the filter end in
       // the camera's frame, metres (x right, y up, z back: forward is negative); rotation_deg tilts it from straight ahead (x negative: tip down; y: tip to the left). Its smoke is thinner than the
