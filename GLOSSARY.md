@@ -651,7 +651,7 @@ What a Thief takes: a tire off a car, a Pet, a satellite dish off a house, a con
 _Avoid_: item, pickup, cargo, stolen goods
 
 **Hit count**:
-How the Bigfoot is killed: not hit points but a number of hits, `hits.per_player` times the participants (at least one), tuned for about a minute. A bullet hit counts 1, with no headshot bonus (a headshot on it is a body hit); an explosive hit (a rocket, the attack missile, the MOAB) and a vehicle-weapon hit count a larger, configurable weight; ramming it counts nothing. The count only goes up while it fights.
+How the Bigfoot is killed: not hit points but a number of hits, `hits.per_player` times the participants (at least one) (80 per player), tuned for about 15 s of rifle fire. A bullet hit counts 1, with no headshot bonus (a headshot on it is a body hit); an explosive hit (a rocket, the attack missile, the MOAB) and a vehicle-weapon hit count a larger, configurable weight; ramming it counts nothing. The count only goes up while it fights.
 _Avoid_: health, hit points, HP bar
 
 **Participant**:

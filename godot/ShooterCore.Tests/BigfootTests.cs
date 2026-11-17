@@ -1075,7 +1075,7 @@ public class BigfootTests
     const string PinnedWipe = "0.00 Run\n1.20 StompWindup\n2.30 Stomp\n2.90 Idle\n2.93 Run\n3.73 GrabReach\n0.00 GrabReach\n0.40 Hold\n2.93 Launch\n0.00 Idle\n0.00 TrunkWindup\n1.00 Idle\n1.03 Run\n4.40 StompWindup\n5.50 Stomp\n6.10 Idle\n6.13 Run\n6.90 Walk\n6.93 GrabReach\n7.63 Hold\n0.00 Hold\n0.17 Launch\n0.70 Idle\n0.73 Roar";
     const ulong PinnedWipeHash = 12676320353054961180UL;
     const string PinnedDeath = "0.00 GrabReach\n0.70 Hold\n0.00 Hold\n1.20 Launch\n1.73 Idle\n1.77 StompWindup\n2.87 Stomp\n3.47 Idle\n3.50 Roar\n5.33 Idle\n5.37 GrabReach\n0.00 Dead";
-    const ulong PinnedDeathHash = 517379191213203903UL;
+    const ulong PinnedDeathHash = 1904474280527172671UL;
 
     // ---- the act and life machines ----
 
