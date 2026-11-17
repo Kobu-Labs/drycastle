@@ -4,7 +4,7 @@ using Drycastle.ShooterCore;
 
 namespace Drycastle.MapLoader;
 
-// Pure (no Godot types): compiled into ShooterCore.Tests by a link. The forest ground of the pack trees (#287): solid ground objects (logs, stumps,
+// Pure (no Godot types): compiled into ShooterCore.Tests by a link. The forest ground of the pack trees (#287): ground objects (fallen logs are drawn only, #359; stumps,
 // boulders, root plates of ground_objects.json) as pack models in place of the baked ones, and client-only undergrowth. Both ride the tiles of
 // MapLoader.PackTrees.cs, so they merge into the same per-material draws as the trees. Config: the sections ground_objects and undergrowth of pack_trees.json.
 
@@ -21,7 +21,7 @@ public sealed class GroundKindConfig
 }
 
 /// <summary>
-/// Fallen trees (#287): how a log record (4-9 m, 0.3-0.6 m thick, a collider box of that size) gets a model. An upright model (<see cref="PackTreeEntry.Lay"/>: a dead tree) is laid down
+/// Fallen trees (#287): how a log record (4-9 m, 0.3-0.6 m thick, a size box that is not solid, #359) gets a model. An upright model (<see cref="PackTreeEntry.Lay"/>: a dead tree) is laid down
 /// along the log, base at the thick end, scaled so its height is the log's length; a log model is used as it is, or several end to end, stretched at most <see cref="StretchMax"/>.
 /// </summary>
 public sealed class FallenConfig
@@ -188,7 +188,7 @@ public sealed class GroundObjectFile
 /// <summary>A pack model that may stand in for a ground object of one kind (id into the loader's models).</summary>
 public readonly record struct GroundCandidate(int ModelId, float Weight, bool Lay = false);
 
-/// <summary>The collider box of a log, in metres: half its width across the log and the height of its top over the object's ground point (the trunk drawn must lie inside both).</summary>
+/// <summary>The size box of a log (not solid), in metres: half its width across the log and the height of its top over the object's ground point (the trunk drawn must lie inside both).</summary>
 public readonly record struct LogBox(float HalfWidth, float Top);
 
 /// <summary>An upright model laid down on a log: the scale of its cross-section, how much its length is stretched against that, and how high its axis rides over the ground.</summary>
@@ -236,10 +236,10 @@ public static class GroundObjectMath
         return (modelRadius > 1e-4f ? radiusM * scale / modelRadius : scale, ez);
     }
 
-    /// <summary>The collider box of a log record, from the collider's own arithmetic (<see cref="GroundObjectColliders.Parts"/>), so the drawn trunk and the solid agree.</summary>
+    /// <summary>The size box of a log record, from the collider's own arithmetic (<see cref="GroundObjectColliders.LogBox"/>), so the drawn trunk and the collider-sized box agree.</summary>
     public static LogBox BoxOf(PackGroundObject o, GroundModel model)
     {
-        var part = GroundObjectColliders.Parts(new GroundObject(GroundKind.Log, o.X, o.Y, o.Z, o.Rot, o.Scale, o.Len, 0, 0), model)[0];
+        var part = GroundObjectColliders.LogBox(new GroundObject(GroundKind.Log, o.X, o.Y, o.Z, o.Rot, o.Scale, o.Len, 0, 0), model);
         return new LogBox(part.HalfV, part.Z1 - o.Z);
     }
 
