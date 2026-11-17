@@ -4,27 +4,27 @@ using Xunit;
 
 namespace Drycastle.ShooterCore.Tests;
 
-public class BazookaTests
+public class RpgTests
 {
     static readonly WeaponsFile File = WeaponsFile.Load(Path.Combine(AppContext.BaseDirectory, "../../../../shooter/data/weapons.json"));
-    static WeaponDef Bz => File.Find("bazooka")!;
+    static WeaponDef Bz => File.Find("rpg")!;
     const double Dt = 1.0 / 30;
 
     [Theory]
-    [InlineData(0f, 100f)]
-    [InlineData(1.5f, 100f)]
-    [InlineData(3f, 73f)]       // 100 - 80 * 1.5 / 4.5
-    [InlineData(4.5f, 47f)]     // 100 - 80 * 3 / 4.5
-    [InlineData(5.99f, 20f)]
-    [InlineData(6f, 0f)]
+    [InlineData(0f, 120f)]
+    [InlineData(1.5f, 120f)]
+    [InlineData(3f, 93f)]       // 120 - 100 * 1.5 / 5.5
+    [InlineData(4.5f, 65f)]     // 120 - 100 * 3 / 5.5
+    [InlineData(6.99f, 20f)]
+    [InlineData(7f, 0f)]
     [InlineData(10f, 0f)]
     public void SplashFalloffIsLinear(float d, float expected) => Assert.Equal(expected, ProjectileMath.SplashDamage(Bz, d, false), 0.6f);
 
     [Fact]
     public void SelfDamageIsHalf()
     {
-        Assert.Equal(50f, ProjectileMath.SplashDamage(Bz, 0.5f, true));
-        Assert.Equal(37f, ProjectileMath.SplashDamage(Bz, 3f, true), 0.6f);
+        Assert.Equal(60f, ProjectileMath.SplashDamage(Bz, 0.5f, true));
+        Assert.Equal(46f, ProjectileMath.SplashDamage(Bz, 3f, true), 0.6f);
     }
 
     [Fact]
@@ -73,21 +73,21 @@ public class BazookaTests
     }
 
     [Fact]
-    public void BazookaAmmoAndTimers()
+    public void RpgAmmoAndTimers()
     {
         var w = new PlayerWeapons(File); double t = 10; w.Reset(t);
         FireOutcome? Tick(bool fire = false, bool reload = false, int slot = 3) { t += Dt; return w.Update(t, new WeaponInput(fire, reload, slot, false)); }
         for (var i = 0; i < 30; i++) Tick();
-        Assert.Equal(3, w.Slot); Assert.Equal((1, 4), (w.Mag(3), w.Reserve(3)));
+        Assert.Equal(3, w.Slot); Assert.Equal((1, 2), (w.Mag(3), w.Reserve(3)));
         Assert.NotNull(Tick(true));
         Assert.Equal(0, w.Mag(3));
         for (var i = 0; i < 31; i++) Tick(); Assert.Null(Tick(true)); // empty: the pull starts the reload
         Assert.True(w.Reloading);
         var start = t;
         while (w.Reloading) Tick();
-        Assert.InRange(t - start, 3.4, 3.6);
-        Assert.Equal((1, 3), (w.Mag(3), w.Reserve(3)));
-        w.RefillReserves(); Assert.Equal(4, w.Reserve(3));
+        Assert.InRange(t - start, 3.9, 4.1);
+        Assert.Equal((1, 1), (w.Mag(3), w.Reserve(3)));
+        w.RefillReserves(); Assert.Equal(2, w.Reserve(3));
         Assert.Equal(0.85f, w.SpeedFor(3));
     }
 

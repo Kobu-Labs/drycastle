@@ -5,7 +5,7 @@ public enum WeaponKind { Hitscan, Projectile, Melee }
 /// <summary>Weapon category (weapons.json "category"). Melee and Launcher map to their own kinds; the rest are hitscan guns.</summary>
 public enum WeaponCategory { MachineGun, AssaultRifle, Shotgun, Smg, Sniper, Pistol, Launcher, Melee }
 
-/// <summary>Loadout slot (weapons.json "slot"). Special is carried outside the primary/secondary choice (knife, bazooka).</summary>
+/// <summary>Loadout slot (weapons.json "slot"). Special is carried outside the primary/secondary choice (the knife).</summary>
 public enum WeaponSlot { Primary, Secondary, Special }
 
 /// <summary>

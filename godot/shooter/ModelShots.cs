@@ -20,7 +20,7 @@ public static class ModelShots
         vp.AddChild(cam);
         var ok = true;
         // remote characters: five side by side, facing the camera (the game's forward is -Z, so rotate 180 about Y)
-        var states = new (string W, bool Fire, bool Dead, float Speed)[] { ("pistol", false, false, 0), ("ak47", false, false, 3), ("bazooka", false, false, 7), ("knife", true, false, 0), ("ak47", true, false, 0), ("pistol", false, true, 0) };
+        var states = new (string W, bool Fire, bool Dead, float Speed)[] { ("pistol", false, false, 0), ("ak47", false, false, 3), ("rpg", false, false, 7), ("knife", true, false, 0), ("ak47", true, false, 0), ("pistol", false, true, 0) };
         var views = new List<CharacterView>();
         for (var i = 0; i < states.Length; i++)
         {
@@ -64,7 +64,7 @@ public static class ModelShots
         cam.Position = new Vector3(0, 1.6f, 0); cam.Fov = 90;
         var vm = new WeaponViewmodel();
         cam.AddChild(vm);
-        foreach (var w in new[] { "pistol", "ak47", "bazooka", "knife" })
+        foreach (var w in new[] { "pistol", "ak47", "rpg", "knife" })
         {
             vm.Show(w);
             await HudShots.Frames(host, 6);

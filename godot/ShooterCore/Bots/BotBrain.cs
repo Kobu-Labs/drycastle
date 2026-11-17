@@ -46,6 +46,16 @@ public sealed record BotTuning
     /// error above, shots stop landing much past this distance, and two bots standing farther apart would duel for ever.
     /// </summary>
     public float HoldRangeM { get; init; } = 35f;
+    /// <summary>
+    /// The aim error with a rocket launcher in the hand (#348), degrees at first sight and settled: far smaller than a gun's
+    /// (<see cref="AimErrorDeg"/>), so a bot's rocket lands where it means it to. It also leads a moving target by the rocket's flight time.
+    /// </summary>
+    public float LauncherAimErrorDeg { get; init; } = 0.4f;
+    public float LauncherAimErrorMinDeg { get; init; } = 0.1f;
+    /// <summary>With a launcher the bot fires only when its aim is within this of where it wants to aim, degrees (a gun's is <see cref="FireConeDeg"/>).</summary>
+    public float LauncherFireConeDeg { get; init; } = 0.6f;
+    /// <summary>The share of bots that carry a rocket launcher as their secondary weapon, 0 to 1.</summary>
+    public float LauncherShare { get; init; } = 0.35f;
 
     public static readonly BotTuning Default = new();
 }
@@ -54,10 +64,20 @@ public sealed record BotTuning
 public readonly record struct BotContact(ushort Id, Vector3 Feet, Stance Stance, bool Protected);
 
 /// <summary>The bot's own body and weapon this tick.</summary>
-public readonly record struct BotSelf(ushort Id, Vector3 Feet, Stance Stance, int Magazine, int MagazineSize, int Reserve, bool Reloading, bool FullAuto);
+/// <summary>
+/// The rocket launcher a bot carries (#348): its hotbar slot, the rockets in the tube and in reserve, the range it is used at (not closer than
+/// <paramref name="MinRangeM"/>, where its own blast would reach it; not farther than <paramref name="MaxRangeM"/>, where the rocket burns out) and the rocket's speed.
+/// </summary>
+public readonly record struct BotLauncher(int Slot, int Magazine, int Reserve, float MinRangeM, float MaxRangeM, float SpeedMps);
 
-/// <summary>What the bot does this tick, in the terms of a player's input: movement axes, look angles (radians, Godot convention) and buttons.</summary>
-public readonly record struct BotCommand(float MoveX, float MoveY, float Yaw, float Pitch, MoveButtons Buttons);
+/// <summary>
+/// The bot's own body and weapon this tick. Magazine, reserve and reload are those of the weapon in its hand, <paramref name="Slot"/>;
+/// <paramref name="GunSlot"/> is the gun it fights with otherwise (0: it never changes weapon).
+/// </summary>
+public readonly record struct BotSelf(ushort Id, Vector3 Feet, Stance Stance, int Magazine, int MagazineSize, int Reserve, bool Reloading, bool FullAuto, int Slot = 0, int GunSlot = 0, BotLauncher? Launcher = null);
+
+/// <summary>What the bot does this tick, in the terms of a player's input: movement axes, look angles (radians, Godot convention), buttons and the weapon slot it wants in its hand (0: no change).</summary>
+public readonly record struct BotCommand(float MoveX, float MoveY, float Yaw, float Pitch, MoveButtons Buttons, int Slot = 0);
 
 /// <summary>What a bot asks of the world. The server answers from the match and the map colliders; tests answer from a list.</summary>
 public interface IBotWorld
@@ -80,6 +100,11 @@ public interface IBotWorld
 /// while it fires. A hit from out of sight makes it look that way.
 /// </para>
 /// <para>
+/// Rocket launcher (#348): a bot that carries one takes it out for a target in sight between the launcher's ranges while a rocket is loaded,
+/// aims at the target's feet ahead of where it runs (the blast does the rest) with a far smaller error than a gun's, fires once and goes back
+/// to its gun. It reloads the tube when nobody is in sight.
+/// </para>
+/// <para>
 /// Moving: with nobody in sight it heads for the world's <see cref="IBotWorld.Goal"/> along a route. The brain does not
 /// find routes: it states the one it wants in <see cref="PathRequest"/>, and the host answers with <see cref="SetPath"/>
 /// when it has the time. It walks the route point to point, sprints when far, and when it makes no headway it jumps and
@@ -97,6 +122,10 @@ public sealed class BotBrain
     double _firstSeen, _lastSeen = double.NegativeInfinity, _nextThink, _nextError, _burstUntil, _pauseUntil;
     bool _inBurst, _tap;
     float _errYaw, _errPitch;
+    // the target's feet as last known and its speed from them, for a rocket's lead
+    Vector3 _targetFeet, _targetVel;
+    ushort? _velFor;
+    bool _launcherOut, _feetClear;
     Vector3 _alert;
     double _alertUntil = double.NegativeInfinity;
     // travel
@@ -171,6 +200,7 @@ public sealed class BotBrain
     {
         _yaw = yaw; _pitch = 0;
         _target = null; _visible = false; _inBurst = false;
+        _velFor = null; _targetVel = Vector3.Zero; _launcherOut = false;
         _lastSeen = _alertUntil = double.NegativeInfinity;
         _nextThink = now + _rng.NextDouble() * _t.ThinkS; // bots that spawn together do not all cast their rays on the same tick
         _pauseUntil = now;
@@ -202,8 +232,9 @@ public sealed class BotBrain
         {
             // between looks the aim follows the target's position (no ray), so a strafing target is tracked every tick
             foreach (var e in world.Enemies(self.Id))
-                if (e.Id == id) { _aimPoint = AimPoint(e); break; }
+                if (e.Id == id) { _aimPoint = AimPoint(e); TrackTarget(id, e.Feet, dt); break; }
         }
+        _launcherOut = self.Launcher is { } held && self.Slot == held.Slot;
 
         var buttons = MoveButtons.None;
         float moveX = 0, moveY = 0;
@@ -212,7 +243,7 @@ public sealed class BotBrain
         if (engaging)
         {
             if (now >= _nextError) RollError(now);
-            var (yaw, pitch) = Angles(eye, _aimPoint);
+            var (yaw, pitch) = Angles(eye, _launcherOut ? RocketAimPoint(eye, self.Launcher!.Value) : _aimPoint);
             yaw += _errYaw; pitch += _errPitch;
             var off = TurnToward(yaw, pitch, dt);
             if (Fires(now, off, self)) buttons |= MoveButtons.Fire;
@@ -240,8 +271,48 @@ public sealed class BotBrain
 
         // reload when empty, and top up a half-empty magazine while nobody is in sight
         var wantsReload = self.Magazine == 0 || (!engaging && self.Magazine * 2 < self.MagazineSize);
+        if (_launcherOut && engaging) wantsReload = false; // an empty tube is put away in a fight, not reloaded
         if (wantsReload && !self.Reloading && self.Reserve > 0 && self.MagazineSize > 0) buttons |= MoveButtons.Reload;
-        return new BotCommand(moveX, moveY, _yaw, _pitch, buttons);
+        return new BotCommand(moveX, moveY, _yaw, _pitch, buttons, WantedSlot(self, eye, engaging));
+    }
+
+    /// <summary>
+    /// The weapon the bot wants in its hand: the launcher for a target in sight inside its ranges while a rocket is loaded (kept a little inside
+    /// the near range once it is out, so it does not swap back and forth at the edge), the launcher again to reload it when nobody is in sight,
+    /// else its gun.
+    /// </summary>
+    int WantedSlot(in BotSelf self, Vector3 eye, bool engaging)
+    {
+        if (self.Launcher is not { } l) return self.GunSlot;
+        if (engaging)
+        {
+            var d = Vector3.Distance(eye, _aimPoint);
+            var near = _launcherOut ? l.MinRangeM * 0.8f : l.MinRangeM;
+            return _visible && l.Magazine > 0 && d >= near && d <= l.MaxRangeM ? l.Slot : self.GunSlot;
+        }
+        return l.Magazine == 0 && l.Reserve > 0 ? l.Slot : self.GunSlot;
+    }
+
+    /// <summary>The target's feet this tick: its speed is the smoothed change of them (a new target starts at rest).</summary>
+    void TrackTarget(ushort id, Vector3 feet, float dt)
+    {
+        if (_velFor != id) { _velFor = id; _targetVel = Vector3.Zero; }
+        else if (dt > 1e-4f) _targetVel = Vector3.Lerp(_targetVel, (feet - _targetFeet) / dt, 0.25f);
+        _targetFeet = feet;
+    }
+
+    /// <summary>How far above the ground under its target a bot aims a rocket, metres.</summary>
+    const float FeetAimM = 0.2f;
+
+    /// <summary>
+    /// Where a rocket is aimed: ahead of the target by the rocket's flight time, at the ground under it (the blast catches it even on a
+    /// near miss), or at its chest when the bot cannot see its feet.
+    /// </summary>
+    Vector3 RocketAimPoint(Vector3 eye, in BotLauncher l)
+    {
+        var flight = Vector3.Distance(eye, _targetFeet) / MathF.Max(l.SpeedMps, 1f);
+        var lead = new Vector3(_targetVel.X, 0, _targetVel.Z) * flight; // a jump is not led: the target lands again
+        return (_feetClear ? _targetFeet + Vector3.UnitY * FeetAimM : _aimPoint) + lead;
     }
 
     /// <summary>
@@ -339,12 +410,16 @@ public sealed class BotBrain
         _visible = true;
         _lastSeen = now;
         _aimPoint = AimPoint(p);
+        if (_velFor != p.Id) TrackTarget(p.Id, p.Feet, 0); // between looks the per-tick follow keeps the speed
+        else _targetFeet = p.Feet;
+        // a rocket is aimed at the ground under the target only when the bot sees it: low cover in between would take the blast instead
+        _feetClear = self.Launcher != null && world.Clear(eye, p.Feet + Vector3.UnitY * FeetAimM);
     }
 
     /// <summary>The trigger: only on a target in sight, after the reaction time, with the aim on it; in bursts.</summary>
     bool Fires(double now, float offAim, in BotSelf self)
     {
-        var can = _visible && now - _firstSeen >= _t.ReactionS && offAim <= Rad(_t.FireConeDeg) && self.Magazine > 0 && !self.Reloading;
+        var can = _visible && now - _firstSeen >= _t.ReactionS && offAim <= Rad(_launcherOut ? _t.LauncherFireConeDeg : _t.FireConeDeg) && self.Magazine > 0 && !self.Reloading;
         if (!can)
         {
             if (_inBurst) { _inBurst = false; _pauseUntil = now + _t.BurstPauseS * 0.5; }
@@ -373,7 +448,8 @@ public sealed class BotBrain
     void RollError(double now)
     {
         var settled = Math.Clamp((now - _firstSeen) / Math.Max(_t.AimSettleS, 1e-3), 0, 1);
-        var m = Rad((float)(_t.AimErrorDeg + (_t.AimErrorMinDeg - _t.AimErrorDeg) * settled));
+        var (first, least) = _launcherOut ? (_t.LauncherAimErrorDeg, _t.LauncherAimErrorMinDeg) : (_t.AimErrorDeg, _t.AimErrorMinDeg);
+        var m = Rad((float)(first + (least - first) * settled));
         _errYaw = (float)(_rng.NextDouble() * 2 - 1) * m;
         _errPitch = (float)(_rng.NextDouble() * 2 - 1) * m * 0.6f; // people miss sideways more than up and down
         _nextError = now + 0.25 + _rng.NextDouble() * 0.25;

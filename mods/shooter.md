@@ -15,7 +15,7 @@
 - types
     - pistol
     - ak 47
-    - bazooka
+    - rpg
     - knife
 - design a good balance between ammo, reload time, HP etc
 - add sound design

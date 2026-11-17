@@ -69,7 +69,7 @@ public class AttackMissileTests
     // ---- killstreaks.json: the missile block ------------------------------------------------------------------------
 
     [Fact]
-    public void ShippedMissileTuningIsLoadedAndSplashIsBiggerThanTheBazookas()
+    public void ShippedMissileTuningIsLoadedAndSplashIsBiggerThanTheRpgs()
     {
         var t = Tuning;
         Assert.Equal(64f, t.SpeedMps);
@@ -80,7 +80,7 @@ public class AttackMissileTests
         Assert.Equal(-32f * MathF.PI / 180f, t.ShallowPitchRad, 1e-4f);
         Assert.Equal(-80f * MathF.PI / 180f, t.SteepPitchRad, 1e-4f);
         Assert.Equal(12f, t.SplashRadius);
-        Assert.True(t.SplashRadius > Shipped.Weapons.Find("bazooka")!.Splash!.Radius);
+        Assert.True(t.SplashRadius > Shipped.Weapons.Find("rpg")!.Splash!.Radius);
         Assert.Null(Shipping.Find("uav")!.Missile);
     }
 

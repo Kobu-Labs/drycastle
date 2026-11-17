@@ -105,11 +105,11 @@ public partial class NetServer
         public readonly Stopwatch Clock = Stopwatch.StartNew();
         public int Next;
         public bool OwnsFeed;
-        public static readonly (double At, CombatKind Kind, string Weapon)[] Cues = { (0.0, CombatKind.Shot, "ak47"), (0.8, CombatKind.Explosion, "bazooka"), (1.8, CombatKind.Death, "") };
+        public static readonly (double At, CombatKind Kind, string Weapon)[] Cues = { (0.0, CombatKind.Shot, "ak47"), (0.8, CombatKind.Explosion, "rpg"), (1.8, CombatKind.Death, "") };
         public const double EndS = 4.0;
     }
 
-    /// <summary>"/rozhlas combattest": starts the feed when the mic is not live, then an ak47 shot, a bazooka blast and a death go through the combat path (position and phase filters skipped). Everyone hears them about 2 s later.</summary>
+    /// <summary>"/rozhlas combattest": starts the feed when the mic is not live, then an ak47 shot, an rpg blast and a death go through the combat path (position and phase filters skipped). Everyone hears them about 2 s later.</summary>
     void ChatRozhlasCombatTest(Client c)
     {
         if (EnsureLiveFeed() is not { } feed || EnsureRozhlas() == null || _combat == null || _combatBank == null) { ChatTo(c, ChatLineKind.Error, "The combat sounds have no data (sounds.json or rozhlas_voice.json could not be read)."); return; }

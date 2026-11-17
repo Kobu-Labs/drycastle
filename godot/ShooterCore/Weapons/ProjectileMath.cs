@@ -8,7 +8,7 @@ public enum ImpactKind { None, World, Player }
 public readonly record struct SweepResult(ImpactKind Kind, float Distance, ushort Victim);
 
 /// <summary>
-/// Godot-free projectile math for the bazooka: swept segment test against the world distance and player capsules,
+/// Godot-free projectile math for the rpg: swept segment test against the world distance and player capsules,
 /// splash damage falloff, distance to a player capsule and knockback impulse.
 /// Splash ignores walls in v1 (no occlusion test), so nothing here looks at geometry besides the swept segment.
 /// </summary>
@@ -59,7 +59,7 @@ public static class ProjectileMath
 
     /// <summary>
     /// The weapon as one launch explodes: the same weapon with its blast replaced by <paramref name="blast"/> (a gunship's rocket
-    /// has its own 8 m blast; the bazooka keeps weapons.json's). Null keeps the weapon's own blast.
+    /// has its own 8 m blast; the rpg keeps weapons.json's). Null keeps the weapon's own blast.
     /// </summary>
     public static WeaponDef WithBlast(WeaponDef w, SplashDef? blast) => blast == null ? w : new WeaponDef { Id = w.Id, Kind = w.Kind, Damage = w.Damage, Splash = blast };
 

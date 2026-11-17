@@ -83,7 +83,7 @@ public sealed class LevelsFile
                 : throw new DataFileException($"{F}: awards \"assist_window_seconds\" is required and must be >= 0"),
         };
 
-        // Items that the table can gate: every primary/secondary weapon and every perk. Specials (knife, bazooka) are not loadout items.
+        // Items that the table can gate: every primary/secondary weapon and every perk. Specials (the knife) are not loadout items.
         var itemLevels = new Dictionary<(UnlockKind, string), int>();
         foreach (var gun in weapons.Weapons.Where(x => x.Slot != WeaponSlot.Special)) itemLevels[(UnlockKind.Weapon, gun.Id)] = gun.UnlockLevel;
         foreach (var p in perks.Perks) itemLevels[(UnlockKind.Perk, p.Id)] = p.UnlockLevel;

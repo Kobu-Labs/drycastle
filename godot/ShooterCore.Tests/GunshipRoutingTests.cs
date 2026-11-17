@@ -191,7 +191,7 @@ public class GunshipRoutingTests
         Assert.Equal(3, RoundsToDestroyCar(Weapon("ac130", "gun40").Damage));       // 40 mm: 80 x 1.5 = 120
         Assert.Equal(2, RoundsToDestroyCar(Weapon("ac130", "howitzer").Damage));    // 105 mm: 150 x 1.5 = 225
         Assert.Equal(3, RoundsToDestroyCar(Weapon("gunship", "cannon").Damage));    // helicopter cannon: 75 x 1.5 = 112.5
-        Assert.Equal(2, RoundsToDestroyCar(100f));                                  // rocket (bazooka): 100 x 1.5 = 150
+        Assert.Equal(2, RoundsToDestroyCar(100f));                                  // rocket (rpg): 100 x 1.5 = 150
     }
 
     [Theory]

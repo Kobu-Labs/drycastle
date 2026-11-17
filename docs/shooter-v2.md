@@ -17,8 +17,8 @@ simulation, the data files and the wire codecs; the Godot scenes, shaders and HU
   alive takes effect on death.
 - The server validates every loadout against the data files (weapon slots and unlock levels, perk and streak ids) before
   it stores it (`LoadoutRules`, `LoadoutEditor`).
-- Hotbar: primary, secondary and knife (`LoadoutHotbar`). Keys 1-3 and the next-weapon cycle use it. The bazooka is not a
-  loadout item, so players cannot select it; see section 9. Smoke arenas and `--debug-cmds` servers keep every weapon on
+- Hotbar: primary, secondary and knife (`LoadoutHotbar`). Keys 1-3 and the next-weapon cycle use it. The RPG (`rpg`) is a secondary since #348
+  (level 8), as the Lock-on launcher is. Smoke arenas and `--debug-cmds` servers keep every weapon on
   the hotbar (`LoadoutHotbar.All`).
 - Corpses (#130): a killed player leaves a corpse holding its primary. Walking onto it and pressing E swaps the corpse's
   weapon into the primary or the secondary position. A corpse also carries the item its player wore (section 7b).
@@ -31,8 +31,18 @@ simulation, the data files and the wire codecs; the Godot scenes, shaders and HU
 ## 2. Weapons
 
 Registry: `godot/shooter/data/weapons.json` (version 2). Categories and their recoil defaults are in `category_defaults`.
-Weapon categories: machine guns, assault rifles, SMGs, shotguns, snipers (primary); pistols (secondary); the bazooka and the
-knife are special.
+Weapon categories: machine guns, assault rifles, SMGs, shotguns, snipers (primary); pistols and the two launchers, the RPG (`rpg`) and the Lock-on launcher (`strela`) (secondary); the
+knife is special.
+
+RPG (#348, replaces the bazooka): unguided, one rocket in the tube and two in reserve, 4 s reload, 60 m/s for 4 s (240 m), 120 damage,
+7 m blast (below `DustRules.FrontMinRadius`, so a Dust cloud and no Blast wave), half damage to its owner. It is the bazooka's rocket path
+unchanged (`Rocket`, `RocketFlight.Step`, `ProjectileMath`); only the numbers and the look are new. On the client (`RocketFx`, `WeaponFx`):
+the paid pack's launcher (`props/rpg_01`, its rocket head hidden while the tube is empty) and rocket head in flight (`props/rpg_rocket_01`),
+a cloud trail from a pooled emitter laid only within 220 m of the camera, a backblast out of the tube's rear and the tube's jump
+(`recoil.vertical_per_shot`, first-person view only). Without the pack: the code-built tube and rocket. Bots: a share of them
+(`BotTuning.LauncherShare`) carries it as secondary; a bot takes it out for a target in sight between blast radius + 3 m and the rocket's
+reach, aims at the ground under the target ahead of where it runs with a far smaller error than a gun's (`LauncherAimErrorDeg`), fires
+once, goes back to its gun and reloads the tube when nobody is in sight.
 
 | Category | Weapons (unlock level) |
 |---|---|
@@ -182,7 +192,7 @@ on a body (the hit point), and rounds to destroy a 300 hp car (direct hit, rocke
 | Helicopter cannon (m82) | 0.15 s | 75 | 500 | 3 m | 3 |
 | AC-130 25 mm (m249) | 0.04 s | 50 | 1250 | 3 m | 4 |
 | AC-130 40 mm (m82) | 0.2 s | 80 | 400 | 6 m | 3 |
-| AC-130 105 mm shell (bazooka) | 1.0 s | 150 | 150 | 14 m | 2 |
+| AC-130 105 mm shell (rpg) | 1.0 s | 150 | 150 | 14 m | 2 |
 
 Turret aim is world space and ground-stabilised (#160). The aim is a world point: the look (the mouse's world yaw and pitch) meets
 the ground plane at the orbit centre's height (`GunshipAim.AimPoint`; a plane, not a physics raycast, so the client and the server
@@ -220,15 +230,15 @@ the air is lost on a round start or end (`_shells.Clear()`); its owner leaving d
 is resolved at once.
 
 Gunship rockets (#159) have their own 8 m blast: a `splash` block on the rockets entry in killstreaks.json (radius 8, full damage
-to 2 m, edge 20, no self damage). The rocket sim takes it per launch (`Rocket.Blast`, `ProjectileMath.WithBlast`), so the bazooka
-keeps weapons.json's 6 m, and the explosion's radius rides the Explosion event (protocol 12).
+to 2 m, edge 20, no self damage). The rocket sim takes it per launch (`Rocket.Blast`, `ProjectileMath.WithBlast`), so the rpg
+keeps weapons.json's 7 m, and the explosion's radius rides the Explosion event (protocol 12).
 
 Gunship rocket flight (protocol 16): the rockets entry has `projectile_speed_mps` (250, default 250). A rocket launched with it flies
 at that speed and lives out its whole range: its life is `RocketFlight.LifeFor(range_m, speed)` (range over speed, plus 0.5 s), carried
-in the server's `Rocket` (`Speed`, `Life`; zero keeps the weapon's own). Before this, a gunship rocket flew the bazooka's 40 m/s and
+in the server's `Rocket` (`Speed`, `Life`; zero keeps the weapon's own). Before this, a gunship rocket flew the hand-held launcher's 40 m/s and
 expired after 3.75 s, about 150 m out, so it never reached a target 400 m or more away. The Launch event's velocity is the flight
-(speed and direction), so clients animate it at that speed; a snapshot no longer resets a rocket's speed to the bazooka's. The
-per-tick rule is `RocketFlight.Step` (pure, tested in `RocketFlightTests`); the bazooka keeps weapons.json's 40 m/s and 3.75 s. The enemy markers are a red diamond
+(speed and direction), so clients animate it at that speed; a snapshot no longer resets a rocket's speed to the rpg's. The
+per-tick rule is `RocketFlight.Step` (pure, tested in `RocketFlightTests`); the rpg keeps weapons.json's 60 m/s and 4 s. The enemy markers are a red diamond
 per visible enemy player and target dummy, the nearest to the reticle larger. One helper draws them for both the gunship overlay
 and the attack missile's infrared view (`EnemyMarkers`, from the remote replicas), so the two cannot drift apart.
 

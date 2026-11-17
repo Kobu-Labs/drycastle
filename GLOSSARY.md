@@ -253,7 +253,7 @@ The fall of a sniper rifle's bullet under gravity, as if it flew at the weapon's
 _Avoid_: falloff (that is damage), ballistics (the thrown arcs of the Bigfoot)
 
 **Casing**:
-The spent case a gun throws out when it fires (#307): every gun that fires a round has one (a pistol's, a rifle's, a shotgun's red hull, the big case of a door gun, the jeep's roof gun or a sentry turret, the 35 mm case of the flak), a knife or a bazooka none. Seen by every client, drawn only near the camera, never sent over the network (each client throws its own from the same shot). It flies, bounces up to three times with a clink (`casing.tink`), lies on the floor for 20 s and fades. One that lands on a vehicle's roof goes after a second; one that goes under water sinks slowly, lies on the bed and makes no sound; one that lands on a steep face slides down it; it does not come to rest inside a vehicle (not yet, #316).
+The spent case a gun throws out when it fires (#307): every gun that fires a round has one (a pistol's, a rifle's, a shotgun's red hull, the big case of a door gun, the jeep's roof gun or a sentry turret, the 35 mm case of the flak), a knife, an RPG or a Lock-on launcher none. Seen by every client, drawn only near the camera, never sent over the network (each client throws its own from the same shot). It flies, bounces up to three times with a clink (`casing.tink`), lies on the floor for 20 s and fades. One that lands on a vehicle's roof goes after a second; one that goes under water sinks slowly, lies on the bed and makes no sound; one that lands on a steep face slides down it; it does not come to rest inside a vehicle (not yet, #316).
 _Avoid_: shell (a flak **shell** is the round, not the case), brass
 
 **Zero**:
@@ -331,9 +331,13 @@ _Avoid_: parking spot, spawn point (that is where a player appears)
 A flak shell's end by an aircraft: the shell flies straight at 700 m/s, and once it passes within 12 m of an aircraft it bursts at the closest approach. An aircraft within 15 m of the burst takes 150 damage out to 4 m, falling to 40 at the edge. The gunner has to lead the aircraft, which flies a known circle. A shell that meets no aircraft ends on the ground with a small blast (4 m, weak), or runs out of range.
 _Avoid_: proximity fuse (the fuse is how it works, the burst is the thing), flak burst
 
+**RPG**:
+A secondary weapon carried on the shoulder (`weapons.json` `rpg`, unlocked at level 8) that fires one unguided rocket where it is aimed: it flies straight at 60 m/s for up to 240 m and bursts on what it meets with a 7 m blast (a Dust cloud, no Blast wave), half as harmful to the one who fired it. One rocket in the tube and two in reserve. A share of the bots carries it and aims it far more steadily than a gun. It replaced the bazooka (#348).
+_Avoid_: bazooka, rocket launcher (alone: the Lock-on launcher is one too)
+
 **Lock-on launcher**:
 A secondary weapon carried on the shoulder (`weapons.json` `strela`) that shoots down Aircraft and nothing else (ADR 0031). It fires only on a complete Lock; without one the trigger clicks. One Homing missile in the tube and two in reserve, 500 damage each: one for the UAV, two for a helicopter, three for the AC-130. Its sight replaces the crosshair while it is in the hand. Bots do not carry it.
-_Avoid_: AA launcher, MANPADS, Stinger, rocket launcher (that is the bazooka)
+_Avoid_: AA launcher, MANPADS, Stinger, rocket launcher (that is the RPG)
 
 **Lock**:
 What a Lock-on launcher builds on one enemy Aircraft before it may fire: the Aircraft has to stay inside the lock circle (wider than the aim), within range (the UAV at any distance) and in sight for 2.5 seconds. Out of the circle or behind a wall the progress waits 0.4 seconds, then the Lock is lost. The server decides it; the shooter hears beeps that quicken and a solid tone when it is complete.
@@ -345,7 +349,7 @@ _Avoid_: missile warning, RWR
 
 **Homing missile**:
 What a Lock-on launcher fires: it flies at 160 m/s after the Aircraft it was locked on and always reaches it, unless the Aircraft is gone first (then it bursts in the air). Its hit is an explosion with no Dust cloud; the one that shoots the Aircraft down is 20 m and raises a Blast wave.
-_Avoid_: rocket (the bazooka's and the gunship's fly straight), attack missile (that is the killstreak)
+_Avoid_: rocket (the RPG's and the gunship's fly straight), attack missile (that is the killstreak)
 
 **Sentry turret**:
 The killstreak that places a 500 hp gun on the ground for 15 seconds. It turns to targets within its sight range and shoots them. It is removed when its owner dies or leaves the match, so it never fires or credits kills for an absent owner.

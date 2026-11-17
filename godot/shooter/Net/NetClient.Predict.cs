@@ -140,6 +140,14 @@ public partial class NetClient
 
     bool _pHeld;
 
+    /// <summary>Every frame: the rocket head sits in the held RPG's tube only while a rocket is loaded (the predicted magazine, else the server's).</summary>
+    void RenderLauncherLoaded()
+    {
+        if (_viewmodel?.Current is not { } held) return;
+        var mag = _pMag >= 0 ? _pMag : Ammo is { } a && a.Slot >= 1 && a.Slot <= a.Slots.Count ? a.Slots[a.Slot - 1].Mag : 1;
+        WeaponFx.SetLoaded(held, mag > 0);
+    }
+
     /// <summary>Forgets the predicted reload and magazine (weapon switch, death, spawn): the next ammo message re-syncs the magazine, and no reload keeps counting for a weapon that is gone.</summary>
     void ClearPredictedReload()
     {
@@ -169,7 +177,13 @@ public partial class NetClient
         var dir = -cam.GlobalTransform.Basis.Z;
         var muzzle = _me.ZoomFov > 0 ? from + dir * 0.6f : _viewmodel?.MuzzlePosition ?? from + dir * 0.8f; // scoped: the streak leaves the crosshair, the gun is hidden
         _viewmodel?.Flash(projectile ? 0.5f : 0.4f);
-        if (projectile) return;
+        if (projectile)
+        {
+            // a launcher: the tube jumps (weapons.json recoil, the viewmodel only: a rocket has no spread to climb) and throws its backblast out of the rear
+            _viewmodel?.Kick(w.Recoil.VerticalPerShot);
+            RocketFx.Backblast(Owned, (_viewmodel?.MuzzlePosition ?? from) - dir * (WeaponFx.LauncherRear + 0.2f), dir);
+            return;
+        }
         if (CasingFx.KindOf(w) is { } ck) CasingFx.Eject(Owned, muzzle, dir, ck); // the rocket itself comes from the server
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * 300f, CollisionLayers.WorldShots); // not the vehicles' solid boxes: VehicleAlong finds a vehicle
         q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
@@ -234,7 +248,7 @@ public partial class NetClient
     }
 }
 
-/// <summary>Dev aid: <c>--fx-demo dir</c> fires the bazooka at the ground ahead (t=3 s) and then an AK burst (t=7 s), saving screenshots of the effects into dir.</summary>
+/// <summary>Dev aid: <c>--fx-demo dir</c> fires the rpg at the ground ahead (t=3 s) and then an AK burst (t=7 s), saving screenshots of the effects into dir.</summary>
 public partial class NetClient
 {
     public string FxDemo = "";

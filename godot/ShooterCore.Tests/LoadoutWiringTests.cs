@@ -43,8 +43,8 @@ public class LoadoutWiringTests
         Assert.Equal("ak47", w.Current.Id); // spawn with the primary
         Assert.Equal(3, w.Hotbar.Count);
 
-        // the bazooka is in weapons.json but not on the hotbar: selecting it does nothing
-        w.Update(1, new WeaponInput(false, false, IndexOf("bazooka") + 1, false));
+        // the rpg is in weapons.json but not on the hotbar: selecting it does nothing
+        w.Update(1, new WeaponInput(false, false, IndexOf("rpg") + 1, false));
         Assert.Equal("ak47", w.Current.Id);
 
         // the cycle goes primary -> secondary -> knife -> primary, skipping every other weapon

@@ -64,7 +64,7 @@ public partial class NetClient
         {
             var b = m.Blasts[i];
             var at = new Vector3(b.At.X, b.At.Y, b.At.Z);
-            if (i == 0 && Sfx.Enabled) Sfx.Play3D(SoundRules.Event("explosion", "bazooka"), at);
+            if (i == 0 && Sfx.Enabled) Sfx.Play3D(SoundRules.Event("explosion", "rpg"), at);
             if (Mathf.Abs(b.Radius - FlakPuffRadius) < 0.05f) FlakFx.Burst(Owned, at, b.Radius); // an airburst: black flak smoke, not a fireball
             else RocketFx.Explode(Owned, at, b.Radius);
             ShakeFor(at, b.Radius);

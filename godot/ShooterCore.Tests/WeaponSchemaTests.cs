@@ -56,10 +56,10 @@ public class WeaponSchemaTests
         Assert.Equal(20f, sniper.ZoomFov);
         Assert.Equal(1, sniper.ZoomLevels);
 
-        var bazooka = d.Weapons.Find("bazooka")!;
-        Assert.Equal(WeaponCategory.Launcher, bazooka.Category);
-        Assert.Equal(WeaponSlot.Special, bazooka.Slot);
-        Assert.Equal(0.85f, bazooka.MoveSpeedMultiplier);
+        var rpg = d.Weapons.Find("rpg")!;
+        Assert.Equal(WeaponCategory.Launcher, rpg.Category);
+        Assert.Equal(WeaponSlot.Secondary, rpg.Slot);
+        Assert.Equal(0.85f, rpg.MoveSpeedMultiplier);
 
         var knife = d.Weapons.Find("knife")!;
         Assert.Equal(WeaponCategory.Melee, knife.Category);
@@ -67,7 +67,9 @@ public class WeaponSchemaTests
 
         // v1 weapons other than the ak47 get no recoil, so their behaviour is unchanged; the ak47 has its own (#111).
         // The v2 machine guns and rifles added by #111 are covered in WeaponRegistryContentTests.
-        foreach (var w in d.Weapons.Weapons.Where(w => w.Id is "pistol" or "bazooka" or "knife"))
+        // The rpg's recoil (#348) is the jump of the tube in the first-person view only: a rocket has no spread to climb.
+        Assert.Equal(12, rpg.Recoil.VerticalPerShot);
+        foreach (var w in d.Weapons.Weapons.Where(w => w.Id is "pistol" or "knife"))
         {
             Assert.Equal(0, w.Recoil.VerticalPerShot);
             Assert.Empty(w.Recoil.Pattern);

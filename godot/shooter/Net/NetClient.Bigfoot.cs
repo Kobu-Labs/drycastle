@@ -20,7 +20,7 @@ public partial class NetClient
     /// <summary>The sound events the effects play. There is no roar yet: these are the closest sounds the game already has, and the table to change when real ones arrive.</summary>
     static class BigfootSounds
     {
-        public const string Roar = "explosion.vehicle", StompWindup = "land", Shockwave = "explosion.bazooka", Throw = "shot.knife", Land = "explosion.vehicle", Log = "impact", Grab = "death";
+        public const string Roar = "explosion.vehicle", StompWindup = "land", Shockwave = "explosion.rpg", Throw = "shot.knife", Land = "explosion.vehicle", Log = "impact", Grab = "death";
     }
 
     /// <summary>The figure of one Bigfoot: the node at its feet, the pivot the procedural motion turns and scales, and the model with its clips.</summary>
