@@ -48,7 +48,7 @@ public partial class NetClient
         {
             EndCockpit();
             _rig = CockpitRig.Make(spec);
-            v.Node.AddChild(_rig);
+            GlassHost(v.Node).AddChild(_rig); // on the body, in the vehicle's frame (docs/standards/car-design.md 0): the rig and the eye lean with the hull
             _rig.HideModel(v.Node, spec.Hide);
             _rigCar = v;
         }
@@ -58,7 +58,7 @@ public partial class NetClient
         var flies = FlightDef(v) != null;
         // a helicopter's view tilts with the airframe; with reduce motion it stays level and the rig tilts round it
         var frame = flies && !GameSettings.Current.ReduceMotion ? v.Node.GlobalBasis : Basis.FromEuler(new Vector3(0, rot.Y, 0));
-        _me.Cockpit(p, v.Node.GlobalTransform * spec.Eye, frame, rot.Y, lookTurnsWithVehicle: !flies);
+        _me.Cockpit(p, GlassHost(v.Node).GlobalTransform * spec.Eye, frame, rot.Y, lookTurnsWithVehicle: !flies);
         HideSelfInCar(); // the rig has the hands; the seated body would be in the camera
         return true;
     }

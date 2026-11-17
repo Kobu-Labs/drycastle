@@ -19,6 +19,8 @@ public sealed partial class CockpitRig : Node3D
     static readonly Dictionary<string, Spec> Specs = new()
     {
         ["golf_mk2"] = new Spec(new Vector3(-0.4875f, 1.50f, 0.30f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildGolf),
+        // the Humvee: eye = seat_driver [-0.62, 0.6, -0.22] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/make_humvee_model.py): inside the cab (roof 1.83 inside, windscreen top 1.79), behind the wheel.
+        ["humvee"] = new Spec(new Vector3(-0.62f, 1.65f, -0.13f), new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildHumvee),
         ["bus"] = new Spec(new Vector3(-0.70f, 1.60f, -4.75f), System.Array.Empty<string>(), BuildBus),
         ["flak"] = new Spec(new Vector3(-0.50f, 2.05f, -1.25f), new[] { "cab" }, BuildFlak),
         // the harvester (#331): the combine's cab, after SM_Veh_Harvester_01 (model +Z is forward, the model faces yaw 180, so its steering wheel at x 0.79, y 2.70, z 1.21 is x -0.79, z -1.21 here; no hull: the rig hangs under the root).
@@ -227,6 +229,14 @@ public sealed partial class CockpitRig : Node3D
 
     static void BuildGolf(CockpitRig r) =>
         r.SteeringWheel(new Vector3(-0.4875f, 1.175f, -0.225f), 0.206f, 90f, new Vector3(-0.4875f, 0.95f, 0.55f), 0.30f);
+
+    // ------------------------------------------------------------------ the Humvee
+    // The model has its interior (scripts/make_humvee_model.py: dash, tunnel, four seats, door cards, rear partition): nothing is built round the driver but
+    // the steering wheel, which the model draws as a rim and spokes (two nodes, hidden here) so the rig's own can turn, and the hands. The wheel's face is
+    // tilted 25 degrees from upright towards the driver (a lean of 65 from level), centre x -0.62, y 1.10, z -0.60, 0.185 m to the rim's middle.
+
+    static void BuildHumvee(CockpitRig r) =>
+        r.SteeringWheel(new Vector3(-0.62f, 1.10f, -0.60f), 0.185f, 65f, new Vector3(-0.62f, 0.90f, 0.12f), 0.30f);
 
     static void BuildHarvester(CockpitRig r) =>
         r.SteeringWheel(new Vector3(-0.787f, 2.705f, -1.21f), 0.22f, 45f, new Vector3(-0.79f, 2.45f, -0.45f), 0.30f);

@@ -64,6 +64,45 @@
       "lights": { "head": [[-0.85, 0.7, -2.1], [0.85, 0.7, -2.1]], "tail": [[-0.85, 0.75, 2.1], [0.85, 0.75, 2.1]], "beam_range": 40, "beam_angle": 26 }
     },
     {
+      "id": "humvee",
+      "comment": "The Humvee (Scud launch event models; scripts/make_humvee_model.py, numbers in docs/research/scud-models-facts.md): the Synty SIMPLE Military troop car scaled to a real HMMWV (private pack, a grey box without it). A heavier, tougher jeep on the drive model (wheels roll and steer, the body leans, the driver predicts it): driver, front passenger, two rear passengers (plain seats behind the hull) and a standing roof gunner in the ring (exposed seat, the jeep's roof gun numbers on a ring mount that turns all the way round). The gunner's feet are at y 0.73, not the model's seat_gunner 0.55, so that feet + the standing eye 1.65 = the gun sight (2.377).",
+      "drive": {
+        "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 3.153, "track": 1.877,
+        "land": {
+          "launch_boost": 2.2, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.6, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
+          "grip": 1000, "yaw_response": 12, "handbrake_decel": 10, "handbrake_grip": 0.3, "handbrake_steer": 1.4,
+          "step_height": 0.45, "max_climb_deg": 45, "snap_down": 0.3
+        },
+        "body": {
+          "squat_deg": 0.4, "dive_deg": 0.5, "lean_deg": 0.45, "max_pitch_deg": 3.5, "max_roll_deg": 5, "response": 6.5, "damping": 0.42, "terrain_response": 11,
+          "wheel_lock_deg": 32
+        },
+        "camera": { "distance": 7, "height": 2.2, "follow": 10, "max_lag": 1.8, "tilt": 0.35, "fov_boost_deg": 8, "turn_follow": 0, "turn_response": 5 }
+      },
+      "top_speed": 28, "acceleration": 3.4, "brake": 7.5, "turn_radius": 4.4, "high_speed_radius_factor": 7, "max_lateral_accel": 8, "mass": 2400, "run_over_mass": 2000, "hp": 550,
+      "hood": [0, 1.2, -1.7], "spawn_count": 2, "half_width": 1.13, "half_length": 2.32, "height": 1.86,
+      "model": "pack:synty-simple-military/humvee", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
+      "tow": { "hitch": [0, 0.62, 2.44] },
+      "seats": [
+        { "role": "driver", "offset": [-0.62, 0.6, -0.22] },
+        { "role": "passenger", "offset": [0.62, 0.6, -0.22], "eye_height": 1.05 },
+        { "role": "passenger", "offset": [-0.45, 0.6, 0.5], "eye_height": 1.05 },
+        { "role": "passenger", "offset": [0.45, 0.6, 0.5], "eye_height": 1.05 },
+        { "role": "gunner", "offset": [0, 0.73, 0.105], "exposed": true, "standing": true }
+      ],
+      "gun": { "damage": 14, "fire_interval": 0.1, "range": 220, "spread_degrees": 1.2, "magazine": 60, "reserve": 240, "reload_time": 2.5 },
+      "door_gun": { "pivot": [0, 2.157, 0.105], "ring_radius": 0.55, "outward_yaw_deg": 0, "yaw_arc_deg": 180, "min_pitch_deg": -25, "max_pitch_deg": 55, "muzzle_length": 0.826, "eye": [0, 0.22, 0.55], "recoil_m": 0.05 },
+      "glass": [
+        { "id": "windscreen_l", "centre": [-0.51, 1.551, -0.945], "normal": [0, 0.075, -0.997], "size": [0.928, 0.477], "outline": [[0.464, 0.239], [-0.462, 0.239], [-0.464, -0.239], [0.464, -0.239]] },
+        { "id": "windscreen_r", "centre": [0.51, 1.551, -0.945], "normal": [0, 0.075, -0.997], "size": [0.928, 0.477], "outline": [[0.462, 0.239], [-0.464, 0.239], [-0.464, -0.239], [0.464, -0.239]] },
+        { "id": "door_front_l", "centre": [-1.078, 1.48, -0.41], "normal": [-1, 0, 0], "size": [0.709, 0.541], "outline": [[-0.354, -0.27], [0.349, -0.27], [0.354, 0.27], [-0.35, 0.27]] },
+        { "id": "door_rear_l", "centre": [-1.078, 1.484, 0.496], "normal": [-1, 0, 0], "size": [0.702, 0.55], "outline": [[-0.351, -0.275], [0.351, -0.275], [0.348, 0.275], [-0.351, 0.266]] },
+        { "id": "door_front_r", "centre": [1.078, 1.48, -0.41], "normal": [1, 0, 0], "size": [0.709, 0.541], "outline": [[0.35, 0.27], [-0.354, 0.27], [-0.349, -0.27], [0.354, -0.27]] },
+        { "id": "door_rear_r", "centre": [1.078, 1.484, 0.496], "normal": [1, 0, 0], "size": [0.702, 0.55], "outline": [[0.351, 0.266], [-0.348, 0.275], [-0.351, -0.275], [0.351, -0.275]] }
+      ],
+      "lights": { "head": [[-0.77, 0.96, -2.28], [0.77, 0.96, -2.28]], "tail": [[-0.8, 0.88, 2.29], [0.8, 0.88, 2.29]], "beam_range": 40, "beam_angle": 26 }
+    },
+    {
       "id": "quad", "top_speed": 25, "acceleration": 7.0, "brake": 11, "turn_radius": 2.3, "max_lateral_accel": 11, "mass": 300, "run_over_mass": 300, "hp": 90, "hood": [0, 0.7, -0.6], "spawn_count": 4, "half_width": 0.6, "half_length": 1.0, "height": 1.2,
       "tint": [0.36, 0.42, 0.26],
       "lights": { "head": [[-0.4, 0.55, -0.95], [0.4, 0.55, -0.95]], "tail": [[-0.4, 0.6, 0.95], [0.4, 0.6, 0.95]], "beam_range": 25, "beam_angle": 30 }

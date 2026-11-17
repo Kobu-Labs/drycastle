@@ -10,6 +10,7 @@ Glass panes on vehicles and buildings have hit points, crack as they lose them a
 | Mechanic garage plate | `MechanicGarageSite.AddPane` (not in `windows.json`: added to the map's pane list on the server and every client, sorted by node name `mechanic_garage_plate`) | one OSB plate, 240 hit points (`MapGlassPane.Hp`), black cracks, no rim of shards left in the opening and OSB-chip fragments (`GlassFx.OsbShards`, `glass_crack.gdshader` `crack_colour`/`edge_shards`), its box and mesh go when it shatters (`MechanicGarage.SetPlate`), ADR 0029 |
 | Car | `vehicles.json` `glass` | windscreen, rear, two side |
 | War jeep | `vehicles.json` `glass` | windscreen, rear, two side |
+| Humvee | `vehicles.json` `glass` (written by hand from `docs/research/scud-models-facts.md`; the private model has the `glass_N` nodes) | two windscreen halves, a front and a rear door window on each side (6) |
 | Bus | `vehicles.json` `glass` | windscreen and its two wrapped corners, rear, six left windows, four right windows, four door leaves (18) |
 | Flak truck | `vehicles.json` `glass` | two windscreen halves, a door window and a quarter light on each side (6) |
 | Utility helicopter | `vehicles.json` `glass` | two windscreen halves, two cockpit doors |
@@ -18,6 +19,8 @@ Glass panes on vehicles and buildings have hit points, crack as they lose them a
 The motorcycle, bicycle, quad and amphibious transport have no glass. The utility helicopter also has two open sides (its cabin has no doors; `open_sides` in `vehicles.json`, written by hand next to the generated `glass` list, which the model script leaves alone).
 
 **Generated models (bus, flak truck, helicopter).** The model script builds every pane as its own node `glass_N` (N = the pane's place in the vehicle's `glass` list) and, when run without an output path, rewrites that list in `vehicles.json`: `centre`, `normal`, `size` (the bounding rectangle) and `outline` (a convex counter-clockwise polygon `[u, v]` in metres from the centre, so a trapezoid or a triangle is its real shape). Do not edit those lists by hand; change the script and run it (`python3 -I scripts/make_bus_model.py`, and the same for `make_flak_model.py` and `make_utility_helicopter_model.py`; the Golf's `python3 scripts/make_golf_mk2_model.py` needs numpy, so no `-I`). The client hides the `glass_N` node while the pane is shattered. Shots, the crack overlay and the fragments use the outline.
+
+**Humvee.** Its model (`scripts/make_humvee_model.py`, private pack) builds every pane as a `glass_N` node like the generated ones, but its list is not rewritten by the script: it is copied from the facts file (`scripts/make_scud_models_facts.py`) and `HumveeTests` checks it against `docs/research/scud-models-facts.d/humvee.json`. The windows are real openings, nothing stands behind a shattered pane. The roof gunner is in the open (an exposed seat): rounds that reach him hit him, the passengers stay behind the hull.
 
 **Kenney models (car, jeep).** Their glass is painted into one colour map, so the panes are rectangles measured from the glass cells and moved into the vehicle frame with the model's scale, yaw and offset; they have no pane node and no outline, and the original glass stays under a shattered pane.
 
