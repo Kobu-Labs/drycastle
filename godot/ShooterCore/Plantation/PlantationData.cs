@@ -145,8 +145,8 @@ public sealed class CigaretteFirstPersonData
 public sealed class CigaretteLightData
 {
     public string Colour { get; set; } = "#ff9a4d";
-    public double Energy { get; set; } = 0.7;
-    public double Range { get; set; } = 1.6;
+    public double Energy { get; set; } = 1.1;
+    public double Range { get; set; } = 4.0;
     public double CullM { get; set; } = 30;
 }
 

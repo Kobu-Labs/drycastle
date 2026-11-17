@@ -46,6 +46,11 @@ public partial class NetClient
         _ownTip = tip;
         _me.Camera.AddChild(_ownCigarette);
         if (!ShotFx.Enabled) return;
+        // the same small warm light the figure has for the others (it is not drawn in the own view, so its light is not there either): it lights the weapon in the hands and what is near
+        tip.AddChild(new OmniLight3D
+        {
+            Name = "OwnCigaretteGlow", LightColor = new Color(c.Light.Colour), LightEnergy = (float)c.Light.Energy, OmniRange = (float)c.Light.Range, ShadowEnabled = false,
+        });
         // The smoke travels with the player but does not turn with the look: world-space smoke would be left behind the camera at the first step, and smoke fixed to the camera would swing round with
         // the head. So the emitter is top-level (it keeps the world's axes), follows the tip each frame, and its particles are local to it. Started only once it is in the tree.
         _ownSmoke = CharacterView.CigaretteSmoke(c.Smoke, fp.SmokeAmount, (float)fp.SmokeSizeM);
