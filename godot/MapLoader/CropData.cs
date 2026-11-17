@@ -79,6 +79,24 @@ public static class CropSettings
 
     /// <summary>Distance (metres) at which a plant is gone, before the cell allowance and the clutter scale: a field is read from further than a tuft.</summary>
     public const float PlantRangeM = 110f;
+    /// <summary>The band inside <see cref="PlantRangeM"/> over which the plants thin out one by one, so a field has no edge where they end (crop_plant.gdshader).</summary>
+    public const float PlantFadeM = 50f;
+    /// <summary>The share of the band one plant takes to grow from nothing to whole.</summary>
+    public const float PlantGrow = 0.3f;
+
+    /// <summary>
+    /// How much of a plant stands, 0 (gone) to 1 (whole), <paramref name="distance"/> metres from the camera: whole inside <c>radius - band</c>, gone at the radius,
+    /// in between each plant starts at a distance of its own (<paramref name="threshold"/> in [0, 1), a hash of where it stands). Mirrors crop_plant.gdshader.
+    /// </summary>
+    public static float Grow(float distance, float threshold, float radius, float band, float grow = PlantGrow)
+    {
+        band = MathF.Max(band, 0.001f);
+        var far = distance >= radius ? 1f : Math.Clamp((distance - (radius - band)) / band, 0f, 1f);
+        var span = MathF.Max(grow, 0.001f);
+        var g = Math.Clamp((span + (1f - span) * threshold - far) / span, 0f, 1f);
+        return g * g * (3f - 2f * g);
+    }
+
     /// <summary>The same for an artifact (bale, tractor, scarecrow): few and big.</summary>
     public const float ArtifactRangeM = 220f;
 

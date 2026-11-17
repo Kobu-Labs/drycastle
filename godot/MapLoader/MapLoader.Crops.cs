@@ -10,7 +10,8 @@ namespace Drycastle.MapLoader;
 /// pack, <c>pack:synty-farm/&lt;name&gt;</c>, several = variants picked per instance by a position hash). A model is flattened once into one
 /// <see cref="ArrayMesh"/> with one surface per pack material (a prefab's parts, e.g. a tractor and its wheels, are merged), so a MultiMesh draws it with
 /// the pack's own atlas material, shared. Each kind and variant of a ~48 m cell is one MultiMeshInstance3D with a visibility range
-/// (<see cref="CropSettings"/>). Cosmetic only: no collision shape anywhere, nothing blocks a bullet. A kind whose model is missing (no pack on this
+/// (<see cref="CropSettings"/>). Plants wear crop_plant.gdshader (their own material's look): over the outer band of their range each plant grows in at a distance of
+/// its own, so the crop thins out towards the range instead of ending at a line of cells. Cosmetic only: no collision shape anywhere, nothing blocks a bullet. A kind whose model is missing (no pack on this
 /// machine) is drawn as a flat-coloured cone or box (<see cref="CropPlaceholder"/>). A map without crops.json builds nothing; a headless load
 /// (<see cref="CollisionOnly"/>) never builds it; <see cref="ClutterScale"/> 0 turns it off with the clutter.
 /// </summary>
@@ -20,6 +21,8 @@ public sealed partial class MapLoader
     readonly Dictionary<string, Mesh?> _cropMeshes = new();        // asset id -> flattened model (null = not available)
     readonly Dictionary<string, StandardMaterial3D> _cropPlaceholderMaterials = new();
     readonly HashSet<string> _cropWarned = new();
+    readonly Dictionary<Material, Material> _cropPlantMaterials = new(); // a plant model's material -> the same look with the grow-in
+    readonly Dictionary<string, Shader> _cropPlantShaders = new();       // by cull mode
 
     /// <summary>Crop nodes built by the last load: one MultiMesh per cell, kind and variant.</summary>
     public IReadOnlyList<GeometryInstance3D> CropNodes => _cropNodes;
@@ -31,6 +34,7 @@ public sealed partial class MapLoader
         _cropNodes.Clear();
         _cropCells.Clear();
         _cropMeshes.Clear();
+        _cropPlantMaterials.Clear();
         Stats.CropInstances = 0;
     }
 
@@ -90,9 +94,53 @@ public sealed partial class MapLoader
                 _cropMeshes[id] = mesh = known.ContainsKey(id) && GetAssetTemplate(id, out _) is { } scene ? FlattenModel(scene, onGround: !spec.IsPlant, onSide: kind == "art_hay_bale_round") : null;
             if (mesh != null) found.Add(mesh);
         }
-        if (found.Count > 0) return found;
-        if (ids.Count > 0) CropWarn("pack:" + kind, $"crops: no model for '{kind}' ({string.Join(", ", ids)}); drawn as a placeholder (the Synty Farm pack is not installed)");
-        return new List<Mesh> { PlaceholderMesh(kind, spec) };
+        if (found.Count == 0)
+        {
+            if (ids.Count > 0) CropWarn("pack:" + kind, $"crops: no model for '{kind}' ({string.Join(", ", ids)}); drawn as a placeholder (the Synty Farm pack is not installed)");
+            found.Add(PlaceholderMesh(kind, spec));
+        }
+        if (spec.IsPlant)
+            foreach (var mesh in found) GrowIn(mesh);
+        return found;
+    }
+
+    /// <summary>Swaps the materials of a plant's mesh (ours: flattened or a placeholder, never the asset's) for crop_plant.gdshader ones of the same look.</summary>
+    void GrowIn(Mesh mesh)
+    {
+        for (var s = 0; s < mesh.GetSurfaceCount(); s++)
+            if (mesh.SurfaceGetMaterial(s) is BaseMaterial3D source)
+                mesh.SurfaceSetMaterial(s, CropPlantMaterial(source));
+    }
+
+    /// <summary>A plant material with the grow-in: the source's albedo, alpha scissor, cull mode and surface amounts, one per source material (shared by every cell).</summary>
+    Material CropPlantMaterial(BaseMaterial3D source)
+    {
+        if (_cropPlantMaterials.TryGetValue(source, out var made)) return made;
+        var cull = source.CullMode switch
+        {
+            BaseMaterial3D.CullModeEnum.Front => "cull_front",
+            BaseMaterial3D.CullModeEnum.Disabled => "cull_disabled",
+            _ => "cull_back",
+        };
+        if (!_cropPlantShaders.TryGetValue(cull, out var shader))
+            _cropPlantShaders[cull] = shader = TreeCutShaders.Load("crop_plant.gdshader", cull);
+        var mat = new ShaderMaterial { Shader = shader };
+        if (source.AlbedoTexture is { } tex) mat.SetShaderParameter("albedo_tex", tex);
+        mat.SetShaderParameter("albedo_colour", source.AlbedoColor);
+        // a cut-out stays a cut-out; a blended one becomes one too (a field of blended plants would sort badly and cost a pass)
+        mat.SetShaderParameter("scissor", source.Transparency switch
+        {
+            BaseMaterial3D.TransparencyEnum.Disabled => -1f,
+            BaseMaterial3D.TransparencyEnum.AlphaScissor => source.AlphaScissorThreshold,
+            _ => 0.5f,
+        });
+        mat.SetShaderParameter("roughness", source.Roughness);
+        mat.SetShaderParameter("metallic", source.Metallic);
+        mat.SetShaderParameter("specular", source.MetallicSpecular);
+        mat.SetShaderParameter("vertex_colour", source.VertexColorUseAsAlbedo ? 1f : 0f);
+        mat.SetShaderParameter("vertex_srgb", source.VertexColorIsSrgb ? 1f : 0f);
+        mat.SetShaderParameter("crop_cut", new Vector3(CropSettings.PlantRangeM * ClutterScale, CropSettings.PlantFadeM * ClutterScale, CropSettings.PlantGrow));
+        return _cropPlantMaterials[source] = mat;
     }
 
     /// <summary>Every visible mesh of a model scene (not in the tree) in one ArrayMesh, relative to the scene root, one surface per material.
@@ -203,7 +251,8 @@ public sealed partial class MapLoader
             CastShadow = plant ? GeometryInstance3D.ShadowCastingSetting.Off : GeometryInstance3D.ShadowCastingSetting.On,
             VisibilityRangeEnd = rangeEnd,
             VisibilityRangeEndMargin = ClutterSettings.FadeMarginM,
-            VisibilityRangeFadeMode = GeometryInstance3D.VisibilityRangeFadeModeEnum.Self,
+            // plants are gone at their radius by their shader, one by one: the node's range only culls the cell, it must not fade it
+            VisibilityRangeFadeMode = plant ? GeometryInstance3D.VisibilityRangeFadeModeEnum.Disabled : GeometryInstance3D.VisibilityRangeFadeModeEnum.Self,
         };
         parent.AddChild(node);
         _cropCells.Add(new CropCell(mm, kind, plant, cell, new bool[cell.Count]));

@@ -14,6 +14,7 @@
     <EmbeddedResource Include="Shaders/tree_cut.gdshaderinc" LogicalName="tree_cut.gdshaderinc" />
     <EmbeddedResource Include="Shaders/props_tree_cut.gdshader" LogicalName="props_tree_cut.gdshader" />
     <EmbeddedResource Include="Shaders/pack_tree.gdshader" LogicalName="pack_tree.gdshader" />
+    <EmbeddedResource Include="Shaders/crop_plant.gdshader" LogicalName="crop_plant.gdshader" />
   </ItemGroup>
 
   <ItemGroup>
