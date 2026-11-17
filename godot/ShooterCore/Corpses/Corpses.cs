@@ -24,7 +24,7 @@ public static class CorpseRules
     /// A body that rolls on landing (a harvester's bale, #351): the pitch it carries while it rolls, the deceleration (m/s2), the share of its horizontal speed it keeps on landing, the speed (m/s) under which it stops,
     /// the longest roll (s), and how far the ground may drop under it before it flies on.
     /// </summary>
-    public const float RollPitch = 0.25f, RollFriction = 3.5f, RollLandingKeep = 0.7f, RollStopSpeed = 0.4f, RollMaxSeconds = 6f, RollStepDown = 0.6f;
+    public const float RollPitch = 0.25f, RollFriction = 3.5f, RollLandingKeep = 0.7f, RollStopSpeed = 0.4f, RollMaxSeconds = 6f, RollStepDown = 0.6f, RollRadius = 0.65f;
     /// <summary>A pilot's or driver's corpse stays seated until its vehicle has been at rest (no faster than <see cref="RestSpeed"/>, a helicopter also on the ground) for <see cref="SeatedRestSeconds"/>, then it drops (ADR 0026).</summary>
     public const float RestSpeed = 0.5f, SeatedRestSeconds = 1f;
 
@@ -532,8 +532,9 @@ public sealed class ThrownBody
         if (hl > 1e-4f)
         {
             var dir = h / hl;
-            var hit = cast(p + Vector3.UnitY * 0.6f, dir, hl + CorpseRules.BodyRadius);
-            if (hit is { } d) { p += dir * MathF.Max(0, d - CorpseRules.BodyRadius); v.X = 0; v.Z = 0; }
+            var r = Rolls ? CorpseRules.RollRadius : CorpseRules.BodyRadius; // a bale is wider than a body: it stops its own radius short of a wall
+            var hit = cast(p + Vector3.UnitY * 0.6f, dir, hl + r);
+            if (hit is { } d) { p += dir * MathF.Max(0, d - r); v.X = 0; v.Z = 0; }
             else p += h;
         }
 
@@ -600,7 +601,7 @@ public sealed class ThrownBody
         if (old < 1e-4f || speed < CorpseRules.RollStopSpeed || _fsm.Elapsed >= CorpseRules.RollMaxSeconds) { Stop(p); return; }
         var dir = h / old;
         var step = speed * dt;
-        if (cast(p + Vector3.UnitY * 0.6f, dir, step + CorpseRules.BodyRadius) is { } wall) { Stop(p + dir * MathF.Max(0, wall - CorpseRules.BodyRadius)); return; }
+        if (cast(p + Vector3.UnitY * 0.6f, dir, step + CorpseRules.RollRadius) is { } wall) { Stop(p + dir * MathF.Max(0, wall - CorpseRules.RollRadius)); return; }
         p += dir * step;
         Velocity = dir * speed;
         if (cast(p + Vector3.UnitY * 0.3f, -Vector3.UnitY, 0.3f + CorpseRules.RollStepDown) is not { } down)

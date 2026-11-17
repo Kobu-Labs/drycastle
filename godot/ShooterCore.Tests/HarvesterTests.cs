@@ -639,7 +639,7 @@ public class HarvesterTests
         // 3.6 s at the reel's 3.4 rad/s is about two turns, not the one and a quarter of the old 1.2 s draw
         Assert.True(HarvesterCatch.OrbitAngle(1.8f, 3.4f, Cfg.DrawSeconds) - 1.8f > 2 * MathF.Tau * 0.95f);
         Assert.Equal(3.6f, Cfg.DrawSeconds);
-        Assert.Equal(2.5f, Cfg.ChewSeconds); // the chew stays
+        Assert.Equal(1f, Cfg.ChewSeconds); // the bale pops out a second after the body went in
         // the reel's axis is where the model has it: 3.66 m ahead, 0.81 m up
         Assert.Equal(3.66f, Cfg.HeaderForwardM); Assert.Equal(0.81f, Cfg.ReelAxisUpM);
     }
