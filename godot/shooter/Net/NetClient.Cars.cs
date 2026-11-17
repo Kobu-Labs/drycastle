@@ -78,7 +78,7 @@ public partial class NetClient
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flak != null) v.Flak = FlakNodes.Find(v.Node);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].DoorGun is { } doorGun) v.DoorGun = DoorGunNodes.Find(v.Node, doorGun);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flight != null) v.Rotor = RotorFx.Find(v.Node);
-            if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Drive != null) v.Drive = DriveNodes.Find(v.Node);
+            if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Drive != null) v.Drive = DriveNodes.Find(v.Node, Vehicles.Vehicles[v.Kind]);
             if (ShotFx.Enabled) v.Wheels = FindWheels(v.Node);
             if (ShotFx.Enabled && GenericWheels(Vehicles.Vehicles[v.Kind])) v.Roller = VehicleWheels.Find(v.Node);
             if (Vehicles.Vehicles[v.Kind].Trailer != null) v.Trailer = MakeTrailerView(v);

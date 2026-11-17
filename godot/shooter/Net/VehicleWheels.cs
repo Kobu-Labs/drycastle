@@ -4,10 +4,11 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The generic wheel animation of a ground vehicle that is not predicted (#295, car-design section 3): every wheel the model names (<see cref="WheelMath.Layouts"/>)
-/// rolls about its own X by the distance the DRAWN vehicle moved along its heading over its own radius, every <c>_steer</c> parent turns about its LOCAL Y
-/// (a raked fork's tilted axis too) by <c>atan(arm * curvature)</c> of the drawn path, and <c>steer_bars</c> follow the steer angle. Predicted drive vehicles keep
-/// <c>DriveNodes</c>, the Scud, the harvester and the trailer their own. Allocates once, when the model is found; a frame allocates nothing.
+/// The wheel animation of every ground vehicle (#295, car-design section 3): every wheel the model names (<see cref="WheelMath.Layouts"/>) rolls about its own X
+/// over its own radius, every <c>_steer</c> parent turns about its LOCAL Y (a raked fork's tilted axis too), and <c>steer_bars</c> follow the steer angle. A driven
+/// vehicle (a <c>drive</c> block: all of them with seats) is turned from its drive state (<see cref="StepDriven"/>: the speed and the front wheels' angle, by
+/// <c>DriveNodes</c>); <see cref="Step"/> reads the same from the DRAWN motion for a model with no state. The Scud and the trailer keep their own. Allocates once,
+/// when the model is found; a frame allocates nothing.
 /// </summary>
 sealed class VehicleWheels
 {
@@ -61,6 +62,26 @@ sealed class VehicleWheels
         var t = Transform3D.Identity;
         for (var n = node; n != null && n != root; n = n.GetParent() as Node3D) t = n.Transform * t;
         return t;
+    }
+
+    /// <summary>
+    /// One frame of a driven vehicle, from its drive state: the speed along the heading (m/s) and the angle of the front wheels (radians, about Y). A steered
+    /// axle behind the first turns by its own share (its distance ahead of the fixed axle over the first's: an eight-wheeler's second axle turns less).
+    /// </summary>
+    public void StepDriven(float speed, float frontAngle, float dt)
+    {
+        var reach = 0f;
+        for (var i = 0; i < _arm.Length; i++) if (_steer[i] != null) reach = MathF.Max(reach, _arm[i]);
+        var tan = MathF.Tan(frontAngle);
+        for (var i = 0; i < _wheels.Length; i++)
+        {
+            if (!GodotObject.IsInstanceValid(_wheels[i])) continue;
+            _rolled[i] = Mathf.Wrap(_rolled[i] + WheelMath.RollDelta(speed, _radius[i], dt), -Mathf.Pi, Mathf.Pi);
+            _wheels[i].Basis = new Basis(Vector3.Right, _rolled[i]) * _wheelRest[i];
+            if (_steer[i] is { } p && GodotObject.IsInstanceValid(p))
+                p.Basis = _steerRest[i] * new Basis(Vector3.Up, reach > 0 && _arm[i] < reach ? MathF.Atan(_arm[i] / reach * tan) : frontAngle);
+        }
+        if (_bars != null && GodotObject.IsInstanceValid(_bars)) _bars.Basis = _barsRest * new Basis(Vector3.Up, frontAngle);
     }
 
     /// <summary>One frame, from where and how the vehicle is drawn (its root's place and yaw).</summary>

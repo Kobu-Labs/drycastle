@@ -51,7 +51,21 @@
         { "role": "passenger", "offset": [0.3, 0.444, 1.134], "cover": "glass", "eye_height": 0.95 }
       ] },
     {
-      "id": "motorcycle", "top_speed": 36.1, "acceleration": 8.5, "brake": 10, "turn_radius": 2.8, "max_lateral_accel": 11, "mass": 230, "hp": 120, "hood": [0, 0.8, -0.45], "spawn_count": 3, "half_width": 0.42, "half_length": 1.1, "height": 1.19,
+      "id": "motorcycle",
+      "drive": {
+        "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 1.469, "track": 0,
+        "land": {
+          "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
+          "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
+          "step_height": 0.3, "max_climb_deg": 50, "snap_down": 0.3
+        },
+        "body": {
+          "squat_deg": 0, "dive_deg": 0, "lean_deg": 0, "max_pitch_deg": 0, "max_roll_deg": 0, "response": 7, "damping": 0.45, "terrain_response": 12,
+          "wheel_lock_deg": 35
+        },
+        "camera": { "distance": 6.5, "height": 1.5, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
+      },
+      "top_speed": 36.1, "acceleration": 8.5, "brake": 10, "turn_radius": 2.8, "max_lateral_accel": 11, "mass": 230, "hp": 120, "hood": [0, 0.8, -0.45], "spawn_count": 3, "half_width": 0.42, "half_length": 1.1, "height": 1.19,
       "lights": { "head": [[0, 1.021, -0.468]], "tail": [[0, 0.904, 0.993]], "beam_range": 35, "beam_angle": 30 },
       "model": "pack:synty-vehicles/bike_woodland",
       "skins": ["pack:synty-vehicles/bike_woodland", "pack:synty-vehicles/bike_desert", "pack:synty-vehicles/bike_khaki", "pack:synty-vehicles/bike_black", "pack:synty-vehicles/bike_sand", "pack:synty-vehicles/bike_grey"],
@@ -64,6 +78,19 @@
     },
     {
       "id": "jeep",
+      "drive": {
+        "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 3.489, "track": 2.345, "axle_centre": -0.196,
+        "land": {
+          "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
+          "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
+          "step_height": 0.45, "max_climb_deg": 45, "snap_down": 0.3
+        },
+        "body": {
+          "squat_deg": 0.3, "dive_deg": 0.4, "lean_deg": 0.3, "max_pitch_deg": 3, "max_roll_deg": 4, "response": 7, "damping": 0.45, "terrain_response": 12,
+          "wheel_lock_deg": 30
+        },
+        "camera": { "distance": 9, "height": 2.8, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
+      },
       "comment": "The type id stays `jeep`; the model is the Synty Battle Royale cargo truck SM_Veh_Truck_01 at real size (#325): six wheels, a three-seat cab bench (driver and two passengers), no gun and no gunner seat. It tows (hitch on the centre line 0.13 m behind the bed tail, 0.62 high like the rocket cart's eye). The tuning of the old jeep is kept. Skins are the six Battle Royale atlases (private pack, boxes without it); node names in docs/standards/car-design.md.",
       "top_speed": 30, "acceleration": 4.8, "brake": 8, "turn_radius": 3.6, "max_lateral_accel": 9, "mass": 1800, "run_over_mass": 1500, "hp": 380, "hood": [0, 1.9, -3.3], "spawn_count": 3, "half_width": 1.53, "half_length": 3.54, "height": 3.17,
       "model": "pack:synty-vehicles/truck_woodland", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
@@ -124,7 +151,21 @@
       "lights": { "head": [[-0.77, 0.96, -2.28], [0.77, 0.96, -2.28]], "tail": [[-0.8, 0.88, 2.29], [0.8, 0.88, 2.29]], "beam_range": 40, "beam_angle": 26 }
     },
     {
-      "id": "quad", "top_speed": 25, "acceleration": 7.0, "brake": 11, "turn_radius": 2.3, "max_lateral_accel": 11, "mass": 300, "run_over_mass": 300, "hp": 90, "hood": [0, 0.7, -0.6], "spawn_count": 4, "half_width": 0.6, "half_length": 1.15, "height": 1.32,
+      "id": "quad",
+      "drive": {
+        "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 1.459, "track": 0.908,
+        "land": {
+          "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
+          "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
+          "step_height": 0.35, "max_climb_deg": 50, "snap_down": 0.3
+        },
+        "body": {
+          "squat_deg": 0.4, "dive_deg": 0.5, "lean_deg": 0.4, "max_pitch_deg": 3.5, "max_roll_deg": 5, "response": 7, "damping": 0.45, "terrain_response": 12,
+          "wheel_lock_deg": 35
+        },
+        "camera": { "distance": 6.5, "height": 1.5, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
+      },
+      "top_speed": 25, "acceleration": 7.0, "brake": 11, "turn_radius": 2.3, "max_lateral_accel": 11, "mass": 300, "run_over_mass": 300, "hp": 90, "hood": [0, 0.7, -0.6], "spawn_count": 4, "half_width": 0.6, "half_length": 1.15, "height": 1.32,
       "lights": { "head": [[-0.236, 0.705, -1.031], [0.236, 0.705, -1.031]], "tail": [[0, 0.779, 1.017]], "beam_range": 25, "beam_angle": 30 },
       "model": "pack:synty-vehicles/quad_red",
       "skins": ["pack:synty-vehicles/quad_red", "pack:synty-vehicles/quad_blue", "pack:synty-vehicles/quad_olive", "pack:synty-vehicles/quad_sand"],
@@ -172,7 +213,21 @@
       "lights": { "head": [[-0.98, 1.0, -1.81], [0.98, 1.0, -1.81]], "tail": [[-0.55, 0.98, 2.08], [0.55, 0.98, 2.08]], "beam_range": 35, "beam_angle": 26 }
     },
     {
-      "id": "flak", "top_speed": 15, "acceleration": 2.5, "brake": 6, "turn_radius": 7.5, "max_lateral_accel": 6, "mass": 6000, "run_over_mass": 3000, "hp": 1200, "exposed_gunner": true, "hood": [0, 1.8, -2.7], "spawn_count": 1, "half_width": 1.3, "half_length": 3.55, "height": 3.0,
+      "id": "flak",
+      "drive": {
+        "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 4.75, "track": 2.14, "axle_centre": 0.025,
+        "land": {
+          "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
+          "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
+          "step_height": 0.45, "max_climb_deg": 40, "snap_down": 0.3
+        },
+        "body": {
+          "squat_deg": 0.25, "dive_deg": 0.3, "lean_deg": 0.25, "max_pitch_deg": 2.5, "max_roll_deg": 3, "response": 7, "damping": 0.45, "terrain_response": 12,
+          "wheel_lock_deg": 28
+        },
+        "camera": { "distance": 8.1, "height": 2.05, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
+      },
+      "top_speed": 15, "acceleration": 2.5, "brake": 6, "turn_radius": 7.5, "max_lateral_accel": 6, "mass": 6000, "run_over_mass": 3000, "hp": 1200, "exposed_gunner": true, "hood": [0, 1.8, -2.7], "spawn_count": 1, "half_width": 1.3, "half_length": 3.55, "height": 3.0,
       "model": "drycastle-generated-models/flak.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
       "tow": { "hitch": [0, 0.7, 3.65] },
@@ -196,7 +251,21 @@
       "lights": { "head": [[-0.98, 1.47, -3.13], [0.98, 1.47, -3.13]], "tail": [[-1.06, 0.97, 3.5], [1.06, 0.97, 3.5]], "beam_range": 45, "beam_angle": 26 }
     },
     {
-      "id": "bus", "top_speed": 25, "acceleration": 2.6, "brake": 7, "turn_radius": 9.5, "max_lateral_accel": 5, "mass": 13000, "run_over_mass": 3000, "hp": 900, "hood": [0, 1.3, 6.13], "spawn_count": 1, "half_width": 1.28, "half_length": 6.03, "height": 3.1,
+      "id": "bus",
+      "drive": {
+        "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 6.02, "track": 1.94, "axle_centre": -0.305,
+        "land": {
+          "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
+          "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
+          "step_height": 0.4, "max_climb_deg": 35, "snap_down": 0.3
+        },
+        "body": {
+          "squat_deg": 0.2, "dive_deg": 0.3, "lean_deg": 0.3, "max_pitch_deg": 2, "max_roll_deg": 3, "response": 7, "damping": 0.45, "terrain_response": 12,
+          "wheel_lock_deg": 35
+        },
+        "camera": { "distance": 11.1, "height": 3.05, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
+      },
+      "top_speed": 25, "acceleration": 2.6, "brake": 7, "turn_radius": 9.5, "max_lateral_accel": 5, "mass": 13000, "run_over_mass": 3000, "hp": 900, "hood": [0, 1.3, 6.13], "spawn_count": 1, "half_width": 1.28, "half_length": 6.03, "height": 3.1,
       "model": "drycastle-generated-models/bus.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Red", "paints": ["Red"],
       "seats": [{ "role": "driver", "offset": [-0.7, 0.62, -4.825], "cover": "glass" }, { "role": "passenger", "offset": [0.53, 0.38, -2.175], "cover": "glass", "eye_height": 1.05 }, { "role": "passenger", "offset": [-0.97, 0.86, 1.825], "cover": "glass", "eye_height": 1.05 }, { "role": "passenger", "offset": [0, 0.86, 4.905], "cover": "glass", "eye_height": 1.05 }],
@@ -299,6 +368,19 @@
     },
     {
       "id": "harvester",
+      "drive": {
+        "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 3.682, "track": 2.137, "axle_centre": 0.981,
+        "land": {
+          "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
+          "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
+          "step_height": 0.5, "max_climb_deg": 35, "snap_down": 0.3
+        },
+        "body": {
+          "squat_deg": 0.15, "dive_deg": 0.2, "lean_deg": 0.15, "max_pitch_deg": 1.5, "max_roll_deg": 2, "response": 7, "damping": 0.45, "terrain_response": 12,
+          "wheel_lock_deg": 30
+        },
+        "camera": { "distance": 15, "height": 5.5, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
+      },
       "comment": "The harvester event (#331): the Synty Farm combine (SM_Veh_Harvester_01) standardized by scripts/standardize_vehicle.py (scripts/vehicles/harvester.json; private pack synty-vehicles, a grey box without it): hull, wheel_fl/fr/rl/rr (front pair under wheel_*_steer, rolled and steered by the generic VehicleWheels), steering_wheel_rim/_spokes, seat_driver. Its reel node SM_Veh_Harvester_Reel spins on X. Run-over is the event's own (run_over false): NetServer.Harvester.cs, because the field speed is far below run_over_min_speed. turn_radius (7 m, a real combine's) is what the AI's turns between passes are planned with (HarvesterConfig.TurnRadiusM, FieldPlanner: half circles between lanes k apart, a bulb turn for the last lanes).",
       "top_speed": 6.5, "acceleration": 1.3, "brake": 4, "turn_radius": 7, "high_speed_radius_factor": 1, "max_lateral_accel": 4,
       "mass": 14000, "run_over_mass": 8000, "run_over": false, "hp": 1400,
@@ -324,6 +406,19 @@
     },
     {
       "id": "scud",
+      "drive": {
+        "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 7.509, "track": 2.672, "axle_centre": 0.215,
+        "land": {
+          "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
+          "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
+          "step_height": 0.5, "max_climb_deg": 35, "snap_down": 0.3
+        },
+        "body": {
+          "squat_deg": 0.15, "dive_deg": 0.2, "lean_deg": 0.15, "max_pitch_deg": 1.5, "max_roll_deg": 2, "response": 7, "damping": 0.45, "terrain_response": 12,
+          "wheel_lock_deg": 30
+        },
+        "camera": { "distance": 17, "height": 6, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
+      },
       "comment": "The Scud launcher truck (GLOSSARY Scud truck): a heavy 8x8 launcher, two seats (driver, operator) in two half cabs with the missile's nose between them. Spawned by the event or /scud spawn, never dealt (spawn_count 0, no fixed spot), cannot tow, and never returns once destroyed (returns false). Model pack:synty-simple-military/scud (scripts/make_scud_model.py, numbers in docs/research/scud-models-facts.md; a grey box with a rack stands in without the private pack): nodes hull (body, cab, glass, rack > missile, seats, lamps) and the wheels as siblings of hull: wheel_l1..l4 / wheel_r1..r4, the front two axles under wheel_lN_steer / wheel_rN_steer. Hit box 3.13 x 11.9 m, 3.54 m to the top of the lying missile (the erected rack and the fins reach 4.0 m but are not a target). launcher: operator_seat 1; muzzle = the ERECTED missile's centre of mass (the rack pivot [0, 2.62, 3.634], the missile centre 0.477 up and 3.27 ahead of it when lying, turned 90 degrees up about X: [0, 5.89, 4.111]), where the missile entity spawns; exhaust = its tail end [0, 1.1, 4.111]; wheel_radius 0.736; steer_arms = the distance from the middle of the two fixed axles (z 2.892) to each steered axle (z -3.539, -1.38), front first, for the wheels' angle (atan(arm / turn radius)). The seats' eye_height 1.05 puts the eye at y 2.2, inside the half cab (roof 2.66, windscreen 1.99-2.42). The glass centres are the panes' positions in the loaded model: the facts file (and the script's printout) give them without the 0.37 m the glass_N nodes are moved towards +z (the rear), which is added here (checked against the GLB). Flak-truck handling, slower: no drive block (the server steps it, the driver's client does not predict it).",
       "top_speed": 13, "acceleration": 1.6, "brake": 5, "turn_radius": 11, "high_speed_radius_factor": 3, "max_lateral_accel": 5,
       "mass": 18000, "run_over_mass": 9000, "hp": 1500, "returns": false,

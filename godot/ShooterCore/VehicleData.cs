@@ -557,9 +557,17 @@ public class VehicleDriveDef
     public float SteerCalm { get; set; } = 0.45f;
 
     // ---- where the wheels are (the model's)
-    /// <summary>Distance between the axles and between the wheels of an axle, metres: where the ground is sampled, so the body lies on the slope under it.</summary>
+    /// <summary>
+    /// Distance between the axles (the first and the last of a vehicle with more) and between the wheels of an axle, metres: where the ground is sampled, so the body
+    /// lies on the slope under it. A track of 0 is a single-track vehicle (a motorcycle): the ground is sampled under its two wheels and it never rolls with the ground.
+    /// </summary>
     public float Wheelbase { get; set; } = 2.72f;
     public float Track { get; set; } = 1.96f;
+    /// <summary>
+    /// Where the point half way between the first and the last axle is along the model, metres (z: positive is behind the origin, 0: under it). The ground is
+    /// sampled round this point, so a vehicle whose axles are not centred on its footprint (a combine, a bus with a long nose) still stands on its own wheels.
+    /// </summary>
+    public float AxleCentre { get; set; }
 
     public DriveLandDef Land { get; set; } = new();
     public DriveWaterDef Water { get; set; } = new();
@@ -569,8 +577,9 @@ public class VehicleDriveDef
     /// <summary>Null when the numbers make a drivable vehicle, else what is wrong.</summary>
     public string? Validate(VehicleDef v)
     {
-        if (ThrottleRise <= 0 || ThrottleFall <= 0 || SteerRise <= 0 || SteerFall <= 0 || Wheelbase <= 0 || Track <= 0) return "the ramp rates, wheelbase and track must be positive";
+        if (ThrottleRise <= 0 || ThrottleFall <= 0 || SteerRise <= 0 || SteerFall <= 0 || Wheelbase <= 0 || Track < 0) return "the ramp rates and the wheelbase must be positive, the track not negative (0: a single-track vehicle, a motorcycle)";
         if (SteerCalm is <= 0 or > 1) return "steer_calm is above 0 and at most 1";
+        if (MathF.Abs(AxleCentre) + Wheelbase / 2f > v.HalfLength + 0.5f) return "axle_centre and wheelbase put an axle outside the vehicle's length";
         var l = Land;
         if (l.LaunchBoost < 1 || l.LaunchSpeed <= 0 || l.PowerCurve <= 0 || l.CoastDecel < 0 || l.CoastDrag < 0 || l.Grip <= 0 || l.YawResponse <= 0 || l.HandbrakeDecel <= 0
             || l.HandbrakeSteer <= 0 || l.StepHeight <= 0 || l.SnapDown <= 0)
@@ -788,7 +797,6 @@ public class VehicleLauncherDef
         if (!(WheelRadius > 0.1f && WheelRadius < 2f)) return "wheel_radius must be between 0.1 and 2 metres";
         if (SteerArms.Any(a => !(a > 0.5f && a < 20f))) return "steer_arms are distances in metres between 0.5 and 20";
         if (v.Flight != null || v.Gun != null || v.Flak != null || v.DoorGun != null) return "a launcher truck is a ground vehicle with no gun, flak or door gun";
-        if (v.Drive != null) return "a launcher truck has no drive block: the server steps it and brakes it while its rack moves, its driver's client does not predict it";
         return null;
     }
 }

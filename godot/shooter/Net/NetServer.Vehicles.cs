@@ -527,7 +527,13 @@ public partial class NetServer
     /// </summary>
     void StepDrivenVehicle(ServerCar car, Client? driver, float dt)
     {
-        if (driver == null || _tick - car.DriveTick > DriveStarveTicks)
+        if (driver != null && driver == _harvDriver)
+        {
+            // the harvester's own driver sends no inputs: the server steers it (NetServer.Harvester), one step a tick
+            car.Wake();
+            car.StepDrive(new DriveInput { Throttle = driver.Throttle, Steer = driver.Steer, Handbrake = driver.Handbrake }, dt);
+        }
+        else if (driver == null || _tick - car.DriveTick > DriveStarveTicks)
         {
             if (!car.Asleep) car.StepDriveUnpiloted(dt); // a parked one at rest is not stepped until disturbed (DriveRest)
         }
