@@ -69,7 +69,19 @@ public class VehiclesFile : IVersioned
                 if (side.OutlineProblem() is { } problem) throw new DataFileException($"vehicles.json: {v.Id}: open side {side.Id}: {problem}");
             }
             if (v.Tint is { Length: not 3 } || v.Tint != null && v.Paints.Count > 0) throw new DataFileException($"vehicles.json: {v.Id}: tint is [r, g, b] and excludes paints");
-            if (v.Seats.Count is < 1 or > 4 || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..4 and the first is the driver");
+            if (v.Trailer is { } trl)
+            {
+                if (v.Seats.Count != 0) throw new DataFileException($"vehicles.json: {v.Id}: a trailer has no seats (\"seats\": [])");
+                if (v.Tow != null) throw new DataFileException($"vehicles.json: {v.Id}: a trailer does not tow: tow and trailer exclude each other");
+                if (v.Medium != VehicleMedium.Land || v.Drive != null || v.Gun != null || v.Flak != null || v.DoorGun != null) throw new DataFileException($"vehicles.json: {v.Id}: a trailer is a land type with no drive, gun, flak or door_gun block");
+                if (trl.Validate() is { } why) throw new DataFileException($"vehicles.json: {v.Id}: trailer: {why}");
+            }
+            else if (v.Seats.Count is < 1 or > 4 || v.Seats[0].Role != "driver") throw new DataFileException($"vehicles.json: {v.Id}: seats are 1..4 and the first is the driver");
+            if (v.Tow is { } tw)
+            {
+                if (v.Medium == VehicleMedium.Air) throw new DataFileException($"vehicles.json: {v.Id}: a tow block is for a land or amphibious vehicle");
+                if (tw.Validate() is { } why) throw new DataFileException($"vehicles.json: {v.Id}: tow: {why}");
+            }
             foreach (var seat in v.Seats)
             {
                 if (seat.Role is not ("driver" or "gunner" or "passenger")) throw new DataFileException($"vehicles.json: {v.Id}: seat role {seat.Role} is not driver, gunner or passenger");
@@ -823,6 +835,10 @@ public class VehicleDef
     /// <see cref="DriveModel"/> and never by <see cref="CarModel"/>. Null for every other type. A land type's block has no water numbers in use (see <see cref="VehicleDriveDef.Validate"/>).
     /// </summary>
     public VehicleDriveDef? Drive { get; set; }
+    /// <summary>The type can pull a trailer (vehicles.json "tow": the hitch and what the load does to it). Null: it cannot. See <see cref="TowModel"/>.</summary>
+    public VehicleTowDef? Tow { get; set; }
+    /// <summary>The type is a single-axle trailer (vehicles.json "trailer": drawbar eye, axle, mass) with no seats, pulled by a type with a <see cref="Tow"/> block. Null: it is not.</summary>
+    public VehicleTrailerDef? Trailer { get; set; }
     /// <summary>A single fixed body colour [r, g, b] (sRGB) for a type with one look (olive drab). Replaces the colour variants: such a type has one variant.</summary>
     public float[]? Tint { get; set; }
     /// <summary>Model file relative to assets/ (empty: the code-built car with the Kenney sedan). Scale, yaw and offset fit the raw node to the game (forward -Z, origin at the ground centre).</summary>

@@ -405,7 +405,8 @@ public static class CarModel
     /// only moderately wider at top speed; the actual yaw rate chases that target at a limited slew rate.
     /// <paramref name="onWater"/> is set while the vehicle floats: an amphibious then drives at its water speed.
     /// </summary>
-    public static void Step(ref CarState s, VehicleDef def, float throttle, float steer, bool handbrake, float dt, bool onWater = false)
+    /// <param name="tow">What a trailer on the hook does to the step (<see cref="TowLoad"/>, <see cref="TowBlock"/>); the default is no trailer and changes nothing.</param>
+    public static void Step(ref CarState s, VehicleDef def, float throttle, float steer, bool handbrake, float dt, bool onWater = false, in TowEffect tow = default)
     {
         var h = def.Handling;
         var v = s.Speed;
@@ -416,19 +417,23 @@ public static class CarModel
         {
             top = def.WaterTopSpeed; accel = def.WaterAcceleration;
         }
+        var brake = def.Brake;
+        if (tow.Hitched) { top *= tow.Load.TopSpeedScale; accel *= tow.Load.AccelScale; brake *= tow.Load.BrakeScale; }
         // the launch boost: more thrust near a standstill, fading to the plain acceleration at h.LaunchSpeed (either direction of travel)
         accel *= 1f + (h.LaunchBoost - 1f) * MathF.Max(0f, 1f - MathF.Abs(v) / MathF.Max(0.1f, h.LaunchSpeed));
         if (handbrake) v = Approach(v, 0, h.HandbrakeDecel * dt);
         else if (throttle > 0.05f)
-            v = v < 0 ? Approach(v, 0, def.Brake * dt) : MathF.Min(top, v + accel * throttle * dt);
+            v = v < 0 ? Approach(v, 0, brake * dt) : tow.Hitched && v > top ? Approach(v, top, brake * dt) : MathF.Min(top, v + accel * throttle * dt);
         else if (throttle < -0.05f)
-            v = v > 0 ? Approach(v, 0, def.Brake * dt) : MathF.Max(-top * h.ReverseTopFraction, v + accel * throttle * dt);
+            v = v > 0 ? Approach(v, 0, brake * dt) : MathF.Max(-top * h.ReverseTopFraction, v + accel * throttle * dt);
         else v = Approach(v, 0, coast * dt);
         s.Speed = v;
 
         // steering: the wheel input sets the curvature; the handbrake sharpens it for a slide
         var target = -steer * v / TurnRadiusAt(def, v) * (handbrake ? h.HandbrakeSteerBoost : 1f);
+        if (tow.Hitched && MathF.Abs(v) > 0.5f) { var hold = def.MaxLateralAccel * tow.Load.LateralScale / MathF.Abs(v); target = Math.Clamp(target, -hold, hold); } // the trailer's weight: the bend must be wider
         s.YawRate = Approach(s.YawRate, target, h.YawSlew * dt);
+        if (tow.Block.Active) { var slip = 0f; tow.Block.Clamp(ref s.Speed, ref slip, ref s.YawRate); } // the trailer is at its limit: what would fold it further is taken
         s.Yaw += s.YawRate * dt;
     }
 

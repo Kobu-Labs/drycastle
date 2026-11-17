@@ -128,6 +128,18 @@ _Avoid_: APC, amphib, Schwimmwagen, duck
 A vehicle whose driver's client steps its own copy with the driver's inputs, so the driver sees it in the present rather than about 100 ms late: the utility helicopter (ADR 0006), the amphibious transport (ADR 0010) and the car (ADR 0014). Everyone else, the riders included, sees a predicted vehicle drawn from the snapshots; the other ground vehicles are drawn from the snapshots for the driver too.
 _Avoid_: client-side vehicle, smooth vehicle
 
+**Trailer**:
+A single-axle vehicle with no seats that a tractor pulls (vehicles.json `trailer`: drawbar eye, axle, mass). Loose it stands still; hitched its drawbar eye is pinned to the tractor's hitch and it follows the hitch's velocity, so it cuts corners and, reversed, folds. Its machine is `Trailer.Tow` (Loose, Hitched, Released). The first trailer is the rocket cart.
+_Avoid_: cart (alone), caravan, wagon
+
+**Tow hitch / Hitched**:
+The tow hitch is the ball at the rear of a vehicle whose type has a `tow` block (the jeep, the flak truck); only data decides who tows. A tractor latches a loose trailer by itself when it reverses with its hitch within 0.8 m of the drawbar eye and headings within 35 degrees; the driver unhitches by holding interact, and the trailer cannot be latched again for 2 s (Released). Hitched, the tractor accelerates and brakes by its mass over the pair's, tops out at 60 % of its speed and holds less sideways acceleration; a turn taken too fast lets the trailer swing out.
+_Avoid_: coupled, attached, trailer lock
+
+**Jackknife limit**:
+The most a hitched trailer can fold against its tractor (75 degrees, `tow.limit_deg`). Reversing grows the fold; at the limit the tractor's motion that would fold it further (speed, yaw rate) is taken from it, so it stops, and driving forward unfolds it. A trailer whose box is blocked blocks its tractor the same way.
+_Avoid_: max angle, articulation cap
+
 **Armed seat**:
 A passenger seat whose rider keeps their own loadout and fights with it from the seat, in first person, aiming with the view inside the seat's arc. The mouse wheel changes the weapon there, since the number keys are the seat switch. The amphibious transport's front right seat is one; the bus's passenger seats are not.
 _Avoid_: shotgun seat, gunner seat (that seat works the vehicle's own gun), fighting seat
