@@ -197,4 +197,27 @@ public class LockOnTests
         Assert.Null(LockCodec.DecodeAlert(new byte[] { 9, 0, 0 })); // not a level
         Assert.Null(LockCodec.DecodeLaunch(new byte[10]));
     }
+
+    [Fact]
+    public void A_missile_pursues_a_moving_vehicle_and_hits_it()
+    {
+        var at = new Vector3(0, 50, 0);
+        var heli = new Vector3(0, 50, -300);
+        var hit = false;
+        for (var t = 0; t < 300 && !hit; t++)
+        {
+            heli += new Vector3(20, 0, 0) * Dt; // flies off sideways at 20 m/s
+            (at, hit) = LockRules.Pursue(at, heli, 160f, 2f, Dt);
+        }
+        Assert.True(hit);
+        Assert.True(Vector3.Distance(at, heli) < 1f);
+    }
+
+    [Fact]
+    public void A_missile_out_of_reach_keeps_flying()
+    {
+        var (next, hit) = LockRules.Pursue(Vector3.Zero, new Vector3(0, 0, -500), 160f, 2f, Dt);
+        Assert.False(hit);
+        Assert.InRange(next.Z, -5.4f, -5.2f);
+    }
 }

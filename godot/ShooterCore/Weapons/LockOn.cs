@@ -92,6 +92,19 @@ public static class LockRules
     }
 
     /// <summary>
+    /// One tick of a missile homing on a flown vehicle, which has no known path: it re-aims at where the vehicle is now and flies <paramref name="speed"/>
+    /// metres a second straight at it. <c>Hit</c> when it reaches within <paramref name="reach"/> of the vehicle this tick (the server's hit; the client draws the same step).
+    /// </summary>
+    public static (Vector3 Next, bool Hit) Pursue(Vector3 at, Vector3 target, float speed, float reach, float dt)
+    {
+        var to = target - at;
+        var dist = to.Length();
+        var step = speed * dt;
+        if (dist <= step + reach || dist < 1e-4f) return (target, true);
+        return (at + to / dist * step, false);
+    }
+
+    /// <summary>
     /// Where a homing missile is drawn <paramref name="dt"/> seconds on, given where it is, where its Aircraft is now and the seconds it has left:
     /// it closes the gap at the rate that lands it on the Aircraft exactly when the server's hit does, so its path bends after the Aircraft.
     /// </summary>
