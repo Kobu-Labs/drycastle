@@ -19,6 +19,10 @@ public sealed class CropCrushConfig
     public int MaxCellsTotal { get; set; } = 120000;
     /// <summary>The most bytes of one crush message (a late joiner's history comes in these).</summary>
     public int MaxMessageBytes { get; set; } = 200;
+    /// <summary>The server sends the cells that are new this often, seconds (a client already stamped what it drew, see <see cref="CropCrushMask"/>; this is for the others, joiners and missed cells).</summary>
+    public float FlushS { get; set; } = 0.1f;
+    /// <summary>A vehicle's direction of travel (which end leads) is decided after it moved this far, metres, so jitter at a standstill does not flip it.</summary>
+    public float DirectionM { get; set; } = 0.25f;
 }
 
 /// <summary>
@@ -77,6 +81,14 @@ public sealed class CrushGrid
     public List<int> Mark(Vector2 a, Vector2 b, float halfWidth, int totalCells)
     {
         var fresh = new List<int>();
+        Mark(a, b, halfWidth, totalCells, fresh);
+        return fresh;
+    }
+
+    /// <summary>As <see cref="Mark(Vector2, Vector2, float, int)"/>, appending the new cells to <paramref name="fresh"/> (no allocation per call: the per-frame path of a client). Returns how many were added.</summary>
+    public int Mark(Vector2 a, Vector2 b, float halfWidth, int totalCells, List<int> fresh)
+    {
+        var first = fresh.Count;
         var c = _cfg.CellM;
         var x0 = Math.Max(0, (int)MathF.Floor((MathF.Min(a.X, b.X) - halfWidth) / c) - OriginX);
         var x1 = Math.Min(Width - 1, (int)MathF.Floor((MathF.Max(a.X, b.X) + halfWidth) / c) - OriginX);
@@ -89,9 +101,9 @@ public sealed class CrushGrid
                 if (_bits[i]) continue;
                 var centre = new Vector2((OriginX + cx + 0.5f) * c, (OriginZ + cz + 0.5f) * c);
                 if (Poly.DistanceToSegment(centre, a, b) > halfWidth) continue;
-                if (Set(i, totalCells + fresh.Count)) fresh.Add(i);
+                if (Set(i, totalCells + fresh.Count - first)) fresh.Add(i);
             }
-        return fresh;
+        return fresh.Count - first;
     }
 
     /// <summary>The crushed cells as alternating run lengths over the whole grid: first how many are clear, then how many crushed, and so on (a late joiner's copy of the mask).</summary>
@@ -117,6 +129,9 @@ public static class CropCrushRules
 
     /// <summary>The half width of the strip for a vehicle of half width <paramref name="halfWidth"/>.</summary>
     public static float HalfStrip(CropCrushConfig cfg, float halfWidth) => halfWidth * cfg.WidthShare;
+
+    /// <summary>How far ahead of the vehicle's centre the strip is stamped, metres: the leading end, so the rounded end of the strip (its half width) ends at the bumper. The track is under the nose, not half a body behind it.</summary>
+    public static float LeadM(CropCrushConfig cfg, float halfWidth, float halfLength) => MathF.Max(0f, halfLength - HalfStrip(cfg, halfWidth));
 }
 
 /// <summary>Wire payload of <see cref="EventKind.CropCrush"/> (little-endian, varints): u16 field, u8 mode. Mode 0: the cells that are new, as ascending grid indices, each the varint difference to the one before (the first from 0). Mode 1: a stretch of the mask, u32 grid index it starts at, then alternating run lengths (clear first) as varints.</summary>

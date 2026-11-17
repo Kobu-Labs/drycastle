@@ -96,4 +96,133 @@ public class CropCrushTests
         foreach (var m in msgs) foreach (var c in CrushCodec.Cells(CrushCodec.Decode(m)!.Value)) back.Set(c, 0);
         Assert.Equal(g.Count, back.Count);
     }
+
+    // ---- CropCrushMask: what the server and a client both run (#353) ----
+
+    static CropCrushMask MaskOf(CropCrushConfig? cfg = null) => new(cfg ?? Cfg, new[] { new CropField("GP-1", "crop_grain", Rect(0, 0, 200, 100)) });
+
+    /// <summary>A 4.3 m long, 2.2 m wide car at (x, z) heading east (yaw -90 degrees: forward is +x).</summary>
+    static CrushBody East(float x, float z = 50, float speed = 10, bool driven = true, bool ground = true) => new(new Vector2(x, z), -MathF.PI / 2, 1.1f, 2.15f, speed, driven, ground);
+
+    [Fact]
+    public void The_strip_is_stamped_from_the_leading_end_not_the_centre()
+    {
+        var mask = MaskOf(); var fresh = new List<int>();
+        for (var x = 20f; x <= 40f; x += 0.1f) mask.Step(1, East(x), fresh);
+        var grid = mask.GridOf(0)!;
+        var maxX = fresh.Max(i => grid.CentreOf(i).X);
+        // the car's centre reached 40 (and its sampler's last segment ends at or before it): the nose is 2.15 m further, the strip's rounded end stops at the bumper
+        Assert.InRange(maxX, 40f, 42.4f);
+        Assert.True(maxX > 40f);
+        Assert.Equal(fresh.Count, grid.Count);
+        Assert.Equal(fresh.Count, mask.Total);
+        var lead = CropCrushRules.LeadM(Cfg, 1.1f, 2.15f);
+        Assert.Equal(2.15f - 1.1f * 0.95f, lead, 3);
+    }
+
+    [Fact]
+    public void Reversing_leads_with_the_rear_and_turning_round_starts_the_path_afresh()
+    {
+        var mask = MaskOf(); var fresh = new List<int>();
+        for (var x = 100f; x >= 60f; x -= 0.1f) mask.Step(1, East(x), fresh); // yaw east, moving west: backing up
+        var grid = mask.GridOf(0)!;
+        var minX = fresh.Min(i => grid.CentreOf(i).X);
+        Assert.True(minX < 62f, $"{minX}"); // the rear is the leading end: it went at least about to the centre's x minus the lead
+        Assert.InRange(fresh.Max(i => grid.CentreOf(i).X), 0f, 100f); // nothing ahead of the start
+    }
+
+    [Fact]
+    public void Standing_slow_or_off_the_ground_stamps_nothing_and_a_driverless_one_needs_speed()
+    {
+        var mask = MaskOf(); var fresh = new List<int>();
+        for (var x = 20f; x <= 40f; x += 0.1f)
+        {
+            Assert.Equal(-1, mask.Step(1, East(x, speed: 0.2f), fresh));
+            Assert.Equal(-1, mask.Step(2, East(x, speed: 10, ground: false), fresh)); // flying, afloat or wrecked
+            Assert.Equal(-1, mask.Step(3, East(x, speed: 1f, driven: false), fresh));
+        }
+        Assert.Empty(fresh); Assert.Equal(0, mask.Total);
+    }
+
+    [Fact]
+    public void Off_the_field_nothing_is_stamped_and_the_path_starts_afresh_on_entering()
+    {
+        var mask = MaskOf(); var fresh = new List<int>();
+        for (var x = -30f; x <= -1f; x += 0.1f) Assert.Equal(-1, mask.Step(1, East(x), fresh));
+        Assert.Empty(fresh);
+        for (var x = 0f; x <= 30f; x += 0.1f) mask.Step(1, East(x), fresh);
+        Assert.NotEmpty(fresh);
+    }
+
+    [Fact]
+    public void The_samples_are_spaced_by_the_crush_config_not_the_harvesters()
+    {
+        var wide = MaskOf(new CropCrushConfig { SampleM = 10 }); var tight = MaskOf(new CropCrushConfig { SampleM = 0.5f });
+        var a = new List<int>(); var b = new List<int>();
+        for (var x = 20f; x <= 28f; x += 0.1f) { wide.Step(1, East(x), a); tight.Step(1, East(x), b); }
+        // 8 m of travel: a sample every 10 m has stamped nothing yet, one every 0.5 m has
+        Assert.Empty(a); Assert.NotEmpty(b);
+        Assert.Equal(2f, new CropCrushConfig().SampleM);
+    }
+
+    [Fact]
+    public void The_client_stamps_what_it_drew_and_the_servers_cells_add_only_what_is_new()
+    {
+        var client = MaskOf(); var server = MaskOf();
+        var mine = new List<int>(); var theirs = new List<int>();
+        // the client draws the car ahead of the server's: its stamp reaches further
+        for (var x = 20f; x <= 45f; x += 0.1f) client.Step(1, East(x), mine);
+        for (var x = 20f; x <= 40f; x += 0.1f) server.Step(1, East(x), theirs);
+        var before = client.Total;
+        var added = theirs.Count(i => client.Set(0, i));
+        Assert.Equal(before + added, client.Total);
+        Assert.InRange(added, 0, 4); // what the client had not drawn itself (an edge cell at most)
+        Assert.All(theirs, i => Assert.True(client.GridOf(0)!.IsSet(i)));
+        Assert.False(client.Set(0, theirs[0])); // again: nothing
+        Assert.False(client.Set(5, 0)); // no such field
+    }
+
+    [Fact]
+    public void A_new_round_clears_the_masks_and_the_total_and_every_path()
+    {
+        var mask = MaskOf(); var fresh = new List<int>();
+        for (var x = 20f; x <= 40f; x += 0.1f) mask.Step(1, East(x), fresh);
+        Assert.True(mask.Total > 0);
+        mask.Clear();
+        Assert.Equal(0, mask.Total); Assert.Empty(mask.Grids);
+        fresh.Clear();
+        Assert.Equal(-1, mask.Step(1, East(40.1f), fresh)); // the path starts afresh: the first sample only marks the start
+        Assert.Empty(fresh);
+        for (var x = 40.2f; x <= 60f; x += 0.1f) mask.Step(1, East(x), fresh);
+        Assert.NotEmpty(fresh);
+    }
+
+    [Fact]
+    public void The_total_cap_holds_over_stamping_and_the_servers_cells()
+    {
+        var mask = MaskOf(new CropCrushConfig { MaxCellsTotal = 30 }); var fresh = new List<int>();
+        for (var x = 20f; x <= 120f; x += 0.1f) mask.Step(1, East(x), fresh);
+        Assert.Equal(30, mask.Total);
+        Assert.Equal(30, fresh.Count);
+        Assert.False(mask.Set(0, 5)); // full
+    }
+
+    [Fact]
+    public void A_flush_every_tenth_of_a_second_of_a_fast_car_stays_far_under_the_message_cap()
+    {
+        Assert.Equal(0.1f, Cfg.FlushS);
+        var mask = MaskOf(); var fresh = new List<int>();
+        var worst = 0;
+        // 40 m/s (a fast car), 60 Hz, one flush per 0.1 s: the bytes of each flush
+        var cells = new List<int>(); var t = 0f; var next = 0.1f;
+        for (var x = 10f; x < 190f; x += 40f / 60f, t += 1f / 60f)
+        {
+            fresh.Clear(); mask.Step(1, East(x), fresh); cells.AddRange(fresh);
+            if (t < next) continue;
+            next = t + Cfg.FlushS; cells.Sort();
+            worst = Math.Max(worst, CrushCodec.PackDelta(0, cells, Cfg.MaxMessageBytes).Sum(m => m.Length));
+            cells.Clear();
+        }
+        Assert.InRange(worst, 1, 120);
+    }
 }
