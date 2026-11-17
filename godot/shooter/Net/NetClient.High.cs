@@ -18,6 +18,7 @@ public partial class NetClient
     float _nauseaRoll;
     Node3D? _ownCigarette;      // the first-person copy on the camera (the figure itself is not drawn in the own view)
     CpuParticles3D? _ownSmoke;
+    Node3D? _ownTip;
 
     /// <summary>
     /// The high player's own cigarette: a copy fixed to the first-person camera where the mouth is, so the tip, its ember and the smoke show at the bottom of the view (plantation.json
@@ -28,10 +29,10 @@ public partial class NetClient
         if (!show || _me == null)
         {
             if (_ownCigarette != null && GodotObject.IsInstanceValid(_ownCigarette)) _ownCigarette.QueueFree();
-            _ownCigarette = null; _ownSmoke = null;
+            _ownCigarette = null; _ownSmoke = null; _ownTip = null;
             return;
         }
-        if (_ownCigarette != null && GodotObject.IsInstanceValid(_ownCigarette)) return;
+        if (_ownCigarette != null && GodotObject.IsInstanceValid(_ownCigarette)) { FollowOwnSmoke(); return; }
         var c = Plantation.View.Cigarette;
         var fp = c.FirstPerson;
         // the model points +Z, the camera looks down -Z: turned round, then tilted
@@ -42,13 +43,23 @@ public partial class NetClient
             Transform = new Transform3D(tilt * new Basis(Vector3.Up, Mathf.Pi), new Vector3((float)fp.Offset[0], (float)fp.Offset[1], (float)fp.Offset[2])),
         };
         _ownCigarette.AddChild(CharacterView.CigaretteModel(c, out var tip));
-        if (ShotFx.Enabled)
-        {
-            _ownSmoke = CharacterView.CigaretteSmoke(c.Smoke, fp.SmokeAmount, (float)fp.SmokeSizeM);
-            tip.AddChild(_ownSmoke); // world-space particles: they stay where they were let out while the camera moves on
-            ParticleFx.Run(_ownSmoke, true);
-        }
+        _ownTip = tip;
         _me.Camera.AddChild(_ownCigarette);
+        if (!ShotFx.Enabled) return;
+        // The smoke travels with the player but does not turn with the look: world-space smoke would be left behind the camera at the first step, and smoke fixed to the camera would swing round with
+        // the head. So the emitter is top-level (it keeps the world's axes), follows the tip each frame, and its particles are local to it. Started only once it is in the tree.
+        _ownSmoke = CharacterView.CigaretteSmoke(c.Smoke, fp.SmokeAmount, (float)fp.SmokeSizeM);
+        _ownSmoke.LocalCoords = true;
+        _ownSmoke.TopLevel = true;
+        _ownCigarette.AddChild(_ownSmoke);
+        FollowOwnSmoke();
+        ParticleFx.Run(_ownSmoke, true);
+    }
+
+    void FollowOwnSmoke()
+    {
+        if (_ownSmoke == null || _ownTip == null || !GodotObject.IsInstanceValid(_ownSmoke) || !GodotObject.IsInstanceValid(_ownTip)) return;
+        _ownSmoke.GlobalTransform = new Transform3D(Basis.Identity, _ownTip.GlobalPosition);
     }
 
     /// <summary>The local player is high according to the last status message.</summary>
