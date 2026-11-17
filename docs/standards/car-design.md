@@ -130,6 +130,7 @@ One standardization step per pack prefab: **`scripts/standardize_vehicle.py`**, 
 7. **`vehicles.json`**: size from the model, `glass` written by the script when run without an output path (do not hand-edit it), `seats` with `eye_height`, `lights`, `drive`, paints. **The .glb and `vehicles.json` in one commit.**
 8. A model test next to the others if the vehicle has its own rules (`GolfMk2Tests`, `AmphibiousModelTests`).
 9. Update `docs/glass.md` pane table and this file's node table.
+10. **Seat-panel outline**: `python3 scripts/make_vehicle_outlines.py [--only <id>]` projects the model onto the ground plane and writes the top-view silhouette (20 to 60 points, vehicle-frame metres, rotors/barrels/steering wheel left out) to `godot/shooter/data/vehicle_outlines.json`. Run it whenever the hull changes (a vehicle without an entry is drawn as its hit box; `SeatSwitchTests` fails for a vehicle with seats and no outline, or a seat outside its outline). Only the 2D silhouette is committed, like the glass-pane outlines in the facts files; no mesh data.
 
 ## Definition of done (both paths)
 
@@ -137,6 +138,7 @@ One standardization step per pack prefab: **`scripts/standardize_vehicle.py`**, 
 - [ ] Contract A met: nodes and frames, interior, seats (eye, cover, views once they exist), panes (kind once it exists), box fit, `model_scale` 1 / `model_offset` 0 / `model_yaw_deg` 0, material names, colour variants.
 - [ ] .glb (public, or private under `assets-private/synty/glb/<pack>/` with a manifest row) and `vehicles.json` in one commit; the facts file / the script committed; `make release-check` covers a private model (it fails when a `pack:` model or skin that `vehicles.json` names has no manifest row, file or entry in the pack zip).
 - [ ] Per-vehicle test and `VehicleTypesTests`, `GlassTests`, `HeadlightsTests` green; `docs/glass.md` and the node table updated.
+- [ ] Outline regenerated (`scripts/make_vehicle_outlines.py`) when the hull changed; every seat inside it (`SeatSwitchTests`).
 - [ ] Manual pass on the full village map (section 13, item 6).
 
 ## Reference (sections 0 to 13)
