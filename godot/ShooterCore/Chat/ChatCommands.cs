@@ -5,8 +5,8 @@ public enum ChatArgKind { Int, Choice, Time, Player, IntOrChoice }
 /// <summary>One argument of a chat command. <see cref="Min"/> and <see cref="Max"/> bound an <see cref="ChatArgKind.Int"/>.</summary>
 public sealed record ChatArg(string Name, ChatArgKind Kind, bool Required = true, int Min = 0, int Max = 0);
 
-/// <summary>A slash command the chat knows. The same table drives the server's parser and the client's autocomplete.</summary>
-public sealed record ChatCommand(string Name, string Summary, IReadOnlyList<ChatArg> Args, bool AdminOnly = true)
+/// <summary>A slash command the chat knows. The same table drives the server's parser and the client's autocomplete. A <see cref="ClientSide"/> command is run by the client that typed it and never reaches the server.</summary>
+public sealed record ChatCommand(string Name, string Summary, IReadOnlyList<ChatArg> Args, bool AdminOnly = true, bool ClientSide = false)
 {
     /// <summary>"/bots [count]": required arguments in angle brackets, optional ones in square brackets.</summary>
     public string Usage => "/" + Name + string.Concat(Args.Select(a => a.Required ? $" <{a.Name}>" : $" [{a.Name}]"));
@@ -87,6 +87,7 @@ public static class ChatCommands
     public static readonly IReadOnlyList<ChatCommand> All = new ChatCommand[]
     {
         new("help", "List the commands, or explain one", new[] { new ChatArg("command", ChatArgKind.Choice, false) }, AdminOnly: false),
+        new("fps", "Show or hide the FPS counter in the top right (remembered in settings)", Array.Empty<ChatArg>(), AdminOnly: false, ClientSide: true),
         new("bots", "Set how many bots play, or show the count. Takes effect at once", new[] { new ChatArg("count", ChatArgKind.Int, false, 0, MaxBots) }),
         new("spawn", "Spawn a vehicle in front of you", new[] { new ChatArg("vehicle", ChatArgKind.Choice) }),
         new("sandbox", "Turn sandbox mode on or off for a player (name or #id), or flip it", new[] { new ChatArg("player", ChatArgKind.Player), new ChatArg("state", ChatArgKind.Choice, false) }),

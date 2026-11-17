@@ -29,6 +29,7 @@ public partial class Hud
         if (ControlMode == on) return;
         ControlMode = on;
         _root.Visible = !on;
+        ApplyFps();
         _feedBox.Scale = on ? new Vector2(ShooterTheme.FeedCompactScale, ShooterTheme.FeedCompactScale) : Vector2.One;
         _feedShown = (-1, -1); // redraw the feed from the other list
     }

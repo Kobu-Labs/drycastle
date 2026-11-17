@@ -126,6 +126,7 @@ public partial class Hud : CanvasLayer
         BuildSeats(); // the vehicle seat schematic above the vehicle readout
         BuildTop();
         BuildFeed();
+        BuildFps(); // after the feed: it moves the feed clear of the chip
         BuildProtectionChip();
         BuildRespawn();
         BuildBlood(); // above the scrim
@@ -155,6 +156,7 @@ public partial class Hud : CanvasLayer
         _seatsDef = null; // the seat hint names the (maybe rebound) keys: rebuilt on the next frame
         foreach (var tri in _indTri) tri.Color = ShooterTheme.Danger; // read at build time otherwise; the palette may have switched
         ApplyCrosshairVisibility();
+        ApplyFps();
     }
 
     bool _crossCovered;
@@ -671,6 +673,7 @@ public partial class Hud : CanvasLayer
         if (_huntUntil > 0) UpdateHuntShot(now);
         for (var i = 0; i < Indicators; i++) UpdateIndicator(i, now);
         UpdateFeed(now);
+        UpdateFps(now);
         UpdateCrosshair();
         UpdateBreath();
         UpdateTacticalMap();
