@@ -300,11 +300,14 @@ public partial class ServerCar : CharacterBody3D
     public void StepDrive(in DriveInput input, float dt)
     {
         var before = Drive;
-        DriveModel.Step(ref Drive, Def, input, dt, DriveWorld!, TowEffectNow());
+        DriveModel.Step(ref Drive, Def, Immobilised ? DriveInput.Held : input, dt, DriveWorld!, TowEffectNow());
         if (Towing != null && !StepTowed(dt)) TowModel.Hold(ref Drive, before); // the trailer is blocked: the tractor stops where it was
         DriveImpact = MathF.Max(DriveImpact, Drive.Impact);
         FollowDrive();
     }
+
+    /// <summary>The brakes are on and the driver's keys ignored (a Scud truck while its rack moves): every drive step is <see cref="DriveInput.Held"/>. The driver's client does the same from the launcher's state.</summary>
+    public bool Immobilised;
 
     /// <summary>Over a water body (the amphibious transport): the origin rides its surface and gravity does not apply.</summary>
     public bool Afloat;

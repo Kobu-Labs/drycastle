@@ -157,7 +157,9 @@ public partial class NetClient
     }
 
     /// <summary>The driver's controls of one input, as the server will read them: hands off while a killstreak has the keys.</summary>
-    DriveInput DriverInput(in NetInput ni) => DriveInput.FromNet(ni, handsOff: Mode.RemoteViewOwnsScreen);
+    DriveInput DriverInput(in NetInput ni) =>
+        _drive != null && _scudTrucks.TryGetValue(_drive.CarId, out var truck) && ScudRules.Immobilises(truck.Msg.State) ? DriveInput.Held // a Scud truck while its rack moves: the brakes are on, as the server steps it
+        : DriveInput.FromNet(ni, handsOff: Mode.RemoteViewOwnsScreen);
 
     /// <summary>On the input tick: the prediction steps with the input that was just sent.</summary>
     void PredictDrive(in NetInput ni, float dt)

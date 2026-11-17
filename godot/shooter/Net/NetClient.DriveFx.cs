@@ -20,9 +20,9 @@ public partial class NetClient
         public Node3D? Hull;
         Node3D _root = null!;
         Node3D? _propeller, _wakeBow, _wakeSternL, _wakeSternR;
-        readonly Node3D?[] _wheels = new Node3D?[4];
-        readonly Node3D?[] _steer = new Node3D?[2];
-        float _wheelRadius = 0.4f, _roll, _turn;
+        /// <summary>The model's wheels, whatever their count (<see cref="VehicleWheels"/>); null for a model without, or one that turns its own (the Scud truck).</summary>
+        VehicleWheels? _wheels;
+        float _turn;
         CpuParticles3D? _wake, _spray;
         bool _started, _wasAfloat;
 
@@ -31,7 +31,7 @@ public partial class NetClient
         /// <summary>Afloat the wheels hang in the water and turn with it at this share of the speed.</summary>
         const float WaterWheelShare = 0.3f;
 
-        public static DriveNodes? Find(Node3D root)
+        public static DriveNodes? Find(Node3D root, VehicleDef def)
         {
             var n = new DriveNodes
             {
@@ -39,12 +39,8 @@ public partial class NetClient
                 _wakeBow = root.FindChild("wake_bow", true, false) as Node3D,
                 _wakeSternL = root.FindChild("wake_stern_l", true, false) as Node3D, _wakeSternR = root.FindChild("wake_stern_r", true, false) as Node3D,
             };
-            var names = new[] { "wheel_fl", "wheel_fr", "wheel_rl", "wheel_rr" };
-            for (var i = 0; i < 4; i++) n._wheels[i] = root.FindChild(names[i], true, false) as Node3D;
-            n._steer[0] = root.FindChild("wheel_fl_steer", true, false) as Node3D;
-            n._steer[1] = root.FindChild("wheel_fr_steer", true, false) as Node3D;
-            if (n.Hull == null && n._wheels[0] == null && n._propeller == null) return null;
-            if (n._wheels[2] is { } rear && rear.Position.Y > 0.05f) n._wheelRadius = rear.Position.Y; // it stands on the ground: its centre is its radius up
+            if (def.Launcher == null) n._wheels = VehicleWheels.Find(root, def.Drive!.Body.WheelLockDeg * FlightMath.Deg2Rad); // the Scud truck turns its eight itself (NetClient.Scud)
+            if (n.Hull == null && n._wheels == null && n._propeller == null) return null;
             return n;
         }
 
@@ -58,11 +54,9 @@ public partial class NetClient
             if (Hull != null) Hull.Rotation = new Vector3(pose.BodyPitch, 0, pose.BodyRoll);
 
             // wheels: rolling forward (-Z) turns them backwards about X; the front pair take the angle the circle they steer needs
-            _roll = Mathf.Wrap(_roll - s.Speed * (s.Afloat ? WaterWheelShare : 1f) / _wheelRadius * dt, -Mathf.Pi, Mathf.Pi);
-            foreach (var w in _wheels) if (w != null) w.Rotation = new Vector3(_roll, 0, 0);
             var lockAngle = d.Body.WheelLockDeg * FlightMath.Deg2Rad;
             var angle = -s.Steer * Mathf.Min(lockAngle, Mathf.Atan(d.Wheelbase / DriveModel.TurnRadiusAt(def, s.Speed)));
-            foreach (var p in _steer) if (p != null) p.Rotation = new Vector3(0, angle, 0);
+            _wheels?.StepDriven(s.Speed * (s.Afloat ? WaterWheelShare : 1f), angle, dt);
 
             // propeller: it turns only in the water, slowly at idle, with the throttle ahead and astern
             if (_propeller != null && s.Afloat)

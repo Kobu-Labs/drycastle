@@ -402,7 +402,7 @@ def update_manifest(cfg, private, entries):
 
 
 def entry_fields(cfg, info, facts, has_drive=True):
-    """The model-owned keys of the vehicle's entry, as (key path, text). `drive.*` only for a type that has a drive block (a bike or quad has none until #295)."""
+    """The model-owned keys of the vehicle's entry, as (key path, text). `drive.*` only for a type that has a drive block (every ground vehicle with a driver has one, ADR 0036)."""
     ids = [f"pack:{cfg['pack']}/{cfg['id']}_{s['id']}" for s in cfg["skins"]]
     seats = []
     for k, s in info["seats"].items():

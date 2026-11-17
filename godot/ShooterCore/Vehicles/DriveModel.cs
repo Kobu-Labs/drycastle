@@ -65,6 +65,9 @@ public struct DriveInput
 
     /// <summary>Nobody at the wheel, or a driver whose inputs are not arriving: it coasts.</summary>
     public static DriveInput None => default;
+
+    /// <summary>The brakes are on whatever the driver presses (a Scud truck while its rack moves): no throttle, no steering, the handbrake.</summary>
+    public static DriveInput Held => new() { Handbrake = true };
 }
 
 /// <summary>Where a move ended, and the surface that stopped it (unit normal, pointing away from the surface).</summary>
@@ -105,6 +108,8 @@ public static class DriveModel
     const float MaxTilt = 0.6f;
     /// <summary>A wheel over a drop hangs: it pulls the body down no further than this below the highest wheel, metres.</summary>
     const float WheelDroop = 1.2f;
+    /// <summary>... or this share of the wheelbase, whichever is more: a slope of this much (rise over run) is followed whole however long the vehicle is.</summary>
+    const float LongDroop = 0.35f;
     /// <summary>Falling, it goes afloat once the wheels are within this of the surface, metres.</summary>
     const float SurfaceTouch = 0.05f;
     /// <summary>Below these the vehicle is taken as exactly still, so nothing creeps.</summary>
@@ -310,6 +315,7 @@ public static class DriveModel
         public float Step(VehicleDriveDef d, float stood, float pitch, float roll)
         {
             var ahead = MathF.Tan(pitch) * d.Wheelbase / 2f; var side = MathF.Tan(roll) * d.Track / 2f;
+            stood -= MathF.Tan(pitch) * d.AxleCentre; // the plane's height between the axles, which is not under the origin on every vehicle
             return MathF.Max(MathF.Max(FrontLeft - (stood + ahead - side), FrontRight - (stood + ahead + side)),
                 MathF.Max(RearLeft - (stood - ahead - side), RearRight - (stood - ahead + side)));
         }
@@ -323,6 +329,9 @@ public static class DriveModel
     {
         var (sy, cy) = MathF.SinCos(yaw);
         var ahead = new Vector3(-sy, 0, -cy) * (d.Wheelbase / 2f); var side = new Vector3(cy, 0, -sy) * (d.Track / 2f);
+        pos -= new Vector3(-sy, 0, -cy) * d.AxleCentre; // the point between the axles (the model's z, positive: behind the origin)
+        // the world looks for ground from a step above the point it is given: an axle far from the middle is that much higher up a slope, so a long vehicle asks from higher
+        pos.Y += MathF.Max(0f, d.Wheelbase / 2f * LongDroop * 2f - 1f);
         var fl = world.GroundY(pos + ahead - side);
         var fr = world.GroundY(pos + ahead + side);
         var rl = world.GroundY(pos - ahead - side);
@@ -330,11 +339,15 @@ public static class DriveModel
         var highest = MathF.Max(MathF.Max(fl, fr), MathF.Max(rl, rr));
         wheels = default;
         if (float.IsNegativeInfinity(highest)) return false;
-        fl = MathF.Max(fl, highest - WheelDroop); fr = MathF.Max(fr, highest - WheelDroop);
-        rl = MathF.Max(rl, highest - WheelDroop); rr = MathF.Max(rr, highest - WheelDroop);
-        wheels = new Wheels(fl, fr, rl, rr, (fl + fr + rl + rr) / 4f,
-            Math.Clamp(MathF.Atan2((fl + fr - rl - rr) / 2f, d.Wheelbase), -MaxTilt, MaxTilt),
-            Math.Clamp(MathF.Atan2((fr + rr - fl - rl) / 2f, d.Track), -MaxTilt, MaxTilt));
+        // a long vehicle's axles are further apart in height on the same slope: its wheels may hang by that much more (a bus on a dyke lies on it)
+        var droop = MathF.Max(WheelDroop, d.Wheelbase * LongDroop);
+        fl = MathF.Max(fl, highest - droop); fr = MathF.Max(fr, highest - droop);
+        rl = MathF.Max(rl, highest - droop); rr = MathF.Max(rr, highest - droop);
+        var pitch = Math.Clamp(MathF.Atan2((fl + fr - rl - rr) / 2f, d.Wheelbase), -MaxTilt, MaxTilt);
+        // the origin stands on the wheels' plane: ahead of the point between the axles it is higher on a nose-up slope
+        wheels = new Wheels(fl, fr, rl, rr, (fl + fr + rl + rr) / 4f + MathF.Tan(pitch) * d.AxleCentre,
+            pitch,
+            d.Track > 0 ? Math.Clamp(MathF.Atan2((fr + rr - fl - rl) / 2f, d.Track), -MaxTilt, MaxTilt) : 0f); // a single-track vehicle stands upright across the slope
         return true;
     }
 

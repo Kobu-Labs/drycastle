@@ -127,6 +127,7 @@ public partial class NetServer
             if (car.Def.Launcher == null) continue;
             if (car.Destroyed)
             {
+                car.Immobilised = false;
                 if (_scudRigs.Remove(car.Id)) BroadcastEvent(EventKind.ScudState, ScudCodec.Encode(new ScudStateMsg(car.Id, ScudLauncherState.Stowed, 0, float.PositiveInfinity, 0, 0, null, 0, 0)));
                 continue;
             }
@@ -135,6 +136,7 @@ public partial class NetServer
             var order = rig.Launcher.Tick(dt, crew, N(car.GlobalPosition), CartSenseOf(car, rig));
             if (order.Launch) LaunchScud(car, order);
             if (order.TakeCart != 0) TakeRocketFromCart(order.TakeCart);
+            car.Immobilised = rig.Launcher.Immobilised; // a driven truck: every drive step is held (ServerCar.StepDrive), as its driver's client predicts it
             if (rig.Launcher.Immobilised && OccupantAt(car, 0) is { } driver)
             {
                 driver.Throttle = 0; driver.Steer = 0; driver.Handbrake = true; // brakes on, the driver's input ignored while the rack moves
