@@ -191,6 +191,15 @@ public sealed partial class MapLoader
         return lights;
     }
 
+    /// <summary>The placed objects of one asset as they stand now: id and transform in map space, in id order.</summary>
+    public List<(string Id, Transform3D Transform)> ObjectsOf(string asset)
+    {
+        var found = new List<(string, Transform3D)>();
+        foreach (var (id, node) in _objectNodes.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            if (GodotObject.IsInstanceValid(node) && _objectAssets.TryGetValue(id, out var a) && a == asset) found.Add((id, node.Transform));
+        return found;
+    }
+
     /// <summary>Where the horns of the placed megaphone poles (assets "prim:pole_megaphone_*") are in map space: about 79% up the pole, where the generator mounts them.</summary>
     public List<Vector3> MegaphoneSpeakers()
     {

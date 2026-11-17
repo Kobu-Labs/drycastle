@@ -14,6 +14,7 @@ public sealed class PlantationFile : IVersioned
     public double HighSeconds { get; set; } = 120;
     public NauseaData Nausea { get; set; } = new();
     public HighViewData View { get; set; } = new();
+    public ReflectorData Reflectors { get; set; } = new();
 
     public static PlantationFile Parse(string json) => DataFile.Parse<PlantationFile>(json, "plantation.json").Validate();
 
@@ -46,6 +47,10 @@ public sealed class PlantationFile : IVersioned
         }
 
         Pos(HoldSeconds, "hold_seconds"); Pos(HighSeconds, "high_seconds");
+        var rf = Reflectors;
+        if (rf.Head.Length != 3 || rf.Lens.Length != 2) throw new DataFileException("plantation.json: reflectors.head needs 3 numbers and lens 2");
+        Pos(rf.RangeM, "reflectors.range_m"); Pos(rf.AngleDeg, "reflectors.angle_deg"); NonNeg(rf.Energy, "reflectors.energy"); NonNeg(rf.LensEnergy, "reflectors.lens_energy");
+        Pos(rf.CullM, "reflectors.cull_m"); Pos(rf.Lens[0], "reflectors.lens"); Pos(rf.Lens[1], "reflectors.lens");
         var n = Nausea;
         Waves(n.Yaw, "nausea.yaw"); Waves(n.Pitch, "nausea.pitch"); Waves(n.Roll, "nausea.roll"); Waves(n.Fov, "nausea.fov");
         Pos(n.FadeS, "nausea.fade_s"); NonNeg(n.LagS, "nausea.lag_s"); Unit(n.ReducedScale, "nausea.reduced_scale");
@@ -171,4 +176,24 @@ public sealed class HighEyesData
     public string PupilColour { get; set; } = "#0a0a0c";
     public double PupilWidth { get; set; } = 0.38;
     public double PupilHeight { get; set; } = 0.34;
+}
+
+/// <summary>
+/// The reflector stands of a plantation: every placed object of <see cref="Asset"/> shines a real spot light (the kind a vehicle's headlamp is: no shadow) from its lamp bar, on by itself at night
+/// (the street lamps' curve). <see cref="Head"/> is the lamp bar in the model's own frame, metres (x right, y up, z ahead: the model shines along +Z); <see cref="PitchDeg"/> tips the beam (negative: down).
+/// <see cref="Lens"/> is the width and height of the lit bar drawn in front of the lamps, its <see cref="LensEnergy"/> above the bloom threshold of 2 on purpose (ADR 0030). The light runs only
+/// within <see cref="CullM"/> of the camera.
+/// </summary>
+public sealed class ReflectorData
+{
+    public string Asset { get; set; } = "pack:synty-gang-warfare/SM_Prop_Light_Portable_01";
+    public double[] Head { get; set; } = { 0, 1.99, 0.07 };
+    public double PitchDeg { get; set; } = -24;
+    public double RangeM { get; set; } = 18;
+    public double AngleDeg { get; set; } = 40;
+    public double Energy { get; set; } = 5;
+    public string Colour { get; set; } = "#fff1d2";
+    public double[] Lens { get; set; } = { 0.54, 0.11 };
+    public double LensEnergy { get; set; } = 7;
+    public double CullM { get; set; } = 150;
 }
