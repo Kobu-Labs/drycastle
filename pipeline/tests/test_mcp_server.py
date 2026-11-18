@@ -898,6 +898,48 @@ def test_a_pole_needs_no_parcel(env):
     assert '"objects"' not in settings.edits_path.read_text()  # only written when there are some
 
 
+def test_object_z_and_solid_round_trip(env):
+    tools, settings, _ = env
+    far = [OX + 900, OY + 900]
+    plain = tools.place_object("prim:slab", position=far)["entry"]
+    assert "z" not in plain and "solid" not in plain  # defaults are not written
+
+    placed = tools.place_object("prim:slab", position=far, z=212.5, solid=False)
+    assert placed["entry"]["z"] == 212.5 and placed["entry"]["solid"] is False
+    oid = placed["id"]
+    on_disk = next(o for o in load_edits(settings.edits_path).objects if o["id"] == oid)
+    assert on_disk["z"] == 212.5 and on_disk["solid"] is False
+    canonical(settings)
+
+    assert tools.move_object(oid, z=213.0)["entry"]["z"] == 213.0
+    cleared = tools.move_object(oid, clear_z=True)["entry"]
+    assert "z" not in cleared and cleared["solid"] is False  # solid kept
+    back = tools.move_object(oid, solid=True)["entry"]
+    assert "solid" not in back  # true is the default: the key goes away
+    assert tools.place_object("prim:slab", position=far, solid=True)["entry"].get("solid") is None
+    canonical(settings)
+
+
+def test_object_z_and_solid_are_validated(env):
+    tools, settings, _ = env
+    far = [OX + 900, OY + 900]
+    oid = tools.place_object("prim:slab", position=far)["id"]
+    for bad in (float("nan"), float("inf"), "3", True):
+        with pytest.raises(ToolError, match="z must be a number"):
+            tools.place_object("prim:slab", position=far, z=bad)
+        with pytest.raises(ToolError, match="z must be a number"):
+            tools.move_object(oid, z=bad)
+    with pytest.raises(ToolError, match="solid must be true or false"):
+        tools.place_object("prim:slab", position=far, solid="no")
+    with pytest.raises(ToolError, match="solid must be true or false"):
+        tools.move_object(oid, solid=0)
+    with pytest.raises(ToolError, match="not both"):
+        tools.move_object(oid, z=1.0, clear_z=True)
+    with pytest.raises(ToolError, match="nothing to change"):
+        tools.move_object(oid)
+    assert [o["id"] for o in load_edits(settings.edits_path).objects] == [oid]  # nothing was written by the refusals
+
+
 def test_an_anchor_needs_a_parcel_but_an_exact_position_does_not(env):
     tools, _, _ = env
     with pytest.raises(ToolError, match="exact `position`"):
