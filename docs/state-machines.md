@@ -7,7 +7,7 @@ How to add or change one: see `godot/ShooterCore/Fsm/StateMachine.cs`. "From any
 
 ## Animal.Behaviour
 
-What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot, lie dead until the corpse is removed.
+What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot (a vanishing species turns immune and is teleported instead), lie dead until the corpse is removed.
 
 ```mermaid
 stateDiagram-v2
@@ -17,30 +17,36 @@ stateDiagram-v2
     Idle --> Sit
     Idle --> Bark
     Idle --> Flee
+    Idle --> Vanish
     Idle --> Carried
     Idle --> Thrown
     Idle --> Dead
     Eat --> Idle
     Eat --> Flee
+    Eat --> Vanish
     Eat --> Carried
     Eat --> Thrown
     Eat --> Dead
     Sit --> Idle
     Sit --> Flee
+    Sit --> Vanish
     Sit --> Carried
     Sit --> Thrown
     Sit --> Dead
     Bark --> Idle
     Bark --> Flee
+    Bark --> Vanish
     Bark --> Carried
     Bark --> Thrown
     Bark --> Dead
     Walk --> Idle
     Walk --> Flee
+    Walk --> Vanish
     Walk --> Carried
     Walk --> Thrown
     Walk --> Dead
     Flee --> Idle
+    Flee --> Vanish
     Flee --> Carried
     Flee --> Thrown
     Flee --> Dead
@@ -50,8 +56,10 @@ stateDiagram-v2
     Thrown --> Dead
     Down --> Flee
     Down --> Idle
+    Down --> Vanish
     Down --> Thrown
     Down --> Dead
+    Vanish --> Idle
     Dead --> [*]
 ```
 
@@ -65,6 +73,7 @@ stateDiagram-v2
 - **Carried**: A Thief of the Thieves event holds it (no clock: it is moved by the Thief, MoveCarried, and does nothing itself). Let go (Release) it stands; one put down outside its Pen walks home over open ground until it is inside again. Still a hit target: any hit that deals damage kills it.
 - **Thrown**: A vehicle ran it over and it survived (Throw): it flies on the arc the vehicle gave it, then rolls on along the ground with part of that speed; no clock. Coming to rest puts it Down. Still a hit target; another vehicle only changes the arc.
 - **Down**: Lies knocked down where it landed (clock: knockdown_seconds), then gets up: Flee from where the vehicle was (a species that does not flee stands). Run over again it is Thrown again.
+- **Vanish**: A species with vanish_seconds is startled (threat, non-lethal hit, herd alarm, getting up after a run-over) and does not run: immune for vanish_seconds (clock; no damage, no throw, no carry, not a hit target), the client spirals rainbow round it, then the Vanished event lets the keeper pick a place at least vanish_min_m away and Teleport puts it there Idle. Only Idle follows; never Dead, Thrown or Carried. No startle for vanish_grace_seconds after it reappears.
 
 ## App.Phase
 
