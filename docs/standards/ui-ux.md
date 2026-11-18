@@ -29,6 +29,12 @@ Owner's rule: *"This game follows AAA standards; UI and menus come polished from
 - Works from 1280×720 to 3840×2160, 16:9 to 21:9; UI scale setting 75-150 %.
 - Body text ≥16 px at 1080p; contrast ≥4.5:1 text, ≥3:1 icons. Never colour-only; colour-blind-safe option; reduce-motion option.
 
+### Collection logs
+- A collection log (Hunter's Log, Mineral Log) is the one place the UI is dressed in a material instead of the flat HUD surfaces: an opaque board with a skin of its own (lodge: planks, brass, parchment, antlers; stone: masonry, iron, slate, crystals). This is the named exception to "UI art matches the flat low-poly map"; the art stays flat-shaded (a few tones, no photo textures).
+- Every log is built on `LogFrame` with a `LogSkin`: the skin's tokens and its Theme live in `LogSkin.cs`, the screen's own code has no colours. A new log adds a skin, not a frame.
+- Text sits only on a plate, a paper or the plain board colour, with the contrast of section 4. Rarity, "found", "yours" and "selected" are always a shape or words as well as a colour (a medal and the tier's name, a tick, "(you)", a thicker frame).
+- The states of section 3 hold on a skin too: a plaque lightens on hover, lightens more with a thicker rim when pressed, and gets a ring when focused.
+
 ## 5. Settings
 - Groups: Graphics / Audio / Controls / Gameplay / Accessibility, one config file, live preview, Apply/Revert, auto-revert for risky video changes.
 - Every list, table and form has designed loading, empty and error states.

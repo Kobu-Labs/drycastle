@@ -9,10 +9,15 @@ public enum AgoUnit { Now, Minutes, Hours, Days, Date }
 public enum TileLook { Outline, Filled }
 
 /// <summary>A Life List tile (<see cref="LifeEntry"/>) as the screen draws it. <see cref="Hidden"/>: the blurred blob; <see cref="Look"/>: the animal outlined until hunted, filled once.</summary>
-public readonly record struct LifeTileModel(string Species, bool Hidden, TileLook Look, float? BestKg, float? LongestM, long CaughtAtUnix, bool Mystery)
+public readonly record struct LifeTileModel(string Species, bool Hidden, TileLook Look, float? BestKg, float? LongestM, long CaughtAtUnix, bool Mystery, HuntTier Tier = HuntTier.Common)
 {
-    public static LifeTileModel From(LifeEntry e) =>
-        new(e.Species, e.Hidden, e.Caught ? TileLook.Filled : TileLook.Outline, e.Hidden ? null : e.BestKg, e.Hidden ? null : e.LongestM, e.Hidden ? 0 : e.CaughtAtUnix, e.Hidden || Mysteries.Is(e.Species));
+    /// <summary>The rim's tier is only for a hunted index species: a mystery tile is framed in its creature's own style, a hidden one says nothing.</summary>
+    public static LifeTileModel From(LifeEntry e)
+    {
+        var mystery = e.Hidden || Mysteries.Is(e.Species);
+        return new(e.Species, e.Hidden, e.Caught ? TileLook.Filled : TileLook.Outline, e.Hidden ? null : e.BestKg, e.Hidden ? null : e.LongestM, e.Hidden ? 0 : e.CaughtAtUnix, mystery,
+            mystery || !e.Caught ? HuntTier.Common : e.Tier);
+    }
 
     public bool Caught => Look == TileLook.Filled;
 }

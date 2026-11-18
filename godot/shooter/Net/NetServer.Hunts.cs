@@ -61,7 +61,7 @@ public partial class NetServer
         if (_huntLoad == null)
         {
             if (_elapsed < _huntRetryAt) return;
-            if (Progression == null) { _huntBook = new HuntBook(); return; } // no store: every player is a guest, nothing is logged
+            if (Progression == null) { _huntBook = new HuntBook(HuntTierOf); return; } // no store: every player is a guest, nothing is logged
             _huntLoad = Progression.Hunts.GetAllAsync();
             return;
         }
@@ -74,7 +74,7 @@ public partial class NetServer
             return;
         }
         var rows = _huntLoad.Result;
-        var book = HuntBook.From(rows);
+        var book = HuntBook.From(rows, HuntTierOf);
         _huntLoad = null;
         _huntBook = book;
         foreach (var c in _clients.Values)
@@ -83,6 +83,9 @@ public partial class NetServer
         _huntsEarly.Clear();
         GD.Print($"server: hunter's log loaded, {rows.Count} hunts replayed");
     }
+
+    /// <summary>The rarity of a hunt's weight by the ranges of animals.json as they are now (a changed range re-tiers the old hunts at the next start).</summary>
+    HuntTier HuntTierOf(HuntRecord h) => HuntRarity.Of(AnimalData, h);
 
     /// <summary>The player id a viewer is known by in the log: their stored profile's, 0 for a guest.</summary>
     static long ViewerId(Client c) => c.Profile is { Persist: true } p ? p.DbId : 0;

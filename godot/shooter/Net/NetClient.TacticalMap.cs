@@ -13,7 +13,7 @@ public partial class NetClient
 
     /// <summary>Who wants the cursor now; the shell asks it every frame (<c>WantsFreeMouse</c> in Shooter.cs should read <see cref="WantsFreeMouse"/> instead of repeating the list).</summary>
     public bool WantsFreeMouse => MouseOwners.WantsFreeMouse;
-    MouseOwners MouseOwners => new(Dead, ChatOpen, EquipmentOpen, TacticalMapOpen, ChooserFreesMouse, HuntersLogOpen);
+    MouseOwners MouseOwners => new(Dead, ChatOpen, EquipmentOpen, TacticalMapOpen, ChooserFreesMouse, HuntersLogOpen, MineralLogOpen);
 
     /// <summary>
     /// Per frame. Sandbox: the open map frees the mouse (a cursor to pick the teleport point with; looking and firing stop meanwhile) and takes it

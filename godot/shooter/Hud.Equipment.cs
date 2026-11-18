@@ -35,7 +35,7 @@ public partial class Hud
         switch (OverlayArbiter.Key(Overlay.Equipment, _equipment.IsOpen, Overlays(menuOpen, chooserOpen)))
         {
             case OverlayKeyVerdict.Close: _equipment.Close(); return true;
-            case OverlayKeyVerdict.Open: _tacticalMap.Close(); CloseHuntersLog(); _equipment.Open(); return true; // the two overlays never show together
+            case OverlayKeyVerdict.Open: _tacticalMap.Close(); CloseHuntersLog(); CloseMineralLog(); _equipment.Open(); return true; // the two overlays never show together
             default: return false;
         }
     }

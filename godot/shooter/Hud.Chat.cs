@@ -37,6 +37,7 @@ public partial class Hud
     public void OpenChat(string prefill = "")
     {
         CloseHuntersLog();
+        CloseMineralLog();
         _chat.Open(prefill);
     }
 

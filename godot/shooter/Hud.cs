@@ -679,6 +679,7 @@ public partial class Hud : CanvasLayer
         UpdateTacticalMap();
         UpdateEquipment();
         UpdateHuntersLog();
+        UpdateMineralLog();
         var want = (Input.IsActionPressed("scoreboard") && !ChatOpen) || _phase == MatchPhase.Ending; // Tab completes in the chat box
         if (want != _boardShown || (want && _boardDirty)) UpdateBoard(want);
     }
