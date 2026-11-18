@@ -145,6 +145,19 @@ public sealed class WildlifeKeeper : IAnimalHits
         return true;
     }
 
+    /// <summary>
+    /// An extra animal of a rare species at <paramref name="at"/> (the admin's "/unicorn"): no slot, so it does not come back when killed and does not change the slot's countdown.
+    /// False when the species is unknown, the point has no ground or room, or the map is full.
+    /// </summary>
+    public bool SpawnExtra(string id, Vector3 at, IAnimalWorld ground)
+    {
+        var species = _animals.IndexOf(id);
+        if (species < 0 || _byHit.Count >= _cfg.MaxAnimals) return false;
+        var radius = _animals.Animals[species].BodyRadiusOf(0);
+        if (ground.GroundY(at.X, at.Z) == null || !ground.Fits(at.X, at.Z, radius)) return false;
+        return SpawnAt(species, at, ground, null) == Spawned.Yes;
+    }
+
     /// <summary>The animal of a rare slot died or went: the slot counts down to a new one.</summary>
     static void FreeSlot(Wild wild)
     {
