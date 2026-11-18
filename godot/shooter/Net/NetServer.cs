@@ -26,6 +26,8 @@ public partial class NetServer : Node
         public bool BotLauncher;
         public ushort Id;
         public string Name = "";
+        /// <summary>When this client's last performance report was taken (<see cref="OnClientReport"/>): one per few seconds, the rest are dropped.</summary>
+        public double ClientReportAt = -1e9;
         /// <summary>Where this connection is: connected (hello awaited), rejected, loading its profile, joined. <see cref="Joined"/> and <see cref="Loading"/> follow it.</summary>
         public readonly StateMachine<SessionPhase> Session = new(ConnectionPhases.Session);
         public SessionPhase Phase => Session.Current;
@@ -507,6 +509,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.SquadAssign } sq && c.Joined) OnSquadAssign(c, sq.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) OnHuntRequest(c, hq);
             else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) OnChatSend(c, cs.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.ClientReport } cr) { if (c.Joined) OnClientReport(c, cr.Payload); }
             else if (c.Joined) OnProfileMessage(c, m);
         }
         else if (c.Joined && d[0] == Wire.TRozhlasMic) OnRozhlasMic(c, d); // the set holder's voice (NetServer.RozhlasSet.cs)

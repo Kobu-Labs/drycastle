@@ -35,6 +35,25 @@ public partial class NetServer
         }
     }
 
+    /// <summary>
+    /// A client's performance numbers of its last period (<see cref="ClientReport"/>): they join this period's batch as <c>drycastle_client_*</c>, labelled with
+    /// the player and their graphics adapter, and <c>drycastle_client_scope_ms_per_s</c> per client scope. One per client per half period; a report that does
+    /// not decode is dropped. Nothing in the game reads them.
+    /// </summary>
+    void OnClientReport(Client c, byte[] payload)
+    {
+        if (_elapsed - c.ClientReportAt < ClientReport.PeriodSeconds / 2) return;
+        if (!ClientReport.TryDecode(payload, out var values, out var scopes, out var adapter, out _)) return;
+        c.ClientReportAt = _elapsed;
+        if (Metrics is not { } m) return;
+        var gpu = ClientReport.AdapterLabel(adapter);
+        m.Begin("drycastle_client", "player", c.Name, "gpu", gpu);
+        for (var i = 0; i < values.Length && i < ClientReport.Fields.Length; i++) m.Field(ClientReport.Fields[i], values[i]);
+        m.Field("server_rtt_ms", RttOf(c)).End();
+        for (var i = 0; i < scopes.Length && i < ClientProf.ScopeCount; i++)
+            m.Begin("drycastle_client_scope", "player", c.Name, "scope", ClientProf.Name(i)).Field("ms_per_s", scopes[i]).End();
+    }
+
     /// <summary>End of the report period: what was gathered goes to the store.</summary>
     void MetricsFlush()
     {

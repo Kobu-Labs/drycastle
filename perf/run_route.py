@@ -8,7 +8,7 @@ Starts the client offline (`--role client --offline --perf-route`) in a 1920x108
 Usage: run_route.py --variants base,msaa0,noshadow,mobile [--views 48] [--dwell 1.5] [--gpu nvidia|intel]
 GPU choice on this hybrid laptop: --gpu nvidia sets the PRIME offload variables, --gpu intel leaves the iGPU.
 """
-import argparse, json, os, subprocess, sys, time
+import argparse, json, os, shutil, statistics, subprocess, sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import *
@@ -18,6 +18,11 @@ VARIANTS = {
     "msaa0": ["--perf-msaa", "0"], "msaa2": ["--perf-msaa", "2"], "msaa4": ["--perf-msaa", "4"], "msaa8": ["--perf-msaa", "8"],
     "noshadow": ["--perf-noshadow"], "shadow100": ["--perf-shadow-dist", "100"], "shadow60": ["--perf-shadow-dist", "60"], "shadow40": ["--perf-shadow-dist", "40"],
     "mobile": ["--perf-msaa", "0"], "compat": ["--perf-msaa", "0"],
+    # what a part of the picture costs: the frame without it (PerfRoute --perf-hide), and the pixels against the geometry (--perf-scale)
+    "hide-trees": ["--perf-hide", "trees"], "hide-meadow": ["--perf-hide", "meadow"], "hide-clutter": ["--perf-hide", "clutter"], "hide-crops": ["--perf-hide", "crops"],
+    "hide-objects": ["--perf-hide", "objects"], "hide-terrain": ["--perf-hide", "terrain"], "hide-veg": ["--perf-hide", "trees,meadow,clutter,crops"],
+    "hide-all": ["--perf-hide", "trees,meadow,clutter,crops,objects,terrain"],
+    "noglow": ["--perf-noglow"], "nofog": ["--perf-nofog"], "scale50": ["--perf-scale", "0.5"], "scale75": ["--perf-scale", "0.75"],
 }
 RENDERER = {"mobile": ["--rendering-method", "mobile"], "compat": ["--rendering-method", "gl_compatibility"]}
 
@@ -41,7 +46,7 @@ def main():
     a = ap.parse_args()
     for v in [x for _ in range(a.repeat) for x in a.variants.split(",")]:
         d = out_dir(f"{a.tag}-{a.gpu}{a.gpu_index if a.gpu_index >= 0 else ''}-{v}-{int(time.time()) % 100000}")
-        env = dict(os.environ)
+        env = window_env()
         if not a.keep_profile:  # a new install: no saved settings file, so game defaults (MSAA etc.) apply
             import tempfile
             env["XDG_DATA_HOME"] = tempfile.mkdtemp(prefix="drycastle-fresh-profile-")
@@ -50,6 +55,11 @@ def main():
         args = [GODOT, "--path", str(SHOOTER), "--resolution", a.res, "--windowed"] + (["--gpu-index", str(a.gpu_index)] if a.gpu_index >= 0 else []) + RENDERER.get(v, []) + ["--", "--role", "client", "--offline", "--map", a.map, "--perf-route", "--perf-out", str(d),
                 "--perf-views", str(a.views), "--perf-dwell", str(a.dwell), "--perf-tag", v] + VARIANTS.get(v, []) + (["--perf-blasts", str(a.blasts)] if a.blasts > 0 else []) + (["--perf-anchors", a.anchors] if a.anchors else []) + ["--perf-settle", str(a.settle)]
         log = open(d / "client.log", "w")
+        # the graphics card's own state through the run: a laptop caps its power when it is hot, and a capped run is not comparable with a free one
+        smi = None
+        if shutil.which("nvidia-smi") and a.gpu == "nvidia":
+            smi = subprocess.Popen(["nvidia-smi", "--query-gpu=power.draw,clocks.gr,utilization.gpu,temperature.gpu,clocks_event_reasons.active,pstate", "--format=csv,noheader,nounits", "-l", "1"],
+                                   stdout=open(d / "gpu-state.csv", "w"), stderr=subprocess.DEVNULL)
         t0 = time.time()
         p = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, text=True, env=env)
         smp = Sampler(p.pid); smp.start()
@@ -60,17 +70,26 @@ def main():
         except subprocess.TimeoutExpired:
             p.kill()
         smp.stop(); log.close()
+        gpu_state = {}
+        if smi:
+            smi.terminate(); smi.wait()
+            rows = [l.strip().split(", ") for l in open(d / "gpu-state.csv") if l.count(",") == 5]
+            busy = [r for r in rows if float(r[2]) > 50]  # the seconds the card was drawing the route
+            if busy:
+                reasons = sorted({r[4] for r in busy})
+                gpu_state = {"power_w": statistics.fmean(float(r[0]) for r in busy), "clock_mhz": statistics.fmean(float(r[1]) for r in busy), "temp_c": max(float(r[3]) for r in busy),
+                             "pstates": sorted({r[5] for r in busy}), "clock_reasons": reasons, "capped": any(int(x, 16) & 0x6c for x in reasons)}  # power cap, thermal slowdown
         smp.write_csv(d / "proc.csv")
         res = {}
         sp = d / "route-summary.json"
         if sp.exists():
             res = json.loads(sp.read_text())
         res.update({"variant": v, "gpu_env": a.gpu, "wall_to_ready_s": t_ready, "rss_mb": stats([r["rss_kb"] / 1024 for r in smp.rows]), "hwm_mb": max((r["hwm_kb"] for r in smp.rows), default=0) / 1024,
-                    "machine": machine()})
+                    "machine": machine(), "gpu_state": gpu_state})
         write_json(d / "result.json", res)
         fm = res.get("frame_ms", {})
         print(f'{v:10} adapter={res.get("adapter")} renderer={res.get("renderer")} msaa={res.get("msaa")} ready={t_ready and round(t_ready, 1)}s  fps={res.get("fps_mean", 0):.0f}  frame p50/p95/p99/max={fm.get("p50", 0):.1f}/{fm.get("p95", 0):.1f}/{fm.get("p99", 0):.1f}/{fm.get("max", 0):.1f} ms  '
-              f'draws p50/p90={res.get("draws", {}).get("p50")}/{res.get("draws", {}).get("p90")}  per-view draws p50/p90={res.get("per_view_mean_draws", {}).get("p50", 0):.0f}/{res.get("per_view_mean_draws", {}).get("p90", 0):.0f}  rss={res.get("hwm_mb", 0):.0f}MB vram={res.get("video_mem_mb", 0):.0f}MB -> {d}', flush=True)
+              f'draws p50/p90={res.get("draws", {}).get("p50")}/{res.get("draws", {}).get("p90")}  per-view draws p50/p90={res.get("per_view_mean_draws", {}).get("p50", 0):.0f}/{res.get("per_view_mean_draws", {}).get("p90", 0):.0f}  gpu={res.get("render_gpu_ms", {}).get("mean", 0):.1f}ms at {gpu_state.get("power_w", 0):.0f}W {gpu_state.get("clock_mhz", 0):.0f}MHz{" CAPPED" if gpu_state.get("capped") else ""}  rss={res.get("hwm_mb", 0):.0f}MB vram={res.get("video_mem_mb", 0):.0f}MB -> {d}', flush=True)
 
 
 if __name__ == "__main__":
