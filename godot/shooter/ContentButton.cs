@@ -75,7 +75,7 @@ public sealed partial class ContentButton : Button
     }
 }
 
-/// <summary>A name that opens that player's log: the accent, underlined (so it reads as a link without the colour); under the pointer (<see cref="Hot"/>) it gets a border like every other clickable.</summary>
+/// <summary>A name that opens that player's log: the theme's link colour, underlined (so it reads as a link without the colour); under the pointer (<see cref="Hot"/>) it gets a border like every other clickable.</summary>
 public sealed partial class PlayerLink : Label
 {
     bool _hot;
@@ -100,8 +100,9 @@ public sealed partial class PlayerLink : Label
         var font = GetThemeFont("font");
         var size = GetThemeFontSize("font_size");
         var w = Math.Min(Size.X, font.GetStringSize(Text, HorizontalAlignment.Left, -1, size).X);
-        if (_hot) DrawStyleBox(ShooterTheme.Box(Colors.Transparent, 0, ShooterTheme.Accent, ShooterTheme.Border), new Rect2(-ShooterTheme.Space / 2f, 0, w + ShooterTheme.Space, Size.Y)); // a border only: the row's own hover fill is behind it, the text stays readable either way
+        var ink = GetThemeColor("font_color"); // the accent on the HUD, the ink of a skinned log
+        if (_hot) DrawStyleBox(ShooterTheme.Box(Colors.Transparent, 0, ink, ShooterTheme.Border), new Rect2(-ShooterTheme.Space / 2f, 0, w + ShooterTheme.Space, Size.Y)); // a border only: the row's own hover fill is behind it, the text stays readable either way
         var y = Size.Y / 2 + font.GetHeight(size) / 2 + 1;
-        DrawLine(new Vector2(0, y), new Vector2(w, y), ShooterTheme.Accent, ShooterTheme.Border);
+        DrawLine(new Vector2(0, y), new Vector2(w, y), ink, ShooterTheme.Border);
     }
 }

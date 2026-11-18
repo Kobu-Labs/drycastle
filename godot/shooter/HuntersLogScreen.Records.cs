@@ -23,15 +23,16 @@ public sealed partial class HuntersLogScreen
                 return;
         }
         var grid = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
-        grid.AddThemeConstantOverride("h_separation", ShooterTheme.Space);
-        grid.AddThemeConstantOverride("v_separation", ShooterTheme.Space);
+        grid.AddThemeConstantOverride("h_separation", ShooterTheme.Space * 2);
+        grid.AddThemeConstantOverride("v_separation", ShooterTheme.Space * 2 + LogSkin.Tack);
         foreach (var r in Data.Records.Data!) grid.AddChild(RecordCard(RecordCardModel.From(r)));
         _recHost.AddChild(grid);
     }
 
     Control RecordCard(RecordCardModel m)
     {
-        var card = new PanelContainer { ThemeTypeVariation = "LogCard", CustomMinimumSize = new Vector2(ShooterTheme.LogCardW, 0), MouseFilter = MouseFilterEnum.Ignore };
+        // a paper pinned to the board; a creature the viewer has not caught is a paper under a cloth
+        var card = new LogPaper(Skin, m.Kind == RecordKind.Hidden ? "LogCover" : "LogCard") { CustomMinimumSize = new Vector2(ShooterTheme.LogCardW, 0) };
         var v = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         v.AddThemeConstantOverride("separation", ShooterTheme.Space);
         card.AddChild(v);
@@ -40,20 +41,20 @@ public sealed partial class HuntersLogScreen
         {
             case RecordKind.Hidden:
                 // a creature the viewer has not caught: a "?", nothing else
-                v.AddChild(HiddenFigure(new Vector2(ShooterTheme.LogCardW - 4 * ShooterTheme.Space, ShooterTheme.LogFigureH * 2), m.HiddenLook == TileLook.Filled));
+                v.AddChild(HiddenFigure(new Vector2(ShooterTheme.LogCardW - 4 * ShooterTheme.Space, ShooterTheme.LogFigureH * 2), m.HiddenLook == TileLook.Filled, onTile: true));
                 break;
             case RecordKind.Unhunted:
             {
-                v.AddChild(Text(_env.SpeciesName(m.Species), "HudHead"));
-                var pic = new AnimalPicture(new Vector2(ShooterTheme.LogCardW - 4 * ShooterTheme.Space, ShooterTheme.LogFigureH * 2));
+                v.AddChild(Text(_env.SpeciesName(m.Species), "InkHead"));
+                var pic = PaperPicture(new Vector2(ShooterTheme.LogCardW - 5 * ShooterTheme.Space, ShooterTheme.LogFigureH * 2));
                 pic.SetSpecies(_env.Art.ForSpecies(m.Species), filled: false);
-                v.AddChild(pic);
-                v.AddChild(Text(Strings.T("log.rec.todo"), "HudDim", wrap: true));
+                v.AddChild(Figure(pic));
+                v.AddChild(Text(Strings.T("log.rec.todo"), "InkDimSmall", wrap: true));
                 break;
             }
             default:
             {
-                v.AddChild(Text(_env.SpeciesName(m.Species), "HudHead"));
+                v.AddChild(Text(_env.SpeciesName(m.Species), "InkHead"));
                 var shots = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
                 shots.AddThemeConstantOverride("separation", ShooterTheme.Space);
                 shots.AddChild(m.Mystery ? Shot(Strings.T("log.rec.first"), m.Left, h => AgoText(h.AtUnix), figureW) : Shot(Strings.T("log.rec.heaviest"), m.Left, h => Kg(h.Kg), figureW));
@@ -75,15 +76,17 @@ public sealed partial class HuntersLogScreen
     {
         var v = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
         v.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
-        v.AddChild(HitFigure(h, new Vector2(figureW, ShooterTheme.LogFigureH)));
-        v.AddChild(Text(label, "LogCaption"));
+        v.AddChild(Figure(HitFigure(h, new Vector2(figureW - 2 * ShooterTheme.Space, ShooterTheme.LogFigureH))));
+        var cap = Text(label, "LogCaption");
+        cap.Uppercase = true;
+        v.AddChild(cap);
         if (h == null)
         {
-            v.AddChild(Text(Strings.T("log.none"), "HudHead"));
+            v.AddChild(Text(Strings.T("log.none"), "InkHead"));
             return v;
         }
-        v.AddChild(Text(number(h), "HudHead"));
-        v.AddChild(Text(HitLine(h), "HudSmall", wrap: true));
+        v.AddChild(Text(number(h), "InkHead"));
+        v.AddChild(Text(HitLine(h), "InkSmall", wrap: true));
         return v;
     }
 
@@ -99,7 +102,7 @@ public sealed partial class HuntersLogScreen
     Control HitFigure(HuntView? h, Vector2 size)
     {
         if (h is { Hidden: true }) return HiddenFigure(size, caught: true);
-        var pic = new AnimalPicture(size);
+        var pic = PaperPicture(size);
         if (h == null) { pic.SetSpecies(AnimalArt.Box, filled: false); return pic; }
         var spec = HuntPicture.Resolve(_env.Art.Shapes, h);
         pic.SetHit(_env.Art.Art(spec.Standing, spec.SpeciesId), spec.HasMark, spec.Along, spec.Height);

@@ -36,6 +36,11 @@ public sealed partial class AnimalPicture : Control
     bool _mark;
     float _along = 0.5f, _height = 0.5f;
 
+    /// <summary>The inks of the three looks; the HUD's tokens unless a skinned screen (a collection log) sets its own.</summary>
+    public Color FillInk { get; init; } = ShooterTheme.Accent;
+    public Color OutlineInk { get; init; } = ShooterTheme.Line;
+    public Color HitInk { get; init; } = ShooterTheme.Dim;
+
     public AnimalPicture(Vector2 size)
     {
         CustomMinimumSize = size;
@@ -60,7 +65,7 @@ public sealed partial class AnimalPicture : Control
         // the body's rectangle: the silhouette's proportions (a plain 2:1 body without one), as large as fits
         var aspect = _art.Shape != null ? _art.Shape.Length / _art.Shape.Height : _art.Aspect;
         var rect = Fit(aspect);
-        var ink = _look switch { PictureLook.Filled => ShooterTheme.Accent, PictureLook.Outline => ShooterTheme.Line, _ => ShooterTheme.Dim };
+        var ink = _look switch { PictureLook.Filled => FillInk, PictureLook.Outline => OutlineInk, _ => HitInk };
         if (_art.Picture is { } pic)
             // the picture is baked with the nose on the right: a negative width mirrors it in place (the rectangle keeps its corner)
             DrawTextureRect(_look == PictureLook.Outline ? pic.Outline : pic.Fill, new Rect2(rect.Position, new Vector2(-rect.Size.X, rect.Size.Y)), false, ink);

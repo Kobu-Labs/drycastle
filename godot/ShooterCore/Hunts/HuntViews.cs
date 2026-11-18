@@ -7,8 +7,11 @@ namespace Drycastle.ShooterCore;
 public sealed record HuntView(long PlayerId, string Hunter, string Species, string Exact, string Variant, float? Kg, float? DistanceM, string Weapon,
     HitDiagram? Diagram, long AtUnix, bool Hidden);
 
-/// <summary>One Life List tile of a player's log. <see cref="Caught"/>: the owner has hunted it (filled picture, else outline). A hidden tile carries no numbers.</summary>
-public sealed record LifeEntry(string Species, bool Hidden, bool Caught, float? BestKg, float? LongestM, long CaughtAtUnix);
+/// <summary>
+/// One Life List tile of a player's log. <see cref="Caught"/>: the owner has hunted it (filled picture, else outline). A hidden tile carries no numbers.
+/// <see cref="Tier"/>: the rarest weight the owner has hunted of it (<see cref="HuntRarity"/>); common for a mystery and a hidden tile.
+/// </summary>
+public sealed record LifeEntry(string Species, bool Hidden, bool Caught, float? BestKg, float? LongestM, long CaughtAtUnix, HuntTier Tier = HuntTier.Common);
 
 /// <summary>A player's log: totals, the heaviest and the longest shot, and a tile for every species of <see cref="HuntSpecies.Keys"/>.</summary>
 public sealed record PlayerLogView(long PlayerId, string Name, int Hunts, int Species, HuntView? Heaviest, HuntView? Longest, IReadOnlyList<LifeEntry> Life);

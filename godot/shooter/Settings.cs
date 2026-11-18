@@ -225,6 +225,7 @@ public static class InputBindings
         ("map", Binding.Key((int)Key.M)),
         ("inventory", Binding.Key((int)Key.F)),
         ("hunters_log", Binding.Key((int)Key.J)),
+        ("mineral_log", Binding.Key((int)Key.N)),
         ("binoculars", Binding.Key((int)Key.B)),
         ("scud_screen", Binding.Key((int)Key.G)), ("scud_confirm", Binding.Key((int)Key.Enter)), ("scud_abort", Binding.Key((int)Key.Backspace)),
     };

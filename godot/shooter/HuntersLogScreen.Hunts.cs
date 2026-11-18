@@ -49,8 +49,8 @@ public sealed partial class HuntersLogScreen
     long _viewer = -1; // the viewer the shown rows were tinted for
 
     // the hit card
-    PanelContainer _hit = null!;
-    Control _hitBox = null!;
+    PanelContainer _hit = null!, _ledger = null!;
+    Control _hitBox = null!, _hitFigure = null!;
     AnimalPicture _hitPic = null!;
     Control _hitHidden = null!;
     Label _hitName = null!, _hitKg = null!, _hitDistance = null!, _hitWeapon = null!, _hitWhen = null!, _hitNone = null!;
@@ -102,11 +102,17 @@ public sealed partial class HuntersLogScreen
 
     Control BuildTable()
     {
-        var table = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
-        table.AddThemeConstantOverride("separation", ShooterTheme.Space);
+        var outer = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
+        outer.AddThemeConstantOverride("separation", ShooterTheme.Space + ShooterTheme.Space / 2);
+        // the table is a ledger page: the header and the ruled rows on one paper; a state box (loading, empty, error) stands on the board in the paper's place
+        _ledger = new PanelContainer { ThemeTypeVariation = "LogLedger", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
+        var table = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        table.AddThemeConstantOverride("separation", 0);
+        _ledger.AddChild(table);
+        outer.AddChild(_ledger);
 
         var head = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        head.AddThemeConstantOverride("separation", ShooterTheme.Space);
+        head.AddThemeConstantOverride("separation", 0);
         for (var c = 0; c < Columns.Length; c++)
         {
             var col = Columns[c];
@@ -128,10 +134,11 @@ public sealed partial class HuntersLogScreen
         // the rows scroll, the header and the pager do not; the state box (loading, empty, error) takes the rows' place
         _rowsScroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true, SizeFlagsVertical = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, ShooterTheme.LogRowH * 6), MouseFilter = MouseFilterEnum.Pass };
         _rowsBox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
+        _rowsBox.AddThemeConstantOverride("separation", 0);
         _rowsScroll.AddChild(_rowsBox);
         table.AddChild(_rowsScroll);
         _tableStateHost.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        table.AddChild(_tableStateHost);
+        outer.AddChild(_tableStateHost);
 
         // the pager
         var pager = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
@@ -155,34 +162,35 @@ public sealed partial class HuntersLogScreen
         _range = Text("", "HudSmall", HorizontalAlignment.Right);
         _range.VerticalAlignment = VerticalAlignment.Center;
         pager.AddChild(_range);
-        table.AddChild(pager);
-        return table;
+        outer.AddChild(pager);
+        return outer;
     }
 
     void BuildHitCard()
     {
-        _hit = new PanelContainer { ThemeTypeVariation = "LogHit", CustomMinimumSize = new Vector2(ShooterTheme.LogHitW, 0), SizeFlagsVertical = SizeFlags.ShrinkBegin, MouseFilter = MouseFilterEnum.Ignore };
+        _hit = new LogPaper(Skin, "LogHit") { CustomMinimumSize = new Vector2(ShooterTheme.LogHitW, 0), SizeFlagsVertical = SizeFlags.ShrinkBegin };
         var outer = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         _hit.AddChild(outer);
         var v = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         v.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
         _hitBox = v;
         outer.AddChild(v);
-        var artSize = new Vector2(ShooterTheme.LogHitW - 3 * ShooterTheme.Space, ShooterTheme.LogHitArtH);
-        _hitPic = new AnimalPicture(artSize);
+        var artSize = new Vector2(ShooterTheme.LogHitW - 5 * ShooterTheme.Space, ShooterTheme.LogHitArtH);
+        _hitPic = PaperPicture(artSize);
+        _hitFigure = Figure(_hitPic);
         _hitHidden = HiddenFigure(artSize, caught: true);
-        v.AddChild(_hitPic); v.AddChild(_hitHidden);
+        v.AddChild(_hitFigure); v.AddChild(_hitHidden);
 
         var title = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        _hitName = Text("", "HudHead"); _hitName.ClipText = true; _hitName.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        _hitBlur = new BlurText(Strings.T("hunt.hidden.name"), "HudHead");
-        _hitKg = Text("", "HudAccent");
+        _hitName = Text("", "InkHead"); _hitName.ClipText = true; _hitName.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _hitBlur = new BlurText(Strings.T("hunt.hidden.name"), "InkHead");
+        _hitKg = Text("", "InkHead");
         title.AddChild(_hitName); title.AddChild(_hitBlur); title.AddChild(_hitKg);
         v.AddChild(title);
         v.AddChild(Pair("log.hit.distance", out _hitDistance));
         v.AddChild(Pair("log.hit.weapon", out _hitWeapon));
         var who = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        who.AddChild(Text(Strings.T("log.hit.hunter"), "HudSmall"));
+        who.AddChild(Text(Strings.T("log.hit.hunter"), "InkDimSmall"));
         who.AddChild(Ui.Fill());
         _hitHunter = Ui.Btn("", () => OpenPlayerLog(_hitHunterId, _hitHunterName));
         _hitHunter.ClipText = true;
@@ -190,9 +198,9 @@ public sealed partial class HuntersLogScreen
         v.AddChild(who);
         v.AddChild(Pair("log.hit.when", out _hitWhen));
         _hitHead = new PanelContainer { ThemeTypeVariation = "LogPill", MouseFilter = MouseFilterEnum.Ignore, SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
-        _hitHead.AddChild(Text(Strings.T("log.head"), "HudAccentSmall"));
+        _hitHead.AddChild(Text(Strings.T("log.head"), "LogSealText"));
         v.AddChild(_hitHead);
-        _hitNone = Text(Strings.T("log.hit.none"), "HudDim", wrap: true);
+        _hitNone = Text(Strings.T("log.hit.none"), "InkDimSmall", wrap: true);
         v.AddChild(_hitNone);
         ShowHit(null);
     }
@@ -200,9 +208,9 @@ public sealed partial class HuntersLogScreen
     Control Pair(string key, out Label value)
     {
         var h = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        h.AddChild(Text(Strings.T(key), "HudSmall"));
+        h.AddChild(Text(Strings.T(key), "InkDimSmall"));
         h.AddChild(Ui.Fill());
-        value = Text("", "HudTextSmall", HorizontalAlignment.Right);
+        value = Text("", "InkSmall", HorizontalAlignment.Right);
         h.AddChild(value);
         return h;
     }
@@ -298,7 +306,7 @@ public sealed partial class HuntersLogScreen
                     break;
             }
         }
-        _rowsScroll.Visible = _tableState == null;
+        _ledger.Visible = _tableState == null;
         _tableStateHost.Visible = _tableState != null; // the box takes the rows' room only while it shows
         SyncSelection(rows);
         RefreshPager(page, rows?.Count ?? 0);
@@ -350,21 +358,21 @@ public sealed partial class HuntersLogScreen
         r.Btn = new ContentButton { ThemeTypeVariation = "LogRow", ToggleMode = true, MinSize = new Vector2(0, ShooterTheme.LogRowH), SizeFlagsHorizontal = SizeFlags.ExpandFill };
         var h = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         h.AddThemeConstantOverride("separation", ShooterTheme.Space);
-        r.When = Cell("HudTextSmall", HorizontalAlignment.Left, Columns[0].Ratio);
+        r.When = Cell("InkSmall", HorizontalAlignment.Left, Columns[0].Ratio);
         r.Player = new PlayerLink { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = Columns[1].Ratio, VerticalAlignment = VerticalAlignment.Center, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
         r.PlayerCell = r.Player;
-        // species: the name (or the blurred placeholder), then the record pill
+        // species: the name (or the blurred placeholder), then the record seal
         var species = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = Columns[2].Ratio, MouseFilter = MouseFilterEnum.Ignore };
         species.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
-        r.Species = Cell("HudTextSmall", HorizontalAlignment.Left, 1);
-        r.Blur = new BlurText(Strings.T("hunt.hidden.name"), "HudTextSmall") { Visible = false };
+        r.Species = Cell("InkSmall", HorizontalAlignment.Left, 1);
+        r.Blur = new BlurText(Strings.T("hunt.hidden.name"), "InkSmall") { Visible = false };
         r.Pill = new PanelContainer { ThemeTypeVariation = "LogPill", Visible = false, MouseFilter = MouseFilterEnum.Ignore, SizeFlagsVertical = SizeFlags.ShrinkCenter };
-        r.PillText = Text("", "HudAccentSmall");
+        r.PillText = Text("", "LogSealText");
         r.Pill.AddChild(r.PillText);
         species.AddChild(r.Species); species.AddChild(r.Blur); species.AddChild(r.Pill);
-        r.Kg = Cell("HudTextSmall", HorizontalAlignment.Right, Columns[3].Ratio);
-        r.Distance = Cell("HudTextSmall", HorizontalAlignment.Right, Columns[4].Ratio);
-        r.Weapon = Cell("HudTextSmall", HorizontalAlignment.Left, Columns[5].Ratio);
+        r.Kg = Cell("InkSmall", HorizontalAlignment.Right, Columns[3].Ratio);
+        r.Distance = Cell("InkSmall", HorizontalAlignment.Right, Columns[4].Ratio);
+        r.Weapon = Cell("InkSmall", HorizontalAlignment.Left, Columns[5].Ratio);
         h.AddChild(r.When); h.AddChild(r.Player); h.AddChild(species); h.AddChild(r.Kg); h.AddChild(r.Distance); h.AddChild(r.Weapon);
         r.Btn.SetContent(h);
         return r;
@@ -419,7 +427,7 @@ public sealed partial class HuntersLogScreen
         _hit.Visible = h != null; // nothing selected: no card, no hint
         _hitBox.Visible = h != null;
         if (h == null) return;
-        _hitPic.Visible = !h.Hidden;
+        _hitFigure.Visible = !h.Hidden;
         _hitHidden.Visible = h.Hidden;
         if (!h.Hidden)
         {

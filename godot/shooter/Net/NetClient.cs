@@ -965,6 +965,7 @@ public partial class NetClient : Node
         if (HandleMapInput(e)) return; // M: the tactical map
         if (HandleEquipmentInput(e)) return; // F: the Equipment screen (#268)
         if (HandleHuntersLogInput(e)) return; // J: the Hunter's Log (#336)
+        if (HandleMineralLogInput(e)) return; // N: the Mineral Log
         if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
         if (HandleScudInput(e)) return; // the Scud screen's keys (open, confirm, abort, lock, the wheel's zoom)
         if (HandleSeatInput(e)) return; // a number key while seated takes that seat

@@ -134,7 +134,7 @@ public static class HuntEvents
         foreach (var e in l.Life.Take(byte.MaxValue))
         {
             w.Str(e.Species);
-            w.U8((byte)((e.Hidden ? 1 : 0) | (e.Caught ? 2 : 0) | (e.BestKg != null ? 4 : 0) | (e.LongestM != null ? 8 : 0)));
+            w.U8((byte)((e.Hidden ? 1 : 0) | (e.Caught ? 2 : 0) | (e.BestKg != null ? 4 : 0) | (e.LongestM != null ? 8 : 0) | ((int)e.Tier & 3) << 4)); // bits 4-5: the rarity tier
             if (e.BestKg is { } kg) w.F32(kg);
             if (e.LongestM is { } m) w.F32(m);
             w.I64(e.CaughtAtUnix);
@@ -159,7 +159,7 @@ public static class HuntEvents
             float? kg = (ef & 4) != 0 ? r.F32() : null;
             float? m = (ef & 8) != 0 ? r.F32() : null;
             var at = r.I64();
-            if (r.Ok) life.Add(new LifeEntry(key, (ef & 1) != 0, (ef & 2) != 0, kg, m, at));
+            if (r.Ok) life.Add(new LifeEntry(key, (ef & 1) != 0, (ef & 2) != 0, kg, m, at, (HuntTier)(ef >> 4 & 3)));
         }
         return r.Ok && r.End ? new PlayerLogAnswer(req, HuntStatus.Ok, viewer, new PlayerLogView(player, name, (int)hunts, species, heavy, far, life)) : null;
     }

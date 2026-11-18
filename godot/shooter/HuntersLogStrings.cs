@@ -8,12 +8,14 @@ public static class HuntersLogStrings
         ("bind.hunters_log", "Hunter's Log (toggle)"),
         ("pause.hunterslog", "Hunter's Log"),
         // frame
-        ("log.title.my", "My Log"), ("log.title.other", "{0}'s Log"), ("log.tab.records", "Records"), ("log.tab.hunts", "All hunts"),
+        ("log.name", "Hunter's Log"), ("log.title.my", "My Log"), ("log.title.other", "{0}'s Log"), ("log.tab.records", "Records"), ("log.tab.hunts", "All hunts"),
         ("log.close", "Close"), ("log.back", "Back"),
         ("log.sandbox", "Sandbox: hunts are not logged"),
         // my log
         ("log.stat.hunts", "Hunts"), ("log.stat.species", "Species"), ("log.stat.heaviest", "Heaviest"), ("log.stat.longest", "Longest shot"), ("log.none", "-"),
-        ("log.life.title", "Life List"), ("log.life.count", "{0} of {1}"),
+        ("log.life.title", "Life List"), ("log.life.count", "{0} of {1}"), ("log.sec.game", "Game"), ("log.sec.mystery", "Mystery"),
+        ("log.tier.gold", "Gold"), ("log.tier.silver", "Silver"), ("log.tier.bronze", "Bronze"), ("log.tile.tier", "{0} kg, {1}"),
+        ("log.legend.gold", "Gold, top 5%"), ("log.legend.silver", "Silver, top 10%"), ("log.legend.bronze", "Bronze, top 20%"),
         ("log.tile.best", "Best {0} kg"), ("log.tile.longest", "Longest {0}"), ("log.tile.caught", "Caught {0}"), ("log.tile.todo", "Not hunted yet"),
         ("log.hunts.own", "All my hunts"), ("log.hunts.other", "All {0}'s hunts"),
         ("log.hidden.mark", "?"), ("hunt.hidden.name", "Xxxxxxxx"),
