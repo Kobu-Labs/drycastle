@@ -91,6 +91,7 @@ public static class ChatCommands
         new("fps", "Show or hide the FPS counter in the top right (remembered in settings)", Array.Empty<ChatArg>(), AdminOnly: false, ClientSide: true),
         new("bots", "Set how many bots play, or show the count. Takes effect at once", new[] { new ChatArg("count", ChatArgKind.Int, false, 0, MaxBots) }),
         new("spawn", "Spawn a vehicle in front of you", new[] { new ChatArg("vehicle", ChatArgKind.Choice) }),
+        new("unicorn", "TEST: an extra wild Unicorn on the ground in front of you (a Hunt when killed; it is not respawned)", Array.Empty<ChatArg>()),
         new("sandbox", "Turn sandbox mode on or off for a player (name or #id), or flip it", new[] { new ChatArg("player", ChatArgKind.Player), new ChatArg("state", ChatArgKind.Choice, false) }),
         new("give", "Give an item to a player (name or #id), or to yourself. It is worn if the slot is empty, else it goes in the bag", new[] { new ChatArg("item", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
         new("restart", "Restart the round now, optionally in another mode (ffa or tdm)", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),

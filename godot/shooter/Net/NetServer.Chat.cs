@@ -61,6 +61,7 @@ public partial class NetServer
             case "help": ChatHelp(c, args); break;
             case "bots": ChatBots(c, args); break;
             case "spawn": ChatSpawn(c, args[0]); break;
+            case "unicorn": ChatUnicorn(c); break;
             case "sandbox": ChatSandbox(c, args); break;
             case "give": ChatGive(c, args); break;
             case "time": ChatTimeCommand(c, args); break;
@@ -118,6 +119,19 @@ public partial class NetServer
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { ChatTo(c, ChatLineKind.Error, "You must be alive to spawn a vehicle."); return; }
         if (TrySpawnVehicle(c, (byte)kind, AdminVehicleCap) is { } why) { ChatTo(c, ChatLineKind.Error, why); return; }
         ChatTo(c, ChatLineKind.Info, $"Spawned a {id} in front of you.");
+    }
+
+    /// <summary>"/unicorn" (admins, a test): an extra Unicorn on the ground 6 m in front of the player (see <see cref="WildlifeKeeper.SpawnExtra"/>).</summary>
+    void ChatUnicorn(Client c)
+    {
+        if (_wildlife == null) { ChatTo(c, ChatLineKind.Error, "There is no wildlife on this map."); return; }
+        if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { ChatTo(c, ChatLineKind.Error, "You must be alive to spawn a Unicorn."); return; }
+        var yaw = c.Body.Yaw;
+        var at = c.Body.GlobalPosition + new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw)) * 6f;
+        if (Query.Ground(MoverKind.Player, at, 60f, 200f) is { } ground) at = ground.Position;
+        if (_wildlife.SpawnExtra(Mysteries.Unicorn, N(at), _wildlifeGround ??= new WildlifeGround(this)))
+            ChatTo(c, ChatLineKind.Info, "A Unicorn stands in front of you.");
+        else ChatTo(c, ChatLineKind.Error, "No room for a Unicorn here (no ground, or the map is full).");
     }
 
     /// <summary>
