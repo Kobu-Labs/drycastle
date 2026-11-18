@@ -403,6 +403,9 @@ public static class ObjectColliders
     /// <summary>Assets that stop nothing whatever their category: the satellite dish (category "other" so the editor palette shows it, but a fitting on a wall).</summary>
     public static bool IsPassThrough(string asset) => asset == DishSource.AssetId;
 
+    /// <summary>An object stops nothing when its asset is a pass-through one or it was placed with <c>solid: false</c> (dressing over a climbable prim).</summary>
+    public static bool IsPassThrough(string asset, bool solid) => !solid || IsPassThrough(asset);
+
     /// <summary>
     /// Flowers and house connectors have none (walk and shoot through). Bushes stop shots only. Trees have a trunk (solid, lower third) and a crown
     /// box (shot-only). A pole (utility pole) is its column alone: a thin solid box at the origin, as high as the pole, so the

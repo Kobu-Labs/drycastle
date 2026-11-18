@@ -44,10 +44,13 @@ formatting is fixed, so git diffs stay small. Version 1::
     id                  str, unique within the whole file.
     asset               "pack:<pack>/<model>" or "prim:<name>".
     position            [x, y] absolute EPSG:5514 metres.
-    z                   optional metres; omitted = terrain height at runtime.
+    z                   optional metres, absolute above the DMR datum (not relative to the terrain); omitted = terrain height
+                        at runtime.
     rotation_deg        number, default 0.
     scale               number > 0, default 1.
     colour              optional "#rrggbb" override.
+    solid               optional bool, default true; written only as false: no collision at all (players, vehicles and shots
+                        pass through), for dressing laid over a climbable prim such as trash on prim:mound.
     (objects.json entries also carry ``parcel`` (the parcel containing the object, or null) and
     ``chunk``; both are derived.)
 
@@ -172,7 +175,7 @@ PARCEL_KEYS = ("fence", "objects")  # "objects" only so a file of the old shape 
 FENCE_KEYS = ("mode", "type", "column", "height_m", "thickness_m", "colour", "gaps")
 CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "gaps")
 GAP_KEYS = ("at", "width_m")
-OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour")
+OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour", "solid")
 GROUP_KEYS = ("parcels", "fence")
 PATCH_KEYS = ("type", "polygon", "water_y", "max_depth")
 ZONE_KEYS = ("kind", "polygon")
@@ -347,6 +350,8 @@ def _check_objects(v: object, path: str, errors: list[str], seen: dict[str, str]
             _check_positive(obj["scale"], f"{opath}.scale", errors)
         if "colour" in obj:
             _check_colour(obj["colour"], f"{opath}.colour", errors)
+        if "solid" in obj and not isinstance(obj["solid"], bool):
+            errors.append(f"{opath}.solid: must be true or false")
 
 
 def _check_parcels(parcels: dict, errors: list[str], seen: dict[str, str]) -> None:

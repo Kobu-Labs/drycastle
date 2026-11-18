@@ -15,6 +15,8 @@ public sealed class PlacedObject
     public float RotationDeg { get; init; }
     public float Scale { get; init; } = 1f;
     public string? Colour { get; init; }
+    /// <summary>False = no collision at all (players, vehicles and shots pass through): trash laid over a climbable prim. objects.json carries the key only when false.</summary>
+    public bool Solid { get; init; } = true;
     /// <summary>Parcel containing the object (null: outside every parcel). An object belongs to no parcel; this is where it happens to stand.</summary>
     public string? Parcel { get; init; }
     /// <summary>The group node the object sits in (and is removed with): its containing parcel, else <see cref="NoParcelGroup"/>.</summary>
@@ -174,6 +176,7 @@ public sealed partial class MapLoader
                 RotationDeg = o.TryGetProperty("rotation_deg", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetSingle() : 0f,
                 Scale = o.TryGetProperty("scale", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetSingle() : 1f,
                 Colour = o.TryGetProperty("colour", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null,
+                Solid = !(o.TryGetProperty("solid", out var so) && so.ValueKind == JsonValueKind.False),
                 Parcel = o.TryGetProperty("parcel", out var pa) && pa.ValueKind == JsonValueKind.String ? pa.GetString() : null,
             });
         }
@@ -234,7 +237,13 @@ public sealed partial class MapLoader
         var node = new Node3D { Name = $"object_{SafeName(o.Id)}" };
         // a headless load (CollisionOnly) builds the colliders alone: no model is loaded for the object
         if (!CollisionOnly) node.AddChild(CreateObjectModel(o.Asset, o.Colour, out _));
-        AddObjectColliders(node, o.Asset);
+        AddObjectColliders(node, o.Asset, o.Solid);
+        if (!o.Solid) // a prefab or pack model brings its own bodies (client): switch them off like an opened door
+            foreach (var body in Descendants(node).OfType<CollisionObject3D>())
+            {
+                body.CollisionLayer = 0;
+                body.CollisionMask = 0;
+            }
         container.AddChild(node);
         var y = o.Z ?? TerrainOrMean(o.X, -o.Y);
         node.Position = new Vector3(o.X, y, -o.Y);
