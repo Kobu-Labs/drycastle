@@ -24,9 +24,9 @@ public static class LampPool
     /// Points the light slots at the nearest lamps to <paramref name="eye"/> within <paramref name="maxDistance"/>.
     /// <c>slots[i]</c> is a lamp index, or -1 for an empty slot. A slot keeps its lamp while that lamp is still
     /// among the nearest, so lights do not hop between lamps when the camera moves. Slots that get a new lamp
-    /// are the only ones that change. Returns true if any slot changed its lamp.
+    /// are the only ones that change. A lamp with <paramref name="off"/>[i] set (a broken one) is never a candidate. Returns true if any slot changed its lamp.
     /// </summary>
-    public static bool Refresh(int[] slots, IReadOnlyList<Vector3> lamps, Vector3 eye, float maxDistance)
+    public static bool Refresh(int[] slots, IReadOnlyList<Vector3> lamps, Vector3 eye, float maxDistance, bool[]? off = null)
     {
         int k = slots.Length;
         if (k == 0) return false;
@@ -36,6 +36,7 @@ public static class LampPool
         float maxSq = maxDistance * maxDistance;
         for (int i = 0; i < lamps.Count; i++)
         {
+            if (off != null && i < off.Length && off[i]) continue;
             float d = Vector3.DistanceSquared(lamps[i], eye);
             if (d > maxSq) continue;
             if (n == k && d >= topD[k - 1]) continue;

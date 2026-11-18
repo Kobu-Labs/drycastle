@@ -44,8 +44,8 @@ public sealed class CarLights
     public static CarLights? Attach(Node3D vehicle, VehicleDef def)
     {
         if (def.Lights is not { } l) return null;
-        var headMat = new StandardMaterial3D { AlbedoColor = HeadColour, EmissionEnabled = true, Emission = HeadColour, EmissionEnergyMultiplier = HeadOffEnergy };
-        var tailMat = new StandardMaterial3D { AlbedoColor = TailColour, EmissionEnabled = true, Emission = TailColour, EmissionEnergyMultiplier = TailEnergy };
+        var headMat = LampKit.Lens(HeadColour, HeadOffEnergy);
+        var tailMat = LampKit.Lens(TailColour, TailEnergy);
         var lens = new SphereMesh { Radius = 0.06f, Height = 0.12f, RadialSegments = 8, Rings = 4 };
         var c = new CarLights(headMat, tailMat);
         c.BindModelLamps(vehicle);
@@ -57,11 +57,7 @@ public sealed class CarLights
         {
             var at = toHost * Lamp(p);
             if (c._modelHead == null) host.AddChild(new MeshInstance3D { Mesh = lens, Transform = at, MaterialOverride = headMat });
-            var spot = new SpotLight3D
-            {
-                Transform = at, SpotRange = range, SpotAngle = l.BeamAngle, SpotAttenuation = 1f, LightColor = HeadColour,
-                LightEnergy = 3f, ShadowEnabled = false, Visible = false,
-            };
+            var spot = LampKit.Beam(at, HeadColour, range, l.BeamAngle, 3f);
             host.AddChild(spot);
             c._spots.Add(spot);
         }
