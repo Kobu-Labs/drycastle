@@ -84,7 +84,7 @@ public sealed class AnimalDef
     /// </summary>
     public float BodyAhead { get; set; }
     /// <summary>
-    /// animals.json "fx": the id of a client-only visual set the client attaches to every animal of the species ("unicorn": a glowing speckled horn, sparkles at its tip, a rainbow trail);
+    /// animals.json "fx": the id of a client-only visual set the client attaches to every animal of the species ("unicorn": a pearl coat, a rainbow mane and tail, a glowing speckled horn, sparkles, a rainbow trail);
     /// empty: none. Pure looks, nothing of it travels on the wire or changes a rule. A lower case id (letters, digits, underscores); an id the client does not know draws nothing extra.
     /// </summary>
     public string Fx { get; set; } = "";
