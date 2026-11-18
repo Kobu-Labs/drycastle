@@ -121,13 +121,13 @@ public partial class NetServer
         ChatTo(c, ChatLineKind.Info, $"Spawned a {id} in front of you.");
     }
 
-    /// <summary>"/unicorn" (admins, a test): an extra Unicorn on the ground 6 m in front of the player (see <see cref="WildlifeKeeper.SpawnExtra"/>).</summary>
+    /// <summary>"/unicorn" (admins, a test): an extra Unicorn on the ground 50 m in front of the player, past its flee_radius (40 m, animals.json) so it is not startled (see <see cref="WildlifeKeeper.SpawnExtra"/>).</summary>
     void ChatUnicorn(Client c)
     {
         if (_wildlife == null) { ChatTo(c, ChatLineKind.Error, "There is no wildlife on this map."); return; }
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { ChatTo(c, ChatLineKind.Error, "You must be alive to spawn a Unicorn."); return; }
         var yaw = c.Body.Yaw;
-        var at = c.Body.GlobalPosition + new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw)) * 6f;
+        var at = c.Body.GlobalPosition + new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw)) * 50f;
         if (Query.Ground(MoverKind.Player, at, 60f, 200f) is { } ground) at = ground.Position;
         if (_wildlife.SpawnExtra(Mysteries.Unicorn, N(at), _wildlifeGround ??= new WildlifeGround(this)))
             ChatTo(c, ChatLineKind.Info, "A Unicorn stands in front of you.");
