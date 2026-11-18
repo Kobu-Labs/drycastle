@@ -334,7 +334,7 @@ real meshes, UVs and textures into `out/textures/fences.png`, so the look can be
 file): per-parcel fence mode (`auto`, `none`, `custom` with a type, column, height, colour and gaps),
 property groups (`G-NNNN`: one fence around the members' combined outer edge), and placed objects (`pack:` or `prim:` assets, absolute S-JTSK metres).
 Objects go to `work/objects.json`, and with them the `cables` (`C-NNNN`: `from` and `to`, the ids of two
-placed utility poles) whose poles are both placed; the game strings the wires (`docs/utility-poles.md`). `ground_patches` (`GP-NNNN`: `type`, `polygon` one ring of at
+placed utility poles) whose poles are both placed; an object may carry `z` (absolute metres above the DMR datum; omitted = on the terrain) and `solid: false` (no collision at all, for dressing over a climbable prim; `objects.json` has the key only when false); the game strings the wires (`docs/utility-poles.md`). `ground_patches` (`GP-NNNN`: `type`, `polygon` one ring of at
 least 3 `[x, y]` absolute S-JTSK points, no self-intersection, `water_y` for a water type) are hand-drawn ground (see "Parcels and ground areas"); the props stage reads
 only their water ones (no trees in a lake). `zones` (`Z-NNNN`: `kind`, `polygon`) are what an area means in play (see "Zones"); the props
 stage reads the `player_spawn` ones. The format and validator are documented in

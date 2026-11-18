@@ -837,6 +837,7 @@ def plan_edits(
                 "colour": obj.get("colour"),
                 "parcel": hits[0] if hits else None,
                 "chunk": chunk_of(lx, ly, chunk_m),
+                **({"solid": False} if obj.get("solid") is False else {}),  # key only when false: older maps unchanged
             }
         )
     plan.objects.sort(key=lambda o: o["id"])
