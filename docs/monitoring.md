@@ -1,7 +1,7 @@
-# Monitoring the server (Grafana on the VPS)
+# Monitoring the server and the clients (Grafana on the VPS)
 
 The game server sends its own numbers to a small metrics store on the same VPS every 10 s; Grafana, also there, draws them. Nothing leaves
-the machine and nothing listens on the internet. Three compose services (`deploy/docker-compose.yml`), each with a memory cap, none needed by the game:
+the machine and nothing listens on the internet. The players' games report through the server ("Clients" below). Three compose services (`deploy/docker-compose.yml`), each with a memory cap, none needed by the game:
 
 | Service | What | Memory used / cap (measured 2026-11-18) |
 |---|---|---|
@@ -38,8 +38,27 @@ sign in as `admin` with `GRAFANA_PASSWORD` from `/opt/drycastle/deploy/.env` on 
   log and the dashboard agree. The request runs off the game thread; a store that is down costs one error line and nothing else.
   Without the variable nothing is sent.
 - Series are `drycastle_<measurement>_<field>`: `tick`, `match`, `phase{phase}`, `scope{scope}`, `thread{thread}`, `nav{what}`, `worst_tick`,
-  `mem`, `gc`, `gc_period`, `up`. About 250 series; none per player. The fields are the ones described in `docs/shooter-server.md`, "Performance log".
+  `mem`, `gc`, `gc_period`, `up`. About 250 series; none per player (the clients' are below). The fields are the ones described in `docs/shooter-server.md`, "Performance log".
 - The host's `node_*` series are fetched by the store itself (`deploy/monitoring/scrape.yml`).
+
+## Clients
+
+Every player's game reports its own numbers too: `make monitor-clients` (the "Drycastle clients" dashboard, a player filter at the top).
+
+- What: frames per second, frame time p50 / p99 / slowest, hitches (frames over 33 / 50 / 100 ms), the engine's render time on the processor and
+  on the graphics card, draw calls, primitives, memory (process, C# heap, video), allocation and collector pauses, ping, loss, snapshot gaps,
+  reconciles, traffic, and the client's own scopes (ms per second: `net`, `players`, `creatures`, `vehicles`, `projectiles`, `view`, `hud`,
+  `predict`, `reconcile`, and `net_snapshot`, `net_world`, `net_events` taken out of `net`).
+- How: `NetClient.Report.cs` gathers them and every 10 s of play sends one small reliable message over the game connection
+  (`EventKind.ClientReport`, `ShooterCore/Diagnostics/ClientPerf.cs`); the server (`OnClientReport`, `NetServer.Metrics.cs`) adds them to its own
+  batch as `drycastle_client_<field>{player, gpu}` and `drycastle_client_scope_ms_per_s{player, scope}`. No new port, nothing in the client
+  knows the store. The same numbers are in the player's log as `client: perf` and `client: perf scopes` lines.
+- Who: every client with a window, always, while it is in a match. Bots and headless clients send none. About 50 series per player who ever
+  played; the label is the player's name with anything but letters and digits made `_`.
+- An older server ignores the message (it is not a protocol version); an older client sends none. Fields are added at the end of
+  `ClientReport.Fields` only, never moved: the wire carries them by position.
+- The server takes one report per client per 5 s and drops what does not decode; nothing in the game reads them.
+- The repeatable client load test and its saved numbers: `docs/perf-investigation/client-64-bots.md`.
 
 ## Changing it
 

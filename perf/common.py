@@ -12,6 +12,14 @@ SHOOTER = REPO / "godot" / "shooter"
 CLK = os.sysconf("SC_CLK_TCK")
 
 
+def window_env(env=None):
+    """The environment for a game process that opens a window in an automated run: WORKSPACE=6 unless it is set, which the window manager
+    of the development machine reads to put the window on its hidden workspace, out of the way of whoever is working."""
+    env = dict(os.environ if env is None else env)
+    env.setdefault("WORKSPACE", "6")
+    return env
+
+
 def pct(xs, p):
     if not xs:
         return 0.0

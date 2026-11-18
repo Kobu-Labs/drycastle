@@ -246,10 +246,13 @@ public partial class NetClient : Node
     {
         TelemetryFrame(delta);
         PerfClientFrame(delta);
+        ReportFrame(delta);
         if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
         if (LinkEnded) return;
         UpdateMapCursor();
+        var t = ClientProf.Begin();
         Poll();
+        t = ClientProf.Lap(ClientProf.S.Net, t);
         if (_link.Is(LinkPhase.Connecting))
         {
             _link.Tick((float)delta);
@@ -263,23 +266,28 @@ public partial class NetClient : Node
         RenderGroundItems();
         RenderCarePackages();
         RenderTurrets();
+        t = ClientProf.Lap(ClientProf.S.Players, t);
         RenderAnimals();
         RenderFlocks(delta);
         RenderBigfoot();
         RenderCitizens();
         RenderGang(delta);
         RenderDemon();
+        t = ClientProf.Lap(ClientProf.S.Creatures, t);
         UpdateDeath(delta);
         UpdatePounce(delta);
+        t = ClientProf.Lap(ClientProf.S.View, t);
         RenderCars();
         RenderHarvester((float)delta);
         RenderAircraft(delta);
+        t = ClientProf.Lap(ClientProf.S.Vehicles, t);
         RenderRockets();
         RenderLockOn();
         RenderLauncherLoaded();
         RenderMissiles();
         RenderMissilePov();
         RenderScud(delta);
+        t = ClientProf.Lap(ClientProf.S.Projectiles, t);
         RenderWater();
         UpdateViewmodel();
         UpdateDemonQuake(delta);
@@ -287,8 +295,10 @@ public partial class NetClient : Node
         UpdateShake(delta);
         UpdateNausea(delta); // a high player's sway (NetClient.High.cs), before the roll is composed
         FadeOwnCorrection(delta);
+        t = ClientProf.Lap(ClientProf.S.View, t);
         UpdateHud();
         RozhlasMicFrame(); // the set holder's mic and the ON AIR cue
+        ClientProf.End(ClientProf.S.Hud, t);
     }
 
     void Poll()
@@ -318,9 +328,15 @@ public partial class NetClient : Node
     void OnPacket(byte[] d)
     {
         if (d.Length == 0) return;
-        if (d[0] < Wire.TInput) OnReliable(Wire.DecodeReliable(d));
-        else if (d[0] == Wire.TSnapshot) OnSnapshot(d);
-        else if (d[0] == Wire.TWorldSnapshot) WorldEntities.Apply(d);
+        var t = ClientProf.Begin();
+        if (d[0] < Wire.TInput)
+        {
+            var m = Wire.DecodeReliable(d);
+            OnReliable(m);
+            ReportEvent(m is EventMsg e ? e.Kind : (byte)0, ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetEvents, t));
+        }
+        else if (d[0] == Wire.TSnapshot) { OnSnapshot(d); ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetSnapshot, t); }
+        else if (d[0] == Wire.TWorldSnapshot) { WorldEntities.Apply(d); ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetWorld, t); }
         else if (d[0] == Wire.TRozhlasFeed && RozhlasFeedWire.TryDecode(d, out var feedSeq, out var feedOpus)) { RozhlasFeedPlayer.Current?.Push(feedSeq, feedOpus); BotFeedFrame(feedOpus); } // the live rozhlas feed (silent when headless)
     }
 
@@ -333,7 +349,7 @@ public partial class NetClient : Node
                 RozhlasSetReset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
                 DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
                 CasingFx.Water = Water;
-                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Bodies = this };
+                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Bodies = this };
                 World.AddChild(_me);
                 if (!Bot && ShotFx.Enabled) { _viewmodel = MakeViewmodel(); _me.Camera.AddChild(_viewmodel); }
                 if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(_me.Camera); // the glass shaders compile now, not at the first crack
@@ -439,6 +455,7 @@ public partial class NetClient : Node
         LossOnSnapshot(h);
         PerfClientSnapshot();
         TelemetrySnapshot(h.Tick);
+        ReportSnapshot(h.Tick);
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         _clock.OnSnapshot(h.Tick, _lastArrival);
         DayNightCycle.Current?.SetServerTick(h.Tick);
@@ -550,6 +567,7 @@ public partial class NetClient : Node
         LastVertical = MathF.Abs(predicted.Position.Y - sp.Y) > 0.5f * err; // the error is mostly up or down (steps, slopes, jumps, landings)
         LossOnPredictionError(err);
         TelemetryPredictionError(err);
+        ReportPredictionError(err);
         _pending.RemoveRange(0, idx + 1);
         if (err <= ReconcileEpsilon)
         {
@@ -629,8 +647,10 @@ public partial class NetClient : Node
         else if (Bot && _elapsed >= BotSeconds) { if (CarBot != "") CarResult(false, "timeout"); else if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
         if (!OwnSpawned) return; // wait for our spawn position
         DemonBodyTick(); // the demon's Body capsule is where the server last put it, before the body is predicted
+        var pt = ClientProf.Begin();
         ReplayReconcile(); // C-02: a snapshot's reconcile replays here, with the physics step (see OnSelf)
         ReplayDriveReconcile(); // and so does a predicted vehicle's (ADR 0010, ADR 0014)
+        pt = ClientProf.Lap(ClientProf.S.Reconcile, pt);
         var dt = (float)delta;
         MoveInput mi;
         if (Bot && MatchBot != "")
@@ -665,7 +685,7 @@ public partial class NetClient : Node
             var jump = ((int)(t * 30) % 45) == 0 ? MoveButtons.Jump : MoveButtons.None;
             mi = new MoveInput { MoveY = 1, Yaw = yaw, Buttons = jump, SpeedScale = 1 };
         }
-        else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
+        else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : PerfPlay ? PerfPlayStep() : _me.Sample();
         if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); TickLootReturn(dt); }
         FxDemoInput(ref mi);
         ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
@@ -689,6 +709,7 @@ public partial class NetClient : Node
         _conn.Flush();
         var p = _me.State.Position;
         _meMin = NVec3.Min(_meMin, p); _meMax = NVec3.Max(_meMax, p);
+        ClientProf.End(ClientProf.S.Predict, pt);
     }
 
     /// <summary>The fractional server tick the remote entities are drawn at this frame (see <see cref="RenderClock"/>).</summary>

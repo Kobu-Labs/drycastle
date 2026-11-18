@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes grafana/dashboards/drycastle-server.json (the provisioned dashboard) from the panel list below. Run after editing it:
+"""Writes grafana/dashboards/drycastle-server.json and drycastle-clients.json (the provisioned dashboards) from the panel lists below. Run after editing it:
     deploy/monitoring/make_dashboard.py
 Series: drycastle_* are pushed by the game server every 10 s (NetServer.Metrics.cs); node_* are the host's (node-exporter)."""
 import json, os
@@ -96,12 +96,83 @@ ts("Host memory", [("node_memory_MemAvailable_bytes", "available"), ("node_memor
 ts("Disk free and load", [('node_filesystem_avail_bytes{mountpoint="/"}', "disk free")], 16, w=8, unit="bytes")
 nextline()
 
-dash = {
-    "uid": "drycastle-server", "title": "Drycastle server", "tags": ["drycastle"], "timezone": "browser", "schemaVersion": 39, "version": 1,
-    "refresh": "30s", "time": {"from": "now-6h", "to": "now"}, "editable": False, "graphTooltip": 1, "panels": panels,
-}
-out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "grafana", "dashboards", "drycastle-server.json")
-with open(out, "w") as f:
-    json.dump(dash, f, indent=1)
-    f.write("\n")
-print(out, len(panels), "panels")
+def finish(uid, title, variables=()):
+    """Writes the panels so far as the dashboard uid, and starts an empty one."""
+    global panels, y
+    dash = {
+        "uid": uid, "title": title, "tags": ["drycastle"], "timezone": "browser", "schemaVersion": 39, "version": 1,
+        "refresh": "30s", "time": {"from": "now-6h", "to": "now"}, "editable": False, "graphTooltip": 1, "panels": panels,
+        "templating": {"list": list(variables)},
+        "links": [{"type": "dashboards", "tags": ["drycastle"], "asDropdown": False, "title": "Drycastle", "icon": "external link"}],
+    }
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "grafana", "dashboards", uid + ".json")
+    with open(out, "w") as f:
+        json.dump(dash, f, indent=1)
+        f.write("\n")
+    print(out, len(panels), "panels")
+    panels, y = [], 0
+
+finish("drycastle-server", "Drycastle server")
+
+# ---- the clients: what each player's game sends through the server every 10 s of play (NetClient.Report.cs, docs/monitoring.md "Clients")
+P = '{player=~"$player"}'
+L = "{{player}}"
+def c(field, legend=L): return (f"drycastle_client_{field}{P}", legend)
+
+row("Now")
+stat("Clients reporting", "count(drycastle_client_fps)", 0, desc="Players whose game sent its numbers in the last minutes. A bot sends none.")
+stat("Lowest fps", f"min(drycastle_client_fps{P})", 4, thresholds=None)
+stat("Worst frame p99", f"max(drycastle_client_frame_p99_ms{P})", 8, unit="ms", thresholds=[(16.7, "orange"), (33.3, "red")])
+stat("Highest ping", f"max(drycastle_client_rtt_ms{P})", 12, unit="ms", thresholds=[(80, "orange"), (150, "red")])
+stat("Highest loss", f"max(drycastle_client_loss_pct{P})", 16, unit="percent", thresholds=[(1, "orange"), (5, "red")])
+stat("Frames over 100 ms", f"sum(drycastle_client_frames_over_100ms{P})", 20, thresholds=[(1, "orange"), (5, "red")], desc="In the last 10 s, all selected players together.")
+nextline(4)
+
+row("Frames")
+ts("Frames per second", [c("fps")], 0, desc="Frames drawn in each 10 s, per second. The game caps a focused window at 120 and an unfocused one at 20.")
+ts("Frame time p99", [c("frame_p99_ms")], 12, unit="ms", thresholds=[(16.7, "orange"), (33.3, "red")], desc="One frame in a hundred took longer than this. 16.7 ms is 60 a second, 33.3 ms is 30.")
+nextline()
+ts("Frame time p50", [c("frame_p50_ms")], 0, w=8, unit="ms")
+ts("Slowest frame", [c("frame_max_ms")], 8, w=8, unit="ms", desc="The longest frame of each 10 s: a hitch.")
+ts("Hitches per 10 s", [c("frames_over_33ms", L + " over 33 ms"), c("frames_over_50ms", L + " over 50 ms"), c("frames_over_100ms", L + " over 100 ms")], 16, w=8)
+nextline()
+
+row("Where a frame goes")
+ts("Client scopes", [(f'drycastle_client_scope_ms_per_s{{player=~"$player"}}', "{{player}} {{scope}}")], 0, unit="ms", stack=True,
+   desc="Milliseconds of the game's own script work per second of play, by part (10 ms/s is 1 % of a core). Not in it: the engine's rendering, physics and audio.")
+ts("Render time", [c("render_cpu_ms", L + " cpu"), c("render_gpu_ms", L + " gpu")], 12, unit="ms",
+   desc="What the engine measured for the main viewport per frame: preparing the frame on the processor, and drawing it on the graphics card.")
+nextline()
+ts("Script time, worst frame", [c("process_peak_ms", L + " process"), c("physics_peak_ms", L + " physics")], 0, w=8, unit="ms", desc="The engine's 'process' and 'physics process' times: all scripts of a frame and of a physics step. The engine keeps the worst of each second; this is their mean over 10 s.")
+ts("Draw calls", [c("draws")], 8, w=8, desc="Per frame, the mean of the period.")
+ts("Triangles and objects", [c("prims_k", L + " thousand primitives"), c("objects", L + " objects")], 16, w=8)
+nextline()
+
+row("Memory and garbage collection")
+ts("Memory", [c("rss_mb", L + " process"), c("gc_heap_mb", L + " C# heap"), c("video_mem_mb", L + " video")], 0, w=8, unit="decmbytes")
+ts("Allocation", [c("alloc_mb_s")], 8, w=8, unit="MBs", desc="What the C# code allocates: the collector's work.")
+ts("Collector pause per 10 s", [c("gc_pause_ms")], 16, w=8, unit="ms", desc="A pause is a hitch when it is longer than a frame.")
+nextline()
+ts("Collections per 10 s", [c("gc_gen0", L + " gen0"), c("gc_gen1", L + " gen1"), c("gc_gen2", L + " gen2")], 0, w=8)
+ts("Nodes in the scene", [c("nodes")], 8, w=8, desc="A number that only grows is a leak.")
+ts("What the client sees", [c("remotes", L + " players"), c("world_entities", L + " world entities")], 16, w=8)
+nextline()
+
+row("Connection")
+ts("Ping", [c("rtt_ms"), c("rtt_var_ms", L + " variance")], 0, w=8, unit="ms")
+ts("Packet loss", [c("loss_pct")], 8, w=8, unit="percent")
+ts("Longest gap between snapshots", [c("snap_gap_max_ms")], 16, w=8, unit="ms", thresholds=[(100, "orange"), (250, "red")], desc="The server sends 30 a second (33 ms apart). A long gap is a freeze of the others on this player's screen.")
+nextline()
+ts("Snapshots per second", [c("snaps_per_s")], 0, w=8, max_=35)
+ts("Corrections", [c("reconciles", L + " reconciles per 10 s"), c("tick_skips", L + " ticks skipped")], 8, w=8, desc="A reconcile: the server put the player somewhere else than the client predicted, and the client replayed its inputs.")
+ts("Traffic", [c("in_kb_s", L + " in"), c("out_kb_s", L + " out")], 16, w=8, unit="KBs")
+nextline()
+ts("Largest prediction error", [c("pred_err_max_m")], 0, w=8, unit="lengthm")
+ts("Window size", [c("res_w", L + " width"), c("res_h", L + " height")], 8, w=8, unit="pixel")
+nextline()
+
+finish("drycastle-clients", "Drycastle clients", variables=[{
+    "name": "player", "label": "Player", "type": "query", "datasource": DS, "query": {"query": "label_values(drycastle_client_fps, player)", "refId": "A"},
+    "definition": "label_values(drycastle_client_fps, player)", "refresh": 2, "multi": True, "includeAll": True, "allValue": ".*",
+    "current": {"selected": True, "text": "All", "value": "$__all"}, "sort": 1,
+}])

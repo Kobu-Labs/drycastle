@@ -1675,5 +1675,19 @@
     }
    ]
   }
+ ],
+ "templating": {
+  "list": []
+ },
+ "links": [
+  {
+   "type": "dashboards",
+   "tags": [
+    "drycastle"
+   ],
+   "asDropdown": false,
+   "title": "Drycastle",
+   "icon": "external link"
+  }
  ]
 }
