@@ -4,7 +4,7 @@ Curated, redistributable 3D assets for placed objects (cars, flowers, bushes, fe
 pavement, pots, walls). Placed objects reference an asset by id (see `pipeline/src/drycastle_pipeline/edits.py`):
 
 - `pack:<pack>/<model>`: a glTF/GLB in `assets/<pack>/`, for example `pack:kenney-car-kit/sedan`.
-- `prim:<name>`: a pipeline primitive with no file (`wall`, `slab`, `pot`, `radio_tower`, `bunker`, the
+- `prim:<name>`: a pipeline primitive with no file (`wall`, `slab`, `pot`, `radio_tower`, `bunker`, `mound` (a terraced, climbable 12 m hill, tiers of boxes with rises <= 0.28 m; its `solids` are one box per tier), the
   utility poles `pole_*`, the house connectors `connector_*` and the flood wall pieces `floodwall_*`), built by `pipeline/src/drycastle_pipeline/primitives.py`.
 
 `manifest.json` (format_version 1) is the index: per asset `id`, `category`
