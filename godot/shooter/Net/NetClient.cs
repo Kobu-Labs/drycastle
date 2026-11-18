@@ -1036,6 +1036,12 @@ public partial class NetClient : Node
             case EventKind.GlassSync when GlassCodec.DecodeSync(payload) is { } gsync:
                 OnGlassSync(gsync);
                 break;
+            case EventKind.LampState when LampCodec.DecodeState(payload) is { } lamp:
+                StreetLamps.Current?.SetPoleLamp(lamp.Index, lamp.State);
+                break;
+            case EventKind.LampSync when LampCodec.DecodeSync(payload) is { } lamps:
+                StreetLamps.Current?.SyncPoleLamps(lamps);
+                break;
             case EventKind.HuntShot when HuntShot.Decode(payload) is { } hs:
                 HudHuntShot(hs);
                 break;

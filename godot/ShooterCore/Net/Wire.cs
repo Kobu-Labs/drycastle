@@ -212,6 +212,10 @@ public enum EventKind : byte
     LockAlert = 247,
     /// <summary>Server to everyone: a homing missile left a Lock-on launcher, the Aircraft it homes on and its flight seconds; the Explosion with its id ends it.</summary>
     HomingLaunch = 248,
+    /// <summary>Server broadcast: one pole lamp's state after it changed (<see cref="LampCodec"/>, ADR 0038: broken by a round, flickering back on, lit). Kinds 250-251 belong to the pole lamps.</summary>
+    LampState = 250,
+    /// <summary>Server broadcast, or to the joining player: every pole lamp that is not lit (<see cref="LampCodec"/>); the rest are lit. The join catch-up and a new round.</summary>
+    LampSync = 251,
     /// <summary>Client to server: a crew member's command to a Scud truck's launcher (<see cref="ScudCodec"/>: open or close the screen, the camera, lock a point, confirm, withdraw, abort). Kinds 80-85 belong to the Scud truck.</summary>
     ScudCommand = 80,
     /// <summary>Server to everyone, and to a joiner for each truck: one launcher's state, its clock, who is the operator, the locked point and who confirmed (<see cref="ScudStateMsg"/>). Sent when anything of that changes.</summary>
@@ -340,7 +344,8 @@ public static class Wire
     //   v69 loading a Scud truck from a rocket cart: the launcher state byte may be 10 (Loading) and the Scud notice codes 11 (LoadStarted), 12 (LoadCancelled) and 13 (EventFound); the Scud event (/event scud): an intel board entry may carry an AREA, a centre and a radius in metres (flags bit 4, a f32 radius after the centre)
     //   v70 the plantation (#364): bit 2 of the player status mask (EventKind.StatusState, StatusKind.High): the player is high; the others draw a lit cigarette and red eyes on the figure, the player's own camera sways
     //   v71 squads (#379): event 241 SquadAssign (client to server); the scoreboard message ends in a squad tail (a squad byte per row, then the squads' names)
-    public const byte ProtocolVersion = 71;
+    //   v72 shootable pole lamps (ADR 0038): events 250 LampState and 251 LampSync
+    public const byte ProtocolVersion = 72;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

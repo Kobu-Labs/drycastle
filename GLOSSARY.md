@@ -92,6 +92,10 @@ _Avoid_: reward, achievement
 A lamp post of the base map, placed from OSM street lamp nodes or along roads by the pipeline (`lamps.json`). In the shooter it is solid and lights up at night (see the night factor); the viewer does not show it.
 _Avoid_: light, streetlight, lamp post
 
+**Pole lamp**:
+The luminaire of a placed utility pole (an object's light point in `assets/manifest.json`), lit like a Street lamp. It is shootable: a bullet, pellet or gun round that passes within `hit_radius_m` (environment.json `lamp`) of its head breaks it for every player; the server owns the state (`BreakableLamps`, machine `Lamp.Light`). A Broken pole lamp has no lit lens and no beam; after `respawn_seconds` (120) it flickers for `flicker_seconds` (3) and is lit again, and a new round lights them all. The Street lamps of `lamps.json` do not break. ADR 0038.
+_Avoid_: light (alone), bulb
+
 **Respawn**:
 The player's own action (pause menu, or "Apply now" in the Loadouts screen, both with a confirm): the player dies at once and comes back after the normal respawn delay with the active loadout, or the one named. It is a suicide like a fall: a death, the killfeed names only the victim ("Respawn"), a Corpse, the Streak counter resets. No cooldown and no combat lockout (a victim can deny the kill; accepted). Refused while dead, outside a running round, or held by the demon or the Bigfoot.
 _Avoid_: redeploy (the wire name only), suicide

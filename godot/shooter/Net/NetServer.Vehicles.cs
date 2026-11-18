@@ -194,6 +194,7 @@ public partial class NetServer
         foreach (var cl in _clients.Values) DetachFromCar(cl); // out of the seat for good: Car, and Body.InVehicle with it (a body left flagged cannot go prone)
         foreach (var car in _cars) { if (car.Retired) continue; car.Seat.Clear(); car.Reset(); RestoreVehicleGlass(car); }
         RestoreGlassForRound();
+        RestoreLampsForRound();
         _carResets += _cars.Count > 0 ? 1 : 0;
     }
 
@@ -369,6 +370,7 @@ public partial class NetServer
             DamageVehicle(shotCar, def.Damage * Vehicles.BulletDamageMultiplier, c.Id, SpecialWeapons.VehicleGun, 0);
         if (hit == null && shotCar != car && wall <= def.Range) ShotGlass(shotCar, eye, dir, wall, def.Damage);
         DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, _ => def.Damage);
+        ShotLamps(N(eye), N(dir), hit?.Distance ?? Math.Min(wall, def.Range)); // a pole lamp the round passed breaks (ADR 0038)
         _vehicleView = null;
     }
 

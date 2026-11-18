@@ -334,6 +334,7 @@ public partial class NetServer : Node
         DetonateHoming();  // homing missiles that have arrived hit their Aircraft now
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
+        FlushLamps((float)delta); // the pole lamps: clocks of the broken ones and the changes of this tick (ADR 0038)
         FlushStatuses(); // statuses and burning that changed this tick
         FlushScoreboard(); // once a tick at most, and about once a second (the ping), however many kills the tick had (A-04)
         PerfLap(ServerPerf.Ph.Detonate);
@@ -580,6 +581,7 @@ public partial class NetServer : Node
         foreach (var w in _match.Entities.Snapshot()) Send(c, new EventMsg((byte)EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State)));
         SendCorpseItemsOnJoin(c); // the items the corpses carry, after the corpses themselves
         SendGlassOnJoin(c); // the glass panes that are not whole (ADR 0007)
+        SendLampsOnJoin(c); // the pole lamps that are not lit (ADR 0038)
         SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
         SendIntelOnJoin(c); // the events on the intel screen
         SendMassOnJoin(c); // the Holy Mass, when one runs
@@ -1108,12 +1110,14 @@ public partial class NetServer : Node
                 if (!drops || hit != null || wall <= len || before + BulletDrop.SegmentM >= range) break;
                 var passed = before;
                 DamageCrossed(crossed, float.PositiveInfinity, at => HitMath.HitscanDamage(w, passed + at, false)); // the panes of a piece the bullet flew through
+                ShotLamps(N(from), N(along), len); // and the lamps it passed
                 before += BulletDrop.SegmentM;
             }
             PerfShot(c, eye, dir, range, hit?.Id);
             var end = from + along * (hit?.Distance ?? Math.Min(wall, len));
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
             BaleShot(N(from), N(along), hit?.Distance ?? Math.Min(wall, len)); // any bale the bullet passes catches fire (#331)
+            ShotLamps(N(from), N(along), hit?.Distance ?? Math.Min(wall, len)); // and any pole lamp it passes breaks (ADR 0038)
             if (hit is { } h)
             {
                 // a wild animal under any hitscan weapon: where the bullet entered its body, taken before the hit can remove it (the hunter's log keeps it; a sniper's shooter is also shown it)
