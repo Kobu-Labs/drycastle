@@ -2406,7 +2406,8 @@ def build_server(settings: Settings) -> Any:
 
     @server.tool(description=f"List assets that place_object can use. Each has id (use as `asset`), "
                  f"category (car, slab, pot, flower, bush, tree, wall, fence, pole, connector, other), name, size_m "
-                 f"and tags; primitives (prim:wall, prim:slab, prim:pot, prim:radio_tower, prim:bunker and the "
+                 f"and tags; primitives (prim:wall, prim:slab, prim:pot, prim:radio_tower, prim:bunker, prim:mound (a 12 m x 4 m terraced hill you can walk up, origin at the "
+                 f"centre of its base on the ground; it scales with `scale`, keep scale <= 1.07 so each ledge stays steppable) and the "
                  f"utility poles prim:pole_*, category pole: origin at the foot, the wires run along the object's "
                  f"x axis, the lamp reaches to its -y; and the flood wall pieces prim:floodwall_*, category wall: "
                  f"origin on the wall line, the wall runs along the object's x axis, the ledge is to its -y, "
