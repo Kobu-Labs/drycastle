@@ -925,6 +925,224 @@
       "pack": null
     },
     {
+      "id": "prim:mound",
+      "category": "other",
+      "name": "Trash mound (terraced, climbable hill)",
+      "file": null,
+      "size_m": [
+        12.0,
+        4.0,
+        12.0
+      ],
+      "tags": [
+        "mound",
+        "hill",
+        "terrain",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/primitives.py)",
+      "pack": null,
+      "solids": [
+        {
+          "min": [
+            -6.0,
+            -6.0,
+            0.0
+          ],
+          "max": [
+            6.0,
+            6.0,
+            0.267
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -5.607,
+            -5.607,
+            0.0
+          ],
+          "max": [
+            5.607,
+            5.607,
+            0.533
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -5.214,
+            -5.214,
+            0.0
+          ],
+          "max": [
+            5.214,
+            5.214,
+            0.8
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -4.821,
+            -4.821,
+            0.0
+          ],
+          "max": [
+            4.821,
+            4.821,
+            1.067
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -4.429,
+            -4.429,
+            0.0
+          ],
+          "max": [
+            4.429,
+            4.429,
+            1.333
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -4.036,
+            -4.036,
+            0.0
+          ],
+          "max": [
+            4.036,
+            4.036,
+            1.6
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -3.643,
+            -3.643,
+            0.0
+          ],
+          "max": [
+            3.643,
+            3.643,
+            1.867
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -3.25,
+            -3.25,
+            0.0
+          ],
+          "max": [
+            3.25,
+            3.25,
+            2.133
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -2.857,
+            -2.857,
+            0.0
+          ],
+          "max": [
+            2.857,
+            2.857,
+            2.4
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -2.464,
+            -2.464,
+            0.0
+          ],
+          "max": [
+            2.464,
+            2.464,
+            2.667
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -2.071,
+            -2.071,
+            0.0
+          ],
+          "max": [
+            2.071,
+            2.071,
+            2.933
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -1.679,
+            -1.679,
+            0.0
+          ],
+          "max": [
+            1.679,
+            1.679,
+            3.2
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -1.286,
+            -1.286,
+            0.0
+          ],
+          "max": [
+            1.286,
+            1.286,
+            3.467
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -0.893,
+            -0.893,
+            0.0
+          ],
+          "max": [
+            0.893,
+            0.893,
+            3.733
+          ],
+          "surface": "dirt"
+        },
+        {
+          "min": [
+            -0.5,
+            -0.5,
+            0.0
+          ],
+          "max": [
+            0.5,
+            0.5,
+            4.0
+          ],
+          "surface": "dirt"
+        }
+      ]
+    },
+    {
       "id": "prim:wall",
       "category": "wall",
       "name": "Wall",
@@ -3667,8 +3885,8 @@
       "source": "scripts/make_gold_chain_model.py (original geometry written as code; python3 -I scripts/make_gold_chain_model.py rebuilds the file)",
       "pack": "drycastle-generated-models",
       "used_for": "godot/shooter item id gold_chain (data/items.json `model`), worn by CharacterView on the Neck bone and rendered into ui/icons/items/gold_chain.png; authored in the neck slot frame (forward -Z, origin at the Neck bone's origin, metres), one mesh node, 3 flat-colour materials"
-      },
-      {
+    },
+    {
       "id": "pack:drycastle-generated-models/rapeseed_plant",
       "category": "other",
       "name": "Oilseed rape plant (green stem and leaves, yellow flower heads)",
@@ -3688,8 +3906,8 @@
       "source": "scripts/make_rapeseed_model.py (original geometry written as code; python3 -I scripts/make_rapeseed_model.py rebuilds the file)",
       "pack": "drycastle-generated-models",
       "used_for": "crop_rapeseed ground type (#328), instanced over the field; origin on the ground at the foot of the stem, forward -Z, metres, one mesh node, 4 flat-colour materials, 280 triangles"
-      },
-      {
+    },
+    {
       "id": "pack:drycastle-generated-models/satellite_dish",
       "category": "other",
       "name": "Satellite dish (household, 0.7 m, on a short wall arm)",

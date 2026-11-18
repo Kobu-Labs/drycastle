@@ -48,6 +48,61 @@ def slab_mesh(params: dict | None = None) -> Mesh:
     return _box(float(p["length_m"]), float(p["width_m"]), float(p["height_m"]), p["colour"])
 
 
+def mound_tiers(params: dict | None = None) -> list[tuple[float, float]]:
+    """Tiers of ``prim:mound`` from the bottom up as ``(half_size, top_z)``: nested centred squares, the
+    plan shrinking evenly from ``base_m`` to ``top_m`` while the height climbs evenly to ``peak_m``, in as
+    few tiers as keep every rise at or under ``step_rise_m`` (the player auto-steps 0.3 m)."""
+    p = {**PRIMITIVES["mound"].params, **(params or {})}
+    base, peak, top, rise = (float(p[k]) for k in ("base_m", "peak_m", "top_m", "step_rise_m"))
+    if not (0 < top < base and peak > 0 and rise > 0):
+        raise ValueError("mound needs 0 < top_m < base_m, peak_m > 0 and step_rise_m > 0")
+    n = max(1, math.ceil(peak / rise - 1e-9))
+    run = (base - top) / 2 / max(1, n - 1)  # plan inset per tier, per side
+    return [(max(top, base) / 2 - i * run if n > 1 else top / 2, peak * (i + 1) / n) for i in range(n)]
+
+
+def mound_solids(params: dict | None = None) -> list[dict]:
+    """Collision boxes of ``prim:mound``, one per tier, each from the ground up (so the tiers nest), in the
+    mesh frame (x, y plan, z up), as the ``solids`` of the asset manifest."""
+    return [
+        {"min": [round(-h, 3), round(-h, 3), 0.0], "max": [round(h, 3), round(h, 3), round(z, 3)], "surface": "dirt"}
+        for h, z in mound_tiers(params)
+    ]
+
+
+def mound_mesh(params: dict | None = None) -> Mesh:
+    """Terraced hill: tiers of closed boxes stacked on each other, every tier from the top of the one below
+    to its own top, so the picture is what mound_solids lets you stand on. Odd tiers a little darker."""
+    p = {**PRIMITIVES["mound"].params, **(params or {})}
+    base = hex_to_rgb(p["colour"])
+    dark = tuple(int(c * 0.9) for c in base)
+    tris, colours, z0 = [], [], 0.0
+    for i, (h, z1) in enumerate(mound_tiers(p)):
+        box = box_tris((-h, 0.0), (h, 0.0), 2 * h, z0, z1)
+        tris += box
+        colours += [dark if i % 2 else base] * len(box)
+        z0 = z1
+    return _mesh(tris, colours)
+
+
+def mound_entry() -> dict:
+    """The ``assets/manifest.json`` record of ``prim:mound`` (solids from the default parameters)."""
+    prim = PRIMITIVES["mound"]
+    return {
+        "id": "prim:mound",
+        "category": "other",
+        "name": "Trash mound (terraced, climbable hill)",
+        "file": None,
+        "size_m": list(prim.size_m),
+        "tags": ["mound", "hill", "terrain", "flat-colour", "primitive"],
+        "licence": "CC0",
+        "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/primitives.py)",
+        "pack": None,
+        # the game collides with these boxes, not one box: each tier rises <= 0.28 m so the player steps up
+        "solids": mound_solids(),
+    }
+
+
 def pot_mesh(params: dict | None = None) -> Mesh:
     """Flower pot: a tapered 8-sided cylinder with a rim, an inner wall and a coloured soil top."""
     p = {**PRIMITIVES["pot"].params, **(params or {})}
@@ -231,6 +286,12 @@ PRIMITIVES: dict[str, Primitive] = {
         },
         (0.4, 0.35, 0.4),
         "#b5623c",
+    ),
+    "mound": Primitive(
+        mound_mesh,
+        {"base_m": 12.0, "peak_m": 4.0, "top_m": 1.0, "step_rise_m": 0.28, "colour": "#5a4a3a"},
+        (12.0, 4.0, 12.0),
+        "#5a4a3a",
     ),
     "bunker": Primitive(
         bunker_prim_mesh,
