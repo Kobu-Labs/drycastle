@@ -38,7 +38,7 @@ public partial class StreetLamps : Node3D
     /// <summary>Headless server: the pole colliders only, no visuals, light pool or per-frame work.</summary>
     public bool CollisionOnly { get; init; }
 
-    /// <summary>The lamps of this map on this client (null on a server that builds none); the network client reads it to break and relight pole lamps (ADR 0037).</summary>
+    /// <summary>The lamps of this map on this client (null on a server that builds none); the network client reads it to break and relight pole lamps (ADR 0038).</summary>
     public static StreetLamps? Current { get; private set; }
 
     Vector3[] _heads = Array.Empty<Vector3>();
@@ -47,7 +47,7 @@ public partial class StreetLamps : Node3D
     readonly int[] _slots = new int[PoolSize];
     readonly int[] _shown = new int[PoolSize];
     StandardMaterial3D _headMat = new();
-    // pole lamps are shootable (ADR 0037): the server says when one breaks and when it flickers back; the flicker itself is local, a pure function of its age
+    // pole lamps are shootable (ADR 0038): the server says when one breaks and when it flickers back; the flicker itself is local, a pure function of its age
     LampState[] _state = Array.Empty<LampState>();
     float[] _age = Array.Empty<float>();
     bool[] _off = Array.Empty<bool>(); // by head index: broken, so the pool never gives it a beam

@@ -610,6 +610,8 @@ public sealed partial class TacticalMap : Control
             for (var i = 0; i < m.Vehicles.Count; i++) MapGlyphs.Vehicle(this, At(m.Vehicles[i], b));
             if (m.TeamColours)
                 for (var i = 0; i < m.Friends.Count; i++) MapGlyphs.Friend(this, At(m.Friends[i], b));
+            if (m.TeamColours)
+                for (var i = 0; i < m.Squad.Count; i++) MapGlyphs.Squad(this, At(m.Squad[i].At, b), m.Squad[i].Name, 1.3f);
             var pings = m.Pings.Positions(Time.GetTicksMsec() / 1000.0); // empty once the UAV's pings expire, as on the minimap
             for (var i = 0; i < pings.Count; i++) MapGlyphs.Ping(this, At(pings[i], b), m.TeamColours);
             if (m.Blips is { } blips)
@@ -711,6 +713,23 @@ static class MapGlyphs
     {
         c.DrawCircle(p, 10f, ShooterTheme.Outline);
         c.DrawCircle(p, 8f, ShooterTheme.Good);
+    }
+
+    /// <summary>
+    /// A squad mate (#379): a blue disc in a pale ring with the name beside it, over a dark casing. Blue is the colour, the ring and the name are the shape and the words the green teammate disc does not have
+    /// (never colour only). <paramref name="scale"/> is 1 on the minimap, a little larger on the sheet.
+    /// </summary>
+    public static void Squad(CanvasItem c, Vector2 p, string name, float scale)
+    {
+        c.DrawCircle(p, 9f * scale, ShooterTheme.Outline);
+        c.DrawCircle(p, 8f * scale, ShooterTheme.Text);
+        c.DrawCircle(p, 5.5f * scale, ShooterTheme.Squad);
+        if (name == "") return;
+        var font = ThemeDB.FallbackFont;
+        const int fs = ShooterTheme.FontSmall;
+        var at = p + new Vector2(11f * scale, 5f);
+        c.DrawStringOutline(font, at, name, HorizontalAlignment.Left, -1, fs, 6, ShooterTheme.Outline);
+        c.DrawString(font, at, name, HorizontalAlignment.Left, -1, fs, ShooterTheme.Squad.Lightened(0.35f));
     }
 
     public static void Ping(CanvasItem c, Vector2 p, bool teamColours)

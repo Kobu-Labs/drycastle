@@ -21,7 +21,7 @@
         "land": {
           "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
           "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
-          "step_height": 0.4, "max_climb_deg": 50, "snap_down": 0.3
+          "step_height": 0.4, "max_climb_deg": 50, "snap_down": 0.3, "pivot_behind": 1.376
         },
         "body": {
           "squat_deg": 0.3, "dive_deg": 0.4, "lean_deg": 0.3, "max_pitch_deg": 3, "max_roll_deg": 4, "response": 7, "damping": 0.45, "terrain_response": 12,
@@ -57,7 +57,7 @@
         "land": {
           "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
           "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
-          "step_height": 0.3, "max_climb_deg": 50, "snap_down": 0.3
+          "step_height": 0.3, "max_climb_deg": 50, "snap_down": 0.3, "pivot_behind": 0.727
         },
         "body": {
           "squat_deg": 0, "dive_deg": 0, "lean_deg": 0, "max_pitch_deg": 0, "max_roll_deg": 0, "response": 7, "damping": 0.45, "terrain_response": 12,
@@ -83,7 +83,7 @@
         "land": {
           "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
           "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
-          "step_height": 0.45, "max_climb_deg": 45, "snap_down": 0.3
+          "step_height": 0.45, "max_climb_deg": 45, "snap_down": 0.3, "pivot_behind": 1.548
         },
         "body": {
           "squat_deg": 0.3, "dive_deg": 0.4, "lean_deg": 0.3, "max_pitch_deg": 3, "max_roll_deg": 4, "response": 7, "damping": 0.45, "terrain_response": 12,
@@ -92,7 +92,7 @@
         "camera": { "distance": 9, "height": 2.8, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
       },
       "comment": "The type id stays `jeep`; the model is the Synty Battle Royale cargo truck SM_Veh_Truck_01 at real size (#325): six wheels, a three-seat cab bench (driver and two passengers), no gun and no gunner seat. It tows (hitch on the centre line 0.13 m behind the bed tail, 0.62 high like the rocket cart's eye). The tuning of the old jeep is kept. Skins are the six Battle Royale atlases (private pack, boxes without it); node names in docs/standards/car-design.md.",
-      "top_speed": 30, "acceleration": 4.8, "brake": 8, "turn_radius": 3.6, "max_lateral_accel": 9, "mass": 1800, "run_over_mass": 1500, "hp": 380, "hood": [0, 1.9, -3.3], "spawn_count": 3, "half_width": 1.53, "half_length": 3.54, "height": 3.17,
+      "top_speed": 30, "acceleration": 4.8, "brake": 8, "turn_radius": 3.6, "max_lateral_accel": 9, "mass": 6500, "run_over_mass": 1500, "hp": 380, "hood": [0, 1.9, -3.3], "spawn_count": 3, "half_width": 1.53, "half_length": 3.54, "height": 3.17,
       "model": "pack:synty-vehicles/truck_woodland", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "chase_distance": 9, "chase_height": 2.8,
       "tow": { "hitch": [0, 0.62, 3.66] },
@@ -119,7 +119,7 @@
         "land": {
           "launch_boost": 2.2, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.6, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
           "grip": 1000, "yaw_response": 12, "handbrake_decel": 10, "handbrake_grip": 0.3, "handbrake_steer": 1.4,
-          "step_height": 0.45, "max_climb_deg": 45, "snap_down": 0.3
+          "step_height": 0.45, "max_climb_deg": 45, "snap_down": 0.3, "pivot_behind": 1.445
         },
         "body": {
           "squat_deg": 0.4, "dive_deg": 0.5, "lean_deg": 0.45, "max_pitch_deg": 3.5, "max_roll_deg": 5, "response": 6.5, "damping": 0.42, "terrain_response": 11,
@@ -157,7 +157,7 @@
         "land": {
           "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
           "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
-          "step_height": 0.35, "max_climb_deg": 50, "snap_down": 0.3
+          "step_height": 0.35, "max_climb_deg": 50, "snap_down": 0.3, "pivot_behind": 0.711
         },
         "body": {
           "squat_deg": 0.4, "dive_deg": 0.5, "lean_deg": 0.4, "max_pitch_deg": 3.5, "max_roll_deg": 5, "response": 7, "damping": 0.45, "terrain_response": 12,
@@ -184,7 +184,7 @@
         "land": {
           "launch_boost": 1.7, "launch_speed": 9, "power_curve": 2.5, "coast_decel": 1.3, "coast_drag": 0.07, "brake_bite": 0.55, "reverse_top_fraction": 0.3,
           "grip": 14, "yaw_response": 9, "handbrake_decel": 9, "handbrake_grip": 0.3, "handbrake_steer": 1.3,
-          "step_height": 0.4, "max_climb_deg": 48, "snap_down": 0.3
+          "step_height": 0.4, "max_climb_deg": 48, "snap_down": 0.3, "pivot_behind": 1.3
         },
         "water": {
           "draft": 0.56, "float_depth": 0.12, "reverse_thrust": 0.6, "coast_drag": 0.12, "turn_radius": 14, "prop_steer": 0.3, "yaw_response": 2, "side_drag": 2.5, "stern_swing": 1.2,
@@ -219,7 +219,7 @@
         "land": {
           "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
           "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
-          "step_height": 0.45, "max_climb_deg": 40, "snap_down": 0.3
+          "step_height": 0.45, "max_climb_deg": 40, "snap_down": 0.3, "pivot_behind": 1.775
         },
         "body": {
           "squat_deg": 0.25, "dive_deg": 0.3, "lean_deg": 0.25, "max_pitch_deg": 2.5, "max_roll_deg": 3, "response": 7, "damping": 0.45, "terrain_response": 12,
@@ -227,7 +227,7 @@
         },
         "camera": { "distance": 8.1, "height": 2.05, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
       },
-      "top_speed": 15, "acceleration": 2.5, "brake": 6, "turn_radius": 7.5, "max_lateral_accel": 6, "mass": 6000, "run_over_mass": 3000, "hp": 1200, "exposed_gunner": true, "hood": [0, 1.8, -2.7], "spawn_count": 1, "half_width": 1.3, "half_length": 3.55, "height": 3.0,
+      "top_speed": 15, "acceleration": 2.5, "brake": 6, "turn_radius": 7.5, "max_lateral_accel": 6, "mass": 9000, "run_over_mass": 3000, "hp": 1200, "exposed_gunner": true, "hood": [0, 1.8, -2.7], "spawn_count": 1, "half_width": 1.3, "half_length": 3.55, "height": 3.0,
       "model": "drycastle-generated-models/flak.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
       "tow": { "hitch": [0, 0.7, 3.65] },
@@ -257,7 +257,7 @@
         "land": {
           "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
           "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
-          "step_height": 0.4, "max_climb_deg": 35, "snap_down": 0.3
+          "step_height": 0.4, "max_climb_deg": 35, "snap_down": 0.3, "pivot_behind": 2.705
         },
         "body": {
           "squat_deg": 0.2, "dive_deg": 0.3, "lean_deg": 0.3, "max_pitch_deg": 2, "max_roll_deg": 3, "response": 7, "damping": 0.45, "terrain_response": 12,
@@ -330,7 +330,7 @@
         "land": {
           "launch_boost": 2.5, "launch_speed": 12, "power_curve": 18, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
           "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
-          "step_height": 0.5, "max_climb_deg": 50, "snap_down": 0.3
+          "step_height": 0.5, "max_climb_deg": 50, "snap_down": 0.3, "pivot_behind": 1.544
         },
         "body": {
           "squat_deg": 0.3, "dive_deg": 0.4, "lean_deg": 0.3, "max_pitch_deg": 3, "max_roll_deg": 4, "response": 7, "damping": 0.45, "terrain_response": 12,
@@ -373,7 +373,7 @@
         "land": {
           "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
           "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
-          "step_height": 0.5, "max_climb_deg": 35, "snap_down": 0.3
+          "step_height": 0.5, "max_climb_deg": 35, "snap_down": 0.3, "pivot_behind": 2.822
         },
         "body": {
           "squat_deg": 0.15, "dive_deg": 0.2, "lean_deg": 0.15, "max_pitch_deg": 1.5, "max_roll_deg": 2, "response": 7, "damping": 0.45, "terrain_response": 12,
@@ -411,7 +411,7 @@
         "land": {
           "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
           "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
-          "step_height": 0.5, "max_climb_deg": 35, "snap_down": 0.3
+          "step_height": 0.5, "max_climb_deg": 35, "snap_down": 0.3, "pivot_behind": 2.892
         },
         "body": {
           "squat_deg": 0.15, "dive_deg": 0.2, "lean_deg": 0.15, "max_pitch_deg": 1.5, "max_roll_deg": 2, "response": 7, "damping": 0.45, "terrain_response": 12,

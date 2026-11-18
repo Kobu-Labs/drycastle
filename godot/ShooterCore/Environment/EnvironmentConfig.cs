@@ -90,7 +90,7 @@ public sealed class LampLook
     public double LensEnergy { get; set; } = 6;
     /// <summary>A pole lamp is broken by a round that passes within this many metres of its head.</summary>
     public double HitRadiusM { get; set; } = 0.25;
-    /// <summary>A broken pole lamp stays dark this long, then flickers for <see cref="FlickerSeconds"/> and is lit again (ADR 0037).</summary>
+    /// <summary>A broken pole lamp stays dark this long, then flickers for <see cref="FlickerSeconds"/> and is lit again (ADR 0038).</summary>
     public float RespawnSeconds { get; set; } = 120;
     public float FlickerSeconds { get; set; } = 3;
 }

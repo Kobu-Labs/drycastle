@@ -32,8 +32,8 @@ public static class IndexSpecies
 public sealed record Mystery(string Id, string Name, bool Live);
 
 /// <summary>
-/// The Mystery registry. Bigfoot is caught when its Event is won; Unicorn and Scylla are registered so their Life List tiles exist, and
-/// need only a catch hook later. A viewer who has not caught one is sent <see cref="HiddenId"/> instead of its id (<see cref="HuntRedaction"/>).
+/// The Mystery registry. Bigfoot is caught when its Event is won; the Unicorn when a player kills it (a rare wild animal, <see cref="HuntRecord.ForUnicorn"/>); Scylla is registered so its Life List tile exists, and
+/// needs only a catch hook later. A viewer who has not caught one is sent <see cref="HiddenId"/> instead of its id (<see cref="HuntRedaction"/>).
 /// </summary>
 public static class Mysteries
 {
@@ -47,7 +47,7 @@ public static class Mysteries
     public static readonly IReadOnlyList<Mystery> All = new[]
     {
         new Mystery(Bigfoot, "Bigfoot", Live: true),
-        new Mystery(Unicorn, "Unicorn", Live: false),
+        new Mystery(Unicorn, "Unicorn", Live: true),
         new Mystery(Scylla, "Scylla", Live: false),
     };
 

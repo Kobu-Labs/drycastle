@@ -356,4 +356,48 @@ public class AnimalCollisionTests
         Assert.Equal(20, keeper.Populate(new Dictionary<string, Pen> { ["G-1"] = pen }, world));
         Assert.All(keeper.Pets, p => Assert.True(p.Position.X >= 10, $"spawned in the house at {p.Position}"));
     }
+
+    // ---- the crowd's grid gives the answers the whole list gave ----
+
+    [Fact]
+    public void TheCrowdAnswersFromItsGridAsItWouldFromEveryAnimal()
+    {
+        var yard = new Yard();
+        var rng = new Random(7);
+        var crowd = new AnimalCrowd();
+        var all = new List<Animal>();
+        float Coord() => (float)(rng.NextDouble() * 30 - 15); // both sides of zero, several cells, dense enough to touch
+        for (var i = 0; i < 120; i++)
+        {
+            var a = Make(yard, new Vector3(Coord(), 0, Coord()), (float)(rng.NextDouble() * 6.28), seed: i + 1);
+            all.Add(a); crowd.Add(a);
+        }
+        yard.Threats.Add(new Vector3(40, 0, 40)); // some of them run, and cross cells
+        var blocked = 0; var stopped = 0;
+        for (var round = 0; round < 40; round++)
+        {
+            foreach (var a in all.Where((_, i) => i % 3 == 0)) a.Tick(Dt);
+            if (round == 20) { crowd.Remove(all[5]); crowd.Remove(all[50]); all.RemoveAt(50); all.RemoveAt(5); }
+            foreach (var self in all)
+            {
+                var from = self.Body;
+                var to = BodyBox.Of(self.Position + new Vector3(Coord() / 30, 0, Coord() / 30), self.Yaw, 0.4f, 0.8f, 0);
+                var expected = all.Any(o => !ReferenceEquals(o, self) && o.Obstructs && (self.Herd == null || !ReferenceEquals(o.Herd, self.Herd)) && to.Overlaps(o.Body)
+                    && (!from.Overlaps(o.Body) || to.DistanceBetweenCentres(o.Body) < from.DistanceBetweenCentres(o.Body)));
+                Assert.Equal(expected, crowd.Blocks(self, from, to));
+                if (expected) blocked++;
+            }
+            for (var q = 0; q < 30; q++)
+            {
+                float x = Coord(), z = Coord(), radius = 0.3f + (float)rng.NextDouble() * 3;
+                var want = all.Where(a => a.Stands && Vector2.DistanceSquared(new Vector2(a.Position.X, a.Position.Z), new Vector2(x, z)) <= (a.BodyReach + radius) * (a.BodyReach + radius))
+                    .Select(a => (a.Body.X, a.Body.Z, a.Position.Y)).ToList();
+                var got = new List<BodyObstacle>();
+                crowd.Near(x, z, radius, got);
+                Assert.Equal(want, got.Select(b => (b.Box.X, b.Box.Z, b.Y0)).ToList()); // the same bodies, in the order they joined
+                stopped += got.Count;
+            }
+        }
+        Assert.True(blocked > 50 && stopped > 500, $"the test asked too little: {blocked} blocks, {stopped} bodies");
+    }
 }

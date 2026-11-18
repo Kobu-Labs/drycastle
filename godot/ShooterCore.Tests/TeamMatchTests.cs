@@ -196,7 +196,7 @@ public class TeamMatchTests
     public void OlderMatchStateWithoutTeamTailStillDecodes()
     {
         var full = MatchCodec.Encode(new MatchStateMsg(MatchPhase.Running, 1f, Array.Empty<ushort>(), new[] { new ScoreRow(1, "a", 2, 0, 5, Teams.A) }, MatchMode.TeamDeathmatch, 2, 0));
-        var old = full[..^(1 + 2 + 2 + 1)]; // drop mode, both scores and the one team byte
+        var old = full[..^(1 + 2 + 2 + 1 + 1 + 1)]; // drop mode, both scores, the one team byte, and the squad tail (one squad byte, the count)
         var d = MatchCodec.DecodeMatchState(old)!;
         Assert.Equal(MatchMode.FreeForAll, d.Mode);
         Assert.Equal(Teams.None, d.Rows[0].Team);

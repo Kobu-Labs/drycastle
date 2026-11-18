@@ -19,6 +19,9 @@ public sealed class MapMarkers
     public bool HasPlayer { get; private set; }
     public List<NVector2> Vehicles { get; } = new();
     public List<NVector2> Friends { get; } = new();
+    /// <summary>Squad mates (#379): blue, with their names. Not in <see cref="Friends"/>.</summary>
+    public List<SquadMark> Squad { get; } = new();
+    public readonly record struct SquadMark(NVector2 At, string Name);
     public MinimapPings Pings { get; } = new();
     /// <summary>The Scud missiles about to land near the player: a ring the size of the lethal radius, until the impact (and a few seconds after).</summary>
     public MapStrikes Strikes { get; } = new();
@@ -30,7 +33,7 @@ public sealed class MapMarkers
     public GunfireBlips? Blips { get; set; }
     /// <summary>The player's waypoint (set by clicking the tactical map): drawn on both maps and in the world.</summary>
     public Waypoint Waypoint { get; } = new();
-    /// <summary>Team deathmatch: pings use the enemy colour (orange) and friends are drawn, as outlined circles in the friend colour.</summary>
+    /// <summary>Team deathmatch: pings use the enemy colour (orange) and friends and squad mates are drawn.</summary>
     public bool TeamColours { get; set; }
 
     /// <summary>True the first time a player is set; the minimap uses it to start its eased yaw without a sweep from zero.</summary>
@@ -46,6 +49,12 @@ public sealed class MapMarkers
     public void SetVehicles(IReadOnlyList<Vector2> groundXZ) => Copy(groundXZ, Vehicles);
 
     public void SetFriends(IReadOnlyList<Vector2> groundXZ) => Copy(groundXZ, Friends);
+
+    public void SetSquad(IReadOnlyList<(Vector2 At, string Name)> mates)
+    {
+        Squad.Clear();
+        for (var i = 0; i < mates.Count; i++) Squad.Add(new SquadMark(new NVector2(mates[i].At.X, mates[i].At.Y), mates[i].Name));
+    }
 
     static void Copy(IReadOnlyList<Vector2> src, List<NVector2> dst)
     {

@@ -15,7 +15,7 @@ public enum LampState : byte
 public readonly record struct LampStateMsg(ushort Index, LampState State);
 
 /// <summary>
-/// The shootable pole lamps (ADR 0037), server side and pure: a round whose path passes through a lamp's head breaks it, after <see cref="LampLook.RespawnSeconds"/>
+/// The shootable pole lamps (ADR 0038), server side and pure: a round whose path passes through a lamp's head breaks it, after <see cref="LampLook.RespawnSeconds"/>
 /// it flickers for <see cref="LampLook.FlickerSeconds"/> and is lit again. Only a lamp that is not lit has a machine, so a map of hundreds of lamps costs nothing
 /// until one is shot. A new round lights every lamp again (<see cref="RestoreAll"/>). Lamps of lamps.json (the base map's own poles) are not in the list.
 /// </summary>
@@ -129,7 +129,7 @@ public static class LampFlicker
 }
 
 /// <summary>
-/// Wire side of the pole lamps (ADR 0037), over the reliable channel. <see cref="EventKind.LampState"/>: u16 lamp, u8 <see cref="LampState"/>.
+/// Wire side of the pole lamps (ADR 0038), over the reliable channel. <see cref="EventKind.LampState"/>: u16 lamp, u8 <see cref="LampState"/>.
 /// <see cref="EventKind.LampSync"/>: u16 count, then count times a lamp as above; every lamp not listed is lit (the join catch-up, a new round).
 /// </summary>
 public static class LampCodec

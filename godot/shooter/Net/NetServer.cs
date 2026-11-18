@@ -184,8 +184,10 @@ public partial class NetServer : Node
     // rockets: server-owned projectile entities, ids from 0x8000 up (player ids count up from 1)
     /// <summary>A rocket in flight. Speed and Life are per launch when set (a gunship's, killstreaks.json); zero keeps the weapon's own.</summary>
     /// <summary>FromCar is the vehicle its owner fired it from, in an armed seat (null on foot): while the owner still rides it, the rocket passes its hull and spares its riders.</summary>
-    sealed class Rocket { public ushort Id, Owner; public byte Weapon; public Vector3 Pos, Dir; public float Age; public SplashDef? Blast; public float Speed, Life; public ServerCar? FromCar; public int ViewBack = -1; public uint ViewLife; }
+    sealed class Rocket { public ushort Id, Owner; public byte Weapon; public Vector3 Pos, Dir; public float Age; public SplashDef? Blast; public float Speed, Life; public ServerCar? FromCar; public int ViewBack = -1; public uint ViewLife; /* a thrown grenade (weapons.json grenade): its velocity and fuse; Dir is then the velocity's direction */ public GrenadeDef? Grenade; public Vector3 Vel; public Countdown Fuse; }
     readonly List<Rocket> _rockets = new();
+    /// <summary>A grenade's speed in the health byte of its snapshot record, per m/s (the client divides it back out).</summary>
+    public const float GrenadeSpeedScale = 8f;
     ushort _nextRocket = 0x8000;
     public bool RpgSmoke;
     /// <summary>Car smoke: flat arena, three cars at fixed spots, debug commands, judges the vehicle scenario.</summary>
@@ -260,6 +262,7 @@ public partial class NetServer : Node
         _elapsed += delta;
         _perf?.Begin();
         PhasesBegin();
+        Prof.TickBegin();
         foreach (var cl in _clients.Values) cl.PacketsThisTick = 0;
         Poll();
         PerfLap(ServerPerf.Ph.Poll);
@@ -270,26 +273,36 @@ public partial class NetServer : Node
         IntelTick(); // a made-up event whose time is up leaves the intel screen
         PerfLap(ServerPerf.Ph.Housekeeping);
         _audit?.Begin();
+        var pt = Prof.Begin();
         _match.Update();
         NavDrain(); // the routes the worker finished since the last tick, applied here and nowhere else
         _audit?.Lap(0);
+        pt = Prof.Lap(Prof.S.MatchUpdate, pt);
         BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
         GangsPrepare(); // the players the Gang members fight, and who each fights
+        AnimalsPrepare(); // the players and moving vehicles the animals look at, read once for all of them
         _audit?.Lap(1);
+        pt = Prof.Lap(Prof.S.Prepare, pt);
         _match.Entities.Tick((float)delta);
         _audit?.Lap(2);
+        pt = Prof.Lap(Prof.S.Entities, pt);
         CitizensTick((float)delta);
         _audit?.Lap(3);
+        pt = Prof.Lap(Prof.S.Citizens, pt);
         PetsTick((float)delta);
         _audit?.Lap(4);
+        pt = Prof.Lap(Prof.S.Pets, pt);
         WildlifeTick((float)delta);
+        AnimalsDone(); // the animals have ticked: the players move from here on
         _audit?.Lap(5);
+        pt = Prof.Lap(Prof.S.Wildlife, pt);
         MassTick((float)delta); // the Holy Mass: its clock, the pastor, the seats
         _audit?.Lap(6);
         ThievesTick((float)delta); // the Thieves event: its phase clock
         _audit?.Lap(7);
         RozhlasTick((float)delta); // the village loudspeaker: the schedule and the hijack clock
         _audit?.Lap(8);
+        Prof.End(Prof.S.Events, pt);
         PerfLap(ServerPerf.Ph.Match);
         StreakTick((float)delta);
         PerfLap(ServerPerf.Ph.Streaks);
@@ -317,10 +330,11 @@ public partial class NetServer : Node
         PlantationTick((float)delta); // highs run out
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
         DetonateFlak();    // flak shells that have arrived burst now
+        StepVehicleHoming((float)delta); // missiles homing on flown helicopters fly and hit now
         DetonateHoming();  // homing missiles that have arrived hit their Aircraft now
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
-        FlushLamps((float)delta); // the pole lamps: clocks of the broken ones and the changes of this tick (ADR 0037)
+        FlushLamps((float)delta); // the pole lamps: clocks of the broken ones and the changes of this tick (ADR 0038)
         FlushStatuses(); // statuses and burning that changed this tick
         FlushScoreboard(); // once a tick at most, and about once a second (the ping), however many kills the tick had (A-04)
         PerfLap(ServerPerf.Ph.Detonate);
@@ -338,7 +352,11 @@ public partial class NetServer : Node
         if (_clients.Count > _peakPlayers) _peakPlayers = _clients.Count;
         if (QuitAfter > 0) foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved; // only the smoke verdict reads it; a production server keeps no per-name history
         if (_tick % (Wire.TickRate * 2) == 0 && _clients.Count > 0)
-            GD.Print($"server: tick {_tick}, players {string.Join(", ", _byId.Values.Select(c => $"{c.Name}#{c.Id}@({c.Body.GlobalPosition.X:F1},{c.Body.GlobalPosition.Y:F1},{c.Body.GlobalPosition.Z:F1}) ack={c.Ack}"))}");
+        {
+            var logT = Prof.Begin(Prof.S.LogPlayers); // after the tick's clock stopped: this line is in no phase
+                GD.Print($"server: tick {_tick}, players {string.Join(", ", _byId.Values.Select(c => $"{c.Name}#{c.Id}@({c.Body.GlobalPosition.X:F1},{c.Body.GlobalPosition.Y:F1},{c.Body.GlobalPosition.Z:F1}) ack={c.Ack}"))}");
+            Prof.End(Prof.S.LogPlayers, logT);
+        }
         if (RpgSmoke)
         {
             if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishRpg();
@@ -486,6 +504,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.SeatSwitch } sw && c.Joined) OnSeatSwitch(c, sw.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.ScudCommand } sc && c.Joined) OnScudCommand(c, sc.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.TeamAssign } ta && c.Joined) OnTeamAssign(c, ta.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.SquadAssign } sq && c.Joined) OnSquadAssign(c, sq.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) OnHuntRequest(c, hq);
             else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) OnChatSend(c, cs.Payload);
             else if (c.Joined) OnProfileMessage(c, m);
@@ -562,7 +581,7 @@ public partial class NetServer : Node
         foreach (var w in _match.Entities.Snapshot()) Send(c, new EventMsg((byte)EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State)));
         SendCorpseItemsOnJoin(c); // the items the corpses carry, after the corpses themselves
         SendGlassOnJoin(c); // the glass panes that are not whole (ADR 0007)
-        SendLampsOnJoin(c); // the pole lamps that are not lit (ADR 0037)
+        SendLampsOnJoin(c); // the pole lamps that are not lit (ADR 0038)
         SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
         SendIntelOnJoin(c); // the events on the intel screen
         SendMassOnJoin(c); // the Holy Mass, when one runs
@@ -649,6 +668,7 @@ public partial class NetServer : Node
     /// <summary>Broadcast an event envelope to every joined client (shot, hit, kill, ... from later issues).</summary>
     public void BroadcastEvent(EventKind kind, byte[] payload)
     {
+        var profT = Prof.Begin(Prof.S.BroadcastEvent);
         ReliableMsg m = new EventMsg((byte)kind, payload);
         PerfEventSent(kind, payload);
         RozhlasCombatEvent(kind, payload); // shots, launches and blasts inside the Urad go to the rozhlas live feed while the mic is live
@@ -657,6 +677,7 @@ public partial class NetServer : Node
         var effect = Wire.IsEffect(kind);
         foreach (var c in _clients.Values)
             if (c.Joined) Tx(c.Peer!, effect ? Wire.ChanEffects : Wire.ChanReliable, bytes, effect ? 0 : (int)ENetPacketPeer.FlagReliable);
+        Prof.End(Prof.S.BroadcastEvent, profT);
     }
 
     void OnDebug(Client c, byte[] payload)
@@ -777,8 +798,8 @@ public partial class NetServer : Node
 
     MatchStateMsg BuildMatchState()
     {
-        var rows = _match.Ranking().Select(p => new ScoreRow(p.Id, p.Sandbox ? p.Name + " [SANDBOX]" : p.Name, p.Kills, p.Deaths, Ping(p.Id), p.Team, p.Sandbox, p.Bot)).ToList();
-        return new MatchStateMsg(_match.Phase, _match.TimeRemaining, _match.Winners, rows, _match.Mode, _match.TeamScore(Teams.A), _match.TeamScore(Teams.B));
+        var rows = _match.Ranking().Select(p => new ScoreRow(p.Id, p.Sandbox ? p.Name + " [SANDBOX]" : p.Name, p.Kills, p.Deaths, Ping(p.Id), p.Team, p.Sandbox, p.Bot, p.Squad)).ToList();
+        return new MatchStateMsg(_match.Phase, _match.TimeRemaining, _match.Winners, rows, _match.Mode, _match.TeamScore(Teams.A), _match.TeamScore(Teams.B), _match.SquadList);
     }
 
     ushort Ping(ushort id) =>
@@ -836,7 +857,9 @@ public partial class NetServer : Node
             if (useAct && LootInReach(c) == null && (MassSit(c) || GarageUse(c) || TryEnterCar(c))) continue; // the use key on lying Loot sends it back, it does not take a seat
             c.Body.Yaw = Quant.Yaw(i.Yaw);
             c.Body.Pitch = Quant.Pitch(i.Pitch);
+            var moveT = Prof.Begin(Prof.S.PlayerMove);
             c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
+            Prof.End(Prof.S.PlayerMove, moveT);
             c.StepTicks++;
             c.Recoil.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Fire) != 0, c.W.Current.Recoil);
             // breath hold: sprint is cancelled while aiming, so the sprint bit with aim held is the breath key
@@ -846,7 +869,7 @@ public partial class NetServer : Node
             if (c.W.Update(_elapsed, wi) is { } shot)
             {
                 if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++; // spawn protection ends on a real shot, not on Fire held with an empty magazine
-                FireWeapon(c, i, shot);
+                { var fireT = Prof.Begin(Prof.S.Fire); FireWeapon(c, i, shot); Prof.End(Prof.S.Fire, fireT); }
             }
             if (c.W.Changed) SendAmmo(c);
             c.Slot = (byte)(c.W.Slot - 1);
@@ -876,7 +899,7 @@ public partial class NetServer : Node
         if (c.W.Update(_elapsed, input with { Locked = HasLock(c) }) is { } shot)
         {
             if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++;
-            FireWeapon(c, i, shot, car);
+            { var fireT = Prof.Begin(Prof.S.Fire); FireWeapon(c, i, shot, car); Prof.End(Prof.S.Fire, fireT); }
         }
         if (c.W.Changed) SendAmmo(c);
         c.Slot = (byte)(c.W.Slot - 1);
@@ -919,9 +942,12 @@ public partial class NetServer : Node
     /// </summary>
     List<HitTarget> LiveTargets()
     {
+        var profT = Prof.Begin(Prof.S.LiveTargets);
         var list = _targetLists.Count > 0 ? _targetLists.Pop() : new List<HitTarget>(_byId.Count + 4);
+        var partT = Prof.Begin(Prof.S.TargetsPlayers);
         foreach (var o in _byId.Values)
             if (_match.Get(o.Id)?.Life == PlayerLife.Alive && !_pins.ContainsKey(o.Id)) list.Add(HitTargetOf(o)); // a pinned player is under the demon and untouchable: not a target, so no shot stops on them
+        Prof.End(Prof.S.TargetsPlayers, partT);
         var dummies = _match.Targets.All; // living target dummies: an index loop, no enumerator object
         for (var i = 0; i < dummies.Count; i++)
         {
@@ -932,11 +958,14 @@ public partial class NetServer : Node
         _crowd?.AddTargets(list); // the citizens of the Holy Mass
         AddGangTargets(list); // the Gang members of the Thieves event
         AddVanTargets(list); // and their Raid vans
+        partT = Prof.Begin(Prof.S.TargetsAnimals);
         AddPetTargets(list);
         AddWildlifeTargets(list);
+        Prof.End(Prof.S.TargetsAnimals, partT);
         _workers?.AddTargets(list); // the workers of the Urad
         AddDemonTarget(list);
         PerfCounters.LiveTargetsCalls++; PerfCounters.LiveTargetsElems += list.Count;
+        Prof.End(Prof.S.LiveTargets, profT);
         return list;
     }
 
@@ -1013,6 +1042,13 @@ public partial class NetServer : Node
     /// </summary>
     void FireWeapon(Client c, in NetInput i, FireOutcome shot, ServerCar? seatCar = null)
     {
+        List<HitTarget>? pooled = null;
+        try { FireWeaponWith(c, i, shot, seatCar, ref pooled); }
+        finally { if (pooled != null) ReturnTargets(pooled); } // the shot is resolved: its target list goes back for the next one (it was a new list of every target per shot)
+    }
+
+    void FireWeaponWith(Client c, in NetInput i, FireOutcome shot, ServerCar? seatCar, ref List<HitTarget>? pooled)
+    {
         var w = shot.Weapon;
         var back = VehicleBackOf(c); // the vehicles this shot rewinds (B-02): the same view tick as the players (ADR 0013)
         _vehicleView = ViewOf(back, c.LifeStart);
@@ -1026,13 +1062,17 @@ public partial class NetServer : Node
             var held = SeatAimRules.Aim(seat!.Aim, carYaw, carPitch, carRoll, yaw, pitch);
             yaw = held.ViewYaw; pitch = held.ViewPitch;
         }
-        var targets = seatCar != null ? RiderRules.NotAboard(ShotTargets(c), seatCar.Seat) : ShotTargets(c); // players where the shooter's screen showed them (ADR 0013)
+        var targetsT = Prof.Begin(Prof.S.ShotTargets);
+        var all = ShotTargets(c); // players where the shooter's screen showed them (ADR 0013)
+        pooled = all;
+        var targets = seatCar != null ? RiderRules.NotAboard(all, seatCar.Seat) : all; // (NotAboard copies its own)
+        Prof.End(Prof.S.ShotTargets, targetsT);
         _shotsFired++;
         var aiming = (i.Buttons & (ushort)MoveButtons.Aim) != 0;
         var body = c.Body.State;
         float Spread(float degrees) => seat != null ? SeatAimRules.ShotSpread(degrees, w, aiming, seatCar!.State.Speed, seat) : HitMath.ShotSpread(degrees, w, body, aiming);
         var stance = seat != null ? Stance.Stand : body.Stance; // a seat steadies the recoil no more than standing does
-        if (w.Kind == WeaponKind.Hitscan && w.Pellets > 1) FirePellets(c, eye, yaw, pitch, w, (byte)shot.WeaponIndex, Spread(w.PelletSpread), targets, seatCar);
+        if (w.Kind == WeaponKind.Hitscan && w.Pellets > 1) { var pelT = Prof.Begin(Prof.S.FirePellets); FirePellets(c, eye, yaw, pitch, w, (byte)shot.WeaponIndex, Spread(w.PelletSpread), targets, seatCar); Prof.End(Prof.S.FirePellets, pelT); }
         else if (w.Kind == WeaponKind.Hitscan)
         {
             var kick = c.Recoil.Shot(w.Recoil, RecoilState.Multiplier(w.Recoil, aiming, stance));
@@ -1057,10 +1097,16 @@ public partial class NetServer : Node
                     along = len > 1e-4f ? new Vector3(piece.X, piece.Y, piece.Z) / len : dir;
                 }
                 crossed = null;
+                var partT = Prof.Begin(Prof.S.FireBulletHit);
                 wall = BulletHit(from, along, len, out shotCar, ref crossed, seatCar);
+                Prof.End(Prof.S.FireBulletHit, partT);
+                partT = Prof.Begin(Prof.S.FireRaycast);
                 var (exposedGunner, pastHull) = ExposedGunnerBehind(shotCar, from, along, len, targets, skip: seatCar);
                 hit = GunnerCover.Raycast(N(from), N(along), len, wall, targets, c.Id, exposedGunner, pastHull); // a flak gunner in the open is hit through his hull
-                if (hit == null && HitMath.Raycast(N(from), N(along), len, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++;
+                Prof.End(Prof.S.FireRaycast, partT);
+                partT = Prof.Begin(Prof.S.FireMissCheck);
+                if (WeaponsSmoke && hit == null && HitMath.Raycast(N(from), N(along), len, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++; // only the weapons smoke reads the count: a second ray over every target on each miss otherwise
+                Prof.End(Prof.S.FireMissCheck, partT);
                 if (!drops || hit != null || wall <= len || before + BulletDrop.SegmentM >= range) break;
                 var passed = before;
                 DamageCrossed(crossed, float.PositiveInfinity, at => HitMath.HitscanDamage(w, passed + at, false)); // the panes of a piece the bullet flew through
@@ -1071,12 +1117,14 @@ public partial class NetServer : Node
             var end = from + along * (hit?.Distance ?? Math.Min(wall, len));
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
             BaleShot(N(from), N(along), hit?.Distance ?? Math.Min(wall, len)); // any bale the bullet passes catches fire (#331)
-            ShotLamps(N(from), N(along), hit?.Distance ?? Math.Min(wall, len)); // and any pole lamp it passes breaks (ADR 0037)
+            ShotLamps(N(from), N(along), hit?.Distance ?? Math.Min(wall, len)); // and any pole lamp it passes breaks (ADR 0038)
             if (hit is { } h)
             {
                 // a wild animal under any hitscan weapon: where the bullet entered its body, taken before the hit can remove it (the hunter's log keeps it; a sniper's shooter is also shown it)
                 var hunt = WildlifeRules.IsHitId(h.Id) ? HuntShotOf(targets, h.Id, N(from + along * h.Distance), before + h.Distance, (byte)shot.WeaponIndex, h.ShapeHead) : null;
+                var dealT = Prof.Begin(Prof.S.FireDeal);
                 var dealt = Deal(c.Id, (byte)shot.WeaponIndex, h.Id, HitMath.HitscanDamage(w, before + h.Distance, h.Head), h.Head, false, shot: hunt, shotDistance: before + h.Distance);
+                Prof.End(Prof.S.FireDeal, dealT);
                 if (dealt == DamageResult.Killed && hunt is { } shown && w.Category == WeaponCategory.Sniper) Send(c, new EventMsg((byte)EventKind.HuntShot, HuntShot.Encode(shown)));
             }
             else if (shotCar != null && Vehicles != null && wall <= len)
@@ -1090,6 +1138,7 @@ public partial class NetServer : Node
             var dir = HitMath.Forward(yaw, pitch);
             if (w.Lock != null && FireHoming(c, shot, eye)) { _vehicleView = null; return; } // a Lock-on launcher's missile homes on its Aircraft (ADR 0031)
             var rocket = new Rocket { Id = _nextRocket, Owner = c.Id, Weapon = (byte)shot.WeaponIndex, Pos = eye, Dir = new Vector3(dir.X, dir.Y, dir.Z), FromCar = seatCar };
+            if (w.Grenade is { } gren) { rocket.Grenade = gren; rocket.Vel = rocket.Dir * w.ProjectileSpeed; rocket.Fuse.Start(gren.FuseSeconds); }
             _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
             rocket.ViewBack = back; rocket.ViewLife = c.LifeStart; // a rocket rewinds vehicles by the shooter's lag at each step (B-02)
             _rockets.Add(rocket);
@@ -1118,6 +1167,7 @@ public partial class NetServer : Node
     /// <param name="shot">Where the bullet entered a wild animal it hit (the hit diagram), and <paramref name="shotDistance"/> how far it flew: for the hunter's log (<see cref="OnWildKilled"/>).</param>
     DamageResult Deal(ushort attackerId, byte weaponIdx, ushort victim, float damage, bool head, bool backstab, KillCause cause = KillCause.Standard, HuntShotMsg? shot = null, float? shotDistance = null)
     {
+        _animalsFresh = false; // a life may end here: the animals' list of players is asked anew
         if (victim == BigfootRules.TargetId) return DealBigfoot(attackerId, weaponIdx); // a hit count, not hit points (issue #264)
         if (_streaks.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
         if (DemonRules.IsHitId(victim)) return DemonHit(attackerId, weaponIdx, damage); // the demon: a hit count, no hit points
@@ -1155,6 +1205,7 @@ public partial class NetServer : Node
         {
             var r = _rockets[k];
             var w = Weapons.Weapons[r.Weapon];
+            if (r.Grenade != null) { if (StepGrenade(r, w, dt)) _rockets.RemoveAt(k); continue; }
             var speed = r.Speed > 0 ? r.Speed : w.ProjectileSpeed;
             var life = r.Life > 0 ? r.Life : w.ProjectileLife;
             var len = speed * dt;
@@ -1186,6 +1237,29 @@ public partial class NetServer : Node
             r.Age += dt;
             if (step.Outcome == RocketOutcome.Expired) { _rockets.RemoveAt(k); _expiredRockets++; Explode(r, w, r.Pos, null); }
         }
+    }
+
+    /// <summary>
+    /// Moves a thrown grenade one tick (<see cref="GrenadeFlight"/>): it bounces off the world and vehicles (as they stood where its thrower's screen showed them, B-02) and
+    /// flies through players; its fuse runs out into the rpg's own <see cref="Explode"/>. True when it blew up (the caller drops it).
+    /// </summary>
+    bool StepGrenade(Rocket r, WeaponDef w, float dt)
+    {
+        var own = RocketCar(r);
+        _vehicleView = ViewOf(r.ViewBack, r.ViewLife);
+        var step = GrenadeFlight.Step(r.Grenade!, N(r.Pos), N(r.Vel), dt, (from, dir, len) =>
+        {
+            var stop = Query.Shot(new Vector3(from.X, from.Y, from.Z), new Vector3(dir.X, dir.Y, dir.Z), len, own);
+            return new GrenadeStop(stop.Distance, new NVec3(stop.Normal.X, stop.Normal.Y, stop.Normal.Z));
+        });
+        _vehicleView = null;
+        r.Pos = new Vector3(step.Pos.X, step.Pos.Y, step.Pos.Z);
+        r.Vel = new Vector3(step.Vel.X, step.Vel.Y, step.Vel.Z);
+        if (r.Vel.LengthSquared() > 1e-4f) r.Dir = r.Vel.Normalized();
+        r.Age += dt;
+        if (!r.Fuse.Tick(dt)) return false;
+        Explode(r, w, r.Pos + Vector3.Up * 0.1f, null); // a hair above where it lies: the blast centre is not in the floor
+        return true;
     }
 
     /// <summary>The vehicle a rocket was fired from, while its owner still rides it; null otherwise (fired on foot, or the owner has got out or died).</summary>
@@ -1259,7 +1333,7 @@ public partial class NetServer : Node
         ents.AddRange(TargetRecords()); // target dummies (#148)
         foreach (var r in _rockets)
             ents.Add(EntityRecord.Make(r.Id, EntityType.Projectile, N(r.Pos),
-                MathF.Atan2(-r.Dir.X, -r.Dir.Z), MathF.Asin(Math.Clamp(r.Dir.Y, -1f, 1f)), 0, EntityState.Alive, r.Weapon));
+                MathF.Atan2(-r.Dir.X, -r.Dir.Z), MathF.Asin(Math.Clamp(r.Dir.Y, -1f, 1f)), r.Grenade != null ? r.Vel.Length() * GrenadeSpeedScale : 0, EntityState.Alive, r.Weapon)); // a grenade's speed rides the health byte (the rocket has none)
         // an empty tick (nothing changed for this client) sends no packet except the heartbeat, which carries the input ack (A-05)
         var heartbeat = _tick % Wire.EmptyTickHeartbeat == 0;
         foreach (var c in _clients.Values)

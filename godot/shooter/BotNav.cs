@@ -120,9 +120,13 @@ public sealed class BotNav
 
     static Vector3[] Query(Rid map, NavigationPathQueryParameters3D query, NavigationPathQueryResult3D result, Vector3 from, Vector3 to)
     {
-        query.StartPosition = NavigationServer3D.MapGetClosestPoint(map, from);
-        query.TargetPosition = NavigationServer3D.MapGetClosestPoint(map, to);
+        // the raw ends: the path search itself takes the nearest place on the mesh for each. Snapping them first (MapGetClosestPoint, twice) cost
+        // more than the search and gave the same route: 205 of 205 on the live map, to the centimetre (perf run of 2026-11-17)
+        query.StartPosition = from;
+        query.TargetPosition = to;
+        var t = Stopwatch.GetTimestamp();
         NavigationServer3D.QueryPath(query, result);
+        Prof.NavPath(t);
         return result.Path;
     }
 

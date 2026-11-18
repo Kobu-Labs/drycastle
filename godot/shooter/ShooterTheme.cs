@@ -66,6 +66,8 @@ public static class ShooterTheme
     /// <summary>Team deathmatch friend / enemy colours (blue / orange; <see cref="TeamPalette"/>), also under the colour-blind setting.</summary>
     public static Color Friend => From(TeamPalette.Friend(ColorBlind));
     public static Color Enemy => From(TeamPalette.Enemy(ColorBlind));
+    /// <summary>A squad mate on the maps and name tags (#379): blue, the other teammates stay <see cref="Good"/>.</summary>
+    public static Color Squad => From(TeamPalette.Squad(ColorBlind));
     static Color From(StatePalette.Rgb c) => new(c.R, c.G, c.B);
     public static readonly Color Outline = new(0f, 0f, 0f, 0.85f);
     public static readonly Color Scrim = new(0f, 0f, 0f, 0.60f);

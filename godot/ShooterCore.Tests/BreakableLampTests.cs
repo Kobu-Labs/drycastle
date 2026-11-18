@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Drycastle.ShooterCore.Tests;
 
-/// <summary>Shootable pole lamps (ADR 0037, #337): the state machine, the hit geometry, the wire, the pool and the flicker.</summary>
+/// <summary>Shootable pole lamps (ADR 0038, #337): the state machine, the hit geometry, the wire, the pool and the flicker.</summary>
 public class BreakableLampTests
 {
     static readonly LampLook Look = new() { RespawnSeconds = 120, FlickerSeconds = 3, HitRadiusM = 0.25 };

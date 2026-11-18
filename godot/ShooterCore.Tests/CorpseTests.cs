@@ -118,7 +118,7 @@ public class CorpseTests
         var before = taker.HotbarWeapon(CorpseRules.PrimaryPos);
 
         Assert.Equal(PickUpResult.OutOfReach, book.TryPickUp(id, new Vector3(10, 0, 0), taker, File, CorpseRules.PrimaryPos));
-        Assert.Equal(PickUpResult.BadSlot, book.TryPickUp(id, Vector3.Zero, taker, File, 3));
+        Assert.Equal(PickUpResult.BadSlot, book.TryPickUp(id, Vector3.Zero, taker, File, 4));
         Assert.Equal(PickUpResult.Gone, book.TryPickUp(9999, Vector3.Zero, taker, File, CorpseRules.PrimaryPos));
         Assert.Equal(before, taker.HotbarWeapon(CorpseRules.PrimaryPos));
     }

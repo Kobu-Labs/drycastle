@@ -119,7 +119,9 @@ public partial class NetServer
     {
         var t0 = _perf != null ? Stopwatch.GetTimestamp() : 0L;
         var list = NoLagComp || c.Peer == null ? LiveTargets() : RewoundTargets(c);
+        var armT = Prof.Begin(Prof.S.TargetsArmoured);
         DropArmoured(list); // no bullet or pellet reaches an armoured seat (ADR 0035)
+        Prof.End(Prof.S.TargetsArmoured, armT);
         if (_perf != null) _lagResolveUs = (Stopwatch.GetTimestamp() - t0) * 1_000_000.0 / Stopwatch.Frequency;
         return list;
     }
@@ -132,7 +134,7 @@ public partial class NetServer
     {
         SyncLife(c);
         var view = LagComp.ViewTick(_tick, BackTicksOf(c), c.LifeStart);
-        var list = new List<HitTarget>(_byId.Count);
+        var list = _targetLists.Count > 0 ? _targetLists.Pop() : new List<HitTarget>(_byId.Count + 4); // the caller's until ReturnTargets, as LiveTargets'
         foreach (var o in _byId.Values)
         {
             if (_match.Get(o.Id)?.Life != PlayerLife.Alive) continue;

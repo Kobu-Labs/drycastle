@@ -46,13 +46,24 @@ public static class HudLogic
     }
 
     /// <summary>
+    /// One team's rows grouped by squad (#379): a squad's members sit together, in <paramref name="sorted"/> order, and the squads follow the order of their best member; the rows with no squad come last.
+    /// </summary>
+    public static List<ScoreRow> GroupBySquad(List<ScoreRow> sorted)
+    {
+        if (!sorted.Any(r => r.Squad != 0)) return sorted;
+        var order = new List<byte>();
+        foreach (var r in sorted) if (r.Squad != 0 && !order.Contains(r.Squad)) order.Add(r.Squad);
+        return order.SelectMany(s => sorted.Where(r => r.Squad == s)).Concat(sorted.Where(r => r.Squad == 0)).ToList();
+    }
+
+    /// <summary>
     /// Team deathmatch score line data: (own team's score, other team's score, own team). A player without a team sees team A first.
     /// </summary>
     public static (int Mine, int Theirs, byte MyTeam) TeamScores(byte myTeam, int scoreA, int scoreB) =>
         myTeam == Teams.B ? (scoreB, scoreA, Teams.B) : (scoreA, scoreB, Teams.A);
 
     /// <summary>
-    /// Team deathmatch scoreboard: one table per team, each in <see cref="Sort"/> order. The local player's team is the left
+    /// Team deathmatch scoreboard: one table per team, each in <see cref="Sort"/> order with the squads grouped (<see cref="GroupBySquad"/>). The local player's team is the left
     /// table (team A for a player without a team), so the sides do not swap when the lead changes. Players without a team are apart.
     /// </summary>
     public static (byte LeftTeam, List<ScoreRow> Left, List<ScoreRow> Right, List<ScoreRow> NoTeam) SplitTeams(IReadOnlyList<ScoreRow> rows, byte myTeam)
@@ -60,7 +71,7 @@ public static class HudLogic
         var left = myTeam == Teams.B ? Teams.B : Teams.A;
         var right = Teams.Other(left);
         var l = Sort(rows);
-        return (left, l.FindAll(r => r.Team == left), l.FindAll(r => r.Team == right), l.FindAll(r => r.Team != left && r.Team != right));
+        return (left, GroupBySquad(l.FindAll(r => r.Team == left)), GroupBySquad(l.FindAll(r => r.Team == right)), l.FindAll(r => r.Team != left && r.Team != right));
     }
 
     /// <summary>

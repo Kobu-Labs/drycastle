@@ -3,7 +3,7 @@ namespace Drycastle.ShooterCore;
 public enum WeaponKind { Hitscan, Projectile, Melee }
 
 /// <summary>Weapon category (weapons.json "category"). Melee and Launcher map to their own kinds; the rest are hitscan guns.</summary>
-public enum WeaponCategory { MachineGun, AssaultRifle, Shotgun, Smg, Sniper, Pistol, Launcher, Melee }
+public enum WeaponCategory { MachineGun, AssaultRifle, Shotgun, Smg, Sniper, Pistol, Launcher, Melee, Grenade }
 
 /// <summary>Loadout slot (weapons.json "slot"). Special is carried outside the primary/secondary choice (the knife).</summary>
 public enum WeaponSlot { Primary, Secondary, Special }
@@ -77,6 +77,7 @@ public class WeaponsFile
         {
             WeaponCategory.Melee => WeaponKind.Melee,
             WeaponCategory.Launcher => WeaponKind.Projectile,
+            WeaponCategory.Grenade => WeaponKind.Projectile,
             _ => WeaponKind.Hitscan,
         };
         if (kind != expected) throw Invalid(where, "kind", $"must be {expected.ToString().ToLowerInvariant()} for category {Snake(category)}");
@@ -124,6 +125,19 @@ public class WeaponsFile
             if (lk.HitBlastRadius < 0 || lk.KillBlastRadius < 0) throw Invalid(where, "lock", "blast radii must be >= 0");
             if (r.ProjectileSpeed is not > 0 || r.ProjectileLife is not > 0) throw Invalid(where, "lock", "needs projectile_speed and projectile_life > 0");
         }
+
+        if (category == WeaponCategory.Grenade)
+        {
+            if (r.Grenade is not { } g) throw Invalid(where, "grenade", "is required for the grenade category");
+            if (g.FuseSeconds <= 0) throw Invalid(where, "grenade.fuse_seconds", "must be > 0");
+            if (g.Gravity <= 0) throw Invalid(where, "grenade.gravity", "must be > 0");
+            if (g.Bounce is < 0 or >= 1) throw Invalid(where, "grenade.bounce", "must be between 0 and 1");
+            if (g.GroundFriction is < 0 or > 1) throw Invalid(where, "grenade.ground_friction", "must be between 0 and 1");
+            if (r.ProjectileSpeed is not > 0) throw Invalid(where, "projectile_speed", "is the throw speed and must be > 0");
+            if (r.Splash == null) throw Invalid(where, "splash", "is required for the grenade category");
+            if (r.Lock != null) throw Invalid(where, "lock", "is not for a grenade");
+        }
+        else if (r.Grenade != null) throw Invalid(where, "grenade", "is only for the grenade category");
 
         var c = categoryDefaults.GetValueOrDefault(category) ?? new TuningRaw();
         var move = Pick(r.MoveSpeedMultiplier, c.MoveSpeedMultiplier, 1);
@@ -178,6 +192,7 @@ public class WeaponsFile
             ProjectileLife = r.ProjectileLife ?? 0,
             Splash = r.Splash,
             Lock = r.Lock,
+            Grenade = r.Grenade,
         };
     }
 
@@ -319,6 +334,7 @@ public class WeaponsFile
         public float? ProjectileLife { get; set; }
         public SplashDef? Splash { get; set; }
         public LockDef? Lock { get; set; }
+        public GrenadeDef? Grenade { get; set; }
     }
 
     internal sealed class RecoilRaw
@@ -415,6 +431,24 @@ public class WeaponDef
     public SplashDef? Splash { get; set; }
     /// <summary>The Lock a Lock-on launcher needs before it fires (weapons.json "lock"); null for every other weapon. See <see cref="LockRules"/>.</summary>
     public LockDef? Lock { get; set; }
+    /// <summary>The throw of a grenade (weapons.json "grenade", category grenade); null for every other weapon. See <see cref="GrenadeFlight"/>.</summary>
+    public GrenadeDef? Grenade { get; set; }
+}
+
+/// <summary>
+/// A thrown grenade's flight and fuse (weapons.json "grenade"). The throw speed is the weapon's <c>projectile_speed</c>, the blast its <c>splash</c>
+/// (the rpg's explosion path: Splash, Dust cloud, Explosion event). The fuse starts at the throw and is fixed: no cooking.
+/// </summary>
+public class GrenadeDef
+{
+    /// <summary>Seconds from the throw to the blast.</summary>
+    public float FuseSeconds { get; set; }
+    /// <summary>Downward acceleration, m/s².</summary>
+    public float Gravity { get; set; }
+    /// <summary>Share (0..1) of the speed along a surface's normal kept after a bounce.</summary>
+    public float Bounce { get; set; }
+    /// <summary>Share (0..1) of the speed across the surface lost on each bounce (a grenade rolls to a stop).</summary>
+    public float GroundFriction { get; set; }
 }
 
 /// <summary>

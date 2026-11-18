@@ -4,7 +4,7 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// Server side of the shootable pole lamps (ADR 0037). The server owns every lamp's state (<see cref="BreakableLamps"/>): a bullet, pellet or gun round that
+/// Server side of the shootable pole lamps (ADR 0038). The server owns every lamp's state (<see cref="BreakableLamps"/>): a bullet, pellet or gun round that
 /// passed a lamp's head on its way breaks it, a lamp comes back on its own (flickering first) and a new round lights all of them. The lamp list is the placed
 /// objects' luminaires in id order (MapLoader.ObjectLights()), the one the clients draw; the headless server builds no lamp visuals but has the same list.
 /// </summary>

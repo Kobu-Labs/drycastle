@@ -33,6 +33,7 @@ public partial class NetClient
                 break;
             case EventKind.ChatLine when ChatEvents.DecodeLine(payload) is { } line:
                 _hud?.AddChatLine(line);
+                SquadAnswer(line);
                 break;
             case EventKind.ClockSet when ChatEvents.DecodeClock(payload) is { } change:
                 DayNightCycle.Current?.SetServerClock(change.Clock, change.Tick); // the sky jumps to the new time at once

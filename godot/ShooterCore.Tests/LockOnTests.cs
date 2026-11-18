@@ -26,6 +26,13 @@ public class LockOnTests
         Assert.False(LockRules.Holds(Def, Eye, Ahead, At(1, 0, -500))); // past the range
     }
 
+    [Theory]
+    [InlineData(false, false, true)]  // on foot
+    [InlineData(true, true, true)]    // armed seat
+    [InlineData(true, false, false)]  // driver / unarmed passenger: no Lock, no beeps (#373)
+    public void A_seat_allows_the_launcher_only_when_it_is_armed(bool seated, bool armed, bool allowed) =>
+        Assert.Equal(allowed, LockRules.SeatAllows(seated, armed));
+
     [Fact]
     public void A_kind_with_unlimited_range_is_held_at_any_distance()
     {
@@ -196,5 +203,28 @@ public class LockOnTests
         Assert.Null(LockCodec.DecodeState(new byte[3]));
         Assert.Null(LockCodec.DecodeAlert(new byte[] { 9, 0, 0 })); // not a level
         Assert.Null(LockCodec.DecodeLaunch(new byte[10]));
+    }
+
+    [Fact]
+    public void A_missile_pursues_a_moving_vehicle_and_hits_it()
+    {
+        var at = new Vector3(0, 50, 0);
+        var heli = new Vector3(0, 50, -300);
+        var hit = false;
+        for (var t = 0; t < 300 && !hit; t++)
+        {
+            heli += new Vector3(20, 0, 0) * Dt; // flies off sideways at 20 m/s
+            (at, hit) = LockRules.Pursue(at, heli, 160f, 2f, Dt);
+        }
+        Assert.True(hit);
+        Assert.True(Vector3.Distance(at, heli) < 1f);
+    }
+
+    [Fact]
+    public void A_missile_out_of_reach_keeps_flying()
+    {
+        var (next, hit) = LockRules.Pursue(Vector3.Zero, new Vector3(0, 0, -500), 160f, 2f, Dt);
+        Assert.False(hit);
+        Assert.InRange(next.Z, -5.4f, -5.2f);
     }
 }

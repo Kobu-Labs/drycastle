@@ -15,7 +15,8 @@ public partial class NetClient : Node
     sealed class Pending { public NetInput Input; public MoveState After; }
     sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc, WadeAcc; public double RippleDue; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
         /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the vehicle and seat this player sits in (<see cref="SeatRiders"/>).</summary>
-        public float ShownYaw, ShownPitch; public bool Binoculars; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
+        public float ShownYaw, ShownPitch; public bool Binoculars; /// <summary>The squad whose name the name tag shows after the name (0: none); the tag is rebuilt when it changes (#379).</summary>
+        public byte TagSquad; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -83,7 +84,7 @@ public partial class NetClient : Node
     readonly List<(double T, ExplosionMsg M)> _explosionLog = new();
     /// <summary>The event logs are read only by the scripted bots (the weapons, rpg, blast and car checks), so a normal match keeps none of them: they grew for the whole match (#173, T3-028).</summary>
     bool KeepEventLogs => WeaponsBot != "" || RpgBot != "" || BlastBot != "" || CarBot != "";
-    sealed class Rocket { public double Born; public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; /* a homing missile (NetClient.LockOn.cs): the Aircraft it closes on and when it gets there */ public bool Homing; public ushort Target; public double Arrive; }
+    sealed class Rocket { public double Born; public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; /* a homing missile (NetClient.LockOn.cs): the Aircraft it closes on and when it gets there */ public bool Homing; public ushort Target; public double Arrive; /* a thrown grenade: drawn falling along its arc from the last snapshot */ public bool Grenade; public float Gravity; }
     readonly Dictionary<ushort, Rocket> _rockets = new();
     readonly HashSet<ushort> _deadRockets = new();
     readonly List<(double T, AmmoMsg M)> _ammoLog = new();
@@ -473,9 +474,14 @@ public partial class NetClient : Node
         {
             var speed = Weapons != null && rec.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[rec.Weapon].ProjectileSpeed : 40f;
             r = new Rocket { Node = RocketFx.Make(Owned, WeaponId(rec.Weapon)), Born = Now, Speed = speed }; _rockets[id] = r;
+            r.Gravity = GrenadeGravity(rec.Weapon); r.Grenade = r.Gravity > 0;
         }
+        if (r.Grenade) r.Speed = rec.Health / NetServer.GrenadeSpeedScale; // a grenade's speed rides the health byte
         r.Pos = rec.Position; r.Dir = dir; r.At = Now;
     }
+
+    /// <summary>The fall of a thrown weapon (weapons.json grenade.gravity, m/s²); 0 for a rocket.</summary>
+    float GrenadeGravity(int weapon) => Weapons != null && weapon >= 0 && weapon < Weapons.Weapons.Count ? Weapons.Weapons[weapon].Grenade?.Gravity ?? 0f : 0f;
 
     void RenderRockets()
     {
@@ -484,12 +490,14 @@ public partial class NetClient : Node
         {
             if (r.Node == null) continue;
             if (r.Homing) StepHoming(r);
-            var p = r.Homing ? r.Pos : r.Pos + r.Dir * (r.Speed * (float)Math.Min(0.1, Now - r.At));
+            var dtp = (float)Math.Min(0.1, Now - r.At);
+            var p = r.Homing ? r.Pos : r.Pos + r.Dir * (r.Speed * dtp) - NVec3.UnitY * (0.5f * r.Gravity * dtp * dtp); // a grenade falls between snapshots
             // visual only: the server rocket starts at the eye; draw it leaving the muzzle (0.8 m ahead, right and down) and blend onto the true path
             var k = Mathf.Max(0f, 1f - (float)(Now - r.Born) / 0.35f);
             var d = new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z);
             var side = d.Cross(Vector3.Up).Normalized();
             r.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z) + (d * 0.8f + side * 0.25f + Vector3.Down * 0.2f) * k;
+            if (r.Grenade) { r.Node.RotateX(r.Speed > 0.5f ? 9f * (float)GetProcessDeltaTime() : 0f); continue; } // it tumbles while it moves; no trail, no flight loop
             SfxRocket(r, r.Node.GlobalPosition);
             if (camAt is { } eye) RocketFx.GateTrail(r.Node, eye);
             if (Mathf.Abs(r.Dir.Y) < 0.99f) r.Node.LookAt(r.Node.GlobalPosition + new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z));
@@ -971,16 +979,17 @@ public partial class NetClient : Node
                 if (KeepEventLogs) _launchLog.Add((Now, l));
                 if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
                 // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the rpg's)
-                if (_rockets.TryGetValue(l.Id, out var known)) known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length();
+                if (_rockets.TryGetValue(l.Id, out var known)) { known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length(); known.Gravity = GrenadeGravity(l.Weapon); known.Grenade = known.Gravity > 0; }
                 else if (!_deadRockets.Contains(l.Id) && ShotFx.Enabled && Weapons != null)
                 {
                     // show the rocket at once from the launch event; snapshots take over
                     var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);
-                    _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned, WeaponId(l.Weapon)), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length() };
+                    _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned, WeaponId(l.Weapon)), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length(), Gravity = GrenadeGravity(l.Weapon), Grenade = GrenadeGravity(l.Weapon) > 0 };
                 }
                 if (!EchoOfPredicted(l.Owner))
                 {
                     SfxLaunch(l);
+                    if (GrenadeGravity(l.Weapon) > 0) { if (_remotes.TryGetValue(l.Owner, out var thrower)) thrower.FireUntil = Now + 0.45; break; } // a throw: no flash, no backblast
                     if (l.Owner == _myId) _viewmodel?.Flash(0.5f); else if (_remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
                     // a held launcher's backblast, behind the shooter's shoulder (a gunship's rocket has no owner on foot: its owner is not a remote here)
                     if (_remotes.ContainsKey(l.Owner) && l.Velocity.LengthSquared() > 1e-4f) { var ld = G(NVec3.Normalize(l.Velocity)); RocketFx.Backblast(Owned, G(l.Origin) - ld * WeaponFx.LauncherRear + Vector3.Down * 0.15f, ld); }

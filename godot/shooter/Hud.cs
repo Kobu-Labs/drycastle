@@ -41,7 +41,7 @@ public partial class Hud : CanvasLayer
     // crosshair, hit marker, indicators
     readonly ColorRect[] _arms = new ColorRect[4], _armsBack = new ColorRect[4];
     float _gap = -1;
-    Control _hit = null!, _crossRoot = null!;
+    Control _hit = null!, _crossRoot = null!, _ammoBox = null!;
     readonly Line2D[] _hitLines = new Line2D[4];
     double _hitUntil, _hitFade;
     readonly Control[] _ind = new Control[Indicators];
@@ -126,6 +126,7 @@ public partial class Hud : CanvasLayer
         BuildSeats(); // the vehicle seat schematic above the vehicle readout
         BuildTop();
         BuildFeed();
+        BuildFps(); // after the feed: it moves the feed clear of the chip
         BuildProtectionChip();
         BuildRespawn();
         BuildBlood(); // above the scrim
@@ -155,6 +156,7 @@ public partial class Hud : CanvasLayer
         _seatsDef = null; // the seat hint names the (maybe rebound) keys: rebuilt on the next frame
         foreach (var tri in _indTri) tri.Color = ShooterTheme.Danger; // read at build time otherwise; the palette may have switched
         ApplyCrosshairVisibility();
+        ApplyFps();
     }
 
     bool _crossCovered;
@@ -163,6 +165,16 @@ public partial class Hud : CanvasLayer
     {
         if (_crossCovered == on) return;
         _crossCovered = on;
+        ApplyCrosshairVisibility();
+    }
+
+    bool _crossUnarmed;
+    /// <summary>The local player sits where nothing can be fired (a driver's or an unarmed passenger's seat, #373): no crosshair and no weapon/ammo readout meanwhile.</summary>
+    public void SetUnarmedSeat(bool on)
+    {
+        if (_crossUnarmed == on) return;
+        _crossUnarmed = on;
+        if (_ammoBox != null) _ammoBox.Visible = !on;
         ApplyCrosshairVisibility();
     }
 
@@ -179,7 +191,7 @@ public partial class Hud : CanvasLayer
     void ApplyCrosshairVisibility()
     {
         if (_crossRoot == null) return;
-        _crossRoot.Visible = CrosshairRules.Visible(Settings.ShowCrosshair, _crossCovered || _crossLauncher, _scope?.Visible ?? false, _bino?.Visible ?? false, _pounceHide || _flungHide);
+        _crossRoot.Visible = CrosshairRules.Visible(Settings.ShowCrosshair, _crossCovered || _crossLauncher, _scope?.Visible ?? false, _bino?.Visible ?? false, _pounceHide || _flungHide, _crossUnarmed);
     }
 
     public override void _ExitTree() => GameSettings.Changed -= OnSettingsChanged;
@@ -302,6 +314,7 @@ public partial class Hud : CanvasLayer
         _root.AddChild(_radial);
         // weapon name and ammo only: no panel, no border
         var v = Place(new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore }, 1, 1, -ShooterTheme.Margin, -ShooterTheme.Margin, 320, 88);
+        _ammoBox = v;
         v.AddThemeConstantOverride("separation", 0);
         _root.AddChild(v);
         _wName = L("", "HudHead", HorizontalAlignment.Right); v.AddChild(_wName);
@@ -660,6 +673,7 @@ public partial class Hud : CanvasLayer
         if (_huntUntil > 0) UpdateHuntShot(now);
         for (var i = 0; i < Indicators; i++) UpdateIndicator(i, now);
         UpdateFeed(now);
+        UpdateFps(now);
         UpdateCrosshair();
         UpdateBreath();
         UpdateTacticalMap();
@@ -944,7 +958,9 @@ public partial class Hud : CanvasLayer
             var mine = r.Id == MyId;
             col.Row[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
             var c = col.Cells[i];
-            Set(c[0], mine ? Strings.F("score.you", r.Name) : r.Name); // the team is the table's heading
+            var who = mine ? Strings.F("score.you", r.Name) : r.Name; // the team is the table's heading
+            if (r.Squad != 0 && _team?.SquadNameOf(r.Squad) is { Length: > 0 } squad) who = Strings.F("squad.tag", who, squad); // the squad's members sit together, the name says which
+            Set(c[0], who);
             Tint(c[0], RelationColor(r.Team));
             Set(c[1], r.Kills.ToString()); Set(c[2], r.Deaths.ToString()); Set(c[3], Strings.F("score.ping", r.Ping));
             col.Row[i].Visible = true;

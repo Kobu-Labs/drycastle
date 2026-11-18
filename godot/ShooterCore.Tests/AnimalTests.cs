@@ -101,7 +101,7 @@ public class AnimalTests
     [Fact]
     public void ShippedSpeciesLoad()
     {
-        Assert.Equal(25, Shipped.Animals.Count);
+        Assert.Equal(26, Shipped.Animals.Count);
         Assert.NotNull(Shipped.Find("deer"));
         Assert.Equal(Shipped.IndexOf("deer"), Shipped.Animals.IndexOf(Shipped.Find("deer")!));
         Assert.Equal(-1, Shipped.IndexOf("dragon"));
@@ -659,5 +659,127 @@ public class AnimalTests
         Run(a, 60);
         Assert.Equal(Vector3.Zero, a.Position);
         Assert.Equal(AnimalState.Idle, a.State);
+    }
+
+    // ---- vanishing (the Unicorn: startled, it turns immune and is teleported instead of running) ----
+
+    static AnimalsFile Vanishing(string extra = "\"vanish_seconds\":2,\"vanish_min_m\":150,") => AnimalsFile.Parse($$"""
+        {"version":1,"idle_min_seconds":100,"idle_max_seconds":200,"animals":[{"id":"deer","name":"Deer","model":"animated-animals/deer.glb","scale":0.33,"hp":100,{{extra}}
+        "walk_speed":1.5,"run_speed":12,"turn_rate_deg_per_s":360,"flee_radius":30,"wander_radius":20,"hit_box":[0.5,1.4,1.5]}]}
+        """);
+
+    [Fact]
+    public void AStartledVanishingAnimalVanishesInsteadOfRunning()
+    {
+        var w = new FakeWorld();
+        var a = Make(w, Vanishing());
+        Run(a, 1);
+        w.Threats.Add(new Vector3(0, 0, 10));
+        a.Tick(Dt);
+        Assert.Equal(AnimalState.Vanish, a.State);
+        Assert.True(a.Immune);
+        var at = a.Position;
+        Run(a, 1.5f);
+        Assert.Equal((AnimalState.Vanish, at), (a.State, a.Position)); // it stands still the whole time
+    }
+
+    [Fact]
+    public void EveryStartleOfAVanishingAnimalVanishes()
+    {
+        var shot = Make(new FakeWorld(), Vanishing());
+        shot.OnDamage(10, 7);
+        Assert.Equal(AnimalState.Vanish, shot.State);
+
+        var w = new FakeWorld();
+        var herd = new Herd(Vector3.Zero, 5, 20, 5, 10, 1);
+        var (first, second) = (Make(w, Vanishing()), Make(w, Vanishing(), 2));
+        herd.Add(first); herd.Add(second);
+        herd.Alarm(first, new Vector3(0, 0, 5)); // the herd takes fright: the others startle
+        Assert.Equal(AnimalState.Vanish, second.State);
+
+        var run = Make(new FakeWorld(), Vanishing());
+        Assert.True(run.Throw(new Vector3(0, 3, 4), new Vector3(0, 0, 5)));
+        for (var i = 0; i < 160 && run.State != AnimalState.Vanish; i++) run.Tick(Dt); // flies, lies knocked down, gets up
+        Assert.Equal(AnimalState.Vanish, run.State);
+    }
+
+    [Fact]
+    public void ADamageDuringTheVanishIsAbsorbed()
+    {
+        var a = Make(new FakeWorld(), Vanishing());
+        a.OnDamage(10, 7);
+        Assert.Equal(AnimalState.Vanish, a.State);
+        var before = a.Serialize();
+        a.OnDamage(5000, 7);
+        Assert.True(a.Alive);
+        Assert.Equal(90f, a.Hp);
+        Assert.Equal(before, a.Serialize()); // no hit toggle, no death
+        Assert.False(a.Throw(new Vector3(0, 3, 4), Vector3.Zero));
+        Assert.False(a.Carry());
+        Assert.Equal(AnimalState.Vanish, a.State);
+    }
+
+    [Fact]
+    public void AfterVanishSecondsItIsTeleportedAndStandsCalmForTheGrace()
+    {
+        var w = new FakeWorld();
+        var a = Make(w, Vanishing());
+        var seen = 0;
+        a.Vanished += x => { seen++; Assert.Equal(AnimalState.Vanish, x.State); Assert.True(x.Teleport(new Vector3(200, 0, 0), 1f)); };
+        a.OnDamage(10, 7);
+        Run(a, 1.9f);
+        Assert.Equal((0, AnimalState.Vanish), (seen, a.State));
+        Run(a, 0.2f);
+        Assert.Equal((1, AnimalState.Idle), (seen, a.State));
+        Assert.True(Distance(a.Position, Vector3.Zero) >= 150);
+        Assert.Equal(1f, a.Yaw);
+        Assert.False(a.Teleport(Vector3.Zero, 0)); // only while vanishing
+        Assert.Equal(200f, a.Position.X);
+
+        // grace: a threat or a shot right after arriving startles nothing (the animal is not immune there either)
+        w.Threats.Add(new Vector3(200, 0, 10));
+        Run(a, 2.5f);
+        Assert.Equal(AnimalState.Idle, a.State);
+        a.OnDamage(10, 7);
+        Assert.Equal(AnimalState.Idle, a.State);
+        Assert.Equal(80f, a.Hp);
+        Run(a, 1f); // 3 s of grace over
+        Assert.Equal(AnimalState.Vanish, a.State);
+    }
+
+    [Fact]
+    public void AVanishNobodyPlacesLeavesItWhereItWasAndStillCalm()
+    {
+        var w = new FakeWorld();
+        var a = Make(w, Vanishing());
+        a.OnDamage(10, 7);
+        Run(a, 2.2f);
+        Assert.Equal((AnimalState.Idle, Vector3.Zero), (a.State, a.Position));
+        a.OnDamage(10, 7);
+        Assert.Equal(AnimalState.Idle, a.State); // grace
+    }
+
+    [Fact]
+    public void ASpeciesWithoutVanishSecondsFleesAsBefore()
+    {
+        var a = Make(new FakeWorld(), Vanishing(""));
+        Assert.False(a.Vanishes);
+        a.OnDamage(10, 7);
+        Assert.Equal(AnimalState.Flee, a.State);
+        Assert.False(a.Immune);
+    }
+
+    [Theory]
+    [InlineData("\"vanish_seconds\":-1,")]
+    [InlineData("\"vanish_seconds\":1,\"vanish_min_m\":-5,")]
+    [InlineData("\"vanish_seconds\":1,\"vanish_grace_seconds\":-1,")]
+    public void VanishFieldsAreValidated(string extra) => Assert.Throws<DataFileException>(() => Vanishing(extra));
+
+    [Fact]
+    public void TheShippedUnicornVanishesAndNoOtherSpecies()
+    {
+        var u = Shipped.Find("unicorn")!;
+        Assert.True(u.VanishSeconds > 0 && u.VanishMinM > 0 && u.VanishGraceSeconds > 0);
+        Assert.All(Shipped.Animals.Where(x => x.Id != "unicorn"), x => Assert.Equal(0f, x.VanishSeconds));
     }
 }

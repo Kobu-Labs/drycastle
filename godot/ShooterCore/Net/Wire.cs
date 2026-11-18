@@ -160,6 +160,8 @@ public enum EventKind : byte
     ThiefVoice = 236,
     /// <summary>Client to server: an admin's team change from the Teams screen (<see cref="TeamAssignCodec"/>, #312); the server checks the sender is an admin and the match is team deathmatch. The result travels in the scoreboard (team, sandbox and bot bits per row).</summary>
     TeamAssign = 240,
+    /// <summary>Client to server: a squad request from the Squads screen (<see cref="SquadAssignCodec"/>, #379): create, join or leave. The server checks the match is team deathmatch and the sender a human on a team. The result travels in the scoreboard (squad byte per row, squad names).</summary>
+    SquadAssign = 241,
     /// <summary>Server to everyone, and to a joiner when the doors are open: the church doors opened (1) or closed (0), one byte (<see cref="ChurchDoorCodec"/>, ADR 0019). Kinds 210-219 belong to the church.</summary>
     ChurchDoor = 210,
     /// <summary>Server to everyone, and to a joiner: the Holy Mass as it is now (<see cref="MassStateMsg"/>, <see cref="MassCodec"/>): phase, chant on or off, the pastor's kills, where the chant is, and once at the start the bells. Kinds 210-219 belong to the Holy Mass.</summary>
@@ -210,7 +212,7 @@ public enum EventKind : byte
     LockAlert = 247,
     /// <summary>Server to everyone: a homing missile left a Lock-on launcher, the Aircraft it homes on and its flight seconds; the Explosion with its id ends it.</summary>
     HomingLaunch = 248,
-    /// <summary>Server broadcast: one pole lamp's state after it changed (<see cref="LampCodec"/>, ADR 0037: broken by a round, flickering back on, lit). Kinds 250-251 belong to the pole lamps.</summary>
+    /// <summary>Server broadcast: one pole lamp's state after it changed (<see cref="LampCodec"/>, ADR 0038: broken by a round, flickering back on, lit). Kinds 250-251 belong to the pole lamps.</summary>
     LampState = 250,
     /// <summary>Server broadcast, or to the joining player: every pole lamp that is not lit (<see cref="LampCodec"/>); the rest are lit. The join catch-up and a new round.</summary>
     LampSync = 251,
@@ -341,8 +343,9 @@ public static class Wire
     //   v68 the Scud truck: events 80-85 (the launcher's command, state, the operator's camera, the launch, the impact and a notice), world entity 11 (the Scud missile), special weapon 237, vehicles.json "launcher"
     //   v69 loading a Scud truck from a rocket cart: the launcher state byte may be 10 (Loading) and the Scud notice codes 11 (LoadStarted), 12 (LoadCancelled) and 13 (EventFound); the Scud event (/event scud): an intel board entry may carry an AREA, a centre and a radius in metres (flags bit 4, a f32 radius after the centre)
     //   v70 the plantation (#364): bit 2 of the player status mask (EventKind.StatusState, StatusKind.High): the player is high; the others draw a lit cigarette and red eyes on the figure, the player's own camera sways
-    //   v71 shootable pole lamps (ADR 0037): events 250 LampState and 251 LampSync
-    public const byte ProtocolVersion = 71;
+    //   v71 squads (#379): event 241 SquadAssign (client to server); the scoreboard message ends in a squad tail (a squad byte per row, then the squads' names)
+    //   v72 shootable pole lamps (ADR 0038): events 250 LampState and 251 LampSync
+    public const byte ProtocolVersion = 72;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

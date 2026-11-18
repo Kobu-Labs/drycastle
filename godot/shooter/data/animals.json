@@ -50,6 +50,11 @@
       "walk_speed": 1.6, "run_speed": 12, "turn_rate_deg_per_s": 180, "flee_radius": 15, "wander_radius": 30, "body_ahead": 0.24, "hit_box": [0.53, 1.83, 2.16] },
     { "id": "wolf", "name": "Wolf", "model": "animated-animals/wolf.glb", "scale": 0.3, "model_yaw_deg": 180, "weight_kg": [30, 60], "hp": 60,
       "walk_speed": 1.6, "run_speed": 10, "turn_rate_deg_per_s": 300, "flee_radius": 20, "wander_radius": 60, "body_ahead": -0.02, "hit_box": [0.32, 0.8, 1.67] },
+    // Unicorn: rare wild animal (GLOSSARY "Wildlife"). Synty SIMPLE Farm Animals horse, Grey look, plus a horn (a "Horn" mesh and a "HornTip" marker on the head bone; tools/build_pets.sh,
+    // group SA_Animal_Horse.fbx), built like the pets: metres already (scale 1), faces +Z, hit_box and body_ahead measured from the model (horn included). Not one_hit: it leaves a corpse like the horse. Startled, it does not run: immune for vanish_seconds (rainbow spirals), then teleported at least vanish_min_m away, calm for vanish_grace_seconds.
+    { "id": "unicorn", "name": "Unicorn", "model": "synty/glb/pets/unicorn/unicorn_01.glb", "scale": 1, "model_yaw_deg": 180, "hp": 150,
+      "walk_speed": 1.6, "run_speed": 14, "turn_rate_deg_per_s": 200, "flee_radius": 40, "wander_radius": 40, "body_ahead": 0.2, "hit_box": [0.52, 1.92, 2.13], "fx": "unicorn",
+      "vanish_seconds": 2.0, "vanish_min_m": 150, "vanish_grace_seconds": 3 },
     // Forest animals (Synty SIMPLE Forest Animals), built by tools/build_pets.sh like the pets: flee, but die like the pets: one_hit (any damaging hit kills, no corpse, a puff), so the pack needs no Death or hit clips. Sized in metres
     // already (scale 1), face +Z, hit_box measured per model (variants: the _0N looks; moose_male/moose_female). hp, speeds and radii are guesses.
     { "id": "bear", "name": "Bear", "model": "synty/glb/pets/bear/bear_01.glb", "scale": 1, "model_yaw_deg": 180, "weight_kg": [150, 350], "hp": 200, "one_hit": true,

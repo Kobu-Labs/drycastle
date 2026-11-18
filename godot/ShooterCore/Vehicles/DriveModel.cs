@@ -124,6 +124,18 @@ public static class DriveModel
     public static float WaterDrag(VehicleDef def) =>
         (def.WaterAcceleration - def.Drive!.Water.CoastDrag * def.WaterTopSpeed) / (def.WaterTopSpeed * def.WaterTopSpeed);
 
+    /// <summary>
+    /// How far behind the origin the point it turns about is right now, metres: the fixed axle (<see cref="DriveLandDef.PivotBehind"/>) while it stands on its wheels,
+    /// 0 afloat (the boat's pivot is <see cref="DriveWaterDef.SternSwing"/>, the step's own) and in the air.
+    /// </summary>
+    public static float PivotBehind(in DriveState s, VehicleDef def) => s.Afloat || s.Airborne ? 0f : def.Drive!.Land.PivotBehind ?? 0f;
+
+    /// <summary>
+    /// The origin's speed sideways (positive: to the right) on its wheels: the slide plus what the turn about the fixed axle gives it (a positive yaw rate turns left,
+    /// and the origin ahead of the pivot goes left with it). What a trailer on the hitch is pulled by.
+    /// </summary>
+    public static float OriginSlip(in DriveState s, VehicleDef def) => s.Slip - s.YawRate * PivotBehind(s, def);
+
     /// <param name="tow">What a trailer on the hook does to the step (<see cref="TowLoad"/>: the pull, the brake, the top speed and the grip it takes; <see cref="TowBlock"/>: no folding it further than its limit). The default is no trailer, and then the step is exactly what it is without the argument.</param>
     public static void Step(ref DriveState s, VehicleDef def, in DriveInput input, float dt, IDriveWorld world, in TowEffect tow = default)
     {
@@ -200,7 +212,8 @@ public static class DriveModel
         // ---- yaw: the rate follows what the wheel or the helm asks for; the heading turns, the motion keeps its own way
         s.YawRate += (wantYaw - s.YawRate) * (1f - MathF.Exp(-yawResponse * dt));
         if (MathF.Abs(wantYaw) < StillRate && MathF.Abs(s.YawRate) < StillRate) s.YawRate = 0;
-        if (tow.Block.Active) tow.Block.Clamp(ref u, ref w, ref s.YawRate); // the trailer is at its limit: what would fold it further is taken
+        var pivot = PivotBehind(s, def);
+        if (tow.Block.Active) tow.Block.Clamp(ref u, ref w, ref s.YawRate, pivot); // the trailer is at its limit: what would fold it further is taken
         var turn = s.YawRate * dt;
         s.Yaw = FlightMath.Wrap(s.Yaw + turn);
         var (st, ct) = MathF.SinCos(turn);
@@ -213,7 +226,9 @@ public static class DriveModel
         // ---- move: what a wall takes from the speed is the impact; then slide along it once
         var (sy, cy) = MathF.SinCos(s.Yaw);
         var fwd = new Vector3(-sy, 0, -cy); var right = new Vector3(cy, 0, -sy);
-        var swing = s.Afloat ? s.YawRate * wet.SternSwing : 0f; // afloat it pivots ahead of its centre: the stern swings out
+        // the turn is about a point that is not the origin, so the origin goes sideways with it: afloat the pivot is ahead (the stern swings out),
+        // on its wheels it is the fixed axle behind (the nose sweeps wide, the rear follows)
+        var swing = s.Afloat ? s.YawRate * wet.SternSwing : -s.YawRate * pivot;
         var vel = fwd * u + right * (w + swing);
         // afloat the hull is swept at the surface: a shallow bed is under the boat, not in its way
         var from = s.Afloat ? s.Position + Vector3.UnitY * wet.Draft : s.Position;
@@ -246,7 +261,14 @@ public static class DriveModel
         }
         else if (!Fit(world, d, pos, s.Yaw, out var wheels))
         {
-            // nothing under it: it falls
+            // nothing under it. If the ground is just over it the origin has sunk into a slope (the rays start inside it and miss): it is lifted out, never dropped through the map
+            if (FitFromAbove(world, d, pos, s.Yaw, out var lifted))
+            {
+                pos.Y = lifted.Y; s.Airborne = false; s.Sink = 0; s.VerticalSpeed = 0; s.Pitch = lifted.Pitch; s.Roll = lifted.Roll;
+                s.Position = pos; s.Speed = u; s.Slip = w;
+                return;
+            }
+            // nothing there at all: it falls
             s.Airborne = true; s.Sink = 0;
             s.VerticalSpeed -= MoveConsts.Gravity * dt;
             pos.Y += s.VerticalSpeed * dt;
@@ -325,8 +347,9 @@ public static class DriveModel
     /// The ground under the four wheels at <paramref name="pos"/>. A wheel with nothing under it, or over a drop, hangs. False when no wheel has
     /// ground in reach.
     /// </summary>
-    static bool Fit(IDriveWorld world, VehicleDriveDef d, Vector3 pos, float yaw, out Wheels wheels)
+    static bool Fit(IDriveWorld world, VehicleDriveDef d, Vector3 pos, float yaw, out Wheels wheels, float lift = 0f)
     {
+        pos.Y += lift;
         var (sy, cy) = MathF.SinCos(yaw);
         var ahead = new Vector3(-sy, 0, -cy) * (d.Wheelbase / 2f); var side = new Vector3(cy, 0, -sy) * (d.Track / 2f);
         pos -= new Vector3(-sy, 0, -cy) * d.AxleCentre; // the point between the axles (the model's z, positive: behind the origin)
@@ -349,6 +372,17 @@ public static class DriveModel
             pitch,
             d.Track > 0 ? Math.Clamp(MathF.Atan2((fr + rr - fl - rl) / 2f, d.Track), -MaxTilt, MaxTilt) : 0f); // a single-track vehicle stands upright across the slope
         return true;
+    }
+
+    /// <summary>Metres over the origin the ground is looked for again when the wheels found none under it (the origin is inside a slope).</summary>
+    static readonly float[] SunkLifts = { 2f, 4f, 6f };
+
+    static bool FitFromAbove(IDriveWorld world, VehicleDriveDef d, Vector3 pos, float yaw, out Wheels wheels)
+    {
+        foreach (var lift in SunkLifts)
+            if (Fit(world, d, pos, yaw, out wheels, lift) && wheels.Y > pos.Y) return true;
+        wheels = default;
+        return false;
     }
 
     /// <summary>
@@ -482,8 +516,8 @@ public sealed class DrivePrediction
         if (_rig is not { } rig) { DriveModel.Step(ref s, _def, input, dt, _world); return; }
         var before = s;
         DriveModel.Step(ref s, _def, input, dt, _world, new TowEffect(TowLoad.Of(_def, rig.TrailerDef, TrailerLoaded), TowModel.BlockOf(rig.Geometry, trailer)));
-        if (rig.World == null) TowModel.Step(ref trailer, rig.Geometry, TractorMotion.From(s), dt);
-        else if (!TowModel.StepChecked(ref trailer, rig.Geometry, TractorMotion.From(s), dt, rig.World)) TowModel.Hold(ref s, before);
+        if (rig.World == null) TowModel.Step(ref trailer, rig.Geometry, TractorMotion.From(s, _def), dt);
+        else if (!TowModel.StepChecked(ref trailer, rig.Geometry, TractorMotion.From(s, _def), dt, rig.World)) TowModel.Hold(ref s, before);
     }
 
     /// <summary>Steps the prediction with the input just sent under <paramref name="seq"/>.</summary>

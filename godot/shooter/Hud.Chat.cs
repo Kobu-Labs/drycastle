@@ -18,8 +18,19 @@ public partial class Hud
 
     void BuildChat()
     {
-        _chat = new ChatBox(() => ChatInfo?.Invoke() ?? new ChatContext(false, Array.Empty<string>()), t => ChatSubmit?.Invoke(t));
+        _chat = new ChatBox(() => ChatInfo?.Invoke() ?? new ChatContext(false, Array.Empty<string>()), RunChat);
         _root.AddChild(_chat);
+    }
+
+    /// <summary>What the player sent: a client-side command (/fps) runs here and never leaves the client; anything else goes to the owner to send.</summary>
+    void RunChat(string text)
+    {
+        if (text.StartsWith('/') && ChatCommands.Parse(text, ChatInfo?.Invoke() ?? new ChatContext(false, Array.Empty<string>())) is { Ok: true, Command: { ClientSide: true } cmd })
+        {
+            if (cmd.Name == "fps") ToggleFps();
+            return;
+        }
+        ChatSubmit?.Invoke(text);
     }
 
     /// <summary>Opens the chat box. The Hunter's Log closes first: it sits on the top layer, so it would cover the box and take its Q / E keys.</summary>
