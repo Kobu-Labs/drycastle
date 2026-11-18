@@ -74,6 +74,7 @@ public partial class NetServer
         else if (shotCar == null && wall <= gun.Range) BulletPuff(N(end)); // dust where the round meets the ground or a wall
         if (hit == null && wall <= gun.Range) ShotGlass(shotCar, from, dir, wall, gun.Damage);
         DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, _ => gun.Damage);
+        ShotLamps(N(from), N(dir), hit?.Distance ?? Math.Min(wall, gun.Range)); // a pole lamp the round passed breaks (ADR 0037)
         _vehicleView = null;
     }
 }

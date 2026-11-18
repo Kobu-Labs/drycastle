@@ -1010,6 +1010,23 @@ stateDiagram-v2
 - **Refused**: Activate returned false: dropped by the service, the streak stays held. Never ended by the framework.
 - **Ended**: Over: EndReason is set, StreakEnded sent, callbacks run.
 
+## Lamp.Light
+
+A shootable pole lamp: lit until a round passes through its head, dark for a while, then it flickers back on.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Lit
+    Lit --> Broken
+    Broken --> Flickering
+    Flickering --> Lit
+    Flickering --> Broken
+```
+
+- **Lit**: Shines at night. A lit lamp has no clock and no machine; a new round lights every lamp again without a transition.
+- **Broken**: Dark (clock: respawn_seconds). A second shot changes nothing.
+- **Flickering**: Coming back on (clock: flicker_seconds); a shot breaks it again.
+
 ## Launcher.Lock
 
 The Lock of a Lock-on launcher on one Aircraft: it builds while the Aircraft stays in the lock circle and in sight, and only a complete Lock lets the launcher fire.

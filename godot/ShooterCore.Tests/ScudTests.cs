@@ -716,9 +716,9 @@ public class ScudTests
     }
 
     [Fact]
-    public void The_protocol_is_70_and_the_events_are_where_the_docs_say()
+    public void The_protocol_is_71_and_the_events_are_where_the_docs_say()
     {
-        Assert.Equal(70, Wire.ProtocolVersion);
+        Assert.Equal(71, Wire.ProtocolVersion);
         Assert.Equal(80, (int)EventKind.ScudCommand);
         Assert.Equal(85, (int)EventKind.ScudNotice);
         Assert.Equal(237, SpecialWeapons.Scud);

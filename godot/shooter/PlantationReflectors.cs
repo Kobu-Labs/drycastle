@@ -23,8 +23,7 @@ public partial class PlantationReflectors : Node3D
     {
         if (Stands.Count == 0 || DisplayServer.GetName() == "headless") { SetProcess(false); return; }
         var colour = new Color(Data.Colour);
-        _lens = new StandardMaterial3D { AlbedoColor = colour, // shaded, as the car lamps are: an unshaded material drops its emission and would never bloom
-             EmissionEnabled = true, Emission = colour, EmissionEnergyMultiplier = 0f };
+        _lens = LampKit.Lens(colour, 0f);
         var bar = new BoxMesh { Size = new Vector3((float)Data.Lens[0], (float)Data.Lens[1], 0.01f) };
         var head = new Vector3((float)Data.Head[0], (float)Data.Head[1], (float)Data.Head[2]);
         // a spot shines along its own -Z, the model along +Z: turned round, then tipped
@@ -33,11 +32,7 @@ public partial class PlantationReflectors : Node3D
         {
             var at = stand * new Transform3D(Basis.Identity, head);
             AddChild(new MeshInstance3D { Mesh = bar, MaterialOverride = _lens, Transform = at, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
-            var beam = new SpotLight3D
-            {
-                Transform = at * new Transform3D(aim, Vector3.Zero), SpotRange = (float)Data.RangeM, SpotAngle = (float)Data.AngleDeg, SpotAttenuation = 1f,
-                LightColor = colour, LightEnergy = 0f, ShadowEnabled = false, Visible = false,
-            };
+            var beam = LampKit.Beam(at * new Transform3D(aim, Vector3.Zero), colour, (float)Data.RangeM, (float)Data.AngleDeg, 0f);
             AddChild(beam);
             _beams.Add(beam);
         }
