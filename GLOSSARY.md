@@ -725,6 +725,18 @@ _Avoid_: hunter index, leaderboard, journal
 A player's tile for every Index species and every Mystery creature in the Hunter's Log: outline only until hunted, filled once hunted, with the player's best weight and longest shot and when it was first caught. A hidden Mystery tile carries no numbers.
 _Avoid_: collection, bestiary
 
+**Hunt rarity**:
+How rare a Hunt's weight is for its exact species and look: gold (the heaviest 5 %), silver (10 %), bronze (20 %) or common, read from the weight distribution itself (`HuntRarity`), never counted from the stored hunts. A Life List tile carries the rarest one its owner has hunted, shown as the plaque's rim, a medal and the tier in words. A Mystery creature has none.
+_Avoid_: quality, grade, trophy class
+
+**Mineral**:
+One of the 28 stones of the Mineral Log (crystals.md): 8 real-life ones and 20 fantasy ones, the latter the crystals of `crystals.json`. The one table is `Minerals` (ShooterCore).
+_Avoid_: gem, ore, crystal (that is the model in the world)
+
+**Mineral Log**:
+The collection log of Minerals: one grid of all 28 in a fixed shuffled order (the same for everyone), each card a niche with the mineral's crystals and its name, always shown; a found one says which finder the player was ("7th found"), one not found is blurred behind frosted glass. The N key (rebindable, `mineral_log`; also in Pause) opens it like the Hunter's Log: a non-pausing centred panel, Esc closes. Nothing can be found yet: every card is behind glass.
+_Avoid_: geo log, geocaching log, crystal log
+
 **Index species**:
 What a Hunter's Log record and Life List tile are kept per: Deer (the animals `deer` and `doe` together), Stag, Moose, Bear, Boar, Wolf, Fox, Raccoon, Skunk and Rabbit. A Hunt keeps the index id and the exact species. The one table is `IndexSpecies`.
 _Avoid_: species (alone, that is `animals.json`'s id)

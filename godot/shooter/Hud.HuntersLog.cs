@@ -45,6 +45,7 @@ public partial class Hud
         if (_huntersLog == null || _huntersLog.IsOpen) return;
         _equipment?.Close();
         _tacticalMap.Close();
+        _mineralLog?.Close();
         _huntersLog.Open();
     }
 

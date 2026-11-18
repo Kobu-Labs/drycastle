@@ -23,26 +23,24 @@ public sealed partial class HuntersLogScreen : Control
 
     readonly HuntLogEnv _env;
     readonly HuntLogNav _nav = new();
-    readonly PanelContainer _panel = new() { ThemeTypeVariation = "LogPanel", MouseFilter = MouseFilterEnum.Stop };
-    readonly Button[] _tabs = new Button[Tabs];
-    readonly Control[] _panes = new Control[Tabs];
-    Label _title = null!;
+    readonly LogFrame _frame;
     Control _sandboxNote = null!;
-    Button _back = null!, _close = null!;
-    PanelFade _fade;
     bool _logStale, _recordsStale, _huntsStale;
 
+    static LogSkin Skin => LogSkin.Lodge;
     HuntLogData Data => _env.Data;
-    bool _open => _fade.Wanted;
+    bool _open => _frame.IsOpen;
     public bool IsOpen => _open;
+    Control[] _panes => _frame.Panes;
+    Control _panel => _frame.Panel;
 
     public HuntersLogScreen(HuntLogEnv env)
     {
         _env = env;
-        Visible = false;
-        SetProcess(false);
         MouseFilter = MouseFilterEnum.Ignore;
         SetAnchorsPreset(LayoutPreset.FullRect);
+        _frame = new LogFrame(Skin, Strings.T("log.name"), Tabs);
+        AddChild(_frame);
         BuildFrame();
         BuildLogPane();
         BuildRecordsPane();
@@ -53,104 +51,41 @@ public sealed partial class HuntersLogScreen : Control
 
     public override void _ExitTree() => Data.Changed -= OnDataChanged;
 
-    // ---- the frame: header, tabs, the three panes ----
+    // ---- the frame: what the shared frame's parts do here ----
 
     void BuildFrame()
     {
-        _panel.AnchorLeft = (1f - ShooterTheme.LogWidthShare) / 2; _panel.AnchorRight = 1f - _panel.AnchorLeft;
-        _panel.AnchorTop = (1f - ShooterTheme.LogHeightShare) / 2; _panel.AnchorBottom = 1f - _panel.AnchorTop;
-        _panel.OffsetLeft = 0; _panel.OffsetTop = 0; _panel.OffsetBottom = 0; _panel.OffsetRight = 0;
-        AddChild(_panel);
-
-        var col = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        _panel.AddChild(col);
-
-        var head = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        _back = Ui.Btn(Strings.T("log.back"), BackPressed);
-        _back.Visible = false;
-        _title = new Label { ThemeTypeVariation = "HudBig", SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipText = true, VerticalAlignment = VerticalAlignment.Center, MouseFilter = MouseFilterEnum.Ignore };
-        _close = new Button { ThemeTypeVariation = "LogClose", FocusMode = FocusModeEnum.All, TooltipText = Strings.T("log.close"), MouseDefaultCursorShape = CursorShape.PointingHand, CustomMinimumSize = new Vector2(ShooterTheme.LogCloseSize + ShooterTheme.Space * 2, ShooterTheme.LogCloseSize + ShooterTheme.Space * 2) };
-        var cross = new Glyph(Glyph.Kind.Close, ShooterTheme.Text, ShooterTheme.LogCloseSize) { MouseFilter = MouseFilterEnum.Ignore };
-        cross.SetAnchorsAndOffsetsPreset(LayoutPreset.Center);
-        cross.OffsetLeft = -ShooterTheme.LogCloseSize / 2f; cross.OffsetRight = ShooterTheme.LogCloseSize / 2f; cross.OffsetTop = -ShooterTheme.LogCloseSize / 2f; cross.OffsetBottom = ShooterTheme.LogCloseSize / 2f;
-        _close.AddChild(cross);
-        _close.Pressed += () => { Sfx.Ui("ui.back"); Close(); };
-        head.AddChild(_back); head.AddChild(_title); head.AddChild(_close);
-        col.AddChild(head);
-
-        var tabs = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        var group = new ButtonGroup();
-        for (var i = 0; i < Tabs; i++)
-        {
-            var index = i;
-            var b = new Button { ThemeTypeVariation = "MenuTab", ToggleMode = true, ButtonGroup = group, FocusMode = FocusModeEnum.All, MouseDefaultCursorShape = CursorShape.PointingHand };
-            b.Pressed += () => SelectTab(index);
-            _tabs[i] = b;
-            tabs.AddChild(b);
-        }
-        _tabs[1].Text = Strings.T("log.tab.records");
-        _tabs[2].Text = Strings.T("log.tab.hunts");
-        col.AddChild(tabs);
+        _frame.Tabs[1].Text = Strings.T("log.tab.records");
+        _frame.Tabs[2].Text = Strings.T("log.tab.hunts");
+        _frame.TabPressed += SelectTab;
+        _frame.TabStepped += StepTab;
+        _frame.BackPressed += BackPressed;
+        _frame.CloseRequested += Close;
+        _frame.Ticked += delta => { Data.Tick(delta); SyncSandbox(); };
 
         // sandbox writes nothing to the database, so no hunt is logged: a line under the tabs says so on every tab while it holds (text, not colour alone)
         _sandboxNote = new PanelContainer { ThemeTypeVariation = "LogNotice", Visible = false, MouseFilter = MouseFilterEnum.Ignore };
         _sandboxNote.AddChild(Text(Strings.T("log.sandbox"), "HudWarn"));
-        col.AddChild(_sandboxNote);
-
-        // the panes share one space; the shown one is visible
-        var stack = new MarginContainer { SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
-        stack.AddThemeConstantOverride("margin_top", ShooterTheme.Space);
-        col.AddChild(stack);
-        for (var i = 0; i < Tabs; i++)
-        {
-            _panes[i] = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true, Visible = i == 0, MouseFilter = MouseFilterEnum.Pass };
-            stack.AddChild(_panes[i]);
-        }
+        _frame.Notices.AddChild(_sandboxNote);
     }
 
     /// <summary>The control a pane's content goes into: a vertical box that fills the pane's width.</summary>
-    static VBoxContainer NewHost(Control pane)
-    {
-        var host = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
-        pane.AddChild(host);
-        return host;
-    }
+    VBoxContainer NewHost(Control pane) => _frame.NewHost(Array.IndexOf(_panes, pane));
 
     // ---- open and close ----
 
     public void Open()
     {
         if (_open) return;
-        _fade.Show(GameSettings.Current.ReduceMotion);
-        Visible = true;
-        MouseFilter = MouseFilterEnum.Ignore;
-        MouseBehaviorRecursive = MouseBehaviorRecursiveEnum.Inherited;
+        _frame.Open();
         _nav.Reset();
         _logStale = _recordsStale = _huntsStale = true; // every pane asks again when it shows: the book changes while the screen is closed
-        ApplyAlpha();
-        SetProcess(true);
         ShowPage();
         Callable.From(FocusTab).CallDeferred();
     }
 
     /// <summary>Starts hiding the screen (a 150 ms fade, none with reduce motion).</summary>
-    public void Close()
-    {
-        if (!_open) return;
-        var finished = _fade.Hide(GameSettings.Current.ReduceMotion);
-        MouseBehaviorRecursive = MouseBehaviorRecursiveEnum.Disabled; // the fading screen takes no clicks: the mouse is captured again already
-        GetViewport().GuiReleaseFocus(); // nor keys
-        if (finished) FinishClose();
-    }
-
-    void FinishClose()
-    {
-        ApplyAlpha();
-        Visible = false;
-        SetProcess(false);
-    }
-
-    void ApplyAlpha() => Modulate = new Color(1, 1, 1, _fade.Alpha);
+    public void Close() => _frame.Close();
 
     /// <summary>Esc: another player's log goes up to My Log; anything else closes. True when it was open (the Esc is used).</summary>
     public bool HandleBack()
@@ -168,14 +103,6 @@ public sealed partial class HuntersLogScreen : Control
         Callable.From(FocusTab).CallDeferred();
     }
 
-    public override void _Process(double delta)
-    {
-        var (changed, finished) = _fade.Tick((float)delta, UiShell.FadeTime);
-        if (changed) ApplyAlpha();
-        if (finished) { FinishClose(); return; }
-        if (_open) { Data.Tick((float)delta); SyncSandbox(); }
-    }
-
     /// <summary>Shows the sandbox line while the player is in sandbox (a flag read per frame while open; the line only changes when it flips).</summary>
     void SyncSandbox()
     {
@@ -187,7 +114,7 @@ public sealed partial class HuntersLogScreen : Control
 
     void SelectTab(int index)
     {
-        if (index == _nav.TabIndex && _tabs[index].ButtonPressed && _panes[index].Visible) return;
+        if (index == _nav.TabIndex && _panes[index].Visible) { _frame.ShowTab(index); return; }
         Sfx.Ui("ui.click");
         _nav.ShowTab(index);
         ShowPage();
@@ -202,24 +129,18 @@ public sealed partial class HuntersLogScreen : Control
         FocusTab();
     }
 
-    void FocusTab() { if (_open) _tabs[_nav.TabIndex].GrabFocus(); }
+    void FocusTab() => _frame.FocusTab();
 
     /// <summary>
-    /// Shows the page the navigation names: tab states, title, the pane; asks for its data when it is stale (an answer redraws the pane, so a request ends here)
+    /// Shows the page the navigation names: tab states, the first tab's name, the pane; asks for its data when it is stale (an answer redraws the pane, so a request ends here)
     /// and draws what it holds when it is not.
     /// </summary>
     void ShowPage()
     {
-        for (var i = 0; i < Tabs; i++)
-        {
-            _tabs[i].SetPressedNoSignal(i == _nav.TabIndex);
-            _panes[i].Visible = i == _nav.TabIndex;
-        }
+        _frame.ShowTab(_nav.TabIndex);
         SyncSandbox();
-        var title = TitleText();
-        _tabs[0].Text = title;
-        _title.Text = title;
-        _back.Visible = _nav.Page == HuntLogPage.PlayerLog;
+        _frame.Tabs[0].Text = TitleText();
+        _frame.Back.Visible = _nav.Page == HuntLogPage.PlayerLog;
         switch (_nav.Page)
         {
             case HuntLogPage.MyLog or HuntLogPage.PlayerLog:
@@ -231,7 +152,7 @@ public sealed partial class HuntersLogScreen : Control
                 RebuildRecords();
                 break;
             default:
-                // the table needs the records too (the "Mystery hunts" option and the record pills)
+                // the table needs the records too (the "Mystery hunts" option and the record seals)
                 if (_recordsStale) { _recordsStale = false; Data.RequestRecords(); }
                 if (_huntsStale) { _huntsStale = false; _selected = -1; Data.RequestHunts(drop: false); return; }
                 RefreshHunts();
@@ -251,85 +172,38 @@ public sealed partial class HuntersLogScreen : Control
         Callable.From(EnsureFocus).CallDeferred();
     }
 
-    /// <summary>A pane that was rebuilt freed the control that had the focus: the keys go to the tab again.</summary>
-    void EnsureFocus()
-    {
-        if (!_open) return;
-        var f = GetViewport().GuiGetFocusOwner();
-        if (f == null || !IsAncestorOf(f) || !f.IsVisibleInTree()) FocusTab();
-    }
-
-    // ---- input ----
-
-    public override void _Input(InputEvent e)
-    {
-        if (!_open) return;
-        var step = e switch
-        {
-            InputEventKey { Pressed: true, Echo: false } k when k.PhysicalKeycode is Key.E or Key.Pagedown => 1,
-            InputEventKey { Pressed: true, Echo: false } k when k.PhysicalKeycode is Key.Q or Key.Pageup => -1,
-            InputEventJoypadButton { Pressed: true, ButtonIndex: JoyButton.RightShoulder } => 1,
-            InputEventJoypadButton { Pressed: true, ButtonIndex: JoyButton.LeftShoulder } => -1,
-            _ => 0,
-        };
-        if (step != 0) { StepTab(step); GetViewport().SetInputAsHandled(); return; }
-        // the pad's B goes up one level like Esc (Esc itself is the shell's: it asks the HUD to go back before it opens Pause)
-        if (e is InputEventJoypadButton { Pressed: true, ButtonIndex: JoyButton.B }) { BackPressed(); GetViewport().SetInputAsHandled(); return; }
-        // an arrow with nothing focused (the player clicked on the panel) starts from the tab instead of doing nothing
-        if (GetViewport().GuiGetFocusOwner() == null && (e.IsActionPressed("ui_left") || e.IsActionPressed("ui_right") || e.IsActionPressed("ui_up") || e.IsActionPressed("ui_down")))
-        {
-            FocusTab();
-            GetViewport().SetInputAsHandled();
-        }
-    }
+    void EnsureFocus() => _frame.EnsureFocus();
 
     // ---- small builders the panes share ----
 
-    static Label Text(string text, string? variation = null, HorizontalAlignment align = HorizontalAlignment.Left, bool wrap = false)
-    {
-        var l = new Label { Text = text, HorizontalAlignment = align, MouseFilter = MouseFilterEnum.Ignore };
-        if (variation != null) l.ThemeTypeVariation = variation;
-        if (wrap) l.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        return l;
-    }
+    static Label Text(string text, string? variation = null, HorizontalAlignment align = HorizontalAlignment.Left, bool wrap = false) => LogFrame.Text(text, variation, align, wrap);
 
     static void Clear(Node host)
     {
         foreach (var c in host.GetChildren()) { host.RemoveChild(c); c.QueueFree(); }
     }
 
-    /// <summary>
-    /// A loading, empty, error or missing state in the middle of its pane: a spinner (loading), the title, what happened (<paramref name="body"/> empty: just the title), and a
-    /// button (Retry, or the action that leaves the state). <paramref name="action"/> null: no button.
-    /// </summary>
-    Control StateBox(string title, string body, bool spinner = false, string? actionText = null, Action? action = null)
+    static Control StateBox(string title, string body, bool spinner = false, string? actionText = null, Action? action = null) => LogFrame.StateBox(title, body, spinner, actionText, action);
+
+    /// <summary>A recorded hit's picture in the inks of the paper it sits on.</summary>
+    static AnimalPicture PaperPicture(Vector2 size) => new(size) { FillInk = Skin.InkDim, OutlineInk = Skin.InkDim, HitInk = Skin.InkDim };
+
+    /// <summary>The darker box a picture on paper sits in.</summary>
+    static PanelContainer Figure(Control picture)
     {
-        var center = new CenterContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
-        var v = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore, CustomMinimumSize = new Vector2(ShooterTheme.Space * 40, 0) };
-        v.AddThemeConstantOverride("separation", ShooterTheme.Space);
-        center.AddChild(v);
-        if (spinner)
-        {
-            var s = new Spinner(ShooterTheme.Space * 6) { SizeFlagsHorizontal = SizeFlags.ShrinkCenter };
-            v.AddChild(s);
-        }
-        v.AddChild(Text(title, "HudHead", HorizontalAlignment.Center));
-        if (body != "") v.AddChild(Text(body, "HudDim", HorizontalAlignment.Center, wrap: true));
-        if (actionText != null && action != null)
-        {
-            var b = Ui.Btn(actionText, action, "MenuPrimary", ShooterTheme.Space * 16);
-            b.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
-            v.AddChild(b);
-        }
-        return center;
+        var box = new PanelContainer { ThemeTypeVariation = "LogFigure", MouseFilter = MouseFilterEnum.Ignore };
+        box.AddChild(picture);
+        return box;
     }
 
-    /// <summary>The Mystery creature's picture: a "?" and nothing else (no shape, the name stays unsent). The accent when the log's owner caught it, the dim ink when nobody did.</summary>
-    static Control HiddenFigure(Vector2 size, bool caught)
+    /// <summary>
+    /// The Mystery creature's picture: a "?" and nothing else (no shape, the name stays unsent). The full ink when the log's owner caught it, the dim one when nobody did
+    /// (<paramref name="onTile"/>: on a covered plaque, else on paper).
+    /// </summary>
+    static Control HiddenFigure(Vector2 size, bool caught, bool onTile = false)
     {
         var holder = new Control { CustomMinimumSize = size, MouseFilter = MouseFilterEnum.Ignore };
-        var mark = Text(Strings.T("log.hidden.mark"), size.Y < ShooterTheme.Space * 12 ? "HudBig" : "HudDisplay", HorizontalAlignment.Center);
-        mark.AddThemeColorOverride("font_color", caught ? ShooterTheme.Accent : ShooterTheme.Dim);
+        var mark = Text(Strings.T("log.hidden.mark"), onTile ? (caught ? "TileMark" : "TileMarkDim") : caught ? "InkDisplay" : "InkDimDisplay", HorizontalAlignment.Center);
         mark.VerticalAlignment = VerticalAlignment.Center;
         mark.SetAnchorsPreset(LayoutPreset.FullRect);
         holder.AddChild(mark);

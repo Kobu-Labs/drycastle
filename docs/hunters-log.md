@@ -5,7 +5,7 @@ Design source for the Hunter's Log: a server-wide, browsable book of every wild 
 ## Scope
 - A **Hunt** = one logged kill of a wild Animal that has `weight_kg` in `animals.json`, by a player, any weapon (a run-over too), plus a **Mystery** catch (below). Not pets, livestock, bird flocks, or kills by non-players.
 - Persisted forever in the progression DB (Postgres migration; SQLite and in-memory stores too). Server is the only writer.
-- No XP, no ranks, no achievements/marks. Records, Life List, announcements only.
+- No XP, no ranks, no achievements/marks. Records, Life List, rarity rims, announcements only.
 
 ## Index species
 | Index id | Source animals (`animals.json`) |
@@ -67,3 +67,18 @@ Same as above, plus:
 - Table rows carry a "Record kg" / "Record shot" pill when the hunt holds that record (read from the Records answer); own rows are tinted and say "(you)".
 - A Mystery creature's tile reads "Caught <when>" and its longest shot (no weight). One without a baked picture is a plain body box (an upright one for a Mystery).
 
+
+## Rarity
+- A hunt's rarity is where its weight lies in the weight distribution of its exact species and look (a doe and a deer, a moose cow and a bull have their own `weight_kg` range): the heaviest 5 % are **gold**, 10 % **silver**, 20 % **bronze**, the rest common. `HuntRarity` (ShooterCore).
+- The weight is the range at a roll that is the mean of two uniform draws (`AnimalRules.RollSize`), so the share is exact: gold from 84.2 % of the range, silver from 77.6 %, bronze from 68.4 %. Nothing is counted from the stored hunts, nothing new is stored; a changed range re-tiers old hunts at the next server start.
+- A Life List tile carries the rarest weight its owner has hunted of that index species (not always the heaviest: a heavy doe is rarer than a middling deer). Sent in the player log answer (wire v73, bits 4-5 of the tile's flag byte).
+- A Mystery creature has no weight and no rarity: its tile is framed in the creature's own style (`MysteryFrame`).
+
+## Look (the lodge skin)
+Visual reference: https://claude.ai/artifact/2qCpYrMVLR4GKXFnD9y6DU
+- The log is opaque and dressed as a hunting lodge's wall board (`LogSkin.Lodge` on the shared `LogFrame`, see docs/standards/ui-ux.md "Collection logs"): dark planks, brass corner brackets, a rack of antlers on the top edge, the title burnt into a lighter header band, a round brass close button.
+- Tabs are signs hung from the header; the current one is lighter, has a thicker edge and a brass tack.
+- My Log: the four totals on brass plates; the Life List in two sections, Game and Mystery, each with its count. A tile is a shield plaque: the animal chalked in outline until hunted, filled once, its name on a small plate, the best weight and the longest shot. A rare best has a rim in its metal, a medal on the corner and the tier in words ("187 kg, Gold"); a legend beside the title says what the metals mean. A hidden Mystery tile is a plaque under a cloth with the "?".
+- Records: a parchment card per species pinned to the board with a tack; a hidden creature's card is under a cloth.
+- All hunts: the table is a ledger page (ruled rows, ink); the owner's rows are tinted with a stripe on the left and say "(you)"; a record is a red seal with its words; the selected row has a thick ink frame; the hit card is a pinned paper. A loading, empty or error box stands on the board in the paper's place.
+- Not built: the Trophies tab and its rewards, the Birds section, per-creature frames on Records cards.

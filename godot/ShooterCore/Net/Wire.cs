@@ -347,7 +347,8 @@ public static class Wire
     //   v70 the plantation (#364): bit 2 of the player status mask (EventKind.StatusState, StatusKind.High): the player is high; the others draw a lit cigarette and red eyes on the figure, the player's own camera sways
     //   v71 shootable pole lamps (ADR 0037): events 250 LampState and 251 LampSync
     //   v72 squads (#379): event 241 SquadAssign (client to server); the scoreboard message ends in a squad tail (a squad byte per row, then the squads' names)
-    public const byte ProtocolVersion = 72;
+    //   v73 hunt rarity: bits 4-5 of a Life List entry's flag byte in the player log answer (EventKind.HuntPlayerLog) carry the tile's HuntTier
+    public const byte ProtocolVersion = 73;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {
