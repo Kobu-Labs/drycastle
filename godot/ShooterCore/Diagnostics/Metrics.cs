@@ -18,11 +18,12 @@ public sealed class MetricsBatch
     public bool Empty => _sb.Length == 0;
 
     /// <summary>Starts a line of <paramref name="measurement"/>, with one tag when <paramref name="tag"/> is given. Fields follow (<see cref="Field"/>); a line that gets none is dropped by <see cref="End"/>.</summary>
-    public MetricsBatch Begin(string measurement, string? tag = null, string? tagValue = null)
+    public MetricsBatch Begin(string measurement, string? tag = null, string? tagValue = null, string? tag2 = null, string? tagValue2 = null)
     {
         _lineAt = _sb.Length;
         _sb.Append(Clean(measurement));
         if (tag != null && !string.IsNullOrEmpty(tagValue)) _sb.Append(',').Append(Clean(tag)).Append('=').Append(Clean(tagValue));
+        if (tag2 != null && !string.IsNullOrEmpty(tagValue2)) _sb.Append(',').Append(Clean(tag2)).Append('=').Append(Clean(tagValue2));
         _sb.Append(' ');
         _fields = false;
         return this;

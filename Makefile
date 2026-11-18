@@ -311,6 +311,11 @@ private-pack:
 monitor:
 	scripts/monitor.sh
 
+# The players' dashboard: what each client reports through the server (docs/monitoring.md, "Clients").
+.PHONY: monitor-clients
+monitor-clients:
+	scripts/monitor.sh clients
+
 release-check:
 	python3 -I scripts/check_release_assets.py
 
