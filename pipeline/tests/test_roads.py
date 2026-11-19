@@ -179,3 +179,22 @@ def test_clip_graph_cuts_edges_at_the_terrain_border() -> None:
     ends = {n["id"]: (n["x"], n["y"]) for n in out["nodes"]}
     assert set(ends) == {"N-0001", "N-0002", cut["to"]} and ends[cut["to"]] == (200.0, 10.0)  # new node on the border
     assert clip_graph(out, box(0, 0, 200, 100)) == out  # clipping again changes nothing
+
+
+def test_the_rust_engine_drapes_the_triangles_of_the_python_reference() -> None:
+    from shapely.geometry import Polygon
+
+    from drycastle_pipeline import roads
+
+    if roads._engine() is None:
+        pytest.skip("the Rust engine is not installed (make detail-rust-build)")
+    t = make_terrain()
+    bend = ribbon_footprint(np.array([[30.0, 50.0], [90.0, 70.0], [150.0, 70.0]]), 5.0, 2.0)
+    holed = Polygon([(40, 40), (80, 40), (80, 80), (40, 80)], [[(55, 55), (65, 55), (65, 65), (55, 65)]])  # handed back to Python
+    jobs = [(bend, 0.05, [70, 70, 70]), (holed, 0.02, [90, 80, 60]), (Polygon(), 0.0, [1, 2, 3]),
+            (bend.difference(Point(90, 70).buffer(4)), 0.053, [10, 20, 30])]
+    ref = roads.drape_meshes(jobs, t, "python")
+    got = roads.drape_meshes(jobs, t, "rust")
+    assert ref[0].face_count > 50 and ref[1].face_count > 50 and ref[2].face_count == 0
+    for a, b in zip(ref, got, strict=True):
+        assert np.array_equal(a.tris, b.tris) and np.array_equal(a.colours, b.colours)

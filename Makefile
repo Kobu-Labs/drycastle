@@ -73,8 +73,9 @@ ortho:
 
 # Where the trees are, read from the photo (data/village/ortho/trees.json + canopy.png). Needs `make ortho` (and normalise) first.
 # The first run trains the canopy model (a minute or two), later runs reuse it; RETRAIN=1 trains it again.
-ortho-trees:
-	cd pipeline && uv run python -m drycastle_pipeline.ortho_trees $(if $(RETRAIN),--retrain,)
+# Unchanged inputs (photo, model, buildings, outline, parameters, detector code): nothing runs, the files are kept; FORCE=1 detects again.
+ortho-trees: detail-rust-build
+	cd pipeline && uv run python -m drycastle_pipeline.ortho_trees $(if $(RETRAIN),--retrain,) $(if $(FORCE),--force,)
 
 # Pictures of the generated utility poles in out/poles (variants, random seeds, a wired row, the parts kit); GLB=1 also
 # writes each placeable pole as a GLB. No map data needed. See docs/utility-poles.md.

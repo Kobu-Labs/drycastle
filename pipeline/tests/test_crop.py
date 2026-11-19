@@ -507,3 +507,12 @@ def test_append_crops_after_the_engine(ws) -> None:
     stats = D.append_crops(out, edits_path=tmp / "no-edits.json")
     assert stats["crops"]["crop_wheat"] > 0 and (out / "detail_crops.json").is_file()
     assert len(np.load(out / "detail_patches.npy")) > n
+
+
+def test_crop_units_in_processes_give_the_same_village(ws) -> None:
+    work, tmp = ws
+    one = D.build_village_detail(work, edits_path=tmp / "no-edits.json", recipe="crop")
+    many = D.build_village_detail(work, edits_path=tmp / "no-edits.json", recipe="crop", workers=3)
+    assert many.crops == one.crops and many.clutter == one.clutter
+    assert many.patches.tobytes() == one.patches.tobytes() and len(one.patches) > 0
+    assert many.stats["patch_triangles_by_type"] == one.stats["patch_triangles_by_type"]
