@@ -30,6 +30,7 @@ import functools
 import hashlib
 import json
 import math
+import os
 import random
 import sys
 import time
@@ -1378,12 +1379,76 @@ def patch_rows(flat: Mesh, textured: dict[str, TexturedMesh], textures: list[str
     return np.concatenate(rows) if rows else np.zeros((0, _PATCH_ROW))
 
 
+def _unit_results(v: "Village", parcel: dict, atype: str) -> list[tuple]:
+    """``(context, recipe, rules, result)`` of every context of one unit."""
+    out = []
+    for ctx in v.contexts(parcel):
+        kind = "dike" if ctx.dike else atype
+        cfg = v.cfg_for(parcel, kind)
+        out.append((ctx, kind, cfg, RECIPES[kind](ctx, cfg)))
+    return out
+
+
+_FORKED: tuple | None = None  # (village, units) of :func:`_units_in_processes`, read by its forked workers
+
+
+def _forked_unit(k: int) -> list[tuple]:
+    v, todo = _FORKED
+    _, parcel, atype = todo[k]
+    return [(None, kind, None, res) for _, kind, _, res in _unit_results(v, parcel, atype)]  # the result alone crosses back
+
+
+def _units_in_processes(v: "Village", todo: list[tuple], workers: int) -> list[list[tuple]]:
+    """:func:`_unit_results` of every unit of ``todo``, in its order, from ``workers`` forked processes (they share the village
+    read-only; the biggest units go first so no process is left with them at the end)."""
+    import multiprocessing
+
+    global _FORKED
+    for _ in v.contexts(todo[0][1]):  # the village's lazy tables are built once here, not once per process
+        pass
+    _FORKED = (v, todo)
+    try:
+        order = sorted(range(len(todo)), key=lambda k: -shape(todo[k][1]["polygon"]).area)
+        with multiprocessing.get_context("fork").Pool(min(workers, len(todo))) as pool:
+            got = pool.map(_forked_unit, order, chunksize=1)
+    finally:
+        _FORKED = None
+    out: list[list[tuple]] = [[] for _ in todo]
+    for k, r in zip(order, got, strict=True):
+        out[k] = r
+    return out
+
+
+def _draped_rows(pending: list[tuple[str, list[Patch]]], drape_patches, terrain: Terrain, lift: float, textures: list[str],
+                 by_type: dict[str, dict[str, int]]) -> np.ndarray:
+    """The patch rows of all units from one ``drape_patches`` call, in the row order of :func:`patch_meshes` and
+    :func:`patch_rows`; adds the triangle count per recipe and layer to ``by_type``."""
+    every = [p for _, patches in pending for p in patches]
+    draped, counts = drape_patches(every, terrain, lift, textures)
+    starts = np.concatenate([[0], np.cumsum(counts)])
+    out, at = [], 0
+    for kind, patches in pending:
+        tally = by_type.setdefault(kind, {})
+        idx = range(at, at + len(patches))
+        at += len(patches)
+        for i, p in zip(idx, patches, strict=True):
+            if counts[i]:
+                tally[p.layer] = tally.get(p.layer, 0) + counts[i]
+        order = [i for i, p in zip(idx, patches, strict=True) if p.texture is None]
+        order += sorted((i for i, p in zip(idx, patches, strict=True) if p.texture is not None), key=lambda i: every[i].texture)
+        out += [draped[starts[i]:starts[i + 1]] for i in order if counts[i]]
+    return np.concatenate(out) if out else np.zeros((0, _PATCH_ROW))
+
+
 def build_village_detail(
     work_dir: Path, rules_path: Path = DEFAULT_RULES, edits_path: Path = DEFAULT_EDITS,
-    only: set[str] | None = None, log=None, recipe: str | None = None,
+    only: set[str] | None = None, log=None, recipe: str | None = None, drape_patches=None, workers: int = 0,
 ) -> VillageDetail:
     """The detail of every parcel of the map (``only``: just these parcel IDs; tests, previews; ``recipe``: just the units of
-    this recipe, :data:`PYTHON_RECIPES` after the Rust engine)."""
+    this recipe, :data:`PYTHON_RECIPES` after the Rust engine). ``drape_patches`` (:func:`detail_rust.drape_patches`): the patches
+    of all units are draped by it in one call at the end, not one by one in Python (:func:`patch_meshes`); the rows keep the
+    order of the Python build (per unit: the flat patches, then the textured ones by texture id). ``workers`` > 1: the recipes
+    of the units run in that many processes (every recipe is seeded by its unit, so the result is the same)."""
     v = Village(work_dir, rules_path, edits_path)
     for w in v.warnings:
         print(f"detail: warning: {w}", file=sys.stderr)
@@ -1392,27 +1457,34 @@ def build_village_detail(
     chunks: dict[tuple[int, int], dict[str, list[list[float]]]] = {}
     crops: dict[tuple[int, int], dict[str, list[list[float]]]] = {}
     rows = []
+    pending: list[tuple[str, list[Patch]]] = []  # with ``drape_patches``: (recipe, patches) of every unit, draped after the loop
     by_type: dict[str, dict[str, int]] = {}
     mcfg = v.cfg["meadow"]
     meadow = meadow_mod.new_meadow(mcfg, v.chunk_m)
     stored = set(mcfg["stored_kinds"])
     meadow_cells = 0
     t0 = time.time()
+    todo = []
     for n, parcel in enumerate(sorted(v.parcels, key=lambda p: p["id"])):
         atype = area_type(parcel, v.types)
         if atype is None or (only is not None and parcel["id"] not in only) or (recipe is not None and atype != recipe):
             continue
-        for ctx in v.contexts(parcel):
-            kind = "dike" if ctx.dike else atype
-            cfg = v.cfg_for(parcel, kind)
-            res = RECIPES[kind](ctx, cfg)
+        todo.append((n, parcel, atype))
+    # not for the meadow recipes: they are added to the one meadow from their context, here
+    forked = workers > 1 and len(todo) > 1 and recipe is not None and recipe not in meadow_mod.MEADOW_TYPES
+    built = _units_in_processes(v, todo, workers) if forked else None
+    for k, (n, parcel, atype) in enumerate(todo):
+        for ctx, kind, cfg, res in built[k] if built is not None else _unit_results(v, parcel, atype):
             if kind in meadow_mod.MEADOW_TYPES:
                 # the game generates the dense kinds from the raster; the recipe's own instances stay only for the rest
                 res.clutter = [c for c in res.clutter if c["kind"] in stored]
                 band = float(cfg[kind].get("edge_band_m", 0.0))
                 meadow_cells += meadow_mod.add_parcel(meadow, ctx, res, kind, free_area(ctx, cfg, trunks=False), mcfg, band)
-            flat, tex = patch_meshes(res, v.terrain, lift, by_type.setdefault(kind, {}))
-            rows.append(patch_rows(flat, tex, textures))
+            if drape_patches is not None:
+                pending.append((kind, res.patches))
+            else:
+                flat, tex = patch_meshes(res, v.terrain, lift, by_type.setdefault(kind, {}))
+                rows.append(patch_rows(flat, tex, textures))
             for c in res.crops:
                 key = tuple(chunk_of(c["x"], c["y"], v.chunk_m))
                 crops.setdefault(key, {}).setdefault(c["kind"], []).append(
@@ -1425,6 +1497,8 @@ def build_village_detail(
                 chunks.setdefault(key, {}).setdefault(c["kind"], []).append(row)
         if log and n % 200 == 0:
             log(f"{n}/{len(v.parcels)} parcels, {time.time() - t0:.0f} s")
+    if pending:
+        rows.append(_draped_rows(pending, drape_patches, v.terrain, lift, textures, by_type))
     count = lambda: {k: sum(len(kinds.get(k, [])) for kinds in chunks.values()) for k in CLUTTER_KINDS}  # noqa: E731
     before = count()
     cap_clutter(chunks, v.cfg["caps_per_chunk"])
@@ -1502,7 +1576,11 @@ def append_crops(work_dir: Path, rules_path: Path = DEFAULT_RULES, edits_path: P
     if not crop_units_exist(work_dir, rules_path, edits_path):
         (work_dir / "detail_crops.json").unlink(missing_ok=True)
         return {}
-    detail = build_village_detail(work_dir, rules_path, edits_path, recipe="crop")
+    from drycastle_pipeline import detail_rust
+
+    # the engine drapes the crop patches (minutes in Python)
+    detail = build_village_detail(work_dir, rules_path, edits_path, recipe="crop", drape_patches=detail_rust.drape_patches,
+                                  workers=os.cpu_count() or 1)
     textures = json.loads((work_dir / "detail_patches.json").read_text())["textures"]
     assert textures == detail.textures, "the crop recipe uses a texture the engine's list lacks"
     base = np.load(work_dir / "detail_patches.npy")
@@ -1545,19 +1623,24 @@ def patches_by_chunk(rows: np.ndarray, textures: list[str], chunk_m: float, k: f
     c = tris.mean(axis=1)
     ix, iy = np.floor(c[:, 0] / chunk_m).astype(int), np.floor(c[:, 1] / chunk_m).astype(int)
     tid = rows[:, 18].astype(int)
-    for key in sorted(set(zip(ix.tolist(), iy.tolist(), strict=True))):
-        in_chunk = (ix == key[0]) & (iy == key[1])
-        nodes: dict = {}
-        flat = in_chunk & (tid < 0)
-        if flat.any():
-            nodes["detail_patches"] = Mesh(tris[flat], rows[flat, 9:12].astype(np.uint8))
-        for i, name in enumerate(textures):
-            sel = in_chunk & (tid == i)
-            if sel.any():
-                nodes[tex_node_name("detail_patches", name)] = TexturedMesh(
-                    tris[sel], rows[sel, 9:12].astype(np.uint8), rows[sel, 12:18].reshape(-1, 3, 2)
-                )
-        out[key] = nodes
+    # one stable sort by (chunk, texture) instead of a pass over every row per chunk and texture: rows keep their order within a group
+    order = np.lexsort((tid, iy, ix))
+    sx, sy, st = ix[order], iy[order], tid[order]
+    starts = np.concatenate([[0], np.flatnonzero((np.diff(sx) != 0) | (np.diff(sy) != 0) | (np.diff(st) != 0)) + 1, [len(order)]])
+    for a, b in zip(starts[:-1].tolist(), starts[1:].tolist(), strict=True):
+        sel, t = order[a:b], int(st[a])
+        nodes = out.setdefault((int(sx[a]), int(sy[a])), {})
+        if t < 0:
+            if "detail_patches" in nodes:  # two negative texture indices in one chunk: one flat mesh, rows in their order
+                sel = np.sort(np.concatenate([nodes.pop("_flat_rows"), sel]))
+            nodes["_flat_rows"] = sel
+            nodes["detail_patches"] = Mesh(tris[sel], rows[sel, 9:12].astype(np.uint8))
+        elif t < len(textures):
+            nodes[tex_node_name("detail_patches", textures[t])] = TexturedMesh(
+                tris[sel], rows[sel, 9:12].astype(np.uint8), rows[sel, 12:18].reshape(-1, 3, 2)
+            )
+    for nodes in out.values():
+        nodes.pop("_flat_rows", None)
     return out
 
 

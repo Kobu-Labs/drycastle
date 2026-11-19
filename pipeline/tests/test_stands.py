@@ -19,7 +19,7 @@ CFG_STANDS = {**TREE["stands"], "cell_m": 40}  # small cells: several stands in 
 WET = box(280, 100, 300, 500)  # a stream through the forest
 
 
-def forest(tmp_path: Path, wet=None) -> list[dict]:
+def forest(tmp_path: Path, wet=None, engine: str = "auto") -> list[dict]:
     mask = np.zeros((SIZE, SIZE), np.uint8)
     mask[SIZE - CANOPY[1] : SIZE - CANOPY[0], CANOPY[0] : CANOPY[1]] = 255  # row 0 is the north edge
     ortho = tmp_path / "ortho"
@@ -32,7 +32,7 @@ def forest(tmp_path: Path, wet=None) -> list[dict]:
     terrain = SimpleNamespace(coverage=box(0, 0, SIZE, SIZE), surface=lambda x, y: np.zeros(len(x)))
     cfg = {**TREE, "ortho_dir": str(ortho), "stands": CFG_STANDS,
            "ortho": {**TREE["ortho"], "canopy_per_1000m2": 8.0}}  # sparser than the village: a test of the stands
-    return make_trees([], {"edges": [], "nodes": []}, terrain, cfg, origin=(0.0, 0.0), wet=wet)
+    return make_trees([], {"edges": [], "nodes": []}, terrain, cfg, origin=(0.0, 0.0), wet=wet, engine=engine)
 
 
 def edge_distance_m(t: dict) -> float:
@@ -115,3 +115,28 @@ def test_swamp_only_near_water(tmp_path) -> None:
     assert sum(t["shape"] == "box" for t in swamp) / len(swamp) > 0.7
     dry = [t for t in forest(tmp_path) if wet_distance_m(t) <= reach]
     assert len(swamp) < 0.7 * len(dry)  # sparse
+
+
+def test_the_edge_field_gives_the_edge_distance_of_every_pixel() -> None:
+    import numpy as np
+
+    from drycastle_pipeline import props
+
+    rng = np.random.default_rng(5)
+    mask = rng.random((70, 90)) < 0.8
+    mask[20:45, 30:60] = True  # a closed block, so some pixels are far from open ground
+    field = props.EdgeField(mask, 0.6, 9.0, 3.0)
+    for row, col in [(0, 0), (69, 89), (32, 45), (21, 31), (5, 80), (44, 59), (0, 45)]:
+        assert field.distance(row, col) == props.edge_distance(mask, row, col, 0.6, 9.0, 3.0)
+
+
+def test_the_rust_engine_plants_the_trees_of_the_python_reference(tmp_path) -> None:
+    import pytest
+
+    from drycastle_pipeline import props
+
+    if props.planting_engine() is None:
+        pytest.skip("the Rust engine is not installed (make detail-rust-build)")
+    for wet in (None, WET):  # with and without the swamp stand
+        ref = forest(tmp_path, wet, engine="python")
+        assert len(ref) > 500 and forest(tmp_path, wet, engine="rust") == ref

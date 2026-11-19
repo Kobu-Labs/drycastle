@@ -194,12 +194,14 @@ def trees_mesh(trees: list[dict], cfg: dict) -> Mesh:
 
 def _outward(tris: list, centre) -> list:
     """Wind every triangle counter-clockwise seen from outside, for a solid that is star-shaped around ``centre``."""
-    c = np.asarray(centre, float)
+    cx, cy, cz = (float(v) for v in centre)
     out = []
-    for a, b, d in tris:
-        n = np.cross(np.subtract(b, a), np.subtract(d, a))
-        mid = (np.asarray(a) + np.asarray(b) + np.asarray(d)) / 3
-        out.append([a, b, d] if float(n @ (mid - c)) >= 0 else [a, d, b])
+    for a, b, d in tris:  # plain floats: a few triangles at a time, numpy only costs here
+        ux, uy, uz = b[0] - a[0], b[1] - a[1], b[2] - a[2]
+        vx, vy, vz = d[0] - a[0], d[1] - a[1], d[2] - a[2]
+        nx, ny, nz = uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx
+        mx, my, mz = (a[0] + b[0] + d[0]) / 3, (a[1] + b[1] + d[1]) / 3, (a[2] + b[2] + d[2]) / 3
+        out.append([a, b, d] if nx * (mx - cx) + ny * (my - cy) + nz * (mz - cz) >= 0 else [a, d, b])
     return out
 
 

@@ -161,3 +161,17 @@ def test_cut_holes_removes_the_hole_and_keeps_the_rest_on_the_same_plane() -> No
     assert cut_holes(mesh, []) is mesh
     far = Polygon([(10, 10), (11, 10), (11, 11), (10, 11)])
     assert cut_holes(mesh, [far]).face_count == 2
+
+
+def test_surface_of_a_few_points_is_the_surface_of_many() -> None:
+    """A handful of points takes the plain-float path: it must give the very floats of the array path."""
+    import numpy as np
+
+    from drycastle_pipeline.terrain import Terrain
+
+    rng = np.random.default_rng(2)
+    t = Terrain(64.0, 8, -8, -8, np.round(rng.random((17, 17)) * 30, 3), np.ones((17, 17), bool), None)
+    xs, ys = rng.uniform(-70, 70, 400), rng.uniform(-70, 70, 400)  # some beyond the grid: clamped at the edge
+    many = t.surface(xs, ys)
+    few = np.concatenate([t.surface(xs[i : i + 2], ys[i : i + 2]) for i in range(0, 400, 2)])
+    assert np.array_equal(many, few)

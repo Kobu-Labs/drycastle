@@ -49,6 +49,7 @@ class ParcelColours:
         self.parcels = sorted(parcels, key=lambda p: p["id"])
         self.tree = shapely.STRtree([shape(p["polygon"]) for p in self.parcels])
         self.polys = self.tree.geometries
+        self._prepared: set[int] = set()
         self.palette = {k: [hex_to_rgb(c) for c in v] for k, v in palette.items()}
         self.fallback = self.palette["other"][0]
         self.parcel_colour = [self._pick(p) for p in self.parcels]
@@ -64,7 +65,7 @@ class ParcelColours:
         edges = [g.boundary for g, p in zip(self.polys, self.parcels) if p["kind"] in kinds] if self.blend_m > 0 else []
         if self.swamp is not None and self.blend_m > 0:
             edges.append(self.swamp.boundary)
-        self.edges = shapely.STRtree(edges) if edges else None
+        self.edges = shapely.STRtree(_short_lines(edges)) if edges else None
 
     def _pick(self, p: dict) -> list[int]:
         return self._shade(p, self.palette.get(p["kind"], self.palette["other"]))
@@ -93,8 +94,20 @@ class ParcelColours:
     def _flat(self, pts: np.ndarray) -> np.ndarray:
         out = np.tile(np.array(self.fallback, np.uint8), (len(pts), 1))
         found = np.full(len(pts), len(self.parcels))
-        idx, tidx = self.tree.query(shapely.points(pts[:, 0], pts[:, 1]), predicate="within")
-        np.minimum.at(found, idx, tidx)
+        # candidates by bounding box, then every polygon tests its own points at once (prepared: a point query with a
+        # predicate would run the unprepared test of each point against whole forest polygons)
+        idx, tidx = self.tree.query(shapely.points(pts[:, 0], pts[:, 1]))
+        order = np.argsort(tidx, kind="stable")
+        idx, tidx = idx[order], tidx[order]
+        cuts = np.flatnonzero(np.diff(tidx)) + 1
+        for sel in np.split(np.arange(len(tidx)), cuts) if len(tidx) else ():
+            t = tidx[sel[0]]
+            if t not in self._prepared:
+                shapely.prepare(self.polys[t])
+                self._prepared.add(t)
+            mine = idx[sel]
+            inside = mine[shapely.contains_xy(self.polys[t], pts[mine, 0], pts[mine, 1])]
+            found[inside] = np.minimum(found[inside], t)
         hit = np.nonzero(found < len(self.parcels))[0]
         for i in hit:
             out[i] = self.parcel_colour[found[i]]
@@ -105,6 +118,16 @@ class ParcelColours:
                 if c is not None:
                     out[i] = c
         return out
+
+
+def _short_lines(lines: list, most: int = 16) -> np.ndarray:
+    """The same lines cut into runs of at most ``most`` segments: a point is within a distance of a line exactly when it is of
+    one of its runs, and a tree of short runs answers that without measuring against a whole forest outline."""
+    out = []
+    for part in shapely.get_parts(shapely.get_parts(lines)):  # collections, then multi-lines, down to single lines and rings
+        xy = shapely.get_coordinates(part)
+        out += [xy[i : i + most + 1] for i in range(0, len(xy) - 1, most)]
+    return np.array([shapely.linestrings(run) for run in out], dtype=object)
 
 
 @dataclass

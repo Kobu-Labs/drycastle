@@ -22,9 +22,15 @@ Two detectors, because the two kinds of tree look different from above:
 ``trees.json`` lists the standalone trees (local map metres, crown radius, score); the canopy is a
 1-bit mask with the photo's pixel grid (``canopy.png``, bounds in the json). Where the canopy is, the
 generator decides the trunks; the photo does not resolve single crowns in a forest.
+
+The detection runs in the Rust engine (``pipeline/rust/detail``, ``trees.rs``, all cores) when it is installed, else in the Python
+below, which is the reference: both give the same trees and the same mask. ``trees.json`` records a fingerprint of everything the
+result depends on (photo, model, buildings, outline, parameters, the detector's code); while it matches, the stage keeps the files
+and does nothing (``--force`` detects again).
 """
 
 import argparse
+import hashlib
 import json
 import zlib
 from collections.abc import Sequence
@@ -77,11 +83,17 @@ class Grid:
 # --- image maths ---------------------------------------------------------------------------
 
 
-def smooth(a: np.ndarray, sigma_px: float) -> np.ndarray:
-    """Gaussian blur, separable, as shifted sums (fast on big arrays, no scipy)."""
+def kernel(sigma_px: float) -> np.ndarray:
+    """The weights of :func:`smooth`: a Gaussian out to 3 sigma, sum 1."""
     r = max(1, int(3 * sigma_px) + 1)
     k = np.exp(-0.5 * (np.arange(-r, r + 1) / sigma_px) ** 2)
-    k /= k.sum()
+    return k / k.sum()
+
+
+def smooth(a: np.ndarray, sigma_px: float) -> np.ndarray:
+    """Gaussian blur, separable, as shifted sums (fast on big arrays, no scipy)."""
+    k = kernel(sigma_px)
+    r = len(k) // 2
     a = a.astype(np.float32)
     for axis in (0, 1):
         pad = [(0, 0), (0, 0)]
@@ -291,22 +303,60 @@ def suppress(cands: list[tuple[float, int, int, float]]) -> list[tuple[float, in
     return out
 
 
-def detect(img: Image.Image, grid: Grid, model: dict, work_dir: Path, outline: Polygon | None, p: Params):
-    """(canopy mask over the whole photo, standalone trees as dicts in local metres)."""
+def engine_module():
+    """The Rust engine's module if it is installed and has the detector, else None."""
+    try:
+        import drycastle_detail
+    except ImportError:
+        return None
+    return drycastle_detail if hasattr(drycastle_detail, "detect_trees") else None
+
+
+def detect_strips_rust(module, img: Image.Image, grid: Grid, model: dict, buildings: list, p: Params, threads: int = 0):
+    """(canopy mask, candidates) of the whole photo from the engine: what the strip loop of :func:`detect` gives."""
+    w_img, h_img = img.size
+    rgb = np.ascontiguousarray(np.asarray(img.convert("RGB")))
+    built = b"".join(
+        draw_polys(buildings, grid, ya, yb - ya, w_img).tobytes()
+        for ya, yb in ((max(0, y0 - STRIP_MARGIN), min(h_img, y0 + STRIP_ROWS + STRIP_MARGIN)) for y0 in range(0, h_img, STRIP_ROWS))
+    )
+    sigmas = [1.5, 8.0] + [f * s for s in p.sigmas_m for f in (p.ring_factor, 1.0)]  # green, wooded, ring and core per size
+    kernels = [kernel(s / grid.res).astype("<f4").tobytes() for s in sigmas]
+    radii = [p.crown_factor * s / grid.res for s in p.sigmas_m]
+    packed = np.concatenate([model["mu"], model["sd"], model["w"], [float(model["b"])]]).astype("<f8").tobytes()
+    mask, found = module.detect_trees(
+        rgb.tobytes(), w_img, h_img, built, STRIP_ROWS, STRIP_MARGIN, packed,
+        (p.canopy_p, p.green, p.wooded_p, p.tau_open, p.tau_wooded), kernels, radii, threads,
+    )
+    canopy = np.frombuffer(mask, np.uint8).reshape(h_img, w_img) > 0
+    rows = np.frombuffer(found, "<f8").reshape(-1, 4)
+    return canopy, [(float(s), int(c), int(r), radii[int(i)]) for s, c, r, i in rows]
+
+
+def detect(img: Image.Image, grid: Grid, model: dict, work_dir: Path, outline: Polygon | None, p: Params, engine: str = "auto"):
+    """(canopy mask over the whole photo, standalone trees as dicts in local metres).
+
+    ``engine``: "rust", "python", or "auto" (the Rust engine when it is installed)."""
     norm = work_dir / "normalised"
     buildings = [shape(f["geometry"]).buffer(p.building_buffer_m)
                  for f in json.loads((norm / "buildings.geojson").read_text())["features"]]
     w_img, h_img = img.size
-    canopy = np.zeros((h_img, w_img), bool)
-    cands = []
-    for y0 in range(0, h_img, STRIP_ROWS):
-        ya, yb = max(0, y0 - STRIP_MARGIN), min(h_img, y0 + STRIP_ROWS + STRIP_MARGIN)
-        rgb = np.asarray(img.crop((0, ya, w_img, yb)).convert("RGB"))
-        built = draw_polys(buildings, grid, ya, yb - ya, w_img) > 0
-        strip_canopy, strip_cands = detect_strip(rgb, model, built, grid.res, p)
-        top, bot = y0 - ya, y0 - ya + min(STRIP_ROWS, h_img - y0)
-        canopy[y0 : y0 + (bot - top)] = strip_canopy[top:bot]
-        cands += [(s, c, r + ya, rad) for s, c, r, rad in strip_cands if y0 <= r + ya < y0 + STRIP_ROWS]
+    module = engine_module() if engine != "python" else None
+    if engine == "rust" and module is None:
+        raise ValueError("the Rust engine is not installed: build it with `make detail-rust-build`")
+    if module is not None:
+        canopy, cands = detect_strips_rust(module, img, grid, model, buildings, p)
+    else:
+        canopy = np.zeros((h_img, w_img), bool)
+        cands = []
+        for y0 in range(0, h_img, STRIP_ROWS):
+            ya, yb = max(0, y0 - STRIP_MARGIN), min(h_img, y0 + STRIP_ROWS + STRIP_MARGIN)
+            rgb = np.asarray(img.crop((0, ya, w_img, yb)).convert("RGB"))
+            built = draw_polys(buildings, grid, ya, yb - ya, w_img) > 0
+            strip_canopy, strip_cands = detect_strip(rgb, model, built, grid.res, p)
+            top, bot = y0 - ya, y0 - ya + min(STRIP_ROWS, h_img - y0)
+            canopy[y0 : y0 + (bot - top)] = strip_canopy[top:bot]
+            cands += [(s, c, r + ya, rad) for s, c, r, rad in strip_cands if y0 <= r + ya < y0 + STRIP_ROWS]
     trees = []
     for s, c, r, rad in suppress(cands):
         x, y = grid.local(c + 0.5, r + 0.5)
@@ -331,8 +381,36 @@ def load_grid(raw_dir: Path, work_dir: Path, ortho_dir: Path) -> tuple[Grid, dic
     return grid, info, outline
 
 
-def build(raw_dir: Path, work_dir: Path, ortho_dir: Path, *, retrain: bool = False, params: Params | None = None) -> dict:
-    """Train (or load) the canopy model, detect, and write ``trees.json`` and ``canopy.png``."""
+CODE_FILES = (Path(__file__), Path(__file__).resolve().parents[2] / "rust" / "detail" / "src" / "trees.rs")
+
+
+def fingerprint(raw_dir: Path, work_dir: Path, ortho_dir: Path, photo: str, params: Params) -> str:
+    """sha256 of everything the detection depends on: its input files, the parameters and the detector's code."""
+    h = hashlib.sha256(json.dumps([FORMAT_VERSION, STRIP_ROWS, STRIP_MARGIN, asdict(params)], sort_keys=True).encode())
+    files = [ortho_dir / "ortho.json", ortho_dir / photo, ortho_dir / "tree_model.npz", raw_dir / "area.json",
+             work_dir / "frame.json", work_dir / "normalised" / "buildings.geojson", *CODE_FILES]
+    for f in files:
+        h.update(f.name.encode() + b"\0")
+        h.update(hashlib.sha256(f.read_bytes()).digest() if f.is_file() else b"missing")
+    return h.hexdigest()
+
+
+def cached(ortho_dir: Path, inputs: str) -> dict | None:
+    """The ``trees.json`` on disk if it was detected from exactly these inputs and its mask is there, else None."""
+    try:
+        doc = json.loads((ortho_dir / "trees.json").read_text())
+    except (OSError, ValueError):
+        return None
+    ok = isinstance(doc, dict) and doc.get("inputs_sha256") == inputs and (ortho_dir / "canopy.png").is_file()
+    return doc if ok else None
+
+
+def build(raw_dir: Path, work_dir: Path, ortho_dir: Path, *, retrain: bool = False, params: Params | None = None,
+          force: bool = False, engine: str = "auto") -> dict:
+    """Train (or load) the canopy model, detect, and write ``trees.json`` and ``canopy.png``.
+
+    Nothing is detected when the files on disk come from the same inputs (see :func:`fingerprint`), unless ``force`` or
+    ``retrain``; the returned document then has ``"kept": True`` (not written)."""
     params = params or Params()
     grid, info, outline = load_grid(raw_dir, work_dir, ortho_dir)
     Image.MAX_IMAGE_PIXELS = None
@@ -342,12 +420,17 @@ def build(raw_dir: Path, work_dir: Path, ortho_dir: Path, *, retrain: bool = Fal
         model = train(img, grid, work_dir, params)
         np.savez(model_path, **model)
     else:
+        if not (force or retrain):
+            kept = cached(ortho_dir, fingerprint(raw_dir, work_dir, ortho_dir, info["file"], params))
+            if kept is not None:
+                return {**kept, "kept": True}
         with np.load(model_path) as z:
             model = {k: z[k] for k in z.files}
-    canopy, trees = detect(img, grid, model, work_dir, outline, params)
+    canopy, trees = detect(img, grid, model, work_dir, outline, params, engine)
     Image.fromarray(canopy).save(ortho_dir / "canopy.png")  # 1-bit
     doc = {
         "format_version": FORMAT_VERSION,
+        "inputs_sha256": fingerprint(raw_dir, work_dir, ortho_dir, info["file"], params),
         "axes": "x east, y north, metres in the map's local frame (origin_epsg5514 of frame.json)",
         "params": asdict(params),
         "canopy": {
@@ -362,27 +445,28 @@ def build(raw_dir: Path, work_dir: Path, ortho_dir: Path, *, retrain: bool = Fal
     return doc
 
 
-def run_ortho_trees(*, retrain: bool = False, params: Params | None = None) -> int:
+def run_ortho_trees(*, retrain: bool = False, params: Params | None = None, force: bool = False) -> int:
     """Detect the trees of the map from its photo; prints one line and returns the exit status."""
     paths = map_paths()
     ortho_dir = paths.raw.parent / "ortho"
     try:
-        doc = build(paths.raw, paths.work, ortho_dir, retrain=retrain, params=params)
+        doc = build(paths.raw, paths.work, ortho_dir, retrain=retrain, params=params, force=force)
     except FileNotFoundError as exc:
         print(f"ortho-trees: error: missing {Path(str(exc.filename)).name}; run make fetch normalise ortho first")
         return 1
     except ValueError as exc:
         print(f"ortho-trees: error: {exc}")
         return 1
-    print(f"ortho-trees: canopy {doc['canopy']['fraction'] * 100:.1f}% of the photo, "
-          f"{len(doc['standalone'])} standalone trees -> {ortho_dir / 'trees.json'}")
+    print(f"ortho-trees: canopy {doc['canopy']['fraction'] * 100:.1f}% of the photo, {len(doc['standalone'])} standalone trees "
+          + (f"(inputs unchanged, kept {ortho_dir / 'trees.json'})" if doc.get("kept") else f"-> {ortho_dir / 'trees.json'}"))
     return 0
 
 
 def run(force: bool = False, **_options: object) -> int:
-    """The ``ortho-trees`` pipeline stage (after ``ortho``). The cached canopy model is reused; ``make ortho-trees RETRAIN=1``
-    trains it again (``force`` is not that: it would make every ``--force`` run spend minutes on training)."""
-    return run_ortho_trees()
+    """The ``ortho-trees`` pipeline stage (after ``ortho``). Unchanged inputs: the files are kept; ``force`` detects again.
+    The cached canopy model is reused; ``make ortho-trees RETRAIN=1`` trains it again (``force`` is not that: it would make
+    every ``--force`` run spend minutes on training)."""
+    return run_ortho_trees(force=force)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -390,8 +474,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--retrain", action="store_true", help="fit the canopy model again (else tree_model.npz is reused)")
     ap.add_argument("--tau-open", type=float, default=Params.tau_open, help="blob darkness needed in open ground")
     ap.add_argument("--tau-wooded", type=float, default=Params.tau_wooded, help="... in tree-like surroundings")
+    ap.add_argument("--force", action="store_true", help="detect again even when the inputs are unchanged")
     args = ap.parse_args(argv)
-    return run_ortho_trees(retrain=args.retrain,
+    return run_ortho_trees(retrain=args.retrain, force=args.force,
                            params=Params(tau_open=args.tau_open, tau_wooded=args.tau_wooded))
 
 

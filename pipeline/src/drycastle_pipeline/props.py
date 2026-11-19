@@ -347,6 +347,27 @@ def edge_distance(mask: np.ndarray, row: int, col: int, res: float, reach_m: flo
     return min(reach_m, float(np.sqrt((rr - r) ** 2 + (cc - r) ** 2).min()) * res)
 
 
+class EdgeField:
+    """:func:`edge_distance` for many pixels of one mask: where the open ground is, worked out once for the whole raster."""
+
+    def __init__(self, mask: np.ndarray, res: float, reach_m: float, gap_m: float):
+        k = max(1, round(gap_m / res / 2))
+        self.r = r = math.ceil(reach_m / res)
+        self.res, self.reach_m = res, reach_m
+        n = 2 * k + 1
+        pad = np.pad(mask.astype(np.int32), r + k, constant_values=1)  # off the raster counts as canopy
+        acc = np.pad(pad.cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+        total = acc[n:, n:] - acc[:-n, n:] - acc[n:, :-n] + acc[:-n, :-n]
+        self.open = 2 * total < n * n  # canopy fraction under a half; [row + i, col + j] is the pixel (row - r + i, col - r + j)
+
+    def distance(self, row: int, col: int) -> float:
+        r = self.r
+        rr, cc = np.nonzero(self.open[row : row + 2 * r + 1, col : col + 2 * r + 1])
+        if rr.size == 0:
+            return self.reach_m
+        return min(self.reach_m, float(np.sqrt((rr - r) ** 2 + (cc - r) ** 2).min()) * self.res)
+
+
 def wet_zone(units: list[dict], kinds: set[str] | frozenset[str], water: BaseGeometry | None) -> BaseGeometry | None:
     """Where there is water: ground units of a water kind (ponds, streams; as :func:`water.plan_water` reads them) and the
     wet areas of the water patches (``water``, see :func:`water_zone`). Local metres; None without any."""
@@ -356,8 +377,68 @@ def wet_zone(units: list[dict], kinds: set[str] | frozenset[str], water: BaseGeo
     return unary_union(parts) if parts else None
 
 
+def planting_engine():
+    """The Rust engine's module if it is installed and plants trees, else None."""
+    try:
+        import drycastle_detail
+    except ImportError:
+        return None
+    return drycastle_detail if hasattr(drycastle_detail, "plant_trees") else None
+
+
+def plant_canopy_rust(module, terrain: Terrain, zones: tuple, cfg: dict, origin, mask: np.ndarray, frame: tuple[float, float, float],
+                      placed: list[tuple[float, float]], stands: "Stands | None") -> list[dict]:
+    """The canopy trees of :func:`ortho_trees` from the Rust engine (``planting.rs``): the same draws in the same order, so the
+    same trees. The records are the ones :func:`make_trees` builds (``tree`` there), heights from the terrain here."""
+    minx, maxy, res = frame
+    ocfg, scfg = cfg.get("ortho", {}), cfg.get("stands")
+    crown_lo, crown_hi = (float(v) for v in ocfg.get("canopy_crown_scale", (1.7, 2.5)))
+    ages = [(str(a["name"]), float(a["share"]), float(a["scale"])) for a in ocfg.get("age_classes", ())]
+    palette = cfg["forest_canopy_colours"]
+    doc: dict = {
+        "w": int(mask.shape[1]), "h": int(mask.shape[0]), "minx": minx, "maxy": maxy, "res": res, "ox": origin[0], "oy": origin[1],
+        "cell_px": CANOPY_CELL_PX, "spacing": float(ocfg.get("canopy_min_spacing_m", 4.0)), "density": float(ocfg.get("canopy_per_1000m2", 25.0)),
+        "crown_lo": crown_lo, "crown_hi": crown_hi, "ages": [[share, scale] for _, share, scale in ages], "palette": len(palette),
+        "stands": None, "swamp_zone": False,
+    }
+    geoms = [terrain.coverage, *(g for g in zones if g is not None)]
+    if stands is not None:
+        def stand(st: dict) -> dict:
+            scale = st.get("scale", 1.0)
+            return {"share": float(st.get("share", 0.0)), "cone_share": float(st["cone_share"]), "keep": float(st.get("keep", 1.0)),
+                    "scale": [float(scale[0]), float(scale[1])] if isinstance(scale, (list, tuple)) else float(scale)}
+
+        thicket, ecfg = stands.types.get("thicket"), scfg.get("edge")
+        doc["stands"] = {
+            "cell": stands.cell, "key": f"stand:{stands.cell}", "types": [stand(stands.types[k]) for k in stands.names],
+            "swamp": stand(scfg["swamp"]) if "swamp" in scfg else None,
+            "thicket": {"index": stands.names.index("thicket"), "density_factor": float(thicket.get("density_factor", 1.0)),
+                        "spacing_scale": float(thicket.get("spacing_scale", 1.0))} if thicket else None,
+            "edge": {"edge_m": float(ecfg["edge_m"]), "lo": float(ecfg["scale"][0]), "hi": float(ecfg["scale"][1]), "cone_share": float(ecfg["cone_share"]),
+                     "k": max(1, round(float(ecfg["gap_m"]) / res / 2)), "r": math.ceil(float(ecfg["edge_m"]) / res)} if ecfg else None,
+        }
+        if stands.swamp is not None:
+            doc["swamp_zone"] = True
+            geoms.append(stands.swamp)
+    raw = module.plant_trees(json.dumps(doc), np.ascontiguousarray(mask, dtype=np.uint8).tobytes(), [shapely.to_wkb(g) for g in geoms],
+                             np.array(placed, dtype="<f8").reshape(-1, 2).tobytes())
+    rows = np.frombuffer(raw, "<f8").reshape(-1, 9)
+    zs = terrain.surface(rows[:, 0], rows[:, 1]) if len(rows) else []
+    out = []
+    for (x, y, scale, rot, cone, colour, age, st, edge), z in zip(rows.tolist(), np.asarray(zs).tolist(), strict=True):
+        rec = {"src": "ortho-canopy", "parcel": None, "x": _r3(x), "y": _r3(y), "z": _r3(z), "scale": round(scale, 3), "rot": round(rot, 3),
+               "shape": "cone" if cone else "box", "colour": palette[int(colour)], "forest": True, "age": ages[int(age)][0] if age >= 0 else ""}
+        if stands is not None:
+            rec["stand"] = "swamp" if int(st) == len(stands.names) else stands.names[int(st)]
+            if edge:
+                rec["edge"] = True
+        out.append(rec)
+    return out
+
+
 def ortho_trees(
-    tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[float, float] | None, wet: BaseGeometry | None = None
+    tree, terrain: Terrain, zones: tuple, cfg: dict, origin: tuple[float, float] | None, wet: BaseGeometry | None = None,
+    engine: str = "python",
 ) -> list[dict]:
     """Every tree, planted from the orthophoto detector (``make ortho-trees``).
 
@@ -374,6 +455,9 @@ def ortho_trees(
       an ``edge`` tree, smaller toward the edge. Without ``stands`` every forest tree is mixed, as before.
 
     The photo does not resolve single crowns in a forest, so the canopy trunks are random within the detected extent.
+
+    ``engine``: "python" (the reference, with any ``tree``), or "rust" / "auto" (the Rust engine, when installed, plants the canopy:
+    the same trees, :func:`plant_canopy_rust`; only for the ``tree`` of :func:`make_trees`, whose records it builds itself).
     """
     if origin is None:
         raise ValueError("trees from the orthophoto need the frame origin (parcels.json origin_epsg5514)")
@@ -419,6 +503,13 @@ def ortho_trees(
     scfg = cfg.get("stands")
     stands = Stands(scfg, wet) if scfg else None
     ecfg = (scfg or {}).get("edge")
+    module = planting_engine() if engine != "python" else None
+    if engine == "rust" and module is None:
+        raise ValueError("the Rust engine is not installed: build it with `make detail-rust-build`")
+    if module is not None:
+        placed = [p for spots in grid.values() for p in spots]  # the standalone trees planted above
+        return trees + plant_canopy_rust(module, terrain, zones, cfg, origin, mask, (minx, maxy, res), placed, stands)
+    edges = EdgeField(mask, res, float(ecfg["edge_m"]), float(ecfg["gap_m"])) if stands is not None and ecfg else None
 
     def plant(x: float, y: float, rng, stand: str, row: int, col: int) -> dict:
         """A forest tree: crown, age class, then the stand's shape mix and size, then the edge mantle. (row, col): its mask pixel."""
@@ -431,7 +522,7 @@ def ortho_trees(
             cone = float(st["cone_share"])
             if ecfg:
                 edge_m = float(ecfg["edge_m"])
-                d = edge_distance(mask, row, col, res, edge_m, float(ecfg["gap_m"]))
+                d = edges.distance(row, col)  # edge_distance(mask, row, col, res, edge_m, gap_m)
                 if d < edge_m:  # the wall steps down: smallest at the edge itself
                     lo, hi = (float(v) for v in ecfg["scale"])
                     scale *= lo + (hi - lo) * d / edge_m
@@ -452,11 +543,12 @@ def ortho_trees(
             return None
         if only is not None and stands.noise(x, y) != only:  # cheap: before the geometry tests
             return None
-        if not shapely.contains_xy(terrain.coverage, x, y):
-            return None
-        if any(g is not None and shapely.contains_xy(g, x, y) for g in zones):
+        hit = shapely.contains_xy(tests, x, y)  # one call for the coverage and every zone
+        if not hit[0] or hit[1:].any():
             return None
         return x, y, row, col
+
+    tests = np.array([terrain.coverage, *(g for g in zones if g is not None)], dtype=object)
 
     thicket = stands.types.get("thicket") if stands else None
     for r0 in range(0, h, CANOPY_CELL_PX):
@@ -569,8 +661,10 @@ def make_trees(
     origin: tuple[float, float] | None = None,
     removed: list[tuple[float, float, float]] | None = None,
     wet: BaseGeometry | None = None,
+    engine: str = "auto",
 ) -> list[dict]:
     """Every tree of the map: planted from the orthophoto detector (:func:`ortho_trees`, ``make ortho-trees``).
+    ``engine``: who plants the canopy, "auto" (the Rust engine when installed), "rust" or "python"; the trees are the same.
 
     There is no other source: no OSM trees, no per-parcel density, no shore rows. ``cfg["ortho_dir"]`` is the folder
     of the detector's output (``trees.json`` and the canopy mask); without it there are no trees. ``origin`` is the
@@ -606,7 +700,7 @@ def make_trees(
             "forest": forest,
         }
 
-    trees = ortho_trees(tree, terrain, (bzone, rzone, ozone, water), cfg, origin, wet)
+    trees = ortho_trees(tree, terrain, (bzone, rzone, ozone, water), cfg, origin, wet, engine=engine)
     if removed:
         kept = [t for t in trees if not any(math.hypot(t["x"] - x, t["y"] - y) <= r for x, y, r in removed)]
         for x, y, r in removed:
@@ -698,11 +792,16 @@ def make_spawns(
     whole terrain instead, off the roads (``kind`` ``random``, no zone id); a zone with no usable ground gets none and does not
     trigger that."""
     bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
+    tree_gap = float(cfg["min_tree_distance_m"])
+    if trees and zones:  # only the trees within reach of a zone can take ground from it: the rest need no disc
+        spots = shapely.points([t["x"] for t in trees], [t["y"] for t in trees])
+        near = np.unique(shapely.STRtree(spots).query([poly for _, poly in zones], predicate="dwithin", distance=tree_gap + 1.0)[1])
+        trees = [trees[i] for i in near]
     avoid = [
         g
         for g in (
             unary_union(bpolys).buffer(float(cfg["min_building_distance_m"])) if bpolys else None,
-            unary_union([Point(t["x"], t["y"]).buffer(float(cfg["min_tree_distance_m"])) for t in trees]) if trees else None,
+            unary_union([Point(t["x"], t["y"]).buffer(tree_gap) for t in trees]) if trees else None,
             water.buffer(float(cfg["water_clearance_m"])) if water is not None and not water.is_empty else None,
         )
         if g is not None
@@ -823,9 +922,11 @@ def plan_edits(
             spec = resolve_fence(entry.get("fence"), group_fence)
             gaps = tuple((*_local_xy(x, y, origin), w) for x, y, w in spec.gaps)
             plan.specs[pid] = replace(spec, gaps=gaps)
+    ids = list(polys)
+    index = shapely.STRtree([polys[q] for q in ids])
     for obj in edits.objects:
         lx, ly = _local_xy(*obj["position"], origin)
-        hits = sorted(q for q, g in polys.items() if g.covers(Point(lx, ly)))
+        hits = sorted(ids[i] for i in index.query(Point(lx, ly), predicate="covered_by"))  # the parcels that cover the point
         plan.objects.append(
             {
                 "id": obj["id"],
