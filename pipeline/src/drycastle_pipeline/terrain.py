@@ -93,6 +93,9 @@ class Terrain:
         Each cell is split along its flatter diagonal, exactly as in ``chunk_mesh``.
         """
         x, y = np.asarray(x, float), np.asarray(y, float)
+        if x.size <= 4 and x.ndim == 1 and x.shape == y.shape and self.heights.dtype == np.float64:
+            # a handful of points (one tree, one log): plain floats, the same arithmetic without the array overhead
+            return np.array([self._height(float(a), float(b)) for a, b in zip(x.tolist(), y.tolist(), strict=True)])
         gx = np.clip(x / self.step - self.i0, 0, self.ncols - 1e-9)
         gy = np.clip(y / self.step - self.j0, 0, self.nrows - 1e-9)
         ci, cj = gx.astype(int), gy.astype(int)
@@ -107,6 +110,18 @@ class Terrain:
         return np.where(
             diag1, np.where(fx + fy <= 1, d1_low, d1_up), np.where(fx >= fy, d0_low, d0_up)
         )
+
+    def _height(self, x: float, y: float) -> float:
+        """:meth:`surface` at one point, operation by operation the same (so the same float)."""
+        gx = min(max(x / self.step - self.i0, 0.0), self.ncols - 1e-9)
+        gy = min(max(y / self.step - self.j0, 0.0), self.nrows - 1e-9)
+        ci, cj = int(gx), int(gy)
+        fx, fy = gx - ci, gy - cj
+        h = self.heights
+        h00, h10, h01, h11 = float(h[cj, ci]), float(h[cj, ci + 1]), float(h[cj + 1, ci]), float(h[cj + 1, ci + 1])
+        if abs(h10 - h01) < abs(h00 - h11):
+            return h00 + fx * (h10 - h00) + fy * (h01 - h00) if fx + fy <= 1 else h11 + (1 - fx) * (h01 - h11) + (1 - fy) * (h10 - h11)
+        return h00 + fx * (h10 - h00) + fy * (h11 - h10) if fx >= fy else h00 + fx * (h11 - h01) + fy * (h01 - h00)
 
     def _chunk_cells(self, cx: int, cy: int, dec: int):
         """Vertex slice of a chunk (every ``dec``-th vertex) and the validity of its cells."""

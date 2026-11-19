@@ -54,6 +54,11 @@ fn err_count<T>(r: geos::GResult<T>) -> Option<T> {
     }
 }
 
+/// A geometry from its WKB bytes (what shapely hands over); empty when the bytes do not parse.
+pub fn from_wkb(wkb: &[u8]) -> G {
+    err_count(Geometry::new_from_wkb(wkb)).unwrap_or_else(empty)
+}
+
 pub fn empty() -> G {
     Geometry::create_empty_polygon().expect("empty polygon")
 }

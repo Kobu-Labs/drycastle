@@ -38,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="fetch, ortho: ignore the disk cache and download everything again",
+        help="fetch, ortho: ignore the disk cache and download everything again; ortho-trees: detect again though the inputs are unchanged",
     )
     parser.add_argument(
         "--edits",

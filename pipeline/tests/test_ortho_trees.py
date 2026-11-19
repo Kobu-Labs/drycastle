@@ -186,3 +186,58 @@ def test_missing_inputs_give_a_clear_error(tmp_path: Path) -> None:
     assert ot.main([]) in (0, 1)  # no data in the test tree is fine: an error code, never a crash
     with pytest.raises(FileNotFoundError):
         ot.build(tmp_path, tmp_path, tmp_path)
+
+
+# --- unchanged inputs are not detected again ---
+
+
+def test_build_keeps_the_files_while_the_inputs_are_unchanged(tmp_path: Path) -> None:
+    raw, work, ortho = village(tmp_path, handmade_model())
+    first = ot.build(raw, work, ortho)
+    assert "kept" not in first and len(first["inputs_sha256"]) == 64
+    stamp = (ortho / "trees.json").stat().st_mtime_ns
+    again = ot.build(raw, work, ortho)
+    assert again["kept"] is True and again["standalone"] == first["standalone"]
+    assert (ortho / "trees.json").stat().st_mtime_ns == stamp  # not written again
+    assert "kept" not in ot.build(raw, work, ortho, force=True)
+
+
+@pytest.mark.parametrize("change", ["buildings", "photo", "params", "model", "mask gone"])
+def test_build_detects_again_when_an_input_changes(tmp_path: Path, change: str) -> None:
+    raw, work, ortho = village(tmp_path, handmade_model())
+    ot.build(raw, work, ortho)
+    params = None
+    if change == "buildings":
+        (work / "normalised" / "buildings.geojson").write_text(json.dumps({"type": "FeatureCollection", "features": []}))
+    elif change == "photo":
+        Image.fromarray(scene()[:, ::-1].copy()).save(ortho / "ortho.png")
+    elif change == "params":
+        params = ot.Params(tau_open=0.25)
+    elif change == "model":
+        np.savez(ortho / "tree_model.npz", **constant_model(0.01))
+    else:
+        (ortho / "canopy.png").unlink()
+    doc = ot.build(raw, work, ortho, params=params)
+    assert "kept" not in doc and (ortho / "canopy.png").is_file()
+    assert ot.build(raw, work, ortho, params=params)["kept"] is True
+
+
+# --- the Rust engine gives the reference's result ---
+
+
+def test_the_rust_engine_detects_what_the_python_reference_detects(tmp_path: Path) -> None:
+    if ot.engine_module() is None:
+        pytest.skip("the Rust engine is not installed (make detail-rust-build)")
+    # a photo taller than two strips: the scene stacked, with noise so that no two pixels tie, and a black (no data) corner
+    rng = np.random.default_rng(3)
+    tall = np.concatenate([scene()] * 8)
+    tall = np.clip(tall.astype(np.int16) + rng.integers(-12, 13, tall.shape), 0, 255).astype(np.uint8)
+    tall[:40, -60:] = 0
+    img = Image.fromarray(tall)
+    grid = ot.Grid(minx=0.0, maxy=tall.shape[0] * RES, res=RES, origin=(0.0, 0.0))
+    _, work, ortho = village(tmp_path, None)
+    model = ot.train(Image.open(ortho / "ortho.png"), GRID, work, ot.Params(), n_per=1500)  # every feature has a weight
+    got = [ot.detect(img, grid, model, work, None, ot.Params(), engine=e) for e in ("python", "rust")]
+    assert got[0][0].any() and len(got[0][1]) > 20
+    assert np.array_equal(got[0][0], got[1][0])
+    assert got[0][1] == got[1][1]

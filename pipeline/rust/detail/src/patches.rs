@@ -135,7 +135,7 @@ pub fn assemble(
 
 pub type Tri = [Pt; 3];
 
-fn triangulate(p: &geom::PolyC, out: &mut Vec<Tri>) {
+pub fn triangulate(p: &geom::PolyC, out: &mut Vec<Tri>) {
     let mut data: Vec<f64> = vec![];
     let mut holes: Vec<usize> = vec![];
     let ring = |r: &Vec<Pt>, data: &mut Vec<f64>| {
@@ -296,6 +296,89 @@ pub fn patch_rows(patches: &[Patch], t: &Terrain, lift_m: f64, tex: &Textures, r
     }
 }
 
+/// One geometry to drape for Python (``detail_rust.drape_patches``): the patch of a recipe that is still built in Python.
+pub struct DrapeJob {
+    /// WKB of the patch's polygons (parsed on the thread that drapes: a GEOS geometry never crosses threads).
+    pub wkb: Vec<u8>,
+    /// The flat colour, or the tint of a textured patch.
+    pub colour: [u8; 3],
+    /// Tile width, tile height and index of the texture; None for a flat patch.
+    pub tex: Option<(f64, f64, f64)>,
+    pub angle: f64,
+    pub origin: Pt,
+    pub lift: f64,
+}
+
+/// Cells along one side of a tile of :func:`drape_jobs`: a big patch (a whole field) is draped tile by tile on all cores.
+const DRAPE_TILE_CELLS: usize = 24;
+
+/// The rows of every job, in job order (within a job: tile by tile, rows of tiles then columns), and the triangle count per job.
+/// The result does not depend on the thread count.
+pub fn drape_jobs(jobs: &[DrapeJob], t: &Terrain) -> (Vec<f64>, Vec<usize>) {
+    use rayon::prelude::*;
+    let mut tasks: Vec<(usize, (usize, usize, usize, usize))> = vec![];
+    for (i, job) in jobs.iter().enumerate() {
+        let g = geom::from_wkb(&job.wkb);
+        if geom::is_empty(&g) {
+            continue;
+        }
+        let Some((ci0, ci1, cj0, cj1)) = t.cell_range(geom::bounds(&g)) else { continue };
+        let mut cj = cj0;
+        while cj <= cj1 {
+            let cjb = (cj + DRAPE_TILE_CELLS - 1).min(cj1);
+            let mut ci = ci0;
+            while ci <= ci1 {
+                let cib = (ci + DRAPE_TILE_CELLS - 1).min(ci1);
+                tasks.push((i, (ci, cib, cj, cjb)));
+                ci = cib + 1;
+            }
+            cj = cjb + 1;
+        }
+    }
+    let parts: Vec<Vec<f64>> = tasks
+        .par_iter()
+        .map(|&(i, r)| {
+            let job = &jobs[i];
+            let g = geom::from_wkb(&job.wkb);
+            let (a, b) = (t.cell_box(r.0, r.2), t.cell_box(r.1, r.3));
+            let piece = geom::clip_rect(&g, a[0], a[1], b[2], b[3]);
+            let mut tris = vec![];
+            drape_rec(&piece, r, t, &mut tris);
+            let mut rows = Vec::with_capacity(tris.len() * PATCH_ROW);
+            let (c, s) = ((-job.angle).cos(), (-job.angle).sin());
+            for tri in &tris {
+                let Some(v) = lift_tri(t, tri, job.lift) else { continue };
+                for q in &v {
+                    rows.extend_from_slice(q);
+                }
+                rows.extend(job.colour.iter().map(|&x| x as f64));
+                match job.tex {
+                    None => {
+                        rows.extend([0.0; 6]);
+                        rows.push(-1.0);
+                    }
+                    Some((tw, th, index)) => {
+                        for q in &v {
+                            let (dx, dy) = (q[0] - job.origin[0], q[1] - job.origin[1]);
+                            rows.push((dx * c - dy * s) / tw);
+                            rows.push((dx * s + dy * c) / th);
+                        }
+                        rows.push(index);
+                    }
+                }
+            }
+            rows
+        })
+        .collect();
+    let mut counts = vec![0; jobs.len()];
+    let mut rows = Vec::with_capacity(parts.iter().map(Vec::len).sum());
+    for (&(i, _), part) in tasks.iter().zip(&parts) {
+        counts[i] += part.len() / PATCH_ROW;
+        rows.extend_from_slice(part);
+    }
+    (rows, counts)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -428,5 +511,29 @@ mod tests {
         let t = Terrain::new(40.0, 4, -2, -8, 5, 5, vec![0.0; 25], vec![true; 25]);
         let draped = drape_xy(&g, &t);
         assert!((area_of(&draped) - geom::area(&g)).abs() < 1e-9, "{} vs {}", area_of(&draped), geom::area(&g));
+    }
+
+    #[test]
+    fn drape_jobs_cover_the_polygon_whatever_the_tiling() {
+        // 60 x 60 cells of 1 m: more than one tile each way
+        let (rows, cols) = (61, 61);
+        let h: Vec<f64> = (0..rows * cols).map(|k| (k % cols) as f64 * 0.1).collect();
+        let t = Terrain::new(60.0, 60, 0, 0, rows, cols, h, vec![true; rows * cols]);
+        let g = geom::polygon(&[[1.5, 1.5], [58.2, 3.0], [55.0, 57.5], [3.0, 50.0], [1.5, 1.5]], &[]);
+        let wkb: Vec<u8> = geos::Geom::to_wkb(&g).unwrap().into();
+        let jobs = [
+            DrapeJob { wkb: wkb.clone(), colour: [1, 2, 3], tex: None, angle: 0.0, origin: [0.0, 0.0], lift: 0.05 },
+            DrapeJob { wkb, colour: [9, 9, 9], tex: Some((2.0, 4.0, 3.0)), angle: 0.3, origin: [5.0, 5.0], lift: 0.05 },
+        ];
+        let (out, counts) = drape_jobs(&jobs, &t);
+        assert_eq!(out.len(), (counts[0] + counts[1]) * PATCH_ROW);
+        assert_eq!(counts[0], counts[1]);
+        let mut area = 0.0;
+        for r in out.chunks_exact(PATCH_ROW).take(counts[0]) {
+            area += ((r[3] - r[0]) * (r[7] - r[1]) - (r[6] - r[0]) * (r[4] - r[1])).abs() / 2.0;
+            assert!((r[2] - (r[0] * 0.1 + 0.05)).abs() < 1e-9 && r[18] == -1.0 && r[9] == 1.0);
+        }
+        assert!((area - geom::area(&g)).abs() < 1e-6, "{area} vs {}", geom::area(&g));
+        assert!(out.chunks_exact(PATCH_ROW).skip(counts[0]).all(|r| r[18] == 3.0 && r[9] == 9.0));
     }
 }

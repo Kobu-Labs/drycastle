@@ -239,8 +239,11 @@ def drape_mesh(foot, terrain: Terrain, lift: float, colour: list[int]) -> Mesh:
     if foot.is_empty:
         return Mesh.empty()
     tris = []
-    for tri in _terrain_triangles(terrain, foot.bounds, foot):
-        piece = foot.intersection(Polygon(tri[:, :2]))
+    under = list(_terrain_triangles(terrain, foot.bounds, foot))
+    if not under:
+        return Mesh.empty()
+    pieces = shapely.intersection(foot, shapely.polygons(np.array([t[:, :2] for t in under])))  # every triangle in one call
+    for tri, piece in zip(under, pieces, strict=True):
         if piece.is_empty:
             continue
         a, b, c = tri
@@ -265,6 +268,39 @@ def drape_mesh(foot, terrain: Terrain, lift: float, colour: list[int]) -> Mesh:
     if not tris:
         return Mesh.empty()
     return Mesh(np.array(tris), np.tile(np.array(colour, np.uint8), (len(tris), 1)))
+
+
+def _engine():
+    """The Rust engine's module if it is installed and drapes roads, else None."""
+    try:
+        import drycastle_detail
+    except ImportError:
+        return None
+    return drycastle_detail if hasattr(drycastle_detail, "drape_roads") else None
+
+
+def drape_meshes(jobs: list[tuple[BaseGeometry, float, list[int]]], terrain: Terrain, engine: str = "auto") -> list[Mesh]:
+    """:func:`drape_mesh` of every ``(foot, lift, colour)``: by the Rust engine on all cores when it is installed (the same
+    triangles: ``pipeline/rust/detail/src/roads.rs``), else one after the other here. ``engine``: "auto", "rust" or "python"."""
+    module = _engine() if engine != "python" else None
+    if engine == "rust" and module is None:
+        raise ValueError("the Rust engine is not installed: build it with `make detail-rust-build`")
+    if module is None or not jobs:
+        return [drape_mesh(foot, terrain, lift, colour) for foot, lift, colour in jobs]
+    doc = {"chunk_m": terrain.chunk_m, "n": terrain.n, "i0": terrain.i0, "j0": terrain.j0,
+           "rows": int(terrain.heights.shape[0]), "cols": int(terrain.heights.shape[1])}
+    done = module.drape_roads(
+        json.dumps(doc), [shapely.to_wkb(foot) for foot, _, _ in jobs], [float(lift) for _, lift, _ in jobs],
+        np.ascontiguousarray(terrain.heights, dtype="<f8").tobytes(), np.ascontiguousarray(terrain.valid, dtype=np.uint8).tobytes(),
+    )
+    out = []
+    for (foot, lift, colour), raw in zip(jobs, done, strict=True):
+        if raw is None:  # a piece the engine's ear clipper does not cover (a hole, over 80 vertices): the reference
+            out.append(drape_mesh(foot, terrain, lift, colour))
+            continue
+        tris = np.frombuffer(raw, "<f8").reshape(-1, 3, 3)
+        out.append(Mesh(tris.copy(), np.tile(np.array(colour, np.uint8), (len(tris), 1))) if len(tris) else Mesh.empty())
+    return out
 
 
 def _junction_outline(centre: tuple[float, float], radius: float) -> Polygon:
@@ -335,7 +371,7 @@ def road_mesh(graph: dict, terrain: Terrain, cfg: dict, only: set[str] | None = 
     """
     order = {hw: i for i, hw in enumerate(cfg["order"])}
     lift, step = float(cfg["lift_m"]), float(cfg["sample_step_m"])
-    meshes = []
+    jobs: list[tuple[BaseGeometry, float, list[int]]] = []  # (foot, lift, colour), draped together at the end
     node_best: dict[str, tuple[float, int, list[int]]] = {}
     nodes = {n["id"]: n for n in graph["nodes"]}
     deg: dict[str, int] = {}
@@ -355,7 +391,7 @@ def road_mesh(graph: dict, terrain: Terrain, cfg: dict, only: set[str] | None = 
         colour = road_colour(e["highway"], e["surface"], cfg)
         keep = only is None or e["id"] in only
         if keep:
-            meshes.append(drape_mesh(footprint(e).difference(trims.get(e["id"], Polygon())), terrain, z, colour))
+            jobs.append((footprint(e).difference(trims.get(e["id"], Polygon())), z, colour))
             touched.update((e["from"], e["to"]))
         for end in (e["from"], e["to"]):
             deg[end] = deg.get(end, 0) + 1
@@ -374,8 +410,8 @@ def road_mesh(graph: dict, terrain: Terrain, cfg: dict, only: set[str] | None = 
                 ]
             )
             patch = _junction_outline((n["x"], n["y"]), w / 2).difference(covered)
-            meshes.append(drape_mesh(patch, terrain, lift + rank * 0.003, colour))
-    mesh = Mesh.concat(meshes)
+            jobs.append((patch, lift + rank * 0.003, colour))
+    mesh = Mesh.concat(drape_meshes(jobs, terrain))
     if not mesh.face_count:
         return mesh
     c = mesh.tris.mean(axis=1)
