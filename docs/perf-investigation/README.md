@@ -10,7 +10,7 @@
 > The live server under 64 bots, measured on the VPS, with the repeatable test and the numbers of each round of fixes: `vps-64-bots.md`
 > (`perf/vps_bots_test.sh`, `perf/vps_summary.py`, raw logs in `vps-logs/`).
 >
-> The client in the same fight (one client with a window against 64 bots), its repeatable test and baseline numbers: `client-64-bots.md`
+> The client in the same fight (one client with a window against 64 bots), its repeatable test, baseline numbers and the first batches of fixes (2026-11-20): `client-64-bots.md`
 > (`perf/vps_client_test.sh`, `perf/client_summary.py`, logs in `client-logs/`).
 
 

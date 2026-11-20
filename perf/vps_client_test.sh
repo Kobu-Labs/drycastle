@@ -82,7 +82,7 @@ rm -rf "$profile"
 [ -z "$smi" ] || kill "$smi" 2> /dev/null || true
 
 {
-  echo "# client load test: $label; $(date -u +%FT%TZ); commit $(git -C "$here" rev-parse --short HEAD)$(git -C "$here" diff --quiet || echo +dirty); bots $BOTS; $RES; gpu env $GPU"
+  echo "# client load test: $label; $(date -u +%FT%TZ); commit $(cut -c1-8 "$dir/commit"); bots $BOTS; $RES; gpu env $GPU"
   [ ! -s "$log.gpu" ] || awk -F', ' '$3 > 50 { n++; w += $1; c += $2; if ($4 > t) t = $4; if (strtonum($5) % 128 >= 4) cap++ }
     END { if (n) printf "# gpu: power_w=%.1f clock_mhz=%.0f temp_max_c=%d capped_pct=%.0f busy_s=%d\n", w / n, c / n, t, 100 * cap / n, n }' "$log.gpu"
   echo "# cpu: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs); adapter: $(grep -m1 -oE 'Vulkan [0-9.]+ - .*|OpenGL API .*' "$log.full" || echo '?')"
