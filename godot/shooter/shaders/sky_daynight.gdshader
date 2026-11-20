@@ -71,7 +71,7 @@ void sky() {
 
 	// moon: soft disc and a faint halo, shown with moon_visibility
 	float md = dot(dir, normalize(moon_dir));
-	col += moon_colour * pow(max(md, 0.0), 48.0) * 0.12 * moon_visibility * lift;
+	col += moon_colour * pow(max(md, 0.0), 140.0) * 0.09 * moon_visibility * lift;
 	col = mix(col, moon_colour * moon_visibility * lift, smoothstep(0.9983, 0.9988, md) * moon_visibility);
 
 	COLOR = col;
