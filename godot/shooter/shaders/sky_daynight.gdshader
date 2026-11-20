@@ -57,7 +57,7 @@ void sky() {
 		float t = clamp(dot(dir - tail, seg) / len2, 0.0, 1.0);
 		float d = length(dir - (tail + seg * t));
 		float width = mix(0.0006, 0.0022, t);
-		float line = smoothstep(width, 0.0, d) * t * t;
+		float line = (1.0 - smoothstep(0.0, width, d)) * t * t;
 		col += line * br * vec3(0.9, 0.95, 1.0) * 1.2 * step(0.0, dir.y);
 	}
 
