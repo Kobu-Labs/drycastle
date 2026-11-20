@@ -81,8 +81,8 @@ public static class ShooterTheme
     public static readonly Color MapGrid = new(0.94f, 0.95f, 0.84f, 0.40f);
     public static readonly Color MapFrame = new(0.82f, 0.84f, 0.70f);
     public static readonly Color MapRoadCasing = new(0.07f, 0.08f, 0.06f, 0.85f);
-    /// <summary>Vehicle tracks in crop fields on the maps: a pale thin line with a dark casing (the shape, a line along the way driven, carries it; the colour only helps), and a server-told cell's dot.</summary>
-    public static readonly Color MapTrail = new(0.98f, 0.93f, 0.72f, 0.95f);
+    /// <summary>Vehicle tracks in crop fields on the maps: the brown of the crushed-ground mark in the world (MapLoader's crop mark tint, hue 0.16/0.14/0.07), lifted to read on the dark sheet, with a dark casing, and a server-told cell's dot (#413).</summary>
+    public static readonly Color MapTrail = new(0.70f, 0.61f, 0.31f, 0.95f);
     public const float MapTrailWidth = 1.5f;
     public const float MapTrailCasing = 3.5f;
     /// <summary>The waypoint's ink in the world and on the maps: a light green (friendly, as in other shooters), never on a dark plate; its text is outlined instead.</summary>
