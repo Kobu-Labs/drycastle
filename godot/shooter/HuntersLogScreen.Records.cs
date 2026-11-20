@@ -143,7 +143,7 @@ public sealed partial class HuntersLogScreen
     static Control PersonLink(string name, Action open, string variation)
     {
         var b = new ContentButton { ThemeTypeVariation = "LogRow", MinSize = Vector2.Zero, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, TooltipText = Strings.F("log.hit.open", name), MouseDefaultCursorShape = CursorShape.PointingHand };
-        var link = new PlayerLink { Text = name, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, VerticalAlignment = VerticalAlignment.Center, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
+        var link = new PlayerLink { Text = name, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, VerticalAlignment = VerticalAlignment.Center, ClipText = false, TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming }; // a clipping label has no minimum width: in a shrinking row it would be 0 wide, the name invisible
         b.SetContent(StatLine(HuntArt.Person, "", variation, tint: true, content: link));
         b.Pressed += open;
         b.MouseEntered += () => link.Hot = true;

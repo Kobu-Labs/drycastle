@@ -43,6 +43,7 @@ Checklist for any new UI. Each line is something the owner had to ask for.
 - Centre what is reasonable: card/tile grids use `FlowContainer.Alignment = Center`; legends and summaries centre under what they describe.
 - Nothing is ever cropped (headers, labels, cells) from 1280×720 up and at 150 % scale. Columns get minimum-width tokens (`LogColMin`) shared by header and cells; when too narrow, drop the least important column or stack the detail panel, never cut text. Test the narrow case first.
 - A headline number (a record's kg or m) is a badge floating over its picture's corner, out of the layout, with a strip reserved under the picture so it covers little; never a text line whose length can shift the rows below.
+- A `Label` with `ClipText` or an overrun mode has minimum width 0: in a shrinking row it vanishes. Text that must always show (a name link) clips nothing; give clipping labels an expand flag or a minimum.
 - Swapping a child of a row (e.g. a link for a label): remove the old one now (`RemoveChild`), or build the row with the final control; `QueueFree` leaves it in layout until the frame ends and the new one gets no room.
 - Detail panels carry their own labels as icons plus value; check that no row can be empty or clipped (a button with no text is a bug).
 
