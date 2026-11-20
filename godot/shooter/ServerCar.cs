@@ -60,6 +60,8 @@ public partial class ServerCar : CharacterBody3D
     public ushort[]? SeatsSent;
     /// <summary>Headlights on (replicated as one bit, <see cref="VehicleRecord.Make"/>): set when a driver gets in at night, toggled by the H key, off when empty.</summary>
     public bool Lights;
+    /// <summary>Its brakes were on in the last step (handbrake, or the key against the travel); sent in the vehicle record for the brake lamps (#409).</summary>
+    public bool Braking => Drives ? Drive.Braking : State.Braking;
     public CarState State;
     public readonly Dictionary<ushort, double> HitCooldown = new();
 
@@ -116,7 +118,7 @@ public partial class ServerCar : CharacterBody3D
         Life = new VehicleLifecycle(Cargo?.MaxHp(Def) ?? Def.Hp);
         Seat = new VehicleSeat(Def.Seats.Count); // a trailer has none
         // the hit volume (VehicleBox): ground to the top of the body; a type with a hull list has a shape for each of its boxes (the body itself stays upright, it turns with the yaw only)
-        if (Def.Tilts)
+        if (Def.Tilts && Flies) // (a trailer's body keeps the wide footprint for the vehicle contact pass; its narrow hull is the analytic one, #482)
             foreach (var b in Def.HullBoxes) AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(b.HalfWidth * 2, b.Y1 - b.Y0, b.HalfLength * 2) }, Position = new Vector3(b.Cx, (b.Y0 + b.Y1) / 2, b.Cz) });
         else AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(HalfWidth * 2, Def.Height, HalfLength * 2) }, Position = new Vector3(0, Def.Height / 2, 0) });
         FloorSnapLength = 0.4f;
@@ -139,10 +141,11 @@ public partial class ServerCar : CharacterBody3D
     /// </summary>
     public void PlaceSolid()
     {
-        var p = GlobalPosition;
-        var tilt = Def.Tilts && Flies; // a hull that tilts turns with the flight state, rounded as its flight record is (FlightRecord.AsSent)
+        var p = HullFeet;
+        var tilt = Def.Tilts; // a hull that tilts turns by its own attitude (HullTilt), rounded as a flight record is (FlightRecord.AsSent)
+        var (pitch, roll) = HullTilt;
         (int X, int Y, int Z, ushort Yaw, bool Solid, short Pitch, ushort Roll) at = (Quant.Pos(p.X), Quant.Pos(p.Y), Quant.Pos(p.Z), Quant.Yaw(State.Yaw), !Destroyed,
-            tilt ? Quant.Pitch(Flight.Pitch) : (short)0, tilt ? Quant.Yaw(Flight.Roll) : (ushort)0);
+            tilt ? Quant.Pitch(pitch) : (short)0, tilt ? Quant.Yaw(roll) : (ushort)0);
         if (at == _solidAt) return;
         _solidAt = at;
         var place = new Vector3(Quant.Pos(at.X), Quant.Pos(at.Y), Quant.Pos(at.Z));
@@ -234,13 +237,27 @@ public partial class ServerCar : CharacterBody3D
     {
         var p = Flies ? Flight.Position : new System.Numerics.Vector3(GlobalPosition.X, GlobalPosition.Y, GlobalPosition.Z);
         var f = Def.Flight;
-        var tilt = Def.Tilts && Flies;
+        var tilt = Flies || Drives; // a trailer's narrow hull is for shots, blasts and the on-foot box; against other vehicles it stays the wide upright footprint (#482)
+        var (pitch, roll) = HullTilt;
         return new ContactShape(p, State.Yaw, HalfWidth, HalfLength, Def.Height, f?.RotorRadius ?? 0, f?.RotorHeight ?? 0, f?.RotorThickness ?? 0,
-            tilt ? Flight.Pitch : 0, tilt ? Flight.Roll : 0, Def.Tilts ? Def.HullBoxes : null);
+            tilt ? pitch : 0, tilt ? roll : 0, tilt ? Def.HullBoxes : null);
     }
 
-    /// <summary>This vehicle as one side of a bump: its mass (a type with none counts as a car) and the velocity it is moving with.</summary>
-    public BumpBody BumpBody() => new(Def.Mass > 0 ? Def.Mass : 1200f, Flies ? Flight.Velocity : new System.Numerics.Vector3(Forward.X, 0, Forward.Z) * State.Speed, Flies);
+    /// <summary>
+    /// The pitch and roll the hull (<see cref="VehicleDef.Tilts"/>) is turned by: the flight state's for an aircraft, a trailer's ground fit (<see cref="TrailerTilt"/>), a driven vehicle's slope
+    /// (<c>Drive.Pitch</c>/<c>Roll</c>, the numbers its drive record carries; level once settled afloat, as the record says). The body springs' lean (<c>DriveBody</c>) is not in it. The one place a type's attitude source is chosen (#483).
+    /// </summary>
+    public (float Pitch, float Roll) HullTilt =>
+        Flies ? (Flight.Pitch, Flight.Roll)
+        : TrailerTilt is { } t ? (t.Pitch, t.Roll)
+        : Drives ? (Drive.Pitch, Drive.Roll) // (a throw sets both to 0, PlaceThrown; afloat the drive step settles them to 0)
+        : (0f, 0f);
+
+    /// <summary>The point the hull's frame has its origin at: the trailer's origin when turned about its axle (<see cref="TrailerTilt"/>), else the node's.</summary>
+    public System.Numerics.Vector3 HullFeet => TrailerTilt is { } t ? t.Origin : new System.Numerics.Vector3(GlobalPosition.X, GlobalPosition.Y, GlobalPosition.Z);
+
+    /// <summary>This vehicle as one side of a bump: its mass (a type with none counts as a car; a trailer weighs what its load makes it) and the velocity it is moving with.</summary>
+    public BumpBody BumpBody() => new(Def.Trailer is { } tr ? tr.MassFor(Cargo?.Loaded ?? true) : Def.Mass > 0 ? Def.Mass : 1200f, Flies ? Flight.Velocity : new System.Numerics.Vector3(Forward.X, 0, Forward.Z) * State.Speed, Flies);
 
     /// <summary>
     /// Applies a bump (<see cref="VehicleContact.Bump"/>): moves the vehicle apart and changes its velocity. A ground vehicle is moved through the

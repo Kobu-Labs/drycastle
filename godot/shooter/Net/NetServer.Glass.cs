@@ -151,7 +151,7 @@ public partial class NetServer
         foreach (var car in _cars)
         {
             if (car.Destroyed || car.Def.Glass.Count == 0) continue;
-            var feet = N(car.GlobalPosition);
+            var feet = car.HullFeet;
             if (NVec3.Distance(c, feet) > radius + MathF.Max(car.HalfLength + car.Def.Height, car.Def.BroadReach)) continue;
             car.Wake();
             var rects = car.Def.GlassRects;

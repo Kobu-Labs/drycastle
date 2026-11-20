@@ -92,6 +92,10 @@ _Avoid_: reward, achievement
 A lamp post of the base map, placed from OSM street lamp nodes or along roads by the pipeline (`lamps.json`). In the shooter it is solid and lights up at night (see the night factor); the viewer does not show it.
 _Avoid_: light, streetlight, lamp post
 
+**Pole lamp**:
+The luminaire of a placed utility pole (an object's light point in `assets/manifest.json`), lit like a Street lamp. It is shootable: a bullet, pellet or gun round that passes within `hit_radius_m` (environment.json `lamp`) of its head breaks it for every player; the server owns the state (`BreakableLamps`, machine `Lamp.Light`). A Broken pole lamp has no lit lens and no beam; after `respawn_seconds` (120) it flickers for `flicker_seconds` (3) and is lit again, and a new round lights them all. The Street lamps of `lamps.json` do not break. ADR 0037.
+_Avoid_: light (alone), bulb
+
 **Respawn**:
 The player's own action (pause menu, or "Apply now" in the Loadouts screen, both with a confirm): the player dies at once and comes back after the normal respawn delay with the active loadout, or the one named. It is a suicide like a fall: a death, the killfeed names only the victim ("Respawn"), a Corpse, the Streak counter resets. No cooldown and no combat lockout (a victim can deny the kill; accepted). Refused while dead, outside a running round, or held by the demon or the Bigfoot.
 _Avoid_: redeploy (the wire name only), suicide
@@ -109,7 +113,7 @@ A player whose player token is listed on the server (`--admin-token`). Admins ma
 _Avoid_: operator, moderator, op
 
 **Chat command**:
-A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/event` (`rozhlas` the loudspeaker, `intel` a test announcement, `bigfoot` starts the Bigfoot Event, `thieves` starts the Thieves event, `harvester` starts a harvester on a crop field near the players (ignores the cooldown, says the field `GP-NNNN` and x,y,z), `current end` concludes the running Event as a win for testing, `current cancel` removes it with no reward), `/help`. The chat box completes them with Tab and lists the candidates and the usage above the input.
+A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/event` (`rozhlas` the loudspeaker, `intel` a test announcement, `bigfoot` starts the Bigfoot Event, `thieves` starts the Thieves event, `harvester` starts a harvester on a crop field near the players (ignores the cooldown, says the field `GP-NNNN` and x,y,z), `current end` concludes the running Event as a win for testing, `current cancel` removes it with no reward), `/help`. `/night` (admin, typing client only: tunes the night lighting in percent, moon / ambient floor / night exposure, `reset` restores) is a test command. `/fps` is for everyone and runs on the typing client only (it never reaches the server): it shows or hides the FPS counter in the HUD's top right corner, kept in the settings file; under the FPS line the card shows TPS, the server ticks received per second (snapshots, 30 when healthy). The chat box completes them with Tab and lists the candidates and the usage above the input.
 _Avoid_: console command, cheat
 
 **Care package**:
@@ -249,8 +253,12 @@ Forest or meadow ground within 25 m of water (a water ground area or a water pat
 _Avoid_: marsh, bog, wetland (those are not terms of this map)
 
 **Shot-only cover**:
-Collision that stops bullets, pellets, rockets and sight lines but not players or cars: tree crowns and bushes. Tree trunks and placed solids are solid for everyone.
+Collision that stops bullets, pellets, rockets and sight lines but not players or cars: bushes, and the crown of a tree that is not drawn as a pack model (a hand-placed tree, a tree of a map without pack trees). The leaves of a pack tree stop nothing (ADR 0037). Tree trunks, limbs and placed solids are solid for everyone.
 _Avoid_: hitbox (for a prop), foliage collision
+
+**Limb**:
+One stretch of the wood of a pack tree model, a trunk or a branch, and the solid that stands where it is: a square ring below and a square ring above, each with its own centre, so it leans as the wood does. A forked trunk is a limb per arm. A tree drawn as a pack model is solid for everyone exactly at its limbs (`tree_limbs.json`, ADR 0037); a limb is followed up until it is hidden in the leaves.
+_Avoid_: branch collider, trunk box, hitbox
 
 **Concealment**:
 The factor (stance, stillness, movement) by which camouflage reduces how far away a player can be spotted. Only the number exists; it is not yet applied in the server tick.
@@ -316,8 +324,12 @@ An Item that rides in the Bag (it cannot be worn) and is used from there: the bi
 _Avoid_: rangefinder, spotter scope
 
 **Headlights**:
-A vehicle's front and tail lights, from the optional `lights` block in `vehicles.json`. The driver toggles them with the headlights key (H).
+A vehicle's front and tail lights, from the optional `lights` block in `vehicles.json`. The driver toggles them with the headlights key (H), which is also the Head lamp key on foot.
 _Avoid_: lamps (for vehicles), beams
+
+**Head lamp**:
+A soft white beam from a player's head, switched with the headlights key (H) while on foot (in a vehicle the same key works the Headlights). Off by default and at every spawn; death and getting into a vehicle switch it off. No item, no battery. The server holds the on/off bit and tells everyone, so the others see the beam along that player's aim; only the nearest three lit players get a real light. Range, cone and energy are the consts of `HeadLamp`.
+_Avoid_: flashlight, torch
 
 **Day clock**:
 The server's day/night clock: one 24-hour day of `day_length_minutes` real minutes, started at `start_time` (or `--time`), optionally frozen (`--freeze-time`). Clients get it in the welcome message.
@@ -328,7 +340,7 @@ A value from the day clock that drives street lamp light, headlight and window g
 _Avoid_: darkness, night mode
 
 **Aircraft**:
-A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper, the AC-130 gunship and the UAV. Nobody boards or flies it; its owner only works its guns (the UAV has none). It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship, 200 for the UAV) and can be shot down by flak, the Lock-on launcher and any other anti-aircraft (ADR 0005, ADR 0031): its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle.
+A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper, the AC-130 gunship and the UAV. Nobody boards or flies it; its owner only works its guns (the UAV has none). It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship, 200 for the UAV) and can be shot down by flak, the Lock-on launcher and any other anti-aircraft (ADR 0005, ADR 0031): its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle, but the Lock-on launcher locks it like one while it is flown (ADR 0031).
 _Avoid_: plane (for helicopters), drone, helicopter (alone)
 
 **Utility helicopter**:
@@ -367,16 +379,20 @@ _Avoid_: parking spot, spawn point (that is where a player appears)
 A flak shell's end by an aircraft: the shell flies straight at 700 m/s, and once it passes within 12 m of an aircraft it bursts at the closest approach. An aircraft within 15 m of the burst takes 150 damage out to 4 m, falling to 40 at the edge. The gunner has to lead the aircraft, which flies a known circle. A shell that meets no aircraft ends on the ground with a small blast (4 m, weak), or runs out of range.
 _Avoid_: proximity fuse (the fuse is how it works, the burst is the thing), flak burst
 
+**Grenade**:
+A Special-slot weapon (`weapons.json` `grenade`, fourth on the hotbar after the knife) thrown by hand: it leaves at 17 m/s, falls and bounces off the world and vehicles (flying through players), and bursts when its fixed 3 s fuse runs out (no cooking). The blast is the RPG's own explosion path with a 5.5 m Splash (half as harmful to the thrower), so it raises a Dust cloud but, being under the Blast wave's 9 m minimum, no Blast wave. One in hand and two in reserve; a kill refills the reserve. Not carried by bots.
+_Avoid_: frag, bomb
+
 **RPG**:
 A secondary weapon carried on the shoulder (`weapons.json` `rpg`, unlocked at level 8) that fires one unguided rocket where it is aimed: it flies straight at 60 m/s for up to 240 m and bursts on what it meets with a 10 m blast (a Dust cloud and a Blast wave at 200 m/s), half as harmful to the one who fired it. One rocket in the tube and two in reserve. A share of the bots carries it and aims it far more steadily than a gun. It replaced the bazooka (#348).
 _Avoid_: bazooka, rocket launcher (alone: the Lock-on launcher is one too)
 
 **Lock-on launcher**:
-A secondary weapon carried on the shoulder (`weapons.json` `strela`) that shoots down Aircraft and nothing else (ADR 0031). It fires only on a complete Lock; without one the trigger clicks. One Homing missile in the tube and two in reserve, 500 damage each: one for the UAV, two for a helicopter, three for the AC-130. Its sight replaces the crosshair while it is in the hand. Bots do not carry it.
+A secondary weapon carried on the shoulder (`weapons.json` `strela`) that shoots down Aircraft and flown helicopters (air vehicles) and nothing else (ADR 0031). It fires only on a complete Lock; without one the trigger clicks. One Homing missile in the tube and two in reserve, 500 damage each: one for the UAV, two for a helicopter, three for the AC-130. Its sight replaces the crosshair while it is in the hand. Bots do not carry it.
 _Avoid_: AA launcher, MANPADS, Stinger, rocket launcher (that is the RPG)
 
 **Lock**:
-What a Lock-on launcher builds on one enemy Aircraft before it may fire: the Aircraft has to stay inside the lock circle (wider than the aim), within range (the UAV at any distance) and in sight for 2.5 seconds. Out of the circle or behind a wall the progress waits 0.4 seconds, then the Lock is lost. The server decides it; the shooter hears beeps that quicken and a solid tone when it is complete.
+What a Lock-on launcher builds on one enemy Aircraft or flown helicopter (a piloted air vehicle off the ground; a landed or empty one is not lockable) before it may fire: the Aircraft has to stay inside the lock circle (wider than the aim), within range (the UAV at any distance) and in sight for 2.5 seconds. Out of the circle or behind a wall the progress waits 0.4 seconds, then the Lock is lost. The server decides it; the shooter hears beeps that quicken and a solid tone when it is complete.
 _Avoid_: target lock, aim assist, tracking (that is a Lock whose Aircraft is in the circle right now)
 
 **Lock alert**:
@@ -533,13 +549,17 @@ _Avoid_: game mode, playlist
 
 **Team**:
 One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. The same goes for a vehicle with a teammate in any seat (an empty one, or one only the shooter sits in, can be hurt; crashes and water are never blocked) (#338). A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team. An admin can regroup from the Pause menu's Teams screen (#312): drag a player card onto a team's table (or A, B, U on the keyboard), or use the quick actions (bots to a team, shuffle, balance). A player moved to a team respawns on the new side, leaves any vehicle, loses their turrets and streak progress, keeps their kills and deaths, and the earned team score stays with the old team. A player dropped on the **Unassigned** table is out of the round: down, no death on the record, not spawned (also not at round starts), not balanced or shuffled, until an admin puts them on a team. A mode change puts everyone on a team again. Round-start balance moves bots before humans, then the newest.
-_Avoid_: squad, clan, faction
+_Avoid_: clan, faction
+
+**Squad**:
+A small opt-in group inside one Team in team deathmatch (#379, #288): up to 4 human players, with a name, no leader. Nobody is put in one: from the Pause menu's Squads screen (or `/squad create [name]`, `join <name|number>`, `leave`, `list`) a player creates a squad with a typed name (trimmed, up to 16 characters; empty: "<player>'s squad") or joins one of their own team's squads (a full one refuses). A player is in one squad at a time: creating or joining leaves the old one, and a squad with no member disappears. Bots are never in a squad. A squad is only a tag: friend logic (`AreFriends`), scoring and team colours do not look at it. A team change (an admin's move, the round-start balance), a mode change and leaving the match take a player out of their squad. Squad mates are blue discs with their names on the minimap and tactical map (the other teammates stay green), their through-wall name tags gain the squad's name, and the scoreboard groups a team's rows by squad.
+_Avoid_: party, group, clan, fireteam
 
 **Friend / enemy colours**:
-The blue (friend) and orange (enemy) the HUD uses, seen from the local player's team, for names in the kill feed and scoreboard and for the enemy pings on the maps. Teammates on the minimap and tactical map are green circles instead. A team tag ("A"/"B") always accompanies the colour, and both colours have a colour-blind set (`TeamPalette`).
+The blue (friend) and orange (enemy) the HUD uses, seen from the local player's team, for names in the kill feed and scoreboard and for the enemy pings on the maps. Teammates on the minimap and tactical map are green circles instead, and Squad mates blue discs with their names (`TeamPalette.Squad`). A team tag ("A"/"B") always accompanies the colour, and both colours have a colour-blind set (`TeamPalette`).
 
 **Tactical map**:
-The full-screen, north-up map sheet of the whole world (the square that holds the whole terrain polygon, so the player can be anywhere on it; the minimap shows the village's smaller square) that the M key (rebindable, `map`) opens and closes; Esc also closes it. It does not pause anything. It frees the mouse and the legs keep working (like the Equipment screen), but the view does not turn and nothing fires. The ground is painted from the terrain mesh's own colours, top-down (the default ground colour shows where the terrain is cut off), and the map's top-down render (`tactical-map.png` in the map folder: buildings, roofs, props, forest) lies over it wherever it has pixels when the map has one (the minimap uses it only inside the village polygon); roads and a square grid are drawn over it, labelling columns A, B, C... from the west and rows 1, 2, 3... from the south, so a square has a short reference such as "C7" (the cell is 50, 100 or 200 m, chosen so there are about 10 to 20 a side; these are not S-JTSK coordinates). One panel on the right holds only the compass rose (with the player's heading) and the player's current grid reference. Markers (the player's arrow, vehicles, friends in team deathmatch, UAV pings, gunfire blips, the waypoint) are the minimap's, drawn from the same data. It closes on the respawn screen, at the end of a match and in a missile or turret view.
+The full-screen, north-up map sheet of the whole world (the square that holds the whole terrain polygon, so the player can be anywhere on it; the minimap shows the village's smaller square) that the M key (rebindable, `map`) opens and closes; Esc also closes it. It does not pause anything. It frees the mouse and the legs keep working (like the Equipment screen), but the view does not turn and nothing fires. The ground is painted from the terrain mesh's own colours, top-down (the default ground colour shows where the terrain is cut off), and the map's top-down render (`tactical-map.png` in the map folder: buildings, roofs, props, forest) lies over it wherever it has pixels when the map has one (the minimap uses it only inside the village polygon); roads and a square grid are drawn over it, labelling columns A, B, C... from the west and rows 1, 2, 3... from the south, so a square has a short reference such as "C7" (the cell is 50, 100 or 200 m, chosen so there are about 10 to 20 a side; these are not S-JTSK coordinates). One panel on the right holds only the compass rose (with the player's heading) and the player's current grid reference. Markers (the player's arrow, vehicles, teammates and squad mates in team deathmatch, UAV pings, gunfire blips, the waypoint) are the minimap's, drawn from the same data. It closes on the respawn screen, at the end of a match and in a missile or turret view.
 _Avoid_: world map, big map, full map
 
 **Waypoint**:
@@ -651,7 +671,7 @@ What a Thief takes: a tire off a car, a Pet, a satellite dish off a house, a con
 _Avoid_: item, pickup, cargo, stolen goods
 
 **Hit count**:
-How the Bigfoot is killed: not hit points but a number of hits, `hits.per_player` times the participants (at least one), tuned for about a minute. A bullet hit counts 1, with no headshot bonus (a headshot on it is a body hit); an explosive hit (a rocket, the attack missile, the MOAB) and a vehicle-weapon hit count a larger, configurable weight; ramming it counts nothing. The count only goes up while it fights.
+How the Bigfoot is killed: not hit points but a number of hits, `hits.per_player` times the participants (at least one) (80 per player), tuned for about 15 s of rifle fire. A bullet hit counts 1, with no headshot bonus (a headshot on it is a body hit); an explosive hit (a rocket, the attack missile, the MOAB) and a vehicle-weapon hit count a larger, configurable weight; ramming it counts nothing. The count only goes up while it fights.
 _Avoid_: health, hit points, HP bar
 
 **Participant**:
@@ -698,21 +718,41 @@ The boss the priest turns into in the Holy Mass event: it crawls on the walls an
 _Avoid_: boss (alone), monster, priest (that is its first form)
 
 **Hunt**:
-One logged kill of a wild Animal with `weight_kg` by a player, with any weapon (a vehicle run over included, weapon `run_over`), or one catch of a Mystery creature: the player, the Index species and the exact species and variant, the weight (none for a mystery), the distance (none for a run over and a catch), the weapon, the Hit diagram where a shape was hit, the place and the time. Weights and distances are kept to a tenth. Not a Pet, livestock, a bird flock or a kill by a bot; a guest (no stored Profile) and a sandbox player log nothing. Stored forever; the server is the only writer.
+One logged kill of a wild Animal with `weight_kg` by a player, with any weapon (a vehicle run over included, weapon `run_over`), or one catch of a Mystery creature: the player, the Index species and the exact species and variant, the weight (none for a mystery), the distance (none for a run over and an Event catch), the weapon, the Hit diagram where a shape was hit, the place and the time. Weights and distances are kept to a tenth. Not a Pet, livestock, a bird flock or a kill by a bot; a guest (no stored Profile) and a sandbox player log nothing. Stored forever; the server is the only writer.
 _Avoid_: kill (alone), trophy, catch (that is a Mystery creature's)
 
+**Player kill**:
+A player's longest kill of another player, kept in the Hunter's Log beside the Hunts but not a Hunt (no species, weight or rarity): the killer, the victim, the distance (a tenth of a metre), the weapon, the place and the time. Only the best of each killer is kept (no log of every kill), and the server's longest is the best of those; a tie keeps the earlier kill. Counted only for an enemy shot with a hitscan weapon (a shotgun's is the first pellet that hit; not a grenade, vehicle, blade or run over), when both are players with a stored Profile (not a guest, a bot or a sandbox player). The server is the only writer; a new server record is announced like a longest shot. Shown as the Records tab's "Longest player kill" card and My Log's "Longest kill" plate, never in All hunts. Rules are in `PlayerKillBook` (ShooterCore).
+_Avoid_: kill record, frag, PvP hunt
+
 **Hunter's Log**:
-The server-wide, browsable book of every Hunt: a player's own log (totals and the Life List), the Records, and a paged table of all hunts. It has no XP, ranks or achievements. The server answers its queries already redacted for the asker (Mystery creature), and announces to everyone a new record (heaviest, or longest shot) and a player's first Hunt of an Index species or Mystery creature; a first that is also a record is one announcement, and an ordinary hunt is none. A tie keeps the earlier hunt; a run over holds no longest shot. Rules are in one place, `HuntBook` (ShooterCore). The J key (rebindable, `hunters_log`; also in Pause) opens it as a non-pausing panel centred over 60 % of the screen's width (on its own top layer, the kill feed stays put), with the three tabs My Log, Records and All hunts; the world stays visible and live, the mouse is released and the legs work, firing does not. Esc goes up one level, then closes.
+The server-wide, browsable book of every Hunt: a player's own log (totals and the Life List), the Records, and a paged table of all hunts. It has no XP, ranks or achievements. The server answers its queries already redacted for the asker (Mystery creature), and announces to everyone a new record (heaviest, or longest shot) and a player's first Hunt of an Index species or Mystery creature; a first that is also a record is one announcement, and an ordinary hunt is none. A tie keeps the earlier hunt; a run over holds no longest shot. Rules are in one place, `HuntBook` (ShooterCore); the longest Player kill is kept beside, in `PlayerKillBook`. The J key (rebindable, `hunters_log`; also in Pause) opens it as a non-pausing panel centred over 60 % of the screen's width (on its own top layer, the kill feed stays put), with the three tabs My Log, Records and All hunts; the world stays visible and live, the mouse is released and the legs work, firing does not. Esc goes up one level, then closes.
 _Avoid_: hunter index, leaderboard, journal
 
 **Life List**:
 A player's tile for every Index species and every Mystery creature in the Hunter's Log: outline only until hunted, filled once hunted, with the player's best weight and longest shot and when it was first caught. A hidden Mystery tile carries no numbers.
 _Avoid_: collection, bestiary
 
+**Hunt rarity**:
+How rare a Hunt's weight is for its exact species and look: gold (the heaviest 5 %), silver (10 %), bronze (20 %) or common, read from the weight distribution itself (`HuntRarity`), never counted from the stored hunts. A Life List tile carries the rarest one its owner has hunted, shown as the plaque's rim, a medal and the tier in words. A Mystery creature has none.
+_Avoid_: quality, grade, trophy class
+
+**Mineral**:
+One of the 28 stones of the Mineral Log (crystals.md): 8 real-life ones and 20 fantasy ones, the latter the crystals of `crystals.json`. The one table is `Minerals` (ShooterCore).
+_Avoid_: gem, ore, crystal (that is the model in the world)
+
+**Mineral Log**:
+The collection log of Minerals: one grid of all 28 in a fixed shuffled order (the same for everyone), each card a niche with the mineral's crystals and its name, always shown; a found one says which finder the player was ("7th found"), one not found is blurred behind frosted glass. The N key (rebindable, `mineral_log`; also in Pause) opens it like the Hunter's Log: a non-pausing centred panel, Esc closes. Nothing can be found yet: every card is behind glass.
+_Avoid_: geo log, geocaching log, crystal log
+
 **Index species**:
 What a Hunter's Log record and Life List tile are kept per: Deer (the animals `deer` and `doe` together), Stag, Moose, Bear, Boar, Wolf, Fox, Raccoon, Skunk and Rabbit. A Hunt keeps the index id and the exact species. The one table is `IndexSpecies`.
 _Avoid_: species (alone, that is `animals.json`'s id)
 
 **Mystery creature**:
-A creature in the Hunter's Log caught by winning an Event, not hunted for weight: Bigfoot (live), Unicorn and Scylla (registered, nothing catches them yet). A viewer who has not caught one is never sent its name or shape: the server sends a hidden id, and the hunter, time, distance and weapon stay. A player's first catch unlocks it for them everywhere at once. It has no weight; it can hold a first catch and a longest shot.
+A creature in the Hunter's Log that is not hunted for weight: Bigfoot (live, caught by winning its Event), the Unicorn (live, caught by killing it: a rare wild Animal) and Scylla (registered, nothing catches it yet). A viewer who has not caught one is never sent its name or shape: the server sends a hidden id, and the hunter, time, distance and weapon stay. A player's first catch unlocks it for them everywhere at once. It has no weight; it can hold a first catch and a longest shot. A Unicorn hunt also keeps a Hit diagram, and has a distance like any shot (none for a run over); an Event catch has neither.
 _Avoid_: cryptid, boss
+
+**Unicorn**:
+A rare wild Animal (`unicorn` in `animals.json`, listed under `rare` in `wildlife.json`, not a zone species): one lives on the whole map at a time, at a random point anywhere with ground that is at least `min_building_m` (60) from every building. Killed like any animal (any weapon, a run over too; it lies for `corpse_seconds`), it leaves a corpse and is replaced by a new one at a new random point `respawn_seconds` (60) after the kill; a search that finds no point is tried again after another `respawn_seconds`. It never runs: a threat in its flee radius, a hit that does not kill it, a run-over knockdown getting up or (never for it, it is alone) a herd alarm startles it, and then it turns immune for `vanish_seconds` (2; no damage, no throw, shots and vehicles pass through; rainbow spirals wind round it on the client), vanishes in a puff and reappears, standing, at another random point (same rules as its spawn point, at least `vanish_min_m` (150) from where it was); for `vanish_grace_seconds` (3) after that nothing startles it, so it can be seen and shot where it arrived. A shot that kills it outright (before it is startled) still does. It counts toward `max_animals`. Killing it is a Hunt of the Mystery creature Unicorn (no weight). Nothing announces its spawn or its respawn (the first catch and a longest-shot record are announced like any Mystery creature's); the WildlifeKeeper runs it, no Event. Its pearl coat, rainbow mane and tail, glowing speckled horn, the sparkles round it, the rainbow trail behind it (a tube with volume) and the whirl of stars and clouds of its vanish are client-only looks (`"fx": "unicorn"` in `animals.json`, `UnicornFx`), nothing on the wire.
+_Avoid_: Event (it is not an Event), boss, unicorn event

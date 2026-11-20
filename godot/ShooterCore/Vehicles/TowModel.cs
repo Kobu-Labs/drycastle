@@ -53,7 +53,8 @@ public readonly struct TowGeometry
 /// </summary>
 public readonly record struct TractorMotion(Vector3 Position, float Yaw, float Speed, float Slip, float YawRate)
 {
-    public static TractorMotion From(in DriveState s) => new(s.Position, s.Yaw, s.Speed, s.Slip, s.YawRate);
+    /// <summary>A tractor stepped by <see cref="DriveModel"/>: the slide is the origin's (<see cref="DriveModel.OriginSlip"/>: it turns about its fixed axle, not its origin).</summary>
+    public static TractorMotion From(in DriveState s, VehicleDef def) => new(s.Position, s.Yaw, s.Speed, DriveModel.OriginSlip(s, def), s.YawRate);
     /// <summary>A tractor stepped by <see cref="CarModel"/>: it never slides; the position is the physics body's.</summary>
     public static TractorMotion From(Vector3 position, in CarState s) => new(position, s.Yaw, s.Speed, 0f, s.YawRate);
 }
@@ -99,17 +100,19 @@ public readonly struct TowBlock
     public int Side => _active ? _side : 0;
 
     /// <summary>Whether the motion folds the trailer further than it is.</summary>
-    public bool Increases(float speed, float slip, float yawRate) => _active && _side * TowModel.PhiRate(_phi, _drawbar, _hitchX, _hitchZ, speed, slip, yawRate, 0f) > 0f;
+    /// <param name="pivotBehind">How far behind the tractor's origin it turns about (<see cref="DriveModel.PivotBehind"/>): the hitch swings by its distance from there, not from the origin.</param>
+    public bool Increases(float speed, float slip, float yawRate, float pivotBehind = 0f) =>
+        _active && _side * TowModel.PhiRate(_phi, _drawbar, _hitchX, _hitchZ - pivotBehind, speed, slip, yawRate, 0f) > 0f;
 
     /// <summary>
     /// Takes the motion that would fold the trailer further out of the tractor's step: a speed that drives it deeper (reversing, mostly) is stopped, then a yaw rate that still would is
     /// cancelled. True when anything was changed. The same stop <see cref="DriveModel"/> gives a ledge too high to climb.
     /// </summary>
-    public bool Clamp(ref float speed, ref float slip, ref float yawRate)
+    public bool Clamp(ref float speed, ref float slip, ref float yawRate, float pivotBehind = 0f)
     {
-        if (!Increases(speed, slip, yawRate)) return false;
+        if (!Increases(speed, slip, yawRate, pivotBehind)) return false;
         if (_side * TowModel.PhiRate(_phi, _drawbar, _hitchX, _hitchZ, speed, slip, 0f, 0f) > 0f) { speed = 0; slip = 0; }
-        if (Increases(speed, slip, yawRate)) yawRate = 0;
+        if (Increases(speed, slip, yawRate, pivotBehind)) yawRate = 0;
         return true;
     }
 }
@@ -119,6 +122,12 @@ public interface ITrailerWorld
 {
     /// <summary>The trailer going from <paramref name="from"/> to <paramref name="to"/> (footprints on the ground plane; <paramref name="y"/> the ground height at the trailer) is stopped by something solid.</summary>
     bool Blocked(in BodyBox from, in BodyBox to, float y);
+
+    /// <summary>
+    /// The height of the ground at (<paramref name="x"/>, <paramref name="z"/>), searched near <paramref name="hint"/> (the height it was a step ago); the hint when there is none. A world with no
+    /// ground of its own (flat) leaves it as it is.
+    /// </summary>
+    float GroundY(float x, float z, float hint) => hint;
 }
 
 /// <summary>
@@ -178,7 +187,9 @@ public static class TowModel
     {
         b.Phi = Math.Clamp(FlightMath.Wrap(b.Yaw - t.Yaw), -g.Limit, g.Limit);
         b.Slide = 0;
+        var y = b.Position.Y; // its own ground, not the hitch's: what the next step searches the ground from
         Pin(ref b, g, t);
+        b.Position.Y = y;
     }
 
     /// <summary>
@@ -256,12 +267,14 @@ public static class TowModel
 
     /// <summary>
     /// <see cref="Step"/> against the world: when the box the trailer would stand in is blocked, the body stays as it was (speed 0) and the result is false. The caller then
-    /// holds the tractor where it was (<see cref="Hold(ref DriveState, in DriveState)"/>): a trailer that is stopped stops the tractor.
+    /// holds the tractor where it was (<see cref="Hold(ref DriveState, in DriveState)"/>): a trailer that is stopped stops the tractor. The body's height is the ground's under it, searched from
+    /// the height it had (never the hitch's, which is the tractor's ground: metres off with the tractor at the foot of a dyke and the trailer still on it, #377).
     /// </summary>
     public static bool StepChecked(ref TrailerBody b, in TowGeometry g, in TractorMotion t, float dt, ITrailerWorld world)
     {
         var next = b;
         Step(ref next, g, t, dt);
+        next.Position.Y = world.GroundY(next.Position.X, next.Position.Z, b.Position.Y);
         if (world.Blocked(Footprint(g, b), Footprint(g, next), next.Position.Y)) { b.Speed = 0; return false; }
         b = next;
         return true;

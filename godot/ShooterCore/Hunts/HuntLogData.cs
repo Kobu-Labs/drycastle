@@ -10,7 +10,7 @@ public sealed class HuntLogData
     readonly Action<EventKind, byte[]> _send;
 
     public HuntLoader<PlayerLogView> Log { get; } = new();
-    public HuntLoader<IReadOnlyList<SpeciesRecordView>> Records { get; } = new();
+    public HuntLoader<RecordsAnswer> Records { get; } = new();
     public HuntLoader<HuntsAnswer> Hunts { get; } = new();
     public HuntTableState Table { get; } = new();
     public HuntPeople People { get; } = new();
@@ -63,7 +63,7 @@ public sealed class HuntLogData
     public void OnRecords(RecordsAnswer a)
     {
         Learn(a.ViewerId);
-        if (!Records.Accept(a.Req, a.Status, a.Status == HuntStatus.Ok ? a.Records : null)) return;
+        if (!Records.Accept(a.Req, a.Status, a.Status == HuntStatus.Ok ? a : null)) return;
         foreach (var c in a.Records) { People.Learn(c.Heaviest); People.Learn(c.Longest); People.Learn(c.First); }
         Changed?.Invoke();
     }

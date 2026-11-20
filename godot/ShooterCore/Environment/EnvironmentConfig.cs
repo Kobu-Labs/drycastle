@@ -14,7 +14,9 @@ public sealed class EnvironmentConfig : IVersioned
     /// <summary>When set, the clock is frozen at this time of day.</summary>
     public string? FrozenTime { get; set; }
     /// <summary>Ambient light floor at night so the world is never pitch black (0 would be fully dark).</summary>
-    public float MinAmbient { get; set; } = 0.35f;
+    public float MinAmbient { get; set; } = 0.10f;
+    /// <summary>How a street lamp lights up at night (the lens, the beam): the same kind of numbers as a vehicle's <c>lights</c>.</summary>
+    public LampLook Lamp { get; set; } = new();
 
     public static EnvironmentConfig Parse(string json)
     {
@@ -36,6 +38,10 @@ public sealed class EnvironmentConfig : IVersioned
         if (FrozenTime != null) ParseHhMm(FrozenTime, "frozen_time");
         if (!(DayLengthMinutes > 0)) throw new DataFileException("environment.json: day_length_minutes must be above 0");
         if (MinAmbient < 0 || MinAmbient > 1) throw new DataFileException("environment.json: min_ambient must be 0..1");
+        if (!(Lamp.RangeM > 0) || !(Lamp.AngleDeg > 0 && Lamp.AngleDeg < 90) || Lamp.Energy < 0 || Lamp.LensEnergy < 0)
+            throw new DataFileException("environment.json: lamp needs range_m above 0, angle_deg 0..90 (exclusive), energy and lens_energy 0 or more");
+        if (!(Lamp.HitRadiusM > 0) || !(Lamp.RespawnSeconds > 0) || !(Lamp.FlickerSeconds > 0))
+            throw new DataFileException("environment.json: lamp needs hit_radius_m, respawn_seconds and flicker_seconds above 0");
     }
 
     /// <summary>"HH:MM" to minute of the day (0..1439). Throws <see cref="DataFileException"/> naming the field on bad input.</summary>
@@ -67,4 +73,24 @@ public sealed class EnvironmentConfig : IVersioned
             Frozen = frozen,
         };
     }
+}
+
+/// <summary>
+/// The light of one street lamp at full night (environment.json <c>lamp</c>): a spot beam straight down from the luminaire, like a vehicle headlamp
+/// (<c>BeamRange</c>/<c>BeamAngle</c> in vehicles.json), and a lit lens that blooms. <see cref="AngleDeg"/> is the half angle of the cone.
+/// Tuned by eye: nothing here was seen in the game.
+/// </summary>
+public sealed class LampLook
+{
+    public double RangeM { get; set; } = 12;
+    public double AngleDeg { get; set; } = 55;
+    public double Energy { get; set; } = 4;
+    public string Colour { get; set; } = "#ffc773";
+    /// <summary>Emission of the lens at full night; above the bloom threshold (2) on purpose (ADR 0030).</summary>
+    public double LensEnergy { get; set; } = 6;
+    /// <summary>A pole lamp is broken by a round that passes within this many metres of its head.</summary>
+    public double HitRadiusM { get; set; } = 0.25;
+    /// <summary>A broken pole lamp stays dark this long, then flickers for <see cref="FlickerSeconds"/> and is lit again (ADR 0037).</summary>
+    public float RespawnSeconds { get; set; } = 120;
+    public float FlickerSeconds { get; set; } = 3;
 }

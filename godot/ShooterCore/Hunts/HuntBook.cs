@@ -21,9 +21,12 @@ public sealed class HuntBook
     {
         public HuntRecord? Heaviest, Longest, First;
         public int Count;
+        /// <summary>The rarest weight among the hunts (not always the heaviest: a heavy doe is rarer than a middling deer).</summary>
+        public HuntTier Tier;
 
-        public HuntOutcome Add(HuntRecord h)
+        public HuntOutcome Add(HuntRecord h, HuntTier tier)
         {
+            if (tier > Tier) Tier = tier;
             var first = Count == 0;
             Count++;
             First ??= h;
@@ -39,11 +42,15 @@ public sealed class HuntBook
     readonly Dictionary<long, Dictionary<string, Best>> _players = new();
     readonly Dictionary<long, string> _names = new();
     static readonly IReadOnlySet<string> None = new HashSet<string>();
+    readonly Func<HuntRecord, HuntTier>? _rarity;
+
+    /// <param name="rarity">The rarity of a hunt's weight (<see cref="HuntRarity.Of(AnimalsFile, HuntRecord)"/>); null: every hunt is common.</param>
+    public HuntBook(Func<HuntRecord, HuntTier>? rarity = null) => _rarity = rarity;
 
     /// <summary>The book of hunts that were stored, oldest first.</summary>
-    public static HuntBook From(IEnumerable<HuntRow> rows)
+    public static HuntBook From(IEnumerable<HuntRow> rows, Func<HuntRecord, HuntTier>? rarity = null)
     {
-        var book = new HuntBook();
+        var book = new HuntBook(rarity);
         foreach (var r in rows)
         {
             book.SetName(r.Hunt.PlayerId, r.Hunter);
@@ -66,8 +73,9 @@ public sealed class HuntBook
         if (!_server.TryGetValue(h.Species, out var s)) _server[h.Species] = s = new Best();
         if (!_players.TryGetValue(h.PlayerId, out var mine)) _players[h.PlayerId] = mine = new Dictionary<string, Best>();
         if (!mine.TryGetValue(h.Species, out var p)) mine[h.Species] = p = new Best();
-        var against = s.Add(h);
-        var own = p.Add(h);
+        var tier = _rarity?.Invoke(h) ?? HuntTier.Common;
+        var against = s.Add(h, tier);
+        var own = p.Add(h, tier);
         return new HuntOutcome(own.FirstTime, against.Heaviest, against.Longest);
     }
 
@@ -109,7 +117,7 @@ public sealed class HuntBook
             var caught = b is { Count: > 0 };
             var hidden = HuntRedaction.IsHidden(key, viewer);
             life.Add(new LifeEntry(HuntRedaction.SpeciesFor(key, viewer), hidden, caught,
-                hidden ? null : b?.Heaviest?.Kg, hidden ? null : b?.Longest?.DistanceM, hidden || b?.First == null ? 0 : Unix(b.First.AtUtc)));
+                hidden ? null : b?.Heaviest?.Kg, hidden ? null : b?.Longest?.DistanceM, hidden || b?.First == null ? 0 : Unix(b.First.AtUtc), hidden || b == null ? HuntTier.Common : b.Tier));
             if (!caught) continue;
             hunts += b!.Count;
             species++;

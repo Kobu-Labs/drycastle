@@ -435,6 +435,32 @@ def test_objects_json_content_and_order(ws, tmp_path, capsys) -> None:
     assert capsys.readouterr().err == ""
 
 
+def test_solid_false_reaches_objects_json_and_only_then(ws, tmp_path) -> None:
+    edits = write_edits(
+        tmp_path,
+        {
+            "version": 1,
+            "objects": [
+                {"id": "o-0001", "asset": "prim:slab", "position": [ORIGIN[0] + 50, ORIGIN[1] + 50], "z": 12.5, "solid": False},
+                {"id": "o-0002", "asset": "prim:slab", "position": [ORIGIN[0] + 60, ORIGIN[1] + 50], "solid": True},
+            ],
+        },
+    )
+    run_props(ws["work"], DEFAULT_RULES, edits_path=edits)
+    one, two = read_objects(ws["work"])["objects"]
+    assert one["solid"] is False and one["z"] == 12.5
+    assert "solid" not in two  # true is the default: the export is unchanged for it
+
+
+def test_object_solid_must_be_a_bool(tmp_path) -> None:
+    doc = {"version": 1, "objects": [{"id": "o-1", "asset": "prim:slab", "position": [1, 2], "solid": "no"}]}
+    assert any("objects.0.solid: must be true or false" in e for e in validate(doc))
+    doc["objects"][0]["solid"] = False
+    assert validate(doc) == []
+    doc["objects"][0]["z"] = float("nan")
+    assert any("objects.0.z" in e for e in validate(doc))
+
+
 def test_object_outside_every_parcel_is_placed_without_a_warning(ws, tmp_path, capsys) -> None:
     # an object belongs to no parcel: a pole on a road or on ground needs only its position
     edits = write_edits(

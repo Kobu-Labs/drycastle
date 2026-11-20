@@ -25,6 +25,8 @@ public partial class NetClient
         public float RadiusL = 0.45f, RadiusR = 0.45f;
         /// <summary>The ground fit as drawn (smoothed), the drawn speed along the heading (from the drawn motion) and where it was drawn last frame.</summary>
         public float Pitch, Roll, Speed;
+        /// <summary>How it lies on the ground as the latest record says (unsmoothed, the server's own fit: <see cref="TrailerProbe.Attitude"/>); its hit box and solid box turn by it (<see cref="HullTiltOf"/>).</summary>
+        public TrailerAttitude.Result? Hull;
         public Vector3 LastPos;
         public bool HasLast;
     }
@@ -50,14 +52,14 @@ public partial class NetClient
     TrailerView MakeTrailerView(CarView v)
     {
         var t = new TrailerView();
+        _trailerGround ??= TrailerProbe.Make(Vehicles!.Vehicles[v.Kind]); // a headless client fits the hull too
+        if (_trailerGround.GetParent() == null) Owned.AddChild(_trailerGround);
         if (!ShotFx.Enabled) return t;
         t.WheelL = v.Node.FindChild("wheel_l", true, false) as Node3D;
         t.WheelR = v.Node.FindChild("wheel_r", true, false) as Node3D;
         t.Missile = v.Node.FindChild("missile", true, false) as Node3D;
         if (t.WheelL is { Position.Y: > 0.05f }) t.RadiusL = t.WheelL.Position.Y; // the wheel's centre is at its axle: its height is the radius (car-design section 3)
         if (t.WheelR is { Position.Y: > 0.05f }) t.RadiusR = t.WheelR.Position.Y;
-        _trailerGround ??= TrailerProbe.Make(Vehicles!.Vehicles[v.Kind]);
-        if (_trailerGround.GetParent() == null) Owned.AddChild(_trailerGround);
         return t;
     }
 
@@ -77,6 +79,20 @@ public partial class NetClient
             if (t.Missile != null && GodotObject.IsInstanceValid(t.Missile)) t.Missile.Visible = loaded;
         }
         t.TractorId = tractor; t.Seen = true;
+    }
+
+    /// <summary>
+    /// Fits a trailer's hull to the ground at the place its latest record gives, as the server does for its own (<see cref="ServerCar.PlaceTrailer"/>: the same <see cref="TrailerProbe.Attitude"/>, pulled by the
+    /// hitch of the tractor's record or loose), so a shot, a blast or a step on foot meets the box where the server has it without the tilt travelling on the wire (#482).
+    /// </summary>
+    void RefreshHull(CarView v)
+    {
+        if (v.Trailer is not { } t || Vehicles == null || _trailerGround == null || !Vehicles.Vehicles[v.Kind].Tilts) return;
+        var def = Vehicles.Vehicles[v.Kind];
+        TowGeometry g; float? hitchY = null;
+        if (t.TractorId != 0 && _cars.TryGetValue(t.TractorId, out var tractor) && Vehicles.Vehicles[tractor.Kind].Tow != null) { g = GeometryOf(tractor.Kind, v.Kind); hitchY = tractor.Pos.Y + g.HitchY; }
+        else g = TowGeometry.ForTrailer(def);
+        t.Hull = _trailerGround.Attitude(g, v.Pos.X, v.Pos.Z, v.Pos.Y, v.Yaw, hitchY);
     }
 
     void TowChanged(CarView trailer, TrailerView t, ushort now)
@@ -142,38 +158,20 @@ public partial class NetClient
         var phi = Math.Clamp(PhiOf(tractor, trailerSnapYaw), -g.Limit, g.Limit);
         var yaw = FlightMath.Wrap(tractor.Node.Rotation.Y + phi);
         var hitch = tractor.Node.GlobalTransform * new Vector3(g.HitchX, g.HitchY, g.HitchZ); // on the tractor as drawn: it leans with its slope
-        var (s, c) = MathF.SinCos(yaw);
-        var axleZ = g.EyeZ + g.Drawbar;
         var flat = TowModel.OriginAt(g, NV(hitch), yaw);
-        var ax = flat.X + axleZ * s; var az = flat.Z + axleZ * c; // the axle's contact on the ground
-        var gAxle = _trailerGround!.GroundY(ax, az, hitch.Y);
-        FitSmooth(t, TowModel.PitchFor(g, hitch.Y - gAxle), AxleRoll(def, ax, az, c, s, gAxle), dt);
+        var fit = _trailerGround!.Attitude(g, flat.X, flat.Z, flat.Y, yaw, hitch.Y); // the same fit as the server's hull (#482)
+        FitSmooth(t, fit.Pitch, fit.Roll, dt);
         rot = new Vector3(t.Pitch, yaw, t.Roll);
         pos = hitch - Basis.FromEuler(rot) * new Vector3(0, g.EyeY, g.EyeZ); // the eye is on the hitch, exactly
     }
 
     void PoseLoose(TrailerView t, VehicleDef def, Interpolator.Sample s, float dt, out Vector3 pos, out Vector3 rot)
     {
-        var tr = def.Trailer!;
         var g = TowGeometry.ForTrailer(def);
-        var (sn, c) = MathF.SinCos(s.Yaw);
-        var axleZ = tr.Axle[2];
-        var ax = s.Pos.X + axleZ * sn; var az = s.Pos.Z + axleZ * c;
-        var gAxle = _trailerGround!.GroundY(ax, az, s.Pos.Y);
-        var ex = s.Pos.X + tr.Eye[2] * sn; var ez = s.Pos.Z + tr.Eye[2] * c;
-        var gEye = _trailerGround.GroundY(ex, ez, s.Pos.Y);
-        FitSmooth(t, TowModel.PitchFor(g, tr.Eye[1] + (gEye - gAxle)), AxleRoll(def, ax, az, c, sn, gAxle), dt);
+        var fit = _trailerGround!.Attitude(g, s.Pos.X, s.Pos.Z, s.Pos.Y, s.Yaw, null);
+        FitSmooth(t, fit.Pitch, fit.Roll, dt);
         rot = new Vector3(t.Pitch, s.Yaw, t.Roll);
-        pos = new Vector3(ax, gAxle, az) - Basis.FromEuler(rot) * new Vector3(0, 0, axleZ);
-    }
-
-    /// <summary>The ground's sideways slope under the axle: the roll, radians (positive: the right side higher).</summary>
-    float AxleRoll(VehicleDef def, float ax, float az, float cosYaw, float sinYaw, float gAxle)
-    {
-        var half = def.HalfWidth * 0.9f;
-        var gl = _trailerGround!.GroundY(ax - cosYaw * half, az + sinYaw * half, gAxle + 0.5f);
-        var gr = _trailerGround.GroundY(ax + cosYaw * half, az - sinYaw * half, gAxle + 0.5f);
-        return MathF.Atan2(gr - gl, 2 * half);
+        pos = new Vector3(fit.Axle.X, fit.Axle.Y, fit.Axle.Z) - Basis.FromEuler(rot) * new Vector3(0, 0, g.EyeZ + g.Drawbar);
     }
 
     static void FitSmooth(TrailerView t, float pitch, float roll, float dt)

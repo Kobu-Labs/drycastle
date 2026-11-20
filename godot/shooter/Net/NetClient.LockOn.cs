@@ -67,7 +67,7 @@ public partial class NetClient
 
     /// <summary>The Lock of the weapon in the local player's hand, when its sight should be up.</summary>
     LockDef? LauncherHeld() =>
-        !Dead && _me != null && _gunship == null && Weapons != null && Ammo is { } a && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1].Lock : null;
+        !Dead && _me != null && _gunship == null && !InUnarmedSeat && Weapons != null && Ammo is { } a && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1].Lock : null;
 
     /// <summary>Every frame: the shooter's sight and beeps, the owner's warning and beeps.</summary>
     void RenderLockOn()
@@ -76,10 +76,10 @@ public partial class NetClient
         {
             _hud?.SetLauncherHidesCrosshair(true);
             Vector3? target = null; var range = 0f; var unlimited = false;
-            if (_lock.Phase != LockPhase.Idle && _aircraft.TryGetValue(_lock.Target, out var view))
+            if (_lock.Phase != LockPhase.Idle && LockTargetPosition(_lock.Target) is { } at)
             {
-                target = view.Model.GlobalPosition;
-                range = _me!.Camera.GlobalPosition.DistanceTo(view.Model.GlobalPosition) / def.RangeM;
+                target = at;
+                range = _me!.Camera.GlobalPosition.DistanceTo(at) / def.RangeM;
                 unlimited = def.UnlimitedRange.Contains(AircraftKindId(_lock.Target));
             }
             var (mag, reserve) = a.Slots[a.Slot - 1];
@@ -111,8 +111,14 @@ public partial class NetClient
         _lockBeepAt = Now + (_lock.Phase == LockPhase.Idle ? BeepSearchS : Mathf.Lerp((float)BeepSlowS, (float)BeepFastS, progress));
     }
 
+    /// <summary>Where a lock target is drawn: an Aircraft's model, or a flown helicopter's vehicle node. Null when it is not in view.</summary>
+    Vector3? LockTargetPosition(ushort id) =>
+        _aircraft.TryGetValue(id, out var view) ? view.Model.GlobalPosition
+        : _cars.TryGetValue(id, out var car) && car.Node != null ? car.Node.GlobalPosition : null;
+
     string AircraftKindId(ushort id)
     {
+        if (_cars.ContainsKey(id)) return "";
         if (!WorldEntities.Entities.TryGetValue(id, out var e) || Killstreaks?.AircraftKinds is not { } kinds) return "";
         var index = AircraftState.Unpack(e.State.State).Kind;
         return index < kinds.Count ? kinds[index].Id : "";
@@ -129,8 +135,8 @@ public partial class NetClient
         }
         if (_deadRockets.Contains(l.Id) || !ShotFx.Enabled || Weapons == null || _rockets.ContainsKey(l.Id)) return;
         var speed = l.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[l.Weapon].ProjectileSpeed : 160f;
-        var to = _aircraft.TryGetValue(l.Target, out var view) ? new NVec3(view.Model.GlobalPosition.X, view.Model.GlobalPosition.Y, view.Model.GlobalPosition.Z) - l.Origin : NVec3.UnitY;
-        _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(to), At = Now, Speed = speed, Homing = true, Target = l.Target, Arrive = Now + l.Seconds };
+        var to = LockTargetPosition(l.Target) is { } tp ? new NVec3(tp.X, tp.Y, tp.Z) - l.Origin : NVec3.UnitY;
+        _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(to), At = Now, Speed = speed, Homing = true, Target = l.Target, Arrive = l.Seconds > 0 ? Now + l.Seconds : 0 };
     }
 
     /// <summary>One frame of a homing missile: it closes on where its Aircraft is drawn at the rate that lands it there on time; with the Aircraft gone it flies straight on.</summary>
@@ -139,10 +145,10 @@ public partial class NetClient
         var dt = (float)(Now - r.At);
         r.At = Now;
         if (dt <= 0) return;
-        if (_aircraft.TryGetValue(r.Target, out var view))
+        if (LockTargetPosition(r.Target) is { } p)
         {
-            var p = view.Model.GlobalPosition;
-            var next = LockRules.Chase(r.Pos, new NVec3(p.X, p.Y, p.Z), (float)(r.Arrive - Now) + dt, dt);
+            // an Aircraft: arrives when the server's hit does; a helicopter (Arrive 0, Seconds 0): flown as the server does, at its speed, straight at the vehicle
+            var next = r.Arrive <= 0 ? LockRules.Pursue(r.Pos, new NVec3(p.X, p.Y, p.Z), r.Speed, 0f, dt).Next : LockRules.Chase(r.Pos, new NVec3(p.X, p.Y, p.Z), (float)(r.Arrive - Now) + dt, dt);
             var step = next - r.Pos;
             if (step.LengthSquared() > 1e-8f) r.Dir = NVec3.Normalize(step);
             r.Pos = next;

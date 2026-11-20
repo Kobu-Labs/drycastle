@@ -3,7 +3,7 @@ using System.Numerics;
 namespace Drycastle.ShooterCore;
 
 /// <summary>What an animal is doing; the low four bits of its replicated state byte (the clients pick the clip from it).</summary>
-public enum AnimalState : byte { Idle = 0, Eat = 1, Walk = 2, Flee = 3, Dead = 4, Sit = 5, Bark = 6, Carried = 7, Thrown = 8, Down = 9 }
+public enum AnimalState : byte { Idle = 0, Eat = 1, Walk = 2, Flee = 3, Dead = 4, Sit = 5, Bark = 6, Carried = 7, Thrown = 8, Down = 9, Vanish = 10 }
 
 /// <summary>Animal world entity rules: the wire type id and the state byte the clients read.</summary>
 public static class AnimalRules
@@ -15,6 +15,9 @@ public static class AnimalRules
     public const byte StateMask = 15, HitToggle = 16, SizeShift = 5;
 
     /// <summary>Size steps the state byte carries (0 .. <see cref="SizeSteps"/> - 1), and the scale of the smallest and the largest.</summary>
+    /// <summary>Metres between two replicated positions of an animal above which it was teleported (<see cref="Animal.Teleport"/>), not moved: the client's buffer starts over so it is not drawn sliding there. The fastest thing an animal does is a thrown body.</summary>
+    public const float TeleportM = 40f;
+
     public const int SizeSteps = 8;
     public const float MinSize = 0.7f, MaxSize = 1.4f;
 
@@ -42,7 +45,7 @@ public static class AnimalRules
     /// Whether an animal in this state stands where it is, and so is a body a player on foot cannot walk through: idle, eating, sitting, barking. One that walks or runs is not (the server and a
     /// client would see it in different places a moment apart, and the player would be stopped by a body that is no longer there); it stops or steers for a player itself.
     /// </summary>
-    public static bool Stands(AnimalState state) => state is AnimalState.Idle or AnimalState.Eat or AnimalState.Sit or AnimalState.Bark;
+    public static bool Stands(AnimalState state) => state is AnimalState.Idle or AnimalState.Eat or AnimalState.Sit or AnimalState.Bark or AnimalState.Vanish;
 
     public static AnimalState StateOf(byte state) => (AnimalState)(state & StateMask);
     public static bool HitToggled(byte state) => (state & HitToggle) != 0;
@@ -85,6 +88,15 @@ public interface IAnimalWorld
     /// </summary>
     bool Fits(float x, float z, float radius) => GroundY(x, z) != null;
 
+    /// <summary>The rectangle a rare species (<see cref="RareSpecies"/>) may spawn in: the map's box (ground axes, x east, z = -north). Null: the world has none, so no rare animal spawns.</summary>
+    FlightBounds? MapBounds => null;
+
+    /// <summary>
+    /// Flat distance from (x, z) to the nearest building, metres; <see cref="float.PositiveInfinity"/> when none is within <paramref name="maxM"/> (a caller that wants "at least m from every building" asks with m).
+    /// A point inside a building is 0. The default world has no buildings.
+    /// </summary>
+    float NearestBuildingM(float x, float z, float maxM) => float.PositiveInfinity;
+
     /// <summary>Appends the position of every living player on foot within <paramref name="radius"/> of <paramref name="at"/> (flat) to <paramref name="into"/>: the circles an animal stops for. A player is never pushed.</summary>
     void PlayersNear(Vector3 at, float radius, List<Vector3> into) { }
 }
@@ -115,16 +127,17 @@ public sealed class Animal : IWorldEntity
 
     /// <summary>Who may follow whom. Idle is the hub: an animal stands, then eats or walks, and goes back to standing; a threat (or a hit that did not kill) sends any living state to Flee; Flee only ends by calming down into Idle.</summary>
     public static readonly StateMachineSpec<AnimalState> Spec = StateMachineSpec<AnimalState>.Define(
-            "Animal.Behaviour", "What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot, lie dead until the corpse is removed.", AnimalState.Idle)
-        .Allow(AnimalState.Idle, AnimalState.Eat, AnimalState.Walk, AnimalState.Sit, AnimalState.Bark, AnimalState.Flee, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
-        .Allow(AnimalState.Eat, AnimalState.Idle, AnimalState.Flee, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
-        .Allow(AnimalState.Sit, AnimalState.Idle, AnimalState.Flee, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
-        .Allow(AnimalState.Bark, AnimalState.Idle, AnimalState.Flee, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
-        .Allow(AnimalState.Walk, AnimalState.Idle, AnimalState.Flee, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
-        .Allow(AnimalState.Flee, AnimalState.Idle, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
+            "Animal.Behaviour", "What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot (a vanishing species turns immune and is teleported instead), lie dead until the corpse is removed.", AnimalState.Idle)
+        .Allow(AnimalState.Idle, AnimalState.Eat, AnimalState.Walk, AnimalState.Sit, AnimalState.Bark, AnimalState.Flee, AnimalState.Vanish, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
+        .Allow(AnimalState.Eat, AnimalState.Idle, AnimalState.Flee, AnimalState.Vanish, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
+        .Allow(AnimalState.Sit, AnimalState.Idle, AnimalState.Flee, AnimalState.Vanish, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
+        .Allow(AnimalState.Bark, AnimalState.Idle, AnimalState.Flee, AnimalState.Vanish, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
+        .Allow(AnimalState.Walk, AnimalState.Idle, AnimalState.Flee, AnimalState.Vanish, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
+        .Allow(AnimalState.Flee, AnimalState.Idle, AnimalState.Vanish, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
         .Allow(AnimalState.Carried, AnimalState.Idle, AnimalState.Dead)
         .Allow(AnimalState.Thrown, AnimalState.Down, AnimalState.Dead)
-        .Allow(AnimalState.Down, AnimalState.Flee, AnimalState.Idle, AnimalState.Thrown, AnimalState.Dead)
+        .Allow(AnimalState.Down, AnimalState.Flee, AnimalState.Idle, AnimalState.Vanish, AnimalState.Thrown, AnimalState.Dead)
+        .Allow(AnimalState.Vanish, AnimalState.Idle)
         .Note(AnimalState.Idle, "Stands for a random while (clock: idle seconds), then Choose: sit or bark (species that opt in), eat, or walk to a spot near home.")
         .Note(AnimalState.Eat, "Grazes (clock: eat seconds), then stands.")
         .Note(AnimalState.Sit, "Sits for a random while (clock: sit seconds; the client plays sit-down, holds, stands up after), then stands. Species with a sit rule only.")
@@ -134,6 +147,7 @@ public sealed class Animal : IWorldEntity
         .Note(AnimalState.Carried, "A Thief of the Thieves event holds it (no clock: it is moved by the Thief, MoveCarried, and does nothing itself). Let go (Release) it stands; one put down outside its Pen walks home over open ground until it is inside again. Still a hit target: any hit that deals damage kills it.")
         .Note(AnimalState.Thrown, "A vehicle ran it over and it survived (Throw): it flies on the arc the vehicle gave it, then rolls on along the ground with part of that speed; no clock. Coming to rest puts it Down. Still a hit target; another vehicle only changes the arc.")
         .Note(AnimalState.Down, "Lies knocked down where it landed (clock: knockdown_seconds), then gets up: Flee from where the vehicle was (a species that does not flee stands). Run over again it is Thrown again.")
+        .Note(AnimalState.Vanish, "A species with vanish_seconds is startled (threat, non-lethal hit, herd alarm, getting up after a run-over) and does not run: immune for vanish_seconds (clock; no damage, no throw, no carry, not a hit target), the client spirals rainbow round it, then the Vanished event lets the keeper pick a place at least vanish_min_m away and Teleport puts it there Idle. Only Idle follows; never Dead, Thrown or Carried. No startle for vanish_grace_seconds after it reappears.")
         .Note(AnimalState.Dead, "A body a vehicle threw flies on first. Lies for corpse_seconds (the clock's elapsed time), then the entity ends; a one-hit species' entity ends at once. Never left.")
         .Build();
 
@@ -158,6 +172,7 @@ public sealed class Animal : IWorldEntity
     float _floorY;         // the last ground height it flew over, to land on where there is none (water, the terrain's rim)
     bool _rolling;         // the thrown body has come down and rolls on along the ground (ThrownRoll); false in the air
     bool _hitToggle;
+    Countdown _grace;      // after a vanish: no startle (no new vanish) until it runs out, so the animal is seen where it arrived
 
     /// <param name="sizeRoll">The size and weight roll, 0..1 (<see cref="AnimalRules.RollSize"/>); only a species with <see cref="AnimalDef.WeightKg"/> has a size.</param>
     public Animal(AnimalsFile file, int species, Vector3 home, float yaw, IAnimalWorld world, int seed, int variant = 0, float sizeRoll = 0.5f)
@@ -207,7 +222,10 @@ public sealed class Animal : IWorldEntity
     public BodyBox Body => BodyBox.Of(Position, Yaw, _bodyW, _bodyL, _bodyAhead);
     /// <summary>Radius of the sphere that asks the world whether it fits at a spot.</summary>
     public float BodyRadius => Def.BodyRadiusOf(Variant);
-    public Vector3 Position { get; private set; }
+    public Vector3 Position { get => _position; private set { _position = value; Crowd?.Moved(this); } }
+    Vector3 _position;
+    /// <summary>The crowd's own notes on this animal: the cell of its grid it is filed under, and its place in the order the animals joined.</summary>
+    internal int CrowdCx, CrowdCz, CrowdSeq;
     /// <summary>Godot convention: 0 faces -Z.</summary>
     public float Yaw { get; private set; }
     public float Hp { get; private set; }
@@ -220,6 +238,18 @@ public sealed class Animal : IWorldEntity
 
     /// <summary>Raised once, when the hit that took the last hit points lands: the animal and the player who shot it. The server turns it into a kill credit.</summary>
     public event Action<Animal, ushort>? Died;
+
+    /// <summary>
+    /// Raised once when the clock of <see cref="AnimalState.Vanish"/> ends: whoever handles it picks a place and calls <see cref="Teleport"/> (the keeper). Unhandled, or when no place is found, the animal just stands
+    /// where it is, calm for <see cref="AnimalDef.VanishGraceSeconds"/>.
+    /// </summary>
+    public event Action<Animal>? Vanished;
+
+    /// <summary>Whether its species vanishes when startled instead of running (<see cref="AnimalDef.VanishSeconds"/> above 0).</summary>
+    public bool Vanishes => Def.VanishSeconds > 0;
+
+    /// <summary>Immune while it vanishes: it takes no damage, is not thrown or carried, and is no target of a shot or a vehicle.</summary>
+    public bool Immune => State == AnimalState.Vanish;
 
     public byte TypeId => AnimalRules.TypeId;
     /// <summary>Animals belong to no player; the species index is in the replicated state's owner field.</summary>
@@ -250,7 +280,7 @@ public sealed class Animal : IWorldEntity
     /// <summary>Applies damage (already scaled by the weapon, headshots and range). A dead animal takes none.</summary>
     public void OnDamage(float amount, ushort attacker)
     {
-        if (Ended != null || !Alive || !(amount > 0)) return;
+        if (Ended != null || !Alive || !(amount > 0) || Immune) return;
         Hp = Def.OneHit ? 0 : MathF.Max(0, Hp - amount);
         if (Hp <= 0)
         {
@@ -263,6 +293,7 @@ public sealed class Animal : IWorldEntity
         }
         _hitToggle = !_hitToggle;
         if (!Def.Flees || State is AnimalState.Carried or AnimalState.Thrown or AnimalState.Down) return; // a pet shrugs it off: the hit reaction plays, no alarm, no flight
+        if (Vanishes) { TryVanish(); return; } // it does not run: it goes (if it is not still calm from its last vanish)
         // Run from where the shot came from; when the shooter is gone, from behind (the animal bolts the way it faces).
         _alarmFrom = _world.PositionOf(attacker) ?? Position - Forward * 5;
         _alarm.Start(_file.AlarmSeconds);
@@ -281,9 +312,11 @@ public sealed class Animal : IWorldEntity
             if (_fsm.Elapsed >= _file.CorpseSeconds) Ended = WorldDespawnReason.Expired;
             return;
         }
+        _grace.Tick(dt);
         if (State == AnimalState.Carried) return; // held: the Thief moves it
         if (State == AnimalState.Thrown) { if (Fly(dt)) Go(AnimalState.Down, _file.KnockdownSeconds); return; }
         if (State == AnimalState.Down) { if (_fsm.Tick(dt)) GetUp(); return; }
+        if (State == AnimalState.Vanish) { if (_fsm.Tick(dt)) FinishVanish(); return; } // runs on even unwatched: it must be somewhere else when seen again
         if (!_world.Watched(Position)) return; // no client holds it: nothing to show, so nothing to simulate (a corpse, a throw and a knockdown above run on)
         if (_open != null && _world is IPennedWorld pen && pen.Inside(Position.X, Position.Z)) _open = null; // back inside: its own world again
 
@@ -293,7 +326,11 @@ public sealed class Animal : IWorldEntity
             _alarm.Tick(dt);
             threat ??= _alarmFrom;
         }
-        if (threat is { } t)
+        if (threat != null && Vanishes)
+        {
+            if (TryVanish()) return; // startled: gone for a while; still calm from the last vanish: the threat is ignored
+        }
+        else if (threat is { } t)
         {
             _fleeFrom = t;
             _calm.Reset();
@@ -324,7 +361,7 @@ public sealed class Animal : IWorldEntity
     /// </summary>
     public bool Throw(Vector3 velocity, Vector3 from)
     {
-        if (Ended != null || !Alive || State == AnimalState.Carried || Def.OneHit) return false;
+        if (Ended != null || !Alive || State is AnimalState.Carried or AnimalState.Vanish || Def.OneHit) return false;
         _arc = velocity;
         _rolling = false;
         _floorY = Position.Y;
@@ -366,6 +403,7 @@ public sealed class Animal : IWorldEntity
     void GetUp()
     {
         if (!Def.Flees) { StandStill(); return; }
+        if (Vanishes) { if (!TryVanish()) StandStill(); return; }
         _fleeFrom = _alarmFrom;
         _alarm.Start(_file.AlarmSeconds);
         _calm.Reset();
@@ -377,7 +415,7 @@ public sealed class Animal : IWorldEntity
     /// <summary>A Thief takes it up: from any living state, it does nothing until <see cref="Release"/>. False when it is dead, gone or already held.</summary>
     public bool Carry()
     {
-        if (Ended != null || !Alive || State == AnimalState.Carried) return false;
+        if (Ended != null || !Alive || State is AnimalState.Carried or AnimalState.Vanish) return false;
         _open = null;
         Go(AnimalState.Carried);
         return true;
@@ -436,10 +474,50 @@ public sealed class Animal : IWorldEntity
         Herd?.Alarm(this, _fleeFrom); // a herd runs together: the others take fright from the same spot
     }
 
+    /// <summary>
+    /// A species with <see cref="Vanishes"/> startled: becomes immune and still for <see cref="AnimalDef.VanishSeconds"/> (<see cref="AnimalState.Vanish"/>). False (nothing happens) while it is still calm from its last vanish, or already vanishing.
+    /// </summary>
+    bool TryVanish()
+    {
+        if (!Vanishes || _grace.Running || State == AnimalState.Vanish) return false;
+        _alarm.Cancel();
+        _calm.Reset();
+        Go(AnimalState.Vanish, Def.VanishSeconds);
+        return true;
+    }
+
+    /// <summary>The vanish clock ran out: lets the keeper place it (<see cref="Vanished"/>, which calls <see cref="Teleport"/>); not placed, it stands where it is.</summary>
+    void FinishVanish()
+    {
+        Vanished?.Invoke(this);
+        if (State != AnimalState.Vanish) return;
+        _grace.Start(Def.VanishGraceSeconds);
+        StandStill();
+    }
+
+    /// <summary>
+    /// The end of a vanish: it is at <paramref name="at"/> (on the ground there, facing <paramref name="yaw"/>), standing, calm for <see cref="AnimalDef.VanishGraceSeconds"/>, with no heading, target or alarm left from before.
+    /// Only while it is vanishing; False otherwise (nothing moves).
+    /// </summary>
+    public bool Teleport(Vector3 at, float yaw)
+    {
+        if (Ended != null || State != AnimalState.Vanish) return false;
+        Position = _world.GroundY(at.X, at.Z) is { } y ? new Vector3(at.X, y, at.Z) : at;
+        Yaw = yaw;
+        _open = null;
+        _arc = null;
+        _alarm.Cancel();
+        _calm.Reset();
+        _grace.Start(Def.VanishGraceSeconds);
+        StandStill();
+        return true;
+    }
+
     /// <summary>Another animal of the herd took fright (<see cref="Herd.Alarm"/>): runs from the same spot for a while, without alarming the herd again.</summary>
     internal void Startle(Vector3 from)
     {
-        if (Ended != null || !Alive || !Def.Flees || State is AnimalState.Flee or AnimalState.Thrown or AnimalState.Down or AnimalState.Carried) return; // one in the air, knocked down or held is not startled out of it (it runs when it gets up)
+        if (Ended != null || !Alive || !Def.Flees || State is AnimalState.Flee or AnimalState.Vanish or AnimalState.Thrown or AnimalState.Down or AnimalState.Carried) return; // one in the air, knocked down or held is not startled out of it (it runs when it gets up)
+        if (Vanishes) { TryVanish(); return; }
         _alarmFrom = from;
         _fleeFrom = from;
         _alarm.Start(_file.AlarmSeconds);
@@ -569,6 +647,14 @@ public sealed class Animal : IWorldEntity
     /// </summary>
     Block Step(float want, float speed, float dt)
     {
+        var t = Prof.Begin(Prof.S.AnimalStep);
+        var block = StepInner(want, speed, dt);
+        Prof.End(Prof.S.AnimalStep, t);
+        return block;
+    }
+
+    Block StepInner(float want, float speed, float dt)
+    {
         var turned = TurretMath.StepAngle(Yaw, want, Def.TurnRateDegPerS * MathF.PI / 180f * dt);
         if (_recheck.Running && turned != Yaw && SolidAlong(_open ?? _world, turned)) turned = Yaw; // just blocked by a wall: it does not swing its nose into it
         Yaw = turned;
@@ -579,7 +665,10 @@ public sealed class Animal : IWorldEntity
         var z = Position.Z + f.Z * speed * dt;
         var world = _open ?? _world;
         if (world.GroundY(x, z) is not { } y || MathF.Abs(y - Position.Y) > _file.MaxStepM) return Block.Ground;
-        if (BodyAhead(x, z)) return Block.Body;
+        var bodyT = Prof.Begin(Prof.S.AnimalBodyAhead);
+        var body = BodyAhead(x, z);
+        Prof.End(Prof.S.AnimalBodyAhead, bodyT);
+        if (body) return Block.Body;
         if (SolidAhead(world, step, speed, dt)) return Block.Solid;
         Position = new Vector3(x, y, z);
         return Block.None;
@@ -598,7 +687,10 @@ public sealed class Animal : IWorldEntity
     {
         var to = BodyBox.Of(new Vector3(x, Position.Y, z), Yaw, _bodyW, _bodyL, _bodyAhead);
         var from = Body;
-        if (Crowd?.Blocks(this, from, to) == true) return true;
+        var crowdT = Prof.Begin(Prof.S.AnimalCrowd);
+        var crowded = Crowd?.Blocks(this, from, to) == true;
+        Prof.End(Prof.S.AnimalCrowd, crowdT);
+        if (crowded) return true;
         var near = s_players ??= new List<Vector3>();
         near.Clear();
         _world.PlayersNear(Position, BodyReach + PlayerRadius + 1f, near);

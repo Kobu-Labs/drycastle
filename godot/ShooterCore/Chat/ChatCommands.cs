@@ -1,12 +1,13 @@
 namespace Drycastle.ShooterCore;
 
-public enum ChatArgKind { Int, Choice, Time, Player, IntOrChoice }
+/// <summary><see cref="Text"/>: free text; as the last argument it takes the rest of the line, case and spaces kept.</summary>
+public enum ChatArgKind { Int, Choice, Time, Player, IntOrChoice, Text }
 
 /// <summary>One argument of a chat command. <see cref="Min"/> and <see cref="Max"/> bound an <see cref="ChatArgKind.Int"/>.</summary>
 public sealed record ChatArg(string Name, ChatArgKind Kind, bool Required = true, int Min = 0, int Max = 0);
 
-/// <summary>A slash command the chat knows. The same table drives the server's parser and the client's autocomplete.</summary>
-public sealed record ChatCommand(string Name, string Summary, IReadOnlyList<ChatArg> Args, bool AdminOnly = true)
+/// <summary>A slash command the chat knows. The same table drives the server's parser and the client's autocomplete. A <see cref="ClientSide"/> command is run by the client that typed it and never reaches the server.</summary>
+public sealed record ChatCommand(string Name, string Summary, IReadOnlyList<ChatArg> Args, bool AdminOnly = true, bool ClientSide = false)
 {
     /// <summary>"/bots [count]": required arguments in angle brackets, optional ones in square brackets.</summary>
     public string Usage => "/" + Name + string.Concat(Args.Select(a => a.Required ? $" <{a.Name}>" : $" [{a.Name}]"));
@@ -87,8 +88,10 @@ public static class ChatCommands
     public static readonly IReadOnlyList<ChatCommand> All = new ChatCommand[]
     {
         new("help", "List the commands, or explain one", new[] { new ChatArg("command", ChatArgKind.Choice, false) }, AdminOnly: false),
+        new("fps", "Show or hide the FPS counter in the top right (remembered in settings)", Array.Empty<ChatArg>(), AdminOnly: false, ClientSide: true),
         new("bots", "Set how many bots play, or show the count. Takes effect at once", new[] { new ChatArg("count", ChatArgKind.Int, false, 0, MaxBots) }),
         new("spawn", "Spawn a vehicle in front of you", new[] { new ChatArg("vehicle", ChatArgKind.Choice) }),
+        new("unicorn", "TEST: an extra wild Unicorn on the ground in front of you (a Hunt when killed; it is not respawned)", Array.Empty<ChatArg>()),
         new("sandbox", "Turn sandbox mode on or off for a player (name or #id), or flip it", new[] { new ChatArg("player", ChatArgKind.Player), new ChatArg("state", ChatArgKind.Choice, false) }),
         new("give", "Give an item to a player (name or #id), or to yourself. It is worn if the slot is empty, else it goes in the bag", new[] { new ChatArg("item", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
         new("restart", "Restart the round now, optionally in another mode (ffa or tdm)", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
@@ -101,6 +104,9 @@ public static class ChatCommands
             new[] { new ChatArg("size", ChatArgKind.Int, true, 1, MaxExplodeSize), new ChatArg("distance", ChatArgKind.Int, true, 0, MaxExplodeDistance), new ChatArg("speed", ChatArgKind.Int, false, MinExplodeSpeed, MaxExplodeSpeed) }),
         new("scud", "TEST: the Scud truck. spawn: a truck stands in front of you; reload: the truck you ride or the nearest within 40 m is loaded at once; blast: a Scud blast 200 m ahead of you (kills, destroys, shatters glass); state: its launcher's state",
             new[] { new ChatArg("action", ChatArgKind.Choice) }),
+        new("squad", "Squads (team deathmatch): create one with a name, join one by name or number, leave yours, or list your team's", new[] { new ChatArg("action", ChatArgKind.Choice), new ChatArg("name", ChatArgKind.Text, false) }, AdminOnly: false),
+        new("night", "TEST (this client only): tune the night lighting, all in percent: moon light (default 8), ambient floor (4), night exposure (90). No arguments shows the values, reset restores them. Use /time midnight to see it",
+            new[] { new ChatArg("moon", ChatArgKind.IntOrChoice, false, 0, 100), new ChatArg("ambient", ChatArgKind.Int, false, 0, 100), new ChatArg("exposure", ChatArgKind.Int, false, 10, 200) }, ClientSide: true),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
     };
 
@@ -121,6 +127,7 @@ public static class ChatCommands
             ChatArgKind.Choice when cmd.Name == "give" => ctx.Items.Select(i => (i, "")).ToList(),
             ChatArgKind.Choice when cmd.Name == "sandbox" => new[] { ("on", "godmode, unlimited ammo, no score"), ("off", "back to normal play") },
             ChatArgKind.Choice when cmd.Name == "status" => new[] { ("bless", "one lethal hit is negated"), ("curse", "your bullets set victims ablaze"), ("high", "high from the plantation, as after a hold in it"), ("clear", "take every status away") },
+            ChatArgKind.Choice when cmd.Name == "squad" => new[] { ("create", "start a squad; the name is optional (up to 16 characters)"), ("join", "join your team's squad by name or number from list (up to 4 players)"), ("leave", "leave your squad"), ("list", "your team's squads and who is in them") },
             ChatArgKind.Choice when cmd.Name == "restart"=> new[] { ("ffa", "free-for-all, everyone alone"), ("tdm", "team deathmatch, two teams") },
             ChatArgKind.Choice when cmd.Name == "event" && argIndex == 0 => new[]
             {
@@ -143,6 +150,7 @@ public static class ChatCommands
             ChatArgKind.Choice when cmd.Name == "scud" => new[] { ("spawn", "a Scud truck stands in front of you"), ("reload", "the truck you ride (or the nearest within 40 m) is loaded at once, when its rack is down"), ("blast", "TEST: a Scud blast 200 m ahead of you, credited to you"), ("state", "say the launcher's state of the truck") },
             ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },
             ChatArgKind.Choice when cmd.Name == "rozhlas" => new[] { ("hijack", "the announcement cuts and the mic stays live for 3 minutes (only while a detour broadcast is on air)"), ("take", "TEST: hold the set yourself (stands in for holding E at the dictation table; only while hijacked)"), ("release", "TEST: let the set holder go"), ("goto", "TEST: stand at the dictation table (where E takes the set during a hijack)"), ("feedtest", "TEST: push a few seconds of test voice and a shot through the live feed (ffmpeg voice chain, 2 s delay) to every megaphone"), ("combattest", "TEST: push a shot, a blast and a death sound through the live feed, wherever you stand") },
+            ChatArgKind.IntOrChoice when cmd.Name == "night" => new[] { ("reset", "back to the shipped night") },
             ChatArgKind.IntOrChoice when cmd.Name == "citizens" => new[] { ("clear", "remove every citizen") },
             ChatArgKind.Choice when cmd.Name == "help" => Visible(ctx).Select(c => (c.Name, c.Summary)).ToList(),
             _ => Array.Empty<(string, string)>(),
@@ -176,6 +184,8 @@ public static class ChatCommands
                 return token.ToLowerInvariant();
             case ChatArgKind.Player:
                 return token; // a name or #id: only the server knows who is connected
+            case ChatArgKind.Text:
+                return token;
             default:
                 var hit = Choices(cmd, i, ctx).FirstOrDefault(c => c.Value.Equals(token, StringComparison.OrdinalIgnoreCase));
                 if (hit.Value == null) { error = $"Unknown {arg.Name} '{token}'."; return null; }
@@ -192,6 +202,10 @@ public static class ChatCommands
         if (cmd == null) return new ChatParse(null, Array.Empty<string>(), $"Unknown command /{t[0].ToLowerInvariant()}. /help lists the commands.");
         if (cmd.AdminOnly && !ctx.IsAdmin) return new ChatParse(cmd, Array.Empty<string>(), $"Only admins can use /{cmd.Name}.");
         var args = t.Skip(1).ToArray();
+        if (cmd.Args.Count > 0 && cmd.Args[^1].Kind == ChatArgKind.Text && args.Length > cmd.Args.Count) // a text argument takes the rest of the line
+        {
+            args = args[..(cmd.Args.Count - 1)].Append(string.Join(' ', args[(cmd.Args.Count - 1)..])).ToArray();
+        }
         if (args.Length > cmd.Args.Count) return new ChatParse(cmd, Array.Empty<string>(), $"Too many arguments. Usage: {cmd.Usage}");
         var normal = new List<string>();
         for (var i = 0; i < args.Length; i++)
@@ -237,6 +251,7 @@ public static class ChatCommands
         var argIndex = trailing ? t.Length - 1 : t.Length - 2;
         var current = trailing ? "" : t[^1];
         var from = input.Length - current.Length;
+        if (argIndex >= cmd.Args.Count && cmd.Args.Count > 0 && cmd.Args[^1].Kind == ChatArgKind.Text) argIndex = cmd.Args.Count - 1; // the text runs on
         if (argIndex >= cmd.Args.Count)
             return new ChatHint(cmd.Usage, cmd.Summary, "", Array.Empty<ChatSuggestion>(), from, "No more arguments.");
 
@@ -247,9 +262,10 @@ public static class ChatCommands
         var help = arg.Kind switch
         {
             ChatArgKind.Int => $"{arg.Name}: a whole number from {arg.Min} to {arg.Max}",
-            ChatArgKind.IntOrChoice => $"{arg.Name}: a whole number from {arg.Min} to {arg.Max}, or clear",
+            ChatArgKind.IntOrChoice => $"{arg.Name}: a whole number from {arg.Min} to {arg.Max}, or {(cmd.Name == "night" ? "reset" : "clear")}",
             ChatArgKind.Time => $"{arg.Name}: HH:MM, a word, freeze or resume",
             ChatArgKind.Player => $"{arg.Name}: a player's name (no spaces) or #id from the scoreboard",
+            ChatArgKind.Text => $"{arg.Name}: free text",
             _ => $"{arg.Name}",
         } + (arg.Required ? "" : " (optional)");
 

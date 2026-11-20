@@ -307,4 +307,96 @@ public class HuntBookTests
         Assert.Empty(HuntQueryRules.Apply(rows, Q(HuntSort.Time, true, Array.Empty<string>())).Rows);
         Assert.Empty(HuntQueryRules.Apply(rows, new HuntQuery(1, null, "", 0, HuntSort.Time, true, Array.Empty<string>())).Rows); // page 1 of 4 rows
     }
+
+    // ---- the Unicorn: a mystery that is a wild animal ----
+
+    static HuntRecord Unicorn(long player, float? distance, int minute, string weapon = "sniper", HitDiagram? d = null) =>
+        HuntRecord.ForUnicorn(player, distance, weapon, d ?? new HitDiagram(100, 120, true, true, 3, 7), 1, 2, 3, T0.AddMinutes(minute));
+
+    [Fact]
+    public void AUnicornShotIsAMysteryRowWithADistanceADiagramAndNoWeight()
+    {
+        var d = new HitDiagram(10, 20, false, true, 2, 5);
+        var h = Unicorn(7, 123.449f, 0, "sniper", d);
+        Assert.True(h.IsMystery);
+        Assert.Equal((Mysteries.Unicorn, Mysteries.Unicorn, "", (float?)null, (float?)123.4f, "sniper"), (h.Species, h.Exact, h.Variant, h.Kg, h.DistanceM, h.Weapon));
+        Assert.Equal(d, h.Diagram);
+        Assert.Equal((1f, 2f, 3f), (h.X, h.Y, h.Z));
+        Assert.True(h.CountsForLongest);
+        Assert.True(Mysteries.Find(Mysteries.Unicorn)!.Live);
+    }
+
+    [Fact]
+    public void AUnicornRunOverHasNoDistanceNoDiagramAndNoLongestShot()
+    {
+        var run = Unicorn(7, 4, 0, HuntWeapons.RunOver);
+        Assert.Equal(((float?)null, (HitDiagram?)null, false), (run.DistanceM, run.Diagram, run.CountsForLongest));
+        Assert.Null(HuntRecord.ForUnicorn(7, null, "ak47", null, 0, 0, 0, T0).DistanceM);
+    }
+
+    [Fact]
+    public void TheLongestUnicornShotIsARecordAndATieKeepsTheEarlierOne()
+    {
+        var book = new HuntBook();
+        book.SetName(1, "Ann"); book.SetName(2, "Bea");
+        Assert.Equal(new HuntOutcome(true, false, true), book.Add(Unicorn(1, 100, 0)));
+        Assert.Equal(new HuntOutcome(true, false, false), book.Add(Unicorn(2, 100, 1))); // a tie: not beaten
+        Assert.Equal(new HuntOutcome(false, false, false), book.Add(Unicorn(1, 50, 2)));
+        Assert.Equal(new HuntOutcome(false, false, false), book.Add(Unicorn(1, null, 3, HuntWeapons.RunOver))); // a run over holds none
+        Assert.Equal(new HuntOutcome(false, false, true), book.Add(Unicorn(1, 180.5f, 4)));
+        var card = book.Records(Caught(Mysteries.Unicorn)).Single(r => r.Species == Mysteries.Unicorn);
+        Assert.Equal(("Ann", 180.5f), (card.Longest!.Hunter, card.Longest.DistanceM));
+        Assert.Equal(("Ann", 100f), (card.First!.Hunter, card.First.DistanceM)); // the first catch stays
+        Assert.NotNull(card.Longest.Diagram);
+        Assert.Null(card.Heaviest); // no weight
+    }
+
+    [Fact]
+    public void AFirstUnicornIsAnnouncedAndAnOrdinaryOneIsNot()
+    {
+        var book = new HuntBook();
+        var first = book.Add(Unicorn(1, 30, 0));
+        Assert.True(first.FirstTime);
+        Assert.True(first.Announce);
+        var again = book.Add(Unicorn(1, 20, 1));
+        Assert.False(again.Announce);
+        Assert.True(book.Add(Unicorn(2, 10, 2)).FirstTime); // another player's first
+        Assert.Equal(new[] { Mysteries.Unicorn }, book.CaughtBy(1));
+    }
+
+    [Fact]
+    public void ARedactedUnicornRowKeepsDistanceAndWeaponButNotNameOrDiagramAndTheLogShowsItsShot()
+    {
+        var book = new HuntBook();
+        book.SetName(1, "Ann");
+        book.Add(Unicorn(1, 77.7f, 0));
+        var hidden = book.Records(Nobody).Single(r => r.Species == Mysteries.HiddenId(Mysteries.Unicorn)).Longest!;
+        Assert.Equal((true, "", "", 77.7f, "sniper"), (hidden.Hidden, hidden.Exact, hidden.Variant, hidden.DistanceM, hidden.Weapon));
+        Assert.Null(hidden.Diagram);
+        var shown = book.Records(Caught(Mysteries.Unicorn)).Single(r => r.Species == Mysteries.Unicorn).Longest!;
+        Assert.Equal((false, Mysteries.Unicorn), (shown.Hidden, shown.Exact));
+        Assert.NotNull(shown.Diagram);
+        var tile = book.PlayerLog(1, Caught(Mysteries.Unicorn))!.Life.Single(e => e.Species == Mysteries.Unicorn);
+        Assert.Equal((true, (float?)null, (float?)77.7f), (tile.Caught, tile.BestKg, tile.LongestM));
+        var model = LifeTileModel.From(tile);
+        Assert.True(model.Mystery);
+    }
+
+    [Fact]
+    public void AUnicornHitPictureUsesItsOwnShapeKey()
+    {
+        Assert.Equal("unicorn", HuntFormat.ShapeKey(Mysteries.Unicorn, ""));
+        var h = book_view();
+        var shapes = new AnimalShapes();
+        var spec = HuntPicture.Resolve(shapes, h);
+        Assert.Equal(("unicorn", "unicorn"), (spec.ShapeKey, spec.SpeciesId));
+        Assert.True(spec.HasMark); // a diagram: the mark is drawn (on the body box when the species has no baked picture)
+
+        static HuntView book_view()
+        {
+            var b = new HuntBook();
+            b.Add(Unicorn(1, 40, 0, "sniper", new HitDiagram(100, 100, true, false, HuntShot.NoShape, 0)));
+            return b.Records(Caught(Mysteries.Unicorn)).Single(r => r.Species == Mysteries.Unicorn).Longest!;
+        }
+    }
 }

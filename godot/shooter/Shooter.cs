@@ -109,7 +109,7 @@ public partial class Shooter : Node3D
         if (cfg.Str("intel-shots") != "") { _ = IntelShots.Run(this, cfg.Str("intel-shots")); return; }
         if (role == "client")
         {
-            if (!_smoke && !_smokeMove && DisplayServer.GetName() != "headless") { _capFps = true; Engine.MaxFps = FocusedFps; }
+            if (!_smoke && !_smokeMove && !cfg.Flag("perf-play") && DisplayServer.GetName() != "headless") { _capFps = true; Engine.MaxFps = FocusedFps; }
             try { GD.Print($"sounds: {Sfx.Init(this).SoundCount} events, table and files ok"); }
             catch (Exception e)
             {
@@ -193,9 +193,10 @@ public partial class Shooter : Node3D
         _shell = new UiShell
         {
             PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks),
-                _client is { CanManageTeams: true } tc ? () => _shell.Push(new TeamsScreen(tc)) : null, () => _client?.Redeploy(null), () => _client is { Dead: false }, () => _client?.OpenHuntersLog()),
+                _client is { CanManageTeams: true } tc ? () => _shell.Push(new TeamsScreen(tc)) : null, () => _client?.Redeploy(null), () => _client is { Dead: false }, () => _client?.OpenHuntersLog(),
+                _client is { CanUseSquads: true } sc ? () => _shell.Push(new SquadsScreen(sc)) : null, () => _client?.OpenMineralLog()),
             WantsFreeMouse = () => _client is { WantsFreeMouse: true }, // MouseOwners: the respawn screen, the chat box, the Equipment screen, the tactical map (click to set the waypoint) and the corpse chooser's item list release the mouse (buttons to click, keys to type, cells to drag or click)
-            BackHandler = () => (_client?.CloseChat() ?? false) || (_client?.CloseEquipment() ?? false) || (_client?.CloseHuntersLog() ?? false) || (_client?.CloseTacticalMap() ?? false), // Esc closes the chat box, then the Equipment screen, the Hunter's Log (another player's log first goes up to My Log), then the tactical map, before it opens Pause
+            BackHandler = () => (_client?.CloseChat() ?? false) || (_client?.CloseEquipment() ?? false) || (_client?.CloseHuntersLog() ?? false) || (_client?.CloseMineralLog() ?? false) || (_client?.CloseTacticalMap() ?? false), // Esc closes the chat box, then the Equipment screen, the Hunter's Log (another player's log first goes up to My Log), then the tactical map, before it opens Pause
         };
         AddChild(_shell);
         GD.Print("SHOOTER_MENU role=client");
@@ -296,7 +297,7 @@ public partial class Shooter : Node3D
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
-                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, BlipConfig = _data.Match, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, Scud = _data.Scud, Plantation = _data.Plantation, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
+                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), PerfPlay = _cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(_cfg), PerfRes = _cfg.Str("perf-res", "1920x1080"), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, BlipConfig = _data.Match, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, Scud = _data.Scud, Plantation = _data.Plantation, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(JoinResult.Welcomed),
             };
             client.OnFailed = (why, joined) =>
@@ -413,6 +414,7 @@ public partial class Shooter : Node3D
                 Bases = _map.Lamps.Select(l => l.Position).ToList(),
                 PoleHeads = poleLamps.Select(l => (l.Position, l.YawDeg)).ToList(),
                 CollisionOnly = _map.CollisionOnly,
+                Look = _data.Environment.Lamp,
             });
         if (!_map.CollisionOnly && _map.ObjectsOf(_data.Plantation.Reflectors.Asset) is { Count: > 0 } stands) // the plantation's reflector stands: real beams at night
             AddChild(new PlantationReflectors { Stands = stands.Select(o => o.Transform).ToList(), Data = _data.Plantation.Reflectors });
@@ -457,7 +459,7 @@ public partial class Shooter : Node3D
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var server = new NetServer
         {
-            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, CamoData = _data.Camo, Turret = _data.Turret,
+            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, LampData = _data.Environment.Lamp, CamoData = _data.Camo, Turret = _data.Turret,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             MatchConfig = WithTargets(ApplyOverrides(_data.Match, cfg.Str("match-set")), cfg.Str("targets")),
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")), Scud = _data.Scud, Plantation = _data.Plantation,
@@ -559,6 +561,9 @@ public partial class Shooter : Node3D
         cfg.Flag("sandbox") || System.Environment.GetEnvironmentVariable("DRYCASTLE_SANDBOX") is "1" or "true"
         || (DevUi.Enabled && GameSettings.LoadConnect("sandbox", "0") == "1"); // the connect screen's checkbox (dev builds)
 
+    /// <summary>--perf-seconds: how long the scripted player of --perf-play plays (NetClient.Report.cs).</summary>
+    static double PerfSecondsOf(Config cfg) => double.TryParse(cfg.Str("perf-seconds", "300"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var s) ? s : 300;
+
     void BuildNetClient(Config cfg)
     {
         var target = cfg.Str("connect");
@@ -573,7 +578,7 @@ public partial class Shooter : Node3D
         {
             World = this, Host = host, Port = port, PlayerName = cfg.Str("name", "player"), Bot = bot, KillY = killY, SandboxRequested = SandboxAsked(cfg),
             BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6, BotChat = cfg.Str("bot-chat"),
-            Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"), PerfStreaks = cfg.Str("perf-streaks"), PerfOut = cfg.Str("perf-out"), PerfStreakPeriod = double.TryParse(cfg.Str("perf-streak-period", "2"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var psp) ? psp : 2, PerfVehicles = cfg.Str("perf-vehicles"),
+            Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"), PerfStreaks = cfg.Str("perf-streaks"), PerfOut = cfg.Str("perf-out"), PerfPlay = cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(cfg), PerfRes = cfg.Str("perf-res", "1920x1080"), PerfStreakPeriod = double.TryParse(cfg.Str("perf-streak-period", "2"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var psp) ? psp : 2, PerfVehicles = cfg.Str("perf-vehicles"),
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
             FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), CarLoop = cfg.Flag("car-loop"), CarLoopSeconds = double.TryParse(cfg.Str("car-loop-seconds", "120"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var cls) ? cls : 120, RpgBot = cfg.Str("rpg-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("rpg-bot") != "" ? cfg.Str("rpg-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Scud = _data.Scud, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, Map = _map,
         });

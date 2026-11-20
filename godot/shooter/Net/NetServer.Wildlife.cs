@@ -30,6 +30,7 @@ public partial class NetServer
         /// <summary>The nearest living player or moving vehicle within the radius (flat distance).</summary>
         public override NVec3? NearestThreat(NVec3 from, float radius)
         {
+            var t = Prof.Begin(Prof.S.AnimalThreat);
             NVec3? best = null;
             var bestSq = radius * radius;
             void Consider(NVec3 p)
@@ -38,10 +39,20 @@ public partial class NetServer
                 var d = dx * dx + dz * dz;
                 if (d < bestSq) { bestSq = d; best = p; }
             }
-            foreach (var c in _s._byId.Values)
-                if (_s._match.Get(c.Id)?.Life == PlayerLife.Alive) Consider(N(c.Body.GlobalPosition));
-            foreach (var car in _s._cars)
-                if (!car.Destroyed && MathF.Abs(car.State.Speed) > WildlifeCarThreatSpeed) Consider(N(car.GlobalPosition));
+            if (_s._animalsPrepared)
+            {
+                foreach (var a in _s._animalPlayers)
+                    if (a.Alive) Consider(a.Pos);
+                foreach (var p in _s._animalCarThreats) Consider(p);
+            }
+            else
+            {
+                foreach (var c in _s._byId.Values)
+                    if (_s._match.Get(c.Id)?.Life == PlayerLife.Alive) Consider(N(c.Body.GlobalPosition));
+                foreach (var car in _s._cars)
+                    if (!car.Destroyed && MathF.Abs(car.State.Speed) > WildlifeCarThreatSpeed) Consider(N(car.GlobalPosition));
+            }
+            Prof.End(Prof.S.AnimalThreat, t);
             return best;
         }
     }
@@ -53,6 +64,15 @@ public partial class NetServer
     bool AnimalWatched(NVec3 at)
     {
         const float r2 = WorldInterest.LeaveM * WorldInterest.LeaveM;
+        if (_animalsPrepared)
+        {
+            foreach (var a in _animalPlayers)
+            {
+                var dx = a.Pos.X - at.X; var dz = a.Pos.Z - at.Z;
+                if (dx * dx + dz * dz <= r2) return true;
+            }
+            return false;
+        }
         foreach (var c in _byId.Values)
         {
             var p = c.Body.GlobalPosition;
@@ -76,16 +96,17 @@ public partial class NetServer
     {
         if (_wildlife == null) return;
         _wildlife.Clear();
-        if (_match.Phase != MatchPhase.Running || ArenaMode || MapDir == "" || Map == null || (WildlifeData.MaxAnimals <= 0 || WildlifeData.Species.Count == 0 && WildlifeData.Herds.Count == 0) && WildlifeData.Flocks.Count == 0) return;
+        _buildingFootprints = null;
+        if (_match.Phase != MatchPhase.Running || ArenaMode || MapDir == "" || Map == null || (WildlifeData.MaxAnimals <= 0 || WildlifeData.Species.Count == 0 && WildlifeData.Herds.Count == 0 && WildlifeData.Rare.Count == 0) && WildlifeData.Flocks.Count == 0) return;
         var points = MapZonePoints;
         var n = _wildlife.Populate(species => points.Points(species), _wildlifeGround ??= new WildlifeGround(this));
         GD.Print($"server: {n} wild animals, {_wildlife.Flocks.Count} bird flocks");
     }
 
-    /// <summary>Once a tick, after the entities: the herds drift.</summary>
+    /// <summary>Once a tick, after the entities: the herds drift and a rare species counts down to its next animal.</summary>
     void WildlifeTick(float dt)
     {
-        if (_wildlife != null && _wildlife.Count > 0 && _wildlifeGround != null) _wildlife.Update(dt, _wildlifeGround);
+        if (_wildlife != null && (_wildlife.Count > 0 || _wildlife.RareWaiting > 0) && _wildlifeGround != null) _wildlife.Update(dt, _wildlifeGround);
     }
 
     /// <summary>What the hit diagram shows of a bullet that met the wild animal <paramref name="hitId"/> at <paramref name="point"/>; null when the animal or its target is not there.</summary>

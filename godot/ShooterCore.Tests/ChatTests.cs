@@ -122,9 +122,9 @@ public class ChatTests
     }
 
     [Fact]
-    public void AGuestOnlySeesHelp()
+    public void AGuestOnlySeesTheCommandsForEveryone()
     {
-        Assert.Equal("help", Assert.Single(ChatCommands.Hint("/", Guest).Suggestions).Insert);
+        Assert.Equal(new[] { "help", "fps", "squad" }, ChatCommands.Hint("/", Guest).Suggestions.Select(s => s.Insert).ToArray());
         Assert.NotNull(ChatCommands.Hint("/bots", Guest).Error);
     }
 

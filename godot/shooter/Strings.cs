@@ -42,7 +42,7 @@ public static class Strings
         ("hud.score.team", "Team {0}   You {1} : {2} Enemy"), ("score.team.tag", "[{0}] {1}"), ("score.ending.team", "Round over: team {0} wins"),
         ("score.team.mine", "Your team {0}: {1}"), ("score.team.enemy", "Enemy team {0}: {1}"), ("score.team.other", "Team {0}: {1}"),
         ("score.team.none", "No team"), ("score.empty", "No players"),
-        ("weapon.pistol", "M1911"), ("weapon.ak47", "AK-47"), ("weapon.rpg", "RPG-7"), ("weapon.strela", "Strela"), ("weapon.knife", "Knife"), ("weapon.sniper", "Sniper"), ("weapon.glock17", "Glock 17"), ("weapon.deagle", "Desert Eagle"), ("weapon.m82", "Barrett M82"), ("weapon.awm", "AWM"), ("weapon.svd", "Dragunov SVD"),
+        ("weapon.pistol", "M1911"), ("weapon.ak47", "AK-47"), ("weapon.rpg", "RPG-7"), ("weapon.strela", "Strela"), ("weapon.knife", "Knife"), ("weapon.grenade", "Grenade"), ("weapon.sniper", "Sniper"), ("weapon.glock17", "Glock 17"), ("weapon.deagle", "Desert Eagle"), ("weapon.m82", "Barrett M82"), ("weapon.awm", "AWM"), ("weapon.svd", "Dragunov SVD"),
         ("hud.breath.ready", "Hold {0} to steady"), ("hud.hunt.title", "{0}   |   {1} kg"), ("hud.hunt.line", "{0} m   |   {1}"), ("hud.hunt.line.head", "{0} m   |   {1}   |   HEAD"), ("hud.binoculars.range", "{0} m"), ("hud.binoculars.none", "---"), ("hud.binoculars.hint", "{0}: lower"), ("bind.binoculars", "Binoculars (raise / lower)"), ("hud.scope.zero", "ZERO {0} m   |   dot = {1} mil   |   scroll: zero"),
         ("weapon.fall", "Fall"), ("weapon.bigfoot", "Bigfoot"), ("weapon.gang", "Gang member"), ("weapon.harvester", "Harvester reel"), ("weapon.void", "Void"), ("weapon.debug", "Debug"), ("weapon.redeploy", "Respawn"), ("weapon.vehicle", "Car"), ("weapon.vehicle_gun", "Mounted MG"), ("weapon.moab", "MOAB"), ("moab.inbound", "MOAB inbound {0}"), ("moab.blast", "MOAB by {0}"), ("moab.cancelled", "MOAB cancelled"), ("weapon.turret", "Turret"), ("feed.roadkill", "Roadkill"), ("weapon.unknown", "?"),
         ("player.unknown", "Player {0}"),
@@ -114,7 +114,7 @@ public static class Strings
         ("bind.move_forward", "Move forward"), ("bind.move_back", "Move back"), ("bind.move_left", "Move left"), ("bind.move_right", "Move right"),
         ("bind.jump", "Jump / helicopter climb"), ("bind.sprint", "Sprint"), ("bind.crouch", "Crouch / helicopter descend"), ("bind.prone", "Prone"), ("bind.fire", "Fire"), ("bind.reload", "Reload"),
         ("bind.interact", "Interact"), ("bind.scoreboard", "Scoreboard (hold)"),
-        ("bind.slot_1", "Weapon slot 1 / vehicle seat 1"), ("bind.slot_2", "Weapon slot 2 / vehicle seat 2"), ("bind.slot_3", "Weapon slot 3 / vehicle seat 3"), ("bind.slot_4", "Weapon slot 4 / vehicle seat 4"), ("bind.slot_5", "Weapon slot 5 / vehicle seat 5"), ("bind.zoom", "Scope zoom"), ("bind.headlights", "Vehicle headlights"), ("bind.vehicle_view", "Vehicle view (chase / cockpit)"), ("bind.rozhlas_talk", "Talk on the rozhlas (hold, set holder)"), ("bind.killstreak", "Use killstreak"), ("bind.inventory", "Equipment screen (toggle)"),
+        ("bind.slot_1", "Weapon slot 1 / vehicle seat 1"), ("bind.slot_2", "Weapon slot 2 / vehicle seat 2"), ("bind.slot_3", "Weapon slot 3 / vehicle seat 3"), ("bind.slot_4", "Weapon slot 4 / vehicle seat 4"), ("bind.slot_5", "Weapon slot 5 / vehicle seat 5"), ("bind.zoom", "Scope zoom"), ("bind.headlights", "Head lamp (on foot) / vehicle headlights"), ("bind.vehicle_view", "Vehicle view (chase / cockpit)"), ("bind.rozhlas_talk", "Talk on the rozhlas (hold, set holder)"), ("bind.killstreak", "Use killstreak"), ("bind.throw_grenade", "Throw grenade (hold to aim, release to throw; aim key cancels)"), ("bind.inventory", "Equipment screen (toggle)"),
         ("weapon.m4a1", "M4A1"), ("weapon.aug", "AUG"), ("weapon.g36", "G36"), ("weapon.rpk", "RPK"), ("weapon.m249", "M249"), ("weapon.m60", "M60"), ("weapon.pkm", "PKM"),
         ("weapon.mp5", "MP5"), ("weapon.ump45", "UMP45"), ("weapon.p90", "P90"), ("weapon.remington870", "Remington 870"), ("weapon.spas12", "SPAS-12"), ("weapon.benelli_m4", "Benelli M4"), ("weapon.aa12", "AA-12"),
         ("streak.uav", "UAV"), ("streak.attack_missile", "Attack missile"), ("streak.turret", "Turret"), ("streak.care_package", "Care package"),
@@ -213,13 +213,16 @@ public static class Strings
         foreach (var (k, v) in Table) tr.AddMessage(k, v);
         foreach (var (k, v) in Hud2Strings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in SandboxStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in VolumeStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in TeamsStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in SquadsStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in ChatStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in TacticalMapStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in IntelStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in MassStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in ScudStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in HuntersLogStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in MineralLogStrings.Table) tr.AddMessage(k, v);
         TranslationServer.AddTranslation(tr);
         TranslationServer.SetLocale("en");
     }

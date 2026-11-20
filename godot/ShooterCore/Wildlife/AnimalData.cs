@@ -83,6 +83,20 @@ public sealed class AnimalDef
     /// Not <see cref="HitBoxAhead"/>, which a bullet's box test and the hit diagram already use and which is left as it was.
     /// </summary>
     public float BodyAhead { get; set; }
+    /// <summary>
+    /// animals.json "fx": the id of a client-only visual set the client attaches to every animal of the species ("unicorn": a pearl coat, a rainbow mane and tail, a glowing speckled horn, sparkles, a rainbow trail);
+    /// empty: none. Pure looks, nothing of it travels on the wire or changes a rule. A lower case id (letters, digits, underscores); an id the client does not know draws nothing extra.
+    /// </summary>
+    public string Fx { get; set; } = "";
+    /// <summary>
+    /// animals.json "vanish_seconds": above 0, the species does not run when it is startled (a threat in its flee radius, a hit that did not kill, a herd alarm, getting up after a run-over): it becomes
+    /// immune for this long (<see cref="AnimalState.Vanish"/>), then is teleported to another place of the map (<see cref="VanishMinM"/> away) and stands there. 0 (default): it flees as any animal.
+    /// </summary>
+    public float VanishSeconds { get; set; }
+    /// <summary>animals.json "vanish_min_m": the least distance (m, flat) between where it vanished and where it reappears. Only for a species with <see cref="VanishSeconds"/>.</summary>
+    public float VanishMinM { get; set; }
+    /// <summary>animals.json "vanish_grace_seconds": after it reappears nothing startles it for this long, so it can be seen (and shot) where it arrived. Only for a species with <see cref="VanishSeconds"/>.</summary>
+    public float VanishGraceSeconds { get; set; } = 3;
     /// <summary>Other models of the same species. Variant index 0 is <see cref="Model"/>; index i (1 up) is <c>Variants[i - 1]</c>. The index travels on the wire.</summary>
     public List<AnimalVariant> Variants { get; set; } = new();
 
@@ -187,6 +201,9 @@ public sealed class AnimalsFile : IVersioned
             if (!seen.Add(a.Id)) throw new DataFileException($"{F}: species id {a.Id} appears twice");
             if (a.Name == "") throw new DataFileException($"{F}: {a.Id}: name is empty");
             if (!a.Model.EndsWith(".glb", StringComparison.Ordinal)) throw new DataFileException($"{F}: {a.Id}: model must be a .glb path in the asset library");
+            if (a.Fx.Any(c => !(char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '_'))) throw new DataFileException($"{F}: {a.Id}: fx is a lower case id (letters, digits, underscores) or empty");
+            if (!(a.VanishSeconds >= 0) || !(a.VanishMinM >= 0) || !(a.VanishGraceSeconds >= 0) || a.VanishSeconds > 0 && !a.Flees)
+                throw new DataFileException($"{F}: {a.Id}: vanish_seconds, vanish_min_m and vanish_grace_seconds are not negative; a species that vanishes also flees (flees true)");
             if (!(a.Scale > 0)) throw new DataFileException($"{F}: {a.Id}: scale must be positive");
             if (!(a.Hp > 0) || a.Hp > 255) throw new DataFileException($"{F}: {a.Id}: hp must be 1..255 (the wire carries it in one byte)");
             if (!(a.WalkSpeed > 0) || a.RunSpeed < a.WalkSpeed) throw new DataFileException($"{F}: {a.Id}: walk_speed must be positive and not above run_speed");

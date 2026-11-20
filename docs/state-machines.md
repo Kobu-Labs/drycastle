@@ -7,7 +7,7 @@ How to add or change one: see `godot/ShooterCore/Fsm/StateMachine.cs`. "From any
 
 ## Animal.Behaviour
 
-What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot, lie dead until the corpse is removed.
+What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot (a vanishing species turns immune and is teleported instead), lie dead until the corpse is removed.
 
 ```mermaid
 stateDiagram-v2
@@ -17,30 +17,36 @@ stateDiagram-v2
     Idle --> Sit
     Idle --> Bark
     Idle --> Flee
+    Idle --> Vanish
     Idle --> Carried
     Idle --> Thrown
     Idle --> Dead
     Eat --> Idle
     Eat --> Flee
+    Eat --> Vanish
     Eat --> Carried
     Eat --> Thrown
     Eat --> Dead
     Sit --> Idle
     Sit --> Flee
+    Sit --> Vanish
     Sit --> Carried
     Sit --> Thrown
     Sit --> Dead
     Bark --> Idle
     Bark --> Flee
+    Bark --> Vanish
     Bark --> Carried
     Bark --> Thrown
     Bark --> Dead
     Walk --> Idle
     Walk --> Flee
+    Walk --> Vanish
     Walk --> Carried
     Walk --> Thrown
     Walk --> Dead
     Flee --> Idle
+    Flee --> Vanish
     Flee --> Carried
     Flee --> Thrown
     Flee --> Dead
@@ -50,8 +56,10 @@ stateDiagram-v2
     Thrown --> Dead
     Down --> Flee
     Down --> Idle
+    Down --> Vanish
     Down --> Thrown
     Down --> Dead
+    Vanish --> Idle
     Dead --> [*]
 ```
 
@@ -65,6 +73,7 @@ stateDiagram-v2
 - **Carried**: A Thief of the Thieves event holds it (no clock: it is moved by the Thief, MoveCarried, and does nothing itself). Let go (Release) it stands; one put down outside its Pen walks home over open ground until it is inside again. Still a hit target: any hit that deals damage kills it.
 - **Thrown**: A vehicle ran it over and it survived (Throw): it flies on the arc the vehicle gave it, then rolls on along the ground with part of that speed; no clock. Coming to rest puts it Down. Still a hit target; another vehicle only changes the arc.
 - **Down**: Lies knocked down where it landed (clock: knockdown_seconds), then gets up: Flee from where the vehicle was (a species that does not flee stands). Run over again it is Thrown again.
+- **Vanish**: A species with vanish_seconds is startled (threat, non-lethal hit, herd alarm, getting up after a run-over) and does not run: immune for vanish_seconds (clock; no damage, no throw, no carry, not a hit target), the client spirals rainbow round it, then the Vanished event lets the keeper pick a place at least vanish_min_m away and Teleport puts it there Idle. Only Idle follows; never Dead, Thrown or Carried. No startle for vanish_grace_seconds after it reappears.
 
 ## App.Phase
 
@@ -761,6 +770,20 @@ stateDiagram-v2
 - **Shut**: Closed and solid (the start state, and every new server): the leaves fill the doorway.
 - **Open**: The leaves are swung out into the yard and nothing is solid. Stays open until a player closes it; it does not close while a vehicle stands in the doorway.
 
+## Grenade.Throw
+
+The grenade throw key: held to aim (the arc shows), released to throw.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Aiming
+    Aiming --> Idle
+```
+
+- **Idle**: Key up (the start state). A press where the key is the grenade's starts the aim; a key already held when the throw became possible does not.
+- **Aiming**: Key held: the grenade is in the hand and the weapon hidden. Releasing throws; releasing with the aim key held, or losing the right to aim (a vehicle, death, a ladder, the Scud screen), puts it away.
+
 ## Harvester.Ai
 
 The AI harvester's job: drive to the field's first pass, cut the passes with turns between, leave along the edge; stops when its driver is killed.
@@ -1009,6 +1032,23 @@ stateDiagram-v2
 - **Open**: Accepted and running until its duration, its own End, its owner's death or leaving, a round reset, or its aircraft's destruction.
 - **Refused**: Activate returned false: dropped by the service, the streak stays held. Never ended by the framework.
 - **Ended**: Over: EndReason is set, StreakEnded sent, callbacks run.
+
+## Lamp.Light
+
+A shootable pole lamp: lit until a round passes through its head, dark for a while, then it flickers back on.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Lit
+    Lit --> Broken
+    Broken --> Flickering
+    Flickering --> Lit
+    Flickering --> Broken
+```
+
+- **Lit**: Shines at night. A lit lamp has no clock and no machine; a new round lights every lamp again without a transition.
+- **Broken**: Dark (clock: respawn_seconds). A second shot changes nothing.
+- **Flickering**: Coming back on (clock: flicker_seconds); a shot breaks it again.
 
 ## Launcher.Lock
 

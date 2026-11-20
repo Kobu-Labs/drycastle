@@ -13,4 +13,5 @@ Consequences:
 - `place_object` takes `asset` and an exact `position`; `parcel` and an anchor are optional and only a way to compute a position in a parcel's front-edge frame. Without a parcel the rotation defaults to 0.
 - The editor's placement ghost no longer turns red outside parcels, and a drag no longer snaps back. The inspector says "on no parcel" or "in P-NNNN".
 - The instant path (`EditsWatcher`) diffs objects by id, not by parcel, so an object that crosses a parcel boundary, or leaves every parcel, is just replaced.
+- `z` and `solid` (#389, trash on the climbable `prim:mound`): an object may carry `z`, absolute metres above the DMR datum (omitted = on the terrain; `move_object` `clear_z` removes it), and `solid: false` (written only when false) = no collision at all, players, vehicles and shots pass through. The loader skips the asset's colliders and switches off the bodies of a prefab or pack model, on the server and the client. objects.json carries `solid` only when false, so no map version bump.
 - Undo records each object by id at the top level; because the file is written sorted by id, an undone removal or an edit never reorders it.

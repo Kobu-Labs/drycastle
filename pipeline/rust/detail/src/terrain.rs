@@ -23,6 +23,12 @@ impl Terrain {
         self.heights[r * (self.ncols + 1) + c]
     }
 
+    /// The height of the grid vertex in this row and column.
+    #[inline]
+    pub fn height(&self, r: usize, c: usize) -> f64 {
+        self.at(r, c)
+    }
+
     #[inline]
     fn ok_at(&self, r: usize, c: usize) -> bool {
         self.valid[r * (self.ncols + 1) + c]

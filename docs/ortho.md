@@ -54,9 +54,20 @@ The two kinds of tree look different from above, so there are two detectors:
 
 Output: `trees.json` lists the standalone trees (`x`, `y` in the map's local metres, `radius_m`, `score`), with the
 parameters used, and `canopy.png` is a 1-bit mask on the photo's pixel grid (bounds in the json). Everything is clipped to
-the map outline. The photo is processed in strips of 1024 rows, so it runs on the whole village (about 1.5 minutes for
-7 km2: 4200 standalone trees, 18 % canopy); `tree_model.npz` caches the trained model (`make ortho-trees RETRAIN=1`
-fits it again), `--tau-open` and `--tau-wooded` move the two thresholds.
+the map outline. The photo is processed in strips of 1024 rows, so it runs on the whole village (7 km2: 4200 standalone
+trees, 18 % canopy); `tree_model.npz` caches the trained model (`make ortho-trees RETRAIN=1` fits it again), `--tau-open`
+and `--tau-wooded` move the two thresholds.
+
+Speed. The strips are detected by the Rust engine (`pipeline/rust/detail/src/trees.rs`, entry `detect_trees`, all cores:
+about 4 s for the village) when it is installed (`make detail-rust-build`; `make map` and `make ortho-trees` build it),
+else by the Python reference in `ortho_trees.py` (about 80 s). Both give the same trees and the same mask
+(`test_the_rust_engine_detects_what_the_python_reference_detects`); Python keeps the photo decoding, the building masks,
+the training and the files. A change to the detection goes into both.
+
+Unchanged inputs are not detected again: `trees.json` carries `inputs_sha256`, a hash of the photo and `ortho.json`, the
+model, `area.json`, `frame.json`, `buildings.geojson`, the parameters and the detector's two source files. While it
+matches and `canopy.png` is there, the stage prints "inputs unchanged" and writes nothing. `--force` (`make ortho-trees
+FORCE=1`, `run-all --force`) detects again.
 
 Known limits: a forest edge is read as canopy plus a few standalone circles; shrubs and hedges count as trees (they are
 indistinguishable in an RGB photo); some roadside shadows still pass. There is no ground truth, so the checks were by

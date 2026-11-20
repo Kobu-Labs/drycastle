@@ -194,6 +194,7 @@ public partial class NetServer
         foreach (var cl in _clients.Values) DetachFromCar(cl); // out of the seat for good: Car, and Body.InVehicle with it (a body left flagged cannot go prone)
         foreach (var car in _cars) { if (car.Retired) continue; car.Seat.Clear(); car.Reset(); RestoreVehicleGlass(car); }
         RestoreGlassForRound();
+        RestoreLampsForRound();
         _carResets += _cars.Count > 0 ? 1 : 0;
     }
 
@@ -369,6 +370,7 @@ public partial class NetServer
             DamageVehicle(shotCar, def.Damage * Vehicles.BulletDamageMultiplier, c.Id, SpecialWeapons.VehicleGun, 0);
         if (hit == null && shotCar != car && wall <= def.Range) ShotGlass(shotCar, eye, dir, wall, def.Damage);
         DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, _ => def.Damage);
+        ShotLamps(N(eye), N(dir), hit?.Distance ?? Math.Min(wall, def.Range)); // a pole lamp the round passed breaks (ADR 0037)
         _vehicleView = null;
     }
 
@@ -405,7 +407,9 @@ public partial class NetServer
     {
         if (Vehicles == null || _cars.Count == 0) return;
         TrailerLatchTick(); // a loose trailer is latched by a tractor that reverses its hitch onto it (before the contacts and the steps: it follows its tractor from this tick on)
+        var contactsT = Prof.Begin(Prof.S.VehicleContacts);
         ResolveVehicleContacts();
+        Prof.End(Prof.S.VehicleContacts, contactsT);
         foreach (var car in _cars)
         {
             var def = car.Def;
@@ -424,10 +428,12 @@ public partial class NetServer
             var occupied = car.Seat.Occupied;
             if (occupied) car.Wake(); // somebody aboard: the vehicle is stepped every tick until it is empty and rests again
             car.PrevPos = car.Drives ? car.TickEndPos : car.GlobalPosition; // a driven vehicle has already moved this tick, on its driver's inputs
+            var stepT = Prof.Begin(Prof.S.VehicleStep);
             if (car.Flies) StepFlyingVehicle(car, driver, dt);
             else if (car.Drives) StepDrivenVehicle(car, driver, dt);
             else if (driver != null) car.Step(def, driver.Throttle, driver.Steer, driver.Handbrake, dt, Water);
             else if (!car.Asleep || occupied) car.StepParked(dt, Water); // a parked car at rest is not stepped until disturbed (ParkedRules, T2-04)
+            Prof.End(Prof.S.VehicleStep, stepT);
             var here = car.GlobalPosition; // read once: a native read each time, every car every tick
             car.TickEndPos = here;
             if (here.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); continue; }

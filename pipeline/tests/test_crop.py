@@ -493,17 +493,10 @@ def test_village_builds_crop_patches_instances_and_a_baulk(ws) -> None:
     assert only.crops == res.crops
 
 
-def test_append_crops_after_the_engine(ws) -> None:
+def test_crop_units_in_processes_give_the_same_village(ws) -> None:
     work, tmp = ws
-    out = work / "after-engine"
-    out.mkdir(exist_ok=True)
-    base = D.build_village_detail(work, edits_path=tmp / "no-edits.json", only={"P-0001"})  # stands in for the engine's files
-    D.write_detail(out, base)
-    n = len(np.load(out / "detail_patches.npy"))
-    assert not (out / "detail_crops.json").exists()
-    for name in ("parcels.json", "buildings.json", "roads.json", "props.json", "terrain.json", "terrain_heights.npy", "terrain_valid.npy"):
-        if (work / name).is_file():
-            (out / name).write_bytes((work / name).read_bytes())
-    stats = D.append_crops(out, edits_path=tmp / "no-edits.json")
-    assert stats["crops"]["crop_wheat"] > 0 and (out / "detail_crops.json").is_file()
-    assert len(np.load(out / "detail_patches.npy")) > n
+    one = D.build_village_detail(work, edits_path=tmp / "no-edits.json", recipe="crop")
+    many = D.build_village_detail(work, edits_path=tmp / "no-edits.json", recipe="crop", workers=3)
+    assert many.crops == one.crops and many.clutter == one.clutter
+    assert many.patches.tobytes() == one.patches.tobytes() and len(one.patches) > 0
+    assert many.stats["patch_triangles_by_type"] == one.stats["patch_triangles_by_type"]

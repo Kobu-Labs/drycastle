@@ -334,7 +334,7 @@ real meshes, UVs and textures into `out/textures/fences.png`, so the look can be
 file): per-parcel fence mode (`auto`, `none`, `custom` with a type, column, height, colour and gaps),
 property groups (`G-NNNN`: one fence around the members' combined outer edge), and placed objects (`pack:` or `prim:` assets, absolute S-JTSK metres).
 Objects go to `work/objects.json`, and with them the `cables` (`C-NNNN`: `from` and `to`, the ids of two
-placed utility poles) whose poles are both placed; the game strings the wires (`docs/utility-poles.md`). `ground_patches` (`GP-NNNN`: `type`, `polygon` one ring of at
+placed utility poles) whose poles are both placed; an object may carry `z` (absolute metres above the DMR datum; omitted = on the terrain) and `solid: false` (no collision at all, for dressing over a climbable prim; `objects.json` has the key only when false); the game strings the wires (`docs/utility-poles.md`). `ground_patches` (`GP-NNNN`: `type`, `polygon` one ring of at
 least 3 `[x, y]` absolute S-JTSK points, no self-intersection, `water_y` for a water type) are hand-drawn ground (see "Parcels and ground areas"); the props stage reads
 only their water ones (no trees in a lake). `zones` (`Z-NNNN`: `kind`, `polygon`) are what an area means in play (see "Zones"); the props
 stage reads the `player_spawn` ones. The format and validator are documented in
@@ -584,8 +584,11 @@ objects (a circle of half the footprint diagonal plus 0.3 m), water patches and 
   a chance of the type's `extras` (a lone tractor, a sprinkler line, a hay stack). Plants are instances in rows along
   the row direction (or a jittered grid), ~4 to 10 per 100 m2; artifacts are 2 to 10 per patch (`per_ha` 4, none under 400 m2),
   clustered at a corner, on the edge or alone inside, plants keep `radius_m` clear. No new instance kinds.
-  The Rust engine skips crop units; the stage builds them in Python right after it (`detail.append_crops`: appends their
-  triangles to `detail_patches.npy`, writes `detail_crops.json`). The Python reference build does the same in one go.
+  The Rust engine runs the recipe too (`rust/detail/src/crop.rs`, in parallel with the others, written after them in
+  `detail_patches.npy`, and writes `detail_crops.json`): a line-by-line port of `crop.py` that reproduces Python's
+  `random.Random`, numpy's generator (PCG64) and `round` bit for bit, so for the same inputs it gives the same instances as
+  the Python twin (`tests/test_crop_rust.py`). The patches are draped in 24-cell tiles on all cores. `crop.py` stays as the twin
+  of the tools (`parcel-run`, `patch-run`, previews) and the reference of the tests: change one, change the other.
   **`crops.json`** (map `files.crops`, copied from `detail_crops.json`; only maps with a crop patch): `{format_version: 1, axes,
   chunk_size_m, kinds: {kind: {role: plant|artifact, asset | synty: [Farm pack prefab names, full `SM_...`]}}, chunks: {"ix_iy": {kind: [[x, y, z, rot,
   scale], ...]}}}`, rows as in `clutter.json` without a tint; at most `detail.crop_kinds.<kind>.cap` per kind and chunk (a hash drops
@@ -641,6 +644,21 @@ point); the Rust engine does the same work on all cores in 7 to 8 s (26 s on one
 (`detail.json`, `detail_patches.npy`, `detail_patches.json`, `detail_meadow.bin`, formats unchanged, so the export and the game read
 them as before). The stage runs on the Rust engine only; the Python build (`detail.run_reference`, `build_village_detail`) stays as the
 reference the tests compare it with and is not a stage.
+
+The same module also does three jobs for other stages. Each has its Python reference, gives the reference's output (not merely an
+equivalent one: the tests compare them value by value) and is used when the module is installed, else the Python runs:
+
+| Entry | Stage | What | Python reference | Village |
+|---|---|---|---|---|
+| `detect_trees` (`trees.rs`) | ortho-trees | the per-strip tree detection, strips in parallel (see docs/ortho.md) | `ortho_trees.detect_strip` | 78 s -> 4 s |
+| `plant_trees` (`planting.rs`) | props | the canopy planting: Python's `random.Random` and float floor division reproduced, one thread (the planting is one sequence) | `props.ortho_trees` | 5 s -> 1.3 s |
+| `drape_roads` (`roads.rs`) | export | road ribbons and junction patches on the terrain, one footprint per task; a footprint with a hole or a piece of over 80 vertices is handed back to Python | `roads.drape_mesh` | 4.5 s -> 0.6 s |
+
+A change to one of these algorithms goes into both sides; the parity tests (`test_the_rust_engine_*`) fail otherwise.
+
+The rest of the speed of props and export is plain Python (#403): the object -> parcel lookup and the terrain colours use a spatial
+index with prepared polygons, the spawn stage unions only the tree discs near a zone, `Terrain.surface` has a plain-float path for a
+few points, the forest-edge distance comes from one precomputed mask (`props.EdgeField`), `detail.patches_by_chunk` groups by one sort.
 
 * **Build**: `make detail-rust-build` (maturin into the pipeline venv; needs `cargo` and the GEOS development files, e.g. `sudo dnf install geos-devel`
   on Fedora or `libgeos-dev` on Debian, because the `geos` crate links the system GEOS, the library shapely wraps; the build is a

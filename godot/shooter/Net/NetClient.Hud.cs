@@ -43,6 +43,7 @@ public partial class NetClient
         WireLoadoutHud(_hud);
         _hud.AttachEquipment(this); // F (#268)
         _hud.AttachHuntersLog(HuntLogEnvironment()); // J (#336)
+        _hud.AttachMineralLog(); // N
         HuntData.RequestLog(0); // learns the player's own id in the log (their own announcements say "you"), and warms My Log
         _hud.Minimap.Build(Map); // once per connection; the texture comes from the map's parcels and roads (ticket #119)
         _hud.PrewarmTacticalMap(GetViewport().GetVisibleRect().Size); // the full-screen map's picture is made on a worker meanwhile
@@ -120,6 +121,7 @@ public partial class NetClient
     }
 
     readonly List<Vector2> _friendDots = new();
+    readonly List<(Vector2 At, string Name)> _squadDots = new();
 
     /// <summary>Anyone but me who is not a teammate (FFA: everyone else).</summary>
     bool IsMapEnemy(ushort id) => id != _myId && !Match.AreFriends(_myId, id);
@@ -128,14 +130,17 @@ public partial class NetClient
     {
         _hud?.SetControlMode(Mode.RemoteViewOwnsScreen); // one mode switch: a turret or the missile owns the screen (ticket #152)
         _hud?.SetHealth(Mathf.CeilToInt(_me?.Health ?? 100));
+        _hud?.SetSnapshotCount(_snaps); // the FPS card's TPS line (Hud.Fps.cs)
         _hud?.CoverCrosshair(_chooser.IsOpen);
-        if (_me != null) _me.MoveWithFreeMouse = (_hud?.EquipmentOpen ?? false) || (_hud?.TacticalMapOpen ?? false) || (_hud?.HuntersLogOpen ?? false); // the Equipment screen, the tactical map and the Hunter's Log free the mouse, not the legs (#268, #336)
-        if (_hud is { EquipmentOpen: true } or { TacticalMapOpen: true } or { HuntersLogOpen: true })
+        _hud?.SetUnarmedSeat(InUnarmedSeat); // no crosshair, no ammo readout where nothing can be fired (#373)
+        if (_me != null) _me.MoveWithFreeMouse = (_hud?.EquipmentOpen ?? false) || (_hud?.TacticalMapOpen ?? false) || (_hud?.HuntersLogOpen ?? false) || (_hud?.MineralLogOpen ?? false); // the Equipment screen, the tactical map and the Hunter's Log free the mouse, not the legs (#268, #336)
+        if (_hud is { EquipmentOpen: true } or { TacticalMapOpen: true } or { HuntersLogOpen: true } or { MineralLogOpen: true })
         {
             var overlays = _hud.Overlays(MenuOpen?.Invoke() == true, ChooserOpen); // a menu or the corpse chooser takes the screen from the Equipment screen, a menu from the map
             if (_hud.EquipmentOpen && OverlayArbiter.YieldsToMenu(Overlay.Equipment, overlays)) _hud.CloseEquipment();
             if (_hud.TacticalMapOpen && OverlayArbiter.YieldsToMenu(Overlay.TacticalMap, overlays)) _hud.CloseTacticalMap();
             if (_hud.HuntersLogOpen && OverlayArbiter.YieldsToMenu(Overlay.HuntersLog, overlays)) _hud.CloseHuntersLog();
+            if (_hud.MineralLogOpen && OverlayArbiter.YieldsToMenu(Overlay.MineralLog, overlays)) _hud.CloseMineralLog();
         }
         UavTick();
         if (_me != null) RozhlasFeedPlayer.Current?.SetListener(_me.GlobalPosition);
@@ -156,11 +161,17 @@ public partial class NetClient
             }
             _hud.Minimap.SetVehicleDots(_carDots);
             _friendDots.Clear();
+            _squadDots.Clear();
             if (Match.IsTeamMode)
                 foreach (var (id, r) in _remotes)
                     if (r.State != EntityState.Dead && Match.AreFriends(_myId, id) && GodotObject.IsInstanceValid(r.Node))
-                        _friendDots.Add(new Vector2(r.Node.GlobalPosition.X, r.Node.GlobalPosition.Z));
+                    {
+                        var at = new Vector2(r.Node.GlobalPosition.X, r.Node.GlobalPosition.Z);
+                        if (Match.AreSquadMates(_myId, id)) _squadDots.Add((at, Match.NameOf(id))); // squad mates are blue with a name, the other teammates green
+                        else _friendDots.Add(at);
+                    }
             _hud.Minimap.SetFriendDots(_friendDots);
+            _hud.Minimap.SetSquadDots(_squadDots);
         }
     }
 }

@@ -78,6 +78,8 @@ public sealed class MatchPlayer
     public int Kills, Deaths;
     /// <summary>Team deathmatch: <see cref="Teams.A"/> or <see cref="Teams.B"/>. <see cref="Teams.None"/> (0) in free-for-all, for sandbox players and, in team deathmatch, for a player an admin took out of the round (#312).</summary>
     public byte Team;
+    /// <summary>The squad (#379, <see cref="MatchSim.CreateSquad"/>): an opt-in tag inside the team, 0 for none. Bots and the teamless never have one; it clears with a team change.</summary>
+    public byte Squad;
     /// <summary>A bot: the balance moves bots before humans.</summary>
     public bool Bot;
     /// <summary>Sandbox mode (#156): godmode, and no kills, score or round end. Ranked after everyone else.</summary>
@@ -115,7 +117,7 @@ public sealed class MatchPlayer
 /// injected clock (seconds), spawn randomness from the injected <see cref="Random"/>. The host calls
 /// <see cref="Update"/> every tick and reacts to <see cref="Event"/>.
 /// </summary>
-public sealed class MatchSim
+public sealed partial class MatchSim
 {
     readonly MatchConfig _cfg;
     readonly Func<double> _now;
@@ -264,6 +266,7 @@ public sealed class MatchSim
         var from = p.Team;
         if (from == team) return;
         p.Team = team;
+        DropSquad(p); // a squad is a tag inside one team
         if (quiet) return;
         var running = Phase == MatchPhase.Running;
         if (p.Life == PlayerLife.Unspawned && !running) return; // not in the world and no round on: nothing to tell
@@ -363,6 +366,7 @@ public sealed class MatchSim
         if (!_players.TryGetValue(id, out var p) || p.Sandbox == on) return false;
         p.Sandbox = on;
         p.Vulnerable = false;
+        DropSquad(p);
         if (IsTeamMode) p.Team = on ? Teams.None : SmallerTeam();
         Emit(new ScoreboardChanged());
         return true;
@@ -372,6 +376,7 @@ public sealed class MatchSim
 
     public void AddPlayer(ushort id, string name, bool sandbox = false, bool bot = false)
     {
+        if (_players.TryGetValue(id, out var old)) DropSquad(old);
         _players[id] = new MatchPlayer { Id = id, Name = name, Sandbox = sandbox, Bot = bot };
         if (IsTeamMode && !sandbox) _players[id].Team = SmallerTeam(); // auto-balance on join
         if (Phase == MatchPhase.Waiting) { StartIfReady(); }
@@ -382,7 +387,9 @@ public sealed class MatchSim
 
     public void RemovePlayer(ushort id)
     {
-        if (!_players.Remove(id)) return;
+        if (!_players.TryGetValue(id, out var gone)) return;
+        DropSquad(gone);
+        _players.Remove(id);
         if (Phase != MatchPhase.Waiting && _players.Count < _cfg.MinPlayers) ToWaiting();
         Emit(new ScoreboardChanged());
     }
@@ -522,6 +529,7 @@ public sealed class MatchSim
         if (mode is { } m && m != Mode)
         {
             Mode = m;
+            ClearSquads();
             foreach (var p in _players.Values) { p.Team = Teams.None; } // a mode change regroups everyone
             if (IsTeamMode) foreach (var p in _players.Values.Where(p => !p.Sandbox)) p.Team = SmallerTeam();
         }
@@ -601,10 +609,26 @@ public static class SpawnChooser
     public static Vector3 Choose(IReadOnlyList<Vector3> candidates, IEnumerable<Vector3> living, float minDistance, Random rng)
     {
         if (candidates.Count == 0) return Vector3.Zero;
-        var l = living.ToList();
-        float Nearest(Vector3 c) => l.Count == 0 ? float.PositiveInfinity : l.Min(o => Vector3.Distance(c, o));
-        var ok = candidates.Where(c => Nearest(c) >= minDistance).ToList();
-        if (ok.Count > 0) return ok[rng.Next(ok.Count)];
-        return candidates.OrderByDescending(Nearest).First();
+        // plain loops over lists kept between calls: a spawn asks every candidate about every living player (700 x 64 on the village map), and a round start asks for everyone at once
+        var l = t_living ??= new List<Vector3>(); l.Clear(); l.AddRange(living);
+        var nearest = t_nearest ??= new List<float>(); nearest.Clear();
+        var ok = t_ok ??= new List<int>(); ok.Clear();
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var c = candidates[i];
+            var d2 = float.PositiveInfinity;
+            foreach (var o in l) d2 = MathF.Min(d2, Vector3.DistanceSquared(c, o));
+            var d = MathF.Sqrt(d2); // the distance to the nearest: the root of the least square is the least root
+            nearest.Add(d);
+            if (d >= minDistance) ok.Add(i);
+        }
+        if (ok.Count > 0) return candidates[ok[rng.Next(ok.Count)]];
+        var best = 0;
+        for (var i = 1; i < nearest.Count; i++) if (nearest[i] > nearest[best]) best = i; // the first of the farthest, as a stable sort gives
+        return candidates[best];
     }
+
+    [ThreadStatic] static List<Vector3>? t_living;
+    [ThreadStatic] static List<float>? t_nearest;
+    [ThreadStatic] static List<int>? t_ok;
 }

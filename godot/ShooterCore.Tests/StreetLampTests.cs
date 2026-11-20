@@ -119,4 +119,13 @@ public class StreetLampTests
         Assert.InRange(mid, 0.01f, 0.99f);
         Assert.Equal(0f, LampPool.Energy(1f, 1f, 0f));
     }
+
+    [Fact]
+    public void ShippedLampLookLoadsAndABadBeamIsRefused()
+    {
+        var c = EnvironmentConfig.Load(Path.Combine(AppContext.BaseDirectory, "data", "environment.json"));
+        Assert.True(c.Lamp.RangeM > 0 && c.Lamp.LensEnergy > 2); // the lens must clear the bloom threshold
+        var e = Assert.Throws<DataFileException>(() => EnvironmentConfig.Parse("{\"version\":1,\"lamp\":{\"angle_deg\":120}}"));
+        Assert.Contains("lamp", e.Message);
+    }
 }

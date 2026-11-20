@@ -111,6 +111,36 @@ public class CarDriveTests
     }
 
     [Fact]
+    public void The_brake_bit_is_set_by_the_handbrake_or_the_key_against_the_travel_never_by_driving_or_coasting()
+    {
+        var road = new Road();
+        var d = new DriveState();
+        var c = new CarState();
+        for (var i = 0; i < 4 * Wire.TickRate; i++)
+        {
+            DriveModel.Step(ref d, Car, Keys(1), Dt, road); CarModel.Step(ref c, Car, 1, 0, false, Dt);
+            Assert.False(d.Braking, $"W held, tick {i}"); Assert.False(c.Braking, $"W held (car model), tick {i}");
+        }
+        DriveModel.Step(ref d, Car, Keys(0), Dt, road); CarModel.Step(ref c, Car, 0, 0, false, Dt);
+        Assert.False(d.Braking); Assert.False(c.Braking); // coasting
+        DriveModel.Step(ref d, Car, Keys(-1), Dt, road); CarModel.Step(ref c, Car, -1, 0, false, Dt);
+        Assert.True(d.Braking); Assert.True(c.Braking); // S against the travel
+        DriveModel.Step(ref d, Car, Keys(0, 0, true), Dt, road); CarModel.Step(ref c, Car, 0, 0, true, Dt);
+        Assert.True(d.Braking); Assert.True(c.Braking); // handbrake while moving
+        var parked = new DriveState();
+        DriveModel.Step(ref parked, Car, Keys(0, 0, true), Dt, road);
+        Assert.False(parked.Braking); // handbrake at a standstill: no lamps
+    }
+
+    [Fact]
+    public void The_record_carries_the_brake_bit_without_touching_the_other_health_bits()
+    {
+        var r = VehicleRecord.Make(VehicleRecord.FirstId, System.Numerics.Vector3.Zero, 0, 1, 0, stage: 2, lights: true, wheelsOff: 5, braking: true);
+        Assert.True(VehicleRecord.Braking(r)); Assert.True(VehicleRecord.Lights(r)); Assert.Equal(2, VehicleRecord.Stage(r)); Assert.Equal((byte)5, VehicleRecord.Wheels(r));
+        Assert.False(VehicleRecord.Braking(VehicleRecord.Make(VehicleRecord.FirstId, System.Numerics.Vector3.Zero, 0, 1, 0)));
+    }
+
+    [Fact]
     public void Braking_from_top_speed_stops_in_the_car_models_distance_and_coasting_in_its_too()
     {
         var road = new Road();

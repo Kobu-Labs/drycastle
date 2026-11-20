@@ -286,7 +286,8 @@ MATERIALS = {
     "Rubber": (0.07, 0.07, 0.075, 0.95, 0.0, 0),      # tyres
     "Glass": (0.20, 0.33, 0.40, 0.2, 0.0, 0),         # windows, lenses
     "Yellow": (0.90, 0.70, 0.12, 0.8, 0.0, 0),        # hazard accents, ammunition bands
-    "Red": (0.72, 0.13, 0.10, 0.7, 0.0, 0),           # tail lamps, tow hooks, extinguisher
+    "Red": (0.72, 0.13, 0.10, 0.7, 0.0, 0),           # tow hooks, extinguisher
+    "Emissive red tail lamps": (0.72, 0.13, 0.10, 0.7, 0.0, 0.3),  # tail lamps: the contract name, CarLights drives it
     "Lamp": (0.98, 0.94, 0.75, 0.4, 0.0, 0.6),        # headlamp lenses
     "Amber": (0.95, 0.50, 0.08, 0.6, 0.0, 0.2),       # indicators
 }
@@ -601,7 +602,7 @@ def build():
     chassis.add(both(extrude("Olive", guard, 'x', 0.78, 1.29)))
     # rear beam, tail lamps, hitch
     chassis.add(box("DarkMetal", -1.26, 1.26, 0.84, 1.10, 3.38, 3.47, c=0.03, axis='x', e=0))
-    chassis.add(both(box("Red", 0.94, 1.18, 0.90, 1.04, 3.465, 3.50)), both(box("Amber", 0.80, 0.92, 0.90, 1.04, 3.465, 3.495)))
+    chassis.add(both(box("Emissive red tail lamps", 0.94, 1.18, 0.90, 1.04, 3.465, 3.50)), both(box("Amber", 0.80, 0.92, 0.90, 1.04, 3.465, 3.495)))
     chassis.add(cyl("DarkMetal", (0, 0.76, 3.36), (0, 0.76, 3.60), 0.06, 6))
     chassis.add(box("Steel", -0.26, 0.26, 0.90, 1.04, 3.468, 3.48))            # number plate
 

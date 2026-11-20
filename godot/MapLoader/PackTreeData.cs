@@ -335,6 +335,25 @@ public sealed class PackModelSets
     }
 }
 
+/// <summary>
+/// Which pack model each tree's solids follow (#375): the choice the client draws by (<see cref="PackTreeMath.ModelOf"/>), made from tree_limbs.json's models and
+/// heights instead of the loaded pack, so the server and a client without the pack make it too.
+/// </summary>
+public static class PackTreeLimbs
+{
+    /// <summary>Sets <see cref="TreeInstance.Model"/> of every tree (file order, as <paramref name="treesJson"/>) and returns the tree model carrying the limb table.</summary>
+    public static TreeModel Dress(List<TreeInstance> trees, TreeModel model, string treesJson, PackTreeConfig cfg, IReadOnlyList<LimbModel> limbs)
+    {
+        var ids = new Dictionary<(string, string), int>();
+        for (var i = 0; i < limbs.Count; i++) ids[(limbs[i].Pack, limbs[i].Name)] = i;
+        var sets = PackModelSets.Build(cfg, e => ids.TryGetValue((e.Pack, e.Name), out var i) ? new PackCandidate(i, limbs[i].HeightM, e.Weight, e.Bulk) : null);
+        var tags = PackTreeTags.Parse(treesJson, trees.Count);
+        for (var i = 0; i < trees.Count; i++)
+            trees[i] = trees[i] with { Model = PackTreeMath.ModelOf(trees[i], model, tags[i], sets, cfg) };
+        return model with { Limbs = limbs };
+    }
+}
+
 /// <summary>The arithmetic of the pack trees: which model, how big, which tile, where the cut is.</summary>
 public static class PackTreeMath
 {
@@ -365,13 +384,8 @@ public static class PackTreeMath
         return last;
     }
 
-    /// <summary>The height of the code-built tree above its foot (the top of its highest collision solid, <see cref="TreeColliders.Parts"/>).</summary>
-    public static float CodeHeight(TreeInstance t, TreeModel m)
-    {
-        var top = float.MinValue;
-        foreach (var p in TreeColliders.Parts(t, m)) top = MathF.Max(top, p.Z1);
-        return top - t.Z;
-    }
+    /// <summary>The height of the code-built tree above its foot (the top of its highest collision solid, <see cref="TreeColliders.CodeParts"/>).</summary>
+    public static float CodeHeight(TreeInstance t, TreeModel m) => TreeColliders.CodeHeight(t, m);
 
     /// <summary>The uniform scale that makes a model of <paramref name="modelHeightM"/> as tall as the code-built tree (1 for a model without height).</summary>
     public static float ScaleFor(TreeInstance t, TreeModel m, float modelHeightM)
@@ -421,6 +435,15 @@ public static class PackTreeMath
     {
         var set = sets.For(tag, cfg.EdgeShare, EdgeRoll(t.X, t.Y));
         return PlaceFrom(t, m, t.Cone ? set.Cone : set.Box, set.BulkShare, cfg, tag.Colour);
+    }
+
+    /// <summary>The model a tree is drawn as (the candidate's id), by the same choice as <see cref="Place(TreeInstance, TreeModel, PackTreeTag, PackModelSets, PackTreeConfig)"/>; -1 when its shape has none.</summary>
+    public static int ModelOf(TreeInstance t, TreeModel m, PackTreeTag tag, PackModelSets sets, PackTreeConfig cfg)
+    {
+        var set = sets.For(tag, cfg.EdgeShare, EdgeRoll(t.X, t.Y));
+        var list = t.Cone ? set.Cone : set.Box;
+        var pick = Choose(list, CodeHeight(t, m), Roll(t.X, t.Y), cfg.ScaleMin, cfg.ScaleMax, set.BulkShare);
+        return pick < 0 ? -1 : list[pick].ModelId;
     }
 
     static PackPlacement? PlaceFrom(TreeInstance t, TreeModel m, IReadOnlyList<PackCandidate> list, float bulkShare, PackTreeConfig cfg, Vector3 baked = default)

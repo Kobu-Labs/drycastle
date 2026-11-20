@@ -184,3 +184,55 @@ def test_a_tiled_forest_gets_the_wet_floor(wet_ws, tmp_path) -> None:
     assert stats["items"] > stats["parts"] and not stats["failed"]  # tiled
     forest = stats["patch_triangles_by_type"]["forest"]
     assert forest["mud"] > 20
+
+
+def _tri_area(rows: np.ndarray) -> np.ndarray:
+    return np.abs((rows[:, 3] - rows[:, 0]) * (rows[:, 7] - rows[:, 1]) - (rows[:, 6] - rows[:, 0]) * (rows[:, 4] - rows[:, 1])) / 2
+
+
+def test_drape_patches_matches_the_python_drape(ws) -> None:
+    """The engine's drape for patches built in Python (the crop fields): the same area per patch, on the terrain, with the colours,
+    texture coordinates and row order of the Python build; the triangles themselves are cut differently."""
+    from drycastle_pipeline.terrain import load_terrain
+    from drycastle_pipeline.textures import texture
+
+    work, _ = ws
+    terrain, _ = load_terrain(work)
+    c = terrain.coverage.centroid
+    hole = Point(c.x + 6, c.y + 4).buffer(5)
+    patches = [
+        D.Patch("crop_ground", Point(c.x, c.y).buffer(60).difference(hole), colour=[90, 70, 40]),
+        D.Patch("dirt", box(c.x - 80, c.y - 9, c.x - 30, c.y + 31), colour=[200, 180, 160], texture="dirt", angle=0.4, origin=(c.x, c.y)),
+        D.Patch("gravel", hole, texture="gravel", lift=0.2),
+        D.Patch("lawn", box(c.x + 1e6, c.y, c.x + 1e6 + 5, c.y + 5), colour=[1, 2, 3]),  # off the terrain: no rows
+    ]
+    textures = sorted(set(D.PATCH_TEXTURE.values()))
+    lift = 0.03
+    res = D.DetailResult("P-test", patches=patches)
+    tally_py: dict = {}
+    py = D.patch_rows(*D.patch_meshes(res, terrain, lift, tally_py), textures)
+    by_type: dict = {}
+    rs = D._draped_rows([("crop", patches)], R.drape_patches, terrain, lift, textures, by_type)
+    assert set(by_type["crop"]) == set(tally_py) == {"crop_ground", "dirt", "gravel"}
+    assert rs.shape[1] == py.shape[1] == 19 and len(rs) == sum(by_type["crop"].values())
+    # the same blocks in the same order: flat first, then the textures by id
+    assert [int(t) for t in rs[np.r_[True, rs[1:, 18] != rs[:-1, 18]], 18]] == [int(t) for t in py[np.r_[True, py[1:, 18] != py[:-1, 18]], 18]]
+    for tid, p in ((-1, patches[0]), (textures.index("dirt"), patches[1]), (textures.index("gravel"), patches[2])):
+        a, b = rs[rs[:, 18] == tid], py[py[:, 18] == tid]
+        covered = p.geom.intersection(terrain.coverage).area
+        assert abs(_tri_area(a).sum() - _tri_area(b).sum()) < 0.01 * covered and abs(_tri_area(a).sum() - covered) < 0.01 * covered
+        assert {tuple(r) for r in a[:, 9:12].tolist()} == {tuple(r) for r in b[:, 9:12].tolist()}
+        xy = a[:, :9].reshape(-1, 3, 3)
+        ground = terrain.surface(xy[:, :, 0].ravel(), xy[:, :, 1].ravel()).reshape(-1, 3)
+        assert np.allclose(xy[:, :, 2], ground + (p.lift or lift), atol=1e-9)
+        e1, e2 = xy[:, 1] - xy[:, 0], xy[:, 2] - xy[:, 0]
+        assert (e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0] > 0).all()  # counter-clockwise from above
+        if tid >= 0:
+            t = texture(p.texture)
+            cs, sn = np.cos(-p.angle), np.sin(-p.angle)
+            dx, dy = xy[:, :, 0] - p.origin[0], xy[:, :, 1] - p.origin[1]
+            uv = np.stack([(dx * cs - dy * sn) / t.tile_w, (dx * sn + dy * cs) / t.tile_h], axis=2).reshape(-1, 6)
+            assert np.allclose(a[:, 12:18], uv, atol=1e-9)
+    one, _ = R.drape_patches(patches, terrain, lift, textures, threads=1)
+    many, _ = R.drape_patches(patches, terrain, lift, textures, threads=4)
+    assert one.tobytes() == many.tobytes()

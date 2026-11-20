@@ -6,6 +6,7 @@ use crate::geom::{self, PolyC, Pt, G};
 use crate::index::BoxIndex;
 use crate::terrain::Terrain;
 use crate::util;
+use geos::SpatialIndex;
 use rayon::prelude::*;
 use serde_json::Value;
 use std::cell::OnceCell;
@@ -23,6 +24,8 @@ pub struct RoadEdge {
 }
 
 pub struct Unit {
+    /// Position in the work files' unit list (the order the Python recipes see the units in).
+    pub seq: usize,
     pub id: String,
     pub kind: String,
     pub recipe: String,
@@ -54,6 +57,10 @@ pub struct Shared {
     pub rl_idx: BoxIndex,
     pub objects: Vec<PolyC>,
     pub o_idx: BoxIndex,
+    /// The objects' discs in a GEOS STRtree (node capacity 10 like shapely's): the order of its query results.
+    pub o_tree: geos::STRtree<usize>,
+    #[allow(dead_code)] // the STRtree points at these
+    o_geoms: Vec<G>,
     pub regions: Vec<PolyC>,
     pub reg_idx: BoxIndex,
     pub water: Vec<PolyC>,
@@ -65,6 +72,12 @@ pub struct Shared {
     pub v_idx: [BoxIndex; 2],
     pub coverage: PolyC,
     pub osm_lines: HashMap<String, Vec<usize>>,
+    /// Crop units in work-file order (indices into ``units``), with a box index: the crop patches beside a crop patch (baulk).
+    pub crop_units: Vec<usize>,
+    pub crop_box: BoxIndex,
+    /// Every unit with a recipe in work-file order, with a box index: the ground a crop patch's edge blends into.
+    pub around_units: Vec<usize>,
+    pub around_box: BoxIndex,
 }
 
 fn pt(v: &Value) -> Pt {
@@ -120,7 +133,9 @@ impl Shared {
             .as_array()
             .ok_or("units")?
             .iter()
-            .map(|u| Unit {
+            .enumerate()
+            .map(|(seq, u)| Unit {
+                seq: u["seq"].as_u64().map_or(seq, |v| v as usize),
                 id: u["id"].as_str().unwrap_or("").to_string(),
                 kind: u["kind"].as_str().unwrap_or("").to_string(),
                 recipe: u["recipe"].as_str().unwrap_or("").to_string(),
@@ -177,7 +192,31 @@ impl Shared {
         }
         let verge = crate::verge::make_verge(&roads, Cfg(&cfg).at("verge"));
         let coverage = PolyC { ext: ring(&input["coverage"]), holes: vec![] };
+        let mut by_seq: Vec<usize> = (0..units.len()).collect();
+        by_seq.sort_by_key(|&i| units[i].seq);
+        let unit_box = |i: usize| {
+            let mut b = [f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY];
+            for p in &units[i].polys {
+                let pb = p.bounds();
+                b = [b[0].min(pb[0]), b[1].min(pb[1]), b[2].max(pb[2]), b[3].max(pb[3])];
+            }
+            b
+        };
+        let crop_units: Vec<usize> = by_seq.iter().copied().filter(|&i| units[i].recipe == "crop").collect();
+        let around_units: Vec<usize> = by_seq.iter().copied().filter(|&i| !units[i].recipe.is_empty()).collect();
+        let crop_box = BoxIndex::new(&crop_units.iter().map(|&i| unit_box(i)).collect::<Vec<_>>());
+        let around_box = BoxIndex::new(&around_units.iter().map(|&i| unit_box(i)).collect::<Vec<_>>());
+        let o_geoms: Vec<G> = objects.iter().map(geom::from_polyc).collect();
+        let mut o_tree = geos::STRtree::with_capacity(10).map_err(|e| e.to_string())?;
+        for (i, g) in o_geoms.iter().enumerate() {
+            geos::SpatialIndex::insert(&mut o_tree, g, i);
+        }
+        geos::SpatialIndex::build(&o_tree).map_err(|e| e.to_string())?;
         let sh = Shared {
+        crop_units,
+        crop_box,
+        around_units,
+        around_box,
             canopy_m: input["canopy_m"].as_f64().unwrap_or(5.0),
             chunk_m: input["chunk_m"].as_f64().unwrap_or(250.0),
             kinds: input["kinds"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect()).unwrap_or_default(),
@@ -195,6 +234,8 @@ impl Shared {
                 b
             }),
             o_idx: boxes(&objects, polyc_box),
+            o_tree,
+            o_geoms,
             reg_idx: boxes(&regions, polyc_box),
             w_idx: boxes(&water, polyc_box),
             sw_idx: boxes(&swamp, polyc_box),
@@ -233,6 +274,9 @@ impl Shared {
 pub enum Near {
     /// The context's own outline grown by :data:`NEAR_M`: exact tests like the Python stage.
     Exact,
+    /// :data:`Near::Exact`, and the placed objects in the order shapely's STRtree reports them (the order GEOS then unions them in; the
+    /// Python crop recipe is sensitive to it where a patch has many holes).
+    ExactPy,
     /// Only bounding boxes: for a tile of a big area, whose neighbours are looked up by box.
     Box,
 }
@@ -266,7 +310,7 @@ impl<'a> Ctx<'a> {
         let cfg = Cfg(&sh.cfg);
         let pb = geom::bounds(&polygon);
         let near_g: Option<G> = match near {
-            Near::Exact => Some(geom::buffer(&polygon, NEAR_M, 16)),
+            Near::Exact | Near::ExactPy => Some(geom::buffer(&polygon, NEAR_M, 16)),
             Near::Box => None,
         };
         let nb = util::grow(pb, NEAR_M);
@@ -275,7 +319,13 @@ impl<'a> Ctx<'a> {
         let roads: Vec<G> = sh.r_idx.query(nb).into_iter().map(|i| geom::from_polyc(&sh.roads[i].poly)).filter(|g| hit(g)).collect();
         let road = if roads.is_empty() { None } else { Some(geom::union_all(roads)) };
 
-        let obj_ids = sh.o_idx.query(pb);
+        let obj_ids = if matches!(near, Near::ExactPy) {
+            let mut hits = vec![];
+            sh.o_tree.query(&polygon, |&i| hits.push(i));
+            hits
+        } else {
+            sh.o_idx.query(pb)
+        };
         let mut blocked: Vec<G> = obj_ids.iter().map(|&i| geom::from_polyc(&sh.objects[i])).filter(|g| geom::intersects(g, &polygon)).collect();
         let reg_ids = sh.reg_idx.query(util::grow(pb, 1.0));
         if !reg_ids.is_empty() {
@@ -284,7 +334,7 @@ impl<'a> Ctx<'a> {
                 blocked.push(geom::inter(&regs, &geom::buffer(&polygon, 1.0, 16)));
             }
         }
-        let blocked = if blocked.is_empty() { None } else { Some(geom::union_all(blocked)) };
+        let blocked = if blocked.is_empty() { None } else { Some(if matches!(near, Near::ExactPy) { geom::union_py(blocked) } else { geom::union_all(blocked) }) };
 
         let mut verge: [G; 2] = [geom::empty(), geom::empty()];
         for k in 0..2 {
@@ -330,7 +380,7 @@ impl<'a> Ctx<'a> {
         let water = {
             let ids = sh.w_idx.query(util::grow(pb, water_m));
             let area = match near {
-                Near::Exact => Some(geom::buffer(&polygon, water_m, 16)),
+                Near::Exact | Near::ExactPy => Some(geom::buffer(&polygon, water_m, 16)),
                 Near::Box => None,
             };
             let ps: Vec<G> = ids.iter().map(|&i| geom::from_polyc(&sh.water[i])).filter(|g| area.as_ref().is_none_or(|a| geom::intersects(g, a))).collect();

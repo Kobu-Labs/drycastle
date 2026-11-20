@@ -180,10 +180,13 @@ public partial class Player : CharacterBody3D
 
     /// <summary>How many times the body was put somewhere else (spawn, seat, exit, debug). The server's lag compensation starts a new life at each one (ADR 0013).</summary>
     public int Teleports { get; private set; }
+    /// <summary>Teleports of every body together: a count that moved says some player is no longer where a per-tick list of positions has them.</summary>
+    public static int TeleportsAll { get; private set; }
 
     public void Teleport(Vector3 feet)
     {
         Teleports++;
+        TeleportsAll++;
         GlobalPosition = feet;
         Velocity = Vector3.Zero;
         _state = new MoveState { Position = ToN(feet), OnFloor = false, FallPeakY = feet.Y };
@@ -449,6 +452,7 @@ public partial class Player : CharacterBody3D
         if (!HandsBusy && Input.IsActionPressed("fire")) b |= MoveButtons.Fire;
         if (!HandsBusy && Input.IsActionPressed("zoom")) b |= MoveButtons.Aim;
         if (Input.IsActionPressed("reload")) b |= MoveButtons.Reload;
+        if (!HandsBusy && Input.IsActionPressed("throw_grenade")) b |= MoveButtons.Throw;
         if (Input.IsActionPressed("interact")) b |= MoveButtons.Use;
         if (Input.IsActionPressed("headlights")) b |= MoveButtons.Headlights;
         if (Input.IsActionPressed("killstreak")) b |= MoveButtons.Killstreak;
@@ -503,7 +507,10 @@ public partial class Player : CharacterBody3D
     /// <summary>One movement tick: the shared step, the physics move and (when authoritative) fall damage and respawn.</summary>
     public void Simulate(in MoveInput input, float dt)
     {
+        var pt = Prof.Begin(Prof.S.MoveHead);
         _state.HeadBlocked = _state.Stance != Stance.Stand && HeadBlockedCheck(_state.Stance);
+        Prof.End(Prof.S.MoveHead, pt);
+        pt = Prof.Begin(Prof.S.MoveLogic);
         Water.Sample(ref _state);
         _state.FloorTooSteep = IsOnFloor() && GetFloorNormal().Y < Mathf.Cos(Mathf.DegToRad(MoveConsts.ProneMaxSlopeDegrees));
         _state.ProneBlocked = _inVehicle;
@@ -518,13 +525,22 @@ public partial class Player : CharacterBody3D
         }
         MovementStep.Step(ref _state, input, dt);
         SetStanceShape(_state.Stance);
+        Prof.End(Prof.S.MoveLogic, pt);
 
         Velocity = ToG(_state.Velocity);
+        pt = Prof.Begin(Prof.S.MoveStepUp);
         StepUp(dt);
+        Prof.End(Prof.S.MoveStepUp, pt);
         var movedFrom = ToN(GlobalPosition);
+        pt = Prof.Begin(Prof.S.MoveSlide);
         MoveAndSlide();
+        Prof.End(Prof.S.MoveSlide, pt);
+        pt = Prof.Begin(Prof.S.MoveBodies);
         if (Bodies != null && !_inVehicle) KeepOutOfBodies(movedFrom);
+        Prof.End(Prof.S.MoveBodies, pt);
+        pt = Prof.Begin(Prof.S.MovePost);
         LastFallDamage = MovementStep.PostMove(ref _state, ToN(GlobalPosition), ToN(Velocity), IsOnFloor(), Water.DepthAt(ToN(GlobalPosition)));
+        Prof.End(Prof.S.MovePost, pt);
         if (Authoritative && LastFallDamage > 0)
         {
             Health -= LastFallDamage;

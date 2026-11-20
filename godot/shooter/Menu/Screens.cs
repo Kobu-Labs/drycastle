@@ -115,18 +115,19 @@ public partial class MainMenu : MenuScreen
 public partial class PauseScreen : MenuScreen
 {
     readonly Action _resume, _disconnect;
-    readonly Action? _loadouts, _teams;
+    readonly Action? _loadouts, _teams, _squads;
     readonly Func<bool>? _unlockAll;
     readonly Action? _respawn;
     readonly Func<bool>? _canRespawn;
-    readonly Action? _hunters;
+    readonly Action? _hunters, _minerals;
     Button _first = null!;
     Button? _respawnBtn;
     /// <param name="unlockAll">True while the server runs in dev mode (<c>--unlock-all</c>): the corner indicator shows.</param>
     /// <param name="teams">Opens the Teams screen (#312); null hides the entry (not an admin in team deathmatch).</param>
+    /// <param name="squads">Opens the Squads screen (#379); null hides the entry (not a team deathmatch player on a team).</param>
     /// <param name="hunters">Opens the Hunter's Log (#336) once Pause has closed; null hides the entry.</param>
     /// <param name="respawn">The player's own Respawn (#284), asked after a confirm; <paramref name="canRespawn"/> false (the player is already dead) disables the button.</param>
-    public PauseScreen(Action resume, Action disconnect, Action? loadouts = null, Func<bool>? unlockAll = null, Action? teams = null, Action? respawn = null, Func<bool>? canRespawn = null, Action? hunters = null) : base("HudScrim") { _hunters = hunters; _resume = resume; _disconnect = disconnect; _loadouts = loadouts; _unlockAll = unlockAll; _teams = teams; _respawn = respawn; _canRespawn = canRespawn; }
+    public PauseScreen(Action resume, Action disconnect, Action? loadouts = null, Func<bool>? unlockAll = null, Action? teams = null, Action? respawn = null, Func<bool>? canRespawn = null, Action? hunters = null, Action? squads = null, Action? minerals = null) : base("HudScrim") { _minerals = minerals; _squads = squads; _hunters = hunters; _resume = resume; _disconnect = disconnect; _loadouts = loadouts; _unlockAll = unlockAll; _teams = teams; _respawn = respawn; _canRespawn = canRespawn; }
 
     public override void _Ready()
     {
@@ -144,7 +145,9 @@ public partial class PauseScreen : MenuScreen
         v.AddChild(_first);
         if (_loadouts != null) v.AddChild(Ui.Btn(Strings.T("pause.loadouts"), _loadouts));
         if (_teams != null) v.AddChild(Ui.Btn(Strings.T("pause.teams"), _teams));
+        if (_squads != null) v.AddChild(Ui.Btn(Strings.T("pause.squads"), _squads));
         if (_hunters != null) v.AddChild(Ui.Btn(Strings.T("pause.hunterslog"), () => { if (Shell.Pop(this)) { _resume(); _hunters(); } }));
+        if (_minerals != null) v.AddChild(Ui.Btn(Strings.T("pause.minerallog"), () => { if (Shell.Pop(this)) { _resume(); _minerals(); } }));
         if (_respawn != null)
         {
             _respawnBtn = Ui.Btn(Strings.T("pause.respawn"), () => Shell.Push(new DialogScreen(Strings.T("respawn.title"), Strings.T("respawn.body"),

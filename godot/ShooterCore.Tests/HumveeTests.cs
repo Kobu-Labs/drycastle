@@ -50,10 +50,10 @@ public class HumveeTests
     }
 
     [Fact]
-    public void It_is_a_heavier_tougher_jeep_and_lighter_than_the_flak_truck()
+    public void It_is_a_tougher_jeep_and_lighter_than_both_trucks()
     {
         var h = Humvee;
-        Assert.InRange(h.Mass, Jeep.Mass, Flak.Mass);
+        Assert.True(h.Mass < Jeep.Mass && Jeep.Mass < Flak.Mass, "the jeep is the 7 m cargo truck now (#325): the Humvee is lighter than it, it lighter than the flak truck");
         Assert.InRange(h.Hp, Jeep.Hp, Flak.Hp);
         Assert.InRange(h.TopSpeed, Flak.TopSpeed, Jeep.TopSpeed);
         Assert.InRange(h.Acceleration, Flak.Acceleration, Jeep.Acceleration);

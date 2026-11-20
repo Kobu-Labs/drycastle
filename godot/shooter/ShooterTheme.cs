@@ -31,14 +31,16 @@ public static class ShooterTheme
     /// <summary>The drag preview's opacity and the opacity of a cell that is the source of a drag or cannot take the item being dragged.</summary>
     public const float DragPreviewAlpha = 0.85f, DragDimAlpha = 0.45f;
 
-    // the Hunter's Log (a panel centred on the screen on its own top layer, the world stays visible around it): its share of the screen, a Life List tile, a record card's pictures,
-    // the hit card beside the table, a table row; below LogStackBelow reference pixels of panel width the hit card goes under the table instead of beside it
+    // a collection log (the Hunter's Log, the Mineral Log: a panel centred on the screen on its own top layer, the world stays visible around it): its share of the screen,
+    // a Life List tile, a record card's pictures, the hit card beside the table, a table row; below LogStackBelow reference pixels of panel width the hit card goes under the
+    // table instead of beside it. Their colours and styles are a LogSkin's (LogSkin.cs), not this Theme's
     public const float LogWidthShare = 0.6f, LogHeightShare = 0.85f;
-    public const int LogTileW = 22 * Space, LogTileArtH = 7 * Space, LogCardW = 40 * Space, LogFigureH = 12 * Space;
+    public const int LogTileW = 25 * Space, LogTileArtH = 7 * Space, LogCardW = 40 * Space, LogFigureH = 12 * Space, LogBadgeStrip = 2 * Space, LogBadge = 5 * Space, LogSealStrip = 6 * Space;
+    public static readonly Godot.Vector2 LogRowArt = new(5 * Space, 3 * Space);
     public const int LogHitW = 30 * Space, LogHitArtH = 20 * Space, LogRowH = 5 * Space, LogStatW = 14 * Space, LogStackBelow = 110 * Space;
-    public const int LogPageButton = 5 * Space, LogFilterW = 22 * Space, LogCloseSize = 3 * Space;
-    /// <summary>The share of the accent that tints the log owner's own rows (the row also says so in words: the "you" tag of the scoreboard).</summary>
-    public const float LogMineTint = 0.18f;
+    public const int LogPageButton = 5 * Space, LogFilterW = 22 * Space, LogCloseSize = 3 * Space, LogStatIcon = 2 * Space + Space / 2;
+    /// <summary>Minimum widths of the All hunts table's columns (When, Player, Species, Weight, Distance, Weapon), so a header or a cell is never cut.</summary>
+    public static readonly int[] LogColMin = { 11 * Space, 19 * Space, 27 * Space, 12 * Space, 13 * Space, 12 * Space };
 
     // text sizes (five); body text is 20 and nothing is under 16 at 1080p
     public const int FontSmall = 16, FontBody = 20, FontHead = 24, FontBig = 32, FontDisplay = 48;
@@ -66,6 +68,8 @@ public static class ShooterTheme
     /// <summary>Team deathmatch friend / enemy colours (blue / orange; <see cref="TeamPalette"/>), also under the colour-blind setting.</summary>
     public static Color Friend => From(TeamPalette.Friend(ColorBlind));
     public static Color Enemy => From(TeamPalette.Enemy(ColorBlind));
+    /// <summary>A squad mate on the maps and name tags (#379): blue, the other teammates stay <see cref="Good"/>.</summary>
+    public static Color Squad => From(TeamPalette.Squad(ColorBlind));
     static Color From(StatePalette.Rgb c) => new(c.R, c.G, c.B);
     public static readonly Color Outline = new(0f, 0f, 0f, 0.85f);
     public static readonly Color Scrim = new(0f, 0f, 0f, 0.60f);
@@ -77,8 +81,8 @@ public static class ShooterTheme
     public static readonly Color MapGrid = new(0.94f, 0.95f, 0.84f, 0.40f);
     public static readonly Color MapFrame = new(0.82f, 0.84f, 0.70f);
     public static readonly Color MapRoadCasing = new(0.07f, 0.08f, 0.06f, 0.85f);
-    /// <summary>Vehicle tracks in crop fields on the maps: a pale thin line with a dark casing (the shape, a line along the way driven, carries it; the colour only helps), and a server-told cell's dot.</summary>
-    public static readonly Color MapTrail = new(0.98f, 0.93f, 0.72f, 0.95f);
+    /// <summary>Vehicle tracks in crop fields on the maps: the brown of the crushed-ground mark in the world (MapLoader's crop mark tint, hue 0.16/0.14/0.07), lifted to read on the dark sheet, with a dark casing, and a server-told cell's dot (#413).</summary>
+    public static readonly Color MapTrail = new(0.70f, 0.61f, 0.31f, 0.95f);
     public const float MapTrailWidth = 1.5f;
     public const float MapTrailCasing = 3.5f;
     /// <summary>The waypoint's ink in the world and on the maps: a light green (friendly, as in other shooters), never on a dark plate; its text is outlined instead.</summary>
@@ -192,7 +196,6 @@ public static class ShooterTheme
         t.SetConstant("v_separation", "IntelFlow", Space);
 
         ItemCellStyles(t);
-        LogStyles(t);
 
         t.SetStylebox("background", "ProgressBar", Box(new Color(0, 0, 0, 0.55f), 0, Line));
         Bar(t, "HealthBar", Good);
@@ -232,64 +235,6 @@ public static class ShooterTheme
         t.SetConstant("icon_size", c, CellIcon);
         PanelVariation(t, "ItemTip", Box(Raised with { A = 0.97f }, Space, Line));
         PanelVariation(t, "KeyCap", Box(Raised, Space / 2, Line));
-    }
-
-    /// <summary>
-    /// The Hunter's Log: the panel, a stat tile, a record card, a Life List tile (a button that jumps to that species' hunts; dashed in spirit by a dimmer
-    /// border while not hunted), a table row (selected is the pressed look: a strong accent border, not colour alone) and its tinted own-row variation, the
-    /// sortable header (its arrow is an icon in the accent) and the record pill.
-    /// </summary>
-    static void LogStyles(Theme t)
-    {
-        const int pad = Space;
-        PanelVariation(t, "LogPanel", Box(Surface with { A = 0.96f }, Space * 2, Line));
-        PanelVariation(t, "LogStat", Box(Raised, pad, Line));
-        PanelVariation(t, "LogCard", Box(Raised, pad + Space / 2, Line));
-        PanelVariation(t, "LogHit", Box(Raised, pad + Space / 2, Line));
-        PanelVariation(t, "LogNotice", Box(Raised, Space, Warn));
-        PanelVariation(t, "LogPill", Box(Colors.Transparent, Space / 4, Accent, Border, Radius));
-        Variation(t, "LogCaption", FontSmall, Dim);
-
-        VariationButton(t, "LogTile", Box(Raised, pad, Line), Box(Hover, pad, Accent), Box(Active, pad, Accent, BorderStrong));
-        VariationButton(t, "LogTileTodo", Box(Surface, pad, new Color(Line, 0.5f)), Box(Hover, pad, Accent), Box(Active, pad, Accent, BorderStrong));
-        foreach (var n in new[] { "LogTile", "LogTileTodo" })
-        {
-            t.SetStylebox("focus", n, Ring(pad));
-            t.SetStylebox("disabled", n, Box(Surface, pad, new Color(Line, 0.4f)));
-        }
-
-        var none = Box(Colors.Transparent, Space / 2, null, 0);
-        var mine = Box(new Color(Accent, LogMineTint), Space / 2, null, 0);
-        var hover = Box(Hover, Space / 2, Accent); // the border only shows on hover: the margins are the same, nothing moves
-        var selected = Box(Active, Space / 2, Accent, BorderStrong);
-        VariationButton(t, "LogRow", none, hover, selected);
-        VariationButton(t, "LogRowMine", mine, hover, selected);
-        foreach (var n in new[] { "LogRow", "LogRowMine" })
-        {
-            t.SetStylebox("focus", n, Ring(Space / 2));
-            t.SetStylebox("disabled", n, none);
-        }
-
-        VariationButton(t, "LogHead", Box(Raised, Space / 2, null, 0), Box(Hover, Space / 2, Accent), Box(Active, Space / 2, null, 0));
-        VariationButton(t, "LogHeadSorted", Box(Raised, Space / 2, null, 0), Box(Hover, Space / 2, Accent), Box(Active, Space / 2, null, 0));
-        foreach (var n in new[] { "LogHead", "LogHeadSorted" })
-        {
-            t.SetStylebox("focus", n, Ring(Space / 2));
-            t.SetFontSize("font_size", n, FontSmall);
-            t.SetColor("font_color", n, Dim);
-            t.SetColor("font_hover_color", n, Text);
-            t.SetColor("font_focus_color", n, Text);
-            foreach (var st in new[] { "icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color", "icon_hover_pressed_color" }) t.SetColor(st, n, Accent);
-            t.SetConstant("icon_max_width", n, Space * 2);
-            t.SetConstant("h_separation", n, Space / 2);
-        }
-        t.SetColor("font_color", "LogHeadSorted", Accent);
-        t.SetColor("font_hover_color", "LogHeadSorted", Accent);
-        t.SetColor("font_focus_color", "LogHeadSorted", Accent);
-
-        // the close button: a bare square holding the drawn cross
-        VariationButton(t, "LogClose", Box(Colors.Transparent, Space / 2, Line), Box(Hover, Space / 2, Accent), Box(Active, Space / 2, Accent, BorderStrong));
-        t.SetStylebox("focus", "LogClose", Ring(Space / 2));
     }
 
     static StyleBoxFlat Ring(int pad = Space * 1) => new StyleBoxFlat { DrawCenter = false, BorderColor = Accent }.With(b => { b.SetBorderWidthAll(BorderStrong); b.SetCornerRadiusAll(Radius); b.SetContentMarginAll(pad); });

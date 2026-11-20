@@ -71,12 +71,11 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
     # the unit table: recipe (None: no detail), terrain colour, whether the whole unit is the dike
     out_units = []
     cfgs: dict[str, dict] = {}
+    seq = {p["id"]: i for i, p in enumerate(units)}  # the crop recipe walks the neighbours in the order of the work files
     for p in sorted(units, key=lambda u: u["id"]):
-        recipe = D.area_type(p)
-        if recipe in D.PYTHON_RECIPES:  # the engine skips these units; ``D.append_crops`` builds them after it
-            recipe = None
+        recipe = D.area_type(p, types)
         out_units.append({
-            "id": p["id"], "kind": p["kind"], "recipe": recipe or "",
+            "id": p["id"], "seq": seq[p["id"]], "kind": p["kind"], "recipe": recipe or "",
             "whole_dike": bool(p["id"] in D.dike_parcels() or p["kind"] == "dike"),
             "colour": colours._pick(p), "polygon": p["polygon"],
         })
@@ -135,6 +134,36 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
     return doc, np.ascontiguousarray(terrain.heights, dtype="<f8"), np.ascontiguousarray(terrain.valid, dtype=np.uint8), image, list(plan.warnings)
 
 
+def drape_patches(patches: list, terrain, lift_m: float, textures: list[str], threads: int = 0) -> tuple[np.ndarray, list[int]]:
+    """The rows (the layout of ``detail_patches.npy``) of ``patches`` (:class:`detail.Patch`) draped on the terrain by the engine, on
+    all cores, in patch order, and the triangle count of each patch. What :func:`detail.patch_meshes` does in Python (minutes for the
+    crop fields of the village map): the same area at the same heights, cut into triangles its own way."""
+    import shapely
+    from shapely.geometry import MultiPolygon
+
+    from drycastle_pipeline.patches import _polygons
+    from drycastle_pipeline.textures import texture
+
+    mod = load_module()
+    jobs, blobs, at = [], [], 0
+    for p in patches:
+        wkb = shapely.to_wkb(MultiPolygon(_polygons(p.geom)))
+        tex = None
+        if p.texture is not None:
+            t = texture(p.texture)
+            tex = [t.tile_w, t.tile_h, textures.index(p.texture)]
+        colour = p.colour or ([128, 128, 128] if p.texture is None else [255, 255, 255])  # a textured patch's colour is its tint
+        jobs.append({"wkb": [at, len(wkb)], "colour": [int(c) for c in colour], "tex": tex, "angle": float(p.angle),
+                     "origin": [float(p.origin[0]), float(p.origin[1])], "lift": float(p.lift or lift_m)})
+        blobs.append(wkb)
+        at += len(wkb)
+    doc = {"terrain": {"chunk_m": terrain.chunk_m, "n": terrain.n, "i0": terrain.i0, "j0": terrain.j0,
+                       "rows": int(terrain.heights.shape[0]), "cols": int(terrain.heights.shape[1])}, "jobs": jobs}
+    rows, counts = mod.drape(json.dumps(doc), b"".join(blobs), np.ascontiguousarray(terrain.heights, dtype="<f8").tobytes(),
+                             np.ascontiguousarray(terrain.valid, dtype=np.uint8).tobytes(), threads)
+    return np.frombuffer(rows, dtype="<f8").reshape(-1, D._PATCH_ROW), list(counts)
+
+
 def run_engine(
     work_dir: Path, rules_path: Path = DEFAULT_RULES, edits_path: Path = DEFAULT_EDITS,
     threads: int = 0, only: list[str] | None = None, write: bool = True, out_dir: Path | None = None,
@@ -166,14 +195,8 @@ def run(force: bool = False, edits: str | None = None, work: str | None = None, 
         return 1
     for w in warnings:
         print(f"detail: warning: {w}", file=sys.stderr)
-    try:
-        crops = D.append_crops(work_dir, edits_path=edits_path)
-    except EditsError as exc:
-        for error in exc.errors:
-            print(f"detail: error: {edits_path.name}: {error}", file=sys.stderr)
-        return 1
-    if crops:
-        print("detail: crops: " + ", ".join(f"{k}: {n}" for k, n in crops["crops"].items() if n), file=sys.stderr)
+    if any(stats["crops"].values()):
+        print("detail: crops: " + ", ".join(f"{k}: {n}" for k, n in stats["crops"].items() if n), file=sys.stderr)
     for f in stats["failed"]:
         print(f"detail: warning: a unit failed and has no detail: {f}", file=sys.stderr)
     print(

@@ -6,10 +6,9 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// Street lamps of the base map (lamps.json), and the lamps of placed utility poles (<see cref="PoleHeads"/>: the pole
-/// and its luminaire are the placed object's own model, so only the lit plate, the glow and the light are added
-/// here). Poles and heads are primitive MultiMeshes; each lamp gets a glow
-/// billboard in one MultiMesh (hidden far away by visibility range); a pool of <see cref="PoolSize"/> real lights
-/// follows the camera's nearest lamps. Everything is driven by <see cref="DayNightCycle.NightFactor"/>. The lamps
+/// and its luminaire are the placed object's own model, so only the lit plate and the light are added
+/// here). Poles and heads are primitive MultiMeshes; every lamp wears a lit lens that blooms, like a car's (<see cref="LampKit"/>); a pool of
+/// <see cref="PoolSize"/> real spot beams pointing straight down follows the camera's nearest lamps (the rest are lens only). Everything is driven by <see cref="DayNightCycle.NightFactor"/>. The lamps
 /// are solid: one thin box per pole, the same on the server. The curve and the pool assignment are in
 /// <see cref="LampCurve"/> and <see cref="LampPool"/>.
 /// </summary>
@@ -19,14 +18,9 @@ public partial class StreetLamps : Node3D
     public const float PoleHeight = 5f;
     /// <summary>Lights fade out between 60% and 100% of this distance from the camera.</summary>
     const float PoolMaxDistance = 90f;
-    const float LightRange = 14f;
-    /// <summary>Pool light energy at full night, right under the lamp.</summary>
-    const float LightPeak = 2.2f;
     /// <summary>Energy per second toward the target, so a light fades in or out in about half a second.</summary>
     const float LightRate = 2f;
     const float RefreshSeconds = 0.2f;
-    const float GlowVisibleTo = 260f;
-    static readonly Color LampColour = new(1f, 0.78f, 0.45f);
 
     /// <summary>Foot of each pole on the ground (Godot axes, Y up).</summary>
     public IReadOnlyList<Vector3> Bases { get; init; } = Array.Empty<Vector3>();
@@ -38,18 +32,38 @@ public partial class StreetLamps : Node3D
     /// </summary>
     public IReadOnlyList<(Vector3 Position, float YawDeg)> PoleHeads { get; init; } = Array.Empty<(Vector3, float)>();
 
+    /// <summary>The beam and lens numbers (environment.json <c>lamp</c>).</summary>
+    public LampLook Look { get; init; } = new();
+
     /// <summary>Headless server: the pole colliders only, no visuals, light pool or per-frame work.</summary>
     public bool CollisionOnly { get; init; }
 
+    /// <summary>The lamps of this map on this client (null on a server that builds none); the network client reads it to break and relight pole lamps (ADR 0037).</summary>
+    public static StreetLamps? Current { get; private set; }
+
     Vector3[] _heads = Array.Empty<Vector3>();
     Num.Vector3[] _headsNum = Array.Empty<Num.Vector3>();
-    readonly OmniLight3D[] _lights = new OmniLight3D[PoolSize];
+    readonly SpotLight3D[] _lights = new SpotLight3D[PoolSize];
     readonly int[] _slots = new int[PoolSize];
     readonly int[] _shown = new int[PoolSize];
     StandardMaterial3D _headMat = new();
-    StandardMaterial3D _glowMat = new();
+    // pole lamps are shootable (ADR 0037): the server says when one breaks and when it flickers back; the flicker itself is local, a pure function of its age
+    LampState[] _state = Array.Empty<LampState>();
+    float[] _age = Array.Empty<float>();
+    bool[] _off = Array.Empty<bool>(); // by head index: broken, so the pool never gives it a beam
+    bool[] _dark = Array.Empty<bool>(); // by pole lamp: no lit lens and no beam right now (broken, or a dark step of its flicker)
+    MultiMesh? _plates;
+    Transform3D[] _plateXf = Array.Empty<Transform3D>();
+    int _flickering;
     double _refreshIn;
     float _level = -1f;
+
+    public override void _EnterTree() => Current = this;
+
+    public override void _ExitTree()
+    {
+        if (Current == this) Current = null;
+    }
 
     public override void _Ready()
     {
@@ -58,6 +72,10 @@ public partial class StreetLamps : Node3D
         // the light pool and the glow treat both kinds alike: the lamps of lamps.json first, then the pole lamps
         _heads = Bases.Select(b => b + Vector3.Up * (PoleHeight - 0.04f)).Concat(PoleHeads.Select(h => h.Position)).ToArray();
         _headsNum = _heads.Select(h => new Num.Vector3(h.X, h.Y, h.Z)).ToArray();
+        _state = new LampState[PoleHeads.Count];
+        _age = new float[PoleHeads.Count];
+        _off = new bool[_heads.Length];
+        _dark = new bool[PoleHeads.Count];
         BuildVisuals();
         BuildCollision();
         BuildPool();
@@ -77,8 +95,9 @@ public partial class StreetLamps : Node3D
         {
             _refreshIn = RefreshSeconds;
             var eye = cam.GlobalPosition;
-            LampPool.Refresh(_slots, _headsNum, new Num.Vector3(eye.X, eye.Y, eye.Z), PoolMaxDistance);
+            LampPool.Refresh(_slots, _headsNum, new Num.Vector3(eye.X, eye.Y, eye.Z), PoolMaxDistance, _off);
         }
+        if (_flickering > 0) StepFlicker((float)delta);
 
         var eyePos = cam?.GlobalPosition ?? Vector3.Zero;
         for (int s = 0; s < PoolSize; s++)
@@ -93,17 +112,60 @@ public partial class StreetLamps : Node3D
                 if (idx >= 0) light.Position = _heads[idx];
             }
             float target = idx >= 0 && cam != null
-                ? LampPool.Energy(level, eyePos.DistanceTo(_heads[idx]), PoolMaxDistance) * LightPeak
+                ? LampPool.Energy(level, eyePos.DistanceTo(_heads[idx]), PoolMaxDistance) * (float)Look.Energy
                 : 0f;
-            light.LightEnergy = Mathf.MoveToward(light.LightEnergy, target, (float)delta * LightRate);
+            // a flickering lamp snaps on and off; every other one fades
+            var pole = idx - Bases.Count;
+            if (idx >= 0 && pole >= 0 && _state[pole] == LampState.Flickering) light.LightEnergy = _dark[pole] ? 0f : target;
+            else light.LightEnergy = Mathf.MoveToward(light.LightEnergy, target, (float)delta * LightRate);
         }
+    }
+
+    /// <summary>The server says pole lamp <paramref name="lamp"/> (its place in the placed objects' lamp list) is now in <paramref name="state"/>.</summary>
+    public void SetPoleLamp(int lamp, LampState state)
+    {
+        if ((uint)lamp >= (uint)_state.Length || _state[lamp] == state) return;
+        if (_state[lamp] == LampState.Flickering) _flickering--;
+        _state[lamp] = state;
+        _age[lamp] = 0f;
+        if (state == LampState.Flickering) _flickering++;
+        var head = Bases.Count + lamp;
+        _off[head] = state == LampState.Broken;
+        if (_off[head]) for (var s = 0; s < PoolSize; s++) if (_slots[s] == head) _slots[s] = -1; // its beam goes at once, not at the next refresh
+        SetDark(lamp, state == LampState.Broken || (state == LampState.Flickering && !LampFlicker.On(lamp, 0f, (float)Look.FlickerSeconds)));
+    }
+
+    /// <summary>Every pole lamp not listed is lit (the join catch-up, a new round).</summary>
+    public void SyncPoleLamps(IReadOnlyList<LampStateMsg> unlit)
+    {
+        for (var i = 0; i < _state.Length; i++) SetPoleLamp(i, LampState.Lit);
+        foreach (var m in unlit) SetPoleLamp(m.Index, m.State);
+    }
+
+    void StepFlicker(float dt)
+    {
+        var seconds = (float)Look.FlickerSeconds;
+        for (var i = 0; i < _state.Length; i++)
+        {
+            if (_state[i] != LampState.Flickering) continue;
+            _age[i] += dt;
+            if (_age[i] >= seconds) SetPoleLamp(i, LampState.Lit); // steady on; the server's Lit says the same
+            else SetDark(i, !LampFlicker.On(i, _age[i], seconds));
+        }
+    }
+
+    /// <summary>A dark lamp has no lit lens (its plate shrunk to nothing) and no beam.</summary>
+    void SetDark(int lamp, bool dark)
+    {
+        if (_dark[lamp] == dark) return;
+        _dark[lamp] = dark;
+        _plates?.SetInstanceTransform(lamp, dark ? new Transform3D(Basis.FromScale(Vector3.Zero), _plateXf[lamp].Origin) : _plateXf[lamp]);
     }
 
     void ApplyLevel(float level)
     {
         _level = level;
-        _headMat.EmissionEnergyMultiplier = 0.1f + 3f * level;
-        _glowMat.AlbedoColor = new Color(LampColour.R, LampColour.G, LampColour.B, 0.85f * level);
+        _headMat.EmissionEnergyMultiplier = 0.1f + (float)Look.LensEnergy * level;
     }
 
     void BuildVisuals()
@@ -112,48 +174,21 @@ public partial class StreetLamps : Node3D
         var poleMesh = new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.07f, Height = PoleHeight, RadialSegments = 6, Rings = 1 };
         AddChild(Batch(poleMesh, Bases.Select(b => new Transform3D(Basis.Identity, b + Vector3.Up * (PoleHeight / 2))), poleMat));
 
-        _headMat = new StandardMaterial3D
-        {
-            AlbedoColor = new Color(0.55f, 0.55f, 0.52f),
-            EmissionEnabled = true,
-            Emission = LampColour,
-        };
+        _headMat = LampKit.Lens(new Color(Look.Colour), 0f);
+        _headMat.AlbedoColor = new Color(0.55f, 0.55f, 0.52f);
         var headMesh = new BoxMesh { Size = new Vector3(0.42f, 0.08f, 0.22f) };
         AddChild(Batch(headMesh, _heads.Take(Bases.Count).Select(h => new Transform3D(Basis.Identity, h)), _headMat));
         if (PoleHeads.Count > 0)
         {
             // a thin lit plate under the luminaire of each pole lamp, turned with its pole (the arm reaches along the pole's +Z)
             var plate = new BoxMesh { Size = new Vector3(0.16f, 0.02f, 0.34f) };
-            var lit = Batch(plate, PoleHeads.Select(h => new Transform3D(new Basis(Vector3.Up, Mathf.DegToRad(h.YawDeg)), h.Position)), _headMat);
+            _plateXf = PoleHeads.Select(h => new Transform3D(new Basis(Vector3.Up, Mathf.DegToRad(h.YawDeg)), h.Position)).ToArray();
+            var lit = Batch(plate, _plateXf, _headMat);
+            _plates = lit.Multimesh;
             lit.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
             AddChild(lit);
         }
 
-        var glowTex = new GradientTexture2D
-        {
-            Width = 64,
-            Height = 64,
-            Fill = GradientTexture2D.FillEnum.Radial,
-            FillFrom = new Vector2(0.5f, 0.5f),
-            FillTo = new Vector2(1f, 0.5f),
-            Gradient = new Gradient { Colors = new[] { Colors.White, new Color(1f, 1f, 1f, 0f) }, Offsets = new[] { 0f, 1f } },
-        };
-        _glowMat = new StandardMaterial3D
-        {
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            BlendMode = BaseMaterial3D.BlendModeEnum.Add,
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled,
-            AlbedoTexture = glowTex,
-            AlbedoColor = new Color(LampColour.R, LampColour.G, LampColour.B, 0f),
-            NoDepthTest = false,
-        };
-        var glow = Batch(new QuadMesh { Size = new Vector2(2.4f, 2.4f) },
-            _heads.Select(h => new Transform3D(Basis.Identity, h - Vector3.Up * 0.15f)), _glowMat);
-        glow.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
-        glow.VisibilityRangeEnd = GlowVisibleTo;
-        glow.VisibilityRangeEndMargin = 20f;
-        AddChild(glow);
         ApplyLevel(0f);
     }
 
@@ -178,13 +213,10 @@ public partial class StreetLamps : Node3D
     {
         for (int s = 0; s < PoolSize; s++)
         {
-            _lights[s] = new OmniLight3D
-            {
-                LightColor = LampColour,
-                OmniRange = LightRange,
-                ShadowEnabled = false,
-                LightEnergy = 0f,
-            };
+            // a spot shines along its own -Z: tipped to shine straight down
+            _lights[s] = LampKit.Beam(new Transform3D(new Basis(Vector3.Right, -Mathf.Pi / 2), Vector3.Zero), new Color(Look.Colour),
+                (float)Look.RangeM, (float)Look.AngleDeg, 0f);
+            _lights[s].Visible = true; // the pool slot is always on; its energy is what fades
             AddChild(_lights[s]);
         }
     }

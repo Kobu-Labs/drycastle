@@ -205,6 +205,32 @@ public class MatchTests
     }
 
     [Fact]
+    public void TheSpawnChooserPicksWhatTheWrittenRulePicks()
+    {
+        // the rule as it was first written: a random one of those far enough from everyone, else the first of the farthest
+        static Vector3 Rule(IReadOnlyList<Vector3> candidates, IEnumerable<Vector3> living, float minDistance, Random rng)
+        {
+            var l = living.ToList();
+            float Nearest(Vector3 c) => l.Count == 0 ? float.PositiveInfinity : l.Min(o => Vector3.Distance(c, o));
+            var ok = candidates.Where(c => Nearest(c) >= minDistance).ToList();
+            return ok.Count > 0 ? ok[rng.Next(ok.Count)] : candidates.OrderByDescending(Nearest).First();
+        }
+        var rng = new Random(11);
+        Vector3 At() => new(rng.Next(0, 40) * 5, rng.Next(0, 3), rng.Next(0, 40) * 5); // on a grid, so equal distances happen
+        var crowded = 0;
+        for (var round = 0; round < 300; round++)
+        {
+            var spawns = Enumerable.Range(0, rng.Next(1, 60)).Select(_ => At()).ToList();
+            var living = Enumerable.Range(0, rng.Next(0, 70)).Select(_ => At()).ToList();
+            var min = rng.Next(0, 4) * 20f;
+            var want = Rule(spawns, living, min, new Random(round));
+            Assert.Equal(want, SpawnChooser.Choose(spawns, living, min, new Random(round)));
+            if (!spawns.Any(c => living.All(o => Vector3.Distance(c, o) >= min))) crowded++;
+        }
+        Assert.True(crowded > 30, $"too few rounds with nowhere far enough: {crowded}");
+    }
+
+    [Fact]
     public void CodecsRoundTrip()
     {
         var m = new MatchStateMsg(MatchPhase.Ending, 7.5f, new ushort[] { 2 }, new[] { new ScoreRow(2, "Anička", 25, 3, 40), new ScoreRow(5, "b", 0, 9, 0) });

@@ -22,7 +22,7 @@ public readonly record struct HitTarget(ushort Id, Vector3 Feet, Stance Stance, 
 
 /// <summary>
 /// A ray's hit. <paramref name="Head"/> is a headshot (the weapon's headshot damage). <paramref name="ShapeHead"/> says the bullet met the head cells of
-/// an animal's hit shape: for the hit diagram only, an animal has no headshot damage.
+/// an animal's hit shape (also a headshot; it also marks the hit diagram).
 /// </summary>
 public readonly record struct RayHit(ushort Id, float Distance, bool Head, bool ShapeHead = false);
 public readonly record struct MeleeHit(ushort Id, bool Backstab, float Distance);
@@ -271,7 +271,7 @@ public static class HitMath
                 if (t.Shape.Ray(ToFrame(t, origin), ToFrameDirection(t, dir), limit / size) is not { } sh) continue;
                 var shapeDistance = sh.Distance * size;
                 if (best is { } sb && sb.Distance <= shapeDistance) continue;
-                best = new RayHit(t.Id, shapeDistance, false, sh.Head);
+                best = new RayHit(t.Id, shapeDistance, sh.Head, sh.Head); // a head cell is a headshot (the weapon's headshot damage), as on a player
                 continue;
             }
             if (t.Box.Y > 0)

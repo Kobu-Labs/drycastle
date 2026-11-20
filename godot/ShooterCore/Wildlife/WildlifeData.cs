@@ -24,6 +24,21 @@ public sealed class WildlifeSpecies
     public HerdRules? Herd { get; set; }
 }
 
+/// <summary>
+/// A rare wild species (wildlife.json, "rare"; GLOSSARY "Unicorn"): <see cref="Count"/> of it live on the whole map at a time, each at a random point anywhere with ground
+/// that is at least <see cref="MinBuildingM"/> from every building (no habitat zone). A killed one is replaced by a new one at a new point <see cref="RespawnSeconds"/> after the kill.
+/// </summary>
+public sealed class RareSpecies
+{
+    public string Id { get; set; } = "";
+    /// <summary>How many live at once (each has its own respawn clock).</summary>
+    public int Count { get; set; } = 1;
+    /// <summary>Spawn points lie at least this far (flat metres) from every building.</summary>
+    public float MinBuildingM { get; set; } = 60;
+    /// <summary>From a kill (or a failed search for a point) to the next try, seconds.</summary>
+    public float RespawnSeconds { get; set; } = 60;
+}
+
 /// <summary>One member rule of a <see cref="MixedHerd"/>: an animals.json id that is a fixed <see cref="Min"/>..<see cref="Max"/> of each herd (a stag or two), and/or fills the rest by <see cref="Weight"/>.</summary>
 public sealed class HerdMember
 {
@@ -139,6 +154,8 @@ public sealed class WildlifeFile : IVersioned
     public List<WildlifeSpecies> Species { get; set; } = new();
     /// <summary>Herds of several species (<see cref="MixedHerd"/>): their members are animals of animals.json, placed apart from <see cref="Species"/>.</summary>
     public List<MixedHerd> Herds { get; set; } = new();
+    /// <summary>Rare wild species (<see cref="RareSpecies"/>): not zone species; they count toward <see cref="MaxAnimals"/> and the entity cap.</summary>
+    public List<RareSpecies> Rare { get; set; } = new();
     /// <summary>Bird flocks (flying boids); not animals: they are not in animals.json and cannot be shot. Flock entities count towards the world's entity cap.</summary>
     public List<FlockSpecies> Flocks { get; set; } = new();
 
@@ -162,6 +179,14 @@ public sealed class WildlifeFile : IVersioned
                 if (!(h.SpreadM > 0) || !(h.RangeM >= 0)) throw new DataFileException($"{F}: species {s.Id}: herd spread_m must be positive and range_m not negative");
                 if (!(h.MoveMinSeconds > 0) || h.MoveMaxSeconds < h.MoveMinSeconds) throw new DataFileException($"{F}: species {s.Id}: herd move_min_seconds must be positive and not above move_max_seconds");
             }
+        }
+        var seenRare = new HashSet<string>();
+        foreach (var r in f.Rare)
+        {
+            if (r is null || r.Id == "") throw new DataFileException($"{F}: a rare species has no id");
+            if (!seenRare.Add(r.Id) || seen.Contains(r.Id)) throw new DataFileException($"{F}: rare species {r.Id}: the id is used twice (rare and species are one namespace)");
+            if (r.Count is < 1 or > 10) throw new DataFileException($"{F}: rare species {r.Id}: count is 1..10");
+            if (!(r.MinBuildingM >= 0) || !(r.RespawnSeconds > 0)) throw new DataFileException($"{F}: rare species {r.Id}: min_building_m must not be negative and respawn_seconds must be positive");
         }
         var seenHerds = new HashSet<string>();
         foreach (var m in f.Herds)
@@ -192,7 +217,7 @@ public sealed class WildlifeFile : IVersioned
         foreach (var k in f.Flocks)
         {
             if (k is null || k.Id == "") throw new DataFileException($"{F}: a flock has no id");
-            if (!seenFlocks.Add(k.Id) || seen.Contains(k.Id)) throw new DataFileException($"{F}: flock {k.Id}: the id is used twice (flocks and species share one namespace: it is the habitat name)");
+            if (!seenFlocks.Add(k.Id) || seen.Contains(k.Id) || seenRare.Contains(k.Id)) throw new DataFileException($"{F}: flock {k.Id}: the id is used twice (flocks and species share one namespace: it is the habitat name)");
             if (k.Flocks < 1 || k.Flocks > 20) throw new DataFileException($"{F}: flock {k.Id}: flocks is 1..20");
             if (k.BirdsMin < 2 || k.BirdsMax < k.BirdsMin || k.BirdsMax > 120) throw new DataFileException($"{F}: flock {k.Id}: birds_min is at least 2, not above birds_max, and birds_max is at most 120");
             if (!(k.AltitudeMinM >= 0) || k.AltitudeMaxM < k.AltitudeMinM) throw new DataFileException($"{F}: flock {k.Id}: altitude_min_m is not negative and not above altitude_max_m");
@@ -212,6 +237,12 @@ public sealed class WildlifeFile : IVersioned
         {
             if (animals.Find(s.Id) is not { } def) throw new DataFileException($"wildlife.json: species {s.Id} is not in animals.json");
             if (!def.Flees) throw new DataFileException($"wildlife.json: species {s.Id} is a pet (flees is off): pets.json places those");
+        }
+        foreach (var r in Rare)
+        {
+            if (animals.Find(r.Id) is not { } def) throw new DataFileException($"wildlife.json: rare species {r.Id} is not in animals.json");
+            if (!def.Flees) throw new DataFileException($"wildlife.json: rare species {r.Id} is a pet (flees is off): pets.json places those");
+            if (Herds.Any(h => h.Members.Any(k => k.Id == r.Id))) throw new DataFileException($"wildlife.json: rare species {r.Id} is also a herd member");
         }
         foreach (var herd in Herds)
             foreach (var k in herd.Members)

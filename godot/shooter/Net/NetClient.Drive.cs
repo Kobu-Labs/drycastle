@@ -64,6 +64,7 @@ public partial class NetClient
         d.Rec = rec;
         d.Buf.Push(tick, rec.Position, DriveRecord.Roll(rec), DriveRecord.Pitch(rec));
         d.Keys.Push(tick, new NVec3(DriveRecord.Steer(rec), DriveRecord.Throttle(rec), 0), 0, 0);
+        if (_cars.TryGetValue(carId, out var car)) PlaceCarSolid(car); // the hull's solid box lies on the slope the record says
     }
 
     VehicleDef? DriveDef(CarView v) => Vehicles != null && v.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[v.Kind].Drive != null ? Vehicles.Vehicles[v.Kind] : null;
@@ -120,7 +121,9 @@ public partial class NetClient
             Owned.AddChild(probe);
             var g = GeometryOf(mine.Kind, trailer.Kind);
             _drive.TrailerWorld = probe; _drive.TrailerId = trailer.Id;
-            _drive.Predict.AttachTrailer(tdef, g, TowModel.Pose(g, server.Position, server.Yaw, phi), probe);
+            var body = TowModel.Pose(g, server.Position, server.Yaw, phi);
+            body.Position.Y = rec.Position.Y; // the trailer's own ground (the server's), not the hitch's: the step searches the ground from it (#377)
+            _drive.Predict.AttachTrailer(tdef, g, body, probe);
         }
         _drive.Predict.TrailerLoaded = trailer.Trailer?.Loaded ?? true; // a cart emptied under way weighs less from the next step on, as the server's does
         return phi;

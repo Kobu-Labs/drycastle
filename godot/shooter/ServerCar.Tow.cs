@@ -24,6 +24,9 @@ public partial class ServerCar
     /// <summary>A trailer's view of the world for its own step (the world's solids under its box, the ground under it); null for every other type.</summary>
     public TrailerProbe? TrailerWorld { get; private set; }
 
+    /// <summary>How the trailer lies on the ground as of its last placing (<see cref="TrailerProbe.Attitude"/>, the same fit the clients draw it by); null before the first placing and after a throw.</summary>
+    public TrailerAttitude.Result? TrailerTilt { get; private set; }
+
     /// <summary>The tractor this trailer is hitched to; null when it is loose.</summary>
     public ServerCar? Tractor { get; private set; }
 
@@ -60,6 +63,7 @@ public partial class ServerCar
         Life.SetMaxHp(Cargo.MaxHp(Def));
         Tow = new TowLink(OriginPos.ToNumerics(), OriginYaw);
         TowGeo = TowGeometry.ForTrailer(Def);
+        TrailerTilt = null;
     }
 
     /// <summary>The vehicle's own end of a hitch goes (a reset, a blast): a tractor lets its trailer go (with the lockout), a trailer lets go of its tractor.</summary>
@@ -70,12 +74,20 @@ public partial class ServerCar
     }
 
     /// <summary>The tractor's step is told what the trailer on it does (its load and the jackknife block); none when nothing is hitched.</summary>
-    public TowEffect TowEffectNow() => Towing is { Tow: { } link } trailer ? link.Effect(Def, trailer.Def, trailer.TowGeo, trailer.Cargo?.Loaded ?? true) : TowEffect.None;
+    public TowEffect TowEffectNow()
+    {
+        if (Towing is not { Tow: { } link } trailer) return TowEffect.None;
+        var e = link.Effect(Def, trailer.Def, trailer.TowGeo, trailer.Cargo?.Loaded ?? true);
+        var now = Time.GetTicksMsec() / 1000.0;
+        if (e.Block.Active && now - _blockLogS >= 1) { _blockLogS = now; GD.Print($"server: {Def.Id} {Id} jackknife block active, trailer {trailer.Id} at its fold limit (phi {link.Body.Phi * 180f / MathF.PI:F0} deg)"); }
+        return e;
+    }
+    double _blockLogS = -10;
 
     /// <summary>What the tractor did this tick, as the trailer needs it: the drive state's, or the car state with the physics body's place.</summary>
     public TractorMotion TowMotion()
     {
-        if (Drives) return TractorMotion.From(Drive);
+        if (Drives) return TractorMotion.From(Drive, Def);
         var p = GlobalPosition;
         return TractorMotion.From(new NVec3(p.X, p.Y, p.Z), State);
     }
@@ -142,6 +154,7 @@ public partial class ServerCar
         Rotation = new Vector3(0, b.Yaw, 0);
         State.Yaw = b.Yaw; State.Speed = b.Speed; State.YawRate = 0;
         Velocity = Vector3.Zero;
+        if (Def.Tilts) TrailerTilt = TrailerWorld.Attitude(TowGeo, b.Position.X, b.Position.Z, gy, b.Yaw, Tractor is { } t ? t.GlobalPosition.Y + TowGeo.HitchY : null); // the node stays upright; the hull turns (HullTilt)
     }
 
     /// <summary>The body takes the node's place (a trailer the Bigfoot threw and set down): it stands there, still.</summary>
@@ -149,6 +162,7 @@ public partial class ServerCar
     {
         var p = GlobalPosition;
         Tow!.Body = TrailerBody.At(new NVec3(p.X, p.Y, p.Z), State.Yaw);
+        TrailerTilt = null; // set down somewhere else: upright until the next placing fits it
     }
 
     /// <summary>Puts the load on or takes it off: its hit points follow (<see cref="CartCargo.MaxHp"/>), keeping their share. True when that changed it.</summary>

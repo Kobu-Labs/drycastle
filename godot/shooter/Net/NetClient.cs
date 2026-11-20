@@ -15,7 +15,8 @@ public partial class NetClient : Node
     sealed class Pending { public NetInput Input; public MoveState After; }
     sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc, WadeAcc; public double RippleDue; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
         /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the vehicle and seat this player sits in (<see cref="SeatRiders"/>).</summary>
-        public float ShownYaw, ShownPitch; public bool Binoculars; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
+        public float ShownYaw, ShownPitch; public bool Binoculars; /// <summary>The squad whose name the name tag shows after the name (0: none); the tag is rebuilt when it changes (#379).</summary>
+        public byte TagSquad; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -83,7 +84,7 @@ public partial class NetClient : Node
     readonly List<(double T, ExplosionMsg M)> _explosionLog = new();
     /// <summary>The event logs are read only by the scripted bots (the weapons, rpg, blast and car checks), so a normal match keeps none of them: they grew for the whole match (#173, T3-028).</summary>
     bool KeepEventLogs => WeaponsBot != "" || RpgBot != "" || BlastBot != "" || CarBot != "";
-    sealed class Rocket { public double Born; public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; /* a homing missile (NetClient.LockOn.cs): the Aircraft it closes on and when it gets there */ public bool Homing; public ushort Target; public double Arrive; }
+    sealed class Rocket { public double Born; public Node3D Node = null!; public float Tumble; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; /* a homing missile (NetClient.LockOn.cs): the Aircraft it closes on and when it gets there */ public bool Homing; public ushort Target; public double Arrive; /* a thrown grenade: drawn falling along its arc from the last snapshot */ public bool Grenade; public float Gravity; }
     readonly Dictionary<ushort, Rocket> _rockets = new();
     readonly HashSet<ushort> _deadRockets = new();
     readonly List<(double T, AmmoMsg M)> _ammoLog = new();
@@ -246,10 +247,14 @@ public partial class NetClient : Node
     {
         TelemetryFrame(delta);
         PerfClientFrame(delta);
+        ReportFrame(delta);
         if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
         if (LinkEnded) return;
         UpdateMapCursor();
+        if (_volumes != null) UpdateVolumes();
+        var t = ClientProf.Begin();
         Poll();
+        t = ClientProf.Lap(ClientProf.S.Net, t);
         if (_link.Is(LinkPhase.Connecting))
         {
             _link.Tick((float)delta);
@@ -258,37 +263,46 @@ public partial class NetClient : Node
         }
         PumpAutosave(); // loadout saves whose debounce ran out go out here, whichever screen is open (#145)
         RenderRemotes();
+        RenderHeadLamps();
         if (PoseDemo && !_poseDemoDone && _me != null) SpawnPoseDemo();
         RenderCorpses();
         RenderGroundItems();
         RenderCarePackages();
         RenderTurrets();
+        t = ClientProf.Lap(ClientProf.S.Players, t);
         RenderAnimals();
         RenderFlocks(delta);
         RenderBigfoot();
         RenderCitizens();
         RenderGang(delta);
         RenderDemon();
+        t = ClientProf.Lap(ClientProf.S.Creatures, t);
         UpdateDeath(delta);
         UpdatePounce(delta);
+        t = ClientProf.Lap(ClientProf.S.View, t);
         RenderCars();
         RenderHarvester((float)delta);
         RenderAircraft(delta);
+        t = ClientProf.Lap(ClientProf.S.Vehicles, t);
         RenderRockets();
         RenderLockOn();
         RenderLauncherLoaded();
         RenderMissiles();
         RenderMissilePov();
         RenderScud(delta);
+        t = ClientProf.Lap(ClientProf.S.Projectiles, t);
         RenderWater();
         UpdateViewmodel();
+        UpdateThrowArc();
         UpdateDemonQuake(delta);
         UpdateDust(); // before the shake: a blast wave that arrives this frame shakes this frame
         UpdateShake(delta);
         UpdateNausea(delta); // a high player's sway (NetClient.High.cs), before the roll is composed
         FadeOwnCorrection(delta);
+        t = ClientProf.Lap(ClientProf.S.View, t);
         UpdateHud();
         RozhlasMicFrame(); // the set holder's mic and the ON AIR cue
+        ClientProf.End(ClientProf.S.Hud, t);
     }
 
     void Poll()
@@ -318,9 +332,15 @@ public partial class NetClient : Node
     void OnPacket(byte[] d)
     {
         if (d.Length == 0) return;
-        if (d[0] < Wire.TInput) OnReliable(Wire.DecodeReliable(d));
-        else if (d[0] == Wire.TSnapshot) OnSnapshot(d);
-        else if (d[0] == Wire.TWorldSnapshot) WorldEntities.Apply(d);
+        var t = ClientProf.Begin();
+        if (d[0] < Wire.TInput)
+        {
+            var m = Wire.DecodeReliable(d);
+            OnReliable(m);
+            ReportEvent(m is EventMsg e ? e.Kind : (byte)0, ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetEvents, t));
+        }
+        else if (d[0] == Wire.TSnapshot) { OnSnapshot(d); ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetSnapshot, t); }
+        else if (d[0] == Wire.TWorldSnapshot) { WorldEntities.Apply(d); ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetWorld, t); }
         else if (d[0] == Wire.TRozhlasFeed && RozhlasFeedWire.TryDecode(d, out var feedSeq, out var feedOpus)) { RozhlasFeedPlayer.Current?.Push(feedSeq, feedOpus); BotFeedFrame(feedOpus); } // the live rozhlas feed (silent when headless)
     }
 
@@ -333,7 +353,7 @@ public partial class NetClient : Node
                 RozhlasSetReset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
                 DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
                 CasingFx.Water = Water;
-                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Bodies = this };
+                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Bodies = this };
                 World.AddChild(_me);
                 if (!Bot && ShotFx.Enabled) { _viewmodel = MakeViewmodel(); _me.Camera.AddChild(_viewmodel); }
                 if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(_me.Camera); // the glass shaders compile now, not at the first crack
@@ -357,7 +377,7 @@ public partial class NetClient : Node
             case LeaveMsg l:
                 _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
                 if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
-                ForgetWorn(l.PlayerId); _binocularsBy.Remove(l.PlayerId);
+                ForgetWorn(l.PlayerId); _binocularsBy.Remove(l.PlayerId); _headLampBy.Remove(l.PlayerId);
                 ForgetStatus(l.PlayerId);
                 break;
             case EventMsg e:
@@ -439,6 +459,7 @@ public partial class NetClient : Node
         LossOnSnapshot(h);
         PerfClientSnapshot();
         TelemetrySnapshot(h.Tick);
+        ReportSnapshot(h.Tick);
         _lastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         _clock.OnSnapshot(h.Tick, _lastArrival);
         DayNightCycle.Current?.SetServerTick(h.Tick);
@@ -473,9 +494,14 @@ public partial class NetClient : Node
         {
             var speed = Weapons != null && rec.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[rec.Weapon].ProjectileSpeed : 40f;
             r = new Rocket { Node = RocketFx.Make(Owned, WeaponId(rec.Weapon)), Born = Now, Speed = speed }; _rockets[id] = r;
+            r.Gravity = GrenadeGravity(rec.Weapon); r.Grenade = r.Gravity > 0;
         }
+        if (r.Grenade) r.Speed = rec.Health / NetServer.GrenadeSpeedScale; // a grenade's speed rides the health byte
         r.Pos = rec.Position; r.Dir = dir; r.At = Now;
     }
+
+    /// <summary>The fall of a thrown weapon (weapons.json grenade.gravity, m/s²); 0 for a rocket.</summary>
+    float GrenadeGravity(int weapon) => Weapons != null && weapon >= 0 && weapon < Weapons.Weapons.Count ? Weapons.Weapons[weapon].Grenade?.Gravity ?? 0f : 0f;
 
     void RenderRockets()
     {
@@ -484,12 +510,22 @@ public partial class NetClient : Node
         {
             if (r.Node == null) continue;
             if (r.Homing) StepHoming(r);
-            var p = r.Homing ? r.Pos : r.Pos + r.Dir * (r.Speed * (float)Math.Min(0.1, Now - r.At));
+            var dtp = (float)Math.Min(0.1, Now - r.At);
+            var falls = r.Speed > GrenadeFlight.RestSpeed; // a grenade lying still does not keep falling between snapshots (it sank up to 10 cm into the road, #421)
+            var p = r.Homing ? r.Pos : r.Pos + r.Dir * (r.Speed * dtp) - NVec3.UnitY * (falls ? 0.5f * r.Gravity * dtp * dtp : 0f); // a grenade falls between snapshots
             // visual only: the server rocket starts at the eye; draw it leaving the muzzle (0.8 m ahead, right and down) and blend onto the true path
             var k = Mathf.Max(0f, 1f - (float)(Now - r.Born) / 0.35f);
             var d = new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z);
             var side = d.Cross(Vector3.Up).Normalized();
             r.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z) + (d * 0.8f + side * 0.25f + Vector3.Down * 0.2f) * k;
+            if (r.Grenade)
+            {
+                // it tumbles while it moves, and lies on its side when it stops (upright, its lower half would sink into the road ribbons floating 2-8 cm over the ground)
+                var spin = (float)GetProcessDeltaTime();
+                r.Tumble = r.Speed > GrenadeFlight.RestSpeed ? r.Tumble + 9f * spin : Mathf.MoveToward(r.Tumble, MathF.Round((r.Tumble - Mathf.Pi / 2) / Mathf.Pi) * Mathf.Pi + Mathf.Pi / 2, 8f * spin);
+                r.Node.Rotation = new Vector3(r.Tumble, 0, 0);
+                continue; // no trail, no flight loop
+            }
             SfxRocket(r, r.Node.GlobalPosition);
             if (camAt is { } eye) RocketFx.GateTrail(r.Node, eye);
             if (Mathf.Abs(r.Dir.Y) < 0.99f) r.Node.LookAt(r.Node.GlobalPosition + new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z));
@@ -550,6 +586,7 @@ public partial class NetClient : Node
         LastVertical = MathF.Abs(predicted.Position.Y - sp.Y) > 0.5f * err; // the error is mostly up or down (steps, slopes, jumps, landings)
         LossOnPredictionError(err);
         TelemetryPredictionError(err);
+        ReportPredictionError(err);
         _pending.RemoveRange(0, idx + 1);
         if (err <= ReconcileEpsilon)
         {
@@ -629,8 +666,10 @@ public partial class NetClient : Node
         else if (Bot && _elapsed >= BotSeconds) { if (CarBot != "") CarResult(false, "timeout"); else if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
         if (!OwnSpawned) return; // wait for our spawn position
         DemonBodyTick(); // the demon's Body capsule is where the server last put it, before the body is predicted
+        var pt = ClientProf.Begin();
         ReplayReconcile(); // C-02: a snapshot's reconcile replays here, with the physics step (see OnSelf)
         ReplayDriveReconcile(); // and so does a predicted vehicle's (ADR 0010, ADR 0014)
+        pt = ClientProf.Lap(ClientProf.S.Reconcile, pt);
         var dt = (float)delta;
         MoveInput mi;
         if (Bot && MatchBot != "")
@@ -665,10 +704,11 @@ public partial class NetClient : Node
             var jump = ((int)(t * 30) % 45) == 0 ? MoveButtons.Jump : MoveButtons.None;
             mi = new MoveInput { MoveY = 1, Yaw = yaw, Buttons = jump, SpeedScale = 1 };
         }
-        else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : _me.Sample();
+        else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : PerfPlay ? PerfPlayStep() : _me.Sample();
         if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); TickLootReturn(dt); }
         FxDemoInput(ref mi);
         ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
+        ThrowFilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
         _aimHeld = mi.Has(MoveButtons.Aim);
         if (HeadLookWanted()) mi.Buttons |= MoveButtons.HeadLook; // seated and looking out of their own eyes: the view is the head's, shown to everyone (ADR 0026)
         TickRecoil(mi);
@@ -689,6 +729,7 @@ public partial class NetClient : Node
         _conn.Flush();
         var p = _me.State.Position;
         _meMin = NVec3.Min(_meMin, p); _meMax = NVec3.Max(_meMax, p);
+        ClientProf.End(ClientProf.S.Predict, pt);
     }
 
     /// <summary>The fractional server tick the remote entities are drawn at this frame (see <see cref="RenderClock"/>).</summary>
@@ -754,7 +795,7 @@ public partial class NetClient : Node
     {
         if (_viewmodel == null) return;
         var slot = Ammo?.Slot ?? _wantSlot;
-        var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
+        var id = ThrowHeldId() ?? (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : ""); // the throw key held: the grenade, whatever was selected
         _viewmodel.Show(id);
         _viewmodel.Visible = Mode.ShowsViewmodel && !OwnBodyFlung && _me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
     }
@@ -936,7 +977,9 @@ public partial class NetClient : Node
         if (HandleMapInput(e)) return; // M: the tactical map
         if (HandleEquipmentInput(e)) return; // F: the Equipment screen (#268)
         if (HandleHuntersLogInput(e)) return; // J: the Hunter's Log (#336)
+        if (HandleMineralLogInput(e)) return; // N: the Mineral Log
         if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
+        if (HandleVolumeInput(e)) return; // F3, the bounding-volume overlay; [ ] step its mode (#479)
         if (HandleScudInput(e)) return; // the Scud screen's keys (open, confirm, abort, lock, the wheel's zoom)
         if (HandleSeatInput(e)) return; // a number key while seated takes that seat
         if (HandleViewInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
@@ -971,16 +1014,17 @@ public partial class NetClient : Node
                 if (KeepEventLogs) _launchLog.Add((Now, l));
                 if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
                 // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the rpg's)
-                if (_rockets.TryGetValue(l.Id, out var known)) known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length();
+                if (_rockets.TryGetValue(l.Id, out var known)) { known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length(); known.Gravity = GrenadeGravity(l.Weapon); known.Grenade = known.Gravity > 0; }
                 else if (!_deadRockets.Contains(l.Id) && ShotFx.Enabled && Weapons != null)
                 {
                     // show the rocket at once from the launch event; snapshots take over
                     var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);
-                    _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned, WeaponId(l.Weapon)), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length() };
+                    _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned, WeaponId(l.Weapon)), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length(), Gravity = GrenadeGravity(l.Weapon), Grenade = GrenadeGravity(l.Weapon) > 0 };
                 }
                 if (!EchoOfPredicted(l.Owner))
                 {
                     SfxLaunch(l);
+                    if (GrenadeGravity(l.Weapon) > 0) { if (_remotes.TryGetValue(l.Owner, out var thrower)) thrower.FireUntil = Now + 0.45; break; } // a throw: no flash, no backblast
                     if (l.Owner == _myId) _viewmodel?.Flash(0.5f); else if (_remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
                     // a held launcher's backblast, behind the shooter's shoulder (a gunship's rocket has no owner on foot: its owner is not a remote here)
                     if (_remotes.ContainsKey(l.Owner) && l.Velocity.LengthSquared() > 1e-4f) { var ld = G(NVec3.Normalize(l.Velocity)); RocketFx.Backblast(Owned, G(l.Origin) - ld * WeaponFx.LauncherRear + Vector3.Down * 0.15f, ld); }
@@ -1026,6 +1070,12 @@ public partial class NetClient : Node
                 break;
             case EventKind.GlassSync when GlassCodec.DecodeSync(payload) is { } gsync:
                 OnGlassSync(gsync);
+                break;
+            case EventKind.LampState when LampCodec.DecodeState(payload) is { } lamp:
+                StreetLamps.Current?.SetPoleLamp(lamp.Index, lamp.State);
+                break;
+            case EventKind.LampSync when LampCodec.DecodeSync(payload) is { } lamps:
+                StreetLamps.Current?.SyncPoleLamps(lamps);
                 break;
             case EventKind.HuntShot when HuntShot.Decode(payload) is { } hs:
                 HudHuntShot(hs);

@@ -8,22 +8,24 @@ public static class HuntersLogStrings
         ("bind.hunters_log", "Hunter's Log (toggle)"),
         ("pause.hunterslog", "Hunter's Log"),
         // frame
-        ("log.title.my", "My Log"), ("log.title.other", "{0}'s Log"), ("log.tab.records", "Records"), ("log.tab.hunts", "All hunts"),
+        ("log.name", "Hunter's Log"), ("log.title.my", "My Log"), ("log.title.other", "{0}'s Log"), ("log.tab.records", "Records"), ("log.tab.hunts", "All hunts"),
         ("log.close", "Close"), ("log.back", "Back"),
         ("log.sandbox", "Sandbox: hunts are not logged"),
         // my log
         ("log.stat.hunts", "Hunts"), ("log.stat.species", "Species"), ("log.stat.heaviest", "Heaviest"), ("log.stat.longest", "Longest shot"), ("log.none", "-"),
-        ("log.life.title", "Life List"), ("log.life.count", "{0} of {1}"),
+        ("log.life.title", "Life List"), ("log.life.count", "{0} of {1}"), ("log.sec.game", "Regular"), ("log.sec.mystery", "Mystery"),
+        ("log.tier.gold", "Gold"), ("log.tier.silver", "Silver"), ("log.tier.bronze", "Bronze"), ("log.tile.tier", "{0} kg, {1}"),
+        ("log.legend.gold", "Gold, top 5%"), ("log.legend.silver", "Silver, top 10%"), ("log.legend.bronze", "Bronze, top 20%"),
         ("log.tile.best", "Best {0} kg"), ("log.tile.longest", "Longest {0}"), ("log.tile.caught", "Caught {0}"), ("log.tile.todo", "Not hunted yet"),
-        ("log.hunts.own", "All my hunts"), ("log.hunts.other", "All {0}'s hunts"),
         ("log.hidden.mark", "?"), ("hunt.hidden.name", "Xxxxxxxx"),
         // records
         ("log.rec.heaviest", "Heaviest"), ("log.rec.longest", "Longest shot"), ("log.rec.first", "First caught"), ("log.rec.todo", "Not hunted yet. The first kill takes the record."),
-        ("log.rec.open", "All {0} hunts"), ("log.head", "HEAD"),
+        ("log.rec.kill.title", "Player kill"), ("log.rec.kill.todo", "No player kill yet. The first one takes the record."),
+        ("log.rec.open", "All {0} hunts"), ("log.area.head", "Head"), ("log.area.body", "Body"), ("log.area.legs", "Legs"), ("log.area.none", "No hit"),
         // all hunts
-        ("log.col.when", "When"), ("log.col.player", "Player"), ("log.col.species", "Species"), ("log.col.weight", "Weight"), ("log.col.distance", "Distance"), ("log.col.weapon", "Weapon"),
+        ("log.col.when", "When"), ("log.col.player", "Hunter"), ("log.col.species", "Species"), ("log.col.weight", "Weight"), ("log.col.distance", "Distance"), ("log.col.weapon", "Weapon"),
         ("log.sort.tip", "Sort by {0}"),
-        ("log.filter.species", "Species"), ("log.filter.weapon", "Weapon"), ("log.filter.player", "Player"), ("log.filter.all", "All"), ("log.filter.allplayers", "All players"),
+        ("log.filter.species", "Species"), ("log.filter.player", "Hunter"), ("log.filter.all", "All"), ("log.filter.allplayers", "All hunters"),
         ("log.filter.mystery", "Mystery hunts"), ("log.filter.clear", "Clear filters"),
         ("log.page.prev", "Prev"), ("log.page.next", "Next"), ("log.page.tip", "Page {0}"), ("log.range", "{0}-{1} of {2}"), ("log.gap", "..."),
         ("log.pill.kg", "Record kg"), ("log.pill.shot", "Record shot"),
@@ -43,9 +45,9 @@ public static class HuntersLogStrings
         ("weapon.run_over", "Run over"), ("weapon.event", "Event"), ("weapon.other", "Other"),
         // announcements
         ("hunt.tag.record", "NEW RECORD"), ("hunt.tag.first", "FIRST"),
-        ("hunt.line.kg", "{0}: {1}, {2} kg"), ("hunt.line.shot", "{0}: {1}, {2} m longest shot"),
+        ("hunt.line.kg", "{0}: {1}, {2} kg"), ("hunt.line.shot", "{0}: {1}, {2} m longest shot"), ("hunt.line.kill", "{0}: {1} m longest player kill"),
         ("hunt.line.first", "{0} hunted a {1} for the first time"), ("hunt.line.first.mystery", "{0} caught {1} for the first time"),
-        ("toast.hunt.kg", "New record: {0}, {1} kg"), ("toast.hunt.shot", "New record: {0}, {1} m longest shot"),
+        ("toast.hunt.kg", "New record: {0}, {1} kg"), ("toast.hunt.shot", "New record: {0}, {1} m longest shot"), ("toast.hunt.kill", "New record: {0} m longest player kill"),
         ("toast.hunt.first", "First {0}: added to your Life List"), ("toast.hunt.first.mystery", "You caught {0} for the first time"),
     };
 }

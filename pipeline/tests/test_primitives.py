@@ -10,7 +10,7 @@ from drycastle_pipeline.assets import (
     validate_asset_ref,
 )
 from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.primitives import PRIMITIVES, build_primitive
+from drycastle_pipeline.primitives import PRIMITIVES, build_primitive, mound_entry, mound_solids, mound_tiers
 
 MANIFEST = load_manifest(private=False)  # the public library: the private packs have their own rules
 # Packs whose terms the owner has not confirmed yet: listed and placeable, but flagged UNVERIFIED with a NOTICE.txt instead of CC0 + LICENSE.txt.
@@ -161,3 +161,59 @@ def test_bunker_is_a_low_dome_with_door_facing_front() -> None:
     assert signed_volume(mesh) > 0
     door = mesh.tris.reshape(-1, 3)
     assert door[:, 1].min() < -2.1  # door and slit boxes stand proud of the -y wall
+
+
+# --- mound: a terraced hill the player can walk up ---
+
+STEP_HEIGHT = 0.3  # MoveConsts.StepHeight
+
+
+def test_mound_solids_one_nested_box_per_tier_rise_within_step() -> None:
+    solids = mound_solids()
+    assert len(solids) == len(mound_tiers()) == 15  # ceil(4 / 0.28)
+    tops = [s["max"][2] for s in solids]
+    assert all(s["min"][2] == 0 for s in solids)
+    assert tops[0] - 0 <= 0.28 + 1e-9
+    assert all(b - a <= 0.28 + 1e-9 for a, b in zip(tops, tops[1:], strict=False))
+    assert tops == sorted(tops) and tops[-1] == pytest.approx(4.0)
+    for lower, upper in zip(solids, solids[1:], strict=False):  # each tier sits inside the one below, centred
+        assert all(u > lo_ for u, lo_ in zip(upper["min"][:2], lower["min"][:2], strict=True))
+        assert all(u < hi for u, hi in zip(upper["max"][:2], lower["max"][:2], strict=True))
+    assert solids[0]["min"][:2] == [-6.0, -6.0] and solids[0]["max"][:2] == [6.0, 6.0]
+    assert solids[-1]["max"][:2] == [0.5, 0.5]  # the 1 m flat top
+    run = solids[0]["max"][0] - solids[1]["max"][0]
+    assert 0.3 <= run <= 0.5  # a walkable slope
+
+
+def test_mound_mesh_matches_solids_and_is_deterministic() -> None:
+    mesh = build_primitive("mound")
+    lo, hi = bbox(mesh)
+    assert hi[2] == pytest.approx(4.0) and lo[2] == pytest.approx(0) and hi[0] == pytest.approx(6.0)
+    assert np.array_equal(mesh.tris, build_primitive("mound").tris)
+    assert mound_solids() == mound_solids()
+    assert signed_volume(mesh) == pytest.approx(
+        sum((s["max"][0] - s["min"][0]) ** 2 * (s["max"][2] - s["min"][2]) for s in _stacked(mound_solids())), rel=1e-3
+    )
+
+
+def _stacked(solids):
+    prev = 0.0
+    for s in solids:
+        yield {**s, "min": [*s["min"][:2], prev]}
+        prev = s["max"][2]
+
+
+def test_mound_params_override() -> None:
+    tiers = mound_tiers({"base_m": 8, "peak_m": 2, "top_m": 2, "step_rise_m": 0.25})
+    assert len(tiers) == 8 and tiers[0][0] == 4.0 and tiers[-1] == (1.0, 2.0)
+    lo, hi = bbox(build_primitive("mound", {"base_m": 8, "peak_m": 2, "top_m": 2, "colour": "#112233"}))
+    assert hi[2] == pytest.approx(2.0) and hi[0] == pytest.approx(4.0)
+    with pytest.raises(ValueError):
+        mound_tiers({"top_m": 20})
+
+
+def test_mound_manifest_entry_in_sync_and_ref_valid() -> None:
+    assert validate_asset_ref("prim:mound", MANIFEST) is None
+    entry = next(a for a in MANIFEST["assets"] if a["id"] == "prim:mound")
+    assert entry == mound_entry()  # regenerate with mound_entry() when the primitive changes
+    assert entry["size_m"] == [12.0, 4.0, 12.0] and entry["solids"] == mound_solids()

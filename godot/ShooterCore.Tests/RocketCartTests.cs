@@ -353,7 +353,7 @@ public class RocketCartTests
             seq++;
             var effect = new TowEffect(TowLoad.Of(car, Cart), TowModel.BlockOf(g, serverBody));
             DriveModel.Step(ref server, car, keys, Dt, world, effect);
-            TowModel.Step(ref serverBody, g, TractorMotion.From(server), Dt);
+            TowModel.Step(ref serverBody, g, TractorMotion.From(server, car), Dt);
             client.Step(seq, keys, Dt);
             Assert.Equal(server.Position, client.State.Position);
             Assert.Equal(serverBody.Phi, client.TrailerBody.Phi);
@@ -387,7 +387,7 @@ public class RocketCartTests
         for (var i = 0; i < 4; i++)
         {
             DriveModel.Step(ref server, car, inputs[i], Dt, world, new TowEffect(TowLoad.Of(car, Cart), TowModel.BlockOf(g, body)));
-            TowModel.Step(ref body, g, TractorMotion.From(server), Dt);
+            TowModel.Step(ref body, g, TractorMotion.From(server, car), Dt);
         }
         var serverPhi = body.Phi + 0.3f;
         Assert.True(client.Reconcile(4, server, Dt, serverPhi));
@@ -399,7 +399,7 @@ public class RocketCartTests
         for (var i = 4; i < 10; i++)
         {
             DriveModel.Step(ref s2, car, inputs[i], Dt, world, new TowEffect(TowLoad.Of(car, Cart), TowModel.BlockOf(g, uncorrected)));
-            TowModel.Step(ref uncorrected, g, TractorMotion.From(s2), Dt);
+            TowModel.Step(ref uncorrected, g, TractorMotion.From(s2, car), Dt);
         }
         Assert.True(MathF.Abs(client.TrailerBody.Phi - uncorrected.Phi) > 0.05f, "the 0.3 rad the server gave it is still in it");
         // and with no trailer the prediction is the one it always was
@@ -424,6 +424,56 @@ public class RocketCartTests
     }
 
     /// <summary>A wall across the world at z = 18 (the tractor's z grows as it reverses): the trailer is blocked when its box would reach it.</summary>
+    // ---- the tilting hull (#482) ----
+
+    [Fact]
+    public void The_hull_is_one_narrow_box_over_the_missile_and_the_footprint_stays_wide()
+    {
+        Assert.True(Cart.Tilts);
+        var b = Assert.Single(Cart.HullBoxes);
+        Assert.Equal(new HullBox(0, 0.69f, 0.6f, 5.61f, 0.46f, 2.0f), b);
+        Assert.Equal(1.23f, Cart.HalfWidth); Assert.Equal(6.3f, Cart.HalfLength); // run-over, contact and the probe keep the footprint
+    }
+
+    [Fact]
+    public void A_ray_meets_the_missile_but_passes_wheel_drawbar_front_and_top_fin_zone()
+    {
+        float? Across(float y, float z) => VehicleBox.Ray(new Vector3(-5, y, z), Vector3.UnitX, 50f, Vector3.Zero, 0, 0, 0, Cart)?.Distance;
+        Assert.NotNull(Across(1.2f, 2f));      // across the missile body
+        Assert.Null(Across(0.3f, 2f));         // below the axle line: wheel and fender zone
+        Assert.Null(Across(2.3f, 2f));         // over the missile and its margin: top fin zone
+        Assert.Null(Across(1.2f, -5.5f));      // beside the drawbar, ahead of the nose (z -4.92)
+        Assert.NotNull(Across(1.2f, -4.5f));   // beside the nose
+        Assert.Null(VehicleBox.Ray(new Vector3(0, 0.8f, -9f), new Vector3(0, 0, 1), 3f, Vector3.Zero, 0, 0, 0, Cart)); // along the drawbar's front 1.4 m (z -6.3 to -4.92): nothing before the nose
+        Assert.NotNull(VehicleBox.Ray(new Vector3(0, 1.2f, -9f), new Vector3(0, 0, 1), 6f, Vector3.Zero, 0, 0, 0, Cart));
+    }
+
+    [Fact]
+    public void The_hull_turns_with_the_pitch_a_ray_at_the_raised_tail_hits_where_the_level_hull_is_missed()
+    {
+        var tail = new Vector3(-5, 3.0f, 5.0f); // above the tail end of the level box (top 2.0)
+        Assert.Null(VehicleBox.Ray(tail, Vector3.UnitX, 50f, Vector3.Zero, 0, 0, 0, Cart));
+        Assert.NotNull(VehicleBox.Ray(tail, Vector3.UnitX, 50f, Vector3.Zero, 0, -0.3f, 0, Cart)); // tail up by 0.3 rad (negative pitch: the drawbar end down)
+        Assert.Null(VehicleBox.Ray(new Vector3(-5, 1.2f, 5.0f), Vector3.UnitX, 50f, Vector3.Zero, 0, -0.3f, 0, Cart)); // and the level body line under it is now empty
+    }
+
+    [Fact]
+    public void The_shared_attitude_is_level_on_flat_ground_and_pitches_and_rolls_on_a_slope()
+    {
+        var g = TowGeometry.ForTrailer(Cart);
+        var flat = TrailerAttitude.Of(g, 0, 0, 1.4f, 0, g.EyeY, 0, 0, 1.1f);
+        Assert.Equal(0f, flat.Pitch, 4); Assert.Equal(0f, flat.Roll, 4);
+        Assert.Equal(0f, flat.Origin.Y, 4);                                  // level: the origin is on the ground
+        Assert.Equal(1.4f - 1.4f, flat.Origin.Z, 4);                          // and the axle is 1.4 m behind it
+        // ground rising 0.5 m from axle to eye (the drawbar end up), 0.2 m across: positive pitch and roll, the origin lifted by the turn about the axle
+        var up = TrailerAttitude.Of(g, 0, 0, 1.4f, 0, g.EyeY + 0.5f, 0, 0.2f, 1.1f);
+        Assert.True(up.Pitch > 0 && up.Roll > 0);
+        Assert.True(up.Origin.Y > 0.05f);
+        Assert.Equal(0f, up.Axle.Y, 4);
+        var local = FlightMath.Unrotate(up.Axle - up.Origin, 0, up.Pitch, up.Roll);
+        Assert.Equal(1.4f, local.Z, 3);                                       // the axle stays 1.4 m behind the origin in the cart's own frame
+    }
+
     sealed class Wall : ITrailerWorld
     {
         public bool Blocked(in BodyBox from, in BodyBox to, float y) => to.Z + to.HalfL > 18f;

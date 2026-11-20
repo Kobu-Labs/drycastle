@@ -217,7 +217,7 @@ public class TowTests
         var s = new DriveState { Position = new Vector3(0, 0, 0) };
         DriveModel.Settle(ref s, def, world);
         var link = new TowLink(Vector3.Zero, 0f);
-        link.Body = AtHitch(g, TractorMotion.From(s), 0.03f);
+        link.Body = AtHitch(g, TractorMotion.From(s, def), 0.03f);
         Assert.True(link.TryLatch(g, new TractorMotion(s.Position, s.Yaw, -1f, 0, 0))); // reversing onto it
         var effect = default(TowEffect);
         var minSpeed = 0f;
@@ -226,7 +226,7 @@ public class TowTests
             effect = link.Effect(def, cart, g);
             DriveModel.Step(ref s, def, new DriveInput { Throttle = -1f }, Dt, world, effect);
             minSpeed = MathF.Min(minSpeed, s.Speed);
-            link.StepHitched(g, TractorMotion.From(s), Dt);
+            link.StepHitched(g, TractorMotion.From(s, def), Dt);
             Assert.True(MathF.Abs(link.Body.Phi) <= g.Limit + 1e-4f);
         }
         Assert.True(minSpeed < -1f, "it did reverse until it folded");
@@ -236,7 +236,7 @@ public class TowTests
         for (var i = 0; i < 30 * 12; i++)
         {
             DriveModel.Step(ref s, def, new DriveInput { Throttle = 1f }, Dt, world, link.Effect(def, cart, g));
-            link.StepHitched(g, TractorMotion.From(s), Dt);
+            link.StepHitched(g, TractorMotion.From(s, def), Dt);
         }
         Assert.True(s.Speed > 3f);
         Assert.True(MathF.Abs(link.Body.Phi) < 0.2f, "pulled forwards the trailer straightens");
@@ -389,7 +389,7 @@ public class TowTests
         var def = Tractor(); var cart = Cart(); var g = TowGeometry.Of(def, cart);
         var world = new Flat();
         var s = new DriveState(); DriveModel.Settle(ref s, def, world);
-        var link = new TowLink(Vector3.Zero, 0f) { Body = AtHitch(g, TractorMotion.From(s), 0f) };
+        var link = new TowLink(Vector3.Zero, 0f) { Body = AtHitch(g, TractorMotion.From(s, def), 0f) };
         link.TryLatch(g, new TractorMotion(s.Position, s.Yaw, -1f, 0, 0));
         var wall = new Wall(); // the trailer can go back no further than z = 8
         wall.MinZ = 8f;
@@ -398,7 +398,7 @@ public class TowTests
         {
             var before = s; var bodyBefore = link.Body;
             DriveModel.Step(ref s, def, new DriveInput { Throttle = -1f }, Dt, world, link.Effect(def, cart, g));
-            if (!link.StepHitched(g, TractorMotion.From(s), Dt, wall))
+            if (!link.StepHitched(g, TractorMotion.From(s, def), Dt, wall))
             {
                 held = true;
                 TowModel.Hold(ref s, before);
@@ -412,6 +412,46 @@ public class TowTests
         Assert.True(link.Body.Position.Z - g.HalfLength <= 8f + 1f, "stopped at the wall");
         Assert.True(s.Position.Z < 8f - 2.3f, "the tractor stood still behind the trailer");
         Assert.True(link.Hitched);
+    }
+
+    /// <summary>
+    /// A dyke 3 m high: flat on top for z &gt;= 0, falling at 30 degrees to its foot. The ground is found only from near it, as a ray does (nothing from more than 1.5 m under it), and a trailer
+    /// asked about at a height that far under the ground it stands on is in the dyke: blocked.
+    /// </summary>
+    sealed class Dyke : ITrailerWorld
+    {
+        public static float Ground(float z) => Math.Clamp(3f + z * MathF.Tan(MathF.PI / 6), 0f, 3f);
+        public float GroundY(float x, float z, float hint) => Ground(z) <= hint + 1.5f ? Ground(z) : hint;
+        public bool Blocked(in BodyBox from, in BodyBox to, float y) => Ground(to.Z) > y + 1.5f;
+    }
+
+    [Fact]
+    public void A_trailer_on_a_dyke_keeps_its_own_ground_while_the_tractor_is_at_the_foot()
+    {
+        // #377: the tractor has gone down (-Z) and stands 3 m lower; the hitch's height is its ground, not the trailer's
+        var def = Tractor(); var cart = Cart(); var g = TowGeometry.Of(def, cart);
+        var world = new Dyke();
+        var t = new TractorMotion(new Vector3(0, 0, -5.2f), 0f, 3f, 0f, 0f);
+        var body = TowModel.Pose(g, t.Position, t.Yaw, 0f);
+        Assert.True(Dyke.Ground(body.Position.Z) > 1.5f, "the trailer is still high on the slope");
+        body.Position.Y = Dyke.Ground(body.Position.Z);
+        for (var i = 0; i < 30 * 4; i++)
+        {
+            t = t with { Position = t.Position + new Vector3(0, 0, -t.Speed * Dt) };
+            Assert.True(TowModel.StepChecked(ref body, g, t, Dt, world), $"blocked at tick {i}, z {body.Position.Z}");
+            Assert.Equal(Dyke.Ground(body.Position.Z), body.Position.Y, 3);
+        }
+        Assert.Equal(0f, body.Position.Y, 3); // down with the tractor
+    }
+
+    [Fact]
+    public void Coupling_keeps_the_trailers_own_height()
+    {
+        var def = Tractor(); var cart = Cart(); var g = TowGeometry.Of(def, cart);
+        var body = TrailerBody.At(new Vector3(0, 2.5f, 6f), 0f);
+        TowModel.Couple(ref body, g, new TractorMotion(Vector3.Zero, 0f, 0f, 0f, 0f));
+        Assert.Equal(2.5f, body.Position.Y);
+        Assert.Equal(TowModel.HitchPoint(g, Vector3.Zero, 0f).Z, TowModel.EyePoint(g, body).Z, 4);
     }
 
     // ---- load ----
@@ -527,7 +567,7 @@ public class TowTests
             if (a.Speed > 0) { CarModel.Step(ref a, jeep, -1f, 0f, false, Dt); da += a.Speed * Dt; }
             if (b.Speed > 0) { CarModel.Step(ref b, jeep, -1f, 0f, false, Dt, false, tow); db += b.Speed * Dt; }
         }
-        Assert.True(db > da * 1.5f);
+        Assert.True(db > da * 1.15f); // the jeep is a 6500 kg cargo truck: a 1500 kg cart takes a fifth of its braking
         // the bend is wider, and a block at the limit stops a reversing one
         var c = new CarState { Speed = 12 };
         CarModel.Step(ref c, jeep, 0f, 1f, false, 1f, false, tow);

@@ -546,10 +546,21 @@ public sealed partial class MapLoader
 
     static long CellKey(int cx, int cz) => ((long)cx << 32) ^ (uint)cz;
 
+    /// <summary>
+    /// The hash of a <see cref="CellKey"/>. The default hash of a long folds its halves together (cx xor cz), so the cells of a map, a few hundred each way,
+    /// fell into a few hundred buckets and a lookup walked a chain of a hundred keys. This one mixes the bits; the keys and what they find are the same.
+    /// </summary>
+    sealed class CellKeys : IEqualityComparer<long>
+    {
+        public static readonly CellKeys Instance = new();
+        public bool Equals(long a, long b) => a == b;
+        public int GetHashCode(long key) => (int)(((ulong)key * 0x9E3779B97F4A7C15UL) >> 32);
+    }
+
     // Triangles bucketed by 8 m cells so a height lookup tests a handful of triangles, not the whole mesh.
     void BuildTerrainGrid()
     {
-        var grid = new Dictionary<long, List<(int, int)>>();
+        var grid = new Dictionary<long, List<(int, int)>>(CellKeys.Instance);
         for (var m = 0; m < _terrain.Count; m++)
         {
             var faces = _terrain[m].faces;

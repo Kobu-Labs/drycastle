@@ -134,6 +134,9 @@ public partial class NetClient
             case EventKind.BinocularsRaised when Binoculars.TryDecodeRaised(payload, out var holder, out var up):
                 OnBinocularsRaised(holder, up);
                 break;
+            case EventKind.HeadLampState when HeadLamp.TryDecode(payload, out var lamp, out var lampOn):
+                OnHeadLampState(lamp, lampOn);
+                break;
             case EventKind.Equipment when ItemEvents.TryDecodeEquipment(payload, out var worn, out var bag):
                 _wornItems = worn;
                 _bagItems = bag;

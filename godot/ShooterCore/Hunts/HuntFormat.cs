@@ -5,14 +5,30 @@ namespace Drycastle.ShooterCore;
 /// <summary>How long ago, in the unit the screen words it: just now, minutes, hours, days, or (past <see cref="HuntFormat.DaysMax"/> days) a date.</summary>
 public enum AgoUnit { Now, Minutes, Hours, Days, Date }
 
+/// <summary>Where a shot hit, in words: the head, the legs (low on the body), the rest of the body; None for a hunt with no hit diagram (a run over, a catch).</summary>
+public enum HitArea { None, Head, Body, Legs }
+
+public static class HitAreas
+{
+    /// <summary>Height (0 ground, 1 top) below which a body hit counts as the legs.</summary>
+    public const float LegsBelow = 0.3f;
+
+    public static HitArea Of(HitDiagram? d) => d is not { } g ? HitArea.None : g.Head ? HitArea.Head : g.HeightF < LegsBelow ? HitArea.Legs : HitArea.Body;
+}
+
 /// <summary>What a Life List tile is drawn as. Hidden: a blurred blob and a "?" and nothing else.</summary>
 public enum TileLook { Outline, Filled }
 
 /// <summary>A Life List tile (<see cref="LifeEntry"/>) as the screen draws it. <see cref="Hidden"/>: the blurred blob; <see cref="Look"/>: the animal outlined until hunted, filled once.</summary>
-public readonly record struct LifeTileModel(string Species, bool Hidden, TileLook Look, float? BestKg, float? LongestM, long CaughtAtUnix, bool Mystery)
+public readonly record struct LifeTileModel(string Species, bool Hidden, TileLook Look, float? BestKg, float? LongestM, long CaughtAtUnix, bool Mystery, HuntTier Tier = HuntTier.Common)
 {
-    public static LifeTileModel From(LifeEntry e) =>
-        new(e.Species, e.Hidden, e.Caught ? TileLook.Filled : TileLook.Outline, e.Hidden ? null : e.BestKg, e.Hidden ? null : e.LongestM, e.Hidden ? 0 : e.CaughtAtUnix, e.Hidden || Mysteries.Is(e.Species));
+    /// <summary>The rim's tier is only for a hunted index species: a mystery tile is framed in its creature's own style, a hidden one says nothing.</summary>
+    public static LifeTileModel From(LifeEntry e)
+    {
+        var mystery = e.Hidden || Mysteries.Is(e.Species);
+        return new(e.Species, e.Hidden, e.Caught ? TileLook.Filled : TileLook.Outline, e.Hidden ? null : e.BestKg, e.Hidden ? null : e.LongestM, e.Hidden ? 0 : e.CaughtAtUnix, mystery,
+            mystery || !e.Caught ? HuntTier.Common : e.Tier);
+    }
 
     public bool Caught => Look == TileLook.Filled;
 }
@@ -63,8 +79,8 @@ public static class HuntFormat
     public static string Date(long unix) => DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 }
 
-/// <summary>What a server-wide announcement (<see cref="HuntAnnounceMsg"/>) says, before it is put in words: a record (of the weight or of the shot) or a first.</summary>
-public enum HuntLineKind { First, RecordHeaviest, RecordLongest }
+/// <summary>What a server-wide announcement (<see cref="HuntAnnounceMsg"/>) says, before it is put in words: a record (of the weight, of the shot or of a player kill) or a first.</summary>
+public enum HuntLineKind { First, RecordHeaviest, RecordLongest, RecordPlayerKill }
 
 public readonly record struct HuntLine(HuntLineKind Kind, bool Mine, bool Hidden, bool Mystery, HuntView Hunt)
 {
@@ -77,7 +93,8 @@ public readonly record struct HuntLine(HuntLineKind Kind, bool Mine, bool Hidden
     public static HuntLine Of(HuntAnnounceMsg m, long viewerId)
     {
         var f = m.Flags;
-        var kind = (f & HuntAnnounceFlags.Heaviest) != 0 && m.Hunt.Kg != null ? HuntLineKind.RecordHeaviest
+        var kind = (f & HuntAnnounceFlags.PlayerKill) != 0 && m.Hunt.DistanceM != null ? HuntLineKind.RecordPlayerKill
+            : (f & HuntAnnounceFlags.Heaviest) != 0 && m.Hunt.Kg != null ? HuntLineKind.RecordHeaviest
             : (f & HuntAnnounceFlags.Longest) != 0 && m.Hunt.DistanceM != null ? HuntLineKind.RecordLongest
             : HuntLineKind.First;
         return new HuntLine(kind, viewerId != 0 && m.Hunt.PlayerId == viewerId, m.Hunt.Hidden, m.Hunt.Hidden || Mysteries.Is(m.Hunt.Species), m.Hunt);

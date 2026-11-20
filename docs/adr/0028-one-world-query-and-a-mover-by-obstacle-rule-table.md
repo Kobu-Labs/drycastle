@@ -31,9 +31,10 @@ Where a player and an NPC or animal block each other, the NPC or animal stops or
 | Citizen, gang, worker, demon | follows the player capsule | player capsule r 0.35 m |
 | Wildlife, pet | baked outline for every species; blast and knife measure to the outline's bounding box | a box per species |
 | Utility helicopter | 3 boxes (cabin, tail boom, fin) that tilt with pitch and roll | the same 3 boxes |
-| Other vehicles | one upright box | the same box |
+| Rocket cart (towed) | one narrow box (missile body, 1.2 m wide, y 0.46 to 2.0, nose to tail) that tilts with the ground it lies on (#482: pitch and roll from `TrailerAttitude`, fitted by server and client alike, not on the wire) | the same box for on-foot players; against other vehicles and the world probe the wide upright footprint |
+| Other driven vehicles | one box from half_width, half_length, height (ground to roof) that lies on the slope it stands on (#483: pitch and roll of the drive state, the same numbers as its drive record, so server, lag compensation and clients agree; the springs' lean, afloat bobbing and a throw are not in it: level afloat and thrown) | the same box for on-foot players and vehicle-to-vehicle contact (the push stays sideways); the world probe stays a swept box |
 
-Run-over tests the victim's Body footprint scaled to 95%.
+Run-over tests the victim's Body footprint scaled to 95%, planar and upright.
 
 **4. Cost.** Measured 2026-11-16 (village map, 16 players, 226 animals): two rays on every animal step cost +1.6 to 2.0 ms a tick, every animal every tick +5.4 to 7.0 ms. The animal rows may cost at most 1 ms a tick: query objects are reused, an animal farther than `WorldInterest.LeaveM` from every player is not simulated, and checks are throttled.
 

@@ -15,6 +15,8 @@ public static class Hud2Strings
         ("hud2.set.minimap.size", "Minimap size"),
         ("hud2.set.minimap.opacity", "Minimap opacity"),
         ("hud2.set.minimap.zoom", "Minimap zoom"),
+        ("hud2.fps.on", "FPS counter on. Type /fps to hide it."),
+        ("hud2.fps.off", "FPS counter off."),
         ("hud2.fmt.px", "{0} px"),
         ("hud2.fmt.metres", "{0} m"),
     };

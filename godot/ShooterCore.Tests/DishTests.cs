@@ -239,6 +239,15 @@ public class DishTests
     }
 
     [Fact]
+    public void An_object_placed_with_solid_false_has_no_collision()
+    {
+        const string bus = "pack:drycastle-generated-models/bus";
+        Assert.False(ObjectColliders.IsPassThrough(bus, solid: true));
+        Assert.True(ObjectColliders.IsPassThrough(bus, solid: false));
+        Assert.True(ObjectColliders.IsPassThrough(DishSource.AssetId, solid: true));
+    }
+
+    [Fact]
     public void The_dish_config_is_in_thieves_json_and_checked()
     {
         var f = ThievesFile.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data", "thieves.json")));

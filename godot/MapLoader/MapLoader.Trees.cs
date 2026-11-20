@@ -5,7 +5,8 @@ using GVector3 = Godot.Vector3;
 namespace Drycastle.MapLoader;
 
 /// <summary>
-/// Collision of the base map's trees and of placed objects (trees.json, objects.json). Trunks are solid (world layer, players
+/// Collision of the base map's trees and of placed objects (trees.json, objects.json). A tree drawn as a pack model is solid at its limbs
+/// and its leaves stop nothing (<see cref="DressTrees"/>, #375). Otherwise trunks are solid (world layer, players
 /// walk around them); crowns and bushes are shot-only (<see cref="CollisionLayers.ShotOnly"/>): bullets, pellets and sight lines
 /// stop on them, players and cars move through. The geometry is the pure ShooterCore code (<see cref="TreeColliders"/>,
 /// <see cref="ObjectColliders"/>), so the server and the client agree. Each body carries a "surface" meta ("wood" or
@@ -30,12 +31,37 @@ public sealed partial class MapLoader
     /// <summary>Builds the trunk and crown bodies of every tree, per chunk (or on the root for a tree outside any loaded chunk).</summary>
     void BuildTreeColliders() { foreach (var _ in BuildTreeColliderSteps()) { } }
 
+    const string TreeLimbsPath = "res://data/tree_limbs.json";
+
+    /// <summary>
+    /// Gives every tree the pack model it is drawn as, so its solids are that model's wood (#375). Only on a map that draws pack trees (trees.json
+    /// <c>model.base_uv2</c>) and where the two data files are (not in the viewer): else the trees keep the code-built solids. It does not ask whether
+    /// this machine has the pack or has pack trees switched off: the server and every client must build the same solids.
+    /// </summary>
+    TreeModel DressTrees(TreeModel model)
+    {
+        if (_trees.Count == 0 || !PackTreeSettings.ReadBaseUv2(TreesJson)) return model;
+        if (!Godot.FileAccess.FileExists(TreeLimbsPath) || !Godot.FileAccess.FileExists(PackTreeConfigPath)) return model;
+        try
+        {
+            var limbs = TreeLimbsFile.Parse(Godot.FileAccess.Open(TreeLimbsPath, Godot.FileAccess.ModeFlags.Read).GetAsText());
+            var cfg = PackTreeConfig.Parse(Godot.FileAccess.Open(PackTreeConfigPath, Godot.FileAccess.ModeFlags.Read).GetAsText());
+            return PackTreeLimbs.Dress(_trees, model, TreesJson, cfg, limbs);
+        }
+        catch (DataFileException e)
+        {
+            PackWarn("limbs", $"tree solids: {e.Message}; the trees keep the code-built solids");
+            return model;
+        }
+    }
+
     /// <summary>Tree colliders in batches (thousands of shapes): yields the fraction done after each batch so a loading screen can redraw.</summary>
     IEnumerable<float> BuildTreeColliderSteps()
     {
         const int Batch = 300;
         _trees.Clear();
         _trees.AddRange(TreeColliders.Parse(TreesJson, out var model));
+        model = DressTrees(model);
         TreeModel = model;
         var bodies = new Dictionary<(int, int, PartRole), StaticBody3D>();
         var n = 0;
@@ -66,9 +92,11 @@ public sealed partial class MapLoader
     }
 
     /// <summary>The collision of the placed objects of one asset, as children of the object's node (scaled with it).</summary>
-    void AddObjectColliders(Node3D node, string asset)
+    void AddObjectColliders(Node3D node, string asset, bool isSolid = true)
     {
-        if (ObjectColliders.IsPassThrough(asset)) return; // a satellite dish: no collision on the server or the client
+        // a satellite dish, or an object placed with solid false: no collision on the server or the client (AddObject also
+        // switches off the bodies a client model brings along)
+        if (ObjectColliders.IsPassThrough(asset, isSolid)) return;
         if (_assetManifest == null) ReadAssetManifest();
         var category = _assetManifest!.TryGetValue(asset, out var entry) ? entry.Category : "";
         var size = entry?.Size ?? GVector3.One;
@@ -118,7 +146,7 @@ public sealed partial class MapLoader
         var key = SolidShapeKeys.Of(p);
         if (!_solidShapes.TryGetValue(key, out var shape))
         {
-            shape = key.Kind switch { 1 => PyramidShape(key), 2 => FrustumShape(key), _ => BoxShape(key) };
+            shape = key.Kind switch { 1 => PyramidShape(key), 2 => FrustumShape(key), 3 => LimbShape(key), _ => BoxShape(key) };
             _solidShapes[key] = shape;
         }
         var basis = Basis.Identity.Rotated(GVector3.Up, p.Yaw);
@@ -141,6 +169,18 @@ public sealed partial class MapLoader
         {
             new GVector3(-lo, 0, lo), new GVector3(lo, 0, lo), new GVector3(lo, 0, -lo), new GVector3(-lo, 0, -lo),
             new GVector3(-hi, height, hi), new GVector3(hi, height, hi), new GVector3(hi, height, -hi), new GVector3(-hi, height, -hi),
+        };
+        return new ConvexPolygonShape3D { Points = pts };
+    }
+
+    // A limb: the frustum with its top ring centred D along the local X and E along the map v axis, which is Godot's -Z.
+    static ConvexPolygonShape3D LimbShape(SolidShapeKeys.Key k)
+    {
+        var (lo, height, hi, u, v) = (k.A / 1000f, k.B / 1000f, k.C / 1000f, k.D / 1000f, k.E / 1000f);
+        var pts = new[]
+        {
+            new GVector3(-lo, 0, lo), new GVector3(lo, 0, lo), new GVector3(lo, 0, -lo), new GVector3(-lo, 0, -lo),
+            new GVector3(u - hi, height, -v + hi), new GVector3(u + hi, height, -v + hi), new GVector3(u + hi, height, -v - hi), new GVector3(u - hi, height, -v - hi),
         };
         return new ConvexPolygonShape3D { Points = pts };
     }

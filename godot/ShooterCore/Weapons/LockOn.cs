@@ -22,6 +22,12 @@ public readonly record struct LockCandidate(ushort Id, Vector3 Position, string 
 /// </summary>
 public static class LockRules
 {
+    /// <summary>
+    /// Whether a seat lets its holder use a launcher at all (#373): on foot, or in an armed seat. A driver and an unarmed passenger cannot fire from the seat,
+    /// so no Lock builds for them, the server says nothing, and the client draws no sight and plays no seeker beep. The server and the client both ask here.
+    /// </summary>
+    public static bool SeatAllows(bool seated, bool armedSeat) => !seated || armedSeat;
+
     public static readonly StateMachineSpec<LockPhase> Spec = StateMachineSpec<LockPhase>
         .Define("Launcher.Lock", "The Lock of a Lock-on launcher on one Aircraft: it builds while the Aircraft stays in the lock circle and in sight, and only a complete Lock lets the launcher fire.", LockPhase.Idle)
         .Allow(LockPhase.Idle, LockPhase.Locking)
@@ -89,6 +95,19 @@ public static class LockRules
             if (Vector3.Distance(origin, at) <= speed * t) return (t, at);
         }
         return null;
+    }
+
+    /// <summary>
+    /// One tick of a missile homing on a flown vehicle, which has no known path: it re-aims at where the vehicle is now and flies <paramref name="speed"/>
+    /// metres a second straight at it. <c>Hit</c> when it reaches within <paramref name="reach"/> of the vehicle this tick (the server's hit; the client draws the same step).
+    /// </summary>
+    public static (Vector3 Next, bool Hit) Pursue(Vector3 at, Vector3 target, float speed, float reach, float dt)
+    {
+        var to = target - at;
+        var dist = to.Length();
+        var step = speed * dt;
+        if (dist <= step + reach || dist < 1e-4f) return (target, true);
+        return (at + to / dist * step, false);
     }
 
     /// <summary>

@@ -78,6 +78,9 @@ public sealed partial class Minimap : Control
     /// <summary>Teammates' positions (ground x, z), drawn in team deathmatch only. Copied, so the caller may reuse its list.</summary>
     public void SetFriendDots(IReadOnlyList<Vector2> groundXZ) => _markers.SetFriends(groundXZ);
 
+    /// <summary>Squad mates (#379): their positions (ground x, z) and names, drawn blue with the name in team deathmatch. Copied.</summary>
+    public void SetSquadDots(IReadOnlyList<(Vector2 At, string Name)> mates) => _markers.SetSquad(mates);
+
     /// <summary>
     /// Shows enemy pings (circles) until <paramref name="expiry"/> on the Time.GetTicksMsec()/1000 clock. A new call replaces
     /// the previous set. This is the UAV streak's layer.
@@ -149,6 +152,12 @@ public sealed partial class Minimap : Control
                     var p = centre + Screen(_markers.Friends[i], theta, pxPerMetre, inner);
                     DrawCircle(p, 7f, ShooterTheme.Outline);
                     DrawCircle(p, 5f, ShooterTheme.Good);
+                }
+            if (TeamColours)
+                for (var i = 0; i < _markers.Squad.Count; i++) // squad mates: blue discs in a pale ring, with their names
+                {
+                    var p = centre + Screen(_markers.Squad[i].At, theta, pxPerMetre, inner);
+                    MapGlyphs.Squad(this, p, _markers.Squad[i].Name, 1f);
                 }
             var pings = _markers.Pings.Positions(now);
             for (var i = 0; i < pings.Count; i++)

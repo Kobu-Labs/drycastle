@@ -140,7 +140,7 @@ public static class ObjectEdits
     {
         var errs = new List<string>();
         if (v is not List<object?> list) { errs.Add($"{path}: must be a list"); return errs; }
-        string[] allowed = { "id", "asset", "position", "z", "rotation_deg", "scale", "colour" };
+        string[] allowed = { "id", "asset", "position", "z", "rotation_deg", "scale", "colour", "solid" };
         for (var i = 0; i < list.Count; i++)
         {
             var p = $"{path}.{i}";
@@ -159,6 +159,7 @@ public static class ObjectEdits
             if (o.TryGetValue("rotation_deg", out var r) && !IsNum(r)) errs.Add($"{p}.rotation_deg: must be a number");
             if (o.TryGetValue("scale", out var sc) && !(IsNum(sc) && Number(sc) > 0)) errs.Add($"{p}.scale: must be a number > 0");
             if (o.TryGetValue("colour", out var c) && !(c is string cs && EditSchema.ColourRx.IsMatch(cs))) errs.Add($"{p}.colour: must be #rrggbb");
+            if (o.TryGetValue("solid", out var so) && so is not bool) errs.Add($"{p}.solid: must be true or false");
         }
         return errs;
     }

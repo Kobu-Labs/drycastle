@@ -50,8 +50,12 @@ public enum EventKind : byte
     RaiseBinoculars = 26,
     /// <summary>Server to everyone but that player, and to a joiner for each player who has them up: a player's binoculars are up or down (<see cref="Binoculars.EncodeRaised"/>: u16 player id, u8); the client poses the character.</summary>
     BinocularsRaised = 27,
+    /// <summary>Server to everyone (the lamp's owner too), when it changes and, to a joiner, for each player whose head lamp is on: a player's head lamp is on or off (<see cref="HeadLamp.Encode"/>: u16 player id, u8). The client draws the beam from that player's head.</summary>
+    HeadLampState = 31,
     /// <summary>Client to server: the player's own Respawn, with an optional loadout slot to select first (<see cref="Redeploy.Encode"/>: u8, 255 for none); the server kills them as a suicide (<see cref="MatchSim.ForceDeath"/>).</summary>
     Redeploy = 28,
+    /// <summary>Client to server, every ten seconds: the client's performance numbers of the period (<see cref="ClientReport"/>), for the metrics store. A server that does not know it ignores it, so it is not a protocol version.</summary>
+    ClientReport = 29,
     /// <summary>Client to server: take a corpse's weapon into a hotbar position (<see cref="CorpseCodec"/>).</summary>
     PickUpCorpse = 20,
     /// <summary>Server to one player: the hotbar after a corpse pickup (<see cref="CorpseCodec"/>).</summary>
@@ -160,6 +164,8 @@ public enum EventKind : byte
     ThiefVoice = 236,
     /// <summary>Client to server: an admin's team change from the Teams screen (<see cref="TeamAssignCodec"/>, #312); the server checks the sender is an admin and the match is team deathmatch. The result travels in the scoreboard (team, sandbox and bot bits per row).</summary>
     TeamAssign = 240,
+    /// <summary>Client to server: a squad request from the Squads screen (<see cref="SquadAssignCodec"/>, #379): create, join or leave. The server checks the match is team deathmatch and the sender a human on a team. The result travels in the scoreboard (squad byte per row, squad names).</summary>
+    SquadAssign = 241,
     /// <summary>Server to everyone, and to a joiner when the doors are open: the church doors opened (1) or closed (0), one byte (<see cref="ChurchDoorCodec"/>, ADR 0019). Kinds 210-219 belong to the church.</summary>
     ChurchDoor = 210,
     /// <summary>Server to everyone, and to a joiner: the Holy Mass as it is now (<see cref="MassStateMsg"/>, <see cref="MassCodec"/>): phase, chant on or off, the pastor's kills, where the chant is, and once at the start the bells. Kinds 210-219 belong to the Holy Mass.</summary>
@@ -210,6 +216,10 @@ public enum EventKind : byte
     LockAlert = 247,
     /// <summary>Server to everyone: a homing missile left a Lock-on launcher, the Aircraft it homes on and its flight seconds; the Explosion with its id ends it.</summary>
     HomingLaunch = 248,
+    /// <summary>Server broadcast: one pole lamp's state after it changed (<see cref="LampCodec"/>, ADR 0037: broken by a round, flickering back on, lit). Kinds 250-251 belong to the pole lamps.</summary>
+    LampState = 250,
+    /// <summary>Server broadcast, or to the joining player: every pole lamp that is not lit (<see cref="LampCodec"/>); the rest are lit. The join catch-up and a new round.</summary>
+    LampSync = 251,
     /// <summary>Client to server: a crew member's command to a Scud truck's launcher (<see cref="ScudCodec"/>: open or close the screen, the camera, lock a point, confirm, withdraw, abort). Kinds 80-85 belong to the Scud truck.</summary>
     ScudCommand = 80,
     /// <summary>Server to everyone, and to a joiner for each truck: one launcher's state, its clock, who is the operator, the locked point and who confirmed (<see cref="ScudStateMsg"/>). Sent when anything of that changes.</summary>
@@ -337,7 +347,13 @@ public static class Wire
     //   v68 the Scud truck: events 80-85 (the launcher's command, state, the operator's camera, the launch, the impact and a notice), world entity 11 (the Scud missile), special weapon 237, vehicles.json "launcher"
     //   v69 loading a Scud truck from a rocket cart: the launcher state byte may be 10 (Loading) and the Scud notice codes 11 (LoadStarted), 12 (LoadCancelled) and 13 (EventFound); the Scud event (/event scud): an intel board entry may carry an AREA, a centre and a radius in metres (flags bit 4, a f32 radius after the centre)
     //   v70 the plantation (#364): bit 2 of the player status mask (EventKind.StatusState, StatusKind.High): the player is high; the others draw a lit cigarette and red eyes on the figure, the player's own camera sways
-    public const byte ProtocolVersion = 70;
+    //   v71 shootable pole lamps (ADR 0037): events 250 LampState and 251 LampSync
+    //   v72 squads (#379): event 241 SquadAssign (client to server); the scoreboard message ends in a squad tail (a squad byte per row, then the squads' names)
+    //   v73 hunt rarity: bits 4-5 of a Life List entry's flag byte in the player log answer (EventKind.HuntPlayerLog) carry the tile's HuntTier
+    //   v74 the longest player kill (#430): the records answer ends in the server's longest player kill (u8 flag, then the kill), the player log answer carries the player's own (flag bit 4 and the kill after the longest shot); bit 8 of the hunt announcement's flags is a new longest player kill
+    //   v75 brake lamps (#409): bit 6 of a driven vehicle's health byte says its brakes are on (VehicleRecord.BrakeBit/Braking); the client no longer guesses braking from speed
+    //   v76 the head lamp: event 31 HeadLampState (a player's head lamp on or off, to everyone and to a joiner)
+    public const byte ProtocolVersion = 76;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

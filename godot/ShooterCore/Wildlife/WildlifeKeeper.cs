@@ -18,7 +18,8 @@ public static class WildlifeRules
 /// The wildlife of a match: <see cref="Populate"/> puts each species of wildlife.json at random candidate points of its habitat (the zones of its
 /// kind, baked into points by the build), as <see cref="Animal"/> world entities that wander about their spawn point and run from
 /// players and vehicles. A wild animal can be shot dead (it lies for corpse_seconds unless its species is one-hit; nothing scores and nothing replaces it
-/// this round). Godot-free; the server supplies the ground and the threats and calls <see cref="AddTargets"/> and <see cref="Hit"/>.
+/// this round), except a <see cref="RareSpecies"/> (a Unicorn): its slot waits <see cref="RareSpecies.RespawnSeconds"/> after the kill (a <see cref="Countdown"/>, ticked by <see cref="Update"/>) and then
+/// puts a new one at a new random point of the map with ground that is far enough from every building. Godot-free; the server supplies the ground and the threats and calls <see cref="AddTargets"/> and <see cref="Hit"/>.
 /// </summary>
 public sealed class WildlifeKeeper : IAnimalHits
 {
@@ -28,6 +29,17 @@ public sealed class WildlifeKeeper : IAnimalHits
         public required ushort Entity;
         public required ushort HitId;
         public bool Gone;
+        /// <summary>The rare-species slot this animal fills while alive; null for an ordinary animal, or once it died.</summary>
+        public RareSlot? Slot;
+    }
+
+    /// <summary>One of the <see cref="RareSpecies.Count"/> places of a rare species: an animal, or (none) a clock to the next try at a spawn point.</summary>
+    sealed class RareSlot
+    {
+        public required RareSpecies Rule;
+        public required int Species;
+        public Wild? Animal;
+        public Countdown Respawn;
     }
 
     readonly WildlifeFile _cfg;
@@ -39,6 +51,7 @@ public sealed class WildlifeKeeper : IAnimalHits
     readonly List<Wild> _all = new();
     readonly List<Herd> _herds = new();
     readonly List<Flock> _flocks = new();
+    readonly List<RareSlot> _rare = new();
     int _nextHit;
     AnimalCrowd? _crowd;
 
@@ -62,6 +75,8 @@ public sealed class WildlifeKeeper : IAnimalHits
     public int Count => _byHit.Count;
     public int AliveCount { get { var n = 0; foreach (var w in _all) if (w.Animal.Alive) n++; return n; } }
     public IEnumerable<Animal> Animals => _all.Select(w => w.Animal);
+    /// <summary>Rare-species slots with no animal alive: each is counting down to a new one.</summary>
+    public int RareWaiting { get { var n = 0; foreach (var r in _rare) if (r.Animal == null) n++; return n; } }
     public IReadOnlyList<Herd> Herds => _herds;
     public IReadOnlyList<Flock> Flocks => _flocks;
 
@@ -73,10 +88,88 @@ public sealed class WildlifeKeeper : IAnimalHits
     public int Populate(Func<string, IReadOnlyList<Vector3>> habitat, IAnimalWorld ground)
     {
         Clear();
+        PopulateRare(ground);
         var n = PopulateAnimals(habitat, ground);
         PopulateFlocks(habitat, ground);
         return n;
     }
+
+    /// <summary>The first animal of every rare slot; one that finds no point waits a respawn period and tries again (<see cref="Update"/>).</summary>
+    void PopulateRare(IAnimalWorld ground)
+    {
+        foreach (var rule in _cfg.Rare)
+        {
+            var species = _animals.IndexOf(rule.Id);
+            if (species < 0) continue;
+            for (var k = 0; k < rule.Count; k++)
+            {
+                var slot = new RareSlot { Rule = rule, Species = species };
+                _rare.Add(slot);
+                if (!TrySpawnRare(slot, ground)) slot.Respawn.Start(rule.RespawnSeconds);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A random point of the map with ground, room for the body and at least <paramref name="minBuildingM"/> from every building (<see cref="RareSpecies.MinBuildingM"/>); with <paramref name="awayFrom"/> also at least
+    /// <paramref name="awayM"/> (flat) from it (where a vanishing animal reappears). Null when <see cref="MaxTries"/> tries find none.
+    /// </summary>
+    Vector3? PickRarePoint(int species, float minBuildingM, IAnimalWorld ground, Vector3? awayFrom = null, float awayM = 0)
+    {
+        if (ground.MapBounds is not { } b || !float.IsFinite(b.MinX + b.MaxX + b.MinZ + b.MaxZ) || !(b.MaxX > b.MinX) || !(b.MaxZ > b.MinZ)) return null;
+        var radius = _animals.Animals[species].BodyRadiusOf(0);
+        var min = minBuildingM;
+        for (var attempt = 0; attempt < MaxTries; attempt++)
+        {
+            var x = b.MinX + (float)_rng.NextDouble() * (b.MaxX - b.MinX);
+            var z = b.MinZ + (float)_rng.NextDouble() * (b.MaxZ - b.MinZ);
+            if (awayFrom is { } from && Flat(x, z, from) < awayM) continue;
+            if (ground.GroundY(x, z) == null || !(ground.NearestBuildingM(x, z, min) >= min) || !ground.Fits(x, z, radius)) continue; // cheapest test first
+            return new Vector3(x, 0, z);
+        }
+        return null;
+    }
+
+    static float Flat(float x, float z, Vector3 p) => MathF.Sqrt((x - p.X) * (x - p.X) + (z - p.Z) * (z - p.Z));
+
+    /// <summary>Tries a rare slot's animal at a new point. False (logged) when there is no point, no room in <see cref="WildlifeFile.MaxAnimals"/> or the world is full.</summary>
+    bool TrySpawnRare(RareSlot slot, IAnimalWorld ground)
+    {
+        var id = slot.Rule.Id;
+        if (_byHit.Count >= _cfg.MaxAnimals) { Log?.Invoke($"wildlife: no room for the rare {id} (max_animals {_cfg.MaxAnimals}): trying again in {slot.Rule.RespawnSeconds:0} s"); return false; }
+        if (PickRarePoint(slot.Species, slot.Rule.MinBuildingM, ground) is not { } at) { Log?.Invoke($"wildlife: no point for the rare {id} ({MaxTries} tries): trying again in {slot.Rule.RespawnSeconds:0} s"); return false; }
+        if (SpawnAt(slot.Species, at, ground, null) != Spawned.Yes) return false;
+        var wild = _all[^1];
+        wild.Slot = slot;
+        slot.Animal = wild;
+        return true;
+    }
+
+    /// <summary>
+    /// An extra animal of a rare species at <paramref name="at"/> (the admin's "/unicorn"): no slot, so it does not come back when killed and does not change the slot's countdown.
+    /// False when the species is unknown, the point has no ground or room, or the map is full.
+    /// </summary>
+    public bool SpawnExtra(string id, Vector3 at, IAnimalWorld ground)
+    {
+        var species = _animals.IndexOf(id);
+        if (species < 0 || _byHit.Count >= _cfg.MaxAnimals) return false;
+        var radius = _animals.Animals[species].BodyRadiusOf(0);
+        if (ground.GroundY(at.X, at.Z) == null || !ground.Fits(at.X, at.Z, radius)) return false;
+        return SpawnAt(species, at, ground, null) == Spawned.Yes;
+    }
+
+    /// <summary>The animal of a rare slot died or went: the slot counts down to a new one.</summary>
+    static void FreeSlot(Wild wild)
+    {
+        if (wild.Slot is not { } slot) return;
+        wild.Slot = null;
+        if (slot.Animal != wild) return;
+        slot.Animal = null;
+        slot.Respawn.Start(slot.Rule.RespawnSeconds);
+    }
+
+    /// <summary>Tries at a random point before a rare spawn gives up until the next countdown.</summary>
+    public const int MaxTries = 200;
 
     /// <summary>The bird flocks of wildlife.json: per kind its flocks, each at a random habitat point, a random number of birds. A kind with no point gets none (logged).</summary>
     void PopulateFlocks(Func<string, IReadOnlyList<Vector3>> habitat, IAnimalWorld ground)
@@ -193,11 +286,24 @@ public sealed class WildlifeKeeper : IAnimalHits
         _crowd?.Add(animal);
         var hit = NextHitId();
         var wild = new Wild { Animal = animal, Entity = entity, HitId = hit };
-        animal.Died += (a, by) => Killed?.Invoke(a, by);
+        animal.Died += (a, by) => { FreeSlot(wild); Killed?.Invoke(a, by); };
+        if (animal.Vanishes) animal.Vanished += a => OnVanished(wild, ground);
         _byHit[hit] = wild;
         _byEntity[entity] = wild;
         _all.Add(wild);
         return Spawned.Yes;
+    }
+
+    /// <summary>A vanishing animal's clock ran out: it reappears at a point picked as a rare one is (ground, room, far from buildings: its slot's rule, or no building distance for a species with no slot) at least vanish_min_m from where it was; none found, it stays.</summary>
+    void OnVanished(Wild wild, IAnimalWorld ground)
+    {
+        var a = wild.Animal;
+        if (wild.Gone || PickRarePoint(a.Species, wild.Slot?.Rule.MinBuildingM ?? 0, ground, a.Position, a.Def.VanishMinM) is not { } at)
+        {
+            if (!wild.Gone) Log?.Invoke($"wildlife: no point for the vanished {a.Def.Id} ({MaxTries} tries): it stays");
+            return;
+        }
+        a.Teleport(at, (float)_rng.NextDouble() * MathF.Tau);
     }
 
     ushort NextHitId()
@@ -210,15 +316,18 @@ public sealed class WildlifeKeeper : IAnimalHits
     {
         if (!_byEntity.Remove(d.Id, out var wild)) return;
         wild.Gone = true;
+        FreeSlot(wild);
         _crowd?.Remove(wild.Animal);
         _byHit.Remove(wild.HitId);
         _all.Remove(wild); // at most 100 animals, and only when one is despawned
     }
 
-    /// <summary>Once a tick, after the entities ticked: the herds drift their anchors.</summary>
+    /// <summary>Once a tick, after the entities ticked: the herds drift their anchors, and the rare slots count down to their next animal.</summary>
     public void Update(float dt, IAnimalWorld ground)
     {
         foreach (var h in _herds) h.Update(dt, ground);
+        foreach (var slot in _rare)
+            if (slot.Animal == null && slot.Respawn.Tick(dt) && !TrySpawnRare(slot, ground)) slot.Respawn.Start(slot.Rule.RespawnSeconds);
     }
 
     /// <summary>The hit shapes of the species and their looks (animal_shapes.json); a look with none, and an animal knocked down or thrown, is tested against its body box.</summary>
@@ -231,7 +340,7 @@ public sealed class WildlifeKeeper : IAnimalHits
         AnimalState.Walk => AnimalPose.Walk,
         AnimalState.Flee => AnimalPose.Run,
         AnimalState.Thrown or AnimalState.Down or AnimalState.Dead or AnimalState.Carried => null,
-        _ => AnimalPose.Idle,
+        _ => AnimalPose.Idle, // Idle, Sit, Bark and Vanish (it stands still; it is no hit target anyway)
     };
 
     /// <summary>
@@ -258,19 +367,19 @@ public sealed class WildlifeKeeper : IAnimalHits
     public void AddTargets(List<HitTarget> into, float backSeconds = 0)
     {
         foreach (var w in _all)
-            if (w.Animal.Alive) into.Add(TargetOf(w.HitId, w.Animal, backSeconds));
+            if (w.Animal.Alive && !w.Animal.Immune) into.Add(TargetOf(w.HitId, w.Animal, backSeconds)); // a vanishing one is a ghost: shots and vehicles pass through
     }
 
-    /// <summary>The living wild animals with their hit ids, into <paramref name="into"/> (a copy: a hit may remove one).</summary>
+    /// <summary>The living wild animals with their hit ids, into <paramref name="into"/> (a copy: a hit may remove one). A vanishing one is not in it.</summary>
     public void Living(List<(ushort HitId, Animal Animal)> into)
     {
         foreach (var w in _all)
-            if (w.Animal.Alive) into.Add((w.HitId, w.Animal));
+            if (w.Animal.Alive && !w.Animal.Immune) into.Add((w.HitId, w.Animal));
     }
 
     public DamageResult Hit(ushort hitId, ushort attacker, float amount)
     {
-        if (!_byHit.TryGetValue(hitId, out var wild) || !wild.Animal.Alive || !(amount > 0)) return DamageResult.Ignored;
+        if (!_byHit.TryGetValue(hitId, out var wild) || !wild.Animal.Alive || wild.Animal.Immune || !(amount > 0)) return DamageResult.Ignored;
         wild.Animal.OnDamage(amount, attacker);
         if (wild.Animal.Ended is { } reason) _entities.Despawn(wild.Entity, reason); // a one-hit species leaves no corpse: it is gone before the next tick
         return wild.Animal.Alive ? DamageResult.Damaged : DamageResult.Killed;
@@ -280,6 +389,6 @@ public sealed class WildlifeKeeper : IAnimalHits
     public void Clear()
     {
         foreach (var w in _all) { w.Gone = true; _crowd?.Remove(w.Animal); }
-        _byHit.Clear(); _byEntity.Clear(); _all.Clear(); _herds.Clear(); _flocks.Clear();
+        _byHit.Clear(); _byEntity.Clear(); _all.Clear(); _herds.Clear(); _flocks.Clear(); _rare.Clear();
     }
 }

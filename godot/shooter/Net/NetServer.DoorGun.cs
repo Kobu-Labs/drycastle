@@ -18,6 +18,7 @@ public partial class NetServer
     static (float Yaw, float Pitch, float Roll) AttitudeOf(ServerCar car) =>
         car.Flies ? (car.Flight.Yaw, car.Flight.Pitch, car.Flight.Roll)
         : car.Drives ? (car.Drive.Yaw, car.Drive.Pitch, car.Drive.Roll) // a driven vehicle lies on the slope it stands on
+        : car.TrailerTilt is { } t ? (car.State.Yaw, t.Pitch, t.Roll) // a trailer lies on the ground it stands on (#482)
         : (car.State.Yaw, 0f, 0f);
 
     /// <summary>The door gun's record for the snapshot: the mount's yaw and the gun's pitch against the vehicle, and the gunner's id. With nobody at it, the gun stays where it was left.</summary>
@@ -74,6 +75,7 @@ public partial class NetServer
         else if (shotCar == null && wall <= gun.Range) BulletPuff(N(end)); // dust where the round meets the ground or a wall
         if (hit == null && wall <= gun.Range) ShotGlass(shotCar, from, dir, wall, gun.Damage);
         DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, _ => gun.Damage);
+        ShotLamps(N(from), N(dir), hit?.Distance ?? Math.Min(wall, gun.Range)); // a pole lamp the round passed breaks (ADR 0037)
         _vehicleView = null;
     }
 }

@@ -6,6 +6,12 @@
 > (lag-back and misprediction: render-clock backsteps, reconcile snaps, replay floor flag, input starvation). Where measured numbers disagree
 > with the specialist reports below, the measured numbers win (examples: ray cost was 5x lower than assumed, C-01 was rejected, the reconcile
 > floor had a different root cause, the A-08 starvation claim was withdrawn).
+>
+> The live server under 64 bots, measured on the VPS, with the repeatable test and the numbers of each round of fixes: `vps-64-bots.md`
+> (`perf/vps_bots_test.sh`, `perf/vps_summary.py`, raw logs in `vps-logs/`).
+>
+> The client in the same fight (one client with a window against 64 bots), its repeatable test and baseline numbers: `client-64-bots.md`
+> (`perf/vps_client_test.sh`, `perf/client_summary.py`, logs in `client-logs/`).
 
 
 Branch `areas-not-parcels`, 2026-11-13. Read-only: nothing was built, run or measured. Eight specialist reports sit beside

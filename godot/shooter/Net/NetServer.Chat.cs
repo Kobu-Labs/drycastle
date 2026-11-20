@@ -54,12 +54,14 @@ public partial class NetServer
             ChatTo(c, ChatLineKind.Error, parsed.Error ?? "That did not work.");
             return;
         }
+        if (parsed.Command!.ClientSide) { ChatTo(c, ChatLineKind.Info, $"/{parsed.Command.Name} runs on your own client."); return; } // a modified client sent it: nothing to do here
         var args = parsed.Args;
         switch (parsed.Command!.Name)
         {
             case "help": ChatHelp(c, args); break;
             case "bots": ChatBots(c, args); break;
             case "spawn": ChatSpawn(c, args[0]); break;
+            case "unicorn": ChatUnicorn(c); break;
             case "sandbox": ChatSandbox(c, args); break;
             case "give": ChatGive(c, args); break;
             case "time": ChatTimeCommand(c, args); break;
@@ -71,6 +73,7 @@ public partial class NetServer
             case "rozhlas": ChatRozhlas(c, args); break;
             case "status": ChatStatus(c, args); break;
             case "scud": ChatScud(c, args); break;
+            case "squad": ChatSquad(c, args); break;
         }
         GD.Print($"server: {c.Name} #{c.Id} ran {text}");
     }
@@ -83,7 +86,7 @@ public partial class NetServer
             ChatTo(c, ChatLineKind.Info, $"{one.Usage}: {one.Summary}.");
             return;
         }
-        ChatTo(c, ChatLineKind.Info, ctx.IsAdmin ? "Commands (Tab completes, Up and Down bring back what you sent):" : "Commands are for admins. You can use:");
+        ChatTo(c, ChatLineKind.Info, ctx.IsAdmin ? "Commands (Tab completes, Up and Down bring back what you sent):" : "Most commands are for admins. You can use:");
         foreach (var cmd in ChatCommands.Visible(ctx)) ChatTo(c, ChatLineKind.Info, $"{cmd.Usage}: {cmd.Summary}.");
     }
 
@@ -116,6 +119,19 @@ public partial class NetServer
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { ChatTo(c, ChatLineKind.Error, "You must be alive to spawn a vehicle."); return; }
         if (TrySpawnVehicle(c, (byte)kind, AdminVehicleCap) is { } why) { ChatTo(c, ChatLineKind.Error, why); return; }
         ChatTo(c, ChatLineKind.Info, $"Spawned a {id} in front of you.");
+    }
+
+    /// <summary>"/unicorn" (admins, a test): an extra Unicorn on the ground 50 m in front of the player, past its flee_radius (40 m, animals.json) so it is not startled (see <see cref="WildlifeKeeper.SpawnExtra"/>).</summary>
+    void ChatUnicorn(Client c)
+    {
+        if (_wildlife == null) { ChatTo(c, ChatLineKind.Error, "There is no wildlife on this map."); return; }
+        if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { ChatTo(c, ChatLineKind.Error, "You must be alive to spawn a Unicorn."); return; }
+        var yaw = c.Body.Yaw;
+        var at = c.Body.GlobalPosition + new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw)) * 50f;
+        if (Query.Ground(MoverKind.Player, at, 60f, 200f) is { } ground) at = ground.Position;
+        if (_wildlife.SpawnExtra(Mysteries.Unicorn, N(at), _wildlifeGround ??= new WildlifeGround(this)))
+            ChatTo(c, ChatLineKind.Info, "A Unicorn stands in front of you.");
+        else ChatTo(c, ChatLineKind.Error, "No room for a Unicorn here (no ground, or the map is full).");
     }
 
     /// <summary>
@@ -191,6 +207,39 @@ public partial class NetServer
         if (TeamAssignRules.Apply(_match, a, c.Name) is not { } line) return;
         ChatToAll(ChatLineKind.System, "", line);
         GD.Print($"server: {c.Name} #{c.Id} team {a.Action} {a.Id} {a.Team}");
+    }
+
+    /// <summary>A player's squad request from the Squads screen (#379, <see cref="SquadAssign"/>). The scoreboard carries the result; a refusal comes back as a chat line.</summary>
+    void OnSquadAssign(Client c, byte[] payload)
+    {
+        if (SquadAssignCodec.Decode(payload) is not { } a) return;
+        RunSquad(c, a);
+        GD.Print($"server: {c.Name} #{c.Id} squad {a.Action} {a.Squad} '{a.Name}'");
+    }
+
+    /// <summary>"/squad create [name] | join name-or-number | leave | list" (#379): the same requests as the Squads screen.</summary>
+    void ChatSquad(Client c, IReadOnlyList<string> args)
+    {
+        var name = args.Count > 1 ? args[1] : "";
+        switch (args[0])
+        {
+            case "list": foreach (var line in SquadRules.List(_match, c.Id)) ChatTo(c, ChatLineKind.Info, line); break;
+            case "create": RunSquad(c, new SquadAssign(SquadAction.Create, 0, name)); break;
+            case "leave": RunSquad(c, new SquadAssign(SquadAction.Leave)); break;
+            case "join":
+                if (name == "") { ChatTo(c, ChatLineKind.Error, "Say which squad: /squad join <name or number>. /squad list shows them."); break; }
+                if (SquadRules.Find(_match, c.Id, name) is var squad && squad == 0) { ChatTo(c, ChatLineKind.Error, $"Your team has no squad '{name}'. /squad list shows them."); break; }
+                RunSquad(c, new SquadAssign(SquadAction.Join, squad));
+                break;
+        }
+    }
+
+    void RunSquad(Client c, SquadAssign a)
+    {
+        if (!c.Joined || c.IsBot) return;
+        var reply = SquadRules.Apply(_match, c.Id, a);
+        ChatTo(c, reply.Ok ? ChatLineKind.Info : ChatLineKind.Error, reply.Text);
+        foreach (var (id, text) in reply.Tell) if (_byId.TryGetValue(id, out var mate)) ChatTo(mate, ChatLineKind.Info, text);
     }
 
     /// <summary>"/restart [ffa|tdm]": a new round now, in the current mode or the named one. Everyone is told which.</summary>

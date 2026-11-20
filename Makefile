@@ -73,8 +73,9 @@ ortho:
 
 # Where the trees are, read from the photo (data/village/ortho/trees.json + canopy.png). Needs `make ortho` (and normalise) first.
 # The first run trains the canopy model (a minute or two), later runs reuse it; RETRAIN=1 trains it again.
-ortho-trees:
-	cd pipeline && uv run python -m drycastle_pipeline.ortho_trees $(if $(RETRAIN),--retrain,)
+# Unchanged inputs (photo, model, buildings, outline, parameters, detector code): nothing runs, the files are kept; FORCE=1 detects again.
+ortho-trees: detail-rust-build
+	cd pipeline && uv run python -m drycastle_pipeline.ortho_trees $(if $(RETRAIN),--retrain,) $(if $(FORCE),--force,)
 
 # Pictures of the generated utility poles in out/poles (variants, random seeds, a wired row, the parts kit); GLB=1 also
 # writes each placeable pole as a GLB. No map data needed. See docs/utility-poles.md.
@@ -306,6 +307,16 @@ private-pack:
 	python3 -I scripts/make_private_pack.py
 
 # Before a release: is the published map, private pack and launcher still what this machine would publish? Exit 1 = republish first (scripts/check_release_assets.py).
+# The live server's Grafana dashboard, through an ssh tunnel (docs/monitoring.md). Ctrl+C closes it.
+.PHONY: monitor
+monitor:
+	scripts/monitor.sh
+
+# The players' dashboard: what each client reports through the server (docs/monitoring.md, "Clients").
+.PHONY: monitor-clients
+monitor-clients:
+	scripts/monitor.sh clients
+
 release-check:
 	python3 -I scripts/check_release_assets.py
 

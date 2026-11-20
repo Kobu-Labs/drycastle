@@ -1375,6 +1375,8 @@ class ParcelEditTools:
         rotation_deg: float | None = None,
         scale: float | None = None,
         colour: str | None = None,
+        z: float | None = None,
+        solid: bool | None = None,
     ) -> dict:
         """Place an object (see the registered tool description). It belongs to no parcel."""
         pid = self.map.need(parcel) if parcel is not None else None
@@ -1385,6 +1387,10 @@ class ParcelEditTools:
             _check_num("rotation_deg", rotation_deg)
         if colour is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", str(colour)):
             raise ToolError(f'colour must look like "#rrggbb" (got {colour!r})')
+        if z is not None:
+            _check_num("z", z)
+        if solid is not None and not isinstance(solid, bool):
+            raise ToolError(f"solid must be true or false, got {solid!r}")
         warnings: list[str] = []
         x, y, frame = self._place_point(pid, anchor, offset_m, position, warnings)
         if rotation_deg is not None:
@@ -1401,6 +1407,10 @@ class ParcelEditTools:
                 entry["scale"] = scl
             if colour is not None:
                 entry["colour"] = colour
+            if z is not None:
+                entry["z"] = float(z)
+            if solid is False:  # true is the default: the key is only written when false
+                entry["solid"] = False
             warnings.extend(self._placement_warnings(pid, (x, y), info, rot, scl, edits, None))
             edits.objects.append(entry)
             return entry
@@ -1543,16 +1553,27 @@ class ParcelEditTools:
         rotation_deg: float | None = None,
         scale: float | None = None,
         colour: str | None = None,
+        z: float | None = None,
+        clear_z: bool = False,
+        solid: bool | None = None,
     ) -> dict:
-        """Change position, rotation, scale or colour of a placed object (see tool description)."""
+        """Change position, rotation, scale, colour, z or solid of a placed object (see tool description)."""
         if scale is not None:
             _check_num("scale", scale, positive=True)
         if rotation_deg is not None:
             _check_num("rotation_deg", rotation_deg)
         if colour is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", str(colour)):
             raise ToolError(f'colour must look like "#rrggbb" (got {colour!r})')
-        if all(v is None for v in (parcel, anchor, offset_m, position, rotation_deg, scale, colour)):
-            raise ToolError("nothing to change: give a new anchor/offset_m/position/rotation_deg/scale/colour")
+        if z is not None:
+            _check_num("z", z)
+            if clear_z:
+                raise ToolError("give z or clear_z, not both")
+        if solid is not None and not isinstance(solid, bool):
+            raise ToolError(f"solid must be true or false, got {solid!r}")
+        if not clear_z and all(v is None for v in (parcel, anchor, offset_m, position, rotation_deg, scale, colour, z, solid)):
+            raise ToolError(
+                "nothing to change: give a new anchor/offset_m/position/rotation_deg/scale/colour/z/clear_z/solid"
+            )
         relocate = any(v is not None for v in (parcel, anchor, offset_m, position))
         warnings: list[str] = []
         path = self.settings.edits_path
@@ -1579,6 +1600,14 @@ class ParcelEditTools:
                 new["scale"] = float(scale)
             if colour is not None:
                 new["colour"] = colour
+            if z is not None:
+                new["z"] = float(z)
+            elif clear_z:
+                new.pop("z", None)  # back on the terrain
+            if solid is True:
+                new.pop("solid", None)  # the default
+            elif solid is False:
+                new["solid"] = False
             info = self._asset(new["asset"])
             lx, ly = self.map.to_local(*new["position"])
             warnings.extend(
@@ -2406,7 +2435,8 @@ def build_server(settings: Settings) -> Any:
 
     @server.tool(description=f"List assets that place_object can use. Each has id (use as `asset`), "
                  f"category (car, slab, pot, flower, bush, tree, wall, fence, pole, connector, other), name, size_m "
-                 f"and tags; primitives (prim:wall, prim:slab, prim:pot, prim:radio_tower, prim:bunker and the "
+                 f"and tags; primitives (prim:wall, prim:slab, prim:pot, prim:radio_tower, prim:bunker, prim:mound (a 12 m x 4 m terraced hill you can walk up, origin at the "
+                 f"centre of its base on the ground; it scales with `scale`, keep scale <= 1.07 so each ledge stays steppable) and the "
                  f"utility poles prim:pole_*, category pole: origin at the foot, the wires run along the object's "
                  f"x axis, the lamp reaches to its -y; and the flood wall pieces prim:floodwall_*, category wall: "
                  f"origin on the wall line, the wall runs along the object's x axis, the ledge is to its -y, "
@@ -2532,7 +2562,10 @@ def build_server(settings: Settings) -> Any:
         "object's front toward the road (right for a car parked in front of the house), else 0; "
         "`rotation_deg` is "
         "counter-clockwise seen from above, absolute. `scale` is uniform, default 1 (small pack "
-        "models may need it); `colour` is \"#rrggbb\". Unknown asset/parcel and bad values are "
+        "models may need it); `colour` is \"#rrggbb\". `z` (optional, metres, absolute above the DMR datum, not "
+        "relative to the ground) fixes the height instead of standing on the terrain: set it to lay an object on "
+        "a prim:mound tier or a roof. `solid` (default true) false = no collision at all, players, vehicles and "
+        "shots pass through: for dressing (trash) laid over a climbable prim. Unknown asset/parcel and bad values are "
         "errors; overlaps with buildings or other objects and positions outside a named parcel are "
         "applied and reported in `warnings`. Returns the new object's id, final position, rotation."))
     def place_object(
@@ -2544,9 +2577,11 @@ def build_server(settings: Settings) -> Any:
         rotation_deg: float | None = None,
         scale: float | None = None,
         colour: str | None = None,
+        z: float | None = None,
+        solid: bool | None = None,
     ) -> dict:
         return tools.place_object(
-            asset, parcel, anchor, offset_m, position, rotation_deg, scale, colour
+            asset, parcel, anchor, offset_m, position, rotation_deg, scale, colour, z, solid
         )
 
     @server.tool(description="Remove a placed object by its id (e.g. o-0003). The cables hanging from a "
@@ -2577,8 +2612,9 @@ def build_server(settings: Settings) -> Any:
 
     @server.tool(description=(
         "Change a placed object: new position (an exact `position` [x, y], or `anchor` + `offset_m` "
-        "relative to `parcel`, default the parcel the object stands in), `rotation_deg`, `scale` or "
-        "`colour`. With a new anchor and no rotation_deg the object turns to face the road "
+        "relative to `parcel`, default the parcel the object stands in), `rotation_deg`, `scale`, "
+        "`colour`, `z` (absolute metres above the DMR datum) or `clear_z` true (back on the terrain; a missing "
+        "z cannot say \"clear\"), `solid` (false = no collision at all, true = the default). With a new anchor and no rotation_deg the object turns to face the road "
         "again. An object belongs to no parcel; `parcel` is only the frame an anchor is measured in."))
     def move_object(
         id: str,
@@ -2589,8 +2625,13 @@ def build_server(settings: Settings) -> Any:
         rotation_deg: float | None = None,
         scale: float | None = None,
         colour: str | None = None,
+        z: float | None = None,
+        clear_z: bool = False,
+        solid: bool | None = None,
     ) -> dict:
-        return tools.move_object(id, parcel, anchor, offset_m, position, rotation_deg, scale, colour)
+        return tools.move_object(
+            id, parcel, anchor, offset_m, position, rotation_deg, scale, colour, z, clear_z, solid
+        )
 
     @server.tool(description=(
         "Create a property group (id G-NNNN) from 2 or more parcels that belong to one owner: "
