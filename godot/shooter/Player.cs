@@ -452,6 +452,7 @@ public partial class Player : CharacterBody3D
         if (!HandsBusy && Input.IsActionPressed("fire")) b |= MoveButtons.Fire;
         if (!HandsBusy && Input.IsActionPressed("zoom")) b |= MoveButtons.Aim;
         if (Input.IsActionPressed("reload")) b |= MoveButtons.Reload;
+        if (!HandsBusy && Input.IsActionPressed("throw_grenade")) b |= MoveButtons.Throw;
         if (Input.IsActionPressed("interact")) b |= MoveButtons.Use;
         if (Input.IsActionPressed("headlights")) b |= MoveButtons.Headlights;
         if (Input.IsActionPressed("killstreak")) b |= MoveButtons.Killstreak;

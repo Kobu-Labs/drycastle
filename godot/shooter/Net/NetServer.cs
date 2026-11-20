@@ -93,6 +93,8 @@ public partial class NetServer : Node
         public bool LightsHeld, Handbrake;
         /// <summary>Held-key edges of Use and Killstreak. Fed every input (also while dead), so a key held across a respawn is not a fresh press.</summary>
         public Edge UseKey, StreakKey;
+        /// <summary>The grenade throw key (G): held to aim, released to throw (<see cref="GrenadeThrower"/>).</summary>
+        public readonly GrenadeThrower Throw = new();
         /// <summary>The interact key beside a Scud truck with an empty rack and a loaded rocket cart: a tap gets in or out, a hold loads the rocket (NetServer.Scud.cs).</summary>
         public readonly ScudReloadKey ReloadKey = new();
         /// <summary>The interact key's hold at the rozhlas dictation table (NetServer.RozhlasSet.cs).</summary>
@@ -830,6 +832,10 @@ public partial class NetServer : Node
             var lightsEdge = Headlights.Edge((i.Buttons & (ushort)MoveButtons.Headlights) != 0, ref c.LightsHeld);
             var streakDown = (i.Buttons & (ushort)MoveButtons.Killstreak) != 0;
             var streakEdge = c.StreakKey.Pressed(streakDown);
+            // the throw key is fed every input; it is the grenade's only on foot and free-handed (a held key, a vehicle, death or a pin put the grenade away)
+            var canThrow = c.Car == null && !controlled && _match.Get(c.Id)?.Life == PlayerLife.Alive && _tick > c.HeldUntilTick && !_sitters.ContainsKey(c.Id) && !_pins.ContainsKey(c.Id)
+                && !c.Body.State.OnLadder && _elapsed >= c.LaunchGraceUntil;
+            var throwStep = c.Throw.Tick((i.Buttons & (ushort)MoveButtons.Throw) != 0, (i.Buttons & (ushort)MoveButtons.Aim) != 0, canThrow);
             if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
             if (c.Car == null && _tick <= c.HeldUntilTick) continue; // in the Bigfoot's hand: the input is acked, the body is where the Bigfoot puts it (issue #264)
             if (c.Car == null && _sitters.TryGetValue(c.Id, out var sitter)) { SitterInput(c, sitter, i, useEdge); continue; } // seated in the church: no walking, no weapon
@@ -873,6 +879,11 @@ public partial class NetServer : Node
             {
                 if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++; // spawn protection ends on a real shot, not on Fire held with an empty magazine
                 { var fireT = Prof.Begin(Prof.S.Fire); FireWeapon(c, i, shot); Prof.End(Prof.S.Fire, fireT); }
+            }
+            if (throwStep == GrenadeThrowStep.Throw && c.W.TryThrow(_elapsed) is { } nade)
+            {
+                if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++;
+                { var fireT = Prof.Begin(Prof.S.Fire); FireWeapon(c, i, nade); Prof.End(Prof.S.Fire, fireT); }
             }
             if (c.W.Changed) SendAmmo(c);
             c.Slot = (byte)(c.W.Slot - 1);
