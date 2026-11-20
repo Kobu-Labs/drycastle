@@ -48,13 +48,8 @@ void vertex() {
 	model_pos = VERTEX;
 }
 
-void fragment() {
-	if (flat_colour) {
-		ALBEDO = gear_color.rgb;
-		ROUGHNESS = 0.95;
-		return;
-	}
-	vec3 p = model_pos * pattern_scale;
+vec3 suit_albedo(vec3 pos) {
+	vec3 p = pos * pattern_scale;
 	// t: 0 draws the base colour, 1 the secondary. Each pattern has its own shape and its own edge.
 	float t;
 	if (pattern == 1) {
@@ -79,6 +74,14 @@ void fragment() {
 	float spread = contrast * 2.0;
 	vec3 a = clamp(mid + (base_color.rgb - mid) * spread, 0.0, 1.0);
 	vec3 b = clamp(mid + (secondary_color.rgb - mid) * spread, 0.0, 1.0);
-	ALBEDO = mix(a, b, t);
+	return mix(a, b, t);
+}
+
+void fragment() {
+	if (flat_colour) {
+		ALBEDO = gear_color.rgb;
+	} else {
+		ALBEDO = suit_albedo(model_pos);
+	}
 	ROUGHNESS = 0.95;
 }
