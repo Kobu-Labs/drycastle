@@ -345,14 +345,14 @@ public static class VehicleRecord
 {
     public const ushort FirstId = 0x4000;
 
-    /// <summary>Health byte bit 0x80: headlights on (one bit, see <see cref="Headlights"/>). Bits 0..1 are the damage stage, bits 2..5 the wheels the Thieves have taken (<see cref="WheelsMask"/>), bit 6 is a trailer's loaded flag (<see cref="LoadedBit"/>, <see cref="MakeTrailer"/>).</summary>
-    public const byte LightsBit = 0x80, StageMask = 0x03, WheelsMask = 0x3C;
+    /// <summary>Health byte bit 0x80: headlights on (one bit, see <see cref="Headlights"/>); bit 0x40 on a driven vehicle: its brakes are on (<see cref="BrakeBit"/>, protocol 71). Bits 0..1 are the damage stage, bits 2..5 the wheels the Thieves have taken (<see cref="WheelsMask"/>), bit 6 is a trailer's loaded flag (<see cref="LoadedBit"/>, <see cref="MakeTrailer"/>).</summary>
+    public const byte LightsBit = 0x80, BrakeBit = 0x40, StageMask = 0x03, WheelsMask = 0x3C;
     const int WheelsShift = 2;
 
     /// <summary>The Health byte of a vehicle record carries the damage stage (0..3), the wheels taken (bit per wheel: front left, front right, back left, back right) and the headlights bit; a destroyed vehicle is State Dead.</summary>
-    public static EntityRecord Make(ushort id, Vector3 pos, float yaw, ushort driver, byte colourAndKind, int stage = 0, bool destroyed = false, bool lights = false, byte wheelsOff = 0)
+    public static EntityRecord Make(ushort id, Vector3 pos, float yaw, ushort driver, byte colourAndKind, int stage = 0, bool destroyed = false, bool lights = false, byte wheelsOff = 0, bool braking = false)
     {
-        var health = (stage & StageMask) | ((wheelsOff & 0xF) << WheelsShift) | (lights ? LightsBit : 0);
+        var health = (stage & StageMask) | ((wheelsOff & 0xF) << WheelsShift) | (lights ? LightsBit : 0) | (braking ? BrakeBit : 0);
         var r = EntityRecord.Make(id, EntityType.Vehicle, pos, yaw, 0, health, destroyed ? EntityState.Dead : driver != 0 ? EntityState.InVehicle : EntityState.Alive, colourAndKind);
         r.Pitch = unchecked((short)driver);
         return r;
@@ -384,6 +384,8 @@ public static class VehicleRecord
     public static bool Loaded(in EntityRecord r) => (r.Health & LoadedBit) != 0;
     public static int Stage(in EntityRecord r) => r.Health & StageMask;
     public static bool Lights(in EntityRecord r) => (r.Health & LightsBit) != 0;
+    /// <summary>The brake bit of a driven vehicle's record (bit 6, which a trailer uses for its load): the server's brakes were on in its last step.</summary>
+    public static bool Braking(in EntityRecord r) => (r.Health & BrakeBit) != 0;
     /// <summary>The wheels taken, one bit each (0 front left, 1 front right, 2 back left, 3 back right).</summary>
     public static byte Wheels(in EntityRecord r) => (byte)((r.Health & WheelsMask) >> WheelsShift);
     public static byte Colour(in EntityRecord r) => (byte)(r.Weapon & 0xF);
@@ -403,6 +405,8 @@ public struct CarState
     public float Speed;
     /// <summary>Current yaw rate, rad/s, eased toward the steering target at <see cref="VehicleHandling.YawSlew"/> so the nose never snaps round.</summary>
     public float YawRate;
+    /// <summary>The brakes bit in the last step (the handbrake, or the key against the travel, while it moved); the brake lamps' state (#409).</summary>
+    public bool Braking;
 }
 
 public static class CarModel
@@ -441,6 +445,7 @@ public static class CarModel
         if (tow.Hitched) { top *= tow.Load.TopSpeedScale; accel *= tow.Load.AccelScale; brake *= tow.Load.BrakeScale; }
         // the launch boost: more thrust near a standstill, fading to the plain acceleration at h.LaunchSpeed (either direction of travel)
         accel *= 1f + (h.LaunchBoost - 1f) * MathF.Max(0f, 1f - MathF.Abs(v) / MathF.Max(0.1f, h.LaunchSpeed));
+        s.Braking = MathF.Abs(v) > 1e-3f && (handbrake || throttle > 0.05f && v < 0 || throttle < -0.05f && v > 0);
         if (handbrake) v = Approach(v, 0, h.HandbrakeDecel * dt);
         else if (throttle > 0.05f)
             v = v < 0 ? Approach(v, 0, brake * dt) : tow.Hitched && v > top ? Approach(v, top, brake * dt) : MathF.Min(top, v + accel * throttle * dt);

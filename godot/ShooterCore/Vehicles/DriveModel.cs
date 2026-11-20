@@ -34,6 +34,8 @@ public struct DriveState
     public float Impact;
     /// <summary>It went into the water, or came out of it, in the last step.</summary>
     public bool EnteredWater, LeftWater;
+    /// <summary>The brakes bit in the last step: the handbrake, or the key against the travel, while it moved. Coasting and driving do not set it. Drives the brake lamps (#409).</summary>
+    public bool Braking;
 
     /// <summary>The seat, gun or lamp at <paramref name="offset"/> (the vehicle's frame: x right, y up, z back) in the world, on the slope it stands on.</summary>
     public readonly Vector3 ToWorld(float[] offset) => Position + FlightMath.Rotate(new Vector3(offset[0], offset[1], offset[2]), Yaw, Pitch, Roll);
@@ -129,7 +131,7 @@ public static class DriveModel
     {
         var d = def.Drive!;
         var land = d.Land; var wet = d.Water;
-        s.Impact = 0; s.EnteredWater = false; s.LeftWater = false;
+        s.Impact = 0; s.EnteredWater = false; s.LeftWater = false; s.Braking = false;
         var key = Math.Clamp(input.Throttle, -1f, 1f);
         var wheel = Math.Clamp(input.Steer, -1f, 1f);
 
@@ -170,6 +172,7 @@ public static class DriveModel
         {
             // ---- on its wheels
             var braking = key > Dead && u < -StillSpeed || key < -Dead && u > StillSpeed;
+            s.Braking = (input.Handbrake || braking) && MathF.Abs(u) > StillSpeed;
             if (input.Handbrake) u = FlightMath.Approach(u, 0, land.HandbrakeDecel * dt);
             else if (braking)
             {

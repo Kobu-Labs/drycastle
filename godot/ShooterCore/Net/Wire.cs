@@ -337,7 +337,8 @@ public static class Wire
     //   v68 the Scud truck: events 80-85 (the launcher's command, state, the operator's camera, the launch, the impact and a notice), world entity 11 (the Scud missile), special weapon 237, vehicles.json "launcher"
     //   v69 loading a Scud truck from a rocket cart: the launcher state byte may be 10 (Loading) and the Scud notice codes 11 (LoadStarted), 12 (LoadCancelled) and 13 (EventFound); the Scud event (/event scud): an intel board entry may carry an AREA, a centre and a radius in metres (flags bit 4, a f32 radius after the centre)
     //   v70 the plantation (#364): bit 2 of the player status mask (EventKind.StatusState, StatusKind.High): the player is high; the others draw a lit cigarette and red eyes on the figure, the player's own camera sways
-    public const byte ProtocolVersion = 70;
+    //   v71 brake lamps (#409): bit 6 of a driven vehicle's health byte says its brakes are on (VehicleRecord.BrakeBit/Braking); the client no longer guesses braking from speed
+    public const byte ProtocolVersion = 71;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {
