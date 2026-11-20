@@ -364,16 +364,25 @@ public sealed partial class HuntersLogScreen
         who.AddChild(r.Player);
         r.PlayerCell = who;
         // species: the name (or the blurred placeholder), then the record seal
-        var species = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = Columns[2].Ratio, MouseFilter = MouseFilterEnum.Ignore };
-        species.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
+        // the record seal floats over the cell's right end, in no layout: a strip of the cell is reserved for it so the name is never covered, and a seal cannot move the columns
+        var species = new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = Columns[2].Ratio, MouseFilter = MouseFilterEnum.Ignore };
+        var names = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        names.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        names.OffsetRight = -ShooterTheme.LogSealStrip;
+        names.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
+        species.AddChild(names);
         r.Icon = new AnimalPicture(ShooterTheme.LogRowArt) { FillInk = Skin.InkDim, OutlineInk = Skin.InkDim, SizeFlagsVertical = SizeFlags.ShrinkCenter, ClipContents = true, MouseFilter = MouseFilterEnum.Ignore };
-        species.AddChild(r.Icon);
+        names.AddChild(r.Icon);
         r.Species = Cell("InkSmall", HorizontalAlignment.Left, 1);
         r.Blur = new BlurText(Strings.T("hunt.hidden.name"), "InkSmall") { Visible = false };
         r.Pill = new PanelContainer { ThemeTypeVariation = "LogPill", Visible = false, MouseFilter = MouseFilterEnum.Ignore, SizeFlagsVertical = SizeFlags.ShrinkCenter };
         r.PillText = Text("", "LogSealText");
         r.Pill.AddChild(r.PillText);
-        species.AddChild(r.Species); species.AddChild(r.Blur); species.AddChild(r.Pill);
+        names.AddChild(r.Species); names.AddChild(r.Blur);
+        r.Pill.SetAnchorsPreset(Control.LayoutPreset.CenterRight);
+        r.Pill.GrowHorizontal = Control.GrowDirection.Begin; r.Pill.GrowVertical = Control.GrowDirection.Both;
+        r.Pill.OffsetRight = -ShooterTheme.Space / 2;
+        species.AddChild(r.Pill);
         r.Kg = Cell("InkSmall", HorizontalAlignment.Right, Columns[3].Ratio);
         r.Distance = Cell("InkSmall", HorizontalAlignment.Right, Columns[4].Ratio);
         r.Weapon = Cell("InkSmall", HorizontalAlignment.Left, Columns[5].Ratio);
