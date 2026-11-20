@@ -69,6 +69,12 @@ public class VehicleTrailerDef
     /// </summary>
     public float LoadedHp { get; set; }
 
+    /// <summary>
+    /// How far above the ground under it the world probe sweeps the trailer's solid box, metres; 0: the probe's default (0.5, the wheels' business). The rocket cart's is above its drawbar and landing
+    /// leg, so only the missile is swept and a dyke the low parts clear does not hold it (#377).
+    /// </summary>
+    public float ProbeClearance { get; set; }
+
     /// <summary>The trailer carries a load that changes its hit points and, destroyed, goes off (<see cref="CartCargo"/>).</summary>
     public bool HasCargo => LoadedHp > 0;
 
@@ -80,6 +86,7 @@ public class VehicleTrailerDef
         if (Eye.Length != 3 || Axle.Length != 3) return "eye and axle are [x, y, z]";
         if (MathF.Abs(Eye[0]) > 0.01f || MathF.Abs(Axle[0]) > 0.01f) return "eye and axle are on the centre line (x 0)";
         if (Drawbar < 0.5f) return "the axle must be at least 0.5 m behind the drawbar eye (eye z below axle z)";
+        if (ProbeClearance < 0 || !float.IsFinite(ProbeClearance)) return "probe_clearance must not be negative";
         if (Mass <= 0) return "mass must be positive";
         if (EmptyMass < 0 || EmptyMass > Mass || !float.IsFinite(EmptyMass)) return "empty_mass must be 0 (same as mass) or between 0 and mass";
         if (Grip <= 0 || SwayGain < 0 || SwaySettle <= 0 || RollDecel < 0) return "grip and sway_settle must be positive, sway_gain and roll_decel not negative";

@@ -15,6 +15,7 @@ public sealed partial class TrailerProbe : Node3D, ITrailerWorld
 {
     /// <summary>The box is swept this far above the ground under it, metres (the wheels' business: kerbs and banks pass under).</summary>
     public const float Clearance = 0.5f;
+    float _clearance = Clearance; // the type's own (trailer.probe_clearance), above its low parts
     const float RayLift = 1.5f, RayReach = 8f;
     /// <summary>The ground under a box is sampled this far apart along its length (a crest or a dyke between its two ends), metres.</summary>
     const float SampleEvery = 1.5f;
@@ -31,7 +32,8 @@ public sealed partial class TrailerProbe : Node3D, ITrailerWorld
 
     public override void _Ready()
     {
-        var height = MathF.Max(0.2f, _def.Height - Clearance);
+        if (_def.Trailer is { ProbeClearance: > 0 } t) _clearance = t.ProbeClearance;
+        var height = MathF.Max(0.2f, _def.Height - _clearance);
         _box = new BoxShape3D { Size = new Vector3(_def.HalfWidth * 2, height, _def.HalfLength * 2) };
         _query.Shape = _box; _query.CollisionMask = SweepMask;
         _ray.CollisionMask = WorldMask;
@@ -66,7 +68,7 @@ public sealed partial class TrailerProbe : Node3D, ITrailerWorld
             lift = MathF.Max(lift, GroundY(x, z, y) - (gr + (gf - gr) * t));
         }
         var mid = (gf + gr) / 2 + lift;
-        var centre = new Vector3(to.X, mid + Clearance + height / 2, to.Z);
+        var centre = new Vector3(to.X, mid + _clearance + height / 2, to.Z);
         _query.Transform = new Transform3D(basis, centre);
         return GetWorld3D().DirectSpaceState.IntersectShape(_query, 1).Count > 0;
     }

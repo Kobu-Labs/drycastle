@@ -402,7 +402,7 @@
       "chase_distance": 15, "chase_height": 5,
       "model": "pack:synty-simple-military/rocket_cart", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "seats": [],
-      "trailer": { "eye": [0, 0.62, -6.2], "axle": [0, 0.46, 1.4], "mass": 3000, "empty_mass": 1000, "grip": 5.5, "loaded_hp": 150 }
+      "trailer": { "eye": [0, 0.62, -6.2], "axle": [0, 0.46, 1.4], "mass": 3000, "empty_mass": 1000, "grip": 5.5, "loaded_hp": 150, "probe_clearance": 1.6 }
     },
     {
       "id": "scud",
