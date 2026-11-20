@@ -36,6 +36,7 @@ public static class ShooterTheme
     // table instead of beside it. Their colours and styles are a LogSkin's (LogSkin.cs), not this Theme's
     public const float LogWidthShare = 0.6f, LogHeightShare = 0.85f;
     public const int LogTileW = 25 * Space, LogTileArtH = 7 * Space, LogCardW = 40 * Space, LogFigureH = 12 * Space, LogBadgeStrip = 2 * Space;
+    public static readonly Godot.Vector2 LogRowArt = new(5 * Space, 3 * Space);
     public const int LogHitW = 30 * Space, LogHitArtH = 20 * Space, LogRowH = 5 * Space, LogStatW = 14 * Space, LogStackBelow = 110 * Space;
     public const int LogPageButton = 5 * Space, LogFilterW = 22 * Space, LogCloseSize = 3 * Space, LogStatIcon = 2 * Space + Space / 2;
     /// <summary>Minimum widths of the All hunts table's columns (When, Player, Species, Weight, Distance, Weapon), so a header or a cell is never cut.</summary>

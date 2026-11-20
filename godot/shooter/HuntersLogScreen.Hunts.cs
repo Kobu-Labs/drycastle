@@ -21,6 +21,7 @@ public sealed partial class HuntersLogScreen
         public ContentButton Btn = null!;
         public Label When = null!, Species = null!, Kg = null!, Distance = null!, Weapon = null!, PillText = null!;
         public PlayerLink Player = null!;
+        public AnimalPicture Icon = null!;
         public BlurText Blur = null!;
         public PanelContainer Pill = null!;
         public Control PlayerCell = null!;
@@ -358,6 +359,8 @@ public sealed partial class HuntersLogScreen
         // species: the name (or the blurred placeholder), then the record seal
         var species = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = Columns[2].Ratio, MouseFilter = MouseFilterEnum.Ignore };
         species.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
+        r.Icon = new AnimalPicture(ShooterTheme.LogRowArt) { FillInk = Skin.InkDim, OutlineInk = Skin.InkDim, SizeFlagsVertical = SizeFlags.ShrinkCenter, MouseFilter = MouseFilterEnum.Ignore };
+        species.AddChild(r.Icon);
         r.Species = Cell("InkSmall", HorizontalAlignment.Left, 1);
         r.Blur = new BlurText(Strings.T("hunt.hidden.name"), "InkSmall") { Visible = false };
         r.Pill = new PanelContainer { ThemeTypeVariation = "LogPill", Visible = false, MouseFilter = MouseFilterEnum.Ignore, SizeFlagsVertical = SizeFlags.ShrinkCenter };
@@ -390,6 +393,8 @@ public sealed partial class HuntersLogScreen
         r.When.Text = AgoText(h.AtUnix);
         r.Player.Text = mine ? Strings.F("score.you", h.Hunter) : h.Hunter; // a tinted row also says so in words
         r.Species.Visible = !h.Hidden;
+        r.Icon.Visible = !h.Hidden;
+        if (!h.Hidden) r.Icon.SetSpecies(_env.Art.ForSpecies(h.Exact != "" ? h.Exact : h.Species), filled: true);
         r.Blur.Visible = h.Hidden;
         r.Species.Text = h.Hidden ? "" : HuntSpeciesName(h);
         var mark = HuntRecords.MarkOf(Data.Records.Data, h);
