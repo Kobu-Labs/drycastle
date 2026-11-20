@@ -67,6 +67,7 @@ public partial class DustVolume : MeshInstance3D
         if (_mat == null) return; // no shader: no dust is drawn (the veil still works)
         _at = at; _radius = radius; _born = born; _speed = speed;
         _groundMin = 0f; _groundMax = 0f;
+        _groundNext = CellOrder.Length; // no front: no ground to sample (a previous blast's grid is dropped)
         _columnHeight = radius * Mathf.Lerp(ColumnLowPerRadius, ColumnTallPerRadius, Mathf.Clamp((radius - ColumnSmallRadius) / (ColumnTallRadius - ColumnSmallRadius), 0f, 1f));
         EndMs = (ulong)((born + Seconds) * 1000.0);
         var front = DustRules.HasFront(radius);
@@ -87,28 +88,65 @@ public partial class DustVolume : MeshInstance3D
         SetProcess(true);
     }
 
+    /// <summary>Grid cells sampled per frame: the wave's ground is filled in rings from the blast outwards over a few frames, not in one frame (1,089 rays at once cost ~10 ms).</summary>
+    const int RaysPerFrame = 192;
+
+    /// <summary>The grid's cells nearest the centre first.</summary>
+    static readonly int[] CellOrder = MakeOrder();
+
+    static int[] MakeOrder()
+    {
+        var c = (GroundSide - 1) / 2f;
+        var order = new int[GroundSide * GroundSide];
+        for (var k = 0; k < order.Length; k++) order[k] = k;
+        Array.Sort(order, (p, q) =>
+        {
+            float dp = Sq(p % GroundSide - c) + Sq(p / GroundSide - c), dq = Sq(q % GroundSide - c) + Sq(q / GroundSide - c);
+            return dp.CompareTo(dq);
+        });
+        return order;
+    }
+
+    static float Sq(float v) => v * v;
+
+    int _groundNext = GroundSide * GroundSide; // next index into CellOrder; the end when the grid is done
+    float _groundHalf, _groundSpan;
+
     /// <summary>
-    /// The ground's height (relative to the blast) on a grid over the square of half side <paramref name="half"/> around it, into the shader's texture: the wave
-    /// runs over it instead of level. A point with no ground in range takes the blast's own height. Roofs count as ground: the wave washes over a house.
+    /// Begins sampling the ground (relative to the blast) on a grid over the square of half side <paramref name="half"/> around it, into the shader's texture: the wave
+    /// runs over it instead of level. A point with no ground in range takes the blast's own height. Roofs count as ground: the wave washes over a house. The cells fill from the
+    /// centre out, <see cref="RaysPerFrame"/> a frame (<see cref="StepGround"/>); the rest are level until then.
     /// </summary>
     void SampleGround(float half)
     {
-        var space = GetWorld3D().DirectSpaceState;
         _groundRay ??= new PhysicsRayQueryParameters3D { CollisionMask = CollisionLayers.World };
-        var span = MathF.Max(8f, half * GroundSpanPerReach);
+        _groundHalf = half;
+        _groundSpan = MathF.Max(8f, half * GroundSpanPerReach);
         _groundMin = 0f; _groundMax = 0f;
-        for (var j = 0; j < GroundSide; j++)
-            for (var i = 0; i < GroundSide; i++)
-            {
-                var x = _at.X + (i / (float)(GroundSide - 1) * 2f - 1f) * half;
-                var z = _at.Z + (j / (float)(GroundSide - 1) * 2f - 1f) * half;
-                _groundRay.From = new Vector3(x, _at.Y + span, z);
-                _groundRay.To = new Vector3(x, _at.Y - span, z);
-                var hit = space.IntersectRay(_groundRay);
-                var y = hit.Count == 0 ? 0f : hit["position"].AsVector3().Y - _at.Y;
-                _groundData[j * GroundSide + i] = y;
-                _groundMin = MathF.Min(_groundMin, y); _groundMax = MathF.Max(_groundMax, y);
-            }
+        Array.Clear(_groundData);
+        _groundNext = 0;
+        StepGround();
+    }
+
+    /// <summary>Samples the next batch of cells and hands the grid to the shader.</summary>
+    void StepGround()
+    {
+        var space = GetWorld3D().DirectSpaceState;
+        var half = _groundHalf; var span = _groundSpan;
+        var end = Math.Min(_groundNext + RaysPerFrame, CellOrder.Length);
+        for (; _groundNext < end; _groundNext++)
+        {
+            var cell = CellOrder[_groundNext];
+            int i = cell % GroundSide, j = cell / GroundSide;
+            var x = _at.X + (i / (float)(GroundSide - 1) * 2f - 1f) * half;
+            var z = _at.Z + (j / (float)(GroundSide - 1) * 2f - 1f) * half;
+            _groundRay!.From = new Vector3(x, _at.Y + span, z);
+            _groundRay.To = new Vector3(x, _at.Y - span, z);
+            var hit = space.IntersectRay(_groundRay);
+            var y = hit.Count == 0 ? 0f : hit["position"].AsVector3().Y - _at.Y;
+            _groundData[cell] = y;
+            _groundMin = MathF.Min(_groundMin, y); _groundMax = MathF.Max(_groundMax, y);
+        }
         Buffer.BlockCopy(_groundData, 0, _groundBytes, 0, _groundBytes.Length);
         if (_groundImage == null)
         {
@@ -132,7 +170,8 @@ public partial class DustVolume : MeshInstance3D
     public override void _Process(double delta)
     {
         var age = Time.GetTicksMsec() / 1000.0 - _born;
-        if (age >= Seconds) { Visible = false; SetProcess(false); return; }
+        if (age >= Seconds) { Visible = false; SetProcess(false); _groundNext = CellOrder.Length; return; }
+        if (_groundNext < CellOrder.Length) StepGround();
         Feed(age);
     }
 
