@@ -54,10 +54,10 @@ public class AnimalShapeTests
         var body = Broadside(s, 0.1f, 0.85f);
         Assert.NotNull(body);
         Assert.False(body!.Value.ShapeHead);
-        Assert.False(body.Value.Head); // never a headshot's damage
+        Assert.False(body.Value.Head); // a body cell is body damage
         var head = Broadside(s, hz, hy);
         Assert.True(head!.Value.ShapeHead);
-        Assert.False(head.Value.Head);
+        Assert.True(head.Value.Head); // a head cell is a headshot
         // all three are inside the box a bullet was tested against before
         Assert.Null(Broadside(s, -0.2f, 1.3f));  // over the back
         Assert.Null(Broadside(s, 0.15f, 0.25f)); // under the belly, between the legs
