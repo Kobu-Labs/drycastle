@@ -80,14 +80,14 @@ public partial class NetServer
     static float HullDistanceNow(ServerCar car, NVec3 at)
     {
         var (yaw, pitch, roll) = AttitudeOf(car);
-        return HullDistance.Of(at, N(car.GlobalPosition), yaw, pitch, roll, car.Def);
+        return HullDistance.Of(at, car.HullFeet, yaw, pitch, roll, car.Def);
     }
 
     /// <summary>The vehicle as it stands now: its feet, yaw and attitude, and the turret's yaw (the same numbers the hit box and the seats read).</summary>
     static VehiclePose PresentPose(ServerCar car)
     {
         var (_, pitch, roll) = AttitudeOf(car);
-        return new VehiclePose(N(car.GlobalPosition), car.State.Yaw, pitch, roll, car.TurretLocalYaw);
+        return new VehiclePose(car.HullFeet, car.State.Yaw, pitch, roll, car.TurretLocalYaw);
     }
 
     /// <summary>

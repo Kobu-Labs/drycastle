@@ -201,7 +201,7 @@ public class HelicopterHullTests
         Assert.True(Heli.Tilts);
         Assert.False(Car.Tilts);
         Assert.Equal(new[] { HullBox.Upright(Car.HalfWidth, Car.HalfLength, Car.Height) }, Car.HullBoxes);
-        foreach (var v in Data.Vehicles.Vehicles.Where(v => v.Id != "utility_helicopter")) Assert.Null(v.Hull);
+        foreach (var v in Data.Vehicles.Vehicles.Where(v => v.Id is not ("utility_helicopter" or "rocket_cart"))) Assert.Null(v.Hull); // (the rocket cart's is #482)
     }
 
     [Fact]

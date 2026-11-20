@@ -101,6 +101,33 @@ public sealed partial class TrailerProbe : Node3D, ITrailerWorld
         return new GroundFit(gf, gr, lift, MathF.Atan2(gf - gr, 2 * box.HalfL));
     }
 
+    /// <summary>
+    /// How a trailer whose origin is at (<paramref name="x"/>, <paramref name="z"/>), about <paramref name="y"/> high, facing <paramref name="yaw"/>, lies on the ground (<see cref="TrailerAttitude"/>). With
+    /// <paramref name="hitchY"/> (the height of the tractor's hitch, world) it is pulled: the axle's ground is walked to from the eye, and the pitch is the hitch's height over it; without, it is loose: the
+    /// axle's ground is walked to from the origin and the eye's from the axle. The server's hull and the client's drawing and its copy of the hull both ask this (#482).
+    /// </summary>
+    public TrailerAttitude.Result Attitude(in TowGeometry g, float x, float z, float y, float yaw, float? hitchY)
+    {
+        var (s, c) = MathF.SinCos(yaw);
+        var back = g.EyeZ + g.Drawbar; // the axle's distance behind the origin
+        float ax = x + back * s, az = z + back * c, ex = x + g.EyeZ * s, ez = z + g.EyeZ * c;
+        float gAxle, eyeAbove;
+        if (hitchY is { } h)
+        {
+            gAxle = GroundWalk(ex, ez, ax, az, h - g.EyeY); // the axle's ground is metres off the hitch's on a dyke, further than one ray finds (#377)
+            eyeAbove = h - gAxle;
+        }
+        else
+        {
+            gAxle = GroundWalk(x, z, ax, az, y);
+            eyeAbove = g.EyeY + GroundWalk(ax, az, ex, ez, gAxle) - gAxle;
+        }
+        var half = g.HalfWidth * 0.9f;
+        var gl = GroundY(ax - c * half, az + s * half, gAxle + 0.5f);
+        var gr = GroundY(ax + c * half, az - s * half, gAxle + 0.5f);
+        return TrailerAttitude.Of(g, yaw, ax, az, gAxle, eyeAbove, gl, gr, half);
+    }
+
     // what the last query was, for the block log (#377: why a towed cart sticks on a dyke) and the volume overlay
     int _misses;
     double _lastLogS = -10;

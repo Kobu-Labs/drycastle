@@ -31,6 +31,7 @@ Where a player and an NPC or animal block each other, the NPC or animal stops or
 | Citizen, gang, worker, demon | follows the player capsule | player capsule r 0.35 m |
 | Wildlife, pet | baked outline for every species; blast and knife measure to the outline's bounding box | a box per species |
 | Utility helicopter | 3 boxes (cabin, tail boom, fin) that tilt with pitch and roll | the same 3 boxes |
+| Rocket cart (towed) | one narrow box (missile body, 1.2 m wide, y 0.46 to 2.0, nose to tail) that tilts with the ground it lies on (#482: pitch and roll from `TrailerAttitude`, fitted by server and client alike, not on the wire) | the same box for on-foot players; against other vehicles and the world probe the wide upright footprint |
 | Other vehicles | one upright box | the same box |
 
 Run-over tests the victim's Body footprint scaled to 95%.

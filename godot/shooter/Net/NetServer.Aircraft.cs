@@ -96,7 +96,7 @@ public partial class NetServer
             var riders = targets != null && c.Seat.Occupied ? RiderRules.Exposed(c.Def, c.Seat, targets, seatsOnly: true) : null;
             var (_, pitch, roll) = AttitudeOf(c);
             var (tp, tr) = c.Def.TiltOf(pitch, roll);
-            list.Add(new GunshipVehicle(i, N(c.GlobalPosition), c.State.Yaw, c.HalfWidth, c.HalfLength, c.Def.Height, riders, tp, tr, c.Def.Tilts ? c.Def.HullBoxes : null));
+            list.Add(new GunshipVehicle(i, c.HullFeet, c.State.Yaw, c.HalfWidth, c.HalfLength, c.Def.Height, riders, tp, tr, c.Def.Tilts ? c.Def.HullBoxes : null));
         }
         return list;
     }
