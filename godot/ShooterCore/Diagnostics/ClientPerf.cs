@@ -37,10 +37,15 @@ public static class ClientProf
         NetWorld,
         /// <summary>Reliable messages and effects decoded and handled: shots, hits, kills, spawns ("client: perf events" names the kinds).</summary>
         NetEvents,
+        /// <summary>Animals (taken out of <see cref="Creatures"/>, as the next three are: Creatures is what is left, the Bigfoot and the demon).</summary>
+        CreaturesAnimals,
+        CreaturesFlocks,
+        CreaturesCitizens,
+        CreaturesGang,
         Count,
     }
 
-    static readonly string[] Names = { "net", "players", "creatures", "vehicles", "projectiles", "view", "hud", "predict", "reconcile", "net_snapshot", "net_world", "net_events" };
+    static readonly string[] Names = { "net", "players", "creatures", "vehicles", "projectiles", "view", "hud", "predict", "reconcile", "net_snapshot", "net_world", "net_events", "creatures_animals", "creatures_flocks", "creatures_citizens", "creatures_gang" };
     const int N = (int)S.Count;
     static readonly long[] Win = new long[N];
 

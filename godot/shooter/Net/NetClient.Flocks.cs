@@ -23,6 +23,7 @@ public partial class NetClient
         public float FlapHz;
         public bool Started;
         public double Owed;
+        public byte Stride;
         public int Birds;
         public FlockSpecies Kind = null!;
     }
@@ -140,13 +141,14 @@ public partial class NetClient
         _flockClock += delta;
         var rt = RenderTickNow();
         CollectFlockObstacles(delta, rt);
-        var cam = GetViewport().GetCamera3D();
+        CreatureLod.BeginFrame(GetViewport().GetCamera3D());
         foreach (var (id, v) in _flocks)
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant) continue;
-            var stride = v.Started ? CreatureLod.Stride(cam, v.Node.GlobalPosition) : 1;
+            if (!v.Started) v.Stride = 1;
+            else if (CreatureLod.Stale(v.Stride, id)) v.Stride = CreatureLod.Of(new Vector3(e.State.Position.X, e.State.Position.Y, e.State.Position.Z));
             v.Owed += delta;
-            if (!CreatureLod.Due(id, stride)) continue; // far or out of view: the birds keep their places until the flock's turn
+            if (!CreatureLod.Due(id, v.Stride)) continue; // far or out of view: the birds keep their places until the flock's turn
             var step = v.Owed; v.Owed = 0;
             v.Started = true;
             var goal = e.Buf.At(rt) is { } s ? new System.Numerics.Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z) : e.State.Position;

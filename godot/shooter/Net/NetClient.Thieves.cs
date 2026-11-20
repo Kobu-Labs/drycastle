@@ -19,6 +19,7 @@ public partial class NetClient
         public GangMemberView View = null!;
         public Vector3 Last;
         public bool Placed;
+        public byte Stride;
         public float Speed;   // metres per second, smoothed: whether it is walking
     }
 
@@ -81,13 +82,14 @@ public partial class NetClient
         RenderLoot();
         if (_gang.Count == 0 || _lastTick == 0) return;
         var rt = RenderTickNow();
-        var cam = GetViewport().GetCamera3D();
+        CreatureLod.BeginFrame(GetViewport().GetCamera3D());
         foreach (var (id, g) in _gang)
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
-            var stride = g.Placed ? CreatureLod.Stride(cam, g.View.GlobalPosition) : 1; // the first frame is drawn whole
-            var due = CreatureLod.Due(id, stride);
-            var step = g.View.Pace(delta, stride > 1, due);
+            if (!g.Placed) g.Stride = 1; // the first frame is drawn whole
+            else if (CreatureLod.Stale(g.Stride, id)) g.Stride = CreatureLod.Of(new Vector3(e.State.Position.X, e.State.Position.Y, e.State.Position.Z));
+            var due = CreatureLod.Due(id, g.Stride);
+            var step = g.View.Pace(delta, g.Stride > 1, due);
             if (!due) continue; // far or out of view: it keeps its place and pose until its turn
             if (e.Buf.At(rt) is { } s)
             {
