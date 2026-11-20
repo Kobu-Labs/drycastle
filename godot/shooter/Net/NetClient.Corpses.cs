@@ -129,15 +129,51 @@ public partial class NetClient
         if (e.Type != CorpseRules.TypeId) return;
         if (e.State.Owner == BigfootRules.TargetId) { _corpses[e.Id] = MakeGiantCorpse(e); return; }
         if (HarvesterRules.IsBale(e.State.Owner)) { _corpses[e.Id] = MakeBaleCorpse(e); return; }
-        var node = new Node3D { Name = $"Corpse{e.Id}" };
-        var view = CharacterView.Make();
-        if (Appearances.TryGetValue(e.State.Owner, out var look)) view.SetCamo(look, CamoData); // the dead player's look (#203)
-        view.Position = new Vector3(0, -RagdollTumble.Half, 0); // the node sits at the body's middle, so a thrown body spins about its centre
-        node.AddChild(view);
-        Owned.AddChild(node);
+        Appearances.TryGetValue(e.State.Owner, out var look);
+        var (node, view) = TakeCorpseView(CharacterView.ModelFor(look, CamoData));
+        node.Name = $"Corpse{e.Id}";
+        if (look != null) view.SetCamo(look, CamoData); // the dead player's look (#203)
         node.Visible = false; // until RenderCorpses knows whether this body collapses (DecideCollapse)
         _corpses[e.Id] = new CorpseView { Node = node, View = view, Born = Now };
         DressCorpse(e.Id); // the item the corpse carries, when its event came first (#266)
+    }
+
+    /// <summary>
+    /// The views of corpses that are gone, by body model, kept hidden for the next death (building a skinned body costs several ms, and the cap sends one
+    /// corpse out for each one in): at most <see cref="CorpseRules.MaxCorpses"/> of them. Reset by <see cref="CharacterView.ResetForReuse"/> when taken.
+    /// </summary>
+    readonly Dictionary<string, Stack<(Node3D Node, CharacterView View)>> _corpsePool = new();
+    int _corpsePooled;
+
+    /// <summary>A node and view for a new corpse on <paramref name="model"/>: a reset pooled one, or a new one.</summary>
+    (Node3D Node, CharacterView View) TakeCorpseView(string model)
+    {
+        while (_corpsePool.TryGetValue(model, out var stack) && stack.Count > 0)
+        {
+            var (node, pooled) = stack.Pop();
+            _corpsePooled--;
+            if (!GodotObject.IsInstanceValid(node) || !GodotObject.IsInstanceValid(pooled)) continue;
+            pooled.ResetForReuse();
+            return (node, pooled);
+        }
+        var view = CharacterView.Make(model);
+        view.Position = new Vector3(0, -RagdollTumble.Half, 0); // the node sits at the body's middle, so a thrown body spins about its centre
+        var fresh = new Node3D();
+        fresh.AddChild(view);
+        Owned.AddChild(fresh);
+        return (fresh, view);
+    }
+
+    /// <summary>Keeps a gone corpse's view for the next one (hidden, posed once and stopped). False when it is not a body's view or the pool is full: the caller frees it.</summary>
+    bool PoolCorpseView(CorpseView v)
+    {
+        if (v.Giant || v.Bale || v.View is not { HasModel: true } view || _corpsePooled >= CorpseRules.MaxCorpses || !GodotObject.IsInstanceValid(v.Node)) return false;
+        v.Node.Visible = false;
+        view.Freeze();
+        if (!_corpsePool.TryGetValue(view.ModelPath, out var stack)) _corpsePool[view.ModelPath] = stack = new();
+        stack.Push((v.Node, view));
+        _corpsePooled++;
+        return true;
     }
 
     void OnCorpseDespawned(ushort id)
@@ -145,7 +181,7 @@ public partial class NetClient
         _corpseItems.Remove(id);
         HarvesterCorpseGone(id);
         if (!_corpses.Remove(id, out var v)) return;
-        v.Node.QueueFree();
+        if (!PoolCorpseView(v)) v.Node.QueueFree();
         if (_chooser.IsOpen && _chooser.Corpse == id) _chooser.Close();
     }
 

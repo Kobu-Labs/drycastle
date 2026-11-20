@@ -60,6 +60,58 @@ public sealed partial class CharacterView : Node3D
         return v;
     }
 
+    /// <summary>A view built straight on <paramref name="model"/> (the body of the look it is about to wear: <see cref="ModelFor"/>), so <see cref="SetCamo"/> has no second body to build. The default body when the model is missing.</summary>
+    public static CharacterView Make(string model)
+    {
+        var v = new CharacterView();
+        if (!v.Build(model) && model != DefaultModel) v.Build(DefaultModel);
+        return v;
+    }
+
+    /// <summary>The body model a look wears: its camo.json body, or the default body when the look or the data is missing or rejected.</summary>
+    public static string ModelFor(CamoSpec? look, CamoFile? data) =>
+        look != null && data != null && look.Validate(data) == null ? data.Bodies[look.Body].Model : DefaultModel;
+
+    /// <summary>The model of the body now worn (see <see cref="ModelFor"/>), "" before one is built.</summary>
+    public string ModelPath => _modelPath;
+
+    /// <summary>The first AnimationPlayer, Skeleton3D and MeshInstance3D under <paramref name="root"/> (depth first, the order FindChildren gives), found in one walk.</summary>
+    static (AnimationPlayer? Anim, Skeleton3D? Skeleton, MeshInstance3D? Mesh) FindParts(Node root)
+    {
+        AnimationPlayer? anim = null; Skeleton3D? skeleton = null; MeshInstance3D? mesh = null;
+        var todo = new Stack<Node>();
+        for (var i = root.GetChildCount() - 1; i >= 0; i--) todo.Push(root.GetChild(i));
+        while (todo.Count > 0 && (anim == null || skeleton == null || mesh == null))
+        {
+            var n = todo.Pop();
+            if (anim == null && n is AnimationPlayer a) anim = a;
+            else if (skeleton == null && n is Skeleton3D sk) skeleton = sk;
+            else if (mesh == null && n is MeshInstance3D mi) mesh = mi;
+            for (var i = n.GetChildCount() - 1; i >= 0; i--) todo.Push(n.GetChild(i));
+        }
+        return (anim, skeleton, mesh);
+    }
+
+    /// <summary>
+    /// Puts a finished corpse view back to a fresh one, for the pool (<see cref="NetClient"/> keeps the views of gone corpses): thawed, nothing worn or held, no ragdoll,
+    /// upright, the look cleared (<see cref="SetCamo"/> draws the next one), the clip back at Idle.
+    /// </summary>
+    public void ResetForReuse()
+    {
+        Thaw();
+        _binoculars = false;
+        _stance = Stance.Stand; _swim = false;
+        ApplyPose();
+        SetRagdoll(false);
+        SetWeapon("");
+        SetAimed(false);
+        for (var i = 0; i < _worn.Length; i++) { _worn[i] = null; BuildWorn((EquipSlot)i); } // no ReapplyCamo: the look is cleared next
+        ClearCamo();
+        _playing = "";
+        Play("Idle", 0);
+        Apply(0f, false, false, "");
+    }
+
     /// <summary>Loads <paramref name="path"/> as the body, replacing the current one. Keeps the stance, swim pose, weapon and animation. False (nothing changed) when the model is missing.</summary>
     bool Build(string path)
     {
@@ -82,12 +134,10 @@ public sealed partial class CharacterView : Node3D
         _model = m;
         m.Scale = Vector3.One * Scale;
         AddChild(m);
-        _anim = m.FindChildren("*", "AnimationPlayer", true, false).FirstOrDefault() as AnimationPlayer;
+        (_anim, _skeleton, _mesh) = FindParts(m);
         if (_anim != null)
             foreach (var n in new[] { "Idle", "Walk", "Run", "Walk_Carry", "Run_Carry" })
                 if (_anim.HasAnimation(n)) _anim.GetAnimation(n).LoopMode = Animation.LoopModeEnum.Linear;
-        _skeleton = m.FindChildren("*", "Skeleton3D", true, false).FirstOrDefault() as Skeleton3D;
-        _mesh = m.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>().FirstOrDefault();
         _hand = null; _grip = null; _arms = null; _aim = null; _aimed = false; _look = null;
         if (_skeleton != null && _mesh?.Skin != null)
         {
