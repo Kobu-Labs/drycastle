@@ -20,18 +20,18 @@ public sealed class CarLights
 
     /// <summary>
     /// Emission energy of the lamp lenses. The environment's glow threshold is <see cref="DayNightCycle.GlowThreshold"/> (full bloom from
-    /// threshold + <see cref="DayNightCycle.GlowRamp"/>): lit values are well above it, off and dim ones below it. Colours peak at 1 (head,
-    /// fallback lenses) so the energy is the HDR value; the Golf's glTF tail and reverse emissive factors are 0.5 and 0.68, hence higher energies.
+    /// threshold + <see cref="DayNightCycle.GlowRamp"/>): lit values are well above it, off and dim ones below it. Colours peak at 1, so the
+    /// energy is the HDR value: tails on bloom softly (4), braking sits at <see cref="DayNightCycle.GlowCap"/> for four times the halo.
     /// </summary>
     /// <summary>Spot light energy of one headlamp beam. High because the night exposure is low (0.2).</summary>
     const float BeamEnergy = 12f;
-    const float HeadOnEnergy = 6f, HeadOffEnergy = 0.3f, TailEnergy = 0.5f, TailOnEnergy = 14f, BrakeEnergy = 45f;
-    /// <summary>Model lamp materials: tails glow softly when the lights are on (red has low luminance, so energies are high to clear the glow threshold), flare while braking, off otherwise; reverse lamps bloom only while reversing.</summary>
-    const float ModelTailOn = 22f, ModelTailBrake = 70f, ModelReverseOn = 9f;
+    const float HeadOnEnergy = 6f, HeadOffEnergy = 0.3f, TailEnergy = 0.5f, TailOnEnergy = 4f, BrakeEnergy = DayNightCycle.GlowCap;
+    /// <summary>Model lamp materials: tail and reverse lamps get one colour here (the glTF emissive factors differ per model: tail 0.17 Synty, 0.5 Golf), so one set of energies fits every vehicle; tails use the fallback lens energies and are off with the lights off; reverse lamps bloom only while reversing.</summary>
+    const float ModelReverseOn = 6f;
     /// <summary>Material names of the lamps a model may carry (assets/README.md, scripts/make_golf_mk2_model.py).</summary>
     public const string HeadLensMaterial = "Emissive warm headlight lens", TailLampMaterial = "Emissive red tail lamps",
         ReverseLampMaterial = "Emissive reverse lamps", IndicatorMaterial = "Emissive amber indicators";
-    static readonly Color HeadColour = new(1f, 0.95f, 0.8f), TailColour = new(1f, 0.08f, 0.04f);
+    static readonly Color HeadColour = new(1f, 0.95f, 0.8f), TailColour = new(1f, 0.08f, 0.04f), ReverseColour = new(0.95f, 1f, 0.9f);
 
     readonly StandardMaterial3D _headMat, _tailMat;
     /// <summary>This vehicle's own copies of the model's lamp materials (null where the model has none).</summary>
@@ -93,6 +93,8 @@ public sealed class CarLights
                 {
                     copy = (StandardMaterial3D)bm.Duplicate();
                     copy.EmissionEnabled = true;
+                    if (name == TailLampMaterial) copy.Emission = TailColour;
+                    if (name == ReverseLampMaterial) copy.Emission = ReverseColour;
                     copy.EmissionEnergyMultiplier = name == IndicatorMaterial ? 0f : name == HeadLensMaterial ? HeadOffEnergy : 0f;
                     copies[name] = copy;
                 }
@@ -112,7 +114,7 @@ public sealed class CarLights
         if (_set && on == _on && braking == _braking && beam == _beam && reversing == _reversing) return;
         _set = true; _on = on; _braking = braking; _beam = beam; _reversing = reversing;
         if (_modelHead != null) _modelHead.EmissionEnergyMultiplier = on ? HeadOnEnergy : HeadOffEnergy;
-        if (_modelTail != null) _modelTail.EmissionEnergyMultiplier = braking ? ModelTailBrake : on ? ModelTailOn : 0f;
+        if (_modelTail != null) _modelTail.EmissionEnergyMultiplier = braking ? BrakeEnergy : on ? TailOnEnergy : 0f;
         if (_modelReverse != null) _modelReverse.EmissionEnergyMultiplier = reversing ? ModelReverseOn : 0f;
         _tailMat.EmissionEnergyMultiplier = braking ? BrakeEnergy : on ? TailOnEnergy : TailEnergy;
         _headMat.EmissionEnergyMultiplier = on ? HeadOnEnergy : HeadOffEnergy;
