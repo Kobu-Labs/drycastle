@@ -5,6 +5,17 @@ namespace Drycastle.ShooterCore;
 /// <summary>How long ago, in the unit the screen words it: just now, minutes, hours, days, or (past <see cref="HuntFormat.DaysMax"/> days) a date.</summary>
 public enum AgoUnit { Now, Minutes, Hours, Days, Date }
 
+/// <summary>Where a shot hit, in words: the head, the legs (low on the body), the rest of the body; None for a hunt with no hit diagram (a run over, a catch).</summary>
+public enum HitArea { None, Head, Body, Legs }
+
+public static class HitAreas
+{
+    /// <summary>Height (0 ground, 1 top) below which a body hit counts as the legs.</summary>
+    public const float LegsBelow = 0.3f;
+
+    public static HitArea Of(HitDiagram? d) => d is not { } g ? HitArea.None : g.Head ? HitArea.Head : g.HeightF < LegsBelow ? HitArea.Legs : HitArea.Body;
+}
+
 /// <summary>What a Life List tile is drawn as. Hidden: a blurred blob and a "?" and nothing else.</summary>
 public enum TileLook { Outline, Filled }
 

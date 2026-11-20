@@ -395,4 +395,13 @@ public class HuntLogUiTests
         Assert.Equal(0, edge[0]);           // outside
         Assert.True(edge.Count(b => b == 255) < mask.Count(b => b == 255));
     }
+
+    [Fact]
+    public void A_hit_area_is_always_named_when_there_is_a_diagram()
+    {
+        Assert.Equal(HitArea.None, HitAreas.Of(null));
+        Assert.Equal(HitArea.Head, HitAreas.Of(new HitDiagram(100, 250, false, true, 0, 0)));
+        Assert.Equal(HitArea.Legs, HitAreas.Of(new HitDiagram(100, 20, false, false, 0, 0)));
+        Assert.Equal(HitArea.Body, HitAreas.Of(new HitDiagram(100, 150, false, false, 0, 0)));
+    }
 }

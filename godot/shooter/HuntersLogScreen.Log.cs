@@ -44,19 +44,13 @@ public sealed partial class HuntersLogScreen
         stats.AddChild(Stat(Metres(log.Longest?.DistanceM), Strings.T("log.stat.longest"), log.Longest));
         _logHost.AddChild(stats);
 
-        // the Life List's title, what the rims mean, and the way to this player's hunts
-        var sub = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        sub.AddThemeConstantOverride("separation", ShooterTheme.Space * 2);
-        sub.AddChild(Text(Strings.T("log.life.title"), "HudHead"));
-        sub.AddChild(Legend(HuntTier.Gold, "log.legend.gold"));
-        sub.AddChild(Legend(HuntTier.Silver, "log.legend.silver"));
-        sub.AddChild(Legend(HuntTier.Bronze, "log.legend.bronze"));
-        sub.AddChild(Ui.Fill());
-        var own = !_nav.ViewingOther;
-        var all = Ui.Btn(own ? Strings.T("log.hunts.own") : Strings.F("log.hunts.other", log.Name), () => OpenPlayerHunts(log.PlayerId));
-        all.Disabled = log.Hunts == 0;
-        sub.AddChild(all);
-        _logHost.AddChild(sub);
+        // what the rims mean, centred under the plates
+        var legend = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center, MouseFilter = MouseFilterEnum.Ignore };
+        legend.AddThemeConstantOverride("separation", ShooterTheme.Space * 2);
+        legend.AddChild(Legend(HuntTier.Gold, "log.legend.gold"));
+        legend.AddChild(Legend(HuntTier.Silver, "log.legend.silver"));
+        legend.AddChild(Legend(HuntTier.Bronze, "log.legend.bronze"));
+        _logHost.AddChild(legend);
 
         // the Life List: the game on plaques, then the Mystery creatures
         var tiles = log.Life.Select(LifeTileModel.From).ToList();
@@ -68,7 +62,7 @@ public sealed partial class HuntersLogScreen
     {
         if (tiles.Count == 0) return;
         _logHost.AddChild(_frame.Section(Strings.T(titleKey), Strings.F("log.life.count", tiles.Count(t => t.Caught), tiles.Count)));
-        var grid = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
+        var grid = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Alignment = FlowContainer.AlignmentMode.Center, MouseFilter = MouseFilterEnum.Ignore };
         grid.AddThemeConstantOverride("h_separation", ShooterTheme.Space * 2);
         grid.AddThemeConstantOverride("v_separation", ShooterTheme.Space + ShooterTheme.Space / 2);
         foreach (var m in tiles) grid.AddChild(Tile(m));
