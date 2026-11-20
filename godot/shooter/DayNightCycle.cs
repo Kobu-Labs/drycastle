@@ -28,7 +28,28 @@ public partial class DayNightCycle : Node3D
 
     /// <summary>Local clock used when no server clock is attached (offline view).</summary>
     public DayClock LocalClock { get; set; } = new();
-    public float MinAmbient { get; set; } = 0.35f;
+    public float MinAmbient { get; set; } = 0.10f;
+
+    /// <summary>TEST (/night, this client only): the moon's peak light, and the night exposure. Reset by <see cref="ResetNightTuning"/>.</summary>
+    public float MoonPeak { get; set; } = DayCurve.MoonPeakEnergy;
+    public float NightExposure { get; set; } = DayCurve.ExposureNight;
+    float _shippedAmbient = -1f;
+
+    public void ResetNightTuning()
+    {
+        MoonPeak = DayCurve.MoonPeakEnergy;
+        NightExposure = DayCurve.ExposureNight;
+        if (_shippedAmbient >= 0) MinAmbient = _shippedAmbient;
+    }
+
+    /// <summary>TEST (/night): sets any of the three (null keeps it). The ambient floor the map shipped with is remembered for reset.</summary>
+    public void TuneNight(float? moon, float? ambient, float? exposure)
+    {
+        if (_shippedAmbient < 0) _shippedAmbient = MinAmbient;
+        if (moon is { } m) MoonPeak = m;
+        if (ambient is { } a) MinAmbient = a;
+        if (exposure is { } e) NightExposure = e;
+    }
 
     /// <summary>How much of the day's ambient light is left in a bunker room (0.2 turns 0.35 into about 0.07).</summary>
     public const float IndoorAmbient = 0.2f;
@@ -46,7 +67,7 @@ public partial class DayNightCycle : Node3D
     /// <summary>
     /// Glow (bloom) is for lamps only. The threshold is on the scene's linear HDR value before exposure: a white surface in full sun
     /// peaks at about 1.1 (sun) + 0.7 (ambient) = 1.8 and the sun disc at 1.4, so nothing lit by day or the sky reaches 2; lit lamp lenses
-    /// are driven to 6 and up (<see cref="CarLights"/>). Full bloom from threshold + ramp. Exposure (0.5..1.5 x 1.0..1.35) comes after.
+    /// are driven to 6 and up (<see cref="CarLights"/>). Full bloom from threshold + ramp. Exposure (0.5..1.5 x 1.0..0.9) comes after.
     /// </summary>
     public const float GlowThreshold = 2f, GlowRamp = 1f;
 
@@ -119,7 +140,7 @@ public partial class DayNightCycle : Node3D
 
     void Apply(double hour)
     {
-        var l = DayCurve.Sample(hour, MinAmbient);
+        var l = DayCurve.Sample(hour, MinAmbient, MoonPeak, NightExposure);
         Lighting = l;
         NightFactor = l.NightFactor;
 
@@ -153,7 +174,7 @@ public partial class DayNightCycle : Node3D
         _sky.SetShaderParameter("sun_colour", Col(l.SunColour));
         _sky.SetShaderParameter("moon_dir", _moon.Basis.Z);
         _sky.SetShaderParameter("moon_colour", Col(l.MoonColour));
-        _sky.SetShaderParameter("moon_visibility", Mathf.Clamp(l.MoonEnergy / DayCurve.MoonPeakEnergy, 0f, 1f));
+        _sky.SetShaderParameter("moon_visibility", l.NightFactor);
         _sky.SetShaderParameter("star_visibility", l.StarVisibility);
     }
 

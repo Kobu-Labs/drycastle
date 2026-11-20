@@ -26,7 +26,7 @@ public class FpsCommandTests
 
     [Fact]
     public void OtherCommandsStayOnTheServer() =>
-        Assert.All(ChatCommands.All.Where(c => c.Name != "fps"), c => Assert.False(c.ClientSide));
+        Assert.All(ChatCommands.All.Where(c => c.Name is not ("fps" or "night")), c => Assert.False(c.ClientSide));
 
     [Fact]
     public void ReadoutSamplesTwiceASecond()

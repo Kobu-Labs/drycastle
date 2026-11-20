@@ -263,6 +263,7 @@ public partial class NetClient : Node
         }
         PumpAutosave(); // loadout saves whose debounce ran out go out here, whichever screen is open (#145)
         RenderRemotes();
+        RenderHeadLamps();
         if (PoseDemo && !_poseDemoDone && _me != null) SpawnPoseDemo();
         RenderCorpses();
         RenderGroundItems();
@@ -376,7 +377,7 @@ public partial class NetClient : Node
             case LeaveMsg l:
                 _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
                 if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
-                ForgetWorn(l.PlayerId); _binocularsBy.Remove(l.PlayerId);
+                ForgetWorn(l.PlayerId); _binocularsBy.Remove(l.PlayerId); _headLampBy.Remove(l.PlayerId);
                 ForgetStatus(l.PlayerId);
                 break;
             case EventMsg e:

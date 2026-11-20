@@ -66,6 +66,21 @@ public partial class NetServer
             if (o != c && o.BinocularsUp) Send(c, new EventMsg((byte)EventKind.BinocularsRaised, Binoculars.EncodeRaised(o.Id, true)));
     }
 
+    /// <summary>The player's head lamp is on or off now (<see cref="HeadLamp"/>): everyone, the owner too, is told when it changed.</summary>
+    void SetHeadLamp(Client c, bool on)
+    {
+        if (c.HeadLampOn == on) return;
+        c.HeadLampOn = on;
+        BroadcastEvent(EventKind.HeadLampState, HeadLamp.Encode(c.Id, on));
+    }
+
+    /// <summary>A joiner learns whose head lamp is on.</summary>
+    void SendHeadLampsOnJoin(Client c)
+    {
+        foreach (var o in _byId.Values)
+            if (o != c && o.HeadLampOn) Send(c, new EventMsg((byte)EventKind.HeadLampState, HeadLamp.Encode(o.Id, true)));
+    }
+
     /// <summary>Sends a player their equipment and bag when either changed since the last send.</summary>
     void SendEquipmentIfChanged(Client c)
     {

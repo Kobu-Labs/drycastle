@@ -50,6 +50,8 @@ public enum EventKind : byte
     RaiseBinoculars = 26,
     /// <summary>Server to everyone but that player, and to a joiner for each player who has them up: a player's binoculars are up or down (<see cref="Binoculars.EncodeRaised"/>: u16 player id, u8); the client poses the character.</summary>
     BinocularsRaised = 27,
+    /// <summary>Server to everyone (the lamp's owner too), when it changes and, to a joiner, for each player whose head lamp is on: a player's head lamp is on or off (<see cref="HeadLamp.Encode"/>: u16 player id, u8). The client draws the beam from that player's head.</summary>
+    HeadLampState = 31,
     /// <summary>Client to server: the player's own Respawn, with an optional loadout slot to select first (<see cref="Redeploy.Encode"/>: u8, 255 for none); the server kills them as a suicide (<see cref="MatchSim.ForceDeath"/>).</summary>
     Redeploy = 28,
     /// <summary>Client to server, every ten seconds: the client's performance numbers of the period (<see cref="ClientReport"/>), for the metrics store. A server that does not know it ignores it, so it is not a protocol version.</summary>
@@ -350,7 +352,8 @@ public static class Wire
     //   v73 hunt rarity: bits 4-5 of a Life List entry's flag byte in the player log answer (EventKind.HuntPlayerLog) carry the tile's HuntTier
     //   v74 the longest player kill (#430): the records answer ends in the server's longest player kill (u8 flag, then the kill), the player log answer carries the player's own (flag bit 4 and the kill after the longest shot); bit 8 of the hunt announcement's flags is a new longest player kill
     //   v75 brake lamps (#409): bit 6 of a driven vehicle's health byte says its brakes are on (VehicleRecord.BrakeBit/Braking); the client no longer guesses braking from speed
-    public const byte ProtocolVersion = 75;
+    //   v76 the head lamp: event 31 HeadLampState (a player's head lamp on or off, to everyone and to a joiner)
+    public const byte ProtocolVersion = 76;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

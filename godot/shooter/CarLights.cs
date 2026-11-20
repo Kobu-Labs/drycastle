@@ -23,6 +23,8 @@ public sealed class CarLights
     /// threshold + <see cref="DayNightCycle.GlowRamp"/>): lit values are well above it, off and dim ones below it. Colours peak at 1 (head,
     /// fallback lenses) so the energy is the HDR value; the Golf's glTF tail and reverse emissive factors are 0.5 and 0.68, hence higher energies.
     /// </summary>
+    /// <summary>Spot light energy of one headlamp beam. High because the night exposure is low (0.2).</summary>
+    const float BeamEnergy = 12f;
     const float HeadOnEnergy = 6f, HeadOffEnergy = 0.3f, TailEnergy = 0.5f, TailOnEnergy = 3.5f, BrakeEnergy = 10f;
     /// <summary>Model lamp materials: tails glow softly when the lights are on (the Golf's 0.5 factor makes 7 about 3.5, just over the threshold), flare while braking, off otherwise; reverse lamps bloom only while reversing.</summary>
     const float ModelTailOn = 7f, ModelTailBrake = 20f, ModelReverseOn = 9f;
@@ -57,7 +59,7 @@ public sealed class CarLights
         {
             var at = toHost * Lamp(p);
             if (c._modelHead == null) host.AddChild(new MeshInstance3D { Mesh = lens, Transform = at, MaterialOverride = headMat });
-            var spot = LampKit.Beam(at, HeadColour, range, l.BeamAngle, 3f);
+            var spot = LampKit.Beam(at, HeadColour, range, l.BeamAngle, BeamEnergy);
             host.AddChild(spot);
             c._spots.Add(spot);
         }
