@@ -146,7 +146,8 @@ public partial class NetClient
         var axleZ = g.EyeZ + g.Drawbar;
         var flat = TowModel.OriginAt(g, NV(hitch), yaw);
         var ax = flat.X + axleZ * s; var az = flat.Z + axleZ * c; // the axle's contact on the ground
-        var gAxle = _trailerGround!.GroundY(ax, az, hitch.Y);
+        // walked back from the eye: the axle's ground is metres off the hitch's on a dyke, further than one ray finds (#377)
+        var gAxle = _trailerGround!.GroundWalk(hitch.X, hitch.Z, ax, az, hitch.Y - g.EyeY);
         FitSmooth(t, TowModel.PitchFor(g, hitch.Y - gAxle), AxleRoll(def, ax, az, c, s, gAxle), dt);
         rot = new Vector3(t.Pitch, yaw, t.Roll);
         pos = hitch - Basis.FromEuler(rot) * new Vector3(0, g.EyeY, g.EyeZ); // the eye is on the hitch, exactly
@@ -161,7 +162,7 @@ public partial class NetClient
         var ax = s.Pos.X + axleZ * sn; var az = s.Pos.Z + axleZ * c;
         var gAxle = _trailerGround!.GroundY(ax, az, s.Pos.Y);
         var ex = s.Pos.X + tr.Eye[2] * sn; var ez = s.Pos.Z + tr.Eye[2] * c;
-        var gEye = _trailerGround.GroundY(ex, ez, s.Pos.Y);
+        var gEye = _trailerGround.GroundWalk(ax, az, ex, ez, gAxle);
         FitSmooth(t, TowModel.PitchFor(g, tr.Eye[1] + (gEye - gAxle)), AxleRoll(def, ax, az, c, sn, gAxle), dt);
         rot = new Vector3(t.Pitch, s.Yaw, t.Roll);
         pos = new Vector3(ax, gAxle, az) - Basis.FromEuler(rot) * new Vector3(0, 0, axleZ);

@@ -120,7 +120,9 @@ public partial class NetClient
             Owned.AddChild(probe);
             var g = GeometryOf(mine.Kind, trailer.Kind);
             _drive.TrailerWorld = probe; _drive.TrailerId = trailer.Id;
-            _drive.Predict.AttachTrailer(tdef, g, TowModel.Pose(g, server.Position, server.Yaw, phi), probe);
+            var body = TowModel.Pose(g, server.Position, server.Yaw, phi);
+            body.Position.Y = rec.Position.Y; // the trailer's own ground (the server's), not the hitch's: the step searches the ground from it (#377)
+            _drive.Predict.AttachTrailer(tdef, g, body, probe);
         }
         _drive.Predict.TrailerLoaded = trailer.Trailer?.Loaded ?? true; // a cart emptied under way weighs less from the next step on, as the server's does
         return phi;

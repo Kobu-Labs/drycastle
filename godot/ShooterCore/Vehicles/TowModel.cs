@@ -122,6 +122,12 @@ public interface ITrailerWorld
 {
     /// <summary>The trailer going from <paramref name="from"/> to <paramref name="to"/> (footprints on the ground plane; <paramref name="y"/> the ground height at the trailer) is stopped by something solid.</summary>
     bool Blocked(in BodyBox from, in BodyBox to, float y);
+
+    /// <summary>
+    /// The height of the ground at (<paramref name="x"/>, <paramref name="z"/>), searched near <paramref name="hint"/> (the height it was a step ago); the hint when there is none. A world with no
+    /// ground of its own (flat) leaves it as it is.
+    /// </summary>
+    float GroundY(float x, float z, float hint) => hint;
 }
 
 /// <summary>
@@ -181,7 +187,9 @@ public static class TowModel
     {
         b.Phi = Math.Clamp(FlightMath.Wrap(b.Yaw - t.Yaw), -g.Limit, g.Limit);
         b.Slide = 0;
+        var y = b.Position.Y; // its own ground, not the hitch's: what the next step searches the ground from
         Pin(ref b, g, t);
+        b.Position.Y = y;
     }
 
     /// <summary>
@@ -259,12 +267,14 @@ public static class TowModel
 
     /// <summary>
     /// <see cref="Step"/> against the world: when the box the trailer would stand in is blocked, the body stays as it was (speed 0) and the result is false. The caller then
-    /// holds the tractor where it was (<see cref="Hold(ref DriveState, in DriveState)"/>): a trailer that is stopped stops the tractor.
+    /// holds the tractor where it was (<see cref="Hold(ref DriveState, in DriveState)"/>): a trailer that is stopped stops the tractor. The body's height is the ground's under it, searched from
+    /// the height it had (never the hitch's, which is the tractor's ground: metres off with the tractor at the foot of a dyke and the trailer still on it, #377).
     /// </summary>
     public static bool StepChecked(ref TrailerBody b, in TowGeometry g, in TractorMotion t, float dt, ITrailerWorld world)
     {
         var next = b;
         Step(ref next, g, t, dt);
+        next.Position.Y = world.GroundY(next.Position.X, next.Position.Z, b.Position.Y);
         if (world.Blocked(Footprint(g, b), Footprint(g, next), next.Position.Y)) { b.Speed = 0; return false; }
         b = next;
         return true;

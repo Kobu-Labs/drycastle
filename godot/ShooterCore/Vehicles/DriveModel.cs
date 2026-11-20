@@ -565,7 +565,7 @@ public sealed class DrivePrediction
         s.Afloat = server.Afloat; s.Airborne = server.Airborne;
         s.Sink = server.Emerging ? MathF.Max(predicted.Sink, server.Sink) : 0f;
         var trailer = predictedTrailer;
-        if (_rig is { } rig) { trailer = TowModel.Pose(rig.Geometry, s.Position, s.Yaw, serverPhi); trailer.Slide = predictedTrailer.Slide; trailer.Speed = predictedTrailer.Speed; }
+        if (_rig is { } rig) { trailer = TowModel.Pose(rig.Geometry, s.Position, s.Yaw, serverPhi); trailer.Slide = predictedTrailer.Slide; trailer.Speed = predictedTrailer.Speed; trailer.Position.Y = predictedTrailer.Position.Y; }
         for (var i = 0; i < _pending.Count; i++)
         {
             StepBoth(ref s, ref trailer, _pending[i].Input, dt);
