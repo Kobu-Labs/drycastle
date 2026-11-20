@@ -64,8 +64,10 @@ public sealed class VehicleEngineSound
         }
         if (lift)
         {
+            Sfx.Notes = true; // the trace below prints the note
             var played = def.Lift is { } l && Sfx.Play3D(l.Sound, at, exact: true);
             Log($"LIFT kmh={kmh:F0} ({_model.LiftNote}) -> {(def.Lift == null ? "this type has no lift sound" : played ? "played" : "NOT played")}: {Sfx.LastNote}; loops ducked to {EngineMix.LiftDuckGain * 100:F0}%, mix now bg={_mix.Gain[0]:F2} idle={_mix.Gain[1]:F2} accel={_mix.Gain[2]:F2} top={_mix.Gain[4]:F2}");
+            Sfx.Notes = false;
         }
     }
 

@@ -120,6 +120,21 @@ public static class SoundRules
         return best >= 0 && priorityOf(best) > priority ? -1 : best;
     }
 
+    /// <summary>
+    /// <see cref="PickVoice(int, Func{int, bool}, Func{int, int}, Func{int, ulong}, int)"/> over plain arrays: a voice is playing while <paramref name="endMs"/> is after <paramref name="nowMs"/>.
+    /// No delegates and no engine call per voice (a hot path: every shot heard).
+    /// </summary>
+    public static int PickVoice(int count, ulong[] endMs, ulong nowMs, int[] priorityOf, ulong[] startedOf, int priority)
+    {
+        var best = -1;
+        for (var i = 0; i < count; i++)
+        {
+            if (endMs[i] <= nowMs) return i;
+            if (best < 0 || priorityOf[i] < priorityOf[best] || (priorityOf[i] == priorityOf[best] && startedOf[i] < startedOf[best])) best = i;
+        }
+        return best >= 0 && priorityOf[best] > priority ? -1 : best;
+    }
+
     /// <summary>The event id for a per-weapon sound, e.g. <c>Event("shot", "ak47")</c> is <c>shot.ak47</c>.</summary>
     public static string Event(string kind, string weaponId) => kind + "." + weaponId;
 }

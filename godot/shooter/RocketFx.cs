@@ -143,7 +143,9 @@ public static class RocketFx
             var trail = Trail(world);
             trail.Position = new Vector3(0, 0, tail + 0.1f);
             node.AddChild(trail);
-            ParticleFx.Run(trail, true);
+            world.AddChild(node);
+            ParticleFx.Run(trail, true); // in the tree first: a world-space emitter's restart reads its global transform
+            return node;
         }
         world.AddChild(node);
         return node;

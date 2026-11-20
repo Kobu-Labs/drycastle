@@ -73,7 +73,7 @@ public static class ShotFx
     }
 
     /// <summary>True when the span is close enough to the camera to be seen (no camera: built anyway).</summary>
-    static bool InRange(Node3D world, Vector3 a, Vector3 b)
+    public static bool InRange(Node3D world, Vector3 a, Vector3 b)
     {
         var cam = world.GetViewport()?.GetCamera3D();
         return cam == null || EffectCull.Near(Nv(cam.GlobalPosition), Nv(a), Nv(b));

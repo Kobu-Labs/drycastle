@@ -13,6 +13,7 @@ public partial class BulletHoles : Node3D
 
     static BulletHoles? _inst;
     static ImageTexture? _tex;
+    static PhysicsRayQueryParameters3D? _query;
 
     readonly Decal[] _decals = new Decal[Count];
     readonly double[] _age = new double[Count]; // < 0: unused
@@ -129,8 +130,9 @@ public partial class BulletHoles : Node3D
         if (!ShotFx.Enabled || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree()) return;
         var dir = end - from;
         if (dir.LengthSquared() < 0.01f) return;
-        var q = PhysicsRayQueryParameters3D.Create(from, end + dir.Normalized() * 0.1f, Drycastle.ShooterCore.CollisionLayers.WorldShots);
-        var hit = world.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        _query ??= PhysicsRayQueryParameters3D.Create(from, end, Drycastle.ShooterCore.CollisionLayers.WorldShots); // one query object, refilled per shot
+        _query.From = from; _query.To = end + dir.Normalized() * 0.1f;
+        var hit = world.GetWorld3D().DirectSpaceState.IntersectRay(_query);
         if (hit.Count == 0) return;
         var p = hit["position"].AsVector3();
         if (p.DistanceTo(end) > 0.15f) return;

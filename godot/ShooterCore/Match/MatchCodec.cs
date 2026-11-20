@@ -190,6 +190,12 @@ public sealed class ClientMatchState
         foreach (var r in Rows) if (r.Id == id) return r.Team;
         return Teams.None;
     }
+    /// <summary>True when the last scoreboard lists the player (a loop, no closure: asked per shot).</summary>
+    public bool Knows(ushort id)
+    {
+        foreach (var r in Rows) if (r.Id == id) return true;
+        return false;
+    }
     /// <summary>The squads that have a member, as the last scoreboard listed them (#379).</summary>
     public IReadOnlyList<SquadName> Squads { get; private set; } = Array.Empty<SquadName>();
     /// <summary>Squad of a player on the scoreboard, 0 for none or an unknown id.</summary>

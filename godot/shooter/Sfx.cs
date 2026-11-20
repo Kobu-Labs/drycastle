@@ -59,6 +59,9 @@ public partial class Sfx : Node
     AudioStreamPlayer3D[] _p3 = Array.Empty<AudioStreamPlayer3D>();
     AudioStreamPlayer3D[] _pLoop = Array.Empty<AudioStreamPlayer3D>();
     readonly bool[] _loopTaken = new bool[PoolLoop];
+    // when each pooled voice's sound ends (ms): "playing" without asking the engine per voice (every shot heard picks a voice)
+    ulong[] _end2 = Array.Empty<ulong>(), _end3 = Array.Empty<ulong>();
+    readonly Dictionary<AudioStream, ulong> _lenMs = new();
     ulong[] _s2 = Array.Empty<ulong>(), _s3 = Array.Empty<ulong>(), _sUi = Array.Empty<ulong>();
     ulong _i2, _i3, _iUi;
     readonly Dictionary<string, double> _lastPlay = new();
@@ -112,6 +115,7 @@ public partial class Sfx : Node
         _rng.Randomize();
         if (!Enabled) return;
         _p2 = MakePool(Pool2D, "SFX"); _pUi = MakePool(PoolUi, "UI");
+        _end2 = new ulong[_p2.Length]; _end3 = new ulong[Pool3D];
         _s2 = new ulong[_p2.Length]; _pr2 = new int[_p2.Length]; _pr3 = new int[Pool3D]; _sUi = new ulong[_pUi.Length];
         _p3 = new AudioStreamPlayer3D[Pool3D]; _s3 = new ulong[Pool3D];
         for (var i = 0; i < Pool3D; i++) { _p3[i] = Make3D(); AddChild(_p3[i]); }
@@ -195,6 +199,8 @@ public partial class Sfx : Node
         p.PanningStrength = exact && ListenerDistance(p.GlobalPosition) < 3f ? 0f : 1f;
     }
     public static string LastNote { get; private set; } = "";
+    /// <summary>When true a played 3D sound writes its full description to <see cref="LastNote"/> (a string built per sound: only for a trace that reads it).</summary>
+    public static bool Notes { get; set; }
     public static void Ui(string id) => Instance?.DoUi(id);
     /// <summary>A looping voice; <paramref name="startFraction"/> starts it that share of the way into its file (0 to 1).</summary>
     public static LoopVoice? Loop(string id, Vector3 at, float startFraction = 0f) => Instance?.DoLoop(id, at, startFraction);
@@ -207,12 +213,14 @@ public partial class Sfx : Node
     void Do2D(string id, float dbOffset)
     {
         if (!Enabled || _p2.Length == 0 || Def(id) is not { } d || !GapOk(d)) return;
-        var i = SoundRules.PickVoice(_p2.Length, k => _p2[k].Playing, k => _pr2[k], k => _s2[k], d.Priority);
+        var now = Time.GetTicksMsec();
+        var i = SoundRules.PickVoice(_p2.Length, _end2, now, _pr2, _s2, d.Priority);
         if (i < 0 || Pick(d) is not { } st) return;
         _pr2[i] = d.Priority;
         var p = _p2[i];
         p.Stream = st; p.Bus = d.Bus; p.VolumeDb = d.VolumeDb + dbOffset;
         p.PitchScale = SoundRules.PitchFor(d, _rng.Randf());
+        _end2[i] = EndOf(st, d, now, p.PitchScale);
         p.Play();
         _s2[i] = ++_i2;
     }
@@ -220,16 +228,17 @@ public partial class Sfx : Node
     bool Do3D(string id, Vector3 at, float dbOffset, bool exact)
     {
         if (!Enabled || _p3.Length == 0) { LastNote = "audio disabled"; return false; }
-        if (Def(id) is not { } d) { LastNote = $"no sounds.json entry {id}"; return false; }
+        if (Def(id) is not { } d) { LastNote = Notes ? $"no sounds.json entry {id}" : "no sounds.json entry"; return false; }
         if (!d.Positional) { Do2D(id, dbOffset); LastNote = "played 2D"; return true; }
         var cam = GetViewport().GetCamera3D();
         var dist = cam != null ? cam.GlobalPosition.DistanceTo(at) : 0f;
-        if (cam != null && !SoundRules.Audible(d, dist)) { LastNote = $"out of range ({dist:F0} m of {d.MaxDistance:F0})"; return false; }
+        if (cam != null && !SoundRules.Audible(d, dist)) { LastNote = Notes ? $"out of range ({dist:F0} m of {d.MaxDistance:F0})" : "out of range"; return false; }
         if (!GapOk(d)) { LastNote = "min gap"; return false; }
-        var i = SoundRules.PickVoice(_p3.Length, k => _p3[k].Playing, k => _pr3[k], k => _s3[k], d.Priority);
-        if (i < 0) { LastNote = $"no voice: every playing voice outranks priority {d.Priority}"; return false; }
+        var now = Time.GetTicksMsec();
+        var i = SoundRules.PickVoice(_p3.Length, _end3, now, _pr3, _s3, d.Priority);
+        if (i < 0) { LastNote = Notes ? $"no voice: every playing voice outranks priority {d.Priority}" : "no voice"; return false; }
         if (Pick(d) is not { } st) { LastNote = "no stream loaded (file missing or failed to decode)"; return false; }
-        var stolen = _p3[i].Playing;
+        var stolen = Notes && _end3[i] > now;
         _pr3[i] = d.Priority;
         var p = _p3[i];
         p.Stream = st; p.Bus = d.Bus; p.VolumeDb = d.VolumeDb + dbOffset;
@@ -237,10 +246,19 @@ public partial class Sfx : Node
         p.MaxDistance = d.MaxDistance; p.UnitSize = SoundRules.UnitSize(d.MaxDistance);
         p.GlobalPosition = at;
         SetExactLevel(p, exact);
+        _end3[i] = EndOf(st, d, now, p.PitchScale);
         p.Play();
         _s3[i] = ++_i3;
-        LastNote = $"played on voice {i}{(stolen ? " (stole a playing voice)" : "")}, {d.VolumeDb + dbOffset:F1} dB, pitch {p.PitchScale:F2}, listener {dist:F1} m, length {st.GetLength():F2}s, bus {p.Bus}";
+        if (Notes) LastNote = $"played on voice {i}{(stolen ? " (stole a playing voice)" : "")}, {d.VolumeDb + dbOffset:F1} dB, pitch {p.PitchScale:F2}, listener {dist:F1} m, length {st.GetLength():F2}s, bus {p.Bus}";
         return true;
+    }
+
+    /// <summary>When a sound started now on a voice is over (ms clock): its length at the pitch, with a small margin; never for a looping one.</summary>
+    ulong EndOf(AudioStream st, SoundDef d, ulong now, float pitch)
+    {
+        if (d.Loop) return ulong.MaxValue;
+        if (!_lenMs.TryGetValue(st, out var len)) _lenMs[st] = len = (ulong)(st.GetLength() * 1000.0);
+        return now + (ulong)(len / Math.Max(pitch, 0.05f)) + 30;
     }
 
     /// <summary>UI sounds: when several are asked for in the same frame (a button click that also pops the screen) the last one wins.</summary>

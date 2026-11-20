@@ -20,10 +20,13 @@ public partial class NetClient
             _blips = new GunfireBlips(cfg.GunfireBlipRadius, cfg.GunfireBlipSeconds, cfg.GunfireBlipInterval);
             _hud.Minimap.SetBlips(_blips);
         }
-        var kind = weapon < Weapons.Weapons.Count ? Weapons.Weapons[weapon].Kind : WeaponKind.Melee;
-        var known = Match.Rows.Any(r => r.Id == shooter);
-        if (!GunfireBlipRules.Qualifies(shooter, _myId, known, Match.AreFriends(_myId, shooter), weapon, Weapons.Weapons.Count, kind)) return;
+        if (shooter == _myId) return;
         var g = _me.GlobalPosition;
+        var dx = origin.X - g.X; var dz = origin.Z - g.Z;
+        if (dx * dx + dz * dz > cfg.GunfireBlipRadius * cfg.GunfireBlipRadius) return; // outside the blip radius: nothing to add, whoever it is
+        var kind = weapon < Weapons.Weapons.Count ? Weapons.Weapons[weapon].Kind : WeaponKind.Melee;
+        var known = Match.Knows(shooter);
+        if (!GunfireBlipRules.Qualifies(shooter, _myId, known, Match.AreFriends(_myId, shooter), weapon, Weapons.Weapons.Count, kind)) return;
         _blips.Add(shooter, new Vector2(origin.X, origin.Z), new Vector2(g.X, g.Z), Time.GetTicksMsec() / 1000.0);
     }
 }

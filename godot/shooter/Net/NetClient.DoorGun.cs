@@ -112,11 +112,13 @@ public partial class NetClient
         if (KeepEventLogs) _shotLog.Add((Now, sh));
         SfxShot(sh, false);
         var origin = G(sh.Origin); var end = G(sh.End);
-        ShotFx.Spawn(Owned, nodes.Muzzle?.GlobalPosition ?? origin, end, false);
-        ShotHole(origin, end);
-        BulletSurfaceHit(origin, end);
         nodes.Kick();
-        CasingFx.Eject(Owned, nodes.Muzzle?.GlobalPosition ?? origin, end - origin, CasingKind.Heavy, CarVelocity(car));
+        if (!ShotFx.InRange(Owned, origin, end)) return true; // out of the effect range of the camera: nothing to draw
+        var muzzle = nodes.Muzzle is { } m && m.IsInsideTree() ? m.GlobalPosition : origin; // a muzzle not in the tree (its car hidden) has no global position
+        ShotFx.Spawn(Owned, muzzle, end, false);
+        if (HoleVisible(end)) ShotHole(origin, end);
+        BulletSurfaceHit(origin, end);
+        CasingFx.Eject(Owned, muzzle, end - origin, CasingKind.Heavy, CarVelocity(car));
         return true;
     }
 

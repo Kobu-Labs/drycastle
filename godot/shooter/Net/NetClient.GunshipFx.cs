@@ -22,16 +22,23 @@ public partial class NetClient
         if (EchoOfPredicted(sh.Shooter)) return; // already played and drawn by prediction
         var endV = new Vector3(sh.End.X, sh.End.Y, sh.End.Z);
         SfxShot(sh, melee);
-        if (!melee && !exactMuzzle) { if (sh.Shooter == _myId) _viewmodel?.Flash(0.4f); else if (_remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
         var originV = new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z);
+        // a shot whose span is out of the effect range of the camera (300 m, ShotFx) draws nothing: no muzzle lookup, flash, tracer, casing, hole or splash
+        if (!melee && !ShotFx.InRange(Owned, originV, endV)) return;
+        if (!melee && !exactMuzzle) { if (sh.Shooter == _myId) _viewmodel?.Flash(0.4f); else if (_remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
         // a gunship's impact is its own message (OnGunshipImpacts), so its tracer does not draw one too: no 300 m cut-off for a long round
         var muzzle = exactMuzzle ? originV : MuzzleOf(sh.Shooter, originV, endV);
         ShotFx.Spawn(Owned, muzzle, endV, melee, impact: impact, speed: speed, length: length, width: width);
         if (!melee && !exactMuzzle && CasingKindOf(sh.Weapon) is { } ck) CasingFx.Eject(Owned, muzzle, endV - muzzle, ck);
         var marks = !melee && (holes ?? !exactMuzzle);
-        if (marks) ShotHole(originV, endV);
+        if (marks && HoleVisible(endV)) ShotHole(originV, endV); // a hole fades out at 80 m (BulletHoles): none is placed beyond
         if (marks) BulletSurfaceHit(originV, endV);
     }
+
+    /// <summary>Beyond this distance from the camera a bullet hole is invisible (its decal fades out between 60 and 80 m), so none is placed.</summary>
+    const float HoleRange = 80f;
+
+    bool HoleVisible(Vector3 at) => Owned.GetViewport()?.GetCamera3D() is not { } cam || cam.GlobalPosition.DistanceSquaredTo(at) <= HoleRange * HoleRange;
 
     /// <summary>The casing a weapon byte ejects: a vehicle machine gun a big one, a hand weapon by its category, none for melee, launchers and the rest.</summary>
     CasingKind? CasingKindOf(byte weapon) => weapon == SpecialWeapons.VehicleGun ? CasingKind.Heavy : Weapons != null && weapon < Weapons.Weapons.Count ? CasingFx.KindOf(Weapons.Weapons[weapon]) : null;

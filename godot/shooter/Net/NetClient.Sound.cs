@@ -22,10 +22,20 @@ public partial class NetClient
 
     Vector3? PlayerPos(ushort id) => id == _myId ? _me?.GlobalPosition : _remotes.TryGetValue(id, out var r) ? r.Node.GlobalPosition : null;
 
+    string[]? _shotEvents;
+
+    /// <summary>The sound event id of a weapon's shot ("shot.ak47"), built once per weapon, not per shot.</summary>
+    string ShotEvent(byte weapon)
+    {
+        var n = Weapons?.Weapons.Count ?? 0;
+        if (_shotEvents == null || _shotEvents.Length != n) _shotEvents = new string[n];
+        return weapon < n ? _shotEvents[weapon] ??= SoundRules.Event("shot", WeaponId(weapon)) : SoundRules.Event("shot", "");
+    }
+
     void SfxShot(ShotMsg sh, bool melee)
     {
         if (!Sfx.Enabled) return;
-        var id = SoundRules.Event("shot", WeaponId(sh.Weapon));
+        var id = ShotEvent(sh.Weapon);
         if (sh.Shooter == _myId) Sfx.Play2D(id); else Sfx.Play3D(id, G(sh.Origin));
         if (!melee) Sfx.Play3D("impact", G(sh.End));
     }
