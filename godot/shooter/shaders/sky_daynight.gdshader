@@ -9,6 +9,8 @@ uniform vec3 moon_dir = vec3(0.0, -1.0, 0.0);
 uniform vec3 moon_colour : source_color = vec3(0.6, 0.7, 0.95);
 uniform float moon_visibility = 0.0;
 uniform float star_visibility = 0.0;
+// 1 / tonemap exposure: stars, moon, sun and meteors are lifted by it so a dark night does not dim them; the sky colour itself is not
+uniform float lift = 1.0;
 // shooting stars from Meteors (ShooterCore): a = path start xyz + progress, b = path end xyz + brightness (0 = none)
 uniform vec4 meteor_a[8];
 uniform vec4 meteor_b[8];
@@ -42,7 +44,7 @@ void sky() {
 			float twinkle = 1.0 - 0.18 * (0.5 + 0.5 * sin(TIME * (0.8 + 2.0 * h3) + h2 * 6.2831));
 			vec3 tint = mix(vec3(0.8, 0.88, 1.0), vec3(1.0, 0.92, 0.8), h3);
 			float fade = smoothstep(0.0, 0.12, dir.y);
-			col += point * star_visibility * twinkle * fade * tint * (0.5 + 0.7 * h2);
+			col += point * star_visibility * twinkle * fade * tint * (0.5 + 0.7 * h2) * lift;
 		}
 	}
 
@@ -58,19 +60,19 @@ void sky() {
 		float d = length(dir - (tail + seg * t));
 		float width = mix(0.0006, 0.0022, t);
 		float line = (1.0 - smoothstep(0.0, width, d)) * t * t;
-		col += line * br * vec3(0.9, 0.95, 1.0) * 1.2 * step(0.0, dir.y);
+		col += line * br * vec3(0.9, 0.95, 1.0) * 1.2 * step(0.0, dir.y) * lift;
 	}
 
 	// sun: soft-edged disc plus a glow that only shows while it is up
 	float sd = dot(dir, normalize(sun_dir));
 	float sun_up = smoothstep(-0.1, 0.1, normalize(sun_dir).y);
-	col += sun_colour * pow(max(sd, 0.0), 24.0) * 0.35 * sun_up;
-	col = mix(col, sun_colour * 1.4, smoothstep(0.9990, 0.9995, sd));
+	col += sun_colour * pow(max(sd, 0.0), 24.0) * 0.35 * sun_up * lift;
+	col = mix(col, sun_colour * 1.4 * lift, smoothstep(0.9990, 0.9995, sd));
 
 	// moon: soft disc and a faint halo, shown with moon_visibility
 	float md = dot(dir, normalize(moon_dir));
-	col += moon_colour * pow(max(md, 0.0), 48.0) * 0.12 * moon_visibility;
-	col = mix(col, moon_colour * moon_visibility, smoothstep(0.9983, 0.9988, md) * moon_visibility);
+	col += moon_colour * pow(max(md, 0.0), 48.0) * 0.12 * moon_visibility * lift;
+	col = mix(col, moon_colour * moon_visibility * lift, smoothstep(0.9983, 0.9988, md) * moon_visibility);
 
 	COLOR = col;
 }

@@ -94,6 +94,7 @@ public partial class DayNightCycle : Node3D
         _env.Sky = new Sky { SkyMaterial = _sky };
         _env.AmbientLightSource = Godot.Environment.AmbientSource.Color;
         _env.FogEnabled = true;
+        _env.FogSkyAffect = 0f; // at 1 (Godot's default) the fog paints over the whole sky: no sun, moon or stars. The sky's horizon is the fog colour already
         // a small tight halo: only the first mips (levels 1-3), additive, nothing below the threshold
         _env.GlowEnabled = true;
         _env.GlowBlendMode = Godot.Environment.GlowBlendModeEnum.Additive;
@@ -170,8 +171,7 @@ public partial class DayNightCycle : Node3D
         var gate = Meteors.NightGate(l.NightFactor);
         var meteorGlow = Meteors.Glow(meteors) * gate * MeteorAmbient;
         _env.AmbientLightEnergy = (l.AmbientEnergy * Mathf.Lerp(1f, IndoorAmbient, Mathf.Max(Indoor, IndoorExtra)) + meteorGlow * (1f - Mathf.Max(Indoor, IndoorExtra))) * gloom;
-        // the tonemap exposure darkens the sky with the world: the sky is lifted back by it, so stars, moon and sun stay visible in a dark night
-        _env.BackgroundEnergyMultiplier = Mathf.Lerp(1f / Mathf.Max(l.Exposure, 0.05f), 0.12f, Mathf.Clamp(Gloom, 0f, 1f));
+        _env.BackgroundEnergyMultiplier = Mathf.Lerp(1f, 0.12f, Mathf.Clamp(Gloom, 0f, 1f));
         _env.TonemapExposure = l.Exposure * brightness;
         _env.FogDensity = l.FogDensity;
         _env.FogLightColor = Col(l.SkyHorizon);
@@ -184,6 +184,8 @@ public partial class DayNightCycle : Node3D
         _sky.SetShaderParameter("moon_colour", Col(l.MoonColour));
         _sky.SetShaderParameter("moon_visibility", l.NightFactor);
         _sky.SetShaderParameter("star_visibility", l.StarVisibility);
+        // the tonemap exposure darkens the sky with the world: the things in the sky are lifted back by it, the sky colour stays with the fog
+        _sky.SetShaderParameter("lift", 1f / Mathf.Max(l.Exposure, 0.05f));
         var a = new Vector4[Meteors.MaxActive];
         var b = new Vector4[Meteors.MaxActive];
         for (var i = 0; i < meteors.Count; i++)
