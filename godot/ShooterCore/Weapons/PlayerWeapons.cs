@@ -35,7 +35,7 @@ public sealed class PlayerWeapons
     readonly int[] _hotbar; // weapons.json indexes, in hotbar order
     readonly int _startSlot; // the slot equipped at spawn
     readonly int[] _mag, _reserve;
-    double _nextFire, _reloadDone, _swapReady, _lastNow;
+    double _nextFire, _reloadDone, _swapReady, _lastNow, _grenadeReady;
     bool _prevFire;
     float _spreadExtra;
 
@@ -107,7 +107,7 @@ public sealed class PlayerWeapons
         for (var i = 0; i < _mag.Length; i++) { _mag[i] = _file.Weapons[i].MagazineSize; _reserve[i] = _file.Weapons[i].ReserveAmmo; }
         Slot = _startSlot;
         Reloading = false; _spreadExtra = 0; _prevFire = false;
-        _nextFire = _reloadDone = _swapReady = now; _lastNow = now;
+        _nextFire = _reloadDone = _swapReady = _grenadeReady = now; _lastNow = now;
         Changed = true;
     }
 
@@ -157,6 +157,7 @@ public sealed class PlayerWeapons
         _prevFire = input.Fire;
         // a shell reload is interrupted by a shot the moment it can fire (a shell is loaded)
         if (pull && Reloading && w.ShellReload && _mag[Slot - 1] > 0 && now + Eps >= _nextFire) Reloading = false;
+        if (w.Grenade != null) return null; // a grenade is thrown with the throw key (TryThrow), not the trigger
         if (!pull || Reloading || now + Eps < _nextFire || now + Eps < _swapReady) return null;
 
         switch (w.Kind)
@@ -183,6 +184,34 @@ public sealed class PlayerWeapons
     }
 
     bool _prevNext;
+
+    /// <summary>The weapons.json index of the hotbar's grenade, or -1 when the loadout has none.</summary>
+    public int GrenadeIndex
+    {
+        get { foreach (var i in _hotbar) if (_file.Weapons[i].Grenade != null) return i; return -1; }
+    }
+
+    /// <summary>Whether a grenade is in hand to throw: a round in it (the next one comes up with the <see cref="TryThrow"/> cooldown).</summary>
+    public bool HasGrenade => GrenadeIndex is var g && g >= 0 && (Unlimited || _mag[g] > 0);
+
+    /// <summary>
+    /// Throws the hotbar's grenade whatever weapon is selected (the throw key, <see cref="GrenadeThrower"/>). It uses a round; the next comes out of the reserve at once
+    /// but cannot be thrown before the grenade's reload time has passed. Null when there is none, or it is not ready.
+    /// </summary>
+    public FireOutcome? TryThrow(double now)
+    {
+        var gi = GrenadeIndex;
+        if (gi < 0 || now + Eps < _grenadeReady || (!Unlimited && _mag[gi] <= 0)) return null;
+        var w = _file.Weapons[gi];
+        if (!Unlimited)
+        {
+            _mag[gi]--;
+            if (_mag[gi] <= 0 && _reserve[gi] > 0) { _mag[gi]++; _reserve[gi]--; }
+        }
+        _grenadeReady = now + Math.Max(w.FireInterval, w.ReloadTime / _perks.ReloadSpeed);
+        Changed = true;
+        return new FireOutcome(w, gi, 0);
+    }
 
     /// <summary>The hotbar slot after <paramref name="slot"/> (wraps around); a slot that is not on the hotbar goes to the first entry.</summary>
     int NextOnHotbar(int slot)

@@ -770,6 +770,20 @@ stateDiagram-v2
 - **Shut**: Closed and solid (the start state, and every new server): the leaves fill the doorway.
 - **Open**: The leaves are swung out into the yard and nothing is solid. Stays open until a player closes it; it does not close while a vehicle stands in the doorway.
 
+## Grenade.Throw
+
+The grenade throw key: held to aim (the arc shows), released to throw.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Aiming
+    Aiming --> Idle
+```
+
+- **Idle**: Key up (the start state). A press where the key is the grenade's starts the aim; a key already held when the throw became possible does not.
+- **Aiming**: Key held: the grenade is in the hand and the weapon hidden. Releasing throws; releasing with the aim key held, or losing the right to aim (a vehicle, death, a ladder, the Scud screen), puts it away.
+
 ## Harvester.Ai
 
 The AI harvester's job: drive to the field's first pass, cut the passes with turns between, leave along the edge; stops when its driver is killed.

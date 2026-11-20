@@ -291,6 +291,7 @@ public partial class NetClient : Node
         t = ClientProf.Lap(ClientProf.S.Projectiles, t);
         RenderWater();
         UpdateViewmodel();
+        UpdateThrowArc();
         UpdateDemonQuake(delta);
         UpdateDust(); // before the shake: a blast wave that arrives this frame shakes this frame
         UpdateShake(delta);
@@ -697,6 +698,7 @@ public partial class NetClient : Node
         if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); TickLootReturn(dt); }
         FxDemoInput(ref mi);
         ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
+        ThrowFilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
         _aimHeld = mi.Has(MoveButtons.Aim);
         if (HeadLookWanted()) mi.Buttons |= MoveButtons.HeadLook; // seated and looking out of their own eyes: the view is the head's, shown to everyone (ADR 0026)
         TickRecoil(mi);
@@ -783,7 +785,7 @@ public partial class NetClient : Node
     {
         if (_viewmodel == null) return;
         var slot = Ammo?.Slot ?? _wantSlot;
-        var id = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : "";
+        var id = ThrowHeldId() ?? (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : ""); // the throw key held: the grenade, whatever was selected
         _viewmodel.Show(id);
         _viewmodel.Visible = Mode.ShowsViewmodel && !OwnBodyFlung && _me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
     }
