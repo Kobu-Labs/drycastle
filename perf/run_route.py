@@ -66,10 +66,14 @@ def main():
         smp = Sampler(p.pid); smp.start()
         ready = wait_for(d / "client.log", "SHOOTER_READY", 300)
         t_ready = (time.time() - t0) if ready is not None else None
+        # the game takes minutes to tear its scene down after Quit: once the summary is written there is nothing more to wait for
+        end = time.time() + a.timeout
+        while p.poll() is None and time.time() < end and not (d / "route-summary.json").exists():
+            time.sleep(1)
         try:
-            p.wait(timeout=a.timeout)
+            p.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            p.kill()
+            p.kill(); p.wait()
         smp.stop(); log.close()
         gpu_state = {}
         if smi:
