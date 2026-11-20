@@ -10,7 +10,7 @@ namespace Drycastle.MapLoader;
 /// walk around them); crowns and bushes are shot-only (<see cref="CollisionLayers.ShotOnly"/>): bullets, pellets and sight lines
 /// stop on them, players and cars move through. The geometry is the pure ShooterCore code (<see cref="TreeColliders"/>,
 /// <see cref="ObjectColliders"/>), so the server and the client agree. Each body carries a "surface" meta ("wood" or
-/// "foliage") for the impact classifier. Trees are one static body per chunk and role, not one per tree.
+/// "foliage") for the impact classifier. Trees are one static body per chunk and role, not one per tree, and their solids are shape owners of that body, not child nodes.
 /// </summary>
 public sealed partial class MapLoader
 {
@@ -77,7 +77,7 @@ public sealed partial class MapLoader
                     body = NewSolidBody(part.Role == PartRole.Trunk ? "TreeTrunks" : "TreeCrowns", part.Layer, part.Group);
                     bodies[key] = body;
                 }
-                body.AddChild(SolidShape(part));
+                AddSolidOwner(body, part);
             }
         }
         // Bodies are filled while detached and attached once each: adding a shape to a body that is already in the tree
@@ -143,6 +143,26 @@ public sealed partial class MapLoader
     /// <summary>The Godot shape of one solid part: a box with the part's yaw, or a convex pyramid. Shapes are shared by key.</summary>
     CollisionShape3D SolidShape(SolidPart p)
     {
+        var (shape, xf) = SolidShapeAt(p);
+        return new CollisionShape3D { Shape = shape, Transform = xf };
+    }
+
+    /// <summary>
+    /// Adds a solid part to a body as a shape owner of the body itself instead of a <see cref="CollisionShape3D"/> child: the same shape at the same
+    /// transform in the physics server, but no node (the village's trees are about 200,000 parts). One owner per shape, so a ray's shape index maps to
+    /// its owner and transform as before (NetClient.Volumes). Not for bodies whose children the navigation bake parses (ground objects): the engine's
+    /// parser reads CollisionShape3D nodes only.
+    /// </summary>
+    void AddSolidOwner(CollisionObject3D body, SolidPart p)
+    {
+        var (shape, xf) = SolidShapeAt(p);
+        var owner = body.CreateShapeOwner(body);
+        body.ShapeOwnerSetTransform(owner, xf);
+        body.ShapeOwnerAddShape(owner, shape);
+    }
+
+    (Shape3D Shape, Transform3D Xf) SolidShapeAt(SolidPart p)
+    {
         var key = SolidShapeKeys.Of(p);
         if (!_solidShapes.TryGetValue(key, out var shape))
         {
@@ -152,10 +172,10 @@ public sealed partial class MapLoader
         var basis = Basis.Identity.Rotated(GVector3.Up, p.Yaw);
         if (p.Shape != PartShape.Box)
             // the pyramid and the frustum are built around their base centre, in the solid's yawed frame
-            return new CollisionShape3D { Shape = shape, Transform = new Transform3D(basis, ToGodot(p.X, p.Y, p.Z0)) };
+            return (shape, new Transform3D(basis, ToGodot(p.X, p.Y, p.Z0)));
         var mid = (p.Z0 + p.Z1) / 2;
         // a rotation about Godot's up axis by the map yaw maps the box's X onto the map u axis (cos, sin)
-        return new CollisionShape3D { Shape = shape, Transform = new Transform3D(basis, ToGodot(p.X, p.Y, mid)) };
+        return (shape, new Transform3D(basis, ToGodot(p.X, p.Y, mid)));
     }
 
     static BoxShape3D BoxShape(SolidShapeKeys.Key k)
