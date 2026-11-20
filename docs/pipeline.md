@@ -584,11 +584,11 @@ objects (a circle of half the footprint diagonal plus 0.3 m), water patches and 
   a chance of the type's `extras` (a lone tractor, a sprinkler line, a hay stack). Plants are instances in rows along
   the row direction (or a jittered grid), ~4 to 10 per 100 m2; artifacts are 2 to 10 per patch (`per_ha` 4, none under 400 m2),
   clustered at a corner, on the edge or alone inside, plants keep `radius_m` clear. No new instance kinds.
-  The Rust engine skips crop units; the stage builds them in Python right after it (`detail.append_crops`: appends their
-  triangles to `detail_patches.npy`, writes `detail_crops.json`). There the recipes of the crop units run in one process per
-  core (each is seeded by its unit, so the result is the same) and their patches are draped by the engine
-  (`detail_rust.drape_patches`, the module's `drape`: the same area at the same heights as `patches.drape`, cut into triangles
-  its own way). The Python reference build does it all in one go, in Python.
+  The Rust engine runs the recipe too (`rust/detail/src/crop.rs`, in parallel with the others, written after them in
+  `detail_patches.npy`, and writes `detail_crops.json`): a line-by-line port of `crop.py` that reproduces Python's
+  `random.Random`, numpy's generator (PCG64) and `round` bit for bit, so for the same inputs it gives the same instances as
+  the Python twin (`tests/test_crop_rust.py`). The patches are draped in 24-cell tiles on all cores. `crop.py` stays as the twin
+  of the tools (`parcel-run`, `patch-run`, previews) and the reference of the tests: change one, change the other.
   **`crops.json`** (map `files.crops`, copied from `detail_crops.json`; only maps with a crop patch): `{format_version: 1, axes,
   chunk_size_m, kinds: {kind: {role: plant|artifact, asset | synty: [Farm pack prefab names, full `SM_...`]}}, chunks: {"ix_iy": {kind: [[x, y, z, rot,
   scale], ...]}}}`, rows as in `clutter.json` without a tint; at most `detail.crop_kinds.<kind>.cap` per kind and chunk (a hash drops
