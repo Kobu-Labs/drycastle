@@ -114,6 +114,11 @@ public sealed partial class GangMemberView
     }
 
     /// <summary>Time that runs by itself: a blow waiting for its start, a landing, a gesture.</summary>
+    double _owed;
+
+    /// <summary>Plays the clips at the creature's update rate (<see cref="CreatureLod"/>); returns the time this frame's update covers.</summary>
+    public double Pace(double dt, bool slow, bool due) => CreatureLod.Pace(_anim, ref _owed, dt, slow, due);
+
     public override void _Process(double delta)
     {
         if (_anim == null) return;

@@ -131,6 +131,11 @@ public sealed partial class CitizenView : Node3D
     }
 
     /// <summary>Shows what the citizen is doing. A body that is already seated, kneeling or dead when first seen takes its final pose at once.</summary>
+    double _owed;
+
+    /// <summary>Plays the clips at the creature's update rate (<see cref="CreatureLod"/>); returns the time this frame's update covers.</summary>
+    public double Pace(double dt, bool slow, bool due) => CreatureLod.Pace(_anim, ref _owed, dt, slow, due);
+
     public void Show(CitizenState state)
     {
         if ((byte)state == _shown) return;

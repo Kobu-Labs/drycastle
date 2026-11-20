@@ -44,6 +44,8 @@ public partial class NetClient : IStandingBodies
         /// <summary>The loose limbs of the thrown body, one per skeleton of the model; empty for a rig with none (it is thrown as a rigid body).</summary>
         public List<AnimalFlail> Flail = new();
         public Vector3 LastFeet;
+        /// <summary>Time since its last update while it is updated at a lower rate (<see cref="CreatureLod"/>).</summary>
+        public double Owed;
         public bool SeenFeet;
         /// <summary>The driver's own picture of a throw by the vehicle it drives, shown before the server's arrives (<see cref="ThrowGuess"/>).</summary>
         public readonly ThrowGuess Guess = new();
@@ -179,11 +181,18 @@ public partial class NetClient : IStandingBodies
         if (_animals.Count == 0 || _lastTick == 0) return;
         var rt = RenderTickNow();
         var now = Time.GetTicksMsec() / 1000.0;
-        var dt = (float)GetProcessDeltaTime();
+        var frameDt = GetProcessDeltaTime();
+        var cam = GetViewport().GetCamera3D();
         var car = ThrowGuessCar();
         foreach (var (id, v) in _animals)
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant) continue;
+            // far or out of view it is updated every few frames, with the time it missed; a body that is thrown, guessed or tumbling keeps the full rate
+            var stride = v.SeenFeet && !v.Tumbling && !v.Guess.Active ? CreatureLod.Stride(cam, v.Node.GlobalPosition) : 1;
+            var slow = stride > 1;
+            var due = CreatureLod.Due(id, stride);
+            var dt = (float)CreatureLod.Pace(v.Anim, ref v.Owed, frameDt, slow, due);
+            if (!due) continue;
             var raw = e.State.State;
             var state = AnimalRules.StateOf(raw);
             if (e.Buf.At(rt) is { } s)

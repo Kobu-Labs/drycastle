@@ -81,15 +81,20 @@ public partial class NetClient
         RenderLoot();
         if (_gang.Count == 0 || _lastTick == 0) return;
         var rt = RenderTickNow();
+        var cam = GetViewport().GetCamera3D();
         foreach (var (id, g) in _gang)
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
+            var stride = g.Placed ? CreatureLod.Stride(cam, g.View.GlobalPosition) : 1; // the first frame is drawn whole
+            var due = CreatureLod.Due(id, stride);
+            var step = g.View.Pace(delta, stride > 1, due);
+            if (!due) continue; // far or out of view: it keeps its place and pose until its turn
             if (e.Buf.At(rt) is { } s)
             {
                 var p = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 g.View.GlobalPosition = p;
                 g.View.Rotation = new Vector3(0, s.Yaw, 0);
-                if (g.Placed && delta > 0) g.Speed = Mathf.Lerp(g.Speed, (p - g.Last).Length() / (float)delta, 0.2f);
+                if (g.Placed && step > 0) g.Speed = Mathf.Lerp(g.Speed, (p - g.Last).Length() / (float)step, 0.2f);
                 g.Last = p; g.Placed = true;
             }
             g.View.Show(GangRules.StateOf(e.State.State), g.Speed > 0.35f);

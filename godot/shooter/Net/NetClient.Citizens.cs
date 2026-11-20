@@ -16,6 +16,7 @@ public partial class NetClient
     sealed class CitizenNode
     {
         public CitizenView View = null!;
+        public bool Seen;
     }
 
     readonly Dictionary<ushort, CitizenNode> _citizens = new();
@@ -52,10 +53,17 @@ public partial class NetClient
     {
         if (_citizens.Count == 0 || _lastTick == 0) return;
         var rt = RenderTickNow();
+        var cam = GetViewport().GetCamera3D();
+        var dt = GetProcessDeltaTime();
         var hideIn = ChurchInterior.Visible ? null : ChurchDoorNode.Current?.Shell; // doors shut, camera outside: whoever is in the church is not drawn
         foreach (var (id, c) in _citizens)
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
+            var stride = c.Seen ? CreatureLod.Stride(cam, c.View.GlobalPosition) : 1; // the first frame is drawn whole
+            var due = CreatureLod.Due(id, stride);
+            c.View.Pace(dt, stride > 1, due);
+            if (!due) continue; // far or out of view: it keeps its place and pose until its turn
+            c.Seen = true;
             if (e.Buf.At(rt) is { } s)
             {
                 c.View.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
