@@ -23,7 +23,7 @@ VPS=${VPS:-root@159.195.244.164}
 VPS_KEY=${VPS_KEY:-$HOME/.ssh/drycastle-vps}
 here=$(cd "$(dirname "$0")/.." && pwd)
 MAPDIR=${MAPDIR:-$here/out/village/map}
-dir=$here/out/perf/client-build   # the test's own export: never the release export in out/shooter, whose map and assets are copies that go stale
+dir=${BUILD:-$here/out/perf/client-build}   # BUILD=<a kept copy of this folder> EXPORT=0 runs an earlier commit's export again; the test's own export: never the release export in out/shooter, whose map and assets are copies that go stale
 CLIENT=$dir/drycastle-shooter.x86_64
 out=$here/out/perf/client; mkdir -p "$out"
 log=$out/$(date -u +%Y%m%dT%H%M%SZ)-$label.log
