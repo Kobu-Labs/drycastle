@@ -76,18 +76,30 @@ public sealed partial class HuntersLogScreen
     {
         var v = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
         v.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
-        v.AddChild(Figure(HitFigure(h, new Vector2(figureW - 2 * ShooterTheme.Space, ShooterTheme.LogFigureH))));
+        v.AddChild(Badged(Figure(HitFigure(h, new Vector2(figureW - 2 * ShooterTheme.Space, ShooterTheme.LogFigureH))), h == null ? Strings.T("log.none") : number(h), figureW - 2 * ShooterTheme.Space));
         var cap = Text(label, "LogCaption");
         cap.Uppercase = true;
         v.AddChild(cap);
-        if (h == null)
-        {
-            v.AddChild(Text(Strings.T("log.none"), "InkHead"));
-            return v;
-        }
-        v.AddChild(Text(number(h), "InkHead"));
-        v.AddChild(HitFacts(h));
+        if (h != null) v.AddChild(HitFacts(h));
         return v;
+    }
+
+    /// <summary>
+    /// A figure with its number on a plate floating over its bottom-right corner, in no layout of its own: the holder reserves a strip under the figure (<see cref="ShooterTheme.LogBadgeStrip"/>) for the plate to sit half in,
+    /// so it never covers much of the picture and a longer number cannot move the lines below.
+    /// </summary>
+    static Control Badged(Control figure, string text, float width)
+    {
+        var holder = new Control { CustomMinimumSize = new Vector2(width, ShooterTheme.LogFigureH + ShooterTheme.LogBadgeStrip), MouseFilter = MouseFilterEnum.Ignore };
+        figure.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        figure.OffsetBottom = -ShooterTheme.LogBadgeStrip;
+        holder.AddChild(figure);
+        var plate = new PanelContainer { ThemeTypeVariation = "LogName", MouseFilter = MouseFilterEnum.Ignore, GrowHorizontal = Control.GrowDirection.Begin, GrowVertical = Control.GrowDirection.Begin };
+        plate.AddChild(Text(text, "TileName", HorizontalAlignment.Center));
+        plate.SetAnchorsPreset(Control.LayoutPreset.BottomRight);
+        plate.OffsetRight = -ShooterTheme.Space; plate.OffsetBottom = 0;
+        holder.AddChild(plate);
+        return holder;
     }
 
     /// <summary>The facts of a hit, one per line and always all of them (<paramref name="full"/> adds the distance and the time: the hit card), each with its icon so the lines align across cards: the hunter, the weapon, the hit area.</summary>
@@ -101,11 +113,8 @@ public sealed partial class HuntersLogScreen
         {
             // the hunter is a link here: a button around the same line, the name underlined, a tooltip saying where it goes
             var b = new ContentButton { ThemeTypeVariation = "LogRow", MinSize = Vector2.Zero, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, TooltipText = Strings.F("log.hit.open", h.Hunter), MouseDefaultCursorShape = CursorShape.PointingHand };
-            var line = StatLine(HuntArt.Person, "", variation, tint: true);
             var link = new PlayerLink { Text = h.Hunter, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, VerticalAlignment = VerticalAlignment.Center, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
-            line.GetChild(1).QueueFree();
-            line.AddChild(link);
-            b.SetContent(line);
+            b.SetContent(StatLine(HuntArt.Person, "", variation, tint: true, content: link));
             b.Pressed += openHunter;
             b.MouseEntered += () => link.Hot = true;
             b.MouseExited += () => link.Hot = false;
@@ -123,7 +132,7 @@ public sealed partial class HuntersLogScreen
     };
 
     /// <summary>An icon cell of a fixed size and a clipped text. Every icon is a flat tinted glyph of one style.</summary>
-    static Control StatLine(Texture2D? icon, string text, string variation, bool tint)
+    static Control StatLine(Texture2D? icon, string text, string variation, bool tint, Control? content = null)
     {
         var h = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         h.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
@@ -134,6 +143,7 @@ public sealed partial class HuntersLogScreen
         };
         if (tint) pic.Modulate = Skin.InkDim;
         h.AddChild(pic);
+        if (content != null) { h.AddChild(content); return h; }
         var label = Text(text, variation);
         label.ClipText = true; label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis; label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         h.AddChild(label);

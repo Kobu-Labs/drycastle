@@ -42,6 +42,8 @@ Checklist for any new UI. Each line is something the owner had to ask for.
 - One fact per line, never `a | b | c` on one wrapping line. Every card of a kind has the same lines in the same order; a missing value shows a placeholder, never drops the line (stats then align across cards).
 - Centre what is reasonable: card/tile grids use `FlowContainer.Alignment = Center`; legends and summaries centre under what they describe.
 - Nothing is ever cropped (headers, labels, cells) from 1280×720 up and at 150 % scale. Columns get minimum-width tokens (`LogColMin`) shared by header and cells; when too narrow, drop the least important column or stack the detail panel, never cut text. Test the narrow case first.
+- A headline number (a record's kg or m) is a badge floating over its picture's corner, out of the layout, with a strip reserved under the picture so it covers little; never a text line whose length can shift the rows below.
+- Swapping a child of a row (e.g. a link for a label): remove the old one now (`RemoveChild`), or build the row with the final control; `QueueFree` leaves it in layout until the frame ends and the new one gets no room.
 - Detail panels carry their own labels as icons plus value; check that no row can be empty or clipped (a button with no text is a bug).
 
 **Icons**
