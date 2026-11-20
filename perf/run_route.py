@@ -5,7 +5,7 @@ Starts the client offline (`--role client --offline --perf-route`) in a 1920x108
 (process start -> map loaded -> in the world) and collects route-summary.json / route-frames.csv written by PerfRoute.cs. One variant per run:
   base | msaa0 | msaa2 | msaa4 | msaa8 | noshadow | shadow100 | mobile | compat
 
-Usage: run_route.py --variants base,msaa0,noshadow,mobile [--views 48] [--dwell 1.5] [--gpu nvidia|intel]
+Usage: run_route.py --variants base,msaa0,noshadow,mobile [--views 48] [--dwell 1.5] [--gpu nvidia|intel] [--exe out/perf/client-build/drycastle-shooter.x86_64]
 GPU choice on this hybrid laptop: --gpu nvidia sets the PRIME offload variables, --gpu intel leaves the iGPU.
 """
 import argparse, json, os, shutil, statistics, subprocess, sys, time
@@ -39,6 +39,7 @@ def main():
     ap.add_argument("--timeout", type=int, default=900)
     ap.add_argument("--gpu-index", type=int, default=-1, help="Godot --gpu-index (pick the adapter: 0/1)")
     ap.add_argument("--repeat", type=int, default=1)
+    ap.add_argument("--exe", default="", help="an exported client to run instead of the project (perf/vps_client_test.sh keeps one of the last commit in out/perf/client-build): the run then does not depend on the state of the working tree")
     ap.add_argument("--keep-profile", action="store_true", help="use the real saved settings (default: a fresh profile = new install)")
     ap.add_argument("--blasts", type=float, default=0, help="bench: rocket explosions per second around the camera (--perf-blasts)")
     ap.add_argument("--anchors", default="", help='viewpoints "x,y,z;x,y,z" (Godot axes) instead of the spawn points (--perf-anchors)')
@@ -52,7 +53,7 @@ def main():
             env["XDG_DATA_HOME"] = tempfile.mkdtemp(prefix="drycastle-fresh-profile-")
         if a.gpu == "nvidia":
             env.update({"__NV_PRIME_RENDER_OFFLOAD": "1", "__GLX_VENDOR_LIBRARY_NAME": "nvidia", "__VK_LAYER_NV_optimus": "NVIDIA_only", "DRI_PRIME": "1"})
-        args = [GODOT, "--path", str(SHOOTER), "--resolution", a.res, "--windowed"] + (["--gpu-index", str(a.gpu_index)] if a.gpu_index >= 0 else []) + RENDERER.get(v, []) + ["--", "--role", "client", "--offline", "--map", a.map, "--perf-route", "--perf-out", str(d),
+        args = ([a.exe] if a.exe else [GODOT, "--path", str(SHOOTER)]) + ["--resolution", a.res, "--windowed"] + (["--gpu-index", str(a.gpu_index)] if a.gpu_index >= 0 else []) + RENDERER.get(v, []) + ["--", "--role", "client", "--offline", "--map", a.map, "--perf-route", "--perf-out", str(d),
                 "--perf-views", str(a.views), "--perf-dwell", str(a.dwell), "--perf-tag", v] + VARIANTS.get(v, []) + (["--perf-blasts", str(a.blasts)] if a.blasts > 0 else []) + (["--perf-anchors", a.anchors] if a.anchors else []) + ["--perf-settle", str(a.settle)]
         log = open(d / "client.log", "w")
         # the graphics card's own state through the run: a laptop caps its power when it is hot, and a capped run is not comparable with a free one

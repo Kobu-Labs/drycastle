@@ -12,13 +12,16 @@ ROWS = ["fps", "frame_p50_ms", "frame_p99_ms", "frame_max_ms", "frames_over_33ms
 
 EVENT = re.compile(r"([A-Za-z0-9]+)=(-?[0-9.]+)\|")
 PAIR = re.compile(r"([a-z0-9_]+)=(-?[0-9]+(?:\.[0-9]+)?)")
+GPU = {}  # log -> the card's state through the run (the "# gpu:" line of vps_client_test.sh)
 def pairs(line): return {k: float(v) for k, v in PAIR.findall(line)}  # the engine's error output can land in the middle of a line
 
 def read(path):
     vals, scopes, events = [], [], []
     with (gzip.open(path, "rt") if path.endswith(".gz") else open(path)) as f:
         for line in f:
-            if line.startswith("client: perf events "):
+            if line.startswith("# gpu: "):
+                GPU[path] = pairs(line)
+            elif line.startswith("client: perf events "):
                 events.append({k: float(a) for k, a in EVENT.findall(line)})
             elif line.startswith("client: perf scopes ms_per_s "):
                 scopes.append(pairs(line))
@@ -47,6 +50,8 @@ def main():
     line("windows (10 s)", [str(len(v)) for _, v, _ in runs])
     for r in ROWS: line(r, [fmt(med(v, r)) for _, v, _ in runs])
     line("frame_max_ms, run max", [fmt(max((x["frame_max_ms"] for x in v), default=None)) for _, v, _ in runs])
+    if GPU:  # render_gpu_ms of a capped run and of a free one are not comparable
+        for k in ["power_w", "clock_mhz", "temp_max_c", "capped_pct"]: line("gpu " + k, [fmt(GPU.get(p, {}).get(k)) for p in args])
     print("scopes, ms per second (10 = 1 % of a core)")
     names = []
     for _, _, s in runs:
