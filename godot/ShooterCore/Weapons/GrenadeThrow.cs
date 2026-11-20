@@ -9,9 +9,9 @@ public enum GrenadeThrowPhase : byte { Idle, Aiming }
 public enum GrenadeThrowStep : byte { None, Throw, Cancel }
 
 /// <summary>
-/// The throw key (G by default, <c>throw_grenade</c>): hold to aim, release to throw, release together with the aim key to put the grenade away. The server and the
+/// The throw key (middle mouse button by default, <c>throw_grenade</c>): hold to aim, release to throw, release together with the aim key to put the grenade away. The server and the
 /// client run the same rule, so what the client previews is what the server throws. The key only starts an aim from a fresh press, and only where
-/// <see cref="CanAim"/> says the key is the grenade's (G is also the Scud screen's: in a seat or on the screen it is not).
+/// <see cref="CanAim"/> says the key is the grenade's (a rebind to G shares it with the Scud screen: in a seat or on the screen it is not).
 /// </summary>
 public sealed class GrenadeThrower
 {
