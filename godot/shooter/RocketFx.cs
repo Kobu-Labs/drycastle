@@ -26,9 +26,9 @@ public static class RocketFx
     }
 
     /// <summary>Particle material: unshaded, takes the per-particle colour (the ramp) as albedo, alpha blended.</summary>
-    internal static StandardMaterial3D Part(Color c, bool emissive = false)
+    internal static StandardMaterial3D Part(Color c, bool emissive = false, bool opaque = false)
     {
-        var m = Unshaded(new Color(c.R, c.G, c.B, 0.99f));
+        var m = Unshaded(new Color(c.R, c.G, c.B, opaque ? 1f : 0.99f)); // opaque: the opaque pass, no per-particle sort or blend (#447); the effect fades by shrinking
         m.VertexColorUseAsAlbedo = true;
         if (emissive) { m.EmissionEnabled = true; m.Emission = c; m.EmissionEnergyMultiplier = 1.5f; }
         return m;
@@ -67,7 +67,21 @@ public static class RocketFx
         public readonly Gradient SparkRamp = Ramp((0f, new Color(1f, 1f, 0.7f, 1f)), (0.6f, new Color(1f, 0.55f, 0.15f, 1f)), (1f, new Color(0.6f, 0.2f, 0.05f, 0f)));
         public readonly SphereMesh Smoke = new() { Radius = 0.5f, Height = 1f, RadialSegments = 8, Rings = 4, Material = Part(new Color(1, 1, 1)) };
         public readonly Gradient SmokeRamp = Ramp((0f, new Color(0.35f, 0.33f, 0.3f, 0.85f)), (0.5f, new Color(0.2f, 0.2f, 0.2f, 0.7f)), (1f, new Color(0.12f, 0.12f, 0.12f, 0f)));
+        // the blast's own fire and sparks: opaque (#447), so the ramp's alpha is unused and they go out by shrinking; the shared Fire and Spark above stay alpha for the other effects
+        public readonly SphereMesh BlastFire = new() { Radius = 0.3f, Height = 0.6f, RadialSegments = 8, Rings = 4, Material = Part(new Color(1, 1, 1), true, true) };
+        public readonly SphereMesh BlastSpark = new() { Radius = 0.04f, Height = 0.08f, RadialSegments = 6, Rings = 3, Material = Part(new Color(1, 1, 1), true, true) };
+        public readonly Gradient BlastFireRamp = Ramp((0f, new Color(1f, 0.95f, 0.6f)), (0.35f, new Color(1f, 0.5f, 0.1f)), (1f, new Color(0.3f, 0.1f, 0.05f)));
+        public readonly Gradient BlastSparkRamp = Ramp((0f, new Color(1f, 1f, 0.7f)), (0.6f, new Color(1f, 0.55f, 0.15f)), (1f, new Color(0.6f, 0.2f, 0.05f)));
+        public readonly Curve BlastFireScale = BlastCurve();
         public readonly BoxMesh Debris = new() { Size = new Vector3(0.18f, 0.12f, 0.15f), Material = new StandardMaterial3D { AlbedoColor = new Color(0.3f, 0.22f, 0.15f), Roughness = 1f } };
+    }
+
+    /// <summary>The fireball puffs swell to full size, then shrink away (what the alpha fade did).</summary>
+    static Curve BlastCurve()
+    {
+        var c = new Curve();
+        c.AddPoint(new Vector2(0, 0.5f)); c.AddPoint(new Vector2(0.4f, 1.8f)); c.AddPoint(new Vector2(1, 0.15f));
+        return c;
     }
 
     static Cache? _c;
@@ -226,7 +240,7 @@ public static class RocketFx
         public MeshInstance3D Flash = null!, Fireball = null!;
         public OmniLight3D Light = null!;
         public CpuParticles3D Fire = null!, Spark = null!, Smoke = null!, Debris = null!;
-        public readonly List<Tween> Tweens = new();
+        public BlastKitNode Driver = null!;
         public ulong EndMs;
     }
 
@@ -242,15 +256,17 @@ public static class RocketFx
         _kits = new Kit[KitPool];
         for (var i = 0; i < KitPool; i++)
         {
-            var k = new Kit { Root = new Node3D { Name = "BlastKit", Visible = false } };
+            var k = new Kit { Driver = new BlastKitNode { Name = "BlastKit", Visible = false } };
+            k.Root = k.Driver;
             k.Flash = new MeshInstance3D { Mesh = c.Ball, MaterialOverride = c.FlashMat, CastShadow = off };
             k.Fireball = new MeshInstance3D { Mesh = c.Ball, MaterialOverride = c.FireballMat, CastShadow = off };
             k.Light = new OmniLight3D { LightColor = new Color(1f, 0.65f, 0.25f), LightEnergy = 10f, ShadowEnabled = false };
             k.Root.AddChild(k.Flash); k.Root.AddChild(k.Fireball); k.Root.AddChild(k.Light);
-            k.Fire = Pooled(k.Root, c.Fire, c.FireRamp, 24, 0.7, new Vector3(0, 1.5f, 0), c.Grow);
-            k.Spark = Pooled(k.Root, c.Spark, c.SparkRamp, 24, 1.0, new Vector3(0, -9.8f, 0), c.Shrink);
+            k.Fire = Pooled(k.Root, c.BlastFire, c.BlastFireRamp, 24, 0.7, new Vector3(0, 1.5f, 0), c.BlastFireScale);
+            k.Spark = Pooled(k.Root, c.BlastSpark, c.BlastSparkRamp, 24, 1.0, new Vector3(0, -9.8f, 0), c.Shrink);
             k.Smoke = Pooled(k.Root, c.Smoke, c.SmokeRamp, 16, 1.6, new Vector3(0, 1.2f, 0), c.Grow);
             k.Debris = Pooled(k.Root, c.Debris, null, 10, 1.3, new Vector3(0, -14f, 0), null);
+            k.Driver.Bind(k.Flash, k.Fireball, k.Light);
             world.AddChild(k.Root);
             _kits[i] = k;
         }
@@ -287,7 +303,6 @@ public static class RocketFx
     public static void Explode(Node3D world, Vector3 at, float radius, float waveSpeed = 0f)
     {
         if (!ShotFx.Enabled || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree()) return;
-        var c = C;
         var kits = Kits(world);
         var r = Mathf.Max(1f, radius);
         var now = Time.GetTicksMsec();
@@ -295,44 +310,19 @@ public static class RocketFx
         var cam = world.GetViewport()?.GetCamera3D();
         var simple = r < SimplifyMaxRadius && cam != null && cam.GlobalPosition.DistanceTo(at) > SimplifyRange;
 
-        foreach (var t in k.Tweens) t.Kill();
-        k.Tweens.Clear();
         k.EndMs = now + (ulong)KitLifeMs;
         k.Root.Position = at;
         k.Root.Visible = true;
 
-        // flash sphere (white-hot, gone in 0.12 s) and fireball (grows 0.35 s, fades)
-        k.Flash.Scale = Vector3.One * r * 0.15f; k.Flash.Transparency = 0;
-        k.Fireball.Scale = Vector3.One * r * 0.2f; k.Fireball.Transparency = 0;
-        var tf = k.Flash.CreateTween().SetParallel();
-        tf.TweenProperty(k.Flash, "scale", Vector3.One * r * 0.5f, 0.12f);
-        tf.TweenProperty(k.Flash, "transparency", 1f, 0.12f);
-        var tb = k.Fireball.CreateTween().SetParallel();
-        tb.TweenProperty(k.Fireball, "scale", Vector3.One * r * 0.55f, 0.35f).SetEase(Tween.EaseType.Out);
-        tb.TweenProperty(k.Fireball, "transparency", 1f, 0.35f).SetDelay(0.1f);
-        k.Tweens.Add(tf); k.Tweens.Add(tb);
-
-        // the light and the particles, unless the blast is far and small
+        // flash sphere (white-hot, gone in 0.12 s), fireball (grows 0.35 s, fades) and the light, driven by the kit's own process (no tweens, #454)
         k.Light.Visible = !simple;
         k.Light.OmniRange = r * 3.5f;
-        k.Light.LightEnergy = 10f;
-        if (!simple)
-        {
-            var tl = k.Light.CreateTween();
-            tl.TweenProperty(k.Light, "light_energy", 0f, 0.35f);
-            k.Tweens.Add(tl);
-        }
+        k.Driver.Play(r, !simple);
         Burst(k.Fire, simple, 1f, r * 0.9f, r * 0.8f, r * 1.4f, 180f);
         Burst(k.Spark, simple, r * 1.0f, r * 2.4f, 0.6f, 1.4f, 180f);
         Burst(k.Smoke, simple, 0.8f, r * 0.45f, r * 0.5f, r * 0.9f, 60f);
         Burst(k.Debris, simple, r * 0.8f, r * 1.9f, 0.7f, 1.8f, 70f);
         DustFx.Blast(world, at, r, DustRules.SpeedOr(waveSpeed)); // the dust outlives the kit: it has its own pool
-
-        // the kit's root hides itself when the blast is over: an idle kit is not drawn
-        var end = k.Root.CreateTween();
-        end.TweenInterval(KitLifeMs / 1000.0);
-        end.TweenCallback(Callable.From(() => { if (GodotObject.IsInstanceValid(k.Root)) k.Root.Visible = false; }));
-        k.Tweens.Add(end);
     }
 
     static void Burst(CpuParticles3D p, bool skip, float vMin, float vMax, float sMin, float sMax, float spread)
