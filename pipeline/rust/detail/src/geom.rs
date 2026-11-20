@@ -174,6 +174,14 @@ pub fn diff(a: &G, b: &G) -> G {
     op2(a, b, |x, y| x.difference(y))
 }
 
+/// ``a.difference(b)`` always through GEOS, also for an empty ``b`` (which hands back ``a`` re-noded, not as it was): what shapely does.
+pub fn diff_exact(a: &G, b: &G) -> G {
+    if is_empty(a) {
+        return empty();
+    }
+    op2(a, b, |x, y| x.difference(y))
+}
+
 pub fn union2(a: &G, b: &G) -> G {
     if is_empty(a) {
         return dup(b);
@@ -384,6 +392,199 @@ pub fn min_rotated_rect(g: &G) -> Vec<Pt> {
 
 pub fn distance(a: &G, b: &G) -> f64 {
     a.distance(b).unwrap_or(f64::INFINITY)
+}
+
+// --- what the crop recipe (crop.rs) needs: shapely's own tools, on the same GEOS --------------------------------
+
+/// ``shapely.box(x0, y0, x1, y1)``: counter-clockwise from the lower right.
+pub fn box_ccw(x0: f64, y0: f64, x1: f64, y1: f64) -> G {
+    polygon(&[[x1, y0], [x1, y1], [x0, y1], [x0, y0]], &[])
+}
+
+/// ``Polygon(shell, holes).buffer(0)``.
+pub fn polygon_holes_fixed(ext: &[Pt], holes: &[Vec<Pt>]) -> G {
+    let p = polygon(ext, holes);
+    if is_empty(&p) {
+        return p;
+    }
+    buffer0(&p)
+}
+
+/// The polygons as one (multi)polygon, not dissolved: what ``shape(geojson)`` gives.
+pub fn multipolygon(polys: &[PolyC]) -> G {
+    let mut gs: Vec<G> = polys.iter().map(from_polyc).filter(|g| !is_empty(g)).collect();
+    match gs.len() {
+        0 => empty(),
+        1 => gs.remove(0),
+        _ => Geometry::create_multipolygon(gs).unwrap_or_else(|_| empty()),
+    }
+}
+
+/// ``g.buffer(d, single_sided=True, cap_style="flat")`` (the left side of a line for ``d > 0``).
+pub fn buffer_single_sided(g: &G, d: f64) -> G {
+    let params = geos::BufferParams::builder()
+        .quadrant_segments(16)
+        .end_cap_style(CapStyle::Flat)
+        .join_style(JoinStyle::Round)
+        .mitre_limit(5.0)
+        .single_sided(true)
+        .build();
+    match params.and_then(|p| g.buffer_with_params(d, &p)) {
+        Ok(r) => r,
+        Err(e) => {
+            note_error("buffer", &e);
+            empty()
+        }
+    }
+}
+
+/// ``shapely.segmentize(line, max_len)`` of the points of a line or ring.
+pub fn densify_pts(pts: &[Pt], max_len: f64) -> Vec<Pt> {
+    match line(pts).densify(max_len) {
+        Ok(g) => coords(&g),
+        Err(_) => pts.to_vec(),
+    }
+}
+
+fn signed_area(r: &[Pt]) -> f64 {
+    let mut s = 0.0;
+    for w in r.windows(2) {
+        s += w[0][0] * w[1][1] - w[1][0] * w[0][1];
+    }
+    s / 2.0
+}
+
+/// ``shapely.geometry.polygon.orient(poly, 1.0)``: shell counter-clockwise, holes clockwise.
+pub fn orient(p: &PolyC) -> PolyC {
+    let rev = |r: &Vec<Pt>| r.iter().rev().copied().collect::<Vec<Pt>>();
+    let ext = if signed_area(&p.ext) >= 0.0 { p.ext.clone() } else { rev(&p.ext) };
+    let holes = p.holes.iter().map(|h| if signed_area(h) <= 0.0 { h.clone() } else { rev(h) }).collect();
+    PolyC { ext, holes }
+}
+
+/// ``line.interpolate(s)`` (clamped to the ends).
+pub fn interp(g: &G, s: f64) -> Pt {
+    match g.interpolate(s) {
+        Ok(p) => [p.get_x().unwrap_or(0.0), p.get_y().unwrap_or(0.0)],
+        Err(_) => [0.0, 0.0],
+    }
+}
+
+/// ``line.interpolate(f, normalized=True)``.
+pub fn interp_norm(g: &G, f: f64) -> Pt {
+    match g.interpolate_normalized(f) {
+        Ok(p) => [p.get_x().unwrap_or(0.0), p.get_y().unwrap_or(0.0)],
+        Err(_) => [0.0, 0.0],
+    }
+}
+
+/// ``line.project(Point(p))``.
+pub fn project(g: &G, p: Pt) -> f64 {
+    g.project(&point(p[0], p[1])).unwrap_or(0.0)
+}
+
+/// ``nearest_points(Point(p), g)[1]``: the point of ``g`` nearest to ``p``.
+pub fn nearest_on(p: Pt, g: &G) -> Pt {
+    let a = point(p[0], p[1]);
+    match a.nearest_points(g) {
+        Ok(seq) => match seq.as_buffer(Some(CoordType::XY)) {
+            Ok(b) if b.len() >= 4 => [b[2], b[3]],
+            _ => p,
+        },
+        Err(_) => p,
+    }
+}
+
+pub fn envelope(g: &G) -> G {
+    g.envelope().unwrap_or_else(|_| empty())
+}
+
+pub fn boundary(g: &G) -> G {
+    g.boundary().unwrap_or_else(|_| empty())
+}
+
+/// ``geom.representative_point()``.
+pub fn rep_point(g: &G) -> Pt {
+    match g.point_on_surface() {
+        Ok(p) => [p.get_x().unwrap_or(0.0), p.get_y().unwrap_or(0.0)],
+        Err(_) => [0.0, 0.0],
+    }
+}
+
+/// ``shapely.voronoi_polygons(MultiPoint(pts), extend_to=extent)``: the cells in GEOS's order.
+pub fn voronoi(pts: &[Pt], extent: &G) -> Vec<G> {
+    let ps: Vec<G> = pts.iter().map(|p| point(p[0], p[1])).collect();
+    let Ok(mp) = Geometry::create_multipoint(ps) else { return vec![] };
+    match mp.voronoi(Some(extent), 0.0, false) {
+        Ok(v) => {
+            let n = v.get_num_geometries().unwrap_or(0);
+            (0..n).filter_map(|i| v.get_geometry_n(i).ok().map(|c| dup(&c))).collect()
+        }
+        Err(e) => {
+            note_error("voronoi", &e);
+            vec![]
+        }
+    }
+}
+
+/// ``shapely.affinity.rotate(g, angle, origin=origin, use_radians=True)`` of the polygons of ``g``.
+pub fn rotate(g: &G, angle: f64, origin: Pt) -> G {
+    let (mut c, mut s) = (angle.cos(), angle.sin());
+    if c.abs() < 2.5e-16 {
+        c = 0.0;
+    }
+    if s.abs() < 2.5e-16 {
+        s = 0.0;
+    }
+    let (x0, y0) = (origin[0], origin[1]);
+    let (xoff, yoff) = (x0 - x0 * c + y0 * s, y0 - x0 * s - y0 * c);
+    let f = |p: &Pt| [c * p[0] + (-s) * p[1] + xoff, s * p[0] + c * p[1] + yoff];
+    let polys: Vec<PolyC> = polys(g).into_iter().map(|p| PolyC { ext: p.ext.iter().map(f).collect(), holes: p.holes.iter().map(|h| h.iter().map(f).collect()).collect() }).collect();
+    multipolygon(&polys)
+}
+
+/// ``unary_union(parts)`` of the non-empty parts, None when GEOS fails on it (shapely raises there).
+pub fn union_try(parts: &[G]) -> Option<G> {
+    let parts: Vec<G> = parts.iter().filter(|p| !is_empty(*p)).map(dup).collect();
+    if parts.is_empty() {
+        return Some(empty());
+    }
+    Geometry::create_geometry_collection(parts).ok()?.unary_union().ok()
+}
+
+/// ``shapely.make_valid(g).buffer(0)``.
+pub fn repaired_buffer0(g: &G) -> G {
+    buffer0(&repaired(g))
+}
+
+/// ``unary_union(parts)`` of the non-empty parts (an empty polygon for none), also for a single part (GEOS still dissolves it).
+pub fn union_py(parts: Vec<G>) -> G {
+    let parts: Vec<G> = parts.into_iter().filter(|p| !is_empty(p)).collect();
+    if parts.is_empty() {
+        return empty();
+    }
+    let coll = match Geometry::create_geometry_collection(parts) {
+        Ok(c) => c,
+        Err(_) => {
+            GEOS_ERRORS.fetch_add(1, Ordering::Relaxed);
+            return empty();
+        }
+    };
+    match coll.unary_union() {
+        Ok(u) => u,
+        Err(_) => {
+            GEOS_ERRORS.fetch_add(1, Ordering::Relaxed);
+            let mut acc = empty();
+            if let Ok(n) = coll.get_num_geometries() {
+                for i in 0..n {
+                    if let Ok(c) = coll.get_geometry_n(i) {
+                        acc = union2(&acc, &dup(&c));
+                    }
+                }
+            }
+            acc
+        }
+    }
 }
 
 #[cfg(test)]

@@ -16,6 +16,8 @@ mod index;
 mod meadow;
 mod noise;
 mod patches;
+mod pyrand;
+mod crop;
 mod planting;
 mod rng;
 mod roads;

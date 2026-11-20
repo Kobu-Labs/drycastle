@@ -30,7 +30,6 @@ import functools
 import hashlib
 import json
 import math
-import os
 import random
 import sys
 import time
@@ -1118,8 +1117,6 @@ def crop_recipe(ctx: ParcelContext, cfg: dict) -> DetailResult:
 
 
 RECIPES = {"garden": garden_detail, "field": field_detail, "forest": forest_detail, "village": village_detail, "dike": dike_recipe, "crop": crop_recipe}
-# Recipes the Rust engine does not run: the stage builds them in Python after it (:func:`append_crops`) and the engine skips their units.
-PYTHON_RECIPES = frozenset({"crop"})
 
 
 @functools.cache
@@ -1445,7 +1442,7 @@ def build_village_detail(
     only: set[str] | None = None, log=None, recipe: str | None = None, drape_patches=None, workers: int = 0,
 ) -> VillageDetail:
     """The detail of every parcel of the map (``only``: just these parcel IDs; tests, previews; ``recipe``: just the units of
-    this recipe, :data:`PYTHON_RECIPES` after the Rust engine). ``drape_patches`` (:func:`detail_rust.drape_patches`): the patches
+    this recipe). ``drape_patches`` (:func:`detail_rust.drape_patches`): the patches
     of all units are draped by it in one call at the end, not one by one in Python (:func:`patch_meshes`); the rows keep the
     order of the Python build (per unit: the flat patches, then the textured ones by texture id). ``workers`` > 1: the recipes
     of the units run in that many processes (every recipe is seeded by its unit, so the result is the same)."""
@@ -1561,32 +1558,6 @@ def write_crops(work_dir: Path, detail: VillageDetail) -> None:
         path.write_text(json.dumps(doc, separators=(",", ":")) + "\n")
     else:
         path.unlink(missing_ok=True)
-
-
-def crop_units_exist(work_dir: Path, rules_path: Path = DEFAULT_RULES, edits_path: Path = DEFAULT_EDITS) -> bool:
-    """True when some ground unit of the work files has the crop recipe (cheap: no terrain, no props)."""
-    parcels_doc = json.loads((work_dir / "parcels.json").read_text())
-    types = ground_types(rules_path, edits_path)
-    return any(area_type(p, types) == "crop" for p in ground_units(parcels_doc))
-
-
-def append_crops(work_dir: Path, rules_path: Path = DEFAULT_RULES, edits_path: Path = DEFAULT_EDITS) -> dict:
-    """After the Rust engine: builds the :data:`PYTHON_RECIPES` units (crop patches) in Python, appends their patch triangles to
-    ``detail_patches.npy`` and writes ``detail_crops.json``. Returns the stats (``{}`` when there is no crop unit)."""
-    if not crop_units_exist(work_dir, rules_path, edits_path):
-        (work_dir / "detail_crops.json").unlink(missing_ok=True)
-        return {}
-    from drycastle_pipeline import detail_rust
-
-    # the engine drapes the crop patches (minutes in Python)
-    detail = build_village_detail(work_dir, rules_path, edits_path, recipe="crop", drape_patches=detail_rust.drape_patches,
-                                  workers=os.cpu_count() or 1)
-    textures = json.loads((work_dir / "detail_patches.json").read_text())["textures"]
-    assert textures == detail.textures, "the crop recipe uses a texture the engine's list lacks"
-    base = np.load(work_dir / "detail_patches.npy")
-    np.save(work_dir / "detail_patches.npy", np.concatenate([base, detail.patches]) if len(detail.patches) else base)
-    write_crops(work_dir, detail)
-    return detail.stats
 
 
 def write_detail(work_dir: Path, detail: VillageDetail) -> None:
