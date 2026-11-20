@@ -21,8 +21,8 @@ public static class GrenadeFlight
     /// <summary>The floor: a surface whose normal points up by at least this much (cosine of its slope).</summary>
     public const float FloorNormalY = 0.6f;
 
-    /// <summary>How far in front of a surface the grenade is stopped, metres, so the next tick does not start inside it.</summary>
-    public const float Skin = 0.03f;
+    /// <summary>How far in front of a surface the grenade is stopped, metres, so the next tick does not start inside it. About the grenade's own radius: it lies on the floor, not in it (#421).</summary>
+    public const float Skin = 0.07f;
 
     public static GrenadeStep Step(GrenadeDef g, Vector3 pos, Vector3 vel, float dt, Func<Vector3, Vector3, float, GrenadeStop> cast)
     {

@@ -101,7 +101,12 @@ public static class RocketFx
             var tail = 0.62f;
             if (weaponId == "grenade") // a thrown grenade: the pack's model, no flame, light or trail
             {
-                if (SyntyLib.Instance("props/grenade_01", "glb/atlas/military_weapons_01.png") is { } nade) node.AddChild(nade);
+                if (SyntyLib.Instance("props/grenade_01", "glb/atlas/military_weapons_01.png") is { } nade)
+                {
+                    // the node is the grenade's centre (where the server rests it a body radius above the floor): the model is centred on it, not hung from its base (#421)
+                    if (nade.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>().FirstOrDefault() is { } mi) nade.Position = -(mi.Transform * mi.GetAabb().GetCenter());
+                    node.AddChild(nade);
+                }
                 else node.AddChild(new MeshInstance3D { Mesh = new SphereMesh { Radius = 0.05f, Height = 0.1f } });
                 world.AddChild(node);
                 return node;
