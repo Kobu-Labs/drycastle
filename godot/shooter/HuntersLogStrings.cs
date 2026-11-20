@@ -20,7 +20,7 @@ public static class HuntersLogStrings
         ("log.hidden.mark", "?"), ("hunt.hidden.name", "Xxxxxxxx"),
         // records
         ("log.rec.heaviest", "Heaviest"), ("log.rec.longest", "Longest shot"), ("log.rec.first", "First caught"), ("log.rec.todo", "Not hunted yet. The first kill takes the record."),
-        ("log.rec.kill", "Longest player kill"), ("log.rec.kill.todo", "No player kill yet. The first one takes the record."),
+        ("log.rec.kill.title", "Player kill"), ("log.rec.kill.todo", "No player kill yet. The first one takes the record."),
         ("log.rec.open", "All {0} hunts"), ("log.area.head", "Head"), ("log.area.body", "Body"), ("log.area.legs", "Legs"), ("log.area.none", "No hit"),
         // all hunts
         ("log.col.when", "When"), ("log.col.player", "Hunter"), ("log.col.species", "Species"), ("log.col.weight", "Weight"), ("log.col.distance", "Distance"), ("log.col.weapon", "Weapon"),

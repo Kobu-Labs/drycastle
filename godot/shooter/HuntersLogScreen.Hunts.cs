@@ -53,6 +53,7 @@ public sealed partial class HuntersLogScreen
     Control _hitHidden = null!;
     Label _hitName = null!, _hitKg = null!, _hitNone = null!;
     VBoxContainer _hitFacts = null!;
+    Control _headPad = null!;
     BlurText _hitBlur = null!;
 
     void BuildHuntsPane()
@@ -111,7 +112,7 @@ public sealed partial class HuntersLogScreen
             var col = Columns[c];
             var b = new Button
             {
-                ThemeTypeVariation = "LogHead", Text = Strings.T(col.Label), ClipText = true, FocusMode = FocusModeEnum.All, ExpandIcon = true,
+                ThemeTypeVariation = "LogHead", Text = Strings.T(col.Label), FocusMode = FocusModeEnum.All, ExpandIcon = true,
                 IconAlignment = HorizontalAlignment.Right, Alignment = col.Number ? HorizontalAlignment.Right : HorizontalAlignment.Left,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = col.Ratio, MouseDefaultCursorShape = CursorShape.PointingHand,
                 TooltipText = Strings.F("log.sort.tip", Strings.T(col.Label)), Icon = HuntArt.Arrow(null),
@@ -122,6 +123,9 @@ public sealed partial class HuntersLogScreen
             _heads[c] = b;
             head.AddChild(b);
         }
+        // the rows' scrollbar takes width the header does not have: a spacer of the same width keeps every header over its column
+        _headPad = new Control { MouseFilter = MouseFilterEnum.Ignore };
+        head.AddChild(_headPad);
         table.AddChild(head);
 
         // the rows scroll, the header and the pager do not; the state box (loading, empty, error) takes the rows' place
@@ -129,6 +133,9 @@ public sealed partial class HuntersLogScreen
         _rowsBox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
         _rowsBox.AddThemeConstantOverride("separation", 0);
         _rowsScroll.AddChild(_rowsBox);
+        var bar = _rowsScroll.GetVScrollBar();
+        void SyncPad() => _headPad.CustomMinimumSize = new Vector2(bar.Visible ? bar.GetCombinedMinimumSize().X : 0, 0);
+        bar.VisibilityChanged += SyncPad;
         table.AddChild(_rowsScroll);
         _tableStateHost.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         outer.AddChild(_tableStateHost);
@@ -359,7 +366,7 @@ public sealed partial class HuntersLogScreen
         // species: the name (or the blurred placeholder), then the record seal
         var species = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = Columns[2].Ratio, MouseFilter = MouseFilterEnum.Ignore };
         species.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
-        r.Icon = new AnimalPicture(ShooterTheme.LogRowArt) { FillInk = Skin.InkDim, OutlineInk = Skin.InkDim, SizeFlagsVertical = SizeFlags.ShrinkCenter, MouseFilter = MouseFilterEnum.Ignore };
+        r.Icon = new AnimalPicture(ShooterTheme.LogRowArt) { FillInk = Skin.InkDim, OutlineInk = Skin.InkDim, SizeFlagsVertical = SizeFlags.ShrinkCenter, ClipContents = true, MouseFilter = MouseFilterEnum.Ignore };
         species.AddChild(r.Icon);
         r.Species = Cell("InkSmall", HorizontalAlignment.Left, 1);
         r.Blur = new BlurText(Strings.T("hunt.hidden.name"), "InkSmall") { Visible = false };
