@@ -235,18 +235,20 @@ public partial class ServerCar : CharacterBody3D
     {
         var p = Flies ? Flight.Position : new System.Numerics.Vector3(GlobalPosition.X, GlobalPosition.Y, GlobalPosition.Z);
         var f = Def.Flight;
-        var tilt = Def.Tilts && Flies; // a trailer's narrow hull is for shots, blasts and the on-foot box; against other vehicles it stays the wide upright footprint (#482)
+        var tilt = Flies || Drives; // a trailer's narrow hull is for shots, blasts and the on-foot box; against other vehicles it stays the wide upright footprint (#482)
+        var (pitch, roll) = HullTilt;
         return new ContactShape(p, State.Yaw, HalfWidth, HalfLength, Def.Height, f?.RotorRadius ?? 0, f?.RotorHeight ?? 0, f?.RotorThickness ?? 0,
-            tilt ? Flight.Pitch : 0, tilt ? Flight.Roll : 0, tilt ? Def.HullBoxes : null);
+            tilt ? pitch : 0, tilt ? roll : 0, tilt ? Def.HullBoxes : null);
     }
 
     /// <summary>
-    /// The pitch and roll the hull (<see cref="VehicleDef.Tilts"/>) is turned by: the flight state's for an aircraft, a trailer's ground fit (<see cref="TrailerTilt"/>), else none.
-    /// The one place a type's attitude source is chosen: a ground vehicle's drive state (<c>Drive.Pitch</c>/<c>Roll</c>) joins here when its hull tilts (#483).
+    /// The pitch and roll the hull (<see cref="VehicleDef.Tilts"/>) is turned by: the flight state's for an aircraft, a trailer's ground fit (<see cref="TrailerTilt"/>), a driven vehicle's slope
+    /// (<c>Drive.Pitch</c>/<c>Roll</c>, the numbers its drive record carries; level once settled afloat, as the record says). The body springs' lean (<c>DriveBody</c>) is not in it. The one place a type's attitude source is chosen (#483).
     /// </summary>
     public (float Pitch, float Roll) HullTilt =>
         Flies ? (Flight.Pitch, Flight.Roll)
         : TrailerTilt is { } t ? (t.Pitch, t.Roll)
+        : Drives ? (Drive.Pitch, Drive.Roll) // (a throw sets both to 0, PlaceThrown; afloat the drive step settles them to 0)
         : (0f, 0f);
 
     /// <summary>The point the hull's frame has its origin at: the trailer's origin when turned about its axle (<see cref="TrailerTilt"/>), else the node's.</summary>

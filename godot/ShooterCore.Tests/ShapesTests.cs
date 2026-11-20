@@ -199,7 +199,7 @@ public class HelicopterHullTests
             new HullBox(0, -0.5f, 1.3f, 3.5f, 0, 3.0f), new HullBox(0, 5.5f, 0.35f, 2.5f, 1.45f, 2.8f), new HullBox(0, 8.43f, 0.35f, 0.43f, 1.5f, 4.35f),
         }, Heli.HullBoxes);
         Assert.True(Heli.Tilts);
-        Assert.False(Car.Tilts);
+        Assert.True(Car.Tilts); // every driven type's one box tilts with its slope (#483)
         Assert.Equal(new[] { HullBox.Upright(Car.HalfWidth, Car.HalfLength, Car.Height) }, Car.HullBoxes);
         foreach (var v in Data.Vehicles.Vehicles.Where(v => v.Id is not ("utility_helicopter" or "rocket_cart"))) Assert.Null(v.Hull); // (the rocket cart's is #482)
     }
@@ -295,7 +295,7 @@ public class HelicopterHullTests
         Assert.Equal(1.65f, HullDistance.Of(new Vector3(2, 2.0f, 5.5f), feet, 0, 0, 0, Heli), 3);
         Assert.Equal(0f, HullDistance.Of(new Vector3(0, 2.0f, 5.5f), feet, 0, 0, 0, Heli), 4); // inside the boom, beyond the old single box (it ended at z 4.0)
         // a car: the upright box, as VehicleDamage has it
-        Assert.Equal(VehicleDamage.DistanceToBox(new Vector3(4, 1, 0), feet, 0.3f, Car.HalfWidth, Car.HalfLength, Car.Height), HullDistance.Of(new Vector3(4, 1, 0), feet, 0.3f, 0.2f, 0.2f, Car), 4);
+        Assert.Equal(VehicleDamage.DistanceToBox(new Vector3(4, 1, 0), feet, 0.3f, Car.HalfWidth, Car.HalfLength, Car.Height), HullDistance.Of(new Vector3(4, 1, 0), feet, 0.3f, 0f, 0f, Car), 4); // (level: a tilted car is DriveSlopeHullTests)
     }
 
     [Fact]

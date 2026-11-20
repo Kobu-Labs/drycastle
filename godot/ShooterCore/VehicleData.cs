@@ -131,7 +131,7 @@ public class VehiclesFile : IVersioned
             if (v.Height <= 0 || v.HalfWidth <= 0 || v.HalfLength <= 0) throw new DataFileException($"vehicles.json: {v.Id}: height, half_width and half_length must be positive");
             if (v.Hull is { } hull && (hull.Count == 0 || hull.Any(b => b == null || b.Length != 6 || !(b[2] > 0) || !(b[3] > 0) || !(b[5] > b[4]) || b.Any(x => !float.IsFinite(x)))))
                 throw new DataFileException($"vehicles.json: {v.Id}: hull is a list of [cx, cz, half_width, half_length, y0, y1] with positive half sizes and y1 above y0");
-            if (v.Hull != null && v.Flight == null && v.Trailer == null) throw new DataFileException($"vehicles.json: {v.Id}: a hull list tilts by the vehicle's attitude: it is for a flying type or a trailer (the ground fit); other ground vehicles wait for #483");
+            if (v.Hull != null && v.Flight == null && v.Trailer == null) throw new DataFileException($"vehicles.json: {v.Id}: a hull list is for a flying type or a trailer; a driven ground vehicle gets one box from half_width, half_length and height, tilted by its slope (#483)");
             if (v.EnterRadius is < 0 || f.EnterRadius < 0) throw new DataFileException($"vehicles.json: {v.Id}: enter_radius must not be negative");
             if (v.RunOverMass is { } rm && rm <= 0) throw new DataFileException($"vehicles.json: {v.Id}: run_over_mass must be positive");
             if (!VehicleMedium.All.Contains(v.Medium)) throw new DataFileException($"vehicles.json: {v.Id}: medium {v.Medium} is not land, amphibious or air");
@@ -843,8 +843,8 @@ public class VehicleDef
     public float Height { get; set; } = 1.2f;
     /// <summary>
     /// The hull as several boxes instead of the one upright box over the footprint (<see cref="HalfWidth"/>, <see cref="HalfLength"/>, <see cref="Height"/>): [cx, cz, half_width, half_length, y0, y1] each, in the
-    /// vehicle's node frame, metres (the utility helicopter: cabin, tail boom, fin). They are both Hit shape and Body shape (ADR 0028) and tilt with the vehicle's pitch and roll (an aircraft's flight state, a trailer's ground fit, <see cref="TrailerAttitude"/>; vehicle-to-vehicle contact of a trailer keeps the footprint).
-    /// Null: the one upright box, turned by the yaw only. <see cref="HalfWidth"/>, <see cref="HalfLength"/> and <see cref="Height"/> stay the footprint the run-over, the enter reach and the seat schematic read.
+    /// vehicle's node frame, metres (the utility helicopter: cabin, tail boom, fin). They are both Hit shape and Body shape (ADR 0028) and tilt with the vehicle's pitch and roll (an aircraft's flight state, a trailer's ground fit, <see cref="TrailerAttitude"/>, a driven vehicle's slope; vehicle-to-vehicle contact of a trailer keeps the footprint).
+    /// Null: the one box over the footprint, tilted the same way. <see cref="HalfWidth"/>, <see cref="HalfLength"/> and <see cref="Height"/> stay the footprint the run-over, the enter reach and the seat schematic read.
     /// </summary>
     public List<float[]>? Hull { get; set; }
 
@@ -852,8 +852,8 @@ public class VehicleDef
     /// <summary>The boxes of the hull (<see cref="Hull"/>), or the one upright box of a type without one.</summary>
     public HullBox[] HullBoxes => _hullBoxes ??= Hull is { } h ? h.Select(b => new HullBox(b[0], b[1], b[2], b[3], b[4], b[5])).ToArray() : new[] { HullBox.Upright(HalfWidth, HalfLength, Height) };
 
-    /// <summary>Whether the hull's boxes tilt with the pitch and roll (a type with a <see cref="Hull"/> list); the one upright box turns with the yaw only.</summary>
-    public bool Tilts => Hull != null;
+    /// <summary>Whether the hull's boxes tilt with the pitch and roll: a type with an attitude (an aircraft, a trailer, a driven ground vehicle: every type in vehicles.json); one box or a <see cref="Hull"/> list alike (#483).</summary>
+    public bool Tilts => Flight != null || Trailer != null || Drive != null;
 
     /// <summary>
     /// How far from the origin the hull reaches, metres (a cheap distance for a broad test): the footprint's half length and width added for the one upright box; for a <see cref="Hull"/>, the farthest corner of any
