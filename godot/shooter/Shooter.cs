@@ -268,6 +268,10 @@ public partial class Shooter : Node3D
             warm();
             await Step(ld, "loading.world", 0.75f);
         }
+        // the pooled effects drawn once in a hidden viewport, so their pipelines compile now and not on the first shot and blast (#457)
+        var fx = EffectWarm.Begin(this);
+        for (var i = 0; fx != null && i < EffectWarm.Frames; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        EffectWarm.Finish(fx);
     }
 
     async Task BeginGame(string host, int port, string name)
