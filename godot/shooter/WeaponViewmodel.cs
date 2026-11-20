@@ -37,10 +37,29 @@ public sealed partial class WeaponViewmodel : Node3D
     public Node3D? Current => _models.GetValueOrDefault(_current);
 
     /// <summary>World position of the held weapon's barrel tip, or null when nothing is shown.</summary>
-    public Vector3? MuzzlePosition => Current is { Visible: true } n && n.GetNodeOrNull<Node3D>("Muzzle") is { } m && m.IsInsideTree() ? m.GlobalPosition : null;
+    public Vector3? MuzzlePosition => Current is { Visible: true } n && MuzzleOf(n) is { } m && m.IsInsideTree() ? m.GlobalPosition : null;
 
     /// <summary>Flash the current weapon's muzzle (no-op for melee / nothing shown).</summary>
-    public void Flash(float scale) { if (Current is { Visible: true } n) MuzzleFlash.Of(n)?.Flash(scale); }
+    public void Flash(float scale)
+    {
+        if (Current is not { Visible: true } n || MuzzleOf(n) is not { } m) return;
+        if (_mzFlash == null || !GodotObject.IsInstanceValid(_mzFlash)) _mzFlash = m.GetNodeOrNull<MuzzleFlash>("Flash");
+        _mzFlash?.Flash(scale);
+    }
+
+    Node3D? _mzModel, _mz; // the model the cached Muzzle marker (and its flash) belong to: looked up by name once per model, not per shot
+    MuzzleFlash? _mzFlash;
+
+    Node3D? MuzzleOf(Node3D model)
+    {
+        if (!ReferenceEquals(_mzModel, model) || _mz == null || !GodotObject.IsInstanceValid(_mz))
+        {
+            _mzModel = model;
+            _mz = model.GetNodeOrNull<Node3D>("Muzzle");
+            _mzFlash = _mz?.GetNodeOrNull<MuzzleFlash>("Flash");
+        }
+        return _mz;
+    }
 
     static readonly Vector3 HipPosition = new(0.24f, -0.22f, -0.5f);
     const float AdsDepth = -0.42f, AdsRate = 14f;

@@ -424,10 +424,31 @@ public sealed partial class CharacterView : Node3D
     }
 
     /// <summary>Barrel tip of the held weapon in world space, or null when nothing is held.</summary>
-    public Vector3? MuzzlePosition => _held != null && GodotObject.IsInstanceValid(_held) && _held.IsInsideTree() ? _held.GetNodeOrNull<Node3D>("Muzzle")?.GlobalPosition : null;
+    public Vector3? MuzzlePosition => _held != null && GodotObject.IsInstanceValid(_held) && _held.IsInsideTree() && HeldMuzzle() is { } m && m.IsInsideTree() ? m.GlobalPosition : null;
+
+    Node3D? _muzzleOf, _muzzle; // the held weapon the cached muzzle and its flash belong to
+    MuzzleFlash? _muzzleFlash;
+
+    /// <summary>The held weapon's Muzzle marker, looked up by name once per held weapon (not per shot); a weapon without one is looked up again next time.</summary>
+    Node3D? HeldMuzzle()
+    {
+        if (_held == null || !GodotObject.IsInstanceValid(_held)) return null;
+        if (!ReferenceEquals(_muzzleOf, _held) || _muzzle == null || !GodotObject.IsInstanceValid(_muzzle))
+        {
+            _muzzleOf = _held;
+            _muzzle = _held.GetNodeOrNull<Node3D>("Muzzle");
+            _muzzleFlash = _muzzle?.GetNodeOrNull<MuzzleFlash>("Flash");
+        }
+        return _muzzle;
+    }
 
     /// <summary>Flash the held weapon's muzzle.</summary>
-    public void Flash(float scale = 1f) => MuzzleFlash.Of(_held)?.Flash(scale);
+    public void Flash(float scale = 1f)
+    {
+        if (HeldMuzzle() == null) return;
+        if (_muzzleFlash == null || !GodotObject.IsInstanceValid(_muzzleFlash)) _muzzleFlash = _muzzle!.GetNodeOrNull<MuzzleFlash>("Flash");
+        _muzzleFlash?.Flash(scale);
+    }
 
     void SetWeapon(string id)
     {
