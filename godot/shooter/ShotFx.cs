@@ -23,8 +23,7 @@ public static class ShotFx
 
     // the pools hang under one node in the world they were built for; a new world (a new match) builds fresh ones
     static Node3D? _poolRoot, _poolWorld;
-    static Node3D[]? _tracers;
-    static Tween?[]? _tracerTweens;
+    static TracerPivot[]? _tracers;
     static int _tracerNext;
     static CpuParticles3D[]? _sparks;
     static int _sparkNext;
@@ -51,11 +50,10 @@ public static class ShotFx
         _poolRoot = new Node3D { Name = "ShotFxPool" };
         world.AddChild(_poolRoot);
         _poolWorld = world;
-        _tracers = new Node3D[TracerPool];
-        _tracerTweens = new Tween?[TracerPool];
+        _tracers = new TracerPivot[TracerPool];
         for (var k = 0; k < TracerPool; k++)
         {
-            var pivot = new Node3D { Visible = false };
+            var pivot = new TracerPivot { Visible = false };
             pivot.AddChild(new MeshInstance3D { Mesh = _tracerMesh, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off });
             _poolRoot.AddChild(pivot);
             _tracers[k] = pivot;
@@ -104,7 +102,6 @@ public static class ShotFx
         var len = Mathf.Min(length, dist);
         var k = _tracerNext;
         _tracerNext = (_tracerNext + 1) % _tracers!.Length;
-        _tracerTweens![k]?.Kill(); // a tracer still in flight in this slot is taken over by the new shot
         var pivot = _tracers[k];
         var up = Mathf.Abs(dir.Y) > 0.99f ? Vector3.Right : Vector3.Up;
         // the streak's tail starts at the muzzle and its head ends at the end point; it travels the distance minus its own length
@@ -112,11 +109,7 @@ public static class ShotFx
         var end = to - dir * (len * 0.5f);
         pivot.LookAtFromPosition(start, start + dir, up);
         pivot.Scale = new Vector3(width, width, len); // look_at resets the basis, so the streak's length (and the width, a multiple of the 3 cm mesh) is set after it
-        pivot.Visible = true;
-        var tw = pivot.CreateTween();
-        _tracerTweens[k] = tw;
-        tw.TweenProperty(pivot, "position", end, Mathf.Max(0.03f, (dist - len) / speed));
-        tw.TweenCallback(Callable.From(() => pivot.Visible = false));
+        pivot.Fly(start, end, Mathf.Max(0.03f, (dist - len) / speed)); // a tracer still in flight in this slot is taken over by the new shot
     }
 
     /// <summary>A puff of about 8 sparks thrown back along <paramref name="normal"/>, from the spark pool (gone after 0.3 s).</summary>
