@@ -19,11 +19,11 @@ public sealed partial class HuntersLogScreen
     sealed class RowCells
     {
         public ContentButton Btn = null!;
-        public Label When = null!, Species = null!, Kg = null!, Distance = null!, Weapon = null!, PillText = null!;
+        public Label When = null!, Species = null!, Kg = null!, Distance = null!, Weapon = null!;
         public PlayerLink Player = null!;
         public AnimalPicture Icon = null!;
         public BlurText Blur = null!;
-        public PanelContainer Pill = null!;
+        public RecordBadge Pill = null!;
         public Control PlayerCell = null!;
     }
 
@@ -375,9 +375,7 @@ public sealed partial class HuntersLogScreen
         names.AddChild(r.Icon);
         r.Species = Cell("InkSmall", HorizontalAlignment.Left, 1);
         r.Blur = new BlurText(Strings.T("hunt.hidden.name"), "InkSmall") { Visible = false };
-        r.Pill = new PanelContainer { ThemeTypeVariation = "LogPill", Visible = false, MouseFilter = MouseFilterEnum.Ignore, SizeFlagsVertical = SizeFlags.ShrinkCenter };
-        r.PillText = Text("", "LogSealText");
-        r.Pill.AddChild(r.PillText);
+        r.Pill = new RecordBadge(Skin) { Visible = false };
         names.AddChild(r.Species); names.AddChild(r.Blur);
         r.Pill.SetAnchorsPreset(Control.LayoutPreset.CenterRight);
         r.Pill.GrowHorizontal = Control.GrowDirection.Begin; r.Pill.GrowVertical = Control.GrowDirection.Both;
@@ -414,8 +412,8 @@ public sealed partial class HuntersLogScreen
         r.Blur.Visible = h.Hidden;
         r.Species.Text = h.Hidden ? "" : HuntSpeciesName(h);
         var mark = HuntRecords.MarkOf(Data.Records.Data?.Records, h);
-        r.Pill.Visible = mark != RecordMark.None;
-        r.PillText.Text = mark == RecordMark.Weight ? Strings.T("log.pill.kg") : mark == RecordMark.Shot ? Strings.T("log.pill.shot") : "";
+        r.Pill.Set(mark);
+        r.Pill.TooltipText = mark == RecordMark.Weight ? Strings.T("log.pill.kg") : mark == RecordMark.Shot ? Strings.T("log.pill.shot") : "";
         r.Kg.Text = Kg(h.Kg);
         r.Distance.Text = Metres(h.DistanceM);
         r.Weapon.Text = _env.WeaponName(h.Weapon);

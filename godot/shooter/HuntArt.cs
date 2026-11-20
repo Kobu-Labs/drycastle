@@ -134,6 +134,74 @@ public static class HuntArt
         return true;
     });
 
+    // ---- the record badge (a winner's medal on a ribbon, two kinds: a measuring tape for the longest shot, a weight marked "kg" for the heaviest) ----
+
+    const double BadgeX = .5, BadgeY = .42, BadgeR = .36;
+    static Texture2D? _badgeRibbon, _badgeDisc, _badgeRing, _badgeTape, _badgeWeight;
+
+    /// <summary>The two ribbon tails behind the medal (the drawer tints them darker than the disc).</summary>
+    public static Texture2D BadgeRibbon => _badgeRibbon ??= BuildMask(p =>
+    {
+        foreach (var sg in new[] { -1, 1 })
+        {
+            var pts = new (double X, double Y)[]
+            {
+                (BadgeX + sg * .25 * BadgeR, BadgeY + .6 * BadgeR), (BadgeX + sg * .85 * BadgeR, BadgeY + .6 * BadgeR), (BadgeX + sg * .85 * BadgeR, .97),
+                (BadgeX + sg * .55 * BadgeR, .88), (BadgeX + sg * .25 * BadgeR, .97),
+            };
+            if (InPoly(p.x, p.y, pts)) return true;
+        }
+        return false;
+    });
+
+    /// <summary>The medal's disc.</summary>
+    public static Texture2D BadgeDisc => _badgeDisc ??= BuildMask(p => Math.Sqrt(Math.Pow(p.x - BadgeX, 2) + Math.Pow(p.y - BadgeY, 2)) <= BadgeR);
+
+    /// <summary>The thin ring inside the disc.</summary>
+    public static Texture2D BadgeRing => _badgeRing ??= BuildMask(p =>
+    {
+        var d = Math.Sqrt(Math.Pow(p.x - BadgeX, 2) + Math.Pow(p.y - BadgeY, 2));
+        return d <= .82 * BadgeR && d >= .82 * BadgeR - .021;
+    });
+
+    /// <summary>The longest shot's emblem: a tape strip with its ticks (the same strip as <see cref="Tape"/>, on the medal).</summary>
+    public static Texture2D BadgeTape => _badgeTape ??= BuildMask(p =>
+    {
+        double w = 1.25 * BadgeR, h = .46 * BadgeR, x0 = BadgeX - w / 2, y0 = BadgeY - h / 2;
+        if (p.x < x0 || p.x > x0 + w || p.y < y0 || p.y > y0 + h) return false;
+        for (var i = 0; i < 9; i++)
+            if (Math.Abs(p.x - (x0 + w * (i + .5) / 9)) <= w * .012 && p.y <= y0 + h * (i % 2 == 0 ? .55 : .32)) return false;
+        return true;
+    });
+
+    /// <summary>The heaviest's emblem: an old iron weight with a ring handle and "kg" cut out of its body.</summary>
+    public static Texture2D BadgeWeight => _badgeWeight ??= BuildMask(p =>
+    {
+        double s = 1.25 * BadgeR, cy = BadgeY + .05 * BadgeR, top = cy - .28 * s, bot = cy + .46 * s;
+        // the ring handle
+        double r = .2 * s, hy = top - .36 * s + r, hd = Math.Sqrt(Math.Pow(p.x - BadgeX, 2) + Math.Pow(p.y - hy, 2));
+        var handle = hd <= r && hd >= r - .08 * s;
+        var body = false;
+        if (p.y >= top && p.y <= bot)
+        {
+            var half = (.28 + .22 * (p.y - top) / (bot - top)) * s;
+            body = Math.Abs(p.x - BadgeX) <= half;
+        }
+        if (!body) return handle;
+        // "kg": strokes of width t, in a box centred on the body
+        double t = .085 * s, h = .46 * s, ty = cy + .12 * s, asc = ty - .5 * h, xt = ty - .12 * h, bas = ty + .3 * h, desc = ty + .5 * h, mid = (xt + bas) / 2;
+        double kx = BadgeX - .2 * s, gx = BadgeX + .08 * s, gw = .2 * s;
+        bool Seg(double ax, double ay, double bx, double by)
+        {
+            double dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy, u = l2 == 0 ? 0 : Math.Clamp(((p.x - ax) * dx + (p.y - ay) * dy) / l2, 0, 1);
+            return Math.Sqrt(Math.Pow(p.x - (ax + u * dx), 2) + Math.Pow(p.y - (ay + u * dy), 2)) <= t / 2;
+        }
+        var k = Seg(kx, asc, kx, bas) || Seg(kx + .17 * s, xt, kx, mid + .02 * h) || Seg(kx + .02 * s, mid, kx + .18 * s, bas);
+        double ga = gw / 2, gb = (bas - xt) / 2, rho = Math.Sqrt(Math.Pow((p.x - (gx + ga)) / ga, 2) + Math.Pow((p.y - mid) / gb, 2));
+        var g = (rho <= 1 && rho >= 1 - t / Math.Min(ga, gb)) || Seg(gx + gw, xt + t / 2, gx + gw, desc - t) || Seg(gx + gw, desc - t, gx + .1 * gw, desc - .2 * t);
+        return !(k || g);
+    });
+
     /// <summary>The "when" icon: a calendar page with its two rings and a grid of days.</summary>
     public static Texture2D Calendar => _calendar ??= BuildMask(p =>
     {

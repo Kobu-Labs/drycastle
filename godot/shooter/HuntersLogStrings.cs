@@ -12,7 +12,7 @@ public static class HuntersLogStrings
         ("log.close", "Close"), ("log.back", "Back"),
         ("log.sandbox", "Sandbox: hunts are not logged"),
         // my log
-        ("log.stat.hunts", "Hunts"), ("log.stat.species", "Species"), ("log.stat.heaviest", "Heaviest"), ("log.stat.longest", "Longest shot"), ("log.stat.kill", "Longest kill"), ("log.none", "-"),
+        ("log.stat.hunts", "Hunts"), ("log.stat.species", "Species"), ("log.stat.heaviest", "Heaviest"), ("log.stat.longest", "Longest shot"), ("log.none", "-"),
         ("log.life.title", "Life List"), ("log.life.count", "{0} of {1}"), ("log.sec.game", "Regular"), ("log.sec.mystery", "Mystery"),
         ("log.tier.gold", "Gold"), ("log.tier.silver", "Silver"), ("log.tier.bronze", "Bronze"), ("log.tile.tier", "{0} kg, {1}"),
         ("log.legend.gold", "Gold, top 5%"), ("log.legend.silver", "Silver, top 10%"), ("log.legend.bronze", "Bronze, top 20%"),

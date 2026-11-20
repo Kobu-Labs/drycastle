@@ -43,7 +43,6 @@ public sealed partial class HuntersLogScreen
         stats.AddChild(Stat($"{log.Species} / {HuntSpecies.Keys.Count}", Strings.T("log.stat.species"), null));
         stats.AddChild(Stat(Kg(log.Heaviest?.Kg), Strings.T("log.stat.heaviest"), log.Heaviest));
         stats.AddChild(Stat(Metres(log.Longest?.DistanceM), Strings.T("log.stat.longest"), log.Longest));
-        stats.AddChild(Stat(Metres(log.Kill?.DistanceM), Strings.T("log.stat.kill"), null));
         _logHost.AddChild(stats);
 
         // what the rims mean, centred under the plates
