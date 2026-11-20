@@ -195,11 +195,24 @@ public class GrenadeTests
     }
 
     [Fact]
-    public void Splash_follows_the_weapons_numbers_and_halves_on_the_thrower()
+    public void Standing_on_or_within_a_metre_of_the_grenade_kills_the_thrower_too()
     {
         var w = Grenade;
-        Assert.Equal(w.Damage, ProjectileMath.SplashDamage(w, 0.5f, false));
-        Assert.Equal(MathF.Round(w.Damage * w.Splash!.SelfDamageMultiplier), ProjectileMath.SplashDamage(w, 0.5f, true));
-        Assert.Equal(0, ProjectileMath.SplashDamage(w, w.Splash.Radius + 0.1f, false));
+        foreach (var d in new[] { 0f, 0.5f, 1f })
+        {
+            Assert.True(ProjectileMath.SplashDamage(w, d, false) >= MoveConsts.MaxHealth, $"others at {d} m");
+            Assert.True(ProjectileMath.SplashDamage(w, d, true) >= MoveConsts.MaxHealth, $"the thrower at {d} m");
+        }
+        Assert.Equal(0, ProjectileMath.SplashDamage(w, w.Splash!.Radius + 0.1f, false));
+        Assert.True(ProjectileMath.SplashDamage(w, 3f, false) < MoveConsts.MaxHealth); // the kill zone is tight: further out it wounds
+    }
+
+    [Fact]
+    public void A_grenade_comes_to_rest_a_body_radius_above_the_floor()
+    {
+        var g = Grenade.Grenade!;
+        var s = GrenadeFlight.Step(g, new Vector3(0, 0.2f, 0), new Vector3(0, -9f, 0), Dt, Floor);
+        Assert.True(s.Bounced);
+        Assert.True(s.Pos.Y >= GrenadeFlight.Skin - 1e-4f, $"stopped at {s.Pos.Y}");
     }
 }
