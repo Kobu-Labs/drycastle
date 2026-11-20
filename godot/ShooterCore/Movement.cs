@@ -68,6 +68,8 @@ public enum MoveButtons
     /// shows them on the rider's figure (<see cref="RiderPose"/>). Clear in the chase view, where the yaw is the camera's orbit and the head faces ahead.
     /// </summary>
     HeadLook = 2048,
+    /// <summary>Grenade throw key (G by default), held: aims the throw, and the release throws (see <see cref="GrenadeThrower"/>). With <see cref="Aim"/> held at the release the throw is put away.</summary>
+    Throw = 4096,
 }
 
 /// <summary>One tick of player input: movement axes (x = strafe right, y = forward, each -1..1), look yaw in radians, buttons.</summary>

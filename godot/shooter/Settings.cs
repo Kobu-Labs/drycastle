@@ -227,11 +227,11 @@ public static class InputBindings
         ("hunters_log", Binding.Key((int)Key.J)),
         ("mineral_log", Binding.Key((int)Key.N)),
         ("binoculars", Binding.Key((int)Key.B)),
-        ("scud_screen", Binding.Key((int)Key.G)), ("scud_confirm", Binding.Key((int)Key.Enter)), ("scud_abort", Binding.Key((int)Key.Backspace)),
+        ("scud_screen", Binding.Key((int)Key.G)), ("throw_grenade", Binding.Key((int)Key.G)), ("scud_confirm", Binding.Key((int)Key.Enter)), ("scud_abort", Binding.Key((int)Key.Backspace)),
     };
 
     /// <summary>Actions that may hold the same key because they are never active together: the vehicle view acts only in a vehicle, the rozhlas talk key (hold, the set holder) only on foot (<see cref="BindingMap.Shares"/>).</summary>
-    public static readonly (string, string)[] Sharing = { ("vehicle_view", "rozhlas_talk") };
+    public static readonly (string, string)[] Sharing = { ("vehicle_view", "rozhlas_talk"), ("scud_screen", "throw_grenade") };
 
     public static BindingMap NewMap() => new(Defaults, Sharing);
 

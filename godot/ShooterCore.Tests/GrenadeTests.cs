@@ -42,17 +42,108 @@ public class GrenadeTests
     }
 
     [Fact]
-    public void A_throw_uses_a_round_and_the_next_waits_for_the_reload()
+    public void A_throw_uses_a_round_and_the_next_waits_for_the_cooldown_whatever_is_selected()
+    {
+        var weapons = new PlayerWeapons(File, hotbar: LoadoutHotbar.Build(File, null));
+        var gi = File.Weapons.IndexOf(Grenade);
+        var selected = weapons.Slot;
+        Assert.NotEqual(gi + 1, selected);
+        var shot = weapons.TryThrow(1.0);
+        Assert.NotNull(shot);
+        Assert.Equal(gi, shot!.Value.WeaponIndex);
+        Assert.Equal(selected, weapons.Slot); // the weapon in hand stays selected
+        Assert.Equal(1, weapons.Mag(gi + 1));
+        Assert.Equal(Grenade.ReserveAmmo - 1, weapons.Reserve(gi + 1));
+        Assert.Null(weapons.TryThrow(1.0 + Dt));
+        Assert.NotNull(weapons.TryThrow(1.0 + Grenade.ReloadTime + Dt));
+    }
+
+    [Fact]
+    public void The_trigger_does_not_throw_a_selected_grenade()
     {
         var weapons = new PlayerWeapons(File, hotbar: LoadoutHotbar.Build(File, null));
         var slot = File.Weapons.IndexOf(Grenade) + 1;
         weapons.Update(1.0, new WeaponInput(false, false, slot, false));
         Assert.Equal(slot, weapons.Slot);
-        var shot = weapons.Update(1.0 + Dt, new WeaponInput(true, false, 0, false));
-        Assert.NotNull(shot);
-        Assert.Equal(0, weapons.Mag(slot));
-        Assert.Equal(Grenade.ReserveAmmo, weapons.Reserve(slot));
-        Assert.Null(weapons.Update(1.0 + 2 * Dt, new WeaponInput(false, false, 0, false)));
+        Assert.Null(weapons.Update(1.0 + Dt, new WeaponInput(true, false, 0, false)));
+        Assert.Equal(Grenade.MagazineSize, weapons.Mag(slot));
+    }
+
+    [Fact]
+    public void Last_round_gone_means_no_throw()
+    {
+        var weapons = new PlayerWeapons(File, hotbar: LoadoutHotbar.Build(File, null));
+        var t = 1.0; var n = 0;
+        while (weapons.TryThrow(t) != null) { n++; t += 5; }
+        Assert.Equal(Grenade.MagazineSize + Grenade.ReserveAmmo, n);
+        Assert.False(weapons.HasGrenade);
+    }
+
+    [Fact]
+    public void Holding_the_key_aims_and_the_release_throws()
+    {
+        var k = new GrenadeThrower();
+        Assert.Equal(GrenadeThrowStep.None, k.Tick(true, false, true));
+        Assert.True(k.Aiming);
+        Assert.Equal(GrenadeThrowStep.None, k.Tick(true, false, true));
+        Assert.Equal(GrenadeThrowStep.Throw, k.Tick(false, false, true));
+        Assert.False(k.Aiming);
+        Assert.Equal(GrenadeThrowStep.None, k.Tick(false, false, true));
+    }
+
+    [Fact]
+    public void The_aim_key_at_the_release_puts_the_grenade_away()
+    {
+        var k = new GrenadeThrower();
+        k.Tick(true, false, true);
+        Assert.Equal(GrenadeThrowStep.Cancel, k.Tick(false, true, true));
+        Assert.False(k.Aiming);
+    }
+
+    [Fact]
+    public void Losing_the_right_to_aim_cancels_and_a_key_held_into_it_does_not_start_an_aim()
+    {
+        var k = new GrenadeThrower();
+        k.Tick(true, false, true);
+        Assert.Equal(GrenadeThrowStep.Cancel, k.Tick(true, false, false)); // got into a vehicle with G held
+        Assert.Equal(GrenadeThrowStep.None, k.Tick(true, false, true));    // still held: no fresh press, no aim
+        Assert.False(k.Aiming);
+        k.Tick(false, false, true);
+        k.Tick(true, false, true);
+        Assert.True(k.Aiming);
+    }
+
+    [Fact]
+    public void A_press_where_g_belongs_to_something_else_does_not_aim()
+    {
+        var k = new GrenadeThrower();
+        Assert.Equal(GrenadeThrowStep.None, k.Tick(true, false, GrenadeThrower.CanAim(true, true, false, true, scudScreen: true)));
+        Assert.False(k.Aiming);
+        Assert.False(GrenadeThrower.CanAim(onFoot: false, true, false, true, false)); // seated (a Scud seat opens its screen with G)
+        Assert.False(GrenadeThrower.CanAim(true, true, false, hasRound: false, false));
+        Assert.False(GrenadeThrower.CanAim(true, handsFree: false, false, true, false));
+        Assert.False(GrenadeThrower.CanAim(true, true, onLadder: true, true, false));
+        Assert.True(GrenadeThrower.CanAim(true, true, false, true, false));
+    }
+
+    [Fact]
+    public void The_aim_arc_is_the_flight_the_server_flies_and_reaches_further_than_it_used_to()
+    {
+        var g = Grenade.Grenade!;
+        Assert.True(Grenade.ProjectileSpeed > 17f);
+        var from = new Vector3(0, 1.6f, 0);
+        var dir = Vector3.Normalize(new Vector3(1, 0.3f, 0));
+        var vel = dir * Grenade.ProjectileSpeed;
+        var arc = GrenadeArc.Fly(g, from, vel, Floor);
+        var pos = from; var v = vel;
+        for (var k = 0; k < arc.Points.Count - 1; k++)
+        {
+            var s = GrenadeFlight.Step(g, pos, v, Dt, Floor);
+            pos = s.Pos; v = s.Vel;
+            Assert.Equal(arc.Points[k + 1], pos);
+        }
+        Assert.NotEmpty(arc.Bounces);
+        Assert.True(arc.Bounces[0].X > 17f); // the first landing is further than the old 17 m/s throw could reach on the level
     }
 
     [Fact]
