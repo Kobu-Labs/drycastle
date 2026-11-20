@@ -90,14 +90,13 @@ public partial class NetClient
         if (v.Trailer != null) { OnTrailerRecord(v, rec); v.Driver = 0; } // a trailer's pitch field is its tractor's id, not a driver's (protocol 67)
         else v.Driver = VehicleRecord.Driver(rec);
         v.Lights = VehicleRecord.Lights(rec);
+        v.Braking = v.Trailer == null && VehicleRecord.Braking(rec); // the server's brakes bit, not a guess from the speed (#409)
         SetVehicleDamage(v, VehicleRecord.Stage(rec), rec.State == EntityState.Dead);
         ApplyWheels(v, VehicleRecord.Wheels(rec)); // the wheels the Thieves took
         if (tick > v.LastTick && v.LastTick != 0)
         {
             var d = NVec3.Distance(rec.Position, v.Pos) / ((tick - v.LastTick) / (float)Wire.TickRate);
-            var before = v.Kmh;
             v.Kmh += (d * 3.6f - v.Kmh) * 0.3f;
-            v.Braking = before - v.Kmh > 0.5f; // the record has no brake bit: a clear fall in speed reads as braking
         }
         v.LastTick = tick; v.Pos = rec.Position; v.Yaw = rec.YawRad;
         v.Buf.Push(tick, rec.Position, rec.YawRad, v.Trailer != null ? VehicleRecord.Tractor(rec) : 0); // a trailer's pitch slot carries its tractor's id, so it is drawn hitched exactly while the sample at the render tick says so (RenderTrailers)

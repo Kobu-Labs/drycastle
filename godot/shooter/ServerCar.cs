@@ -60,6 +60,8 @@ public partial class ServerCar : CharacterBody3D
     public ushort[]? SeatsSent;
     /// <summary>Headlights on (replicated as one bit, <see cref="VehicleRecord.Make"/>): set when a driver gets in at night, toggled by the H key, off when empty.</summary>
     public bool Lights;
+    /// <summary>Its brakes were on in the last step (handbrake, or the key against the travel); sent in the vehicle record for the brake lamps (#409).</summary>
+    public bool Braking => Drives ? Drive.Braking : State.Braking;
     public CarState State;
     public readonly Dictionary<ushort, double> HitCooldown = new();
 
