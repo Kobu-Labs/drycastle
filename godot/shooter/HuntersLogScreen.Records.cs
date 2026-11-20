@@ -25,7 +25,9 @@ public sealed partial class HuntersLogScreen
         var grid = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Alignment = FlowContainer.AlignmentMode.Center, MouseFilter = MouseFilterEnum.Ignore };
         grid.AddThemeConstantOverride("h_separation", ShooterTheme.Space * 2);
         grid.AddThemeConstantOverride("v_separation", ShooterTheme.Space * 2 + LogSkin.Tack);
-        foreach (var r in Data.Records.Data!) grid.AddChild(RecordCard(RecordCardModel.From(r)));
+        var answer = Data.Records.Data!;
+        foreach (var r in answer.Records) grid.AddChild(RecordCard(RecordCardModel.From(r)));
+        grid.AddChild(PlayerKillCard(answer.Kill));
         _recHost.AddChild(grid);
     }
 
@@ -69,6 +71,28 @@ public sealed partial class HuntersLogScreen
     }
 
     /// <summary>
+    /// The server's longest player kill (GLOSSARY "Player kill"): no animal, so the distance and three icon lines, the hunter and the victim (links to their logs) and the weapon.
+    /// Nobody has made one yet: the same lines with dashes, never a missing card.
+    /// </summary>
+    Control PlayerKillCard(PlayerKillView? k)
+    {
+        var card = new LogPaper(Skin, "LogCard") { CustomMinimumSize = new Vector2(ShooterTheme.LogCardW, 0) };
+        var v = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        v.AddThemeConstantOverride("separation", ShooterTheme.Space);
+        card.AddChild(v);
+        v.AddChild(Text(Strings.T("log.rec.kill"), "InkHead", HorizontalAlignment.Center));
+        v.AddChild(Text(Metres(k?.DistanceM), "InkHead", HorizontalAlignment.Center));
+        var lines = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        lines.AddThemeConstantOverride("separation", 2);
+        lines.AddChild(k == null ? StatLine(HuntArt.Person, Strings.T("log.none"), "InkSmall", tint: true) : PersonLink(k.Killer, () => OpenPlayerLog(k.KillerId, k.Killer), "InkSmall"));
+        lines.AddChild(k == null ? StatLine(HuntArt.Person, Strings.T("log.none"), "InkSmall", tint: true) : PersonLink(k.Victim, () => OpenPlayerLog(k.VictimId, k.Victim), "InkSmall"));
+        lines.AddChild(StatLine(HuntArt.Rifle, k == null ? Strings.T("log.none") : _env.WeaponName(k.Weapon), "InkSmall", tint: true));
+        v.AddChild(lines);
+        if (k == null) v.AddChild(Text(Strings.T("log.rec.kill.todo"), "InkDimSmall", wrap: true));
+        return card;
+    }
+
+    /// <summary>
     /// One recorded hit: its picture (the animal facing left, the bullet's entry marked), what the record is, the number, and who, with what, and where it hit (always the three lines).
     /// <paramref name="number"/> words the record's number (a weight, a distance, how long ago a Mystery creature was first caught); nothing recorded yet is a dash under an empty frame.
     /// </summary>
@@ -96,25 +120,26 @@ public sealed partial class HuntersLogScreen
         var v = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         v.AddThemeConstantOverride("separation", 2);
         if (full) v.AddChild(StatLine(HuntArt.Tape, Metres(h.DistanceM), variation, tint: true));
-        if (openHunter == null) v.AddChild(StatLine(HuntArt.Person, h.Hunter, variation, tint: true));
-        else
-        {
-            // the hunter is a link here: a button around the same line, the name underlined, a tooltip saying where it goes
-            var b = new ContentButton { ThemeTypeVariation = "LogRow", MinSize = Vector2.Zero, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, TooltipText = Strings.F("log.hit.open", h.Hunter), MouseDefaultCursorShape = CursorShape.PointingHand };
-            var line = StatLine(HuntArt.Person, "", variation, tint: true);
-            var link = new PlayerLink { Text = h.Hunter, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, VerticalAlignment = VerticalAlignment.Center, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
-            line.GetChild(1).QueueFree();
-            line.AddChild(link);
-            b.SetContent(line);
-            b.Pressed += openHunter;
-            b.MouseEntered += () => link.Hot = true;
-            b.MouseExited += () => link.Hot = false;
-            v.AddChild(b);
-        }
+        v.AddChild(openHunter == null ? StatLine(HuntArt.Person, h.Hunter, variation, tint: true) : PersonLink(h.Hunter, openHunter, variation));
         v.AddChild(StatLine(HuntArt.Rifle, _env.WeaponName(h.Weapon), variation, tint: true));
         v.AddChild(StatLine(HuntArt.Crosshair, AreaName(h), variation, tint: true));
         if (full) v.AddChild(StatLine(HuntArt.Calendar, AgoText(h.AtUnix), variation, tint: true));
         return v;
+    }
+
+    /// <summary>A person's line as a link: a button around the same line, the name underlined, a tooltip saying where it goes (their log).</summary>
+    static Control PersonLink(string name, Action open, string variation)
+    {
+        var b = new ContentButton { ThemeTypeVariation = "LogRow", MinSize = Vector2.Zero, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, TooltipText = Strings.F("log.hit.open", name), MouseDefaultCursorShape = CursorShape.PointingHand };
+        var line = StatLine(HuntArt.Person, "", variation, tint: true);
+        var link = new PlayerLink { Text = name, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, VerticalAlignment = VerticalAlignment.Center, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
+        line.GetChild(1).QueueFree();
+        line.AddChild(link);
+        b.SetContent(line);
+        b.Pressed += open;
+        b.MouseEntered += () => link.Hot = true;
+        b.MouseExited += () => link.Hot = false;
+        return b;
     }
 
     string AreaName(HuntView h) => HitAreas.Of(h.Diagram) switch

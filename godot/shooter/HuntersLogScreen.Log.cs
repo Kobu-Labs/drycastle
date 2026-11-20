@@ -35,13 +35,15 @@ public sealed partial class HuntersLogScreen
 
     void BuildLogContent(PlayerLogView log)
     {
-        // totals and bests: four metal plates
-        var stats = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
-        stats.AddThemeConstantOverride("separation", ShooterTheme.Space + ShooterTheme.Space / 2);
+        // totals and bests: five metal plates, centred, wrapping rather than cut when the panel is narrow
+        var stats = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Alignment = FlowContainer.AlignmentMode.Center, MouseFilter = MouseFilterEnum.Ignore };
+        stats.AddThemeConstantOverride("h_separation", ShooterTheme.Space + ShooterTheme.Space / 2);
+        stats.AddThemeConstantOverride("v_separation", ShooterTheme.Space + ShooterTheme.Space / 2);
         stats.AddChild(Stat(log.Hunts.ToString(), Strings.T("log.stat.hunts"), null));
         stats.AddChild(Stat($"{log.Species} / {HuntSpecies.Keys.Count}", Strings.T("log.stat.species"), null));
         stats.AddChild(Stat(Kg(log.Heaviest?.Kg), Strings.T("log.stat.heaviest"), log.Heaviest));
         stats.AddChild(Stat(Metres(log.Longest?.DistanceM), Strings.T("log.stat.longest"), log.Longest));
+        stats.AddChild(Stat(Metres(log.Kill?.DistanceM), Strings.T("log.stat.kill"), null));
         _logHost.AddChild(stats);
 
         // what the rims mean, centred under the plates

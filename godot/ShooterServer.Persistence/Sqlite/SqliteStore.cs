@@ -289,6 +289,17 @@ public sealed class SqliteProgressionStore : IProgressionStore
         public Task<IReadOnlyList<HuntRow>> GetAllAsync() => db.Read<IReadOnlyList<HuntRow>>(c =>
             Query(c, $"SELECT {HuntSql.Columns} FROM hunts h JOIN players p ON p.id = h.player_id ORDER BY h.hunted_at, h.id;", new List<object>(), ReadRow));
 
+        public Task SavePlayerKillAsync(PlayerKillRecord k) => db.Write("save player kill", c => Exec(c,
+            "INSERT INTO player_kills (killer_id, victim_id, distance_m, weapon, x, y, z, killed_at) VALUES ($k, $v, $d, $w, $x, $y, $z, $at) " +
+            "ON CONFLICT (killer_id) DO UPDATE SET victim_id = excluded.victim_id, distance_m = excluded.distance_m, weapon = excluded.weapon, x = excluded.x, y = excluded.y, z = excluded.z, killed_at = excluded.killed_at " +
+            "WHERE excluded.distance_m > player_kills.distance_m;",
+            ("$k", k.KillerId), ("$v", k.VictimId), ("$d", k.DistanceM), ("$w", k.Weapon), ("$x", k.X), ("$y", k.Y), ("$z", k.Z), ("$at", Stamp(k.AtUtc))));
+
+        public Task<IReadOnlyList<PlayerKillRow>> GetPlayerKillsAsync() => db.Read<IReadOnlyList<PlayerKillRow>>(c =>
+            Query(c, "SELECT k.killer_id, k.victim_id, killer.name, victim.name, k.distance_m, k.weapon, k.x, k.y, k.z, k.killed_at FROM player_kills k " +
+                "JOIN players killer ON killer.id = k.killer_id JOIN players victim ON victim.id = k.victim_id ORDER BY k.killed_at, k.killer_id;", new List<object>(),
+                r => new PlayerKillRow(new PlayerKillRecord(r.GetInt64(0), r.GetInt64(1), (float)r.GetDouble(4), r.GetString(5), (float)r.GetDouble(6), (float)r.GetDouble(7), (float)r.GetDouble(8), ParseStamp(r.GetString(9)).ToUniversalTime()), r.GetString(2), r.GetString(3))));
+
         static List<T> Query<T>(SqliteConnection c, string sql, List<object> args, Func<SqliteDataReader, T> read)
         {
             using var cmd = c.CreateCommand();

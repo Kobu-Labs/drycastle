@@ -392,7 +392,7 @@ public sealed partial class HuntersLogScreen
         r.Species.Visible = !h.Hidden;
         r.Blur.Visible = h.Hidden;
         r.Species.Text = h.Hidden ? "" : HuntSpeciesName(h);
-        var mark = HuntRecords.MarkOf(Data.Records.Data, h);
+        var mark = HuntRecords.MarkOf(Data.Records.Data?.Records, h);
         r.Pill.Visible = mark != RecordMark.None;
         r.PillText.Text = mark == RecordMark.Weight ? Strings.T("log.pill.kg") : mark == RecordMark.Shot ? Strings.T("log.pill.shot") : "";
         r.Kg.Text = Kg(h.Kg);
@@ -455,7 +455,7 @@ public sealed partial class HuntersLogScreen
         // species: the index species, the Mystery creatures the viewer has caught, and the one "Mystery hunts" option while hidden hunts exist
         var options = new List<(string Key, string Name)> { ("", Strings.T("log.filter.all")) };
         foreach (var s in IndexSpecies.All) options.Add((s, _env.SpeciesName(s)));
-        if (Data.Records.Data is { } cards)
+        if (Data.Records.Data?.Records is { } cards)
         {
             foreach (var c in cards) if (c.Caught && !c.Hidden && Mysteries.Is(c.Species)) options.Add((c.Species, _env.SpeciesName(c.Species)));
             if (cards.Any(c => c.Caught && c.Hidden)) options.Add((Mysteries.AllHidden, Strings.T("log.filter.mystery")));

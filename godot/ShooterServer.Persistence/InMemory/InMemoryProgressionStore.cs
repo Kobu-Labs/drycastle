@@ -15,6 +15,7 @@ public sealed class InMemoryProgressionStore : IProgressionStore
     readonly Dictionary<long, StatsRow> _stats = new();
     readonly Dictionary<(long Player, int Slot), CamoSpec> _camo = new();
     readonly List<HuntRecord> _hunts = new();
+    readonly Dictionary<long, PlayerKillRecord> _kills = new();
     readonly LevelCurve _curve;
     long _nextId = 1;
     long _nextHunt = 1;
@@ -222,6 +223,19 @@ public sealed class InMemoryProgressionStore : IProgressionStore
         {
             lock (s._gate)
                 return Task.FromResult<IReadOnlyList<HuntRow>>(Rows().OrderBy(r => r.Hunt.AtUtc).ThenBy(r => r.Hunt.Id).ToList());
+        }
+
+        public Task SavePlayerKillAsync(PlayerKillRecord kill)
+        {
+            lock (s._gate)
+                if (s._byId.ContainsKey(kill.KillerId) && s._byId.ContainsKey(kill.VictimId) && (!s._kills.TryGetValue(kill.KillerId, out var had) || kill.DistanceM > had.DistanceM)) s._kills[kill.KillerId] = kill;
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<PlayerKillRow>> GetPlayerKillsAsync()
+        {
+            lock (s._gate)
+                return Task.FromResult<IReadOnlyList<PlayerKillRow>>(s._kills.Values.OrderBy(k => k.AtUtc).Select(k => new PlayerKillRow(k, s._byId[k.KillerId].Name, s._byId[k.VictimId].Name)).ToList());
         }
 
         IEnumerable<HuntRow> Rows() => s._hunts.Select(h => new HuntRow(h, s._byId[h.PlayerId].Name)).ToList();

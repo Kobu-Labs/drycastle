@@ -46,7 +46,7 @@ public interface ICamoRepository
     Task SaveAsync(long playerId, int slot, CamoSpec spec);
 }
 
-/// <summary>The Hunter's Log (#336): every hunt, kept forever. Rules (records, first-times, redaction) are <see cref="HuntBook"/>'s, not the store's; the store keeps rows and pages them.</summary>
+/// <summary>The Hunter's Log (#336): every hunt, kept forever, and each killer's longest player kill (#430). Rules (records, first-times, redaction) are <see cref="HuntBook"/>'s, not the store's; the store keeps rows and pages them.</summary>
 public interface IHuntRepository
 {
     /// <summary>Queues one hunt (its <see cref="HuntRecord.Id"/> is ignored). A failed write is logged, never thrown. A hunt of an unknown player is not stored.</summary>
@@ -55,6 +55,10 @@ public interface IHuntRepository
     Task<HuntPage> PageAsync(HuntQuery query);
     /// <summary>Every hunt, oldest first (ties by id): what <see cref="HuntBook.From"/> replays at server start.</summary>
     Task<IReadOnlyList<HuntRow>> GetAllAsync();
+    /// <summary>Keeps a player kill (#430) as its killer's longest when it is longer than the one stored (a tie keeps the earlier one); one row per killer. A failed write is logged, never thrown. A kill of an unknown player is not stored.</summary>
+    Task SavePlayerKillAsync(PlayerKillRecord kill);
+    /// <summary>The longest kill of every killer, oldest first: what <see cref="PlayerKillBook.From"/> replays at server start.</summary>
+    Task<IReadOnlyList<PlayerKillRow>> GetPlayerKillsAsync();
 }
 
 /// <summary>One store = one database (or in-memory set). Disposing it stops the background writer.</summary>

@@ -12,7 +12,7 @@ public static class HuntersLogStrings
         ("log.close", "Close"), ("log.back", "Back"),
         ("log.sandbox", "Sandbox: hunts are not logged"),
         // my log
-        ("log.stat.hunts", "Hunts"), ("log.stat.species", "Species"), ("log.stat.heaviest", "Heaviest"), ("log.stat.longest", "Longest shot"), ("log.none", "-"),
+        ("log.stat.hunts", "Hunts"), ("log.stat.species", "Species"), ("log.stat.heaviest", "Heaviest"), ("log.stat.longest", "Longest shot"), ("log.stat.kill", "Longest kill"), ("log.none", "-"),
         ("log.life.title", "Life List"), ("log.life.count", "{0} of {1}"), ("log.sec.game", "Regular"), ("log.sec.mystery", "Mystery"),
         ("log.tier.gold", "Gold"), ("log.tier.silver", "Silver"), ("log.tier.bronze", "Bronze"), ("log.tile.tier", "{0} kg, {1}"),
         ("log.legend.gold", "Gold, top 5%"), ("log.legend.silver", "Silver, top 10%"), ("log.legend.bronze", "Bronze, top 20%"),
@@ -20,6 +20,7 @@ public static class HuntersLogStrings
         ("log.hidden.mark", "?"), ("hunt.hidden.name", "Xxxxxxxx"),
         // records
         ("log.rec.heaviest", "Heaviest"), ("log.rec.longest", "Longest shot"), ("log.rec.first", "First caught"), ("log.rec.todo", "Not hunted yet. The first kill takes the record."),
+        ("log.rec.kill", "Longest player kill"), ("log.rec.kill.todo", "No player kill yet. The first one takes the record."),
         ("log.rec.open", "All {0} hunts"), ("log.area.head", "Head"), ("log.area.body", "Body"), ("log.area.legs", "Legs"), ("log.area.none", "No hit"),
         // all hunts
         ("log.col.when", "When"), ("log.col.player", "Hunter"), ("log.col.species", "Species"), ("log.col.weight", "Weight"), ("log.col.distance", "Distance"), ("log.col.weapon", "Weapon"),
@@ -44,9 +45,9 @@ public static class HuntersLogStrings
         ("weapon.run_over", "Run over"), ("weapon.event", "Event"), ("weapon.other", "Other"),
         // announcements
         ("hunt.tag.record", "NEW RECORD"), ("hunt.tag.first", "FIRST"),
-        ("hunt.line.kg", "{0}: {1}, {2} kg"), ("hunt.line.shot", "{0}: {1}, {2} m longest shot"),
+        ("hunt.line.kg", "{0}: {1}, {2} kg"), ("hunt.line.shot", "{0}: {1}, {2} m longest shot"), ("hunt.line.kill", "{0}: {1} m longest player kill"),
         ("hunt.line.first", "{0} hunted a {1} for the first time"), ("hunt.line.first.mystery", "{0} caught {1} for the first time"),
-        ("toast.hunt.kg", "New record: {0}, {1} kg"), ("toast.hunt.shot", "New record: {0}, {1} m longest shot"),
+        ("toast.hunt.kg", "New record: {0}, {1} kg"), ("toast.hunt.shot", "New record: {0}, {1} m longest shot"), ("toast.hunt.kill", "New record: {0} m longest player kill"),
         ("toast.hunt.first", "First {0}: added to your Life List"), ("toast.hunt.first.mystery", "You caught {0} for the first time"),
     };
 }

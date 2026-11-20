@@ -13,8 +13,11 @@ public sealed record HuntView(long PlayerId, string Hunter, string Species, stri
 /// </summary>
 public sealed record LifeEntry(string Species, bool Hidden, bool Caught, float? BestKg, float? LongestM, long CaughtAtUnix, HuntTier Tier = HuntTier.Common);
 
-/// <summary>A player's log: totals, the heaviest and the longest shot, and a tile for every species of <see cref="HuntSpecies.Keys"/>.</summary>
-public sealed record PlayerLogView(long PlayerId, string Name, int Hunts, int Species, HuntView? Heaviest, HuntView? Longest, IReadOnlyList<LifeEntry> Life);
+/// <summary>A longest player kill (<see cref="PlayerKillBook"/>): who killed whom, how far, with what, when. Names as players.name has them.</summary>
+public sealed record PlayerKillView(long KillerId, string Killer, long VictimId, string Victim, float DistanceM, string Weapon, long AtUnix);
+
+/// <summary>A player's log: totals, the heaviest and the longest shot, a tile for every species of <see cref="HuntSpecies.Keys"/>, and their longest player kill.</summary>
+public sealed record PlayerLogView(long PlayerId, string Name, int Hunts, int Species, HuntView? Heaviest, HuntView? Longest, IReadOnlyList<LifeEntry> Life, PlayerKillView? Kill = null);
 
 /// <summary>
 /// One species' card on the Records tab. <see cref="Caught"/>: somebody has hunted it. <see cref="Heaviest"/> is null for a mystery,
