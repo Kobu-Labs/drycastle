@@ -414,6 +414,46 @@ public class TowTests
         Assert.True(link.Hitched);
     }
 
+    /// <summary>
+    /// A dyke 3 m high: flat on top for z &gt;= 0, falling at 30 degrees to its foot. The ground is found only from near it, as a ray does (nothing from more than 1.5 m under it), and a trailer
+    /// asked about at a height that far under the ground it stands on is in the dyke: blocked.
+    /// </summary>
+    sealed class Dyke : ITrailerWorld
+    {
+        public static float Ground(float z) => Math.Clamp(3f + z * MathF.Tan(MathF.PI / 6), 0f, 3f);
+        public float GroundY(float x, float z, float hint) => Ground(z) <= hint + 1.5f ? Ground(z) : hint;
+        public bool Blocked(in BodyBox from, in BodyBox to, float y) => Ground(to.Z) > y + 1.5f;
+    }
+
+    [Fact]
+    public void A_trailer_on_a_dyke_keeps_its_own_ground_while_the_tractor_is_at_the_foot()
+    {
+        // #377: the tractor has gone down (-Z) and stands 3 m lower; the hitch's height is its ground, not the trailer's
+        var def = Tractor(); var cart = Cart(); var g = TowGeometry.Of(def, cart);
+        var world = new Dyke();
+        var t = new TractorMotion(new Vector3(0, 0, -5.2f), 0f, 3f, 0f, 0f);
+        var body = TowModel.Pose(g, t.Position, t.Yaw, 0f);
+        Assert.True(Dyke.Ground(body.Position.Z) > 1.5f, "the trailer is still high on the slope");
+        body.Position.Y = Dyke.Ground(body.Position.Z);
+        for (var i = 0; i < 30 * 4; i++)
+        {
+            t = t with { Position = t.Position + new Vector3(0, 0, -t.Speed * Dt) };
+            Assert.True(TowModel.StepChecked(ref body, g, t, Dt, world), $"blocked at tick {i}, z {body.Position.Z}");
+            Assert.Equal(Dyke.Ground(body.Position.Z), body.Position.Y, 3);
+        }
+        Assert.Equal(0f, body.Position.Y, 3); // down with the tractor
+    }
+
+    [Fact]
+    public void Coupling_keeps_the_trailers_own_height()
+    {
+        var def = Tractor(); var cart = Cart(); var g = TowGeometry.Of(def, cart);
+        var body = TrailerBody.At(new Vector3(0, 2.5f, 6f), 0f);
+        TowModel.Couple(ref body, g, new TractorMotion(Vector3.Zero, 0f, 0f, 0f, 0f));
+        Assert.Equal(2.5f, body.Position.Y);
+        Assert.Equal(TowModel.HitchPoint(g, Vector3.Zero, 0f).Z, TowModel.EyePoint(g, body).Z, 4);
+    }
+
     // ---- load ----
 
     [Fact]
