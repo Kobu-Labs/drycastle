@@ -23,11 +23,18 @@ public partial class PerfRoute : Node
     public float ShadowDist = -1;
     public float BlastRate;
     public string Tag = "";
-    /// <summary>--perf-hide a,b: parts of the picture not drawn, to price them by what the frame costs without: trees (the tree packs), meadow, clutter, crops, objects, terrain (the chunks' own meshes: ground, buildings).</summary>
+    /// <summary>--perf-hide a,b: parts of the picture not drawn, to price them by what the frame costs without: trees (the tree packs), meadow, clutter, crops, objects, terrain (the terrain meshes only), chunks (the whole chunk nodes), merged (the merged_* meshes), water, lamps, cables.</summary>
     public string Hide = "";
     /// <summary>--perf-noglow, --perf-nofog, --perf-scale F (the 3D picture drawn at F of the resolution: what the pixels cost against what the geometry costs).</summary>
     public bool NoGlow, NoFog;
     public float Scale = -1;
+    /// <summary>--perf-hour H: the day clock frozen at hour H (default: the start hour, so the sun does not drift over the route; -1 = default). --perf-noshadow is honoured by DayNightCycle (ForceNoShadow).
+    /// --perf-flatsky: background colour instead of the sky. --perf-sky N: sky radiance size N (32..2048) with Incremental process mode. --perf-shadowq hard|verylow|low: directional soft shadow filter quality.
+    /// --perf-nolights: the pooled lamp spots invisible. --perf-fsr: FSR1 upscaling for --perf-scale. (--perf-nomerge, --perf-lambert and --perf-noprepass act at map load / start: Shooter.cs, MapLoader, run_route.py.)</summary>
+    public double Hour = -1;
+    public bool FlatSky, NoLights, Fsr;
+    public int SkyRadiance;
+    public string ShadowQ = "";
     public List<Vector3> Anchors = new(); // --perf-anchors "x,y,z;x,y,z" (Godot axes): the viewpoints, e.g. deep in a forest, where no spawn point is
     double _blastAcc;
     readonly Random _rng = new(7);
@@ -62,10 +69,25 @@ public partial class PerfRoute : Node
         Engine.MaxFps = 0;
         if (Msaa >= 0) GetTree().Root.Msaa3D = Msaa switch { 2 => Viewport.Msaa.Msaa2X, 4 => Viewport.Msaa.Msaa4X, 8 => Viewport.Msaa.Msaa8X, _ => Viewport.Msaa.Disabled };
         if (Scale > 0) GetTree().Root.Scaling3DScale = Scale;
+        if (Fsr) GetTree().Root.Scaling3DMode = Viewport.Scaling3DModeEnum.Fsr;
+        if (DayNightCycle.Current is { } cycle)
+        {
+            cycle.FreezeHour = Hour >= 0 ? Hour : cycle.LocalClock.HourAt(0);
+            cycle.ForceNoShadow = NoShadow;
+        }
+        StreetLamps.PerfNoLights = NoLights;
+        if (ShadowQ.Length > 0)
+            RenderingServer.DirectionalSoftShadowFilterSetQuality(ShadowQ switch { "hard" => RenderingServer.ShadowQuality.Hard, "verylow" => RenderingServer.ShadowQuality.SoftVeryLow, "low" => RenderingServer.ShadowQuality.SoftLow, "medium" => RenderingServer.ShadowQuality.SoftMedium, _ => RenderingServer.ShadowQuality.SoftLow });
         foreach (var we in GetTree().Root.FindChildren("*", "WorldEnvironment", true, false).OfType<WorldEnvironment>())
         {
             if (NoGlow && we.Environment != null) we.Environment.GlowEnabled = false;
             if (NoFog && we.Environment != null) we.Environment.FogEnabled = false;
+            if (FlatSky && we.Environment != null) { we.Environment.BackgroundMode = Godot.Environment.BGMode.Color; we.Environment.BackgroundColor = new Color(0.72f, 0.84f, 0.95f); }
+            if (SkyRadiance > 0 && we.Environment?.Sky is { } sky)
+            {
+                sky.RadianceSize = (Sky.RadianceSizeEnum)Math.Clamp((int)Math.Round(Math.Log2(SkyRadiance / 32.0)), 0, 6); // 32, 64, 128, 256, 512, 1024, 2048
+                sky.ProcessMode = (Sky.ProcessModeEnum)2; // Incremental (Automatic 0, Quality 1, Incremental 2, Real-time 3)
+            }
         }
         HideParts();
         foreach (var l in GetTree().Root.FindChildren("*", "DirectionalLight3D", true, false).OfType<DirectionalLight3D>())
@@ -91,7 +113,12 @@ public partial class PerfRoute : Node
                 case "objects": Off(Map.Root.FindChild("Objects", true, false)); break;
                 case "clutter": foreach (var c in Map.Root.FindChildren("clutter_*", "MultiMeshInstance3D", true, false)) Off(c); break;
                 case "crops": foreach (var c in Map.Root.FindChildren("crop_*", "MultiMeshInstance3D", true, false)) Off(c); break;
-                case "terrain": foreach (var c in Map.Root.GetChildren()) if (c.Name.ToString().StartsWith("chunk_") && c.GetChildCount() > 0) Off(c.GetChild(0)); break;
+                case "terrain": foreach (var c in Map.Root.FindChildren("terrain", "MeshInstance3D", true, false)) Off(c); break; // the terrain meshes only
+                case "chunks": foreach (var c in Map.Root.GetChildren()) if (c.Name.ToString().StartsWith("chunk_")) Off(c); break; // the whole chunk nodes: terrain, merged meshes, everything in the chunk files
+                case "merged": foreach (var c in Map.Root.GetChildren()) if (c.Name.ToString().StartsWith("chunk_")) foreach (var m in c.GetChildren()) if (m.Name.ToString().StartsWith("merged_")) Off(m); break;
+                case "water": Off(GetTree().Root.FindChild("WaterSurfaces", true, false)); break;
+                case "lamps": Off(StreetLamps.Current); break;
+                case "cables": Off(Map.Root.FindChild("Cables", true, false)); break;
                 default: GD.PrintErr($"perf route: unknown part to hide: {part}"); break;
             }
         _hidden += n;
@@ -175,7 +202,8 @@ public partial class PerfRoute : Node
         var warmMs = _warm.Select(x => x.Ms).ToList();
         var res = new Dictionary<string, object>
         {
-            ["tag"] = Tag, ["hide"] = Hide, ["hidden_nodes"] = _hidden, ["scale_3d"] = GetTree().Root.Scaling3DScale, ["views"] = _anchors.Count * 4, ["frames_measured"] = _s.Count, ["renderer"] = ProjectSettings.GetSetting("rendering/renderer/rendering_method").ToString(),
+            ["tag"] = Tag, ["hide"] = Hide, ["hidden_nodes"] = _hidden, ["scale_3d"] = GetTree().Root.Scaling3DScale, ["views"] = _anchors.Count * 4, ["frames_measured"] = _s.Count, ["renderer"] = RenderingServer.GetCurrentRenderingMethod(), ["hour"] = DayNightCycle.Current?.FreezeHour ?? -1.0, ["prepass"] = ProjectSettings.GetSetting("rendering/driver/depth_prepass/enable", true).ToString(), ["scale_mode"] = GetTree().Root.Scaling3DMode.ToString(),
+            ["flags"] = new { noshadow = NoShadow, flatsky = FlatSky, sky_radiance = SkyRadiance, shadowq = ShadowQ, nolights = NoLights, fsr = Fsr, lambert = Drycastle.MapLoader.MapLoader.PerfLambert, merge = Map.MergeChunkMeshes },
             ["adapter"] = RenderingServer.GetVideoAdapterName(), ["resolution"] = $"{DisplayServer.WindowGetSize().X}x{DisplayServer.WindowGetSize().Y}",
             ["msaa"] = GetTree().Root.Msaa3D.ToString(), ["vsync"] = DisplayServer.WindowGetVsyncMode().ToString(),
             ["ms_to_route_ready"] = _startMs, ["frame_ms"] = Stats(_s.Select(x => x.Ms).ToList()), ["fps_mean"] = 1000.0 / Math.Max(0.001, _s.Count == 0 ? 1 : _s.Average(x => x.Ms)),
@@ -206,7 +234,7 @@ public partial class Shooter
         AddChild(new PerfRoute
         {
             Player = player, Map = _map, OutDir = cfg.Str("perf-out", "out/perf/route"), Views = I(cfg.Str("perf-views"), 96), Msaa = I(cfg.Str("perf-msaa"), -1),
-            Dwell = F(cfg.Str("perf-dwell"), 2f), NoShadow = cfg.Flag("perf-noshadow"), ShadowDist = F(cfg.Str("perf-shadow-dist"), -1f), BlastRate = F(cfg.Str("perf-blasts"), 0f), Hide = cfg.Str("perf-hide"), NoGlow = cfg.Flag("perf-noglow"), NoFog = cfg.Flag("perf-nofog"), Scale = F(cfg.Str("perf-scale"), -1f), Vsync = cfg.Flag("perf-vsync"), Tag = cfg.Str("perf-tag"), Settle = F(cfg.Str("perf-settle"), 0.6f),
+            Dwell = F(cfg.Str("perf-dwell"), 2f), NoShadow = cfg.Flag("perf-noshadow"), ShadowDist = F(cfg.Str("perf-shadow-dist"), -1f), BlastRate = F(cfg.Str("perf-blasts"), 0f), Hide = cfg.Str("perf-hide"), NoGlow = cfg.Flag("perf-noglow"), NoFog = cfg.Flag("perf-nofog"), Scale = F(cfg.Str("perf-scale"), -1f), Hour = F(cfg.Str("perf-hour"), -1f), FlatSky = cfg.Flag("perf-flatsky"), SkyRadiance = I(cfg.Str("perf-sky"), 0), ShadowQ = cfg.Str("perf-shadowq"), NoLights = cfg.Flag("perf-nolights"), Fsr = cfg.Flag("perf-fsr"), Vsync = cfg.Flag("perf-vsync"), Tag = cfg.Str("perf-tag"), Settle = F(cfg.Str("perf-settle"), 0.6f),
             Anchors = cfg.Str("perf-anchors").Split(';', StringSplitOptions.RemoveEmptyEntries).Select(a => a.Split(',')).Where(a => a.Length == 3).Select(a => new Vector3(F(a[0], 0f), F(a[1], 0f), F(a[2], 0f))).ToList(),
         });
     }

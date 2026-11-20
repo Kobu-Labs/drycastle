@@ -3,7 +3,7 @@
 
 Starts the client offline (`--role client --offline --perf-route`) in a 1920x1080 window, samples its RSS/CPU, measures the wall time to SHOOTER_READY
 (process start -> map loaded -> in the world) and collects route-summary.json / route-frames.csv written by PerfRoute.cs. One variant per run:
-  base | msaa0 | msaa2 | msaa4 | msaa8 | noshadow | shadow100 | mobile | compat
+  (see VARIANTS) base | msaa0 | msaa2 | msaa4 | msaa8 | noshadow | shadow100 | mobile | compat
 
 Usage: run_route.py --variants base,msaa0,noshadow,mobile [--views 48] [--dwell 1.5] [--gpu nvidia|intel] [--exe out/perf/client-build/drycastle-shooter.x86_64]
 GPU choice on this hybrid laptop: --gpu nvidia sets the PRIME offload variables, --gpu intel leaves the iGPU.
@@ -21,10 +21,21 @@ VARIANTS = {
     # what a part of the picture costs: the frame without it (PerfRoute --perf-hide), and the pixels against the geometry (--perf-scale)
     "hide-trees": ["--perf-hide", "trees"], "hide-meadow": ["--perf-hide", "meadow"], "hide-clutter": ["--perf-hide", "clutter"], "hide-crops": ["--perf-hide", "crops"],
     "hide-objects": ["--perf-hide", "objects"], "hide-terrain": ["--perf-hide", "terrain"], "hide-veg": ["--perf-hide", "trees,meadow,clutter,crops"],
-    "hide-all": ["--perf-hide", "trees,meadow,clutter,crops,objects,terrain"],
+    "hide-all": ["--perf-hide", "trees,meadow,clutter,crops,objects,chunks,water,lamps,cables"],
+    "hide-merged": ["--perf-hide", "merged"], "hide-water": ["--perf-hide", "water"], "hide-lamps": ["--perf-hide", "lamps"], "hide-cables": ["--perf-hide", "cables"], "hide-chunks": ["--perf-hide", "chunks"],
     "noglow": ["--perf-noglow"], "nofog": ["--perf-nofog"], "scale50": ["--perf-scale", "0.5"], "scale75": ["--perf-scale", "0.75"],
+    # the clock is frozen at the start hour in every route run; --perf-hour H holds another (22 = night)
+    "base-night": ["--perf-hour", "22"], "noshadow-night": ["--perf-noshadow", "--perf-hour", "22"],
+    "flatsky": ["--perf-flatsky"], "sky32": ["--perf-sky", "32"], "sky64": ["--perf-sky", "64"],
+    "shadowq-hard": ["--perf-shadowq", "hard"], "shadowq-verylow": ["--perf-shadowq", "verylow"], "shadowq-low": ["--perf-shadowq", "low"],
+    "nomerge": ["--perf-nomerge"], "nolights": ["--perf-nolights"], "nolights-night": ["--perf-nolights", "--perf-hour", "22"], "lambert": ["--perf-lambert"],
+    "noprepass": ["--perf-noprepass"],  # the flag only labels the run; the setting is an override.cfg written below (OVERRIDE_CFG)
+    "mobile-msaa2": ["--perf-msaa", "2"], "mobile-night": ["--perf-msaa", "2", "--perf-hour", "22"],
+    "scale75-fsr": ["--perf-scale", "0.75", "--perf-fsr"], "scale85-fsr": ["--perf-scale", "0.85", "--perf-fsr"],
 }
-RENDERER = {"mobile": ["--rendering-method", "mobile"], "compat": ["--rendering-method", "gl_compatibility"]}
+RENDERER = {"mobile": ["--rendering-method", "mobile"], "compat": ["--rendering-method", "gl_compatibility"], "mobile-msaa2": ["--rendering-method", "mobile"], "mobile-night": ["--rendering-method", "mobile"]}
+# project-setting overrides a variant needs at start: written as override.cfg beside the exported exe (or in the project folder without --exe), removed after the run
+OVERRIDE_CFG = {"noprepass": "[rendering]\n\ndriver/depth_prepass/enable=false\n"}
 
 
 def main():
@@ -56,6 +67,12 @@ def main():
         args = ([a.exe] if a.exe else [GODOT, "--path", str(SHOOTER)]) + ["--resolution", a.res, "--windowed"] + (["--gpu-index", str(a.gpu_index)] if a.gpu_index >= 0 else []) + RENDERER.get(v, []) + ["--", "--role", "client", "--offline", "--map", a.map, "--perf-route", "--perf-out", str(d),
                 "--perf-views", str(a.views), "--perf-dwell", str(a.dwell), "--perf-tag", v] + VARIANTS.get(v, []) + (["--perf-blasts", str(a.blasts)] if a.blasts > 0 else []) + (["--perf-anchors", a.anchors] if a.anchors else []) + ["--perf-settle", str(a.settle)]
         log = open(d / "client.log", "w")
+        override = None
+        if v in OVERRIDE_CFG:
+            override = (Path(a.exe).resolve().parent if a.exe else Path(SHOOTER)) / "override.cfg"
+            if override.exists():
+                sys.exit(f"{override} exists: refusing to overwrite it")
+            override.write_text(OVERRIDE_CFG[v])
         # the graphics card's own state through the run: a laptop caps its power when it is hot, and a capped run is not comparable with a free one
         smi = None
         if shutil.which("nvidia-smi") and a.gpu == "nvidia":
@@ -79,6 +96,8 @@ def main():
         except subprocess.TimeoutExpired:
             p.kill(); p.wait()
         smp.stop(); log.close()
+        if override is not None:
+            override.unlink(missing_ok=True)
         gpu_state = {}
         if smi:
             smi.terminate(); smi.wait()
@@ -97,7 +116,7 @@ def main():
                     "machine": machine(), "gpu_state": gpu_state})
         write_json(d / "result.json", res)
         fm = res.get("frame_ms", {})
-        print(f'{v:10} adapter={res.get("adapter")} renderer={res.get("renderer")} msaa={res.get("msaa")} ready={t_ready and round(t_ready, 1)}s  fps={res.get("fps_mean", 0):.0f}  frame p50/p95/p99/max={fm.get("p50", 0):.1f}/{fm.get("p95", 0):.1f}/{fm.get("p99", 0):.1f}/{fm.get("max", 0):.1f} ms  '
+        print(f'{v:10} adapter={res.get("adapter")} renderer={res.get("renderer")} msaa={res.get("msaa")} hour={res.get("hour")} prepass={res.get("prepass")} ready={t_ready and round(t_ready, 1)}s  fps={res.get("fps_mean", 0):.0f}  frame p50/p95/p99/max={fm.get("p50", 0):.1f}/{fm.get("p95", 0):.1f}/{fm.get("p99", 0):.1f}/{fm.get("max", 0):.1f} ms  '
               f'draws p50/p90={res.get("draws", {}).get("p50")}/{res.get("draws", {}).get("p90")}  per-view draws p50/p90={res.get("per_view_mean_draws", {}).get("p50", 0):.0f}/{res.get("per_view_mean_draws", {}).get("p90", 0):.0f}  gpu={res.get("render_gpu_ms", {}).get("mean", 0):.1f}ms at {gpu_state.get("power_w", 0):.0f}W {gpu_state.get("clock_mhz", 0):.0f}MHz{" CAPPED" if gpu_state.get("capped") else ""}  rss={res.get("hwm_mb", 0):.0f}MB vram={res.get("video_mem_mb", 0):.0f}MB -> {d}', flush=True)
 
 

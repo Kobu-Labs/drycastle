@@ -30,6 +30,11 @@ public partial class DayNightCycle : Node3D
     public DayClock LocalClock { get; set; } = new();
     public float MinAmbient { get; set; } = 0.10f;
 
+    /// <summary>Measurement only (PerfRoute): the clock held at this hour; null runs it.</summary>
+    public double? FreezeHour { get; set; }
+    /// <summary>Measurement only (PerfRoute --perf-noshadow): the sun never casts shadows, whatever the hour.</summary>
+    public bool ForceNoShadow { get; set; }
+
     /// <summary>TEST (/night, this client only): the moon's peak light, and the night exposure. Reset by <see cref="ResetNightTuning"/>.</summary>
     public float MoonPeak { get; set; } = DayCurve.MoonPeakEnergy;
     public float NightExposure { get; set; } = DayCurve.ExposureNight;
@@ -133,6 +138,7 @@ public partial class DayNightCycle : Node3D
 
     public override void _Process(double delta)
     {
+        if (FreezeHour is { } frozen) { Apply(frozen); return; }
         if (_serverClock == null) _elapsed += delta;
         else
         {
@@ -162,7 +168,7 @@ public partial class DayNightCycle : Node3D
         _sun.LightColor = Col(l.SunColour);
         var gloom = Mathf.Lerp(1f, GloomFloor, Mathf.Clamp(Gloom, 0f, 1f));
         _sun.LightEnergy = l.SunEnergy * gloom;
-        _sun.ShadowEnabled = l.SunEnergy > 0.01f; // shadows fade with the sun and are gone at night
+        _sun.ShadowEnabled = !ForceNoShadow && l.SunEnergy > 0.01f; // shadows fade with the sun and are gone at night
         // Grazing light (dawn/dusk) stretches each shadow texel over a long strip of ground: self-shadow stripes (acne).
         // Bias grows as the sun drops; at 30 deg and up it is Godot's default.
         var low = 1f - Mathf.Clamp(l.SunElevationDeg / 30f, 0f, 1f);

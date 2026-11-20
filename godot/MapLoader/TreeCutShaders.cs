@@ -40,6 +40,7 @@ static class TreeCutShaders
     {
         EnsureGlobal();
         var code = ReadEmbedded(resource).Replace("// @include tree_cut", ReadEmbedded("tree_cut.gdshaderinc")).Replace("CULL_MODE", cull);
+        if (MapLoader.PerfLambert) code = code.Replace("diffuse_burley", "diffuse_lambert").Replace("specular_schlick_ggx", "specular_disabled"); // measurement: --perf-lambert
         return new Shader { Code = code };
     }
 

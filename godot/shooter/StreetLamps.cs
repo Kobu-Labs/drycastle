@@ -15,6 +15,8 @@ namespace Drycastle.Shooter;
 public partial class StreetLamps : Node3D
 {
     public const int PoolSize = 12;
+    /// <summary>Measurement only (PerfRoute --perf-nolights): the pooled spots stay invisible.</summary>
+    public static bool PerfNoLights { get; set; }
     public const float PoleHeight = 5f;
     /// <summary>Lights fade out between 60% and 100% of this distance from the camera.</summary>
     const float PoolMaxDistance = 90f;
@@ -118,6 +120,7 @@ public partial class StreetLamps : Node3D
             var pole = idx - Bases.Count;
             if (idx >= 0 && pole >= 0 && _state[pole] == LampState.Flickering) light.LightEnergy = _dark[pole] ? 0f : target;
             else light.LightEnergy = Mathf.MoveToward(light.LightEnergy, target, (float)delta * LightRate);
+            light.Visible = !PerfNoLights && light.LightEnergy > 0f; // a spot with no energy lights nothing: out of the light clusters
         }
     }
 

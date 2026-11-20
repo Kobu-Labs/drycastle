@@ -420,6 +420,8 @@ public sealed partial class MapLoader
                 if (GodotObject.IsInstanceValid(mi) && !HasCollisionDescendant(mi)) mi.Free();
                 continue;
             }
+            // flat on the ground and covered by the terrain's own shadow: nothing visible to cast (and the merge keys on CastShadow)
+            if (name.StartsWith("detail_patches") || name.StartsWith("roads")) mi.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
             ApplyMaterial(mi, name);
             Stats.Triangles += TriangleCount(mi.Mesh);
             var (baseName, texture) = SplitTexNode(name);
@@ -481,6 +483,9 @@ public sealed partial class MapLoader
     /// </summary>
     static StandardMaterial3D? _flatMaterial;
 
+    /// <summary>Measurement only (shooter --perf-lambert, set before Load): Lambert diffuse and no specular on the flat material and the tree-cut shaders.</summary>
+    public static bool PerfLambert { get; set; }
+
     /// <summary>Flat colour look: vertex colours drive albedo, fully rough, no specular.</summary>
     static void FixMaterials(MeshInstance3D mi) => mi.MaterialOverride = FlatMaterial();
 
@@ -493,6 +498,8 @@ public sealed partial class MapLoader
         Roughness = 1f,
         Metallic = 0f,
         MetallicSpecular = 0f,
+        DiffuseMode = PerfLambert ? BaseMaterial3D.DiffuseModeEnum.Lambert : BaseMaterial3D.DiffuseModeEnum.Burley,
+        SpecularMode = PerfLambert ? BaseMaterial3D.SpecularModeEnum.Disabled : BaseMaterial3D.SpecularModeEnum.SchlickGgx,
     };
 
     /// <summary>Static trimesh collider under the (hidden) collision mesh. Dynamic ones (parcel swaps) are not registered.</summary>
