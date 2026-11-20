@@ -219,7 +219,7 @@ public partial class NetClient
     Vector3 MuzzleOf(ushort id, Vector3 fallback, Vector3 end)
     {
         if (id == _myId) return _me is { ZoomFov: > 0 } ? fallback + (end - fallback).Normalized() * 0.6f : _viewmodel?.MuzzlePosition ?? fallback;
-        if (!_remotes.TryGetValue(id, out var r)) return fallback;
+        if (!_remotes.TryGetValue(id, out var r) || !r.Node.IsInsideTree()) return fallback;
         var chest = r.Node.GlobalPosition + Vector3.Up * 1.3f;
         var dir = (end - fallback).Normalized();
         var fwd = new Vector3(dir.X, 0, dir.Z).Normalized();

@@ -14,7 +14,7 @@ public partial class NetClient
 
     void GunfireBlip(ushort shooter, byte weapon, System.Numerics.Vector3 origin)
     {
-        if (_hud == null || BlipConfig is not { } cfg || Weapons == null || _me == null) return;
+        if (_hud == null || BlipConfig is not { } cfg || Weapons == null || _me == null || !_me.IsInsideTree()) return; // a player node not in the scene (between lives) has no position
         if (_blips == null)
         {
             _blips = new GunfireBlips(cfg.GunfireBlipRadius, cfg.GunfireBlipSeconds, cfg.GunfireBlipInterval);
