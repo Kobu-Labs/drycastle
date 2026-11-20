@@ -249,6 +249,7 @@ public partial class NetClient : Node
         if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
         if (LinkEnded) return;
         UpdateMapCursor();
+        if (_volumes != null) UpdateVolumes();
         Poll();
         if (_link.Is(LinkPhase.Connecting))
         {
@@ -937,6 +938,7 @@ public partial class NetClient : Node
         if (HandleEquipmentInput(e)) return; // F: the Equipment screen (#268)
         if (HandleHuntersLogInput(e)) return; // J: the Hunter's Log (#336)
         if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
+        if (HandleVolumeInput(e)) return; // F3, the bounding-volume overlay; [ ] step its mode (#479)
         if (HandleScudInput(e)) return; // the Scud screen's keys (open, confirm, abort, lock, the wheel's zoom)
         if (HandleSeatInput(e)) return; // a number key while seated takes that seat
         if (HandleViewInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
