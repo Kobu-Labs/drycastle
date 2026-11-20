@@ -35,15 +35,32 @@ Owner's rule: *"This game follows AAA standards; UI and menus come polished from
 - Text sits only on a plate, a paper or the plain board colour, with the contrast of section 4. Rarity, "found", "yours" and "selected" are always a shape or words as well as a colour (a medal and the tier's name, a tick, "(you)", a thicker frame).
 - The states of section 3 hold on a skin too: a plaque lightens on hover, lightens more with a thicker rim when pressed, and gets a ring when focused.
 
-### Lessons: stat blocks, tables, links (Hunter's Log, #387)
-Found in review of the first Hunter's Log; start the next UI from these.
-- **Stat block = one fact per line, icon + text, always every line.** Never join facts with `|` on one wrapping line (they split unpredictably, and cards of one grid end at different heights so the numbers below sit on different rows). A fact with no value shows a placeholder ("No hit"), never drops its line. One icon cell of a fixed size, even when the thing has no icon, so text stays aligned. Same set of lines and same order on every card (`HitFacts`).
-- **Icons**: tinted masks (`HuntArt.Person`, `HuntArt.Crosshair`) take the skin's dim ink; one icon set, one flat single-tone style: never mix in detailed or coloured art (the weapon's own coloured icon beside flat glyphs looked wrong, so weapons use one flat rifle glyph and the name carries the difference). Fixed token size `LogStatIcon`.
-- **Table columns never clip.** Each column has a minimum width token (`LogColMin`) applied to header and cells alike; spare width is shared by ratio. When the table cannot hold every column, drop the least important column (Weapon; the detail card repeats it) instead of cutting headers ("eight", "tance") or cells ("Dee"). Rule of thumb: a cut word is a bug at any size from 1280×720 up and at 150 % UI scale.
-- **Centre what is reasonable**: card and tile grids use centred flow (`FlowContainer.Alignment = Center`), so a last short row does not hug the left edge.
-- **Filters earn their place.** Remove a filter whose job the sort or a column already does (weapon).
-- **A link must look and behave like one**: an icon before it, underline always, a filled and bordered hover, hand cursor, a tooltip saying where it goes ("X's log"). The click target is the text itself, never its column or row width: a click beside the name must not navigate. Underline alone is not enough in a row of other clickable text.
-- **Check at the narrow end first** (1280×720, 150 % scale, side panel stacked): that is where layouts break; the wide case works by default.
+### Owner's UI rules (from the Hunter's Log review, #387)
+Checklist for any new UI. Each line is something the owner had to ask for.
+
+**Layout**
+- One fact per line, never `a | b | c` on one wrapping line. Every card of a kind has the same lines in the same order; a missing value shows a placeholder, never drops the line (stats then align across cards).
+- Centre what is reasonable: card/tile grids use `FlowContainer.Alignment = Center`; legends and summaries centre under what they describe.
+- Nothing is ever cropped (headers, labels, cells) from 1280×720 up and at 150 % scale. Columns get minimum-width tokens (`LogColMin`) shared by header and cells; when too narrow, drop the least important column or stack the detail panel, never cut text. Test the narrow case first.
+- Detail panels carry their own labels as icons plus value; check that no row can be empty or clipped (a button with no text is a bug).
+
+**Icons**
+- Icon + text for every attribute (person = hunter, rifle = weapon, crosshair = hit area, tape = distance, calendar = when). Same attribute, same icon, on every screen.
+- One icon set, flat single-tone, tinted by the skin's ink. Never mix detailed or coloured art next to flat glyphs.
+- Draw a new icon as a preview PNG and show it before wiring it in; expect 1-3 rounds ("looks nothing like a sniper rifle"). Keep the silhouette recognisable at 20 px: long barrel, scope, no bipod/clutter; for a ruler just the strip.
+
+**Links and clickables**
+- A link looks like one: icon, always underlined, filled+bordered hover, hand cursor, tooltip with the destination ("X's log").
+- The click target is the text itself, never its column or row width. A click beside it must not navigate.
+
+**Naming and content**
+- One word per concept everywhere: column, filter, filter option, card all say "Hunter", not "Player" in one place. Fix the name in every string when one changes ("Game" became "Regular").
+- Remove a control that duplicates another path (weapon filter; "All my hunts" button when the Hunter column/links reach it). Remove section titles that only repeat their sections.
+- A removed UI element leaves no dead code, strings or doc lines.
+
+**Process**
+- The user judges in the running game: seed realistic data across every state (all rarity tiers, empty, hidden) so the screen can be seen, and say that a server restart may be needed.
+- Record findings here and in the feature's doc as you go; do not wait for the end.
 
 ## 5. Settings
 - Groups: Graphics / Audio / Controls / Gameplay / Accessibility, one config file, live preview, Apply/Revert, auto-revert for risky video changes.
