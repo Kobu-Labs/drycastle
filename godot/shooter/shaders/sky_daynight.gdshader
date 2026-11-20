@@ -35,7 +35,7 @@ void sky() {
 		vec3 g = dir * 180.0;
 		vec3 cell = floor(g);
 		float r = hash3(cell);
-		if (r > 0.997) {
+		if (r > 0.9988) {
 			float h2 = hash3(cell + 1.7);
 			float h3 = hash3(cell + 4.1);
 			float size = mix(3.5, 2.0, h2);
