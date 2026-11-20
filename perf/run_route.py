@@ -64,8 +64,12 @@ def main():
         t0 = time.time()
         p = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, text=True, env=env)
         smp = Sampler(p.pid); smp.start()
-        ready = wait_for(d / "client.log", "SHOOTER_READY", 300)
-        t_ready = (time.time() - t0) if ready is not None else None
+        t_ready = None  # an exported client does not print the marker: do not sit out the whole wait once the game is gone or the route is done
+        while time.time() - t0 < 300 and p.poll() is None and not (d / "route-summary.json").exists():
+            if "SHOOTER_READY" in (d / "client.log").read_text(errors="replace"):
+                t_ready = time.time() - t0
+                break
+            time.sleep(0.5)
         # the game takes minutes to tear its scene down after Quit: once the summary is written there is nothing more to wait for
         end = time.time() + a.timeout
         while p.poll() is None and time.time() < end and not (d / "route-summary.json").exists():
