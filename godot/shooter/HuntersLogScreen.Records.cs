@@ -144,6 +144,9 @@ public sealed partial class HuntersLogScreen
     {
         var b = new ContentButton { ThemeTypeVariation = "LogRow", MinSize = Vector2.Zero, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, TooltipText = Strings.F("log.hit.open", name), MouseDefaultCursorShape = CursorShape.PointingHand };
         var link = new PlayerLink { Text = name, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, VerticalAlignment = VerticalAlignment.Center, ClipText = false, TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming }; // a clipping label has no minimum width: in a shrinking row it would be 0 wide, the name invisible
+        // no row padding or fill: the line sits exactly where the other lines of the card do (the link's own hover box says it is live); only the focus ring is drawn
+        foreach (var state in new[] { "normal", "hover", "pressed", "disabled", "hover_pressed" }) b.AddThemeStyleboxOverride(state, new StyleBoxEmpty());
+        b.AddThemeStyleboxOverride("focus", ShooterTheme.Box(Colors.Transparent, 0, Skin.Ink, ShooterTheme.Border));
         b.SetContent(StatLine(HuntArt.Person, "", variation, tint: true, content: link));
         b.Pressed += open;
         b.MouseEntered += () => link.Hot = true;
