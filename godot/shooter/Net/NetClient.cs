@@ -536,6 +536,7 @@ public partial class NetClient : Node
     {
         var node = new Node3D { Name = $"Remote{id}" };
         var view = CharacterView.Make();
+        view.ThrottleFar = true; // far and off-screen players animate at a lower rate (#449)
         if (Appearances.TryGetValue(id, out var look)) view.SetCamo(look, CamoData); // the look may arrive before the first snapshot (#140)
         DressPlayer(view, id); // what they wear (#266), likewise
         node.AddChild(view);

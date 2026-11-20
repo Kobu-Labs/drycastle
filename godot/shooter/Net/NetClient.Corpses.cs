@@ -181,6 +181,7 @@ public partial class NetClient
                 view.SetRagdoll(true, t.Amount, t.AtRest);
             }
             else if (weapon != v.Weapon) { v.Weapon = weapon; view.ShowCorpse(weapon); }
+            if (!t.Thrown || t.AtRest) view.Freeze(); // the body lies still: no more skeleton or clip updates (#450)
             v.Feet = at;
             v.Node.GlobalPosition = at + FloatOffset(id, at, t.Thrown) + Vector3.Up * t.PivotHeight;
             v.Node.Basis = t.BasisFor(s.YawRad);

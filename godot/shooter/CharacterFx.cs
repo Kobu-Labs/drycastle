@@ -41,6 +41,15 @@ public sealed partial class CharacterView : Node3D
     string _lastWeapon = "";
     bool _lastFiring, _lastDead;
     float _lastSpeed;
+    /// <summary>
+    /// Steps the clip and the skeleton by hand at <see cref="FarUpdate"/>'s rate instead of every frame (far or off-screen remote players, #449).
+    /// Off (the default) leaves the engine to drive them every frame: the own body, the menu preview and the model shots.
+    /// </summary>
+    public bool ThrottleFar;
+    /// <summary>The skeleton the manual stepping was set up on (a new body has its own), the time since the last step, and whether a settled corpse stands still for good (<see cref="Freeze"/>).</summary>
+    Skeleton3D? _steppedSkeleton;
+    float _sinceStep = GD.Randf() * 0.1f; // spreads the characters over the frames
+    bool _frozen;
     public bool HasModel { get; private set; }
     public string CurrentAnim => _playing;
 
@@ -93,6 +102,7 @@ public sealed partial class CharacterView : Node3D
         _flail = _skeleton != null ? RagdollFlail.Create(_skeleton) : null;
         if (_flail != null) { _skeleton!.AddChild(_flail); ApplyFlail(); }
         _playing = "";
+        _frozen = false; _steppedSkeleton = null; SetProcess(true);
         ApplyPose();
         Apply(_lastSpeed, _lastFiring, _lastDead, _lastWeapon);
         return true;
@@ -189,6 +199,7 @@ public sealed partial class CharacterView : Node3D
     /// <summary>A corpse (ticket #130): the death pose, held at its last frame, with the weapon it carries in the hand. <see cref="Apply"/> hides weapons while dead, so corpses use this.</summary>
     public void ShowCorpse(string weaponId)
     {
+        Thaw();
         SetWeapon(weaponId);
         SetAimed(false);
         Play("Death", 0);
@@ -201,6 +212,7 @@ public sealed partial class CharacterView : Node3D
     /// </summary>
     public void SetRagdoll(bool on, float amount = 0, bool frozen = false)
     {
+        if (!frozen || !on) Thaw();
         _ragdoll = on; _flailAmount = on ? amount : 0; _flailFrozen = frozen;
         ApplyFlail();
         if (on) Play("Idle", 0);
@@ -216,6 +228,7 @@ public sealed partial class CharacterView : Node3D
     /// <summary>A thrown corpse: the weapon it carries in the hand and the limbs flailing (<see cref="SetRagdoll"/> drives them). <see cref="ShowCorpse"/> is for a body that fell where it stood.</summary>
     public void ShowThrown(string weaponId)
     {
+        Thaw();
         SetWeapon(weaponId);
         SetAimed(false);
         SetRagdoll(true, _flailAmount, _flailFrozen);
@@ -282,6 +295,7 @@ public sealed partial class CharacterView : Node3D
     /// <summary>While a gun is firing the weapon kicks about every 0.11 s (a steady automatic rate; the real shots arrive as events, this is the pose only).</summary>
     public override void _Process(double delta)
     {
+        if (ThrottleFar && !_frozen) StepFar((float)delta);
         HighFrame(); // the light and the smoke of a high figure follow its cigarette
         if (!_shooting || _arms == null) { _fireTimer = 0; return; }
         _fireTimer -= (float)delta;
@@ -289,6 +303,55 @@ public sealed partial class CharacterView : Node3D
         _fireTimer = 0.11f;
         _arms.Kick();
         if (FlashOnShot) Flash();
+    }
+
+    /// <summary>Takes the clip and the skeleton's modifiers off the engine's every-frame update, so <see cref="StepNow"/> is the only thing that moves the pose.</summary>
+    void TakeOverStepping()
+    {
+        if (_steppedSkeleton == _skeleton) return;
+        _steppedSkeleton = _skeleton;
+        if (_anim != null) _anim.CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Manual;
+        if (_skeleton != null) _skeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Manual;
+    }
+
+    /// <summary>Advances the clip and then the modifiers (the arms, the look, the flail) by <paramref name="dt"/>, the same order the engine runs them in.</summary>
+    void StepNow(float dt)
+    {
+        _anim?.Advance(dt);
+        _skeleton?.Advance(dt);
+    }
+
+    void StepFar(float delta)
+    {
+        TakeOverStepping();
+        _sinceStep += delta;
+        if (_sinceStep < FarUpdate.Interval(GetViewport()?.GetCamera3D(), GlobalPosition, PlayerHitBox.StandHeight)) return;
+        StepNow(_sinceStep);
+        _sinceStep = 0f;
+    }
+
+    /// <summary>
+    /// A corpse that has settled (the death pose held, or the ragdoll at rest, #450): poses it once more and stops every update of it, clip,
+    /// skeleton and view, until something changes it (<see cref="ShowCorpse"/>, <see cref="ShowThrown"/>, <see cref="SetRagdoll"/>, a new body).
+    /// </summary>
+    public void Freeze()
+    {
+        if (_frozen || _skeleton == null) return;
+        TakeOverStepping();
+        StepNow(0f);
+        _frozen = true;
+        SetProcess(false);
+    }
+
+    void Thaw()
+    {
+        if (!_frozen) return;
+        _frozen = false;
+        SetProcess(true);
+        if (ThrottleFar || _steppedSkeleton == null) return;
+        _steppedSkeleton = null; // a corpse back to the engine's every-frame update
+        if (_anim != null) _anim.CallbackModeProcess = AnimationMixer.AnimationCallbackModeProcess.Idle;
+        if (_skeleton != null) _skeleton.ModifierCallbackModeProcess = Skeleton3D.ModifierCallbackModeProcessEnum.Idle;
     }
 
     /// <summary>Armed and posed: the weapon hangs on the aim node and the arms are posed onto it. Otherwise it sits in the right fist and the clip plays as it is.</summary>
