@@ -105,12 +105,13 @@ public partial class NetClient
         PlaceCarSolid(v);
     }
 
-    /// <summary>The pitch and roll a vehicle's hull is turned by on this client: the latest flight record's for a type with a hull list (<see cref="VehicleDef.Tilts"/>), else none (the one upright box turns with the yaw).</summary>
+    /// <summary>The pitch and roll a vehicle's hull is turned by on this client: the latest flight record's, the trailer's ground fit, or the latest drive record's slope; else none.</summary>
     (float Pitch, float Roll) HullTiltOf(CarView v, VehicleDef def) =>
         !def.Tilts ? (0f, 0f)
         : v.Trailer is { Hull: { } h } ? (h.Pitch, h.Roll) // a trailer's own ground fit (RefreshHull), the server's number
         : _flights.TryGetValue(v.Id, out var f) ? (FlightRecord.Pitch(f.Rec), FlightRecord.Roll(f.Rec))
-        : (0f, 0f); // (a ground vehicle's drive state joins here, #483)
+        : _drives.TryGetValue(v.Id, out var d) && !CarThrown(v.Id) ? (DriveRecord.Pitch(d.Rec), DriveRecord.Roll(d.Rec)) // a driven vehicle's slope, the latest drive record's (the server's Drive.Pitch/Roll); not the springs' lean
+        : (0f, 0f); // (a thrown one is level, as on the server)
 
     /// <summary>Where a vehicle's hull frame has its origin: the record's place, or a trailer's origin turned about its axle (<see cref="HullTiltOf"/>).</summary>
     static NVec3 HullFeetOf(CarView v) => v.Trailer is { Hull: { } h } ? h.Origin : v.Pos;

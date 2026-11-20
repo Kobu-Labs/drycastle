@@ -64,6 +64,7 @@ public partial class NetClient
         d.Rec = rec;
         d.Buf.Push(tick, rec.Position, DriveRecord.Roll(rec), DriveRecord.Pitch(rec));
         d.Keys.Push(tick, new NVec3(DriveRecord.Steer(rec), DriveRecord.Throttle(rec), 0), 0, 0);
+        if (_cars.TryGetValue(carId, out var car)) PlaceCarSolid(car); // the hull's solid box lies on the slope the record says
     }
 
     VehicleDef? DriveDef(CarView v) => Vehicles != null && v.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[v.Kind].Drive != null ? Vehicles.Vehicles[v.Kind] : null;

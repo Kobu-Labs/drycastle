@@ -115,7 +115,7 @@ public static class VehicleContact
     {
         var dy = MathF.Min(a.Y1, b.Y1) - MathF.Max(a.Y0, b.Y0);
         if (dy <= 0) return null;
-        if (a.Tilted != null || b.Tilted != null) return TiltedOverlap(a, b); // a box of a tilting hull: the way out may be any way (only helicopters have one, and a pair with one may meet vertically)
+        if (a.Tilted != null || b.Tilted != null) return TiltedOverlap(a, b, vertical); // a box of a tilting hull: the way out may be any way for a pair with a helicopter in it, else it is sideways
         var plane = a.Disc switch
         {
             true when b.Disc => DiscDisc(a, b),
@@ -133,15 +133,15 @@ public static class VehicleContact
     }
 
     /// <summary>Two parts of which one is a box of a tilting hull: boxes by the separating axis test in 3D, a rotor disc against a box by the box's nearest point to the disc's centre.</summary>
-    static VehicleContactHit? TiltedOverlap(in Part a, in Part b)
+    static VehicleContactHit? TiltedOverlap(in Part a, in Part b, bool vertical)
     {
         if (a.Disc) return Flip(DiscObb(a, ObbOf(b)));
         if (b.Disc) return DiscObb(b, ObbOf(a)); // its normal points from the box to the disc: here the box is first
-        return ObbObb(ObbOf(a), ObbOf(b));
+        return ObbObb(ObbOf(a), ObbOf(b), vertical);
     }
 
     /// <summary>The way out of the overlap of two boxes of any attitude that needs the least movement (the normal points from the first to the second), or null when they do not touch: 15 axes.</summary>
-    static VehicleContactHit? ObbObb(in Obb a, in Obb b)
+    static VehicleContactHit? ObbObb(in Obb a, in Obb b, bool vertical = true)
     {
         var d = b.Centre - a.Centre;
         var best = float.PositiveInfinity; var normal = Vector3.UnitY;
@@ -160,8 +160,17 @@ public static class VehicleContact
             var along = Vector3.Dot(d, axis);
             var overlap = a.Support(axis) + b.Support(axis) - MathF.Abs(along);
             if (overlap <= 0) return null; // a separating axis
+            if (!vertical) // ground vehicles are never pushed up or down: the way out is the least sideways one, the push lengthened by the axis' slant
+            {
+                var flat = MathF.Sqrt(1 - axis.Y * axis.Y);
+                if (flat < 0.8f) continue; // (a steep axis is no way out; it still counted for the separation above)
+                overlap /= flat;
+                if (overlap < best) { best = overlap; normal = Flat(along < 0 ? -axis : axis) / flat; }
+                continue;
+            }
             if (overlap < best) { best = overlap; normal = along < 0 ? -axis : axis; }
         }
+        if (float.IsPositiveInfinity(best)) return new VehicleContactHit(Vector3.Normalize(Flat(d) + new Vector3(1e-3f, 0, 0)), 0.01f); // (only steep axes: a sideways nudge)
         return new VehicleContactHit(normal, best);
     }
 
