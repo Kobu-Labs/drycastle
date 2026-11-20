@@ -221,6 +221,7 @@ public static class InputBindings
         ("rozhlas_talk", Binding.Key((int)Key.V)),
         ("killstreak", Binding.Key((int)Key.Q)),
         ("sandbox_panel", Binding.Key((int)Key.F4)),
+        ("debug_volumes", Binding.Key((int)Key.F3)), ("debug_volumes_prev", Binding.Key((int)Key.Bracketleft)), ("debug_volumes_next", Binding.Key((int)Key.Bracketright)),
         ("chat", Binding.Key((int)Key.T)),
         ("map", Binding.Key((int)Key.M)),
         ("inventory", Binding.Key((int)Key.F)),
