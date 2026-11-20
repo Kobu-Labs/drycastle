@@ -170,7 +170,8 @@ public partial class DayNightCycle : Node3D
         var gate = Meteors.NightGate(l.NightFactor);
         var meteorGlow = Meteors.Glow(meteors) * gate * MeteorAmbient;
         _env.AmbientLightEnergy = (l.AmbientEnergy * Mathf.Lerp(1f, IndoorAmbient, Mathf.Max(Indoor, IndoorExtra)) + meteorGlow * (1f - Mathf.Max(Indoor, IndoorExtra))) * gloom;
-        _env.BackgroundEnergyMultiplier = Mathf.Lerp(1f, 0.12f, Mathf.Clamp(Gloom, 0f, 1f));
+        // the tonemap exposure darkens the sky with the world: the sky is lifted back by it, so stars, moon and sun stay visible in a dark night
+        _env.BackgroundEnergyMultiplier = Mathf.Lerp(1f / Mathf.Max(l.Exposure, 0.05f), 0.12f, Mathf.Clamp(Gloom, 0f, 1f));
         _env.TonemapExposure = l.Exposure * brightness;
         _env.FogDensity = l.FogDensity;
         _env.FogLightColor = Col(l.SkyHorizon);
