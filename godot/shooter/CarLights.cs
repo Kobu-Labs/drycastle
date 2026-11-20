@@ -25,9 +25,9 @@ public sealed class CarLights
     /// </summary>
     /// <summary>Spot light energy of one headlamp beam. High because the night exposure is low (0.2).</summary>
     const float BeamEnergy = 12f;
-    const float HeadOnEnergy = 6f, HeadOffEnergy = 0.3f, TailEnergy = 0.5f, TailOnEnergy = 3.5f, BrakeEnergy = 10f;
-    /// <summary>Model lamp materials: tails glow softly when the lights are on (the Golf's 0.5 factor makes 7 about 3.5, just over the threshold), flare while braking, off otherwise; reverse lamps bloom only while reversing.</summary>
-    const float ModelTailOn = 7f, ModelTailBrake = 20f, ModelReverseOn = 9f;
+    const float HeadOnEnergy = 6f, HeadOffEnergy = 0.3f, TailEnergy = 0.5f, TailOnEnergy = 14f, BrakeEnergy = 45f;
+    /// <summary>Model lamp materials: tails glow softly when the lights are on (red has low luminance, so energies are high to clear the glow threshold), flare while braking, off otherwise; reverse lamps bloom only while reversing.</summary>
+    const float ModelTailOn = 22f, ModelTailBrake = 70f, ModelReverseOn = 9f;
     /// <summary>Material names of the lamps a model may carry (assets/README.md, scripts/make_golf_mk2_model.py).</summary>
     public const string HeadLensMaterial = "Emissive warm headlight lens", TailLampMaterial = "Emissive red tail lamps",
         ReverseLampMaterial = "Emissive reverse lamps", IndicatorMaterial = "Emissive amber indicators";
