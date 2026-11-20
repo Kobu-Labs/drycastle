@@ -55,7 +55,7 @@ impl PyRandom {
         PyRandom::new(u64::from_be_bytes(d[..8].try_into().unwrap()))
     }
 
-    fn next_u32(&mut self) -> u32 {
+    pub(crate) fn next_u32(&mut self) -> u32 {
         if self.at >= 624 {
             for k in 0..624 {
                 let y = (self.mt[k] & 0x8000_0000) | (self.mt[(k + 1) % 624] & 0x7fff_ffff);

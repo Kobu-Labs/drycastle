@@ -243,13 +243,16 @@ pub struct Textures<'a> {
 
 /// The rows of one patch and its numbers (triangles, area, 1, triangle area).
 fn rows_of(p: &Patch, t: &Terrain, lift_m: f64, tex: &Textures) -> (Vec<f64>, (usize, f64, usize, f64)) {
+    rows_from(p, &drape_xy(&p.geom, t), t, lift_m, tex)
+}
+
+fn rows_from(p: &Patch, tris: &[Tri], t: &Terrain, lift_m: f64, tex: &Textures) -> (Vec<f64>, (usize, f64, usize, f64)) {
     let lift = p.lift.unwrap_or(lift_m);
-    let tris = drape_xy(&p.geom, t);
     let mut e = (0, geom::area(&p.geom), 1, 0.0);
     let mut rows = Vec::with_capacity(tris.len() * PATCH_ROW);
     let (tw, th) = p.texture.map(|n| (tex.tile)(n)).unwrap_or((1.0, 1.0));
     let (c, s) = ((-p.angle).cos(), (-p.angle).sin());
-    for tri in &tris {
+    for tri in tris {
         let Some(v) = lift_tri(t, tri, lift) else { continue };
         e.0 += 1;
         e.3 += ((v[1][0] - v[0][0]) * (v[2][1] - v[0][1]) - (v[2][0] - v[0][0]) * (v[1][1] - v[0][1])).abs() / 2.0;
@@ -275,6 +278,53 @@ fn rows_of(p: &Patch, t: &Terrain, lift_m: f64, tex: &Textures) -> (Vec<f64>, (u
         }
     }
     (rows, e)
+}
+
+/// The rows of one patch draped tile by tile (:data:`DRAPE_TILE_CELLS` cells a side, all cores): the triangles of
+/// :func:`drape_jobs`, for the big patches of a crop field.
+fn rows_of_tiled(p: &Patch, t: &Terrain, lift_m: f64, tex: &Textures) -> (Vec<f64>, (usize, f64, usize, f64)) {
+    use rayon::prelude::*;
+    let mut tiles: Vec<(usize, usize, usize, usize)> = vec![];
+    if !geom::is_empty(&p.geom) {
+        if let Some((ci0, ci1, cj0, cj1)) = t.cell_range(geom::bounds(&p.geom)) {
+            let mut cj = cj0;
+            while cj <= cj1 {
+                let cjb = (cj + DRAPE_TILE_CELLS - 1).min(cj1);
+                let mut ci = ci0;
+                while ci <= ci1 {
+                    let cib = (ci + DRAPE_TILE_CELLS - 1).min(ci1);
+                    tiles.push((ci, cib, cj, cjb));
+                    ci = cib + 1;
+                }
+                cj = cjb + 1;
+            }
+        }
+    }
+    let per_tile: Vec<Vec<Tri>> = tiles
+        .par_iter()
+        .map(|&r| {
+            let (a, b) = (t.cell_box(r.0, r.2), t.cell_box(r.1, r.3));
+            let piece = geom::clip_rect(&p.geom, a[0], a[1], b[2], b[3]);
+            let mut tris = vec![];
+            drape_rec(&piece, r, t, &mut tris);
+            tris
+        })
+        .collect();
+    let tris: Vec<Tri> = per_tile.into_iter().flatten().collect();
+    rows_from(p, &tris, t, lift_m, tex)
+}
+
+/// :func:`patch_rows` for patches draped tile by tile (the crop recipe: its row order is the Python stage's ``drape_jobs``).
+pub fn patch_rows_tiled(patches: &[Patch], t: &Terrain, lift_m: f64, tex: &Textures, rows: &mut Vec<f64>, tally: &mut BTreeMap<&'static str, (usize, f64, usize, f64)>) {
+    for p in patches {
+        let (r, e) = rows_of_tiled(p, t, lift_m, tex);
+        rows.extend_from_slice(&r);
+        let slot = tally.entry(p.layer).or_insert((0, 0.0, 0, 0.0));
+        slot.0 += e.0;
+        slot.1 += e.1;
+        slot.2 += e.2;
+        slot.3 += e.3;
+    }
 }
 
 /// The rows (``PATCH_ROW`` numbers each) of the patches' triangles, in patch order; adds the triangle count, area, patch count and

@@ -71,12 +71,11 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
     # the unit table: recipe (None: no detail), terrain colour, whether the whole unit is the dike
     out_units = []
     cfgs: dict[str, dict] = {}
+    seq = {p["id"]: i for i, p in enumerate(units)}  # the crop recipe walks the neighbours in the order of the work files
     for p in sorted(units, key=lambda u: u["id"]):
-        recipe = D.area_type(p)
-        if recipe in D.PYTHON_RECIPES:  # the engine skips these units; ``D.append_crops`` builds them after it
-            recipe = None
+        recipe = D.area_type(p, types)
         out_units.append({
-            "id": p["id"], "kind": p["kind"], "recipe": recipe or "",
+            "id": p["id"], "seq": seq[p["id"]], "kind": p["kind"], "recipe": recipe or "",
             "whole_dike": bool(p["id"] in D.dike_parcels() or p["kind"] == "dike"),
             "colour": colours._pick(p), "polygon": p["polygon"],
         })
@@ -196,14 +195,8 @@ def run(force: bool = False, edits: str | None = None, work: str | None = None, 
         return 1
     for w in warnings:
         print(f"detail: warning: {w}", file=sys.stderr)
-    try:
-        crops = D.append_crops(work_dir, edits_path=edits_path)
-    except EditsError as exc:
-        for error in exc.errors:
-            print(f"detail: error: {edits_path.name}: {error}", file=sys.stderr)
-        return 1
-    if crops:
-        print("detail: crops: " + ", ".join(f"{k}: {n}" for k, n in crops["crops"].items() if n), file=sys.stderr)
+    if any(stats["crops"].values()):
+        print("detail: crops: " + ", ".join(f"{k}: {n}" for k, n in stats["crops"].items() if n), file=sys.stderr)
     for f in stats["failed"]:
         print(f"detail: warning: a unit failed and has no detail: {f}", file=sys.stderr)
     print(

@@ -10,6 +10,7 @@ use crate::field::{self, Part, Pre};
 use crate::geom::{self, PolyC, G};
 use crate::meadow::{self, Cells, Raster, MEADOW_TYPES};
 use crate::patches::{self, Textures};
+use crate::pyrand::py_round;
 use rayon::prelude::*;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -34,6 +35,7 @@ struct Item {
 struct Out {
     rows: Vec<f64>,
     clutter: Vec<Clutter>,
+    crops: Vec<crate::crop::Inst>,
     cells: Cells,
     tally: BTreeMap<&'static str, (usize, f64, usize, f64)>,
     failed: Option<String>,
@@ -98,8 +100,16 @@ fn parts_of(sh: &Shared, unit: &crate::ctx::Unit) -> Vec<Part> {
 fn run_item(sh: &Shared, part: &Part, pre: &Pre, tile: Option<[f64; 4]>) -> Out {
     let cfg = sh.cfg_for(&part.cfg_kind, &part.recipe);
     let mut out = Out::default();
+    let mut crops = vec![];
     let (res, cells): (Res, Cells) = match part.recipe.as_str() {
         "field" | "forest" => field::run(sh, part, cfg, pre, tile, part.recipe == "forest"),
+        "crop" => {
+            let ctx = Ctx::build(sh, &part.cid, &part.kind, geom::from_polyc(&part.poly), Near::ExactPy, part.colour);
+            let nb = crate::crop::neighbours(sh, &ctx.polygon, part.cid.split('.').next().unwrap_or(""));
+            let (res, inst) = crate::crop::crop_detail(&ctx, cfg, &nb);
+            crops = inst;
+            (res, Cells::default())
+        }
         other => {
             let ctx = Ctx::build(sh, &part.cid, &part.kind, geom::from_polyc(&part.poly), Near::Exact, part.colour);
             let res = match other {
@@ -117,8 +127,13 @@ fn run_item(sh: &Shared, part: &Part, pre: &Pre, tile: Option<[f64; 4]>) -> Out 
     let tile_of = |n: &str| sh.textures.get(n).copied().unwrap_or((1.0, 1.0));
     let index_of = |n: &str| sh.tex_list.iter().position(|t| t == n).map_or(-1.0, |i| i as f64);
     let tex = Textures { tile: &tile_of, index: &index_of };
-    patches::patch_rows(&res.patches, &sh.terrain, cfg.at("lift_m").f(), &tex, &mut out.rows, &mut out.tally);
+    if part.recipe == "crop" {
+        patches::patch_rows_tiled(&res.patches, &sh.terrain, cfg.at("lift_m").f(), &tex, &mut out.rows, &mut out.tally);
+    } else {
+        patches::patch_rows(&res.patches, &sh.terrain, cfg.at("lift_m").f(), &tex, &mut out.rows, &mut out.tally);
+    }
     out.clutter = res.clutter;
+    out.crops = crops;
     out.cells = cells;
     out
 }
@@ -186,6 +201,54 @@ fn write_npy(path: &Path, outs: &[Out], n: usize) -> std::io::Result<()> {
     f.flush()
 }
 
+type Chunks = BTreeMap<(i64, i64), BTreeMap<u16, Vec<Row>>>;
+
+/// At most ``limit_of(kind)`` rows of a kind per chunk (0 = no cap): a hash of the position decides which stay.
+fn cap_chunks(chunks: &mut Chunks, kinds: &[String], limit_of: &(dyn Fn(&str) -> i64 + Sync)) {
+    chunks.par_iter_mut().for_each(|(_, by_kind)| {
+        for (ki, rows) in by_kind.iter_mut() {
+            let kind = &kinds[*ki as usize];
+            let limit = limit_of(kind);
+            if limit > 0 && rows.len() as i64 > limit {
+                let mut keyed: Vec<([u8; 32], Row)> = rows.drain(..).map(|r| (cap_hash(&r, kind), r)).collect();
+                keyed.sort_by(|a, b| a.0.cmp(&b.0));
+                keyed.truncate(limit as usize);
+                *rows = keyed.into_iter().map(|(_, r)| r).collect();
+                rows.sort_by(row_cmp);
+            }
+        }
+    });
+}
+
+/// ``"ix_iy":{"kind":[[row],...],...}`` of every chunk that has rows, kinds by name.
+fn chunks_json(chunks: &Chunks, kinds: &[String]) -> Vec<String> {
+    let mut kind_order: Vec<(usize, &String)> = kinds.iter().enumerate().collect();
+    kind_order.sort_by(|a, b| a.1.cmp(b.1));
+    chunks
+        .par_iter()
+        .filter_map(|((ix, iy), by_kind)| {
+            let mut s = String::new();
+            for (ki, name) in &kind_order {
+                let Some(rows) = by_kind.get(&(*ki as u16)).filter(|r| !r.is_empty()) else { continue };
+                s.push_str(if s.is_empty() { "{" } else { "," });
+                s.push_str(&format!("{name:?}:["));
+                for (n, r) in rows.iter().enumerate() {
+                    if n > 0 {
+                        s.push(',');
+                    }
+                    fmt_row(r, &mut s);
+                }
+                s.push(']');
+            }
+            if s.is_empty() {
+                return None;
+            }
+            s.push('}');
+            Some(format!("\"{ix}_{iy}\":{s}"))
+        })
+        .collect()
+}
+
 pub struct Inputs {
     pub input: Value,
     pub heights: Vec<f64>,
@@ -215,6 +278,9 @@ pub fn run(inp: Inputs) -> Result<Value, String> {
     }
     order.sort_by(|&a, &b| sh.units[a].id.cmp(&sh.units[b].id));
     let parts: Vec<Part> = order.par_iter().map(|&i| parts_of(&sh, &sh.units[i])).collect::<Vec<_>>().into_iter().flatten().collect();
+    // the crop patches go last: their rows follow all the others in the files (the order the Python stage appended them in)
+    let mut parts = parts;
+    parts.sort_by_key(|p| p.recipe == "crop");
     mark("parts", &mut t);
 
     let pres: Vec<Pre> = parts
@@ -287,6 +353,8 @@ pub fn run(inp: Inputs) -> Result<Value, String> {
     let ls = meadow::layers(mcfg);
     let mut raster = Raster::new(chunk_m, mcfg.at("cell_m").f(), ls.len());
     let mut cell_count = 0usize;
+    let crop_kinds: Vec<String> = cfg.at("crop_kinds").entries().iter().map(|(k, _)| k.to_string()).collect();
+    let mut crop_chunks: Chunks = BTreeMap::new();
     for (k, o) in outs.iter().enumerate() {
         let part = &parts[items[k].part];
         if let Some(f) = &o.failed {
@@ -306,6 +374,12 @@ pub fn run(inp: Inputs) -> Result<Value, String> {
             let key = ((c.x / chunk_m).floor() as i64, (c.y / chunk_m).floor() as i64);
             chunks.entry(key).or_default().entry(c.kind).or_default().push(Row { v: [r2(c.x), r2(c.y), r2(c.z), r2(c.rot), r2(c.scale)], tint: c.tint });
         }
+        for c in &o.crops {
+            let ki = crop_kinds.iter().position(|k| *k == c.kind).unwrap_or_else(|| panic!("crop kind {} is not in detail.crop_kinds", c.kind)) as u16;
+            let key = ((c.x / chunk_m).floor() as i64, (c.y / chunk_m).floor() as i64);
+            let r = |v: f64| py_round(v, 2);
+            crop_chunks.entry(key).or_default().entry(ki).or_default().push(Row { v: [r(c.x), r(c.y), r(c.z), r(c.rot), r(c.scale)], tint: -1 });
+        }
         cell_count += o.cells.gx.len();
         raster.set(&o.cells);
     }
@@ -316,20 +390,11 @@ pub fn run(inp: Inputs) -> Result<Value, String> {
     };
     let before = count(&chunks);
     let caps = cfg.at("caps_per_chunk");
-    let kinds = &sh.kinds;
-    chunks.par_iter_mut().for_each(|(_, by_kind)| {
-        for (ki, rows) in by_kind.iter_mut() {
-            let kind = &kinds[*ki as usize];
-            let limit = caps.at(kind).i();
-            if limit > 0 && rows.len() as i64 > limit {
-                let mut keyed: Vec<([u8; 32], Row)> = rows.drain(..).map(|r| (cap_hash(&r, kind), r)).collect();
-                keyed.sort_by(|a, b| a.0.cmp(&b.0));
-                keyed.truncate(limit as usize);
-                *rows = keyed.into_iter().map(|(_, r)| r).collect();
-                rows.sort_by(row_cmp);
-            }
-        }
-    });
+    cap_chunks(&mut chunks, &sh.kinds, &|k| caps.at(k).i());
+    // the crop instances: the same caps, the per-kind ``cap`` of ``crop_kinds``
+    cap_chunks(&mut crop_chunks, &crop_kinds, &|k| cfg.at("crop_kinds").at(k).at("cap").i());
+    let crop_counts: BTreeMap<String, usize> =
+        crop_kinds.iter().enumerate().map(|(i, k)| (k.clone(), crop_chunks.values().map(|m| m.get(&(i as u16)).map_or(0, |v| v.len())).sum())).collect();
     let after = count(&chunks);
     let max_per_chunk: BTreeMap<String, usize> =
         sh.kinds.iter().enumerate().map(|(i, k)| (k.clone(), chunks.values().map(|m| m.get(&(i as u16)).map_or(0, |v| v.len())).max().unwrap_or(0))).collect();
@@ -338,31 +403,7 @@ pub fn run(inp: Inputs) -> Result<Value, String> {
     // --- files ---
     if inp.write {
         let dir = Path::new(&inp.out_dir);
-        let mut kind_order: Vec<(usize, &String)> = sh.kinds.iter().enumerate().collect();
-        kind_order.sort_by(|a, b| a.1.cmp(b.1));
-        let chunk_json: Vec<String> = chunks
-            .par_iter()
-            .filter_map(|((ix, iy), by_kind)| {
-                let mut s = String::new();
-                for (ki, name) in &kind_order {
-                    let Some(rows) = by_kind.get(&(*ki as u16)).filter(|r| !r.is_empty()) else { continue };
-                    s.push_str(if s.is_empty() { "{" } else { "," });
-                    s.push_str(&format!("{name:?}:["));
-                    for (n, r) in rows.iter().enumerate() {
-                        if n > 0 {
-                            s.push(',');
-                        }
-                        fmt_row(r, &mut s);
-                    }
-                    s.push(']');
-                }
-                if s.is_empty() {
-                    return None;
-                }
-                s.push('}');
-                Some(format!("\"{ix}_{iy}\":{s}"))
-            })
-            .collect();
+        let chunk_json = chunks_json(&chunks, &sh.kinds);
         let tintable = &sh.tintable;
         let kinds_json: Vec<String> =
             sh.kinds.iter().map(|k| if tintable.contains(k) { format!("{k:?}:{{\"mesh\":{k:?},\"tint\":true}}") } else { format!("{k:?}:{{\"mesh\":{k:?}}}") }).collect();
@@ -373,6 +414,31 @@ pub fn run(inp: Inputs) -> Result<Value, String> {
             chunk_json.join(",")
         );
         std::fs::write(dir.join("detail.json"), doc).map_err(|e| e.to_string())?;
+        let crops_path = dir.join("detail_crops.json");
+        let crop_json = chunks_json(&crop_chunks, &crop_kinds);
+        if crop_json.is_empty() {
+            let _ = std::fs::remove_file(&crops_path);
+        } else {
+            let mut kinds_obj = serde_json::Map::new();
+            for (k, spec) in cfg.at("crop_kinds").entries() {
+                let mut o = serde_json::Map::new();
+                if let Some(m) = spec.0.as_object() {
+                    for (key, v) in m {
+                        if key != "cap" {
+                            o.insert(key.clone(), v.clone());
+                        }
+                    }
+                }
+                kinds_obj.insert(k.to_string(), Value::Object(o));
+            }
+            let doc = format!(
+                "{{\"format_version\":1,\"axes\":\"map metres: x east, y north, z up (ground height at the instance); row: x y z rot(rad about up) scale\",\"chunk_size_m\":{:?},\"kinds\":{},\"chunks\":{{{}}}}}\n",
+                chunk_m,
+                serde_json::to_string(&Value::Object(kinds_obj)).map_err(|e| e.to_string())?,
+                crop_json.join(",")
+            );
+            std::fs::write(&crops_path, doc).map_err(|e| e.to_string())?;
+        }
         write_npy(&dir.join("detail_patches.npy"), &outs, outs.iter().map(|o| o.rows.len() / patches::PATCH_ROW).sum()).map_err(|e| e.to_string())?;
         let tex_json: Vec<String> = sh.tex_list.iter().map(|t| format!("  {t:?}")).collect();
         std::fs::write(
@@ -405,6 +471,7 @@ pub fn run(inp: Inputs) -> Result<Value, String> {
     let stats = json!({
         "clutter_before_caps": before,
         "clutter": after,
+        "crops": crop_counts,
         "max_per_chunk": max_per_chunk,
         "patch_triangles": tris,
         "patch_area_m2": patch_area,
