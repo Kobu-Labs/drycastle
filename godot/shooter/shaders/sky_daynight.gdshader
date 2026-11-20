@@ -9,6 +9,9 @@ uniform vec3 moon_dir = vec3(0.0, -1.0, 0.0);
 uniform vec3 moon_colour : source_color = vec3(0.6, 0.7, 0.95);
 uniform float moon_visibility = 0.0;
 uniform float star_visibility = 0.0;
+// shooting stars from Meteors (ShooterCore): a = path start xyz + progress, b = path end xyz + brightness (0 = none)
+uniform vec4 meteor_a[8];
+uniform vec4 meteor_b[8];
 
 // cheap hash for star placement; one star per cell of a 180 cell grid over the sphere
 float hash3(vec3 p) {
@@ -41,6 +44,21 @@ void sky() {
 			float fade = smoothstep(0.0, 0.12, dir.y);
 			col += point * star_visibility * twinkle * fade * tint * (0.5 + 0.7 * h2);
 		}
+	}
+
+	// shooting stars: a bright head and a tail that fades behind it, along the path from start to end
+	for (int i = 0; i < 8; i++) {
+		float br = meteor_b[i].w;
+		if (br <= 0.0) continue;
+		vec3 head = normalize(mix(meteor_a[i].xyz, meteor_b[i].xyz, meteor_a[i].w));
+		vec3 tail = normalize(mix(meteor_a[i].xyz, meteor_b[i].xyz, max(meteor_a[i].w - 0.3, 0.0)));
+		vec3 seg = head - tail;
+		float len2 = max(dot(seg, seg), 1e-6);
+		float t = clamp(dot(dir - tail, seg) / len2, 0.0, 1.0);
+		float d = length(dir - (tail + seg * t));
+		float width = mix(0.0006, 0.0022, t);
+		float line = smoothstep(width, 0.0, d) * t * t;
+		col += line * br * vec3(0.9, 0.95, 1.0) * 1.2 * step(0.0, dir.y);
 	}
 
 	// sun: soft-edged disc plus a glow that only shows while it is up
