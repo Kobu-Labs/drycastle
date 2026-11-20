@@ -70,9 +70,11 @@ public partial class DayNightCycle : Node3D
     /// <summary>
     /// Glow (bloom) is for lamps only. The threshold is on the scene's linear HDR value before exposure: a white surface in full sun
     /// peaks at about 1.1 (sun) + 0.7 (ambient) = 1.8 and the sun disc at 1.4, so nothing lit by day or the sky reaches 2; lit lamp lenses
-    /// are driven to 6 and up (<see cref="CarLights"/>). Full bloom from threshold + ramp. Exposure (0.5..1.5 x 1.0..0.9) comes after.
+    /// are driven to 4 and up (<see cref="CarLights"/>). Full bloom from threshold + ramp; values above <see cref="GlowCap"/> bloom no more.
+    /// Godot tests the threshold on max(r, g, b) AFTER the tonemap exposure, so <see cref="Apply"/> scales the three by the exposure each
+    /// frame; fixed values put every lamp under the threshold at night (exposure 0.2).
     /// </summary>
-    public const float GlowThreshold = 2f, GlowRamp = 1f;
+    public const float GlowThreshold = 2f, GlowRamp = 1f, GlowCap = 16f;
 
     readonly DirectionalLight3D _sun = new() { ShadowEnabled = true };
     readonly DirectionalLight3D _moon = new() { ShadowEnabled = false };
@@ -98,9 +100,6 @@ public partial class DayNightCycle : Node3D
         // a small tight halo: only the first mips (levels 1-3), additive, nothing below the threshold
         _env.GlowEnabled = true;
         _env.GlowBlendMode = Godot.Environment.GlowBlendModeEnum.Additive;
-        _env.GlowHdrThreshold = GlowThreshold;
-        _env.GlowHdrScale = GlowRamp;
-        _env.GlowHdrLuminanceCap = 8f;
         _env.GlowIntensity = 0.6f;
         _env.GlowStrength = 1f;
         _env.GlowBloom = 0f;
@@ -172,7 +171,11 @@ public partial class DayNightCycle : Node3D
         var meteorGlow = Meteors.Glow(meteors) * gate * MeteorAmbient;
         _env.AmbientLightEnergy = (l.AmbientEnergy * Mathf.Lerp(1f, IndoorAmbient, Mathf.Max(Indoor, IndoorExtra)) + meteorGlow * (1f - Mathf.Max(Indoor, IndoorExtra))) * gloom;
         _env.BackgroundEnergyMultiplier = Mathf.Lerp(1f, 0.12f, Mathf.Clamp(Gloom, 0f, 1f));
-        _env.TonemapExposure = l.Exposure * brightness;
+        var exposure = l.Exposure * brightness;
+        _env.TonemapExposure = exposure;
+        _env.GlowHdrThreshold = GlowThreshold * exposure;
+        _env.GlowHdrScale = GlowRamp * exposure;
+        _env.GlowHdrLuminanceCap = GlowCap * exposure;
         _env.FogDensity = l.FogDensity;
         _env.FogLightColor = Col(l.SkyHorizon);
 

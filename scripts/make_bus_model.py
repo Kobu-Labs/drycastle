@@ -72,7 +72,7 @@ MATERIALS = {
     "SeatHead": (0.10, 0.40, 0.48, 0.95, 0.0, 0, 1),       # headrest covers
     "Yellow": (0.95, 0.78, 0.10, 0.5, 0.0, 0, 1),          # handrails, step edges
     "Lamp": (0.98, 0.94, 0.75, 0.4, 0.0, 0.6, 1),          # headlamps
-    "TailLamp": (0.78, 0.08, 0.06, 0.5, 0.0, 0.3, 1),      # tail lamps, marker lamps
+    "Emissive red tail lamps": (0.78, 0.08, 0.06, 0.5, 0.0, 0.3, 1),  # tail lamps and the high rear lamps: the contract name, CarLights drives it
     "Amber": (0.98, 0.55, 0.08, 0.5, 0.0, 0.7, 1),         # indicators, the destination display's lit dots
 }
 
@@ -361,8 +361,8 @@ def build():
         hull.add(box("Black", -0.62, 0.62, 0.60 + k * 0.09, 0.65 + k * 0.09, zb - 0.02, zb + 0.012))
     hull.add(box("Black", -0.90, 0.90, 1.52, 1.535, zb - 0.02, zb + 0.008))                   # hatch seam
     hull.add(box("White", -0.26, 0.26, 1.06, 1.18, zb - 0.02, zb + 0.014))
-    tail = box("TailLamp", 0.93, 1.15, 0.98, 1.36, zb - 0.02, zb + 0.016) + box("Amber", 0.93, 1.15, 1.38, 1.52, zb - 0.02, zb + 0.016)
-    tail += box("White", 0.93, 1.15, 0.86, 0.96, zb - 0.02, zb + 0.016) + box("TailLamp", 0.95, 1.13, 2.62, 2.68, zb - 0.02, zb + 0.014)
+    tail = box("Emissive red tail lamps", 0.93, 1.15, 0.98, 1.36, zb - 0.02, zb + 0.016) + box("Amber", 0.93, 1.15, 1.38, 1.52, zb - 0.02, zb + 0.016)
+    tail += box("White", 0.93, 1.15, 0.86, 0.96, zb - 0.02, zb + 0.016) + box("Emissive red tail lamps", 0.95, 1.13, 2.62, 2.68, zb - 0.02, zb + 0.014)
     hull.add(both(tail))
 
     # ================================================================ floor, wells, running gear

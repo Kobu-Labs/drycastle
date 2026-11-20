@@ -66,7 +66,7 @@ MATERIALS = {
     "Steel": (0.62, 0.64, 0.64, 0.5, 0.4, 0),         # ring, hubs, propeller
     "Rubber": (0.07, 0.07, 0.075, 0.95, 0.0, 0),      # tyres, steering wheel rim
     "Yellow": (0.90, 0.70, 0.12, 0.8, 0.0, 0),        # ammunition belt
-    "Red": (0.72, 0.13, 0.10, 0.7, 0.0, 0.3),         # tail lamps
+    "Emissive red tail lamps": (0.72, 0.13, 0.10, 0.7, 0.0, 0.3),  # tail lamps: the contract name, CarLights drives it
     "Lamp": (0.98, 0.94, 0.75, 0.4, 0.0, 0.6),        # headlamp lenses, gauges
 }
 
@@ -259,7 +259,7 @@ def build():
         x = sx * WHEEL_X
         hull.add(lathe((x, 1.00, -1.60), (0, 0, -1), [(0, 0.0, "Olive"), (0.02, 0.07), (0.16, 0.085), (0.18, 0.085, "Lamp"), (0.20, 0.06), (0.205, 0.0)], 10))
         hull.add(cyl("Olive", (x, 0.90, -1.52), (x, 0.96, -1.52), 0.02, 5, smooth=False))
-        hull.add(box("Red", sx * 0.55 - 0.05, sx * 0.55 + 0.05, 0.93, 1.03, 2.045, 2.075))
+        hull.add(box("Emissive red tail lamps", sx * 0.55 - 0.05, sx * 0.55 + 0.05, 0.93, 1.03, 2.045, 2.075))
 
     # ---- loose gear: a paddle on the left running board, a fuel can on the right one
     hull.add(cyl("Wood", (-0.93, 0.665, AXLE_F + 0.55), (-0.93, 0.665, 0.45), 0.018, 6))
