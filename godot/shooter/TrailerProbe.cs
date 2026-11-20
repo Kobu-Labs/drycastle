@@ -44,11 +44,21 @@ public sealed partial class TrailerProbe : Node3D, ITrailerWorld
     {
         _ray.From = new Vector3(x, hint + RayLift, z); _ray.To = new Vector3(x, hint - RayReach, z);
         var r = GetWorld3D().DirectSpaceState.IntersectRay(_ray);
-        return r.Count == 0 ? hint : r["position"].AsVector3().Y;
+        if (r.Count == 0) { _misses++; return hint; }
+        return r["position"].AsVector3().Y;
     }
+
+    // what the last query was, for the block log (#377: why a towed cart sticks on a dyke) and the volume overlay
+    int _misses;
+    double _lastLogS = -10;
+    /// <summary>The last swept box: where it was, how it was turned and its size.</summary>
+    public Transform3D LastBoxAt { get; private set; }
+    public Vector3 LastBoxSize => _box.Size;
+    public bool LastBlocked { get; private set; }
 
     public bool Blocked(in BodyBox from, in BodyBox to, float y)
     {
+        _misses = 0;
         // the ground under the two ends of the box at its new place: the box lies along that slope, clear of it
         var (s, c) = MathF.SinCos(to.Yaw);
         var front = (X: to.X - s * to.HalfL, Z: to.Z - c * to.HalfL);
@@ -70,6 +80,20 @@ public sealed partial class TrailerProbe : Node3D, ITrailerWorld
         var mid = (gf + gr) / 2 + lift;
         var centre = new Vector3(to.X, mid + _clearance + height / 2, to.Z);
         _query.Transform = new Transform3D(basis, centre);
-        return GetWorld3D().DirectSpaceState.IntersectShape(_query, 1).Count > 0;
+        LastBoxAt = _query.Transform;
+        var hits = GetWorld3D().DirectSpaceState.IntersectShape(_query, 1);
+        LastBlocked = hits.Count > 0;
+        if (LastBlocked) LogBlock(hits[0], to, y, gf, gr, lift, pitch, centre);
+        return LastBlocked;
+    }
+
+    /// <summary>One line a second at most when the box is blocked: what it hit, and what the ground samples said (rays that found nothing read as flat ground at the hint).</summary>
+    void LogBlock(Godot.Collections.Dictionary hit, in BodyBox to, float y, float gf, float gr, float lift, float pitch, Vector3 centre)
+    {
+        var now = Time.GetTicksMsec() / 1000.0;
+        if (now - _lastLogS < 1) return;
+        _lastLogS = now;
+        var who = hit.TryGetValue("collider", out var c) && c.AsGodotObject() is Node n ? $"{n.Name} ({n.GetType().Name}, layer {(n as CollisionObject3D)?.CollisionLayer})" : "?";
+        GD.Print($"server: trailer {_def.Id} blocked by {who} at ({to.X:F1},{to.Z:F1}) yaw {to.Yaw * 180f / MathF.PI:F0}: hint y {y:F2}, ground front {gf:F2} rear {gr:F2}, lift {lift:F2}, pitch {pitch * 180f / MathF.PI:F1} deg, box centre y {centre.Y:F2}, ray misses {_misses}");
     }
 }
