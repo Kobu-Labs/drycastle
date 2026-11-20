@@ -5,14 +5,15 @@
 shader_type spatial;
 render_mode cull_disabled, diffuse_lambert, specular_disabled;
 
-uniform vec4 base_color : source_color = vec4(0.294, 0.353, 0.196, 1.0);
-uniform vec4 secondary_color : source_color = vec4(0.18, 0.227, 0.122, 1.0);
+// Instance uniforms: every character shares one material and carries its own look (#448).
+instance uniform vec4 base_color : source_color = vec4(0.294, 0.353, 0.196, 1.0);
+instance uniform vec4 secondary_color : source_color = vec4(0.18, 0.227, 0.122, 1.0);
 // Tip displacement in model units (camo.json tuft_sway_m maps the 0..255 field onto this).
-uniform float sway_amount = 0.03;
+instance uniform float sway_amount = 0.03;
 // How much the cards differ from each other in colour, 0..1: 0 all take the base colour, 1 they spread over both suit colours and vary in brightness.
-uniform float colour_variation = 0.4;
+instance uniform float colour_variation = 0.4;
 // The vegetation look: 0 grass, 1 fern, 2 bush.
-uniform int shape = 0;
+instance uniform int shape = 0;
 
 varying float tip;
 varying float variation;

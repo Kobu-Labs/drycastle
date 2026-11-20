@@ -4,13 +4,16 @@
 shader_type spatial;
 render_mode cull_back, diffuse_lambert, specular_disabled;
 
-uniform vec4 base_color : source_color = vec4(0.294, 0.353, 0.196, 1.0);
-uniform vec4 secondary_color : source_color = vec4(0.18, 0.227, 0.122, 1.0);
-uniform int pattern = 0;
+// Instance uniforms: every character shares one material and carries its own colours (#448). The gear material (flat_colour) draws gear_color flat.
+uniform bool flat_colour = false;
+instance uniform vec4 gear_color : source_color = vec4(0.1, 0.12, 0.07, 1.0);
+instance uniform vec4 base_color : source_color = vec4(0.294, 0.353, 0.196, 1.0);
+instance uniform vec4 secondary_color : source_color = vec4(0.18, 0.227, 0.122, 1.0);
+instance uniform int pattern = 0;
 // Pattern cells per unit of model space (camo.json pattern_scale_per_m maps the 0..255 field onto this).
-uniform float pattern_scale = 4.0;
+instance uniform float pattern_scale = 4.0;
 // How far apart the two colours are drawn: 0 both are their average (a plain suit), 0.5 as picked, 1 pushed apart to twice the difference.
-uniform float contrast = 0.5;
+instance uniform float contrast = 0.5;
 
 varying vec3 model_pos;
 
@@ -46,6 +49,11 @@ void vertex() {
 }
 
 void fragment() {
+	if (flat_colour) {
+		ALBEDO = gear_color.rgb;
+		ROUGHNESS = 0.95;
+		return;
+	}
 	vec3 p = model_pos * pattern_scale;
 	// t: 0 draws the base colour, 1 the secondary. Each pattern has its own shape and its own edge.
 	float t;

@@ -42,6 +42,14 @@ public sealed partial class CharacterView
     const float BootTop = 0.2f;
 
     static Shader? _suitShader, _tuftShader, _hiddenShader;
+    /// <summary>
+    /// The materials every character shares (#448): one suit and one gear material (colours and pattern are instance uniforms set on the mesh), one hidden, one tuft, and the skin and face
+    /// materials of each skin tone. A character's own values ride on its instances, so characters cost no material of their own and no variant is compiled on a spawn.
+    /// </summary>
+    static ShaderMaterial? _suitMaterial, _gearMaterial, _hiddenMaterial, _tuftMaterial;
+    static StandardMaterial3D? _eyeMaterial;
+    static readonly Dictionary<uint, (StandardMaterial3D Skin, StandardMaterial3D Face)> ToneMaterials = new();
+    static readonly Dictionary<(int, int, int, int, int), ImageTexture> FaceTextures = new();
     static readonly Dictionary<string, ArrayMesh> PreparedMeshes = new();
 
     CamoBody? _bodyDef;
@@ -128,12 +136,12 @@ public sealed partial class CharacterView
     {
         var mesh = (ArrayMesh)_mesh!.Mesh;
         var tone = ToColor(data.SkinTones[spec.SkinTone].Colour);
-        var suit = SuitMaterial(spec, data);
+        var suit = SuitMaterial();
+        var gear = GearMaterial();
         var gearColour = ToColor(spec.SuitSecondary) * 0.55f;
         gearColour.A = 1f;
-        var gear = new StandardMaterial3D { AlbedoColor = gearColour, Roughness = 0.9f };
-        var skin = new StandardMaterial3D { AlbedoColor = tone, VertexColorUseAsAlbedo = true, Roughness = 0.85f };
-        var face = new StandardMaterial3D { AlbedoColor = tone, Roughness = 0.85f };
+        SetSuitLook(_mesh, ToColor(spec.SuitBase), ToColor(spec.SuitSecondary), (int)spec.SuitPattern, data.PatternScaleOf(spec.PatternScale) * Scale, CamoSpec.Unit(spec.Contrast), gearColour); // the shader works in rig units, the data in metres
+        var (skin, face) = ToneMaterial(tone);
         for (var i = 0; i < mesh.GetSurfaceCount(); i++)
         {
             var name = SurfaceName(mesh, i);
@@ -148,22 +156,40 @@ public sealed partial class CharacterView
         }
     }
 
-    static ShaderMaterial SuitMaterial(CamoSpec spec, CamoFile data)
+    static ShaderMaterial SuitMaterial() => _suitMaterial ??= new ShaderMaterial { Shader = _suitShader ??= GD.Load<Shader>(SuitShaderPath) };
+
+    static ShaderMaterial GearMaterial()
     {
-        _suitShader ??= GD.Load<Shader>(SuitShaderPath);
-        var mat = new ShaderMaterial { Shader = _suitShader };
-        mat.SetShaderParameter("base_color", ToColor(spec.SuitBase));
-        mat.SetShaderParameter("secondary_color", ToColor(spec.SuitSecondary));
-        mat.SetShaderParameter("pattern", (int)spec.SuitPattern);
-        mat.SetShaderParameter("pattern_scale", data.PatternScaleOf(spec.PatternScale) * Scale); // the shader works in rig units, the data in metres
-        mat.SetShaderParameter("contrast", CamoSpec.Unit(spec.Contrast));
-        return mat;
+        if (_gearMaterial != null) return _gearMaterial;
+        _gearMaterial = new ShaderMaterial { Shader = _suitShader ??= GD.Load<Shader>(SuitShaderPath) };
+        _gearMaterial.SetShaderParameter("flat_colour", true);
+        return _gearMaterial;
+    }
+
+    /// <summary>The look on one character's mesh: the suit's colours, pattern and contrast, and the gear's flat colour (a dark tint of the suit's secondary).</summary>
+    static void SetSuitLook(GeometryInstance3D mi, Color baseColour, Color secondary, int pattern, float patternScale, float contrast, Color gearColour)
+    {
+        mi.SetInstanceShaderParameter("base_color", baseColour);
+        mi.SetInstanceShaderParameter("secondary_color", secondary);
+        mi.SetInstanceShaderParameter("pattern", pattern);
+        mi.SetInstanceShaderParameter("pattern_scale", patternScale);
+        mi.SetInstanceShaderParameter("contrast", contrast);
+        mi.SetInstanceShaderParameter("gear_color", gearColour);
+    }
+
+    /// <summary>The skin and face materials of a skin tone, shared by every character of that tone.</summary>
+    static (StandardMaterial3D Skin, StandardMaterial3D Face) ToneMaterial(Color tone)
+    {
+        var key = tone.ToRgba32();
+        if (!ToneMaterials.TryGetValue(key, out var pair))
+            ToneMaterials[key] = pair = (new StandardMaterial3D { AlbedoColor = tone, VertexColorUseAsAlbedo = true, Roughness = 0.85f }, new StandardMaterial3D { AlbedoColor = tone, Roughness = 0.85f });
+        return pair;
     }
 
     internal static ShaderMaterial HiddenMaterial()
     {
         _hiddenShader ??= new Shader { Code = "shader_type spatial;\nrender_mode unshaded;\nvoid fragment() { discard; }\n" };
-        return new ShaderMaterial { Shader = _hiddenShader };
+        return _hiddenMaterial ??= new ShaderMaterial { Shader = _hiddenShader };
     }
 
     // ---- tufts ----
@@ -317,13 +343,7 @@ public sealed partial class CharacterView
         }
         if (perBone.Count == 0) return;
 
-        _tuftShader ??= GD.Load<Shader>(TuftShaderPath);
-        var mat = new ShaderMaterial { Shader = _tuftShader };
-        mat.SetShaderParameter("base_color", ToColor(spec.SuitBase));
-        mat.SetShaderParameter("secondary_color", ToColor(spec.SuitSecondary));
-        mat.SetShaderParameter("sway_amount", data.TuftSwayOf(spec.TuftSway) / Scale);
-        mat.SetShaderParameter("colour_variation", CamoSpec.Unit(spec.TuftColourVariation));
-        mat.SetShaderParameter("shape", spec.Vegetation < TuftLooks.Length ? (int)spec.Vegetation : 0);
+        _tuftMaterial ??= new ShaderMaterial { Shader = _tuftShader ??= GD.Load<Shader>(TuftShaderPath) };
         // the quad's bottom edge is at the instance origin, so a card grows from the body
         var quad = new QuadMesh { Size = new Vector2(length * look.Width, length), CenterOffset = new Vector3(0, length * 0.5f, 0) };
         foreach (var (bone, placements) in perBone)
@@ -331,11 +351,17 @@ public sealed partial class CharacterView
             var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = quad, InstanceCount = placements.Count };
             for (var i = 0; i < placements.Count; i++) mm.SetInstanceTransform(i, placements[i]);
             var carrier = new BoneAttachment3D { Name = "Tufts_" + attachOf[bone].Replace('.', '_'), BoneName = attachOf[bone] };
-            carrier.AddChild(new MultiMeshInstance3D
+            var tufts = new MultiMeshInstance3D
             {
-                Name = "Tufts", Multimesh = mm, MaterialOverride = mat, VisibilityRangeEnd = TuftHideDistance,
+                Name = "Tufts", Multimesh = mm, MaterialOverride = _tuftMaterial, VisibilityRangeEnd = TuftHideDistance,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, // hundreds of small cards: not worth a shadow pass
-            });
+            };
+            tufts.SetInstanceShaderParameter("base_color", ToColor(spec.SuitBase));
+            tufts.SetInstanceShaderParameter("secondary_color", ToColor(spec.SuitSecondary));
+            tufts.SetInstanceShaderParameter("sway_amount", data.TuftSwayOf(spec.TuftSway) / Scale);
+            tufts.SetInstanceShaderParameter("colour_variation", CamoSpec.Unit(spec.TuftColourVariation));
+            tufts.SetInstanceShaderParameter("shape", spec.Vegetation < TuftLooks.Length ? (int)spec.Vegetation : 0);
+            carrier.AddChild(tufts);
             _skeleton!.AddChild(carrier);
             _camoNodes.Add(carrier);
         }
@@ -366,7 +392,7 @@ public sealed partial class CharacterView
         var head = sk.FindBone("Head");
         if (FacePlate() is not { } plate || head < 0 || !_bind.ContainsKey(head)) return;
         var eye = new BoxMesh { Size = new Vector3(plate.Size.X * 0.11f, plate.Size.Y * 0.32f, 0.02f) };
-        var dark = new StandardMaterial3D { AlbedoColor = new Color(0.04f, 0.04f, 0.05f), ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
+        var dark = _eyeMaterial ??= new StandardMaterial3D { AlbedoColor = new Color(0.04f, 0.04f, 0.05f), ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded };
         var toHead = _bind[head].AffineInverse();
         var carrier = new BoneAttachment3D { Name = "Eyes", BoneName = "Head" };
         if (_high is { } high) AddHighEyes(carrier, plate, toHead, high.View.Eyes); // a high figure's: bigger, white with a red tint, each with a pupil (CharacterView.High.cs)
@@ -385,7 +411,7 @@ public sealed partial class CharacterView
         if (spec.FaceCoverage == 0 || _skeleton == null || HeadCovered) return; // a worn headgear Item covers the face (and a decal would paint on the item)
         var head = _skeleton.FindBone("Head");
         if (FacePlate() is not { } plate || head < 0 || !_bind.ContainsKey(head)) return;
-        var tex = ImageTexture.CreateFromImage(FaceImage(spec));
+        var tex = FaceTexture(spec);
         // a Decal projects along its local -Y: turned 90 degrees about X it projects along -Z, from the front of the face towards the back of the head
         var inBind = new Transform3D(Basis.FromEuler(new Vector3(Mathf.Pi / 2f, 0, 0)), new Vector3(plate.GetCenter().X, plate.GetCenter().Y, plate.GetCenter().Z + 0.05f));
         var carrier = new BoneAttachment3D { Name = "FacePaint", BoneName = "Head" };
@@ -395,10 +421,24 @@ public sealed partial class CharacterView
             Transform = _bind[head].AffineInverse() * inBind,
             Size = new Vector3(plate.Size.X * 1.05f, 0.2f, plate.Size.Y * 1.05f),
             TextureAlbedo = tex,
+            DistanceFadeEnabled = true, DistanceFadeBegin = FacePaintFadeDistance, DistanceFadeLength = 5f, // a face is not readable beyond this: no decal to cull and project
         });
         _skeleton.AddChild(carrier);
         _camoNodes.Add(carrier);
     }
+
+    /// <summary>Beyond this distance (m) the face paint fades out and is not drawn.</summary>
+    const float FacePaintFadeDistance = 40f;
+
+    /// <summary>The face paint texture of a look, shared by every character painted the same.</summary>
+    static ImageTexture FaceTexture(CamoSpec spec)
+    {
+        var key = (spec.FacePattern, spec.FaceCoverage, Pack(spec.FaceColourA), Pack(spec.FaceColourB), Pack(spec.FaceColourC));
+        if (!FaceTextures.TryGetValue(key, out var tex)) FaceTextures[key] = tex = ImageTexture.CreateFromImage(FaceImage(spec));
+        return tex;
+    }
+
+    static int Pack(Rgb c) => (c.R << 16) | (c.G << 8) | c.B;
 
     static Color ToColor(Rgb c) => new(c.R / 255f, c.G / 255f, c.B / 255f);
 
