@@ -5,7 +5,7 @@ namespace Drycastle.MapLoader;
 
 /// <summary>
 /// Near-only ground clutter (tufts, pebbles, rocks, leaves, flowers): clutter.json (manifest <c>files.clutter</c>) lists instances per
-/// chunk and kind, clutter_meshes.glb (<c>files.clutter_meshes</c>) has one small mesh node per kind. Each kind of a ~48 m cell becomes one
+/// chunk and kind, clutter_meshes.glb (<c>files.clutter_meshes</c>) has one small mesh node per kind. Each kind of a ~64 m cell becomes one
 /// MultiMeshInstance3D with a visibility range (see <see cref="ClutterSettings"/>): no shadows, no collision, a flat colour material like the
 /// rest of the map. A map without the files builds nothing, silently; a headless load (<see cref="CollisionOnly"/>) never builds it.
 /// Rotation: the file's rot is counter-clockwise seen from above in map axes, which is a positive rotation about Godot's +Y axis (z = -north),
@@ -85,11 +85,11 @@ public sealed partial class MapLoader
                 continue;
             }
             var parent = _chunkRoots.TryGetValue($"chunk_{g.ChunkX}_{g.ChunkY}", out var cr) ? cr : Root;
-            var range = ClutterSettings.RangeOf(g.Kind) * ClutterScale + ClutterSettings.CellAllowanceM;
-            foreach (var cell in ClutterSettings.Cells(g.Instances))
+            var range = ClutterSettings.RangeOf(g.Kind) * ClutterScale + ClutterSettings.StoredCellAllowanceM;
+            foreach (var cell in ClutterSettings.Cells(g.Instances, ClutterSettings.StoredCellM))
             {
                 if (cell.Count >= ClutterSettings.MultiMeshMin) { _clutterNodes.Add(AddClutterCell(parent, g.Kind, mesh, cell, range)); continue; }
-                var key = (parent, (int)MathF.Floor(cell[0].X / ClutterSettings.CellM), (int)MathF.Floor(cell[0].Y / ClutterSettings.CellM));
+                var key = (parent, (int)MathF.Floor(cell[0].X / ClutterSettings.StoredCellM), (int)MathF.Floor(cell[0].Y / ClutterSettings.StoredCellM));
                 if (!small.TryGetValue(key, out var list)) small[key] = list = new();
                 list.Add((mesh, g.Kind, cell.Select(i => (ToGodot(i.X, i.Y, i.Z), i.Rot, i.Scale, i.Tint)).ToList()));
                 Stats.ClutterInstances += cell.Count;
@@ -97,9 +97,9 @@ public sealed partial class MapLoader
         }
         foreach (var ((parent, cx, cy), groups) in small)
         {
-            var centre = ToGodot((cx + 0.5f) * ClutterSettings.CellM, (cy + 0.5f) * ClutterSettings.CellM, 0f);
-            var range = groups.Max(g => ClutterSettings.RangeOf(g.Kind)) * ClutterScale + ClutterSettings.CellAllowanceM;
-            if (BuildMergedMesh(groups, centre, ClutterSettings.CellM, range, parent, "clutter_merged") is { } node) _clutterNodes.Add(node);
+            var centre = ToGodot((cx + 0.5f) * ClutterSettings.StoredCellM, (cy + 0.5f) * ClutterSettings.StoredCellM, 0f);
+            var range = groups.Max(g => ClutterSettings.RangeOf(g.Kind)) * ClutterScale + ClutterSettings.StoredCellAllowanceM;
+            if (BuildMergedMesh(groups, centre, ClutterSettings.StoredCellM, range, parent, "clutter_merged") is { } node) _clutterNodes.Add(node);
         }
         if (_clutterNodes.Count > 0)
             GD.Print($"clutter: {Stats.ClutterInstances} instances in {_clutterNodes.Count} nodes, scale {ClutterScale}");

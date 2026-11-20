@@ -85,9 +85,13 @@ public static class ClutterSettings
     /// <summary>Instances are grouped into cells this wide (metres), one MultiMesh per cell and kind, because a visibility range
     /// is measured to the node as a whole: one chunk-sized MultiMesh would vanish while the player stands inside it.</summary>
     public const float CellM = 48f;
+    /// <summary>Cell width (metres) of the stored clutter (clutter.json), wider than <see cref="CellM"/> (crops, meadow) to keep the node count down: the village's 259,568
+    /// instances are 2,898 nodes at 64 m cells and 24 instances (perf/count_map_nodes.py), against 4,171 at 48 m and 16. The visibility range of a cell grows
+    /// by <see cref="StoredCellAllowanceM"/>, so a kind shows a little further at the cell's edge.</summary>
+    public const float StoredCellM = 64f;
     /// <summary>A stored kind with at least this many instances in a cell is one MultiMesh node; fewer are merged with the cell's other small groups into one mesh
-    /// (about 19 MB of vertices for the village, 1,715 nodes instead of 2,809).</summary>
-    public const int MultiMeshMin = 16;
+    /// (about 1 M vertices for the village).</summary>
+    public const int MultiMeshMin = 24;
 
     /// <summary>Distance (metres) from the camera at which a kind is gone, before the cell allowance.</summary>
     public const float DefaultRangeM = 70f;
@@ -95,6 +99,8 @@ public static class ClutterSettings
     public const float FadeMarginM = 8f;
     /// <summary>Half the diagonal of a cell: added to the range, the distance being measured to the cell centre.</summary>
     public static readonly float CellAllowanceM = CellM * 0.7072f;
+    /// <summary><see cref="CellAllowanceM"/> for the stored clutter's cells (<see cref="StoredCellM"/>).</summary>
+    public static readonly float StoredCellAllowanceM = StoredCellM * 0.7072f;
 
     /// <summary>Per kind overrides of <see cref="DefaultRangeM"/>: small things vanish sooner.</summary>
     public static readonly IReadOnlyDictionary<string, float> KindRangeM = new Dictionary<string, float>
@@ -142,14 +148,14 @@ public static class ClutterSettings
     }
 
     /// <summary>
-    /// Splits a group into cells of <see cref="CellM"/> metres (cell index from the map position), in a stable order.
+    /// Splits a group into cells of <paramref name="cellM"/> metres (<see cref="CellM"/> unless given; cell index from the map position), in a stable order.
     /// </summary>
-    public static IEnumerable<IReadOnlyList<ClutterInstance>> Cells(IReadOnlyList<ClutterInstance> instances)
+    public static IEnumerable<IReadOnlyList<ClutterInstance>> Cells(IReadOnlyList<ClutterInstance> instances, float cellM = CellM)
     {
         var cells = new SortedDictionary<(int, int), List<ClutterInstance>>();
         foreach (var i in instances)
         {
-            var key = ((int)MathF.Floor(i.X / CellM), (int)MathF.Floor(i.Y / CellM));
+            var key = ((int)MathF.Floor(i.X / cellM), (int)MathF.Floor(i.Y / cellM));
             if (!cells.TryGetValue(key, out var l)) cells[key] = l = new();
             l.Add(i);
         }
