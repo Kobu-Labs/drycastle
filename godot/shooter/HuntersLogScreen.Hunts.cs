@@ -16,9 +16,6 @@ public sealed partial class HuntersLogScreen
         (HuntSort.Kg, "log.col.weight", 2, true), (HuntSort.Distance, "log.col.distance", 2, true), (HuntSort.Weapon, "log.col.weapon", 3, false),
     };
 
-    /// <summary>The weapon ids a hunt can carry that are not in weapons.json, after the weapons themselves.</summary>
-    static readonly string[] ExtraWeapons = { HuntWeapons.RunOver, "vehicle", "vehicle_gun", "flak", HuntWeapons.Event, "other" };
-
     sealed class RowCells
     {
         public ContentButton Btn = null!;
@@ -29,8 +26,8 @@ public sealed partial class HuntersLogScreen
         public Control PlayerCell = null!;
     }
 
-    readonly OptionButton _fSpecies = new(), _fWeapon = new(), _fPlayer = new();
-    readonly List<string> _speciesKeys = new(), _weaponKeys = new();
+    readonly OptionButton _fSpecies = new(), _fPlayer = new();
+    readonly List<string> _speciesKeys = new();
     readonly List<long> _playerIds = new();
     string _speciesSig = "";
     int _peopleSig = -1;
@@ -53,12 +50,9 @@ public sealed partial class HuntersLogScreen
     Control _hitBox = null!, _hitFigure = null!;
     AnimalPicture _hitPic = null!;
     Control _hitHidden = null!;
-    Label _hitName = null!, _hitKg = null!, _hitDistance = null!, _hitWeapon = null!, _hitWhen = null!, _hitNone = null!;
+    Label _hitName = null!, _hitKg = null!, _hitNone = null!;
+    VBoxContainer _hitFacts = null!;
     BlurText _hitBlur = null!;
-    Button _hitHunter = null!;
-    PanelContainer _hitHead = null!;
-    long _hitHunterId;
-    string _hitHunterName = "";
 
     void BuildHuntsPane()
     {
@@ -69,14 +63,12 @@ public sealed partial class HuntersLogScreen
         filters.AddThemeConstantOverride("h_separation", ShooterTheme.Space * 2);
         filters.AddThemeConstantOverride("v_separation", ShooterTheme.Space);
         filters.AddChild(Field("log.filter.species", _fSpecies));
-        filters.AddChild(Field("log.filter.weapon", _fWeapon));
         filters.AddChild(Field("log.filter.player", _fPlayer));
         _fClear = Ui.Btn(Strings.T("log.filter.clear"), ClearFilters);
         _fClear.Visible = false;
         filters.AddChild(_fClear);
         host.AddChild(filters);
         _fSpecies.ItemSelected += i => { if (i >= 0 && i < _speciesKeys.Count && _speciesKeys[(int)i] != Data.Table.Species) { Data.Table.SetSpecies(_speciesKeys[(int)i]); AskHunts(); } };
-        _fWeapon.ItemSelected += i => { if (i >= 0 && i < _weaponKeys.Count && _weaponKeys[(int)i] != Data.Table.Weapon) { Data.Table.SetWeapon(_weaponKeys[(int)i]); AskHunts(); } };
         _fPlayer.ItemSelected += i => { if (i >= 0 && i < _playerIds.Count && _playerIds[(int)i] != Data.Table.PlayerId) { Data.Table.SetPlayer(_playerIds[(int)i]); AskHunts(); } };
 
         // the table beside (or over) the hit card
@@ -123,7 +115,7 @@ public sealed partial class HuntersLogScreen
                 SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = col.Ratio, MouseDefaultCursorShape = CursorShape.PointingHand,
                 TooltipText = Strings.F("log.sort.tip", Strings.T(col.Label)), Icon = HuntArt.Arrow(null),
             };
-            b.CustomMinimumSize = new Vector2(0, ShooterTheme.Space * 5);
+            b.CustomMinimumSize = new Vector2(ShooterTheme.LogColMin[c], ShooterTheme.Space * 5);
             var sort = col.Sort;
             b.Pressed += () => { Sfx.Ui("ui.click"); Data.Table.ClickHeader(sort); AskHunts(); };
             _heads[c] = b;
@@ -187,42 +179,37 @@ public sealed partial class HuntersLogScreen
         _hitKg = Text("", "InkHead");
         title.AddChild(_hitName); title.AddChild(_hitBlur); title.AddChild(_hitKg);
         v.AddChild(title);
-        v.AddChild(Pair("log.hit.distance", out _hitDistance));
-        v.AddChild(Pair("log.hit.weapon", out _hitWeapon));
-        var who = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        who.AddChild(Text(Strings.T("log.hit.hunter"), "InkDimSmall"));
-        who.AddChild(Ui.Fill());
-        _hitHunter = Ui.Btn("", () => OpenPlayerLog(_hitHunterId, _hitHunterName));
-        _hitHunter.ClipText = true;
-        who.AddChild(_hitHunter);
-        v.AddChild(who);
-        v.AddChild(Pair("log.hit.when", out _hitWhen));
-        _hitHead = new PanelContainer { ThemeTypeVariation = "LogPill", MouseFilter = MouseFilterEnum.Ignore, SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
-        _hitHead.AddChild(Text(Strings.T("log.head"), "LogSealText"));
-        v.AddChild(_hitHead);
+        _hitFacts = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        v.AddChild(_hitFacts);
         _hitNone = Text(Strings.T("log.hit.none"), "InkDimSmall", wrap: true);
         v.AddChild(_hitNone);
         ShowHit(null);
-    }
-
-    Control Pair(string key, out Label value)
-    {
-        var h = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        h.AddChild(Text(Strings.T(key), "InkDimSmall"));
-        h.AddChild(Ui.Fill());
-        value = Text("", "InkSmall", HorizontalAlignment.Right);
-        h.AddChild(value);
-        return h;
     }
 
     /// <summary>The panel is narrow (the UI scale is large, the window small): the hit card goes under the table instead of beside it.</summary>
     void OnPanelResized()
     {
         var stack = _panel.Size.X < ShooterTheme.LogStackBelow;
-        if (_body.Vertical == stack) return;
-        _body.Vertical = stack;
-        _hit.CustomMinimumSize = new Vector2(stack ? 0 : ShooterTheme.LogHitW, 0);
-        _rowsScroll.CustomMinimumSize = new Vector2(0, ShooterTheme.LogRowH * (stack ? 8 : 6));
+        if (_body.Vertical != stack)
+        {
+            _body.Vertical = stack;
+            _hit.CustomMinimumSize = new Vector2(stack ? 0 : ShooterTheme.LogHitW, 0);
+            _rowsScroll.CustomMinimumSize = new Vector2(0, ShooterTheme.LogRowH * (stack ? 8 : 6));
+        }
+        // the weapon column goes first when the table cannot hold every column at its minimum (the hit card names the weapon)
+        var width = _panel.Size.X - (stack ? 0 : ShooterTheme.LogHitW) - 6 * ShooterTheme.Space;
+        var needed = ShooterTheme.LogColMin.Sum() + (Columns.Length - 1) * ShooterTheme.Space;
+        SetWeaponColumn(width >= needed);
+    }
+
+    bool _weaponCol = true;
+
+    void SetWeaponColumn(bool on)
+    {
+        if (on == _weaponCol) return;
+        _weaponCol = on;
+        _heads[Columns.Length - 1].Visible = on;
+        foreach (var r in _rows) r.Weapon.Visible = on;
     }
 
     // ---- the data ----
@@ -344,6 +331,7 @@ public sealed partial class HuntersLogScreen
         {
             var index = _rows.Count;
             var cells = NewRow();
+            cells.Weapon.Visible = _weaponCol;
             cells.Btn.Pressed += () => SelectRow(index);
             cells.Btn.GuiInput += e => RowInput(index, e);
             cells.Btn.MouseExited += () => cells.Player.Hot = false;
@@ -359,8 +347,14 @@ public sealed partial class HuntersLogScreen
         var h = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         h.AddThemeConstantOverride("separation", ShooterTheme.Space);
         r.When = Cell("InkSmall", HorizontalAlignment.Left, Columns[0].Ratio);
-        r.Player = new PlayerLink { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = Columns[1].Ratio, VerticalAlignment = VerticalAlignment.Center, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
-        r.PlayerCell = r.Player;
+        // player: a person icon and the name as a link (underlined, filled when the pointer is over it), so it reads as something to click
+        r.Player = new PlayerLink { SizeFlagsHorizontal = SizeFlags.ExpandFill, VerticalAlignment = VerticalAlignment.Center, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
+        var who = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = Columns[1].Ratio, MouseFilter = MouseFilterEnum.Ignore };
+        who.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
+        who.AddChild(new TextureRect { Texture = HuntArt.Person, ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, MouseFilter = MouseFilterEnum.Ignore, Modulate = Skin.InkDim,
+            CustomMinimumSize = new Vector2(ShooterTheme.LogStatIcon, ShooterTheme.LogStatIcon), SizeFlagsVertical = SizeFlags.ShrinkCenter });
+        who.AddChild(r.Player);
+        r.PlayerCell = who;
         // species: the name (or the blurred placeholder), then the record seal
         var species = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = Columns[2].Ratio, MouseFilter = MouseFilterEnum.Ignore };
         species.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
@@ -373,7 +367,10 @@ public sealed partial class HuntersLogScreen
         r.Kg = Cell("InkSmall", HorizontalAlignment.Right, Columns[3].Ratio);
         r.Distance = Cell("InkSmall", HorizontalAlignment.Right, Columns[4].Ratio);
         r.Weapon = Cell("InkSmall", HorizontalAlignment.Left, Columns[5].Ratio);
-        h.AddChild(r.When); h.AddChild(r.Player); h.AddChild(species); h.AddChild(r.Kg); h.AddChild(r.Distance); h.AddChild(r.Weapon);
+        h.AddChild(r.When); h.AddChild(who); h.AddChild(species); h.AddChild(r.Kg); h.AddChild(r.Distance); h.AddChild(r.Weapon);
+        // no cell is narrower than its column's minimum, so none is cut and the cells stay under their headers
+        Control[] cells = { r.When, who, species, r.Kg, r.Distance, r.Weapon };
+        for (var c = 0; c < cells.Length; c++) cells[c].CustomMinimumSize = new Vector2(ShooterTheme.LogColMin[c], 0);
         r.Btn.SetContent(h);
         return r;
     }
@@ -408,17 +405,23 @@ public sealed partial class HuntersLogScreen
     void RowInput(int i, InputEvent e)
     {
         if (i >= _rows.Count) return;
-        var cell = _rows[i].PlayerCell;
-        if (e is InputEventMouseMotion mm) { _rows[i].Player.Hot = OverName(cell, mm.GlobalPosition); return; }
+        var link = _rows[i].Player;
+        if (e is InputEventMouseMotion mm)
+        {
+            var over = OverName(link, mm.GlobalPosition);
+            _rows[i].Player.Hot = over;
+            _rows[i].Btn.TooltipText = over && Data.Hunts.Data is { } pg && i < pg.Rows.Count ? Strings.F("log.hit.open", pg.Rows[i].Hunter) : "";
+            return;
+        }
         if (e is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb || Data.Hunts.Data is not { } page || i >= page.Rows.Count) return;
-        if (!OverName(cell, mb.GlobalPosition)) return;
+        if (!OverName(link, mb.GlobalPosition)) return;
         _rows[i].Btn.AcceptEvent();
         var h = page.Rows[i];
         OpenPlayerLog(h.PlayerId, h.Hunter);
     }
 
-    /// <summary>Whether a screen position is over the name's cell (tested in the cell's own coordinates).</summary>
-    static bool OverName(Control cell, Vector2 global) => new Rect2(Vector2.Zero, cell.Size).HasPoint(cell.GetGlobalTransformWithCanvas().AffineInverse() * global);
+    /// <summary>Whether a screen position is over the name's text itself (not its column: a click beside the name only selects the row).</summary>
+    static bool OverName(PlayerLink name, Vector2 global) => name.NameRect().HasPoint(name.GetGlobalTransformWithCanvas().AffineInverse() * global);
 
     // ---- the hit card ----
 
@@ -438,13 +441,9 @@ public sealed partial class HuntersLogScreen
         _hitBlur.Visible = h.Hidden;
         _hitName.Text = h.Hidden ? "" : HuntSpeciesName(h);
         _hitKg.Text = h.Kg is { } kg ? Strings.F("log.kg", HuntFormat.Kg(kg)) : "";
-        _hitDistance.Text = Metres(h.DistanceM);
-        _hitWeapon.Text = _env.WeaponName(h.Weapon);
-        _hitHunterId = h.PlayerId; _hitHunterName = h.Hunter;
-        _hitHunter.Text = h.Hunter;
-        _hitHunter.TooltipText = Strings.F("log.hit.open", h.Hunter);
-        _hitWhen.Text = AgoText(h.AtUnix);
-        _hitHead.Visible = h.Diagram is { Head: true };
+        Clear(_hitFacts);
+        var id = h.PlayerId; var name = h.Hunter;
+        _hitFacts.AddChild(HitFacts(h, openHunter: () => OpenPlayerLog(id, name), full: true));
         _hitNone.Visible = h.Diagram == null;
     }
 
@@ -470,15 +469,6 @@ public sealed partial class HuntersLogScreen
             foreach (var (k, n) in options) { _speciesKeys.Add(k); _fSpecies.AddItem(n); }
         }
         _fSpecies.Select(Math.Max(0, _speciesKeys.IndexOf(t.Species)));
-
-        // weapons: every weapon, then what else a hunt can carry, by name
-        if (_weaponKeys.Count == 0)
-        {
-            var ids = _env.WeaponIds().Concat(ExtraWeapons).Distinct().Select(id => (Id: id, Name: _env.WeaponName(id))).OrderBy(w => w.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
-            _weaponKeys.Add(""); _fWeapon.AddItem(Strings.T("log.filter.all"));
-            foreach (var (id, name) in ids) { _weaponKeys.Add(id); _fWeapon.AddItem(name); }
-        }
-        _fWeapon.Select(Math.Max(0, _weaponKeys.IndexOf(t.Weapon)));
 
         // players: those the log has seen (the server sends no list of them)
         var people = Data.People;

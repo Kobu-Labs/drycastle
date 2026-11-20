@@ -241,18 +241,6 @@ public sealed partial class HuntersLogScreen : Control
         Callable.From(FocusFirstRow).CallDeferred();
     }
 
-    /// <summary>Jumps to All hunts of one player, newest first.</summary>
-    void OpenPlayerHunts(long player)
-    {
-        Sfx.Ui("ui.click");
-        Data.Table.JumpToPlayer(player);
-        _huntsStale = true;
-        _selected = -1;
-        _nav.ShowTab(2);
-        ShowPage();
-        Callable.From(FocusFirstRow).CallDeferred();
-    }
-
     /// <summary>A name was picked: that player's log opens on the first tab (the viewer's own id is My Log).</summary>
     void OpenPlayerLog(long id, string name)
     {

@@ -37,7 +37,9 @@ public static class ShooterTheme
     public const float LogWidthShare = 0.6f, LogHeightShare = 0.85f;
     public const int LogTileW = 25 * Space, LogTileArtH = 7 * Space, LogCardW = 40 * Space, LogFigureH = 12 * Space;
     public const int LogHitW = 30 * Space, LogHitArtH = 20 * Space, LogRowH = 5 * Space, LogStatW = 14 * Space, LogStackBelow = 110 * Space;
-    public const int LogPageButton = 5 * Space, LogFilterW = 22 * Space, LogCloseSize = 3 * Space;
+    public const int LogPageButton = 5 * Space, LogFilterW = 22 * Space, LogCloseSize = 3 * Space, LogStatIcon = 2 * Space + Space / 2;
+    /// <summary>Minimum widths of the All hunts table's columns (When, Player, Species, Weight, Distance, Weapon), so a header or a cell is never cut.</summary>
+    public static readonly int[] LogColMin = { 11 * Space, 19 * Space, 27 * Space, 12 * Space, 13 * Space, 12 * Space };
 
     // text sizes (five); body text is 20 and nothing is under 16 at 1080p
     public const int FontSmall = 16, FontBody = 20, FontHead = 24, FontBig = 32, FontDisplay = 48;

@@ -35,6 +35,16 @@ Owner's rule: *"This game follows AAA standards; UI and menus come polished from
 - Text sits only on a plate, a paper or the plain board colour, with the contrast of section 4. Rarity, "found", "yours" and "selected" are always a shape or words as well as a colour (a medal and the tier's name, a tick, "(you)", a thicker frame).
 - The states of section 3 hold on a skin too: a plaque lightens on hover, lightens more with a thicker rim when pressed, and gets a ring when focused.
 
+### Lessons: stat blocks, tables, links (Hunter's Log, #387)
+Found in review of the first Hunter's Log; start the next UI from these.
+- **Stat block = one fact per line, icon + text, always every line.** Never join facts with `|` on one wrapping line (they split unpredictably, and cards of one grid end at different heights so the numbers below sit on different rows). A fact with no value shows a placeholder ("No hit"), never drops its line. One icon cell of a fixed size, even when the thing has no icon, so text stays aligned. Same set of lines and same order on every card (`HitFacts`).
+- **Icons**: tinted masks (`HuntArt.Person`, `HuntArt.Crosshair`) take the skin's dim ink; one icon set, one flat single-tone style: never mix in detailed or coloured art (the weapon's own coloured icon beside flat glyphs looked wrong, so weapons use one flat rifle glyph and the name carries the difference). Fixed token size `LogStatIcon`.
+- **Table columns never clip.** Each column has a minimum width token (`LogColMin`) applied to header and cells alike; spare width is shared by ratio. When the table cannot hold every column, drop the least important column (Weapon; the detail card repeats it) instead of cutting headers ("eight", "tance") or cells ("Dee"). Rule of thumb: a cut word is a bug at any size from 1280×720 up and at 150 % UI scale.
+- **Centre what is reasonable**: card and tile grids use centred flow (`FlowContainer.Alignment = Center`), so a last short row does not hug the left edge.
+- **Filters earn their place.** Remove a filter whose job the sort or a column already does (weapon).
+- **A link must look and behave like one**: an icon before it, underline always, a filled and bordered hover, hand cursor, a tooltip saying where it goes ("X's log"). The click target is the text itself, never its column or row width: a click beside the name must not navigate. Underline alone is not enough in a row of other clickable text.
+- **Check at the narrow end first** (1280×720, 150 % scale, side panel stacked): that is where layouts break; the wide case works by default.
+
 ## 5. Settings
 - Groups: Graphics / Audio / Controls / Gameplay / Accessibility, one config file, live preview, Apply/Revert, auto-revert for risky video changes.
 - Every list, table and form has designed loading, empty and error states.

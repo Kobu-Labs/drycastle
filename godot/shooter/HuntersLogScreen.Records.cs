@@ -22,7 +22,7 @@ public sealed partial class HuntersLogScreen
                 _recHost.AddChild(StateBox(Strings.T("log.error"), Strings.T("log.error.body"), actionText: Strings.T("log.retry"), action: () => Data.RequestRecords()));
                 return;
         }
-        var grid = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
+        var grid = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Alignment = FlowContainer.AlignmentMode.Center, MouseFilter = MouseFilterEnum.Ignore };
         grid.AddThemeConstantOverride("h_separation", ShooterTheme.Space * 2);
         grid.AddThemeConstantOverride("v_separation", ShooterTheme.Space * 2 + LogSkin.Tack);
         foreach (var r in Data.Records.Data!) grid.AddChild(RecordCard(RecordCardModel.From(r)));
@@ -69,7 +69,7 @@ public sealed partial class HuntersLogScreen
     }
 
     /// <summary>
-    /// One recorded hit: its picture (the animal facing left, the bullet's entry marked), what the record is, the number, and who, with what, and HEAD when it was one.
+    /// One recorded hit: its picture (the animal facing left, the bullet's entry marked), what the record is, the number, and who, with what, and where it hit (always the three lines).
     /// <paramref name="number"/> words the record's number (a weight, a distance, how long ago a Mystery creature was first caught); nothing recorded yet is a dash under an empty frame.
     /// </summary>
     Control Shot(string label, HuntView? h, Func<HuntView, string> number, float figureW)
@@ -86,16 +86,58 @@ public sealed partial class HuntersLogScreen
             return v;
         }
         v.AddChild(Text(number(h), "InkHead"));
-        v.AddChild(Text(HitLine(h), "InkSmall", wrap: true));
+        v.AddChild(HitFacts(h));
         return v;
     }
 
-    /// <summary>"Vesna  |  Sniper  |  HEAD": the hunter, the weapon and where it hit.</summary>
-    string HitLine(HuntView h)
+    /// <summary>The facts of a hit, one per line and always all of them (<paramref name="full"/> adds the distance and the time: the hit card), each with its icon so the lines align across cards: the hunter, the weapon, the hit area.</summary>
+    Control HitFacts(HuntView h, string variation = "InkSmall", Action? openHunter = null, bool full = false)
     {
-        var parts = new List<string> { h.Hunter, _env.WeaponName(h.Weapon) };
-        if (h.Diagram is { Head: true }) parts.Add(Strings.T("log.head"));
-        return string.Join("  |  ", parts);
+        var v = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        v.AddThemeConstantOverride("separation", 2);
+        if (full) v.AddChild(StatLine(HuntArt.Tape, Metres(h.DistanceM), variation, tint: true));
+        if (openHunter == null) v.AddChild(StatLine(HuntArt.Person, h.Hunter, variation, tint: true));
+        else
+        {
+            // the hunter is a link here: a button around the same line, the name underlined, a tooltip saying where it goes
+            var b = new ContentButton { ThemeTypeVariation = "LogRow", MinSize = Vector2.Zero, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, TooltipText = Strings.F("log.hit.open", h.Hunter), MouseDefaultCursorShape = CursorShape.PointingHand };
+            var line = StatLine(HuntArt.Person, "", variation, tint: true);
+            var link = new PlayerLink { Text = h.Hunter, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, VerticalAlignment = VerticalAlignment.Center, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
+            line.GetChild(1).QueueFree();
+            line.AddChild(link);
+            b.SetContent(line);
+            b.Pressed += openHunter;
+            b.MouseEntered += () => link.Hot = true;
+            b.MouseExited += () => link.Hot = false;
+            v.AddChild(b);
+        }
+        v.AddChild(StatLine(HuntArt.Rifle, _env.WeaponName(h.Weapon), variation, tint: true));
+        v.AddChild(StatLine(HuntArt.Crosshair, AreaName(h), variation, tint: true));
+        if (full) v.AddChild(StatLine(HuntArt.Calendar, AgoText(h.AtUnix), variation, tint: true));
+        return v;
+    }
+
+    string AreaName(HuntView h) => HitAreas.Of(h.Diagram) switch
+    {
+        HitArea.Head => Strings.T("log.area.head"), HitArea.Legs => Strings.T("log.area.legs"), HitArea.Body => Strings.T("log.area.body"), _ => Strings.T("log.area.none"),
+    };
+
+    /// <summary>An icon cell of a fixed size and a clipped text. Every icon is a flat tinted glyph of one style.</summary>
+    static Control StatLine(Texture2D? icon, string text, string variation, bool tint)
+    {
+        var h = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        h.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
+        var pic = new TextureRect
+        {
+            Texture = icon, ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, MouseFilter = MouseFilterEnum.Ignore,
+            CustomMinimumSize = new Vector2(ShooterTheme.LogStatIcon, ShooterTheme.LogStatIcon), SizeFlagsVertical = SizeFlags.ShrinkCenter,
+        };
+        if (tint) pic.Modulate = Skin.InkDim;
+        h.AddChild(pic);
+        var label = Text(text, variation);
+        label.ClipText = true; label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis; label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        h.AddChild(label);
+        return h;
     }
 
     /// <summary>A hunt's recorded picture: a "?" when hidden, else the animal with the entry marked (none for a run over or a catch: no diagram).</summary>

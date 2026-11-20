@@ -13,19 +13,18 @@ public static class HuntersLogStrings
         ("log.sandbox", "Sandbox: hunts are not logged"),
         // my log
         ("log.stat.hunts", "Hunts"), ("log.stat.species", "Species"), ("log.stat.heaviest", "Heaviest"), ("log.stat.longest", "Longest shot"), ("log.none", "-"),
-        ("log.life.title", "Life List"), ("log.life.count", "{0} of {1}"), ("log.sec.game", "Game"), ("log.sec.mystery", "Mystery"),
+        ("log.life.title", "Life List"), ("log.life.count", "{0} of {1}"), ("log.sec.game", "Regular"), ("log.sec.mystery", "Mystery"),
         ("log.tier.gold", "Gold"), ("log.tier.silver", "Silver"), ("log.tier.bronze", "Bronze"), ("log.tile.tier", "{0} kg, {1}"),
         ("log.legend.gold", "Gold, top 5%"), ("log.legend.silver", "Silver, top 10%"), ("log.legend.bronze", "Bronze, top 20%"),
         ("log.tile.best", "Best {0} kg"), ("log.tile.longest", "Longest {0}"), ("log.tile.caught", "Caught {0}"), ("log.tile.todo", "Not hunted yet"),
-        ("log.hunts.own", "All my hunts"), ("log.hunts.other", "All {0}'s hunts"),
         ("log.hidden.mark", "?"), ("hunt.hidden.name", "Xxxxxxxx"),
         // records
         ("log.rec.heaviest", "Heaviest"), ("log.rec.longest", "Longest shot"), ("log.rec.first", "First caught"), ("log.rec.todo", "Not hunted yet. The first kill takes the record."),
-        ("log.rec.open", "All {0} hunts"), ("log.head", "HEAD"),
+        ("log.rec.open", "All {0} hunts"), ("log.area.head", "Head"), ("log.area.body", "Body"), ("log.area.legs", "Legs"), ("log.area.none", "No hit"),
         // all hunts
-        ("log.col.when", "When"), ("log.col.player", "Player"), ("log.col.species", "Species"), ("log.col.weight", "Weight"), ("log.col.distance", "Distance"), ("log.col.weapon", "Weapon"),
+        ("log.col.when", "When"), ("log.col.player", "Hunter"), ("log.col.species", "Species"), ("log.col.weight", "Weight"), ("log.col.distance", "Distance"), ("log.col.weapon", "Weapon"),
         ("log.sort.tip", "Sort by {0}"),
-        ("log.filter.species", "Species"), ("log.filter.weapon", "Weapon"), ("log.filter.player", "Player"), ("log.filter.all", "All"), ("log.filter.allplayers", "All players"),
+        ("log.filter.species", "Species"), ("log.filter.player", "Hunter"), ("log.filter.all", "All"), ("log.filter.allplayers", "All hunters"),
         ("log.filter.mystery", "Mystery hunts"), ("log.filter.clear", "Clear filters"),
         ("log.page.prev", "Prev"), ("log.page.next", "Next"), ("log.page.tip", "Page {0}"), ("log.range", "{0}-{1} of {2}"), ("log.gap", "..."),
         ("log.pill.kg", "Record kg"), ("log.pill.shot", "Record shot"),
