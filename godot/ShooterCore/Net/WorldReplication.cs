@@ -112,6 +112,12 @@ public sealed class WorldHistory
         Store(tick, d);
     }
 
+    /// <summary>An empty dictionary to assemble a tick in: one that fell out of the history, else a new one. Give it to <see cref="Adopt"/> when the tick is stored.</summary>
+    public Dictionary<ushort, WorldEntry> Rent() => _spare.Count > 0 ? _spare.Pop() : new Dictionary<ushort, WorldEntry>();
+
+    /// <summary>Marks a dictionary (from <see cref="Rent"/>) as the history's: it is emptied and rented again when its tick falls out. Call before <see cref="Store"/>.</summary>
+    public void Adopt(Dictionary<ushort, WorldEntry> states) => _own.Add(states);
+
     /// <summary>A reader keeps <paramref name="states"/> (from <see cref="Get"/>) past its tick's time in the history: it is not used again while held. Ended by <see cref="Release"/>.</summary>
     public void Hold(IReadOnlyDictionary<ushort, WorldEntry> states) => _held[states] = _held.GetValueOrDefault(states) + 1;
 
@@ -433,6 +439,7 @@ public sealed class WorldReplica
     public WorldReplica(WorldEntityRegistry? types = null) => _types = types ?? WorldEntityRegistry.Shared;
 
     readonly record struct Staged(ushort Id, bool Remove, WorldEntry Entry);
+    readonly List<Staged> _staged = new();
 
     public IReadOnlyDictionary<ushort, Entity> Entities => _ents;
     /// <summary>The committed state of every world entity the server has sent, spawned or not: what the next deltas are relative to.</summary>
@@ -509,8 +516,12 @@ public sealed class WorldReplica
         if (!_assembling || tick > _asmTick)
         {
             Dictionary<ushort, WorldEntry> start;
-            if (baseTick == Wire.NoTick) start = new Dictionary<ushort, WorldEntry>();
-            else if (_history.Get(baseTick) is { } b) start = new Dictionary<ushort, WorldEntry>(b); // a copy: the history keeps its own
+            if (baseTick == Wire.NoTick) start = _history.Rent();
+            else if (_history.Get(baseTick) is { } b)
+            {
+                start = _history.Rent(); // a copy: the history keeps its own (into a dictionary that left the history, not a new one per tick)
+                foreach (var kv in b) start[kv.Key] = kv.Value;
+            }
             else return false; // the baseline is gone: wait for a full set
             _asm = start; _asmTick = tick; _asmTotal = total; _asmGot = 0; _assembling = true; _changed.Clear(); TicksStarted++;
         }
@@ -518,7 +529,8 @@ public sealed class WorldReplica
         if (total != _asmTotal || (_asmGot & (1UL << index)) != 0) return false;
 
         // parse first: a malformed packet changes nothing
-        var staged = new List<Staged>(count);
+        var staged = _staged;
+        staged.Clear();
         var o = WorldSnapshotEncoder.HeaderBytes;
         for (var i = 0; i < count; i++)
         {
@@ -578,6 +590,7 @@ public sealed class WorldReplica
     void Commit(uint tick)
     {
         _states = _asm!; // the committed dictionary is never changed again: the history keeps it too
+        _history.Adopt(_asm!);
         _history.Store(tick, _states);
         _asm = null; _assembling = false;
         LastTick = tick; HasState = true;

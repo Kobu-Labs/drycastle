@@ -77,7 +77,12 @@ public partial class NetClient
                 SplashAt(at, 0.4f);
             _rocketInWater[id] = inWater;
         }
-        foreach (var id in _rocketInWater.Keys.Where(k => !_rockets.ContainsKey(k)).ToList()) _rocketInWater.Remove(id);
+        if (_rocketInWater.Count > 0)
+        {
+            _staleWater.Clear();
+            foreach (var k in _rocketInWater.Keys) if (!_rockets.ContainsKey(k)) _staleWater.Add(k);
+            foreach (var k in _staleWater) _rocketInWater.Remove(k);
+        }
     }
 
     /// <summary>

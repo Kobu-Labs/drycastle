@@ -144,10 +144,12 @@ public partial class NetClient
     /// onto the orbit in the first moments and drawn into the machine at the end (the server holds it at the axis for <see cref="HarvesterConfig.DrawSeconds"/>); the machine rumbles while it chews; the bale
     /// that leaves the chute grows in quickly and the server throws it from there. Cosmetic: nothing here touches the server positions.
     /// </summary>
+    HarvesterConfig? _harvesterCfg;
+
     void AnimateCatch()
     {
-        if (!ShotFx.Enabled) return;
-        var cfg = new HarvesterConfig();
+        if (!ShotFx.Enabled || (_drawIn.Count == 0 && _baleEmerge.Count == 0 && _shakeUntil.Count == 0)) return; // idle: nothing to copy or allocate
+        var cfg = _harvesterCfg ??= new HarvesterConfig();
         foreach (var (id, d) in _drawIn.ToArray())
         {
             var t = (float)(Now - d.Start);

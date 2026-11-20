@@ -33,6 +33,12 @@ public sealed class SnapshotHistory
         Store(tick, d);
     }
 
+    /// <summary>An empty dictionary to assemble a tick in: one that fell out of the history, else a new one. Give it to <see cref="Adopt"/> when the tick is stored.</summary>
+    public Dictionary<ushort, EntityRecord> Rent() => _spare.Count > 0 ? _spare.Pop() : new Dictionary<ushort, EntityRecord>();
+
+    /// <summary>Marks a dictionary (from <see cref="Rent"/>) as the history's: it is emptied and rented again when its tick falls out. Call before <see cref="Store"/>.</summary>
+    public void Adopt(Dictionary<ushort, EntityRecord> states) => _own.Add(states);
+
     /// <summary>Keeps the state of a tick. The dictionary must not change afterwards.</summary>
     public void Store(uint tick, IReadOnlyDictionary<ushort, EntityRecord> states)
     {
@@ -219,6 +225,7 @@ public sealed class SnapshotDecoder
     Dictionary<ushort, EntityRecord>? _asm;
 
     readonly record struct Staged(ushort Id, bool Remove, EntityRecord Rec);
+    readonly List<Staged> _staged = new();
 
     /// <summary>
     /// Apply one snapshot packet. Returns true when this packet completed a tick, which is then committed (<see cref="States"/>
@@ -240,8 +247,12 @@ public sealed class SnapshotDecoder
         if (!_assembling || tick > _asmTick)
         {
             Dictionary<ushort, EntityRecord> start;
-            if (baseTick == Wire.NoTick) start = new Dictionary<ushort, EntityRecord>();
-            else if (_history.Get(baseTick) is { } b) start = new Dictionary<ushort, EntityRecord>(b); // a copy: the history keeps its own
+            if (baseTick == Wire.NoTick) start = _history.Rent();
+            else if (_history.Get(baseTick) is { } b)
+            {
+                start = _history.Rent(); // a copy: the history keeps its own (into a dictionary that left the history, not a new one per tick)
+                foreach (var kv in b) start[kv.Key] = kv.Value;
+            }
             else return false; // the baseline is gone: wait for a full set
             _asm = start; _asmTick = tick; _asmTotal = total; _asmGot = 0; _assembling = true; TicksStarted++;
         }
@@ -249,7 +260,8 @@ public sealed class SnapshotDecoder
         if (total != _asmTotal || (_asmGot & (1UL << index)) != 0) return false;
 
         // parse first: a malformed packet changes nothing
-        var staged = new List<Staged>(count);
+        var staged = _staged;
+        staged.Clear();
         var o = SnapshotEncoder.HeaderBytes;
         for (var i = 0; i < count; i++)
         {
@@ -314,6 +326,7 @@ public sealed class SnapshotDecoder
         _states = _asm!; // the committed dictionary is never changed again: the history keeps it too
         _asm = null; _assembling = false;
         LastTick = tick; HasState = true;
+        _history.Adopt((Dictionary<ushort, EntityRecord>)_states);
         _history.Store(tick, _states);
     }
 }

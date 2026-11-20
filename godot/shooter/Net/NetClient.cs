@@ -16,7 +16,7 @@ public partial class NetClient : Node
     sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc, WadeAcc; public double RippleDue; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
         /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the vehicle and seat this player sits in (<see cref="SeatRiders"/>).</summary>
         public float ShownYaw, ShownPitch; public bool Binoculars; /// <summary>The squad whose name the name tag shows after the name (0: none); the tag is rebuilt when it changes (#379).</summary>
-        public byte TagSquad; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
+        public byte TagSquad; public Label3D? Tag; /* the name tag node, kept so a frame does not list the children */ public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
 
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
@@ -390,7 +390,7 @@ public partial class NetClient : Node
                 // the busiest kinds have one handler each (no other On*Event below names them): straight there, then the generic listeners
                 switch ((EventKind)e.Kind)
                 {
-                    case EventKind.Shot or EventKind.PelletFan: OnWeaponEvent((EventKind)e.Kind, e.Payload); break;
+                    case EventKind.Shot or EventKind.PelletFan or EventKind.Launch or EventKind.Explosion: OnWeaponEvent((EventKind)e.Kind, e.Payload); break;
                     case EventKind.WorldSpawn or EventKind.WorldDespawn: WorldEntities.OnEvent((EventKind)e.Kind, e.Payload); break;
                     default: OnEventSlow((EventKind)e.Kind, e.Payload); break;
                 }
@@ -559,16 +559,17 @@ public partial class NetClient : Node
         if (look != null) view.SetCamo(look, CamoData); // the look may arrive before the first snapshot (#140)
         DressPlayer(view, id); // what they wear (#266), likewise
         node.AddChild(view);
-        node.AddChild(new Label3D
+        var tag = new Label3D
         {
             Text = _names.TryGetValue(id, out var n) ? NameTag(id, n) : $"#{id}", // [SANDBOX] tag for sandbox players (#156)
             Modulate = target ? TargetTint : Colors.White, // orange name tag for target dummies (#148)
             Position = new Vector3(0, MoveConsts.CapsuleHeight + 0.3f, 0),
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
             PixelSize = 0.005f, NoDepthTest = true,
-        });
+        };
+        node.AddChild(tag);
         World.AddChild(node);
-        return new Remote { Node = node, View = view, Binoculars = _binocularsBy.Contains(id) };
+        return new Remote { Node = node, View = view, Tag = tag, Binoculars = _binocularsBy.Contains(id) };
     }
 
     void OnSelf(EntityRecord rec, ushort ack)

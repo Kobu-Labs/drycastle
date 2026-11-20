@@ -124,6 +124,7 @@ public partial class NetClient
     readonly List<(Vector2 At, string Name)> _squadDots = new();
 
     /// <summary>Anyone but me who is not a teammate (FFA: everyone else).</summary>
+    Func<ushort, bool>? _isMapEnemy; // the method group as one delegate, not one per vehicle per frame
     bool IsMapEnemy(ushort id) => id != _myId && !Match.AreFriends(_myId, id);
 
     void UpdateHud()
@@ -155,7 +156,7 @@ public partial class NetClient
             {
                 if (c.Destroyed) continue;
                 _seatOccupants.TryGetValue(c.Id, out var others); // an enemy on any seat: not on the map (#313)
-                if (HudLogic.HideEnemyOccupiedVehicle(c.Driver, others, _myId, IsMapEnemy)) continue;
+                if (HudLogic.HideEnemyOccupiedVehicle(c.Driver, others, _myId, _isMapEnemy ??= IsMapEnemy)) continue;
                 if (Vehicles != null && c.Kind < Vehicles.Vehicles.Count && ScudTruckHidden(Vehicles.Vehicles[c.Kind])) continue; // the Scud event's truck is not on any map until it is found
                 _carDots.Add(new Vector2(c.Node.GlobalPosition.X, c.Node.GlobalPosition.Z));
             }
