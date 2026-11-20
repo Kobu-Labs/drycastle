@@ -70,7 +70,15 @@ public partial class ServerCar
     }
 
     /// <summary>The tractor's step is told what the trailer on it does (its load and the jackknife block); none when nothing is hitched.</summary>
-    public TowEffect TowEffectNow() => Towing is { Tow: { } link } trailer ? link.Effect(Def, trailer.Def, trailer.TowGeo, trailer.Cargo?.Loaded ?? true) : TowEffect.None;
+    public TowEffect TowEffectNow()
+    {
+        if (Towing is not { Tow: { } link } trailer) return TowEffect.None;
+        var e = link.Effect(Def, trailer.Def, trailer.TowGeo, trailer.Cargo?.Loaded ?? true);
+        var now = Time.GetTicksMsec() / 1000.0;
+        if (e.Block.Active && now - _blockLogS >= 1) { _blockLogS = now; GD.Print($"server: {Def.Id} {Id} jackknife block active, trailer {trailer.Id} at its fold limit (phi {link.Body.Phi * 180f / MathF.PI:F0} deg)"); }
+        return e;
+    }
+    double _blockLogS = -10;
 
     /// <summary>What the tractor did this tick, as the trailer needs it: the drive state's, or the car state with the physics body's place.</summary>
     public TractorMotion TowMotion()
