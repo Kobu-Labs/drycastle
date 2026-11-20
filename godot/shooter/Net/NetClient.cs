@@ -84,7 +84,7 @@ public partial class NetClient : Node
     readonly List<(double T, ExplosionMsg M)> _explosionLog = new();
     /// <summary>The event logs are read only by the scripted bots (the weapons, rpg, blast and car checks), so a normal match keeps none of them: they grew for the whole match (#173, T3-028).</summary>
     bool KeepEventLogs => WeaponsBot != "" || RpgBot != "" || BlastBot != "" || CarBot != "";
-    sealed class Rocket { public double Born; public Node3D Node = null!; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; /* a homing missile (NetClient.LockOn.cs): the Aircraft it closes on and when it gets there */ public bool Homing; public ushort Target; public double Arrive; /* a thrown grenade: drawn falling along its arc from the last snapshot */ public bool Grenade; public float Gravity; }
+    sealed class Rocket { public double Born; public Node3D Node = null!; public float Tumble; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; /* a homing missile (NetClient.LockOn.cs): the Aircraft it closes on and when it gets there */ public bool Homing; public ushort Target; public double Arrive; /* a thrown grenade: drawn falling along its arc from the last snapshot */ public bool Grenade; public float Gravity; }
     readonly Dictionary<ushort, Rocket> _rockets = new();
     readonly HashSet<ushort> _deadRockets = new();
     readonly List<(double T, AmmoMsg M)> _ammoLog = new();
@@ -510,13 +510,21 @@ public partial class NetClient : Node
             if (r.Node == null) continue;
             if (r.Homing) StepHoming(r);
             var dtp = (float)Math.Min(0.1, Now - r.At);
-            var p = r.Homing ? r.Pos : r.Pos + r.Dir * (r.Speed * dtp) - NVec3.UnitY * (0.5f * r.Gravity * dtp * dtp); // a grenade falls between snapshots
+            var falls = r.Speed > GrenadeFlight.RestSpeed; // a grenade lying still does not keep falling between snapshots (it sank up to 10 cm into the road, #421)
+            var p = r.Homing ? r.Pos : r.Pos + r.Dir * (r.Speed * dtp) - NVec3.UnitY * (falls ? 0.5f * r.Gravity * dtp * dtp : 0f); // a grenade falls between snapshots
             // visual only: the server rocket starts at the eye; draw it leaving the muzzle (0.8 m ahead, right and down) and blend onto the true path
             var k = Mathf.Max(0f, 1f - (float)(Now - r.Born) / 0.35f);
             var d = new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z);
             var side = d.Cross(Vector3.Up).Normalized();
             r.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z) + (d * 0.8f + side * 0.25f + Vector3.Down * 0.2f) * k;
-            if (r.Grenade) { r.Node.RotateX(r.Speed > 0.5f ? 9f * (float)GetProcessDeltaTime() : 0f); continue; } // it tumbles while it moves; no trail, no flight loop
+            if (r.Grenade)
+            {
+                // it tumbles while it moves, and lies on its side when it stops (upright, its lower half would sink into the road ribbons floating 2-8 cm over the ground)
+                var spin = (float)GetProcessDeltaTime();
+                r.Tumble = r.Speed > GrenadeFlight.RestSpeed ? r.Tumble + 9f * spin : Mathf.MoveToward(r.Tumble, MathF.Round((r.Tumble - Mathf.Pi / 2) / Mathf.Pi) * Mathf.Pi + Mathf.Pi / 2, 8f * spin);
+                r.Node.Rotation = new Vector3(r.Tumble, 0, 0);
+                continue; // no trail, no flight loop
+            }
             SfxRocket(r, r.Node.GlobalPosition);
             if (camAt is { } eye) RocketFx.GateTrail(r.Node, eye);
             if (Mathf.Abs(r.Dir.Y) < 0.99f) r.Node.LookAt(r.Node.GlobalPosition + new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z));
