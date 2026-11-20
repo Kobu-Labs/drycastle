@@ -270,11 +270,17 @@ public partial class NetClient : Node
         RenderCarePackages();
         RenderTurrets();
         t = ClientProf.Lap(ClientProf.S.Players, t);
+        t = ClientProf.Begin();
         RenderAnimals();
+        t = ClientProf.Lap(ClientProf.S.CreaturesAnimals, t);
         RenderFlocks(delta);
+        t = ClientProf.Lap(ClientProf.S.CreaturesFlocks, t);
         RenderBigfoot();
+        t = ClientProf.Lap(ClientProf.S.Creatures, t);
         RenderCitizens();
+        t = ClientProf.Lap(ClientProf.S.CreaturesCitizens, t);
         RenderGang(delta);
+        t = ClientProf.Lap(ClientProf.S.CreaturesGang, t);
         RenderDemon();
         t = ClientProf.Lap(ClientProf.S.Creatures, t);
         UpdateDeath(delta);
@@ -381,33 +387,45 @@ public partial class NetClient : Node
                 ForgetStatus(l.PlayerId);
                 break;
             case EventMsg e:
-                if ((EventKind)e.Kind == EventKind.TargetRoster) OnTargetRoster(e.Payload); // target dummies' names (#148)
-                OnSandboxEvent((EventKind)e.Kind, e.Payload); // sandbox answer (#156)
-                OnChatEvent((EventKind)e.Kind, e.Payload); // chat lines, the admin flag, the day clock
-                OnStatusEvent((EventKind)e.Kind, e.Payload); // statuses: blessing, curse, burning
-                OnItemEvent((EventKind)e.Kind, e.Payload); // what the player wears, what a corpse carries, an item crumbling
-                OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
-                OnThiefAudioEvent((EventKind)e.Kind, e.Payload); // a Gang member says a line (ticket 09)
-                OnBigfootEvent((EventKind)e.Kind, e.Payload); // the Bigfoot's effects and the footprints to its corpse (#264)
-                OnHarvesterEvent((EventKind)e.Kind, e.Payload); // the harvester's cut, its bales' fire (#331)
-                OnThievesEvent((EventKind)e.Kind, e.Payload); // the Raid vans' honk
-                OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
-                OnRozhlasEvent((EventKind)e.Kind, e.Payload); // the village loudspeaker's phase, broadcast and offset
-                OnUradDoorEvent((EventKind)e.Kind, e.Payload); // the Obecny Urad's door
-                OnGarageDoorEvent((EventKind)e.Kind, e.Payload); // the bus garage's doors
-                OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
-                OnDemonEvent((EventKind)e.Kind, e.Payload); // the demon: fireballs, the curse
-                OnHuntEvent((EventKind)e.Kind, e.Payload); // the Hunter's Log: answers and announcements (#336)
-                OnWeaponEvent((EventKind)e.Kind, e.Payload);
-                OnMatchEvent((EventKind)e.Kind, e.Payload);
-                OnProgressionEvent((EventKind)e.Kind, e.Payload);
-                UavEvent((EventKind)e.Kind, e.Payload);
-                OnAppearanceEvent((EventKind)e.Kind, e.Payload);
-                WorldEntities.OnEvent((EventKind)e.Kind, e.Payload);
+                // the busiest kinds have one handler each (no other On*Event below names them): straight there, then the generic listeners
+                switch ((EventKind)e.Kind)
+                {
+                    case EventKind.Shot or EventKind.PelletFan: OnWeaponEvent((EventKind)e.Kind, e.Payload); break;
+                    case EventKind.WorldSpawn or EventKind.WorldDespawn: WorldEntities.OnEvent((EventKind)e.Kind, e.Payload); break;
+                    default: OnEventSlow((EventKind)e.Kind, e.Payload); break;
+                }
                 PerfClientEvent((EventKind)e.Kind, e.Payload);
                 EventReceived?.Invoke((EventKind)e.Kind, e.Payload);
                 break;
         }
+    }
+
+    /// <summary>Every handler that may care about <paramref name="kind"/>: each one's own switch picks its kinds.</summary>
+    void OnEventSlow(EventKind kind, byte[] payload)
+    {
+        if (kind == EventKind.TargetRoster) OnTargetRoster(payload); // target dummies' names (#148)
+        OnSandboxEvent(kind, payload); // sandbox answer (#156)
+        OnChatEvent(kind, payload); // chat lines, the admin flag, the day clock
+        OnStatusEvent(kind, payload); // statuses: blessing, curse, burning
+        OnItemEvent(kind, payload); // what the player wears, what a corpse carries, an item crumbling
+        OnIntelEvent(kind, payload); // the announced events: the intel screen, the announcement
+        OnThiefAudioEvent(kind, payload); // a Gang member says a line (ticket 09)
+        OnBigfootEvent(kind, payload); // the Bigfoot's effects and the footprints to its corpse (#264)
+        OnHarvesterEvent(kind, payload); // the harvester's cut, its bales' fire (#331)
+        OnThievesEvent(kind, payload); // the Raid vans' honk
+        OnChurchEvent(kind, payload); // the church doors
+        OnRozhlasEvent(kind, payload); // the village loudspeaker's phase, broadcast and offset
+        OnUradDoorEvent(kind, payload); // the Obecny Urad's door
+        OnGarageDoorEvent(kind, payload); // the bus garage's doors
+        OnMassEvent(kind, payload); // the Holy Mass: chant, bells, the player's seat, the blessing
+        OnDemonEvent(kind, payload); // the demon: fireballs, the curse
+        OnHuntEvent(kind, payload); // the Hunter's Log: answers and announcements (#336)
+        OnWeaponEvent(kind, payload);
+        OnMatchEvent(kind, payload);
+        OnProgressionEvent(kind, payload);
+        UavEvent(kind, payload);
+        OnAppearanceEvent(kind, payload);
+        WorldEntities.OnEvent(kind, payload);
     }
 
     double Now => Time.GetTicksMsec() / 1000.0;
@@ -535,9 +553,10 @@ public partial class NetClient : Node
     Remote MakeRemote(ushort id, bool target = false)
     {
         var node = new Node3D { Name = $"Remote{id}" };
-        var view = CharacterView.Make();
+        Appearances.TryGetValue(id, out var look);
+        var view = CharacterView.Make(CharacterView.ModelFor(look, CamoData)); // on the look's body at once: no second build in SetCamo
         view.ThrottleFar = true; // far and off-screen players animate at a lower rate (#449)
-        if (Appearances.TryGetValue(id, out var look)) view.SetCamo(look, CamoData); // the look may arrive before the first snapshot (#140)
+        if (look != null) view.SetCamo(look, CamoData); // the look may arrive before the first snapshot (#140)
         DressPlayer(view, id); // what they wear (#266), likewise
         node.AddChild(view);
         node.AddChild(new Label3D
