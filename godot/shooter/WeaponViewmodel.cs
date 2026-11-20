@@ -21,9 +21,17 @@ public sealed partial class WeaponViewmodel : Node3D
             n = Factory(weaponId);
             if (n == null) return;
             _models[weaponId] = n;
+            NoShadows(n);
             AddChild(n);
         }
         n.Visible = true;
+    }
+
+    /// <summary>The viewmodel's own shadow is never seen: keep it out of the sun's shadow pass.</summary>
+    static void NoShadows(Node n)
+    {
+        if (n is GeometryInstance3D g) g.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+        foreach (var c in n.GetChildren()) NoShadows(c);
     }
 
     public Node3D? Current => _models.GetValueOrDefault(_current);

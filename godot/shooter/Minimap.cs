@@ -114,7 +114,26 @@ public sealed partial class Minimap : Control
     {
         if (_markers.HasPlayer) _shownYaw = MinimapView.Follow(_shownYaw, _markers.Yaw, (float)delta, FollowRate);
         EnsureTexture();
-        QueueRedraw();
+        // a still view with nothing moving or fading on it draws the same picture: skip the redraw (one more after the last mover is gone)
+        var now = Time.GetTicksMsec() / 1000.0;
+        var key = (_markers.Player, _shownYaw, ZoomMetres, Size, _markers.HasPlayer, TeamColours, _markers.Waypoint.At, _side);
+        var live = IsAnimated(now);
+        if (live || _wasAnimated || key != _drawnKey) QueueRedraw();
+        _wasAnimated = live;
+        _drawnKey = key;
+    }
+
+    (Vector2, float, float, Vector2, bool, bool, NVector2?, int) _drawnKey;
+    bool _wasAnimated;
+
+    /// <summary>Whether anything on the map moves, fades or expires by itself (the markers are fed fresh every frame).</summary>
+    bool IsAnimated(double now)
+    {
+        if (_markers.Vehicles.Count > 0 || _markers.Pings.Active(now) || _markers.Trails.Trails.Count > 0 || _markers.Trails.Dots.Count > 0) return true;
+        if (TeamColours && (_markers.Friends.Count > 0 || _markers.Squad.Count > 0)) return true;
+        if (_markers.Strikes.Live(now).Count > 0) return true;
+        if (_markers.Blips is { } blips) { blips.Collect(now, _blipScratch); if (_blipScratch.Count > 0) return true; }
+        return false;
     }
 
     public override void _Draw()

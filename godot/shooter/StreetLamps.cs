@@ -172,12 +172,16 @@ public partial class StreetLamps : Node3D
     {
         var poleMat = new StandardMaterial3D { AlbedoColor = new Color(0.2f, 0.21f, 0.23f) };
         var poleMesh = new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.07f, Height = PoleHeight, RadialSegments = 6, Rings = 1 };
-        AddChild(Batch(poleMesh, Bases.Select(b => new Transform3D(Basis.Identity, b + Vector3.Up * (PoleHeight / 2))), poleMat));
+        var poles = Batch(poleMesh, Bases.Select(b => new Transform3D(Basis.Identity, b + Vector3.Up * (PoleHeight / 2))), poleMat);
+        poles.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off; // thin poles: not worth a shadow pass
+        AddChild(poles);
 
         _headMat = LampKit.Lens(new Color(Look.Colour), 0f);
         _headMat.AlbedoColor = new Color(0.55f, 0.55f, 0.52f);
         var headMesh = new BoxMesh { Size = new Vector3(0.42f, 0.08f, 0.22f) };
-        AddChild(Batch(headMesh, _heads.Take(Bases.Count).Select(h => new Transform3D(Basis.Identity, h)), _headMat));
+        var heads = Batch(headMesh, _heads.Take(Bases.Count).Select(h => new Transform3D(Basis.Identity, h)), _headMat);
+        heads.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+        AddChild(heads);
         if (PoleHeads.Count > 0)
         {
             // a thin lit plate under the luminaire of each pole lamp, turned with its pole (the arm reaches along the pole's +Z)

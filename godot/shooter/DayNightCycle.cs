@@ -76,7 +76,10 @@ public partial class DayNightCycle : Node3D
     /// </summary>
     public const float GlowThreshold = 2f, GlowRamp = 1f, GlowCap = 16f;
 
-    readonly DirectionalLight3D _sun = new() { ShadowEnabled = true };
+    /// <summary>How far from the camera the sun casts shadows (Godot's default is 100 m with every caster in range; the viewer uses 250). Past it the ground is lit but shadowless.</summary>
+    public const float ShadowMaxMetres = 150f;
+
+    readonly DirectionalLight3D _sun = new() { ShadowEnabled = true, DirectionalShadowMaxDistance = ShadowMaxMetres };
     readonly DirectionalLight3D _moon = new() { ShadowEnabled = false };
     readonly WorldEnvironment _worldEnv = new();
     readonly Godot.Environment _env = new();
@@ -141,13 +144,19 @@ public partial class DayNightCycle : Node3D
         Apply(clock.HourAt(_elapsed));
     }
 
+    (double, float, float, float, float, float, float, float)? _appliedKey;
+
     void Apply(double hour)
     {
+        // The clock runs 1 game hour a minute: a tenth of a real second (0.0017 h, 0.025 deg of sun) is below what shows, so the ~30 properties
+        // and sky parameters are written when the quantised hour or a setting changes, and every frame only while shooting stars fly.
+        var brightness = GameSettings.Current.Brightness;
+        var key = (Math.Round(hour * 600), Gloom, Indoor, IndoorExtra, MinAmbient, MoonPeak, NightExposure, brightness);
+        if (_appliedKey == key && Meteors.NightGate(NightFactor) <= 0f) return;
+        _appliedKey = key;
         var l = DayCurve.Sample(hour, MinAmbient, MoonPeak, NightExposure);
         Lighting = l;
         NightFactor = l.NightFactor;
-
-        var brightness = GameSettings.Current.Brightness;
 
         _sun.RotationDegrees = new Vector3(-l.SunElevationDeg, SunAzimuthDeg, 0);
         _sun.LightColor = Col(l.SunColour);
