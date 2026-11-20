@@ -64,6 +64,9 @@ public partial class DayNightCycle : Node3D
     public float Gloom { get; set; }
     const float GloomFloor = 0.03f;
 
+    /// <summary>Ambient energy a normal shooting star adds at its peak (a fireball adds 2.5x).</summary>
+    const float MeteorAmbient = 0.03f;
+
     /// <summary>
     /// Glow (bloom) is for lamps only. The threshold is on the scene's linear HDR value before exposure: a white surface in full sun
     /// peaks at about 1.1 (sun) + 0.7 (ambient) = 1.8 and the sun disc at 1.4, so nothing lit by day or the sky reaches 2; lit lamp lenses
@@ -162,7 +165,11 @@ public partial class DayNightCycle : Node3D
         _moon.LightEnergy = l.MoonEnergy * gloom;
 
         _env.AmbientLightColor = Col(l.AmbientColour);
-        _env.AmbientLightEnergy = l.AmbientEnergy * Mathf.Lerp(1f, IndoorAmbient, Mathf.Max(Indoor, IndoorExtra)) * gloom;
+        // shooting stars: only once it is already dark; each one lights the ground a little
+        var meteors = Meteors.NightGate(l.NightFactor) > 0f ? Meteors.Active(Time.GetTicksMsec() / 1000.0) : new List<Meteor>();
+        var gate = Meteors.NightGate(l.NightFactor);
+        var meteorGlow = Meteors.Glow(meteors) * gate * MeteorAmbient;
+        _env.AmbientLightEnergy = (l.AmbientEnergy * Mathf.Lerp(1f, IndoorAmbient, Mathf.Max(Indoor, IndoorExtra)) + meteorGlow * (1f - Mathf.Max(Indoor, IndoorExtra))) * gloom;
         _env.BackgroundEnergyMultiplier = Mathf.Lerp(1f, 0.12f, Mathf.Clamp(Gloom, 0f, 1f));
         _env.TonemapExposure = l.Exposure * brightness;
         _env.FogDensity = l.FogDensity;
@@ -176,6 +183,16 @@ public partial class DayNightCycle : Node3D
         _sky.SetShaderParameter("moon_colour", Col(l.MoonColour));
         _sky.SetShaderParameter("moon_visibility", l.NightFactor);
         _sky.SetShaderParameter("star_visibility", l.StarVisibility);
+        var a = new Vector4[Meteors.MaxActive];
+        var b = new Vector4[Meteors.MaxActive];
+        for (var i = 0; i < meteors.Count; i++)
+        {
+            var m = meteors[i];
+            a[i] = new Vector4(m.From.X, m.From.Y, m.From.Z, m.Progress);
+            b[i] = new Vector4(m.To.X, m.To.Y, m.To.Z, m.Brightness * gate * Mathf.Lerp(1f, GloomFloor, Mathf.Clamp(Gloom, 0f, 1f)));
+        }
+        _sky.SetShaderParameter("meteor_a", a);
+        _sky.SetShaderParameter("meteor_b", b);
     }
 
     static Color Col(System.Numerics.Vector3 v) => new(v.X, v.Y, v.Z);
