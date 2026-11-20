@@ -5,26 +5,35 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// The FPS counter in the HUD's top right corner (#340), toggled by the client-side /fps chat command and remembered in
-/// <see cref="GameSettings.ShowFps"/>. It is text on a panel (readable on any background, never colour alone), ignores the
-/// mouse, has a fixed size, and refreshes twice a second (<see cref="FpsReadout"/>). The kill feed sits below it while it is on.
+/// <see cref="GameSettings.ShowFps"/>. One card: the frame rate, and under it the server ticks received per second (TPS).
+/// It is text on a panel (readable on any background, never colour alone), ignores the mouse, has a fixed size, and refreshes
+/// twice a second (<see cref="FpsReadout"/>). The kill feed sits below it while it is on.
 /// </summary>
 public partial class Hud
 {
-    /// <summary>Panel height: one body line plus the panel's padding.</summary>
-    const int FpsChipHeight = 40, FpsChipWidth = 128;
+    /// <summary>Panel height: two body lines plus the panel's padding (FPS over TPS).</summary>
+    const int FpsChipHeight = 64, FpsChipWidth = 128;
 
     PanelContainer _fpsChip = null!;
-    Label _fpsLabel = null!;
+    Label _fpsLabel = null!, _tpsLabel = null!;
     readonly FpsReadout _fps = new();
+    long _snapshots;
 
     void BuildFps()
     {
         _fpsChip = Place(P("HudPanel"), 1, 0, -ShooterTheme.Margin, ShooterTheme.Margin, FpsChipWidth, FpsChipHeight);
+        var card = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         _fpsLabel = L(FpsReadout.Format(0), null, HorizontalAlignment.Right);
-        _fpsChip.AddChild(_fpsLabel);
+        _tpsLabel = L(FpsReadout.NoTps, null, HorizontalAlignment.Right);
+        card.AddChild(_fpsLabel);
+        card.AddChild(_tpsLabel);
+        _fpsChip.AddChild(card);
         _root.AddChild(_fpsChip);
         ApplyFps();
     }
+
+    /// <summary>The running count of server snapshots received; the TPS line is its rate (set by the client every frame).</summary>
+    public void SetSnapshotCount(long count) => _snapshots = count;
 
     /// <summary>Shows or hides the counter to match the setting, and moves the kill feed clear of it.</summary>
     void ApplyFps()
@@ -41,7 +50,9 @@ public partial class Hud
     void UpdateFps(double now)
     {
         if (!Settings.ShowFps) return;
-        if (_fps.Sample(now, Engine.GetFramesPerSecond()) is { } text) Set(_fpsLabel, text);
+        if (_fps.Sample(now, Engine.GetFramesPerSecond(), _snapshots) is not { } r) return;
+        Set(_fpsLabel, r.Fps);
+        Set(_tpsLabel, r.Tps);
     }
 
     /// <summary>Flips the counter, saves the choice and answers in the chat log.</summary>

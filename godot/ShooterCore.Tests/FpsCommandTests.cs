@@ -32,19 +32,44 @@ public class FpsCommandTests
     public void ReadoutSamplesTwiceASecond()
     {
         var r = new FpsReadout();
-        Assert.Equal("60 FPS", r.Sample(10.0, 60));
-        Assert.Null(r.Sample(10.2, 144));
-        Assert.Null(r.Sample(10.49, 144));
-        Assert.Equal("144 FPS", r.Sample(10.5, 144));
+        Assert.Equal(new FpsReadout.Reading("60 FPS", FpsReadout.NoTps), r.Sample(10.0, 60, 0));
+        Assert.Null(r.Sample(10.2, 144, 6));
+        Assert.Null(r.Sample(10.49, 144, 9));
+        Assert.Equal(new FpsReadout.Reading("144 FPS", "30 TPS"), r.Sample(10.5, 144, 15));
+    }
+
+    [Fact]
+    public void TpsIsSnapshotsPerSecondOverTheWindow()
+    {
+        var r = new FpsReadout();
+        r.Sample(1.0, 60, 100);
+        Assert.Equal("30 TPS", r.Sample(1.5, 60, 115).Value.Tps);  // 15 snapshots in 0.5 s
+        Assert.Equal("0 TPS", r.Sample(2.0, 60, 115).Value.Tps);      // a stall: nothing arrived
+    }
+
+    [Fact]
+    public void TpsIsNotShownUntilASecondSample()
+    {
+        var r = new FpsReadout();
+        Assert.Equal(FpsReadout.NoTps, r.Sample(1.0, 60, 50).Value.Tps);
+    }
+
+    [Fact]
+    public void ResetRestartsTheTpsWindow()
+    {
+        var r = new FpsReadout();
+        r.Sample(1.0, 60, 10);
+        r.Reset();
+        Assert.Equal(FpsReadout.NoTps, r.Sample(1.1, 75, 40).Value.Tps);
     }
 
     [Fact]
     public void ResetSamplesAtOnce()
     {
         var r = new FpsReadout();
-        r.Sample(1.0, 60);
+        r.Sample(1.0, 60, 0);
         r.Reset();
-        Assert.Equal("75 FPS", r.Sample(1.1, 75));
+        Assert.Equal("75 FPS", r.Sample(1.1, 75, 0).Value.Fps);
     }
 
     [Theory]
@@ -52,4 +77,10 @@ public class FpsCommandTests
     [InlineData(-3, "0 FPS")]
     [InlineData(5000, "999 FPS")]
     public void FormatRoundsAndClamps(double fps, string text) => Assert.Equal(text, FpsReadout.Format(fps));
+
+    [Theory]
+    [InlineData(29.6, "30 TPS")]
+    [InlineData(-1, "0 TPS")]
+    [InlineData(5000, "999 TPS")]
+    public void TpsFormatRoundsAndClamps(double tps, string text) => Assert.Equal(text, FpsReadout.FormatTps(tps));
 }

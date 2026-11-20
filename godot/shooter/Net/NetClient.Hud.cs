@@ -130,6 +130,7 @@ public partial class NetClient
     {
         _hud?.SetControlMode(Mode.RemoteViewOwnsScreen); // one mode switch: a turret or the missile owns the screen (ticket #152)
         _hud?.SetHealth(Mathf.CeilToInt(_me?.Health ?? 100));
+        _hud?.SetSnapshotCount(_snaps); // the FPS card's TPS line (Hud.Fps.cs)
         _hud?.CoverCrosshair(_chooser.IsOpen);
         _hud?.SetUnarmedSeat(InUnarmedSeat); // no crosshair, no ammo readout where nothing can be fired (#373)
         if (_me != null) _me.MoveWithFreeMouse = (_hud?.EquipmentOpen ?? false) || (_hud?.TacticalMapOpen ?? false) || (_hud?.HuntersLogOpen ?? false) || (_hud?.MineralLogOpen ?? false); // the Equipment screen, the tactical map and the Hunter's Log free the mouse, not the legs (#268, #336)
