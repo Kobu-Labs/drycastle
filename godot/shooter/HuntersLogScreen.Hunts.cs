@@ -19,11 +19,11 @@ public sealed partial class HuntersLogScreen
     sealed class RowCells
     {
         public ContentButton Btn = null!;
-        public Label When = null!, Species = null!, Kg = null!, Distance = null!, Weapon = null!, PillText = null!;
+        public Label When = null!, Species = null!, Kg = null!, Distance = null!, Weapon = null!;
         public PlayerLink Player = null!;
         public AnimalPicture Icon = null!;
         public BlurText Blur = null!;
-        public PanelContainer Pill = null!;
+        public RecordBadge Pill = null!;
         public Control PlayerCell = null!;
     }
 
@@ -53,6 +53,7 @@ public sealed partial class HuntersLogScreen
     Control _hitHidden = null!;
     Label _hitName = null!, _hitKg = null!, _hitNone = null!;
     VBoxContainer _hitFacts = null!;
+    Control _headPad = null!;
     BlurText _hitBlur = null!;
 
     void BuildHuntsPane()
@@ -111,7 +112,7 @@ public sealed partial class HuntersLogScreen
             var col = Columns[c];
             var b = new Button
             {
-                ThemeTypeVariation = "LogHead", Text = Strings.T(col.Label), ClipText = true, FocusMode = FocusModeEnum.All, ExpandIcon = true,
+                ThemeTypeVariation = "LogHead", Text = Strings.T(col.Label), FocusMode = FocusModeEnum.All, ExpandIcon = true,
                 IconAlignment = HorizontalAlignment.Right, Alignment = col.Number ? HorizontalAlignment.Right : HorizontalAlignment.Left,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = col.Ratio, MouseDefaultCursorShape = CursorShape.PointingHand,
                 TooltipText = Strings.F("log.sort.tip", Strings.T(col.Label)), Icon = HuntArt.Arrow(null),
@@ -122,6 +123,9 @@ public sealed partial class HuntersLogScreen
             _heads[c] = b;
             head.AddChild(b);
         }
+        // the rows' scrollbar takes width the header does not have: a spacer of the same width keeps every header over its column
+        _headPad = new Control { MouseFilter = MouseFilterEnum.Ignore };
+        head.AddChild(_headPad);
         table.AddChild(head);
 
         // the rows scroll, the header and the pager do not; the state box (loading, empty, error) takes the rows' place
@@ -129,6 +133,9 @@ public sealed partial class HuntersLogScreen
         _rowsBox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
         _rowsBox.AddThemeConstantOverride("separation", 0);
         _rowsScroll.AddChild(_rowsBox);
+        var bar = _rowsScroll.GetVScrollBar();
+        void SyncPad() => _headPad.CustomMinimumSize = new Vector2(bar.Visible ? bar.GetCombinedMinimumSize().X : 0, 0);
+        bar.VisibilityChanged += SyncPad;
         table.AddChild(_rowsScroll);
         _tableStateHost.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         outer.AddChild(_tableStateHost);
@@ -357,16 +364,23 @@ public sealed partial class HuntersLogScreen
         who.AddChild(r.Player);
         r.PlayerCell = who;
         // species: the name (or the blurred placeholder), then the record seal
-        var species = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = Columns[2].Ratio, MouseFilter = MouseFilterEnum.Ignore };
-        species.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
-        r.Icon = new AnimalPicture(ShooterTheme.LogRowArt) { FillInk = Skin.InkDim, OutlineInk = Skin.InkDim, SizeFlagsVertical = SizeFlags.ShrinkCenter, MouseFilter = MouseFilterEnum.Ignore };
-        species.AddChild(r.Icon);
+        // the record seal floats over the cell's right end, in no layout: a strip of the cell is reserved for it so the name is never covered, and a seal cannot move the columns
+        var species = new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = Columns[2].Ratio, MouseFilter = MouseFilterEnum.Ignore };
+        var names = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        names.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        names.OffsetRight = -ShooterTheme.LogSealStrip;
+        names.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
+        species.AddChild(names);
+        r.Icon = new AnimalPicture(ShooterTheme.LogRowArt) { FillInk = Skin.InkDim, OutlineInk = Skin.InkDim, SizeFlagsVertical = SizeFlags.ShrinkCenter, ClipContents = true, MouseFilter = MouseFilterEnum.Ignore };
+        names.AddChild(r.Icon);
         r.Species = Cell("InkSmall", HorizontalAlignment.Left, 1);
         r.Blur = new BlurText(Strings.T("hunt.hidden.name"), "InkSmall") { Visible = false };
-        r.Pill = new PanelContainer { ThemeTypeVariation = "LogPill", Visible = false, MouseFilter = MouseFilterEnum.Ignore, SizeFlagsVertical = SizeFlags.ShrinkCenter };
-        r.PillText = Text("", "LogSealText");
-        r.Pill.AddChild(r.PillText);
-        species.AddChild(r.Species); species.AddChild(r.Blur); species.AddChild(r.Pill);
+        r.Pill = new RecordBadge(Skin) { Visible = false };
+        names.AddChild(r.Species); names.AddChild(r.Blur);
+        r.Pill.SetAnchorsPreset(Control.LayoutPreset.CenterRight);
+        r.Pill.GrowHorizontal = Control.GrowDirection.Begin; r.Pill.GrowVertical = Control.GrowDirection.Both;
+        r.Pill.OffsetRight = -ShooterTheme.Space / 2;
+        species.AddChild(r.Pill);
         r.Kg = Cell("InkSmall", HorizontalAlignment.Right, Columns[3].Ratio);
         r.Distance = Cell("InkSmall", HorizontalAlignment.Right, Columns[4].Ratio);
         r.Weapon = Cell("InkSmall", HorizontalAlignment.Left, Columns[5].Ratio);
@@ -398,8 +412,8 @@ public sealed partial class HuntersLogScreen
         r.Blur.Visible = h.Hidden;
         r.Species.Text = h.Hidden ? "" : HuntSpeciesName(h);
         var mark = HuntRecords.MarkOf(Data.Records.Data?.Records, h);
-        r.Pill.Visible = mark != RecordMark.None;
-        r.PillText.Text = mark == RecordMark.Weight ? Strings.T("log.pill.kg") : mark == RecordMark.Shot ? Strings.T("log.pill.shot") : "";
+        r.Pill.Set(mark);
+        r.Pill.TooltipText = mark == RecordMark.Weight ? Strings.T("log.pill.kg") : mark == RecordMark.Shot ? Strings.T("log.pill.shot") : "";
         r.Kg.Text = Kg(h.Kg);
         r.Distance.Text = Metres(h.DistanceM);
         r.Weapon.Text = _env.WeaponName(h.Weapon);

@@ -143,7 +143,6 @@ public sealed class LogSkin
         Text(t, "TileDim", ShooterTheme.FontSmall, OnTileDim);
         Text(t, "TileMark", ShooterTheme.FontDisplay, OnTile);
         Text(t, "TileMarkDim", ShooterTheme.FontDisplay, OnTileDim);
-        Text(t, "LogSealText", ShooterTheme.FontSmall, OnSeal);
 
         // panels: plates of metal, papers, the darker box a picture sits in
         Panel(t, "LogStat", Box(Plate, S * 2, MetalEdge, 2).With(b => { b.ContentMarginTop = b.ContentMarginBottom = S; }));
@@ -156,7 +155,6 @@ public sealed class LogSkin
         Panel(t, "LogCover", Box(Cover, S * 2, Edge, 2, 3));
         Panel(t, "LogFigure", Box(PaperShade, S / 2, PaperLine, 1, 0));
         Panel(t, "LogNotice", Box(Edge, S, ShooterTheme.Warn, 2));
-        Panel(t, "LogPill", Box(Seal, 0, null, 0, S + S / 2).With(b => { b.ContentMarginLeft = b.ContentMarginRight = S; b.ContentMarginTop = b.ContentMarginBottom = 1; }));
 
         // buttons on the board (and the hunter button on the hit card): every state its own fill, the pressed and current one a thicker edge as well
         const int pad = 12;

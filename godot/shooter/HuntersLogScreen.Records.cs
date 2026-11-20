@@ -76,18 +76,36 @@ public sealed partial class HuntersLogScreen
     /// </summary>
     Control PlayerKillCard(PlayerKillView? k)
     {
+        // the same card as a creature's: title, the picture in its frame (a person's silhouette, dim until someone has made the kill), the number on a badge, a caption, then the three icon lines
         var card = new LogPaper(Skin, "LogCard") { CustomMinimumSize = new Vector2(ShooterTheme.LogCardW, 0) };
         var v = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         v.AddThemeConstantOverride("separation", ShooterTheme.Space);
         card.AddChild(v);
-        v.AddChild(Text(Strings.T("log.rec.kill"), "InkHead", HorizontalAlignment.Center));
-        v.AddChild(Text(Metres(k?.DistanceM), "InkHead", HorizontalAlignment.Center));
+        v.AddChild(Text(Strings.T("log.rec.kill.title"), "InkHead"));
+        var w = ShooterTheme.LogCardW - 4 * ShooterTheme.Space;
+        var holder = new Control { CustomMinimumSize = new Vector2(w - 2 * ShooterTheme.Space, ShooterTheme.LogFigureH), MouseFilter = MouseFilterEnum.Ignore };
+        var pic = new TextureRect
+        {
+            Texture = HuntArt.Person, ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, MouseFilter = MouseFilterEnum.Ignore,
+            Modulate = k == null ? new Color(Skin.InkDim, 0.35f) : Skin.InkDim,
+        };
+        pic.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        pic.OffsetTop = pic.OffsetBottom = ShooterTheme.Space; // air above and below the silhouette
+        pic.OffsetBottom = -ShooterTheme.Space;
+        holder.AddChild(pic);
+        var col = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        col.AddThemeConstantOverride("separation", ShooterTheme.Space / 2);
+        col.AddChild(Badged(Figure(holder), k == null ? Strings.T("log.none") : Metres(k.DistanceM), w - 2 * ShooterTheme.Space));
+        var cap = Text(Strings.T("log.rec.longest"), "LogCaption");
+        cap.Uppercase = true;
+        col.AddChild(cap);
         var lines = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         lines.AddThemeConstantOverride("separation", 2);
         lines.AddChild(k == null ? StatLine(HuntArt.Person, Strings.T("log.none"), "InkSmall", tint: true) : PersonLink(k.Killer, () => OpenPlayerLog(k.KillerId, k.Killer), "InkSmall"));
         lines.AddChild(k == null ? StatLine(HuntArt.Person, Strings.T("log.none"), "InkSmall", tint: true) : PersonLink(k.Victim, () => OpenPlayerLog(k.VictimId, k.Victim), "InkSmall"));
         lines.AddChild(StatLine(HuntArt.Rifle, k == null ? Strings.T("log.none") : _env.WeaponName(k.Weapon), "InkSmall", tint: true));
-        v.AddChild(lines);
+        col.AddChild(lines);
+        v.AddChild(col);
         if (k == null) v.AddChild(Text(Strings.T("log.rec.kill.todo"), "InkDimSmall", wrap: true));
         return card;
     }
@@ -143,7 +161,10 @@ public sealed partial class HuntersLogScreen
     static Control PersonLink(string name, Action open, string variation)
     {
         var b = new ContentButton { ThemeTypeVariation = "LogRow", MinSize = Vector2.Zero, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, TooltipText = Strings.F("log.hit.open", name), MouseDefaultCursorShape = CursorShape.PointingHand };
-        var link = new PlayerLink { Text = name, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, VerticalAlignment = VerticalAlignment.Center, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
+        var link = new PlayerLink { Text = name, SizeFlagsHorizontal = SizeFlags.ShrinkBegin, VerticalAlignment = VerticalAlignment.Center, ClipText = false, TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming }; // a clipping label has no minimum width: in a shrinking row it would be 0 wide, the name invisible
+        // no row padding or fill: the line sits exactly where the other lines of the card do (the link's own hover box says it is live); only the focus ring is drawn
+        foreach (var state in new[] { "normal", "hover", "pressed", "disabled", "hover_pressed" }) b.AddThemeStyleboxOverride(state, new StyleBoxEmpty());
+        b.AddThemeStyleboxOverride("focus", ShooterTheme.Box(Colors.Transparent, 0, Skin.Ink, ShooterTheme.Border));
         b.SetContent(StatLine(HuntArt.Person, "", variation, tint: true, content: link));
         b.Pressed += open;
         b.MouseEntered += () => link.Hot = true;
