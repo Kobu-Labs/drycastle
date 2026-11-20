@@ -379,6 +379,7 @@ public partial class Shooter : Node3D
         if (!Directory.Exists(dir)) throw new InvalidOperationException($"map folder not found: {dir} (pass --map DIR or set DRYCASTLE_MAP)");
         AddChild(_map.Root);
         _map.CollisionOnly = cfg.Str("role", "client") == "server"; // the server never draws the map
+        _map.MergeChunkMeshes = !_map.CollisionOnly; // the client draws a chunk as a few meshes per material (#441); the viewer keeps one node per piece
         if (File.Exists(Path.Combine(dir, "garage.json"))) // the village: what the map has on the mechanic garage's ground (#320): two baked trees (not solid) and two spawn candidates (not used: nobody spawns in a sealed shed)
         {
             _map.TreeFilter = (x, y) => MechanicGarageSite.Covers(x, -y, 0.5f);

@@ -157,6 +157,7 @@ public sealed partial class MapLoader
         if (BuildBoundary) BuildTerrainBoundary();
         Stats.LoadSeconds = (Time.GetTicksMsec() - t0) / 1000.0;
         GD.Print($"map load phases: chunks {(tChunks - tPhase) / 1000.0:F1}s, trees {(tTrees - tChunks) / 1000.0:F1}s, objects {(tObjects - tTrees) / 1000.0:F1}s, clutter {(tClutter - tObjects) / 1000.0:F1}s, boundary {(Time.GetTicksMsec() - tClutter) / 1000.0:F1}s");
+        if (MergedMeshes > 0) GD.Print($"map: {MergedSources} chunk meshes merged into {MergedMeshes}");
         yield return 1f;
     }
 
@@ -446,6 +447,7 @@ public sealed partial class MapLoader
                 if (_parcels.TryGetValue(id, out var info)) info.HasModel = true;
             }
         }
+        if (MergeChunkMeshes && !CollisionOnly) MergeChunkVisuals(chunk, scene);
     }
 
     static IEnumerable<Node> Descendants(Node n)
