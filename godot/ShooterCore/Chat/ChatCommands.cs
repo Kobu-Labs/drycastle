@@ -105,6 +105,8 @@ public static class ChatCommands
         new("scud", "TEST: the Scud truck. spawn: a truck stands in front of you; reload: the truck you ride or the nearest within 40 m is loaded at once; blast: a Scud blast 200 m ahead of you (kills, destroys, shatters glass); state: its launcher's state",
             new[] { new ChatArg("action", ChatArgKind.Choice) }),
         new("squad", "Squads (team deathmatch): create one with a name, join one by name or number, leave yours, or list your team's", new[] { new ChatArg("action", ChatArgKind.Choice), new ChatArg("name", ChatArgKind.Text, false) }, AdminOnly: false),
+        new("night", "TEST (this client only): tune the night lighting, all in percent: moon light (default 8), ambient floor (4), night exposure (90). No arguments shows the values, reset restores them. Use /time midnight to see it",
+            new[] { new ChatArg("moon", ChatArgKind.IntOrChoice, false, 0, 100), new ChatArg("ambient", ChatArgKind.Int, false, 0, 100), new ChatArg("exposure", ChatArgKind.Int, false, 10, 200) }, ClientSide: true),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
     };
 
@@ -148,6 +150,7 @@ public static class ChatCommands
             ChatArgKind.Choice when cmd.Name == "scud" => new[] { ("spawn", "a Scud truck stands in front of you"), ("reload", "the truck you ride (or the nearest within 40 m) is loaded at once, when its rack is down"), ("blast", "TEST: a Scud blast 200 m ahead of you, credited to you"), ("state", "say the launcher's state of the truck") },
             ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },
             ChatArgKind.Choice when cmd.Name == "rozhlas" => new[] { ("hijack", "the announcement cuts and the mic stays live for 3 minutes (only while a detour broadcast is on air)"), ("take", "TEST: hold the set yourself (stands in for holding E at the dictation table; only while hijacked)"), ("release", "TEST: let the set holder go"), ("goto", "TEST: stand at the dictation table (where E takes the set during a hijack)"), ("feedtest", "TEST: push a few seconds of test voice and a shot through the live feed (ffmpeg voice chain, 2 s delay) to every megaphone"), ("combattest", "TEST: push a shot, a blast and a death sound through the live feed, wherever you stand") },
+            ChatArgKind.IntOrChoice when cmd.Name == "night" => new[] { ("reset", "back to the shipped night") },
             ChatArgKind.IntOrChoice when cmd.Name == "citizens" => new[] { ("clear", "remove every citizen") },
             ChatArgKind.Choice when cmd.Name == "help" => Visible(ctx).Select(c => (c.Name, c.Summary)).ToList(),
             _ => Array.Empty<(string, string)>(),
@@ -259,7 +262,7 @@ public static class ChatCommands
         var help = arg.Kind switch
         {
             ChatArgKind.Int => $"{arg.Name}: a whole number from {arg.Min} to {arg.Max}",
-            ChatArgKind.IntOrChoice => $"{arg.Name}: a whole number from {arg.Min} to {arg.Max}, or clear",
+            ChatArgKind.IntOrChoice => $"{arg.Name}: a whole number from {arg.Min} to {arg.Max}, or {(cmd.Name == "night" ? "reset" : "clear")}",
             ChatArgKind.Time => $"{arg.Name}: HH:MM, a word, freeze or resume",
             ChatArgKind.Player => $"{arg.Name}: a player's name (no spaces) or #id from the scoreboard",
             ChatArgKind.Text => $"{arg.Name}: free text",

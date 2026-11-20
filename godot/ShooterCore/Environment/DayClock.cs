@@ -70,11 +70,11 @@ public static class DayCurve
     /// <summary>Highest the sun gets at noon, degrees above the horizon.</summary>
     public const float MaxSunElevationDeg = 60f;
     /// <summary>Peak moon light at full night (sun energy at noon is about 1.1).</summary>
-    public const float MoonPeakEnergy = 0.3f;
+    public const float MoonPeakEnergy = 0f;
     /// <summary>Ambient energy at full day; night goes down to the configured min_ambient.</summary>
     public const float AmbientDayEnergy = 0.7f;
-    /// <summary>Exposure at full day and at full night; night is lifted so shapes stay readable.</summary>
-    public const float ExposureDay = 1.0f, ExposureNight = 1.35f;
+    /// <summary>Exposure at full day and at full night; no night lift, so the night stays dark.</summary>
+    public const float ExposureDay = 1.0f, ExposureNight = 0.2f;
     public const float FogDay = 0.0006f, FogNight = 0.0012f;
 
     static readonly Vector3 AmbientDay = new(1f, 1f, 1f), AmbientNight = new(0.45f, 0.52f, 0.75f);
@@ -99,7 +99,7 @@ public static class DayCurve
     /// <summary>0 at full day, 1 at full night. Transition band is sun sine -0.15..+0.25 (about 05:00 to 07:30, 16:30 to 19:00).</summary>
     public static float NightFactorAt(double hour) => 1f - Smoothstep(-0.15f, 0.25f, SunSine(hour));
 
-    public static DayLighting Sample(double hour, float minAmbient)
+    public static DayLighting Sample(double hour, float minAmbient, float moonPeak = MoonPeakEnergy, float exposureNight = ExposureNight)
     {
         var s = SunSine(hour);
         var day = Smoothstep(-0.15f, 0.25f, s);
@@ -112,7 +112,7 @@ public static class DayCurve
 
         // the moon sits on the opposite side of the sky to the sun, and only lights the night
         var moonElev = -sunElev * 0.8f;
-        var moonEnergy = MoonPeakEnergy * Smoothstep(-0.05f, 0.2f, -s);
+        var moonEnergy = moonPeak * Smoothstep(-0.05f, 0.2f, -s);
 
         // ambient never drops below minAmbient, so the night stays playable
         var ambientEnergy = minAmbient + (AmbientDayEnergy - minAmbient) * day;
@@ -134,7 +134,7 @@ public static class DayCurve
             SkyTop: skyTop,
             SkyHorizon: horizon,
             StarVisibility: Smoothstep(0.4f, 1f, night),
-            Exposure: ExposureDay + (ExposureNight - ExposureDay) * night,
+            Exposure: ExposureDay + (exposureNight - ExposureDay) * night,
             FogDensity: FogDay + (FogNight - FogDay) * night,
             NightFactor: night);
     }

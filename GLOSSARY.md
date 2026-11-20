@@ -113,7 +113,7 @@ A player whose player token is listed on the server (`--admin-token`). Admins ma
 _Avoid_: operator, moderator, op
 
 **Chat command**:
-A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/event` (`rozhlas` the loudspeaker, `intel` a test announcement, `bigfoot` starts the Bigfoot Event, `thieves` starts the Thieves event, `harvester` starts a harvester on a crop field near the players (ignores the cooldown, says the field `GP-NNNN` and x,y,z), `current end` concludes the running Event as a win for testing, `current cancel` removes it with no reward), `/help`. `/fps` is for everyone and runs on the typing client only (it never reaches the server): it shows or hides the FPS counter in the HUD's top right corner, kept in the settings file; under the FPS line the card shows TPS, the server ticks received per second (snapshots, 30 when healthy). The chat box completes them with Tab and lists the candidates and the usage above the input.
+A chat line starting with "/", run by the server for an admin: `/bots` (how many bots play, live), `/spawn` (a vehicle in front of the admin), `/time` (the time of day, freeze or resume the clock), `/restart` (a new round now, optionally in the other match mode), `/sandbox` (turn sandbox mode on or off for a player, by name or `#id`; only on a server started with `--allow-sandbox`), `/give` (give an Item to a player, or to yourself: worn if the slot is empty, else in the Bag), `/event` (`rozhlas` the loudspeaker, `intel` a test announcement, `bigfoot` starts the Bigfoot Event, `thieves` starts the Thieves event, `harvester` starts a harvester on a crop field near the players (ignores the cooldown, says the field `GP-NNNN` and x,y,z), `current end` concludes the running Event as a win for testing, `current cancel` removes it with no reward), `/help`. `/night` (admin, typing client only: tunes the night lighting in percent, moon / ambient floor / night exposure, `reset` restores) is a test command. `/fps` is for everyone and runs on the typing client only (it never reaches the server): it shows or hides the FPS counter in the HUD's top right corner, kept in the settings file; under the FPS line the card shows TPS, the server ticks received per second (snapshots, 30 when healthy). The chat box completes them with Tab and lists the candidates and the usage above the input.
 _Avoid_: console command, cheat
 
 **Care package**:
@@ -324,8 +324,12 @@ An Item that rides in the Bag (it cannot be worn) and is used from there: the bi
 _Avoid_: rangefinder, spotter scope
 
 **Headlights**:
-A vehicle's front and tail lights, from the optional `lights` block in `vehicles.json`. The driver toggles them with the headlights key (H).
+A vehicle's front and tail lights, from the optional `lights` block in `vehicles.json`. The driver toggles them with the headlights key (H), which is also the Head lamp key on foot.
 _Avoid_: lamps (for vehicles), beams
+
+**Head lamp**:
+A soft white beam from a player's head, switched with the headlights key (H) while on foot (in a vehicle the same key works the Headlights). Off by default and at every spawn; death and getting into a vehicle switch it off. No item, no battery. The server holds the on/off bit and tells everyone, so the others see the beam along that player's aim; only the nearest three lit players get a real light. Range, cone and energy are the consts of `HeadLamp`.
+_Avoid_: flashlight, torch
 
 **Day clock**:
 The server's day/night clock: one 24-hour day of `day_length_minutes` real minutes, started at `start_time` (or `--time`), optionally frozen (`--freeze-time`). Clients get it in the welcome message.

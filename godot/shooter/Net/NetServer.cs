@@ -45,6 +45,8 @@ public partial class NetServer : Node
         public readonly ZeroDial Zero = new();
         /// <summary>The player holds the binoculars at the face (<see cref="Binoculars"/>): what the others are told, nothing the server acts on.</summary>
         public bool BinocularsUp;
+        /// <summary>The head lamp is on (<see cref="HeadLamp"/>): told to everyone, nothing else on the server reads it.</summary>
+        public bool HeadLampOn;
         public readonly Queue<NetInput> Inputs = new();
         public ushort Ack;
         public bool HasAck;
@@ -601,6 +603,7 @@ public partial class NetServer : Node
         SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
         SendWornOnJoin(c); // what the others wear (#266), to draw on their characters
         SendBinocularsOnJoin(c); // and who holds the binoculars up
+        SendHeadLampsOnJoin(c); // and whose head lamp is on
         SendStatusOnJoin(c); // who is blessed, cursed or burning
         _match.AddPlayer(c.Id, c.Name, c.Sandbox, c.IsBot); // spawns the player (event) and broadcasts the scoreboard
         SandboxAnnounce(c); // sandbox name tags both ways, and the held streak (#156)
@@ -762,6 +765,7 @@ public partial class NetServer : Node
                     sc.Breath.Reset();
                     sc.Zero.Reset();
                     SetBinoculars(sc, false); // a new life starts with them down
+                    SetHeadLamp(sc, false); // and with the head lamp off
                     ItemRules.IssueStandard(Items, sc.Bag); // and with the standard items (the binoculars) in the bag
                     SendEquipmentIfChanged(sc); // also what was issued at the join, before the first life
                     SendAmmo(sc);
@@ -783,7 +787,7 @@ public partial class NetServer : Node
                 break;
             case PlayerTeamChanged tc: OnTeamChanged(tc); break;
             case TargetKilled tk: OnTargetKilled(tk); break;
-            case PlayerDied d: OnStatusDeath(d.Victim); RozhlasSetDeath(d.Victim); RozhlasCombatDeath(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
+            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) SetHeadLamp(dead, false); OnStatusDeath(d.Victim); RozhlasSetDeath(d.Victim); RozhlasCombatDeath(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
         }
     }
 
@@ -830,6 +834,7 @@ public partial class NetServer : Node
             LootUse(c, useDown);
             PlantationUse(c, useDown);
             var lightsEdge = Headlights.Edge((i.Buttons & (ushort)MoveButtons.Headlights) != 0, ref c.LightsHeld);
+            SetHeadLamp(c, HeadLamp.Next(c.HeadLampOn, lightsEdge, c.Car == null, _match.Get(c.Id)?.Life == PlayerLife.Alive)); // H on foot: the head lamp (in a vehicle: the car's lights, below)
             var streakDown = (i.Buttons & (ushort)MoveButtons.Killstreak) != 0;
             var streakEdge = c.StreakKey.Pressed(streakDown);
             // the throw key is fed every input; it is the grenade's only on foot and free-handed (a held key, a vehicle, death or a pin put the grenade away)

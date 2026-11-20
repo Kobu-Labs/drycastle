@@ -14,7 +14,7 @@ public sealed class EnvironmentConfig : IVersioned
     /// <summary>When set, the clock is frozen at this time of day.</summary>
     public string? FrozenTime { get; set; }
     /// <summary>Ambient light floor at night so the world is never pitch black (0 would be fully dark).</summary>
-    public float MinAmbient { get; set; } = 0.35f;
+    public float MinAmbient { get; set; } = 0.10f;
     /// <summary>How a street lamp lights up at night (the lens, the beam): the same kind of numbers as a vehicle's <c>lights</c>.</summary>
     public LampLook Lamp { get; set; } = new();
 
