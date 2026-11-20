@@ -131,7 +131,7 @@ public class VehiclesFile : IVersioned
             if (v.Height <= 0 || v.HalfWidth <= 0 || v.HalfLength <= 0) throw new DataFileException($"vehicles.json: {v.Id}: height, half_width and half_length must be positive");
             if (v.Hull is { } hull && (hull.Count == 0 || hull.Any(b => b == null || b.Length != 6 || !(b[2] > 0) || !(b[3] > 0) || !(b[5] > b[4]) || b.Any(x => !float.IsFinite(x)))))
                 throw new DataFileException($"vehicles.json: {v.Id}: hull is a list of [cx, cz, half_width, half_length, y0, y1] with positive half sizes and y1 above y0");
-            if (v.Hull != null && v.Flight == null) throw new DataFileException($"vehicles.json: {v.Id}: a hull list tilts with the flight state: it is for a flying type");
+            if (v.Hull != null && v.Flight == null && v.Trailer == null) throw new DataFileException($"vehicles.json: {v.Id}: a hull list tilts by the vehicle's attitude: it is for a flying type or a trailer (the ground fit); other ground vehicles wait for #483");
             if (v.EnterRadius is < 0 || f.EnterRadius < 0) throw new DataFileException($"vehicles.json: {v.Id}: enter_radius must not be negative");
             if (v.RunOverMass is { } rm && rm <= 0) throw new DataFileException($"vehicles.json: {v.Id}: run_over_mass must be positive");
             if (!VehicleMedium.All.Contains(v.Medium)) throw new DataFileException($"vehicles.json: {v.Id}: medium {v.Medium} is not land, amphibious or air");
@@ -843,7 +843,7 @@ public class VehicleDef
     public float Height { get; set; } = 1.2f;
     /// <summary>
     /// The hull as several boxes instead of the one upright box over the footprint (<see cref="HalfWidth"/>, <see cref="HalfLength"/>, <see cref="Height"/>): [cx, cz, half_width, half_length, y0, y1] each, in the
-    /// vehicle's node frame, metres (the utility helicopter: cabin, tail boom, fin). They are both Hit shape and Body shape (ADR 0028) and tilt with the vehicle's pitch and roll.
+    /// vehicle's node frame, metres (the utility helicopter: cabin, tail boom, fin). They are both Hit shape and Body shape (ADR 0028) and tilt with the vehicle's pitch and roll (an aircraft's flight state, a trailer's ground fit, <see cref="TrailerAttitude"/>; vehicle-to-vehicle contact of a trailer keeps the footprint).
     /// Null: the one upright box, turned by the yaw only. <see cref="HalfWidth"/>, <see cref="HalfLength"/> and <see cref="Height"/> stay the footprint the run-over, the enter reach and the seat schematic read.
     /// </summary>
     public List<float[]>? Hull { get; set; }

@@ -101,18 +101,26 @@ public partial class NetClient
         }
         v.LastTick = tick; v.Pos = rec.Position; v.Yaw = rec.YawRad;
         v.Buf.Push(tick, rec.Position, rec.YawRad, v.Trailer != null ? VehicleRecord.Tractor(rec) : 0); // a trailer's pitch slot carries its tractor's id, so it is drawn hitched exactly while the sample at the render tick says so (RenderTrailers)
+        RefreshHull(v);
         PlaceCarSolid(v);
     }
 
     /// <summary>The pitch and roll a vehicle's hull is turned by on this client: the latest flight record's for a type with a hull list (<see cref="VehicleDef.Tilts"/>), else none (the one upright box turns with the yaw).</summary>
     (float Pitch, float Roll) HullTiltOf(CarView v, VehicleDef def) =>
-        def.Tilts && _flights.TryGetValue(v.Id, out var f) ? (FlightRecord.Pitch(f.Rec), FlightRecord.Roll(f.Rec)) : (0f, 0f);
+        !def.Tilts ? (0f, 0f)
+        : v.Trailer is { Hull: { } h } ? (h.Pitch, h.Roll) // a trailer's own ground fit (RefreshHull), the server's number
+        : _flights.TryGetValue(v.Id, out var f) ? (FlightRecord.Pitch(f.Rec), FlightRecord.Roll(f.Rec))
+        : (0f, 0f); // (a ground vehicle's drive state joins here, #483)
+
+    /// <summary>Where a vehicle's hull frame has its origin: the record's place, or a trailer's origin turned about its axle (<see cref="HullTiltOf"/>).</summary>
+    static NVec3 HullFeetOf(CarView v) => v.Trailer is { Hull: { } h } ? h.Origin : v.Pos;
 
     /// <summary>Puts a vehicle's solid box where its latest records say: the server builds its own from the same numbers (<c>ServerCar.PlaceSolid</c>).</summary>
     void PlaceCarSolid(CarView v)
     {
         if (v.Solid == null) return;
-        var p = new Vector3(v.Pos.X, v.Pos.Y, v.Pos.Z);
+        var f = HullFeetOf(v);
+        var p = new Vector3(f.X, f.Y, f.Z);
         var def = Vehicles!.Vehicles[v.Kind];
         if (def.Tilts) { var (pitch, roll) = HullTiltOf(v, def); VehicleCollider.Place(v.Solid, p, v.Yaw, pitch, roll, !v.Destroyed); }
         else VehicleCollider.Place(v.Solid, p, v.Yaw, !v.Destroyed);
@@ -323,10 +331,10 @@ public partial class NetClient
             if (v.Destroyed || v == skip || v.Kind >= Vehicles.Vehicles.Count) continue;
             var def = Vehicles.Vehicles[v.Kind];
             var (pitch, roll) = HullTiltOf(v, def);
-            if (VehicleBox.Ray(NV(from), NV(dir), maxDistance, v.Pos, v.Yaw, pitch, roll, def) is not { } h || h.Distance >= best) continue;
+            if (VehicleBox.Ray(NV(from), NV(dir), maxDistance, HullFeetOf(v), v.Yaw, pitch, roll, def) is not { } h || h.Distance >= best) continue;
             if (def.GlassRects.Count > 0 || def.OpenSideRects.Count > 0)
             {
-                var lo = GlassRules.ToVehicle(NV(from), v.Pos, v.Yaw, pitch, roll); var ld = GlassRules.DirToVehicle(NV(dir), v.Yaw, pitch, roll);
+                var lo = GlassRules.ToVehicle(NV(from), HullFeetOf(v), v.Yaw, pitch, roll); var ld = GlassRules.DirToVehicle(NV(dir), v.Yaw, pitch, roll);
                 var way = GlassRules.Through(def.GlassRects, def.OpenSideRects, lo, ld, h.Distance, GlassData.VehicleReach);
                 if (way.Enters)
                 {
