@@ -79,8 +79,8 @@ public static class HuntFormat
     public static string Date(long unix) => DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 }
 
-/// <summary>What a server-wide announcement (<see cref="HuntAnnounceMsg"/>) says, before it is put in words: a record (of the weight or of the shot) or a first.</summary>
-public enum HuntLineKind { First, RecordHeaviest, RecordLongest }
+/// <summary>What a server-wide announcement (<see cref="HuntAnnounceMsg"/>) says, before it is put in words: a record (of the weight, of the shot or of a player kill) or a first.</summary>
+public enum HuntLineKind { First, RecordHeaviest, RecordLongest, RecordPlayerKill }
 
 public readonly record struct HuntLine(HuntLineKind Kind, bool Mine, bool Hidden, bool Mystery, HuntView Hunt)
 {
@@ -93,7 +93,8 @@ public readonly record struct HuntLine(HuntLineKind Kind, bool Mine, bool Hidden
     public static HuntLine Of(HuntAnnounceMsg m, long viewerId)
     {
         var f = m.Flags;
-        var kind = (f & HuntAnnounceFlags.Heaviest) != 0 && m.Hunt.Kg != null ? HuntLineKind.RecordHeaviest
+        var kind = (f & HuntAnnounceFlags.PlayerKill) != 0 && m.Hunt.DistanceM != null ? HuntLineKind.RecordPlayerKill
+            : (f & HuntAnnounceFlags.Heaviest) != 0 && m.Hunt.Kg != null ? HuntLineKind.RecordHeaviest
             : (f & HuntAnnounceFlags.Longest) != 0 && m.Hunt.DistanceM != null ? HuntLineKind.RecordLongest
             : HuntLineKind.First;
         return new HuntLine(kind, viewerId != 0 && m.Hunt.PlayerId == viewerId, m.Hunt.Hidden, m.Hunt.Hidden || Mysteries.Is(m.Hunt.Species), m.Hunt);

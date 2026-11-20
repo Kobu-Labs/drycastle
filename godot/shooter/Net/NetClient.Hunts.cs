@@ -72,6 +72,7 @@ public partial class NetClient
         {
             HuntLineKind.RecordHeaviest => Strings.F("hunt.line.kg", hunter, Mark, HuntFormat.Kg(h.Kg ?? 0)),
             HuntLineKind.RecordLongest => Strings.F("hunt.line.shot", hunter, Mark, HuntFormat.Number(h.DistanceM ?? 0)),
+            HuntLineKind.RecordPlayerKill => Strings.F("hunt.line.kill", hunter, HuntFormat.Number(h.DistanceM ?? 0)),
             _ => Strings.F(line.Mystery ? "hunt.line.first.mystery" : "hunt.line.first", hunter, Mark),
         };
         var cut = text.IndexOf(Mark, StringComparison.Ordinal);
@@ -82,6 +83,7 @@ public partial class NetClient
         {
             HuntLineKind.RecordHeaviest => Strings.F("toast.hunt.kg", species, HuntFormat.Kg(h.Kg ?? 0)),
             HuntLineKind.RecordLongest => Strings.F("toast.hunt.shot", species, HuntFormat.Number(h.DistanceM ?? 0)),
+            HuntLineKind.RecordPlayerKill => Strings.F("toast.hunt.kill", HuntFormat.Number(h.DistanceM ?? 0)),
             _ => Strings.F(line.Mystery ? "toast.hunt.first.mystery" : "toast.hunt.first", species),
         });
     }

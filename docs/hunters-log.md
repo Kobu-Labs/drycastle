@@ -30,6 +30,9 @@ player, index species, exact species, variant, kg (null for mystery), distance m
 ## Records
 Per index species: heaviest, longest shot (run overs and null distance excluded). Ties: the earlier hunt keeps it. Mystery species: first catch and longest shot.
 
+## Player kill (#430)
+GLOSSARY "Player kill". Not a Hunt: separate table `player_kills` (SQLite migration 0008, Postgres 0003), one row per killer, upserted only when a kill is longer (a tie keeps the earlier). Columns: killer_id, victim_id (both `players.id`), distance_m, weapon, x, y, z (the victim's place), killed_at. Rules in `PlayerKillBook` (ShooterCore), loaded at start with the hunts; the server records it in `Deal` for a hitscan kill with a distance. Only enemy kills between two stored players (no guest, sandbox, bot, teammate, suicide). Names resolve like the hunters' (`players.name`). A new server record is announced like a longest shot ("NEW RECORD  X: 231 m longest player kill", a toast for the killer); a new personal best is not.
+
 ## Announcements (server-wide)
 - New record (heaviest or longest shot beaten).
 - First time: a player's first kill of an index species, or first mystery catch.
@@ -39,16 +42,16 @@ Per index species: heaviest, longest shot (run overs and null distance excluded)
 
 ## Queries (client asks, server answers, read-only, paged)
 - `hunts(page, size 50, filter species|weapon|player, sort column + direction)`
-- `records()`
-- `player(id)`: totals, heaviest, longest shot, Life List per species (best kg, longest shot, caught at)
+- `records()` (also the server's longest player kill)
+- `player(id)`: totals, heaviest, longest shot, longest player kill, Life List per species (best kg, longest shot, caught at)
 All answers are already redacted for the asking player.
 
 ## UI (overlay, not fullscreen)
 - Non-pausing panel centred (horizontally and vertically) over about 60% of the screen's width, 85% of its height, on its own top layer above the HUD panels, the scoreboard and the kill feed (the feed stays where it is); the world stays visible and live around it. Like Equipment: mouse released, movement keys work, firing does not. Closes with its key, Esc, death, match end, a turret/missile view, or when the chat box opens (the panel would cover it).
 - Rebindable action `hunters_log`, default J. Also reachable from the pause menu. No on-screen control-hint text, no key hints.
 - Tabs, in order: **My Log** (default), **Records**, **All hunts**. For another player the first tab reads "<Name>'s Log" and a back button returns to My Log.
-- My Log: name/title, tiles (Hunts, Species, Heaviest, Longest), Life List grid (index species + mysteries in one grid). Tile = the animal's silhouette: outline only until hunted, filled once hunted, best kg on one line, longest shot on the next. Hidden mystery tile: the "?" and a blurred placeholder name, no other text (no shape).
-- Records: card per species with two pictures: heaviest and longest shot, each the recorded hit (animal facing left, bullet entry marked), its number (kg or m) on a brass badge floating over the picture's bottom-right corner (out of the layout; a strip under the picture is reserved for it), then three icon lines: hunter, weapon, hit area (Head / Body / Legs, "No hit" without a diagram; Legs = a body hit below 30 % of the height). "All <species> hunts" jumps to All hunts filtered. Unhunted species: outline only.
+- My Log: name/title, tiles (Hunts, Species, Heaviest, Longest, Longest kill), Life List grid (index species + mysteries in one grid). Tile = the animal's silhouette: outline only until hunted, filled once hunted, best kg on one line, longest shot on the next. Hidden mystery tile: the "?" and a blurred placeholder name, no other text (no shape).
+- Records: a last card "Longest player kill" (no animal picture): the distance, then three icon lines, hunter and victim (person icon, each a link to their log) and the weapon (rifle icon); empty: dashes and one line, never a missing card. Not in All hunts (no column, no filter). Card per species with two pictures: heaviest and longest shot, each the recorded hit (animal facing left, bullet entry marked), its number (kg or m) on a brass badge floating over the picture's bottom-right corner (out of the layout; a strip under the picture is reserved for it), then three icon lines: hunter, weapon, hit area (Head / Body / Legs, "No hit" without a diagram; Legs = a body hit below 30 % of the height). "All <species> hunts" jumps to All hunts filtered. Unhunted species: outline only.
 - All hunts: table, newest first, sortable headers, filters (species, player; no weapon filter), paginated (Prev/Next/numbers). Selecting a row shows its hit card. A small flat species silhouette (5×3 Space) sits left of the species name (none for a hidden creature). Player names open that player's log. Own rows tinted.
 - Designed loading, empty and error (Retry) states. Empty: the player's own empty My Log shows nothing extra; an empty All hunts table shows only its short title ("No hunts yet"); no hint texts. The hit card is hidden while no row is selected. Everything meets `docs/standards/ui-ux.md` (Esc goes up one level, keyboard + gamepad navigation, theme tokens only, states).
 - Silhouettes are the pictures baked in `animal_shapes.json` (the hit diagram's own); species without a baked picture fall back to the body box.
@@ -78,7 +81,7 @@ Same as above, plus:
 Visual reference: https://claude.ai/artifact/2qCpYrMVLR4GKXFnD9y6DU
 - The log is opaque and dressed as a hunting lodge's wall board (`LogSkin.Lodge` on the shared `LogFrame`, see docs/standards/ui-ux.md "Collection logs"): dark planks, brass corner brackets, a rack of antlers on the top edge, the title burnt into a lighter header band, a round brass close button.
 - Tabs are signs hung from the header; the current one is lighter, has a thicker edge and a brass tack.
-- My Log: the four totals on brass plates; the metal legend centred under them; the Life List in two sections, Regular and Mystery, each with its count (no separate "Life List" title, no "All hunts" button: the Hunter column and the hunter links reach a player's hunts). Cards and tiles are centred in their row. A tile is a shield plaque: the animal chalked in outline until hunted, filled once, its name on a small plate, the best weight and the longest shot. A rare best has a rim in its metal, a medal on the corner and the tier in words ("187 kg, Gold"); a legend beside the title says what the metals mean. A hidden Mystery tile is a plaque under a cloth with the "?".
+- My Log: the five totals on brass plates, centred and wrapping when narrow (the fifth is the longest player kill's distance); the metal legend centred under them; the Life List in two sections, Regular and Mystery, each with its count (no separate "Life List" title, no "All hunts" button: the Hunter column and the hunter links reach a player's hunts). Cards and tiles are centred in their row. A tile is a shield plaque: the animal chalked in outline until hunted, filled once, its name on a small plate, the best weight and the longest shot. A rare best has a rim in its metal, a medal on the corner and the tier in words ("187 kg, Gold"); a legend beside the title says what the metals mean. A hidden Mystery tile is a plaque under a cloth with the "?".
 - Records: a parchment card per species pinned to the board with a tack; a hidden creature's card is under a cloth.
 - All hunts: the table is a ledger page (ruled rows, ink); the owner's rows are tinted with a stripe on the left and say "(you)"; a record is a red seal with its words; the selected row has a thick ink frame; the hit card is a pinned paper. A loading, empty or error box stands on the board in the paper's place.
 - Not built: the Trophies tab and its rewards, the Birds section, per-creature frames on Records cards.

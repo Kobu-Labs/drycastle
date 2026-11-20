@@ -125,7 +125,7 @@ public partial class NetServer
     {
         if (p.Persist && p.Name != c.Name) _ = Progression!.Profiles.SetNameAsync(p.DbId, c.Name);
         p.Name = c.Name;
-        if (p.Persist) _huntBook?.SetName(p.DbId, c.Name); // the log's hunter names (a name read before the book is set when the book loads)
+        if (p.Persist) SetLogName(p.DbId, c.Name); // the log's hunter names (a name read before the book is set when the book loads)
         for (var i = 0; i < p.Camos.Length; i++)
             if (p.Camos[i].Validate(CamoData) != null) p.Camos[i] = CamoSpec.Default; // a stored look that camo.json no longer has falls back to the default
         c.Profile = p;

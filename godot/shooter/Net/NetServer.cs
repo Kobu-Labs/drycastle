@@ -1203,6 +1203,7 @@ public partial class NetServer : Node
         if (head) _headshots++;
         if (backstab) _backstabs++;
         var kill = r == DamageResult.Killed;
+        if (kill && shotDistance is { } far) RecordPlayerKill(attackerId, victim, weaponIdx, far); // the longest player kill of a hitscan shot (#430)
         var msg = new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attackerId, weaponIdx, (ushort)damage, head, backstab, kill)));
         _byId.TryGetValue(attackerId, out var attacker);
         if (attackerId == _gunFxOwner) _gunFx.Hit(attackerId, head, kill); // a gunner's hit marker rides the tick's gunship blasts (#159)

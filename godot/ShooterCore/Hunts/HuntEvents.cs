@@ -6,15 +6,15 @@ namespace Drycastle.ShooterCore;
 /// <summary>How a query ended: the answer, a failure to read it (the client offers Retry), or no such player.</summary>
 public enum HuntStatus : byte { Ok = 0, Error = 1, Unknown = 2 }
 
-/// <summary>Bits of <see cref="HuntAnnounceMsg.Flags"/>: a player's first of the species, a new heaviest, a new longest shot. A first that is also a record sets both bits: one line.</summary>
-[Flags] public enum HuntAnnounceFlags : byte { None = 0, First = 1, Heaviest = 2, Longest = 4 }
+/// <summary>Bits of <see cref="HuntAnnounceMsg.Flags"/>: a player's first of the species, a new heaviest, a new longest shot, a new longest player kill (its view carries the killer, distance and weapon only). A first that is also a record sets both bits: one line.</summary>
+[Flags] public enum HuntAnnounceFlags : byte { None = 0, First = 1, Heaviest = 2, Longest = 4, PlayerKill = 8 }
 
 /// <summary>Client to server (<see cref="EventKind.HuntsRequest"/>): one page of the All hunts table. <see cref="Req"/> is echoed so a stale answer can be dropped. Species "" none, <see cref="Mysteries.AllHidden"/> the Mystery hunts option; Weapon "" none; PlayerId 0 none.</summary>
 public sealed record HuntsRequest(ushort Req, ushort Page, HuntSort Sort, bool Descending, string Species, string Weapon, long PlayerId);
 /// <summary>Server to the asker (<see cref="EventKind.HuntsPage"/>): the rows of that page, already redacted. <see cref="ViewerId"/>: the asker's own player id (0 for a guest), to tint their rows. <see cref="Total"/>: hunts matching in all, <see cref="HuntBook.PageSize"/> to a page.</summary>
 public sealed record HuntsAnswer(ushort Req, HuntStatus Status, long ViewerId, ushort Page, uint Total, IReadOnlyList<HuntView> Rows);
-/// <summary>Server to the asker (<see cref="EventKind.Records"/>): a card per species of <see cref="HuntSpecies.Keys"/>, already redacted.</summary>
-public sealed record RecordsAnswer(ushort Req, HuntStatus Status, long ViewerId, IReadOnlyList<SpeciesRecordView> Records);
+/// <summary>Server to the asker (<see cref="EventKind.Records"/>): a card per species of <see cref="HuntSpecies.Keys"/>, already redacted, and the server's longest player kill (null while none).</summary>
+public sealed record RecordsAnswer(ushort Req, HuntStatus Status, long ViewerId, IReadOnlyList<SpeciesRecordView> Records, PlayerKillView? Kill = null);
 /// <summary>Client to server (<see cref="EventKind.PlayerLogRequest"/>): the log of a player; 0 asks for the asker's own.</summary>
 public sealed record PlayerLogRequest(ushort Req, long PlayerId);
 /// <summary>Server to the asker (<see cref="EventKind.PlayerLog"/>): the log, already redacted; null unless <see cref="Status"/> is Ok.</summary>
@@ -28,12 +28,13 @@ public sealed record HuntAnnounceMsg(HuntAnnounceFlags Flags, HuntView Hunt);
 /// <list type="bullet">
 /// <item>HuntsRequest: u16 req, u16 page, u8 sort (<see cref="HuntSort"/>), u8 descending, str species, str weapon, i64 player.</item>
 /// <item>HuntsPage: u16 req, u8 status, i64 viewer, u16 page, u32 total, u8 count, count HuntView.</item>
-/// <item>Records: u16 req, u8 status, i64 viewer, u8 count, count SpeciesRecordView.</item>
+/// <item>Records: u16 req, u8 status, i64 viewer, u8 count, count SpeciesRecordView, u8 has kill, that PlayerKillView.</item>
 /// <item>PlayerLogRequest: u16 req, i64 player. PlayerLog: u16 req, u8 status, i64 viewer, then when Ok a PlayerLogView.</item>
-/// <item>HuntAnnounce: u8 flags, HuntView.</item>
+/// <item>HuntAnnounce: u8 flags (1 first, 2 heaviest, 4 longest, 8 player kill), HuntView.</item>
 /// <item>HuntView: i64 player, str hunter, str species, str exact, str variant, u8 flags (1 kg, 2 distance, 4 diagram, 8 hidden), f32 kg?, f32 distance?, str weapon, diagram? (u8 along, u8 height, u8 flags 1 right flank 2 head, u8 pose, u8 frame), i64 unix seconds.</item>
 /// <item>SpeciesRecordView: str species, u8 flags (1 hidden, 2 caught, 4 heaviest, 8 longest, 16 first), then those HuntViews.</item>
-/// <item>PlayerLogView: i64 player, str name, u32 hunts, u16 species, u8 flags (1 heaviest, 2 longest), those HuntViews, u8 count, count LifeEntry (str species, u8 flags 1 hidden 2 caught 4 kg 8 longest, f32 kg?, f32 longest?, i64 caught at).</item>
+/// <item>PlayerKillView: i64 killer, str killer name, i64 victim, str victim name, f32 distance, str weapon, i64 unix seconds.</item>
+/// <item>PlayerLogView: i64 player, str name, u32 hunts, u16 species, u8 flags (1 heaviest, 2 longest, 4 player kill), those HuntViews and that PlayerKillView, u8 count, count LifeEntry (str species, u8 flags 1 hidden 2 caught 4 kg 8 longest, f32 kg?, f32 longest?, i64 caught at).</item>
 /// </list>
 /// </summary>
 public static class HuntEvents
@@ -92,6 +93,8 @@ public static class HuntEvents
             if (c.Longest != null) Hunt(w, c.Longest);
             if (c.First != null) Hunt(w, c.First);
         }
+        w.U8(a.Kill != null ? 1 : 0);
+        if (a.Kill != null) Kill(w, a.Kill);
         return w.Done();
     }
 
@@ -108,7 +111,8 @@ public static class HuntEvents
             var first = (f & 16) != 0 ? Hunt(ref r) : null;
             if (r.Ok) list.Add(new SpeciesRecordView(species, (f & 1) != 0, (f & 2) != 0, heavy, far, first));
         }
-        return r.Ok && r.End && status <= (byte)HuntStatus.Unknown ? new RecordsAnswer(req, (HuntStatus)status, viewer, list) : null;
+        var kill = r.U8() != 0 ? Kill(ref r) : null;
+        return r.Ok && r.End && status <= (byte)HuntStatus.Unknown ? new RecordsAnswer(req, (HuntStatus)status, viewer, list, kill) : null;
     }
 
     public static byte[] EncodePlayerRequest(PlayerLogRequest q)
@@ -127,9 +131,10 @@ public static class HuntEvents
         w.U16(a.Req); w.U8((byte)a.Status); w.I64(a.ViewerId);
         if (a.Status != HuntStatus.Ok || a.Log is not { } l) return w.Done();
         w.I64(l.PlayerId); w.Str(l.Name); w.U32((uint)l.Hunts); w.U16((ushort)l.Species);
-        w.U8((byte)((l.Heaviest != null ? 1 : 0) | (l.Longest != null ? 2 : 0)));
+        w.U8((byte)((l.Heaviest != null ? 1 : 0) | (l.Longest != null ? 2 : 0) | (l.Kill != null ? 4 : 0)));
         if (l.Heaviest != null) Hunt(w, l.Heaviest);
         if (l.Longest != null) Hunt(w, l.Longest);
+        if (l.Kill != null) Kill(w, l.Kill);
         w.U8((byte)Math.Min(l.Life.Count, byte.MaxValue));
         foreach (var e in l.Life.Take(byte.MaxValue))
         {
@@ -151,6 +156,7 @@ public static class HuntEvents
         var player = r.I64(); var name = r.Str(); var hunts = r.U32(); var species = r.U16(); var f = r.U8();
         var heavy = (f & 1) != 0 ? Hunt(ref r) : null;
         var far = (f & 2) != 0 ? Hunt(ref r) : null;
+        var kill = (f & 4) != 0 ? Kill(ref r) : null;
         var n = r.U8();
         var life = new List<LifeEntry>(n);
         for (var i = 0; i < n && r.Ok; i++)
@@ -161,7 +167,7 @@ public static class HuntEvents
             var at = r.I64();
             if (r.Ok) life.Add(new LifeEntry(key, (ef & 1) != 0, (ef & 2) != 0, kg, m, at, (HuntTier)(ef >> 4 & 3)));
         }
-        return r.Ok && r.End ? new PlayerLogAnswer(req, HuntStatus.Ok, viewer, new PlayerLogView(player, name, (int)hunts, species, heavy, far, life)) : null;
+        return r.Ok && r.End ? new PlayerLogAnswer(req, HuntStatus.Ok, viewer, new PlayerLogView(player, name, (int)hunts, species, heavy, far, life, kill)) : null;
     }
 
     public static byte[] EncodeAnnounce(HuntAnnounceMsg m)
@@ -177,7 +183,7 @@ public static class HuntEvents
         var r = new R(p);
         var flags = r.U8();
         var h = Hunt(ref r);
-        return r.Ok && r.End && h != null && flags <= 7 ? new HuntAnnounceMsg((HuntAnnounceFlags)flags, h) : null;
+        return r.Ok && r.End && h != null && flags <= 15 ? new HuntAnnounceMsg((HuntAnnounceFlags)flags, h) : null;
     }
 
     static void Hunt(W w, HuntView h)
@@ -189,6 +195,17 @@ public static class HuntEvents
         w.Str(h.Weapon);
         if (h.Diagram is { } g) { w.U8(g.Along); w.U8(g.Height); w.U8((byte)((g.RightFlank ? 1 : 0) | (g.Head ? 2 : 0))); w.U8(g.Pose); w.U8(g.Frame); }
         w.I64(h.AtUnix);
+    }
+
+    static void Kill(W w, PlayerKillView k)
+    {
+        w.I64(k.KillerId); w.Str(k.Killer); w.I64(k.VictimId); w.Str(k.Victim); w.F32(k.DistanceM); w.Str(k.Weapon); w.I64(k.AtUnix);
+    }
+
+    static PlayerKillView? Kill(ref R r)
+    {
+        var killer = r.I64(); var killerName = r.Str(); var victim = r.I64(); var victimName = r.Str(); var d = r.F32(); var weapon = r.Str(); var at = r.I64();
+        return r.Ok ? new PlayerKillView(killer, killerName, victim, victimName, d, weapon, at) : null;
     }
 
     static HuntView? Hunt(ref R r)
