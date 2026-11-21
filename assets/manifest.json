@@ -3990,6 +3990,29 @@
       "used_for": "the Bigfoot event (#264, #286): data/bigfoot.json `model`, drawn by godot/shooter NetClient.Bigfoot.cs. Metres, stands on y 0, faces -Z, 3.6 m to the crest. One skinned mesh (2336 triangles, 12 flat-colour materials), 26 bones with identity rest rotations (Root > Hips > Spine > Chest > Neck > Head > Jaw; Clavicle/UpperArm/Forearm/Hand/Fingers and Thigh/Shin/Foot/Toe, .L and .R), clips Idle, Walk, Run, Death, Hit, Roar, TrunkThrow, StompWindup, Stomp, VehicleLift, Launch, GrabReach, Hold, Hurl. scripts/preview_glb_clips.py draws the clips without the game."
     },
     {
+      "id": "pack:drycastle-generated-models/phoenix",
+      "category": "other",
+      "name": "Phoenix (rigid low-poly firebird: glowing feathers, flame tail; clips Idle, Cruise, Fall, Perched)",
+      "file": "drycastle-generated-models/phoenix.glb",
+      "size_m": [
+        3.83,
+        1.31,
+        4.34
+      ],
+      "tags": [
+        "shooter",
+        "creature",
+        "animated",
+        "flat-colour",
+        "emissive",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_phoenix_model.py (original geometry and animation written as code; python3 scripts/make_phoenix_model.py rebuilds the file, needs numpy)",
+      "pack": "drycastle-generated-models",
+      "used_for": "the Phoenix, a rare Mystery animal of the night sky (#396): data/animals.json species phoenix `model`, drawn by godot/shooter NetClient.Animals.cs. Metres, forward -Z (model_yaw_deg 0), origin = the body centre while flying (the clip Perched lowers it to the ground), size_m is the rest pose with the wings spread. Rigid node articulation (no skin), 4410 triangles, 10 flat-colour materials with KHR_materials_emissive_strength; clips Idle, Cruise, Fall, Perched (all loop)."
+    },
+    {
       "id": "pack:drycastle-generated-models/bigfoot_head",
       "category": "other",
       "name": "Bigfoot head (the giant's own head as headgear: scowling brow, burning eyes, fangs and tusks, crest and mane)",

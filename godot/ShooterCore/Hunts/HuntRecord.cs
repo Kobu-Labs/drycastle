@@ -43,10 +43,17 @@ public sealed record HuntRecord(long Id, long PlayerId, string Species, string E
     /// <summary>
     /// The kill of a Unicorn (GLOSSARY "Unicorn"): a mystery creature that is a wild animal, so it keeps a distance and a hit diagram like any hunt (same rules as <see cref="ForAnimal"/>: none for a run over), and no weight.
     /// </summary>
-    public static HuntRecord ForUnicorn(long player, float? distanceM, string weapon, HitDiagram? diagram, float x, float y, float z, DateTime atUtc)
+    public static HuntRecord ForUnicorn(long player, float? distanceM, string weapon, HitDiagram? diagram, float x, float y, float z, DateTime atUtc) =>
+        ForMysteryAnimal(player, Mysteries.Unicorn, distanceM, weapon, diagram, x, y, z, atUtc);
+
+    /// <summary>
+    /// The kill of a Mystery creature that is a wild animal (<see cref="Mysteries.IsAnimal"/>: the Unicorn; the Phoenix, caught by the second hit that burns it, GLOSSARY "Phoenix"): species and exact are the creature's id, no variant, no weight,
+    /// a distance and a hit diagram as for any shot (none for a run over).
+    /// </summary>
+    public static HuntRecord ForMysteryAnimal(long player, string mystery, float? distanceM, string weapon, HitDiagram? diagram, float x, float y, float z, DateTime atUtc)
     {
         var run = weapon == HuntWeapons.RunOver;
-        return new HuntRecord(0, player, Mysteries.Unicorn, Mysteries.Unicorn, "", null, run || distanceM is null ? null : Round(distanceM.Value), weapon, run ? null : diagram, x, y, z, atUtc);
+        return new HuntRecord(0, player, mystery, mystery, "", null, run || distanceM is null ? null : Round(distanceM.Value), weapon, run ? null : diagram, x, y, z, atUtc);
     }
 
     /// <summary>The catch of a mystery creature (its Event won): no weight, no distance, no hit diagram.</summary>

@@ -52,6 +52,8 @@ public enum EventKind : byte
     BinocularsRaised = 27,
     /// <summary>Server to everyone (the lamp's owner too), when it changes and, to a joiner, for each player whose head lamp is on: a player's head lamp is on or off (<see cref="HeadLamp.Encode"/>: u16 player id, u8). The client draws the beam from that player's head.</summary>
     HeadLampState = 31,
+    /// <summary>Server broadcast: a Phoenix was first hit and starts to fall (<see cref="PhoenixFallCodec"/>: u16 world entity id, f32 x3 where it was hit, f32 x3 the crash site, f32 fall seconds, 30 bytes). Not sent to a joiner: its state and position say the rest.</summary>
+    PhoenixFall = 32,
     /// <summary>Client to server: the player's own Respawn, with an optional loadout slot to select first (<see cref="Redeploy.Encode"/>: u8, 255 for none); the server kills them as a suicide (<see cref="MatchSim.ForceDeath"/>).</summary>
     Redeploy = 28,
     /// <summary>Client to server, every ten seconds: the client's performance numbers of the period (<see cref="ClientReport"/>), for the metrics store. A server that does not know it ignores it, so it is not a protocol version.</summary>
@@ -366,7 +368,8 @@ public static class Wire
     //   v77 finding minerals (#401): events 111 MineralPick (client to server), 112 MineralNodes (the nodes and whether each is active) and 113 MineralFinds (the player's finds with their places)
     //   v78 the crash sound (#410): event 163 VehicleCrash (a vehicle hit something: its id and how hard)
     //   v79 a run-over survivor is thrown (#411): event 164 PlayerFlung (the player a vehicle threw alive)
-    public const byte ProtocolVersion = 79;
+    //   v80 the Phoenix (#396): animal states 11-14 (Flying, Falling, Crashed, Burning, AnimalState); an animal's world-state pitch is the Phoenix's dive pitch; event 32 PhoenixFall (PhoenixFallCodec)
+    public const byte ProtocolVersion = 80;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

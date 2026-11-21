@@ -112,7 +112,7 @@ public partial class NetServer
 
     // ---- recording ----
 
-    /// <summary>The Killed event of the wild animal keeper: a player killed a weighed animal (or the Unicorn), with the weapon <see cref="Deal"/> noted.</summary>
+    /// <summary>The Killed event of the wild animal keeper: a player killed a weighed animal (or the Unicorn, or burned the Phoenix with the second hit), with the weapon <see cref="Deal"/> noted.</summary>
     void OnWildKilled(Animal a, ushort by)
     {
         if (_wildHit is not { } hit || !_byId.TryGetValue(by, out var c) || c.IsBot || !Scores(by) || c.Profile is not { Persist: true } p) return;
@@ -121,7 +121,7 @@ public partial class NetServer
         var variant = a.Variant >= 1 && a.Variant <= a.Def.Variants.Count ? a.Def.Variants[a.Variant - 1].Id : "";
         var diagram = hit.Shot is { } shot ? HitDiagram.From(shot) : (HitDiagram?)null;
         var h = HuntRecord.ForAnimal(p.DbId, a.Def.Id, variant, a.WeightKg, distance, weapon, diagram, a.Position.X, a.Position.Y, a.Position.Z, DateTime.UtcNow)
-            ?? (a.Def.Id == Mysteries.Unicorn ? HuntRecord.ForUnicorn(p.DbId, distance, weapon, diagram, a.Position.X, a.Position.Y, a.Position.Z, DateTime.UtcNow) : null); // a mystery that is an animal: no weight
+            ?? (Mysteries.IsAnimal(a.Def.Id) ? HuntRecord.ForMysteryAnimal(p.DbId, a.Def.Id, distance, weapon, diagram, a.Position.X, a.Position.Y, a.Position.Z, DateTime.UtcNow) : null); // a mystery that is an animal (Unicorn, Phoenix): no weight
         if (h != null) RecordHunt(h);
     }
 

@@ -2,8 +2,11 @@ using System.Numerics;
 
 namespace Drycastle.ShooterCore;
 
-/// <summary>What an animal is doing; the low four bits of its replicated state byte (the clients pick the clip from it).</summary>
-public enum AnimalState : byte { Idle = 0, Eat = 1, Walk = 2, Flee = 3, Dead = 4, Sit = 5, Bark = 6, Carried = 7, Thrown = 8, Down = 9, Vanish = 10 }
+/// <summary>
+/// What an animal is doing; the low four bits of its replicated state byte (the clients pick the clip from it). 11-14 are the phases of a Phoenix (<see cref="PhoenixRules"/>, protocol 80): Flying (clip Cruise,
+/// or Idle), Falling (Fall), Crashed (Perched: seated and alive on the ground), Burning (dies in a flame, the Fall or Perched clip holds, no longer a hit target); then Dead (the ash). 15 is free.
+/// </summary>
+public enum AnimalState : byte { Idle = 0, Eat = 1, Walk = 2, Flee = 3, Dead = 4, Sit = 5, Bark = 6, Carried = 7, Thrown = 8, Down = 9, Vanish = 10, Flying = 11, Falling = 12, Crashed = 13, Burning = 14 }
 
 /// <summary>Animal world entity rules: the wire type id and the state byte the clients read.</summary>
 public static class AnimalRules
@@ -45,7 +48,7 @@ public static class AnimalRules
     /// Whether an animal in this state stands where it is, and so is a body a player on foot cannot walk through: idle, eating, sitting, barking. One that walks or runs is not (the server and a
     /// client would see it in different places a moment apart, and the player would be stopped by a body that is no longer there); it stops or steers for a player itself.
     /// </summary>
-    public static bool Stands(AnimalState state) => state is AnimalState.Idle or AnimalState.Eat or AnimalState.Sit or AnimalState.Bark or AnimalState.Vanish;
+    public static bool Stands(AnimalState state) => state is AnimalState.Idle or AnimalState.Eat or AnimalState.Sit or AnimalState.Bark or AnimalState.Vanish or AnimalState.Crashed;
 
     public static AnimalState StateOf(byte state) => (AnimalState)(state & StateMask);
     public static bool HitToggled(byte state) => (state & HitToggle) != 0;
@@ -119,7 +122,7 @@ public interface IPennedWorld : IAnimalWorld
 /// <see cref="AnimalsFile.CorpseSeconds"/> (its death clip plays) and is removed. A <see cref="AnimalDef.OneHit"/> species dies from any hit and is removed at once. Godot-free and deterministic for a seed.
 /// A world entity of type <see cref="AnimalRules.TypeId"/>; the species index travels in the owner field of its state.
 /// </summary>
-public sealed class Animal : IWorldEntity
+public sealed partial class Animal : IWorldEntity
 {
     readonly AnimalsFile _file;
     readonly IAnimalWorld _world;
@@ -127,8 +130,8 @@ public sealed class Animal : IWorldEntity
 
     /// <summary>Who may follow whom. Idle is the hub: an animal stands, then eats or walks, and goes back to standing; a threat (or a hit that did not kill) sends any living state to Flee; Flee only ends by calming down into Idle.</summary>
     public static readonly StateMachineSpec<AnimalState> Spec = StateMachineSpec<AnimalState>.Define(
-            "Animal.Behaviour", "What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot (a vanishing species turns immune and is teleported instead), lie dead until the corpse is removed.", AnimalState.Idle)
-        .Allow(AnimalState.Idle, AnimalState.Eat, AnimalState.Walk, AnimalState.Sit, AnimalState.Bark, AnimalState.Flee, AnimalState.Vanish, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
+            "Animal.Behaviour", "What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot (a vanishing species turns immune and is teleported instead), lie dead until the corpse is removed. A Phoenix flies, falls, crashes, burns and dies.", AnimalState.Idle)
+        .Allow(AnimalState.Idle, AnimalState.Eat, AnimalState.Walk, AnimalState.Sit, AnimalState.Bark, AnimalState.Flee, AnimalState.Vanish, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead, AnimalState.Flying)
         .Allow(AnimalState.Eat, AnimalState.Idle, AnimalState.Flee, AnimalState.Vanish, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
         .Allow(AnimalState.Sit, AnimalState.Idle, AnimalState.Flee, AnimalState.Vanish, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
         .Allow(AnimalState.Bark, AnimalState.Idle, AnimalState.Flee, AnimalState.Vanish, AnimalState.Carried, AnimalState.Thrown, AnimalState.Dead)
@@ -138,6 +141,10 @@ public sealed class Animal : IWorldEntity
         .Allow(AnimalState.Thrown, AnimalState.Down, AnimalState.Dead)
         .Allow(AnimalState.Down, AnimalState.Flee, AnimalState.Idle, AnimalState.Vanish, AnimalState.Thrown, AnimalState.Dead)
         .Allow(AnimalState.Vanish, AnimalState.Idle)
+        .Allow(AnimalState.Flying, AnimalState.Falling)
+        .Allow(AnimalState.Falling, AnimalState.Crashed)
+        .Allow(AnimalState.Crashed, AnimalState.Burning)
+        .Allow(AnimalState.Burning, AnimalState.Dead)
         .Note(AnimalState.Idle, "Stands for a random while (clock: idle seconds), then Choose: sit or bark (species that opt in), eat, or walk to a spot near home.")
         .Note(AnimalState.Eat, "Grazes (clock: eat seconds), then stands.")
         .Note(AnimalState.Sit, "Sits for a random while (clock: sit seconds; the client plays sit-down, holds, stands up after), then stands. Species with a sit rule only.")
@@ -148,7 +155,11 @@ public sealed class Animal : IWorldEntity
         .Note(AnimalState.Thrown, "A vehicle ran it over and it survived (Throw): it flies on the arc the vehicle gave it, then rolls on along the ground with part of that speed; no clock. Coming to rest puts it Down. Still a hit target; another vehicle only changes the arc.")
         .Note(AnimalState.Down, "Lies knocked down where it landed (clock: knockdown_seconds), then gets up: Flee from where the vehicle was (a species that does not flee stands). Run over again it is Thrown again.")
         .Note(AnimalState.Vanish, "A species with vanish_seconds is startled (threat, non-lethal hit, herd alarm, getting up after a run-over) and does not run: immune for vanish_seconds (clock; no damage, no throw, no carry, not a hit target), the client spirals rainbow round it, then the Vanished event lets the keeper pick a place at least vanish_min_m away and Teleport puts it there Idle. Only Idle follows; never Dead, Thrown or Carried. No startle for vanish_grace_seconds after it reappears.")
-        .Note(AnimalState.Dead, "A body a vehicle threw flies on first. Lies for corpse_seconds (the clock's elapsed time), then the entity ends; a one-hit species' entity ends at once. Never left.")
+        .Note(AnimalState.Flying, "A Phoenix (PhoenixRules, a species with flies): patrols a wide circle high in the sky, the clock is not used. Reached from Idle only at spawn (the constructor takes off at once). The first hit that deals damage, from any weapon, makes it Fall; it is no target of a knife (too high) and the dawn hour ends it (it flies off, the entity is removed). Never Dead from here.")
+        .Note(AnimalState.Falling, "Dives along a straight line from where it was hit to its crash site (clock: fall_seconds; the position follows the line, pitch is the line's), then Crashes. Not damaged further: a hit changes nothing.")
+        .Note(AnimalState.Crashed, "Seated and alive at the crash site, stationary (Perched clip, fire and embers on the client), no clock: it stays until killed or the round ends. The ONLY state the second hit counts in: a damaging hit sets it Burning and takes the Hunt (Died is raised, the shooter is the Killer).")
+        .Note(AnimalState.Burning, "Dies in a big flame (clock: burn_seconds), no longer alive and no hit target; then it is Dead and the mineral is dropped (Dropped). Only Dead follows.")
+        .Note(AnimalState.Dead, "A body a vehicle threw flies on first. Lies for corpse_seconds (the clock's elapsed time; a Phoenix's is the ash), then the entity ends; a one-hit species' entity ends at once. Never left.")
         .Build();
 
     // The machine's clock is the behaviour timer: idle and eat count the stand/graze seconds down, walk its time budget to arrive, dead how long it has lain
@@ -175,7 +186,8 @@ public sealed class Animal : IWorldEntity
     Countdown _grace;      // after a vanish: no startle (no new vanish) until it runs out, so the animal is seen where it arrived
 
     /// <param name="sizeRoll">The size and weight roll, 0..1 (<see cref="AnimalRules.RollSize"/>); only a species with <see cref="AnimalDef.WeightKg"/> has a size.</param>
-    public Animal(AnimalsFile file, int species, Vector3 home, float yaw, IAnimalWorld world, int seed, int variant = 0, float sizeRoll = 0.5f)
+    /// <param name="sky">Set for a Phoenix (<see cref="AnimalDef.Flies"/>): its patrol and rules; it takes off at once (<see cref="AnimalState.Flying"/>).</param>
+    public Animal(AnimalsFile file, int species, Vector3 home, float yaw, IAnimalWorld world, int seed, int variant = 0, float sizeRoll = 0.5f, PhoenixSpawn? sky = null)
     {
         Variant = variant;
         _file = file;
@@ -200,6 +212,7 @@ public sealed class Animal : IWorldEntity
         (_bodyW, _bodyH, _bodyL, _bodyAhead) = (HitBox[0], HitBox[1], HitBox[2], Def.BodyAheadOf(variant) * Size); // the Body box grows with the animal, as its Hit shape does
         BodyReach = MathF.Sqrt(_bodyW * _bodyW + _bodyL * _bodyL) / 2 + MathF.Abs(_bodyAhead);
         _fsm.Restart(Between(file.IdleMinSeconds, file.IdleMaxSeconds));
+        if (sky != null) TakeOff(sky);
     }
 
     public int Species { get; }
@@ -215,7 +228,7 @@ public sealed class Animal : IWorldEntity
     /// <summary>Metres from its position to the farthest point of its Body box: the cheap distance that rules out an animal that is far.</summary>
     public float BodyReach { get; }
     /// <summary>Whether another animal stops for this one: it stands on the ground. One that lies, flies, is held or is dead is no obstacle.</summary>
-    public bool Obstructs => Ended == null && State is not (AnimalState.Dead or AnimalState.Thrown or AnimalState.Down or AnimalState.Carried);
+    public bool Obstructs => Ended == null && State is not (AnimalState.Dead or AnimalState.Thrown or AnimalState.Down or AnimalState.Carried or AnimalState.Flying or AnimalState.Falling or AnimalState.Burning);
     /// <summary>Whether it stands where it is (<see cref="AnimalRules.Stands"/>): then a player on foot cannot walk through its Body box.</summary>
     public bool Stands => Ended == null && AnimalRules.Stands(State);
     /// <summary>Its Body box now (ADR 0028): the footprint contact with a player or another animal is tested against.</summary>
@@ -232,7 +245,8 @@ public sealed class Animal : IWorldEntity
     public AnimalState State => _fsm.Current;
     /// <summary>Seconds since the state began (or was begun again): how far into the state's clip a client is, less the delay it sees the animal with.</summary>
     public float StateSeconds => _fsm.Elapsed;
-    public bool Alive => State != AnimalState.Dead;
+    /// <summary>Not dead, and for a Phoenix not burning either (the second hit killed it: it is no hit target and takes no more).</summary>
+    public bool Alive => State is not (AnimalState.Dead or AnimalState.Burning);
     /// <summary>The player whose hit killed it (0 until then, and for a death with no shooter).</summary>
     public ushort Killer { get; private set; }
 
@@ -273,14 +287,18 @@ public sealed class Animal : IWorldEntity
         get
         {
             var b = HitBox;
-            return (Position + Vector3.UnitY * (b[1] / 2), new Vector3(b[0], b[1], b[2]) / 2, Yaw);
+            return (Feet + Vector3.UnitY * (b[1] / 2), new Vector3(b[0], b[1], b[2]) / 2, Yaw);
         }
     }
+
+    /// <summary>The bottom of the body box. The position, except for a Phoenix in the air (Flying, Falling), whose position is its body's centre: half the box's height lower.</summary>
+    public Vector3 Feet => State is AnimalState.Flying or AnimalState.Falling ? Position - Vector3.UnitY * (HitBox[1] / 2) : Position;
 
     /// <summary>Applies damage (already scaled by the weapon, headshots and range). A dead animal takes none.</summary>
     public void OnDamage(float amount, ushort attacker)
     {
         if (Ended != null || !Alive || !(amount > 0) || Immune) return;
+        if (IsPhoenix) { PhoenixHit(attacker); return; }
         Hp = Def.OneHit ? 0 : MathF.Max(0, Hp - amount);
         if (Hp <= 0)
         {
@@ -305,6 +323,7 @@ public sealed class Animal : IWorldEntity
     public void Tick(float dt)
     {
         if (Ended != null || dt <= 0) return;
+        if (IsPhoenix) { TickPhoenix(dt); return; } // in the sky it runs on even unwatched: one animal, and its fall must not wait for a player
         if (!Alive)
         {
             Fly(dt);
@@ -349,7 +368,7 @@ public sealed class Animal : IWorldEntity
     {
         var state = (byte)((byte)State | (_hitToggle ? AnimalRules.HitToggle : 0) | SizeStep << AnimalRules.SizeShift);
         // a living animal never shows 0 hp (a sliver of health rounds up)
-        return WorldState.Make(Position, Yaw, 0, AnimalRules.Look(Species, Variant), state, Alive ? MathF.Ceiling(Hp) : 0);
+        return WorldState.Make(Position, Yaw, Pitch, AnimalRules.Look(Species, Variant), state, Alive ? MathF.Ceiling(Hp) : 0);
     }
 
     // ---- run over ----
@@ -361,7 +380,7 @@ public sealed class Animal : IWorldEntity
     /// </summary>
     public bool Throw(Vector3 velocity, Vector3 from)
     {
-        if (Ended != null || !Alive || State is AnimalState.Carried or AnimalState.Vanish || Def.OneHit) return false;
+        if (Ended != null || !Alive || State is AnimalState.Carried or AnimalState.Vanish || Def.OneHit || IsPhoenix) return false;
         _arc = velocity;
         _rolling = false;
         _floorY = Position.Y;
@@ -415,7 +434,7 @@ public sealed class Animal : IWorldEntity
     /// <summary>A Thief takes it up: from any living state, it does nothing until <see cref="Release"/>. False when it is dead, gone or already held.</summary>
     public bool Carry()
     {
-        if (Ended != null || !Alive || State is AnimalState.Carried or AnimalState.Vanish) return false;
+        if (Ended != null || !Alive || State is AnimalState.Carried or AnimalState.Vanish || IsPhoenix) return false;
         _open = null;
         Go(AnimalState.Carried);
         return true;

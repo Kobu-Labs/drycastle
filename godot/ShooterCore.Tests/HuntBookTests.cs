@@ -131,7 +131,7 @@ public class HuntBookTests
         var book = new HuntBook();
         book.SetName(1, "Ann");
         var life = book.PlayerLog(1, Nobody)!.Life;
-        Assert.Equal(13, life.Count);
+        Assert.Equal(14, life.Count);
         Assert.Equal(IndexSpecies.All, life.Take(10).Select(e => e.Species));
         Assert.All(life, e => Assert.False(e.Caught));
         Assert.Null(book.PlayerLog(99, Nobody)); // never heard of
@@ -193,7 +193,7 @@ public class HuntBookTests
     public void HiddenIdsAreStablePerCreatureAndDistinct()
     {
         var ids = Mysteries.All.Select(m => Mysteries.HiddenId(m.Id)).ToList();
-        Assert.Equal(3, ids.Distinct().Count());
+        Assert.Equal(4, ids.Distinct().Count());
         Assert.All(ids, i => Assert.True(Mysteries.IsHiddenId(i)));
         Assert.False(Mysteries.IsHiddenId("bigfoot"));
     }
@@ -250,10 +250,10 @@ public class HuntBookTests
     {
         Assert.Null(HuntRedaction.FilterFor("", Nobody));
         Assert.Equal(new[] { "deer" }, HuntRedaction.FilterFor("deer", Nobody));
-        Assert.Equal(new[] { "bigfoot", "unicorn", "scylla" }, HuntRedaction.FilterFor(Mysteries.AllHidden, Nobody));
-        Assert.Equal(new[] { "bigfoot", "unicorn", "scylla" }, HuntRedaction.FilterFor("bigfoot", Nobody)); // asking by name reveals nothing
+        Assert.Equal(new[] { "bigfoot", "unicorn", "scylla", "phoenix" }, HuntRedaction.FilterFor(Mysteries.AllHidden, Nobody));
+        Assert.Equal(new[] { "bigfoot", "unicorn", "scylla", "phoenix" }, HuntRedaction.FilterFor("bigfoot", Nobody)); // asking by name reveals nothing
         Assert.Equal(new[] { "bigfoot" }, HuntRedaction.FilterFor("bigfoot", Caught("bigfoot")));
-        Assert.Equal(new[] { "unicorn", "scylla" }, HuntRedaction.FilterFor(Mysteries.AllHidden, Caught("bigfoot")));
+        Assert.Equal(new[] { "unicorn", "scylla", "phoenix" }, HuntRedaction.FilterFor(Mysteries.AllHidden, Caught("bigfoot")));
         Assert.Empty(HuntRedaction.FilterFor("nonsense", Nobody)!);
     }
 
@@ -273,7 +273,7 @@ public class HuntBookTests
     public void ARecordPlacesTheMysteriesAfterTheIndexSpeciesAndNamesNobodyWhoWasNeverHunted()
     {
         var recs = new HuntBook().Records(Nobody);
-        Assert.Equal(13, recs.Count);
+        Assert.Equal(14, recs.Count);
         Assert.Equal(IndexSpecies.All, recs.Take(10).Select(r => r.Species));
         Assert.All(recs, r => Assert.False(r.Caught));
         Assert.All(recs, r => Assert.Null(r.Heaviest));

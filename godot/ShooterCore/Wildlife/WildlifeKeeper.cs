@@ -52,6 +52,8 @@ public sealed class WildlifeKeeper : IAnimalHits
     readonly List<Herd> _herds = new();
     readonly List<Flock> _flocks = new();
     readonly List<RareSlot> _rare = new();
+    readonly PhoenixSchedule? _schedule;
+    readonly List<MineralDrop> _drops = new();
     int _nextHit;
     AnimalCrowd? _crowd;
 
@@ -60,7 +62,28 @@ public sealed class WildlifeKeeper : IAnimalHits
         _cfg = cfg; _animals = animals; _entities = entities;
         _rng = new Random(seed);
         entities.Despawned += OnDespawned;
+        if (cfg.Phoenix is { } phoenix) _schedule = new PhoenixSchedule(phoenix);
     }
+
+    /// <summary>The night counter of the Phoenix (null: wildlife.json has none). Counts the keeper's whole life, not one round (<see cref="PhoenixSchedule"/>).</summary>
+    public PhoenixSchedule? Nights => _schedule;
+
+    /// <summary>True from <see cref="Populate"/> to <see cref="Clear"/>: a round is running with wildlife on the map. A Phoenix spawns only then (the nights are counted either way).</summary>
+    public bool Active { get; private set; }
+
+    /// <summary>
+    /// A Phoenix was hit and starts to fall: the world entity id, where it was hit, the crash site and the fall's seconds. The server broadcasts it (<see cref="EventKind.PhoenixFall"/>, <see cref="PhoenixFallCodec"/>).
+    /// </summary>
+    public event Action<ushort, Vector3, Vector3, float>? PhoenixFell;
+
+    /// <summary>A dead Phoenix left its mineral where it burned (it is also in <see cref="Drops"/>, until the round ends): the drop. Whoever runs the pickups (the Mineral Log's world nodes) takes it from here.</summary>
+    public event Action<MineralDrop>? MineralDropped;
+
+    /// <summary>The minerals creatures left in the world this round, none taken (the keeper has no pickup of its own: see <see cref="MineralDropped"/>).</summary>
+    public IReadOnlyList<MineralDrop> Drops => _drops;
+
+    /// <summary>Phoenixes in the world that are not dead (flying, falling, crashed): at most one is due at a time.</summary>
+    public int PhoenixAlive { get { var n = 0; foreach (var w in _all) if (w.Animal.IsPhoenix && w.Animal.Alive) n++; return n; } }
 
     /// <summary>Every animal of the match, pets included: the wild ones are put into it when they spawn and out when they end, so an animal runs into one of another herd or a pet (ADR 0028). Null: none do.</summary>
     public AnimalCrowd? Crowd { get => _crowd; set => _crowd = value; }
@@ -91,6 +114,7 @@ public sealed class WildlifeKeeper : IAnimalHits
         PopulateRare(ground);
         var n = PopulateAnimals(habitat, ground);
         PopulateFlocks(habitat, ground);
+        Active = true;
         return n;
     }
 
@@ -274,13 +298,13 @@ public sealed class WildlifeKeeper : IAnimalHits
 
     enum Spawned { Yes, NoGround, EntitiesFull }
 
-    Spawned SpawnAt(int species, Vector3 h, IAnimalWorld ground, Herd? herd)
+    Spawned SpawnAt(int species, Vector3 h, IAnimalWorld ground, Herd? herd, PhoenixSpawn? sky = null)
     {
         var def = _animals.Animals[species];
         var yaw = (float)_rng.NextDouble() * MathF.Tau;
         var seed = _rng.Next();
         var variant = _rng.Next(def.VariantCount);
-        var animal = new Animal(_animals, species, new Vector3(h.X, 0, h.Z), yaw, ground, seed, variant, AnimalRules.RollSize(_rng));
+        var animal = new Animal(_animals, species, new Vector3(h.X, 0, h.Z), yaw, ground, seed, variant, AnimalRules.RollSize(_rng), sky);
         if (_entities.Spawn(animal) is not { } entity) { Log?.Invoke("wildlife: the world is full of entities; no more wildlife"); return Spawned.EntitiesFull; }
         herd?.Add(animal);
         _crowd?.Add(animal);
@@ -288,6 +312,11 @@ public sealed class WildlifeKeeper : IAnimalHits
         var wild = new Wild { Animal = animal, Entity = entity, HitId = hit };
         animal.Died += (a, by) => { FreeSlot(wild); Killed?.Invoke(a, by); };
         if (animal.Vanishes) animal.Vanished += a => OnVanished(wild, ground);
+        if (animal.IsPhoenix)
+        {
+            animal.Fell += (_, from, site, seconds) => PhoenixFell?.Invoke(wild.Entity, from, site, seconds);
+            animal.Dropped += (a, mineral) => { var drop = new MineralDrop(mineral, a.Position, wild.Entity); _drops.Add(drop); MineralDropped?.Invoke(drop); };
+        }
         _byHit[hit] = wild;
         _byEntity[entity] = wild;
         _all.Add(wild);
@@ -330,6 +359,43 @@ public sealed class WildlifeKeeper : IAnimalHits
             if (slot.Animal == null && slot.Respawn.Tick(dt) && !TrySpawnRare(slot, ground)) slot.Respawn.Start(slot.Rule.RespawnSeconds);
     }
 
+    // ---- the Phoenix ----
+
+    /// <summary>
+    /// Once a tick: the hour of the server's day clock goes to the night counter. A due Phoenix (every <see cref="PhoenixRules.NightsBetween"/>th night, at <see cref="PhoenixRules.SpawnHour"/>) is spawned while a round is
+    /// <see cref="Active"/> and none is alive (<see cref="PhoenixAlive"/>: a Crashed one from last time is still there: this night has none); at <see cref="PhoenixRules.DawnHour"/> a Phoenix still Flying flies off.
+    /// </summary>
+    public void UpdateSky(double hour, IAnimalWorld ground)
+    {
+        if (_schedule == null) return;
+        var tick = _schedule.Advance(hour);
+        if (!Active) return;
+        if (tick.Dawn)
+            foreach (var w in _all.ToArray())
+                if (w.Animal.IsPhoenix && w.Animal.FlyOff()) _entities.Despawn(w.Entity, WorldDespawnReason.Expired);
+        if (tick.Due && PhoenixAlive == 0) SpawnPhoenix(ground);
+    }
+
+    /// <summary>
+    /// A Phoenix now, flying a circle that fits the map (the admin's "/phoenix" and <see cref="UpdateSky"/>); the schedule is not touched. False (logged) when wildlife.json has none, the world has no map box or ground
+    /// for the circle's centre, or the map is full.
+    /// </summary>
+    public bool SpawnPhoenix(IAnimalWorld ground)
+    {
+        if (_cfg.Phoenix is not { } rules) return false;
+        var species = _animals.IndexOf(rules.Id);
+        if (species < 0) return false;
+        if (_byHit.Count >= _cfg.MaxAnimals) { Log?.Invoke($"wildlife: no room for the {rules.Id} (max_animals {_cfg.MaxAnimals})"); return false; }
+        for (var attempt = 0; attempt < 30; attempt++)
+        {
+            if (ground.MapBounds is not { } bounds || PhoenixFlight.Circle(bounds, rules.PatrolRadiusM, _rng) is not { } c) { Log?.Invoke($"wildlife: no map box for the {rules.Id}"); return false; }
+            if (ground.GroundY(c.X, c.Z) == null) continue; // its height is the ground's at the centre
+            return SpawnAt(species, new Vector3(c.X, 0, c.Z), ground, null, new PhoenixSpawn(rules, new Vector3(c.X, 0, c.Z), c.Radius)) == Spawned.Yes;
+        }
+        Log?.Invoke($"wildlife: no ground at the centre of a patrol for the {rules.Id} (30 tries)");
+        return false;
+    }
+
     /// <summary>The hit shapes of the species and their looks (animal_shapes.json); a look with none, and an animal knocked down or thrown, is tested against its body box.</summary>
     public AnimalShapes? Shapes { get; set; }
 
@@ -339,7 +405,7 @@ public sealed class WildlifeKeeper : IAnimalHits
         AnimalState.Eat => AnimalPose.Eat,
         AnimalState.Walk => AnimalPose.Walk,
         AnimalState.Flee => AnimalPose.Run,
-        AnimalState.Thrown or AnimalState.Down or AnimalState.Dead or AnimalState.Carried => null,
+        AnimalState.Thrown or AnimalState.Down or AnimalState.Dead or AnimalState.Carried or AnimalState.Flying or AnimalState.Falling or AnimalState.Crashed or AnimalState.Burning => null, // a Phoenix has no shape: its body box
         _ => AnimalPose.Idle, // Idle, Sit, Bark and Vanish (it stands still; it is no hit target anyway)
     };
 
@@ -351,7 +417,7 @@ public sealed class WildlifeKeeper : IAnimalHits
     public HitTarget TargetOf(ushort hitId, Animal animal, float backSeconds = 0)
     {
         var box = animal.HitBox;
-        var target = new HitTarget(hitId, animal.Position, Stance.Stand, animal.Yaw, HeadGuarded: true, Scale: box[1] / PlayerHitBox.StandHeight,
+        var target = new HitTarget(hitId, animal.Feet, Stance.Stand, animal.Yaw, HeadGuarded: true, Scale: box[1] / PlayerHitBox.StandHeight,
             Box: new Vector3(box[0], box[1], box[2]), BoxAhead: animal.Def.HitBoxAhead * animal.Size, ShapeScale: animal.Size);
         // each look of a species (a variant) has its own shapes, baked from its own model
         if (Shapes == null || PoseOf(animal.State) is not { } pose) return target;
@@ -389,6 +455,7 @@ public sealed class WildlifeKeeper : IAnimalHits
     public void Clear()
     {
         foreach (var w in _all) { w.Gone = true; _crowd?.Remove(w.Animal); }
-        _byHit.Clear(); _byEntity.Clear(); _all.Clear(); _herds.Clear(); _flocks.Clear(); _rare.Clear();
+        _byHit.Clear(); _byEntity.Clear(); _all.Clear(); _herds.Clear(); _flocks.Clear(); _rare.Clear(); _drops.Clear();
+        Active = false;
     }
 }

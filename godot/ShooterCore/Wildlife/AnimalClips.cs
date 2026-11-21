@@ -1,7 +1,7 @@
 namespace Drycastle.ShooterCore;
 
 /// <summary>The clips a client plays on an animal, by what they show (not by the model's own name for them).</summary>
-public enum AnimalClip { Idle, IdleAlt, Eat, Walk, Run, Death, HitLeft, HitRight, SitStart, SitIdle, SitUp, Bark }
+public enum AnimalClip { Idle, IdleAlt, Eat, Walk, Run, Death, HitLeft, HitRight, SitStart, SitIdle, SitUp, Bark, Cruise, Fall, Perched }
 
 /// <summary>
 /// The one table that maps what an animal does to the names of clips in its model. The pet packs name them <c>Idle Walk Run Eat Sit_Start Sit_Idle Sit_Up Bark</c>;
@@ -24,17 +24,27 @@ public static class AnimalClips
         /* SitIdle   */ new[] { "Sit_Idle" },
         /* SitUp     */ new[] { "Sit_Up" },
         /* Bark      */ new[] { "Bark" },
+        /* Cruise    */ new[] { "Cruise" },
+        /* Fall      */ new[] { "Fall" },
+        /* Perched   */ new[] { "Perched" },
     };
 
     public static IReadOnlyList<string> NamesOf(AnimalClip clip) => Names[(int)clip];
 
     /// <summary>Clips that play over and over (the rest play once and stop; glTF stores no loop flag, so the client sets it by this).</summary>
-    public static bool Loops(AnimalClip clip) => clip is AnimalClip.Idle or AnimalClip.IdleAlt or AnimalClip.Eat or AnimalClip.Walk or AnimalClip.Run or AnimalClip.SitIdle;
+    public static bool Loops(AnimalClip clip) => clip is AnimalClip.Idle or AnimalClip.IdleAlt or AnimalClip.Eat or AnimalClip.Walk or AnimalClip.Run or AnimalClip.SitIdle or AnimalClip.Cruise or AnimalClip.Fall or AnimalClip.Perched; // a flyer's clips all loop (Fall tumbles until it lands, Perched breathes)
 
-    /// <summary>The clips a species' model must have: the four every animal plays, the death and hit reactions unless it dies from one hit, and the sit and bark clips of the species that sit or bark.</summary>
+    /// <summary>The clips a species' model must have: for a flyer Idle, Cruise, Fall and Perched; else the four every animal plays, the death and hit reactions unless it dies from one hit, and the sit and bark clips of the species that sit or bark.</summary>
     public static IEnumerable<AnimalClip> Needed(AnimalDef def)
     {
         yield return AnimalClip.Idle;
+        if (def.Flies)
+        {
+            yield return AnimalClip.Cruise;
+            yield return AnimalClip.Fall;
+            yield return AnimalClip.Perched;
+            yield break;
+        }
         yield return AnimalClip.Eat;
         yield return AnimalClip.Walk;
         yield return AnimalClip.Run;
