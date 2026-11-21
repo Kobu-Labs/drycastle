@@ -35,6 +35,7 @@ const MODELS := {
 	"m82": ["sniper-rifle-2.glb", 1.3],
 	"awm": ["sniper-rifle-3.glb", 1.2],
 	"svd": ["sniper-rifle-4.glb", 1.2],
+	"hunting_rifle": ["sniper-rifle-4.glb", 1.25], # placeholder, see WeaponFx
 	"rpg": ["", 0.0],
 	"strela": ["", 0.0],
 }

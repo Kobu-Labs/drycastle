@@ -121,7 +121,7 @@ public static class Strings
         ("streak.attack_helicopter", "Attack helicopter"), ("streak.helicopter_helper", "Helicopter helper"), ("streak.ac130", "AC-130"), ("streak.moab", "MOAB"),
         ("loadout.title", "Loadouts"), ("loadout.level", "Level {0}"), ("loadout.slot", "Slot {0}"), ("loadout.active", "Active"), ("loadout.none", "None"),
         ("loadout.primary", "Primary weapon"), ("loadout.secondary", "Secondary weapon"), ("loadout.perk", "Perk"), ("loadout.streak", "Killstreak {0}"),
-        ("loadout.locked", "Unlocks at level {0}"), ("loadout.empty", "Empty"),
+        ("loadout.locked", "Unlocks at level {0}"), ("loadout.locked_reward", "Complete the Hunter's Log: {0}"), ("loadout.empty", "Empty"),
         ("loadout.group.MachineGun", "Machine guns"), ("loadout.group.AssaultRifle", "Assault rifles"), ("loadout.group.Shotgun", "Shotguns"), ("loadout.group.Smg", "SMGs"),
         ("loadout.group.Sniper", "Sniper rifles"), ("loadout.group.Pistol", "Pistols"), ("loadout.group.Launcher", "Launchers"), ("loadout.group.Perk", "Perks"), ("loadout.group.Killstreak", "Killstreaks"),
         ("loadout.stat.damage", "Damage"), ("loadout.stat.rate", "Fire rate"), ("loadout.stat.magazine", "Magazine"), ("loadout.stat.mobility", "Mobility"),

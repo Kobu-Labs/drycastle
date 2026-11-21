@@ -100,6 +100,16 @@ public class WeaponsFile
         NonNegative(r.ProjectileSpeed, where, "projectile_speed");
         NonNegative(r.ProjectileLife, where, "projectile_life");
         NonNegative(r.UnlockLevel, where, "unlock_level");
+        var reward = r.RewardTier switch
+        {
+            null => HuntTier.Common,
+            "bronze" => HuntTier.Bronze,
+            "silver" => HuntTier.Silver,
+            "gold" => HuntTier.Gold,
+            _ => throw new DataFileException($"weapons.json: {where}: field \"reward_tier\" must be bronze, silver or gold"),
+        };
+        if (reward != HuntTier.Common && r.UnlockLevel is > 0)
+            throw new DataFileException($"weapons.json: {where}: a reward_tier weapon has no unlock_level");
         NonNegative(r.PelletSpread, where, "pellet_spread");
         NonNegative(r.DamagePerPellet, where, "damage_per_pellet");
         NonNegative(r.SwayAmount, where, "sway_amount");
@@ -149,7 +159,8 @@ public class WeaponsFile
             Kind = kind,
             Category = category,
             Slot = slot,
-            UnlockLevel = r.UnlockLevel ?? 0,
+            UnlockLevel = reward != HuntTier.Common ? WeaponDef.RewardUnlockLevel : r.UnlockLevel ?? 0,
+            RewardTier = reward,
             FullAuto = r.FullAuto ?? false,
             PumpAction = r.PumpAction ?? false,
             ShellReload = r.ShellReload ?? false,
@@ -302,6 +313,7 @@ public class WeaponsFile
         public string? Category { get; set; }
         public string? Slot { get; set; }
         public int? UnlockLevel { get; set; }
+        public string? RewardTier { get; set; }
         public bool? FullAuto { get; set; }
         public bool? PumpAction { get; set; }
         public bool? ShellReload { get; set; }
@@ -358,6 +370,10 @@ public class WeaponDef
     public WeaponSlot Slot { get; set; }
     /// <summary>XP level that unlocks the weapon; 0 = available from the start.</summary>
     public int UnlockLevel { get; set; }
+    /// <summary>Hunter's Log collection tier that unlocks the weapon (#473); Common = not a reward. A reward weapon has no level: <see cref="UnlockLevel"/> is <see cref="RewardUnlockLevel"/> (never reached), so only an owned unlock row opens it.</summary>
+    public HuntTier RewardTier { get; set; }
+    public const int RewardUnlockLevel = int.MaxValue;
+    public bool IsReward => RewardTier != HuntTier.Common;
     public bool FullAuto { get; set; }
     /// <summary>Pump action: the fire interval is the pump cycle, and the weapon is never full auto (validated). No other runtime effect yet.</summary>
     public bool PumpAction { get; set; }

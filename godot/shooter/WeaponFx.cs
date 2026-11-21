@@ -41,6 +41,7 @@ public static class WeaponFx
         ["m82"] = ("quaternius-ultimate-gun-pack/sniper-rifle-2.glb", 1.3f),
         ["awm"] = ("quaternius-ultimate-gun-pack/sniper-rifle-3.glb", 1.2f),
         ["svd"] = ("quaternius-ultimate-gun-pack/sniper-rifle-4.glb", 1.2f),
+        ["hunting_rifle"] = ("quaternius-ultimate-gun-pack/sniper-rifle-4.glb", 1.25f), // placeholder: SM_Wep_HuntingRifle_Clean_01 (Synty Apocalypse) is not a runtime GLB yet (#473)
     };
 
     /// <summary>Node meta: height of the weapon's top (iron sight) above its origin, in metres; the viewmodel lowers the gun by this much to aim down sights.</summary>

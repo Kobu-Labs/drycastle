@@ -19,7 +19,7 @@ public class SniperAndPistolContentTests
     [Fact]
     public void FourSniperRiflesArePrimaryNonAutoHitscanWithAScopeAndBreathHold()
     {
-        Assert.Equal(Snipers.Length, File.Weapons.Count(w => w.Category == WeaponCategory.Sniper));
+        Assert.Equal(Snipers.Length, File.Weapons.Count(w => w.Category == WeaponCategory.Sniper && !w.IsReward)); // the hunting rifle is the silver reward (#473)
         foreach (var id in Snipers)
         {
             var w = Def(id);

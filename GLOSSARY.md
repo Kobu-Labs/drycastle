@@ -737,6 +737,10 @@ _Avoid_: collection, bestiary
 How rare a Hunt's weight is for its exact species and look: gold (the heaviest 5 %), silver (10 %), bronze (20 %) or common, read from the weight distribution itself (`HuntRarity`), never counted from the stored hunts. A Life List tile carries the rarest one its owner has hunted, shown as the plaque's rim, a medal and the tier in words. A Mystery creature has none.
 _Avoid_: quality, grade, trophy class
 
+**Collection tier**:
+The highest Hunt rarity tier (bronze, silver, gold) at which a player has every Index species: each species' rarest Hunt is at that tier or better (the Life List tile's rim). Mystery creatures do not count. Tiers stack (gold counts as silver and bronze) and, once reached, stay (a new Index species takes none back). A tier unlocks the weapons whose `reward_tier` it is, as unlock rows on the Profile: silver, the hunting rifle (a primary, locked in the loadout editor until then). Rules are in `HuntBook.CollectionTier` (ShooterCore); the server grants on a Hunt and on join.
+_Avoid_: collection level, trophy
+
 **Mineral**:
 One of the 28 stones of the Mineral Log (crystals.md): 8 real-life ones and 20 fantasy ones, the latter the crystals of `crystals.json`. The one table is `Minerals` (ShooterCore).
 _Avoid_: gem, ore, crystal (that is the model in the world)
