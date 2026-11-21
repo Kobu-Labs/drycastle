@@ -123,11 +123,10 @@ public partial class NetClient
         if (OwnCorpseAt() is { } body)
         {
             var dir = body - from.Origin;
-            if (dir.LengthSquared() > 0.04f)
-            {
-                var aim = Basis.LookingAt(dir.Normalized(), Vector3.Up).GetRotationQuaternion();
-                look = look.Slerp(aim, DeathPresentation.PanBlend((float)GetProcessDeltaTime()));
-            }
+            var yawNow = look.GetEuler(EulerOrder.Yxz).Y;
+            var (yaw, pitch) = DeathPresentation.ThrownAim(dir.X, dir.Y, dir.Z, yawNow); // never LookingAt: a body straight above is collinear with Up
+            var aim = Quaternion.FromEuler(new Vector3(pitch, yaw, 0));
+            look = look.Slerp(aim, DeathPresentation.PanBlend((float)GetProcessDeltaTime(), look.AngleTo(aim)));
         }
         _deathLook = look;
         return new Transform3D(new Basis(look), from.Origin);
@@ -136,12 +135,14 @@ public partial class NetClient
     /// <summary>Where the own corpse's body is (its middle), or null while it is not in the world yet.</summary>
     Vector3? OwnCorpseAt()
     {
+        // the newest own body only: an older one of ours (they last two minutes) lies still elsewhere, and an unplaced one sits at the origin until RenderCorpses decides it
+        CorpseView? newest = null;
         foreach (var (id, v) in _corpses)
         {
             if (v.Giant || v.Bale || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.Owner != _myId) continue;
-            return v.Node.GlobalPosition;
+            if (newest == null || v.Born > newest.Born) newest = v;
         }
-        return null;
+        return newest is { Decided: true } ? newest.Node.GlobalPosition : null;
     }
 
     /// <summary>How much of a fall's travel (forward or back) fits before a wall: 0..1 (a body that falls against a wall does not push the view into it).</summary>
