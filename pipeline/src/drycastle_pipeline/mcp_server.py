@@ -81,6 +81,7 @@ from drycastle_pipeline.ground_attributes import (
     RECIPES,
     attributes_of,
 )
+from drycastle_pipeline.parcel_outlines import buildings_outside, splice_outline
 from drycastle_pipeline.patches import patch_rank
 from drycastle_pipeline.roads import edge_lines
 from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
@@ -106,7 +107,7 @@ _GROUP_ID = re.compile(r"G-\d{4,}")
 _PATCH_ID = re.compile(r"GP-\d{4,}")
 _ZONE_ID = re.compile(r"Z-\d{4,}")
 _RULE_ZONE_ID = re.compile(r"A-\d{4,}(?:\.\d+)?")  # a zone that comes from a rule: a ground area (or one outline of it)
-_GENERATED_ID = re.compile(r"(?:[oGCZ]|GP|ZC)-(\d+)")
+_GENERATED_ID = re.compile(r"(?:[oGCZ]|GP|ZC|PA)-(\d+)")
 
 
 def _r3(v: float) -> float:
@@ -393,6 +394,8 @@ def _edits_doc(edits: Edits) -> dict:
         doc["cables"] = edits.cables
     if edits.ground_types:
         doc["ground_types"] = edits.ground_types
+    if edits.paths:
+        doc["paths"] = edits.paths
     return doc
 
 
@@ -418,6 +421,15 @@ def _all_objects(edits: Edits) -> list[dict]:
 # --- geometry helpers -----------------------------------------------------------------------
 
 
+def _check_size_m(v: object) -> list[float] | None:
+    """A tool's `size_m` argument: None or [length, width, height], three finite numbers > 0."""
+    if v is None:
+        return None
+    if not isinstance(v, (list, tuple)) or len(v) != 3:
+        raise ToolError("size_m must be [length, width, height] in metres")
+    return [_check_num(n, c, positive=True) for n, c in zip(("size_m length", "size_m width", "size_m height"), v)]
+
+
 def _facing_rotation(direction: tuple[float, float]) -> float:
     """``rotation_deg`` that turns an object's front (+Z) toward ``direction`` (map frame)."""
     phi = math.degrees(math.atan2(direction[1], direction[0]))
@@ -430,11 +442,18 @@ def _norm_deg(deg: float) -> float:
 
 
 def object_polygon(
-    xy: tuple[float, float], size_m: list[float] | None, rotation_deg: float, scale: float
+    xy: tuple[float, float],
+    size_m: list[float] | None,
+    rotation_deg: float,
+    scale: float,
+    fixed_m: list[float] | None = None,
 ) -> Polygon:
-    """Approximate footprint of a placed object (local metres): its bbox about the origin."""
+    """Approximate footprint of a placed object (local metres): its bbox about the origin.
+    ``fixed_m`` = the object's own [length, width, height] (wins over the manifest size and ``scale``)."""
     sx, sz = (size_m[0], size_m[2]) if size_m else (1.0, 1.0)
     hx, hz = sx * scale / 2, sz * scale / 2
+    if fixed_m:
+        hx, hz = fixed_m[0] / 2, fixed_m[1] / 2
     th = math.radians(rotation_deg)
     c, s = math.cos(th), math.sin(th)
     pts = []
@@ -1207,6 +1226,107 @@ class ParcelEditTools:
             "warnings": warnings,
         }
 
+    def set_parcel_ground_type(self, parcel: str, type: str | None = None) -> dict:
+        """Give one parcel the ground of a ground type (``ground_type`` of its edits entry); none removes it."""
+        if not (isinstance(parcel, str) and _PARCEL_ID.fullmatch(parcel)):
+            raise ToolError(f"parcel {parcel!r} is not a parcel ID like P-0412")
+        pid = self.map.need(parcel)
+
+        def change(edits: Edits) -> bool:
+            holder = edits.parcels.setdefault(pid, {})
+            if not type:
+                return holder.pop("ground_type", None) is not None
+            changed = holder.get("ground_type") != type
+            holder["ground_type"] = type
+            return changed
+
+        changed = self._write(change)  # an emptied entry is dropped by _write; an unknown or water type is refused by the validator
+        return {
+            "summary": f"ground of {pid} is now {type}" if type else (
+                f"ground type of {pid} removed" if changed else f"{pid} had no ground type"),
+            "parcel": pid,
+            "ground_type": type or None,
+            "changed": changed,
+            "note": "Needs the next make map-update to show on the map.",
+        }
+
+    def set_parcel_outline(self, parcel: str, points: list | None = None, sketch_line: str | None = None) -> dict:
+        """Replace one parcel's outline (``outline`` of its edits entry), whole or by splicing a sketch line into it."""
+        if not (isinstance(parcel, str) and _PARCEL_ID.fullmatch(parcel)):
+            raise ToolError(f"parcel {parcel!r} is not a parcel ID like P-0412")
+        if (points is None) == (sketch_line is None):
+            raise ToolError("give exactly one of points (the full new outline, [[x, y], ...] absolute S-JTSK metres) or sketch_line (an open line id of get_sketch)")
+        pid = self.map.need(parcel)
+        m = self.map
+        if points is not None:
+            if not isinstance(points, list):
+                raise ToolError("points must be a list of [x, y] points")
+            new = [tuple(self._xy(f"points[{i}]", p)) for i, p in enumerate(points)]
+            if len(new) > 1 and new[0] == new[-1]:
+                new.pop()
+        else:
+            line, line_closed = self._sketch_line(sketch_line)
+            if line_closed:
+                raise ToolError(f"sketch line {sketch_line} is closed; give an open line, or its points as the full outline")
+            if len(line) < 2:
+                raise ToolError(f"sketch line {sketch_line} has fewer than 2 points")
+        info: dict = {}
+
+        def change(edits: Edits) -> None:
+            holder = edits.parcels.setdefault(pid, {})
+            if points is None:
+                current = holder.get("outline") or [m.to_abs(x, y) for x, y in list(m.polys[pid].exterior.coords)[:-1]]
+                try:
+                    ring = splice_outline([(float(x), float(y)) for x, y in current], [(x, y) for x, y in line])
+                except ValueError as exc:
+                    raise ToolError(f"cannot splice {sketch_line} into the outline of {pid}: {exc}") from exc
+            else:
+                ring = new
+            outline = [_pt(x, y) for x, y in ring]
+            local = Polygon([m.to_local(x, y) for x, y in outline])
+            info["old_area_m2"] = round(m.polys[pid].area, 1)
+            info["trimmed"] = {}
+            if local.is_valid and local.area > 0:  # otherwise the validator refuses it below
+                inside = {b: m.bpolys[b] for b in m.parcels[pid].get("buildings", []) if b in m.bpolys}
+                out = buildings_outside(local, inside)
+                if out:
+                    raise ToolError(f"refused: the new outline of {pid} leaves {', '.join(out)} outside; nothing was written")
+                info["new_area_m2"] = round(local.area, 1)
+                edited = {p for p, e in edits.parcels.items() if e.get("outline")} | {pid}
+                info["trimmed"] = {
+                    other: round(m.polys[other].intersection(local).area, 1)
+                    for other in m.parcels_near(local, 0.0) if other not in edited
+                    and m.polys[other].intersection(local).area > 0.01
+                }
+            holder["outline"] = outline
+
+        self._write(change)  # a self-crossing outline or one overlapping another edited outline is refused by the validator
+        trimmed = info["trimmed"]
+        return {
+            "summary": f"outline of {pid} replaced: {info['old_area_m2']} m2 -> {info['new_area_m2']} m2"
+                       + (f"; neighbours cut back: {trimmed}" if trimmed else ""),
+            "parcel": pid,
+            **info,
+            "warnings": [],
+            "note": "Needs make parcels, then make map-update, to show on the map (the outline is applied in the parcels stage).",
+        }
+
+    def reset_parcel_outline(self, parcel: str) -> dict:
+        """Remove a parcel's outline edit: its cadastral outline applies again."""
+        if not (isinstance(parcel, str) and _PARCEL_ID.fullmatch(parcel)):
+            raise ToolError(f"parcel {parcel!r} is not a parcel ID like P-0412")
+
+        def change(edits: Edits) -> bool:
+            return bool(edits.parcels.get(parcel, {}).pop("outline", None))
+
+        changed = self._write(change)
+        return {
+            "summary": f"outline of {parcel} reset to the cadastre" if changed else f"{parcel} had no outline edit",
+            "parcel": parcel,
+            "changed": changed,
+            "note": "Needs make parcels, then make map-update, to show on the map.",
+        }
+
     def reset_fence(self, target: str) -> dict:
         """Remove the fence entry of a parcel or group, so the rules (or the group) apply again."""
         kind, tid = self._fence_target(target)
@@ -1329,6 +1449,7 @@ class ParcelEditTools:
         scale: float,
         edits: Edits,
         skip_id: str | None,
+        fixed_m: list[float] | None = None,
     ) -> list[str]:
         m = self.map
         warnings: list[str] = []
@@ -1337,7 +1458,7 @@ class ParcelEditTools:
             inside = m.parcel_at(*xy)
             where = f"inside {inside}" if inside else "outside every parcel"
             warnings.append(f"position is outside {pid} ({where}); placed anyway as requested")
-        fp = object_polygon(xy, asset.get("size_m"), rotation, scale)
+        fp = object_polygon(xy, asset.get("size_m"), rotation, scale, fixed_m)
         for bid in m.buildings_near(fp, 0.0):
             warnings.append(
                 f"overlaps building {bid} (approximate footprint of {asset['id']} at this "
@@ -1353,12 +1474,13 @@ class ParcelEditTools:
                 (a.get("size_m") for a in self.manifest["assets"] if a["id"] == other["asset"]), None
             )
             ofp = object_polygon(
-                (ox, oy), osz, float(other.get("rotation_deg", 0)), float(other.get("scale", 1))
+                (ox, oy), osz, float(other.get("rotation_deg", 0)), float(other.get("scale", 1)),
+                other.get("size_m"),
             )
             if fp.intersects(ofp):
                 warnings.append(f"overlaps placed object {other['id']} ({other['asset']})")
         size = asset.get("size_m") or [1, 1, 1]
-        if max(size) < 1.0 and scale == 1.0:
+        if max(size) < 1.0 and scale == 1.0 and not fixed_m:
             warnings.append(
                 f"{asset['id']} is small at scale 1 (largest side {max(size):.2f} m); pass scale "
                 "if it should be bigger"
@@ -1377,12 +1499,16 @@ class ParcelEditTools:
         colour: str | None = None,
         z: float | None = None,
         solid: bool | None = None,
+        size_m: list[float] | None = None,
     ) -> dict:
         """Place an object (see the registered tool description). It belongs to no parcel."""
         pid = self.map.need(parcel) if parcel is not None else None
         info = self._asset(asset)
         if scale is not None:
             _check_num("scale", scale, positive=True)
+        fixed = _check_size_m(size_m)
+        if fixed is not None and scale is not None:
+            raise ToolError("give size_m or scale, not both")
         if rotation_deg is not None:
             _check_num("rotation_deg", rotation_deg)
         if colour is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", str(colour)):
@@ -1405,13 +1531,15 @@ class ParcelEditTools:
             entry: dict = {"id": oid, "asset": asset, "position": absolute, "rotation_deg": rot}
             if scale is not None:
                 entry["scale"] = scl
+            if fixed is not None:
+                entry["size_m"] = fixed
             if colour is not None:
                 entry["colour"] = colour
             if z is not None:
                 entry["z"] = float(z)
             if solid is False:  # true is the default: the key is only written when false
                 entry["solid"] = False
-            warnings.extend(self._placement_warnings(pid, (x, y), info, rot, scl, edits, None))
+            warnings.extend(self._placement_warnings(pid, (x, y), info, rot, scl, edits, None, fixed))
             edits.objects.append(entry)
             return entry
 
@@ -1423,6 +1551,7 @@ class ParcelEditTools:
             "position": absolute,
             "rotation_deg": rot,
             "scale": scl,
+            **({"size_m": fixed} if fixed is not None else {}),
             "entry": entry,
             "warnings": warnings,
         }
@@ -1556,10 +1685,14 @@ class ParcelEditTools:
         z: float | None = None,
         clear_z: bool = False,
         solid: bool | None = None,
+        size_m: list[float] | None = None,
     ) -> dict:
-        """Change position, rotation, scale, colour, z or solid of a placed object (see tool description)."""
+        """Change position, rotation, scale, size_m, colour, z or solid of a placed object (see tool description)."""
         if scale is not None:
             _check_num("scale", scale, positive=True)
+        fixed = _check_size_m(size_m)
+        if fixed is not None and scale is not None:
+            raise ToolError("give size_m or scale, not both")
         if rotation_deg is not None:
             _check_num("rotation_deg", rotation_deg)
         if colour is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", str(colour)):
@@ -1570,9 +1703,9 @@ class ParcelEditTools:
                 raise ToolError("give z or clear_z, not both")
         if solid is not None and not isinstance(solid, bool):
             raise ToolError(f"solid must be true or false, got {solid!r}")
-        if not clear_z and all(v is None for v in (parcel, anchor, offset_m, position, rotation_deg, scale, colour, z, solid)):
+        if not clear_z and all(v is None for v in (parcel, anchor, offset_m, position, rotation_deg, scale, fixed, colour, z, solid)):
             raise ToolError(
-                "nothing to change: give a new anchor/offset_m/position/rotation_deg/scale/colour/z/clear_z/solid"
+                "nothing to change: give a new anchor/offset_m/position/rotation_deg/scale/size_m/colour/z/clear_z/solid"
             )
         relocate = any(v is not None for v in (parcel, anchor, offset_m, position))
         warnings: list[str] = []
@@ -1598,6 +1731,10 @@ class ParcelEditTools:
                 new["rotation_deg"] = _norm_deg(rotation_deg)
             if scale is not None:
                 new["scale"] = float(scale)
+                new.pop("size_m", None)  # size_m would win over the new scale
+            if fixed is not None:
+                new["size_m"] = fixed
+                new.pop("scale", None)
             if colour is not None:
                 new["colour"] = colour
             if z is not None:
@@ -1613,7 +1750,7 @@ class ParcelEditTools:
             warnings.extend(
                 self._placement_warnings(
                     target, (lx, ly), info, float(new.get("rotation_deg", 0)),
-                    float(new.get("scale", 1)), edits, id,
+                    float(new.get("scale", 1)), edits, id, new.get("size_m"),
                 )
             )
             edits.objects[edits.objects.index(obj)] = new
@@ -2041,6 +2178,12 @@ class ParcelEditTools:
                 raise ToolError(f"{name} is already deleted. Nothing was changed.")
             if name in protected_ground_types():
                 raise ToolError(f"{name} cannot be deleted, it {protected_ground_types()[name]}. Nothing was changed.")
+            on_parcels = sorted(pid for pid, e in edits.parcels.items() if e.get("ground_type") == name)
+            if on_parcels:
+                raise ToolError(
+                    f"parcels {', '.join(on_parcels)} have the ground of type {name}; give them another "
+                    "(set_parcel_ground_type) first. Nothing was changed."
+                )
             used = self._ground_type_patches(name, edits)
             if used:
                 raise ToolError(
@@ -2336,6 +2479,59 @@ class ParcelEditTools:
             "warnings": [],
         }
 
+    # paths ---------------------------------------------------------------------------------
+    def _sketch_line(self, line: str) -> tuple[list[list[float]], bool]:
+        """The points of a sketch line (its id, as get_sketch shows it) and whether it is closed."""
+        from drycastle_pipeline import sketchfile
+
+        path = self.settings.sketch_path or sketchfile.default_path()
+        doc = json.loads(path.read_text()) if path.is_file() else {}
+        for entry in doc.get("lines", []):
+            if entry.get("id") == line:
+                return [[float(x), float(y)] for x, y in entry["points"]], bool(entry.get("closed"))
+        raise ToolError(f"no sketch line {line!r}; see get_sketch")
+
+    def create_path(self, points: list | None = None, sketch_line: str | None = None, width_m: float | None = None,
+                    closed: bool | None = None) -> dict:
+        """Create a worn footpath (see the registered tool description)."""
+        if (points is None) == (sketch_line is None):
+            raise ToolError("give exactly one of points ([[x, y], ...], absolute S-JTSK metres) or sketch_line (a line id of get_sketch)")
+        if sketch_line is not None:
+            pts, line_closed = self._sketch_line(sketch_line)
+            closed = line_closed if closed is None else closed
+        else:
+            if not isinstance(points, list):
+                raise ToolError("points must be a list of [x, y] points")
+            pts = [self._xy(f"points[{i}]", p) for i, p in enumerate(points)]
+        entry: dict = {"points": pts}
+        if width_m is not None:
+            entry["width_m"] = width_m
+        if closed:
+            entry["closed"] = True
+
+        def change(edits: Edits) -> str:
+            pid = _next_id("PA", list(edits.paths))
+            edits.paths[pid] = entry
+            return pid
+
+        pid = self._write(change)
+        return {"summary": f"created {pid} ({len(pts)} points); the map shows it after the next make map-update", "id": pid, **entry, "warnings": []}
+
+    def list_paths(self) -> dict:
+        """Every worn footpath of the edits."""
+        paths = _read_edits(self.settings.edits_path).paths
+        return {"count": len(paths), "paths": [{"id": pid, **e} for pid, e in sorted(paths.items())]}
+
+    def delete_path(self, id: str) -> dict:
+        """Delete a worn footpath."""
+        def change(edits: Edits) -> None:
+            if id not in edits.paths:
+                raise ToolError(f"no path {id!r}; see list_paths")
+            del edits.paths[id]
+
+        self._write(change)
+        return {"summary": f"deleted {id}; the map shows it after the next make map-update", "id": id, "warnings": []}
+
     def set_zone_kind(self, id: str, kind: str, from_kind: str | None = None) -> dict:
         """Give a zone another kind."""
         zid = self._zone_ref(id)
@@ -2410,7 +2606,8 @@ class ParcelEditTools:
 _ASSET_NOTE = (
     "Sizes are the raw bounding boxes in metres [x, y, z] (y up). Some packs are authored small "
     "(the Kenney suburban kit: a tree is 0.77 m, a fence section 0.5 m), so a `scale` on "
-    "place_object may be needed; cars and primitives are real size."
+    "place_object may be needed; cars and primitives are real size. "
+    "Any asset can instead be sized to an exact bounding box with place_object `size_m` [length, width, height]."
 )
 
 
@@ -2549,6 +2746,30 @@ def build_server(settings: Settings) -> Any:
         return tools.reset_fence(target)
 
     @server.tool(description=(
+        "Give ONE parcel the ground of a ground type (see list_ground_types; make one with set_ground_type, e.g. `graveyard`): its "
+        "terrain colours and detail recipe come from that type instead of the yard of its kind (a type without a recipe: bare "
+        "ground, no detail). Kind, layout and fence are unchanged. Not a water type. null removes it. Ground patches cannot do this "
+        "(they paint only outside parcels). Needs the next make map-update to show on the map."))
+    def set_parcel_ground_type(parcel: str, type: str | None = None) -> dict:
+        return tools.set_parcel_ground_type(parcel, type)
+
+    @server.tool(description=(
+        "Replace the outline of ONE parcel (the cadastral boundary; no edit = untouched). Give `sketch_line` = the id of an open "
+        "line the user drew (get_sketch): the stretch of the current boundary between the two points nearest the line's ends is "
+        "replaced by the line, keeping the larger part of the parcel, so the user draws only the part that changes. Or give "
+        "`points` = [[x, y], ...], absolute S-JTSK metres, the full new outline. The outline must be a simple polygon and the "
+        "parcel's buildings must stay inside it. Where it overlaps an unedited parcel the edited one wins and the neighbour is "
+        "cut back; two edited outlines must not overlap. Land the parcel gives up becomes ground. Fence, ground, detail and "
+        "object clearance follow the new outline. Needs make parcels, then make map-update, to show on the map."))
+    def set_parcel_outline(parcel: str, points: list[list[float]] | None = None, sketch_line: str | None = None) -> dict:
+        return tools.set_parcel_outline(parcel, points, sketch_line)
+
+    @server.tool(description=(
+        "Remove the outline edit of a parcel: its cadastral outline applies again. Needs make parcels, then make map-update."))
+    def reset_parcel_outline(parcel: str) -> dict:
+        return tools.reset_parcel_outline(parcel)
+
+    @server.tool(description=(
         "Place an asset (see list_assets). An object belongs to no parcel, it only has a position: "
         "give an exact `position` [x, y] in S-JTSK metres (nothing else is needed, so a pole by a "
         "road is fine), or name a `parcel` and an `anchor` = front | back "
@@ -2562,7 +2783,10 @@ def build_server(settings: Settings) -> Any:
         "object's front toward the road (right for a car parked in front of the house), else 0; "
         "`rotation_deg` is "
         "counter-clockwise seen from above, absolute. `scale` is uniform, default 1 (small pack "
-        "models may need it); `colour` is \"#rrggbb\". `z` (optional, metres, absolute above the DMR datum, not "
+        "models may need it); `size_m` [length, width, height] instead sizes the object to an exact bounding box in "
+        "metres (length along the object's own x, east at rotation 0; width along its own map y, north at rotation 0; "
+        "height up), scaling the model non-uniformly (e.g. prim:slab as a 1.52 x 2.66 x 0.12 m grave slab); "
+        "give `size_m` or `scale`, not both; `colour` is \"#rrggbb\". `z` (optional, metres, absolute above the DMR datum, not "
         "relative to the ground) fixes the height instead of standing on the terrain: set it to lay an object on "
         "a prim:mound tier or a roof. `solid` (default true) false = no collision at all, players, vehicles and "
         "shots pass through: for dressing (trash) laid over a climbable prim. Unknown asset/parcel and bad values are "
@@ -2579,9 +2803,10 @@ def build_server(settings: Settings) -> Any:
         colour: str | None = None,
         z: float | None = None,
         solid: bool | None = None,
+        size_m: list[float] | None = None,
     ) -> dict:
         return tools.place_object(
-            asset, parcel, anchor, offset_m, position, rotation_deg, scale, colour, z, solid
+            asset, parcel, anchor, offset_m, position, rotation_deg, scale, colour, z, solid, size_m
         )
 
     @server.tool(description="Remove a placed object by its id (e.g. o-0003). The cables hanging from a "
@@ -2613,6 +2838,7 @@ def build_server(settings: Settings) -> Any:
     @server.tool(description=(
         "Change a placed object: new position (an exact `position` [x, y], or `anchor` + `offset_m` "
         "relative to `parcel`, default the parcel the object stands in), `rotation_deg`, `scale`, "
+        "`size_m` [length, width, height] exact metres (as place_object; setting one of scale/size_m drops the other), "
         "`colour`, `z` (absolute metres above the DMR datum) or `clear_z` true (back on the terrain; a missing "
         "z cannot say \"clear\"), `solid` (false = no collision at all, true = the default). With a new anchor and no rotation_deg the object turns to face the road "
         "again. An object belongs to no parcel; `parcel` is only the frame an anchor is measured in."))
@@ -2628,9 +2854,10 @@ def build_server(settings: Settings) -> Any:
         z: float | None = None,
         clear_z: bool = False,
         solid: bool | None = None,
+        size_m: list[float] | None = None,
     ) -> dict:
         return tools.move_object(
-            id, parcel, anchor, offset_m, position, rotation_deg, scale, colour, z, clear_z, solid
+            id, parcel, anchor, offset_m, position, rotation_deg, scale, colour, z, clear_z, solid, size_m
         )
 
     @server.tool(description=(
@@ -2738,6 +2965,24 @@ def build_server(settings: Settings) -> Any:
         points: list[list[float]] | None = None,
     ) -> dict:
         return tools.create_zone(kind, polygon, parcel, points)
+
+    @server.tool(description=(
+        "Create a worn footpath (id PA-NNNN): a line people walk until the grass is gone. Give `points` = [[x, y], ...] in "
+        "absolute S-JTSK metres, or `sketch_line` = the id of a line the user drew (get_sketch; a closed line makes a loop). "
+        "`width_m` 0.3 to 4 (default 0.8) is the average width of the trodden ground; its outline swells, wanders and thins out "
+        "at the ends of an open path. It is drawn as bare earth over whatever ground is there (also inside a parcel) and changes "
+        "no parcel, ground area or kind. Needs the next make map-update to show on the map."))
+    def create_path(points: list[list[float]] | None = None, sketch_line: str | None = None, width_m: float | None = None,
+                    closed: bool | None = None) -> dict:
+        return tools.create_path(points, sketch_line, width_m, closed)
+
+    @server.tool(description="List the worn footpaths (create_path): id, points, width_m, closed.")
+    def list_paths() -> dict:
+        return tools.list_paths()
+
+    @server.tool(description="Delete a worn footpath by its id (PA-NNNN). Needs the next make map-update to show on the map.")
+    def delete_path(id: str) -> dict:
+        return tools.delete_path(id)
 
     @server.tool(description=(
         "Give a zone another kind (see list_zone_kinds). A zone from list_zones with an `A-` id (one the kind has by "

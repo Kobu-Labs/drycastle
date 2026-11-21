@@ -23,7 +23,8 @@ from drycastle_pipeline.assets import ASSETS_DIR, load_manifest
 from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.detail_meshes import KINDS, TINTABLE
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
-from drycastle_pipeline.ground import ground_types, ground_units, type_colours, water_kinds
+from drycastle_pipeline.footpaths import path_polygons
+from drycastle_pipeline.ground import ground_kind, ground_types, ground_units, type_colours, water_kinds, with_parcel_types
 from drycastle_pipeline.ground_attributes import attributes_of
 from drycastle_pipeline.patches import plan_patches
 from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
@@ -45,6 +46,9 @@ def load_module():
     return drycastle_detail
 
 
+SIZED_CLEARANCE_M = 0.06  # detail keeps this far from the rectangle of an object placed with size_m
+
+
 def _polys(geom) -> list[dict]:
     parts = list(geom.geoms) if hasattr(geom, "geoms") else [geom]
     return [{"exterior": [list(c) for c in p.exterior.coords], "holes": [[list(c) for c in r.coords] for r in p.interiors]}
@@ -59,7 +63,7 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
     tree_cfg = load_section("props", rules_path)["trees"]
     terrain, _ = load_terrain(work_dir)
     parcels_doc = json.loads((work_dir / "parcels.json").read_text())
-    units = ground_units(parcels_doc)
+    units = with_parcel_types(ground_units(parcels_doc), edits_path)
     buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
     props = json.loads((work_dir / "props.json").read_text())
     graph = json.loads((work_dir / "roads.json").read_text())
@@ -75,15 +79,15 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
     for p in sorted(units, key=lambda u: u["id"]):
         recipe = D.area_type(p, types)
         out_units.append({
-            "id": p["id"], "seq": seq[p["id"]], "kind": p["kind"], "recipe": recipe or "",
+            "id": p["id"], "seq": seq[p["id"]], "kind": ground_kind(p), "recipe": recipe or "",  # the kind the detail goes by: a parcel's ground type of the edits first
             "whole_dike": bool(p["id"] in D.dike_parcels() or p["kind"] == "dike"),
             "colour": colours._pick(p), "polygon": p["polygon"],
         })
         if recipe is None:
             continue
         for r in {recipe, "dike"}:
-            attrs = attributes_of(types.get(p["kind"]))
-            key = f"{p['kind']}|{r}"
+            attrs = attributes_of(types.get(ground_kind(p)))
+            key = f"{ground_kind(p)}|{r}"
             if attrs.get("detail") and attrs.get("recipe") == r and key not in cfgs:
                 cfgs[key] = {**cfg, r: _merge(cfg[r], attrs["detail"])}
 
@@ -91,7 +95,16 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
     discs = []
     for o in objects:
         sx, _, sz = sizes.get(o["asset"], [1.0, 1.0, 1.0])
-        r = 0.5 * math.hypot(sx, sz) * float(o.get("scale", 1.0)) + float(cfg["object_clearance_m"])
+        sx, sz, k = (o["size_m"][0], o["size_m"][1], 1.0) if o.get("size_m") else (sx, sz, float(o.get("scale", 1.0)))
+        if o.get("size_m"):  # an exact footprint (a grave): its own rectangle, not the disc around it, so ground and paths reach it
+            hx, hy = sx / 2 + SIZED_CLEARANCE_M, sz / 2 + SIZED_CLEARANCE_M
+            a = math.radians(float(o.get("rotation_deg", 0.0)))
+            ca, sa = math.cos(a), math.sin(a)
+            x, y = o["position"]
+            ring = [[x + ca * dx - sa * dy, y + sa * dx + ca * dy] for dx, dy in ((-hx, -hy), (hx, -hy), (hx, hy), (-hx, hy))]
+            discs.append({"exterior": ring + [ring[0]], "holes": []})
+            continue
+        r = 0.5 * math.hypot(sx, sz) * k + float(cfg["object_clearance_m"])
         discs.append([o["position"][0], o["position"][1], r])
 
     plan = plan_patches(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), terrain, types)
@@ -121,6 +134,11 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
         "roads": [{"id": e["id"], "highway": e["highway"], "width": float(e["width"]), "osm_id": e.get("osm_id") or "", "polyline": e["polyline"]}
                   for e in graph["edges"]],
         "objects": discs,
+        # worn footpaths of the edits (footpaths.py): trodden ground, joined to the dirt of the verges by the engine
+        "paths": [p for g in path_polygons(load_edits(edits_path).paths, tuple(parcels_doc.get("origin_epsg5514") or (0.0, 0.0))) for p in _polys(g)],
+        # the two bands of thin grass beside them, inner and outer: the path's edge fades into the ground
+        "path_fringe": [[p for g in path_polygons(load_edits(edits_path).paths, tuple(parcels_doc.get("origin_epsg5514") or (0.0, 0.0)), band) for p in _polys(g)]
+                        for band in (0, 1)],
         "regions": water_patches,  # the engine calls the polygons it keeps detail out of "regions"
         "swamp": _polys(swamp) if swamp is not None else [],  # swamp ground: where the swamp stand of trees stands (detail.swamp_zone)
         "coverage": [list(c) for c in terrain.coverage.exterior.coords],

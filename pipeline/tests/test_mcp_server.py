@@ -6,6 +6,7 @@ import threading
 import time
 
 import pytest
+from shapely.geometry import Polygon
 from mcp.server.mcpserver.exceptions import ToolError
 
 from drycastle_pipeline.edits import dump_text, load_edits, validate
@@ -631,6 +632,28 @@ def test_object_polygon_orientation():
     assert poly.bounds == pytest.approx((8, 19, 12, 21))
 
 
+def test_object_polygon_fixed_size():
+    # size_m [length, width, height]: length along x, width along map y; wins over scale and the manifest size
+    poly = object_polygon((10, 20), [1.0, 0.1, 1.0], 0, 3, [1.52, 2.66, 0.12])
+    assert poly.bounds == pytest.approx((10 - 0.76, 20 - 1.33, 10 + 0.76, 20 + 1.33))
+
+
+def test_place_and_move_object_size_m(tools, env):
+    placed = tools.place_object("prim:slab", "P-0001", anchor="centre", size_m=[1.52, 2.66, 0.12])
+    assert placed["entry"]["size_m"] == [1.52, 2.66, 0.12] and "scale" not in placed["entry"]
+    oid = placed["id"]
+    with pytest.raises(ToolError, match="not both"):
+        tools.place_object("prim:slab", "P-0001", size_m=[1, 1, 1], scale=2)
+    for bad in ([1, 2], [1, 0, 1], [1, 1, "x"]):
+        with pytest.raises(ToolError):
+            tools.place_object("prim:slab", "P-0001", size_m=bad)
+    moved = tools.move_object(oid, rotation_deg=90)
+    assert moved["entry"]["size_m"] == [1.52, 2.66, 0.12]
+    assert "size_m" not in tools.move_object(oid, scale=2)["entry"]
+    again = tools.move_object(oid, size_m=[2, 1, 0.1])["entry"]
+    assert again["size_m"] == [2, 1, 0.1] and "scale" not in again
+
+
 def test_parse_args(tmp_path):
     s = parse_args(["--edits", str(tmp_path / "e.json"), "--state", str(tmp_path / "s.json")])
     assert s.edits_path == tmp_path / "e.json" and s.work.parts[-2:] == ("village", "work")
@@ -657,10 +680,10 @@ def test_through_mcp_session(env):
         async with Client(server) as client:
             names = {t.name for t in (await client.list_tools()).tools}
             assert names == {
-                "list_assets", "find_parcels", "get_parcel", "set_fence", "reset_fence",
+                "list_assets", "find_parcels", "get_parcel", "set_fence", "reset_fence", "set_parcel_ground_type", "set_parcel_outline", "reset_parcel_outline",
                 "place_object", "remove_object", "move_object", "create_group", "merge_groups",
                 "dissolve_group", "create_ground_patch", "set_patch_type", "set_patch_water", "move_patch_corner", "delete_ground_patch", "list_ground_patches",
-                "create_zone", "set_zone_kind", "move_zone_corner", "delete_zone", "list_zones", "list_zone_kinds",
+                "create_zone", "set_zone_kind", "move_zone_corner", "delete_zone", "list_zones", "list_zone_kinds", "create_path", "list_paths", "delete_path",
                 "list_ground_types", "set_ground_type", "reset_ground_type", "delete_ground_type", "connect_poles", "disconnect_poles", "list_cables", "get_sketch", "create_sketch", "sketch_add_point", "sketch_add_line", "sketch_add_road", "sketch_remove",
             }
             tool = next(t for t in (await client.list_tools()).tools if t.name == "place_object")
@@ -954,3 +977,65 @@ def test_get_parcel_lists_the_objects_standing_in_it(env):
     tools.place_object("prim:pole_lamp_1", position=[OX + 900, OY + 900])
     assert [o["id"] for o in tools.get_parcel("P-0001")["edits"]["objects"]] == [inside["id"]]
     assert tools.get_parcel("P-0002")["edits"]["objects"] == []
+
+
+def test_set_parcel_ground_type(env):
+    tools, settings, _ = env
+    tools.set_ground_type("graveyard", attributes={"colours": ["#9aa38f", "#939c88"]})
+    assert tools.set_parcel_ground_type("P-0001", "graveyard")["ground_type"] == "graveyard"
+    assert load_edits(settings.edits_path).parcels == {"P-0001": {"ground_type": "graveyard"}}
+    canonical(settings)
+    with pytest.raises(ToolError, match="P-0001"):  # a type in use stays
+        tools.delete_ground_type("graveyard")
+    with pytest.raises(ToolError):
+        tools.set_parcel_ground_type("P-0001", "no_such_type")
+    assert tools.set_parcel_ground_type("P-0001", None)["changed"] is True
+    assert load_edits(settings.edits_path).parcels == {}  # emptied entry dropped
+    assert tools.set_parcel_ground_type("P-0001", None)["changed"] is False
+
+
+def test_parcel_outline_tools(env):
+    tools, settings, _ = env
+    # P-0001 is box(40,40,95,100) with a house at (60..75, 55..70); a line cutting its north-east corner
+    abs_ = lambda x, y: [OX + x, OY + y]
+    settings.sketch_path.write_text(json.dumps({"lines": [
+        {"id": "L1", "points": [abs_(80, 100), abs_(95, 85)]},
+        {"id": "L2", "points": [abs_(50, 100), abs_(50, 60), abs_(95, 60)]},  # cuts the house off
+    ]}))
+    out = tools.set_parcel_outline("P-0001", sketch_line="L1")
+    assert out["old_area_m2"] == 3300.0 and out["new_area_m2"] == pytest.approx(3300 - 112.5) and out["trimmed"] == {}
+    stored = load_edits(settings.edits_path).parcels["P-0001"]["outline"]
+    assert Polygon([local(p) for p in stored]).area == pytest.approx(3300 - 112.5) and abs_(80, 100) in stored
+    canonical(settings)
+    # a line that would leave the house outside, and a bow-tie, are refused and change nothing
+    before = settings.edits_path.read_text()
+    with pytest.raises(ToolError, match="leaves w1 outside"):
+        tools.set_parcel_outline("P-0001", sketch_line="L2")
+    with pytest.raises(ToolError, match="refused"):
+        tools.set_parcel_outline("P-0001", points=[abs_(40, 40), abs_(95, 100), abs_(95, 40), abs_(40, 100)])
+    with pytest.raises(ToolError, match="exactly one"):
+        tools.set_parcel_outline("P-0001")
+    assert settings.edits_path.read_text() == before
+    # the full outline, reaching 5 m over the unedited neighbour P-0002: it is cut back
+    full = [abs_(40, 40), abs_(100, 40), abs_(100, 100), abs_(40, 100)]
+    out = tools.set_parcel_outline("P-0001", points=full)
+    assert out["trimmed"] == {"P-0002": 300.0}
+    assert tools.reset_parcel_outline("P-0001")["changed"] is True
+    assert load_edits(settings.edits_path).parcels == {}
+    assert tools.reset_parcel_outline("P-0001")["changed"] is False
+
+
+def test_path_tools(env):
+    tools, settings, _ = env
+    out = tools.create_path(points=[[0.0, 0.0], [10.0, 0.0]], width_m=1.2)
+    assert out["id"] == "PA-0001" and load_edits(settings.edits_path).paths == {"PA-0001": {"points": [[0.0, 0.0], [10.0, 0.0]], "width_m": 1.2}}
+    canonical(settings)
+    assert tools.list_paths()["count"] == 1
+    with pytest.raises(ToolError):
+        tools.create_path(points=[[0.0, 0.0]])
+    with pytest.raises(ToolError):
+        tools.create_path()
+    tools.delete_path("PA-0001")
+    assert load_edits(settings.edits_path).paths == {}
+    with pytest.raises(ToolError):
+        tools.delete_path("PA-0001")

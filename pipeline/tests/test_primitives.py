@@ -217,3 +217,21 @@ def test_mound_manifest_entry_in_sync_and_ref_valid() -> None:
     entry = next(a for a in MANIFEST["assets"] if a["id"] == "prim:mound")
     assert entry == mound_entry()  # regenerate with mound_entry() when the primitive changes
     assert entry["size_m"] == [12.0, 4.0, 12.0] and entry["solids"] == mound_solids()
+
+
+def test_graves_are_deterministic_fit_their_rectangle_and_face_outward() -> None:
+    from drycastle_pipeline import graves
+
+    for i in range(40):
+        length, width = (2.66, 1.52) if i % 3 else (2.4, 2.2)
+        spec = graves.spec_for(f"o-{i}", length, width, neglect=i / 39)
+        a, b = graves.grave_mesh(length, width, spec, f"o-{i}"), graves.grave_mesh(length, width, spec, f"o-{i}")
+        assert np.array_equal(a.tris, b.tris) and np.array_equal(a.colours, b.colours)
+        lo, hi = bbox(a)
+        assert -0.05 <= lo[2] <= 1e-9 and signed_volume(a) > 0  # a leaning stone dips a little into the ground
+        # the frame is the rectangle; a leaning stone or a weed may hang a little over it
+        assert width - 1e-6 <= hi[0] - lo[0] <= width + 0.12 and length - 0.01 <= hi[1] - lo[1] <= length + 0.12
+    obj = {"id": "o-1", "asset": graves.ASSET, "position": [-589000.0, -1249690.0], "size_m": [1.5, 2.7, 0.3]}
+    lo, hi = bbox(graves.object_mesh(obj))
+    assert hi[0] - lo[0] == pytest.approx(1.5) and 0 <= graves.neglect_at(-589000.0, -1249690.0) <= 1
+    assert graves.manifest_entry() in MANIFEST["assets"]

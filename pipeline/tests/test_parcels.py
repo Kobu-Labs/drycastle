@@ -363,6 +363,31 @@ def test_stage_turns_a_ground_patch_into_ground(tmp_path: Path, capsys) -> None:
     assert "ground_layers" not in doc and "zones" not in doc  # a ground type is terrain only
 
 
+def test_stage_applies_a_parcel_outline(tmp_path: Path, capsys) -> None:
+    work = tmp_path / "work"
+    _write_normalised(work)  # P-0001 box(0,0,100,100) with a building at (10..20), P-0002 box(100,0,200,100) is ground
+    ox, oy = -500000.0, -1200000.0
+
+    def ring(x0, y0, x1, y1):
+        return [[ox + x0, oy + y0], [ox + x1, oy + y0], [ox + x1, oy + y1], [ox + x0, oy + y1]]
+
+    edits = tmp_path / "edits.json"
+    registry = tmp_path / "registry" / "parcels.registry.json"
+    edits.write_text(json.dumps({"version": 1, "parcels": {"P-0001": {"outline": ring(0, 0, 60, 100)}}}))
+    build_parcels(work, registry, ParcelRules(), edits_path=edits)
+    doc = json.loads((work / "parcels.json").read_text())
+    (p1,) = doc["parcels"]
+    assert shape(p1["polygon"]).equals(box(0, 0, 60, 100)) and p1["area"] == 6000  # local metres: the absolute outline shifted by the origin
+    assert p1["buildings"] == ["w1"]
+    (g1,) = doc["ground"]  # the land the parcel gave up joins the ground next to it
+    assert shape(g1["polygon"]).equals(box(60, 0, 200, 100))
+    # an outline that leaves the building is refused: the cadastral outline stays, with a warning
+    edits.write_text(json.dumps({"version": 1, "parcels": {"P-0001": {"outline": ring(30, 0, 100, 100)}}}))
+    build_parcels(work, registry, ParcelRules(), edits_path=edits)
+    assert shape(json.loads((work / "parcels.json").read_text())["parcels"][0]["polygon"]).equals(box(0, 0, 100, 100))
+    assert "w1" in capsys.readouterr().err
+
+
 def test_zones_change_no_ground_area(tmp_path: Path) -> None:
     ox, oy = -500000.0, -1200000.0
 

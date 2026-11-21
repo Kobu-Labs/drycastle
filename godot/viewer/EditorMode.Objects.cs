@@ -308,8 +308,8 @@ public partial class EditorMode
         _gizmoRoot.Visible = Active && node != null && box != null;
         if (node == null || box == null) return;
         var b = box.Value;
-        var sc = node.Scale.X;
-        var radius = Mathf.Max(0.9f, 0.5f * Mathf.Sqrt(b.Size.X * b.Size.X + b.Size.Z * b.Size.Z) * sc + 0.6f);
+        var (sx, sz) = (b.Size.X * node.Scale.X, b.Size.Z * node.Scale.Z); // size_m scales the axes apart
+        var radius = Mathf.Max(0.9f, 0.5f * Mathf.Sqrt(sx * sx + sz * sz) + 0.6f);
         var key = $"{node.GetInstanceId()}|{radius:F2}";
         if (key != _gizKey) { _gizKey = key; GizmoRadius = radius; RebuildGizmoShapes(b, radius); }
         _gizBox.GlobalTransform = node.GlobalTransform;
