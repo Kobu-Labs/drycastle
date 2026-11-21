@@ -14,7 +14,7 @@ public class RocketCartTests
     static VehiclesFile Load() => VehiclesFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "vehicles.json"));
     static readonly VehiclesFile Shipped = Load();
     static VehicleDef Cart => Shipped.Vehicles.Single(v => v.Id == "rocket_cart");
-    static VehicleDef Jeep => Shipped.Vehicles.Single(v => v.Id == "jeep");
+    static VehicleDef Truck => Shipped.Vehicles.Single(v => v.Id == "truck");
     static VehicleDef Flak => Shipped.Vehicles.Single(v => v.Id == "flak");
 
     // ---- the shipped type ----
@@ -31,7 +31,7 @@ public class RocketCartTests
         Assert.Equal(150f, Cart.Trailer.LoadedHp);
         Assert.Equal("pack:synty-simple-military/rocket_cart", Cart.Model);
         Assert.Null(Cart.Lights); Assert.Null(Cart.Sounds); Assert.Empty(Cart.Glass);
-        Assert.True(TowGeometry.CanTow(Jeep, Cart));
+        Assert.True(TowGeometry.CanTow(Truck, Cart));
         Assert.True(TowGeometry.CanTow(Flak, Cart));
         Assert.True(TowGeometry.CanTow(Shipped.Vehicles.Single(v => v.Id == "humvee"), Cart));
         Assert.Equal(12.6f, Cart.HalfLength * 2, 2); // the model's 12.6 m including the drawbar (it carries the whole 11.1 m missile)
@@ -43,9 +43,9 @@ public class RocketCartTests
     }
 
     [Fact]
-    public void The_cart_fits_the_jeeps_and_the_flaks_hitch_without_starting_inside_them()
+    public void The_cart_fits_the_trucks_and_the_flaks_hitch_without_starting_inside_them()
     {
-        foreach (var tractor in new[] { Jeep, Flak, Shipped.Vehicles.Single(v => v.Id == "humvee") })
+        foreach (var tractor in new[] { Truck, Flak, Shipped.Vehicles.Single(v => v.Id == "humvee") })
         {
             var g = TowGeometry.Of(tractor, Cart);
             var b = TowModel.Pose(g, Vector3.Zero, 0f, 0f);
@@ -78,7 +78,7 @@ public class RocketCartTests
     public void A_vehicle_with_no_seats_and_no_trailer_block_is_refused_and_a_trailer_with_seats_too()
     {
         var f = Load();
-        f.Vehicles.Single(v => v.Id == "jeep").Seats = new();
+        f.Vehicles.Single(v => v.Id == "truck").Seats = new();
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(f));
         var g = Load();
         g.Vehicles.Single(v => v.Id == "rocket_cart").Seats = new() { new VehicleSeatDef { Role = "driver" } };
@@ -121,8 +121,8 @@ public class RocketCartTests
         Assert.False(cargo.Detonates(Cart)); // an empty one is a small ordinary vehicle
         cargo.Reset();
         Assert.True(cargo.Loaded);
-        Assert.False(new CartCargo().Detonates(Jeep)); // a type with no load never detonates
-        Assert.Equal(Jeep.Hp, new CartCargo().MaxHp(Jeep));
+        Assert.False(new CartCargo().Detonates(Truck)); // a type with no load never detonates
+        Assert.Equal(Truck.Hp, new CartCargo().MaxHp(Truck));
     }
 
     [Fact]
@@ -256,7 +256,7 @@ public class RocketCartTests
     [InlineData(-1.3f, 3.1f)]
     public void The_articulation_is_read_back_from_the_two_records_yaws(float phi, float tractorYaw)
     {
-        var g = TowGeometry.Of(Jeep, Cart);
+        var g = TowGeometry.Of(Truck, Cart);
         var tractor = VehicleRecord.Make(VehicleRecord.FirstId, new Vector3(5, 0, 5), tractorYaw, 1, 0);
         var trailerBody = TowModel.Pose(g, tractor.Position, tractor.YawRad, phi);
         var trailer = VehicleRecord.MakeTrailer((ushort)(VehicleRecord.FirstId + 1), trailerBody.Position, trailerBody.Yaw, tractor.Id, 0, true);
@@ -272,7 +272,7 @@ public class RocketCartTests
     [InlineData(-0.8f, -2.4f)]
     public void The_pose_drawn_from_a_tractor_puts_the_eye_on_the_hitch_and_matches_the_pinned_body(float phi, float yaw)
     {
-        var g = TowGeometry.Of(Jeep, Cart);
+        var g = TowGeometry.Of(Truck, Cart);
         var at = new Vector3(40, 3, -12);
         var b = TowModel.Pose(g, at, yaw, phi);
         Assert.True(Vector3.Distance(TowModel.EyePoint(g, b), TowModel.HitchPoint(g, at, yaw)) < 1e-3f);
@@ -288,7 +288,7 @@ public class RocketCartTests
     [Fact]
     public void The_ground_pitch_is_zero_on_level_ground_and_follows_a_rising_hitch_about_the_axle()
     {
-        var g = TowGeometry.Of(Jeep, Cart);
+        var g = TowGeometry.Of(Truck, Cart);
         Assert.Equal(0f, TowModel.PitchFor(g, g.EyeY), 5); // the eye at its own height over the axle's ground: level
         var up = TowModel.PitchFor(g, g.EyeY + 0.6f);
         var down = TowModel.PitchFor(g, g.EyeY - 0.4f);
@@ -310,7 +310,7 @@ public class RocketCartTests
         for (var i = 0; i < 600; i++) TowModel.StepLoose(ref b, g, Dt);
         Assert.Equal(0f, b.Speed);
         Assert.True(b.Position.Z < -3f && b.Position.Z > -10f, "it rolled on ahead of where it was released and stopped");
-        Assert.Throws<ArgumentException>(() => TowGeometry.ForTrailer(Jeep));
+        Assert.Throws<ArgumentException>(() => TowGeometry.ForTrailer(Truck));
     }
 
     // ---- the driver's prediction of a trailer ----

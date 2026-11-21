@@ -8,7 +8,7 @@ namespace Drycastle.Shooter;
 /// Trailers on the client (the rocket cart; docs/shooter-v2.md "Towing and the rocket cart"). A trailer is a vehicle in the snapshot like any other (<c>OnVehicleState</c>), whose record says which tractor
 /// it is hitched to (<see cref="VehicleRecord.Tractor"/>) and whether it carries its load (<see cref="VehicleRecord.Loaded"/>). It is <b>drawn from its tractor as the tractor is drawn</b>, never from its own raw
 /// record: the pose is the hitch of the drawn tractor and the articulation (<see cref="TowModel.OriginAt"/>), so it cannot lag or sway against the tractor whatever the tractor's own drawing does (interpolated
-/// for a <see cref="CarModel"/> type such as the jeep or the flak truck; predicted for its driver for a <see cref="DriveModel"/> type, whose trailer the driver's client then steps itself,
+/// for a <see cref="CarModel"/> type such as the truck or the flak truck; predicted for its driver for a <see cref="DriveModel"/> type, whose trailer the driver's client then steps itself,
 /// <see cref="DrivePrediction.AttachTrailer"/>). The articulation of a trailer drawn from the snapshots is the difference of the two interpolated yaws (the same tick, so the same tick's tractor); a
 /// loose one is drawn at its record. On top comes the ground fit (follow the terrain under the axle: pitch, roll and height), the wheels rolling with the drawn speed and the missile shown or hidden.
 /// </summary>

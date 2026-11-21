@@ -119,7 +119,7 @@ public class VehicleTests
     {
         // the launch boost: the first two seconds matter most, so each engine type is at 10 m/s (36 km/h) within 2 s of full throttle
         // (the amphibious transport is not stepped by the car model: DriveTests holds the same two seconds for it)
-        foreach (var def in Shipped().Vehicles.Where(v => v.Id is "car" or "jeep" or "quad" or "motorcycle"))
+        foreach (var def in Shipped().Vehicles.Where(v => v.Id is "car" or "truck" or "quad" or "motorcycle"))
         {
             var s = new CarState(); var t = 0f;
             while (s.Speed < 10f && t < 5f) { CarModel.Step(ref s, def, 1, 0, false, 1f / 60); t += 1f / 60; }
@@ -170,7 +170,7 @@ public class VehicleTests
     public void ShippedFileHasCarAndMotorcycleWithTheAgreedSpawnCounts()
     {
         var f = Shipped();
-        // the two v1 types keep their order and counts (the v2 jeep and quad are checked in VehicleTypesTests; the bicycle is dropped, #325)
+        // the two v1 types keep their order and counts (the v2 truck and quad are checked in VehicleTypesTests; the bicycle is dropped, #325)
         Assert.Equal(new[] { "car", "motorcycle" }, f.Vehicles.Take(2).Select(v => v.Id));
         Assert.Equal(new[] { 12, 3 }, f.Vehicles.Take(2).Select(v => v.SpawnCount)); // 12 cars: clustered around the spawn areas (c2c7cc9)
         Assert.NotEqual("", f.Vehicles[1].Model);

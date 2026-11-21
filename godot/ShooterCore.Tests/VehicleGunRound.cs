@@ -5,7 +5,7 @@ namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
 /// The round of a vehicle machine gun, the numbers the Humvee's roof gun, the amphibious transport's ring gun and the utility helicopter's door gun share
-/// (the old jeep's roof gun, #325). Each of those types carries them in its own `gun` block in vehicles.json: the jeep is a truck without a gun now, so the
+/// (the old jeep's roof gun, #325). Each of those types carries them in its own `gun` block in vehicles.json: the truck has no gun now (it was a jeep with one), so the
 /// tests no longer read them off it. The helicopter fires the same interval and spread with a harder hit; the amphibious one a bigger belt.
 /// </summary>
 static class VehicleGunRound

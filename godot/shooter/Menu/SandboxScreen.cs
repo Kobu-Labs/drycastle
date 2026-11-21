@@ -12,7 +12,7 @@ namespace Drycastle.Shooter;
 /// </summary>
 public sealed partial class SandboxScreen : MenuScreen
 {
-    static readonly string[] Vehicles = { "car", "jeep", "humvee", "quad", "amphibious", "flak", "bus", "utility_helicopter" };
+    static readonly string[] Vehicles = { "car", "truck", "humvee", "quad", "amphibious", "flak", "bus", "utility_helicopter" };
 
     readonly NetClient _client;
     readonly Func<GameData> _data;

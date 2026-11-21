@@ -7,7 +7,7 @@ namespace Drycastle.ShooterCore.Tests;
 
 /// <summary>
 /// The Humvee (vehicles.json humvee, scripts/make_humvee_model.py): its shipped entry against the numbers the model script measured (the model itself is private,
-/// so the committed facts file stands for it: docs/research/scud-models-facts.d/humvee.json), its five seats and roof ring gun, its place between the jeep and the
+/// so the committed facts file stands for it: docs/research/scud-models-facts.d/humvee.json), its five seats and roof ring gun, its place between the truck and the
 /// flak truck, and that it drives on the drive model and tows.
 /// </summary>
 public class HumveeTests
@@ -16,7 +16,7 @@ public class HumveeTests
     static string DataDir => Path.Combine(AppContext.BaseDirectory, "data");
     static readonly VehiclesFile Shipped = VehiclesFile.Load(Path.Combine(DataDir, "vehicles.json"));
     static VehicleDef Humvee => Shipped.Vehicles.Single(v => v.Id == "humvee");
-    static VehicleDef Jeep => Shipped.Vehicles.Single(v => v.Id == "jeep");
+    static VehicleDef Truck => Shipped.Vehicles.Single(v => v.Id == "truck");
     static VehicleDef Flak => Shipped.Vehicles.Single(v => v.Id == "flak");
 
     static JsonElement Facts()
@@ -50,15 +50,15 @@ public class HumveeTests
     }
 
     [Fact]
-    public void It_is_a_tougher_jeep_and_lighter_than_both_trucks()
+    public void It_is_a_tougher_truck_and_lighter_than_both_trucks()
     {
         var h = Humvee;
-        Assert.True(h.Mass < Jeep.Mass && Jeep.Mass < Flak.Mass, "the jeep is the 7 m cargo truck now (#325): the Humvee is lighter than it, it lighter than the flak truck");
-        Assert.InRange(h.Hp, Jeep.Hp, Flak.Hp);
-        Assert.InRange(h.TopSpeed, Flak.TopSpeed, Jeep.TopSpeed);
-        Assert.InRange(h.Acceleration, Flak.Acceleration, Jeep.Acceleration);
-        Assert.InRange(h.TurnRadius, Jeep.TurnRadius, Flak.TurnRadius);
-        Assert.InRange(h.RunOverMass!.Value, Jeep.RunOverMass!.Value, Flak.RunOverMass!.Value);
+        Assert.True(h.Mass < Truck.Mass && Truck.Mass < Flak.Mass, "the truck is the 7 m cargo truck now (#325): the Humvee is lighter than it, it lighter than the flak truck");
+        Assert.InRange(h.Hp, Truck.Hp, Flak.Hp);
+        Assert.InRange(h.TopSpeed, Flak.TopSpeed, Truck.TopSpeed);
+        Assert.InRange(h.Acceleration, Flak.Acceleration, Truck.Acceleration);
+        Assert.InRange(h.TurnRadius, Truck.TurnRadius, Flak.TurnRadius);
+        Assert.InRange(h.RunOverMass!.Value, Truck.RunOverMass!.Value, Flak.RunOverMass!.Value);
         Assert.Equal(28f, h.TopSpeed);
     }
 
@@ -225,7 +225,7 @@ public class HumveeTests
     }
 
     [Fact]
-    public void Full_throttle_reaches_its_top_speed_slower_than_the_jeep_and_it_turns_wider()
+    public void Full_throttle_reaches_its_top_speed_slower_than_the_truck_and_it_turns_wider()
     {
         static (float Top, float At20) Run(VehicleDef d)
         {
@@ -241,15 +241,15 @@ public class HumveeTests
         var (top, at20) = Run(h);
         Assert.Equal(h.TopSpeed, top, 1);
         Assert.InRange(at20, 3f, 9f);
-        // the jeep (CarModel) gets to 20 m/s sooner
-        var jeep = new CarState(); float? jeepAt20 = null;
+        // the truck (CarModel) gets to 20 m/s sooner
+        var truck = new CarState(); float? truckAt20 = null;
         for (var t = 0f; t < 25f; t += Dt)
         {
-            CarModel.Step(ref jeep, Jeep, 1, 0, false, Dt);
-            jeepAt20 ??= jeep.Speed >= 20f ? t : null;
+            CarModel.Step(ref truck, Truck, 1, 0, false, Dt);
+            truckAt20 ??= truck.Speed >= 20f ? t : null;
         }
-        Assert.True(at20 > jeepAt20, $"the Humvee {at20:F1} s, the jeep {jeepAt20:F1} s");
-        Assert.True(CarModel.TurnRadiusAt(h, 20) > CarModel.TurnRadiusAt(Jeep, 20));
+        Assert.True(at20 > truckAt20, $"the Humvee {at20:F1} s, the truck {truckAt20:F1} s");
+        Assert.True(CarModel.TurnRadiusAt(h, 20) > CarModel.TurnRadiusAt(Truck, 20));
     }
 
     [Fact]

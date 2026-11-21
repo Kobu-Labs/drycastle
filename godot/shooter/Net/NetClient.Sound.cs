@@ -154,7 +154,14 @@ public partial class NetClient
         var def = Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null;
         // the vehicle this player rides (any seat) is heard from the inside: placed at the listener, so the chase camera's distance and the car's turning never pan or fade it
         var mine = RidesCar(v);
+        var world = at;
         if (mine) at = Sfx.ListenerPosition(at);
+        if (def is { ReverseBeep: true })
+        {
+            // the backup alarm: from the drawn signed speed, for any driver (a bot's too); the rider hears it as loud as the engine (PlayCarSound puts it at the listener)
+            var active = v.Driver != 0 && !v.Destroyed && (mine || Sfx.ListenerDistance(at) <= 60f);
+            if (v.Beep.Step(DriveOf(v)?.Speed ?? 0f, dt, active)) PlayCarSound("vehicle.reverse_beep", world, v);
+        }
         if (def?.Sounds is { } set)
         {
             // a type with its own set: layered engine sounds, kept only while it is occupied and near

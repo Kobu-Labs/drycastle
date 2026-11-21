@@ -13,9 +13,9 @@ public class VehicleTypesTests
     // ---- the types ----
 
     [Fact]
-    public void JeepIsTheCargoTruckWithABenchOfThreeNoGunAndSixSkinsAndItStillTows()
+    public void TruckIsTheCargoTruckWithABenchOfThreeNoGunAndSixSkinsAndItStillTows()
     {
-        var j = Type("jeep");
+        var j = Type("truck");
         Assert.Equal(new[] { "driver", "passenger", "passenger" }, j.Seats.Select(s => s.Role));
         Assert.Null(j.Gun);
         Assert.Null(j.DoorGun);
@@ -38,7 +38,7 @@ public class VehicleTypesTests
     }
 
     [Theory]
-    [InlineData("jeep")]
+    [InlineData("truck")]
     [InlineData("quad")]
     public void NewTypesReachTheirTopSpeedAndStopOnTheHandbrake(string id)
     {
@@ -50,11 +50,11 @@ public class VehicleTypesTests
     }
 
     [Fact]
-    public void JeepTopSpeedIsAboutOneHundredAndTenKmhAndBelowTheCar()
+    public void TruckTopSpeedIsAboutOneHundredAndTenKmhAndBelowTheCar()
     {
         var f = Shipped();
-        Assert.InRange(f.Vehicles.First(v => v.Id == "jeep").TopSpeed * 3.6f, 100f, 120f);
-        Assert.True(Type("jeep").TopSpeed < f.Vehicles[0].TopSpeed);
+        Assert.InRange(f.Vehicles.First(v => v.Id == "truck").TopSpeed * 3.6f, 100f, 120f);
+        Assert.True(Type("truck").TopSpeed < f.Vehicles[0].TopSpeed);
     }
 
     [Fact]
@@ -66,10 +66,10 @@ public class VehicleTypesTests
     }
 
     [Fact]
-    public void JeepStopsFromOneHundredAndEightKmhWithinItsBrakingTarget()
+    public void TruckStopsFromOneHundredAndEightKmhWithinItsBrakingTarget()
     {
         // braking at 8 m/s2 from 30 m/s: v^2 / 2a = 56 m, plus the first ticks
-        var def = Type("jeep"); var s = new CarState { Speed = 30 };
+        var def = Type("truck"); var s = new CarState { Speed = 30 };
         var dt = 1f / 60; var distance = 0f;
         for (var i = 0; i < 60 * 30 && s.Speed > 0; i++) { distance += s.Speed * dt; CarModel.Step(ref s, def, -1, 0, false, dt); }
         Assert.InRange(distance, 52f, 62f);
@@ -88,13 +88,13 @@ public class VehicleTypesTests
     [Fact]
     public void TurningRadiusIsTheLockAtWalkingPaceAndWidensWithSpeedForBothTypes()
     {
-        foreach (var id in new[] { "jeep", "quad" })
+        foreach (var id in new[] { "truck", "quad" })
         {
             var def = Type(id);
             Assert.Equal(def.TurnRadius, CarModel.TurnRadiusAt(def, 0), 3);
             Assert.True(CarModel.TurnRadiusAt(def, def.TopSpeed) > CarModel.TurnRadiusAt(def, 2), id);
         }
-        Assert.True(CarModel.TurnRadiusAt(Type("jeep"), 20) > CarModel.TurnRadiusAt(Type("quad"), 20), "the jeep turns wider than the quad");
+        Assert.True(CarModel.TurnRadiusAt(Type("truck"), 20) > CarModel.TurnRadiusAt(Type("quad"), 20), "the truck turns wider than the quad");
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public class VehicleTypesTests
     {
         var f = Shipped();
         Assert.True(Type("quad").Hp < f.Vehicles[1].Hp, "the quad is flimsier than the motorcycle");
-        Assert.True(Type("jeep").Hp > f.Vehicles[0].Hp, "the jeep takes more than the car");
+        Assert.True(Type("truck").Hp > f.Vehicles[0].Hp, "the truck takes more than the car");
     }
 
     // ---- run-over ----
@@ -113,16 +113,16 @@ public class VehicleTypesTests
         var f = Shipped();
         Assert.Equal(1f, f.RunOverScale(f.Vehicles[0]));  // car: no run_over_mass, the v1 numbers
         Assert.Equal(1f, f.RunOverScale(f.Vehicles[1]));  // motorcycle
-        Assert.Equal(1.25f, f.RunOverScale(Type("jeep")), 3);
+        Assert.Equal(1.25f, f.RunOverScale(Type("truck")), 3);
         Assert.Equal(0.25f, f.RunOverScale(Type("quad")), 3);
     }
 
     [Fact]
-    public void QuadRunOverIsLightAndTheJeepHeavier()
+    public void QuadRunOverIsLightAndTheTruckHeavier()
     {
         var f = Shipped();
         Assert.Equal(42.5f, RunOver.Damage(f, 25, f.RunOverScale(Type("quad"))), 3);
-        Assert.Equal(50f, RunOver.Damage(f, 12, f.RunOverScale(Type("jeep"))), 3);
+        Assert.Equal(50f, RunOver.Damage(f, 12, f.RunOverScale(Type("truck"))), 3);
         Assert.Equal(f.RunOverMaxDamage, RunOver.Damage(f, 25, f.RunOverScale(f.Vehicles[0])));
         Assert.Equal(RunOver.Damage(f, 12), RunOver.Damage(f, 12, 1f), 3); // default scale is the v1 rule
     }
@@ -229,16 +229,16 @@ public class VehicleTypesTests
     [Fact]
     public void NearestFreeSeatPicksTheClosestFreeSeatWithinRange()
     {
-        var jeep = Type("jeep"); var car = Vector3.Zero;
+        var truck = Type("truck"); var car = Vector3.Zero;
         var s = new VehicleSeat(2);
-        Assert.Equal(0, s.NearestFreeSeat(jeep, car, 0, new Vector3(0, 0, 3.5f), 4f)); // an empty vehicle: the first in is the driver, wherever they stand
+        Assert.Equal(0, s.NearestFreeSeat(truck, car, 0, new Vector3(0, 0, 3.5f), 4f)); // an empty vehicle: the first in is the driver, wherever they stand
         // standing beside the car: the driver's seat (the centre) is no further than the roof, so the lower index wins
-        Assert.Equal(0, s.NearestFreeSeat(jeep, car, 0, new Vector3(2, 0, 0), 4f));
+        Assert.Equal(0, s.NearestFreeSeat(truck, car, 0, new Vector3(2, 0, 0), 4f));
         s.TryEnter(9, 0);
-        Assert.Equal(1, s.NearestFreeSeat(jeep, car, 0, new Vector3(2, 0, 0), 4f));  // the driver is taken: the gunner
-        Assert.Equal(-1, s.NearestFreeSeat(jeep, car, 0, new Vector3(20, 0, 0), 4f)); // too far from every free seat
+        Assert.Equal(1, s.NearestFreeSeat(truck, car, 0, new Vector3(2, 0, 0), 4f));  // the driver is taken: the gunner
+        Assert.Equal(-1, s.NearestFreeSeat(truck, car, 0, new Vector3(20, 0, 0), 4f)); // too far from every free seat
         s.TryEnter(8, 1);
-        Assert.Equal(-1, s.NearestFreeSeat(jeep, car, 0, new Vector3(2, 0, 0), 4f));  // full
+        Assert.Equal(-1, s.NearestFreeSeat(truck, car, 0, new Vector3(2, 0, 0), 4f));  // full
     }
 
     // ---- the gun ----

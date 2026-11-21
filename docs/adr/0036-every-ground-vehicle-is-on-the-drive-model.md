@@ -4,7 +4,7 @@ Decided with the user during #325 (Unify all vehicle models), ending the migrati
 
 **Why now.** The old model moves an upright box with Godot's `MoveAndSlide` and draws the vehicle level. A box as long as the vehicle rides a slope on its bottom edge, so the front wheels of the 7 m truck that replaced the jeep hung in the air on a dyke, the edge scraping took its speed, and with a trailer it stuck. The four types already on `DriveModel` (car, Golf, Humvee, amphibious) lie on the slope under their wheels and tow on it. Two models also meant two behaviours for everything measured from a vehicle (seats, guns, glass, holes).
 
-**Decision.** Every vehicle type with a driver that is not a helicopter has a `drive` block: motorcycle, `jeep` (the truck), quad, flak, bus, harvester and the Scud truck join the four. A trailer has none (it follows its tractor, `TowModel`). `EveryVehicleDrivesTests` holds it; `docs/standards/car-design.md` A7 is the rule for a new vehicle.
+**Decision.** Every vehicle type with a driver that is not a helicopter has a `drive` block: motorcycle, `truck` (the cargo truck, once `jeep`), quad, flak, bus, harvester and the Scud truck join the four. A trailer has none (it follows its tractor, `TowModel`). `EveryVehicleDrivesTests` holds it; `docs/standards/car-design.md` A7 is the rule for a new vehicle.
 
 **What the model needed for them.**
 - `drive.track` may be 0: a single-track vehicle (the motorcycle) is sampled under its two wheels and never rolls with the ground.

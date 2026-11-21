@@ -9,7 +9,7 @@
 #   3 scripts/vehicle_pack_variants.py: the vehicle atlases 02..06 (colour variants) into glb/battle-royale/tex + materials.json; Military Land_Vehicles_NN atlases added (add-only)
 #   4 scripts/quadbike_extract.py (unitypackage -> quadbike/{fbx,textures,sources.json}) + godot --import + scripts/quadbike_export.gd: glb/quadbike/SM_Veh_QuadBike_01.glb, materials.json, tex/, manifest "synty-quadbike"
 #   5 scripts/vehicle_pack_check.gd: reloads the GLBs like the game, checks the part nodes and material names
-#   6 scripts/standardize_vehicle.py for every scripts/vehicles/*.json (the contract-conforming GLBs, one per skin, in glb/vehicles-std/ + materials.json + manifest rows + docs/research/vehicle-facts.d/<id>.json), then scripts/vehicle_std_check.gd reloads them. Needs numpy + Pillow. Step 6 can be run alone: `scripts/build_vehicle_packs.sh --standardize-only`. Vehicles done: car_small (car), bike (motorcycle), quad (quad), truck (jeep), harvester; a steering assembly, two wheels, exposed seats and no glass are config only (docs/standards/car-design.md B1)
+#   6 scripts/standardize_vehicle.py for every scripts/vehicles/*.json (the contract-conforming GLBs, one per skin, in glb/vehicles-std/ + materials.json + manifest rows + docs/research/vehicle-facts.d/<id>.json), then scripts/vehicle_std_check.gd reloads them. Needs numpy + Pillow. Step 6 can be run alone: `scripts/build_vehicle_packs.sh --standardize-only`. Vehicles done: car_small (car), bike (motorcycle), quad (quad), truck (truck), harvester; a steering assembly, two wheels, exposed seats and no glass are config only (docs/standards/car-design.md B1)
 set -euo pipefail
 only_std=0
 if [ "${1:-}" = "--standardize-only" ]; then only_std=1; shift; fi

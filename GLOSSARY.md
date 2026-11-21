@@ -141,7 +141,7 @@ The trailer that carries one large missile (vehicles.json `rocket_cart`, 12.6 m 
 _Avoid_: missile trailer, Scud trailer, wagon
 
 **Tow hitch / Hitched**:
-The tow hitch is the ball at the rear of a vehicle whose type has a `tow` block (the jeep, the Humvee, the flak truck); only data decides who tows. A tractor latches a loose trailer by itself when it reverses with its hitch within 0.8 m of the drawbar eye and headings within 35 degrees; the driver unhitches by holding interact for 0.6 s (a tap still leaves the vehicle, on release; `Trailer.UnhitchKey`), and the trailer cannot be latched again for 2 s (Released). A tractor pulls at most one trailer. Hitched, the tractor accelerates and brakes by its mass over the pair's, tops out at 60 % of its speed and holds less sideways acceleration; a turn taken too fast lets the trailer swing out.
+The tow hitch is the ball at the rear of a vehicle whose type has a `tow` block (the truck, the Humvee, the flak truck); only data decides who tows. A tractor latches a loose trailer by itself when it reverses with its hitch within 0.8 m of the drawbar eye and headings within 35 degrees; the driver unhitches by holding interact for 0.6 s (a tap still leaves the vehicle, on release; `Trailer.UnhitchKey`), and the trailer cannot be latched again for 2 s (Released). A tractor pulls at most one trailer. Hitched, the tractor accelerates and brakes by its mass over the pair's, tops out at 60 % of its speed and holds less sideways acceleration; a turn taken too fast lets the trailer swing out.
 _Avoid_: coupled, attached, trailer lock
 
 **Jackknife limit**:
@@ -165,7 +165,7 @@ The amphibious transport's and the Humvee's machine gun, on a ring mount (over t
 _Avoid_: turret (alone), pintle gun, rear gun
 
 **Vehicle gun round**:
-The round the Humvee's roof gun, the amphibious transport's ring gun and the utility helicopter's door gun fire: 14 damage (30 from the helicopter's belt), one round every 0.1 s, 220 m range, 1.2 degrees of spread. There is no shared record: each of those types carries it in its own `gun` block in `vehicles.json`. It was "the jeep's roof gun" until the jeep became a gunless truck (#325).
+The round the Humvee's roof gun, the amphibious transport's ring gun and the utility helicopter's door gun fire: 14 damage (30 from the helicopter's belt), one round every 0.1 s, 220 m range, 1.2 degrees of spread. There is no shared record: each of those types carries it in its own `gun` block in `vehicles.json`. It was "the jeep's roof gun" until the jeep became the gunless truck (#325).
 _Avoid_: jeep gun, roof gun (alone)
 
 **Fixed seat**:
@@ -351,6 +351,10 @@ _Avoid_: helicopter (alone), chopper, Huey, aircraft (that is the circling kills
 The utility helicopter's machine gun, on a pintle in its right door and worked from the gunner seat. The gunner's view aims it inside an arc that keeps its rounds off the helicopter itself; its rounds are the vehicle gun round, and its kills are ordinary kills. The door gunner sits in the open, like the flak truck's gunner: a shot that reaches the body hits it, while the pilot stays behind the hull.
 _Avoid_: turret (alone), minigun, side gun
 
+**Reversing beep**:
+The backup alarm of the bigger vehicles (`reverse_beep` in `vehicles.json`: every type of 2000 kg and up, so the cargo truck, Humvee, amphibious transport, flak truck, bus, harvester and Scud truck): one 0.55 s tone at 780 Hz, the moment a driven vehicle backs up faster than 1 m/s and every 1.4 s while it keeps going. Made on each client from the drawn speed, never sent over the network; a bot-driven vehicle beeps too. The rider hears it as loud as the engine, others by distance (60 m).
+_Avoid_: backup horn, reverse horn
+
 **Flak truck**:
 A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the Humvee's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every closed vehicle.
 _Avoid_: AA gun, anti-air vehicle, SPAAG
@@ -361,11 +365,11 @@ _Avoid_: coach, autobus, transport (that is the amphibious one)
 
 **Humvee**:
 A heavier, tougher military car (a 4.6 m troop car, 2400 kg, 550 hp, 100 km/h) with five seats: a driver, a front passenger, two rear passengers and a roof gunner. Dealt at random (two), driven by the drive model like the car (wheels roll and steer, the body leans, the driver predicts it) and able to tow. The passengers sit under the hull, in plain seats; the gunner stands in the roof ring, an exposed seat working a ring gun with the vehicle gun round that turns all the way round. Its model is from the private SIMPLE Military pack (a grey box without it).
-_Avoid_: Hummer, HMMWV, troop car, jeep (that is the cargo truck)
+_Avoid_: Hummer, HMMWV, troop car, jeep (the old name of the cargo truck)
 
-**Jeep**:
-The vehicle type `jeep`: the six-wheeled Synty Battle Royale cargo truck (SM_Veh_Truck_01, 3.05 x 3.16 x 7.05 m, drawn at real size, six camo and colour skins), with a three-seat cab bench (a driver and two passengers) and a flat bed behind. It has no gun and no gunner seat. It tows. The id stays `jeep` because data, tests and chat commands name it; it replaced the Kenney SUV with a roof gun (#325).
-_Avoid_: truck (alone: the flak truck and the Scud truck are other vehicles), war jeep, Kenney jeep
+**Truck**:
+The vehicle type `truck`: the six-wheeled Synty Battle Royale cargo truck (SM_Veh_Truck_01, 3.05 x 3.16 x 7.05 m, drawn at real size, six camo and colour skins), with a three-seat cab bench (a driver and two passengers) and a flat bed behind. It has no gun and no gunner seat. It tows. Called `jeep` until it was renamed: it replaced the Kenney SUV with a roof gun (#325).
+_Avoid_: jeep (its old name), war jeep, Kenney jeep; truck (alone, in a talk about all trucks: the flak truck and the Scud truck are other vehicles)
 
 **Golf Mk2**:
 A small black three-door hatchback (4.3 m) with four seats (left-hand drive) that tops out at 200 km/h, the fastest vehicle. Driven by the drive model like the car; no weapon. It is never dealt at random: it stands at its fixed spot.
