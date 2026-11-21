@@ -121,6 +121,14 @@
       "download_url": null,
       "licence": "UNVERIFIED",
       "downloaded": "2026-11-13"
+    },
+    {
+      "name": "youtube-crystal-chime",
+      "title": "Magical Crystal Chime Sound Effect (Free Video Sound Effects HD, YouTube)",
+      "url": "https://www.youtube.com/results?search_query=Magical+Crystal+Chime+Sound+Effect+Free+Video+Sound+Effects+HD",
+      "download_url": null,
+      "licence": "unverified (free sound effect, terms not checked)",
+      "downloaded": "2026-11-21"
     }
   ],
   "assets": [
@@ -5099,6 +5107,18 @@
       "downloaded": "2026-11-11",
       "generated": false,
       "note": "single shot cut from U_14P, semi automatic 7.62x39, near-mid distance; leading silence trimmed, last 0.25 s faded, peak -1 dBFS, mono OGG 44.1 kHz"
+    },
+    {
+      "id": "sfx:youtube-crystal-chime/crystal_chime",
+      "name": "Crystal chime",
+      "file": "youtube-crystal-chime/crystal_chime.ogg",
+      "used_for": "mineral.found",
+      "licence": "unverified (free sound effect, terms not checked)",
+      "source": "YouTube: 'Magical Crystal Chime Sound Effect (Free Sound Effect)' by Free Video Sound Effects HD",
+      "pack": "youtube-crystal-chime",
+      "downloaded": "2026-11-21",
+      "generated": false,
+      "note": "first 3.6 s, +5.3 dB, 0.5 s fade out, converted wav to ogg vorbis"
     }
   ],
   "unverified_models": [

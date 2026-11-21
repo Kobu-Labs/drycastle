@@ -28,6 +28,14 @@ public static class SyntyLib
         return copy;
     }
 
+    /// <summary>A copy of <c>glb/{model}.glb</c> with the materials the GLB came with (no atlas override), for callers that dress its surfaces themselves (crystals). Null without a display or the pack.</summary>
+    public static Node3D? Model(string model)
+    {
+        if (!ShotFx.Enabled) return null;
+        if (!Models.TryGetValue(model, out var t)) Models[model] = t = Load(model);
+        return t?.Duplicate() as Node3D;
+    }
+
     /// <summary>The clip <c>anim/baked/{name}.glb</c>; it loops when the manifest says so.</summary>
     public static Animation? Clip(string name)
     {

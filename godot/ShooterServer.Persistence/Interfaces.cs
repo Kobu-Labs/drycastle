@@ -61,6 +61,15 @@ public interface IHuntRepository
     Task<IReadOnlyList<PlayerKillRow>> GetPlayerKillsAsync();
 }
 
+/// <summary>The Mineral Log's finds (#401): one row per player and mineral, kept forever. The rules (once per player, the place among the finders) are <see cref="MineralBook"/>'s.</summary>
+public interface IMineralRepository
+{
+    /// <summary>Queues one find. A second find of the same mineral by the same player, and a find of an unknown player, are not stored. A failed write is logged, never thrown.</summary>
+    Task AppendAsync(MineralFind find);
+    /// <summary>Every find, oldest first (ties by id): what <see cref="MineralBook.From"/> replays at server start.</summary>
+    Task<IReadOnlyList<MineralFind>> GetAllAsync();
+}
+
 /// <summary>One store = one database (or in-memory set). Disposing it stops the background writer.</summary>
 public interface IProgressionStore : IDisposable
 {
@@ -70,6 +79,7 @@ public interface IProgressionStore : IDisposable
     IStatsRepository Stats { get; }
     ICamoRepository Camo { get; }
     IHuntRepository Hunts { get; }
+    IMineralRepository Minerals { get; }
     /// <summary>Writes and reads queued behind the database thread (0 for a store with no queue). Logged by the server telemetry line.</summary>
     int QueueDepth => 0;
 }

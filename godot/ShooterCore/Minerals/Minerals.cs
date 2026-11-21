@@ -54,6 +54,10 @@ public readonly record struct MineralTileModel(Mineral Mineral, bool Found, int 
 /// <summary>Words of the Mineral Log, culture-free.</summary>
 public static class MineralFormat
 {
+    /// <summary>The toast of a find: <paramref name="template"/> is the translated "You are the {0} to find {1}!", {0} the place ("7th"), {1} the mineral's name.</summary>
+    public static string FoundLine(string template, string mineralName, int rank) =>
+        string.Format(System.Globalization.CultureInfo.InvariantCulture, template, Ordinal(rank), mineralName);
+
     /// <summary>"1st", "2nd", "3rd", "4th", "11th", "22nd": the place among a mineral's finders.</summary>
     public static string Ordinal(int n)
     {

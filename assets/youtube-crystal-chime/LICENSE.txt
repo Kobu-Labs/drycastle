@@ -1,0 +1,3 @@
+crystal_chime.ogg: the first 3.6 s of "Magical Crystal Chime Sound Effect (Free Sound Effect)" by Free Video Sound Effects HD (YouTube),
+trimmed, raised 5.3 dB (peak near -1 dB), faded out over 0.5 s, encoded as ogg vorbis. Used for a player's first find of a mineral (#433).
+Licence: NOT CC0. The video is offered as a free sound effect; its exact terms were not checked. Check them before a public release, or replace the file.

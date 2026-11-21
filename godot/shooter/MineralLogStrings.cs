@@ -9,6 +9,6 @@ public static class MineralLogStrings
     {
         ("mineral.title", "Mineral Log"), ("pause.minerallog", "Mineral Log"), ("bind.mineral_log", "Mineral Log"),
         ("mineral.stat.found", "Found"), ("mineral.stat.found.of", "all minerals"), ("mineral.stat.first", "First finder"), ("mineral.stat.first.of", "found before anyone"),
-        ("mineral.rank", "{0} found"), ("mineral.todo", "Not found yet"),
+        ("mineral.rank", "{0} found"), ("toast.mineral.found", "You are the {0} to find {1}!"), ("mineral.todo", "Not found yet"),
     }.Concat(Minerals.All.Select(m => ("mineral." + m.Id, m.Name))).ToArray();
 }

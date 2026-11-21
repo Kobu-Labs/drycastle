@@ -25,6 +25,8 @@ public partial class NetServer : Node
         /// <summary>This bot carries the RPG as its secondary weapon (#348); decided when it joins.</summary>
         public bool BotLauncher;
         public ushort Id;
+        /// <summary>The finds of the Mineral Log were sent to this client (<see cref="NetServer.MineralTick"/> sends them once the book is loaded).</summary>
+        public bool FindsSent;
         public string Name = "";
         /// <summary>When this client's last performance report was taken (<see cref="OnClientReport"/>): one per few seconds, the rest are dropped.</summary>
         public double ClientReportAt = -1e9;
@@ -275,6 +277,7 @@ public partial class NetServer : Node
         CompleteProfileLoads();
         CompleteSaves();
         HuntTick();
+        MineralTick();
         DropSilentPeers();
         IntelTick(); // a made-up event whose time is up leaves the intel screen
         PerfLap(ServerPerf.Ph.Housekeeping);
@@ -504,6 +507,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.RaiseBinoculars } rb) { if (c.Joined && Binoculars.TryDecodeRaise(rb.Payload, out var up)) SetBinoculars(c, up && CarriesBinoculars(c)); }
             else if (m is EventMsg { Kind: (byte)EventKind.Redeploy } rd && c.Joined) OnRedeploy(c, rd.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.MineralPick } mp && c.Joined) OnMineralPick(c, mp.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) OnSandboxTeleportTo(c, st.Payload);
@@ -593,6 +597,7 @@ public partial class NetServer : Node
         SendIntelOnJoin(c); // the events on the intel screen
         SendMassOnJoin(c); // the Holy Mass, when one runs
         SendThievesOnJoin(c); // the Thieves event, when one runs
+        SendMineralsOnJoin(c); // the mineral nodes
         SendRozhlasOnJoin(c); // the village loudspeaker, when a detour broadcast is on
         SendUradDoorOnJoin(c); // and the Urad door, when it is open
         SendGarageDoorOnJoin(c); // and the garage doors, when they are open
