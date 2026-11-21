@@ -944,6 +944,8 @@ public class VehicleDef
     public VehicleLights? Lights { get; set; }
     /// <summary>The engine sound set of this type (vehicles.json "sounds"); null keeps the shared vehicle.engine loop.</summary>
     public VehicleSoundsDef? Sounds { get; set; }
+    /// <summary>The type sounds a backup alarm while its driver reverses (vehicles.json "reverse_beep", the bigger vehicles, #432). See <see cref="ReverseBeep"/>.</summary>
+    public bool ReverseBeep { get; set; }
     /// <summary>The glass panes of this type (vehicles.json "glass"), at most 24; empty for a type without glass. A pane's place in the list is its index on the wire.</summary>
     public List<VehicleGlassDef> Glass { get; set; } = new();
     List<GlassPaneRect>? _glassRects;

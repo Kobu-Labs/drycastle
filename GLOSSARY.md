@@ -351,6 +351,10 @@ _Avoid_: helicopter (alone), chopper, Huey, aircraft (that is the circling kills
 The utility helicopter's machine gun, on a pintle in its right door and worked from the gunner seat. The gunner's view aims it inside an arc that keeps its rounds off the helicopter itself; its rounds are the vehicle gun round, and its kills are ordinary kills. The door gunner sits in the open, like the flak truck's gunner: a shot that reaches the body hits it, while the pilot stays behind the hull.
 _Avoid_: turret (alone), minigun, side gun
 
+**Reversing beep**:
+The backup alarm of the bigger vehicles (`reverse_beep` in `vehicles.json`: every type of 2000 kg and up, so the cargo truck, Humvee, amphibious transport, flak truck, bus, harvester and Scud truck): one 0.55 s tone at 780 Hz, the moment a driven vehicle backs up faster than 1 m/s and every 1.4 s while it keeps going. Made on each client from the drawn speed, never sent over the network; a bot-driven vehicle beeps too. The rider hears it as loud as the engine, others by distance (60 m).
+_Avoid_: backup horn, reverse horn
+
 **Flak truck**:
 A heavy six-wheeled land vehicle with a driver seat and a gunner seat. The gunner's view aims a twin 35 mm turret (elevation 5 to 85 degrees, all the way round) that fires airburst shells at aircraft; the turret and the barrels turn on the model for everyone. It is weak against the ground (a shell that lands does 30 damage in a 4 m blast): it is there for aircraft. Its kills are ordinary kills, not the streak's, like the Humvee's roof gun. It has 1200 hp. The gunner sits in an open turret: a shot that reaches his body hits him (not the hull around him) and can kill him, which frees the turret; the driver and a passenger stay behind the hull, as in every closed vehicle.
 _Avoid_: AA gun, anti-air vehicle, SPAAG

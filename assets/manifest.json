@@ -4700,6 +4700,18 @@
       "note": "Three detuned metal modes by scripts/make_casing_clinks.py (in the repo, deterministic); mono OGG, ~0.2 s"
     },
     {
+      "id": "sfx:drycastle-generated-sounds/reverse_beep",
+      "name": "Reversing beep (backup alarm of the bigger vehicles)",
+      "file": "drycastle-generated-sounds/reverse_beep.ogg",
+      "used_for": "vehicle.reverse_beep",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-21",
+      "generated": true,
+      "note": "One 780 Hz soft-square beep, 0.55 s, by scripts/make_reverse_beep.py (in the repo, deterministic); mono OGG; the game repeats it every 1.4 s"
+    },
+    {
       "id": "sfx:drycastle-generated-sounds/heartbeat",
       "name": "Heartbeat (sniper breath running out)",
       "file": "drycastle-generated-sounds/heartbeat.ogg",

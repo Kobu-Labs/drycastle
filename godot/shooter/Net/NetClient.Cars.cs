@@ -41,6 +41,8 @@ public partial class NetClient
         public LoopVoice? Snd;
         /// <summary>The layered engine sounds of a type with a vehicles.json "sounds" set (null otherwise, and until driven).</summary>
         public VehicleEngineSound? Engine;
+        /// <summary>The clock of the reversing beep of a type with vehicles.json "reverse_beep".</summary>
+        public ReverseBeep Beep;
         /// <summary>Damage stage 0..3 from the record, whether the vehicle is destroyed, and whether its blast was already drawn (event or state, whichever came first).</summary>
         public int Stage;
         public bool Destroyed, Exploded;
