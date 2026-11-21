@@ -516,7 +516,7 @@ The earth embankment north of the village, with a gravel track on top and thick 
 _Avoid_: levee, flood wall (that is the concrete wall)
 
 **Ladder**:
-How a player moves between the floors of a bunker: they get on with the interact key, climb with forward and back, and step off at either end. They cannot fire on it.
+How a player moves between the floors of a bunker: they get on with the interact key, climb with forward and back, and step off at either end onto the open side of the ladder, away from the wall. They cannot fire on it.
 _Avoid_: stairs, climbing (that is the verb)
 
 **Shelter**:

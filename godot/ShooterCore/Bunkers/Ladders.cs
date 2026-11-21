@@ -20,8 +20,11 @@ public sealed class Ladders
     public const float ClimbSpeed = 2f;
     /// <summary>At the top the player is put this far past the climbing spot, on the floor beyond the hatch edge.</summary>
     public const float StepOffTop = 1f;
-    /// <summary>At the bottom they are put this far back from the ladder, into the room.</summary>
-    public const float StepOffBottom = 0.5f;
+    /// <summary>
+    /// At the bottom they are put this far past the climbing spot too, on the open side (<see cref="Ladder.Facing"/>), never back
+    /// toward the wall the climber's back is to: the hatch sits 0.6 m from it and the capsule is 0.35 m wide (#412).
+    /// </summary>
+    public const float StepOffBottom = 1f;
     /// <summary>The slack in height (m) at which a player can still get on: a step above the top floor, a little below the bottom.</summary>
     public const float ReachAbove = 0.6f, ReachBelow = 0.3f;
 
@@ -92,7 +95,7 @@ public sealed class Ladders
         var y = s.Position.Y + (s.LadderArmed ? i.MoveY * ClimbSpeed * dt : 0f);
         var f = ladder.Facing;
         if (y >= ladder.Y1 && s.LadderArmed && i.MoveY > 0) StepOff(ref s, ladder.Rail + f * StepOffTop, ladder.Y1);
-        else if (y <= ladder.Y0) StepOff(ref s, ladder.Rail - f * StepOffBottom, ladder.Y0);
+        else if (y <= ladder.Y0) StepOff(ref s, ladder.Rail + f * StepOffBottom, ladder.Y0);
         else s.Position = new Vector3(ladder.Rail.X, Math.Min(y, ladder.Y1), ladder.Rail.Y);
         return true;
     }

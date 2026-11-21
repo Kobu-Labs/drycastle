@@ -93,7 +93,7 @@ public class LaddersTests
         s.LadderArmed = true;
         One.Climb(ref s, Input(s.Position, MoveButtons.None, moveY: -1), Dt);
         Assert.False(s.OnLadder);
-        Assert.Equal(new Vector3(-Ladders.StepOffBottom, -2.4f, 0f), s.Position);
+        Assert.Equal(new Vector3(Ladders.StepOffBottom, -2.4f, 0f), s.Position);
     }
 
     [Fact]
