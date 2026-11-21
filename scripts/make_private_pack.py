@@ -30,6 +30,7 @@ INCLUDE = [
     "music/*.ogg", "music/*.mp3",         # Sfx.LoadPrivateMusic
     "audio/holy_mass/*.ogg",              # ChurchChant, DemonAudio
     "audio/thieves/voice/*.ogg",          # ThiefAudio
+    "audio/vehicle/*.ogg",                # sounds.json vehicle.crash, vehicle.crash_hard (#410)
     "audio/thieves/songs/*.ogg",          # ThiefAudio (van song)
     "synty/glb/**",                       # SyntyLib.Instance, ModelLib (pets, office, props, vehicles, atlas/); MapLoader.Prefabs (military/: map objects)
     "synty/anim/manifest.json",           # SyntyLib.Loops
