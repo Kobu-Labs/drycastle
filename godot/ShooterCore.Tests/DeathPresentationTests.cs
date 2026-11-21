@@ -64,6 +64,31 @@ public class DeathPresentationTests
         Assert.Equal(0f, DeathPresentation.PanBlend(0f));
     }
 
+    [Fact]
+    public void ThrownAimStraightAboveKeepsYawAndClampsPitch()
+    {
+        var (yaw, pitch) = DeathPresentation.ThrownAim(0.05f, 8f, -0.05f, 0.7f);
+        Assert.Equal(0.7f, yaw);
+        Assert.Equal(DeathPresentation.ThrownMaxPitch, pitch, 4);
+        Assert.Equal(-DeathPresentation.ThrownMaxPitch, DeathPresentation.ThrownAim(0, -8f, 0, 0).Pitch, 4);
+    }
+
+    [Fact]
+    public void ThrownAimTurnsToTheBodyAlongMinusZ()
+    {
+        Assert.Equal(0f, DeathPresentation.ThrownAim(0, 0, -5f, 1f).Yaw, 4);          // ahead
+        Assert.Equal(MathF.PI / 2, DeathPresentation.ThrownAim(-5f, 0, 0, 0).Yaw, 4); // to the left (-X)
+        Assert.Equal(MathF.PI / 4, DeathPresentation.ThrownAim(0, 3f, -3f, 0).Pitch, 4);
+    }
+
+    [Fact]
+    public void PanBlendTurnsQuickerTheFurtherOffTheBody()
+    {
+        Assert.Equal(DeathPresentation.PanBlend(0.05f), DeathPresentation.PanBlend(0.05f, 0f), 5);
+        Assert.True(DeathPresentation.PanBlend(0.05f, 1.5f) > DeathPresentation.PanBlend(0.05f, 0.2f));
+        Assert.Equal(DeathPresentation.PanBlend(0.05f, 1.6f), DeathPresentation.PanBlend(0.05f, 3f), 5); // boost caps
+    }
+
     static DeathPlan FallPlan(float delay = 5) => DeathPresentation.Plan(ClientMode.OnFoot, false, false, false, delay, 1);
 
     [Fact]

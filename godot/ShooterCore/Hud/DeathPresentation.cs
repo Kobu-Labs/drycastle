@@ -80,8 +80,32 @@ public sealed class DeathPresentation
     /// <summary>A thrown death (#416): the camera backs off this far along its own view and up, metres, then only turns; its turn follows the body with this rate (1/s).</summary>
     public const float ThrownBackM = 2.5f, ThrownUpM = 0.3f, ThrownPanRate = 7f;
 
+    /// <summary>A thrown death's aim never pitches past this (radians, about 65 degrees) and keeps its yaw while the body is closer than <see cref="ThrownMinHorizontalM"/> to straight above or below.</summary>
+    public const float ThrownMaxPitch = 1.13f, ThrownMinHorizontalM = 0.5f;
+
+    /// <summary>
+    /// Where the thrown death's camera aims at a body <paramref name="dx"/>, <paramref name="dy"/>, <paramref name="dz"/> metres from it: yaw (about up, 0 looks along -Z, positive turns left) and pitch (positive looks up),
+    /// the pitch clamped to <see cref="ThrownMaxPitch"/>, the yaw kept at <paramref name="yawNow"/> while the body is nearly straight above or below (no heading to turn to).
+    /// </summary>
+    public static (float Yaw, float Pitch) ThrownAim(float dx, float dy, float dz, float yawNow)
+    {
+        var h = MathF.Sqrt(dx * dx + dz * dz);
+        var yaw = h < ThrownMinHorizontalM ? yawNow : MathF.Atan2(-dx, -dz);
+        var pitch = Math.Clamp(MathF.Atan2(dy, h), -ThrownMaxPitch, ThrownMaxPitch);
+        return (yaw, pitch);
+    }
+
     /// <summary>How much of the way to the aim the thrown death's camera turns in a frame of <paramref name="dt"/> seconds (0..1, frame-rate independent).</summary>
     public static float PanBlend(float dt) => 1f - MathF.Exp(-ThrownPanRate * Math.Max(dt, 0f));
+
+    /// <summary>As <see cref="PanBlend(float)"/>, but the turn is up to <see cref="ThrownPanBoost"/> times quicker the further the view is off the body (a fast fling must not outrun it); full boost from a quarter turn off.</summary>
+    public static float PanBlend(float dt, float errorRad)
+    {
+        var boost = 1f + (ThrownPanBoost - 1f) * Math.Clamp(Math.Abs(errorRad) / (MathF.PI / 2f), 0f, 1f);
+        return 1f - MathF.Exp(-ThrownPanRate * boost * Math.Max(dt, 0f));
+    }
+
+    public const float ThrownPanBoost = 4f;
 
     readonly StateMachine<DeathPhase> _fsm = new(Spec);
     DeathPlan _plan;
