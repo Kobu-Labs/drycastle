@@ -85,7 +85,7 @@ public sealed partial class HuntersLogScreen
         row.AddThemeConstantOverride("separation", ShooterTheme.Space);
         var icon = new TextureRect
         {
-            Texture = _env.RewardIcon(r), CustomMinimumSize = new Vector2(ShooterTheme.Space * 8, ShooterTheme.Space * 4), StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            Texture = _env.RewardIcon(r), CustomMinimumSize = new Vector2(ShooterTheme.Space * 14, ShooterTheme.Space * 7), StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, MouseFilter = MouseFilterEnum.Ignore, SizeFlagsVertical = SizeFlags.ShrinkCenter,
         };
         row.AddChild(icon);
