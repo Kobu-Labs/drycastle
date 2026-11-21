@@ -60,6 +60,8 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # assets/manifest.json), first used for typed fences: "parcel_<ID>_props_tex_<id>". The manifest lists the ids used.
 # (no bump) objects.json objects may carry "solid": false (no collision at all; the key is absent when true) and a "z" (absolute
 # metres, else the terrain height). Older loaders ignore "solid" and keep the collision.
+# (no bump) objects.json objects may carry "size_m": [length, width, height] metres, the exact final bounding box (the model is scaled
+# non-uniformly to it; wins over "scale"; absent when not set). Older loaders ignore it and draw the model at "scale".
 # (no bump) objects.json may carry "cables": the cables between placed utility poles (id, from, to). The game
 # strings the wires itself from the poles and the wire seats in assets/manifest.json; older loaders ignore the key.
 # 0.8.0: ground detail (detail stage): per chunk a "detail_patches" node (flat colours) and "detail_patches_tex_<id>" nodes

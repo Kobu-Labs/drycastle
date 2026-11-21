@@ -14,6 +14,8 @@ public sealed class PlacedObject
     public float? Z { get; init; }
     public float RotationDeg { get; init; }
     public float Scale { get; init; } = 1f;
+    /// <summary>Exact final bounding box in metres (X length along the object's x, Y width along map y, Z height); wins over <see cref="Scale"/>. Null = none.</summary>
+    public Vector3? SizeM { get; init; }
     public string? Colour { get; init; }
     /// <summary>False = no collision at all (players, vehicles and shots pass through): trash laid over a climbable prim. objects.json carries the key only when false.</summary>
     public bool Solid { get; init; } = true;
@@ -22,6 +24,19 @@ public sealed class PlacedObject
     /// <summary>The group node the object sits in (and is removed with): its containing parcel, else <see cref="NoParcelGroup"/>.</summary>
     public string Group => Parcel ?? NoParcelGroup;
     public const string NoParcelGroup = "_none";
+
+    /// <summary>Reads an object's optional "size_m" [length, width, height]; null when absent or not three numbers above 0.</summary>
+    public static Vector3? ReadSizeM(JsonElement o)
+    {
+        if (!o.TryGetProperty("size_m", out var a) || a.ValueKind != JsonValueKind.Array || a.GetArrayLength() != 3) return null;
+        var v = new float[3];
+        for (var i = 0; i < 3; i++)
+        {
+            if (a[i].ValueKind != JsonValueKind.Number || !(a[i].GetSingle() > 0)) return null;
+            v[i] = a[i].GetSingle();
+        }
+        return new Vector3(v[0], v[1], v[2]);
+    }
 }
 
 /// <summary>An entry of assets/manifest.json: id ("pack:..." / "prim:..."), category, display name and size in metres (glTF axes).</summary>
@@ -175,6 +190,7 @@ public sealed partial class MapLoader
                 Z = o.TryGetProperty("z", out var z) && z.ValueKind == JsonValueKind.Number ? z.GetSingle() : null,
                 RotationDeg = o.TryGetProperty("rotation_deg", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetSingle() : 0f,
                 Scale = o.TryGetProperty("scale", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetSingle() : 1f,
+                SizeM = PlacedObject.ReadSizeM(o),
                 Colour = o.TryGetProperty("colour", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null,
                 Solid = !(o.TryGetProperty("solid", out var so) && so.ValueKind == JsonValueKind.False),
                 Parcel = o.TryGetProperty("parcel", out var pa) && pa.ValueKind == JsonValueKind.String ? pa.GetString() : null,
@@ -248,10 +264,25 @@ public sealed partial class MapLoader
         var y = o.Z ?? TerrainOrMean(o.X, -o.Y);
         node.Position = new Vector3(o.X, y, -o.Y);
         node.RotationDegrees = new Vector3(0, o.RotationDeg, 0);
-        node.Scale = Vector3.One * (o.Scale > 0 ? o.Scale : 1f);
+        node.Scale = ObjectScale(o);
         _objectNodes[o.Id] = node;
         _objectGroup[o.Id] = group;
         _objectAssets[o.Id] = o.Asset;
+    }
+
+    /// <summary>
+    /// The node scale of an object: uniform <see cref="PlacedObject.Scale"/>, or with a size_m the manifest size stretched to it per axis
+    /// (length on glTF x, width on glTF z = map y, height on glTF y); colliders are children of the node and follow.
+    /// </summary>
+    Vector3 ObjectScale(PlacedObject o)
+    {
+        if (o.SizeM is { } s)
+        {
+            if (_assetManifest == null) ReadAssetManifest();
+            var m = _assetManifest!.TryGetValue(o.Asset, out var e) ? e.Size : Vector3.One; // unknown asset: the 1 m placeholder box
+            if (m.X > 0 && m.Y > 0 && m.Z > 0) return new Vector3(s.X / m.X, s.Z / m.Y, s.Y / m.Z);
+        }
+        return Vector3.One * (o.Scale > 0 ? o.Scale : 1f);
     }
 
     /// <summary>

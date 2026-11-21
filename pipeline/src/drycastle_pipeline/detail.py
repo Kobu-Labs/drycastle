@@ -1209,7 +1209,8 @@ class Village:
         self.object_polys = []
         for o in objects:
             sx, _, sz = sizes.get(o["asset"], [1.0, 1.0, 1.0])
-            r = 0.5 * math.hypot(sx, sz) * float(o.get("scale", 1.0)) + float(self.cfg["object_clearance_m"])
+            sx, sz, k = (o["size_m"][0], o["size_m"][1], 1.0) if o.get("size_m") else (sx, sz, float(o.get("scale", 1.0)))
+            r = 0.5 * math.hypot(sx, sz) * k + float(self.cfg["object_clearance_m"])
             self.object_polys.append(Point(o["position"][0], o["position"][1]).buffer(r, 8))
         self.o_tree = shapely.STRtree(self.object_polys)
         plan = plan_patches(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), self.terrain, self.types)

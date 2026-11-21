@@ -98,6 +98,7 @@ public static class ObjectEdits
 
     public static void SetScale(Obj o, double s)
     {
+        o.Remove("size_m"); // would win over the scale
         if (Math.Abs(s - 1.0) < 1e-12) o.Remove("scale");
         else o["scale"] = new EditsFile.Num(EditsFile.PyFloat(Math.Round(s, 6)));
     }
@@ -140,7 +141,7 @@ public static class ObjectEdits
     {
         var errs = new List<string>();
         if (v is not List<object?> list) { errs.Add($"{path}: must be a list"); return errs; }
-        string[] allowed = { "id", "asset", "position", "z", "rotation_deg", "scale", "colour", "solid" };
+        string[] allowed = { "id", "asset", "position", "z", "rotation_deg", "scale", "size_m", "colour", "solid" };
         for (var i = 0; i < list.Count; i++)
         {
             var p = $"{path}.{i}";
@@ -158,6 +159,7 @@ public static class ObjectEdits
             if (o.TryGetValue("z", out var z) && !IsNum(z)) errs.Add($"{p}.z: must be a number");
             if (o.TryGetValue("rotation_deg", out var r) && !IsNum(r)) errs.Add($"{p}.rotation_deg: must be a number");
             if (o.TryGetValue("scale", out var sc) && !(IsNum(sc) && Number(sc) > 0)) errs.Add($"{p}.scale: must be a number > 0");
+            if (o.TryGetValue("size_m", out var sz) && !(sz is List<object?> szl && szl.Count == 3 && szl.All(c => IsNum(c) && Number(c) > 0))) errs.Add($"{p}.size_m: must be [length, width, height], three numbers > 0 (metres)");
             if (o.TryGetValue("colour", out var c) && !(c is string cs && EditSchema.ColourRx.IsMatch(cs))) errs.Add($"{p}.colour: must be #rrggbb");
             if (o.TryGetValue("solid", out var so) && so is not bool) errs.Add($"{p}.solid: must be true or false");
         }

@@ -418,6 +418,15 @@ def _all_objects(edits: Edits) -> list[dict]:
 # --- geometry helpers -----------------------------------------------------------------------
 
 
+def _check_size_m(v: object) -> list[float] | None:
+    """A tool's `size_m` argument: None or [length, width, height], three finite numbers > 0."""
+    if v is None:
+        return None
+    if not isinstance(v, (list, tuple)) or len(v) != 3:
+        raise ToolError("size_m must be [length, width, height] in metres")
+    return [_check_num(n, c, positive=True) for n, c in zip(("size_m length", "size_m width", "size_m height"), v)]
+
+
 def _facing_rotation(direction: tuple[float, float]) -> float:
     """``rotation_deg`` that turns an object's front (+Z) toward ``direction`` (map frame)."""
     phi = math.degrees(math.atan2(direction[1], direction[0]))
@@ -430,11 +439,18 @@ def _norm_deg(deg: float) -> float:
 
 
 def object_polygon(
-    xy: tuple[float, float], size_m: list[float] | None, rotation_deg: float, scale: float
+    xy: tuple[float, float],
+    size_m: list[float] | None,
+    rotation_deg: float,
+    scale: float,
+    fixed_m: list[float] | None = None,
 ) -> Polygon:
-    """Approximate footprint of a placed object (local metres): its bbox about the origin."""
+    """Approximate footprint of a placed object (local metres): its bbox about the origin.
+    ``fixed_m`` = the object's own [length, width, height] (wins over the manifest size and ``scale``)."""
     sx, sz = (size_m[0], size_m[2]) if size_m else (1.0, 1.0)
     hx, hz = sx * scale / 2, sz * scale / 2
+    if fixed_m:
+        hx, hz = fixed_m[0] / 2, fixed_m[1] / 2
     th = math.radians(rotation_deg)
     c, s = math.cos(th), math.sin(th)
     pts = []
@@ -1329,6 +1345,7 @@ class ParcelEditTools:
         scale: float,
         edits: Edits,
         skip_id: str | None,
+        fixed_m: list[float] | None = None,
     ) -> list[str]:
         m = self.map
         warnings: list[str] = []
@@ -1337,7 +1354,7 @@ class ParcelEditTools:
             inside = m.parcel_at(*xy)
             where = f"inside {inside}" if inside else "outside every parcel"
             warnings.append(f"position is outside {pid} ({where}); placed anyway as requested")
-        fp = object_polygon(xy, asset.get("size_m"), rotation, scale)
+        fp = object_polygon(xy, asset.get("size_m"), rotation, scale, fixed_m)
         for bid in m.buildings_near(fp, 0.0):
             warnings.append(
                 f"overlaps building {bid} (approximate footprint of {asset['id']} at this "
@@ -1353,12 +1370,13 @@ class ParcelEditTools:
                 (a.get("size_m") for a in self.manifest["assets"] if a["id"] == other["asset"]), None
             )
             ofp = object_polygon(
-                (ox, oy), osz, float(other.get("rotation_deg", 0)), float(other.get("scale", 1))
+                (ox, oy), osz, float(other.get("rotation_deg", 0)), float(other.get("scale", 1)),
+                other.get("size_m"),
             )
             if fp.intersects(ofp):
                 warnings.append(f"overlaps placed object {other['id']} ({other['asset']})")
         size = asset.get("size_m") or [1, 1, 1]
-        if max(size) < 1.0 and scale == 1.0:
+        if max(size) < 1.0 and scale == 1.0 and not fixed_m:
             warnings.append(
                 f"{asset['id']} is small at scale 1 (largest side {max(size):.2f} m); pass scale "
                 "if it should be bigger"
@@ -1377,12 +1395,16 @@ class ParcelEditTools:
         colour: str | None = None,
         z: float | None = None,
         solid: bool | None = None,
+        size_m: list[float] | None = None,
     ) -> dict:
         """Place an object (see the registered tool description). It belongs to no parcel."""
         pid = self.map.need(parcel) if parcel is not None else None
         info = self._asset(asset)
         if scale is not None:
             _check_num("scale", scale, positive=True)
+        fixed = _check_size_m(size_m)
+        if fixed is not None and scale is not None:
+            raise ToolError("give size_m or scale, not both")
         if rotation_deg is not None:
             _check_num("rotation_deg", rotation_deg)
         if colour is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", str(colour)):
@@ -1405,13 +1427,15 @@ class ParcelEditTools:
             entry: dict = {"id": oid, "asset": asset, "position": absolute, "rotation_deg": rot}
             if scale is not None:
                 entry["scale"] = scl
+            if fixed is not None:
+                entry["size_m"] = fixed
             if colour is not None:
                 entry["colour"] = colour
             if z is not None:
                 entry["z"] = float(z)
             if solid is False:  # true is the default: the key is only written when false
                 entry["solid"] = False
-            warnings.extend(self._placement_warnings(pid, (x, y), info, rot, scl, edits, None))
+            warnings.extend(self._placement_warnings(pid, (x, y), info, rot, scl, edits, None, fixed))
             edits.objects.append(entry)
             return entry
 
@@ -1423,6 +1447,7 @@ class ParcelEditTools:
             "position": absolute,
             "rotation_deg": rot,
             "scale": scl,
+            **({"size_m": fixed} if fixed is not None else {}),
             "entry": entry,
             "warnings": warnings,
         }
@@ -1556,10 +1581,14 @@ class ParcelEditTools:
         z: float | None = None,
         clear_z: bool = False,
         solid: bool | None = None,
+        size_m: list[float] | None = None,
     ) -> dict:
-        """Change position, rotation, scale, colour, z or solid of a placed object (see tool description)."""
+        """Change position, rotation, scale, size_m, colour, z or solid of a placed object (see tool description)."""
         if scale is not None:
             _check_num("scale", scale, positive=True)
+        fixed = _check_size_m(size_m)
+        if fixed is not None and scale is not None:
+            raise ToolError("give size_m or scale, not both")
         if rotation_deg is not None:
             _check_num("rotation_deg", rotation_deg)
         if colour is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", str(colour)):
@@ -1570,9 +1599,9 @@ class ParcelEditTools:
                 raise ToolError("give z or clear_z, not both")
         if solid is not None and not isinstance(solid, bool):
             raise ToolError(f"solid must be true or false, got {solid!r}")
-        if not clear_z and all(v is None for v in (parcel, anchor, offset_m, position, rotation_deg, scale, colour, z, solid)):
+        if not clear_z and all(v is None for v in (parcel, anchor, offset_m, position, rotation_deg, scale, fixed, colour, z, solid)):
             raise ToolError(
-                "nothing to change: give a new anchor/offset_m/position/rotation_deg/scale/colour/z/clear_z/solid"
+                "nothing to change: give a new anchor/offset_m/position/rotation_deg/scale/size_m/colour/z/clear_z/solid"
             )
         relocate = any(v is not None for v in (parcel, anchor, offset_m, position))
         warnings: list[str] = []
@@ -1598,6 +1627,10 @@ class ParcelEditTools:
                 new["rotation_deg"] = _norm_deg(rotation_deg)
             if scale is not None:
                 new["scale"] = float(scale)
+                new.pop("size_m", None)  # size_m would win over the new scale
+            if fixed is not None:
+                new["size_m"] = fixed
+                new.pop("scale", None)
             if colour is not None:
                 new["colour"] = colour
             if z is not None:
@@ -1613,7 +1646,7 @@ class ParcelEditTools:
             warnings.extend(
                 self._placement_warnings(
                     target, (lx, ly), info, float(new.get("rotation_deg", 0)),
-                    float(new.get("scale", 1)), edits, id,
+                    float(new.get("scale", 1)), edits, id, new.get("size_m"),
                 )
             )
             edits.objects[edits.objects.index(obj)] = new
@@ -2410,7 +2443,8 @@ class ParcelEditTools:
 _ASSET_NOTE = (
     "Sizes are the raw bounding boxes in metres [x, y, z] (y up). Some packs are authored small "
     "(the Kenney suburban kit: a tree is 0.77 m, a fence section 0.5 m), so a `scale` on "
-    "place_object may be needed; cars and primitives are real size."
+    "place_object may be needed; cars and primitives are real size. "
+    "Any asset can instead be sized to an exact bounding box with place_object `size_m` [length, width, height]."
 )
 
 
@@ -2562,7 +2596,10 @@ def build_server(settings: Settings) -> Any:
         "object's front toward the road (right for a car parked in front of the house), else 0; "
         "`rotation_deg` is "
         "counter-clockwise seen from above, absolute. `scale` is uniform, default 1 (small pack "
-        "models may need it); `colour` is \"#rrggbb\". `z` (optional, metres, absolute above the DMR datum, not "
+        "models may need it); `size_m` [length, width, height] instead sizes the object to an exact bounding box in "
+        "metres (length along the object's own x, east at rotation 0; width along its own map y, north at rotation 0; "
+        "height up), scaling the model non-uniformly (e.g. prim:slab as a 1.52 x 2.66 x 0.12 m grave slab); "
+        "give `size_m` or `scale`, not both; `colour` is \"#rrggbb\". `z` (optional, metres, absolute above the DMR datum, not "
         "relative to the ground) fixes the height instead of standing on the terrain: set it to lay an object on "
         "a prim:mound tier or a roof. `solid` (default true) false = no collision at all, players, vehicles and "
         "shots pass through: for dressing (trash) laid over a climbable prim. Unknown asset/parcel and bad values are "
@@ -2579,9 +2616,10 @@ def build_server(settings: Settings) -> Any:
         colour: str | None = None,
         z: float | None = None,
         solid: bool | None = None,
+        size_m: list[float] | None = None,
     ) -> dict:
         return tools.place_object(
-            asset, parcel, anchor, offset_m, position, rotation_deg, scale, colour, z, solid
+            asset, parcel, anchor, offset_m, position, rotation_deg, scale, colour, z, solid, size_m
         )
 
     @server.tool(description="Remove a placed object by its id (e.g. o-0003). The cables hanging from a "
@@ -2613,6 +2651,7 @@ def build_server(settings: Settings) -> Any:
     @server.tool(description=(
         "Change a placed object: new position (an exact `position` [x, y], or `anchor` + `offset_m` "
         "relative to `parcel`, default the parcel the object stands in), `rotation_deg`, `scale`, "
+        "`size_m` [length, width, height] exact metres (as place_object; setting one of scale/size_m drops the other), "
         "`colour`, `z` (absolute metres above the DMR datum) or `clear_z` true (back on the terrain; a missing "
         "z cannot say \"clear\"), `solid` (false = no collision at all, true = the default). With a new anchor and no rotation_deg the object turns to face the road "
         "again. An object belongs to no parcel; `parcel` is only the frame an anchor is measured in."))
@@ -2628,9 +2667,10 @@ def build_server(settings: Settings) -> Any:
         z: float | None = None,
         clear_z: bool = False,
         solid: bool | None = None,
+        size_m: list[float] | None = None,
     ) -> dict:
         return tools.move_object(
-            id, parcel, anchor, offset_m, position, rotation_deg, scale, colour, z, clear_z, solid
+            id, parcel, anchor, offset_m, position, rotation_deg, scale, colour, z, clear_z, solid, size_m
         )
 
     @server.tool(description=(

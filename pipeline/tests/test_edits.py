@@ -130,6 +130,12 @@ def test_validator_accepts_full_document() -> None:
         ),
         (
             with_parcel(
+                {"objects": [{"id": "a", "asset": "prim:box", "position": [1, 2], "size_m": [1, 0, 2]}]}
+            ),
+            "objects.0.size_m: must be",
+        ),
+        (
+            with_parcel(
                 {"objects": [{"id": "a", "asset": "prim:box", "position": [1, 2], "spin": 1}]}
             ),
             "objects.0.spin: unknown key",

@@ -631,6 +631,28 @@ def test_object_polygon_orientation():
     assert poly.bounds == pytest.approx((8, 19, 12, 21))
 
 
+def test_object_polygon_fixed_size():
+    # size_m [length, width, height]: length along x, width along map y; wins over scale and the manifest size
+    poly = object_polygon((10, 20), [1.0, 0.1, 1.0], 0, 3, [1.52, 2.66, 0.12])
+    assert poly.bounds == pytest.approx((10 - 0.76, 20 - 1.33, 10 + 0.76, 20 + 1.33))
+
+
+def test_place_and_move_object_size_m(tools, env):
+    placed = tools.place_object("prim:slab", "P-0001", anchor="centre", size_m=[1.52, 2.66, 0.12])
+    assert placed["entry"]["size_m"] == [1.52, 2.66, 0.12] and "scale" not in placed["entry"]
+    oid = placed["id"]
+    with pytest.raises(ToolError, match="not both"):
+        tools.place_object("prim:slab", "P-0001", size_m=[1, 1, 1], scale=2)
+    for bad in ([1, 2], [1, 0, 1], [1, 1, "x"]):
+        with pytest.raises(ToolError):
+            tools.place_object("prim:slab", "P-0001", size_m=bad)
+    moved = tools.move_object(oid, rotation_deg=90)
+    assert moved["entry"]["size_m"] == [1.52, 2.66, 0.12]
+    assert "size_m" not in tools.move_object(oid, scale=2)["entry"]
+    again = tools.move_object(oid, size_m=[2, 1, 0.1])["entry"]
+    assert again["size_m"] == [2, 1, 0.1] and "scale" not in again
+
+
 def test_parse_args(tmp_path):
     s = parse_args(["--edits", str(tmp_path / "e.json"), "--state", str(tmp_path / "s.json")])
     assert s.edits_path == tmp_path / "e.json" and s.work.parts[-2:] == ("village", "work")

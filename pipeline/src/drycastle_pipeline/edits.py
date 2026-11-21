@@ -47,7 +47,11 @@ formatting is fixed, so git diffs stay small. Version 1::
     z                   optional metres, absolute above the DMR datum (not relative to the terrain); omitted = terrain height
                         at runtime.
     rotation_deg        number, default 0.
-    scale               number > 0, default 1.
+    scale               number > 0, default 1 (uniform).
+    size_m              optional [length, width, height], each a number > 0: the exact final bounding-box size in metres, length
+                        along the object's local x (map east at rotation 0), width along its local map-y, height up. The model is
+                        scaled non-uniformly by size_m / the asset's manifest size_m (glTF [x, y up, z]); colliders follow. Wins over
+                        ``scale`` when both are present (``scale`` is then ignored).
     colour              optional "#rrggbb" override.
     solid               optional bool, default true; written only as false: no collision at all (players, vehicles and shots
                         pass through), for dressing laid over a climbable prim such as trash on prim:mound.
@@ -175,7 +179,7 @@ PARCEL_KEYS = ("fence", "objects")  # "objects" only so a file of the old shape 
 FENCE_KEYS = ("mode", "type", "column", "height_m", "thickness_m", "colour", "gaps")
 CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "gaps")
 GAP_KEYS = ("at", "width_m")
-OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour", "solid")
+OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "size_m", "colour", "solid")
 GROUP_KEYS = ("parcels", "fence")
 PATCH_KEYS = ("type", "polygon", "water_y", "max_depth")
 ZONE_KEYS = ("kind", "polygon")
@@ -348,6 +352,10 @@ def _check_objects(v: object, path: str, errors: list[str], seen: dict[str, str]
             errors.append(f"{opath}.rotation_deg: must be a number")
         if "scale" in obj:
             _check_positive(obj["scale"], f"{opath}.scale", errors)
+        if "size_m" in obj:
+            sz = obj["size_m"]
+            if not (isinstance(sz, list) and len(sz) == 3 and all(_is_num(c) and c > 0 for c in sz)):
+                errors.append(f"{opath}.size_m: must be [length, width, height], three numbers > 0 (metres)")
         if "colour" in obj:
             _check_colour(obj["colour"], f"{opath}.colour", errors)
         if "solid" in obj and not isinstance(obj["solid"], bool):

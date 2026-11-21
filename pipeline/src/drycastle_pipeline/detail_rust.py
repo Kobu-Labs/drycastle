@@ -91,7 +91,8 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
     discs = []
     for o in objects:
         sx, _, sz = sizes.get(o["asset"], [1.0, 1.0, 1.0])
-        r = 0.5 * math.hypot(sx, sz) * float(o.get("scale", 1.0)) + float(cfg["object_clearance_m"])
+        sx, sz, k = (o["size_m"][0], o["size_m"][1], 1.0) if o.get("size_m") else (sx, sz, float(o.get("scale", 1.0)))
+        r = 0.5 * math.hypot(sx, sz) * k + float(cfg["object_clearance_m"])
         discs.append([o["position"][0], o["position"][1], r])
 
     plan = plan_patches(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), terrain, types)
