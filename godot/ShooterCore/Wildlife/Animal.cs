@@ -156,7 +156,7 @@ public sealed partial class Animal : IWorldEntity
         .Note(AnimalState.Down, "Lies knocked down where it landed (clock: knockdown_seconds), then gets up: Flee from where the vehicle was (a species that does not flee stands). Run over again it is Thrown again.")
         .Note(AnimalState.Vanish, "A species with vanish_seconds is startled (threat, non-lethal hit, herd alarm, getting up after a run-over) and does not run: immune for vanish_seconds (clock; no damage, no throw, no carry, not a hit target), the client spirals rainbow round it, then the Vanished event lets the keeper pick a place at least vanish_min_m away and Teleport puts it there Idle. Only Idle follows; never Dead, Thrown or Carried. No startle for vanish_grace_seconds after it reappears.")
         .Note(AnimalState.Flying, "A Phoenix (PhoenixRules, a species with flies): patrols a wide circle high in the sky, the clock is not used. Reached from Idle only at spawn (the constructor takes off at once). The first hit that deals damage, from any weapon, makes it Fall; it is no target of a knife (too high) and the dawn hour ends it (it flies off, the entity is removed). Never Dead from here.")
-        .Note(AnimalState.Falling, "Dives along a straight line from where it was hit to its crash site (clock: fall_seconds; the position follows the line, pitch is the line's), then Crashes. Not damaged further: a hit changes nothing.")
+        .Note(AnimalState.Falling, "Dives along a straight line from where it was hit to its crash site (clock: fall_seconds; the position follows the line, pitch is the line's), then Crashes. No hit target (bullets and blasts pass through it) so a hit cannot reach it.")
         .Note(AnimalState.Crashed, "Seated and alive at the crash site, stationary (Perched clip, fire and embers on the client), no clock: it stays until killed or the round ends. The ONLY state the second hit counts in: a damaging hit sets it Burning and takes the Hunt (Died is raised, the shooter is the Killer).")
         .Note(AnimalState.Burning, "Dies in a big flame (clock: burn_seconds), no longer alive and no hit target; then it is Dead and the mineral is dropped (Dropped). Only Dead follows.")
         .Note(AnimalState.Dead, "A body a vehicle threw flies on first. Lies for corpse_seconds (the clock's elapsed time; a Phoenix's is the ash), then the entity ends; a one-hit species' entity ends at once. Never left.")
@@ -264,6 +264,9 @@ public sealed partial class Animal : IWorldEntity
 
     /// <summary>Immune while it vanishes: it takes no damage, is not thrown or carried, and is no target of a shot or a vehicle.</summary>
     public bool Immune => State == AnimalState.Vanish;
+
+    /// <summary>A target of a shot, a blast or a vehicle: alive, not vanishing and not a Phoenix Falling (it dives out of reach: bullets pass through it).</summary>
+    public bool Targetable => Alive && !Immune && State != AnimalState.Falling;
 
     public byte TypeId => AnimalRules.TypeId;
     /// <summary>Animals belong to no player; the species index is in the replicated state's owner field.</summary>

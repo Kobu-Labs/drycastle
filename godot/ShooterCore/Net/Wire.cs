@@ -369,7 +369,8 @@ public static class Wire
     //   v78 the crash sound (#410): event 163 VehicleCrash (a vehicle hit something: its id and how hard)
     //   v79 a run-over survivor is thrown (#411): event 164 PlayerFlung (the player a vehicle threw alive)
     //   v80 the Phoenix (#396): animal states 11-14 (Flying, Falling, Crashed, Burning, AnimalState); an animal's world-state pitch is the Phoenix's dive pitch; event 32 PhoenixFall (PhoenixFallCodec)
-    public const byte ProtocolVersion = 80;
+    //   v81 dropped minerals (#396): the MineralNodes set (event 112) may hold dynamic nodes (ids from 128, a Phoenix's pheonixite) and is the WHOLE set: a client drops a node it no longer lists
+    public const byte ProtocolVersion = 81;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

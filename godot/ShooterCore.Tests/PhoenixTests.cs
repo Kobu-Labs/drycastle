@@ -245,12 +245,12 @@ public class PhoenixTests
     {
         var (p, _) = NewPhoenix();
         var box = p.HitBox;
-        Assert.Equal(new[] { 3.0f, 0.6f, 4.0f }, box);
-        Assert.Equal(p.Position.Y - 0.3f, p.Feet.Y, 1e-4f);
+        Assert.Equal(new[] { 3.0f, 1.1f, 4.0f }, box);
+        Assert.Equal(p.Position.Y - 0.55f, p.Feet.Y, 1e-4f);
         Assert.Equal(p.Position.Y, p.Bounds.Centre.Y, 1e-4f);
         var c = Crashed();
         Assert.Equal(c.Position, c.Feet);
-        Assert.Equal(c.Position.Y + 0.3f, c.Bounds.Centre.Y, 1e-4f);
+        Assert.Equal(c.Position.Y + 0.55f, c.Bounds.Centre.Y, 1e-4f);
         Assert.True(AnimalRules.Stands(AnimalState.Crashed));
         Assert.False(AnimalRules.Stands(AnimalState.Flying));
         Assert.False(p.Obstructs);
@@ -429,7 +429,7 @@ public class PhoenixTests
         Assert.Equal(DamageResult.Damaged, k.Hit(hit, 5, 1)); // from the air: only a fall
         Assert.Equal(1, fell!.Value.Item1);
         Assert.Empty(killed);
-        Assert.Equal(DamageResult.Damaged, k.Hit(hit, 5, 1)); // falling: nothing
+        Assert.Equal(DamageResult.Ignored, k.Hit(hit, 5, 1)); // falling: not a target
         Run(p, Rules.FallSeconds + 0.5f);
         Assert.Empty(killed);
         Assert.Equal(DamageResult.Killed, k.Hit(hit, 6, 1)); // crashed: the second hit
@@ -452,6 +452,63 @@ public class PhoenixTests
     }
 
     [Fact]
+    public void The_mineral_a_dead_phoenix_drops_becomes_a_pickup_node_at_the_crash_site_anybody_can_take()
+    {
+        var (k, _) = Keeper();
+        var w = new World();
+        k.Populate(_ => Array.Empty<Vector3>(), w);
+        Assert.True(k.SpawnPhoenix(w));
+        var set = new MineralNodeSet();
+        k.MineralDropped += d => set.AddDrop(d);
+        var living = new List<(ushort HitId, Animal Animal)>();
+        k.Living(living);
+        var (hit, p) = living.Single();
+        k.Hit(hit, 5, 1);
+        Run(p, Rules.FallSeconds + 0.5f);
+        k.Hit(hit, 6, 1); // the killer is player 6
+        Assert.Empty(set.Nodes);
+        Run(p, Rules.BurnSeconds + 0.5f);
+        var node = Assert.Single(set.Nodes);
+        Assert.Equal(("pheonixite", p.Position), (node.MineralId, node.Position));
+        var book = new MineralBook();
+        var near = p.Position + new Vector3(1, 0, 0);
+        Assert.Equal(MineralPickResult.Ok, book.Check(5, node, MineralActivity.IsActive(node.MineralId, default), near)); // not the killer
+        Assert.Equal(MineralPickResult.Ok, book.Check(6, node, true, near)); // the killer is no different
+    }
+
+    [Fact]
+    public void A_falling_phoenix_is_no_hit_target_so_bullets_pass_through_it_and_it_is_a_target_again_once_crashed()
+    {
+        var (k, _) = Keeper();
+        var w = new World();
+        k.Populate(_ => Array.Empty<Vector3>(), w);
+        Assert.True(k.SpawnPhoenix(w));
+        var living = new List<(ushort HitId, Animal Animal)>();
+        k.Living(living);
+        var (hit, p) = living.Single();
+        Assert.True(p.Targetable);
+        Assert.Equal(DamageResult.Damaged, k.Hit(hit, 5, 1));
+        Assert.Equal(AnimalState.Falling, p.State);
+        Assert.False(p.Targetable);
+        Assert.True(p.Alive);
+        var targets = new List<HitTarget>();
+        k.AddTargets(targets);
+        Assert.Empty(targets);
+        var from = new Vector3(p.Position.X, 1.5f, p.Position.Z + 10);
+        Assert.Null(HitMath.Raycast(from, Vector3.Normalize(p.Position - from), 500, float.PositiveInfinity, targets, shooter: 1)); // passes through
+        living.Clear();
+        k.Living(living);
+        Assert.Empty(living);
+        Assert.Equal(DamageResult.Ignored, k.Hit(hit, 5, 100));
+        Assert.Equal(AnimalState.Falling, p.State);
+        Run(p, Rules.FallSeconds + 0.5f);
+        Assert.Equal(AnimalState.Crashed, p.State);
+        Assert.True(p.Targetable);
+        k.AddTargets(targets);
+        Assert.Single(targets);
+    }
+
+    [Fact]
     public void The_target_of_a_flying_phoenix_is_its_box_in_the_air_so_a_knife_never_reaches_it()
     {
         var (k, _) = Keeper();
@@ -462,8 +519,8 @@ public class PhoenixTests
         var targets = new List<HitTarget>();
         k.AddTargets(targets);
         var t = Assert.Single(targets);
-        Assert.Equal(p.Position.Y - 0.3f, t.Feet.Y, 1e-3f);
-        Assert.Equal(new Vector3(3, 0.6f, 4), t.Box);
+        Assert.Equal(p.Position.Y - 0.55f, t.Feet.Y, 1e-3f);
+        Assert.Equal(new Vector3(3, 1.1f, 4), t.Box);
         Assert.Null(HitMath.Melee(new Vector3(p.Position.X, 0, p.Position.Z), 0, 3f, targets, 1)); // right under it, 80 m or more up
         // a bullet from the ground to the body centre hits it
         var from = new Vector3(p.Position.X, 1.5f, p.Position.Z + 10);

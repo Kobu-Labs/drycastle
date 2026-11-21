@@ -433,19 +433,19 @@ public sealed class WildlifeKeeper : IAnimalHits
     public void AddTargets(List<HitTarget> into, float backSeconds = 0)
     {
         foreach (var w in _all)
-            if (w.Animal.Alive && !w.Animal.Immune) into.Add(TargetOf(w.HitId, w.Animal, backSeconds)); // a vanishing one is a ghost: shots and vehicles pass through
+            if (w.Animal.Targetable) into.Add(TargetOf(w.HitId, w.Animal, backSeconds)); // a vanishing one is a ghost: shots and vehicles pass through
     }
 
     /// <summary>The living wild animals with their hit ids, into <paramref name="into"/> (a copy: a hit may remove one). A vanishing one is not in it.</summary>
     public void Living(List<(ushort HitId, Animal Animal)> into)
     {
         foreach (var w in _all)
-            if (w.Animal.Alive && !w.Animal.Immune) into.Add((w.HitId, w.Animal));
+            if (w.Animal.Targetable) into.Add((w.HitId, w.Animal));
     }
 
     public DamageResult Hit(ushort hitId, ushort attacker, float amount)
     {
-        if (!_byHit.TryGetValue(hitId, out var wild) || !wild.Animal.Alive || wild.Animal.Immune || !(amount > 0)) return DamageResult.Ignored;
+        if (!_byHit.TryGetValue(hitId, out var wild) || !wild.Animal.Targetable || !(amount > 0)) return DamageResult.Ignored;
         wild.Animal.OnDamage(amount, attacker);
         if (wild.Animal.Ended is { } reason) _entities.Despawn(wild.Entity, reason); // a one-hit species leaves no corpse: it is gone before the next tick
         return wild.Animal.Alive ? DamageResult.Damaged : DamageResult.Killed;

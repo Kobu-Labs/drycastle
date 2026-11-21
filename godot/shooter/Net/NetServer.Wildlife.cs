@@ -90,8 +90,8 @@ public partial class NetServer
         _match.Wildlife = _wildlife;
         _wildlife.Killed += (a, by) => { GD.Print($"server: #{by} killed a wild {a.Def.Id}"); OnWildKilled(a, by); };
         _wildlife.PhoenixFell += (entity, from, site, seconds) => BroadcastEvent(EventKind.PhoenixFall, PhoenixFallCodec.Encode(entity, from, site, seconds));
-        // The dead Phoenix's mineral lies where it burned (WildlifeKeeper.Drops). The world pickup of a Mineral (#401, the Mineral Log's nodes) is not in this build: when it is, MineralDropped becomes a node there.
-        _wildlife.MineralDropped += d => GD.Print($"server: a Phoenix left {d.MineralId} at ({d.At.X:F0}, {d.At.Y:F0}, {d.At.Z:F0})");
+        // The dead Phoenix's mineral lies where it burned (WildlifeKeeper.Drops) as a mineral node anybody can take (#401).
+        _wildlife.MineralDropped += OnMineralDropped;
     }
 
     /// <summary>A round starts: the wildlife of the last one is gone with the entities; the species of wildlife.json move to their habitat points.</summary>
@@ -99,6 +99,7 @@ public partial class NetServer
     {
         if (_wildlife == null) return;
         _wildlife.Clear();
+        MineralRoundStart();
         _buildingFootprints = null;
         if (_match.Phase != MatchPhase.Running || ArenaMode || MapDir == "" || Map == null || (WildlifeData.MaxAnimals <= 0 || WildlifeData.Species.Count == 0 && WildlifeData.Herds.Count == 0 && WildlifeData.Rare.Count == 0 && WildlifeData.Phoenix == null) && WildlifeData.Flocks.Count == 0) return;
         var points = MapZonePoints;
