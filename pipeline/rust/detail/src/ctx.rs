@@ -70,6 +70,9 @@ pub struct Shared {
     pub sw_idx: BoxIndex,
     pub verge: [Vec<PolyC>; 2],
     pub v_idx: [BoxIndex; 2],
+    /// The inner and outer band of thin grass beside the worn footpaths (``footpaths.py``).
+    pub fringe: [Vec<PolyC>; 2],
+    pub fr_idx: [BoxIndex; 2],
     pub coverage: PolyC,
     pub osm_lines: HashMap<String, Vec<usize>>,
     /// Crop units in work-file order (indices into ``units``), with a box index: the crop patches beside a crop patch (baulk).
@@ -170,6 +173,9 @@ impl Shared {
             .ok_or("objects")?
             .iter()
             .map(|o| {
+                if o.is_object() {
+                    return polyc_ext_holes(o); // an object placed with size_m: its own rectangle
+                }
                 let g = geom::buffer(&geom::point(o[0].as_f64().unwrap_or(0.0), o[1].as_f64().unwrap_or(0.0)), o[2].as_f64().unwrap_or(0.5), 8);
                 geom::polys(&g).into_iter().next().unwrap_or_default()
             })
@@ -190,7 +196,13 @@ impl Shared {
                 cfgs.insert(k.clone(), v.clone());
             }
         }
-        let verge = crate::verge::make_verge(&roads, Cfg(&cfg).at("verge"));
+        let mut verge = crate::verge::make_verge(&roads, Cfg(&cfg).at("verge"));
+        // worn footpaths of the edits (footpaths.py): trodden ground, drawn and kept clear like the dirt of the verges
+        if let Some(paths) = input["paths"].as_array() {
+            verge[1].extend(paths.iter().map(polyc_ext_holes));
+        }
+        let band = |k: usize| -> Vec<PolyC> { input["path_fringe"][k].as_array().map(|a| a.iter().map(polyc_ext_holes).collect()).unwrap_or_default() };
+        let fringe = [band(0), band(1)];
         let coverage = PolyC { ext: ring(&input["coverage"]), holes: vec![] };
         let mut by_seq: Vec<usize> = (0..units.len()).collect();
         by_seq.sort_by_key(|&i| units[i].seq);
@@ -240,6 +252,8 @@ impl Shared {
             w_idx: boxes(&water, polyc_box),
             sw_idx: boxes(&swamp, polyc_box),
             v_idx: [boxes(&verge[0], polyc_box), boxes(&verge[1], polyc_box)],
+            fr_idx: [boxes(&fringe[0], polyc_box), boxes(&fringe[1], polyc_box)],
+            fringe,
             cfg,
             cfgs,
             terrain,
@@ -293,6 +307,8 @@ pub struct Ctx<'a> {
     pub blocked: Option<G>,
     pub verge_g: G,
     pub verge_d: G,
+    /// The bands of thin grass beside the worn footpaths in this unit, inner and outer (empty: none).
+    pub fringe: [G; 2],
     pub water: Option<G>,
     pub road_lines: Vec<(G, f64)>,
     /// The part of this ground within the reach of water, for the ground types of ``detail.swamp.kinds``.
@@ -344,6 +360,13 @@ impl<'a> Ctx<'a> {
             }
         }
         let [verge_g, verge_d] = verge;
+        let mut fringe: [G; 2] = [geom::empty(), geom::empty()];
+        for k in 0..2 {
+            let parts: Vec<G> = sh.fr_idx[k].query(pb).into_iter().map(|i| geom::from_polyc(&sh.fringe[k][i])).filter(|g| geom::intersects(g, &polygon)).collect();
+            if !parts.is_empty() {
+                fringe[k] = geom::inter(&geom::union_all(parts), &polygon);
+            }
+        }
 
         let buildings: Vec<G> = sh.b_idx.query(nb).into_iter().map(|i| geom::from_polyc(&sh.buildings[i])).filter(|g| hit(g)).collect();
         let fences: Vec<G> = sh
@@ -398,6 +421,7 @@ impl<'a> Ctx<'a> {
             blocked,
             verge_g,
             verge_d,
+            fringe,
             water,
             road_lines,
             swamp,

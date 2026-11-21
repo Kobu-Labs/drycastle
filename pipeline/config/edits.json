@@ -5232,6 +5232,19 @@
     "recipe": "crop"
    }
   },
+  "graveyard": {
+   "attributes": {
+    "colours": [
+     "#7f9a62"
+    ],
+    "detail": {
+     "grass_colours": [
+      "#7f9a62"
+     ]
+    },
+    "recipe": "village"
+   }
+  },
   "paint_1f7d0c": {
    "attributes": {
     "colours": [
@@ -54763,8 +54776,7 @@
    "z": 190.44
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4673",
    "position": [
     -589013.394,
@@ -54774,12 +54786,11 @@
    "size_m": [
     2.075,
     2.826,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4674",
    "position": [
     -589009.114,
@@ -54789,12 +54800,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4675",
    "position": [
     -589012.636,
@@ -54804,12 +54814,11 @@
    "size_m": [
     2.075,
     2.826,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4676",
    "position": [
     -589009.154,
@@ -54819,12 +54828,11 @@
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4677",
    "position": [
     -589005.786,
@@ -54834,12 +54842,11 @@
    "size_m": [
     2.115,
     3.325,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4678",
    "position": [
     -589003.508,
@@ -54849,12 +54856,11 @@
    "size_m": [
     2.115,
     3.325,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4679",
    "position": [
     -589001.25,
@@ -54864,12 +54870,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4680",
    "position": [
     -588999.026,
@@ -54879,27 +54884,25 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4681",
    "position": [
     -588998.816,
     -1249661.06
    ],
-   "rotation_deg": 180.0,
+   "rotation_deg": -90.0,
    "size_m": [
-    2.494,
     2.085,
-    0.12
+    2.494,
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4682",
    "position": [
     -588996.593,
@@ -54909,12 +54912,11 @@
    "size_m": [
     1.627,
     3.13,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4683",
    "position": [
     -588993.745,
@@ -54924,12 +54926,11 @@
    "size_m": [
     1.79,
     3.13,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4684",
    "position": [
     -588991.304,
@@ -54939,27 +54940,25 @@
    "size_m": [
     1.79,
     3.13,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4685",
    "position": [
     -588988.973,
     -1249661.125
    ],
-   "rotation_deg": 180.0,
+   "rotation_deg": 0.0,
    "size_m": [
     2.115,
     3.261,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4686",
    "position": [
     -588986.39,
@@ -54969,12 +54968,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4687",
    "position": [
     -589012.518,
@@ -54984,12 +54982,11 @@
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4688",
    "position": [
     -589009.223,
@@ -54999,12 +54996,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4689",
    "position": [
     -589006.892,
@@ -55014,12 +55010,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4690",
    "position": [
     -589003.589,
@@ -55029,27 +55024,25 @@
    "size_m": [
     1.953,
     2.738,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4691",
    "position": [
     -588999.007,
     -1249666.634
    ],
-   "rotation_deg": 180.0,
+   "rotation_deg": 0.0,
    "size_m": [
     1.899,
     2.281,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4692",
    "position": [
     -588996.748,
@@ -55059,12 +55052,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4693",
    "position": [
     -588990.87,
@@ -55074,12 +55066,11 @@
    "size_m": [
     2.213,
     2.993,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4694",
    "position": [
     -588986.423,
@@ -55089,12 +55080,11 @@
    "size_m": [
     2.766,
     2.934,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4695",
    "position": [
     -588971.148,
@@ -55104,12 +55094,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4696",
    "position": [
     -588969.195,
@@ -55119,12 +55108,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4697",
    "position": [
     -588968.87,
@@ -55134,12 +55122,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4698",
    "position": [
     -588961.711,
@@ -55149,12 +55136,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4699",
    "position": [
     -588957.48,
@@ -55164,12 +55150,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4700",
    "position": [
     -589009.045,
@@ -55179,12 +55164,11 @@
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4701",
    "position": [
     -589000.979,
@@ -55194,12 +55178,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4702",
    "position": [
     -588998.538,
@@ -55209,12 +55192,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4703",
    "position": [
     -588996.641,
@@ -55224,12 +55206,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4704",
    "position": [
     -588992.666,
@@ -55239,12 +55220,11 @@
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4705",
    "position": [
     -588991.675,
@@ -55254,12 +55234,11 @@
    "size_m": [
     1.798,
     2.826,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4706",
    "position": [
     -588987.04,
@@ -55269,27 +55248,25 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4707",
    "position": [
     -588973.48,
     -1249672.438
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4708",
    "position": [
     -588971.059,
@@ -55299,12 +55276,11 @@
    "size_m": [
     2.351,
     2.494,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4709",
    "position": [
     -588966.808,
@@ -55314,27 +55290,25 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4710",
    "position": [
     -588966.09,
     -1249672.258
    ],
-   "rotation_deg": 172.75,
+   "rotation_deg": -7.25,
    "size_m": [
     0.992,
     2.435,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4711",
    "position": [
     -588964.639,
@@ -55344,42 +55318,39 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4712",
    "position": [
     -588964.479,
     -1249672.361
    ],
-   "rotation_deg": 176.13,
+   "rotation_deg": -3.87,
    "size_m": [
     1.391,
     2.009,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4713",
    "position": [
     -588959.059,
     -1249672.536
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.953,
     2.738,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4714",
    "position": [
     -588958.891,
@@ -55389,12 +55360,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4715",
    "position": [
     -588956.218,
@@ -55404,12 +55374,11 @@
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4716",
    "position": [
     -588955.284,
@@ -55419,72 +55388,67 @@
    "size_m": [
     2.245,
     3.149,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4717",
    "position": [
     -588954.0,
     -1249672.62
    ],
-   "rotation_deg": 168.65,
+   "rotation_deg": -11.35,
    "size_m": [
     1.49,
     1.825,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4718",
    "position": [
     -589013.207,
     -1249674.737
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.798,
     2.826,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4719",
    "position": [
     -589010.098,
     -1249676.121
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.953,
     2.738,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4720",
    "position": [
     -589004.837,
     -1249675.143
    ],
-   "rotation_deg": 180.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.627,
     3.65,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4721",
    "position": [
     -589002.389,
@@ -55494,12 +55458,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4722",
    "position": [
     -588997.162,
@@ -55509,12 +55472,11 @@
    "size_m": [
     1.79,
     3.13,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4723",
    "position": [
     -588990.084,
@@ -55524,42 +55486,39 @@
    "size_m": [
     1.953,
     2.738,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4724",
    "position": [
     -588988.07,
     -1249676.545
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4725",
    "position": [
     -588985.304,
     -1249673.676
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4726",
    "position": [
     -588980.077,
@@ -55569,12 +55528,11 @@
    "size_m": [
     2.115,
     3.325,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4727",
    "position": [
     -588976.952,
@@ -55584,42 +55542,39 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4728",
    "position": [
     -588974.619,
     -1249675.697
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4729",
    "position": [
     -588966.213,
     -1249676.283
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4730",
    "position": [
     -588964.368,
@@ -55629,12 +55584,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4731",
    "position": [
     -588962.145,
@@ -55644,27 +55598,25 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4732",
    "position": [
     -588957.464,
     -1249676.248
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4733",
    "position": [
     -588953.831,
@@ -55674,117 +55626,109 @@
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4734",
    "position": [
     -589012.792,
     -1249679.852
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.433,
     3.824,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4735",
    "position": [
     -589005.944,
     -1249679.71
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.245,
     3.149,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4736",
    "position": [
     -589003.915,
     -1249678.827
    ],
-   "rotation_deg": 180.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.52,
     2.674,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4737",
    "position": [
     -589002.064,
     -1249679.74
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4738",
    "position": [
     -588999.175,
     -1249679.051
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4739",
    "position": [
     -588997.292,
     -1249678.697
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4740",
    "position": [
     -588994.884,
     -1249678.566
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.115,
     3.325,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4741",
    "position": [
     -588990.377,
@@ -55794,12 +55738,11 @@
    "size_m": [
     2.245,
     3.149,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4742",
    "position": [
     -588984.707,
@@ -55809,27 +55752,25 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4743",
    "position": [
     -588982.79,
     -1249677.621
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.79,
     3.13,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4744",
    "position": [
     -588977.046,
@@ -55839,27 +55780,25 @@
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4745",
    "position": [
     -588973.317,
     -1249678.566
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4746",
    "position": [
     -588970.714,
@@ -55869,57 +55808,53 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4747",
    "position": [
     -588968.279,
     -1249678.123
    ],
-   "rotation_deg": 174.33,
+   "rotation_deg": -5.67,
    "size_m": [
     1.228,
     1.986,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4748",
    "position": [
     -588959.812,
     -1249678.435
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4749",
    "position": [
     -589014.105,
     -1249684.043
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4750",
    "position": [
     -589009.691,
@@ -55929,12 +55864,11 @@
    "size_m": [
     2.213,
     2.993,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4751",
    "position": [
     -589008.573,
@@ -55944,12 +55878,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4752",
    "position": [
     -589007.434,
@@ -55959,12 +55892,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4753",
    "position": [
     -589004.001,
@@ -55974,12 +55906,11 @@
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4754",
    "position": [
     -588999.895,
@@ -55989,12 +55920,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4755",
    "position": [
     -588997.244,
@@ -56004,12 +55934,11 @@
    "size_m": [
     1.953,
     2.738,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4756",
    "position": [
     -588993.386,
@@ -56019,87 +55948,81 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4757",
    "position": [
     -588985.94,
     -1249683.421
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4758",
    "position": [
     -588977.278,
     -1249681.631
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4759",
    "position": [
     -588976.968,
     -1249684.484
    ],
-   "rotation_deg": 94.76,
+   "rotation_deg": 4.76,
    "size_m": [
-    2.273,
     1.137,
-    0.12
+    2.273,
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4760",
    "position": [
     -588971.107,
     -1249682.218
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.058,
     3.599,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4761",
    "position": [
     -588967.223,
     -1249682.674
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.115,
     3.325,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4762",
    "position": [
     -588965.019,
@@ -56109,162 +56032,151 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4763",
    "position": [
     -588956.544,
     -1249683.29
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4764",
    "position": [
     -589009.061,
     -1249687.564
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4765",
    "position": [
     -589006.945,
     -1249687.303
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4766",
    "position": [
     -589004.396,
     -1249685.618
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.161,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4767",
    "position": [
     -589001.827,
     -1249685.969
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.213,
     2.993,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4768",
    "position": [
     -588997.053,
     -1249685.187
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.213,
     2.993,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4769",
    "position": [
     -588994.633,
     -1249685.477
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4770",
    "position": [
     -588992.123,
     -1249688.115
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4771",
    "position": [
     -588990.023,
     -1249684.825
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4772",
    "position": [
     -588988.43,
     -1249686.194
    ],
-   "rotation_deg": 180.0,
+   "rotation_deg": 0.0,
    "size_m": [
     1.355,
     2.152,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4773",
    "position": [
     -588986.451,
@@ -56274,12 +56186,11 @@
    "size_m": [
     1.953,
     2.738,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4774",
    "position": [
     -588980.614,
@@ -56289,12 +56200,11 @@
    "size_m": [
     2.245,
     3.149,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4775",
    "position": [
     -588977.006,
@@ -56304,12 +56214,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4776",
    "position": [
     -588974.609,
@@ -56319,12 +56228,11 @@
    "size_m": [
     2.433,
     3.824,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4777",
    "position": [
     -588962.341,
@@ -56334,147 +56242,137 @@
    "size_m": [
     1.79,
     2.543,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4778",
    "position": [
     -588959.379,
     -1249687.901
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.161,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4779",
    "position": [
     -588959.379,
     -1249685.098
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.161,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4780",
    "position": [
     -589011.996,
     -1249690.465
    ],
-   "rotation_deg": 180.0,
+   "rotation_deg": -90.0,
    "size_m": [
-    2.169,
     2.087,
-    0.12
+    2.169,
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4781",
    "position": [
     -589007.487,
     -1249692.193
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4782",
    "position": [
     -589003.101,
     -1249690.009
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.603,
     3.521,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4783",
    "position": [
     -588998.213,
     -1249690.106
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4784",
    "position": [
     -588996.315,
     -1249689.389
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4785",
    "position": [
     -588983.299,
     -1249689.398
    ],
-   "rotation_deg": 163.25,
+   "rotation_deg": 73.25,
    "size_m": [
-    2.851,
     1.802,
-    0.12
+    2.851,
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4786",
    "position": [
     -588962.907,
     -1249689.436
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.49,
     2.494,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4787",
    "position": [
     -589009.712,
@@ -56484,27 +56382,25 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4788",
    "position": [
     -589007.366,
     -1249695.206
    ],
-   "rotation_deg": 94.76,
+   "rotation_deg": 4.76,
    "size_m": [
-    2.196,
     1.849,
-    0.12
+    2.196,
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4789",
    "position": [
     -589004.614,
@@ -56514,12 +56410,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4790",
    "position": [
     -589002.097,
@@ -56529,12 +56424,11 @@
    "size_m": [
     2.213,
     2.993,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4791",
    "position": [
     -588997.981,
@@ -56544,12 +56438,11 @@
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4792",
    "position": [
     -588993.311,
@@ -56559,57 +56452,39 @@
    "size_m": [
     2.213,
     2.993,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
-   "id": "o-4793",
-   "position": [
-    -588984.389,
-    -1249695.974
-   ],
-   "rotation_deg": 0.0,
-   "size_m": [
-    2.929,
-    2.934,
-    0.12
-   ]
-  },
-  {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4794",
    "position": [
     -588983.167,
     -1249692.915
    ],
-   "rotation_deg": 95.71,
+   "rotation_deg": -174.29,
    "size_m": [
-    2.288,
     0.986,
-    0.12
+    2.288,
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4795",
    "position": [
     -588981.207,
     -1249693.646
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.798,
     2.826,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4796",
    "position": [
     -588977.064,
@@ -56619,27 +56494,25 @@
    "size_m": [
     2.49,
     2.494,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4797",
    "position": [
     -588973.756,
     -1249692.762
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.49,
     2.494,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4798",
    "position": [
     -588969.61,
@@ -56649,12 +56522,11 @@
    "size_m": [
     1.79,
     3.13,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4799",
    "position": [
     -588966.67,
@@ -56664,492 +56536,305 @@
    "size_m": [
     1.798,
     2.826,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4800",
    "position": [
     -588960.973,
     -1249692.653
    ],
-   "rotation_deg": 99.43,
+   "rotation_deg": 9.43,
    "size_m": [
-    1.868,
     1.223,
-    0.12
+    1.868,
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4801",
    "position": [
     -589012.228,
     -1249696.39
    ],
-   "rotation_deg": 97.9,
+   "rotation_deg": 7.9,
    "size_m": [
-    2.178,
     1.928,
-    0.12
+    2.178,
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
-   "id": "o-4802",
-   "position": [
-    -588987.887,
-    -1249699.886
-   ],
-   "rotation_deg": 180.0,
-   "size_m": [
-    2.115,
-    2.281,
-    0.12
-   ]
-  },
-  {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
-   "id": "o-4803",
-   "position": [
-    -588985.652,
-    -1249699.725
-   ],
-   "rotation_deg": 93.3,
-   "size_m": [
-    2.855,
-    1.752,
-    0.12
-   ]
-  },
-  {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4804",
    "position": [
     -588977.636,
     -1249699.495
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.441,
     3.325,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4805",
    "position": [
     -588967.84,
     -1249698.973
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4806",
    "position": [
     -588965.453,
     -1249698.908
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4807",
    "position": [
     -589011.265,
     -1249703.994
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.115,
     3.325,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4808",
    "position": [
     -589001.23,
     -1249704.058
    ],
-   "rotation_deg": 180.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.572,
     2.543,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4809",
    "position": [
     -588998.979,
     -1249704.059
    ],
-   "rotation_deg": 180.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.844,
     3.977,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4810",
    "position": [
     -588978.015,
     -1249703.473
    ],
-   "rotation_deg": 180.0,
+   "rotation_deg": -90.0,
    "size_m": [
-    2.766,
     2.283,
-    0.12
+    2.766,
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4811",
    "position": [
     -588971.257,
     -1249700.409
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
-   "id": "o-4812",
-   "position": [
-    -589007.922,
-    -1249706.406
-   ],
-   "rotation_deg": 0.0,
-   "size_m": [
-    1.521,
-    2.66,
-    0.12
-   ]
-  },
-  {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
-   "id": "o-4813",
-   "position": [
-    -589004.776,
-    -1249706.601
-   ],
-   "rotation_deg": 0.0,
-   "size_m": [
-    1.521,
-    2.66,
-    0.12
-   ]
-  },
-  {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
-   "id": "o-4814",
-   "position": [
-    -589001.149,
-    -1249707.808
-   ],
-   "rotation_deg": 0.0,
-   "size_m": [
-    2.278,
-    3.521,
-    0.12
-   ]
-  },
-  {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4815",
    "position": [
     -588995.27,
     -1249706.37
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.66,
     2.328,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4816",
    "position": [
     -588990.003,
     -1249704.092
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.441,
     3.521,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4817",
    "position": [
     -588983.474,
     -1249705.428
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.058,
     3.599,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
-   "id": "o-4818",
-   "position": [
-    -589013.182,
-    -1249710.58
-   ],
-   "rotation_deg": 0.0,
-   "size_m": [
-    1.521,
-    2.66,
-    0.12
-   ]
-  },
-  {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
-   "id": "o-4819",
-   "position": [
-    -588999.677,
-    -1249711.622
-   ],
-   "rotation_deg": 0.0,
-   "size_m": [
-    1.521,
-    2.66,
-    0.12
-   ]
-  },
-  {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
-   "id": "o-4820",
-   "position": [
-    -588998.593,
-    -1249708.297
-   ],
-   "rotation_deg": 0.0,
-   "size_m": [
-    1.521,
-    2.66,
-    0.12
-   ]
-  },
-  {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
-   "id": "o-4821",
-   "position": [
-    -588992.774,
-    -1249711.716
-   ],
-   "rotation_deg": 0.0,
-   "size_m": [
-    1.66,
-    2.328,
-    0.12
-   ]
-  },
-  {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4822",
    "position": [
     -588988.01,
     -1249708.203
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     2.075,
     2.993,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
-   "id": "o-4823",
-   "position": [
-    -588996.748,
-    -1249711.949
-   ],
-   "rotation_deg": 0.0,
-   "size_m": [
-    1.521,
-    2.66,
-    0.12
-   ]
-  },
-  {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
-   "id": "o-4824",
-   "position": [
-    -588989.372,
-    -1249712.274
-   ],
-   "rotation_deg": 0.0,
-   "size_m": [
-    1.521,
-    2.66,
-    0.12
-   ]
-  },
-  {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4825",
    "position": [
     -588978.5,
     -1249707.5
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4826",
    "position": [
     -588973.0,
     -1249708.0
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4827",
    "position": [
     -588969.5,
     -1249706.5
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4828",
    "position": [
     -588965.5,
     -1249703.0
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4829",
    "position": [
     -588962.5,
     -1249701.0
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4830",
    "position": [
     -588960.0,
     -1249699.5
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4831",
    "position": [
     -588956.5,
     -1249696.5
    ],
-   "rotation_deg": 0.0,
+   "rotation_deg": -180.0,
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4832",
    "position": [
     -588982.5,
@@ -57159,12 +56844,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4833",
    "position": [
     -588980.5,
@@ -57174,12 +56858,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4834",
    "position": [
     -588977.5,
@@ -57189,12 +56872,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4835",
    "position": [
     -588974.5,
@@ -57204,12 +56886,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4836",
    "position": [
     -588972.5,
@@ -57219,12 +56900,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4837",
    "position": [
     -588980.0,
@@ -57234,12 +56914,11 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
   },
   {
-   "asset": "prim:slab",
-   "colour": "#a9a9a4",
+   "asset": "prim:grave",
    "id": "o-4838",
    "position": [
     -588976.5,
@@ -57249,8 +56928,17 @@
    "size_m": [
     1.521,
     2.66,
-    0.12
+    0.3
    ]
+  },
+  {
+   "asset": "prim:crucifix",
+   "id": "o-4839",
+   "position": [
+    -588985.0,
+    -1249697.5
+   ],
+   "rotation_deg": -90.0
   }
  ],
  "parcels": {
@@ -59500,7 +59188,110 @@
     ],
     "mode": "custom",
     "type": "brick_red"
-   }
+   },
+   "ground_type": "graveyard",
+   "outline": [
+    [
+     -588930.466,
+     -1249684.044
+    ],
+    [
+     -588932.784,
+     -1249685.804
+    ],
+    [
+     -588973.874,
+     -1249712.185
+    ],
+    [
+     -588978.144,
+     -1249711.666
+    ],
+    [
+     -588996.874,
+     -1249709.385
+    ],
+    [
+     -589019.974,
+     -1249704.285
+    ],
+    [
+     -589018.994,
+     -1249694.415
+    ],
+    [
+     -589017.844,
+     -1249682.805
+    ],
+    [
+     -589016.734,
+     -1249671.605
+    ],
+    [
+     -589015.574,
+     -1249659.885
+    ],
+    [
+     -589012.173,
+     -1249660.185
+    ],
+    [
+     -589011.684,
+     -1249655.474
+    ],
+    [
+     -589007.273,
+     -1249656.085
+    ],
+    [
+     -589002.883,
+     -1249656.684
+    ],
+    [
+     -588996.114,
+     -1249657.615
+    ],
+    [
+     -588991.313,
+     -1249658.275
+    ],
+    [
+     -588987.324,
+     -1249658.825
+    ],
+    [
+     -588984.293,
+     -1249659.245
+    ],
+    [
+     -588974.213,
+     -1249660.635
+    ],
+    [
+     -588971.623,
+     -1249660.985
+    ],
+    [
+     -588962.503,
+     -1249662.244
+    ],
+    [
+     -588950.813,
+     -1249663.854
+    ],
+    [
+     -588948.946,
+     -1249664.11
+    ],
+    [
+     -588942.705,
+     -1249669.594
+    ],
+    [
+     -588934.256,
+     -1249680.753
+    ]
+   ]
   },
   "P-1093": {
    "fence": {
@@ -59671,6 +59462,241 @@
    "fence": {
     "mode": "none"
    }
+  }
+ },
+ "paths": {
+  "PA-0001": {
+   "closed": true,
+   "points": [
+    [
+     -589016.5,
+     -1249700.0
+    ],
+    [
+     -589007.0,
+     -1249699.5
+    ],
+    [
+     -588994.5,
+     -1249699.5
+    ],
+    [
+     -588990.0,
+     -1249696.5
+    ],
+    [
+     -588987.5,
+     -1249691.0
+    ],
+    [
+     -588992.0,
+     -1249685.0
+    ],
+    [
+     -588989.5,
+     -1249680.5
+    ],
+    [
+     -588982.5,
+     -1249680.5
+    ],
+    [
+     -588980.0,
+     -1249679.0
+    ],
+    [
+     -588981.5,
+     -1249676.5
+    ],
+    [
+     -588982.5,
+     -1249672.0
+    ],
+    [
+     -588984.0,
+     -1249668.0
+    ],
+    [
+     -588986.5,
+     -1249672.0
+    ],
+    [
+     -588990.5,
+     -1249675.5
+    ],
+    [
+     -588995.0,
+     -1249676.5
+    ],
+    [
+     -589000.5,
+     -1249676.0
+    ],
+    [
+     -589003.0,
+     -1249676.0
+    ],
+    [
+     -589004.0,
+     -1249671.0
+    ],
+    [
+     -589008.5,
+     -1249674.0
+    ],
+    [
+     -589014.0,
+     -1249670.0
+    ],
+    [
+     -589017.5,
+     -1249690.5
+    ]
+   ]
+  },
+  "PA-0002": {
+   "points": [
+    [
+     -588991.5,
+     -1249700.5
+    ],
+    [
+     -588986.0,
+     -1249703.0
+    ],
+    [
+     -588980.0,
+     -1249701.5
+    ],
+    [
+     -588979.5,
+     -1249696.5
+    ],
+    [
+     -588959.0,
+     -1249695.0
+    ]
+   ]
+  },
+  "PA-0003": {
+   "points": [
+    [
+     -588974.0,
+     -1249697.0
+    ],
+    [
+     -588975.5,
+     -1249707.0
+    ]
+   ]
+  },
+  "PA-0004": {
+   "points": [
+    [
+     -588985.0,
+     -1249680.5
+    ],
+    [
+     -588983.5,
+     -1249685.0
+    ],
+    [
+     -588978.5,
+     -1249691.0
+    ],
+    [
+     -588966.0,
+     -1249687.5
+    ]
+   ]
+  },
+  "PA-0005": {
+   "points": [
+    [
+     -588983.5,
+     -1249669.5
+    ],
+    [
+     -588974.5,
+     -1249669.5
+    ],
+    [
+     -588971.0,
+     -1249675.5
+    ],
+    [
+     -588964.5,
+     -1249674.0
+    ],
+    [
+     -588960.5,
+     -1249675.5
+    ],
+    [
+     -588963.5,
+     -1249679.0
+    ],
+    [
+     -588968.5,
+     -1249679.5
+    ],
+    [
+     -588960.0,
+     -1249682.0
+    ],
+    [
+     -588946.5,
+     -1249679.0
+    ]
+   ]
+  },
+  "PA-0006": {
+   "points": [
+    [
+     -588961.5,
+     -1249670.0
+    ],
+    [
+     -588962.0,
+     -1249675.0
+    ]
+   ]
+  },
+  "PA-0007": {
+   "points": [
+    [
+     -589017.0,
+     -1249687.0
+    ],
+    [
+     -589006.0,
+     -1249685.0
+    ],
+    [
+     -589000.0,
+     -1249683.5
+    ],
+    [
+     -588992.5,
+     -1249684.5
+    ]
+   ]
+  },
+  "PA-0008": {
+   "points": [
+    [
+     -588979.5,
+     -1249689.5
+    ],
+    [
+     -588982.0,
+     -1249691.5
+    ],
+    [
+     -588987.5,
+     -1249691.0
+    ]
+   ]
   }
  },
  "version": 1,

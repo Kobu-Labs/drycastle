@@ -24,6 +24,7 @@ from drycastle_pipeline.buildings import hex_to_rgb
 from drycastle_pipeline.connectors import CONNECTORS, build_connector
 from drycastle_pipeline.floodwall import PIECES as FLOODWALL_PIECES
 from drycastle_pipeline.floodwall import build_piece
+from drycastle_pipeline import graves
 from drycastle_pipeline.meshes import Mesh
 from drycastle_pipeline.poles import VARIANTS as POLE_VARIANTS
 from drycastle_pipeline.poles import build_variant
@@ -351,6 +352,10 @@ def _floodwall_primitive(name: str) -> Primitive:
 
 
 PRIMITIVES.update({name: _floodwall_primitive(name) for name in FLOODWALL_PIECES})
+
+
+PRIMITIVES["crucifix"] = Primitive(graves.crucifix_mesh, {}, tuple(graves.crucifix_entry()["size_m"]), graves.STONES["terrazzo"][0])
+PRIMITIVES["grave"] = Primitive(graves.default_mesh, {}, tuple(graves.manifest_entry()["size_m"]), graves.STONES[graves.DEFAULT_SPEC.stone][0])
 
 
 def build_primitive(name: str, params: dict | None = None) -> Mesh:

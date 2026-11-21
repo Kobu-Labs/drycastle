@@ -47,8 +47,9 @@ from drycastle_pipeline.assets import load_manifest
 from drycastle_pipeline.buildings import footprint_polygon, hex_to_rgb
 from drycastle_pipeline.config import map_paths
 from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
+from drycastle_pipeline.footpaths import path_polygons
 from drycastle_pipeline import meadow as meadow_mod
-from drycastle_pipeline.ground import ground_types, ground_units, type_colours, water_kinds
+from drycastle_pipeline.ground import ground_kind, ground_types, ground_units, type_colours, water_kinds, with_parcel_types
 from drycastle_pipeline.ground_attributes import attributes_of
 from drycastle_pipeline.meshes import Mesh
 from drycastle_pipeline.props import chunk_of, seeded, wet_zone
@@ -1134,12 +1135,12 @@ def area_type(parcel: dict, types: dict[str, dict] | None = None) -> str | None:
     """The recipe (:data:`RECIPES`) of a parcel or ground area, by its kind; None: no detail (water).
 
     The only place that reads the kind: a parcel is a yard, a ground area has the ``recipe`` of its type
-    (``ground.types`` in ``rules.yaml``)."""
+    (``ground.types`` in ``rules.yaml``), and so has a parcel the edits gave a ground type (``ground.ground_kind``)."""
     if parcel.get("id") in dike_parcels():
         return "dike"
-    if parcel["kind"] in ("garden", "building_plot"):
+    if parcel["kind"] in ("garden", "building_plot") and not parcel.get("ground_type"):
         return "garden"
-    return attributes_of((types if types is not None else _shipped_types()).get(parcel["kind"])).get("recipe")
+    return attributes_of((types if types is not None else _shipped_types()).get(ground_kind(parcel))).get("recipe")
 
 
 # --- the village ----------------------------------------------------------------------------
@@ -1179,7 +1180,7 @@ class Village:
         self.terrain, _ = load_terrain(work_dir)
         parcels_doc = json.loads((work_dir / "parcels.json").read_text())
         self.chunk_m = float(parcels_doc["chunk_size_m"])
-        self.parcels = ground_units(parcels_doc)  # parcels and ground areas: every unit gets its recipe
+        self.parcels = with_parcel_types(ground_units(parcels_doc), edits_path)  # parcels and ground areas: every unit gets its recipe
         buildings = json.loads((work_dir / "buildings.json").read_text())["buildings"]
         props = json.loads((work_dir / "props.json").read_text())
         graph = json.loads((work_dir / "roads.json").read_text())
@@ -1222,6 +1223,8 @@ class Village:
         self.water_polys = [shape(p["polygon"]) for p in self.parcels if p["kind"] in wet]
         self.w_tree = shapely.STRtree(self.water_polys)
         self.verge_polys = make_verge(graph, self.cfg["verge"])
+        # worn footpaths of the edits are trodden ground like the dirt of the verges
+        self.verge_polys["dirt"] += path_polygons(load_edits(edits_path).paths, tuple(parcels_doc.get("origin_epsg5514") or (0.0, 0.0)))
         self.v_tree = {k: shapely.STRtree(v) for k, v in self.verge_polys.items()}
         # crop patches, for the baulk between two that adjoin
         self.crop_units = [(p["id"], shape(p["polygon"])) for p in self.parcels if area_type(p, self.types) == "crop"]
@@ -1239,12 +1242,13 @@ class Village:
     def cfg_for(self, parcel: dict, recipe: str) -> dict:
         """The detail rules for a unit: for a ground area whose type has ``detail`` settings, those laid over the
         section of its recipe."""
-        attrs = attributes_of(self.types.get(parcel["kind"]))
+        kind = ground_kind(parcel)
+        attrs = attributes_of(self.types.get(kind))
         if not attrs.get("detail") or attrs.get("recipe") != recipe:
             return self.cfg
-        if parcel["kind"] not in self._type_cfg:
-            self._type_cfg[parcel["kind"]] = {**self.cfg, recipe: _merge(self.cfg[recipe], attrs["detail"])}
-        return self._type_cfg[parcel["kind"]]
+        if kind not in self._type_cfg:
+            self._type_cfg[kind] = {**self.cfg, recipe: _merge(self.cfg[recipe], attrs["detail"])}
+        return self._type_cfg[kind]
 
     @staticmethod
     def _near(tree: shapely.STRtree, items: list, geom: BaseGeometry) -> list:

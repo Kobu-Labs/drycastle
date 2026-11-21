@@ -171,7 +171,7 @@ public static class ObjectEdits
     {
         var errs = new List<string>();
         if (!(root.GetValueOrDefault("version") is EditsFile.Num v && v.Text == "1")) errs.Add("version: must be 1");
-        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "objects" or "groups" or "ground_patches" or "zones" or "zone_cuts" or "cables" or "ground_types")) errs.Add($"{k}: unknown key");
+        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "objects" or "groups" or "ground_patches" or "zones" or "zone_cuts" or "cables" or "ground_types" or "paths")) errs.Add($"{k}: unknown key");
         var seen = new Dictionary<string, string>(); // object id -> where it first appears, unique across the whole file
         if (root.TryGetValue("objects", out var top)) errs.AddRange(CheckObjects(top, "objects", seen));
         foreach (var (pid, entry) in Parcels(root))
@@ -180,8 +180,16 @@ public static class ObjectEdits
             if (!ParcelRx.IsMatch(pid)) errs.Add($"{path}: parcel IDs look like P-0412");
             if (entry is not Obj e) { errs.Add($"{path}: must be an object"); continue; }
             if (e.ContainsKey("trees")) errs.Add($"{path}.trees: per-parcel tree settings were removed; delete this entry");
-            foreach (var k in e.Keys) if (k is not ("fence" or "trees" or "objects")) errs.Add($"{path}.{k}: unknown key");
+            foreach (var k in e.Keys) if (k is not ("fence" or "ground_type" or "outline" or "trees" or "objects")) errs.Add($"{path}.{k}: unknown key");
             if (e.TryGetValue("fence", out var f)) errs.AddRange(f is Obj fo ? EditModel.CheckFence(fo, $"{path}.fence") : new List<string> { $"{path}.fence: must be an object" });
+            if (e.TryGetValue("ground_type", out var gt))
+            {
+                var (exists, water) = gt is string gs && gs != "" ? GroundTypeEdits.PatchType(gs, root.GetValueOrDefault("ground_types") as Obj) : (false, null);
+                if (!exists) errs.Add($"{path}.ground_type: {gt} is not a ground type (or it is deleted)");
+                else if (water is true) errs.Add($"{path}.ground_type: {gt} is a water type, a parcel cannot be water");
+            }
+            // mirror of edits.py: a parcel's outline is a simple ring like a patch's polygon (that two edited outlines must not overlap is checked by the Python validator only)
+            if (e.ContainsKey("outline")) errs.AddRange(CheckPolygon(e, path, "outline"));
             if (e.TryGetValue("objects", out var ob)) errs.AddRange(CheckObjects(ob, $"{path}.objects", seen));
         }
         var owner = new Dictionary<string, string>();
@@ -245,10 +253,30 @@ public static class ObjectEdits
             if (gtypes is not Obj go) errs.Add("ground_types: must be an object");
             else errs.AddRange(GroundTypeEdits.Validate(go));
         }
+        if (root.GetValueOrDefault("paths") is { } paths)
+        {
+            if (paths is not Obj pao) errs.Add("paths: must be an object");
+            else
+                foreach (var (pid, entry) in pao)
+                {
+                    // mirror of edits.py `_check_paths`: a worn footpath is a line of at least 2 [x, y] points, an optional width and "closed"
+                    var path = $"paths.{pid}";
+                    if (!PathRx.IsMatch(pid)) errs.Add($"{path}: path IDs look like PA-0001");
+                    if (entry is not Obj pe) { errs.Add($"{path}: must be an object"); continue; }
+                    foreach (var k in pe.Keys) if (k is not ("points" or "width_m" or "closed")) errs.Add($"{path}.{k}: unknown key");
+                    var pts = pe.GetValueOrDefault("points") as List<object?>;
+                    if (pts == null || pts.Count < 2 || !pts.All(p => p is List<object?> { Count: 2 } xy && xy.All(v => Number(v) is double n && double.IsFinite(n))))
+                        errs.Add($"{path}.points: must be a list of at least 2 [x, y] points");
+                    if (pe.TryGetValue("width_m", out var w) && !(Number(w) is double wm && wm >= 0.3 && wm <= 4.0))
+                        errs.Add($"{path}.width_m: must be a number of metres from 0.3 to 4");
+                    if (pe.TryGetValue("closed", out var cl) && cl is not bool) errs.Add($"{path}.closed: must be true or false");
+                }
+        }
         return errs;
     }
 
     static readonly Regex CableRx = new("^C-\\d{4,}$", RegexOptions.Compiled);
+    static readonly Regex PathRx = new("^PA-\\d{4,}$", RegexOptions.Compiled);
 
     /// <summary>Mirror of edits.py `_check_cables`: two different object ids per cable, and no pair of poles joined twice.</summary>
     static List<string> CheckCables(Obj cables)
@@ -318,23 +346,23 @@ public static class ObjectEdits
         return errs;
     }
 
-    static List<string> CheckPolygon(Obj r, string path)
+    static List<string> CheckPolygon(Obj r, string path, string key = "polygon")
     {
         var errs = new List<string>();
-        if (!r.TryGetValue("polygon", out var poly)) { errs.Add($"{path}.polygon: required"); return errs; }
-        if (poly is not List<object?> pts) { errs.Add($"{path}.polygon: must be a list of [x, y] points"); return errs; }
+        if (!r.TryGetValue(key, out var poly)) { errs.Add($"{path}.{key}: required"); return errs; }
+        if (poly is not List<object?> pts) { errs.Add($"{path}.{key}: must be a list of [x, y] points"); return errs; }
         var ring = new List<(double x, double y)>();
         for (var i = 0; i < pts.Count; i++)
         {
             if (pts[i] is List<object?> p && p.Count == 2 && Number(p[0]) is double x && Number(p[1]) is double y) ring.Add((x, y));
-            else errs.Add($"{path}.polygon.{i}: must be [x, y] in absolute S-JTSK metres");
+            else errs.Add($"{path}.{key}.{i}: must be [x, y] in absolute S-JTSK metres");
         }
         if (errs.Count > 0) return errs;
         switch (RingProblemCode(ring))
         {
-            case RingTooFew: errs.Add($"{path}.polygon: needs at least 3 points"); break;
-            case RingRepeated: errs.Add($"{path}.polygon: has repeated consecutive points"); break;
-            case RingNotSimple: errs.Add($"{path}.polygon: must not intersect or touch itself, and must enclose an area"); break;
+            case RingTooFew: errs.Add($"{path}.{key}: needs at least 3 points"); break;
+            case RingRepeated: errs.Add($"{path}.{key}: has repeated consecutive points"); break;
+            case RingNotSimple: errs.Add($"{path}.{key}: must not intersect or touch itself, and must enclose an area"); break;
         }
         return errs;
     }

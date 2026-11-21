@@ -81,6 +81,7 @@ from drycastle_pipeline.ground_attributes import (
     RECIPES,
     attributes_of,
 )
+from drycastle_pipeline.parcel_outlines import buildings_outside, splice_outline
 from drycastle_pipeline.patches import patch_rank
 from drycastle_pipeline.roads import edge_lines
 from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
@@ -106,7 +107,7 @@ _GROUP_ID = re.compile(r"G-\d{4,}")
 _PATCH_ID = re.compile(r"GP-\d{4,}")
 _ZONE_ID = re.compile(r"Z-\d{4,}")
 _RULE_ZONE_ID = re.compile(r"A-\d{4,}(?:\.\d+)?")  # a zone that comes from a rule: a ground area (or one outline of it)
-_GENERATED_ID = re.compile(r"(?:[oGCZ]|GP|ZC)-(\d+)")
+_GENERATED_ID = re.compile(r"(?:[oGCZ]|GP|ZC|PA)-(\d+)")
 
 
 def _r3(v: float) -> float:
@@ -393,6 +394,8 @@ def _edits_doc(edits: Edits) -> dict:
         doc["cables"] = edits.cables
     if edits.ground_types:
         doc["ground_types"] = edits.ground_types
+    if edits.paths:
+        doc["paths"] = edits.paths
     return doc
 
 
@@ -1221,6 +1224,107 @@ class ParcelEditTools:
             "target": tid,
             "fence": fence,
             "warnings": warnings,
+        }
+
+    def set_parcel_ground_type(self, parcel: str, type: str | None = None) -> dict:
+        """Give one parcel the ground of a ground type (``ground_type`` of its edits entry); none removes it."""
+        if not (isinstance(parcel, str) and _PARCEL_ID.fullmatch(parcel)):
+            raise ToolError(f"parcel {parcel!r} is not a parcel ID like P-0412")
+        pid = self.map.need(parcel)
+
+        def change(edits: Edits) -> bool:
+            holder = edits.parcels.setdefault(pid, {})
+            if not type:
+                return holder.pop("ground_type", None) is not None
+            changed = holder.get("ground_type") != type
+            holder["ground_type"] = type
+            return changed
+
+        changed = self._write(change)  # an emptied entry is dropped by _write; an unknown or water type is refused by the validator
+        return {
+            "summary": f"ground of {pid} is now {type}" if type else (
+                f"ground type of {pid} removed" if changed else f"{pid} had no ground type"),
+            "parcel": pid,
+            "ground_type": type or None,
+            "changed": changed,
+            "note": "Needs the next make map-update to show on the map.",
+        }
+
+    def set_parcel_outline(self, parcel: str, points: list | None = None, sketch_line: str | None = None) -> dict:
+        """Replace one parcel's outline (``outline`` of its edits entry), whole or by splicing a sketch line into it."""
+        if not (isinstance(parcel, str) and _PARCEL_ID.fullmatch(parcel)):
+            raise ToolError(f"parcel {parcel!r} is not a parcel ID like P-0412")
+        if (points is None) == (sketch_line is None):
+            raise ToolError("give exactly one of points (the full new outline, [[x, y], ...] absolute S-JTSK metres) or sketch_line (an open line id of get_sketch)")
+        pid = self.map.need(parcel)
+        m = self.map
+        if points is not None:
+            if not isinstance(points, list):
+                raise ToolError("points must be a list of [x, y] points")
+            new = [tuple(self._xy(f"points[{i}]", p)) for i, p in enumerate(points)]
+            if len(new) > 1 and new[0] == new[-1]:
+                new.pop()
+        else:
+            line, line_closed = self._sketch_line(sketch_line)
+            if line_closed:
+                raise ToolError(f"sketch line {sketch_line} is closed; give an open line, or its points as the full outline")
+            if len(line) < 2:
+                raise ToolError(f"sketch line {sketch_line} has fewer than 2 points")
+        info: dict = {}
+
+        def change(edits: Edits) -> None:
+            holder = edits.parcels.setdefault(pid, {})
+            if points is None:
+                current = holder.get("outline") or [m.to_abs(x, y) for x, y in list(m.polys[pid].exterior.coords)[:-1]]
+                try:
+                    ring = splice_outline([(float(x), float(y)) for x, y in current], [(x, y) for x, y in line])
+                except ValueError as exc:
+                    raise ToolError(f"cannot splice {sketch_line} into the outline of {pid}: {exc}") from exc
+            else:
+                ring = new
+            outline = [_pt(x, y) for x, y in ring]
+            local = Polygon([m.to_local(x, y) for x, y in outline])
+            info["old_area_m2"] = round(m.polys[pid].area, 1)
+            info["trimmed"] = {}
+            if local.is_valid and local.area > 0:  # otherwise the validator refuses it below
+                inside = {b: m.bpolys[b] for b in m.parcels[pid].get("buildings", []) if b in m.bpolys}
+                out = buildings_outside(local, inside)
+                if out:
+                    raise ToolError(f"refused: the new outline of {pid} leaves {', '.join(out)} outside; nothing was written")
+                info["new_area_m2"] = round(local.area, 1)
+                edited = {p for p, e in edits.parcels.items() if e.get("outline")} | {pid}
+                info["trimmed"] = {
+                    other: round(m.polys[other].intersection(local).area, 1)
+                    for other in m.parcels_near(local, 0.0) if other not in edited
+                    and m.polys[other].intersection(local).area > 0.01
+                }
+            holder["outline"] = outline
+
+        self._write(change)  # a self-crossing outline or one overlapping another edited outline is refused by the validator
+        trimmed = info["trimmed"]
+        return {
+            "summary": f"outline of {pid} replaced: {info['old_area_m2']} m2 -> {info['new_area_m2']} m2"
+                       + (f"; neighbours cut back: {trimmed}" if trimmed else ""),
+            "parcel": pid,
+            **info,
+            "warnings": [],
+            "note": "Needs make parcels, then make map-update, to show on the map (the outline is applied in the parcels stage).",
+        }
+
+    def reset_parcel_outline(self, parcel: str) -> dict:
+        """Remove a parcel's outline edit: its cadastral outline applies again."""
+        if not (isinstance(parcel, str) and _PARCEL_ID.fullmatch(parcel)):
+            raise ToolError(f"parcel {parcel!r} is not a parcel ID like P-0412")
+
+        def change(edits: Edits) -> bool:
+            return bool(edits.parcels.get(parcel, {}).pop("outline", None))
+
+        changed = self._write(change)
+        return {
+            "summary": f"outline of {parcel} reset to the cadastre" if changed else f"{parcel} had no outline edit",
+            "parcel": parcel,
+            "changed": changed,
+            "note": "Needs make parcels, then make map-update, to show on the map.",
         }
 
     def reset_fence(self, target: str) -> dict:
@@ -2074,6 +2178,12 @@ class ParcelEditTools:
                 raise ToolError(f"{name} is already deleted. Nothing was changed.")
             if name in protected_ground_types():
                 raise ToolError(f"{name} cannot be deleted, it {protected_ground_types()[name]}. Nothing was changed.")
+            on_parcels = sorted(pid for pid, e in edits.parcels.items() if e.get("ground_type") == name)
+            if on_parcels:
+                raise ToolError(
+                    f"parcels {', '.join(on_parcels)} have the ground of type {name}; give them another "
+                    "(set_parcel_ground_type) first. Nothing was changed."
+                )
             used = self._ground_type_patches(name, edits)
             if used:
                 raise ToolError(
@@ -2369,6 +2479,59 @@ class ParcelEditTools:
             "warnings": [],
         }
 
+    # paths ---------------------------------------------------------------------------------
+    def _sketch_line(self, line: str) -> tuple[list[list[float]], bool]:
+        """The points of a sketch line (its id, as get_sketch shows it) and whether it is closed."""
+        from drycastle_pipeline import sketchfile
+
+        path = self.settings.sketch_path or sketchfile.default_path()
+        doc = json.loads(path.read_text()) if path.is_file() else {}
+        for entry in doc.get("lines", []):
+            if entry.get("id") == line:
+                return [[float(x), float(y)] for x, y in entry["points"]], bool(entry.get("closed"))
+        raise ToolError(f"no sketch line {line!r}; see get_sketch")
+
+    def create_path(self, points: list | None = None, sketch_line: str | None = None, width_m: float | None = None,
+                    closed: bool | None = None) -> dict:
+        """Create a worn footpath (see the registered tool description)."""
+        if (points is None) == (sketch_line is None):
+            raise ToolError("give exactly one of points ([[x, y], ...], absolute S-JTSK metres) or sketch_line (a line id of get_sketch)")
+        if sketch_line is not None:
+            pts, line_closed = self._sketch_line(sketch_line)
+            closed = line_closed if closed is None else closed
+        else:
+            if not isinstance(points, list):
+                raise ToolError("points must be a list of [x, y] points")
+            pts = [self._xy(f"points[{i}]", p) for i, p in enumerate(points)]
+        entry: dict = {"points": pts}
+        if width_m is not None:
+            entry["width_m"] = width_m
+        if closed:
+            entry["closed"] = True
+
+        def change(edits: Edits) -> str:
+            pid = _next_id("PA", list(edits.paths))
+            edits.paths[pid] = entry
+            return pid
+
+        pid = self._write(change)
+        return {"summary": f"created {pid} ({len(pts)} points); the map shows it after the next make map-update", "id": pid, **entry, "warnings": []}
+
+    def list_paths(self) -> dict:
+        """Every worn footpath of the edits."""
+        paths = _read_edits(self.settings.edits_path).paths
+        return {"count": len(paths), "paths": [{"id": pid, **e} for pid, e in sorted(paths.items())]}
+
+    def delete_path(self, id: str) -> dict:
+        """Delete a worn footpath."""
+        def change(edits: Edits) -> None:
+            if id not in edits.paths:
+                raise ToolError(f"no path {id!r}; see list_paths")
+            del edits.paths[id]
+
+        self._write(change)
+        return {"summary": f"deleted {id}; the map shows it after the next make map-update", "id": id, "warnings": []}
+
     def set_zone_kind(self, id: str, kind: str, from_kind: str | None = None) -> dict:
         """Give a zone another kind."""
         zid = self._zone_ref(id)
@@ -2583,6 +2746,30 @@ def build_server(settings: Settings) -> Any:
         return tools.reset_fence(target)
 
     @server.tool(description=(
+        "Give ONE parcel the ground of a ground type (see list_ground_types; make one with set_ground_type, e.g. `graveyard`): its "
+        "terrain colours and detail recipe come from that type instead of the yard of its kind (a type without a recipe: bare "
+        "ground, no detail). Kind, layout and fence are unchanged. Not a water type. null removes it. Ground patches cannot do this "
+        "(they paint only outside parcels). Needs the next make map-update to show on the map."))
+    def set_parcel_ground_type(parcel: str, type: str | None = None) -> dict:
+        return tools.set_parcel_ground_type(parcel, type)
+
+    @server.tool(description=(
+        "Replace the outline of ONE parcel (the cadastral boundary; no edit = untouched). Give `sketch_line` = the id of an open "
+        "line the user drew (get_sketch): the stretch of the current boundary between the two points nearest the line's ends is "
+        "replaced by the line, keeping the larger part of the parcel, so the user draws only the part that changes. Or give "
+        "`points` = [[x, y], ...], absolute S-JTSK metres, the full new outline. The outline must be a simple polygon and the "
+        "parcel's buildings must stay inside it. Where it overlaps an unedited parcel the edited one wins and the neighbour is "
+        "cut back; two edited outlines must not overlap. Land the parcel gives up becomes ground. Fence, ground, detail and "
+        "object clearance follow the new outline. Needs make parcels, then make map-update, to show on the map."))
+    def set_parcel_outline(parcel: str, points: list[list[float]] | None = None, sketch_line: str | None = None) -> dict:
+        return tools.set_parcel_outline(parcel, points, sketch_line)
+
+    @server.tool(description=(
+        "Remove the outline edit of a parcel: its cadastral outline applies again. Needs make parcels, then make map-update."))
+    def reset_parcel_outline(parcel: str) -> dict:
+        return tools.reset_parcel_outline(parcel)
+
+    @server.tool(description=(
         "Place an asset (see list_assets). An object belongs to no parcel, it only has a position: "
         "give an exact `position` [x, y] in S-JTSK metres (nothing else is needed, so a pole by a "
         "road is fine), or name a `parcel` and an `anchor` = front | back "
@@ -2778,6 +2965,24 @@ def build_server(settings: Settings) -> Any:
         points: list[list[float]] | None = None,
     ) -> dict:
         return tools.create_zone(kind, polygon, parcel, points)
+
+    @server.tool(description=(
+        "Create a worn footpath (id PA-NNNN): a line people walk until the grass is gone. Give `points` = [[x, y], ...] in "
+        "absolute S-JTSK metres, or `sketch_line` = the id of a line the user drew (get_sketch; a closed line makes a loop). "
+        "`width_m` 0.3 to 4 (default 0.8) is the average width of the trodden ground; its outline swells, wanders and thins out "
+        "at the ends of an open path. It is drawn as bare earth over whatever ground is there (also inside a parcel) and changes "
+        "no parcel, ground area or kind. Needs the next make map-update to show on the map."))
+    def create_path(points: list[list[float]] | None = None, sketch_line: str | None = None, width_m: float | None = None,
+                    closed: bool | None = None) -> dict:
+        return tools.create_path(points, sketch_line, width_m, closed)
+
+    @server.tool(description="List the worn footpaths (create_path): id, points, width_m, closed.")
+    def list_paths() -> dict:
+        return tools.list_paths()
+
+    @server.tool(description="Delete a worn footpath by its id (PA-NNNN). Needs the next make map-update to show on the map.")
+    def delete_path(id: str) -> dict:
+        return tools.delete_path(id)
 
     @server.tool(description=(
         "Give a zone another kind (see list_zone_kinds). A zone from list_zones with an `A-` id (one the kind has by "

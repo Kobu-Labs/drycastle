@@ -260,5 +260,23 @@ def type_colours(types: dict[str, dict]) -> dict[str, list[str]]:
     return {name: attributes_of(spec)["colours"] for name, spec in types.items() if attributes_of(spec).get("colours")}
 
 
+def ground_kind(unit: dict) -> str:
+    """The name the terrain of a unit goes by: the ground type the edits gave the parcel (``ground_type``, laid on by
+    :func:`with_parcel_types`), else its kind. Only the look of the ground (terrain colour, detail recipe) reads this; what the
+    parcel is (fence, trees, buildings) stays its kind."""
+    return unit.get("ground_type") or unit["kind"]
+
+
+def with_parcel_types(units: list[dict], edits_path: Path | None) -> list[dict]:
+    """``units`` with the ground type of the edits (``parcels.<ID>.ground_type``) laid on as ``ground_type``; a unit without
+    one is the same dict. :func:`ground_kind` reads it."""
+    if edits_path is None:
+        return units
+    from drycastle_pipeline.edits import load_edits
+
+    own = {pid: e["ground_type"] for pid, e in load_edits(edits_path).parcels.items() if e.get("ground_type")}
+    return [{**u, "ground_type": own[u["id"]]} if u["id"] in own else u for u in units] if own else units
+
+
 def water_kinds(types: dict[str, dict]) -> set[str]:
     return {name for name, spec in types.items() if attributes_of(spec).get("water")}

@@ -16,6 +16,9 @@ public sealed class PlacedObject
     public float Scale { get; init; } = 1f;
     /// <summary>Exact final bounding box in metres (X length along the object's x, Y width along map y, Z height); wins over <see cref="Scale"/>. Null = none.</summary>
     public Vector3? SizeM { get; init; }
+    /// <summary>A GLB of the map (relative path, "graves/o-4673.glb") drawn in place of the asset's shared model, at its real size: never stretched
+    /// by <see cref="SizeM"/>, which then only sizes the colliders. Null = the asset's model. Written by the export, not by edits.json.</summary>
+    public string? Model { get; init; }
     public string? Colour { get; init; }
     /// <summary>False = no collision at all (players, vehicles and shots pass through): trash laid over a climbable prim. objects.json carries the key only when false.</summary>
     public bool Solid { get; init; } = true;
@@ -191,6 +194,7 @@ public sealed partial class MapLoader
                 RotationDeg = o.TryGetProperty("rotation_deg", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetSingle() : 0f,
                 Scale = o.TryGetProperty("scale", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetSingle() : 1f,
                 SizeM = PlacedObject.ReadSizeM(o),
+                Model = o.TryGetProperty("model", out var mo) && mo.ValueKind == JsonValueKind.String ? mo.GetString() : null,
                 Colour = o.TryGetProperty("colour", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null,
                 Solid = !(o.TryGetProperty("solid", out var so) && so.ValueKind == JsonValueKind.False),
                 Parcel = o.TryGetProperty("parcel", out var pa) && pa.ValueKind == JsonValueKind.String ? pa.GetString() : null,
@@ -252,7 +256,16 @@ public sealed partial class MapLoader
         }
         var node = new Node3D { Name = $"object_{SafeName(o.Id)}" };
         // a headless load (CollisionOnly) builds the colliders alone: no model is loaded for the object
-        if (!CollisionOnly) node.AddChild(CreateObjectModel(o.Asset, o.Colour, out _));
+        var scale = ObjectScale(o);
+        if (!CollisionOnly)
+        {
+            if (OwnModel(o) is { } own)
+            {
+                own.Scale = new Vector3(1f / scale.X, 1f / scale.Y, 1f / scale.Z); // its real size: undo the node's stretch
+                node.AddChild(own);
+            }
+            else node.AddChild(CreateObjectModel(o.Asset, o.Colour, out _));
+        }
         AddObjectColliders(node, o.Asset, o.Solid);
         if (!o.Solid) // a prefab or pack model brings its own bodies (client): switch them off like an opened door
             foreach (var body in Descendants(node).OfType<CollisionObject3D>())
@@ -264,10 +277,31 @@ public sealed partial class MapLoader
         var y = o.Z ?? TerrainOrMean(o.X, -o.Y);
         node.Position = new Vector3(o.X, y, -o.Y);
         node.RotationDegrees = new Vector3(0, o.RotationDeg, 0);
-        node.Scale = ObjectScale(o);
+        node.Scale = scale;
         _objectNodes[o.Id] = node;
         _objectGroup[o.Id] = group;
         _objectAssets[o.Id] = o.Asset;
+    }
+
+    /// <summary>The object's own model (<see cref="PlacedObject.Model"/>, a GLB inside the map directory), or null: none named, or it cannot be loaded.</summary>
+    Node3D? OwnModel(PlacedObject o)
+    {
+        if (string.IsNullOrEmpty(o.Model)) return null;
+        var path = Path.GetFullPath(Path.Combine(_mapDir, o.Model));
+        if (!path.StartsWith(Path.GetFullPath(_mapDir) + Path.DirectorySeparatorChar) || !File.Exists(path)) return null;
+        try
+        {
+            var scene = LoadGltf(path);
+            if (scene == null) return null;
+            foreach (var mi in AllMeshes(scene)) FixMaterials(mi);
+            scene.Name = "Model";
+            return scene;
+        }
+        catch (Exception e)
+        {
+            Warn($"object {o.Id}: model '{o.Model}': {e.Message}; using the asset's model");
+            return null;
+        }
     }
 
     /// <summary>

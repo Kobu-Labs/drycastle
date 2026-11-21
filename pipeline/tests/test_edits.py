@@ -716,3 +716,45 @@ def test_objects_are_written_sorted_by_id() -> None:
     doc = json.loads(dump_text(edits))
     assert [o["id"] for o in doc["objects"]] == ["car-1", "o-0002", "o-0010"]
     assert [o["id"] for o in edits.objects] == ["o-0010", "o-0002", "car-1"]  # the document in memory is not reordered
+
+
+def test_parcel_ground_type_validation() -> None:
+    ok = {"version": 1, "parcels": {"P-1091": {"ground_type": "graveyard"}},
+          "ground_types": {"graveyard": {"attributes": {"colours": ["#9aa38f"]}}}}
+    assert validate(ok) == []
+    assert parse(ok).parcels == ok["parcels"]
+    for bad in ("no_such_type", "", 3, "water"):
+        errs = validate({"version": 1, "parcels": {"P-1091": {"ground_type": bad}}})
+        assert errs and "ground_type" in errs[0], bad
+
+
+def test_parcel_outline_validation() -> None:
+    sq = [[0, 0], [10, 0], [10, 10], [0, 10]]
+    ok = {"version": 1, "parcels": {"P-0001": {"outline": sq}, "P-0002": {"outline": [[10, 0], [20, 0], [20, 10], [10, 10]]}}}
+    assert validate(ok) == []  # touching is fine
+    assert parse(ok).parcels == ok["parcels"]
+    bow = [[0, 0], [10, 10], [10, 0], [0, 10]]
+    for bad in ([[0, 0], [1, 1]], bow, "x", [[0, 0], [1, "a"], [2, 2]]):
+        errs = validate({"version": 1, "parcels": {"P-0001": {"outline": bad}}})
+        assert errs and errs[0].startswith("parcels.P-0001.outline"), bad
+    overlap = {"version": 1, "parcels": {"P-0001": {"outline": sq}, "P-0002": {"outline": [[5, 0], [15, 0], [15, 10], [5, 10]]}}}
+    assert any("overlaps the edited outline of P-0001" in e for e in validate(overlap))
+
+
+def test_paths_validation_roundtrip_and_ground() -> None:
+    from drycastle_pipeline.footpaths import path_polygons
+
+    ok = {"version": 1, "parcels": {}, "paths": {"PA-0001": {"points": [[0, 0], [10, 0], [14, 6]], "width_m": 1.0},
+                                                  "PA-0002": {"points": [[0, 20], [8, 20], [8, 28]], "closed": True}}}
+    assert validate(ok) == []
+    assert parse(ok).paths == ok["paths"] and '"paths"' in dump_text(parse(ok))
+    assert '"paths"' not in dump_text(parse({"version": 1, "parcels": {}}))
+    for bad in ({"points": [[0, 0]]}, {"points": [[0, 0], [0, 0]]}, {"points": [[0, 0], [1, 1]], "width_m": 9},
+                {"points": [[0, 0], [1, 1]], "closed": True}, {"points": [[0, 0], [1, 1]], "kind": "x"}):
+        assert validate({"version": 1, "parcels": {}, "paths": {"PA-0001": bad}}), bad
+    assert validate({"version": 1, "parcels": {}, "paths": {"P-1": {"points": [[0, 0], [1, 1]]}}})
+    polys = path_polygons(ok["paths"], (0.0, 0.0))
+    assert polys == path_polygons(ok["paths"], (0.0, 0.0))  # deterministic
+    open_path = polys[0]
+    assert open_path.is_valid and 0.5 * 17.2 < open_path.area < 1.6 * 17.2  # about its length times its width
+    assert open_path.buffer(0.01).contains(__import__("shapely").geometry.LineString(ok["paths"]["PA-0001"]["points"]).interpolate(8))

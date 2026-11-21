@@ -925,6 +925,143 @@
       "pack": null
     },
     {
+      "id": "prim:grave",
+      "category": "slab",
+      "name": "Grave (generated per object: size_m = [width, length, solid height])",
+      "file": null,
+      "size_m": [
+        1.5,
+        1.13,
+        2.7
+      ],
+      "tags": [
+        "grave",
+        "graveyard",
+        "headstone",
+        "flat-colour",
+        "primitive",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/graves.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:crucifix",
+      "category": "other",
+      "name": "Graveyard cross with the body of Christ (5.6 m, on stone steps)",
+      "file": null,
+      "size_m": [
+        2.4,
+        5.6,
+        2.4
+      ],
+      "tags": [
+        "cross",
+        "crucifix",
+        "graveyard",
+        "monument",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/graves.py)",
+      "pack": null,
+      "solids": [
+        {
+          "min": [
+            -1.2,
+            -1.2,
+            0.0
+          ],
+          "max": [
+            1.2,
+            1.2,
+            0.18
+          ],
+          "surface": "concrete"
+        },
+        {
+          "min": [
+            -0.92,
+            -0.92,
+            0.0
+          ],
+          "max": [
+            0.92,
+            0.92,
+            0.36
+          ],
+          "surface": "concrete"
+        },
+        {
+          "min": [
+            -0.66,
+            -0.66,
+            0.0
+          ],
+          "max": [
+            0.66,
+            0.66,
+            0.56
+          ],
+          "surface": "concrete"
+        },
+        {
+          "min": [
+            -0.4,
+            -0.4,
+            0.0
+          ],
+          "max": [
+            0.4,
+            0.4,
+            1.86
+          ],
+          "surface": "concrete"
+        },
+        {
+          "min": [
+            -0.48,
+            -0.48,
+            0.0
+          ],
+          "max": [
+            0.48,
+            0.48,
+            1.98
+          ],
+          "surface": "concrete"
+        },
+        {
+          "min": [
+            -0.15,
+            -0.3,
+            1.98
+          ],
+          "max": [
+            0.15,
+            0.15,
+            5.3
+          ],
+          "surface": "wood"
+        },
+        {
+          "min": [
+            -1.2,
+            -0.15,
+            4.3
+          ],
+          "max": [
+            1.2,
+            0.15,
+            4.6
+          ],
+          "surface": "wood"
+        }
+      ]
+    },
+    {
       "id": "prim:mound",
       "category": "other",
       "name": "Trash mound (terraced, climbable hill)",
