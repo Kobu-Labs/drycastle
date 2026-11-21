@@ -65,11 +65,11 @@ A passive modifier a loadout carries (e.g. Fleet Foot, Quick Hands, Flak Jacket,
 _Avoid_: ability, skill, upgrade
 
 **Killstreak**:
-A reward a loadout selects (up to three), unlocked by the Streak counter reaching a kill threshold and usable until the player dies. Examples: UAV, turret, care package, attack helicopter, AC-130, MOAB.
+A reward a loadout selects (up to three), unlocked by the Streak counter reaching a kill threshold. Once earned it is kept (also through a death and a respawn, while the loadout still has it) until used; a running one (turret, UAV, aircraft) ends at its owner's death, and a used one is earned again from zero. A round reset drops every earned streak (#414). Examples: UAV, turret, care package, attack helicopter, AC-130, MOAB.
 _Avoid_: streak (alone), ultimate, power-up
 
 **Streak counter**:
-The number of kills a player has made since their last death; it decides which killstreaks are available. Only kills count, and it resets on death. Kills made by a killstreak's own weapons do not advance it.
+The number of kills a player has made since their last death; it decides which killstreaks are available. Only kills count, and it resets on death (earned killstreaks are kept). Kills made by a killstreak's own weapons do not advance it.
 _Avoid_: kill count, combo
 
 **Player token**:
@@ -548,7 +548,7 @@ How a round is scored and won, set by `mode` in `match.json` at server start, or
 _Avoid_: game mode, playlist
 
 **Team**:
-One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. The same goes for a vehicle with a teammate in any seat (an empty one, or one only the shooter sits in, can be hurt; crashes and water are never blocked) (#338). A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team. An admin can regroup from the Pause menu's Teams screen (#312): drag a player card onto a team's table (or A, B, U on the keyboard), or use the quick actions (bots to a team, shuffle, balance). A player moved to a team respawns on the new side, leaves any vehicle, loses their turrets and streak progress, keeps their kills and deaths, and the earned team score stays with the old team. A player dropped on the **Unassigned** table is out of the round: down, no death on the record, not spawned (also not at round starts), not balanced or shuffled, until an admin puts them on a team. A mode change puts everyone on a team again. Round-start balance moves bots before humans, then the newest.
+One of the two sides (A and B) of a team deathmatch round. A joining player goes to the smaller team, and at each round start the teams are evened out to differ by at most one. Teammates do not hurt each other unless `friendly_fire` is on. The same goes for a vehicle with a teammate in any seat (an empty one, or one only the shooter sits in, can be hurt; crashes and water are never blocked) (#338). A team's score is the sum of its members' kills (team kills and suicides excluded); the team that reaches `team_score_goal`, or leads when time runs out, wins. Sandbox players belong to no team. An admin can regroup from the Pause menu's Teams screen (#312): drag a player card onto a team's table (or A, B, U on the keyboard), or use the quick actions (bots to a team, shuffle, balance). A player moved to a team respawns on the new side, leaves any vehicle, loses their turrets, earned killstreaks and streak progress, keeps their kills and deaths, and the earned team score stays with the old team. A player dropped on the **Unassigned** table is out of the round: down, no death on the record, not spawned (also not at round starts), not balanced or shuffled, until an admin puts them on a team. A mode change puts everyone on a team again. Round-start balance moves bots before humans, then the newest.
 _Avoid_: clan, faction
 
 **Squad**:
