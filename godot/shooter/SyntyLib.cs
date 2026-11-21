@@ -17,7 +17,7 @@ public static class SyntyLib
 
     static string Dir => Path.Combine(GamePaths.PrivateAssets(), "synty");
 
-    /// <summary>A copy of <c>glb/{model}.glb</c> wearing the texture <paramref name="atlas"/> (a path under synty/).</summary>
+    /// <summary>A copy of <c>glb/{model}.glb</c> wearing the texture <paramref name="atlas"/> (a path under synty/), with no collision of its own (a look only).</summary>
     public static Node3D? Instance(string model, string atlas)
     {
         if (!ShotFx.Enabled) return null;
@@ -25,6 +25,9 @@ public static class SyntyLib
         if (t?.Duplicate() is not Node3D copy) return null;
         var mat = Atlas(atlas);
         foreach (var m in copy.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>()) m.MaterialOverride = mat;
+        // a prefab converted from a pack carries its own physics body (the weapon and shop prefabs do); a drawn model is a look only, and one riding on a
+        // character collides with it and shakes it (#473: a held rifle), so every collision object is taken out
+        foreach (var body in copy.FindChildren("*", "CollisionObject3D", true, false).OfType<CollisionObject3D>()) { body.GetParent().RemoveChild(body); body.QueueFree(); }
         return copy;
     }
 
