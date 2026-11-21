@@ -55,7 +55,7 @@ public static class DustRules
     /// cloud's density over <see cref="CloudVeilPulseSeconds"/>. The drawn cloud already hides the world by distance for a camera inside it; a full veil
     /// on top of it hid the near things too, for the cloud's whole life. The wave's part is not cut.
     /// </summary>
-    public const float CloudVeilShare = 0.3f, CloudVeilPulseSeconds = 0.5f;
+    public const float CloudVeilShare = 0.25f, CloudVeilPulseSeconds = 0.5f;
     /// <summary>A sight line with at least this much dust on it hides what is at its end (a name tag).</summary>
     public const float SightBlocked = 0.6f;
 
