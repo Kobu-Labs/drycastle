@@ -1087,6 +1087,9 @@ public partial class NetClient : Node
             case EventKind.HelperWarning when HelperWarningCodec.Decode(payload) is { } hw:
                 OnHelperWarning(hw);
                 break;
+            case EventKind.VehicleCrash when VehicleCrashCodec.Decode(payload) is { } crash:
+                OnVehicleCrash(crash.Car, crash.Sound);
+                break;
             case EventKind.GlassPane when GlassCodec.DecodePane(payload) is { } gp:
                 OnGlassPane(gp);
                 break;

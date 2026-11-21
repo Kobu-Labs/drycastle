@@ -492,7 +492,7 @@ How a vehicle's glass pane treats a bullet (`vehicles.json` glass `kind`, hit po
 _Avoid_: bulletproof glass, armoured glass
 
 **Glass pane**:
-A flat piece of breakable glass with hit points that the server owns: a window pane of a building (`windows.json`, unless its `breakable` is false) or a pane of a vehicle type (the `glass` list in `vehicles.json`). It is a rectangle, or, for the generated vehicles (bus, flak truck, helicopter), a convex outline polygon inside its bounding rectangle, and there it is also its own node `glass_N` in the model. Bullets and blasts take its hit points; below full it shows a crack (see Crack stage), at zero it is shattered. It has no collider of its own. A vehicle's pane has a Pane kind.
+A flat piece of breakable glass with hit points that the server owns: a window pane of a building (`windows.json`, unless its `breakable` is false) or a pane of a vehicle type (the `glass` list in `vehicles.json`). It is a rectangle, or, for the generated vehicles (bus, flak truck, helicopter), a convex outline polygon inside its bounding rectangle, and there it is also its own node `glass_N` in the model. Bullets and blasts take its hit points, and a vehicle's hard collision cracks its panes or, harder still, shatters them all (`crash_crack_speed`, `crash_shatter_speed` in `glass.json`); below full it shows a crack (see Crack stage), at zero it is shattered. It has no collider of its own. A vehicle's pane has a Pane kind.
 _Avoid_: window (for a vehicle's), glass (alone), windowpane
 
 **Open side**:

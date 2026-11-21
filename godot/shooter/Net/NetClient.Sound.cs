@@ -117,6 +117,13 @@ public partial class NetClient
         else Sfx.Play3D(id, at, dbOffset);
     }
 
+    /// <summary>A vehicle hit something (<see cref="EventKind.VehicleCrash"/>, #410): the bump or the hard crash, at the vehicle; its riders hear it at full level.</summary>
+    void OnVehicleCrash(ushort carId, CrashSound sound)
+    {
+        if (!_cars.TryGetValue(carId, out var car) || !GodotObject.IsInstanceValid(car.Node)) return;
+        PlayCarSound(sound == CrashSound.Hard ? "vehicle.crash_hard" : "vehicle.crash", car.Node.GlobalPosition, car);
+    }
+
     /// <summary>A sound of a vehicle that lasts (the harvester's reel and chew, seconds long) and rides with it: <see cref="StepCarVoices"/> keeps it on the moving machine, or at the listener when the local player rides it. It ends with the file.</summary>
     sealed class CarVoice
     {
