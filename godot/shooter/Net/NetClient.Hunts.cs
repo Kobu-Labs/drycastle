@@ -34,7 +34,14 @@ public partial class NetClient
     }
 
     /// <summary>What the screen draws with and asks through.</summary>
-    HuntLogEnv HuntLogEnvironment() => new(HuntData, HuntArtOf, HuntSpeciesName, WeaponName, () => Weapons?.Weapons.Select(w => w.Id).ToList() ?? new List<string>(), () => SandboxGranted);
+    HuntLogEnv HuntLogEnvironment() => new(HuntData, HuntArtOf, HuntSpeciesName, WeaponName, () => Weapons?.Weapons.Select(w => w.Id).ToList() ?? new List<string>(), () => SandboxGranted, () => Weapons != null && ItemData != null ? HuntRewards.For(Weapons, ItemData) : Array.Empty<HuntReward>(), RewardIcon);
+
+    /// <summary>The icon of a reward (a weapon's or an item's), null when the file is not there.</summary>
+    static Texture2D? RewardIcon(HuntReward r)
+    {
+        var path = IconRegistry.PathFor(r.Kind == "weapon" ? IconKind.Weapon : IconKind.Item, r.Id);
+        return ResourceLoader.Exists(path) ? ResourceLoader.Load<Texture2D>(path) : null;
+    }
 
     /// <summary>The name of a species key of the log: a Mystery creature's, or the animal's. Never asked for a hidden id.</summary>
     string HuntSpeciesName(string key) => Mysteries.Is(key) ? Strings.T("hunt.species." + key) : AnimalData.Find(key)?.Name ?? key;

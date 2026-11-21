@@ -932,7 +932,7 @@ stateDiagram-v2
 
 ## HuntersLog.Page
 
-Which page of the Hunter's Log shows: the first tab (own log, or another player's), Records, All hunts.
+Which page of the Hunter's Log shows: the first tab (own log, or another player's), Records, All hunts, Rewards.
 
 ```mermaid
 stateDiagram-v2
@@ -940,20 +940,29 @@ stateDiagram-v2
     MyLog --> PlayerLog
     MyLog --> Records
     MyLog --> AllHunts
+    MyLog --> Rewards
     PlayerLog --> MyLog
     PlayerLog --> PlayerLog
     PlayerLog --> Records
     PlayerLog --> AllHunts
+    PlayerLog --> Rewards
     Records --> MyLog
     Records --> PlayerLog
     Records --> AllHunts
+    Records --> Rewards
     AllHunts --> MyLog
     AllHunts --> PlayerLog
     AllHunts --> Records
+    AllHunts --> Rewards
+    Rewards --> MyLog
+    Rewards --> PlayerLog
+    Rewards --> Records
+    Rewards --> AllHunts
 ```
 
 - **MyLog**: The default, and where a screen opens. The asker's own log.
 - **PlayerLog**: Another player's log, opened from a name. Esc goes up to My Log; another tab keeps it parked on the first tab.
+- **Rewards**: The asker's own progress to the collection tiers and what each gives (#473); another player's log stays parked on the first tab.
 
 ## Interact.Hold
 

@@ -1,7 +1,7 @@
 namespace Drycastle.ShooterCore;
 
 /// <summary>Which page of the Hunter's Log screen shows. MyLog and PlayerLog are the first tab (the asker's own log, or another player's).</summary>
-public enum HuntLogPage { MyLog, PlayerLog, Records, AllHunts }
+public enum HuntLogPage { MyLog, PlayerLog, Records, AllHunts, Rewards }
 
 /// <summary>What Esc / Back did: closed the screen, or went one level up to My Log.</summary>
 public enum HuntLogBack { Close, ToMyLog }
@@ -12,12 +12,14 @@ public enum HuntLogBack { Close, ToMyLog }
 /// </summary>
 public sealed class HuntLogNav
 {
-    public static readonly StateMachineSpec<HuntLogPage> Spec = StateMachineSpec<HuntLogPage>.Define("HuntersLog.Page", "Which page of the Hunter's Log shows: the first tab (own log, or another player's), Records, All hunts.", HuntLogPage.MyLog)
-        .Allow(HuntLogPage.MyLog, HuntLogPage.PlayerLog, HuntLogPage.Records, HuntLogPage.AllHunts)
-        .Allow(HuntLogPage.PlayerLog, HuntLogPage.MyLog, HuntLogPage.PlayerLog, HuntLogPage.Records, HuntLogPage.AllHunts)
-        .Allow(HuntLogPage.Records, HuntLogPage.MyLog, HuntLogPage.PlayerLog, HuntLogPage.AllHunts)
-        .Allow(HuntLogPage.AllHunts, HuntLogPage.MyLog, HuntLogPage.PlayerLog, HuntLogPage.Records)
+    public static readonly StateMachineSpec<HuntLogPage> Spec = StateMachineSpec<HuntLogPage>.Define("HuntersLog.Page", "Which page of the Hunter's Log shows: the first tab (own log, or another player's), Records, All hunts, Rewards.", HuntLogPage.MyLog)
+        .Allow(HuntLogPage.MyLog, HuntLogPage.PlayerLog, HuntLogPage.Records, HuntLogPage.AllHunts, HuntLogPage.Rewards)
+        .Allow(HuntLogPage.PlayerLog, HuntLogPage.MyLog, HuntLogPage.PlayerLog, HuntLogPage.Records, HuntLogPage.AllHunts, HuntLogPage.Rewards)
+        .Allow(HuntLogPage.Records, HuntLogPage.MyLog, HuntLogPage.PlayerLog, HuntLogPage.AllHunts, HuntLogPage.Rewards)
+        .Allow(HuntLogPage.AllHunts, HuntLogPage.MyLog, HuntLogPage.PlayerLog, HuntLogPage.Records, HuntLogPage.Rewards)
+        .Allow(HuntLogPage.Rewards, HuntLogPage.MyLog, HuntLogPage.PlayerLog, HuntLogPage.Records, HuntLogPage.AllHunts)
         .Note(HuntLogPage.MyLog, "The default, and where a screen opens. The asker's own log.")
+        .Note(HuntLogPage.Rewards, "The asker's own progress to the collection tiers and what each gives (#473); another player's log stays parked on the first tab.")
         .Note(HuntLogPage.PlayerLog, "Another player's log, opened from a name. Esc goes up to My Log; another tab keeps it parked on the first tab.")
         .Build();
 
@@ -30,7 +32,7 @@ public sealed class HuntLogNav
 
     public string SubjectName { get; private set; } = "";
 
-    public int TabIndex => Page switch { HuntLogPage.MyLog or HuntLogPage.PlayerLog => 0, HuntLogPage.Records => 1, _ => 2 };
+    public int TabIndex => Page switch { HuntLogPage.MyLog or HuntLogPage.PlayerLog => 0, HuntLogPage.Records => 1, HuntLogPage.AllHunts => 2, _ => 3 };
 
     public bool ViewingOther => Subject != 0;
 
@@ -41,10 +43,10 @@ public sealed class HuntLogNav
         _fsm.Reset(HuntLogPage.MyLog);
     }
 
-    /// <summary>Tab 0 shows the own log or the parked player's; 1 Records; 2 All hunts.</summary>
+    /// <summary>Tab 0 shows the own log or the parked player's; 1 Records; 2 All hunts; 3 Rewards.</summary>
     public void ShowTab(int index)
     {
-        _fsm.Enter(index switch { 0 => ViewingOther ? HuntLogPage.PlayerLog : HuntLogPage.MyLog, 1 => HuntLogPage.Records, _ => HuntLogPage.AllHunts });
+        _fsm.Enter(index switch { 0 => ViewingOther ? HuntLogPage.PlayerLog : HuntLogPage.MyLog, 1 => HuntLogPage.Records, 2 => HuntLogPage.AllHunts, _ => HuntLogPage.Rewards });
     }
 
     public void OpenOwn()

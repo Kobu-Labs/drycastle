@@ -93,3 +93,58 @@ public class CollectionTierTests
         Assert.True(Pick(new[] { new Unlock("weapon", "hunting_rifle") }, 1).Unlocked);
     }
 }
+
+/// <summary>#473: the Rewards tab of the Hunter's Log (progress to each tier, what each gives, the navigation to it).</summary>
+public class HuntRewardsTests
+{
+    static LifeEntry Tile(string species, HuntTier tier, bool caught = true, bool hidden = false) =>
+        new(species, hidden, caught, caught ? 50f : null, null, 0, caught ? tier : HuntTier.Common);
+
+    static List<LifeEntry> Life(Func<string, LifeEntry> f) => IndexSpecies.All.Select(f).Append(Tile("unicorn", HuntTier.Gold)).ToList();
+
+    [Fact]
+    public void ProgressCountsTheIndexSpeciesAtTheTierOrBetter()
+    {
+        var life = Life(s => s switch { "deer" => Tile(s, HuntTier.Gold), "stag" => Tile(s, HuntTier.Silver), "moose" => Tile(s, HuntTier.Bronze), "bear" => Tile(s, HuntTier.Common), "boar" => Tile(s, HuntTier.Gold, caught: false), _ => Tile(s, HuntTier.Silver) });
+        var p = HuntRewards.Progress(life);
+        Assert.Equal(new[] { HuntTier.Bronze, HuntTier.Silver, HuntTier.Gold }, p.Select(t => t.Tier));
+        Assert.All(p, t => Assert.Equal(IndexSpecies.All.Count, t.Of));
+        Assert.Equal(new[] { 8, 7, 1 }, p.Select(t => t.Have)); // 10 minus the common bear and the unhunted boar; the silvers and the gold; the gold; mystery never counts
+    }
+
+    [Fact]
+    public void AllGoldReachesEveryTierAndAnEmptyLogNone()
+    {
+        Assert.All(HuntRewards.Progress(Life(s => Tile(s, HuntTier.Gold))), t => Assert.True(t.Reached));
+        Assert.All(HuntRewards.Progress(Life(s => Tile(s, HuntTier.Gold, caught: false))), t => Assert.False(t.Reached));
+    }
+
+    [Fact]
+    public void AMysteryOrAHiddenTileNeverCounts()
+    {
+        var life = Life(s => Tile(s, HuntTier.Gold)).Append(Tile("mystery_x", HuntTier.Gold, hidden: true)).ToList();
+        Assert.All(HuntRewards.Progress(life), t => Assert.Equal(IndexSpecies.All.Count, t.Have));
+    }
+
+    [Fact]
+    public void TheRewardsListsTheShippedWeaponAndItemLowestTierFirst()
+    {
+        var dir = Path.Combine(AppContext.BaseDirectory, "../../../../shooter/data");
+        var r = HuntRewards.For(WeaponsFile.Load(Path.Combine(dir, "weapons.json")), ItemsFile.Load(Path.Combine(dir, "items.json")));
+        Assert.Equal(new[] { ("item", "hunting_binoculars", HuntTier.Bronze), ("weapon", "hunting_rifle", HuntTier.Silver) }, r.Select(x => (x.Kind, x.Id, x.Tier)));
+        Assert.Equal("Hunting binoculars", r[0].ItemName);
+    }
+
+    [Fact]
+    public void TheRewardsTabIsTheFourthAndAnyTabLeavesAParkedLogOnTheFirst()
+    {
+        var nav = new HuntLogNav();
+        nav.OpenPlayer(7, "Ann");
+        nav.ShowTab(3);
+        Assert.Equal(HuntLogPage.Rewards, nav.Page);
+        Assert.Equal(3, nav.TabIndex);
+        Assert.Equal(HuntLogBack.Close, nav.Back());
+        nav.ShowTab(0);
+        Assert.Equal(HuntLogPage.PlayerLog, nav.Page); // still parked on Ann's log
+    }
+}

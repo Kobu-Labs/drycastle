@@ -46,7 +46,7 @@ public static class WeaponFx
     /// <summary>Weapons of the paid Synty packs (SyntyLib: model under synty/glb/, its atlas, length in metres). Their barrel runs along +Z (the Quaternius ones along +X). Without the pack the weapon has no model.</summary>
     static readonly Dictionary<string, (string Model, string Atlas, float Length)> SyntyModels = new()
     {
-        ["hunting_rifle"] = ("apocalypse/SM_Wep_HuntingRifle_Clean_01", "glb/apocalypse/tex/PolygonApocalypse_01_A.png", 1.25f), // #473: the silver Hunter's Log reward
+        ["hunting_rifle"] = ("apocalypse/SM_Wep_SniperRifle_02", "glb/apocalypse/tex/PolygonApocalypse_01_A.png", 1.2f), // #473: the silver Hunter's Log reward
     };
 
     /// <summary>Node meta: height of the weapon's top (iron sight) above its origin, in metres; the viewmodel lowers the gun by this much to aim down sights.</summary>

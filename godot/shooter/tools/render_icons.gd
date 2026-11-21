@@ -43,7 +43,7 @@ const MODELS := {
 # Weapons of the paid Synty packs (WeaponFx.SyntyModels): id -> [glb, atlas], both under assets-private/ (DRYCASTLE_ASSETS_PRIVATE overrides it). Barrel along +Z.
 # `-- hunting_rifle` (any weapon ids) renders only those.
 const SYNTY := {
-	"hunting_rifle": ["synty/glb/apocalypse/SM_Wep_HuntingRifle_Clean_01.glb", "synty/glb/apocalypse/tex/PolygonApocalypse_01_A.png"],
+	"hunting_rifle": ["synty/glb/apocalypse/SM_Wep_SniperRifle_02.glb", "synty/glb/apocalypse/tex/PolygonApocalypse_01_A.png"],
 }
 
 # id -> [model in assets/ (items.json `model`), yaw degrees to the right of the item's front, pitch degrees above it]
