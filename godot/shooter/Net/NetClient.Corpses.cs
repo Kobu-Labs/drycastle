@@ -182,6 +182,7 @@ public partial class NetClient
             }
             else if (weapon != v.Weapon) { v.Weapon = weapon; view.ShowCorpse(weapon); }
             v.Feet = at;
+            v.Node.Visible = !(_remotes.TryGetValue(s.Owner, out var owner) && owner.Guess.Active); // the driver's guessed throw of this body is what is drawn until it has landed (#411)
             v.Node.GlobalPosition = at + FloatOffset(id, at, t.Thrown) + Vector3.Up * t.PivotHeight;
             v.Node.Basis = t.BasisFor(s.YawRad);
         }

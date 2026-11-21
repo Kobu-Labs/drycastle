@@ -14,6 +14,9 @@ public static class RunOver
     /// <summary>Whether a vehicle at <paramref name="speed"/> moves the bodies it touches (<see cref="ContactMinSpeed"/>).</summary>
     public static bool Contacts(float speed) => MathF.Abs(speed) >= ContactMinSpeed;
 
+    /// <summary>Whether a run-over at <paramref name="speed"/> kills a player at full health for certain (#411): the driver's client shows such a body thrown before the server says so (<see cref="ThrowGuess"/>).</summary>
+    public static bool Kills(VehiclesFile f, float speed, float massScale = 1f) => Damage(f, speed, massScale) >= MoveConsts.MaxHealth;
+
     /// <param name="massScale">A type's <see cref="VehiclesFile.RunOverScale"/> (1 for the v1 numbers).</param>
     public static float Damage(VehiclesFile f, float speed, float massScale = 1f)
     {
