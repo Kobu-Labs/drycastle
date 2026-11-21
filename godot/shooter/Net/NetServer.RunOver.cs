@@ -34,7 +34,7 @@ public partial class NetServer
                 if (spare != null && spare(t.Id)) continue;
                 if (cls == ObstacleClass.Player && (!_byId.TryGetValue(t.Id, out var rider) || rider.Car != null)) continue;
                 var animal = cls == ObstacleClass.Wildlife ? _wildlife?.AnimalOf(t.Id) : cls == ObstacleClass.Pet ? _pets?.AnimalOf(t.Id) : null;
-                if ((cls is ObstacleClass.Wildlife or ObstacleClass.Pet) && (animal == null || animal.State == AnimalState.Carried)) continue; // a carried pet is in somebody's hands
+                if ((cls is ObstacleClass.Wildlife or ObstacleClass.Pet) && (animal == null || animal.State == AnimalState.Carried || animal.IsPhoenix)) continue; // a carried pet is in somebody's hands; a Phoenix is shot, never run over
                 var footprint = animal != null ? RunOverFootprint.OfBody(animal.Body, animal.Position.Y) : RunOverFootprint.OfCapsule(t.Feet);
                 if (!footprint.Hits(m.Prev, m.Now, m.Yaw, m.HalfWidth, m.HalfLength)) continue;
                 if (m.Cooldown.TryGetValue(t.Id, out var until) && _elapsed < until) continue;

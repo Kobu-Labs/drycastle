@@ -142,3 +142,61 @@ public class MineralsTests
         }
     }
 }
+
+public class MineralDropTests
+{
+    static readonly MineralDrop Drop = new("pheonixite", new System.Numerics.Vector3(100, 5, 200), 7);
+
+    [Fact]
+    public void ADropBecomesADynamicNodeAnybodyWhoHasNotFoundItCanTakeUntilTakenAndTheKillerGetsNoPriority()
+    {
+        var set = new MineralNodeSet();
+        var place = set.AddStatic("opal", new System.Numerics.Vector3(1, 0, 1))!;
+        var node = set.AddDrop(Drop)!;
+        Assert.True(node.Id >= MineralNodeSet.FirstDynamicId);
+        Assert.Equal(place, set.Find(place.Id));
+        Assert.Equal(node, set.Find(node.Id));
+        Assert.Equal(new[] { place, node }, set.Nodes);
+        var at = new System.Numerics.Vector3(101, 5, 201);
+        var book = new MineralBook();
+        const long killer = 1, other = 2;
+        Assert.Equal(MineralPickResult.Ok, book.Check(other, node, MineralActivity.IsActive(node.MineralId, default), at)); // anybody
+        Assert.Equal(MineralPickResult.Ok, book.Check(killer, node, true, at));
+        Assert.Equal(MineralPickResult.TooFar, book.Check(other, node, true, at + new System.Numerics.Vector3(20, 0, 0)));
+        Assert.Equal(1, book.Add(other, node.MineralId)); // the find lands in the Mineral Log with its place among the finders
+        Assert.True(book.Has(other, "pheonixite"));
+        Assert.Equal(MineralPickResult.AlreadyFound, book.Check(other, node, true, at));
+        Assert.Equal(MineralPickResult.Ok, book.Check(killer, node, true, at)); // the node was not reserved or used up for the others
+        Assert.Equal(2, book.Add(killer, node.MineralId));
+        Assert.Same(node, set.Find(node.Id)); // a pickup does not use it up
+        Assert.Empty(set.Expire(59.9));
+        Assert.Equal(new[] { node.Id }, set.Expire(60)); // its minute is over: it burns away
+        Assert.Null(set.Find(node.Id));
+        Assert.Equal(MineralPickResult.UnknownNode, book.Check(3, set.Find(node.Id), true, at));
+        Assert.False(set.Remove(place.Id)); // a static node never goes
+        Assert.Contains(place, set.Nodes);
+    }
+
+    [Fact]
+    public void TheRoundEndsTheDropsButNotThePlacesNodes()
+    {
+        var set = new MineralNodeSet();
+        var place = set.AddStatic("opal", default)!;
+        var a = set.AddDrop(Drop)!;
+        var b = set.AddDrop(Drop)!;
+        Assert.NotEqual(a.Id, b.Id);
+        Assert.True(set.ClearDrops());
+        Assert.Equal(new[] { place }, set.Nodes);
+        Assert.False(set.ClearDrops());
+        Assert.NotEqual(a.Id, set.AddDrop(Drop)!.Id); // ids are not reused at once
+    }
+
+    [Fact]
+    public void ADynamicNodeRoundTripsInTheNodesPayload()
+    {
+        var set = new MineralNodeSet();
+        var node = set.AddDrop(Drop)!;
+        var back = MineralRules.DecodeNodes(MineralRules.EncodeNodes(new[] { (node, true) }))!;
+        Assert.Equal((node, true), Assert.Single(back));
+    }
+}

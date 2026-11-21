@@ -48,6 +48,13 @@ public partial class NetClient
 
     void ApplyMineralNodes(IReadOnlyList<(MineralNode Node, bool Active)> nodes)
     {
+        // the set is the whole world's: a node it no longer lists (a dropped mineral somebody took, or the round ended) is gone
+        foreach (var id in _mineralNodes.Keys.Where(k => nodes.All(n => n.Node.Id != k)).ToList())
+        {
+            if (id >= MineralNodeSet.FirstDynamicId && _mineralNodes[id].Visual.IsInsideTree()) PhoenixFx.FirePuff(Owned, _mineralNodes[id].Visual.GlobalPosition); // a drop's minute is over: it burns away
+            _mineralNodes[id].Visual.QueueFree();
+            _mineralNodes.Remove(id);
+        }
         foreach (var (node, active) in nodes)
         {
             if (!_mineralNodes.TryGetValue(node.Id, out var v))

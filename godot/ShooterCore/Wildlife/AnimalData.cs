@@ -89,6 +89,11 @@ public sealed class AnimalDef
     /// </summary>
     public string Fx { get; set; } = "";
     /// <summary>
+    /// animals.json "flies": the species lives in the sky (the Phoenix, <see cref="PhoenixRules"/> in wildlife.json): it is no ground animal, so the walk, run, eat and flee numbers are unused placeholders, its model's origin is the body
+    /// centre while it flies (clip <c>Perched</c> lowers it so the origin is the ground), and its clips are Idle, Cruise, Fall and Perched (<see cref="AnimalClips.Needed"/>). The hit box is the body in flight: wingspan, height, length with tail.
+    /// </summary>
+    public bool Flies { get; set; }
+    /// <summary>
     /// animals.json "vanish_seconds": above 0, the species does not run when it is startled (a threat in its flee radius, a hit that did not kill, a herd alarm, getting up after a run-over): it becomes
     /// immune for this long (<see cref="AnimalState.Vanish"/>), then is teleported to another place of the map (<see cref="VanishMinM"/> away) and stands there. 0 (default): it flees as any animal.
     /// </summary>

@@ -41,7 +41,7 @@ public static class HuntersLogStrings
         ("log.guest", "No log for a guest"), ("log.guest.body", "Hunts are only logged for a player with a profile. Records and All hunts are open to read."),
         ("log.missing", "No such hunter"), ("log.missing.body", "The log has no entry for this player."),
         // species and weapons the log adds
-        ("hunt.species.bigfoot", "Bigfoot"), ("hunt.species.unicorn", "Unicorn"), ("hunt.species.scylla", "Scylla"),
+        ("hunt.species.bigfoot", "Bigfoot"), ("hunt.species.unicorn", "Unicorn"), ("hunt.species.scylla", "Scylla"), ("hunt.species.phoenix", "Phoenix"),
         ("weapon.run_over", "Run over"), ("weapon.event", "Event"), ("weapon.other", "Other"),
         // announcements
         ("hunt.tag.record", "NEW RECORD"), ("hunt.tag.first", "FIRST"),

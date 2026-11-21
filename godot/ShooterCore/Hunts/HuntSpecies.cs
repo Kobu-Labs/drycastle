@@ -32,12 +32,12 @@ public static class IndexSpecies
 public sealed record Mystery(string Id, string Name, bool Live);
 
 /// <summary>
-/// The Mystery registry. Bigfoot is caught when its Event is won; the Unicorn when a player kills it (a rare wild animal, <see cref="HuntRecord.ForUnicorn"/>); Scylla is registered so its Life List tile exists, and
-/// needs only a catch hook later. A viewer who has not caught one is sent <see cref="HiddenId"/> instead of its id (<see cref="HuntRedaction"/>).
+/// The Mystery registry. Bigfoot is caught when its Event is won; the Unicorn when a player kills it (a rare wild animal, <see cref="HuntRecord.ForUnicorn"/>); the Phoenix when a player lands the second hit that burns it
+/// (<see cref="HuntRecord.ForMysteryAnimal"/>); Scylla is registered so its Life List tile exists, and needs only a catch hook later. The order is the hidden id's (<see cref="HiddenId"/>: "mystery-" + position + 1), so a new one goes last. A viewer who has not caught one is sent <see cref="HiddenId"/> instead of its id (<see cref="HuntRedaction"/>).
 /// </summary>
 public static class Mysteries
 {
-    public const string Bigfoot = "bigfoot", Unicorn = "unicorn", Scylla = "scylla";
+    public const string Bigfoot = "bigfoot", Unicorn = "unicorn", Scylla = "scylla", Phoenix = "phoenix";
 
     /// <summary>The filter key for "every mystery hunt I cannot see" (the one "Mystery hunts" option).</summary>
     public const string AllHidden = "?";
@@ -49,10 +49,14 @@ public static class Mysteries
         new Mystery(Bigfoot, "Bigfoot", Live: true),
         new Mystery(Unicorn, "Unicorn", Live: true),
         new Mystery(Scylla, "Scylla", Live: false),
+        new Mystery(Phoenix, "Phoenix", Live: true),
     };
 
     public static Mystery? Find(string id) => All.FirstOrDefault(m => m.Id == id);
     public static bool Is(string species) => Find(species) != null;
+
+    /// <summary>Whether the mystery is a wild animal a player catches by killing it (the Unicorn, the Phoenix): its hunt keeps a distance and a hit diagram (<see cref="HuntRecord.ForMysteryAnimal"/>).</summary>
+    public static bool IsAnimal(string id) => id is Unicorn or Phoenix;
 
     /// <summary>What a viewer who has not caught <paramref name="id"/> is sent in its place: stable per creature (tiles stay apart) and says nothing of which one it is.</summary>
     public static string HiddenId(string id) => HiddenPrefix + (IndexOf(id) + 1);

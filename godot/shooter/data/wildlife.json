@@ -15,6 +15,15 @@
   // ground (not water, not steep) that is at least "min_building_m" (default 60) from every building (a parcel that holds one). A killed one is replaced by a new one at a
   // new random point "respawn_seconds" (default 60) after the kill; a search that finds no point (200 tries) is tried again after another "respawn_seconds". Round start puts the first.
   // A rare animal counts toward "max_animals" and the entity cap, is placed before the other species, and is an id of animals.json that flees. It is never announced and is no Event.
+  // "phoenix" (GLOSSARY "Phoenix"): the rare Mystery animal of the night sky, an id of animals.json with "flies": true. A night is counted each time the server's day clock passes
+  // "spawn_hour" (0 = midnight); every "nights_between"th (5) night, at that hour, one Phoenix appears (the first on the 5th night) if none is still alive and a round is running. The count is the server's own
+  // and is not reset by a round; a stopped clock (/time freeze) never passes midnight. It flies a circle of "patrol_radius_m" (cut to fit the map) at "speed_mps", its body centre
+  // "altitude_min_m".."altitude_max_m" above the ground. The first hit that deals damage (any weapon; nothing hits it with a knife: too high) makes it fall for "fall_seconds" along a straight line to a crash site, a
+  // clear patch of ground 40-120 m from where it was hit: a free circle of "crash_clear_m" (3: 6 m across), ground all over it no more than "crash_max_slope_m" higher or lower than its middle, nothing solid in it,
+  // at least "crash_building_m" from every building. It sits there, alive, until a second hit (only then) burns it for "burn_seconds"; then it is dead, lies as ash for corpse_seconds and leaves the
+  // mineral "drops" (a Minerals id) where it burned. At "dawn_hour" a Phoenix still flying flies off; a crashed one stays until killed or the round ends. It counts toward max_animals.
+  "phoenix": { "id": "phoenix", "nights_between": 5, "spawn_hour": 0, "dawn_hour": 5, "altitude_min_m": 80, "altitude_max_m": 140, "patrol_radius_m": 350, "speed_mps": 14,
+               "fall_seconds": 4, "crash_min_m": 40, "crash_max_m": 120, "crash_clear_m": 3, "crash_max_slope_m": 0.9, "crash_building_m": 10, "burn_seconds": 6, "drops": "pheonixite" },
   "max_animals": 160,
   "rare": [
     { "id": "unicorn", "count": 1, "min_building_m": 60, "respawn_seconds": 60 }

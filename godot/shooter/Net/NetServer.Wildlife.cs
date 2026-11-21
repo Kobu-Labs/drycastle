@@ -89,6 +89,9 @@ public partial class NetServer
         _wildlife = new WildlifeKeeper(WildlifeData, AnimalData, _match.Entities, System.Environment.TickCount) { Log = s => GD.PrintErr($"server: {s}"), Shapes = AnimalShapes, Crowd = _animalCrowd };
         _match.Wildlife = _wildlife;
         _wildlife.Killed += (a, by) => { GD.Print($"server: #{by} killed a wild {a.Def.Id}"); OnWildKilled(a, by); };
+        _wildlife.PhoenixFell += (entity, from, site, seconds) => BroadcastEvent(EventKind.PhoenixFall, PhoenixFallCodec.Encode(entity, from, site, seconds));
+        // The dead Phoenix's mineral lies where it burned (WildlifeKeeper.Drops) as a mineral node anybody can take (#401).
+        _wildlife.MineralDropped += OnMineralDropped;
     }
 
     /// <summary>A round starts: the wildlife of the last one is gone with the entities; the species of wildlife.json move to their habitat points.</summary>
@@ -96,16 +99,18 @@ public partial class NetServer
     {
         if (_wildlife == null) return;
         _wildlife.Clear();
+        MineralRoundStart();
         _buildingFootprints = null;
-        if (_match.Phase != MatchPhase.Running || ArenaMode || MapDir == "" || Map == null || (WildlifeData.MaxAnimals <= 0 || WildlifeData.Species.Count == 0 && WildlifeData.Herds.Count == 0 && WildlifeData.Rare.Count == 0) && WildlifeData.Flocks.Count == 0) return;
+        if (_match.Phase != MatchPhase.Running || ArenaMode || MapDir == "" || Map == null || (WildlifeData.MaxAnimals <= 0 || WildlifeData.Species.Count == 0 && WildlifeData.Herds.Count == 0 && WildlifeData.Rare.Count == 0 && WildlifeData.Phoenix == null) && WildlifeData.Flocks.Count == 0) return;
         var points = MapZonePoints;
         var n = _wildlife.Populate(species => points.Points(species), _wildlifeGround ??= new WildlifeGround(this));
         GD.Print($"server: {n} wild animals, {_wildlife.Flocks.Count} bird flocks");
     }
 
-    /// <summary>Once a tick, after the entities: the herds drift and a rare species counts down to its next animal.</summary>
+    /// <summary>Once a tick, after the entities: the herds drift, a rare species counts down to its next animal, and the day clock's hour goes to the Phoenix's night counter (the clock the clients show: <see cref="ChatTimeCommand"/>'s).</summary>
     void WildlifeTick(float dt)
     {
+        if (_wildlife is { Nights: not null } sky) sky.UpdateSky(Clock.HourAt(_tick / (double)Wire.TickRate), _wildlifeGround ??= new WildlifeGround(this));
         if (_wildlife != null && (_wildlife.Count > 0 || _wildlife.RareWaiting > 0) && _wildlifeGround != null) _wildlife.Update(dt, _wildlifeGround);
     }
 

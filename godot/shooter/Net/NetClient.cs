@@ -401,6 +401,7 @@ public partial class NetClient : Node
                 OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
                 OnDemonEvent((EventKind)e.Kind, e.Payload); // the demon: fireballs, the curse
                 OnHuntEvent((EventKind)e.Kind, e.Payload); // the Hunter's Log: answers and announcements (#336)
+                OnPhoenixEvent((EventKind)e.Kind, e.Payload); // the Phoenix's fall: a flash and the crash site's warning light
                 OnMineralEvent((EventKind)e.Kind, e.Payload); // the mineral nodes and the player's finds (#401)
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);

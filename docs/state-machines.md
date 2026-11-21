@@ -7,7 +7,7 @@ How to add or change one: see `godot/ShooterCore/Fsm/StateMachine.cs`. "From any
 
 ## Animal.Behaviour
 
-What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot (a vanishing species turns immune and is teleported instead), lie dead until the corpse is removed.
+What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot (a vanishing species turns immune and is teleported instead), lie dead until the corpse is removed. A Phoenix flies, falls, crashes, burns and dies.
 
 ```mermaid
 stateDiagram-v2
@@ -21,6 +21,7 @@ stateDiagram-v2
     Idle --> Carried
     Idle --> Thrown
     Idle --> Dead
+    Idle --> Flying
     Eat --> Idle
     Eat --> Flee
     Eat --> Vanish
@@ -60,6 +61,10 @@ stateDiagram-v2
     Down --> Thrown
     Down --> Dead
     Vanish --> Idle
+    Flying --> Falling
+    Falling --> Crashed
+    Crashed --> Burning
+    Burning --> Dead
     Dead --> [*]
 ```
 
@@ -67,13 +72,17 @@ stateDiagram-v2
 - **Eat**: Grazes (clock: eat seconds), then stands.
 - **Walk**: Walks to a wander target (clock: the time budget to arrive, then it gives up and stands).
 - **Flee**: Runs from the threat or the shooter; no clock of its own (calm and alarm timers run beside). Calms down into Idle.
-- **Dead**: A body a vehicle threw flies on first. Lies for corpse_seconds (the clock's elapsed time), then the entity ends; a one-hit species' entity ends at once. Never left.
+- **Dead**: A body a vehicle threw flies on first. Lies for corpse_seconds (the clock's elapsed time; a Phoenix's is the ash), then the entity ends; a one-hit species' entity ends at once. Never left.
 - **Sit**: Sits for a random while (clock: sit seconds; the client plays sit-down, holds, stands up after), then stands. Species with a sit rule only.
 - **Bark**: Barks once (clock: the bark clip's length), then stands. Species with a bark rule only.
 - **Carried**: A Thief of the Thieves event holds it (no clock: it is moved by the Thief, MoveCarried, and does nothing itself). Let go (Release) it stands; one put down outside its Pen walks home over open ground until it is inside again. Still a hit target: any hit that deals damage kills it.
 - **Thrown**: A vehicle ran it over and it survived (Throw): it flies on the arc the vehicle gave it, then rolls on along the ground with part of that speed; no clock. Coming to rest puts it Down. Still a hit target; another vehicle only changes the arc.
 - **Down**: Lies knocked down where it landed (clock: knockdown_seconds), then gets up: Flee from where the vehicle was (a species that does not flee stands). Run over again it is Thrown again.
 - **Vanish**: A species with vanish_seconds is startled (threat, non-lethal hit, herd alarm, getting up after a run-over) and does not run: immune for vanish_seconds (clock; no damage, no throw, no carry, not a hit target), the client spirals rainbow round it, then the Vanished event lets the keeper pick a place at least vanish_min_m away and Teleport puts it there Idle. Only Idle follows; never Dead, Thrown or Carried. No startle for vanish_grace_seconds after it reappears.
+- **Flying**: A Phoenix (PhoenixRules, a species with flies): patrols a wide circle high in the sky, the clock is not used. Reached from Idle only at spawn (the constructor takes off at once). The first hit that deals damage, from any weapon, makes it Fall; it is no target of a knife (too high) and the dawn hour ends it (it flies off, the entity is removed). Never Dead from here.
+- **Falling**: Dives along a straight line from where it was hit to its crash site (clock: fall_seconds; the position follows the line, pitch is the line's), then Crashes. No hit target (bullets and blasts pass through it) so a hit cannot reach it.
+- **Crashed**: Seated and alive at the crash site, stationary (Perched clip, fire and embers on the client), no clock: it stays until killed or the round ends. The ONLY state the second hit counts in: a damaging hit sets it Burning and takes the Hunt (Died is raised, the shooter is the Killer).
+- **Burning**: Dies in a big flame (clock: burn_seconds), no longer alive and no hit target; then it is Dead and the mineral is dropped (Dropped). Only Dead follows.
 
 ## App.Phase
 
