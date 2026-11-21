@@ -283,6 +283,19 @@ public class WorldInterestTests
     }
 
     [Fact]
+    public void AStateSeenFromAfarIsSentAtAnyRange()
+    {
+        var types = new WorldEntityRegistry();
+        types.Register(new WorldEntityDef(Animal, "test animal", HasHp: true, Interest: true, SeenFromAfar: s => s.State == 11));
+        var enc = new WorldSnapshotEncoder(types);
+        var sky = Rig.At(Animal, 9000) with { State = 11 };
+        var packets = enc.Encode(1, Wire.NoTick, new[] { new WorldEntry(1, Animal, sky), new WorldEntry(2, Animal, Rig.At(Animal, 9000)) }, new Vector3(0, 0, 0));
+        var records = Records(packets);
+        Assert.Equal(Wire.FKey | Wire.FHp, records.Single(x => x.Id == 1).Flags);
+        Assert.Equal(Wire.FDormant, records.Single(x => x.Id == 2).Flags);
+    }
+
+    [Fact]
     public void JoinFullSetKeyframesNearEntitiesAndHidesTheFarOnes()
     {
         var r = new Rig();

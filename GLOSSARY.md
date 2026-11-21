@@ -460,7 +460,7 @@ A non-player thing the server replicates on one channel: a corpse, a ground item
 _Avoid_: object, prop, actor
 
 **Interest**:
-The distance rule of the world channel (ADR 0025): the world entity types that opt in (animals, flocks, poop) are sent to a client only while they are within 800 m of its player (horizontal), and stay in until 850 m. Out of interest an entity is still alive and still counts (its spawn and despawn go to everyone); the client just does not see it. Players and vehicles are not subject to it.
+The distance rule of the world channel (ADR 0025): the world entity types that opt in (animals, flocks, poop) are sent to a client only while they are within 800 m of its player (horizontal), and stay in until 850 m. Out of interest an entity is still alive and still counts (its spawn and despawn go to everyone); the client just does not see it. Players and vehicles are not subject to it. A Flying or Falling Phoenix is sent to everybody at any range (it is a light in the sky the whole map sees).
 _Avoid_: relevancy, culling, area of interest, visibility range
 
 **Dormant**:
