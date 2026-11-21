@@ -1353,8 +1353,8 @@ stateDiagram-v2
     Lying --> [*]
 ```
 
-- **Buckling**: Clock: the buckle length. The knees or the lean give way and the view sinks part of the way; a little blood. Zero seconds for a death that does not move the camera.
-- **Falling**: Clock: the fall length. The body goes over (forward, back, left or right by the plan) and the view hits the ground; the blood grows to full. Zero seconds for a plain fade.
+- **Buckling**: Clock: the buckle length. The knees or the lean give way and the view sinks part of the way; a little blood. Zero seconds for a death that does not move the camera, and for a thrown one.
+- **Falling**: Clock: the fall length. The body goes over (forward, back, left or right by the plan) and the view hits the ground; the blood grows to full. Zero seconds for a plain fade. A thrown death (a blast or a run-over threw the body): the clock is the flight, the camera stays back from where the eye was and only turns to follow the body; no blood for a blast.
 - **Lying**: Held until the spawn ends it. Clock (elapsed): the impact shake, then the scrim fade-in with the "eliminated by" text and the countdown.
 
 ## Player.High

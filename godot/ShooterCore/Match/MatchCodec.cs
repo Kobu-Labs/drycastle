@@ -16,7 +16,11 @@ public sealed record MatchStateMsg(MatchPhase Phase, float TimeRemaining, IReadO
 /// <summary>A kill for the feed. <paramref name="Cause"/> travels as an optional sixth byte (old 5-byte messages decode as Standard).</summary>
 public sealed record KillMsg(ushort Killer, ushort Victim, byte Weapon, KillCause Cause = KillCause.Standard);
 public sealed record SpawnMsg(ushort Id, Vector3 Position, float Protection);
-public sealed record DeathMsg(ushort Victim, ushort Killer, float RespawnDelay)
+/// <summary>How a killed body leaves the ground, for the victim's own death view (#416): not thrown, thrown by a blast, thrown by a run-over.</summary>
+public enum DeathFlight : byte { None = 0, Blast = 1, RunOver = 2 }
+
+/// <summary><paramref name="Flight"/> travels as an optional ninth byte (old 8-byte messages decode as None).</summary>
+public sealed record DeathMsg(ushort Victim, ushort Killer, float RespawnDelay, DeathFlight Flight = DeathFlight.None)
 {
     /// <summary><see cref="RespawnDelay"/> of a player an admin took out of the round (#312): no countdown, they wait to be put on a team.</summary>
     public const float WaitsForAdmin = -1f;
@@ -146,15 +150,17 @@ public static class MatchCodec
 
     public static byte[] Encode(DeathMsg m)
     {
-        var b = new byte[8];
+        var b = new byte[m.Flight == DeathFlight.None ? 8 : 9];
         BinaryPrimitives.WriteUInt16LittleEndian(b, m.Victim);
         BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(2), m.Killer);
         BinaryPrimitives.WriteSingleLittleEndian(b.AsSpan(4), m.RespawnDelay);
+        if (b.Length > 8) b[8] = (byte)m.Flight;
         return b;
     }
 
     public static DeathMsg? DecodeDeath(byte[] d) => d.Length < 8 ? null : new DeathMsg(
-        BinaryPrimitives.ReadUInt16LittleEndian(d), BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(2)), BinaryPrimitives.ReadSingleLittleEndian(d.AsSpan(4)));
+        BinaryPrimitives.ReadUInt16LittleEndian(d), BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(2)), BinaryPrimitives.ReadSingleLittleEndian(d.AsSpan(4)),
+        d.Length > 8 && Enum.IsDefined((DeathFlight)d[8]) ? (DeathFlight)d[8] : DeathFlight.None);
 
     public static byte[] EncodeDebugKill(ushort target)
     {

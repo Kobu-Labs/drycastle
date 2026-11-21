@@ -18,9 +18,11 @@ public partial class NetClient
     float _deathTargetY, _deathPushScale = 1f;
     Vector3 _deathForward;
     Change<bool> _deathHidesCorpse;
+    /// <summary>A thrown death (#416): where the camera looks now, turning towards the own corpse; null until the first frame.</summary>
+    Quaternion? _deathLook;
 
     /// <summary>The death of the local player: choose how it looks from what the player was doing until now, and start it.</summary>
-    void BeginDeathView(float respawnDelay)
+    void BeginDeathView(float respawnDelay, DeathFlight flight = DeathFlight.None)
     {
         var before = (Mode with { Dead = false }).Resolve();
         var underwater = false;
@@ -29,8 +31,9 @@ public partial class NetClient
             var eye = _me.Camera.GlobalPosition;
             underwater = Water.DepthAt(new NVec3(eye.X, eye.Y, eye.Z)) > 0f;
         }
-        _death.Begin(DeathPresentation.Plan(before, underwater, drowned: false, GameSettings.Current.ReduceMotion, respawnDelay, _deaths));
+        _death.Begin(DeathPresentation.Plan(before, underwater, drowned: false, GameSettings.Current.ReduceMotion, respawnDelay, _deaths, flight));
         _deathFrom = null;
+        _deathLook = null;
     }
 
     /// <summary>The spawn: the death screen is over, the camera, the corpse and the overlays go back at once (the HUD hides its scrim itself).</summary>
@@ -38,6 +41,7 @@ public partial class NetClient
     {
         _death.End();
         _deathFrom = null;
+        _deathLook = null;
         _hud?.SetBlood(0);
     }
 
@@ -51,7 +55,7 @@ public partial class NetClient
             _hud?.SetBlood(_death.BloodNow, _deaths);
             _hud?.SetRespawnScrim(_death.ScrimNow);
         }
-        var hide = _death.OwnsCamera;
+        var hide = _death.HidesOwnCorpse;
         if (_deathHidesCorpse.Update(hide) || hide) ShowOwnCorpse(!hide);
     }
 
@@ -76,6 +80,7 @@ public partial class NetClient
 
     Transform3D DeathCamera(Transform3D pose)
     {
+        if (_death.Current.Style == DeathStyle.Thrown) return ThrownCamera(pose);
         if (_deathFrom is not { } from)
         {
             from = pose;
@@ -89,6 +94,54 @@ public partial class NetClient
         pos.Y = Mathf.Lerp(from.Origin.Y, Math.Min(from.Origin.Y, _deathTargetY), p.Drop) + p.BounceM; // never rises: a pinned camera is already low
         var turn = new Basis(Vector3.Up, p.Yaw) * new Basis(Vector3.Right, p.Pitch) * new Basis(Vector3.Back, p.Roll); // about the view's own axes
         return new Transform3D(from.Basis * turn, pos);
+    }
+
+    /// <summary>
+    /// A thrown death (#416): the camera stays where the eye was in the first frame, backed off a little (<see cref="DeathPresentation.ThrownBackM"/>, shortened against a wall) and
+    /// up, and only turns, smoothly, to keep the own corpse in the middle. Before the corpse is known it keeps looking the way the eye did.
+    /// </summary>
+    Transform3D ThrownCamera(Transform3D pose)
+    {
+        if (_deathFrom is not { } from)
+        {
+            from = pose;
+            var back = from.Basis.Z; // the view looks along -Z: +Z is behind it
+            var room = 1f;
+            if (_me != null && GodotObject.IsInstanceValid(_me) && _me.IsInsideTree())
+            {
+                var q = PhysicsRayQueryParameters3D.Create(from.Origin, from.Origin + back * (DeathPresentation.ThrownBackM + 0.3f));
+                q.CollisionMask = CollisionLayers.OnFoot;
+                q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
+                var hit = _me.GetWorld3D().DirectSpaceState.IntersectRay(q);
+                if (hit.Count > 0) room = Mathf.Clamp((from.Origin.DistanceTo(hit["position"].AsVector3()) - 0.3f) / DeathPresentation.ThrownBackM, 0f, 1f);
+            }
+            from.Origin += back * (DeathPresentation.ThrownBackM * room) + Vector3.Up * DeathPresentation.ThrownUpM * room;
+            _deathFrom = from;
+            _deathLook = from.Basis.GetRotationQuaternion();
+        }
+        var look = _deathLook ?? from.Basis.GetRotationQuaternion();
+        if (OwnCorpseAt() is { } body)
+        {
+            var dir = body - from.Origin;
+            if (dir.LengthSquared() > 0.04f)
+            {
+                var aim = Basis.LookingAt(dir.Normalized(), Vector3.Up).GetRotationQuaternion();
+                look = look.Slerp(aim, DeathPresentation.PanBlend((float)GetProcessDeltaTime()));
+            }
+        }
+        _deathLook = look;
+        return new Transform3D(new Basis(look), from.Origin);
+    }
+
+    /// <summary>Where the own corpse's body is (its middle), or null while it is not in the world yet.</summary>
+    Vector3? OwnCorpseAt()
+    {
+        foreach (var (id, v) in _corpses)
+        {
+            if (v.Giant || v.Bale || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.Owner != _myId) continue;
+            return v.Node.GlobalPosition;
+        }
+        return null;
     }
 
     /// <summary>How much of a fall's travel (forward or back) fits before a wall: 0..1 (a body that falls against a wall does not push the view into it).</summary>

@@ -5,6 +5,65 @@ namespace Drycastle.ShooterCore.Tests;
 
 public class DeathPresentationTests
 {
+    [Fact]
+    public void BlastDeathOnFootIsThrownWithoutBlood()
+    {
+        var p = DeathPresentation.Plan(ClientMode.OnFoot, false, false, false, 5, 1, DeathFlight.Blast);
+        Assert.Equal(DeathStyle.Thrown, p.Style);
+        Assert.Equal(0f, p.Blood);
+        Assert.Equal(0f, p.BuckleSeconds);
+        Assert.True(p.FallSeconds > 0);
+    }
+
+    [Fact]
+    public void RunOverDeathIsThrownWithBlood()
+    {
+        var p = DeathPresentation.Plan(ClientMode.OnFoot, false, false, false, 5, 1, DeathFlight.RunOver);
+        Assert.Equal(DeathStyle.Thrown, p.Style);
+        Assert.Equal(DeathPresentation.FullBlood, p.Blood);
+    }
+
+    [Fact]
+    public void ThrownDeathOnlyWhereTheCameraIsTheBodys()
+    {
+        Assert.Equal(DeathStyle.Blood, DeathPresentation.Plan(ClientMode.Seated, false, false, false, 5, 1, DeathFlight.Blast).Style);
+        Assert.Equal(DeathStyle.Blood, DeathPresentation.Plan(ClientMode.OnFoot, false, false, true, 5, 1, DeathFlight.Blast).Style); // reduce motion
+        Assert.Equal(DeathStyle.Blood, DeathPresentation.Plan(ClientMode.OnFoot, true, false, false, 5, 1, DeathFlight.Blast).Style);  // under water
+    }
+
+    [Fact]
+    public void ThrownDeathKeepsTheCorpseShownAndTheCameraStill()
+    {
+        var d = new DeathPresentation();
+        d.Begin(DeathPresentation.Plan(ClientMode.OnFoot, false, false, false, 5, 1, DeathFlight.Blast));
+        Assert.True(d.OwnsCamera);
+        Assert.False(d.HidesOwnCorpse);
+        Assert.Equal(DeathPose.None, d.Pose);
+        Assert.Equal(0f, d.BloodNow);
+        Assert.True(d.Falling);
+        d.Tick(5f);
+        Assert.True(d.Lying);
+        Assert.Equal(0f, d.BloodNow);
+        Assert.Equal(DeathPose.None, d.Pose);
+    }
+
+    [Fact]
+    public void FallDeathStillHidesTheCorpse()
+    {
+        var d = new DeathPresentation();
+        d.Begin(FallPlan());
+        Assert.True(d.HidesOwnCorpse);
+    }
+
+    [Fact]
+    public void PanBlendIsFrameRateIndependent()
+    {
+        var one = 1f - DeathPresentation.PanBlend(1f / 30f);
+        var two = (1f - DeathPresentation.PanBlend(1f / 60f)) * (1f - DeathPresentation.PanBlend(1f / 60f));
+        Assert.Equal(one, two, 4);
+        Assert.Equal(0f, DeathPresentation.PanBlend(0f));
+    }
+
     static DeathPlan FallPlan(float delay = 5) => DeathPresentation.Plan(ClientMode.OnFoot, false, false, false, delay, 1);
 
     [Fact]
