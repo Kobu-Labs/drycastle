@@ -7,7 +7,7 @@ Frame: metres, +Y up, forward -Z (the game's frame: ModelYawDeg 0). Origin = the
 GROUND under it (belly ~0.1 m up). Rigid node articulation, no skin: FlightRoot (bob, pitch) > Head, Tail, WingShoulder_L/R > WingElbow > WingTip, Foot_L/R.
 Clips (names are API; the client sets the loop): Idle (hover, 1.35 s, loops), Cruise (glide, 2.4 s, loops), Fall (shot down, a tumbling dive, 0.9 s, loops),
 Perched (crashed, seated and beaten but breathing, 3 s, loops).
-Emissive: KHR_materials_emissive_strength (the feathers glow like embers, the flame and eyes much more), so it reads at night without any light.
+Emissive: KHR_materials_emissive_strength. The game's bloom threshold is HDR 2 (ADR 0030): the feathers are authored at 3-5 so the whole bird blooms like a coal in the night sky, the flame and eyes at 8-10.
 """
 from pathlib import Path
 import json, math, struct, sys
@@ -23,13 +23,13 @@ def material(name,color,emission=None,metal=0,rough=.65,strength=1):
         if strength!=1:d['extensions']={'KHR_materials_emissive_strength':{'emissiveStrength':strength}}
     MATS.append(d);return len(MATS)-1
 wine=material('01 Obsidian plum',(.065,.018,.045),metal=.15)
-red=material('02 Smoldering crimson',(.28,.018,.032),emission=[.28,.018,.032],strength=.6)
-orange=material('03 Vermilion feather',(.92,.115,.025),emission=[.92,.115,.025],strength=.5)
-copper=material('04 Copper shadow',(.42,.095,.018),emission=[.42,.095,.018],strength=.4,metal=.3)
-gold=material('05 Marigold feather',(.78,.30,.018),emission=[.78,.30,.018],strength=.5,metal=.12)
-sun=material('06 Sunlit feather',(.95,.52,.055),emission=[.95,.52,.055],strength=1.5)
-ivory=material('07 Living flame',(1,.75,.25),emission=[1,.4,.06],strength=3)
-eye=material('08 White gold eyes',(1,.98,.7),emission=[1,1,.6],strength=4)
+red=material('02 Smoldering crimson',(.28,.018,.032),emission=[.28,.018,.032],strength=12)
+orange=material('03 Vermilion feather',(.92,.115,.025),emission=[.92,.115,.025],strength=5)
+copper=material('04 Copper shadow',(.42,.095,.018),emission=[.42,.095,.018],strength=8,metal=.3)
+gold=material('05 Marigold feather',(.78,.30,.018),emission=[.78,.30,.018],strength=5,metal=.12)
+sun=material('06 Sunlit feather',(.95,.52,.055),emission=[.95,.52,.055],strength=6)
+ivory=material('07 Living flame',(1,.75,.25),emission=[1,.4,.06],strength=8)
+eye=material('08 White gold eyes',(1,.98,.7),emission=[1,1,.6],strength=10)
 beak=material('09 Burnished beak',(.86,.48,.09),metal=.55,rough=.3)
 coal=material('10 Basalt talons',(.055,.045,.07),metal=.2)
 

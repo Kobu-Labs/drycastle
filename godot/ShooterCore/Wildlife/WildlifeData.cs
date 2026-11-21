@@ -72,6 +72,8 @@ public sealed class PhoenixRules
     public float CrashBuildingM { get; set; } = 10;
     /// <summary>How long the flame burns after the second hit, seconds; then it is Dead and the mineral is left.</summary>
     public float BurnSeconds { get; set; } = 6;
+    /// <summary>How long the Dead Phoenix stays (the body is gone at once on the client, embers rise) before the entity ends, seconds. The mineral it dropped has its own minute.</summary>
+    public float DeadSeconds { get; set; } = 6;
     /// <summary>The mineral (<see cref="Minerals"/> id) the dead Phoenix leaves where it burned.</summary>
     public string Drops { get; set; } = "pheonixite";
 }

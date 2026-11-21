@@ -201,7 +201,7 @@ public class PhoenixTests
         Assert.Equal(AnimalState.Dead, p.State);
         Assert.Equal("pheonixite", dropped);
         Assert.Null(p.Ended);
-        Run(p, Data.Animals.CorpseSeconds + 1);
+        Run(p, Data.Wildlife.Phoenix!.DeadSeconds + 1);
         Assert.Equal(WorldDespawnReason.Expired, p.Ended);
     }
 
