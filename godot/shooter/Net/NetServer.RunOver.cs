@@ -49,7 +49,7 @@ public partial class NetServer
     static ObstacleClass? ObstacleClassOf(ushort hitId) => CollisionRules.ClassOfHitId(hitId);
 
     /// <summary>
-    /// What running over one body does. A body that can die as a ragdoll (a player, a dummy) is thrown ahead; an animal is thrown and loses part of its hit points; any other NPC dies outright.
+    /// What running over one body does. A body that can die as a ragdoll (a player, a dummy) is thrown ahead, and a player the hit does not kill is thrown ahead alive at the same velocity, knocked off their feet (PlayerFlung: tumbling, then getting up, #411); an animal is thrown and loses part of its hit points; any other NPC dies outright.
     /// A vehicle too slow to hurt (<see cref="RunOverSweep.Damage"/> 0, above <see cref="RunOver.ContactMinSpeed"/>) only moves the body out of its way: a player is pushed ahead, an animal is
     /// knocked over unhurt, the rest are left alone.
     /// </summary>
@@ -67,9 +67,17 @@ public partial class NetServer
         {
             case ObstacleClass.Player:
             case ObstacleClass.TargetDummy:
-                PushOnDeath(id, CorpseRules.ThrowFromCar(m.Forward, m.Speed), DeathFlight.RunOver); // a roadkill is thrown ahead of the vehicle (the ragdoll)
+                var thrown = CorpseRules.ThrowFromCar(m.Forward, m.Speed);
+                PushOnDeath(id, thrown, DeathFlight.RunOver); // a roadkill is thrown ahead of the vehicle (the ragdoll)
                 var r = Deal(m.Attacker, SpecialWeapons.Vehicle, id, m.Damage, false, false, KillCause.Roadkill);
                 ClearPush(id, r);
+                // one who lives through it (hurt, or spared: a teammate) leaves the bumper the same way, as the slow push does: no vehicle drives through a standing body (#411)
+                if (cls == ObstacleClass.Player && r != DamageResult.Killed && _byId.TryGetValue(id, out var hurt) && _match.Get(id)?.Life == PlayerLife.Alive)
+                {
+                    hurt.Body.AddImpulse(new Vector3(thrown.X, thrown.Y, thrown.Z));
+                    hurt.LaunchGraceUntil = _elapsed + RunOver.ThrownGraceSeconds; hurt.LaunchedAt = _elapsed; // knocked off their feet, as by the Bigfoot's throw: no shooting in the air, no fall damage from this landing
+                    BroadcastEvent(EventKind.PlayerFlung, PlayerFlungCodec.Encode(id)); // every client draws the body tumbling and getting up; the driver's has guessed it already
+                }
                 if (cls == ObstacleClass.Player && r != DamageResult.Ignored)
                 {
                     _runOvers++;
