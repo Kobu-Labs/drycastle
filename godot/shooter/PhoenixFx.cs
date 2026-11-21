@@ -4,7 +4,7 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The looks of the Phoenix (animals.json <c>"fx": "phoenix"</c>), pure client, nothing on the wire: a warm flickering light on the bird (it reads at night) and CPU particles in world space, by phase
+/// The looks of the Phoenix (animals.json <c>"fx": "phoenix"</c>), pure client, nothing on the wire: a warm flickering light on the bird, a glow with the bird's direction (a tail of fire behind it and a bar of fire along its wings, sized by the camera distance so the night sky shows it from across the map) and CPU particles in world space, by phase
 /// (<see cref="AnimalState"/>, GLOSSARY "Phoenix"). Flying: a thin trail of embers. Falling: a heavy streak of flame behind it and smoke, the light swelling. Crashed: a ring of fire on the ground round it,
 /// rising embers, smoke and a flickering light. Burning (the second hit): a tall column of flame, a flash and a bright light that die down over the burn's length. Dead: the body is ash, a few embers
 /// rise for a while, and a small glow lingers. Child of the animal's node (origin = the body centre while it flies, the ground when it sits), built once per animal and freed with it; <see cref="Tick"/> runs
@@ -33,8 +33,11 @@ public sealed partial class PhoenixFx : Node3D
 
     CpuParticles3D? _embers, _streak, _smoke, _ring, _rise, _column;
     OmniLight3D? _light;
-    MeshInstance3D? _halo;
+    MeshInstance3D? _halo, _tail, _wings;
     StandardMaterial3D? _haloMat;
+    ShaderMaterial? _tailMat, _wingMat;
+    static Shader? _glowShader;
+    static readonly StringName PAxis = "axis", PStart = "start", PLen = "len", PWidth = "width", PSym = "sym", PPower = "power", PMotion = "motion";
     readonly List<MeshInstance3D> _bodies = new();
     Change<AnimalState> _phase;
     float _clock, _t, _burnSeconds = 6f;
@@ -108,14 +111,29 @@ public sealed partial class PhoenixFx : Node3D
         _haloMat = new StandardMaterial3D
         {
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, Transparency = BaseMaterial3D.TransparencyEnum.Alpha, BlendMode = BaseMaterial3D.BlendModeEnum.Add, CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-            BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled, AlbedoColor = new Color(3.2f, 1.2f, 0.3f, 1f), NoDepthTest = false, DisableReceiveShadows = true,
+            BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled, AlbedoColor = new Color(3.2f, 1.2f, 0.3f, 1f), NoDepthTest = false, DisableReceiveShadows = true, DisableFog = true,
             AlbedoTexture = new GradientTexture2D { Fill = GradientTexture2D.FillEnum.Radial, FillFrom = new Vector2(0.5f, 0.5f), FillTo = new Vector2(1f, 0.5f), Width = 64, Height = 64, Gradient = RocketFx.Ramp((0f, new Color(1, 1, 1, 1f)), (0.25f, new Color(1, 1, 1, 0.45f)), (1f, new Color(1, 1, 1, 0f))) },
         };
         _halo = new MeshInstance3D { Name = "Halo", Mesh = new QuadMesh { Size = Vector2.One, Material = _haloMat }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Visible = false };
         AddChild(_halo);
+        // the glow's direction (shaders/phoenix_glow.gdshader): a tail of fire behind it (+Z) and a bar of fire along the wings (X), each turned about its own axis to the camera. They bank and dive with the bird
+        _glowShader ??= GD.Load<Shader>("res://shaders/phoenix_glow.gdshader");
+        (_tail, _tailMat) = Streak("Tail", Vector3.Back, 0f);
+        (_wings, _wingMat) = Streak("Wings", Vector3.Right, 1f);
         if (model != null)
             foreach (var n in model.FindChildren("*", "MeshInstance3D", true, false))
                 if (n is MeshInstance3D mi) _bodies.Add(mi);
+    }
+
+    (MeshInstance3D, ShaderMaterial) Streak(string name, Vector3 axis, float sym)
+    {
+        var mat = new ShaderMaterial { Shader = _glowShader };
+        mat.SetShaderParameter(PAxis, axis);
+        mat.SetShaderParameter(PSym, sym);
+        // the shader moves the quad far from the node: the margin keeps it drawn while the bird itself is off the screen
+        var mi = new MeshInstance3D { Name = name, Mesh = new QuadMesh { Size = Vector2.One, Material = mat }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, ExtraCullMargin = 400f, Visible = false };
+        AddChild(mi);
+        return (mi, mat);
     }
 
     /// <summary>The first hit landed (the fall begins): a flash of light on the bird.</summary>
@@ -129,19 +147,40 @@ public sealed partial class PhoenixFx : Node3D
         _t += dt; _clock += dt;
         _flash.Tick(dt);
         var near = Sfx.ListenerDistance(GlobalPosition) <= EffectCull.EffectRange;
-        if (_halo != null)
+        if (_halo != null && _tail != null && _wings != null)
         {
-            var glows = state is AnimalState.Flying or AnimalState.Falling or AnimalState.Crashed or AnimalState.Burning;
+            var sky = state is AnimalState.Flying or AnimalState.Falling;
+            var glows = sky || state is AnimalState.Crashed or AnimalState.Burning;
             var cam = GetViewport()?.GetCamera3D();
             _halo.Visible = glows && cam != null;
+            _tail.Visible = _wings.Visible = sky && cam != null;
             if (_halo.Visible)
             {
                 var d = cam!.GlobalPosition.DistanceTo(GlobalPosition);
-                var size = Math.Clamp(d * 0.06f, 7f, 45f) * (state == AnimalState.Burning ? 1.6f : 1f); // about 3.5 degrees on screen, however far
+                var still = GameSettings.Current.ReduceMotion;
+                var flick = still ? 1f : 0.85f + 0.15f * MathF.Sin(_clock * 7f) * MathF.Sin(_clock * 3.1f + 1f);
+                // in the sky the round glow is only the hot core (the tail and the wings give the shape); on the ground it is the fire's glow. Sizes follow the distance: the bird is a few pixels from afar, the glow never is
+                var size = sky ? Math.Clamp(d * 0.03f, 5f, 60f) : Math.Clamp(d * 0.06f, 7f, 45f) * (state == AnimalState.Burning ? 1.6f : 1f);
                 _halo.Scale = new Vector3(size, size, 1f);
-                _halo.Position = Vector3.Up * (state is AnimalState.Flying or AnimalState.Falling ? 0f : 0.8f);
-                var flick = GameSettings.Current.ReduceMotion ? 1f : 0.85f + 0.15f * MathF.Sin(_clock * 7f) * MathF.Sin(_clock * 3.1f + 1f);
+                _halo.Position = Vector3.Up * (sky ? 0f : 0.8f);
                 _haloMat!.AlbedoColor = new Color(3.2f * flick, 1.2f * flick, 0.3f * flick, state == AnimalState.Burning ? 1f : 0.85f);
+                if (sky)
+                {
+                    var dive = state == AnimalState.Falling;
+                    var grow = dive ? Math.Clamp(_t / 1.2f, 0f, 1f) : 0f; // the fall tears a longer, hotter tail off it
+                    var tail = MathF.Max(34f + 30f * grow, d * (0.09f + 0.06f * grow));
+                    _tailMat!.SetShaderParameter(PStart, -1.5f);
+                    _tailMat.SetShaderParameter(PLen, tail);
+                    _tailMat.SetShaderParameter(PWidth, MathF.Max(6f + 3f * grow, d * 0.022f));
+                    _tailMat.SetShaderParameter(PPower, flick * (1f + 0.8f * grow));
+                    _tailMat.SetShaderParameter(PMotion, still ? 0f : 1f);
+                    var span = MathF.Max(13f, d * 0.05f);
+                    _wingMat!.SetShaderParameter(PStart, -span * 0.5f);
+                    _wingMat.SetShaderParameter(PLen, span);
+                    _wingMat.SetShaderParameter(PWidth, MathF.Max(4.5f, d * 0.016f));
+                    _wingMat.SetShaderParameter(PPower, flick * 0.8f);
+                    _wingMat.SetShaderParameter(PMotion, still ? 0f : 1f);
+                }
             }
         }
         var burn = Math.Clamp(1f - _t / _burnSeconds, 0f, 1f); // 1 at the second hit, 0 when the flame is out

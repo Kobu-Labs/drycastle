@@ -226,7 +226,7 @@ public sealed class WorldSnapshotEncoder
             if (filter && def is { Interest: true })
             {
                 long dx = q.State.X - vx, dz = q.State.Z - vz;
-                emit = Decide(q, b, baseTick, tick, dx * dx + dz * dz);
+                emit = Decide(q, b, baseTick, tick, def.SeenFromAfar?.Invoke(q.State) == true ? 0 : dx * dx + dz * dz); // seen from afar: in interest at any range
                 if (emit == Emit.Skip) { o = at; continue; }
             }
             if (emit == Emit.Dormant)
