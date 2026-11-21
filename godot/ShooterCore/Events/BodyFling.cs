@@ -1,8 +1,8 @@
 namespace Drycastle.ShooterCore;
 
 /// <summary>
-/// Where a player is in the Bigfoot's grab, as a client draws the body: held in the fist, flying after the throw, or getting up after the landing.
-/// None means the normal figure. Cosmetic: the server's movement and damage know nothing of it (#360).
+/// Where a player is in the Bigfoot's grab, or after a vehicle threw them alive (#411), as a client draws the body: held in the fist, flying after the throw,
+/// or getting up after the landing. None means the normal figure. Cosmetic: the server's movement and damage know nothing of it (#360).
 /// </summary>
 public enum BodyFling : byte { None, Held, Flying, Lying, Landing }
 
@@ -14,14 +14,14 @@ public sealed class BodyFlingTracker
 {
     /// <summary>Held: grabbed. Flying: the throw (the Bigfoot's Launch). Lying: landed, the ragdoll lies on the ground. Landing: it turns upright again. None: any end (released, died, left, round reset).</summary>
     public static readonly StateMachineSpec<BodyFling> Spec = StateMachineSpec<BodyFling>
-        .Define("Bigfoot.BodyFling", "A player the Bigfoot grabbed, as a client draws them: held in the fist, flying after the throw, getting up after the landing.", BodyFling.None)
-        .Allow(BodyFling.None, BodyFling.Held)
+        .Define("Bigfoot.BodyFling", "A player the Bigfoot grabbed or a vehicle threw alive, as a client draws them: held in the fist, flying after the throw, getting up after the landing.", BodyFling.None)
+        .Allow(BodyFling.None, BodyFling.Held, BodyFling.Flying)
         .Allow(BodyFling.Held, BodyFling.Flying, BodyFling.None)
         .Allow(BodyFling.Flying, BodyFling.Lying, BodyFling.Held, BodyFling.None)
-        .Allow(BodyFling.Lying, BodyFling.Landing, BodyFling.Held, BodyFling.None)
-        .Allow(BodyFling.Landing, BodyFling.None, BodyFling.Held)
+        .Allow(BodyFling.Lying, BodyFling.Landing, BodyFling.Held, BodyFling.Flying, BodyFling.None)
+        .Allow(BodyFling.Landing, BodyFling.None, BodyFling.Held, BodyFling.Flying)
         .Note(BodyFling.Held, "In the fist (Bigfoot act Hold): limbs loose, the body swung by the hand. Released without a throw, the Bigfoot dying or the player dying or leaving ends it at None.")
-        .Note(BodyFling.Flying, "The throw (Bigfoot act Launch): tumbling, limbs flailing, until the body is on the ground and slow (after MinAirSeconds), or has been slow for SettleSeconds where the ground cannot be told (a roof), or MaxAirSeconds.")
+        .Note(BodyFling.Flying, "The throw (Bigfoot act Launch, or a vehicle that ran the player over without killing: from None, or again while lying or getting up): tumbling, limbs flailing, until the body is on the ground and slow (after MinAirSeconds), or has been slow for SettleSeconds where the ground cannot be told (a roof), or MaxAirSeconds.")
         .Note(BodyFling.Lying, "Landed alive: the ragdoll lies limp on the ground for LieSeconds.")
         .Note(BodyFling.Landing, "Getting up: the body turns upright and the limbs go slack, then the normal figure (a dead one is the corpse's, not this machine's).")
         .Build();
@@ -52,6 +52,14 @@ public sealed class BodyFlingTracker
     /// <summary>The Hold ended in a throw (act Launch). Only a held body is thrown.</summary>
     public void Flung() { if (_fsm.Is(BodyFling.Held)) { _slowFor = 0; _fsm.Enter(BodyFling.Flying); } }
 
+    /// <summary>A vehicle threw the player alive (#411: the server's PlayerFlung, or the driver's own guess of it). A held body stays the Bigfoot's; one already flying flies on.</summary>
+    public void Thrown()
+    {
+        if (_fsm.Is(BodyFling.Held)) return;
+        _slowFor = 0;
+        if (!_fsm.Enter(BodyFling.Flying)) _fsm.Restart();
+    }
+
     /// <summary>The hold ended with no throw, the Bigfoot is gone, or the player died, left or respawned.</summary>
     public void Ended() => _fsm.Enter(BodyFling.None);
 
@@ -73,4 +81,12 @@ public sealed class BodyFlingTracker
         }
         else if (_fsm.Is(BodyFling.Lying) && _fsm.Elapsed >= LieSeconds) _fsm.Enter(BodyFling.Landing);
     }
+}
+
+/// <summary><see cref="EventKind.PlayerFlung"/>: u16 player (a vehicle ran them over and they live: every client draws them thrown, <see cref="BodyFlingTracker.Thrown"/>, #411).</summary>
+public static class PlayerFlungCodec
+{
+    public static byte[] Encode(ushort player) => new[] { (byte)player, (byte)(player >> 8) };
+
+    public static ushort? Decode(ReadOnlySpan<byte> p) => p.Length == 2 ? (ushort)(p[0] | p[1] << 8) : null;
 }

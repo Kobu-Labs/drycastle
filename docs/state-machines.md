@@ -158,12 +158,13 @@ From any state: Dead
 
 ## Bigfoot.BodyFling
 
-A player the Bigfoot grabbed, as a client draws them: held in the fist, flying after the throw, getting up after the landing.
+A player the Bigfoot grabbed or a vehicle threw alive, as a client draws them: held in the fist, flying after the throw, getting up after the landing.
 
 ```mermaid
 stateDiagram-v2
     [*] --> None
     None --> Held
+    None --> Flying
     Held --> Flying
     Held --> None
     Flying --> Lying
@@ -171,13 +172,15 @@ stateDiagram-v2
     Flying --> None
     Lying --> Landing
     Lying --> Held
+    Lying --> Flying
     Lying --> None
     Landing --> None
     Landing --> Held
+    Landing --> Flying
 ```
 
 - **Held**: In the fist (Bigfoot act Hold): limbs loose, the body swung by the hand. Released without a throw, the Bigfoot dying or the player dying or leaving ends it at None.
-- **Flying**: The throw (Bigfoot act Launch): tumbling, limbs flailing, until the body is on the ground and slow (after MinAirSeconds), or has been slow for SettleSeconds where the ground cannot be told (a roof), or MaxAirSeconds.
+- **Flying**: The throw (Bigfoot act Launch, or a vehicle that ran the player over without killing: from None, or again while lying or getting up): tumbling, limbs flailing, until the body is on the ground and slow (after MinAirSeconds), or has been slow for SettleSeconds where the ground cannot be told (a roof), or MaxAirSeconds.
 - **Lying**: Landed alive: the ragdoll lies limp on the ground for LieSeconds.
 - **Landing**: Getting up: the body turns upright and the limbs go slack, then the normal figure (a dead one is the corpse's, not this machine's).
 

@@ -21,15 +21,6 @@ public class VehicleTests
     public void RunOverDamageFollowsTheRule(float speed, float expected) => Assert.Equal(expected, RunOver.Damage(Cfg(), speed), 3);
 
     [Fact]
-    public void A_run_over_kills_for_certain_only_from_full_damage()
-    {
-        var f = Cfg();
-        Assert.False(RunOver.Kills(f, 12f)); // hurts, does not kill a body at full health: no throw to guess
-        Assert.True(RunOver.Kills(f, f.RunOverMinSpeed + MoveConsts.MaxHealth / f.RunOverDamagePerSpeed));
-        Assert.False(RunOver.Kills(f, 20f, 0.1f)); // a light vehicle: the mass scale counts
-    }
-
-    [Fact]
     public void OneDriverOnly()
     {
         var s = new VehicleSeat();

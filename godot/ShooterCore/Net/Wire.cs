@@ -112,6 +112,8 @@ public enum EventKind : byte
     SeatState = 162,
     /// <summary>Server broadcast: a vehicle hit something hard enough to be heard (u16 vehicle, u8 <see cref="CrashSound"/>, <see cref="VehicleCrashCodec"/>, #410).</summary>
     VehicleCrash = 163,
+    /// <summary>Server broadcast: a vehicle ran a player over and they live, thrown ahead of it (u16 player, <see cref="PlayerFlungCodec"/>, #411): drawn tumbling, then getting up.</summary>
+    PlayerFlung = 164,
     /// <summary>Server broadcast: one glass pane's hit points after they changed (<see cref="GlassCodec"/>, ADR 0007). Kinds 170-179 belong to glass panes.</summary>
     GlassPane = 170,
     /// <summary>Server broadcast, or to the joining player: the panes of a scope are whole except the listed ones (<see cref="GlassCodec"/>): the join catch-up, a new round, a vehicle that returned.</summary>
@@ -363,7 +365,8 @@ public static class Wire
     //   v76 the head lamp: event 31 HeadLampState (a player's head lamp on or off, to everyone and to a joiner)
     //   v77 finding minerals (#401): events 111 MineralPick (client to server), 112 MineralNodes (the nodes and whether each is active) and 113 MineralFinds (the player's finds with their places)
     //   v78 the crash sound (#410): event 163 VehicleCrash (a vehicle hit something: its id and how hard)
-    public const byte ProtocolVersion = 78;
+    //   v79 a run-over survivor is thrown (#411): event 164 PlayerFlung (the player a vehicle threw alive)
+    public const byte ProtocolVersion = 79;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

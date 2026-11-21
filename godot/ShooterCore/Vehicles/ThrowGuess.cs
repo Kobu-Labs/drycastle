@@ -36,6 +36,12 @@ public sealed class ThrowGuess
         .Note(ThrowGuessPhase.Settling, "Drawn at the server's position plus the fading offset (clock: SettleSeconds); no new guess, as the server throws one body once in that time.")
         .Build();
 
+    /// <summary>
+    /// Whether a living player the server threw at <paramref name="launchSpeed"/> and now moves at <paramref name="serverSpeed"/> (m/s along the ground) still flies (#411): faster
+    /// than anybody runs, and most of the launch. That the server threw them at all is its PlayerFlung event; this only tells when its body has come down.
+    /// </summary>
+    public static bool ServerStillFlies(float serverSpeed, float launchSpeed) => serverSpeed >= MathF.Max(MoveConsts.SprintSpeed * 1.15f, launchSpeed * 0.6f);
+
     readonly StateMachine<ThrowGuessPhase> _fsm = new(Spec);
     Vector3 _pos, _vel, _offset;
     float _floorY;
