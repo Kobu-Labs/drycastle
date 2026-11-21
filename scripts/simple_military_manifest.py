@@ -17,6 +17,7 @@ MODELS = [  # (file stem, facts file, display name, tags)
     ("scud", "scud", "Scud launcher truck", ["vehicles", "scud"]),
     ("scud_missile", "scud", "Scud missile (flying entity)", ["props", "scud"]),
     ("rocket_cart", "rocket_cart", "Rocket cart (towable, one Scud missile)", ["vehicles", "scud"]),
+    ("sentry_turret", "sentry_turret", "Sentry turret (tripod machine gun: stand + yawing gun, #306)", ["props", "turret"]),
 ]
 
 
