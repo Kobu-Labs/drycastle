@@ -18,8 +18,9 @@ public class DustRulesTests
         var field = new DustField();
         Assert.True(field.Add(Rocket));
         Assert.Equal(0f, field.Veil(eye, 10.0));
-        Assert.True(field.Veil(eye, 10.3) > 0.9f);
-        Assert.True(field.Veil(eye, 11.5) > 0.9f);
+        Assert.True(field.Veil(eye, 10.2) > 0.9f); // the blast's first moment blinds
+        Assert.Equal(DustRules.CloudVeilShare, field.Veil(eye, 11.5), 2); // then the drawn cloud does the hiding: near things can be made out
+        Assert.True(DustRules.CloudDensity(Rocket, eye, 11.5) > 0.95f); // the cloud itself is as thick as before
         Assert.InRange(DustRules.CloudSeconds(6f), 3f, 5f);
         var late = field.Veil(eye, 13.5);
         Assert.InRange(late, 0.001f, 0.5f); // thinning, not gone at a stroke
