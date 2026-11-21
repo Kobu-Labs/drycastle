@@ -174,6 +174,27 @@ public sealed partial class PhoenixFx : Node3D
         foreach (var mi in _bodies) if (GodotObject.IsInstanceValid(mi)) mi.MaterialOverride = _ash;
     }
 
+    /// <summary>A mineral drop's minute is over: a short puff of fire where it lay (the client no longer sees the node). Not built far from the camera.</summary>
+    public static void FirePuff(Node3D world, Vector3 at)
+    {
+        if (!ShotFx.Enabled || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree() || Sfx.ListenerDistance(at) > WarningRange) return;
+        EnsureShared();
+        var drift = GameSettings.Current.ReduceMotion ? 0f : 1f;
+        var p = new CpuParticles3D
+        {
+            Mesh = _flame, ColorRamp = _flameRamp, ScaleAmountCurve = _shrink, Amount = 24, Lifetime = 0.9, OneShot = true, Explosiveness = 1f, Emitting = true, LocalCoords = false,
+            Direction = Vector3.Up, Spread = 60, Gravity = new Vector3(0, 1.2f * drift, 0), InitialVelocityMin = 1.5f * drift, InitialVelocityMax = 3.5f * drift, ScaleAmountMin = 0.8f, ScaleAmountMax = 1.5f,
+            EmissionShape = CpuParticles3D.EmissionShapeEnum.Sphere, EmissionSphereRadius = 0.4f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Position = at + Vector3.Up * 0.4f,
+        };
+        world.AddChild(p);
+        var light = new OmniLight3D { LightColor = new Color(1f, 0.45f, 0.12f), LightEnergy = 3f, OmniRange = 8f, ShadowEnabled = false, Position = at + Vector3.Up * 0.8f };
+        world.AddChild(light);
+        var tween = light.CreateTween();
+        tween.TweenProperty(light, "light_energy", 0.0, 0.8);
+        tween.TweenCallback(Callable.From(light.QueueFree));
+        ShotFx.Expire(world, p, 1.4f);
+    }
+
     /// <summary>
     /// Where the fall will end (event <see cref="EventKind.PhoenixFall"/>): a red light at the crash site that swells as the bird comes down, a warning in the dark. Freed a moment after the landing, where the
     /// Crashed Phoenix's own fire takes over. Not built far from the camera.

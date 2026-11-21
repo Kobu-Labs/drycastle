@@ -168,7 +168,9 @@ public class MineralDropTests
         Assert.Equal(MineralPickResult.AlreadyFound, book.Check(other, node, true, at));
         Assert.Equal(MineralPickResult.Ok, book.Check(killer, node, true, at)); // the node was not reserved or used up for the others
         Assert.Equal(2, book.Add(killer, node.MineralId));
-        Assert.True(set.Remove(node.Id)); // taken: it is gone
+        Assert.Same(node, set.Find(node.Id)); // a pickup does not use it up
+        Assert.Empty(set.Expire(59.9));
+        Assert.Equal(new[] { node.Id }, set.Expire(60)); // its minute is over: it burns away
         Assert.Null(set.Find(node.Id));
         Assert.Equal(MineralPickResult.UnknownNode, book.Check(3, set.Find(node.Id), true, at));
         Assert.False(set.Remove(place.Id)); // a static node never goes

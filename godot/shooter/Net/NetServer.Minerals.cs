@@ -33,6 +33,7 @@ public partial class NetServer
         if (_mineralNodes != null && _elapsed >= _mineralNextCheck)
         {
             _mineralNextCheck = _elapsed + 1;
+            if (_mineralNodes.Expire(_elapsed).Count > 0) MineralNodesChanged(); // a drop's minute is over: it burns away
             var now = ActiveNow();
             if (!now.SequenceEqual(_mineralActive)) { _mineralActive = now; BroadcastEvent(EventKind.MineralNodes, MineralNodesPayload()); }
         }
@@ -58,11 +59,11 @@ public partial class NetServer
         BroadcastEvent(EventKind.MineralNodes, MineralNodesPayload());
     }
 
-    /// <summary>A dead Phoenix's mineral (<see cref="WildlifeKeeper.MineralDropped"/>) lies where it burned as a node anybody can take, until taken or the round ends (GLOSSARY "Mineral").</summary>
+    /// <summary>A dead Phoenix's mineral (<see cref="WildlifeKeeper.MineralDropped"/>) lies where it burned as a node anybody can take, for a minute (GLOSSARY "Mineral").</summary>
     void OnMineralDropped(MineralDrop drop)
     {
         if (_mineralNodes == null) return;
-        if (_mineralNodes.AddDrop(drop) is { } node) { MineralNodesChanged(); GD.Print($"server: {drop.MineralId} lies as mineral node {node.Id} at ({drop.At.X:F0}, {drop.At.Y:F0}, {drop.At.Z:F0})"); }
+        if (_mineralNodes.AddDrop(drop, _elapsed) is { } node) { MineralNodesChanged(); GD.Print($"server: {drop.MineralId} lies as mineral node {node.Id} at ({drop.At.X:F0}, {drop.At.Y:F0}, {drop.At.Z:F0})"); }
         else GD.PrintErr($"server: no free mineral node id for the dropped {drop.MineralId}");
     }
 
@@ -120,7 +121,6 @@ public partial class NetServer
         var rank = book.Add(p.DbId, node.MineralId);
         _ = Progression!.Minerals.AppendAsync(new MineralFind(p.DbId, node.MineralId, DateTime.UtcNow));
         SendMineralFinds(c, p.DbId, (byte)MineralRules.IndexOf(node.MineralId));
-        if (_mineralNodes.Remove(node.Id)) MineralNodesChanged(); // a dropped mineral lies until somebody takes it
         GD.Print($"server: {c.Name} found {node.MineralId}, {MineralFormat.Ordinal(rank)} finder");
     }
 }
