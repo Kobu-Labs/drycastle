@@ -359,19 +359,23 @@ public enum PlaqueKind
     Mystery,
 }
 
-/// <summary>How a caught Mystery creature's plaque is framed: its field, its rim (one colour, or several run along the rim) and whether it sparkles.</summary>
-public sealed record MysteryFrame(Color Field, Color[] Rim, bool Sparkles)
+/// <summary>What a caught Mystery creature's plaque has on its corners besides the rim: nothing, four-pointed stars (the Unicorn) or tongues of flame (the Phoenix). A shape, so the style is not colour alone.</summary>
+public enum MysteryDecor { None, Sparkles, Flames }
+
+/// <summary>How a caught Mystery creature's plaque is framed: its field, its rim (one colour, or several run along the rim) and its corner decoration.</summary>
+public sealed record MysteryFrame(Color Field, Color[] Rim, MysteryDecor Decor)
 {
     static readonly Color[] Iris = { new(0xff9ecfff), new(0xffe08aff), new(0x9ef0c0ff), new(0x8fd0ffff), new(0xc9a6ffff) };
 
     static readonly Dictionary<string, MysteryFrame> ById = new()
     {
-        [Mysteries.Unicorn] = new(new(0x3a2a5cff), Iris, true),
-        [Mysteries.Bigfoot] = new(new(0x2f3b24ff), new[] { new Color(0x8a6a3aff), new Color(0x6f8f4aff) }, false),
-        [Mysteries.Scylla] = new(new(0x123a46ff), new[] { new Color(0x4fd6c8ff), new Color(0x2f8fb0ff) }, false),
+        [Mysteries.Unicorn] = new(new(0x3a2a5cff), Iris, MysteryDecor.Sparkles),
+        [Mysteries.Bigfoot] = new(new(0x2f3b24ff), new[] { new Color(0x8a6a3aff), new Color(0x6f8f4aff) }, MysteryDecor.None),
+        [Mysteries.Scylla] = new(new(0x123a46ff), new[] { new Color(0x4fd6c8ff), new Color(0x2f8fb0ff) }, MysteryDecor.None),
+        [Mysteries.Phoenix] = new(new(0x3b1410ff), new[] { new Color(0xffc247ff), new Color(0xff6a1fff), new Color(0xd8321aff) }, MysteryDecor.Flames), // a night field of embers, a rim of gold through orange to red
     };
 
-    static readonly MysteryFrame Plain = new(new(0x2b2b33ff), new[] { new Color(0xd5dae0ff) }, false);
+    static readonly MysteryFrame Plain = new(new(0x2b2b33ff), new[] { new Color(0xd5dae0ff) }, MysteryDecor.None);
 
     public static MysteryFrame Of(string species) => ById.GetValueOrDefault(species) ?? Plain;
 }
@@ -462,9 +466,12 @@ public sealed partial class PlaqueArt : Control
                 colors[i] = a.Lerp(c, at - MathF.Floor(at));
             }
             DrawPolylineColors(closed, colors, rimWidth + 2, true);
-            if (frame.Sparkles)
+            if (frame.Decor != MysteryDecor.None)
                 foreach (var (x, y, r) in new[] { (0.13f, 0.14f, 7f), (0.86f, 0.28f, 9f), (0.2f, 0.4f, 5f), (0.78f, 0.1f, 5f), (0.14f, 0.66f, 6f), (0.86f, 0.62f, 5f) })
-                    Sparkle(new Vector2(Size.X * x, Size.Y * y), r);
+                {
+                    if (frame.Decor == MysteryDecor.Sparkles) Sparkle(new Vector2(Size.X * x, Size.Y * y), r);
+                    else Flame(new Vector2(Size.X * x, Size.Y * y), r);
+                }
         }
         else if (LogSkin.TierColor(_kind == PlaqueKind.Hunted ? _tier : HuntTier.Common) is { } metal)
         {
@@ -473,6 +480,18 @@ public sealed partial class PlaqueArt : Control
         }
         else if (pressed) LogDraw.Outline(this, shield, s.OnTileDim, 2);
     }
+
+    /// <summary>A tongue of flame, tip up, <paramref name="r"/> wide: an outer orange one and a smaller gold one inside it (two kites, so each polygon is convex).</summary>
+    void Flame(Vector2 at, float r)
+    {
+        DrawColoredPolygon(FlameShape(at, r), new Color(0xff7a22ff));
+        DrawColoredPolygon(FlameShape(at + new Vector2(0, r * 0.35f), r * 0.55f), new Color(0xffd36aff));
+    }
+
+    static Vector2[] FlameShape(Vector2 at, float r) => new[]
+    {
+        at + new Vector2(0, -r * 1.7f), at + new Vector2(r * 0.9f, -r * 0.1f), at + new Vector2(r * 0.55f, r * 0.9f), at + new Vector2(0, r * 1.1f), at + new Vector2(-r * 0.55f, r * 0.9f), at + new Vector2(-r * 0.9f, -r * 0.1f),
+    };
 
     /// <summary>A four-pointed star.</summary>
     void Sparkle(Vector2 at, float r)

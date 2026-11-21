@@ -52,6 +52,14 @@ public partial class NetClient : IStandingBodies
         public bool SeenServer;
         /// <summary>The client-only looks of a species whose animals.json entry has an <see cref="AnimalDef.Fx"/> (the Unicorn's horn, sparkles and rainbow trail); null for the rest.</summary>
         public UnicornFx? Fx;
+        /// <summary>The client-only fire of the Phoenix (<c>"fx": "phoenix"</c>); null for the rest.</summary>
+        public PhoenixFx? Phoenix;
+        /// <summary>A flyer (the Phoenix): its drawn pose, smoothed (heading, dive pitch and bank, radians; the turn rate, radians/s, the bank follows), the raw heading it had last frame, and whether the first frame has set them.</summary>
+        public float FlyYaw, FlyPitch, FlyBank, FlyTurn, LastYaw;
+        public bool SeenFly;
+        /// <summary>A gliding flyer hovers now and then: the hover clip (<see cref="AnimalClip.Idle"/>) instead of the glide, and the seconds until it swaps.</summary>
+        public bool Hover;
+        public Countdown GlideLeft;
     }
 
     readonly Dictionary<ushort, AnimalView> _animals = new();
@@ -65,6 +73,9 @@ public partial class NetClient : IStandingBodies
 
     /// <summary>How long a hit reaction may hold back the clip of the state (a gallop must not wait for a long clip).</summary>
     const double AnimalHitReactMaxSeconds = 0.6;
+
+    /// <summary>A gliding flyer's seconds of glide before it hovers (a range) and its seconds of hover; how fast (per second) its pose follows the snapshots: heading, dive pitch, bank, and the turn rate the bank follows.</summary>
+    const float GlideMin = 8f, GlideMax = 18f, HoverSeconds = 2.5f, FlyYawRate = 10f, FlyPitchRate = 6f, FlyBankRate = 4f, FlyTurnRate = 3f;
 
     /// <summary>
     /// The animals that stand, as the player's prediction meets them (<see cref="Player.Bodies"/>): each animal the server last sent that is in a state that stands (<see cref="AnimalRules.Stands"/>), at the
@@ -110,6 +121,7 @@ public partial class NetClient : IStandingBodies
         v.Node.ProcessMode = e.Dormant ? Node.ProcessModeEnum.Disabled : Node.ProcessModeEnum.Inherit; // an AnimationPlayer keeps playing while hidden otherwise
         if (e.Dormant) { v.Guess.Reset(); v.SeenServer = false; return; }
         v.Shown = 255; v.HitUntil = 0; v.Toggle = AnimalRules.HitToggled(e.State.State);
+        v.SeenFly = false;
     }
 
     void OnAnimalSpawned(WorldReplica.Entity e)
@@ -155,6 +167,7 @@ public partial class NetClient : IStandingBodies
         Owned.AddChild(node);
         var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Size = size, Variant = variant, Flail = flail, Toggle = AnimalRules.HitToggled(e.State.State) };
         if (def.Fx == UnicornFx.Id) view.Fx = UnicornFx.Attach(node, modelRoot, def.VanishSeconds);
+        if (def.Fx == PhoenixFx.Id) view.Phoenix = PhoenixFx.Attach(node, modelRoot, WildlifeData.Phoenix?.BurnSeconds ?? 6f);
         _animals[e.Id] = view;
         if (e.Dormant) SetAnimalDormant(view, e); // spawned outside the interest range: hidden until a keyframe shows it
     }
@@ -197,7 +210,9 @@ public partial class NetClient : IStandingBodies
                 var inAir = state == AnimalState.Thrown || state == AnimalState.Dead && serverSpeed > AnimalFlyingSpeed;
                 var at = v.Guess.Step(dt, s.Pos, thrown, inAir, v.Guess.Active ? GroundUnder(v.Guess.Position) : null);
                 PlaceAnimal(v, GuessedState(v, state), new Vector3(at.X, at.Y, at.Z), s.Yaw, dt);
+                if (v.Def.Flies) PoseFlyer(v, state, s.Yaw, s.Pitch, dt);
                 v.Fx?.Tick(dt, state != AnimalState.Dead, state == AnimalState.Vanish);
+                v.Phoenix?.Tick(dt, state);
             }
             var shown = GuessedState(v, state);
             var toggle = AnimalRules.HitToggled(raw);
@@ -209,9 +224,51 @@ public partial class NetClient : IStandingBodies
             if (v.Tumbling) { ShowAnimalTumble(v, shown); continue; } // thrown by a vehicle: no clip of the state, the body is turned whole
             if (state == AnimalState.Dead) { if (v.Shown != (byte)state) ShowAnimalState(v, state); continue; }
             if (now < v.HitUntil) continue;
+            if (v.Def.Flies && state == AnimalState.Flying) GlideOrHover(v, dt);
             if (v.Shown != (byte)state) ShowAnimalState(v, state); // also after a reaction: Shown is 254 until its clip is over
             v.HitUntil = 0;
         }
+    }
+
+    /// <summary>
+    /// A flyer's pose: its heading follows the snapshots lightly, it dives at the pitch the server sends while Falling (negative: nose down; level otherwise) and banks into a turn (<see cref="FlyerLook.Bank"/>
+    /// of the smoothed turn rate). The node turns about its origin: the body centre while it flies, which the model's origin is.
+    /// </summary>
+    void PoseFlyer(AnimalView v, AnimalState state, float yaw, float pitch, float dt)
+    {
+        var diving = state == AnimalState.Falling;
+        if (!v.SeenFly || dt <= 0)
+        {
+            v.SeenFly = true;
+            v.FlyYaw = v.LastYaw = yaw; v.FlyPitch = diving ? pitch : 0f; v.FlyBank = v.FlyTurn = 0f;
+        }
+        else
+        {
+            v.FlyTurn = FlyerLook.Approach(v.FlyTurn, FlyerLook.AngleDelta(v.LastYaw, yaw) / dt, FlyTurnRate, dt);
+            v.LastYaw = yaw;
+            v.FlyYaw += FlyerLook.AngleDelta(v.FlyYaw, yaw) * (1f - MathF.Exp(-FlyYawRate * dt));
+            v.FlyPitch = diving ? FlyerLook.Approach(v.FlyPitch, pitch, FlyPitchRate, dt) : 0f; // landed: the sitting clip lays it down level
+            v.FlyBank = FlyerLook.Approach(v.FlyBank, state == AnimalState.Flying ? FlyerLook.Bank(v.FlyTurn) : 0f, FlyBankRate, dt);
+        }
+        v.Node.Rotation = new Vector3(v.FlyPitch, v.FlyYaw, v.FlyBank);
+    }
+
+    /// <summary>A gliding flyer swaps its glide for a few seconds of hover now and then (the clip of the state is picked again).</summary>
+    static void GlideOrHover(AnimalView v, float dt)
+    {
+        if (v.GlideLeft.Ready) v.GlideLeft.Start(GlideMin + GD.Randf() * (GlideMax - GlideMin)); // first seen (a swap restarts it at once)
+        if (!v.GlideLeft.Tick(dt)) return;
+        v.Hover = !v.Hover;
+        v.GlideLeft.Start(v.Hover ? HoverSeconds : GlideMin + GD.Randf() * (GlideMax - GlideMin));
+        v.Shown = 255;
+    }
+
+    /// <summary>The Phoenix's fall begins (event <see cref="EventKind.PhoenixFall"/>): a flash on the bird and a warning light at the crash site.</summary>
+    void OnPhoenixEvent(EventKind kind, byte[] payload)
+    {
+        if (kind != EventKind.PhoenixFall || !PhoenixFallCodec.TryDecode(payload, out var id, out _, out var site, out var seconds)) return;
+        if (_animals.TryGetValue(id, out var v)) v.Phoenix?.Hit();
+        PhoenixFx.CrashWarning(Owned, new Vector3(site.X, site.Y, site.Z), seconds);
     }
 
     /// <summary>
@@ -307,6 +364,12 @@ public partial class NetClient : IStandingBodies
         v.Shown = (byte)state;
         if (v.Anim == null || v.Clips.Length == 0) return;
         string? Clip(AnimalClip c) => v.Clips[(int)c];
+        if (v.Def.Flies)
+        {
+            // a flyer's clips by its phase (Flying glides or hovers, Falling tumbles, Crashed, Burning and Dead sit); no hit reactions, no death clip
+            if (FlyerLook.ClipOf(state, v.Hover) is { } fc && Clip(fc) is { } flyClip) v.Anim.Play(flyClip, 0.3);
+            return;
+        }
         if (state == AnimalState.Carried)
         {
             // held under a Thief's arm: no clip of its own, the standing pose frozen
