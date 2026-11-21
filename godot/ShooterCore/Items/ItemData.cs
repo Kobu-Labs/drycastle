@@ -39,6 +39,8 @@ public sealed class ItemDef
     public bool Binoculars { get; set; }
     /// <summary>Vertical FOV of binoculars while raised, degrees; 0 = <see cref="ShooterCore.Binoculars.FovDeg"/>.</summary>
     public float Fov { get; set; }
+    /// <summary>Binoculars that can mark an animal (#473): seconds a marked animal stays highlighted for their holder; 0 = they cannot mark.</summary>
+    public float MarkSeconds { get; set; }
     /// <summary>
     /// The id of the standard item this one is the upgrade of (#473): a player who owns it (an unlock row of kind "item", granted by the Hunter's Log
     /// collection tier <see cref="RewardTier"/>) is issued it in place of that item. It is standard too (a death does not leave it on the corpse) but
@@ -96,6 +98,7 @@ public sealed class ItemsFile : IVersioned
             if (i.Standard && !i.BagOnly) throw new DataFileException($"{F}: {i.Id}: a standard item is bag_only (it is issued into the bag)");
             if (i.Binoculars && !i.BagOnly) throw new DataFileException($"{F}: {i.Id}: binoculars are bag_only (they are used from the bag)");
             if (i.Fov < 0 || (i.Fov > 0 && !i.Binoculars) || i.Fov > 90) throw new DataFileException($"{F}: {i.Id}: fov is for binoculars, between 0 and 90 degrees");
+            if (i.MarkSeconds < 0 || i.MarkSeconds > 600 || (i.MarkSeconds > 0 && !i.Binoculars)) throw new DataFileException($"{F}: {i.Id}: mark_seconds is for binoculars, between 0 and 600");
             if (i.Replaces != "")
             {
                 var base_ = f.Items.Find(b => b.Id == i.Replaces);

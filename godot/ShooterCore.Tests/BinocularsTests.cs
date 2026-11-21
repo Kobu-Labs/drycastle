@@ -119,6 +119,16 @@ public class StandardItemTests
     }
 
     [Fact]
+    public void Only_the_upgrade_marks_animals_for_thirty_seconds()
+    {
+        var items = Shipped;
+        Assert.Equal(30f, Binoculars.MarkSecondsOf(items.Find("hunting_binoculars")!));
+        Assert.Equal(0f, Binoculars.MarkSecondsOf(items.Find("binoculars")!));
+        var e = Assert.Throws<DataFileException>(() => ItemsFile.Parse("""{"version":1,"items":[{"id":"s","name":"S","bag_only":true,"mark_seconds":5}]}"""));
+        Assert.Contains("mark_seconds", e.Message);
+    }
+
+    [Fact]
     public void The_upgrade_is_not_left_on_a_corpse()
     {
         var items = Shipped;

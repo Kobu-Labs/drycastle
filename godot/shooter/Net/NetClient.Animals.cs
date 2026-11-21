@@ -52,6 +52,9 @@ public partial class NetClient : IStandingBodies
         public bool SeenServer;
         /// <summary>The client-only looks of a species whose animals.json entry has an <see cref="AnimalDef.Fx"/> (the Unicorn's horn, sparkles and rainbow trail); null for the rest.</summary>
         public UnicornFx? Fx;
+        /// <summary>Client clock time until which the animal is highlighted for its watcher (<see cref="MarkAnimal"/>, #473); 0 = not marked.</summary>
+        public double MarkedUntil;
+        public bool MarkShown;
     }
 
     readonly Dictionary<ushort, AnimalView> _animals = new();
@@ -177,6 +180,7 @@ public partial class NetClient : IStandingBodies
     void RenderAnimals()
     {
         if (_animals.Count == 0 || _lastTick == 0) return;
+        TickAnimalMarks();
         var rt = RenderTickNow();
         var now = Time.GetTicksMsec() / 1000.0;
         var dt = (float)GetProcessDeltaTime();

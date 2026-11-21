@@ -44,11 +44,13 @@ public partial class NetClient
     }
 
     /// <summary>What the HUD shows of the binoculars: whether they are up, and the distance read (null: nothing in range).</summary>
-    (bool Up, int? RangeM) BinocularsView() => (_binoculars, _binocularsRange);
+    (bool Up, int? RangeM, bool CanMark) BinocularsView() => (_binoculars, _binocularsRange, CarriedBinoculars is { MarkSeconds: > 0 });
 
     bool HandleBinocularsInput(InputEvent e)
     {
-        if (Bot || e.IsEcho() || !e.IsActionPressed("binoculars")) return false;
+        if (Bot || e.IsEcho()) return false;
+        if (_binoculars && e.IsActionPressed("binoculars_mark")) { MarkAnimal(); GetViewport().SetInputAsHandled(); return true; }
+        if (!e.IsActionPressed("binoculars")) return false;
         if (_binoculars) LowerBinoculars();
         else
         {

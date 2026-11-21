@@ -455,7 +455,7 @@ public partial class Player : CharacterBody3D
         if (!HandsBusy && Input.IsActionPressed("throw_grenade")) b |= MoveButtons.Throw;
         if (Input.IsActionPressed("interact")) b |= MoveButtons.Use;
         if (Input.IsActionPressed("headlights")) b |= MoveButtons.Headlights;
-        if (Input.IsActionPressed("killstreak")) b |= MoveButtons.Killstreak;
+        if (!HandsBusy && Input.IsActionPressed("killstreak")) b |= MoveButtons.Killstreak; // Q marks an animal while the binoculars are up
         if (_state.OnLadder) b &= ~MoveButtons.Fire; // no firing with both hands on a ladder
         var captured = Input.MouseMode == Input.MouseModeEnum.Captured;
         var moves = captured || MoveWithFreeMouse;
