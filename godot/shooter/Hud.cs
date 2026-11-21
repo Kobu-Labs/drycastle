@@ -47,6 +47,8 @@ public partial class Hud : CanvasLayer
     readonly Control[] _ind = new Control[Indicators];
     readonly Polygon2D[] _indTri = new Polygon2D[Indicators];
     readonly double[] _indAt = new double[Indicators];
+    readonly object?[] _indKey = new object?[Indicators];
+    readonly Func<float?>?[] _indLive = new Func<float?>?[Indicators];
     int _indNext;
     // health
     ProgressBar _hpBar = null!;
@@ -545,10 +547,24 @@ public partial class Hud : CanvasLayer
 
     public void ClearKills() { _kills.Clear(); _killTimes.Clear(); _mineKills.Clear(); _mineTimes.Clear(); _feedShown = (-1, -1); }
 
-    /// <summary>Direction of a damage source relative to the view (radians, 0 = ahead, clockwise).</summary>
-    public void Damage(float angle)
+    /// <summary>Direction of a damage source relative to the view (radians, 0 = ahead, clockwise). Fixed: it does not follow anything.</summary>
+    public void Damage(float angle) => Show(null, angle, null);
+
+    /// <summary>
+    /// A damage source that is tracked: <paramref name="live"/> gives its current angle every frame (null = lost, the chevron keeps its last angle).
+    /// A new hit from the same <paramref name="key"/> refreshes its chevron instead of taking another (#424).
+    /// </summary>
+    public void Damage(object key, Func<float?> live)
     {
-        var i = _indNext++ % Indicators;
+        if (live() is { } a) Show(key, a, live);
+    }
+
+    void Show(object? key, float angle, Func<float?>? live)
+    {
+        var i = -1;
+        if (key != null) for (var k = 0; k < Indicators; k++) if (_indAt[k] > 0 && key.Equals(_indKey[k])) { i = k; break; }
+        if (i < 0) i = _indNext++ % Indicators;
+        _indKey[i] = key; _indLive[i] = live;
         _ind[i].Rotation = angle;
         _indAt[i] = Now;
         Fade(_ind[i], 1);
@@ -569,7 +585,7 @@ public partial class Hud : CanvasLayer
     {
         _hitUntil = 0; Fade(_hit, 0);
         ClearHuntShot();
-        for (var i = 0; i < Indicators; i++) { _indAt[i] = 0; Fade(_ind[i], 0); }
+        for (var i = 0; i < Indicators; i++) { _indAt[i] = 0; _indKey[i] = null; _indLive[i] = null; Fade(_ind[i], 0); }
     }
 
     /// <summary>
@@ -695,7 +711,8 @@ public partial class Hud : CanvasLayer
         if (_indAt[i] <= 0) return;
         var age = now - _indAt[i];
         const double life = 1.2;
-        if (age >= life) { _indAt[i] = 0; Fade(_ind[i], 0); return; }
+        if (age >= life) { _indAt[i] = 0; _indKey[i] = null; _indLive[i] = null; Fade(_ind[i], 0); return; }
+        if (_indLive[i]?.Invoke() is { } a) _ind[i].Rotation = a;
         Fade(_ind[i], Settings.ReduceMotion ? 1f : (float)Math.Clamp((life - age) / 0.6, 0, 1));
     }
 
