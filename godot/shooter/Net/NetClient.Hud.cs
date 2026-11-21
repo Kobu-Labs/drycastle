@@ -104,21 +104,22 @@ public partial class NetClient
         if (h.Attacker == _myId && h.Victim != _myId && _gunship != null) _gunOverlay.Hit(h.Headshot, h.Kill);
         if (_hud == null) return;
         if (h.Attacker == _myId && h.Victim != _myId) _hud.Hit(h.Headshot, h.Kill);
-        if (h.Victim == _myId && h.Attacker != _myId && _me != null && _remotes.TryGetValue(h.Attacker, out var r))
-        {
-            var me = _me.GlobalPosition; var src = r.Node.GlobalPosition;
-            _hud.Damage(HudLogic.DamageAngle(me.X, me.Z, _me.Yaw, src.X, src.Z));
-        }
-        else if (h.Victim == _myId && GangRules.IsHitId(h.Attacker) && _me != null && NearestGangMember(_me.GlobalPosition) is { } member)
-            _hud.Damage(HudLogic.DamageAngle(_me.GlobalPosition.X, _me.GlobalPosition.Z, _me.Yaw, member.X, member.Z)); // a blow of a Gang member: the marker points at the nearest one
-        else if (h.Victim == _myId && RaidVanRules.IsHitId(h.Attacker) && _me != null && NearestVan(_me.GlobalPosition) is { } van)
-            _hud.Damage(HudLogic.DamageAngle(_me.GlobalPosition.X, _me.GlobalPosition.Z, _me.Yaw, van.X, van.Z)); // a Raid van ran into the player: the marker points at the nearest van
-        else if (h.Victim == _myId && h.Attacker == BigfootRules.TargetId && _me != null && _bigfoots.Values.FirstOrDefault() is { } giant)
-        {
-            var me = _me.GlobalPosition; var src = giant.Node.GlobalPosition; // the Bigfoot's logs, shockwave and launch: the marker points at it (#264)
-            _hud.Damage(HudLogic.DamageAngle(me.X, me.Z, _me.Yaw, src.X, src.Z));
-        }
+        if (h.Victim != _myId || _me == null) return;
+        // the chevron follows its source while it shows (#424); a source that is gone leaves it at its last angle
+        if (h.Attacker != _myId && _remotes.TryGetValue(h.Attacker, out var r)) DamageFrom(h.Attacker, () => NodePos(r.Node));
+        else if (GangRules.IsHitId(h.Attacker)) DamageFrom(h.Attacker, () => NearestGangMember(_me.GlobalPosition)); // a blow of a Gang member: the marker points at the nearest one
+        else if (RaidVanRules.IsHitId(h.Attacker)) DamageFrom(h.Attacker, () => NearestVan(_me.GlobalPosition)); // a Raid van ran into the player: the marker points at the nearest van
+        else if (h.Attacker == BigfootRules.TargetId) DamageFrom(h.Attacker, () => _bigfoots.Values.FirstOrDefault() is { } giant ? NodePos(giant.Node) : null); // the Bigfoot's logs, shockwave and launch: the marker points at it (#264)
     }
+
+    static Vector3? NodePos(Node3D n) => GodotObject.IsInstanceValid(n) && n.IsInsideTree() ? n.GlobalPosition : null;
+
+    void DamageFrom(object key, Func<Vector3?> source) => _hud!.Damage(key, () =>
+    {
+        if (_me == null || !GodotObject.IsInstanceValid(_me) || source() is not { } s) return null;
+        var m = _me.GlobalPosition;
+        return HudLogic.DamageAngle(m.X, m.Z, _me.Yaw, s.X, s.Z);
+    });
 
     readonly List<Vector2> _friendDots = new();
     readonly List<(Vector2 At, string Name)> _squadDots = new();
