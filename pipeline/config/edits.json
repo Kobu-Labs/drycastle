@@ -56939,6 +56939,123 @@
     -1249697.5
    ],
    "rotation_deg": -90.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-4840",
+   "position": [
+    -587348.5,
+    -1248890.0
+   ],
+   "rotation_deg": 0.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-4841",
+   "position": [
+    -587362.0,
+    -1248587.0
+   ],
+   "rotation_deg": 30.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-4842",
+   "position": [
+    -587720.5,
+    -1248470.0
+   ],
+   "rotation_deg": 60.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-4843",
+   "position": [
+    -588220.5,
+    -1247929.5
+   ],
+   "rotation_deg": 90.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-4844",
+   "position": [
+    -588508.0,
+    -1248306.5
+   ],
+   "rotation_deg": 120.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-4845",
+   "position": [
+    -588484.5,
+    -1248843.5
+   ],
+   "rotation_deg": 150.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-4846",
+   "position": [
+    -588100.0,
+    -1248757.0
+   ],
+   "rotation_deg": 180.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-4847",
+   "position": [
+    -588401.5,
+    -1249192.0
+   ],
+   "rotation_deg": 210.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-4848",
+   "position": [
+    -588083.0,
+    -1250358.5
+   ],
+   "rotation_deg": 240.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-4849",
+   "position": [
+    -587661.0,
+    -1250509.0
+   ],
+   "rotation_deg": 270.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-4850",
+   "position": [
+    -587724.0,
+    -1250523.0
+   ],
+   "rotation_deg": 300.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-4851",
+   "position": [
+    -587953.5,
+    -1251310.0
+   ],
+   "rotation_deg": 330.0
+  },
+  {
+   "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+   "id": "o-4852",
+   "position": [
+    -589169.5,
+    -1251270.0
+   ],
+   "rotation_deg": 15.0
   }
  ],
  "parcels": {

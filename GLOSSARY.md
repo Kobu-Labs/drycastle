@@ -520,8 +520,12 @@ The earth embankment north of the village, with a gravel track on top and thick 
 _Avoid_: levee, flood wall (that is the concrete wall)
 
 **Ladder**:
-How a player moves between the floors of a bunker: they get on with the interact key, climb with forward and back, and step off at either end onto the open side of the ladder, away from the wall. They cannot fire on it.
+How a player moves between the floors of a bunker, or up to the deck of a Hunter outpost: they get on with the interact key, climb with forward and back, and step off at either end onto the open side of the ladder, away from the wall. They cannot fire on it.
 _Avoid_: stairs, climbing (that is the verb)
+
+**Hunter outpost**:
+A guard tower (`SM_Bld_GuardTower_01`) placed by hand on the hunting grounds, a vantage over the wilds. Its ladder, on the tower's own side, is climbed like a bunker's and leads to the deck. Every placed tower has one (`object_ladders.json`, laid out in the object's frame); nothing else is attached to it.
+_Avoid_: base, camp
 
 **Shelter**:
 What a bunker's room, or the church, gives the players in it: a blast outside the room does not hurt them, and a blast inside it hurts nobody outside. The MOAB is not stopped.
