@@ -217,6 +217,21 @@ public sealed class GlassPanes
         return true;
     }
 
+    /// <summary>
+    /// A collision's crack (#431): the pane is left with at most <paramref name="fraction"/> of <paramref name="maxHp"/>. True when its hit
+    /// points changed: a pane already that low (or shattered) is left as it is, so a crack never shatters.
+    /// </summary>
+    public bool CrackTo(GlassPaneKey key, float fraction, float maxHp)
+    {
+        if (!(fraction > 0) || !(maxHp > 0)) return false;
+        var hp = Hp(key, maxHp);
+        var cap = fraction * maxHp;
+        if (hp <= cap) return false;
+        _damaged[key] = (cap, maxHp);
+        _changed.Add(key);
+        return true;
+    }
+
     /// <summary>Makes every pane of <paramref name="owner"/> whole again (a vehicle that returned). True when any was damaged.</summary>
     public bool Restore(ushort owner)
     {

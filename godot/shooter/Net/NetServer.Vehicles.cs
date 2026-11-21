@@ -412,6 +412,7 @@ public partial class NetServer
         Prof.End(Prof.S.VehicleContacts, contactsT);
         foreach (var car in _cars)
         {
+            car.CrashSoundGap.Tick(dt);
             var def = car.Def;
             if (car.Retired) continue; // taken out of the world for good (RemoveRocketCarts)
             if (car.Destroyed)
@@ -438,8 +439,7 @@ public partial class NetServer
             car.TickEndPos = here;
             if (here.Y < KillY) { foreach (var o in Occupants(car)) LeaveSeat(o, false); car.Reset(false); continue; }
             // a wall takes speed from a driven car; a helicopter is hurt by what it hits whoever flies it, or nobody
-            if ((driver != null || car.Flies) && car.Def.CrashDamage && car.LastImpact > Vehicles.CrashMinSpeedLoss)
-                DamageVehicle(car, (car.LastImpact - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, 0, SpecialWeapons.Vehicle, 0);
+            if (driver != null || car.Flies) Crash(car, car.LastImpact, 0);
             if (car.Life.DetonationDue(_elapsed)) { Detonate(car); continue; }
             for (var s = 0; s < car.Seat.Count; s++) // the riders are put on their seats (no list per car per tick)
             {
@@ -495,11 +495,23 @@ public partial class NetServer
     /// <summary>Beyond this distance between two origins no pair of vehicles can touch (the bus is 12 m long, a rotor disc 9 m across).</summary>
     const float ContactBroadRange = 20f;
 
-    void BumpDamage(ServerCar car, float speedLoss, ServerCar other)
+    void BumpDamage(ServerCar car, float speedLoss, ServerCar other) => Crash(car, speedLoss, OccupantAt(other, 0)?.Id ?? 0);
+
+    /// <summary>
+    /// The one crash rule (#417, #431): a collision that took <paramref name="speedLoss"/> m/s from <paramref name="car"/> in one tick, whatever it
+    /// met (a wall, a tree, a ledge, the ground under a helicopter, another vehicle, a Raid van). Up to crash_min_speed_loss the hull takes
+    /// nothing; the panes crack and shatter by their own two speeds (<see cref="CrashGlass"/>). A type with crash_damage off takes neither.
+    /// From crash_sound_min_speed_loss it is heard (#410).
+    /// </summary>
+    void Crash(ServerCar car, float speedLoss, ushort attacker)
     {
-        if (!car.Def.CrashDamage || speedLoss <= Vehicles!.CrashMinSpeedLoss) return;
-        var attacker = OccupantAt(other, 0)?.Id ?? 0;
-        DamageVehicle(car, (speedLoss - Vehicles.CrashMinSpeedLoss) * Vehicles.CrashDamagePerSpeed, attacker, SpecialWeapons.Vehicle, 0);
+        // heard by everyone, whatever the type takes from it (#410); one per vehicle in crash_sound_gap, so grinding along a wall is not a crash every tick
+        if (Vehicles!.CrashSoundOf(speedLoss) is var sound and not CrashSound.None && car.CrashSoundGap.StartIfReady(Vehicles.CrashSoundGap))
+            BroadcastEvent(EventKind.VehicleCrash, VehicleCrashCodec.Encode(car.Id, sound));
+        if (!car.Def.CrashDamage) return;
+        CrashGlass(car, speedLoss); // before the hull: a crash that dooms the vehicle still breaks its glass
+        var damage = Vehicles!.CrashDamage(speedLoss);
+        if (damage > 0) DamageVehicle(car, damage, attacker, SpecialWeapons.Vehicle, 0);
     }
 
     /// <summary>

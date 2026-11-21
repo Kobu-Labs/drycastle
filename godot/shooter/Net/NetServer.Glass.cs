@@ -165,6 +165,23 @@ public partial class NetServer
         }
     }
 
+    /// <summary>
+    /// A collision took <paramref name="speedLoss"/> m/s from <paramref name="car"/> (a wall, a tree, a landing, another vehicle, #431): from
+    /// glass.json crash_crack_speed its standing panes crack, from crash_shatter_speed they all shatter, whatever their kind.
+    /// </summary>
+    void CrashGlass(ServerCar car, float speedLoss)
+    {
+        if (car.Destroyed || car.Def.Glass.Count == 0) return;
+        var crash = GlassData.Crash(speedLoss);
+        if (crash == GlassCrash.None) return;
+        for (var i = 0; i < car.Def.Glass.Count; i++)
+        {
+            var key = new GlassPaneKey(car.Id, (ushort)i);
+            var hp = VehiclePaneHp(car.Def, i);
+            if (crash == GlassCrash.Shatter ? _glass.Damage(key, hp, hp) : _glass.CrackTo(key, GlassData.CrashCrackFraction, hp)) _glassHits++;
+        }
+    }
+
     /// <summary>Sends the panes that changed this tick, one reliable event each (called once at the end of the tick).</summary>
     void FlushGlass()
     {
