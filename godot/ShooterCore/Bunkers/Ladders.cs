@@ -31,6 +31,9 @@ public sealed class Ladders
 
     public Ladders(IReadOnlyList<Ladder> all) => All = all;
 
+    /// <summary>These ladders and <paramref name="more"/> (the ones on placed objects, <see cref="ObjectLaddersFile"/>); the indices of the first ones stay.</summary>
+    public Ladders Plus(IEnumerable<Ladder> more) => new(All.Concat(more).ToList());
+
     /// <summary>
     /// The ladder a player at <paramref name="feet"/> looking along <paramref name="yaw"/> (Godot convention) can get on, or -1:
     /// near its climbing spot, between its floors, and looking toward it. Several in reach: the nearest.

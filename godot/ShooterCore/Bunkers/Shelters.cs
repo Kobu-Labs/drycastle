@@ -96,6 +96,9 @@ public sealed class Shelters
         return a == b || (a >= 0 && b >= 0 && Rooms[a].BunkerId == Rooms[b].BunkerId && Rooms[a].Level == Rooms[b].Level);
     }
 
+    /// <summary>The same shelters with <paramref name="more"/> ladders added (the ones on placed objects).</summary>
+    public Shelters WithLadders(IEnumerable<Ladder> more) => new(Rooms, Ladders.Plus(more), IntelScreens);
+
     /// <summary>These shelters with the rooms of the church added (ADR 0019): same rules, same exceptions; the doors do not change them.</summary>
     public Shelters WithChurch(ChurchShell? church) =>
         church == null || church.Rooms.Count == 0 ? this : new Shelters(Rooms.Concat(church.Rooms).ToList(), Ladders, IntelScreens);

@@ -20,6 +20,7 @@ public partial class NetServer
         {
             if (_shelters != null) return _shelters;
             _shelters = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"server: {m}; bunkers give no shelter from blasts and no ladders"))
+                .WithLadders(ObjectLadders.Of(Map)) // the ladders of the placed objects (hunter outposts, #372)
                 .WithChurch(MapChurch); // the nave and the chancel shelter like a bunker room (ADR 0019)
             if (_shelters.Rooms.Count > 0) GD.Print($"server: {_shelters.Rooms.Count} bunker and church rooms shelter from blasts");
             return _shelters;

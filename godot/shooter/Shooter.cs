@@ -595,7 +595,7 @@ public partial class Shooter : Node3D
     {
         AddLightAndSky();
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
-        var player = new Player { Name = "Player", KillY = killY, Water = _water, Ladders = Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; no ladders")).Ladders, PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
+        var player = new Player { Name = "Player", KillY = killY, Water = _water, Ladders = ObjectLadders.WithObjects(Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; no ladders")).Ladders, _map), PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
         AddChild(player);
         var spawn = RandomSpawn();
         player.Teleport(spawn + Vector3.Up * 0.1f);
