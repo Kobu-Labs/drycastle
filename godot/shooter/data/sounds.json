@@ -50,6 +50,7 @@
     { "id": "shot.g36", "files": ["free-firearm-sound-library/ar15.ogg"], "bus": "SFX", "volume_db": -3, "pitch": 1.05, "pitch_variance": 0.04, "max_distance": 200, "priority": 3 },
     { "id": "shot.rpk", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch": 0.92, "pitch_variance": 0.04, "max_distance": 200, "priority": 3 },
     { "id": "shot.m249", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch": 0.8, "pitch_variance": 0.04, "max_distance": 200, "priority": 3 },
+    { "id": "shot.turret", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -2, "pitch": 0.8, "pitch_variance": 0.05, "max_distance": 220, "priority": 3 },
     { "id": "shot.m60", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch": 0.85, "pitch_variance": 0.04, "max_distance": 200, "priority": 3 },
     { "id": "shot.", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch_variance": 0.04, "max_distance": 200, "priority": 3 },
     { "id": "shot.pkm", "files": ["free-firearm-sound-library/ak47.ogg"], "bus": "SFX", "volume_db": -3, "pitch": 0.75, "pitch_variance": 0.04, "max_distance": 200, "priority": 3 },

@@ -424,7 +424,7 @@ What a Scud missile's impact does (`NetServer.ScudBlast`, numbers in `scud.json`
 _Avoid_: nuke, MOAB (that kills everyone and ignores shelters)
 
 **Sentry turret**:
-The killstreak that places a 500 hp gun on the ground for 15 seconds. It turns to targets within its sight range and shoots them. It is removed when its owner dies or leaves the match, so it never fires or credits kills for an absent owner.
+The killstreak that places a 500 hp tripod machine gun on the ground for 90 seconds (`lifetime_seconds` in `turret.json`). Its gun turns on a fixed stand (yaw only) to targets within its sight range and shoots them, with a report, a tracer and cases. It is removed when its owner dies or leaves the match, so it never fires or credits kills for an absent owner.
 _Avoid_: turret (alone, ambiguous with the vehicle gun), gun emplacement
 
 **UAV**:

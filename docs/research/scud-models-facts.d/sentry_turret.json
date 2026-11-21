@@ -1,0 +1,35 @@
+{
+ "model": "pack:synty-simple-military/sentry_turret",
+ "file": "synty/glb/simple-military/sentry_turret.glb",
+ "bounds": {
+  "min": [
+   -0.563,
+   0.0,
+   -1.248
+  ],
+  "max": [
+   0.503,
+   1.343,
+   0.726
+  ]
+ },
+ "yaw_pivot": [
+  0.0,
+  0.651,
+  0.0
+ ],
+ "muzzle": [
+  -0.002,
+  1.201,
+  -1.248
+ ],
+ "eject": [
+  0.14,
+  1.231,
+  0.136
+ ],
+ "tris": {
+  "stand": 24,
+  "gun": 62
+ }
+}

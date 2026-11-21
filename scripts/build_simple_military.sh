@@ -23,5 +23,6 @@ python3 -I "$here/simple_military_extract.py" "$pkg" "$proj"
 python3 "$here/make_humvee_model.py" "$out/humvee.glb"
 python3 "$here/make_scud_model.py" "$out"
 python3 "$here/make_rocket_cart_model.py" "$out/rocket_cart.glb"
+python3 "$here/make_sentry_turret_model.py" "$out/sentry_turret.glb"
 ( cd "$proj" && godot --headless --path . --script "$here/simple_military_check.gd" -- "$out" 2>&1 | grep -v -E "$noise" )
 python3 -I "$here/simple_military_manifest.py" "$priv"
