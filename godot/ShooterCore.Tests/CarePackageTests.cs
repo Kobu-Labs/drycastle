@@ -367,7 +367,7 @@ public class CarePackageTests
     }
 
     [Fact]
-    public void A_death_loses_the_held_rewards()
+    public void A_death_keeps_the_held_rewards_and_a_wipe_drops_them()
     {
         var sent = new List<(ushort Owner, EventKind Kind, byte[] Payload)>();
         var service = Service(sent);
@@ -375,7 +375,11 @@ public class CarePackageTests
         service.Grant(Opener, "uav");
 
         service.OnDeath(Opener);
+        Assert.Equal(new[] { "uav" }, service.HeldRewards(Opener)); // #414
+        service.Arm(Opener, new[] { "", "", "" }, 0f);
+        Assert.Equal(new[] { "uav" }, service.HeldRewards(Opener));
 
+        service.Wipe(Opener);
         Assert.Empty(service.HeldRewards(Opener));
     }
 

@@ -69,6 +69,7 @@ public partial class NetClient
     /// <summary>The round start and end sounds, on a phase change (<see cref="ClientMatchState.PhaseChanged"/>; the first state of a connection is no round start).</summary>
     void SfxPhase(MatchPhase? prev, MatchPhase p)
     {
+        if (p is MatchPhase.Running or MatchPhase.Ending) { _streaks?.Reset(); RefreshStreaks(); } // a round reset drops earned streaks too, as on the server
         if (p == MatchPhase.Running) ScudRoundStart(); // the burnt ground and the missiles in the air of the last round
         if (prev == null || !Sfx.Enabled) return;
         if (p == MatchPhase.Running) Sfx.Play2D("round.start");
