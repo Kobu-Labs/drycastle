@@ -59,7 +59,7 @@ public sealed class Ladders
 
     /// <summary>
     /// The ladder part of a movement tick. Not on a ladder: the Use key (its press) gets on one in reach. On one: forward climbs,
-    /// back descends, the Use key or Jump lets go, and reaching the top or the bottom steps off. Returns true when the tick was
+    /// back descends, the Use key or Jump lets go (straight down, no push: the wall is at the climber's back), and reaching the top or the bottom steps off. Returns true when the tick was
     /// spent on the ladder (the caller then skips the walking step and the physics move). Position and state are set here, so
     /// the client prediction and the server agree.
     /// </summary>
@@ -76,7 +76,7 @@ public sealed class Ladders
             var l = All[ix];
             s.OnLadder = true;
             s.LadderIndex = ix;
-            s.LadderArmed = false; // climbing starts once the movement keys have been let go: pressing Use while walking at the hatch does not step straight off
+            s.LadderArmed = false; // the top step-off waits for forward to be let go once: getting on at the hatch with forward held does not step straight off again
             s.Position = new Vector3(l.Rail.X, Math.Clamp(s.Position.Y, l.Y0, l.Y1), l.Rail.Y);
             s.Velocity = Vector3.Zero;
             s.OnFloor = true;
@@ -92,7 +92,7 @@ public sealed class Ladders
             return false; // let go: the walking step takes over this tick and gravity does the rest
         }
         if (MathF.Abs(i.MoveY) < 0.1f) s.LadderArmed = true;
-        var y = s.Position.Y + (s.LadderArmed ? i.MoveY * ClimbSpeed * dt : 0f);
+        var y = s.Position.Y + i.MoveY * ClimbSpeed * dt; // climbing starts at once, whatever keys were held on getting on
         var f = ladder.Facing;
         if (y >= ladder.Y1 && s.LadderArmed && i.MoveY > 0) StepOff(ref s, ladder.Rail + f * StepOffTop, ladder.Y1);
         else if (y <= ladder.Y0) StepOff(ref s, ladder.Rail + f * StepOffBottom, ladder.Y0);

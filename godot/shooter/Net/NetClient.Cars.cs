@@ -267,8 +267,18 @@ public partial class NetClient
         if (_driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
         if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
-        _hud?.SetPrompt(TurretPrompt() ?? LootPrompt() ?? GarageDoorPrompt() ?? ScudLoadPrompt(prompt) ?? prompt ?? MassPrompt() ?? RozhlasSetPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt()); // a placing turret owns the prompt
+        _hud?.SetPrompt(LadderPrompt() ?? TurretPrompt() ?? LootPrompt() ?? GarageDoorPrompt() ?? ScudLoadPrompt(prompt) ?? prompt ?? MassPrompt() ?? RozhlasSetPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt() ?? LadderReachPrompt()); // a placing turret owns the prompt
     }
+
+    /// <summary>On a ladder: the keys that work there. The prompt that owns the line (nothing else is in reach on a rung).</summary>
+    string? LadderPrompt() => _me is { State.OnLadder: true } && !Dead
+        ? Strings.F("hud.ladder.release", InputBindings.Name("interact"), InputBindings.Name("jump"), InputBindings.Name("move_forward"), InputBindings.Name("move_back"))
+        : null;
+
+    /// <summary>A ladder in reach (the same test as getting on): the key that gets on. Last in the chain, as the interact key's lowest-priority target after the loot.</summary>
+    string? LadderReachPrompt() => _me != null && !Dead && !_driving && _me.Ladders.Count > 0 && _me.Ladders.Reach(_me.State.Position, _me.Yaw) >= 0
+        ? Strings.F("hud.ladder.climb", InputBindings.Name("interact"))
+        : null;
 
     CharacterView? _selfView;
     bool _selfViewerHides;
