@@ -13,7 +13,8 @@ namespace Drycastle.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc, WadeAcc; public double RippleDue; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
+    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc, WadeAcc; public double RippleDue; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); /// <summary>The driver's own picture of this body thrown by the vehicle they drive, shown before the server's kill arrives (#411).</summary>
+        public readonly ThrowGuess Guess = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
         /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the vehicle and seat this player sits in (<see cref="SeatRiders"/>).</summary>
         public float ShownYaw, ShownPitch; public bool Binoculars; /// <summary>The squad whose name the name tag shows after the name (0: none); the tag is rebuilt when it changes (#379).</summary>
         public byte TagSquad; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
@@ -747,18 +748,37 @@ public partial class NetClient : Node
                 drawn++;
                 var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 var dead = r.State == EntityState.Dead;
+                at = GuessRunOver(r, at, dead, dt);
+                var guessed = r.Guess.Active; // the body the driver's vehicle has just hit: thrown on the guessed arc, ahead of the server
                 r.ShownYaw = s.Yaw; r.ShownPitch = s.Pitch;
                 if (dead) EndFling(id);
-                TumbleRemote(id, r, at, s.Yaw, dead && TargetDummies.IsDummyId(id), dt);
+                TumbleRemote(id, r, at, s.Yaw, dead && TargetDummies.IsDummyId(id) || guessed, dt);
                 PounceLieRemote(id, r, at); // the one the demon has pinned lies on its back
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
-                r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && (CorpseOf(id) || HarvestVictimHidden(id, dead))); // the harvester's victim is in the machine, then inside its bale: no body at the spot where it died // riders are drawn in their seat (the server puts the body there), seated rather than standing
+                r.Node.Visible = guessed || !(dead && !TargetDummies.IsDummyId(id) && (CorpseOf(id) || HarvestVictimHidden(id, dead))); // the harvester's victim is in the machine, then inside its bale: no body at the spot where it died // riders are drawn in their seat (the server puts the body there), seated rather than standing
                 r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
                 if (r.State == EntityState.InVehicle) _lastRode[id] = Now;
                 AnimateRemote(r, s.Pos);
                 UpdateNameTag(id, r);
             }
         _rub.AddRender(rt, _lastTick, drawn);
+    }
+
+    /// <summary>
+    /// The driver's picture of a run-over (#411, as <see cref="ThrowGuess"/> does for animals): the vehicle this player drives is drawn ahead of the remote bodies (about the
+    /// interpolation delay and a round trip), so a body it hits is seen inside the hull until the server's kill arrives. The moment the predicted vehicle's box touches a living
+    /// body as drawn, and the speed kills for certain, the body is shown thrown on the arc the server will give it. Returns where the body is drawn.
+    /// </summary>
+    Vector3 GuessRunOver(Remote r, Vector3 at, bool dead, float dt)
+    {
+        var g = r.Guess;
+        var feet = new NVec3(at.X, at.Y, at.Z);
+        if (g.Ready && r.State == EntityState.Alive && Vehicles != null && ThrowGuessCar() is { } c
+            && RunOver.Kills(Vehicles, c.State.Speed, Vehicles.RunOverScale(c.Def))
+            && RunOverFootprint.OfCapsule(feet).Hits(c.State.Position, c.State.Position, c.State.Yaw, c.Def.HalfWidth, c.Def.HalfLength))
+            g.Start(feet, CorpseRules.ThrowFromCar(new NVec3(-MathF.Sin(c.State.Yaw), 0, -MathF.Cos(c.State.Yaw)), c.State.Speed));
+        var p = g.Step(dt, feet, dead, false, g.Active ? GroundUnder(g.Position) : null);
+        return new Vector3(p.X, p.Y, p.Z);
     }
 
     /// <summary>
@@ -818,7 +838,7 @@ public partial class NetClient : Node
         r.LastPos = p; r.LastT = now;
         var weaponId = Weapons != null && r.Slot >= 1 && r.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[r.Slot - 1].Id : "";
         r.View?.SetBinoculars(r.Binoculars);
-        r.View?.Apply(r.Speed, now < r.FireUntil, r.State == EntityState.Dead, weaponId);
+        r.View?.Apply(r.Speed, now < r.FireUntil, r.State == EntityState.Dead || r.Guess.Active, weaponId);
     }
 
     void Debug(ushort victim)
