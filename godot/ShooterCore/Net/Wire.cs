@@ -200,6 +200,12 @@ public enum EventKind : byte
     PlayerLog = 105,
     /// <summary>Server to everyone: a new record, a player's first of a species, or both in one (<see cref="HuntAnnounceMsg"/>); the same hunt is redacted separately for each recipient.</summary>
     HuntAnnounce = 106,
+    /// <summary>Client to server: the player held the interact key at a mineral node (<see cref="MineralRules.EncodePick"/>: u8 node id). Kinds 111-113 belong to the Mineral Log's finding (#401).</summary>
+    MineralPick = 111,
+    /// <summary>Server to everyone, and to a joiner: the mineral nodes of the world and whether each can be taken now (<see cref="MineralRules.EncodeNodes"/>).</summary>
+    MineralNodes = 112,
+    /// <summary>Server to a stored player: their finds with the place among the finders, at join and after each find (<see cref="MineralRules.EncodeFinds"/>); a find that just happened also says which, and the client plays the pickup sound (#433).</summary>
+    MineralFinds = 113,
     /// <summary>Server to everyone, and to a joiner: the satellite dishes taken so far (<see cref="DishCodec"/>: the whole set of object ids, also when it is empty after a round reset). The client hides those objects' nodes.</summary>
     DishTaken = 233,
     /// <summary>Server to everyone, about twice a second while a harvester job runs and once when it ends (<see cref="HarvesterCodec.StateMsg"/>): the phase, the field and how far the AI's plan has come (the cut itself is <see cref="HarvesterCut"/>). Kinds 234-235 belong to the harvester (#331).</summary>
@@ -353,7 +359,8 @@ public static class Wire
     //   v74 the longest player kill (#430): the records answer ends in the server's longest player kill (u8 flag, then the kill), the player log answer carries the player's own (flag bit 4 and the kill after the longest shot); bit 8 of the hunt announcement's flags is a new longest player kill
     //   v75 brake lamps (#409): bit 6 of a driven vehicle's health byte says its brakes are on (VehicleRecord.BrakeBit/Braking); the client no longer guesses braking from speed
     //   v76 the head lamp: event 31 HeadLampState (a player's head lamp on or off, to everyone and to a joiner)
-    public const byte ProtocolVersion = 76;
+    //   v77 finding minerals (#401): events 111 MineralPick (client to server), 112 MineralNodes (the nodes and whether each is active) and 113 MineralFinds (the player's finds with their places)
+    public const byte ProtocolVersion = 77;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

@@ -34,6 +34,9 @@ public partial class Hud
         }
     }
 
+    /// <summary>The player's finds from the server (mineral id to the place among its finders): the log's cards turn over.</summary>
+    public void SetMineralFinds(IReadOnlyDictionary<string, int> ranks) => _mineralLog?.SetFinds(ranks);
+
     /// <summary>Opens it (also from the pause menu), closing the other overlays: they never show together.</summary>
     public void OpenMineralLog()
     {

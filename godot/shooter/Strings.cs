@@ -51,7 +51,7 @@ public static class Strings
         ("hud.corpse.hold.items", "Hold {0}  take {1} as primary     Tap {0}  choose slot or an item"), ("hud.corpse.tap.items", "Tap {0}  take {1} or an item"),
         ("hud.corpse.giant.item", "Tap {0}  put on {1}"), ("hud.corpse.giant.items", "Tap {0}  take an item"),
         ("item.bigfoot_head", "Bigfoot head"), ("item.gold_chain", "Gold chain"), ("toast.item.crumbled", "The item crumbles in your hands"), ("toast.item.bagfull", "Your bag is full"), ("hud.ground.take", "{0}  Pick up {1}"),
-        ("hud.crate.hold", "Hold {0}  open care package"), ("hud.crate.opening", "Opening..."),
+        ("hud.crate.hold", "Hold {0}  open care package"), ("hud.crate.opening", "Opening..."), ("hud.mineral.hold", "Hold {0}  take {1}"),
         ("hud.loot.hold", "Hold {0}  send the {1} back"), ("loot.tire", "tire"), ("loot.pet", "pet"), ("loot.dish", "satellite dish"), ("loot.connector", "connector"),
         ("toast.streak.granted", "Care package: {0} is ready. Press {1} to use it."), ("toast.streak.replaced", "Care package: {0} is ready and replaced {1}. Press {2} to use it."),
         ("corpse.title", "Take {0}"), ("corpse.title.with_items", "Take {0} or an item"), ("corpse.title.items", "Take an item"), ("corpse.option", "{0}  {1}"), ("corpse.primary", "Replace primary: {0}"), ("corpse.secondary", "Replace secondary: {0}"),

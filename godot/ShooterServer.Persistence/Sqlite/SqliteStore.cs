@@ -17,6 +17,7 @@ public sealed class SqliteProgressionStore : IProgressionStore
         Stats = new StatsRepo(db);
         Camo = new CamoRepo(db);
         Hunts = new HuntRepo(db);
+        Minerals = new MineralRepo(db);
     }
 
     public IProfileRepository Profiles { get; }
@@ -25,6 +26,7 @@ public sealed class SqliteProgressionStore : IProgressionStore
     public IStatsRepository Stats { get; }
     public ICamoRepository Camo { get; }
     public IHuntRepository Hunts { get; }
+    public IMineralRepository Minerals { get; }
 
     /// <summary>
     /// Opens (creating if needed) and migrates the database. <paramref name="curve"/> (from levels.json) turns XP into the Level on read.
@@ -318,5 +320,22 @@ public sealed class SqliteProgressionStore : IProgressionStore
                 r.GetString(8), diagram, (float)r.GetDouble(15), (float)r.GetDouble(16), (float)r.GetDouble(17), ParseStamp(r.GetString(18)).ToUniversalTime());
             return new HuntRow(hunt, r.GetString(2));
         }
+    }
+
+    sealed class MineralRepo(SqliteWorker db) : IMineralRepository
+    {
+        public Task AppendAsync(MineralFind f) => db.Write("append mineral find", c => Exec(c,
+            "INSERT INTO mineral_finds (player_id, mineral, found_at) VALUES ($pl, $m, $at) ON CONFLICT (player_id, mineral) DO NOTHING;",
+            ("$pl", f.PlayerId), ("$m", f.MineralId), ("$at", Stamp(f.AtUtc))));
+
+        public Task<IReadOnlyList<MineralFind>> GetAllAsync() => db.Read<IReadOnlyList<MineralFind>>(c =>
+        {
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = "SELECT player_id, mineral, found_at FROM mineral_finds ORDER BY found_at, id;";
+            using var r = cmd.ExecuteReader();
+            var list = new List<MineralFind>();
+            while (r.Read()) list.Add(new MineralFind(r.GetInt64(0), r.GetString(1), ParseStamp(r.GetString(2)).ToUniversalTime()));
+            return list;
+        });
     }
 }

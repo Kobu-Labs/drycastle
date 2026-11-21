@@ -741,8 +741,15 @@ _Avoid_: quality, grade, trophy class
 One of the 28 stones of the Mineral Log (crystals.md): 8 real-life ones and 20 fantasy ones, the latter the crystals of `crystals.json`. The one table is `Minerals` (ShooterCore).
 _Avoid_: gem, ore, crystal (that is the model in the world)
 
+**Mineral node**:
+A crystal in the world that holds one Mineral (#401). It never goes away or hides. Whether it can be taken now is its mineral's own rule (`MineralActivity`: Thundernite only in a storm, Pheonixite once a phoenix drops it; no rule: always). While active any number of players can take it. The player holds the interact key at it (`MineralRules.HoldSeconds`). The one node so far is a test node beside the first spawn; the places are #389 to #397.
+_Avoid_: crystal spawn, pickup
+
+**Find**:
+A stored player's taking of a Mineral from a Mineral node, kept forever (`mineral_finds`, `MineralBook`). A player has at most one Find per Mineral, ever; the node stays for them but cannot be taken again. The place among a Mineral's finders ("7th found") is the order of first Finds. Only stored players find (guests and bots do not). A Find plays the pickup sound once (#433).
+
 **Mineral Log**:
-The collection log of Minerals: one grid of all 28 in a fixed shuffled order (the same for everyone), each card a niche with the mineral's crystals and its name, always shown; a found one says which finder the player was ("7th found"), one not found is blurred behind frosted glass. The N key (rebindable, `mineral_log`; also in Pause) opens it like the Hunter's Log: a non-pausing centred panel, Esc closes. Nothing can be found yet: every card is behind glass.
+The collection log of Minerals: one grid of all 28 in a fixed shuffled order (the same for everyone), each card a niche with the mineral's crystals and its name, always shown; a found one says which finder the player was ("7th found"), one not found is blurred behind frosted glass. The N key (rebindable, `mineral_log`; also in Pause) opens it like the Hunter's Log: a non-pausing centred panel, Esc closes. A card turns over when the player has a Find of that mineral.
 _Avoid_: geo log, geocaching log, crystal log
 
 **Index species**:
