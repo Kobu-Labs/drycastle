@@ -37,6 +37,17 @@ public sealed class ItemDef
     public bool Standard { get; set; }
     /// <summary>A pair of binoculars: carried in the bag, the binoculars key raises them (<see cref="ShooterCore.Binoculars"/>). Needs <see cref="BagOnly"/>.</summary>
     public bool Binoculars { get; set; }
+    /// <summary>Vertical FOV of binoculars while raised, degrees; 0 = <see cref="ShooterCore.Binoculars.FovDeg"/>.</summary>
+    public float Fov { get; set; }
+    /// <summary>
+    /// The id of the standard item this one is the upgrade of (#473): a player who owns it (an unlock row of kind "item", granted by the Hunter's Log
+    /// collection tier <see cref="RewardTier"/>) is issued it in place of that item. It is standard too (a death does not leave it on the corpse) but
+    /// is never issued on its own.
+    /// </summary>
+    public string Replaces { get; set; } = "";
+    /// <summary>"bronze", "silver" or "gold": the collection tier that unlocks an upgrade (<see cref="Replaces"/>); empty otherwise.</summary>
+    public string RewardTier { get; set; } = "";
+    public HuntTier RewardTierOf => RewardTier switch { "bronze" => HuntTier.Bronze, "silver" => HuntTier.Silver, "gold" => HuntTier.Gold, _ => HuntTier.Common };
 }
 
 /// <summary>
@@ -84,6 +95,14 @@ public sealed class ItemsFile : IVersioned
                 throw new DataFileException($"{F}: {i.Id}: atlas is a .png path under synty/, for a model under synty/glb/");
             if (i.Standard && !i.BagOnly) throw new DataFileException($"{F}: {i.Id}: a standard item is bag_only (it is issued into the bag)");
             if (i.Binoculars && !i.BagOnly) throw new DataFileException($"{F}: {i.Id}: binoculars are bag_only (they are used from the bag)");
+            if (i.Fov < 0 || (i.Fov > 0 && !i.Binoculars) || i.Fov > 90) throw new DataFileException($"{F}: {i.Id}: fov is for binoculars, between 0 and 90 degrees");
+            if (i.Replaces != "")
+            {
+                var base_ = f.Items.Find(b => b.Id == i.Replaces);
+                if (base_ is not { Standard: true, Replaces: "" } || !i.Standard || i.RewardTierOf == HuntTier.Common)
+                    throw new DataFileException($"{F}: {i.Id}: replaces names a standard item that is not itself an upgrade, and the upgrade is standard with a reward_tier (bronze, silver or gold)");
+            }
+            else if (i.RewardTier != "") throw new DataFileException($"{F}: {i.Id}: reward_tier needs replaces");
             if (i.PickupLimit is < 1) throw new DataFileException($"{F}: {i.Id}: pickup_limit is at least 1 (leave it out for no limit)");
         }
         return f;

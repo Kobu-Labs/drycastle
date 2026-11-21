@@ -41,7 +41,12 @@ public static class WeaponFx
         ["m82"] = ("quaternius-ultimate-gun-pack/sniper-rifle-2.glb", 1.3f),
         ["awm"] = ("quaternius-ultimate-gun-pack/sniper-rifle-3.glb", 1.2f),
         ["svd"] = ("quaternius-ultimate-gun-pack/sniper-rifle-4.glb", 1.2f),
-        ["hunting_rifle"] = ("quaternius-ultimate-gun-pack/sniper-rifle-4.glb", 1.25f), // placeholder: SM_Wep_HuntingRifle_Clean_01 (Synty Apocalypse) is not a runtime GLB yet (#473)
+    };
+
+    /// <summary>Weapons of the paid Synty packs (SyntyLib: model under synty/glb/, its atlas, length in metres). Their barrel runs along +Z (the Quaternius ones along +X). Without the pack the weapon has no model.</summary>
+    static readonly Dictionary<string, (string Model, string Atlas, float Length)> SyntyModels = new()
+    {
+        ["hunting_rifle"] = ("apocalypse/SM_Wep_HuntingRifle_Clean_01", "glb/apocalypse/tex/PolygonApocalypse_01_A.png", 1.25f), // #473: the silver Hunter's Log reward
     };
 
     /// <summary>Node meta: height of the weapon's top (iron sight) above its origin, in metres; the viewmodel lowers the gun by this much to aim down sights.</summary>
@@ -52,7 +57,18 @@ public static class WeaponFx
     {
         if (!ShotFx.Enabled) return null;
         var root = new Node3D { Name = "Held_" + weaponId };
-        if (Models.TryGetValue(weaponId, out var m) && ModelLib.Instance(m.File) is { } model)
+        if (SyntyModels.TryGetValue(weaponId, out var sm) && SyntyLib.Instance(sm.Model, sm.Atlas) is { } synty)
+        {
+            // same fit as below, with the barrel along +Z: centred on the grip (rear third), muzzle towards -Z
+            var box = Bounds(synty);
+            var s = sm.Length / Mathf.Max(box.Size.Z, 0.001f);
+            var holder = new Node3D { Scale = Vector3.One * s, RotationDegrees = new Vector3(0, 180, 0) };
+            synty.Position = new Vector3(-(box.Position.X + box.Size.X * 0.5f), -(box.Position.Y + box.Size.Y * 0.8f), -(box.Position.Z + box.Size.Z * 0.3f));
+            holder.AddChild(synty);
+            root.AddChild(holder);
+            root.SetMeta(SightHeightMeta, box.Size.Y * 0.2f * s);
+        }
+        else if (Models.TryGetValue(weaponId, out var m) && ModelLib.Instance(m.File) is { } model)
         {
             var box = Bounds(model);
             var s = m.Length / Mathf.Max(box.Size.X, 0.001f);

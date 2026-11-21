@@ -567,7 +567,7 @@ public partial class NetServer : Node
         c.Breath = new BreathState(c.Id);
         c.Worn = new Equipment(Items);
         c.Bag = new Bag();
-        ItemRules.IssueStandard(Items, c.Bag); // every player has the standard items (the binoculars) from the start
+        ItemRules.IssueStandard(Items, c.Bag, OwnedItems(c)); // every player has the standard items (the binoculars) from the start
         c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = MapLadders, Bodies = _animalCrowd };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
@@ -766,7 +766,7 @@ public partial class NetServer : Node
                     sc.Zero.Reset();
                     SetBinoculars(sc, false); // a new life starts with them down
                     SetHeadLamp(sc, false); // and with the head lamp off
-                    ItemRules.IssueStandard(Items, sc.Bag); // and with the standard items (the binoculars) in the bag
+                    ItemRules.IssueStandard(Items, sc.Bag, OwnedItems(sc)); // and with the standard items (the binoculars) in the bag
                     SendEquipmentIfChanged(sc); // also what was issued at the join, before the first life
                     SendAmmo(sc);
                 }

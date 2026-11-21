@@ -149,6 +149,10 @@ public partial class NetServer
         if (announce) GrantCollectionRewards(book, h.PlayerId);
     }
 
+    /// <summary>The ids of the reward items a player owns (unlock rows of kind "item", #473), so a spawn issues the upgrade in place of the standard item.</summary>
+    IReadOnlySet<string> OwnedItems(Client c) =>
+        c.Profile is { } p ? p.Unlocks.Where(u => u.Kind == "item").Select(u => u.ItemId).ToHashSet() : new HashSet<string>();
+
     /// <summary>
     /// The reward weapons (weapons.json <c>reward_tier</c>, #473) of the player's collection tier (<see cref="HuntBook.CollectionTier"/>) become unlock rows, once: stored, kept
     /// for good (a new Index species does not take one back), and told to the player when they are online.
@@ -169,6 +173,15 @@ public partial class NetServer
                 p.Unlocks.Add(u);
                 _ = Progression.Unlocks.GrantAsync(dbId, u);
                 GD.Print($"server: collection reward: #{dbId} {tier} tier, unlocked {w.Id}");
+                granted = true;
+            }
+            foreach (var it in Items.Items)
+            {
+                if (it.Replaces == "" || it.RewardTierOf > tier || p.Unlocks.Any(u => u.Kind == "item" && u.ItemId == it.Id)) continue;
+                var u = new Unlock("item", it.Id);
+                p.Unlocks.Add(u);
+                _ = Progression.Unlocks.GrantAsync(dbId, u);
+                GD.Print($"server: collection reward: #{dbId} {tier} tier, unlocked {it.Id}"); // issued at the next spawn
                 granted = true;
             }
             if (granted) SendProfile(c);

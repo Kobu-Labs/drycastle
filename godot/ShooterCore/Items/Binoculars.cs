@@ -13,6 +13,9 @@ public static class Binoculars
 {
     /// <summary>Vertical FOV while raised, degrees (about 8x of the default view).</summary>
     public const float FovDeg = 9f;
+    /// <summary>The FOV while raised of this pair: its own (an upgrade, #473) or the standard <see cref="FovDeg"/>.</summary>
+    public static float FovOf(ItemDef pair) => pair.Fov > 0 ? pair.Fov : FovDeg;
+
     /// <summary>Farthest distance read, metres; beyond it (the sky) there is no reading.</summary>
     public const float MaxRangeM = 1500f;
     /// <summary>Seconds between two measurements, so the number does not flicker.</summary>

@@ -66,7 +66,8 @@ func _init() -> void:
 		_textures.clear()
 		var seen := {}
 		var before := assets.size()
-		for group in GROUPS:
+		# weapons are not map objects: only converted when a name filter asks for one (the manifest is left alone then)
+		for group in (GROUPS + ["Weapons"] if filter != "" else GROUPS):
 			_scan("%s/%s/Prefabs/%s" % [ROOT, pack_dir, group], pack, dir, String(group).to_lower(), filter, assets, seen)
 		_write_json("%s/%s/materials.json" % [_out, dir], {"materials": _materials})
 		packs.append({"id": pack, "dir": dir, "assets": assets.size() - before})

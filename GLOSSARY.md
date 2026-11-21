@@ -738,7 +738,7 @@ How rare a Hunt's weight is for its exact species and look: gold (the heaviest 5
 _Avoid_: quality, grade, trophy class
 
 **Collection tier**:
-The highest Hunt rarity tier (bronze, silver, gold) at which a player has every Index species: each species' rarest Hunt is at that tier or better (the Life List tile's rim). Mystery creatures do not count. Tiers stack (gold counts as silver and bronze) and, once reached, stay (a new Index species takes none back). A tier unlocks the weapons whose `reward_tier` it is, as unlock rows on the Profile: silver, the hunting rifle (a primary, locked in the loadout editor until then). Rules are in `HuntBook.CollectionTier` (ShooterCore); the server grants on a Hunt and on join.
+The highest Hunt rarity tier (bronze, silver, gold) at which a player has every Index species: each species' rarest Hunt is at that tier or better (the Life List tile's rim). Mystery creatures do not count. Tiers stack (gold counts as silver and bronze) and, once reached, stay (a new Index species takes none back). A tier unlocks what carries its `reward_tier`, as unlock rows on the Profile: silver, the hunting rifle (a primary weapon, locked in the loadout editor until then); bronze, the hunting binoculars (an item that replaces the standard pair from the next spawn: narrower view, 4° against 9°). A weapon or item is checked against the tier at each Hunt and at join. Rules are in `HuntBook.CollectionTier` (ShooterCore); the server grants on a Hunt and on join.
 _Avoid_: collection level, trophy
 
 **Mineral**:
