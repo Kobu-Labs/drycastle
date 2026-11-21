@@ -78,7 +78,7 @@ public sealed partial class Animal
                 if (clock) Burnt();
                 break;
             case AnimalState.Dead:
-                if (_fsm.Elapsed >= _file.CorpseSeconds) Ended = WorldDespawnReason.Expired;
+                if (_fsm.Elapsed >= rules.DeadSeconds) Ended = WorldDespawnReason.Expired;
                 break;
         }
     }

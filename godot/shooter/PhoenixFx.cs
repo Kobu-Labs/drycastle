@@ -33,7 +33,8 @@ public sealed partial class PhoenixFx : Node3D
 
     CpuParticles3D? _embers, _streak, _smoke, _ring, _rise, _column;
     OmniLight3D? _light;
-    StandardMaterial3D? _ash;
+    MeshInstance3D? _halo;
+    StandardMaterial3D? _haloMat;
     readonly List<MeshInstance3D> _bodies = new();
     Change<AnimalState> _phase;
     float _clock, _t, _burnSeconds = 6f;
@@ -103,6 +104,15 @@ public sealed partial class PhoenixFx : Node3D
         _column.EmissionShape = CpuParticles3D.EmissionShapeEnum.Sphere; _column.EmissionSphereRadius = 1.3f; _column.Position = new Vector3(0, 0.5f, 0);
         _light = new OmniLight3D { Name = "Light", LightColor = Flame, LightEnergy = 0f, OmniRange = 12f, ShadowEnabled = false, Visible = false };
         AddChild(_light);
+        // a soft additive glow sprite round the bird, HDR so it blooms (ADR 0030): a 3 m bird at 150 m is a few pixels, this is what the night sky shows. Its size follows the camera distance (see Tick).
+        _haloMat = new StandardMaterial3D
+        {
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, Transparency = BaseMaterial3D.TransparencyEnum.Alpha, BlendMode = BaseMaterial3D.BlendModeEnum.Add, CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+            BillboardMode = BaseMaterial3D.BillboardModeEnum.Enabled, AlbedoColor = new Color(3.2f, 1.2f, 0.3f, 1f), NoDepthTest = false, DisableReceiveShadows = true,
+            AlbedoTexture = new GradientTexture2D { Fill = GradientTexture2D.FillEnum.Radial, FillFrom = new Vector2(0.5f, 0.5f), FillTo = new Vector2(1f, 0.5f), Width = 64, Height = 64, Gradient = RocketFx.Ramp((0f, new Color(1, 1, 1, 1f)), (0.25f, new Color(1, 1, 1, 0.45f)), (1f, new Color(1, 1, 1, 0f))) },
+        };
+        _halo = new MeshInstance3D { Name = "Halo", Mesh = new QuadMesh { Size = Vector2.One, Material = _haloMat }, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, Visible = false };
+        AddChild(_halo);
         if (model != null)
             foreach (var n in model.FindChildren("*", "MeshInstance3D", true, false))
                 if (n is MeshInstance3D mi) _bodies.Add(mi);
@@ -119,6 +129,21 @@ public sealed partial class PhoenixFx : Node3D
         _t += dt; _clock += dt;
         _flash.Tick(dt);
         var near = Sfx.ListenerDistance(GlobalPosition) <= EffectCull.EffectRange;
+        if (_halo != null)
+        {
+            var glows = state is AnimalState.Flying or AnimalState.Falling or AnimalState.Crashed or AnimalState.Burning;
+            var cam = GetViewport()?.GetCamera3D();
+            _halo.Visible = glows && cam != null;
+            if (_halo.Visible)
+            {
+                var d = cam!.GlobalPosition.DistanceTo(GlobalPosition);
+                var size = Math.Clamp(d * 0.06f, 7f, 45f) * (state == AnimalState.Burning ? 1.6f : 1f); // about 3.5 degrees on screen, however far
+                _halo.Scale = new Vector3(size, size, 1f);
+                _halo.Position = Vector3.Up * (state is AnimalState.Flying or AnimalState.Falling ? 0f : 0.8f);
+                var flick = GameSettings.Current.ReduceMotion ? 1f : 0.85f + 0.15f * MathF.Sin(_clock * 7f) * MathF.Sin(_clock * 3.1f + 1f);
+                _haloMat!.AlbedoColor = new Color(3.2f * flick, 1.2f * flick, 0.3f * flick, state == AnimalState.Burning ? 1f : 0.85f);
+            }
+        }
         var burn = Math.Clamp(1f - _t / _burnSeconds, 0f, 1f); // 1 at the second hit, 0 when the flame is out
         var flying = state == AnimalState.Flying;
         var falling = state == AnimalState.Falling;
@@ -137,21 +162,20 @@ public sealed partial class PhoenixFx : Node3D
 
         var energy = state switch
         {
-            AnimalState.Flying => 1.6f,
+            AnimalState.Flying => 4f,
             AnimalState.Falling => 2f + 2.5f * Math.Clamp(_t / 2f, 0f, 1f),
             AnimalState.Crashed => 2.2f,
             AnimalState.Burning => 2.2f + 7f * burn * burn,
             AnimalState.Dead => 0.7f * Math.Clamp(1f - _t / AshFadeSeconds, 0.3f, 1f),
             _ => 0f,
         };
-        var range = state switch { AnimalState.Flying => 22f, AnimalState.Falling => 26f, AnimalState.Burning => 12f + 10f * burn, AnimalState.Dead => 6f, _ => 14f };
+        var range = state switch { AnimalState.Flying => 40f, AnimalState.Falling => 40f, AnimalState.Burning => 12f + 10f * burn, AnimalState.Dead => 6f, _ => 14f };
         if (_flash.Running) energy += 5f * (_flash.Left / 0.4f);
         // the flicker of fire; a player who reduced motion gets a steady light
         var flicker = GameSettings.Current.ReduceMotion ? 1f : 1f + 0.16f * MathF.Sin(_clock * 13f) + 0.1f * MathF.Sin(_clock * 23.7f + 2f) + (crashed ? 0.08f * MathF.Sin(_clock * 41f) : 0f);
         var lit = near && energy > 0f;
         if (_light.Visible != lit) _light.Visible = lit;
         if (lit) { _light.LightEnergy = energy * flicker; _light.OmniRange = range; }
-        if (_ash != null) _ash.EmissionEnergyMultiplier = 0.6f * Math.Clamp(1f - _t / AshFadeSeconds, 0.25f, 1f);
     }
 
     /// <summary>Starts or stops an emitter when its wish changed (hidden until it first runs; what is in the air dies out).</summary>
@@ -170,8 +194,7 @@ public sealed partial class PhoenixFx : Node3D
     /// <summary>The body goes to ash: every mesh of the model dark, a faint ember glow left that sinks (<see cref="Tick"/>).</summary>
     void Ash()
     {
-        _ash ??= new StandardMaterial3D { AlbedoColor = new Color(0.07f, 0.055f, 0.055f), Roughness = 1f, EmissionEnabled = true, Emission = Flame, EmissionEnergyMultiplier = 0.6f };
-        foreach (var mi in _bodies) if (GodotObject.IsInstanceValid(mi)) mi.MaterialOverride = _ash;
+        foreach (var mi in _bodies) if (GodotObject.IsInstanceValid(mi)) mi.Visible = false; // the flame consumed it: embers rise where it lay, the entity ends a few seconds later (DeadSeconds)
     }
 
     /// <summary>A mineral drop's minute is over: a short puff of fire where it lay (the client no longer sees the node). Not built far from the camera.</summary>
