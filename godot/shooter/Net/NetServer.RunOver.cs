@@ -67,7 +67,7 @@ public partial class NetServer
         {
             case ObstacleClass.Player:
             case ObstacleClass.TargetDummy:
-                PushOnDeath(id, CorpseRules.ThrowFromCar(m.Forward, m.Speed)); // a roadkill is thrown ahead of the vehicle (the ragdoll)
+                PushOnDeath(id, CorpseRules.ThrowFromCar(m.Forward, m.Speed), DeathFlight.RunOver); // a roadkill is thrown ahead of the vehicle (the ragdoll)
                 var r = Deal(m.Attacker, SpecialWeapons.Vehicle, id, m.Damage, false, false, KillCause.Roadkill);
                 ClearPush(id, r);
                 if (cls == ObstacleClass.Player && r != DamageResult.Ignored)

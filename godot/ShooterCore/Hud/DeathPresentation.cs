@@ -23,6 +23,8 @@ public enum DeathStyle
     Blood,
     /// <summary>A plain fade to the scrim: no blood, no fall (a drowning).</summary>
     Fade,
+    /// <summary>On foot, killed by a blast or a run-over (#416): the body is thrown and shown (a ragdoll); the camera stays where the eye was, a little further back, and only turns to follow the body. A blast leaves no blood, a run-over does.</summary>
+    Thrown,
 }
 
 /// <summary>How one death is shown: chosen once at the death by <see cref="DeathPresentation.Plan"/>.</summary>
@@ -54,8 +56,8 @@ public sealed class DeathPresentation
     public static readonly StateMachineSpec<DeathPhase> Spec = StateMachineSpec<DeathPhase>.Define("Player.DeathView", "The local player's death screen: the legs give way, the body goes over and the blood spatters, then it lies there under the respawn scrim until the spawn.", DeathPhase.Buckling)
         .Allow(DeathPhase.Buckling, DeathPhase.Falling)
         .Allow(DeathPhase.Falling, DeathPhase.Lying)
-        .Note(DeathPhase.Buckling, "Clock: the buckle length. The knees or the lean give way and the view sinks part of the way; a little blood. Zero seconds for a death that does not move the camera.")
-        .Note(DeathPhase.Falling, "Clock: the fall length. The body goes over (forward, back, left or right by the plan) and the view hits the ground; the blood grows to full. Zero seconds for a plain fade.")
+        .Note(DeathPhase.Buckling, "Clock: the buckle length. The knees or the lean give way and the view sinks part of the way; a little blood. Zero seconds for a death that does not move the camera, and for a thrown one.")
+        .Note(DeathPhase.Falling, "Clock: the fall length. The body goes over (forward, back, left or right by the plan) and the view hits the ground; the blood grows to full. Zero seconds for a plain fade. A thrown death (a blast or a run-over threw the body): the clock is the flight, the camera stays back from where the eye was and only turns to follow the body; no blood for a blast.")
         .Note(DeathPhase.Lying, "Held until the spawn ends it. Clock (elapsed): the impact shake, then the scrim fade-in with the \"eliminated by\" text and the countdown.")
         .Build();
 
@@ -75,6 +77,11 @@ public sealed class DeathPresentation
     public const float MaxPushM = 0.8f;
     /// <summary>The impact shake lasts about this long once Lying, seconds.</summary>
     public const float ImpactSeconds = 0.5f;
+    /// <summary>A thrown death (#416): the camera backs off this far along its own view and up, metres, then only turns; its turn follows the body with this rate (1/s).</summary>
+    public const float ThrownBackM = 2.5f, ThrownUpM = 0.3f, ThrownPanRate = 7f;
+
+    /// <summary>How much of the way to the aim the thrown death's camera turns in a frame of <paramref name="dt"/> seconds (0..1, frame-rate independent).</summary>
+    public static float PanBlend(float dt) => 1f - MathF.Exp(-ThrownPanRate * Math.Max(dt, 0f));
 
     readonly StateMachine<DeathPhase> _fsm = new(Spec);
     DeathPlan _plan;
@@ -86,15 +93,18 @@ public sealed class DeathPresentation
     public bool Buckling => Active && _fsm.Is(DeathPhase.Buckling);
     public bool Falling => Active && _fsm.Is(DeathPhase.Falling);
     public bool Lying => Active && _fsm.Is(DeathPhase.Lying);
-    /// <summary>The camera is the presentation's to move (the style is <see cref="DeathStyle.Fall"/>).</summary>
-    public bool OwnsCamera => Active && _plan.Style == DeathStyle.Fall;
+    /// <summary>The camera is the presentation's to move (the style is <see cref="DeathStyle.Fall"/> or <see cref="DeathStyle.Thrown"/>).</summary>
+    public bool OwnsCamera => Active && _plan.Style is DeathStyle.Fall or DeathStyle.Thrown;
+    /// <summary>The own corpse is hidden because the camera lies where it fell (<see cref="DeathStyle.Fall"/>); a thrown body is shown.</summary>
+    public bool HidesOwnCorpse => Active && _plan.Style == DeathStyle.Fall;
 
     /// <summary>
     /// How this death is shown. <paramref name="before"/> is the mode the player was in until the death. On foot, getting up from a pin and pinned all
     /// fall (a pinned player already lies low, the camera continues from there); every other camera (seat, turret, missile, the Bigfoot's hand, the Mass) and
     /// <paramref name="eyeUnderwater"/> get blood and the scrim only; <paramref name="drowned"/> is a plain fade. Reduce-motion never moves the camera.
+    /// On foot, a death with a <paramref name="flight"/> (a blast or a run-over threw the body, #416) is <see cref="DeathStyle.Thrown"/>: no buckle, the fall clock is the flight, blood only for a run-over.
     /// </summary>
-    public static DeathPlan Plan(ClientMode before, bool eyeUnderwater, bool drowned, bool reduceMotion, float respawnDelay, int seed)
+    public static DeathPlan Plan(ClientMode before, bool eyeUnderwater, bool drowned, bool reduceMotion, float respawnDelay, int seed, DeathFlight flight = DeathFlight.None)
     {
         var blood = reduceMotion ? ReducedBlood : FullBlood;
         var scrim = reduceMotion ? ScrimFadeReducedSeconds : ScrimFadeSeconds;
@@ -103,6 +113,7 @@ public sealed class DeathPresentation
         if (!onFoot || eyeUnderwater || reduceMotion) return new DeathPlan(DeathStyle.Blood, FallKind.Forward, 0, BloodBeatSeconds, blood, scrim);
         var kind = KindFor(seed);
         var total = Math.Clamp(respawnDelay * TotalShareOfDelay, MinTotalSeconds, MaxTotalSeconds);
+        if (flight != DeathFlight.None) return new DeathPlan(DeathStyle.Thrown, kind, 0, total, flight == DeathFlight.RunOver ? blood : 0f, scrim);
         var buckle = total * (kind == FallKind.Forward ? BuckleShareForward : BuckleShare);
         return new DeathPlan(DeathStyle.Fall, kind, buckle, total - buckle, blood, scrim);
     }
@@ -156,7 +167,7 @@ public sealed class DeathPresentation
     {
         get
         {
-            if (!OwnsCamera) return DeathPose.None;
+            if (!OwnsCamera || _plan.Style == DeathStyle.Thrown) return DeathPose.None; // a thrown death's turn follows the body: the client makes it
             var k = _plan.Kind;
             if (_fsm.Is(DeathPhase.Buckling)) return BucklePose(k, PhaseT(_plan.BuckleSeconds));
             if (_fsm.Is(DeathPhase.Falling)) return FallPose(k, PhaseT(_plan.FallSeconds));
@@ -228,7 +239,7 @@ public sealed class DeathPresentation
         get
         {
             if (!Active || !_fsm.Is(DeathPhase.Lying)) return 0;
-            var wait = _plan.Style == DeathStyle.Fall ? ImpactSeconds * 0.4f : 0f;
+            var wait = _plan.Style == DeathStyle.Fall ? ImpactSeconds * 0.4f : 0f; // a thrown body has no impact shake
             var e = _fsm.Elapsed - wait;
             if (e <= 0) return 0;
             return _plan.ScrimFadeSeconds <= 0 ? 1 : Math.Clamp(e / _plan.ScrimFadeSeconds, 0f, 1f);
