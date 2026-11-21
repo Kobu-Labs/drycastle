@@ -759,7 +759,7 @@ public class VehicleExplosionDef
 
 /// <summary>
 /// The reusable driving parameter set (vehicles.json "handling" per type; defaults here are the shared feel). A later type
-/// (jeep, quad) reuses the model by data: only the keys it changes need to be written.
+/// (truck, quad) reuses the model by data: only the keys it changes need to be written.
 /// </summary>
 public class VehicleHandling
 {

@@ -14,7 +14,7 @@ public class TowTests
     static string DataDir => Path.Combine(AppContext.BaseDirectory, "data");
     static VehiclesFile Load() => VehiclesFile.Load(Path.Combine(DataDir, "vehicles.json"));
     static readonly VehiclesFile Shipped = Load();
-    static VehicleDef Jeep => Shipped.Vehicles.Single(v => v.Id == "jeep");
+    static VehicleDef Truck => Shipped.Vehicles.Single(v => v.Id == "truck");
     static VehicleDef Flak => Shipped.Vehicles.Single(v => v.Id == "flak");
 
     /// <summary>The standard car with a hitch: a tractor on the drive model.</summary>
@@ -65,11 +65,11 @@ public class TowTests
     // ---- data ----
 
     [Fact]
-    public void The_jeep_the_humvee_and_the_flak_truck_tow_and_nobody_else_does()
+    public void The_truck_the_humvee_and_the_flak_truck_tow_and_nobody_else_does()
     {
-        Assert.Equal(new[] { "flak", "humvee", "jeep" }, Shipped.Vehicles.Where(v => v.Tow != null).Select(v => v.Id).OrderBy(x => x).ToArray());
+        Assert.Equal(new[] { "flak", "humvee", "truck" }, Shipped.Vehicles.Where(v => v.Tow != null).Select(v => v.Id).OrderBy(x => x).ToArray());
         Assert.Equal(new[] { "rocket_cart" }, Shipped.Vehicles.Where(v => v.Trailer != null).Select(v => v.Id).ToArray()); // the only trailer shipped
-        foreach (var v in new[] { Jeep, Flak, Shipped.Vehicles.Single(x => x.Id == "humvee") })
+        foreach (var v in new[] { Truck, Flak, Shipped.Vehicles.Single(x => x.Id == "humvee") })
             Assert.True(v.Tow!.Hitch[2] > v.HalfLength, $"{v.Id}: the hitch is behind the footprint");
     }
 
@@ -106,16 +106,16 @@ public class TowTests
     {
         var f = Load();
         var cart = Cart(); f.Vehicles.Add(cart);
-        var jeep = f.Vehicles.Single(v => v.Id == "jeep");
+        var truck = f.Vehicles.Single(v => v.Id == "truck");
         switch (what)
         {
             case "seat": cart.Seats = new() { new VehicleSeatDef { Role = "driver" } }; break;
             case "both": cart.Tow = new VehicleTowDef(); break;
             case "drawbar": cart.Trailer!.Axle = new[] { 0f, 0.4f, -1.6f }; break;
             case "eye_x": cart.Trailer!.Eye = new[] { 0.3f, 0.5f, -1.8f }; break;
-            case "hitch_front": jeep.Tow!.Hitch = new[] { 0f, 0.5f, -2.4f }; break;
-            case "limit": jeep.Tow!.LimitDeg = 95; break;
-            case "fraction": jeep.Tow!.SpeedFraction = 1.5f; break;
+            case "hitch_front": truck.Tow!.Hitch = new[] { 0f, 0.5f, -2.4f }; break;
+            case "limit": truck.Tow!.LimitDeg = 95; break;
+            case "fraction": truck.Tow!.SpeedFraction = 1.5f; break;
         }
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(f));
         // and the unchanged file with a sound cart is accepted
@@ -472,8 +472,8 @@ public class TowTests
         Assert.Equal(1f, default(TowEffect).Load.AccelScale);
         Assert.False(default(TowEffect).Block.Active);
         Assert.Throws<ArgumentException>(() => TowLoad.Of(cart, def));
-        // the jeep and the flak truck tow the cart as well
-        Assert.True(TowLoad.Of(Jeep, cart).AccelScale < TowLoad.Of(Flak, cart).AccelScale, "a heavier tractor feels less of it");
+        // the truck and the flak truck tow the cart as well
+        Assert.True(TowLoad.Of(Truck, cart).AccelScale < TowLoad.Of(Flak, cart).AccelScale, "a heavier tractor feels less of it");
     }
 
     sealed class Flat : IDriveWorld
@@ -548,34 +548,34 @@ public class TowTests
     [Fact]
     public void The_car_model_takes_the_same_load()
     {
-        var jeep = Jeep; var cart = Cart();
-        var load = TowLoad.Of(jeep, cart);
+        var truck = Truck; var cart = Cart();
+        var load = TowLoad.Of(truck, cart);
         var tow = new TowEffect(load, default);
         var free = new CarState(); var towing = new CarState();
         for (var i = 0; i < 30 * 60; i++)
         {
-            CarModel.Step(ref free, jeep, 1f, 0f, false, Dt);
-            CarModel.Step(ref towing, jeep, 1f, 0f, false, Dt, false, tow);
+            CarModel.Step(ref free, truck, 1f, 0f, false, Dt);
+            CarModel.Step(ref towing, truck, 1f, 0f, false, Dt, false, tow);
         }
-        Assert.Equal(jeep.TopSpeed, free.Speed, 3);
-        Assert.Equal(jeep.TopSpeed * 0.6f, towing.Speed, 3);
+        Assert.Equal(truck.TopSpeed, free.Speed, 3);
+        Assert.Equal(truck.TopSpeed * 0.6f, towing.Speed, 3);
         // braking from the same speed takes longer
         var a = new CarState { Speed = 15 }; var b = new CarState { Speed = 15 };
         float da = 0, db = 0;
         for (var i = 0; i < 30 * 30; i++)
         {
-            if (a.Speed > 0) { CarModel.Step(ref a, jeep, -1f, 0f, false, Dt); da += a.Speed * Dt; }
-            if (b.Speed > 0) { CarModel.Step(ref b, jeep, -1f, 0f, false, Dt, false, tow); db += b.Speed * Dt; }
+            if (a.Speed > 0) { CarModel.Step(ref a, truck, -1f, 0f, false, Dt); da += a.Speed * Dt; }
+            if (b.Speed > 0) { CarModel.Step(ref b, truck, -1f, 0f, false, Dt, false, tow); db += b.Speed * Dt; }
         }
-        Assert.True(db > da * 1.15f); // the jeep is a 6500 kg cargo truck: a 1500 kg cart takes a fifth of its braking
+        Assert.True(db > da * 1.15f); // the truck is a 6500 kg cargo truck: a 1500 kg cart takes a fifth of its braking
         // the bend is wider, and a block at the limit stops a reversing one
         var c = new CarState { Speed = 12 };
-        CarModel.Step(ref c, jeep, 0f, 1f, false, 1f, false, tow);
-        Assert.True(MathF.Abs(c.YawRate) * MathF.Abs(c.Speed) <= jeep.MaxLateralAccel * 0.8f * 1.02f);
-        var g = TowGeometry.Of(jeep, cart);
+        CarModel.Step(ref c, truck, 0f, 1f, false, 1f, false, tow);
+        Assert.True(MathF.Abs(c.YawRate) * MathF.Abs(c.Speed) <= truck.MaxLateralAccel * 0.8f * 1.02f);
+        var g = TowGeometry.Of(truck, cart);
         var jam = TowModel.BlockOf(g, new TrailerBody { Phi = g.Limit });
         var r = new CarState { Speed = -3 };
-        CarModel.Step(ref r, jeep, -1f, 0f, false, Dt, false, new TowEffect(load, jam));
+        CarModel.Step(ref r, truck, -1f, 0f, false, Dt, false, new TowEffect(load, jam));
         Assert.Equal(0f, r.Speed);
     }
 

@@ -64,7 +64,7 @@ One class in its own file, one registration line, one json sub-section, one clie
 ### Open
 - Not run in the game (brief): the work spot beside the wheel, the wheel centres (computed from the sedan's node positions: pivot plus half the wheel's width), the kneel pose, the carried tire in both hands, the hidden wheel, the prompt and ring, the approach and haul speeds and every number in `loot` are build- and unit-verified only.
 - UI standard DoD not complete: the prompt and ring reuse the care package's HUD pieces (no new control, strings in `Strings.cs`), but there are no screenshots at 1280x720 and 3840x2160 and no keyboard walkthrough (brief: nothing run).
-- Only cars of type `car` have tires (the sedan's wheel nodes are known); the jeep (now the six-wheeled cargo truck: `wheel_l1..r3`, not the four names) and the others have not been checked for wheel nodes, so they are not in `vehicle_ids`.
+- Only cars of type `car` have tires (the sedan's wheel nodes are known); the truck (the six-wheeled cargo truck: `wheel_l1..r3`, not the four names) and the others have not been checked for wheel nodes, so they are not in `vehicle_ids`.
 - Approach and Haul follow the navigation mesh routes of 02; a route that ends within `repath_m` (3 m) of the work spot or door counts as arrived, so a work spot off the mesh by more than that is given up (avoided 60 s).
 - A Thief called back or fleeing aloft is put on the ground at the base at once (no climb down).
 - A kneeling capsule is bent forward and lowered; with Synty bodies the `steal` clip is empty (ticket 08 names one).

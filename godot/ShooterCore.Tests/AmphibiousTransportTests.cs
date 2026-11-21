@@ -61,7 +61,7 @@ public class AmphibiousTransportTests
         Assert.NotNull(v.DoorGun);
         Assert.Null(v.Flak);
         VehicleGunRound.AssertIsTheRound(v.Gun!);            // the vehicle machine gun round, the helicopter's belt
-        Assert.Null(Shipped.Vehicles.Single(x => x.Id == "jeep").Gun); // the truck has no gun (#325)
+        Assert.Null(Shipped.Vehicles.Single(x => x.Id == "truck").Gun); // the truck has no gun (#325)
         Assert.Equal(Shipped.Vehicles.Single(x => x.Id == "utility_helicopter").Gun!.Magazine, v.Gun.Magazine);
     }
 

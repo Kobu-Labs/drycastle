@@ -4,11 +4,11 @@ using Xunit;
 
 namespace Drycastle.ShooterCore.Tests;
 
-/// <summary>The `jeep` type is the Synty cargo truck SM_Veh_Truck_01 (#325): what is particular to it (the generic part is StandardizedVehicleTests and VehicleContractTests).</summary>
+/// <summary>The `truck` type is the Synty cargo truck SM_Veh_Truck_01 (#325): what is particular to it (the generic part is StandardizedVehicleTests and VehicleContractTests).</summary>
 public class TruckModelTests
 {
     static readonly VehiclesFile Shipped = VehiclesFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "vehicles.json"));
-    static VehicleDef Truck => Shipped.Vehicles.Single(v => v.Id == "jeep");
+    static VehicleDef Truck => Shipped.Vehicles.Single(v => v.Id == "truck");
 
     static JsonElement Facts()
     {

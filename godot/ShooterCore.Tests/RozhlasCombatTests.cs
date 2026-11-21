@@ -11,7 +11,7 @@ public class RozhlasCombatTests
     [Theory]
     [InlineData(CombatKind.Shot, "ak47", "shot.ak47")]
     [InlineData(CombatKind.Shot, "knife", "shot.knife")]
-    [InlineData(CombatKind.Shot, "", "shot.")] // the jeep's roof gun: the client plays the table's "shot." too
+    [InlineData(CombatKind.Shot, "", "shot.")] // the truck's roof gun: the client plays the table's "shot." too
     [InlineData(CombatKind.Launch, "rpg", "launch.rpg")]
     [InlineData(CombatKind.Explosion, "rpg", "explosion.rpg")]
     [InlineData(CombatKind.VehicleExplosion, "", "explosion.vehicle")]
