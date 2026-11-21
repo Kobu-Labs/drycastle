@@ -694,6 +694,10 @@ _Avoid_: smoke (that is a vehicle's damage or a rocket's trail), fog
 The wall of dust a large blast (a destroyed vehicle's and larger) sends out along the ground. It slows as it goes and stops at six times the blast's radius. The blast is heard and felt when the wave arrives, not when it goes off, and the dust it carries veils the view for a moment as it passes.
 _Avoid_: shockwave (that is the Bigfoot's stomp, and it hurts)
 
+**Ear ringing**:
+A high tone only the local player hears when a blast goes off close to them (#481), felt when the blast is (a Blast wave's delay applies). Judged against the blast's damage radius, capped at 30 m (so a Scud rings only 30 m): full level out to 75% of the radius, falling to nothing at it. It comes up in 0.1 s and fades over 1 s (faint) to 4 s (full). A blast not louder than the peak of the ring still going does nothing: no stack, no replay. Cleared at respawn. The sound (`ear.ring`, `audio/ear_ring/ring.ogg`) is in the private asset folder; without it the game is silent here. Not sent over the network.
+_Avoid_: tinnitus, deafness (nothing else is muffled)
+
 **Shockwave**:
 The stomp's ring of force running outwards along the ground from the Bigfoot. It knocks back and hurts every player standing on the ground it crosses, once; a player who is in the air as it passes (a jump) is untouched. The stomp's wind-up (its pose and a sound) is the warning.
 _Avoid_: blast, explosion (those have a radius and damage falloff)

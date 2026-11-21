@@ -28,6 +28,7 @@ INCLUDE = [
     "animal-kit/*",                       # wildlife.json: crow model (+ NOTICE)
     "paintings/hell_*.png",               # ChurchPaintings
     "music/*.ogg", "music/*.mp3",         # Sfx.LoadPrivateMusic
+    "audio/ear_ring/*.ogg",               # sounds.json ear.ring (#481)
     "audio/holy_mass/*.ogg",              # ChurchChant, DemonAudio
     "audio/thieves/voice/*.ogg",          # ThiefAudio
     "audio/thieves/songs/*.ogg",          # ThiefAudio (van song)
