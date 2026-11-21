@@ -537,7 +537,7 @@ public partial class LoadoutScreen : MenuScreen
         if (Autosave == null || _picker < 0) return;
         if (!o.Unlocked && !_devMode)
         {
-            Shell.Toast(Strings.F("loadout.locked", o.UnlockLevel), ToastKind.Warn);
+            Shell.Toast(LockText(o), ToastKind.Warn);
             return;
         }
         var d = Draft;
@@ -795,6 +795,10 @@ public partial class LoadoutScreen : MenuScreen
         return row switch { 0 => d.PrimaryWeapon, 1 => d.SecondaryWeapon, 2 => d.Perk, 3 => d.Streak1, 4 => d.Streak2, _ => d.Streak3 };
     }
 
+    /// <summary>Why a locked item is locked: its level, or the Hunter's Log tier that rewards it (#473).</summary>
+    static string LockText(PickerOption o) =>
+        o.Reward == HuntTier.Common ? Strings.F("loadout.locked", o.UnlockLevel) : Strings.F("loadout.locked_reward", o.Reward.ToString().ToLowerInvariant());
+
     /// <summary>NEW: unlocked at the level the player has just reached (the fresh unlocks of the last level-up).</summary>
     bool IsNew(PickerOption o) => !_devMode && o.Unlocked && o.UnlockLevel > 0 && o.UnlockLevel == _profile?.Level;
 
@@ -820,7 +824,7 @@ public partial class LoadoutScreen : MenuScreen
         if (locked)
         {
             status.AddChild(new Glyph(Glyph.Kind.Padlock, ShooterTheme.Warn, ShooterTheme.Space * 2));
-            status.AddChild(Ui.Lbl(Strings.F("loadout.locked", o.UnlockLevel), "HudSmall"));
+            status.AddChild(Ui.Lbl(LockText(o), "HudSmall"));
         }
         else if (o.Id == current)
         {
@@ -883,7 +887,7 @@ public partial class LoadoutScreen : MenuScreen
         if (o.Id != "")
         {
             if (_picker >= 3) lines.Add(Strings.F("loadout.kills", data.Killstreaks.Streaks.FirstOrDefault(x => x.Id == o.Id)?.KillsRequired ?? 0));
-            lines.Add(!o.Unlocked && !_devMode ? Strings.F("loadout.locked", o.UnlockLevel) : Strings.T("loadout.available"));
+            lines.Add(!o.Unlocked && !_devMode ? LockText(o) : Strings.T("loadout.available"));
         }
         _cmpNote.Text = string.Join("\n", lines);
     }

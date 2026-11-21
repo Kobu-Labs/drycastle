@@ -182,6 +182,15 @@
       "recoil": { "vertical_per_shot": 0.9, "recovery_rate": 6, "max_climb": 3 }
     },
     {
+      "id": "hunting_rifle", "category": "sniper", "slot": "primary", "reward_tier": "silver", "kind": "hitscan", "full_auto": false,
+      "damage": 90, "headshot_multiplier": 3, "fire_interval": 1.3, "move_speed_multiplier": 0.9,
+      "magazine_size": 5, "reserve_ammo": 20, "reload_time": 3.0,
+      "range": 900, "scope_fov": 6, "zoom_levels": 1,
+      "falloff_start": 900, "falloff_end": 900, "falloff_multiplier": 1.0,
+      "muzzle_velocity": 480, "zero_distance": 150, "sway_amount": 0.6, "breath_hold_seconds": 8.0, "breath_recover_seconds": 1.2,
+      "recoil": { "vertical_per_shot": 1.1, "recovery_rate": 5, "max_climb": 3.5 }
+    },
+    {
       "id": "strela", "category": "launcher", "slot": "secondary", "unlock_level": 10, "kind": "projectile", "full_auto": false,
       "damage": 500, "fire_interval": 1.0,
       "magazine_size": 1, "reserve_ammo": 2, "reload_time": 4.0,

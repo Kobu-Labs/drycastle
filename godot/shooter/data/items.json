@@ -18,6 +18,7 @@
     { "id": "bigfoot_head", "name": "Bigfoot head", "slot": "headgear", "model": "drycastle-generated-models/bigfoot_head.glb", "pickup_limit": 3, "headshot_immune": true },
     { "id": "gold_chain", "name": "Gold chain", "slot": "neck", "model": "drycastle-generated-models/gold_chain.glb", "pickup_limit": 3 },
     { "id": "speaker", "name": "Speaker", "bag_only": true },
-    { "id": "binoculars", "name": "Binoculars", "bag_only": true, "binoculars": true, "standard": true, "model": "synty/glb/props/binoculars_01.glb", "atlas": "glb/atlas/military_01_A.png" }
+    { "id": "binoculars", "name": "Binoculars", "bag_only": true, "binoculars": true, "standard": true, "model": "synty/glb/props/binoculars_01.glb", "atlas": "glb/atlas/military_01_A.png" },
+    { "id": "hunting_binoculars", "name": "Hunting binoculars", "bag_only": true, "binoculars": true, "standard": true, "replaces": "binoculars", "reward_tier": "bronze", "fov": 4, "mark_seconds": 30, "model": "synty/glb/shops/SM_Prop_Hunting_Binoculars_01.glb", "atlas": "glb/shops/tex/PolygonShops_Texture_01_A.png" }
   ]
 }

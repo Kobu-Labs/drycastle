@@ -203,17 +203,24 @@ public static class ItemRules
 
     /// <summary>
     /// The start of a life: each standard item (<see cref="ItemDef.Standard"/>) the player does not carry is put in the first empty bag cell,
-    /// with no pickups counted. A full bag gets none. True when something was added.
+    /// with no pickups counted. A full bag gets none. <paramref name="owned"/>: ids of the upgrades the player owns, issued in place. True when something was added.
     /// </summary>
-    public static bool IssueStandard(ItemsFile items, Bag bag)
+    public static bool IssueStandard(ItemsFile items, Bag bag, IReadOnlySet<string>? owned = null)
     {
         var added = false;
         for (var index = 0; index < items.Items.Count; index++)
         {
-            if (!items.Items[index].Standard) continue;
+            var def = items.Items[index];
+            if (!def.Standard || def.Replaces != "") continue;
+            var give = index; // the best owned upgrade of it (#473), else the item itself
+            var tier = HuntTier.Common;
+            if (owned != null)
+                for (var u = 0; u < items.Items.Count; u++)
+                    if (items.Items[u] is { } up && up.Replaces == def.Id && owned.Contains(up.Id) && up.RewardTierOf > tier) { give = u; tier = up.RewardTierOf; }
             var has = false;
-            foreach (var held in bag.Held) if (held.Item == index) { has = true; break; }
-            if (!has && bag.Add(new ItemStack(index)) >= 0) added = true;
+            foreach (var held in bag.Held)
+                if (items.At(held.Item) is { } h && (h.Id == def.Id || h.Replaces == def.Id)) { has = true; break; }
+            if (!has && bag.Add(new ItemStack(give)) >= 0) added = true;
         }
         return added;
     }

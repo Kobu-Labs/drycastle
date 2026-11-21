@@ -4,7 +4,7 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>What the Hunter's Log screen needs from the match: the queries, the pictures and the names (docs/hunters-log.md).</summary>
-public sealed record HuntLogEnv(HuntLogData Data, HuntArtResolver Art, Func<string, string> SpeciesName, Func<string, string> WeaponName, Func<IReadOnlyList<string>> WeaponIds, Func<bool> InSandbox);
+public sealed record HuntLogEnv(HuntLogData Data, HuntArtResolver Art, Func<string, string> SpeciesName, Func<string, string> WeaponName, Func<IReadOnlyList<string>> WeaponIds, Func<bool> InSandbox, Func<IReadOnlyList<HuntReward>> Rewards, Func<HuntReward, Texture2D?> RewardIcon);
 
 /// <summary>
 /// The Hunter's Log (#336, J, rebindable action "hunters_log", also in the pause menu): the book of every wild animal a player hunted. A non-pausing overlay like the
@@ -12,20 +12,20 @@ public sealed record HuntLogEnv(HuntLogData Data, HuntArtResolver Art, Func<stri
 /// asks <see cref="Hud.HuntersLogOpen"/>), the movement keys still work (<see cref="Player.MoveWithFreeMouse"/>), firing does not, nothing pauses. It closes with its key,
 /// Esc, death, the end of the match and a turret or missile view; Esc on another player's log first goes up to My Log (<see cref="HuntLogNav"/>).
 /// Tabs, in order: My Log (the Life List of 10 index species and 3 Mystery creatures, one grid), Records (a card per species with its heaviest and its longest shot as
-/// recorded hit pictures), All hunts (a sortable, filterable, paged table with the selected hunt's hit card beside it). Q / E, the bumpers and Page Up / Down change tab; the
+/// recorded hit pictures), All hunts (a sortable, filterable, paged table with the selected hunt's hit card beside it), Rewards (progress to the bronze, silver and gold collection tiers and what each gives, #473). Q / E, the bumpers and Page Up / Down change tab; the
 /// arrows move focus. There is no hint text: every control is labelled by what it is. The server answers every query redacted (a Mystery creature the viewer has not caught is
 /// a hidden id: a "?" and a blurred placeholder name); every query has a designed loading, empty and error (Retry) state, a late answer to an older request is dropped
 /// (<see cref="HuntLoader{T}"/>), and nothing is rebuilt per frame (a pane is rebuilt when its answer arrives, the table's rows are pooled).
 /// </summary>
 public sealed partial class HuntersLogScreen : Control
 {
-    const int Tabs = 3;
+    const int Tabs = 4;
 
     readonly HuntLogEnv _env;
     readonly HuntLogNav _nav = new();
     readonly LogFrame _frame;
     Control _sandboxNote = null!;
-    bool _logStale, _recordsStale, _huntsStale;
+    bool _logStale, _recordsStale, _huntsStale, _rewardsStale;
 
     static LogSkin Skin => LogSkin.Lodge;
     HuntLogData Data => _env.Data;
@@ -45,6 +45,7 @@ public sealed partial class HuntersLogScreen : Control
         BuildLogPane();
         BuildRecordsPane();
         BuildHuntsPane();
+        BuildRewardsPane();
         _panel.Resized += OnPanelResized;
         Data.Changed += OnDataChanged;
     }
@@ -57,6 +58,7 @@ public sealed partial class HuntersLogScreen : Control
     {
         _frame.Tabs[1].Text = Strings.T("log.tab.records");
         _frame.Tabs[2].Text = Strings.T("log.tab.hunts");
+        _frame.Tabs[3].Text = Strings.T("log.tab.rewards");
         _frame.TabPressed += SelectTab;
         _frame.TabStepped += StepTab;
         _frame.BackPressed += BackPressed;
@@ -79,7 +81,7 @@ public sealed partial class HuntersLogScreen : Control
         if (_open) return;
         _frame.Open();
         _nav.Reset();
-        _logStale = _recordsStale = _huntsStale = true; // every pane asks again when it shows: the book changes while the screen is closed
+        _logStale = _recordsStale = _huntsStale = _rewardsStale = true; // every pane asks again when it shows: the book changes while the screen is closed
         ShowPage();
         Callable.From(FocusTab).CallDeferred();
     }
@@ -150,6 +152,11 @@ public sealed partial class HuntersLogScreen : Control
             case HuntLogPage.Records:
                 if (_recordsStale) { _recordsStale = false; Data.RequestRecords(); return; }
                 RebuildRecords();
+                break;
+            case HuntLogPage.Rewards:
+                // always the asker's own log (another player's parked on the first tab is asked for again when that tab shows)
+                if (_rewardsStale || Data.LogSubject != 0) { _rewardsStale = false; Data.RequestLog(0); return; }
+                RebuildRewards();
                 break;
             default:
                 // the table needs the records too (the "Mystery hunts" option and the record seals)

@@ -29,22 +29,28 @@ public partial class NetClient
     double _binocularsMeasuredAt;
     int? _binocularsRange;
 
-    bool CarriesBinoculars
+    bool CarriesBinoculars => CarriedBinoculars != null;
+
+    /// <summary>The pair in the bag (the narrowest when there are several), or null.</summary>
+    ItemDef? CarriedBinoculars
     {
         get
         {
+            ItemDef? best = null;
             foreach (var s in _bagItems)
-                if (s is { } stack && ItemData.At(stack.Item) is { Binoculars: true }) return true;
-            return false;
+                if (s is { } stack && ItemData.At(stack.Item) is { Binoculars: true } pair && (best == null || Binoculars.FovOf(pair) < Binoculars.FovOf(best))) best = pair;
+            return best;
         }
     }
 
     /// <summary>What the HUD shows of the binoculars: whether they are up, and the distance read (null: nothing in range).</summary>
-    (bool Up, int? RangeM) BinocularsView() => (_binoculars, _binocularsRange);
+    (bool Up, int? RangeM, bool CanMark) BinocularsView() => (_binoculars, _binocularsRange, CarriedBinoculars is { MarkSeconds: > 0 });
 
     bool HandleBinocularsInput(InputEvent e)
     {
-        if (Bot || e.IsEcho() || !e.IsActionPressed("binoculars")) return false;
+        if (Bot || e.IsEcho()) return false;
+        if (_binoculars && e.IsActionPressed("binoculars_mark")) { MarkAnimal(); GetViewport().SetInputAsHandled(); return true; }
+        if (!e.IsActionPressed("binoculars")) return false;
         if (_binoculars) LowerBinoculars();
         else
         {
@@ -74,7 +80,7 @@ public partial class NetClient
         if (!_binoculars || _me == null) return false;
         if (Dead || _pinned || Input.MouseMode != Input.MouseModeEnum.Captured || !CarriesBinoculars) { LowerBinoculars(); return false; }
         _me.HandsBusy = true;
-        _me.ZoomFov = Binoculars.FovDeg; _me.IronSightZoom = false;
+        _me.ZoomFov = CarriedBinoculars is { } pair ? Binoculars.FovOf(pair) : Binoculars.FovDeg; _me.IronSightZoom = false;
         if (_viewmodel != null) _viewmodel.Aiming = false;
         if (Now - _binocularsMeasuredAt >= Binoculars.MeasureSeconds)
         {

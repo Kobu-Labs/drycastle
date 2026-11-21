@@ -60,6 +60,9 @@ public partial class NetClient : IStandingBodies
         /// <summary>A gliding flyer hovers now and then: the hover clip (<see cref="AnimalClip.Idle"/>) instead of the glide, and the seconds until it swaps.</summary>
         public bool Hover;
         public Countdown GlideLeft;
+        /// <summary>Client clock time until which the animal is highlighted for its watcher (<see cref="MarkAnimal"/>, #473); 0 = not marked.</summary>
+        public double MarkedUntil;
+        public bool MarkShown;
     }
 
     readonly Dictionary<ushort, AnimalView> _animals = new();
@@ -190,6 +193,7 @@ public partial class NetClient : IStandingBodies
     void RenderAnimals()
     {
         if (_animals.Count == 0 || _lastTick == 0) return;
+        TickAnimalMarks();
         var rt = RenderTickNow();
         var now = Time.GetTicksMsec() / 1000.0;
         var dt = (float)GetProcessDeltaTime();

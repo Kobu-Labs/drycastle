@@ -8,7 +8,7 @@ public static class HuntersLogStrings
         ("bind.hunters_log", "Hunter's Log (toggle)"),
         ("pause.hunterslog", "Hunter's Log"),
         // frame
-        ("log.name", "Hunter's Log"), ("log.title.my", "My Log"), ("log.title.other", "{0}'s Log"), ("log.tab.records", "Records"), ("log.tab.hunts", "All hunts"),
+        ("log.name", "Hunter's Log"), ("log.title.my", "My Log"), ("log.title.other", "{0}'s Log"), ("log.tab.records", "Records"), ("log.tab.hunts", "All hunts"), ("log.tab.rewards", "Rewards"),
         ("log.close", "Close"), ("log.back", "Back"),
         ("log.sandbox", "Sandbox: hunts are not logged"),
         // my log
@@ -17,6 +17,10 @@ public static class HuntersLogStrings
         ("log.tier.gold", "Gold"), ("log.tier.silver", "Silver"), ("log.tier.bronze", "Bronze"), ("log.tile.tier", "{0} kg, {1}"),
         ("log.legend.gold", "Gold, top 5%"), ("log.legend.silver", "Silver, top 10%"), ("log.legend.bronze", "Bronze, top 20%"),
         ("log.tile.best", "Best {0} kg"), ("log.tile.longest", "Longest {0}"), ("log.tile.caught", "Caught {0}"), ("log.tile.todo", "Not hunted yet"),
+        // rewards (#473)
+        ("log.rewards.caption", "Every species at {0} or better"), ("log.rewards.progress", "{0} / {1}"), ("log.rewards.reached", "Reached"), ("log.rewards.open", "In progress"),
+        ("log.rewards.unlocked", "Unlocked"), ("log.rewards.locked", "Locked"), ("log.rewards.soon", "Reward coming soon"),
+        ("log.reward.hunting_binoculars", "Narrower view, and the mark key highlights an animal for 30 s"), ("log.reward.hunting_rifle", "Sniper rifle with a far narrower scope; pick it in the loadout"),
         ("log.hidden.mark", "?"), ("hunt.hidden.name", "Xxxxxxxx"),
         // records
         ("log.rec.heaviest", "Heaviest"), ("log.rec.longest", "Longest shot"), ("log.rec.first", "First caught"), ("log.rec.todo", "Not hunted yet. The first kill takes the record."),

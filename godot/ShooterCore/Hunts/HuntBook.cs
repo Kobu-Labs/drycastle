@@ -79,6 +79,22 @@ public sealed class HuntBook
         return new HuntOutcome(own.FirstTime, against.Heaviest, against.Longest);
     }
 
+    /// <summary>
+    /// A player's collection tier (#473): the highest tier T such that every Index species has a hunt of tier T or better (the Life List tile's rim, the rarest
+    /// hunt of the species). Common when any Index species is not hunted or is only common. Mystery creatures have no rarity and do not count.
+    /// </summary>
+    public HuntTier CollectionTier(long playerId)
+    {
+        if (!_players.TryGetValue(playerId, out var mine)) return HuntTier.Common;
+        var tier = HuntTier.Gold;
+        foreach (var key in IndexSpecies.All)
+        {
+            if (!mine.TryGetValue(key, out var b) || b.Count == 0) return HuntTier.Common;
+            if (b.Tier < tier) tier = b.Tier;
+        }
+        return tier;
+    }
+
     /// <summary>The mystery creatures a player has caught: what they may see the names and shapes of.</summary>
     public IReadOnlySet<string> CaughtBy(long playerId)
     {

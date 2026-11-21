@@ -102,6 +102,42 @@ public class StandardItemTests
     }
 
     [Fact]
+    public void An_owned_upgrade_is_issued_in_place_of_the_standard_pair_and_never_beside_it()
+    {
+        var items = Shipped;
+        var up = items.Find("hunting_binoculars")!;
+        Assert.Equal(HuntTier.Bronze, up.RewardTierOf);
+        Assert.True(Binoculars.FovOf(up) < Binoculars.FovOf(items.Find("binoculars")!)); // more zoom
+        var bag = new Bag();
+        Assert.True(ItemRules.IssueStandard(items, bag, new HashSet<string> { "hunting_binoculars" }));
+        Assert.Equal(1, bag.Count);
+        Assert.Equal(items.IndexOf("hunting_binoculars"), bag.Get(0)?.Item);
+        Assert.False(ItemRules.IssueStandard(items, bag, new HashSet<string>())); // a pair is carried: no standard one beside it
+        var plain = new Bag();
+        ItemRules.IssueStandard(items, plain, new HashSet<string>()); // not owned: the standard pair
+        Assert.Equal(items.IndexOf("binoculars"), plain.Get(0)?.Item);
+    }
+
+    [Fact]
+    public void Only_the_upgrade_marks_animals_for_thirty_seconds()
+    {
+        var items = Shipped;
+        Assert.Equal(30f, Binoculars.MarkSecondsOf(items.Find("hunting_binoculars")!));
+        Assert.Equal(0f, Binoculars.MarkSecondsOf(items.Find("binoculars")!));
+        var e = Assert.Throws<DataFileException>(() => ItemsFile.Parse("""{"version":1,"items":[{"id":"s","name":"S","bag_only":true,"mark_seconds":5}]}"""));
+        Assert.Contains("mark_seconds", e.Message);
+    }
+
+    [Fact]
+    public void The_upgrade_is_not_left_on_a_corpse()
+    {
+        var items = Shipped;
+        var bag = new Bag();
+        bag.Add(new ItemStack(items.IndexOf("hunting_binoculars")));
+        Assert.Empty(ItemRules.StripForCorpse(items, new Equipment(items), bag));
+    }
+
+    [Fact]
     public void A_full_bag_is_issued_nothing()
     {
         var items = Shipped;

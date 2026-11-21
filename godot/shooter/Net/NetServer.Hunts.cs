@@ -146,6 +146,46 @@ public partial class NetServer
         _ = Progression!.Hunts.AppendAsync(h); // queued behind the tick: never waited for
         GD.Print($"server: hunt: #{h.PlayerId} {h.Exact} {h.Kg?.ToString("F1") ?? "-"} kg, {h.DistanceM?.ToString("F1") ?? "-"} m, {h.Weapon}{(outcome.Announce ? $" (first {outcome.FirstTime}, heaviest {outcome.Heaviest}, longest {outcome.Longest})" : "")}");
         if (announce && outcome.Announce) AnnounceHunt(book, h, outcome);
+        if (announce) GrantCollectionRewards(book, h.PlayerId);
+    }
+
+    /// <summary>The ids of the reward items a player owns (unlock rows of kind "item", #473), so a spawn issues the upgrade in place of the standard item.</summary>
+    IReadOnlySet<string> OwnedItems(Client c) =>
+        c.Profile is { } p ? p.Unlocks.Where(u => u.Kind == "item").Select(u => u.ItemId).ToHashSet() : new HashSet<string>();
+
+    /// <summary>
+    /// The reward weapons (weapons.json <c>reward_tier</c>, #473) of the player's collection tier (<see cref="HuntBook.CollectionTier"/>) become unlock rows, once: stored, kept
+    /// for good (a new Index species does not take one back), and told to the player when they are online.
+    /// </summary>
+    void GrantCollectionRewards(HuntBook book, long dbId)
+    {
+        if (Progression == null || dbId == 0) return;
+        var tier = book.CollectionTier(dbId);
+        if (tier == HuntTier.Common) return;
+        foreach (var c in _clients.Values)
+        {
+            if (c.Profile is not { Persist: true } p || p.DbId != dbId) continue;
+            var granted = false;
+            foreach (var w in Weapons.Weapons)
+            {
+                if (!w.IsReward || w.RewardTier > tier || p.Unlocks.Any(u => u.Kind == "weapon" && u.ItemId == w.Id)) continue;
+                var u = new Unlock("weapon", w.Id);
+                p.Unlocks.Add(u);
+                _ = Progression.Unlocks.GrantAsync(dbId, u);
+                GD.Print($"server: collection reward: #{dbId} {tier} tier, unlocked {w.Id}");
+                granted = true;
+            }
+            foreach (var it in Items.Items)
+            {
+                if (it.Replaces == "" || it.RewardTierOf > tier || p.Unlocks.Any(u => u.Kind == "item" && u.ItemId == it.Id)) continue;
+                var u = new Unlock("item", it.Id);
+                p.Unlocks.Add(u);
+                _ = Progression.Unlocks.GrantAsync(dbId, u);
+                GD.Print($"server: collection reward: #{dbId} {tier} tier, unlocked {it.Id}"); // issued at the next spawn
+                granted = true;
+            }
+            if (granted) SendProfile(c);
+        }
     }
 
     /// <summary>One line for a first and/or a record, to everyone; each recipient gets the hunt redacted for what they have caught.</summary>
