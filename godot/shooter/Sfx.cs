@@ -194,6 +194,10 @@ public partial class Sfx : Node
         // driving old, so left/right would flip and the level wobble. Centre it.
         p.PanningStrength = exact && ListenerDistance(p.GlobalPosition) < 3f ? 0f : 1f;
     }
+    /// <summary>A player of its own for a looping event whose volume the caller drives every frame (the ear ringing, #481): stopped, parented to the Sfx node. Null when audio is off or the file is missing.</summary>
+    public static AudioStreamPlayer? OwnVoice(string id) => Instance?.MakeOwn(id);
+    /// <summary>The event's volume_db: the level a caller of <see cref="OwnVoice"/> adds its own offset to.</summary>
+    public static float BaseDb(string id) => Instance?._table.Find(id)?.VolumeDb ?? 0f;
     public static string LastNote { get; private set; } = "";
     public static void Ui(string id) => Instance?.DoUi(id);
     /// <summary>A looping voice; <paramref name="startFraction"/> starts it that share of the way into its file (0 to 1).</summary>
@@ -215,6 +219,14 @@ public partial class Sfx : Node
         p.PitchScale = SoundRules.PitchFor(d, _rng.Randf());
         p.Play();
         _s2[i] = ++_i2;
+    }
+
+    AudioStreamPlayer? MakeOwn(string id)
+    {
+        if (!Enabled || Def(id) is not { } d || Pick(d) is not { } st) return null;
+        var p = new AudioStreamPlayer { Stream = st, Bus = d.Bus, VolumeDb = -80f };
+        AddChild(p);
+        return p;
     }
 
     bool Do3D(string id, Vector3 at, float dbOffset, bool exact)

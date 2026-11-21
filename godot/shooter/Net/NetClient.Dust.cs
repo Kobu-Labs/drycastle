@@ -16,6 +16,7 @@ public partial class NetClient
     const float DustBehindWall = 0.3f;
 
     readonly List<(double At, Vector3 Pos, float Radius, string? Sound)> _blastsDue = new();
+    EarRingFx? _earRing;
     PhysicsRayQueryParameters3D? _dustRay;
     Func<DustBlast, float>? _dustReach;
     Vector3 _dustEye;
@@ -33,6 +34,15 @@ public partial class NetClient
     {
         if (sound != null && Sfx.Enabled) Sfx.Play3D(sound, at);
         ShakeFor(at, radius);
+        RingFrom(at, radius);
+    }
+
+    /// <summary>The ear ringing (#481) when this player stands within the blast's damage radius (<paramref name="radius"/> is the one the server used). Only the local player hears it.</summary>
+    void RingFrom(Vector3 at, float radius)
+    {
+        if (_me == null || !Sfx.Enabled) return; // a kill by the blast still rings through the death view; respawn clears it
+        if (_earRing == null) { _earRing = new EarRingFx { Name = "EarRing" }; AddChild(_earRing); }
+        _earRing.Blast(at, _me.GlobalPosition, radius);
     }
 
     /// <summary>Every frame: the blasts whose wave has arrived are heard and felt, and the veil follows the dust at the camera.</summary>
