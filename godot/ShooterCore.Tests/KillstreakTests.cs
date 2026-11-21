@@ -129,18 +129,58 @@ public class KillstreakTests
     }
 
     [Fact]
-    public void DeathResetsTheCounterAndWhatWasEarned()
+    public void DeathResetsTheCounterButKeepsWhatWasEarned()
     {
         var h = new Harness(Shipping);
         h.Service.Arm(Player, new[] { "uav", "", "" }, 0);
         Kills(h, Player, 4);
         h.Service.OnDeath(Player);
         Assert.Equal(0, h.Service.KillCount(Player));
+        Assert.Equal(new[] { "uav" }, h.Service.Held(Player)); // earned stays earned (#414)
+        h.Service.Arm(Player, new[] { "uav", "", "" }, 0); // the respawn
+        Assert.Equal(new[] { "uav" }, h.Service.Held(Player));
+        Assert.Equal(0, h.Service.KillCount(Player));
+        var earned = h.Sent.Count(s => s.Kind == EventKind.StreakEarned);
+        Kills(h, Player, 4);
+        Assert.Equal(earned, h.Sent.Count(s => s.Kind == EventKind.StreakEarned)); // no second earn while held
+    }
+
+    [Fact]
+    public void ADeathBringsAUsedStreakBackToBeEarnedAgain()
+    {
+        var h = new Harness(Shipping);
+        h.Service.Arm(Player, new[] { "uav", "", "" }, 0);
+        Kills(h, Player, 4);
+        h.Service.Activate(Player, 0, Here);
+        h.Service.OnDeath(Player);
+        h.Service.Arm(Player, new[] { "uav", "", "" }, 0);
         Assert.Empty(h.Service.Held(Player));
         Kills(h, Player, 3);
-        Assert.Empty(h.Service.Held(Player)); // the count restarted: three is not enough
+        Assert.Empty(h.Service.Held(Player));
         Kills(h, Player, 1);
-        Assert.Equal(new[] { "uav" }, h.Service.Held(Player)); // earned again in the new life
+        Assert.Equal(new[] { "uav" }, h.Service.Held(Player));
+    }
+
+    [Fact]
+    public void AnEarnedStreakTheNewLoadoutLacksIsDroppedAtTheRespawn()
+    {
+        var h = new Harness(Shipping);
+        h.Service.Arm(Player, new[] { "uav", "", "" }, 0);
+        Kills(h, Player, 4);
+        h.Service.OnDeath(Player);
+        h.Service.Arm(Player, new[] { "turret", "", "" }, 0);
+        Assert.Empty(h.Service.Held(Player));
+    }
+
+    [Fact]
+    public void WipeDropsEarnedStreaksToo()
+    {
+        var h = new Harness(Shipping);
+        h.Service.Arm(Player, new[] { "uav", "", "" }, 0);
+        Kills(h, Player, 4);
+        h.Service.Wipe(Player);
+        h.Service.Arm(Player, new[] { "uav", "", "" }, 0);
+        Assert.Empty(h.Service.Held(Player));
     }
 
     [Fact]

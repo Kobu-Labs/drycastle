@@ -28,12 +28,12 @@ public readonly record struct StreakSlotView(string Id, string Name, StreakSlotS
 public sealed class KillstreakTracker
 {
     /// <summary>
-    /// One loadout slot as the HUD shows it, driven by the server's events. Empty is a slot with no (known) streak. A streak is earned once per life, used once,
-    /// and runs until its end; only a death (or a round reset) brings it back to Progress. The sandbox can use a streak that was never earned (Progress -> Active) and use
+    /// One loadout slot as the HUD shows it, driven by the server's events. Empty is a slot with no (known) streak. A streak is earned, used once,
+    /// and runs until its end; a death (or a round reset) brings it back to Progress, but a Ready one stays Ready through a death (#414). The sandbox can use a streak that was never earned (Progress -> Active) and use
     /// it again (Spent -> Active), so those edges are declared too.
     /// </summary>
     public static readonly StateMachineSpec<StreakSlotState> Spec = StateMachineSpec<StreakSlotState>.Define(
-            "Killstreak.Slot", "A loadout streak slot on the HUD tracker: kills to go, ready to use, running, spent for this life.", StreakSlotState.Empty)
+            "Killstreak.Slot", "A loadout streak slot on the HUD tracker: kills to go, ready to use (kept through a death), running, spent.", StreakSlotState.Empty)
         .Allow(StreakSlotState.Empty, StreakSlotState.Progress)
         .Allow(StreakSlotState.Progress, StreakSlotState.Ready, StreakSlotState.Active)
         .Allow(StreakSlotState.Ready, StreakSlotState.Active, StreakSlotState.Progress)
@@ -41,7 +41,7 @@ public sealed class KillstreakTracker
         .Allow(StreakSlotState.Spent, StreakSlotState.Active, StreakSlotState.Progress)
         .Note(StreakSlotState.Empty, "No streak (or an unknown id) in the slot; set by Arm, never left except by the next Arm.")
         .Note(StreakSlotState.Progress, "Not earned: kills still to go. The state of every streak at the start of a life.")
-        .Note(StreakSlotState.Ready, "Earned (StreakEarned) and held: the Killstreak key uses it.")
+        .Note(StreakSlotState.Ready, "Earned (StreakEarned) and held: the Killstreak key uses it. Survives a death, not a round reset.")
         .Note(StreakSlotState.Active, "Used (StreakUsed) and running until StreakEnded.")
         .Note(StreakSlotState.Spent, "Used and ended this life; it comes back only after a death or a round reset.")
         .Build();
@@ -61,16 +61,22 @@ public sealed class KillstreakTracker
     /// <summary>Kills this life, as the client counts them (the server's value after each earned event).</summary>
     public int Kills => _kills;
 
-    /// <summary>Starts a life at spawn: the loadout's three streak ids (empty = none) and the perk's cost reduction.</summary>
+    /// <summary>Starts a life at spawn: the loadout's three streak ids (empty = none) and the perk's cost reduction. A streak held Ready stays Ready if the new loadout still has it (#414).</summary>
     public void Arm(IReadOnlyList<string> loadoutStreaks, float costReduction)
     {
+        var ready = new HashSet<string>();
+        for (var i = 0; i < _slots.Length; i++) if (_slots[i].Is(StreakSlotState.Ready)) ready.Add(_loadout[i]);
         Reset();
         _costReduction = costReduction;
         for (var i = 0; i < KillstreakService.Slots; i++)
         {
             _loadout[i] = i < loadoutStreaks.Count ? loadoutStreaks[i] ?? "" : "";
             _slots[i].Reset(StreakSlotState.Empty);
-            if (_loadout[i] != "" && _data.Find(_loadout[i]) != null) _slots[i].Enter(StreakSlotState.Progress);
+            if (_loadout[i] != "" && _data.Find(_loadout[i]) != null)
+            {
+                _slots[i].Enter(StreakSlotState.Progress);
+                if (ready.Contains(_loadout[i])) _slots[i].Enter(StreakSlotState.Ready);
+            }
         }
     }
 
@@ -97,8 +103,13 @@ public sealed class KillstreakTracker
     /// <summary>An active streak ended (duration, round reset, death or leaving).</summary>
     public void OnEnded(string streakId) => EachSlotOf(streakId, m => { if (m.Is(StreakSlotState.Active)) m.Enter(StreakSlotState.Spent); });
 
-    /// <summary>The owner died: the counter and every earned, used and active streak reset (the server does the same).</summary>
-    public void OnDeath() => Reset();
+    /// <summary>The owner died: the counter and the used and active streaks reset; a Ready streak stays Ready (the server does the same, #414).</summary>
+    public void OnDeath()
+    {
+        _kills = 0;
+        foreach (var m in _slots)
+            if (!m.Is(StreakSlotState.Empty) && !m.Is(StreakSlotState.Ready)) m.Enter(StreakSlotState.Progress);
+    }
 
     /// <summary>Clears the counter and the streak states; the loadout stays until the next <see cref="Arm"/>.</summary>
     public void Reset()

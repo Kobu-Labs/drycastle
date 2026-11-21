@@ -974,7 +974,7 @@ stateDiagram-v2
 
 ## Killstreak.Hold
 
-One loadout streak in one life: kills to go, earned and held, used.
+One loadout streak: kills to go, earned and held (across deaths), used.
 
 ```mermaid
 stateDiagram-v2
@@ -985,13 +985,13 @@ stateDiagram-v2
     Used --> Progress
 ```
 
-- **Progress**: Not earned: the Streak counter is below the threshold (the start of every life).
-- **Earned**: Threshold reached (StreakEarned sent): held until the owner uses it.
-- **Used**: Activation accepted (StreakUsed sent): spent for this life, whether it still runs or has ended. Only a death or a round reset brings it back to Progress.
+- **Progress**: Not earned: the Streak counter is below the threshold (the start of every life, unless an earned streak is carried over).
+- **Earned**: Threshold reached (StreakEarned sent): held until the owner uses it, and it survives the owner's death (#414).
+- **Used**: Activation accepted (StreakUsed sent): spent, whether it still runs or has ended. A death or a round reset brings it back to Progress (earn it again).
 
 ## Killstreak.Slot
 
-A loadout streak slot on the HUD tracker: kills to go, ready to use, running, spent for this life.
+A loadout streak slot on the HUD tracker: kills to go, ready to use (kept through a death), running, spent.
 
 ```mermaid
 stateDiagram-v2
@@ -1009,7 +1009,7 @@ stateDiagram-v2
 
 - **Empty**: No streak (or an unknown id) in the slot; set by Arm, never left except by the next Arm.
 - **Progress**: Not earned: kills still to go. The state of every streak at the start of a life.
-- **Ready**: Earned (StreakEarned) and held: the Killstreak key uses it.
+- **Ready**: Earned (StreakEarned) and held: the Killstreak key uses it. Survives a death, not a round reset.
 - **Active**: Used (StreakUsed) and running until StreakEnded.
 - **Spent**: Used and ended this life; it comes back only after a death or a round reset.
 
