@@ -299,7 +299,7 @@
       "hull": [[0, -0.5, 1.3, 3.5, 0, 3.0], [0, 5.5, 0.35, 2.5, 1.45, 2.8], [0, 8.43, 0.35, 0.43, 1.5, 4.35]],
       "model": "drycastle-generated-models/utility_helicopter.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
-      "seats": [{ "role": "driver", "offset": [0.55, 0.72, -1.9], "cover": "glass" }, { "role": "gunner", "offset": [0.4, 0.72, 0.15] }],
+      "seats": [{ "role": "driver", "offset": [0.55, 0.72, -1.9], "cover": "glass" }, { "role": "gunner", "offset": [0.4, 0.72, 0.15] }, { "role": "passenger", "offset": [-0.4, 0.72, 0.15], "cover": "exposed", "armed": true, "aim": { "yaw_deg": 90, "arc_deg": 70, "min_pitch_deg": -55, "max_pitch_deg": 12, "spread_full_speed": 16 } }],
       "gun": { "damage": 30, "fire_interval": 0.1, "range": 220, "spread_degrees": 1.2, "magazine": 100, "reserve": 400, "reload_time": 3 },
       "door_gun": { "pivot": [1.3, 1.5, 0.15], "outward_yaw_deg": -90, "yaw_arc_deg": 70, "min_pitch_deg": -55, "max_pitch_deg": 12, "muzzle_length": 0.88, "eye": [0, 0.22, 0.62], "recoil_m": 0.05 },
       "flight": {

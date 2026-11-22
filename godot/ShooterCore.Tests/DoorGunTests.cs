@@ -29,7 +29,7 @@ public class DoorGunTests
     public void The_shipped_helicopter_has_a_pilot_and_a_door_gunner_and_fires_by_the_gun_rules()
     {
         var v = Heli;
-        Assert.Equal(new[] { "driver", "gunner" }, v.Seats.Select(s => s.Role));
+        Assert.Equal(new[] { "driver", "gunner", "passenger" }, v.Seats.Select(s => s.Role));
         Assert.NotNull(v.Gun);
         Assert.NotNull(v.DoorGun);
         Assert.Null(v.Flak);
