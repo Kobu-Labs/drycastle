@@ -49,8 +49,14 @@ public partial class NetClient
     }
 
     /// <summary>The picture of a Companion's species (the Hunter's Log's flat silhouette: white with alpha, tinted by the drawer); null when the species has none.</summary>
-    public Texture2D? CompanionIcon(int def) =>
-        def >= 0 && def < CompanionData.Companions.Count ? HuntArtOf.ForSpecies(CompanionData.Companions[def].Species).Picture?.Fill : null;
+    public Texture2D? CompanionIcon(int def)
+    {
+        if (def < 0 || def >= CompanionData.Companions.Count) return null;
+        var entry = CompanionData.Companions[def];
+        // its own look's picture ("<species>/<variant>" in the shapes) when it is not the species' base model
+        var look = entry.Asset != "" && entry.Asset != AnimalVariant.BaseAssetId ? HuntArtOf.ForSpecies($"{entry.Species}/{entry.Asset}").Picture : null;
+        return (look ?? HuntArtOf.ForSpecies(entry.Species).Picture)?.Fill;
+    }
 
     /// <summary>A wish: have this Companion out (an index of <see cref="CompanionsOwned"/>'s values). The server answers with the roster.</summary>
     public void RequestCompanion(int def) => SendItem(EventKind.CompanionPick, CompanionRoster.EncodePick(def));
