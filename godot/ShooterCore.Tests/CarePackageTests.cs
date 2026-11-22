@@ -393,6 +393,18 @@ public class CarePackageTests
     // ---- the streak: drop ahead of the owner ----
 
     [Fact]
+    public void The_thrown_canister_lands_ahead_on_flat_ground_and_further_when_thrown_higher()
+    {
+        float Cast(Vector3 from, Vector3 dir, float len) => dir.Y < 0 && from.Y + dir.Y * len <= 0 ? from.Y / -dir.Y : float.PositiveInfinity;
+        var flat = CarePackageRules.ThrowLanding(new Vector3(0, 1.65f, 0), 0f, 0f, Cast);
+        var up = CarePackageRules.ThrowLanding(new Vector3(0, 1.65f, 0), 0f, 0.5f, Cast);
+        Assert.Equal(0f, flat.X, 3);
+        Assert.InRange(flat.Y, -0.01f, 0.01f);
+        Assert.True(flat.Z < -3f);
+        Assert.True(up.Z < flat.Z);
+    }
+
+    [Fact]
     public void The_drop_point_is_five_metres_ahead_of_the_owner()
     {
         var ahead = CarePackageRules.DropPoint(new Vector3(0, 0, 0), 0f);
@@ -409,7 +421,7 @@ public class CarePackageTests
     {
         var manager = World(out _);
         var book = new CarePackageBook(manager, ShippingRewards());
-        var care = new CarePackageStreak(book, _ => 0f, p => 2f);
+        var care = new CarePackageStreak(book, (_, f) => CarePackageRules.DropPoint(f, 0f), p => 2f);
         var service = Service(new List<(ushort Owner, EventKind Kind, byte[] Payload)>(), care);
         service.Arm(Owner, new[] { CarePackageRules.StreakId, "", "" }, 0f);
         for (var i = 0; i < 6; i++) service.OnKill(Owner, 99, false);
@@ -429,7 +441,7 @@ public class CarePackageTests
     {
         var manager = World(out _);
         var book = new CarePackageBook(manager, ShippingRewards());
-        var care = new CarePackageStreak(book, _ => 0f, _ => null);
+        var care = new CarePackageStreak(book, (_, f) => CarePackageRules.DropPoint(f, 0f), _ => null);
         var service = Service(new List<(ushort Owner, EventKind Kind, byte[] Payload)>(), care);
         service.Arm(Owner, new[] { CarePackageRules.StreakId, "", "" }, 0f);
         for (var i = 0; i < 6; i++) service.OnKill(Owner, 99, false);

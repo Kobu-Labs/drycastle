@@ -50,7 +50,8 @@ public partial class GunshipOverlay : CanvasLayer
                 : cycleWeapons
                     ? Strings.F("gunship.hint", InputBindings.Name("fire"), InputBindings.Name("zoom"), InputBindings.Name("reload"))
                     : Strings.F("gunship.hint_single", InputBindings.Name("fire"), InputBindings.Name("zoom")),
-            selector: ac130 ? WeaponSelector(def, s.Weapon) : null);
+            selector: ac130 ? WeaponSelector(def, s.Weapon) : null,
+            weapon: w.Name);
         Visible = true;
     }
 
@@ -86,6 +87,7 @@ public partial class GunshipOverlay : CanvasLayer
     {
         string _title = "", _zoom = "", _ammo = "", _hint = "", _timer = "", _kills = "";
         string? _selector;
+        string _weapon = "";
         ulong _hitAtMs;
         bool _hitKill, _hitHead;
         static readonly List<Vector3> EmptyPoints = new();
@@ -131,9 +133,9 @@ public partial class GunshipOverlay : CanvasLayer
             }
         }
 
-        public void Set(string title, string zoom, string ammo, string hint, string? selector)
+        public void Set(string title, string zoom, string ammo, string hint, string? selector, string weapon = "")
         {
-            _title = title; _zoom = zoom; _ammo = ammo; _hint = hint; _selector = selector;
+            _title = title; _zoom = zoom; _ammo = ammo; _hint = hint; _selector = selector; _weapon = weapon;
             QueueRedraw();
         }
 
@@ -165,6 +167,9 @@ public partial class GunshipOverlay : CanvasLayer
             DrawLine(centre - new Vector2(0, gap), centre - new Vector2(0, gap + len), ShooterTheme.Text, wd);
             DrawHitMarker(centre, s);
             DrawString(font, new Vector2(centre.X - 60f * s, centre.Y + 40f * s), _zoom, HorizontalAlignment.Center, 120f * s, big, ShooterTheme.Text);
+
+            // under the reticle: the selected weapon, where the eye is (the selector at the top left lists them all)
+            if (_weapon != "") DrawString(font, new Vector2(centre.X - 120f * s, centre.Y + 40f * s + big + 4f * s), _weapon, HorizontalAlignment.Center, 240f * s, big, ShooterTheme.Text);
 
             // top left: the turret and the weapon
             DrawString(font, new Vector2(m, m + body), _title, HorizontalAlignment.Left, -1, body, ShooterTheme.Text);
