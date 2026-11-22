@@ -543,7 +543,7 @@ public class PhoenixTests
         Assert.True(Mysteries.Find(Mysteries.Phoenix) is { Live: true });
         Assert.Equal("mystery-4", Mysteries.HiddenId(Mysteries.Phoenix));
         Assert.Equal("mystery-2", Mysteries.HiddenId(Mysteries.Unicorn)); // the others' hidden ids did not move
-        Assert.Equal(Data.Animals.Animals.Count - 1, Data.Animals.IndexOf("phoenix")); // last: no species index moved
+        Assert.Equal(26, Data.Animals.IndexOf("phoenix")); // after every species that was there before it, and what came later (the eagle, #488) is after it: no species index moved
         var hunt = HuntRecord.ForMysteryAnimal(5, Mysteries.Phoenix, 41.23f, "sniper_rifle", null, 1, 2, 3, DateTime.UnixEpoch);
         Assert.True(hunt.IsMystery);
         Assert.Equal((Mysteries.Phoenix, Mysteries.Phoenix, (float?)null, (float?)41.2f), (hunt.Species, hunt.Exact, hunt.Kg, hunt.DistanceM));

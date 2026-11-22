@@ -6,10 +6,10 @@
   //   heel (HeelCompanion, on the ground): follow_m, stop_m, run_m, recall_m, stuck_seconds, walk_speed, run_speed (0: the species'), sit_after_min_seconds, sit_after_max_seconds
   //   wing (WingCompanion, in the air): height_m, behind_m, side_m, follow_m, arrive_m, fly_speed, recall_m, clearance_m, circle_every_min_seconds, circle_every_max_seconds,
   //                                     circle_radius_m, circle_speed, circle_turns
-  // "reward_tier" (bronze, silver, gold): the Hunter's Log collection tier that unlocks it for good. None has one yet (which animal the gold tier gives is undecided);
-  // /companion <id> gives one for the session.
+  // "reward_tier" (bronze, silver, gold): the Hunter's Log collection tier that unlocks it for good: the eagle is the gold tier's. /companion <id> gives one for the session.
   "companions": [
     { "id": "dog", "name": "Dog", "kind": "heel", "species": "dog", "rules": { "run_speed": 8 } },
-    { "id": "firebird", "name": "Firebird", "kind": "wing", "species": "phoenix", "scale": 0.25 }
+    { "id": "firebird", "name": "Firebird", "kind": "wing", "species": "phoenix", "scale": 0.25 },
+    { "id": "eagle", "name": "Eagle", "kind": "wing", "species": "eagle", "scale": 0.6, "reward_tier": "gold", "rules": { "height_m": 2.6, "circle_radius_m": 4 } }
   ]
 }

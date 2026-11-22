@@ -101,7 +101,7 @@ public class AnimalTests
     [Fact]
     public void ShippedSpeciesLoad()
     {
-        Assert.Equal(27, Shipped.Animals.Count);
+        Assert.Equal(28, Shipped.Animals.Count);
         Assert.NotNull(Shipped.Find("deer"));
         Assert.Equal(Shipped.IndexOf("deer"), Shipped.Animals.IndexOf(Shipped.Find("deer")!));
         Assert.Equal(-1, Shipped.IndexOf("dragon"));
