@@ -60,6 +60,17 @@ public class BinocularsTests
         Assert.Equal(ItemPlace.Bagged, ItemRules.Place(items, new ItemStack(items.IndexOf("binoculars")), worn, bag, swap: false, out _));
         Assert.True(Binoculars.Carried(items, Enumerable.Range(0, Bag.Cells).Select(c => bag.Get(c)?.Item)));
     }
+
+    [Fact]
+    public void The_pair_raised_is_the_narrowest_of_those_carried()
+    {
+        var items = Shipped;
+        int standard = items.IndexOf("binoculars"), hunting = items.IndexOf("hunting_binoculars"), speaker = items.IndexOf("speaker");
+        Assert.Equal(-1, Binoculars.Held(items, new[] { speaker }));
+        Assert.Equal(standard, Binoculars.Held(items, new[] { speaker, standard }));
+        Assert.Equal(hunting, Binoculars.Held(items, new[] { standard, hunting }));
+        Assert.Equal(hunting, Binoculars.Held(items, new[] { hunting, standard }));
+    }
 }
 
 public class BinocularsWireTests
@@ -71,17 +82,6 @@ public class BinocularsWireTests
         Assert.True(Binoculars.TryDecodeRaise(Binoculars.EncodeRaise(false), out up) && !up);
         Assert.False(Binoculars.TryDecodeRaise(new byte[] { 2 }, out _));
         Assert.False(Binoculars.TryDecodeRaise(Array.Empty<byte>(), out _));
-    }
-
-    [Fact]
-    public void The_pair_raised_is_the_narrowest_of_those_carried()
-    {
-        var items = Shipped;
-        int standard = items.IndexOf("binoculars"), hunting = items.IndexOf("hunting_binoculars"), speaker = items.IndexOf("speaker");
-        Assert.Equal(-1, Binoculars.Held(items, new[] { speaker }));
-        Assert.Equal(standard, Binoculars.Held(items, new[] { speaker, standard }));
-        Assert.Equal(hunting, Binoculars.Held(items, new[] { standard, hunting }));
-        Assert.Equal(hunting, Binoculars.Held(items, new[] { hunting, standard }));
     }
 
     [Fact]
