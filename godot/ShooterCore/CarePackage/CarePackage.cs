@@ -5,7 +5,7 @@ namespace Drycastle.ShooterCore;
 
 /// <summary>
 /// Care package rules (ticket #124, reward reworked in #151): the killstreak that drops a crate on a parachute. The owner's
-/// crate lands <see cref="DropDistanceMetres"/> ahead of them; any living player within reach holds the interact key for
+/// crate lands where the owner throws it (Q: a canister flies like a smoke grenade, the crate parachutes down at the spot); any living player within reach holds the interact key for
 /// <see cref="OpenHoldSeconds"/> to open it. Opening grants a random killstreak from <see cref="StreakRewards"/> and the
 /// crate despawns at once. An unopened crate disappears after <see cref="LifetimeSeconds"/>.
 /// </summary>
@@ -44,6 +44,36 @@ public static class CarePackageRules
     {
         var (sin, cos) = MathF.SinCos(yaw);
         return feet + new Vector3(-sin, 0, -cos) * DropDistanceMetres;
+    }
+
+    /// <summary>Speed of the thrown smoke canister that marks the drop, m/s.</summary>
+    public const float ThrowSpeedMetresPerSecond = 16f;
+    /// <summary>Gravity on the canister, m/s².</summary>
+    public const float ThrowGravity = 20f;
+    /// <summary>Longest flight simulated, seconds (a throw into the sky lands somewhere).</summary>
+    public const float ThrowMaxSeconds = 4f;
+
+    /// <summary>
+    /// Where the thrown canister lands: it leaves <paramref name="eye"/> along the owner's look (yaw, pitch) and flies under gravity until
+    /// <paramref name="castDistance"/> (from, direction, length: distance to the first surface, infinity if none) stops it. The crate parachutes down there.
+    /// </summary>
+    public static Vector3 ThrowLanding(Vector3 eye, float yaw, float pitch, Func<Vector3, Vector3, float, float> castDistance)
+    {
+        var (sy, cy) = MathF.SinCos(yaw);
+        var (sp, cp) = MathF.SinCos(pitch);
+        var vel = new Vector3(-sy * cp, sp, -cy * cp) * ThrowSpeedMetresPerSecond;
+        var pos = eye;
+        const float dt = 1f / 30f;
+        for (var t = 0f; t < ThrowMaxSeconds; t += dt)
+        {
+            vel.Y -= ThrowGravity * dt;
+            var move = vel * dt;
+            var len = move.Length();
+            var d = castDistance(pos, move / len, len);
+            if (d <= len) return pos + move / len * d;
+            pos += move;
+        }
+        return pos;
     }
 
     public static bool InReach(Vector3 player, Vector3 crate, float slack = 0) =>
@@ -177,22 +207,22 @@ public sealed class CarePackageBook
 }
 
 /// <summary>
-/// The care package killstreak: a use drops a crate ahead of the owner and ends at once (the crate lives on by itself).
+/// The care package killstreak: a use throws a canister and drops a crate where it lands and ends at once (the crate lives on by itself).
 /// Refused (the streak stays held) when the world has no room or there is no ground under the landing point.
 /// </summary>
 public sealed class CarePackageStreak : IKillstreak
 {
     readonly CarePackageBook _book;
-    readonly Func<ushort, float> _yawOf;
+    readonly Func<ushort, Vector3, Vector3> _landingOf;
     readonly Func<Vector3, float?> _groundAt;
 
     /// <param name="book">Where the crate goes.</param>
-    /// <param name="yawOf">The owner's yaw now (radians), for the drop direction.</param>
+    /// <param name="landingOf">Where the owner's thrown canister lands (owner, feet): see <see cref="CarePackageRules.ThrowLanding"/>.</param>
     /// <param name="groundAt">Height of the ground under a point, or null when there is none.</param>
-    public CarePackageStreak(CarePackageBook book, Func<ushort, float> yawOf, Func<Vector3, float?> groundAt)
+    public CarePackageStreak(CarePackageBook book, Func<ushort, Vector3, Vector3> landingOf, Func<Vector3, float?> groundAt)
     {
         _book = book;
-        _yawOf = yawOf;
+        _landingOf = landingOf;
         _groundAt = groundAt;
     }
 
@@ -201,7 +231,7 @@ public sealed class CarePackageStreak : IKillstreak
 
     public bool Activate(KillstreakUse use)
     {
-        var drop = CarePackageRules.DropPoint(use.Position, _yawOf(use.Owner));
+        var drop = _landingOf(use.Owner, use.Position);
         if (_groundAt(drop) is not { } ground)
         {
             use.Log("no ground at the drop point; streak kept");

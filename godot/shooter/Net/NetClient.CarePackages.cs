@@ -28,6 +28,9 @@ public partial class NetClient
     InteractHold _crateHold;
     /// <summary>The ring's shown fill (0 to 1): follows the hold up and drains down after a release.</summary>
     float _ringShown;
+    /// <summary>The crate whose open request is sent and the time until which it is treated as gone (hidden, no prompt, no hold) while the server's despawn is on its way. A refused open brings it back after the wait.</summary>
+    (ushort Id, double Until)? _crateOpening;
+    const double CrateOpeningWaitSeconds = 1.5;
 
     /// <summary>Called once from <see cref="_Ready"/>: registers the crate type and follows the crate entities.</summary>
     void InitCarePackages()
@@ -88,9 +91,12 @@ public partial class NetClient
             var p = e.State.Position;
             v.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
             v.Canopy.Visible = e.State.State == CarePackageRules.StateFalling;
+            v.Node.Visible = !IsCrateOpening(id);
         }
         _crateNear = NearestCrateInReach();
     }
+
+    bool IsCrateOpening(ushort id) => _crateOpening is { } o && o.Id == id && Time.GetTicksMsec() / 1000.0 < o.Until;
 
     ushort? NearestCrateInReach()
     {
@@ -100,7 +106,7 @@ public partial class NetClient
         var at = _me.GlobalPosition;
         foreach (var (id, v) in _crates)
         {
-            if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.State.State != CarePackageRules.StateLanded) continue;
+            if (IsCrateOpening(id) || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.State != CarePackageRules.StateLanded) continue;
             var d = v.Node.GlobalPosition.DistanceTo(at);
             if (d <= bd) { best = id; bd = d; }
         }
@@ -113,7 +119,7 @@ public partial class NetClient
     /// </summary>
     string? CratePrompt()
     {
-        if (_crateNear == null || _crateHold.Held > 0) return null;
+        if (_crateNear == null || _crateHold.Held > 0 || _crateHold.Sent) return null;
         return Strings.F("hud.crate.hold", InputBindings.Name("interact"));
     }
 
@@ -124,7 +130,12 @@ public partial class NetClient
     void TickCarePackages(double dt)
     {
         var use = Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("interact");
-        if (_crateHold.Tick(use, _crateNear != null, dt, CarePackageRules.OpenHoldSeconds) && _crateNear is { } id) SendOpenCarePackage(id);
+        if (_crateHold.Tick(use, _crateNear != null, dt, CarePackageRules.OpenHoldSeconds) && _crateNear is { } id)
+        {
+            SendOpenCarePackage(id);
+            _crateOpening = (id, Time.GetTicksMsec() / 1000.0 + CrateOpeningWaitSeconds); // gone for the player now; the despawn confirms
+            _crateNear = null;
+        }
         TickRozhlasSetHold(use, dt); // the other hold of the same key (NetClient.Rozhlas.cs); the ring shows whichever is on
         ShowHoldRing(dt);
     }
@@ -132,7 +143,7 @@ public partial class NetClient
     /// <summary>The ring fills with the hold and drains after a release; with reduce motion the drain is instant.</summary>
     void ShowHoldRing(double dt)
     {
-        var target = _crateHold.Held > 0 && _crateNear != null ? (float)Math.Min(1.0, _crateHold.Held / CarePackageRules.OpenHoldSeconds) : 0f;
+        var target = _crateHold.Held > 0 && _crateNear != null && !_crateHold.Sent ? (float)Math.Min(1.0, _crateHold.Held / CarePackageRules.OpenHoldSeconds) : 0f;
         target = Math.Max(target, Math.Max(RozhlasSetHoldFraction, LootHoldFraction));
         if (target >= _ringShown || GameSettings.Current.ReduceMotion) _ringShown = target;
         else _ringShown = Mathf.MoveToward(_ringShown, target, (float)dt / RingDrainSeconds);
