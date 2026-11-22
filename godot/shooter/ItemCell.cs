@@ -10,7 +10,7 @@ namespace Drycastle.Shooter;
 /// dragged is dimmed, so no state is colour alone. It is a control of its own and not a Button: Enter (not Space, which is jump) and a click activate it,
 /// Delete asks to drop it, the arrows ask the screen to move focus. A refused cell shakes (a flash of the danger border with reduce motion) and plays the
 /// error sound (<see cref="Refuse"/>). The mouse hovering a cell also gives it focus, so Enter and Delete act on what the player points at.
-/// A cell can also show a picture that is no Item (<see cref="SetPicture"/>: a Companion of the Equipment screen's picker, #488): a flat silhouette in the text colour, a
+/// A cell can also show a picture that is no Item (<see cref="SetPicture"/>: a Companion of the Equipment screen's picker, #488): the picture as it is (a live 3D view), a
 /// name tooltip, and when it is the chosen one a filled box with a tick in its corner and the word in the tooltip, so "chosen" is never colour alone.
 /// </summary>
 public sealed partial class ItemCell : Control
@@ -98,7 +98,7 @@ public sealed partial class ItemCell : Control
     }
 
     /// <summary>
-    /// Shows a picture that is no Item: a white silhouette (tinted with the text colour; the ghost stays when there is none) and a name for the tooltip (empty: no tooltip).
+    /// Shows a picture that is no Item, drawn as it is (the ghost stays when there is none), and a name for the tooltip (empty: no tooltip).
     /// <paramref name="chosen"/> marks the one in use: a filled box and a tick. The name should say it too.
     /// </summary>
     public void SetPicture(Texture2D? icon, string name, bool chosen)
@@ -216,7 +216,7 @@ public sealed partial class ItemCell : Control
         }
     }
 
-    /// <summary>The silhouette, whole and centred in the icon's square (a long animal is as wide as the square, a tall one as high), in the text colour.</summary>
+    /// <summary>The picture, whole and in the middle of the cell, as large as the icon's square allows.</summary>
     void DrawPicture(Texture2D picture, float alpha)
     {
         var side = (float)GetThemeConstant("icon_size", Type);
@@ -224,9 +224,7 @@ public sealed partial class ItemCell : Control
         if (size.X <= 0 || size.Y <= 0) return;
         var fit = size * Mathf.Min(side / size.X, side / size.Y);
         var at = (Size - fit) / 2f; // the middle of the cell: a picture has no pips under it
-        var ink = GetThemeColor("picture", Type);
-        ink.A *= alpha;
-        DrawTextureRect(picture, new Rect2(at, fit), false, ink);
+        DrawTextureRect(picture, new Rect2(at, fit), false, new Color(1, 1, 1, alpha));
     }
 
     /// <summary>The mark of the chosen cell: a disc in the top right corner with a tick in it.</summary>

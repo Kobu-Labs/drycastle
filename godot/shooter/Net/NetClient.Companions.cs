@@ -48,14 +48,12 @@ public partial class NetClient
         return t == k ? entry.Name : t;
     }
 
-    /// <summary>The picture of a Companion's species (the Hunter's Log's flat silhouette: white with alpha, tinted by the drawer); null when the species has none.</summary>
-    public Texture2D? CompanionIcon(int def)
+    /// <summary>A live 3D view of a Companion's look for a picker cell (<see cref="CompanionPortrait"/>); null when the species or its model is not there.</summary>
+    public CompanionPortrait? NewCompanionPortrait(int def)
     {
         if (def < 0 || def >= CompanionData.Companions.Count) return null;
         var entry = CompanionData.Companions[def];
-        // its own look's picture ("<species>/<variant>" in the shapes) when it is not the species' base model
-        var look = entry.Asset != "" && entry.Asset != AnimalVariant.BaseAssetId ? HuntArtOf.ForSpecies($"{entry.Species}/{entry.Asset}").Picture : null;
-        return (look ?? HuntArtOf.ForSpecies(entry.Species).Picture)?.Fill;
+        return AnimalData.Find(entry.Species) is { } animal ? CompanionPortrait.Of(animal, Math.Max(0, entry.VariantIn(animal))) : null;
     }
 
     /// <summary>A wish: have this Companion out (an index of <see cref="CompanionsOwned"/>'s values). The server answers with the roster.</summary>

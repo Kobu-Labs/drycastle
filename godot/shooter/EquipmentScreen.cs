@@ -11,7 +11,7 @@ namespace Drycastle.Shooter;
 /// worn goes into its cell); drag between the bag, a slot and the avatar (a valid target highlights); drag out of the panel or press Delete to drop an
 /// Item on the ground (no confirmation: picking it up again costs a pickup); the arrows move focus. Over the headgear or neck slot (hovered or focused) the figure
 /// shows the head close up. One glyph-only hint row follows the active device.
-/// Under the bag, after a line, is the Companion picker (#488): a cell for each Companion the player can have out (its species' silhouette, its name as a tooltip),
+/// Under the bag, after a line, is the Companion picker (#488): a cell for each Companion the player can have out (a live 3D view of its model, <see cref="CompanionPortrait"/>; its name as a tooltip),
 /// the one that is out filled and ticked ("with you" in its tooltip). Click or Enter on another puts that one out: the old one goes in a puff and the new one appears
 /// beside the player, and the choice is kept with the Profile. A player who owns none sees one empty cell with a paw ghost. Companion cells do not drag or drop.
 /// It is a non-pausing overlay in the HUD, like the map: the mouse is released (UiShell asks <see cref="Hud.EquipmentOpen"/>), the movement keys still
@@ -28,6 +28,7 @@ public sealed partial class EquipmentScreen : Control
     readonly ItemCell[] _bag = new ItemCell[Bag.Cells];
     readonly List<ItemCell> _companions = new(); // the picker: one cell per Companion the player can pick, or one empty cell
     readonly GridContainer _companionGrid;
+    readonly List<(int Def, CompanionPortrait? View)> _portraits = new(); // per picker cell: which Companion its 3D view shows (-1 none)
     readonly Label _openKey = new(), _activateKey = new(), _dropKey = new();
     InputDevice _device = InputDevice.KeyboardMouse;
     CamoSpec? _shownLook;
@@ -172,6 +173,7 @@ public sealed partial class EquipmentScreen : Control
         {
             var last = _companions[^1];
             _companions.RemoveAt(_companions.Count - 1);
+            _portraits.RemoveAt(_portraits.Count - 1); // its 3D view is the cell's child and goes with it
             _companionGrid.RemoveChild(last); // now, not at the frame's end: the grid lays out without it
             last.QueueFree();
         }
@@ -181,16 +183,37 @@ public sealed partial class EquipmentScreen : Control
             cell.Activated += PickCompanion;
             cell.Moved += OnMoved;
             _companions.Add(cell);
+            _portraits.Add((-1, null));
             _companionGrid.AddChild(cell);
         }
         for (var i = 0; i < _companions.Count; i++)
         {
-            if (i >= owned.Count) { _companions[i].SetPicture(null, Strings.T("companion.none"), false); continue; }
-            var def = owned[i];
+            var def = i < owned.Count ? owned[i] : -1;
+            var view = PortraitOf(i, def);
+            if (def < 0) { _companions[i].SetPicture(null, Strings.T("companion.none"), false); continue; }
             var isOut = def == _client.CompanionOut;
             var name = _client.CompanionName(def);
-            _companions[i].SetPicture(_client.CompanionIcon(def), isOut ? Strings.F("companion.out", name) : name, isOut);
+            _companions[i].SetPicture(view?.Picture, isOut ? Strings.F("companion.out", name) : name, isOut);
         }
+    }
+
+    /// <summary>The 3D view of the Companion a picker cell shows: kept while the cell shows the same one, made anew (the old one freed) when it shows another.</summary>
+    CompanionPortrait? PortraitOf(int cell, int def)
+    {
+        var (shown, view) = _portraits[cell];
+        if (shown == def) return view;
+        if (view != null) { _companions[cell].RemoveChild(view); view.QueueFree(); }
+        view = def < 0 ? null : _client.NewCompanionPortrait(def);
+        if (view != null) { view.Live = _open; _companions[cell].AddChild(view); }
+        _portraits[cell] = (def, view);
+        return view;
+    }
+
+    /// <summary>The 3D views render only while the screen shows.</summary>
+    void SetPortraitsLive(bool on)
+    {
+        foreach (var (_, view) in _portraits)
+            if (view != null) view.Live = on;
     }
 
     void OnCompanionsChanged()
@@ -222,6 +245,7 @@ public sealed partial class EquipmentScreen : Control
         _avatar.Frame(CamoPreview.Framing.Body);
         SetHintNames();
         Refresh();
+        SetPortraitsLive(true);
         ApplyAlpha();
         SetProcess(true);
         Callable.From(FocusFirst).CallDeferred();
@@ -245,6 +269,7 @@ public sealed partial class EquipmentScreen : Control
         ApplyAlpha();
         Visible = false;
         SetProcess(false);
+        SetPortraitsLive(false);
     }
 
     void ApplyAlpha() => Modulate = new Color(1, 1, 1, _fade.Alpha);
