@@ -65,6 +65,12 @@ public sealed class IconRegistry
     };
 
     /// <summary>The file an id's icon is stored in, whether or not it exists.</summary>
+    /// <summary>
+    /// The icon of a Companion (<c>companions/&lt;id&gt;.png</c>, 256x256, transparent: its 3D view, written by <c>--companion-shots</c>). Every Companion that is a
+    /// reward (companions.json <c>reward_tier</c>) has one: the Rewards tab of the Hunter's Log shows it.
+    /// </summary>
+    public static string CompanionPath(string id) => $"{Root}companions/{id}.png";
+
     public static string PathFor(IconKind kind, string id) => $"{Root}{Folder(kind)}/{id}.png";
 
     /// <summary>True when the data has this id (the icon file is expected to exist too; a test checks that).</summary>

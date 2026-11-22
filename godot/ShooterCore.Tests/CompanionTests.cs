@@ -427,4 +427,19 @@ public class CompanionTests
         Assert.Null(EquipmentNav.Move(CellRef.BagCell(5), NavDir.Down));
         Assert.Null(EquipmentNav.Move(CellRef.Companion(0), NavDir.Up, companions: 0));
     }
+
+    [Fact]
+    public void EveryShippedRewardCompanionIsListedAsARewardAndHasAnIcon()
+    {
+        var shipped = CompanionsFile.Load(Path.Combine(DataDir, "companions.json"));
+        var rewards = shipped.Companions.Where(c => c.RewardTierOf != HuntTier.Common).ToList();
+        Assert.Contains(rewards, c => c.Id == "eagle" && c.RewardTierOf == HuntTier.Gold);
+        var listed = HuntRewards.For(new WeaponsFile(), new ItemsFile(), shipped);
+        var icons = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "shooter", "ui", "icons", "companions"));
+        foreach (var c in rewards)
+        {
+            Assert.Contains(listed, r => r.Kind == CompanionRules.UnlockKind && r.Id == c.Id && r.Tier == c.RewardTierOf && r.ItemName == c.Name);
+            Assert.True(System.IO.File.Exists(Path.Combine(icons, c.Id + ".png")), "no icon for the reward Companion " + c.Id + " (IconRegistry.CompanionPath)");
+        }
+    }
 }

@@ -34,12 +34,12 @@ public partial class NetClient
     }
 
     /// <summary>What the screen draws with and asks through.</summary>
-    HuntLogEnv HuntLogEnvironment() => new(HuntData, HuntArtOf, HuntSpeciesName, WeaponName, () => Weapons?.Weapons.Select(w => w.Id).ToList() ?? new List<string>(), () => SandboxGranted, () => Weapons != null && ItemData != null ? HuntRewards.For(Weapons, ItemData) : Array.Empty<HuntReward>(), RewardIcon);
+    HuntLogEnv HuntLogEnvironment() => new(HuntData, HuntArtOf, HuntSpeciesName, WeaponName, () => Weapons?.Weapons.Select(w => w.Id).ToList() ?? new List<string>(), () => SandboxGranted, () => Weapons != null && ItemData != null ? HuntRewards.For(Weapons, ItemData, CompanionData) : Array.Empty<HuntReward>(), RewardIcon);
 
-    /// <summary>The icon of a reward (a weapon's or an item's), null when the file is not there.</summary>
+    /// <summary>The icon of a reward (a weapon's, an item's or a Companion's), null when the file is not there.</summary>
     static Texture2D? RewardIcon(HuntReward r)
     {
-        var path = IconRegistry.PathFor(r.Kind == "weapon" ? IconKind.Weapon : IconKind.Item, r.Id);
+        var path = r.Kind == CompanionRules.UnlockKind ? IconRegistry.CompanionPath(r.Id) : IconRegistry.PathFor(r.Kind == "weapon" ? IconKind.Weapon : IconKind.Item, r.Id);
         return ResourceLoader.Exists(path) ? ResourceLoader.Load<Texture2D>(path) : null;
     }
 

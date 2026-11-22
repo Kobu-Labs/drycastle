@@ -5,7 +5,9 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// <c>--companion-shots DIR</c>: renders the cells of the Equipment screen's Companion picker (#488) at 1280x720 and 3840x2160 and saves one PNG per size: every Companion
-/// of companions.json as its live 3D view (<see cref="CompanionPortrait"/>), the first one chosen, then the empty cell of a player who owns none. The cells only, on the
+/// of companions.json as its live 3D view (<see cref="CompanionPortrait"/>), the first one chosen, then the empty cell of a player who owns none; and each
+/// Companion's own picture as <c>icon_&lt;id&gt;.png</c> (256x256, transparent), the source of a reward Companion's icon (<see cref="IconRegistry.CompanionPath"/>:
+/// cropped to the animal and centred in a square by hand). The cells only, on the
 /// screen's card: not the whole Equipment screen (that needs a match). Needs a display server with a renderer (not --headless).
 /// </summary>
 public static class CompanionShots
@@ -28,6 +30,7 @@ public static class CompanionShots
             var center = new CenterContainer();
             center.SetAnchorsPreset(Control.LayoutPreset.FullRect);
             root.AddChild(center);
+            var views = new List<(string Id, CompanionPortrait View)>();
             var card = new PanelContainer { ThemeTypeVariation = "MenuCard" };
             center.AddChild(card);
             var grid = new GridContainer { Columns = Math.Max(1, data.Companions.Companions.Count + 1) };
@@ -38,7 +41,7 @@ public static class CompanionShots
                 var cell = new ItemCell { Ref = CellRef.Companion(i), Ghost = Glyph.Kind.Paw };
                 grid.AddChild(cell);
                 var view = data.Animals.Find(entry.Species) is { } animal ? CompanionPortrait.Of(animal, Math.Max(0, entry.VariantIn(animal))) : null;
-                if (view != null) { view.Live = true; cell.AddChild(view); }
+                if (view != null) { view.Live = true; cell.AddChild(view); views.Add((entry.Id, view)); }
                 else GD.PrintErr($"companion-shot: {entry.Id} has no model here, its cell shows the ghost");
                 cell.SetPicture(view?.Picture, entry.Name, chosen: i == 0);
             }
@@ -50,6 +53,15 @@ public static class CompanionShots
             var err = vp.GetTexture().GetImage().SavePng(path);
             GD.Print($"companion-shot {size.X}x{size.Y}: {(err == Error.Ok ? path : "FAILED " + err)}");
             failed |= err != Error.Ok;
+            if (size == Sizes[^1])
+                foreach (var (id, view) in views)
+                {
+                    // each Companion's own picture, transparent: copy a reward's to ui/icons/companions/<id>.png (IconRegistry.CompanionPath)
+                    var icon = Path.Combine(dir, $"icon_{id}.png");
+                    var iconErr = view.Picture.GetImage().SavePng(icon);
+                    GD.Print($"companion-icon {id}: {(iconErr == Error.Ok ? icon : "FAILED " + iconErr)}");
+                    failed |= iconErr != Error.Ok;
+                }
             vp.QueueFree();
         }
         GD.Print(failed ? "COMPANION_SHOTS_FAIL" : "COMPANION_SHOTS_OK");
