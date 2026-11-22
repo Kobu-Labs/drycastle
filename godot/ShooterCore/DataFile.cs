@@ -33,6 +33,18 @@ public static class DataFile
         return v;
     }
 
+    /// <summary>
+    /// One object inside a data file read as <typeparamref name="T"/> by the same rules (snake_case keys, unknown fields ignored): the part of an entry only its own code knows
+    /// (a Companion kind's <c>rules</c>). An absent or null section is a <typeparamref name="T"/> of defaults.
+    /// </summary>
+    public static T Section<T>(JsonElement section, string what) where T : new()
+    {
+        if (section.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null) return new T();
+        if (section.ValueKind != JsonValueKind.Object) throw new DataFileException($"{what}: must be an object");
+        try { return section.Deserialize<T>(Options) ?? new T(); }
+        catch (JsonException e) { throw new DataFileException($"{what}: {e.Message}", e); }
+    }
+
     public static T Load<T>(string path, int supported = SupportedVersion) where T : IVersioned
     {
         if (!File.Exists(path)) throw new DataFileException($"{path}: file not found");

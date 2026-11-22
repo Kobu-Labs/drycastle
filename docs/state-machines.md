@@ -388,6 +388,46 @@ stateDiagram-v2
 - **Spawned**: Goes back to Welcomed at each respawn, until the new spawn position arrives.
 - **Failed**: Frames and bot scripts stop; the menu was told.
 
+## Companion.Heel
+
+What a land Companion of the heel kind is doing: stay by its owner, sit, walk or run after them. Falling too far behind or being stuck puts it beside its owner at once (no state: it then stays).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Stay
+    Stay --> Follow
+    Stay --> Sit
+    Sit --> Follow
+    Follow --> Stay
+    Follow --> Run
+    Run --> Follow
+    Run --> Stay
+```
+
+- **Stay**: Stands near its owner (clock: a roll of sit_after seconds, then it sits; no clock when it never sits). Its owner farther than follow_m: Follow.
+- **Follow**: Walks to its owner. Within stop_m: Stay. Farther than run_m: Run. Farther than recall_m, or no step for stuck_seconds: put beside its owner, Stay.
+- **Run**: Runs to its owner. Within follow_m: Follow. Farther than recall_m, or no step for stuck_seconds: put beside its owner, Stay.
+- **Sit**: Sits (no clock) until its owner is farther than follow_m: Follow.
+
+## Companion.Wing
+
+What a flying Companion of the wing kind is doing: hover at its perch over its owner, fly after the perch, or fly circles round its owner. Falling too far behind puts it at its perch at once (no state: it then hovers).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Hover
+    Hover --> Trail
+    Hover --> Circle
+    Trail --> Hover
+    Trail --> Circle
+    Circle --> Trail
+    Circle --> Hover
+```
+
+- **Hover**: Hangs at its perch (height_m over the owner, behind_m behind, side_m to the left), drifting with it at up to drift_speed and facing as its owner does; no clock. The perch farther than follow_m (its owner moves faster than it drifts): Trail. The circle clock (beside the machine, a roll of circle_every seconds) runs out: Circle.
+- **Trail**: Flies to the perch at up to fly_speed and keeps with it while its owner moves; no clock. Within arrive_m of a perch that has come to rest (slower than drift_speed): Hover. The circle clock runs out: Circle. Its owner farther than recall_m: put at its perch, Hover.
+- **Circle**: Flies circle_turns turns round its owner at circle_radius_m and circle_speed, at perch height (clock: the time the turns take), then Trail back to the perch. Its owner farther than recall_m: put at its perch, Hover.
+
 ## Corpse.Collapse
 
 A killed body that was not thrown topples to the ground from the killing hit's impulse, bounces and lies still (client look only; the server's point does not move).
