@@ -426,7 +426,7 @@ stateDiagram-v2
 
 - **Hover**: Hangs at its perch (height_m over the owner, behind_m behind, side_m to the left), drifting with it at up to drift_speed and facing as its owner does; no clock. The perch farther than follow_m (its owner moves faster than it drifts): Trail. The circle clock (beside the machine, a roll of circle_every seconds) runs out: Circle.
 - **Trail**: Flies to the perch at up to fly_speed and keeps with it while its owner moves; no clock. Within arrive_m of a perch that has come to rest (slower than drift_speed): Hover. The circle clock runs out: Circle. Its owner farther than recall_m: put at its perch, Hover.
-- **Circle**: Flies circle_turns turns round its owner at circle_radius_m and circle_speed, at perch height (clock: the time the turns take), then Trail back to the perch. Its owner farther than recall_m: put at its perch, Hover.
+- **Circle**: Flies circle_turns turns round its owner at circle_radius_m and circle_speed, climbing to circle_height_m (0: staying at perch height) as it widens (clock: the time the turns take), then Trail back to the perch. Its owner farther than recall_m: put at its perch, Hover.
 
 ## Corpse.Collapse
 

@@ -442,4 +442,79 @@ public class CompanionTests
             Assert.True(System.IO.File.Exists(Path.Combine(icons, c.Id + ".png")), "no icon for the reward Companion " + c.Id + " (IconRegistry.CompanionPath)");
         }
     }
+
+    // ---- the scout kind: flies as the wing kind, and marks enemies when it begins its circles ----
+
+    /// <summary>Flat ground that also knows the owner's enemies (what the server's world says).</summary>
+    sealed class Watched : IAnimalWorld, ICompanionWorld
+    {
+        public readonly List<CompanionSighting> Enemies = new();
+        public float? GroundY(float x, float z) => 0f;
+        public Vector3? NearestThreat(Vector3 from, float radius) => null;
+        public Vector3? PositionOf(ushort player) => null;
+        public void EnemiesNear(ushort owner, Vector3 at, float radius, List<CompanionSighting> into)
+        {
+            foreach (var e in Enemies)
+                if (e.Player != owner && Flat2(e.Position, at) <= radius) into.Add(e);
+        }
+    }
+
+    static ScoutCompanion Scout(IAnimalWorld world, string rules = "") => Make<ScoutCompanion>(CompanionsFile.Parse($$"""
+        {"version":1,"companions":[{"id":"eagle","name":"Eagle","kind":"scout","species":"bird",
+          "rules":{"circle_every_min_seconds":2,"circle_every_max_seconds":2,"circle_height_m":7,"mark_radius_m":40,"mark_max":2,"mark_seconds":3{{rules}} } }]}
+        """).CheckAgainst(Animals), "eagle", world, Origin);
+
+    [Fact]
+    public void AScoutMarksTheNearestEnemiesWhenItBeginsItsCirclesAndTheMarksRunOut()
+    {
+        var world = new Watched();
+        world.Enemies.Add(new CompanionSighting(3, new Vector3(30, 0, 0)));
+        world.Enemies.Add(new CompanionSighting(4, new Vector3(10, 0, 0)));
+        world.Enemies.Add(new CompanionSighting(5, new Vector3(0, 0, 20)));
+        world.Enemies.Add(new CompanionSighting(6, new Vector3(0, 0, 60))); // out of the radius
+        var eagle = Scout(world);
+        Run(eagle, 1.5f, _ => Origin);
+        Assert.Empty(eagle.Marks); // it has not circled yet
+
+        Run(eagle, 0.7f, _ => Origin);
+        Assert.Equal(WingState.Circle, eagle.State);
+        Assert.Equal(new ushort[] { 4, 5 }, eagle.Marks); // the two nearest of the three in reach
+
+        Run(eagle, 2.5f, _ => Origin);
+        Assert.Equal(new ushort[] { 4, 5 }, eagle.Marks); // 3 s have not passed
+        Assert.True(eagle.Position.Y > 4f); // it climbs to its circle height
+        Run(eagle, 0.7f, _ => Origin);
+        Assert.Empty(eagle.Marks);
+    }
+
+    [Fact]
+    public void AScoutWithNoEnemyNearOrInAWorldThatKnowsNoneMarksNobody()
+    {
+        var far = new Watched();
+        far.Enemies.Add(new CompanionSighting(3, new Vector3(100, 0, 0)));
+        var eagle = Scout(far);
+        Run(eagle, 2.3f, _ => Origin);
+        Assert.Equal(WingState.Circle, eagle.State);
+        Assert.Empty(eagle.Marks);
+
+        var blind = Scout(new Flat());
+        Run(blind, 2.3f, _ => Origin);
+        Assert.Empty(blind.Marks);
+        Assert.Empty(Make<WingCompanion>(File(), "bird", new Watched(), Origin).Marks); // a wing marks nobody
+    }
+
+    [Fact]
+    public void ScoutRulesAreCheckedAtLoadAndTheMarksRoundTrip()
+    {
+        Assert.Throws<DataFileException>(() => Scout(new Flat(), ",\"mark_max\":0"));
+        Assert.Throws<DataFileException>(() => Scout(new Flat(), ",\"mark_max\":9"));
+        Assert.Throws<DataFileException>(() => Scout(new Flat(), ",\"mark_radius_m\":0"));
+        Assert.Throws<DataFileException>(() => Scout(new Flat(), ",\"fly_speed\":0")); // the wing kind's rules are its own too
+
+        Assert.True(ScoutCompanion.TryDecodeMarks(ScoutCompanion.EncodeMarks(new ushort[] { 4, 700 }), out var marks));
+        Assert.Equal(new ushort[] { 4, 700 }, marks);
+        Assert.True(ScoutCompanion.TryDecodeMarks(ScoutCompanion.EncodeMarks(Array.Empty<ushort>()), out var none));
+        Assert.Empty(none);
+        Assert.False(ScoutCompanion.TryDecodeMarks(new byte[] { 2, 1, 0 }, out _));
+    }
 }

@@ -212,10 +212,12 @@ public enum EventKind : byte
     MineralNodes = 112,
     /// <summary>Server to a stored player: their finds with the place among the finders, at join and after each find (<see cref="MineralRules.EncodeFinds"/>); a find that just happened also says which, and the client plays the pickup sound (#433).</summary>
     MineralFinds = 113,
-    /// <summary>Client to server: the Companion the player wants out, picked on the Equipment screen (<see cref="CompanionRoster.EncodePick"/>: u16 companions.json index). Kinds 114-115 belong to the Companions (#488).</summary>
+    /// <summary>Client to server: the Companion the player wants out, picked on the Equipment screen (<see cref="CompanionRoster.EncodePick"/>: u16 companions.json index). Kinds 114-116 belong to the Companions (#488).</summary>
     CompanionPick = 114,
     /// <summary>Server to the owner: the Companions they can pick and the one that is out (<see cref="CompanionRoster"/>), at join and when either changes.</summary>
     Companions = 115,
+    /// <summary>Server to the owner: the players their Companion has marked now (<see cref="ScoutCompanion.EncodeMarks"/>: u8 count, a u16 player id each; 0 clears). Sent when the set changes. The owner's client draws them through walls.</summary>
+    CompanionMarks = 116,
     /// <summary>Server to everyone, and to a joiner: the satellite dishes taken so far (<see cref="DishCodec"/>: the whole set of object ids, also when it is empty after a round reset). The client hides those objects' nodes.</summary>
     DishTaken = 233,
     /// <summary>Server to everyone, about twice a second while a harvester job runs and once when it ends (<see cref="HarvesterCodec.StateMsg"/>): the phase, the field and how far the AI's plan has come (the cut itself is <see cref="HarvesterCut"/>). Kinds 234-235 belong to the harvester (#331).</summary>
@@ -380,7 +382,7 @@ public static class Wire
     //   v81 dropped minerals (#396): the MineralNodes set (event 112) may hold dynamic nodes (ids from 128, a Phoenix's pheonixite) and is the WHOLE set: a client drops a node it no longer lists
     //   v82 Companions (#488): world entity type 58 (CompanionRules): the owner field is the index in companions.json, the state byte a CompanionPose
     //   v83 shootable road sign plates (ADR 0039): events 252 SignPlateState and 253 SignPlateSync
-    //   v84 the Companion picker (#488): events 114 CompanionPick and 115 Companions (CompanionRoster)
+    //   v84 the Companion picker (#488): events 114 CompanionPick and 115 Companions (CompanionRoster); the scout kind's marks: event 116 CompanionMarks
     public const byte ProtocolVersion = 84;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)

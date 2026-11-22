@@ -59,8 +59,50 @@ public partial class NetClient
     /// <summary>A wish: have this Companion out (an index of <see cref="CompanionsOwned"/>'s values). The server answers with the roster.</summary>
     public void RequestCompanion(int def) => SendItem(EventKind.CompanionPick, CompanionRoster.EncodePick(def));
 
+    // ---- the marks of a scout (the Eagle): the players the local player's Companion marked, drawn through walls for them alone ----
+
+    static readonly StandardMaterial3D CompanionMarkMaterial = new()
+    {
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, Transparency = BaseMaterial3D.TransparencyEnum.Alpha, NoDepthTest = true,
+        AlbedoColor = new Color(ShooterTheme.Danger, 0.5f), RenderPriority = 20,
+    };
+
+    ushort[] _companionMarks = Array.Empty<ushort>();
+    readonly HashSet<ushort> _companionMarkShown = new();
+
+    /// <summary>The server's word on whom the Companion has marked now: a new set says so once (a toast and a sound), an empty one clears.</summary>
+    void OnCompanionMarks(ushort[] marks)
+    {
+        _companionMarks = marks;
+        if (marks.Length == 0) return;
+        Sfx.Ui("ui.accept");
+        UiShell.Instance?.Toast(Strings.F(marks.Length == 1 ? "toast.companion.marked.one" : "toast.companion.marked", marks.Length), ToastKind.Info);
+    }
+
+    /// <summary>
+    /// Once a frame: the highlight (a pulsing overlay drawn through walls, as the binoculars' mark on an animal, in the danger colour) is on the marked players' models
+    /// and off everyone else's. A model that was rebuilt while marked (a new look) gets it again when the next set comes.
+    /// </summary>
+    void TickCompanionMarks()
+    {
+        if (_companionMarks.Length == 0 && _companionMarkShown.Count == 0) return;
+        CompanionMarkMaterial.AlbedoColor = new Color(ShooterTheme.Danger, 0.38f + 0.14f * MathF.Sin((float)Now * 5f));
+        foreach (var id in _companionMarkShown.ToArray())
+            if (Array.IndexOf(_companionMarks, id) < 0) { SetCompanionMark(id, false); _companionMarkShown.Remove(id); }
+        foreach (var id in _companionMarks)
+            if (_companionMarkShown.Add(id)) SetCompanionMark(id, true);
+    }
+
+    void SetCompanionMark(ushort player, bool on)
+    {
+        if (!_remotes.TryGetValue(player, out var r) || !GodotObject.IsInstanceValid(r.Node)) return;
+        foreach (var mi in r.Node.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>())
+            mi.MaterialOverlay = on ? CompanionMarkMaterial : null;
+    }
+
     void OnCompanionEvent(EventKind kind, byte[] payload)
     {
+        if (kind == EventKind.CompanionMarks && ScoutCompanion.TryDecodeMarks(payload, out var marks)) { OnCompanionMarks(marks); return; }
         if (kind != EventKind.Companions || !CompanionRoster.TryDecode(payload, out var roster)) return;
         _companionRoster = roster;
         CompanionsChanged?.Invoke();

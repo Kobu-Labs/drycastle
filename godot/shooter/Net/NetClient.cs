@@ -276,6 +276,7 @@ public partial class NetClient : Node
         t = ClientProf.Lap(ClientProf.S.Players, t);
         RenderAnimals();
         RenderCompanions();
+        TickCompanionMarks();
         RenderFlocks(delta);
         RenderBigfoot();
         RenderCitizens();

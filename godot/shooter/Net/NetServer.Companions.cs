@@ -19,10 +19,22 @@ public partial class NetServer
     CompanionKeeper? _companions;
     CompanionGround? _companionGround;
 
-    /// <summary>The ground a Companion walks on: the terrain, as shallow as an animal wades. It fears nothing.</summary>
-    sealed class CompanionGround : AnimalGroundBase
+    /// <summary>The ground a Companion walks on: the terrain, as shallow as an animal wades. It fears nothing. It can say who its owner's enemies are (a scout marks them).</summary>
+    sealed class CompanionGround : AnimalGroundBase, ICompanionWorld
     {
         public CompanionGround(NetServer server) : base(server) { }
+
+        /// <summary>Every living player who is not the owner and not on their team (everyone else in a free-for-all), bots too, on foot or in a seat.</summary>
+        public void EnemiesNear(ushort owner, NVec3 at, float radius, List<CompanionSighting> into)
+        {
+            foreach (var c in _s._byId.Values)
+            {
+                if (c.Id == owner || _s._match.AreFriends(owner, c.Id) || _s._match.Get(c.Id)?.Life != PlayerLife.Alive) continue;
+                var p = c.Body.GlobalPosition;
+                var dx = p.X - at.X; var dz = p.Z - at.Z;
+                if (dx * dx + dz * dz <= radius * radius) into.Add(new CompanionSighting(c.Id, N(p)));
+            }
+        }
 
         protected override float WadeM => PetWadeM;
 
@@ -41,6 +53,24 @@ public partial class NetServer
     {
         if (_companions == null) return;
         _companions.Update(_companionGround ??= new CompanionGround(this), CompanionOwnerOf);
+        SendCompanionMarks();
+    }
+
+    /// <summary>The marks each owner was told last (absent: none).</summary>
+    readonly Dictionary<ushort, ushort[]> _companionMarksSent = new();
+
+    /// <summary>Tells each owner whom their Companion has marked, when that changed: a new set, or none (the marks ran out, or the Companion went with its owner's death).</summary>
+    void SendCompanionMarks()
+    {
+        foreach (var c in _byId.Values)
+        {
+            if (c.IsBot) continue;
+            var now = _companions!.Of(c.Id)?.Marks ?? Array.Empty<ushort>();
+            var had = _companionMarksSent.GetValueOrDefault(c.Id) ?? Array.Empty<ushort>();
+            if (now.Count == had.Length && now.SequenceEqual(had)) continue;
+            if (now.Count == 0) _companionMarksSent.Remove(c.Id); else _companionMarksSent[c.Id] = now.ToArray();
+            Send(c, new EventMsg((byte)EventKind.CompanionMarks, ScoutCompanion.EncodeMarks(now)));
+        }
     }
 
     CompanionOwner? CompanionOwnerOf(ushort player)
@@ -57,6 +87,7 @@ public partial class NetServer
     {
         _companions?.Forget(id);
         _companionGiven.Remove(id);
+        _companionMarksSent.Remove(id);
     }
 
     /// <summary>The Companion <c>/companion</c> gave a player for this session: they can pick it, though their Profile does not own it.</summary>
