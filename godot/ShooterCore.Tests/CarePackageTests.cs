@@ -405,6 +405,30 @@ public class CarePackageTests
     }
 
     [Fact]
+    public void A_thrown_canister_flies_then_smokes_then_the_crate_falls_and_lands()
+    {
+        float Cast(Vector3 from, Vector3 dir, float len) => dir.Y < 0 && from.Y + dir.Y * len <= 0 ? from.Y / -dir.Y : float.PositiveInfinity;
+        var flight = CarePackageRules.Throw(new Vector3(0, 1.65f, 0), 0f, 0.3f, Cast);
+        Assert.True(flight.Seconds > 0.3f);
+        var crate = new CarePackage(Owner, new Vector3(flight.Landing.X, 0, flight.Landing.Z), flight);
+        Assert.Equal(CarePackageState.Thrown, crate.State);
+        Assert.False(crate.Landed);
+        Assert.Equal(CarePackageRules.StateThrown, crate.Serialize().State);
+        crate.Tick(flight.Seconds / 2);
+        Assert.Equal(CarePackageState.Thrown, crate.State);
+        Assert.True(crate.Position.Z < -0.5f);
+        crate.Tick(flight.Seconds);
+        Assert.Equal(CarePackageState.Marking, crate.State);
+        Assert.Equal(0f, crate.Position.Y, 0.01f);
+        Assert.Equal(CarePackageRules.StateMarking, crate.Serialize().State);
+        crate.Tick(CarePackageRules.MarkSeconds + 0.1f);
+        Assert.Equal(CarePackageState.Falling, crate.State);
+        Assert.Equal(CarePackageRules.StartHeightMetres, crate.Position.Y, 0.5f);
+        crate.Tick(20f);
+        Assert.Equal(CarePackageState.Landed, crate.State);
+    }
+
+    [Fact]
     public void The_drop_point_is_five_metres_ahead_of_the_owner()
     {
         var ahead = CarePackageRules.DropPoint(new Vector3(0, 0, 0), 0f);
@@ -421,7 +445,7 @@ public class CarePackageTests
     {
         var manager = World(out _);
         var book = new CarePackageBook(manager, ShippingRewards());
-        var care = new CarePackageStreak(book, (_, f) => CarePackageRules.DropPoint(f, 0f), p => 2f);
+        var care = new CarePackageStreak(book, (_, f) => new CarePackageRules.ThrowFlight(f, Vector3.Zero, 0f, CarePackageRules.DropPoint(f, 0f)), p => 2f);
         var service = Service(new List<(ushort Owner, EventKind Kind, byte[] Payload)>(), care);
         service.Arm(Owner, new[] { CarePackageRules.StreakId, "", "" }, 0f);
         for (var i = 0; i < 6; i++) service.OnKill(Owner, 99, false);
@@ -441,7 +465,7 @@ public class CarePackageTests
     {
         var manager = World(out _);
         var book = new CarePackageBook(manager, ShippingRewards());
-        var care = new CarePackageStreak(book, (_, f) => CarePackageRules.DropPoint(f, 0f), _ => null);
+        var care = new CarePackageStreak(book, (_, f) => new CarePackageRules.ThrowFlight(f, Vector3.Zero, 0f, CarePackageRules.DropPoint(f, 0f)), _ => null);
         var service = Service(new List<(ushort Owner, EventKind Kind, byte[] Payload)>(), care);
         service.Arm(Owner, new[] { CarePackageRules.StreakId, "", "" }, 0f);
         for (var i = 0; i < 6; i++) service.OnKill(Owner, 99, false);

@@ -32,6 +32,10 @@ public static class CarePackageRules
 
     /// <summary>State byte on the wire: still on its parachute, or on the ground and openable.</summary>
     public const byte StateFalling = 0, StateLanded = 1;
+    /// <summary>More state bytes: the canister still flying from the owner's hand, and lying on the ground marking the spot with smoke before the crate comes.</summary>
+    public const byte StateThrown = 2, StateMarking = 3;
+    /// <summary>Seconds the landed canister smokes before the crate is dropped on it.</summary>
+    public const float MarkSeconds = 3f;
 
     /// <summary>Registers the type once (idempotent). A crate carries no hit points.</summary>
     public static void Register(WorldEntityRegistry registry)
@@ -53,27 +57,36 @@ public static class CarePackageRules
     /// <summary>Longest flight simulated, seconds (a throw into the sky lands somewhere).</summary>
     public const float ThrowMaxSeconds = 4f;
 
+    /// <summary>A throw: the canister leaves <see cref="Origin"/> with <see cref="Velocity"/> and flies <see cref="Seconds"/> under <see cref="ThrowGravity"/> to <see cref="Landing"/>.</summary>
+    public readonly record struct ThrowFlight(Vector3 Origin, Vector3 Velocity, float Seconds, Vector3 Landing);
+
+    /// <summary>Where the thrown canister lands: see <see cref="Throw"/>.</summary>
+    public static Vector3 ThrowLanding(Vector3 eye, float yaw, float pitch, Func<Vector3, Vector3, float, float> castDistance) =>
+        Throw(eye, yaw, pitch, castDistance).Landing;
+
     /// <summary>
-    /// Where the thrown canister lands: it leaves <paramref name="eye"/> along the owner's look (yaw, pitch) and flies under gravity until
+    /// The throw: the canister leaves <paramref name="eye"/> along the owner's look (yaw, pitch) and flies under gravity until
     /// <paramref name="castDistance"/> (from, direction, length: distance to the first surface, infinity if none) stops it. The crate parachutes down there.
     /// </summary>
-    public static Vector3 ThrowLanding(Vector3 eye, float yaw, float pitch, Func<Vector3, Vector3, float, float> castDistance)
+    public static ThrowFlight Throw(Vector3 eye, float yaw, float pitch, Func<Vector3, Vector3, float, float> castDistance)
     {
         var (sy, cy) = MathF.SinCos(yaw);
         var (sp, cp) = MathF.SinCos(pitch);
-        var vel = new Vector3(-sy * cp, sp, -cy * cp) * ThrowSpeedMetresPerSecond;
+        var v0 = new Vector3(-sy * cp, sp, -cy * cp) * ThrowSpeedMetresPerSecond;
+        var vel = v0;
         var pos = eye;
         const float dt = 1f / 30f;
-        for (var t = 0f; t < ThrowMaxSeconds; t += dt)
+        var t = 0f;
+        for (; t < ThrowMaxSeconds; t += dt)
         {
             vel.Y -= ThrowGravity * dt;
             var move = vel * dt;
             var len = move.Length();
             var d = castDistance(pos, move / len, len);
-            if (d <= len) return pos + move / len * d;
+            if (d <= len) return new ThrowFlight(eye, v0, t + dt * (d / len), pos + move / len * d);
             pos += move;
         }
-        return pos;
+        return new ThrowFlight(eye, v0, t, pos);
     }
 
     public static bool InReach(Vector3 player, Vector3 crate, float slack = 0) =>
@@ -81,20 +94,24 @@ public static class CarePackageRules
 }
 
 /// <summary>Where a crate is in its life: on the parachute, on the ground and openable, or ended (opened, or timed out unopened).</summary>
-public enum CarePackageState : byte { Falling, Landed, Opened, Expired }
+public enum CarePackageState : byte { Falling, Landed, Opened, Expired, Thrown, Marking }
 
 /// <summary>Why a crate could not be opened.</summary>
 public enum OpenResult : byte { Ok, Gone, NotLanded, OutOfReach }
 
 /// <summary>
-/// A care package on the map: falls from <see cref="CarePackageRules.StartHeightMetres"/> above its landing point on a
+/// A care package on the map: a canister thrown by the owner that lands and smokes, then the crate falls from <see cref="CarePackageRules.StartHeightMetres"/> above its landing point on a
 /// parachute and is openable once it lands. Takes no damage. It despawns after its lifetime, or when opened.
 /// </summary>
 public sealed class CarePackage : IWorldEntity
 {
     public static readonly StateMachineSpec<CarePackageState> Spec = StateMachineSpec<CarePackageState>
-        .Define("CarePackage.Life", "A care package crate: falls on its parachute, lands and can be opened, then ends opened or expired (the world manager despawns it once it has ended).", CarePackageState.Falling)
+        .Define("CarePackage.Life", "A care package: a canister flies from the owner's hand and smokes where it lands, then the crate falls on its parachute, lands and can be opened, then ends opened or expired (the world manager despawns it once it has ended).", CarePackageState.Thrown)
+        .Allow(CarePackageState.Thrown, CarePackageState.Marking, CarePackageState.Expired)
+        .Allow(CarePackageState.Marking, CarePackageState.Falling, CarePackageState.Expired)
         .Allow(CarePackageState.Falling, CarePackageState.Landed, CarePackageState.Expired)
+        .Note(CarePackageState.Thrown, "The canister is in the air (ballistic, no crate yet); not openable.")
+        .Note(CarePackageState.Marking, "The canister lies at the landing point and smokes for the mark time; then the crate starts from above it. Not openable.")
         .Allow(CarePackageState.Landed, CarePackageState.Opened, CarePackageState.Expired)
         .Note(CarePackageState.Falling, "Descending at the fall speed; not openable. The lifetime already runs (counted from the drop).")
         .Note(CarePackageState.Landed, "On the ground (altitude at the landing point's Y): openable by anyone in reach.")
@@ -106,12 +123,24 @@ public sealed class CarePackage : IWorldEntity
     readonly StateMachine<CarePackageState> _fsm = new(Spec);
     float _altitude;
     Lifetime _life;
+    Vector3 _flightPos, _flightVel;
+    float _flightLeft;
 
-    public CarePackage(ushort owner, Vector3 landing)
+    /// <summary>A crate dropping from above its landing point at once (no flight), or, with a <paramref name="flight"/>, a canister thrown first.</summary>
+    public CarePackage(ushort owner, Vector3 landing, CarePackageRules.ThrowFlight? flight = null)
     {
         Owner = owner;
         _landing = landing;
         _altitude = landing.Y + CarePackageRules.StartHeightMetres;
+        if (flight is { Seconds: > 0 } f)
+        {
+            _flightPos = f.Origin; _flightVel = f.Velocity; _flightLeft = f.Seconds;
+        }
+        else
+        {
+            _fsm.Enter(CarePackageState.Marking);
+            _fsm.Enter(CarePackageState.Falling);
+        }
     }
 
     public byte TypeId => CarePackageRules.TypeId;
@@ -125,13 +154,29 @@ public sealed class CarePackage : IWorldEntity
     };
     /// <summary>The landing point (its Y is the ground).</summary>
     public Vector3 Landing => _landing;
-    public bool Landed => _altitude <= _landing.Y;
-    public Vector3 Position => new(_landing.X, _altitude, _landing.Z);
+    public bool Landed => !InFlight && _altitude <= _landing.Y;
+    /// <summary>The canister stage: in the air or smoking on the ground (no crate yet).</summary>
+    public bool InFlight => _fsm.IsAny(CarePackageState.Thrown, CarePackageState.Marking);
+    public Vector3 Position => _fsm.Current switch
+    {
+        CarePackageState.Thrown => _flightPos,
+        CarePackageState.Marking => _landing,
+        _ => new Vector3(_landing.X, _altitude, _landing.Z),
+    };
 
     public void Tick(float dt)
     {
         var expired = _life.Tick(dt, CarePackageRules.LifetimeSeconds);
-        if (!Landed) _altitude = MathF.Max(_landing.Y, _altitude - CarePackageRules.FallSpeedMetresPerSecond * dt);
+        if (_fsm.Is(CarePackageState.Thrown))
+        {
+            var step = MathF.Min(dt, _flightLeft);
+            _flightVel.Y -= CarePackageRules.ThrowGravity * step;
+            _flightPos += _flightVel * step;
+            _flightLeft -= dt;
+            if (_flightLeft <= 0) { _flightPos = _landing; _fsm.Enter(CarePackageState.Marking, CarePackageRules.MarkSeconds); }
+        }
+        else if (_fsm.Is(CarePackageState.Marking) && _fsm.Tick(dt)) _fsm.Enter(CarePackageState.Falling);
+        else if (!InFlight && !Landed) _altitude = MathF.Max(_landing.Y, _altitude - CarePackageRules.FallSpeedMetresPerSecond * dt);
         SyncLanded();
         if (Ended == null && expired) _fsm.Enter(CarePackageState.Expired);
     }
@@ -144,7 +189,14 @@ public sealed class CarePackage : IWorldEntity
 
     public void OnDamage(float amount, ushort attacker) { }
 
-    public WorldState Serialize() => WorldState.Make(Position, 0, 0, Owner, Landed ? CarePackageRules.StateLanded : CarePackageRules.StateFalling, 0);
+    public WorldState Serialize() => WorldState.Make(Position, 0, 0, Owner, WireState, 0);
+
+    byte WireState => _fsm.Current switch
+    {
+        CarePackageState.Thrown => CarePackageRules.StateThrown,
+        CarePackageState.Marking => CarePackageRules.StateMarking,
+        _ => Landed ? CarePackageRules.StateLanded : CarePackageRules.StateFalling,
+    };
 
     /// <summary>Marks the crate as opened; the book then despawns it with <see cref="WorldDespawnReason.Opened"/>. An ended crate (expired, or already opened) stays as it ended.</summary>
     internal void MarkOpened()
@@ -179,9 +231,9 @@ public sealed class CarePackageBook
         _crates.Values.Any(c => c.Ended == null && c.Landed && CarePackageRules.InReach(player, c.Position, slack));
 
     /// <summary>Drops a crate at <paramref name="landing"/>. Null when the world refuses it (cap reached).</summary>
-    public ushort? Drop(ushort owner, Vector3 landing)
+    public ushort? Drop(ushort owner, Vector3 landing, CarePackageRules.ThrowFlight? flight = null)
     {
-        var crate = new CarePackage(owner, landing);
+        var crate = new CarePackage(owner, landing, flight);
         var id = _world.Spawn(crate);
         if (id is { } i) _crates[i] = crate;
         return id;
@@ -213,16 +265,16 @@ public sealed class CarePackageBook
 public sealed class CarePackageStreak : IKillstreak
 {
     readonly CarePackageBook _book;
-    readonly Func<ushort, Vector3, Vector3> _landingOf;
+    readonly Func<ushort, Vector3, CarePackageRules.ThrowFlight> _throwOf;
     readonly Func<Vector3, float?> _groundAt;
 
     /// <param name="book">Where the crate goes.</param>
-    /// <param name="landingOf">Where the owner's thrown canister lands (owner, feet): see <see cref="CarePackageRules.ThrowLanding"/>.</param>
+    /// <param name="throwOf">The owner's throw (owner, feet): see <see cref="CarePackageRules.Throw"/>.</param>
     /// <param name="groundAt">Height of the ground under a point, or null when there is none.</param>
-    public CarePackageStreak(CarePackageBook book, Func<ushort, Vector3, Vector3> landingOf, Func<Vector3, float?> groundAt)
+    public CarePackageStreak(CarePackageBook book, Func<ushort, Vector3, CarePackageRules.ThrowFlight> throwOf, Func<Vector3, float?> groundAt)
     {
         _book = book;
-        _landingOf = landingOf;
+        _throwOf = throwOf;
         _groundAt = groundAt;
     }
 
@@ -231,14 +283,15 @@ public sealed class CarePackageStreak : IKillstreak
 
     public bool Activate(KillstreakUse use)
     {
-        var drop = _landingOf(use.Owner, use.Position);
+        var flight = _throwOf(use.Owner, use.Position);
+        var drop = flight.Landing;
         if (_groundAt(drop) is not { } ground)
         {
             use.Log("no ground at the drop point; streak kept");
             return false;
         }
         var landing = new Vector3(drop.X, ground, drop.Z);
-        if (_book.Drop(use.Owner, landing) is not { } id)
+        if (_book.Drop(use.Owner, landing, flight) is not { } id)
         {
             use.Log("no room for another world entity; streak kept");
             return false;

@@ -30,11 +30,11 @@ public partial class NetServer
         GroundBelow);
 
     /// <summary>Where the owner's thrown canister lands (Q): from the eye along the look, stopped by the first surface.</summary>
-    NVec3 ThrowCanister(ushort owner, NVec3 feet)
+    CarePackageRules.ThrowFlight ThrowCanister(ushort owner, NVec3 feet)
     {
-        if (!_byId.TryGetValue(owner, out var c)) return CarePackageRules.DropPoint(feet, 0f);
+        if (!_byId.TryGetValue(owner, out var c)) return new CarePackageRules.ThrowFlight(feet, NVec3.Zero, 0f, CarePackageRules.DropPoint(feet, 0f));
         var eye = new NVec3(feet.X, feet.Y + MovementStep.EyeHeight(c.Body.State.Stance), feet.Z);
-        return CarePackageRules.ThrowLanding(eye, c.Body.Yaw, c.Body.Pitch, (from, dir, len) =>
+        return CarePackageRules.Throw(eye, c.Body.Yaw, c.Body.Pitch, (from, dir, len) =>
             Query.Shot(new Vector3(from.X, from.Y, from.Z), new Vector3(dir.X, dir.Y, dir.Z), len, null).Distance);
     }
 

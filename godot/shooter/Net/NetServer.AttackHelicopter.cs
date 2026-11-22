@@ -20,24 +20,11 @@ public partial class NetServer
         return new AttackHelicopterStreakImpl(new AttackHelicopterWorld(this));
     }
 
-    /// <summary>The helicopter's view of the server: the map centre, the spawn, and the removal.</summary>
+    /// <summary>The helicopter's view of the server: the spawn and the removal.</summary>
     sealed class AttackHelicopterWorld : IAttackHelicopterWorld
     {
         readonly NetServer _s;
         public AttackHelicopterWorld(NetServer server) => _s = server;
-
-        /// <summary>The average of the spawn points (on the ground); the origin when the map has none.</summary>
-        public NVec3 Centre
-        {
-            get
-            {
-                var sp = _s.Spawns;
-                if (sp.Count == 0) return NVec3.Zero;
-                var sum = NVec3.Zero;
-                foreach (var p in sp) sum += p;
-                return sum / sp.Count;
-            }
-        }
 
         public AttackHelicopterLaunch? Launch(ushort owner, NVec3 centre, float phaseRad)
         {
