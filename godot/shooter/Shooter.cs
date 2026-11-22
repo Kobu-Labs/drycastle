@@ -41,6 +41,7 @@ namespace Drycastle.Shooter;
 ///   (client with a display and none of the smoke flags starts at the main menu; --connect host:port --name N joins straight away)
 ///   --model-shots DIR         render the remote character animations and the first-person weapon viewmodels into DIR as PNGs, then exit (needs a display)
 ///   --demon-shots DIR         render the demon's head with the mouth shut, half open and wide into DIR as PNGs, then exit (needs a display and the private pack)
+///   --companion-shots DIR     render the Companion picker's cells (each Companion's 3D view, the empty cell) at 1280x720 and 3840x2160 into DIR as PNGs, then exit (needs a display)
 ///   --hud-shots DIR           render the HUD with fake data at 1280x720 and 3840x2160 into DIR as PNGs, then exit (needs a display)
 ///   --smoke-move              client only: scripted movement check on the map collision (SHOOTER_SMOKE_MOVE_OK, exit 0; else exit 2)
 ///   --smoke                   load everything, print SHOOTER_SMOKE_OK and exit 0 (exit 2 on failure)
@@ -106,6 +107,7 @@ public partial class Shooter : Node3D
         if (cfg.Str("hud-shots") != "") { _ = HudShots.Run(this, cfg.Str("hud-shots")); return; }
         if (cfg.Str("menu-shots") != "") { _ = MenuShots.Run(this, cfg.Str("menu-shots")); return; }
         if (cfg.Str("demon-shots") != "") { _ = DemonShots.Run(this, cfg.Str("demon-shots")); return; }
+        if (cfg.Str("companion-shots") != "") { _ = CompanionShots.Run(this, LoadData(), cfg.Str("companion-shots")); return; }
         if (cfg.Str("intel-shots") != "") { _ = IntelShots.Run(this, cfg.Str("intel-shots")); return; }
         if (role == "client")
         {

@@ -23,7 +23,7 @@ public static class ShooterTheme
     public const float DisabledAlpha = 0.45f;
 
     // item cells (Equipment screen, corpse chooser): the cell, the icon in it, the pickup pips under the icon, the figure in the Equipment screen
-    public const int Cell = 10 * Space, CellIcon = 7 * Space, CellGap = Space + Space / 2, Pip = Space, CellTick = 3 * Space;
+    public const int Cell = 10 * Space, CellIcon = 7 * Space, CellGap = Space + Space / 2, Pip = Space, CellTick = 2 * Space + Space / 2;
     /// <summary>Pixels a side of a Companion's 3D view in a picker cell (rendered, not reference pixels: sharp up to a 4K screen at 150 % scale).</summary>
     public const int PortraitPx = 256;
     public const int AvatarWidth = 45 * Space, AvatarHeight = 60 * Space;
