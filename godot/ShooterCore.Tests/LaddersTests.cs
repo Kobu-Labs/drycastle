@@ -109,6 +109,18 @@ public class LaddersTests
     }
 
     [Fact]
+    public void GettingOnAtTheFootWithNoKeyStaysOn()
+    {
+        var s = At(1.2f, -2.4f, 0f);
+        Assert.True(One.Climb(ref s, Input(s.Position, MoveButtons.Use), Dt));
+        One.Climb(ref s, Input(s.Position, MoveButtons.None), Dt);
+        Assert.True(s.OnLadder);
+        Assert.Equal(-2.4f, s.Position.Y, 4);
+        One.Climb(ref s, Input(s.Position, MoveButtons.None, moveY: 1), Dt);
+        Assert.True(s.Position.Y > -2.4f);
+    }
+
+    [Fact]
     public void KeysHeldOnGettingOnClimbAtOnce()
     {
         var s = At(1.2f, 0f, 0f);
