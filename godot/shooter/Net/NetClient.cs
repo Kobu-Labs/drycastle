@@ -1077,6 +1077,12 @@ public partial class NetClient : Node
             case EventKind.LampSync when LampCodec.DecodeSync(payload) is { } lamps:
                 StreetLamps.Current?.SyncPoleLamps(lamps);
                 break;
+            case EventKind.SignPlateState when SignPlateCodec.DecodeState(payload) is { } plate:
+                SignPlates.Current?.SetPlate(plate.Index, plate.State);
+                break;
+            case EventKind.SignPlateSync when SignPlateCodec.DecodeSync(payload) is { } plates:
+                SignPlates.Current?.SyncPlates(plates);
+                break;
             case EventKind.HuntShot when HuntShot.Decode(payload) is { } hs:
                 HudHuntShot(hs);
                 break;

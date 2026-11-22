@@ -4,5 +4,7 @@
   "day_length_minutes": 24,
   "min_ambient": 0.10,
   // A street lamp at full night: a spot beam straight down (range_m, angle_deg = half angle of the cone, energy) and a lit lens that blooms (lens_energy above 2 on purpose). Pole lamps are shootable (ADR 0037): a round within hit_radius_m of the head breaks it, it stays dark respawn_seconds, then flickers flicker_seconds and is lit again. Nothing here was seen in the game: nudge freely.
-  "lamp": { "range_m": 12, "angle_deg": 55, "energy": 10, "colour": "#ffc773", "lens_energy": 6, "hit_radius_m": 0.25, "respawn_seconds": 120, "flicker_seconds": 3 }
+  "lamp": { "range_m": 12, "angle_deg": 55, "energy": 10, "colour": "#ffc773", "lens_energy": 6, "hit_radius_m": 0.25, "respawn_seconds": 120, "flicker_seconds": 3 },
+  // The shootable plate of a road sign (ADR 0038): a round within hit_radius_m of the plate's centre bends it (visual only), it hangs bent respawn_seconds and is whole again. Nothing here was seen in the game: nudge freely.
+  "sign_plate": { "hit_radius_m": 0.3, "respawn_seconds": 120 }
 }

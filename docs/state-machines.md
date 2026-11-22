@@ -1655,6 +1655,20 @@ stateDiagram-v2
 - **Loading**: Joined when the profile arrives, or as a guest when the load fails or times out.
 - **Joined**: Inputs, events and the snapshots flow. A bot is created here; a guest (no profile store or token) skips Loading.
 
+## Sign.Plate
+
+The shootable plate of a road sign: whole until a round passes through it, bent (hanging askew) for a while, then whole again.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Whole
+    Whole --> Bent
+    Bent --> Whole
+```
+
+- **Whole**: Straight on its clamps. A whole plate has no clock and no machine; a new round straightens every plate without a transition.
+- **Bent**: Tilted and sagging on its upper clamp (clock: respawn_seconds). A second shot changes nothing and does not restart the clock.
+
 ## Target.Dummy
 
 A target dummy: standing, or down until it respawns.

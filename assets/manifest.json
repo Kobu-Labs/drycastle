@@ -3929,6 +3929,144 @@
       "used_for": "the dishes of the Thieves event (pipeline/src/drycastle_pipeline/dishes.py places them on house walls); origin on the wall at the arm's root, +X out of the wall (set rotation_deg to the way the wall faces and z to the height of the origin; it reaches 0.4 m above it), a node each for mount, dish and lnb"
     },
     {
+      "id": "pack:drycastle-generated-models/sign_stop",
+      "category": "sign",
+      "name": "Road sign: Stop (STOP)",
+      "file": "drycastle-generated-models/sign_stop.glb",
+      "size_m": [
+        0.716,
+        2.52,
+        0.093
+      ],
+      "tags": [
+        "sign",
+        "road-sign",
+        "slovakia",
+        "metal",
+        "generated",
+        "stop",
+        "octagon"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_road_sign_models.py (original geometry written as code; python3 -I scripts/make_road_sign_models.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "Slovak road sign B2 Stop (red octagon, white STOP, #425). Decoration only (no traffic or AI effect), placed by hand in the map editor. Origin on the ground at the pole foot, the plate faces +Z (rotation_deg turns it); nodes Pole (solid) and Plate (shootable: a round through `plates` bends it, ADR 0038), pivot of Plate at its upper clamp; metal PBR materials, no emissive.",
+      "plates": [
+        [
+          0.0,
+          -0.051,
+          2.15
+        ]
+      ],
+      "solids": [
+        {
+          "min": [
+            -0.08,
+            -0.08,
+            0.0
+          ],
+          "max": [
+            0.08,
+            0.08,
+            2.5
+          ],
+          "surface": "metal"
+        }
+      ]
+    },
+    {
+      "id": "pack:drycastle-generated-models/sign_give_way",
+      "category": "sign",
+      "name": "Road sign: Give way (Daj prednosť v jazde)",
+      "file": "drycastle-generated-models/sign_give_way.glb",
+      "size_m": [
+        0.778,
+        2.52,
+        0.093
+      ],
+      "tags": [
+        "sign",
+        "road-sign",
+        "slovakia",
+        "metal",
+        "generated",
+        "give-way",
+        "triangle"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_road_sign_models.py (original geometry written as code; python3 -I scripts/make_road_sign_models.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "Slovak road sign P6 Daj prednosť v jazde (inverted triangle, red border, white field, #425). Decoration only (no traffic or AI effect), placed by hand in the map editor. Origin on the ground at the pole foot, the plate faces +Z (rotation_deg turns it); nodes Pole (solid) and Plate (shootable: a round through `plates` bends it, ADR 0038), pivot of Plate at its upper clamp; metal PBR materials, no emissive.",
+      "plates": [
+        [
+          0.0,
+          -0.051,
+          2.258
+        ]
+      ],
+      "solids": [
+        {
+          "min": [
+            -0.08,
+            -0.08,
+            0.0
+          ],
+          "max": [
+            0.08,
+            0.08,
+            2.5
+          ],
+          "surface": "metal"
+        }
+      ]
+    },
+    {
+      "id": "pack:drycastle-generated-models/sign_main_road",
+      "category": "sign",
+      "name": "Road sign: Main road (Hlavná cesta)",
+      "file": "drycastle-generated-models/sign_main_road.glb",
+      "size_m": [
+        0.73,
+        2.52,
+        0.093
+      ],
+      "tags": [
+        "sign",
+        "road-sign",
+        "slovakia",
+        "metal",
+        "generated",
+        "main-road",
+        "diamond"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_road_sign_models.py (original geometry written as code; python3 -I scripts/make_road_sign_models.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "Slovak road sign Hlavná cesta (yellow diamond, black line, white border, #425). Decoration only (no traffic or AI effect), placed by hand in the map editor. Origin on the ground at the pole foot, the plate faces +Z (rotation_deg turns it); nodes Pole (solid) and Plate (shootable: a round through `plates` bends it, ADR 0038), pivot of Plate at its upper clamp; metal PBR materials, no emissive.",
+      "plates": [
+        [
+          0.0,
+          -0.051,
+          2.15
+        ]
+      ],
+      "solids": [
+        {
+          "min": [
+            -0.08,
+            -0.08,
+            0.0
+          ],
+          "max": [
+            0.08,
+            0.08,
+            2.5
+          ],
+          "surface": "metal"
+        }
+      ]
+    },
+    {
       "id": "pack:welcome-sign/welcome_sign",
       "category": "other",
       "name": "Welcome sign (VITAJTE V OBCI)",

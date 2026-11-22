@@ -191,6 +191,30 @@ public sealed partial class MapLoader
         return lights;
     }
 
+    /// <summary>
+    /// The shootable plate of a placed road sign (ADR 0038): where its centre is in map space and the node of the object's model that is bent when it is shot.
+    /// <see cref="Part"/> is "Plate" for an asset's first plate point, "Plate2", "Plate3" ... after it.
+    /// </summary>
+    public readonly record struct ObjectSignPlate(string ObjectId, Vector3 Position, string Part);
+
+    /// <summary>
+    /// The sign plates of the placed objects as they stand now: one per plate point of each object's asset (assets/manifest.json "plates"), ordered by object id
+    /// and then the asset's points. A plate's place in this list is its index on the wire (server and client list the same map).
+    /// </summary>
+    public List<ObjectSignPlate> ObjectSignPlates()
+    {
+        var plates = new List<ObjectSignPlate>();
+        if (_assetManifest == null) ReadAssetManifest();
+        foreach (var (id, node) in _objectNodes.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            if (!GodotObject.IsInstanceValid(node) || !_objectAssets.TryGetValue(id, out var asset)
+                || !_assetManifest!.TryGetValue(asset, out var entry)) continue;
+            for (var i = 0; i < entry.Plates.Count; i++)
+                plates.Add(new ObjectSignPlate(id, node.Transform * entry.Plates[i], i == 0 ? "Plate" : $"Plate{i + 1}"));
+        }
+        return plates;
+    }
+
     /// <summary>The placed objects of one asset as they stand now: id and transform in map space, in id order.</summary>
     public List<(string Id, Transform3D Transform)> ObjectsOf(string asset)
     {
@@ -215,14 +239,17 @@ public sealed partial class MapLoader
     }
 
     /// <summary>The light points of a manifest asset in the object's own frame (Godot axes), from its "lights" list (pipeline axes, z up).</summary>
-    static List<Vector3> ParseLights(JsonElement asset)
+    static List<Vector3> ParseLights(JsonElement asset) => ParsePoints(asset, "lights");
+
+    /// <summary>A list of [x, y, z] points of a manifest asset ("lights", "plates") in the object's own frame (Godot axes), from pipeline axes (z up).</summary>
+    static List<Vector3> ParsePoints(JsonElement asset, string key)
     {
-        var lights = new List<Vector3>();
-        if (!asset.TryGetProperty("lights", out var arr) || arr.ValueKind != JsonValueKind.Array) return lights;
+        var points = new List<Vector3>();
+        if (!asset.TryGetProperty(key, out var arr) || arr.ValueKind != JsonValueKind.Array) return points;
         foreach (var p in arr.EnumerateArray())
             if (p.ValueKind == JsonValueKind.Array && p.GetArrayLength() == 3)
-                lights.Add(new Vector3(p[0].GetSingle(), p[2].GetSingle(), -p[1].GetSingle()));
-        return lights;
+                points.Add(new Vector3(p[0].GetSingle(), p[2].GetSingle(), -p[1].GetSingle()));
+        return points;
     }
 
     /// <summary>The wire seats of a manifest asset in the object's own frame (Godot axes), from its "seats" list (pipeline axes: x east, y north, z up).</summary>
