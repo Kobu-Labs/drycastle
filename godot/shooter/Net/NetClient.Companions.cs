@@ -35,6 +35,24 @@ public partial class NetClient
     /// <summary>The Companions the local player can pick (indices of companions.json, in its order). Stable between <see cref="CompanionsChanged"/> events.</summary>
     public IReadOnlyList<int> CompanionsOwned => _companionRoster.Owned;
 
+    /// <summary>
+    /// The reward Companions the local player does not own yet (companions.json <c>reward_tier</c>), in its order: the picker shows them locked, so a player sees what
+    /// there is to earn and where.
+    /// </summary>
+    public IReadOnlyList<int> CompanionsLocked
+    {
+        get
+        {
+            var locked = new List<int>();
+            for (var i = 0; i < CompanionData.Companions.Count; i++)
+                if (CompanionData.Companions[i].RewardTierOf != HuntTier.Common && !_companionRoster.Owns(i)) locked.Add(i);
+            return locked;
+        }
+    }
+
+    /// <summary>The collection tier of the Hunter's Log that unlocks a Companion (Common: none does).</summary>
+    public HuntTier CompanionTier(int def) => def >= 0 && def < CompanionData.Companions.Count ? CompanionData.Companions[def].RewardTierOf : HuntTier.Common;
+
     /// <summary>The Companion that is out (an index of companions.json), or -1.</summary>
     public int CompanionOut => _companionRoster.Out;
 

@@ -227,6 +227,7 @@ public static class ShooterTheme
         t.SetStylebox("target", c, Box(Active, 0, Good, BorderStrong));
         t.SetStylebox("focus", c, Ring(0));
         t.SetStylebox("chosen", c, Box(Active, 0, Accent)); // the picture cell in use (a Companion that is out): filled, and the cell draws a tick as well
+        t.SetColor("padlock", c, Dim); // a locked picture cell (a Companion not earned yet): dimmed picture, this padlock, and the words in its tooltip
         t.SetColor("tick", c, Accent);
         t.SetColor("tick_ink", c, Backdrop);
         t.SetConstant("tick_size", c, CellTick);
