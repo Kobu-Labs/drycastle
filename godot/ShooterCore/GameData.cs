@@ -37,6 +37,8 @@ public class GameData
     public ScudFile Scud { get; init; } = ScudFile.Default;
     /// <summary>plantation.json (the marijuana plantation: hold and high times, the nausea and the looks of a high player). The shipped defaults when the file is absent.</summary>
     public PlantationFile Plantation { get; init; } = PlantationFile.Default;
+    /// <summary>companions.json (the Companions a player can own). Empty when the file is absent.</summary>
+    public CompanionsFile Companions { get; init; } = new();
     /// <summary>turret.json: the sentry turret's tuning (the turret killstreak).</summary>
     public required TurretFile Turret { get; init; }
 
@@ -55,7 +57,7 @@ public class GameData
         """;
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string wildlifeJson = "", string thievesJson = "", string scudJson = "", string plantationJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string wildlifeJson = "", string thievesJson = "", string scudJson = "", string plantationJson = "", string companionsJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -83,6 +85,7 @@ public class GameData
             Demon = demonJson == "" ? new() : DemonFile.Parse(demonJson),
             Scud = scudJson == "" ? ScudFile.Default : ScudFile.Parse(scudJson),
             Plantation = plantationJson == "" ? PlantationFile.Default : PlantationFile.Parse(plantationJson),
+            Companions = companionsJson == "" ? new() : CompanionsFile.Parse(companionsJson).CheckAgainst(animals),
         };
     }
 
@@ -115,6 +118,7 @@ public class GameData
             Demon = File.Exists(Path.Combine(dir, "holy_mass_demon.json")) ? DemonFile.Load(Path.Combine(dir, "holy_mass_demon.json")) : new(),
             Scud = File.Exists(Path.Combine(dir, "scud.json")) ? ScudFile.Load(Path.Combine(dir, "scud.json")) : ScudFile.Default,
             Plantation = File.Exists(Path.Combine(dir, "plantation.json")) ? PlantationFile.Load(Path.Combine(dir, "plantation.json")) : PlantationFile.Default,
+            Companions = File.Exists(Path.Combine(dir, "companions.json")) ? CompanionsFile.Load(Path.Combine(dir, "companions.json")).CheckAgainst(animals) : new(),
         };
     }
 }

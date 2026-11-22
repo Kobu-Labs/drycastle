@@ -234,6 +234,7 @@ public partial class NetServer : Node
         InitBigfoot(); // after the corpse book, which follows the same despawns
         InitPets();
         InitWildlife();
+        InitCompanions();
         InitThieves();
         InitHarvester();
         InitScud();
@@ -302,6 +303,7 @@ public partial class NetServer : Node
         _audit?.Lap(4);
         pt = Prof.Lap(Prof.S.Pets, pt);
         WildlifeTick((float)delta);
+        CompanionsTick();
         AnimalsDone(); // the animals have ticked: the players move from here on
         _audit?.Lap(5);
         pt = Prof.Lap(Prof.S.Wildlife, pt);
@@ -629,6 +631,7 @@ public partial class NetServer : Node
     void Leave(Client c)
     {
         StreakLeave(c.Id);
+        CompanionLeave(c.Id);
         StatusLeave(c.Id);
         RozhlasSetLeave(c.Id);
         MassStandUp(c.Id); _seatHint.Remove(c.Id);
@@ -727,6 +730,7 @@ public partial class NetServer : Node
         _mass?.End(); // the Holy Mass does not outlive the round
         _crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
         PetsRoundStart();
+        CompanionsRoundStart();
         WildlifeRoundStart(); // the match cleared the pets' entities too; a new round moves new ones into the property groups
         WorkersAfterRoundReset(); // the Urad workers of a detour still open sit down again
         ResetCars();

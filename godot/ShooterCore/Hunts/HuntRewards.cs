@@ -1,8 +1,8 @@
 namespace Drycastle.ShooterCore;
 
 /// <summary>One reward of a collection tier (#473): a weapon or an item that carries the tier as its <c>reward_tier</c> in the data.</summary>
-/// <param name="Kind">"weapon" or "item": which icon set and which table the id is in.</param>
-/// <param name="ItemName">The item's display name; empty for a weapon (the client names it).</param>
+/// <param name="Kind">"weapon", "item" or "companion" (<see cref="CompanionRules.UnlockKind"/>): which icon set and which table the id is in.</param>
+/// <param name="ItemName">The item's or the Companion's display name; empty for a weapon (the client names it).</param>
 public sealed record HuntReward(HuntTier Tier, string Kind, string Id, string ItemName);
 
 /// <summary>A player's progress to one collection tier: how many Index species have a hunt of the tier or better, of how many there are.</summary>
@@ -28,13 +28,15 @@ public static class HuntRewards
     }
 
     /// <summary>Every reward in the data, lowest tier first: the weapons and the items with a <c>reward_tier</c>.</summary>
-    public static IReadOnlyList<HuntReward> For(WeaponsFile weapons, ItemsFile items)
+    public static IReadOnlyList<HuntReward> For(WeaponsFile weapons, ItemsFile items, CompanionsFile? companions = null)
     {
         var list = new List<HuntReward>();
         foreach (var w in weapons.Weapons)
             if (w.IsReward) list.Add(new HuntReward(w.RewardTier, "weapon", w.Id, ""));
         foreach (var i in items.Items)
             if (i.RewardTierOf != HuntTier.Common) list.Add(new HuntReward(i.RewardTierOf, "item", i.Id, i.Name));
+        foreach (var c in companions?.Companions ?? new())
+            if (c.RewardTierOf != HuntTier.Common) list.Add(new HuntReward(c.RewardTierOf, CompanionRules.UnlockKind, c.Id, c.Name));
         return list.OrderBy(r => r.Tier).ToList();
     }
 }

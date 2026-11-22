@@ -143,36 +143,42 @@ public partial class NetClient : IStandingBodies
         var box = def.HitBoxOf(variant).Select(x => x * size).ToArray();
         var node = new Node3D { Name = $"Animal{e.Id}" };
         var flail = new List<AnimalFlail>();
-        AnimationPlayer? anim = null;
-        var clips = Array.Empty<string?>();
-        Node3D? modelRoot = null;
-        if (ModelLib.Instance(def.ModelOf(variant)) is { } model)
-        {
-            model.Scale = Vector3.One * (def.Scale * size);
-            model.RotationDegrees = new Vector3(0, def.ModelYawDeg, 0);
-            node.AddChild(model);
-            modelRoot = model;
-            anim = model.FindChildren("*", "AnimationPlayer", true, false).FirstOrDefault() as AnimationPlayer;
-            foreach (var sk in model.FindChildren("*", "Skeleton3D", true, false).OfType<Skeleton3D>())
+        var (modelRoot, anim, clips) = AddAnimalModel(node, def, variant, size, box);
+        if (modelRoot != null)
+            foreach (var sk in modelRoot.FindChildren("*", "Skeleton3D", true, false).OfType<Skeleton3D>())
                 if (AnimalFlail.Create(sk) is { } f) { sk.AddChild(f); flail.Add(f); }
-            if (anim != null)
-            {
-                clips = AnimalClips.Resolve(n => anim.HasAnimation(n));
-                for (var c = 0; c < clips.Length; c++)
-                    if (clips[c] is { } name) anim.GetAnimation(name).LoopMode = AnimalClips.Loops((AnimalClip)c) ? Animation.LoopModeEnum.Linear : Animation.LoopModeEnum.None;
-            }
-        }
-        else
-        {
-            var (w, h, l) = (box[0], box[1], box[2]);
-            node.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(w, h, l) }, Position = new Vector3(0, h / 2, 0) });
-        }
         Owned.AddChild(node);
         var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Size = size, Variant = variant, Flail = flail, Toggle = AnimalRules.HitToggled(e.State.State) };
         if (def.Fx == UnicornFx.Id) view.Fx = UnicornFx.Attach(node, modelRoot, def.VanishSeconds);
         if (def.Fx == PhoenixFx.Id) view.Phoenix = PhoenixFx.Attach(node, modelRoot, WildlifeData.Phoenix?.BurnSeconds ?? 6f);
         _animals[e.Id] = view;
         if (e.Dormant) SetAnimalDormant(view, e); // spawned outside the interest range: hidden until a keyframe shows it
+    }
+
+    /// <summary>
+    /// Puts the model of a species' look under <paramref name="node"/>, scaled and turned as animals.json says, and finds its clips (<see cref="AnimalClips"/>; the looping ones are set
+    /// to loop). Without a model (headless, or the file is missing) a box of <paramref name="box"/> stands in and there is no model, player or clip. Animals and Companions are both drawn with it.
+    /// </summary>
+    static (Node3D? Model, AnimationPlayer? Anim, string?[] Clips) AddAnimalModel(Node3D node, AnimalDef def, int variant, float size, IReadOnlyList<float> box)
+    {
+        if (ModelLib.Instance(def.ModelOf(variant)) is not { } model)
+        {
+            var (w, h, l) = (box[0], box[1], box[2]);
+            node.AddChild(new MeshInstance3D { Mesh = new BoxMesh { Size = new Vector3(w, h, l) }, Position = new Vector3(0, h / 2, 0) });
+            return (null, null, Array.Empty<string?>());
+        }
+        model.Scale = Vector3.One * (def.Scale * size);
+        model.RotationDegrees = new Vector3(0, def.ModelYawDeg, 0);
+        node.AddChild(model);
+        var anim = model.FindChildren("*", "AnimationPlayer", true, false).FirstOrDefault() as AnimationPlayer;
+        var clips = Array.Empty<string?>();
+        if (anim != null)
+        {
+            clips = AnimalClips.Resolve(n => anim.HasAnimation(n));
+            for (var c = 0; c < clips.Length; c++)
+                if (clips[c] is { } name) anim.GetAnimation(name).LoopMode = AnimalClips.Loops((AnimalClip)c) ? Animation.LoopModeEnum.Linear : Animation.LoopModeEnum.None;
+        }
+        return (model, anim, clips);
     }
 
     /// <summary>A pet that died of a hit (it has no corpse) goes in a puff where it stood; an animal that expired or was removed just leaves. Runs before <see cref="OnAnimalDespawned"/> frees the node.</summary>

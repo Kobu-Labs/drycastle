@@ -184,7 +184,16 @@ public partial class NetServer
                 GD.Print($"server: collection reward: #{dbId} {tier} tier, unlocked {it.Id}"); // issued at the next spawn
                 granted = true;
             }
-            if (granted) SendProfile(c);
+            foreach (var cd in CompanionData.Companions)
+            {
+                if (cd.RewardTierOf == HuntTier.Common || cd.RewardTierOf > tier || p.Unlocks.Any(u => u.Kind == CompanionRules.UnlockKind && u.ItemId == cd.Id)) continue;
+                var u = new Unlock(CompanionRules.UnlockKind, cd.Id);
+                p.Unlocks.Add(u);
+                _ = Progression.Unlocks.GrantAsync(dbId, u);
+                GD.Print($"server: collection reward: #{dbId} {tier} tier, unlocked the Companion {cd.Id}");
+                granted = true;
+            }
+            if (granted) { SendProfile(c); CompanionFromProfile(c); }
         }
     }
 

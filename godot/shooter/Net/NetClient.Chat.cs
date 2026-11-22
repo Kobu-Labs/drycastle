@@ -29,7 +29,7 @@ public partial class NetClient
         switch (kind)
         {
             case EventKind.ChatStatus when ChatEvents.DecodeStatus(payload) is { } st:
-                ChatCtx = new ChatContext(st.Admin, st.Vehicles, ItemData.Items.Select(i => i.Id).ToList());
+                ChatCtx = new ChatContext(st.Admin, st.Vehicles, ItemData.Items.Select(i => i.Id).ToList(), CompanionData.Companions.Select(i => i.Id).ToList());
                 break;
             case EventKind.ChatLine when ChatEvents.DecodeLine(payload) is { } line:
                 _hud?.AddChatLine(line);

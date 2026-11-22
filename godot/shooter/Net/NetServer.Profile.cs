@@ -130,6 +130,7 @@ public partial class NetServer
             if (p.Camos[i].Validate(CamoData) != null) p.Camos[i] = CamoSpec.Default; // a stored look that camo.json no longer has falls back to the default
         c.Profile = p;
         if (p.Persist && _huntBook is { } book) GrantCollectionRewards(book, p.DbId); // a tier reached while the rule or the weapon was not there yet
+        CompanionFromProfile(c);
     }
 
     void SendProfile(Client c)

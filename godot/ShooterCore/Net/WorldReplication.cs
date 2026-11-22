@@ -488,6 +488,7 @@ public sealed class WorldReplica
     static void Store(Entity e, uint tick, WorldState s)
     {
         if (e.Type == AnimalRules.TypeId && Vector3.DistanceSquared(e.State.Position, s.Position) > AnimalRules.TeleportM * AnimalRules.TeleportM) e.Buf.Reset(); // a vanished animal reappeared far away: it does not slide across the map
+        if (e.Type == CompanionRules.TypeId && Vector3.DistanceSquared(e.State.Position, s.Position) > CompanionRules.TeleportM * CompanionRules.TeleportM) e.Buf.Reset(); // a Companion put beside its owner: not drawn sliding there
         e.State = s;
         e.Buf.Push(tick, s.Position, s.YawRad, s.PitchRad);
     }

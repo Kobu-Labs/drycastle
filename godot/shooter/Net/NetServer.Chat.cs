@@ -20,7 +20,7 @@ public partial class NetServer
 
     bool IsAdmin(Client c) => !c.IsBot && (AdminAll || (c.Token.Length > 0 && AdminTokens.Contains(c.Token)));
 
-    ChatContext ChatCtx(Client c) => new(IsAdmin(c), Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList());
+    ChatContext ChatCtx(Client c) => new(IsAdmin(c), Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList(), CompanionData.Companions.Select(i => i.Id).ToList());
 
     /// <summary>Join: tells the client if it is an admin and which vehicles it may name.</summary>
     void SendChatStatus(Client c)
@@ -65,6 +65,7 @@ public partial class NetServer
             case "phoenix": ChatPhoenix(c); break;
             case "sandbox": ChatSandbox(c, args); break;
             case "give": ChatGive(c, args); break;
+            case "companion": ChatCompanion(c, args); break;
             case "time": ChatTimeCommand(c, args); break;
             case "explode": ChatExplode(c, args); break;
             case "restart": ChatRestart(c, args); break;

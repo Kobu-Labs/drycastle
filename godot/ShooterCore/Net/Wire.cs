@@ -370,7 +370,8 @@ public static class Wire
     //   v79 a run-over survivor is thrown (#411): event 164 PlayerFlung (the player a vehicle threw alive)
     //   v80 the Phoenix (#396): animal states 11-14 (Flying, Falling, Crashed, Burning, AnimalState); an animal's world-state pitch is the Phoenix's dive pitch; event 32 PhoenixFall (PhoenixFallCodec)
     //   v81 dropped minerals (#396): the MineralNodes set (event 112) may hold dynamic nodes (ids from 128, a Phoenix's pheonixite) and is the WHOLE set: a client drops a node it no longer lists
-    public const byte ProtocolVersion = 81;
+    //   v82 Companions (#488): world entity type 58 (CompanionRules): the owner field is the index in companions.json, the state byte a CompanionPose
+    public const byte ProtocolVersion = 82;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

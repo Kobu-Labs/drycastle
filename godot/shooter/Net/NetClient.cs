@@ -135,6 +135,7 @@ public partial class NetClient : Node
         InitMissile();
         InitTurrets();
         InitAnimals();
+        InitCompanions();
         InitFlocks();
         InitPoop();
         InitBigfoot();
@@ -274,6 +275,7 @@ public partial class NetClient : Node
         RenderTurrets();
         t = ClientProf.Lap(ClientProf.S.Players, t);
         RenderAnimals();
+        RenderCompanions();
         RenderFlocks(delta);
         RenderBigfoot();
         RenderCitizens();
