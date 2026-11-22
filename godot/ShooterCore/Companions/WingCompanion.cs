@@ -6,7 +6,7 @@ namespace Drycastle.ShooterCore;
 public enum WingState : byte { Hover, Trail, Circle }
 
 /// <summary>The numbers of the "wing" kind (the <c>rules</c> of its companions.json entry). Lengths in metres, times in seconds, speeds in m/s.</summary>
-public sealed class WingRules
+public class WingRules
 {
     /// <summary>Its perch: this high over its owner's feet, this far behind them and this far to their left.</summary>
     public float HeightM { get; set; } = 2.2f;
@@ -28,22 +28,27 @@ public sealed class WingRules
     public float CircleRadiusM { get; set; } = 3f;
     public float CircleSpeed { get; set; } = 6f;
     public float CircleTurns { get; set; } = 1f;
+    /// <summary>How high over its owner's feet it circles; 0: at <see cref="HeightM"/>. It climbs there as the circle widens.</summary>
+    public float CircleHeightM { get; set; }
 
-    public void Check(string what)
+    public virtual void Check(string what)
     {
         if (!(HeightM > 0) || BehindM < 0 || !(ClearanceM >= 0)) throw new DataFileException($"{what}: height_m is positive, behind_m and clearance_m are not negative");
         if (!(ArriveM > 0) || !(FollowM > ArriveM) || !(RecallM > FollowM)) throw new DataFileException($"{what}: 0 < arrive_m < follow_m < recall_m");
         if (!(FlySpeed > 0) || !(DriftSpeed > 0) || DriftSpeed > FlySpeed) throw new DataFileException($"{what}: fly_speed is positive and drift_speed is positive and not above it");
         if (CircleEveryMinSeconds < 0 || CircleEveryMaxSeconds < CircleEveryMinSeconds) throw new DataFileException($"{what}: circle_every_min_seconds is not negative and not above circle_every_max_seconds");
         if (CircleEveryMaxSeconds > 0 && (!(CircleRadiusM > 0) || !(CircleSpeed > 0) || !(CircleTurns > 0))) throw new DataFileException($"{what}: circle_radius_m, circle_speed and circle_turns must be positive");
+        if (CircleHeightM < 0) throw new DataFileException($"{what}: circle_height_m is 0 (the perch height) or positive");
     }
 }
 
 /// <summary>
 /// The "wing" kind: a flying Companion. It hovers at a perch over its owner's shoulder, flies after the perch when they move, and now and then flies circles round them. Nothing
 /// stops it (it does not land and meets no wall); it is put beside its owner when it falls too far behind. All of its rules are here.
+/// A kind that flies the same way and does more (<see cref="ScoutCompanion"/>) derives from it and adds its own rules at the circle (<see cref="OnCircleStart"/>,
+/// <see cref="Beside"/>).
 /// </summary>
-public sealed class WingCompanion : Companion
+public class WingCompanion : Companion
 {
     public static readonly CompanionKind Kind = new("wing", s => new WingCompanion(s), d => RulesOf(d));
 
@@ -54,13 +59,13 @@ public sealed class WingCompanion : Companion
         .Allow(WingState.Circle, WingState.Trail, WingState.Hover)
         .Note(WingState.Hover, "Hangs at its perch (height_m over the owner, behind_m behind, side_m to the left), drifting with it at up to drift_speed and facing as its owner does; no clock. The perch farther than follow_m (its owner moves faster than it drifts): Trail. The circle clock (beside the machine, a roll of circle_every seconds) runs out: Circle.")
         .Note(WingState.Trail, "Flies to the perch at up to fly_speed and keeps with it while its owner moves; no clock. Within arrive_m of a perch that has come to rest (slower than drift_speed): Hover. The circle clock runs out: Circle. Its owner farther than recall_m: put at its perch, Hover.")
-        .Note(WingState.Circle, "Flies circle_turns turns round its owner at circle_radius_m and circle_speed, at perch height (clock: the time the turns take), then Trail back to the perch. Its owner farther than recall_m: put at its perch, Hover.")
+        .Note(WingState.Circle, "Flies circle_turns turns round its owner at circle_radius_m and circle_speed, climbing to circle_height_m (0: staying at perch height) as it widens (clock: the time the turns take), then Trail back to the perch. Its owner farther than recall_m: put at its perch, Hover.")
         .Build();
 
     readonly StateMachine<WingState> _fsm = new(Spec);
     readonly WingRules _rules;
     Countdown _nextCircle;
-    float _angle, _radius; // where on its circle it is, and how far out (it spirals out to the circle's radius)
+    float _angle, _radius, _height; // where on its circle it is, how far out and how high (it spirals out and up to the circle)
     int _dir = 1;
     Vector3 _lastPerch; // where the perch was a tick ago: how fast it moves
 
@@ -71,9 +76,11 @@ public sealed class WingCompanion : Companion
         return r;
     }
 
-    WingCompanion(CompanionSpawn s) : base(s)
+    WingCompanion(CompanionSpawn s) : this(s, RulesOf(s.Def)) { }
+
+    protected WingCompanion(CompanionSpawn s, WingRules rules) : base(s)
     {
-        _rules = RulesOf(s.Def);
+        _rules = rules;
         Position = _lastPerch = Perch;
         Pose = CompanionPose.Hover;
         ScheduleCircle();
@@ -106,6 +113,7 @@ public sealed class WingCompanion : Companion
         var perch = Perch;
         var perchSpeed = Vector3.Distance(perch, _lastPerch) / dt;
         _lastPerch = perch;
+        Beside(dt);
         var circleDue = State != WingState.Circle && _rules.CircleEveryMaxSeconds > 0 && _nextCircle.Tick(dt);
         switch (State)
         {
@@ -147,10 +155,18 @@ public sealed class WingCompanion : Companion
     {
         _angle = MathF.Atan2(Position.Z - Master.Position.Z, Position.X - Master.Position.X);
         _radius = Flat(Position, Master.Position);
+        _height = Position.Y - Master.Position.Y;
         _dir = Rng.NextDouble() < 0.5 ? 1 : -1;
         var angular = _rules.CircleSpeed / _rules.CircleRadiusM;
         _fsm.Enter(WingState.Circle, _rules.CircleTurns * MathF.Tau / angular);
+        OnCircleStart();
     }
+
+    /// <summary>It begins its circles: what a derived kind does then (a scout looks for enemies).</summary>
+    protected virtual void OnCircleStart() { }
+
+    /// <summary>Every tick, before it flies, in whatever state: a derived kind's own clocks, beside the flight machine.</summary>
+    protected virtual void Beside(float dt) { }
 
     /// <summary>One step round its owner: the circle is centred on them, so it goes with them as they walk.</summary>
     void Orbit(float dt)
@@ -158,7 +174,8 @@ public sealed class WingCompanion : Companion
         _angle += _dir * _rules.CircleSpeed / _rules.CircleRadiusM * dt;
         _radius = Ramp.MoveToward(_radius, _rules.CircleRadiusM, _rules.CircleSpeed * 0.5f * dt);
         var (s, c) = MathF.SinCos(_angle);
-        var next = new Vector3(Master.Position.X + c * _radius, Master.Position.Y + _rules.HeightM, Master.Position.Z + s * _radius);
+        _height = Ramp.MoveToward(_height, _rules.CircleHeightM > 0 ? _rules.CircleHeightM : _rules.HeightM, _rules.CircleSpeed * 0.5f * dt);
+        var next = new Vector3(Master.Position.X + c * _radius, Master.Position.Y + _height, Master.Position.Z + s * _radius);
         if (World.GroundY(next.X, next.Z) is { } ground && next.Y < ground + _rules.ClearanceM) next.Y = ground + _rules.ClearanceM;
         Position = next;
         Yaw = TurretMath.YawTo(Vector3.Zero, new Vector3(-s, 0, c) * _dir); // along the circle

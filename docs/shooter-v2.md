@@ -575,6 +575,12 @@ items, ADR 0018 (#267, protocol 31).
   drop on the ground (no confirm: picking it up again costs a pickup); the arrows move focus; the head slot, hovered or focused, frames the figure's head. Every
   move is a request (`RequestEquip` and the others); the cells redraw only on the server's next Equipment event, and further requests wait for it (at most 0.6 s).
   Rules and focus order are pure (`ShooterCore/Items/EquipmentScreenLogic.cs`, `EquipmentScreenTests`).
+- **The Companion picker (#488).** Under the bag on the Equipment screen, after a line: one cell per Companion the player can have out (`ItemCell.SetPicture`: a live 3D view of
+  its model playing its idle clip, `CompanionPortrait`, rendered only while the screen is open; the name as a tooltip), in the bag's three columns. The one that is out has a filled box, a tick in
+  its corner and "(with you)" in its tooltip. Click or Enter on another puts it out (the old one goes in a puff, the new one appears beside the player); the choice
+  is kept with the Profile. No "none" (a Companion is always on), no drag, no drop. A player who owns none sees one empty cell with a paw ghost ("No Companion
+  yet"). The arrows go from the bag's bottom row down into the picker and back (`EquipmentNav.Move`, `CellHome.Companion`). Rules and wire: `CompanionRoster`
+  (events 114 `CompanionPick`, 115 `Companions`, protocol 84). Dev mode (`--unlock-all`) offers every Companion.
 - **Drawn on the character (#266).** `items.json` `model` names the item's model (`assets/`, authored in the slot's frame: metres, facing -Z, for headgear
   the origin is the middle of the head). `CharacterView.SetWorn(slot, item)` (`CharacterView.Worn.cs`) hangs it on the head bone, so it follows every
   clip, stance, the prone roll and the ragdoll, and hides what it replaces: the helmet and the hair, the head's foliage and the face paint. The same call

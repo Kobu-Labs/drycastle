@@ -50,7 +50,7 @@ public static class Strings
         ("hud.corpse.hold.item", "Hold {0}  take {1} as primary     Tap {0}  choose slot or put on {2}"), ("hud.corpse.tap.item", "Tap {0}  take {1} or put on {2}"),
         ("hud.corpse.hold.items", "Hold {0}  take {1} as primary     Tap {0}  choose slot or an item"), ("hud.corpse.tap.items", "Tap {0}  take {1} or an item"),
         ("hud.corpse.giant.item", "Tap {0}  put on {1}"), ("hud.corpse.giant.items", "Tap {0}  take an item"),
-        ("item.bigfoot_head", "Bigfoot head"), ("item.gold_chain", "Gold chain"), ("toast.item.crumbled", "The item crumbles in your hands"), ("toast.item.bagfull", "Your bag is full"), ("hud.ground.take", "{0}  Pick up {1}"),
+        ("item.bigfoot_head", "Bigfoot head"), ("item.gold_chain", "Gold chain"), ("companion.none", "No Companion yet"), ("toast.companion.marked.one", "Your Companion marked an enemy"), ("toast.companion.marked", "Your Companion marked {0} enemies"), ("companion.out", "{0} (with you)"), ("toast.item.crumbled", "The item crumbles in your hands"), ("toast.item.bagfull", "Your bag is full"), ("hud.ground.take", "{0}  Pick up {1}"),
         ("hud.crate.hold", "Hold {0}  open care package"), ("hud.crate.opening", "Opening..."), ("hud.mineral.hold", "Hold {0}  take {1}"),
         ("hud.loot.hold", "Hold {0}  send the {1} back"), ("loot.tire", "tire"), ("loot.pet", "pet"), ("loot.dish", "satellite dish"), ("loot.connector", "connector"),
         ("toast.streak.granted", "Care package: {0} is ready. Press {1} to use it."), ("toast.streak.replaced", "Care package: {0} is ready and replaced {1}. Press {2} to use it."),

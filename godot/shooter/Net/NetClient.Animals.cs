@@ -159,7 +159,7 @@ public partial class NetClient : IStandingBodies
     /// Puts the model of a species' look under <paramref name="node"/>, scaled and turned as animals.json says, and finds its clips (<see cref="AnimalClips"/>; the looping ones are set
     /// to loop). Without a model (headless, or the file is missing) a box of <paramref name="box"/> stands in and there is no model, player or clip. Animals and Companions are both drawn with it.
     /// </summary>
-    static (Node3D? Model, AnimationPlayer? Anim, string?[] Clips) AddAnimalModel(Node3D node, AnimalDef def, int variant, float size, IReadOnlyList<float> box)
+    internal static (Node3D? Model, AnimationPlayer? Anim, string?[] Clips) AddAnimalModel(Node3D node, AnimalDef def, int variant, float size, IReadOnlyList<float> box)
     {
         if (ModelLib.Instance(def.ModelOf(variant)) is not { } model)
         {

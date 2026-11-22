@@ -351,4 +351,170 @@ public class CompanionTests
         Assert.Null(keeper.Assigned(8));
         Assert.NotNull(keeper.Of(7));
     }
+
+    // ---- the picker: the roster of one player, its wire form, and the arrows of the Equipment screen ----
+
+    [Fact]
+    public void RosterIsWhatTheProfileOwnsPlusTheSessionGiftInFileOrder()
+    {
+        var file = File();
+        var none = CompanionRoster.Of(file, Array.Empty<Unlock>(), all: false, given: null, @out: null);
+        Assert.Empty(none.Owned);
+        Assert.Equal(-1, none.Out);
+        Assert.Equal(-1, none.Default(file, "dog"));
+
+        var rows = new[] { new Unlock("weapon", "dog"), new Unlock(CompanionRules.UnlockKind, "bird"), new Unlock(CompanionRules.UnlockKind, "gone") };
+        var owned = CompanionRoster.Of(file, rows, all: false, given: null, @out: "bird");
+        Assert.Equal(new[] { 1 }, owned.Owned); // a weapon row and a Companion the file no longer has do not count
+        Assert.Equal(1, owned.Out);
+
+        var given = CompanionRoster.Of(file, rows, all: false, given: "dog", @out: "dog");
+        Assert.Equal(new[] { 0, 1 }, given.Owned);
+        Assert.Equal(0, given.Out);
+
+        var dev = CompanionRoster.Of(file, Array.Empty<Unlock>(), all: true, given: null, @out: null);
+        Assert.Equal(new[] { 0, 1 }, dev.Owned);
+    }
+
+    [Fact]
+    public void TheChosenCompanionIsOutAtJoinWhenStillOwnedElseTheFirstOwned()
+    {
+        var file = File();
+        var both = CompanionRoster.Of(file, new[] { new Unlock(CompanionRules.UnlockKind, "dog"), new Unlock(CompanionRules.UnlockKind, "bird") }, false, null, null);
+        Assert.Equal(1, both.Default(file, "bird"));
+        Assert.Equal(0, both.Default(file, ""));
+        Assert.Equal(0, both.Default(file, "gone"));
+        var bird = CompanionRoster.Of(file, new[] { new Unlock(CompanionRules.UnlockKind, "bird") }, false, null, null);
+        Assert.Equal(1, bird.Default(file, "dog")); // chose one they do not own (any more)
+    }
+
+    [Fact]
+    public void RosterAndPickRoundTripAndRefuseABadLength()
+    {
+        var roster = new CompanionRoster(new[] { 0, 3, 700 }, 3);
+        Assert.True(CompanionRoster.TryDecode(roster.Encode(), out var back));
+        Assert.Equal(roster.Owned, back.Owned);
+        Assert.Equal(3, back.Out);
+        Assert.True(CompanionRoster.TryDecode(CompanionRoster.None.Encode(), out var empty));
+        Assert.Empty(empty.Owned);
+        Assert.Equal(-1, empty.Out);
+        Assert.False(CompanionRoster.TryDecode(roster.Encode().AsSpan(0, 4), out _));
+        Assert.False(CompanionRoster.TryDecode(ReadOnlySpan<byte>.Empty, out _));
+
+        Assert.True(CompanionRoster.TryDecodePick(CompanionRoster.EncodePick(700), out var def));
+        Assert.Equal(700, def);
+        Assert.False(CompanionRoster.TryDecodePick(new byte[] { 1 }, out _));
+    }
+
+    [Fact]
+    public void ArrowsReachThePickerUnderTheBagAndComeBack()
+    {
+        // bag: 6 cells in 3 columns; picker: 4 cells in the same columns (a second row of one); 2 slots
+        CellRef? Move(CellRef from, NavDir dir) => EquipmentNav.Move(from, dir, slots: 2, bagCells: 6, bagColumns: 3, companions: 4);
+        Assert.Equal(CellRef.Companion(1), Move(CellRef.BagCell(4), NavDir.Down));
+        Assert.Equal(CellRef.BagCell(4), Move(CellRef.Companion(1), NavDir.Up));
+        Assert.Equal(CellRef.Companion(2), Move(CellRef.Companion(1), NavDir.Right));
+        Assert.Null(Move(CellRef.Companion(2), NavDir.Right));
+        Assert.Equal(CellRef.Companion(3), Move(CellRef.Companion(0), NavDir.Down));
+        Assert.Equal(CellRef.Companion(0), Move(CellRef.Companion(3), NavDir.Up));
+        Assert.Null(Move(CellRef.Companion(3), NavDir.Right));
+        Assert.Null(Move(CellRef.Companion(3), NavDir.Down));
+        Assert.Equal(CellRef.Slot((EquipSlot)1), Move(CellRef.Companion(0), NavDir.Left));
+        Assert.Equal(CellRef.Slot((EquipSlot)1), Move(CellRef.Companion(3), NavDir.Left));
+
+        // one cell (the empty picker): every bag column of the bottom row lands on it; none: the bag's bottom row is an edge, as before
+        Assert.Equal(CellRef.Companion(0), EquipmentNav.Move(CellRef.BagCell(5), NavDir.Down, companions: 1));
+        Assert.Null(EquipmentNav.Move(CellRef.BagCell(5), NavDir.Down));
+        Assert.Null(EquipmentNav.Move(CellRef.Companion(0), NavDir.Up, companions: 0));
+    }
+
+    [Fact]
+    public void EveryShippedRewardCompanionIsListedAsARewardAndHasAnIcon()
+    {
+        var shipped = CompanionsFile.Load(Path.Combine(DataDir, "companions.json"));
+        var rewards = shipped.Companions.Where(c => c.RewardTierOf != HuntTier.Common).ToList();
+        Assert.Contains(rewards, c => c.Id == "eagle" && c.RewardTierOf == HuntTier.Gold);
+        var listed = HuntRewards.For(new WeaponsFile(), new ItemsFile(), shipped);
+        var icons = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "shooter", "ui", "icons", "companions"));
+        foreach (var c in rewards)
+        {
+            Assert.Contains(listed, r => r.Kind == CompanionRules.UnlockKind && r.Id == c.Id && r.Tier == c.RewardTierOf && r.ItemName == c.Name);
+            Assert.True(System.IO.File.Exists(Path.Combine(icons, c.Id + ".png")), "no icon for the reward Companion " + c.Id + " (IconRegistry.CompanionPath)");
+        }
+    }
+
+    // ---- the scout kind: flies as the wing kind, and marks enemies when it begins its circles ----
+
+    /// <summary>Flat ground that also knows the owner's enemies (what the server's world says).</summary>
+    sealed class Watched : IAnimalWorld, ICompanionWorld
+    {
+        public readonly List<CompanionSighting> Enemies = new();
+        public float? GroundY(float x, float z) => 0f;
+        public Vector3? NearestThreat(Vector3 from, float radius) => null;
+        public Vector3? PositionOf(ushort player) => null;
+        public void EnemiesNear(ushort owner, Vector3 at, float radius, List<CompanionSighting> into)
+        {
+            foreach (var e in Enemies)
+                if (e.Player != owner && Flat2(e.Position, at) <= radius) into.Add(e);
+        }
+    }
+
+    static ScoutCompanion Scout(IAnimalWorld world, string rules = "") => Make<ScoutCompanion>(CompanionsFile.Parse($$"""
+        {"version":1,"companions":[{"id":"eagle","name":"Eagle","kind":"scout","species":"bird",
+          "rules":{"circle_every_min_seconds":2,"circle_every_max_seconds":2,"circle_height_m":7,"mark_radius_m":40,"mark_max":2,"mark_seconds":3{{rules}} } }]}
+        """).CheckAgainst(Animals), "eagle", world, Origin);
+
+    [Fact]
+    public void AScoutMarksTheNearestEnemiesWhenItBeginsItsCirclesAndTheMarksRunOut()
+    {
+        var world = new Watched();
+        world.Enemies.Add(new CompanionSighting(3, new Vector3(30, 0, 0)));
+        world.Enemies.Add(new CompanionSighting(4, new Vector3(10, 0, 0)));
+        world.Enemies.Add(new CompanionSighting(5, new Vector3(0, 0, 20)));
+        world.Enemies.Add(new CompanionSighting(6, new Vector3(0, 0, 60))); // out of the radius
+        var eagle = Scout(world);
+        Run(eagle, 1.5f, _ => Origin);
+        Assert.Empty(eagle.Marks); // it has not circled yet
+
+        Run(eagle, 0.7f, _ => Origin);
+        Assert.Equal(WingState.Circle, eagle.State);
+        Assert.Equal(new ushort[] { 4, 5 }, eagle.Marks); // the two nearest of the three in reach
+
+        Run(eagle, 2.5f, _ => Origin);
+        Assert.Equal(new ushort[] { 4, 5 }, eagle.Marks); // 3 s have not passed
+        Assert.True(eagle.Position.Y > 4f); // it climbs to its circle height
+        Run(eagle, 0.7f, _ => Origin);
+        Assert.Empty(eagle.Marks);
+    }
+
+    [Fact]
+    public void AScoutWithNoEnemyNearOrInAWorldThatKnowsNoneMarksNobody()
+    {
+        var far = new Watched();
+        far.Enemies.Add(new CompanionSighting(3, new Vector3(100, 0, 0)));
+        var eagle = Scout(far);
+        Run(eagle, 2.3f, _ => Origin);
+        Assert.Equal(WingState.Circle, eagle.State);
+        Assert.Empty(eagle.Marks);
+
+        var blind = Scout(new Flat());
+        Run(blind, 2.3f, _ => Origin);
+        Assert.Empty(blind.Marks);
+        Assert.Empty(Make<WingCompanion>(File(), "bird", new Watched(), Origin).Marks); // a wing marks nobody
+    }
+
+    [Fact]
+    public void ScoutRulesAreCheckedAtLoadAndTheMarksRoundTrip()
+    {
+        Assert.Throws<DataFileException>(() => Scout(new Flat(), ",\"mark_max\":0"));
+        Assert.Throws<DataFileException>(() => Scout(new Flat(), ",\"mark_max\":9"));
+        Assert.Throws<DataFileException>(() => Scout(new Flat(), ",\"mark_radius_m\":0"));
+        Assert.Throws<DataFileException>(() => Scout(new Flat(), ",\"fly_speed\":0")); // the wing kind's rules are its own too
+
+        Assert.True(ScoutCompanion.TryDecodeMarks(ScoutCompanion.EncodeMarks(new ushort[] { 4, 700 }), out var marks));
+        Assert.Equal(new ushort[] { 4, 700 }, marks);
+        Assert.True(ScoutCompanion.TryDecodeMarks(ScoutCompanion.EncodeMarks(Array.Empty<ushort>()), out var none));
+        Assert.Empty(none);
+        Assert.False(ScoutCompanion.TryDecodeMarks(new byte[] { 2, 1, 0 }, out _));
+    }
 }

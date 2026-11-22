@@ -4,7 +4,7 @@ using Drycastle.ShooterCore;
 namespace Drycastle.Shooter;
 
 /// <summary>
-/// The Equipment screen in the HUD (issue #268, F): an overlay under the HUD root like the tactical map, above the panels but below the scoreboard.
+/// The Equipment screen in the HUD (issue #268, F; with the Companion picker of #488): an overlay under the HUD root like the tactical map, above the panels but below the scoreboard.
 /// The match owner attaches it once (<see cref="AttachEquipment"/>); the HUD closes it when death, the end of the match or a control session (a turret,
 /// the attack missile) takes the screen, as it does the map, and the two never show together. Nothing about it pauses the game: the mouse mode is
 /// the shell's (it asks <see cref="EquipmentOpen"/>), and Esc closes it through <see cref="CloseEquipment"/>.

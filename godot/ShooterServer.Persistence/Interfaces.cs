@@ -11,6 +11,9 @@ public interface IProfileRepository
     Task SetNameAsync(long playerId, string name);
     /// <summary>Adds XP (amount must be &gt;= 0). Level is derived from XP on read.</summary>
     Task AddXpAsync(long playerId, int amount);
+    /// <summary>The Companion the player chose (#488): an id of companions.json, empty for none chosen or an unknown player. Whether they own it is the caller's to check.</summary>
+    Task<string> GetCompanionAsync(long playerId);
+    Task SetCompanionAsync(long playerId, string companionId);
 }
 
 public interface ILoadoutRepository

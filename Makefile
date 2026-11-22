@@ -2,7 +2,7 @@
 # MAP: the map folder the viewer, editor and shooter targets load (override with MAP=<dir>).
 MAP ?= out/village/map
 
-.PHONY: viewer-pack-trees rozhlas thief-voices private-pack release-check editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run patch-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-patches-smoke viewer-editor-smoke viewer-panel-smoke viewer-shape-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-rpg-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
+.PHONY: viewer-pack-trees rozhlas thief-voices private-pack release-check editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run patch-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-patches-smoke viewer-editor-smoke viewer-panel-smoke viewer-shape-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-rpg-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-companion-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
 	cd pipeline && uv sync
@@ -335,6 +335,11 @@ shooter-hud-shots:
 shooter-menu-shots:
 	dotnet build godot/shooter/shooter.csproj
 	godot --path godot/shooter -- --menu-shots $(abspath $(or $(DIR),out/menu))
+
+# The Companion picker's cells (each Companion's 3D view, the empty cell) at 1280x720 and 3840x2160 (needs a display): make shooter-companion-shots DIR=out/companions
+shooter-companion-shots:
+	dotnet build godot/shooter -v q
+	godot --path godot/shooter -- --companion-shots $(abspath $(or $(DIR),out/companions))
 
 # The intel screen's content (the base's wall screen) with made-up events, at its two texture sizes (needs a display): make shooter-intel-shots DIR=out/intel
 shooter-intel-shots:
