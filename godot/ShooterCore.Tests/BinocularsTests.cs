@@ -60,6 +60,17 @@ public class BinocularsTests
         Assert.Equal(ItemPlace.Bagged, ItemRules.Place(items, new ItemStack(items.IndexOf("binoculars")), worn, bag, swap: false, out _));
         Assert.True(Binoculars.Carried(items, Enumerable.Range(0, Bag.Cells).Select(c => bag.Get(c)?.Item)));
     }
+
+    [Fact]
+    public void The_pair_raised_is_the_narrowest_of_those_carried()
+    {
+        var items = Shipped;
+        int standard = items.IndexOf("binoculars"), hunting = items.IndexOf("hunting_binoculars"), speaker = items.IndexOf("speaker");
+        Assert.Equal(-1, Binoculars.Held(items, new[] { speaker }));
+        Assert.Equal(standard, Binoculars.Held(items, new[] { speaker, standard }));
+        Assert.Equal(hunting, Binoculars.Held(items, new[] { standard, hunting }));
+        Assert.Equal(hunting, Binoculars.Held(items, new[] { hunting, standard }));
+    }
 }
 
 public class BinocularsWireTests
@@ -76,13 +87,15 @@ public class BinocularsWireTests
     [Fact]
     public void The_state_told_to_the_others_round_trips_and_a_bad_one_is_refused()
     {
-        Assert.True(Binoculars.TryDecodeRaised(Binoculars.EncodeRaised(513, true), out var player, out var up));
+        Assert.True(Binoculars.TryDecodeRaised(Binoculars.EncodeRaised(513, true, 4), out var player, out var up, out var item));
         Assert.Equal(513, player);
         Assert.True(up);
-        Assert.True(Binoculars.TryDecodeRaised(Binoculars.EncodeRaised(7, false), out player, out up));
+        Assert.Equal(4, item);
+        Assert.True(Binoculars.TryDecodeRaised(Binoculars.EncodeRaised(7, false, 4), out player, out up, out item));
         Assert.False(up);
-        Assert.False(Binoculars.TryDecodeRaised(new byte[] { 1, 0, 2 }, out _, out _));
-        Assert.False(Binoculars.TryDecodeRaised(new byte[2], out _, out _));
+        Assert.Equal(0, item);
+        Assert.False(Binoculars.TryDecodeRaised(new byte[] { 1, 0, 2, 0 }, out _, out _, out _));
+        Assert.False(Binoculars.TryDecodeRaised(new byte[3], out _, out _, out _));
     }
 }
 

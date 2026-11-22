@@ -15,13 +15,14 @@ namespace Drycastle.Shooter;
 public partial class NetClient
 {
     bool _binoculars;
-    /// <summary>The other players who hold the binoculars up (<see cref="EventKind.BinocularsRaised"/>), kept by id so a character made later is posed at once.</summary>
-    readonly HashSet<ushort> _binocularsBy = new();
+    /// <summary>The other players who hold the binoculars up and the pair each holds (<see cref="EventKind.BinocularsRaised"/>), kept by id so a character made later is posed at once.</summary>
+    readonly Dictionary<ushort, ItemDef> _binocularsBy = new();
 
-    void OnBinocularsRaised(ushort player, bool up)
+    void OnBinocularsRaised(ushort player, bool up, int item)
     {
-        if (up) _binocularsBy.Add(player); else _binocularsBy.Remove(player);
-        if (_remotes.TryGetValue(player, out var r)) r.Binoculars = up;
+        var pair = up && ItemData.At(item) is { Binoculars: true } def ? def : null;
+        if (pair != null) _binocularsBy[player] = pair; else _binocularsBy.Remove(player);
+        if (_remotes.TryGetValue(player, out var r)) r.Binoculars = pair;
     }
 
     /// <summary>Tells the server the binoculars went up or down, so the others see it.</summary>

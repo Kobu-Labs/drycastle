@@ -131,8 +131,8 @@ public partial class NetClient
     {
         switch (kind)
         {
-            case EventKind.BinocularsRaised when Binoculars.TryDecodeRaised(payload, out var holder, out var up):
-                OnBinocularsRaised(holder, up);
+            case EventKind.BinocularsRaised when Binoculars.TryDecodeRaised(payload, out var holder, out var up, out var pair):
+                OnBinocularsRaised(holder, up, pair);
                 break;
             case EventKind.HeadLampState when HeadLamp.TryDecode(payload, out var lamp, out var lampOn):
                 OnHeadLampState(lamp, lampOn);
