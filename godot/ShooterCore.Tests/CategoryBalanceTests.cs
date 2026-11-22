@@ -7,7 +7,8 @@ namespace Drycastle.ShooterCore.Tests;
 /// Shooter v2 balance pass (#133): no hitscan weapon is the unique fastest kill in its category at every sampled range.
 /// Time to kill = (shots - 1) x fire interval against a 100 hp body, no headshot, using the shipped falloff.
 /// Shotguns are left out (their pellet fan is a Monte Carlo, see ShotgunSmgTests); they are checked by hand in the
-/// resolution comment of #133.
+/// resolution comment of #133. Retired weapons (#477) are not selectable, so they are left out; a category left with
+/// fewer than two weapons has nothing to dominate and is not run.
 /// </summary>
 public class CategoryBalanceTests
 {
@@ -35,7 +36,7 @@ public class CategoryBalanceTests
     public void NoWeaponIsTheUniqueFastestKillAtEveryRange(string name)
     {
         var (_, ids) = Categories.Single(c => c.Name == name);
-        var weapons = ids.Select(id => File.Find(id)!).ToArray();
+        var weapons = KeptIn(ids);
         // A weapon "dominates" the category when it is the unique fastest kill at every sampled range.
         foreach (var candidate in weapons)
         {
@@ -48,5 +49,8 @@ public class CategoryBalanceTests
         }
     }
 
-    public static IEnumerable<object[]> CategoryNames() => Categories.Select(c => new object[] { c.Name });
+    static WeaponDef[] KeptIn(string[] ids) => ids.Select(id => File.Find(id)!).Where(w => !w.Retired).ToArray();
+
+    public static IEnumerable<object[]> CategoryNames() =>
+        Categories.Where(c => KeptIn(c.Ids).Length >= 2).Select(c => new object[] { c.Name });
 }

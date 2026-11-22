@@ -35,7 +35,7 @@ public static class LoadoutEditor
             case LoadoutPicker.Primary:
             case LoadoutPicker.Secondary:
                 var slot = pick == LoadoutPicker.Primary ? WeaponSlot.Primary : WeaponSlot.Secondary;
-                foreach (var w in weapons.Weapons.Where(w => w.Slot == slot).OrderBy(w => w.Category).ThenBy(w => w.UnlockLevel).ThenBy(w => w.Id))
+                foreach (var w in weapons.Weapons.Where(w => w.Slot == slot && !w.Retired).OrderBy(w => w.Category).ThenBy(w => w.UnlockLevel).ThenBy(w => w.Id))
                     result.Add(new PickerOption(w.Id, w.Category.ToString(), w.UnlockLevel, Unlocked(level, w.UnlockLevel, owned, "weapon", w.Id), w.RewardTier));
                 break;
             case LoadoutPicker.Perk:
@@ -62,7 +62,7 @@ public static class LoadoutEditor
     /// </summary>
     public static IReadOnlyList<WeaponStat> Stats(WeaponDef w, WeaponsFile weapons)
     {
-        var same = weapons.Weapons.Where(x => x.Slot == w.Slot).ToList();
+        var same = weapons.Weapons.Where(x => x.Slot == w.Slot && !x.Retired).ToList();
         return new[]
         {
             Stat(StatDamage, w.Damage, same.Max(x => x.Damage)),
@@ -79,7 +79,7 @@ public static class LoadoutEditor
     /// </summary>
     public static IReadOnlyList<WeaponStat> CompareStats(WeaponDef w, WeaponsFile weapons)
     {
-        var same = weapons.Weapons.Where(x => x.Slot == w.Slot).ToList();
+        var same = weapons.Weapons.Where(x => x.Slot == w.Slot && !x.Retired).ToList();
         var steadiest = same.Min(x => x.Recoil.VerticalPerShot);
         var recoil = w.Recoil.VerticalPerShot;
         var recoilShare = recoil > 0 ? Math.Clamp(steadiest / recoil, 0f, 1f) : 1f;

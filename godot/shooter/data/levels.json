@@ -23,7 +23,7 @@
     { "level": 3, "kind": "perk", "id": "flak_jacket" },
     { "level": 4, "kind": "weapon", "id": "g36" },
     { "level": 4, "kind": "weapon", "id": "ump45" },
-    { "level": 5, "kind": "weapon", "id": "deagle" },
+    { "level": 0, "kind": "weapon", "id": "deagle" },
     { "level": 5, "kind": "weapon", "id": "sniper" },
     { "level": 5, "kind": "perk", "id": "swift_swap" },
     { "level": 6, "kind": "weapon", "id": "aug" },

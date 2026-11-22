@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "starting_weapon": "pistol",
+  "starting_weapon": "deagle",
   "category_defaults": {
     "pistol": { "move_speed_multiplier": 1.0, "spread_base": 0.4, "spread_per_shot": 0.3, "spread_max": 4, "spread_recovery": 0.4, "prone_spread_multiplier": 0.7, "crouch_spread_multiplier": 0.85, "ads_spread_multiplier": 0.6, "move_spread": 0.8 },
     "machine_gun": { "move_speed_multiplier": 0.7, "ads_move_speed_multiplier": 0.55, "spread_base": 1.4, "spread_per_shot": 0.12, "spread_max": 4.5, "spread_recovery": 0.5, "prone_spread_multiplier": 0.7, "crouch_spread_multiplier": 0.8, "ads_spread_multiplier": 0.6, "move_spread": 2.0, "recoil": { "vertical_per_shot": 0.5, "horizontal_sway": 0.3, "recovery_rate": 4, "max_climb": 15, "prone_multiplier": 0.6 } },
@@ -13,7 +13,7 @@
   },
   "weapons": [
     {
-      "id": "pistol", "category": "pistol", "slot": "secondary", "unlock_level": 0, "kind": "hitscan", "full_auto": false,
+      "id": "pistol", "retired": true, "category": "pistol", "slot": "secondary", "unlock_level": 0, "kind": "hitscan", "full_auto": false,
       "damage": 24, "headshot_multiplier": 2, "fire_interval": 0.15,
       "magazine_size": 15, "reserve_ammo": 60, "reload_time": 1.6,
       "falloff_start": 25, "falloff_end": 60, "falloff_multiplier": 0.7
@@ -40,7 +40,7 @@
       "move_speed_multiplier": 1.1
     },
     {
-      "id": "sniper", "category": "sniper", "slot": "primary", "unlock_level": 5, "kind": "hitscan", "full_auto": false,
+      "id": "sniper", "retired": true, "category": "sniper", "slot": "primary", "unlock_level": 5, "kind": "hitscan", "full_auto": false,
       "damage": 85, "headshot_multiplier": 3, "fire_interval": 1.4,
       "magazine_size": 5, "reserve_ammo": 15, "reload_time": 3.2,
       "range": 600, "scope_fov": 20, "zoom_levels": 1,
@@ -60,7 +60,7 @@
       "falloff_start": 50, "falloff_end": 120, "falloff_multiplier": 0.65, "spread_base": 0.7, "recoil": { "vertical_per_shot": 0.45, "horizontal_sway": 0.15, "recovery_rate": 7, "max_climb": 9 }
     },
     {
-      "id": "g36", "category": "assault_rifle", "slot": "primary", "unlock_level": 4, "kind": "hitscan", "full_auto": true,
+      "id": "g36", "retired": true, "category": "assault_rifle", "slot": "primary", "unlock_level": 4, "kind": "hitscan", "full_auto": true,
       "damage": 24, "headshot_multiplier": 2, "fire_interval": 0.08,
       "magazine_size": 30, "reserve_ammo": 90, "reload_time": 2.3,
       "falloff_start": 55, "falloff_end": 130, "falloff_multiplier": 0.7, "spread_base": 0.9
@@ -72,31 +72,31 @@
       "falloff_start": 35, "falloff_end": 90, "falloff_multiplier": 0.65, "recoil": { "vertical_per_shot": 0.7 }
     },
     {
-      "id": "m249", "category": "machine_gun", "slot": "primary", "unlock_level": 10, "kind": "hitscan", "full_auto": true,
+      "id": "m249", "retired": true, "category": "machine_gun", "slot": "primary", "unlock_level": 10, "kind": "hitscan", "full_auto": true,
       "damage": 22, "headshot_multiplier": 2, "fire_interval": 0.08,
       "magazine_size": 100, "reserve_ammo": 200, "reload_time": 7.0,
       "falloff_start": 30, "falloff_end": 80, "falloff_multiplier": 0.6, "recoil": { "vertical_per_shot": 0.45 }
     },
     {
-      "id": "m60", "category": "machine_gun", "slot": "primary", "unlock_level": 12, "kind": "hitscan", "full_auto": true,
+      "id": "m60", "retired": true, "category": "machine_gun", "slot": "primary", "unlock_level": 12, "kind": "hitscan", "full_auto": true,
       "damage": 26, "headshot_multiplier": 2, "fire_interval": 0.109,
       "magazine_size": 100, "reserve_ammo": 200, "reload_time": 7.5,
       "falloff_start": 35, "falloff_end": 95, "falloff_multiplier": 0.65
     },
     {
-      "id": "pkm", "category": "machine_gun", "slot": "primary", "unlock_level": 8, "kind": "hitscan", "full_auto": true,
+      "id": "pkm", "retired": true, "category": "machine_gun", "slot": "primary", "unlock_level": 8, "kind": "hitscan", "full_auto": true,
       "damage": 26, "headshot_multiplier": 2, "fire_interval": 0.0923,
       "magazine_size": 100, "reserve_ammo": 200, "reload_time": 6.5,
       "falloff_start": 35, "falloff_end": 90, "falloff_multiplier": 0.65
     },
     {
-      "id": "mp5", "category": "smg", "slot": "primary", "unlock_level": 6, "kind": "hitscan", "full_auto": true,
+      "id": "mp5", "retired": true, "category": "smg", "slot": "primary", "unlock_level": 6, "kind": "hitscan", "full_auto": true,
       "damage": 22, "headshot_multiplier": 2, "fire_interval": 0.075,
       "magazine_size": 30, "reserve_ammo": 120, "reload_time": 1.8,
       "falloff_start": 12, "falloff_end": 35, "falloff_multiplier": 0.5
     },
     {
-      "id": "ump45", "category": "smg", "slot": "primary", "unlock_level": 4, "kind": "hitscan", "full_auto": true,
+      "id": "ump45", "retired": true, "category": "smg", "slot": "primary", "unlock_level": 4, "kind": "hitscan", "full_auto": true,
       "damage": 26, "headshot_multiplier": 2, "fire_interval": 0.1,
       "magazine_size": 25, "reserve_ammo": 100, "reload_time": 2.0,
       "falloff_start": 10, "falloff_end": 30, "falloff_multiplier": 0.5
@@ -116,7 +116,7 @@
       "falloff_start": 8, "falloff_end": 30, "falloff_multiplier": 0.4
     },
     {
-      "id": "spas12", "category": "shotgun", "slot": "primary", "unlock_level": 8, "kind": "hitscan", "full_auto": false,
+      "id": "spas12", "retired": true, "category": "shotgun", "slot": "primary", "unlock_level": 8, "kind": "hitscan", "full_auto": false,
       "pump_action": true, "shell_reload": true,
       "damage": 13, "headshot_multiplier": 1.5, "fire_interval": 0.7,
       "pellets": 8, "pellet_spread": 3.0, "range": 60,
@@ -124,7 +124,7 @@
       "falloff_start": 8, "falloff_end": 30, "falloff_multiplier": 0.4
     },
     {
-      "id": "benelli_m4", "category": "shotgun", "slot": "primary", "unlock_level": 10, "kind": "hitscan", "full_auto": false,
+      "id": "benelli_m4", "retired": true, "category": "shotgun", "slot": "primary", "unlock_level": 10, "kind": "hitscan", "full_auto": false,
       "shell_reload": true,
       "damage": 13, "headshot_multiplier": 1.5, "fire_interval": 0.4,
       "pellets": 8, "pellet_spread": 3.0, "range": 60,
@@ -132,7 +132,7 @@
       "falloff_start": 8, "falloff_end": 30, "falloff_multiplier": 0.4
     },
     {
-      "id": "aa12", "category": "shotgun", "slot": "primary", "unlock_level": 14, "kind": "hitscan", "full_auto": true,
+      "id": "aa12", "retired": true, "category": "shotgun", "slot": "primary", "unlock_level": 14, "kind": "hitscan", "full_auto": true,
       "shell_reload": true,
       "damage": 10, "headshot_multiplier": 1.5, "fire_interval": 0.2,
       "pellets": 8, "pellet_spread": 3.5, "range": 60,
@@ -140,14 +140,14 @@
       "falloff_start": 8, "falloff_end": 30, "falloff_multiplier": 0.4
     },
     {
-      "id": "glock17", "category": "pistol", "slot": "secondary", "unlock_level": 3, "kind": "hitscan", "full_auto": false,
+      "id": "glock17", "retired": true, "category": "pistol", "slot": "secondary", "unlock_level": 3, "kind": "hitscan", "full_auto": false,
       "damage": 18, "headshot_multiplier": 2, "fire_interval": 0.11,
       "magazine_size": 17, "reserve_ammo": 102, "reload_time": 1.5,
       "falloff_start": 20, "falloff_end": 50, "falloff_multiplier": 0.7,
       "spread_base": 0.6, "spread_per_shot": 0.2, "spread_max": 3.5, "spread_recovery": 0.6
     },
     {
-      "id": "deagle", "category": "pistol", "slot": "secondary", "unlock_level": 5, "kind": "hitscan", "full_auto": false,
+      "id": "deagle", "category": "pistol", "slot": "secondary", "unlock_level": 0, "kind": "hitscan", "full_auto": false,
       "damage": 45, "headshot_multiplier": 2, "fire_interval": 0.35,
       "magazine_size": 7, "reserve_ammo": 35, "reload_time": 2.2,
       "falloff_start": 30, "falloff_end": 70, "falloff_multiplier": 0.8,
@@ -155,7 +155,7 @@
       "recoil": { "vertical_per_shot": 1.2, "recovery_rate": 6, "max_climb": 6 }
     },
     {
-      "id": "m82", "category": "sniper", "slot": "primary", "unlock_level": 7, "kind": "hitscan", "full_auto": false,
+      "id": "m82", "retired": true, "category": "sniper", "slot": "primary", "unlock_level": 7, "kind": "hitscan", "full_auto": false,
       "damage": 120, "headshot_multiplier": 2.5, "fire_interval": 1.0, "move_speed_multiplier": 0.75,
       "magazine_size": 10, "reserve_ammo": 30, "reload_time": 4.0,
       "range": 800, "scope_fov": 15, "zoom_levels": 1,
@@ -165,7 +165,7 @@
     },
     {
       "id": "awm", "category": "sniper", "slot": "primary", "unlock_level": 11, "kind": "hitscan", "full_auto": false,
-      "damage": 150, "headshot_multiplier": 2, "fire_interval": 1.5, "move_speed_multiplier": 0.75,
+      "damage": 80, "headshot_multiplier": 2, "fire_interval": 1.5, "move_speed_multiplier": 0.75,
       "magazine_size": 5, "reserve_ammo": 20, "reload_time": 3.6,
       "range": 700, "scope_fov": 12, "zoom_levels": 1,
       "falloff_start": 700, "falloff_end": 700, "falloff_multiplier": 1.0,
@@ -173,7 +173,7 @@
       "recoil": { "vertical_per_shot": 1.6, "recovery_rate": 5, "max_climb": 4 }
     },
     {
-      "id": "svd", "category": "sniper", "slot": "primary", "unlock_level": 9, "kind": "hitscan", "full_auto": false,
+      "id": "svd", "retired": true, "category": "sniper", "slot": "primary", "unlock_level": 9, "kind": "hitscan", "full_auto": false,
       "damage": 55, "headshot_multiplier": 2.5, "fire_interval": 0.4, "move_speed_multiplier": 0.85,
       "magazine_size": 10, "reserve_ammo": 40, "reload_time": 3.0,
       "range": 600, "scope_fov": 18, "zoom_levels": 1,

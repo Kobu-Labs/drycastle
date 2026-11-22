@@ -61,6 +61,7 @@ public class WeaponsFile
         var file = new WeaponsFile { Version = raw.Version, StartingWeapon = raw.StartingWeapon ?? "", Weapons = weapons };
         if (file.Find(file.StartingWeapon) is not { } start)
             throw new DataFileException($"weapons.json: starting_weapon \"{file.StartingWeapon}\" is not a weapon");
+        if (start.Retired) throw new DataFileException($"weapons.json: starting_weapon \"{start.Id}\" is retired");
         if (start.UnlockLevel != 0)
             throw new DataFileException($"weapons.json: starting_weapon \"{start.Id}\" must have unlock_level 0");
         return file;
@@ -161,6 +162,7 @@ public class WeaponsFile
             Slot = slot,
             UnlockLevel = reward != HuntTier.Common ? WeaponDef.RewardUnlockLevel : r.UnlockLevel ?? 0,
             RewardTier = reward,
+            Retired = r.Retired ?? false,
             FullAuto = r.FullAuto ?? false,
             PumpAction = r.PumpAction ?? false,
             ShellReload = r.ShellReload ?? false,
@@ -314,6 +316,7 @@ public class WeaponsFile
         public string? Slot { get; set; }
         public int? UnlockLevel { get; set; }
         public string? RewardTier { get; set; }
+        public bool? Retired { get; set; }
         public bool? FullAuto { get; set; }
         public bool? PumpAction { get; set; }
         public bool? ShellReload { get; set; }
@@ -374,6 +377,8 @@ public class WeaponDef
     public HuntTier RewardTier { get; set; }
     public const int RewardUnlockLevel = int.MaxValue;
     public bool IsReward => RewardTier != HuntTier.Common;
+    /// <summary>Cut from the loadout (#477): not offered in the editor, refused on save, skipped by every default and fallback. The entry stays because killstreak guns and the unlock table still name it.</summary>
+    public bool Retired { get; set; }
     public bool FullAuto { get; set; }
     /// <summary>Pump action: the fire interval is the pump cycle, and the weapon is never full auto (validated). No other runtime effect yet.</summary>
     public bool PumpAction { get; set; }

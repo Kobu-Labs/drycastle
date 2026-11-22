@@ -52,15 +52,15 @@ public static class DevUnlocks
         slot switch
         {
             // each arm names its own slot number, so the kit always sits in the slot it is for
-            // assault rifle, pistol, Fleet Foot, UAV, sentry turret, care package
-            0 => new Loadout(0, "ak47", "pistol", "fleet_foot", "uav", "turret", "care_package"),
-            // sniper, pistol, Steady Lung, UAV, attack missile, sentry turret
-            1 => new Loadout(1, "sniper", "pistol", "steady_lung", "uav", "attack_missile", "turret"),
-            // pump shotgun, Glock, Quick Hands, UAV, care package, attack missile
-            2 => new Loadout(2, "remington870", "glock17", "quick_hands", "uav", "care_package", "attack_missile"),
+            // assault rifle, Desert Eagle, Fleet Foot, UAV, sentry turret, care package
+            0 => new Loadout(0, "ak47", "deagle", "fleet_foot", "uav", "turret", "care_package"),
+            // sniper, Desert Eagle, Steady Lung, UAV, attack missile, sentry turret
+            1 => new Loadout(1, "awm", "deagle", "steady_lung", "uav", "attack_missile", "turret"),
+            // pump shotgun, Desert Eagle, Quick Hands, UAV, care package, attack missile
+            2 => new Loadout(2, "remington870", "deagle", "quick_hands", "uav", "care_package", "attack_missile"),
             // SMG, Desert Eagle, Swift Swap, UAV, attack helicopter, helicopter helper
-            3 => new Loadout(3, "mp5", "deagle", "swift_swap", "uav", "attack_helicopter", "helicopter_helper"),
+            3 => new Loadout(3, "p90", "deagle", "swift_swap", "uav", "attack_helicopter", "helicopter_helper"),
             // LMG with the big streaks, Hot Streak so they come sooner
-            _ => new Loadout(4, "m249", "deagle", "hot_streak", "attack_helicopter", "ac130", "moab"),
+            _ => new Loadout(4, "rpk", "deagle", "hot_streak", "attack_helicopter", "ac130", "moab"),
         };
 }

@@ -32,8 +32,8 @@ public class CorpseTests
         return (world, new CorpseBook(world), despawns);
     }
 
-    /// <summary>A taker holding a primary (ak47) and a secondary (glock17), knife after, as LoadoutHotbar builds it.</summary>
-    static PlayerWeapons Taker(string primary = "ak47", string secondary = "glock17") =>
+    /// <summary>A taker holding a primary (ak47) and a secondary (deagle), knife after, as LoadoutHotbar builds it.</summary>
+    static PlayerWeapons Taker(string primary = "ak47", string secondary = "deagle") =>
         new(File, null, LoadoutHotbar.Build(File, new Loadout(0, primary, secondary, "", "", "", "")));
 
     static Corpse CorpseOf(string weapon, Vector3 at, int rounds = 60, ushort owner = 7) =>
@@ -54,7 +54,7 @@ public class CorpseTests
     public void APrimaryReplacesThePrimaryOrTheSecondaryButAPistolOnlyTheSecondary()
     {
         var ak = File.Weapons[IndexOf("ak47")];
-        var pistol = File.Weapons[IndexOf("glock17")];
+        var pistol = File.Weapons[IndexOf("deagle")];
         var knife = File.Weapons[IndexOf("knife")];
         Assert.True(CorpseRules.CanReplace(ak, CorpseRules.PrimaryPos));
         Assert.True(CorpseRules.CanReplace(ak, CorpseRules.SecondaryPos));
@@ -83,13 +83,13 @@ public class CorpseTests
     {
         var (world, book, _) = Setup();
         var id = book.Add(CorpseOf("m4a1", Vector3.Zero))!.Value;
-        var taker = Taker(secondary: "glock17");
+        var taker = Taker(secondary: "rpg");
         Assert.Equal(PickUpResult.Ok, book.TryPickUp(id, Vector3.Zero, taker, File, CorpseRules.SecondaryPos));
 
-        // the taker's secondary is now the m4a1; the glock it gave up is on the corpse and can go back into the secondary position
+        // the taker's secondary is now the m4a1; the rpg it gave up is on the corpse and can go back into the secondary position
         Assert.Equal(IndexOf("m4a1"), taker.HotbarWeapon(CorpseRules.SecondaryPos));
         Assert.Equal(PickUpResult.Ok, book.TryPickUp(id, Vector3.Zero, taker, File, CorpseRules.SecondaryPos));
-        Assert.Equal(IndexOf("glock17"), taker.HotbarWeapon(CorpseRules.SecondaryPos));
+        Assert.Equal(IndexOf("rpg"), taker.HotbarWeapon(CorpseRules.SecondaryPos));
     }
 
     [Fact]
@@ -98,15 +98,15 @@ public class CorpseTests
         var (world, book, _) = Setup();
         var corpse = CorpseOf("m4a1", Vector3.Zero);
         var id = book.Add(corpse)!.Value;
-        var taker = Taker(secondary: "glock17");
-        var glockRounds = taker.RoundsOf(IndexOf("glock17"));
+        var taker = Taker(secondary: "rpg");
+        var rpgRounds = taker.RoundsOf(IndexOf("rpg"));
         Assert.Equal(PickUpResult.Ok, book.TryPickUp(id, Vector3.Zero, taker, File, CorpseRules.SecondaryPos));
-        Assert.Equal(IndexOf("glock17"), corpse.Weapon);
-        Assert.Equal(glockRounds, corpse.Rounds);
+        Assert.Equal(IndexOf("rpg"), corpse.Weapon);
+        Assert.Equal(rpgRounds, corpse.Rounds);
         // the wire state the clients read: weapon in State, rounds in Hp
         var s = corpse.Serialize();
-        Assert.Equal(IndexOf("glock17"), s.State);
-        Assert.Equal(glockRounds, s.Hp);
+        Assert.Equal(IndexOf("rpg"), s.State);
+        Assert.Equal(rpgRounds, s.Hp);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class CorpseTests
     {
         var (world, book, _) = Setup();
         var id = book.Add(CorpseOf("deagle", Vector3.Zero))!.Value;
-        var taker = Taker();
+        var taker = Taker(secondary: "rpg"); // not already holding the deagle
         Assert.Equal(PickUpResult.WrongKind, book.TryPickUp(id, Vector3.Zero, taker, File, CorpseRules.PrimaryPos));
         Assert.Equal(PickUpResult.Ok, book.TryPickUp(id, Vector3.Zero, taker, File, CorpseRules.SecondaryPos));
     }
