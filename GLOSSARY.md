@@ -117,7 +117,7 @@ A chat line starting with "/", run by the server for an admin: `/bots` (how many
 _Avoid_: console command, cheat
 
 **Care package**:
-The killstreak that gives its user a random Perk; better perks are rarer.
+The killstreak that gives its user a random Perk; better perks are rarer. Thrown with the killstreak key like a smoke grenade: the canister flies, smokes where it lands, then the crate parachutes down there; any player in reach can open it.
 _Avoid_: supply drop, crate
 
 **Weapon category**:

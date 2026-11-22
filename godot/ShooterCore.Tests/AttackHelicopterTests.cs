@@ -16,7 +16,6 @@ public class AttackHelicopterTests
     /// <summary>The server's side in memory: records launches and removals, and the gunner's inputs.</summary>
     sealed class FakeWorld : IAttackHelicopterWorld
     {
-        public Vector3 Centre { get; init; } = new(10, 2, -5);
         public bool Room { get; set; } = true;
         public readonly List<(ushort Owner, Vector3 Centre, float Phase)> Launches = new();
         public readonly List<ushort> Removed = new();
@@ -88,15 +87,15 @@ public class AttackHelicopterTests
     }
 
     [Fact]
-    public void The_helicopter_circles_the_map_centre_and_starts_on_the_owners_bearing()
+    public void The_helicopter_circles_the_owner()
     {
         var rig = new Rig();
         rig.Earn();
-        rig.Service.Activate(Owner, 0, new Vector3(10, 0, -5 + 20)); // 20 m due +Z of the centre
+        rig.Service.Activate(Owner, 0, new Vector3(10, 2, -5 + 20));
         var (owner, centre, phase) = rig.World.Launches.Single();
         Assert.Equal(Owner, owner);
-        Assert.Equal(rig.World.Centre, centre);
-        Assert.Equal(MathF.PI / 2, phase, 4);
+        Assert.Equal(new Vector3(10, 2, 15), centre);
+        Assert.Equal(0f, phase, 4);
     }
 
     [Fact]

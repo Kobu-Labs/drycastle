@@ -19,6 +19,13 @@ public partial class NetClient
     {
         public Node3D Node = null!;
         public MeshInstance3D Canopy = null!;
+        /// <summary>The crate body (hidden while only the smoke canister is out).</summary>
+        public MeshInstance3D Box = null!;
+        /// <summary>The thrown smoke canister and its smoke: shown while the canister flies and marks the spot.</summary>
+        public Node3D Canister = null!;
+        public CpuParticles3D Smoke = null!;
+        /// <summary>Where the canister lay (seen while it marked), so the smoke keeps rising there while the crate comes down. Null for a crate first seen falling.</summary>
+        public Vector3? Landing;
     }
 
     readonly Dictionary<ushort, CrateView> _crates = new();
@@ -61,8 +68,27 @@ public partial class NetClient
         };
         node.AddChild(box);
         node.AddChild(canopy);
+        // the canister the owner threw: a small orange can with a coloured smoke column, so the spot reads from afar
+        var canister = new Node3D { Name = "Canister" };
+        canister.AddChild(new MeshInstance3D
+        {
+            Mesh = new CylinderMesh { TopRadius = 0.06f, BottomRadius = 0.06f, Height = 0.2f },
+            MaterialOverride = CrateMaterial(new Color(0.9f, 0.45f, 0.1f)),
+            Position = new Vector3(0, 0.1f, 0),
+        });
+        var smoke = new CpuParticles3D
+        {
+            Mesh = new SphereMesh { Radius = 0.5f, Height = 1f, RadialSegments = 8, Rings = 4 },
+            Amount = 60, Lifetime = 5.0, LocalCoords = false, Emitting = false,
+            Direction = Vector3.Up, Spread = 12f, InitialVelocityMin = 3f, InitialVelocityMax = 5f, Gravity = new Vector3(0, 0.6f, 0),
+            ScaleAmountMin = 1.2f, ScaleAmountMax = 2.6f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(1f, 0.55f, 0.1f, 0.55f), Transparency = BaseMaterial3D.TransparencyEnum.Alpha, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded },
+            Position = new Vector3(0, 0.2f, 0),
+        };
+        canister.AddChild(smoke);
+        node.AddChild(canister);
         Owned.AddChild(node);
-        _crates[e.Id] = new CrateView { Node = node, Canopy = canopy };
+        _crates[e.Id] = new CrateView { Node = node, Canopy = canopy, Box = box, Canister = canister, Smoke = smoke };
     }
 
     /// <summary>
@@ -89,8 +115,19 @@ public partial class NetClient
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
             var p = e.State.Position;
+            var flying = e.State.State == CarePackageRules.StateThrown && e.Buf.At(RenderTickNow()) != null;
+            if (flying) p = e.Buf.At(RenderTickNow())!.Value.Pos; // the canister's arc is smoothed between snapshots
             v.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
-            v.Canopy.Visible = e.State.State == CarePackageRules.StateFalling;
+            var st = e.State.State;
+            var canisterOnly = st == CarePackageRules.StateThrown || st == CarePackageRules.StateMarking;
+            v.Canopy.Visible = st == CarePackageRules.StateFalling;
+            v.Box.Visible = !canisterOnly;
+            v.Canister.Visible = canisterOnly;
+            // the smoke starts at the throw and keeps pouring while the crate comes down, until it lands
+            if (st == CarePackageRules.StateMarking) v.Landing = new Vector3(p.X, p.Y, p.Z);
+            var smoking = canisterOnly || (st == CarePackageRules.StateFalling && v.Landing != null);
+            if (v.Smoke.Emitting != smoking) v.Smoke.Emitting = smoking;
+            v.Smoke.GlobalPosition = st == CarePackageRules.StateFalling && v.Landing is { } l ? l + new Vector3(0, 0.2f, 0) : v.Node.GlobalPosition + new Vector3(0, 0.2f, 0);
             v.Node.Visible = !IsCrateOpening(id);
         }
         _crateNear = NearestCrateInReach();

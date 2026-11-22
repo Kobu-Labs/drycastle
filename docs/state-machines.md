@@ -249,11 +249,15 @@ stateDiagram-v2
 
 ## CarePackage.Life
 
-A care package crate: falls on its parachute, lands and can be opened, then ends opened or expired (the world manager despawns it once it has ended).
+A care package: a canister flies from the owner's hand and smokes where it lands, then the crate falls on its parachute, lands and can be opened, then ends opened or expired (the world manager despawns it once it has ended).
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Falling
+    [*] --> Thrown
+    Thrown --> Marking
+    Thrown --> Expired
+    Marking --> Falling
+    Marking --> Expired
     Falling --> Landed
     Falling --> Expired
     Landed --> Opened
@@ -266,6 +270,8 @@ stateDiagram-v2
 - **Landed**: On the ground (altitude at the landing point's Y): openable by anyone in reach.
 - **Opened**: Opened by a player: ended, the reward is granted, the book despawns it at once. Cannot be reached from Expired.
 - **Expired**: The lifetime ran out unopened: ended. An ended crate cannot be opened even before it is despawned.
+- **Thrown**: The canister is in the air (ballistic, no crate yet); not openable.
+- **Marking**: The canister lies at the landing point and smokes for the mark time; then the crate starts from above it. Not openable.
 
 ## Casing.Phase
 
