@@ -578,8 +578,8 @@ items, ADR 0018 (#267, protocol 31).
 - **The Companion picker (#488).** Under the bag on the Equipment screen, after a line: one cell per Companion the player can have out (`ItemCell.SetPicture`: a live 3D view of
   its model playing its idle clip, `CompanionPortrait`, rendered only while the screen is open; the name as a tooltip), in the bag's three columns. The one that is out has a filled box, a tick in
   its corner and "(with you)" in its tooltip. Click or Enter on another puts it out (the old one goes in a puff, the new one appears beside the player); the choice
-  is kept with the Profile. No "none" (a Companion is always on), no drag, no drop. A player who owns none sees one empty cell with a paw ghost ("No Companion
-  yet"). The arrows go from the bag's bottom row down into the picker and back (`EquipmentNav.Move`, `CellHome.Companion`). Rules and wire: `CompanionRoster`
+  is kept with the Profile. No "none" (a Companion is always on), no drag, no drop. After the owned ones come the reward Companions not earned yet, locked: dimmed, a padlock in the corner, "(locked: reach Gold in
+  the Hunter's Log)" in the tooltip; activating one shakes it. One empty cell with a paw ghost ("No Companion yet") only when there is nothing to show. The arrows go from the bag's bottom row down into the picker and back (`EquipmentNav.Move`, `CellHome.Companion`). Rules and wire: `CompanionRoster`
   (events 114 `CompanionPick`, 115 `Companions`, protocol 84). Dev mode (`--unlock-all`) offers every Companion.
 - **Drawn on the character (#266).** `items.json` `model` names the item's model (`assets/`, authored in the slot's frame: metres, facing -Z, for headgear
   the origin is the middle of the head). `CharacterView.SetWorn(slot, item)` (`CharacterView.Worn.cs`) hangs it on the head bone, so it follows every

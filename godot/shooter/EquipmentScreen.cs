@@ -13,7 +13,8 @@ namespace Drycastle.Shooter;
 /// shows the head close up. One glyph-only hint row follows the active device.
 /// Under the bag, after a line, is the Companion picker (#488): a cell for each Companion the player can have out (a live 3D view of its model, <see cref="CompanionPortrait"/>; its name as a tooltip),
 /// the one that is out filled and ticked ("with you" in its tooltip). Click or Enter on another puts that one out: the old one goes in a puff and the new one appears
-/// beside the player, and the choice is kept with the Profile. A player who owns none sees one empty cell with a paw ghost. Companion cells do not drag or drop.
+/// beside the player, and the choice is kept with the Profile. After them come the reward Companions the player has not earned yet, locked: dimmed, a padlock, and the
+/// tier of the Hunter's Log that unlocks them in the tooltip; activating one shakes it. Only a game with no Companion to show at all has one empty cell with a paw ghost. Companion cells do not drag or drop.
 /// It is a non-pausing overlay in the HUD, like the map: the mouse is released (UiShell asks <see cref="Hud.EquipmentOpen"/>), the movement keys still
 /// work (<see cref="Player.MoveWithFreeMouse"/>), firing does not, and nothing pauses. It closes with F, Esc, death, the end of the match and a turret
 /// or missile view. It never changes what it shows by itself: every move is a wish to the server, and the cells redraw on the next Equipment event.
@@ -162,13 +163,15 @@ public sealed partial class EquipmentScreen : Control
     }
 
     /// <summary>
-    /// The picker's cells: one per Companion the player can pick, in the order of companions.json, the one that is out marked. With none to pick it is one empty cell
-    /// (a paw ghost, "No Companion yet"), so the row never vanishes and the arrows always have somewhere to go.
+    /// The picker's cells: one per Companion the player can pick, in the order of companions.json, the one that is out marked; then the reward Companions not earned
+    /// yet, locked. With nothing to show it is one empty cell (a paw ghost, "No Companion yet"), so the row never vanishes and the arrows always have somewhere to go.
     /// </summary>
     void RefreshCompanions()
     {
         var owned = _client.CompanionsOwned;
-        var want = Math.Max(1, owned.Count);
+        var locked = _client.CompanionsLocked;
+        var shown = owned.Count + locked.Count;
+        var want = Math.Max(1, shown);
         while (_companions.Count > want)
         {
             var last = _companions[^1];
@@ -188,14 +191,22 @@ public sealed partial class EquipmentScreen : Control
         }
         for (var i = 0; i < _companions.Count; i++)
         {
-            var def = i < owned.Count ? owned[i] : -1;
+            var def = i < owned.Count ? owned[i] : i < shown ? locked[i - owned.Count] : -1;
             var view = PortraitOf(i, def);
             if (def < 0) { _companions[i].SetPicture(null, Strings.T("companion.none"), false); continue; }
-            var isOut = def == _client.CompanionOut;
             var name = _client.CompanionName(def);
+            if (i >= owned.Count)
+            {
+                _companions[i].SetPicture(view?.Picture, Strings.F("companion.locked", name, Strings.T(TierKey(_client.CompanionTier(def)))), false, locked: true);
+                continue;
+            }
+            var isOut = def == _client.CompanionOut;
             _companions[i].SetPicture(view?.Picture, isOut ? Strings.F("companion.out", name) : name, isOut);
         }
     }
+
+    /// <summary>The name of a collection tier, as the Hunter's Log words it.</summary>
+    static string TierKey(HuntTier tier) => tier switch { HuntTier.Gold => "log.tier.gold", HuntTier.Silver => "log.tier.silver", _ => "log.tier.bronze" };
 
     /// <summary>The 3D view of the Companion a picker cell shows: kept while the cell shows the same one, made anew (the old one freed) when it shows another.</summary>
     CompanionPortrait? PortraitOf(int cell, int def)
@@ -321,11 +332,12 @@ public sealed partial class EquipmentScreen : Control
         _wait.Begin(Time.GetTicksMsec() / 1000.0);
     }
 
-    /// <summary>Click or Enter on a Companion: a wish to have it out. The one that is out already, and the empty cell, do nothing. Waits for the answer like an item wish.</summary>
+    /// <summary>Click or Enter on a Companion: a wish to have it out. The one that is out already, and the empty cell, do nothing; a locked one shakes. Waits for the answer like an item wish.</summary>
     void PickCompanion(ItemCell cell)
     {
         if (_wait.Active || !_open) return;
         var owned = _client.CompanionsOwned;
+        if (cell.Locked) { cell.Refuse(); return; } // not earned yet: its tooltip says how
         if (cell.Ref.Index >= owned.Count || owned[cell.Ref.Index] == _client.CompanionOut) return;
         _client.RequestCompanion(owned[cell.Ref.Index]);
         Sfx.Ui("ui.click");

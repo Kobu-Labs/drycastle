@@ -11,7 +11,8 @@ namespace Drycastle.Shooter;
 /// Delete asks to drop it, the arrows ask the screen to move focus. A refused cell shakes (a flash of the danger border with reduce motion) and plays the
 /// error sound (<see cref="Refuse"/>). The mouse hovering a cell also gives it focus, so Enter and Delete act on what the player points at.
 /// A cell can also show a picture that is no Item (<see cref="SetPicture"/>: a Companion of the Equipment screen's picker, #488): the picture as it is (a live 3D view), a
-/// name tooltip, and when it is the chosen one a filled box with a tick in its corner and the word in the tooltip, so "chosen" is never colour alone.
+/// name tooltip, and when it is the chosen one a filled box with a tick in its corner and the word in the tooltip, so "chosen" is never colour alone. A locked picture (not owned yet) is dimmed with a padlock in the
+/// same corner and says so in its tooltip; activating it refuses.
 /// </summary>
 public sealed partial class ItemCell : Control
 {
@@ -52,7 +53,8 @@ public sealed partial class ItemCell : Control
     public HeldItem? Item => _item;
 
     HeldItem? _item;
-    bool _picture, _chosen; // shows a picture that is no Item (SetPicture), and it is the chosen one
+    bool _picture, _chosen, _locked; // shows a picture that is no Item (SetPicture); it is the chosen one; it is not the player's yet
+    Glyph? _padlock;
     Texture2D? _icon;
     string _name = "";
     Glyph? _ghost;
@@ -88,6 +90,7 @@ public sealed partial class ItemCell : Control
     {
         _item = item;
         _picture = _chosen = false;
+        SetLocked(false);
         PlaceGhost();
         _icon = item == null ? null : icon;
         _name = item == null ? "" : name;
@@ -101,11 +104,12 @@ public sealed partial class ItemCell : Control
     /// Shows a picture that is no Item, drawn as it is (the ghost stays when there is none), and a name for the tooltip (empty: no tooltip).
     /// <paramref name="chosen"/> marks the one in use: a filled box and a tick. The name should say it too.
     /// </summary>
-    public void SetPicture(Texture2D? icon, string name, bool chosen)
+    public void SetPicture(Texture2D? icon, string name, bool chosen, bool locked = false)
     {
         _item = null;
         _picture = true;
-        _chosen = chosen;
+        _chosen = chosen && !locked;
+        SetLocked(locked);
         _icon = icon;
         _name = name;
         if (_ghost != null) _ghost.Visible = icon == null;
@@ -113,6 +117,25 @@ public sealed partial class ItemCell : Control
         if (_tipText != null) _tipText.Text = _name;
         UpdateTip();
         QueueRedraw();
+    }
+
+    /// <summary>True for a picture the player does not own yet (<see cref="SetPicture"/>).</summary>
+    public bool Locked => _locked;
+
+    /// <summary>The padlock of a locked picture: in the corner where a chosen one has its tick (a cell is never both).</summary>
+    void SetLocked(bool locked)
+    {
+        _locked = locked;
+        if (locked && _padlock == null)
+        {
+            var side = GetThemeConstant("tick_size", Type);
+            _padlock = new Glyph(Glyph.Kind.Padlock, GetThemeColor("padlock", Type), side);
+            AddChild(_padlock);
+        }
+        if (_padlock == null) return;
+        _padlock.Visible = locked;
+        _padlock.Size = _padlock.CustomMinimumSize;
+        _padlock.Position = new Vector2(Size.X - _padlock.Size.X - ShooterTheme.Space / 2f, ShooterTheme.Space / 2f);
     }
 
     /// <summary>A disabled cell takes no input and is drawn dimmed (the screen waits for the server's answer).</summary>
@@ -188,7 +211,7 @@ public sealed partial class ItemCell : Control
         }
         else if (_picture)
         {
-            if (_icon != null) DrawPicture(_icon, dim);
+            if (_icon != null) DrawPicture(_icon, _locked ? dim * ShooterTheme.DisabledAlpha : dim);
             if (_chosen) DrawTick(dim);
         }
         if (HasFocus()) DrawStyleBox(GetThemeStylebox("focus", Type), area);
@@ -257,6 +280,7 @@ public sealed partial class ItemCell : Control
         {
             case NotificationResized:
                 PlaceGhost();
+                if (_padlock != null) SetLocked(_locked);
                 QueueRedraw();
                 break;
             case NotificationMouseEnter:
