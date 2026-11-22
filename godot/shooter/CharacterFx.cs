@@ -221,29 +221,33 @@ public sealed partial class CharacterView : Node3D
         SetRagdoll(true, _flailAmount, _flailFrozen);
     }
 
-    /// <summary>What <see cref="SetWeapon"/> holds for a pair of binoculars: not a weapon id.</summary>
-    const string BinocularsHeld = "#binoculars";
-    bool _binoculars;
+    /// <summary>What <see cref="SetWeapon"/> holds for a pair of binoculars: this and the pair's item id, not a weapon id.</summary>
+    const string BinocularsHeld = "#binoculars:";
+    ItemDef? _binoculars;
 
     /// <summary>
-    /// The player holds binoculars at the face (GLOSSARY "Binoculars"): from the next <see cref="Apply"/> the pair replaces the weapon in the hands,
-    /// both raised to the eyes, until it is set back. A dead body holds nothing.
+    /// The player holds <paramref name="pair"/> at the face (GLOSSARY "Binoculars"; null: none): from the next <see cref="Apply"/> the pair replaces the
+    /// weapon in the hands, both raised to the eyes, until it is set back. A dead body holds nothing.
     /// </summary>
-    public void SetBinoculars(bool up) => _binoculars = up;
+    public void SetBinoculars(ItemDef? pair) => _binoculars = pair;
+
+    /// <summary>How wide a held pair is drawn, metres: the width of the soldier's face under the helmet, readable from a few metres (real binoculars are about 17 cm).</summary>
+    const float BinocularsWidth = 0.28f;
 
     /// <summary>
-    /// The pair a character holds: the model of the paid pack wearing its atlas, drawn 0.8 x its authored size (0.35 m wide) so it is 28 cm
-    /// across, the width of the soldier's face under the helmet and readable from a few metres (real binoculars are about 17 cm), or two
-    /// light barrels when the pack is not there.
+    /// The pair a character holds: the item's own model (items.json; the standard pair and the hunting pair differ), drawn <see cref="BinocularsWidth"/>
+    /// wide, or two light barrels when the model is not there. Its origin is the middle of the eyepiece end and it reaches away along -Z, so
+    /// <see cref="ArmsReadyPose"/> places the eyepieces at the eyes whatever the pair's length.
     /// </summary>
-    static Node3D MakeBinoculars()
+    static Node3D MakeBinoculars(ItemDef? pair)
     {
         var root = new Node3D { Name = "Binoculars" };
-        if (SyntyLib.Instance("props/binoculars_01", "glb/atlas/military_01_A.png") is { } model)
+        if (pair is { Model: not "" } && NetClient.ItemModel(pair) is { } model && NetClient.ModelBounds(model, Transform3D.Identity, true) is { } box && box.Size.X > 0.001f)
         {
-            // the pack's props face +Z (eyepieces at -Z), the hands hold things facing -Z; centred on its own height (0.134 m authored)
-            const float s = 0.8f;
-            model.Transform = new Transform3D(new Basis(Vector3.Up, Mathf.Pi).Scaled(Vector3.One * s), new Vector3(0, -0.067f * s, 0));
+            // the packs' pairs face +Z (eyepieces at -Z), the hands hold things facing -Z: turned round, with the middle of the eyepiece end on the origin
+            var s = BinocularsWidth / box.Size.X;
+            var c = box.GetCenter();
+            model.Transform = new Transform3D(new Basis(Vector3.Up, Mathf.Pi).Scaled(Vector3.One * s), new Vector3(c.X, -c.Y, box.Position.Z) * s);
             root.AddChild(model);
             return root;
         }
@@ -252,7 +256,7 @@ public sealed partial class CharacterView : Node3D
             root.AddChild(new MeshInstance3D
             {
                 Mesh = new CylinderMesh { TopRadius = 0.05f, BottomRadius = 0.062f, Height = 0.26f, RadialSegments = 12 },
-                MaterialOverride = light, Position = new Vector3(x, 0, 0), Rotation = new Vector3(Mathf.Pi / 2, 0, 0),
+                MaterialOverride = light, Position = new Vector3(x, 0, -0.13f), Rotation = new Vector3(Mathf.Pi / 2, 0, 0),
             });
         return root;
     }
@@ -260,8 +264,8 @@ public sealed partial class CharacterView : Node3D
     /// <summary>Update from snapshot state: horizontal speed (m/s), whether it fired in the last moments, dead, and the weapon id it holds.</summary>
     public void Apply(float speed, bool firing, bool dead, string weaponId)
     {
-        if (_binoculars && !dead) { weaponId = BinocularsHeld; firing = false; }
-        if (_arms != null) _arms.Binoculars = weaponId == BinocularsHeld;
+        if (_binoculars != null && !dead) { weaponId = BinocularsHeld + _binoculars.Id; firing = false; }
+        if (_arms != null) _arms.Binoculars = weaponId.StartsWith(BinocularsHeld, StringComparison.Ordinal);
         _lastSpeed = speed; _lastFiring = firing; _lastDead = dead; _lastWeapon = weaponId;
         SetWeapon(dead ? "" : weaponId);
         if (!HasModel) return;
@@ -321,7 +325,7 @@ public sealed partial class CharacterView : Node3D
         if (id == _heldId || WeaponParent() == null) return;
         _heldId = id;
         _held?.QueueFree();
-        _held = id == "" ? null : id == BinocularsHeld ? MakeBinoculars() : WeaponFx.Make(id);
+        _held = id == "" ? null : id.StartsWith(BinocularsHeld, StringComparison.Ordinal) ? MakeBinoculars(_binoculars) : WeaponFx.Make(id);
         if (_held == null) return;
         // the weapon is built in metres and the rig is scaled by Scale
         _held.Scale = Vector3.One / Scale;

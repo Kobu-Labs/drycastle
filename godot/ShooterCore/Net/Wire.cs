@@ -48,7 +48,7 @@ public enum EventKind : byte
     HuntShot = 25,
     /// <summary>Client to server: the player raised or lowered the binoculars (<see cref="Binoculars.EncodeRaise"/>: u8).</summary>
     RaiseBinoculars = 26,
-    /// <summary>Server to everyone but that player, and to a joiner for each player who has them up: a player's binoculars are up or down (<see cref="Binoculars.EncodeRaised"/>: u16 player id, u8); the client poses the character.</summary>
+    /// <summary>Server to everyone but that player, and to a joiner for each player who has them up: a player's binoculars are up or down (<see cref="Binoculars.EncodeRaised"/>: u16 player id, u8, u8 the pair's item index); the client poses the character with that pair.</summary>
     BinocularsRaised = 27,
     /// <summary>Server to everyone (the lamp's owner too), when it changes and, to a joiner, for each player whose head lamp is on: a player's head lamp is on or off (<see cref="HeadLamp.Encode"/>: u16 player id, u8). The client draws the beam from that player's head.</summary>
     HeadLampState = 31,
@@ -383,7 +383,8 @@ public static class Wire
     //   v82 Companions (#488): world entity type 58 (CompanionRules): the owner field is the index in companions.json, the state byte a CompanionPose
     //   v83 shootable road sign plates (ADR 0039): events 252 SignPlateState and 253 SignPlateSync
     //   v84 the Companion picker (#488): events 114 CompanionPick and 115 Companions (CompanionRoster); the scout kind's marks: event 116 CompanionMarks
-    public const byte ProtocolVersion = 84;
+    //   v85 the binoculars seen by the others name the pair (#341): event 27 BinocularsRaised ends in the pair's item index (u8)
+    public const byte ProtocolVersion = 85;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

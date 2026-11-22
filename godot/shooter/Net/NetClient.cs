@@ -17,7 +17,8 @@ public partial class NetClient : Node
         public readonly ThrowGuess Guess = new(); /// <summary>The guessed throw is drawn as the dead ragdoll (the server has said dead; until then a hit that hurts tumbles as a thrown living body, <see cref="BodyFlingTracker"/>). GuessFlung: this guess started that tumble; GuessConfirmed: the server's PlayerFlung came for it. And the launch speed of the guess and where the server had the body last frame, to see when the server's living body has come down (#411).</summary>
         public bool GuessRagdoll, GuessFlung, GuessConfirmed; public float GuessLaunch; public Vector3 GuessServerLast; public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
         /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the vehicle and seat this player sits in (<see cref="SeatRiders"/>).</summary>
-        public float ShownYaw, ShownPitch; public bool Binoculars; /// <summary>The squad whose name the name tag shows after the name (0: none); the tag is rebuilt when it changes (#379).</summary>
+        public float ShownYaw, ShownPitch; /// <summary>The pair of binoculars held at the face, or null.</summary>
+        public ItemDef? Binoculars; /// <summary>The squad whose name the name tag shows after the name (0: none); the tag is rebuilt when it changes (#379).</summary>
         public byte TagSquad; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
 
     public const double InterpDelayTicks = 3.0;
@@ -557,7 +558,7 @@ public partial class NetClient : Node
             PixelSize = 0.005f, NoDepthTest = true,
         });
         World.AddChild(node);
-        return new Remote { Node = node, View = view, Binoculars = _binocularsBy.Contains(id) };
+        return new Remote { Node = node, View = view, Binoculars = _binocularsBy.GetValueOrDefault(id) };
     }
 
     void OnSelf(EntityRecord rec, ushort ack)

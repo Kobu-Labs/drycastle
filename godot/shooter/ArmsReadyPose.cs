@@ -53,13 +53,18 @@ public sealed partial class ArmsReadyPose : SkeletonModifier3D
 
     /// <summary>
     /// Binoculars instead of a weapon: both hands are raised to the face, one on each barrel, and <see cref="Aim"/> (the node the pair hangs on) sits
-    /// between them in front of the eyes, level. No recoil, no pitch.
+    /// at the eyes. The pair and the hands follow the head bone (#341): the clips move the head (the Run clip leans it 0.2 m forward and tips it 11
+    /// degrees down, the Walk clip sways it 6 cm to each side) and a rider's look turns it, so a pair at a fixed point of the figure ends up inside
+    /// the head. No recoil, no pitch.
     /// </summary>
     public bool Binoculars { get; set; }
-    /// <summary>Where the pair is held, metres in the model's own frame: in front of the eyes (measured on the soldier model: eyes about 1.46 m up, the face plate 0.28 m ahead, the helmet brim 0.33 m). The pair is 0.28 m wide and 0.28 m deep, so its eyepieces end 1.5 cm in front of the face.</summary>
-    static readonly Vector3 AtFace = new(0, 1.46f, 0.44f);
-    /// <summary>Each hand, from the pair's centre: just outside its side (half the pair's width is 0.14 m), a little under it and a touch nearer the face, so the fists do not cover it.</summary>
-    static readonly Vector3 HandFromPair = new(0.16f, -0.03f, -0.02f);
+    /// <summary>Where the eyepiece end of the pair is held (the origin of what hangs on <see cref="Aim"/>), metres in the head's bind frame: 1.5 cm in front of the face at the eyes (measured on the four bodies: eyes about 1.46 m up, the face plate 0.28 m ahead, the Operator's 0.26 m, the helmet brim 0.33 m ahead from 1.52 m up).</summary>
+    static readonly Vector3 AtEyes = new(0, 1.46f, 0.295f);
+    /// <summary>Each hand, from the eyepiece end: just outside the pair's side (half its width is 0.14 m), a little under it and about halfway along it, so the fists do not cover it.</summary>
+    static readonly Vector3 HandFromEyes = new(0.16f, -0.03f, 0.125f);
+    int _head = -1;
+    /// <summary>The head bone's bind pose, inverted: with the bone's pose now it carries a point of the bind figure to where the head has it.</summary>
+    Transform3D _headBindInverse = Transform3D.Identity;
 
     /// <param name="bind">Bind-pose global transform by bone index (<c>CharacterView.BindPoses</c>).</param>
     /// <param name="rigPerMetre">Rig units per metre (1 / the model's draw scale).</param>
@@ -69,7 +74,10 @@ public sealed partial class ArmsReadyPose : SkeletonModifier3D
         var right = MakeArm(sk, bind, "R");
         var left = MakeArm(sk, bind, "L");
         if (right == null || left == null) return null;
-        return new ArmsReadyPose { Name = "ArmsReady", Active = false, _right = right, _left = left, _rigPerMetre = rigPerMetre };
+        var pose = new ArmsReadyPose { Name = "ArmsReady", Active = false, _right = right, _left = left, _rigPerMetre = rigPerMetre };
+        var head = sk.FindBone("Head");
+        if (head >= 0 && bind.TryGetValue(head, out var headBind)) { pose._head = head; pose._headBindInverse = headBind.AffineInverse(); }
+        return pose;
     }
 
     static Arm? MakeArm(Skeleton3D sk, Dictionary<int, Transform3D> bind, string side)
@@ -95,10 +103,13 @@ public sealed partial class ArmsReadyPose : SkeletonModifier3D
         _recoil = Mathf.Max(0f, _recoil - (float)delta * 9f);
         if (Binoculars)
         {
+            // the head as the clip and the look (LookPose runs first) have it now, against its bind pose; a rig without the bone holds the pair where the bind head is
+            var head = _head >= 0 ? sk.GetBoneGlobalPose(_head) * _headBindInverse : Transform3D.Identity;
+            head = new Transform3D(head.Basis.Orthonormalized(), head.Origin);
             // x is to the character's left: the right hand is on the -x side
-            Solve(sk, _right, (AtFace + new Vector3(-HandFromPair.X, HandFromPair.Y, HandFromPair.Z)) * _rigPerMetre, out _);
-            Solve(sk, _left, (AtFace + HandFromPair) * _rigPerMetre, out _);
-            if (Aim != null) Aim.Transform = new Transform3D(new Basis(Vector3.Left, Vector3.Up, Vector3.Forward), AtFace * _rigPerMetre);
+            Solve(sk, _right, head * ((AtEyes + new Vector3(-HandFromEyes.X, HandFromEyes.Y, HandFromEyes.Z)) * _rigPerMetre), out _);
+            Solve(sk, _left, head * ((AtEyes + HandFromEyes) * _rigPerMetre), out _);
+            if (Aim != null) Aim.Transform = head * new Transform3D(new Basis(Vector3.Left, Vector3.Up, Vector3.Forward), AtEyes * _rigPerMetre);
             return;
         }
         // a shot pushes the weapon back along the barrel and lifts the muzzle; the targets move, so the arms recoil with it
