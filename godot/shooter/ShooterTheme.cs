@@ -23,7 +23,7 @@ public static class ShooterTheme
     public const float DisabledAlpha = 0.45f;
 
     // item cells (Equipment screen, corpse chooser): the cell, the icon in it, the pickup pips under the icon, the figure in the Equipment screen
-    public const int Cell = 10 * Space, CellIcon = 7 * Space, CellGap = Space + Space / 2, Pip = Space;
+    public const int Cell = 10 * Space, CellIcon = 7 * Space, CellGap = Space + Space / 2, Pip = Space, CellTick = 3 * Space;
     public const int AvatarWidth = 45 * Space, AvatarHeight = 60 * Space;
     /// <summary>Seconds a refused cell shakes, how far it moves (pixels at the reference size) and how many swings it makes.</summary>
     public const float ShakeSeconds = 0.3f;
@@ -210,6 +210,7 @@ public static class ShooterTheme
     /// <summary>
     /// The item cell (the Equipment screen's slots and bag, the corpse chooser's list): every state has its own box. Hover, pressed and the valid drop
     /// target change the border width and the fill, not only the colour; the cell that is the source of a drag, or cannot take the dragged item, is dimmed.
+    /// A cell that shows a picture and no Item (a Companion of the Equipment screen's picker) draws it in the text colour; the chosen one has its own box and a tick.
     /// The pips (pickups used of the limit: filled for used, hollow for left, the warn colour when the next take makes the item crumble) and the ghost
     /// icon of an empty slot take their colours from here too.
     /// </summary>
@@ -223,6 +224,11 @@ public static class ShooterTheme
         t.SetStylebox("drag", c, Box(Surface, 0, Dim));
         t.SetStylebox("target", c, Box(Active, 0, Good, BorderStrong));
         t.SetStylebox("focus", c, Ring(0));
+        t.SetStylebox("chosen", c, Box(Active, 0, Accent)); // the picture cell in use (a Companion that is out): filled, and the cell draws a tick as well
+        t.SetColor("picture", c, Text);
+        t.SetColor("tick", c, Accent);
+        t.SetColor("tick_ink", c, Backdrop);
+        t.SetConstant("tick_size", c, CellTick);
         var frame = new StyleBoxFlat { DrawCenter = false, BorderColor = Good };
         frame.SetBorderWidthAll(BorderStrong);
         frame.SetCornerRadiusAll(Radius);

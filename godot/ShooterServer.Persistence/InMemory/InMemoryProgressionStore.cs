@@ -11,6 +11,7 @@ public sealed class InMemoryProgressionStore : IProgressionStore
     readonly Dictionary<long, Profile> _byId = new();
     readonly Dictionary<long, Loadout[]> _loadouts = new();
     readonly Dictionary<long, int> _activeSlot = new();
+    readonly Dictionary<long, string> _companion = new();
     readonly Dictionary<long, HashSet<Unlock>> _unlocks = new();
     readonly Dictionary<long, StatsRow> _stats = new();
     readonly Dictionary<(long Player, int Slot), CamoSpec> _camo = new();
@@ -78,6 +79,18 @@ public sealed class InMemoryProgressionStore : IProgressionStore
         public Task SetNameAsync(long playerId, string name)
         {
             lock (s._gate) Update(playerId, p => p with { Name = name ?? "" });
+            return Task.CompletedTask;
+        }
+
+        public Task<string> GetCompanionAsync(long playerId)
+        {
+            lock (s._gate) return Task.FromResult(s._companion.GetValueOrDefault(playerId, ""));
+        }
+
+        public Task SetCompanionAsync(long playerId, string companionId)
+        {
+            lock (s._gate)
+                if (s._byId.ContainsKey(playerId)) s._companion[playerId] = companionId ?? "";
             return Task.CompletedTask;
         }
 

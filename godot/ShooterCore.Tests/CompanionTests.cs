@@ -351,4 +351,80 @@ public class CompanionTests
         Assert.Null(keeper.Assigned(8));
         Assert.NotNull(keeper.Of(7));
     }
+
+    // ---- the picker: the roster of one player, its wire form, and the arrows of the Equipment screen ----
+
+    [Fact]
+    public void RosterIsWhatTheProfileOwnsPlusTheSessionGiftInFileOrder()
+    {
+        var file = File();
+        var none = CompanionRoster.Of(file, Array.Empty<Unlock>(), all: false, given: null, @out: null);
+        Assert.Empty(none.Owned);
+        Assert.Equal(-1, none.Out);
+        Assert.Equal(-1, none.Default(file, "dog"));
+
+        var rows = new[] { new Unlock("weapon", "dog"), new Unlock(CompanionRules.UnlockKind, "bird"), new Unlock(CompanionRules.UnlockKind, "gone") };
+        var owned = CompanionRoster.Of(file, rows, all: false, given: null, @out: "bird");
+        Assert.Equal(new[] { 1 }, owned.Owned); // a weapon row and a Companion the file no longer has do not count
+        Assert.Equal(1, owned.Out);
+
+        var given = CompanionRoster.Of(file, rows, all: false, given: "dog", @out: "dog");
+        Assert.Equal(new[] { 0, 1 }, given.Owned);
+        Assert.Equal(0, given.Out);
+
+        var dev = CompanionRoster.Of(file, Array.Empty<Unlock>(), all: true, given: null, @out: null);
+        Assert.Equal(new[] { 0, 1 }, dev.Owned);
+    }
+
+    [Fact]
+    public void TheChosenCompanionIsOutAtJoinWhenStillOwnedElseTheFirstOwned()
+    {
+        var file = File();
+        var both = CompanionRoster.Of(file, new[] { new Unlock(CompanionRules.UnlockKind, "dog"), new Unlock(CompanionRules.UnlockKind, "bird") }, false, null, null);
+        Assert.Equal(1, both.Default(file, "bird"));
+        Assert.Equal(0, both.Default(file, ""));
+        Assert.Equal(0, both.Default(file, "gone"));
+        var bird = CompanionRoster.Of(file, new[] { new Unlock(CompanionRules.UnlockKind, "bird") }, false, null, null);
+        Assert.Equal(1, bird.Default(file, "dog")); // chose one they do not own (any more)
+    }
+
+    [Fact]
+    public void RosterAndPickRoundTripAndRefuseABadLength()
+    {
+        var roster = new CompanionRoster(new[] { 0, 3, 700 }, 3);
+        Assert.True(CompanionRoster.TryDecode(roster.Encode(), out var back));
+        Assert.Equal(roster.Owned, back.Owned);
+        Assert.Equal(3, back.Out);
+        Assert.True(CompanionRoster.TryDecode(CompanionRoster.None.Encode(), out var empty));
+        Assert.Empty(empty.Owned);
+        Assert.Equal(-1, empty.Out);
+        Assert.False(CompanionRoster.TryDecode(roster.Encode().AsSpan(0, 4), out _));
+        Assert.False(CompanionRoster.TryDecode(ReadOnlySpan<byte>.Empty, out _));
+
+        Assert.True(CompanionRoster.TryDecodePick(CompanionRoster.EncodePick(700), out var def));
+        Assert.Equal(700, def);
+        Assert.False(CompanionRoster.TryDecodePick(new byte[] { 1 }, out _));
+    }
+
+    [Fact]
+    public void ArrowsReachThePickerUnderTheBagAndComeBack()
+    {
+        // bag: 6 cells in 3 columns; picker: 4 cells in the same columns (a second row of one); 2 slots
+        CellRef? Move(CellRef from, NavDir dir) => EquipmentNav.Move(from, dir, slots: 2, bagCells: 6, bagColumns: 3, companions: 4);
+        Assert.Equal(CellRef.Companion(1), Move(CellRef.BagCell(4), NavDir.Down));
+        Assert.Equal(CellRef.BagCell(4), Move(CellRef.Companion(1), NavDir.Up));
+        Assert.Equal(CellRef.Companion(2), Move(CellRef.Companion(1), NavDir.Right));
+        Assert.Null(Move(CellRef.Companion(2), NavDir.Right));
+        Assert.Equal(CellRef.Companion(3), Move(CellRef.Companion(0), NavDir.Down));
+        Assert.Equal(CellRef.Companion(0), Move(CellRef.Companion(3), NavDir.Up));
+        Assert.Null(Move(CellRef.Companion(3), NavDir.Right));
+        Assert.Null(Move(CellRef.Companion(3), NavDir.Down));
+        Assert.Equal(CellRef.Slot((EquipSlot)1), Move(CellRef.Companion(0), NavDir.Left));
+        Assert.Equal(CellRef.Slot((EquipSlot)1), Move(CellRef.Companion(3), NavDir.Left));
+
+        // one cell (the empty picker): every bag column of the bottom row lands on it; none: the bag's bottom row is an edge, as before
+        Assert.Equal(CellRef.Companion(0), EquipmentNav.Move(CellRef.BagCell(5), NavDir.Down, companions: 1));
+        Assert.Null(EquipmentNav.Move(CellRef.BagCell(5), NavDir.Down));
+        Assert.Null(EquipmentNav.Move(CellRef.Companion(0), NavDir.Up, companions: 0));
+    }
 }

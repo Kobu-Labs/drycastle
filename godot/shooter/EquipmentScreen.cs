@@ -11,6 +11,9 @@ namespace Drycastle.Shooter;
 /// worn goes into its cell); drag between the bag, a slot and the avatar (a valid target highlights); drag out of the panel or press Delete to drop an
 /// Item on the ground (no confirmation: picking it up again costs a pickup); the arrows move focus. Over the headgear or neck slot (hovered or focused) the figure
 /// shows the head close up. One glyph-only hint row follows the active device.
+/// Under the bag, after a line, is the Companion picker (#488): a cell for each Companion the player can have out (its species' silhouette, its name as a tooltip),
+/// the one that is out filled and ticked ("with you" in its tooltip). Click or Enter on another puts that one out: the old one goes in a puff and the new one appears
+/// beside the player, and the choice is kept with the Profile. A player who owns none sees one empty cell with a paw ghost. Companion cells do not drag or drop.
 /// It is a non-pausing overlay in the HUD, like the map: the mouse is released (UiShell asks <see cref="Hud.EquipmentOpen"/>), the movement keys still
 /// work (<see cref="Player.MoveWithFreeMouse"/>), firing does not, and nothing pauses. It closes with F, Esc, death, the end of the match and a turret
 /// or missile view. It never changes what it shows by itself: every move is a wish to the server, and the cells redraw on the next Equipment event.
@@ -23,6 +26,8 @@ public sealed partial class EquipmentScreen : Control
     readonly PanelContainer _panel;
     readonly ItemCell[] _slots = new ItemCell[Equipment.SlotCount];
     readonly ItemCell[] _bag = new ItemCell[Bag.Cells];
+    readonly List<ItemCell> _companions = new(); // the picker: one cell per Companion the player can pick, or one empty cell
+    readonly GridContainer _companionGrid;
     readonly Label _openKey = new(), _activateKey = new(), _dropKey = new();
     InputDevice _device = InputDevice.KeyboardMouse;
     CamoSpec? _shownLook;
@@ -71,15 +76,22 @@ public sealed partial class EquipmentScreen : Control
         left.AddChild(figure);
         left.AddChild(BuildHints());
 
-        // the bag: three columns of two
-        var grid = new GridContainer { Columns = EquipmentNav.BagColumns, MouseFilter = MouseFilterEnum.Ignore, SizeFlagsVertical = SizeFlags.ShrinkCenter };
-        row.AddChild(grid);
+        // the bag: three columns of two; under it, after a line, the Companion picker in the same columns
+        var right = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        row.AddChild(right);
+        var grid = new GridContainer { Columns = EquipmentNav.BagColumns, MouseFilter = MouseFilterEnum.Ignore };
+        right.AddChild(grid);
         for (var c = 0; c < _bag.Length; c++)
         {
             _bag[c] = MakeCell(CellRef.BagCell(c), null);
             grid.AddChild(_bag[c]);
         }
+        right.AddChild(new HSeparator { MouseFilter = MouseFilterEnum.Ignore });
+        _companionGrid = new GridContainer { Columns = EquipmentNav.BagColumns, MouseFilter = MouseFilterEnum.Ignore };
+        right.AddChild(_companionGrid);
+        RefreshCompanions();
         _client.ItemsChanged += OnItemsChanged;
+        _client.CompanionsChanged += OnCompanionsChanged;
     }
 
     ItemCell MakeCell(CellRef at, Glyph.Kind? ghost)
@@ -134,7 +146,7 @@ public sealed partial class EquipmentScreen : Control
 
     EquipSlot? SlotOf(CellRef at) => (at.Home == CellHome.Worn ? _client.Worn((EquipSlot)at.Index) : _client.InBag(at.Index))?.Def.Slot;
 
-    ItemCell CellAt(CellRef at) => at.Home == CellHome.Worn ? _slots[at.Index] : _bag[at.Index];
+    ItemCell CellAt(CellRef at) => at.Home switch { CellHome.Worn => _slots[at.Index], CellHome.Companion => _companions[at.Index], _ => _bag[at.Index] };
 
     void Refresh()
     {
@@ -145,6 +157,46 @@ public sealed partial class EquipmentScreen : Control
             _avatar.ShowWorn((EquipSlot)s, held?.Def);
         }
         for (var c = 0; c < _bag.Length; c++) Fill(_bag[c], _client.InBag(c));
+        RefreshCompanions();
+    }
+
+    /// <summary>
+    /// The picker's cells: one per Companion the player can pick, in the order of companions.json, the one that is out marked. With none to pick it is one empty cell
+    /// (a paw ghost, "No Companion yet"), so the row never vanishes and the arrows always have somewhere to go.
+    /// </summary>
+    void RefreshCompanions()
+    {
+        var owned = _client.CompanionsOwned;
+        var want = Math.Max(1, owned.Count);
+        while (_companions.Count > want)
+        {
+            var last = _companions[^1];
+            _companions.RemoveAt(_companions.Count - 1);
+            _companionGrid.RemoveChild(last); // now, not at the frame's end: the grid lays out without it
+            last.QueueFree();
+        }
+        while (_companions.Count < want)
+        {
+            var cell = new ItemCell { Ref = CellRef.Companion(_companions.Count), Ghost = Glyph.Kind.Paw, Disabled = _dimmed };
+            cell.Activated += PickCompanion;
+            cell.Moved += OnMoved;
+            _companions.Add(cell);
+            _companionGrid.AddChild(cell);
+        }
+        for (var i = 0; i < _companions.Count; i++)
+        {
+            if (i >= owned.Count) { _companions[i].SetPicture(null, Strings.T("companion.none"), false); continue; }
+            var def = owned[i];
+            var isOut = def == _client.CompanionOut;
+            var name = _client.CompanionName(def);
+            _companions[i].SetPicture(_client.CompanionIcon(def), isOut ? Strings.F("companion.out", name) : name, isOut);
+        }
+    }
+
+    void OnCompanionsChanged()
+    {
+        EndPending();
+        RefreshCompanions();
     }
 
     void Fill(ItemCell cell, HeldItem? held) =>
@@ -244,6 +296,17 @@ public sealed partial class EquipmentScreen : Control
         _wait.Begin(Time.GetTicksMsec() / 1000.0);
     }
 
+    /// <summary>Click or Enter on a Companion: a wish to have it out. The one that is out already, and the empty cell, do nothing. Waits for the answer like an item wish.</summary>
+    void PickCompanion(ItemCell cell)
+    {
+        if (_wait.Active || !_open) return;
+        var owned = _client.CompanionsOwned;
+        if (cell.Ref.Index >= owned.Count || owned[cell.Ref.Index] == _client.CompanionOut) return;
+        _client.RequestCompanion(owned[cell.Ref.Index]);
+        Sfx.Ui("ui.click");
+        _wait.Begin(Time.GetTicksMsec() / 1000.0);
+    }
+
     void UpdatePending()
     {
         var now = Time.GetTicksMsec() / 1000.0;
@@ -262,13 +325,14 @@ public sealed partial class EquipmentScreen : Control
         _dimmed = on;
         foreach (var c in _slots) c.Disabled = on;
         foreach (var c in _bag) c.Disabled = on;
+        foreach (var c in _companions) c.Disabled = on;
     }
 
     // ---- focus and framing ----
 
     void OnMoved(ItemCell from, NavDir dir)
     {
-        if (EquipmentNav.Move(from.Ref, dir) is not { } to) return;
+        if (EquipmentNav.Move(from.Ref, dir, companions: _companions.Count) is not { } to) return;
         Sfx.Ui("ui.hover");
         CellAt(to).FocusByKeys();
     }
@@ -318,5 +382,9 @@ public sealed partial class EquipmentScreen : Control
         if (ItemCell.TryRead(data, out var from)) Perform(EquipmentWishes.Drag(from, DropTarget.Ground, SlotOf), null);
     }
 
-    public override void _ExitTree() => _client.ItemsChanged -= OnItemsChanged;
+    public override void _ExitTree()
+    {
+        _client.ItemsChanged -= OnItemsChanged;
+        _client.CompanionsChanged -= OnCompanionsChanged;
+    }
 }

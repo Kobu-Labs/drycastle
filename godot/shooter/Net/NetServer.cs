@@ -511,6 +511,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.Redeploy } rd && c.Joined) OnRedeploy(c, rd.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.MineralPick } mp && c.Joined) OnMineralPick(c, mp.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.CompanionPick } cp && c.Joined) OnCompanionPick(c, cp.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) OnSandboxTeleportTo(c, st.Payload);
@@ -583,6 +584,7 @@ public partial class NetServer : Node
         c.Enc = new SnapshotEncoder(_sentStates);
         c.WEnc = new WorldSnapshotEncoder(history: _sentWorld);
         SendProfile(c);
+        SendCompanions(c); // the Companions they can pick and the one that is out (the Equipment screen's picker)
         SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
         SendChatStatus(c); // admin or not, and the vehicles /spawn takes
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick,

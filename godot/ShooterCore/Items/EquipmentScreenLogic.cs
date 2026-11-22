@@ -1,30 +1,53 @@
 namespace Drycastle.ShooterCore;
 
-/// <summary>Where an item cell of the Equipment screen holds its item: a worn slot (index = <see cref="EquipSlot"/>) or a bag cell.</summary>
-public enum CellHome { Worn, Bag }
+/// <summary>
+/// Where a cell of the Equipment screen holds what it shows: a worn slot (index = <see cref="EquipSlot"/>), a bag cell, or a cell of the Companion picker (index = its
+/// place among the Companions the player can pick; it holds no item).
+/// </summary>
+public enum CellHome { Worn, Bag, Companion }
 
 /// <summary>One cell of the Equipment screen.</summary>
 public readonly record struct CellRef(CellHome Home, int Index)
 {
     public static CellRef Slot(EquipSlot slot) => new(CellHome.Worn, (int)slot);
     public static CellRef BagCell(int cell) => new(CellHome.Bag, cell);
+    public static CellRef Companion(int index) => new(CellHome.Companion, index);
 }
 
 public enum NavDir { Left, Right, Up, Down }
 
 /// <summary>
 /// Keyboard and gamepad focus on the Equipment screen (arrows move focus). The layout is a column of worn-slot cells on the left, top to bottom in slot
-/// order, and the bag as a grid <see cref="BagColumns"/> wide on the right. Pure, so the screen and the tests agree; a move off an edge stays where it is.
+/// order, and on the right the bag as a grid <see cref="BagColumns"/> wide with the Companion picker under it, a grid of the same width. Pure, so the screen and the tests agree; a move off an edge stays where it is.
 /// </summary>
 public static class EquipmentNav
 {
     public const int BagColumns = 3;
 
     /// <summary>The cell a move from <paramref name="from"/> in <paramref name="dir"/> lands on, or null at an edge (focus stays).</summary>
-    public static CellRef? Move(CellRef from, NavDir dir, int slots = -1, int bagCells = Bag.Cells, int bagColumns = BagColumns)
+    public static CellRef? Move(CellRef from, NavDir dir, int slots = -1, int bagCells = Bag.Cells, int bagColumns = BagColumns, int companions = 0)
     {
         if (slots < 0) slots = Equipment.SlotCount;
         var rows = Math.Max(1, (bagCells + bagColumns - 1) / bagColumns);
+        if (from.Home == CellHome.Companion)
+        {
+            var i = from.Index;
+            if (i < 0 || i >= companions) return null;
+            var c = i % bagColumns;
+            switch (dir)
+            {
+                case NavDir.Left:
+                    if (c > 0) return CellRef.Companion(i - 1);
+                    return slots > 0 ? CellRef.Slot((EquipSlot)(slots - 1)) : null; // the picker is below the bag: level with the last slot at most
+                case NavDir.Right:
+                    return c < bagColumns - 1 && i + 1 < companions ? CellRef.Companion(i + 1) : null;
+                case NavDir.Up:
+                    if (i >= bagColumns) return CellRef.Companion(i - bagColumns);
+                    return bagCells > 0 ? CellRef.BagCell(Math.Min((rows - 1) * bagColumns + c, bagCells - 1)) : null; // the bag's bottom row, the same column
+                default:
+                    return i + bagColumns < companions ? CellRef.Companion(i + bagColumns) : null;
+            }
+        }
         if (from.Home == CellHome.Worn)
         {
             if (from.Index < 0 || from.Index >= slots) return null;
@@ -50,7 +73,8 @@ public static class EquipmentNav
             case NavDir.Up:
                 return row > 0 ? CellRef.BagCell(cell - bagColumns) : null;
             default:
-                return cell + bagColumns < bagCells ? CellRef.BagCell(cell + bagColumns) : null;
+                if (cell + bagColumns < bagCells) return CellRef.BagCell(cell + bagColumns);
+                return companions > 0 ? CellRef.Companion(Math.Min(col, companions - 1)) : null; // off the bag's bottom row: the picker under it
         }
     }
 

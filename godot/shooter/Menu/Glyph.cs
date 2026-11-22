@@ -6,11 +6,12 @@ namespace Drycastle.Shooter;
 /// A drawn padlock or star for menu rows and tabs (ticket #147). Drawn rather than taken from a font, so it renders the same
 /// on every system. It ignores the mouse and always sits beside a text label, so it is never the only cue.
 /// The Equipment screen (issue #268) adds the pictograms of its hint row (<see cref="Kind.Close"/>, <see cref="Kind.Swap"/>, <see cref="Kind.Drop"/>), which
-/// stand beside a key cap, and the ghosts of an empty headgear slot (<see cref="Kind.Headgear"/>) and neck slot (<see cref="Kind.Neck"/>).
+/// stand beside a key cap, and the ghosts of an empty headgear slot (<see cref="Kind.Headgear"/>), neck slot (<see cref="Kind.Neck"/>) and Companion cell
+/// (<see cref="Kind.Paw"/>, #488).
 /// </summary>
 public sealed partial class Glyph : Control
 {
-    public enum Kind { Padlock, Star, Close, Swap, Drop, Headgear, Neck }
+    public enum Kind { Padlock, Star, Close, Swap, Drop, Headgear, Neck, Paw }
 
     readonly Kind _kind;
     readonly Color _color;
@@ -33,6 +34,7 @@ public sealed partial class Glyph : Control
             case Kind.Swap: DrawSwap(Size); break;
             case Kind.Drop: DrawDrop(Size); break;
             case Kind.Neck: DrawNeck(Size); break;
+            case Kind.Paw: DrawPaw(Size); break;
             default: DrawHeadgear(Size); break;
         }
     }
@@ -92,6 +94,26 @@ public sealed partial class Glyph : Control
         var tip = new Vector2(s.X * 0.5f, centre.Y + r);
         var h = s.X * 0.13f;
         DrawColoredPolygon(new[] { tip + new Vector2(0, -h * 0.6f), tip + new Vector2(h, h * 0.5f), tip + new Vector2(0, h * 2f), tip + new Vector2(-h, h * 0.5f) }, _color);
+    }
+
+    /// <summary>The numbers of the paw print, as fractions of the glyph's side: the pad (an ellipse) and the four toes (circles) in an arc over it.</summary>
+    public static readonly (float X, float Y, float Rx, float Ry) PawPad = (0.5f, 0.66f, 0.25f, 0.2f);
+    public static readonly (float X, float Y, float R)[] PawToes = { (0.2f, 0.44f, 0.095f), (0.38f, 0.24f, 0.105f), (0.62f, 0.24f, 0.105f), (0.8f, 0.44f, 0.095f) };
+
+    /// <summary>A paw print: a pad and four toes. The ghost of a Companion cell that has no picture.</summary>
+    void DrawPaw(Vector2 s)
+    {
+        var side = Mathf.Min(s.X, s.Y);
+        var o = (s - new Vector2(side, side)) / 2f;
+        const int steps = 24;
+        var pad = new Vector2[steps];
+        for (var i = 0; i < steps; i++)
+        {
+            var a = i * Mathf.Tau / steps;
+            pad[i] = o + new Vector2(PawPad.X + Mathf.Cos(a) * PawPad.Rx, PawPad.Y + Mathf.Sin(a) * PawPad.Ry) * side;
+        }
+        DrawColoredPolygon(pad, _color);
+        foreach (var (x, y, r) in PawToes) DrawCircle(o + new Vector2(x, y) * side, r * side, _color);
     }
 
     void DrawPadlock(Vector2 s)

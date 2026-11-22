@@ -137,6 +137,12 @@ public sealed class PostgresProgressionStore : IProgressionStore
         public Task SetNameAsync(long playerId, string name) =>
             db.Write("set name", c => Exec(c, "UPDATE players SET name = @n WHERE id = @id;", ("n", name ?? ""), ("id", playerId)));
 
+        public Task<string> GetCompanionAsync(long playerId) => db.Read(c =>
+            Scalar(c, "SELECT companion FROM players WHERE id = @id;", ("id", playerId)) as string ?? "");
+
+        public Task SetCompanionAsync(long playerId, string companionId) =>
+            db.Write("set companion", c => Exec(c, "UPDATE players SET companion = @c WHERE id = @id;", ("c", companionId ?? ""), ("id", playerId)));
+
         public Task AddXpAsync(long playerId, int amount)
         {
             if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount), amount, "XP cannot go down");

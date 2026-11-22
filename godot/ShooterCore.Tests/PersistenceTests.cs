@@ -44,6 +44,19 @@ public class PersistenceTests
 
     [Theory]
     [MemberData(nameof(Backends))]
+    public async Task TheChosenCompanionIsKeptAndEmptyUntilChosen(string backend)
+    {
+        using var store = Create(backend);
+        var p = await store.Profiles.GetOrCreateAsync("companion-player");
+        Assert.Equal("", await store.Profiles.GetCompanionAsync(p.Id));
+        await store.Profiles.SetCompanionAsync(p.Id, "dog");
+        await store.Profiles.SetCompanionAsync(p.Id, "firebird");
+        Assert.Equal("firebird", await store.Profiles.GetCompanionAsync(p.Id));
+        Assert.Equal("", await store.Profiles.GetCompanionAsync(999_999));
+    }
+
+    [Theory]
+    [MemberData(nameof(Backends))]
     public async Task NameAndXpPersistAndLevelFollowsXp(string backend)
     {
         using var store = Create(backend);
@@ -138,8 +151,8 @@ public class PersistenceTests
         using (var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
         {
             conn.Open();
-            // one row per migration file (0001_init, 0002_roadkills, 0003_camo, 0004_loadout_camo, 0005_loadout_name, 0006_camo_character, 0007_hunts, 0008_player_kills, 0009_mineral_finds)
-            Assert.Equal(9L,(long)new Microsoft.Data.Sqlite.SqliteCommand("SELECT COUNT(*) FROM schema_migrations;", conn).ExecuteScalar()!);
+            // one row per migration file (0001_init, 0002_roadkills, 0003_camo, 0004_loadout_camo, 0005_loadout_name, 0006_camo_character, 0007_hunts, 0008_player_kills, 0009_mineral_finds, 0010_companion)
+            Assert.Equal(10L,(long)new Microsoft.Data.Sqlite.SqliteCommand("SELECT COUNT(*) FROM schema_migrations;", conn).ExecuteScalar()!);
         }
         using (var store = SqliteProgressionStore.Open(path, Logged.Add, Curve))
         {

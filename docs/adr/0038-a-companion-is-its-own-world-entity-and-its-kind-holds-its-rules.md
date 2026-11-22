@@ -10,6 +10,6 @@ A Companion (#488, #429) is an animal that belongs to one player and stays with 
 
 **4. The keeper owns presence.** `CompanionKeeper` knows who has which Companion out and makes or removes the entity: it is in the world while the server says its owner is present (alive, on foot). Kinds never decide whether they exist.
 
-**5. Owned on the Profile, out in the session.** Owning one is an unlock row of kind `companion` (as a reward weapon or item, ADR 0016's split): a collection tier's `reward_tier` grants it for good. Which one is out is server session state.
+**5. Owned on the Profile, out in the session.** Owning one is an unlock row of kind `companion` (as a reward weapon or item, ADR 0016's split): a collection tier's `reward_tier` grants it for good. Which one is out is the player's choice among those they own: the Companion picker on the Equipment screen (F) sends a wish (event 114 `CompanionPick`), the server checks it against the roster (`CompanionRoster`: unlock rows, plus the one `/companion` gave for the session, or all in dev mode), answers with the roster (event 115 `Companions`) and keeps the choice in `players.companion` (SQLite migration 0010, Postgres 0005). Until a player picks, the first one owned is out. There is no "none" in the picker (a Companion is always on).
 
 **Consequences.** A Companion walks on the terrain like an animal and is put beside its owner when it cannot follow (no pathfinding). Shots, vehicles, bots, wildlife and Thieves ignore it by not knowing the type. Protocol 82.

@@ -25,6 +25,43 @@ public partial class NetClient
 
     readonly Dictionary<ushort, CompanionView> _companions = new();
 
+    // ---- the picker of the Equipment screen: what the local player can pick and what is out (the server's word, EventKind.Companions) ----
+
+    CompanionRoster _companionRoster = CompanionRoster.None;
+
+    /// <summary>The roster changed (a pick was answered, a Companion was unlocked or given): the Equipment screen redraws its picker.</summary>
+    public event Action? CompanionsChanged;
+
+    /// <summary>The Companions the local player can pick (indices of companions.json, in its order). Stable between <see cref="CompanionsChanged"/> events.</summary>
+    public IReadOnlyList<int> CompanionsOwned => _companionRoster.Owned;
+
+    /// <summary>The Companion that is out (an index of companions.json), or -1.</summary>
+    public int CompanionOut => _companionRoster.Out;
+
+    /// <summary>The display name of a Companion: the translation "companion.&lt;id&gt;" when there is one, else the name in companions.json.</summary>
+    public string CompanionName(int def)
+    {
+        if (def < 0 || def >= CompanionData.Companions.Count) return "";
+        var entry = CompanionData.Companions[def];
+        var k = "companion." + entry.Id;
+        var t = Strings.T(k);
+        return t == k ? entry.Name : t;
+    }
+
+    /// <summary>The picture of a Companion's species (the Hunter's Log's flat silhouette: white with alpha, tinted by the drawer); null when the species has none.</summary>
+    public Texture2D? CompanionIcon(int def) =>
+        def >= 0 && def < CompanionData.Companions.Count ? HuntArtOf.ForSpecies(CompanionData.Companions[def].Species).Picture?.Fill : null;
+
+    /// <summary>A wish: have this Companion out (an index of <see cref="CompanionsOwned"/>'s values). The server answers with the roster.</summary>
+    public void RequestCompanion(int def) => SendItem(EventKind.CompanionPick, CompanionRoster.EncodePick(def));
+
+    void OnCompanionEvent(EventKind kind, byte[] payload)
+    {
+        if (kind != EventKind.Companions || !CompanionRoster.TryDecode(payload, out var roster)) return;
+        _companionRoster = roster;
+        CompanionsChanged?.Invoke();
+    }
+
     /// <summary>Called once from <see cref="_Ready"/>: registers the Companion type and follows its entities.</summary>
     void InitCompanions()
     {

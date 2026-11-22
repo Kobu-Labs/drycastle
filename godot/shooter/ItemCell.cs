@@ -10,6 +10,8 @@ namespace Drycastle.Shooter;
 /// dragged is dimmed, so no state is colour alone. It is a control of its own and not a Button: Enter (not Space, which is jump) and a click activate it,
 /// Delete asks to drop it, the arrows ask the screen to move focus. A refused cell shakes (a flash of the danger border with reduce motion) and plays the
 /// error sound (<see cref="Refuse"/>). The mouse hovering a cell also gives it focus, so Enter and Delete act on what the player points at.
+/// A cell can also show a picture that is no Item (<see cref="SetPicture"/>: a Companion of the Equipment screen's picker, #488): a flat silhouette in the text colour, a
+/// name tooltip, and when it is the chosen one a filled box with a tick in its corner and the word in the tooltip, so "chosen" is never colour alone.
 /// </summary>
 public sealed partial class ItemCell : Control
 {
@@ -50,6 +52,7 @@ public sealed partial class ItemCell : Control
     public HeldItem? Item => _item;
 
     HeldItem? _item;
+    bool _picture, _chosen; // shows a picture that is no Item (SetPicture), and it is the chosen one
     Texture2D? _icon;
     string _name = "";
     Glyph? _ghost;
@@ -84,9 +87,27 @@ public sealed partial class ItemCell : Control
     public void SetItem(HeldItem? item, Texture2D? icon, string name)
     {
         _item = item;
+        _picture = _chosen = false;
         _icon = item == null ? null : icon;
         _name = item == null ? "" : name;
         if (_ghost != null) _ghost.Visible = item == null;
+        if (_tipText != null) _tipText.Text = _name;
+        UpdateTip();
+        QueueRedraw();
+    }
+
+    /// <summary>
+    /// Shows a picture that is no Item: a white silhouette (tinted with the text colour; the ghost stays when there is none) and a name for the tooltip (empty: no tooltip).
+    /// <paramref name="chosen"/> marks the one in use: a filled box and a tick. The name should say it too.
+    /// </summary>
+    public void SetPicture(Texture2D? icon, string name, bool chosen)
+    {
+        _item = null;
+        _picture = true;
+        _chosen = chosen;
+        _icon = icon;
+        _name = name;
+        if (_ghost != null) _ghost.Visible = icon == null;
         if (_tipText != null) _tipText.Text = _name;
         UpdateTip();
         QueueRedraw();
@@ -147,6 +168,7 @@ public sealed partial class ItemCell : Control
         : _dragActive && _valid ? "target"
         : _pressed ? "pressed"
         : _hover ? "hover"
+        : _chosen ? "chosen"
         : "normal";
 
     public override void _Draw()
@@ -161,6 +183,11 @@ public sealed partial class ItemCell : Control
             var side = GetThemeConstant("icon_size", Type);
             if (_icon != null) DrawTextureRect(_icon, new Rect2(new Vector2((Size.X - side) / 2f, ShooterTheme.Space / 2f), new Vector2(side, side)), false, tint);
             DrawPips(held, dim);
+        }
+        else if (_picture)
+        {
+            if (_icon != null) DrawPicture(_icon, dim);
+            if (_chosen) DrawTick(dim);
         }
         if (HasFocus()) DrawStyleBox(GetThemeStylebox("focus", Type), area);
         if (_error && _errorBox != null) DrawStyleBox(_errorBox, area);
@@ -185,6 +212,32 @@ public sealed partial class ItemCell : Control
             if (i < used) DrawCircle(at, size / 2f, colour);
             else DrawCircle(at, size / 2f - 1f, hollow, false, ShooterTheme.BorderStrong / 2f);
         }
+    }
+
+    /// <summary>The silhouette, whole and centred in the icon's square (a long animal is as wide as the square, a tall one as high), in the text colour.</summary>
+    void DrawPicture(Texture2D picture, float alpha)
+    {
+        var side = (float)GetThemeConstant("icon_size", Type);
+        var size = picture.GetSize();
+        if (size.X <= 0 || size.Y <= 0) return;
+        var fit = size * Mathf.Min(side / size.X, side / size.Y);
+        var at = new Vector2((Size.X - fit.X) / 2f, ShooterTheme.Space / 2f + (side - fit.Y) / 2f);
+        var ink = GetThemeColor("picture", Type);
+        ink.A *= alpha;
+        DrawTextureRect(picture, new Rect2(at, fit), false, ink);
+    }
+
+    /// <summary>The mark of the chosen cell: a disc in the top right corner with a tick in it.</summary>
+    void DrawTick(float alpha)
+    {
+        var r = GetThemeConstant("tick_size", Type) / 2f;
+        var c = new Vector2(Size.X - r - ShooterTheme.Space / 2f, r + ShooterTheme.Space / 2f);
+        var disc = GetThemeColor("tick", Type);
+        var ink = GetThemeColor("tick_ink", Type);
+        disc.A *= alpha; ink.A *= alpha;
+        DrawCircle(c, r, disc);
+        var w = Mathf.Max(2f, r * 0.3f);
+        DrawPolyline(new[] { c + new Vector2(-0.5f, 0.02f) * r, c + new Vector2(-0.12f, 0.4f) * r, c + new Vector2(0.52f, -0.34f) * r }, ink, w, true);
     }
 
     void PlaceGhost()
@@ -372,7 +425,7 @@ public sealed partial class ItemCell : Control
 
     void UpdateTip()
     {
-        var want = NameTip && _item != null && !_disabled && !_dragActive && !_dragSource && (_hover || HasFocus()) && IsVisibleInTree();
+        var want = NameTip && (_item != null || (_picture && _name != "")) && !_disabled && !_dragActive && !_dragSource && (_hover || HasFocus()) && IsVisibleInTree();
         if (!want)
         {
             if (_tip != null) _tip.Visible = false;

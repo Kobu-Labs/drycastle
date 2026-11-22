@@ -27,6 +27,8 @@ public partial class NetServer
         /// <summary>One look per loadout slot (#141). The look other players see is the active slot's.</summary>
         public CamoSpec[] Camos = Enumerable.Repeat(CamoSpec.Default, Loadout.SlotCount).ToArray();
         public CamoSpec Camo => Camos[Math.Clamp(Active, 0, Loadout.MaxSlot)];
+        /// <summary>The Companion chosen on the Equipment screen (an id of companions.json, #488); empty: none chosen, the first one owned is out.</summary>
+        public string Companion = "";
     }
 
     /// <summary>A profile still being read on the database thread. Only the task is shared; the result is applied on the tick.</summary>
@@ -90,6 +92,7 @@ public partial class NetServer
         var rows = await store.Loadouts.GetAllAsync(p.Id);
         var active = await store.Loadouts.GetActiveSlotAsync(p.Id);
         var unlocks = await store.Unlocks.GetAllAsync(p.Id);
+        var companion = await store.Profiles.GetCompanionAsync(p.Id);
         var camos = Enumerable.Repeat(CamoSpec.Default, Loadout.SlotCount).ToArray();
         foreach (var (slot, spec) in await store.Camo.GetAllAsync(p.Id))
             if (slot is >= 0 and <= Loadout.MaxSlot) camos[slot] = spec;
@@ -110,7 +113,7 @@ public partial class NetServer
         return new PlayerProfile
         {
             DbId = p.Id, Persist = true, Name = p.Name, Xp = p.Xp, Level = p.Level,
-            Loadouts = slots, Active = Math.Clamp(active, 0, Loadout.MaxSlot), Unlocks = unlocks.ToList(), Camos = camos,
+            Loadouts = slots, Active = Math.Clamp(active, 0, Loadout.MaxSlot), Unlocks = unlocks.ToList(), Camos = camos, Companion = companion,
         };
     }
 
