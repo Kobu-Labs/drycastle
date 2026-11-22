@@ -79,7 +79,7 @@ public sealed class Ladders
             var l = All[ix];
             s.OnLadder = true;
             s.LadderIndex = ix;
-            s.LadderArmed = false; // the top step-off waits for forward to be let go once: getting on at the hatch with forward held does not step straight off again
+            s.LadderArmed = false; // the step-offs wait for the key to be let go once: getting on at the hatch with forward held (or at the foot with back held) does not step straight off again
             s.Position = new Vector3(l.Rail.X, Math.Clamp(s.Position.Y, l.Y0, l.Y1), l.Rail.Y);
             s.Velocity = Vector3.Zero;
             s.OnFloor = true;
@@ -98,8 +98,8 @@ public sealed class Ladders
         var y = s.Position.Y + i.MoveY * ClimbSpeed * dt; // climbing starts at once, whatever keys were held on getting on
         var f = ladder.Facing;
         if (y >= ladder.Y1 && s.LadderArmed && i.MoveY > 0) StepOff(ref s, ladder.Rail + f * StepOffTop, ladder.Y1);
-        else if (y <= ladder.Y0) StepOff(ref s, ladder.Rail + f * StepOffBottom, ladder.Y0);
-        else s.Position = new Vector3(ladder.Rail.X, Math.Min(y, ladder.Y1), ladder.Rail.Y);
+        else if (y <= ladder.Y0 && i.MoveY < 0 && s.LadderArmed) StepOff(ref s, ladder.Rail + f * StepOffBottom, ladder.Y0);
+        else s.Position = new Vector3(ladder.Rail.X, Math.Clamp(y, ladder.Y0, ladder.Y1), ladder.Rail.Y); // at the bottom without a down push (just got on there) they stay: no kick-off (#372)
         return true;
     }
 
