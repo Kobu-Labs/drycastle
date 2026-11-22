@@ -88,6 +88,7 @@ public sealed partial class ItemCell : Control
     {
         _item = item;
         _picture = _chosen = false;
+        PlaceGhost();
         _icon = item == null ? null : icon;
         _name = item == null ? "" : name;
         if (_ghost != null) _ghost.Visible = item == null;
@@ -108,6 +109,7 @@ public sealed partial class ItemCell : Control
         _icon = icon;
         _name = name;
         if (_ghost != null) _ghost.Visible = icon == null;
+        PlaceGhost();
         if (_tipText != null) _tipText.Text = _name;
         UpdateTip();
         QueueRedraw();
@@ -221,7 +223,7 @@ public sealed partial class ItemCell : Control
         var size = picture.GetSize();
         if (size.X <= 0 || size.Y <= 0) return;
         var fit = size * Mathf.Min(side / size.X, side / size.Y);
-        var at = new Vector2((Size.X - fit.X) / 2f, ShooterTheme.Space / 2f + (side - fit.Y) / 2f);
+        var at = (Size - fit) / 2f; // the middle of the cell: a picture has no pips under it
         var ink = GetThemeColor("picture", Type);
         ink.A *= alpha;
         DrawTextureRect(picture, new Rect2(at, fit), false, ink);
@@ -245,7 +247,8 @@ public sealed partial class ItemCell : Control
         if (_ghost == null) return;
         var side = GetThemeConstant("icon_size", Type);
         _ghost.Size = new Vector2(side, side);
-        _ghost.Position = new Vector2((Size.X - side) / 2f, ShooterTheme.Space / 2f);
+        // an Item's icon sits high, over its pips; a picture cell has none, so its ghost is in the middle
+        _ghost.Position = new Vector2((Size.X - side) / 2f, _picture ? (Size.Y - side) / 2f : ShooterTheme.Space / 2f);
     }
 
     // ---- notifications: hover, focus, drag ----
