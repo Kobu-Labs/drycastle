@@ -57056,6 +57056,51 @@
     -1251270.0
    ],
    "rotation_deg": 15.0
+  },
+  {
+   "asset": "pack:drycastle-generated-models/sign_give_way",
+   "id": "o-4853",
+   "position": [
+    -589046.0,
+    -1250199.5
+   ],
+   "rotation_deg": 90.0
+  },
+  {
+   "asset": "pack:drycastle-generated-models/sign_give_way",
+   "id": "o-4854",
+   "position": [
+    -589174.5,
+    -1249950.0
+   ],
+   "rotation_deg": 296.6
+  },
+  {
+   "asset": "pack:drycastle-generated-models/sign_main_road",
+   "id": "o-4855",
+   "position": [
+    -589267.0,
+    -1249853.5
+   ],
+   "rotation_deg": 45.0
+  },
+  {
+   "asset": "pack:drycastle-generated-models/sign_give_way",
+   "id": "o-4856",
+   "position": [
+    -588820.0,
+    -1249764.5
+   ],
+   "rotation_deg": 296.6
+  },
+  {
+   "asset": "pack:drycastle-generated-models/sign_give_way",
+   "id": "o-4857",
+   "position": [
+    -588196.5,
+    -1249927.5
+   ],
+   "rotation_deg": 63.4
   }
  ],
  "parcels": {
