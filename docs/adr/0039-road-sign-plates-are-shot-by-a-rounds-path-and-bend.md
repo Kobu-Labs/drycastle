@@ -1,0 +1,15 @@
+# Road sign plates are shot by a round's path and bend
+
+Decided for #425 (Road signs). A **Road sign** (GLOSSARY) is a placed object of category `sign`: Stop, Daj prednosť v jazde, Hlavná cesta. Decoration, localized to Slovakia; no traffic, AI or gameplay effect. The user places them on the map by hand.
+
+- **Same machinery as the pole lamps (ADR 0037).** The server owns the state (`BreakableSigns`, machine `Sign.Plate`: Whole, Bent, Whole). A round that passes within `hit_radius_m` (0.3 m, environment.json `sign_plate`) of a plate's centre bends it. The check is the round's path (`LampGeometry.Hits`, the segment to where it stopped, reached from the same `ShotScenery` call as the lamps), not a collider: the plate stops no round and has no physics body. Only the plate is shootable; the pole is not (a round that stops on it only bends the plate if it passed within the radius).
+- **Identity is the index in `MapLoader.ObjectSignPlates()`**, ordered by object id and then the asset's `plates` points (assets/manifest.json, pipeline axes, like `lights`). Server and client list the same placed objects from the same map build, so a u16 is enough on the wire. A map edited live while a match runs is not supported.
+- **One round bends it, a second changes nothing.** Bent lasts `respawn_seconds` (120) from the first round and is not restarted by later ones; then the plate is whole again, with no flicker. A new round straightens every plate. Only a bent plate has a machine.
+- **Wire.** Events 252 `SignPlateState` (u16 plate, u8 state), 253 `SignPlateSync` (every plate not listed is whole: the join catch-up and a new round), protocol 77.
+- **The bend is the client's drawing.** The model's `Plate` node has its origin at the plate's upper clamp; the client (`SignPlates`) rolls it 35 degrees about that point, tips it 12 degrees out at the bottom and drops it 4 cm. The side (left or right) is a hash of the plate's index, so every client draws the same lean and a row of signs does not all lean one way. Whole puts the node back as the model has it. Nothing is sent per frame.
+- **The pole is solid, the plate is not.** The asset lists its own `solids` (one thin metal box up to the pole's height), so the default one-box-per-category collider, which would span the plate, does not apply. Players and cars stop at the pole; they and rounds pass through the plate.
+- **Models are generated** (`scripts/make_road_sign_models.py`, CC0): metal PBR (galvanised pole, glossy painted plate), no emissive, the STOP letters a block font of boxes.
+
+**Not done.** No sound: the game has no metal ping to reuse (the shot already plays the generic bullet impact). Blasts do not bend plates. The plate's hit shape is a sphere at its centre, not its outline: a round passing 30 cm in front of or behind it also counts.
+
+**Considered.** A damage model with hit points and a shot-off plate (the user asked for a bend that recovers). A collider on the plate so rounds stop on it (the lamp precedent is a path check, and a collider would need a second solid set the rest of the game would run into).

@@ -232,6 +232,10 @@ public enum EventKind : byte
     LampState = 250,
     /// <summary>Server broadcast, or to the joining player: every pole lamp that is not lit (<see cref="LampCodec"/>); the rest are lit. The join catch-up and a new round.</summary>
     LampSync = 251,
+    /// <summary>Server broadcast: one road sign plate's state after it changed (<see cref="SignPlateCodec"/>, ADR 0039: bent by a round, whole again). Kinds 252-253 belong to the road signs.</summary>
+    SignPlateState = 252,
+    /// <summary>Server broadcast, or to the joining player: every road sign plate that is not whole (<see cref="SignPlateCodec"/>); the rest are whole. The join catch-up and a new round.</summary>
+    SignPlateSync = 253,
     /// <summary>Client to server: a crew member's command to a Scud truck's launcher (<see cref="ScudCodec"/>: open or close the screen, the camera, lock a point, confirm, withdraw, abort). Kinds 80-85 belong to the Scud truck.</summary>
     ScudCommand = 80,
     /// <summary>Server to everyone, and to a joiner for each truck: one launcher's state, its clock, who is the operator, the locked point and who confirmed (<see cref="ScudStateMsg"/>). Sent when anything of that changes.</summary>
@@ -371,7 +375,8 @@ public static class Wire
     //   v80 the Phoenix (#396): animal states 11-14 (Flying, Falling, Crashed, Burning, AnimalState); an animal's world-state pitch is the Phoenix's dive pitch; event 32 PhoenixFall (PhoenixFallCodec)
     //   v81 dropped minerals (#396): the MineralNodes set (event 112) may hold dynamic nodes (ids from 128, a Phoenix's pheonixite) and is the WHOLE set: a client drops a node it no longer lists
     //   v82 Companions (#488): world entity type 58 (CompanionRules): the owner field is the index in companions.json, the state byte a CompanionPose
-    public const byte ProtocolVersion = 82;
+    //   v83 shootable road sign plates (ADR 0039): events 252 SignPlateState and 253 SignPlateSync
+    public const byte ProtocolVersion = 83;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

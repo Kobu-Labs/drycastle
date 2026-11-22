@@ -54,7 +54,7 @@ public sealed partial class MapLoader
     /// <summary><c>Root</c> is the folder <c>File</c> is relative to (null = the asset library). <c>Prefab</c>: a model of a private pack that brings its own
     /// collision bodies and wears the pack's materials (see MapLoader.Prefabs.cs).</summary>
     sealed record AssetEntry(string File, string? Root, bool Prefab, Vector3 Size, string Category, string Name, List<(string kind, int tier, Vector3 local)> Seats, List<Vector3> Lights,
-        List<Drycastle.ShooterCore.AssetSolid> Solids);
+        List<Drycastle.ShooterCore.AssetSolid> Solids, List<Vector3> Plates);
 
     string _mapDir = "";
     Node3D? _objectsRoot;
@@ -428,7 +428,7 @@ public sealed partial class MapLoader
             var cat = a.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString()! : "other";
             var name = a.TryGetProperty("name", out var nm) && nm.ValueKind == JsonValueKind.String ? nm.GetString()! : id;
             _assetManifest[id] = new AssetEntry(file, root, prefab, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name, ParseSeats(a), ParseLights(a),
-                Drycastle.ShooterCore.ObjectColliders.ParseSolids(a));
+                Drycastle.ShooterCore.ObjectColliders.ParseSolids(a), ParsePoints(a, "plates"));
         }
     }
 

@@ -17,6 +17,8 @@ public sealed class EnvironmentConfig : IVersioned
     public float MinAmbient { get; set; } = 0.10f;
     /// <summary>How a street lamp lights up at night (the lens, the beam): the same kind of numbers as a vehicle's <c>lights</c>.</summary>
     public LampLook Lamp { get; set; } = new();
+    /// <summary>The shootable plate of a road sign (ADR 0039).</summary>
+    public SignPlateLook SignPlate { get; set; } = new();
 
     public static EnvironmentConfig Parse(string json)
     {
@@ -42,6 +44,8 @@ public sealed class EnvironmentConfig : IVersioned
             throw new DataFileException("environment.json: lamp needs range_m above 0, angle_deg 0..90 (exclusive), energy and lens_energy 0 or more");
         if (!(Lamp.HitRadiusM > 0) || !(Lamp.RespawnSeconds > 0) || !(Lamp.FlickerSeconds > 0))
             throw new DataFileException("environment.json: lamp needs hit_radius_m, respawn_seconds and flicker_seconds above 0");
+        if (!(SignPlate.HitRadiusM > 0) || !(SignPlate.RespawnSeconds > 0))
+            throw new DataFileException("environment.json: sign_plate needs hit_radius_m and respawn_seconds above 0");
     }
 
     /// <summary>"HH:MM" to minute of the day (0..1439). Throws <see cref="DataFileException"/> naming the field on bad input.</summary>
@@ -93,4 +97,14 @@ public sealed class LampLook
     /// <summary>A broken pole lamp stays dark this long, then flickers for <see cref="FlickerSeconds"/> and is lit again (ADR 0037).</summary>
     public float RespawnSeconds { get; set; } = 120;
     public float FlickerSeconds { get; set; } = 3;
+}
+
+/// <summary>
+/// The shootable plate of a road sign (environment.json <c>sign_plate</c>, ADR 0039). A round that passes within <see cref="HitRadiusM"/> of the plate's centre
+/// (the asset's "plates" point) bends it; it hangs bent for <see cref="RespawnSeconds"/> and is whole again. Tuned by eye: nothing here was seen in the game.
+/// </summary>
+public sealed class SignPlateLook
+{
+    public double HitRadiusM { get; set; } = 0.3;
+    public float RespawnSeconds { get; set; } = 120;
 }

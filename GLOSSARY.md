@@ -96,6 +96,10 @@ _Avoid_: light, streetlight, lamp post
 The luminaire of a placed utility pole (an object's light point in `assets/manifest.json`), lit like a Street lamp. It is shootable: a bullet, pellet or gun round that passes within `hit_radius_m` (environment.json `lamp`) of its head breaks it for every player; the server owns the state (`BreakableLamps`, machine `Lamp.Light`). A Broken pole lamp has no lit lens and no beam; after `respawn_seconds` (120) it flickers for `flicker_seconds` (3) and is lit again, and a new round lights them all. The Street lamps of `lamps.json` do not break. ADR 0037.
 _Avoid_: light (alone), bulb
 
+**Road sign**:
+A Slovak road sign (dopravná značka) placed by hand as an object (category `sign`): Stop, Daj prednosť v jazde (give way), Hlavná cesta (main road); a galvanised pole with a metal plate. Decoration only: no traffic or AI effect. The pole is solid (a thin box, like a utility pole's column); the plate is not solid but shootable: a round that passes within `hit_radius_m` (environment.json `sign_plate`) of its centre (the asset's `plates` point) bends it for every player, it hangs tilted for `respawn_seconds` (120) and is whole again, and a new round straightens them all. The server owns the state (`BreakableSigns`, machine `Sign.Plate`). Visual only. ADR 0039.
+_Avoid_: traffic sign, sign (alone: the welcome sign and the church paintings are not Road signs)
+
 **Respawn**:
 The player's own action (pause menu, or "Apply now" in the Loadouts screen, both with a confirm): the player dies at once and comes back after the normal respawn delay with the active loadout, or the one named. It is a suicide like a fall: a death, the killfeed names only the victim ("Respawn"), a Corpse, the Streak counter resets. No cooldown and no combat lockout (a victim can deny the kill; accepted). Refused while dead, outside a running round, or held by the demon or the Bigfoot.
 _Avoid_: redeploy (the wire name only), suicide
