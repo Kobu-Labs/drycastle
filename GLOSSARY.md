@@ -149,11 +149,11 @@ The most a hitched trailer can fold against its tractor (75 degrees, `tow.limit_
 _Avoid_: max angle, articulation cap
 
 **Armed seat**:
-A passenger seat whose rider keeps their own loadout and fights with it from the seat, in first person, aiming with the view inside the seat's arc. The mouse wheel changes the weapon there, since the number keys are the seat switch. The amphibious transport's front right seat is one; the bus's passenger seats are not.
+A passenger seat whose rider keeps their own loadout and fights with it from the seat, in first person, aiming with the view inside the seat's arc. The mouse wheel changes the weapon there, since the number keys are the seat switch. The amphibious transport's front right seat and the utility helicopter's left door seat are the two; the bus's passenger seats are not.
 _Avoid_: shotgun seat, gunner seat (that seat works the vehicle's own gun), fighting seat
 
 **Exposed seat**:
-A seat the hull does not cover: a shot that reaches its rider's body hits the rider and not the hull, and a shot that misses them hits the hull. The flak truck's, the utility helicopter's and the Humvee's gunner seats are exposed, and all three seats of the amphibious transport. Riders of one vehicle never hit each other.
+A seat the hull does not cover: a shot that reaches its rider's body hits the rider and not the hull, and a shot that misses them hits the hull. The flak truck's, the utility helicopter's (gunner and left door seat) and the Humvee's gunner seats are exposed, and all three seats of the amphibious transport. Riders of one vehicle never hit each other.
 _Avoid_: open seat, unprotected seat
 
 **Seat cover**:
@@ -344,7 +344,7 @@ A killstreak's flying entity that circles the map at a set altitude and radius: 
 _Avoid_: plane (for helicopters), drone, helicopter (alone)
 
 **Utility helicopter**:
-The vehicle a player flies: boarded, left and destroyed like any other vehicle, and flown freely by whoever sits in its pilot seat (the vehicle's driver seat). Its second seat is the door gunner's. Hands off it levels itself, stops and holds a hover; with nobody in the pilot seat it hovers briefly, then sets itself down. There is one, standing at its fixed spot on the military base's heliport (square to the two open hangars beside it), never dealt at random; a destroyed one comes back there.
+The vehicle a player flies: boarded, left and destroyed like any other vehicle, and flown freely by whoever sits in its pilot seat (the vehicle's driver seat). Its second seat is the door gunner's (right door); its third is an armed seat in the left door (#476). Hands off it levels itself, stops and holds a hover; with nobody in the pilot seat it hovers briefly, then sets itself down. There is one, standing at its fixed spot on the military base's heliport (square to the two open hangars beside it), never dealt at random; a destroyed one comes back there.
 _Avoid_: helicopter (alone), chopper, Huey, aircraft (that is the circling killstreak entity), flyable helicopter
 
 **Door gun**:
