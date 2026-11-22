@@ -24,13 +24,16 @@ public class WeaponTests
     }
 
     static WeaponDef Def(string id) => File.Find(id)!;
+    /// <summary>Hotbar slot (1-based) of the starting weapon, from the data.</summary>
+    static int Start => File.Weapons.FindIndex(w => w.Id == File.StartingWeapon) + 1;
+    static WeaponDef Starter => Def(File.StartingWeapon);
 
     [Fact]
-    public void StartsWithPistolAndFullAmmo()
+    public void StartsWithTheStartingWeaponAndFullAmmo()
     {
         var r = new Rig();
-        Assert.Equal(1, r.W.Slot);
-        Assert.Equal("pistol", r.W.Current.Id);
+        Assert.Equal(Start, r.W.Slot);
+        Assert.Equal(File.StartingWeapon, r.W.Current.Id);
         for (var s = 1; s <= File.Weapons.Count; s++) { Assert.Equal(File.Weapons[s - 1].MagazineSize, r.W.Mag(s)); Assert.Equal(File.Weapons[s - 1].ReserveAmmo, r.W.Reserve(s)); }
         Assert.Equal(File.Weapons.Count, r.W.Hotbar.Count);
         Assert.Equal("rpg", r.W.Hotbar[2].Id);
@@ -40,11 +43,12 @@ public class WeaponTests
     public void PistolIsSemiAuto()
     {
         var r = new Rig();
+        Assert.False(Starter.FullAuto);
         Assert.Equal(1, r.Shots(30)); // holding fire for 1 s: one shot
-        r.Tick(false, slot: 1);
-        r.Idle(0.2);
-        Assert.NotNull(r.Tick(true, slot: 1));
-        Assert.Equal(13, r.W.Mag(1));
+        r.Tick(false, slot: Start);
+        r.Idle(Starter.FireInterval + 0.1);
+        Assert.NotNull(r.Tick(true, slot: Start));
+        Assert.Equal(Starter.MagazineSize - 2, r.W.Mag(Start));
     }
 
     [Fact]
@@ -78,9 +82,9 @@ public class WeaponTests
     {
         var r = new Rig();
         r.Tick(next: true); r.Tick(next: true);
-        Assert.Equal(2, r.W.Slot);
+        Assert.Equal(Start + 1, r.W.Slot);
         r.Tick(next: false); r.Tick(next: true);
-        Assert.Equal(3, r.W.Slot);
+        Assert.Equal(Start + 2, r.W.Slot);
     }
 
     [Fact]
@@ -105,8 +109,8 @@ public class WeaponTests
         var r = new Rig();
         r.Tick(false, true);  // nothing to reload yet
         Assert.False(r.W.Reloading);
-        for (var i = 0; i < 15; i++) { r.Tick(true); r.Tick(false); r.Idle(0.15); }
-        Assert.Equal(0, r.W.Mag(1));
+        for (var i = 0; i < Starter.MagazineSize; i++) { r.Tick(true); r.Tick(false); r.Idle(Starter.FireInterval + 0.1); }
+        Assert.Equal(0, r.W.Mag(Start));
         Assert.Null(r.Tick(true));
         Assert.True(r.W.Reloading);
         Assert.Null(r.Tick(false)); Assert.Null(r.Tick(true));
@@ -116,12 +120,12 @@ public class WeaponTests
     public void ReserveRunsOutAndKillRefills()
     {
         var r = new Rig();
-        for (var i = 0; i < 15; i++) { r.Tick(true); r.Tick(false); r.Idle(0.15); }
-        r.Tick(false, true); r.Idle(2);
-        Assert.Equal(15, r.W.Mag(1));
-        Assert.Equal(45, r.W.Reserve(1));
+        for (var i = 0; i < Starter.MagazineSize; i++) { r.Tick(true); r.Tick(false); r.Idle(Starter.FireInterval + 0.1); }
+        r.Tick(false, true); r.Idle(Starter.ReloadTime + 0.5);
+        Assert.Equal(Starter.MagazineSize, r.W.Mag(Start));
+        Assert.Equal(Starter.ReserveAmmo - Starter.MagazineSize, r.W.Reserve(Start));
         r.W.RefillReserves();
-        Assert.Equal(60, r.W.Reserve(1));
+        Assert.Equal(Starter.ReserveAmmo, r.W.Reserve(Start));
         Assert.Equal(90, r.W.Reserve(2));
         Assert.Equal(2, r.W.Reserve(3));
         Assert.True(r.W.Changed);
@@ -314,20 +318,20 @@ public class WeaponTests
         var r = new Rig();
         r.Tick(true);
         var m = WeaponCodec.BuildAmmo(r.W, r.T);
-        Assert.Equal(1, m.Slot);
-        Assert.Equal(((ushort)14, (ushort)60), m.Slots[0]);
+        Assert.Equal(Start, m.Slot);
+        Assert.Equal(((ushort)(Starter.MagazineSize - 1), (ushort)Starter.ReserveAmmo), m.Slots[Start - 1]);
         Assert.Equal(File.Weapons.Count, m.Slots.Count);
     }
 
     [Fact]
     public void SniperIsABoltActionOneShotHeadshotWithAScope()
     {
-        var w = File.Find("sniper")!;
+        var w = File.Find("awm")!;
         Assert.Equal(WeaponKind.Hitscan, w.Kind);
         Assert.False(w.FullAuto);
         Assert.True(w.Damage * w.HeadshotMultiplier >= 100, "a headshot kills in one shot");
         Assert.True(w.Damage < 100, "a body shot does not");
         Assert.True(w.Range > 300 && w.ZoomFov is > 0 and < 60);
-        Assert.Equal(1.4f, w.FireInterval);
+        Assert.Equal(1.5f, w.FireInterval);
     }
 }

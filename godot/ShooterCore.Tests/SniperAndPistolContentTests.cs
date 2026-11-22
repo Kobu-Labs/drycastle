@@ -46,7 +46,7 @@ public class SniperAndPistolContentTests
     [Fact]
     public void SnipersHaveDistinctRoles()
     {
-        // M82: heavy, no falloff, small mag. AWM: one-shot body, slowest cycle, smallest mag. SVD: semi-auto marksman, the only sniper that falls off.
+        // M82: heavy, no falloff, small mag. AWM: slowest cycle, smallest mag. SVD: semi-auto marksman, the only sniper that falls off.
         Assert.Equal(1f, Def("m82").FalloffMultiplier);
         Assert.True(Def("awm").FireInterval > Def("svd").FireInterval && Def("awm").MagazineSize < Def("svd").MagazineSize);
         Assert.True(Def("svd").FalloffMultiplier < 1 && Def("svd").FalloffEnd > Def("svd").FalloffStart);
@@ -74,7 +74,7 @@ public class SniperAndPistolContentTests
     /// <summary>Shots to kill a body (100 hp) at 10 m and at 60 m.</summary>
     [Theory]
     [InlineData("m82", 1, 1)]
-    [InlineData("awm", 1, 1)]
+    [InlineData("awm", 2, 2)]  // 80 body (was 150), a headshot still kills; no body one-shot (#477)
     [InlineData("svd", 2, 2)]
     [InlineData("deagle", 3, 3)]  // 45 dmg (was 60, a 2-shot kill at every range, which made it the best pistol everywhere)
     [InlineData("glock17", 6, 8)]

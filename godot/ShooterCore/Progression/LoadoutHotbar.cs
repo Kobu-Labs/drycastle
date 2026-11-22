@@ -10,9 +10,9 @@ public static class LoadoutHotbar
     public static int[] Build(WeaponsFile weapons, Loadout? loadout)
     {
         var primary = Index(weapons, loadout?.PrimaryWeapon, WeaponSlot.Primary);
-        if (primary < 0) primary = weapons.Weapons.FindIndex(w => w.Slot == WeaponSlot.Primary && w.UnlockLevel == 0);
+        if (primary < 0) primary = weapons.Weapons.FindIndex(w => w.Slot == WeaponSlot.Primary && w.UnlockLevel == 0 && !w.Retired);
         var secondary = Index(weapons, loadout?.SecondaryWeapon, WeaponSlot.Secondary);
-        if (secondary < 0) secondary = weapons.Weapons.FindIndex(w => w.Slot == WeaponSlot.Secondary && w.UnlockLevel == 0);
+        if (secondary < 0) secondary = weapons.Weapons.FindIndex(w => w.Slot == WeaponSlot.Secondary && w.UnlockLevel == 0 && !w.Retired);
         var knife = weapons.Weapons.FindIndex(w => w.Category == WeaponCategory.Melee);
         var grenade = weapons.Weapons.FindIndex(w => w.Category == WeaponCategory.Grenade);
         return new[] { primary, secondary, knife, grenade }.Where(i => i >= 0).ToArray();
@@ -25,5 +25,5 @@ public static class LoadoutHotbar
     public static int[] All(WeaponsFile weapons) => Enumerable.Range(0, weapons.Weapons.Count).ToArray();
 
     static int Index(WeaponsFile weapons, string? id, WeaponSlot slot) =>
-        string.IsNullOrEmpty(id) ? -1 : weapons.Weapons.FindIndex(w => w.Id == id && w.Slot == slot);
+        string.IsNullOrEmpty(id) ? -1 : weapons.Weapons.FindIndex(w => w.Id == id && w.Slot == slot && !w.Retired);
 }

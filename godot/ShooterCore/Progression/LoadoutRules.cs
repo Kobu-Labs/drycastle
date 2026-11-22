@@ -45,8 +45,8 @@ public static class LoadoutRules
     /// </summary>
     public static Loadout DefaultLoadout(int slot, WeaponsFile weapons, PerksFile perks)
     {
-        var primary = weapons.Weapons.FirstOrDefault(w => w.Slot == WeaponSlot.Primary && w.UnlockLevel == 0)?.Id ?? "";
-        var secondary = weapons.Weapons.FirstOrDefault(w => w.Slot == WeaponSlot.Secondary && w.UnlockLevel == 0)?.Id ?? "";
+        var primary = weapons.Weapons.FirstOrDefault(w => w.Slot == WeaponSlot.Primary && w.UnlockLevel == 0 && !w.Retired)?.Id ?? "";
+        var secondary = weapons.Weapons.FirstOrDefault(w => w.Slot == WeaponSlot.Secondary && w.UnlockLevel == 0 && !w.Retired)?.Id ?? "";
         var perk = perks.Perks.FirstOrDefault(p => p.UnlockLevel == 0)?.Id ?? "";
         return new Loadout(slot, primary, secondary, perk, KillstreakIds.StarterStreak, "", "", DefaultName(slot));
     }
@@ -110,6 +110,7 @@ public static class LoadoutRules
         if (id.Length > MaxItemIdBytes) return $"unknown {label} weapon \"{Short(id)}\"";
         var w = weapons.Find(id);
         if (w == null || w.Slot != slot) return $"unknown {label} weapon \"{Short(id)}\"";
+        if (w.Retired) return $"{w.Id} is no longer available";
         if (level < w.UnlockLevel && !owned.Contains(id)) return $"{w.Id} unlocks at level {w.UnlockLevel}";
         return null;
     }

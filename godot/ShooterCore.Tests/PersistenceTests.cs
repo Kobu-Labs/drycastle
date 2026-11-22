@@ -144,22 +144,51 @@ public class PersistenceTests
         {
             id = (await store.Profiles.GetOrCreateAsync("durable")).Id;
             await store.Profiles.SetNameAsync(id, "Kept");
-            await store.Loadouts.SaveAsync(id, new Loadout(0, "sniper", "pistol", "", "", "", ""));
+            await store.Loadouts.SaveAsync(id, new Loadout(0, "awm", "deagle", "", "", "", ""));
         }
 
         // Second open runs the migration check again: nothing new should apply, data should be intact.
         using (var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
         {
             conn.Open();
-            // one row per migration file (0001_init, 0002_roadkills, 0003_camo, 0004_loadout_camo, 0005_loadout_name, 0006_camo_character, 0007_hunts, 0008_player_kills, 0009_mineral_finds, 0010_companion)
-            Assert.Equal(10L,(long)new Microsoft.Data.Sqlite.SqliteCommand("SELECT COUNT(*) FROM schema_migrations;", conn).ExecuteScalar()!);
+            // one row per migration file (0001_init, 0002_roadkills, 0003_camo, 0004_loadout_camo, 0005_loadout_name, 0006_camo_character, 0007_hunts, 0008_player_kills, 0009_mineral_finds, 0010_companion, 0011_weapon_cut)
+            Assert.Equal(11L,(long)new Microsoft.Data.Sqlite.SqliteCommand("SELECT COUNT(*) FROM schema_migrations;", conn).ExecuteScalar()!);
         }
         using (var store = SqliteProgressionStore.Open(path, Logged.Add, Curve))
         {
             var p = await store.Profiles.GetOrCreateAsync("durable");
             Assert.Equal(id, p.Id);
             Assert.Equal("Kept", p.Name);
-            Assert.Equal("sniper", (await store.Loadouts.GetAllAsync(id))[0].PrimaryWeapon);
+            Assert.Equal("awm", (await store.Loadouts.GetAllAsync(id))[0].PrimaryWeapon);
+        }
+    }
+
+    [Fact]
+    public async Task WeaponCutMigrationRemapsSavedRetiredWeaponsToKeptOnes()
+    {
+        var path = TempDb();
+        using (var store = SqliteProgressionStore.Open(path, Logged.Add, Curve))
+        {
+            var id = (await store.Profiles.GetOrCreateAsync("cut")).Id;
+            await store.Loadouts.SaveAsync(id, new Loadout(0, "sniper", "glock17", "", "", "", ""));
+            await store.Loadouts.SaveAsync(id, new Loadout(1, "mp5", "pistol", "", "", "", ""));
+            await store.Loadouts.SaveAsync(id, new Loadout(2, "ak47", "deagle", "", "", "", ""));
+        }
+
+        // make the store think 0011 never ran, so the next open applies it to rows that still name retired weapons
+        using (var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
+        {
+            conn.Open();
+            new Microsoft.Data.Sqlite.SqliteCommand("DELETE FROM schema_migrations WHERE name LIKE '%weapon_cut%';", conn).ExecuteNonQuery();
+        }
+
+        using (var store = SqliteProgressionStore.Open(path, Logged.Add, Curve))
+        {
+            var id = (await store.Profiles.GetOrCreateAsync("cut")).Id;
+            var all = await store.Loadouts.GetAllAsync(id);
+            Assert.Equal(("awm", "deagle"), (all[0].PrimaryWeapon, all[0].SecondaryWeapon));
+            Assert.Equal(("p90", "deagle"), (all[1].PrimaryWeapon, all[1].SecondaryWeapon));
+            Assert.Equal(("ak47", "deagle"), (all[2].PrimaryWeapon, all[2].SecondaryWeapon));
         }
     }
 
