@@ -99,8 +99,15 @@ public partial class NetServer
     /// <summary>Places the cars once the spawn candidates are validated: near the spawn zones, at least 12 m apart, random colours; the types' fixed spots stand last in the list.</summary>
     void SpawnCars()
     {
-        var space = World.GetWorld3D().DirectSpaceState;
         var spots = new List<(NVec3 Pos, float Yaw, int Kind)>();
+        if (BlastSmoke || CarSmoke) AddSmokeArenaSpots(spots);
+        else DealVehicleSpots(World.GetWorld3D().DirectSpaceState, spots);
+        CreateCars(spots);
+    }
+
+    /// <summary>The smoke arenas' cars, at fixed spots.</summary>
+    void AddSmokeArenaSpots(List<(NVec3 Pos, float Yaw, int Kind)> spots)
+    {
         if (BlastSmoke)
         {
             var kind = Vehicles!.Vehicles.FindIndex(v => v.Id == SmokeKind);
@@ -108,68 +115,77 @@ public partial class NetServer
             // car 0 is shot to pieces, car 1 stands 6 m beside it (chain damage, survives), car 2 is far away (rocket target, never in a blast)
             foreach (var o in new[] { new NVec3(0, 0, -30), new NVec3(6, 0, -30), new NVec3(0, 0, -70) }) spots.Add((c + o, 0, kind));
         }
-        else if (CarSmoke)
+        else
         {
             var kind = Vehicles!.Vehicles.FindIndex(v => v.Id == SmokeKind);
             if (kind < 0) throw new InvalidOperationException($"unknown --car-kind {SmokeKind}");
             var c = new NVec3(ArenaX, 0, ArenaZ);
             foreach (var o in new[] { new NVec3(-40, 0, 60), new NVec3(-80, 0, 60), new NVec3(-40, 0, 100) }) spots.Add((c + o, 0, kind));
         }
-        else
+    }
+
+    /// <summary>
+    /// The deal on the real map: vehicles stand around the player spawn areas. The spawn candidates are clustered greedily (most uncovered candidates within ClusterRadius),
+    /// the vehicles of vehicles.json (cars first) are dealt round-robin over the clusters and each takes a free candidate within 40 m of its
+    /// cluster anchor (a random one), at least 12 m from every other vehicle, on real ground under the whole footprint; then the fixed spots join, and spawn candidates next to a vehicle are dropped.
+    /// </summary>
+    void DealVehicleSpots(PhysicsDirectSpaceState3D space, List<(NVec3 Pos, float Yaw, int Kind)> spots)
+    {
+        var kinds = new List<int>();
+        var garaged = _garage.Parking()?.Kind ?? -1; // one of that type stands in the garage instead of being dealt
+        for (var kind = 0; kind < Vehicles!.Vehicles.Count; kind++)
+            for (var n = kind == garaged ? 1 : 0; n < Vehicles.Vehicles[kind].SpawnCount; n++) kinds.Add(kind);
+        var anchors = ClusterAnchors(Spawns, Math.Max(1, Math.Min(6, (kinds.Count + 2) / 3)), ClusterRadius);
+        var fitProbes = new Dictionary<int, FlightProbe>();
+        var fixedSpots = PlanFixedSpots(space); // the random deal keeps 12 m clear of them; they join the list after it, so the ids of the dealt vehicles do not move
+        bool Place(int kind, IEnumerable<NVec3> cands)
         {
-            // vehicles stand around the player spawn areas: the spawn candidates are clustered greedily (most uncovered candidates within ClusterRadius),
-            // the vehicles of vehicles.json (cars first) are dealt round-robin over the clusters and each takes a free candidate within 40 m of its
-            // cluster anchor (a random one), at least 12 m from every other vehicle, on real ground under the whole footprint
-            var kinds = new List<int>();
-            var garaged = _garage.Parking()?.Kind ?? -1; // one of that type stands in the garage instead of being dealt
-            for (var kind = 0; kind < Vehicles!.Vehicles.Count; kind++)
-                for (var n = kind == garaged ? 1 : 0; n < Vehicles.Vehicles[kind].SpawnCount; n++) kinds.Add(kind);
-            var anchors = ClusterAnchors(Spawns, Math.Max(1, Math.Min(6, (kinds.Count + 2) / 3)), ClusterRadius);
-            var fitProbes = new Dictionary<int, FlightProbe>();
-            var fixedSpots = PlanFixedSpots(space); // the random deal keeps 12 m clear of them; they join the list after it, so the ids of the dealt vehicles do not move
-            bool Place(int kind, IEnumerable<NVec3> cands)
+            var def0 = Vehicles.Vehicles[kind];
+            foreach (var p in cands)
             {
-                var def0 = Vehicles.Vehicles[kind];
-                foreach (var p in cands)
+                if (spots.Any(s => NVec3.Distance(s.Pos, p) < 12f) || fixedSpots.Any(s => NVec3.Distance(s.Pos, p) < 12f)) continue;
+                var yaw = (float)(_rng.NextDouble() * Math.PI * 2);
+                if (ServerCar.RestHeight(space, new Vector3(p.X, p.Y, p.Z), yaw, def0.HalfWidth, def0.HalfLength, p.Y) is not { } gy) continue;
+                if (def0.Flight != null)
                 {
-                    if (spots.Any(s => NVec3.Distance(s.Pos, p) < 12f) || fixedSpots.Any(s => NVec3.Distance(s.Pos, p) < 12f)) continue;
-                    var yaw = (float)(_rng.NextDouble() * Math.PI * 2);
-                    if (ServerCar.RestHeight(space, new Vector3(p.X, p.Y, p.Z), yaw, def0.HalfWidth, def0.HalfLength, p.Y) is not { } gy) continue;
-                    if (def0.Flight != null)
-                    {
-                        // a helicopter needs room for its rotor as well as flat ground for its skids
-                        if (!fitProbes.TryGetValue(kind, out var fit)) { fitProbes[kind] = fit = FlightProbe.Make(def0, Water, FlightBounds.None); World.AddChild(fit); }
-                        if (!fit.Fits(new Vector3(p.X, gy, p.Z), yaw)) continue;
-                    }
-                    spots.Add((new NVec3(p.X, gy, p.Z), yaw, kind));
-                    return true;
+                    // a helicopter needs room for its rotor as well as flat ground for its skids
+                    if (!fitProbes.TryGetValue(kind, out var fit)) { fitProbes[kind] = fit = FlightProbe.Make(def0, Water, FlightBounds.None); World.AddChild(fit); }
+                    if (!fit.Fits(new Vector3(p.X, gy, p.Z), yaw)) continue;
                 }
-                return false;
+                spots.Add((new NVec3(p.X, gy, p.Z), yaw, kind));
+                return true;
             }
-            for (var i = 0; i < kinds.Count; i++)
-            {
-                var kind = kinds[i];
-                var def = Vehicles.Vehicles[kind];
-                var anchor = anchors.Count > 0 ? anchors[i % anchors.Count] : Spawns[0];
-                var near = Spawns.Where(s => Dist2D(s, anchor) <= 40f).OrderBy(_ => _rng.Next()).ToList();
-                // amphibious: a shore candidate near its cluster first, so it can drive straight into the water
-                var ok = (def.Medium == VehicleMedium.Amphibious && Place(kind, Spawns.Where(s => Dist2D(s, anchor) <= 90f && Water.ShoreDistance(s.X, s.Z) <= 40f).OrderBy(_ => _rng.Next())))
-                    || Place(kind, near)
-                    || Place(kind, Spawns.Where(s => Dist2D(s, anchor) <= 90f).OrderBy(s => Dist2D(s, anchor)))
-                    || Place(kind, Spawns.OrderBy(_ => _rng.Next()));
-                if (!ok) GD.PrintErr($"server: no spot for {def.Id}");
-            }
-            foreach (var fit in fitProbes.Values) fit.QueueFree();
-            spots.AddRange(fixedSpots);
-            // players must not respawn inside a vehicle: drop the spawn candidates next to one (keep a healthy pool)
-            var free = Spawns.Where(s => spots.All(v => NVec3.Distance(v.Pos, s) > 4f)).ToList();
-            if (free.Count >= 20) { Spawns.Clear(); Spawns.AddRange(free); }
-            foreach (var (pos, _, kind) in spots)
-            {
-                var anchorD = anchors.Select(a => Dist2D(a, pos)).DefaultIfEmpty(float.MaxValue).Min();
-                GD.Print($"server: vehicle spot {Vehicles.Vehicles[kind].Id} at ({pos.X:F1},{pos.Y:F1},{pos.Z:F1}), {anchorD:F0} m from the nearest spawn-cluster anchor, nearest player spawn {Spawns.Select(s => Dist2D(s, pos)).DefaultIfEmpty(-1).Min():F0} m");
-            }
+            return false;
         }
+        for (var i = 0; i < kinds.Count; i++)
+        {
+            var kind = kinds[i];
+            var def = Vehicles.Vehicles[kind];
+            var anchor = anchors.Count > 0 ? anchors[i % anchors.Count] : Spawns[0];
+            var near = Spawns.Where(s => Dist2D(s, anchor) <= 40f).OrderBy(_ => _rng.Next()).ToList();
+            // amphibious: a shore candidate near its cluster first, so it can drive straight into the water
+            var ok = (def.Medium == VehicleMedium.Amphibious && Place(kind, Spawns.Where(s => Dist2D(s, anchor) <= 90f && Water.ShoreDistance(s.X, s.Z) <= 40f).OrderBy(_ => _rng.Next())))
+                || Place(kind, near)
+                || Place(kind, Spawns.Where(s => Dist2D(s, anchor) <= 90f).OrderBy(s => Dist2D(s, anchor)))
+                || Place(kind, Spawns.OrderBy(_ => _rng.Next()));
+            if (!ok) GD.PrintErr($"server: no spot for {def.Id}");
+        }
+        foreach (var fit in fitProbes.Values) fit.QueueFree();
+        spots.AddRange(fixedSpots);
+        // players must not respawn inside a vehicle: drop the spawn candidates next to one (keep a healthy pool)
+        var free = Spawns.Where(s => spots.All(v => NVec3.Distance(v.Pos, s) > 4f)).ToList();
+        if (free.Count >= 20) { Spawns.Clear(); Spawns.AddRange(free); }
+        foreach (var (pos, _, kind) in spots)
+        {
+            var anchorD = anchors.Select(a => Dist2D(a, pos)).DefaultIfEmpty(float.MaxValue).Min();
+            GD.Print($"server: vehicle spot {Vehicles.Vehicles[kind].Id} at ({pos.X:F1},{pos.Y:F1},{pos.Z:F1}), {anchorD:F0} m from the nearest spawn-cluster anchor, nearest player spawn {Spawns.Select(s => Dist2D(s, pos)).DefaultIfEmpty(-1).Min():F0} m");
+        }
+    
+    }
+
+    /// <summary>One <see cref="ServerCar"/> per spot, in the list's order (the ids follow it), each in a colour of its type not yet taken.</summary>
+    void CreateCars(List<(NVec3 Pos, float Yaw, int Kind)> spots)
+    {
         var colours = new Dictionary<int, List<byte>>();
         foreach (var (pos, yaw, kind) in spots)
         {
@@ -187,6 +203,7 @@ public partial class NetServer
             _cars.Add(car);
         }
         GD.Print($"server: {_cars.Count} vehicles spawned ({string.Join(", ", colours.Select(k => $"{Vehicles!.Vehicles[k.Key].Id} x{k.Value.Count} colours {string.Join(",", k.Value)}"))})");
+    
     }
 
     void ResetCars()
