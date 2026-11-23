@@ -41,16 +41,16 @@ public partial class NetClient
         var yaw = _me!.Yaw;
         var forward = new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
         var right = new Vector3(Mathf.Cos(yaw), 0, -Mathf.Sin(yaw));
-        var suit = CamoData.SuitPreset("ghillie_grass")?.Spec ?? CamoSpec.Default;
+        var suit = Camo.Data.SuitPreset("ghillie_grass")?.Spec ?? CamoSpec.Default;
         for (var i = 0; i < DemoPoses.Length; i++)
         {
             var p = DemoPoses[i];
             var node = new Node3D { Name = $"PoseDemo{i}" };
             var view = CharacterView.Make();
             // every body in turn, a plain suit on the even ones and the ghillie on the odd ones
-            var look = (i % 2 == 0 ? CamoSpec.Default : suit) with { Body = (byte)(i % CamoData.Bodies.Count) };
+            var look = (i % 2 == 0 ? CamoSpec.Default : suit) with { Body = (byte)(i % Camo.Data.Bodies.Count) };
             view.FlashOnShot = true;
-            view.SetCamo(look, CamoData);
+            view.SetCamo(look, Camo.Data);
             view.SetStance(p.Stance);
             view.Apply(p.Speed, p.Fire, p.Dead, p.Weapon);
             if (p.Dead) view.ShowCorpse(p.Weapon);

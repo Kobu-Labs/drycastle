@@ -58,22 +58,10 @@ public partial class NetClient
     }
 
     /// <summary>Asks the server to copy one loadout slot (and its camouflage) into another. The answer is a new profile, or a <see cref="ServerError"/>.</summary>
-    public bool CopyLoadout(int from, int to)
-    {
-        if (_peer == null || !_welcomed) return false;
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.CopyLoadout, LoadoutEvents.EncodeCopy(from, to))), (int)ENetPacketPeer.FlagReliable);
-        _conn.Flush();
-        return true;
-    }
+    public bool CopyLoadout(int from, int to) => SendNow(new EventMsg((byte)EventKind.CopyLoadout, LoadoutEvents.EncodeCopy(from, to)));
 
     /// <summary>Asks the server to restore one loadout slot to the starter kit. The answer is a new profile, or a <see cref="ServerError"/>.</summary>
-    public bool ResetLoadout(int slot)
-    {
-        if (_peer == null || !_welcomed) return false;
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.ResetLoadout, LoadoutEvents.EncodeReset(slot))), (int)ENetPacketPeer.FlagReliable);
-        _conn.Flush();
-        return true;
-    }
+    public bool ResetLoadout(int slot) => SendNow(new EventMsg((byte)EventKind.ResetLoadout, LoadoutEvents.EncodeReset(slot)));
 
     /// <summary>Takes the active loadout (as the server does at the spawn): the hotbar, the perk, and the hotbar names on the HUD.</summary>
     void ApplySpawnLoadout()

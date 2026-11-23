@@ -8,6 +8,7 @@ using Drycastle.Shooter.Menu;
 using Drycastle.Shooter.Net.Server;
 using Drycastle.Shooter.Scenery;
 using Drycastle.Shooter.Weapons;
+using Drycastle.ShooterCore.Camo;
 using Drycastle.ShooterCore.Bunkers;
 using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Corpses;
@@ -145,12 +146,16 @@ public partial class NetClient : Node
     public ScreensClient Screens => _screens;
     /// <summary>The chat box, the Squads screen's and the Teams screen's requests (the menus reach them here).</summary>
     public ChatClient Chat { get; private set; } = null!;
+    /// <summary>The players' camouflage looks (the Equipment and Customization screens read and save them here).</summary>
+    public CamoClient Camo { get; private set; } = null!;
+    /// <summary>camo.json (set by the host).</summary>
+    public CamoFile CamoData = null!;
     public SquadsClient Squads { get; private set; } = null!;
     public TeamsClient TeamAdmin { get; private set; } = null!;
 
     public NetClient()
     {
-        Ctx = new ClientContext(this) { Send = SendEvent, Connected = () => _peer != null, InVehicle = () => Ctx.Driving || _myState == EntityState.InVehicle };
+        Ctx = new ClientContext(this) { Send = SendEvent, Connected = () => _peer != null, SendJoined = SendNow, InVehicle = () => Ctx.Driving || _myState == EntityState.InVehicle };
         Sandbox = new SandboxClient(Ctx);
         _moab = new MoabClient(Ctx);
         _doors = new DoorsClient(Ctx);
@@ -173,6 +178,7 @@ public partial class NetClient : Node
         Chat = new ChatClient(Ctx, ItemData, CompanionData, Squads);
         TeamAdmin = new TeamsClient(Ctx, Chat);
         _minerals = new MineralsClient(Ctx);
+        Camo = new CamoClient(Ctx, CamoData, DressCorpses);
         _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
         _bot = MakeBot();
         InitCorpses();
@@ -269,20 +275,18 @@ public partial class NetClient : Node
     }
 
     /// <summary>Asks the server to replace a loadout slot. The server answers with a <see cref="LoadoutAckInfo"/> (matched by seq) and the new profile. False when not connected.</summary>
-    public bool SaveLoadout(Loadout loadout, uint seq)
-    {
-        if (_peer == null || !_welcomed) return false;
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(new SaveLoadoutMsg(loadout, seq)), (int)ENetPacketPeer.FlagReliable);
-        _conn.Flush();
-        return true;
-    }
+    public bool SaveLoadout(Loadout loadout, uint seq) => SendNow(new SaveLoadoutMsg(loadout, seq));
 
     /// <summary>Asks the server to make a loadout slot the active one. Answered like <see cref="SaveLoadout"/>.</summary>
-    public void SelectSlot(int slot)
+    public void SelectSlot(int slot) => SendNow(new SelectSlotMsg(slot));
+
+    /// <summary>Sends a reliable message at once, flushed; false when not connected or no welcome has come.</summary>
+    bool SendNow(ReliableMsg m)
     {
-        if (_peer == null || !_welcomed) return;
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(new SelectSlotMsg(slot)), (int)ENetPacketPeer.FlagReliable);
+        if (_peer == null || !_welcomed) return false;
+        Tx(_peer, Wire.ChanReliable, Wire.Encode(m), (int)ENetPacketPeer.FlagReliable);
         _conn.Flush();
+        return true;
     }
 
     /// <summary>
@@ -509,7 +513,7 @@ public partial class NetClient : Node
         OnMatchEvent(kind, payload);
         OnProgressionEvent(kind, payload);
         _uav.OnEvent(kind, payload);
-        OnAppearanceEvent(kind, payload);
+        Camo.OnEvent(kind, payload);
         WorldEntities.OnEvent(kind, payload);
         PerfClientEvent(kind, payload);
         _bot?.OnEvent(kind, payload);

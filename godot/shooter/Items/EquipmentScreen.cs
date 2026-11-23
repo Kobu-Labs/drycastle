@@ -261,7 +261,7 @@ public sealed partial class EquipmentScreen : Control
         Visible = true;
         MouseFilter = MouseFilterEnum.Stop;
         MouseBehaviorRecursive = MouseBehaviorRecursiveEnum.Inherited;
-        if (_client.OwnLook is { } look && !look.Equals(_shownLook)) { _avatar.Show(look, _client.CamoData); _shownLook = look; }
+        if (_client.Camo.OwnLook is { } look && !look.Equals(_shownLook)) { _avatar.Show(look, _client.CamoData); _shownLook = look; }
         _avatar.ResetView();
         _avatar.Frame(CamoPreview.Framing.Body);
         SetHintNames();

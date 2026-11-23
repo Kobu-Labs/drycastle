@@ -3,6 +3,7 @@ using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Corpses;
 using Drycastle.Shooter.Menu;
 using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Camo;
 using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Hud;
@@ -112,6 +113,13 @@ public partial class NetClient
     InteractHold _corpseHold; // the hold for the primary position: counts only while the corpse owns the key and offers a weapon to replace it
 
     /// <summary>True while the corpse chooser is up; the hotbar keys and wheel belong to it then.</summary>
+    /// <summary>A look that arrives after the corpse of that player spawned goes on it (#203).</summary>
+    void DressCorpses(ushort owner, CamoSpec look)
+    {
+        foreach (var (id, c) in _corpses)
+            if (WorldEntities.Entities.TryGetValue(id, out var e) && e.State.Owner == owner) c.View?.SetCamo(look, Camo.Data);
+    }
+
     bool ChooserOpen => _chooser.IsOpen;
 
     /// <summary>The chooser shows a list of Items: the mouse is released for it (the shell asks). A chooser with only the weapon rows keeps the mouse captured.</summary>
@@ -142,7 +150,7 @@ public partial class NetClient
         if (HarvesterRules.IsBale(e.State.Owner)) { _corpses[e.Id] = MakeBaleCorpse(e); return; }
         var node = new Node3D { Name = $"Corpse{e.Id}" };
         var view = CharacterView.Make();
-        if (Appearances.TryGetValue(e.State.Owner, out var look)) view.SetCamo(look, CamoData); // the dead player's look (#203)
+        Camo.Dress(view, e.State.Owner); // the dead player's look (#203)
         view.Position = new Vector3(0, -RagdollTumble.Half, 0); // the node sits at the body's middle, so a thrown body spins about its centre
         node.AddChild(view);
         Owned.AddChild(node);

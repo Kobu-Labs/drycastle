@@ -43,7 +43,7 @@ public partial class NetClient
     {
         var node = new Node3D { Name = $"Remote{id}" };
         var view = CharacterView.Make();
-        if (Appearances.TryGetValue(id, out var look)) view.SetCamo(look, CamoData); // the look may arrive before the first snapshot (#140)
+        Camo.Dress(view, id); // the look may arrive before the first snapshot (#140)
         DressPlayer(view, id); // what they wear (#266), likewise
         node.AddChild(view);
         node.AddChild(new Label3D

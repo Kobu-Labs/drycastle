@@ -68,6 +68,8 @@ public sealed class ClientContext
     public Dictionary<ushort, string> Names { get; } = new();
     /// <summary>Sends a player's request (not for a bot, which has no screens to ask from).</summary>
     public void SendHuman(EventKind kind, byte[] payload) { if (!Bot) Send(kind, payload); }
+    /// <summary>Sends one reliable message at once, flushed (a profile request); false when the welcome has not come.</summary>
+    public Func<ReliableMsg, bool> SendJoined = _ => false;
     /// <summary>True while there is a link to the server to send on.</summary>
     public Func<bool> Connected = () => false;
 

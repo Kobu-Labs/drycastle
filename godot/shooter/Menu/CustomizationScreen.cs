@@ -603,7 +603,7 @@ public partial class CustomizationScreen : MenuScreen
     void Apply()
     {
         if (_net == null || !Dirty || AwaitingSave) return;
-        if (!_net.SaveCamo(_slot, _draft)) { Shell.Toast(Strings.T("net.not_sent"), ToastKind.Error); return; }
+        if (!_net.Camo.Save(_slot, _draft)) { Shell.Toast(Strings.T("net.not_sent"), ToastKind.Error); return; }
         _wait.Begin(_slot, _draft, Now());
         Sync();
     }

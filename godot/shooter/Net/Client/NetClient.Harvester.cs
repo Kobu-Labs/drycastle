@@ -326,7 +326,7 @@ public partial class NetClient
     CharacterView MakeBaleBody(Node3D parent, ushort victim)
     {
         var view = CharacterView.Make();
-        if (Appearances.TryGetValue(victim, out var look)) view.SetCamo(look, CamoData);
+        Camo.Dress(view, victim);
         view.ShowThrown("");
         view.SetRagdoll(true, 1f);
         parent.AddChild(view);
