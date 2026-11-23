@@ -91,7 +91,7 @@ public partial class NetServer
     {
         ServerCar? best = null;
         distance = float.PositiveInfinity; pose = default;
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
         {
             if (car == skipA || car == skipB || car.Destroyed || passed != null && passed.Contains(car)) continue;
             var p = PoseOf(car);

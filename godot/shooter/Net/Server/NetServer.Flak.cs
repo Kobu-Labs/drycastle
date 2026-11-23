@@ -106,7 +106,7 @@ public partial class NetServer
         var wall = WorldWall(from, new Vector3(dir.X, dir.Y, dir.Z), def.MaxRange);
         // the riders of the truck are not in the shell's way, nor is the truck itself
         var targets = LiveTargets().Where(t => car.Seat.SeatOf(t.Id) < 0).ToList();
-        var vehicles = GunshipVehicles(targets).Where(v => _cars[v.Index] != car).ToList();
+        var vehicles = GunshipVehicles(targets).Where(v => _fleet.Cars[v.Index] != car).ToList();
         var route = GunshipRouting.Route(shell, origin, dir, wall, targets, c.Id, vehicles, Vehicles?.BulletDamageMultiplier ?? 0f);
         var stop = route.Impact == GunshipImpact.None ? float.PositiveInfinity : route.Distance;
         var plan = FlakRules.Plan(def, origin, dir, stop, FlakTargets());

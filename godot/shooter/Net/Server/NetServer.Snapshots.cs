@@ -1,3 +1,4 @@
+using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
 
@@ -17,8 +18,8 @@ public partial class NetServer
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot,
                     c.Car != null ? RiderRules.HitStance(c.Car.Def, c.CarSeat, c.Body.State.Stance) : BodyStanceOf(c)));
-        foreach (var car in _cars) if (car.Seat.Count > 1) ents.Add(SeatsRecord.Make(car.Id, SeatOccupants(car))); // who sits in seats 1..4, for every client (ADR 0026)
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars) if (car.Seat.Count > 1) ents.Add(SeatsRecord.Make(car.Id, Fleet.SeatOccupants(car))); // who sits in seats 1..4, for every client (ADR 0026)
+        foreach (var car in _fleet.Cars)
         {
             if (car.Retired) continue; // removed for good (RemoveRocketCarts): not sent, so every client drops it
             var stage = Vehicles == null ? 0 : VehicleDamage.Stage(car.Hp, car.Life.MaxHp, Vehicles.DamageStages);
@@ -26,10 +27,10 @@ public partial class NetServer
                 ? VehicleRecord.MakeTrailer(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Tractor?.Id ?? (ushort)0, car.Colour, car.Cargo!.Loaded, stage, car.Destroyed) // a trailer: its tractor in the driver's field, its load in a health bit (protocol 67)
                 : VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, stage, car.Destroyed, car.Lights, car.Life.WheelsOff, car.Braking));
         }
-        foreach (var car in _cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model
-        foreach (var car in _cars) if (car.Flies) ents.Add(FlightRecord.Make(car.Id, car.Flight)); // a helicopter's velocity, tilt and rotor (ADR 0006)
-        foreach (var car in _cars) if (car.Drives) ents.Add(DriveRecord.Make(car.Id, car.Drive)); // a driven vehicle's speeds, slope, steering and whether it floats (ADR 0010)
-        foreach (var car in _cars) if (car.Def.DoorGun != null) ents.Add(DoorGunRecordOf(car)); // a door gun's aim against its airframe, for everyone's model
+        foreach (var car in _fleet.Cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model
+        foreach (var car in _fleet.Cars) if (car.Flies) ents.Add(FlightRecord.Make(car.Id, car.Flight)); // a helicopter's velocity, tilt and rotor (ADR 0006)
+        foreach (var car in _fleet.Cars) if (car.Drives) ents.Add(DriveRecord.Make(car.Id, car.Drive)); // a driven vehicle's speeds, slope, steering and whether it floats (ADR 0010)
+        foreach (var car in _fleet.Cars) if (car.Def.DoorGun != null) ents.Add(DoorGunRecordOf(car)); // a door gun's aim against its airframe, for everyone's model
         ents.AddRange(TargetRecords()); // target dummies (#148)
         foreach (var r in _rockets)
             ents.Add(EntityRecord.Make(r.Id, EntityType.Projectile, N(r.Pos),

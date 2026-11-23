@@ -45,11 +45,11 @@ public partial class NetServer
 
         public IEnumerable<TireCar> Cars()
         {
-            foreach (var car in _s._cars)
+            foreach (var car in _s._fleet.Cars)
                 if (Of(car) is { } t) yield return t;
         }
 
-        ServerCar? Find(int carId) => carId - VehicleRecord.FirstId is var i && i >= 0 && i < _s._cars.Count && _s._cars[i].Id == carId ? _s._cars[i] : null;
+        ServerCar? Find(int carId) => _s._fleet.Find(carId);
 
         public bool TryGet(int carId, out TireCar car)
         {
@@ -67,7 +67,7 @@ public partial class NetServer
 
         public void RestoreAll()
         {
-            foreach (var car in _s._cars)
+            foreach (var car in _s._fleet.Cars)
                 for (var w = 0; w < VehicleLifecycle.Wheels; w++) car.Life.ReturnWheel(w);
         }
     }

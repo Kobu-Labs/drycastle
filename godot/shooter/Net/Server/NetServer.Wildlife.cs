@@ -53,7 +53,7 @@ public partial class NetServer
             {
                 foreach (var c in _s._byId.Values)
                     if (_s._match.Get(c.Id)?.Life == PlayerLife.Alive) Consider(N(c.Body.GlobalPosition));
-                foreach (var car in _s._cars)
+                foreach (var car in _s._fleet.Cars)
                     if (!car.Destroyed && MathF.Abs(car.State.Speed) > WildlifeCarThreatSpeed) Consider(N(car.GlobalPosition));
             }
             Prof.End(Prof.S.AnimalThreat, t);

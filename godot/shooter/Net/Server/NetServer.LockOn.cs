@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Bots;
 using Drycastle.ShooterCore.Flight;
@@ -77,7 +78,7 @@ public partial class NetServer
         _lockCandidates.Clear();
         foreach (var (id, e) in _match.Entities.OfType(Aircraft.WireType))
             if (e is Aircraft { Ended: null } a) _lockCandidates.Add(new LockCandidate(id, a.Position, a.Def.Id));
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
             if (LockableHeli(car)) _lockCandidates.Add(new LockCandidate(car.Id, car.Flight.Position, car.Def.Id));
     }
 
@@ -87,12 +88,12 @@ public partial class NetServer
     /// <summary>Whether an id is a vehicle's (the ranges of vehicle and world entity ids do not meet).</summary>
     static bool IsVehicleId(ushort id) => id >= VehicleRecord.FirstId;
 
-    ServerCar? LiveHeli(ushort id) => IsVehicleId(id) ? _cars.FirstOrDefault(c => c.Id == id && LockableHeli(c)) : null;
+    ServerCar? LiveHeli(ushort id) => IsVehicleId(id) ? _fleet.Find(id) is { } c && LockableHeli(c) ? c : null : null;
 
     /// <summary>Who is warned about a Lock on <paramref name="id"/>: an Aircraft's owner, everybody aboard a helicopter. Empty when the target is gone.</summary>
     ushort[] AlertRecipients(ushort id)
     {
-        if (IsVehicleId(id)) return _cars.FirstOrDefault(c => c.Id == id) is { Destroyed: false } car ? SeatOccupants(car).Where(o => o != 0).ToArray() : Array.Empty<ushort>();
+        if (IsVehicleId(id)) return _fleet.Find(id) is { Destroyed: false } car ? Fleet.SeatOccupants(car).Where(o => o != 0).ToArray() : Array.Empty<ushort>();
         return LiveAircraft(id) is { } a ? new[] { a.Owner } : Array.Empty<ushort>();
     }
 

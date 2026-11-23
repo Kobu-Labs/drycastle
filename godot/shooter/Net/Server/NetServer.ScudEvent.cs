@@ -79,7 +79,7 @@ public partial class NetServer
         if (ServerCar.RestHeight(space, new Vector3(x, terrain, z), yaw, halfW, halfL, terrain) is not { } y) return null;
         if (!ScudFootprintClear(new Vector3(x, y, z), yaw, halfW, halfL)) return null;
         var box = new BodyBox(x, z, halfW, halfL, yaw);
-        foreach (var other in _cars)
+        foreach (var other in _fleet.Cars)
             if (!other.Destroyed && !other.Retired && ScudReloadRules.Gap(box, BoxOf(other)) < 1f) return null;
         return y;
     }
@@ -254,7 +254,7 @@ public partial class NetServer
     ushort FirstHumanAboard(ServerCar truck)
     {
         for (var s = 0; s < truck.Seat.Count; s++)
-            if (OccupantAt(truck, s) is { IsBot: false } o) return o.Id;
+            if (_fleet.OccupantAt(truck, s) is { IsBot: false } o) return o.Id;
         return 0;
     }
 
@@ -279,7 +279,7 @@ public partial class NetServer
         RemoveRocketCarts();
         if (retireTruck && _scudTruck is { Destroyed: false } t)
         {
-            foreach (var o in Occupants(t)) LeaveSeat(o, true);
+            foreach (var o in _fleet.Occupants(t)) LeaveSeat(o, true);
             t.Seat.Clear();
             t.Retire();
         }

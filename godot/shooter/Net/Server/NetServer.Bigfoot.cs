@@ -92,7 +92,7 @@ public partial class NetServer
         if (_bigfoot == null) return;
         foreach (var c in _byId.Values)
             if (_match.Get(c.Id)?.Life == PlayerLife.Alive) _bfPlayers.Add(new BigfootPlayer(c.Id, N(c.Body.GlobalPosition), c.Body.State.OnFloor, c.Car != null));
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
             if (!car.Destroyed && car.Thrown == null) _bfVehicles.Add(new BigfootVehicle(car.Id, N(car.GlobalPosition), car.Def.HalfLength));
     }
 
@@ -111,7 +111,7 @@ public partial class NetServer
         car.PrevPos = car.TickEndPos = car.GlobalPosition;
         for (var s = 0; s < car.Seat.Count; s++) // the riders stay on their seats the whole way
         {
-            if (OccupantAt(car, s) is not { } o) continue;
+            if (_fleet.OccupantAt(car, s) is not { } o) continue;
             var at = SeatPos(car, o.CarSeat);
             o.Body.Teleport(at);
             _match.SetPosition(o.Id, N(at));
@@ -355,7 +355,7 @@ public partial class NetServer
 
         public void LiftVehicle(ushort vehicle, NVec3 hold, float seconds)
         {
-            var car = _s._cars.FirstOrDefault(v => v.Id == vehicle);
+            var car = _s._fleet.Find(vehicle);
             if (car == null || car.Destroyed || car.Thrown != null) return;
             car.Thrown = new VehicleThrow(N(car.GlobalPosition), car.State.Yaw, hold, seconds);
             car.Wake();
@@ -364,12 +364,12 @@ public partial class NetServer
 
         public void DropVehicle(ushort vehicle)
         {
-            if (_s._cars.FirstOrDefault(v => v.Id == vehicle) is { Destroyed: false, Thrown: { Released: false } lifted }) lifted.PutDown();
+            if (_s._fleet.Find(vehicle) is { Destroyed: false, Thrown: { Released: false } lifted }) lifted.PutDown();
         }
 
         public void ThrowVehicle(ushort vehicle, NVec3 landing, float seconds, float spinRadPerS)
         {
-            var car = _s._cars.FirstOrDefault(v => v.Id == vehicle);
+            var car = _s._fleet.Find(vehicle);
             if (car is { Destroyed: false, Thrown: { Released: false } lifted }) { lifted.Release(landing, seconds, spinRadPerS); return; } // from over its head
             if (car == null || car.Destroyed || car.Thrown != null) return;
             car.Thrown = new VehicleThrow(N(car.GlobalPosition), car.State.Yaw, landing, seconds, spinRadPerS);

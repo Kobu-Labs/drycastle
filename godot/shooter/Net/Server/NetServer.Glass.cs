@@ -155,7 +155,7 @@ public partial class NetServer
             var dmg = GlassRules.BlastDamage(NVec3.Distance(c, panes[i].Rect.Centre), radius, blastDamage);
             if (dmg > 0 && _glass.Damage(new GlassPaneKey(GlassPaneKey.Map, (ushort)i), dmg, panes[i].Hp ?? GlassData.BuildingPaneHp)) _glassHits++;
         }
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
         {
             if (car.Destroyed || car.Def.Glass.Count == 0) continue;
             var feet = car.HullFeet;

@@ -91,7 +91,7 @@ public partial class NetServer
         double P(double p) => s.Count == 0 ? 0 : s[Math.Min(s.Count - 1, (int)Math.Ceiling(p / 100 * s.Count) - 1 < 0 ? 0 : (int)Math.Ceiling(p / 100 * s.Count) - 1)];
         var joined = _clients.Values.Where(c => c.Joined).ToList();
         var perClient = joined.Count == 0 ? 0 : joined.Average(c => c.BytesOut) / seconds;
-        var entities = _match.Entities.Snapshot().Count + joined.Count + _cars.Count + _rockets.Count;
+        var entities = _match.Entities.Snapshot().Count + joined.Count + _fleet.Count + _rockets.Count;
         var line = $"server: stats tick p50 {P(50):F2} ms p99 {P(99):F2} ms (budget {TickMs:F1}), overruns {_overruns}, skipped snapshots {_skippedSnapshots}, " +
                $"players {joined.Count}, bots {_byId.Count - joined.Count}, out {perClient:F0} B/s per client, entities {entities}, db queue {Progression?.QueueDepth ?? 0}, " +
                $"dropped packets {_droppedPackets}, rejected saves {_rejectedSaves}";

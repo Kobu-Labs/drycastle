@@ -88,16 +88,16 @@ public partial class NetServer
     float WorldWall(Vector3 from, Vector3 dir, float max) => Query.Wall(from, dir, max);
 
     /// <summary>
-    /// The live vehicles as the gunship routing sees them: the index is the position in <see cref="_cars"/>. With <paramref name="targets"/> (the
+    /// The live vehicles as the gunship routing sees them: the index is the position in <see cref="_fleet.Cars"/>. With <paramref name="targets"/> (the
     /// bodies a round can hit), a vehicle whose seats are in the open (an amphibious transport, ADR 0012) carries its riders, so a round reaches
     /// them through its hit volume. A flak truck's or a helicopter's gunner stays behind the volume for these rounds, as before.
     /// </summary>
     List<GunshipVehicle> GunshipVehicles(IReadOnlyList<HitTarget>? targets = null)
     {
-        var list = new List<GunshipVehicle>(_cars.Count);
-        for (var i = 0; i < _cars.Count; i++)
+        var list = new List<GunshipVehicle>(_fleet.Count);
+        for (var i = 0; i < _fleet.Count; i++)
         {
-            var c = _cars[i];
+            var c = _fleet.Cars[i];
             if (c.Destroyed) continue; // no collision: a destroyed vehicle is shot through
             var riders = targets != null && c.Seat.Occupied ? RiderRules.Exposed(c.Def, c.Seat, targets, seatsOnly: true) : null;
             var (_, pitch, roll) = AttitudeOf(c);
@@ -173,7 +173,7 @@ public partial class NetServer
             kill = Deal(owner, credit, route.TargetId, route.Damage, false, false) == DamageResult.Killed;
         else if (route.Impact == GunshipImpact.Vehicle && Vehicles != null)
         {
-            var car = _cars[route.VehicleIndex];
+            var car = _fleet.Cars[route.VehicleIndex];
             DamageVehicle(car, route.Damage, owner, credit, 0);
             kill = car.Destroyed;
         }
@@ -213,7 +213,7 @@ public partial class NetServer
         {
             if (h.IsVehicle)
             {
-                var car = _cars[h.VehicleIndex];
+                var car = _fleet.Cars[h.VehicleIndex];
                 DamageVehicle(car, h.Damage, owner, credit, 0);
                 if (h.Direct && car.Destroyed) kill = true;
                 continue;

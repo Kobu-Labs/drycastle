@@ -64,7 +64,7 @@ public partial class NetServer
     float ParkedHullDistance(Vector3 from, Vector3 dir, float max)
     {
         var best = float.PositiveInfinity;
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
         {
             if (car.Destroyed || car.Thrown != null || (car.Flies && !car.Flight.Grounded) || MathF.Abs(car.State.Speed) > ParkedSpeed) continue;
             var p = car.GlobalPosition;

@@ -63,7 +63,7 @@ public partial class NetServer
     /// </summary>
     void CaptureVehiclePoses()
     {
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
         {
             SyncCarLife(car);
             if (car.Destroyed) { car.Poses.Record(_tick, false, default); continue; }

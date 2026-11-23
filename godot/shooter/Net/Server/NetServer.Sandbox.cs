@@ -194,12 +194,12 @@ public partial class NetServer
         var colour = VehicleColours.Pick(_rng, new List<byte>(), def.Variants);
         var car = new ServerCar
         {
-            Name = $"{def.Id}{_cars.Count}", Id = (ushort)(VehicleRecord.FirstId + _cars.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, colour),
+            Name = $"{def.Id}{_fleet.Count}", Id = (ushort)(VehicleRecord.FirstId + _fleet.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, colour),
             HalfWidth = def.HalfWidth, HalfLength = def.HalfLength, OriginPos = new Vector3(at.X, at.Y + 0.02f, at.Z), OriginYaw = yaw,
             FlightWater = Water, FlightBounds = MapFlightBounds,
         };
         World.AddChild(car);
-        _cars.Add(car);
+        _fleet.Add(car);
         GD.Print($"server: {c.Name} #{c.Id} spawned a {def.Id}");
         return null;
     }

@@ -25,16 +25,16 @@ public partial class NetServer
     /// </summary>
     void TrailerLatchTick()
     {
-        foreach (var trailer in _cars)
+        foreach (var trailer in _fleet.Cars)
         {
             if (!trailer.IsTrailer || trailer.Destroyed || trailer.Tractor != null || trailer.Thrown != null || trailer.Tow!.State != TrailerState.Loose) continue;
             var at = trailer.GlobalPosition;
-            foreach (var tractor in _cars)
+            foreach (var tractor in _fleet.Cars)
             {
                 if (tractor.Def.Tow == null || tractor.Destroyed || tractor.Thrown != null || tractor.Towing != null || tractor.Flies || tractor.Afloat) continue;
                 if (Dist2D(N(at), N(tractor.GlobalPosition)) > LatchBroadRange) continue;
                 if (!trailer.TryLatchTo(tractor)) continue;
-                var driver = OccupantAt(tractor, 0);
+                var driver = _fleet.OccupantAt(tractor, 0);
                 tractor.UnhitchKey.Arm(driver?.UseKey.Held ?? false); // a key held as it latched must be let go before it counts
                 GD.Print($"server: {tractor.Def.Id} {tractor.Id} hitched {trailer.Def.Id} {trailer.Id}");
                 break;
@@ -66,7 +66,7 @@ public partial class NetServer
     /// </summary>
     void TrailerRunOver(ServerCar car, float speed)
     {
-        var credit = car.Tractor is { } tractor ? OccupantAt(tractor, 0)?.Id ?? (ushort)0 : (ushort)0;
+        var credit = car.Tractor is { } tractor ? _fleet.OccupantAt(tractor, 0)?.Id ?? (ushort)0 : (ushort)0;
         var dmg = RunOver.Damage(Vehicles!, speed, Vehicles!.RunOverScale(car.Def));
         RunOverTargets(new RunOverSweep(MoverKind.GroundVehicle, N(car.PrevPos), N(car.GlobalPosition), car.State.Yaw, car.HalfWidth, car.HalfLength, N(car.Forward), speed, dmg, credit, car.HitCooldown));
     }
@@ -116,12 +116,12 @@ public partial class NetServer
         var ground = Query.GroundY(MoverKind.GroundVehicle, new Vector3(position.X, position.Y + 2f, position.Z), 3f, 12f) ?? position.Y;
         var car = new ServerCar
         {
-            Name = $"{def.Id}{_cars.Count}", Id = (ushort)(VehicleRecord.FirstId + _cars.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, 0),
+            Name = $"{def.Id}{_fleet.Count}", Id = (ushort)(VehicleRecord.FirstId + _fleet.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, 0),
             HalfWidth = def.HalfWidth, HalfLength = def.HalfLength, OriginPos = new Vector3(position.X, ground + 0.02f, position.Z), OriginYaw = yaw,
             FlightWater = Water, FlightBounds = MapFlightBounds,
         };
         World.AddChild(car);
-        _cars.Add(car);
+        _fleet.Add(car);
         car.SetLoaded(loaded);
         GD.Print($"server: rocket cart {car.Id} spawned at ({position.X:F1},{ground:F1},{position.Z:F1}), {(loaded ? "loaded" : "empty")}");
         return car;
@@ -131,7 +131,7 @@ public partial class NetServer
     public int RemoveRocketCarts()
     {
         var n = 0;
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
         {
             if (car.Cargo == null || car.Retired) continue;
             car.Retire();
@@ -151,7 +151,7 @@ public partial class NetServer
     public List<ServerCar> LoadedRocketCartsNear(NVec3 point, float radius)
     {
         var found = new List<(float D, ServerCar Car)>();
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
         {
             if (car.Cargo is not { Loaded: true } || car.Destroyed) continue;
             var d = NVec3.Distance(N(car.GlobalPosition), point);

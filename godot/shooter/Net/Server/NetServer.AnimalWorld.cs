@@ -149,7 +149,7 @@ public partial class NetServer
         _animalCarThreats.Clear();
         foreach (var c in _byId.Values)
             _animalPlayers.Add(new AnimalPlayer(N(c.Body.GlobalPosition), _match.Get(c.Id)?.Life == PlayerLife.Alive, c.Car == null));
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
             if (!car.Destroyed && MathF.Abs(car.State.Speed) > WildlifeCarThreatSpeed) _animalCarThreats.Add(N(car.GlobalPosition));
         _animalsTeleports = Player.TeleportsAll;
         _animalsFresh = true;

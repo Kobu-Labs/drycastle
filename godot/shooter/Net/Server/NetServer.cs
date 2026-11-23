@@ -1,6 +1,7 @@
 using Godot;
 using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Net.Server.BusGarage;
+using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
 using Drycastle.Shooter.Net.Server.Scenery;
@@ -91,6 +92,8 @@ public partial class NetServer : Node
     /// <summary>What the smoke tests count (and their verdicts); nothing reads it on a production server.</summary>
     readonly SmokeStats _smoke = new();
 
+    public NetServer() => _fleet = new Fleet(_byId);
+
     public override void _Ready()
     {
         PerfInit();
@@ -110,7 +113,7 @@ public partial class NetServer : Node
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
         _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, CitizenHits, TableSeating());
         _intel = new IntelServer(_ctx);
-        _garage = new GarageServer(_ctx, ArenaMode, MapDir, _cars, () => Vehicles);
+        _garage = new GarageServer(_ctx, ArenaMode, MapDir, _fleet.Cars, () => Vehicles);
         _minerals = new MineralsServer(_ctx, Progression, () => _wildlife?.Drops ?? Array.Empty<MineralDrop>());
         StatusInit();
         DemonInit();
@@ -254,7 +257,7 @@ public partial class NetServer : Node
     /// <summary>Every joined player takes the inputs queued for this tick (bots included), then the Lock-on launchers step.</summary>
     void SimulatePlayers(float dt)
     {
-        foreach (var car in _cars) car.PlaceSolid(); // the boxes on-foot players are stopped by, where the vehicles stand after the last tick (#217)
+        foreach (var car in _fleet.Cars) car.PlaceSolid(); // the boxes on-foot players are stopped by, where the vehicles stand after the last tick (#217)
         PlaceVanSolids(); // and the Raid vans' (a van that stands is solid)
         PerfLap(ServerPerf.Ph.PlaceSolids);
         _simClients.Clear(); _simClients.AddRange(_byId.Values); // a copy: a client may leave while the others are simulated
@@ -562,7 +565,7 @@ public partial class NetServer : Node
         }
         if (WeaponCodec.DecodeDebugVehicleDamage(payload) is { } vd)
         {
-            var car = _cars.FirstOrDefault(x => x.Id == vd.Vehicle);
+            var car = _fleet.Find(vd.Vehicle);
             if (car != null) DamageVehicle(car, vd.Amount, c.Id, SpecialWeapons.Debug, 0);
             return;
         }

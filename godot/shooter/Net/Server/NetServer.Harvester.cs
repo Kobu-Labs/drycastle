@@ -162,11 +162,11 @@ public partial class NetServer
     {
         var car = new ServerCar
         {
-            Name = $"{def.Id}{_cars.Count}", Id = (ushort)(VehicleRecord.FirstId + _cars.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, 0),
+            Name = $"{def.Id}{_fleet.Count}", Id = (ushort)(VehicleRecord.FirstId + _fleet.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, 0),
             HalfWidth = def.HalfWidth, HalfLength = def.HalfLength, OriginPos = origin, OriginYaw = yaw, FlightWater = Water, FlightBounds = MapFlightBounds,
         };
         World.AddChild(car);
-        _cars.Add(car);
+        _fleet.Add(car);
         return car;
     }
 
@@ -201,7 +201,7 @@ public partial class NetServer
     /// <summary>Hides the machine until the next job: out of its seat, destroyed with no blast and no return time (<see cref="ServerCar.Destroy"/>).</summary>
     void RetireHarvester(ServerCar car)
     {
-        foreach (var o in Occupants(car)) { if (o.HarvesterDriver) _harvOldDrivers.Add(o); LeaveSeat(o, true); }
+        foreach (var o in _fleet.Occupants(car)) { if (o.HarvesterDriver) _harvOldDrivers.Add(o); LeaveSeat(o, true); }
         car.Seat.Clear();
         if (!car.Destroyed) car.Destroy(double.MaxValue);
     }
@@ -321,14 +321,14 @@ public partial class NetServer
     /// <summary>After the vehicles moved: what the machine runs over and what its reel draws in, the corpses on their way into it, the bales' fire.</summary>
     void HarvesterAfterVehicles(float dt)
     {
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
         {
             if (car.Destroyed || car.Def.Id != HarvesterRules.VehicleId || car.Seat.Occupant(0) == 0) continue; // any harvester with somebody at the wheel: the event's, a stolen one, a spawned one
             if (_match.Phase == MatchPhase.Running) HarvesterContacts(car);
             StepSwath(car);
         }
         StepCrush();
-        foreach (var car in _cars) if (car.Def.Id == HarvesterRules.VehicleId && (car.Destroyed || car.Seat.Occupant(0) == 0)) _samplers.Remove(car.Id);
+        foreach (var car in _fleet.Cars) if (car.Def.Id == HarvesterRules.VehicleId && (car.Destroyed || car.Seat.Occupant(0) == 0)) _samplers.Remove(car.Id);
         FlushSwaths();
         StepMachineCorpses(dt);
         FollowMadeBales();
@@ -336,7 +336,7 @@ public partial class NetServer
     }
 
     /// <summary>The credit of the machine's kills: its driver (the AI's, or a player who took the seat), else nobody.</summary>
-    ushort HarvesterAttacker(ServerCar car) => OccupantAt(car, 0) is { } d && _match.Get(d.Id)?.Life == PlayerLife.Alive ? d.Id : HarvesterRules.NobodyAttacker;
+    ushort HarvesterAttacker(ServerCar car) => _fleet.OccupantAt(car, 0) is { } d && _match.Get(d.Id)?.Life == PlayerLife.Alive ? d.Id : HarvesterRules.NobodyAttacker;
 
     /// <summary>The reel is the only part that harms (<see cref="HarvesterConfig.Reel"/>): a player on foot inside its box is drawn in while the machine moves forward. The body kills nobody (vehicles.json run_over is false).</summary>
     void HarvesterContacts(ServerCar car)
@@ -500,7 +500,7 @@ public partial class NetServer
     {
         if (Map == null) return;
         var mask = _crushMask ??= new CropCrushMask(CropCrush, CrushFieldList);
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
         {
             var ground = !car.Destroyed && car.Def.Flight == null && !car.Afloat;
             var body = new CrushBody(new NVec2(car.GlobalPosition.X, car.GlobalPosition.Z), car.State.Yaw, car.HalfWidth, car.HalfLength, car.State.Speed, car.Seat.Occupied, ground);

@@ -221,7 +221,7 @@ public partial class NetServer
             if (van.Ended != null) continue;
             var shape = van.Shape;
             var body = new BumpBody(VanMass, van.Velocity, false);
-            foreach (var car in _cars)
+            foreach (var car in _fleet.Cars)
             {
                 if (car.Destroyed || car.Thrown != null) continue;
                 var p = car.GlobalPosition;

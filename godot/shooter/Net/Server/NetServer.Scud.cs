@@ -74,7 +74,7 @@ public partial class NetServer
         return new ScudCrew(seats, car.Def.Launcher!.OperatorSeat);
     }
 
-    ServerCar? ScudCarById(ushort id) => _cars.FirstOrDefault(c => c.Id == id);
+    ServerCar? ScudCarById(ushort id) => _fleet.Find(id);
 
     /// <summary>
     /// A launcher truck standing at <paramref name="position"/> (the ground there is found), turned to <paramref name="yaw"/>: the first vehicle type with a launcher block, one more vehicle record. Null
@@ -92,12 +92,12 @@ public partial class NetServer
         var y = ServerCar.RestHeight(space, new Vector3(position.X, ground, position.Z), yaw, def.HalfWidth, def.HalfLength, ground) ?? ground;
         var car = new ServerCar
         {
-            Name = $"{def.Id}{_cars.Count}", Id = (ushort)(VehicleRecord.FirstId + _cars.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, 0),
+            Name = $"{def.Id}{_fleet.Count}", Id = (ushort)(VehicleRecord.FirstId + _fleet.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, 0),
             HalfWidth = def.HalfWidth, HalfLength = def.HalfLength, OriginPos = new Vector3(position.X, y + 0.02f, position.Z), OriginYaw = yaw,
             FlightWater = Water, FlightBounds = MapFlightBounds,
         };
         World.AddChild(car);
-        _cars.Add(car);
+        _fleet.Add(car);
         GD.Print($"server: Scud truck {car.Id} at ({position.X:F1},{y:F1},{position.Z:F1}) facing {yaw * 180f / MathF.PI:F0} deg");
         return car;
     }
@@ -132,7 +132,7 @@ public partial class NetServer
     void StepScud(float dt)
     {
         if (Vehicles == null) return;
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
         {
             if (car.Def.Launcher == null) continue;
             if (car.Destroyed)
@@ -147,7 +147,7 @@ public partial class NetServer
             if (order.Launch) LaunchScud(car, order);
             if (order.TakeCart != 0) TakeRocketFromCart(order.TakeCart);
             car.Immobilised = rig.Launcher.Immobilised; // a driven truck: every drive step is held (ServerCar.StepDrive), as its driver's client predicts it
-            if (rig.Launcher.Immobilised && OccupantAt(car, 0) is { } driver)
+            if (rig.Launcher.Immobilised && _fleet.OccupantAt(car, 0) is { } driver)
             {
                 driver.Throttle = 0; driver.Steer = 0; driver.Handbrake = true; // brakes on, the driver's input ignored while the rack moves
                 car.Wake();
@@ -181,7 +181,7 @@ public partial class NetServer
         rig.ViewDirty = false; rig.ViewSentAt = _elapsed;
         var msg = new EventMsg((byte)EventKind.ScudView, ScudCodec.Encode(new ScudViewMsg(car.Id, rig.ViewX, rig.ViewZ, rig.ViewZoom)));
         for (var s = 0; s < crew.Seats.Count; s++)
-            if (s != crew.OperatorSeat && OccupantAt(car, s) is { } o) Send(o, msg);
+            if (s != crew.OperatorSeat && _fleet.OccupantAt(car, s) is { } o) Send(o, msg);
     }
 
     /// <summary>A joiner learns every launcher that is not stowed and idle (the rack, the proposal) and the operator's camera while a screen is open.</summary>
@@ -198,7 +198,7 @@ public partial class NetServer
     {
         if (ScudCarById(carId) is not { } car) return;
         var msg = new EventMsg((byte)EventKind.ScudNotice, ScudCodec.Encode(code));
-        foreach (var o in Occupants(car)) Send(o, msg);
+        foreach (var o in _fleet.Occupants(car)) Send(o, msg);
     }
 
     /// <summary>A new round: the launchers start over, and a truck that never returns is retired instead of reset (hidden, out of its seats).</summary>
@@ -206,7 +206,7 @@ public partial class NetServer
     {
         ScudEventRoundReset(); // the Scud event is over with the round (no reward); the loop below retires its truck and carts
         _scudRigs.Clear();
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
         {
             if (car.Def.Returns || car.Destroyed) continue;
             car.Seat.Clear();
@@ -221,7 +221,7 @@ public partial class NetServer
 
     /// <summary>Every live rocket cart, as the rules want it.</summary>
     IEnumerable<ScudCartCandidate> CartCandidates() =>
-        _cars.Where(c => c.Cargo != null && !c.Retired).Select(c => new ScudCartCandidate(c.Id, BoxOf(c), c.Cargo!.Loaded && !c.Life.Doomed, !c.Destroyed));
+        _fleet.Cars.Where(c => c.Cargo != null && !c.Retired).Select(c => new ScudCartCandidate(c.Id, BoxOf(c), c.Cargo!.Loaded && !c.Life.Doomed, !c.Destroyed));
 
     /// <summary>What the launcher is told about the cart it is loading from this tick: alive, still loaded, not doomed and in reach (null when it is loading from none).</summary>
     ScudCartSense? CartSenseOf(ServerCar truck, ScudRig rig)
@@ -250,7 +250,7 @@ public partial class NetServer
         IEnumerable<ServerCar> trucks;
         if (c.Car != null) trucks = c.Car.Def.Launcher != null ? new[] { c.Car } : Array.Empty<ServerCar>();
         else if (LootInReach(c) != null) return null;
-        else trucks = _cars.Where(t => t.Def.Launcher != null);
+        else trucks = _fleet.Cars.Where(t => t.Def.Launcher != null);
         foreach (var truck in trucks)
         {
             if (truck.Destroyed || truck.Retired || !_scudRigs.TryGetValue(truck.Id, out var rig)) continue;
@@ -405,7 +405,7 @@ public partial class NetServer
         ReturnTargets(targets);
 
         var destroyed = 0;
-        foreach (var car in _cars.ToList())
+        foreach (var car in _fleet.Cars.ToList())
         {
             if (car.Destroyed) continue;
             var dist = HullDistanceNow(car, position);
@@ -472,7 +472,7 @@ public partial class NetServer
     {
         if (c.Car is { Destroyed: false } ridden && ridden.Def.Launcher != null) return ridden;
         ServerCar? best = null; var bd = 40f;
-        foreach (var car in _cars)
+        foreach (var car in _fleet.Cars)
         {
             if (car.Destroyed || car.Def.Launcher == null) continue;
             var d = car.GlobalPosition.DistanceTo(c.Body.GlobalPosition);

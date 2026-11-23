@@ -51,7 +51,7 @@ public partial class NetServer
                 _wildHit = null;
             }
         }
-        foreach (var car in _cars.Where(c => !c.Destroyed).ToList()) DamageVehicle(car, car.Hp + 1, owner, MoabWeapon, 0);
+        foreach (var car in _fleet.Cars.Where(c => !c.Destroyed).ToList()) DamageVehicle(car, car.Hp + 1, owner, MoabWeapon, 0);
         GD.Print($"server: MOAB by #{owner} detonated: {victims.Count} killed, vehicles destroyed");
     }
 
