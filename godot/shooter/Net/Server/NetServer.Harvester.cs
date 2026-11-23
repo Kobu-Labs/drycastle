@@ -162,7 +162,7 @@ public partial class NetServer
     {
         var car = new ServerCar
         {
-            Name = $"{def.Id}{_fleet.Count}", Id = (ushort)(VehicleRecord.FirstId + _fleet.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, 0),
+            Name = $"{def.Id}{_fleet.Count}", Id = _fleet.NextId, Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, 0),
             HalfWidth = def.HalfWidth, HalfLength = def.HalfLength, OriginPos = origin, OriginYaw = yaw, FlightWater = Water, FlightBounds = MapFlightBounds,
         };
         World.AddChild(car);

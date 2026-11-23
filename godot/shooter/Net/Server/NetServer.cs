@@ -3,6 +3,7 @@ using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Net.Server.BusGarage;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.ChatRoom;
+using Drycastle.Shooter.Net.Server.Crates;
 using Drycastle.Shooter.Net.Server.Fauna;
 using Drycastle.Shooter.Net.Server.Gear;
 using Drycastle.Shooter.Net.Server.HuntLog;
@@ -91,6 +92,7 @@ public partial class NetServer : Node
     IntelServer _intel = null!;
     ChatServer _chat = null!;
     ProfileServer _profiles = null!;
+    CrateServer _crates = null!;
     SentryWorld _sentries = null!;
     HuntLogServer _hunts = null!;
     StatusServer _status = null!;
@@ -170,7 +172,7 @@ public partial class NetServer : Node
         InitScud();
         InitEvents(); // after the kinds above: the handler table names their start, end and cancel
         InitAircraft();
-        BuildCarePackages();
+        _crates = new CrateServer(_ctx, Killstreaks.Rewards, () => Query, () => _streaks);
         BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
         WarmSurfaceIndexes(); // roads.json and the tree grid, so no impact pays for them on a tick (T3-003, T3-004)
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
@@ -396,7 +398,7 @@ public partial class NetServer : Node
         else if (m is EventMsg { Kind: (byte)EventKind.SetZero } sz) { if (c.Joined && BulletDrop.TryDecodeZero(sz.Payload, out var zi, out var zm) && zi < Weapons.Weapons.Count && BulletDrop.HasDrop(Weapons.Weapons[zi])) c.Zero.Set(zi, Weapons.Weapons[zi], zm); }
         else if (m is EventMsg { Kind: (byte)EventKind.RaiseBinoculars } rb) { if (c.Joined && Binoculars.TryDecodeRaise(rb.Payload, out var up)) _gear.SetBinoculars(c, up && _gear.CarriesBinoculars(c)); }
         else if (m is EventMsg { Kind: (byte)EventKind.Redeploy } rd && c.Joined) _profiles.OnRedeploy(c, rd.Payload);
-        else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) _crates.OnOpen(c, oc.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.MineralPick } mp && c.Joined) _minerals.OnPick(c, mp.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.CompanionPick } cp && c.Joined) _companions.OnPick(c, cp.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);

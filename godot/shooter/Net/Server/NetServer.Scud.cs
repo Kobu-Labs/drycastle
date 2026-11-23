@@ -93,7 +93,7 @@ public partial class NetServer
         var y = ServerCar.RestHeight(space, new Vector3(position.X, ground, position.Z), yaw, def.HalfWidth, def.HalfLength, ground) ?? ground;
         var car = new ServerCar
         {
-            Name = $"{def.Id}{_fleet.Count}", Id = (ushort)(VehicleRecord.FirstId + _fleet.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, 0),
+            Name = $"{def.Id}{_fleet.Count}", Id = _fleet.NextId, Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, 0),
             HalfWidth = def.HalfWidth, HalfLength = def.HalfLength, OriginPos = new Vector3(position.X, y + 0.02f, position.Z), OriginYaw = yaw,
             FlightWater = Water, FlightBounds = MapFlightBounds,
         };

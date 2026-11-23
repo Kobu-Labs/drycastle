@@ -59,7 +59,7 @@ public partial class NetServer
     {
         var centre = NVec3.Zero;
         if (Spawns.Count > 0) centre = Spawns.Aggregate(NVec3.Zero, (a, p) => a + p) / (float)Spawns.Count;
-        var ground = GroundBelow(centre) ?? centre.Y;
+        var ground = _crates.GroundBelow(centre) ?? centre.Y;
         var at = new NVec3(centre.X, ground, centre.Z);
         var phase = (float)(_helperRng.NextDouble() * Math.Tau);
         return SpawnAircraft(kindId, at, phase, _helperRng.Next(2) == 0, 0);

@@ -31,7 +31,7 @@ public partial class NetServer
             Killstreaks,
             Killstreaks.Streaks.Select(s =>
                 s.Id == MoabStreak.StreakId ? (IKillstreak)new MoabStreak(OnMoabPhase) :
-                s.Id == CarePackageRules.StreakId ? CarePackageImpl() :
+                s.Id == CarePackageRules.StreakId ? _crates.Streak() :
                 s.Id == AttackMissileStreak.StreakId ? MakeMissileStreak() :
                 s.Id == TurretStreak.StreakId ? new TurretStreak(Turret.Def, _match.Entities, _sentries) :
                 s.Id == UavStreak.StreakId ? _uav :

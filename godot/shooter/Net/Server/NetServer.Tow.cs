@@ -116,7 +116,7 @@ public partial class NetServer
         var ground = Query.GroundY(MoverKind.GroundVehicle, new Vector3(position.X, position.Y + 2f, position.Z), 3f, 12f) ?? position.Y;
         var car = new ServerCar
         {
-            Name = $"{def.Id}{_fleet.Count}", Id = (ushort)(VehicleRecord.FirstId + _fleet.Count), Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, 0),
+            Name = $"{def.Id}{_fleet.Count}", Id = _fleet.NextId, Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, 0),
             HalfWidth = def.HalfWidth, HalfLength = def.HalfLength, OriginPos = new Vector3(position.X, ground + 0.02f, position.Z), OriginYaw = yaw,
             FlightWater = Water, FlightBounds = MapFlightBounds,
         };
