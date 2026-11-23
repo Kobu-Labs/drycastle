@@ -84,7 +84,7 @@ public partial class NetClient
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
                 _blips.Add(sh.Shooter, sh.Weapon, sh.Origin);
-                if (!OnDoorGunShot(sh)) OnShot(sh); // a door gun's round leaves its muzzle on the model
+                if (!_guns.OnDoorGunShot(sh)) OnShot(sh); // a door gun's round leaves its muzzle on the model
                 break;
             case EventKind.PelletFan when WeaponCodec.DecodePelletFan(payload) is { } pf:
                 _blips.Add(pf.Shooter, pf.Weapon, pf.Origin);
@@ -136,7 +136,7 @@ public partial class NetClient
                 _hunts.OnShot(hs);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
-                if (KeepEventLogs) _logs.Hits.Add((Ctx.Now, h));
+                Ctx.Logs?.Hits.Add((Ctx.Now, h));
                 Ctx.Sound.Hit(h);
                 HudHit(h);
                 break;

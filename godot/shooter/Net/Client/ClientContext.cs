@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Characters;
+using Drycastle.Shooter.Net.Bots;
 using Drycastle.Shooter.HeadsUp;
 using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Match;
@@ -44,6 +45,8 @@ public sealed class ClientContext
     public RenderClock Clock { get; } = new();
     /// <summary>The tick of the newest snapshot; 0 before the first one.</summary>
     public uint LastTick;
+    /// <summary>The rockets and thrown grenades in the air, by entity id.</summary>
+    internal Dictionary<ushort, RocketView> Rockets { get; } = new();
     /// <summary>The other players and target dummies being drawn, by entity id.</summary>
     public Dictionary<ushort, RemotePlayer> Remotes { get; } = new();
     public Node3D World = null!;
@@ -60,6 +63,8 @@ public sealed class ClientContext
     public AmmoMsg? Ammo;
     /// <summary>The weapon of the slot the newest ammo state names; null before it or when weapons.json has no such slot.</summary>
     public WeaponDef? CurrentWeapon => Ammo is { } a && Weapons != null && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1] : null;
+    /// <summary>The events kept for the smoke bots to check (null unless a bot that reads them runs).</summary>
+    public EventLogs? Logs;
     /// <summary>The weapon slots of the spawn hotbar and the one in hand.</summary>
     public Hotbar Hotbar { get; } = new();
     public bool Dead;

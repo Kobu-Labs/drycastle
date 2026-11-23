@@ -98,7 +98,7 @@ public partial class NetClient
 
     void OnVehicleExplosion(VehicleExplosionMsg m)
     {
-        if (KeepEventLogs) _logs.VehicleExplosions.Add((Ctx.Now, m));
+        Ctx.Logs?.VehicleExplosions.Add((Ctx.Now, m));
         if (Ctx.Cars.TryGet(m.Id, out var v) && !v.Exploded) ExplodeVehicle(v, new Vector3(m.Position.X, m.Position.Y, m.Position.Z), m.Radius);
     }
 
@@ -151,12 +151,12 @@ public partial class NetClient
             if (drive != null) _driveClient.Pose(v, drive, rt, dt, ref p, ref rot); // an amphibious transport lies on the slope and bobs; the one this player drives is drawn from its prediction
             v.Node.GlobalPosition = p;
             v.Node.Rotation = rot;
-            WaterCraft(v, p);
+            _water.Craft(v, p);
             if (v.Destroyed) continue;
-            var flakMine = v.Flak != null && RenderFlak(v, s, rt, dt);
+            var flakMine = v.Flak != null && _guns.RenderFlak(v, s, rt, dt);
             // the gun stands on the body: on a driven vehicle that is the slope plus the body's own lean over its wheels
             var gunRot = drive != null && _driveClient.BodyLean(v.Id) is { } lean ? rot + new Vector3(lean.Pitch, 0, lean.Roll) : rot;
-            if (v.DoorGun != null && RenderDoorGun(v, gunRot, rt, dt)) { flakMine = true; doorGunner = true; } // the gun camera, as at the flak
+            if (v.DoorGun != null && _guns.RenderDoorGun(v, gunRot, rt, dt)) { flakMine = true; doorGunner = true; } // the gun camera, as at the flak
             if (flakMine) flakGunner = true;
             v.Smoke?.Near(Sfx.ListenerDistance(p) < 90f); // far vehicles do not smoke: particle budget
             if (flies) _flight.StepFx(v, _flight.DefOf(v)!, p, rot, dt); // rotors, their sound, the downwash
@@ -190,14 +190,14 @@ public partial class NetClient
         _seats.PlaceRiders(); // the riders of every vehicle, on their seats as the vehicles are drawn this frame (ADR 0026)
         if (!Ctx.Driving) { _rider.HideSelf(); _rider.Leave(); }
         if (!cockpit) _rider.EndCockpit();
-        if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) Ctx.Me?.EndChase(Ctx.Me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
+        if (!flakGunner && _guns.CameraOn && _gunship == null) { _guns.CameraOn = false; if (!chased) Ctx.Me?.EndChase(Ctx.Me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
         if (!Ctx.Driving && _gunship == null) Ctx.Me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
         Ctx.Hud?.SetSeats(Ctx.Cars.SeatPanel());
-        if (flakGunner) Ctx.Hud?.SetVehicleReadout(doorGunner ? DoorGunReadout() : FlakReadout());
+        if (flakGunner) Ctx.Hud?.SetVehicleReadout(doorGunner ? _guns.DoorGunReadout() : _guns.FlakReadout());
         else if (flown is { } fr) Ctx.Hud?.SetVehicleReadout(_flight.Readout(fr));
         else Ctx.Hud?.SetVehicleSpeed(Ctx.Driving ? kmh ?? 0f : null);
         string? prompt = null;
-        if (Ctx.Driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? _flight.Prompt(fp) : Ctx.View.InArmedSeat ? _seats.ArmedPrompt() : Ctx.Cars.MySeat() is { Def.Drive: not null } ride ? _driveClient.Prompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        if (Ctx.Driving) prompt = doorGunner ? _guns.DoorGunPrompt() : flown is { } fp ? _flight.Prompt(fp) : Ctx.View.InArmedSeat ? _seats.ArmedPrompt() : Ctx.Cars.MySeat() is { Def.Drive: not null } ride ? _driveClient.Prompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         if (driven != null && prompt != null && _tow.TowHint(driven) is { } towHint) prompt += "     " + towHint; // a trailer on the hook: the key that unhitches it
         if (Ctx.Driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
         if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = _rider.WithViewHint(prompt);

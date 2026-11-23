@@ -131,6 +131,8 @@ public partial class NetClient : Node
     TowClient _tow = null!;
     SeatsClient _seats = null!;
     VehicleHulls _hulls = null!;
+    VehicleGunsClient _guns = null!;
+    readonly WaterClient _water;
     RiderCamera _rider = null!;
     CropCrushClient _crush = null!;
     /// <summary>glass.json (set by the host); the defaults when it sets none.</summary>
@@ -171,6 +173,7 @@ public partial class NetClient : Node
         Ctx.Viewmodel.StepAcc = () => Ctx.Sound.StepAcc;
         _prediction = new OwnPrediction(Ctx, SpeedFor);
         _fxDemo = new FxDemoClient(Ctx);
+        _water = new WaterClient(Ctx);
         Sandbox = new SandboxClient(Ctx);
         Report = new ReportClient(Ctx, _conn, () => !Bot && !LinkEnded && _welcomed, () => _peer, () => _elapsed);
         _moab = new MoabClient(Ctx);
@@ -187,6 +190,7 @@ public partial class NetClient : Node
     public override void _Ready()
     {
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
+        if (KeepEventLogs) Ctx.Logs = _logs;
         _blips = new BlipsClient(Ctx, BlipConfig);
         _mass = new MassClient(Ctx, HolyMassData, _prediction.Drop);
         Ctx.View.MassSeated = () => _mass.Seated;
@@ -213,6 +217,7 @@ public partial class NetClient : Node
         _hulls = new VehicleHulls(Ctx, _flight, _driveClient, CarThrown, GlassData);
         _seats = new SeatsClient(Ctx);
         _rider = new RiderCamera(Ctx, _flight, DressSelf);
+        _guns = new VehicleGunsClient(Ctx, _hulls, _rider, _water);
         Camo = new CamoClient(Ctx, CamoData, DressCorpses);
         _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
         _bot = MakeBot();
@@ -230,7 +235,7 @@ public partial class NetClient : Node
         InitDemon();
         InitAircraft();
         InitLockOn();
-        InitFlak();
+        EventReceived += _guns.OnEvent;
         EventReceived += _seats.OnEvent;
         InitScud();
         InitMatchEdges();
@@ -258,14 +263,14 @@ public partial class NetClient : Node
     {
         _link.Enter(LinkPhase.Left);
         _session.Close();
-        foreach (var r in _rockets.Values) r.Snd?.Release();
+        foreach (var r in Ctx.Rockets.Values) r.Snd?.Release();
         Ctx.Cars.ReleaseSounds();
         _rozhlas.Reset(); // the mic is shut
         if (_peer != null) { _peer.PeerDisconnect(); _conn.Flush(); _peer = null; }
         foreach (var r in Ctx.Remotes.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         Ctx.Remotes.Clear();
-        foreach (var r in _rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
-        _rockets.Clear();
+        foreach (var r in Ctx.Rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
+        Ctx.Rockets.Clear();
         Ctx.Cars.Clear(); _flight.Clear(); _driveClient.Clear(); // the probes are under Owned and go with them
         _glass.Teardown();
         if (Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me)) Ctx.Me.QueueFree();
@@ -411,7 +416,7 @@ public partial class NetClient : Node
     /// <summary>The own view: water, the viewmodel, the camera's shakes and sways, in the order that composes the camera.</summary>
     void UpdateView(double delta)
     {
-        RenderWater();
+        _water.Render();
         UpdateViewmodel();
         UpdateThrowArc();
         UpdateDemonQuake(delta);
@@ -618,7 +623,7 @@ public partial class NetClient : Node
             if (rec.Type == EntityType.Projectile) { OnRocketState(id, rec); continue; }
             if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
             if (rec.Type == EntityType.Seats) { _seats.OnRecord(rec); continue; }
-            if (rec.Type == EntityType.Turret) { OnTurretState(rec, h.Tick); continue; }
+            if (rec.Type == EntityType.Turret) { _guns.OnRecord(rec, h.Tick); continue; }
             if (rec.Type == EntityType.Flight) { _flight.OnState(rec, h.Tick); continue; }
             if (rec.Type == EntityType.Drive) { _driveClient.OnState(rec, h.Tick); continue; }
             if (rec.Type is not (EntityType.Player or EntityType.Target)) continue;

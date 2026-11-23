@@ -22,7 +22,7 @@ public partial class NetClient
     /// <summary>The missile's heading the POV camera uses this frame (the minimap follows it, ticket #150).</summary>
     float _missileViewYaw;
     MissilePovOverlay? _pov;
-    readonly Dictionary<ushort, Rocket> _missiles = new();
+    readonly Dictionary<ushort, RocketView> _missiles = new();
     double _povSince;
 
     /// <summary>Called once from <see cref="_Ready"/>: registers the type, follows the missile entities and builds the POV overlay.</summary>
@@ -38,7 +38,7 @@ public partial class NetClient
     void OnMissileSpawned(WorldReplica.Entity e)
     {
         if (e.Type != AttackMissileRules.TypeId) return;
-        _missiles[e.Id] = new Rocket { Node = RocketFx.Make(Ctx.Owned), Born = Ctx.Now, At = Ctx.Now };
+        _missiles[e.Id] = new RocketView { Node = RocketFx.Make(Ctx.Owned), Born = Ctx.Now, At = Ctx.Now };
     }
 
     void OnMissileDespawned(ushort id)
