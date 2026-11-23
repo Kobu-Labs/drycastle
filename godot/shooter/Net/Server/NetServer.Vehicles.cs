@@ -430,7 +430,7 @@ public partial class NetServer
             // seats of players who have gone (disconnect, death) are freed; the driver is seat 0 and only the driver steers
             for (var s = 0; s < car.Seat.Count; s++) if (car.Seat.Occupant(s) != 0 && _fleet.OccupantAt(car, s) == null) car.Seat.Clear(s);
             SendSeatState(car);
-            if (car.Thrown != null) { car.Towing?.Unhitch(); StepThrownVehicle(car, dt); continue; } // flying on the Bigfoot's arc: no driving, no crash, no run-over (issue #264)
+            if (car.Thrown != null) { car.Towing?.Unhitch(); _bigfoot.StepThrownVehicle(car, dt); continue; } // flying on the Bigfoot's arc: no driving, no crash, no run-over (issue #264)
             var driver = _fleet.OccupantAt(car, 0);
             var occupied = car.Seat.Occupied;
             if (occupied) car.Wake(); // somebody aboard: the vehicle is stepped every tick until it is empty and rests again

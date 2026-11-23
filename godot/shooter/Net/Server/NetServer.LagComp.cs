@@ -41,7 +41,7 @@ public partial class NetServer
             var valid = o.Car == null && _match.Get(o.Id)?.Life == PlayerLife.Alive && !_pounce.IsPinned(o.Id);
             o.Poses.Record(_tick, valid, new HitTarget(o.Id, N(o.Body.GlobalPosition), _sitters.StanceOf(o), o.Body.Yaw));
         }
-        CaptureBigfootPose();
+        _bigfoot.CapturePose();
         _thieves.RecordPoses(_tick); // Gang members and Raid vans
     }
 
@@ -155,7 +155,7 @@ public partial class NetServer
             var d = dummies[i];
             if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
         }
-        if (BigfootTarget() is { } bigfoot) list.Add(BigfootRewound(bigfoot, view)); // the Bigfoot is rewound like a player (issue #264)
+        if (_bigfoot.Target() is { } bigfoot) list.Add(_bigfoot.Rewound(bigfoot, view)); // the Bigfoot is rewound like a player (issue #264)
         _citizens.Crowd?.AddTargets(list); // citizens walk slowly: not rewound
         _thieves.AddTargets(list, view); // Gang members run and the Raid vans drive: rewound like the Bigfoot (a pose ring each)
         _pets.AddTargets(list); // so do pets

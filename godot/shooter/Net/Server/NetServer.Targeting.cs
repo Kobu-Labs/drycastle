@@ -26,7 +26,7 @@ public partial class NetServer
         _targets = new TargetBook(() => _byId.Count);
         _targets.AddSource(AddPlayerTargets);
         _targets.AddSource(AddDummyTargets);
-        _targets.AddSource(list => { if (BigfootTarget() is { } bigfoot) list.Add(bigfoot); }); // the Bigfoot is a hit target like a player (issue #264)
+        _targets.AddSource(list => { if (_bigfoot.Target() is { } bigfoot) list.Add(bigfoot); }); // the Bigfoot is a hit target like a player (issue #264)
         _targets.AddSource(list => _citizens.Crowd?.AddTargets(list)); // the citizens of the Holy Mass
         _targets.AddSource(list => _thieves.AddTargets(list)); // the Gang members of the Thieves event and their Raid vans
         _targets.AddSource(AddAnimalTargets);

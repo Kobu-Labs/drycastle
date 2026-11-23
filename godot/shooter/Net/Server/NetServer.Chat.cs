@@ -190,14 +190,14 @@ public partial class NetServer
 
     /// <summary>
     /// "/event rozhlas": starts a detour broadcast of the village loudspeaker now (<see cref="RozhlasServer.ChatEvent"/>). "/event intel [clear]": the test announcement (<see cref="IntelServer.Chat"/>).
-    /// "/event bigfoot", "mass" and "thieves" start that kind through the handler table (<see cref="InitEvents"/>); "/event current end" concludes the running
-    /// event as a win (for testing) and "/event current cancel" removes it with no reward, by its kind (<see cref="ChatCurrentEvent"/>). Everyone is told who did.
+    /// "/event bigfoot", "mass" and "thieves" start that kind through the handler table (<see cref="EventServer"/>); "/event current end" concludes the running
+    /// event as a win (for testing) and "/event current cancel" removes it with no reward, by its kind (<see cref="EventServer.Current"/>). Everyone is told who did.
     /// </summary>
     void ChatEvent(ServerClient c, IReadOnlyList<string> args)
     {
         var action = args.Count > 1 ? args[1] : "";
         var allowed = args[0] switch { "intel" => "clear", "current" => "end or cancel", _ => "" }; // the parser only lets known events and actions through; whether they belong together is checked here
-        if (args[0] == "current") { ChatCurrentEvent(c, action); return; }
+        if (args[0] == "current") { _eventServer.Current(c, action); return; }
         if (action != "" && (args[0] != "intel" || action != "clear"))
         {
             ChatTo(c, ChatLineKind.Error, allowed == "" ? $"/event {args[0]} takes no action." : $"/event {args[0]} takes {allowed}.");
@@ -210,7 +210,7 @@ public partial class NetServer
                 break;
             case "intel": _intel.Chat(c, action == "clear"); break;
             case "demon": _demon.Chat(c); break;
-            default: _eventHandlers.Start(args[0], c); break; // bigfoot, mass, thieves: the kinds of the handler table
+            default: _eventServer.Start(args[0], c); break; // bigfoot, mass, thieves: the kinds of the handler table
         }
     }
 

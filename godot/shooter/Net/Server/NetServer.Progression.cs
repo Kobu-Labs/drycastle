@@ -39,7 +39,7 @@ public partial class NetServer
         _gunships.RoundReset(); // a round reset takes the shells in the air with it
         _flak.RoundReset();
         _xp.Reset();
-        BigfootRoundReset();
+        _bigfoot.RoundReset();
         _thieves.RoundReset(); // the Thieves event does not outlive the round either, and what it stole is back
         foreach (var c in _clients.Values) c.RoundXp.Clear();
     }

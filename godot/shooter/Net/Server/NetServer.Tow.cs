@@ -48,7 +48,7 @@ public partial class NetServer
     /// </summary>
     void StepTrailerCar(ServerCar car, float dt)
     {
-        if (car.Thrown != null) { car.Unhitch(); StepThrownVehicle(car, dt); car.SyncTrailerFromNode(); return; }
+        if (car.Thrown != null) { car.Unhitch(); _bigfoot.StepThrownVehicle(car, dt); car.SyncTrailerFromNode(); return; }
         car.PrevPos = car.TickEndPos;
         if (car.Tractor == null) car.StepFree(dt);
         else car.Wake(); // pulled: never rests (it is not stepped by its own turn, but it is not asleep either)

@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Characters;
+using Drycastle.Shooter.Net.Server.BigfootEvent;
 using Drycastle.Shooter.Net.Server.BusGarage;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.ChatRoom;
@@ -13,6 +14,7 @@ using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
 using Drycastle.Shooter.Net.Server.Parish;
 using Drycastle.Shooter.Net.Server.Profiles;
+using Drycastle.Shooter.Net.Server.RoundFlow;
 using Drycastle.Shooter.Net.Server.Scenery;
 using Drycastle.Shooter.Net.Server.Seating;
 using Drycastle.Shooter.Net.Server.Sentries;
@@ -30,6 +32,7 @@ using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Demon;
 using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Items;
 using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Killstreaks.Helicopter;
@@ -94,6 +97,8 @@ public partial class NetServer : Node
     /// <summary>levels.json: the XP curve and awards.</summary>
     public LevelsFile Levels = null!;
     MatchXp _xp = null!;
+    /// <summary>Which event runs (shared by every <c>/event</c> kind: one at a time).</summary>
+    readonly EventBook _events = new();
     /// <summary>environment.json "lamp" and "sign_plate"; the defaults when the host sets none.</summary>
     public LampLook LampData = new();
     public SignPlateLook SignPlateData = new();
@@ -107,6 +112,8 @@ public partial class NetServer : Node
     public ThievesFile ThievesData = new();
     /// <summary>plantation.json (the host sets it from the data directory; the shipped defaults otherwise).</summary>
     public PlantationFile Plantation = PlantationFile.Default;
+    /// <summary>bigfoot.json: every number of the fight.</summary>
+    public BigfootFile BigfootData = new();
 
     // The features that are classes of their own (<c>Net/Server/&lt;Feature&gt;/</c>), made in _Ready once the match exists; each takes only the context.
     ServerContext _ctx = null!;
@@ -141,6 +148,8 @@ public partial class NetServer : Node
     LockOnServer _lockOn = null!;
     MapAreas _areas = null!;
     PlantationServer _plantation = null!;
+    BigfootServer _bigfoot = null!;
+    EventServer _eventServer = null!;
     WalkerGround _walkers = null!;
     readonly ParkedHulls _parked;
 
@@ -241,7 +250,8 @@ public partial class NetServer : Node
         CitizenRules.Register(WorldEntityRegistry.Shared);
         _corpses = new CorpseBook(_match.Entities);
         _gear = new ItemsServer(_ctx, Items, _corpses, () => Query, car => PresentPose(car).Feet);
-        InitBigfoot(); // after the corpse book, which follows the same despawns
+        _bigfoot = new BigfootServer(_ctx, BigfootData, _events, new BigfootTerrain(World, Water), _fleet, Deal, _deathPush, _rng, Weapons, new BigfootLoot(BigfootData, Items, Weapons, _corpses, _gear), _areas,
+            _hunts, () => _gunships, _smoke, SeatPos, Scores, AwardXp, Levels.Awards.EventWin); // after the corpse book, which follows the same despawns
     }
 
     /// <summary>The remaining features, after the kinds above: a feature that registers an entity type or a handler comes before the ones that name it.</summary>
@@ -255,7 +265,12 @@ public partial class NetServer : Node
         _thieves = BuildThieves();
         InitHarvester();
         InitScud();
-        InitEvents(); // after the kinds above: the handler table names their start, end and cancel
+        _eventServer = new EventServer(_ctx, _events); // after the kinds above: the handler table names their start, end and cancel
+        _eventServer.Register(EventBook.Bigfoot, "Bigfoot event", _bigfoot.Start, _bigfoot.End, _bigfoot.Cancel);
+        _eventServer.Register(EventBook.Mass, "Holy Mass", _mass.Chat, _mass.End); // the Holy Mass can only end (its handler answers a cancel with a refusal)
+        _eventServer.Register(EventBook.Harvester, "harvester event", StartHarvester, EndHarvester, CancelHarvester);
+        _eventServer.Register(EventBook.Thieves, "Thieves event", _thieves.Start, _thieves.End, _thieves.Cancel);
+        _eventServer.Register(EventBook.Scud, "Scud event", StartScudEvent, EndScudEvent, CancelScudEvent);
         _gunships = new GunshipServer(_ctx, Killstreaks, Weapons, _targets, _fleet, () => Query, () => Vehicles, Deal, DamageVehicle, LaunchGunshipRocket, _impacts, _splash, _deathPush, () => _streaks.Rules);
         _flak = new FlakServer(_ctx, Weapons, _gunships, _targets, _fleet, () => Vehicles, _rng);
         _crates = new CrateServer(_ctx, Killstreaks.Rewards, () => Query, () => _streaks.Rules);
@@ -280,7 +295,7 @@ public partial class NetServer : Node
     /// Streaks without an adapter keep their logging stub.
     /// </summary>
     StreakServer BuildStreaks() => new(_ctx, Killstreaks, _gunships, () => Spawns, _crates.GroundBelow, (streaks, id) =>
-        id == MoabStreak.StreakId ? new MoabServer(_ctx, _targets, _hunts, _fleet, DamageVehicle, (owner, weapon) => DealBigfoot(owner, weapon), _impacts, _rng).Streak() :
+        id == MoabStreak.StreakId ? new MoabServer(_ctx, _targets, _hunts, _fleet, DamageVehicle, (owner, weapon) => _bigfoot.Hit(owner, weapon), _impacts, _rng).Streak() :
         id == CarePackageRules.StreakId ? _crates.Streak() :
         id == AttackMissileStreak.StreakId ? new MissileServer(_ctx, Killstreaks, _targets, WorldHit, () => Vehicles != null, RocketVsVehicles, (at, radius) => BlastGlass(at, radius), Deal, _impacts, _splash, _deathPush).Streak() :
         id == TurretStreak.StreakId ? new TurretStreak(Turret.Def, _match.Entities, _sentries) :
@@ -402,7 +417,7 @@ public partial class NetServer : Node
         NavDrain(); // the routes the worker finished since the last tick, applied here and nowhere else
         _audit?.Lap(0);
         pt = Prof.Lap(Prof.S.MatchUpdate, pt);
-        BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
+        _bigfoot.Prepare(); // the players and vehicles the Bigfoot's brain looks at this tick
         _thieves.Prepare(); // the players the Gang members fight, and who each fights
         _animals.Prepare(); // the players and moving vehicles the animals look at, read once for all of them
         _audit?.Lap(1);
