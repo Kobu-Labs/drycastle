@@ -133,6 +133,7 @@ public partial class NetClient : Node
     readonly HeadLampClient _headLamps;
     readonly RozhlasClient _rozhlas;
     readonly BlastDustClient _blastDust;
+    readonly ImpactsClient _impacts;
     MassClient _mass = null!;
     CitizensClient _citizens = null!;
     StatusClient _status = null!;
@@ -165,6 +166,7 @@ public partial class NetClient : Node
         _headLamps = new HeadLampClient(Ctx);
         _rozhlas = new RozhlasClient(Ctx, SendMic);
         _blastDust = new BlastDustClient(Ctx);
+        _impacts = new ImpactsClient(Ctx);
     }
 
     public override void _Ready()
@@ -246,9 +248,7 @@ public partial class NetClient : Node
         _animals.Clear(); // the nodes are under Owned
         _poop.Reset();
         _citizens.Reset();
-        _impacts = null; Array.Clear(_impactNext);
-        _rings = null; _ringNext = 0; _ringMesh = null;
-        _dust = null; _dustNext = 0;
+        _impacts.Reset();
         _povCam = null;
     }
 

@@ -13,7 +13,7 @@ namespace Drycastle.Shooter.Net.Client;
 /// <summary>
 /// The gunship FX on the client (ticket #159): one server tick's tracers, impacts and blasts, coalesced by the server (kinds 121-123).
 /// Every coalesced tracer, impact and blast is drawn, through the same code as the single events: a tracer is <see cref="OnShot"/>,
-/// an impact is <see cref="OnImpactFx"/> (a pooled emitter, round-robin), a blast is the explosion look at its radius with the shake.
+/// an impact is <see cref="ImpactsClient.OnImpact"/> (a pooled emitter, round-robin), a blast is the explosion look at its radius with the shake.
 /// The owner's hit marker comes with its blasts message.
 /// </summary>
 public partial class NetClient
@@ -58,7 +58,7 @@ public partial class NetClient
     /// <summary>The tick's gunship impacts (kills included): each one drawn as an ImpactFx.</summary>
     void OnGunshipImpacts(IReadOnlyList<GunshipImpactFx> impacts)
     {
-        foreach (var i in impacts) OnImpactFx(i.Impact);
+        foreach (var i in impacts) _impacts.OnImpact(i.Impact);
     }
 
     /// <summary>

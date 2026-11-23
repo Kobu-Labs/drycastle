@@ -140,7 +140,7 @@ public partial class NetClient
                 OnGunshipBlasts(gb);
                 break;
             case EventKind.ImpactFx when ImpactCodec.Decode(payload) is { } imp:
-                OnImpactFx(imp);
+                _impacts.OnImpact(imp);
                 break;
             case EventKind.HelperWarning when HelperWarningCodec.Decode(payload) is { } hw:
                 OnHelperWarning(hw);
