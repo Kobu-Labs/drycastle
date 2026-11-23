@@ -22,7 +22,8 @@ public partial class NetClient : Node
         public byte TagSquad; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
 
     public const double InterpDelayTicks = 3.0;
-    const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
+    public const float SnapDistance = 2f;
+    const float ReconcileEpsilon = 0.03f;
 
     /// <summary>What the features of this client may use of the rest of it (see <see cref="ClientContext"/>); the plain members below forward to it.</summary>
     public ClientContext Ctx { get; }
@@ -41,15 +42,10 @@ public partial class NetClient : Node
     public bool Bot { get => Ctx.Bot; set => Ctx.Bot = value; }
     /// <summary>Network impairment for the loss and latency test (--net-sim); null = none.</summary>
     public NetSim? Sim;
-    /// <summary>Loss test role ("walker" or "shooter"); empty = off. See NetClient.LossBot.cs.</summary>
-    public string LossBot = "";
-    public double BotSeconds = 6;
     public bool Headless;
     public float KillY = float.NegativeInfinity;
     /// <summary>The map's water (water.json), shared with the prediction so swimming matches the server.</summary>
     public Drycastle.ShooterCore.Water Water = Drycastle.ShooterCore.Water.Empty;
-    /// <summary>Match smoke role: "alice" (kills bob with the debug command) or "bob" (fires after each spawn); empty = normal bot/player.</summary>
-    public string MatchBot = "";
     /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
     public ClientMatchState Match => Ctx.Match;
     public bool Dead => Ctx.Dead;
@@ -63,24 +59,11 @@ public partial class NetClient : Node
     public WeaponsFile Weapons { get => Ctx.Weapons!; set => Ctx.Weapons = value; }
     /// <summary>match.json as the client shipped it: the gunfire blips' radius, lifetime and rate limit (null: no blips, e.g. headless bots).</summary>
     public MatchConfig? BlipConfig;
-    /// <summary>Weapons smoke role: "a" (shoots) or "b" (stands still and counts hits); empty = none.</summary>
-    public string WeaponsBot = "";
-    /// <summary>Rpg smoke role ("a"/"b"); WeaponsBot carries the same letter so the shared bot plumbing runs.</summary>
-    public string RpgBot = "";
-    /// <summary>Vehicle blast smoke role ("a"/"b"); WeaponsBot carries the same letter.</summary>
-    public string BlastBot = "";
     /// <summary>Latest owner ammo state from the server (null before the first one).</summary>
     public AmmoMsg? Ammo { get; private set; }
-    readonly List<(double T, ShotMsg M)> _shotLog = new();
-    readonly List<(double T, HitMsg M)> _hitLog = new();
-    readonly List<(double T, LaunchMsg M)> _launchLog = new();
-    readonly List<(double T, ExplosionMsg M)> _explosionLog = new();
-    /// <summary>The event logs are read only by the scripted bots (the weapons, rpg, blast and car checks), so a normal match keeps none of them: they grew for the whole match (#173, T3-028).</summary>
-    bool KeepEventLogs => WeaponsBot != "" || RpgBot != "" || BlastBot != "" || CarBot != "";
     sealed class Rocket { public double Born; public Node3D Node = null!; public float Tumble; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; /* a homing missile (NetClient.LockOn.cs): the Aircraft it closes on and when it gets there */ public bool Homing; public ushort Target; public double Arrive; /* a thrown grenade: drawn falling along its arc from the last snapshot */ public bool Grenade; public float Gravity; }
     readonly Dictionary<ushort, Rocket> _rockets = new();
     readonly HashSet<ushort> _deadRockets = new();
-    readonly List<(double T, AmmoMsg M)> _ammoLog = new();
     int _wantSlot = 1;
     WeaponViewmodel? _viewmodel;
     double _ammoAt;
@@ -110,12 +93,8 @@ public partial class NetClient : Node
     int _recon, _snaps;
     float _maxErr;
     NVec3 _meMin = new(float.MaxValue), _meMax = new(float.MinValue);
-    // match smoke
-    double _spawnAt, _fireStart, _spawnProtection = 99;
     EntityState _myState;
-    bool _sawProtected, _earlyCounted;
-    int _deaths, _earlyEnds;
-    readonly MatchBotAlice _alice = new();
+    int _deaths;
 
     // the features that need only the context; the ones that take the host's data are made in _Ready
     readonly MoabClient _moab;
@@ -137,6 +116,7 @@ public partial class NetClient : Node
     {
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
         _blips = new BlipsClient(Ctx, BlipConfig);
+        _bot = MakeBot();
         InitCorpses();
         InitGroundItems();
         InitCarePackages();
@@ -354,7 +334,7 @@ public partial class NetClient : Node
         }
         else if (d[0] == Wire.TSnapshot) { OnSnapshot(d); ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetSnapshot, t); }
         else if (d[0] == Wire.TWorldSnapshot) { WorldEntities.Apply(d); ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetWorld, t); }
-        else if (d[0] == Wire.TRozhlasFeed && RozhlasFeedWire.TryDecode(d, out var feedSeq, out var feedOpus)) { RozhlasFeedPlayer.Current?.Push(feedSeq, feedOpus); BotFeedFrame(feedOpus); } // the live rozhlas feed (silent when headless)
+        else if (d[0] == Wire.TRozhlasFeed && RozhlasFeedWire.TryDecode(d, out var feedSeq, out var feedOpus)) { RozhlasFeedPlayer.Current?.Push(feedSeq, feedOpus); _rozhlasTest?.OnFeedFrame(feedOpus); } // the live rozhlas feed (silent when headless)
     }
 
     void OnReliable(ReliableMsg? m)
@@ -419,6 +399,7 @@ public partial class NetClient : Node
                 OnAppearanceEvent((EventKind)e.Kind, e.Payload);
                 WorldEntities.OnEvent((EventKind)e.Kind, e.Payload);
                 PerfClientEvent((EventKind)e.Kind, e.Payload);
+                _bot?.OnEvent((EventKind)e.Kind, e.Payload);
                 EventReceived?.Invoke((EventKind)e.Kind, e.Payload);
                 break;
         }
@@ -449,7 +430,7 @@ public partial class NetClient : Node
                     ApplySpawnLoadout(); // the hotbar and perk the server applied at this spawn
                     _wantSlot = StartSlot();
                     Ctx.Dead = false; _earRing?.Clear(); if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
-                    _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
+                    _bot?.OnSpawn(sp.Protection);
                     EndDeathView(); _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId); _breathCues.Reset(); _zero.Reset(); ClearPredictedReload(); _pNextFire = 0;
                 }
                 break;
@@ -458,7 +439,7 @@ public partial class NetClient : Node
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 SfxDeath(d);
                 NoteDeath(d);
-                if (d.Victim == _myId) { _deaths++; BeginDeathView(d.RespawnDelay, d.Flight); Ctx.Dead = true; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); _hud?.SetProtection(0); OnStreakDeath(); }
+                if (d.Victim == _myId) { _deaths++; _bot?.OnOwnDeath(); BeginDeathView(d.RespawnDelay, d.Flight); Ctx.Dead = true; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); _hud?.SetProtection(0); OnStreakDeath(); }
                 break;
         }
     }
@@ -470,7 +451,7 @@ public partial class NetClient : Node
     {
         if (_me == null || !_dec.Apply(d, out var h)) return;
         if (_lastTick != 0 && h.Tick < _lastTick) return;
-        LossOnSnapshot(h);
+        _bot?.OnSnapshot(h);
         PerfClientSnapshot();
         TelemetrySnapshot(h.Tick);
         ReportSnapshot(h.Tick);
@@ -495,7 +476,7 @@ public partial class NetClient : Node
         }
         UpdatePiloting(h.Ack); // the helicopter this player flies is predicted, and reconciled here (ADR 0006)
         UpdateDriving(h.Ack);  // and so is the amphibious transport this player drives (ADR 0010)
-        LossAfterSnapshot(h);
+        _bot?.AfterSnapshot(h);
     }
 
     /// <summary>Rockets are drawn at the newest snapshot position and dead-reckoned along their direction (a 100 ms interpolation delay would make them vanish 4 m short of the blast).</summary>
@@ -588,8 +569,7 @@ public partial class NetClient : Node
         if (Mode.HeldOnFoot) { _pending.Clear(); _reconcile = null; _viewFix = Vector3.Zero; _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); return; } // in the Bigfoot's hand: the body is where the server puts it, nothing is predicted (#264)
         if (Mode.ServerHoldsBody) { _pending.Clear(); _reconcile = null; _me.SetState(new MoveState { Position = sp, OnFloor = true, FallPeakY = sp.Y }); return; } // seated at the Mass or pinned by the demon: the server holds the body, take its place as is
         if (Mode.SkipsReconcile) { _pending.Clear(); return; }
-        if (rec.State == EntityState.Protected) _sawProtected = true;
-        if (rec.State == EntityState.Alive && _fireStart > 0 && !_earlyCounted && Now - _fireStart < 0.6 && _fireStart - _spawnAt < _spawnProtection - 1.0) { _earlyEnds++; _earlyCounted = true; }
+        _bot?.OnOwnState(rec);
         var idx = _pending.FindIndex(p => p.Input.Seq == ack);
         if (idx < 0) return;
         var predicted = _pending[idx].After;
@@ -598,7 +578,8 @@ public partial class NetClient : Node
         PerfPredErr(err, predicted.Position - sp);
         LastNearRemote = NearRemotePlayer(sp);
         LastVertical = MathF.Abs(predicted.Position.Y - sp.Y) > 0.5f * err; // the error is mostly up or down (steps, slopes, jumps, landings)
-        LossOnPredictionError(err);
+        if (err > ReconcileEpsilon) _rub.AddOnFoot(err, LastNearRemote, LastVertical);
+        _bot?.OnPredictionError(err);
         TelemetryPredictionError(err);
         ReportPredictionError(err);
         _pending.RemoveRange(0, idx + 1);
@@ -675,9 +656,8 @@ public partial class NetClient : Node
     {
         if (LinkEnded || !_welcomed || _me == null || _peer == null) return;
         _elapsed += delta;
-        BotChatTick();
-        if (Bot && LossBot != "") { if (_elapsed >= BotSeconds) LossFail("timeout: round never reached its end"); }
-        else if (Bot && _elapsed >= BotSeconds) { if (CarBot != "") CarResult(false, "timeout"); else if (WeaponsBot != "") WeaponsFail("timeout"); else if (MatchBot != "") MatchFail("timeout"); else FinishBot(); return; }
+        _rozhlasTest?.Tick();
+        if (_bot != null && _elapsed >= BotSeconds && _bot.TimedOut()) return;
         if (!OwnSpawned) return; // wait for our spawn position
         DemonBodyTick(); // the demon's Body capsule is where the server last put it, before the body is predicted
         var pt = ClientProf.Begin();
@@ -685,40 +665,7 @@ public partial class NetClient : Node
         ReplayDriveReconcile(); // and so does a predicted vehicle's (ADR 0010, ADR 0014)
         pt = ClientProf.Lap(ClientProf.S.Reconcile, pt);
         var dt = (float)delta;
-        MoveInput mi;
-        if (Bot && MatchBot != "")
-        {
-            // idle; bob fires 1 s after every spawn (ends spawn protection early), alice runs her script
-            var btn = MoveButtons.None;
-            if (MatchBot == "bob" && !Dead && Now - _spawnAt >= 1.0)
-            {
-                btn = MoveButtons.Fire;
-                if (_fireStart == 0) _fireStart = Now;
-            }
-            mi = new MoveInput { Buttons = Dead ? MoveButtons.None : btn, SpeedScale = 1 };
-            if (MatchBot == "alice") MatchAliceStep();
-            else MatchBobCheck();
-        }
-        else if (Bot && LossBot != "") mi = LossBotStep();
-        else if (Bot && CarBot != "") mi = CarBotStep();
-        else if (Bot && CarLoop) mi = CarLoopStep();
-        else if (Bot && WeaponsBot != "") mi = WeaponsBotStep();
-        else if (Bot && _botStand)
-        {
-            // at the dictation table (--bot-chat "/rozhlas goto"): stand still and hold E until the set is ours
-            var use = !HoldsRozhlasSet ? MoveButtons.Use : MoveButtons.None;
-            mi = new MoveInput { Buttons = use, SpeedScale = 1 };
-        }
-        else if (Bot)
-        {
-            // scripted walk: forward, changing heading every 1.5 s, a jump now and then
-            var t = _elapsed;
-            var phase = (int)(t / 1.5);
-            var yaw = (float)(phase * Math.PI / 2 + (PlayerName.GetHashCode() & 3) * Math.PI / 2);
-            var jump = ((int)(t * 30) % 45) == 0 ? MoveButtons.Jump : MoveButtons.None;
-            mi = new MoveInput { MoveY = 1, Yaw = yaw, Buttons = jump, SpeedScale = 1 };
-        }
-        else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : PerfPlay ? PerfPlayStep() : _me.Sample();
+        var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : PerfPlay ? PerfPlayStep() : _me.Sample();
         if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); TickLootReturn(dt); TickMinerals(dt); }
         FxDemoInput(ref mi);
         ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
@@ -878,106 +825,6 @@ public partial class NetClient : Node
         r.View?.Apply(r.Speed, now < r.FireUntil, r.State == EntityState.Dead || r.GuessRagdoll, weaponId);
     }
 
-    void Debug(ushort victim)
-    {
-        Tx(_peer!, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, MatchCodec.EncodeDebugKill(victim))), (int)ENetPacketPeer.FlagReliable);
-        _conn.Flush();
-    }
-
-    sealed class MatchBotAlice
-    {
-        public ushort Victim;
-        public bool Attempted, Verified, Killed;
-        public double AttemptAt;
-        public int KillsBefore, KillsSent, Attempts;
-        public bool WasDead;
-    }
-
-    int MyKills() => Match.Rows.FirstOrDefault(r => r.Id == _myId).Kills;
-
-    void MatchAliceStep()
-    {
-        var a = _alice;
-        var now = Now;
-        if (Match.Restarts > 0) { MatchBotFinishAlice(); return; }
-        if (Match.Phase != MatchPhase.Running) return;
-        if (a.Victim == 0)
-        {
-            var row = Match.Rows.FirstOrDefault(r => r.Name == "bob");
-            if (row.Name == null) return;
-            a.Victim = row.Id;
-        }
-        if (!_dec.States.TryGetValue(a.Victim, out var v)) return;
-        switch (v.State)
-        {
-            case EntityState.Dead: a.Attempted = a.Verified = a.Killed = false; break;
-            case EntityState.Protected when !a.Attempted:
-                a.Attempted = true; a.AttemptAt = now; a.KillsBefore = MyKills(); a.Attempts++;
-                GD.Print($"client alice: trying to kill protected bob (attempt {a.Attempts})");
-                Debug(a.Victim);
-                break;
-            case EntityState.Protected when a.Attempted && !a.Verified && now - a.AttemptAt >= 0.4:
-                if (MyKills() != a.KillsBefore) { MatchFail("kill landed on a protected player"); return; }
-                a.Verified = true;
-                break;
-            case EntityState.Alive when !a.Killed && Match.Phase == MatchPhase.Running:
-                a.Killed = true; a.KillsSent++;
-                GD.Print($"client alice: killing unprotected bob (kill {a.KillsSent})");
-                Debug(a.Victim);
-                break;
-        }
-        // a respawn must take at least the announced delay
-        if (Match.DiedAt.TryGetValue(a.Victim, out var died) && Match.SpawnedAt.TryGetValue(a.Victim, out var sp) && sp > died && Match.LastDeath.TryGetValue(a.Victim, out var dm)
-            && sp - died < dm.RespawnDelay - 0.2 && !_respawnFailed)
-        { _respawnFailed = true; MatchFail($"respawn after {sp - died:F2}s, expected {dm.RespawnDelay:F1}s"); }
-    }
-
-    bool _respawnFailed;
-
-    void MatchBotFinishAlice()
-    {
-        var a = _alice;
-        var ok = Match.RoundsEnded == 1 && Match.Restarts == 1 && Match.Rows.All(r => r.Kills == 0 && r.Deaths == 0)
-                 && a.KillsSent >= 2 && a.Attempts >= 2 && !_respawnFailed;
-        GD.Print($"client alice: kills sent {a.KillsSent}, protection attempts {a.Attempts}, rounds ended {Match.RoundsEnded}, restarts {Match.Restarts}");
-        MatchResult(ok, ok ? "" : "round did not play out as expected");
-    }
-
-    void MatchBobCheck()
-    {
-        if (Match.Restarts > 0)
-        {
-            var ok = _deaths >= 2 && _sawProtected && _earlyEnds >= 1 && Match.RoundsEnded == 1;
-            GD.Print($"client bob: deaths {_deaths}, saw protection {_sawProtected}, early protection ends {_earlyEnds}, rounds ended {Match.RoundsEnded}");
-            MatchResult(ok, ok ? "" : "bob did not observe the expected events");
-        }
-    }
-
-    void MatchFail(string why) => MatchResult(false, why);
-
-    void MatchResult(bool ok, string why)
-    {
-        if (LinkEnded) return;
-        _link.Enter(LinkPhase.Left);
-        if (!ok) GD.PrintErr($"client {PlayerName}: match smoke failure: {why}");
-        GD.Print(ok ? "SHOOTER_MATCH_CLIENT_OK" : "SHOOTER_MATCH_CLIENT_FAIL");
-        GetTree().Quit(ok ? 0 : 2);
-    }
-
-    void FinishBot()
-    {
-        _link.Enter(LinkPhase.Left);
-        BotFeedReport();
-        var own = new Vector2(_meMax.X - _meMin.X, _meMax.Z - _meMin.Z).Length();
-        var seen = _remotes.Count;
-        var best = 0f;
-        foreach (var r in _remotes.Values) best = MathF.Max(best, new Vector2(r.Max.X - r.Min.X, r.Max.Z - r.Min.Z).Length());
-        GD.Print($"client {PlayerName}: moved {own:F1} m (predicted), saw {seen} remote player(s), remote moved up to {best:F1} m, snapshots {_snaps}, reconciliations {_recon}, max error {_maxErr:F3} m");
-        var ok = own >= 2f && seen >= 1 && best >= 1f && _snaps > 30;
-        GD.Print(ok ? "SHOOTER_NET_CLIENT_OK" : "SHOOTER_NET_CLIENT_FAIL");
-        GetTree().Quit(ok ? 0 : 2);
-    }
-
     // ---- weapons: input, events, placeholder effects (the HUD lives in NetClient.Hud.cs) ----
 
     /// <summary>Movement speed multiplier of the weapon in <paramref name="slot"/> (0: none, 1.0), times the run speed of <see cref="Perks"/>. The server applies the same value.</summary>
@@ -1054,7 +901,7 @@ public partial class NetClient : Node
         switch (kind)
         {
             case EventKind.Ammo when WeaponCodec.DecodeAmmo(payload) is { } a:
-                Ammo = a; _ammoAt = Now; _ammoLog.Add((Now, a));
+                Ammo = a; _ammoAt = Now;
                 PredictOnAmmo(a);
                 SfxAmmo(a);
                 HudAmmo();
@@ -1068,7 +915,7 @@ public partial class NetClient : Node
                 OnPelletFan(pf);
                 break;
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
-                if (KeepEventLogs) _launchLog.Add((Now, l));
+                if (KeepEventLogs) _logs.Launches.Add((Now, l));
                 if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
                 // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the rpg's)
                 if (_rockets.TryGetValue(l.Id, out var known)) { known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length(); known.Gravity = GrenadeGravity(l.Weapon); known.Grenade = known.Gravity > 0; }
@@ -1088,7 +935,7 @@ public partial class NetClient : Node
                 }
                 break;
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
-                if (KeepEventLogs) _explosionLog.Add((Now, ex));
+                if (KeepEventLogs) _logs.Explosions.Add((Now, ex));
                 if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(Owned, rk.Node); if (rk.Homing) NoteHomingBlast(new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z), ex.Radius); }
                 _dec.Forget(ex.Id);
                 _deadRockets.Add(ex.Id);
@@ -1150,7 +997,7 @@ public partial class NetClient : Node
                 HudHuntShot(hs);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
-                if (KeepEventLogs) _hitLog.Add((Now, h));
+                if (KeepEventLogs) _logs.Hits.Add((Now, h));
                 SfxHit(h);
                 HudHit(h);
                 break;

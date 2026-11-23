@@ -59,7 +59,7 @@ public partial class NetClient
                 if (_mic.IsOpen) _mic.Pump(_talking);
             }
         }
-        BotMicTick(holder);
+        _rozhlasTest?.MicTick(holder);
         _hud?.SetRozhlas(holder, _talking);
     }
 

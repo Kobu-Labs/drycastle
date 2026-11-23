@@ -66,8 +66,6 @@ public partial class NetClient
     readonly Dictionary<ushort, CarView> _cars = new();
     bool _driving;
     float _carYaw;
-    /// <summary>Car smoke role: "a" drives, "b" stands in the way.</summary>
-    public string CarBot = "";
     /// <summary>vehicles.json (type per snapshot record, visuals and the smoke's expected run-over damage).</summary>
     public VehiclesFile? Vehicles;
 
@@ -164,11 +162,10 @@ public partial class NetClient
 
     void OnVehicleExplosion(VehicleExplosionMsg m)
     {
-        if (KeepEventLogs) _vehicleExplosionLog.Add((Now, m));
+        if (KeepEventLogs) _logs.VehicleExplosions.Add((Now, m));
         if (_cars.TryGetValue(m.Id, out var v) && !v.Exploded) ExplodeVehicle(v, new Vector3(m.Position.X, m.Position.Y, m.Position.Z), m.Radius);
     }
 
-    readonly List<(double T, VehicleExplosionMsg M)> _vehicleExplosionLog = new();
 
     readonly List<(float D, int I, CarView V)> _beamCands = new();
     readonly HashSet<CarView> _beams = new();

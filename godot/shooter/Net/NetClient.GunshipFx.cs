@@ -15,7 +15,7 @@ public partial class NetClient
     /// <param name="exactMuzzle">The origin is the real muzzle (a flak barrel): the tracer starts there, not at the shooter's hands, and the shooter's own flash and hole are skipped.</param>
     void OnShot(ShotMsg sh, float? speed = null, float? length = null, bool impact = true, bool exactMuzzle = false, float width = 1f, bool? holes = null)
     {
-        if (KeepEventLogs) _shotLog.Add((Now, sh));
+        if (KeepEventLogs) _logs.Shots.Add((Now, sh));
         if (_remotes.TryGetValue(sh.Shooter, out var shooter)) shooter.FireUntil = Now + 0.45;
         if (sh.Shooter == _myId && Weapons != null && sh.Weapon < Weapons.Weapons.Count) _spread.Shot(Weapons.Weapons[sh.Weapon], Now);
         var melee = Weapons != null && sh.Weapon < Weapons.Weapons.Count && Weapons.Weapons[sh.Weapon].Kind == WeaponKind.Melee;
