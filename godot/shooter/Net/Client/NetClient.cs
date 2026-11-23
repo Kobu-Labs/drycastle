@@ -125,6 +125,8 @@ public partial class NetClient : Node
     /// <summary>The perf harness' client log directory (--perf-out); empty = no log.</summary>
     public string PerfOut = "";
     GlassClient _glass = null!;
+    FlightClient _flight = null!;
+    DriveClient _driveClient = null!;
     /// <summary>glass.json (set by the host); the defaults when it sets none.</summary>
     public GlassConfig GlassData = new();
     MineralsClient _minerals = null!;
@@ -195,6 +197,8 @@ public partial class NetClient : Node
         _session = new SessionLog(Ctx, Host, Port, () => !Bot && !LinkEnded && _welcomed, () => _peer);
         _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _peer, Ctx.Snapshots);
         _glass = new GlassClient(Ctx, GlassData);
+        _driveClient = new DriveClient(Ctx, CarThrown, PlaceCarSolid, ScudImmobilises);
+        _flight = new FlightClient(Ctx, CarThrown, PlaceCarSolid, _session.FlightCorrection);
         Camo = new CamoClient(Ctx, CamoData, DressCorpses);
         _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
         _bot = MakeBot();
@@ -247,7 +251,7 @@ public partial class NetClient : Node
         Ctx.Remotes.Clear();
         foreach (var r in _rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         _rockets.Clear();
-        Ctx.Cars.Clear(); _flights.Clear(); _pilot = null; _drives.Clear(); _drive = null; // the probes are under Owned and go with them
+        Ctx.Cars.Clear(); _flight.Clear(); _driveClient.Clear(); // the probes are under Owned and go with them
         _glass.Teardown();
         if (Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me)) Ctx.Me.QueueFree();
         Ctx.Me = null;
@@ -580,7 +584,7 @@ public partial class NetClient : Node
         Ctx.LastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         Ctx.Clock.OnSnapshot(h.Tick, _lastArrival);
         DayNightCycle.Current?.SetServerTick(h.Tick);
-        foreach (var id in Ctx.Snapshots.Removed) { if (Ctx.Remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (Ctx.Cars.Remove(id)) { _flights.Remove(id); _drives.Remove(id); } }
+        foreach (var id in Ctx.Snapshots.Removed) { if (Ctx.Remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (Ctx.Cars.Remove(id)) { _flight.Remove(id); _driveClient.Remove(id); } }
         foreach (var (id, rec) in Ctx.Snapshots.States)
         {
             if (id == Ctx.MyId) { OnSelf(rec, h.Ack); continue; }
@@ -588,16 +592,16 @@ public partial class NetClient : Node
             if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
             if (rec.Type == EntityType.Seats) { OnSeatsState(rec); continue; }
             if (rec.Type == EntityType.Turret) { OnTurretState(rec, h.Tick); continue; }
-            if (rec.Type == EntityType.Flight) { OnFlightState(rec, h.Tick); continue; }
-            if (rec.Type == EntityType.Drive) { OnDriveState(rec, h.Tick); continue; }
+            if (rec.Type == EntityType.Flight) { _flight.OnState(rec, h.Tick); continue; }
+            if (rec.Type == EntityType.Drive) { _driveClient.OnState(rec, h.Tick); continue; }
             if (rec.Type is not (EntityType.Player or EntityType.Target)) continue;
             if (!Ctx.Remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); Ctx.Remotes[id] = r; _status.SyncFx(id); }
             r.State = rec.State; r.Stance = rec.Stance; r.Slot = rec.Weapon;
             r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
         }
-        UpdatePiloting(h.Ack); // the helicopter this player flies is predicted, and reconciled here (ADR 0006)
-        UpdateDriving(h.Ack);  // and so is the amphibious transport this player drives (ADR 0010)
+        _flight.Update(h.Ack); // the helicopter this player flies is predicted, and reconciled here (ADR 0006)
+        _driveClient.Update(h.Ack);  // and so is the amphibious transport this player drives (ADR 0010)
         _bot?.AfterSnapshot(h);
     }
 
@@ -611,7 +615,7 @@ public partial class NetClient : Node
         DemonBodyTick(); // the demon's Body capsule is where the server last put it, before the body is predicted
         var pt = ClientProf.Begin();
         ReplayReconcile(); // C-02: a snapshot's reconcile replays here, with the physics step (see OnSelf)
-        ReplayDriveReconcile(); // and so does a predicted vehicle's (ADR 0010, ADR 0014)
+        _driveClient.ReplayReconcile(); // and so does a predicted vehicle's (ADR 0010, ADR 0014)
         pt = ClientProf.Lap(ClientProf.S.Reconcile, pt);
         var dt = (float)delta;
         PredictTick(SampleInput(dt), dt);
@@ -645,8 +649,8 @@ public partial class NetClient : Node
         var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? Ctx.Hotbar.Want : 0), GunnerAim);
         // C-03: a dead body does not move on the server (its input is zero and it is skipped), so it is not predicted either; else each snapshot snapped it back
         if (Mode.BodyIsPredicted) { if (!Dead) Ctx.Me!.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
-        PredictFlight(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
-        PredictDrive(ni, dt);  // and so does the driver of an amphibious transport
+        _flight.Predict(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
+        _driveClient.Predict(ni, dt);  // and so does the driver of an amphibious transport
         _pending.Add(new Pending { Input = ni, After = Ctx.Me!.State });
         if (_pending.Count > 120) _pending.RemoveAt(0);
     }

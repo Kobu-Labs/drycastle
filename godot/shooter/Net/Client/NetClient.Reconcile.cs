@@ -111,7 +111,7 @@ public partial class NetClient
     void FadeOwnCorrection(double delta)
     {
         if (Ctx.Me == null) return;
-        _viewFix *= Mathf.Exp(-CorrectionFade * (float)delta);
+        _viewFix *= Mathf.Exp(-Correction.FadePerSecond * (float)delta);
         if (_viewFix.LengthSquared() < 1e-6f) _viewFix = Vector3.Zero; // under a millimetre: done
         Ctx.Me.ViewOffset = _viewFix + _heldSwing; // in the Bigfoot's hand the eye swings with the hand (#264)
         Ctx.Me.ViewRoll = _heldRoll + High.Roll;

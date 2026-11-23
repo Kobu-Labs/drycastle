@@ -85,7 +85,7 @@ public partial class NetClient : IBotHost
     float IBotHost.BestRemoteTravel => Ctx.Remotes.Values.Select(r => new Vector2(r.Max.X - r.Min.X, r.Max.Z - r.Min.Z).Length()).DefaultIfEmpty(0f).Max();
     RubberStats IBotHost.Rubber { get => Ctx.Rub; set => Ctx.Rub = value; }
     NetSim? IBotHost.Sim => Sim;
-    int IBotHost.DriveCorrections => _driveCorrections;
+    int IBotHost.DriveCorrections => _driveClient.Corrections;
 
     (double Received, double Sent) IBotHost.PopTraffic() =>
         (_conn.PopStatistic(ENetConnection.HostStatistic.ReceivedData), _conn.PopStatistic(ENetConnection.HostStatistic.SentData));
@@ -102,5 +102,5 @@ public partial class NetClient : IBotHost
         if (_peer != null) Tx(_peer, Wire.ChanRozhlasFeed, packet, 0);
     }
 
-    BotCar AsBotCar(CarView v) => new(v.Id, v.Kind, v.Driver, v.Pos, v.Kmh, v.Stage, v.Destroyed, v.Exploded, v.Node, DriveDef(v) != null);
+    BotCar AsBotCar(CarView v) => new(v.Id, v.Kind, v.Driver, v.Pos, v.Kmh, v.Stage, v.Destroyed, v.Exploded, v.Node, _driveClient.DefOf(v) != null);
 }

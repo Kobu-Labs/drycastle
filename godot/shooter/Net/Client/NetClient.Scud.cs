@@ -77,6 +77,9 @@ public partial class NetClient
     enum ScudKey : byte { None = 0, Screen = 1, Confirm = 2, Abort = 4, Lock = 8 }
 
     readonly Dictionary<ushort, ScudTruck> _scudTrucks = new();
+
+    /// <summary>A Scud truck's rack is moving: its driver's brakes are on, as the server steps it.</summary>
+    bool ScudImmobilises(ushort carId) => _scudTrucks.TryGetValue(carId, out var truck) && ScudRules.Immobilises(truck.Msg.State);
     readonly Dictionary<ushort, ScudMissileView> _scudMissiles = new();
     readonly Dictionary<ushort, ScudFlightInfo> _scudFlights = new();
     readonly ScudScreen _scudScreen = new();

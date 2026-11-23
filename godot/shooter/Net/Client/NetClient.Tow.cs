@@ -26,14 +26,6 @@ public partial class NetClient
 
     /// <summary>The ground probe of every trailer drawn here (a ray for the height under a point), and each type's own world view for the driver's predicted trailer.</summary>
     TrailerProbe? _trailerGround;
-    readonly Dictionary<(int Tractor, int Trailer), TowGeometry> _towGeo = new();
-
-    /// <summary>The geometry of a tractor type pulling a trailer type (built once).</summary>
-    TowGeometry GeometryOf(int tractorKind, int trailerKind)
-    {
-        if (_towGeo.TryGetValue((tractorKind, trailerKind), out var g)) return g;
-        return _towGeo[(tractorKind, trailerKind)] = TowGeometry.Of(Vehicles!.Vehicles[tractorKind], Vehicles.Vehicles[trailerKind]);
-    }
 
     /// <summary>A new trailer's view: its model's nodes (<c>wheel_l</c>, <c>wheel_r</c>, <c>missile</c>; a model without one just does not have that part).</summary>
     TrailerView MakeTrailerView(CarView v)
@@ -77,7 +69,7 @@ public partial class NetClient
         if (v.Trailer is not { } t || Vehicles == null || _trailerGround == null || !Vehicles.Vehicles[v.Kind].Tilts) return;
         var def = Vehicles.Vehicles[v.Kind];
         TowGeometry g; float? hitchY = null;
-        if (t.TractorId != 0 && Ctx.Cars.TryGet(t.TractorId, out var tractor) && Vehicles.Vehicles[tractor.Kind].Tow != null) { g = GeometryOf(tractor.Kind, v.Kind); hitchY = tractor.Pos.Y + g.HitchY; }
+        if (t.TractorId != 0 && Ctx.Cars.TryGet(t.TractorId, out var tractor) && Vehicles.Vehicles[tractor.Kind].Tow != null) { g = Ctx.Cars.GeometryOf(tractor.Kind, v.Kind); hitchY = tractor.Pos.Y + g.HitchY; }
         else g = TowGeometry.ForTrailer(def);
         t.Hull = _trailerGround.Attitude(g, v.Pos.X, v.Pos.Z, v.Pos.Y, v.Yaw, hitchY);
     }
@@ -91,18 +83,10 @@ public partial class NetClient
         if (tractor != null && tractor.Driver == Ctx.MyId && Ctx.Driving && !Dead) UiShell.Instance?.Toast(Strings.T(now != 0 ? "toast.tow.hitched" : "toast.tow.unhitched"), ToastKind.Info);
     }
 
-    /// <summary>The trailer hitched to <paramref name="tractor"/> as the records say, or null (a tractor pulls at most one).</summary>
-    CarView? TrailerOf(ushort tractor)
-    {
-        if (tractor == 0) return null;
-        foreach (var c in Ctx.Cars.All) if (c.Trailer is { } t && t.TractorId == tractor && !c.Destroyed) return c;
-        return null;
-    }
-
     /// <summary>
     /// The hint line for the driver who has a trailer on the hook: hold the interact key to unhitch (a tap still leaves the vehicle). Appended to the vehicle's own prompt; null when nothing is hitched.
     /// </summary>
-    string? TowHint(CarView tractor) => TrailerOf(tractor.Id) == null ? null : Strings.F("hud.tow.unhitch", InputBindings.Name("interact"));
+    string? TowHint(CarView tractor) => Ctx.Cars.TrailerOf(tractor.Id) == null ? null : Strings.F("hud.tow.unhitch", InputBindings.Name("interact"));
 
     /// <summary>
     /// Draws every trailer once the vehicles' own poses are set this frame (a trailer is drawn from its tractor's drawn pose, so the tractors go first): hitched, from the hitch of the drawn tractor and the
@@ -137,11 +121,11 @@ public partial class NetClient
 
     /// <summary>The articulation to draw: the driver's own predicted trailer's when this client predicts the tractor's trailer, else the snapshots' (the trailer's yaw less the tractor's, both as interpolated at the render tick).</summary>
     float PhiOf(CarView tractor, float trailerSnapYaw) =>
-        _drive != null && _drive.CarId == tractor.Id && _drive.Predict.HasTrailer ? _drive.DrawnPhi : FlightMath.Wrap(trailerSnapYaw - tractor.SnapYaw);
+        _driveClient.PredictedPhi(tractor.Id) ?? FlightMath.Wrap(trailerSnapYaw - tractor.SnapYaw);
 
     void PoseHitched(CarView v, TrailerView t, VehicleDef def, CarView tractor, float trailerSnapYaw, float dt, out Vector3 pos, out Vector3 rot)
     {
-        var g = GeometryOf(tractor.Kind, v.Kind);
+        var g = Ctx.Cars.GeometryOf(tractor.Kind, v.Kind);
         var phi = Math.Clamp(PhiOf(tractor, trailerSnapYaw), -g.Limit, g.Limit);
         var yaw = FlightMath.Wrap(tractor.Node.Rotation.Y + phi);
         var hitch = tractor.Node.GlobalTransform * new Vector3(g.HitchX, g.HitchY, g.HitchZ); // on the tractor as drawn: it leans with its slope

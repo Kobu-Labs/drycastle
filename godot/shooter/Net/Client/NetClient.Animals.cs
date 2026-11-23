@@ -296,9 +296,8 @@ public partial class NetClient : IStandingBodies
     /// </summary>
     (DriveState State, VehicleDef Def)? ThrowGuessCar()
     {
-        if (_drive == null || Dead || !_drive.Def.RunOver || Match.Phase != MatchPhase.Running) return null; // the server throws no animal outside the round
-        var s = _drive.Predict.State;
-        return s.Afloat || !RunOver.Contacts(s.Speed) ? null : (s, _drive.Def);
+        if (_driveClient.Predicted is not { Def.RunOver: true } p || Dead || Match.Phase != MatchPhase.Running) return null; // the server throws no animal outside the round
+        return p.State.Afloat || !RunOver.Contacts(p.State.Speed) ? null : p;
     }
 
     /// <summary>The ground's height under a guessed throw (one ray down through the static world), or null where there is none: the guess lands and rolls on the ground it is over, not at the height it left.</summary>

@@ -31,7 +31,7 @@ public partial class NetClient
         {
             if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count || !GodotObject.IsInstanceValid(v.Node)) continue;
             var def = Vehicles.Vehicles[v.Kind];
-            var drive = DriveOf(v);
+            var drive = _driveClient.StateOf(v);
             var p = v.Node.GlobalPosition;
             var body = new CrushBody(new NVec2(p.X, p.Z), v.Node.Rotation.Y, def.HalfWidth, def.HalfLength, drive?.Speed ?? v.Kmh / 3.6f, v.Driver != 0, def.Flight == null && drive is not { Afloat: true });
             _crushFresh.Clear();

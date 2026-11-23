@@ -38,7 +38,7 @@ public partial class NetClient
         if (CurrentWeapon is not { } w) return 0f;
         var own = HitMath.OwnSpread(w, _spread.Degrees(w, Ctx.Now));
         // in an armed seat the vehicle's speed is what widens it (the server's rule for a shot from the seat)
-        if (Ctx.View.InArmedSeat && Ctx.Cars.MySeat() is { } m) return SeatAimRules.ShotSpread(own, w, _aimHeld, RideSpeed(m.Car, DriveOf(m.Car)), m.Seat);
+        if (Ctx.View.InArmedSeat && Ctx.Cars.MySeat() is { } m) return SeatAimRules.ShotSpread(own, w, _aimHeld, RideSpeed(m.Car, _driveClient.StateOf(m.Car)), m.Seat);
         return Ctx.Me is { } me ? HitMath.ShotSpread(own, w, me.State, _aimHeld) : own;
     }
 

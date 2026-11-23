@@ -86,7 +86,7 @@ public partial class NetClient
             var lift = ((input.Buttons & MoveButtons.Jump) != 0 ? 1 : 0) - ((input.Buttons & MoveButtons.Crouch) != 0 ? 1 : 0);
             _rig.Pose(input.MoveX, input.MoveY, lift, dt);
         }
-        var flies = FlightDef(v) != null;
+        var flies = _flight.DefOf(v) != null;
         // a helicopter's view tilts with the airframe; with reduce motion it stays level and the rig tilts round it (a ground vehicle's is always level)
         var frame = flies && !GameSettings.Current.ReduceMotion ? v.Node.GlobalBasis : Basis.FromEuler(new Vector3(0, rot.Y, 0));
         var e = SeatEye.For(def, seat);

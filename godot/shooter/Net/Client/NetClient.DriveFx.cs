@@ -17,20 +17,6 @@ namespace Drycastle.Shooter.Net.Client;
 public partial class NetClient
 {
 
-    /// <summary>The frame's body, wheels, propeller and water effects of one driven vehicle, as it was posed by <see cref="PoseDrive"/>.</summary>
-    void StepDriveFx(CarView v, VehicleDef def, Vector3 p, float dt)
-    {
-        if (v.Drive == null || !_drives.TryGetValue(v.Id, out var view) || !view.Drawn) return;
-        var crossed = v.Drive.Step(def, view.Shown, view.Pose, Sfx.ListenerDistance(p), dt);
-        if (crossed == 0) return;
-        // going in: a big splash at the bow; coming out: a smaller one where the stern leaves the water
-        var at = crossed > 0 ? v.Drive.Bow : v.Drive.Stern;
-        var surface = Water.SurfaceY(at.X, at.Z);
-        if (float.IsNaN(surface)) surface = Water.SurfaceY(p.X, p.Z);
-        if (float.IsNaN(surface)) surface = p.Y + def.Drive!.Water.Draft;
-        WaterFx.Splash(Ctx.Owned, new Vector3(at.X, surface, at.Z), crossed > 0 ? 2.6f : 1.3f);
-    }
-
     /// <summary>The node riders stand on: the body of a driven vehicle (it leans over its wheels), else the vehicle itself.</summary>
     static Node3D SeatAnchor(CarView v) => v.Drive?.Hull is { } hull && GodotObject.IsInstanceValid(hull) ? hull : v.Node;
 

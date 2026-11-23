@@ -66,8 +66,8 @@ public partial class NetClient
     (float Pitch, float Roll) HullTiltOf(CarView v, VehicleDef def) =>
         !def.Tilts ? (0f, 0f)
         : v.Trailer is { Hull: { } h } ? (h.Pitch, h.Roll) // a trailer's own ground fit (RefreshHull), the server's number
-        : _flights.TryGetValue(v.Id, out var f) ? (FlightRecord.Pitch(f.Rec), FlightRecord.Roll(f.Rec))
-        : _drives.TryGetValue(v.Id, out var d) && !CarThrown(v.Id) ? (DriveRecord.Pitch(d.Rec), DriveRecord.Roll(d.Rec)) // a driven vehicle's slope, the latest drive record's (the server's Drive.Pitch/Roll); not the springs' lean
+        : _flight.RecordTilt(v.Id) is { } tilt ? tilt
+        : !CarThrown(v.Id) && _driveClient.RecordTilt(v.Id) is { } slope ? slope // a driven vehicle's slope, the latest drive record's (the server's Drive.Pitch/Roll); not the springs' lean
         : (0f, 0f); // (a thrown one is level, as on the server)
 
     /// <summary>Where a vehicle's hull frame has its origin: the record's place, or a trailer's origin turned about its axle (<see cref="HullTiltOf"/>).</summary>
@@ -162,28 +162,28 @@ public partial class NetClient
         foreach (var v in Ctx.Cars.All)
         {
             if (v.Trailer != null) continue; // a trailer is drawn after the tractors, from the tractor as it is drawn (RenderTrailers)
-            v.Lamps?.Set(v.Lights && !v.Destroyed, v.Braking, beams.Contains(v), DriveOf(v) is { Speed: < -0.3f }); // reverse lamps: the drawn signed speed
+            v.Lamps?.Set(v.Lights && !v.Destroyed, v.Braking, beams.Contains(v), _driveClient.StateOf(v) is { Speed: < -0.3f }); // reverse lamps: the drawn signed speed
             if (v.Buf.At(rt) is not { } s) continue;
             var p = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
             var rot = new Vector3(0, s.Yaw, 0);
             v.SnapYaw = s.Yaw;
-            var flies = FlightDef(v) != null;
-            var drive = flies ? null : DriveDef(v);
-            if (flies) PoseFlight(v, rt, dt, ref p, ref rot); // a helicopter pitches and rolls; the one this player flies is drawn from its prediction
-            if (drive != null) PoseDrive(v, drive, rt, dt, ref p, ref rot); // an amphibious transport lies on the slope and bobs; the one this player drives is drawn from its prediction
+            var flies = _flight.DefOf(v) != null;
+            var drive = flies ? null : _driveClient.DefOf(v);
+            if (flies) _flight.Pose(v, rt, dt, ref p, ref rot); // a helicopter pitches and rolls; the one this player flies is drawn from its prediction
+            if (drive != null) _driveClient.Pose(v, drive, rt, dt, ref p, ref rot); // an amphibious transport lies on the slope and bobs; the one this player drives is drawn from its prediction
             v.Node.GlobalPosition = p;
             v.Node.Rotation = rot;
             WaterCraft(v, p);
             if (v.Destroyed) continue;
             var flakMine = v.Flak != null && RenderFlak(v, s, rt, dt);
             // the gun stands on the body: on a driven vehicle that is the slope plus the body's own lean over its wheels
-            var gunRot = drive != null && _drives.TryGetValue(v.Id, out var lean) ? rot + new Vector3(lean.Pose.BodyPitch, 0, lean.Pose.BodyRoll) : rot;
+            var gunRot = drive != null && _driveClient.BodyLean(v.Id) is { } lean ? rot + new Vector3(lean.Pitch, 0, lean.Roll) : rot;
             if (v.DoorGun != null && RenderDoorGun(v, gunRot, rt, dt)) { flakMine = true; doorGunner = true; } // the gun camera, as at the flak
             if (flakMine) flakGunner = true;
             v.Smoke?.Near(Sfx.ListenerDistance(p) < 90f); // far vehicles do not smoke: particle budget
-            if (flies) StepFlightFx(v, FlightDef(v)!, p, rot, dt); // rotors, their sound, the downwash
+            if (flies) _flight.StepFx(v, _flight.DefOf(v)!, p, rot, dt); // rotors, their sound, the downwash
             else SfxCar(v, p, dt);
-            if (drive != null) StepDriveFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
+            if (drive != null) _driveClient.StepFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
             else v.Roller?.Step(p, rot.Y, dt); // wheels of a vehicle that is not predicted: from its drawn motion
             var seat = Ctx.Driving && Ctx.Me != null ? OwnSeatIn(v) : -1; // the seat the local player has in this vehicle
             if (seat >= 0) TrackView(v, seat);
@@ -197,15 +197,15 @@ public partial class NetClient
                     if (CockpitFrame(v, seat, p, rot, dt)) cockpit = true; // the view from the seat's eye, in the place of the chase camera
                     else
                     {
-                        if (flies) ChaseFlight(v, p, rot, dt);
-                        else if (drive != null) ChaseDrive(v, drive, p, rot, dt);
+                        if (flies) _flight.Chase(v, p, rot, dt);
+                        else if (drive != null) _driveClient.Chase(v, drive, p, rot, dt);
                         else Ctx.Me!.Chase(p, s.Yaw, Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null, dt);
                         ShowSelfInCar(v, seat, viewerHides: false);
                     }
-                    if (seat == 0 && flies) { flown = FlightOf(v); chased = true; }
+                    if (seat == 0 && flies) { flown = _flight.StateOf(v); chased = true; }
                     else if (drive != null && !cockpit) chased = true;
                 }
-                kmh = DriveOf(v) is { } ds ? MathF.Abs(ds.Speed) * 3.6f : v.Kmh; // a predicted vehicle's speed now, not a tenth of a second ago; a passenger reads it as the driver does
+                kmh = _driveClient.StateOf(v) is { } ds ? MathF.Abs(ds.Speed) * 3.6f : v.Kmh; // a predicted vehicle's speed now, not a tenth of a second ago; a passenger reads it as the driver does
             }
         }
         RenderTrailers(rt, dt); // every trailer, from its tractor as drawn just now (the hitch, the articulation, the ground fit, the wheels)
@@ -216,14 +216,14 @@ public partial class NetClient
         if (!Ctx.Driving && _gunship == null) Ctx.Me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
         Ctx.Hud?.SetSeats(Ctx.Cars.SeatPanel());
         if (flakGunner) Ctx.Hud?.SetVehicleReadout(doorGunner ? DoorGunReadout() : FlakReadout());
-        else if (flown is { } fr) Ctx.Hud?.SetVehicleReadout(FlightReadout(fr));
+        else if (flown is { } fr) Ctx.Hud?.SetVehicleReadout(_flight.Readout(fr));
         else Ctx.Hud?.SetVehicleSpeed(Ctx.Driving ? kmh ?? 0f : null);
         string? prompt = null;
-        if (Ctx.Driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : Ctx.View.InArmedSeat ? ArmedSeatPrompt() : Ctx.Cars.MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        if (Ctx.Driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? _flight.Prompt(fp) : Ctx.View.InArmedSeat ? ArmedSeatPrompt() : Ctx.Cars.MySeat() is { Def.Drive: not null } ride ? _driveClient.Prompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         if (driven != null && prompt != null && TowHint(driven) is { } towHint) prompt += "     " + towHint; // a trailer on the hook: the key that unhitches it
         if (Ctx.Driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
         if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);
-        else if (Ctx.Me != null && !Dead && NearestFreeCar(Ctx.Me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
+        else if (Ctx.Me != null && !Dead && NearestFreeCar(Ctx.Me.GlobalPosition) is { } free) prompt = Strings.F(_flight.DefOf(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
         Ctx.Hud?.SetPrompt(LadderPrompt() ?? TurretPrompt() ?? _thieves.Loot.Prompt() ?? _doors.GarageDoorPrompt(Ctx.Driving) ?? ScudLoadPrompt(prompt) ?? prompt ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? _minerals.Prompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt() ?? LadderReachPrompt()); // a placing turret owns the prompt
     }
 
