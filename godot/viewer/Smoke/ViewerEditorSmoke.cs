@@ -18,20 +18,6 @@ namespace Drycastle.Viewer;
 /// </summary>
 public partial class Viewer
 {
-    async Task<bool> WaitIdle(double seconds)
-    {
-        // no parcel-run in flight and none starting for 2 s in a row
-        var t0 = Time.GetTicksMsec();
-        var quietSince = Time.GetTicksMsec();
-        while ((Time.GetTicksMsec() - t0) / 1000.0 < seconds)
-        {
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            if (_watcher!.Busy) quietSince = Time.GetTicksMsec();
-            else if (Time.GetTicksMsec() - quietSince > 2000) return true;
-        }
-        return false;
-    }
-
     static float Ground(Drycastle.MapLoader.MapLoader map, Vector3 p) => map.GroundHeightOrMean(p.X, p.Z);
 
     async Task RunEditorSmoke()
