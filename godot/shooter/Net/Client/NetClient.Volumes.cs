@@ -88,7 +88,7 @@ public partial class NetClient
         {
             if (r.Node == null || !GodotObject.IsInstanceValid(r.Node) || !r.Node.Visible || r.State == EntityState.Dead) continue;
             var at = r.Node.GlobalPosition;
-            if (Near(at, cam)) VolumePerson(o, at, r.Stance, r.Node.GlobalRotation.Y, 1f, _names.TryGetValue(id, out var n) ? n : $"player {id}");
+            if (Near(at, cam)) VolumePerson(o, at, r.Stance, r.Node.GlobalRotation.Y, 1f, Ctx.Names.TryGetValue(id, out var n) ? n : $"player {id}");
         }
         foreach (var c in _citizens.Views) VolumeNpc(o, c, cam, "citizen");
         foreach (var g in _thieves.GangViews) VolumeNpc(o, g, cam, "gang");

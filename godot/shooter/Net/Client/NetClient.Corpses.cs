@@ -240,11 +240,11 @@ public partial class NetClient
             return CorpseItems(id).Count switch { 0 => null, 1 => Strings.F("hud.corpse.giant.item", key, ItemName(CorpseItem(id)!)), _ => Strings.F("hud.corpse.giant.items", key) };
         if (CorpseWeapon(id) is not { } w) return null;
         var hold = CorpseRules.CanReplace(w, CorpseRules.PrimaryPos);
-        if (CorpseItems(id).Count > 1) return Strings.F(hold ? "hud.corpse.hold.items" : "hud.corpse.tap.items", key, WeaponName(w.Id)); // a list: its own chooser names them
-        if (CorpseItem(id) is { } item) return Strings.F(hold ? "hud.corpse.hold.item" : "hud.corpse.tap.item", key, WeaponName(w.Id), ItemName(item));
+        if (CorpseItems(id).Count > 1) return Strings.F(hold ? "hud.corpse.hold.items" : "hud.corpse.tap.items", key, ClientText.WeaponName(w.Id)); // a list: its own chooser names them
+        if (CorpseItem(id) is { } item) return Strings.F(hold ? "hud.corpse.hold.item" : "hud.corpse.tap.item", key, ClientText.WeaponName(w.Id), ItemName(item));
         return hold
-            ? Strings.F("hud.corpse.hold", key, WeaponName(w.Id))
-            : Strings.F("hud.corpse.tap", key, WeaponName(w.Id));
+            ? Strings.F("hud.corpse.hold", key, ClientText.WeaponName(w.Id))
+            : Strings.F("hud.corpse.tap", key, ClientText.WeaponName(w.Id));
     }
 
     /// <summary>
@@ -282,15 +282,15 @@ public partial class NetClient
         foreach (var pos in new[] { CorpseRules.PrimaryPos, CorpseRules.SecondaryPos })
         {
             if (weapon == null || !CorpseRules.CanReplace(weapon, pos) || pos >= _hotbar.Length) continue;
-            var current = WeaponName(Weapons!.Weapons[_hotbar[pos]].Id);
+            var current = ClientText.WeaponName(Weapons!.Weapons[_hotbar[pos]].Id);
             options.Add((pos, Strings.F(pos == CorpseRules.PrimaryPos ? "corpse.primary" : "corpse.secondary", current)));
         }
         var items = ChooserItems(corpse);
         if (options.Count == 0 && items.Count == 0) return;
         var title = options.Count == 0 // nothing of the weapon can be taken: the Items are the offer
             ? Strings.T("corpse.title.items") // each Item's name stands in its row
-            : items.Count == 0 ? Strings.F("corpse.title", WeaponName(weapon!.Id))
-            : Strings.F("corpse.title.with_items", WeaponName(weapon!.Id));
+            : items.Count == 0 ? Strings.F("corpse.title", ClientText.WeaponName(weapon!.Id))
+            : Strings.F("corpse.title.with_items", ClientText.WeaponName(weapon!.Id));
         _chooser.Open(corpse, title, options, items);
     }
 
@@ -304,6 +304,6 @@ public partial class NetClient
         for (var i = 0; i < Math.Min(hot.Length, _hotbar.Length); i++)
             if (hot[i] != _hotbar[i] && _wantSlot == _hotbar[i] + 1) _wantSlot = hot[i] + 1;
         _hotbar = hot;
-        _hud?.SetWeapons(_hotbar.Select(i => WeaponName(Weapons.Weapons[i].Id)).ToList());
+        _hud?.SetWeapons(_hotbar.Select(i => ClientText.WeaponName(Weapons.Weapons[i].Id)).ToList());
     }
 }

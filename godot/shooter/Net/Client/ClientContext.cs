@@ -64,6 +64,10 @@ public sealed class ClientContext
     public Func<bool>? MenuOpen;
     /// <summary>Sends one reliable event to the server (nothing when not connected).</summary>
     public Action<EventKind, byte[]> Send = (_, _) => { };
+    /// <summary>The names of the players and target dummies, by entity id (the join events and the target roster).</summary>
+    public Dictionary<ushort, string> Names { get; } = new();
+    /// <summary>Sends a player's request (not for a bot, which has no screens to ask from).</summary>
+    public void SendHuman(EventKind kind, byte[] payload) { if (!Bot) Send(kind, payload); }
     /// <summary>True while there is a link to the server to send on.</summary>
     public Func<bool> Connected = () => false;
 

@@ -48,7 +48,7 @@ public partial class NetClient
         node.AddChild(view);
         node.AddChild(new Label3D
         {
-            Text = _names.TryGetValue(id, out var n) ? NameTag(id, n) : $"#{id}", // [SANDBOX] tag for sandbox players (#156)
+            Text = Ctx.Names.TryGetValue(id, out var n) ? Sandbox.NameTag(id, n) : $"#{id}", // [SANDBOX] tag for sandbox players (#156)
             Modulate = target ? TargetTint : Colors.White, // orange name tag for target dummies (#148)
             Position = new Vector3(0, MoveConsts.CapsuleHeight + 0.3f, 0),
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,

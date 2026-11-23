@@ -46,7 +46,7 @@ public partial class NetClient
         var now = BulletDrop.Dial(w, was, clicks);
         if (now == was) return true; // at the end of the dial
         _zero.Set(a.Slot - 1, w, now);
-        SendItem(EventKind.SetZero, BulletDrop.EncodeZero(a.Slot - 1, now));
+        Ctx.SendHuman(EventKind.SetZero, BulletDrop.EncodeZero(a.Slot - 1, now));
         Sfx.Ui("ui.hover");
         return true;
     }

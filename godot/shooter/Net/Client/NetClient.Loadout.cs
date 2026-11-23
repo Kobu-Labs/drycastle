@@ -82,7 +82,7 @@ public partial class NetClient
         var active = p is { } pr && pr.ActiveSlot >= 0 && pr.ActiveSlot < pr.Loadouts.Count ? pr.Loadouts[pr.ActiveSlot] : null;
         if (Weapons != null) _hotbar = LoadoutHotbar.Build(Weapons, active);
         Perks = PerkModifiers.Of(PerkData?.Find(active?.Perk ?? ""));
-        if (Weapons != null && _hud != null) _hud.SetWeapons(_hotbar.Select(i => WeaponName(Weapons.Weapons[i].Id)).ToList());
+        if (Weapons != null && _hud != null) _hud.SetWeapons(_hotbar.Select(i => ClientText.WeaponName(Weapons.Weapons[i].Id)).ToList());
         ArmStreaks(); // the HUD tracker's counter starts at this spawn (ticket #119)
     }
 
@@ -136,8 +136,8 @@ public partial class NetClient
     {
         var parts = new List<string>
         {
-            l.PrimaryWeapon == "" ? Strings.T("loadout.empty") : WeaponName(l.PrimaryWeapon),
-            l.SecondaryWeapon == "" ? Strings.T("loadout.empty") : WeaponName(l.SecondaryWeapon),
+            l.PrimaryWeapon == "" ? Strings.T("loadout.empty") : ClientText.WeaponName(l.PrimaryWeapon),
+            l.SecondaryWeapon == "" ? Strings.T("loadout.empty") : ClientText.WeaponName(l.SecondaryWeapon),
             l.Perk == "" ? Strings.T("loadout.none") : PerkData?.Find(l.Perk)?.Name ?? l.Perk,
         };
         var streaks = new[] { l.Streak1, l.Streak2, l.Streak3 }.Where(s => s != "").Select(StreakName);

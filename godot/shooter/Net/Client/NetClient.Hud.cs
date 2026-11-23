@@ -49,15 +49,15 @@ public partial class NetClient
     void HudWelcome()
     {
         if (!ShotFx.Enabled || _hud != null) return; // headless runs have no HUD
-        _hud = new Hud { MyId = _myId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => _me is { ZoomFov: > 0 } && !_binoculars, Binoculars = BinocularsView, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Scope = ScopeView, Spread = CrosshairSpread };
+        _hud = new Hud { MyId = _myId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? ClientText.WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => _me is { ZoomFov: > 0 } && !_binoculars, Binoculars = BinocularsView, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Scope = ScopeView, Spread = CrosshairSpread };
         AddChild(_hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
-        _hud.TacticalMapTeleport = OnMapTeleport;
-        _hud.SetSandbox(SandboxGranted, SandboxHeldStreak, SandboxTakesDamage); // the SANDBOX badge (#156)
+        _hud.TacticalMapTeleport = _screens.OnMapTeleport;
+        Sandbox.ShowOnHud(); // the SANDBOX badge (#156)
         WireLoadoutHud(_hud);
         _hud.AttachEquipment(this); // F (#268)
-        _hud.AttachHuntersLog(HuntLogEnvironment()); // J (#336)
+        _hud.AttachHuntersLog(_hunts.Environment()); // J (#336)
         _hud.AttachMineralLog(); // N
-        HuntData.RequestLog(0); // learns the player's own id in the log (their own announcements say "you"), and warms My Log
+        _hunts.Data.RequestLog(0); // learns the player's own id in the log (their own announcements say "you"), and warms My Log
         _hud.Minimap.Build(Map); // once per connection; the texture comes from the map's parcels and roads (ticket #119)
         _hud.PrewarmTacticalMap(GetViewport().GetVisibleRect().Size); // the full-screen map's picture is made on a worker meanwhile
     }
@@ -65,13 +65,6 @@ public partial class NetClient
     /// <summary>The loaded map (set by the host): the minimap's texture source.</summary>
     public Drycastle.MapLoader.MapLoader? Map { get => Ctx.Map; set => Ctx.Map = value; }
     readonly List<Vector2> _carDots = new();
-
-    static string WeaponName(string id)
-    {
-        var k = "weapon." + id;
-        var t = Strings.T(k);
-        return t == k ? id : t;
-    }
 
     /// <summary>Ammo of the hotbar: the selected hotbar cell, and every hotbar weapon's magazine in hotbar order.</summary>
     void HudAmmo()
@@ -85,31 +78,8 @@ public partial class NetClient
         _hud.SetAmmo(Math.Max(1, HotbarPos(a.Slot) + 1), w.MagazineSize == 0 ? -1 : mag, reserve, all, a.ReloadRemaining, w.ReloadTime);
     }
 
-    HuntArtResolver? _huntArt;
 
     /// <summary>What the hit diagram and the Hunter's Log draw an animal from (shapes, baked pictures, plain bodies).</summary>
-    HuntArtResolver HuntArtOf => _huntArt ??= new HuntArtResolver(AnimalShapes, AnimalData);
-
-    /// <summary>The hit diagram of an animal this player just killed with a sniper rifle.</summary>
-    void HudHuntShot(HuntShotMsg m)
-    {
-        if (_hud == null || m.Species >= AnimalData.Animals.Count) return;
-        var def = AnimalData.Animals[m.Species];
-        var weapon = Weapons != null && m.Weapon < Weapons.Weapons.Count ? WeaponName(Weapons.Weapons[m.Weapon].Id) : "";
-        // always the look's one standing picture, whatever the animal was doing: the hit is moved from the shape the server tested the bullet
-        // against (the pose it was in) onto the standing shape, head to head and body to body. Without shapes: the species' baked picture
-        var key = def.ShapeKey(m.Variant);
-        var standing = AnimalShapes.Frame(key, AnimalPose.Idle, 0);
-        var (along, height) = (m.Along, m.Height);
-        if (standing != null && m.Pose != HuntShot.NoShape && AnimalShapes.Frame(key, (AnimalPose)m.Pose, m.Frame) is { } hitOn)
-            (along, height) = hitOn.MapOnto(standing, m.Along, m.Height, m.Head);
-        else if (m.Pose == HuntShot.NoShape) standing = null; // tested against the body box: its picture, by the box
-        var line = Strings.F(m.Head ? "hud.hunt.line.head" : "hud.hunt.line", m.DistanceM, weapon);
-        // the species and what it weighed (a species with no weight: the name alone)
-        var name = def.Name.ToUpperInvariant();
-        var title = m.WeightKg > 0 ? Strings.F("hud.hunt.title", name, m.WeightKg.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)) : name;
-        _hud.ShowHuntShot(title, HuntArtOf.Art(standing, def.Id), along, height, line);
-    }
 
     void HudHit(HitMsg h)
     {
@@ -147,15 +117,7 @@ public partial class NetClient
         _hud?.SetSnapshotCount(_snaps); // the FPS card's TPS line (Hud.Fps.cs)
         _hud?.CoverCrosshair(_chooser.IsOpen);
         _hud?.SetUnarmedSeat(InUnarmedSeat); // no crosshair, no ammo readout where nothing can be fired (#373)
-        if (_me != null) _me.MoveWithFreeMouse = (_hud?.EquipmentOpen ?? false) || (_hud?.TacticalMapOpen ?? false) || (_hud?.HuntersLogOpen ?? false) || (_hud?.MineralLogOpen ?? false); // the Equipment screen, the tactical map and the Hunter's Log free the mouse, not the legs (#268, #336)
-        if (_hud is { EquipmentOpen: true } or { TacticalMapOpen: true } or { HuntersLogOpen: true } or { MineralLogOpen: true })
-        {
-            var overlays = _hud.Overlays(MenuOpen?.Invoke() == true, ChooserOpen); // a menu or the corpse chooser takes the screen from the Equipment screen, a menu from the map
-            if (_hud.EquipmentOpen && OverlayArbiter.YieldsToMenu(Overlay.Equipment, overlays)) _hud.CloseEquipment();
-            if (_hud.TacticalMapOpen && OverlayArbiter.YieldsToMenu(Overlay.TacticalMap, overlays)) _hud.CloseTacticalMap();
-            if (_hud.HuntersLogOpen && OverlayArbiter.YieldsToMenu(Overlay.HuntersLog, overlays)) _hud.CloseHuntersLog();
-            if (_hud.MineralLogOpen && OverlayArbiter.YieldsToMenu(Overlay.MineralLog, overlays)) _hud.CloseMineralLog();
-        }
+        _screens.Update();
         _uav.Tick();
         if (_me != null) RozhlasFeedPlayer.Current?.SetListener(_me.GlobalPosition);
         if (_me != null) Rozhlas.Current?.SetListener(_me.GlobalPosition); // the loudspeaker is heard where the player is, not where a vehicle's orbiting camera is

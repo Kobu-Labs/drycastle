@@ -32,7 +32,7 @@ public partial class NetClient
     }
 
     /// <summary>Tells the server the binoculars went up or down, so the others see it.</summary>
-    void SendBinoculars(bool up) => SendItem(EventKind.RaiseBinoculars, Binoculars.EncodeRaise(up));
+    void SendBinoculars(bool up) => Ctx.SendHuman(EventKind.RaiseBinoculars, Binoculars.EncodeRaise(up));
     double _binocularsMeasuredAt;
     int? _binocularsRange;
 

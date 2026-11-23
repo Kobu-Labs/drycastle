@@ -110,7 +110,6 @@ public partial class NetClient : Node
     readonly SnapshotDecoder _dec = new();
     /// <summary>Replicated world entities (turrets, missiles, ...). Subscribe to Spawned/Despawned for visuals.</summary>
     public WorldReplica WorldEntities => Ctx.WorldEntities;
-    readonly Dictionary<ushort, string> _names = new();
     Dictionary<ushort, RemotePlayer> _remotes => Ctx.Remotes;
     uint _lastTick { get => Ctx.LastTick; set => Ctx.LastTick = value; }
     double _lastArrival;
@@ -137,6 +136,13 @@ public partial class NetClient : Node
     CitizensClient _citizens = null!;
     StatusClient _status = null!;
     ThievesClient _thieves = null!;
+    MineralsClient _minerals = null!;
+    HuntsClient _hunts = null!;
+    ScreensClient _screens = null!;
+    /// <summary>The sandbox mode's state and requests (the panel and the host reach them here).</summary>
+    public SandboxClient Sandbox { get; }
+    /// <summary>The HUD screens a key opens (Equipment, the map, the logs): Esc, the mouse, the pause menu's entries.</summary>
+    public ScreensClient Screens => _screens;
     /// <summary>The chat box, the Squads screen's and the Teams screen's requests (the menus reach them here).</summary>
     public ChatClient Chat { get; private set; } = null!;
     public SquadsClient Squads { get; private set; } = null!;
@@ -145,6 +151,7 @@ public partial class NetClient : Node
     public NetClient()
     {
         Ctx = new ClientContext(this) { Send = SendEvent, Connected = () => _peer != null, InVehicle = () => Ctx.Driving || _myState == EntityState.InVehicle };
+        Sandbox = new SandboxClient(Ctx);
         _moab = new MoabClient(Ctx);
         _doors = new DoorsClient(Ctx);
         _uav = new UavClient(Ctx);
@@ -165,8 +172,11 @@ public partial class NetClient : Node
         Squads = new SquadsClient(Ctx);
         Chat = new ChatClient(Ctx, ItemData, CompanionData, Squads);
         TeamAdmin = new TeamsClient(Ctx, Chat);
+        _minerals = new MineralsClient(Ctx);
+        _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
         _bot = MakeBot();
         InitCorpses();
+        _screens = new ScreensClient(Ctx, Chat, Sandbox, _chooser);
         InitGroundItems();
         InitCarePackages();
         InitMissile();
@@ -246,6 +256,13 @@ public partial class NetClient : Node
         GetTree().Quit(2);
     }
 
+    /// <summary>Sends one reliable event to the server (<see cref="ClientContext.Send"/>).</summary>
+    void SendEvent(EventKind kind, byte[] payload)
+    {
+        if (_peer == null) return;
+        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)kind, payload)), (int)ENetPacketPeer.FlagReliable);
+    }
+
     void Tx(ENetPacketPeer peer, int chan, byte[] data, int flags)
     {
         if (Sim != null) Sim.Send(peer, chan, data, flags); else peer.Send(chan, data, flags);
@@ -287,7 +304,7 @@ public partial class NetClient : Node
         ReportFrame(delta);
         if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
         if (LinkEnded) return;
-        UpdateMapCursor();
+        _screens.UpdateMapCursor();
         if (_volumes != null) UpdateVolumes();
         var t = ClientProf.Begin();
         Poll();
@@ -327,7 +344,7 @@ public partial class NetClient : Node
         RenderCorpses();
         RenderGroundItems();
         RenderCarePackages();
-        RenderMinerals();
+        _minerals.Render();
         RenderTurrets();
     }
 
@@ -384,7 +401,7 @@ public partial class NetClient : Node
             switch (ev)
             {
                 case ENetConnection.EventType.Connect:
-                    Tx(peer, Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName, Token, SandboxRequested ? HelloFlags.Sandbox : (byte)0, Map?.BuildHash ?? 0)), (int)ENetPacketPeer.FlagReliable);
+                    Tx(peer, Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName, Token, Sandbox.Requested ? HelloFlags.Sandbox : (byte)0, Map?.BuildHash ?? 0)), (int)ENetPacketPeer.FlagReliable);
                     _conn.Flush();
                     break;
                 case ENetConnection.EventType.Disconnect:
@@ -429,7 +446,7 @@ public partial class NetClient : Node
                 if (!_welcomed) _rejectReason = er.Reason; // the server disconnects after a refused hello
                 ServerError?.Invoke(er.Reason);
                 break;
-            case JoinMsg j: _names[j.PlayerId] = j.Name; GD.Print($"client: {j.Name} #{j.PlayerId} joined"); break;
+            case JoinMsg j: Ctx.Names[j.PlayerId] = j.Name; GD.Print($"client: {j.Name} #{j.PlayerId} joined"); break;
             case LeaveMsg l:
                 OnLeave(l);
                 break;
@@ -460,7 +477,7 @@ public partial class NetClient : Node
     /// <summary>A player left: everything the client keeps per player goes.</summary>
     void OnLeave(LeaveMsg l)
     {
-        _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
+        Ctx.Names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
         if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
         ForgetWorn(l.PlayerId); _binocularsBy.Remove(l.PlayerId); _headLamps.Forget(l.PlayerId);
         _status.Forget(l.PlayerId);
@@ -470,7 +487,7 @@ public partial class NetClient : Node
     void DispatchEvent(EventKind kind, byte[] payload)
     {
         if (kind == EventKind.TargetRoster) OnTargetRoster(payload); // target dummies' names (#148)
-        OnSandboxEvent(kind, payload); // sandbox answer (#156)
+        Sandbox.OnEvent(kind, payload); // sandbox answer (#156)
         Chat.OnEvent(kind, payload); // chat lines, the admin flag, the day clock
         _status.OnEvent(kind, payload); // statuses: blessing, curse, burning
         OnItemEvent(kind, payload); // what the player wears, what a corpse carries, an item crumbling
@@ -484,9 +501,9 @@ public partial class NetClient : Node
         _rozhlas.OnEvent(kind, payload); // the village loudspeaker's phase, broadcast and offset
         _mass.OnEvent(kind, payload); // the Holy Mass: chant, bells, the player's seat, the blessing
         OnDemonEvent(kind, payload); // the demon: fireballs, the curse
-        OnHuntEvent(kind, payload); // the Hunter's Log: answers and announcements (#336)
+        _hunts.OnEvent(kind, payload); // the Hunter's Log: answers and announcements (#336)
         OnPhoenixEvent(kind, payload); // the Phoenix's fall: a flash and the crash site's warning light
-        OnMineralEvent(kind, payload); // the mineral nodes and the player's finds (#401)
+        _minerals.OnEvent(kind, payload); // the mineral nodes and the player's finds (#401)
         OnWeaponEvent(kind, payload);
         OnStreetEvent(kind, payload); // the street lamps and sign plates
         OnMatchEvent(kind, payload);
@@ -597,7 +614,7 @@ public partial class NetClient : Node
     MoveInput SampleInput(float dt)
     {
         var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = _me!.Yaw } : PerfPlay ? PerfPlayStep() : _me!.Sample();
-        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); _thieves.Loot.TickReturn(dt); TickMinerals(dt); }
+        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); }
         FxDemoInput(ref mi);
         ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         ThrowFilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
@@ -637,11 +654,8 @@ public partial class NetClient : Node
     public override void _UnhandledInput(InputEvent e)
     {
         if (Chat.HandleInput(e)) return; // T or "/": the chat box
-        if (HandleMapInput(e)) return; // M: the tactical map
-        if (HandleEquipmentInput(e)) return; // F: the Equipment screen (#268)
-        if (HandleHuntersLogInput(e)) return; // J: the Hunter's Log (#336)
-        if (HandleMineralLogInput(e)) return; // N: the Mineral Log
-        if (HandleSandboxInput(e)) return; // F4, the sandbox panel (#156)
+        if (_screens.HandleInput(e)) return; // M: the tactical map, F: the Equipment screen (#268), J: the Hunter's Log (#336), N: the Mineral Log
+        if (Sandbox.HandleInput(e)) return; // F4, the sandbox panel (#156)
         if (HandleVolumeInput(e)) return; // F3, the bounding-volume overlay; [ ] step its mode (#479)
         if (HandleScudInput(e)) return; // the Scud screen's keys (open, confirm, abort, lock, the wheel's zoom)
         if (HandleSeatInput(e)) return; // a number key while seated takes that seat

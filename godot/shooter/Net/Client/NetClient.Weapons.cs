@@ -158,7 +158,7 @@ public partial class NetClient
                 OnGlassSync(gsync);
                 break;
             case EventKind.HuntShot when HuntShot.Decode(payload) is { } hs:
-                HudHuntShot(hs);
+                _hunts.OnShot(hs);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 if (KeepEventLogs) _logs.Hits.Add((Now, h));

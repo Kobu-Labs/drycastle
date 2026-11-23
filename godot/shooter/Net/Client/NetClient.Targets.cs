@@ -19,14 +19,14 @@ public partial class NetClient
         var dummy = TargetDummies.IsDummyId(id);
         var show = (dummy || (Match.IsTeamMode && Match.AreFriends(_myId, id))) && !_blastDust.Hides(r.Node.GlobalPosition + Vector3.Up * 1.6f); // not through dust (#345)
         var squad = !dummy && Match.AreSquadMates(_myId, id) ? Match.SquadOf(id) : (byte)0;
-        var retag = !dummy && r.TagSquad != squad && _names.ContainsKey(id); // only a change rebuilds the text
+        var retag = !dummy && r.TagSquad != squad && Ctx.Names.ContainsKey(id); // only a change rebuilds the text
         if (retag) r.TagSquad = squad;
         foreach (var label in r.Node.GetChildren().OfType<Label3D>())
         {
             label.Visible = show;
             if (dummy) continue;
             label.Modulate = FriendTagTint;
-            if (retag) label.Text = squad == 0 ? NameTag(id, _names[id]) : Strings.F("squad.tag", NameTag(id, _names[id]), Match.SquadNameOf(squad));
+            if (retag) label.Text = squad == 0 ? Sandbox.NameTag(id, Ctx.Names[id]) : Strings.F("squad.tag", Sandbox.NameTag(id, Ctx.Names[id]), Match.SquadNameOf(squad));
         }
     }
 
@@ -39,7 +39,7 @@ public partial class NetClient
         }
         foreach (var (id, name) in list)
         {
-            _names[id] = name;
+            Ctx.Names[id] = name;
             Match.NameTarget(id, name);
             // a snapshot may have drawn the dummy before the roster arrived: fix its name tag
             if (_remotes.TryGetValue(id, out var r))

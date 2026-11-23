@@ -82,7 +82,7 @@ public partial class NetClient
     }
 
     /// <summary>A wish: have this Companion out (an index of <see cref="CompanionsOwned"/>'s values). The server answers with the roster.</summary>
-    public void RequestCompanion(int def) => SendItem(EventKind.CompanionPick, CompanionRoster.EncodePick(def));
+    public void RequestCompanion(int def) => Ctx.SendHuman(EventKind.CompanionPick, CompanionRoster.EncodePick(def));
 
     // ---- the marks of a scout (the Eagle): the players the local player's Companion marked, drawn through walls for them alone ----
 
