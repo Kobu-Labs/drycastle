@@ -23,7 +23,7 @@ public partial class NetClient
         node.AddChild(new Label3D
         {
             Text = Ctx.Names.TryGetValue(id, out var n) ? Sandbox.NameTag(id, n) : $"#{id}", // [SANDBOX] tag for sandbox players (#156)
-            Modulate = target ? TargetTint : Colors.White, // orange name tag for target dummies (#148)
+            Modulate = target ? TargetsClient.DummyTint : Colors.White, // orange name tag for target dummies (#148)
             Position = new Vector3(0, MoveConsts.CapsuleHeight + 0.3f, 0),
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
             PixelSize = 0.005f, NoDepthTest = true,
@@ -53,15 +53,15 @@ public partial class NetClient
                 r.ShownYaw = s.Yaw; r.ShownPitch = s.Pitch;
                 if (dead) EndFling(id);
                 TumbleRemote(id, r, at, s.Yaw, dead && TargetDummies.IsDummyId(id) || r.GuessRagdoll, dt);
-                PounceLieRemote(id, r, at); // the one the demon has pinned lies on its back
+                _pounce.LieRemote(id, r, at); // the one the demon has pinned lies on its back
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
                 r.Node.Visible = guessed || !(dead && !TargetDummies.IsDummyId(id) && (CorpseOf(id) || HarvestVictimHidden(id, dead))); // the harvester's victim is in the machine, then inside its bale: no body at the spot where it died // riders are drawn in their seat (the server puts the body there), seated rather than standing
                 r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
                 if (r.State == EntityState.InVehicle) _lastRode[id] = Ctx.Now;
                 AnimateRemote(r, s.Pos);
-                UpdateNameTag(id, r);
+                _targets.UpdateNameTag(id, r);
             }
-        _rub.AddRender(rt, Ctx.LastTick, drawn);
+        Ctx.Rub.AddRender(rt, Ctx.LastTick, drawn);
     }
 
     /// <summary>
@@ -76,7 +76,7 @@ public partial class NetClient
     {
         var g = r.Guess;
         var feet = new NVec3(at.X, at.Y, at.Z);
-        if (g.Ready && r.State == EntityState.Alive && Vehicles != null && ThrowGuessCar() is { } c
+        if (g.Ready && r.State == EntityState.Alive && Vehicles != null && _animals.GuessCar() is { } c
             && RunOverFootprint.OfCapsule(feet).Hits(c.State.Position, c.State.Position, c.State.Yaw, c.Def.HalfWidth, c.Def.HalfLength))
         {
             var launch = CorpseRules.ThrowFromCar(new NVec3(-MathF.Sin(c.State.Yaw), 0, -MathF.Cos(c.State.Yaw)), c.State.Speed);
@@ -91,7 +91,7 @@ public partial class NetClient
         var moved = at - r.GuessServerLast; moved.Y = 0; r.GuessServerLast = at;
         var flies = !dead && r.GuessConfirmed && dt > 0 && ThrowGuess.ServerStillFlies(moved.Length() / dt, r.GuessLaunch);
         var was = g.Phase;
-        var p = g.Step(dt, feet, dead || r.GuessConfirmed, flies, g.Active ? GroundUnder(g.Position) : null);
+        var p = g.Step(dt, feet, dead || r.GuessConfirmed, flies, g.Active ? _animals.GroundUnder(g.Position) : null);
         if (was == ThrowGuessPhase.Flying && g.Phase == ThrowGuessPhase.Settling && r.GuessFlung && !dead) EndFling(id); // the server saw no hit: the tumble is taken back with the arc
         if (!g.Active) r.GuessFlung = false;
         return new Vector3(p.X, p.Y, p.Z);
@@ -146,7 +146,7 @@ public partial class NetClient
             // a rider sits: the seat moving (the car driving, a flak turret turning the gunner about its ring) is not the body walking
             if (r.State == EntityState.InVehicle) sp = 0;
             r.Speed = Mathf.Lerp(r.Speed, sp, 0.3f);
-            if (r.State != EntityState.InVehicle) SfxRemoteStep(r, p, (float)(now - r.LastT));
+            if (r.State != EntityState.InVehicle) Ctx.Sound.RemoteStep(r, p, (float)(now - r.LastT));
         }
         r.LastPos = p; r.LastT = now;
         var weaponId = Weapons != null && r.Slot >= 1 && r.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[r.Slot - 1].Id : "";

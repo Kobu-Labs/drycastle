@@ -12,10 +12,22 @@ namespace Drycastle.Shooter.Net.Client;
 /// call). Cosmetic: the birds are not hit targets and the clients' birds differ in detail. The bird is the model of wildlife.json "flocks" (its first mesh, flapped
 /// by narrowing its wings, since the pack has no flap clip); without the model a small wedge stands in.
 /// </summary>
-public partial class NetClient
+internal sealed class FlocksClient
 {
-    /// <summary>wildlife.json: set by the host (the flock kinds; the kind index of a state is a position in <c>Flocks</c>).</summary>
-    public WildlifeFile WildlifeData = new();
+    readonly ClientContext _ctx;
+    readonly WildlifeFile _data;
+    readonly AircraftClient _aircraft;
+
+    /// <param name="data">wildlife.json (set by the host: the flock kinds; the kind index of a state is a position in <c>Flocks</c>).</param>
+    /// <param name="aircraft">The aircraft the birds keep clear of.</param>
+    public FlocksClient(ClientContext ctx, WildlifeFile data, AircraftClient aircraft)
+    {
+        _ctx = ctx; _data = data; _aircraft = aircraft;
+        FlockRules.Register(WorldEntityRegistry.Shared);
+        ctx.WorldEntities.Spawned += OnSpawned;
+        ctx.WorldEntities.Despawned += OnDespawned;
+        ctx.WorldEntities.DormancyChanged += OnDormancy;
+    }
 
     sealed class FlockView
     {
@@ -40,16 +52,8 @@ public partial class NetClient
     /// <summary>Radius of the sphere a gunship aircraft keeps clear, metres; a flying vehicle's is its half length plus the rotor's reach.</summary>
     const float AircraftAvoidRadiusM = 12, VehicleRotorReachM = 4;
 
-    void InitFlocks()
-    {
-        FlockRules.Register(WorldEntityRegistry.Shared);
-        WorldEntities.Spawned += OnFlockSpawned;
-        WorldEntities.Despawned += OnFlockDespawned;
-        WorldEntities.DormancyChanged += OnFlockDormancy;
-    }
-
     /// <summary>A flock outside the interest range (ADR 0025) is hidden and its boids are not flown; one that comes back starts a new swarm at its centre (the old one would fly across the map to catch up).</summary>
-    void OnFlockDormancy(WorldReplica.Entity e)
+    void OnDormancy(WorldReplica.Entity e)
     {
         if (e.Type != FlockRules.TypeId || !_flocks.TryGetValue(e.Id, out var v)) return;
         v.Node.Visible = !e.Dormant;
@@ -86,21 +90,21 @@ public partial class NetClient
         return _birdMeshes[kind.Id] = (mesh, local);
     }
 
-    void OnFlockSpawned(WorldReplica.Entity e)
+    void OnSpawned(WorldReplica.Entity e)
     {
         if (e.Type != FlockRules.TypeId) return;
         var kindIndex = FlockRules.SpeciesOf(e.State.Owner);
-        if (kindIndex >= WildlifeData.Flocks.Count)
+        if (kindIndex >= _data.Flocks.Count)
         {
-            GD.PrintErr($"client: flock {e.Id} has kind {kindIndex}, wildlife.json has {WildlifeData.Flocks.Count}; not drawn (data files differ from the server's?)");
+            GD.PrintErr($"client: flock {e.Id} has kind {kindIndex}, wildlife.json has {_data.Flocks.Count}; not drawn (data files differ from the server's?)");
             return;
         }
-        var kind = WildlifeData.Flocks[kindIndex];
+        var kind = _data.Flocks[kindIndex];
         var birds = Math.Max(1, FlockRules.BirdsOf(e.State.Owner));
         var (mesh, local) = BirdMesh(kind);
         var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = mesh, InstanceCount = birds };
         var node = new MultiMeshInstance3D { Name = $"Flock{e.Id}", Multimesh = mm, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, ExtraCullMargin = 100 };
-        Ctx.Owned.AddChild(node);
+        _ctx.Owned.AddChild(node);
         var p = e.State.Position;
         var rng = new Random(e.Id);
         var phase = new float[birds];
@@ -109,7 +113,7 @@ public partial class NetClient
         node.Visible = !e.Dormant; // spawned outside the interest range: hidden until a keyframe shows it
     }
 
-    void OnFlockDespawned(ushort id)
+    void OnDespawned(ushort id)
     {
         if (!_flocks.Remove(id, out var v)) return;
         v.Node.QueueFree();
@@ -126,25 +130,25 @@ public partial class NetClient
             _obstacleLast[key] = p;
             _flockObstacles.Add(new BoidObstacle(p, vel, radius));
         }
-        foreach (var (id, _) in _aircraft)
-            if (WorldEntities.Entities.TryGetValue(id, out var e) && e.Buf.At(rt) is { } s) Add(id, new Godot.Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z), AircraftAvoidRadiusM);
-        if (Vehicles != null)
-            foreach (var (id, v) in Ctx.Cars.ById)
-                if (!v.Destroyed && v.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[v.Kind] is { Medium: VehicleMedium.Air } def && GodotObject.IsInstanceValid(v.Node))
+        foreach (var id in _aircraft.Ids)
+            if (_ctx.WorldEntities.Entities.TryGetValue(id, out var e) && e.Buf.At(rt) is { } s) Add(id, new Godot.Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z), AircraftAvoidRadiusM);
+        if (_ctx.Vehicles != null)
+            foreach (var (id, v) in _ctx.Cars.ById)
+                if (!v.Destroyed && v.Kind < _ctx.Vehicles.Vehicles.Count && _ctx.Vehicles.Vehicles[v.Kind] is { Medium: VehicleMedium.Air } def && GodotObject.IsInstanceValid(v.Node))
                     Add(ObstacleVehicleKey + id, v.Node.GlobalPosition, def.HalfLength + VehicleRotorReachM);
         if (_obstacleLast.Count > _flockObstacles.Count + 8) _obstacleLast.Clear(); // an aircraft that is gone leaves its last place behind; start over rather than grow
     }
 
     /// <summary>Flies every flock's boids one frame around the flock's centre (round the aircraft) and writes the birds' transforms.</summary>
-    void RenderFlocks(double delta)
+    public void Render(double delta)
     {
-        if (_flocks.Count == 0 || Ctx.LastTick == 0) return;
+        if (_flocks.Count == 0 || _ctx.LastTick == 0) return;
         _flockClock += delta;
-        var rt = RenderTickNow();
+        var rt = _ctx.RenderTick;
         CollectFlockObstacles(delta, rt);
         foreach (var (id, v) in _flocks)
         {
-            if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant) continue;
+            if (!_ctx.WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant) continue;
             var goal = e.Buf.At(rt) is { } s ? new System.Numerics.Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z) : e.State.Position;
             v.Swarm.Step((float)Math.Min(delta, 0.1), goal, e.State.State == (byte)FlockState.Scatter, _flockObstacles);
             var mm = v.Node.Multimesh;

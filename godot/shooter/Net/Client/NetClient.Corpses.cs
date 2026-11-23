@@ -193,7 +193,7 @@ public partial class NetClient
             var wasThrown = t.Thrown;
             t.Update(at, flying, (float)GetProcessDeltaTime());
             if (t.Collapsing && !t.AtRest) t.GroundUp = GroundUpAt(at);
-            var weapon = WeaponId(s.State);
+            var weapon = Ctx.Sound.WeaponId(s.State);
             if (t.Thrown)
             {
                 if (!wasThrown || weapon != v.Weapon) { v.Weapon = weapon; view.ShowThrown(weapon); }

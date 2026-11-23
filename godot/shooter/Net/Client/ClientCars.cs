@@ -77,4 +77,21 @@ internal sealed class ClientCars
         if (!_ctx.Driving || Seats is not { } s || _ctx.Vehicles == null || !TryGet(s.CarId, out var v) || v.Kind >= _ctx.Vehicles.Vehicles.Count) return null;
         return (_ctx.Vehicles.Vehicles[v.Kind], s.Occupants, s.Mine);
     }
+
+    readonly Dictionary<(int Tractor, int Trailer), TowGeometry> _towGeo = new();
+
+    /// <summary>The geometry of a tractor type pulling a trailer type (built once).</summary>
+    public TowGeometry GeometryOf(int tractorKind, int trailerKind)
+    {
+        if (_towGeo.TryGetValue((tractorKind, trailerKind), out var g)) return g;
+        return _towGeo[(tractorKind, trailerKind)] = TowGeometry.Of(_ctx.Vehicles!.Vehicles[tractorKind], _ctx.Vehicles.Vehicles[trailerKind]);
+    }
+
+    /// <summary>The trailer hitched to <paramref name="tractor"/> as the records say, or null (a tractor pulls at most one).</summary>
+    public CarView? TrailerOf(ushort tractor)
+    {
+        if (tractor == 0) return null;
+        foreach (var c in _byId.Values) if (c.Trailer is { } t && t.TractorId == tractor && !c.Destroyed) return c;
+        return null;
+    }
 }

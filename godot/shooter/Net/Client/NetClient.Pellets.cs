@@ -33,11 +33,11 @@ public partial class NetClient
             var q = PhysicsRayQueryParameters3D.Create(from, from + ray * range, CollisionLayers.WorldShots);
             var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
             var worldDist = hit.Count == 0 ? float.MaxValue : from.DistanceTo(hit["position"].AsVector3());
-            if (VehicleAlong(from, ray, MathF.Min(range, worldDist), out var car, out var vh))
+            if (_hulls.Along(from, ray, MathF.Min(range, worldDist), out var car, out var vh))
             {
                 // a pellet that stops on a car: the hole rides the car's node, the spark is where the car is drawn
                 BulletHoles.PlaceOn(Ctx.Owned, GlassClient.HostOf(car.Node), G(vh.Local), G(vh.LocalNormal));
-                var vat = ToWorld(car, G(vh.Local));
+                var vat = VehicleHulls.ToWorld(car, G(vh.Local));
                 ShotFx.Spark(Ctx.Owned, vat, car.Node.GlobalTransform.Basis * G(vh.LocalNormal));
                 first ??= vat;
                 continue;
@@ -53,8 +53,8 @@ public partial class NetClient
         var end = first ?? from + G(aim) * range;
         if (!echo)
         {
-            SfxShot(new ShotMsg(pf.Shooter, pf.Weapon, pf.Origin, new NVec3(end.X, end.Y, end.Z)), false);
-            if (pf.Shooter == Ctx.MyId) _viewmodel?.Flash(0.4f); else if (Ctx.Remotes.TryGetValue(pf.Shooter, out var flasher)) flasher.View?.Flash();
+            Ctx.Sound.Shot(new ShotMsg(pf.Shooter, pf.Weapon, pf.Origin, new NVec3(end.X, end.Y, end.Z)), false);
+            if (pf.Shooter == Ctx.MyId) _viewmodel.Flash(0.4f); else if (Ctx.Remotes.TryGetValue(pf.Shooter, out var flasher)) flasher.View?.Flash();
         }
         var muzzle = MuzzleOf(pf.Shooter, from, end);
         ShotFx.Spawn(Ctx.Owned, muzzle, end, false, impact: false);

@@ -1,6 +1,6 @@
 # Crops crushed by vehicles (#328)
 
-Cosmetic only, like the crops themselves: nothing collides, slows or blocks a bullet. Pure rules `ShooterCore/Events/CropCrush.cs` and `CropCrushMask.cs` (tests `CropCrushTests`), server `Net/Server/Harvest/CropCut.cs` (`Crush`), client `NetClient.CropCrush.cs` (`StampCrush`, `OnCropCrush`, `FlushCrush`), map `MapLoader.Harvest.cs`.
+Cosmetic only, like the crops themselves: nothing collides, slows or blocks a bullet. Pure rules `ShooterCore/Events/CropCrush.cs` and `CropCrushMask.cs` (tests `CropCrushTests`), server `Net/Server/Harvest/CropCut.cs` (`Crush`), client `CropCrushClient.cs` (`StampCrush`, `OnCropCrush`, `FlushCrush`), map `MapLoader.Harvest.cs`.
 
 - **Who.** Every ground vehicle (land or amphibious on land, not aircraft, not afloat), also the harvester's body, on a crop field (`CropFields`: grain, corn, potato, rapeseed; not `crop_bare`). Moving faster than 0.6 m/s with somebody at the wheel, or 2 m/s rolling free.
 - **Footprint.** The body's width (95 % of `half_width` each side; vehicles.json has no wheel positions), stamped as a strip along the path of the vehicle's **leading end** (front bumper going forward, the rear reversing; `CropCrushRules.LeadM`: the strip's rounded end stops at the bumper), a sample every `CropCrushConfig.SampleM` = 2 m of travel (`SwathSampler`, not the reel's `SwathSampleM`). Which end leads is decided after 0.25 m of travel (`DirectionM`); turning round restarts the path.

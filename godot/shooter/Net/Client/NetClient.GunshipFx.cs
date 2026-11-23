@@ -22,22 +22,22 @@ public partial class NetClient
     /// <param name="exactMuzzle">The origin is the real muzzle (a flak barrel): the tracer starts there, not at the shooter's hands, and the shooter's own flash and hole are skipped.</param>
     void OnShot(ShotMsg sh, float? speed = null, float? length = null, bool impact = true, bool exactMuzzle = false, float width = 1f, bool? holes = null)
     {
-        if (KeepEventLogs) _logs.Shots.Add((Ctx.Now, sh));
+        Ctx.Logs?.Shots.Add((Ctx.Now, sh));
         if (Ctx.Remotes.TryGetValue(sh.Shooter, out var shooter)) shooter.FireUntil = Ctx.Now + 0.45;
         if (sh.Shooter == Ctx.MyId && Weapons != null && sh.Weapon < Weapons.Weapons.Count) _spread.Shot(Weapons.Weapons[sh.Weapon], Ctx.Now);
         var melee = Weapons != null && sh.Weapon < Weapons.Weapons.Count && Weapons.Weapons[sh.Weapon].Kind == WeaponKind.Melee;
         if (EchoOfPredicted(sh.Shooter)) return; // already played and drawn by prediction
         var endV = new Vector3(sh.End.X, sh.End.Y, sh.End.Z);
-        SfxShot(sh, melee);
-        if (!melee && !exactMuzzle) { if (sh.Shooter == Ctx.MyId) _viewmodel?.Flash(0.4f); else if (Ctx.Remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
+        Ctx.Sound.Shot(sh, melee);
+        if (!melee && !exactMuzzle) { if (sh.Shooter == Ctx.MyId) _viewmodel.Flash(0.4f); else if (Ctx.Remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
         var originV = new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z);
         // a gunship's impact is its own message (OnGunshipImpacts), so its tracer does not draw one too: no 300 m cut-off for a long round
         var muzzle = exactMuzzle ? originV : MuzzleOf(sh.Shooter, originV, endV);
         ShotFx.Spawn(Ctx.Owned, muzzle, endV, melee, impact: impact, speed: speed, length: length, width: width);
         if (!melee && !exactMuzzle && CasingKindOf(sh.Weapon) is { } ck) CasingFx.Eject(Ctx.Owned, muzzle, endV - muzzle, ck);
         var marks = !melee && (holes ?? !exactMuzzle);
-        if (marks) ShotHole(originV, endV);
-        if (marks) BulletSurfaceHit(originV, endV);
+        if (marks) _hulls.ShotHole(originV, endV);
+        if (marks) _water.BulletSurfaceHit(originV, endV);
     }
 
     /// <summary>The casing a weapon byte ejects: a vehicle machine gun a big one, a hand weapon by its category, none for melee, launchers and the rest.</summary>
@@ -46,12 +46,12 @@ public partial class NetClient
     /// <summary>One gunner's tracers this tick: each one drawn as its own shot.</summary>
     void OnGunshipShots(GunshipShotsMsg m)
     {
-        var flak = FlakCarOf(m.Owner); // a flak gunner's shells leave the barrels: the tracer starts at the muzzle, and the barrel kicks
+        var flak = _guns.FlakCarOf(m.Owner); // a flak gunner's shells leave the barrels: the tracer starts at the muzzle, and the barrel kicks
         foreach (var t in m.Tracers)
         {
-            OnShot(new ShotMsg(m.Owner, t.Weapon, t.Origin, t.End), t.SpeedMps > 0 ? t.SpeedMps : null, t.LengthM > 0 ? t.LengthM : null, impact: false, exactMuzzle: true, width: flak != null ? FlakTracerWidth : 1f, holes: flak == null);
+            OnShot(new ShotMsg(m.Owner, t.Weapon, t.Origin, t.End), t.SpeedMps > 0 ? t.SpeedMps : null, t.LengthM > 0 ? t.LengthM : null, impact: false, exactMuzzle: true, width: flak != null ? VehicleGunsClient.FlakTracerWidth : 1f, holes: flak == null);
             flak?.Flak?.Kick();
-            if (flak != null) CasingFx.Eject(Ctx.Owned, G(t.Origin) - (G(t.End) - G(t.Origin)).Normalized() * 1.2f, G(t.End) - G(t.Origin), CasingKind.Shell, CarVelocity(flak)); // a 35 mm case leaves the breech, well behind the muzzle
+            if (flak != null) CasingFx.Eject(Ctx.Owned, G(t.Origin) - (G(t.End) - G(t.Origin)).Normalized() * 1.2f, G(t.End) - G(t.Origin), CasingKind.Shell, VehicleGunsClient.CarVelocity(flak)); // a 35 mm case leaves the breech, well behind the muzzle
         }
     }
 
@@ -72,7 +72,7 @@ public partial class NetClient
             var b = m.Blasts[i];
             var at = new Vector3(b.At.X, b.At.Y, b.At.Z);
             if (i == 0 && Sfx.Enabled) Sfx.Play3D(SoundRules.Event("explosion", "rpg"), at);
-            if (Mathf.Abs(b.Radius - FlakPuffRadius) < 0.05f) FlakFx.Burst(Ctx.Owned, at, b.Radius); // an airburst: black flak smoke, not a fireball
+            if (Mathf.Abs(b.Radius - _guns.FlakPuffRadius) < 0.05f) FlakFx.Burst(Ctx.Owned, at, b.Radius); // an airburst: black flak smoke, not a fireball
             else RocketFx.Explode(Ctx.Owned, at, b.Radius);
             Ctx.Shake.At(at, b.Radius);
         }
@@ -84,7 +84,7 @@ public partial class NetClient
     {
         var head = flags.HasFlag(GunshipHitFlags.Headshot);
         var kill = flags.HasFlag(GunshipHitFlags.Kill);
-        if (_gunship != null) _gunOverlay.Hit(head, kill);
+        _aircraftClient.HitMarker(head, kill);
         Ctx.Hud?.Hit(head, kill);
         if (Sfx.Enabled) Sfx.Play2D(kill ? "kill.confirm" : "hit.tick");
     }

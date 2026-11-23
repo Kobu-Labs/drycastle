@@ -16,7 +16,7 @@ namespace Drycastle.Shooter.Net.Client;
 /// footprints that lead to its corpse (<see cref="EventKind.BigfootTrail"/>) and the giant's corpse itself (a corpse owned by <see cref="BigfootRules.TargetId"/>).
 /// The model (scripts/models/make_bigfoot_model.py) has a clip per act, a flinch and a roar (<see cref="BigfootRules.Clips"/>): <see cref="ClipFor"/> picks one and
 /// stretches a wind-up over its act's time, Walk and Run play at the speed the giant moves (<see cref="PaceGait"/>).
-/// The server owns everything: a client only shows it, and stops predicting its own body while the Bigfoot holds it (<see cref="_heldByBigfoot"/>) or its
+/// The server owns everything: a client only shows it, and stops predicting its own body while the Bigfoot holds it (<see cref="ClientView.HeldByBigfoot"/>) or its
 /// vehicle while the Bigfoot throws it (<see cref="_thrownCars"/>).
 /// </summary>
 public partial class NetClient
@@ -77,8 +77,6 @@ public partial class NetClient
     readonly List<Node3D> _prints = new();
     /// <summary>Vehicles the Bigfoot threw: the client time until which the driver's prediction waits (the server flies the vehicle, the driver's input is ignored).</summary>
     readonly Dictionary<ushort, double> _thrownCars = new();
-    /// <summary>The Bigfoot holds this client's player: no prediction, the body is where the server puts it.</summary>
-    bool _heldByBigfoot;
     /// <summary>What the flailing hand adds to the held player's own eye: an offset (metres, world) and a roll (radians). Zero when not held.</summary>
     Vector3 _heldSwing;
     float _heldRoll;
@@ -198,46 +196,65 @@ public partial class NetClient
         if (Ctx.LastTick != 0)
         {
             var rt = RenderTickNow();
-            var now = Ctx.Now;
-            foreach (var (id, v) in _bigfoots)
-            {
-                if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
-                if (e.Buf.At(rt) is { } s)
-                {
-                    v.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
-                    // the server snaps its yaw at the start of an attack and steps it in a detour: the figure turns there quickly instead of jumping
-                    var yaw = v.HasLastAt ? Mathf.LerpAngle(v.Node.Rotation.Y, s.Yaw, 1f - MathF.Exp(-14f * (float)GetProcessDeltaTime())) : s.Yaw;
-                    v.Node.Rotation = new Vector3(0, yaw, 0);
-                    MeasureSpeed(v);
-                }
-                var raw = e.State.State;
-                var act = BigfootRules.ActOf(raw);
-                TrackHold(v, act, e.State.Owner);
-                if (Ctx.MyId != 0 && e.State.Owner == Ctx.MyId && act == BigfootAct.Hold) held = true;
-                if (v.HitBit.Update(BigfootRules.HitToggled(raw)))
-                {
-                    // it flinches only standing (a flinch in the chase would cut the stride and start it over), and at most every few seconds
-                    if (act == BigfootAct.Idle && now >= v.HitUntil + HitReactionGapSeconds) PlayOver(v, BigfootRules.ClipHit, 0.05, now);
-                }
-                if (act != BigfootAct.Idle && now < v.HitUntil) v.HitUntil = now; // a flinch or a roar gives way to whatever it does next
-                if (now >= v.HitUntil && v.Drawn.Update((byte)act)) ShowBigfootAct(v, act, now);
-                MoveBigfoot(v, act, BigfootRules.IsEnraged(raw), now);
-                if (Ctx.MyId != 0 && e.State.Owner == Ctx.MyId && act == BigfootAct.Hold) holder = v;
-            }
-            foreach (var (id, node) in _trunks)
-            {
-                if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Buf.At(rt) is not { } s) continue;
-                var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
-                node.GlobalPosition = at;
-                node.Visible = true;
-                node.Rotation = new Vector3((float)(Ctx.Now * 5.0), s.Yaw, 0); // it tumbles end over end as it flies
-                _trunkLast[id] = at;
-            }
+            PlaceBigfoots(rt, ref held, ref holder);
+            PlaceTrunks(rt);
         }
-        _heldByBigfoot = held;
+        Ctx.View.HeldByBigfoot = held;
         TickOwnFling();
         Ctx.Hud?.SetFlungHidesCrosshair(OwnBodyFlung);
-        // the server holds the body at a fixed point in front of the giant; the flailing is drawn here, so the eye rides the same swing as the figure
+        SwingHeldEye(holder);
+        PlayFightMusic();
+        RenderRings();
+    }
+
+    /// <summary>Places every Bigfoot from its interpolated state and shows what it does; notes whether it holds the local player (<paramref name="held"/>) and which one does (<paramref name="holder"/>).</summary>
+    void PlaceBigfoots(double rt, ref bool held, ref BigfootView? holder)
+    {
+        var now = Ctx.Now;
+        foreach (var (id, v) in _bigfoots)
+        {
+            if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
+            if (e.Buf.At(rt) is { } s)
+            {
+                v.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
+                // the server snaps its yaw at the start of an attack and steps it in a detour: the figure turns there quickly instead of jumping
+                var yaw = v.HasLastAt ? Mathf.LerpAngle(v.Node.Rotation.Y, s.Yaw, 1f - MathF.Exp(-14f * (float)GetProcessDeltaTime())) : s.Yaw;
+                v.Node.Rotation = new Vector3(0, yaw, 0);
+                MeasureSpeed(v);
+            }
+            var raw = e.State.State;
+            var act = BigfootRules.ActOf(raw);
+            TrackHold(v, act, e.State.Owner);
+            if (Ctx.MyId != 0 && e.State.Owner == Ctx.MyId && act == BigfootAct.Hold) held = true;
+            if (v.HitBit.Update(BigfootRules.HitToggled(raw)))
+            {
+                // it flinches only standing (a flinch in the chase would cut the stride and start it over), and at most every few seconds
+                if (act == BigfootAct.Idle && now >= v.HitUntil + HitReactionGapSeconds) PlayOver(v, BigfootRules.ClipHit, 0.05, now);
+            }
+            if (act != BigfootAct.Idle && now < v.HitUntil) v.HitUntil = now; // a flinch or a roar gives way to whatever it does next
+            if (now >= v.HitUntil && v.Drawn.Update((byte)act)) ShowBigfootAct(v, act, now);
+            MoveBigfoot(v, act, BigfootRules.IsEnraged(raw), now);
+            if (Ctx.MyId != 0 && e.State.Owner == Ctx.MyId && act == BigfootAct.Hold) holder = v;
+        }
+    }
+
+    /// <summary>The thrown trunks fly tumbling along their replicated path.</summary>
+    void PlaceTrunks(double rt)
+    {
+        foreach (var (id, node) in _trunks)
+        {
+            if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Buf.At(rt) is not { } s) continue;
+            var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
+            node.GlobalPosition = at;
+            node.Visible = true;
+            node.Rotation = new Vector3((float)(Ctx.Now * 5.0), s.Yaw, 0); // it tumbles end over end as it flies
+            _trunkLast[id] = at;
+        }
+    }
+
+    /// <summary>The server holds the body at a fixed point in front of the giant; the flailing is drawn here, so the eye rides the same swing as the figure.</summary>
+    void SwingHeldEye(BigfootView? holder)
+    {
         var swing = Vector3.Zero; var tilt = 0f;
         if (holder != null && Ctx.Me != null)
         {
@@ -250,13 +267,16 @@ public partial class NetClient
         var ease = 1f - MathF.Exp(-14f * (float)GetProcessDeltaTime()); // in and out without a jump
         _heldSwing = _heldSwing.Lerp(swing, ease);
         _heldRoll = Mathf.Lerp(_heldRoll, tilt, ease);
-        // its music plays while a living one is near the player (the file is private: without it there is none)
+    }
+
+    /// <summary>Its music plays while a living one is near the player (the file is private: without it there is none).</summary>
+    void PlayFightMusic()
+    {
         var near = false;
         if (Ctx.Me != null)
             foreach (var v in _bigfoots.Values)
                 if ((BigfootAct)v.Drawn.Last != BigfootAct.Dead && v.Node.GlobalPosition.DistanceTo(Ctx.Me.GlobalPosition) <= BigfootData.Music.RadiusM) near = true;
         Sfx.FightMusic(near, BigfootData.Music.File, BigfootData.Music.VolumeDb);
-        RenderRings();
     }
 
     const double HitReactionGapSeconds = 4;
