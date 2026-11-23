@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Corpses;
@@ -21,19 +22,7 @@ public partial class NetServer
 {
     CorpseBook _corpses = null!;
     /// <summary>The throw a killing blow gave its victim (a blast's knockback, a car's run-over), set before the damage and used by <see cref="SpawnCorpse"/>. The corpse flies off with it.</summary>
-    readonly Dictionary<ushort, NVec3> _deathPush = new();
-
-    /// <summary>Records the throw for a victim about to take damage; <see cref="ClearPush"/> drops it when the hit did not kill.</summary>
-    void PushOnDeath(ushort victim, NVec3 velocity, DeathFlight flight = DeathFlight.Blast)
-    {
-        _deathPush[victim] = velocity;
-        if (flight == DeathFlight.None) _deathFlight.Remove(victim); else _deathFlight[victim] = flight;
-    }
-
-    void ClearPush(ushort victim, DamageResult result) { if (result != DamageResult.Killed) { _deathPush.Remove(victim); _deathFlight.Remove(victim); } }
-
-    /// <summary>What threw each victim about to die (<see cref="PushOnDeath"/>), sent with the Death event so the victim's own view can follow the flight (#416).</summary>
-    readonly Dictionary<ushort, DeathFlight> _deathFlight = new();
+    readonly DeathPush _deathPush = new();
 
     /// <summary>Where a rider was killed, kept from <c>PlayerKilled</c> (which frees the seat) to <c>PlayerDied</c> (which spawns the corpse): the vehicle, the seat, and whether the corpse stays seated (ADR 0026).</summary>
     readonly Dictionary<ushort, (ServerCar Car, int Seat, bool Attach)> _riderDeath = new();
@@ -55,8 +44,8 @@ public partial class NetServer
     void RiderDies(ServerClient c)
     {
         var car = c.Car!; var seat = c.CarSeat;
-        var attach = !car.Destroyed && car.Def.Seats[seat].Role == "driver" && !_deathPush.ContainsKey(c.Id);
-        if (!attach && !_deathPush.ContainsKey(c.Id)) PushOnDeath(c.Id, CarVelocity(car), DeathFlight.None);
+        var attach = !car.Destroyed && car.Def.Seats[seat].Role == "driver" && !_deathPush.Has(c.Id);
+        if (!attach && !_deathPush.Has(c.Id)) _deathPush.Record(c.Id, CarVelocity(car), DeathFlight.None);
         _riderDeath[c.Id] = (car, seat, attach);
         LeaveSeat(c, false);
     }
@@ -121,7 +110,7 @@ public partial class NetServer
         var weapon = c.W.HotbarWeapon(CorpseRules.PrimaryPos);
         var items = ItemRules.StripForCorpse(Items, c.Worn, c.Bag); // the standard items (the binoculars) are not left on the corpse
         var corpse = new Corpse(victim, N(c.Body.GlobalPosition), c.Body.Yaw, weapon, c.W.RoundsOf(weapon), items);
-        var pushed = _deathPush.Remove(victim, out var push);
+        var pushed = _deathPush.Take(victim, out var push);
         if (rider is { Attach: true } seated) corpse.Attach(N(SeatPos(seated.Car, seated.Seat)));
         else if (rider != null) corpse.Throw(pushed ? push : NVec3.Zero); // out of a vehicle: falls, with the push it got
         else if (pushed) corpse.Launch(push);

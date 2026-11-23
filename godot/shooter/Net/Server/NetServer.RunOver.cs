@@ -20,9 +20,6 @@ namespace Drycastle.Shooter.Net.Server;
 /// </summary>
 public partial class NetServer
 {
-    /// <summary>What one sweep of a run-over mover needs: where it was and is, its box, how hard it hits, and who is credited.</summary>
-    readonly record struct RunOverSweep(MoverKind Mover, NVec3 Prev, NVec3 Now, float Yaw, float HalfWidth, float HalfLength, NVec3 Forward, float Speed, float Damage, ushort Attacker, Dictionary<ushort, double> Cooldown);
-
     /// <summary>The row a vehicle is asked about: aircraft or ground vehicle (an aircraft counts only when it is low, which its caller checks).</summary>
     static MoverKind RunOverMoverOf(ServerCar car) => car.Flies ? MoverKind.Aircraft : MoverKind.GroundVehicle;
 
@@ -76,9 +73,9 @@ public partial class NetServer
             case ObstacleClass.Player:
             case ObstacleClass.TargetDummy:
                 var thrown = CorpseRules.ThrowFromCar(m.Forward, m.Speed);
-                PushOnDeath(id, thrown, DeathFlight.RunOver); // a roadkill is thrown ahead of the vehicle (the ragdoll)
+                _deathPush.Record(id, thrown, DeathFlight.RunOver); // a roadkill is thrown ahead of the vehicle (the ragdoll)
                 var r = Deal(m.Attacker, SpecialWeapons.Vehicle, id, m.Damage, false, false, KillCause.Roadkill);
-                ClearPush(id, r);
+                _deathPush.Clear(id, r);
                 // one who lives through it (hurt, or spared: a teammate) leaves the bumper the same way, as the slow push does: no vehicle drives through a standing body (#411)
                 if (cls == ObstacleClass.Player && r != DamageResult.Killed && _byId.TryGetValue(id, out var hurt) && _match.Get(id)?.Life == PlayerLife.Alive)
                 {
@@ -100,7 +97,7 @@ public partial class NetServer
                 Deal(m.Attacker, SpecialWeapons.Vehicle, id, animal.MaxHp * AnimalData.RunOverHpFraction, false, false, KillCause.Roadkill);
                 break;
             case ObstacleClass.Gang when m.Mover == MoverKind.RaidVan: // a van has no player to credit: the member is simply killed (a roadkill kills outright)
-                foreach (var raid in _raids!.Raids) raid.Gang.Hit(id, 0, SpecialWeapons.Vehicle, 1, KillCause.Roadkill);
+                _thieves.RoadkillCrew(id);
                 break;
             default: // gang, citizen, worker: the amount only has to be above 0, a roadkill kills
                 Deal(m.Attacker, SpecialWeapons.Vehicle, id, 1, false, false, KillCause.Roadkill);

@@ -10,7 +10,7 @@ namespace Drycastle.ShooterCore.Demon;
 public enum DemonStage : byte { None, Delay, Transforming, Climbing, Fighting, Dying }
 
 /// <summary>
-/// The demon's lifecycle (docs/events/README.md, "Demon"): the stage machine and its clock, Godot-free. The server (NetServer.Demon) keeps only the world wiring
+/// The demon's lifecycle (docs/events/README.md, "Demon"): the stage machine and its clock, Godot-free. The server (Net/Server/Parish/DemonServer.cs) keeps only the world wiring
 /// (the entity, the brain, the doors, the fireballs) and asks this for "which stage, how long left, what next". Durations come from
 /// <see cref="DemonFightDef"/>; one shared countdown runs the timed stages, exactly like the hand-written <c>_dTime -= dt</c> it replaces.
 /// <code>

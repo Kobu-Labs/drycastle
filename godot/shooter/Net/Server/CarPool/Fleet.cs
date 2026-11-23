@@ -15,6 +15,9 @@ internal sealed class Fleet
 
     public Fleet(IReadOnlyDictionary<ushort, ServerClient> players) => _players = players;
 
+    /// <summary>Beyond this distance between two origins no pair of vehicles can touch (the bus is 12 m long, a rotor disc 9 m across).</summary>
+    public const float ContactBroadRange = 20f;
+
     public int Count => _cars.Count;
 
     public IReadOnlyList<ServerCar> Cars => _cars;
@@ -42,6 +45,13 @@ internal sealed class Fleet
         for (var s = 0; s < car.Seat.Count; s++) if (OccupantAt(car, s) is { } o) list.Add(o);
         return list;
     }
+
+    /// <summary>The attitude a door gun's arc and a rider turn with: the helicopter's; a land vehicle's yaw alone.</summary>
+    public static (float Yaw, float Pitch, float Roll) AttitudeOf(ServerCar car) =>
+        car.Flies ? (car.Flight.Yaw, car.Flight.Pitch, car.Flight.Roll)
+        : car.Drives ? (car.Drive.Yaw, car.Drive.Pitch, car.Drive.Roll) // a driven vehicle lies on the slope it stands on
+        : car.TrailerTilt is { } t ? (car.State.Yaw, t.Pitch, t.Roll) // a trailer lies on the ground it stands on (#482)
+        : (car.State.Yaw, 0f, 0f);
 
     /// <summary>The occupants of the car's seats as ids, in seat order (0 for a free seat).</summary>
     public static ushort[] SeatOccupants(ServerCar car)

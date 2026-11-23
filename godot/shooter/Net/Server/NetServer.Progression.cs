@@ -30,26 +30,26 @@ public partial class NetServer
         {
             Unlimited = c.Sandbox, // sandbox (#156): unlimited ammo, the whole hotbar
         };
-        StreakArm(c, l);
+        _streaks.Arm(c, l);
     }
 
     void RoundStarted()
     {
-        StreakRoundReset();
-        _shells.Clear(); // a round reset takes the shells in the air with it
-        _flakShells.Clear();
+        _streaks.RoundReset();
+        _gunships.RoundReset(); // a round reset takes the shells in the air with it
+        _flak.RoundReset();
         _xp.Reset();
         BigfootRoundReset();
-        ThievesRoundReset(); // the Thieves event does not outlive the round either, and what it stole is back
+        _thieves.RoundReset(); // the Thieves event does not outlive the round either, and what it stole is back
         foreach (var c in _clients.Values) c.RoundXp.Clear();
     }
 
     /// <summary>End of round: the win and top-three awards, one match counted per joined player, and each player's XP summary.</summary>
     void RoundEnded()
     {
-        StreakRoundReset();
-        _shells.Clear();
-        _flakShells.Clear();
+        _streaks.RoundReset();
+        _gunships.RoundReset();
+        _flak.RoundReset();
         AwardXp(_xp.OnMatchEnd(_match.Winners, _match.Ranking().Where(p => !p.Sandbox).Select(p => p.Id).ToList()));
         foreach (var c in _clients.Values.Where(c => c.Joined)) // human players: a bot has no stats and no summary
         {

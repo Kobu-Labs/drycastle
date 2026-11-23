@@ -69,7 +69,7 @@ public partial class NetServer
     /// </summary>
     DamageResult DealBigfoot(ushort attackerId, byte weaponIdx)
     {
-        _deathPush.Remove(BigfootRules.TargetId);
+        _deathPush.Forget(BigfootRules.TargetId);
         if (_bigfoot is not { Alive: true } bf || _match.Phase != MatchPhase.Running) return DamageResult.Ignored;
         var source = BigfootRules.SourceOf(weaponIdx, Weapons.Weapons.Count, i => Weapons.Weapons[i].Kind == WeaponKind.Projectile);
         var weight = BigfootRules.Weight(BigfootData.Hits, source);
@@ -78,8 +78,7 @@ public partial class NetServer
         _smoke.HitsLanded++;
         var msg = new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(BigfootRules.TargetId, attackerId, weaponIdx, (ushort)Math.Clamp(weight, 1f, 255f), false, false, killed)));
         _byId.TryGetValue(attackerId, out var attacker);
-        if (attackerId == _gunFxOwner) _gunFx.Hit(attackerId, false, killed);
-        else if (attacker != null) Send(attacker, msg);
+        if (!_gunships.NoteHit(attackerId, false, killed) && attacker != null) Send(attacker, msg);
         return killed ? DamageResult.Killed : DamageResult.Damaged;
     }
 

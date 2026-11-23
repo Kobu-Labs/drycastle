@@ -52,7 +52,7 @@ public partial class NetServer
     bool PlantationHoldCounts(ServerClient c)
     {
         var alive = _match.Get(c.Id)?.Life == PlayerLife.Alive;
-        var onFoot = c.Car == null && !_sitters.IsSeated(c.Id) && !_pins.ContainsKey(c.Id) && _tick > c.HeldUntilTick && _streaks.ControlOf(c.Id) == null;
+        var onFoot = c.Car == null && !_sitters.IsSeated(c.Id) && !_pounce.IsPinned(c.Id) && _tick > c.HeldUntilTick && _streaks.Rules.ControlOf(c.Id) == null;
         if (!alive || !onFoot) return false;
         var inside = InPlantation(c.Body.GlobalPosition);
         return PlantationRules.HoldCounts(alive, onFoot, inside, inside ? KeyCompetitors(c) : KeyCompetitor.None);
@@ -73,9 +73,9 @@ public partial class NetServer
         if (c.Body.State.OnLadder || MapLadders.Reach(at, c.Body.Yaw) >= 0) k |= KeyCompetitor.Ladder;
         if (EnterableCar(p) != null) k |= KeyCompetitor.Vehicle;
         if (_garage.InReach(at)) k |= KeyCompetitor.Doors;
-        if (_mass is { Running: true } mass && mass.SeatNear(at) != null) k |= KeyCompetitor.MassSeat;
+        if (_mass.SeatNear(at)) k |= KeyCompetitor.MassSeat;
         if (_rozhlas.CanTakeSetAt(at, c.Car != null)) k |= KeyCompetitor.RozhlasSet;
-        if (LootInReach(c) != null) k |= KeyCompetitor.Loot;
+        if (_thieves.LootInReach(c) != null) k |= KeyCompetitor.Loot;
         if (ScudReloadOffer(c) != null) k |= KeyCompetitor.ScudCart;
         return k;
     }

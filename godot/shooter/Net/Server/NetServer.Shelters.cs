@@ -6,7 +6,7 @@ namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Server side of the shelter rule (#224, ADR 0009): a bunker room shelters the players inside from a blast outside it, and a
-/// blast inside a room stays in it. Asked by every blast that splashes players, through <see cref="SplashShare"/> (rockets and flak shells, the attack missile, the
+/// blast inside a room stays in it. Asked by every blast that splashes players, through <see cref="Splash.Share"/> (rockets and flak shells, the attack missile, the
 /// gunship, a vehicle blowing up). The MOAB does not ask: it kills everyone. A direct hit does not ask either.
 /// </summary>
 public partial class NetServer
@@ -21,7 +21,7 @@ public partial class NetServer
             if (_shelters != null) return _shelters;
             _shelters = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"server: {m}; bunkers give no shelter from blasts and no ladders"))
                 .WithLadders(ObjectLadders.Of(Map)) // the ladders of the placed objects (hunter outposts, #372)
-                .WithChurch(MapChurch); // the nave and the chancel shelter like a bunker room (ADR 0019)
+                .WithChurch(_church.Shell); // the nave and the chancel shelter like a bunker room (ADR 0019)
             if (_shelters.Rooms.Count > 0) GD.Print($"server: {_shelters.Rooms.Count} bunker and church rooms shelter from blasts");
             return _shelters;
         }

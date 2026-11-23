@@ -292,7 +292,7 @@ public partial class NetServer
     {
         if (SeatCodec.DecodeSwitch(payload) is not { } seat) return;
         if (c.Car is not { Destroyed: false } car || _match.Get(c.Id)?.Life != PlayerLife.Alive) return;
-        if (_streaks.ControlOf(c.Id) != null) return; // flying a streak's point of view: the seat is not theirs to change now
+        if (_streaks.Rules.ControlOf(c.Id) != null) return; // flying a streak's point of view: the seat is not theirs to change now
         SwitchSeat(c, car, seat);
     }
 
@@ -345,7 +345,7 @@ public partial class NetServer
     /// <summary>A gunner's inputs: reload when asked, then one round when the trigger is held and the gun is ready.</summary>
     void GunnerInput(ServerClient c, NetInput i)
     {
-        if (c.Car!.Def.Flak is { } flak) { FlakGunnerInput(c, c.Car, flak, i); return; }
+        if (c.Car!.Def.Flak is { } flak) { _flak.OnGunnerInput(c, c.Car, flak, i); return; }
         if (c.Car.Def.DoorGun is { } doorGun) { DoorGunnerInput(c, c.Car, doorGun, i); return; }
         var gun = c.Car!.Gun!;
         if ((i.Buttons & (ushort)MoveButtons.Reload) != 0) gun.TryReload(_elapsed);
@@ -471,8 +471,8 @@ public partial class NetServer
         // each origin is read once here (a native call per read, and every pair asks): only a bump moves a vehicle inside this pass, so only those are read again
         if (_contactAt.Length < _fleet.Count) _contactAt = new Vector3[_fleet.Count];
         for (var i = 0; i < _fleet.Count; i++) _contactAt[i] = _fleet.Cars[i].GlobalPosition;
-        ShoveCarsByVans(); // the Raid vans push through: a vehicle in a van's box is shoved out
-        const float range2 = ContactBroadRange * ContactBroadRange;
+        _thieves.ShoveCarsByVans(); // the Raid vans push through: a vehicle in a van's box is shoved out
+        const float range2 = Fleet.ContactBroadRange * Fleet.ContactBroadRange;
         for (var i = 0; i < _fleet.Count; i++)
         {
             var a = _fleet.Cars[i];
@@ -497,9 +497,6 @@ public partial class NetServer
 
     /// <summary>Each live vehicle's origin for the broad test of <see cref="ResolveVehicleContacts"/> (reused every tick).</summary>
     Vector3[] _contactAt = Array.Empty<Vector3>();
-
-    /// <summary>Beyond this distance between two origins no pair of vehicles can touch (the bus is 12 m long, a rotor disc 9 m across).</summary>
-    const float ContactBroadRange = 20f;
 
     void BumpDamage(ServerCar car, float speedLoss, ServerCar other) => Crash(car, speedLoss, _fleet.OccupantAt(other, 0)?.Id ?? 0);
 
@@ -609,7 +606,7 @@ public partial class NetServer
     {
         var e = Vehicles!.Explosion;
         BroadcastEvent(EventKind.VehicleExplosion, WeaponCodec.Encode(new VehicleExplosionMsg(car.Id, attacker, N(at), e.Splash.Radius)));
-        BroadcastImpact(N(car.GlobalPosition), ImpactSize.Plume); // the blast throws up dirt or road where the car sits (ticket #154)
+        _impacts.Broadcast(N(car.GlobalPosition), ImpactSize.Plume); // the blast throws up dirt or road where the car sits (ticket #154)
         BlastGlass(at, e.Splash.Radius);
         GD.Print($"server: {car.Def.Id} {car.Id} exploded at ({at.X:F1},{at.Y:F1},{at.Z:F1}), credited to #{attacker}");
 
@@ -618,9 +615,9 @@ public partial class NetServer
         {
             // a rider who dies is thrown with the vehicle's velocity plus the blast's knockback from its centre (no corpse stays seated in a wreck)
             var k = ProjectileMath.Knockback(e.Splash.KnockbackSpeed, N(at), N(o.Body.GlobalPosition) + NVec3.UnitY * 0.9f, 1f);
-            PushOnDeath(o.Id, (k == NVec3.Zero ? NVec3.Zero : CorpseRules.ThrowFromBlast(k)) + carVelocity);
+            _deathPush.Record(o.Id, (k == NVec3.Zero ? NVec3.Zero : CorpseRules.ThrowFromBlast(k)) + carVelocity);
             var dealt = Deal(attacker, weapon, o.Id, e.DriverDamage, false, false); // everyone still aboard (a gunner too)
-            ClearPush(o.Id, dealt);
+            _deathPush.Clear(o.Id, dealt);
             if (o.Car == car) LeaveSeat(o, true); // survived (spawn protection): thrown out, the seat is gone
         }
         foreach (var t in _targets.Live())
@@ -629,16 +626,16 @@ public partial class NetServer
             var dist = HitMath.DistanceToBody(N(at), t);
             var dmg = VehicleDamage.BlastDamage(e, dist);
             if (dmg <= 0) continue;
-            var share = SplashShare(N(at), t); // walls, a bunker room's too, and a covered seat's hull
+            var share = _splash.Share(N(at), t); // walls, a bunker room's too, and a covered seat's hull
             if (share <= 0) continue;
             dmg *= share;
             var self = t.Id == attacker;
             if (self) dmg = MathF.Max(1f, MathF.Round(dmg * e.Splash.SelfDamageMultiplier));
             if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
             var k = ProjectileMath.Knockback(e.Splash.KnockbackSpeed, N(at), HitMath.Centre(t), dmg / e.Damage);
-            PushOnDeath(t.Id, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
+            _deathPush.Record(t.Id, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
             var res = Deal(attacker, weapon, t.Id, dmg, false, false);
-            ClearPush(t.Id, res);
+            _deathPush.Clear(t.Id, res);
             if (res == DamageResult.Ignored) continue;
             _blastHits++;
             if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));

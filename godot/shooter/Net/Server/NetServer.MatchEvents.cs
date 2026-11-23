@@ -17,8 +17,8 @@ public partial class NetServer
     /// </summary>
     void ResetRoundWorld()
     {
-        _mass?.End(); // the Holy Mass does not outlive the round
-        _crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
+        _mass.RoundEnd(); // the Holy Mass does not outlive the round
+        _citizens.Crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
         _pets.RoundStart();
         _companions.RoundStart();
         _wildlife.Clear();
@@ -30,7 +30,7 @@ public partial class NetServer
         ScudRoundReset(); // the launchers start over; a Scud truck, which never returns, is retired
         _status.RoundStart();
         PlantationRoundStart();
-        LockRoundReset();
+        _lockOn.RoundReset();
         RoundStarted();
     }
 
@@ -83,14 +83,26 @@ public partial class NetServer
                 if (RpgSmoke && _smoke.Kills >= 1 && _smoke.FinishAt == 0) _smoke.FinishAt = _elapsed + 1.5;
                 LossKill(k.Killer, k.Victim);
                 RecordKill(k);
-                var fromStreak = StreakKill(k);
+                var fromStreak = _streaks.Kill(k, WeaponKey(k.Weapon));
                 if (Scores(k.Killer) && Scores(k.Victim)) AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause, fromStreak), _elapsed)); // the death of a bot (#214) or of a sandbox player grants no XP
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon, k.Cause)));
                 break;
             case PlayerTeamChanged tc: OnTeamChanged(tc); break;
             case TargetKilled tk: OnTargetKilled(tk); break;
-            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) _gear.SetHeadLamp(dead, false); _status.OnDeath(d.Victim); _rozhlas.OnPlayerDied(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay, _deathFlight.Remove(d.Victim, out var flight) ? flight : DeathFlight.None))); break;
+            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) _gear.SetHeadLamp(dead, false); _status.OnDeath(d.Victim); _rozhlas.OnPlayerDied(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); _streaks.Death(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay, _deathPush.TakeFlight(d.Victim)))); break;
         }
+    }
+
+    /// <summary>
+    /// An admin moved a player to the other team (#312): they climb out of any vehicle, and their turrets and killstreak progress are dropped like at a death
+    /// (a turret would else turn on its owner's new teammates). The respawn at the new side's spawn follows from the match.
+    /// </summary>
+    void OnTeamChanged(PlayerTeamChanged tc)
+    {
+        if (_byId.TryGetValue(tc.Id, out var c) && c.Car != null) LeaveSeat(c, false);
+        _streaks.Wipe(tc.Id);
+        if (tc.To == Teams.None) BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(tc.Id, tc.Id, DeathMsg.WaitsForAdmin))); // out of the round: down until an admin puts them on a team, no corpse, no death on the record
+        GD.Print($"server: #{tc.Id} moved from team {Teams.Tag(tc.From)} to {Teams.Tag(tc.To)}");
     }
 
     /// <summary>Set by a scoreboard change; cleared by the flush that sends the table.</summary>

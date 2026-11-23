@@ -73,7 +73,7 @@ public partial class NetServer
     long _navTicket;
 
     /// <summary>Most routes in flight per kind of asker, so bots and Gang members share the worker (<see cref="BotNav.MaxInFlight"/> is the total).</summary>
-    const int MaxBotRoutesInFlight = 4, MaxGangRoutesInFlight = 4;
+    const int MaxBotRoutesInFlight = 4;
 
     /// <summary>A ticket for a route request: the microsecond clock, kept strictly rising, so it is unique and the answer's age is read off it.</summary>
     long NextNavTicket() => _navTicket = Math.Max(_navTicket + 1, (long)Time.GetTicksUsec());
@@ -92,7 +92,7 @@ public partial class NetServer
                 applied = b.BotWasAlive && b.Brain.AcceptPath(a.Ticket, route, N(b.Body.GlobalPosition), _elapsed);
                 break;
             }
-            if (!applied && _gangs != null) applied = _gangs.DeliverRoute(a.Ticket, route);
+            if (!applied) applied = _thieves.DeliverRoute(a.Ticket, route);
             if (!applied) { _navDropped++; continue; }
             var wait = ((long)Time.GetTicksUsec() - a.Ticket) / 1000.0;
             _navRoutes++; _navMs += a.WorkMs; _navMaxMs = Math.Max(_navMaxMs, a.WorkMs);

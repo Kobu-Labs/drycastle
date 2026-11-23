@@ -1,4 +1,6 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.CarPool;
+using Drycastle.Shooter.Net.Server.Streaks;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Items;
@@ -37,32 +39,32 @@ public partial class NetServer
         c.Ack = i.Seq; c.HasAck = true;
         // a killstreak's control session (a turret being placed) takes the owner's input first; while it holds it,
         // Fire and Use belong to the session, not to the weapon or the vehicles
-        var controlled = _streaks.RouteInput(c.Id, i);
+        var controlled = _streaks.Rules.RouteInput(c.Id, i);
         if (controlled) i.Buttons &= (ushort)(ushort.MaxValue ^ (ushort)(MoveButtons.Fire | MoveButtons.Use));
         if (c.Car == null && _elapsed < c.LaunchGraceUntil && (_elapsed < c.LaunchedAt + 0.3 || !c.Body.State.OnFloor)) i.Buttons &= (ushort)(ushort.MaxValue ^ (ushort)MoveButtons.Fire); // thrown by the Bigfoot and in the air: no shooting (#360)
         var useDown = (i.Buttons & (ushort)MoveButtons.Use) != 0;
         var useEdge = c.UseKey.Pressed(useDown);
         _rozhlas.OnInput(c, useDown);
-        LootUse(c, useDown);
+        _thieves.OnUse(c, useDown);
         PlantationUse(c, useDown);
         var lightsEdge = Headlights.Edge((i.Buttons & (ushort)MoveButtons.Headlights) != 0, ref c.LightsHeld);
         _gear.SetHeadLamp(c, HeadLamp.Next(c.HeadLampOn, lightsEdge, c.Car == null, _match.Get(c.Id)?.Life == PlayerLife.Alive)); // H on foot: the head lamp (in a vehicle: the car's lights, below)
         var streakDown = (i.Buttons & (ushort)MoveButtons.Killstreak) != 0;
         var streakEdge = c.StreakKey.Pressed(streakDown);
         // the throw key is fed every input; it is the grenade's only on foot and free-handed (a held key, a vehicle, death or a pin put the grenade away)
-        var canThrow = c.Car == null && !controlled && _match.Get(c.Id)?.Life == PlayerLife.Alive && _tick > c.HeldUntilTick && !_sitters.IsSeated(c.Id) && !_pins.ContainsKey(c.Id)
+        var canThrow = c.Car == null && !controlled && _match.Get(c.Id)?.Life == PlayerLife.Alive && _tick > c.HeldUntilTick && !_sitters.IsSeated(c.Id) && !_pounce.IsPinned(c.Id)
             && !c.Body.State.OnLadder && _elapsed >= c.LaunchGraceUntil;
         var throwStep = c.Throw.Tick((i.Buttons & (ushort)MoveButtons.Throw) != 0, (i.Buttons & (ushort)MoveButtons.Aim) != 0, canThrow);
         if (_match.Get(c.Id)?.Life != PlayerLife.Alive) return; // dead or waiting: inputs are acked but ignored
         if (c.Car == null && _tick <= c.HeldUntilTick) return; // in the Bigfoot's hand: the input is acked, the body is where the Bigfoot puts it (issue #264)
         if (c.Car == null && _sitters.Input(c, i, useEdge)) return; // seated in the church: no walking, no weapon
-        if (c.Car == null && _pins.TryGetValue(c.Id, out var pinYaw)) { c.Body.Yaw = pinYaw; c.Body.Pitch = 0; return; } // pinned by the demon: held on the floor, no walking, no weapon, no use
-        if (streakEdge && !controlled) StreakActivate(c);
-        if (c.Car == null && _streaks.ControlOf(c.Id) is { FreezesBody: true }) return; // controlling a streak entity that holds the body (the missile, a gunship): the body stands still
+        if (c.Car == null && _pounce.TryYaw(c.Id, out var pinYaw)) { c.Body.Yaw = pinYaw; c.Body.Pitch = 0; return; } // pinned by the demon: held on the floor, no walking, no weapon, no use
+        if (streakEdge && !controlled && !SandboxStreakKey(c)) _streaks.Activate(c);
+        if (c.Car == null && _streaks.Rules.ControlOf(c.Id) is { FreezesBody: true }) return; // controlling a streak entity that holds the body (the missile, a gunship): the body stands still
         if (c.Car is { Thrown: not null }) return; // the Bigfoot threw it: nobody steers, fires or gets out until it lands (issue #264)
         if (c.Car != null) { RideInput(c, i, dt, controlled, useDown, useEdge, lightsEdge); return; }
         var useAct = ScudUseKey(c, useDown, useEdge, dt); // beside a truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket)
-        if (useAct && LootInReach(c) == null && (MassSit(c) || _garage.Use(c) || TryEnterCar(c))) return; // the use key on lying Loot sends it back, it does not take a seat
+        if (useAct && _thieves.LootInReach(c) == null && (_mass.Sit(c) || _garage.Use(c) || TryEnterCar(c))) return; // the use key on lying Loot sends it back, it does not take a seat
         WalkAndFire(c, i, dt, throwStep);
     }
 
@@ -101,7 +103,7 @@ public partial class NetServer
         // breath hold: sprint is cancelled while aiming, so the sprint bit with aim held is the breath key
         c.Breath.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Aim) != 0 && c.W.Current.ZoomFov > 0,
             (i.Buttons & (ushort)MoveButtons.Sprint) != 0, c.W.Current, c.Perks.HoldBreathTime);
-        var wi = new WeaponInput((i.Buttons & (ushort)MoveButtons.Fire) != 0 && !c.Body.State.OnLadder, (i.Buttons & (ushort)MoveButtons.Reload) != 0, i.Slot, (i.Buttons & (ushort)MoveButtons.Switch) != 0, HasLock(c));
+        var wi = new WeaponInput((i.Buttons & (ushort)MoveButtons.Fire) != 0 && !c.Body.State.OnLadder, (i.Buttons & (ushort)MoveButtons.Reload) != 0, i.Slot, (i.Buttons & (ushort)MoveButtons.Switch) != 0, LockOnServer.HasLock(c));
         if (c.W.Update(_elapsed, wi) is { } shot)
         {
             if (_match.NotifyFired(c.Id)) _smoke.EarlyProtectionEnds++; // spawn protection ends on a real shot, not on Fire held with an empty magazine
@@ -126,13 +128,13 @@ public partial class NetServer
     /// </summary>
     void SeatWeapons(ServerClient c, ServerCar car, NetInput i, WeaponInput input)
     {
-        var (yaw, pitch, roll) = AttitudeOf(car);
+        var (yaw, pitch, roll) = Fleet.AttitudeOf(car);
         var aim = SeatAimRules.Aim(car.Def.Seats[c.CarSeat].Aim, yaw, pitch, roll, Quant.Yaw(i.Yaw), Quant.Pitch(i.Pitch));
         c.Body.Yaw = aim.ViewYaw; c.Body.Pitch = aim.ViewPitch;
         c.Recoil.Tick(_elapsed, input.Fire, c.W.Current.Recoil);
         c.Breath.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Aim) != 0 && c.W.Current.ZoomFov > 0,
             (i.Buttons & (ushort)MoveButtons.Sprint) != 0, c.W.Current, c.Perks.HoldBreathTime);
-        if (c.W.Update(_elapsed, input with { Locked = HasLock(c) }) is { } shot)
+        if (c.W.Update(_elapsed, input with { Locked = LockOnServer.HasLock(c) }) is { } shot)
         {
             if (_match.NotifyFired(c.Id)) _smoke.EarlyProtectionEnds++;
             { var fireT = Prof.Begin(Prof.S.Fire); FireWeapon(c, i, shot, car); Prof.End(Prof.S.Fire, fireT); }
@@ -148,7 +150,7 @@ public partial class NetServer
     /// </summary>
     void SeatLook(ServerClient c, ServerCar car, NetInput i)
     {
-        var (off, pitch) = RiderPose.Passive(c.CarSeat == 0 && car.Flies, (i.Buttons & (ushort)MoveButtons.HeadLook) != 0, AttitudeOf(car).Yaw, Quant.Yaw(i.Yaw), Quant.Pitch(i.Pitch));
+        var (off, pitch) = RiderPose.Passive(c.CarSeat == 0 && car.Flies, (i.Buttons & (ushort)MoveButtons.HeadLook) != 0, Fleet.AttitudeOf(car).Yaw, Quant.Yaw(i.Yaw), Quant.Pitch(i.Pitch));
         c.HeadOff = off; c.HeadPitch = pitch;
         ApplyHeadLook(c, car);
     }
@@ -156,7 +158,7 @@ public partial class NetServer
     /// <summary>A passive rider's body yaw and pitch for the snapshot: the hull's yaw now, turned by their look (<see cref="ServerClient.HeadOff"/>), at their look's pitch.</summary>
     void ApplyHeadLook(ServerClient c, ServerCar car)
     {
-        c.Body.Yaw = AttitudeOf(car).Yaw + c.HeadOff;
+        c.Body.Yaw = Fleet.AttitudeOf(car).Yaw + c.HeadOff;
         c.Body.Pitch = c.HeadPitch;
     }
 

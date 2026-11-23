@@ -27,19 +27,18 @@ public partial class NetServer
         _targets.AddSource(AddPlayerTargets);
         _targets.AddSource(AddDummyTargets);
         _targets.AddSource(list => { if (BigfootTarget() is { } bigfoot) list.Add(bigfoot); }); // the Bigfoot is a hit target like a player (issue #264)
-        _targets.AddSource(list => _crowd?.AddTargets(list)); // the citizens of the Holy Mass
-        _targets.AddSource(list => AddGangTargets(list)); // the Gang members of the Thieves event
-        _targets.AddSource(list => AddVanTargets(list)); // and their Raid vans
+        _targets.AddSource(list => _citizens.Crowd?.AddTargets(list)); // the citizens of the Holy Mass
+        _targets.AddSource(list => _thieves.AddTargets(list)); // the Gang members of the Thieves event and their Raid vans
         _targets.AddSource(AddAnimalTargets);
         _targets.AddSource(list => _rozhlas.AddTargets(list)); // the workers of the Urad
-        _targets.AddSource(AddDemonTarget);
+        _targets.AddSource(list => _demon.AddTarget(list));
     }
 
     void AddPlayerTargets(List<HitTarget> list)
     {
         var partT = Prof.Begin(Prof.S.TargetsPlayers);
         foreach (var o in _byId.Values)
-            if (_match.Get(o.Id)?.Life == PlayerLife.Alive && !_pins.ContainsKey(o.Id)) list.Add(HitTargetOf(o)); // a pinned player is under the demon and untouchable: not a target, so no shot stops on them
+            if (_match.Get(o.Id)?.Life == PlayerLife.Alive && !_pounce.IsPinned(o.Id)) list.Add(HitTargetOf(o)); // a pinned player is under the demon and untouchable: not a target, so no shot stops on them
         Prof.End(Prof.S.TargetsPlayers, partT);
     }
 
@@ -115,4 +114,23 @@ public partial class NetServer
 
     /// <summary>The distance the ray stops at with two vehicles left out (the hull it hit and the shooter's own): a wall or another hull.</summary>
     float NextStop(Vector3 from, Vector3 dir, float max, ServerCar? skipA, ServerCar? skipB) => Query.Shot(from, dir, max, skipA, skipB).Distance;
+
+    /// <summary>
+    /// A ray, pellet or rocket segment stopped on <paramref name="hull"/>. When that vehicle's gunner sits in the open (vehicles.json exposed_gunner) and is
+    /// alive, returns him as a target and the world distance along the ray with the hull left out, so the shot can reach him through the hull
+    /// (<see cref="GunnerCover"/>). A rider behind a pane is reached by <see cref="BulletHit"/>, which lets bullets through glass.
+    /// Otherwise no gunner (every rider stays behind the hull).
+    /// </summary>
+    /// <remarks>
+    /// The riders are every rider of <paramref name="hull"/> in the open (<see cref="RiderRules.Exposed"/>): the one gunner of a flak truck or a
+    /// utility helicopter, or everyone aboard an amphibious transport (ADR 0012). <paramref name="seatsOnly"/> is for the weapons that never
+    /// reached a flak or helicopter gunner through the hull (the Humvee's roof gun, the killstreak guns): they reach only riders whose seat says it
+    /// is exposed. <paramref name="skip"/> is the shooter's own vehicle, which the ray passes through as well.
+    /// </remarks>
+    (ExposedRiders? Gunner, float PastHull) ExposedGunnerBehind(ServerCar? hull, Vector3 from, Vector3 dir, float max, IReadOnlyList<HitTarget> targets, bool seatsOnly = false, ServerCar? skip = null)
+    {
+        if (hull is not { Destroyed: false } || !hull.Seat.Occupied) return (null, float.PositiveInfinity);
+        if (RiderRules.Exposed(hull.Def, hull.Seat, targets, seatsOnly) is not { } riders) return (null, float.PositiveInfinity);
+        return (riders, NextStop(from, dir, max, hull, skip)); // the walls and the other hulls, the hull and the shooter's own left out (B-02)
+    }
 }

@@ -1,8 +1,11 @@
 using Godot;
 using Drycastle.Shooter.Net.Server.CarPool;
+using Drycastle.Shooter.Net.Server.Combat;
+using Drycastle.Shooter.Net.Server.Seating;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Bots;
 using Drycastle.ShooterCore.Flight;
+using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
@@ -10,7 +13,7 @@ using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter.Net.Server;
+namespace Drycastle.Shooter.Net.Server.Streaks;
 
 /// <summary>
 /// The Lock-on launcher on the server (ADR 0031, glossary "Lock-on launcher", "Lock", "Homing missile"). The server alone decides the Lock: once a
@@ -18,9 +21,9 @@ namespace Drycastle.Shooter.Net.Server;
 /// the Lock is (<see cref="LockOn"/>); the shooter is sent their Lock when it changes, and the Aircraft's owner the worst of the launchers on it
 /// (<see cref="LockAlert"/>). A pull on a complete Lock fires a missile whose whole flight is known at once, because an Aircraft flies a fixed
 /// circle (<see cref="LockRules.Intercept"/>, as the flak's shell): the damage lands when it arrives, through the path every anti-aircraft uses
-/// (<see cref="DamageAircraft"/>, ADR 0005), and the blast is the ordinary Explosion event (a kill's is big enough for a Blast wave).
+/// (<see cref="GunshipServer.DamageAircraft"/>, ADR 0005), and the blast is the ordinary Explosion event (a kill's is big enough for a Blast wave).
 /// </summary>
-public partial class NetServer
+internal sealed class LockOnServer
 {
     /// <summary>A missile on its way: its id (the Explosion's), who fired it with which weapon, the Aircraft it homes on, where it was planned to arrive and when.</summary>
     sealed record Homing(ushort Id, ushort Owner, byte Weapon, WeaponDef Def, ushort Target, NVec3 At, double Due);
@@ -31,28 +34,51 @@ public partial class NetServer
         public ushort Id, Owner, Target; public byte Weapon; public WeaponDef Def = null!; public NVec3 Pos; public float Age;
     }
 
+    readonly ServerContext _ctx;
+    readonly Fleet _fleet;
+    readonly GunshipServer _gunships;
+    readonly Func<KillstreakService> _streaks;
+    readonly Sitters _sitters;
+    readonly Func<ushort, bool> _isPinned;
+    readonly Func<ServerCar, int, Vector3> _seatPos;
+    readonly WorldHitProbe _worldHit;
+    readonly RocketIds _rocketIds;
+    readonly SmokeStats _smoke;
+    readonly Action<ServerCar, float, ushort, byte, float> _damageVehicle;
+    readonly Func<VehiclesFile?> _vehicles;
+    readonly IReadOnlyList<ServerClient> _simClients;
     readonly List<Homing> _homing = new();
     readonly List<VehicleHoming> _vehicleHoming = new();
     /// <summary>The level last sent for each target (an Aircraft's entity id, a helicopter's vehicle id) and who it went to, so only a change is sent.</summary>
-    readonly Dictionary<ushort, (LockAlert Level, ushort[] Who)> _lockAlerts = new();
-    readonly Dictionary<ushort, LockAlert> _lockAlertsNow = new();
-    readonly List<LockCandidate> _lockCandidates = new();
+    readonly Dictionary<ushort, (LockAlert Level, ushort[] Who)> _alerts = new();
+    readonly Dictionary<ushort, LockAlert> _alertsNow = new();
+    readonly List<LockCandidate> _candidates = new();
+
+    /// <param name="isPinned">Whether the player is held by the demon (no launcher then).</param>
+    /// <param name="seatPos">Where a vehicle's seat is in the world.</param>
+    /// <param name="simClients">The players simulated this tick, in order (the list the server refills before it steps the Locks).</param>
+    public LockOnServer(ServerContext ctx, Fleet fleet, GunshipServer gunships, Func<KillstreakService> streaks, Sitters sitters, Func<ushort, bool> isPinned, Func<ServerCar, int, Vector3> seatPos,
+        WorldHitProbe worldHit, RocketIds rocketIds, SmokeStats smoke, Action<ServerCar, float, ushort, byte, float> damageVehicle, Func<VehiclesFile?> vehicles, IReadOnlyList<ServerClient> simClients)
+    {
+        _ctx = ctx; _fleet = fleet; _gunships = gunships; _streaks = streaks; _sitters = sitters; _isPinned = isPinned; _seatPos = seatPos; _worldHit = worldHit; _rocketIds = rocketIds;
+        _smoke = smoke; _damageVehicle = damageVehicle; _vehicles = vehicles; _simClients = simClients;
+    }
 
     /// <summary>The Lock of the weapon in a player's hand when they can use it now: alive, not a bot, on foot or in an armed seat, not at a streak's controls.</summary>
     LockDef? LauncherInHand(ServerClient c)
     {
         if (c.IsBot || c.W.Current.Lock is not { } def) return null;
-        if (_match.Get(c.Id)?.Life != PlayerLife.Alive) return null;
-        if (_streaks.ControlOf(c.Id) != null || _sitters.IsSeated(c.Id) || _pins.ContainsKey(c.Id)) return null;
+        if (!_ctx.IsAlive(c.Id)) return null;
+        if (_streaks().ControlOf(c.Id) != null || _sitters.IsSeated(c.Id) || _isPinned(c.Id)) return null;
         if (!LockRules.SeatAllows(c.Car != null, c.Car != null && c.CarSeat >= 0 && c.CarSeat < c.Car.Def.Seats.Count && c.Car.Def.Seats[c.CarSeat].Armed)) return null;
         return def;
     }
 
     /// <summary>Whether this input's pull may fire a weapon that needs a Lock (<see cref="WeaponInput.Locked"/>).</summary>
-    bool HasLock(ServerClient c) => c.Lock.Phase == LockPhase.Locked;
+    public static bool HasLock(ServerClient c) => c.Lock.Phase == LockPhase.Locked;
 
     /// <summary>Once a tick, after the players moved: every Lock steps, the shooters and the Aircraft owners are told what changed.</summary>
-    void StepLocks(float dt)
+    public void Step(float dt)
     {
         var candidatesBuilt = false;
         foreach (var c in _simClients)
@@ -64,22 +90,22 @@ public partial class NetServer
             }
             else
             {
-                if (!candidatesBuilt) { BuildLockCandidates(); candidatesBuilt = true; }
-                c.Lock.Update(dt, def, LockSeen(c, def));
+                if (!candidatesBuilt) { BuildCandidates(); candidatesBuilt = true; }
+                c.Lock.Update(dt, def, Seen(c, def));
             }
             if (!c.LockSent.Update((c.Lock.Phase, c.Lock.Target, c.Lock.Tracking))) continue;
-            Send(c, new EventMsg((byte)EventKind.LockState, LockCodec.Encode(new LockStateMsg(c.Lock.Phase, c.Lock.Target, c.Lock.Tracking, c.Lock.Progress, def?.Seconds ?? 0f))));
+            _ctx.SendEvent(c, EventKind.LockState, LockCodec.Encode(new LockStateMsg(c.Lock.Phase, c.Lock.Target, c.Lock.Tracking, c.Lock.Progress, def?.Seconds ?? 0f)));
         }
-        FlushLockAlerts();
+        FlushAlerts();
     }
 
-    void BuildLockCandidates()
+    void BuildCandidates()
     {
-        _lockCandidates.Clear();
-        foreach (var (id, e) in _match.Entities.OfType(Aircraft.WireType))
-            if (e is Aircraft { Ended: null } a) _lockCandidates.Add(new LockCandidate(id, a.Position, a.Def.Id));
+        _candidates.Clear();
+        foreach (var (id, e) in _ctx.Match.Entities.OfType(Aircraft.WireType))
+            if (e is Aircraft { Ended: null } a) _candidates.Add(new LockCandidate(id, a.Position, a.Def.Id));
         foreach (var car in _fleet.Cars)
-            if (LockableHeli(car)) _lockCandidates.Add(new LockCandidate(car.Id, car.Flight.Position, car.Def.Id));
+            if (LockableHeli(car)) _candidates.Add(new LockCandidate(car.Id, car.Flight.Position, car.Def.Id));
     }
 
     /// <summary>A flown (piloted, off the ground) air vehicle: the Lock-on launcher's other target. A landed or empty one is not.</summary>
@@ -98,55 +124,51 @@ public partial class NetServer
     }
 
     /// <summary>The Aircraft a player's launcher looks at: an enemy's (never their own, never a teammate's), in the circle and the range, with nothing solid in between.</summary>
-    ushort? LockSeen(ServerClient c, LockDef def)
+    ushort? Seen(ServerClient c, LockDef def)
     {
-        if (_lockCandidates.Count == 0) return null;
-        var feet = c.Car != null ? SeatPos(c.Car, c.CarSeat) : c.Body.GlobalPosition;
+        if (_candidates.Count == 0) return null;
+        var feet = c.Car != null ? _seatPos(c.Car, c.CarSeat) : c.Body.GlobalPosition;
         var eye = feet + Vector3.Up * (c.Car != null ? SeatAimRules.EyeHeight(c.Car.Def.Seats[c.CarSeat]) : MovementStep.EyeHeight(c.Body.State.Stance));
         var forward = HitMath.Forward(c.Body.Yaw, c.Body.Pitch);
-        return LockRules.Pick(def, N(eye), forward, _lockCandidates, c.Lock.Target, cand =>
+        return LockRules.Pick(def, eye.ToNumerics(), forward, _candidates, c.Lock.Target, cand =>
         {
-            var owner = IsVehicleId(cand.Id) ? LiveHeli(cand.Id)?.Seat.Occupant(0) : AircraftOwner(cand.Id);
-            if (owner is not { } o || o == 0 || !BotEnemies.IsEnemy(_match, c.Id, o)) return false;
+            var owner = IsVehicleId(cand.Id) ? LiveHeli(cand.Id)?.Seat.Occupant(0) : LiveAircraft(cand.Id)?.Owner;
+            if (owner is not { } o || o == 0 || !BotEnemies.IsEnemy(_ctx.Match, c.Id, o)) return false;
             var to = new Vector3(cand.Position.X, cand.Position.Y, cand.Position.Z) - eye;
             var len = to.Length();
-            return WorldHit(eye, to / len, len, out _, c.Car) >= len - 0.05f;
+            return _worldHit(eye, to / len, len, out _, c.Car) >= len - 0.05f;
         });
     }
 
-    ushort? AircraftOwner(ushort id) => LiveAircraft(id)?.Owner;
-
     Aircraft? LiveAircraft(ushort id)
     {
-        foreach (var (eid, e) in _match.Entities.OfType(Aircraft.WireType))
+        foreach (var (eid, e) in _ctx.Match.Entities.OfType(Aircraft.WireType))
             if (eid == id) return e is Aircraft { Ended: null } a ? a : null;
         return null;
     }
 
     /// <summary>
     /// A pull on a complete Lock: the missile leaves, the Lock starts over. The flight is planned here; an Aircraft that cannot be reached (it left in
-    /// this very tick) gets an ordinary rocket along the aim instead, which ends on whatever it meets.
+    /// this very tick) gets an ordinary rocket along the aim instead (false: the caller fires it), which ends on whatever it meets.
     /// </summary>
-    bool FireHoming(ServerClient c, FireOutcome shot, Vector3 eye)
+    public bool Fire(ServerClient c, FireOutcome shot, Vector3 eye)
     {
         var w = shot.Weapon;
         var target = c.Lock.Target;
         c.Lock.Reset();
-        if (LiveHeli(target) is { } heli)
+        if (LiveHeli(target) is { })
         {
-            var hid = _nextRocket;
-            _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
+            var hid = _rocketIds.Next();
             _smoke.RocketsFired++;
-            _vehicleHoming.Add(new VehicleHoming { Id = hid, Owner = c.Id, Target = target, Weapon = (byte)shot.WeaponIndex, Def = w, Pos = N(eye) });
-            BroadcastEvent(EventKind.HomingLaunch, LockCodec.Encode(new HomingLaunchMsg(hid, c.Id, (byte)shot.WeaponIndex, N(eye), target, 0f))); // Seconds 0: the client flies it as the server does
+            _vehicleHoming.Add(new VehicleHoming { Id = hid, Owner = c.Id, Target = target, Weapon = (byte)shot.WeaponIndex, Def = w, Pos = eye.ToNumerics() });
+            _ctx.Broadcast(EventKind.HomingLaunch, LockCodec.Encode(new HomingLaunchMsg(hid, c.Id, (byte)shot.WeaponIndex, eye.ToNumerics(), target, 0f))); // Seconds 0: the client flies it as the server does
             return true;
         }
-        if (LiveAircraft(target) is not { } aircraft || LockRules.Intercept(N(eye), w.ProjectileSpeed, w.ProjectileLife, aircraft.PositionAfter) is not { } plan) return false;
-        var id = _nextRocket;
-        _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
+        if (LiveAircraft(target) is not { } aircraft || LockRules.Intercept(eye.ToNumerics(), w.ProjectileSpeed, w.ProjectileLife, aircraft.PositionAfter) is not { } plan) return false;
+        var id = _rocketIds.Next();
         _smoke.RocketsFired++;
-        _homing.Add(new Homing(id, c.Id, (byte)shot.WeaponIndex, w, target, plan.At, _elapsed + plan.Seconds));
-        BroadcastEvent(EventKind.HomingLaunch, LockCodec.Encode(new HomingLaunchMsg(id, c.Id, (byte)shot.WeaponIndex, N(eye), target, plan.Seconds)));
+        _homing.Add(new Homing(id, c.Id, (byte)shot.WeaponIndex, w, target, plan.At, _ctx.Now + plan.Seconds));
+        _ctx.Broadcast(EventKind.HomingLaunch, LockCodec.Encode(new HomingLaunchMsg(id, c.Id, (byte)shot.WeaponIndex, eye.ToNumerics(), target, plan.Seconds)));
         return true;
     }
 
@@ -154,29 +176,29 @@ public partial class NetServer
     /// The missiles whose flight has ended by now: one that still has its Aircraft hurts it where it flies (and shoots it down at 0), one whose
     /// Aircraft is gone bursts in the air where they would have met. Called once a tick, before the tick's gunship FX are sent (the hit marker rides them).
     /// </summary>
-    void DetonateHoming()
+    public void DetonateHoming()
     {
         for (var k = _homing.Count - 1; k >= 0; k--)
         {
             var m = _homing[k];
-            if (m.Due > _elapsed) continue;
+            if (m.Due > _ctx.Now) continue;
             _homing.RemoveAt(k);
             var def = m.Def.Lock!;
             var aircraft = LiveAircraft(m.Target);
             var at = aircraft?.Position ?? m.At;
-            var down = aircraft != null && DamageAircraft(m.Target, aircraft, m.Def.Damage, m.Owner);
-            if (aircraft != null) _gunFx.Hit(m.Owner, false, down);
+            var down = aircraft != null && _gunships.DamageAircraft(m.Target, aircraft, m.Def.Damage, m.Owner);
+            if (aircraft != null) _gunships.Fx.Hit(m.Owner, false, down);
             _smoke.Explosions++;
-            BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(m.Id, m.Owner, m.Weapon, at, down ? def.KillBlastRadius : def.HitBlastRadius)));
+            _ctx.Broadcast(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(m.Id, m.Owner, m.Weapon, at, down ? def.KillBlastRadius : def.HitBlastRadius)));
         }
     }
 
     /// <summary>
     /// Flies the missiles homing on helicopters one tick: each re-aims at its vehicle's position now and moves <c>projectile_speed</c> metres a second.
-    /// It hurts the vehicle where it arrives (through <see cref="DamageVehicle"/>, credited to the shooter); one whose vehicle is gone (destroyed,
+    /// It hurts the vehicle where it arrives (through the vehicle damage path, credited to the shooter); one whose vehicle is gone (destroyed,
     /// landed, emptied) or that outlives <c>projectile_life</c> bursts in the air where it is.
     /// </summary>
-    void StepVehicleHoming(float dt)
+    public void StepVehicleHoming(float dt)
     {
         for (var k = _vehicleHoming.Count - 1; k >= 0; k--)
         {
@@ -190,11 +212,11 @@ public partial class NetServer
                 if (hit)
                 {
                     _vehicleHoming.RemoveAt(k);
-                    DamageVehicle(car, m.Def.Damage * (Vehicles?.RocketDamageMultiplier ?? 1f), m.Owner, m.Weapon, 0);
+                    _damageVehicle(car, m.Def.Damage * (_vehicles()?.RocketDamageMultiplier ?? 1f), m.Owner, m.Weapon, 0);
                     var down = car.Hp <= 0;
-                    _gunFx.Hit(m.Owner, false, down);
+                    _gunships.Fx.Hit(m.Owner, false, down);
                     _smoke.Explosions++;
-                    BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(m.Id, m.Owner, m.Weapon, car.Flight.Position, down ? def.KillBlastRadius : def.HitBlastRadius)));
+                    _ctx.Broadcast(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(m.Id, m.Owner, m.Weapon, car.Flight.Position, down ? def.KillBlastRadius : def.HitBlastRadius)));
                     continue;
                 }
                 m.Pos = next;
@@ -202,53 +224,53 @@ public partial class NetServer
             if (car != null && m.Age <= m.Def.ProjectileLife) continue;
             _vehicleHoming.RemoveAt(k);
             _smoke.Explosions++;
-            BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(m.Id, m.Owner, m.Weapon, m.Pos, def.HitBlastRadius)));
+            _ctx.Broadcast(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(m.Id, m.Owner, m.Weapon, m.Pos, def.HitBlastRadius)));
         }
     }
 
     /// <summary>Each target's occupants hear the worst of what is on their Aircraft: a missile in the air, a complete Lock, a Lock past the alert share. Only changes are sent.</summary>
-    void FlushLockAlerts()
+    void FlushAlerts()
     {
-        _lockAlertsNow.Clear();
+        _alertsNow.Clear();
         foreach (var c in _simClients)
         {
             if (c.Lock.Phase == LockPhase.Idle || c.W.Current.Lock is not { } def) continue;
-            RaiseLockAlert(c.Lock.Target, LockRules.AlertOf(def, c.Lock.Phase, c.Lock.Progress));
+            Raise(c.Lock.Target, LockRules.AlertOf(def, c.Lock.Phase, c.Lock.Progress));
         }
-        foreach (var m in _homing) RaiseLockAlert(m.Target, LockAlert.Launched);
-        foreach (var m in _vehicleHoming) RaiseLockAlert(m.Target, LockAlert.Launched);
-        if (_lockAlertsNow.Count == 0 && _lockAlerts.Count == 0) return;
+        foreach (var m in _homing) Raise(m.Target, LockAlert.Launched);
+        foreach (var m in _vehicleHoming) Raise(m.Target, LockAlert.Launched);
+        if (_alertsNow.Count == 0 && _alerts.Count == 0) return;
 
-        foreach (var id in _lockAlerts.Keys)
-            if (!_lockAlertsNow.ContainsKey(id)) _lockAlertsNow[id] = LockAlert.None;
-        foreach (var (id, level) in _lockAlertsNow)
+        foreach (var id in _alerts.Keys)
+            if (!_alertsNow.ContainsKey(id)) _alertsNow[id] = LockAlert.None;
+        foreach (var (id, level) in _alertsNow)
         {
-            var had = _lockAlerts.GetValueOrDefault(id, (Level: LockAlert.None, Who: Array.Empty<ushort>()));
+            var had = _alerts.GetValueOrDefault(id, (Level: LockAlert.None, Who: Array.Empty<ushort>()));
             // a target that is gone has nobody to ask: those who were warned are told it is over
             var now = level == LockAlert.None ? Array.Empty<ushort>() : AlertRecipients(id);
             if (had.Level == level && had.Who.SequenceEqual(now)) continue;
-            if (level == LockAlert.None) _lockAlerts.Remove(id); else _lockAlerts[id] = (level, now);
-            foreach (var who in had.Who.Except(now)) SendLockAlert(who, LockAlert.None, id);
-            foreach (var who in now) if (had.Level != level || !had.Who.Contains(who)) SendLockAlert(who, level, id);
+            if (level == LockAlert.None) _alerts.Remove(id); else _alerts[id] = (level, now);
+            foreach (var who in had.Who.Except(now)) SendAlert(who, LockAlert.None, id);
+            foreach (var who in now) if (had.Level != level || !had.Who.Contains(who)) SendAlert(who, level, id);
         }
     }
 
-    void SendLockAlert(ushort player, LockAlert level, ushort target)
+    void SendAlert(ushort player, LockAlert level, ushort target)
     {
-        if (_byId.TryGetValue(player, out var pilot)) Send(pilot, new EventMsg((byte)EventKind.LockAlert, LockCodec.Encode(new LockAlertMsg(level, target))));
+        if (_ctx.Players.TryGetValue(player, out var pilot)) _ctx.SendEvent(pilot, EventKind.LockAlert, LockCodec.Encode(new LockAlertMsg(level, target)));
     }
 
-    void RaiseLockAlert(ushort aircraft, LockAlert level)
+    void Raise(ushort aircraft, LockAlert level)
     {
         if (aircraft == 0 || level == LockAlert.None) return;
-        if (_lockAlertsNow.GetValueOrDefault(aircraft) < level) _lockAlertsNow[aircraft] = level;
+        if (_alertsNow.GetValueOrDefault(aircraft) < level) _alertsNow[aircraft] = level;
     }
 
     /// <summary>A new round: no missile flies on and nobody stays warned.</summary>
-    void LockRoundReset()
+    public void RoundReset()
     {
         _homing.Clear();
         _vehicleHoming.Clear();
-        foreach (var c in _byId.Values) c.Lock.Reset();
+        foreach (var c in _ctx.Players.Values) c.Lock.Reset();
     }
 }

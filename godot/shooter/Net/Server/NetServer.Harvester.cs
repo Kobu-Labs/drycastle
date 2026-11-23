@@ -369,7 +369,7 @@ public partial class NetServer
     {
         if (k.Weapon != SpecialWeapons.Harvester) return; // only the reel
         if (!_harvVictims.TryGetValue(k.Victim, out var car) || car.Destroyed) { _harvVictims.Remove(k.Victim); return; }
-        _deathPush.Remove(k.Victim); // no ragdoll throw: the body lies where it fell until the machine draws it in
+        _deathPush.Forget(k.Victim); // no ragdoll throw: the body lies where it fell until the machine draws it in
     }
 
     /// <summary>A corpse was made (<see cref="SpawnCorpse"/>): when the harvester killed its player the corpse begins its way into the machine.</summary>

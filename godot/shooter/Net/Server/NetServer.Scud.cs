@@ -250,7 +250,7 @@ public partial class NetServer
         var p = c.Body.GlobalPosition;
         IEnumerable<ServerCar> trucks;
         if (c.Car != null) trucks = c.Car.Def.Launcher != null ? new[] { c.Car } : Array.Empty<ServerCar>();
-        else if (LootInReach(c) != null) return null;
+        else if (_thieves.LootInReach(c) != null) return null;
         else trucks = _fleet.Cars.Where(t => t.Def.Launcher != null);
         foreach (var truck in trucks)
         {
@@ -355,7 +355,7 @@ public partial class NetServer
     /// THE Scud blast: the whole of what a Scud missile's impact does, at <paramref name="position"/> (the ground), credited to <paramref name="attackerId"/> (the player who placed the lock;
     /// the rocket cart's shooter when a loaded cart is shot). Everything inside the lethal radius dies, in a vehicle or not and spawn protected or not, except what a blast shelter covers
     /// (<see cref="MapShelters"/>, the same rule as every blast); beyond it the damage falls off to the damage radius and then walls, a hull and shelters work as for any blast
-    /// (<see cref="SplashShare"/>). Vehicles whose hull is in the destroy radius go up, those beyond it take hit points. Every glass pane within the glass radius shatters, the clients draw the
+    /// (<see cref="Splash.Share"/>). Vehicles whose hull is in the destroy radius go up, those beyond it take hit points. Every glass pane within the glass radius shatters, the clients draw the
     /// biggest blast wave and dust the game has, shake the camera map-wide and leave a scorch. Kills are ordinary kills (friendly fire as the match mode has it). Aircraft are not touched.
     /// </summary>
     /// <param name="missileId">The world entity that flew here (0 for a blast with none); the clients end its picture with it.</param>
@@ -380,25 +380,25 @@ public partial class NetServer
             var k = push * (ScudKnockMps * Math.Clamp(1f - dist / (float)b.DamageRadiusM, 0.1f, 1f));
             if (hit.Lethal)
             {
-                PushOnDeath(t.Id, CorpseRules.ThrowFromBlast(k)); // the body is thrown
+                _deathPush.Record(t.Id, CorpseRules.ThrowFromBlast(k)); // the body is thrown
                 if (t.Id == BigfootRules.TargetId) DealBigfoot(attackerId, ScudWeapon); // the Bigfoot takes it as an explosive hit, not as a kill (issue #264)
                 else
                 {
                     _hunts.Pending = new WildHit(ScudWeapon, KillCause.Standard, null, null); // a wild animal in the blast is a hunt with the Scud
                     var res = _match.ApplyDamage(t.Id, attackerId, ScudWeapon, hit.Damage, ignoreProtection: true);
                     _hunts.Pending = null;
-                    ClearPush(t.Id, res);
+                    _deathPush.Clear(t.Id, res);
                     if (res == DamageResult.Killed) killed++;
                 }
                 continue;
             }
-            var share = SplashShare(position, t); // walls, a hull over a covered seat
+            var share = _splash.Share(position, t); // walls, a hull over a covered seat
             if (share <= 0) continue;
             var dmg = hit.Damage * share;
             if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
-            PushOnDeath(t.Id, CorpseRules.ThrowFromBlast(k));
+            _deathPush.Record(t.Id, CorpseRules.ThrowFromBlast(k));
             var dealt = Deal(attackerId, ScudWeapon, t.Id, dmg, false, false);
-            ClearPush(t.Id, dealt);
+            _deathPush.Clear(t.Id, dealt);
             if (dealt == DamageResult.Ignored) continue; // spawn protected
             if (dealt == DamageResult.Killed) killed++; else hurt++;
             if (dealt != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v)) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z) * 0.3f);

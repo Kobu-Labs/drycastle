@@ -66,7 +66,7 @@ internal sealed class ServerClient
     public bool HasSeq;
     public byte Slot;
     public PlayerWeapons W = null!;
-    /// <summary>This player's Lock (Lock-on launcher, <c>NetServer.LockOn.cs</c>) and what of it was last sent to them (phase, Aircraft, tracking).</summary>
+    /// <summary>This player's Lock (Lock-on launcher, <c>Streaks/LockOnServer.cs</c>) and what of it was last sent to them (phase, Aircraft, tracking).</summary>
     public readonly LockOn Lock = new();
     public Change<(LockPhase, ushort, bool)> LockSent;
     /// <summary>What the player wears (items.json): set at join, taken off onto the corpse at death, never stored in the profile.</summary>
@@ -116,7 +116,7 @@ internal sealed class ServerClient
     /// <summary>The high of the plantation (NetServer.Plantation.cs) and the interact key's hold inside one; the replicated bit is <see cref="StatusKind.High"/> of <see cref="Status"/>.</summary>
     public readonly PlayerHigh High = new();
     public InteractHold PlantHold;
-    /// <summary>The use key's hold on lying Loot (NetServer.Thieves.Loot.cs) and the health it was last seen at (a drop is a hit taken).</summary>
+    /// <summary>The use key's hold on lying Loot (Thieves/LootServer.cs) and the health it was last seen at (a drop is a hit taken).</summary>
     public LootReturnHold LootHold;
     public float LootHealth;
     /// <summary>The Bigfoot holds this player (issue #264) through this tick: their input is read and acknowledged but their body stays where it puts them.</summary>

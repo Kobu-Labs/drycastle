@@ -1,12 +1,13 @@
-using System.Diagnostics;
 using Godot;
 using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
+using System.Diagnostics;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter.Net.Server;
@@ -37,12 +38,11 @@ public partial class NetServer
         foreach (var o in _byId.Values)
         {
             SyncLife(o);
-            var valid = o.Car == null && _match.Get(o.Id)?.Life == PlayerLife.Alive && !_pins.ContainsKey(o.Id);
+            var valid = o.Car == null && _match.Get(o.Id)?.Life == PlayerLife.Alive && !_pounce.IsPinned(o.Id);
             o.Poses.Record(_tick, valid, new HitTarget(o.Id, N(o.Body.GlobalPosition), _sitters.StanceOf(o), o.Body.Yaw));
         }
         CaptureBigfootPose();
-        CaptureGangPoses();
-        CaptureVanPoses();
+        _thieves.RecordPoses(_tick); // Gang members and Raid vans
     }
 
     /// <summary>
@@ -85,14 +85,14 @@ public partial class NetServer
     /// <summary>Distance from a point to a vehicle's hull where it stands now (its upright box, or its type's tilted boxes).</summary>
     static float HullDistanceNow(ServerCar car, NVec3 at)
     {
-        var (yaw, pitch, roll) = AttitudeOf(car);
+        var (yaw, pitch, roll) = Fleet.AttitudeOf(car);
         return HullDistance.Of(at, car.HullFeet, yaw, pitch, roll, car.Def);
     }
 
     /// <summary>The vehicle as it stands now: its feet, yaw and attitude, and the turret's yaw (the same numbers the hit box and the seats read).</summary>
     static VehiclePose PresentPose(ServerCar car)
     {
-        var (_, pitch, roll) = AttitudeOf(car);
+        var (_, pitch, roll) = Fleet.AttitudeOf(car);
         return new VehiclePose(car.HullFeet, car.State.Yaw, pitch, roll, car.TurretLocalYaw);
     }
 
@@ -156,13 +156,12 @@ public partial class NetServer
             if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
         }
         if (BigfootTarget() is { } bigfoot) list.Add(BigfootRewound(bigfoot, view)); // the Bigfoot is rewound like a player (issue #264)
-        _crowd?.AddTargets(list); // citizens walk slowly: not rewound
-        AddGangTargets(list, view); // Gang members run: rewound like the Bigfoot (a pose ring each)
-        AddVanTargets(list, view); // so do the Raid vans (they drive)
+        _citizens.Crowd?.AddTargets(list); // citizens walk slowly: not rewound
+        _thieves.AddTargets(list, view); // Gang members run and the Raid vans drive: rewound like the Bigfoot (a pose ring each)
         _pets.AddTargets(list); // so do pets
         _wildlife.AddTargets(list, BackTicksOf(c) / (float)Wire.TickRate); // and wild animals, where they stand now but in the pose the shooter saw (a grazing head goes down and up)
         _rozhlas.AddTargets(list); // the Urad workers sit still
-        AddDemonTarget(list); // so does the demon on its wall
+        _demon.AddTarget(list); // so does the demon on its wall
         return list;
     }
 
