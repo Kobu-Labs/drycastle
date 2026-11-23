@@ -66,7 +66,7 @@ internal sealed class ServerClient
     public bool HasSeq;
     public byte Slot;
     public PlayerWeapons W = null!;
-    /// <summary>This player's Lock (Lock-on launcher, <c>NetServer.LockOn.cs</c>) and what of it was last sent to them (phase, Aircraft, tracking).</summary>
+    /// <summary>This player's Lock (Lock-on launcher, <c>Streaks/LockOnServer.cs</c>) and what of it was last sent to them (phase, Aircraft, tracking).</summary>
     public readonly LockOn Lock = new();
     public Change<(LockPhase, ushort, bool)> LockSent;
     /// <summary>What the player wears (items.json): set at join, taken off onto the corpse at death, never stored in the profile.</summary>

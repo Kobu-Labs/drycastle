@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Buildings;
+using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Buildings;
 using Drycastle.ShooterCore.Data;
@@ -162,7 +163,7 @@ public partial class NetServer
             if (NVec3.Distance(c, feet) > radius + MathF.Max(car.HalfLength + car.Def.Height, car.Def.BroadReach)) continue;
             car.Wake();
             var rects = car.Def.GlassRects;
-            var (_, attPitch, attRoll) = AttitudeOf(car);
+            var (_, attPitch, attRoll) = Fleet.AttitudeOf(car);
             var (tiltPitch, tiltRoll) = car.Def.TiltOf(attPitch, attRoll);
             for (var i = 0; i < rects.Count; i++)
             {

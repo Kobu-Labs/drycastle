@@ -1,4 +1,5 @@
 using Drycastle.Shooter.Net.Server.CarPool;
+using Drycastle.Shooter.Net.Server.Streaks;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
 
@@ -27,7 +28,7 @@ public partial class NetServer
                 ? VehicleRecord.MakeTrailer(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Tractor?.Id ?? (ushort)0, car.Colour, car.Cargo!.Loaded, stage, car.Destroyed) // a trailer: its tractor in the driver's field, its load in a health bit (protocol 67)
                 : VehicleRecord.Make(car.Id, N(car.GlobalPosition), car.State.Yaw, car.Seat.Driver, car.Colour, stage, car.Destroyed, car.Lights, car.Life.WheelsOff, car.Braking));
         }
-        foreach (var car in _fleet.Cars) if (car.Def.Flak != null) ents.Add(FlakRecordOf(car)); // a flak truck's turret aim, for everyone's model
+        foreach (var car in _fleet.Cars) if (car.Def.Flak != null) ents.Add(FlakServer.RecordOf(car)); // a flak truck's turret aim, for everyone's model
         foreach (var car in _fleet.Cars) if (car.Flies) ents.Add(FlightRecord.Make(car.Id, car.Flight)); // a helicopter's velocity, tilt and rotor (ADR 0006)
         foreach (var car in _fleet.Cars) if (car.Drives) ents.Add(DriveRecord.Make(car.Id, car.Drive)); // a driven vehicle's speeds, slope, steering and whether it floats (ADR 0010)
         foreach (var car in _fleet.Cars) if (car.Def.DoorGun != null) ents.Add(DoorGunRecordOf(car)); // a door gun's aim against its airframe, for everyone's model

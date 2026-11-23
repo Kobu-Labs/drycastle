@@ -292,7 +292,7 @@ public partial class NetServer
     {
         if (SeatCodec.DecodeSwitch(payload) is not { } seat) return;
         if (c.Car is not { Destroyed: false } car || _match.Get(c.Id)?.Life != PlayerLife.Alive) return;
-        if (_streaks.ControlOf(c.Id) != null) return; // flying a streak's point of view: the seat is not theirs to change now
+        if (_streaks.Rules.ControlOf(c.Id) != null) return; // flying a streak's point of view: the seat is not theirs to change now
         SwitchSeat(c, car, seat);
     }
 
@@ -345,7 +345,7 @@ public partial class NetServer
     /// <summary>A gunner's inputs: reload when asked, then one round when the trigger is held and the gun is ready.</summary>
     void GunnerInput(ServerClient c, NetInput i)
     {
-        if (c.Car!.Def.Flak is { } flak) { FlakGunnerInput(c, c.Car, flak, i); return; }
+        if (c.Car!.Def.Flak is { } flak) { _flak.OnGunnerInput(c, c.Car, flak, i); return; }
         if (c.Car.Def.DoorGun is { } doorGun) { DoorGunnerInput(c, c.Car, doorGun, i); return; }
         var gun = c.Car!.Gun!;
         if ((i.Buttons & (ushort)MoveButtons.Reload) != 0) gun.TryReload(_elapsed);

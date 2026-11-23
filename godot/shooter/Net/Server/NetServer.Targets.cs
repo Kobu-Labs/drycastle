@@ -43,10 +43,6 @@ public partial class NetServer
         GD.Print($"server: planted {spots.Count}/{n} target dummies (rings {string.Join("/", TargetPlacement.RingsMetres)} m; cover and wall spots not generated)");
     }
 
-    /// <summary>Dummies for the UAV: visible to the enemy pings like anyone, with the default visibility.</summary>
-    IEnumerable<UavContact> TargetUavContacts() =>
-        _match.Targets.All.Where(d => d.Alive).Select(d => new UavContact(d.Id, d.Spot.Feet.X, d.Spot.Feet.Z, PerkModifiers.None.UavVisibility));
-
     /// <summary>Snapshot entries for every dummy: standing, or down (the Defeat pose) until it respawns.</summary>
     List<EntityRecord> TargetRecords()
     {
@@ -73,7 +69,7 @@ public partial class NetServer
     {
         if (_deathPush.Take(tk.Target.Id, out var push)) tk.Target.Body.Launch(push); // thrown by the blast or the car (the ragdoll)
         var killed = new PlayerKilled(tk.Killer, tk.Target.Id, tk.Weapon, tk.Cause);
-        var fromStreak = StreakKill(killed);
+        var fromStreak = _streaks.Kill(killed, WeaponKey(killed.Weapon));
         if (MatchConfig.TargetsAwardXp && Scores(tk.Killer)) AwardXp(_xp.OnKill(new KillFacts(tk.Killer, tk.Target.Id, tk.Cause, fromStreak), _elapsed));
         BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(tk.Killer, tk.Target.Id, tk.Weapon, tk.Cause)));
         GD.Print($"server: #{tk.Killer} killed {tk.Target.Name} (weapon {tk.Weapon}, {tk.Cause})");

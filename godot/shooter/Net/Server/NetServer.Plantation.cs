@@ -52,7 +52,7 @@ public partial class NetServer
     bool PlantationHoldCounts(ServerClient c)
     {
         var alive = _match.Get(c.Id)?.Life == PlayerLife.Alive;
-        var onFoot = c.Car == null && !_sitters.IsSeated(c.Id) && !_pins.ContainsKey(c.Id) && _tick > c.HeldUntilTick && _streaks.ControlOf(c.Id) == null;
+        var onFoot = c.Car == null && !_sitters.IsSeated(c.Id) && !_pins.ContainsKey(c.Id) && _tick > c.HeldUntilTick && _streaks.Rules.ControlOf(c.Id) == null;
         if (!alive || !onFoot) return false;
         var inside = InPlantation(c.Body.GlobalPosition);
         return PlantationRules.HoldCounts(alive, onFoot, inside, inside ? KeyCompetitors(c) : KeyCompetitor.None);

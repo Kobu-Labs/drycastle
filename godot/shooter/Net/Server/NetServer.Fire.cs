@@ -1,4 +1,6 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.CarPool;
+using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Net.Server.HuntLog;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Citizens;
@@ -32,7 +34,7 @@ public partial class NetServer
     readonly List<Rocket> _rockets = new();
     /// <summary>A grenade's speed in the health byte of its snapshot record, per m/s (the client divides it back out).</summary>
     public const float GrenadeSpeedScale = 8f;
-    ushort _nextRocket = 0x8000;
+    readonly RocketIds _rocketIds = new();
 
     const float MaxShotRange = 300f;
 
@@ -61,7 +63,7 @@ public partial class NetServer
         var yaw = Quant.Yaw(i.Yaw); var pitch = Quant.Pitch(i.Pitch);
         if (seatCar != null)
         {
-            var (carYaw, carPitch, carRoll) = AttitudeOf(seatCar);
+            var (carYaw, carPitch, carRoll) = Fleet.AttitudeOf(seatCar);
             var held = SeatAimRules.Aim(seat!.Aim, carYaw, carPitch, carRoll, yaw, pitch);
             yaw = held.ViewYaw; pitch = held.ViewPitch;
         }
@@ -157,15 +159,26 @@ public partial class NetServer
         var w = shot.Weapon;
         var (seatCar, eye, _, yaw, pitch, _, _, _, _) = aim;
         var dir = HitMath.Forward(yaw, pitch);
-        if (w.Lock != null && FireHoming(c, shot, eye)) return; // a Lock-on launcher's missile homes on its Aircraft (ADR 0031)
-        var rocket = new Rocket { Id = _nextRocket, Owner = c.Id, Weapon = (byte)shot.WeaponIndex, Pos = eye, Dir = new Vector3(dir.X, dir.Y, dir.Z), FromCar = seatCar };
+        if (w.Lock != null && _lockOn.Fire(c, shot, eye)) return; // a Lock-on launcher's missile homes on its Aircraft (ADR 0031)
+        var rocket = new Rocket { Id = _rocketIds.Next(), Owner = c.Id, Weapon = (byte)shot.WeaponIndex, Pos = eye, Dir = new Vector3(dir.X, dir.Y, dir.Z), FromCar = seatCar };
         if (w.Grenade is { } gren) { rocket.Grenade = gren; rocket.Vel = rocket.Dir * w.ProjectileSpeed; rocket.Fuse.Start(gren.FuseSeconds); }
-        _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
         rocket.ViewBack = back; rocket.ViewLife = c.LifeStart; // a rocket rewinds vehicles by the shooter's lag at each step (B-02)
         _rockets.Add(rocket);
         _smoke.RocketsFired++;
         BroadcastEvent(EventKind.Launch, WeaponCodec.Encode(new LaunchMsg(rocket.Id, c.Id, rocket.Weapon, N(eye), dir * w.ProjectileSpeed)));
-    
+    }
+
+    /// <summary>A gunship's rocket joins the rocket sim at its own speed and lives out its whole range (the rpg's 40 m/s would burst it ~150 m out).</summary>
+    void LaunchGunshipRocket(ushort owner, byte weapon, SplashDef? blast, NVec3 origin, NVec3 direction, float speed, float life)
+    {
+        var rocket = new Rocket
+        {
+            Id = _rocketIds.Next(), Owner = owner, Weapon = weapon, Blast = blast,
+            Pos = new Vector3(origin.X, origin.Y, origin.Z), Dir = new Vector3(direction.X, direction.Y, direction.Z), Speed = speed, Life = life,
+        };
+        _rockets.Add(rocket);
+        _smoke.RocketsFired++;
+        BroadcastEvent(EventKind.Launch, WeaponCodec.Encode(new LaunchMsg(rocket.Id, owner, rocket.Weapon, origin, direction * rocket.Speed)));
     }
 
     /// <summary>A melee swing: the target in reach, unless a wall stands between the attacker and the victim's chest; else a sentry turret in reach.</summary>
@@ -194,7 +207,7 @@ public partial class NetServer
     {
         _animals.PlayerHurt(); // a life may end here: the animals' list of players is asked anew
         if (victim == BigfootRules.TargetId) return DealBigfoot(attackerId, weaponIdx); // a hit count, not hit points (issue #264)
-        if (_streaks.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
+        if (_streaks.Rules.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
         if (DemonRules.IsHitId(victim)) return DemonHit(attackerId, weaponIdx, damage); // the demon: a hit count, no hit points
         if (WildlifeRules.IsHitId(victim)) _hunts.Pending = new WildHit(weaponIdx, cause, shotDistance, shot); // read by the keeper's Killed event, inside this call
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
@@ -217,8 +230,7 @@ public partial class NetServer
         if (kill && shotDistance is { } far) _hunts.RecordPlayerKill(attackerId, victim, weaponIdx, far); // the longest player kill of a hitscan shot (#430)
         var msg = new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attackerId, weaponIdx, (ushort)damage, head, backstab, kill)));
         _byId.TryGetValue(attackerId, out var attacker);
-        if (attackerId == _gunFxOwner) _gunFx.Hit(attackerId, head, kill); // a gunner's hit marker rides the tick's gunship blasts (#159)
-        else if (attacker != null) Send(attacker, msg);
+        if (!_gunships.NoteHit(attackerId, head, kill) && attacker != null) Send(attacker, msg); // a gunner's hit marker rides the tick's gunship blasts (#159)
         if (_byId.TryGetValue(victim, out var v) && v != attacker) Send(v, msg);
         if (kill && victim != attackerId && attacker != null) { attacker.W.RefillReserves(); _smoke.Refills++; }
         return r;

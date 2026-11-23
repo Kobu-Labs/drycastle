@@ -114,4 +114,23 @@ public partial class NetServer
 
     /// <summary>The distance the ray stops at with two vehicles left out (the hull it hit and the shooter's own): a wall or another hull.</summary>
     float NextStop(Vector3 from, Vector3 dir, float max, ServerCar? skipA, ServerCar? skipB) => Query.Shot(from, dir, max, skipA, skipB).Distance;
+
+    /// <summary>
+    /// A ray, pellet or rocket segment stopped on <paramref name="hull"/>. When that vehicle's gunner sits in the open (vehicles.json exposed_gunner) and is
+    /// alive, returns him as a target and the world distance along the ray with the hull left out, so the shot can reach him through the hull
+    /// (<see cref="GunnerCover"/>). A rider behind a pane is reached by <see cref="BulletHit"/>, which lets bullets through glass.
+    /// Otherwise no gunner (every rider stays behind the hull).
+    /// </summary>
+    /// <remarks>
+    /// The riders are every rider of <paramref name="hull"/> in the open (<see cref="RiderRules.Exposed"/>): the one gunner of a flak truck or a
+    /// utility helicopter, or everyone aboard an amphibious transport (ADR 0012). <paramref name="seatsOnly"/> is for the weapons that never
+    /// reached a flak or helicopter gunner through the hull (the Humvee's roof gun, the killstreak guns): they reach only riders whose seat says it
+    /// is exposed. <paramref name="skip"/> is the shooter's own vehicle, which the ray passes through as well.
+    /// </remarks>
+    (ExposedRiders? Gunner, float PastHull) ExposedGunnerBehind(ServerCar? hull, Vector3 from, Vector3 dir, float max, IReadOnlyList<HitTarget> targets, bool seatsOnly = false, ServerCar? skip = null)
+    {
+        if (hull is not { Destroyed: false } || !hull.Seat.Occupied) return (null, float.PositiveInfinity);
+        if (RiderRules.Exposed(hull.Def, hull.Seat, targets, seatsOnly) is not { } riders) return (null, float.PositiveInfinity);
+        return (riders, NextStop(from, dir, max, hull, skip)); // the walls and the other hulls, the hull and the shooter's own left out (B-02)
+    }
 }

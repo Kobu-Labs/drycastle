@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Movement;
@@ -18,13 +19,6 @@ public partial class NetServer
 {
     int _doorGunShots;
 
-    /// <summary>The attitude a door gun's arc turns with: the helicopter's; a land vehicle's yaw alone.</summary>
-    static (float Yaw, float Pitch, float Roll) AttitudeOf(ServerCar car) =>
-        car.Flies ? (car.Flight.Yaw, car.Flight.Pitch, car.Flight.Roll)
-        : car.Drives ? (car.Drive.Yaw, car.Drive.Pitch, car.Drive.Roll) // a driven vehicle lies on the slope it stands on
-        : car.TrailerTilt is { } t ? (car.State.Yaw, t.Pitch, t.Roll) // a trailer lies on the ground it stands on (#482)
-        : (car.State.Yaw, 0f, 0f);
-
     /// <summary>The door gun's record for the snapshot: the mount's yaw and the gun's pitch against the vehicle, and the gunner's id. With nobody at it, the gun stays where it was left.</summary>
     EntityRecord DoorGunRecordOf(ServerCar car)
     {
@@ -36,7 +30,7 @@ public partial class NetServer
     /// <summary>The gunner's input: the view aims the gun inside its arc, Reload reloads, Fire fires a round per interval while the magazine lasts.</summary>
     void DoorGunnerInput(ServerClient c, ServerCar car, VehicleDoorGunDef def, NetInput i)
     {
-        var (yaw, pitch, roll) = AttitudeOf(car);
+        var (yaw, pitch, roll) = Fleet.AttitudeOf(car);
         var aim = DoorGunRules.Aim(def, yaw, pitch, roll, Quant.Yaw(i.Yaw), Quant.Pitch(i.Pitch));
         car.TurretLocalYaw = aim.Yaw;
         car.GunPitch = aim.Pitch;
@@ -59,7 +53,7 @@ public partial class NetServer
     void FireDoorGun(ServerClient c, ServerCar car, VehicleDoorGunDef def, VehicleGunDef gun, DoorGunAim aim)
     {
         _vehicleView = ViewOf(VehicleBackOf(c), c.LifeStart); // the other vehicles, where the gunner's screen showed them (B-02)
-        var (yaw, pitch, roll) = AttitudeOf(car);
+        var (yaw, pitch, roll) = Fleet.AttitudeOf(car);
         var muzzle = DoorGunRules.Muzzle(def, DoorGunRules.GunPivot(def, N(car.GlobalPosition), yaw, pitch, roll, aim), aim);
         var d = HitMath.SpreadDirection(aim.ViewYaw, aim.ViewPitch, gun.SpreadDegrees, _rng);
         var from = new Vector3(muzzle.X, muzzle.Y, muzzle.Z);

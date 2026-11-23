@@ -41,7 +41,7 @@ public partial class NetServer
         c.Sandbox = on;
         _match.SetSandbox(c.Id, on);
         if (c.W != null) c.W.Unlimited = on;
-        if (!on) _streaks.SandboxRelease(c.Id);
+        if (!on) _streaks.Rules.SandboxRelease(c.Id);
         Send(c, new EventMsg((byte)EventKind.SandboxStatus, SandboxEvents.EncodeStatus(new SandboxAnswer(on, on ? SandboxRules.GrantedReason : SandboxRules.RevokedReason))));
         BroadcastEvent(EventKind.SandboxState, SandboxEvents.EncodeState(c.Id, on));
         SendSandboxHeld(c); // off: the held slot is empty, the client clears it
@@ -62,7 +62,7 @@ public partial class NetServer
     }
 
     void SendSandboxHeld(ServerClient c) =>
-        Send(c, new EventMsg((byte)EventKind.SandboxHeld, SandboxEvents.EncodeText(_streaks.SandboxHeldOf(c.Id) ?? "")));
+        Send(c, new EventMsg((byte)EventKind.SandboxHeld, SandboxEvents.EncodeText(_streaks.Rules.SandboxHeldOf(c.Id) ?? "")));
 
     /// <summary>A short line for the owner's toast (a refused action, or the reason the panel did nothing).</summary>
     void SandboxNote(ServerClient c, string text) => Send(c, new EventMsg((byte)EventKind.SandboxNotice, SandboxEvents.EncodeText(text)));
@@ -74,7 +74,7 @@ public partial class NetServer
     void OnSandboxGrant(ServerClient c, byte[] payload)
     {
         if (!c.Sandbox || SandboxEvents.DecodeGrant(payload) is not { } streakId) return;
-        if (!_streaks.SandboxHold(c.Id, streakId)) { SandboxNote(c, "Unknown killstreak."); return; }
+        if (!_streaks.Rules.SandboxHold(c.Id, streakId)) { SandboxNote(c, "Unknown killstreak."); return; }
         SendSandboxHeld(c);
     }
 
@@ -120,7 +120,7 @@ public partial class NetServer
     /// <summary>The activation key for a sandbox player with a held streak: use the held one (returns true when it did).</summary>
     bool SandboxStreakKey(ServerClient c)
     {
-        if (!c.Sandbox || _streaks.SandboxHeldOf(c.Id) is null) return false;
+        if (!c.Sandbox || _streaks.Rules.SandboxHeldOf(c.Id) is null) return false;
         SandboxUseHeld(c);
         return true;
     }
@@ -130,7 +130,7 @@ public partial class NetServer
     {
         if (!c.Sandbox || _match.Get(c.Id) is not { Life: PlayerLife.Alive }) return false;
         var p = c.Body.GlobalPosition;
-        return _streaks.SandboxActivateHeld(c.Id, _elapsed, new System.Numerics.Vector3(p.X, p.Y, p.Z));
+        return _streaks.Rules.SandboxActivateHeld(c.Id, _elapsed, new System.Numerics.Vector3(p.X, p.Y, p.Z));
     }
 
     /// <summary>Teleport to a random player spawn point, out of any vehicle. Same wire event as a spawn (no protection).</summary>

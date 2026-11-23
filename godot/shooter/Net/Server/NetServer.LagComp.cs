@@ -1,12 +1,13 @@
-using System.Diagnostics;
 using Godot;
 using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
+using System.Diagnostics;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter.Net.Server;
@@ -84,14 +85,14 @@ public partial class NetServer
     /// <summary>Distance from a point to a vehicle's hull where it stands now (its upright box, or its type's tilted boxes).</summary>
     static float HullDistanceNow(ServerCar car, NVec3 at)
     {
-        var (yaw, pitch, roll) = AttitudeOf(car);
+        var (yaw, pitch, roll) = Fleet.AttitudeOf(car);
         return HullDistance.Of(at, car.HullFeet, yaw, pitch, roll, car.Def);
     }
 
     /// <summary>The vehicle as it stands now: its feet, yaw and attitude, and the turret's yaw (the same numbers the hit box and the seats read).</summary>
     static VehiclePose PresentPose(ServerCar car)
     {
-        var (_, pitch, roll) = AttitudeOf(car);
+        var (_, pitch, roll) = Fleet.AttitudeOf(car);
         return new VehiclePose(car.HullFeet, car.State.Yaw, pitch, roll, car.TurretLocalYaw);
     }
 

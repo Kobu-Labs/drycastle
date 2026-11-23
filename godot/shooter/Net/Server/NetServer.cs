@@ -15,9 +15,11 @@ using Drycastle.Shooter.Net.Server.Scenery;
 using Drycastle.Shooter.Net.Server.Seating;
 using Drycastle.Shooter.Net.Server.Sentries;
 using Drycastle.Shooter.Net.Server.Statuses;
+using Drycastle.Shooter.Net.Server.Streaks;
 using Drycastle.Shooter.Net.Server.Thieves;
 using Drycastle.Shooter.Net.Server.VillageRadio;
 using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.CarePackages;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Colliders;
@@ -25,6 +27,9 @@ using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
+using Drycastle.ShooterCore.Killstreaks.Moab;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Perks;
@@ -87,6 +92,8 @@ public partial class NetServer : Node
     /// <summary>environment.json "lamp" and "sign_plate"; the defaults when the host sets none.</summary>
     public LampLook LampData = new();
     public SignPlateLook SignPlateData = new();
+    /// <summary>killstreaks.json: the streak table. Set by the host before the server starts.</summary>
+    public KillstreakFile Killstreaks = null!;
     /// <summary>thieves.json: every number of the Thieves event (set by the host).</summary>
     public ThievesFile ThievesData = new();
 
@@ -112,6 +119,10 @@ public partial class NetServer : Node
     PetServer _pets = null!;
     WildlifeServer _wildlife = null!;
     ThievesServer _thieves = null!;
+    GunshipServer _gunships = null!;
+    FlakServer _flak = null!;
+    StreakServer _streaks = null!;
+    LockOnServer _lockOn = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -183,15 +194,30 @@ public partial class NetServer : Node
         InitHarvester();
         InitScud();
         InitEvents(); // after the kinds above: the handler table names their start, end and cancel
-        InitAircraft();
-        _crates = new CrateServer(_ctx, Killstreaks.Rewards, () => Query, () => _streaks);
-        BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
+        _gunships = new GunshipServer(_ctx, Killstreaks, Weapons, _targets, _fleet, () => Query, () => Vehicles, Deal, DamageVehicle, LaunchGunshipRocket, _impacts, _splash, _deathPush, () => _streaks.Rules);
+        _flak = new FlakServer(_ctx, Weapons, _gunships, _targets, _fleet, () => Vehicles, _rng);
+        _crates = new CrateServer(_ctx, Killstreaks.Rewards, () => Query, () => _streaks.Rules);
+        _streaks = BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
+        _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pins.ContainsKey(id), SeatPos, WorldHit, _rocketIds, _smoke, DamageVehicle, () => Vehicles, _simClients);
         _impacts.Warm(); // roads.json and the tree grid, so no impact pays for them on a tick (T3-003, T3-004)
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
-        if (Weapons != null) foreach (var v in Vehicles.Vehicles) if (v.Flak is { } fk) FlakWeapon(fk); // a flak naming an unknown weapon fails here, not on the first shot
+        _flak.CheckWeapons(Vehicles);
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");
     }
+
+    /// <summary>
+    /// The killstreaks: the table says which streak each entry is and the adapter of each is made here, in the table's order (the missile registers its entity type, the others only look).
+    /// Streaks without an adapter keep their logging stub.
+    /// </summary>
+    StreakServer BuildStreaks() => new(_ctx, Killstreaks, _gunships, () => Spawns, _crates.GroundBelow, (streaks, id) =>
+        id == MoabStreak.StreakId ? new MoabServer(_ctx, _targets, _hunts, _fleet, DamageVehicle, (owner, weapon) => DealBigfoot(owner, weapon), _impacts, _rng).Streak() :
+        id == CarePackageRules.StreakId ? _crates.Streak() :
+        id == AttackMissileStreak.StreakId ? new MissileServer(_ctx, Killstreaks, _targets, WorldHit, () => Vehicles != null, RocketVsVehicles, (at, radius) => BlastGlass(at, radius), Deal, _impacts, _splash, _deathPush).Streak() :
+        id == TurretStreak.StreakId ? new TurretStreak(Turret.Def, _match.Entities, _sentries) :
+        id == AttackHelicopterStreak.StreakId ? new AttackHelicopterServer(_ctx, Killstreaks, _gunships).Streak() :
+        id == Ac130Streak.StreakId ? new Ac130Server(_ctx, Killstreaks, _gunships).Streak() :
+        id == HelicopterHelperStreak.StreakId ? new HelperServer(_ctx, Killstreaks, Weapons, streaks.SpawnOverMap, _targets, _sentries, Deal, _impacts, streaks.Rng).Streak() : null);
 
     /// <summary>
     /// The Thieves event's parts, made in the order they register their world entity types: the Gang members, the Raid vans, the Loot, then the reward, which wraps the hit routing of the first two.
@@ -237,7 +263,7 @@ public partial class NetServer : Node
         Prof.TickBegin();
         ReceiveAndHousekeep();
         TickWorld(dt);
-        StreakTick(dt);
+        _streaks.Tick(dt);
         PerfLap(ServerPerf.Ph.Streaks);
         BotsTick(dt); // fills the roster and queues each bot's input for this tick (#214)
         HarvesterTick(dt); // the harvester event: its spawn, its driver's pedals
@@ -325,7 +351,7 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.PlaceSolids);
         _simClients.Clear(); _simClients.AddRange(_byId.Values); // a copy: a client may leave while the others are simulated
         foreach (var c in _simClients) SimulateClient(c, dt); // every joined player, bots included
-        StepLocks(dt); // the Lock-on launchers: each Lock steps where its player now looks (ADR 0031)
+        _lockOn.Step(dt); // the Lock-on launchers: each Lock steps where its player now looks (ADR 0031)
         PerfLap(ServerPerf.Ph.SimClients);
     }
 
@@ -343,11 +369,11 @@ public partial class NetServer : Node
     {
         _status.Tick(dt); // burns tick
         PlantationTick(dt); // highs run out
-        DetonateShells();  // shells whose tracer has arrived burst now (#162)
-        DetonateFlak();    // flak shells that have arrived burst now
-        StepVehicleHoming(dt); // missiles homing on flown helicopters fly and hit now
-        DetonateHoming();  // homing missiles that have arrived hit their Aircraft now
-        FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
+        _gunships.TickShells();  // shells whose tracer has arrived burst now (#162)
+        _flak.Tick();    // flak shells that have arrived burst now
+        _lockOn.StepVehicleHoming(dt); // missiles homing on flown helicopters fly and hit now
+        _lockOn.DetonateHoming();  // homing missiles that have arrived hit their Aircraft now
+        _gunships.FlushFx(); // the gunship rounds of this tick, coalesced (#159)
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
         _scenery.Tick(dt); // the pole lamps and road sign plates: clocks of the broken ones and the changes of this tick (ADR 0037, 0039)
         _status.Flush(); // statuses and burning that changed this tick
@@ -563,7 +589,7 @@ public partial class NetServer : Node
     /// <summary>Takes a joined player out of the match: a dropped connection, or a bot that is no longer wanted.</summary>
     void Leave(ServerClient c)
     {
-        StreakLeave(c.Id);
+        _streaks.Leave(c.Id);
         _companions.Leave(c.Id);
         _status.Leave(c.Id);
         _rozhlas.OnPlayerLeft(c.Id);

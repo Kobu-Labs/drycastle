@@ -93,8 +93,7 @@ public partial class NetServer
         var at = c.Body.GlobalPosition + new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw)) * distance;
         if (Query.Ground(MoverKind.Player, at, 60f, 200f) is { } ground) at = ground.Position;
         var weapon = Math.Max(0, Weapons?.Weapons.FindIndex(w => w.Kind == WeaponKind.Projectile) ?? 0); // the sound of the blast: the rpg's
-        var id = _nextRocket;
-        _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
+        var id = _rocketIds.Next();
         BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(id, c.Id, (byte)weapon, N(at), size, speed)));
         ChatTo(c, ChatLineKind.Info, speed > 0 ? $"A {size} m blast {distance} m in front of you, its wave at {speed} m/s." : $"A {size} m blast {distance} m in front of you.");
     }
