@@ -17,6 +17,7 @@ using Drycastle.Shooter.Net.Server.Seating;
 using Drycastle.Shooter.Net.Server.Sentries;
 using Drycastle.Shooter.Net.Server.Statuses;
 using Drycastle.Shooter.Net.Server.Streaks;
+using Drycastle.Shooter.Net.Server.Terrain;
 using Drycastle.Shooter.Net.Server.Thieves;
 using Drycastle.Shooter.Net.Server.VillageRadio;
 using Drycastle.ShooterCore.Camo;
@@ -134,6 +135,9 @@ public partial class NetServer : Node
     FlakServer _flak = null!;
     StreakServer _streaks = null!;
     LockOnServer _lockOn = null!;
+    MapAreas _areas = null!;
+    WalkerGround _walkers = null!;
+    readonly ParkedHulls _parked;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -151,7 +155,11 @@ public partial class NetServer : Node
     /// <summary>What the smoke tests count (and their verdicts); nothing reads it on a production server.</summary>
     readonly SmokeStats _smoke = new();
 
-    public NetServer() => _fleet = new Fleet(_byId);
+    public NetServer()
+    {
+        _fleet = new Fleet(_byId);
+        _parked = new ParkedHulls(_fleet, PresentPose);
+    }
 
     public override void _Ready()
     {
@@ -186,8 +194,10 @@ public partial class NetServer : Node
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
         _ctx = new ServerContext(_match, _byId, _clients.Values, () => _elapsed, () => _tick, BroadcastEvent, Send, (c, chan, packet) => { if (c.Peer is { } peer) Tx(peer, chan, packet, 0); });
+        _areas = new MapAreas(Map, () => _church.Shell, _rng);
+        _walkers = new WalkerGround(Map, () => Query);
         _impacts = new ImpactFx(_ctx, Map, Water);
-        _splash = new Splash(_ctx, () => MapShelters, () => Query, PoseOf);
+        _splash = new Splash(_ctx, () => _areas.Shelters, () => Query, PoseOf);
         RegisterTargetSources();
     }
 
@@ -198,7 +208,7 @@ public partial class NetServer : Node
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
         _sitters = new Sitters(_ctx, OnStood);
         _church = new ChurchServer(_ctx, ArenaMode, MapDir);
-        _citizens = new CitizenServer(_ctx, HolyMass, ArenaMode, MapDir, Map, () => _nav, () => WalkerWorld, EnsureNavMesh);
+        _citizens = new CitizenServer(_ctx, HolyMass, ArenaMode, MapDir, Map, () => _nav, () => _walkers, EnsureNavMesh);
         _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, _citizens.Hits, new TableSeating(_sitters.IsSeated, _sitters.StandUpAtTableExcept, _sitters.SitAtTable));
         _intel = new IntelServer(_ctx);
         _chat = new ChatServer(_ctx, admin => new ChatContext(admin, Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList(), CompanionData.Companions.Select(i => i.Id).ToList()), AdminTokens, AdminAll);
@@ -211,7 +221,7 @@ public partial class NetServer : Node
         _sentries = new SentryWorld(_ctx, _targets, Deal, () => Query);
         _status = new StatusServer(_ctx, Deal, Weapons, GetHigh);
         _pounce = new PounceServer(_ctx, () => Demon, _status);
-        _demon = new DemonServer(_ctx, () => Demon, () => _mass, _church, _citizens, _sitters, _status, _pounce, _targets, Deal, () => Query, (at, radius) => BlastGlass(at, radius), () => MapShelters, Weapons, MapDir, World, _events);
+        _demon = new DemonServer(_ctx, () => Demon, () => _mass, _church, _citizens, _sitters, _status, _pounce, _targets, Deal, () => Query, (at, radius) => BlastGlass(at, radius), () => _areas.Shelters, Weapons, MapDir, World, _events);
     }
 
     /// <summary>The world entities' end of life and their types, in the order they register, and what follows the same despawns (the corpse book, the Bigfoot).</summary>
@@ -233,7 +243,7 @@ public partial class NetServer : Node
     void BuildFeatures()
     {
         _pets = new PetServer(_ctx, PetsData, AnimalData, _animals, ArenaMode, MapDir, Map);
-        _wildlife = new WildlifeServer(_ctx, WildlifeData, AnimalData, AnimalShapes, _animals, () => MapZonePoints, () => Clock.HourAt(_tick / (double)Wire.TickRate), () => Query,
+        _wildlife = new WildlifeServer(_ctx, WildlifeData, AnimalData, AnimalShapes, _animals, () => _areas.ZonePoints, () => Clock.HourAt(_tick / (double)Wire.TickRate), () => Query,
             ArenaMode, MapDir, Map, (a, by) => _hunts.OnWildKilled(a, by), _minerals.OnDropped);
         _companions = new CompanionServer(_ctx, CompanionData, AnimalData, _animals.Companions, Progression, UnlockAll);
         _mass = new MassServer(_ctx, HolyMass, _citizens, _church, _demon, _sitters, _status, _events, EnsureNavMesh);
@@ -277,7 +287,7 @@ public partial class NetServer : Node
     ThievesServer BuildThieves()
     {
         var phase = new ThievesEvent();
-        var gangs = new GangServer(_ctx, ThievesData, Weapons, Items, _corpses, Deal, () => _nav, NextNavTicket, () => WalkerWorld, Scores, AwardXp);
+        var gangs = new GangServer(_ctx, ThievesData, Weapons, Items, _corpses, Deal, () => _nav, NextNavTicket, () => _walkers, Scores, AwardXp);
         var raids = new RaidServer(_ctx, ThievesData, phase, gangs, Map, World, _fleet, () => Vehicles, () => _nav, () => MapFlightBounds,
             () => _church.Shell is { } church ? new System.Numerics.Vector2(church.DoorwayPos.X, church.DoorwayPos.Z) : null, _rng, (sweep, spare) => RunOverTargets(sweep, spare), Crash);
         var loot = new LootServer(_ctx, ThievesData, raids.Roster, gangs.Roster, _fleet, _pets.Keeper, Map, () => _nav, ArenaMode, MapDir);
@@ -604,7 +614,7 @@ public partial class NetServer : Node
         c.Worn = new Equipment(Items);
         c.Bag = new Bag();
         ItemRules.IssueStandard(Items, c.Bag, ProfileServer.OwnedItems(c)); // every player has the standard items (the binoculars) from the start
-        c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = MapLadders, Bodies = _animals.Crowd };
+        c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = _areas.Ladders, Bodies = _animals.Crowd };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
         c.Session.Enter(SessionPhase.Joined);

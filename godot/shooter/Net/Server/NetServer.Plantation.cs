@@ -70,7 +70,7 @@ public partial class NetServer
         if (_corpses.AnyBodyInReach(at)) k |= KeyCompetitor.Corpse;
         if (_corpses.AnyGroundInReach(at)) k |= KeyCompetitor.GroundItem;
         if (_crates.AnyInReach(at)) k |= KeyCompetitor.Crate;
-        if (c.Body.State.OnLadder || MapLadders.Reach(at, c.Body.Yaw) >= 0) k |= KeyCompetitor.Ladder;
+        if (c.Body.State.OnLadder || _areas.Ladders.Reach(at, c.Body.Yaw) >= 0) k |= KeyCompetitor.Ladder;
         if (EnterableCar(p) != null) k |= KeyCompetitor.Vehicle;
         if (_garage.InReach(at)) k |= KeyCompetitor.Doors;
         if (_mass.SeatNear(at)) k |= KeyCompetitor.MassSeat;

@@ -128,7 +128,7 @@ public partial class NetServer
         if (_bigfootLife.WhyNotStart(_events) is { } why) { ChatTo(admin, ChatLineKind.Error, why); return; } // an event runs, or the last Bigfoot still lies where it fell
         if (_match.Phase != MatchPhase.Running) { ChatTo(admin, ChatLineKind.Error, "No round is running."); return; }
         var living = _byId.Values.Where(o => _match.Get(o.Id)?.Life == PlayerLife.Alive).ToList();
-        var spawn = PickEventSpawn(EventBook.Bigfoot);
+        var spawn = _areas.PickEventSpawn(EventBook.Bigfoot);
         var fallback = false;
         string? nearName = null;
         NVec3 nearPos = default;

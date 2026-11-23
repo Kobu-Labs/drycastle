@@ -14,7 +14,7 @@ public partial class NetServer
 {
     WorldQuery? _query;
     /// <summary>The one answer to what is under a point, in the way of a mover, or in the way of a shot (ADR 0028). Built on first use: <see cref="World"/> is set by then.</summary>
-    WorldQuery Query => _query ??= new WorldQuery(World, NearestHull, ParkedHullDistance);
+    WorldQuery Query => _query ??= new WorldQuery(World, NearestHull, _parked.Distance);
 
     static NVec3 N(Vector3 v) => new(v.X, v.Y, v.Z);
 
