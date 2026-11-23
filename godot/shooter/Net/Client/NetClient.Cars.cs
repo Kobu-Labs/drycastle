@@ -190,8 +190,8 @@ public partial class NetClient
         _seats.PlaceRiders(); // the riders of every vehicle, on their seats as the vehicles are drawn this frame (ADR 0026)
         if (!Ctx.Driving) { _rider.HideSelf(); _rider.Leave(); }
         if (!cockpit) _rider.EndCockpit();
-        if (!flakGunner && _guns.CameraOn && _gunship == null) { _guns.CameraOn = false; if (!chased) Ctx.Me?.EndChase(Ctx.Me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
-        if (!Ctx.Driving && _gunship == null) Ctx.Me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
+        if (!flakGunner && _guns.CameraOn && !_aircraftClient.AtTurret) { _guns.CameraOn = false; if (!chased) Ctx.Me?.EndChase(Ctx.Me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
+        if (!Ctx.Driving && !_aircraftClient.AtTurret) Ctx.Me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
         Ctx.Hud?.SetSeats(Ctx.Cars.SeatPanel());
         if (flakGunner) Ctx.Hud?.SetVehicleReadout(doorGunner ? _guns.DoorGunReadout() : _guns.FlakReadout());
         else if (flown is { } fr) Ctx.Hud?.SetVehicleReadout(_flight.Readout(fr));

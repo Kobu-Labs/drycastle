@@ -21,4 +21,12 @@ internal sealed class RocketView
     /// <summary>A thrown grenade: drawn falling along its arc from the last snapshot.</summary>
     public bool Grenade;
     public float Gravity;
+
+    /// <summary>The flight loop follows the drawn rocket.</summary>
+    public void PlayFlightLoop(Vector3 at)
+    {
+        if (!Sfx.Enabled) return;
+        Snd ??= Sfx.Loop("rocket.flight", at);
+        Snd?.Update(at);
+    }
 }

@@ -1,10 +1,12 @@
 using Godot;
+using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Flight;
 using Drycastle.Shooter.HeadsUp;
 using Drycastle.Shooter.Menu;
 using Drycastle.Shooter.Weapons;
 using Drycastle.ShooterCore.Flight;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
 
@@ -17,8 +19,44 @@ namespace Drycastle.Shooter.Net.Client;
 /// <see cref="GunshipOverlay"/> shows the thermal grade and the weapon. The server resolves the shots; the status it sends
 /// (<see cref="EventKind.GunshipStatus"/>) is what the overlay shows.
 /// </summary>
-public partial class NetClient
+internal sealed class AircraftClient
 {
+    readonly ClientContext _ctx;
+    readonly KillstreaksClient _streaks;
+    readonly BlastDustClient _blastDust;
+    readonly EnemyMarkers _markers;
+    readonly Func<Vector3, bool> _homingKillShown;
+
+    /// <param name="homingKillShown">A homing missile's kill blast is already drawn at this place.</param>
+    public AircraftClient(ClientContext ctx, KillstreaksClient streaks, BlastDustClient blastDust, EnemyMarkers markers, Func<Vector3, bool> homingKillShown)
+    {
+        _ctx = ctx; _streaks = streaks; _blastDust = blastDust; _markers = markers; _homingKillShown = homingKillShown;
+        // follows aircraft entities and the owner's status events, builds the overlay
+        ctx.WorldEntities.Spawned += OnSpawned;
+        ctx.WorldEntities.Despawned += OnDespawned;
+        ctx.WorldEntities.DespawnedFor += OnDespawnedFor;
+        _gunOverlay = new GunshipOverlay();
+        ctx.Root.AddChild(_gunOverlay);
+    }
+
+    /// <summary>The local player steers their gunship's turret.</summary>
+    public bool AtTurret => _gunship != null;
+
+    /// <summary>The turret camera's yaw this frame (the minimap follows it, ticket #150).</summary>
+    public float TurretViewYaw => _turretViewYaw;
+
+    /// <summary>The hint line of the turret overlay changed: redraw it at the next frame.</summary>
+    public void MarkDirty() => _gunDirty = true;
+
+    /// <summary>The owner's hit marker while at the turret.</summary>
+    public void HitMarker(bool headshot, bool kill) { if (_gunship != null) _gunOverlay.Hit(headshot, kill); }
+
+    /// <summary>Where the aircraft <paramref name="id"/> is drawn; null when there is no such aircraft.</summary>
+    public Vector3? PositionOf(ushort id) => _aircraft.TryGetValue(id, out var view) ? view.Model.GlobalPosition : null;
+
+    /// <summary>The ids of the aircraft in the world.</summary>
+    public IEnumerable<ushort> Ids => _aircraft.Keys;
+
     sealed class AircraftView
     {
         public AircraftModel Model = null!;
@@ -44,27 +82,17 @@ public partial class NetClient
     GunshipStatus _gunStatus;
     bool _gunDirty;
     GunshipOverlay _gunOverlay = null!;
+    HelperWarningOverlay? _helperWarn;
 
 
-    /// <summary>Called once from <see cref="_Ready"/>: follows aircraft entities, the owner's status events and builds the overlay.</summary>
-    void InitAircraft()
-    {
-        WorldEntities.Spawned += OnAircraftSpawned;
-        WorldEntities.Despawned += OnAircraftDespawned;
-        WorldEntities.DespawnedFor += OnAircraftDespawnedFor;
-        EventReceived += OnAircraftEvent;
-        _gunOverlay = new GunshipOverlay();
-        AddChild(_gunOverlay);
-    }
-
-    void OnAircraftSpawned(WorldReplica.Entity e)
+    void OnSpawned(WorldReplica.Entity e)
     {
         if (e.Type != Aircraft.WireType) return;
-        var kinds = Killstreaks?.AircraftKinds;
+        var kinds = _ctx.Killstreaks?.AircraftKinds;
         var index = AircraftState.Unpack(e.State.State).Kind;
         var kindId = kinds != null && index < kinds.Count ? kinds[index].Id : "helicopter";
         var model = AircraftModel.Build(kindId);
-        Ctx.Owned.AddChild(model);
+        _ctx.Owned.AddChild(model);
         var view = new AircraftView { Model = model, AltitudeM = kinds != null && index < kinds.Count ? kinds[index].AltitudeM : 0f };
         if (ShotFx.Enabled && kindId != "uav") // the UAV is silent for now (an engine loop is optional in #303)
         {
@@ -74,27 +102,27 @@ public partial class NetClient
         _aircraft[e.Id] = view;
     }
 
-    void OnAircraftDespawned(ushort id)
+    void OnDespawned(ushort id)
     {
         if (!_aircraft.Remove(id, out var v)) return;
         if (_gunship == v) EndGunship();
         v.Model.QueueFree();
     }
 
-    /// <summary>A shot-down aircraft blows up where it flew (an expired or removed one just leaves); runs before <see cref="OnAircraftDespawned"/> frees the model.</summary>
-    void OnAircraftDespawnedFor(ushort id, WorldDespawnReason reason)
+    /// <summary>A shot-down aircraft blows up where it flew (an expired or removed one just leaves); runs before <see cref="OnDespawned"/> frees the model.</summary>
+    void OnDespawnedFor(ushort id, WorldDespawnReason reason)
     {
         if (reason != WorldDespawnReason.Destroyed || !_aircraft.TryGetValue(id, out var v)) return;
         var at = v.Model.GlobalPosition;
-        if (HomingKillShown(at)) return; // a homing missile's kill blast (the Explosion event, with its Blast wave) is already there
-        RocketFx.Explode(Ctx.Owned, at, AircraftCrashRadius);
+        if (_homingKillShown(at)) return; // a homing missile's kill blast (the Explosion event, with its Blast wave) is already there
+        RocketFx.Explode(_ctx.Owned, at, AircraftCrashRadius);
         _blastDust.BlastFelt(at, AircraftCrashRadius, "explosion.vehicle");
     }
 
     /// <summary>The size of the blast of a shot-down aircraft (the vehicle blast is 9 m).</summary>
     const float AircraftCrashRadius = 12f;
 
-    void OnAircraftEvent(EventKind kind, byte[] payload)
+    public void OnEvent(EventKind kind, byte[] payload)
     {
         if (kind != EventKind.GunshipStatus || GunshipCodec.Decode(payload) is not { } s) return;
         _gunStatus = s;
@@ -102,14 +130,14 @@ public partial class NetClient
     }
 
     /// <summary>Places the aircraft, spins their rotors, and finds the local player's gunship (the one they own).</summary>
-    void RenderAircraft(double delta)
+    public void Render(double delta)
     {
-        if (Ctx.LastTick == 0) return;
-        var rt = RenderTickNow();
+        if (_ctx.LastTick == 0) return;
+        var rt = _ctx.RenderTick;
         ushort mineId = 0;
         foreach (var (id, v) in _aircraft)
         {
-            if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
+            if (!_ctx.WorldEntities.Entities.TryGetValue(id, out var e)) continue;
             v.Model.Spin((float)delta);
             if (e.Buf.At(rt) is { } s)
             {
@@ -118,10 +146,10 @@ public partial class NetClient
                 v.Model.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
                 v.Model.Rotation = new Vector3(0, s.Yaw, -bank); // roll: positive bank is the right wing down
             }
-            if (Ctx.MyId != 0 && e.State.Owner == Ctx.MyId) mineId = id;
+            if (_ctx.MyId != 0 && e.State.Owner == _ctx.MyId) mineId = id;
         }
 
-        if (mineId != 0 && _aircraft.TryGetValue(mineId, out var mine) && !Dead && Ctx.Me != null && _streaks.Gunner.GunDef() is { } gun)
+        if (mineId != 0 && _aircraft.TryGetValue(mineId, out var mine) && !_ctx.Dead && _ctx.Me != null && _streaks.Gunner.GunDef() is { } gun)
         {
             var mount = mine.Model.GlobalPosition - Vector3.Up * GunshipControl.TurretDropM;
             var groundY = mine.Model.GlobalPosition.Y - mine.AltitudeM;
@@ -131,43 +159,25 @@ public partial class NetClient
             {
                 // the turret takes the look the player had, anchored to the ground point it is on (ground-stabilised, #160)
                 _gunship = mine; _gunDirty = true;
-                _lookYaw = Ctx.Me.Yaw; _lookPitch = GunshipAim.ClampPitch(Ctx.Me.Pitch, gun);
-                _rawYaw = Ctx.Me.Yaw; _rawPitch = Ctx.Me.Pitch;
+                _lookYaw = _ctx.Me.Yaw; _lookPitch = GunshipAim.ClampPitch(_ctx.Me.Pitch, gun);
+                _rawYaw = _ctx.Me.Yaw; _rawPitch = _ctx.Me.Pitch;
                 _aimPoint = GunshipAim.AimPoint(ToNum(mount), _lookYaw, _lookPitch, groundY, maxD);
-                Ctx.Me.TurretLook = true;
+                _ctx.Me.TurretLook = true;
             }
             GunAimStep(mount, groundY, maxD, gun);
             var (yaw, pitch) = GunshipAim.View(ToNum(mount), _aimPoint, gun);
             _turretViewYaw = starting ? yaw : GunshipAim.Unwrap(_turretViewYaw, yaw);
-            Ctx.Me.Turret(mount, _turretViewYaw, pitch);
-            Ctx.Me.ZoomFov = GameSettings.Current.Fov / (_gunStatus.Zoom < gun.ZoomLevels.Count ? gun.ZoomLevels[_gunStatus.Zoom] : 1f);
+            _ctx.Me.Turret(mount, _turretViewYaw, pitch);
+            _ctx.Me.ZoomFov = GameSettings.Current.Fov / (_gunStatus.Zoom < gun.ZoomLevels.Count ? gun.ZoomLevels[_gunStatus.Zoom] : 1f);
             if (_gunDirty) { _gunOverlay.Present(_gunStatus, gun, _streaks.Gunner.HeliCycleWeapons && !_streaks.Gunner.Ac130Active, _streaks.Gunner.Ac130Active); _gunDirty = false; }
             // the timed streak's clock: the helicopter's, or the AC-130's time left (whole seconds, its kills are not counted here)
             var (timer, kills) = _streaks.Gunner.Ac130Active ? (Strings.F("ac130.timer", (int)Math.Ceiling(_streaks.Gunner.Ac130SecondsLeft)), "") : _streaks.Gunner.HeliClock();
             _gunOverlay.SetClock(timer, kills);
-            _gunOverlay.SetMarkers(Ctx.Me.Camera, EnemyMarkerPoints());
+            _gunOverlay.SetMarkers(_ctx.Me.Camera, _markers.Points());
         }
         else if (_gunship != null) EndGunship();
 
-        _viewmodel.Visible = _gunship == null;
-    }
-
-    /// <summary>The enemy markers' points (ticket #157): the chest of every live enemy player and target dummy. Reused each frame, no allocation.</summary>
-    readonly List<Vector3> _enemyMarkers = new();
-
-    /// <summary>
-    /// Fills <see cref="_enemyMarkers"/> from the remote replicas (players and target dummies share them): every one but the owner
-    /// and the dead (a dummy's Defeat pose, a player's body). Positions are the replicas' feet plus the chest height.
-    /// </summary>
-    List<Vector3> EnemyMarkerPoints()
-    {
-        _enemyMarkers.Clear();
-        foreach (var (id, r) in Ctx.Remotes)
-        {
-            if (id == Ctx.MyId || Match.AreFriends(Ctx.MyId, id) || r.State == EntityState.Dead || !GodotObject.IsInstanceValid(r.Node)) continue;
-            _enemyMarkers.Add(r.Node.GlobalPosition + Vector3.Up * 1.0f);
-        }
-        return _enemyMarkers;
+        _ctx.Viewmodel.Visible = _gunship == null;
     }
 
     /// <summary>Back to the body's first-person view, looking where the turret pointed.</summary>
@@ -176,7 +186,7 @@ public partial class NetClient
         _gunship = null;
         _gunDirty = false;
         _gunOverlay.Dismiss();
-        if (Ctx.Me != null) { Ctx.Me.TurretLook = false; Ctx.Me.EndChase(_turretViewYaw); } // back to the body, looking where the turret looked
+        if (_ctx.Me != null) { _ctx.Me.TurretLook = false; _ctx.Me.EndChase(_turretViewYaw); } // back to the body, looking where the turret looked
     }
 
     static System.Numerics.Vector3 ToNum(Vector3 v) => new(v.X, v.Y, v.Z);
@@ -191,9 +201,9 @@ public partial class NetClient
     /// </summary>
     void GunAimStep(Vector3 mount, float groundY, float maxDistance, GunshipDef gun)
     {
-        var dYaw = GunshipAim.Wrap(Ctx.Me!.Yaw - _rawYaw);
-        var dPitch = Ctx.Me.Pitch - _rawPitch;
-        _rawYaw = Ctx.Me.Yaw; _rawPitch = Ctx.Me.Pitch;
+        var dYaw = GunshipAim.Wrap(_ctx.Me!.Yaw - _rawYaw);
+        var dPitch = _ctx.Me.Pitch - _rawPitch;
+        _rawYaw = _ctx.Me.Yaw; _rawPitch = _ctx.Me.Pitch;
         if (dYaw == 0 && dPitch == 0) return;
         var (viewYaw, viewPitch) = GunshipAim.View(ToNum(mount), _aimPoint, gun);
         (_lookYaw, _lookPitch) = GunshipAim.Turn(viewYaw, viewPitch, dYaw, dPitch, MagnificationOf(gun), gun);
@@ -204,9 +214,9 @@ public partial class NetClient
     /// At the turret the input carries the turret's look, not the raw mouse look, which stays the player's own. Returns the pitch to
     /// send. The aim point (#161) goes with it: <see cref="GunnerAim"/> is what the server fires at. Called on the input tick.
     /// </summary>
-    float GunnerLook(ref MoveInput mi)
+    public float GunnerLook(ref MoveInput mi)
     {
-        if (_gunship == null || Ctx.Me == null) return Ctx.Me?.Pitch ?? 0f;
+        if (_gunship == null || _ctx.Me == null) return _ctx.Me?.Pitch ?? 0f;
         mi.Yaw = _lookYaw;
         return _lookPitch;
     }
@@ -215,5 +225,16 @@ public partial class NetClient
     /// The aim the input carries while steering a turret (#161): the ground point the reticle is on, from this client's own muzzle.
     /// The server fires from its later muzzle toward this point, so the rounds land where the reticle is. Null when not at a turret.
     /// </summary>
-    System.Numerics.Vector3? GunnerAim => _gunship != null && Ctx.Me != null ? _aimPoint : null;
+    public System.Numerics.Vector3? GunnerAim => _gunship != null && _ctx.Me != null ? _aimPoint : null;
+
+    /// <summary>EventKind.HelperWarning, sent to this player only: the red dot and cue for the helicopter's one-second warning.</summary>
+    public void OnHelperWarning(HelperWarning w)
+    {
+        if (w.Target != _ctx.MyId) return;
+        if (Sfx.Enabled) Sfx.Play2D("helper.warning");
+        _helperWarn ??= new HelperWarningOverlay();
+        if (!_helperWarn.IsInsideTree()) _ctx.Root.AddChild(_helperWarn);
+        var helicopter = w.Helicopter;
+        _helperWarn.Show(() => _aircraft.TryGetValue(helicopter, out var view) ? view.Model.GlobalPosition : null, w.Seconds);
+    }
 }

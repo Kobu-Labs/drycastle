@@ -126,7 +126,7 @@ public partial class NetClient
             _obstacleLast[key] = p;
             _flockObstacles.Add(new BoidObstacle(p, vel, radius));
         }
-        foreach (var (id, _) in _aircraft)
+        foreach (var id in _aircraftClient.Ids)
             if (WorldEntities.Entities.TryGetValue(id, out var e) && e.Buf.At(rt) is { } s) Add(id, new Godot.Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z), AircraftAvoidRadiusM);
         if (Vehicles != null)
             foreach (var (id, v) in Ctx.Cars.ById)

@@ -35,7 +35,7 @@ public partial class NetClient
     /// <summary>Holding zoom with a scoped weapon (sniper) narrows the camera; never while dead or with the mouse released.</summary>
     void ApplyScope()
     {
-        if (Ctx.Me == null || _gunship != null || ScudScreenOn) return; // at a turret the zoom is the gunship's; on a Scud screen it is the screen's
+        if (Ctx.Me == null || _aircraftClient.AtTurret || ScudScreenOn) return; // at a turret the zoom is the gunship's; on a Scud screen it is the screen's
         if (Mode.ScopeSuppressed)
         {
             // seated (roof/door gun, turret, any seat) or steering a missile: the held weapon's scope and iron-sight zoom stay off (#241)
@@ -103,7 +103,7 @@ public partial class NetClient
                 _moab.OnMoab(mo);
                 break;
             case EventKind.MissileBlast when MissileCodec.DecodeBlast(payload) is { } mb:
-                OnMissileBlast(mb);
+                _missile.OnBlast(mb);
                 break;
             case EventKind.GunshipShots when GunshipFxCodec.DecodeShots(payload) is { } gs:
                 OnGunshipShots(gs);
@@ -118,7 +118,7 @@ public partial class NetClient
                 _impacts.OnImpact(imp);
                 break;
             case EventKind.HelperWarning when HelperWarningCodec.Decode(payload) is { } hw:
-                OnHelperWarning(hw);
+                _aircraftClient.OnHelperWarning(hw);
                 break;
             case EventKind.PlayerFlung when PlayerFlungCodec.Decode(payload) is { } flung:
                 OnPlayerFlung(flung);

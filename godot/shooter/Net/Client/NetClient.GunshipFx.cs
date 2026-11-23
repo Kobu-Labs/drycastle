@@ -84,7 +84,7 @@ public partial class NetClient
     {
         var head = flags.HasFlag(GunshipHitFlags.Headshot);
         var kill = flags.HasFlag(GunshipHitFlags.Kill);
-        if (_gunship != null) _gunOverlay.Hit(head, kill);
+        _aircraftClient.HitMarker(head, kill);
         Ctx.Hud?.Hit(head, kill);
         if (Sfx.Enabled) Sfx.Play2D(kill ? "kill.confirm" : "hit.tick");
     }

@@ -74,7 +74,7 @@ public partial class NetClient
 
     /// <summary>The Lock of the weapon in the local player's hand, when its sight should be up.</summary>
     LockDef? LauncherHeld() =>
-        !Dead && Ctx.Me != null && _gunship == null && !Ctx.View.InUnarmedSeat && Weapons != null && Ammo is { } a && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1].Lock : null;
+        !Dead && Ctx.Me != null && !_aircraftClient.AtTurret && !Ctx.View.InUnarmedSeat && Weapons != null && Ammo is { } a && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1].Lock : null;
 
     /// <summary>Every frame: the shooter's sight and beeps, the owner's warning and beeps.</summary>
     void RenderLockOn()
@@ -120,7 +120,7 @@ public partial class NetClient
 
     /// <summary>Where a lock target is drawn: an Aircraft's model, or a flown helicopter's vehicle node. Null when it is not in view.</summary>
     Vector3? LockTargetPosition(ushort id) =>
-        _aircraft.TryGetValue(id, out var view) ? view.Model.GlobalPosition
+        _aircraftClient.PositionOf(id) is { } aircraftAt ? aircraftAt
         : Ctx.Cars.TryGet(id, out var car) && car.Node != null ? car.Node.GlobalPosition : null;
 
     string AircraftKindId(ushort id)

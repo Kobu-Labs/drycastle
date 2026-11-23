@@ -30,14 +30,6 @@ public partial class NetClient
         r.Pos = rec.Position; r.Dir = dir; r.At = Ctx.Now;
     }
 
-    /// <summary>The flight loop of a rocket follows the drawn rocket.</summary>
-    static void SfxRocket(RocketView r, Vector3 at)
-    {
-        if (!Sfx.Enabled) return;
-        r.Snd ??= Sfx.Loop("rocket.flight", at);
-        r.Snd?.Update(at);
-    }
-
     /// <summary>The fall of a thrown weapon (weapons.json grenade.gravity, m/s²); 0 for a rocket.</summary>
     float GrenadeGravity(int weapon) => Weapons != null && weapon >= 0 && weapon < Weapons.Weapons.Count ? Weapons.Weapons[weapon].Grenade?.Gravity ?? 0f : 0f;
 
@@ -64,7 +56,7 @@ public partial class NetClient
                 r.Node.Rotation = new Vector3(r.Tumble, 0, 0);
                 continue; // no trail, no flight loop
             }
-            SfxRocket(r, r.Node.GlobalPosition);
+            r.PlayFlightLoop(r.Node.GlobalPosition);
             if (camAt is { } eye) RocketFx.GateTrail(r.Node, eye);
             if (Mathf.Abs(r.Dir.Y) < 0.99f) r.Node.LookAt(r.Node.GlobalPosition + new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z));
         }

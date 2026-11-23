@@ -79,7 +79,7 @@ public partial class NetClient
     void HudHit(HitMsg h)
     {
         // a gunner's hit marker is the turret overlay's while the HUD is hidden (ticket #152); the hit event reaches it either way
-        if (h.Attacker == Ctx.MyId && h.Victim != Ctx.MyId && _gunship != null) _gunOverlay.Hit(h.Headshot, h.Kill);
+        if (h.Attacker == Ctx.MyId && h.Victim != Ctx.MyId) _aircraftClient.HitMarker(h.Headshot, h.Kill);
         if (Ctx.Hud == null) return;
         if (h.Attacker == Ctx.MyId && h.Victim != Ctx.MyId) Ctx.Hud.Hit(h.Headshot, h.Kill);
         if (h.Victim != Ctx.MyId || Ctx.Me == null) return;
@@ -119,8 +119,8 @@ public partial class NetClient
         if (Ctx.Me != null && Ctx.Hud != null)
         {
             var g = Ctx.Me.GlobalPosition;
-            var src = MinimapView.Select(missilePov: _povCam is { Current: true }, turret: _gunship != null, driving: Ctx.Driving);
-            Ctx.Hud.Minimap.SetPlayer(new Vector2(g.X, g.Z), MinimapView.YawFor(src, Ctx.Me.Yaw, _carYaw, _turretViewYaw, _missileViewYaw));
+            var src = MinimapView.Select(missilePov: _missile.PovOn, turret: _aircraftClient.AtTurret, driving: Ctx.Driving);
+            Ctx.Hud.Minimap.SetPlayer(new Vector2(g.X, g.Z), MinimapView.YawFor(src, Ctx.Me.Yaw, _carYaw, _aircraftClient.TurretViewYaw, _missile.ViewYaw));
             _carDots.Clear();
             foreach (var c in Ctx.Cars.All)
             {

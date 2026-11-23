@@ -132,6 +132,9 @@ public partial class NetClient : Node
     SeatsClient _seats = null!;
     VehicleHulls _hulls = null!;
     VehicleGunsClient _guns = null!;
+    MissileClient _missile = null!;
+    AircraftClient _aircraftClient = null!;
+    readonly EnemyMarkers _markers;
     readonly WaterClient _water;
     RiderCamera _rider = null!;
     CropCrushClient _crush = null!;
@@ -165,15 +168,16 @@ public partial class NetClient : Node
     public NetClient()
     {
         Ctx = new ClientContext(this) { Send = SendEvent, Connected = () => _peer != null, SendJoined = SendNow };
-        Ctx.View.OnTurret = () => _gunship != null;
+        Ctx.View.OnTurret = () => _aircraftClient.AtTurret;
         Ctx.View.ScudScreen = () => ScudScreenOn;
-        Ctx.View.Controlling = () => _controlling;
+        Ctx.View.Controlling = () => _missile.Controlling;
         Ctx.View.Pinned = () => _pinned;
         Ctx.View.Rising = () => _pRising;
         Ctx.Viewmodel.StepAcc = () => Ctx.Sound.StepAcc;
         _prediction = new OwnPrediction(Ctx, SpeedFor);
         _fxDemo = new FxDemoClient(Ctx);
         _water = new WaterClient(Ctx);
+        _markers = new EnemyMarkers(Ctx);
         Sandbox = new SandboxClient(Ctx);
         Report = new ReportClient(Ctx, _conn, () => !Bot && !LinkEnded && _welcomed, () => _peer, () => _elapsed);
         _moab = new MoabClient(Ctx);
@@ -203,10 +207,10 @@ public partial class NetClient : Node
         _minerals = new MineralsClient(Ctx);
         Loadouts = new LoadoutClient(Ctx, PerkData, Chat);
         _streaks = new KillstreaksClient(Ctx, Loadouts);
-        _streaks.Used += OnStreakUsed;
-        _streaks.Ended += OnStreakEnded;
-        _streaks.OwnerDied += ClearStreakViewsOnDeath;
-        _streaks.Gunner.HintsChanged += () => _gunDirty = true;
+        _streaks.Used += id => _missile.OnStreakUsed(id);
+        _streaks.Ended += id => _missile.OnStreakEnded(id);
+        _streaks.OwnerDied += () => { _missile.OnOwnerDied(); _uav.Ended(); };
+        _streaks.Gunner.HintsChanged += () => _aircraftClient.MarkDirty();
         _session = new SessionLog(Ctx, Host, Port, () => !Bot && !LinkEnded && _welcomed, () => _peer);
         _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _peer, Ctx.Snapshots);
         _glass = new GlassClient(Ctx, GlassData);
@@ -225,7 +229,7 @@ public partial class NetClient : Node
         _screens = new ScreensClient(Ctx, Chat, Sandbox, _chooser);
         InitGroundItems();
         InitCarePackages();
-        InitMissile();
+        _missile = new MissileClient(Ctx, _blastDust, _markers);
         InitTurrets();
         InitAnimals();
         InitCompanions();
@@ -233,7 +237,8 @@ public partial class NetClient : Node
         InitBigfoot();
         _thieves = new ThievesClient(Ctx, ThievesData, ItemData);
         InitDemon();
-        InitAircraft();
+        _aircraftClient = new AircraftClient(Ctx, _streaks, _blastDust, _markers, HomingKillShown);
+        EventReceived += _aircraftClient.OnEvent;
         InitLockOn();
         EventReceived += _guns.OnEvent;
         EventReceived += _seats.OnEvent;
@@ -282,12 +287,11 @@ public partial class NetClient : Node
     void FreeOwned()
     {
         Ctx.FreeOwned();
-        _missiles.Clear();
+        _missile.Clear();
         _animals.Clear(); // the nodes are under Owned
         _poop.Reset();
         _citizens.Reset();
         _impacts.Reset();
-        _povCam = null;
     }
 
     void Fail(string why)
@@ -400,7 +404,7 @@ public partial class NetClient : Node
     {
         RenderCars();
         RenderHarvester((float)delta);
-        RenderAircraft(delta);
+        _aircraftClient.Render(delta);
     }
 
     void RenderProjectiles(double delta)
@@ -408,8 +412,8 @@ public partial class NetClient : Node
         RenderRockets();
         RenderLockOn();
         RenderLauncherLoaded();
-        RenderMissiles();
-        RenderMissilePov();
+        _missile.RenderMissiles();
+        _missile.RenderPov();
         RenderScud(delta);
     }
 
@@ -675,10 +679,10 @@ public partial class NetClient : Node
     /// <summary>Numbers the input and predicts it: the own body, and the helicopter or the amphibious transport the player steers. The input waits in <see cref="OwnPrediction"/> for the server's ack.</summary>
     void PredictTick(MoveInput mi, float dt)
     {
-        if (_gunship == null) PredictFire(mi); // rounds from a turret are the server's alone
-        var sentPitch = GunnerLook(ref mi); // at the turret the aim is sent (ground-stabilised, #160), and the player's own look is left alone
-        if (_gunship == null) Ctx.Me!.Yaw = mi.Yaw;
-        var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? Ctx.Hotbar.Want : 0), GunnerAim);
+        if (!_aircraftClient.AtTurret) PredictFire(mi); // rounds from a turret are the server's alone
+        var sentPitch = _aircraftClient.GunnerLook(ref mi); // at the turret the aim is sent (ground-stabilised, #160), and the player's own look is left alone
+        if (!_aircraftClient.AtTurret) Ctx.Me!.Yaw = mi.Yaw;
+        var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_aircraftClient.AtTurret ? TurretKey() : Weapons != null ? Ctx.Hotbar.Want : 0), _aircraftClient.GunnerAim);
         // C-03: a dead body does not move on the server (its input is zero and it is skipped), so it is not predicted either; else each snapshot snapped it back
         if (Mode.BodyIsPredicted) { if (!Dead) Ctx.Me!.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); Ctx.Sound.OwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         _flight.Predict(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
