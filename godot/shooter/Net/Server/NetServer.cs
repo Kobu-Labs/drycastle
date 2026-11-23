@@ -7,6 +7,7 @@ using Drycastle.Shooter.Net.Server.Fauna;
 using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
 using Drycastle.Shooter.Net.Server.Profiles;
+using Drycastle.Shooter.Net.Server.Seating;
 using Drycastle.Shooter.Net.Server.Scenery;
 using Drycastle.Shooter.Net.Server.VillageRadio;
 using Drycastle.ShooterCore.Chat;
@@ -86,6 +87,7 @@ public partial class NetServer : Node
     IntelServer _intel = null!;
     ChatServer _chat = null!;
     ProfileServer _profiles = null!;
+    Sitters _sitters = null!;
     AnimalWorld _animals = null!;
     CompanionServer _companions = null!;
     PetServer _pets = null!;
@@ -128,7 +130,8 @@ public partial class NetServer : Node
         RegisterTargetSources();
         _animals = new AnimalWorld(_ctx, _fleet, Map, Water, () => Query, () => MapFlightBounds);
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
-        _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, CitizenHits, TableSeating());
+        _sitters = new Sitters(_ctx, OnStood);
+        _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, CitizenHits, new TableSeating(_sitters.IsSeated, _sitters.StandUpAtTableExcept, _sitters.SitAtTable));
         _intel = new IntelServer(_ctx);
         _chat = new ChatServer(_ctx, admin => new ChatContext(admin, Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList(), CompanionData.Companions.Select(i => i.Id).ToList()), AdminTokens, AdminAll);
         _profiles = new ProfileServer(_ctx, Progression, UnlockAll, Weapons, Perks, CamoData, Killstreaks, Join, OnProfileAttached, AllowSave);
@@ -526,7 +529,7 @@ public partial class NetServer : Node
         _companions.Leave(c.Id);
         StatusLeave(c.Id);
         _rozhlas.OnPlayerLeft(c.Id);
-        MassStandUp(c.Id); _seatHint.Remove(c.Id);
+        _sitters.StandUp(c.Id); _sitters.Forget(c.Id);
         DetachFromCar(c);
         c.Body.QueueFree();
         _byId.Remove(c.Id);

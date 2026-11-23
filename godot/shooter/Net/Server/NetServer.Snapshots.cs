@@ -17,7 +17,7 @@ public partial class NetServer
         foreach (var c in _byId.Values) // every joined player, bots included
                 ents.Add(EntityRecord.Make(c.Id, EntityType.Player, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z),
                     c.Body.Yaw, c.Body.Pitch, c.Body.Health, c.Car != null && _match.StateOf(c.Id) != EntityState.Dead ? EntityState.InVehicle : _match.StateOf(c.Id), c.Slot,
-                    c.Car != null ? RiderRules.HitStance(c.Car.Def, c.CarSeat, c.Body.State.Stance) : BodyStanceOf(c)));
+                    c.Car != null ? RiderRules.HitStance(c.Car.Def, c.CarSeat, c.Body.State.Stance) : _sitters.StanceOf(c)));
         foreach (var car in _fleet.Cars) if (car.Seat.Count > 1) ents.Add(SeatsRecord.Make(car.Id, Fleet.SeatOccupants(car))); // who sits in seats 1..4, for every client (ADR 0026)
         foreach (var car in _fleet.Cars)
         {

@@ -84,7 +84,7 @@ public partial class NetServer
             DemonStartFailed($"church.json has no usable anchors ({e.Message}); the pastor turns into nothing");
             return;
         }
-        foreach (var id in _sitters.Keys.ToList()) MassStandUp(id);
+        _sitters.StandUpAll();
         DoorsFor(DoorReason.DemonStarting);
         _dSpot = spot.Pos;
         _dSpotForward = new NVec3(-MathF.Sin(spot.Yaw), 0, -MathF.Cos(spot.Yaw));
@@ -224,7 +224,7 @@ public partial class NetServer
         _dPlayers.Clear();
         foreach (var id in inside)
             if (_byId.TryGetValue(id, out var c))
-                _dPlayers.Add(new DemonPlayer(id, N(c.Body.GlobalPosition), true, N(c.Body.Velocity), c.Car == null && c.Body.State.OnFloor, _sitters.ContainsKey(id)));
+                _dPlayers.Add(new DemonPlayer(id, N(c.Body.GlobalPosition), true, N(c.Body.Velocity), c.Car == null && c.Body.State.OnFloor, _sitters.IsSeated(id)));
         _dInside = _dPlayers.Count;
 
         _dEvents.Clear();
