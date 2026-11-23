@@ -21,7 +21,7 @@ from drycastle_pipeline.buildings import hex_to_rgb
 from drycastle_pipeline.bunker import bunker_rooms
 from drycastle_pipeline.detail import load_patches, patches_by_chunk
 from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits
-from drycastle_pipeline.ground import ground_types, ground_units, type_colours, water_kinds
+from drycastle_pipeline.ground import ground_kind, ground_types, ground_units, type_colours, water_kinds, with_parcel_types
 from drycastle_pipeline.landmarks import build_landmark
 from drycastle_pipeline.meshes import Mesh, building_mesh, collision_mesh
 from drycastle_pipeline.patches import node_name, patch_meshes, plan_patches
@@ -37,7 +37,8 @@ GREY = (128, 128, 128)
 
 
 class ParcelColours:
-    """Flat terrain colour by the kind of the parcel or ground area under a point; a shade is picked per unit."""
+    """Flat terrain colour by the kind of the parcel or ground area under a point; a shade is picked per unit. A parcel the
+    edits gave a ground type (``ground.ground_kind``) has that type's colours."""
 
     def __init__(self, parcels: list[dict], palette: dict[str, list[str]], blend: dict | None = None, swamp: dict | None = None):
         """``blend`` ({kinds, radius_m}, the terrain's ``colour_blend``): around the outline of ground of these kinds the colour is the mean of the
@@ -68,7 +69,7 @@ class ParcelColours:
         self.edges = shapely.STRtree(_short_lines(edges)) if edges else None
 
     def _pick(self, p: dict) -> list[int]:
-        return self._shade(p, self.palette.get(p["kind"], self.palette["other"]))
+        return self._shade(p, self.palette.get(ground_kind(p), self.palette["other"]))
 
     @staticmethod
     def _shade(p: dict, shades: list[list[int]]) -> list[int]:
@@ -304,7 +305,7 @@ def build_scene(
                 scene.nodes.setdefault(key, {})[name] = mesh
 
     tcfg = load_section("terrain", rules_path)
-    colours = ParcelColours(ground_units(parcels_doc), {**tcfg["colours"], **type_colours(types)}, tcfg.get("colour_blend"),
+    colours = ParcelColours(with_parcel_types(ground_units(parcels_doc), edits_path), {**tcfg["colours"], **type_colours(types)}, tcfg.get("colour_blend"),
                             _swamp_colours(ground_units(parcels_doc), types, pplan, t, rules_path))
     dec = int(tcfg["collision_decimate"])
     grey = np.array(GREY, np.uint8)

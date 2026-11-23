@@ -87,27 +87,47 @@ public class LaddersTests
     }
 
     [Fact]
-    public void ReachingTheBottomStepsOffBackIntoTheRoom()
+    public void ReachingTheBottomStepsOffOntoTheOpenSide()
     {
         var s = Mounted(-2.39f);
         s.LadderArmed = true;
         One.Climb(ref s, Input(s.Position, MoveButtons.None, moveY: -1), Dt);
         Assert.False(s.OnLadder);
-        Assert.Equal(new Vector3(-Ladders.StepOffBottom, -2.4f, 0f), s.Position);
+        Assert.Equal(new Vector3(Ladders.StepOffBottom, -2.4f, 0f), s.Position);
     }
 
     [Fact]
     public void GettingOnAtTheTopWhileWalkingForwardDoesNotStepStraightOff()
     {
         var s = At(1.2f, 0f, 0f);
-        var walk = Input(s.Position, MoveButtons.Use, moveY: 1);
-        One.Climb(ref s, walk, Dt);
-        One.Climb(ref s, Input(s.Position, MoveButtons.Use, moveY: 1), Dt); // forward still held: waits
+        One.Climb(ref s, Input(s.Position, MoveButtons.Use, moveY: 1), Dt);
+        One.Climb(ref s, Input(s.Position, MoveButtons.Use, moveY: 1), Dt); // forward still held: stays on, no step-off yet
         Assert.True(s.OnLadder);
         Assert.Equal(0f, s.Position.Y);
-        One.Climb(ref s, Input(s.Position, MoveButtons.Use, moveY: 0), Dt); // let go of the keys: armed
-        One.Climb(ref s, Input(s.Position, MoveButtons.Use, moveY: -1), Dt);
+        One.Climb(ref s, Input(s.Position, MoveButtons.Use, moveY: -1), Dt); // back climbs down at once
         Assert.True(s.Position.Y < 0);
+    }
+
+    [Fact]
+    public void GettingOnAtTheFootWithNoKeyStaysOn()
+    {
+        var s = At(1.2f, -2.4f, 0f);
+        Assert.True(One.Climb(ref s, Input(s.Position, MoveButtons.Use), Dt));
+        One.Climb(ref s, Input(s.Position, MoveButtons.None), Dt);
+        Assert.True(s.OnLadder);
+        Assert.Equal(-2.4f, s.Position.Y, 4);
+        One.Climb(ref s, Input(s.Position, MoveButtons.None, moveY: 1), Dt);
+        Assert.True(s.Position.Y > -2.4f);
+    }
+
+    [Fact]
+    public void KeysHeldOnGettingOnClimbAtOnce()
+    {
+        var s = At(1.2f, 0f, 0f);
+        One.Climb(ref s, Input(s.Position, MoveButtons.Use, moveY: -1), Dt); // gets on with back held
+        var y = s.Position.Y;
+        One.Climb(ref s, Input(s.Position, MoveButtons.Use, moveY: -1), Dt);
+        Assert.True(s.Position.Y < y);
     }
 
     [Fact]

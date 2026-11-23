@@ -455,6 +455,7 @@ public partial class EditsWatcher : Node
                 Z = o.TryGetProperty("z", out var z) && z.ValueKind == JsonValueKind.Number ? z.GetSingle() : null,
                 RotationDeg = o.TryGetProperty("rotation_deg", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetSingle() : 0f,
                 Scale = o.TryGetProperty("scale", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetSingle() : 1f,
+                SizeM = Drycastle.MapLoader.PlacedObject.ReadSizeM(o),
                 Colour = o.TryGetProperty("colour", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null,
                 Solid = !(o.TryGetProperty("solid", out var so) && so.ValueKind == JsonValueKind.False),
                 Parcel = Map.ParcelAt(x, -y)?.Id,

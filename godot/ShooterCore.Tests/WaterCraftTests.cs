@@ -104,7 +104,7 @@ public class WaterCraftTests
     {
         // the server gates the run-over check on RunOver and on not being afloat (NetServer.StepVehicles)
         Assert.True(Type("amphibious").RunOver);
-        Assert.True(Type("jeep").RunOver);
+        Assert.True(Type("truck").RunOver);
         Assert.True(Type("car").RunOver);
     }
 

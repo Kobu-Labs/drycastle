@@ -48,10 +48,12 @@ public enum EventKind : byte
     HuntShot = 25,
     /// <summary>Client to server: the player raised or lowered the binoculars (<see cref="Binoculars.EncodeRaise"/>: u8).</summary>
     RaiseBinoculars = 26,
-    /// <summary>Server to everyone but that player, and to a joiner for each player who has them up: a player's binoculars are up or down (<see cref="Binoculars.EncodeRaised"/>: u16 player id, u8); the client poses the character.</summary>
+    /// <summary>Server to everyone but that player, and to a joiner for each player who has them up: a player's binoculars are up or down (<see cref="Binoculars.EncodeRaised"/>: u16 player id, u8, u8 the pair's item index); the client poses the character with that pair.</summary>
     BinocularsRaised = 27,
     /// <summary>Server to everyone (the lamp's owner too), when it changes and, to a joiner, for each player whose head lamp is on: a player's head lamp is on or off (<see cref="HeadLamp.Encode"/>: u16 player id, u8). The client draws the beam from that player's head.</summary>
     HeadLampState = 31,
+    /// <summary>Server broadcast: a Phoenix was first hit and starts to fall (<see cref="PhoenixFallCodec"/>: u16 world entity id, f32 x3 where it was hit, f32 x3 the crash site, f32 fall seconds, 30 bytes). Not sent to a joiner: its state and position say the rest.</summary>
+    PhoenixFall = 32,
     /// <summary>Client to server: the player's own Respawn, with an optional loadout slot to select first (<see cref="Redeploy.Encode"/>: u8, 255 for none); the server kills them as a suicide (<see cref="MatchSim.ForceDeath"/>).</summary>
     Redeploy = 28,
     /// <summary>Client to server, every ten seconds: the client's performance numbers of the period (<see cref="ClientReport"/>), for the metrics store. A server that does not know it ignores it, so it is not a protocol version.</summary>
@@ -110,6 +112,10 @@ public enum EventKind : byte
     SeatSwitch = 161,
     /// <summary>Server to everyone seated in a vehicle: who sits in each of its seats, sent when that changes (<see cref="SeatCodec"/>). Feeds the seat schematic.</summary>
     SeatState = 162,
+    /// <summary>Server broadcast: a vehicle hit something hard enough to be heard (u16 vehicle, u8 <see cref="CrashSound"/>, <see cref="VehicleCrashCodec"/>, #410).</summary>
+    VehicleCrash = 163,
+    /// <summary>Server broadcast: a vehicle ran a player over and they live, thrown ahead of it (u16 player, <see cref="PlayerFlungCodec"/>, #411): drawn tumbling, then getting up.</summary>
+    PlayerFlung = 164,
     /// <summary>Server broadcast: one glass pane's hit points after they changed (<see cref="GlassCodec"/>, ADR 0007). Kinds 170-179 belong to glass panes.</summary>
     GlassPane = 170,
     /// <summary>Server broadcast, or to the joining player: the panes of a scope are whole except the listed ones (<see cref="GlassCodec"/>): the join catch-up, a new round, a vehicle that returned.</summary>
@@ -200,6 +206,18 @@ public enum EventKind : byte
     PlayerLog = 105,
     /// <summary>Server to everyone: a new record, a player's first of a species, or both in one (<see cref="HuntAnnounceMsg"/>); the same hunt is redacted separately for each recipient.</summary>
     HuntAnnounce = 106,
+    /// <summary>Client to server: the player held the interact key at a mineral node (<see cref="MineralRules.EncodePick"/>: u8 node id). Kinds 111-113 belong to the Mineral Log's finding (#401).</summary>
+    MineralPick = 111,
+    /// <summary>Server to everyone, and to a joiner: the mineral nodes of the world and whether each can be taken now (<see cref="MineralRules.EncodeNodes"/>).</summary>
+    MineralNodes = 112,
+    /// <summary>Server to a stored player: their finds with the place among the finders, at join and after each find (<see cref="MineralRules.EncodeFinds"/>); a find that just happened also says which, and the client plays the pickup sound (#433).</summary>
+    MineralFinds = 113,
+    /// <summary>Client to server: the Companion the player wants out, picked on the Equipment screen (<see cref="CompanionRoster.EncodePick"/>: u16 companions.json index). Kinds 114-116 belong to the Companions (#488).</summary>
+    CompanionPick = 114,
+    /// <summary>Server to the owner: the Companions they can pick and the one that is out (<see cref="CompanionRoster"/>), at join and when either changes.</summary>
+    Companions = 115,
+    /// <summary>Server to the owner: the players their Companion has marked now (<see cref="ScoutCompanion.EncodeMarks"/>: u8 count, a u16 player id each; 0 clears). Sent when the set changes. The owner's client draws them through walls.</summary>
+    CompanionMarks = 116,
     /// <summary>Server to everyone, and to a joiner: the satellite dishes taken so far (<see cref="DishCodec"/>: the whole set of object ids, also when it is empty after a round reset). The client hides those objects' nodes.</summary>
     DishTaken = 233,
     /// <summary>Server to everyone, about twice a second while a harvester job runs and once when it ends (<see cref="HarvesterCodec.StateMsg"/>): the phase, the field and how far the AI's plan has come (the cut itself is <see cref="HarvesterCut"/>). Kinds 234-235 belong to the harvester (#331).</summary>
@@ -220,6 +238,10 @@ public enum EventKind : byte
     LampState = 250,
     /// <summary>Server broadcast, or to the joining player: every pole lamp that is not lit (<see cref="LampCodec"/>); the rest are lit. The join catch-up and a new round.</summary>
     LampSync = 251,
+    /// <summary>Server broadcast: one road sign plate's state after it changed (<see cref="SignPlateCodec"/>, ADR 0039: bent by a round, whole again). Kinds 252-253 belong to the road signs.</summary>
+    SignPlateState = 252,
+    /// <summary>Server broadcast, or to the joining player: every road sign plate that is not whole (<see cref="SignPlateCodec"/>); the rest are whole. The join catch-up and a new round.</summary>
+    SignPlateSync = 253,
     /// <summary>Client to server: a crew member's command to a Scud truck's launcher (<see cref="ScudCodec"/>: open or close the screen, the camera, lock a point, confirm, withdraw, abort). Kinds 80-85 belong to the Scud truck.</summary>
     ScudCommand = 80,
     /// <summary>Server to everyone, and to a joiner for each truck: one launcher's state, its clock, who is the operator, the locked point and who confirmed (<see cref="ScudStateMsg"/>). Sent when anything of that changes.</summary>
@@ -353,7 +375,16 @@ public static class Wire
     //   v74 the longest player kill (#430): the records answer ends in the server's longest player kill (u8 flag, then the kill), the player log answer carries the player's own (flag bit 4 and the kill after the longest shot); bit 8 of the hunt announcement's flags is a new longest player kill
     //   v75 brake lamps (#409): bit 6 of a driven vehicle's health byte says its brakes are on (VehicleRecord.BrakeBit/Braking); the client no longer guesses braking from speed
     //   v76 the head lamp: event 31 HeadLampState (a player's head lamp on or off, to everyone and to a joiner)
-    public const byte ProtocolVersion = 76;
+    //   v77 finding minerals (#401): events 111 MineralPick (client to server), 112 MineralNodes (the nodes and whether each is active) and 113 MineralFinds (the player's finds with their places)
+    //   v78 the crash sound (#410): event 163 VehicleCrash (a vehicle hit something: its id and how hard)
+    //   v79 a run-over survivor is thrown (#411): event 164 PlayerFlung (the player a vehicle threw alive)
+    //   v80 the Phoenix (#396): animal states 11-14 (Flying, Falling, Crashed, Burning, AnimalState); an animal's world-state pitch is the Phoenix's dive pitch; event 32 PhoenixFall (PhoenixFallCodec)
+    //   v81 dropped minerals (#396): the MineralNodes set (event 112) may hold dynamic nodes (ids from 128, a Phoenix's pheonixite) and is the WHOLE set: a client drops a node it no longer lists
+    //   v82 Companions (#488): world entity type 58 (CompanionRules): the owner field is the index in companions.json, the state byte a CompanionPose
+    //   v83 shootable road sign plates (ADR 0039): events 252 SignPlateState and 253 SignPlateSync
+    //   v84 the Companion picker (#488): events 114 CompanionPick and 115 Companions (CompanionRoster); the scout kind's marks: event 116 CompanionMarks
+    //   v85 the binoculars seen by the others name the pair (#341): event 27 BinocularsRaised ends in the pair's item index (u8)
+    public const byte ProtocolVersion = 85;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

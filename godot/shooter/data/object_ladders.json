@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "ladders": [
+    {
+      "asset": "pack:synty-military/SM_Bld_GuardTower_01",
+      "at": [0.0, -1.5],
+      "facing": [0.0, 1.0],
+      "bottom_m": 0.0,
+      "top_m": 6.36
+    }
+  ]
+}

@@ -716,9 +716,9 @@ public class ScudTests
     }
 
     [Fact]
-    public void The_protocol_is_75_and_the_events_are_where_the_docs_say()
+    public void The_protocol_is_current_and_the_events_are_where_the_docs_say()
     {
-        Assert.Equal(76, Wire.ProtocolVersion);
+        Assert.True(Wire.ProtocolVersion >= 76); // each later protocol bump keeps these ids
         Assert.Equal(80, (int)EventKind.ScudCommand);
         Assert.Equal(85, (int)EventKind.ScudNotice);
         Assert.Equal(237, SpecialWeapons.Scud);

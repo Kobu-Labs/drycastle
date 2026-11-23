@@ -68,7 +68,7 @@ public class LevelsTests
     [Fact]
     public void EveryShippedWeaponAndPerkIsInTheTableAtItsOwnLevel()
     {
-        foreach (var w in Shipped.Weapons.Weapons.Where(w => w.Slot != WeaponSlot.Special))
+        foreach (var w in Shipped.Weapons.Weapons.Where(w => w.Slot != WeaponSlot.Special && !w.IsReward)) // a reward weapon has no level (#473)
             Assert.Equal(w.UnlockLevel, Shipped.Levels.Table.RequiredLevel(UnlockKind.Weapon, w.Id));
         foreach (var p in Shipped.Perks.Perks)
             Assert.Equal(p.UnlockLevel, Shipped.Levels.Table.RequiredLevel(UnlockKind.Perk, p.Id));

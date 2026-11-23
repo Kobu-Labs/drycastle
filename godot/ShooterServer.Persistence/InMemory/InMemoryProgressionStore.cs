@@ -11,11 +11,13 @@ public sealed class InMemoryProgressionStore : IProgressionStore
     readonly Dictionary<long, Profile> _byId = new();
     readonly Dictionary<long, Loadout[]> _loadouts = new();
     readonly Dictionary<long, int> _activeSlot = new();
+    readonly Dictionary<long, string> _companion = new();
     readonly Dictionary<long, HashSet<Unlock>> _unlocks = new();
     readonly Dictionary<long, StatsRow> _stats = new();
     readonly Dictionary<(long Player, int Slot), CamoSpec> _camo = new();
     readonly List<HuntRecord> _hunts = new();
     readonly Dictionary<long, PlayerKillRecord> _kills = new();
+    readonly List<MineralFind> _finds = new();
     readonly LevelCurve _curve;
     long _nextId = 1;
     long _nextHunt = 1;
@@ -31,6 +33,7 @@ public sealed class InMemoryProgressionStore : IProgressionStore
         Stats = new StatsRepo(this);
         Camo = new CamoRepo(this);
         Hunts = new HuntRepo(this);
+        Minerals = new MineralRepo(this);
     }
 
     public IProfileRepository Profiles { get; }
@@ -39,6 +42,7 @@ public sealed class InMemoryProgressionStore : IProgressionStore
     public IStatsRepository Stats { get; }
     public ICamoRepository Camo { get; }
     public IHuntRepository Hunts { get; }
+    public IMineralRepository Minerals { get; }
 
     public void Dispose() { }
 
@@ -75,6 +79,18 @@ public sealed class InMemoryProgressionStore : IProgressionStore
         public Task SetNameAsync(long playerId, string name)
         {
             lock (s._gate) Update(playerId, p => p with { Name = name ?? "" });
+            return Task.CompletedTask;
+        }
+
+        public Task<string> GetCompanionAsync(long playerId)
+        {
+            lock (s._gate) return Task.FromResult(s._companion.GetValueOrDefault(playerId, ""));
+        }
+
+        public Task SetCompanionAsync(long playerId, string companionId)
+        {
+            lock (s._gate)
+                if (s._byId.ContainsKey(playerId)) s._companion[playerId] = companionId ?? "";
             return Task.CompletedTask;
         }
 
@@ -239,5 +255,20 @@ public sealed class InMemoryProgressionStore : IProgressionStore
         }
 
         IEnumerable<HuntRow> Rows() => s._hunts.Select(h => new HuntRow(h, s._byId[h.PlayerId].Name)).ToList();
+    }
+
+    sealed class MineralRepo(InMemoryProgressionStore s) : IMineralRepository
+    {
+        public Task AppendAsync(MineralFind find)
+        {
+            lock (s._gate)
+                if (s._byId.ContainsKey(find.PlayerId) && !s._finds.Any(f => f.PlayerId == find.PlayerId && f.MineralId == find.MineralId)) s._finds.Add(find);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<MineralFind>> GetAllAsync()
+        {
+            lock (s._gate) return Task.FromResult<IReadOnlyList<MineralFind>>(s._finds.ToList());
+        }
     }
 }

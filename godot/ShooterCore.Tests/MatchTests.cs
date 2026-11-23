@@ -7,6 +7,15 @@ namespace Drycastle.ShooterCore.Tests;
 public class MatchTests
 {
     [Fact]
+    public void DeathMsgCarriesTheFlightAndOldMessagesDecodeAsNone()
+    {
+        var m = new DeathMsg(4, 5, 3, DeathFlight.RunOver);
+        Assert.Equal(m, MatchCodec.DecodeDeath(MatchCodec.Encode(m)));
+        Assert.Equal(8, MatchCodec.Encode(new DeathMsg(4, 5, 3)).Length);
+        Assert.Equal(DeathFlight.None, MatchCodec.DecodeDeath(MatchCodec.Encode(new DeathMsg(4, 5, 3)))!.Flight);
+    }
+
+    [Fact]
     public void TheClientSeesTheSpawnAndDeathThatJustArrivedNotTheLastPlayersOnes()
     {
         // three players spawn in join order, then the first dies and respawns: the newest event is player 1's each time

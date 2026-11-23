@@ -69,6 +69,7 @@ public partial class NetClient
     /// <summary>The round start and end sounds, on a phase change (<see cref="ClientMatchState.PhaseChanged"/>; the first state of a connection is no round start).</summary>
     void SfxPhase(MatchPhase? prev, MatchPhase p)
     {
+        if (p is MatchPhase.Running or MatchPhase.Ending) { _streaks?.Reset(); RefreshStreaks(); } // a round reset drops earned streaks too, as on the server
         if (p == MatchPhase.Running) ScudRoundStart(); // the burnt ground and the missiles in the air of the last round
         if (prev == null || !Sfx.Enabled) return;
         if (p == MatchPhase.Running) Sfx.Play2D("round.start");
@@ -116,6 +117,13 @@ public partial class NetClient
         else Sfx.Play3D(id, at, dbOffset);
     }
 
+    /// <summary>A vehicle hit something (<see cref="EventKind.VehicleCrash"/>, #410): the bump or the hard crash, at the vehicle; its riders hear it at full level.</summary>
+    void OnVehicleCrash(ushort carId, CrashSound sound)
+    {
+        if (!_cars.TryGetValue(carId, out var car) || !GodotObject.IsInstanceValid(car.Node)) return;
+        PlayCarSound(sound == CrashSound.Hard ? "vehicle.crash_hard" : "vehicle.crash", car.Node.GlobalPosition, car);
+    }
+
     /// <summary>A sound of a vehicle that lasts (the harvester's reel and chew, seconds long) and rides with it: <see cref="StepCarVoices"/> keeps it on the moving machine, or at the listener when the local player rides it. It ends with the file.</summary>
     sealed class CarVoice
     {
@@ -153,7 +161,14 @@ public partial class NetClient
         var def = Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null;
         // the vehicle this player rides (any seat) is heard from the inside: placed at the listener, so the chase camera's distance and the car's turning never pan or fade it
         var mine = RidesCar(v);
+        var world = at;
         if (mine) at = Sfx.ListenerPosition(at);
+        if (def is { ReverseBeep: true })
+        {
+            // the backup alarm: from the drawn signed speed, for any driver (a bot's too); the rider hears it as loud as the engine (PlayCarSound puts it at the listener)
+            var active = v.Driver != 0 && !v.Destroyed && (mine || Sfx.ListenerDistance(at) <= 60f);
+            if (v.Beep.Step(DriveOf(v)?.Speed ?? 0f, dt, active)) PlayCarSound("vehicle.reverse_beep", world, v);
+        }
         if (def?.Sounds is { } set)
         {
             // a type with its own set: layered engine sounds, kept only while it is occupied and near

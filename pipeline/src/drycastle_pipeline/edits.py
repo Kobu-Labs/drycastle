@@ -36,6 +36,20 @@ formatting is fixed, so git diffs stay small. Version 1::
                       the boundary, centred on the nearest boundary point to ``at``. ``at`` is
                       absolute EPSG:5514 (S-JTSK) metres, the same frame as objects.
 
+``ground_type`` (a parcel's, optional)
+    name of a ground type (as a patch's ``type``; not a water type): the parcel's ground looks like that type, its terrain
+    colours and its detail ``recipe`` (a type without a recipe: no detail), instead of the yard of its kind. Kind, layout,
+    fence and other parcels are unchanged. Needs the next make map-update.
+
+``outline`` (a parcel's, optional)
+    polygon [[x, y], ...], absolute EPSG:5514 (S-JTSK) metres (the frame of objects): replaces the cadastral outline of this one
+    parcel (no key: untouched). A simple polygon of at least 3 points; the parcel's buildings must stay inside it (checked
+    where it is applied, the parcels stage: a parcel whose outline leaves a building keeps its cadastral outline). Where
+    it overlaps an unedited parcel, the edited one wins and the neighbour is cut back by the overlap; two edited outlines that
+    overlap are an error. Land the parcel no longer holds becomes ground (default ground unless another outline takes it).
+    The outline is applied once, in the parcels stage, so fence, ground, detail and parcel lookup follow it: needs ``make parcels``
+    and then ``make map-update``.
+
 ``objects`` (top level, a list; placed objects, emitted to objects.json, not instanced in props.json). An object
     belongs to no parcel: it only needs its absolute position, so a pole beside a road (ground, not a parcel)
     is as good as a car in a yard. Files written before this kept the list under ``parcels.<ID>.objects``;
@@ -47,7 +61,11 @@ formatting is fixed, so git diffs stay small. Version 1::
     z                   optional metres, absolute above the DMR datum (not relative to the terrain); omitted = terrain height
                         at runtime.
     rotation_deg        number, default 0.
-    scale               number > 0, default 1.
+    scale               number > 0, default 1 (uniform).
+    size_m              optional [length, width, height], each a number > 0: the exact final bounding-box size in metres, length
+                        along the object's local x (map east at rotation 0), width along its local map-y, height up. The model is
+                        scaled non-uniformly by size_m / the asset's manifest size_m (glTF [x, y up, z]); colliders follow. Wins over
+                        ``scale`` when both are present (``scale`` is then ignored).
     colour              optional "#rrggbb" override.
     solid               optional bool, default true; written only as false: no collision at all (players, vehicles and shots
                         pass through), for dressing laid over a climbable prim such as trash on prim:mound.
@@ -87,6 +105,13 @@ formatting is fixed, so git diffs stay small. Version 1::
                         for the server (``zone_points.json``), for ``player_spawn`` into spawn candidates and for ``plantation`` into polygons
                         (``zone_polygons.json``).
     polygon             as of a ground patch. The ``zones`` key is only written when there are zones.
+
+``paths`` (worn footpaths, by ID ``PA-`` and 4 digits; the key is only written when there are any)
+    points              [[x, y], ...], at least 2, absolute EPSG:5514 metres: the line people walk.
+    width_m             optional, 0.3 to 4 (default 0.8): how wide the trodden ground is on average.
+    closed              optional true: the line returns to its first point (a loop, at least 3 points).
+    The detail stage lays bare trodden earth along it over whatever ground is there (``footpaths.py``); parcels, ground
+    areas and their kinds are unchanged. Needs the next make map-update.
 
 ``zone_cuts`` (internal: the editor's record that a zone that comes from a rule was moved, retyped or deleted; ``ZC-`` and 4
 or more digits; see zones.py). The user never sees these as zones.
@@ -170,12 +195,15 @@ FENCE_TYPES: dict[str, dict[str, float | str]] = {
 # Columns a fence can be given instead of its type's own (fencestyles.COLUMN_STYLES).
 COLUMN_TYPES = ("none", "wood_post", "metal_post", "brick_red", "brick_white", "stone", "concrete")
 
-TOP_KEYS = ("version", "parcels", "objects", "groups", "ground_patches", "zones", "zone_cuts", "cables", "ground_types")
-PARCEL_KEYS = ("fence", "objects")  # "objects" only so a file of the old shape still validates; see parse()
+TOP_KEYS = ("version", "parcels", "objects", "groups", "ground_patches", "zones", "zone_cuts", "cables", "ground_types", "paths")
+OUTLINE_OVERLAP_M2 = 0.01  # two edited parcel outlines may touch, or overlap by less than this
+PATH_KEYS = ("points", "width_m", "closed")
+PATH_WIDTH_M = (0.3, 4.0)  # a footpath is this wide (metres); wider is a road
+PARCEL_KEYS = ("fence", "ground_type", "outline", "objects")  # "objects" only so a file of the old shape still validates; see parse()
 FENCE_KEYS = ("mode", "type", "column", "height_m", "thickness_m", "colour", "gaps")
 CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "gaps")
 GAP_KEYS = ("at", "width_m")
-OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "colour", "solid")
+OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "size_m", "colour", "solid")
 GROUP_KEYS = ("parcels", "fence")
 PATCH_KEYS = ("type", "polygon", "water_y", "max_depth")
 ZONE_KEYS = ("kind", "polygon")
@@ -194,6 +222,7 @@ _PARCEL_ID = re.compile(r"P-\d{4,}")
 _GROUP_ID = re.compile(r"G-\d{4,}")
 _PATCH_ID = re.compile(r"GP-\d{4,}")
 _ZONE_ID = re.compile(r"Z-\d{4,}")
+_PATH_ID = re.compile(r"PA-\d{4,}")
 _ZONE_CUT_ID = re.compile(r"ZC-\d{4,}")
 _GROUND_TYPE = re.compile(r"[a-z][a-z0-9_]*")
 _GROUND_NAME = re.compile(r"[a-z][a-z0-9_]{0,%d}" % (GROUND_NAME_MAX - 1))
@@ -220,6 +249,7 @@ class Edits:
     ground_patches: dict[str, dict] = field(default_factory=dict)
     zones: dict[str, dict] = field(default_factory=dict)
     zone_cuts: dict[str, dict] = field(default_factory=dict)
+    paths: dict[str, dict] = field(default_factory=dict)  # worn footpaths (footpaths.py)
     cables: dict[str, dict] = field(default_factory=dict)
     ground_types: dict[str, dict] = field(default_factory=dict)
 
@@ -348,13 +378,18 @@ def _check_objects(v: object, path: str, errors: list[str], seen: dict[str, str]
             errors.append(f"{opath}.rotation_deg: must be a number")
         if "scale" in obj:
             _check_positive(obj["scale"], f"{opath}.scale", errors)
+        if "size_m" in obj:
+            sz = obj["size_m"]
+            if not (isinstance(sz, list) and len(sz) == 3 and all(_is_num(c) and c > 0 for c in sz)):
+                errors.append(f"{opath}.size_m: must be [length, width, height], three numbers > 0 (metres)")
         if "colour" in obj:
             _check_colour(obj["colour"], f"{opath}.colour", errors)
         if "solid" in obj and not isinstance(obj["solid"], bool):
             errors.append(f"{opath}.solid: must be true or false")
 
 
-def _check_parcels(parcels: dict, errors: list[str], seen: dict[str, str]) -> None:
+def _check_parcels(parcels: dict, errors: list[str], seen: dict[str, str], own_types: dict | None = None) -> None:
+    outlines: dict[str, Polygon] = {}
     for pid, entry in parcels.items():
         path = f"parcels.{pid}"
         if not _PARCEL_ID.fullmatch(pid):
@@ -366,8 +401,20 @@ def _check_parcels(parcels: dict, errors: list[str], seen: dict[str, str]) -> No
         _unknown_keys({k: v for k, v in entry.items() if k != "trees"}, PARCEL_KEYS, path, errors)
         if "fence" in entry:
             _check_fence(entry["fence"], f"{path}.fence", errors)
+        if "ground_type" in entry:
+            _check_parcel_ground_type(entry["ground_type"], f"{path}.ground_type", own_types or {}, errors)
+        if "outline" in entry:
+            n = len(errors)
+            _check_polygon(entry, path, errors, "outline")
+            if len(errors) == n:
+                outlines[pid] = Polygon(polygon_ring(entry["outline"]))
         if "objects" in entry:
             _check_objects(entry["objects"], f"{path}.objects", errors, seen)
+    ids = sorted(outlines)
+    for i, a in enumerate(ids):
+        for b in ids[i + 1:]:
+            if outlines[a].intersection(outlines[b]).area > OUTLINE_OVERLAP_M2:
+                errors.append(f"parcels.{b}.outline: overlaps the edited outline of {a}; two edited outlines must not overlap")
 
 
 def _check_groups(groups: dict, errors: list[str]) -> None:
@@ -407,13 +454,13 @@ def polygon_ring(polygon: list) -> list[tuple[float, float]]:
     return pts
 
 
-def _check_polygon(entry: dict, path: str, errors: list[str]) -> None:
-    """The ``polygon`` of a patch or a zone: one simple ring of at least 3 points."""
-    if "polygon" not in entry:
-        errors.append(f"{path}.polygon: required")
+def _check_polygon(entry: dict, path: str, errors: list[str], key: str = "polygon") -> None:
+    """The ``polygon`` of a patch or a zone (a parcel's ``outline``): one simple ring of at least 3 points."""
+    if key not in entry:
+        errors.append(f"{path}.{key}: required")
         return
-    poly = entry["polygon"]
-    ppath = f"{path}.polygon"
+    poly = entry[key]
+    ppath = f"{path}.{key}"
     if not isinstance(poly, list):
         errors.append(f"{ppath}: must be a list of [x, y] points")
         return
@@ -440,6 +487,19 @@ def _effective_type_names(own: dict, shipped: dict) -> set[str]:
         else:
             names.add(name)
     return names
+
+
+def _check_parcel_ground_type(name: object, path: str, own_types: dict, errors: list[str]) -> None:
+    """A parcel's ``ground_type``: a type that exists (rules.yaml or ``ground_types``, not deleted) and is not water."""
+    from drycastle_pipeline.rules import load_section
+
+    shipped = load_section("ground")["types"]
+    if not isinstance(name, str) or name not in _effective_type_names(own_types, shipped):
+        errors.append(f"{path}: {name!r} is not a ground type (or it is deleted)")
+        return
+    own = own_types.get(name)
+    if _effective_attributes(name, own if isinstance(own, dict) else {}, shipped).get("water"):
+        errors.append(f"{path}: {name} is a water type, a parcel cannot be water")
 
 
 def _check_patches(patches: dict, own_types: dict, errors: list[str]) -> None:
@@ -491,6 +551,28 @@ def _check_zones(zones: dict, errors: list[str], key: str = "zones") -> None:
         elif entry["kind"] not in KIND_NAMES:
             errors.append(f"{path}.kind: must be a zone kind ({', '.join(KIND_NAMES)})")
         _check_polygon(entry, path, errors)
+
+
+def _check_paths(paths: dict, errors: list[str]) -> None:
+    for pid, entry in paths.items():
+        path = f"paths.{pid}"
+        if not _PATH_ID.fullmatch(pid):
+            errors.append(f"{path}: path IDs look like PA-0001")
+        if not _is_dict(entry, path, errors):
+            continue
+        _unknown_keys(entry, PATH_KEYS, path, errors)
+        pts = entry.get("points")
+        if not (isinstance(pts, list) and len(pts) >= 2 and all(
+                isinstance(p, list) and len(p) == 2 and all(_is_num(v) and math.isfinite(v) for v in p) for p in pts)):
+            errors.append(f"{path}.points: must be a list of at least 2 [x, y] points")
+        elif all(p == pts[0] for p in pts):
+            errors.append(f"{path}.points: the points must not all be the same")
+        if "width_m" in entry and not (_is_num(entry["width_m"]) and PATH_WIDTH_M[0] <= entry["width_m"] <= PATH_WIDTH_M[1]):
+            errors.append(f"{path}.width_m: must be a number of metres from {PATH_WIDTH_M[0]:g} to {PATH_WIDTH_M[1]:g}")
+        if "closed" in entry and not isinstance(entry["closed"], bool):
+            errors.append(f"{path}.closed: must be true or false")
+        elif entry.get("closed") and isinstance(pts, list) and len(pts) < 3:
+            errors.append(f"{path}.closed: a closed path needs at least 3 points")
 
 
 def cable_pair(entry: dict) -> tuple[str, str]:
@@ -649,12 +731,12 @@ def validate(doc: object) -> list[str]:
     if "objects" in doc:
         _check_objects(doc["objects"], "objects", errors, seen)
     parcels = doc.get("parcels", {})
+    gtypes = doc.get("ground_types", {})
     if _is_dict(parcels, "parcels", errors):
-        _check_parcels(parcels, errors, seen)
+        _check_parcels(parcels, errors, seen, gtypes if isinstance(gtypes, dict) else {})
     groups = doc.get("groups", {})
     if _is_dict(groups, "groups", errors):
         _check_groups(groups, errors)
-    gtypes = doc.get("ground_types", {})
     patches = doc.get("ground_patches", {})
     if _is_dict(patches, "ground_patches", errors):
         _check_patches(patches, gtypes if isinstance(gtypes, dict) else {}, errors)
@@ -669,6 +751,9 @@ def validate(doc: object) -> list[str]:
         _check_cables(cables, errors)
     if _is_dict(gtypes, "ground_types", errors):
         _check_ground_types(gtypes, errors)
+    paths = doc.get("paths", {})
+    if _is_dict(paths, "paths", errors):
+        _check_paths(paths, errors)
     return errors
 
 
@@ -695,6 +780,7 @@ def parse(doc: object) -> Edits:
         ground_patches=copy.deepcopy(doc.get("ground_patches", {})),
         zones=copy.deepcopy(doc.get("zones", {})),
         zone_cuts=copy.deepcopy(doc.get("zone_cuts", {})),
+        paths=copy.deepcopy(doc.get("paths", {})),
         cables=copy.deepcopy(doc.get("cables", {})),
         ground_types=copy.deepcopy(doc.get("ground_types", {})),
     )
@@ -725,6 +811,8 @@ def dump_text(edits: Edits) -> str:
         doc["zones"] = edits.zones
     if edits.zone_cuts:  # likewise
         doc["zone_cuts"] = edits.zone_cuts
+    if edits.paths:  # likewise
+        doc["paths"] = edits.paths
     if edits.cables:  # likewise
         doc["cables"] = edits.cables
     if edits.ground_types:  # likewise

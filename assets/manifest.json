@@ -121,6 +121,14 @@
       "download_url": null,
       "licence": "UNVERIFIED",
       "downloaded": "2026-11-13"
+    },
+    {
+      "name": "youtube-crystal-chime",
+      "title": "Magical Crystal Chime Sound Effect (Free Video Sound Effects HD, YouTube)",
+      "url": "https://www.youtube.com/results?search_query=Magical+Crystal+Chime+Sound+Effect+Free+Video+Sound+Effects+HD",
+      "download_url": null,
+      "licence": "unverified (free sound effect, terms not checked)",
+      "downloaded": "2026-11-21"
     }
   ],
   "assets": [
@@ -923,6 +931,143 @@
       "licence": "CC0",
       "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/primitives.py)",
       "pack": null
+    },
+    {
+      "id": "prim:grave",
+      "category": "slab",
+      "name": "Grave (generated per object: size_m = [width, length, solid height])",
+      "file": null,
+      "size_m": [
+        1.5,
+        1.13,
+        2.7
+      ],
+      "tags": [
+        "grave",
+        "graveyard",
+        "headstone",
+        "flat-colour",
+        "primitive",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/graves.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:crucifix",
+      "category": "other",
+      "name": "Graveyard cross with the body of Christ (5.6 m, on stone steps)",
+      "file": null,
+      "size_m": [
+        2.4,
+        5.6,
+        2.4
+      ],
+      "tags": [
+        "cross",
+        "crucifix",
+        "graveyard",
+        "monument",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/graves.py)",
+      "pack": null,
+      "solids": [
+        {
+          "min": [
+            -1.2,
+            -1.2,
+            0.0
+          ],
+          "max": [
+            1.2,
+            1.2,
+            0.18
+          ],
+          "surface": "concrete"
+        },
+        {
+          "min": [
+            -0.92,
+            -0.92,
+            0.0
+          ],
+          "max": [
+            0.92,
+            0.92,
+            0.36
+          ],
+          "surface": "concrete"
+        },
+        {
+          "min": [
+            -0.66,
+            -0.66,
+            0.0
+          ],
+          "max": [
+            0.66,
+            0.66,
+            0.56
+          ],
+          "surface": "concrete"
+        },
+        {
+          "min": [
+            -0.4,
+            -0.4,
+            0.0
+          ],
+          "max": [
+            0.4,
+            0.4,
+            1.86
+          ],
+          "surface": "concrete"
+        },
+        {
+          "min": [
+            -0.48,
+            -0.48,
+            0.0
+          ],
+          "max": [
+            0.48,
+            0.48,
+            1.98
+          ],
+          "surface": "concrete"
+        },
+        {
+          "min": [
+            -0.15,
+            -0.3,
+            1.98
+          ],
+          "max": [
+            0.15,
+            0.15,
+            5.3
+          ],
+          "surface": "wood"
+        },
+        {
+          "min": [
+            -1.2,
+            -0.15,
+            4.3
+          ],
+          "max": [
+            1.2,
+            0.15,
+            4.6
+          ],
+          "surface": "wood"
+        }
+      ]
     },
     {
       "id": "prim:mound",
@@ -3845,6 +3990,51 @@
       "used_for": "the Bigfoot event (#264, #286): data/bigfoot.json `model`, drawn by godot/shooter NetClient.Bigfoot.cs. Metres, stands on y 0, faces -Z, 3.6 m to the crest. One skinned mesh (2336 triangles, 12 flat-colour materials), 26 bones with identity rest rotations (Root > Hips > Spine > Chest > Neck > Head > Jaw; Clavicle/UpperArm/Forearm/Hand/Fingers and Thigh/Shin/Foot/Toe, .L and .R), clips Idle, Walk, Run, Death, Hit, Roar, TrunkThrow, StompWindup, Stomp, VehicleLift, Launch, GrabReach, Hold, Hurl. scripts/preview_glb_clips.py draws the clips without the game."
     },
     {
+      "id": "pack:drycastle-generated-models/phoenix",
+      "category": "other",
+      "name": "Phoenix (rigid low-poly firebird: glowing feathers, flame tail; clips Idle, Cruise, Fall, Perched)",
+      "file": "drycastle-generated-models/phoenix.glb",
+      "size_m": [
+        3.83,
+        1.31,
+        4.34
+      ],
+      "tags": [
+        "shooter",
+        "creature",
+        "animated",
+        "flat-colour",
+        "emissive",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_phoenix_model.py (original geometry and animation written as code; python3 scripts/make_phoenix_model.py rebuilds the file, needs numpy)",
+      "pack": "drycastle-generated-models",
+      "used_for": "the Phoenix, a rare Mystery animal of the night sky (#396): data/animals.json species phoenix `model`, drawn by godot/shooter NetClient.Animals.cs. Metres, forward -Z (model_yaw_deg 0), origin = the body centre while flying (the clip Perched lowers it to the ground), size_m is the rest pose with the wings spread. Rigid node articulation (no skin), 4410 triangles, 10 flat-colour materials with KHR_materials_emissive_strength; clips Idle, Cruise, Fall, Perched (all loop)."
+    },
+    {
+      "id": "pack:drycastle-generated-models/eagle",
+      "category": "other",
+      "name": "Eagle (rigid simple low-poly white-headed eagle; clips Idle, Cruise, Fall, Perched)",
+      "file": "drycastle-generated-models/eagle.glb",
+      "size_m": [
+        2.36,
+        0.36,
+        0.83
+      ],
+      "tags": [
+        "shooter",
+        "creature",
+        "animated",
+        "flat-colour",
+        "generated"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_eagle_model.py (original geometry and animation written as code; python3 scripts/make_eagle_model.py rebuilds the file, needs numpy)",
+      "pack": "drycastle-generated-models",
+      "used_for": "the Eagle, the gold Companion of the Hunter's Log (#488): data/animals.json species eagle `model` (data/companions.json `eagle`), drawn by godot/shooter NetClient.Companions.cs. Metres, forward -Z (model_yaw_deg 0), origin = the body centre while flying (the clip Perched raises it so the origin is the ground), size_m is the rest pose with the wings spread. Rigid node articulation (no skin), 1996 triangles, 6 flat-colour materials; clips Idle, Cruise, Fall, Perched (all loop)."
+    },
+    {
       "id": "pack:drycastle-generated-models/bigfoot_head",
       "category": "other",
       "name": "Bigfoot head (the giant's own head as headgear: scowling brow, burning eyes, fangs and tusks, crest and mane)",
@@ -3927,6 +4117,144 @@
       "source": "scripts/make_satellite_dish_model.py (original geometry written as code; python3 -I scripts/make_satellite_dish_model.py rebuilds the file)",
       "pack": "drycastle-generated-models",
       "used_for": "the dishes of the Thieves event (pipeline/src/drycastle_pipeline/dishes.py places them on house walls); origin on the wall at the arm's root, +X out of the wall (set rotation_deg to the way the wall faces and z to the height of the origin; it reaches 0.4 m above it), a node each for mount, dish and lnb"
+    },
+    {
+      "id": "pack:drycastle-generated-models/sign_stop",
+      "category": "sign",
+      "name": "Road sign: Stop (STOP)",
+      "file": "drycastle-generated-models/sign_stop.glb",
+      "size_m": [
+        0.716,
+        2.52,
+        0.093
+      ],
+      "tags": [
+        "sign",
+        "road-sign",
+        "slovakia",
+        "metal",
+        "generated",
+        "stop",
+        "octagon"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_road_sign_models.py (original geometry written as code; python3 -I scripts/make_road_sign_models.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "Slovak road sign B2 Stop (red octagon, white STOP, #425). Decoration only (no traffic or AI effect), placed by hand in the map editor. Origin on the ground at the pole foot, the plate faces +Z (rotation_deg turns it); nodes Pole (solid) and Plate (shootable: a round through `plates` bends it, ADR 0039), pivot of Plate at its upper clamp; metal PBR materials, no emissive.",
+      "plates": [
+        [
+          0.0,
+          -0.051,
+          2.15
+        ]
+      ],
+      "solids": [
+        {
+          "min": [
+            -0.08,
+            -0.08,
+            0.0
+          ],
+          "max": [
+            0.08,
+            0.08,
+            2.5
+          ],
+          "surface": "metal"
+        }
+      ]
+    },
+    {
+      "id": "pack:drycastle-generated-models/sign_give_way",
+      "category": "sign",
+      "name": "Road sign: Give way (Daj prednosť v jazde)",
+      "file": "drycastle-generated-models/sign_give_way.glb",
+      "size_m": [
+        0.778,
+        2.52,
+        0.093
+      ],
+      "tags": [
+        "sign",
+        "road-sign",
+        "slovakia",
+        "metal",
+        "generated",
+        "give-way",
+        "triangle"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_road_sign_models.py (original geometry written as code; python3 -I scripts/make_road_sign_models.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "Slovak road sign P6 Daj prednosť v jazde (inverted triangle, red border, white field, #425). Decoration only (no traffic or AI effect), placed by hand in the map editor. Origin on the ground at the pole foot, the plate faces +Z (rotation_deg turns it); nodes Pole (solid) and Plate (shootable: a round through `plates` bends it, ADR 0039), pivot of Plate at its upper clamp; metal PBR materials, no emissive.",
+      "plates": [
+        [
+          0.0,
+          -0.051,
+          2.258
+        ]
+      ],
+      "solids": [
+        {
+          "min": [
+            -0.08,
+            -0.08,
+            0.0
+          ],
+          "max": [
+            0.08,
+            0.08,
+            2.5
+          ],
+          "surface": "metal"
+        }
+      ]
+    },
+    {
+      "id": "pack:drycastle-generated-models/sign_main_road",
+      "category": "sign",
+      "name": "Road sign: Main road (Hlavná cesta)",
+      "file": "drycastle-generated-models/sign_main_road.glb",
+      "size_m": [
+        0.73,
+        2.52,
+        0.093
+      ],
+      "tags": [
+        "sign",
+        "road-sign",
+        "slovakia",
+        "metal",
+        "generated",
+        "main-road",
+        "diamond"
+      ],
+      "licence": "CC0",
+      "source": "scripts/make_road_sign_models.py (original geometry written as code; python3 -I scripts/make_road_sign_models.py rebuilds the file)",
+      "pack": "drycastle-generated-models",
+      "used_for": "Slovak road sign Hlavná cesta (yellow diamond, black line, white border, #425). Decoration only (no traffic or AI effect), placed by hand in the map editor. Origin on the ground at the pole foot, the plate faces +Z (rotation_deg turns it); nodes Pole (solid) and Plate (shootable: a round through `plates` bends it, ADR 0039), pivot of Plate at its upper clamp; metal PBR materials, no emissive.",
+      "plates": [
+        [
+          0.0,
+          -0.051,
+          2.15
+        ]
+      ],
+      "solids": [
+        {
+          "min": [
+            -0.08,
+            -0.08,
+            0.0
+          ],
+          "max": [
+            0.08,
+            0.08,
+            2.5
+          ],
+          "surface": "metal"
+        }
+      ]
     },
     {
       "id": "pack:welcome-sign/welcome_sign",
@@ -4700,6 +5028,18 @@
       "note": "Three detuned metal modes by scripts/make_casing_clinks.py (in the repo, deterministic); mono OGG, ~0.2 s"
     },
     {
+      "id": "sfx:drycastle-generated-sounds/reverse_beep",
+      "name": "Reversing beep (backup alarm of the bigger vehicles)",
+      "file": "drycastle-generated-sounds/reverse_beep.ogg",
+      "used_for": "vehicle.reverse_beep",
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle",
+      "pack": "drycastle-generated-sounds",
+      "downloaded": "2026-11-21",
+      "generated": true,
+      "note": "One 780 Hz soft-square beep, 0.55 s, by scripts/make_reverse_beep.py (in the repo, deterministic); mono OGG; the game repeats it every 1.4 s"
+    },
+    {
       "id": "sfx:drycastle-generated-sounds/heartbeat",
       "name": "Heartbeat (sniper breath running out)",
       "file": "drycastle-generated-sounds/heartbeat.ogg",
@@ -4950,6 +5290,18 @@
       "downloaded": "2026-11-11",
       "generated": false,
       "note": "single shot cut from U_14P, semi automatic 7.62x39, near-mid distance; leading silence trimmed, last 0.25 s faded, peak -1 dBFS, mono OGG 44.1 kHz"
+    },
+    {
+      "id": "sfx:youtube-crystal-chime/crystal_chime",
+      "name": "Crystal chime",
+      "file": "youtube-crystal-chime/crystal_chime.ogg",
+      "used_for": "mineral.found",
+      "licence": "unverified (free sound effect, terms not checked)",
+      "source": "YouTube: 'Magical Crystal Chime Sound Effect (Free Sound Effect)' by Free Video Sound Effects HD",
+      "pack": "youtube-crystal-chime",
+      "downloaded": "2026-11-21",
+      "generated": false,
+      "note": "first 3.6 s, +5.3 dB, 0.5 s fade out, converted wav to ogg vorbis"
     }
   ],
   "unverified_models": [

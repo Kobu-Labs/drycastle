@@ -112,7 +112,7 @@ public partial class NetServer
 
     // ---- recording ----
 
-    /// <summary>The Killed event of the wild animal keeper: a player killed a weighed animal (or the Unicorn), with the weapon <see cref="Deal"/> noted.</summary>
+    /// <summary>The Killed event of the wild animal keeper: a player killed a weighed animal (or the Unicorn, or burned the Phoenix with the second hit), with the weapon <see cref="Deal"/> noted.</summary>
     void OnWildKilled(Animal a, ushort by)
     {
         if (_wildHit is not { } hit || !_byId.TryGetValue(by, out var c) || c.IsBot || !Scores(by) || c.Profile is not { Persist: true } p) return;
@@ -121,7 +121,7 @@ public partial class NetServer
         var variant = a.Variant >= 1 && a.Variant <= a.Def.Variants.Count ? a.Def.Variants[a.Variant - 1].Id : "";
         var diagram = hit.Shot is { } shot ? HitDiagram.From(shot) : (HitDiagram?)null;
         var h = HuntRecord.ForAnimal(p.DbId, a.Def.Id, variant, a.WeightKg, distance, weapon, diagram, a.Position.X, a.Position.Y, a.Position.Z, DateTime.UtcNow)
-            ?? (a.Def.Id == Mysteries.Unicorn ? HuntRecord.ForUnicorn(p.DbId, distance, weapon, diagram, a.Position.X, a.Position.Y, a.Position.Z, DateTime.UtcNow) : null); // a mystery that is an animal: no weight
+            ?? (Mysteries.IsAnimal(a.Def.Id) ? HuntRecord.ForMysteryAnimal(p.DbId, a.Def.Id, distance, weapon, diagram, a.Position.X, a.Position.Y, a.Position.Z, DateTime.UtcNow) : null); // a mystery that is an animal (Unicorn, Phoenix): no weight
         if (h != null) RecordHunt(h);
     }
 
@@ -146,6 +146,55 @@ public partial class NetServer
         _ = Progression!.Hunts.AppendAsync(h); // queued behind the tick: never waited for
         GD.Print($"server: hunt: #{h.PlayerId} {h.Exact} {h.Kg?.ToString("F1") ?? "-"} kg, {h.DistanceM?.ToString("F1") ?? "-"} m, {h.Weapon}{(outcome.Announce ? $" (first {outcome.FirstTime}, heaviest {outcome.Heaviest}, longest {outcome.Longest})" : "")}");
         if (announce && outcome.Announce) AnnounceHunt(book, h, outcome);
+        if (announce) GrantCollectionRewards(book, h.PlayerId);
+    }
+
+    /// <summary>The ids of the reward items a player owns (unlock rows of kind "item", #473), so a spawn issues the upgrade in place of the standard item.</summary>
+    IReadOnlySet<string> OwnedItems(Client c) =>
+        c.Profile is { } p ? p.Unlocks.Where(u => u.Kind == "item").Select(u => u.ItemId).ToHashSet() : new HashSet<string>();
+
+    /// <summary>
+    /// The reward weapons (weapons.json <c>reward_tier</c>, #473) of the player's collection tier (<see cref="HuntBook.CollectionTier"/>) become unlock rows, once: stored, kept
+    /// for good (a new Index species does not take one back), and told to the player when they are online.
+    /// </summary>
+    void GrantCollectionRewards(HuntBook book, long dbId)
+    {
+        if (Progression == null || dbId == 0) return;
+        var tier = book.CollectionTier(dbId);
+        if (tier == HuntTier.Common) return;
+        foreach (var c in _clients.Values)
+        {
+            if (c.Profile is not { Persist: true } p || p.DbId != dbId) continue;
+            var granted = false;
+            foreach (var w in Weapons.Weapons)
+            {
+                if (!w.IsReward || w.RewardTier > tier || p.Unlocks.Any(u => u.Kind == "weapon" && u.ItemId == w.Id)) continue;
+                var u = new Unlock("weapon", w.Id);
+                p.Unlocks.Add(u);
+                _ = Progression.Unlocks.GrantAsync(dbId, u);
+                GD.Print($"server: collection reward: #{dbId} {tier} tier, unlocked {w.Id}");
+                granted = true;
+            }
+            foreach (var it in Items.Items)
+            {
+                if (it.Replaces == "" || it.RewardTierOf > tier || p.Unlocks.Any(u => u.Kind == "item" && u.ItemId == it.Id)) continue;
+                var u = new Unlock("item", it.Id);
+                p.Unlocks.Add(u);
+                _ = Progression.Unlocks.GrantAsync(dbId, u);
+                GD.Print($"server: collection reward: #{dbId} {tier} tier, unlocked {it.Id}"); // issued at the next spawn
+                granted = true;
+            }
+            foreach (var cd in CompanionData.Companions)
+            {
+                if (cd.RewardTierOf == HuntTier.Common || cd.RewardTierOf > tier || p.Unlocks.Any(u => u.Kind == CompanionRules.UnlockKind && u.ItemId == cd.Id)) continue;
+                var u = new Unlock(CompanionRules.UnlockKind, cd.Id);
+                p.Unlocks.Add(u);
+                _ = Progression.Unlocks.GrantAsync(dbId, u);
+                GD.Print($"server: collection reward: #{dbId} {tier} tier, unlocked the Companion {cd.Id}");
+                granted = true;
+            }
+            if (granted) { SendProfile(c); CompanionFromProfile(c); if (c.Joined) SendCompanions(c); }
+        }
     }
 
     /// <summary>One line for a first and/or a record, to everyone; each recipient gets the hunt redacted for what they have caught.</summary>

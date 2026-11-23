@@ -84,6 +84,9 @@ public partial class ServerCar : CharacterBody3D
     /// <summary>Speed lost to a wall in the last <see cref="Step"/> (m/s), for crash damage.</summary>
     public float LastImpact;
 
+    /// <summary>Runs after a crash sound went out: the vehicle's next one waits for it (vehicles.json crash_sound_gap, #410).</summary>
+    public Countdown CrashSoundGap;
+
     /// <summary>A flying type (vehicles.json medium air): stepped by <see cref="StepFlight"/>, never by <see cref="Step"/>.</summary>
     public bool Flies => Def.Flight != null;
     /// <summary>The flight state of a flying type (ADR 0006): the server's is the true one, the pilot's client predicts its own.</summary>

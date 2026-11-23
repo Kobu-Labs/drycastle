@@ -61,7 +61,7 @@ public class MinimapAndTrackerTests
     }
 
     [Fact]
-    public void DeathResetsCounterAndEveryStreakState()
+    public void DeathResetsCounterAndUsedStreaksButKeepsReadyOnes()
     {
         var t = Armed("uav", "turret");
         t.OnEarned("uav", 4);
@@ -71,6 +71,14 @@ public class MinimapAndTrackerTests
         Assert.Equal(StreakSlotState.Progress, t.Slot(0).State);
         Assert.Equal(0, t.Slot(0).KillsDone);
         Assert.Equal(StreakSlotState.Progress, t.Slot(1).State);
+
+        t.OnEarned("turret", 6);
+        t.OnDeath();
+        Assert.Equal(StreakSlotState.Ready, t.Slot(1).State);
+        t.Arm(new[] { "uav", "turret", "" }, 0f); // the respawn keeps it
+        Assert.Equal(StreakSlotState.Ready, t.Slot(1).State);
+        t.Arm(new[] { "uav", "", "" }, 0f);
+        Assert.Equal(StreakSlotState.Empty, t.Slot(1).State);
     }
 
     [Fact]

@@ -15,13 +15,25 @@ public class LoadoutEditorTests
     [Fact]
     public void PrimaryOptionsLockAboveTheLevelAndUnlockOwnedRows()
     {
-        var sniper = Weapons.Weapons.First(x => x.Slot == WeaponSlot.Primary && x.UnlockLevel > 0);
+        var sniper = Weapons.Weapons.First(x => x.Slot == WeaponSlot.Primary && x.UnlockLevel > 0 && !x.Retired);
         var locked = LoadoutEditor.Options(LoadoutPicker.Primary, Weapons, Perks, Streaks, 0, Array.Empty<Unlock>());
         Assert.False(locked.First(o => o.Id == sniper.Id).Unlocked);
         var owned = LoadoutEditor.Options(LoadoutPicker.Primary, Weapons, Perks, Streaks, 0,
             new[] { new Unlock("weapon", sniper.Id) });
         Assert.True(owned.First(o => o.Id == sniper.Id).Unlocked);
         Assert.All(locked, o => Assert.Equal(WeaponSlot.Primary, Weapons.Find(o.Id)!.Slot));
+    }
+
+    [Fact]
+    public void RetiredWeaponsAreNeverOffered()
+    {
+        var retired = Weapons.Weapons.Where(w => w.Retired).ToList();
+        Assert.NotEmpty(retired);
+        foreach (var pick in new[] { LoadoutPicker.Primary, LoadoutPicker.Secondary })
+        {
+            var ids = LoadoutEditor.Options(pick, Weapons, Perks, Streaks, 99, Array.Empty<Unlock>()).Select(o => o.Id).ToHashSet();
+            Assert.All(retired, w => Assert.DoesNotContain(w.Id, ids));
+        }
     }
 
     [Fact]

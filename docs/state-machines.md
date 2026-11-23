@@ -7,7 +7,7 @@ How to add or change one: see `godot/ShooterCore/Fsm/StateMachine.cs`. "From any
 
 ## Animal.Behaviour
 
-What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot (a vanishing species turns immune and is teleported instead), lie dead until the corpse is removed.
+What an animal is doing: stand, eat, wander, sit, bark, run from a threat or a shot (a vanishing species turns immune and is teleported instead), lie dead until the corpse is removed. A Phoenix flies, falls, crashes, burns and dies.
 
 ```mermaid
 stateDiagram-v2
@@ -21,6 +21,7 @@ stateDiagram-v2
     Idle --> Carried
     Idle --> Thrown
     Idle --> Dead
+    Idle --> Flying
     Eat --> Idle
     Eat --> Flee
     Eat --> Vanish
@@ -60,6 +61,10 @@ stateDiagram-v2
     Down --> Thrown
     Down --> Dead
     Vanish --> Idle
+    Flying --> Falling
+    Falling --> Crashed
+    Crashed --> Burning
+    Burning --> Dead
     Dead --> [*]
 ```
 
@@ -67,13 +72,17 @@ stateDiagram-v2
 - **Eat**: Grazes (clock: eat seconds), then stands.
 - **Walk**: Walks to a wander target (clock: the time budget to arrive, then it gives up and stands).
 - **Flee**: Runs from the threat or the shooter; no clock of its own (calm and alarm timers run beside). Calms down into Idle.
-- **Dead**: A body a vehicle threw flies on first. Lies for corpse_seconds (the clock's elapsed time), then the entity ends; a one-hit species' entity ends at once. Never left.
+- **Dead**: A body a vehicle threw flies on first. Lies for corpse_seconds (the clock's elapsed time; a Phoenix's is the ash), then the entity ends; a one-hit species' entity ends at once. Never left.
 - **Sit**: Sits for a random while (clock: sit seconds; the client plays sit-down, holds, stands up after), then stands. Species with a sit rule only.
 - **Bark**: Barks once (clock: the bark clip's length), then stands. Species with a bark rule only.
 - **Carried**: A Thief of the Thieves event holds it (no clock: it is moved by the Thief, MoveCarried, and does nothing itself). Let go (Release) it stands; one put down outside its Pen walks home over open ground until it is inside again. Still a hit target: any hit that deals damage kills it.
 - **Thrown**: A vehicle ran it over and it survived (Throw): it flies on the arc the vehicle gave it, then rolls on along the ground with part of that speed; no clock. Coming to rest puts it Down. Still a hit target; another vehicle only changes the arc.
 - **Down**: Lies knocked down where it landed (clock: knockdown_seconds), then gets up: Flee from where the vehicle was (a species that does not flee stands). Run over again it is Thrown again.
 - **Vanish**: A species with vanish_seconds is startled (threat, non-lethal hit, herd alarm, getting up after a run-over) and does not run: immune for vanish_seconds (clock; no damage, no throw, no carry, not a hit target), the client spirals rainbow round it, then the Vanished event lets the keeper pick a place at least vanish_min_m away and Teleport puts it there Idle. Only Idle follows; never Dead, Thrown or Carried. No startle for vanish_grace_seconds after it reappears.
+- **Flying**: A Phoenix (PhoenixRules, a species with flies): patrols a wide circle high in the sky, the clock is not used. Reached from Idle only at spawn (the constructor takes off at once). The first hit that deals damage, from any weapon, makes it Fall; it is no target of a knife (too high) and the dawn hour ends it (it flies off, the entity is removed). Never Dead from here.
+- **Falling**: Dives along a straight line from where it was hit to its crash site (clock: fall_seconds; the position follows the line, pitch is the line's), then Crashes. No hit target (bullets and blasts pass through it) so a hit cannot reach it.
+- **Crashed**: Seated and alive at the crash site, stationary (Perched clip, fire and embers on the client), no clock: it stays until killed or the round ends. The ONLY state the second hit counts in: a damaging hit sets it Burning and takes the Hunt (Died is raised, the shooter is the Killer).
+- **Burning**: Dies in a big flame (clock: burn_seconds), no longer alive and no hit target; then it is Dead and the mineral is dropped (Dropped). Only Dead follows.
 
 ## App.Phase
 
@@ -158,12 +167,13 @@ From any state: Dead
 
 ## Bigfoot.BodyFling
 
-A player the Bigfoot grabbed, as a client draws them: held in the fist, flying after the throw, getting up after the landing.
+A player the Bigfoot grabbed or a vehicle threw alive, as a client draws them: held in the fist, flying after the throw, getting up after the landing.
 
 ```mermaid
 stateDiagram-v2
     [*] --> None
     None --> Held
+    None --> Flying
     Held --> Flying
     Held --> None
     Flying --> Lying
@@ -171,13 +181,15 @@ stateDiagram-v2
     Flying --> None
     Lying --> Landing
     Lying --> Held
+    Lying --> Flying
     Lying --> None
     Landing --> None
     Landing --> Held
+    Landing --> Flying
 ```
 
 - **Held**: In the fist (Bigfoot act Hold): limbs loose, the body swung by the hand. Released without a throw, the Bigfoot dying or the player dying or leaving ends it at None.
-- **Flying**: The throw (Bigfoot act Launch): tumbling, limbs flailing, until the body is on the ground and slow (after MinAirSeconds), or has been slow for SettleSeconds where the ground cannot be told (a roof), or MaxAirSeconds.
+- **Flying**: The throw (Bigfoot act Launch, or a vehicle that ran the player over without killing: from None, or again while lying or getting up): tumbling, limbs flailing, until the body is on the ground and slow (after MinAirSeconds), or has been slow for SettleSeconds where the ground cannot be told (a roof), or MaxAirSeconds.
 - **Lying**: Landed alive: the ragdoll lies limp on the ground for LieSeconds.
 - **Landing**: Getting up: the body turns upright and the limbs go slack, then the normal figure (a dead one is the corpse's, not this machine's).
 
@@ -249,11 +261,15 @@ stateDiagram-v2
 
 ## CarePackage.Life
 
-A care package crate: falls on its parachute, lands and can be opened, then ends opened or expired (the world manager despawns it once it has ended).
+A care package: a canister flies from the owner's hand and smokes where it lands, then the crate falls on its parachute, lands and can be opened, then ends opened or expired (the world manager despawns it once it has ended).
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Falling
+    [*] --> Thrown
+    Thrown --> Marking
+    Thrown --> Expired
+    Marking --> Falling
+    Marking --> Expired
     Falling --> Landed
     Falling --> Expired
     Landed --> Opened
@@ -266,6 +282,8 @@ stateDiagram-v2
 - **Landed**: On the ground (altitude at the landing point's Y): openable by anyone in reach.
 - **Opened**: Opened by a player: ended, the reward is granted, the book despawns it at once. Cannot be reached from Expired.
 - **Expired**: The lifetime ran out unopened: ended. An ended crate cannot be opened even before it is despawned.
+- **Thrown**: The canister is in the air (ballistic, no crate yet); not openable.
+- **Marking**: The canister lies at the landing point and smokes for the mark time; then the crate starts from above it. Not openable.
 
 ## Casing.Phase
 
@@ -375,6 +393,46 @@ stateDiagram-v2
 - **Connecting**: Elapsed is the time spent connecting (the client fails after 10 s).
 - **Spawned**: Goes back to Welcomed at each respawn, until the new spawn position arrives.
 - **Failed**: Frames and bot scripts stop; the menu was told.
+
+## Companion.Heel
+
+What a land Companion of the heel kind is doing: stay by its owner, sit, walk or run after them. Falling too far behind or being stuck puts it beside its owner at once (no state: it then stays).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Stay
+    Stay --> Follow
+    Stay --> Sit
+    Sit --> Follow
+    Follow --> Stay
+    Follow --> Run
+    Run --> Follow
+    Run --> Stay
+```
+
+- **Stay**: Stands near its owner (clock: a roll of sit_after seconds, then it sits; no clock when it never sits). Its owner farther than follow_m: Follow.
+- **Follow**: Walks to its owner. Within stop_m: Stay. Farther than run_m: Run. Farther than recall_m, or no step for stuck_seconds: put beside its owner, Stay.
+- **Run**: Runs to its owner. Within follow_m: Follow. Farther than recall_m, or no step for stuck_seconds: put beside its owner, Stay.
+- **Sit**: Sits (no clock) until its owner is farther than follow_m: Follow.
+
+## Companion.Wing
+
+What a flying Companion of the wing kind is doing: hover at its perch over its owner, fly after the perch, or fly circles round its owner. Falling too far behind puts it at its perch at once (no state: it then hovers).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Hover
+    Hover --> Trail
+    Hover --> Circle
+    Trail --> Hover
+    Trail --> Circle
+    Circle --> Trail
+    Circle --> Hover
+```
+
+- **Hover**: Hangs at its perch (height_m over the owner, behind_m behind, side_m to the left), drifting with it at up to drift_speed and facing as its owner does; no clock. The perch farther than follow_m (its owner moves faster than it drifts): Trail. The circle clock (beside the machine, a roll of circle_every seconds) runs out: Circle.
+- **Trail**: Flies to the perch at up to fly_speed and keeps with it while its owner moves; no clock. Within arrive_m of a perch that has come to rest (slower than drift_speed): Hover. The circle clock runs out: Circle. Its owner farther than recall_m: put at its perch, Hover.
+- **Circle**: Flies circle_turns turns round its owner at circle_radius_m and circle_speed, climbing to circle_height_m (0: staying at perch height) as it widens (clock: the time the turns take), then Trail back to the perch. Its owner farther than recall_m: put at its perch, Hover.
 
 ## Corpse.Collapse
 
@@ -932,7 +990,7 @@ stateDiagram-v2
 
 ## HuntersLog.Page
 
-Which page of the Hunter's Log shows: the first tab (own log, or another player's), Records, All hunts.
+Which page of the Hunter's Log shows: the first tab (own log, or another player's), Records, All hunts, Rewards.
 
 ```mermaid
 stateDiagram-v2
@@ -940,20 +998,29 @@ stateDiagram-v2
     MyLog --> PlayerLog
     MyLog --> Records
     MyLog --> AllHunts
+    MyLog --> Rewards
     PlayerLog --> MyLog
     PlayerLog --> PlayerLog
     PlayerLog --> Records
     PlayerLog --> AllHunts
+    PlayerLog --> Rewards
     Records --> MyLog
     Records --> PlayerLog
     Records --> AllHunts
+    Records --> Rewards
     AllHunts --> MyLog
     AllHunts --> PlayerLog
     AllHunts --> Records
+    AllHunts --> Rewards
+    Rewards --> MyLog
+    Rewards --> PlayerLog
+    Rewards --> Records
+    Rewards --> AllHunts
 ```
 
 - **MyLog**: The default, and where a screen opens. The asker's own log.
 - **PlayerLog**: Another player's log, opened from a name. Esc goes up to My Log; another tab keeps it parked on the first tab.
+- **Rewards**: The asker's own progress to the collection tiers and what each gives (#473); another player's log stays parked on the first tab.
 
 ## Interact.Hold
 
@@ -974,7 +1041,7 @@ stateDiagram-v2
 
 ## Killstreak.Hold
 
-One loadout streak in one life: kills to go, earned and held, used.
+One loadout streak: kills to go, earned and held (across deaths), used.
 
 ```mermaid
 stateDiagram-v2
@@ -985,13 +1052,13 @@ stateDiagram-v2
     Used --> Progress
 ```
 
-- **Progress**: Not earned: the Streak counter is below the threshold (the start of every life).
-- **Earned**: Threshold reached (StreakEarned sent): held until the owner uses it.
-- **Used**: Activation accepted (StreakUsed sent): spent for this life, whether it still runs or has ended. Only a death or a round reset brings it back to Progress.
+- **Progress**: Not earned: the Streak counter is below the threshold (the start of every life, unless an earned streak is carried over).
+- **Earned**: Threshold reached (StreakEarned sent): held until the owner uses it, and it survives the owner's death (#414).
+- **Used**: Activation accepted (StreakUsed sent): spent, whether it still runs or has ended. A death or a round reset brings it back to Progress (earn it again).
 
 ## Killstreak.Slot
 
-A loadout streak slot on the HUD tracker: kills to go, ready to use, running, spent for this life.
+A loadout streak slot on the HUD tracker: kills to go, ready to use (kept through a death), running, spent.
 
 ```mermaid
 stateDiagram-v2
@@ -1009,7 +1076,7 @@ stateDiagram-v2
 
 - **Empty**: No streak (or an unknown id) in the slot; set by Arm, never left except by the next Arm.
 - **Progress**: Not earned: kills still to go. The state of every streak at the start of a life.
-- **Ready**: Earned (StreakEarned) and held: the Killstreak key uses it.
+- **Ready**: Earned (StreakEarned) and held: the Killstreak key uses it. Survives a death, not a round reset.
 - **Active**: Used (StreakUsed) and running until StreakEnded.
 - **Spent**: Used and ended this life; it comes back only after a death or a round reset.
 
@@ -1353,8 +1420,8 @@ stateDiagram-v2
     Lying --> [*]
 ```
 
-- **Buckling**: Clock: the buckle length. The knees or the lean give way and the view sinks part of the way; a little blood. Zero seconds for a death that does not move the camera.
-- **Falling**: Clock: the fall length. The body goes over (forward, back, left or right by the plan) and the view hits the ground; the blood grows to full. Zero seconds for a plain fade.
+- **Buckling**: Clock: the buckle length. The knees or the lean give way and the view sinks part of the way; a little blood. Zero seconds for a death that does not move the camera, and for a thrown one.
+- **Falling**: Clock: the fall length. The body goes over (forward, back, left or right by the plan) and the view hits the ground; the blood grows to full. Zero seconds for a plain fade. A thrown death (a blast or a run-over threw the body): the clock is the flight, the camera stays back from where the eye was and only turns to follow the body; no blood for a blast.
 - **Lying**: Held until the spawn ends it. Clock (elapsed): the impact shake, then the scrim fade-in with the "eliminated by" text and the countdown.
 
 ## Player.High
@@ -1654,6 +1721,20 @@ stateDiagram-v2
 - **Rejected**: Terminal: nothing more is read from the peer.
 - **Loading**: Joined when the profile arrives, or as a guest when the load fails or times out.
 - **Joined**: Inputs, events and the snapshots flow. A bot is created here; a guest (no profile store or token) skips Loading.
+
+## Sign.Plate
+
+The shootable plate of a road sign: whole until a round passes through it, bent (hanging askew) for a while, then whole again.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Whole
+    Whole --> Bent
+    Bent --> Whole
+```
+
+- **Whole**: Straight on its clamps. A whole plate has no clock and no machine; a new round straightens every plate without a transition.
+- **Bent**: Tilted and sagging on its upper clamp (clock: respawn_seconds). A second shot changes nothing and does not restart the clock.
 
 ## Target.Dummy
 

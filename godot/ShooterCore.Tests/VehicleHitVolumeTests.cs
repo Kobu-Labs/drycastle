@@ -108,14 +108,14 @@ public class VehicleHitVolumeTests
     [Fact]
     public void EveryShippedVehicleHasAHitVolumeAtLeastAsTallAndWideAsItsModel()
     {
-        // the jeep is the standardized SM_Veh_Truck_01 (3.052 x 3.164 x 7.054 m, docs/research/vehicle-facts.d/truck.json); the motorcycle is the standardized SM_Veh_Bike_01 (0.824 x 1.187 x 2.184 m) and the quad SM_Veh_QuadBike_01 (1.189 x 1.319 x 2.280 m), docs/research/vehicle-facts.d
+        // the truck is the standardized SM_Veh_Truck_01 (3.052 x 3.164 x 7.054 m, docs/research/vehicle-facts.d/truck.json); the motorcycle is the standardized SM_Veh_Bike_01 (0.824 x 1.187 x 2.184 m) and the quad SM_Veh_QuadBike_01 (1.189 x 1.319 x 2.280 m), docs/research/vehicle-facts.d
         var f = Shipped();
         // the car is the standardized SM_Veh_Car_Small_01 (2.053 x 1.619 x 3.849 m, docs/research/vehicle-facts.d/car_small.json), drawn at scale 1
         Assert.True(f.Vehicles.Single(v => v.Id == "car").Height >= 1.619f - 0.01f);
-        Assert.True(f.Vehicles.Single(v => v.Id == "jeep").Height >= 3.164f - 0.01f);
+        Assert.True(f.Vehicles.Single(v => v.Id == "truck").Height >= 3.164f - 0.01f);
         Assert.True(f.Vehicles.Single(v => v.Id == "car").HalfWidth >= 2.053f / 2 - 0.01f);
-        Assert.True(f.Vehicles.Single(v => v.Id == "jeep").HalfWidth >= 3.052f / 2 - 0.01f);
-        Assert.True(f.Vehicles.Single(v => v.Id == "jeep").HalfLength >= 7.054f / 2 - 0.01f);
+        Assert.True(f.Vehicles.Single(v => v.Id == "truck").HalfWidth >= 3.052f / 2 - 0.01f);
+        Assert.True(f.Vehicles.Single(v => v.Id == "truck").HalfLength >= 7.054f / 2 - 0.01f);
         Assert.True(f.Vehicles.Single(v => v.Id == "car").HalfLength >= 3.849f / 2 - 0.01f);
         Assert.True(f.Vehicles.Single(v => v.Id == "motorcycle").Height >= 1.187f - 0.01f);
         Assert.True(f.Vehicles.Single(v => v.Id == "quad").Height >= 1.319f - 0.01f);

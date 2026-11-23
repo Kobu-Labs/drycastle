@@ -367,7 +367,7 @@ public class CarePackageTests
     }
 
     [Fact]
-    public void A_death_loses_the_held_rewards()
+    public void A_death_keeps_the_held_rewards_and_a_wipe_drops_them()
     {
         var sent = new List<(ushort Owner, EventKind Kind, byte[] Payload)>();
         var service = Service(sent);
@@ -375,7 +375,11 @@ public class CarePackageTests
         service.Grant(Opener, "uav");
 
         service.OnDeath(Opener);
+        Assert.Equal(new[] { "uav" }, service.HeldRewards(Opener)); // #414
+        service.Arm(Opener, new[] { "", "", "" }, 0f);
+        Assert.Equal(new[] { "uav" }, service.HeldRewards(Opener));
 
+        service.Wipe(Opener);
         Assert.Empty(service.HeldRewards(Opener));
     }
 
@@ -387,6 +391,42 @@ public class CarePackageTests
     }
 
     // ---- the streak: drop ahead of the owner ----
+
+    [Fact]
+    public void The_thrown_canister_lands_ahead_on_flat_ground_and_further_when_thrown_higher()
+    {
+        float Cast(Vector3 from, Vector3 dir, float len) => dir.Y < 0 && from.Y + dir.Y * len <= 0 ? from.Y / -dir.Y : float.PositiveInfinity;
+        var flat = CarePackageRules.ThrowLanding(new Vector3(0, 1.65f, 0), 0f, 0f, Cast);
+        var up = CarePackageRules.ThrowLanding(new Vector3(0, 1.65f, 0), 0f, 0.5f, Cast);
+        Assert.Equal(0f, flat.X, 3);
+        Assert.InRange(flat.Y, -0.01f, 0.01f);
+        Assert.True(flat.Z < -3f);
+        Assert.True(up.Z < flat.Z);
+    }
+
+    [Fact]
+    public void A_thrown_canister_flies_then_smokes_then_the_crate_falls_and_lands()
+    {
+        float Cast(Vector3 from, Vector3 dir, float len) => dir.Y < 0 && from.Y + dir.Y * len <= 0 ? from.Y / -dir.Y : float.PositiveInfinity;
+        var flight = CarePackageRules.Throw(new Vector3(0, 1.65f, 0), 0f, 0.3f, Cast);
+        Assert.True(flight.Seconds > 0.3f);
+        var crate = new CarePackage(Owner, new Vector3(flight.Landing.X, 0, flight.Landing.Z), flight);
+        Assert.Equal(CarePackageState.Thrown, crate.State);
+        Assert.False(crate.Landed);
+        Assert.Equal(CarePackageRules.StateThrown, crate.Serialize().State);
+        crate.Tick(flight.Seconds / 2);
+        Assert.Equal(CarePackageState.Thrown, crate.State);
+        Assert.True(crate.Position.Z < -0.5f);
+        crate.Tick(flight.Seconds);
+        Assert.Equal(CarePackageState.Marking, crate.State);
+        Assert.Equal(0f, crate.Position.Y, 0.01f);
+        Assert.Equal(CarePackageRules.StateMarking, crate.Serialize().State);
+        crate.Tick(CarePackageRules.MarkSeconds + 0.1f);
+        Assert.Equal(CarePackageState.Falling, crate.State);
+        Assert.Equal(CarePackageRules.StartHeightMetres, crate.Position.Y, 0.5f);
+        crate.Tick(20f);
+        Assert.Equal(CarePackageState.Landed, crate.State);
+    }
 
     [Fact]
     public void The_drop_point_is_five_metres_ahead_of_the_owner()
@@ -405,7 +445,7 @@ public class CarePackageTests
     {
         var manager = World(out _);
         var book = new CarePackageBook(manager, ShippingRewards());
-        var care = new CarePackageStreak(book, _ => 0f, p => 2f);
+        var care = new CarePackageStreak(book, (_, f) => new CarePackageRules.ThrowFlight(f, Vector3.Zero, 0f, CarePackageRules.DropPoint(f, 0f)), p => 2f);
         var service = Service(new List<(ushort Owner, EventKind Kind, byte[] Payload)>(), care);
         service.Arm(Owner, new[] { CarePackageRules.StreakId, "", "" }, 0f);
         for (var i = 0; i < 6; i++) service.OnKill(Owner, 99, false);
@@ -425,7 +465,7 @@ public class CarePackageTests
     {
         var manager = World(out _);
         var book = new CarePackageBook(manager, ShippingRewards());
-        var care = new CarePackageStreak(book, _ => 0f, _ => null);
+        var care = new CarePackageStreak(book, (_, f) => new CarePackageRules.ThrowFlight(f, Vector3.Zero, 0f, CarePackageRules.DropPoint(f, 0f)), _ => null);
         var service = Service(new List<(ushort Owner, EventKind Kind, byte[] Payload)>(), care);
         service.Arm(Owner, new[] { CarePackageRules.StreakId, "", "" }, 0f);
         for (var i = 0; i < 6; i++) service.OnKill(Owner, 99, false);

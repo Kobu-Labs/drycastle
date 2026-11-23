@@ -156,7 +156,7 @@ and each weight is 1 or more.
 ## 4. Killstreaks
 
 Data: `godot/shooter/data/killstreaks.json`. The Streak counter counts the owner's kills (not suicides), resets on death,
-and kills made with a streak's own weapon do not advance it (`StreakWeapons`). The vehicle machine gun (the Humvee's roof gun, vehicle gun, 250; the jeep lost its gun in #325) is
+and kills made with a streak's own weapon do not advance it (`StreakWeapons`). The vehicle machine gun (the Humvee's roof gun, vehicle gun, 250; the old jeep lost its gun in #325) is
 not a streak weapon, so its kills do count (correction on #133).
 
 | Streak | Kills | Unlock | Duration | Control | Notes |
@@ -485,7 +485,7 @@ unchanged; when the vehicle blows up, everyone aboard dies with it.
 
 ### Towing and the rocket cart
 
-A **trailer** (vehicles.json `trailer`: drawbar `eye`, `axle`, `mass`, `grip`, `loaded_hp`; no seats) is pulled by a **tractor** (a type with a `tow` block: the jeep, the Humvee, the flak truck). The model is
+A **trailer** (vehicles.json `trailer`: drawbar `eye`, `axle`, `mass`, `grip`, `loaded_hp`; no seats) is pulled by a **tractor** (a type with a `tow` block: the truck, the Humvee, the flak truck). The model is
 ShooterCore's (`TowModel`, `TowLink`, `TowRules`; the numbers and the maths are in their doc comments, the machines in `docs/state-machines.md`). The **rocket cart** is the first trailer:
 the model's numbers (12.6 m with the drawbar because it carries the whole 11.1 m missile, 2.46 m wide, drawbar 7.6 m, eye height 0.62, 3000 kg loaded and 1000 kg empty: `trailer.mass` / `trailer.empty_mass`, `TowLoad.Of(tractor, trailer, loaded)`), `spawn_count` 0, `returns` false, model `pack:synty-simple-military/rocket_cart` (a grey box without the pack). A cart emptied by a launcher stays empty when it falls out of the world and is put back (`ServerCar.Reset(repair: false)`); only a return after destruction loads it again.
 
@@ -516,7 +516,7 @@ the model's numbers (12.6 m with the drawbar because it carries the whole 11.1 m
 - **Client.** `NetClient.Tow.cs`. A trailer is never drawn from its own raw record while hitched: `RenderTrailers` runs after every tractor has its drawn pose and places the trailer from the drawn tractor's hitch
   (`tractor.Node.GlobalTransform * hitch`, so it leans with the tractor) and the articulation, then fits the ground (pitch from the hitch's height over the axle's ground, `TowModel.PitchFor`; roll from the ground
   under the wheels; smoothed), rolls `wheel_l`/`wheel_r` with the drawn speed and shows `missile` while loaded. Loose, it is drawn at its record on the ground. A tractor's driver sees the tractor as that type is
-  seen: the jeep and the flak truck are `CarModel` types, interpolated for everyone, so their trailer's articulation is the interpolated snapshot's (it cannot lag its tractor, both come from the same
+  seen: the truck and the flak truck are `CarModel` types, interpolated for everyone, so their trailer's articulation is the interpolated snapshot's (it cannot lag its tractor, both come from the same
   render tick); a `DriveModel` type with a `tow` block (none yet) is predicted by its driver, who also steps a copy of the trailer's body with `TowModel` after it (`DrivePrediction.AttachTrailer`, the effect
   and the blocked-trailer hold as the server's) and reconciles it from the articulation the snapshot gives. A coupling or an uncoupling (the record's tractor id changes) plays `tow.clunk` through `PlayCarSound`
   (car-design section 9) and toasts the driver ("Trailer hitched" / "Trailer unhitched"); while towing the driver's prompt adds "Hold E  Unhitch trailer".
@@ -575,6 +575,12 @@ items, ADR 0018 (#267, protocol 31).
   drop on the ground (no confirm: picking it up again costs a pickup); the arrows move focus; the head slot, hovered or focused, frames the figure's head. Every
   move is a request (`RequestEquip` and the others); the cells redraw only on the server's next Equipment event, and further requests wait for it (at most 0.6 s).
   Rules and focus order are pure (`ShooterCore/Items/EquipmentScreenLogic.cs`, `EquipmentScreenTests`).
+- **The Companion picker (#488).** Under the bag on the Equipment screen, after a line: one cell per Companion the player can have out (`ItemCell.SetPicture`: a live 3D view of
+  its model playing its idle clip, `CompanionPortrait`, rendered only while the screen is open; the name as a tooltip), in the bag's three columns. The one that is out has a filled box, a tick in
+  its corner and "(with you)" in its tooltip. Click or Enter on another puts it out (the old one goes in a puff, the new one appears beside the player); the choice
+  is kept with the Profile. No "none" (a Companion is always on), no drag, no drop. After the owned ones come the reward Companions not earned yet, locked: dimmed, a padlock in the corner, "(locked: reach Gold in
+  the Hunter's Log)" in the tooltip; activating one shakes it. One empty cell with a paw ghost ("No Companion yet") only when there is nothing to show. The arrows go from the bag's bottom row down into the picker and back (`EquipmentNav.Move`, `CellHome.Companion`). Rules and wire: `CompanionRoster`
+  (events 114 `CompanionPick`, 115 `Companions`, protocol 84). Dev mode (`--unlock-all`) offers every Companion.
 - **Drawn on the character (#266).** `items.json` `model` names the item's model (`assets/`, authored in the slot's frame: metres, facing -Z, for headgear
   the origin is the middle of the head). `CharacterView.SetWorn(slot, item)` (`CharacterView.Worn.cs`) hangs it on the head bone, so it follows every
   clip, stance, the prone roll and the ragdoll, and hides what it replaces: the helmet and the hair, the head's foliage and the face paint. The same call
@@ -681,7 +687,7 @@ Not verified (compiled, not run; the brief for these tickets forbade running the
 - Shaders: `water_surface.gdshader` (compiles on Forward+; its look is not checked in the game), `sky_daynight.gdshader`, `camo_suit.gdshader`,
   `camo_tuft.gdshader`, `gunship_thermal.gdshader`. The first real compile is the first check.
 - Layout, scenes and HUD positions: streak panel, minimap texture size, XP strip, breath bar, care package prompt, gunship
-  overlay, the aircraft overlays. Visual fit of the jeep and quad models (the jeep is the Synty cargo truck now, #325).
+  overlay, the aircraft overlays. Visual fit of the truck and quad models (the truck is the Synty cargo truck now, #325).
 - Lamp energy (2.2 peak), headlight cones and offsets, day curve tuning.
 
 ui-work definition of done not met on most UI tickets (#118, #119, #122, #123, #124, #126, #127, #128, #129, #130, #139,

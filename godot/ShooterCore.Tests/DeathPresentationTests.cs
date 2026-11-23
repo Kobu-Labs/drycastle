@@ -5,6 +5,90 @@ namespace Drycastle.ShooterCore.Tests;
 
 public class DeathPresentationTests
 {
+    [Fact]
+    public void BlastDeathOnFootIsThrownWithoutBlood()
+    {
+        var p = DeathPresentation.Plan(ClientMode.OnFoot, false, false, false, 5, 1, DeathFlight.Blast);
+        Assert.Equal(DeathStyle.Thrown, p.Style);
+        Assert.Equal(0f, p.Blood);
+        Assert.Equal(0f, p.BuckleSeconds);
+        Assert.True(p.FallSeconds > 0);
+    }
+
+    [Fact]
+    public void RunOverDeathIsThrownWithBlood()
+    {
+        var p = DeathPresentation.Plan(ClientMode.OnFoot, false, false, false, 5, 1, DeathFlight.RunOver);
+        Assert.Equal(DeathStyle.Thrown, p.Style);
+        Assert.Equal(DeathPresentation.FullBlood, p.Blood);
+    }
+
+    [Fact]
+    public void ThrownDeathOnlyWhereTheCameraIsTheBodys()
+    {
+        Assert.Equal(DeathStyle.Blood, DeathPresentation.Plan(ClientMode.Seated, false, false, false, 5, 1, DeathFlight.Blast).Style);
+        Assert.Equal(DeathStyle.Blood, DeathPresentation.Plan(ClientMode.OnFoot, false, false, true, 5, 1, DeathFlight.Blast).Style); // reduce motion
+        Assert.Equal(DeathStyle.Blood, DeathPresentation.Plan(ClientMode.OnFoot, true, false, false, 5, 1, DeathFlight.Blast).Style);  // under water
+    }
+
+    [Fact]
+    public void ThrownDeathKeepsTheCorpseShownAndTheCameraStill()
+    {
+        var d = new DeathPresentation();
+        d.Begin(DeathPresentation.Plan(ClientMode.OnFoot, false, false, false, 5, 1, DeathFlight.Blast));
+        Assert.True(d.OwnsCamera);
+        Assert.False(d.HidesOwnCorpse);
+        Assert.Equal(DeathPose.None, d.Pose);
+        Assert.Equal(0f, d.BloodNow);
+        Assert.True(d.Falling);
+        d.Tick(5f);
+        Assert.True(d.Lying);
+        Assert.Equal(0f, d.BloodNow);
+        Assert.Equal(DeathPose.None, d.Pose);
+    }
+
+    [Fact]
+    public void FallDeathStillHidesTheCorpse()
+    {
+        var d = new DeathPresentation();
+        d.Begin(FallPlan());
+        Assert.True(d.HidesOwnCorpse);
+    }
+
+    [Fact]
+    public void PanBlendIsFrameRateIndependent()
+    {
+        var one = 1f - DeathPresentation.PanBlend(1f / 30f);
+        var two = (1f - DeathPresentation.PanBlend(1f / 60f)) * (1f - DeathPresentation.PanBlend(1f / 60f));
+        Assert.Equal(one, two, 4);
+        Assert.Equal(0f, DeathPresentation.PanBlend(0f));
+    }
+
+    [Fact]
+    public void ThrownAimStraightAboveKeepsYawAndClampsPitch()
+    {
+        var (yaw, pitch) = DeathPresentation.ThrownAim(0.05f, 8f, -0.05f, 0.7f);
+        Assert.Equal(0.7f, yaw);
+        Assert.Equal(DeathPresentation.ThrownMaxPitch, pitch, 4);
+        Assert.Equal(-DeathPresentation.ThrownMaxPitch, DeathPresentation.ThrownAim(0, -8f, 0, 0).Pitch, 4);
+    }
+
+    [Fact]
+    public void ThrownAimTurnsToTheBodyAlongMinusZ()
+    {
+        Assert.Equal(0f, DeathPresentation.ThrownAim(0, 0, -5f, 1f).Yaw, 4);          // ahead
+        Assert.Equal(MathF.PI / 2, DeathPresentation.ThrownAim(-5f, 0, 0, 0).Yaw, 4); // to the left (-X)
+        Assert.Equal(MathF.PI / 4, DeathPresentation.ThrownAim(0, 3f, -3f, 0).Pitch, 4);
+    }
+
+    [Fact]
+    public void PanBlendTurnsQuickerTheFurtherOffTheBody()
+    {
+        Assert.Equal(DeathPresentation.PanBlend(0.05f), DeathPresentation.PanBlend(0.05f, 0f), 5);
+        Assert.True(DeathPresentation.PanBlend(0.05f, 1.5f) > DeathPresentation.PanBlend(0.05f, 0.2f));
+        Assert.Equal(DeathPresentation.PanBlend(0.05f, 1.6f), DeathPresentation.PanBlend(0.05f, 3f), 5); // boost caps
+    }
+
     static DeathPlan FallPlan(float delay = 5) => DeathPresentation.Plan(ClientMode.OnFoot, false, false, false, delay, 1);
 
     [Fact]

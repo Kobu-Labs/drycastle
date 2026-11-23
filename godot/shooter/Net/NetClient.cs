@@ -13,9 +13,12 @@ namespace Drycastle.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc, WadeAcc; public double RippleDue; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
+    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc, WadeAcc; public double RippleDue; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); /// <summary>The driver's own picture of this body thrown by the vehicle they drive, shown before the server's kill arrives (#411).</summary>
+        public readonly ThrowGuess Guess = new(); /// <summary>The guessed throw is drawn as the dead ragdoll (the server has said dead; until then a hit that hurts tumbles as a thrown living body, <see cref="BodyFlingTracker"/>). GuessFlung: this guess started that tumble; GuessConfirmed: the server's PlayerFlung came for it. And the launch speed of the guess and where the server had the body last frame, to see when the server's living body has come down (#411).</summary>
+        public bool GuessRagdoll, GuessFlung, GuessConfirmed; public float GuessLaunch; public Vector3 GuessServerLast; public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
         /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the vehicle and seat this player sits in (<see cref="SeatRiders"/>).</summary>
-        public float ShownYaw, ShownPitch; public bool Binoculars; /// <summary>The squad whose name the name tag shows after the name (0: none); the tag is rebuilt when it changes (#379).</summary>
+        public float ShownYaw, ShownPitch; /// <summary>The pair of binoculars held at the face, or null.</summary>
+        public ItemDef? Binoculars; /// <summary>The squad whose name the name tag shows after the name (0: none); the tag is rebuilt when it changes (#379).</summary>
         public byte TagSquad; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
 
     public const double InterpDelayTicks = 3.0;
@@ -133,6 +136,7 @@ public partial class NetClient : Node
         InitMissile();
         InitTurrets();
         InitAnimals();
+        InitCompanions();
         InitFlocks();
         InitPoop();
         InitBigfoot();
@@ -268,9 +272,12 @@ public partial class NetClient : Node
         RenderCorpses();
         RenderGroundItems();
         RenderCarePackages();
+        RenderMinerals();
         RenderTurrets();
         t = ClientProf.Lap(ClientProf.S.Players, t);
         RenderAnimals();
+        RenderCompanions();
+        TickCompanionMarks();
         RenderFlocks(delta);
         RenderBigfoot();
         RenderCitizens();
@@ -353,7 +360,7 @@ public partial class NetClient : Node
                 RozhlasSetReset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
                 DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
                 CasingFx.Water = Water;
-                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Bodies = this };
+                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = ObjectLadders.WithObjects(Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Map), Bodies = this };
                 World.AddChild(_me);
                 if (!Bot && ShotFx.Enabled) { _viewmodel = MakeViewmodel(); _me.Camera.AddChild(_viewmodel); }
                 if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(_me.Camera); // the glass shaders compile now, not at the first crack
@@ -386,6 +393,7 @@ public partial class NetClient : Node
                 OnChatEvent((EventKind)e.Kind, e.Payload); // chat lines, the admin flag, the day clock
                 OnStatusEvent((EventKind)e.Kind, e.Payload); // statuses: blessing, curse, burning
                 OnItemEvent((EventKind)e.Kind, e.Payload); // what the player wears, what a corpse carries, an item crumbling
+                OnCompanionEvent((EventKind)e.Kind, e.Payload); // the Companions the player can pick and the one that is out
                 OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
                 OnThiefAudioEvent((EventKind)e.Kind, e.Payload); // a Gang member says a line (ticket 09)
                 OnBigfootEvent((EventKind)e.Kind, e.Payload); // the Bigfoot's effects and the footprints to its corpse (#264)
@@ -398,6 +406,8 @@ public partial class NetClient : Node
                 OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
                 OnDemonEvent((EventKind)e.Kind, e.Payload); // the demon: fireballs, the curse
                 OnHuntEvent((EventKind)e.Kind, e.Payload); // the Hunter's Log: answers and announcements (#336)
+                OnPhoenixEvent((EventKind)e.Kind, e.Payload); // the Phoenix's fall: a flash and the crash site's warning light
+                OnMineralEvent((EventKind)e.Kind, e.Payload); // the mineral nodes and the player's finds (#401)
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 OnProgressionEvent((EventKind)e.Kind, e.Payload);
@@ -434,7 +444,7 @@ public partial class NetClient : Node
                 {
                     ApplySpawnLoadout(); // the hotbar and perk the server applied at this spawn
                     _wantSlot = StartSlot();
-                    Dead = false; if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
+                    Dead = false; _earRing?.Clear(); if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
                     _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
                     EndDeathView(); _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId); _breathCues.Reset(); _zero.Reset(); ClearPredictedReload(); _pNextFire = 0;
                 }
@@ -444,7 +454,7 @@ public partial class NetClient : Node
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 SfxDeath(d);
                 NoteDeath(d);
-                if (d.Victim == _myId) { _deaths++; BeginDeathView(d.RespawnDelay); Dead = true; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); _hud?.SetProtection(0); OnStreakDeath(); }
+                if (d.Victim == _myId) { _deaths++; BeginDeathView(d.RespawnDelay, d.Flight); Dead = true; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); _hud?.SetProtection(0); OnStreakDeath(); }
                 break;
         }
     }
@@ -548,7 +558,7 @@ public partial class NetClient : Node
             PixelSize = 0.005f, NoDepthTest = true,
         });
         World.AddChild(node);
-        return new Remote { Node = node, View = view, Binoculars = _binocularsBy.Contains(id) };
+        return new Remote { Node = node, View = view, Binoculars = _binocularsBy.GetValueOrDefault(id) };
     }
 
     void OnSelf(EntityRecord rec, ushort ack)
@@ -705,7 +715,7 @@ public partial class NetClient : Node
             mi = new MoveInput { MoveY = 1, Yaw = yaw, Buttons = jump, SpeedScale = 1 };
         }
         else mi = Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : PerfPlay ? PerfPlayStep() : _me.Sample();
-        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); TickLootReturn(dt); }
+        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); TickLootReturn(dt); TickMinerals(dt); }
         FxDemoInput(ref mi);
         ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         ThrowFilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
@@ -747,18 +757,61 @@ public partial class NetClient : Node
                 drawn++;
                 var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 var dead = r.State == EntityState.Dead;
+                at = GuessRunOver(id, r, at, dead, dt);
+                var guessed = r.Guess.Active; // the body the driver's vehicle has just hit: thrown on the guessed arc, ahead of the server
+                r.GuessRagdoll = guessed && (r.GuessRagdoll || dead); // the corpse's ragdoll only once the server says dead; before that the thrown body tumbles as one that may get up
                 r.ShownYaw = s.Yaw; r.ShownPitch = s.Pitch;
                 if (dead) EndFling(id);
-                TumbleRemote(id, r, at, s.Yaw, dead && TargetDummies.IsDummyId(id), dt);
+                TumbleRemote(id, r, at, s.Yaw, dead && TargetDummies.IsDummyId(id) || r.GuessRagdoll, dt);
                 PounceLieRemote(id, r, at); // the one the demon has pinned lies on its back
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
-                r.Node.Visible = !(dead && !TargetDummies.IsDummyId(id) && (CorpseOf(id) || HarvestVictimHidden(id, dead))); // the harvester's victim is in the machine, then inside its bale: no body at the spot where it died // riders are drawn in their seat (the server puts the body there), seated rather than standing
+                r.Node.Visible = guessed || !(dead && !TargetDummies.IsDummyId(id) && (CorpseOf(id) || HarvestVictimHidden(id, dead))); // the harvester's victim is in the machine, then inside its bale: no body at the spot where it died // riders are drawn in their seat (the server puts the body there), seated rather than standing
                 r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
                 if (r.State == EntityState.InVehicle) _lastRode[id] = Now;
                 AnimateRemote(r, s.Pos);
                 UpdateNameTag(id, r);
             }
         _rub.AddRender(rt, _lastTick, drawn);
+    }
+
+    /// <summary>
+    /// The driver's picture of a run-over (#411, as <see cref="ThrowGuess"/> does for animals): the vehicle this player drives is drawn ahead of the remote bodies (about the
+    /// interpolation delay and a round trip), so a body it hits is seen inside the hull until the server's throw arrives. The moment the predicted vehicle's box touches a living
+    /// body as drawn, at any speed that moves a body, the body is shown thrown on the arc the server will give it. The server throws every player a vehicle touches, killed or
+    /// not, and one who lives through a hit that hurts is drawn tumbling by everybody (PlayerFlung, <see cref="BodyFlingTracker"/>): so a hit that hurts tumbles here at once,
+    /// which is right whether the server then says dead (the corpse's ragdoll takes over in flight) or alive (it lands, lies and gets up). A slow push is an upright shove.
+    /// Only a touch the server did not see (a graze, within the lag) is taken back: the body glides to where the server has it. Returns where the body is drawn.
+    /// </summary>
+    Vector3 GuessRunOver(ushort id, Remote r, Vector3 at, bool dead, float dt)
+    {
+        var g = r.Guess;
+        var feet = new NVec3(at.X, at.Y, at.Z);
+        if (g.Ready && r.State == EntityState.Alive && Vehicles != null && ThrowGuessCar() is { } c
+            && RunOverFootprint.OfCapsule(feet).Hits(c.State.Position, c.State.Position, c.State.Yaw, c.Def.HalfWidth, c.Def.HalfLength))
+        {
+            var launch = CorpseRules.ThrowFromCar(new NVec3(-MathF.Sin(c.State.Yaw), 0, -MathF.Cos(c.State.Yaw)), c.State.Speed);
+            if (g.Start(feet, launch))
+            {
+                r.GuessLaunch = new NVec3(launch.X, 0, launch.Z).Length(); r.GuessConfirmed = false;
+                r.GuessFlung = RunOver.Damage(Vehicles, c.State.Speed, Vehicles.RunOverScale(c.Def)) > 0; // a hit that hurts knocks the body off its feet
+                if (r.GuessFlung) FlingOf(id).Thrown();
+            }
+        }
+        // the server's own throw of a living body: its event says it threw, its speed says when its body has come down; the guessed arc is kept until both have, as for a corpse
+        var moved = at - r.GuessServerLast; moved.Y = 0; r.GuessServerLast = at;
+        var flies = !dead && r.GuessConfirmed && dt > 0 && ThrowGuess.ServerStillFlies(moved.Length() / dt, r.GuessLaunch);
+        var was = g.Phase;
+        var p = g.Step(dt, feet, dead || r.GuessConfirmed, flies, g.Active ? GroundUnder(g.Position) : null);
+        if (was == ThrowGuessPhase.Flying && g.Phase == ThrowGuessPhase.Settling && r.GuessFlung && !dead) EndFling(id); // the server saw no hit: the tumble is taken back with the arc
+        if (!g.Active) r.GuessFlung = false;
+        return new Vector3(p.X, p.Y, p.Z);
+    }
+
+    /// <summary>The server's word that a vehicle threw a player alive (<see cref="EventKind.PlayerFlung"/>, #411): the body tumbles and gets up, on every client; the driver's own guess of it is confirmed.</summary>
+    void OnPlayerFlung(ushort id)
+    {
+        FlingOf(id).Thrown();
+        if (_remotes.TryGetValue(id, out var r) && r.Guess.Active) r.GuessConfirmed = true;
     }
 
     /// <summary>
@@ -818,7 +871,7 @@ public partial class NetClient : Node
         r.LastPos = p; r.LastT = now;
         var weaponId = Weapons != null && r.Slot >= 1 && r.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[r.Slot - 1].Id : "";
         r.View?.SetBinoculars(r.Binoculars);
-        r.View?.Apply(r.Speed, now < r.FireUntil, r.State == EntityState.Dead, weaponId);
+        r.View?.Apply(r.Speed, now < r.FireUntil, r.State == EntityState.Dead || r.GuessRagdoll, weaponId);
     }
 
     void Debug(ushort victim)
@@ -1065,6 +1118,12 @@ public partial class NetClient : Node
             case EventKind.HelperWarning when HelperWarningCodec.Decode(payload) is { } hw:
                 OnHelperWarning(hw);
                 break;
+            case EventKind.PlayerFlung when PlayerFlungCodec.Decode(payload) is { } flung:
+                OnPlayerFlung(flung);
+                break;
+            case EventKind.VehicleCrash when VehicleCrashCodec.Decode(payload) is { } crash:
+                OnVehicleCrash(crash.Car, crash.Sound);
+                break;
             case EventKind.GlassPane when GlassCodec.DecodePane(payload) is { } gp:
                 OnGlassPane(gp);
                 break;
@@ -1076,6 +1135,12 @@ public partial class NetClient : Node
                 break;
             case EventKind.LampSync when LampCodec.DecodeSync(payload) is { } lamps:
                 StreetLamps.Current?.SyncPoleLamps(lamps);
+                break;
+            case EventKind.SignPlateState when SignPlateCodec.DecodeState(payload) is { } plate:
+                SignPlates.Current?.SetPlate(plate.Index, plate.State);
+                break;
+            case EventKind.SignPlateSync when SignPlateCodec.DecodeSync(payload) is { } plates:
+                SignPlates.Current?.SyncPlates(plates);
                 break;
             case EventKind.HuntShot when HuntShot.Decode(payload) is { } hs:
                 HudHuntShot(hs);

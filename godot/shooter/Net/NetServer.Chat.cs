@@ -20,7 +20,7 @@ public partial class NetServer
 
     bool IsAdmin(Client c) => !c.IsBot && (AdminAll || (c.Token.Length > 0 && AdminTokens.Contains(c.Token)));
 
-    ChatContext ChatCtx(Client c) => new(IsAdmin(c), Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList());
+    ChatContext ChatCtx(Client c) => new(IsAdmin(c), Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList(), CompanionData.Companions.Select(i => i.Id).ToList());
 
     /// <summary>Join: tells the client if it is an admin and which vehicles it may name.</summary>
     void SendChatStatus(Client c)
@@ -62,8 +62,10 @@ public partial class NetServer
             case "bots": ChatBots(c, args); break;
             case "spawn": ChatSpawn(c, args[0]); break;
             case "unicorn": ChatUnicorn(c); break;
+            case "phoenix": ChatPhoenix(c); break;
             case "sandbox": ChatSandbox(c, args); break;
             case "give": ChatGive(c, args); break;
+            case "companion": ChatCompanion(c, args); break;
             case "time": ChatTimeCommand(c, args); break;
             case "explode": ChatExplode(c, args); break;
             case "restart": ChatRestart(c, args); break;
@@ -119,6 +121,14 @@ public partial class NetServer
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { ChatTo(c, ChatLineKind.Error, "You must be alive to spawn a vehicle."); return; }
         if (TrySpawnVehicle(c, (byte)kind, AdminVehicleCap) is { } why) { ChatTo(c, ChatLineKind.Error, why); return; }
         ChatTo(c, ChatLineKind.Info, $"Spawned a {id} in front of you.");
+    }
+
+    /// <summary>"/phoenix" (admins, a test): a Phoenix now, whatever the hour (<see cref="WildlifeKeeper.SpawnPhoenix"/>); the night counter is not touched, so the scheduled one still comes.</summary>
+    void ChatPhoenix(Client c)
+    {
+        if (_wildlife == null || !_wildlife.Active) { ChatTo(c, ChatLineKind.Error, "There is no wildlife in this round."); return; }
+        if (_wildlife.SpawnPhoenix(_wildlifeGround ??= new WildlifeGround(this))) ChatTo(c, ChatLineKind.Info, "A Phoenix flies over the map.");
+        else ChatTo(c, ChatLineKind.Error, "No Phoenix: wildlife.json has none, or the map is full.");
     }
 
     /// <summary>"/unicorn" (admins, a test): an extra Unicorn on the ground 50 m in front of the player, past its flee_radius (40 m, animals.json) so it is not startled (see <see cref="WildlifeKeeper.SpawnExtra"/>).</summary>

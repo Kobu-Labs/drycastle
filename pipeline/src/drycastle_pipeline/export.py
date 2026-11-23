@@ -7,6 +7,7 @@ glTF (x, y, z) = local (east, up, -north). parcels.json keeps local metres (x ea
 import hashlib
 import json
 import math
+import re
 import struct
 import sys
 from pathlib import Path
@@ -60,6 +61,10 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # assets/manifest.json), first used for typed fences: "parcel_<ID>_props_tex_<id>". The manifest lists the ids used.
 # (no bump) objects.json objects may carry "solid": false (no collision at all; the key is absent when true) and a "z" (absolute
 # metres, else the terrain height). Older loaders ignore "solid" and keep the collision.
+# (no bump) objects.json objects may carry "size_m": [length, width, height] metres, the exact final bounding box (the model is scaled
+# non-uniformly to it; wins over "scale"; absent when not set). Older loaders ignore it and draw the model at "scale".
+# (no bump) objects.json objects may carry "model": a GLB of the map (graves/<id>.glb) drawn in place of the asset's shared model, at its real size
+# (not stretched by size_m): the generated graves (graves.py). An older loader draws the asset stretched.
 # (no bump) objects.json may carry "cables": the cables between placed utility poles (id, from, to). The game
 # strings the wires itself from the poles and the wire seats in assets/manifest.json; older loaders ignore the key.
 # 0.8.0: ground detail (detail stage): per chunk a "detail_patches" node (flat colours) and "detail_patches_tex_<id>" nodes
@@ -278,6 +283,32 @@ def write_primitives(out_dir: Path) -> dict[str, dict]:
     return entries
 
 
+def write_graves(out_dir: Path) -> int:
+    """``graves/<id>.glb`` for every placed ``prim:grave`` of ``objects.json`` (its own mesh at its real size, ``graves.object_mesh``),
+    and that object's ``model`` in ``objects.json``: the loader draws it in place of the asset's shared model. Returns how many."""
+    from drycastle_pipeline import graves
+
+    path = out_dir / "objects.json"
+    doc = json.loads(path.read_text())
+    graves_dir = out_dir / "graves"
+    if graves_dir.is_dir():
+        for old in graves_dir.glob("*.glb"):
+            old.unlink()
+    count = 0
+    for obj in doc.get("objects", []):
+        if obj.get("asset") != graves.ASSET:
+            continue
+        graves_dir.mkdir(parents=True, exist_ok=True)
+        name = re.sub(r"[^A-Za-z0-9_-]", "_", obj["id"])
+        scene = build_chunk_scene([], {name: graves.object_mesh(obj)})
+        (graves_dir / f"{name}.glb").write_bytes(scene.export(file_type="glb"))
+        obj["model"] = f"graves/{name}.glb"
+        count += 1
+    if count:
+        path.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")  # as props writes it
+    return count
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -431,6 +462,7 @@ def run_export(
         # placed objects (props stage); copied verbatim so the loader reads what the build planned
         (out_dir / "objects.json").write_bytes(objects_src.read_bytes())
         files["objects"] = "objects.json"
+        write_graves(out_dir)
     prims = write_primitives(out_dir)
     if scene.graph is not None:
         _dump(out_dir / "roads.json", scene.graph)

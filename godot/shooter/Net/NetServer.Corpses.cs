@@ -16,9 +16,16 @@ public partial class NetServer
     readonly Dictionary<ushort, NVec3> _deathPush = new();
 
     /// <summary>Records the throw for a victim about to take damage; <see cref="ClearPush"/> drops it when the hit did not kill.</summary>
-    void PushOnDeath(ushort victim, NVec3 velocity) => _deathPush[victim] = velocity;
+    void PushOnDeath(ushort victim, NVec3 velocity, DeathFlight flight = DeathFlight.Blast)
+    {
+        _deathPush[victim] = velocity;
+        if (flight == DeathFlight.None) _deathFlight.Remove(victim); else _deathFlight[victim] = flight;
+    }
 
-    void ClearPush(ushort victim, DamageResult result) { if (result != DamageResult.Killed) _deathPush.Remove(victim); }
+    void ClearPush(ushort victim, DamageResult result) { if (result != DamageResult.Killed) { _deathPush.Remove(victim); _deathFlight.Remove(victim); } }
+
+    /// <summary>What threw each victim about to die (<see cref="PushOnDeath"/>), sent with the Death event so the victim's own view can follow the flight (#416).</summary>
+    readonly Dictionary<ushort, DeathFlight> _deathFlight = new();
 
     /// <summary>Where a rider was killed, kept from <c>PlayerKilled</c> (which frees the seat) to <c>PlayerDied</c> (which spawns the corpse): the vehicle, the seat, and whether the corpse stays seated (ADR 0026).</summary>
     readonly Dictionary<ushort, (ServerCar Car, int Seat, bool Attach)> _riderDeath = new();
@@ -41,7 +48,7 @@ public partial class NetServer
     {
         var car = c.Car!; var seat = c.CarSeat;
         var attach = !car.Destroyed && car.Def.Seats[seat].Role == "driver" && !_deathPush.ContainsKey(c.Id);
-        if (!attach && !_deathPush.ContainsKey(c.Id)) PushOnDeath(c.Id, CarVelocity(car));
+        if (!attach && !_deathPush.ContainsKey(c.Id)) PushOnDeath(c.Id, CarVelocity(car), DeathFlight.None);
         _riderDeath[c.Id] = (car, seat, attach);
         LeaveSeat(c, false);
     }

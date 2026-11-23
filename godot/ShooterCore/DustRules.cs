@@ -50,6 +50,12 @@ public static class DustRules
 
     /// <summary>The veil never fully blinds: the HUD stays on top of it and a little of the world shows through.</summary>
     public const float MaxVeil = 0.96f;
+    /// <summary>
+    /// The cloud's part of the veil: full for the blast's first moment (<see cref="CloudRiseSeconds"/>), then down to <see cref="CloudVeilShare"/> of the
+    /// cloud's density over <see cref="CloudVeilPulseSeconds"/>. The drawn cloud already hides the world by distance for a camera inside it; a full veil
+    /// on top of it hid the near things too, for the cloud's whole life. The wave's part is not cut.
+    /// </summary>
+    public const float CloudVeilShare = 0.25f, CloudVeilPulseSeconds = 0.5f;
     /// <summary>A sight line with at least this much dust on it hides what is at its end (a name tag).</summary>
     public const float SightBlocked = 0.6f;
 
@@ -170,6 +176,13 @@ public static class DustRules
     /// <summary>All of one blast's dust at a point: the thicker of its cloud and its wave.</summary>
     public static float Density(in DustBlast b, Vector3 p, double now, float? aboveGround = null) => MathF.Max(CloudDensity(b, p, now), FrontDensity(b, p, now, aboveGround));
 
+    /// <summary>How much of the cloud's density at the eye goes to the veil, <paramref name="age"/> seconds after the blast: 1, then down to <see cref="CloudVeilShare"/>.</summary>
+    public static float CloudVeilShareAt(double age) => 1f - (1f - CloudVeilShare) * Smooth(((float)age - CloudRiseSeconds) / CloudVeilPulseSeconds);
+
+    /// <summary>What one blast's dust takes of the view of an eye at <paramref name="p"/>: its cloud's share (<see cref="CloudVeilShareAt"/>) or its wave, the larger.</summary>
+    public static float VeilDensity(in DustBlast b, Vector3 p, double now, float? aboveGround = null) =>
+        MathF.Max(CloudDensity(b, p, now) * CloudVeilShareAt(now - b.Born), FrontDensity(b, p, now, aboveGround));
+
     /// <summary>
     /// Whether <paramref name="b"/>, going off now, is covered by the dust <paramref name="a"/> already made: close to its centre, not larger, and
     /// while that cloud is still young. A burst of blasts in one spot (a gunship's fire) then keeps one cloud instead of stacking them.
@@ -225,7 +238,7 @@ public sealed class DustField
         var clear = 1f;
         foreach (var b in _blasts)
         {
-            var d = DustRules.Density(b, eye, now, aboveGround);
+            var d = DustRules.VeilDensity(b, eye, now, aboveGround);
             if (d <= 0.005f) continue;
             if (reach != null) d *= Math.Clamp(reach(b), 0f, 1f);
             clear *= 1f - d;

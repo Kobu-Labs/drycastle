@@ -58,7 +58,7 @@ public partial class NetClient
     }
 
     /// <summary>An item's model: its own file, or for a model of the paid Synty packs (<see cref="ItemDef.Atlas"/>) the pack's model wearing that atlas; null when the file is not there.</summary>
-    static Node3D? ItemModel(ItemDef item)
+    internal static Node3D? ItemModel(ItemDef item)
     {
         const string synty = "synty/glb/";
         if (item.Atlas == "") return ModelLib.Instance(item.Model);
@@ -80,7 +80,7 @@ public partial class NetClient
     };
 
     /// <summary>The box round every mesh under <paramref name="n"/> in the frame of the model's root (the root's own transform is left out when <paramref name="root"/>), or null when there is no mesh.</summary>
-    static Aabb? ModelBounds(Node3D n, Transform3D parent, bool root)
+    internal static Aabb? ModelBounds(Node3D n, Transform3D parent, bool root)
     {
         var here = root ? Transform3D.Identity : parent * n.Transform;
         Aabb? box = n is MeshInstance3D { Mesh: not null } mi ? here * mi.GetAabb() : null;

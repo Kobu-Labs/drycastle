@@ -14,9 +14,11 @@ public sealed record ChatCommand(string Name, string Summary, IReadOnlyList<Chat
 }
 
 /// <summary>What the chat needs to know about the viewer and the server to complete and validate: admin rights, the vehicle ids (vehicles.json) the server can spawn and the item ids (items.json) /give takes.</summary>
-public sealed record ChatContext(bool IsAdmin, IReadOnlyList<string> Vehicles, IReadOnlyList<string>? ItemIds = null)
+public sealed record ChatContext(bool IsAdmin, IReadOnlyList<string> Vehicles, IReadOnlyList<string>? ItemIds = null, IReadOnlyList<string>? CompanionIds = null)
 {
     public IReadOnlyList<string> Items => ItemIds ?? Array.Empty<string>();
+    /// <summary>The Companion ids (companions.json) /companion takes.</summary>
+    public IReadOnlyList<string> Companions => CompanionIds ?? Array.Empty<string>();
 }
 
 /// <summary>A command line that parsed: the command and its normalised (lower case) arguments, or the reason it did not.</summary>
@@ -85,6 +87,9 @@ public static class ChatCommands
     /// <summary>Bounds of /explode's wave speed, metres a second.</summary>
     public const int MinExplodeSpeed = 5, MaxExplodeSpeed = 400;
 
+    /// <summary>The value of /companion that takes the Companion away.</summary>
+    public const string CompanionOff = "off";
+
     public static readonly IReadOnlyList<ChatCommand> All = new ChatCommand[]
     {
         new("help", "List the commands, or explain one", new[] { new ChatArg("command", ChatArgKind.Choice, false) }, AdminOnly: false),
@@ -92,8 +97,10 @@ public static class ChatCommands
         new("bots", "Set how many bots play, or show the count. Takes effect at once", new[] { new ChatArg("count", ChatArgKind.Int, false, 0, MaxBots) }),
         new("spawn", "Spawn a vehicle in front of you", new[] { new ChatArg("vehicle", ChatArgKind.Choice) }),
         new("unicorn", "TEST: an extra wild Unicorn on the ground in front of you (a Hunt when killed; it is not respawned)", Array.Empty<ChatArg>()),
+        new("phoenix", "TEST: a Phoenix in the sky now (any hit makes it fall, a second one while it lies burns it; it is not the night schedule's)", Array.Empty<ChatArg>()),
         new("sandbox", "Turn sandbox mode on or off for a player (name or #id), or flip it", new[] { new ChatArg("player", ChatArgKind.Player), new ChatArg("state", ChatArgKind.Choice, false) }),
         new("give", "Give an item to a player (name or #id), or to yourself. It is worn if the slot is empty, else it goes in the bag", new[] { new ChatArg("item", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
+        new("companion", "TEST: give a player (name or #id), or yourself, a Companion for this session, or take it away (off). It is not stored on the profile", new[] { new ChatArg("companion", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
         new("restart", "Restart the round now, optionally in another mode (ffa or tdm)", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
         new("event", "Trigger a village event now", new[] { new ChatArg("event", ChatArgKind.Choice), new ChatArg("action", ChatArgKind.Choice, false) }),
         new("citizens", "Send citizens to the church to sit on its pews (a number), or remove them all (clear)", new[] { new ChatArg("count", ChatArgKind.IntOrChoice, true, 1, MaxCitizens) }),
@@ -125,6 +132,7 @@ public static class ChatCommands
                 .Concat(new[] { ("freeze", "stop the clock"), ("resume", "let it run") }).ToList(),
             ChatArgKind.Choice when cmd.Name == "spawn" => ctx.Vehicles.Select(v => (v, "")).ToList(),
             ChatArgKind.Choice when cmd.Name == "give" => ctx.Items.Select(i => (i, "")).ToList(),
+            ChatArgKind.Choice when cmd.Name == "companion" => ctx.Companions.Select(i => (i, "")).Append((CompanionOff, "no Companion")).ToList(),
             ChatArgKind.Choice when cmd.Name == "sandbox" => new[] { ("on", "godmode, unlimited ammo, no score"), ("off", "back to normal play") },
             ChatArgKind.Choice when cmd.Name == "status" => new[] { ("bless", "one lethal hit is negated"), ("curse", "your bullets set victims ablaze"), ("high", "high from the plantation, as after a hold in it"), ("clear", "take every status away") },
             ChatArgKind.Choice when cmd.Name == "squad" => new[] { ("create", "start a squad; the name is optional (up to 16 characters)"), ("join", "join your team's squad by name or number from list (up to 4 players)"), ("leave", "leave your squad"), ("list", "your team's squads and who is in them") },

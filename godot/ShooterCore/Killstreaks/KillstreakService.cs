@@ -33,13 +33,13 @@ public sealed class KillstreakService
     /// <see cref="Life.Rewards"/> until used.) The use itself (running, ended) is <see cref="KillstreakUse.UseState"/>.
     /// </summary>
     public static readonly StateMachineSpec<StreakHold> HoldSpec = StateMachineSpec<StreakHold>.Define(
-            "Killstreak.Hold", "One loadout streak in one life: kills to go, earned and held, used.", StreakHold.Progress)
+            "Killstreak.Hold", "One loadout streak: kills to go, earned and held (across deaths), used.", StreakHold.Progress)
         .Allow(StreakHold.Progress, StreakHold.Earned)
         .Allow(StreakHold.Earned, StreakHold.Used, StreakHold.Progress)
         .Allow(StreakHold.Used, StreakHold.Progress)
-        .Note(StreakHold.Progress, "Not earned: the Streak counter is below the threshold (the start of every life).")
-        .Note(StreakHold.Earned, "Threshold reached (StreakEarned sent): held until the owner uses it.")
-        .Note(StreakHold.Used, "Activation accepted (StreakUsed sent): spent for this life, whether it still runs or has ended. Only a death or a round reset brings it back to Progress.")
+        .Note(StreakHold.Progress, "Not earned: the Streak counter is below the threshold (the start of every life, unless an earned streak is carried over).")
+        .Note(StreakHold.Earned, "Threshold reached (StreakEarned sent): held until the owner uses it, and it survives the owner's death (#414).")
+        .Note(StreakHold.Used, "Activation accepted (StreakUsed sent): spent, whether it still runs or has ended. A death or a round reset brings it back to Progress (earn it again).")
         .Build();
 
     sealed class Life
@@ -59,8 +59,11 @@ public sealed class KillstreakService
             return m;
         }
 
-        /// <summary>Death or round reset: every streak is back to Progress.</summary>
+        /// <summary>Round reset or a wipe: every streak is back to Progress.</summary>
         public void ClearHolds() { foreach (var m in _holds.Values) m.Enter(StreakHold.Progress); }
+
+        /// <summary>Death: a used streak is earned again from Progress; an earned one stays earned (#414).</summary>
+        public void ClearUsed() { foreach (var m in _holds.Values) if (m.Current == StreakHold.Used) m.Enter(StreakHold.Progress); }
     }
 
     readonly KillstreakFile _data;
@@ -105,6 +108,12 @@ public sealed class KillstreakService
         EndAllFor(owner, KillstreakEndReason.OwnerDied);
         var life = new Life { CostReduction = costReduction };
         for (var i = 0; i < Slots; i++) life.Loadout[i] = i < loadoutStreaks.Count ? loadoutStreaks[i] : "";
+        if (_lives.TryGetValue(owner, out var prev)) // earned streaks and held rewards outlive a death (#414); one the new loadout lacks is dropped
+        {
+            foreach (var id in life.Loadout)
+                if (id != "" && prev.HoldOf(id) == StreakHold.Earned) life.Hold(id).Enter(StreakHold.Earned);
+            life.Rewards.AddRange(prev.Rewards);
+        }
         _lives[owner] = life;
     }
 
@@ -144,12 +153,20 @@ public sealed class KillstreakService
     public IReadOnlyList<string> HeldRewards(ushort owner) =>
         _lives.TryGetValue(owner, out var life) ? life.Rewards.ToList() : Array.Empty<string>();
 
-    /// <summary>The owner died: the counter, the earned, used and reward streaks reset, and their active instances end.</summary>
+    /// <summary>The owner died: the counter and the used streaks reset and their active instances end; earned streaks and held rewards stay (#414).</summary>
     public void OnDeath(ushort owner)
     {
         EndAllFor(owner, KillstreakEndReason.OwnerDied);
         if (!_lives.TryGetValue(owner, out var life)) return;
         life.Kills = 0;
+        life.ClearUsed();
+    }
+
+    /// <summary>The owner's progress is dropped whole, as at a team change: like a death, and the earned streaks and rewards go too.</summary>
+    public void Wipe(ushort owner)
+    {
+        OnDeath(owner);
+        if (!_lives.TryGetValue(owner, out var life)) return;
         life.ClearHolds();
         life.Rewards.Clear();
     }

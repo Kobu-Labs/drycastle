@@ -25,6 +25,8 @@ public partial class NetServer : Node
         /// <summary>This bot carries the RPG as its secondary weapon (#348); decided when it joins.</summary>
         public bool BotLauncher;
         public ushort Id;
+        /// <summary>The finds of the Mineral Log were sent to this client (<see cref="NetServer.MineralTick"/> sends them once the book is loaded).</summary>
+        public bool FindsSent;
         public string Name = "";
         /// <summary>When this client's last performance report was taken (<see cref="OnClientReport"/>): one per few seconds, the rest are dropped.</summary>
         public double ClientReportAt = -1e9;
@@ -232,6 +234,7 @@ public partial class NetServer : Node
         InitBigfoot(); // after the corpse book, which follows the same despawns
         InitPets();
         InitWildlife();
+        InitCompanions();
         InitThieves();
         InitHarvester();
         InitScud();
@@ -275,6 +278,7 @@ public partial class NetServer : Node
         CompleteProfileLoads();
         CompleteSaves();
         HuntTick();
+        MineralTick();
         DropSilentPeers();
         IntelTick(); // a made-up event whose time is up leaves the intel screen
         PerfLap(ServerPerf.Ph.Housekeeping);
@@ -299,6 +303,7 @@ public partial class NetServer : Node
         _audit?.Lap(4);
         pt = Prof.Lap(Prof.S.Pets, pt);
         WildlifeTick((float)delta);
+        CompanionsTick();
         AnimalsDone(); // the animals have ticked: the players move from here on
         _audit?.Lap(5);
         pt = Prof.Lap(Prof.S.Wildlife, pt);
@@ -341,6 +346,7 @@ public partial class NetServer : Node
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
         FlushLamps((float)delta); // the pole lamps: clocks of the broken ones and the changes of this tick (ADR 0037)
+        FlushSigns((float)delta); // the road sign plates: clocks of the bent ones and the changes of this tick (ADR 0039)
         FlushStatuses(); // statuses and burning that changed this tick
         FlushScoreboard(); // once a tick at most, and about once a second (the ping), however many kills the tick had (A-04)
         PerfLap(ServerPerf.Ph.Detonate);
@@ -504,6 +510,8 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.RaiseBinoculars } rb) { if (c.Joined && Binoculars.TryDecodeRaise(rb.Payload, out var up)) SetBinoculars(c, up && CarriesBinoculars(c)); }
             else if (m is EventMsg { Kind: (byte)EventKind.Redeploy } rd && c.Joined) OnRedeploy(c, rd.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.MineralPick } mp && c.Joined) OnMineralPick(c, mp.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.CompanionPick } cp && c.Joined) OnCompanionPick(c, cp.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) OnSandboxTeleportTo(c, st.Payload);
@@ -567,7 +575,7 @@ public partial class NetServer : Node
         c.Breath = new BreathState(c.Id);
         c.Worn = new Equipment(Items);
         c.Bag = new Bag();
-        ItemRules.IssueStandard(Items, c.Bag); // every player has the standard items (the binoculars) from the start
+        ItemRules.IssueStandard(Items, c.Bag, OwnedItems(c)); // every player has the standard items (the binoculars) from the start
         c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = MapLadders, Bodies = _animalCrowd };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
@@ -576,6 +584,7 @@ public partial class NetServer : Node
         c.Enc = new SnapshotEncoder(_sentStates);
         c.WEnc = new WorldSnapshotEncoder(history: _sentWorld);
         SendProfile(c);
+        SendCompanions(c); // the Companions they can pick and the one that is out (the Equipment screen's picker)
         SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
         SendChatStatus(c); // admin or not, and the vehicles /spawn takes
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick,
@@ -589,10 +598,12 @@ public partial class NetServer : Node
         SendCorpseItemsOnJoin(c); // the items the corpses carry, after the corpses themselves
         SendGlassOnJoin(c); // the glass panes that are not whole (ADR 0007)
         SendLampsOnJoin(c); // the pole lamps that are not lit (ADR 0037)
+        SendSignsOnJoin(c); // the road sign plates that are not whole (ADR 0039)
         SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
         SendIntelOnJoin(c); // the events on the intel screen
         SendMassOnJoin(c); // the Holy Mass, when one runs
         SendThievesOnJoin(c); // the Thieves event, when one runs
+        SendMineralsOnJoin(c); // the mineral nodes
         SendRozhlasOnJoin(c); // the village loudspeaker, when a detour broadcast is on
         SendUradDoorOnJoin(c); // and the Urad door, when it is open
         SendGarageDoorOnJoin(c); // and the garage doors, when they are open
@@ -624,6 +635,7 @@ public partial class NetServer : Node
     void Leave(Client c)
     {
         StreakLeave(c.Id);
+        CompanionLeave(c.Id);
         StatusLeave(c.Id);
         RozhlasSetLeave(c.Id);
         MassStandUp(c.Id); _seatHint.Remove(c.Id);
@@ -722,6 +734,7 @@ public partial class NetServer : Node
         _mass?.End(); // the Holy Mass does not outlive the round
         _crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
         PetsRoundStart();
+        CompanionsRoundStart();
         WildlifeRoundStart(); // the match cleared the pets' entities too; a new round moves new ones into the property groups
         WorkersAfterRoundReset(); // the Urad workers of a detour still open sit down again
         ResetCars();
@@ -766,7 +779,7 @@ public partial class NetServer : Node
                     sc.Zero.Reset();
                     SetBinoculars(sc, false); // a new life starts with them down
                     SetHeadLamp(sc, false); // and with the head lamp off
-                    ItemRules.IssueStandard(Items, sc.Bag); // and with the standard items (the binoculars) in the bag
+                    ItemRules.IssueStandard(Items, sc.Bag, OwnedItems(sc)); // and with the standard items (the binoculars) in the bag
                     SendEquipmentIfChanged(sc); // also what was issued at the join, before the first life
                     SendAmmo(sc);
                 }
@@ -787,7 +800,7 @@ public partial class NetServer : Node
                 break;
             case PlayerTeamChanged tc: OnTeamChanged(tc); break;
             case TargetKilled tk: OnTargetKilled(tk); break;
-            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) SetHeadLamp(dead, false); OnStatusDeath(d.Victim); RozhlasSetDeath(d.Victim); RozhlasCombatDeath(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay))); break;
+            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) SetHeadLamp(dead, false); OnStatusDeath(d.Victim); RozhlasSetDeath(d.Victim); RozhlasCombatDeath(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay, _deathFlight.Remove(d.Victim, out var flight) ? flight : DeathFlight.None))); break;
         }
     }
 
@@ -1129,14 +1142,14 @@ public partial class NetServer : Node
                 if (!drops || hit != null || wall <= len || before + BulletDrop.SegmentM >= range) break;
                 var passed = before;
                 DamageCrossed(crossed, float.PositiveInfinity, at => HitMath.HitscanDamage(w, passed + at, false)); // the panes of a piece the bullet flew through
-                ShotLamps(N(from), N(along), len); // and the lamps it passed
+                ShotScenery(N(from), N(along), len); // and the lamps it passed
                 before += BulletDrop.SegmentM;
             }
             PerfShot(c, eye, dir, range, hit?.Id);
             var end = from + along * (hit?.Distance ?? Math.Min(wall, len));
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
             BaleShot(N(from), N(along), hit?.Distance ?? Math.Min(wall, len)); // any bale the bullet passes catches fire (#331)
-            ShotLamps(N(from), N(along), hit?.Distance ?? Math.Min(wall, len)); // and any pole lamp it passes breaks (ADR 0037)
+            ShotScenery(N(from), N(along), hit?.Distance ?? Math.Min(wall, len)); // and any pole lamp it passes breaks (ADR 0037), any sign plate bends (ADR 0039)
             if (hit is { } h)
             {
                 // a wild animal under any hitscan weapon: where the bullet entered its body, taken before the hit can remove it (the hunter's log keeps it; a sniper's shooter is also shown it)

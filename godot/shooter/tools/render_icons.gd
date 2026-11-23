@@ -35,14 +35,25 @@ const MODELS := {
 	"m82": ["sniper-rifle-2.glb", 1.3],
 	"awm": ["sniper-rifle-3.glb", 1.2],
 	"svd": ["sniper-rifle-4.glb", 1.2],
-	"rpg": ["", 0.0],
-	"strela": ["", 0.0],
+	"hunting_rifle": ["", 1.25], # Synty Apocalypse, see SYNTY and WeaponFx.SyntyModels
+	"rpg": ["", 1.0], # Synty, see SYNTY (the procedural _rpg() / _strela() below are WeaponFx's stand-ins for a build without the pack)
+	"strela": ["", 1.0],
+}
+
+# Weapons of the paid Synty packs (WeaponFx.SyntyModels): id -> [glb, atlas], both under assets-private/ (DRYCASTLE_ASSETS_PRIVATE overrides it). Barrel along +Z.
+# `-- hunting_rifle` (any weapon ids) renders only those.
+const SYNTY := {
+	"hunting_rifle": ["synty/glb/apocalypse/SM_Wep_SniperRifle_02.glb", "synty/glb/apocalypse/tex/PolygonApocalypse_01_A.png"],
+	"rpg": ["synty/glb/props/rpg_01.glb", "synty/glb/atlas/military_weapons_01.png"],
+	"strela": ["synty/glb/props/lock_on_launcher_01.glb", "synty/glb/atlas/military_weapons_01.png"],
 }
 
 # id -> [model in assets/ (items.json `model`), yaw degrees to the right of the item's front, pitch degrees above it]
 const ITEMS := {
 	"bigfoot_head": ["drycastle-generated-models/bigfoot_head.glb", 20.0, 10.0],
 	"gold_chain": ["drycastle-generated-models/gold_chain.glb", 0.0, 18.0],
+	# a model of a paid Synty pack (items.json model + atlas, under assets-private/, DRYCASTLE_ASSETS_PRIVATE overrides it): [model, yaw, pitch, atlas]; the pack's props face +Z
+	"hunting_binoculars": ["synty/glb/shops/SM_Prop_Hunting_Binoculars_01.glb", 160.0, 22.0, "synty/glb/shops/tex/PolygonShops_Texture_01_A.png"],
 }
 
 var _vp: SubViewport
@@ -86,17 +97,47 @@ func _initialize() -> void:
 	await process_frame
 	var failures := 0
 	var only_items := OS.get_cmdline_user_args().has("items")
-	for id in ([] if only_items else MODELS.keys()):
+	for a in OS.get_cmdline_user_args():
+		if ITEMS.has(a):
+			only_items = true
+	var only_ids := []
+	for a in OS.get_cmdline_user_args():
+		if MODELS.has(a):
+			only_ids.append(a)
+	for id in ([] if only_items else (only_ids if not only_ids.is_empty() else MODELS.keys())):
 		var spec: Array = MODELS[id]
 		var holder := Node3D.new()
 		_world.add_child(holder)
 		var model: Node3D = null
-		if id == "rpg":
+		if id == "rpg" and not SYNTY.has(id):
 			model = _rpg()
 			holder.add_child(model)
-		elif id == "strela":
+		elif id == "strela" and not SYNTY.has(id):
 			model = _strela()
 			holder.add_child(model)
+		elif SYNTY.has(id):
+			var priv := OS.get_environment("DRYCASTLE_ASSETS_PRIVATE")
+			if priv == "":
+				priv = repo_assets + "../assets-private"
+			model = _load_glb(priv + "/" + SYNTY[id][0])
+			if model == null:
+				printerr("skip ", id, ": ", SYNTY[id][0])
+				failures += 1
+				holder.queue_free()
+				continue
+			var mat := StandardMaterial3D.new()
+			mat.albedo_texture = ImageTexture.create_from_image(Image.load_from_file(priv + "/" + SYNTY[id][1]))
+			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+			mat.roughness = 0.8
+			for mi in _meshes(model, []):
+				mi.material_override = mat
+			# same fit as WeaponFx.Make for a Synty weapon: barrel along +Z, grip (rear third) at the origin, muzzle towards -Z
+			var zbox := _local_box(model)
+			var zs: float = float(spec[1]) / maxf(zbox.size.z, 0.001)
+			holder.scale = Vector3.ONE * zs
+			holder.rotation_degrees = Vector3(0, 180, 0)
+			holder.add_child(model)
+			model.position = Vector3(-(zbox.position.x + zbox.size.x * 0.5), -(zbox.position.y + zbox.size.y * 0.8), -(zbox.position.z + zbox.size.z * 0.3))
 		else:
 			model = _load_glb(repo_assets + PACK + spec[0])
 			if model == null:
@@ -140,9 +181,26 @@ func _render_items(repo_assets: String) -> int:
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	_vp.size = Vector2i(ITEM_SIZE, ITEM_SIZE)
 	var failures := 0
+	var only := []
+	for a in OS.get_cmdline_user_args():
+		if ITEMS.has(a):
+			only.append(a)
 	for id in ITEMS:
+		if not only.is_empty() and not only.has(id):
+			continue
 		var spec: Array = ITEMS[id]
-		var model := _load_glb(repo_assets + String(spec[0]))
+		var synty := String(spec[0]).begins_with("synty/")
+		var priv := OS.get_environment("DRYCASTLE_ASSETS_PRIVATE")
+		if priv == "":
+			priv = repo_assets + "../assets-private"
+		var model := _load_glb((priv + "/" if synty else repo_assets) + String(spec[0]))
+		if model != null and synty:
+			var mat := StandardMaterial3D.new()
+			mat.albedo_texture = ImageTexture.create_from_image(Image.load_from_file(priv + "/" + String(spec[3])))
+			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+			mat.roughness = 0.8
+			for mi in _meshes(model, []):
+				mi.material_override = mat
 		if model == null:
 			printerr("skip item ", id, ": ", spec[0])
 			failures += 1

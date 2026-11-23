@@ -10,6 +10,45 @@ public class ThrowGuessTests
     static readonly Vector3 Stand = new(5, 1, -3);
 
     [Fact]
+    public void A_living_body_the_server_threw_still_flies_while_it_is_faster_than_anybody_runs()
+    {
+        // #411: hit at 12 m/s (hurts, may not kill), the body leaves at 14.7 m/s along the ground
+        var launch = CorpseRules.ThrowFromCar(-Vector3.UnitZ, 12f);
+        var along = new Vector3(launch.X, 0, launch.Z).Length();
+        Assert.True(ThrowGuess.ServerStillFlies(along, along));
+        Assert.True(ThrowGuess.ServerStillFlies(along * 0.8f, along)); // slowed in the air
+        Assert.False(ThrowGuess.ServerStillFlies(MoveConsts.SprintSpeed, along)); // down, and running off
+        Assert.False(ThrowGuess.ServerStillFlies(0, along));
+    }
+
+    [Fact]
+    public void A_vehicle_throws_a_living_body_into_the_same_tumble_as_the_bigfoot_and_it_gets_up()
+    {
+        var f = new BodyFlingTracker();
+        f.Thrown();
+        Assert.Equal(BodyFling.Flying, f.Phase);
+        f.Thrown(); // hit again in the air: it flies on, the clock from the start
+        Assert.Equal(BodyFling.Flying, f.Phase);
+        for (var i = 0; i < 60; i++) f.Tick(Dt, 12f, false); // a second in the air
+        Assert.Equal(BodyFling.Flying, f.Phase);
+        f.Tick(Dt, 0.5f, true);
+        Assert.Equal(BodyFling.Lying, f.Phase);
+        f.Thrown(); // run over again where it lies
+        Assert.Equal(BodyFling.Flying, f.Phase);
+        for (var i = 0; i < 30; i++) f.Tick(Dt, 12f, false);
+        f.Tick(Dt, 0.5f, true);
+        for (var i = 0; i < 40; i++) f.Tick(Dt, 0, true);
+        Assert.Equal(BodyFling.Landing, f.Phase);
+        f.StoodUp();
+        Assert.False(f.Active);
+        // in the Bigfoot's fist it stays the Bigfoot's
+        f.Grabbed(); f.Thrown();
+        Assert.Equal(BodyFling.Held, f.Phase);
+        Assert.Equal((ushort)0x0A0B, PlayerFlungCodec.Decode(PlayerFlungCodec.Encode(0x0A0B)));
+        Assert.Null(PlayerFlungCodec.Decode(new byte[] { 1 }));
+    }
+
+    [Fact]
     public void It_flies_from_the_first_frame_and_ahead_of_the_car()
     {
         var g = new ThrowGuess();

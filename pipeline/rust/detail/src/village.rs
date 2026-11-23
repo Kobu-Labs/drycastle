@@ -49,11 +49,20 @@ pub fn village(ctx: &Ctx, cfg: Cfg) -> Res {
     layers.insert("verge_gravel", geom::dup(&ctx.verge_g));
     layers.insert("verge_dirt", geom::dup(&ctx.verge_d));
     layers.insert("lawn", geom::dup(free));
-    let flat = Flat { lawn: &cols, swamp: &[], tone_a: None, tone_b: None };
+    // a worn footpath's edge: two bands of thin grass between the bare ground and the lawn, the lawn's colour drifting to trodden
+    let trodden = if cfg.at("paths").has("fringe_colour") { hex_rgb(cfg.at("paths").at("fringe_colour").s()) } else { [138, 122, 85] };
+    let toward = |t: f64| -> [u8; 3] { [0, 1, 2].map(|i| (cols[0][i] as f64 + (trodden[i] as f64 - cols[0][i] as f64) * t).round() as u8) };
+    let has_fringe = !geom::is_empty(&ctx.fringe[0]) || !geom::is_empty(&ctx.fringe[1]);
+    if has_fringe {
+        layers.insert("tone_a", geom::dup(&ctx.fringe[0]));
+        layers.insert("tone_b", geom::dup(&ctx.fringe[1]));
+    }
+    let flat = Flat { lawn: &cols, swamp: &[], tone_a: has_fringe.then(|| toward(0.62)), tone_b: has_fringe.then(|| toward(0.3)) };
     let rects: BTreeMap<&'static str, Vec<Rect>> = BTreeMap::new();
     let got = assemble(&mut res.patches, free, &layers, &flat, &rects, &mut Rng::keyed(&format!("{pid}:detail:colours")));
     let (gravel, dirt, grass) = (layer_region(&got, "verge_gravel"), layer_region(&got, "verge_dirt"), layer_region(&got, "lawn"));
-    let all = geom::union_all(["verge_gravel", "verge_dirt", "lawn"].iter().filter_map(|n| got.get(n)).map(geom::dup).collect());
+    let (thin_a, thin_b) = (layer_region(&got, "tone_a"), layer_region(&got, "tone_b"));
+    let all = geom::union_all(["verge_gravel", "verge_dirt", "tone_a", "tone_b", "lawn"].iter().filter_map(|n| got.get(n)).map(geom::dup).collect());
     let bounds = geom::bounds(&all);
     let tint = Tint::new(ctx, cfg);
     let mut em = Emitter::new(ctx.sh);
@@ -72,6 +81,10 @@ pub fn village(ctx: &Ctx, cfg: Cfg) -> Res {
                 vd
             } else if grass.contains(x, y) {
                 vgr
+            } else if thin_b.contains(x, y) {
+                vgr * 0.6 // the grass thins out towards a footpath
+            } else if thin_a.contains(x, y) {
+                vgr * 0.25
             } else {
                 return false;
             };

@@ -5,7 +5,7 @@ namespace Drycastle.ShooterCore.Tests;
 
 public class ChatTests
 {
-    static readonly ChatContext Admin = new(true, new[] { "car", "jeep", "utility_helicopter" });
+    static readonly ChatContext Admin = new(true, new[] { "car", "truck", "utility_helicopter" });
     static readonly ChatContext Guest = new(false, new[] { "car" });
 
     // ---- parsing ----
@@ -134,9 +134,9 @@ public class ChatTests
     [Fact]
     public void ArgumentsCompleteFromTheirChoices()
     {
-        var h = ChatCommands.Hint("/spawn j", Admin);
-        Assert.Equal("jeep", Assert.Single(h.Suggestions).Insert);
-        Assert.Equal("/spawn jeep", ChatCommands.Complete("/spawn j", h, h.Suggestions[0]));
+        var h = ChatCommands.Hint("/spawn tr", Admin);
+        Assert.Equal("truck", Assert.Single(h.Suggestions).Insert);
+        Assert.Equal("/spawn truck", ChatCommands.Complete("/spawn tr", h, h.Suggestions[0]));
         var all = ChatCommands.Hint("/spawn ", Admin);
         Assert.Equal(3, all.Suggestions.Count);
         var times = ChatCommands.Hint("/time ", Admin).Suggestions.Select(s => s.Insert).ToList();
@@ -166,7 +166,7 @@ public class ChatTests
         Assert.NotNull(ChatCommands.Hint("/bots 99", Admin).Error);
         Assert.Null(ChatCommands.Hint("/bots 6", Admin).Error);
         Assert.NotNull(ChatCommands.Hint("/spawn zzz", Admin).Error);
-        Assert.Null(ChatCommands.Hint("/spawn je", Admin).Error);
+        Assert.Null(ChatCommands.Hint("/spawn tr", Admin).Error);
         Assert.NotNull(ChatCommands.Hint("/bots 3 4", Admin).Error);
         Assert.NotNull(ChatCommands.Hint("/nope", Admin).Error);
     }
@@ -177,8 +177,8 @@ public class ChatTests
         var c = new ChatCompleter();
         var first = c.Tab("/spawn ", Admin);
         Assert.Equal("/spawn car", first);
-        Assert.Equal("/spawn jeep", c.Tab(first!, Admin));
-        Assert.Equal("/spawn utility_helicopter", c.Tab("/spawn jeep", Admin));
+        Assert.Equal("/spawn truck", c.Tab(first!, Admin));
+        Assert.Equal("/spawn utility_helicopter", c.Tab("/spawn truck", Admin));
         Assert.Equal("/spawn car", c.Tab("/spawn utility_helicopter", Admin)); // wraps
         Assert.Equal("/spawn utility_helicopter", c.Tab("/spawn car", Admin, backwards: true));
     }
@@ -188,7 +188,7 @@ public class ChatTests
     {
         var c = new ChatCompleter();
         c.Tab("/spawn ", Admin);
-        Assert.Equal("/spawn jeep", c.Tab("/spawn j", Admin)); // not the cycle's next: a fresh word
+        Assert.Equal("/spawn truck", c.Tab("/spawn tr", Admin)); // not the cycle's next: a fresh word
         Assert.Null(c.Tab("hello", Admin));
     }
 

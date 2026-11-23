@@ -39,6 +39,45 @@ public sealed class RareSpecies
     public float RespawnSeconds { get; set; } = 60;
 }
 
+/// <summary>
+/// The Phoenix (wildlife.json, "phoenix"; GLOSSARY "Phoenix"): a rare Mystery animal of the night sky. A night is counted each time the server's clock passes <see cref="SpawnHour"/>; every
+/// <see cref="NightsBetween"/>th one puts a Phoenix in the sky (the first on the 5th night). It patrols a wide circle at <see cref="AltitudeMinM"/> to <see cref="AltitudeMaxM"/> above the ground, falls to a
+/// clear patch of ground when hit, and burns when hit again there. Everything the keeper and the animal need is here; nothing is hard-coded in the rules.
+/// </summary>
+public sealed class PhoenixRules
+{
+    /// <summary>The animals.json species (it has <see cref="AnimalDef.Flies"/>).</summary>
+    public string Id { get; set; } = "phoenix";
+    /// <summary>A Phoenix is due at every this-many-th night (counted from the server's start, not reset by a round).</summary>
+    public int NightsBetween { get; set; } = 5;
+    /// <summary>The hour of the day (0..24, 0 = midnight) that counts a night and spawns the due Phoenix.</summary>
+    public float SpawnHour { get; set; }
+    /// <summary>The hour a Phoenix still Flying leaves (it flies off and is gone). A Crashed one stays until killed or the round ends.</summary>
+    public float DawnHour { get; set; } = 5;
+    /// <summary>Height of the flying body centre above the ground at the patrol centre: a value of this range per Phoenix, metres.</summary>
+    public float AltitudeMinM { get; set; } = 80;
+    public float AltitudeMaxM { get; set; } = 140;
+    /// <summary>Radius of the patrol circle (it is cut to fit the map), metres, and the speed along it, m/s.</summary>
+    public float PatrolRadiusM { get; set; } = 350;
+    public float SpeedMps { get; set; } = 14;
+    /// <summary>How long the fall (the dive from the hit to the crash site) takes, seconds.</summary>
+    public float FallSeconds { get; set; } = 4;
+    /// <summary>The crash site lies this far (flat metres) from where it was hit: min..max, ahead of it within about 40 degrees if the ground there is clear, else all round.</summary>
+    public float CrashMinM { get; set; } = 40;
+    public float CrashMaxM { get; set; } = 120;
+    /// <summary>The site needs a free circle of this radius (6 m across by default): ground all over it, no water, nothing solid, and its ground no more than <see cref="CrashMaxSlopeM"/> higher or lower than its centre.</summary>
+    public float CrashClearM { get; set; } = 3;
+    public float CrashMaxSlopeM { get; set; } = 0.9f;
+    /// <summary>The site is at least this far (flat metres) from every building (a parcel that holds one).</summary>
+    public float CrashBuildingM { get; set; } = 10;
+    /// <summary>How long the flame burns after the second hit, seconds; then it is Dead and the mineral is left.</summary>
+    public float BurnSeconds { get; set; } = 6;
+    /// <summary>How long the Dead Phoenix stays (the body is gone at once on the client, embers rise) before the entity ends, seconds. The mineral it dropped has its own minute.</summary>
+    public float DeadSeconds { get; set; } = 6;
+    /// <summary>The mineral (<see cref="Minerals"/> id) the dead Phoenix leaves where it burned.</summary>
+    public string Drops { get; set; } = "pheonixite";
+}
+
 /// <summary>One member rule of a <see cref="MixedHerd"/>: an animals.json id that is a fixed <see cref="Min"/>..<see cref="Max"/> of each herd (a stag or two), and/or fills the rest by <see cref="Weight"/>.</summary>
 public sealed class HerdMember
 {
@@ -156,6 +195,8 @@ public sealed class WildlifeFile : IVersioned
     public List<MixedHerd> Herds { get; set; } = new();
     /// <summary>Rare wild species (<see cref="RareSpecies"/>): not zone species; they count toward <see cref="MaxAnimals"/> and the entity cap.</summary>
     public List<RareSpecies> Rare { get; set; } = new();
+    /// <summary>The Phoenix, a rare Mystery animal of the night sky (<see cref="PhoenixRules"/>); null: none. Counts toward <see cref="MaxAnimals"/> and the entity cap.</summary>
+    public PhoenixRules? Phoenix { get; set; }
     /// <summary>Bird flocks (flying boids); not animals: they are not in animals.json and cannot be shot. Flock entities count towards the world's entity cap.</summary>
     public List<FlockSpecies> Flocks { get; set; } = new();
 
@@ -187,6 +228,16 @@ public sealed class WildlifeFile : IVersioned
             if (!seenRare.Add(r.Id) || seen.Contains(r.Id)) throw new DataFileException($"{F}: rare species {r.Id}: the id is used twice (rare and species are one namespace)");
             if (r.Count is < 1 or > 10) throw new DataFileException($"{F}: rare species {r.Id}: count is 1..10");
             if (!(r.MinBuildingM >= 0) || !(r.RespawnSeconds > 0)) throw new DataFileException($"{F}: rare species {r.Id}: min_building_m must not be negative and respawn_seconds must be positive");
+        }
+        if (f.Phoenix is { } px)
+        {
+            const string P = F + ": phoenix: ";
+            if (px.Id == "" || seen.Contains(px.Id) || seenRare.Contains(px.Id)) throw new DataFileException(P + "id is empty or used twice (phoenix, rare and species are one namespace)");
+            if (px.NightsBetween < 1 || !(px.SpawnHour >= 0 && px.SpawnHour < 24) || !(px.DawnHour >= 0 && px.DawnHour < 24)) throw new DataFileException(P + "nights_between is at least 1, spawn_hour and dawn_hour are 0..24");
+            if (!(px.AltitudeMinM > 0) || px.AltitudeMaxM < px.AltitudeMinM) throw new DataFileException(P + "altitude_min_m must be positive and not above altitude_max_m");
+            if (!(px.PatrolRadiusM >= 20) || !(px.SpeedMps > 0) || !(px.FallSeconds > 0) || !(px.BurnSeconds > 0)) throw new DataFileException(P + "patrol_radius_m is at least 20; speed_mps, fall_seconds and burn_seconds must be positive");
+            if (!(px.CrashMinM >= 0) || px.CrashMaxM < px.CrashMinM || !(px.CrashClearM > 0) || !(px.CrashMaxSlopeM >= 0) || !(px.CrashBuildingM >= 0)) throw new DataFileException(P + "crash_min_m is not negative and not above crash_max_m; crash_clear_m must be positive; crash_max_slope_m and crash_building_m not negative");
+            if (Minerals.Find(px.Drops) == null) throw new DataFileException(P + $"drops {px.Drops} is not a mineral (Minerals.All)");
         }
         var seenHerds = new HashSet<string>();
         foreach (var m in f.Herds)
@@ -243,6 +294,11 @@ public sealed class WildlifeFile : IVersioned
             if (animals.Find(r.Id) is not { } def) throw new DataFileException($"wildlife.json: rare species {r.Id} is not in animals.json");
             if (!def.Flees) throw new DataFileException($"wildlife.json: rare species {r.Id} is a pet (flees is off): pets.json places those");
             if (Herds.Any(h => h.Members.Any(k => k.Id == r.Id))) throw new DataFileException($"wildlife.json: rare species {r.Id} is also a herd member");
+        }
+        if (Phoenix is { } px)
+        {
+            if (animals.Find(px.Id) is not { } def) throw new DataFileException($"wildlife.json: phoenix {px.Id} is not in animals.json");
+            if (!def.Flies) throw new DataFileException($"wildlife.json: phoenix {px.Id} has no \"flies\": true in animals.json");
         }
         foreach (var herd in Herds)
             foreach (var k in herd.Members)

@@ -36,7 +36,7 @@ y = 0). The loader instances every object: `pack:<pack>/<model>` from `assets/ma
 resolved against the assets directory), `prim:<name>` from `<map>/prims`. Each object is a node
 `Objects/objects_<parcel>/object_<id>` (`<parcel>` is the parcel it stands in, `_none` on ground that is no
 parcel: an object belongs to no parcel, it is only a position) with position (x east, z = -north, y = `z` or the terrain height
-under it when `z` is null), `rotation_deg` counter-clockwise seen from above, uniform `scale` and an optional
+under it when `z` is null), `rotation_deg` counter-clockwise seen from above, uniform `scale` (or an exact `size_m` `[length, width, height]` m, which wins), and an optional
 `colour` (material override). Unknown or missing assets give a warning and a magenta placeholder box.
 Objects have no collision in v1.
 

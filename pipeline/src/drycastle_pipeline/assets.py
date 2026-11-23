@@ -15,7 +15,7 @@ DEFAULT_MANIFEST = ASSETS_DIR / "manifest.json"
 # Its assets are placed like any other ("pack:<pack>/<model>"); "file" is relative to that folder and "prefab" says the GLB has its own collision.
 PRIVATE_MANIFEST = REPO_ROOT / "assets-private" / "manifest.json"
 MANIFEST_FORMAT_VERSION = 1
-CATEGORIES = ("car", "slab", "pot", "flower", "bush", "tree", "wall", "fence", "pole", "connector", "other")
+CATEGORIES = ("car", "slab", "pot", "flower", "bush", "tree", "wall", "fence", "pole", "connector", "sign", "other")
 
 
 def load_manifest(path: Path = DEFAULT_MANIFEST, private: bool = True) -> dict:

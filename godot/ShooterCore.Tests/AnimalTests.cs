@@ -101,7 +101,7 @@ public class AnimalTests
     [Fact]
     public void ShippedSpeciesLoad()
     {
-        Assert.Equal(26, Shipped.Animals.Count);
+        Assert.Equal(28, Shipped.Animals.Count);
         Assert.NotNull(Shipped.Find("deer"));
         Assert.Equal(Shipped.IndexOf("deer"), Shipped.Animals.IndexOf(Shipped.Find("deer")!));
         Assert.Equal(-1, Shipped.IndexOf("dragon"));
@@ -155,7 +155,7 @@ public class AnimalTests
     public void EveryShippedPublicModelIsInTheManifest()
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(AssetsDir(), "manifest.json")));
-        var files = doc.RootElement.GetProperty("unverified_models").EnumerateArray().Select(m => m.GetProperty("file").GetString()).ToHashSet();
+        var files = doc.RootElement.GetProperty("unverified_models").EnumerateArray().Concat(doc.RootElement.GetProperty("assets").EnumerateArray()).Select(m => m.GetProperty("file").GetString()).ToHashSet(); // the repo's own CC0 models (the Phoenix) are under assets
         foreach (var (_, model) in AllModels().Where(m => !InPrivatePack(m.Model))) Assert.Contains(model, files);
     }
 
@@ -167,7 +167,7 @@ public class AnimalTests
             Assert.True(a.Hp is > 0 and <= 255, a.Id);
             Assert.Equal(3, a.HitBox.Count);
             for (var v = 0; v < a.VariantCount; v++) Assert.True(a.HitBoxOf(v)[1] is > 0.05f and < 3f, $"{a.Id}: height {a.HitBoxOf(v)[1]} m");
-            Assert.True(a.RunSpeed > a.WalkSpeed, a.Id);
+            Assert.True(a.Flies || a.RunSpeed > a.WalkSpeed, a.Id); // a flyer has no gait: its numbers are placeholders
         }
     }
 

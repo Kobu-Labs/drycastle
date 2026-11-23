@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  // Companions (GLOSSARY "Companion", #488): an animal that belongs to one player and stays with them. The index of an entry is what the wire carries: add new ones at the end.
+  // The Eagle is the only one shipped. The kinds heel (a dog at heel) and wing (a bird at the shoulder) have no entry now; an entry of theirs needs no code.
+  // "species" is an id of animals.json (the model and its clips), "asset" a variant of it (empty: the species' own model), "scale" how big it is drawn (times the species' size).
+  // "kind" is the class that runs it (ShooterCore/Companions): what it does and every number of it are that kind's own, in "rules" (all optional, the kind has defaults):
+  //   heel (HeelCompanion, on the ground): follow_m, stop_m, run_m, recall_m, stuck_seconds, walk_speed, run_speed (0: the species'), sit_after_min_seconds, sit_after_max_seconds
+  //   wing (WingCompanion, in the air): height_m, behind_m, side_m, follow_m, arrive_m, fly_speed, recall_m, clearance_m, circle_every_min_seconds, circle_every_max_seconds,
+  //                                     circle_radius_m, circle_speed, circle_turns, circle_height_m (0: circles at height_m)
+  //   scout (ScoutCompanion, flies as wing does and takes all of its rules): when it begins its circles it marks the nearest mark_max enemies of its owner within
+  //                                     mark_radius_m of the owner for mark_seconds; only the owner sees the marks (through walls). No line of sight.
+  // "reward_tier" (bronze, silver, gold): the Hunter's Log collection tier that unlocks it for good: the eagle is the gold tier's. /companion <id> gives one for the session.
+  "companions": [
+    { "id": "eagle", "name": "Eagle", "kind": "scout", "species": "eagle", "scale": 0.6, "reward_tier": "gold",
+      "rules": { "height_m": 2.6, "circle_radius_m": 5, "circle_height_m": 7, "circle_turns": 2, "circle_every_min_seconds": 25, "circle_every_max_seconds": 40,
+                 "mark_radius_m": 40, "mark_max": 2, "mark_seconds": 6 } }
+  ]
+}

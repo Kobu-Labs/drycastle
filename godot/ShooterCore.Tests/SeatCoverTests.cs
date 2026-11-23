@@ -225,7 +225,7 @@ public class SeatCoverTests
         var all = VehiclesFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "vehicles.json")).Vehicles.ToDictionary(v => v.Id);
         static SeatCover?[] Covers(VehicleDef v) => Enumerable.Range(0, v.Seats.Count).Select(i => v.DeclaredCover(i)).ToArray();
         Assert.Equal(new SeatCover?[] { SeatCover.Armoured, SeatCover.Exposed }, Covers(all["flak"]));
-        Assert.Equal(new SeatCover?[] { SeatCover.Glass, SeatCover.Exposed }, Covers(all["utility_helicopter"]));
+        Assert.Equal(new SeatCover?[] { SeatCover.Glass, SeatCover.Exposed, SeatCover.Exposed }, Covers(all["utility_helicopter"]));
         Assert.Equal(new SeatCover?[] { SeatCover.Glass, SeatCover.Glass, SeatCover.Glass, SeatCover.Glass, SeatCover.Exposed }, Covers(all["humvee"]));
         Assert.All(Covers(all["amphibious"]), c => Assert.Equal(SeatCover.Exposed, c));
         foreach (var id in new[] { "quad", "motorcycle", "harvester" }) Assert.All(Covers(all[id]), c => Assert.Equal(SeatCover.Exposed, c));

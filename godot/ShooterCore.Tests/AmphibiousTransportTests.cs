@@ -61,27 +61,29 @@ public class AmphibiousTransportTests
         Assert.NotNull(v.DoorGun);
         Assert.Null(v.Flak);
         VehicleGunRound.AssertIsTheRound(v.Gun!);            // the vehicle machine gun round, the helicopter's belt
-        Assert.Null(Shipped.Vehicles.Single(x => x.Id == "jeep").Gun); // the truck has no gun (#325)
+        Assert.Null(Shipped.Vehicles.Single(x => x.Id == "truck").Gun); // the truck has no gun (#325)
         Assert.Equal(Shipped.Vehicles.Single(x => x.Id == "utility_helicopter").Gun!.Magazine, v.Gun.Magazine);
     }
 
     [Fact]
     public void Armed_and_exposed_are_properties_of_a_seat_and_no_other_vehicle_has_them()
     {
-        foreach (var v in Shipped.Vehicles.Where(v => v.Id is not ("amphibious" or "harvester" or "humvee" or "quad" or "motorcycle"))) // the Humvee (a standing exposed roof gunner, HumveeTests), the harvester (#331) and the quad and motorcycle (#325) have an exposed seat: an open cab, a rider in the open
+        foreach (var v in Shipped.Vehicles.Where(v => v.Id is not ("amphibious" or "harvester" or "humvee" or "quad" or "motorcycle" or "utility_helicopter"))) // the helicopter's left door seat is armed and exposed (#476); the Humvee (a standing exposed roof gunner, HumveeTests), the harvester (#331) and the quad and motorcycle (#325) have an exposed seat: an open cab, a rider in the open
             Assert.All(v.Seats, s => Assert.False(s.Armed || s.Exposed || s.Standing || s.Aim != null, $"{v.Id}"));
+        var heliSeats = Shipped.Vehicles.Single(v => v.Id == "utility_helicopter").Seats; // only its left door seat (#476) is armed
+        Assert.Equal(new[] { false, false, true }, heliSeats.Select(s => s.Armed));
+        Assert.True(heliSeats[2].Exposed && heliSeats[2].Aim != null);
         foreach (var id in new[] { "quad", "motorcycle" }) // one exposed driver, seated, not armed
             Assert.All(Shipped.Vehicles.Single(v => v.Id == id).Seats, s => Assert.True(s.Exposed && !s.Armed && !s.Standing && s.Aim == null, id));
         // the bus's passengers stay unarmed: their input does nothing to their weapons
         var bus = Shipped.Vehicles.Single(v => v.Id == "bus");
         var fire = new NetInput { Buttons = (ushort)(MoveButtons.Fire | MoveButtons.Reload), Slot = 2 };
         for (var s = 0; s < bus.Seats.Count; s++) Assert.Null(RiderRules.Weapons(bus, s, fire));
-        // and the flak truck and the helicopter have exactly the one exposed seat they had
-        foreach (var id in new[] { "flak", "utility_helicopter" })
-        {
-            var v = Shipped.Vehicles.Single(x => x.Id == id);
-            Assert.Equal(new[] { false, true }, Enumerable.Range(0, v.Seats.Count).Select(v.SeatExposed));
-        }
+        // the flak truck has exactly the one exposed seat it had; the helicopter's gunner and left door seat (#476) are exposed
+        var flak = Shipped.Vehicles.Single(x => x.Id == "flak");
+        Assert.Equal(new[] { false, true }, Enumerable.Range(0, flak.Seats.Count).Select(flak.SeatExposed));
+        var heli = Shipped.Vehicles.Single(x => x.Id == "utility_helicopter");
+        Assert.Equal(new[] { false, true, true }, Enumerable.Range(0, heli.Seats.Count).Select(heli.SeatExposed));
     }
 
     [Fact]

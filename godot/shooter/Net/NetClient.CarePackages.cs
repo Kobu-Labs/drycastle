@@ -19,6 +19,13 @@ public partial class NetClient
     {
         public Node3D Node = null!;
         public MeshInstance3D Canopy = null!;
+        /// <summary>The crate body (hidden while only the smoke canister is out).</summary>
+        public MeshInstance3D Box = null!;
+        /// <summary>The thrown smoke canister and its smoke: shown while the canister flies and marks the spot.</summary>
+        public Node3D Canister = null!;
+        public CpuParticles3D Smoke = null!;
+        /// <summary>Where the canister lay (seen while it marked), so the smoke keeps rising there while the crate comes down. Null for a crate first seen falling.</summary>
+        public Vector3? Landing;
     }
 
     readonly Dictionary<ushort, CrateView> _crates = new();
@@ -28,6 +35,9 @@ public partial class NetClient
     InteractHold _crateHold;
     /// <summary>The ring's shown fill (0 to 1): follows the hold up and drains down after a release.</summary>
     float _ringShown;
+    /// <summary>The crate whose open request is sent and the time until which it is treated as gone (hidden, no prompt, no hold) while the server's despawn is on its way. A refused open brings it back after the wait.</summary>
+    (ushort Id, double Until)? _crateOpening;
+    const double CrateOpeningWaitSeconds = 1.5;
 
     /// <summary>Called once from <see cref="_Ready"/>: registers the crate type and follows the crate entities.</summary>
     void InitCarePackages()
@@ -58,8 +68,27 @@ public partial class NetClient
         };
         node.AddChild(box);
         node.AddChild(canopy);
+        // the canister the owner threw: a small orange can with a coloured smoke column, so the spot reads from afar
+        var canister = new Node3D { Name = "Canister" };
+        canister.AddChild(new MeshInstance3D
+        {
+            Mesh = new CylinderMesh { TopRadius = 0.06f, BottomRadius = 0.06f, Height = 0.2f },
+            MaterialOverride = CrateMaterial(new Color(0.9f, 0.45f, 0.1f)),
+            Position = new Vector3(0, 0.1f, 0),
+        });
+        var smoke = new CpuParticles3D
+        {
+            Mesh = new SphereMesh { Radius = 0.5f, Height = 1f, RadialSegments = 8, Rings = 4 },
+            Amount = 60, Lifetime = 5.0, LocalCoords = false, Emitting = false,
+            Direction = Vector3.Up, Spread = 12f, InitialVelocityMin = 3f, InitialVelocityMax = 5f, Gravity = new Vector3(0, 0.6f, 0),
+            ScaleAmountMin = 1.2f, ScaleAmountMax = 2.6f, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(1f, 0.55f, 0.1f, 0.55f), Transparency = BaseMaterial3D.TransparencyEnum.Alpha, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded },
+            Position = new Vector3(0, 0.2f, 0),
+        };
+        canister.AddChild(smoke);
+        node.AddChild(canister);
         Owned.AddChild(node);
-        _crates[e.Id] = new CrateView { Node = node, Canopy = canopy };
+        _crates[e.Id] = new CrateView { Node = node, Canopy = canopy, Box = box, Canister = canister, Smoke = smoke };
     }
 
     /// <summary>
@@ -86,11 +115,25 @@ public partial class NetClient
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
             var p = e.State.Position;
+            var flying = e.State.State == CarePackageRules.StateThrown && e.Buf.At(RenderTickNow()) != null;
+            if (flying) p = e.Buf.At(RenderTickNow())!.Value.Pos; // the canister's arc is smoothed between snapshots
             v.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
-            v.Canopy.Visible = e.State.State == CarePackageRules.StateFalling;
+            var st = e.State.State;
+            var canisterOnly = st == CarePackageRules.StateThrown || st == CarePackageRules.StateMarking;
+            v.Canopy.Visible = st == CarePackageRules.StateFalling;
+            v.Box.Visible = !canisterOnly;
+            v.Canister.Visible = canisterOnly;
+            // the smoke starts at the throw and keeps pouring while the crate comes down, until it lands
+            if (st == CarePackageRules.StateMarking) v.Landing = new Vector3(p.X, p.Y, p.Z);
+            var smoking = canisterOnly || (st == CarePackageRules.StateFalling && v.Landing != null);
+            if (v.Smoke.Emitting != smoking) v.Smoke.Emitting = smoking;
+            v.Smoke.GlobalPosition = st == CarePackageRules.StateFalling && v.Landing is { } l ? l + new Vector3(0, 0.2f, 0) : v.Node.GlobalPosition + new Vector3(0, 0.2f, 0);
+            v.Node.Visible = !IsCrateOpening(id);
         }
         _crateNear = NearestCrateInReach();
     }
+
+    bool IsCrateOpening(ushort id) => _crateOpening is { } o && o.Id == id && Time.GetTicksMsec() / 1000.0 < o.Until;
 
     ushort? NearestCrateInReach()
     {
@@ -100,7 +143,7 @@ public partial class NetClient
         var at = _me.GlobalPosition;
         foreach (var (id, v) in _crates)
         {
-            if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.State.State != CarePackageRules.StateLanded) continue;
+            if (IsCrateOpening(id) || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.State != CarePackageRules.StateLanded) continue;
             var d = v.Node.GlobalPosition.DistanceTo(at);
             if (d <= bd) { best = id; bd = d; }
         }
@@ -113,7 +156,7 @@ public partial class NetClient
     /// </summary>
     string? CratePrompt()
     {
-        if (_crateNear == null || _crateHold.Held > 0) return null;
+        if (_crateNear == null || _crateHold.Held > 0 || _crateHold.Sent) return null;
         return Strings.F("hud.crate.hold", InputBindings.Name("interact"));
     }
 
@@ -124,7 +167,12 @@ public partial class NetClient
     void TickCarePackages(double dt)
     {
         var use = Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("interact");
-        if (_crateHold.Tick(use, _crateNear != null, dt, CarePackageRules.OpenHoldSeconds) && _crateNear is { } id) SendOpenCarePackage(id);
+        if (_crateHold.Tick(use, _crateNear != null, dt, CarePackageRules.OpenHoldSeconds) && _crateNear is { } id)
+        {
+            SendOpenCarePackage(id);
+            _crateOpening = (id, Time.GetTicksMsec() / 1000.0 + CrateOpeningWaitSeconds); // gone for the player now; the despawn confirms
+            _crateNear = null;
+        }
         TickRozhlasSetHold(use, dt); // the other hold of the same key (NetClient.Rozhlas.cs); the ring shows whichever is on
         ShowHoldRing(dt);
     }
@@ -132,8 +180,8 @@ public partial class NetClient
     /// <summary>The ring fills with the hold and drains after a release; with reduce motion the drain is instant.</summary>
     void ShowHoldRing(double dt)
     {
-        var target = _crateHold.Held > 0 && _crateNear != null ? (float)Math.Min(1.0, _crateHold.Held / CarePackageRules.OpenHoldSeconds) : 0f;
-        target = Math.Max(target, Math.Max(RozhlasSetHoldFraction, LootHoldFraction));
+        var target = _crateHold.Held > 0 && _crateNear != null && !_crateHold.Sent ? (float)Math.Min(1.0, _crateHold.Held / CarePackageRules.OpenHoldSeconds) : 0f;
+        target = Math.Max(target, Math.Max(RozhlasSetHoldFraction, Math.Max(LootHoldFraction, MineralHoldFraction)));
         if (target >= _ringShown || GameSettings.Current.ReduceMotion) _ringShown = target;
         else _ringShown = Mathf.MoveToward(_ringShown, target, (float)dt / RingDrainSeconds);
         _hud?.SetRadial(_ringShown > 0 ? _ringShown : null);

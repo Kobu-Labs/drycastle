@@ -57,6 +57,7 @@ HATCH_DOOR_CLEAR = 1.8  # the ground floor hatch keeps this far from the doorway
 HATCH_APART = 2.5  # the hatch of a floor is at least this far from the one above it
 HATCH_SLIDE = 0.25  # steps in which a hatch is tried along a wall
 RAIL_SET = 0.45  # the climber stands this far inside the hatch from the edge the ladder hangs on
+# the bottom step-off is STEP_OFF past the rail on the same open side as the top (Ladders.StepOffBottom, #412)
 STEP_OFF = 1.0  # at the top the player is put this far past the climbing spot, on the floor beyond the edge
 STEEL, RUNG = "#4b5357", "#6b6f6c"
 LAMP_CAGE, LAMP_GLOW = "#2f3133", "#f0c987"

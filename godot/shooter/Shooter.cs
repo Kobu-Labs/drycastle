@@ -41,6 +41,7 @@ namespace Drycastle.Shooter;
 ///   (client with a display and none of the smoke flags starts at the main menu; --connect host:port --name N joins straight away)
 ///   --model-shots DIR         render the remote character animations and the first-person weapon viewmodels into DIR as PNGs, then exit (needs a display)
 ///   --demon-shots DIR         render the demon's head with the mouth shut, half open and wide into DIR as PNGs, then exit (needs a display and the private pack)
+///   --companion-shots DIR     render the Companion picker's cells (each Companion's 3D view, the empty cell) at 1280x720 and 3840x2160 into DIR as PNGs, then exit (needs a display)
 ///   --hud-shots DIR           render the HUD with fake data at 1280x720 and 3840x2160 into DIR as PNGs, then exit (needs a display)
 ///   --smoke-move              client only: scripted movement check on the map collision (SHOOTER_SMOKE_MOVE_OK, exit 0; else exit 2)
 ///   --smoke                   load everything, print SHOOTER_SMOKE_OK and exit 0 (exit 2 on failure)
@@ -106,6 +107,7 @@ public partial class Shooter : Node3D
         if (cfg.Str("hud-shots") != "") { _ = HudShots.Run(this, cfg.Str("hud-shots")); return; }
         if (cfg.Str("menu-shots") != "") { _ = MenuShots.Run(this, cfg.Str("menu-shots")); return; }
         if (cfg.Str("demon-shots") != "") { _ = DemonShots.Run(this, cfg.Str("demon-shots")); return; }
+        if (cfg.Str("companion-shots") != "") { _ = CompanionShots.Run(this, LoadData(), cfg.Str("companion-shots")); return; }
         if (cfg.Str("intel-shots") != "") { _ = IntelShots.Run(this, cfg.Str("intel-shots")); return; }
         if (role == "client")
         {
@@ -297,7 +299,7 @@ public partial class Shooter : Node3D
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
-                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), PerfPlay = _cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(_cfg), PerfRes = _cfg.Str("perf-res", "1920x1080"), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, BlipConfig = _data.Match, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, Scud = _data.Scud, Plantation = _data.Plantation, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
+                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), PerfPlay = _cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(_cfg), PerfRes = _cfg.Str("perf-res", "1920x1080"), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, BlipConfig = _data.Match, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, CompanionData = _data.Companions, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, Scud = _data.Scud, Plantation = _data.Plantation, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(JoinResult.Welcomed),
             };
             client.OnFailed = (why, joined) =>
@@ -362,7 +364,7 @@ public partial class Shooter : Node3D
         static string Read(string f) =>
             Godot.FileAccess.Open($"res://data/{f}", Godot.FileAccess.ModeFlags.Read)?.GetAsText()
             ?? throw new DataFileException($"{f}: cannot open ({Godot.FileAccess.GetOpenError()})");
-        var data = GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"), Read("animals.json"), Read("items.json"), Read("holy_mass.json"), Read("holy_mass_demon.json"), Read("bigfoot.json"), Read("pets.json"), Read("wildlife.json"), Read("thieves.json"), Read("scud.json"), Read("plantation.json"));
+        var data = GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"), Read("animals.json"), Read("items.json"), Read("holy_mass.json"), Read("holy_mass_demon.json"), Read("bigfoot.json"), Read("pets.json"), Read("wildlife.json"), Read("thieves.json"), Read("scud.json"), Read("plantation.json"), Read("companions.json"));
         // the hit shapes of the wild species: the free packs' in the data folder, the paid packs' in the private asset folder (both optional)
         if (Godot.FileAccess.FileExists("res://data/animal_shapes.json")) data.Shapes = AnimalShapes.Parse(Read("animal_shapes.json"));
         var privateShapes = System.IO.Path.Combine(GamePaths.PrivateAssets(), "animal-shapes.json");
@@ -416,6 +418,7 @@ public partial class Shooter : Node3D
                 CollisionOnly = _map.CollisionOnly,
                 Look = _data.Environment.Lamp,
             });
+        if (!_map.CollisionOnly && _map.ObjectSignPlates() is { Count: > 0 } signPlates) AddChild(new SignPlates { Map = _map, Plates = signPlates }); // the road signs' plates bend when shot (ADR 0039)
         if (!_map.CollisionOnly && _map.ObjectsOf(_data.Plantation.Reflectors.Asset) is { Count: > 0 } stands) // the plantation's reflector stands: real beams at night
             AddChild(new PlantationReflectors { Stands = stands.Select(o => o.Transform).ToList(), Data = _data.Plantation.Reflectors });
         if (!_map.CollisionOnly) AddChild(new Rozhlas { Speakers = _map.MegaphoneSpeakers() }); // the megaphone poles
@@ -459,12 +462,12 @@ public partial class Shooter : Node3D
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var server = new NetServer
         {
-            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, LampData = _data.Environment.Lamp, CamoData = _data.Camo, Turret = _data.Turret,
+            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, LampData = _data.Environment.Lamp, SignPlateData = _data.Environment.SignPlate, CamoData = _data.Camo, Turret = _data.Turret,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             MatchConfig = WithTargets(ApplyOverrides(_data.Match, cfg.Str("match-set")), cfg.Str("targets")),
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")), Scud = _data.Scud, Plantation = _data.Plantation,
             CarSmoke = cfg.Flag("car-smoke"), BlastSmoke = cfg.Flag("blast-smoke"), SmokeKind = cfg.Str("car-kind", "car"),
-            Weapons = _data.Weapons, Items = _data.Items, HolyMass = _data.HolyMass, Demon = _data.Demon, BigfootData = _data.Bigfoot, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, PetsData = _data.Pets, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, WeaponsSmoke = cfg.Flag("weapons-smoke"), RpgSmoke = cfg.Flag("rpg-smoke"),
+            Weapons = _data.Weapons, Items = _data.Items, HolyMass = _data.HolyMass, Demon = _data.Demon, BigfootData = _data.Bigfoot, AnimalData = _data.Animals, CompanionData = _data.Companions, AnimalShapes = _data.Shapes, PetsData = _data.Pets, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, WeaponsSmoke = cfg.Flag("weapons-smoke"), RpgSmoke = cfg.Flag("rpg-smoke"),
             MatchSmoke = cfg.Flag("match-smoke"), DebugCommands = cfg.Flag("debug-cmds") || cfg.Flag("match-smoke"),
             Clock = ServerClock(cfg),
             Port = int.TryParse(cfg.Str("port", "27015"), out var port) ? port : 27015,
@@ -580,7 +583,7 @@ public partial class Shooter : Node3D
             BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6, BotChat = cfg.Str("bot-chat"),
             Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"), PerfStreaks = cfg.Str("perf-streaks"), PerfOut = cfg.Str("perf-out"), PerfPlay = cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(cfg), PerfRes = cfg.Str("perf-res", "1920x1080"), PerfStreakPeriod = double.TryParse(cfg.Str("perf-streak-period", "2"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var psp) ? psp : 2, PerfVehicles = cfg.Str("perf-vehicles"),
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
-            FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), CarLoop = cfg.Flag("car-loop"), CarLoopSeconds = double.TryParse(cfg.Str("car-loop-seconds", "120"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var cls) ? cls : 120, RpgBot = cfg.Str("rpg-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("rpg-bot") != "" ? cfg.Str("rpg-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Scud = _data.Scud, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, Map = _map,
+            FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), CarLoop = cfg.Flag("car-loop"), CarLoopSeconds = double.TryParse(cfg.Str("car-loop-seconds", "120"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var cls) ? cls : 120, RpgBot = cfg.Str("rpg-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("rpg-bot") != "" ? cfg.Str("rpg-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Scud = _data.Scud, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, CompanionData = _data.Companions, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, Map = _map,
         });
     }
 
@@ -595,7 +598,7 @@ public partial class Shooter : Node3D
     {
         AddLightAndSky();
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
-        var player = new Player { Name = "Player", KillY = killY, Water = _water, Ladders = Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; no ladders")).Ladders, PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
+        var player = new Player { Name = "Player", KillY = killY, Water = _water, Ladders = ObjectLadders.WithObjects(Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; no ladders")).Ladders, _map), PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
         AddChild(player);
         var spawn = RandomSpawn();
         player.Teleport(spawn + Vector3.Up * 0.1f);

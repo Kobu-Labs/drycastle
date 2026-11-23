@@ -11,15 +11,15 @@ public class LoadoutWiringTests
 
     static int IndexOf(string id) => Shipped.Weapons.Weapons.FindIndex(w => w.Id == id);
 
-    static Loadout Kit(string primary = "ak47", string secondary = "pistol") => new(0, primary, secondary, "fleet_foot", "uav", "", "");
+    static Loadout Kit(string primary = "ak47", string secondary = "deagle") => new(0, primary, secondary, "fleet_foot", "uav", "", "");
 
     // ---- hotbar -------------------------------------------------------------------------------------------------
 
     [Fact]
     public void HotbarIsPrimarySecondaryAndKnifeInThatOrder()
     {
-        var hotbar = LoadoutHotbar.Build(Shipped.Weapons, Kit("m4a1", "glock17"));
-        Assert.Equal(new[] { IndexOf("m4a1"), IndexOf("glock17"), IndexOf("knife"), IndexOf("grenade") }, hotbar);
+        var hotbar = LoadoutHotbar.Build(Shipped.Weapons, Kit("m4a1", "deagle"));
+        Assert.Equal(new[] { IndexOf("m4a1"), IndexOf("deagle"), IndexOf("knife"), IndexOf("grenade") }, hotbar);
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public class LoadoutWiringTests
             w.Update(now, new WeaponInput(false, false, 0, false)); // the next edge is per press
             now += 1;
         }
-        Assert.Equal(new[] { "pistol", "knife", "grenade", "ak47" }, ids);
+        Assert.Equal(new[] { "deagle", "knife", "grenade", "ak47" }, ids);
     }
 
     [Fact]
@@ -76,6 +76,59 @@ public class LoadoutWiringTests
     {
         var w = new PlayerWeapons(Shipped.Weapons, null, LoadoutHotbar.Build(Shipped.Weapons, Kit()));
         Assert.Equal(Shipped.Weapons.Weapons.Count, w.WeaponCount);
+    }
+
+    [Fact]
+    public void HotbarFallsBackFromARetiredWeaponToTheFirstUnlockZeroKeptOneOfTheSlot()
+    {
+        var weapons = Shipped.Weapons.Weapons;
+        var firstPrimary = weapons.First(w => w.Slot == WeaponSlot.Primary && w.UnlockLevel == 0 && !w.Retired);
+        var firstSecondary = weapons.First(w => w.Slot == WeaponSlot.Secondary && w.UnlockLevel == 0 && !w.Retired);
+        foreach (var r in weapons.Where(w => w.Retired))
+        {
+            var kit = r.Slot == WeaponSlot.Primary ? new Loadout(0, r.Id, "", "", "", "", "") : new Loadout(0, "", r.Id, "", "", "", "");
+            var hotbar = LoadoutHotbar.Build(Shipped.Weapons, kit);
+            Assert.DoesNotContain(IndexOf(r.Id), hotbar);
+            Assert.Equal(r.Slot == WeaponSlot.Primary ? IndexOf(firstPrimary.Id) : IndexOf(firstSecondary.Id), hotbar[r.Slot == WeaponSlot.Primary ? 0 : 1]);
+        }
+    }
+
+    // ---- the weapon cut (#477) --------------------------------------------------------------------------------------
+
+    [Fact]
+    public void EveryRetiredWeaponIsRefusedOnSave()
+    {
+        var levels = Shipped.Perks.Perks.ToDictionary(p => p.Id, p => p.UnlockLevel);
+        var kit = LoadoutRules.DefaultLoadout(0, Shipped.Weapons, Shipped.Perks);
+        var retired = Shipped.Weapons.Weapons.Where(w => w.Retired).ToList();
+        Assert.NotEmpty(retired);
+        foreach (var r in retired)
+        {
+            var bad = r.Slot == WeaponSlot.Primary
+                ? new Loadout(0, r.Id, kit.SecondaryWeapon, kit.Perk, kit.Streak1, "", "")
+                : new Loadout(0, kit.PrimaryWeapon, r.Id, kit.Perk, kit.Streak1, "", "");
+            var owned = new[] { new Unlock("weapon", r.Id) }; // owning the unlock does not bring it back
+            Assert.Contains("no longer available", LoadoutRules.ValidateLoadout(bad, Shipped.Weapons, 99, owned, levels, Shipped.Killstreaks.UnlockLevels));
+        }
+    }
+
+    [Fact]
+    public void TheDefaultLoadoutIsAkAndDeagle()
+    {
+        var kit = LoadoutRules.DefaultLoadout(0, Shipped.Weapons, Shipped.Perks);
+        Assert.Equal(("ak47", "deagle"), (kit.PrimaryWeapon, kit.SecondaryWeapon));
+    }
+
+    [Fact]
+    public void NoKeptSniperKillsInOneBodyShotAndEveryHeadshotKills()
+    {
+        var snipers = Shipped.Weapons.Weapons.Where(w => w.Category == WeaponCategory.Sniper && !w.Retired && !w.IsReward).ToList();
+        Assert.NotEmpty(snipers);
+        foreach (var w in snipers)
+        {
+            Assert.True(w.Damage < 100, $"{w.Id} one-shots the body");
+            Assert.True(w.Damage * w.HeadshotMultiplier >= 100, $"{w.Id} headshot does not kill");
+        }
     }
 
     // ---- starter kit against the shipped data ----------------------------------------------------------------------

@@ -31,7 +31,7 @@
     { "id": "uav", "name": "UAV", "radius_m": 300, "altitude_m": 150, "speed_mps": 30, "max_bank_deg": 20, "lifetime_s": 65, "hp": 200 }
   ],
   "gunship": {
-    "pitch_min_deg": -70, "pitch_max_deg": -5, "zoom_levels": [1, 2.5, 5],
+    "pitch_min_deg": -88, "pitch_max_deg": -2, "zoom_levels": [1, 2.5, 5],
     "weapons": [
       { "id": "cannon", "name": "Cannon", "kind": "cannon", "weapon_id": "m82", "damage": 75, "range_m": 3000, "interval_s": 0.15, "spread_deg": 0.3, "tracer_speed_mps": 1500, "tracer_length_m": 14,
         "splash": { "radius": 3, "full_damage_radius": 1, "edge_damage": 8, "self_damage_multiplier": 0, "knockback_speed": 4 } },

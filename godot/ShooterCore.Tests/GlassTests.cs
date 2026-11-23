@@ -13,6 +13,61 @@ public class GlassTests
     // ---- hit points and state ----
 
     [Fact]
+    public void ACollisionCracksPanesFromOneSpeedAndShattersThemFromAHigherOne()
+    {
+        var cfg = new GlassConfig { CrashCrackSpeed = 10, CrashShatterSpeed = 18 };
+        Assert.Equal(GlassCrash.None, cfg.Crash(9.9f));
+        Assert.Equal(GlassCrash.Crack, cfg.Crash(10));
+        Assert.Equal(GlassCrash.Crack, cfg.Crash(17.9f));
+        Assert.Equal(GlassCrash.Shatter, cfg.Crash(18));
+        var shipped = GlassConfig.Load(Path.Combine(AppContext.BaseDirectory, "data", "glass.json"));
+        Assert.True(shipped.CrashShatterSpeed > shipped.CrashCrackSpeed);
+        // the crack shows: it is past the first crack stage and the pane still stands
+        Assert.True(GlassRules.CrackStage(shipped.CrashCrackFraction, shipped.CrackStages) >= 2);
+        Assert.Throws<DataFileException>(() => GlassConfig.Parse("{ \"version\": 1, \"crash_crack_speed\": 12, \"crash_shatter_speed\": 8 }"));
+        Assert.Throws<DataFileException>(() => GlassConfig.Parse("{ \"version\": 1, \"crash_crack_fraction\": 1 }"));
+    }
+
+    [Fact]
+    public void ACrashCrackLowersAPaneOnceAndNeverShattersIt()
+    {
+        var panes = new GlassPanes();
+        Assert.True(panes.CrackTo(Pane, 0.5f, 60));
+        Assert.Equal(30, panes.Hp(Pane, 60));
+        Assert.False(panes.CrackTo(Pane, 0.5f, 60)); // a second crash of the same strength changes nothing
+        Assert.Single(panes.TakeChanges());
+        panes.Damage(Pane, 20, 60); // a bullet has taken it lower: the crack leaves it there
+        Assert.False(panes.CrackTo(Pane, 0.5f, 60));
+        Assert.Equal(10, panes.Hp(Pane, 60));
+        panes.Damage(Pane, 60, 60);
+        Assert.False(panes.CrackTo(Pane, 0.5f, 60));
+        Assert.True(panes.IsShattered(Pane));
+    }
+
+    [Fact]
+    public void ACollisionIsHeardFromItsOwnSpeedAndIsTheHardCrashWhereTheHullIsHurt()
+    {
+        var v = new VehiclesFile { CrashMinSpeedLoss = 14, CrashSoundMinSpeedLoss = 4 };
+        Assert.Equal(CrashSound.None, v.CrashSoundOf(3.9f));
+        Assert.Equal(CrashSound.Light, v.CrashSoundOf(4));
+        Assert.Equal(CrashSound.Light, v.CrashSoundOf(14));
+        Assert.Equal(CrashSound.Hard, v.CrashSoundOf(14.1f));
+        Assert.Equal((ushort)0x1234, VehicleCrashCodec.Decode(VehicleCrashCodec.Encode(0x1234, CrashSound.Hard))!.Value.Car);
+        Assert.Equal(CrashSound.Light, VehicleCrashCodec.Decode(VehicleCrashCodec.Encode(7, CrashSound.Light))!.Value.Sound);
+        Assert.Null(VehicleCrashCodec.Decode(new byte[] { 1, 0, 0 }));
+        Assert.Null(VehicleCrashCodec.Decode(new byte[] { 1, 0 }));
+    }
+
+    [Fact]
+    public void ABumpUnderTheCrashMinimumCostsAVehicleNothing()
+    {
+        var v = new VehiclesFile { CrashMinSpeedLoss = 10, CrashDamagePerSpeed = 8 };
+        Assert.Equal(0, v.CrashDamage(0));
+        Assert.Equal(0, v.CrashDamage(10));
+        Assert.Equal(40, v.CrashDamage(15));
+    }
+
+    [Fact]
     public void AnUntouchedPaneIsWholeAndUnknownToTheStore()
     {
         var g = new GlassPanes();
@@ -652,7 +707,7 @@ public class GlassTests
             Assert.True(MathF.Abs(r.Centre.X) <= v.HalfWidth + 0.01f && MathF.Abs(r.Centre.Z) <= v.HalfLength + 0.01f && r.Centre.Y > 0 && r.Centre.Y <= v.Height, $"{v.Id} {g.Id} is outside the hit box");
             // the truck's two cab-back windows look from the cab into the bed: a partition inside the box that no bullet from outside reaches (the bed is in the way);
             // explosions still break them (#325). Every other pane faces away from the middle of the vehicle and is reachable
-            if (v.Id == "jeep" && g.Id.StartsWith("rear_")) { Assert.True(r.Normal.Z > 0.9f, "the cab-back windows face the bed"); continue; }
+            if (v.Id == "truck" && g.Id.StartsWith("rear_")) { Assert.True(r.Normal.Z > 0.9f, "the cab-back windows face the bed"); continue; }
             // a pane faces away from the middle of the vehicle (a partition inside would not)
             var fromMiddle = r.Centre - new Vector3(0, r.Centre.Y, 0);
             Assert.True(Vector3.Dot(r.Normal, fromMiddle) > 0 || r.Normal.Y > 0.5f, $"{v.Id} {g.Id} faces inwards");

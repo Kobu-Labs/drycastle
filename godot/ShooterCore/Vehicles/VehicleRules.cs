@@ -14,6 +14,12 @@ public static class RunOver
     /// <summary>Whether a vehicle at <paramref name="speed"/> moves the bodies it touches (<see cref="ContactMinSpeed"/>).</summary>
     public static bool Contacts(float speed) => MathF.Abs(speed) >= ContactMinSpeed;
 
+    /// <summary>
+    /// Seconds a player a vehicle threw alive is treated as thrown by the server (#411), as one the Bigfoot launched: no shooting while in the air, no grenade, and the landing
+    /// of the throw costs no fall damage.
+    /// </summary>
+    public const float ThrownGraceSeconds = 3f;
+
     /// <param name="massScale">A type's <see cref="VehiclesFile.RunOverScale"/> (1 for the v1 numbers).</param>
     public static float Damage(VehiclesFile f, float speed, float massScale = 1f)
     {

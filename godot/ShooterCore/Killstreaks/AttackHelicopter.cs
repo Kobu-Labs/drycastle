@@ -26,9 +26,6 @@ public static class AttackHelicopterStreak
 /// <summary>What the attack helicopter needs from the server, so the streak runs without Godot.</summary>
 public interface IAttackHelicopterWorld
 {
-    /// <summary>Centre of the helicopter's circle (the map's centre, on the ground).</summary>
-    Vector3 Centre { get; }
-
     /// <summary>
     /// Spawns a helicopter circling <paramref name="centre"/> from <paramref name="phaseRad"/>, owned by
     /// <paramref name="owner"/>, with the owner's gunner input and the cannon only. Null when there is no room.
@@ -59,9 +56,9 @@ public sealed class AttackHelicopterStreakImpl : IKillstreak
 
     public bool Activate(KillstreakUse use)
     {
-        var centre = _world.Centre;
-        // start on the owner's bearing from the centre, so the helicopter comes round towards them first
-        var phase = MathF.Atan2(use.Position.Z - centre.Z, use.Position.X - centre.X);
+        // the circle is centred on the owner, so the gun reaches what is around them on any map size (a fixed map centre left most of a big map out of reach)
+        var centre = use.Position;
+        var phase = 0f;
         var launch = _world.Launch(use.Owner, centre, phase);
         if (launch == null)
         {

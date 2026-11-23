@@ -42,11 +42,15 @@ public partial class NetServer
             if (o != c && o.Worn.Slots.Any(s => s != null)) Send(c, WornEvent(o));
     }
 
-    bool CarriesBinoculars(Client c)
+    bool CarriesBinoculars(Client c) => HeldBinoculars(c) >= 0;
+
+    /// <summary>The item index of the pair the player raises (<see cref="Binoculars.Held"/>), -1 with none in the bag.</summary>
+    int HeldBinoculars(Client c)
     {
+        var carried = new List<int>();
         for (var cell = 0; cell < Bag.Cells; cell++)
-            if (c.Bag.Get(cell) is { } stack && Items.At(stack.Item) is { Binoculars: true }) return true;
-        return false;
+            if (c.Bag.Get(cell) is { } stack) carried.Add(stack.Item);
+        return Binoculars.Held(Items, carried);
     }
 
     /// <summary>The player's binoculars are up or down now: everyone else is told when it changed, so their clients pose that player's character.</summary>
@@ -54,7 +58,7 @@ public partial class NetServer
     {
         if (c.BinocularsUp == up) return;
         c.BinocularsUp = up;
-        var msg = new EventMsg((byte)EventKind.BinocularsRaised, Binoculars.EncodeRaised(c.Id, up));
+        var msg = new EventMsg((byte)EventKind.BinocularsRaised, Binoculars.EncodeRaised(c.Id, up, HeldBinoculars(c)));
         foreach (var o in _byId.Values)
             if (o != c) Send(o, msg);
     }
@@ -63,7 +67,7 @@ public partial class NetServer
     void SendBinocularsOnJoin(Client c)
     {
         foreach (var o in _byId.Values)
-            if (o != c && o.BinocularsUp) Send(c, new EventMsg((byte)EventKind.BinocularsRaised, Binoculars.EncodeRaised(o.Id, true)));
+            if (o != c && o.BinocularsUp) Send(c, new EventMsg((byte)EventKind.BinocularsRaised, Binoculars.EncodeRaised(o.Id, true, HeldBinoculars(o))));
     }
 
     /// <summary>The player's head lamp is on or off now (<see cref="HeadLamp"/>): everyone, the owner too, is told when it changed.</summary>

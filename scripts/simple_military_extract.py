@@ -21,12 +21,14 @@ WANT_FBX = [
     "Assets/SimpleMilitary/Optimized/Models/SM_Prop_Missile_02.fbx",
     "Assets/SimpleMilitary/Optimized/Models/SM_Prop_Missile_03.fbx",
     "Assets/SimpleMilitary/Optimized/Models/SM_Prop_Missile_04.fbx",
+    "Assets/SimpleMilitary/Optimized/Models/SM_Prop_Mg_stand_01.fbx",  # sentry turret (#306)
 ]
 WANT_PREFAB = [
     "Assets/SimpleMilitary/Optimized/Prefabs/Vehicles/SK_Veh_ScudTruck_01.prefab",
     "Assets/SimpleMilitary/Optimized/Prefabs/Vehicles/SK_Veh_Troop_Car_01.prefab",
     "Assets/SimpleMilitary/Old/Prefabs/VehiclesZ+/Veh_troop_car_z_a.prefab",
     "Assets/SimpleMilitary/Optimized/Prefabs/Props/SM_Prop_Missile_01.prefab",
+    "Assets/SimpleMilitary/Optimized/Prefabs/Props/SM_Prop_Mg_stand_01.prefab",
 ]
 
 

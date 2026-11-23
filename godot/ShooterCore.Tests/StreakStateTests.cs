@@ -20,13 +20,16 @@ public class StreakStateTests
         public SetModel() => Array.Fill(_loadout, "");
         public void Arm(IReadOnlyList<string> l)
         {
+            var keep = _earned.Where(id => !_used.Contains(id) && _loadout.Contains(id)).ToList();
             Reset();
+            foreach (var id in keep) _earned.Add(id);
             for (var i = 0; i < KillstreakService.Slots; i++) _loadout[i] = i < l.Count ? l[i] ?? "" : "";
         }
-        public void Earned(string id) => _earned.Add(id);
+        public void Earned(string id) { if (!_used.Contains(id)) _earned.Add(id); }
         public void Used(string id) { _earned.Remove(id); _used.Add(id); _active.Add(id); }
         public void Ended(string id) => _active.Remove(id);
         public void Reset() { _earned.Clear(); _used.Clear(); _active.Clear(); }
+        public void Death() { _used.Clear(); _active.Clear(); }
         public StreakSlotState State(int slot)
         {
             var id = _loadout[slot];
@@ -54,7 +57,7 @@ public class StreakStateTests
                 case 1: t.OnEarned(id, 3); m.Earned(id); break;
                 case 2: case 3: t.OnUsed(id); m.Used(id); break;
                 case 4: t.OnEnded(id); m.Ended(id); break;
-                case 5: if (rng.Next(6) == 0) { t.OnDeath(); m.Reset(); } break;
+                case 5: if (rng.Next(6) == 0) { t.OnDeath(); m.Death(); } break;
                 default: t.OnKill(); break;
             }
             for (var s = 0; s < KillstreakService.Slots; s++)
@@ -148,6 +151,8 @@ public class StreakStateTests
         Assert.Equal(StreakHold.Progress, svc.HoldOf(1, "uav"));
         svc.OnKill(1, 2, false);
         Assert.Equal(StreakHold.Earned, svc.HoldOf(1, "uav"));
+        svc.OnDeath(1);
+        Assert.Equal(StreakHold.Earned, svc.HoldOf(1, "uav")); // earned survives a death (#414)
         svc.Reset();
         Assert.Equal(StreakHold.Progress, svc.HoldOf(1, "uav"));
         _ = probe;

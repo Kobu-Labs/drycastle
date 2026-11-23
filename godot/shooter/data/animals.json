@@ -193,6 +193,17 @@
       "variants": [
         { "id": "duck_green", "model": "synty/glb/pets/duck/duck_green.glb", "hit_box": [0.18, 0.38, 0.53] },
         { "id": "duck_white", "model": "synty/glb/pets/duck/duck_white.glb", "hit_box": [0.18, 0.38, 0.53] }
-      ] }
+      ] },
+    // Phoenix (GLOSSARY "Phoenix", rules in wildlife.json "phoenix"): a rare Mystery animal of the night sky, last in the list so no other species index moves. "flies": it is no ground animal: the walk, run, flee and wander numbers are unused placeholders
+    // (keep them valid). The model is the repo's own (scripts/make_phoenix_model.py), metres, scale 1, faces -Z (model_yaw_deg 0); its origin is the BODY CENTRE while it flies, the clip Perched lowers it so the origin is the ground. Clips
+    // Idle, Cruise (glide), Fall (tumbling dive), Perched (crashed, seated). hit_box [wingspan, body height, length with tail] measured from the model (the height has 0.5 m of margin), centred on the origin (body centre in flight, a ground
+    // origin while crashed: the server lowers the box by half its height in the air). hp is not used by the phases (the first hit makes it fall, the second one burns it); "fx": "phoenix" is the client-only fire, embers and flame.
+    { "id": "phoenix", "name": "Phoenix", "model": "drycastle-generated-models/phoenix.glb", "scale": 1, "model_yaw_deg": 0, "hp": 40, "flies": true, "fx": "phoenix",
+      "walk_speed": 1, "run_speed": 1, "turn_rate_deg_per_s": 90, "flee_radius": 1, "wander_radius": 3, "body_ahead": 0, "hit_box": [3.0, 1.1, 4.0] },
+    // Eagle (#488): the gold Companion's look (companions.json "eagle"), not wildlife: nothing spawns it and it is no Hunter's Log species. After the Phoenix so no species index moves.
+    // "flies": the ground numbers are unused placeholders (keep them valid). The model is the repo's own (scripts/make_eagle_model.py), metres, scale 1, faces -Z; its origin is the body
+    // centre in flight, the ground in the clip Perched. Clips Idle (hover), Cruise, Fall, Perched. hit_box [wingspan, body height, length], centred on the origin: a Companion is never hit, it is its size only.
+    { "id": "eagle", "name": "Eagle", "model": "drycastle-generated-models/eagle.glb", "scale": 1, "model_yaw_deg": 0, "hp": 20, "flies": true,
+      "walk_speed": 1, "run_speed": 1, "turn_rate_deg_per_s": 240, "flee_radius": 1, "wander_radius": 3, "body_ahead": 0, "hit_box": [2.3, 0.5, 0.85] }
   ]
 }

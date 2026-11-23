@@ -5,8 +5,10 @@
   "run_over_max_damage": 100,
   "damage_stages": [0.66, 0.33, 0.12],
   "destroyed_return_time": 30,
-  "crash_min_speed_loss": 6,
+  "crash_min_speed_loss": 13.9,
   "crash_damage_per_speed": 8,
+  "crash_sound_min_speed_loss": 4,
+  "crash_sound_gap": 0.5,
   "bump_restitution": 0.3,
   "bullet_damage_multiplier": 0.5,
   "rocket_damage_multiplier": 1.5,
@@ -77,7 +79,7 @@
       ]
     },
     {
-      "id": "jeep",
+      "id": "truck",
       "drive": {
         "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 3.489, "track": 2.345, "axle_centre": -0.196,
         "land": {
@@ -91,8 +93,8 @@
         },
         "camera": { "distance": 9, "height": 2.8, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
       },
-      "comment": "The type id stays `jeep`; the model is the Synty Battle Royale cargo truck SM_Veh_Truck_01 at real size (#325): six wheels, a three-seat cab bench (driver and two passengers), no gun and no gunner seat. It tows (hitch on the centre line 0.13 m behind the bed tail, 0.62 high like the rocket cart's eye). The tuning of the old jeep is kept. Skins are the six Battle Royale atlases (private pack, boxes without it); node names in docs/standards/car-design.md.",
-      "top_speed": 30, "acceleration": 4.8, "brake": 8, "turn_radius": 3.6, "max_lateral_accel": 9, "mass": 6500, "run_over_mass": 1500, "hp": 380, "hood": [0, 1.9, -3.3], "spawn_count": 3, "half_width": 1.53, "half_length": 3.54, "height": 3.17,
+      "comment": "The type was called `jeep` until it became the Synty Battle Royale cargo truck SM_Veh_Truck_01 at real size (#325): six wheels, a three-seat cab bench (driver and two passengers), no gun and no gunner seat. It tows (hitch on the centre line 0.13 m behind the bed tail, 0.62 high like the rocket cart's eye). The tuning of the old truck is kept. Skins are the six Battle Royale atlases (private pack, boxes without it); node names in docs/standards/car-design.md.",
+      "top_speed": 30, "acceleration": 4.8, "brake": 8, "turn_radius": 3.6, "max_lateral_accel": 9, "reverse_beep": true, "mass": 6500, "run_over_mass": 1500, "hp": 380, "hood": [0, 1.9, -3.3], "spawn_count": 3, "half_width": 1.53, "half_length": 3.54, "height": 3.17,
       "model": "pack:synty-vehicles/truck_woodland", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "chase_distance": 9, "chase_height": 2.8,
       "tow": { "hitch": [0, 0.62, 3.66] },
@@ -113,7 +115,7 @@
     },
     {
       "id": "humvee",
-      "comment": "The Humvee (Scud launch event models; scripts/make_humvee_model.py, numbers in docs/research/scud-models-facts.md): the Synty SIMPLE Military troop car scaled to a real HMMWV (private pack, a grey box without it). A heavier, tougher jeep on the drive model (wheels roll and steer, the body leans, the driver predicts it): driver, front passenger, two rear passengers (plain seats behind the hull) and a standing roof gunner in the ring (exposed seat, the jeep's roof gun numbers on a ring mount that turns all the way round). The gunner's feet are at y 0.73, not the model's seat_gunner 0.55, so that feet + the standing eye 1.65 = the gun sight (2.377).",
+      "comment": "The Humvee (Scud launch event models; scripts/make_humvee_model.py, numbers in docs/research/scud-models-facts.md): the Synty SIMPLE Military troop car scaled to a real HMMWV (private pack, a grey box without it). A heavier, tougher jeep (the old name of the truck) on the drive model (wheels roll and steer, the body leans, the driver predicts it): driver, front passenger, two rear passengers (plain seats behind the hull) and a standing roof gunner in the ring (exposed seat, the old jeep's roof gun numbers on a ring mount that turns all the way round). The gunner's feet are at y 0.73, not the model's seat_gunner 0.55, so that feet + the standing eye 1.65 = the gun sight (2.377).",
       "drive": {
         "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 3.153, "track": 1.877,
         "land": {
@@ -127,7 +129,7 @@
         },
         "camera": { "distance": 7, "height": 2.2, "follow": 10, "max_lag": 1.8, "tilt": 0.35, "fov_boost_deg": 8, "turn_follow": 0, "turn_response": 5 }
       },
-      "top_speed": 28, "acceleration": 3.4, "brake": 7.5, "turn_radius": 4.4, "high_speed_radius_factor": 7, "max_lateral_accel": 8, "mass": 2400, "run_over_mass": 2000, "hp": 550,
+      "top_speed": 28, "acceleration": 3.4, "brake": 7.5, "turn_radius": 4.4, "high_speed_radius_factor": 7, "max_lateral_accel": 8, "reverse_beep": true, "mass": 2400, "run_over_mass": 2000, "hp": 550,
       "hood": [0, 1.2, -1.7], "spawn_count": 2, "half_width": 1.13, "half_length": 2.32, "height": 1.86,
       "model": "pack:synty-simple-military/humvee", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "tow": { "hitch": [0, 0.62, 2.44] },
@@ -177,7 +179,7 @@
       ]
     },
     {
-      "id": "amphibious", "medium": "amphibious", "top_speed": 22, "acceleration": 5.2, "brake": 9.5, "turn_radius": 4.2, "high_speed_radius_factor": 4, "max_lateral_accel": 8.5, "mass": 2500, "run_over_mass": 1800, "hp": 420, "hood": [0, 1.16, 1.88], "spawn_count": 2, "half_width": 1.15, "half_length": 2.3, "height": 1.2,
+      "id": "amphibious", "medium": "amphibious", "top_speed": 22, "acceleration": 5.2, "brake": 9.5, "turn_radius": 4.2, "high_speed_radius_factor": 4, "max_lateral_accel": 8.5, "reverse_beep": true, "mass": 2500, "run_over_mass": 1800, "hp": 420, "hood": [0, 1.16, 1.88], "spawn_count": 2, "half_width": 1.15, "half_length": 2.3, "height": 1.2,
       "water_top_speed": 7, "water_acceleration": 2.6,
       "drive": {
         "throttle_rise": 4, "throttle_fall": 7, "steer_rise": 4.5, "steer_fall": 8, "steer_calm": 0.45, "wheelbase": 2.72, "track": 1.96,
@@ -227,7 +229,7 @@
         },
         "camera": { "distance": 8.1, "height": 2.05, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
       },
-      "top_speed": 15, "acceleration": 2.5, "brake": 6, "turn_radius": 7.5, "max_lateral_accel": 6, "mass": 9000, "run_over_mass": 3000, "hp": 1200, "exposed_gunner": true, "hood": [0, 1.8, -2.7], "spawn_count": 1, "half_width": 1.3, "half_length": 3.55, "height": 3.0,
+      "top_speed": 15, "acceleration": 2.5, "brake": 6, "turn_radius": 7.5, "max_lateral_accel": 6, "reverse_beep": true, "mass": 9000, "run_over_mass": 3000, "hp": 1200, "exposed_gunner": true, "hood": [0, 1.8, -2.7], "spawn_count": 1, "half_width": 1.3, "half_length": 3.55, "height": 3.0,
       "model": "drycastle-generated-models/flak.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
       "tow": { "hitch": [0, 0.7, 3.65] },
@@ -265,7 +267,7 @@
         },
         "camera": { "distance": 11.1, "height": 3.05, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 5, "turn_follow": 0, "turn_response": 5 }
       },
-      "top_speed": 25, "acceleration": 2.6, "brake": 7, "turn_radius": 9.5, "max_lateral_accel": 5, "mass": 13000, "run_over_mass": 3000, "hp": 900, "hood": [0, 1.3, 6.13], "spawn_count": 1, "half_width": 1.28, "half_length": 6.03, "height": 3.1,
+      "top_speed": 25, "acceleration": 2.6, "brake": 7, "turn_radius": 9.5, "max_lateral_accel": 5, "reverse_beep": true, "mass": 13000, "run_over_mass": 3000, "hp": 900, "hood": [0, 1.3, 6.13], "spawn_count": 1, "half_width": 1.28, "half_length": 6.03, "height": 3.1,
       "model": "drycastle-generated-models/bus.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Red", "paints": ["Red"],
       "seats": [{ "role": "driver", "offset": [-0.7, 0.62, -4.825], "cover": "glass" }, { "role": "passenger", "offset": [0.53, 0.38, -2.175], "cover": "glass", "eye_height": 1.05 }, { "role": "passenger", "offset": [-0.97, 0.86, 1.825], "cover": "glass", "eye_height": 1.05 }, { "role": "passenger", "offset": [0, 0.86, 4.905], "cover": "glass", "eye_height": 1.05 }],
@@ -297,7 +299,7 @@
       "hull": [[0, -0.5, 1.3, 3.5, 0, 3.0], [0, 5.5, 0.35, 2.5, 1.45, 2.8], [0, 8.43, 0.35, 0.43, 1.5, 4.35]],
       "model": "drycastle-generated-models/utility_helicopter.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Olive", "paints": ["Olive"],
-      "seats": [{ "role": "driver", "offset": [0.55, 0.72, -1.9], "cover": "glass" }, { "role": "gunner", "offset": [0.4, 0.72, 0.15] }],
+      "seats": [{ "role": "driver", "offset": [0.55, 0.72, -1.9], "cover": "glass" }, { "role": "gunner", "offset": [0.4, 0.72, 0.15] }, { "role": "passenger", "offset": [-0.85, 0.72, 0.15], "cover": "exposed", "armed": true, "aim": { "yaw_deg": 90, "arc_deg": 70, "min_pitch_deg": -55, "max_pitch_deg": 12, "spread_full_speed": 16 } }],
       "gun": { "damage": 30, "fire_interval": 0.1, "range": 220, "spread_degrees": 1.2, "magazine": 100, "reserve": 400, "reload_time": 3 },
       "door_gun": { "pivot": [1.3, 1.5, 0.15], "outward_yaw_deg": -90, "yaw_arc_deg": 70, "min_pitch_deg": -55, "max_pitch_deg": 12, "muzzle_length": 0.88, "eye": [0, 0.22, 0.62], "recoil_m": 0.05 },
       "flight": {
@@ -383,7 +385,7 @@
       },
       "comment": "The harvester event (#331): the Synty Farm combine (SM_Veh_Harvester_01) standardized by scripts/standardize_vehicle.py (scripts/vehicles/harvester.json; private pack synty-vehicles, a grey box without it): hull, wheel_fl/fr/rl/rr (front pair under wheel_*_steer, rolled and steered by the generic VehicleWheels), steering_wheel_rim/_spokes, seat_driver. Its reel node SM_Veh_Harvester_Reel spins on X. Run-over is the event's own (run_over false): NetServer.Harvester.cs, because the field speed is far below run_over_min_speed. turn_radius (7 m, a real combine's) is what the AI's turns between passes are planned with (HarvesterConfig.TurnRadiusM, FieldPlanner: half circles between lanes k apart, a bulb turn for the last lanes).",
       "top_speed": 6.5, "acceleration": 1.3, "brake": 4, "turn_radius": 7, "high_speed_radius_factor": 1, "max_lateral_accel": 4,
-      "mass": 14000, "run_over_mass": 8000, "run_over": false, "hp": 1400,
+      "reverse_beep": true, "mass": 14000, "run_over_mass": 8000, "run_over": false, "hp": 1400,
       "hood": [0, 2.2, -4.3], "spawn_count": 0,
       "half_width": 2.56, "half_length": 4.34, "height": 3.87,
       "chase_distance": 15, "chase_height": 5.5,
@@ -395,7 +397,7 @@
     },
     {
       "id": "rocket_cart",
-      "comment": "The rocket cart (towing): a single-axle military cart that carries one Scud missile (11.1 m, so the rig is 12.6 m long and its drawbar 7.6 m), pulled by any type with a tow block (jeep, humvee, flak). No seats, nobody drives or boards it; spawn_count 0 (spawned by the Scud event, or /spawn rocket_cart); returns false: the Scud event decides when a new loaded cart stands at a bunker (a round retires it). Model pack:synty-simple-military/rocket_cart (scripts/make_rocket_cart_model.py, numbers in docs/research/scud-models-facts.md; a grey box without the private pack): origin on the ground at the centre of the footprint, drawbar to -Z; nodes wheel_l, wheel_r (roll; wheel radius 0.46 = the axle height) and the missile under hull, hidden when empty. hp is the empty cart's; trailer.loaded_hp is the loaded cart's (the missile is the fragile part) and a loaded cart that is destroyed detonates (NetServer.OnRocketCartDetonated: the Scud blast). trailer eye [0, 0.62, -6.2] = the drawbar's tip (the Humvee's hitch is at the same height, the jeep's 0.5 and the flak's 0.7 differ by a degree of pitch at this drawbar, which the drawn cart takes up), axle [0, 0.46, 1.4]; trailer.mass is the loaded cart's (about 3 t), trailer.empty_mass the empty one's. hull (#482): one narrow box over the missile body (x +-0.6, y 0.46 axle to 2.0, z -4.92 nose to 6.3; wheels, fenders, fin tips and the front 1.4 m of drawbar are outside) that tilts with the ground (TrailerAttitude); half_width/half_length/height stay the footprint of the world probe, vehicle contact, run-over and towing.",
+      "comment": "The rocket cart (towing): a single-axle military cart that carries one Scud missile (11.1 m, so the rig is 12.6 m long and its drawbar 7.6 m), pulled by any type with a tow block (truck, humvee, flak). No seats, nobody drives or boards it; spawn_count 0 (spawned by the Scud event, or /spawn rocket_cart); returns false: the Scud event decides when a new loaded cart stands at a bunker (a round retires it). Model pack:synty-simple-military/rocket_cart (scripts/make_rocket_cart_model.py, numbers in docs/research/scud-models-facts.md; a grey box without the private pack): origin on the ground at the centre of the footprint, drawbar to -Z; nodes wheel_l, wheel_r (roll; wheel radius 0.46 = the axle height) and the missile under hull, hidden when empty. hp is the empty cart's; trailer.loaded_hp is the loaded cart's (the missile is the fragile part) and a loaded cart that is destroyed detonates (NetServer.OnRocketCartDetonated: the Scud blast). trailer eye [0, 0.62, -6.2] = the drawbar's tip (the Humvee's hitch is at the same height, the truck's 0.5 and the flak's 0.7 differ by a degree of pitch at this drawbar, which the drawn cart takes up), axle [0, 0.46, 1.4]; trailer.mass is the loaded cart's (about 3 t), trailer.empty_mass the empty one's. hull (#482): one narrow box over the missile body (x +-0.6, y 0.46 axle to 2.0, z -4.92 nose to 6.3; wheels, fenders, fin tips and the front 1.4 m of drawbar are outside) that tilts with the ground (TrailerAttitude); half_width/half_length/height stay the footprint of the world probe, vehicle contact, run-over and towing.",
       "top_speed": 20, "acceleration": 1, "brake": 1, "turn_radius": 5, "max_lateral_accel": 5,
       "mass": 1000, "run_over_mass": 1000, "hp": 200, "returns": false, "hood": [0, 1.4, 0], "spawn_count": 0,
       "half_width": 1.23, "half_length": 6.3, "height": 2.35, "hull": [[0, 0.69, 0.6, 5.61, 0.46, 2.0]],
@@ -421,7 +423,7 @@
       },
       "comment": "The Scud launcher truck (GLOSSARY Scud truck): a heavy 8x8 launcher, two seats (driver, operator) in two half cabs with the missile's nose between them. Spawned by the event or /scud spawn, never dealt (spawn_count 0, no fixed spot), cannot tow, and never returns once destroyed (returns false). Model pack:synty-simple-military/scud (scripts/make_scud_model.py, numbers in docs/research/scud-models-facts.md; a grey box with a rack stands in without the private pack): nodes hull (body, cab, glass, rack > missile, seats, lamps) and the wheels as siblings of hull: wheel_l1..l4 / wheel_r1..r4, the front two axles under wheel_lN_steer / wheel_rN_steer. Hit box 3.13 x 11.9 m, 3.54 m to the top of the lying missile (the erected rack and the fins reach 4.0 m but are not a target). launcher: operator_seat 1; muzzle = the ERECTED missile's centre of mass (the rack pivot [0, 2.62, 3.634], the missile centre 0.477 up and 3.27 ahead of it when lying, turned 90 degrees up about X: [0, 5.89, 4.111]), where the missile entity spawns; exhaust = its tail end [0, 1.1, 4.111]; wheel_radius 0.736; steer_arms = the distance from the middle of the two fixed axles (z 2.892) to each steered axle (z -3.539, -1.38), front first, for the wheels' angle (atan(arm / turn radius)). The seats' eye_height 1.05 puts the eye at y 2.2, inside the half cab (roof 2.66, windscreen 1.99-2.42). The glass centres are the panes' positions in the loaded model: the facts file (and the script's printout) give them without the 0.37 m the glass_N nodes are moved towards +z (the rear), which is added here (checked against the GLB). Flak-truck handling, slower: no drive block (the server steps it, the driver's client does not predict it).",
       "top_speed": 13, "acceleration": 1.6, "brake": 5, "turn_radius": 11, "high_speed_radius_factor": 3, "max_lateral_accel": 5,
-      "mass": 18000, "run_over_mass": 9000, "hp": 1500, "returns": false,
+      "reverse_beep": true, "mass": 18000, "run_over_mass": 9000, "hp": 1500, "returns": false,
       "hood": [0, 2.55, -5.4], "spawn_count": 0,
       "half_width": 1.57, "half_length": 5.95, "height": 3.54,
       "chase_distance": 17, "chase_height": 6,

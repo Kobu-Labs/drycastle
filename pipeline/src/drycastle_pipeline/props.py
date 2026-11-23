@@ -935,6 +935,7 @@ def plan_edits(
                 "z": obj.get("z"),
                 "rotation_deg": float(obj.get("rotation_deg", 0)),
                 "scale": float(obj.get("scale", 1)),
+                **({"size_m": [float(c) for c in obj["size_m"]]} if "size_m" in obj else {}),  # key only when set: older maps unchanged
                 "colour": obj.get("colour"),
                 "parcel": hits[0] if hits else None,
                 "chunk": chunk_of(lx, ly, chunk_m),

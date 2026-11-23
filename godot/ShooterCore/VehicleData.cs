@@ -11,9 +11,20 @@ public class VehiclesFile : IVersioned
     public List<float> DamageStages { get; set; } = new() { 0.66f, 0.33f, 0.12f };
     /// <summary>Seconds a destroyed vehicle stays gone before it returns to its origin with full HP.</summary>
     public float DestroyedReturnTime { get; set; } = 30;
-    /// <summary>Wall impact: speed lost in one tick above the minimum (m/s) hurts the vehicle by this much per m/s.</summary>
-    public float CrashMinSpeedLoss { get; set; } = 6;
+    /// <summary>
+    /// Any collision (a wall, a tree, a ledge, a hard landing, another vehicle, #417): speed lost in one tick above the minimum (m/s) hurts the
+    /// vehicle by this much per m/s. Below the minimum a bump costs nothing. See <see cref="CrashDamage"/>.
+    /// </summary>
+    public float CrashMinSpeedLoss { get; set; } = 13.9f;
     public float CrashDamagePerSpeed { get; set; } = 8;
+    /// <summary>A collision that took at least this much speed in one tick (m/s) is heard (#410); from <see cref="CrashMinSpeedLoss"/> it is the hard crash. See <see cref="CrashSoundOf"/>.</summary>
+    public float CrashSoundMinSpeedLoss { get; set; } = 4;
+    /// <summary>Seconds before the same vehicle's next crash sound: a hull that grinds along a wall is not a crash every tick.</summary>
+    public float CrashSoundGap { get; set; } = 0.5f;
+    /// <summary>What a collision that took <paramref name="speedLoss"/> m/s sounds like: nothing under crash_sound_min_speed_loss, the hard crash where the hull is hurt (#410).</summary>
+    public CrashSound CrashSoundOf(float speedLoss) => speedLoss > CrashMinSpeedLoss ? CrashSound.Hard : speedLoss >= CrashSoundMinSpeedLoss ? CrashSound.Light : CrashSound.None;
+    /// <summary>Hit points a collision that took <paramref name="speedLoss"/> m/s costs a vehicle: nothing up to <see cref="CrashMinSpeedLoss"/>. The one rule every collision goes through (#417).</summary>
+    public float CrashDamage(float speedLoss) => MathF.Max(0, speedLoss - CrashMinSpeedLoss) * CrashDamagePerSpeed;
     /// <summary>Vehicle against vehicle (#253): how much of the closing speed comes back as a bounce (0 = the two stick, 1 = a perfect bounce). The speed each vehicle loses in the bump goes through the crash numbers above.</summary>
     public float BumpRestitution { get; set; } = 0.3f;
     /// <summary>Weapon damage against vehicles is the weapon's damage times these (hitscan bullets, rockets and their splash).</summary>
@@ -759,7 +770,7 @@ public class VehicleExplosionDef
 
 /// <summary>
 /// The reusable driving parameter set (vehicles.json "handling" per type; defaults here are the shared feel). A later type
-/// (jeep, quad) reuses the model by data: only the keys it changes need to be written.
+/// (truck, quad) reuses the model by data: only the keys it changes need to be written.
 /// </summary>
 public class VehicleHandling
 {
@@ -944,6 +955,8 @@ public class VehicleDef
     public VehicleLights? Lights { get; set; }
     /// <summary>The engine sound set of this type (vehicles.json "sounds"); null keeps the shared vehicle.engine loop.</summary>
     public VehicleSoundsDef? Sounds { get; set; }
+    /// <summary>The type sounds a backup alarm while its driver reverses (vehicles.json "reverse_beep", the bigger vehicles, #432). See <see cref="ReverseBeep"/>.</summary>
+    public bool ReverseBeep { get; set; }
     /// <summary>The glass panes of this type (vehicles.json "glass"), at most 24; empty for a type without glass. A pane's place in the list is its index on the wire.</summary>
     public List<VehicleGlassDef> Glass { get; set; } = new();
     List<GlassPaneRect>? _glassRects;
@@ -972,4 +985,16 @@ public class VehicleDef
     public string SkinModel(int colour) => Skins.Count > 0 ? Skins[colour % Skins.Count] : Model;
     /// <summary>Number of colour variants: the skins, the model's paints, or the shared car palette.</summary>
     public int Variants => Skins.Count > 0 ? Skins.Count : Tint != null ? 1 : Paints.Count > 0 ? Paints.Count : VehicleColours.Palette.Length;
+}
+
+/// <summary>How a vehicle's collision sounds (<see cref="VehiclesFile.CrashSoundOf"/>, #410): a bump that costs nothing, or a crash that hurts the hull.</summary>
+public enum CrashSound : byte { None, Light, Hard }
+
+/// <summary><see cref="EventKind.VehicleCrash"/>: u16 vehicle, u8 <see cref="CrashSound"/> (never None).</summary>
+public static class VehicleCrashCodec
+{
+    public static byte[] Encode(ushort car, CrashSound sound) => new[] { (byte)car, (byte)(car >> 8), (byte)sound };
+
+    public static (ushort Car, CrashSound Sound)? Decode(ReadOnlySpan<byte> p) =>
+        p.Length == 3 && p[2] is (byte)CrashSound.Light or (byte)CrashSound.Hard ? ((ushort)(p[0] | p[1] << 8), (CrashSound)p[2]) : null;
 }

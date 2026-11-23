@@ -194,3 +194,18 @@ def test_swamp_ground_is_terrain_colour_and_fades_at_its_outline() -> None:
     green = col[:5, 1].astype(int)
     assert green[0] < green[1] < green[2] < green[3] < green[4]  # a ramp across the zone's outline
     assert col[5].tolist() == [0x80, 0x80, 0x80]  # ground of another kind in the zone keeps its colour
+
+
+def test_parcel_ground_type_gives_the_types_colour_and_recipe() -> None:
+    from drycastle_pipeline.detail import area_type
+    from drycastle_pipeline.scene import ParcelColours
+
+    sq = lambda x0, x1: {"type": "Polygon", "coordinates": [[[x0, 0], [x1, 0], [x1, 100], [x0, 100], [x0, 0]]]}
+    units = [{"id": "P-1091", "kind": "building_plot", "ground_type": "graveyard", "polygon": sq(0, 100)},
+             {"id": "P-1092", "kind": "building_plot", "polygon": sq(100, 200)}]
+    palette = {"building_plot": ["#c9b78f"], "other": ["#808080"], "graveyard": ["#9aa38f"]}
+    col = ParcelColours(units, palette)(np.array([[50.0, 50.0], [150.0, 50.0]]))
+    assert col[0].tolist() == [0x9A, 0xA3, 0x8F]
+    assert col[1].tolist() == [0xC9, 0xB7, 0x8F]  # the other plot keeps its kind's colour
+    types = {"graveyard": {"attributes": {"colours": ["#9aa38f"]}}}
+    assert area_type(units[0], types) is None and area_type(units[1], types) == "garden"

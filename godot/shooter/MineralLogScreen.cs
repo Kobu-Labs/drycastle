@@ -70,7 +70,7 @@ public sealed partial class MineralLogScreen : Control
         stats.AddChild(Stat(tiles.Count(t => t.Rank == 1).ToString(), Strings.T("mineral.stat.first"), Strings.T("mineral.stat.first.of")));
         _host.AddChild(stats);
 
-        var grid = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
+        var grid = new HFlowContainer { Alignment = FlowContainer.AlignmentMode.Center, SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
         grid.AddThemeConstantOverride("h_separation", ShooterTheme.Space * 2);
         grid.AddThemeConstantOverride("v_separation", ShooterTheme.Space + ShooterTheme.Space / 2);
         foreach (var t in tiles) grid.AddChild(Card(t));

@@ -161,7 +161,7 @@ public class SeatSwitchTests
     [Theory]
     [InlineData("car")]
     [InlineData("motorcycle")]
-    [InlineData("jeep")]
+    [InlineData("truck")]
     [InlineData("quad")]
     [InlineData("amphibious")]
     [InlineData("flak")]

@@ -26,8 +26,17 @@ public partial class NetServer
     /// <summary>The care package implementation for <see cref="BuildStreaks"/>.</summary>
     IKillstreak CarePackageImpl() => new CarePackageStreak(
         _carePackages,
-        owner => _byId.TryGetValue(owner, out var c) ? c.Body.Yaw : 0f,
+        ThrowCanister,
         GroundBelow);
+
+    /// <summary>Where the owner's thrown canister lands (Q): from the eye along the look, stopped by the first surface.</summary>
+    CarePackageRules.ThrowFlight ThrowCanister(ushort owner, NVec3 feet)
+    {
+        if (!_byId.TryGetValue(owner, out var c)) return new CarePackageRules.ThrowFlight(feet, NVec3.Zero, 0f, CarePackageRules.DropPoint(feet, 0f));
+        var eye = new NVec3(feet.X, feet.Y + MovementStep.EyeHeight(c.Body.State.Stance), feet.Z);
+        return CarePackageRules.Throw(eye, c.Body.Yaw, c.Body.Pitch, (from, dir, len) =>
+            Query.Shot(new Vector3(from.X, from.Y, from.Z), new Vector3(dir.X, dir.Y, dir.Z), len, null).Distance);
+    }
 
     /// <summary>Height of the ground under a point (a vertical ray), or null when nothing is below it.</summary>
     float? GroundBelow(NVec3 p)

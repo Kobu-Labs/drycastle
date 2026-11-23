@@ -34,7 +34,7 @@ One map is built: the village inside its outline (`polygon`, see below). Its pat
 | work files | `data/village/work/` |
 | export, previews | `out/village/map/`, `out/village/preview/` |
 
-`make map-update` re-runs only `props`, `detail` and `export` (after `edits.json` changed: placed objects, ground patches, zones, fences). It needs one full `make map` first, does not fetch, run the orthophoto stages or rebuild terrain/roads, and plants the trees again from the cached `ortho/trees.json`. Same output folder as `make map`. Only zones changed: `make export` is enough.
+`make map-update` re-runs only `props`, `detail` and `export` (after `edits.json` changed: placed objects, zones, fences; ground patches and parcel outlines also need `make parcels` first). It needs one full `make map` first, does not fetch, run the orthophoto stages or rebuild terrain/roads, and plants the trees again from the cached `ortho/trees.json`. Same output folder as `make map`. Only zones changed: `make export` is enough.
 | `map_version` | `<MAP_VERSION_BASE>-village` (`export.py`) |
 
 The committed registry `registry/parcels.registry.json` is the one
@@ -179,6 +179,26 @@ stage, never a silent skip (`zones.rules`).
 * **`plantation`** becomes polygons for the server at the export (`zone_polygons.json`, see "Zone polygons" under Export).
 * **Every other kind** becomes candidate points for the server at the export, see "Zone points (`zone_points.json`)" under
   Export. Ground areas are never cut by a zone.
+
+### Ground type of one parcel (`edits.json` `parcels.<ID>.ground_type`)
+
+`"parcels": {"P-1091": {"ground_type": "graveyard"}}`: the ground of that parcel looks like the ground type (of `rules.yaml` or
+your own, see below; not water): its terrain colours (scene) and its detail `recipe` (detail; a type without one: no detail)
+instead of the yard of its kind. Kind, layout, fence and other parcels are unchanged. `ground.with_parcel_types` lays the type
+on the units, `ground.ground_kind` is the one lookup. A type a parcel names cannot be deleted. `make map-update` shows it; MCP
+`set_parcel_ground_type`.
+
+### Outline of one parcel (`edits.json` `parcels.<ID>.outline`)
+
+`"parcels": {"P-1091": {"outline": [[x, y], ...]}}`: replaces the cadastral outline of that one parcel, a simple polygon in absolute
+EPSG:5514 metres (like objects; no key: untouched). Its buildings must stay inside; otherwise the parcels stage warns and keeps the
+cadastral outline. It is applied once, in the parcels stage (`parcel_outlines.apply_outlines`, after carving), so `parcels.json` and
+everything built from it (fence, ground, detail, object clearance, parcel lookup) follow it. The registry and the building assignment
+still use the cadastre. Where it overlaps an unedited parcel the edited one wins and the neighbour is cut back by the overlap; two
+edited outlines that overlap are a validation error. The land the parcel gives up goes to the ground rules (default ground unless
+another outline takes it). Edits are in absolute metres, the work files in local ones (minus `origin_epsg5514`). Needs `make parcels`,
+then `make map-update` (terrain and roads do not read parcels); MCP `set_parcel_outline` (a sketch line spliced into the outline, or
+the full points) and `reset_parcel_outline`.
 
 ### Ground types of your own (`edits.json` `ground_types`)
 

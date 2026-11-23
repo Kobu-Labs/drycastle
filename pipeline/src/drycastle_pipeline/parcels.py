@@ -15,7 +15,7 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
 from drycastle_pipeline.config import map_paths
-from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits
+from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits, polygon_ring
 from drycastle_pipeline.ground import ID_PREFIX as GROUND_PREFIX
 from drycastle_pipeline.ground import (
     build_ground,
@@ -27,6 +27,7 @@ from drycastle_pipeline.ground import (
     rules_ground_types,
 )
 from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
+from drycastle_pipeline.parcel_outlines import apply_outlines
 from drycastle_pipeline.registry import (
     DEFAULT_REGISTRY,
     MatchResult,
@@ -188,6 +189,25 @@ def build_parcels(
         geoms[i] = new
         leftovers[pid] = rest
 
+    # hand-edited outlines (edits.json parcels.<ID>.outline, absolute metres): the one place they take effect, every later stage
+    # reads the result. The registry above and the building assignment kept the cadastral outlines.
+    outlines = {
+        pid: Polygon([(x - ox, y - oy) for x, y in polygon_ring(e["outline"])])
+        for pid, e in edits.parcels.items()
+        if e.get("outline")
+    }
+    freed: BaseGeometry = Polygon()
+    if outlines:
+        edited, freed, warnings = apply_outlines(
+            {pid: geoms[index[pid]] for pid in index if pid in kept},
+            outlines,
+            {pid: {b: buildings[b] for b in assignment.by_parcel.get(index[pid], [])} for pid in outlines if pid in index},
+        )
+        for warning in warnings:
+            print(f"parcels: warning: {warning}", file=sys.stderr)
+        for pid, geom in edited.items():
+            geoms[index[pid]] = geom
+
     out = []
     for i, (ref, geom) in enumerate(zip(refs, geoms, strict=True)):
         if ids[i] not in kept:
@@ -203,6 +223,9 @@ def build_parcels(
     free = unary_union([g if g.is_valid else g.buffer(0) for g in dropped.values()]) if dropped else Polygon()
     if leftovers:  # a carved parcel may reach over land that was another parcel's
         free = free.difference(unary_union([geoms[index[pid]] for pid in leftovers]))
+    if outlines:  # an edited outline may reach over ground, and gives back what it no longer holds
+        mine = [geoms[index[pid]] for pid in outlines if pid in index and pid in kept]
+        free = unary_union([free, freed]).difference(unary_union(mine))
     ways = {f["properties"]["osm_id"]: shape(f["geometry"]) for f in _read(norm / "highways.geojson")}
     landuse = [
         (f["properties"]["class"], f["properties"]["value"], shape(f["geometry"])) for f in _read(norm / "landuse.geojson")

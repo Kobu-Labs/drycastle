@@ -23,6 +23,15 @@ public sealed class GlassConfig : IVersioned
     public List<float> CrackStages { get; set; } = new() { 0.66f, 0.33f };
     /// <summary>Damage a blast does to a pane at its centre, falling linearly to nothing at the blast's radius.</summary>
     public float BlastDamage { get; set; } = 150;
+    /// <summary>
+    /// A vehicle's collision (#431): speed lost in one tick, m/s, from which its standing panes crack (they are left with at most
+    /// <see cref="CrashCrackFraction"/> of their hit points, and never shatter by it). See <see cref="Crash"/>.
+    /// </summary>
+    public float CrashCrackSpeed { get; set; } = 11.1f;
+    /// <summary>A vehicle's collision: speed lost in one tick, m/s, from which all its panes shatter, whatever their kind.</summary>
+    public float CrashShatterSpeed { get; set; } = 18;
+    /// <summary>The share of its hit points a pane cracked by a collision keeps at most (0 to 1, exclusive).</summary>
+    public float CrashCrackFraction { get; set; } = 0.5f;
     /// <summary>How far behind the wall a bullet stopped on a building's pane may lie, metres (a pane sits in its reveal, behind the collision wall).</summary>
     public float BuildingReach { get; set; } = 0.5f;
     /// <summary>How far inside a vehicle's hit box a pane may lie along the bullet, metres (the windscreen is behind the bonnet's part of the box).</summary>
@@ -45,6 +54,9 @@ public sealed class GlassConfig : IVersioned
     /// <summary>Hit points of a vehicle pane of <paramref name="kind"/> that sets none of its own.</summary>
     public float PaneHp(GlassKind kind) => Kinds.TryGetValue(kind == GlassKind.Reinforced ? "reinforced" : "normal", out var k) && k.Hp > 0 ? k.Hp : VehiclePaneHp;
 
+    /// <summary>What a collision that took <paramref name="speedLoss"/> m/s from a vehicle does to its panes (#431).</summary>
+    public GlassCrash Crash(float speedLoss) => speedLoss >= CrashShatterSpeed ? GlassCrash.Shatter : speedLoss >= CrashCrackSpeed ? GlassCrash.Crack : GlassCrash.None;
+
     public static GlassConfig Parse(string json) => DataFile.Parse<GlassConfig>(json, "glass.json").Validate();
 
     public static GlassConfig Load(string path) => DataFile.Load<GlassConfig>(path).Validate();
@@ -62,12 +74,17 @@ public sealed class GlassConfig : IVersioned
             if (!(CrackStages[i] > 0 && CrackStages[i] < 1) || i > 0 && CrackStages[i] >= CrackStages[i - 1])
                 throw new DataFileException("glass.json: crack_stages are fractions between 0 and 1, highest first");
         if (BlastDamage < 0 || BuildingReach < 0 || VehicleReach < 0) throw new DataFileException("glass.json: blast_damage, building_reach and vehicle_reach must not be negative");
+        if (!(CrashCrackSpeed > 0) || CrashShatterSpeed < CrashCrackSpeed) throw new DataFileException("glass.json: crash_crack_speed must be positive and crash_shatter_speed not below it");
+        if (!(CrashCrackFraction > 0 && CrashCrackFraction < 1)) throw new DataFileException("glass.json: crash_crack_fraction must be between 0 and 1");
         if (Shards is < 2 or > 200) throw new DataFileException("glass.json: shards must be 2..200");
         if (!(ShardSpeed > 0) || !(ShardLife > 0)) throw new DataFileException("glass.json: shard_speed and shard_life must be positive");
         if (MaxShatterEffects < 0 || ShatterEffectRange < 0) throw new DataFileException("glass.json: max_shatter_effects and shatter_effect_range must not be negative");
         return this;
     }
 }
+
+/// <summary>What a vehicle's collision does to its panes (<see cref="GlassConfig.Crash"/>, #431).</summary>
+public enum GlassCrash { None, Crack, Shatter }
 
 /// <summary>One entry of glass.json <c>kinds</c>.</summary>
 public sealed class GlassKindDef

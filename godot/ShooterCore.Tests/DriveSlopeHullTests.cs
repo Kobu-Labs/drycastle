@@ -8,7 +8,7 @@ namespace Drycastle.ShooterCore.Tests;
 public class DriveSlopeHullTests
 {
     static readonly VehiclesFile Shipped = VehiclesFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "vehicles.json"));
-    static VehicleDef Jeep => Shipped.Vehicles.Single(v => v.Id == "jeep");
+    static VehicleDef Truck => Shipped.Vehicles.Single(v => v.Id == "truck");
     const float Pitch = 0.3f;
 
     static bool Hits(VehicleDef def, float pitch, float roll, Vector3 from, Vector3 dir) => VehicleBox.Ray(from, dir, 20f, Vector3.Zero, 0, pitch, roll, def) != null;
@@ -27,7 +27,7 @@ public class DriveSlopeHullTests
         Assert.True(s.ToWorld(new[] { 0f, 0f, 2f }).Y < -0.5f);
         var r = new DriveState { Roll = Pitch };
         Assert.True(r.ToWorld(new[] { -1f, 0f, 0f }).Y < -0.2f); // positive roll drops the left side (-x)
-        Assert.True(Hits(Jeep, 0, Pitch, new Vector3(-0.5f, 5f, -2f), -Vector3.UnitY)); // sanity: the box is there
+        Assert.True(Hits(Truck, 0, Pitch, new Vector3(-0.5f, 5f, -2f), -Vector3.UnitY)); // sanity: the box is there
     }
 
     [Fact]
@@ -35,19 +35,19 @@ public class DriveSlopeHullTests
     {
         var hl = 2f; // two metres out from the origin along the body
         var dir = -Vector3.UnitX;
-        Assert.False(Hits(Jeep, 0, 0, new Vector3(5f, Jeep.Height + 0.3f, -hl), dir)); // level: over the roof
-        Assert.True(Hits(Jeep, Pitch, 0, new Vector3(5f, Jeep.Height + 0.3f, -hl), dir)); // the nose end stands higher
-        Assert.True(Hits(Jeep, 0, 0, new Vector3(5f, 0.3f, -hl), dir));
-        Assert.False(Hits(Jeep, Pitch, 0, new Vector3(5f, 0.3f, -hl), dir)); // the air under the lifted nose
-        Assert.True(Hits(Jeep, Pitch, 0, new Vector3(5f, 0.3f, hl), dir)); // the low end is still there
-        Assert.False(Hits(Jeep, Pitch, 0, new Vector3(5f, Jeep.Height + 0.3f, hl), dir)); // and not over it
+        Assert.False(Hits(Truck, 0, 0, new Vector3(5f, Truck.Height + 0.3f, -hl), dir)); // level: over the roof
+        Assert.True(Hits(Truck, Pitch, 0, new Vector3(5f, Truck.Height + 0.3f, -hl), dir)); // the nose end stands higher
+        Assert.True(Hits(Truck, 0, 0, new Vector3(5f, 0.3f, -hl), dir));
+        Assert.False(Hits(Truck, Pitch, 0, new Vector3(5f, 0.3f, -hl), dir)); // the air under the lifted nose
+        Assert.True(Hits(Truck, Pitch, 0, new Vector3(5f, 0.3f, hl), dir)); // the low end is still there
+        Assert.False(Hits(Truck, Pitch, 0, new Vector3(5f, Truck.Height + 0.3f, hl), dir)); // and not over it
     }
 
     [Fact]
     public void Two_tilted_ground_vehicles_are_pushed_apart_sideways_and_stay_finite()
     {
-        var a = new ContactShape(Vector3.Zero, 0, Jeep.HalfWidth, Jeep.HalfLength, Jeep.Height, Pitch: 0.35f, Roll: 0.1f, Hull: Jeep.HullBoxes);
-        var b = new ContactShape(new Vector3(1.2f, 0, 0.5f), 0.4f, Jeep.HalfWidth, Jeep.HalfLength, Jeep.Height, Pitch: 0.35f, Roll: 0.1f, Hull: Jeep.HullBoxes);
+        var a = new ContactShape(Vector3.Zero, 0, Truck.HalfWidth, Truck.HalfLength, Truck.Height, Pitch: 0.35f, Roll: 0.1f, Hull: Truck.HullBoxes);
+        var b = new ContactShape(new Vector3(1.2f, 0, 0.5f), 0.4f, Truck.HalfWidth, Truck.HalfLength, Truck.Height, Pitch: 0.35f, Roll: 0.1f, Hull: Truck.HullBoxes);
         var hit = VehicleContact.Test(a, b, vertical: false)!.Value;
         Assert.Equal(0f, hit.Normal.Y, 4);
         Assert.Equal(1f, hit.Normal.Length(), 3);

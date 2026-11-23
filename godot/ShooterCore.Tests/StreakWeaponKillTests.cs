@@ -21,7 +21,7 @@ public class StreakWeaponKillTests
     [Theory]
     [InlineData(0)]
     [InlineData(243)]
-    [InlineData(250)]  // jeep roof gun: not a streak weapon (correction on #133)
+    [InlineData(250)]  // truck roof gun: not a streak weapon (correction on #133)
     [InlineData(251)]
     [InlineData(255)]
     public void OrdinaryWeaponsAndSpecialDeathsAreNot(byte weapon) => Assert.False(StreakWeapons.Is(weapon));

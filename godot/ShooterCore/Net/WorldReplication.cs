@@ -226,7 +226,7 @@ public sealed class WorldSnapshotEncoder
             if (filter && def is { Interest: true })
             {
                 long dx = q.State.X - vx, dz = q.State.Z - vz;
-                emit = Decide(q, b, baseTick, tick, dx * dx + dz * dz);
+                emit = Decide(q, b, baseTick, tick, def.SeenFromAfar?.Invoke(q.State) == true ? 0 : dx * dx + dz * dz); // seen from afar: in interest at any range
                 if (emit == Emit.Skip) { o = at; continue; }
             }
             if (emit == Emit.Dormant)
@@ -488,6 +488,7 @@ public sealed class WorldReplica
     static void Store(Entity e, uint tick, WorldState s)
     {
         if (e.Type == AnimalRules.TypeId && Vector3.DistanceSquared(e.State.Position, s.Position) > AnimalRules.TeleportM * AnimalRules.TeleportM) e.Buf.Reset(); // a vanished animal reappeared far away: it does not slide across the map
+        if (e.Type == CompanionRules.TypeId && Vector3.DistanceSquared(e.State.Position, s.Position) > CompanionRules.TeleportM * CompanionRules.TeleportM) e.Buf.Reset(); // a Companion put beside its owner: not drawn sliding there
         e.State = s;
         e.Buf.Push(tick, s.Position, s.YawRad, s.PitchRad);
     }

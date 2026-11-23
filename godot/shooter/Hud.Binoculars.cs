@@ -11,7 +11,7 @@ namespace Drycastle.Shooter;
 public partial class Hud
 {
     /// <summary>The binoculars: whether they are up, and the distance read, metres (null: nothing in range). Read each frame; the owner sets it.</summary>
-    public Func<(bool Up, int? RangeM)>? Binoculars { get; set; }
+    public Func<(bool Up, int? RangeM, bool CanMark)>? Binoculars { get; set; }
 
     BinocularOverlay _bino = null!;
     Label _binoRange = null!, _binoHint = null!;
@@ -32,7 +32,7 @@ public partial class Hud
     /// <summary>True while the binoculars are up (the crosshair and the scope stay hidden then).</summary>
     bool UpdateBinoculars()
     {
-        var b = Binoculars?.Invoke() ?? (false, null);
+        var b = Binoculars?.Invoke() ?? (false, null, false);
         if (_bino.Visible != b.Up)
         {
             _bino.Visible = _binoRange.Visible = _binoHint.Visible = b.Up;
@@ -45,8 +45,12 @@ public partial class Hud
             _binoShown = range;
             Set(_binoRange, range >= 0 ? Strings.F("hud.binoculars.range", range) : Strings.T("hud.binoculars.none"));
         }
-        var key = InputBindings.Name("binoculars");
-        if (key != _binoKey) { _binoKey = key; Set(_binoHint, Strings.F("hud.binoculars.hint", key)); }
+        var key = InputBindings.Name("binoculars") + (b.CanMark ? "|" + InputBindings.Name("binoculars_mark") : "");
+        if (key != _binoKey)
+        {
+            _binoKey = key;
+            Set(_binoHint, b.CanMark ? Strings.F("hud.binoculars.hint.mark", InputBindings.Name("binoculars"), InputBindings.Name("binoculars_mark")) : Strings.F("hud.binoculars.hint", InputBindings.Name("binoculars")));
+        }
         return true;
     }
 

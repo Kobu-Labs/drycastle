@@ -16,6 +16,7 @@ public sealed class PostgresProgressionStore : IProgressionStore
         Stats = new StatsRepo(db);
         Camo = new CamoRepo(db);
         Hunts = new HuntRepo(db);
+        Minerals = new MineralRepo(db);
     }
 
     public IProfileRepository Profiles { get; }
@@ -24,6 +25,7 @@ public sealed class PostgresProgressionStore : IProgressionStore
     public IStatsRepository Stats { get; }
     public ICamoRepository Camo { get; }
     public IHuntRepository Hunts { get; }
+    public IMineralRepository Minerals { get; }
 
     /// <summary>
     /// Connects (retrying while the database starts) and migrates it. <paramref name="curve"/> (from levels.json) turns XP into the Level on read.
@@ -134,6 +136,12 @@ public sealed class PostgresProgressionStore : IProgressionStore
 
         public Task SetNameAsync(long playerId, string name) =>
             db.Write("set name", c => Exec(c, "UPDATE players SET name = @n WHERE id = @id;", ("n", name ?? ""), ("id", playerId)));
+
+        public Task<string> GetCompanionAsync(long playerId) => db.Read(c =>
+            Scalar(c, "SELECT companion FROM players WHERE id = @id;", ("id", playerId)) as string ?? "");
+
+        public Task SetCompanionAsync(long playerId, string companionId) =>
+            db.Write("set companion", c => Exec(c, "UPDATE players SET companion = @c WHERE id = @id;", ("c", companionId ?? ""), ("id", playerId)));
 
         public Task AddXpAsync(long playerId, int amount)
         {
@@ -319,5 +327,22 @@ public sealed class PostgresProgressionStore : IProgressionStore
                 r.GetString(8), diagram, r.GetFloat(15), r.GetFloat(16), r.GetFloat(17), DateTime.SpecifyKind(r.GetDateTime(18), DateTimeKind.Utc));
             return new HuntRow(hunt, r.GetString(2));
         }
+    }
+
+    sealed class MineralRepo(PostgresWorker db) : IMineralRepository
+    {
+        public Task AppendAsync(MineralFind f) => db.Write("append mineral find", c => Exec(c,
+            "INSERT INTO mineral_finds (player_id, mineral, found_at) VALUES (@pl, @m, @at) ON CONFLICT (player_id, mineral) DO NOTHING;",
+            ("pl", f.PlayerId), ("m", f.MineralId), ("at", DateTime.SpecifyKind(f.AtUtc, DateTimeKind.Utc))));
+
+        public Task<IReadOnlyList<MineralFind>> GetAllAsync() => db.Read<IReadOnlyList<MineralFind>>(c =>
+        {
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = "SELECT player_id, mineral, found_at FROM mineral_finds ORDER BY found_at, id;";
+            using var r = cmd.ExecuteReader();
+            var list = new List<MineralFind>();
+            while (r.Read()) list.Add(new MineralFind(r.GetInt64(0), r.GetString(1), DateTime.SpecifyKind(r.GetDateTime(2), DateTimeKind.Utc)));
+            return list;
+        });
     }
 }

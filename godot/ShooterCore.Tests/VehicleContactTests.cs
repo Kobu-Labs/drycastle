@@ -165,9 +165,9 @@ public class VehicleContactTests
     {
         var bus = Shipped.Vehicles.First(v => v.Id == "bus"); var bike = Shipped.Vehicles.First(v => v.Id == "motorcycle");
         var hit = new VehicleContactHit(Vector3.UnitZ, 0.3f);
-        var bump = VehicleContact.Bump(hit, Moving(bus.Mass, 0, 20), Moving(bike.Mass, 0, 0), Shipped.BumpRestitution);
-        var busHurt = MathF.Max(0, bump.SpeedLossA - Shipped.CrashMinSpeedLoss) * Shipped.CrashDamagePerSpeed;
-        var bikeHurt = MathF.Max(0, bump.SpeedLossB - Shipped.CrashMinSpeedLoss) * Shipped.CrashDamagePerSpeed;
+        var bump = VehicleContact.Bump(hit, Moving(bus.Mass, 0, bus.TopSpeed), Moving(bike.Mass, 0, 0), Shipped.BumpRestitution);
+        var busHurt = Shipped.CrashDamage(bump.SpeedLossA);
+        var bikeHurt = Shipped.CrashDamage(bump.SpeedLossB);
         Assert.Equal(0f, busHurt);
         Assert.True(bikeHurt >= bike.Hp);
     }

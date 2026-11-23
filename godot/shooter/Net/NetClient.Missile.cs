@@ -98,14 +98,18 @@ public partial class NetClient
         return null;
     }
 
-    /// <summary>The POV camera follows the missile's real pose (the turn rate shows), and the overlay reads altitude and time. Back to the body's camera when control ends.</summary>
+    /// <summary>The POV camera sits on the missile and looks along the owner's aim (kept near the missile's heading), and the overlay reads altitude and time. Back to the body's camera when control ends.</summary>
     void RenderMissilePov()
     {
         if (_me == null || _pov == null) return;
         var id = _controlling ? OwnMissile() : null;
         if (id is not { } mid || !WorldEntities.Entities.TryGetValue(mid, out var e))
         {
-            if (_povCam is { Current: true }) { _povCam.Current = false; _me.Camera.Current = true; }
+            if (_povCam is { Current: true })
+            {
+                _povCam.Current = false; _me.Camera.Current = true;
+                if (_lookBeforeMissile is { } look) { _me.Yaw = look.Yaw; _me.Pitch = look.Pitch; _lookBeforeMissile = null; }
+            }
             _pov.SetOn(false);
             _pov.SetMarkers(null, null);
             return;
@@ -114,9 +118,20 @@ public partial class NetClient
         if (!_povCam.IsInsideTree()) Owned.AddChild(_povCam);
         var s = e.State;
         var p = s.Position;
-        _povCam.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
-        _missileViewYaw = s.YawRad;
-        _povCam.Rotation = new Vector3(s.PitchRad, s.YawRad, 0); // Godot's YXZ order: the same heading HitMath.Forward gives
+        var tuning = Killstreaks?.Find(AttackMissileStreak.StreakId)?.Missile;
+        if (!_povCam.Current)
+        {
+            // control starts: the aim starts on the missile's heading (not the body's look, which would turn it at once); the body's look comes back at the end
+            _lookBeforeMissile = (_me.Yaw, _me.Pitch);
+            _me.Yaw = s.YawRad; _me.Pitch = s.PitchRad;
+        }
+        ClampMissileAim(s.YawRad, tuning);
+        // the view is the aim: the mouse turns it at once and the missile turns after it, so the view moves only when the mouse does.
+        // The position is the interpolated pose (the state alone steps at the snapshot rate).
+        var at = e.Buf.At(RenderTickNow())?.Pos ?? p;
+        _povCam.GlobalPosition = new Vector3(at.X, at.Y, at.Z);
+        _missileViewYaw = _me.Yaw;
+        _povCam.Rotation = new Vector3(_me.Pitch, _me.Yaw, 0); // Godot's YXZ order: the same heading HitMath.Forward gives
         _me.Camera.Current = false;
         _povCam.Current = true;
         _pov.SetOn(true);
@@ -127,6 +142,23 @@ public partial class NetClient
         var sink = missile == null ? 0f : missile.SpeedMps * MathF.Sin(-s.PitchRad);
         var eta = sink > 0 ? MathF.Max(0, alt) / sink : float.NaN;
         _pov.SetReadout(alt, Now - _povSince, eta);
+    }
+
+    /// <summary>The owner's aim leads the missile by at most this much (yaw), radians: the mouse steers a bounded lead, it never winds up beyond what the missile can follow.</summary>
+    const float MissileMaxLeadRad = 20f * MathF.PI / 180f;
+    /// <summary>The body's look when the missile took the view, given back when control ends.</summary>
+    (float Yaw, float Pitch)? _lookBeforeMissile;
+
+    /// <summary>
+    /// Keeps the aim the server steers by (the body's look) near the missile: pitch inside the dive cone, yaw within <see cref="MissileMaxLeadRad"/> of the heading.
+    /// Without it the mouse winds the aim up past the turn rate and the dive cone, and the missile keeps turning long after the mouse stopped.
+    /// </summary>
+    void ClampMissileAim(float missileYaw, MissileTuning? t)
+    {
+        if (_me == null) return;
+        if (t != null) _me.Pitch = Mathf.Clamp(_me.Pitch, t.SteepPitchRad, t.ShallowPitchRad);
+        var lead = Mathf.Wrap(_me.Yaw - missileYaw, -Mathf.Pi, Mathf.Pi);
+        _me.Yaw = missileYaw + Mathf.Clamp(lead, -MissileMaxLeadRad, MissileMaxLeadRad);
     }
 
     /// <summary>The blast: the rpg's blast look at the missile's own radius, the shake, and the static on the owner's screen.</summary>
