@@ -156,7 +156,7 @@ public partial class NetClient : IStandingBodies
         if (modelRoot != null)
             foreach (var sk in modelRoot.FindChildren("*", "Skeleton3D", true, false).OfType<Skeleton3D>())
                 if (AnimalFlail.Create(sk) is { } f) { sk.AddChild(f); flail.Add(f); }
-        Owned.AddChild(node);
+        Ctx.Owned.AddChild(node);
         var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Size = size, Variant = variant, Flail = flail, Toggle = AnimalRules.HitToggled(e.State.State) };
         if (def.Fx == UnicornFx.Id) view.Fx = UnicornFx.Attach(node, modelRoot, def.VanishSeconds);
         if (def.Fx == PhoenixFx.Id) view.Phoenix = PhoenixFx.Attach(node, modelRoot, WildlifeData.Phoenix?.BurnSeconds ?? 6f);
@@ -195,7 +195,7 @@ public partial class NetClient : IStandingBodies
     {
         if (reason != WorldDespawnReason.Destroyed || !_animals.TryGetValue(id, out var v)) return;
         var height = v.HitBox.Count == 3 ? v.HitBox[1] : 0.5f;
-        PetFx.Puff(Owned, v.Node.GlobalPosition + Vector3.Up * (height / 2), height);
+        PetFx.Puff(Ctx.Owned, v.Node.GlobalPosition + Vector3.Up * (height / 2), height);
     }
 
     void OnAnimalDespawned(ushort id)
@@ -207,7 +207,7 @@ public partial class NetClient : IStandingBodies
     /// <summary>Places the animals (interpolated, a little in the past like every remote body) and plays the clip of their state.</summary>
     void RenderAnimals()
     {
-        if (_animals.Count == 0 || _lastTick == 0) return;
+        if (_animals.Count == 0 || Ctx.LastTick == 0) return;
         TickAnimalMarks();
         var rt = RenderTickNow();
         var now = Time.GetTicksMsec() / 1000.0;
@@ -287,7 +287,7 @@ public partial class NetClient : IStandingBodies
     {
         if (kind != EventKind.PhoenixFall || !PhoenixFallCodec.TryDecode(payload, out var id, out _, out var site, out var seconds)) return;
         if (_animals.TryGetValue(id, out var v)) v.Phoenix?.Hit();
-        PhoenixFx.CrashWarning(Owned, new Vector3(site.X, site.Y, site.Z), seconds);
+        PhoenixFx.CrashWarning(Ctx.Owned, new Vector3(site.X, site.Y, site.Z), seconds);
     }
 
     /// <summary>

@@ -33,7 +33,7 @@ public partial class NetClient
 
     /// <summary>The scope that is up, for the HUD's mil-dots and zero: its FOV and the zero dialled on the weapon (0: no bullet drop).</summary>
     (float FovDeg, float ZeroM) ScopeView() =>
-        _me is { ZoomFov: > 0 } me && !_binoculars && Ammo is { } a && CurrentWeapon is { } w && BulletDrop.HasDrop(w) ? (me.ZoomFov, _zero.Of(a.Slot - 1, w)) : (0f, 0f);
+        Ctx.Me is { ZoomFov: > 0 } me && !_binoculars && Ammo is { } a && CurrentWeapon is { } w && BulletDrop.HasDrop(w) ? (me.ZoomFov, _zero.Of(a.Slot - 1, w)) : (0f, 0f);
 
     /// <summary>
     /// The mouse wheel while a scope with bullet drop is up: one click of the zero dial (up: farther). The server is told the new zero and resolves the
@@ -41,7 +41,7 @@ public partial class NetClient
     /// </summary>
     bool DialZero(int clicks)
     {
-        if (_me is not { ZoomFov: > 0 } || _binoculars || Ammo is not { } a || CurrentWeapon is not { } w || !BulletDrop.HasDrop(w)) return false;
+        if (Ctx.Me is not { ZoomFov: > 0 } || _binoculars || Ammo is not { } a || CurrentWeapon is not { } w || !BulletDrop.HasDrop(w)) return false;
         var was = _zero.Of(a.Slot - 1, w);
         var now = BulletDrop.Dial(w, was, clicks);
         if (now == was) return true; // at the end of the dial
@@ -58,26 +58,26 @@ public partial class NetClient
     {
         if (!PredictionOn || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count) return;
         if (a.Slot != _pSlot) { _pSlot = a.Slot; ClearPredictedReload(); } // a reload belongs to the weapon it started on
-        while (_predShots.Count > 0 && Now - _predShots.Peek() > 0.6) _predShots.Dequeue();
-        var inFlight = _predShots.Count(t => Now - t < 0.25); // shots sent but not yet counted by this message
+        while (_predShots.Count > 0 && Ctx.Now - _predShots.Peek() > 0.6) _predShots.Dequeue();
+        var inFlight = _predShots.Count(t => Ctx.Now - t < 0.25); // shots sent but not yet counted by this message
         _pMag = Math.Max(0, a.Slots[a.Slot - 1].Mag - inFlight);
     }
 
     /// <summary>Recovers the recoil offset for this tick and shows it on the camera (the server fires with the same offset).</summary>
     void TickRecoil(MoveInput mi)
     {
-        if (_me == null || CurrentWeapon is not { } w) return;
-        _recoil.Tick(Now, mi.Has(MoveButtons.Fire), w.Recoil);
-        _me.AimKick = new Vector2(_recoil.PitchRad, _recoil.YawRad);
+        if (Ctx.Me == null || CurrentWeapon is not { } w) return;
+        _recoil.Tick(Ctx.Now, mi.Has(MoveButtons.Fire), w.Recoil);
+        Ctx.Me.AimKick = new Vector2(_recoil.PitchRad, _recoil.YawRad);
     }
 
     /// <summary>Advances the sniper breath (the server runs the same state from the same input), plays its sounds (inhale, heartbeat, exhale) and shows the cosmetic sway on the camera.</summary>
     void TickBreath(MoveInput mi)
     {
-        if (_me == null || CurrentWeapon is not { } w) return;
+        if (Ctx.Me == null || CurrentWeapon is not { } w) return;
         var scoped = mi.Has(MoveButtons.Aim) && w.ZoomFov > 0 && Mode.CanScope;
-        _breath.Tick(Now, scoped, mi.Has(MoveButtons.Sprint), w, Loadouts.Perks.HoldBreathTime);
-        var cue = _breathCues.Tick(Now, _breath.Phase, _breath.Meter);
+        _breath.Tick(Ctx.Now, scoped, mi.Has(MoveButtons.Sprint), w, Loadouts.Perks.HoldBreathTime);
+        var cue = _breathCues.Tick(Ctx.Now, _breath.Phase, _breath.Meter);
         if (Sfx.Enabled)
         {
             if (cue.Inhale) Sfx.Play2D("breath.in");
@@ -85,15 +85,15 @@ public partial class NetClient
             if (cue.ForcedExhale) Sfx.Play2D("breath.out");
             else if (cue.Exhale) Sfx.Play2D("breath.out", -8f);
         }
-        var v = BreathState.VisualSway(Now, _breath.SwayDegrees(w));
+        var v = BreathState.VisualSway(Ctx.Now, _breath.SwayDegrees(w));
         // the binoculars are held steady: the weapon's sway is not theirs (it would show at their zoom with a sniper rifle in the hotbar)
-        _me.ViewSway = GameSettings.Current.ReduceMotion || _binoculars ? Vector2.Zero : new Vector2(v.X, v.Y);
+        Ctx.Me.ViewSway = GameSettings.Current.ReduceMotion || _binoculars ? Vector2.Zero : new Vector2(v.X, v.Y);
     }
 
     /// <summary>The breath while scoped with a breath hold (the HUD reads it each frame for the key hint).</summary>
     (bool Show, float Meter, BreathState.BreathPhase Phase) BreathView()
     {
-        if (_me is not { ZoomFov: > 0 } || _binoculars || CurrentWeapon is not { } w || BreathState.BudgetSeconds(w, Loadouts.Perks.HoldBreathTime) <= 0)
+        if (Ctx.Me is not { ZoomFov: > 0 } || _binoculars || CurrentWeapon is not { } w || BreathState.BudgetSeconds(w, Loadouts.Perks.HoldBreathTime) <= 0)
             return (false, 0f, BreathState.BreathPhase.Ready);
         return (true, _breath.Meter, _breath.Phase);
     }
@@ -103,7 +103,7 @@ public partial class NetClient
     {
         if (!PredictionOn || !Mode.CanPredictFire || OwnBodyFlung || Ammo is not { } a || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count || a.Slot != Ctx.Hotbar.Want) return;
         var w = Weapons.Weapons[a.Slot - 1];
-        var now = Now;
+        var now = Ctx.Now;
         if (_pReloadUntil > 0 && now >= _pReloadUntil) { _pMag = _pMagAfter; _pReloadUntil = 0; }
         var reloading = a.ReloadRemaining > 0 || now < _pReloadUntil;
         var (srvMag, reserve) = a.Slots[a.Slot - 1];
@@ -134,10 +134,10 @@ public partial class NetClient
         _pNextFire = now + w.FireInterval;
         if (ranged) _pMag--;
         _predShots.Enqueue(now);
-        if (w.Kind == WeaponKind.Hitscan && _me != null)
+        if (w.Kind == WeaponKind.Hitscan && Ctx.Me != null)
         {
             // same offset step as the server's shot; the viewmodel kicks by the same (ADS / crouch scaled) climb
-            var mult = RecoilState.Multiplier(w.Recoil, mi.Has(MoveButtons.Aim), InArmedSeat ? Stance.Stand : _me.State.Stance); // a seat steadies it no more than standing does, as on the server
+            var mult = RecoilState.Multiplier(w.Recoil, mi.Has(MoveButtons.Aim), InArmedSeat ? Stance.Stand : Ctx.Me.State.Stance); // a seat steadies it no more than standing does, as on the server
             _recoil.Shot(w.Recoil, mult);
             _breath.AimError(_breath.SwayDegrees(w)); // the server's per-shot aim error; kept in step (the tracer follows the camera, like recoil)
             _viewmodel?.Kick(w.Recoil.VerticalPerShot * mult);
@@ -165,8 +165,8 @@ public partial class NetClient
 
     void StartPredictedReload(WeaponDef w, int reserve)
     {
-        if (w.ReloadTime <= 0 || Now < _pReloadUntil) return;
-        _pReloadUntil = Now + w.ReloadTime;
+        if (w.ReloadTime <= 0 || Ctx.Now < _pReloadUntil) return;
+        _pReloadUntil = Ctx.Now + w.ReloadTime;
         // a shell reload predicts one shell; the server's ammo message after each shell re-syncs the rest
         _pMagAfter = Math.Min(w.MagazineSize, Math.Max(0, _pMag) + (w.ShellReload ? 1 : reserve));
         Sfx.Play2D(SoundRules.Event("reload", w.Id));
@@ -175,27 +175,27 @@ public partial class NetClient
     /// <summary>Sound, muzzle flash and tracer for the own shot, from the camera aim (spread is not predicted).</summary>
     void OwnShotFx(WeaponDef w)
     {
-        if (_me == null) return;
+        if (Ctx.Me == null) return;
         var melee = w.Kind == WeaponKind.Melee;
         var projectile = w.Kind == WeaponKind.Projectile;
         Sfx.Play2D(SoundRules.Event(projectile ? "launch" : "shot", w.Id));
         if (melee) return;
-        var cam = _me.Camera;
+        var cam = Ctx.Me.Camera;
         var from = cam.GlobalPosition;
         var dir = -cam.GlobalTransform.Basis.Z;
-        var muzzle = _me.ZoomFov > 0 ? from + dir * 0.6f : _viewmodel?.MuzzlePosition ?? from + dir * 0.8f; // scoped: the streak leaves the crosshair, the gun is hidden
+        var muzzle = Ctx.Me.ZoomFov > 0 ? from + dir * 0.6f : _viewmodel?.MuzzlePosition ?? from + dir * 0.8f; // scoped: the streak leaves the crosshair, the gun is hidden
         if (w.Grenade == null) _viewmodel?.Flash(projectile ? 0.5f : 0.4f);
         if (w.Grenade != null) { _viewmodel?.Kick(6f); return; } // a throw: the hand jumps, nothing blows back
         if (projectile)
         {
             // a launcher: the tube jumps (weapons.json recoil, the viewmodel only: a rocket has no spread to climb) and throws its backblast out of the rear
             _viewmodel?.Kick(w.Recoil.VerticalPerShot);
-            RocketFx.Backblast(Owned, (_viewmodel?.MuzzlePosition ?? from) - dir * (WeaponFx.LauncherRear + 0.2f), dir);
+            RocketFx.Backblast(Ctx.Owned, (_viewmodel?.MuzzlePosition ?? from) - dir * (WeaponFx.LauncherRear + 0.2f), dir);
             return;
         }
-        if (CasingFx.KindOf(w) is { } ck) CasingFx.Eject(Owned, muzzle, dir, ck); // the rocket itself comes from the server
+        if (CasingFx.KindOf(w) is { } ck) CasingFx.Eject(Ctx.Owned, muzzle, dir, ck); // the rocket itself comes from the server
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * 300f, CollisionLayers.WorldShots); // not the vehicles' solid boxes: VehicleAlong finds a vehicle
-        q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
+        q.Exclude = new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
         var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         var worldDist = hit.Count == 0 ? 300f : from.DistanceTo(hit["position"].AsVector3());
         if (VehicleAlong(from, dir, MathF.Min(300f, worldDist), out var car, out var vh, Ctx.Cars.MySeat()?.Car))
@@ -203,21 +203,21 @@ public partial class NetClient
             // the predicted shot stops on a car: the tracer ends on its hit box, the hole rides the car's node
             var vat = ToWorld(car, G(vh.Local));
             var vnormal = car.Node.GlobalTransform.Basis * G(vh.LocalNormal);
-            ShotFx.Spawn(Owned, muzzle, vat, false, true, vnormal);
+            ShotFx.Spawn(Ctx.Owned, muzzle, vat, false, true, vnormal);
             Sfx.Play3D("impact", vat);
-            BulletHoles.PlaceOn(Owned, GlassClient.HostOf(car.Node), G(vh.Local), G(vh.LocalNormal));
+            BulletHoles.PlaceOn(Ctx.Owned, GlassClient.HostOf(car.Node), G(vh.Local), G(vh.LocalNormal));
             return;
         }
         var end = hit.Count > 0 ? hit["position"].AsVector3() : from + dir * 300f;
-        ShotFx.Spawn(Owned, muzzle, end, false, true, hit.Count > 0 ? hit["normal"].AsVector3() : null);
-        if (hit.Count > 0) { Sfx.Play3D("impact", end); if (hit["collider"].AsGodotObject() is CollisionObject3D { CollisionLayer: var l } && (l & CollisionLayers.WorldShots) != 0) BulletHoles.Place(Owned, end, hit["normal"].AsVector3()); }
+        ShotFx.Spawn(Ctx.Owned, muzzle, end, false, true, hit.Count > 0 ? hit["normal"].AsVector3() : null);
+        if (hit.Count > 0) { Sfx.Play3D("impact", end); if (hit["collider"].AsGodotObject() is CollisionObject3D { CollisionLayer: var l } && (l & CollisionLayers.WorldShots) != 0) BulletHoles.Place(Ctx.Owned, end, hit["normal"].AsVector3()); }
     }
 
     /// <summary>True when this server event is the echo of a shot already shown by prediction (consumes one prediction).</summary>
     bool EchoOfPredicted(ushort owner)
     {
-        if (owner != _myId || !PredictionOn) return false;
-        while (_predShots.Count > 0 && Now - _predShots.Peek() > 1.0) _predShots.Dequeue(); // the server never answered: drop it
+        if (owner != Ctx.MyId || !PredictionOn) return false;
+        while (_predShots.Count > 0 && Ctx.Now - _predShots.Peek() > 1.0) _predShots.Dequeue(); // the server never answered: drop it
         if (_predShots.Count == 0) return false;
         _predShots.Dequeue();
         return true;
@@ -226,8 +226,8 @@ public partial class NetClient
     /// <summary>Where a shot of <paramref name="id"/> visibly leaves the weapon; <paramref name="fallback"/> (the eye) when nothing better is known.</summary>
     Vector3 MuzzleOf(ushort id, Vector3 fallback, Vector3 end)
     {
-        if (id == _myId) return _me is { ZoomFov: > 0 } ? fallback + (end - fallback).Normalized() * 0.6f : _viewmodel?.MuzzlePosition ?? fallback;
-        if (!_remotes.TryGetValue(id, out var r)) return fallback;
+        if (id == Ctx.MyId) return Ctx.Me is { ZoomFov: > 0 } ? fallback + (end - fallback).Normalized() * 0.6f : _viewmodel?.MuzzlePosition ?? fallback;
+        if (!Ctx.Remotes.TryGetValue(id, out var r)) return fallback;
         var chest = r.Node.GlobalPosition + Vector3.Up * 1.3f;
         var dir = (end - fallback).Normalized();
         var fwd = new Vector3(dir.X, 0, dir.Z).Normalized();
@@ -252,13 +252,13 @@ public partial class NetClient
 
     void FxVehicleDemoInput(ref MoveInput mi)
     {
-        if (_me == null || _peer == null || Ctx.Cars.Count == 0) return;
+        if (Ctx.Me == null || _peer == null || Ctx.Cars.Count == 0) return;
         var dir = FxDemo["vehicle:".Length..];
-        if (_demoStart == 0) { _demoStart = Now; System.IO.Directory.CreateDirectory(dir); }
-        var t = Now - _demoStart;
+        if (_demoStart == 0) { _demoStart = Ctx.Now; System.IO.Directory.CreateDirectory(dir); }
+        var t = Ctx.Now - _demoStart;
         var c = new NVec3(NetServer.ArenaX, 0, NetServer.ArenaZ);
-        if (!_demoTp) { _demoTp = true; Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(_myId, c + new NVec3(2, 0, -42)))), (int)ENetPacketPeer.FlagReliable); }
-        mi.Yaw = MathF.PI; _me.Pitch = -0.08f;
+        if (!_demoTp) { _demoTp = true; Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(Ctx.MyId, c + new NVec3(2, 0, -42)))), (int)ENetPacketPeer.FlagReliable); }
+        mi.Yaw = MathF.PI; Ctx.Me.Pitch = -0.08f;
         if (_vdHit < VehicleDemoHits.Length && t >= VehicleDemoHits[_vdHit].T)
         {
             Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugVehicleDamage(VehicleRecord.FirstId, VehicleDemoHits[_vdHit++].Damage))), (int)ENetPacketPeer.FlagReliable);
@@ -274,15 +274,15 @@ public partial class NetClient
 
     void FxDriveDemoInput(ref MoveInput mi)
     {
-        if (_me == null || _peer == null || Ctx.Cars.Count == 0) return;
+        if (Ctx.Me == null || _peer == null || Ctx.Cars.Count == 0) return;
         var dir = FxDemo["drive:".Length..];
-        if (_demoStart == 0) { _demoStart = Now; System.IO.Directory.CreateDirectory(dir); }
-        var t = Now - _demoStart;
+        if (_demoStart == 0) { _demoStart = Ctx.Now; System.IO.Directory.CreateDirectory(dir); }
+        var t = Ctx.Now - _demoStart;
         if (!_demoTp)
         {
             if (t < 1.5) return; // let a few snapshots in
             _demoTp = true;
-            var me0 = _me.State.Position;
+            var me0 = Ctx.Me.State.Position;
             var pick = Ctx.Cars.ById.OrderBy(c => NVec3.Distance(c.Value.Pos, me0)).First();
             _ddCar = pick.Key; _ddStart = pick.Value.Pos;
             var at = pick.Value.Pos + new NVec3(0, 0.3f, 4.5f); // behind the car's rear is +Z for yaw 0; stand there, look at it
@@ -291,11 +291,11 @@ public partial class NetClient
             at = pick.Value.Pos + side + new NVec3(0, 0.3f, 0);
             _ddYaw = yaw;
             GD.Print($"drive-demo: nearest vehicle {pick.Key} kind {pick.Value.Kind} at {pick.Value.Pos}, teleport to {at}, distance before {NVec3.Distance(pick.Value.Pos, me0):F0} m");
-            Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(_myId, at))), (int)ENetPacketPeer.FlagReliable);
+            Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(Ctx.MyId, at))), (int)ENetPacketPeer.FlagReliable);
             _conn.Flush();
         }
         if (!Ctx.Driving) mi.Yaw = _ddYaw;
-        if (!Ctx.Driving) _me.Pitch = -0.1f;
+        if (!Ctx.Driving) Ctx.Me.Pitch = -0.1f;
         if (_ddShot < DriveShots.Length && t >= DriveShots[_ddShot]) _ = DemoShot(dir, DriveShots[_ddShot++]);
         var pos = Ctx.Cars.TryGet(_ddCar, out var cv) ? cv.Pos : _ddStart;
         if (t is > 4.5 and < 4.6) { mi.Buttons |= MoveButtons.Use; GD.Print($"drive-demo: E pressed, hint='{Strings.F("hud.vehicle.enter", InputBindings.Name("interact"))}' driving={Ctx.Driving}"); }
@@ -311,16 +311,16 @@ public partial class NetClient
     {
         if (FxDemo.StartsWith("drive:")) { FxDriveDemoInput(ref mi); return; }
         if (FxDemo.StartsWith("vehicle:")) { FxVehicleDemoInput(ref mi); return; }
-        if (FxDemo == "" || _me == null) return;
-        if (_demoStart == 0) { _demoStart = Now; System.IO.Directory.CreateDirectory(FxDemo); }
-        var t = Now - _demoStart;
+        if (FxDemo == "" || Ctx.Me == null) return;
+        if (_demoStart == 0) { _demoStart = Ctx.Now; System.IO.Directory.CreateDirectory(FxDemo); }
+        var t = Ctx.Now - _demoStart;
         if (!_demoTp && _peer != null)
         {
             _demoTp = true; // open ground, away from the cars that some spawns sit in
-            Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(_myId, new NVec3(-78f, 191.2f, 52.9f)))), (int)ENetPacketPeer.FlagReliable);
+            Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(Ctx.MyId, new NVec3(-78f, 191.2f, 52.9f)))), (int)ENetPacketPeer.FlagReliable);
         }
         Ctx.Hotbar.Want = t < 6 ? 3 : 2;
-        _me.Pitch = t < 6 ? -0.2f : -0.05f;
+        Ctx.Me.Pitch = t < 6 ? -0.2f : -0.05f;
         if (t > 7) { mi.MoveX = t < 7.2 ? 1 : -1; mi.Yaw += (float)(t - 7) * 0.8f; } // strafe + turn: the flash must stay on the barrel
         if ((t is > 3 and < 3.1) || (t is > 7 and < 8)) mi.Buttons |= MoveButtons.Fire;
         if (_demoNext < DemoShots.Length && t >= DemoShots[_demoNext]) _ = DemoShot(FxDemo, DemoShots[_demoNext++]);
@@ -331,11 +331,11 @@ public partial class NetClient
             if (_wallStep == 2 * k && t > 8 + 1.7 * k && _peer != null)
             {
                 _wallStep++; GD.Print($"fx-demo: wall spot {k}");
-                Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(_myId, wallSpots[k]))), (int)ENetPacketPeer.FlagReliable);
+                Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(Ctx.MyId, wallSpots[k]))), (int)ENetPacketPeer.FlagReliable);
             }
             else if (_wallStep == 2 * k + 1 && t > 9.2 + 1.7 * k)
             {
-                _wallStep++; var best = 1e9f; var from = _me.Camera.GlobalPosition;
+                _wallStep++; var best = 1e9f; var from = Ctx.Me.Camera.GlobalPosition;
                 for (var i = 0; i < 24; i++)
                 {
                     var yaw = i * Mathf.Tau / 24;
@@ -357,8 +357,8 @@ public partial class NetClient
         }
         if (t > 8 && _wallYaw is { } wy)
         {
-            mi.Yaw = wy; _me.Pitch = 0;
-            var o = _me.Camera.GlobalPosition; var fw = -_me.Camera.GlobalTransform.Basis.Z;
+            mi.Yaw = wy; Ctx.Me.Pitch = 0;
+            var o = Ctx.Me.Camera.GlobalPosition; var fw = -Ctx.Me.Camera.GlobalTransform.Basis.Z;
             var ahead = World.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(o, o + fw * 40f, 1));
             if (t < 12.5 && (ahead.Count == 0 || o.DistanceTo(ahead["position"].AsVector3()) > 3f)) mi.MoveY = 1;
         }

@@ -32,7 +32,7 @@ public partial class NetClient
         if (Vehicles == null) return; // never let a missing table abort the rest of the snapshot
         if (!Ctx.Cars.TryGet(id, out var v))
         {
-            v = new CarView { Id = id, Node = CarFx.Make(Owned, Vehicles!.Vehicles[Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1)], VehicleRecord.Colour(rec)), Kind = Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1), Pos = rec.Position, Yaw = rec.YawRad };
+            v = new CarView { Id = id, Node = CarFx.Make(Ctx.Owned, Vehicles!.Vehicles[Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1)], VehicleRecord.Colour(rec)), Kind = Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1), Pos = rec.Position, Yaw = rec.YawRad };
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flak != null) v.Flak = FlakNodes.Find(v.Node);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].DoorGun is { } doorGun) v.DoorGun = DoorGunNodes.Find(v.Node, doorGun);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flight != null) v.Rotor = RotorFx.Find(v.Node);
@@ -43,7 +43,7 @@ public partial class NetClient
             Ctx.Cars.Add(v);
             _glass.ShowOf(id); // panes whose state arrived before the vehicle was drawn (ADR 0007)
         }
-        v.Solid ??= VehicleCollider.Make(Owned, Vehicles.Vehicles[v.Kind]);
+        v.Solid ??= VehicleCollider.Make(Ctx.Owned, Vehicles.Vehicles[v.Kind]);
         v.Lamps ??= ShotFx.Enabled ? CarLights.Attach(v.Node, Vehicles!.Vehicles[v.Kind]) : null;
         if (v.Trailer != null) { OnTrailerRecord(v, rec); v.Driver = 0; } // a trailer's pitch field is its tractor's id, not a driver's (protocol 67)
         else v.Driver = VehicleRecord.Driver(rec);
@@ -95,7 +95,7 @@ public partial class NetClient
             return;
         }
         // the blast event is reliable and can overtake a snapshot that still shows the old damage stage: ignore those for a second, or they would bring the smoke back on a gone vehicle
-        if (v.Exploded && Now - v.ExplodedAt < 1.0) return;
+        if (v.Exploded && Ctx.Now - v.ExplodedAt < 1.0) return;
         // a live record after the blast means the server returned it (30 s later): it is shown again, and only then
         if (v.Destroyed) { v.Destroyed = false; v.Exploded = false; v.Node.Visible = true; }
         if (!ShotFx.Enabled) return;
@@ -110,17 +110,17 @@ public partial class NetClient
         v.Snd?.Release(); v.Snd = null; v.Engine?.Release();
         v.Rotor?.Stop();
         v.Drive?.Stop();
-        v.ExplodedAt = Now;
+        v.ExplodedAt = Ctx.Now;
         if (v.Smoke != null) { v.Smoke.Stop(); v.Smoke.QueueFree(); v.Smoke = null; } // freed with its particles, not just stopped: nothing of the smoke outlives the vehicle
         v.Destroyed = true; // the wreck is gone until the server returns it: a live record must not bring it back or its smoke
         v.Node.Visible = false;
-        VehicleFx.Explode(Owned, at, radius);
+        VehicleFx.Explode(Ctx.Owned, at, radius);
         _blastDust.BlastFelt(at, radius, "explosion.vehicle");
     }
 
     void OnVehicleExplosion(VehicleExplosionMsg m)
     {
-        if (KeepEventLogs) _logs.VehicleExplosions.Add((Now, m));
+        if (KeepEventLogs) _logs.VehicleExplosions.Add((Ctx.Now, m));
         if (Ctx.Cars.TryGet(m.Id, out var v) && !v.Exploded) ExplodeVehicle(v, new Vector3(m.Position.X, m.Position.Y, m.Position.Z), m.Radius);
     }
 
@@ -146,7 +146,7 @@ public partial class NetClient
 
     void RenderCars()
     {
-        if (_lastTick == 0) return;
+        if (Ctx.LastTick == 0) return;
         var rt = RenderTickNow();
         float? kmh = null;
         // real spot lights go to the nearest lit vehicles only (CarLights.MaxBeams); the others show their cones and lenses
@@ -185,7 +185,7 @@ public partial class NetClient
             else SfxCar(v, p, dt);
             if (drive != null) StepDriveFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
             else v.Roller?.Step(p, rot.Y, dt); // wheels of a vehicle that is not predicted: from its drawn motion
-            var seat = Ctx.Driving && _me != null ? OwnSeatIn(v) : -1; // the seat the local player has in this vehicle
+            var seat = Ctx.Driving && Ctx.Me != null ? OwnSeatIn(v) : -1; // the seat the local player has in this vehicle
             if (seat >= 0) TrackView(v, seat);
             if (seat == 0 || seat > 0 && !flakMine)
             {
@@ -199,7 +199,7 @@ public partial class NetClient
                     {
                         if (flies) ChaseFlight(v, p, rot, dt);
                         else if (drive != null) ChaseDrive(v, drive, p, rot, dt);
-                        else _me!.Chase(p, s.Yaw, Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null, dt);
+                        else Ctx.Me!.Chase(p, s.Yaw, Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null, dt);
                         ShowSelfInCar(v, seat, viewerHides: false);
                     }
                     if (seat == 0 && flies) { flown = FlightOf(v); chased = true; }
@@ -212,28 +212,28 @@ public partial class NetClient
         SeatRiders(); // the riders of every vehicle, on their seats as the vehicles are drawn this frame (ADR 0026)
         if (!Ctx.Driving) { HideSelfInCar(); LeaveView(); }
         if (!cockpit) EndCockpit();
-        if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) _me?.EndChase(_me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
-        if (!Ctx.Driving && _gunship == null) _me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
-        _hud?.SetSeats(Ctx.Cars.SeatPanel());
-        if (flakGunner) _hud?.SetVehicleReadout(doorGunner ? DoorGunReadout() : FlakReadout());
-        else if (flown is { } fr) _hud?.SetVehicleReadout(FlightReadout(fr));
-        else _hud?.SetVehicleSpeed(Ctx.Driving ? kmh ?? 0f : null);
+        if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) Ctx.Me?.EndChase(Ctx.Me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
+        if (!Ctx.Driving && _gunship == null) Ctx.Me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
+        Ctx.Hud?.SetSeats(Ctx.Cars.SeatPanel());
+        if (flakGunner) Ctx.Hud?.SetVehicleReadout(doorGunner ? DoorGunReadout() : FlakReadout());
+        else if (flown is { } fr) Ctx.Hud?.SetVehicleReadout(FlightReadout(fr));
+        else Ctx.Hud?.SetVehicleSpeed(Ctx.Driving ? kmh ?? 0f : null);
         string? prompt = null;
         if (Ctx.Driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : Ctx.Cars.MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         if (driven != null && prompt != null && TowHint(driven) is { } towHint) prompt += "     " + towHint; // a trailer on the hook: the key that unhitches it
         if (Ctx.Driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
         if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);
-        else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
-        _hud?.SetPrompt(LadderPrompt() ?? TurretPrompt() ?? _thieves.Loot.Prompt() ?? _doors.GarageDoorPrompt(Ctx.Driving) ?? ScudLoadPrompt(prompt) ?? prompt ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? _minerals.Prompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt() ?? LadderReachPrompt()); // a placing turret owns the prompt
+        else if (Ctx.Me != null && !Dead && NearestFreeCar(Ctx.Me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
+        Ctx.Hud?.SetPrompt(LadderPrompt() ?? TurretPrompt() ?? _thieves.Loot.Prompt() ?? _doors.GarageDoorPrompt(Ctx.Driving) ?? ScudLoadPrompt(prompt) ?? prompt ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? _minerals.Prompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt() ?? LadderReachPrompt()); // a placing turret owns the prompt
     }
 
     /// <summary>On a ladder: the keys that work there. The prompt that owns the line (nothing else is in reach on a rung).</summary>
-    string? LadderPrompt() => _me is { State.OnLadder: true } && !Dead
+    string? LadderPrompt() => Ctx.Me is { State.OnLadder: true } && !Dead
         ? Strings.F("hud.ladder.release", InputBindings.Name("interact"), InputBindings.Name("jump"), InputBindings.Name("move_forward"), InputBindings.Name("move_back"))
         : null;
 
     /// <summary>A ladder in reach (the same test as getting on): the key that gets on. Last in the chain, as the interact key's lowest-priority target after the loot.</summary>
-    string? LadderReachPrompt() => _me != null && !Dead && !Ctx.Driving && _me.Ladders.Count > 0 && _me.Ladders.Reach(_me.State.Position, _me.Yaw) >= 0
+    string? LadderReachPrompt() => Ctx.Me != null && !Dead && !Ctx.Driving && Ctx.Me.Ladders.Count > 0 && Ctx.Me.Ladders.Reach(Ctx.Me.State.Position, Ctx.Me.Yaw) >= 0
         ? Strings.F("hud.ladder.climb", InputBindings.Name("interact"))
         : null;
 
@@ -254,8 +254,8 @@ public partial class NetClient
         {
             _selfView?.QueueFree();
             _selfView = CharacterView.Make();
-            Camo.Dress(_selfView, _myId);
-            DressPlayer(_selfView, _myId); // the headgear shows in the seat too (#266)
+            Camo.Dress(_selfView, Ctx.MyId);
+            DressPlayer(_selfView, Ctx.MyId); // the headgear shows in the seat too (#266)
             _selfView.SetStance(Stance.Crouch); // seated: there is no sitting animation, the crouch squash is the closest pose
             anchor.AddChild(_selfView);
             _selfViewerHides = viewerHides;
@@ -330,10 +330,10 @@ public partial class NetClient
         if (len < 0.05f) return;
         if (VehicleAlong(from, d / len, len + 0.5f, out var car, out var hit) && hit.Distance >= len - 0.5f)
         {
-            BulletHoles.PlaceOn(Owned, GlassClient.HostOf(car.Node), G(hit.Local), G(hit.LocalNormal));
+            BulletHoles.PlaceOn(Ctx.Owned, GlassClient.HostOf(car.Node), G(hit.Local), G(hit.LocalNormal));
             return;
         }
-        BulletHoles.PlaceFromShot(Owned, from, end);
+        BulletHoles.PlaceFromShot(Ctx.Owned, from, end);
     }
 
     CarView? NearestFreeCar(Vector3 p)

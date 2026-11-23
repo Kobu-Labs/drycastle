@@ -30,7 +30,7 @@ public partial class NetClient
 
     void ReportSnapshot(uint tick)
     {
-        var now = Now;
+        var now = Ctx.Now;
         if (_rpLastArr > 0) _rpGapMax = Math.Max(_rpGapMax, (now - _rpLastArr) * 1000);
         if (_rpLastTick != 0 && tick > _rpLastTick + 1) _rpTickSkips += (int)(tick - _rpLastTick - 1);
         _rpLastArr = now; _rpLastTick = tick; _rpSnaps++;
@@ -57,7 +57,7 @@ public partial class NetClient
     void ReportFrame(double delta)
     {
         if (Bot || LinkEnded || !_welcomed || _peer == null) return;
-        var now = Now;
+        var now = Ctx.Now;
         if (_rpStart < 0)
         {
             if (DisplayServer.GetName() == "headless") { _rpStart = double.MaxValue; return; }
@@ -135,7 +135,7 @@ public partial class NetClient
         Set("reconciles", _recon - _rpRecon0); Set("pred_err_max_m", _rpErrMax);
         Set("in_kb_s", _conn.PopStatistic(ENetConnection.HostStatistic.ReceivedData) / secs / 1000);
         Set("out_kb_s", _conn.PopStatistic(ENetConnection.HostStatistic.SentData) / secs / 1000);
-        Set("remotes", _remotes.Count); Set("world_entities", WorldEntities.Entities.Count);
+        Set("remotes", Ctx.Remotes.Count); Set("world_entities", WorldEntities.Entities.Count);
         var size = GetViewport().GetVisibleRect().Size; // what is drawn (the window's size unless the picture is scaled)
         Set("res_w", size.X); Set("res_h", size.Y); Set("driving", Ctx.Driving ? 1 : 0);
         ClientProf.Take(secs, _rpScopes);
@@ -153,7 +153,7 @@ public partial class NetClient
         var buttons = MoveButtons.Sprint;
         if ((int)(t * 30) % 45 == 0) buttons |= MoveButtons.Jump;
         if (t % 2.0 < 0.5) buttons = (buttons & ~MoveButtons.Sprint) | MoveButtons.Fire;
-        _me!.Yaw = yaw;
+        Ctx.Me!.Yaw = yaw;
         return new MoveInput { MoveY = 1, Yaw = yaw, Buttons = buttons, SpeedScale = 1 };
     }
 }

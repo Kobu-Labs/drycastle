@@ -75,12 +75,12 @@ public partial class NetClient
         var f = v.Flak!;
         var def = Vehicles!.Vehicles[v.Kind].Flak!;
         _turretAims.TryGetValue(v.Id, out var aim);
-        var mine = aim != null && aim.Gunner == _myId && Ctx.Driving && !Dead && _me != null;
+        var mine = aim != null && aim.Gunner == Ctx.MyId && Ctx.Driving && !Dead && Ctx.Me != null;
         float yaw, pitch;
         if (mine)
         {
-            _me!.Pitch = FlakRules.ClampPitch(def, _me.Pitch); // the mouse look is the aim, kept inside the barrels' elevation
-            yaw = _me.Yaw; pitch = _me.Pitch;
+            Ctx.Me!.Pitch = FlakRules.ClampPitch(def, Ctx.Me.Pitch); // the mouse look is the aim, kept inside the barrels' elevation
+            yaw = Ctx.Me.Yaw; pitch = Ctx.Me.Pitch;
         }
         else if (aim?.Buf.At(rt) is { } a) { yaw = a.Yaw; pitch = a.Pitch; }
         else { yaw = s.Yaw; pitch = FlakRules.ClampPitch(def, 0); }
@@ -89,9 +89,9 @@ public partial class NetClient
         f.Step(dt);
         if (!mine) return false;
         var body = v.Node.GlobalPosition;
-        _me!.GlobalPosition = body;
+        Ctx.Me!.GlobalPosition = body;
         // over the guns: fixed to the cradle behind the breeches and above the barrels, so the barrels run parallel to the view and the crosshair sits just above them
-        _me.Turret(f.Cradle.ToGlobal(GunnerEye), yaw, pitch);
+        Ctx.Me.Turret(f.Cradle.ToGlobal(GunnerEye), yaw, pitch);
         _flakCamera = true;
         return true;
     }

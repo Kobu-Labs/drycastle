@@ -100,7 +100,7 @@ public partial class NetClient
         var (mesh, local) = BirdMesh(kind);
         var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = mesh, InstanceCount = birds };
         var node = new MultiMeshInstance3D { Name = $"Flock{e.Id}", Multimesh = mm, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, ExtraCullMargin = 100 };
-        Owned.AddChild(node);
+        Ctx.Owned.AddChild(node);
         var p = e.State.Position;
         var rng = new Random(e.Id);
         var phase = new float[birds];
@@ -138,7 +138,7 @@ public partial class NetClient
     /// <summary>Flies every flock's boids one frame around the flock's centre (round the aircraft) and writes the birds' transforms.</summary>
     void RenderFlocks(double delta)
     {
-        if (_flocks.Count == 0 || _lastTick == 0) return;
+        if (_flocks.Count == 0 || Ctx.LastTick == 0) return;
         _flockClock += delta;
         var rt = RenderTickNow();
         CollectFlockObstacles(delta, rt);

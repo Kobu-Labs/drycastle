@@ -140,7 +140,7 @@ public partial class NetClient
                 _bagItems = bag;
                 _wornView = View(worn);
                 _bagView = View(bag);
-                SetWornOf(_myId, worn.Select(w => (int?)w?.Item).ToArray()); // the seat view of the local player
+                SetWornOf(Ctx.MyId, worn.Select(w => (int?)w?.Item).ToArray()); // the seat view of the local player
                 ItemsChanged?.Invoke();
                 break;
             case EventKind.WornItems when ItemEvents.TryDecodeWorn(payload, out var player, out var others):
@@ -171,8 +171,8 @@ public partial class NetClient
     void SetWornOf(ushort player, int?[] slots)
     {
         _wornBy[player] = slots;
-        if (_remotes.TryGetValue(player, out var r) && r.View != null) Dress(r.View, slots);
-        if (player == _myId && _selfView != null) Dress(_selfView, slots);
+        if (Ctx.Remotes.TryGetValue(player, out var r) && r.View != null) Dress(r.View, slots);
+        if (player == Ctx.MyId && _selfView != null) Dress(_selfView, slots);
     }
 
     /// <summary>Forgets a player who left.</summary>

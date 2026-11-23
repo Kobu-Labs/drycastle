@@ -38,14 +38,14 @@ public partial class NetClient
     void OnMissileSpawned(WorldReplica.Entity e)
     {
         if (e.Type != AttackMissileRules.TypeId) return;
-        _missiles[e.Id] = new Rocket { Node = RocketFx.Make(Owned), Born = Now, At = Now };
+        _missiles[e.Id] = new Rocket { Node = RocketFx.Make(Ctx.Owned), Born = Ctx.Now, At = Ctx.Now };
     }
 
     void OnMissileDespawned(ushort id)
     {
         if (!_missiles.Remove(id, out var r)) return;
         r.Snd?.Release();
-        RocketFx.Retire(Owned, r.Node);
+        RocketFx.Retire(Ctx.Owned, r.Node);
     }
 
     /// <summary>Owner-only: the streak was used. The attack missile hands the owner its point of view.</summary>
@@ -53,7 +53,7 @@ public partial class NetClient
     {
         if (streakId != AttackMissileStreak.StreakId) return;
         _controlling = true;
-        _povSince = Now;
+        _povSince = Ctx.Now;
     }
 
     /// <summary>Owner-only: the streak ended (impact, timeout, or death). The point of view goes back to the body.</summary>
@@ -85,7 +85,7 @@ public partial class NetClient
             r.Node.GlobalPosition = at;
             if (Mathf.Abs(d.Y) < 0.99f) r.Node.LookAt(at + new Vector3(d.X, d.Y, d.Z));
             // the owner sees the view, not the model
-            r.Node.Visible = s.Owner != _myId;
+            r.Node.Visible = s.Owner != Ctx.MyId;
             SfxRocket(r, at);
         }
     }
@@ -94,54 +94,54 @@ public partial class NetClient
     ushort? OwnMissile()
     {
         foreach (var (id, e) in WorldEntities.Entities)
-            if (e.Type == AttackMissileRules.TypeId && e.State.Owner == _myId && _missiles.ContainsKey(id)) return id;
+            if (e.Type == AttackMissileRules.TypeId && e.State.Owner == Ctx.MyId && _missiles.ContainsKey(id)) return id;
         return null;
     }
 
     /// <summary>The POV camera sits on the missile and looks along the owner's aim (kept near the missile's heading), and the overlay reads altitude and time. Back to the body's camera when control ends.</summary>
     void RenderMissilePov()
     {
-        if (_me == null || _pov == null) return;
+        if (Ctx.Me == null || _pov == null) return;
         var id = _controlling ? OwnMissile() : null;
         if (id is not { } mid || !WorldEntities.Entities.TryGetValue(mid, out var e))
         {
             if (_povCam is { Current: true })
             {
-                _povCam.Current = false; _me.Camera.Current = true;
-                if (_lookBeforeMissile is { } look) { _me.Yaw = look.Yaw; _me.Pitch = look.Pitch; _lookBeforeMissile = null; }
+                _povCam.Current = false; Ctx.Me.Camera.Current = true;
+                if (_lookBeforeMissile is { } look) { Ctx.Me.Yaw = look.Yaw; Ctx.Me.Pitch = look.Pitch; _lookBeforeMissile = null; }
             }
             _pov.SetOn(false);
             _pov.SetMarkers(null, null);
             return;
         }
         _povCam ??= new Camera3D { Fov = 75, Far = 2000 };
-        if (!_povCam.IsInsideTree()) Owned.AddChild(_povCam);
+        if (!_povCam.IsInsideTree()) Ctx.Owned.AddChild(_povCam);
         var s = e.State;
         var p = s.Position;
         var tuning = Killstreaks?.Find(AttackMissileStreak.StreakId)?.Missile;
         if (!_povCam.Current)
         {
             // control starts: the aim starts on the missile's heading (not the body's look, which would turn it at once); the body's look comes back at the end
-            _lookBeforeMissile = (_me.Yaw, _me.Pitch);
-            _me.Yaw = s.YawRad; _me.Pitch = s.PitchRad;
+            _lookBeforeMissile = (Ctx.Me.Yaw, Ctx.Me.Pitch);
+            Ctx.Me.Yaw = s.YawRad; Ctx.Me.Pitch = s.PitchRad;
         }
         ClampMissileAim(s.YawRad, tuning);
         // the view is the aim: the mouse turns it at once and the missile turns after it, so the view moves only when the mouse does.
         // The position is the interpolated pose (the state alone steps at the snapshot rate).
         var at = e.Buf.At(RenderTickNow())?.Pos ?? p;
         _povCam.GlobalPosition = new Vector3(at.X, at.Y, at.Z);
-        _missileViewYaw = _me.Yaw;
-        _povCam.Rotation = new Vector3(_me.Pitch, _me.Yaw, 0); // Godot's YXZ order: the same heading HitMath.Forward gives
-        _me.Camera.Current = false;
+        _missileViewYaw = Ctx.Me.Yaw;
+        _povCam.Rotation = new Vector3(Ctx.Me.Pitch, Ctx.Me.Yaw, 0); // Godot's YXZ order: the same heading HitMath.Forward gives
+        Ctx.Me.Camera.Current = false;
         _povCam.Current = true;
         _pov.SetOn(true);
         _pov.SetMarkers(_povCam, EnemyMarkerPoints());
         // the estimate: height over the speed's downward part, on flat ground at the body's height (the ground under it is not sent)
-        var alt = p.Y - _me.GlobalPosition.Y;
+        var alt = p.Y - Ctx.Me.GlobalPosition.Y;
         var missile = Killstreaks?.Find(AttackMissileStreak.StreakId)?.Missile;
         var sink = missile == null ? 0f : missile.SpeedMps * MathF.Sin(-s.PitchRad);
         var eta = sink > 0 ? MathF.Max(0, alt) / sink : float.NaN;
-        _pov.SetReadout(alt, Now - _povSince, eta);
+        _pov.SetReadout(alt, Ctx.Now - _povSince, eta);
     }
 
     /// <summary>The owner's aim leads the missile by at most this much (yaw), radians: the mouse steers a bounded lead, it never winds up beyond what the missile can follow.</summary>
@@ -155,19 +155,19 @@ public partial class NetClient
     /// </summary>
     void ClampMissileAim(float missileYaw, MissileTuning? t)
     {
-        if (_me == null) return;
-        if (t != null) _me.Pitch = Mathf.Clamp(_me.Pitch, t.SteepPitchRad, t.ShallowPitchRad);
-        var lead = Mathf.Wrap(_me.Yaw - missileYaw, -Mathf.Pi, Mathf.Pi);
-        _me.Yaw = missileYaw + Mathf.Clamp(lead, -MissileMaxLeadRad, MissileMaxLeadRad);
+        if (Ctx.Me == null) return;
+        if (t != null) Ctx.Me.Pitch = Mathf.Clamp(Ctx.Me.Pitch, t.SteepPitchRad, t.ShallowPitchRad);
+        var lead = Mathf.Wrap(Ctx.Me.Yaw - missileYaw, -Mathf.Pi, Mathf.Pi);
+        Ctx.Me.Yaw = missileYaw + Mathf.Clamp(lead, -MissileMaxLeadRad, MissileMaxLeadRad);
     }
 
     /// <summary>The blast: the rpg's blast look at the missile's own radius, the shake, and the static on the owner's screen.</summary>
     void OnMissileBlast(MissileBlastInfo b)
     {
         var at = new Vector3(b.Position.X, b.Position.Y, b.Position.Z);
-        if (_missiles.Remove(b.Id, out var r)) { r.Snd?.Release(); RocketFx.Retire(Owned, r.Node); }
-        RocketFx.Explode(Owned, at, b.Radius);
+        if (_missiles.Remove(b.Id, out var r)) { r.Snd?.Release(); RocketFx.Retire(Ctx.Owned, r.Node); }
+        RocketFx.Explode(Ctx.Owned, at, b.Radius);
         _blastDust.BlastFelt(at, b.Radius, SoundRules.Event("explosion", "rpg")); // the rpg's blast sound until the missile has its own
-        if (b.Owner == _myId) _pov?.Impact();
+        if (b.Owner == Ctx.MyId) _pov?.Impact();
     }
 }

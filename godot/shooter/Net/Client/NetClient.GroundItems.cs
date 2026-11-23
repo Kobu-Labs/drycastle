@@ -103,7 +103,7 @@ public partial class NetClient
         var node = MakeGroundItemVisual(ItemData.At(GroundItemRules.ItemOf(e.State)));
         node.Name = $"GroundItem{e.Id}";
         var p = e.State.Position;
-        Owned.AddChild(node);
+        Ctx.Owned.AddChild(node);
         node.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
         _groundItems[e.Id] = node;
     }
@@ -120,8 +120,8 @@ public partial class NetClient
     {
         _groundNear = null;
         _groundNearest = false;
-        if (_me == null || Dead || Ctx.Driving || _groundItems.Count == 0) return;
-        var at = _me.GlobalPosition;
+        if (Ctx.Me == null || Dead || Ctx.Driving || _groundItems.Count == 0) return;
+        var at = Ctx.Me.GlobalPosition;
         var best = GroundItemRules.ReachMetres;
         foreach (var (id, node) in _groundItems)
         {

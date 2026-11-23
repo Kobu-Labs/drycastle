@@ -25,26 +25,26 @@ public partial class NetClient
     /// <summary>The mark key: the nearest animal under the middle of the view, not behind the world, within the binoculars' range, is marked (a repeat renews the time).</summary>
     void MarkAnimal()
     {
-        if (CarriedBinoculars is not { MarkSeconds: > 0 } pair || _me == null) return;
+        if (CarriedBinoculars is not { MarkSeconds: > 0 } pair || Ctx.Me == null) return;
         if (AnimalUnderCentre() is not { } v)
         {
             UiShell.Instance?.Toast(Strings.T("toast.mark.none"), ToastKind.Warn);
             Sfx.Ui("ui.error");
             return;
         }
-        v.MarkedUntil = Now + pair.MarkSeconds;
+        v.MarkedUntil = Ctx.Now + pair.MarkSeconds;
         Sfx.Ui("ui.accept");
         UiShell.Instance?.Toast(Strings.F("toast.mark.set", (int)pair.MarkSeconds), ToastKind.Info);
     }
 
     AnimalView? AnimalUnderCentre()
     {
-        var cam = _me!.Camera;
+        var cam = Ctx.Me!.Camera;
         var from = cam.GlobalPosition;
         var dir = -cam.GlobalTransform.Basis.Z;
         var wall = Binoculars.MaxRangeM;
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * Binoculars.MaxRangeM, CollisionLayers.WorldShots);
-        q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
+        q.Exclude = new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
         var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         if (hit.Count > 0) wall = from.DistanceTo(hit["position"].AsVector3());
         var o = new NVec3(from.X, from.Y, from.Z); var d = new NVec3(dir.X, dir.Y, dir.Z);
@@ -63,11 +63,11 @@ public partial class NetClient
     /// <summary>Once a frame: puts the highlight on the animals that are marked and takes it off those whose time ran out; it pulses.</summary>
     void TickAnimalMarks()
     {
-        var pulse = 0.38f + 0.14f * MathF.Sin((float)Now * 5f);
+        var pulse = 0.38f + 0.14f * MathF.Sin((float)Ctx.Now * 5f);
         MarkMaterial.AlbedoColor = new Color(1f, 0.82f, 0.18f, pulse);
         foreach (var v in _animals.Values)
         {
-            var on = v.MarkedUntil > Now;
+            var on = v.MarkedUntil > Ctx.Now;
             if (on == v.MarkShown || !GodotObject.IsInstanceValid(v.Node)) continue;
             v.MarkShown = on;
             foreach (var mi in v.Node.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>())

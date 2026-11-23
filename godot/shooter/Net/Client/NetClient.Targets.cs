@@ -17,8 +17,8 @@ public partial class NetClient
     void UpdateNameTag(ushort id, RemotePlayer r)
     {
         var dummy = TargetDummies.IsDummyId(id);
-        var show = (dummy || (Match.IsTeamMode && Match.AreFriends(_myId, id))) && !_blastDust.Hides(r.Node.GlobalPosition + Vector3.Up * 1.6f); // not through dust (#345)
-        var squad = !dummy && Match.AreSquadMates(_myId, id) ? Match.SquadOf(id) : (byte)0;
+        var show = (dummy || (Match.IsTeamMode && Match.AreFriends(Ctx.MyId, id))) && !_blastDust.Hides(r.Node.GlobalPosition + Vector3.Up * 1.6f); // not through dust (#345)
+        var squad = !dummy && Match.AreSquadMates(Ctx.MyId, id) ? Match.SquadOf(id) : (byte)0;
         var retag = !dummy && r.TagSquad != squad && Ctx.Names.ContainsKey(id); // only a change rebuilds the text
         if (retag) r.TagSquad = squad;
         foreach (var label in r.Node.GetChildren().OfType<Label3D>())
@@ -42,7 +42,7 @@ public partial class NetClient
             Ctx.Names[id] = name;
             Match.NameTarget(id, name);
             // a snapshot may have drawn the dummy before the roster arrived: fix its name tag
-            if (_remotes.TryGetValue(id, out var r))
+            if (Ctx.Remotes.TryGetValue(id, out var r))
                 foreach (var label in r.Node.GetChildren().OfType<Label3D>()) label.Text = name;
         }
         GD.Print($"client: {list.Count} target dummies");

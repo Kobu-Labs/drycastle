@@ -33,7 +33,7 @@ public partial class NetClient
             // what is under it: the ground (or a roof), or the surface of a water body above that
             var q = PhysicsRayQueryParameters3D.Create(p + Vector3.Up, p + Vector3.Down * (RotorFx.WashHeight + 1f));
             q.CollisionMask = CollisionLayers.World;
-            if (_me != null) q.Exclude = _washExclude ??= new Godot.Collections.Array<Rid> { _me.GetRid() };
+            if (Ctx.Me != null) q.Exclude = _washExclude ??= new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
             var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
             var surface = Water.BodyAt(p.X, p.Z)?.SurfaceY;
             float? under = hit.Count > 0 ? hit["position"].AsVector3().Y : null;

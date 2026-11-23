@@ -34,7 +34,7 @@ public partial class NetClient
     }
 
     /// <summary>The seat of <paramref name="v"/> the local player sits in (the driver is the vehicle's record, the rest the seat state), or -1.</summary>
-    int OwnSeatIn(CarView v) => v.Driver == _myId ? 0 : Ctx.Cars.Seats is { Mine: > 0 } st && st.CarId == v.Id ? st.Mine : -1;
+    int OwnSeatIn(CarView v) => v.Driver == Ctx.MyId ? 0 : Ctx.Cars.Seats is { Mine: > 0 } st && st.CarId == v.Id ? st.Mine : -1;
 
     /// <summary>Tells the view machine which seat of which vehicle the rider is in: boarding, or a switch within the vehicle.</summary>
     void TrackView(CarView v, int seat)
@@ -67,7 +67,7 @@ public partial class NetClient
     /// </summary>
     bool CockpitFrame(CarView v, int seat, Vector3 p, Vector3 rot, float dt)
     {
-        if (_view.Current != RiderView.Cockpit || _me == null || !ShotFx.Enabled || !Mode.ViewIsBody || Vehicles == null || v.Kind >= Vehicles.Vehicles.Count) return false;
+        if (_view.Current != RiderView.Cockpit || Ctx.Me == null || !ShotFx.Enabled || !Mode.ViewIsBody || Vehicles == null || v.Kind >= Vehicles.Vehicles.Count) return false;
         var def = Vehicles.Vehicles[v.Kind];
         var spec = seat == 0 ? CockpitOf(v) : null; // the driver's rig is the driver's: another seat sees the model's own interior
         if (spec == null) EndCockpit();
@@ -82,7 +82,7 @@ public partial class NetClient
         }
         if (_rig != null)
         {
-            var input = _me.Sample();
+            var input = Ctx.Me.Sample();
             var lift = ((input.Buttons & MoveButtons.Jump) != 0 ? 1 : 0) - ((input.Buttons & MoveButtons.Crouch) != 0 ? 1 : 0);
             _rig.Pose(input.MoveX, input.MoveY, lift, dt);
         }
@@ -90,7 +90,7 @@ public partial class NetClient
         // a helicopter's view tilts with the airframe; with reduce motion it stays level and the rig tilts round it (a ground vehicle's is always level)
         var frame = flies && !GameSettings.Current.ReduceMotion ? v.Node.GlobalBasis : Basis.FromEuler(new Vector3(0, rot.Y, 0));
         var e = SeatEye.For(def, seat);
-        _me.Cockpit(p, GlassClient.HostOf(v.Node).GlobalTransform * new Vector3(e.X, e.Y, e.Z), frame, rot.Y, lookTurnsWithVehicle: !flies);
+        Ctx.Me.Cockpit(p, GlassClient.HostOf(v.Node).GlobalTransform * new Vector3(e.X, e.Y, e.Z), frame, rot.Y, lookTurnsWithVehicle: !flies);
         ShowSelfInCar(v, seat, viewerHides: true); // the own figure is not drawn for the viewer (the rig has the hands), its shadow stays
         return true;
     }
@@ -110,8 +110,8 @@ public partial class NetClient
     /// <summary>The driver's prompt with the view key after it: what the key switches to. Rebuilt when the prompt or the view changes, and once a second in case the key was rebound.</summary>
     string WithViewHint(string prompt)
     {
-        if (prompt == _viewHintBase && _viewHintCockpit == (_view.Current == RiderView.Cockpit) && Now - _viewHintAt < 1.0) return _viewHintText;
-        _viewHintBase = prompt; _viewHintCockpit = _view.Current == RiderView.Cockpit; _viewHintAt = Now;
+        if (prompt == _viewHintBase && _viewHintCockpit == (_view.Current == RiderView.Cockpit) && Ctx.Now - _viewHintAt < 1.0) return _viewHintText;
+        _viewHintBase = prompt; _viewHintCockpit = _view.Current == RiderView.Cockpit; _viewHintAt = Ctx.Now;
         return _viewHintText = prompt + "     " + Strings.F(_view.Current == RiderView.Cockpit ? "hud.vehicle.view.chase" : "hud.vehicle.view.cockpit", InputBindings.Name("vehicle_view"));
     }
 }

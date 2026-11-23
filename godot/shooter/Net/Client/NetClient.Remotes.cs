@@ -63,11 +63,11 @@ public partial class NetClient
 
     void RenderRemotes()
     {
-        if (_lastTick == 0) return;
+        if (Ctx.LastTick == 0) return;
         var rt = RenderTickNow();
         var dt = (float)GetProcessDeltaTime();
         var drawn = 0;
-        foreach (var (id, r) in _remotes)
+        foreach (var (id, r) in Ctx.Remotes)
             if (r.Buf.At(rt) is { } s)
             {
                 drawn++;
@@ -83,11 +83,11 @@ public partial class NetClient
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
                 r.Node.Visible = guessed || !(dead && !TargetDummies.IsDummyId(id) && (CorpseOf(id) || HarvestVictimHidden(id, dead))); // the harvester's victim is in the machine, then inside its bale: no body at the spot where it died // riders are drawn in their seat (the server puts the body there), seated rather than standing
                 r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
-                if (r.State == EntityState.InVehicle) _lastRode[id] = Now;
+                if (r.State == EntityState.InVehicle) _lastRode[id] = Ctx.Now;
                 AnimateRemote(r, s.Pos);
                 UpdateNameTag(id, r);
             }
-        _rub.AddRender(rt, _lastTick, drawn);
+        _rub.AddRender(rt, Ctx.LastTick, drawn);
     }
 
     /// <summary>
@@ -127,7 +127,7 @@ public partial class NetClient
     void OnPlayerFlung(ushort id)
     {
         FlingOf(id).Thrown();
-        if (_remotes.TryGetValue(id, out var r) && r.Guess.Active) r.GuessConfirmed = true;
+        if (Ctx.Remotes.TryGetValue(id, out var r) && r.Guess.Active) r.GuessConfirmed = true;
     }
 
     /// <summary>
@@ -162,7 +162,7 @@ public partial class NetClient
     /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
     void AnimateRemote(RemotePlayer r, NVec3 pos)
     {
-        var now = Now;
+        var now = Ctx.Now;
         var p = new Vector3(pos.X, pos.Y, pos.Z);
         if (r.LastT > 0 && now > r.LastT + 0.001)
         {

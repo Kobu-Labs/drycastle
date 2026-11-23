@@ -142,10 +142,10 @@ public partial class NetClient
         _pcNext = now + 1;
         var rtt = _peer?.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime) ?? 0;
         _pcLog.WriteLine(string.Join(",", now.ToString("F2", CultureInfo.InvariantCulture), _dec.LastTick, _dec.TicksStarted - _pcTS, _dec.TicksCompleted - _pcTC, _recon - _pcRecon,
-            _pcMaxGap.ToString("F0", CultureInfo.InvariantCulture), rtt, _pcFrames, _pcFrameMax.ToString("F1", CultureInfo.InvariantCulture), _pcSlow33, _remotes.Count,
+            _pcMaxGap.ToString("F0", CultureInfo.InvariantCulture), rtt, _pcFrames, _pcFrameMax.ToString("F1", CultureInfo.InvariantCulture), _pcSlow33, Ctx.Remotes.Count,
             (_pcErrN == 0 ? 0 : _pcErrSum / _pcErrN).ToString("F4", CultureInfo.InvariantCulture), _pcErrMax.ToString("F4", CultureInfo.InvariantCulture),
             (_pcErrN == 0 ? 0 : _pcDx / _pcErrN).ToString("F4", CultureInfo.InvariantCulture), (_pcErrN == 0 ? 0 : _pcDy / _pcErrN).ToString("F4", CultureInfo.InvariantCulture), (_pcErrN == 0 ? 0 : _pcDz / _pcErrN).ToString("F4", CultureInfo.InvariantCulture), _pcErrN,
-            (_me?.State.Position.X ?? 0).ToString("F2", CultureInfo.InvariantCulture), (_me?.State.Position.Y ?? 0).ToString("F2", CultureInfo.InvariantCulture), (_me?.State.Position.Z ?? 0).ToString("F2", CultureInfo.InvariantCulture)));
+            (Ctx.Me?.State.Position.X ?? 0).ToString("F2", CultureInfo.InvariantCulture), (Ctx.Me?.State.Position.Y ?? 0).ToString("F2", CultureInfo.InvariantCulture), (Ctx.Me?.State.Position.Z ?? 0).ToString("F2", CultureInfo.InvariantCulture)));
         _pcErrSum = _pcErrMax = _pcDx = _pcDy = _pcDz = 0; _pcErrN = 0;
         _pcTS = _dec.TicksStarted; _pcTC = _dec.TicksCompleted; _pcRecon = _recon; _pcMaxGap = 0; _pcFrames = 0; _pcFrameMax = 0; _pcSlow33 = 0;
     }

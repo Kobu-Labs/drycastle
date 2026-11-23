@@ -46,7 +46,7 @@ public partial class NetClient
         var slot = Ammo?.Slot ?? Ctx.Hotbar.Want;
         var id = ThrowHeldId() ?? (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : ""); // the throw key held: the grenade, whatever was selected
         _viewmodel.Show(id);
-        _viewmodel.Visible = Mode.ShowsViewmodel && !OwnBodyFlung && _me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
+        _viewmodel.Visible = Mode.ShowsViewmodel && !OwnBodyFlung && Ctx.Me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
     }
 
     /// <summary>Movement speed multiplier of the weapon in <paramref name="slot"/> (0: none, 1.0), times the run speed of <see cref="Perks"/>. The server applies the same value.</summary>
@@ -58,11 +58,11 @@ public partial class NetClient
     /// <summary>Holding zoom with a scoped weapon (sniper) narrows the camera; never while dead or with the mouse released.</summary>
     void ApplyScope()
     {
-        if (_me == null || _gunship != null || ScudScreenOn) return; // at a turret the zoom is the gunship's; on a Scud screen it is the screen's
+        if (Ctx.Me == null || _gunship != null || ScudScreenOn) return; // at a turret the zoom is the gunship's; on a Scud screen it is the screen's
         if (Mode.ScopeSuppressed)
         {
             // seated (roof/door gun, turret, any seat) or steering a missile: the held weapon's scope and iron-sight zoom stay off (#241)
-            _me.ZoomFov = 0f; _me.IronSightZoom = false;
+            Ctx.Me.ZoomFov = 0f; Ctx.Me.IronSightZoom = false;
             if (_viewmodel != null) _viewmodel.Aiming = false;
             LowerBinoculars();
             return;
@@ -71,13 +71,13 @@ public partial class NetClient
         var slot = Ammo?.Slot ?? Ctx.Hotbar.Want;
         var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
         var on = zoom > 0 && !Dead && !_pinned && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
-        _me.ZoomFov = on ? zoom : 0f;
+        Ctx.Me.ZoomFov = on ? zoom : 0f;
         // iron sights: any non-scoped, non-melee weapon while zoom is held
         var kind = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Kind : WeaponKind.Melee;
         if (_viewmodel != null)
             _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && (!Ctx.Driving && _myState != EntityState.InVehicle || InArmedSeat)
                 && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
-        _me.IronSightZoom = _viewmodel is { Aiming: true };
+        Ctx.Me.IronSightZoom = _viewmodel is { Aiming: true };
     }
 
     /// <summary>At a turret the slot sent is the key held (1-5, 0 none), not the body's hotbar weapon: the turret reads it as its weapon number (the AC-130's 1-3).</summary>
@@ -101,7 +101,7 @@ public partial class NetClient
         switch (kind)
         {
             case EventKind.Ammo when WeaponCodec.DecodeAmmo(payload) is { } a:
-                Ammo = a; _ammoAt = Now;
+                Ammo = a; _ammoAt = Ctx.Now;
                 PredictOnAmmo(a);
                 SfxAmmo(a);
                 HudAmmo();
@@ -160,7 +160,7 @@ public partial class NetClient
                 _hunts.OnShot(hs);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
-                if (KeepEventLogs) _logs.Hits.Add((Now, h));
+                if (KeepEventLogs) _logs.Hits.Add((Ctx.Now, h));
                 SfxHit(h);
                 HudHit(h);
                 break;

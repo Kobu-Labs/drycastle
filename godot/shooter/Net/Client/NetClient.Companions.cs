@@ -111,7 +111,7 @@ public partial class NetClient
     void TickCompanionMarks()
     {
         if (_companionMarks.Length == 0 && _companionMarkShown.Count == 0) return;
-        CompanionMarkMaterial.AlbedoColor = new Color(ShooterTheme.Danger, 0.38f + 0.14f * MathF.Sin((float)Now * 5f));
+        CompanionMarkMaterial.AlbedoColor = new Color(ShooterTheme.Danger, 0.38f + 0.14f * MathF.Sin((float)Ctx.Now * 5f));
         foreach (var id in _companionMarkShown.ToArray())
             if (Array.IndexOf(_companionMarks, id) < 0) { SetCompanionMark(id, false); _companionMarkShown.Remove(id); }
         foreach (var id in _companionMarks)
@@ -120,7 +120,7 @@ public partial class NetClient
 
     void SetCompanionMark(ushort player, bool on)
     {
-        if (!_remotes.TryGetValue(player, out var r) || !GodotObject.IsInstanceValid(r.Node)) return;
+        if (!Ctx.Remotes.TryGetValue(player, out var r) || !GodotObject.IsInstanceValid(r.Node)) return;
         foreach (var mi in r.Node.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>())
             mi.MaterialOverlay = on ? CompanionMarkMaterial : null;
     }
@@ -165,21 +165,21 @@ public partial class NetClient
         var box = def.HitBoxOf(variant).Select(x => x * entry.Scale).ToArray();
         var node = new Node3D { Name = $"Companion{e.Id}" };
         var (_, anim, clips) = AddAnimalModel(node, def, variant, entry.Scale, box);
-        Owned.AddChild(node);
+        Ctx.Owned.AddChild(node);
         var at = e.State.Position;
         node.GlobalPosition = new Vector3(at.X, at.Y, at.Z);
         node.Rotation = new Vector3(0, e.State.YawRad, 0);
         var view = new CompanionView { Node = node, Anim = anim, Clips = clips, Height = box.Length == 3 ? box[1] : 0.5f };
         _companions[e.Id] = view;
         if (e.Dormant) SetCompanionDormant(view, e);
-        else PetFx.Puff(Owned, node.GlobalPosition + Vector3.Up * (view.Height / 2), view.Height); // it appears in a puff, as it goes
+        else PetFx.Puff(Ctx.Owned, node.GlobalPosition + Vector3.Up * (view.Height / 2), view.Height); // it appears in a puff, as it goes
     }
 
     /// <summary>A Companion whose owner died or took a seat goes in a puff; one removed with the round just leaves. Runs before <see cref="OnCompanionDespawned"/> frees the node.</summary>
     void OnCompanionDespawnedFor(ushort id, WorldDespawnReason reason)
     {
         if (reason != WorldDespawnReason.Destroyed || !_companions.TryGetValue(id, out var v) || !v.Node.Visible) return;
-        PetFx.Puff(Owned, v.Node.GlobalPosition + Vector3.Up * (v.Height / 2), v.Height);
+        PetFx.Puff(Ctx.Owned, v.Node.GlobalPosition + Vector3.Up * (v.Height / 2), v.Height);
     }
 
     void OnCompanionDespawned(ushort id)
@@ -190,7 +190,7 @@ public partial class NetClient
     /// <summary>Places the Companions (interpolated, a little in the past like every remote body) and plays the clip of their pose.</summary>
     void RenderCompanions()
     {
-        if (_companions.Count == 0 || _lastTick == 0) return;
+        if (_companions.Count == 0 || Ctx.LastTick == 0) return;
         var rt = RenderTickNow();
         foreach (var (id, v) in _companions)
         {

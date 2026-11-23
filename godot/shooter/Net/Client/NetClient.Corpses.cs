@@ -62,7 +62,7 @@ public partial class NetClient
     /// <summary>A corpse younger than this waits for its death event; one older with none is an old corpse (a join), and lies in the death pose.</summary>
     const double CollapseWaitSeconds = 0.25, CollapseWindowSeconds = 2.0;
 
-    void NoteDeath(DeathMsg d) => _deathSeen[d.Victim] = (Now, d.Killer);
+    void NoteDeath(DeathMsg d) => _deathSeen[d.Victim] = (Ctx.Now, d.Killer);
 
     /// <summary>
     /// Settles whether a new corpse collapses. True once decided. A fresh kill (its death event within <see cref="CollapseWindowSeconds"/>) of a player on foot
@@ -70,14 +70,14 @@ public partial class NetClient
     /// </summary>
     bool DecideCollapse(ushort id, CorpseView v, ushort owner, Vector3 at, float yaw, bool flying)
     {
-        var fresh = _deathSeen.TryGetValue(owner, out var death) && Now - death.At < CollapseWindowSeconds;
-        if (!fresh && Now - v.Born < CollapseWaitSeconds) return false;
+        var fresh = _deathSeen.TryGetValue(owner, out var death) && Ctx.Now - death.At < CollapseWindowSeconds;
+        if (!fresh && Ctx.Now - v.Born < CollapseWaitSeconds) return false;
         v.Decided = true;
         v.Node.Visible = true;
-        var rode = _lastRode.TryGetValue(owner, out var when) && Now - when < 1.5;
+        var rode = _lastRode.TryGetValue(owner, out var when) && Ctx.Now - when < 1.5;
         if (!fresh || flying || rode) return true;
         var away = new Basis(Vector3.Up, yaw) * Vector3.Back; // no killer to push it (a fall, a suicide): backwards
-        Vector3? from = death.Killer == owner ? null : death.Killer == _myId ? _me?.GlobalPosition : _remotes.TryGetValue(death.Killer, out var k) ? k.Node.GlobalPosition : null;
+        Vector3? from = death.Killer == owner ? null : death.Killer == Ctx.MyId ? Ctx.Me?.GlobalPosition : Ctx.Remotes.TryGetValue(death.Killer, out var k) ? k.Node.GlobalPosition : null;
         if (from is { } f) { var d = at - f; d.Y = 0; if (d.LengthSquared() > 0.04f) away = d.Normalized(); }
         v.Tumble.BeginCollapse(away, 0.6f);
         return true;
@@ -87,7 +87,7 @@ public partial class NetClient
     Vector3 GroundUpAt(Vector3 at)
     {
         var q = PhysicsRayQueryParameters3D.Create(at + Vector3.Up * 1f, at + Vector3.Down * 1.5f, CollisionRules.StaticMask(MoverKind.Drop));
-        var hit = Owned.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        var hit = Ctx.Owned.GetWorld3D().DirectSpaceState.IntersectRay(q);
         return hit.Count > 0 ? hit["normal"].AsVector3() : Vector3.Up;
     }
 
@@ -153,9 +153,9 @@ public partial class NetClient
         Camo.Dress(view, e.State.Owner); // the dead player's look (#203)
         view.Position = new Vector3(0, -RagdollTumble.Half, 0); // the node sits at the body's middle, so a thrown body spins about its centre
         node.AddChild(view);
-        Owned.AddChild(node);
+        Ctx.Owned.AddChild(node);
         node.Visible = false; // until RenderCorpses knows whether this body collapses (DecideCollapse)
-        _corpses[e.Id] = new CorpseView { Node = node, View = view, Born = Now };
+        _corpses[e.Id] = new CorpseView { Node = node, View = view, Born = Ctx.Now };
         DressCorpse(e.Id); // the item the corpse carries, when its event came first (#266)
     }
 
@@ -201,7 +201,7 @@ public partial class NetClient
             }
             else if (weapon != v.Weapon) { v.Weapon = weapon; view.ShowCorpse(weapon); }
             v.Feet = at;
-            v.Node.Visible = !(_remotes.TryGetValue(s.Owner, out var owner) && owner.Guess.Active); // the driver's guessed throw of this body is what is drawn until it has landed (#411)
+            v.Node.Visible = !(Ctx.Remotes.TryGetValue(s.Owner, out var owner) && owner.Guess.Active); // the driver's guessed throw of this body is what is drawn until it has landed (#411)
             v.Node.GlobalPosition = at + FloatOffset(id, at, t.Thrown) + Vector3.Up * t.PivotHeight;
             v.Node.Basis = t.BasisFor(s.YawRad);
         }
@@ -222,10 +222,10 @@ public partial class NetClient
 
     ushort? NearestCorpseInReach()
     {
-        if (_me == null || Dead || Ctx.Driving) return null;
+        if (Ctx.Me == null || Dead || Ctx.Driving) return null;
         ushort? best = null;
         var bd = CorpseRules.ReachMetres;
-        var at = _me.GlobalPosition;
+        var at = Ctx.Me.GlobalPosition;
         foreach (var (id, v) in _corpses)
         {
             var d = (v.ReachFrom ?? v.Feet).DistanceTo(at);

@@ -44,17 +44,17 @@ public partial class NetClient
         var nodes = v.DoorGun!;
         var vehicle = Vehicles!.Vehicles[v.Kind];
         var def = vehicle.DoorGun!;
-        var mine = Mode.SeatKeysLive && _me != null && Ctx.Cars.Seats is { } st && st.CarId == v.Id && st.Mine >= 0 && st.Mine == GunnerSeat(vehicle);
+        var mine = Mode.SeatKeysLive && Ctx.Me != null && Ctx.Cars.Seats is { } st && st.CarId == v.Id && st.Mine >= 0 && st.Mine == GunnerSeat(vehicle);
         if (mine)
         {
             // the look is the aim, and it is held inside the arc: the view cannot go where the gun cannot
-            var aim = DoorGunRules.Aim(def, rot.Y, rot.X, rot.Z, _me!.Yaw, _me.Pitch);
-            _me.Yaw = aim.ViewYaw; _me.Pitch = aim.ViewPitch;
+            var aim = DoorGunRules.Aim(def, rot.Y, rot.X, rot.Z, Ctx.Me!.Yaw, Ctx.Me.Pitch);
+            Ctx.Me.Yaw = aim.ViewYaw; Ctx.Me.Pitch = aim.ViewPitch;
             nodes.Pose(aim.Yaw, aim.Pitch, dt);
-            _me.GlobalPosition = v.Node.GlobalPosition;
+            Ctx.Me.GlobalPosition = v.Node.GlobalPosition;
             var p = v.Node.GlobalPosition;
             var eye = nodes.Sight?.GlobalPosition ?? G(DoorGunRules.Eye(def, DoorGunRules.GunPivot(def, new NVec3(p.X, p.Y, p.Z), rot.Y, rot.X, rot.Z, aim), rot.Y, rot.X, rot.Z, aim));
-            _me.Turret(eye, aim.ViewYaw, aim.ViewPitch);
+            Ctx.Me.Turret(eye, aim.ViewYaw, aim.ViewPitch);
             HideSelfInCar(); // the pilot's body view, if this player has just come from that seat
             _flakCamera = true;
             return true;
@@ -73,14 +73,14 @@ public partial class NetClient
     {
         var car = sh.Weapon == SpecialWeapons.VehicleGun ? DoorGunCarOf(sh.Shooter) : null;
         if (car?.DoorGun is not { } nodes) return false;
-        if (KeepEventLogs) _logs.Shots.Add((Now, sh));
+        if (KeepEventLogs) _logs.Shots.Add((Ctx.Now, sh));
         SfxShot(sh, false);
         var origin = G(sh.Origin); var end = G(sh.End);
-        ShotFx.Spawn(Owned, nodes.Muzzle?.GlobalPosition ?? origin, end, false);
+        ShotFx.Spawn(Ctx.Owned, nodes.Muzzle?.GlobalPosition ?? origin, end, false);
         ShotHole(origin, end);
         BulletSurfaceHit(origin, end);
         nodes.Kick();
-        CasingFx.Eject(Owned, nodes.Muzzle?.GlobalPosition ?? origin, end - origin, CasingKind.Heavy, CarVelocity(car));
+        CasingFx.Eject(Ctx.Owned, nodes.Muzzle?.GlobalPosition ?? origin, end - origin, CasingKind.Heavy, CarVelocity(car));
         return true;
     }
 
@@ -90,8 +90,8 @@ public partial class NetClient
     /// <summary>The door gunner's prompt line: the keys as they are bound. Rebuilt once a second in case one was rebound.</summary>
     string DoorGunPrompt()
     {
-        if (Now - _doorGunPromptAt < 1.0) return _doorGunPrompt;
-        _doorGunPromptAt = Now;
+        if (Ctx.Now - _doorGunPromptAt < 1.0) return _doorGunPrompt;
+        _doorGunPromptAt = Ctx.Now;
         return _doorGunPrompt = Strings.F("hud.doorgun.prompt", InputBindings.Name("fire"), InputBindings.Name("reload"), InputBindings.Name("interact"));
     }
 

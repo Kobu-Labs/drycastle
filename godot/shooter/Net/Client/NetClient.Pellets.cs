@@ -21,8 +21,8 @@ public partial class NetClient
         var w = Weapons.Weapons[pf.Weapon];
         var range = w.Range > 0 ? w.Range : 300f;
         var echo = EchoOfPredicted(pf.Shooter);
-        if (pf.Shooter == _myId) _spread.Shot(w, Now);
-        if (_remotes.TryGetValue(pf.Shooter, out var shooter)) shooter.FireUntil = Now + 0.45;
+        if (pf.Shooter == Ctx.MyId) _spread.Shot(w, Ctx.Now);
+        if (Ctx.Remotes.TryGetValue(pf.Shooter, out var shooter)) shooter.FireUntil = Ctx.Now + 0.45;
 
         var from = G(pf.Origin);
         var aim = pf.Aim;
@@ -36,17 +36,17 @@ public partial class NetClient
             if (VehicleAlong(from, ray, MathF.Min(range, worldDist), out var car, out var vh))
             {
                 // a pellet that stops on a car: the hole rides the car's node, the spark is where the car is drawn
-                BulletHoles.PlaceOn(Owned, GlassClient.HostOf(car.Node), G(vh.Local), G(vh.LocalNormal));
+                BulletHoles.PlaceOn(Ctx.Owned, GlassClient.HostOf(car.Node), G(vh.Local), G(vh.LocalNormal));
                 var vat = ToWorld(car, G(vh.Local));
-                ShotFx.Spark(Owned, vat, car.Node.GlobalTransform.Basis * G(vh.LocalNormal));
+                ShotFx.Spark(Ctx.Owned, vat, car.Node.GlobalTransform.Basis * G(vh.LocalNormal));
                 first ??= vat;
                 continue;
             }
             if (hit.Count == 0) continue;
             var at = hit["position"].AsVector3();
             var normal = hit["normal"].AsVector3();
-            BulletHoles.Place(Owned, at, normal);
-            ShotFx.Spark(Owned, at, normal);
+            BulletHoles.Place(Ctx.Owned, at, normal);
+            ShotFx.Spark(Ctx.Owned, at, normal);
             first ??= at;
         }
 
@@ -54,10 +54,10 @@ public partial class NetClient
         if (!echo)
         {
             SfxShot(new ShotMsg(pf.Shooter, pf.Weapon, pf.Origin, new NVec3(end.X, end.Y, end.Z)), false);
-            if (pf.Shooter == _myId) _viewmodel?.Flash(0.4f); else if (_remotes.TryGetValue(pf.Shooter, out var flasher)) flasher.View?.Flash();
+            if (pf.Shooter == Ctx.MyId) _viewmodel?.Flash(0.4f); else if (Ctx.Remotes.TryGetValue(pf.Shooter, out var flasher)) flasher.View?.Flash();
         }
         var muzzle = MuzzleOf(pf.Shooter, from, end);
-        ShotFx.Spawn(Owned, muzzle, end, false, impact: false);
-        if (!echo) CasingFx.Eject(Owned, muzzle, end - muzzle, CasingKind.Shotgun);
+        ShotFx.Spawn(Ctx.Owned, muzzle, end, false, impact: false);
+        if (!echo) CasingFx.Eject(Ctx.Owned, muzzle, end - muzzle, CasingKind.Shotgun);
     }
 }

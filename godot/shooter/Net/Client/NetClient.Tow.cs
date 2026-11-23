@@ -40,7 +40,7 @@ public partial class NetClient
     {
         var t = new TrailerView();
         _trailerGround ??= TrailerProbe.Make(Vehicles!.Vehicles[v.Kind]); // a headless client fits the hull too
-        if (_trailerGround.GetParent() == null) Owned.AddChild(_trailerGround);
+        if (_trailerGround.GetParent() == null) Ctx.Owned.AddChild(_trailerGround);
         if (!ShotFx.Enabled) return t;
         t.WheelL = v.Node.FindChild("wheel_l", true, false) as Node3D;
         t.WheelR = v.Node.FindChild("wheel_r", true, false) as Node3D;
@@ -88,7 +88,7 @@ public partial class NetClient
         Ctx.Cars.TryGet(tractorId, out var tractor);
         var at = (tractor ?? trailer).Node.GlobalPosition;
         Ctx.Cars.Sounds.PlayOnce("tow.clunk", at, tractor);
-        if (tractor != null && tractor.Driver == _myId && Ctx.Driving && !Dead) UiShell.Instance?.Toast(Strings.T(now != 0 ? "toast.tow.hitched" : "toast.tow.unhitched"), ToastKind.Info);
+        if (tractor != null && tractor.Driver == Ctx.MyId && Ctx.Driving && !Dead) UiShell.Instance?.Toast(Strings.T(now != 0 ? "toast.tow.hitched" : "toast.tow.unhitched"), ToastKind.Info);
     }
 
     /// <summary>The trailer hitched to <paramref name="tractor"/> as the records say, or null (a tractor pulls at most one).</summary>

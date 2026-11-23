@@ -31,7 +31,7 @@ public partial class NetClient
         var surface = Water.SurfaceY(at.X, at.Z);
         if (float.IsNaN(surface)) surface = Water.SurfaceY(p.X, p.Z);
         if (float.IsNaN(surface)) surface = p.Y + def.Drive!.Water.Draft;
-        WaterFx.Splash(Owned, new Vector3(at.X, surface, at.Z), crossed > 0 ? 2.6f : 1.3f);
+        WaterFx.Splash(Ctx.Owned, new Vector3(at.X, surface, at.Z), crossed > 0 ? 2.6f : 1.3f);
     }
 
     /// <summary>The node riders stand on: the body of a driven vehicle (it leans over its wheels), else the vehicle itself.</summary>
@@ -66,7 +66,7 @@ public partial class NetClient
             if (!Ctx.Cars.SeatOccupants.TryGetValue(v.Id, out var others)) continue;
             for (var k = 0; k < others.Length; k++) if (others[k] != 0) _rideOf[others[k]] = (v, k + 1);
         }
-        foreach (var (id, r) in _remotes)
+        foreach (var (id, r) in Ctx.Remotes)
         {
             if (r.State != EntityState.InVehicle || !_rideOf.TryGetValue(id, out var ride) || ride.Seat >= Vehicles.Vehicles[ride.Car.Kind].Seats.Count)
             {

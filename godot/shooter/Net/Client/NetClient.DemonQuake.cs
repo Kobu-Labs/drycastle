@@ -37,10 +37,10 @@ public partial class NetClient
             t += delta;
             _quakeT[id] = t;
             ChurchDecor.Current?.SetTransform((float)(t / swap));
-            if (_me == null || !GodotObject.IsInstanceValid(_me) || !ShotFx.Enabled || GameSettings.Current.ReduceMotion) continue;
+            if (Ctx.Me == null || !GodotObject.IsInstanceValid(Ctx.Me) || !ShotFx.Enabled || GameSettings.Current.ReduceMotion) continue;
             // builds to the swap, then eases to a rumble
             var build = t < swap ? t * t / (swap * swap) : 1.0 - 0.75 * Math.Min(1.0, (t - swap) / (end - swap));
-            var dist = _me.Camera.GlobalPosition.DistanceTo(d.View.GlobalPosition);
+            var dist = Ctx.Me.Camera.GlobalPosition.DistanceTo(d.View.GlobalPosition);
             var f = Mathf.Clamp((dist - QuakeFullM) / (QuakeGoneM - QuakeFullM), 0f, 1f);
             var near = 1f - f * f * (3f - 2f * f);
             if (near <= 0) continue;

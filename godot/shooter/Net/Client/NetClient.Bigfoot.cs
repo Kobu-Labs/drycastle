@@ -88,10 +88,10 @@ public partial class NetClient
     readonly Dictionary<ushort, BigfootView> _holders = new();
     Vector3 _ownFlingLast;
     /// <summary>This client's own body is in the fist or flying: its arms and weapon are not drawn.</summary>
-    bool OwnBodyFlung => _myId != 0 && _flings.TryGetValue(_myId, out var f) && f.Phase is BodyFling.Held or BodyFling.Flying or BodyFling.Lying;
+    bool OwnBodyFlung => Ctx.MyId != 0 && _flings.TryGetValue(Ctx.MyId, out var f) && f.Phase is BodyFling.Held or BodyFling.Flying or BodyFling.Lying;
 
     /// <summary>True while the Bigfoot's throw has the vehicle (the driver's client does not predict it).</summary>
-    bool CarThrown(ushort car) => _thrownCars.TryGetValue(car, out var until) && Now < until;
+    bool CarThrown(ushort car) => _thrownCars.TryGetValue(car, out var until) && Ctx.Now < until;
 
     /// <summary>Called once from <see cref="_Ready"/>: registers the types and follows their entities.</summary>
     void InitBigfoot()
@@ -112,7 +112,7 @@ public partial class NetClient
         v.Pivot.AddChild(model);
         v.Anim = anim;
         IndexClips(v.Clips, anim);
-        Owned.AddChild(v.Node);
+        Ctx.Owned.AddChild(v.Node);
         IndexBones(v);
         _bigfoots[e.Id] = v;
     }
@@ -183,7 +183,7 @@ public partial class NetClient
         var node = MakeLog();
         node.Name = $"Trunk{e.Id}";
         node.Visible = false; // until the first interpolated position: it must not flash at the world's origin
-        Owned.AddChild(node);
+        Ctx.Owned.AddChild(node);
         _trunks[e.Id] = node;
     }
 
@@ -192,13 +192,13 @@ public partial class NetClient
     void RenderBigfoot()
     {
         if (_thrownCars.Count > 0)
-            foreach (var (car, until) in _thrownCars) if (Now >= until) _thrownCars.Remove(car); // expired: CarThrown already says false, the entry just leaked
+            foreach (var (car, until) in _thrownCars) if (Ctx.Now >= until) _thrownCars.Remove(car); // expired: CarThrown already says false, the entry just leaked
         var held = false;
         BigfootView? holder = null;
-        if (_lastTick != 0)
+        if (Ctx.LastTick != 0)
         {
             var rt = RenderTickNow();
-            var now = Now;
+            var now = Ctx.Now;
             foreach (var (id, v) in _bigfoots)
             {
                 if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
@@ -213,7 +213,7 @@ public partial class NetClient
                 var raw = e.State.State;
                 var act = BigfootRules.ActOf(raw);
                 TrackHold(v, act, e.State.Owner);
-                if (_myId != 0 && e.State.Owner == _myId && act == BigfootAct.Hold) held = true;
+                if (Ctx.MyId != 0 && e.State.Owner == Ctx.MyId && act == BigfootAct.Hold) held = true;
                 if (v.HitBit.Update(BigfootRules.HitToggled(raw)))
                 {
                     // it flinches only standing (a flinch in the chase would cut the stride and start it over), and at most every few seconds
@@ -222,7 +222,7 @@ public partial class NetClient
                 if (act != BigfootAct.Idle && now < v.HitUntil) v.HitUntil = now; // a flinch or a roar gives way to whatever it does next
                 if (now >= v.HitUntil && v.Drawn.Update((byte)act)) ShowBigfootAct(v, act, now);
                 MoveBigfoot(v, act, BigfootRules.IsEnraged(raw), now);
-                if (_myId != 0 && e.State.Owner == _myId && act == BigfootAct.Hold) holder = v;
+                if (Ctx.MyId != 0 && e.State.Owner == Ctx.MyId && act == BigfootAct.Hold) holder = v;
             }
             foreach (var (id, node) in _trunks)
             {
@@ -230,19 +230,19 @@ public partial class NetClient
                 var at = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 node.GlobalPosition = at;
                 node.Visible = true;
-                node.Rotation = new Vector3((float)(Now * 5.0), s.Yaw, 0); // it tumbles end over end as it flies
+                node.Rotation = new Vector3((float)(Ctx.Now * 5.0), s.Yaw, 0); // it tumbles end over end as it flies
                 _trunkLast[id] = at;
             }
         }
         _heldByBigfoot = held;
         TickOwnFling();
-        _hud?.SetFlungHidesCrosshair(OwnBodyFlung);
+        Ctx.Hud?.SetFlungHidesCrosshair(OwnBodyFlung);
         // the server holds the body at a fixed point in front of the giant; the flailing is drawn here, so the eye rides the same swing as the figure
         var swing = Vector3.Zero; var tilt = 0f;
-        if (holder != null && _me != null)
+        if (holder != null && Ctx.Me != null)
         {
-            var local = holder.Node.ToLocal(_me.GlobalPosition);
-            var t = (float)(Now - holder.Since);
+            var local = holder.Node.ToLocal(Ctx.Me.GlobalPosition);
+            var t = (float)(Ctx.Now - holder.Since);
             var shaken = holder.Pivot.Transform.Basis * local + new Vector3(0, 0.45f * MathF.Sin(t * 22f), 0.3f * MathF.Sin(t * 11f + 1.3f)); // the hand also pumps up and down and jerks back and forth
             swing = holder.Node.GlobalBasis * (shaken - local);
             if (!GameSettings.Current.ReduceMotion) tilt = holder.Pivot.Rotation.Z * 1.6f + 0.1f * MathF.Sin(t * 17f);
@@ -252,9 +252,9 @@ public partial class NetClient
         _heldRoll = Mathf.Lerp(_heldRoll, tilt, ease);
         // its music plays while a living one is near the player (the file is private: without it there is none)
         var near = false;
-        if (_me != null)
+        if (Ctx.Me != null)
             foreach (var v in _bigfoots.Values)
-                if ((BigfootAct)v.Drawn.Last != BigfootAct.Dead && v.Node.GlobalPosition.DistanceTo(_me.GlobalPosition) <= BigfootData.Music.RadiusM) near = true;
+                if ((BigfootAct)v.Drawn.Last != BigfootAct.Dead && v.Node.GlobalPosition.DistanceTo(Ctx.Me.GlobalPosition) <= BigfootData.Music.RadiusM) near = true;
         Sfx.FightMusic(near, BigfootData.Music.File, BigfootData.Music.VolumeDb);
         RenderRings();
     }
@@ -294,11 +294,11 @@ public partial class NetClient
     /// <summary>The own body only needs its phase (the eye and the hidden arms): the landing is read from the predicted body's speed.</summary>
     void TickOwnFling()
     {
-        if (_myId == 0 || _me == null || !_flings.TryGetValue(_myId, out var f) || !f.Active) { if (_me != null) _ownFlingLast = _me.GlobalPosition; return; }
+        if (Ctx.MyId == 0 || Ctx.Me == null || !_flings.TryGetValue(Ctx.MyId, out var f) || !f.Active) { if (Ctx.Me != null) _ownFlingLast = Ctx.Me.GlobalPosition; return; }
         if (Dead) { f.Ended(); return; }
         var dt = (float)GetProcessDeltaTime();
-        var at = _me.GlobalPosition;
-        f.Tick(dt, dt > 0 ? (at - _ownFlingLast).Length() / dt : 0, _me.State.OnFloor);
+        var at = Ctx.Me.GlobalPosition;
+        f.Tick(dt, dt > 0 ? (at - _ownFlingLast).Length() / dt : 0, Ctx.Me.State.OnFloor);
         _ownFlingLast = at;
         if (f.Phase == BodyFling.Landing && f.Elapsed >= GetUpSeconds) f.StoodUp();
     }
@@ -322,7 +322,7 @@ public partial class NetClient
         if (f.Phase == BodyFling.Held && _holders.TryGetValue(id, out var h))
         {
             var local = h.Node.ToLocal(at);
-            var tm = (float)(Now - h.Since);
+            var tm = (float)(Ctx.Now - h.Since);
             var hand = h.Node.GlobalBasis;
             var shaken = h.Pivot.Transform.Basis * local + new Vector3(0, 0.45f * MathF.Sin(tm * 22f), 0.3f * MathF.Sin(tm * 11f + 1.3f));
             var tilt = h.Pivot.Rotation.Z * 1.6f + 0.1f * MathF.Sin(tm * 17f);
@@ -452,7 +452,7 @@ public partial class NetClient
         for (var i = _waveRings.Count - 1; i >= 0; i--)
         {
             var (node, _, born) = _waveRings[i];
-            var radius = (float)(Now - born) * BigfootData.Stomp.WaveSpeedMps;
+            var radius = (float)(Ctx.Now - born) * BigfootData.Stomp.WaveSpeedMps;
             if (radius >= BigfootData.Stomp.WaveMaxRadiusM) { node.QueueFree(); _waveRings.RemoveAt(i); continue; }
             _waveRings[i] = (node, radius, born);
             var r = MathF.Max(radius, 0.1f);
@@ -497,11 +497,11 @@ public partial class NetClient
                 break;
             case BigfootFxKind.TrunkThrow: Sfx.Play3D(BigfootSounds.Throw, at); break;
             case BigfootFxKind.VehicleThrow:
-                _thrownCars[m.Id] = Now + m.Extra / 10.0 + 0.5; // the driver's prediction waits for the flight, and a moment after the landing
+                _thrownCars[m.Id] = Ctx.Now + m.Extra / 10.0 + 0.5; // the driver's prediction waits for the flight, and a moment after the landing
                 Sfx.Play3D(BigfootSounds.Roar, at, 2f);
                 break;
             case BigfootFxKind.VehicleLand:
-                _thrownCars[m.Id] = Now + 0.3;
+                _thrownCars[m.Id] = Ctx.Now + 0.3;
                 Sfx.Play3D(BigfootSounds.Land, at, -2f);
                 Ctx.Shake.At(at, 18);
                 break;
@@ -517,7 +517,7 @@ public partial class NetClient
     void RoarAt(Vector3 at)
     {
         foreach (var v in _bigfoots.Values)
-            if ((BigfootAct)v.Drawn.Last == BigfootAct.Idle && v.Node.GlobalPosition.DistanceTo(at) < 4f) PlayOver(v, BigfootRules.ClipRoar, 0.15, Now);
+            if ((BigfootAct)v.Drawn.Last == BigfootAct.Idle && v.Node.GlobalPosition.DistanceTo(at) < 4f) PlayOver(v, BigfootRules.ClipRoar, 0.15, Ctx.Now);
     }
 
     /// <summary>The height of the shockwave's wall of dust at full size (the wave itself is hit below <see cref="BigfootStomp.WaveHeightM"/>: a jump clears it).</summary>
@@ -545,10 +545,10 @@ public partial class NetClient
             Mesh = tube, MaterialOverride = dust, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             Scale = new Vector3(0.93f, 0.55f, 0.93f), Position = new Vector3(0, -0.225f, 0), // its foot on the same ground
         });
-        Owned.AddChild(ring);
+        Ctx.Owned.AddChild(ring);
         ring.GlobalPosition = at;
         ring.SetMeta("ground_y", at.Y);
-        _waveRings.Add((ring, 0, Now));
+        _waveRings.Add((ring, 0, Ctx.Now));
     }
 
     /// <summary>The footprints: one dark print each, flat on the ground, until the next trail replaces them (an empty one clears them).</summary>
@@ -562,7 +562,7 @@ public partial class NetClient
         foreach (var p in prints)
         {
             var node = new MeshInstance3D { Mesh = mesh, MaterialOverride = material, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-            Owned.AddChild(node);
+            Ctx.Owned.AddChild(node);
             node.GlobalPosition = new Vector3(p.Position.X, p.Position.Y + 0.04f, p.Position.Z);
             node.Rotation = new Vector3(0, p.Yaw, 0);
             _prints.Add(node);
@@ -580,7 +580,7 @@ public partial class NetClient
         var node = new Node3D { Name = $"Corpse{e.Id}" };
         var model = MakeGiant(out var anim);
         node.AddChild(model);
-        Owned.AddChild(node); // in the tree first: an AnimationPlayer outside it poses nothing, and the giant would stand in its rest pose
+        Ctx.Owned.AddChild(node); // in the tree first: an AnimationPlayer outside it poses nothing, and the giant would stand in its rest pose
         if (anim != null)
         {
             var clips = new Dictionary<string, string>();

@@ -87,7 +87,7 @@ public partial class NetClient
         if (m.Phase == HarvesterPhase.Gone && Ctx.Cars.TryGet(m.Car, out var gone))
         {
             // it drove off the field: the server hides it (a destroyed record), which must not look like a blast
-            gone.Destroyed = true; gone.Exploded = true; gone.ExplodedAt = Now;
+            gone.Destroyed = true; gone.Exploded = true; gone.ExplodedAt = Ctx.Now;
             gone.Snd?.Release(); gone.Snd = null; gone.Engine?.Release();
             gone.Node.Visible = false;
         }
@@ -101,7 +101,7 @@ public partial class NetClient
         var fields = HarvFields;
         if (m.Field >= fields.Count) return;
         if (!_swathsC.TryGetValue(m.Field, out var sw)) _swathsC[m.Field] = sw = new ClientSwath { Swath = new FieldSwath(new HarvesterConfig(), fields[m.Field].DropsBales) };
-        sw.LastCut = Now - m.AgeS;
+        sw.LastCut = Ctx.Now - m.AgeS;
         for (var i = 1; i < m.Points.Count; i++)
         {
             var a = m.Points[i - 1].Metres; var b = m.Points[i].Metres;
@@ -157,7 +157,7 @@ public partial class NetClient
         var cfg = new HarvesterConfig();
         foreach (var (id, d) in _drawIn.ToArray())
         {
-            var t = (float)(Now - d.Start);
+            var t = (float)(Ctx.Now - d.Start);
             if (t > HarvesterConfigDraw * 1.6f || !_corpses.TryGetValue(id, out var v) || !GodotObject.IsInstanceValid(v.Node)) { if (t > HarvesterConfigDraw * 1.6f) _drawIn.Remove(id); continue; }
             if (d.Car == null || !GodotObject.IsInstanceValid(d.Car.Node)) continue;
             d.From ??= v.Node.GlobalPosition;
@@ -174,7 +174,7 @@ public partial class NetClient
         }
         foreach (var (id, start) in _baleEmerge.ToArray())
         {
-            var t = (float)((Now - start) / EmergeSeconds);
+            var t = (float)((Ctx.Now - start) / EmergeSeconds);
             if (t >= 1f || !_corpses.TryGetValue(id, out var v) || !GodotObject.IsInstanceValid(v.Node)) { if (t >= 1f) _baleEmerge.Remove(id); continue; }
             const float c1 = 1.70158f, c3 = c1 + 1f;
             var grow = t <= 0 ? 0.01f : 1f + c3 * MathF.Pow(t - 1f, 3f) + c1 * MathF.Pow(t - 1f, 2f); // ease out back: a little overshoot
@@ -182,9 +182,9 @@ public partial class NetClient
         }
         foreach (var (carId, until) in _shakeUntil.ToArray())
         {
-            if (Now >= until || !Ctx.Cars.TryGet(carId, out var car) || !GodotObject.IsInstanceValid(car.Node)) { if (Now >= until) _shakeUntil.Remove(carId); continue; }
-            var env = (float)Math.Min(1.0, (until - Now) / 0.6);
-            var tt = (float)Now;
+            if (Ctx.Now >= until || !Ctx.Cars.TryGet(carId, out var car) || !GodotObject.IsInstanceValid(car.Node)) { if (Ctx.Now >= until) _shakeUntil.Remove(carId); continue; }
+            var env = (float)Math.Min(1.0, (until - Ctx.Now) / 0.6);
+            var tt = (float)Ctx.Now;
             car.Node.GlobalPosition += new Vector3(MathF.Sin(tt * 47f) * 0.02f, MathF.Sin(tt * 61f) * 0.025f, MathF.Cos(tt * 53f) * 0.02f) * env;
         }
     }
@@ -201,21 +201,21 @@ public partial class NetClient
             case HarvesterCodec.FxKind.Drawn: // the reel took somebody: it whirrs up, the engine strains, the body is lifted and tumbled in
                 var catcher = NearestHarvester(at);
                 if (catcher != null) Ctx.Cars.Sounds.PlayLong("harvester.reel_in", at, catcher); else if (Sfx.Enabled) Sfx.Play3D("harvester.reel_in", at); // on the machine, heard the same from any camera
-                _drawIn[m.Id] = new DrawIn { Start = Now, Car = catcher };
-                if (m.Victim != 0) _harvHidden[m.Victim] = Now;
-                if (catcher != null) _shakeUntil[catcher.Id] = Now + HarvesterConfigDraw + HarvesterConfigChew;
+                _drawIn[m.Id] = new DrawIn { Start = Ctx.Now, Car = catcher };
+                if (m.Victim != 0) _harvHidden[m.Victim] = Ctx.Now;
+                if (catcher != null) _shakeUntil[catcher.Id] = Ctx.Now + HarvesterConfigDraw + HarvesterConfigChew;
                 break;
             case HarvesterCodec.FxKind.Swallowed: // gone into the machine: a muffled chewing while it works
                 if (NearestHarvester(at) is { } chewer) Ctx.Cars.Sounds.PlayLong("harvester.chew", at, chewer); else if (Sfx.Enabled) Sfx.Play3D("harvester.chew", at);
                 _drawIn.Remove(m.Id);
-                if (m.Victim != 0) _harvHidden[m.Victim] = Now;
+                if (m.Victim != 0) _harvHidden[m.Victim] = Ctx.Now;
                 break;
             case HarvesterCodec.FxKind.BaleOut: // the chute throws the bale out with the body inside: it flies, lands and rolls (the server moves it)
                 var chute = NearestHarvester(at);
                 Ctx.Cars.Sounds.PlayOnce("harvester.eject", at, chute);
                 Ctx.Cars.Sounds.PlayOnce("harvester.pop", at, chute);
-                _baleEmerge[m.Id] = Now;
-                if (m.Victim != 0) { _baleBody[m.Id] = m.Victim; _harvHidden[m.Victim] = Now; }
+                _baleEmerge[m.Id] = Ctx.Now;
+                if (m.Victim != 0) { _baleBody[m.Id] = m.Victim; _harvHidden[m.Victim] = Ctx.Now; }
                 break;
         }
     }
@@ -251,7 +251,7 @@ public partial class NetClient
         var node = new Node3D { Name = $"Bale{e.Id}" };
         Node3D? spin = null;
         if (ShotFx.Enabled) { spin = new Node3D { Name = "Spin" }; spin.AddChild(MakeBaleModel()); node.AddChild(spin); } // the bale tumbles about its middle: the model hangs under a node that turns
-        Owned.AddChild(node);
+        Ctx.Owned.AddChild(node);
         return new CorpseView { Node = node, View = null, Bale = true, Motion = new BaleMotion { Spin = spin } };
     }
 
@@ -337,7 +337,7 @@ public partial class NetClient
     bool HarvestVictimHidden(ushort id, bool dead)
     {
         if (!_harvHidden.TryGetValue(id, out var t)) return false;
-        if (!dead && Now - t > 2) { _harvHidden.Remove(id); return false; }
+        if (!dead && Ctx.Now - t > 2) { _harvHidden.Remove(id); return false; }
         return dead;
     }
 
@@ -346,7 +346,7 @@ public partial class NetClient
     {
         if (!ShotFx.Enabled || _baleFires.ContainsKey(id)) return;
         Node3D? parent;
-        if (HarvesterCodec.IsStaticBale(id)) { parent = new Node3D { Name = $"BaleFire{id}", Position = at }; Owned.AddChild(parent); }
+        if (HarvesterCodec.IsStaticBale(id)) { parent = new Node3D { Name = $"BaleFire{id}", Position = at }; Ctx.Owned.AddChild(parent); }
         else if (!_corpses.TryGetValue(id, out var v)) return;
         else parent = v.Node;
         var fire = new Node3D { Name = "Fire" };
@@ -378,7 +378,7 @@ public partial class NetClient
             Map?.CropHideArtifact(at, 1.2f);
             var heap = new Node3D { Name = $"BaleAsh{id}", Position = at };
             heap.AddChild(ash);
-            Owned.AddChild(heap);
+            Ctx.Owned.AddChild(heap);
             _ashHeaps.Add(heap);
         }
         else if (_corpses.TryGetValue(id, out var v))
@@ -409,7 +409,7 @@ public partial class NetClient
             (root, state) = _orphanBales[k]; _orphanBales.RemoveAt(k); break;
         }
         root ??= new Node3D { Name = $"DroppedBale{i}", Position = at };
-        if (root.GetParent() == null) Owned.AddChild(root);
+        if (root.GetParent() == null) Ctx.Owned.AddChild(root);
         root.Rotation = new Vector3(0, yaw, 0);
         if (state != BaleState.Ash) { var model = MakeBaleModel(); root.AddChild(model); }
         sw.Bales.Add(root); sw.States.Add(state);
@@ -430,7 +430,7 @@ public partial class NetClient
         if (root == null)
         {
             root = new Node3D { Name = "DroppedBaleFx", Position = at };
-            Owned.AddChild(root);
+            Ctx.Owned.AddChild(root);
             _orphanBales.Add((root, state));
         }
         else if (owner!.States[idx] >= state) return;
@@ -470,11 +470,11 @@ public partial class NetClient
     /// <summary>Once a second: a field's bales fade out <see cref="HarvesterConfig.DroppedBaleFadeS"/> after the last cut there, as the server's do.</summary>
     void FadeDroppedBales()
     {
-        if (_swathsC.Count == 0 || Now < _baleFadeCheck) return;
-        _baleFadeCheck = Now + 1;
+        if (_swathsC.Count == 0 || Ctx.Now < _baleFadeCheck) return;
+        _baleFadeCheck = Ctx.Now + 1;
         var fade = new HarvesterConfig().DroppedBaleFadeS;
         foreach (var sw in _swathsC.Values)
-            if (sw.Bales.Count > 0 && Now - sw.LastCut >= fade) ClearDroppedBales(sw, fadeOnly: true);
+            if (sw.Bales.Count > 0 && Ctx.Now - sw.LastCut >= fade) ClearDroppedBales(sw, fadeOnly: true);
     }
 
     void ClearDroppedBales(ClientSwath sw, bool fadeOnly)

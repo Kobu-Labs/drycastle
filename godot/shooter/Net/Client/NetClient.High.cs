@@ -31,7 +31,7 @@ public partial class NetClient
     /// </summary>
     void UpdateOwnCigarette(bool show)
     {
-        if (!show || _me == null)
+        if (!show || Ctx.Me == null)
         {
             if (_ownCigarette != null && GodotObject.IsInstanceValid(_ownCigarette)) _ownCigarette.QueueFree();
             _ownCigarette = null; _ownSmoke = null; _ownTip = null;
@@ -49,7 +49,7 @@ public partial class NetClient
         };
         _ownCigarette.AddChild(CharacterView.CigaretteModel(c, out var tip));
         _ownTip = tip;
-        _me.Camera.AddChild(_ownCigarette);
+        Ctx.Me.Camera.AddChild(_ownCigarette);
         if (!ShotFx.Enabled) return;
         // the same small warm light the figure has for the others (it is not drawn in the own view, so its light is not there either): it lights the weapon in the hands and what is near
         tip.AddChild(new OmniLight3D
@@ -73,27 +73,27 @@ public partial class NetClient
     }
 
     /// <summary>The local player is high according to the last status message.</summary>
-    public bool OwnHigh => _status.Has(_myId, StatusKind.High);
+    public bool OwnHigh => _status.Has(Ctx.MyId, StatusKind.High);
 
     /// <summary>Once per frame, before the roll is composed (<see cref="FadeOwnCorrection"/>): steps the nausea and applies its look change, roll and FOV to the first-person camera.</summary>
     void UpdateNausea(double delta)
     {
-        if (_me == null || !GodotObject.IsInstanceValid(_me)) return;
+        if (Ctx.Me == null || !GodotObject.IsInstanceValid(Ctx.Me)) return;
         if (Dead || !OwnSpawned)
         {
             UpdateOwnCigarette(false);
-            if (_nausea != null) { _nausea = null; _nauseaRoll = 0; _me.FovWobble = 0; } // dead: the high is gone with the life (the status bit too); nothing lingers into the respawn
+            if (_nausea != null) { _nausea = null; _nauseaRoll = 0; Ctx.Me.FovWobble = 0; } // dead: the high is gone with the life (the status bit too); nothing lingers into the respawn
             return;
         }
         var high = OwnHigh;
-        UpdateOwnCigarette(high && Mode.OnFoot && _me.ZoomFov <= 0); // OnFoot is the same test the sway uses (CutCamera is always set: it is the one composed hook, not a sign of a cut-scene)
+        UpdateOwnCigarette(high && Mode.OnFoot && Ctx.Me.ZoomFov <= 0); // OnFoot is the same test the sway uses (CutCamera is always set: it is the one composed hook, not a sign of a cut-scene)
         if (!high && _nausea is not { Active: true }) { _nauseaRoll = 0; return; }
         _nausea ??= new Nausea(Plantation.Nausea);
         var owned = Mode.OnFoot;
         var (dYaw, dPitch) = _nausea.Step((float)delta, high, owned, GameSettings.Current.ReduceMotion);
-        _me.NudgeLook(dYaw, dPitch);
+        Ctx.Me.NudgeLook(dYaw, dPitch);
         var (roll, fov) = _nausea.Visual;
         _nauseaRoll = owned ? roll : 0f;
-        _me.FovWobble = owned ? fov : 0f;
+        Ctx.Me.FovWobble = owned ? fov : 0f;
     }
 }

@@ -91,7 +91,7 @@ public partial class NetClient
         };
         canister.AddChild(smoke);
         node.AddChild(canister);
-        Owned.AddChild(node);
+        Ctx.Owned.AddChild(node);
         _crates[e.Id] = new CrateView { Node = node, Canopy = canopy, Box = box, Canister = canister, Smoke = smoke };
     }
 
@@ -108,7 +108,7 @@ public partial class NetClient
             _crateNear = null;
             _crateHold.Reset();
             _ringShown = 0;
-            _hud?.SetRadial(null);
+            Ctx.Hud?.SetRadial(null);
         }
     }
 
@@ -141,10 +141,10 @@ public partial class NetClient
 
     ushort? NearestCrateInReach()
     {
-        if (_me == null || Dead || Ctx.Driving) return null;
+        if (Ctx.Me == null || Dead || Ctx.Driving) return null;
         ushort? best = null;
         var bd = CarePackageRules.ReachMetres;
-        var at = _me.GlobalPosition;
+        var at = Ctx.Me.GlobalPosition;
         foreach (var (id, v) in _crates)
         {
             if (IsCrateOpening(id) || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.State != CarePackageRules.StateLanded) continue;
@@ -188,7 +188,7 @@ public partial class NetClient
         target = Math.Max(target, Math.Max(_rozhlas.HoldFraction, Math.Max(_thieves.Loot.HoldFraction, _minerals.HoldFraction)));
         if (target >= _ringShown || GameSettings.Current.ReduceMotion) _ringShown = target;
         else _ringShown = Mathf.MoveToward(_ringShown, target, (float)dt / RingDrainSeconds);
-        _hud?.SetRadial(_ringShown > 0 ? _ringShown : null);
+        Ctx.Hud?.SetRadial(_ringShown > 0 ? _ringShown : null);
     }
 
     void SendOpenCarePackage(ushort crate) =>

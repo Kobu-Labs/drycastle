@@ -84,17 +84,17 @@ public partial class NetClient : IBotHost
     EventLogs IBotHost.Logs => _logs;
     IEnumerable<BotCar> IBotHost.Cars => Ctx.Cars.All.Select(AsBotCar);
     BotCar? IBotHost.Car(ushort id) => Ctx.Cars.TryGet(id, out var v) ? AsBotCar(v) : null;
-    IEnumerable<BotRemote> IBotHost.Remotes => _remotes.Values.Select(r => new BotRemote(r.State, r.LastPos));
+    IEnumerable<BotRemote> IBotHost.Remotes => Ctx.Remotes.Values.Select(r => new BotRemote(r.State, r.LastPos));
     int IBotHost.RocketCount => _rockets.Count;
     VehiclesFile? IBotHost.Vehicles => Vehicles;
     int IBotHost.Snaps => _snaps;
     int IBotHost.Recon => _recon;
     float IBotHost.MaxErr => _maxErr;
-    uint IBotHost.LastTick => _lastTick;
+    uint IBotHost.LastTick => Ctx.LastTick;
     double IBotHost.LastArrival => _lastArrival;
     ushort IBotHost.Seq => _seq;
     float IBotHost.OwnTravel => new Vector2(_meMax.X - _meMin.X, _meMax.Z - _meMin.Z).Length();
-    float IBotHost.BestRemoteTravel => _remotes.Values.Select(r => new Vector2(r.Max.X - r.Min.X, r.Max.Z - r.Min.Z).Length()).DefaultIfEmpty(0f).Max();
+    float IBotHost.BestRemoteTravel => Ctx.Remotes.Values.Select(r => new Vector2(r.Max.X - r.Min.X, r.Max.Z - r.Min.Z).Length()).DefaultIfEmpty(0f).Max();
     RubberStats IBotHost.Rubber { get => _rub; set => _rub = value; }
     NetSim? IBotHost.Sim => Sim;
     int IBotHost.DriveCorrections => _driveCorrections;

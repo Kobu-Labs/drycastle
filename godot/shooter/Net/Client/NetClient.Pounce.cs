@@ -26,7 +26,7 @@ public partial class NetClient
     Vector3 _pLook;
 
     /// <summary>Pinned under the demon: the server holds the body, so it is not predicted, not moved by input, and has no weapon.</summary>
-    bool _pinned => _pv.PinnedMe(_myId);
+    bool _pinned => _pv.PinnedMe(Ctx.MyId);
 
     /// <summary>The camera is rising from the floor after a pin of mine.</summary>
     bool _pRising => _pv.Rising;
@@ -36,7 +36,7 @@ public partial class NetClient
     void OnPounce(DemonPounceMsg m)
     {
         if (m.Stage is PounceStage.Wind or PounceStage.Pinned) _pT = 0;
-        switch (_pv.OnMessage(m, _myId))
+        switch (_pv.OnMessage(m, Ctx.MyId))
         {
             case PounceViewEffect.PinnedMine: BeginPinMine(); break;
             case PounceViewEffect.RiseAfterRelease: BeginRise(true); break;
@@ -49,15 +49,15 @@ public partial class NetClient
     void EndPinMineAtOnce()
     {
         _pFlash = 0f;
-        if (_me != null) _me.Pitch = 0;
+        if (Ctx.Me != null) Ctx.Me.Pitch = 0;
     }
 
     /// <summary>The landing on me: the body is the server's, the camera starts to drop, with a jolt and a flash.</summary>
     void BeginPinMine()
     {
-        if (_me == null) return;
+        if (Ctx.Me == null) return;
         _pending.Clear(); _reconcile = null;
-        _pFrom = _me.Camera.GlobalTransform;
+        _pFrom = Ctx.Me.Camera.GlobalTransform;
         _pRise = 0;
         _pLookSet = false;
         var calm = GameSettings.Current.ReduceMotion;
@@ -70,7 +70,7 @@ public partial class NetClient
     {
         _pRise = 0;
         _pFlash = released ? _pFlash : 0f;
-        if (_me != null) _me.Pitch = 0;
+        if (Ctx.Me != null) Ctx.Me.Pitch = 0;
     }
 
     void PounceShake(double amp)
@@ -91,8 +91,8 @@ public partial class NetClient
     void PounceReset()
     {
         _pv.Reset(); _pLookSet = false; _pFlash = 0;
-        if (_me != null && GodotObject.IsInstanceValid(_me)) { _me.LookLocked = false; _me.Camera.Near = 0.05f; }
-        _hud?.SetPounceWash(0); _hud?.SetPounceHidesCrosshair(false);
+        if (Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me)) { Ctx.Me.LookLocked = false; Ctx.Me.Camera.Near = 0.05f; }
+        Ctx.Hud?.SetPounceWash(0); Ctx.Hud?.SetPounceHidesCrosshair(false);
     }
 
     DemonView? PounceView()
@@ -104,8 +104,8 @@ public partial class NetClient
     /// <summary>Where the victim's body is (the server's held place, the middle of their lying body), or null when they are not here.</summary>
     Vector3? PounceBase()
     {
-        if (_pv.Victim == _myId) return _me != null && GodotObject.IsInstanceValid(_me) ? _me.GlobalPosition : null;
-        return _remotes.TryGetValue(_pv.Victim, out var r) && GodotObject.IsInstanceValid(r.Node) && r.LastT > 0 ? r.LastPos : null;
+        if (_pv.Victim == Ctx.MyId) return Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me) ? Ctx.Me.GlobalPosition : null;
+        return Ctx.Remotes.TryGetValue(_pv.Victim, out var r) && GodotObject.IsInstanceValid(r.Node) && r.LastT > 0 ? r.LastPos : null;
     }
 
     Vector3 PounceHeadDir() => new(MathF.Sin(_pv.Yaw), 0, MathF.Cos(_pv.Yaw));
@@ -125,10 +125,10 @@ public partial class NetClient
         if (cfg.PinS <= 0 && !_pv.Marked && _pLie <= 0 && !_pv.Rising) return;
         _pLie = Mathf.MoveToward(_pLie, pinnedNow ? 1f : 0f, dt / Math.Max(0.05f, pinnedNow ? cfg.DropS : cfg.RiseS));
         if (_pv.Marked) _pT += delta;
-        if (_me == null || !GodotObject.IsInstanceValid(_me)) return;
+        if (Ctx.Me == null || !GodotObject.IsInstanceValid(Ctx.Me)) return;
         var view = PounceView();
-        var marked = _pv.MarkedMe(_myId);
-        _me.LookLocked = marked;
+        var marked = _pv.MarkedMe(Ctx.MyId);
+        Ctx.Me.LookLocked = marked;
         if (marked && _pv.Stage == PounceViewStage.Wind && view != null) TurnToDemon(view, dt);
         if (_pv.Rising)
         {
@@ -137,8 +137,8 @@ public partial class NetClient
         }
         var lying = _pinned || _pRising;
         var near = lying ? 0.02f : 0.05f; // the muzzle is a hand away: the near plane must not clip it
-        if (!Mathf.IsEqualApprox(_me.Camera.Near, near)) _me.Camera.Near = near;
-        _hud?.SetPounceHidesCrosshair(lying);
+        if (!Mathf.IsEqualApprox(Ctx.Me.Camera.Near, near)) Ctx.Me.Camera.Near = near;
+        Ctx.Hud?.SetPounceHidesCrosshair(lying);
         if (view != null)
         {
             var m = view.MuzzleWorld;
@@ -150,28 +150,28 @@ public partial class NetClient
         _pFlash *= MathF.Exp(-dt * (calm ? 4f : 7f));
         var wash = Math.Max(_pinned ? 0.1f : 0f, _pFlash);
         if (_pRising) wash = Math.Max(wash, (calm ? 0.2f : 0.45f) * (1f - Smooth(_pRise)));
-        _hud?.SetPounceWash(wash);
+        Ctx.Hud?.SetPounceWash(wash);
     }
 
     /// <summary>The wind: the view turns to the demon's head in about <see cref="DemonPounceDef.LockS"/>; the mouse is locked, the body moves as before.</summary>
     void TurnToDemon(DemonView view, float dt)
     {
-        var eye = _me!.Camera.GlobalPosition;
+        var eye = Ctx.Me!.Camera.GlobalPosition;
         var dir = view.MuzzleWorld - eye;
         if (dir.LengthSquared() < 0.01f) return;
         dir = dir.Normalized();
         var yaw = MathF.Atan2(-dir.X, -dir.Z);
         var pitch = Mathf.Clamp(MathF.Asin(Mathf.Clamp(dir.Y, -1f, 1f)), -1.4f, 1.4f);
         var k = 1f - MathF.Exp(-3f / Math.Max(0.05f, DemonData.Pounce.LockS) * dt);
-        _me.Yaw = Mathf.LerpAngle(_me.Yaw, yaw, k);
-        _me.Pitch = Mathf.Lerp(_me.Pitch, pitch, k);
+        Ctx.Me.Yaw = Mathf.LerpAngle(Ctx.Me.Yaw, yaw, k);
+        Ctx.Me.Pitch = Mathf.Lerp(Ctx.Me.Pitch, pitch, k);
     }
 
     /// <summary>The pounce's part of the cut camera (<see cref="ComposedCamera"/> is the hook, shared with the death's fall): the drop to the floor and the look at the demon's muzzle while pinned, the rise back to the eye after. Null: the normal eye.</summary>
     Transform3D? PounceCamera(Transform3D eye)
     {
         var cfg = DemonData.Pounce;
-        if (_pinned && _me != null && PounceBase() is { } body)
+        if (_pinned && Ctx.Me != null && PounceBase() is { } body)
         {
             var k = Smooth((float)_pT / Math.Max(0.05f, cfg.DropS));
             var pos = _pFrom.Origin.Lerp(PounceEye(body), k);

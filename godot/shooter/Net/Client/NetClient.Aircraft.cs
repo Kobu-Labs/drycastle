@@ -64,7 +64,7 @@ public partial class NetClient
         var index = AircraftState.Unpack(e.State.State).Kind;
         var kindId = kinds != null && index < kinds.Count ? kinds[index].Id : "helicopter";
         var model = AircraftModel.Build(kindId);
-        Owned.AddChild(model);
+        Ctx.Owned.AddChild(model);
         var view = new AircraftView { Model = model, AltitudeM = kinds != null && index < kinds.Count ? kinds[index].AltitudeM : 0f };
         if (ShotFx.Enabled && kindId != "uav") // the UAV is silent for now (an engine loop is optional in #303)
         {
@@ -87,7 +87,7 @@ public partial class NetClient
         if (reason != WorldDespawnReason.Destroyed || !_aircraft.TryGetValue(id, out var v)) return;
         var at = v.Model.GlobalPosition;
         if (HomingKillShown(at)) return; // a homing missile's kill blast (the Explosion event, with its Blast wave) is already there
-        RocketFx.Explode(Owned, at, AircraftCrashRadius);
+        RocketFx.Explode(Ctx.Owned, at, AircraftCrashRadius);
         _blastDust.BlastFelt(at, AircraftCrashRadius, "explosion.vehicle");
     }
 
@@ -104,7 +104,7 @@ public partial class NetClient
     /// <summary>Places the aircraft, spins their rotors, and finds the local player's gunship (the one they own).</summary>
     void RenderAircraft(double delta)
     {
-        if (_lastTick == 0) return;
+        if (Ctx.LastTick == 0) return;
         var rt = RenderTickNow();
         ushort mineId = 0;
         foreach (var (id, v) in _aircraft)
@@ -118,10 +118,10 @@ public partial class NetClient
                 v.Model.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
                 v.Model.Rotation = new Vector3(0, s.Yaw, -bank); // roll: positive bank is the right wing down
             }
-            if (_myId != 0 && e.State.Owner == _myId) mineId = id;
+            if (Ctx.MyId != 0 && e.State.Owner == Ctx.MyId) mineId = id;
         }
 
-        if (mineId != 0 && _aircraft.TryGetValue(mineId, out var mine) && !Dead && _me != null && _streaks.Gunner.GunDef() is { } gun)
+        if (mineId != 0 && _aircraft.TryGetValue(mineId, out var mine) && !Dead && Ctx.Me != null && _streaks.Gunner.GunDef() is { } gun)
         {
             var mount = mine.Model.GlobalPosition - Vector3.Up * GunshipControl.TurretDropM;
             var groundY = mine.Model.GlobalPosition.Y - mine.AltitudeM;
@@ -131,21 +131,21 @@ public partial class NetClient
             {
                 // the turret takes the look the player had, anchored to the ground point it is on (ground-stabilised, #160)
                 _gunship = mine; _gunDirty = true;
-                _lookYaw = _me.Yaw; _lookPitch = GunshipAim.ClampPitch(_me.Pitch, gun);
-                _rawYaw = _me.Yaw; _rawPitch = _me.Pitch;
+                _lookYaw = Ctx.Me.Yaw; _lookPitch = GunshipAim.ClampPitch(Ctx.Me.Pitch, gun);
+                _rawYaw = Ctx.Me.Yaw; _rawPitch = Ctx.Me.Pitch;
                 _aimPoint = GunshipAim.AimPoint(ToNum(mount), _lookYaw, _lookPitch, groundY, maxD);
-                _me.TurretLook = true;
+                Ctx.Me.TurretLook = true;
             }
             GunAimStep(mount, groundY, maxD, gun);
             var (yaw, pitch) = GunshipAim.View(ToNum(mount), _aimPoint, gun);
             _turretViewYaw = starting ? yaw : GunshipAim.Unwrap(_turretViewYaw, yaw);
-            _me.Turret(mount, _turretViewYaw, pitch);
-            _me.ZoomFov = GameSettings.Current.Fov / (_gunStatus.Zoom < gun.ZoomLevels.Count ? gun.ZoomLevels[_gunStatus.Zoom] : 1f);
+            Ctx.Me.Turret(mount, _turretViewYaw, pitch);
+            Ctx.Me.ZoomFov = GameSettings.Current.Fov / (_gunStatus.Zoom < gun.ZoomLevels.Count ? gun.ZoomLevels[_gunStatus.Zoom] : 1f);
             if (_gunDirty) { _gunOverlay.Present(_gunStatus, gun, _streaks.Gunner.HeliCycleWeapons && !_streaks.Gunner.Ac130Active, _streaks.Gunner.Ac130Active); _gunDirty = false; }
             // the timed streak's clock: the helicopter's, or the AC-130's time left (whole seconds, its kills are not counted here)
             var (timer, kills) = _streaks.Gunner.Ac130Active ? (Strings.F("ac130.timer", (int)Math.Ceiling(_streaks.Gunner.Ac130SecondsLeft)), "") : _streaks.Gunner.HeliClock();
             _gunOverlay.SetClock(timer, kills);
-            _gunOverlay.SetMarkers(_me.Camera, EnemyMarkerPoints());
+            _gunOverlay.SetMarkers(Ctx.Me.Camera, EnemyMarkerPoints());
         }
         else if (_gunship != null) EndGunship();
 
@@ -162,9 +162,9 @@ public partial class NetClient
     List<Vector3> EnemyMarkerPoints()
     {
         _enemyMarkers.Clear();
-        foreach (var (id, r) in _remotes)
+        foreach (var (id, r) in Ctx.Remotes)
         {
-            if (id == _myId || Match.AreFriends(_myId, id) || r.State == EntityState.Dead || !GodotObject.IsInstanceValid(r.Node)) continue;
+            if (id == Ctx.MyId || Match.AreFriends(Ctx.MyId, id) || r.State == EntityState.Dead || !GodotObject.IsInstanceValid(r.Node)) continue;
             _enemyMarkers.Add(r.Node.GlobalPosition + Vector3.Up * 1.0f);
         }
         return _enemyMarkers;
@@ -176,7 +176,7 @@ public partial class NetClient
         _gunship = null;
         _gunDirty = false;
         _gunOverlay.Dismiss();
-        if (_me != null) { _me.TurretLook = false; _me.EndChase(_turretViewYaw); } // back to the body, looking where the turret looked
+        if (Ctx.Me != null) { Ctx.Me.TurretLook = false; Ctx.Me.EndChase(_turretViewYaw); } // back to the body, looking where the turret looked
     }
 
     static System.Numerics.Vector3 ToNum(Vector3 v) => new(v.X, v.Y, v.Z);
@@ -191,9 +191,9 @@ public partial class NetClient
     /// </summary>
     void GunAimStep(Vector3 mount, float groundY, float maxDistance, GunshipDef gun)
     {
-        var dYaw = GunshipAim.Wrap(_me!.Yaw - _rawYaw);
-        var dPitch = _me.Pitch - _rawPitch;
-        _rawYaw = _me.Yaw; _rawPitch = _me.Pitch;
+        var dYaw = GunshipAim.Wrap(Ctx.Me!.Yaw - _rawYaw);
+        var dPitch = Ctx.Me.Pitch - _rawPitch;
+        _rawYaw = Ctx.Me.Yaw; _rawPitch = Ctx.Me.Pitch;
         if (dYaw == 0 && dPitch == 0) return;
         var (viewYaw, viewPitch) = GunshipAim.View(ToNum(mount), _aimPoint, gun);
         (_lookYaw, _lookPitch) = GunshipAim.Turn(viewYaw, viewPitch, dYaw, dPitch, MagnificationOf(gun), gun);
@@ -206,7 +206,7 @@ public partial class NetClient
     /// </summary>
     float GunnerLook(ref MoveInput mi)
     {
-        if (_gunship == null || _me == null) return _me?.Pitch ?? 0f;
+        if (_gunship == null || Ctx.Me == null) return Ctx.Me?.Pitch ?? 0f;
         mi.Yaw = _lookYaw;
         return _lookPitch;
     }
@@ -215,5 +215,5 @@ public partial class NetClient
     /// The aim the input carries while steering a turret (#161): the ground point the reticle is on, from this client's own muzzle.
     /// The server fires from its later muzzle toward this point, so the rounds land where the reticle is. Null when not at a turret.
     /// </summary>
-    System.Numerics.Vector3? GunnerAim => _gunship != null && _me != null ? _aimPoint : null;
+    System.Numerics.Vector3? GunnerAim => _gunship != null && Ctx.Me != null ? _aimPoint : null;
 }

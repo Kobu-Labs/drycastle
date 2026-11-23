@@ -30,8 +30,8 @@ public partial class NetClient
     {
         var gi = GrenadeWeapon();
         var hasRound = gi >= 0 && Ammo is { } a && gi < a.Slots.Count && a.Slots[gi].Mag > 0;
-        var onFoot = _me != null && !Bot && Mode.ShowsViewmodel && !Ctx.Driving && !OwnBodyFlung && _gunship == null && Input.MouseMode == Input.MouseModeEnum.Captured;
-        var canAim = GrenadeThrower.CanAim(onFoot, !_binoculars, _me?.State.OnLadder ?? false, hasRound, ScudScreenOn);
+        var onFoot = Ctx.Me != null && !Bot && Mode.ShowsViewmodel && !Ctx.Driving && !OwnBodyFlung && _gunship == null && Input.MouseMode == Input.MouseModeEnum.Captured;
+        var canAim = GrenadeThrower.CanAim(onFoot, !_binoculars, Ctx.Me?.State.OnLadder ?? false, hasRound, ScudScreenOn);
         _grenadeKey.Tick(mi.Has(MoveButtons.Throw), mi.Has(MoveButtons.Aim), canAim);
         if (!canAim) mi.Buttons &= ~MoveButtons.Throw;
         if (_grenadeKey.Aiming) mi.Buttons &= ~MoveButtons.Fire; // the weapon is out of sight: the trigger does nothing
@@ -43,17 +43,17 @@ public partial class NetClient
     /// <summary>Every frame: draws the arc while aiming, hides it otherwise.</summary>
     void UpdateThrowArc()
     {
-        if (!_grenadeKey.Aiming || _me == null || Weapons == null || GrenadeWeapon() is not (var gi and >= 0) || Weapons.Weapons[gi] is not { Grenade: { } g } w)
+        if (!_grenadeKey.Aiming || Ctx.Me == null || Weapons == null || GrenadeWeapon() is not (var gi and >= 0) || Weapons.Weapons[gi] is not { Grenade: { } g } w)
         {
             if (_arcRibbon != null) { _arcRibbon.Visible = false; _arcMark!.Visible = false; }
             return;
         }
         if (_arcRibbon == null) MakeArc();
-        var cam = _me.Camera;
+        var cam = Ctx.Me.Camera;
         var from = cam.GlobalPosition;
         var fwd = -cam.GlobalTransform.Basis.Z;
         var space = World.GetWorld3D().DirectSpaceState;
-        var self = new Godot.Collections.Array<Rid> { _me.GetRid() };
+        var self = new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
         var trace = GrenadeArc.Fly(g, new NVec3(from.X, from.Y, from.Z), new NVec3(fwd.X, fwd.Y, fwd.Z) * w.ProjectileSpeed, (a, dir, len) =>
         {
             var o = new Vector3(a.X, a.Y, a.Z); var d = new Vector3(dir.X, dir.Y, dir.Z);
@@ -107,7 +107,7 @@ public partial class NetClient
             },
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, TopLevel = true,
         };
-        Owned.AddChild(_arcRibbon);
-        Owned.AddChild(_arcMark);
+        Ctx.Owned.AddChild(_arcRibbon);
+        Ctx.Owned.AddChild(_arcMark);
     }
 }

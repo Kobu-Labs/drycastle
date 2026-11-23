@@ -38,7 +38,7 @@ public partial class NetClient
     void SpawnPoseDemo()
     {
         _poseDemoDone = true;
-        var yaw = _me!.Yaw;
+        var yaw = Ctx.Me!.Yaw;
         var forward = new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw));
         var right = new Vector3(Mathf.Cos(yaw), 0, -Mathf.Sin(yaw));
         var suit = Camo.Data.SuitPreset("ghillie_grass")?.Spec ?? CamoSpec.Default;
@@ -62,7 +62,7 @@ public partial class NetClient
             });
             World.AddChild(node);
             var along = (i - (DemoPoses.Length - 1) / 2f) * 1.5f;
-            node.GlobalPosition = _me.GlobalPosition + forward * 6f + right * along;
+            node.GlobalPosition = Ctx.Me.GlobalPosition + forward * 6f + right * along;
             node.Rotation = new Vector3(0, yaw + Mathf.Pi, 0); // facing the player
         }
         GD.Print($"pose-demo: {DemoPoses.Length} characters placed 6 m ahead of the spawn");

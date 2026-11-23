@@ -33,9 +33,9 @@ public partial class NetClient
     {
         var before = (Mode with { Dead = false }).Resolve();
         var underwater = false;
-        if (_me != null && GodotObject.IsInstanceValid(_me) && Water.Bodies.Count > 0)
+        if (Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me) && Water.Bodies.Count > 0)
         {
-            var eye = _me.Camera.GlobalPosition;
+            var eye = Ctx.Me.Camera.GlobalPosition;
             underwater = Water.DepthAt(new NVec3(eye.X, eye.Y, eye.Z)) > 0f;
         }
         _death.Begin(DeathPresentation.Plan(before, underwater, drowned: false, GameSettings.Current.ReduceMotion, respawnDelay, _deaths, flight));
@@ -49,18 +49,18 @@ public partial class NetClient
         _death.End();
         _deathFrom = null;
         _deathLook = null;
-        _hud?.SetBlood(0);
+        Ctx.Hud?.SetBlood(0);
     }
 
     /// <summary>Every frame: the clock, the overlays, the own corpse. Runs before <see cref="UpdatePounce"/>.</summary>
     void UpdateDeath(double delta)
     {
-        if (_me != null && GodotObject.IsInstanceValid(_me)) _me.CutCamera ??= ComposedCamera;
+        if (Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me)) Ctx.Me.CutCamera ??= ComposedCamera;
         _death.Tick((float)delta);
         if (_death.Active)
         {
-            _hud?.SetBlood(_death.BloodNow, _deaths);
-            _hud?.SetRespawnScrim(_death.ScrimNow);
+            Ctx.Hud?.SetBlood(_death.BloodNow, _deaths);
+            Ctx.Hud?.SetRespawnScrim(_death.ScrimNow);
         }
         var hide = _death.HidesOwnCorpse;
         if (_deathHidesCorpse.Update(hide) || hide) ShowOwnCorpse(!hide);
@@ -70,7 +70,7 @@ public partial class NetClient
     {
         foreach (var (id, v) in _corpses)
         {
-            if (v.Giant || v.Bale || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.Owner != _myId) continue;
+            if (v.Giant || v.Bale || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.Owner != Ctx.MyId) continue;
             if (v.Node.Visible != visible) v.Node.Visible = visible;
         }
     }
@@ -114,12 +114,12 @@ public partial class NetClient
             from = pose;
             var back = from.Basis.Z; // the view looks along -Z: +Z is behind it
             var room = 1f;
-            if (_me != null && GodotObject.IsInstanceValid(_me) && _me.IsInsideTree())
+            if (Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me) && Ctx.Me.IsInsideTree())
             {
                 var q = PhysicsRayQueryParameters3D.Create(from.Origin, from.Origin + back * (DeathPresentation.ThrownBackM + 0.3f));
                 q.CollisionMask = CollisionLayers.OnFoot;
-                q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
-                var hit = _me.GetWorld3D().DirectSpaceState.IntersectRay(q);
+                q.Exclude = new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
+                var hit = Ctx.Me.GetWorld3D().DirectSpaceState.IntersectRay(q);
                 if (hit.Count > 0) room = Mathf.Clamp((from.Origin.DistanceTo(hit["position"].AsVector3()) - 0.3f) / DeathPresentation.ThrownBackM, 0f, 1f);
             }
             from.Origin += back * (DeathPresentation.ThrownBackM * room) + Vector3.Up * DeathPresentation.ThrownUpM * room;
@@ -146,7 +146,7 @@ public partial class NetClient
         CorpseView? newest = null;
         foreach (var (id, v) in _corpses)
         {
-            if (v.Giant || v.Bale || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.Owner != _myId) continue;
+            if (v.Giant || v.Bale || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.Owner != Ctx.MyId) continue;
             if (newest == null || v.Born > newest.Born) newest = v;
         }
         return newest is { Decided: true } ? newest.Node.GlobalPosition : null;
@@ -155,12 +155,12 @@ public partial class NetClient
     /// <summary>How much of a fall's travel (forward or back) fits before a wall: 0..1 (a body that falls against a wall does not push the view into it).</summary>
     float PushRoom(Vector3 from, Vector3 forward, FallKind kind)
     {
-        if (_me == null || !GodotObject.IsInstanceValid(_me) || !_me.IsInsideTree()) return 1f;
+        if (Ctx.Me == null || !GodotObject.IsInstanceValid(Ctx.Me) || !Ctx.Me.IsInsideTree()) return 1f;
         var dir = kind == FallKind.Backward ? -forward : forward;
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * (DeathPresentation.MaxPushM + 0.3f));
         q.CollisionMask = CollisionLayers.OnFoot;
-        q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
-        var hit = _me.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        q.Exclude = new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
+        var hit = Ctx.Me.GetWorld3D().DirectSpaceState.IntersectRay(q);
         if (hit.Count == 0) return 1f;
         return Mathf.Clamp((from.DistanceTo(hit["position"].AsVector3()) - 0.3f) / DeathPresentation.MaxPushM, 0f, 1f);
     }
@@ -168,11 +168,11 @@ public partial class NetClient
     /// <summary>The height of the ground (or a vehicle's roof) below <paramref name="from"/>: a ray down, so the camera never ends inside the floor. Without a hit, an eye's height lower.</summary>
     float GroundBelow(Vector3 from)
     {
-        if (_me == null || !GodotObject.IsInstanceValid(_me) || !_me.IsInsideTree()) return from.Y - 1.5f;
+        if (Ctx.Me == null || !GodotObject.IsInstanceValid(Ctx.Me) || !Ctx.Me.IsInsideTree()) return from.Y - 1.5f;
         var q = PhysicsRayQueryParameters3D.Create(from, from + Vector3.Down * 6f);
         q.CollisionMask = CollisionLayers.OnFoot;
-        q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
-        var hit = _me.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        q.Exclude = new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
+        var hit = Ctx.Me.GetWorld3D().DirectSpaceState.IntersectRay(q);
         return hit.Count > 0 ? hit["position"].AsVector3().Y : from.Y - 1.5f;
     }
 }

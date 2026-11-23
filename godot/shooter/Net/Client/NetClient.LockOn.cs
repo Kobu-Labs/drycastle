@@ -50,7 +50,7 @@ public partial class NetClient
         switch (kind)
         {
             case EventKind.LockState when LockCodec.DecodeState(payload) is { } s:
-                _lock = s; _lockAt = Now;
+                _lock = s; _lockAt = Ctx.Now;
                 break;
             case EventKind.LockAlert when LockCodec.DecodeAlert(payload) is { } a:
                 if (a.Level == LockAlert.None) _lockAlerts.Remove(a.Aircraft); else _lockAlerts[a.Aircraft] = a.Level;
@@ -65,7 +65,7 @@ public partial class NetClient
     float LockProgress => _lock.Phase switch
     {
         LockPhase.Locked => 1f,
-        LockPhase.Locking => Math.Clamp(_lock.Progress + (_lock.Tracking && _lock.Seconds > 0 ? (float)(Now - _lockAt) / _lock.Seconds : 0f), 0f, 1f),
+        LockPhase.Locking => Math.Clamp(_lock.Progress + (_lock.Tracking && _lock.Seconds > 0 ? (float)(Ctx.Now - _lockAt) / _lock.Seconds : 0f), 0f, 1f),
         _ => 0f,
     };
 
@@ -74,19 +74,19 @@ public partial class NetClient
 
     /// <summary>The Lock of the weapon in the local player's hand, when its sight should be up.</summary>
     LockDef? LauncherHeld() =>
-        !Dead && _me != null && _gunship == null && !InUnarmedSeat && Weapons != null && Ammo is { } a && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1].Lock : null;
+        !Dead && Ctx.Me != null && _gunship == null && !InUnarmedSeat && Weapons != null && Ammo is { } a && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1].Lock : null;
 
     /// <summary>Every frame: the shooter's sight and beeps, the owner's warning and beeps.</summary>
     void RenderLockOn()
     {
         if (LauncherHeld() is { } def && Ammo is { } a)
         {
-            _hud?.SetLauncherHidesCrosshair(true);
+            Ctx.Hud?.SetLauncherHidesCrosshair(true);
             Vector3? target = null; var range = 0f; var unlimited = false;
             if (_lock.Phase != LockPhase.Idle && LockTargetPosition(_lock.Target) is { } at)
             {
                 target = at;
-                range = _me!.Camera.GlobalPosition.DistanceTo(at) / def.RangeM;
+                range = Ctx.Me!.Camera.GlobalPosition.DistanceTo(at) / def.RangeM;
                 unlimited = def.UnlimitedRange.Contains(AircraftKindId(_lock.Target));
             }
             var (mag, reserve) = a.Slots[a.Slot - 1];
@@ -97,25 +97,25 @@ public partial class NetClient
         else if (_lockSight.Visible)
         {
             _lockSight.Dismiss();
-            _hud?.SetLauncherHidesCrosshair(false);
+            Ctx.Hud?.SetLauncherHidesCrosshair(false);
         }
 
         var worst = LockAlert.None;
         foreach (var level in _lockAlerts.Values) if (level > worst) worst = level;
         _lockAlert.Present(Dead ? LockAlert.None : worst);
-        if (worst != LockAlert.None && Sfx.Enabled && Now >= _lockWarnAt)
+        if (worst != LockAlert.None && Sfx.Enabled && Ctx.Now >= _lockWarnAt)
         {
             Sfx.Play2D("lock.warn");
-            _lockWarnAt = Now + worst switch { LockAlert.Launched => 0.18, LockAlert.Locked => 0.4, _ => 0.9 };
+            _lockWarnAt = Ctx.Now + worst switch { LockAlert.Launched => 0.18, LockAlert.Locked => 0.4, _ => 0.9 };
         }
     }
 
     void SeekerBeep(float progress)
     {
-        if (!Sfx.Enabled || Now < _lockBeepAt) return;
-        if (_lock.Phase == LockPhase.Locked) { Sfx.Play2D("lock.tone"); _lockBeepAt = Now + ToneEveryS; return; }
+        if (!Sfx.Enabled || Ctx.Now < _lockBeepAt) return;
+        if (_lock.Phase == LockPhase.Locked) { Sfx.Play2D("lock.tone"); _lockBeepAt = Ctx.Now + ToneEveryS; return; }
         Sfx.Play2D("lock.beep", _lock.Phase == LockPhase.Idle ? -8f : 0f); // quieter while it only searches
-        _lockBeepAt = Now + (_lock.Phase == LockPhase.Idle ? BeepSearchS : Mathf.Lerp((float)BeepSlowS, (float)BeepFastS, progress));
+        _lockBeepAt = Ctx.Now + (_lock.Phase == LockPhase.Idle ? BeepSearchS : Mathf.Lerp((float)BeepSlowS, (float)BeepFastS, progress));
     }
 
     /// <summary>Where a lock target is drawn: an Aircraft's model, or a flown helicopter's vehicle node. Null when it is not in view.</summary>
@@ -134,28 +134,28 @@ public partial class NetClient
     /// <summary>A homing missile leaves a launcher: drawn from the launch, flown by <see cref="RenderRockets"/> after its Aircraft, ended by the Explosion with its id.</summary>
     void OnHomingLaunch(HomingLaunchMsg l)
     {
-        if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
+        if (Ctx.Remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Ctx.Now + 0.45;
         if (!EchoOfPredicted(l.Owner))
         {
-            if (Sfx.Enabled) { var snd = SoundRules.Event("launch", WeaponId(l.Weapon)); if (l.Owner == _myId) Sfx.Play2D(snd); else Sfx.Play3D(snd, G(l.Origin)); }
-            if (l.Owner == _myId) _viewmodel?.Flash(0.5f); else if (_remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
+            if (Sfx.Enabled) { var snd = SoundRules.Event("launch", WeaponId(l.Weapon)); if (l.Owner == Ctx.MyId) Sfx.Play2D(snd); else Sfx.Play3D(snd, G(l.Origin)); }
+            if (l.Owner == Ctx.MyId) _viewmodel?.Flash(0.5f); else if (Ctx.Remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
         }
         if (_deadRockets.Contains(l.Id) || !ShotFx.Enabled || Weapons == null || _rockets.ContainsKey(l.Id)) return;
         var speed = l.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[l.Weapon].ProjectileSpeed : 160f;
         var to = LockTargetPosition(l.Target) is { } tp ? new NVec3(tp.X, tp.Y, tp.Z) - l.Origin : NVec3.UnitY;
-        _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(to), At = Now, Speed = speed, Homing = true, Target = l.Target, Arrive = l.Seconds > 0 ? Now + l.Seconds : 0 };
+        _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Ctx.Owned), Born = Ctx.Now, Pos = l.Origin, Dir = NVec3.Normalize(to), At = Ctx.Now, Speed = speed, Homing = true, Target = l.Target, Arrive = l.Seconds > 0 ? Ctx.Now + l.Seconds : 0 };
     }
 
     /// <summary>One frame of a homing missile: it closes on where its Aircraft is drawn at the rate that lands it there on time; with the Aircraft gone it flies straight on.</summary>
     void StepHoming(Rocket r)
     {
-        var dt = (float)(Now - r.At);
-        r.At = Now;
+        var dt = (float)(Ctx.Now - r.At);
+        r.At = Ctx.Now;
         if (dt <= 0) return;
         if (LockTargetPosition(r.Target) is { } p)
         {
             // an Aircraft: arrives when the server's hit does; a helicopter (Arrive 0, Seconds 0): flown as the server does, at its speed, straight at the vehicle
-            var next = r.Arrive <= 0 ? LockRules.Pursue(r.Pos, new NVec3(p.X, p.Y, p.Z), r.Speed, 0f, dt).Next : LockRules.Chase(r.Pos, new NVec3(p.X, p.Y, p.Z), (float)(r.Arrive - Now) + dt, dt);
+            var next = r.Arrive <= 0 ? LockRules.Pursue(r.Pos, new NVec3(p.X, p.Y, p.Z), r.Speed, 0f, dt).Next : LockRules.Chase(r.Pos, new NVec3(p.X, p.Y, p.Z), (float)(r.Arrive - Ctx.Now) + dt, dt);
             var step = next - r.Pos;
             if (step.LengthSquared() > 1e-8f) r.Dir = NVec3.Normalize(step);
             r.Pos = next;
@@ -166,9 +166,9 @@ public partial class NetClient
     /// <summary>The blast of a homing missile's hit; a big one (the kill's) is remembered so the Aircraft's own crash blast is skipped.</summary>
     void NoteHomingBlast(Vector3 at, float radius)
     {
-        if (radius >= DustRules.FrontMinRadius) _homingKill = (Now, at);
+        if (radius >= DustRules.FrontMinRadius) _homingKill = (Ctx.Now, at);
     }
 
     /// <summary>Whether a shot-down Aircraft at <paramref name="at"/> has just had a homing missile's kill blast drawn where it flew.</summary>
-    bool HomingKillShown(Vector3 at) => Now - _homingKill.T < 0.75 && _homingKill.At.DistanceTo(at) < 60f;
+    bool HomingKillShown(Vector3 at) => Ctx.Now - _homingKill.T < 0.75 && _homingKill.At.DistanceTo(at) < 60f;
 }

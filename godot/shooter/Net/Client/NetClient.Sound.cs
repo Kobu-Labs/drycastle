@@ -31,7 +31,7 @@ public partial class NetClient
     {
         if (!Sfx.Enabled) return;
         var id = SoundRules.Event("shot", WeaponId(sh.Weapon));
-        if (sh.Shooter == _myId) Sfx.Play2D(id); else Sfx.Play3D(id, G(sh.Origin));
+        if (sh.Shooter == Ctx.MyId) Sfx.Play2D(id); else Sfx.Play3D(id, G(sh.Origin));
         if (!melee) Sfx.Play3D("impact", G(sh.End));
     }
 
@@ -39,24 +39,24 @@ public partial class NetClient
     {
         if (!Sfx.Enabled) return;
         var id = SoundRules.Event("launch", WeaponId(l.Weapon));
-        if (l.Owner == _myId) Sfx.Play2D(id); else Sfx.Play3D(id, G(l.Origin));
+        if (l.Owner == Ctx.MyId) Sfx.Play2D(id); else Sfx.Play3D(id, G(l.Origin));
     }
 
     void SfxHit(HitMsg h)
     {
         if (!Sfx.Enabled) return;
-        var mine = h.Attacker == _myId && h.Victim != _myId;
+        var mine = h.Attacker == Ctx.MyId && h.Victim != Ctx.MyId;
         if (mine) Sfx.Play2D(h.Kill ? "kill.confirm" : "hit.tick");
         if (Weapons?.Weapons.ElementAtOrDefault(h.Weapon) is { Kind: WeaponKind.Melee } w && Ctx.PositionOf(h.Victim) is { } at)
         {
-            if (h.Attacker == _myId) Sfx.Play2D(SoundRules.Event("hit", w.Id)); else Sfx.Play3D(SoundRules.Event("hit", w.Id), at);
+            if (h.Attacker == Ctx.MyId) Sfx.Play2D(SoundRules.Event("hit", w.Id)); else Sfx.Play3D(SoundRules.Event("hit", w.Id), at);
         }
     }
 
     void SfxDeath(DeathMsg d)
     {
         if (!Sfx.Enabled) return;
-        if (d.Victim == _myId) Sfx.Play2D("death");
+        if (d.Victim == Ctx.MyId) Sfx.Play2D("death");
         else if (Ctx.PositionOf(d.Victim) is { } at) Sfx.Play3D("death", at);
     }
 
@@ -67,7 +67,7 @@ public partial class NetClient
         if (_sfxSlot != 0 && a.Slot != _sfxSlot) Sfx.Play2D("switch");
         _sfxSlot = a.Slot;
         var reloading = a.ReloadRemaining > 0;
-        if (reloading && !_sfxReloading && Now > _pReloadUntil) Sfx.Play2D(SoundRules.Event("reload", WeaponId(a.Slot - 1)));
+        if (reloading && !_sfxReloading && Ctx.Now > _pReloadUntil) Sfx.Play2D(SoundRules.Event("reload", WeaponId(a.Slot - 1)));
         _sfxReloading = reloading;
     }
 
@@ -84,8 +84,8 @@ public partial class NetClient
     /// <summary>Own footsteps from horizontal speed and distance, and a thud on landing from a fall. One surface in v1 (ground kind is not cheap to query).</summary>
     void SfxOwnMovement(float dt)
     {
-        if (!Sfx.Enabled || _me == null || Ctx.Driving || Dead) return;
-        var s = _me.State;
+        if (!Sfx.Enabled || Ctx.Me == null || Ctx.Driving || Dead) return;
+        var s = Ctx.Me.State;
         var speed = MathF.Sqrt(s.Velocity.X * s.Velocity.X + s.Velocity.Z * s.Velocity.Z);
         if (SoundRules.FootstepDue(ref _sfxStepAcc, speed, dt, s.OnFloor)) Sfx.Play2D("footstep");
         if (!s.OnFloor) { _sfxWasAir = true; _sfxAirVy = s.Velocity.Y; }
