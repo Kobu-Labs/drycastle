@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Net.Server.Rewind;
+using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Weapons;
 using System.Diagnostics;
@@ -155,10 +156,10 @@ public partial class NetServer
         foreach (var t in rewound)
             foreach (var now in cur)
                 if (now.Id == t.Id) { speeds.Add(((now.Feet - t.Feet).Length() / (back / (float)Wire.TickRate)).ToString("F1", System.Globalization.CultureInfo.InvariantCulture)); break; }
-        var hr = HitMath.Raycast(N(eye), N(dir), range, float.PositiveInfinity, rewound, c.Id);
-        var hn = HitMath.Raycast(N(eye), N(dir), range, float.PositiveInfinity, cur, c.Id);
+        var hr = HitMath.Raycast(eye.ToNumerics(), dir.ToNumerics(), range, float.PositiveInfinity, rewound, c.Id);
+        var hn = HitMath.Raycast(eye.ToNumerics(), dir.ToNumerics(), range, float.PositiveInfinity, cur, c.Id);
         // the target the shooter aimed at: the rewound one nearest to the ray (chest height), and how far the ray passes from it then and from the same player now
-        NVec3 ne = N(eye), nd = N(dir);
+        NVec3 ne = eye.ToNumerics(), nd = dir.ToNumerics();
         float Lat(NVec3 feet) { var v = feet + new NVec3(0, 1.0f, 0) - ne; var al = NVec3.Dot(v, nd); return al <= 0 ? float.MaxValue : (v - nd * al).Length(); }
         ushort aimed = 0; var aimedLat = float.MaxValue; var aimedDist = 0f; var latNow = float.MaxValue;
         foreach (var t in rewound)

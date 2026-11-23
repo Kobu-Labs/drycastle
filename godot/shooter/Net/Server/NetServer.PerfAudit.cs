@@ -1,8 +1,9 @@
+using Godot;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Net;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using Godot;
-using Drycastle.ShooterCore.Net;
 
 namespace Drycastle.Shooter.Net.Server;
 
@@ -116,7 +117,7 @@ public partial class NetServer
     {
         if (_audit == null) return;
         _auditViewers.Clear();
-        foreach (var c in _byId.Values) _auditViewers.Add(N(c.Body.GlobalPosition));
+        foreach (var c in _byId.Values) _auditViewers.Add(c.Body.GlobalPosition.ToNumerics());
         _audit.Tick(world, _auditViewers, _clients.Values.Count(c => c.Joined), _elapsed);
     }
 }
