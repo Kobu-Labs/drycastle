@@ -36,7 +36,6 @@ public partial class EditorMode
     // The fill is striped: a full band of the kind's colour, then a faint one (StripeTexture), so a zone reads at a glance on any ground.
     const float ZoneFill = 0.55f, ZoneFillSelected = 0.85f;
     const float ZoneFillGhost = 0.3f, ZoneEdgeGhost = 0.5f; // the selected kind where an obstacle covers it
-    const float StripeTileM = 24f; // one texture tile on the ground: bands 4 m wide, 8.5 m apart (period)
     const float ZoneMarchTilesPerS = 0.125f; // the bands of the selected kind move 3 m/s
     const float ZoneMarchWhite = 0.7f;       // alpha of the white band between two bands of the tint
     public const string OutlineZoneMarked = "outline_zone_marked";
@@ -65,7 +64,7 @@ public partial class EditorMode
     readonly TriangleBudget _zoBudget = new();
     ArrayMesh? _zoArrayMesh;
     List<string> _zoOrder = new();
-    readonly Dictionary<string, GroundMapType> _zoTypes = new();   // key: the kind
+    readonly Dictionary<string, AreaSet> _zoTypes = new();   // key: the kind
 
     public bool ZoneOverlayShown => _zoOn;
     /// <summary>Zones are drawn and pointed at: the overlay is on, or a kind is selected (it is then shown alone, also with the overlay off).</summary>
@@ -83,7 +82,7 @@ public partial class EditorMode
     /// <summary>Tell the validator which kinds exist (it checks a zone's kind against the map's catalog; no catalog: no check).</summary>
     void SyncCatalogs()
     {
-        GroundRows(); // sets what the ground type validation needs
+        Ground.Rows(); // sets what the ground type validation needs
         ObjectEdits.ZoneKinds = Map.ZoneKinds.Select(k => k.Name).ToList();
     }
 
@@ -185,7 +184,7 @@ public partial class EditorMode
             if (!_zSync && Shapes.SelectedZoneId != null && i >= 0 && i < Map.ZoneKinds.Count) SetZoneKind(Shapes.SelectedZoneId, Map.ZoneKinds[(int)i].Name);
             _zKindOpt.ReleaseFocus();
         };
-        _zKindRow = FieldRow("Kind", _zKindOpt, "The zone kind of the selected zone");
+        _zKindRow = Ui.FieldRow("Kind", _zKindOpt, "The zone kind of the selected zone");
         Shapes.Panel.BuildActions(page, ShapeKind.Zone, _zKindRow);
         Shapes.Panel.BuildDelete(page, ShapeKind.Zone);
         BuildZoneMarks(page);
@@ -359,8 +358,8 @@ public partial class EditorMode
             var rings = a.Rings.Select(Open).Where(r => r.Length >= 3).ToList();
             var outers = new List<Vector2[]>(); var holes = new List<Vector2[]>();
             foreach (var ring in rings)
-                (rings.Count(o => !ReferenceEquals(o, ring) && PointInRing(o, ring[0])) % 2 == 0 ? outers : holes).Add(ring);
-            var of = holes.GroupBy(h => outers.Where(o => PointInRing(o, h[0])).OrderBy(o => Mathf.Abs(ParcelInfo.RingArea(o))).FirstOrDefault())
+                (rings.Count(o => !ReferenceEquals(o, ring) && AreaSurfaces.PointInRing(o, ring[0])) % 2 == 0 ? outers : holes).Add(ring);
+            var of = holes.GroupBy(h => outers.Where(o => AreaSurfaces.PointInRing(o, h[0])).OrderBy(o => Mathf.Abs(ParcelInfo.RingArea(o))).FirstOrDefault())
                 .Where(g => g.Key != null).ToDictionary(g => g.Key!, g => g.ToList());
             var i = 0;
             foreach (var o in outers)
@@ -470,9 +469,9 @@ public partial class EditorMode
             {
                 var rings = new List<Vector2[]> { z.Points.Select(c => Map.FromAbsolute(c.x, c.y)).ToArray() };
                 if (z.Holes != null) rings.AddRange(z.Holes.Select(h => h.Select(c => Map.FromAbsolute(c.x, c.y)).ToArray()));
-                if (!_zoTypes.TryGetValue(z.Kind, out var t)) _zoTypes[z.Kind] = t = new GroundMapType { Name = z.Kind };
+                if (!_zoTypes.TryGetValue(z.Kind, out var t)) _zoTypes[z.Kind] = t = new AreaSet { Name = z.Kind };
                 t.Areas++;
-                SplitRings(rings, t, out var area);
+                AreaSurfaces.Split(rings, t, out var area);
                 t.AreaM2 += area;
             }
         _zoStep = 0; _zoBudget.Count = 0; _zoBudget.Truncated = false; _zoArrayMesh = null; if (_zoMesh != null) _zoMesh.Mesh = null;
@@ -504,7 +503,7 @@ public partial class EditorMode
             _zoArrayMesh ??= new ArrayMesh();
             if (_zoStep == 0 && _zoArrayMesh.GetSurfaceCount() > 0) _zoArrayMesh = new ArrayMesh();
             var kind = _zoOrder[_zoStep];
-            BuildAreaSurfaces(_zoArrayMesh, _zoTypes[kind], ZoneTint(kind), ZoneFill, 6, _zoBudget, StripeTexture());
+            AreaSurfaces.Build(Map, _zoArrayMesh, _zoTypes[kind], ZoneTint(kind), ZoneFill, 6, _zoBudget, StripeTexture());
             _zoMatSig = ""; // new materials: colour them again
             _zoStep++;
             _zoMesh.Mesh = _zoArrayMesh;
@@ -599,9 +598,9 @@ public partial class EditorMode
             var mesh = new ArrayMesh();
             if (_zoTypes.GetValueOrDefault(kind) is { } all)
             {
-                var t = new GroundMapType { Name = kind }; // a copy: the materials of the mesh of all kinds stay its own
+                var t = new AreaSet { Name = kind }; // a copy: the materials of the mesh of all kinds stay its own
                 t.Outers.AddRange(all.Outers); t.Holes.AddRange(all.Holes);
-                BuildAreaSurfaces(mesh, t, colour, ZoneFillSelected, 6, _zoSelBudget, MarchTexture(colour));
+                AreaSurfaces.Build(Map, mesh, t, colour, ZoneFillSelected, 6, _zoSelBudget, MarchTexture(colour));
                 if (t.Fill != null) { t.Fill.AlbedoColor = new Color(1, 1, 1, ZoneFillSelected); t.Fill.NextPass = GhostFill(colour); }
                 if (t.Edge != null) { t.Edge.AlbedoColor = new Color(colour.Lightened(0.55f), 0.95f); t.Edge.NextPass = GhostEdge(colour); }
                 _zoSelFill = t.Fill;
@@ -623,11 +622,11 @@ public partial class EditorMode
     {
         if (_zoGhostFill == null)
         {
-            _zoGhostFill = GroundMapMaterial(5);
+            _zoGhostFill = AreaSurfaces.Material(5);
             _zoGhostFill.NoDepthTest = true;
             _zoGhostFill.Uv1Triplanar = true;
             _zoGhostFill.Uv1WorldTriplanar = true;
-            _zoGhostFill.Uv1Scale = Vector3.One / StripeTileM;
+            _zoGhostFill.Uv1Scale = Vector3.One / AreaSurfaces.StripeTileM;
         }
         _zoGhostFill.AlbedoTexture = MarchTexture(tint);
         _zoGhostFill.AlbedoColor = new Color(1, 1, 1, ZoneFillGhost);
@@ -636,7 +635,7 @@ public partial class EditorMode
 
     StandardMaterial3D GhostEdge(Color tint)
     {
-        _zoGhostEdge ??= GroundMapMaterial(5);
+        _zoGhostEdge ??= AreaSurfaces.Material(5);
         _zoGhostEdge.NoDepthTest = true;
         _zoGhostEdge.AlbedoColor = new Color(tint.Lightened(0.55f), ZoneEdgeGhost);
         return _zoGhostEdge;
@@ -778,7 +777,7 @@ public partial class EditorMode
         ZoneList();
         var segs = new List<(Vector2, Vector2)>();
         foreach (var id in _zMarked) if (_zoneById.GetValueOrDefault(id) is { } z) segs.AddRange(RingSegs(z.Points, true));
-        SetOutline(OutlineZoneMarked, segs, EditorTheme.Danger, GroundMapLift + 0.3f, 0.9f);
+        SetOutline(OutlineZoneMarked, segs, EditorTheme.Danger, AreaSurfaces.Lift + 0.3f, 0.9f);
         if (_outlines[OutlineZoneMarked].MaterialOverride is StandardMaterial3D m) { m.NoDepthTest = true; m.RenderPriority = 9; } // seen through obstacles, over the zone fill
     }
 

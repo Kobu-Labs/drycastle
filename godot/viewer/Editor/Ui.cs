@@ -65,6 +65,23 @@ public static class Ui
         return s;
     }
 
+    /// <summary>A label of fixed width and its field, for the forms of the Ground and Zones pages.</summary>
+    public static HBoxContainer FieldRow(string label, Control field, string? tip = null)
+    {
+        var row = new HBoxContainer();
+        row.AddChild(new Label { Text = label, TooltipText = tip ?? "", CustomMinimumSize = new Vector2(EditorTheme.Space * 12, 0) });
+        row.AddChild(field);
+        return row;
+    }
+
+    /// <summary>A number field whose Esc leaves it (one level up); <paramref name="onEscape"/> runs after it let go (the page is redrawn).</summary>
+    public static SpinBox NumberField(double min, double max, double step, string tip, Action onEscape)
+    {
+        var s = new SpinBox { MinValue = min, MaxValue = max, Step = step, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, TooltipText = tip, Rounded = false, Alignment = HorizontalAlignment.Right };
+        s.GetLineEdit().GuiInput += e => { if (e is InputEventKey { Pressed: true, Keycode: Key.Escape }) { s.GetLineEdit().ReleaseFocus(); s.GetLineEdit().AcceptEvent(); onEscape(); } };
+        return s;
+    }
+
     /// <summary>A small square of one colour with the theme's border, for lists.</summary>
     public static ImageTexture Swatch(string hex) => Swatch(Color.FromHtml(hex));
 

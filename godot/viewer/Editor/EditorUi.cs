@@ -181,7 +181,7 @@ public partial class EditorMode
         _undoInfo = Ui.Note();
         objects.AddChild(_undoInfo);
         Objects.BuildPage(objects);
-        BuildGroundPage(Page(EditorTool.Ground));
+        Ground.BuildPage(Page(EditorTool.Ground));
         BuildZonesPage(Page(EditorTool.Zones));
         Poles.BuildPage(Page(EditorTool.Poles));
         BuildViewPage(Page(EditorTool.View));
@@ -285,6 +285,8 @@ public partial class EditorMode
     public bool CheatSheetShown => _cheat.Visible;
     public void ToggleCheatSheet() => _cheat.Visible = !_cheat.Visible;
 
+    public void RevealInPanel(Control control) => Callable.From(() => _scroll.EnsureControlVisible(control)).CallDeferred();
+
     // ---- tool switching ----
 
     public void SelectTool(EditorTool tool, bool save = true)
@@ -338,10 +340,7 @@ public partial class EditorMode
             if (cfg.Load(CfgPath) != Error.Ok) return;
             if (Enum.TryParse<EditorTool>((string)cfg.GetValue("ui", "tool", "None"), true, out var t)) { Tool = t; Shapes.ShapeRest(); }
             Camera.LoadConfig(cfg);
-            _gmOn = (bool)cfg.GetValue("ui", "ground_map_on", true);
             _zoOn = (bool)cfg.GetValue("ui", "zone_overlay_on", true);
-            var gsel = (string)cfg.GetValue("ui", "ground_type", "");
-            if (gsel != "") _restoreGround = gsel;
             var psel = (string)cfg.GetValue("ui", "patch", "");
             if (psel != "") Shapes.RestorePatch = psel;
             var zsel = (string)cfg.GetValue("ui", "zone", "");
@@ -360,12 +359,10 @@ public partial class EditorMode
             var cfg = new ConfigFile();
             cfg.SetValue("ui", "tool", Tool.ToString());
             Camera.SaveConfig(cfg);
-            cfg.SetValue("ui", "ground_map_on", _gmOn);
             cfg.SetValue("ui", "zone_overlay_on", _zoOn);
             cfg.SetValue("ui", "patch", Shapes.SelectedPatchId ?? "");
             cfg.SetValue("ui", "zone", Shapes.SelectedZoneId ?? "");
             cfg.SetValue("ui", "zone_kind", SelectedZoneKind ?? "");
-            cfg.SetValue("ui", "ground_type", SelectedGroundType ?? "");
             foreach (var part in _parts) part.SaveConfig(cfg);
             cfg.Save(CfgPath);
         }

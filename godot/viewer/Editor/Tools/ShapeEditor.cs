@@ -10,7 +10,7 @@ namespace Drycastle.Viewer.Editor.Tools;
 
 /// <summary>
 /// The polygon editor the two shape tools share: ground PATCHES in the Ground tool and ZONES in the Zones tool (data and file
-/// format: <see cref="ShapeDoc"/>). What differs per tool (what a shape carries, its form, its list) is in EditorMode.Patches.cs and
+/// format: <see cref="ShapeDoc"/>). What differs per tool (what a shape carries, its form, its list) is in <see cref="GroundPatchPage"/> and
 /// EditorMode.Zones.cs; the water level of a patch and its retyping are here. The 3D preview is <see cref="ShapeWorld"/>, the
 /// sidebar parts are <see cref="ShapePanel"/>.
 ///
@@ -169,7 +169,7 @@ public sealed class ShapeEditor : EditorPart
     {
         if (Host.Map.OriginEpsg5514 == null) return "this map has no origin_epsg5514 (export it again, map 0.4.0+); patches and zones need it";
         if (Mode is ShapeState.Drawing or ShapeState.Level or ShapeState.Dragging) return "finish or cancel the shape you are drawing first (Esc)";
-        return k == ShapeKind.Patch ? Host.CannotDrawPatch() : Host.CannotDrawZone();
+        return k == ShapeKind.Patch ? Host.Ground.CannotDrawPatch() : Host.CannotDrawZone();
     }
 
     /// <summary>N: leave any selection and wait for the first corner; clicks then add corners even over existing shapes.</summary>
@@ -179,7 +179,7 @@ public sealed class ShapeEditor : EditorPart
         var k = CurrentKind;
         if (CannotDraw(k) is { } why) { Host.Say(why, true); return; }
         SelectShape(k, null);
-        if (k == ShapeKind.Patch) DrawType = Host.SelectedGroundType; else _drawKind = Host.SelectedZoneKind;
+        if (k == ShapeKind.Patch) DrawType = Host.Ground.SelectedType; else _drawKind = Host.SelectedZoneKind;
         _shape.Enter(ShapeState.Drawing); // waiting for the first corner
         Host.Say(k == ShapeKind.Patch
             ? $"new patch of {DrawType}: click corners on the ground, Enter closes the shape, Esc cancels"
@@ -226,7 +226,7 @@ public sealed class ShapeEditor : EditorPart
     {
         if (_shape.Is(ShapeState.Level)) return CommitShape();
         if (ShapeDraftProblem() is { } why) { Host.Say("cannot close the shape: " + why, true); return false; }
-        if (CurrentKind == ShapeKind.Patch && Host.PatchTypeIsWater(DrawType))
+        if (CurrentKind == ShapeKind.Patch && Host.Ground.PatchTypeIsWater(DrawType))
         {
             _shape.Enter(ShapeState.Level);
             _newWaterY = DefaultWaterLevel(_draft);
@@ -304,7 +304,7 @@ public sealed class ShapeEditor : EditorPart
     /// <summary>Selecting a shape selects its type or kind too (the list row, the form and the map highlight follow it).</summary>
     void FollowShape(ShapeKind k, string id)
     {
-        if (k == ShapeKind.Patch) { if (Patch(id) is { } p) { Host.SelectGroundType(p.Type); Host.GroundFocusPatch = true; } }
+        if (k == ShapeKind.Patch) { if (Patch(id) is { } p) { Host.Ground.SelectType(p.Type); Host.Ground.FocusPatch = true; } }
         else if (Host.Zone(id) is { } z) Host.SelectZoneKind(z.Kind);
     }
 
@@ -375,8 +375,8 @@ public sealed class ShapeEditor : EditorPart
     {
         if (Patch(id) is not { } p) { Host.Say($"patch {id} does not exist", true); return false; }
         if (p.Type == type) return true;
-        if (Host.PatchTypeChoices().All(c => c.Name != type)) { Host.Say($"{type} is not a ground type a patch can be of (deleted, a rule's, or not in this map)", true); return false; }
-        var water = Host.PatchTypeIsWater(type);
+        if (Host.Ground.PatchTypeChoices().All(c => c.Name != type)) { Host.Say($"{type} is not a ground type a patch can be of (deleted, a rule's, or not in this map)", true); return false; }
+        var water = Host.Ground.PatchTypeIsWater(type);
         var level = DefaultWaterLevel(p.Points);
         return Host.Edits.Mutate(root =>
         {
@@ -392,7 +392,7 @@ public sealed class ShapeEditor : EditorPart
     public bool SetPatchWater(string id, double level)
     {
         if (Patch(id) is not { } p) { Host.Say($"patch {id} does not exist", true); return false; }
-        if (!Host.PatchTypeIsWater(p.Type)) { Host.Say($"{id} is of {p.Type}, which is not water: it has no water level", true); return false; }
+        if (!Host.Ground.PatchTypeIsWater(p.Type)) { Host.Say($"{id} is of {p.Type}, which is not water: it has no water level", true); return false; }
         var v = Math.Round(level, 3, MidpointRounding.AwayFromZero);
         if (p.WaterY == v) return true;
         return Host.Edits.Mutate(root =>
@@ -503,7 +503,7 @@ public sealed class ShapeEditor : EditorPart
                 return false;
             case Key.Backspace: return RemoveLastShapePoint();
             case Key.Delete when k.ShiftPressed && CurrentKind == ShapeKind.Zone && mode is ShapeState.Idle or ShapeState.Selected: Host.RequestDeleteMarkedZones(); return true;
-            case Key.Delete when mode == ShapeState.Selected && (CurrentKind == ShapeKind.Zone || Host.GroundFocusPatch): RequestDeleteShape(); return true;
+            case Key.Delete when mode == ShapeState.Selected && (CurrentKind == ShapeKind.Zone || Host.Ground.FocusPatch): RequestDeleteShape(); return true;
             case Key.C when _shape.Is(ShapeState.Drawing):
                 AddCornerAtCursor();
                 return true;
@@ -538,7 +538,7 @@ public sealed class ShapeEditor : EditorPart
             case ShapeState.Dragging: CancelShapeCornerDrag(); Host.Say("move cancelled"); return true;
             case ShapeState.Level: _shape.Enter(ShapeState.Drawing); Host.Say("back to the corners: click to add more, Enter closes again"); ShapeChanged(); return true;
             case ShapeState.Drawing: CancelShapeDraft(); return true;
-            case ShapeState.Selected when CurrentKind == ShapeKind.Zone || Host.GroundFocusPatch: SelectShape(CurrentKind, null); Host.GroundFocusPatch = false; return true;
+            case ShapeState.Selected when CurrentKind == ShapeKind.Zone || Host.Ground.FocusPatch: SelectShape(CurrentKind, null); Host.Ground.FocusPatch = false; return true;
         }
         return false;
     }
@@ -567,7 +567,7 @@ public sealed class ShapeEditor : EditorPart
         }
         if (k == ShapeKind.Zone && free) { Host.Say("no zone there to mark"); return; }
         if (SelectedOf(k) != null) SelectShape(k, null);
-        if (k == ShapeKind.Patch) Host.GroundPick(g);
+        if (k == ShapeKind.Patch) Host.Ground.Pick(g);
         else Host.Say(Host.SelectedZoneKind is { } zk ? $"no {Host.ZoneLabel(zk)} zone there (Esc shows all kinds)" : "no zone there");
     }
 
@@ -583,8 +583,8 @@ public sealed class ShapeEditor : EditorPart
             ShapeState.Level => "shape closed: set the water level, Enter creates the patch, Esc goes back to the corners",
             ShapeState.Drawing => _draft.Count == 0
                 ? $"new {noun}: LMB or C places the first corner, Ctrl free position, Esc cancels"
-                : $"drawing {_draft.Count}: LMB or C adds, Enter {(CurrentKind == ShapeKind.Patch && Host.PatchTypeIsWater(DrawType) ? "closes" : "creates")}, Backspace undoes a corner, Esc cancels",
-            ShapeState.Selected when CurrentKind == ShapeKind.Zone || Host.GroundFocusPatch =>
+                : $"drawing {_draft.Count}: LMB or C adds, Enter {(CurrentKind == ShapeKind.Patch && Host.Ground.PatchTypeIsWater(DrawType) ? "closes" : "creates")}, Backspace undoes a corner, Esc cancels",
+            ShapeState.Selected when CurrentKind == ShapeKind.Zone || Host.Ground.FocusPatch =>
                 $"{SelectedShape(CurrentKind)?.Label}: drag a corner, [ ] and arrows move one, Del deletes, {(CurrentKind == ShapeKind.Zone ? "X marks for deletion, " : "")}N new {noun}, Ctrl+Z undoes, Esc deselects",
             _ => null,
         };

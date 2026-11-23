@@ -33,6 +33,7 @@ public partial class EditorMode : Node, IEditorHost
     public PolesTool Poles { get; }
     public FenceTool Fence { get; }
     public ShapeEditor Shapes { get; }
+    public GroundTool Ground { get; }
     readonly List<EditorPart> _parts;
 
     public EditorMode()
@@ -45,10 +46,11 @@ public partial class EditorMode : Node, IEditorHost
         Poles = new PolesTool(this);
         Fence = new FenceTool(this);
         Shapes = new ShapeEditor(this);
+        Ground = new GroundTool(this);
         Camera = new EditorCamera(this);
         Edits = new EditStore(this, SyncCatalogs, doc => Sketches.Replay(doc));
         Commands = new CommandPalette(PaletteAll);
-        _parts = new() { Fence, Ortho, FloorPlan, Sketches, You, Objects, Poles, Shapes };
+        _parts = new() { Fence, Ortho, FloorPlan, Sketches, You, Objects, Poles, Shapes, Ground };
     }
 
     public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
@@ -450,7 +452,7 @@ public partial class EditorMode : Node, IEditorHost
                 if (HandleModalKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Modal) break;
                 if (Shapes.HandleShapeKey(k)) { GetViewport().SetInputAsHandled(); break; }
-                if (HandleGroundKey(k)) { GetViewport().SetInputAsHandled(); break; }
+                if (Ground.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleZoneKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Sketches.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Poles.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
@@ -477,7 +479,7 @@ public partial class EditorMode : Node, IEditorHost
                         else if (Fence.Gates.Armed) Fence.Gates.Cancel();
                         else if (Poles.SelectedCableId != null) Poles.SelectCable(null);
                         else if (Objects.SelectedObjectId != null) Objects.SelectObject(null);
-                        else if (Tool == EditorTool.Ground && GroundEscape()) { }
+                        else if (Tool == EditorTool.Ground && Ground.Escape()) { }
                         else if (Tool == EditorTool.Zones && ZoneEscape()) { }
                         else if (Selection.Count > 0) GuardUnsaved(() => Click(null, false));
                         else if (Tool != EditorTool.None) SelectTool(EditorTool.None);
@@ -514,7 +516,6 @@ public partial class EditorMode : Node, IEditorHost
         Camera.Fly((float)delta);
         UpdateHover();
         foreach (var part in _parts) part.Update(delta);
-        UpdateGroundMap();
         UpdateZoneOverlay();
         _pollT += delta;
         if (_pollT > 0.5)
@@ -566,13 +567,13 @@ public partial class EditorMode : Node, IEditorHost
             var calm = _hoverPoint != null && !_looking && !OverUi(mouse) && !Modal && Shapes.Mode is ShapeState.Idle or ShapeState.Selected;
             var text = !calm ? null
                 : Tool == EditorTool.Zones ? (ZonesDrawn ? ZoneHoverText(_hoverPoint!.Value) : null)
-                : _gmOn ? GroundHoverText(_hoverPoint!.Value) : null;
+                : Ground.Overlay.On ? Ground.HoverText(_hoverPoint!.Value) : null;
             _hoverLabel.Visible = text != null;
             if (text != null) { _hoverLabel.Text = text; _hoverLabel.Position = mouse + new Vector2(16, 20); }
-            UpdateGroundHoverOutline(Tool == EditorTool.Ground && calm ? _hoverPoint : null);
+            Ground.UpdateHoverOutline(Tool == EditorTool.Ground && calm ? _hoverPoint : null);
             return;
         }
-        UpdateGroundHoverOutline(null);
+        Ground.UpdateHoverOutline(null);
         if (id == null) { _hoverLabel.Visible = false; return; }
         var info = Map.Parcels[id];
         ShowHoverText(info.Group != null
@@ -746,7 +747,7 @@ public partial class EditorMode : Node, IEditorHost
         Objects.RefreshPanel();
         RefreshUndoAndHint();
         Poles.RefreshPanel();
-        RefreshGroundPanel();
+        Ground.RefreshPanel();
         RefreshZonesPanel();
         Sketches.RefreshPanel();
     }
@@ -758,7 +759,7 @@ public partial class EditorMode
     Label _undoInfo = null!;                   // top of the Objects page
 
     /// <summary>The hint line of the open shape tool (smoke tests).</summary>
-    public string ShapeHint => Shapes.CurrentKind == ShapeKind.Zone ? ZonesHintText() : GroundHintText();
+    public string ShapeHint => Shapes.CurrentKind == ShapeKind.Zone ? ZonesHintText() : Ground.HintText();
 
     /// <summary>Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z; true when the key was used. Not reached while a text field has the focus.</summary>
     bool HandleUndoKey(InputEventKey k)
@@ -780,7 +781,7 @@ public partial class EditorMode
         _btnRedo.Disabled = h.RedoDepth == 0;
         _undoInfo.Text = (h.UndoDepth == 0 ? "nothing to undo" : $"undo: {h.NextUndoDescription} ({h.UndoDepth})") + (h.RedoDepth == 0 ? "" : $"; redo: {h.NextRedoDescription} ({h.RedoDepth})");
         var placing = Objects.PlacementAsset != null;
-        _hintLabel.Text = Tool == EditorTool.Ground ? GroundHintText() : Tool == EditorTool.Zones ? ZonesHintText() : Tool == EditorTool.Sketch ? Sketches.HintText() : Tool == EditorTool.Poles && !placing ? Poles.HintText() : Tool == EditorTool.Group && !placing
+        _hintLabel.Text = Tool == EditorTool.Ground ? Ground.HintText() : Tool == EditorTool.Zones ? ZonesHintText() : Tool == EditorTool.Sketch ? Sketches.HintText() : Tool == EditorTool.Poles && !placing ? Poles.HintText() : Tool == EditorTool.Group && !placing
             ? "marking parcels: click a parcel to mark or unmark it, Enter groups the marked ones, Esc clears the marks"
             : placing
             ? "placing: LMB place, R / Shift+R rotate, Ctrl free position, Esc or RMB stop, Ctrl+Z undo"

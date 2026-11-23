@@ -54,7 +54,7 @@ public sealed class ShapePanel
         {
             u.LevelRow = new HBoxContainer();
             u.LevelRow.AddChild(new Label { Text = "Water level (m)", CustomMinimumSize = new Vector2(EditorTheme.Space * 16, 0) });
-            u.Level = _host.NumberField(-500, 5000, 0.1, "Height of the water surface in metres, on the terrain's own scale (the ground map and the terrain use it). A patch of a water type needs one. Enter applies; each change is one undo step.");
+            u.Level = Ui.NumberField(-500, 5000, 0.1, "Height of the water surface in metres, on the terrain's own scale (the ground map and the terrain use it). A patch of a water type needs one. Enter applies; each change is one undo step.", _host.MarkPanelDirty);
             u.Level.ValueChanged += v => { if (!u.Sync) _shapes.OnWaterLevelChanged(v); };
             u.LevelRow.AddChild(u.Level);
             page.AddChild(u.LevelRow);
@@ -127,7 +127,7 @@ public sealed class ShapePanel
         u.Valid.Text = text; u.Valid.ThemeTypeVariation = variation;
 
         var drafting = mode == ShapeState.Drawing && draft.Count > 0;
-        var water = k == ShapeKind.Patch && _host.PatchTypeIsWater(_shapes.DrawType);
+        var water = k == ShapeKind.Patch && _host.Ground.PatchTypeIsWater(_shapes.DrawType);
         u.Finish.Visible = drafting;
         u.Finish.Text = water ? "Close the shape  (Enter)" : $"Create the {noun}  (Enter)";
         u.Finish.Disabled = _shapes.ShapeDraftProblem() != null;
@@ -141,7 +141,7 @@ public sealed class ShapePanel
             u.LevelRow.Visible = mode == ShapeState.Level;
             if (mode == ShapeState.Level && !u.Level.GetLineEdit().HasFocus()) SetLevel(u, _shapes.NewWaterY);
         }
-        u.Delete.Visible = mode == ShapeState.Selected && sel != null && (k == ShapeKind.Zone || _host.GroundFocusPatch);
+        u.Delete.Visible = mode == ShapeState.Selected && sel != null && (k == ShapeKind.Zone || _host.Ground.FocusPatch);
         if (sel != null) u.Delete.Text = $"Delete {sel.Label}  (Del)";
         u.Delete.TooltipText = $"Delete the {noun} (asks first; Ctrl+Z undoes)";
     }

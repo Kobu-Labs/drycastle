@@ -340,7 +340,7 @@ public partial class Viewer
             var zones = _flags.Contains("shot-zones");
             ed.SelectTool(zones ? EditorTool.Zones : EditorTool.Ground);
             if (zones) { if (_opts.GetValueOrDefault("shot-kind") is { } sk) ed.SelectZoneKind(sk); }
-            else if (_opts.GetValueOrDefault("shot-type") is { } st) ed.SelectGroundType(st);
+            else if (_opts.GetValueOrDefault("shot-type") is { } st) ed.Ground.SelectType(st);
             ed.Shapes.StartShape();
             double cx = 0, cy = 0; var n = 0;
             foreach (var pt in draft.Split(';', StringSplitOptions.RemoveEmptyEntries))

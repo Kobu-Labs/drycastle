@@ -99,7 +99,7 @@ public partial class Viewer
         Check(ed.ShapeHint.Contains("draws a patch") && ed.Shapes.Panel.State == "No patch selected", $"idle hint and state: '{ed.ShapeHint}'");
         await Key_(Key.N);
         Check(ed.Shapes.Mode == ShapeState.Idle && ed.StatusMessage.Contains("pick a ground type"), $"N without a selected type is refused with the way out: '{ed.StatusMessage}'");
-        Check(ed.SelectGroundType("paint_336699"), "a type is selected in the list");
+        Check(ed.Ground.SelectType("paint_336699"), "a type is selected in the list");
 
         // ---- drawing: refusals before any save ----
         var q = new[] { Pt("q0"), Pt("q1"), Pt("q2"), Pt("q3") };
@@ -137,11 +137,11 @@ public partial class Viewer
         Check(Disk() == Expect("seed"), "nothing saved while drawing");
         var saves0 = ed.Edits.SaveCount;
         await Gesture("create GP-0002 (Enter)", () => ed.Shapes.Mode == ShapeState.Selected, "p_created", true, () => Key_(Key.Enter));
-        Check(ed.Shapes.SelectedPatchId == "GP-0002" && ed.SelectedGroundType == "paint_336699" && ed.Shapes.ShapeDraft.Count == 0, "new patch is selected (and its type), draft cleared");
+        Check(ed.Shapes.SelectedPatchId == "GP-0002" && ed.Ground.SelectedType == "paint_336699" && ed.Shapes.ShapeDraft.Count == 0, "new patch is selected (and its type), draft cleared");
         Check(ed.Edits.SaveCount == saves0 + 1, "creating saved exactly once");
         Check(_map.DynamicPatches.ContainsKey("GP-0002"), "GP-0002 reached the map through the watcher (patch-run)");
         Check(ed.Shapes.Panel.RowCount == 2 && ed.Shapes.Panel.RowSelected("GP-0002"), "list shows both patches, GP-0002 selected");
-        Check(ed.PatchTypeShown == "paint_336699", "the form shows the patch's type");
+        Check(ed.Ground.PatchPage.TypeShown == "paint_336699", "the form shows the patch's type");
 
         // ---- retype (one gesture) ----
         await Gesture("retype GP-0002", () => ed.Shapes.SetPatchType("GP-0002", "paint_99cc33"), "p_retyped", true);
@@ -169,11 +169,11 @@ public partial class Viewer
 
         // ---- a patch of a water type asks for its water level before it is created ----
         var wq = new[] { Pt("w0"), Pt("w1"), Pt("w2"), Pt("w3") };
-        Check(ed.SelectGroundType("pond"), "the water type is selected");
+        Check(ed.Ground.SelectType("pond"), "the water type is selected");
         await Key_(Key.N);
         foreach (var p in wq) ed.Shapes.AddShapePoint(p[0], p[1]);
         await Key_(Key.Enter);
-        Check(ed.Shapes.Mode == ShapeState.Level && ed.PatchWaterRowShown && ed.Shapes.Panel.CreateButtonShown, "Enter on a water patch asks for the water level: nothing is created yet");
+        Check(ed.Shapes.Mode == ShapeState.Level && ed.Ground.PatchPage.WaterRowShown && ed.Shapes.Panel.CreateButtonShown, "Enter on a water patch asks for the water level: nothing is created yet");
         Check(Disk() == Expect("p_moved"), "nothing saved while the water level is asked for");
         ed.Shapes.World.Redraw();
         Check(ed.SegmentCount(ShapeWorld.OutlineDraft) == 4, "closing edge is part of the preview");
@@ -184,8 +184,8 @@ public partial class Viewer
         await Gesture("create the water patch GP-0003 (Enter)", () => ed.Shapes.Mode == ShapeState.Selected, "p_water", true, () => Key_(Key.Enter));
         Check(ed.Shapes.SelectedPatchId == "GP-0003" && ed.Shapes.Patch("GP-0003")!.WaterY == 1.5, "the water patch carries its water level");
         Check(!ed.Shapes.SetPatchWater("GP-0002", 2.0), "a land patch has no water level");
-        Check(!ed.SetGroundCarried("pond", "water", false) && ed.Edits.History.UndoDepth == 4, $"unticking water on a type a patch uses is refused: '{ed.StatusMessage}'");
-        ed.RequestDeleteGroundType();
+        Check(!ed.Ground.Ops.SetCarried("pond", "water", false) && ed.Edits.History.UndoDepth == 4, $"unticking water on a type a patch uses is refused: '{ed.StatusMessage}'");
+        ed.Ground.Ops.RequestDelete();
         Check(!ed.Confirm.Visible && ed.StatusMessage.Contains("patch"), $"a type a patch uses is not offered for deletion (blocked with the reason, no confirm): '{ed.StatusMessage}'");
 
         // ---- delete: confirm names the patch; cancel keeps it ----
@@ -255,13 +255,13 @@ public partial class Viewer
         ed.SelectTool(EditorTool.Ground);
         ed.Shapes.SelectShape(ShapeKind.Patch, "GP-0001");
         await Key_(Key.Escape);
-        Check(ed.Shapes.SelectedPatchId == null && ed.SelectedGroundType == "paint_aa3322" && ed.Tool == EditorTool.Ground, "Esc deselects the patch, the type and the tool stay");
+        Check(ed.Shapes.SelectedPatchId == null && ed.Ground.SelectedType == "paint_aa3322" && ed.Tool == EditorTool.Ground, "Esc deselects the patch, the type and the tool stay");
         await Key_(Key.Escape);
-        Check(ed.SelectedGroundType == null && ed.Tool == EditorTool.Ground, "Esc again deselects the type");
+        Check(ed.Ground.SelectedType == null && ed.Tool == EditorTool.Ground, "Esc again deselects the type");
         await Key_(Key.Escape);
         Check(ed.Tool == EditorTool.None, "Esc again leaves the tool");
         ed.SelectTool(EditorTool.Ground);
-        ed.SelectGroundType("paint_aa3322");
+        ed.Ground.SelectType("paint_aa3322");
         ed.Shapes.StartShape();
         ed.Shapes.AddShapePoint(q[0][0], q[0][1]);
         await Key_(Key.Backspace);

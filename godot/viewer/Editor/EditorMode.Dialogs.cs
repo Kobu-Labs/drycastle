@@ -29,9 +29,9 @@ public partial class EditorMode
     IEnumerable<(string label, Action run)> PaletteAll(string filter)
     {
         foreach (var (tool, _, name, key) in Tools) { var t = tool; yield return ($"Tool: {name}  ({OS.GetKeycodeString(key)})", () => SelectTool(t)); }
-        foreach (var g in GroundRows()) { var gn = g.Name; yield return ($"{g.Name}  ground type  {RecipeWord(g)}  {StateWord(g.State)}", () => { SelectTool(EditorTool.Ground); SelectGroundType(gn); }); }
+        foreach (var g in Ground.Rows()) { var gn = g.Name; yield return ($"{g.Name}  ground type  {GroundTypeRows.RecipeWord(g)}  {GroundTypeRows.StateWord(g.State)}", () => { SelectTool(EditorTool.Ground); Ground.SelectType(gn); }); }
         yield return ("Ground: draw a patch of the selected type  (N)", () => { SelectTool(EditorTool.Ground); Shapes.StartShape(); });
-        yield return (_gmOn ? "Ground: hide the ground map  (M)" : "Ground: show the ground map  (M)", () => { SelectTool(EditorTool.Ground); ToggleGroundMap(); });
+        yield return (Ground.Overlay.On ? "Ground: hide the ground map  (M)" : "Ground: show the ground map  (M)", () => { SelectTool(EditorTool.Ground); Ground.Overlay.Toggle(); });
         yield return ("Zones: draw a zone of the selected kind  (N)", () => { SelectTool(EditorTool.Zones); Shapes.StartShape(); });
         if (MarkedZoneCount > 0)
         {
