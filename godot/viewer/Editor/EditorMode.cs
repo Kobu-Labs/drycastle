@@ -31,6 +31,7 @@ public partial class EditorMode : Node, IEditorHost
     public YouDot You { get; }
     public ObjectsTool Objects { get; }
     public PolesTool Poles { get; }
+    public FenceTool Fence { get; }
     readonly List<EditorPart> _parts;
 
     public EditorMode()
@@ -41,10 +42,11 @@ public partial class EditorMode : Node, IEditorHost
         You = new YouDot(this);
         Objects = new ObjectsTool(this);
         Poles = new PolesTool(this);
+        Fence = new FenceTool(this);
         Camera = new EditorCamera(this);
         Edits = new EditStore(this, SyncCatalogs, doc => Sketches.Replay(doc));
         Commands = new CommandPalette(PaletteAll);
-        _parts = new() { Ortho, FloorPlan, Sketches, You, Objects, Poles };
+        _parts = new() { Fence, Ortho, FloorPlan, Sketches, You, Objects, Poles };
     }
 
     public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
@@ -59,6 +61,7 @@ public partial class EditorMode : Node, IEditorHost
     public string? HoverId { get; private set; }
     public string StatusMessage { get; private set; } = "";
     public Node3D OutlineRoot { get; private set; } = null!;
+    public Node3D MarkerRoot { get; private set; } = null!;
     public event Action? SelectionChanged;
 
     // outline kinds: node name -> segments last built (ground xz pairs)
@@ -141,7 +144,7 @@ public partial class EditorMode : Node, IEditorHost
             Camera.LeaveEditor();
             Input.MouseMode = Input.MouseModeEnum.Captured;
             CancelShapeGesture();
-            if (GateArmed) CancelGate();
+            if (Fence.Gates.Armed) Fence.Gates.Cancel();
             HoverId = null;
             _hoverLabel.Visible = false;
         }
@@ -266,7 +269,7 @@ public partial class EditorMode : Node, IEditorHost
     /// <summary>Outer perimeter of a property group, computed once until the groups are reloaded.</summary>
     List<(Vector2, Vector2)> Perimeter(string group)
     {
-        if (!_perimeters.TryGetValue(group, out var segs)) _perimeters[group] = segs = GroupPerimeter(Members(group));
+        if (!_perimeters.TryGetValue(group, out var segs)) _perimeters[group] = segs = ParcelOutline.GroupPerimeter(Members(group));
         return segs;
     }
 
@@ -332,7 +335,7 @@ public partial class EditorMode : Node, IEditorHost
         Edits.Mutate(root => EditsFile.Dissolve(root, gid));
     }
 
-    string? Group(string parcel) => Map.Parcels.TryGetValue(parcel, out var p) ? p.Group : null;
+    public string? Group(string parcel) => Map.Parcels.TryGetValue(parcel, out var p) ? p.Group : null;
 
     /// <summary>Fill ParcelInfo.Group from the edits file on disk.</summary>
     public void ReloadGroups()
@@ -359,19 +362,22 @@ public partial class EditorMode : Node, IEditorHost
     /// </summary>
     void GuardUnsaved(Action proceed, string okText = "Discard")
     {
-        if (_pending.Count == 0) { proceed(); return; }
-        var n = _pending.Count;
+        if (Fence.PendingCount == 0) { proceed(); return; }
+        var n = Fence.PendingCount;
         Confirm.Show($"Discard {n} unsaved edit{(n == 1 ? "" : "s")}?",
-            $"Fence and tree edits for {string.Join(", ", _pending.Keys.Take(4))}{(n > 4 ? ", ..." : "")} are not applied yet and exist only in memory. Cancel, then press Enter to apply them.",
-            okText, () => { _pending.Clear(); AfterEdit(); proceed(); });
+            $"Fence and tree edits for {Fence.PendingNames}{(n > 4 ? ", ..." : "")} are not applied yet and exist only in memory. Cancel, then press Enter to apply them.",
+            okText, () => { Fence.Discard(); proceed(); });
     }
 
     public void MarkPanelDirty() => _panelDirty = true;
 
+    /// <summary>Refresh the panel and the outlines now (normally done on the next frame).</summary>
+    public void RefreshNow() { RefreshPanel(); RebuildOutlines(); }
+
     public override void _Notification(int what)
     {
         if (what != NotificationWMCloseRequest) return;
-        if (_pending.Count == 0) { GetTree().Quit(); return; }
+        if (Fence.PendingCount == 0) { GetTree().Quit(); return; }
         if (!Active) SetActive(true); // the confirm needs the editor UI
         GuardUnsaved(() => GetTree().Quit(), "Quit");
     }
@@ -424,9 +430,8 @@ public partial class EditorMode : Node, IEditorHost
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } when !_looking && Modal:
                 break;
-            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && GateArmed:
-                if (RayToGround(FlyCam.ProjectRayOrigin(mb.Position), FlyCam.ProjectRayNormal(mb.Position), out var gp)) GateBegin(gp);
-                else Say("click on the ground near the fence", true);
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Fence.Gates.Armed:
+                Fence.Gates.LeftPress(mb.Position);
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Objects.PlacementAsset != null:
                 Objects.PlaceClick(mb.Position, mb.CtrlPressed);
@@ -460,14 +465,14 @@ public partial class EditorMode : Node, IEditorHost
                     case Key.Enter or Key.KpEnter:
                         if (GetViewport().GuiGetFocusOwner() is (LineEdit or TextEdit)) break;
                         if (Tool == EditorTool.Group) { if (!_btnGroup.Disabled) GroupSelected(); }
-                        else Apply();
+                        else Fence.Apply();
                         break;
                     case Key.Escape:
                         if (_cheat.Visible) _cheat.Visible = false;
                         else if (Objects.PlacementAsset != null) Objects.DisarmPlacement();
                         else if (Poles.Plan.Planning) Poles.Plan.Stop();
                         else if (Poles.Connecting) Poles.StopConnecting();
-                        else if (GateArmed) CancelGate();
+                        else if (Fence.Gates.Armed) Fence.Gates.Cancel();
                         else if (Poles.SelectedCableId != null) Poles.SelectCable(null);
                         else if (Objects.SelectedObjectId != null) Objects.SelectObject(null);
                         else if (Tool == EditorTool.Ground && GroundEscape()) { }
@@ -495,8 +500,8 @@ public partial class EditorMode : Node, IEditorHost
             Objects.EndDrag();
         if (Active && ShapeDragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
             EndCornerDrag();
-        if (Active && GateDragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
-            GateEnd();
+        if (Active && Fence.Gates.Dragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
+            Fence.Gates.End();
     }
 
     // ---- per frame ----
@@ -506,7 +511,6 @@ public partial class EditorMode : Node, IEditorHost
         if (!Active) return;
         Camera.Fly((float)delta);
         UpdateHover();
-        UpdateGateDrag();
         foreach (var part in _parts) part.Update(delta);
         UpdateShapeTool();
         UpdateGroundMap();
@@ -519,9 +523,9 @@ public partial class EditorMode : Node, IEditorHost
         }
         if (_outlinesDirty) RebuildOutlines();
         if (_panelDirty) RefreshPanel();
-        _unsavedLabel.Text = PendingCount == 0 ? "" : $"* {PendingCount} unsaved (Enter applies)";
+        _unsavedLabel.Text = Fence.PendingCount == 0 ? "" : $"* {Fence.PendingCount} unsaved (Enter applies)";
         var c = FlyCam.GlobalPosition;
-        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Camera.Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedShapeId != null && ShapeTool ? $"  |  {(Tool == EditorTool.Zones ? "zone" : "patch")} {SelectedShape(CurrentKind)?.Label}{(SelectedShape(CurrentKind) is PatchInfo sp ? "  " + sp.Type : "")}" : "") + (Tool == EditorTool.Zones && MarkedZoneCount > 0 ? $"  |  {MarkedZoneCount} marked for deletion" : "") + (PendingCount > 0 || ShapeDraftPending ? $"  |  * {(PendingCount > 0 ? $"{PendingCount} UNSAVED" : "UNSAVED")}" : "");
+        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Camera.Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedShapeId != null && ShapeTool ? $"  |  {(Tool == EditorTool.Zones ? "zone" : "patch")} {SelectedShape(CurrentKind)?.Label}{(SelectedShape(CurrentKind) is PatchInfo sp ? "  " + sp.Type : "")}" : "") + (Tool == EditorTool.Zones && MarkedZoneCount > 0 ? $"  |  {MarkedZoneCount} marked for deletion" : "") + (Fence.PendingCount > 0 || ShapeDraftPending ? $"  |  * {(Fence.PendingCount > 0 ? $"{Fence.PendingCount} UNSAVED" : "UNSAVED")}" : "");
         if (Time.GetTicksMsec() / 1000.0 > _statusUntil && _statusLabel.Text != "")
             _statusLabel.Text = "";
     }
@@ -588,7 +592,7 @@ public partial class EditorMode : Node, IEditorHost
     public int SegmentCount(string kind) => _segmentCounts.GetValueOrDefault(kind);
     public MeshInstance3D? OutlineNode(string kind) => _outlines.GetValueOrDefault(kind);
 
-    void MarkAllOutlines() => _outlinesDirty = _hoverOutlineDirty = _selOutlineDirty = _groupOutlineDirty = true;
+    public void MarkAllOutlines() => _outlinesDirty = _hoverOutlineDirty = _selOutlineDirty = _groupOutlineDirty = true;
 
     void MarkHoverOutline() { _hoverOutlineDirty = true; _outlinesDirty = true; }
 
@@ -618,40 +622,11 @@ public partial class EditorMode : Node, IEditorHost
         foreach (var id in ids)
         {
             var g = Group(id);
-            if (g == null) { segs.AddRange(AllEdges(Map.Parcels[id])); continue; }
+            if (g == null) { segs.AddRange(ParcelOutline.Edges(Map.Parcels[id])); continue; }
             if (!seen.Add(g)) continue;
             segs.AddRange(Perimeter(g));
         }
         return segs;
-    }
-
-    static IEnumerable<(Vector2, Vector2)> AllEdges(ParcelInfo p)
-    {
-        foreach (var ring in p.Rings)
-            for (int i = 0, j = ring.Length - 1; i < ring.Length; j = i++)
-                if (ring[i].DistanceSquaredTo(ring[j]) > 1e-8f) yield return (ring[j], ring[i]);
-    }
-
-    static (long, long) Q(Vector2 v) => ((long)Math.Round(v.X * 100.0), (long)Math.Round(v.Y * 100.0));
-
-    /// <summary>
-    /// Outer shape of a group: all member edges, minus those that occur in two members with endpoints
-    /// matching to 1 cm (the shared boundaries).
-    /// </summary>
-    public static List<(Vector2, Vector2)> GroupPerimeter(IReadOnlyList<ParcelInfo> members)
-    {
-        var count = new Dictionary<((long, long), (long, long)), int>();
-        var edges = new List<((long, long), (long, long), (Vector2, Vector2))>();
-        foreach (var m in members)
-            foreach (var (a, b) in AllEdges(m))
-            {
-                var qa = Q(a); var qb = Q(b);
-                if (qa == qb) continue;
-                var key = qa.CompareTo(qb) <= 0 ? (qa, qb) : (qb, qa);
-                count[key] = count.GetValueOrDefault(key) + 1;
-                edges.Add((key.Item1, key.Item2, (a, b)));
-            }
-        return edges.Where(e => count[(e.Item1, e.Item2)] == 1).Select(e => e.Item3).ToList();
     }
 
     public void SetOutline(string name, List<(Vector2 a, Vector2 b)> segs, Color colour, float lift, float width)
@@ -679,37 +654,7 @@ public partial class EditorMode : Node, IEditorHost
             m.AlbedoColor = colour;
             m.Transparency = colour.A < 1f ? BaseMaterial3D.TransparencyEnum.Alpha : BaseMaterial3D.TransparencyEnum.Disabled;
         }
-        mi.Mesh = segs.Count == 0 ? null : BuildRibbon(segs, lift, width);
-    }
-
-    // A flat ribbon of the given width per edge, split every 2 m so it follows the terrain; no collision.
-    ArrayMesh BuildRibbon(List<(Vector2 a, Vector2 b)> segs, float lift, float width)
-    {
-        var verts = new List<Vector3>();
-        var idx = new List<int>();
-        var half = width / 2f;
-        Vector3 P(Vector2 v, Vector2 side) { var q = v + side; return new Vector3(q.X, Map.GroundHeightOrMean(v.X, v.Y) + lift, q.Y); }
-        foreach (var (a0, b0) in segs)
-        {
-            var dir = (b0 - a0).Normalized();
-            var a = a0 - dir * half; var b = b0 + dir * half; // cover the corner joins
-            var side = new Vector2(-dir.Y, dir.X) * half;
-            var n = Mathf.Max(1, (int)Mathf.Ceil(a.DistanceTo(b) / 2f));
-            for (var i = 0; i < n; i++)
-            {
-                var p = a.Lerp(b, (float)i / n); var q = a.Lerp(b, (float)(i + 1) / n);
-                var k = verts.Count;
-                verts.Add(P(p, side)); verts.Add(P(p, -side)); verts.Add(P(q, -side)); verts.Add(P(q, side));
-                idx.AddRange(new[] { k, k + 1, k + 2, k, k + 2, k + 3 });
-            }
-        }
-        var arrays = new Godot.Collections.Array();
-        arrays.Resize((int)Mesh.ArrayType.Max);
-        arrays[(int)Mesh.ArrayType.Vertex] = verts.ToArray();
-        arrays[(int)Mesh.ArrayType.Index] = idx.ToArray();
-        var mesh = new ArrayMesh();
-        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
-        return mesh;
+        mi.Mesh = segs.Count == 0 ? null : Gfx.Ribbon(Map, segs, lift, width);
     }
 
     /// <summary>Texts shown in the panel (for the smoke test).</summary>
@@ -749,7 +694,7 @@ public partial class EditorMode : Node, IEditorHost
         _btnAdd.Disabled = gids.Count != 1 || sel.All(p => p.Group != null);
         _btnRemove.Disabled = gids.Count == 0;
         _btnDissolve.Disabled = gids.Count != 1;
-        RefreshEditPanel();
+        Fence.RefreshPanel();
         Objects.RefreshPanel();
         RefreshUndoAndHint();
         Poles.RefreshPanel();

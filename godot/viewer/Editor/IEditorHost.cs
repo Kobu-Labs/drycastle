@@ -21,6 +21,7 @@ public interface IEditorHost
     EditorCamera Camera { get; }
     ObjectsTool Objects { get; }
     PolesTool Poles { get; }
+    FenceTool Fence { get; }
     /// <summary>The walk-mode player (frozen and hidden while the editor is open).</summary>
     Player Player { get; }
     /// <summary>The editor is open.</summary>
@@ -70,9 +71,11 @@ public interface IEditorHost
     /// <summary>Click semantics of the Select tool: plain click replaces the selection, shift toggles one parcel.</summary>
     void Click(string? parcelId, bool shift);
 
-    // the fence gate, until it is a part of its own
-    bool GateArmed { get; }
-    void CancelGate();
+    /// <summary>The property group of a parcel (null: none).</summary>
+    string? Group(string parcel);
+
+    /// <summary>The outlines of the selection and of the hovered parcel are redrawn on the next frame.</summary>
+    void MarkAllOutlines();
 
     /// <summary>Read the groups again from the file on disk (after every save, and when another writer changed it).</summary>
     void ReloadGroups();

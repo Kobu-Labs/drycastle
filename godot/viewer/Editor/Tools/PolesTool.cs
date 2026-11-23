@@ -100,7 +100,7 @@ public sealed class PolesTool : EditorPart
         if (AllPoles().Count == 0) { Host.Say("place a pole first: cables run from pole to pole, or from a pole to a house", true); return; }
         Objects.DisarmPlacement(false);
         Plan.Stop(false);
-        if (Host.GateArmed) Host.CancelGate();
+        if (Host.Fence.Gates.Armed) Host.Fence.Gates.Cancel();
         SelectCable(null);
         Connecting = true;
         ConnectFrom = Objects.SelectedObjectId != null && IsPole(Objects.SelectedObjectId) ? Objects.SelectedObjectId : null;

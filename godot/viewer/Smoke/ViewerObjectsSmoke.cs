@@ -312,9 +312,9 @@ public partial class Viewer
         ed.Click(A, false); ed.Click(B, true);
         await Frame();
         ed.RefreshNow();
-        Check(ed.Target is { IsGroup: true }, "the selection is the group");
-        ed.SetFenceMode("none");
-        await Op("t24", () => ed.Apply(), run: true);
+        Check(ed.Fence.Target is { IsGroup: true }, "the selection is the group");
+        ed.Fence.SetMode("none");
+        await Op("t24", () => ed.Fence.Apply(), run: true);
         SceneMatches("after a fence Apply (fragment swap)");
         await Op("t25", () => ed.Objects.PlacementAsset == null && ed.Objects.ArmPlacement(CAR) && ed.Objects.PlaceAt(Gp("a_base", -1.1, -1.4)));
         ed.Objects.DisarmPlacement();

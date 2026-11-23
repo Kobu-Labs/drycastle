@@ -299,7 +299,7 @@ public partial class Viewer
         foreach (var title in (_opts.GetValueOrDefault("shot-collapse") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
             ed.SetSectionOpen(title, false);
         if (_opts.GetValueOrDefault("shot-tool") is { } stool) ed.SetTool(stool);
-        if (_opts.GetValueOrDefault("shot-gate") is { } sg && int.TryParse(sg, out var gi)) ed.SelectGate(gi);
+        if (_opts.GetValueOrDefault("shot-gate") is { } sg && int.TryParse(sg, out var gi)) ed.Fence.Gates.Select(gi);
         foreach (var cat in (_opts.GetValueOrDefault("shot-open") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)) ed.Objects.Panel.SetPaletteGroupOpen(cat, true);
         if (_opts.GetValueOrDefault("shot-filter") is { } sf) ed.Objects.Panel.SetPaletteFilter(sf);
         if (_opts.GetValueOrDefault("shot-object") is { } so) Check(ed.Objects.SelectObject(so), $"shot object {so} selected");

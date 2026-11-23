@@ -61,8 +61,6 @@ public partial class EditorMode
 
     // ---- rail ----
 
-    Button IconBtn(string icon, string tip, Action onPress, bool toggle = false, int size = EditorTheme.RailButton) => Ui.IconBtn(icon, tip, onPress, toggle, size);
-
     void BuildRail(Control root)
     {
         _rail = new PanelContainer { Name = "Rail" };
@@ -77,17 +75,17 @@ public partial class EditorMode
         {
             if (tool == EditorTool.View) col.AddChild(new HSeparator());
             var t = tool;
-            var b = IconBtn(icon, $"{name}  ({OS.GetKeycodeString(key)})", () => SelectTool(Tool == t ? EditorTool.None : t), toggle: true);
+            var b = Ui.IconBtn(icon, $"{name}  ({OS.GetKeycodeString(key)})", () => SelectTool(Tool == t ? EditorTool.None : t), toggle: true);
             _railButtons[tool] = b;
             col.AddChild(b);
         }
         col.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
-        _btnUndo = IconBtn("undo", "Undo  (Ctrl+Z)", () => Edits.Undo());
-        _btnRedo = IconBtn("redo", "Redo  (Ctrl+Y)", () => Edits.Redo());
+        _btnUndo = Ui.IconBtn("undo", "Undo  (Ctrl+Z)", () => Edits.Undo());
+        _btnRedo = Ui.IconBtn("redo", "Redo  (Ctrl+Y)", () => Edits.Redo());
         col.AddChild(_btnUndo);
         col.AddChild(_btnRedo);
-        col.AddChild(IconBtn("walk", "Drop to the ground here and walk  (F3)", WalkFromHere));
-        col.AddChild(IconBtn("help", "Controls  (F1)", ToggleCheatSheet));
+        col.AddChild(Ui.IconBtn("walk", "Drop to the ground here and walk  (F3)", WalkFromHere));
+        col.AddChild(Ui.IconBtn("help", "Controls  (F1)", ToggleCheatSheet));
     }
 
     // ---- HUD ----
@@ -119,12 +117,12 @@ public partial class EditorMode
         var top = new HBoxContainer();
         _panelTitle = new Label { ThemeTypeVariation = "Header", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore };
         top.AddChild(_panelTitle);
-        top.AddChild(IconBtn("close", "Close the sidebar  (Esc)", () => SelectTool(EditorTool.None)));
+        top.AddChild(Ui.IconBtn("close", "Close the sidebar  (Esc)", () => SelectTool(EditorTool.None)));
         outer.AddChild(top);
         outer.AddChild(new HSeparator());
 
         _editHead = new VBoxContainer();
-        BuildPanelHeader(_editHead);
+        Fence.BuildHeader(_editHead);
         _editHead.AddChild(new HSeparator());
         outer.AddChild(_editHead);
 
@@ -134,7 +132,9 @@ public partial class EditorMode
         _scroll.AddChild(box);
 
         _editFoot = new VBoxContainer();
-        BuildPanelFooter(_editFoot);
+        MarkerRoot = new Node3D { Name = "EditorMarkers", Visible = false };
+        AddChild(MarkerRoot);
+        Fence.BuildFooter(_editFoot);
         var footSep = new HSeparator();
         _editFoot.AddChild(footSep);
         _editFoot.MoveChild(footSep, 0);
@@ -176,7 +176,7 @@ public partial class EditorMode
         foreach (var b in new[] { _btnMerge, _btnAdd, _btnRemove, _btnDissolve }) grp.AddChild(b);
         grp.AddChild(new Label { Text = "Clear the marks with Esc.", ThemeTypeVariation = "Dim" });
 
-        BuildFenceSection(Page(EditorTool.Fence));
+        Fence.BuildPage(Page(EditorTool.Fence));
         var objects = Page(EditorTool.Objects);
         _undoInfo = Ui.Note();
         objects.AddChild(_undoInfo);
@@ -292,9 +292,9 @@ public partial class EditorMode
         if (ShapeTool && (tool != Tool)) CancelShapeGesture();
         if (Tool == EditorTool.Sketch && tool != EditorTool.Sketch) Sketches.CancelGesture();
         if (Objects.Dragging && tool != Tool) Objects.CancelDrag(); // an object drag must not outlive its tool (the release would still save it)
-        if (tool is EditorTool.Ground or EditorTool.Zones or EditorTool.Sketch) { Objects.DisarmPlacement(false); if (GateArmed) CancelGate(); }
+        if (tool is EditorTool.Ground or EditorTool.Zones or EditorTool.Sketch) { Objects.DisarmPlacement(false); if (Fence.Gates.Armed) Fence.Gates.Cancel(); }
         if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { Poles.StopConnecting(false); Poles.Plan.Stop(false); Poles.SelectCable(null); }
-        if (tool == EditorTool.Poles && GateArmed) CancelGate();
+        if (tool == EditorTool.Poles && Fence.Gates.Armed) Fence.Gates.Cancel();
         Tool = tool;
         ShapeRest(); // Selected or Idle depends on which kind of shape the tool selects
         _panel.Visible = tool != EditorTool.None;

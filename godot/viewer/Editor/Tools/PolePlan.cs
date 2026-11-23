@@ -44,7 +44,7 @@ public sealed class PolePlan
         if (_host.Map.OriginEpsg5514 == null) { _host.Say("this map has no origin_epsg5514", true); return; }
         _host.Objects.DisarmPlacement(false);
         _poles.StopConnecting(false);
-        if (_host.GateArmed) _host.CancelGate();
+        if (_host.Fence.Gates.Armed) _host.Fence.Gates.Cancel();
         _poles.SelectCable(null);
         _host.Objects.SelectObject(null);
         Planning = true;
