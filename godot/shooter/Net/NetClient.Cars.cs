@@ -266,7 +266,7 @@ public partial class NetClient
         if (_driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
         if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
-        _hud?.SetPrompt(LadderPrompt() ?? TurretPrompt() ?? LootPrompt() ?? _doors.GarageDoorPrompt(_driving) ?? ScudLoadPrompt(prompt) ?? prompt ?? MassPrompt() ?? RozhlasSetPrompt() ?? MineralPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt() ?? LadderReachPrompt()); // a placing turret owns the prompt
+        _hud?.SetPrompt(LadderPrompt() ?? TurretPrompt() ?? LootPrompt() ?? _doors.GarageDoorPrompt(_driving) ?? ScudLoadPrompt(prompt) ?? prompt ?? _mass.Prompt() ?? RozhlasSetPrompt() ?? MineralPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt() ?? LadderReachPrompt()); // a placing turret owns the prompt
     }
 
     /// <summary>On a ladder: the keys that work there. The prompt that owns the line (nothing else is in reach on a rung).</summary>

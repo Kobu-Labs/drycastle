@@ -188,7 +188,7 @@ public partial class NetClient
     }
 
     /// <summary>Everyone else's view of the victim: their character lies on its back under the demon, head towards (sin yaw, cos yaw), then gets up. Called after the remote is placed.</summary>
-    void PounceLieRemote(ushort id, Remote r, Vector3 at)
+    void PounceLieRemote(ushort id, RemotePlayer r, Vector3 at)
     {
         if (id != _pv.LieVictim || _pLie <= 0.001f) return;
         var k = Smooth(_pLie);

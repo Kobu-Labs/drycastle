@@ -12,7 +12,7 @@ public partial class NetClient
     static readonly Color FriendTagTint = new(0.3f, 1f, 0.3f);
 
     /// <summary>Name tags over players: none in free-for-all, only teammates (in the friend colour) in team deathmatch, a squad mate's with the squad's name after it (#379); target dummies keep their orange tag.</summary>
-    void UpdateNameTag(ushort id, Remote r)
+    void UpdateNameTag(ushort id, RemotePlayer r)
     {
         var dummy = TargetDummies.IsDummyId(id);
         var show = (dummy || (Match.IsTeamMode && Match.AreFriends(_myId, id))) && !DustHides(r.Node.GlobalPosition + Vector3.Up * 1.6f); // not through dust (#345)

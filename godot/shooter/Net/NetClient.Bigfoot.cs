@@ -304,7 +304,7 @@ public partial class NetClient
     /// own eye rides) with its limbs flailing; thrown it tumbles about its middle (<see cref="RagdollTumble"/>) until it lands, then turns upright and goes
     /// slack, and the normal figure takes over without a pop (a turn is a whole circle, the pivot height at upright is the body's middle).
     /// </summary>
-    void FlingRemote(ushort id, Remote r, BodyFlingTracker f, Vector3 at, float yaw, float dt)
+    void FlingRemote(ushort id, RemotePlayer r, BodyFlingTracker f, Vector3 at, float yaw, float dt)
     {
         var t = r.Tumble;
         var speed = dt > 0 ? (at - r.TumbleLast).Length() / dt : 0;

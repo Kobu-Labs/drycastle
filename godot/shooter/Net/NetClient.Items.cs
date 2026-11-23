@@ -135,7 +135,7 @@ public partial class NetClient
                 OnBinocularsRaised(holder, up, pair);
                 break;
             case EventKind.HeadLampState when HeadLamp.TryDecode(payload, out var lamp, out var lampOn):
-                OnHeadLampState(lamp, lampOn);
+                _headLamps.SetLamp(lamp, lampOn);
                 break;
             case EventKind.Equipment when ItemEvents.TryDecodeEquipment(payload, out var worn, out var bag):
                 _wornItems = worn;

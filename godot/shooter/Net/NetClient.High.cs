@@ -5,7 +5,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// The high on the client (GLOSSARY "High", plantation.json): the server says who is high with <see cref="StatusKind.High"/> in the status mask (<see cref="NetClient.OnStatusEvent"/>). Everyone's figure shows it
-/// (<see cref="CharacterView.SetHigh"/>, called from <see cref="NetClient.SyncStatusFx"/>); the local player's own camera gets the nausea (<see cref="Nausea"/>): a slow sway of the real look yaw and pitch (the angles that
+/// (<see cref="CharacterView.SetHigh"/>, called from <see cref="StatusClient.SyncFx"/>); the local player's own camera gets the nausea (<see cref="Nausea"/>): a slow sway of the real look yaw and pitch (the angles that
 /// are sent, so shots go where the swayed crosshair points; the server need not know), a roll and a breathing FOV that are only drawn. It runs only while the camera is the body's own on foot: not at a cut-scene camera,
 /// a turret or missile view, a seat, the Bigfoot's hand, the Mass, the demon's pin or the death view. The reduce-motion setting leaves a small share of it. Nothing is shown for the hold itself: no prompt, no ring.
 /// </summary>
@@ -68,7 +68,7 @@ public partial class NetClient
     }
 
     /// <summary>The local player is high according to the last status message.</summary>
-    public bool OwnHigh => HasStatus(_myId, StatusKind.High);
+    public bool OwnHigh => _status.Has(_myId, StatusKind.High);
 
     /// <summary>Once per frame, before the roll is composed (<see cref="FadeOwnCorrection"/>): steps the nausea and applies its look change, roll and FOV to the first-person camera.</summary>
     void UpdateNausea(double delta)

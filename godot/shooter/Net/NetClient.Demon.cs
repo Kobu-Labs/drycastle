@@ -128,7 +128,7 @@ public partial class NetClient
             {
                 if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
                 var view = d.View;
-                view.FloorY = _massNow.ChantAt.Y - 1.5f; // the pastor's spot is the floor
+                view.FloorY = _mass.State.ChantAt.Y - 1.5f; // the pastor's spot is the floor
                 if (e.Buf.At(rt) is { } s) // placed before the state is shown: one that is dead from the start falls from where it hangs
                 {
                     var n = DemonRules.UnpackNormal(e.State.Owner);

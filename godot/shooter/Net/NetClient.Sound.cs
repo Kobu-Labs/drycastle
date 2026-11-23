@@ -20,7 +20,6 @@ public partial class NetClient
 
     string WeaponId(int index) => Weapons?.Weapons.ElementAtOrDefault(index)?.Id ?? "";
 
-    Vector3? PlayerPos(ushort id) => id == _myId ? _me?.GlobalPosition : _remotes.TryGetValue(id, out var r) ? r.Node.GlobalPosition : null;
 
     void SfxShot(ShotMsg sh, bool melee)
     {
@@ -42,7 +41,7 @@ public partial class NetClient
         if (!Sfx.Enabled) return;
         var mine = h.Attacker == _myId && h.Victim != _myId;
         if (mine) Sfx.Play2D(h.Kill ? "kill.confirm" : "hit.tick");
-        if (Weapons?.Weapons.ElementAtOrDefault(h.Weapon) is { Kind: WeaponKind.Melee } w && PlayerPos(h.Victim) is { } at)
+        if (Weapons?.Weapons.ElementAtOrDefault(h.Weapon) is { Kind: WeaponKind.Melee } w && Ctx.PositionOf(h.Victim) is { } at)
         {
             if (h.Attacker == _myId) Sfx.Play2D(SoundRules.Event("hit", w.Id)); else Sfx.Play3D(SoundRules.Event("hit", w.Id), at);
         }
@@ -52,7 +51,7 @@ public partial class NetClient
     {
         if (!Sfx.Enabled) return;
         if (d.Victim == _myId) Sfx.Play2D("death");
-        else if (PlayerPos(d.Victim) is { } at) Sfx.Play3D("death", at);
+        else if (Ctx.PositionOf(d.Victim) is { } at) Sfx.Play3D("death", at);
     }
 
     /// <summary>Own reload and weapon switch, from the ammo event (remote players' reloads are not on the wire).</summary>
@@ -91,7 +90,7 @@ public partial class NetClient
         }
     }
 
-    void SfxRemoteStep(Remote r, Vector3 now, float dt)
+    void SfxRemoteStep(RemotePlayer r, Vector3 now, float dt)
     {
         if (!Sfx.Enabled || r.State is EntityState.Dead or EntityState.InVehicle) return;
         var grounded = MathF.Abs(now.Y - r.LastPos.Y) < 0.04f * Math.Max(dt, 0.01f) * 30f;

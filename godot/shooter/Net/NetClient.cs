@@ -13,13 +13,6 @@ namespace Drycastle.Shooter;
 public partial class NetClient : Node
 {
     sealed class Pending { public NetInput Input; public MoveState After; }
-    sealed class Remote { public CharacterView? View; public byte Slot; public double FireUntil; public Vector3 LastPos; public double LastT; public float Speed, StepAcc, WadeAcc; public double RippleDue; public EntityState State; public Stance Stance; public readonly RagdollTumble Tumble = new(); /// <summary>The driver's own picture of this body thrown by the vehicle they drive, shown before the server's kill arrives (#411).</summary>
-        public readonly ThrowGuess Guess = new(); /// <summary>The guessed throw is drawn as the dead ragdoll (the server has said dead; until then a hit that hurts tumbles as a thrown living body, <see cref="BodyFlingTracker"/>). GuessFlung: this guess started that tumble; GuessConfirmed: the server's PlayerFlung came for it. And the launch speed of the guess and where the server had the body last frame, to see when the server's living body has come down (#411).</summary>
-        public bool GuessRagdoll, GuessFlung, GuessConfirmed; public float GuessLaunch; public Vector3 GuessServerLast; public Vector3 TumbleLast; public Node3D Node = null!; public readonly Interpolator Buf = new(); public NVec3 Min = new(float.MaxValue), Max = new(float.MinValue);
-        /// <summary>The yaw and pitch drawn this frame (the aim of a rider), and the vehicle and seat this player sits in (<see cref="SeatRiders"/>).</summary>
-        public float ShownYaw, ShownPitch; /// <summary>The pair of binoculars held at the face, or null.</summary>
-        public ItemDef? Binoculars; /// <summary>The squad whose name the name tag shows after the name (0: none); the tag is rebuilt when it changes (#379).</summary>
-        public byte TagSquad; public ushort RideCar; public int RideSeat = -1; public bool RideStanding; }
 
     public const double InterpDelayTicks = 3.0;
     public const float SnapDistance = 2f;
@@ -54,7 +47,9 @@ public partial class NetClient : Node
     /// The mode flags (dead, in a vehicle, at a turret, steering the missile, held by the Mass, the demon or the Bigfoot) as one value to ask named questions of
     /// (<see cref="ClientModeInputs"/>); build it where it is used, it is a few bools. <c>InArmedSeat</c> is only ever true while driving (<see cref="MySeat"/> needs it).
     /// </summary>
-    ClientModeInputs Mode => new(Dead, _driving, _gunship != null || ScudScreenOn, _controlling, _massSeated, _pinned, _heldByBigfoot, _pRising, _myState == EntityState.InVehicle, _driving && InArmedSeat);
+    ClientModeInputs Mode => new(Dead, _driving, _gunship != null || ScudScreenOn, _controlling, _mass.Seated, _pinned, _heldByBigfoot, _pRising, _myState == EntityState.InVehicle, _driving && InArmedSeat);
+    /// <summary>holy_mass.json (set by the host): the bodies of the citizens and the Mass's chant.</summary>
+    public HolyMassFile HolyMassData = new();
     /// <summary>weapons.json: hotbar order and the per-weapon movement speed multiplier used by prediction.</summary>
     public WeaponsFile Weapons { get => Ctx.Weapons!; set => Ctx.Weapons = value; }
     /// <summary>match.json as the client shipped it: the gunfire blips' radius, lifetime and rate limit (null: no blips, e.g. headless bots).</summary>
@@ -82,13 +77,13 @@ public partial class NetClient : Node
     readonly List<Pending> _pending = new();
     readonly SnapshotDecoder _dec = new();
     /// <summary>Replicated world entities (turrets, missiles, ...). Subscribe to Spawned/Despawned for visuals.</summary>
-    public readonly WorldReplica WorldEntities = new();
+    public WorldReplica WorldEntities => Ctx.WorldEntities;
     readonly Dictionary<ushort, string> _names = new();
-    readonly Dictionary<ushort, Remote> _remotes = new();
-    uint _lastTick;
+    Dictionary<ushort, RemotePlayer> _remotes => Ctx.Remotes;
+    uint _lastTick { get => Ctx.LastTick; set => Ctx.LastTick = value; }
     double _lastArrival;
     /// <summary>The render clock of the remote entities (A-06): a filtered estimate of the server's tick, which never runs backwards.</summary>
-    readonly RenderClock _clock = new();
+    RenderClock _clock => Ctx.Clock;
     double _elapsed;
     int _recon, _snaps;
     float _maxErr;
@@ -102,6 +97,11 @@ public partial class NetClient : Node
     readonly UavClient _uav;
     readonly IntelClient _intel;
     BlipsClient _blips = null!;
+    readonly PoopClient _poop;
+    readonly HeadLampClient _headLamps;
+    MassClient _mass = null!;
+    CitizensClient _citizens = null!;
+    StatusClient _status = null!;
 
     public NetClient()
     {
@@ -110,12 +110,17 @@ public partial class NetClient : Node
         _doors = new DoorsClient(Ctx);
         _uav = new UavClient(Ctx);
         _intel = new IntelClient(Ctx);
+        _poop = new PoopClient(Ctx);
+        _headLamps = new HeadLampClient(Ctx);
     }
 
     public override void _Ready()
     {
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
         _blips = new BlipsClient(Ctx, BlipConfig);
+        _mass = new MassClient(Ctx, HolyMassData, DropPrediction);
+        _citizens = new CitizensClient(Ctx, HolyMassData, _mass);
+        _status = new StatusClient(Ctx, Plantation);
         _bot = MakeBot();
         InitCorpses();
         InitGroundItems();
@@ -125,9 +130,7 @@ public partial class NetClient : Node
         InitAnimals();
         InitCompanions();
         InitFlocks();
-        InitPoop();
         InitBigfoot();
-        InitCitizens();
         InitThieves();
         InitDemon();
         InitAircraft();
@@ -181,8 +184,8 @@ public partial class NetClient : Node
         Ctx.FreeOwned();
         _missiles.Clear();
         _animals.Clear(); // the nodes are under Owned
-        _poops.Clear();
-        _citizens.Clear();
+        _poop.Reset();
+        _citizens.Reset();
         _impacts = null; Array.Clear(_impactNext);
         _rings = null; _ringNext = 0; _ringMesh = null;
         _dust = null; _dustNext = 0;
@@ -274,7 +277,7 @@ public partial class NetClient : Node
     void RenderPlayersAndProps()
     {
         RenderRemotes();
-        RenderHeadLamps();
+        _headLamps.Render(_driving || _myState == EntityState.InVehicle);
         if (PoseDemo && !_poseDemoDone && _me != null) SpawnPoseDemo();
         RenderCorpses();
         RenderGroundItems();
@@ -290,7 +293,7 @@ public partial class NetClient : Node
         TickCompanionMarks();
         RenderFlocks(delta);
         RenderBigfoot();
-        RenderCitizens();
+        _citizens.Render();
         RenderGang(delta);
         RenderDemon();
     }
@@ -414,8 +417,8 @@ public partial class NetClient : Node
     {
         _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
         if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
-        ForgetWorn(l.PlayerId); _binocularsBy.Remove(l.PlayerId); _headLampBy.Remove(l.PlayerId);
-        ForgetStatus(l.PlayerId);
+        ForgetWorn(l.PlayerId); _binocularsBy.Remove(l.PlayerId); _headLamps.Forget(l.PlayerId);
+        _status.Forget(l.PlayerId);
     }
 
     /// <summary>One reliable event, to every feature that listens, in this order (some ignore the kinds that are not theirs).</summary>
@@ -424,7 +427,7 @@ public partial class NetClient : Node
         if (kind == EventKind.TargetRoster) OnTargetRoster(payload); // target dummies' names (#148)
         OnSandboxEvent(kind, payload); // sandbox answer (#156)
         OnChatEvent(kind, payload); // chat lines, the admin flag, the day clock
-        OnStatusEvent(kind, payload); // statuses: blessing, curse, burning
+        _status.OnEvent(kind, payload); // statuses: blessing, curse, burning
         OnItemEvent(kind, payload); // what the player wears, what a corpse carries, an item crumbling
         OnCompanionEvent(kind, payload); // the Companions the player can pick and the one that is out
         _intel.OnEvent(kind, payload); // the announced events: the intel screen, the announcement
@@ -434,7 +437,7 @@ public partial class NetClient : Node
         OnThievesEvent(kind, payload); // the Raid vans' honk
         _doors.OnEvent(kind, payload); // the church doors, the Obecny Urad's door and the bus garage's doors
         OnRozhlasEvent(kind, payload); // the village loudspeaker's phase, broadcast and offset
-        OnMassEvent(kind, payload); // the Holy Mass: chant, bells, the player's seat, the blessing
+        _mass.OnEvent(kind, payload); // the Holy Mass: chant, bells, the player's seat, the blessing
         OnDemonEvent(kind, payload); // the demon: fireballs, the curse
         OnHuntEvent(kind, payload); // the Hunter's Log: answers and announcements (#336)
         OnPhoenixEvent(kind, payload); // the Phoenix's fall: a flash and the crash site's warning light
@@ -514,7 +517,7 @@ public partial class NetClient : Node
             if (rec.Type == EntityType.Flight) { OnFlightState(rec, h.Tick); continue; }
             if (rec.Type == EntityType.Drive) { OnDriveState(rec, h.Tick); continue; }
             if (rec.Type is not (EntityType.Player or EntityType.Target)) continue;
-            if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); _remotes[id] = r; SyncStatusFx(id); }
+            if (!_remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); _remotes[id] = r; _status.SyncFx(id); }
             r.State = rec.State; r.Stance = rec.Stance; r.Slot = rec.Weapon;
             r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
             r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
@@ -572,7 +575,7 @@ public partial class NetClient : Node
         }
     }
 
-    Remote MakeRemote(ushort id, bool target = false)
+    RemotePlayer MakeRemote(ushort id, bool target = false)
     {
         var node = new Node3D { Name = $"Remote{id}" };
         var view = CharacterView.Make();
@@ -588,7 +591,7 @@ public partial class NetClient : Node
             PixelSize = 0.005f, NoDepthTest = true,
         });
         World.AddChild(node);
-        return new Remote { Node = node, View = view, Binoculars = _binocularsBy.GetValueOrDefault(id) };
+        return new RemotePlayer { Node = node, View = view, Binoculars = _binocularsBy.GetValueOrDefault(id) };
     }
 
     void OnSelf(EntityRecord rec, ushort ack)
@@ -659,6 +662,9 @@ public partial class NetClient : Node
         }
         return false;
     }
+
+    /// <summary>The inputs waiting for an ack and a reconcile waiting for the next tick are void (the server took over the body).</summary>
+    void DropPrediction() { _pending.Clear(); _reconcile = null; }
 
     /// <summary>A reconcile from a snapshot, waiting for the next physics tick (see <see cref="OnSelf"/>).</summary>
     MoveState? _reconcile;
@@ -757,7 +763,7 @@ public partial class NetClient : Node
     }
 
     /// <summary>The fractional server tick the remote entities are drawn at this frame (see <see cref="RenderClock"/>).</summary>
-    double RenderTickNow() => _clock.RenderTick(Time.GetTicksMsec() / 1000.0, InterpDelayTicks);
+    double RenderTickNow() => Ctx.RenderTick;
 
     void RenderRemotes()
     {
@@ -796,7 +802,7 @@ public partial class NetClient : Node
     /// which is right whether the server then says dead (the corpse's ragdoll takes over in flight) or alive (it lands, lies and gets up). A slow push is an upright shove.
     /// Only a touch the server did not see (a graze, within the lag) is taken back: the body glides to where the server has it. Returns where the body is drawn.
     /// </summary>
-    Vector3 GuessRunOver(ushort id, Remote r, Vector3 at, bool dead, float dt)
+    Vector3 GuessRunOver(ushort id, RemotePlayer r, Vector3 at, bool dead, float dt)
     {
         var g = r.Guess;
         var feet = new NVec3(at.X, at.Y, at.Z);
@@ -832,7 +838,7 @@ public partial class NetClient : Node
     /// The ragdoll of a killed dummy: while it is thrown (dead and moving fast) it spins about its middle with its limbs flailing, then lies flat with
     /// them loose. A dummy that fell where it stood plays the death clip; everything else stands upright at its feet. Corpses do the same in <see cref="RenderCorpses"/>.
     /// </summary>
-    void TumbleRemote(ushort id, Remote r, Vector3 at, float yaw, bool dummyDown, float dt)
+    void TumbleRemote(ushort id, RemotePlayer r, Vector3 at, float yaw, bool dummyDown, float dt)
     {
         var t = r.Tumble;
         if (_flings.TryGetValue(id, out var fling) && fling.Active && !dummyDown) { FlingRemote(id, r, fling, at, yaw, dt); return; } // in the Bigfoot's fist or flying from it (#360)
@@ -868,7 +874,7 @@ public partial class NetClient : Node
     }
 
     /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
-    void AnimateRemote(Remote r, NVec3 pos)
+    void AnimateRemote(RemotePlayer r, NVec3 pos)
     {
         var now = Now;
         var p = new Vector3(pos.X, pos.Y, pos.Z);

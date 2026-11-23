@@ -17,6 +17,14 @@ public sealed class ClientContext
     /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
     public ClientMatchState Match { get; } = new();
     public CameraShake Shake { get; }
+    /// <summary>Replicated world entities (turrets, missiles, citizens, ...). Subscribe to Spawned/Despawned for visuals.</summary>
+    public WorldReplica WorldEntities { get; } = new();
+    /// <summary>The render clock of the remote entities (A-06): a filtered estimate of the server's tick, which never runs backwards.</summary>
+    public RenderClock Clock { get; } = new();
+    /// <summary>The tick of the newest snapshot; 0 before the first one.</summary>
+    public uint LastTick;
+    /// <summary>The other players and target dummies being drawn, by entity id.</summary>
+    public Dictionary<ushort, RemotePlayer> Remotes { get; } = new();
     public Node3D World = null!;
     /// <summary>The loaded map (set by the host).</summary>
     public Drycastle.MapLoader.MapLoader? Map;
@@ -44,6 +52,11 @@ public sealed class ClientContext
     }
 
     public double Now => Time.GetTicksMsec() / 1000.0;
+    /// <summary>The fractional server tick the remote entities are drawn at this frame (about <see cref="NetClient.InterpDelayTicks"/> in the past).</summary>
+    public double RenderTick => Clock.RenderTick(Now, NetClient.InterpDelayTicks);
+
+    /// <summary>Where a player stands: the local one at the camera's body, another at their drawn node; null when not known.</summary>
+    public Vector3? PositionOf(ushort id) => id == MyId ? Me?.GlobalPosition : Remotes.TryGetValue(id, out var r) ? r.Node.GlobalPosition : null;
     public bool MenuIsOpen => MenuOpen?.Invoke() == true;
 
     /// <summary>
