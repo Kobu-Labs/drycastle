@@ -1,8 +1,8 @@
 # Ground patch and Zones tools: UI notes (issue #275, ADR 0022)
 
 Standard: `docs/standards/ui-ux.md`. Code: `godot/viewer/Editor/Tools/ShapeEditor.cs` (the polygon machinery both tools share: drawing, closing,
-corners, delete, hints, patch type and water level; `ShapePanel`: the draw/state/list widgets; `ShapeWorld`: the 3D preview; `ShapeDoc`: data and file format), `Tools/GroundPatchPage.cs` (patch form, list), `EditorMode.Zones.cs`
-(zone kinds, form, list, the zone overlay), `Tools/GroundMap.cs` (the ground map) and `AreaSurfaces.cs` (the area meshes the zone overlay reuses),
+corners, delete, hints, patch type and water level; `ShapePanel`: the draw/state/list widgets; `ShapeWorld`: the 3D preview; `ShapeDoc`: data and file format), `Tools/GroundPatchPage.cs` (patch form, list), `Tools/ZonesTool.cs`
+(zone list and kinds, keys, hover), `Tools/ZonesPanel.cs` (kinds, form, list), `Tools/ZoneOverlay.cs` (the zone overlay), `Tools/ZoneMarks.cs` (marks, mass delete), `ZoneCut.cs` (cuts, rule outlines), `Tools/GroundMap.cs` (the ground map) and `AreaSurfaces.cs` (the area meshes the zone overlay reuses),
 `EditorMode.Dialogs.cs` (confirm dialog, Ctrl+P palette), rail icons in `IconGlyph.cs` ("ground", "zone"), theme variations `Danger` and
 `DangerButton` in `EditorTheme.cs`. Smoke tests: `make viewer-shape-editor-smoke` (gestures), `make viewer-patches-smoke` (patch hot reload).
 These replace the Regions tool, the ground stack and the attribute-layers overlay (`V`), which are gone.

@@ -11,7 +11,7 @@ namespace Drycastle.Viewer.Editor.Tools;
 /// <summary>
 /// The polygon editor the two shape tools share: ground PATCHES in the Ground tool and ZONES in the Zones tool (data and file
 /// format: <see cref="ShapeDoc"/>). What differs per tool (what a shape carries, its form, its list) is in <see cref="GroundPatchPage"/> and
-/// EditorMode.Zones.cs; the water level of a patch and its retyping are here. The 3D preview is <see cref="ShapeWorld"/>, the
+/// Tools/ZonesTool.cs; the water level of a patch and its retyping are here. The 3D preview is <see cref="ShapeWorld"/>, the
 /// sidebar parts are <see cref="ShapePanel"/>.
 ///
 /// States (the hint bar names each): Idle, Drawing (corners placed, nothing saved), Level (a patch of a water type is closed and
@@ -46,6 +46,20 @@ public sealed class ShapeEditor : EditorPart
     // ---- the parts' hooks ----
 
     public void BuildWorld() => World.Build();
+
+    public override void LoadConfig(ConfigFile cfg)
+    {
+        var patch = (string)cfg.GetValue("ui", "patch", "");
+        if (patch != "") RestorePatch = patch;
+        var zone = (string)cfg.GetValue("ui", "zone", "");
+        if (zone != "") RestoreZone = zone;
+    }
+
+    public override void SaveConfig(ConfigFile cfg)
+    {
+        cfg.SetValue("ui", "patch", SelectedPatchId ?? "");
+        cfg.SetValue("ui", "zone", SelectedZoneId ?? "");
+    }
 
     /// <summary>Per frame: the cursor and the corner under it, a dragged corner follows, the preview is redrawn.</summary>
     public override void Update(double delta)
@@ -143,8 +157,8 @@ public sealed class ShapeEditor : EditorPart
     public List<PatchInfo> Patches() => new(PatchList());
     public PatchInfo? Patch(string id) => PatchList().FirstOrDefault(p => p.Id == id);
 
-    internal List<ShapeInfo> ShapeList(ShapeKind k) => k == ShapeKind.Patch ? PatchList().Cast<ShapeInfo>().ToList() : Host.ZoneList().Cast<ShapeInfo>().ToList();
-    ShapeInfo? ShapeById(ShapeKind k, string id) => k == ShapeKind.Patch ? Patch(id) : Host.Zone(id);
+    internal List<ShapeInfo> ShapeList(ShapeKind k) => k == ShapeKind.Patch ? PatchList().Cast<ShapeInfo>().ToList() : Host.Zones.List().Cast<ShapeInfo>().ToList();
+    ShapeInfo? ShapeById(ShapeKind k, string id) => k == ShapeKind.Patch ? Patch(id) : Host.Zones.Find(id);
     public ShapeInfo? SelectedShape(ShapeKind k) => SelectedOf(k) is { } id ? ShapeById(k, id) : null;
     public string? SelectedOf(ShapeKind k) => k == ShapeKind.Patch ? SelectedPatchId : SelectedZoneId;
 
@@ -152,7 +166,7 @@ public sealed class ShapeEditor : EditorPart
 
     /// <summary>The shape of a kind under a map point; where shapes overlap the higher ID wins (patches: as on the ground; zones: it is the one clicked).</summary>
     public string? ShapeAt(ShapeKind k, double x, double y)
-        => k == ShapeKind.Zone ? Host.ZoneAtPoint(x, y) : ShapeList(k).Where(s => ShapeDoc.PointInRing(s.Points, x, y)).Select(s => s.Id).OrderBy(ShapeDoc.ShapeNumber).ThenBy(i => i, StringComparer.Ordinal).LastOrDefault();
+        => k == ShapeKind.Zone ? Host.Zones.AtPoint(x, y) : ShapeList(k).Where(s => ShapeDoc.PointInRing(s.Points, x, y)).Select(s => s.Id).OrderBy(ShapeDoc.ShapeNumber).ThenBy(i => i, StringComparer.Ordinal).LastOrDefault();
 
     /// <summary>Why the shape being drawn cannot be closed yet, or null when it can. Shown in the panel before anything is committed.</summary>
     public string? ShapeDraftProblem()
@@ -169,7 +183,7 @@ public sealed class ShapeEditor : EditorPart
     {
         if (Host.Map.OriginEpsg5514 == null) return "this map has no origin_epsg5514 (export it again, map 0.4.0+); patches and zones need it";
         if (Mode is ShapeState.Drawing or ShapeState.Level or ShapeState.Dragging) return "finish or cancel the shape you are drawing first (Esc)";
-        return k == ShapeKind.Patch ? Host.Ground.CannotDrawPatch() : Host.CannotDrawZone();
+        return k == ShapeKind.Patch ? Host.Ground.CannotDrawPatch() : Host.Zones.CannotDraw();
     }
 
     /// <summary>N: leave any selection and wait for the first corner; clicks then add corners even over existing shapes.</summary>
@@ -179,11 +193,11 @@ public sealed class ShapeEditor : EditorPart
         var k = CurrentKind;
         if (CannotDraw(k) is { } why) { Host.Say(why, true); return; }
         SelectShape(k, null);
-        if (k == ShapeKind.Patch) DrawType = Host.Ground.SelectedType; else _drawKind = Host.SelectedZoneKind;
+        if (k == ShapeKind.Patch) DrawType = Host.Ground.SelectedType; else _drawKind = Host.Zones.SelectedKind;
         _shape.Enter(ShapeState.Drawing); // waiting for the first corner
         Host.Say(k == ShapeKind.Patch
             ? $"new patch of {DrawType}: click corners on the ground, Enter closes the shape, Esc cancels"
-            : $"new {Host.ZoneLabel(_drawKind!)} zone: click corners on the ground, Enter creates it, Esc cancels");
+            : $"new {Host.Zones.KindLabel(_drawKind!)} zone: click corners on the ground, Enter creates it, Esc cancels");
         ShapeChanged();
     }
 
@@ -305,7 +319,7 @@ public sealed class ShapeEditor : EditorPart
     void FollowShape(ShapeKind k, string id)
     {
         if (k == ShapeKind.Patch) { if (Patch(id) is { } p) { Host.Ground.SelectType(p.Type); Host.Ground.FocusPatch = true; } }
-        else if (Host.Zone(id) is { } z) Host.SelectZoneKind(z.Kind);
+        else if (Host.Zones.Find(id) is { } z) Host.Zones.SelectKind(z.Kind);
     }
 
     /// <summary>Move one corner (absolute metres): one save. Refused (and nothing saved) when the shape would cross itself.</summary>
@@ -319,7 +333,7 @@ public sealed class ShapeEditor : EditorPart
         if (ring[corner] == r.Points[corner]) return false;
         var code = ObjectEdits.RingProblemCode(ring);
         if (code != ObjectEdits.RingOk) { Host.Say($"corner not moved: the outline would {ShapeDoc.RingMessage(code)}", true); return false; }
-        if (r is ZoneInfo { FromRule: true } rz) return Host.EditRuleZone(rz, null, ring, $"moved corner {corner + 1} of {rz.Label}");
+        if (r is ZoneInfo { FromRule: true } rz) return Host.Zones.EditRuleZone(rz, null, ring, $"moved corner {corner + 1} of {rz.Label}");
         return Host.Edits.Mutate(root =>
         {
             if (ShapeDoc.ShapesOf(root, k)?.GetValueOrDefault(id) is not Obj e) return (false, $"{noun} {id} no longer exists");
@@ -331,9 +345,9 @@ public sealed class ShapeEditor : EditorPart
     public bool DeleteShape(ShapeKind k, string id)
     {
         var noun = ShapeDoc.NounOf(k);
-        if (k == ShapeKind.Zone && Host.Zone(id) is { FromRule: true } rz)
+        if (k == ShapeKind.Zone && Host.Zones.Find(id) is { FromRule: true } rz)
         {
-            var gone = Host.EditRuleZone(rz, null, null, $"deleted {rz.Label} (Ctrl+Z undoes)");
+            var gone = Host.Zones.EditRuleZone(rz, null, null, $"deleted {rz.Label} (Ctrl+Z undoes)");
             if (gone && SelectedOf(k) == id) SelectShape(k, null);
             return gone;
         }
@@ -355,7 +369,7 @@ public sealed class ShapeEditor : EditorPart
         if (SelectedShape(k) is not { } s) { Host.Say($"no {ShapeDoc.NounOf(k)} selected", true); return false; }
         var id = s.Id; var name = s.Label;
         var what = s is PatchInfo p ? $"{name} ({p.Type}, {p.Points.Count} corners, {p.AreaM2:F0} m2) is removed from the ground; the land under it goes back to what is below."
-            : s is ZoneInfo z ? $"{name} ({Host.ZoneLabel(z.Kind)}, {z.Points.Count} corners, {z.AreaM2:F0} m2) is removed; the ground is not changed." : name;
+            : s is ZoneInfo z ? $"{name} ({Host.Zones.KindLabel(z.Kind)}, {z.Points.Count} corners, {z.AreaM2:F0} m2) is removed; the ground is not changed." : name;
         Host.Confirm.Show($"Delete {ShapeDoc.NounOf(k)} {name}?", what + " Undo (Ctrl+Z) brings it back.", "Delete", () => DeleteShape(k, id));
         return true;
     }
@@ -502,7 +516,7 @@ public sealed class ShapeEditor : EditorPart
                 if (InLevel || _draft.Count > 0) { CloseShape(); return true; }
                 return false;
             case Key.Backspace: return RemoveLastShapePoint();
-            case Key.Delete when k.ShiftPressed && CurrentKind == ShapeKind.Zone && mode is ShapeState.Idle or ShapeState.Selected: Host.RequestDeleteMarkedZones(); return true;
+            case Key.Delete when k.ShiftPressed && CurrentKind == ShapeKind.Zone && mode is ShapeState.Idle or ShapeState.Selected: Host.Zones.Marks.RequestDelete(); return true;
             case Key.Delete when mode == ShapeState.Selected && (CurrentKind == ShapeKind.Zone || Host.Ground.FocusPatch): RequestDeleteShape(); return true;
             case Key.C when _shape.Is(ShapeState.Drawing):
                 AddCornerAtCursor();
@@ -562,13 +576,13 @@ public sealed class ShapeEditor : EditorPart
         var (rx, ry) = Host.Map.RawAbs(g);
         if (ShapeAt(k, rx, ry) is { } hit)
         {
-            if (k == ShapeKind.Zone && free) Host.ToggleZoneMark(hit); else SelectShape(k, hit); // Ctrl+click: mark for the mass delete
+            if (k == ShapeKind.Zone && free) Host.Zones.Marks.Toggle(hit); else SelectShape(k, hit); // Ctrl+click: mark for the mass delete
             return;
         }
         if (k == ShapeKind.Zone && free) { Host.Say("no zone there to mark"); return; }
         if (SelectedOf(k) != null) SelectShape(k, null);
         if (k == ShapeKind.Patch) Host.Ground.Pick(g);
-        else Host.Say(Host.SelectedZoneKind is { } zk ? $"no {Host.ZoneLabel(zk)} zone there (Esc shows all kinds)" : "no zone there");
+        else Host.Say(Host.Zones.SelectedKind is { } zk ? $"no {Host.Zones.KindLabel(zk)} zone there (Esc shows all kinds)" : "no zone there");
     }
 
     // ---- hints ----

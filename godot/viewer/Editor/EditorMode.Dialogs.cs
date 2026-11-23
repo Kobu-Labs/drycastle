@@ -33,13 +33,13 @@ public partial class EditorMode
         yield return ("Ground: draw a patch of the selected type  (N)", () => { SelectTool(EditorTool.Ground); Shapes.StartShape(); });
         yield return (Ground.Overlay.On ? "Ground: hide the ground map  (M)" : "Ground: show the ground map  (M)", () => { SelectTool(EditorTool.Ground); Ground.Overlay.Toggle(); });
         yield return ("Zones: draw a zone of the selected kind  (N)", () => { SelectTool(EditorTool.Zones); Shapes.StartShape(); });
-        if (MarkedZoneCount > 0)
+        if (Zones.Marks.Count > 0)
         {
-            yield return ($"Zones: delete the {MarkedZoneCount} marked zones  (Shift+Del)", () => { SelectTool(EditorTool.Zones); RequestDeleteMarkedZones(); });
-            yield return ("Zones: unmark all zones", () => { SelectTool(EditorTool.Zones); ClearZoneMarks(); });
+            yield return ($"Zones: delete the {Zones.Marks.Count} marked zones  (Shift+Del)", () => { SelectTool(EditorTool.Zones); Zones.Marks.RequestDelete(); });
+            yield return ("Zones: unmark all zones", () => { SelectTool(EditorTool.Zones); Zones.Marks.Clear(); });
         }
-        yield return (SelectedZoneKind != null ? $"Zones: mark all {ZoneLabel(SelectedZoneKind)} zones for deletion" : "Zones: mark all zones for deletion", () => { SelectTool(EditorTool.Zones); MarkListedZones(); });
-        yield return (_zoOn ? "Zones: hide the zone overlay  (M)" : "Zones: show the zone overlay  (M)", () => { SelectTool(EditorTool.Zones); ToggleZoneOverlay(); });
+        yield return (Zones.SelectedKind != null ? $"Zones: mark all {Zones.KindLabel(Zones.SelectedKind)} zones for deletion" : "Zones: mark all zones for deletion", () => { SelectTool(EditorTool.Zones); Zones.Marks.MarkListed(); });
+        yield return (Zones.Overlay.On ? "Zones: hide the zone overlay  (M)" : "Zones: show the zone overlay  (M)", () => { SelectTool(EditorTool.Zones); Zones.Overlay.Toggle(); });
         yield return (FloorPlan.FloorPlanParcel != null ? $"View: floor plan off, show the building of {FloorPlan.FloorPlanParcel}  (B)" : "View: floor plan of the selected parcel  (B)", FloorPlan.ToggleFloorPlan);
         yield return ("Sketch: mark points  (P)", () => { SelectTool(EditorTool.Sketch); Sketches.SetMode(SketchKind.Point); });
         yield return ("Sketch: draw a line  (L)", () => { SelectTool(EditorTool.Sketch); Sketches.SetMode(SketchKind.Line); });
@@ -52,8 +52,8 @@ public partial class EditorMode
         yield return ("Walk: drop to the ground here  (F3)", WalkFromHere);
         yield return ("Help: controls  (F1)", ToggleCheatSheet);
         foreach (var r in Shapes.Patches()) { var id = r.Id; yield return ($"{r.Id}  ground patch  {r.Type}  {r.Points.Count} corners", () => { SelectTool(EditorTool.Ground); Shapes.SelectShape(ShapeKind.Patch, id); }); }
-        foreach (var z in Zones()) { var id = z.Id; yield return ($"{z.Label}  zone  {ZoneLabel(z.Kind)}  {z.Points.Count} corners", () => { SelectTool(EditorTool.Zones); Shapes.SelectShape(ShapeKind.Zone, id); }); }
-        foreach (var k in Map.ZoneKinds) { var n = k.Name; yield return ($"{k.Label}  zone kind", () => { SelectTool(EditorTool.Zones); SelectZoneKind(n); }); }
+        foreach (var z in Zones.List()) { var id = z.Id; yield return ($"{z.Label}  zone  {Zones.KindLabel(z.Kind)}  {z.Points.Count} corners", () => { SelectTool(EditorTool.Zones); Shapes.SelectShape(ShapeKind.Zone, id); }); }
+        foreach (var k in Map.ZoneKinds) { var n = k.Name; yield return ($"{k.Label}  zone kind", () => { SelectTool(EditorTool.Zones); Zones.SelectKind(n); }); }
         foreach (var p in Sketches.Doc.Points) { var id = p.Id; yield return ($"{p.Id}  sketch point", () => { SelectTool(EditorTool.Sketch); Sketches.SelectItem(id); }); }
         foreach (var l in Sketches.Doc.Lines) { var id = l.Id; yield return ($"{l.Id}  sketch {(l.Closed ? "closed line" : "line")}  {l.Points.Count} corners", () => { SelectTool(EditorTool.Sketch); Sketches.SelectItem(id); }); }
         if (filter.Length >= 2)

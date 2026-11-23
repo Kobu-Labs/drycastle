@@ -200,36 +200,36 @@ public partial class Viewer
         ed.SelectTool(EditorTool.Zones);
         await Frame();
         ed.RefreshNow();
-        ed.SelectZoneKind(null); ed.Shapes.SelectShape(ShapeKind.Zone, null); ed.RefreshNow(); // the saved editor_ui.cfg of this machine may have restored a kind
-        Check(ed.Tool == EditorTool.Zones && !ed.ZoneErrorShown && ed.ZoneKindRowCount > 0, $"Zones tool lists the map's zone kinds ({ed.ZoneKindRowCount}); the map has zone_kinds");
-        Check(ed.Zones().All(z => z.FromRule) && ed.Shapes.Panel.State == "No zone selected", "nothing drawn yet: every zone on the map comes from a rule, none is selected");
-        var deerRow = ed.ZoneKindRowText("deer");
+        ed.Zones.SelectKind(null); ed.Shapes.SelectShape(ShapeKind.Zone, null); ed.RefreshNow(); // the saved editor_ui.cfg of this machine may have restored a kind
+        Check(ed.Tool == EditorTool.Zones && !ed.Zones.Panel.ErrorShown && ed.Zones.Panel.KindRowCount > 0, $"Zones tool lists the map's zone kinds ({ed.Zones.Panel.KindRowCount}); the map has zone_kinds");
+        Check(ed.Zones.List().All(z => z.FromRule) && ed.Shapes.Panel.State == "No zone selected", "nothing drawn yet: every zone on the map comes from a rule, none is selected");
+        var deerRow = ed.Zones.Panel.KindRowText("deer");
         Check(!deerRow.Contains("drawn") && !deerRow.Contains("rule"), $"a kind row has one number, no drawn/rule wording: '{deerRow}'");
         Check(ed.ShapeHint.Contains("zones:"), $"zones idle hint: '{ed.ShapeHint}'");
         await Key_(Key.N);
         Check(ed.Shapes.Mode == ShapeState.Idle && ed.StatusMessage.Contains("pick a zone kind"), $"N without a kind is refused with the way out: '{ed.StatusMessage}'");
-        ed.PressZoneKindRow("bigfoot"); ed.RefreshNow();
-        Check(ed.SelectedZoneKind == "bigfoot", "clicking a kind row selects it");
+        ed.Zones.Panel.PressKindRow("bigfoot"); ed.RefreshNow();
+        Check(ed.Zones.SelectedKind == "bigfoot", "clicking a kind row selects it");
         var zq = new[] { Pt("z0"), Pt("z1"), Pt("z2"), Pt("z3") };
         await Key_(Key.N);
         foreach (var p in zq) ed.Shapes.AddShapePoint(p[0], p[1]);
         Check(ed.ShapeHint.Contains("Enter creates"), $"a zone is created by Enter (no extra step): '{ed.ShapeHint}'");
         await Gesture("create Z-0001 (Enter)", () => ed.Shapes.SelectedZoneId == "Z-0001", "z_created", false, () => Key_(Key.Enter));
-        Check(ed.Shapes.Panel.RowCount == 1 && ed.Shapes.Panel.RowSelected("Z-0001") && ed.ZoneKindShown == "bigfoot", "the zone is listed, selected, and its form shows its kind");
-        await Gesture("change Z-0001 to deer", () => ed.SetZoneKind("Z-0001", "deer"), "z_rekinded", false);
-        Check(ed.SelectedZoneKind == "deer", "the kind selection follows the zone");
-        Check(!ed.SetZoneKind("Z-0001", "no_such_kind") && ed.Edits.History.UndoDepth == 7, "an unknown kind is refused");
+        Check(ed.Shapes.Panel.RowCount == 1 && ed.Shapes.Panel.RowSelected("Z-0001") && ed.Zones.Panel.KindShown == "bigfoot", "the zone is listed, selected, and its form shows its kind");
+        await Gesture("change Z-0001 to deer", () => ed.Zones.SetKind("Z-0001", "deer"), "z_rekinded", false);
+        Check(ed.Zones.SelectedKind == "deer", "the kind selection follows the zone");
+        Check(!ed.Zones.SetKind("Z-0001", "no_such_kind") && ed.Edits.History.UndoDepth == 7, "an unknown kind is refused");
         Check(ed.Shapes.ShapeAt(ShapeKind.Zone, plan.GetProperty("inside_z")[0].GetDouble(), plan.GetProperty("inside_z")[1].GetDouble()) == "Z-0001", "hit test finds Z-0001");
-        ed.ZoneOverlayNow();
-        Check(ed.ZoneOverlayShown, "the overlay is on by default");
+        ed.Zones.Overlay.Now();
+        Check(ed.Zones.Overlay.On, "the overlay is on by default");
         await Key_(Key.M);
-        Check(!ed.ZoneOverlayShown, "M hides the zone overlay");
+        Check(!ed.Zones.Overlay.On, "M hides the zone overlay");
         await Key_(Key.M);
-        Check(ed.ZoneOverlayShown, "M shows it again");
+        Check(ed.Zones.Overlay.On, "M shows it again");
         await Key_(Key.Delete);
         Check(ed.Confirm.Visible && ed.Confirm.Text.Contains("Z-0001"), $"Del asks first and names the zone: '{ed.Confirm.Text.Replace('\n', '|')}'");
-        await Gesture("delete Z-0001", () => { ed.Confirm.Accept(); return ed.Zone("Z-0001") == null; }, "p_moved", false);
-        Check(ed.Shapes.SelectedZoneId == null && ed.Zone("Z-0001") == null, "deleted zone leaves the selection (and the zones key is gone, as dump_text)");
+        await Gesture("delete Z-0001", () => { ed.Confirm.Accept(); return ed.Zones.Find("Z-0001") == null; }, "p_moved", false);
+        Check(ed.Shapes.SelectedZoneId == null && ed.Zones.Find("Z-0001") == null, "deleted zone leaves the selection (and the zones key is gone, as dump_text)");
 
         // ---- undo / redo of every step, byte for byte ----
         var chain = new[] { ("z_rekinded", false), ("z_created", false), ("p_moved", false), ("p_water", true), ("p_moved", true), ("p_retyped", true), ("p_created", true), ("seed", true) };
@@ -291,48 +291,48 @@ public partial class Viewer
         ed.SelectTool(EditorTool.Zones);
         await Frame();
         ed.RefreshNow();
-        var rule = ed.Zones().FirstOrDefault(z => z.FromRule);
+        var rule = ed.Zones.List().FirstOrDefault(z => z.FromRule);
         if (rule == null) GD.Print("info: the map has no zone that comes from a rule; skipped");
         else
         {
             var kind = rule.Kind; var other = kind == "bigfoot" ? "deer" : "bigfoot";
-            var n0 = ed.ZoneCount(kind); var u0 = ed.Edits.History.UndoDepth; var s0 = ed.Edits.SaveCount; var before = Disk();
-            Check(ed.ZoneKindRowText(kind) == $"{ed.ZoneLabel(kind)}   {n0}", $"the row of {kind} shows every zone of it as one number: '{ed.ZoneKindRowText(kind)}' ({n0})");
+            var n0 = ed.Zones.Count(kind); var u0 = ed.Edits.History.UndoDepth; var s0 = ed.Edits.SaveCount; var before = Disk();
+            Check(ed.Zones.Panel.KindRowText(kind) == $"{ed.Zones.KindLabel(kind)}   {n0}", $"the row of {kind} shows every zone of it as one number: '{ed.Zones.Panel.KindRowText(kind)}' ({n0})");
             ed.Shapes.SelectShape(ShapeKind.Zone, rule.Id); ed.RefreshNow();
-            Check(ed.Shapes.SelectedZoneId == rule.Id && ed.SelectedZoneKind == kind && ed.Shapes.Panel.RowSelected(rule.Id), $"a zone from a rule ({rule.Label}) is selectable and listed");
+            Check(ed.Shapes.SelectedZoneId == rule.Id && ed.Zones.SelectedKind == kind && ed.Shapes.Panel.RowSelected(rule.Id), $"a zone from a rule ({rule.Label}) is selectable and listed");
             Check(ed.Shapes.DeleteShape(ShapeKind.Zone, rule.Id) && ed.Edits.SaveCount == s0 + 1 && ed.Edits.History.UndoDepth == u0 + 1, "deleting it is one save, one undo step");
-            Check(ed.ZoneCount(kind) == n0 - 1 && ed.ZoneCutCount == 1 && !Disk().Contains("\"zones\"") && Disk().Contains("zone_cuts"), "the count drops by one; a cut is recorded, no zone is drawn");
-            Check(ed.Edits.Undo() && Disk() == before && ed.ZoneCount(kind) == n0 && ed.ZoneCutCount == 0, "one undo brings it back exactly");
-            Check(ed.SetZoneKind(rule.Id, other) && ed.Edits.SaveCount == s0 + 3 && ed.Edits.History.UndoDepth == u0 + 1, "changing its kind is one save, one undo step");
-            Check(ed.Shapes.SelectedZoneId == "Z-0001" && ed.Zone("Z-0001")!.Kind == other && ed.ZoneCount(kind) == n0 - 1 && ed.ZoneCutCount == 1, "it is now an ordinary zone of the new kind, selected; the old kind lost it");
-            Check(ed.Edits.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings it back exactly");
+            Check(ed.Zones.Count(kind) == n0 - 1 && ed.Zones.CutCount == 1 && !Disk().Contains("\"zones\"") && Disk().Contains("zone_cuts"), "the count drops by one; a cut is recorded, no zone is drawn");
+            Check(ed.Edits.Undo() && Disk() == before && ed.Zones.Count(kind) == n0 && ed.Zones.CutCount == 0, "one undo brings it back exactly");
+            Check(ed.Zones.SetKind(rule.Id, other) && ed.Edits.SaveCount == s0 + 3 && ed.Edits.History.UndoDepth == u0 + 1, "changing its kind is one save, one undo step");
+            Check(ed.Shapes.SelectedZoneId == "Z-0001" && ed.Zones.Find("Z-0001")!.Kind == other && ed.Zones.Count(kind) == n0 - 1 && ed.Zones.CutCount == 1, "it is now an ordinary zone of the new kind, selected; the old kind lost it");
+            Check(ed.Edits.Undo() && Disk() == before && ed.Zones.Count(kind) == n0, "one undo brings it back exactly");
             var c = rule.Points; var mid = (c.Average(p => p.x), c.Average(p => p.y));
             var to = (c[0].x + (mid.Item1 - c[0].x) * 0.1, c[0].y + (mid.Item2 - c[0].y) * 0.1);
             Check(ed.Shapes.MoveShapeCorner(ShapeKind.Zone, rule.Id, 0, to.Item1, to.Item2) && ed.Edits.SaveCount == s0 + 5 && ed.Edits.History.UndoDepth == u0 + 1, $"moving a corner is one save, one undo step: '{ed.StatusMessage}'");
-            Check(ed.Shapes.SelectedZoneId == "Z-0001" && ed.Zone("Z-0001")!.Points.Count == c.Count && ed.ZoneCount(kind) == n0, "the moved copy replaces it: same count, selected");
-            Check(ed.Edits.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings it back exactly");
+            Check(ed.Shapes.SelectedZoneId == "Z-0001" && ed.Zones.Find("Z-0001")!.Points.Count == c.Count && ed.Zones.Count(kind) == n0, "the moved copy replaces it: same count, selected");
+            Check(ed.Edits.Undo() && Disk() == before && ed.Zones.Count(kind) == n0, "one undo brings it back exactly");
 
             // ---- a selected kind is shown alone; marked zones are deleted together: one confirm, one save, one undo step ----
-            ed.Shapes.SelectShape(ShapeKind.Zone, null); ed.SelectZoneKind(kind); ed.RefreshNow(); ed.ZoneOverlayNow();
-            Check(ed.ZoneFillAlpha(kind) > 0.5f && ed.ZoneFillAlpha(other) == 0f, $"only the selected kind is drawn: {kind} {ed.ZoneFillAlpha(kind)}, {other} {ed.ZoneFillAlpha(other)}");
-            ed.SetZoneOverlay(false, false); ed.ZoneOverlayNow();
-            Check(ed.ZonesDrawn && !ed.ZoneOverlayShown, "the selected kind stays shown with the overlay off");
-            ed.SetZoneOverlay(true, false);
-            var two = ed.Zones().Where(z => z.Kind == kind).Take(2).Select(z => z.Id).ToList();
-            Check(!ed.ZoneMarkDeleteEnabled && ed.MarkedZoneCount == 0, "nothing marked: the mass delete is disabled");
-            ed.Shapes.Panel.TickRow(two[0], true); if (two.Count > 1) ed.ToggleZoneMark(two[1]); ed.RefreshNow(); ed.ZoneOverlayNow();
-            Check(ed.MarkedZoneCount == two.Count && two.All(ed.Shapes.Panel.RowMarked) && ed.ZoneMarkDeleteEnabled && ed.ZoneMarkDeleteText.Contains($"{two.Count} marked"), $"a row tick and a map mark both count: '{ed.ZoneMarkDeleteText}'");
-            Check(ed.SegmentCount(EditorMode.OutlineZoneMarked) > 0, "marked zones are outlined on the map");
+            ed.Shapes.SelectShape(ShapeKind.Zone, null); ed.Zones.SelectKind(kind); ed.RefreshNow(); ed.Zones.Overlay.Now();
+            Check(ed.Zones.Overlay.FillAlpha(kind) > 0.5f && ed.Zones.Overlay.FillAlpha(other) == 0f, $"only the selected kind is drawn: {kind} {ed.Zones.Overlay.FillAlpha(kind)}, {other} {ed.Zones.Overlay.FillAlpha(other)}");
+            ed.Zones.Overlay.Set(false, false); ed.Zones.Overlay.Now();
+            Check(ed.Zones.Drawn && !ed.Zones.Overlay.On, "the selected kind stays shown with the overlay off");
+            ed.Zones.Overlay.Set(true, false);
+            var two = ed.Zones.List().Where(z => z.Kind == kind).Take(2).Select(z => z.Id).ToList();
+            Check(!ed.Zones.Panel.MarkDeleteEnabled && ed.Zones.Marks.Count == 0, "nothing marked: the mass delete is disabled");
+            ed.Shapes.Panel.TickRow(two[0], true); if (two.Count > 1) ed.Zones.Marks.Toggle(two[1]); ed.RefreshNow(); ed.Zones.Overlay.Now();
+            Check(ed.Zones.Marks.Count == two.Count && two.All(ed.Shapes.Panel.RowMarked) && ed.Zones.Panel.MarkDeleteEnabled && ed.Zones.Panel.MarkDeleteText.Contains($"{two.Count} marked"), $"a row tick and a map mark both count: '{ed.Zones.Panel.MarkDeleteText}'");
+            Check(ed.SegmentCount(ZoneMarks.Outline) > 0, "marked zones are outlined on the map");
             s0 = ed.Edits.SaveCount; u0 = ed.Edits.History.UndoDepth;
             await Key_(Key.Delete, shift: true);
             Check(ed.Confirm.Visible && ed.Confirm.Text.Contains($"{two.Count} marked") && ed.Edits.SaveCount == s0, $"Shift+Del asks first and names what goes: '{ed.Confirm.Text.Replace('\n', '|')}'");
             ed.Confirm.Accept(); ed.RefreshNow();
-            Check(ed.Edits.SaveCount == s0 + 1 && ed.Edits.History.UndoDepth == u0 + 1 && ed.ZoneCount(kind) == n0 - two.Count && ed.MarkedZoneCount == 0, "the marked zones go in one save, one undo step; the marks are gone");
-            Check(ed.Edits.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings them all back exactly");
-            ed.MarkListedZones(); ed.RefreshNow();
-            Check(ed.MarkedZoneCount == n0, $"Mark all marks every zone of the selected kind ({ed.MarkedZoneCount}/{n0})");
-            ed.ClearZoneMarks(); ed.RefreshNow();
-            Check(ed.MarkedZoneCount == 0 && !ed.ZoneMarkDeleteEnabled, "Unmark all clears the marks; nothing was deleted");
+            Check(ed.Edits.SaveCount == s0 + 1 && ed.Edits.History.UndoDepth == u0 + 1 && ed.Zones.Count(kind) == n0 - two.Count && ed.Zones.Marks.Count == 0, "the marked zones go in one save, one undo step; the marks are gone");
+            Check(ed.Edits.Undo() && Disk() == before && ed.Zones.Count(kind) == n0, "one undo brings them all back exactly");
+            ed.Zones.Marks.MarkListed(); ed.RefreshNow();
+            Check(ed.Zones.Marks.Count == n0, $"Mark all marks every zone of the selected kind ({ed.Zones.Marks.Count}/{n0})");
+            ed.Zones.Marks.Clear(); ed.RefreshNow();
+            Check(ed.Zones.Marks.Count == 0 && !ed.Zones.Panel.MarkDeleteEnabled, "Unmark all clears the marks; nothing was deleted");
         }
 
         Check(_watcher!.FailedCount == 0, "no failed run during the whole smoke");

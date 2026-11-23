@@ -182,7 +182,7 @@ public partial class EditorMode
         objects.AddChild(_undoInfo);
         Objects.BuildPage(objects);
         Ground.BuildPage(Page(EditorTool.Ground));
-        BuildZonesPage(Page(EditorTool.Zones));
+        Zones.BuildPage(Page(EditorTool.Zones));
         Poles.BuildPage(Page(EditorTool.Poles));
         BuildViewPage(Page(EditorTool.View));
         Sketches.BuildPage(Page(EditorTool.Sketch));
@@ -340,13 +340,6 @@ public partial class EditorMode
             if (cfg.Load(CfgPath) != Error.Ok) return;
             if (Enum.TryParse<EditorTool>((string)cfg.GetValue("ui", "tool", "None"), true, out var t)) { Tool = t; Shapes.ShapeRest(); }
             Camera.LoadConfig(cfg);
-            _zoOn = (bool)cfg.GetValue("ui", "zone_overlay_on", true);
-            var psel = (string)cfg.GetValue("ui", "patch", "");
-            if (psel != "") Shapes.RestorePatch = psel;
-            var zsel = (string)cfg.GetValue("ui", "zone", "");
-            if (zsel != "") Shapes.RestoreZone = zsel;
-            var zk = (string)cfg.GetValue("ui", "zone_kind", "");
-            if (zk != "") _restoreZoneKind = zk;
             foreach (var part in _parts) part.LoadConfig(cfg);
         }
         catch (Exception e) { GD.PushWarning($"editor ui settings not loaded: {e.Message}"); }
@@ -359,10 +352,6 @@ public partial class EditorMode
             var cfg = new ConfigFile();
             cfg.SetValue("ui", "tool", Tool.ToString());
             Camera.SaveConfig(cfg);
-            cfg.SetValue("ui", "zone_overlay_on", _zoOn);
-            cfg.SetValue("ui", "patch", Shapes.SelectedPatchId ?? "");
-            cfg.SetValue("ui", "zone", Shapes.SelectedZoneId ?? "");
-            cfg.SetValue("ui", "zone_kind", SelectedZoneKind ?? "");
             foreach (var part in _parts) part.SaveConfig(cfg);
             cfg.Save(CfgPath);
         }

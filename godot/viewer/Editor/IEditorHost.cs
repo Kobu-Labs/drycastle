@@ -24,6 +24,7 @@ public interface IEditorHost
     FenceTool Fence { get; }
     ShapeEditor Shapes { get; }
     GroundTool Ground { get; }
+    ZonesTool Zones { get; }
     /// <summary>The walk-mode player (frozen and hidden while the editor is open).</summary>
     Player Player { get; }
     /// <summary>The editor is open.</summary>
@@ -46,6 +47,9 @@ public interface IEditorHost
 
     /// <summary>Draw a named set of ground segments draped on the terrain; an empty list clears it.</summary>
     void SetOutline(string name, List<(Vector2 a, Vector2 b)> segs, Color colour, float lift, float width);
+
+    /// <summary>The mesh of a named outline (null: not drawn yet).</summary>
+    MeshInstance3D? OutlineNode(string kind);
 
     /// <summary>The label beside the mouse shows this text.</summary>
     void ShowHoverText(string text, Vector2 mouse);
@@ -75,19 +79,6 @@ public interface IEditorHost
 
     /// <summary>The property group of a parcel (null: none).</summary>
     string? Group(string parcel);
-
-    // the Zones tool, until it is a part of its own (the shape editor needs it)
-    string? SelectedZoneKind { get; }
-    bool SelectZoneKind(string? name);
-    string ZoneLabel(string name);
-    string? CannotDrawZone();
-    List<ZoneInfo> ZoneList();
-    ZoneInfo? Zone(string id);
-    string? ZoneAtPoint(double x, double y);
-    /// <summary>Edit a zone that a rule gives (it becomes a drawn zone plus a cut): a new kind, a new outline, or neither (deleted).</summary>
-    bool EditRuleZone(ZoneInfo z, string? kind, List<(double x, double y)>? ring, string message);
-    bool ToggleZoneMark(string id);
-    bool RequestDeleteMarkedZones();
 
     /// <summary>The sidebar scrolls (on the next frame) until the control is in view.</summary>
     void RevealInPanel(Control control);

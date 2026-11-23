@@ -339,7 +339,7 @@ public partial class Viewer
         {
             var zones = _flags.Contains("shot-zones");
             ed.SelectTool(zones ? EditorTool.Zones : EditorTool.Ground);
-            if (zones) { if (_opts.GetValueOrDefault("shot-kind") is { } sk) ed.SelectZoneKind(sk); }
+            if (zones) { if (_opts.GetValueOrDefault("shot-kind") is { } sk) ed.Zones.SelectKind(sk); }
             else if (_opts.GetValueOrDefault("shot-type") is { } st) ed.Ground.SelectType(st);
             ed.Shapes.StartShape();
             double cx = 0, cy = 0; var n = 0;
@@ -361,7 +361,7 @@ public partial class Viewer
         {
             ed.SelectTool(EditorTool.Zones);
             Check(ed.Shapes.SelectShape(ShapeKind.Zone, szone), $"shot zone {szone} selected");
-            var r = ed.Zone(szone)!;
+            var r = ed.Zones.Find(szone)!;
             ed.LookAtAbs(r.Points.Average(p => p.x), r.Points.Average(p => p.y), 70);
         }
         ed.RefreshNow();

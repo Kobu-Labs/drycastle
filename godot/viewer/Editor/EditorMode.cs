@@ -34,6 +34,7 @@ public partial class EditorMode : Node, IEditorHost
     public FenceTool Fence { get; }
     public ShapeEditor Shapes { get; }
     public GroundTool Ground { get; }
+    public ZonesTool Zones { get; }
     readonly List<EditorPart> _parts;
 
     public EditorMode()
@@ -47,10 +48,11 @@ public partial class EditorMode : Node, IEditorHost
         Fence = new FenceTool(this);
         Shapes = new ShapeEditor(this);
         Ground = new GroundTool(this);
+        Zones = new ZonesTool(this);
         Camera = new EditorCamera(this);
-        Edits = new EditStore(this, SyncCatalogs, doc => Sketches.Replay(doc));
+        Edits = new EditStore(this, () => { Ground.Rows(); Zones.SyncCatalog(); }, doc => Sketches.Replay(doc));
         Commands = new CommandPalette(PaletteAll);
-        _parts = new() { Fence, Ortho, FloorPlan, Sketches, You, Objects, Poles, Shapes, Ground };
+        _parts = new() { Fence, Ortho, FloorPlan, Sketches, You, Objects, Poles, Shapes, Ground, Zones };
     }
 
     public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
@@ -453,7 +455,7 @@ public partial class EditorMode : Node, IEditorHost
                 if (Modal) break;
                 if (Shapes.HandleShapeKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Ground.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
-                if (HandleZoneKey(k)) { GetViewport().SetInputAsHandled(); break; }
+                if (Zones.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Sketches.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Poles.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleUndoKey(k) || Objects.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
@@ -480,7 +482,7 @@ public partial class EditorMode : Node, IEditorHost
                         else if (Poles.SelectedCableId != null) Poles.SelectCable(null);
                         else if (Objects.SelectedObjectId != null) Objects.SelectObject(null);
                         else if (Tool == EditorTool.Ground && Ground.Escape()) { }
-                        else if (Tool == EditorTool.Zones && ZoneEscape()) { }
+                        else if (Tool == EditorTool.Zones && Zones.Escape()) { }
                         else if (Selection.Count > 0) GuardUnsaved(() => Click(null, false));
                         else if (Tool != EditorTool.None) SelectTool(EditorTool.None);
                         break;
@@ -516,7 +518,6 @@ public partial class EditorMode : Node, IEditorHost
         Camera.Fly((float)delta);
         UpdateHover();
         foreach (var part in _parts) part.Update(delta);
-        UpdateZoneOverlay();
         _pollT += delta;
         if (_pollT > 0.5)
         {
@@ -527,7 +528,7 @@ public partial class EditorMode : Node, IEditorHost
         if (_panelDirty) RefreshPanel();
         _unsavedLabel.Text = Fence.PendingCount == 0 ? "" : $"* {Fence.PendingCount} unsaved (Enter applies)";
         var c = FlyCam.GlobalPosition;
-        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Camera.Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (Shapes.SelectedShapeId != null && Shapes.ShapeTool ? $"  |  {(Tool == EditorTool.Zones ? "zone" : "patch")} {Shapes.SelectedShape(Shapes.CurrentKind)?.Label}{(Shapes.SelectedShape(Shapes.CurrentKind) is PatchInfo sp ? "  " + sp.Type : "")}" : "") + (Tool == EditorTool.Zones && MarkedZoneCount > 0 ? $"  |  {MarkedZoneCount} marked for deletion" : "") + (Fence.PendingCount > 0 || Shapes.ShapeDraftPending ? $"  |  * {(Fence.PendingCount > 0 ? $"{Fence.PendingCount} UNSAVED" : "UNSAVED")}" : "");
+        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Camera.Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (Shapes.SelectedShapeId != null && Shapes.ShapeTool ? $"  |  {(Tool == EditorTool.Zones ? "zone" : "patch")} {Shapes.SelectedShape(Shapes.CurrentKind)?.Label}{(Shapes.SelectedShape(Shapes.CurrentKind) is PatchInfo sp ? "  " + sp.Type : "")}" : "") + (Tool == EditorTool.Zones && Zones.Marks.Count > 0 ? $"  |  {Zones.Marks.Count} marked for deletion" : "") + (Fence.PendingCount > 0 || Shapes.ShapeDraftPending ? $"  |  * {(Fence.PendingCount > 0 ? $"{Fence.PendingCount} UNSAVED" : "UNSAVED")}" : "");
         if (Time.GetTicksMsec() / 1000.0 > _statusUntil && _statusLabel.Text != "")
             _statusLabel.Text = "";
     }
@@ -566,7 +567,7 @@ public partial class EditorMode : Node, IEditorHost
         {
             var calm = _hoverPoint != null && !_looking && !OverUi(mouse) && !Modal && Shapes.Mode is ShapeState.Idle or ShapeState.Selected;
             var text = !calm ? null
-                : Tool == EditorTool.Zones ? (ZonesDrawn ? ZoneHoverText(_hoverPoint!.Value) : null)
+                : Tool == EditorTool.Zones ? (Zones.Drawn ? Zones.HoverText(_hoverPoint!.Value) : null)
                 : Ground.Overlay.On ? Ground.HoverText(_hoverPoint!.Value) : null;
             _hoverLabel.Visible = text != null;
             if (text != null) { _hoverLabel.Text = text; _hoverLabel.Position = mouse + new Vector2(16, 20); }
@@ -748,7 +749,7 @@ public partial class EditorMode : Node, IEditorHost
         RefreshUndoAndHint();
         Poles.RefreshPanel();
         Ground.RefreshPanel();
-        RefreshZonesPanel();
+        Zones.RefreshPanel();
         Sketches.RefreshPanel();
     }
 }
@@ -759,7 +760,7 @@ public partial class EditorMode
     Label _undoInfo = null!;                   // top of the Objects page
 
     /// <summary>The hint line of the open shape tool (smoke tests).</summary>
-    public string ShapeHint => Shapes.CurrentKind == ShapeKind.Zone ? ZonesHintText() : Ground.HintText();
+    public string ShapeHint => Shapes.CurrentKind == ShapeKind.Zone ? Zones.HintText() : Ground.HintText();
 
     /// <summary>Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z; true when the key was used. Not reached while a text field has the focus.</summary>
     bool HandleUndoKey(InputEventKey k)
@@ -781,7 +782,7 @@ public partial class EditorMode
         _btnRedo.Disabled = h.RedoDepth == 0;
         _undoInfo.Text = (h.UndoDepth == 0 ? "nothing to undo" : $"undo: {h.NextUndoDescription} ({h.UndoDepth})") + (h.RedoDepth == 0 ? "" : $"; redo: {h.NextRedoDescription} ({h.RedoDepth})");
         var placing = Objects.PlacementAsset != null;
-        _hintLabel.Text = Tool == EditorTool.Ground ? Ground.HintText() : Tool == EditorTool.Zones ? ZonesHintText() : Tool == EditorTool.Sketch ? Sketches.HintText() : Tool == EditorTool.Poles && !placing ? Poles.HintText() : Tool == EditorTool.Group && !placing
+        _hintLabel.Text = Tool == EditorTool.Ground ? Ground.HintText() : Tool == EditorTool.Zones ? Zones.HintText() : Tool == EditorTool.Sketch ? Sketches.HintText() : Tool == EditorTool.Poles && !placing ? Poles.HintText() : Tool == EditorTool.Group && !placing
             ? "marking parcels: click a parcel to mark or unmark it, Enter groups the marked ones, Esc clears the marks"
             : placing
             ? "placing: LMB place, R / Shift+R rotate, Ctrl free position, Esc or RMB stop, Ctrl+Z undo"

@@ -36,7 +36,7 @@ public sealed record PatchInfo(string Id, string Type, List<(double x, double y)
 /// A zone: exactly one zone kind of the catalog. Drawn ones are `zones.Z-NNNN`; one that comes from a rule (a ground area of
 /// the kind's where_ground types, minus the cut ones) has <see cref="AreaPart"/> (its ground area, `A-0012`, `A-0012.2` for the
 /// second outline of a multi-part one) and an ID of area and kind, since one area is a zone of several kinds. Both behave the
-/// same to the user (EditorMode.Zones.cs "detach" makes an edit of a rule-derived one an ordinary zone plus a cut).
+/// same to the user (Tools/ZonesTool.cs "detach" makes an edit of a rule-derived one an ordinary zone plus a cut).
 /// Points are the outline in absolute metres; Holes are not selectable, they only keep clicks and the overlay honest.
 /// </summary>
 public sealed record ZoneInfo(string Id, string Kind, List<(double x, double y)> Points, string? AreaPart = null, List<List<(double x, double y)>>? Holes = null) : ShapeInfo(Id, Points)
