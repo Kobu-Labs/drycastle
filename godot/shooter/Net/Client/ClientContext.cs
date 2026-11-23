@@ -1,17 +1,9 @@
 using Godot;
 using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.HeadsUp;
-using Drycastle.Shooter.Net.Server;
-using Drycastle.Shooter.Vehicles;
-using Drycastle.ShooterCore.Colliders;
-using Drycastle.ShooterCore.Companions;
-using Drycastle.ShooterCore.Fsm;
-using Drycastle.ShooterCore.Hunts;
-using Drycastle.ShooterCore.Killstreaks.Moab;
 using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
-using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
 
@@ -31,6 +23,8 @@ public sealed class ClientContext
     /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
     public ClientMatchState Match { get; } = new();
     public CameraShake Shake { get; }
+    /// <summary>The vehicles of the world as drawn, and the seat the local player sits in.</summary>
+    internal ClientCars Cars { get; }
     /// <summary>Replicated world entities (turrets, missiles, citizens, ...). Subscribe to Spawned/Despawned for visuals.</summary>
     public WorldReplica WorldEntities { get; } = new();
     /// <summary>The render clock of the remote entities (A-06): a filtered estimate of the server's tick, which never runs backwards.</summary>
@@ -47,9 +41,17 @@ public sealed class ClientContext
     /// <summary>The predicted local player; null before the welcome.</summary>
     public Player? Me;
     public ushort MyId;
+    /// <summary>How many times the prediction was corrected by a server position (the telemetry, the report and the bots count them).</summary>
+    public int Reconciles;
+    /// <summary>The weapon slots of the spawn hotbar and the one in hand.</summary>
+    public Hotbar Hotbar { get; } = new();
     public bool Dead;
+    /// <summary>The local player drives a vehicle (set by the reconcile: a seat or a driver's place).</summary>
+    public bool Driving;
     public string PlayerName = "player";
     public bool Bot;
+    /// <summary>vehicles.json (set by the host): the type per snapshot record, visuals and the smoke's expected run-over damage.</summary>
+    public VehiclesFile? Vehicles;
     /// <summary>weapons.json (set by the host): hotbar order, per-weapon values.</summary>
     public WeaponsFile? Weapons;
     /// <summary>killstreaks.json (set by the host): streak names, thresholds and the aircraft's defs.</summary>
@@ -60,11 +62,20 @@ public sealed class ClientContext
     public Func<bool>? MenuOpen;
     /// <summary>Sends one reliable event to the server (nothing when not connected).</summary>
     public Action<EventKind, byte[]> Send = (_, _) => { };
+    /// <summary>The names of the players and target dummies, by entity id (the join events and the target roster).</summary>
+    public Dictionary<ushort, string> Names { get; } = new();
+    /// <summary>Sends a player's request (not for a bot, which has no screens to ask from).</summary>
+    public void SendHuman(EventKind kind, byte[] payload) { if (!Bot) Send(kind, payload); }
+    /// <summary>Sends one reliable message at once, flushed (a profile request); false when the welcome has not come.</summary>
+    public Func<ReliableMsg, bool> SendJoined = _ => false;
+    /// <summary>True while there is a link to the server to send on.</summary>
+    public Func<bool> Connected = () => false;
 
     public ClientContext(Node root)
     {
         Root = root;
         Shake = new CameraShake(this);
+        Cars = new ClientCars(this);
     }
 
     public double Now => Time.GetTicksMsec() / 1000.0;

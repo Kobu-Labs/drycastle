@@ -1,17 +1,7 @@
 using Godot;
-using Drycastle.Shooter.HeadsUp;
-using Drycastle.Shooter.Hunts;
-using Drycastle.Shooter.Menu;
 using Drycastle.Shooter.Net.Client;
-using Drycastle.ShooterCore.Colliders;
-using Drycastle.ShooterCore.Companions;
-using Drycastle.ShooterCore.Fsm;
-using Drycastle.ShooterCore.Hunts;
-using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
-using Drycastle.ShooterCore.Vehicles;
-using Drycastle.ShooterCore.Wildlife;
 
 namespace Drycastle.Shooter.Net.Bots;
 

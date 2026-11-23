@@ -52,7 +52,7 @@ public partial class NetClient
         if (!_flights.TryGetValue(carId, out var f)) _flights[carId] = f = new FlightView();
         f.Rec = rec;
         f.Buf.Push(tick, FlightRecord.Velocity(rec), FlightRecord.Roll(rec), FlightRecord.Pitch(rec));
-        if (_cars.TryGetValue(carId, out var car) && Vehicles != null && car.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[car.Kind].Tilts) PlaceCarSolid(car); // the hull's solid box turns with the record
+        if (Ctx.Cars.TryGet(carId, out var car) && Vehicles != null && car.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[car.Kind].Tilts) PlaceCarSolid(car); // the hull's solid box turns with the record
     }
 
     VehicleDef? FlightDef(CarView v) => Vehicles != null && v.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[v.Kind].Flight != null ? Vehicles.Vehicles[v.Kind] : null;
@@ -65,9 +65,9 @@ public partial class NetClient
     void UpdatePiloting(ushort ack)
     {
         CarView? mine = null;
-        if (_driving && !Dead)
-            foreach (var v in _cars.Values)
-                if (v.Driver == _myId && !v.Destroyed && FlightDef(v) != null) { mine = v; break; }
+        if (Ctx.Driving && !Dead)
+            foreach (var v in Ctx.Cars.All)
+                if (v.Driver == Ctx.MyId && !v.Destroyed && FlightDef(v) != null) { mine = v; break; }
         if (mine == null || !_flights.TryGetValue(mine.Id, out var fv) || !_dec.States.TryGetValue(mine.Id, out var vehicle)) { StopPiloting(); return; }
         if (CarThrown(mine.Id)) { StopPiloting(); return; } // in the Bigfoot's hands or thrown: the server places it and ignores the pilot, so it is drawn from the snapshots
         var server = FlightRecord.State(vehicle, fv.Rec);
@@ -76,7 +76,7 @@ public partial class NetClient
             StopPiloting();
             var def = FlightDef(mine)!;
             var probe = FlightProbe.Make(def, Water, _mapFlightBounds ??= FlightProbe.MapBounds(Map));
-            Owned.AddChild(probe);
+            Ctx.Owned.AddChild(probe);
             _pilot = new Piloting { CarId = mine.Id, Def = def, Probe = probe, Predict = new FlightPrediction(def, probe, server), Shown = server };
             // what was drawn until now is the interpolated past: fade from there to the predicted present
             _pilot.Smooth = mine.Node.GlobalPosition - new Vector3(server.Position.X, server.Position.Y, server.Position.Z);
@@ -91,7 +91,7 @@ public partial class NetClient
         _rub.AddVehicle(moved.Length(), FlightMath.Wrap(_pilot.Predict.State.Yaw - yawBefore));
         _pilot.Smooth += new Vector3(moved.X, moved.Y, moved.Z);
         _pilot.AngleFix += AngleDelta(attBefore, _pilot.Predict.State.Yaw, _pilot.Predict.State.Pitch, _pilot.Predict.State.Roll);
-        TelemetryFlightCorrection(new Vector3(moved.X, moved.Y, moved.Z).Length());
+        _session.FlightCorrection(new Vector3(moved.X, moved.Y, moved.Z).Length());
     }
 
     void StopPiloting()
@@ -117,13 +117,13 @@ public partial class NetClient
     /// </summary>
     void PoseFlight(CarView v, double rt, float dt, ref Vector3 p, ref Vector3 rot)
     {
-        if (_pilot != null && _pilot.CarId == v.Id && _me != null)
+        if (_pilot != null && _pilot.CarId == v.Id && Ctx.Me != null)
         {
             var s = _pilot.Predict.State;
             var ahead = (float)Engine.GetPhysicsInterpolationFraction();
             if (ahead > 0.001f && !Dead)
             {
-                var now = NetInput.From(0, _me.Sample(), 0, 0);
+                var now = NetInput.From(0, Ctx.Me.Sample(), 0, 0);
                 FlightModel.Step(ref s, _pilot.Def, PilotInput(now), ahead / Wire.TickRate, _pilot.Probe);
             }
             _pilot.Smooth *= Mathf.Exp(-CorrectionFade * dt);
@@ -144,7 +144,7 @@ public partial class NetClient
     {
         var def = FlightDef(v)!;
         var speed = _pilot != null && _pilot.CarId == v.Id ? _pilot.Shown.Velocity.Length() : v.Kmh / 3.6f;
-        _me!.FlightChase(p, rot.Y, rot.X, rot.Z, speed / def.TopSpeed, def.Flight!.Camera, dt);
+        Ctx.Me!.FlightChase(p, rot.Y, rot.X, rot.Z, speed / def.TopSpeed, def.Flight!.Camera, dt);
     }
 
     int _readoutKmh = -1, _readoutAlt = -1, _promptKind = -1;
@@ -169,8 +169,8 @@ public partial class NetClient
     {
         var def = _pilot?.Def.Flight;
         var kind = s.AtEdge ? 0 : s.Grounded && def != null && s.Rotor < def.LiftoffRotor ? 1 : s.Grounded ? 2 : 3;
-        if (kind == _promptKind && Now - _promptAt < 1.0) return _promptText;
-        _promptKind = kind; _promptAt = Now;
+        if (kind == _promptKind && Ctx.Now - _promptAt < 1.0) return _promptText;
+        _promptKind = kind; _promptAt = Ctx.Now;
         return _promptText = kind switch
         {
             0 => Strings.T("hud.flight.edge"),

@@ -11,8 +11,12 @@ namespace Drycastle.Shooter.Net.Client;
 /// and of dust emitters: nothing is allocated per frame, and each piece goes idle after its one-shot lifetime (about 2 s).
 /// Water impacts use the water splash (<see cref="WaterFx"/>) instead of a dry burst.
 /// </summary>
-public partial class NetClient
+public sealed class ImpactsClient
 {
+    readonly ClientContext _ctx;
+
+    public ImpactsClient(ClientContext ctx) { _ctx = ctx; }
+
     const int ImpactPerSize = 4, RingPool = 3, DustPool = 3;
     const float ImpactLifeS = 2f;
     const int RingSegments = 24;
@@ -70,7 +74,7 @@ public partial class NetClient
                     Direction = Vector3.Up, Spread = 70f, Gravity = new Vector3(0, -9.8f, 0),
                     Mesh = new BoxMesh { Size = new Vector3(0.12f, 0.12f, 0.12f), Material = mat },
                 };
-                Owned.AddChild(p);
+                _ctx.Owned.AddChild(p);
                 banks[b][k] = p;
             }
         }
@@ -91,19 +95,19 @@ public partial class NetClient
                 Gravity = new Vector3(0, 0.8f, 0), ScaleAmountMin = 0.8f, ScaleAmountMax = 1.6f,
                 Mesh = new SphereMesh { Radius = 0.45f, Height = 0.9f, RadialSegments = 6, Rings = 3, Material = mat },
             };
-            Owned.AddChild(p);
+            _ctx.Owned.AddChild(p);
             pool[k] = p;
         }
         return pool;
     }
 
-    void OnImpactFx(ImpactInfo i)
+    public void OnImpact(ImpactInfo i)
     {
-        if (World == null) return;
+        if (_ctx.World == null) return;
         var at = new Vector3(i.At.X, i.At.Y, i.At.Z);
         if (i.Surface == SurfaceKind.Water)
         {
-            WaterFx.Splash(Owned, at, SplashSize(i.Size)); // the proper splash, scaled by the round (ticket #154)
+            WaterFx.Splash(_ctx.Owned, at, SplashSize(i.Size)); // the proper splash, scaled by the round (ticket #154)
             return;
         }
         _impacts ??= BuildImpactPools();
@@ -135,7 +139,7 @@ public partial class NetClient
                     Mesh = _ringMesh, Visible = false,
                     MaterialOverride = new StandardMaterial3D { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, Transparency = BaseMaterial3D.TransparencyEnum.Alpha, CullMode = BaseMaterial3D.CullModeEnum.Disabled, AlbedoColor = new Color(0.9f, 0.85f, 0.7f, 0f) },
                 };
-                Owned.AddChild(m);
+                _ctx.Owned.AddChild(m);
                 _rings[k] = m;
             }
         }
@@ -145,7 +149,7 @@ public partial class NetClient
         ring.GlobalPosition = at + Vector3.Up * 0.1f;
         ring.Scale = new Vector3(0.5f, 1f, 0.5f);
         ring.Visible = true;
-        var tween = CreateTween();
+        var tween = _ctx.Root.CreateTween();
         tween.SetParallel();
         tween.TweenProperty(ring, "scale", new Vector3(10f, 1f, 10f), 0.5f);
         tween.TweenMethod(Callable.From<float>(a => mat.AlbedoColor = new Color(0.9f, 0.85f, 0.7f, a)), 0.6f, 0f, 0.5f);
@@ -186,5 +190,13 @@ public partial class NetClient
         d.GlobalPosition = at + Vector3.Up * 0.3f;
         d.Color = tint.Lerp(new Color(0.6f, 0.56f, 0.5f), 0.6f);
         ParticleFx.Fire(d);
+    }
+
+    /// <summary>The pools hang under the owned node, which is freed on leave: they are built again at the next impact.</summary>
+    public void Reset()
+    {
+        _impacts = null; Array.Clear(_impactNext);
+        _rings = null; _ringNext = 0; _ringMesh = null;
+        _dust = null; _dustNext = 0;
     }
 }

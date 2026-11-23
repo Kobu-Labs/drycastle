@@ -105,29 +105,23 @@ public partial class NetClient
     // ---- what the screens ask for (wishes: the server decides, and tells the result with the next events) ----
 
     /// <summary>Put the item in bag cell <paramref name="cell"/> on. What was worn in its slot goes into that cell. Free.</summary>
-    public void RequestEquip(int cell) => SendItem(EventKind.EquipItem, ItemEvents.EncodeEquip(cell));
+    public void RequestEquip(int cell) => Ctx.SendHuman(EventKind.EquipItem, ItemEvents.EncodeEquip(cell));
 
     /// <summary>Take off what is worn in <paramref name="slot"/> into the bag. The server refuses it with a "bag is full" notice when no cell is free. Free.</summary>
-    public void RequestUnequip(EquipSlot slot) => SendItem(EventKind.UnequipItem, ItemEvents.EncodeUnequip(slot));
+    public void RequestUnequip(EquipSlot slot) => Ctx.SendHuman(EventKind.UnequipItem, ItemEvents.EncodeUnequip(slot));
 
     /// <summary>Drop what is worn in <paramref name="slot"/> on the ground (at the feet, or under the vehicle the player sits in).</summary>
-    public void RequestDropWorn(EquipSlot slot) => SendItem(EventKind.DropItem, ItemEvents.EncodeDrop(ItemHome.Worn, (int)slot));
+    public void RequestDropWorn(EquipSlot slot) => Ctx.SendHuman(EventKind.DropItem, ItemEvents.EncodeDrop(ItemHome.Worn, (int)slot));
 
     /// <summary>Drop what is in bag cell <paramref name="cell"/> on the ground (at the feet, or under the vehicle the player sits in).</summary>
-    public void RequestDropBagged(int cell) => SendItem(EventKind.DropItem, ItemEvents.EncodeDrop(ItemHome.Bag, cell));
+    public void RequestDropBagged(int cell) => Ctx.SendHuman(EventKind.DropItem, ItemEvents.EncodeDrop(ItemHome.Bag, cell));
 
     /// <summary>Take the item lying on the ground (an id from <see cref="GroundItemInReach"/>). Counts one pickup.</summary>
-    public void RequestTakeGroundItem(ushort id) => SendItem(EventKind.TakeGroundItem, ItemEvents.EncodeTakeGround(id));
+    public void RequestTakeGroundItem(ushort id) => Ctx.SendHuman(EventKind.TakeGroundItem, ItemEvents.EncodeTakeGround(id));
 
     /// <summary>Take the item at <paramref name="index"/> of <see cref="CorpseItems"/> from a corpse in reach: into its empty slot, else the bag, else swapped with what is worn. Counts one pickup.</summary>
     public void RequestTakeCorpseItem(ushort corpse, int index) =>
-        SendItem(EventKind.PickUpCorpseItem, ItemEvents.EncodePickUp(corpse, index));
-
-    void SendItem(EventKind kind, byte[] payload)
-    {
-        if (_peer == null || Bot) return;
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)kind, payload)), (int)ENetPacketPeer.FlagReliable);
-    }
+        Ctx.SendHuman(EventKind.PickUpCorpseItem, ItemEvents.EncodePickUp(corpse, index));
 
     // ---- the server's events ----
 
@@ -146,7 +140,7 @@ public partial class NetClient
                 _bagItems = bag;
                 _wornView = View(worn);
                 _bagView = View(bag);
-                SetWornOf(_myId, worn.Select(w => (int?)w?.Item).ToArray()); // the seat view of the local player
+                SetWornOf(Ctx.MyId, worn.Select(w => (int?)w?.Item).ToArray()); // the seat view of the local player
                 ItemsChanged?.Invoke();
                 break;
             case EventKind.WornItems when ItemEvents.TryDecodeWorn(payload, out var player, out var others):
@@ -177,8 +171,8 @@ public partial class NetClient
     void SetWornOf(ushort player, int?[] slots)
     {
         _wornBy[player] = slots;
-        if (_remotes.TryGetValue(player, out var r) && r.View != null) Dress(r.View, slots);
-        if (player == _myId && _selfView != null) Dress(_selfView, slots);
+        if (Ctx.Remotes.TryGetValue(player, out var r) && r.View != null) Dress(r.View, slots);
+        if (player == Ctx.MyId && _selfView != null) Dress(_selfView, slots);
     }
 
     /// <summary>Forgets a player who left.</summary>

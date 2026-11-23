@@ -1,8 +1,3 @@
-using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using Godot;
 using Drycastle.Shooter.Buildings;
 using Drycastle.Shooter.Dev;
@@ -10,6 +5,11 @@ using Drycastle.Shooter.Net.Server;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Movement;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text;
 
 namespace Drycastle.Shooter.Net.Bots;
 

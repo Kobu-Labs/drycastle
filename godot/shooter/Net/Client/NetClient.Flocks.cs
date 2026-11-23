@@ -100,7 +100,7 @@ public partial class NetClient
         var (mesh, local) = BirdMesh(kind);
         var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = mesh, InstanceCount = birds };
         var node = new MultiMeshInstance3D { Name = $"Flock{e.Id}", Multimesh = mm, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, ExtraCullMargin = 100 };
-        Owned.AddChild(node);
+        Ctx.Owned.AddChild(node);
         var p = e.State.Position;
         var rng = new Random(e.Id);
         var phase = new float[birds];
@@ -129,7 +129,7 @@ public partial class NetClient
         foreach (var (id, _) in _aircraft)
             if (WorldEntities.Entities.TryGetValue(id, out var e) && e.Buf.At(rt) is { } s) Add(id, new Godot.Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z), AircraftAvoidRadiusM);
         if (Vehicles != null)
-            foreach (var (id, v) in _cars)
+            foreach (var (id, v) in Ctx.Cars.ById)
                 if (!v.Destroyed && v.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[v.Kind] is { Medium: VehicleMedium.Air } def && GodotObject.IsInstanceValid(v.Node))
                     Add(ObstacleVehicleKey + id, v.Node.GlobalPosition, def.HalfLength + VehicleRotorReachM);
         if (_obstacleLast.Count > _flockObstacles.Count + 8) _obstacleLast.Clear(); // an aircraft that is gone leaves its last place behind; start over rather than grow
@@ -138,7 +138,7 @@ public partial class NetClient
     /// <summary>Flies every flock's boids one frame around the flock's centre (round the aircraft) and writes the birds' transforms.</summary>
     void RenderFlocks(double delta)
     {
-        if (_flocks.Count == 0 || _lastTick == 0) return;
+        if (_flocks.Count == 0 || Ctx.LastTick == 0) return;
         _flockClock += delta;
         var rt = RenderTickNow();
         CollectFlockObstacles(delta, rt);

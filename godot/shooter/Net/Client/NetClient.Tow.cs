@@ -18,23 +18,6 @@ namespace Drycastle.Shooter.Net.Client;
 /// </summary>
 public partial class NetClient
 {
-    /// <summary>What the client keeps of a trailer besides the vehicle: its tractor and load as the record says, the model's moving nodes, and what is drawn.</summary>
-    sealed class TrailerView
-    {
-        /// <summary>The vehicle it is hitched to (0: loose) and whether it carries its load, as the newest record says. <see cref="Seen"/>: a record has been applied (the first is not a coupling).</summary>
-        public ushort TractorId;
-        public bool Loaded = true, Seen;
-        /// <summary>The model's nodes by name (null where it has none, and on a headless client): wheels roll, the missile is shown while loaded.</summary>
-        public Node3D? WheelL, WheelR, Missile;
-        public float RadiusL = 0.45f, RadiusR = 0.45f;
-        /// <summary>The ground fit as drawn (smoothed), the drawn speed along the heading (from the drawn motion) and where it was drawn last frame.</summary>
-        public float Pitch, Roll, Speed;
-        /// <summary>How it lies on the ground as the latest record says (unsmoothed, the server's own fit: <see cref="TrailerProbe.Attitude"/>); its hit box and solid box turn by it (<see cref="HullTiltOf"/>).</summary>
-        public TrailerAttitude.Result? Hull;
-        public Vector3 LastPos;
-        public bool HasLast;
-    }
-
     /// <summary>Half the first vehicle id (<see cref="VehicleRecord.FirstId"/>): an interpolated tractor-id slot above it is hitched.</summary>
     const float TractorIdHalf = VehicleRecord.FirstId / 2f;
 
@@ -57,7 +40,7 @@ public partial class NetClient
     {
         var t = new TrailerView();
         _trailerGround ??= TrailerProbe.Make(Vehicles!.Vehicles[v.Kind]); // a headless client fits the hull too
-        if (_trailerGround.GetParent() == null) Owned.AddChild(_trailerGround);
+        if (_trailerGround.GetParent() == null) Ctx.Owned.AddChild(_trailerGround);
         if (!ShotFx.Enabled) return t;
         t.WheelL = v.Node.FindChild("wheel_l", true, false) as Node3D;
         t.WheelR = v.Node.FindChild("wheel_r", true, false) as Node3D;
@@ -94,7 +77,7 @@ public partial class NetClient
         if (v.Trailer is not { } t || Vehicles == null || _trailerGround == null || !Vehicles.Vehicles[v.Kind].Tilts) return;
         var def = Vehicles.Vehicles[v.Kind];
         TowGeometry g; float? hitchY = null;
-        if (t.TractorId != 0 && _cars.TryGetValue(t.TractorId, out var tractor) && Vehicles.Vehicles[tractor.Kind].Tow != null) { g = GeometryOf(tractor.Kind, v.Kind); hitchY = tractor.Pos.Y + g.HitchY; }
+        if (t.TractorId != 0 && Ctx.Cars.TryGet(t.TractorId, out var tractor) && Vehicles.Vehicles[tractor.Kind].Tow != null) { g = GeometryOf(tractor.Kind, v.Kind); hitchY = tractor.Pos.Y + g.HitchY; }
         else g = TowGeometry.ForTrailer(def);
         t.Hull = _trailerGround.Attitude(g, v.Pos.X, v.Pos.Z, v.Pos.Y, v.Yaw, hitchY);
     }
@@ -102,17 +85,17 @@ public partial class NetClient
     void TowChanged(CarView trailer, TrailerView t, ushort now)
     {
         var tractorId = now != 0 ? now : t.TractorId;
-        _cars.TryGetValue(tractorId, out var tractor);
+        Ctx.Cars.TryGet(tractorId, out var tractor);
         var at = (tractor ?? trailer).Node.GlobalPosition;
-        PlayCarSound("tow.clunk", at, tractor);
-        if (tractor != null && tractor.Driver == _myId && _driving && !Dead) UiShell.Instance?.Toast(Strings.T(now != 0 ? "toast.tow.hitched" : "toast.tow.unhitched"), ToastKind.Info);
+        Ctx.Cars.Sounds.PlayOnce("tow.clunk", at, tractor);
+        if (tractor != null && tractor.Driver == Ctx.MyId && Ctx.Driving && !Dead) UiShell.Instance?.Toast(Strings.T(now != 0 ? "toast.tow.hitched" : "toast.tow.unhitched"), ToastKind.Info);
     }
 
     /// <summary>The trailer hitched to <paramref name="tractor"/> as the records say, or null (a tractor pulls at most one).</summary>
     CarView? TrailerOf(ushort tractor)
     {
         if (tractor == 0) return null;
-        foreach (var c in _cars.Values) if (c.Trailer is { } t && t.TractorId == tractor && !c.Destroyed) return c;
+        foreach (var c in Ctx.Cars.All) if (c.Trailer is { } t && t.TractorId == tractor && !c.Destroyed) return c;
         return null;
     }
 
@@ -128,14 +111,14 @@ public partial class NetClient
     void RenderTrailers(double rt, float dt)
     {
         if (Vehicles == null) return;
-        foreach (var v in _cars.Values)
+        foreach (var v in Ctx.Cars.All)
         {
             if (v.Trailer is not { } t || v.Destroyed || v.Buf.At(rt) is not { } s) continue;
             var def = Vehicles.Vehicles[v.Kind];
             // hitched at the render tick (100 ms behind the newest record): the interpolated sample's id slot is the tractor's id on both sides of a hitch, and between a loose and a hitched sample it
             // passes the half way mark (ids start at 0x4000) where the hitch happens, so the trailer is pinned to its tractor from the sample that says so, not 100 ms early
             var tractorAt = s.Pitch > TractorIdHalf ? (ushort)MathF.Round(s.Pitch) : (ushort)0;
-            var tractor = tractorAt != 0 && _cars.TryGetValue(tractorAt, out var found) && !found.Destroyed && Vehicles.Vehicles[found.Kind].Tow != null ? found : null;
+            var tractor = tractorAt != 0 && Ctx.Cars.TryGet(tractorAt, out var found) && !found.Destroyed && Vehicles.Vehicles[found.Kind].Tow != null ? found : null;
             v.SnapYaw = s.Yaw;
             Vector3 pos; Vector3 rot;
             if (!ShotFx.Enabled)

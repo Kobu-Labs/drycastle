@@ -28,11 +28,11 @@ public partial class NetClient
     {
         var pair = up && ItemData.At(item) is { Binoculars: true } def ? def : null;
         if (pair != null) _binocularsBy[player] = pair; else _binocularsBy.Remove(player);
-        if (_remotes.TryGetValue(player, out var r)) r.Binoculars = pair;
+        if (Ctx.Remotes.TryGetValue(player, out var r)) r.Binoculars = pair;
     }
 
     /// <summary>Tells the server the binoculars went up or down, so the others see it.</summary>
-    void SendBinoculars(bool up) => SendItem(EventKind.RaiseBinoculars, Binoculars.EncodeRaise(up));
+    void SendBinoculars(bool up) => Ctx.SendHuman(EventKind.RaiseBinoculars, Binoculars.EncodeRaise(up));
     double _binocularsMeasuredAt;
     int? _binocularsRange;
 
@@ -61,7 +61,7 @@ public partial class NetClient
         if (_binoculars) LowerBinoculars();
         else
         {
-            if (_me == null || Dead || _pinned || Mode.ScopeSuppressed || Input.MouseMode != Input.MouseModeEnum.Captured || !CarriesBinoculars) return false;
+            if (Ctx.Me == null || Dead || _pinned || Mode.ScopeSuppressed || Input.MouseMode != Input.MouseModeEnum.Captured || !CarriesBinoculars) return false;
             _binoculars = true;
             _binocularsMeasuredAt = 0; _binocularsRange = null;
             SendBinoculars(true);
@@ -76,7 +76,7 @@ public partial class NetClient
         if (!_binoculars) return;
         _binoculars = false;
         _binocularsRange = null;
-        if (_me != null) _me.HandsBusy = false;
+        if (Ctx.Me != null) Ctx.Me.HandsBusy = false;
         SendBinoculars(false);
         Sfx.Ui("ui.back");
     }
@@ -84,14 +84,14 @@ public partial class NetClient
     /// <summary>Once a frame, from the scope step: true while the binoculars are up (they are then the zoom), after lowering them when they cannot stay up.</summary>
     bool TickBinoculars()
     {
-        if (!_binoculars || _me == null) return false;
+        if (!_binoculars || Ctx.Me == null) return false;
         if (Dead || _pinned || Input.MouseMode != Input.MouseModeEnum.Captured || !CarriesBinoculars) { LowerBinoculars(); return false; }
-        _me.HandsBusy = true;
-        _me.ZoomFov = CarriedBinoculars is { } pair ? Binoculars.FovOf(pair) : Binoculars.FovDeg; _me.IronSightZoom = false;
+        Ctx.Me.HandsBusy = true;
+        Ctx.Me.ZoomFov = CarriedBinoculars is { } pair ? Binoculars.FovOf(pair) : Binoculars.FovDeg; Ctx.Me.IronSightZoom = false;
         if (_viewmodel != null) _viewmodel.Aiming = false;
-        if (Now - _binocularsMeasuredAt >= Binoculars.MeasureSeconds)
+        if (Ctx.Now - _binocularsMeasuredAt >= Binoculars.MeasureSeconds)
         {
-            _binocularsMeasuredAt = Now;
+            _binocularsMeasuredAt = Ctx.Now;
             _binocularsRange = Binoculars.Reading(MeasureRange());
         }
         return true;
@@ -100,15 +100,15 @@ public partial class NetClient
     /// <summary>Metres from the eye to the nearest thing under the centre of the view, null with nothing within <see cref="Binoculars.MaxRangeM"/>.</summary>
     float? MeasureRange()
     {
-        var cam = _me!.Camera;
+        var cam = Ctx.Me!.Camera;
         var from = cam.GlobalPosition;
         var dir = -cam.GlobalTransform.Basis.Z;
         var best = float.PositiveInfinity;
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * Binoculars.MaxRangeM, CollisionLayers.WorldShots);
-        q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
+        q.Exclude = new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
         var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         if (hit.Count > 0) best = from.DistanceTo(hit["position"].AsVector3());
-        if (VehicleAlong(from, dir, MathF.Min(Binoculars.MaxRangeM, best), out _, out var vh, MySeat()?.Car)) best = MathF.Min(best, vh.Distance);
+        if (VehicleAlong(from, dir, MathF.Min(Binoculars.MaxRangeM, best), out _, out var vh, Ctx.Cars.MySeat()?.Car)) best = MathF.Min(best, vh.Distance);
         var o = new NVec3(from.X, from.Y, from.Z); var d = new NVec3(dir.X, dir.Y, dir.Z);
         foreach (var a in _animals.Values)
         {
@@ -117,7 +117,7 @@ public partial class NetClient
             var target = new HitTarget(0, new NVec3(p.X, p.Y, p.Z), Stance.Stand, a.Node.Rotation.Y, Box: new NVec3(a.HitBox[0], a.HitBox[1], a.HitBox[2]), BoxAhead: a.Def.HitBoxAhead * a.Size);
             if (HitMath.RayBox(o, d, target) is { } at) best = MathF.Min(best, at);
         }
-        foreach (var r in _remotes.Values)
+        foreach (var r in Ctx.Remotes.Values)
         {
             if (!GodotObject.IsInstanceValid(r.Node) || !r.Node.Visible) continue;
             var p = r.Node.GlobalPosition;

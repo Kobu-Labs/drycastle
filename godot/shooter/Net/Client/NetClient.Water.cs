@@ -32,7 +32,7 @@ public partial class NetClient
     {
         get
         {
-            if (_ripples == null || !GodotObject.IsInstanceValid(_ripples)) { _ripples = new WaterRipples { Name = "WaterRipples" }; Owned.AddChild(_ripples); }
+            if (_ripples == null || !GodotObject.IsInstanceValid(_ripples)) { _ripples = new WaterRipples { Name = "WaterRipples" }; Ctx.Owned.AddChild(_ripples); }
             return _ripples;
         }
     }
@@ -41,20 +41,20 @@ public partial class NetClient
     {
         if (Water.Bodies.Count == 0) return;
         var dt = (float)GetProcessDeltaTime();
-        if (_me != null)
+        if (Ctx.Me != null)
         {
-            var feet = _me.GlobalPosition;
+            var feet = Ctx.Me.GlobalPosition;
             var depth = Water.DepthAt(new NVec3(feet.X, feet.Y, feet.Z));
-            var inWater = !_driving && depth > 0f; // a rider is in the vehicle, not in the water: its own splash is the vehicle's
+            var inWater = !Ctx.Driving && depth > 0f; // a rider is in the vehicle, not in the water: its own splash is the vehicle's
             if (UnderwaterFx.WaterCrossing(_meInWater, inWater) != UnderwaterFx.Crossing.None) SplashAt(feet);
             _meInWater = inWater;
-            if (!_driving && !Dead)
+            if (!Ctx.Driving && !Dead)
             {
-                var vel = _me.State.Velocity;
-                WaterWalk(feet, depth, MathF.Sqrt(vel.X * vel.X + vel.Z * vel.Z), _me.State.OnFloor, ref _meRippleDue, ref _meWadeAcc, dt);
+                var vel = Ctx.Me.State.Velocity;
+                WaterWalk(feet, depth, MathF.Sqrt(vel.X * vel.X + vel.Z * vel.Z), Ctx.Me.State.OnFloor, ref _meRippleDue, ref _meWadeAcc, dt);
             }
         }
-        foreach (var (id, r) in _remotes)
+        foreach (var (id, r) in Ctx.Remotes)
         {
             if (r.Node == null || !r.Node.Visible) { _remoteInWater.Remove(id); continue; }
             if (r.State == EntityState.InVehicle) { _remoteInWater.Remove(id); r.View?.SetSwim(false); continue; } // a rider neither splashes nor swims, however low the hull sits
@@ -70,7 +70,7 @@ public partial class NetClient
         if (_remoteInWater.Count > 0)
         {
             _staleWater.Clear();
-            foreach (var k in _remoteInWater.Keys) if (!_remotes.ContainsKey(k)) _staleWater.Add(k);
+            foreach (var k in _remoteInWater.Keys) if (!Ctx.Remotes.ContainsKey(k)) _staleWater.Add(k);
             foreach (var k in _staleWater) _remoteInWater.Remove(k);
         }
         foreach (var (id, rk) in _rockets)
@@ -96,12 +96,12 @@ public partial class NetClient
         var body = Water.BodyAt(feet.X, feet.Z);
         if (body == null) return;
         var at = new Vector3(feet.X, body.SurfaceY + WaterPalettes.WaveOffset(body, feet.X, feet.Z), feet.Z);
-        if (depth >= 0.3f && speed >= 1f && Now >= rippleDue)
+        if (depth >= 0.3f && speed >= 1f && Ctx.Now >= rippleDue)
         {
             Ripples.Emit(at, 0.8f);
-            rippleDue = Now + 0.6;
+            rippleDue = Ctx.Now + 0.6;
         }
-        if (depth < WaterConsts.SwimDepth && SoundRules.FootstepDue(ref wadeAcc, speed, dt, grounded)) WaterFx.Footstep(Owned, at);
+        if (depth < WaterConsts.SwimDepth && SoundRules.FootstepDue(ref wadeAcc, speed, dt, grounded)) WaterFx.Footstep(Ctx.Owned, at);
     }
 
     /// <summary>
@@ -129,10 +129,10 @@ public partial class NetClient
             // the hull's normal follows the surface: pitch from the slope along z, roll from the slope along x
             visual.Rotation = new Vector3(-MathF.Atan(dhdz), 0f, MathF.Atan(dhdx));
         }
-        if (!v.Destroyed && v.Kmh >= 3.6f && Now >= v.RippleDue)
+        if (!v.Destroyed && v.Kmh >= 3.6f && Ctx.Now >= v.RippleDue)
         {
             Ripples.Emit(new Vector3(p.X, body.SurfaceY + WaterWaves.Height(p.X, p.Z, t, amp), p.Z), 2.2f, 1.4f);
-            v.RippleDue = Now + 0.5;
+            v.RippleDue = Ctx.Now + 0.5;
         }
     }
 
@@ -141,7 +141,7 @@ public partial class NetClient
     {
         var surface = Water.SurfaceY(p.X, p.Z);
         if (float.IsNaN(surface)) return;
-        WaterFx.Splash(Owned, new Vector3(p.X, surface, p.Z), size);
+        WaterFx.Splash(Ctx.Owned, new Vector3(p.X, surface, p.Z), size);
     }
 
     /// <summary>A bullet that crosses a lake surface on its way to the target: a small splash where it meets the water.</summary>
@@ -149,6 +149,6 @@ public partial class NetClient
     {
         if (Water.Bodies.Count == 0) return;
         if (UnderwaterFx.FirstSurfaceCrossing(Water, new NVec3(from.X, from.Y, from.Z), new NVec3(to.X, to.Y, to.Z), out var hit))
-            WaterFx.Splash(Owned, new Vector3(hit.X, hit.Y, hit.Z), 0.4f);
+            WaterFx.Splash(Ctx.Owned, new Vector3(hit.X, hit.Y, hit.Z), 0.4f);
     }
 }

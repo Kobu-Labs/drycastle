@@ -49,7 +49,7 @@ public sealed partial class SquadsScreen : MenuScreen
 
     protected override Control Build()
     {
-        _client.SquadRefused += Refused;
+        _client.Squads.Refused += Refused;
         var root = Ui.VBox();
         root.CustomMinimumSize = new Vector2(760, 0);
         root.AddThemeConstantOverride("separation", ShooterTheme.Space);
@@ -63,7 +63,7 @@ public sealed partial class SquadsScreen : MenuScreen
         hv.AddChild(title);
         hv.AddChild(Ui.Lbl(Strings.T("squads.hint"), "HudDim", 0, true));
 
-        var me = _client.Match.Rows.FirstOrDefault(r => r.Id == _client.MyId).Name ?? "";
+        var me = _client.Match.Rows.FirstOrDefault(r => r.Id == _client.Ctx.MyId).Name ?? "";
         var maxLen = Squads.MaxNameLength;
         var make = Ui.HBox();
         _name = new LineEdit
@@ -85,7 +85,7 @@ public sealed partial class SquadsScreen : MenuScreen
         _status = Ui.Lbl("", "HudHead");
         mine.AddChild(_status);
         mine.AddChild(Ui.Fill());
-        _leave = Ui.Btn(Strings.T("squads.leave"), () => _client.SendSquadAssign(new SquadAssign(SquadAction.Leave)), null, 220);
+        _leave = Ui.Btn(Strings.T("squads.leave"), () => _client.Squads.Assign(new SquadAssign(SquadAction.Leave)), null, 220);
         _leave.TooltipText = Strings.T("squads.leave.tip");
         mine.AddChild(_leave);
         hv.AddChild(mine);
@@ -111,7 +111,7 @@ public sealed partial class SquadsScreen : MenuScreen
         return root;
     }
 
-    public override void _ExitTree() => _client.SquadRefused -= Refused;
+    public override void _ExitTree() => _client.Squads.Refused -= Refused;
 
     void Refused(string text) => Shell.Toast(Strings.F("squads.refused", text), ToastKind.Error);
 
@@ -119,33 +119,33 @@ public sealed partial class SquadsScreen : MenuScreen
 
     public override void _Process(double delta)
     {
-        if (!_client.CanUseSquads) { Back(); return; } // the match changed mode, or the player left their team
+        if (!_client.Squads.CanUse) { Back(); return; } // the match changed mode, or the player left their team
         if (!ReferenceEquals(_seen, _client.Match.Rows)) Refresh(false);
     }
 
     /// <summary>What the player would get from Create now: the typed name, cleaned, or the default.</summary>
     string WantedName()
     {
-        var me = _client.Match.Rows.FirstOrDefault(r => r.Id == _client.MyId).Name ?? "";
+        var me = _client.Match.Rows.FirstOrDefault(r => r.Id == _client.Ctx.MyId).Name ?? "";
         return Squads.CleanName(_name.Text) is { Length: > 0 } c ? c : Squads.DefaultName(me);
     }
 
     void Create()
     {
         if (_create.Disabled) return;
-        _client.SendSquadAssign(new SquadAssign(SquadAction.Create, 0, _name.Text));
+        _client.Squads.Assign(new SquadAssign(SquadAction.Create, 0, _name.Text));
         _name.Text = "";
     }
 
     void Join(byte squad)
     {
         _focusSquad = squad; // the card is rebuilt: the focus follows it
-        _client.SendSquadAssign(new SquadAssign(SquadAction.Join, squad));
+        _client.Squads.Assign(new SquadAssign(SquadAction.Join, squad));
     }
 
     IEnumerable<IGrouping<byte, ScoreRow>> OwnSquads(IReadOnlyList<ScoreRow> rows)
     {
-        var team = _client.Match.TeamOf(_client.MyId);
+        var team = _client.Match.TeamOf(_client.Ctx.MyId);
         return rows.Where(r => r.Team == team && r.Squad != 0).GroupBy(r => r.Squad).OrderBy(g => g.Key);
     }
 
@@ -157,7 +157,7 @@ public sealed partial class SquadsScreen : MenuScreen
         var taken = OwnSquads(rows).Any(g => _client.Match.SquadNameOf(g.Key).Equals(wanted, StringComparison.OrdinalIgnoreCase));
         _create.Disabled = taken;
         _error.Text = taken ? Strings.T("squads.taken") : "";
-        _leave.Disabled = _client.Match.SquadOf(_client.MyId) == 0;
+        _leave.Disabled = _client.Match.SquadOf(_client.Ctx.MyId) == 0;
     }
 
     /// <summary>Redraws the cards when the squads or their members or the own squad changed (every new scoreboard also carries pings and kills that do not matter here).</summary>
@@ -166,7 +166,7 @@ public sealed partial class SquadsScreen : MenuScreen
         var rows = _client.Match.Rows;
         _seen = rows;
         var squads = OwnSquads(rows).ToList();
-        var mySquad = _client.Match.SquadOf(_client.MyId);
+        var mySquad = _client.Match.SquadOf(_client.Ctx.MyId);
         var sig = string.Join('|', squads.Select(g => $"{g.Key}:{_client.Match.SquadNameOf(g.Key)}:{string.Join(',', g.Select(r => $"{r.Id}={r.Name}"))}")) + $"#{mySquad}";
         if (!force && sig == _signature) { UpdateControls(); return; }
         _signature = sig;
@@ -175,7 +175,7 @@ public sealed partial class SquadsScreen : MenuScreen
         foreach (var c in _list.GetChildren()) { _list.RemoveChild(c); c.QueueFree(); }
         _joins.Clear();
         _status.Text = mySquad == 0 ? Strings.T("squads.status.none") : Strings.F("squads.status.in", _client.Match.SquadNameOf(mySquad), squads.First(g => g.Key == mySquad).Count(), Squads.MaxMembers);
-        _listHead.Text = Strings.F("squads.list", Teams.Tag(_client.Match.TeamOf(_client.MyId)), squads.Count);
+        _listHead.Text = Strings.F("squads.list", Teams.Tag(_client.Match.TeamOf(_client.Ctx.MyId)), squads.Count);
         _empty.Visible = squads.Count == 0;
         foreach (var g in squads) _list.AddChild(Card(g.Key, g.ToList(), mySquad));
         UpdateControls();
@@ -199,7 +199,7 @@ public sealed partial class SquadsScreen : MenuScreen
         var text = Ui.VBox();
         text.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         text.AddChild(Ui.Lbl(_client.Match.SquadNameOf(squad), "HudHead"));
-        var names = members.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).Select(r => r.Id == _client.MyId ? Strings.F("score.you", r.Name) : r.Name);
+        var names = members.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).Select(r => r.Id == _client.Ctx.MyId ? Strings.F("score.you", r.Name) : r.Name);
         text.AddChild(Ui.Lbl(string.Join(", ", names), "HudDim", 0, true));
         h.AddChild(text);
         var full = members.Count >= Squads.MaxMembers;

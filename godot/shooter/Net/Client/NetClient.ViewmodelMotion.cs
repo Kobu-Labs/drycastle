@@ -13,7 +13,7 @@ namespace Drycastle.Shooter.Net.Client;
 /// </summary>
 public partial class NetClient
 {
-    WeaponViewmodel MakeViewmodel() => new() { Context = ViewmodelContext, CameraDrop = drop => { if (_me != null) _me.ViewDip = drop; } };
+    WeaponViewmodel MakeViewmodel() => new() { Context = ViewmodelContext, CameraDrop = drop => { if (Ctx.Me != null) Ctx.Me.ViewDip = drop; } };
 
     /// <summary>
     /// The viewmodel's input for this frame, asked from its own <c>_Process</c>. The state is the 30 Hz predicted one, so the landing is the
@@ -22,11 +22,11 @@ public partial class NetClient
     /// </summary>
     ViewmodelInput ViewmodelContext()
     {
-        if (_me == null) return default;
-        var look = _me.TakeLook(); // always taken, so a turn made while the gun was away does not play when it returns
-        if (_viewmodel is not { Visible: true } || _driving || _myState == EntityState.InVehicle) return default;
-        var s = _me.State;
-        var (sin, cos) = MathF.SinCos(_me.Yaw);
+        if (Ctx.Me == null) return default;
+        var look = Ctx.Me.TakeLook(); // always taken, so a turn made while the gun was away does not play when it returns
+        if (_viewmodel is not { Visible: true } || Ctx.Driving || _myState == EntityState.InVehicle) return default;
+        var s = Ctx.Me.State;
+        var (sin, cos) = MathF.SinCos(Ctx.Me.Yaw);
         var swimming = MovementStep.IsSwimming(s);
         var grounded = s.OnFloor && !s.OnLadder && !swimming;
         return new ViewmodelInput

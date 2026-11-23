@@ -1,37 +1,11 @@
 using Godot;
-using Drycastle.Shooter.Audio;
-using Drycastle.Shooter.Bunkers;
 using Drycastle.Shooter.Characters;
-using Drycastle.Shooter.Glass;
-using Drycastle.Shooter.Loudspeaker;
-using Drycastle.Shooter.Menu;
-using Drycastle.Shooter.Net.Server;
-using Drycastle.Shooter.Scenery;
-using Drycastle.Shooter.Weapons;
-using Drycastle.ShooterCore.Bunkers;
-using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Corpses;
-using Drycastle.ShooterCore.Data;
-using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Events;
-using Drycastle.ShooterCore.Flight;
-using Drycastle.ShooterCore.Fsm;
-using Drycastle.ShooterCore.Glass;
-using Drycastle.ShooterCore.Hud;
-using Drycastle.ShooterCore.Items;
-using Drycastle.ShooterCore.Killstreaks;
-using Drycastle.ShooterCore.Killstreaks.Helicopter;
-using Drycastle.ShooterCore.Killstreaks.Moab;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
-using Drycastle.ShooterCore.Perks;
-using Drycastle.ShooterCore.Progression;
-using Drycastle.ShooterCore.RozhlasFeed;
-using Drycastle.ShooterCore.Scenery;
 using Drycastle.ShooterCore.Vehicles;
-using Drycastle.ShooterCore.Weapons;
-using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter.Net.Client;
@@ -43,12 +17,12 @@ public partial class NetClient
     {
         var node = new Node3D { Name = $"Remote{id}" };
         var view = CharacterView.Make();
-        if (Appearances.TryGetValue(id, out var look)) view.SetCamo(look, CamoData); // the look may arrive before the first snapshot (#140)
+        Camo.Dress(view, id); // the look may arrive before the first snapshot (#140)
         DressPlayer(view, id); // what they wear (#266), likewise
         node.AddChild(view);
         node.AddChild(new Label3D
         {
-            Text = _names.TryGetValue(id, out var n) ? NameTag(id, n) : $"#{id}", // [SANDBOX] tag for sandbox players (#156)
+            Text = Ctx.Names.TryGetValue(id, out var n) ? Sandbox.NameTag(id, n) : $"#{id}", // [SANDBOX] tag for sandbox players (#156)
             Modulate = target ? TargetTint : Colors.White, // orange name tag for target dummies (#148)
             Position = new Vector3(0, MoveConsts.CapsuleHeight + 0.3f, 0),
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
@@ -63,11 +37,11 @@ public partial class NetClient
 
     void RenderRemotes()
     {
-        if (_lastTick == 0) return;
+        if (Ctx.LastTick == 0) return;
         var rt = RenderTickNow();
         var dt = (float)GetProcessDeltaTime();
         var drawn = 0;
-        foreach (var (id, r) in _remotes)
+        foreach (var (id, r) in Ctx.Remotes)
             if (r.Buf.At(rt) is { } s)
             {
                 drawn++;
@@ -83,11 +57,11 @@ public partial class NetClient
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
                 r.Node.Visible = guessed || !(dead && !TargetDummies.IsDummyId(id) && (CorpseOf(id) || HarvestVictimHidden(id, dead))); // the harvester's victim is in the machine, then inside its bale: no body at the spot where it died // riders are drawn in their seat (the server puts the body there), seated rather than standing
                 r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
-                if (r.State == EntityState.InVehicle) _lastRode[id] = Now;
+                if (r.State == EntityState.InVehicle) _lastRode[id] = Ctx.Now;
                 AnimateRemote(r, s.Pos);
                 UpdateNameTag(id, r);
             }
-        _rub.AddRender(rt, _lastTick, drawn);
+        _rub.AddRender(rt, Ctx.LastTick, drawn);
     }
 
     /// <summary>
@@ -127,7 +101,7 @@ public partial class NetClient
     void OnPlayerFlung(ushort id)
     {
         FlingOf(id).Thrown();
-        if (_remotes.TryGetValue(id, out var r) && r.Guess.Active) r.GuessConfirmed = true;
+        if (Ctx.Remotes.TryGetValue(id, out var r) && r.Guess.Active) r.GuessConfirmed = true;
     }
 
     /// <summary>
@@ -162,7 +136,7 @@ public partial class NetClient
     /// <summary>Drives the remote character's animation from snapshot state: horizontal speed of the interpolated position, a recent shot event, and the dead state.</summary>
     void AnimateRemote(RemotePlayer r, NVec3 pos)
     {
-        var now = Now;
+        var now = Ctx.Now;
         var p = new Vector3(pos.X, pos.Y, pos.Z);
         if (r.LastT > 0 && now > r.LastT + 0.001)
         {

@@ -54,7 +54,7 @@ public partial class NetClient
         var view = DemonView.Make(DemonData, HolyMassData.Mass);
         view.RoarCue = at => Ctx.Shake.At(at, Math.Max(1f, DemonData.Roar.ShakeRadiusM) / 5f);
         view.Bitten = OnPounceBite;
-        Owned.AddChild(view);
+        Ctx.Owned.AddChild(view);
         ChurchDecor.Current?.SetDemon(true, snap: DemonRules.StateOf(e.State.State) != DemonState.Transforming); // a joiner finds the cross turned and the lights out
         _demons[e.Id] = new DemonNode { View = view, Hp = e.State.Hp };
     }
@@ -64,7 +64,7 @@ public partial class NetClient
         if (_demons.Remove(id, out var d)) d.View.QueueFree();
         if (_demons.Count == 0) PounceReset();
         if (_demons.Count == 0) ChurchDecor.Current?.SetDemon(false);
-        if (_demons.Count == 0) foreach (var b in _balls.Values) RocketFx.Retire(Owned, b.Node);
+        if (_demons.Count == 0) foreach (var b in _balls.Values) RocketFx.Retire(Ctx.Owned, b.Node);
         if (_demons.Count == 0) _balls.Clear();
     }
 
@@ -73,20 +73,20 @@ public partial class NetClient
         switch (kind)
         {
             case EventKind.DemonFireball when DemonCodec.DecodeFireball(payload) is { } f:
-                var node = DemonFx.MakeFireball(Owned);
+                var node = DemonFx.MakeFireball(Ctx.Owned);
                 var o = new Vector3(f.Origin.X, f.Origin.Y, f.Origin.Z);
                 node.Visible = ChurchInterior.Visible;
                 node.GlobalPosition = o;
-                if (_balls.Remove(f.Id, out var old)) RocketFx.Retire(Owned, old.Node);
+                if (_balls.Remove(f.Id, out var old)) RocketFx.Retire(Ctx.Owned, old.Node);
                 _balls[f.Id] = new BallNode { Node = node, Origin = o, Velocity = new Vector3(f.Velocity.X, f.Velocity.Y, f.Velocity.Z), Start = Time.GetTicksMsec() / 1000.0 };
                 foreach (var d in _demons.Values) d.View.Fling();
                 break;
             case EventKind.DemonImpact when DemonCodec.DecodeImpact(payload) is { } i:
                 var at = new Vector3(i.At.X, i.At.Y, i.At.Z);
-                if (_balls.Remove(i.Id, out var ball)) RocketFx.Retire(Owned, ball.Node);
+                if (_balls.Remove(i.Id, out var ball)) RocketFx.Retire(Ctx.Owned, ball.Node);
                 if (i.Fizzled) break;
                 var r = DemonData.Fireball.Splash.RadiusM;
-                RocketFx.Explode(Owned, at, r);
+                RocketFx.Explode(Ctx.Owned, at, r);
                 _blastDust.BlastFelt(at, r, null);
                 break;
             case EventKind.DemonFlame when DemonCodec.DecodeFlame(payload) is { } target:
@@ -113,7 +113,7 @@ public partial class NetClient
         foreach (var (id, _) in _demons)
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Buf.At(double.MaxValue) is not { } s) continue;
-            if (_demonBody == null || !GodotObject.IsInstanceValid(_demonBody)) { _demonBody = new DemonBlocker(); Owned.AddChild(_demonBody); }
+            if (_demonBody == null || !GodotObject.IsInstanceValid(_demonBody)) { _demonBody = new DemonBlocker(); Ctx.Owned.AddChild(_demonBody); }
             var n = DemonRules.UnpackNormal(e.State.Owner);
             _demonBody.Place(DemonRules.StateOf(e.State.State), s.Pos, n, DemonData.BodyM, DemonData.Scale);
             return;
@@ -124,7 +124,7 @@ public partial class NetClient
     /// <summary>Places the demon (interpolated, a little in the past like every remote body), shows what it does, and flies the fireballs.</summary>
     void RenderDemon()
     {
-        if (_lastTick == 0) return;
+        if (Ctx.LastTick == 0) return;
         var dt = GetProcessDeltaTime();
         if (_demons.Count > 0)
         {
@@ -141,7 +141,7 @@ public partial class NetClient
                     view.Place(new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z), new Vector3(n.X, n.Y, n.Z), new Vector3(f.X, f.Y, f.Z), dt);
                 }
                 view.PinMuzzleAt = PounceFacePoint();
-                view.PinMine = _pv.MarkedMe(_myId); // marked at the wind: the world state can come before the pin event
+                view.PinMine = _pv.MarkedMe(Ctx.MyId); // marked at the wind: the world state can come before the pin event
                 view.Calm = GameSettings.Current.ReduceMotion;
                 view.Show(DemonRules.StateOf(e.State.State));
                 if (e.State.Hp < d.Hp) view.Hurt();
@@ -162,14 +162,14 @@ public partial class NetClient
             b.Node.GlobalPosition = b.Origin + b.Velocity * t + new Vector3(0, -0.5f * g * t * t, 0);
             b.Node.Visible = ChurchInterior.Visible;
         }
-        if (gone != null) foreach (var id in gone) { if (_balls.Remove(id, out var b)) RocketFx.Retire(Owned, b.Node); }
+        if (gone != null) foreach (var id in gone) { if (_balls.Remove(id, out var b)) RocketFx.Retire(Ctx.Owned, b.Node); }
     }
 
     /// <summary>A point <paramref name="up"/> metres above the feet of a player (the local one or a remote), or null when they are not here.</summary>
     Vector3? PlayerPoint(ushort id, float up)
     {
-        if (id == _myId && _me != null && GodotObject.IsInstanceValid(_me)) return _me.GlobalPosition + Vector3.Up * up;
-        if (_remotes.TryGetValue(id, out var r) && GodotObject.IsInstanceValid(r.Node)) return r.Node.GlobalPosition + Vector3.Up * up;
+        if (id == Ctx.MyId && Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me)) return Ctx.Me.GlobalPosition + Vector3.Up * up;
+        if (Ctx.Remotes.TryGetValue(id, out var r) && GodotObject.IsInstanceValid(r.Node)) return r.Node.GlobalPosition + Vector3.Up * up;
         return null;
     }
 
@@ -184,8 +184,8 @@ public partial class NetClient
             var d = eye.DistanceSquaredTo(from);
             if (d < bestD) { bestD = d; best = eye; }
         }
-        if (_me != null && GodotObject.IsInstanceValid(_me)) Consider(_me.GlobalPosition);
-        foreach (var r in _remotes.Values) if (GodotObject.IsInstanceValid(r.Node) && r.Node.Visible) Consider(r.Node.GlobalPosition);
+        if (Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me)) Consider(Ctx.Me.GlobalPosition);
+        foreach (var r in Ctx.Remotes.Values) if (GodotObject.IsInstanceValid(r.Node) && r.Node.Visible) Consider(r.Node.GlobalPosition);
         return best;
     }
 }

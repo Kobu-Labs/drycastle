@@ -2,6 +2,7 @@ using Godot;
 using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Corpses;
 using Drycastle.Shooter.Menu;
+using Drycastle.ShooterCore.Camo;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Events;
@@ -61,7 +62,7 @@ public partial class NetClient
     /// <summary>A corpse younger than this waits for its death event; one older with none is an old corpse (a join), and lies in the death pose.</summary>
     const double CollapseWaitSeconds = 0.25, CollapseWindowSeconds = 2.0;
 
-    void NoteDeath(DeathMsg d) => _deathSeen[d.Victim] = (Now, d.Killer);
+    void NoteDeath(DeathMsg d) => _deathSeen[d.Victim] = (Ctx.Now, d.Killer);
 
     /// <summary>
     /// Settles whether a new corpse collapses. True once decided. A fresh kill (its death event within <see cref="CollapseWindowSeconds"/>) of a player on foot
@@ -69,14 +70,14 @@ public partial class NetClient
     /// </summary>
     bool DecideCollapse(ushort id, CorpseView v, ushort owner, Vector3 at, float yaw, bool flying)
     {
-        var fresh = _deathSeen.TryGetValue(owner, out var death) && Now - death.At < CollapseWindowSeconds;
-        if (!fresh && Now - v.Born < CollapseWaitSeconds) return false;
+        var fresh = _deathSeen.TryGetValue(owner, out var death) && Ctx.Now - death.At < CollapseWindowSeconds;
+        if (!fresh && Ctx.Now - v.Born < CollapseWaitSeconds) return false;
         v.Decided = true;
         v.Node.Visible = true;
-        var rode = _lastRode.TryGetValue(owner, out var when) && Now - when < 1.5;
+        var rode = _lastRode.TryGetValue(owner, out var when) && Ctx.Now - when < 1.5;
         if (!fresh || flying || rode) return true;
         var away = new Basis(Vector3.Up, yaw) * Vector3.Back; // no killer to push it (a fall, a suicide): backwards
-        Vector3? from = death.Killer == owner ? null : death.Killer == _myId ? _me?.GlobalPosition : _remotes.TryGetValue(death.Killer, out var k) ? k.Node.GlobalPosition : null;
+        Vector3? from = death.Killer == owner ? null : death.Killer == Ctx.MyId ? Ctx.Me?.GlobalPosition : Ctx.Remotes.TryGetValue(death.Killer, out var k) ? k.Node.GlobalPosition : null;
         if (from is { } f) { var d = at - f; d.Y = 0; if (d.LengthSquared() > 0.04f) away = d.Normalized(); }
         v.Tumble.BeginCollapse(away, 0.6f);
         return true;
@@ -86,7 +87,7 @@ public partial class NetClient
     Vector3 GroundUpAt(Vector3 at)
     {
         var q = PhysicsRayQueryParameters3D.Create(at + Vector3.Up * 1f, at + Vector3.Down * 1.5f, CollisionRules.StaticMask(MoverKind.Drop));
-        var hit = Owned.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        var hit = Ctx.Owned.GetWorld3D().DirectSpaceState.IntersectRay(q);
         return hit.Count > 0 ? hit["normal"].AsVector3() : Vector3.Up;
     }
 
@@ -112,6 +113,13 @@ public partial class NetClient
     InteractHold _corpseHold; // the hold for the primary position: counts only while the corpse owns the key and offers a weapon to replace it
 
     /// <summary>True while the corpse chooser is up; the hotbar keys and wheel belong to it then.</summary>
+    /// <summary>A look that arrives after the corpse of that player spawned goes on it (#203).</summary>
+    void DressCorpses(ushort owner, CamoSpec look)
+    {
+        foreach (var (id, c) in _corpses)
+            if (WorldEntities.Entities.TryGetValue(id, out var e) && e.State.Owner == owner) c.View?.SetCamo(look, Camo.Data);
+    }
+
     bool ChooserOpen => _chooser.IsOpen;
 
     /// <summary>The chooser shows a list of Items: the mouse is released for it (the shell asks). A chooser with only the weapon rows keeps the mouse captured.</summary>
@@ -142,12 +150,12 @@ public partial class NetClient
         if (HarvesterRules.IsBale(e.State.Owner)) { _corpses[e.Id] = MakeBaleCorpse(e); return; }
         var node = new Node3D { Name = $"Corpse{e.Id}" };
         var view = CharacterView.Make();
-        if (Appearances.TryGetValue(e.State.Owner, out var look)) view.SetCamo(look, CamoData); // the dead player's look (#203)
+        Camo.Dress(view, e.State.Owner); // the dead player's look (#203)
         view.Position = new Vector3(0, -RagdollTumble.Half, 0); // the node sits at the body's middle, so a thrown body spins about its centre
         node.AddChild(view);
-        Owned.AddChild(node);
+        Ctx.Owned.AddChild(node);
         node.Visible = false; // until RenderCorpses knows whether this body collapses (DecideCollapse)
-        _corpses[e.Id] = new CorpseView { Node = node, View = view, Born = Now };
+        _corpses[e.Id] = new CorpseView { Node = node, View = view, Born = Ctx.Now };
         DressCorpse(e.Id); // the item the corpse carries, when its event came first (#266)
     }
 
@@ -193,7 +201,7 @@ public partial class NetClient
             }
             else if (weapon != v.Weapon) { v.Weapon = weapon; view.ShowCorpse(weapon); }
             v.Feet = at;
-            v.Node.Visible = !(_remotes.TryGetValue(s.Owner, out var owner) && owner.Guess.Active); // the driver's guessed throw of this body is what is drawn until it has landed (#411)
+            v.Node.Visible = !(Ctx.Remotes.TryGetValue(s.Owner, out var owner) && owner.Guess.Active); // the driver's guessed throw of this body is what is drawn until it has landed (#411)
             v.Node.GlobalPosition = at + FloatOffset(id, at, t.Thrown) + Vector3.Up * t.PivotHeight;
             v.Node.Basis = t.BasisFor(s.YawRad);
         }
@@ -214,10 +222,10 @@ public partial class NetClient
 
     ushort? NearestCorpseInReach()
     {
-        if (_me == null || Dead || _driving) return null;
+        if (Ctx.Me == null || Dead || Ctx.Driving) return null;
         ushort? best = null;
         var bd = CorpseRules.ReachMetres;
-        var at = _me.GlobalPosition;
+        var at = Ctx.Me.GlobalPosition;
         foreach (var (id, v) in _corpses)
         {
             var d = (v.ReachFrom ?? v.Feet).DistanceTo(at);
@@ -240,11 +248,11 @@ public partial class NetClient
             return CorpseItems(id).Count switch { 0 => null, 1 => Strings.F("hud.corpse.giant.item", key, ItemName(CorpseItem(id)!)), _ => Strings.F("hud.corpse.giant.items", key) };
         if (CorpseWeapon(id) is not { } w) return null;
         var hold = CorpseRules.CanReplace(w, CorpseRules.PrimaryPos);
-        if (CorpseItems(id).Count > 1) return Strings.F(hold ? "hud.corpse.hold.items" : "hud.corpse.tap.items", key, WeaponName(w.Id)); // a list: its own chooser names them
-        if (CorpseItem(id) is { } item) return Strings.F(hold ? "hud.corpse.hold.item" : "hud.corpse.tap.item", key, WeaponName(w.Id), ItemName(item));
+        if (CorpseItems(id).Count > 1) return Strings.F(hold ? "hud.corpse.hold.items" : "hud.corpse.tap.items", key, ClientText.WeaponName(w.Id)); // a list: its own chooser names them
+        if (CorpseItem(id) is { } item) return Strings.F(hold ? "hud.corpse.hold.item" : "hud.corpse.tap.item", key, ClientText.WeaponName(w.Id), ItemName(item));
         return hold
-            ? Strings.F("hud.corpse.hold", key, WeaponName(w.Id))
-            : Strings.F("hud.corpse.tap", key, WeaponName(w.Id));
+            ? Strings.F("hud.corpse.hold", key, ClientText.WeaponName(w.Id))
+            : Strings.F("hud.corpse.tap", key, ClientText.WeaponName(w.Id));
     }
 
     /// <summary>
@@ -254,7 +262,7 @@ public partial class NetClient
     void TickCorpses(double dt)
     {
         var use = Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("interact");
-        if (ChooserOpen && (Dead || _driving || _near != _chooser.Corpse)) _chooser.Close();
+        if (ChooserOpen && (Dead || Ctx.Driving || _near != _chooser.Corpse)) _chooser.Close();
         var (_, released) = _useKey.Step(use);
         var near = KeyOwner == InteractOwner.Corpse ? _near : null; // a care package in reach owns the key (ticket #143), and so does a ground item nearer than the corpse (#267)
         var holdWeapon = !ChooserOpen && near is { } hid && CorpseWeapon(hid) is { } hw && CorpseRules.CanReplace(hw, CorpseRules.PrimaryPos);
@@ -281,29 +289,19 @@ public partial class NetClient
         var options = new List<(int Pos, string Text)>();
         foreach (var pos in new[] { CorpseRules.PrimaryPos, CorpseRules.SecondaryPos })
         {
-            if (weapon == null || !CorpseRules.CanReplace(weapon, pos) || pos >= _hotbar.Length) continue;
-            var current = WeaponName(Weapons!.Weapons[_hotbar[pos]].Id);
+            if (weapon == null || !CorpseRules.CanReplace(weapon, pos) || pos >= Ctx.Hotbar.Slots.Length) continue;
+            var current = ClientText.WeaponName(Weapons!.Weapons[Ctx.Hotbar.Slots[pos]].Id);
             options.Add((pos, Strings.F(pos == CorpseRules.PrimaryPos ? "corpse.primary" : "corpse.secondary", current)));
         }
         var items = ChooserItems(corpse);
         if (options.Count == 0 && items.Count == 0) return;
         var title = options.Count == 0 // nothing of the weapon can be taken: the Items are the offer
             ? Strings.T("corpse.title.items") // each Item's name stands in its row
-            : items.Count == 0 ? Strings.F("corpse.title", WeaponName(weapon!.Id))
-            : Strings.F("corpse.title.with_items", WeaponName(weapon!.Id));
+            : items.Count == 0 ? Strings.F("corpse.title", ClientText.WeaponName(weapon!.Id))
+            : Strings.F("corpse.title.with_items", ClientText.WeaponName(weapon!.Id));
         _chooser.Open(corpse, title, options, items);
     }
 
     void SendPickUp(ushort corpse, int pos) =>
         Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.PickUpCorpse, CorpseCodec.EncodePickUp(corpse, (byte)pos))), (int)ENetPacketPeer.FlagReliable);
-
-    /// <summary>The server's hotbar after a pickup. A selected weapon that was replaced hands the selection to its new weapon.</summary>
-    void ApplyHotbar(int[] hot)
-    {
-        if (Weapons == null || hot.Length == 0) return;
-        for (var i = 0; i < Math.Min(hot.Length, _hotbar.Length); i++)
-            if (hot[i] != _hotbar[i] && _wantSlot == _hotbar[i] + 1) _wantSlot = hot[i] + 1;
-        _hotbar = hot;
-        _hud?.SetWeapons(_hotbar.Select(i => WeaponName(Weapons.Weapons[i].Id)).ToList());
-    }
 }

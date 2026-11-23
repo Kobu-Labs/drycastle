@@ -15,7 +15,7 @@ SCALE (below) makes the car bigger than a real Golf so a seated rider fits; the 
 Frame: the game's vehicle frame, metres. x right, y up, z back (forward is -Z), origin on the ground halfway between the axles.
 So vehicles.json uses model_scale 1, model_yaw_deg 0, model_offset [0, 0, 0]. Left-hand drive: the driver sits at x -0.39.
 
-Node tree (the names the client looks for, NetClient.DriveFx.cs DriveNodes and NetClient.Glass.cs):
+Node tree (the names the client looks for, DriveNodes.cs and GlassClient.cs):
 
     golf_mk2
       hull                         body, interior, glazing (the body leans on it over the wheels)

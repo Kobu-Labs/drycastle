@@ -1,18 +1,6 @@
 using Godot;
-using Drycastle.Shooter.Dev;
-using Drycastle.Shooter.HeadsUp;
-using Drycastle.Shooter.Hunts;
-using Drycastle.Shooter.Menu;
 using Drycastle.Shooter.Net.Bots;
-using Drycastle.ShooterCore.Colliders;
-using Drycastle.ShooterCore.Companions;
-using Drycastle.ShooterCore.Fsm;
-using Drycastle.ShooterCore.Hunts;
-using Drycastle.ShooterCore.Killstreaks.Moab;
-using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
-using Drycastle.ShooterCore.Thieves;
-using Drycastle.ShooterCore.Turrets;
 using Drycastle.ShooterCore.Vehicles;
 
 namespace Drycastle.Shooter.Net.Client;
@@ -78,23 +66,23 @@ public partial class NetClient : IBotHost
     bool IBotHost.LinkEnded => LinkEnded;
     bool IBotHost.OwnSpawned => OwnSpawned;
     EntityState IBotHost.MyState => _myState;
-    bool IBotHost.Driving => _driving;
-    int IBotHost.WantSlot { set => _wantSlot = value; }
+    bool IBotHost.Driving => Ctx.Driving;
+    int IBotHost.WantSlot { set => Ctx.Hotbar.Want = value; }
     IReadOnlyDictionary<ushort, EntityRecord> IBotHost.States => _dec.States;
     EventLogs IBotHost.Logs => _logs;
-    IEnumerable<BotCar> IBotHost.Cars => _cars.Values.Select(AsBotCar);
-    BotCar? IBotHost.Car(ushort id) => _cars.TryGetValue(id, out var v) ? AsBotCar(v) : null;
-    IEnumerable<BotRemote> IBotHost.Remotes => _remotes.Values.Select(r => new BotRemote(r.State, r.LastPos));
+    IEnumerable<BotCar> IBotHost.Cars => Ctx.Cars.All.Select(AsBotCar);
+    BotCar? IBotHost.Car(ushort id) => Ctx.Cars.TryGet(id, out var v) ? AsBotCar(v) : null;
+    IEnumerable<BotRemote> IBotHost.Remotes => Ctx.Remotes.Values.Select(r => new BotRemote(r.State, r.LastPos));
     int IBotHost.RocketCount => _rockets.Count;
     VehiclesFile? IBotHost.Vehicles => Vehicles;
     int IBotHost.Snaps => _snaps;
-    int IBotHost.Recon => _recon;
+    int IBotHost.Recon => Ctx.Reconciles;
     float IBotHost.MaxErr => _maxErr;
-    uint IBotHost.LastTick => _lastTick;
+    uint IBotHost.LastTick => Ctx.LastTick;
     double IBotHost.LastArrival => _lastArrival;
     ushort IBotHost.Seq => _seq;
     float IBotHost.OwnTravel => new Vector2(_meMax.X - _meMin.X, _meMax.Z - _meMin.Z).Length();
-    float IBotHost.BestRemoteTravel => _remotes.Values.Select(r => new Vector2(r.Max.X - r.Min.X, r.Max.Z - r.Min.Z).Length()).DefaultIfEmpty(0f).Max();
+    float IBotHost.BestRemoteTravel => Ctx.Remotes.Values.Select(r => new Vector2(r.Max.X - r.Min.X, r.Max.Z - r.Min.Z).Length()).DefaultIfEmpty(0f).Max();
     RubberStats IBotHost.Rubber { get => _rub; set => _rub = value; }
     NetSim? IBotHost.Sim => Sim;
     int IBotHost.DriveCorrections => _driveCorrections;
@@ -106,6 +94,8 @@ public partial class NetClient : IBotHost
     void IBotHost.Quit(bool ok) => GetTree().Quit(ok ? 0 : 2);
 
     void IBotHost.SendMic(byte[] packet) => SendMic(packet);
+    void IBotHost.SendChat(string text) => Chat.Send(text);
+    bool IBotHost.SandboxGranted => Sandbox.Granted;
 
     void SendMic(byte[] packet)
     {

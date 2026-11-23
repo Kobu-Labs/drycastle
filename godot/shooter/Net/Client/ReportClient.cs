@@ -13,11 +13,29 @@ namespace Drycastle.Shooter.Net.Client;
 /// <c>--perf-play</c> (the client load test, perf/vps_client_test.sh): the player walks, turns, jumps and fires by script, the frame cap and vsync are
 /// off, the picture is drawn at <c>--perf-res</c> (1920x1080), and the client quits after <c>--perf-seconds</c>.
 /// </summary>
-public partial class NetClient
+public sealed class ReportClient
 {
+    /// <summary>The scripted client load test is on (set by the host); it ends itself after <see cref="PerfSeconds"/>.</summary>
     public bool PerfPlay;
     public double PerfSeconds = 300;
     public string PerfRes = "1920x1080";
+
+    readonly ClientContext _ctx;
+    readonly ENetConnection _conn;
+    readonly Func<bool> _live;
+    readonly Func<ENetPacketPeer?> _peer;
+    readonly Func<double> _elapsed;
+
+    /// <param name="live">A human's client with a welcome and a link that has not ended.</param>
+    /// <param name="elapsed">Seconds of physics since the welcome.</param>
+    public ReportClient(ClientContext ctx, ENetConnection conn, Func<bool> live, Func<ENetPacketPeer?> peer, Func<double> elapsed)
+    {
+        _ctx = ctx;
+        _conn = conn;
+        _live = live;
+        _peer = peer;
+        _elapsed = elapsed;
+    }
 
     readonly FrameTimes _rpFrames = new();
     readonly float[] _rpValues = new float[ClientReport.Fields.Length], _rpScopes = new float[ClientProf.ScopeCount];
@@ -28,9 +46,9 @@ public partial class NetClient
     long _rpAlloc;
     Rid _rpViewport;
 
-    void ReportSnapshot(uint tick)
+    public void Snapshot(uint tick)
     {
-        var now = Now;
+        var now = _ctx.Now;
         if (_rpLastArr > 0) _rpGapMax = Math.Max(_rpGapMax, (now - _rpLastArr) * 1000);
         if (_rpLastTick != 0 && tick > _rpLastTick + 1) _rpTickSkips += (int)(tick - _rpLastTick - 1);
         _rpLastArr = now; _rpLastTick = tick; _rpSnaps++;
@@ -40,10 +58,10 @@ public partial class NetClient
     readonly long[] _rpEvTicks = new long[256];
     readonly int[] _rpEvCount = new int[256];
 
-    void ReportEvent(byte kind, long ticks) { _rpEvTicks[kind] += ticks; _rpEvCount[kind]++; }
+    public void Event(byte kind, long ticks) { _rpEvTicks[kind] += ticks; _rpEvCount[kind]++; }
 
     /// <summary>The ten costliest event kinds of the period as <c>Kind=ms_per_second|per_second</c>.</summary>
-    string ReportEvents(double secs)
+    string EventsLine(double secs)
     {
         var order = Enumerable.Range(0, 256).Where(k => _rpEvCount[k] > 0).OrderByDescending(k => _rpEvTicks[k]).Take(10);
         var inv = System.Globalization.CultureInfo.InvariantCulture;
@@ -52,16 +70,16 @@ public partial class NetClient
         return line;
     }
 
-    void ReportPredictionError(float err) { if (err > _rpErrMax) _rpErrMax = err; }
+    public void PredictionError(float err) { if (err > _rpErrMax) _rpErrMax = err; }
 
-    void ReportFrame(double delta)
+    public void Frame(double delta)
     {
-        if (Bot || LinkEnded || !_welcomed || _peer == null) return;
-        var now = Now;
+        if (!_live() || _peer() == null) return;
+        var now = _ctx.Now;
         if (_rpStart < 0)
         {
             if (DisplayServer.GetName() == "headless") { _rpStart = double.MaxValue; return; }
-            _rpViewport = GetViewport().GetViewportRid();
+            _rpViewport = _ctx.Root.GetViewport().GetViewportRid();
             RenderingServer.ViewportSetMeasureRenderTime(_rpViewport, true);
             if (PerfPlay)
             {
@@ -70,11 +88,11 @@ public partial class NetClient
                 var wh = PerfRes.Split('x');
                 if (wh.Length == 2 && int.TryParse(wh[0], out var w) && int.TryParse(wh[1], out var h) && w > 0 && h > 0)
                 {
-                    var win = GetWindow();
+                    var win = _ctx.Root.GetWindow();
                     win.ContentScaleMode = Window.ContentScaleModeEnum.Viewport; win.ContentScaleAspect = Window.ContentScaleAspectEnum.Ignore; win.ContentScaleSize = new Vector2I(w, h);
                 }
             }
-            ReportBegin(now);
+            Begin(now);
             return;
         }
         if (_rpStart == double.MaxValue) return;
@@ -90,18 +108,18 @@ public partial class NetClient
             _rpCpu += RenderingServer.ViewportGetMeasuredRenderTimeCpu(_rpViewport);
             _rpGpu += RenderingServer.ViewportGetMeasuredRenderTimeGpu(_rpViewport);
         }
-        if (PerfPlay && _elapsed >= PerfSeconds) { GD.Print("PERF_PLAY_DONE"); PerfPlay = false; GetTree().Quit(0); return; }
+        if (PerfPlay && _elapsed() >= PerfSeconds) { GD.Print("PERF_PLAY_DONE"); PerfPlay = false; _ctx.Root.GetTree().Quit(0); return; }
         if (now - _rpStart < ClientReport.PeriodSeconds) return;
-        ReportSend(now);
-        ReportBegin(now);
+        Send(now);
+        Begin(now);
     }
 
-    void ReportBegin(double now)
+    void Begin(double now)
     {
         _rpStart = now;
         _rpFrames.Reset();
         _rpSamples = 0; _rpProcess = _rpPhysics = _rpCpu = _rpGpu = _rpDraws = _rpPrims = _rpObjects = 0;
-        _rpGapMax = 0; _rpSnaps = _rpTickSkips = 0; _rpErrMax = 0; _rpRecon0 = _recon;
+        _rpGapMax = 0; _rpSnaps = _rpTickSkips = 0; _rpErrMax = 0; _rpRecon0 = _ctx.Reconciles;
         _rpAlloc = GC.GetTotalAllocatedBytes();
         _rpGen0 = GC.CollectionCount(0); _rpGen1 = GC.CollectionCount(1); _rpGen2 = GC.CollectionCount(2);
         _rpPauseMs = GC.GetTotalPauseDuration().TotalMilliseconds;
@@ -110,11 +128,12 @@ public partial class NetClient
         Array.Clear(_rpEvTicks); Array.Clear(_rpEvCount);
     }
 
-    void ReportSend(double now)
+    void Send(double now)
     {
         var secs = Math.Max(now - _rpStart, 1e-3);
         var n = Math.Max(_rpSamples, 1);
         var v = _rpValues;
+        var peer = _peer()!;
         void Set(string field, double value) { var i = ClientReport.Index(field); if (i >= 0) v[i] = (float)value; }
         Set("fps", _rpFrames.Count / secs);
         Set("frame_p50_ms", _rpFrames.Percentile(50)); Set("frame_p99_ms", _rpFrames.Percentile(99)); Set("frame_max_ms", _rpFrames.MaxMs);
@@ -128,32 +147,32 @@ public partial class NetClient
         Set("alloc_mb_s", (GC.GetTotalAllocatedBytes() - _rpAlloc) / 1048576.0 / secs);
         Set("gc_gen0", GC.CollectionCount(0) - _rpGen0); Set("gc_gen1", GC.CollectionCount(1) - _rpGen1); Set("gc_gen2", GC.CollectionCount(2) - _rpGen2);
         Set("gc_pause_ms", GC.GetTotalPauseDuration().TotalMilliseconds - _rpPauseMs);
-        Set("rtt_ms", _peer!.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime));
-        Set("rtt_var_ms", _peer.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTimeVariance));
-        Set("loss_pct", _peer.GetStatistic(ENetPacketPeer.PeerStatistic.PacketLoss) / 65536.0 * 100); // ENet's scale is 1 << 16
+        Set("rtt_ms", peer.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTime));
+        Set("rtt_var_ms", peer.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTimeVariance));
+        Set("loss_pct", peer.GetStatistic(ENetPacketPeer.PeerStatistic.PacketLoss) / 65536.0 * 100); // ENet's scale is 1 << 16
         Set("snaps_per_s", _rpSnaps / secs); Set("snap_gap_max_ms", _rpGapMax); Set("tick_skips", _rpTickSkips);
-        Set("reconciles", _recon - _rpRecon0); Set("pred_err_max_m", _rpErrMax);
+        Set("reconciles", _ctx.Reconciles - _rpRecon0); Set("pred_err_max_m", _rpErrMax);
         Set("in_kb_s", _conn.PopStatistic(ENetConnection.HostStatistic.ReceivedData) / secs / 1000);
         Set("out_kb_s", _conn.PopStatistic(ENetConnection.HostStatistic.SentData) / secs / 1000);
-        Set("remotes", _remotes.Count); Set("world_entities", WorldEntities.Entities.Count);
-        var size = GetViewport().GetVisibleRect().Size; // what is drawn (the window's size unless the picture is scaled)
-        Set("res_w", size.X); Set("res_h", size.Y); Set("driving", _driving ? 1 : 0);
+        Set("remotes", _ctx.Remotes.Count); Set("world_entities", _ctx.WorldEntities.Entities.Count);
+        var size = _ctx.Root.GetViewport().GetVisibleRect().Size; // what is drawn (the window's size unless the picture is scaled)
+        Set("res_w", size.X); Set("res_h", size.Y); Set("driving", _ctx.Driving ? 1 : 0);
         ClientProf.Take(secs, _rpScopes);
         GD.Print("client: perf " + ClientReport.Line(v));
         GD.Print("client: perf scopes ms_per_s " + ClientReport.ScopeLine(_rpScopes));
-        GD.Print("client: perf events ms_per_s|per_s " + ReportEvents(secs));
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.ClientReport, ClientReport.Encode(v, _rpScopes, RenderingServer.GetVideoAdapterName(), OS.GetName()))), (int)ENetPacketPeer.FlagReliable);
+        GD.Print("client: perf events ms_per_s|per_s " + EventsLine(secs));
+        _ctx.Send(EventKind.ClientReport, ClientReport.Encode(v, _rpScopes, RenderingServer.GetVideoAdapterName(), OS.GetName()));
     }
 
     /// <summary>The scripted player of <c>--perf-play</c>: sprints, turns a quarter every 1.5 s, jumps now and then, fires for half a second every two.</summary>
-    MoveInput PerfPlayStep()
+    public MoveInput PlayStep()
     {
-        var t = _elapsed;
+        var t = _elapsed();
         var yaw = (float)((int)(t / 1.5) * Math.PI / 2);
         var buttons = MoveButtons.Sprint;
         if ((int)(t * 30) % 45 == 0) buttons |= MoveButtons.Jump;
         if (t % 2.0 < 0.5) buttons = (buttons & ~MoveButtons.Sprint) | MoveButtons.Fire;
-        _me!.Yaw = yaw;
+        _ctx.Me!.Yaw = yaw;
         return new MoveInput { MoveY = 1, Yaw = yaw, Buttons = buttons, SpeedScale = 1 };
     }
 }

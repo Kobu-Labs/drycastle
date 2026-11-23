@@ -93,7 +93,7 @@ public sealed partial class TeamsScreen : MenuScreen
 
     protected override Control? FirstFocusTarget() => _a.FirstRow ?? _b.FirstRow ?? _none.FirstRow ?? _first;
 
-    void Send(TeamAssign a) => _client.SendTeamAssign(a);
+    void Send(TeamAssign a) => _client.TeamAdmin.Assign(a);
 
     void Move(ushort id, byte team)
     {
@@ -103,7 +103,7 @@ public sealed partial class TeamsScreen : MenuScreen
 
     public override void _Process(double delta)
     {
-        if (!_client.CanManageTeams) { Back(); return; } // no longer an admin, or the match changed mode
+        if (!_client.TeamAdmin.CanManage) { Back(); return; } // no longer an admin, or the match changed mode
         if (!ReferenceEquals(_seen, _client.Match.Rows)) Refresh(false);
     }
 
@@ -116,9 +116,9 @@ public sealed partial class TeamsScreen : MenuScreen
         if (!force && sig == _signature) return;
         _signature = sig;
         var focus = _focusId != 0 ? _focusId : FocusedRowId();
-        _a.Show(rows, _client.Match.ScoreA, _client.MyId);
-        _b.Show(rows, _client.Match.ScoreB, _client.MyId);
-        _none.Show(rows, 0, _client.MyId);
+        _a.Show(rows, _client.Match.ScoreA, _client.Ctx.MyId);
+        _b.Show(rows, _client.Match.ScoreB, _client.Ctx.MyId);
+        _none.Show(rows, 0, _client.Ctx.MyId);
         if (focus != 0 && (_a.RowOf(focus) ?? _b.RowOf(focus) ?? _none.RowOf(focus)) is { } row) row.CallDeferred(Control.MethodName.GrabFocus);
         _focusId = 0;
     }

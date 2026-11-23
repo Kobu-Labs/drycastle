@@ -59,7 +59,7 @@ public partial class NetClient
         {
             node.AddChild(model);
             var smokeM = VehicleFx.Damage.MakeAt(node, TurretSmokeAt);
-            Owned.AddChild(node);
+            Ctx.Owned.AddChild(node);
             _turrets[e.Id] = new TurretView
             {
                 Node = node, Gun = gun, Barrel = muz, Eject = model.FindChild("eject", true, false) as Node3D ?? muz, Packed = true,
@@ -74,7 +74,7 @@ public partial class NetClient
         };
         var barrel = Part(node, new BoxMesh { Size = new Vector3(0.12f, 0.12f, 0.7f) }, new Vector3(0, 0.6f, -0.5f));  // barrel
         var smoke = VehicleFx.Damage.MakeAt(node, TurretSmokeAt);
-        Owned.AddChild(node);
+        Ctx.Owned.AddChild(node);
         _turrets[e.Id] = new TurretView { Node = node, Barrel = barrel, Eject = barrel, Parts = new[] { parts[0], parts[1], barrel }, Smoke = smoke, Owner = e.State.Owner };
     }
 
@@ -105,10 +105,10 @@ public partial class NetClient
             if (v.Gun != null) v.Gun.Rotation = new Vector3(0, s.YawRad, 0); // the stand stays put, only the gun turns
             else v.Node.Rotation = new Vector3(0, s.YawRad, 0);
             var ghost = TurretRules.IsGhost(s.State);
-            v.Node.Visible = !ghost || v.Owner == _myId;
+            v.Node.Visible = !ghost || v.Owner == Ctx.MyId;
             if (ghost)
             {
-                if (v.Owner == _myId) _ghostValid = TurretRules.IsGhostValid(s.State);
+                if (v.Owner == Ctx.MyId) _ghostValid = TurretRules.IsGhostValid(s.State);
                 if (s.State != v.LastState) SetGhostLook(v, TurretRules.IsGhostValid(s.State));
             }
             else
@@ -129,8 +129,8 @@ public partial class NetClient
         var from = v.Barrel.GlobalPosition;
         var dir = -(v.Gun ?? v.Node).GlobalTransform.Basis.Z;
         if (Sfx.Enabled) Sfx.Play3D("shot.turret", from);
-        ShotFx.Spawn(Owned, from, from + dir * TurretTracerM, false, impact: false);
-        CasingFx.Eject(Owned, v.Eject.GlobalPosition, dir, CasingKind.Heavy);
+        ShotFx.Spawn(Ctx.Owned, from, from + dir * TurretTracerM, false, impact: false);
+        CasingFx.Eject(Ctx.Owned, v.Eject.GlobalPosition, dir, CasingKind.Heavy);
     }
 
     /// <summary>How far a sentry's tracer flies: the client does not know the target's distance (the sight range is 40 m), so the streak runs out of sight.</summary>
@@ -153,7 +153,7 @@ public partial class NetClient
     /// <summary>The placement prompt while our ghost is up (null otherwise): the validity in words, the keys to confirm or cancel.</summary>
     string? TurretPrompt()
     {
-        if (_ghostValid is not { } valid || Dead || _driving) return null;
+        if (_ghostValid is not { } valid || Dead || Ctx.Driving) return null;
         var confirm = InputBindings.Name("interact");
         var cancel = InputBindings.Name("killstreak");
         return valid ? Strings.F("hud.turret.valid", confirm, cancel) : Strings.F("hud.turret.invalid", confirm, cancel);

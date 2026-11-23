@@ -261,7 +261,7 @@ public sealed partial class EquipmentScreen : Control
         Visible = true;
         MouseFilter = MouseFilterEnum.Stop;
         MouseBehaviorRecursive = MouseBehaviorRecursiveEnum.Inherited;
-        if (_client.OwnLook is { } look && !look.Equals(_shownLook)) { _avatar.Show(look, _client.CamoData); _shownLook = look; }
+        if (_client.Camo.OwnLook is { } look && !look.Equals(_shownLook)) { _avatar.Show(look, _client.CamoData); _shownLook = look; }
         _avatar.ResetView();
         _avatar.Frame(CamoPreview.Framing.Body);
         SetHintNames();
@@ -309,7 +309,7 @@ public sealed partial class EquipmentScreen : Control
 
     public override void _Process(double delta)
     {
-        _avatar.SetHigh(_client.OwnHigh ? _client.Plantation : null); // the figure shows the high (cigarette, red eyes) as the others see it
+        _avatar.SetHigh(_client.High.OwnHigh ? _client.Plantation : null); // the figure shows the high (cigarette, red eyes) as the others see it
         var (changed, finished) = _fade.Tick((float)delta, UiShell.FadeTime);
         if (changed) ApplyAlpha();
         if (finished) { FinishClose(); return; }

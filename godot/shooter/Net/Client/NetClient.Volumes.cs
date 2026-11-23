@@ -35,19 +35,19 @@ public partial class NetClient
         var toggle = e.IsActionPressed("debug_volumes");
         var step = _volumes == null ? 0 : e.IsActionPressed("debug_volumes_next") ? 1 : e.IsActionPressed("debug_volumes_prev") ? -1 : 0;
         if (!toggle && step == 0) return false;
-        if (MenuOpen?.Invoke() == true || _hud == null) return false;
+        if (MenuOpen?.Invoke() == true || Ctx.Hud == null) return false;
         if (toggle)
         {
             if (_volumes == null)
             {
                 _volumes = new VolumeOverlay { Name = "VolumeOverlay" };
-                Owned.AddChild(_volumes);
+                Ctx.Owned.AddChild(_volumes);
                 _staticAt = 0;
             }
-            else { _volumes.QueueFree(); _volumes = null; _staticShapes.Clear(); _hud.SetVolumeMode(null); return true; }
+            else { _volumes.QueueFree(); _volumes = null; _staticShapes.Clear(); Ctx.Hud.SetVolumeMode(null); return true; }
         }
         else _volumes!.Step(step);
-        _hud.SetVolumeMode(_volumes!.ModeText());
+        Ctx.Hud.SetVolumeMode(_volumes!.ModeText());
         return true;
     }
 
@@ -55,8 +55,8 @@ public partial class NetClient
     void UpdateVolumes()
     {
         var o = _volumes;
-        if (o == null || !GodotObject.IsInstanceValid(o) || _me == null) return;
-        var cam = GetViewport()?.GetCamera3D()?.GlobalPosition ?? _me.GlobalPosition;
+        if (o == null || !GodotObject.IsInstanceValid(o) || Ctx.Me == null) return;
+        var cam = GetViewport()?.GetCamera3D()?.GlobalPosition ?? Ctx.Me.GlobalPosition;
         o.Begin(cam);
         var wantsPeople = o.Wants(VolumeKind.Hit) || o.Wants(VolumeKind.Body);
         if (wantsPeople) VolumePeople(o, cam);
@@ -83,15 +83,15 @@ public partial class NetClient
 
     void VolumePeople(VolumeOverlay o, Vector3 cam)
     {
-        if (_me!.GlobalPosition is var me && Near(me, cam) && !Dead) VolumePerson(o, me, _me.State.Stance, _me.Yaw, 1f, "you");
-        foreach (var (id, r) in _remotes)
+        if (Ctx.Me!.GlobalPosition is var me && Near(me, cam) && !Dead) VolumePerson(o, me, Ctx.Me.State.Stance, Ctx.Me.Yaw, 1f, "you");
+        foreach (var (id, r) in Ctx.Remotes)
         {
             if (r.Node == null || !GodotObject.IsInstanceValid(r.Node) || !r.Node.Visible || r.State == EntityState.Dead) continue;
             var at = r.Node.GlobalPosition;
-            if (Near(at, cam)) VolumePerson(o, at, r.Stance, r.Node.GlobalRotation.Y, 1f, _names.TryGetValue(id, out var n) ? n : $"player {id}");
+            if (Near(at, cam)) VolumePerson(o, at, r.Stance, r.Node.GlobalRotation.Y, 1f, Ctx.Names.TryGetValue(id, out var n) ? n : $"player {id}");
         }
         foreach (var c in _citizens.Views) VolumeNpc(o, c, cam, "citizen");
-        foreach (var g in _gang.Values) VolumeNpc(o, g.View, cam, "gang");
+        foreach (var g in _thieves.GangViews) VolumeNpc(o, g, cam, "gang");
         foreach (var d in _demons.Values) VolumeNpc(o, d.View, cam, "demon");
     }
 
@@ -131,7 +131,7 @@ public partial class NetClient
     void VolumeVehicles(VolumeOverlay o, Vector3 cam)
     {
         if (Vehicles == null) return;
-        foreach (var v in _cars.Values)
+        foreach (var v in Ctx.Cars.All)
         {
             var feet = new Vector3(v.Pos.X, v.Pos.Y, v.Pos.Z);
             if (!Near(feet, cam)) continue;
@@ -153,9 +153,9 @@ public partial class NetClient
     /// <summary>Static colliders within range: props, tree trunks and crowns, buildings that are boxes. Looked up four times a second from the physics space.</summary>
     void VolumeStatic(VolumeOverlay o, Vector3 cam)
     {
-        if (Now - _staticAt > StaticRefresh)
+        if (Ctx.Now - _staticAt > StaticRefresh)
         {
-            _staticAt = Now;
+            _staticAt = Ctx.Now;
             _staticShapes.Clear();
             _staticProbe.Radius = VolumeRange;
             _staticQuery.Shape = _staticProbe;

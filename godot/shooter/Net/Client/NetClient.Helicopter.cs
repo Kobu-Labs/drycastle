@@ -16,7 +16,7 @@ public partial class NetClient
     /// <summary>EventKind.HelperWarning, sent to this player only: the red dot and cue for the helicopter's one-second warning.</summary>
     void OnHelperWarning(HelperWarning w)
     {
-        if (w.Target != _myId) return;
+        if (w.Target != Ctx.MyId) return;
         if (Sfx.Enabled) Sfx.Play2D("helper.warning");
         _helperWarn ??= new HelperWarningOverlay();
         if (!_helperWarn.IsInsideTree()) AddChild(_helperWarn);

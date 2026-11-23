@@ -16,43 +16,6 @@ namespace Drycastle.Shooter.Net.Client;
 /// </summary>
 public partial class NetClient
 {
-    /// <summary>The nodes of a flak model that move, found by name (the model's own, see assets/drycastle-generated-models), and the barrels' recoil.</summary>
-    sealed class FlakNodes
-    {
-        public Node3D Turret = null!, Cradle = null!;
-        public Node3D? Sight, BarrelL, BarrelR;
-        public Vector3 RestL, RestR;
-        public float KickL, KickR;
-        int _next;
-
-        /// <summary>Metres a barrel slides back at full kick, and how fast it comes home (metres per second).</summary>
-        const float RecoilM = 0.35f, ReturnMps = 2.4f;
-
-        public static FlakNodes? Find(Node3D root)
-        {
-            if (root.FindChild("turret", true, false) is not Node3D turret || root.FindChild("gun_cradle", true, false) is not Node3D cradle) return null;
-            var f = new FlakNodes { Turret = turret, Cradle = cradle, Sight = root.FindChild("sight", true, false) as Node3D };
-            f.BarrelL = root.FindChild("barrel_l", true, false) as Node3D;
-            f.BarrelR = root.FindChild("barrel_r", true, false) as Node3D;
-            if (f.BarrelL != null) f.RestL = f.BarrelL.Position;
-            if (f.BarrelR != null) f.RestR = f.BarrelR.Position;
-            return f;
-        }
-
-        /// <summary>A round left: the next barrel kicks back (the two fire in turn, as on the server).</summary>
-        public void Kick()
-        {
-            if ((_next++ & 1) == 0) KickL = 1f; else KickR = 1f;
-        }
-
-        public void Step(float dt)
-        {
-            KickL = Mathf.MoveToward(KickL, 0, dt * ReturnMps / RecoilM);
-            KickR = Mathf.MoveToward(KickR, 0, dt * ReturnMps / RecoilM);
-            if (BarrelL != null) BarrelL.Position = RestL + new Vector3(0, 0, KickL * RecoilM);
-            if (BarrelR != null) BarrelR.Position = RestR + new Vector3(0, 0, KickR * RecoilM);
-        }
-    }
 
     /// <summary>The newest aim of a flak vehicle's turret and its gunner (0 = nobody), by the vehicle's id.</summary>
     sealed class TurretAim
@@ -99,7 +62,7 @@ public partial class NetClient
     {
         if (player == 0) return null;
         foreach (var (id, aim) in _turretAims)
-            if (aim.Gunner == player && _cars.TryGetValue(id, out var v) && v.Flak != null) return v;
+            if (aim.Gunner == player && Ctx.Cars.TryGet(id, out var v) && v.Flak != null) return v;
         return null;
     }
 
@@ -112,12 +75,12 @@ public partial class NetClient
         var f = v.Flak!;
         var def = Vehicles!.Vehicles[v.Kind].Flak!;
         _turretAims.TryGetValue(v.Id, out var aim);
-        var mine = aim != null && aim.Gunner == _myId && _driving && !Dead && _me != null;
+        var mine = aim != null && aim.Gunner == Ctx.MyId && Ctx.Driving && !Dead && Ctx.Me != null;
         float yaw, pitch;
         if (mine)
         {
-            _me!.Pitch = FlakRules.ClampPitch(def, _me.Pitch); // the mouse look is the aim, kept inside the barrels' elevation
-            yaw = _me.Yaw; pitch = _me.Pitch;
+            Ctx.Me!.Pitch = FlakRules.ClampPitch(def, Ctx.Me.Pitch); // the mouse look is the aim, kept inside the barrels' elevation
+            yaw = Ctx.Me.Yaw; pitch = Ctx.Me.Pitch;
         }
         else if (aim?.Buf.At(rt) is { } a) { yaw = a.Yaw; pitch = a.Pitch; }
         else { yaw = s.Yaw; pitch = FlakRules.ClampPitch(def, 0); }
@@ -126,9 +89,9 @@ public partial class NetClient
         f.Step(dt);
         if (!mine) return false;
         var body = v.Node.GlobalPosition;
-        _me!.GlobalPosition = body;
+        Ctx.Me!.GlobalPosition = body;
         // over the guns: fixed to the cradle behind the breeches and above the barrels, so the barrels run parallel to the view and the crosshair sits just above them
-        _me.Turret(f.Cradle.ToGlobal(GunnerEye), yaw, pitch);
+        Ctx.Me.Turret(f.Cradle.ToGlobal(GunnerEye), yaw, pitch);
         _flakCamera = true;
         return true;
     }

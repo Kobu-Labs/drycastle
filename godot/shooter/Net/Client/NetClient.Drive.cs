@@ -68,7 +68,7 @@ public partial class NetClient
         d.Rec = rec;
         d.Buf.Push(tick, rec.Position, DriveRecord.Roll(rec), DriveRecord.Pitch(rec));
         d.Keys.Push(tick, new NVec3(DriveRecord.Steer(rec), DriveRecord.Throttle(rec), 0), 0, 0);
-        if (_cars.TryGetValue(carId, out var car)) PlaceCarSolid(car); // the hull's solid box lies on the slope the record says
+        if (Ctx.Cars.TryGet(carId, out var car)) PlaceCarSolid(car); // the hull's solid box lies on the slope the record says
     }
 
     VehicleDef? DriveDef(CarView v) => Vehicles != null && v.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[v.Kind].Drive != null ? Vehicles.Vehicles[v.Kind] : null;
@@ -81,9 +81,9 @@ public partial class NetClient
     void UpdateDriving(ushort ack)
     {
         CarView? mine = null;
-        if (_driving && !Dead)
-            foreach (var v in _cars.Values)
-                if (v.Driver == _myId && !v.Destroyed && DriveDef(v) != null) { mine = v; break; }
+        if (Ctx.Driving && !Dead)
+            foreach (var v in Ctx.Cars.All)
+                if (v.Driver == Ctx.MyId && !v.Destroyed && DriveDef(v) != null) { mine = v; break; }
         if (mine == null || !_drives.TryGetValue(mine.Id, out var dv) || !_dec.States.TryGetValue(mine.Id, out var vehicle)) { StopDriving(); return; }
         if (CarThrown(mine.Id)) { StopDriving(); return; } // the Bigfoot threw it: the server flies it and ignores the driver's input, so it is drawn from the snapshots until it lands (#264)
         var server = DriveRecord.State(vehicle, dv.Rec);
@@ -92,7 +92,7 @@ public partial class NetClient
             StopDriving();
             var def = DriveDef(mine)!;
             var probe = DriveProbe.Make(def, Water);
-            Owned.AddChild(probe);
+            Ctx.Owned.AddChild(probe);
             _drive = new Driving { CarId = mine.Id, Def = def, Probe = probe, Predict = new DrivePrediction(def, probe, server) };
             // what was drawn until now is the interpolated past: fade from there to the predicted present
             _drive.Smooth = mine.Node.GlobalPosition - new Vector3(server.Position.X, server.Position.Y, server.Position.Z);
@@ -122,7 +122,7 @@ public partial class NetClient
             _drive.TrailerWorld?.QueueFree();
             var tdef = Vehicles.Vehicles[trailer.Kind];
             var probe = TrailerProbe.Make(tdef);
-            Owned.AddChild(probe);
+            Ctx.Owned.AddChild(probe);
             var g = GeometryOf(mine.Kind, trailer.Kind);
             _drive.TrailerWorld = probe; _drive.TrailerId = trailer.Id;
             var body = TowModel.Pose(g, server.Position, server.Yaw, phi);
@@ -147,7 +147,7 @@ public partial class NetClient
         var attBefore = new Vector3(_drive.Predict.State.Yaw, _drive.Predict.State.Pitch, _drive.Predict.State.Roll);
         if (!_drive.Predict.Reconcile(r.Ack, r.Server, 1f / Wire.TickRate, r.Phi)) return;
         _driveCorrections++;
-        _recon++;
+        Ctx.Reconciles++;
         var moved = before - _drive.Predict.State.Position;
         _rub.AddVehicle(moved.Length(), FlightMath.Wrap(_drive.Predict.State.Yaw - yawBefore));
         _drive.Smooth += new Vector3(moved.X, moved.Y, moved.Z);
@@ -175,7 +175,7 @@ public partial class NetClient
         var input = DriverInput(ni);
         if (input.Throttle != _latKeys.Throttle || input.Steer != _latKeys.Steer || input.Handbrake != _latKeys.Handbrake)
         {
-            _latKeys = input; _latSeq = ni.Seq; _latAt = Now; // the first input with new keys: its drawn change is timed below
+            _latKeys = input; _latSeq = ni.Seq; _latAt = Ctx.Now; // the first input with new keys: its drawn change is timed below
         }
         _drive.Predict.Step(ni.Seq, input, dt);
     }
@@ -195,20 +195,20 @@ public partial class NetClient
     {
         if (!_drives.TryGetValue(v.Id, out var view)) _drives[v.Id] = view = new DriveView();
         DriveState s;
-        if (_drive != null && _drive.CarId == v.Id && _me != null)
+        if (_drive != null && _drive.CarId == v.Id && Ctx.Me != null)
         {
             s = _drive.Predict.State;
             _drive.DrawnPhi = _drive.Predict.TrailerBody.Phi;
             var ahead = (float)Engine.GetPhysicsInterpolationFraction();
             if (ahead > 0.001f && !Dead)
             {
-                var now = NetInput.From(0, _me.Sample(), 0, 0);
+                var now = NetInput.From(0, Ctx.Me.Sample(), 0, 0);
                 var stepped = _drive.Predict.Ahead(DriverInput(now), ahead / Wire.TickRate); // the vehicle and, with a trailer on the hook, the trailer after it
                 s = stepped.State; _drive.DrawnPhi = stepped.Trailer.Phi;
             }
             if (_latSeq >= 0 && (MathF.Abs(s.Speed - _latSpeed) > 1e-3f || MathF.Abs(FlightMath.Wrap(s.Yaw - _latYaw)) > 1e-4f))
             {
-                GD.Print($"client {PlayerName}: drive input seq {_latSeq} to first rendered change {(Now - _latAt) * 1000:F1} ms");
+                GD.Print($"client {PlayerName}: drive input seq {_latSeq} to first rendered change {(Ctx.Now - _latAt) * 1000:F1} ms");
                 _latSeq = -1;
             }
             _latSpeed = s.Speed; _latYaw = s.Yaw;
@@ -256,7 +256,7 @@ public partial class NetClient
     void ChaseDrive(CarView v, VehicleDef def, Vector3 p, Vector3 rot, float dt)
     {
         var view = _drives[v.Id];
-        _me!.DriveChase(p, rot.Y, rot.X + view.Pose.BodyPitch, rot.Z + view.Pose.BodyRoll, MathF.Abs(view.Shown.Speed) / def.TopSpeed, def.Drive!.Camera, dt);
+        Ctx.Me!.DriveChase(p, rot.Y, rot.X + view.Pose.BodyPitch, rot.Z + view.Pose.BodyRoll, MathF.Abs(view.Shown.Speed) / def.TopSpeed, def.Drive!.Camera, dt);
     }
 
     string _drivePrompt = "";
@@ -270,8 +270,8 @@ public partial class NetClient
     string DrivePrompt(CarView v, int seat)
     {
         var kind = seat == 0 && DriveOf(v) is { Afloat: false } ? 0 : 1;
-        if (kind == _drivePromptKind && Now - _drivePromptAt < 1.0) return _drivePrompt;
-        _drivePromptKind = kind; _drivePromptAt = Now;
+        if (kind == _drivePromptKind && Ctx.Now - _drivePromptAt < 1.0) return _drivePrompt;
+        _drivePromptKind = kind; _drivePromptAt = Ctx.Now;
         return _drivePrompt = kind == 0 ? Strings.F("hud.transport.drive", InputBindings.Name("interact"), InputBindings.Name("jump")) : Strings.F("hud.transport.afloat", InputBindings.Name("interact"));
     }
 

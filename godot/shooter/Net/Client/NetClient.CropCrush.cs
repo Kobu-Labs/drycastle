@@ -27,7 +27,7 @@ public partial class NetClient
     void StampCrush()
     {
         if (CrushMask is not { } mask || Vehicles == null || CrushFields.Count == 0) return;
-        foreach (var v in _cars.Values)
+        foreach (var v in Ctx.Cars.All)
         {
             if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count || !GodotObject.IsInstanceValid(v.Node)) continue;
             var def = Vehicles.Vehicles[v.Kind];
@@ -38,7 +38,7 @@ public partial class NetClient
             var field = mask.Step(v.Id, body, _crushFresh);
             if (field >= 0) Queue(mask, field, _crushFresh);
             // the map line follows the vehicle while it crushes at all (also over ground crushed before), not only while it adds new cells
-            if (_hud?.Minimap.Trails is { } trails)
+            if (Ctx.Hud?.Minimap.Trails is { } trails)
             {
                 if (body.Ground && CropCrushRules.Crushes(CrushCfg, body.Speed, body.Driven) && mask.FieldAt(body.Pos) >= 0) trails.Extend(v.Id, body.Pos);
                 else trails.Break(v.Id);
@@ -55,7 +55,7 @@ public partial class NetClient
             if (mask.Set(m.Field, i))
             {
                 _crushFresh.Add(i);
-                if (mask.GridOf(m.Field) is { } g && _hud?.Minimap.Trails is { } trails) { var c = g.CentreOf(i); trails.AddCell(new NVec2(c.X, c.Y)); } // a cell this client did not stamp itself: a dot on the maps
+                if (mask.GridOf(m.Field) is { } g && Ctx.Hud?.Minimap.Trails is { } trails) { var c = g.CentreOf(i); trails.AddCell(new NVec2(c.X, c.Y)); } // a cell this client did not stamp itself: a dot on the maps
             }
         Queue(mask, m.Field, _crushFresh);
     }
@@ -84,6 +84,6 @@ public partial class NetClient
     void CropCrushRestart()
     {
         _crushMask?.Clear(); _crushCells.Clear(); _crushCentres.Clear();
-        _hud?.Minimap.Trails.Clear();
+        Ctx.Hud?.Minimap.Trails.Clear();
     }
 }
