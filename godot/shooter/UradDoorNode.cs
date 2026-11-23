@@ -5,7 +5,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// The door of the Obecny Urad (<see cref="DoorNode"/>, the church door's look and behaviour): in the <c>doorway</c> of the urad.json next to the map. Closed while no detour is open; the server
-/// owns the state (<c>NetServer.RozhlasDoor</c>) and a client sets it from <see cref="EventKind.UradDoor"/>. One per map: <see cref="Current"/>.
+/// owns the state (<c>UradServer</c>) and a client sets it from <see cref="EventKind.UradDoor"/>. One per map: <see cref="Current"/>.
 /// </summary>
 public partial class UradDoorNode : DoorNode
 {

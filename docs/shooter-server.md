@@ -67,7 +67,7 @@ Flags (after `--`):
 | `--day-length MIN` | real minutes for one 24-hour day; overrides `day_length_minutes` in `environment.json` (default `24`) |
 | `--freeze-time` | hold the clock at its start time (or at `--time`), so the sky does not move |
 | `--match-set k=v,k=v` | override match options, see below |
-| `--targets N` | plant N stationary target dummies ("Target 01" ...) around the spawn area, 0-64; default 0 from `match.json`. The dummies are not players: they are outside the roster, the player cap, the score goal and the round end, and they respawn 3 s after a kill on the same spot. Planned at start on the ground under the map colliders (rays from above, steep faces rejected; a roof counts as ground where a ray meets one first); no cover or wall spots yet. Wire: entity type 3 in snapshots, event kind 140 (`TargetRoster`) on join. Code: `godot/shooter/Net/NetServer.Targets.cs`. `make shooter-server` passes `TARGETS` (default 24; `make shooter-server TARGETS=0` for none) |
+| `--targets N` | plant N stationary target dummies ("Target 01" ...) around the spawn area, 0-64; default 0 from `match.json`. The dummies are not players: they are outside the roster, the player cap, the score goal and the round end, and they respawn 3 s after a kill on the same spot. Planned at start on the ground under the map colliders (rays from above, steep faces rejected; a roof counts as ground where a ray meets one first); no cover or wall spots yet. Wire: entity type 3 in snapshots, event kind 140 (`TargetRoster`) on join. Code: `godot/shooter/Net/Server/NetServer.Targets.cs`. `make shooter-server` passes `TARGETS` (default 24; `make shooter-server TARGETS=0` for none) |
 | `--debug-cmds` | honour the client debug kill command and give every player the full weapon list on the hotbar (dev aid); leave off on a public server |
 | `--unlock-all` | dev mode: every item unlocked, see the next section. Also on when `DRYCASTLE_UNLOCK_ALL` is `1` or `true`. Leave off on a public server |
 | `--allow-sandbox` | grant sandbox mode to clients that ask for it (#156): godmode, unlimited ammo, the whole hotbar, every killstreak on demand (no kill requirement, no cap). A sandbox player's kills and XP are not scored, nothing is written to the database, the round never ends on their kills and they rank last with a `[SANDBOX]` tag. The panel's "Take damage" checkbox turns the godmode off for that player (off by default): they are hurt, die and respawn like anyone, the rest of sandbox mode stays, their death writes no stat and grants no XP, and the HUD badge reads "SANDBOX - TAKING DAMAGE". A server without the flag refuses the request with a notice. `make shooter-server` passes it (`SANDBOX=1` is the default; `SANDBOX=0` for none). Leave off on a public server |
@@ -181,6 +181,26 @@ Windows: `New-NetFirewallRule -DisplayName "Drycastle server" -Direction Inbound
 - Straight in: `drycastle-shooter --connect host:port --name NAME` (port optional, default 27015).
 
 The client needs the same `--map`/`DRYCASTLE_MAP` and `DRYCASTLE_ASSETS` as described above.
+
+## Code layout (`godot/shooter/Net/Server/`)
+
+`NetServer` (a Godot `Node`) is the composition root: the connection and tick loop, message dispatch (`OnReliable`, `OnInputs`), the order of one tick (`_PhysicsProcess`: `ReceiveAndHousekeep`, `TickWorld`, `SimulatePlayers`,
+`StepVehiclesAndRiders`, `ResolveBlastsAndFlush`, snapshots, report; the order decides the simulation) and the creation of the features in `_Ready`. It is still a `partial class` over the files named `NetServer.*.cs`: the core
+(`Input`, `Fire`, `Targeting`, `Snapshots`, `MatchEvents`, `Smoke`) and the features not yet converted. Bots: `Net/Bots/NetServer.Bots.cs`.
+
+A converted feature is a plain class in a folder of its own, owns its state privately and takes only a `ServerContext` (`ServerContext.cs`: the match, the joined players, the clock, `Broadcast` / `Send` / `SendEvent`, chat lines)
+plus the few things it needs by constructor. Features call each other through the other's small public surface (`IntelServer.Announce` / `Withdraw`). New feature: a class next to the others, one line in `NetServer._Ready`, one line at
+each hook in the tick, never a new partial of `NetServer`.
+
+| Class | Folder | What |
+|---|---|---|
+| `SceneryServer` | `Scenery/` | shootable pole lamps and road sign plates (ADR 0037, 0039) |
+| `MineralsServer` | `Minerals/` | mineral nodes and finds (#401) |
+| `IntelServer` | `Intel/` | the intel board and its announcements |
+| `GarageServer` | `Garage/` | the bus garage's doors and parked vehicle |
+| `RozhlasServer`, `UradServer`, `RozhlasFeedServer`, `RozhlasSetServer` | `Rozhlas/` | the village loudspeaker, the Obecny Urad (workers, door), the live feed with the combat mix, the dictation set |
+
+`ServerClient` (one connection: human or bot) and `PlayerProfile` are plain state in `ServerClient.cs`; `SmokeStats` holds what the smoke tests count and their verdicts.
 
 ## Known gaps
 

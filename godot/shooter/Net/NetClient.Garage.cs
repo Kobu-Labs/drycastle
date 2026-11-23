@@ -6,7 +6,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// The client's side of the bus garage's doors: the server's state (<see cref="EventKind.GarageDoor"/>) sets the box and swings the leaves, and a player on foot at the
-/// doorway sees the prompt. Nothing is sent: the server sees the interact key in the inputs and decides (<c>NetServer.GarageUse</c>).
+/// doorway sees the prompt. Nothing is sent: the server sees the interact key in the inputs and decides (<c>GarageServer.Use</c>).
 /// </summary>
 public partial class NetClient
 {

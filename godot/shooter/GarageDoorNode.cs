@@ -5,7 +5,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// The double doors of the bus garage (<see cref="DoorNode"/>): brown sheet-metal leaves in the <c>doorway</c> of the garage.json next to the map, swinging out into the yard
-/// (the bus stands right behind them). Shut by default; the server owns the state (<c>NetServer.GarageUse</c>, a player's interact key) and a client sets it from
+/// (the bus stands right behind them). Shut by default; the server owns the state (<c>GarageServer.Use</c>, a player's interact key) and a client sets it from
 /// <see cref="EventKind.GarageDoor"/>. One per map: <see cref="Current"/>.
 /// </summary>
 public partial class GarageDoorNode : DoorNode

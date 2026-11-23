@@ -94,7 +94,7 @@ internal sealed class ServerClient
     public readonly GrenadeThrower Throw = new();
     /// <summary>The interact key beside a Scud truck with an empty rack and a loaded rocket cart: a tap gets in or out, a hold loads the rocket (NetServer.Scud.cs).</summary>
     public readonly ScudReloadKey ReloadKey = new();
-    /// <summary>The interact key's hold at the rozhlas dictation table (NetServer.RozhlasSet.cs).</summary>
+    /// <summary>The interact key's hold at the rozhlas dictation table (RozhlasSetServer.cs).</summary>
     public InteractHold SetHold;
     /// <summary>The high of the plantation (NetServer.Plantation.cs) and the interact key's hold inside one; the replicated bit is <see cref="StatusKind.High"/> of <see cref="Status"/>.</summary>
     public readonly PlayerHigh High = new();

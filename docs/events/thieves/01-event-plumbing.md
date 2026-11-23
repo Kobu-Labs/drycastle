@@ -5,7 +5,7 @@ Make a third event kind possible without special cases, and add the empty `thiev
 ## Today
 - `EventBook` (`godot/ShooterCore/Events/EventRun.cs`): kind constants, hard-coded `Startable`, `WhyNotStart` text names the Bigfoot.
 - `/event current end|cancel`: `ChatCurrentEvent` (`NetServer.Bigfoot.cs`) knows the Bigfoot, falls through to `ChatCurrentEnd` (`NetServer.Mass.cs`) which knows the Mass. Any other kind: "No event is running."
-- No real event calls `AnnounceIntel` / `WithdrawIntel` (`NetServer.Intel.cs`).
+- No real event calls `IntelServer.Announce` / `Withdraw` (`Net/Server/Intel/IntelServer.cs`).
 
 ## Do
 - A per-kind handler table on the server: start, end (as a win), cancel. Bigfoot and Mass move onto it, behaviour unchanged. `/event current end|cancel` dispatches by `EventBook.Current`.

@@ -23,7 +23,7 @@ public partial class NetServer
 
     sealed class Sitter
     {
-        /// <summary>The pew; null for the one who sits at the rozhlas dictation table (NetServer.RozhlasSet.cs), who is not part of the Mass.</summary>
+        /// <summary>The pew; null for the one who sits at the rozhlas dictation table (RozhlasSetServer.cs), who is not part of the Mass.</summary>
         public ChurchSeat? Seat;
         public Edge Jump = new(startHeld: true); // the jump that may still be held as they sit is not a stand-up
     }
