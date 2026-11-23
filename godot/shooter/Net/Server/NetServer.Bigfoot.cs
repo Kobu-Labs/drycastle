@@ -238,7 +238,7 @@ public partial class NetServer
         var corpse = new Corpse(BigfootRules.TargetId, fell, _bigfootFellYaw, Math.Max(0, knife), 0, new[] { new ItemStack(item) }, r.CorpseSeconds, r.CorpseHead);
         var id = _corpses.Add(corpse);
         if (id is not { } cid) { GD.PrintErr("server: the world refused the Bigfoot's corpse"); return; }
-        BroadcastCorpseItems(cid);
+        _gear.BroadcastCorpseItems(cid);
         GD.Print($"server: Bigfoot corpse {cid} at ({fell.X:F1},{fell.Y:F1},{fell.Z:F1}), lasts {r.CorpseSeconds:F0} s");
     }
 

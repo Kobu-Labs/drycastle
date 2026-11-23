@@ -131,9 +131,9 @@ public partial class NetServer
             s.Car.Seat.Block(s.Seat); // nobody sits on the body
             _riding.Add((cid, corpse, s.Car, s.Seat));
         }
-        if (id is { } corpseId && items.Count > 0) BroadcastCorpseItems(corpseId); // after the corpse's own spawn event, on the same ordered channel
+        if (id is { } corpseId && items.Count > 0) _gear.BroadcastCorpseItems(corpseId); // after the corpse's own spawn event, on the same ordered channel
         if (id is { } hid) HarvesterOnCorpse(victim, hid, corpse); // a victim of the harvester goes into the machine
-        SendEquipmentIfChanged(c);
+        _gear.SendEquipmentIfChanged(c);
     }
 
     /// <summary>Flies the thrown corpses one tick; they stop against the world (not the cars: a run-over body starts inside one).</summary>

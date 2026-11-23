@@ -57,7 +57,7 @@ public partial class NetServer
         var yaw = (float)_rng.NextDouble() * MathF.Tau - MathF.PI;
         var corpse = new Corpse(ThievesReward.ChainCorpseOwner, k.Where, yaw, Math.Max(0, knife), 0, new[] { new ItemStack(item) }, r.ChainCorpseSeconds);
         if (_corpses.Add(corpse) is not { } id) { GD.PrintErr("server: the world refused the Gang boss's corpse"); return; }
-        BroadcastCorpseItems(id);
+        _gear.BroadcastCorpseItems(id);
         GD.Print($"server: Gang boss corpse {id} with the {r.ChainItem} at ({k.Where.X:F1},{k.Where.Y:F1},{k.Where.Z:F1}), lasts {r.ChainCorpseSeconds:F0} s");
     }
 }

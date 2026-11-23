@@ -4,6 +4,7 @@ using Drycastle.Shooter.Net.Server.BusGarage;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.ChatRoom;
 using Drycastle.Shooter.Net.Server.Fauna;
+using Drycastle.Shooter.Net.Server.Gear;
 using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
 using Drycastle.Shooter.Net.Server.Profiles;
@@ -87,6 +88,7 @@ public partial class NetServer : Node
     IntelServer _intel = null!;
     ChatServer _chat = null!;
     ProfileServer _profiles = null!;
+    ItemsServer _gear = null!;
     Sitters _sitters = null!;
     AnimalWorld _animals = null!;
     CompanionServer _companions = null!;
@@ -148,6 +150,7 @@ public partial class NetServer : Node
         TurretRules.Register(WorldEntityRegistry.Shared);
         CitizenRules.Register(WorldEntityRegistry.Shared);
         _corpses = new CorpseBook(_match.Entities);
+        _gear = new ItemsServer(_ctx, Items, _corpses, () => Query, car => PresentPose(car).Feet);
         InitBigfoot(); // after the corpse book, which follows the same despawns
         _pets = new PetServer(_ctx, PetsData, AnimalData, _animals, ArenaMode, MapDir, Map);
         _wildlife = new WildlifeServer(_ctx, WildlifeData, AnimalData, AnimalShapes, _animals, () => MapZonePoints, () => Clock.HourAt(_tick / (double)Wire.TickRate), () => Query,
@@ -379,10 +382,10 @@ public partial class NetServer : Node
         if (m is HelloMsg h && c.Phase == SessionPhase.Connected) OnHello(c, h);
         else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || ArenaMode)) OnDebug(c, e.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpse } pu) OnPickUpCorpse(c, pu.Payload);
-        else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpseItem } pi) OnPickUpCorpseItem(c, pi.Payload);
-        else if (m is EventMsg { Kind: >= (byte)EventKind.EquipItem and <= (byte)EventKind.TakeGroundItem } ir) OnItemRequest(c, (EventKind)ir.Kind, ir.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpseItem } pi) _gear.OnPickUpCorpseItem(c, pi.Payload);
+        else if (m is EventMsg { Kind: >= (byte)EventKind.EquipItem and <= (byte)EventKind.TakeGroundItem } ir) _gear.OnItemRequest(c, (EventKind)ir.Kind, ir.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SetZero } sz) { if (c.Joined && BulletDrop.TryDecodeZero(sz.Payload, out var zi, out var zm) && zi < Weapons.Weapons.Count && BulletDrop.HasDrop(Weapons.Weapons[zi])) c.Zero.Set(zi, Weapons.Weapons[zi], zm); }
-        else if (m is EventMsg { Kind: (byte)EventKind.RaiseBinoculars } rb) { if (c.Joined && Binoculars.TryDecodeRaise(rb.Payload, out var up)) SetBinoculars(c, up && CarriesBinoculars(c)); }
+        else if (m is EventMsg { Kind: (byte)EventKind.RaiseBinoculars } rb) { if (c.Joined && Binoculars.TryDecodeRaise(rb.Payload, out var up)) _gear.SetBinoculars(c, up && _gear.CarriesBinoculars(c)); }
         else if (m is EventMsg { Kind: (byte)EventKind.Redeploy } rd && c.Joined) _profiles.OnRedeploy(c, rd.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.MineralPick } mp && c.Joined) _minerals.OnPick(c, mp.Payload);
@@ -488,7 +491,7 @@ public partial class NetServer : Node
             if (o != c) Send(o, new JoinMsg(c.Id, c.Name));
         }
         foreach (var w in _match.Entities.Snapshot()) Send(c, new EventMsg((byte)EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State)));
-        SendCorpseItemsOnJoin(c); // the items the corpses carry, after the corpses themselves
+        _gear.SendCorpseItemsOnJoin(c); // the items the corpses carry, after the corpses themselves
         SendGlassOnJoin(c); // the glass panes that are not whole (ADR 0007)
         _scenery.SendOnJoin(c); // the pole lamps and sign plates that are not whole (ADR 0037, 0039)
         SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
@@ -503,9 +506,9 @@ public partial class NetServer : Node
         SendPounceOnJoin(c); // and the demon's pounce, when one is on
         SendTargetRoster(c); // target dummies' names (#148)
         _profiles.SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
-        SendWornOnJoin(c); // what the others wear (#266), to draw on their characters
-        SendBinocularsOnJoin(c); // and who holds the binoculars up
-        SendHeadLampsOnJoin(c); // and whose head lamp is on
+        _gear.SendWornOnJoin(c); // what the others wear (#266), to draw on their characters
+        _gear.SendBinocularsOnJoin(c); // and who holds the binoculars up
+        _gear.SendHeadLampsOnJoin(c); // and whose head lamp is on
         SendStatusOnJoin(c); // who is blessed, cursed or burning
         _match.AddPlayer(c.Id, c.Name, c.Sandbox, c.IsBot); // spawns the player (event) and broadcasts the scoreboard
         SandboxAnnounce(c); // sandbox name tags both ways, and the held streak (#156)

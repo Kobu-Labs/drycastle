@@ -438,7 +438,7 @@ public partial class NetServer
         bale.Launch(HarvesterCatch.BaleVelocity(fwd, CarVelocity(car), Harvester), rolls: true);
         var id = _corpses.Add(bale);
         if (id is not { } cid) return;
-        if (items.Count > 0) BroadcastCorpseItems(cid);
+        if (items.Count > 0) _gear.BroadcastCorpseItems(cid);
         _madeBales[cid] = new HayBale(bale.Position, Harvester, cid);
         HarvesterFx(HarvesterCodec.FxKind.BaleOut, at, cid, victim);
         GD.Print($"server: harvester bale {cid} of #{victim} thrown from ({at.X:F1},{at.Y:F1},{at.Z:F1}) with {items.Count} items");

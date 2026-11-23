@@ -64,10 +64,10 @@ public partial class NetServer
                     sc.Recoil.Reset();
                     sc.Breath.Reset();
                     sc.Zero.Reset();
-                    SetBinoculars(sc, false); // a new life starts with them down
-                    SetHeadLamp(sc, false); // and with the head lamp off
+                    _gear.SetBinoculars(sc, false); // a new life starts with them down
+                    _gear.SetHeadLamp(sc, false); // and with the head lamp off
                     ItemRules.IssueStandard(Items, sc.Bag, OwnedItems(sc)); // and with the standard items (the binoculars) in the bag
-                    SendEquipmentIfChanged(sc); // also what was issued at the join, before the first life
+                    _gear.SendEquipmentIfChanged(sc); // also what was issued at the join, before the first life
                     SendAmmo(sc);
                 }
                 BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(s.Id, s.Position, s.ProtectionSeconds)));
@@ -87,7 +87,7 @@ public partial class NetServer
                 break;
             case PlayerTeamChanged tc: OnTeamChanged(tc); break;
             case TargetKilled tk: OnTargetKilled(tk); break;
-            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) SetHeadLamp(dead, false); OnStatusDeath(d.Victim); _rozhlas.OnPlayerDied(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay, _deathFlight.Remove(d.Victim, out var flight) ? flight : DeathFlight.None))); break;
+            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) _gear.SetHeadLamp(dead, false); OnStatusDeath(d.Victim); _rozhlas.OnPlayerDied(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay, _deathFlight.Remove(d.Victim, out var flight) ? flight : DeathFlight.None))); break;
         }
     }
 
