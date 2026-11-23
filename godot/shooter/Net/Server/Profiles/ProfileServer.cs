@@ -1,6 +1,5 @@
 using Godot;
 using Drycastle.ShooterCore.Camo;
-using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;

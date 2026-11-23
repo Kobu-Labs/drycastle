@@ -1,5 +1,4 @@
 using Drycastle.ShooterCore.Match;
-using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Wildlife;
 
 namespace Drycastle.Shooter.Net.Server.Combat;

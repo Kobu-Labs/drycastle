@@ -1,5 +1,4 @@
 using Drycastle.ShooterCore.Diagnostics;
-using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Weapons;
 
 namespace Drycastle.Shooter.Net.Server.Combat;
