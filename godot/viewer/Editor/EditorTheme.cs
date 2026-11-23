@@ -91,7 +91,21 @@ public static class EditorTheme
     {
         if (_theme != null) return _theme;
         var t = new Theme { DefaultFontSize = FontBody };
+        ButtonStyles(t);
+        ButtonVariations(t);
+        PanelStyles(t);
+        LabelStyles(t);
+        t.SetColor("font_color", "CheckBox", Text);
+        t.SetColor("font_hover_color", "CheckBox", Colors.White);
+        t.SetStylebox("focus", "CheckBox", Focus());
+        t.SetConstant("separation", "VBoxContainer", Space);
+        t.SetConstant("separation", "HBoxContainer", Space);
+        _theme = t;
+        return t;
+    }
 
+    static void ButtonStyles(Theme t)
+    {
         foreach (var type in new[] { "Button", "OptionButton", "ColorPickerButton", "MenuButton" })
         {
             t.SetStylebox("normal", type, Box(Raised, 8, Border));
@@ -108,7 +122,10 @@ public static class EditorTheme
             t.SetColor("font_disabled_color", type, new Color(Dim, 0.55f));
             t.SetFontSize("font_size", type, FontBody);
         }
+    }
 
+    static void ButtonVariations(Theme t)
+    {
         // rail buttons: square, icon only
         t.SetTypeVariation("RailButton", "Button");
         t.SetStylebox("normal", "RailButton", Box(Colors.Transparent, 0));
@@ -149,6 +166,13 @@ public static class EditorTheme
         t.SetColor("font_hover_color", "FlatButton", Accent);
         t.SetColor("font_pressed_color", "FlatButton", Accent);
 
+        t.SetTypeVariation("DangerButton", "Button");
+        t.SetStylebox("normal", "DangerButton", Box(new Color(Danger, 0.25f), 8, Danger));
+        t.SetStylebox("hover", "DangerButton", Box(new Color(Danger, 0.45f), 8, Danger));
+    }
+
+    static void PanelStyles(Theme t)
+    {
         t.SetStylebox("panel", "PanelContainer", Box(Surface, Space, null, 0));
         // a notice that stays on screen (warn) and a read-only block of text
         t.SetTypeVariation("BannerPanel", "PanelContainer");
@@ -159,7 +183,10 @@ public static class EditorTheme
         t.SetStylebox("focus", "LineEdit", Focus());
         t.SetStylebox("read_only", "LineEdit", Box(new Color(Raised, 0.45f), 8));
         t.SetColor("font_color", "LineEdit", Text);
+    }
 
+    static void LabelStyles(Theme t)
+    {
         t.SetColor("font_color", "Label", Text);
         t.SetFontSize("font_size", "Label", FontBody);
         t.SetTypeVariation("Header", "Label");
@@ -171,22 +198,11 @@ public static class EditorTheme
         t.SetColor("font_color", "Dim", Dim);
         t.SetTypeVariation("Danger", "Label");
         t.SetColor("font_color", "Danger", Danger);
-        t.SetTypeVariation("DangerButton", "Button");
-        t.SetStylebox("normal", "DangerButton", Box(new Color(Danger, 0.25f), 8, Danger));
-        t.SetStylebox("hover", "DangerButton", Box(new Color(Danger, 0.45f), 8, Danger));
         // the name tag of a sketch mark, drawn over the 3D view
         t.SetTypeVariation("SketchTag", "Label");
         t.SetColor("font_color", "SketchTag", Sketch);
         t.SetStylebox("normal", "SketchTag", Box(Scrim, Space / 2));
         t.SetTypeVariation("Warn", "Label");
         t.SetColor("font_color", "Warn", Warn);
-
-        t.SetColor("font_color", "CheckBox", Text);
-        t.SetColor("font_hover_color", "CheckBox", Colors.White);
-        t.SetStylebox("focus", "CheckBox", Focus());
-        t.SetConstant("separation", "VBoxContainer", Space);
-        t.SetConstant("separation", "HBoxContainer", Space);
-        _theme = t;
-        return t;
     }
 }
