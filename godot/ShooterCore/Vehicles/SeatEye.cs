@@ -19,7 +19,7 @@ public static class SeatEye
     /// <summary>
     /// Eyes set by hand for a seat (vehicle id, seat index), in the hull frame: the driver's of the seven vehicles that had a hand-built cockpit rig
     /// (<c>CockpitRig</c>). They were measured against the rig and the model, and stay exactly as they were (the Humvee's view must not change). The generic
-    /// rule would put most of them within a hand's width of these, but not on them. The numbers sit beside the model scripts' (scripts/make_*_model.py).
+    /// rule would put most of them within a hand's width of these, but not on them. The numbers sit beside the model scripts' (scripts/models/make_*_model.py).
     /// </summary>
     public static readonly IReadOnlyDictionary<(string Vehicle, int Seat), Vector3> HandSetEyes = new Dictionary<(string, int), Vector3>
     {

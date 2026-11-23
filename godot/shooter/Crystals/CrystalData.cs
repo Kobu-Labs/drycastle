@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>One crystal's section of data/crystals.json, read by key with a default for a missing one (so a half-written file in the lab never breaks a crystal).</summary>
 public sealed class CrystalParams

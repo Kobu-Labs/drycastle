@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Kulturite (crystals.md): the stone of the culture house. Pastel iridescent crystals (<c>shaders/crystal_iridescent.gdshader</c>) with a soft warm light, on a rock base that is a parquet floor

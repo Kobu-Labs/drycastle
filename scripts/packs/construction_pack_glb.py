@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Makes the runtime models of the mechanic garage's props (godot/shooter/MechanicGarage.cs) out of the Synty POLYGON Construction Unity package.
+"""Makes the runtime models of the mechanic garage's props (godot/shooter/Buildings/MechanicGarage.cs) out of the Synty POLYGON Construction Unity package.
 
     python3 -I scripts/packs/construction_pack_glb.py <POLYGON_Construction_Unity_*.unitypackage> [--private DIR]
 
@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / "godot" / "shooter" / "MechanicGarage.cs"
+SOURCE = ROOT / "godot" / "shooter" / "Buildings" / "MechanicGarage.cs"
 PACK = "Assets/Synty/PolygonConstruction"
 
 

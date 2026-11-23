@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Net.Client;
 using Drycastle.ShooterCore.Camo;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Hunts;
@@ -7,7 +8,7 @@ using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Progression;
 using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>
 /// The loadout screen, laid out as a "Create a class" menu (ticket #147; docs/standards/ui-ux.md). A strip of five class tabs

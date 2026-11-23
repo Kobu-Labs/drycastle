@@ -3,7 +3,7 @@ using Drycastle.ShooterCore.Hud;
 using Drycastle.ShooterCore.Menu;
 using Drycastle.ShooterCore.Minimap;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>
 /// Settings: Graphics / Audio / Controls / Gameplay / Accessibility, one config file. Every change previews live on the

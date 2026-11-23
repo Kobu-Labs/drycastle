@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Futbalitrine (crystals.md): the football stone. Opaque crystals in football leather: black pentagons and white hexagons with seams, projected from the middle of every crystal

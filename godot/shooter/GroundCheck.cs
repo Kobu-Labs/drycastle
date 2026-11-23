@@ -1,4 +1,6 @@
 using Godot;
+using Drycastle.Shooter.Characters;
+using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Vehicles;
 

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Venomite (crystals.md): neon toxic green translucent crystals full of liquid: a slow swirl with bubbles rising through it (<c>shaders/crystal_water.gdshader</c>, <c>bubbles</c>), a green light. Venom

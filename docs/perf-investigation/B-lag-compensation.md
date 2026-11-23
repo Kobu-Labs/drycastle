@@ -1,6 +1,6 @@
 # B. Lag compensation and hit registration
 
-Read-only investigation (agent B). Scope: `godot/ShooterCore/Weapons/HitMath.cs`, shot resolution in `godot/shooter/Net/NetServer.cs` (`FireWeapon`, `Deal`, `StepRockets`, `Explode`), pellets, melee, the rockets and killstreak weapons that resolve hits on the server. No code was built, run or changed. Every number is either a citation or arithmetic written out below. Confidence tags: CONFIRMED (read in code or docs, or arithmetic on cited constants), UNVERIFIED (needs a run or a number not in the repo), OPINION.
+Read-only investigation (agent B). Scope: `godot/ShooterCore/Weapons/HitMath.cs`, shot resolution in `godot/shooter/Net/Server/NetServer.cs` (`FireWeapon`, `Deal`, `StepRockets`, `Explode`), pellets, melee, the rockets and killstreak weapons that resolve hits on the server. No code was built, run or changed. Every number is either a citation or arithmetic written out below. Confidence tags: CONFIRMED (read in code or docs, or arithmetic on cited constants), UNVERIFIED (needs a run or a number not in the repo), OPINION.
 
 Terms follow `GLOSSARY.md`: Shot, Pellet, Killstreak, Vehicle, Rider, Glass pane, Hit volume. "Lag" below means the shooter's view age, defined in B-01.
 
@@ -11,12 +11,12 @@ Terms follow `GLOSSARY.md`: Shot, Pellet, Killstreak, Vehicle, Rider, Glass pane
 ## 2. What is healthy
 
 - **Analytic hit tests, no physics per player.** Capsule and head sphere, with the head counted only when the ray reaches it soon after entering the body: `godot/ShooterCore/Weapons/HitMath.cs:200-216`, `RayCapsule` `:235-`, melee `:285-304`. The audit already notes "Hit detection is analytic" (`docs/perf-audit.md:394`).
-- **Server owns hits and tells both sides.** `Deal` applies damage and sends one reliable `Hit` to the attacker and the victim (`godot/shooter/Net/NetServer.cs:811-830`). Clients do not predict a hit, so there are no false kill markers (`godot/shooter/Net/NetClient.Predict.cs:114-145` predicts only sound, flash and a tracer from the camera ray).
-- **Deterministic pellet fans.** The fan is rebuilt from a seed on both sides (`godot/ShooterCore/Weapons/HitMath.cs:133-149`, `godot/shooter/Net/NetServer.Pellets.cs:20-21`, `godot/shooter/Net/NetClient.Pellets.cs:26`). A rewind does not change the event format.
-- **One time base for drawn remote things.** Players, vehicles, animals, aircraft and the helicopter's flight all use `rt = _lastTick + elapsed*30 - InterpDelayTicks` with `InterpDelayTicks = 3` (`godot/shooter/Net/NetClient.cs:20`, `:536`; `NetClient.Animals.cs:89`; `NetClient.Aircraft.cs:101`; `NetClient.Cars.cs:167`). Clients see the world at a single past time, so the server can reconstruct it.
-- **Players do not block shots.** Player bodies are excluded from every bullet ray (`godot/shooter/Net/NetServer.cs:708-715`, `:727`). Only the world, vehicles and shot-only cover stop bullets (`godot/ShooterCore/Colliders/PropColliders.cs:29`). A rewind therefore only has to move targets, not occluders, for players.
-- **Dummies are static** (`godot/shooter/Net/NetServer.Targets.cs:44-45`), so they need no history.
-- **Round-trip time is already on the server.** `Ping` reads ENet's `RoundTripTime` per peer (`godot/shooter/Net/NetServer.cs:584-585`).
+- **Server owns hits and tells both sides.** `Deal` applies damage and sends one reliable `Hit` to the attacker and the victim (`godot/shooter/Net/Server/NetServer.cs:811-830`). Clients do not predict a hit, so there are no false kill markers (`godot/shooter/Net/Client/NetClient.Predict.cs:114-145` predicts only sound, flash and a tracer from the camera ray).
+- **Deterministic pellet fans.** The fan is rebuilt from a seed on both sides (`godot/ShooterCore/Weapons/HitMath.cs:133-149`, `godot/shooter/Net/Server/NetServer.Pellets.cs:20-21`, `godot/shooter/Net/Client/NetClient.Pellets.cs:26`). A rewind does not change the event format.
+- **One time base for drawn remote things.** Players, vehicles, animals, aircraft and the helicopter's flight all use `rt = _lastTick + elapsed*30 - InterpDelayTicks` with `InterpDelayTicks = 3` (`godot/shooter/Net/Client/NetClient.cs:20`, `:536`; `NetClient.Animals.cs:89`; `NetClient.Aircraft.cs:101`; `NetClient.Cars.cs:167`). Clients see the world at a single past time, so the server can reconstruct it.
+- **Players do not block shots.** Player bodies are excluded from every bullet ray (`godot/shooter/Net/Server/NetServer.cs:708-715`, `:727`). Only the world, vehicles and shot-only cover stop bullets (`godot/ShooterCore/Colliders/PropColliders.cs:29`). A rewind therefore only has to move targets, not occluders, for players.
+- **Dummies are static** (`godot/shooter/Net/Server/NetServer.Targets.cs:44-45`), so they need no history.
+- **Round-trip time is already on the server.** `Ping` reads ENet's `RoundTripTime` per peer (`godot/shooter/Net/Server/NetServer.cs:584-585`).
 - **Precedent for trusting a bounded client view.** The gunship's aim point is sent by the client and clamped (`docs/shooter-v2.md:182-192`, `GunshipAim.ClampAim`), shipped at protocol 15. It trusts the view, not the hit, which is the line ADR 0006 draws.
 - **Headroom.** Server tick p50/p95 is 1.6/2.6 ms against a 33 ms budget (`docs/spikes/shooter-loss-test.md:31`). A shot is at most a few tens of µs of extra work (B-06 costs below).
 
@@ -58,7 +58,7 @@ Verified: `docs/perf-audit.md` has 159 findings and none of them is about lag co
 ### B-01 Hitscan and pellet hits resolve against present positions; drawn targets are `RTT + 100 ms` old
 
 - **Mechanism:** see section 3. The shooter aims at what it draws, which is `RTT + 100 ms` old when the server resolves.
-- **Citation:** `godot/shooter/Net/NetServer.cs:747-760`, `:763-783`; `godot/shooter/Net/NetServer.Pellets.cs:17-68`; `godot/ShooterCore/Weapons/HitMath.cs:11-14`; `godot/shooter/Net/NetClient.cs:20`, `:536`.
+- **Citation:** `godot/shooter/Net/Server/NetServer.cs:747-760`, `:763-783`; `godot/shooter/Net/Server/NetServer.Pellets.cs:17-68`; `godot/ShooterCore/Weapons/HitMath.cs:11-14`; `godot/shooter/Net/Client/NetClient.cs:20`, `:536`.
 - **Cost:** no CPU or bandwidth cost in the status quo. Error: a sprinter 1.2 m (RTT 50) to 2.4 m (RTT 200) off, head hits impossible at walking speed from RTT 50.
 - **Fix:** rewind players to the shooter's view tick (section 5, design D1).
 - **Effort:** S to M (history ring, a `LiveTargets(tick)` variant, a shadow-mode counter, tests).
@@ -67,7 +67,7 @@ Verified: `docs/perf-audit.md` has 159 findings and none of them is about lag co
 
 ### B-02 Vehicles are hit by a physics ray at their present pose, so they cannot be rewound without an analytic test
 
-- **Mechanism:** `WorldHit` casts one ray with mask `CollisionLayers.Bullets` (world, vehicles, shot-only cover) and reads the collider's `ServerCar` (`godot/shooter/Net/NetServer.cs:722-732`; mask `godot/ShooterCore/Colliders/PropColliders.cs:29`). Bodies are at their present pose. A physics space cannot be queried at a past pose, so the vehicle test must be replaced by an oriented-box test on a stored pose. Glass panes are rectangles in the vehicle frame (`godot/shooter/Net/NetServer.Glass.cs:83-101`, `GlassRules.ToVehicle(n, feet, yaw)` at present), and rider exposure uses `SeatPos(car, seat)` at present (`NetServer.cs:700-705`, ADR 0012).
+- **Mechanism:** `WorldHit` casts one ray with mask `CollisionLayers.Bullets` (world, vehicles, shot-only cover) and reads the collider's `ServerCar` (`godot/shooter/Net/Server/NetServer.cs:722-732`; mask `godot/ShooterCore/Colliders/PropColliders.cs:29`). Bodies are at their present pose. A physics space cannot be queried at a past pose, so the vehicle test must be replaced by an oriented-box test on a stored pose. Glass panes are rectangles in the vehicle frame (`godot/shooter/Net/Server/NetServer.Glass.cs:83-101`, `GlassRules.ToVehicle(n, feet, yaw)` at present), and rider exposure uses `SeatPos(car, seat)` at present (`NetServer.cs:700-705`, ADR 0012).
 - **Cost:** the change adds about 29 box tests per shot (about 2 µs) and about 232 per pellet fan of 8 (about 15 to 20 µs, assuming 50 to 80 ns per test, UNVERIFIED). Worst case 240 shots/s (16 players at 0.066 s intervals): about 5 ms per second, about 0.5% of one core. Vehicle history: 29 cars x 32 B x 16 ticks, about 15 kB.
 - **Fix:** split `WorldHit` into a walls-only ray (World | ShotOnly) and an analytic vehicle test on the rewound pose; rewind the glass frame and the rider's seat with the same pose (ADR 0012 requires the rider's hit volume to be the one "every client draws").
 - **Effort:** M.
@@ -83,7 +83,7 @@ Verified: `docs/perf-audit.md` has 159 findings and none of them is about lag co
 
 ### B-04 Rockets pass targets: the fuse is contact only, and their targets are at present
 
-- **Mechanism:** `RocketFlight.Step` ends in `Player` only when the sweep meets a victim (`godot/ShooterCore/Weapons/RocketFlight.cs:36`), and splash runs only on explode (`godot/shooter/Net/NetServer.cs:876-903`). Targets are taken from `LiveTargets()` at present each tick (`:845`, `:885`). A lateral miss of 0.56 m or more is a miss, and at 40 m/s the rocket is past in one tick.
+- **Mechanism:** `RocketFlight.Step` ends in `Player` only when the sweep meets a victim (`godot/ShooterCore/Weapons/RocketFlight.cs:36`), and splash runs only on explode (`godot/shooter/Net/Server/NetServer.cs:876-903`). Targets are taken from `LiveTargets()` at present each tick (`:845`, `:885`). A lateral miss of 0.56 m or more is a miss, and at 40 m/s the rocket is past in one tick.
 - **Cost:** nothing extra in the status quo. Per-step rewind of targets (D3) costs 16 history lookups per rocket per tick (about 1 µs per rocket-tick, bounded by the rocket count, which is small).
 - **Fix:** D3 (rewind the target to the shooter's view tick for each step; the rocket path stays at present) or a proximity fuse (content and gameplay change, needs a weapon decision, not a netcode one). Recommend D3 only if rocket hits are measured as a problem.
 - **Effort:** S to M for D3; M for a proximity fuse.
@@ -93,7 +93,7 @@ Verified: `docs/perf-audit.md` has 159 findings and none of them is about lag co
 ### B-05 Shotgun fans at short range miss moving targets entirely
 
 - **Mechanism:** the fan radius grows with distance (`0.052·d`), the lateral lag does not (section 3). At 10 m the usable lateral reach is 0.52 m (fan) + 0.56 m (body) = 1.08 m, so a sprinter at RTT 50 (1.2 m) is outside every pellet's reach.
-- **Citation:** `godot/shooter/data/weapons.json` (ids 15 to 18); `godot/ShooterCore/Weapons/HitMath.cs:133-149`, `:168-175`; `godot/shooter/Net/NetServer.Pellets.cs:17-68`.
+- **Citation:** `godot/shooter/data/weapons.json` (ids 15 to 18); `godot/ShooterCore/Weapons/HitMath.cs:133-149`, `:168-175`; `godot/shooter/Net/Server/NetServer.Pellets.cs:17-68`.
 - **Cost:** none. The fix is B-01.
 - **Confidence:** CONFIRMED arithmetic; the play effect UNVERIFIED.
 - **Audit:** new.
@@ -118,7 +118,7 @@ Verified: `docs/perf-audit.md` has 159 findings and none of them is about lag co
 
 ### B-08 The shooter's own hit feedback is RTT/2 late, and its tracer may not match the server's hit
 
-- **Mechanism:** the hit marker waits for the server's `Hit` (`godot/shooter/Net/NetClient.cs:844-848`, one way after resolution). The tracer is drawn from the camera ray against the world and against vehicles' drawn nodes (`NetClient.Predict.cs:128-143`), so for vehicles the predicted tracer already uses the interpolated (`RTT + 100 ms`) pose. That is the same time as a rewind would use, so the predicted tracer and a rewound server hit would agree for vehicles; without a rewind they disagree (the server hits the present car).
+- **Mechanism:** the hit marker waits for the server's `Hit` (`godot/shooter/Net/Client/NetClient.cs:844-848`, one way after resolution). The tracer is drawn from the camera ray against the world and against vehicles' drawn nodes (`NetClient.Predict.cs:128-143`), so for vehicles the predicted tracer already uses the interpolated (`RTT + 100 ms`) pose. That is the same time as a rewind would use, so the predicted tracer and a rewound server hit would agree for vehicles; without a rewind they disagree (the server hits the present car).
 - **Cost:** none. Keep hit markers unpredicted: predicting them would create false kills.
 - **Fix:** none needed beyond B-02; a rewind makes the tracer and the hit agree.
 - **Confidence:** CONFIRMED (code); the agreement is arithmetic on the same interp delay.
@@ -128,7 +128,7 @@ Verified: `docs/perf-audit.md` has 159 findings and none of them is about lag co
 
 | audit id | claim | status now | evidence |
 |---|---|---|---|
-| T2-02 (exclude array per ray) | rebuilt per call | **partly fixed**: `PlayerRids()` is cached and rebuilt only on join or drop (`NetServer.cs:707-715`). Still per call in `WorldHit` with a skip vehicle (`:727`) and in `BulletHit` with an ignored vehicle (`godot/shooter/Net/NetServer.Glass.cs:86`), which is the rider path. | CONFIRMED |
+| T2-02 (exclude array per ray) | rebuilt per call | **partly fixed**: `PlayerRids()` is cached and rebuilt only on join or drop (`NetServer.cs:707-715`). Still per call in `WorldHit` with a skip vehicle (`:727`) and in `BulletHit` with an ignored vehicle (`godot/shooter/Net/Server/NetServer.Glass.cs:86`), which is the rider path. | CONFIRMED |
 | T3-001 (`LiveTargets` builds a list per call) | open | **open**. The comment defends a fresh list because callers nest (`NetServer.cs:684-687`). A per-depth pool would keep the benefit. | CONFIRMED |
 | T3-005 (HitMath boxed enumerator and `float[2]`) | open | **open**: `Raycast` iterates an `IEnumerable<HitTarget>` (`HitMath.cs:204`, boxing when the source is an iterator, e.g. `TargetHitTargets` in `NetServer.Targets.cs:44`), and `RayCapsule` allocates an array per call (`HitMath.cs:260`). | CONFIRMED |
 | "Hit detection is analytic" (audit, `docs/perf-audit.md:394`) | healthy | confirmed (section 2) | CONFIRMED |
@@ -157,9 +157,9 @@ Victim fairness is the window the victim was out of cover on the shooter's scree
 
 **D0. Status quo (present-state resolution).** Cost: 0. Error: B-01 to B-06. Victim side: never shot after moving out of cover on the server. Shooter side: shots fail on targets moving across the aim.
 
-**D1. Players-only rewind to the shooter's view tick, all shot kinds that hit bodies (recommended first step).** Cost: S to M. Files: `godot/shooter/Net/NetServer.cs` (capture at tick start before `:203`; `LiveTargets(tick)`; `Deal` and `FireWeapon` take the rewound list), `godot/ShooterCore/Weapons/HitMath.cs` (unchanged signatures; it already takes `HitTarget`), a new pure history type in `godot/ShooterCore/` with tests in `godot/ShooterCore.Tests/`, and the ADR wording in 0006 and 0010 to 0012. Buys: B-01, B-03, B-05 for players and B-06. Does not buy vehicles. Life-epoch check needed: a player who died and respawned within the window must not be rewound into their previous life (store a spawn counter in the history; OPINION on the mechanism, CONFIRMED that `PlayerSpawned` teleports, `NetServer.cs:547-551`). Test first: shadow mode (compute both hits, count disagreements, no behaviour change).
+**D1. Players-only rewind to the shooter's view tick, all shot kinds that hit bodies (recommended first step).** Cost: S to M. Files: `godot/shooter/Net/Server/NetServer.cs` (capture at tick start before `:203`; `LiveTargets(tick)`; `Deal` and `FireWeapon` take the rewound list), `godot/ShooterCore/Weapons/HitMath.cs` (unchanged signatures; it already takes `HitTarget`), a new pure history type in `godot/ShooterCore/` with tests in `godot/ShooterCore.Tests/`, and the ADR wording in 0006 and 0010 to 0012. Buys: B-01, B-03, B-05 for players and B-06. Does not buy vehicles. Life-epoch check needed: a player who died and respawned within the window must not be rewound into their previous life (store a spawn counter in the history; OPINION on the mechanism, CONFIRMED that `PlayerSpawned` teleports, `NetServer.cs:547-551`). Test first: shadow mode (compute both hits, count disagreements, no behaviour change).
 
-**D2. D1 plus vehicles, glass frame and rider seats on the rewound pose.** Cost: M to L (B-02). Adds about 15 kB of history and about 0.5% of one core at the worst fire rate (UNVERIFIED per-test cost). Buys B-02, the car and heli case. Changes `WorldHit` (`NetServer.cs:722-732`), `BulletHit` (`NetServer.Glass.cs:83-101`), `ExposedGunnerBehind` (`godot/shooter/Net/NetServer.Flak.cs:55`), `HitTargetOf` (`NetServer.cs:700-705`). ADR amendments: 0006, 0010, 0011, 0012. Risk: a rider's seat in the past must use the car's past pose (cheap if D2 is in).
+**D2. D1 plus vehicles, glass frame and rider seats on the rewound pose.** Cost: M to L (B-02). Adds about 15 kB of history and about 0.5% of one core at the worst fire rate (UNVERIFIED per-test cost). Buys B-02, the car and heli case. Changes `WorldHit` (`NetServer.cs:722-732`), `BulletHit` (`NetServer.Glass.cs:83-101`), `ExposedGunnerBehind` (`godot/shooter/Net/Server/NetServer.Flak.cs:55`), `HitTargetOf` (`NetServer.cs:700-705`). ADR amendments: 0006, 0010, 0011, 0012. Risk: a rider's seat in the past must use the car's past pose (cheap if D2 is in).
 
 **D3. Rockets rewind targets per step.** Cost: S to M. 16 history lookups per rocket per tick. Buys part of B-04: lateral misses still pass because there is no proximity fuse. Recommend only with measurement.
 
@@ -177,16 +177,16 @@ Victim fairness is the window the victim was out of cover on the shooter's scree
 
 The measurements below are plans, not actions taken here.
 
-1. **Bots under-represent the lag.** The loss-test bot aims at the newest decoded snapshot (`godot/shooter/Net/NetClient.LossBot.cs:172-190`, `_dec.States`), which is `OWD` old, not `OWD + 100 ms`. Its effective L is therefore RTT, not RTT + 100 ms, and the loss test's 81 to 89 hits per run (`docs/spikes/shooter-loss-test.md:25`, `:50`) are a lower bound on the human effect. Cheapest: make one bot class aim at its `Interpolator` position (the human's view) and bucket the hit rate by target speed at `rtt100` and `rtt200` (the latter has not been run, `docs/spikes/shooter-loss-test.md:10`, `:51`). About 2 minutes per scenario.
+1. **Bots under-represent the lag.** The loss-test bot aims at the newest decoded snapshot (`godot/shooter/Net/Bots/NetClient.LossBot.cs:172-190`, `_dec.States`), which is `OWD` old, not `OWD + 100 ms`. Its effective L is therefore RTT, not RTT + 100 ms, and the loss test's 81 to 89 hits per run (`docs/spikes/shooter-loss-test.md:25`, `:50`) are a lower bound on the human effect. Cheapest: make one bot class aim at its `Interpolator` position (the human's view) and bucket the hit rate by target speed at `rtt100` and `rtt200` (the latter has not been run, `docs/spikes/shooter-loss-test.md:10`, `:51`). About 2 minutes per scenario.
 2. **Shadow rewind counter.** With D1 behind a flag and no behaviour change, log per shot: present hit vs rewound hit, and the target speed. This gives the disagreement rate without playtesting. Cheapest of all, and it gives the value of D1 before it ships.
-3. **Shot-path cost.** `Stopwatch` around `FireWeapon` with 16 bots on full auto (`godot/shooter/Net/NetServer.Bots.cs`). Expected a few µs per shot today; the number decides whether D2's 0.5% estimate matters.
-4. **Interpolation gap at 3% loss.** A histogram of `rt - _lastTick` and of clamped renders (`godot/shooter/Net/NetClient.cs:536`, `godot/ShooterCore/Net/Interpolator.cs:32`), to see how often B-07 freezes a drawn player.
+3. **Shot-path cost.** `Stopwatch` around `FireWeapon` with 16 bots on full auto (`godot/shooter/Net/Bots/NetServer.Bots.cs`). Expected a few µs per shot today; the number decides whether D2's 0.5% estimate matters.
+4. **Interpolation gap at 3% loss.** A histogram of `rt - _lastTick` and of clamped renders (`godot/shooter/Net/Client/NetClient.cs:536`, `godot/ShooterCore/Net/Interpolator.cs:32`), to see how often B-07 freezes a drawn player.
 5. **Human effect.** Only a real playtest at 50, 100 and 200 ms RTT (netem or `--net-sim` on the client only) can say how much players feel B-01. Not runnable from this investigation.
 
 ## 7. Needs from other agents
 
 - **A (netcode):** the interpolation buffer and snapshot gaps (B-07), the loss-test bot's aim source, and whether T1-2 (the ack and delta baseline) lands first, since D5 depends on it.
-- **C (players and prediction):** the own-player reconciliation and the life/respawn epoch needed for D1 (`godot/shooter/Net/NetServer.cs:547-551`).
+- **C (players and prediction):** the own-player reconciliation and the life/respawn epoch needed for D1 (`godot/shooter/Net/Server/NetServer.cs:547-551`).
 - **D (vehicles):** the car body's pose history fields and whether the car's collider is a compound box; the cost of an analytic vehicle test (B-02).
 - **E (world and physics):** the cost of the `WorldHit` split (B-02) and whether the vehicle layer's ray cost matters.
 - **G (server logic):** the tick order (B-06) and whether a history capture can sit at the top of `_PhysicsProcess`.

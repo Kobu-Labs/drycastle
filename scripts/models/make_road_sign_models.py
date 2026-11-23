@@ -16,7 +16,7 @@ galvanised metal). Pole 2.5 m (60 mm round, cap on top), plate centre 2.15 m, pl
 
 Node tree: sign_* > Pole (pole, cap, two clamp bands: static, solid in the game), Plate (face layers, back slab with its rim, two bolt heads).
 The Plate node's origin is the UPPER CLAMP (on the pole axis, at plate centre + 0.18 m, 0.042 m in front of the pole's axis), so a client
-bends a shot plate by rotating that one node about its own origin: it then hangs from the upper clamp askew (godot/shooter/SignPlates.cs).
+bends a shot plate by rotating that one node about its own origin: it then hangs from the upper clamp askew (godot/shooter/Scenery/SignPlates.cs).
 The manifest entry (assets/manifest.json "plates") gives the plate's centre as the point a round must pass.
 
 Materials are PBR metal, no emissive: the pole is galvanised steel (metallic 0.75, rough 0.4) and the plate is painted sheet metal

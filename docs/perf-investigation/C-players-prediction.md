@@ -19,9 +19,9 @@ needs measurement.
 ## 2. What is healthy
 
 - Shared step inputs match: quantised `ToMove` (`godot/ShooterCore/Net/NetTypes.cs:85`), Quant
-  constants (`NetTypes.cs:17-18`), `Simulate` (`godot/shooter/Player.cs:375-404`).
+  constants (`NetTypes.cs:17-18`), `Simulate` (`godot/shooter/Characters/Player.cs:375-404`).
 - Quantisation error (1/128 m = 3.9 mm/axis) is inside `ReconcileEpsilon` 3 cm
-  (`godot/shooter/Net/NetClient.cs:21`).
+  (`godot/shooter/Net/Client/NetClient.cs:21`).
 - Server steps once per input in order, ack set on dequeue (`NetServer.cs:587-630`).
 - Input cap 8 (`NetServer.cs:379`); 3-input redundancy (`NetClient.cs:525-527`).
 - No client physics tick (`Player.cs:53`, `NetClient.cs:274`).

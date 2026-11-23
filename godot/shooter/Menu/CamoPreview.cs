@@ -1,10 +1,11 @@
 using Godot;
+using Drycastle.Shooter.Characters;
 using Drycastle.ShooterCore.Camo;
 using Drycastle.ShooterCore.Items;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>
 /// The customiser's live preview (ticket #141): the character alone in its own SubViewport, lit by a key and a fill light over the

@@ -1,7 +1,8 @@
 using Godot;
+using Drycastle.Shooter.Net.Client;
 using Drycastle.ShooterCore.Match;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>English strings of the Squads screen (#379).</summary>
 public static class SquadsStrings

@@ -17,7 +17,7 @@
 - Protocol bumped (new slot on the wire).
 
 ## Done: notes
-Code: pure `godot/ShooterCore/Thieves/ThievesCredit.cs` (`ThievesCredit`, `CreditedGangHits`, `ThievesReward`), server `godot/shooter/Net/NetServer.Thieves.Reward.cs`, data `thieves.json` section `reward` (last), `EquipSlot.Neck`, `items.json` `gold_chain`. Tests `ThievesRewardTests.cs` (+ the item, bag, wire and Equipment screen tests moved to two slots). Protocol 44 (the merge renumbers).
+Code: pure `godot/ShooterCore/Thieves/ThievesCredit.cs` (`ThievesCredit`, `CreditedGangHits`, `ThievesReward`), server `godot/shooter/Net/Server/NetServer.Thieves.Reward.cs`, data `thieves.json` section `reward` (last), `EquipSlot.Neck`, `items.json` `gold_chain`. Tests `ThievesRewardTests.cs` (+ the item, bag, wire and Equipment screen tests moved to two slots). Protocol 44 (the merge renumbers).
 
 ### API for later tickets
 - `NetServer.Credit` (`ThievesCredit`): `NoteVanHit(player)` (03: call where the van takes a counted hit), `NoteLootReturned(player)` (04: when the hold-to-send-back completes), `NoteGangHit(player)` (wired), `Credited`, `Settle(won, eligible)`, `Clear()`.

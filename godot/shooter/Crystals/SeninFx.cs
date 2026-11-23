@@ -1,6 +1,7 @@
 using Godot;
+using Drycastle.Shooter.Demon;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Senin (crystals.md): the hay stone, what is left of a burnt bale. Crystals of packed hay: coarse golden straw strands with burnt patches (<c>shaders/crystal_fur.gdshader</c>), real stalks of straw sticking out of the

@@ -37,7 +37,7 @@ public class RozhlasFeedTests
     public void PythonBuilderAndCSharpBuilderAgree()
     {
         // the bake (scripts/sounds/make_rozhlas.py voice_chain) and the live feed must build the same text from the same file; skipped quietly where python3 is missing
-        var script = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../scripts"));
+        var script = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../scripts/sounds"));
         if (!Directory.Exists(script)) return;
         var psi = new ProcessStartInfo("python3") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         psi.ArgumentList.Add("-c");

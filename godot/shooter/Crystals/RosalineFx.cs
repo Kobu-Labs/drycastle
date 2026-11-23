@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Rosaline (crystals.md): the stone of the flower garden, overgrown like a villain's greenhouse. Pink rose-quartz crystals with a soft pink glow (<c>shaders/crystal_quartz.gdshader</c>), ivy vines winding up

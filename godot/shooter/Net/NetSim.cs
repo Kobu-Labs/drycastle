@@ -1,7 +1,7 @@
 using System.Globalization;
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net;
 
 /// <summary>
 /// Network impairment for tests (issue #93), applied in the application send path of both the client and the server

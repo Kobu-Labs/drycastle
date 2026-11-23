@@ -804,7 +804,7 @@ its walls, floor and roof, so a blast on a wall's inner face is inside and one o
 the spot where the climber stands (`x`, `y`), the way they face (`dx`, `dy`) and the floors it joins (`z0` below, `z1`
 above). The shooter's server uses the rooms for the shelter rule (`ShooterCore/Bunkers/Shelters.cs`: a blast hurts a player
 only when both are in the open or both are in the same room), and the ladders go to every player body (`Ladders.Climb`, the
-shared movement step). The client darkens the rooms and hangs a lamp in each (`shooter/BunkerLights.cs`). The placeable
+shared movement step). The client darkens the rooms and hangs a lamp in each (`shooter/Bunkers/BunkerLights.cs`). The placeable
 `prim:bunker` is the closed form (a placed object collides as one box) and has no room.
 
 **Water bodies (`water.json`, version 2).** Written when the terrain exists, listed in `manifest.json` under

@@ -5,7 +5,7 @@ Voice lines, van music, the speaker.
 ## Facts
 - Recordings: `~/downloads/New Recording.mov`, `New Recording 2.mov` … `15.mov` (15, a few seconds each).
 - Template: `scripts/sounds/make_rozhlas.py` (stdlib + ffmpeg, `make rozhlas`), chain as data in `godot/shooter/data/rozhlas_voice.json`.
-- Private audio loader to copy: `godot/shooter/ChurchChant.cs` (private folder first, a missing file logged once). `sounds.json` must not name private files.
+- Private audio loader to copy: `godot/shooter/Churches/ChurchChant.cs` (private folder first, a missing file logged once). `sounds.json` must not name private files.
 - Moving loops: `LoopVoice` (`Sfx.cs`) has 10 shared voices: do not use it here; make own `AudioStreamPlayer3D`s as `ChurchChant` / `DemonAudio`.
 - Long synced audio precedent: `RozhlasState` (variant + offset, sent to joiners).
 

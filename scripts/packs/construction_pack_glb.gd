@@ -1,5 +1,5 @@
 # Converts the FBX props of the Synty POLYGON Construction pack that scripts/packs/construction_pack_glb.py put in a scratch Godot project into the runtime GLBs the
-# mechanic garage (godot/shooter/MechanicGarage.cs) reads, and shrinks the pack's atlas to 1024 px. Geometry and UVs only: SyntyLib puts the atlas on the model.
+# mechanic garage (godot/shooter/Buildings/MechanicGarage.cs) reads, and shrinks the pack's atlas to 1024 px. Geometry and UVs only: SyntyLib puts the atlas on the model.
 #
 #   godot --headless --path <scratch project> --script construction_pack_glb.gd -- <assets-private dir>
 #

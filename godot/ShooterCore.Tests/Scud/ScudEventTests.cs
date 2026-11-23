@@ -375,7 +375,7 @@ public class ScudEventTests
         Assert.NotNull(dir);
         var rules = File.ReadAllText(Path.Combine(dir!, "pipeline", "config", "rules.yaml"));
         Assert.Contains($"\n  {EventBook.Scud}:\n    m2_per_point:", rules);
-        var zones = File.ReadAllText(Path.Combine(dir, "pipeline", "src", "drycastle_pipeline", "edits", "edits/zones.py"));
+        var zones = File.ReadAllText(Path.Combine(dir, "pipeline", "src", "drycastle_pipeline", "edits", "zones.py"));
         Assert.Contains($"SCUD = \"{EventBook.Scud}\"", zones);
     }
 }

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Bloodstone (crystals.md): opaque deep crimson crystals with darker veins and a wet shine (<c>shaders/crystal_veined.gdshader</c>). The glow and a soft red light beat like a heart (two thumps a beat,

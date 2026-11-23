@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>
 /// The corner indicator "Dev: all unlocked" (issue #149). Shown on the loadout screen and the pause menu while the server runs

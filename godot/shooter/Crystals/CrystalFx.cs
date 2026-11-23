@@ -1,6 +1,8 @@
 using Godot;
+using Drycastle.Shooter.Audio;
+using Drycastle.Shooter.Effects;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// A fantasy crystal (crystals.md): the pack's crystal rock (<c>SM_Prop_Crystal_Rock_A_01</c>, about 0.73 x 1.15 x 0.88 m) re-dressed with its own material, light, particles, props and sound.

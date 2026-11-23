@@ -25,7 +25,7 @@ You coordinate. You do not do the deep reading yourself: spawn the specialist ag
 Give each agent: the ground rules above, its scope, its questions, and the output format. Do not paste your whole prompt; paste the rules and its own section.
 
 ### A. Netcode and replication
-Scope: `godot/ShooterCore/Net/*`, `godot/shooter/Net/NetServer*.cs`, `NetClient*.cs`, `NetSim.cs`, ADR 0002, the loss test.
+Scope: `godot/ShooterCore/Net/*`, `godot/shooter/Net/Server/NetServer*.cs`, `NetClient*.cs`, `NetSim.cs`, ADR 0002, the loss test.
 Questions:
 - Is "unreliable-sequenced quantised deltas with 30-tick keyframes" still right? The audit's open defect: deltas against the last *sent* state, not an acked one (T1-2). Size the fix and check what else depends on it.
 - Bandwidth and CPU as a function of players, entities (vehicles, turrets, aircraft, animals, corpses, glass), and events. At what n does it stop fitting: 16, 32, 64? Is the lack of interest management a real cost, and where is the break-even?
@@ -67,7 +67,7 @@ Questions:
 - Map version, memory and download size for players.
 
 ### F. Rendering and client frame
-Scope: `godot/shooter/*Fx.cs`, `Hud*.cs`, `Minimap.cs`, `DayNightCycle.cs`, `shaders/`, `WaterFx.cs`, `CharacterFx.cs`, project settings.
+Scope: `godot/shooter/**/*Fx.cs`, `HeadsUp/Hud*.cs`, `Maps/Minimap.cs`, `Scenery/DayNightCycle.cs`, `shaders/`, `Waters/WaterFx.cs`, `Characters/CharacterFx.cs`, project settings.
 Questions:
 - Draw calls, shadow passes, visibility ranges, MSAA, Forward+ vs. Mobile, for 998 mesh nodes and 16 characters. CPU-bound (draw submission, node churn) or GPU-bound, and for which hardware floor? State the floor you assume and why.
 - Effects: node churn per shot/blast/tracer (T2-15, T2-16, T2-17); which should be pooled, GPU particles, or MultiMesh. Distance gating.

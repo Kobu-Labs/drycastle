@@ -2,7 +2,7 @@ using Godot;
 using Drycastle.ShooterCore.Menu;
 using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>
 /// Play: direct connect (address, port, name) with validation, a persisted recent servers list and three states:
