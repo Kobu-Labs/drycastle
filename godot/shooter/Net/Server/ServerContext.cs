@@ -57,6 +57,15 @@ internal sealed class ServerContext
     /// <summary>The name of a joined player, or "?".</summary>
     public string NameOf(ushort id) => Players.TryGetValue(id, out var c) ? c.Name : "?";
 
+    /// <summary>A joined human by name (spaces ignored) or "#id", or null.</summary>
+    public ServerClient? FindHuman(string who)
+    {
+        var humans = Players.Values.Where(o => !o.IsBot && o.Joined).ToList();
+        return who.StartsWith('#') && ushort.TryParse(who.AsSpan(1), out var id)
+            ? humans.FirstOrDefault(o => o.Id == id)
+            : humans.FirstOrDefault(o => o.Name.Replace(" ", "").Equals(who, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>Whether the player is alive in the match (not dead, not waiting to respawn).</summary>
     public bool IsAlive(ushort id) => Match.Get(id)?.Life == PlayerLife.Alive;
 }

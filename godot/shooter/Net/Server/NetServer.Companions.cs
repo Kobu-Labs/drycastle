@@ -138,7 +138,7 @@ public partial class NetServer
     void ChatCompanion(ServerClient c, IReadOnlyList<string> args)
     {
         if (_companions == null) return;
-        var target = args.Count > 1 ? FindHuman(args[1]) : c;
+        var target = args.Count > 1 ? _ctx.FindHuman(args[1]) : c;
         if (target == null) { ChatTo(c, ChatLineKind.Error, $"No player '{args[1]}'. Use the name without spaces, or #id."); return; }
         var off = args[0] == ChatCommands.CompanionOff;
         if (!_companions.Assign(target.Id, off ? null : args[0])) { ChatTo(c, ChatLineKind.Error, $"Unknown companion '{args[0]}'."); return; }

@@ -12,11 +12,8 @@ using Drycastle.ShooterCore.Wildlife;
 namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
-/// The chat and the admin's commands. A line from a player goes to everyone; a line starting with "/" is a command, which only
-/// an admin may use (<see cref="AdminTokens"/>, from --admin-token: the player token of the admin is their identity, ADR 0003).
-/// The grammar is <see cref="ChatCommands"/>, shared with the client's autocomplete; this file runs what parsed. Everything an
-/// admin changes takes effect on the next tick: <see cref="Bots"/> is read each tick by <see cref="BotsTick"/>, the clock goes
-/// to every client at once.
+/// The admin's commands that are not yet a feature's own (<see cref="ChatServer"/> parses a line, checks who may and calls the handler registered here), and the admin's team and squad changes.
+/// Everything an admin changes takes effect on the next tick: <see cref="Bots"/> is read each tick by <see cref="BotsTick"/>, the clock goes to every client at once.
 /// </summary>
 public partial class NetServer
 {
@@ -26,77 +23,31 @@ public partial class NetServer
     /// <summary>--admin-all (dev servers only): every human is an admin, so nobody has to look up a token. Release servers never pass it.</summary>
     public bool AdminAll;
 
-    bool IsAdmin(ServerClient c) => !c.IsBot && (AdminAll || (c.Token.Length > 0 && AdminTokens.Contains(c.Token)));
-
-    ChatContext ChatCtx(ServerClient c) => new(IsAdmin(c), Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList(), CompanionData.Companions.Select(i => i.Id).ToList());
-
-    /// <summary>Join: tells the client if it is an admin and which vehicles it may name.</summary>
-    void SendChatStatus(ServerClient c)
+    /// <summary>Hands each admin command to the chat; the commands of a feature that has its own class register themselves there instead.</summary>
+    void RegisterChatCommands()
     {
-        var ctx = ChatCtx(c);
-        Send(c, new EventMsg((byte)EventKind.ChatStatus, ChatEvents.EncodeStatus(new ChatStatus(ctx.IsAdmin, ctx.Vehicles))));
-        if (ctx.IsAdmin) GD.Print($"server: {c.Name} #{c.Id} is an admin");
+        _chat.Register("bots", ChatBots);
+        _chat.Register("spawn", (c, args) => ChatSpawn(c, args[0]));
+        _chat.Register("unicorn", (c, _) => ChatUnicorn(c));
+        _chat.Register("phoenix", (c, _) => ChatPhoenix(c));
+        _chat.Register("sandbox", ChatSandbox);
+        _chat.Register("give", ChatGive);
+        _chat.Register("companion", ChatCompanion);
+        _chat.Register("time", ChatTimeCommand);
+        _chat.Register("explode", ChatExplode);
+        _chat.Register("restart", ChatRestart);
+        _chat.Register("event", ChatEvent);
+        _chat.Register("citizens", ChatCitizens);
+        _chat.Register("church", ChatChurch);
+        _chat.Register("rozhlas", _rozhlas.ChatCommand);
+        _chat.Register("status", ChatStatus);
+        _chat.Register("scud", ChatScud);
+        _chat.Register("squad", ChatSquad);
     }
 
     void ChatTo(ServerClient c, ChatLineKind kind, string text) => _ctx.ChatTo(c, kind, text);
 
     void ChatToAll(ChatLineKind kind, string sender, string text) => _ctx.ChatToAll(kind, sender, text);
-
-    void OnChatSend(ServerClient c, byte[] payload)
-    {
-        if (!c.Joined || ChatEvents.DecodeSend(payload) is not { } text) return;
-        if (!c.Chat.TryTake(_elapsed)) { ChatTo(c, ChatLineKind.Error, "You are sending messages too fast."); return; }
-        if (text[0] == '/') { RunChatCommand(c, text); return; }
-        GD.Print($"server: chat {c.Name}: {text}");
-        ChatToAll(ChatLineKind.Player, c.Name, text);
-    }
-
-    void RunChatCommand(ServerClient c, string text)
-    {
-        var parsed = ChatCommands.Parse(text, ChatCtx(c));
-        if (!parsed.Ok)
-        {
-            if (!IsAdmin(c) && parsed.Command is { AdminOnly: true }) GD.Print($"server: {c.Name} #{c.Id} tried {text} without being an admin");
-            ChatTo(c, ChatLineKind.Error, parsed.Error ?? "That did not work.");
-            return;
-        }
-        if (parsed.Command!.ClientSide) { ChatTo(c, ChatLineKind.Info, $"/{parsed.Command.Name} runs on your own client."); return; } // a modified client sent it: nothing to do here
-        var args = parsed.Args;
-        switch (parsed.Command!.Name)
-        {
-            case "help": ChatHelp(c, args); break;
-            case "bots": ChatBots(c, args); break;
-            case "spawn": ChatSpawn(c, args[0]); break;
-            case "unicorn": ChatUnicorn(c); break;
-            case "phoenix": ChatPhoenix(c); break;
-            case "sandbox": ChatSandbox(c, args); break;
-            case "give": ChatGive(c, args); break;
-            case "companion": ChatCompanion(c, args); break;
-            case "time": ChatTimeCommand(c, args); break;
-            case "explode": ChatExplode(c, args); break;
-            case "restart": ChatRestart(c, args); break;
-            case "event": ChatEvent(c, args); break;
-            case "citizens": ChatCitizens(c, args); break;
-            case "church": ChatChurch(c, args); break;
-            case "rozhlas": _rozhlas.ChatCommand(c, args); break;
-            case "status": ChatStatus(c, args); break;
-            case "scud": ChatScud(c, args); break;
-            case "squad": ChatSquad(c, args); break;
-        }
-        GD.Print($"server: {c.Name} #{c.Id} ran {text}");
-    }
-
-    void ChatHelp(ServerClient c, IReadOnlyList<string> args)
-    {
-        var ctx = ChatCtx(c);
-        if (args.Count == 1 && ChatCommands.Find(args[0]) is { } one)
-        {
-            ChatTo(c, ChatLineKind.Info, $"{one.Usage}: {one.Summary}.");
-            return;
-        }
-        ChatTo(c, ChatLineKind.Info, ctx.IsAdmin ? "Commands (Tab completes, Up and Down bring back what you sent):" : "Most commands are for admins. You can use:");
-        foreach (var cmd in ChatCommands.Visible(ctx)) ChatTo(c, ChatLineKind.Info, $"{cmd.Usage}: {cmd.Summary}.");
-    }
 
     void ChatBots(ServerClient c, IReadOnlyList<string> args)
     {
@@ -170,21 +121,12 @@ public partial class NetServer
         ChatTo(c, ChatLineKind.Info, speed > 0 ? $"A {size} m blast {distance} m in front of you, its wave at {speed} m/s." : $"A {size} m blast {distance} m in front of you.");
     }
 
-    /// <summary>A human player by name (spaces ignored) or "#id", or null.</summary>
-    ServerClient? FindHuman(string who)
-    {
-        var humans = _byId.Values.Where(o => !o.IsBot && o.Joined).ToList();
-        return who.StartsWith('#') && ushort.TryParse(who.AsSpan(1), out var id)
-            ? humans.FirstOrDefault(o => o.Id == id)
-            : humans.FirstOrDefault(o => o.Name.Replace(" ", "").Equals(who, StringComparison.OrdinalIgnoreCase));
-    }
-
     /// <summary>"/give item [player]": a new item, with no pickups counted, goes on the player (the admin without a name) if its slot is empty, else into their bag. Both full refuses it. A living player only.</summary>
     void ChatGive(ServerClient c, IReadOnlyList<string> args)
     {
         var index = Items.IndexOf(args[0]);
         if (index < 0) { ChatTo(c, ChatLineKind.Error, $"Unknown item '{args[0]}'."); return; }
-        var target = args.Count > 1 ? FindHuman(args[1]) : c;
+        var target = args.Count > 1 ? _ctx.FindHuman(args[1]) : c;
         if (target == null) { ChatTo(c, ChatLineKind.Error, $"No player '{args[1]}'. Use the name without spaces, or #id."); return; }
         if (_match.Get(target.Id)?.Life != PlayerLife.Alive) { ChatTo(c, ChatLineKind.Error, $"{target.Name} is not alive."); return; }
         var def = Items.Items[index];
@@ -205,7 +147,7 @@ public partial class NetServer
     {
         if (!AllowSandbox) { ChatTo(c, ChatLineKind.Error, "Sandbox mode is not allowed on this server (--allow-sandbox is off)."); return; }
         var who = args[0];
-        var target = FindHuman(who);
+        var target = _ctx.FindHuman(who);
         if (target == null) { ChatTo(c, ChatLineKind.Error, $"No player '{who}'. Use the name without spaces, or #id."); return; }
         var on = args.Count > 1 ? args[1] == "on" : !target.Sandbox;
         if (target.Sandbox == on) { ChatTo(c, ChatLineKind.Info, $"{target.Name} is already {(on ? "in" : "out of")} sandbox mode."); return; }
@@ -217,7 +159,7 @@ public partial class NetServer
     void OnTeamAssign(ServerClient c, byte[] payload)
     {
         if (TeamAssignCodec.Decode(payload) is not { } a) return;
-        if (!IsAdmin(c)) { GD.Print($"server: {c.Name} #{c.Id} sent a team change without being an admin"); return; }
+        if (!_chat.IsAdmin(c)) { GD.Print($"server: {c.Name} #{c.Id} sent a team change without being an admin"); return; }
         // a sandbox player dropped on a team: sandbox mode ends first (it has no team), then the move
         if (a is { Action: TeamAction.Move, Team: Teams.A or Teams.B } && _match.IsTeamMode && _byId.TryGetValue(a.Id, out var target) && target.Sandbox) SetSandbox(target, false);
         if (TeamAssignRules.Apply(_match, a, c.Name) is not { } line) return;

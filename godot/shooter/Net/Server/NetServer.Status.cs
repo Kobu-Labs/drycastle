@@ -124,7 +124,7 @@ public partial class NetServer
     /// <summary>"/status bless|curse|clear [player]": for the named human, or the admin.</summary>
     void ChatStatus(ServerClient c, IReadOnlyList<string> args)
     {
-        var target = args.Count > 1 ? FindHuman(args[1]) : c;
+        var target = args.Count > 1 ? _ctx.FindHuman(args[1]) : c;
         if (target == null) { ChatTo(c, ChatLineKind.Error, $"No player '{args[1]}'. Use the name without spaces, or #id."); return; }
         if (args[0] == "clear")
         {

@@ -2,10 +2,12 @@ using Godot;
 using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Net.Server.BusGarage;
 using Drycastle.Shooter.Net.Server.CarPool;
+using Drycastle.Shooter.Net.Server.ChatRoom;
 using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
 using Drycastle.Shooter.Net.Server.Scenery;
 using Drycastle.Shooter.Net.Server.VillageRadio;
+using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Corpses;
@@ -75,6 +77,7 @@ public partial class NetServer : Node
     RozhlasServer _rozhlas = null!;
     GarageServer _garage = null!;
     IntelServer _intel = null!;
+    ChatServer _chat = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -113,6 +116,8 @@ public partial class NetServer : Node
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
         _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, CitizenHits, TableSeating());
         _intel = new IntelServer(_ctx);
+        _chat = new ChatServer(_ctx, admin => new ChatContext(admin, Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList(), CompanionData.Companions.Select(i => i.Id).ToList()), AdminTokens, AdminAll);
+        RegisterChatCommands();
         _garage = new GarageServer(_ctx, ArenaMode, MapDir, _fleet.Cars, () => Vehicles);
         _minerals = new MineralsServer(_ctx, Progression, () => _wildlife?.Drops ?? Array.Empty<MineralDrop>());
         StatusInit();
@@ -372,7 +377,7 @@ public partial class NetServer : Node
         else if (m is EventMsg { Kind: (byte)EventKind.TeamAssign } ta && c.Joined) OnTeamAssign(c, ta.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SquadAssign } sq && c.Joined) OnSquadAssign(c, sq.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) OnHuntRequest(c, hq);
-        else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) OnChatSend(c, cs.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) _chat.OnSend(c, cs.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.ClientReport } cr) { if (c.Joined) OnClientReport(c, cr.Payload); }
         else if (c.Joined) OnProfileMessage(c, m);
     }
@@ -438,7 +443,7 @@ public partial class NetServer : Node
         SendProfile(c);
         SendCompanions(c); // the Companions they can pick and the one that is out (the Equipment screen's picker)
         SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
-        SendChatStatus(c); // admin or not, and the vehicles /spawn takes
+        _chat.SendStatus(c); // admin or not, and the vehicles /spawn takes
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick,
             (ushort)(Clock.StartMinute), (uint)Math.Round(Clock.DayLengthSeconds * 1000), Clock.Frozen));
         foreach (var o in _byId.Values)
