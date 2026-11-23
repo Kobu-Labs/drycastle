@@ -748,7 +748,7 @@ public class HarvesterTests
     public void The_harvester_is_a_slow_open_cab_machine_with_its_own_run_over()
     {
         var def = Harvester;
-        Assert.False(def.RunOver); // NetServer.Harvester.cs runs it over at field speed
+        Assert.False(def.RunOver); // Harvest/ReelServer.cs runs it over at field speed
         Assert.True(def.Seats[0].Exposed && def.Seats[0].Role == "driver"); // a shot reaches the driver
         Assert.True(def.TurnRadius <= Cfg.TurnRadiusM);
         Assert.StartsWith("pack:synty-vehicles/harvester", def.Model); // standardized (#325)

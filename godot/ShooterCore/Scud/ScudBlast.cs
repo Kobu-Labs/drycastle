@@ -10,7 +10,7 @@ public readonly record struct ScudPlayerHit(bool Lethal, float Damage)
 /// The numbers of a Scud blast (scud.json "blast"), pure so the tests run the server's own arithmetic. Distances are from the blast to the body (players) or the hull (vehicles).
 /// Inside the lethal radius a player dies, in a vehicle or not and spawn protected or not; beyond it the damage starts at <see cref="ScudBlastData.OuterDamage"/> and falls off
 /// linearly to <see cref="ScudBlastData.EdgeDamage"/> at the damage radius. A vehicle in the destroy radius is destroyed; beyond it takes hit points, falling off the same way.
-/// What stands between the blast and the target (a shelter's walls, the world, a hull) is the server's to ask (<c>NetServer.ScudBlast</c>); this is only the distance.
+/// What stands between the blast and the target (a shelter's walls, the world, a hull) is the server's to ask (<c>ScudBlastServer.Blast</c>); this is only the distance.
 /// </summary>
 public static class ScudBlastRules
 {

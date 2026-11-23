@@ -1,5 +1,4 @@
 using Godot;
-using Drycastle.Shooter.Flight;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.Profiles;
 using Drycastle.Shooter.Vehicles;

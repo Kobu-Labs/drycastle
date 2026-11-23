@@ -99,7 +99,7 @@ public readonly record struct ScudTick(bool Launch, Vector3 Target, ushort Place
 
 /// <summary>
 /// The launcher of one Scud truck: the machine of <see cref="ScudLauncherState"/> with its clock, and what rides with it (who is the operator, the locked point, who has confirmed).
-/// Pure, so the tests run the server's own rules. The host (<c>NetServer.Scud.cs</c>) feeds it commands and a tick with the crew and the truck's place, and acts on what it answers.
+/// Pure, so the tests run the server's own rules. The host (<c>ScudServer</c>) feeds it commands and a tick with the crew and the truck's place, and acts on what it answers.
 /// <para>
 /// A proposal needs every occupied seat's confirmation, the operator's included (the lock is the proposal, not the order); a solo player confirms from the operator seat alone.
 /// It is dropped when the crew changes (anyone leaves, joins or changes seat), a confirmer withdraws, the truck moves, the operator locks again or closes the screen, or it times out.

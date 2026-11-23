@@ -109,7 +109,7 @@ internal sealed class ServerClient
     public Edge UseKey, StreakKey;
     /// <summary>The grenade throw key (G): held to aim, released to throw (<see cref="GrenadeThrower"/>).</summary>
     public readonly GrenadeThrower Throw = new();
-    /// <summary>The interact key beside a Scud truck with an empty rack and a loaded rocket cart: a tap gets in or out, a hold loads the rocket (NetServer.Scud.cs).</summary>
+    /// <summary>The interact key beside a Scud truck with an empty rack and a loaded rocket cart: a tap gets in or out, a hold loads the rocket (<c>Scuds/ScudLoading.cs</c>).</summary>
     public readonly ScudReloadKey ReloadKey = new();
     /// <summary>The interact key's hold at the rozhlas dictation table (RozhlasSetServer.cs).</summary>
     public InteractHold SetHold;
