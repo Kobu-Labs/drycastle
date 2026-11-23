@@ -473,7 +473,15 @@ internal sealed class ScudClient
             if (_scudLockKey.Update(GridKey(lk.X, lk.Z))) o.LockGrid = GridRef(lk.X, lk.Z);
         }
 
-        // the words: built when what they say changes
+        FillStatus(o, state, operating);
+        FillHint(o, state, operating, iConfirmed, s.IsOperator);
+        FillCrew(o, msg, s.Def, s.Seat, state);
+        _scudOverlay.SetOn(true);
+    }
+
+    /// <summary>The words of the status line, built when what they say changes.</summary>
+    void FillStatus(ScudScreenState o, ScudLauncherState state, bool operating)
+    {
         if (_scudStatusKey.Update((int)state * 10000 + o.Countdown + 1 + (o.Pending ? 5000 : 0) + (operating ? 1000 : 0)))
         {
             o.Role = Strings.T(operating ? "scud.role.operator" : "scud.role.watch");
@@ -486,8 +494,13 @@ internal sealed class ScudClient
                 _ => "",
             };
         }
+    }
+
+    /// <summary>The hint line: the keys as they are bound, built when the situation changes.</summary>
+    void FillHint(ScudScreenState o, ScudLauncherState state, bool operating, bool iConfirmed, bool isOperator)
+    {
         var confirmKey = InputBindings.Name("scud_confirm"); var abortKey = InputBindings.Name("scud_abort"); var screenKey = InputBindings.Name("scud_screen");
-        if (_scudHintKey.Update((int)state * 8 + (operating ? 4 : 0) + (iConfirmed ? 2 : 0) + (s.IsOperator ? 1 : 0)))
+        if (_scudHintKey.Update((int)state * 8 + (operating ? 4 : 0) + (iConfirmed ? 2 : 0) + (isOperator ? 1 : 0)))
         {
             var fire = InputBindings.Name("fire");
             var pan = InputBindings.Name("move_forward") + InputBindings.Name("move_left") + InputBindings.Name("move_back") + InputBindings.Name("move_right");
@@ -502,23 +515,26 @@ internal sealed class ScudClient
                 _ => Strings.F("scud.hint.watch.under_way", screenKey),
             };
         }
+    }
+
+    /// <summary>Who must confirm and who has.</summary>
+    void FillCrew(ScudScreenState o, ScudStateMsg msg, VehicleDef def, int seat, ScudLauncherState state)
+    {
         // who must confirm and who has
-        var seats = _ctx.Cars.Seats?.Occupants ?? Array.Empty<ushort>();
-        var crewKey = (msg.Need << 8) | msg.Confirmed | ((int)state << 16) | (s.Seat << 24);
+        var crewKey = (msg.Need << 8) | msg.Confirmed | ((int)state << 16) | (seat << 24);
         if (_scudCrewKey.Update(crewKey))
         {
             o.Crew.Clear();
-            for (var i = 0; i < s.Def.Seats.Count; i++)
+            for (var i = 0; i < def.Seats.Count; i++)
             {
                 if ((msg.Need & (1 << i)) == 0) continue;
-                var label = Strings.T(i == 0 ? "scud.seat.driver" : i == s.Def.Launcher!.OperatorSeat ? "scud.seat.operator" : "scud.seat.other");
-                if (i != 0 && i != s.Def.Launcher!.OperatorSeat) label = Strings.F("scud.seat.other", i + 1);
-                if (i == s.Seat) label = Strings.F("scud.crew.you", label);
+                var label = Strings.T(i == 0 ? "scud.seat.driver" : i == def.Launcher!.OperatorSeat ? "scud.seat.operator" : "scud.seat.other");
+                if (i != 0 && i != def.Launcher!.OperatorSeat) label = Strings.F("scud.seat.other", i + 1);
+                if (i == seat) label = Strings.F("scud.crew.you", label);
                 var done = (msg.Confirmed & (1 << i)) != 0;
                 o.Crew.Add(new ScudScreenState.CrewRow($"{label}   {Strings.T(done ? "scud.crew.confirmed" : "scud.crew.waiting")}", done));
             }
         }
-        _scudOverlay.SetOn(true);
     }
 
     /// <summary>A key that changes when a ground point moves to another metre (the grid reference and range are rebuilt on it).</summary>

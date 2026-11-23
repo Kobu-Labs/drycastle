@@ -72,7 +72,15 @@ public partial class NetClient
             if (Input.IsActionPressed($"slot_{k + 1}")) Ctx.Hotbar.Want = Ctx.Hotbar.Slots[k] + 1;
     }
 
+    /// <summary>One reliable event, to the weapon features: the fire and its answers first, then the blasts and the other effects (a kind is only one of them).</summary>
     void OnWeaponEvent(EventKind kind, byte[] payload)
+    {
+        OnFireEvent(kind, payload);
+        OnBlastEvent(kind, payload);
+    }
+
+    /// <summary>The ammo, the shots, the launches and the hits: the sounds, the HUD and the fire's own effects.</summary>
+    void OnFireEvent(EventKind kind, byte[] payload)
     {
         switch (kind)
         {
@@ -93,6 +101,23 @@ public partial class NetClient
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
                 OnLaunch(l);
                 break;
+            case EventKind.HuntShot when HuntShot.Decode(payload) is { } hs:
+                _hunts.OnShot(hs);
+                break;
+            case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
+                Ctx.Logs?.Hits.Add((Ctx.Now, h));
+                Ctx.Sound.Hit(h);
+                HudHit(h);
+                break;
+        }
+    }
+
+
+    /// <summary>The blasts, the gunship's coalesced effects and the vehicles' and the world's reaction.</summary>
+    void OnBlastEvent(EventKind kind, byte[] payload)
+    {
+        switch (kind)
+        {
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
                 OnExplosion(ex);
                 break;
@@ -132,16 +157,9 @@ public partial class NetClient
             case EventKind.GlassSync when GlassCodec.DecodeSync(payload) is { } gsync:
                 _glass.OnSync(gsync);
                 break;
-            case EventKind.HuntShot when HuntShot.Decode(payload) is { } hs:
-                _hunts.OnShot(hs);
-                break;
-            case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
-                Ctx.Logs?.Hits.Add((Ctx.Now, h));
-                Ctx.Sound.Hit(h);
-                HudHit(h);
-                break;
         }
     }
+
 
     /// <summary>The street lamps and the sign plates the server switches (their full state at join, then each change).</summary>
     void OnStreetEvent(EventKind kind, byte[] payload)
