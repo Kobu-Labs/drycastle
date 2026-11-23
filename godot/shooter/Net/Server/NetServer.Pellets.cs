@@ -57,7 +57,7 @@ public partial class NetServer
         {
             var pelletHit = GunnerCover.Raycast(N(eye), dirs[i], range, walls[i], targets, c.Id, exposed[i], pastHull[i]);
             DamageCrossed(crossedBy[i], pelletHit?.Distance ?? float.PositiveInfinity, d => HitMath.PelletDamage(w, d, false));
-            ShotScenery(N(eye), dirs[i], pelletHit?.Distance ?? Math.Min(walls[i], range)); // a pole lamp the pellet passed breaks (ADR 0037)
+            _scenery.Shot(N(eye), dirs[i], pelletHit?.Distance ?? Math.Min(walls[i], range)); // a pole lamp the pellet passed breaks (ADR 0037)
             if (walls[i] > range || pelletHit != null) continue;
             ShotGlass(cars[i], eye, dirsG[i], walls[i], HitMath.PelletDamage(w, walls[i], false));
         }
