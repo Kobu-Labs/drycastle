@@ -83,7 +83,7 @@ public partial class EditorMode
         };
         _gmCheck.Toggled += on => SetGroundMap(on);
         page.AddChild(_gmCheck);
-        _gmNote = Note("");
+        _gmNote = Ui.Note("");
         page.AddChild(_gmNote);
     }
 

@@ -789,7 +789,7 @@ public partial class EditorMode
     void BuildSketchPage(VBoxContainer page)
     {
         page.AddChild(new Label { Text = "Sketch", ThemeTypeVariation = "Header" });
-        page.AddChild(Note("Temporary points and lines on the ground that a prompt can name: \"plant trees inside L1\", \"a lamp at A\", \"everything in sketch ROAD\". They are not part of the map and are never saved to it; Claude can draw into them too."));
+        page.AddChild(Ui.Note("Temporary points and lines on the ground that a prompt can name: \"plant trees inside L1\", \"a lamp at A\", \"everything in sketch ROAD\". They are not part of the map and are never saved to it; Claude can draw into them too."));
 
         var pickRow = new HBoxContainer();
         pickRow.AddChild(new Label { Text = "Sketch" });
@@ -816,11 +816,11 @@ public partial class EditorMode
         var nameCancel = FocusBtn("Cancel", CancelSketchNaming);
         _skNameRow.AddChild(nameOk); _skNameRow.AddChild(nameCancel);
         page.AddChild(_skNameRow);
-        _skNameNote = Note("", "Dim");
+        _skNameNote = Ui.Note("", "Dim");
         _skNameNote.Visible = false;
         page.AddChild(_skNameNote);
         page.AddChild(new HSeparator());
-        _skNoOrigin = Note("This map has no origin_epsg5514, so nothing can be marked. Export it again (map 0.4.0+).", "Danger");
+        _skNoOrigin = Ui.Note("This map has no origin_epsg5514, so nothing can be marked. Export it again (map 0.4.0+).", "Danger");
         page.AddChild(_skNoOrigin);
 
         var modes = new HBoxContainer();
@@ -836,7 +836,7 @@ public partial class EditorMode
         page.AddChild(modes);
 
         _skStateLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, ThemeTypeVariation = "Header" };
-        _skNote = Note("");
+        _skNote = Ui.Note("");
         page.AddChild(_skStateLabel);
         page.AddChild(_skNote);
 
@@ -851,14 +851,14 @@ public partial class EditorMode
         page.AddChild(new HSeparator());
         _skListHead = new Label { Text = "Marks", ThemeTypeVariation = "Header" };
         page.AddChild(_skListHead);
-        _skEmpty = Note("Nothing marked yet. Click the ground, or press C to mark the spot under the cursor.");
+        _skEmpty = Ui.Note("Nothing marked yet. Click the ground, or press C to mark the spot under the cursor.");
         page.AddChild(_skEmpty);
         _skList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         page.AddChild(_skList);
         _skClear = FocusBtn("Clear the sketch", () => RequestClearSketch(), "DangerButton");
         _skClear.TooltipText = "Remove the marks of the active sketch (asks first; Ctrl+Z brings them back)";
         page.AddChild(_skClear);
-        page.AddChild(Note("Marks stay visible in every tool. Esc steps back: cancel the line, deselect, leave the tool."));
+        page.AddChild(Ui.Note("Marks stay visible in every tool. Esc steps back: cancel the line, deselect, leave the tool."));
     }
 
     void StartSketchNaming(SketchNaming kind)

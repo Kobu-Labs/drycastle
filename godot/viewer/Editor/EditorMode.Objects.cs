@@ -524,9 +524,9 @@ public partial class EditorMode
         };
         BuildGizmo();
 
-        _undoInfo = Note();
+        _undoInfo = Ui.Note();
         body.AddChild(_undoInfo);
-        _objCount = Note();
+        _objCount = Ui.Note();
         body.AddChild(_objCount);
 
         // selected object
@@ -534,20 +534,20 @@ public partial class EditorMode
         var head = new Label { Text = "Selected object" };
         head.ThemeTypeVariation = "Header";
         _objBox.AddChild(head);
-        _objAsset = Note("");
+        _objAsset = Ui.Note("");
         _objBox.AddChild(_objAsset);
-        _objX = Spin(-3e6, 3e6, 0.001, " m");
-        _objY = Spin(-3e6, 3e6, 0.001, " m");
+        _objX = Ui.Spin(-3e6, 3e6, 0.001, " m");
+        _objY = Ui.Spin(-3e6, 3e6, 0.001, " m");
         _objX.ValueChanged += _ => { if (!_syncing) SetObjectPosition(_objX.Value, _objY.Value); };
         _objY.ValueChanged += _ => { if (!_syncing) SetObjectPosition(_objX.Value, _objY.Value); };
-        _objBox.AddChild(Row("x", _objX, 60));
-        _objBox.AddChild(Row("y", _objY, 60));
-        _objRot = Spin(-100000, 100000, 0.1, " deg");
+        _objBox.AddChild(Ui.Row("x", _objX, 60));
+        _objBox.AddChild(Ui.Row("y", _objY, 60));
+        _objRot = Ui.Spin(-100000, 100000, 0.1, " deg");
         _objRot.ValueChanged += v => { if (!_syncing) SetObjectRotation(v); };
-        _objBox.AddChild(Row("rotation", _objRot, 60));
-        _objScale = Spin(0.01, 1000, 0.01);
+        _objBox.AddChild(Ui.Row("rotation", _objRot, 60));
+        _objScale = Ui.Spin(0.01, 1000, 0.01);
         _objScale.ValueChanged += v => { if (!_syncing) SetObjectScale(v); };
-        _objBox.AddChild(Row("scale", _objScale, 60));
+        _objBox.AddChild(Ui.Row("scale", _objScale, 60));
         _objColour = new ColorPickerButton { CustomMinimumSize = new Vector2(80, 28), FocusMode = Control.FocusModeEnum.None, EditAlpha = false };
         _objColourReset = ResetBtn(() => SetObjectColour(null));
         // one undo step per picked colour: commit when the picker closes
@@ -556,20 +556,20 @@ public partial class EditorMode
             var hex = "#" + _objColour.Color.ToHtml(false);
             if (!_syncing && !string.Equals(SelectedObject?.Colour, hex, StringComparison.OrdinalIgnoreCase)) SetObjectColour(hex);
         };
-        var cr = Row("colour", _objColour, 60); cr.AddChild(_objColourReset);
+        var cr = Ui.Row("colour", _objColour, 60); cr.AddChild(_objColourReset);
         _objBox.AddChild(cr);
         var br = new HBoxContainer();
-        var dup = Btn("Duplicate (Ctrl+D)", () => DuplicateSelected());
-        var del = Btn("Delete (Del)", () => DeleteSelected());
+        var dup = Ui.Btn("Duplicate (Ctrl+D)", () => DuplicateSelected());
+        var del = Ui.Btn("Delete (Del)", () => DeleteSelected());
         foreach (var b in new[] { dup, del }) { b.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; br.AddChild(b); }
         _objBox.AddChild(br);
-        _objBox.AddChild(Note("drag the object to move it (0.5 m grid), drag the ring to rotate (15 degrees); Ctrl = free; arrows nudge 0.5 m"));
+        _objBox.AddChild(Ui.Note("drag the object to move it (0.5 m grid), drag the ring to rotate (15 degrees); Ctrl = free; arrows nudge 0.5 m"));
         body.AddChild(_objBox);
 
         // palette: category tabs (a render of one item each), then a grid of item renders
         var ph = new Label { Text = "Place an object", ThemeTypeVariation = "Header" };
         body.AddChild(ph);
-        _objStatus = Note("");
+        _objStatus = Ui.Note("");
         body.AddChild(_objStatus);
         _filterEdit = new LineEdit { PlaceholderText = "search all objects", ClearButtonEnabled = true };
         _filterEdit.TextChanged += t => SetPaletteFilter(t);

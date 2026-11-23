@@ -124,7 +124,7 @@ public partial class EditorMode
     void BuildPatchSection(VBoxContainer page)
     {
         page.AddChild(new Label { Text = "Ground patches", ThemeTypeVariation = "Header" });
-        page.AddChild(Note("A patch is a hand-drawn polygon of one ground type. Select a type above, press N (or the button), click corners on the ground and press Enter. Click a patch to select it, drag its corners, change its type or delete it."));
+        page.AddChild(Ui.Note("A patch is a hand-drawn polygon of one ground type. Select a type above, press N (or the button), click corners on the ground and press Enter. Click a patch to select it, drag its corners, change its type or delete it."));
         _pType = new OptionButton { FocusMode = Control.FocusModeEnum.All, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _pType.ItemSelected += i =>
         {
@@ -143,11 +143,11 @@ public partial class EditorMode
         form.AddChild(_pTypeRow);
         form.AddChild(_pCropRow);
         BuildShapeActions(page, ShapeKind.Patch, form);
-        _pNote = Note("");
+        _pNote = Ui.Note("");
         page.AddChild(_pNote);
         BuildShapeDelete(page, ShapeKind.Patch);
         BuildShapeList(page, ShapeKind.Patch, "All patches", "No patches yet. Select a ground type, press N, click corners on the ground, Enter creates the patch.");
-        page.AddChild(Note("Where patches overlap the higher ID wins. Esc steps back: cancel drawing, deselect the patch, deselect the type, leave the tool."));
+        page.AddChild(Ui.Note("Where patches overlap the higher ID wins. Esc steps back: cancel drawing, deselect the patch, deselect the type, leave the tool."));
     }
 
     void RefreshPatches()
@@ -165,7 +165,7 @@ public partial class EditorMode
         _pTypeRow.Visible = showForm;
         var crop = showForm ? EditorTheme.CropName(sel!.Type) : null;
         _pCropRow.Visible = crop != null;
-        if (crop != null) { _pCropSwatch.Texture = Swatch(EditorTheme.CropColour(sel!.Type)!.Value); _pCropName.Text = crop; }
+        if (crop != null) { _pCropSwatch.Texture = Ui.Swatch(EditorTheme.CropColour(sel!.Type)!.Value); _pCropName.Text = crop; }
         if (showForm)
         {
             FillPatchTypes(sel!.Type);
@@ -210,7 +210,7 @@ public partial class EditorMode
             _pChoices = choices;
             _pSync = true;
             _pType.Clear();
-            foreach (var t in choices) _pType.AddIconItem(Swatch(t.Colour), PatchTypeText(t.Name, t.Water));
+            foreach (var t in choices) _pType.AddIconItem(Ui.Swatch(t.Colour), PatchTypeText(t.Name, t.Water));
             _pSync = false;
         }
         var at = _pChoices.FindIndex(c => c.Name == current);

@@ -416,7 +416,7 @@ public partial class EditorMode
 
     void BuildPolesPage(VBoxContainer page)
     {
-        _plNoOrigin = Note("This map has no origin_epsg5514: export it again (map 0.4.0+).", "Danger");
+        _plNoOrigin = Ui.Note("This map has no origin_epsg5514: export it again (map 0.4.0+).", "Danger");
         page.AddChild(_plNoOrigin);
 
         var modes = new HBoxContainer();
@@ -426,7 +426,7 @@ public partial class EditorMode
         _plConnect.TooltipText = "By hand: click a pole, then the next pole or a house; each click strings a cable from the last pole";
         foreach (var b in new[] { _plPlan, _plConnect }) { b.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; modes.AddChild(b); }
         page.AddChild(modes);
-        _plCount = Note("");
+        _plCount = Ui.Note("");
         page.AddChild(_plCount);
 
         _plPlanBox = new VBoxContainer { Visible = false };
@@ -457,7 +457,7 @@ public partial class EditorMode
             _plGrid.AddChild(b);
             _poleButtons.Add((a, b));
         }
-        if (_poleButtons.Count == 0) page.AddChild(Note("No pole assets in the asset manifest. Run make poles-manifest.", "Danger"));
+        if (_poleButtons.Count == 0) page.AddChild(Ui.Note("No pole assets in the asset manifest. Run make poles-manifest.", "Danger"));
 
         _plSelBox = new VBoxContainer { Visible = false };
         _plSelBox.AddChild(new HSeparator());

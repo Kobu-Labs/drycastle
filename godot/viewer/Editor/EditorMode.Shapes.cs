@@ -770,19 +770,8 @@ public partial class EditorMode
         return b;
     }
 
-    static Label Note(string text, string variation = "Dim")
-        => new() { Text = text, ThemeTypeVariation = variation, AutowrapMode = TextServer.AutowrapMode.WordSmart };
 
-    static ImageTexture Swatch(string hex) => Swatch(Color.FromHtml(hex));
 
-    static ImageTexture Swatch(Color colour)
-    {
-        const int n = EditorTheme.Space * 3;
-        var img = Image.CreateEmpty(n, n, false, Image.Format.Rgba8);
-        img.Fill(colour);
-        for (var i = 0; i < n; i++) foreach (var (x, y) in new[] { (i, 0), (i, n - 1), (0, i), (n - 1, i) }) img.SetPixel(x, y, EditorTheme.Border);
-        return ImageTexture.CreateFromImage(img);
-    }
 
     /// <summary>The controls of one shape tool's page that the gesture drives (the same in both).</summary>
     sealed class ShapeUi
@@ -805,12 +794,12 @@ public partial class EditorMode
         var u = new ShapeUi();
         _su[k] = u;
         var noun = NounOf(k);
-        u.NoOrigin = Note("This map has no origin_epsg5514, so patches and zones cannot be placed. Export it again (map 0.4.0+).", "Danger");
+        u.NoOrigin = Ui.Note("This map has no origin_epsg5514, so patches and zones cannot be placed. Export it again (map 0.4.0+).", "Danger");
         page.AddChild(u.NoOrigin);
         u.New = FocusBtn("", StartShape, "PrimaryButton");
         page.AddChild(u.New);
         u.State = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, ThemeTypeVariation = "Header" };
-        u.Valid = Note("");
+        u.Valid = Ui.Note("");
         page.AddChild(u.State);
         page.AddChild(u.Valid);
         if (form != null) page.AddChild(form);
@@ -836,9 +825,9 @@ public partial class EditorMode
         var u = _su[k];
         u.ListHead = new Label { Text = head, ThemeTypeVariation = "Header" };
         page.AddChild(u.ListHead);
-        u.Empty = Note(emptyText);
+        u.Empty = Ui.Note(emptyText);
         page.AddChild(u.Empty);
-        u.ListNote = Note("");
+        u.ListNote = Ui.Note("");
         u.ListNote.Visible = false;
         page.AddChild(u.ListNote);
         u.List = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
@@ -936,7 +925,7 @@ public partial class EditorMode
                 var (text, colour, tip) = row(s);
                 var b = new Button
                 {
-                    Text = text, Icon = Swatch(colour), Alignment = HorizontalAlignment.Left, ClipText = true,
+                    Text = text, Icon = Ui.Swatch(colour), Alignment = HorizontalAlignment.Left, ClipText = true,
                     ToggleMode = true, FocusMode = Control.FocusModeEnum.All, TooltipText = tip,
                 };
                 b.SetPressedNoSignal(id == SelectedOf(k));

@@ -447,11 +447,11 @@ public partial class EditorMode
     void BuildGroundPage(VBoxContainer page)
     {
         page.AddChild(new Label { Text = "Ground", ThemeTypeVariation = "Header" });
-        page.AddChild(Note("Every point of the map has exactly one ground type: terrain colours, detail and whether it is water, nothing more (what a place means in play is a zone). Draw a patch of a type to change the ground by hand; where patches overlap the higher ID wins."));
+        page.AddChild(Ui.Note("Every point of the map has exactly one ground type: terrain colours, detail and whether it is water, nothing more (what a place means in play is a zone). Draw a patch of a type to change the ground by hand; where patches overlap the higher ID wins."));
         var banner = new PanelContainer { ThemeTypeVariation = "BannerPanel" };
-        banner.AddChild(Note("Changes show after the next full map build (make map). The editor saves them at once; Ctrl+Z undoes.", "Warn"));
+        banner.AddChild(Ui.Note("Changes show after the next full map build (make map). The editor saves them at once; Ctrl+Z undoes.", "Warn"));
         page.AddChild(banner);
-        _gtError = Note("", "Danger");
+        _gtError = Ui.Note("", "Danger");
         page.AddChild(_gtError);
 
         BuildGroundMapToggle(page);
@@ -471,7 +471,7 @@ public partial class EditorMode
         _gtName.TextSubmitted += t => { if (CreateGroundType(t.Trim())) _gtName.ReleaseFocus(); };
         EscapableText(_gtName);
         page.AddChild(_gtName);
-        _gtNameValid = Note("");
+        _gtNameValid = Ui.Note("");
         page.AddChild(_gtNameValid);
         var newRow = new HFlowContainer();
         _gtCreate = FocusBtn("Create", () => CreateGroundType(_gtName.Text.Trim()), "PrimaryButton");
@@ -480,7 +480,7 @@ public partial class EditorMode
         newRow.AddChild(_gtCreate);
         newRow.AddChild(_gtDuplicate);
         page.AddChild(newRow);
-        page.AddChild(Note("A new type is for patches: a colour you want that no type has is a type of its own. It takes OSM land only if you give it OSM values, and the types above take theirs first."));
+        page.AddChild(Ui.Note("A new type is for patches: a colour you want that no type has is a type of its own. It takes OSM land only if you give it OSM values, and the types above take theirs first."));
 
         page.AddChild(new HSeparator());
         _gtForm = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
@@ -499,19 +499,19 @@ public partial class EditorMode
     {
         var g = GroundTypeEdits.Groups.First(x => x.Key == group);
         form.AddChild(new Label { Text = g.Label, ThemeTypeVariation = "Header" });
-        form.AddChild(Note(g.Note));
+        form.AddChild(Ui.Note(g.Note));
     }
 
     void BuildGroundForm(VBoxContainer form)
     {
         _gtTitle = new Label { ThemeTypeVariation = "Title", AutowrapMode = TextServer.AutowrapMode.WordSmart };
         form.AddChild(_gtTitle);
-        _gtStateNote = Note("");
+        _gtStateNote = Ui.Note("");
         form.AddChild(_gtStateNote);
         _gtRename = new Button { Text = "Rename", Disabled = true, FocusMode = Control.FocusModeEnum.None,
             TooltipText = "Names are IDs: patches and edits refer to a type by its name, so it cannot be renamed. Duplicate the type under the new name and delete the old one." };
         form.AddChild(_gtRename);
-        _gtCarryNote = Note("");
+        _gtCarryNote = Ui.Note("");
         form.AddChild(_gtCarryNote);
 
         // Appearance: colours, recipe (with its detail settings)
@@ -522,7 +522,7 @@ public partial class EditorMode
         form.AddChild(_gtColoursBox);
         _gtColours = new VBoxContainer();
         _gtColoursBox.AddChild(_gtColours);
-        _gtColourNote = Note("");
+        _gtColourNote = Ui.Note("");
         _gtColoursBox.AddChild(_gtColourNote);
         _gtAddColour = FocusBtn("Add a colour", () => { if (SelectedGroundType != null) AddGroundColour(SelectedGroundType); });
         _gtAddColour.TooltipText = "Add another terrain shade (a type has 1 to 6; one is picked per area)";
@@ -541,7 +541,7 @@ public partial class EditorMode
         };
         _gtRecipeBox.AddChild(FieldRow("Recipe", _gtRecipe, "The detail recipe: what grass, clutter and patches the ground gets"));
         _gtRecipeBox.AddChild(new Label { Text = "Advanced detail settings", ThemeTypeVariation = "Dim" });
-        _gtDetailNote = Note("");
+        _gtDetailNote = Ui.Note("");
         _gtRecipeBox.AddChild(_gtDetailNote);
         _gtDetailFields = new VBoxContainer();
         _gtRecipeBox.AddChild(_gtDetailFields);
@@ -556,7 +556,7 @@ public partial class EditorMode
         form.AddChild(_gtWater);
 
         form.AddChild(new Label { Text = "Source (OSM)", ThemeTypeVariation = "Header" });
-        _gtOsmNote = Note("");
+        _gtOsmNote = Ui.Note("");
         form.AddChild(_gtOsmNote);
         _gtOsmBox = new VBoxContainer();
         form.AddChild(_gtOsmBox);
@@ -571,7 +571,7 @@ public partial class EditorMode
         }
         _gtOsmBox.AddChild(FieldRow("landuse", _gtLanduse));
         _gtOsmBox.AddChild(FieldRow("natural", _gtNatural));
-        _gtOsmValid = Note("");
+        _gtOsmValid = Ui.Note("");
         _gtOsmBox.AddChild(_gtOsmValid);
 
         form.AddChild(new HSeparator());
@@ -579,7 +579,7 @@ public partial class EditorMode
         _gtDelete = FocusBtn("Delete  (Del)", () => RequestDeleteGroundType(), "DangerButton");
         form.AddChild(_gtReset);
         form.AddChild(_gtDelete);
-        _gtActionNote = Note("");
+        _gtActionNote = Ui.Note("");
         form.AddChild(_gtActionNote);
     }
 
@@ -684,7 +684,7 @@ public partial class EditorMode
                 var name = r.Name;
                 var b = new Button
                 {
-                    Text = RowText(r) + (GroundAreaText(r.Name) is { Length: > 0 } at ? $"   ·  {at}" : ""), Icon = Swatch(r.Effective.Colour), Alignment = HorizontalAlignment.Left, ToggleMode = true, ClipText = true,
+                    Text = RowText(r) + (GroundAreaText(r.Name) is { Length: > 0 } at ? $"   ·  {at}" : ""), Icon = Ui.Swatch(r.Effective.Colour), Alignment = HorizontalAlignment.Left, ToggleMode = true, ClipText = true,
                     FocusMode = Control.FocusModeEnum.All, TooltipText = RowTip(r) + (GroundAreaText(r.Name) is { Length: > 0 } at2 ? $" On the map: {at2}." : ""),
                 };
                 b.SetPressedNoSignal(name == SelectedGroundType);

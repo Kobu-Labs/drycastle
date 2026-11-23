@@ -160,8 +160,8 @@ public partial class EditorMode
     void BuildZonesPage(VBoxContainer page)
     {
         page.AddChild(new Label { Text = "Zones", ThemeTypeVariation = "Header" });
-        page.AddChild(Note("A zone marks what an area means in play (Bigfoot, deer, player spawn, ...). It never changes how the ground looks, and zones overlap freely. Pick a kind to show its zones alone, with moving bands; click any zone to select it, then drag its corners, change its kind or delete it. N draws a new one."));
-        _zError = Note("", "Danger");
+        page.AddChild(Ui.Note("A zone marks what an area means in play (Bigfoot, deer, player spawn, ...). It never changes how the ground looks, and zones overlap freely. Pick a kind to show its zones alone, with moving bands; click any zone to select it, then drag its corners, change its kind or delete it. N draws a new one."));
+        _zError = Ui.Note("", "Danger");
         page.AddChild(_zError);
         _zOverlayCheck = new CheckBox
         {
@@ -170,7 +170,7 @@ public partial class EditorMode
         };
         _zOverlayCheck.Toggled += on => { if (!_zSync) SetZoneOverlay(on); };
         page.AddChild(_zOverlayCheck);
-        _zOverlayNote = Note("");
+        _zOverlayNote = Ui.Note("");
         page.AddChild(_zOverlayNote);
 
         _zKindsHead = new Label { Text = "Zone kinds", ThemeTypeVariation = "Header" };
@@ -190,7 +190,7 @@ public partial class EditorMode
         BuildShapeDelete(page, ShapeKind.Zone);
         BuildZoneMarks(page);
         BuildShapeList(page, ShapeKind.Zone, "All zones", "No zones to list. Pick a kind, press N, click corners on the ground, Enter creates the zone.");
-        page.AddChild(Note("Zones overlap freely and add up. Esc steps back: cancel drawing, deselect the zone, deselect the kind (all kinds show again), leave the tool."));
+        page.AddChild(Ui.Note("Zones overlap freely and add up. Esc steps back: cancel drawing, deselect the zone, deselect the kind (all kinds show again), leave the tool."));
     }
 
     void RefreshZonesPanel()
@@ -219,14 +219,14 @@ public partial class EditorMode
             foreach (var b in _zKindRows.Values) { _zKinds.RemoveChild(b); b.QueueFree(); }
             _zKindRows.Clear();
             foreach (var c in _zKinds.GetChildren().OfType<Label>().ToList()) { _zKinds.RemoveChild(c); c.QueueFree(); }
-            if (kinds.Count == 0) _zKinds.AddChild(Note("No zone kinds in this map. Build it again (make map)."));
+            if (kinds.Count == 0) _zKinds.AddChild(Ui.Note("No zone kinds in this map. Build it again (make map)."));
             foreach (var k in kinds)
             {
                 var name = k.Name;
                 var n = counts.GetValueOrDefault(name);
                 var b = new Button
                 {
-                    Text = $"{k.Label}   {n}", Icon = Swatch(k.Tint), Alignment = HorizontalAlignment.Left, ClipText = true,
+                    Text = $"{k.Label}   {n}", Icon = Ui.Swatch(k.Tint), Alignment = HorizontalAlignment.Left, ClipText = true,
                     ToggleMode = true, FocusMode = Control.FocusModeEnum.All,
                     TooltipText = $"{k.Label} ({k.Group}): {n} zone{(n == 1 ? "" : "s")}. Select it to show its zones alone on the map (moving bands, the other kinds hidden), list only them and draw a new one of it (N).",
                 };
@@ -250,7 +250,7 @@ public partial class EditorMode
                 _zKindOptSig = sig;
                 _zSync = true;
                 _zKindOpt.Clear();
-                foreach (var k in kinds) _zKindOpt.AddIconItem(Swatch(k.Tint), k.Label);
+                foreach (var k in kinds) _zKindOpt.AddIconItem(Ui.Swatch(k.Tint), k.Label);
                 _zSync = false;
             }
             var at = kinds.ToList().FindIndex(k => k.Name == sel!.Kind);
@@ -658,7 +658,7 @@ public partial class EditorMode
         page.AddChild(new HSeparator());
         _zMarkHead = new Label { ThemeTypeVariation = "Header" };
         page.AddChild(_zMarkHead);
-        page.AddChild(Note("Delete many zones at once: tick them in the list below, Ctrl+click them on the map, or press X for the selected one. Marked zones are outlined in red on the map."));
+        page.AddChild(Ui.Note("Delete many zones at once: tick them in the list below, Ctrl+click them on the map, or press X for the selected one. Marked zones are outlined in red on the map."));
         var row = new HBoxContainer();
         _zMarkAll = FocusBtn("", MarkListedZones);
         _zMarkAll.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;

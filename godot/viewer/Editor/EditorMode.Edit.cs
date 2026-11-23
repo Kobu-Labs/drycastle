@@ -351,30 +351,8 @@ public partial class EditorMode
 
     static readonly Color Grey = EditorTheme.Dim;
 
-    static Label Note(string text = "")
-    {
-        var l = new Label { Text = text, AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
-        l.ThemeTypeVariation = "Dim";
-        return l;
-    }
 
-    static HBoxContainer Row(string label, Control field, int labelWidth = 70)
-    {
-        var r = new HBoxContainer();
-        var l = new Label { Text = label, CustomMinimumSize = new Vector2(labelWidth, 0) };
-        r.AddChild(l);
-        field.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        r.AddChild(field);
-        return r;
-    }
 
-    static SpinBox Spin(double min, double max, double step, string suffix = "")
-    {
-        var s = new SpinBox { MinValue = min, MaxValue = max, Step = step, Suffix = suffix, AllowGreater = false, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        // after Enter in the field, release the focus so the next Enter applies the changes
-        s.GetLineEdit().TextSubmitted += _ => s.GetLineEdit().ReleaseFocus();
-        return s;
-    }
 
     /// <summary>The small "back to default" button next to a field; shown only while the field is overridden.</summary>
     Button ResetBtn(Action reset)
@@ -400,18 +378,18 @@ public partial class EditorMode
         _scopeRow.AddChild(new Label { Text = "Edit: " });
         _scopeRow.AddChild(_scopeOpt);
         outer.AddChild(_scopeRow);
-        _mixedLabel = Note();
+        _mixedLabel = Ui.Note();
         outer.AddChild(_mixedLabel);
     }
 
     void BuildPanelFooter(VBoxContainer outer)
     {
-        _footLabel = Note("no unsaved changes");
+        _footLabel = Ui.Note("no unsaved changes");
         outer.AddChild(_footLabel);
         var r = new HBoxContainer();
-        _btnApply = Btn("Apply (Enter)", () => Apply());
-        _btnRevert = Btn("Revert", Revert);
-        _btnRevertAll = Btn("Revert all", RevertAll);
+        _btnApply = Ui.Btn("Apply (Enter)", () => Apply());
+        _btnRevert = Ui.Btn("Revert", Revert);
+        _btnRevertAll = Ui.Btn("Revert all", RevertAll);
         foreach (var b in new[] { _btnApply, _btnRevert, _btnRevertAll }) { b.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; r.AddChild(b); }
         outer.AddChild(r);
         MarkerRoot = new Node3D { Name = "EditorMarkers", Visible = false };
@@ -427,41 +405,41 @@ public partial class EditorMode
         _modeOpt = new OptionButton { FocusMode = Control.FocusModeEnum.None };
         foreach (var m in EditSchema.FenceModes) _modeOpt.AddItem(m);
         _modeOpt.ItemSelected += i => { if (!_syncing) SetFenceMode(EditSchema.FenceModes[(int)i]); };
-        var modeRow = Row("mode", _modeOpt);
-        modeRow.AddChild(Btn("Reset", () => ResetFence()));
+        var modeRow = Ui.Row("mode", _modeOpt);
+        modeRow.AddChild(Ui.Btn("Reset", () => ResetFence()));
         body.AddChild(modeRow);
-        _fenceInfo = Note();
+        _fenceInfo = Ui.Note();
         body.AddChild(_fenceInfo);
 
         _typeOpt = new OptionButton { FocusMode = Control.FocusModeEnum.None };
         _typeOpt.AddItem("(default)");
         foreach (var t in EditSchema.FenceTypeNames) _typeOpt.AddItem(t);
         _typeOpt.ItemSelected += i => { if (!_syncing) SetFenceType(i == 0 ? null : EditSchema.FenceTypes[(int)i - 1].Name); };
-        body.AddChild(Row("type", _typeOpt));
+        body.AddChild(Ui.Row("type", _typeOpt));
 
-        _heightSpin = Spin(0.1, 10, 0.05, " m");
+        _heightSpin = Ui.Spin(0.1, 10, 0.05, " m");
         _heightReset = ResetBtn(() => SetFenceHeight(null));
         _heightSpin.ValueChanged += v => { if (!_syncing) SetFenceHeight(v); };
-        var hr = Row("height", _heightSpin); hr.AddChild(_heightReset); body.AddChild(hr);
+        var hr = Ui.Row("height", _heightSpin); hr.AddChild(_heightReset); body.AddChild(hr);
 
-        _thickSpin = Spin(0.01, 2, 0.01, " m");
+        _thickSpin = Ui.Spin(0.01, 2, 0.01, " m");
         _thickReset = ResetBtn(() => SetFenceThickness(null));
         _thickSpin.ValueChanged += v => { if (!_syncing) SetFenceThickness(v); };
-        var tr = Row("thickness", _thickSpin); tr.AddChild(_thickReset); body.AddChild(tr);
+        var tr = Ui.Row("thickness", _thickSpin); tr.AddChild(_thickReset); body.AddChild(tr);
 
         _colourBtn = new ColorPickerButton { CustomMinimumSize = new Vector2(80, 28), FocusMode = Control.FocusModeEnum.None, EditAlpha = false };
         _colourReset = ResetBtn(() => SetFenceColour(null));
         _colourBtn.ColorChanged += c => { if (!_syncing) SetFenceColour("#" + c.ToHtml(false)); };
-        var cr = Row("colour", _colourBtn); cr.AddChild(_colourReset); body.AddChild(cr);
+        var cr = Ui.Row("colour", _colourBtn); cr.AddChild(_colourReset); body.AddChild(cr);
 
         var gh = new Label { Text = "Gates" };
         gh.ThemeTypeVariation = "Header";
         body.AddChild(gh);
         _gapsBox = new VBoxContainer();
         body.AddChild(_gapsBox);
-        _btnAddGate = Btn("Add gate", () => { if (GateArmed) CancelGate(); else { if (CurrentFence.EffectiveMode != "custom") SetFenceMode("custom"); ArmGate(); } });
+        _btnAddGate = Ui.Btn("Add gate", () => { if (GateArmed) CancelGate(); else { if (CurrentFence.EffectiveMode != "custom") SetFenceMode("custom"); ArmGate(); } });
         body.AddChild(_btnAddGate);
-        _gateHint = Note();
+        _gateHint = Ui.Note();
         body.AddChild(_gateHint);
     }
 
@@ -553,9 +531,9 @@ public partial class EditorMode
                 var row = new HBoxContainer { Name = $"gap{i}" };
                 var pick = new Button { Text = $"gate {i + 1}", FocusMode = Control.FocusModeEnum.None, ToggleMode = true };
                 pick.Pressed += () => SelectGate(idx);
-                var w = Spin(EditSchema.GateMin, 30, EditSchema.GateSnap, " m");
+                var w = Ui.Spin(EditSchema.GateMin, 30, EditSchema.GateSnap, " m");
                 w.ValueChanged += v => { if (!_syncing) SetGapWidth(idx, v); };
-                var del = Btn("delete", () => RemoveGap(idx));
+                var del = Ui.Btn("delete", () => RemoveGap(idx));
                 row.AddChild(pick); row.AddChild(w); row.AddChild(del);
                 _gapsBox.AddChild(row);
             }

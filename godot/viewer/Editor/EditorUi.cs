@@ -175,16 +175,16 @@ public partial class EditorMode
         grp.AddChild(_groupCount);
         _groupLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
         grp.AddChild(_groupLabel);
-        _btnGroup = Btn("Group the marked parcels  (Enter)", GroupSelected);
+        _btnGroup = Ui.Btn("Group the marked parcels  (Enter)", GroupSelected);
         _btnGroup.ThemeTypeVariation = "PrimaryButton";
         grp.AddChild(_btnGroup);
         grp.AddChild(new HSeparator());
         grp.AddChild(new Label { Text = "Existing groups", ThemeTypeVariation = "Header" });
-        _btnMerge = Btn("Merge marked groups and parcels into one group", MergeGroups);
+        _btnMerge = Ui.Btn("Merge marked groups and parcels into one group", MergeGroups);
         _btnMerge.TooltipText = "Mark parcels from two or more groups, or a group and loose parcels (also G). Everything goes into one new group; the fence they share is kept, else the first group's. Ctrl+Z undoes it.";
-        _btnAdd = Btn("Add the marked parcels to the group", AddSelectedToGroup);
-        _btnRemove = Btn("Take the marked parcels out of their group", RemoveSelectedFromGroup);
-        _btnDissolve = Btn("Dissolve the group", DissolveGroup);
+        _btnAdd = Ui.Btn("Add the marked parcels to the group", AddSelectedToGroup);
+        _btnRemove = Ui.Btn("Take the marked parcels out of their group", RemoveSelectedFromGroup);
+        _btnDissolve = Ui.Btn("Dissolve the group", DissolveGroup);
         foreach (var b in new[] { _btnMerge, _btnAdd, _btnRemove, _btnDissolve }) grp.AddChild(b);
         grp.AddChild(new Label { Text = "Clear the marks with Esc.", ThemeTypeVariation = "Dim" });
 
@@ -215,13 +215,13 @@ public partial class EditorMode
 
         page.AddChild(new HSeparator());
         page.AddChild(new Label { Text = "Camera", ThemeTypeVariation = "Header" });
-        _btnTopDown = Btn("Top-down view (T)", ToggleTopDown);
+        _btnTopDown = Ui.Btn("Top-down view (T)", ToggleTopDown);
         page.AddChild(_btnTopDown);
 
         page.AddChild(new HSeparator());
         page.AddChild(new Label { Text = "Walk", ThemeTypeVariation = "Header" });
-        page.AddChild(Btn("Drop to the ground here and walk  (F3)", WalkFromHere));
-        page.AddChild(Btn("Walk from where I was  (F2)", () => SetActive(false)));
+        page.AddChild(Ui.Btn("Drop to the ground here and walk  (F3)", WalkFromHere));
+        page.AddChild(Ui.Btn("Walk from where I was  (F2)", () => SetActive(false)));
         page.AddChild(new Label { Text = "Dropping puts you on the ground below the camera, facing the way you look.", ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
         page.AddChild(new Label { Text = "WASD fly, Space up, Shift down, hold the right mouse button to look.", ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
 
@@ -231,12 +231,6 @@ public partial class EditorMode
         Ortho.BuildSection(page);
     }
 
-    static Button Btn(string text, Action onPress)
-    {
-        var b = new Button { Text = text, FocusMode = Control.FocusModeEnum.None };
-        b.Pressed += onPress;
-        return b;
-    }
 
     // ---- status bar and cheat sheet ----
 
