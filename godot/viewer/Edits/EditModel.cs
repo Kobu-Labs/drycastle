@@ -31,9 +31,6 @@ public static class EditSchema
         new("brick_wall", 1.8, 0.3, "#ffffff"),  // the old name of brick_red
     };
 
-    /// <summary>Values of the fence `column` key (edits/schema.py COLUMN_TYPES): the posts or piers, instead of the type's own.</summary>
-    public static readonly string[] ColumnTypes = { "none", "wood_post", "metal_post", "brick_red", "brick_white", "stone", "concrete" };
-
     public static IEnumerable<string> FenceTypeNames => FenceTypes.Select(t => t.Name);
 
     public static FenceTypeInfo TypeInfo(string? name)
