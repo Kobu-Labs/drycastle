@@ -548,9 +548,9 @@ public partial class NetServer
     /// </summary>
     void StepDrivenVehicle(ServerCar car, ServerClient? driver, float dt)
     {
-        if (driver != null && driver == _harvDriver)
+        if (driver != null && _harvester.IsDriver(driver))
         {
-            // the harvester's own driver sends no inputs: the server steers it (NetServer.Harvester), one step a tick
+            // the harvester's own driver sends no inputs: the server steers it (Harvest/HarvesterServer.cs), one step a tick
             car.Wake();
             car.StepDrive(new DriveInput { Throttle = driver.Throttle, Steer = driver.Steer, Handbrake = driver.Handbrake }, dt);
         }

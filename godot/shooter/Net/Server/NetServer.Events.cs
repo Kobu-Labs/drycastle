@@ -20,7 +20,7 @@ public partial class NetServer
         // the Holy Mass can only end (its handler answers a cancel with a refusal)
         _eventHandlers.Register(EventBook.Bigfoot, "Bigfoot event", StartBigfoot, EndBigfoot, CancelBigfoot);
         _eventHandlers.Register(EventBook.Mass, "Holy Mass", _mass.Chat, _mass.End);
-        _eventHandlers.Register(EventBook.Harvester, "harvester event", StartHarvester, EndHarvester, CancelHarvester);
+        _eventHandlers.Register(EventBook.Harvester, "harvester event", _harvester.Start, _harvester.End, _harvester.Cancel);
         _eventHandlers.Register(EventBook.Thieves, "Thieves event", _thieves.Start, _thieves.End, _thieves.Cancel);
         _eventHandlers.Register(EventBook.Scud, "Scud event", StartScudEvent, EndScudEvent, CancelScudEvent);
     }

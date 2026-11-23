@@ -134,7 +134,7 @@ public partial class NetServer
         PerfShot(c, eye, dir, range, hit?.Id);
         var end = from + along * (hit?.Distance ?? Math.Min(wall, len));
         BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(end))));
-        BaleShot(N(from), N(along), hit?.Distance ?? Math.Min(wall, len)); // any bale the bullet passes catches fire (#331)
+        _harvester.Shot(N(from), N(along), hit?.Distance ?? Math.Min(wall, len)); // any bale the bullet passes catches fire (#331)
         _scenery.Shot(N(from), N(along), hit?.Distance ?? Math.Min(wall, len)); // and any pole lamp it passes breaks (ADR 0037), any sign plate bends (ADR 0039)
         if (hit is { } h)
         {

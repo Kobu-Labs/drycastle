@@ -7,6 +7,7 @@ using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Net.Server.Crates;
 using Drycastle.Shooter.Net.Server.Fauna;
 using Drycastle.Shooter.Net.Server.Gear;
+using Drycastle.Shooter.Net.Server.Harvest;
 using Drycastle.Shooter.Net.Server.HuntLog;
 using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
@@ -28,6 +29,7 @@ using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Demon;
 using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Items;
 using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Killstreaks.Helicopter;
@@ -102,6 +104,10 @@ public partial class NetServer : Node
     public KillstreakFile Killstreaks = null!;
     /// <summary>thieves.json: every number of the Thieves event (set by the host).</summary>
     public ThievesFile ThievesData = new();
+    /// <summary>Every number of the harvester event; the host may replace it.</summary>
+    public HarvesterConfig Harvester = new();
+    /// <summary>The numbers of the vehicles' crop damage (#328): what a ground vehicle crushes driving through a crop field.</summary>
+    public CropCrushConfig CropCrush = new();
 
     // The features that are classes of their own (<c>Net/Server/&lt;Feature&gt;/</c>), made in _Ready once the match exists; each takes only the context.
     ServerContext _ctx = null!;
@@ -134,6 +140,7 @@ public partial class NetServer : Node
     FlakServer _flak = null!;
     StreakServer _streaks = null!;
     LockOnServer _lockOn = null!;
+    HarvesterServer _harvester = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -238,7 +245,7 @@ public partial class NetServer : Node
         _companions = new CompanionServer(_ctx, CompanionData, AnimalData, _animals.Companions, Progression, UnlockAll);
         _mass = new MassServer(_ctx, HolyMass, _citizens, _church, _demon, _sitters, _status, _events, EnsureNavMesh);
         _thieves = BuildThieves();
-        InitHarvester();
+        _harvester = BuildHarvester();
         InitScud();
         InitEvents(); // after the kinds above: the handler table names their start, end and cancel
         _gunships = new GunshipServer(_ctx, Killstreaks, Weapons, _targets, _fleet, () => Query, () => Vehicles, Deal, DamageVehicle, LaunchGunshipRocket, _impacts, _splash, _deathPush, () => _streaks.Rules);
@@ -283,6 +290,15 @@ public partial class NetServer : Node
         var loot = new LootServer(_ctx, ThievesData, raids.Roster, gangs.Roster, _fleet, _pets.Keeper, Map, () => _nav, ArenaMode, MapDir);
         var payout = new ThievesPayout(_ctx, ThievesData, Levels.Awards.EventWin, Items, Weapons, _corpses, _gear.BroadcastCorpseItems, _rng, Scores, AwardXp, gangs.Roster, raids.Roster);
         return new ThievesServer(_ctx, ThievesData, _events, _intel, _rng, () => _nav, gangs, raids, loot, payout, phase);
+    }
+
+    /// <summary>The harvester event's parts: the cut and the crushed crops, the bales' fire, what the reel does to people, and the job that drives them.</summary>
+    HarvesterServer BuildHarvester()
+    {
+        var cut = new CropCut(_ctx, Harvester, CropCrush, Map, _fleet);
+        var bales = new BaleFire(_ctx, Harvester, Map, _corpses, _status, cut);
+        var reel = new ReelServer(_ctx, Harvester, _fleet, _targets, Deal, _deathPush, _corpses, _gear, Weapons, Map, bales, CarVelocity, RunOverCooldown);
+        return new HarvesterServer(_ctx, Harvester, () => Vehicles, Map, World, Water, () => MapFlightBounds, _rng, _events, _fleet, _profiles, _ids, Join, Leave, SeatPos, LeaveSeat, cut, bales, reel);
     }
 
     /// <summary>A sitter stood up: the dictation table lets go of the set, the Mass forgets the seat.</summary>
@@ -337,7 +353,7 @@ public partial class NetServer : Node
         _streaks.Tick(dt);
         PerfLap(ServerPerf.Ph.Streaks);
         BotsTick(dt); // fills the roster and queues each bot's input for this tick (#214)
-        HarvesterTick(dt); // the harvester event: its spawn, its driver's pedals
+        _harvester.Tick(dt); // the harvester event: its spawn, its driver's pedals
         ScudEventTick(dt); // the Scud event: who boarded the truck, the search time, the bunkers' carts
         PerfLap(ServerPerf.Ph.Bots);
         SimulatePlayers(dt);
@@ -431,7 +447,7 @@ public partial class NetServer : Node
         StepScud(dt); // the Scud trucks' launchers: the crew's lock, the rack, the brakes (before the vehicles step)
         StepVehicles(dt);
         StepRidingCorpses(dt); // the dead pilots and drivers move with the vehicles that just moved
-        HarvesterAfterVehicles(dt); // what the harvester ran over, the corpses it draws in, the bales' fire
+        _harvester.AfterVehicles(dt); // what the harvester ran over, the corpses it draws in, the bales' fire
         PerfLap(ServerPerf.Ph.Vehicles);
     }
 
@@ -633,7 +649,7 @@ public partial class NetServer : Node
         _minerals.SendOnJoin(c); // the mineral nodes
         _rozhlas.SendOnJoin(c); // the village loudspeaker, when a detour broadcast is on, who is on the mic, and the Urad door when it is open
         _garage.SendOnJoin(c); // and the garage doors, when they are open
-        SendHarvesterOnJoin(c); // the harvester's job and the bales that burn
+        _harvester.SendOnJoin(c); // the harvester's job and the bales that burn
         SendScudOnJoin(c); // the Scud trucks' racks and proposals
         _demon.SendOnJoin(c); // and the demon's pounce, when one is on
         SendTargetRoster(c); // target dummies' names (#148)

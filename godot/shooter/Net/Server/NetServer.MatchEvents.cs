@@ -26,7 +26,7 @@ public partial class NetServer
         _wildlife.Populate(); // the match cleared the pets' entities too; a new round moves new ones into the property groups
         _rozhlas.RoundReset(); // the Urad workers of a detour still open sit down again
         ResetCars();
-        HarvesterRoundReset(); // the car reset brought the harvester back to its old field: hidden again
+        _harvester.RoundReset(); // the car reset brought the harvester back to its old field: hidden again
         ScudRoundReset(); // the launchers start over; a Scud truck, which never returns, is retired
         _status.RoundStart();
         PlantationRoundStart();
@@ -75,7 +75,7 @@ public partial class NetServer
                 BroadcastEvent(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(s.Id, s.Position, s.ProtectionSeconds)));
                 break;
             case PlayerKilled k:
-                HarvesterOnKill(k); // before the corpse: a body the harvester killed is not thrown
+                _harvester.OnKill(k); // before the corpse: a body the harvester killed is not thrown
                 if (_byId.TryGetValue(k.Victim, out var kv) && kv.Car != null) RiderDies(kv); // frees the seat; the corpse (PlayerDied) stays in a pilot's or driver's seat, else falls (ADR 0026)
                 _smoke.Kills += k.Killer != k.Victim ? 1 : 0;
                 BotKillLog(k);

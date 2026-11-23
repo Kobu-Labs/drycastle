@@ -96,7 +96,7 @@ internal sealed class ServerClient
     public uint LifeStart;
     public int TeleportsSeen;
     public ServerCar? Car;
-    /// <summary>The harvester event's driver (#331): a seated bot the AI steers (<c>NetServer.Harvester.cs</c>); the bot roster neither counts nor feeds it.</summary>
+    /// <summary>The harvester event's driver (#331): a seated bot the AI steers (<c>Harvest/HarvesterServer.cs</c>); the bot roster neither counts nor feeds it.</summary>
     public bool HarvesterDriver;
     /// <summary>Seat of <see cref="Car"/> this player sits in (0 = driver).</summary>
     public int CarSeat;
