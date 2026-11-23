@@ -162,14 +162,14 @@ public partial class EditorMode
     /// <summary>The 1 m grid around the building, on whole metres of the map's absolute frame (where the Sketch tool snaps), and its 5 m lines.</summary>
     (List<(Vector2 a, Vector2 b)> minor, List<(Vector2 a, Vector2 b)> major) FloorGridLines(Aabb box)
     {
-        var (ax, ay) = RawAbs(new Vector3(box.Position.X, 0f, box.End.Z));   // south-west corner (y north = -z)
-        var (bx, by) = RawAbs(new Vector3(box.End.X, 0f, box.Position.Z));   // north-east corner
+        var (ax, ay) = Map.RawAbs(new Vector3(box.Position.X, 0f, box.End.Z));   // south-west corner (y north = -z)
+        var (bx, by) = Map.RawAbs(new Vector3(box.End.X, 0f, box.Position.Z));   // north-east corner
         long x0 = (long)Math.Floor(ax - FloorMarginM), x1 = (long)Math.Ceiling(bx + FloorMarginM);
         long y0 = (long)Math.Floor(ay - FloorMarginM), y1 = (long)Math.Ceiling(by + FloorMarginM);
         var minor = new List<(Vector2 a, Vector2 b)>();
         var major = new List<(Vector2 a, Vector2 b)>();
-        for (var x = x0; x <= x1; x++) (x % FloorMajorEvery == 0 ? major : minor).Add((FromAbsolute(x, y0), FromAbsolute(x, y1)));
-        for (var y = y0; y <= y1; y++) (y % FloorMajorEvery == 0 ? major : minor).Add((FromAbsolute(x0, y), FromAbsolute(x1, y)));
+        for (var x = x0; x <= x1; x++) (x % FloorMajorEvery == 0 ? major : minor).Add((Map.FromAbsolute(x, y0), Map.FromAbsolute(x, y1)));
+        for (var y = y0; y <= y1; y++) (y % FloorMajorEvery == 0 ? major : minor).Add((Map.FromAbsolute(x0, y), Map.FromAbsolute(x1, y)));
         return (minor, major);
     }
 

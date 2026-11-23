@@ -221,18 +221,6 @@ public partial class EditorMode
         return best;
     }
 
-    (double x, double y) ToAbsolute(Vector2 ground)
-    {
-        var o = Map.OriginEpsg5514!.Value;
-        return (Math.Round(o.X + ground.X, 3), Math.Round(o.Y - ground.Y, 3));
-    }
-
-    Vector2 FromAbsolute(double x, double y)
-    {
-        var o = Map.OriginEpsg5514!.Value;
-        return new Vector2((float)(x - o.X), (float)(-(y - o.Y)));
-    }
-
     /// <summary>[Add gate]: the next click picks the fence point.</summary>
     public bool ArmGate()
     {
@@ -283,7 +271,7 @@ public partial class EditorMode
     public bool GateEnd()
     {
         if (_gateStart is not { } s) return false;
-        var (x, y) = ToAbsolute(s.point);
+        var (x, y) = Map.ToAbsolute(s.point);
         var width = GateWidth;
         _gateStart = null;
         GateArmed = false;
@@ -352,7 +340,7 @@ public partial class EditorMode
         var gaps = CurrentFence.Gaps;
         for (var i = 0; i < gaps.Count; i++)
         {
-            var at = FromAbsolute(gaps[i].X, gaps[i].Y);
+            var at = Map.FromAbsolute(gaps[i].X, gaps[i].Y);
             var near = NearestOnBoundary(boundary, at, 1000f);
             if (near == null) continue;
             AddGateMarker(_gateRoot, near.Value.point, near.Value.tangent, (float)gaps[i].Width, i == _selectedGate ? GateSelectedColour : GateColour);

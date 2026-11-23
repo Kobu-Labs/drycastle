@@ -347,7 +347,7 @@ public partial class EditorMode
         List<(double x, double y)>? Clean(Vector2[] ring)
         {
             var abs = new List<(double x, double y)>();
-            foreach (var v in ring) { var p = ToAbsolute(v); if (abs.Count == 0 || abs[^1] != p) abs.Add(p); }
+            foreach (var v in ring) { var p = Map.ToAbsolute(v); if (abs.Count == 0 || abs[^1] != p) abs.Add(p); }
             if (abs.Count > 1 && abs[0] == abs[^1]) abs.RemoveAt(abs.Count - 1);
             return abs.Count >= 3 ? abs : null;
         }
@@ -465,8 +465,8 @@ public partial class EditorMode
         if (Map.OriginEpsg5514 != null)
             foreach (var z in zones)
             {
-                var rings = new List<Vector2[]> { z.Points.Select(c => FromAbsolute(c.x, c.y)).ToArray() };
-                if (z.Holes != null) rings.AddRange(z.Holes.Select(h => h.Select(c => FromAbsolute(c.x, c.y)).ToArray()));
+                var rings = new List<Vector2[]> { z.Points.Select(c => Map.FromAbsolute(c.x, c.y)).ToArray() };
+                if (z.Holes != null) rings.AddRange(z.Holes.Select(h => h.Select(c => Map.FromAbsolute(c.x, c.y)).ToArray()));
                 if (!_zoTypes.TryGetValue(z.Kind, out var t)) _zoTypes[z.Kind] = t = new GroundMapType { Name = z.Kind };
                 t.Areas++;
                 SplitRings(rings, t, out var area);
@@ -784,7 +784,7 @@ public partial class EditorMode
     /// <summary>Hover in the Zones tool: the zones at the cursor, as a label near it.</summary>
     string? ZoneHoverText(Vector3 point)
     {
-        var (x, y) = RawAbs(point);
+        var (x, y) = Map.RawAbs(point);
         var hits = ZoneList().Where(z => ZonePickable(z) && z.Contains(x, y)).OrderByDescending(z => ShapeNumber(z.Id)).ThenBy(z => KindOrder(z.Kind)).ToList();
         if (hits.Count == 0) return SelectedZoneKind is { } k ? $"no {ZoneLabel(k)} zone here" : "no zone here";
         var lines = hits.Take(5).Select(z => $"{z.Label}  {ZoneLabel(z.Kind)} zone{(_zMarked.Contains(z.Id) ? "  (marked for deletion)" : "")}").ToList();

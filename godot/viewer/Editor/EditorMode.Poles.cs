@@ -156,9 +156,9 @@ public partial class EditorMode
         if (MountOf(hit.Normal) is not { } mount) { Say("click a wall or the roof, not the underside of something", true); return false; }
         asset ??= PickConnector(mount, hit.Point);
         if (asset == null) { Say($"no {mount} connectors in the asset manifest (make poles-manifest)", true); return false; }
-        var (ax, ay) = RawAbs(hit.Point);
+        var (ax, ay) = Map.RawAbs(hit.Point);
         double x = Math.Round(ax, 3), y = Math.Round(ay, 3), z = Math.Round(hit.Point.Y, 3);
-        var parcel = ParcelAtAbs(x, y)?.Id ?? hit.ParcelId;
+        var parcel = Map.ParcelAtAbs(x, y)?.Id ?? hit.ParcelId;
         var from = ConnectFrom;
         double rot;
         if (mount == "wall") rot = Math.Atan2(-hit.Normal.Z, hit.Normal.X) * 180.0 / Math.PI;
@@ -167,7 +167,7 @@ public partial class EditorMode
             var pole = Map.ObjectNodes.TryGetValue(from, out var pn) ? pn.GlobalPosition : hit.Point + Vector3.Right;
             rot = Math.Atan2(-(pole.Z - hit.Point.Z), pole.X - hit.Point.X) * 180.0 / Math.PI;
         }
-        rot = Math.Round(Mod360(rot), 1);
+        rot = Math.Round(MapFrame.Mod360(rot), 1);
         var name = AssetName(asset);
         string? newId = null;
         var ok = Mutate(root =>
@@ -311,9 +311,9 @@ public partial class EditorMode
 
     void BuildPolesWorld()
     {
-        _poleLineIdle = Unshaded(new Color(1f, 1f, 1f, 0.8f), true);
-        _poleLineOk = Unshaded(new Color(0.1f, 0.95f, 1f), true);
-        _cableHi = Unshaded(new Color(1f, 0.92f, 0.1f), false);
+        _poleLineIdle = Gfx.Unshaded(new Color(1f, 1f, 1f, 0.8f), true);
+        _poleLineOk = Gfx.Unshaded(new Color(0.1f, 0.95f, 1f), true);
+        _cableHi = Gfx.Unshaded(new Color(1f, 0.92f, 0.1f), false);
         _poleLine = new MeshInstance3D { Name = "ConnectLine", Visible = false, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         MarkerRoot.AddChild(_poleLine);
     }
@@ -388,7 +388,7 @@ public partial class EditorMode
                     if (ends != _poleLineEnds)
                     {
                         _poleLineEnds = ends;
-                        _poleLine.Mesh = Strip(new List<Vector3> { ends.Item1, ends.Item2 }, new List<int> { 0, 1 }, Mesh.PrimitiveType.Lines);
+                        _poleLine.Mesh = Gfx.Strip(new List<Vector3> { ends.Item1, ends.Item2 }, new List<int> { 0, 1 }, Mesh.PrimitiveType.Lines);
                     }
                     _poleLine.MaterialOverride = valid ? _poleLineOk : _poleLineIdle;
                     if (under != null || mount != null)

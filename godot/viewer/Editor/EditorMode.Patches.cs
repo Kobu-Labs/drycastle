@@ -46,7 +46,7 @@ public partial class EditorMode
     double DefaultWaterLevel(IReadOnlyList<(double x, double y)> ring)
     {
         if (ring.Count == 0) return 0;
-        var l = FromAbsolute(ring.Average(p => p.x), ring.Average(p => p.y));
+        var l = Map.FromAbsolute(ring.Average(p => p.x), ring.Average(p => p.y));
         return Math.Round(Map.GroundHeightOrMean(l.X, l.Y), 1);
     }
 
@@ -94,7 +94,7 @@ public partial class EditorMode
     /// <summary>The patch under the cursor of the Ground tool, for the hover label.</summary>
     string? PatchHoverText(Vector3 point)
     {
-        var (x, y) = RawAbs(point);
+        var (x, y) = Map.RawAbs(point);
         if (ShapeAt(ShapeKind.Patch, x, y) is not { } id || Patch(id) is not { } p) return null;
         return $"{p.Id}  patch of {p.Type}{(EditorTheme.CropName(p.Type) is { } crop ? $" (crop: {crop})" : "")}{(p.WaterY is { } w ? $", water {w:0.0} m" : "")}  click to select";
     }
@@ -109,7 +109,7 @@ public partial class EditorMode
         PatchInfo? hot = null;
         if (point is { } pt)
         {
-            var (x, y) = RawAbs(pt);
+            var (x, y) = Map.RawAbs(pt);
             if (ShapeAt(ShapeKind.Patch, x, y) is { } id && id != SelectedPatchId) hot = Patch(id);
         }
         if (ReferenceEquals(hot, _gHoverPatch)) return;

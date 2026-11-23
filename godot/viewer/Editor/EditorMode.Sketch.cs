@@ -564,7 +564,7 @@ public partial class EditorMode
                 var at = OverUi(mouse) ? GetViewport().GetVisibleRect().Size / 2 : mouse;
                 if (SketchReady() && RayToGround(FlyCam.ProjectRayOrigin(at), FlyCam.ProjectRayNormal(at), out var g))
                 {
-                    var (x, y) = SnapAbs(g, Input.IsKeyPressed(Key.Ctrl));
+                    var (x, y) = Map.SnapAbs(g, Input.IsKeyPressed(Key.Ctrl));
                     if (_skMode == SketchKind.Point) AddSketchPoint(x, y); else AddSketchCorner(x, y);
                 }
                 return true;
@@ -612,7 +612,7 @@ public partial class EditorMode
         }
         else if (SketchItemAt(screen) is { } hit) { SelectSketchItem(hit); return; }
         if (!RayToGround(FlyCam.ProjectRayOrigin(screen), FlyCam.ProjectRayNormal(screen), out var g)) { Say("click on the ground", true); return; }
-        var (x, y) = SnapAbs(g, free);
+        var (x, y) = Map.SnapAbs(g, free);
         if (_skMode == SketchKind.Point) AddSketchPoint(x, y); else AddSketchCorner(x, y);
     }
 
@@ -662,7 +662,7 @@ public partial class EditorMode
             var mouse = GetViewport().GetMousePosition();
             if (!(OverUi(mouse) || _looking || Modal))
             {
-                if (RayToGround(FlyCam.ProjectRayOrigin(mouse), FlyCam.ProjectRayNormal(mouse), out var g)) _skCursor = SnapAbs(g, Input.IsKeyPressed(Key.Ctrl));
+                if (RayToGround(FlyCam.ProjectRayOrigin(mouse), FlyCam.ProjectRayNormal(mouse), out var g)) _skCursor = Map.SnapAbs(g, Input.IsKeyPressed(Key.Ctrl));
                 if (_skDraft.Count == 0) _skHover = SketchItemAt(mouse);
                 else if (_skDraft.Count >= 3 && PickCorner(mouse, new[] { _skDraft[0] }) == 0) hoverDraft = 0;
                 else if (PickCorner(mouse, new[] { _skDraft[^1] }) == 0) hoverDraft = _skDraft.Count - 1;
@@ -731,7 +731,7 @@ public partial class EditorMode
                 if (_skDraft.Count > 0)
                 {
                     var to = hoverDraft == 0 ? _skDraft[0] : cur;
-                    var a = FromAbsolute(_skDraft[^1].x, _skDraft[^1].y); var b = FromAbsolute(to.x, to.y);
+                    var a = Map.FromAbsolute(_skDraft[^1].x, _skDraft[^1].y); var b = Map.FromAbsolute(to.x, to.y);
                     if (a.DistanceSquaredTo(b) > 1e-8f) ghost.Add((a, b));
                 }
                 if (hoverDraft < 0 && _skHover == null) _skLive.Add((GroundPoint(cur), _skMode == SketchKind.Point ? 1.4f : 1f, HandleGhost));

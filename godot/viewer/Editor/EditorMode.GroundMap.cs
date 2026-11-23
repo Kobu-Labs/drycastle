@@ -103,7 +103,7 @@ public partial class EditorMode
         foreach (var a in Map.GroundAreas) entries.Add((a.Kind, a.Rings.ToList(), false));
         if (Map.OriginEpsg5514 != null)
             foreach (var p in PatchList())
-                entries.Add((p.Type, new List<Vector2[]> { p.Points.Select(c => FromAbsolute(c.x, c.y)).ToArray() }, true));
+                entries.Add((p.Type, new List<Vector2[]> { p.Points.Select(c => Map.FromAbsolute(c.x, c.y)).ToArray() }, true));
         // geometry only changes with a patch (its type or corners) or a new map; colours and selection only touch the materials
         var sig = Map.GroundAreas.Count + "#" + string.Join(";", entries.Where(e => e.Item3).Select(e => e.Item1 + ":" + string.Join(",", e.Item2[0].Select(v => $"{v.X:F1},{v.Y:F1}"))));
         var geometryChanged = sig != _gmSig;

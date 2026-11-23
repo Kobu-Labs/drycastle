@@ -18,7 +18,7 @@ namespace Drycastle.Viewer.Editor;
 /// </summary>
 public partial class EditorMode
 {
-    public const double MoveSnap = 0.5, RotateSnap = 15.0, DuplicateOffset = 1.0, NudgeStep = 0.5;
+    public const double RotateSnap = 15.0, DuplicateOffset = 1.0, NudgeStep = 0.5;
     public static readonly string[] Categories = { "car", "slab", "pot", "flower", "bush", "tree", "wall", "fence", "other" };
     /// <summary>Categories whose palette items show their render alone once it has arrived (the name stays in the tooltip).</summary>
     public static readonly string[] IconOnlyCategories = { "pole", "connector" };
@@ -30,40 +30,9 @@ public partial class EditorMode
 
     // ---- helpers ----
 
-    (double x, double y) RawAbs(Vector3 ground)
-    {
-        var o = Map.OriginEpsg5514!.Value;
-        return (o.X + ground.X, o.Y - ground.Z);
-    }
-
-    static double Snap(double v, double step) => Math.Round(v / step, MidpointRounding.AwayFromZero) * step;
-
-    /// <summary>Absolute S-JTSK position of a ground point (map metres), snapped to 0.5 m unless free, 3 decimals.</summary>
-    public (double x, double y) SnapAbs(Vector3 ground, bool free)
-    {
-        var (x, y) = RawAbs(ground);
-        if (!free) { x = Snap(x, MoveSnap); y = Snap(y, MoveSnap); }
-        return (Math.Round(x, 3), Math.Round(y, 3));
-    }
-
-    ParcelInfo? ParcelAtAbs(double x, double y)
-    {
-        var l = FromAbsolute(x, y);
-        return Map.ParcelAt(l.X, l.Y);
-    }
-
-    public string? ParcelAtAbsolute(double x, double y) => Map.OriginEpsg5514 == null ? null : ParcelAtAbs(x, y)?.Id;
+    public string? ParcelAtAbsolute(double x, double y) => Map.OriginEpsg5514 == null ? null : Map.ParcelAtAbs(x, y)?.Id;
 
     string AssetName(string id) => Map.AssetCatalog.FirstOrDefault(a => a.Id == id)?.Name ?? id;
-
-    static double Mod360(double d) { var m = d % 360.0; return m < 0 ? m + 360.0 : m; }
-
-    static IEnumerable<MeshInstance3D> Meshes(Node n)
-    {
-        if (n is MeshInstance3D m) yield return m;
-        foreach (var c in n.GetChildren())
-            foreach (var x in Meshes(c)) yield return x;
-    }
 
     /// <summary>Objects of the file (the editor's view of the disk).</summary>
     public IReadOnlyList<ObjectInfo> AllObjects()
@@ -72,7 +41,7 @@ public partial class EditorMode
     ObjectInfo ToInfo(Obj o)
     {
         var (x, y) = ObjectEdits.Position(o);
-        return new ObjectInfo(o.GetValueOrDefault("id") as string ?? "", Map.OriginEpsg5514 == null ? "" : ParcelAtAbs(x, y)?.Id ?? "", o.GetValueOrDefault("asset") as string ?? "", x, y,
+        return new ObjectInfo(o.GetValueOrDefault("id") as string ?? "", Map.OriginEpsg5514 == null ? "" : Map.ParcelAtAbs(x, y)?.Id ?? "", o.GetValueOrDefault("asset") as string ?? "", x, y,
             ObjectEdits.Rotation(o), ObjectEdits.Scale(o), o.GetValueOrDefault("colour") as string);
     }
 
@@ -107,7 +76,7 @@ public partial class EditorMode
         _ghost = new Node3D { Name = "Ghost", Visible = false };
         var model = Map.CreateObjectModel(asset, null, out _);
         _ghost.AddChild(model);
-        foreach (var mi in Meshes(model))
+        foreach (var mi in Gfx.Meshes(model))
         {
             mi.MaterialOverride = _ghostOk;
             mi.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
@@ -133,7 +102,7 @@ public partial class EditorMode
 
     public void RotateGhost(double deg)
     {
-        GhostRotation = Mod360(GhostRotation + deg);
+        GhostRotation = MapFrame.Mod360(GhostRotation + deg);
         if (_ghost != null) _ghost.RotationDegrees = new Vector3(0, (float)GhostRotation, 0);
         _panelDirty = true;
     }
@@ -142,9 +111,9 @@ public partial class EditorMode
     public void UpdateGhost(Vector3 ground, bool free)
     {
         if (_ghost == null || Map.OriginEpsg5514 == null) return;
-        var (x, y) = SnapAbs(ground, free);
+        var (x, y) = Map.SnapAbs(ground, free);
         GhostAbsolute = (x, y);
-        var l = FromAbsolute(x, y);
+        var l = Map.FromAbsolute(x, y);
         _ghost.Position = new Vector3(l.X, Map.GroundHeightOrMean(l.X, l.Y), l.Y);
         _ghost.RotationDegrees = new Vector3(0, (float)GhostRotation, 0);
         _ghost.Visible = true;
@@ -155,7 +124,7 @@ public partial class EditorMode
     {
         if (PlacementAsset == null) { Say("choose an asset in the palette first", true); return false; }
         if (Map.OriginEpsg5514 == null) { Say("this map has no origin_epsg5514", true); return false; }
-        var (x, y) = SnapAbs(ground, free);
+        var (x, y) = Map.SnapAbs(ground, free);
         var asset = PlacementAsset;
         var rot = GhostRotation;
         var name = AssetName(asset);
@@ -189,7 +158,7 @@ public partial class EditorMode
         if (_aabbCache.Count > 4000) _aabbCache.Clear();
         Aabb? box = null;
         var inv = node.GlobalTransform.AffineInverse();
-        foreach (var mi in Meshes(node))
+        foreach (var mi in Gfx.Meshes(node))
         {
             if (mi.Mesh == null) continue;
             var b = (inv * mi.GlobalTransform) * mi.GetAabb();
@@ -244,40 +213,26 @@ public partial class EditorMode
     public float GizmoRadius { get; private set; }
     public bool GizmoVisible => _gizmoRoot.Visible;
 
-    static StandardMaterial3D Unshaded(Color c, bool noDepth)
-        => new() { ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, AlbedoColor = c, CullMode = BaseMaterial3D.CullModeEnum.Disabled, NoDepthTest = noDepth };
-
     void BuildGizmo()
     {
         _gizmoRoot = new Node3D { Name = "ObjectGizmo", Visible = false };
         _gizBox = new Node3D { Name = "GizmoBox" };
-        _gizBoxMesh = new MeshInstance3D { CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, MaterialOverride = Unshaded(new Color(1f, 0.92f, 0.1f), false) };
+        _gizBoxMesh = new MeshInstance3D { CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, MaterialOverride = Gfx.Unshaded(new Color(1f, 0.92f, 0.1f), false) };
         _gizBox.AddChild(_gizBoxMesh);
         _gizRing = new Node3D { Name = "GizmoRing" };
         var ringColour = new Color(0.1f, 0.95f, 1f);
-        _gizRingMesh = new MeshInstance3D { CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, MaterialOverride = Unshaded(ringColour, true) };
-        _gizArrowMesh = new MeshInstance3D { CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, MaterialOverride = Unshaded(ringColour, true) };
+        _gizRingMesh = new MeshInstance3D { CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, MaterialOverride = Gfx.Unshaded(ringColour, true) };
+        _gizArrowMesh = new MeshInstance3D { CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, MaterialOverride = Gfx.Unshaded(ringColour, true) };
         _gizKnob = new MeshInstance3D
         {
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             Mesh = new SphereMesh { Radius = 0.3f, Height = 0.6f, RadialSegments = 12, Rings = 6 },
-            MaterialOverride = Unshaded(new Color(1f, 0.2f, 0.9f), true),
+            MaterialOverride = Gfx.Unshaded(new Color(1f, 0.2f, 0.9f), true),
         };
         _gizRing.AddChild(_gizRingMesh); _gizRing.AddChild(_gizArrowMesh); _gizRing.AddChild(_gizKnob);
         _gizmoRoot.AddChild(_gizBox);
         _gizmoRoot.AddChild(_gizRing);
         MarkerRoot.AddChild(_gizmoRoot);
-    }
-
-    static ArrayMesh Strip(List<Vector3> verts, List<int> idx, Mesh.PrimitiveType type = Mesh.PrimitiveType.Triangles)
-    {
-        var arrays = new Godot.Collections.Array();
-        arrays.Resize((int)Mesh.ArrayType.Max);
-        arrays[(int)Mesh.ArrayType.Vertex] = verts.ToArray();
-        arrays[(int)Mesh.ArrayType.Index] = idx.ToArray();
-        var mesh = new ArrayMesh();
-        mesh.AddSurfaceFromArrays(type, arrays);
-        return mesh;
     }
 
     void RebuildGizmoShapes(Aabb box, float radius)
@@ -286,7 +241,7 @@ public partial class EditorMode
         var v = new List<Vector3>();
         for (var i = 0; i < 8; i++) v.Add(box.GetEndpoint(i));
         var edges = new[] { 0, 1, 1, 5, 5, 4, 4, 0, 2, 3, 3, 7, 7, 6, 6, 2, 0, 2, 1, 3, 4, 6, 5, 7 };
-        _gizBoxMesh.Mesh = Strip(v, edges.ToList(), Mesh.PrimitiveType.Lines);
+        _gizBoxMesh.Mesh = Gfx.Strip(v, edges.ToList(), Mesh.PrimitiveType.Lines);
         // ring (a flat ribbon of 0.14 m) and the arrow from the centre to the knob, along local +X
         var rv = new List<Vector3>(); var ri = new List<int>();
         const int n = 72;
@@ -297,9 +252,9 @@ public partial class EditorMode
             rv.Add(d * (radius - 0.07f)); rv.Add(d * (radius + 0.07f));
             if (i > 0) { var k = rv.Count - 4; ri.AddRange(new[] { k, k + 1, k + 3, k, k + 3, k + 2 }); }
         }
-        _gizRingMesh.Mesh = Strip(rv, ri);
+        _gizRingMesh.Mesh = Gfx.Strip(rv, ri);
         var av = new List<Vector3> { new(0, 0, -0.06f), new(0, 0, 0.06f), new(radius, 0, 0.06f), new(radius, 0, -0.06f) };
-        _gizArrowMesh.Mesh = Strip(av, new List<int> { 0, 1, 2, 0, 2, 3 });
+        _gizArrowMesh.Mesh = Gfx.Strip(av, new List<int> { 0, 1, 2, 0, 2, 3 });
         _gizKnob.Position = new Vector3(radius, 0, 0);
     }
 
@@ -346,7 +301,7 @@ public partial class EditorMode
         var o = ObjectData(id);
         if (o == null || Map.OriginEpsg5514 == null) return false;
         SelectObject(id);
-        var (gx, gy) = RawAbs(grabGround);
+        var (gx, gy) = Map.RawAbs(grabGround);
         _grab = (o.X - gx, o.Y - gy);
         _drag = DragKind.Move; _dragId = id; _dragStart = _dragNow = (o.X, o.Y, o.Rotation); _dragMoved = false;
         return true;
@@ -365,18 +320,18 @@ public partial class EditorMode
     public void DragTo(Vector3 ground, bool free)
     {
         if (_drag == DragKind.None || _dragId == null) return;
-        var (gx, gy) = RawAbs(ground);
+        var (gx, gy) = Map.RawAbs(ground);
         if (_drag == DragKind.Move)
         {
             double x = gx + _grab.dx, y = gy + _grab.dy;
-            if (!free) { x = Snap(x, MoveSnap); y = Snap(y, MoveSnap); }
+            if (!free) { x = MapFrame.Snap(x, MapFrame.MoveSnap); y = MapFrame.Snap(y, MapFrame.MoveSnap); }
             _dragNow = (Math.Round(x, 3), Math.Round(y, 3), _dragStart.rot);
         }
         else
         {
             var a = Math.Atan2(gy - _dragStart.y, gx - _dragStart.x) * 180.0 / Math.PI;
-            a = free ? Math.Round(a, 1) : Snap(a, RotateSnap);
-            _dragNow = (_dragStart.x, _dragStart.y, Math.Round(Mod360(a), 3));
+            a = free ? Math.Round(a, 1) : MapFrame.Snap(a, RotateSnap);
+            _dragNow = (_dragStart.x, _dragStart.y, Math.Round(MapFrame.Mod360(a), 3));
         }
         if (_dragNow != _dragStart) _dragMoved = true;
         PreviewObject(_dragId, _dragNow.x, _dragNow.y, _dragNow.rot);
@@ -385,7 +340,7 @@ public partial class EditorMode
     void PreviewObject(string id, double x, double y, double rot)
     {
         if (!Map.ObjectNodes.TryGetValue(id, out var node) || !GodotObject.IsInstanceValid(node)) return;
-        var l = FromAbsolute(x, y);
+        var l = Map.FromAbsolute(x, y);
         // an object fixed at an elevation (a house connector on a wall or roof) keeps it; the others stand on the ground
         var fixedZ = ObjectEdits.Find(Disk(), id) is { } f ? ObjectEdits.Number(f.obj.GetValueOrDefault("z")) : null;
         node.Position = new Vector3(l.X, fixedZ is double z ? (float)z : Map.GroundHeightOrMean(l.X, l.Y), l.Y);
@@ -465,7 +420,7 @@ public partial class EditorMode
     public bool RotateSelected(double deg)
     {
         var o = SelectedObject;
-        return o != null && SetObjectRotation(Mod360(o.Rotation + deg), o.Id);
+        return o != null && SetObjectRotation(MapFrame.Mod360(o.Rotation + deg), o.Id);
     }
 
     public bool DeleteSelected()

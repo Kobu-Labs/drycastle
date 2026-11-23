@@ -203,7 +203,7 @@ public partial class EditorMode
     /// <summary>Look at an absolute point from above and south-east, a little left of centre so the sidebar does not cover it (screenshots).</summary>
     public void LookAtAbs(double x, double y, float dist)
     {
-        var t = FromAbsolute(x, y);
+        var t = Map.FromAbsolute(x, y);
         var target = new Vector3(t.X, Map.GroundHeightOrMean(t.X, t.Y), t.Y);
         var right = FlyCam.GlobalBasis.X;
         LookFrom(target + new Vector3(0, dist * 0.8f, dist * 0.6f) + right * dist * 0.15f, target + right * dist * 0.15f);
@@ -456,7 +456,7 @@ public partial class EditorMode
 
     Vector3 GroundPoint((double x, double y) p)
     {
-        var l = FromAbsolute(p.x, p.y);
+        var l = Map.FromAbsolute(p.x, p.y);
         return new Vector3(l.X, Map.GroundHeightOrMean(l.X, l.Y) + 0.3f, l.Y);
     }
 
@@ -565,7 +565,7 @@ public partial class EditorMode
                 var at = OverUi(mouse) ? GetViewport().GetVisibleRect().Size / 2 : mouse;
                 if (ShapesReady() && RayToGround(FlyCam.ProjectRayOrigin(at), FlyCam.ProjectRayNormal(at), out var g))
                 {
-                    var (x, y) = SnapAbs(g, Input.IsKeyPressed(Key.Ctrl));
+                    var (x, y) = Map.SnapAbs(g, Input.IsKeyPressed(Key.Ctrl));
                     AddShapePoint(x, y);
                 }
                 return true;
@@ -608,8 +608,8 @@ public partial class EditorMode
         }
         if (drafting && _draft.Count >= 3 && PickCorner(screen, new[] { _draft[0] }) == 0) { CloseShape(); return; }
         if (!RayToGround(FlyCam.ProjectRayOrigin(screen), FlyCam.ProjectRayNormal(screen), out var g)) { Say("click on the ground", true); return; }
-        if (drafting) { var (x, y) = SnapAbs(g, free); AddShapePoint(x, y); return; }
-        var (rx, ry) = RawAbs(g);
+        if (drafting) { var (x, y) = Map.SnapAbs(g, free); AddShapePoint(x, y); return; }
+        var (rx, ry) = Map.RawAbs(g);
         if (ShapeAt(k, rx, ry) is { } hit)
         {
             if (k == ShapeKind.Zone && free) ToggleZoneMark(hit); else SelectShape(k, hit); // Ctrl+click: mark for the mass delete
@@ -649,7 +649,7 @@ public partial class EditorMode
         var free = Input.IsKeyPressed(Key.Ctrl);
         var over = OverUi(mouse) || _looking || Modal;
         _cursor = null;
-        if (!over && Map.OriginEpsg5514 != null && RayToGround(FlyCam.ProjectRayOrigin(mouse), FlyCam.ProjectRayNormal(mouse), out var g)) _cursor = SnapAbs(g, free);
+        if (!over && Map.OriginEpsg5514 != null && RayToGround(FlyCam.ProjectRayOrigin(mouse), FlyCam.ProjectRayNormal(mouse), out var g)) _cursor = Map.SnapAbs(g, free);
         _hoverCorner = -1;
         var mode = ShapeMode;
         if (!over && mode is ShapeState.Selected && SelectedShape(CurrentKind) is { } sr) _hoverCorner = PickCorner(mouse, sr.Points);
@@ -670,7 +670,7 @@ public partial class EditorMode
         var n = closed ? pts.Count : pts.Count - 1;
         for (var i = 0; i < n; i++)
         {
-            var a = FromAbsolute(pts[i].x, pts[i].y); var b = FromAbsolute(pts[(i + 1) % pts.Count].x, pts[(i + 1) % pts.Count].y);
+            var a = Map.FromAbsolute(pts[i].x, pts[i].y); var b = Map.FromAbsolute(pts[(i + 1) % pts.Count].x, pts[(i + 1) % pts.Count].y);
             if (a.DistanceSquaredTo(b) > 1e-8f) s.Add((a, b));
         }
         return s;
@@ -699,9 +699,9 @@ public partial class EditorMode
                 if (!InLevel && _cursor is { } cur && _draft.Count > 0)
                 {
                     var ok = ObjectEdits.ChainAccepts(_draft, cur);
-                    var a = FromAbsolute(_draft[^1].x, _draft[^1].y); var b = FromAbsolute(cur.x, cur.y);
+                    var a = Map.FromAbsolute(_draft[^1].x, _draft[^1].y); var b = Map.FromAbsolute(cur.x, cur.y);
                     if (a.DistanceSquaredTo(b) > 1e-8f) (ok ? ghost : bad).Add((a, b));
-                    if (_draft.Count >= 2 && ok) { var f = FromAbsolute(_draft[0].x, _draft[0].y); if (b.DistanceSquaredTo(f) > 1e-8f) ghost.Add((b, f)); }
+                    if (_draft.Count >= 2 && ok) { var f = Map.FromAbsolute(_draft[0].x, _draft[0].y); if (b.DistanceSquaredTo(f) > 1e-8f) ghost.Add((b, f)); }
                 }
                 SetOutline(OutlineShapeDraft, InLevel && RingBad(_draft) ? new() : chain, EditorTheme.Accent, 0.31f, 0.45f);
                 SetOutline(OutlineShapeGhost, ghost, new Color(EditorTheme.Accent, 0.5f), 0.30f, 0.35f);

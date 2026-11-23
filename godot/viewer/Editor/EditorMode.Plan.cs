@@ -57,7 +57,7 @@ public partial class EditorMode
     /// <summary>A left click: a pole point on the ground there (0.5 m grid), or the removal of the one already there.</summary>
     public bool PlanPoleAt(Vector3 ground)
     {
-        var (x, y) = SnapAbs(ground, false);
+        var (x, y) = Map.SnapAbs(ground, false);
         var at = _plan.FindIndex(p => !p.House && Math.Abs(p.X - x) <= PlanPickM && Math.Abs(p.Y - y) <= PlanPickM);
         if (at >= 0) { _plan.RemoveAt(at); PlanChanged(); return true; }
         _plan.Add(new PlanPoint(false, x, y, null));
@@ -71,7 +71,7 @@ public partial class EditorMode
         if (MountOf(hit.Normal) == null) { Say("click a wall or the roof, not the underside of something", true); return false; }
         var at = _plan.FindIndex(p => p.House && p.Hit!.Value.Point.DistanceTo(hit.Point) <= PlanPickM);
         if (at >= 0) { _plan.RemoveAt(at); PlanChanged(); return true; }
-        var (x, y) = RawAbs(hit.Point);
+        var (x, y) = Map.RawAbs(hit.Point);
         _plan.Add(new PlanPoint(true, Math.Round(x, 3), Math.Round(y, 3), hit));
         PlanChanged();
         return true;
@@ -136,7 +136,7 @@ public partial class EditorMode
                 if (to < 0 || ids[to] == null || MountOf(hit.Normal) is not { } mount || PickConnector(mount, hit.Point) is not { } asset) { skipped++; continue; }
                 var rot = mount == "wall" ? Math.Atan2(-hit.Normal.Z, hit.Normal.X) : Math.Atan2(poles[to].Y - houses[h].Y, poles[to].X - houses[h].X);
                 var id = ObjectEdits.NextId(root);
-                var o = ObjectEdits.Make(id, asset, houses[h].X, houses[h].Y, Math.Round(Mod360(rot * 180.0 / Math.PI), 1));
+                var o = ObjectEdits.Make(id, asset, houses[h].X, houses[h].Y, Math.Round(MapFrame.Mod360(rot * 180.0 / Math.PI), 1));
                 ObjectEdits.SetZ(o, Math.Round(hit.Point.Y, 3));
                 ObjectEdits.Add(root, o);
                 if (EditsFile.Connect(root, ids[to]!, id).ok) connected++;
@@ -152,8 +152,8 @@ public partial class EditorMode
 
     void BuildPlanWorld()
     {
-        _planOk = new MeshInstance3D { Name = "PlanOk", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, MaterialOverride = Unshaded(new Color(0.1f, 0.95f, 1f), true) };
-        _planBad = new MeshInstance3D { Name = "PlanBad", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, MaterialOverride = Unshaded(new Color(1f, 0.25f, 0.2f), true) };
+        _planOk = new MeshInstance3D { Name = "PlanOk", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, MaterialOverride = Gfx.Unshaded(new Color(0.1f, 0.95f, 1f), true) };
+        _planBad = new MeshInstance3D { Name = "PlanBad", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, MaterialOverride = Gfx.Unshaded(new Color(1f, 0.25f, 0.2f), true) };
         MarkerRoot.AddChild(_planOk);
         MarkerRoot.AddChild(_planBad);
     }
@@ -189,8 +189,8 @@ public partial class EditorMode
             foreach (var axis in new[] { Vector3.Right, Vector3.Up, Vector3.Back }) { list.Add(at - axis * 0.4f); list.Add(at + axis * 0.4f); }
             if (res.HouseTo[h] >= 0) { ok.Add(at); ok.Add(tops[res.HouseTo[h]]); }
         }
-        _planOk.Mesh = ok.Count == 0 ? null : Strip(ok, Enumerable.Range(0, ok.Count).ToList(), Mesh.PrimitiveType.Lines);
-        _planBad.Mesh = bad.Count == 0 ? null : Strip(bad, Enumerable.Range(0, bad.Count).ToList(), Mesh.PrimitiveType.Lines);
+        _planOk.Mesh = ok.Count == 0 ? null : Gfx.Strip(ok, Enumerable.Range(0, ok.Count).ToList(), Mesh.PrimitiveType.Lines);
+        _planBad.Mesh = bad.Count == 0 ? null : Gfx.Strip(bad, Enumerable.Range(0, bad.Count).ToList(), Mesh.PrimitiveType.Lines);
     }
 
     /// <summary>What Build would do, for the sidebar: poles, cables, houses connected, and what is out of reach.</summary>
