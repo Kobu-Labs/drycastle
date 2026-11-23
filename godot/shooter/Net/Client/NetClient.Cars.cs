@@ -39,13 +39,13 @@ public partial class NetClient
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Drive != null) v.Drive = DriveNodes.Find(v.Node, Vehicles.Vehicles[v.Kind]);
             if (ShotFx.Enabled) v.Wheels = CarView.FindWheels(v.Node);
             if (ShotFx.Enabled && GenericWheels(Vehicles.Vehicles[v.Kind])) v.Roller = VehicleWheels.Find(v.Node);
-            if (Vehicles.Vehicles[v.Kind].Trailer != null) v.Trailer = MakeTrailerView(v);
+            if (Vehicles.Vehicles[v.Kind].Trailer != null) v.Trailer = _tow.MakeView(v);
             Ctx.Cars.Add(v);
             _glass.ShowOf(id); // panes whose state arrived before the vehicle was drawn (ADR 0007)
         }
         v.Solid ??= VehicleCollider.Make(Ctx.Owned, Vehicles.Vehicles[v.Kind]);
         v.Lamps ??= ShotFx.Enabled ? CarLights.Attach(v.Node, Vehicles!.Vehicles[v.Kind]) : null;
-        if (v.Trailer != null) { OnTrailerRecord(v, rec); v.Driver = 0; } // a trailer's pitch field is its tractor's id, not a driver's (protocol 67)
+        if (v.Trailer != null) { _tow.OnRecord(v, rec); v.Driver = 0; } // a trailer's pitch field is its tractor's id, not a driver's (protocol 67)
         else v.Driver = VehicleRecord.Driver(rec);
         v.Lights = VehicleRecord.Lights(rec);
         v.Braking = v.Trailer == null && VehicleRecord.Braking(rec); // the server's brakes bit, not a guess from the speed (#409)
@@ -58,7 +58,7 @@ public partial class NetClient
         }
         v.LastTick = tick; v.Pos = rec.Position; v.Yaw = rec.YawRad;
         v.Buf.Push(tick, rec.Position, rec.YawRad, v.Trailer != null ? VehicleRecord.Tractor(rec) : 0); // a trailer's pitch slot carries its tractor's id, so it is drawn hitched exactly while the sample at the render tick says so (RenderTrailers)
-        RefreshHull(v);
+        _tow.RefreshHull(v);
         PlaceCarSolid(v);
     }
 
@@ -208,7 +208,7 @@ public partial class NetClient
                 kmh = _driveClient.StateOf(v) is { } ds ? MathF.Abs(ds.Speed) * 3.6f : v.Kmh; // a predicted vehicle's speed now, not a tenth of a second ago; a passenger reads it as the driver does
             }
         }
-        RenderTrailers(rt, dt); // every trailer, from its tractor as drawn just now (the hitch, the articulation, the ground fit, the wheels)
+        _tow.Render(rt, dt); // every trailer, from its tractor as drawn just now (the hitch, the articulation, the ground fit, the wheels)
         SeatRiders(); // the riders of every vehicle, on their seats as the vehicles are drawn this frame (ADR 0026)
         if (!Ctx.Driving) { HideSelfInCar(); LeaveView(); }
         if (!cockpit) EndCockpit();
@@ -220,7 +220,7 @@ public partial class NetClient
         else Ctx.Hud?.SetVehicleSpeed(Ctx.Driving ? kmh ?? 0f : null);
         string? prompt = null;
         if (Ctx.Driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? _flight.Prompt(fp) : Ctx.View.InArmedSeat ? ArmedSeatPrompt() : Ctx.Cars.MySeat() is { Def.Drive: not null } ride ? _driveClient.Prompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
-        if (driven != null && prompt != null && TowHint(driven) is { } towHint) prompt += "     " + towHint; // a trailer on the hook: the key that unhitches it
+        if (driven != null && prompt != null && _tow.TowHint(driven) is { } towHint) prompt += "     " + towHint; // a trailer on the hook: the key that unhitches it
         if (Ctx.Driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
         if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);
         else if (Ctx.Me != null && !Dead && NearestFreeCar(Ctx.Me.GlobalPosition) is { } free) prompt = Strings.F(_flight.DefOf(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
