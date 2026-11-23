@@ -1,13 +1,5 @@
 using Godot;
 using Drycastle.Shooter.Net.Client;
-using Drycastle.ShooterCore.Items;
-using Drycastle.ShooterCore.Killstreaks.Helicopter;
-using Drycastle.ShooterCore.Killstreaks.Moab;
-using Drycastle.ShooterCore.Killstreaks.Uav;
-using Drycastle.ShooterCore.Killstreaks;
-using Drycastle.ShooterCore.Match;
-using Drycastle.ShooterCore.Minimap;
-using Drycastle.ShooterCore.Mining;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;

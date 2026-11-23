@@ -1,12 +1,4 @@
 using Godot;
-using Drycastle.ShooterCore.Fsm;
-using Drycastle.ShooterCore.Glass;
-using Drycastle.ShooterCore.Hud;
-using Drycastle.ShooterCore.Items;
-using Drycastle.ShooterCore.Killstreaks.Helicopter;
-using Drycastle.ShooterCore.Killstreaks.Moab;
-using Drycastle.ShooterCore.Killstreaks;
-using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
 using NVec3 = System.Numerics.Vector3;
