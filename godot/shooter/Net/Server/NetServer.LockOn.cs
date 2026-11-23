@@ -128,7 +128,7 @@ public partial class NetServer
         {
             var hid = _nextRocket;
             _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
-            _rocketsFired++;
+            _smoke.RocketsFired++;
             _vehicleHoming.Add(new VehicleHoming { Id = hid, Owner = c.Id, Target = target, Weapon = (byte)shot.WeaponIndex, Def = w, Pos = N(eye) });
             BroadcastEvent(EventKind.HomingLaunch, LockCodec.Encode(new HomingLaunchMsg(hid, c.Id, (byte)shot.WeaponIndex, N(eye), target, 0f))); // Seconds 0: the client flies it as the server does
             return true;
@@ -136,7 +136,7 @@ public partial class NetServer
         if (LiveAircraft(target) is not { } aircraft || LockRules.Intercept(N(eye), w.ProjectileSpeed, w.ProjectileLife, aircraft.PositionAfter) is not { } plan) return false;
         var id = _nextRocket;
         _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
-        _rocketsFired++;
+        _smoke.RocketsFired++;
         _homing.Add(new Homing(id, c.Id, (byte)shot.WeaponIndex, w, target, plan.At, _elapsed + plan.Seconds));
         BroadcastEvent(EventKind.HomingLaunch, LockCodec.Encode(new HomingLaunchMsg(id, c.Id, (byte)shot.WeaponIndex, N(eye), target, plan.Seconds)));
         return true;
@@ -158,7 +158,7 @@ public partial class NetServer
             var at = aircraft?.Position ?? m.At;
             var down = aircraft != null && DamageAircraft(m.Target, aircraft, m.Def.Damage, m.Owner);
             if (aircraft != null) _gunFx.Hit(m.Owner, false, down);
-            _explosions++;
+            _smoke.Explosions++;
             BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(m.Id, m.Owner, m.Weapon, at, down ? def.KillBlastRadius : def.HitBlastRadius)));
         }
     }
@@ -185,7 +185,7 @@ public partial class NetServer
                     DamageVehicle(car, m.Def.Damage * (Vehicles?.RocketDamageMultiplier ?? 1f), m.Owner, m.Weapon, 0);
                     var down = car.Hp <= 0;
                     _gunFx.Hit(m.Owner, false, down);
-                    _explosions++;
+                    _smoke.Explosions++;
                     BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(m.Id, m.Owner, m.Weapon, car.Flight.Position, down ? def.KillBlastRadius : def.HitBlastRadius)));
                     continue;
                 }
@@ -193,7 +193,7 @@ public partial class NetServer
             }
             if (car != null && m.Age <= m.Def.ProjectileLife) continue;
             _vehicleHoming.RemoveAt(k);
-            _explosions++;
+            _smoke.Explosions++;
             BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(m.Id, m.Owner, m.Weapon, m.Pos, def.HitBlastRadius)));
         }
     }

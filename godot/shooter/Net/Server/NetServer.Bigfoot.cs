@@ -63,7 +63,7 @@ public partial class NetServer
         var weight = BigfootRules.Weight(BigfootData.Hits, source);
         if (!(weight > 0)) return DamageResult.Ignored;
         var killed = bf.Hit(attackerId, weight);
-        _hitsLanded++;
+        _smoke.HitsLanded++;
         var msg = new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(BigfootRules.TargetId, attackerId, weaponIdx, (ushort)Math.Clamp(weight, 1f, 255f), false, false, killed)));
         _byId.TryGetValue(attackerId, out var attacker);
         if (attackerId == _gunFxOwner) _gunFx.Hit(attackerId, false, killed);

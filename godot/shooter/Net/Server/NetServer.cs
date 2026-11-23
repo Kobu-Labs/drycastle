@@ -63,8 +63,6 @@ public partial class NetServer : Node
     uint _tick;
     readonly PlayerIds _ids = new();
     double _elapsed;
-    int _peakPlayers;
-    readonly Dictionary<string, float> _movedByName = new();
     readonly List<NetInput> _scratch = new();
     readonly Dictionary<ushort, ServerClient> _byId = new();
     /// <summary>The entity states of the recent ticks, shared by every client's encoder (the baselines of their deltas).</summary>
@@ -72,12 +70,9 @@ public partial class NetServer : Node
     /// <summary>The world states of recent ticks the server sent (the world channel's baselines, shared by every client).</summary>
     readonly WorldHistory _sentWorld = new();
     MatchSim _match = null!;
-    // match smoke bookkeeping
-    int _kills, _roundsEnded, _restarts, _ignoredHits, _earlyProtectionEnds;
-    double _finishAt;
     readonly Random _rng = new();
-    // weapons smoke bookkeeping
-    int _shotsFired, _hitsLanded, _headshots, _wallBlocked, _backstabs, _refills;
+    /// <summary>What the smoke tests count (and their verdicts); nothing reads it on a production server.</summary>
+    readonly SmokeStats _smoke = new();
     // rockets: server-owned projectile entities, ids from 0x8000 up (player ids count up from 1)
     /// <summary>A rocket in flight. Speed and Life are per launch when set (a gunship's, killstreaks.json); zero keeps the weapon's own.</summary>
     /// <summary>FromCar is the vehicle its owner fired it from, in an armed seat (null on foot): while the owner still rides it, the rocket passes its hull and spares its riders.</summary>
@@ -92,7 +87,6 @@ public partial class NetServer : Node
     /// <summary>Blast smoke (ticket #103): flat arena with three cars (two side by side, one far), judges vehicle damage, the blast and the chain reaction.</summary>
     public bool BlastSmoke;
     bool ArenaMode => WeaponsSmoke || RpgSmoke || CarSmoke || BlastSmoke;
-    int _rocketsFired, _explosions, _directHits, _splashHits, _selfHits, _worldExplosions, _expiredRockets, _knocked;
     public const float ArenaX = 20000f, ArenaZ = 20000f;
 
     public override void _Ready()
@@ -150,6 +144,10 @@ public partial class NetServer : Node
         _rozhlas?.Pump(); // the live rozhlas feed's due frames (a thread feeds ffmpeg; the sending is here, on the game thread)
     }
 
+    /// <summary>
+    /// One 30 Hz tick, in this order (it decides the simulation, so it does not change lightly): receive and housekeeping, the world (match, animals, events), the killstreaks,
+    /// the bots, the players' inputs, the rockets and corpses, the vehicles, the blasts and the tick's flushes, the lag-compensation poses, then the snapshots and the report.
+    /// </summary>
     public override void _PhysicsProcess(double delta)
     {
         var tickStartUs = Time.GetTicksUsec();
@@ -161,10 +159,44 @@ public partial class NetServer : Node
             if (_tick >= 3) { CheckSpawnGround(); SpawnCars(); PlanTargets(); BuildBotNav(force: true); } // always: citizens and events need it too, and a bake during play times the clients out
             return; // not accepting connections until the spawn list is validated
         }
+        var dt = (float)delta;
         _elapsed += delta;
         _perf?.Begin();
         PhasesBegin();
         Prof.TickBegin();
+        ReceiveAndHousekeep();
+        TickWorld(dt);
+        StreakTick(dt);
+        PerfLap(ServerPerf.Ph.Streaks);
+        BotsTick(dt); // fills the roster and queues each bot's input for this tick (#214)
+        HarvesterTick(dt); // the harvester event: its spawn, its driver's pedals
+        ScudEventTick(dt); // the Scud event: who boarded the truck, the search time, the bunkers' carts
+        PerfLap(ServerPerf.Ph.Bots);
+        SimulatePlayers(dt);
+        StepRockets(dt);
+        PerfLap(ServerPerf.Ph.Rockets);
+        StepCorpses(dt);
+        PerfLap(ServerPerf.Ph.Corpses);
+        StepVehiclesAndRiders(dt);
+        ResolveBlastsAndFlush(dt);
+        if (CarSmoke && _carExits >= 1 && _smoke.FinishAt == 0) _smoke.FinishAt = _elapsed + 5.0; // after the bot's check that the empty car stays put
+        CaptureLagPoses(); // the poses this tick ends with, the state the snapshots carry (ADR 0013)
+        CaptureVehiclePoses(); // and the vehicles' (B-02)
+        PerfLap(ServerPerf.Ph.LagCapture);
+        if (catchUp && LossTest == 0) _skippedSnapshots++; // the next regular tick sends the current state
+        else SendSnapshots();
+        PerfLap(ServerPerf.Ph.Snapshots);
+        TickTelemetry(tickStartUs, delta);
+        LossTickEnd(tickStartUs);
+        PerfLap(ServerPerf.Ph.Telemetry);
+        PerfEnd();
+        ReportTick();
+        FinishSmokeIfDue();
+    }
+
+    /// <summary>Network in: this tick's packets, the profile loads and saves that finished, and the connections and requests that wait on a clock.</summary>
+    void ReceiveAndHousekeep()
+    {
         foreach (var cl in _clients.Values) cl.PacketsThisTick = 0;
         Poll();
         PerfLap(ServerPerf.Ph.Poll);
@@ -175,6 +207,11 @@ public partial class NetServer : Node
         DropSilentPeers();
         IntelTick(); // a made-up event whose time is up leaves the intel screen
         PerfLap(ServerPerf.Ph.Housekeeping);
+    }
+
+    /// <summary>The match and everything that lives in the world besides players: the entities, the citizens, the animals, the Mass, the Thieves, the rozhlas.</summary>
+    void TickWorld(float dt)
+    {
         _audit?.Begin();
         var pt = Prof.Begin();
         _match.Update();
@@ -186,104 +223,91 @@ public partial class NetServer : Node
         AnimalsPrepare(); // the players and moving vehicles the animals look at, read once for all of them
         _audit?.Lap(1);
         pt = Prof.Lap(Prof.S.Prepare, pt);
-        _match.Entities.Tick((float)delta);
+        _match.Entities.Tick(dt);
         _audit?.Lap(2);
         pt = Prof.Lap(Prof.S.Entities, pt);
-        CitizensTick((float)delta);
+        CitizensTick(dt);
         _audit?.Lap(3);
         pt = Prof.Lap(Prof.S.Citizens, pt);
-        PetsTick((float)delta);
+        PetsTick(dt);
         _audit?.Lap(4);
         pt = Prof.Lap(Prof.S.Pets, pt);
-        WildlifeTick((float)delta);
+        WildlifeTick(dt);
         CompanionsTick();
         AnimalsDone(); // the animals have ticked: the players move from here on
         _audit?.Lap(5);
         pt = Prof.Lap(Prof.S.Wildlife, pt);
-        MassTick((float)delta); // the Holy Mass: its clock, the pastor, the seats
+        MassTick(dt); // the Holy Mass: its clock, the pastor, the seats
         _audit?.Lap(6);
-        ThievesTick((float)delta); // the Thieves event: its phase clock
+        ThievesTick(dt); // the Thieves event: its phase clock
         _audit?.Lap(7);
-        _rozhlas.Tick((float)delta); // the village loudspeaker: the schedule and the hijack clock
+        _rozhlas.Tick(dt); // the village loudspeaker: the schedule and the hijack clock
         _audit?.Lap(8);
         Prof.End(Prof.S.Events, pt);
         PerfLap(ServerPerf.Ph.Match);
-        StreakTick((float)delta);
-        PerfLap(ServerPerf.Ph.Streaks);
-        BotsTick((float)delta); // fills the roster and queues each bot's input for this tick (#214)
-        HarvesterTick((float)delta); // the harvester event: its spawn, its driver's pedals
-        ScudEventTick((float)delta); // the Scud event: who boarded the truck, the search time, the bunkers' carts
-        PerfLap(ServerPerf.Ph.Bots);
+    }
+
+    /// <summary>Every joined player takes the inputs queued for this tick (bots included), then the Lock-on launchers step.</summary>
+    void SimulatePlayers(float dt)
+    {
         foreach (var car in _cars) car.PlaceSolid(); // the boxes on-foot players are stopped by, where the vehicles stand after the last tick (#217)
         PlaceVanSolids(); // and the Raid vans' (a van that stands is solid)
         PerfLap(ServerPerf.Ph.PlaceSolids);
         _simClients.Clear(); _simClients.AddRange(_byId.Values); // a copy: a client may leave while the others are simulated
-        foreach (var c in _simClients) SimulateClient(c, (float)delta); // every joined player, bots included
-        StepLocks((float)delta); // the Lock-on launchers: each Lock steps where its player now looks (ADR 0031)
+        foreach (var c in _simClients) SimulateClient(c, dt); // every joined player, bots included
+        StepLocks(dt); // the Lock-on launchers: each Lock steps where its player now looks (ADR 0031)
         PerfLap(ServerPerf.Ph.SimClients);
-        StepRockets((float)delta);
-        PerfLap(ServerPerf.Ph.Rockets);
-        StepCorpses((float)delta);
-        PerfLap(ServerPerf.Ph.Corpses);
-        StepScud((float)delta); // the Scud trucks' launchers: the crew's lock, the rack, the brakes (before the vehicles step)
-        StepVehicles((float)delta);
-        StepRidingCorpses((float)delta); // the dead pilots and drivers move with the vehicles that just moved
-        HarvesterAfterVehicles((float)delta); // what the harvester ran over, the corpses it draws in, the bales' fire
+    }
+
+    void StepVehiclesAndRiders(float dt)
+    {
+        StepScud(dt); // the Scud trucks' launchers: the crew's lock, the rack, the brakes (before the vehicles step)
+        StepVehicles(dt);
+        StepRidingCorpses(dt); // the dead pilots and drivers move with the vehicles that just moved
+        HarvesterAfterVehicles(dt); // what the harvester ran over, the corpses it draws in, the bales' fire
         PerfLap(ServerPerf.Ph.Vehicles);
-        StatusTick((float)delta); // burns tick
-        PlantationTick((float)delta); // highs run out
+    }
+
+    /// <summary>What the tick's shots set off, and the messages that are sent once per tick however many things changed.</summary>
+    void ResolveBlastsAndFlush(float dt)
+    {
+        StatusTick(dt); // burns tick
+        PlantationTick(dt); // highs run out
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
         DetonateFlak();    // flak shells that have arrived burst now
-        StepVehicleHoming((float)delta); // missiles homing on flown helicopters fly and hit now
+        StepVehicleHoming(dt); // missiles homing on flown helicopters fly and hit now
         DetonateHoming();  // homing missiles that have arrived hit their Aircraft now
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
-        _scenery.Tick((float)delta); // the pole lamps and road sign plates: clocks of the broken ones and the changes of this tick (ADR 0037, 0039)
+        _scenery.Tick(dt); // the pole lamps and road sign plates: clocks of the broken ones and the changes of this tick (ADR 0037, 0039)
         FlushStatuses(); // statuses and burning that changed this tick
         FlushScoreboard(); // once a tick at most, and about once a second (the ping), however many kills the tick had (A-04)
         PerfLap(ServerPerf.Ph.Detonate);
-        if (CarSmoke && _carExits >= 1 && _finishAt == 0) _finishAt = _elapsed + 5.0; // after the bot's check that the empty car stays put
-        CaptureLagPoses(); // the poses this tick ends with, the state the snapshots carry (ADR 0013)
-        CaptureVehiclePoses(); // and the vehicles' (B-02)
-        PerfLap(ServerPerf.Ph.LagCapture);
-        if (catchUp && LossTest == 0) _skippedSnapshots++; // the next regular tick sends the current state
-        else SendSnapshots();
-        PerfLap(ServerPerf.Ph.Snapshots);
-        TickTelemetry(tickStartUs, delta);
-        LossTickEnd(tickStartUs);
-        PerfLap(ServerPerf.Ph.Telemetry);
-        PerfEnd();
-        if (_clients.Count > _peakPlayers) _peakPlayers = _clients.Count;
-        if (QuitAfter > 0) foreach (var c in _clients.Values) if (c.Joined) _movedByName[c.Name] = c.MaxMoved; // only the smoke verdict reads it; a production server keeps no per-name history
-        if (_tick % (Wire.TickRate * 2) == 0 && _clients.Count > 0)
-        {
-            var logT = Prof.Begin(Prof.S.LogPlayers); // after the tick's clock stopped: this line is in no phase
-                GD.Print($"server: tick {_tick}, players {string.Join(", ", _byId.Values.Select(c => $"{c.Name}#{c.Id}@({c.Body.GlobalPosition.X:F1},{c.Body.GlobalPosition.Y:F1},{c.Body.GlobalPosition.Z:F1}) ack={c.Ack}"))}");
-            Prof.End(Prof.S.LogPlayers, logT);
-        }
-        if (RpgSmoke)
-        {
-            if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishRpg();
-        }
-        else if (BlastSmoke)
-        {
-            if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishBlast();
-        }
-        else if (CarSmoke)
-        {
-            if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishCar();
-        }
-        else if (WeaponsSmoke)
-        {
-            if (_finishAt > 0 && _elapsed >= _finishAt || QuitAfter > 0 && _elapsed >= QuitAfter) FinishWeapons();
-        }
-        else if (MatchSmoke)
-        {
-            if (_finishAt > 0 && _elapsed >= _finishAt) FinishMatch();
-            else if (QuitAfter > 0 && _elapsed >= QuitAfter) FinishMatch();
-        }
-        else if (LossTest > 0) { if (QuitAfter > 0 && _elapsed >= QuitAfter) LossEnd(false); }
-        else if (QuitAfter > 0 && _elapsed >= QuitAfter) Finish();
+    }
+
+    /// <summary>The peak player count, the smoke test's moved distances and the 2 s player log.</summary>
+    void ReportTick()
+    {
+        if (_clients.Count > _smoke.PeakPlayers) _smoke.PeakPlayers = _clients.Count;
+        if (QuitAfter > 0) foreach (var c in _clients.Values) if (c.Joined) _smoke.MovedByName[c.Name] = c.MaxMoved; // only the smoke verdict reads it; a production server keeps no per-name history
+        if (_tick % (Wire.TickRate * 2) != 0 || _clients.Count == 0) return;
+        var logT = Prof.Begin(Prof.S.LogPlayers); // after the tick's clock stopped: this line is in no phase
+        GD.Print($"server: tick {_tick}, players {string.Join(", ", _byId.Values.Select(c => $"{c.Name}#{c.Id}@({c.Body.GlobalPosition.X:F1},{c.Body.GlobalPosition.Y:F1},{c.Body.GlobalPosition.Z:F1}) ack={c.Ack}"))}");
+        Prof.End(Prof.S.LogPlayers, logT);
+    }
+
+    /// <summary>A test run ends the server with its verdict, when its deadline or its own finish time has come.</summary>
+    void FinishSmokeIfDue()
+    {
+        var quit = QuitAfter > 0 && _elapsed >= QuitAfter;
+        var due = _smoke.FinishAt > 0 && _elapsed >= _smoke.FinishAt || quit;
+        if (RpgSmoke) { if (due) EndSmoke(_smoke.Rpg()); }
+        else if (BlastSmoke) { if (due) FinishBlast(); }
+        else if (CarSmoke) { if (due) FinishCar(); }
+        else if (WeaponsSmoke) { if (due) EndSmoke(_smoke.Weapons()); }
+        else if (MatchSmoke) { if (due) EndSmoke(_smoke.Match(_match, MatchConfig)); }
+        else if (LossTest > 0) { if (quit) LossEnd(false); }
+        else if (quit) EndSmoke(_smoke.Net());
     }
 
     bool _spawnsChecked;
@@ -322,40 +346,9 @@ public partial class NetServer : Node
         Box("ArenaWall", new Vector3(ArenaX + 20, 2, ArenaZ - 3), new Vector3(14, 4, 0.5f));
     }
 
-    void FinishRpg()
+    /// <summary>Ends the server with the smoke test's verdict.</summary>
+    void EndSmoke(bool ok)
     {
-        var ok = _rocketsFired >= 3 && _explosions >= 3 && _directHits >= 1 && _splashHits >= 1 && _selfHits >= 1 && _worldExplosions >= 2 && _kills >= 1 && _refills >= 1 && _knocked >= 1;
-        GD.Print($"server: rpg smoke rockets={_rocketsFired} explosions={_explosions} direct={_directHits} splash={_splashHits} self={_selfHits} world={_worldExplosions} expired={_expiredRockets} knocked={_knocked} kills={_kills} refills={_refills}");
-        GD.Print(ok ? "SHOOTER_RPG_SERVER_OK" : "SHOOTER_RPG_SERVER_FAIL");
-        GetTree().Quit(ok ? 0 : 2);
-        SetPhysicsProcess(false);
-    }
-
-    void FinishWeapons()
-    {
-        var ok = _kills >= 2 && _hitsLanded >= 5 && _headshots >= 1 && _wallBlocked >= 1 && _backstabs >= 1 && _refills >= 1;
-        GD.Print($"server: weapons smoke shots={_shotsFired} hits={_hitsLanded} headshots={_headshots} backstabs={_backstabs} wallBlocked={_wallBlocked} kills={_kills} refills={_refills}");
-        GD.Print(ok ? "SHOOTER_WEAPONS_SERVER_OK" : "SHOOTER_WEAPONS_SERVER_FAIL");
-        GetTree().Quit(ok ? 0 : 2);
-        SetPhysicsProcess(false);
-    }
-
-    void FinishMatch()
-    {
-        var ok = _kills >= MatchConfig.ScoreGoal && _roundsEnded == 1 && _restarts == 1 && _ignoredHits >= 2 && _earlyProtectionEnds >= 1
-                 && _match.Phase == MatchPhase.Running && _match.Players.All(p => p.Kills == 0 && p.Deaths == 0);
-        GD.Print($"server: match smoke kills={_kills} roundsEnded={_roundsEnded} restarts={_restarts} ignoredHits(protection)={_ignoredHits} earlyProtectionEnds={_earlyProtectionEnds} phase={_match.Phase}");
-        GD.Print(ok ? "SHOOTER_MATCH_SERVER_OK" : "SHOOTER_MATCH_SERVER_FAIL");
-        GetTree().Quit(ok ? 0 : 2);
-        SetPhysicsProcess(false);
-    }
-
-    void Finish()
-    {
-        var movedOk = _movedByName.Count(kv => kv.Value >= 2f);
-        var ok = _peakPlayers >= 2 && movedOk >= 2;
-        GD.Print($"server: peak players {_peakPlayers}, players that moved >= 2 m: {movedOk} ({string.Join(", ", _movedByName.Select(kv => $"{kv.Key}={kv.Value:F1}m"))})");
-        GD.Print(ok ? "SHOOTER_NET_SERVER_OK" : "SHOOTER_NET_SERVER_FAIL");
         GetTree().Quit(ok ? 0 : 2);
         SetPhysicsProcess(false);
     }
@@ -390,48 +383,53 @@ public partial class NetServer : Node
     void OnPacket(ENetPacketPeer peer, byte[] d)
     {
         if (!_clients.TryGetValue(peer, out var c) || d.Length == 0) return;
-        if (d[0] < Wire.TInput) // message type tells the channel apart (Godot does not expose it per packet)
-        {
-            var m = Wire.DecodeReliable(d);
-            if (m is HelloMsg h && c.Phase == SessionPhase.Connected) OnHello(c, h);
-            else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || ArenaMode)) OnDebug(c, e.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpse } pu) OnPickUpCorpse(c, pu.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpseItem } pi) OnPickUpCorpseItem(c, pi.Payload);
-            else if (m is EventMsg { Kind: >= (byte)EventKind.EquipItem and <= (byte)EventKind.TakeGroundItem } ir) OnItemRequest(c, (EventKind)ir.Kind, ir.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.SetZero } sz) { if (c.Joined && BulletDrop.TryDecodeZero(sz.Payload, out var zi, out var zm) && zi < Weapons.Weapons.Count && BulletDrop.HasDrop(Weapons.Weapons[zi])) c.Zero.Set(zi, Weapons.Weapons[zi], zm); }
-            else if (m is EventMsg { Kind: (byte)EventKind.RaiseBinoculars } rb) { if (c.Joined && Binoculars.TryDecodeRaise(rb.Payload, out var up)) SetBinoculars(c, up && CarriesBinoculars(c)); }
-            else if (m is EventMsg { Kind: (byte)EventKind.Redeploy } rd && c.Joined) OnRedeploy(c, rd.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.MineralPick } mp && c.Joined) _minerals.OnPick(c, mp.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.CompanionPick } cp && c.Joined) OnCompanionPick(c, cp.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) OnSandboxTeleportTo(c, st.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.SeatSwitch } sw && c.Joined) OnSeatSwitch(c, sw.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.ScudCommand } sc && c.Joined) OnScudCommand(c, sc.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.TeamAssign } ta && c.Joined) OnTeamAssign(c, ta.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.SquadAssign } sq && c.Joined) OnSquadAssign(c, sq.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) OnHuntRequest(c, hq);
-            else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) OnChatSend(c, cs.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.ClientReport } cr) { if (c.Joined) OnClientReport(c, cr.Payload); }
-            else if (c.Joined) OnProfileMessage(c, m);
-        }
+        if (d[0] < Wire.TInput) OnReliable(c, Wire.DecodeReliable(d)); // message type tells the channel apart (Godot does not expose it per packet)
         else if (c.Joined && d[0] == Wire.TRozhlasMic) _rozhlas.OnMic(c, d); // the set holder's voice
-        else if (c.Joined && d[0] == Wire.TInput)
+        else if (c.Joined && d[0] == Wire.TInput) OnInputs(c, d);
+    }
+
+    /// <summary>A reliable message: the hello first, then the events by kind (the first that matches takes it), anything else is the profile's (loadouts, slots, camo).</summary>
+    void OnReliable(ServerClient c, ReliableMsg? m)
+    {
+        if (m is HelloMsg h && c.Phase == SessionPhase.Connected) OnHello(c, h);
+        else if (m is EventMsg { Kind: (byte)EventKind.Debug } e && c.Joined && (DebugCommands || ArenaMode)) OnDebug(c, e.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpse } pu) OnPickUpCorpse(c, pu.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.PickUpCorpseItem } pi) OnPickUpCorpseItem(c, pi.Payload);
+        else if (m is EventMsg { Kind: >= (byte)EventKind.EquipItem and <= (byte)EventKind.TakeGroundItem } ir) OnItemRequest(c, (EventKind)ir.Kind, ir.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.SetZero } sz) { if (c.Joined && BulletDrop.TryDecodeZero(sz.Payload, out var zi, out var zm) && zi < Weapons.Weapons.Count && BulletDrop.HasDrop(Weapons.Weapons[zi])) c.Zero.Set(zi, Weapons.Weapons[zi], zm); }
+        else if (m is EventMsg { Kind: (byte)EventKind.RaiseBinoculars } rb) { if (c.Joined && Binoculars.TryDecodeRaise(rb.Payload, out var up)) SetBinoculars(c, up && CarriesBinoculars(c)); }
+        else if (m is EventMsg { Kind: (byte)EventKind.Redeploy } rd && c.Joined) OnRedeploy(c, rd.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.MineralPick } mp && c.Joined) _minerals.OnPick(c, mp.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.CompanionPick } cp && c.Joined) OnCompanionPick(c, cp.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) OnSandboxTeleportTo(c, st.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.SeatSwitch } sw && c.Joined) OnSeatSwitch(c, sw.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.ScudCommand } sc && c.Joined) OnScudCommand(c, sc.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.TeamAssign } ta && c.Joined) OnTeamAssign(c, ta.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.SquadAssign } sq && c.Joined) OnSquadAssign(c, sq.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) OnHuntRequest(c, hq);
+        else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) OnChatSend(c, cs.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.ClientReport } cr) { if (c.Joined) OnClientReport(c, cr.Payload); }
+        else if (c.Joined) OnProfileMessage(c, m);
+    }
+
+    /// <summary>A packet of inputs: the snapshot and world acks it carries, and the inputs the player has not sent before, queued for the ticks (at most 8).</summary>
+    void OnInputs(ServerClient c, byte[] d)
+    {
+        _scratch.Clear();
+        if (!Wire.TryDecodeInputs(d, _scratch, out var snapTick, out var worldTick)) return;
+        if (snapTick != Wire.NoTick && snapTick <= _tick && _sentStates.Has(snapTick) && (c.SnapAck == Wire.NoTick || snapTick > c.SnapAck)) c.SnapAck = snapTick; // an older input's ack arriving late changes nothing
+        if (worldTick != Wire.NoTick && worldTick <= _tick && _sentWorld.Has(worldTick) && (c.WAck == Wire.NoTick || worldTick > c.WAck)) c.WAck = worldTick; // the world channel's ack, the same rule
+        foreach (var i in _scratch)
         {
-            _scratch.Clear();
-            if (!Wire.TryDecodeInputs(d, _scratch, out var snapTick, out var worldTick)) return;
-            if (snapTick != Wire.NoTick && snapTick <= _tick && _sentStates.Has(snapTick) && (c.SnapAck == Wire.NoTick || snapTick > c.SnapAck)) c.SnapAck = snapTick; // an older input's ack arriving late changes nothing
-            if (worldTick != Wire.NoTick && worldTick <= _tick && _sentWorld.Has(worldTick) && (c.WAck == Wire.NoTick || worldTick > c.WAck)) c.WAck = worldTick; // the world channel's ack, the same rule
-            foreach (var i in _scratch)
-            {
-                // redundant copies of already-seen inputs are skipped
-                if (c.HasSeq && !NetInput.Newer(i.Seq, c.LastSeq)) continue;
-                c.LastSeq = i.Seq; c.HasSeq = true;
-                c.Inputs.Enqueue(i);
-            }
-            while (c.Inputs.Count > 8) c.Inputs.Dequeue(); // a stalled sim never builds unbounded lag
+            // redundant copies of already-seen inputs are skipped
+            if (c.HasSeq && !NetInput.Newer(i.Seq, c.LastSeq)) continue;
+            c.LastSeq = i.Seq; c.HasSeq = true;
+            c.Inputs.Enqueue(i);
         }
+        while (c.Inputs.Count > 8) c.Inputs.Dequeue(); // a stalled sim never builds unbounded lag
     }
 
     void OnHello(ServerClient c, HelloMsg h)
@@ -611,7 +609,7 @@ public partial class NetServer : Node
         }
         if (MatchCodec.DecodeDebugKill(payload) is not { } target) return;
         var r = _match.ApplyDamage(target, c.Id, SpecialWeapons.Debug, 9999);
-        if (r == DamageResult.Ignored && _match.IsProtected(target)) _ignoredHits++;
+        if (r == DamageResult.Ignored && _match.IsProtected(target)) _smoke.IgnoredHits++;
         GD.Print($"server: debug kill {c.Name} -> #{target}: {r}");
     }
 
@@ -641,7 +639,7 @@ public partial class NetServer : Node
         {
             case ScoreboardChanged: _scoreDirty = true; break; // sent once the tick's events are in (FlushScoreboard)
             case PhaseChanged { Phase: MatchPhase.Ending }:
-                _roundsEnded++;
+                _smoke.RoundsEnded++;
                 RoundEnded();
                 GD.Print($"server: round over, winners {string.Join(",", _match.Winners)}");
                 break;
@@ -652,7 +650,7 @@ public partial class NetServer : Node
             case PhaseChanged { Phase: MatchPhase.Running }: // a new round: also an admin's restart of a running one
                 ResetRoundWorld();
                 LossRoundStart();
-                if (_roundsEnded > 0) { _restarts++; _finishAt = _elapsed + 1.5; }
+                if (_smoke.RoundsEnded > 0) { _smoke.Restarts++; _smoke.FinishAt = _elapsed + 1.5; }
                 GD.Print("server: round started");
                 break;
             case PlayerSpawned s:
@@ -678,10 +676,10 @@ public partial class NetServer : Node
             case PlayerKilled k:
                 HarvesterOnKill(k); // before the corpse: a body the harvester killed is not thrown
                 if (_byId.TryGetValue(k.Victim, out var kv) && kv.Car != null) RiderDies(kv); // frees the seat; the corpse (PlayerDied) stays in a pilot's or driver's seat, else falls (ADR 0026)
-                _kills += k.Killer != k.Victim ? 1 : 0;
+                _smoke.Kills += k.Killer != k.Victim ? 1 : 0;
                 BotKillLog(k);
-                if (WeaponsSmoke && _kills >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5;
-                if (RpgSmoke && _kills >= 1 && _finishAt == 0) _finishAt = _elapsed + 1.5;
+                if (WeaponsSmoke && _smoke.Kills >= 2 && _smoke.FinishAt == 0) _smoke.FinishAt = _elapsed + 1.5;
+                if (RpgSmoke && _smoke.Kills >= 1 && _smoke.FinishAt == 0) _smoke.FinishAt = _elapsed + 1.5;
                 LossKill(k.Killer, k.Victim);
                 RecordKill(k);
                 var fromStreak = StreakKill(k);
@@ -722,87 +720,102 @@ public partial class NetServer : Node
         // normally one input per tick; if the queue backs up (jitter), catch up with a second one
         var n = c.CatchUp.Steps(c.Inputs.Count); // a second input only while the catch-up credit lasts (#197)
         if (c.Inputs.Count == 0 && c.Car == null && _match.Get(c.Id)?.Life == PlayerLife.Alive) c.StarvedTicks++; // A-08: no input for this tick (the body does not move)
-        for (var k = 0; k < n && c.Inputs.Count > 0; k++)
-        {
-            var i = c.Inputs.Dequeue();
-            c.Ack = i.Seq; c.HasAck = true;
-            // a killstreak's control session (a turret being placed) takes the owner's input first; while it holds it,
-            // Fire and Use belong to the session, not to the weapon or the vehicles
-            var controlled = _streaks.RouteInput(c.Id, i);
-            if (controlled) i.Buttons &= (ushort)(ushort.MaxValue ^ (ushort)(MoveButtons.Fire | MoveButtons.Use));
-            if (c.Car == null && _elapsed < c.LaunchGraceUntil && (_elapsed < c.LaunchedAt + 0.3 || !c.Body.State.OnFloor)) i.Buttons &= (ushort)(ushort.MaxValue ^ (ushort)MoveButtons.Fire); // thrown by the Bigfoot and in the air: no shooting (#360)
-            var useDown = (i.Buttons & (ushort)MoveButtons.Use) != 0;
-            var useEdge = c.UseKey.Pressed(useDown);
-            _rozhlas.OnInput(c, useDown);
-            LootUse(c, useDown);
-            PlantationUse(c, useDown);
-            var lightsEdge = Headlights.Edge((i.Buttons & (ushort)MoveButtons.Headlights) != 0, ref c.LightsHeld);
-            SetHeadLamp(c, HeadLamp.Next(c.HeadLampOn, lightsEdge, c.Car == null, _match.Get(c.Id)?.Life == PlayerLife.Alive)); // H on foot: the head lamp (in a vehicle: the car's lights, below)
-            var streakDown = (i.Buttons & (ushort)MoveButtons.Killstreak) != 0;
-            var streakEdge = c.StreakKey.Pressed(streakDown);
-            // the throw key is fed every input; it is the grenade's only on foot and free-handed (a held key, a vehicle, death or a pin put the grenade away)
-            var canThrow = c.Car == null && !controlled && _match.Get(c.Id)?.Life == PlayerLife.Alive && _tick > c.HeldUntilTick && !_sitters.ContainsKey(c.Id) && !_pins.ContainsKey(c.Id)
-                && !c.Body.State.OnLadder && _elapsed >= c.LaunchGraceUntil;
-            var throwStep = c.Throw.Tick((i.Buttons & (ushort)MoveButtons.Throw) != 0, (i.Buttons & (ushort)MoveButtons.Aim) != 0, canThrow);
-            if (_match.Get(c.Id)?.Life != PlayerLife.Alive) continue; // dead or waiting: inputs are acked but ignored
-            if (c.Car == null && _tick <= c.HeldUntilTick) continue; // in the Bigfoot's hand: the input is acked, the body is where the Bigfoot puts it (issue #264)
-            if (c.Car == null && _sitters.TryGetValue(c.Id, out var sitter)) { SitterInput(c, sitter, i, useEdge); continue; } // seated in the church: no walking, no weapon
-            if (c.Car == null && _pins.TryGetValue(c.Id, out var pinYaw)) { c.Body.Yaw = pinYaw; c.Body.Pitch = 0; continue; } // pinned by the demon: held on the floor, no walking, no weapon, no use
-            if (streakEdge && !controlled) StreakActivate(c);
-            if (c.Car == null && _streaks.ControlOf(c.Id) is { FreezesBody: true }) continue; // controlling a streak entity that holds the body (the missile, a gunship): the body stands still
-            if (c.Car is { Thrown: not null }) continue; // the Bigfoot threw it: nobody steers, fires or gets out until it lands (issue #264)
-            if (c.Car != null)
-            {
-                // driving: a helicopter or a predicted ground vehicle is stepped here from the driver's inputs, other cars in StepVehicles; no walking or weapon timers.
-                // A gunner's inputs fire the car's gun instead (its aim is the view yaw and pitch).
-                // The pilot of a helicopter steps it here, once per input, as the body on foot is: the pilot's client predicts the same steps (ADR 0006).
-                if (c.CarSeat == 0 && c.Car.Flies) c.Car.StepFlight(FlightInput.FromNet(i, handsOff: controlled), dt, _tick);
-                else if (c.CarSeat == 0 && c.Car.Drives) { c.Car.Wake(); c.Car.StepDrive(DriveInput.FromNet(i, handsOff: controlled), dt); c.Car.DriveTick = _tick; } // the same for a driven vehicle (ADR 0010, ADR 0014): a driver's input wakes a parked one
-                else if (c.CarSeat == 0) { c.Throttle = Quant.Axis(i.MoveY); c.Steer = Quant.Axis(i.MoveX); c.Handbrake = (i.Buttons & (ushort)MoveButtons.Jump) != 0; }
-                else if (c.Car.Gun != null && c.Car.Def.Seats[c.CarSeat].Role == "gunner")
-                {
-                    GunnerInput(c, i);
-                    c.Body.Yaw = Quant.Yaw(i.Yaw); c.Body.Pitch = Quant.Pitch(i.Pitch); // a gunner's body faces where they aim, for everyone who sees them at the gun
-                }
-                else if (!controlled && RiderRules.Weapons(c.Car.Def, c.CarSeat, i) is { } seated) SeatWeapons(c, c.Car, i, seated); // an armed seat: the rider's own weapons (ADR 0011)
-                if (!RiderPose.FollowsAim(c.Car.Def.Seats[c.CarSeat])) SeatLook(c, c.Car, i); // every other seat: the body is the vehicle's and the head looks where the rider's first-person view does (ADR 0026)
-                if (lightsEdge) c.Car.Lights = Headlights.Toggle(c.Car.Lights);
-                if (c.Car.Def.Launcher != null ? ScudUseKey(c, useDown, useEdge, dt) : TowUseKey(c, c.Car, useDown, useEdge, dt)) ExitCar(c); // a Scud truck: a tap leaves, a hold loads a cart's rocket (a truck does not tow); with a trailer on the hook a tap leaves and a hold unhitches (UnhitchKey); otherwise the press leaves
-                continue;
-            }
-            var useAct = ScudUseKey(c, useDown, useEdge, dt); // beside a truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket)
-            if (useAct && LootInReach(c) == null && (MassSit(c) || GarageUse(c) || TryEnterCar(c))) continue; // the use key on lying Loot sends it back, it does not take a seat
-            c.Body.Yaw = Quant.Yaw(i.Yaw);
-            c.Body.Pitch = Quant.Pitch(i.Pitch);
-            var moveT = Prof.Begin(Prof.S.PlayerMove);
-            c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
-            Prof.End(Prof.S.PlayerMove, moveT);
-            c.StepTicks++;
-            c.Recoil.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Fire) != 0, c.W.Current.Recoil);
-            // breath hold: sprint is cancelled while aiming, so the sprint bit with aim held is the breath key
-            c.Breath.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Aim) != 0 && c.W.Current.ZoomFov > 0,
-                (i.Buttons & (ushort)MoveButtons.Sprint) != 0, c.W.Current, c.Perks.HoldBreathTime);
-            var wi = new WeaponInput((i.Buttons & (ushort)MoveButtons.Fire) != 0 && !c.Body.State.OnLadder, (i.Buttons & (ushort)MoveButtons.Reload) != 0, i.Slot, (i.Buttons & (ushort)MoveButtons.Switch) != 0, HasLock(c));
-            if (c.W.Update(_elapsed, wi) is { } shot)
-            {
-                if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++; // spawn protection ends on a real shot, not on Fire held with an empty magazine
-                { var fireT = Prof.Begin(Prof.S.Fire); FireWeapon(c, i, shot); Prof.End(Prof.S.Fire, fireT); }
-            }
-            if (throwStep == GrenadeThrowStep.Throw && c.W.TryThrow(_elapsed) is { } nade)
-            {
-                if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++;
-                { var fireT = Prof.Begin(Prof.S.Fire); FireWeapon(c, i, nade); Prof.End(Prof.S.Fire, fireT); }
-            }
-            if (c.W.Changed) SendAmmo(c);
-            c.Slot = (byte)(c.W.Slot - 1);
-            if (c.Body.LastFallDamage > 0 && _elapsed >= c.LaunchGraceUntil) _match.ApplyDamage(c.Id, c.Id, SpecialWeapons.Fall, c.Body.LastFallDamage); // a launched player lands for the Bigfoot's damage, not the fall's
-            if (c.Body.GlobalPosition.Y < KillY) GD.Print($"server: {c.Name} fell out of the world at {c.Body.GlobalPosition} (killY {KillY}, spawn {_match.Get(c.Id)?.Position})");
-            if (c.Body.GlobalPosition.Y < KillY) _match.ApplyDamage(c.Id, c.Id, SpecialWeapons.Void, 9999, ignoreProtection: true);
-        }
+        for (var k = 0; k < n && c.Inputs.Count > 0; k++) ApplyInput(c, c.Inputs.Dequeue(), dt);
         _match.SetPosition(c.Id, new System.Numerics.Vector3(c.Body.GlobalPosition.X, c.Body.GlobalPosition.Y, c.Body.GlobalPosition.Z));
         c.Body.Health = _match.Get(c.Id)?.Health ?? 0;
         var p = c.Body.GlobalPosition - c.Start;
         c.MaxMoved = Mathf.Max(c.MaxMoved, new Vector2(p.X, p.Z).Length());
+    }
+
+    /// <summary>
+    /// One input of one player: acked always, then what the player is doing decides what it does. The keys are fed first (also while dead), then in order: nothing while dead, held by the Bigfoot, seated in the church,
+    /// pinned by the demon; the killstreak key; a held body (a controlled streak entity, a thrown car); driving or riding; the use key's actions on foot; and at last walking, the weapon and the grenade.
+    /// </summary>
+    void ApplyInput(ServerClient c, NetInput i, float dt)
+    {
+        c.Ack = i.Seq; c.HasAck = true;
+        // a killstreak's control session (a turret being placed) takes the owner's input first; while it holds it,
+        // Fire and Use belong to the session, not to the weapon or the vehicles
+        var controlled = _streaks.RouteInput(c.Id, i);
+        if (controlled) i.Buttons &= (ushort)(ushort.MaxValue ^ (ushort)(MoveButtons.Fire | MoveButtons.Use));
+        if (c.Car == null && _elapsed < c.LaunchGraceUntil && (_elapsed < c.LaunchedAt + 0.3 || !c.Body.State.OnFloor)) i.Buttons &= (ushort)(ushort.MaxValue ^ (ushort)MoveButtons.Fire); // thrown by the Bigfoot and in the air: no shooting (#360)
+        var useDown = (i.Buttons & (ushort)MoveButtons.Use) != 0;
+        var useEdge = c.UseKey.Pressed(useDown);
+        _rozhlas.OnInput(c, useDown);
+        LootUse(c, useDown);
+        PlantationUse(c, useDown);
+        var lightsEdge = Headlights.Edge((i.Buttons & (ushort)MoveButtons.Headlights) != 0, ref c.LightsHeld);
+        SetHeadLamp(c, HeadLamp.Next(c.HeadLampOn, lightsEdge, c.Car == null, _match.Get(c.Id)?.Life == PlayerLife.Alive)); // H on foot: the head lamp (in a vehicle: the car's lights, below)
+        var streakDown = (i.Buttons & (ushort)MoveButtons.Killstreak) != 0;
+        var streakEdge = c.StreakKey.Pressed(streakDown);
+        // the throw key is fed every input; it is the grenade's only on foot and free-handed (a held key, a vehicle, death or a pin put the grenade away)
+        var canThrow = c.Car == null && !controlled && _match.Get(c.Id)?.Life == PlayerLife.Alive && _tick > c.HeldUntilTick && !_sitters.ContainsKey(c.Id) && !_pins.ContainsKey(c.Id)
+            && !c.Body.State.OnLadder && _elapsed >= c.LaunchGraceUntil;
+        var throwStep = c.Throw.Tick((i.Buttons & (ushort)MoveButtons.Throw) != 0, (i.Buttons & (ushort)MoveButtons.Aim) != 0, canThrow);
+        if (_match.Get(c.Id)?.Life != PlayerLife.Alive) return; // dead or waiting: inputs are acked but ignored
+        if (c.Car == null && _tick <= c.HeldUntilTick) return; // in the Bigfoot's hand: the input is acked, the body is where the Bigfoot puts it (issue #264)
+        if (c.Car == null && _sitters.TryGetValue(c.Id, out var sitter)) { SitterInput(c, sitter, i, useEdge); return; } // seated in the church: no walking, no weapon
+        if (c.Car == null && _pins.TryGetValue(c.Id, out var pinYaw)) { c.Body.Yaw = pinYaw; c.Body.Pitch = 0; return; } // pinned by the demon: held on the floor, no walking, no weapon, no use
+        if (streakEdge && !controlled) StreakActivate(c);
+        if (c.Car == null && _streaks.ControlOf(c.Id) is { FreezesBody: true }) return; // controlling a streak entity that holds the body (the missile, a gunship): the body stands still
+        if (c.Car is { Thrown: not null }) return; // the Bigfoot threw it: nobody steers, fires or gets out until it lands (issue #264)
+        if (c.Car != null) { RideInput(c, i, dt, controlled, useDown, useEdge, lightsEdge); return; }
+        var useAct = ScudUseKey(c, useDown, useEdge, dt); // beside a truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket)
+        if (useAct && LootInReach(c) == null && (MassSit(c) || GarageUse(c) || TryEnterCar(c))) return; // the use key on lying Loot sends it back, it does not take a seat
+        WalkAndFire(c, i, dt, throwStep);
+    }
+
+    /// <summary>
+    /// An input of a player who sits in a vehicle: a helicopter or a predicted ground vehicle is stepped here from the driver's inputs, other cars in StepVehicles; no walking or weapon timers.
+    /// A gunner's inputs fire the car's gun instead (its aim is the view yaw and pitch).
+    /// </summary>
+    void RideInput(ServerClient c, NetInput i, float dt, bool controlled, bool useDown, bool useEdge, bool lightsEdge)
+    {
+        if (c.Car == null) return; // (the caller checked)
+        // The pilot of a helicopter steps it here, once per input, as the body on foot is: the pilot's client predicts the same steps (ADR 0006).
+        if (c.CarSeat == 0 && c.Car.Flies) c.Car.StepFlight(FlightInput.FromNet(i, handsOff: controlled), dt, _tick);
+        else if (c.CarSeat == 0 && c.Car.Drives) { c.Car.Wake(); c.Car.StepDrive(DriveInput.FromNet(i, handsOff: controlled), dt); c.Car.DriveTick = _tick; } // the same for a driven vehicle (ADR 0010, ADR 0014): a driver's input wakes a parked one
+        else if (c.CarSeat == 0) { c.Throttle = Quant.Axis(i.MoveY); c.Steer = Quant.Axis(i.MoveX); c.Handbrake = (i.Buttons & (ushort)MoveButtons.Jump) != 0; }
+        else if (c.Car.Gun != null && c.Car.Def.Seats[c.CarSeat].Role == "gunner")
+        {
+            GunnerInput(c, i);
+            c.Body.Yaw = Quant.Yaw(i.Yaw); c.Body.Pitch = Quant.Pitch(i.Pitch); // a gunner's body faces where they aim, for everyone who sees them at the gun
+        }
+        else if (!controlled && RiderRules.Weapons(c.Car.Def, c.CarSeat, i) is { } seated) SeatWeapons(c, c.Car, i, seated); // an armed seat: the rider's own weapons (ADR 0011)
+        if (!RiderPose.FollowsAim(c.Car.Def.Seats[c.CarSeat])) SeatLook(c, c.Car, i); // every other seat: the body is the vehicle's and the head looks where the rider's first-person view does (ADR 0026)
+        if (lightsEdge) c.Car.Lights = Headlights.Toggle(c.Car.Lights);
+        if (c.Car.Def.Launcher != null ? ScudUseKey(c, useDown, useEdge, dt) : TowUseKey(c, c.Car, useDown, useEdge, dt)) ExitCar(c); // a Scud truck: a tap leaves, a hold loads a cart's rocket (a truck does not tow); with a trailer on the hook a tap leaves and a hold unhitches (UnhitchKey); otherwise the press leaves
+    }
+
+    /// <summary>An input of a living player on foot: the look, the move step, recoil and breath, the weapon (and the grenade), the fall and the void.</summary>
+    void WalkAndFire(ServerClient c, NetInput i, float dt, GrenadeThrowStep throwStep)
+    {
+        c.Body.Yaw = Quant.Yaw(i.Yaw);
+        c.Body.Pitch = Quant.Pitch(i.Pitch);
+        var moveT = Prof.Begin(Prof.S.PlayerMove);
+        c.Body.Simulate(i.ToMove(c.W.SpeedFor(i.Slot)), dt);
+        Prof.End(Prof.S.PlayerMove, moveT);
+        c.StepTicks++;
+        c.Recoil.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Fire) != 0, c.W.Current.Recoil);
+        // breath hold: sprint is cancelled while aiming, so the sprint bit with aim held is the breath key
+        c.Breath.Tick(_elapsed, (i.Buttons & (ushort)MoveButtons.Aim) != 0 && c.W.Current.ZoomFov > 0,
+            (i.Buttons & (ushort)MoveButtons.Sprint) != 0, c.W.Current, c.Perks.HoldBreathTime);
+        var wi = new WeaponInput((i.Buttons & (ushort)MoveButtons.Fire) != 0 && !c.Body.State.OnLadder, (i.Buttons & (ushort)MoveButtons.Reload) != 0, i.Slot, (i.Buttons & (ushort)MoveButtons.Switch) != 0, HasLock(c));
+        if (c.W.Update(_elapsed, wi) is { } shot)
+        {
+            if (_match.NotifyFired(c.Id)) _smoke.EarlyProtectionEnds++; // spawn protection ends on a real shot, not on Fire held with an empty magazine
+            { var fireT = Prof.Begin(Prof.S.Fire); FireWeapon(c, i, shot); Prof.End(Prof.S.Fire, fireT); }
+        }
+        if (throwStep == GrenadeThrowStep.Throw && c.W.TryThrow(_elapsed) is { } nade)
+        {
+            if (_match.NotifyFired(c.Id)) _smoke.EarlyProtectionEnds++;
+            { var fireT = Prof.Begin(Prof.S.Fire); FireWeapon(c, i, nade); Prof.End(Prof.S.Fire, fireT); }
+        }
+        if (c.W.Changed) SendAmmo(c);
+        c.Slot = (byte)(c.W.Slot - 1);
+        if (c.Body.LastFallDamage > 0 && _elapsed >= c.LaunchGraceUntil) _match.ApplyDamage(c.Id, c.Id, SpecialWeapons.Fall, c.Body.LastFallDamage); // a launched player lands for the Bigfoot's damage, not the fall's
+        if (c.Body.GlobalPosition.Y < KillY) GD.Print($"server: {c.Name} fell out of the world at {c.Body.GlobalPosition} (killY {KillY}, spawn {_match.Get(c.Id)?.Position})");
+        if (c.Body.GlobalPosition.Y < KillY) _match.ApplyDamage(c.Id, c.Id, SpecialWeapons.Void, 9999, ignoreProtection: true);
     }
 
     /// <summary>
@@ -820,7 +833,7 @@ public partial class NetServer : Node
             (i.Buttons & (ushort)MoveButtons.Sprint) != 0, c.W.Current, c.Perks.HoldBreathTime);
         if (c.W.Update(_elapsed, input with { Locked = HasLock(c) }) is { } shot)
         {
-            if (_match.NotifyFired(c.Id)) _earlyProtectionEnds++;
+            if (_match.NotifyFired(c.Id)) _smoke.EarlyProtectionEnds++;
             { var fireT = Prof.Begin(Prof.S.Fire); FireWeapon(c, i, shot, car); Prof.End(Prof.S.Fire, fireT); }
         }
         if (c.W.Changed) SendAmmo(c);
@@ -989,7 +1002,7 @@ public partial class NetServer : Node
         pooled = all;
         var targets = seatCar != null ? RiderRules.NotAboard(all, seatCar.Seat) : all; // (NotAboard copies its own)
         Prof.End(Prof.S.ShotTargets, targetsT);
-        _shotsFired++;
+        _smoke.ShotsFired++;
         var aiming = (i.Buttons & (ushort)MoveButtons.Aim) != 0;
         var body = c.Body.State;
         float Spread(float degrees) => seat != null ? SeatAimRules.ShotSpread(degrees, w, aiming, seatCar!.State.Speed, seat) : HitMath.ShotSpread(degrees, w, body, aiming);
@@ -1027,7 +1040,7 @@ public partial class NetServer : Node
                 hit = GunnerCover.Raycast(N(from), N(along), len, wall, targets, c.Id, exposedGunner, pastHull); // a flak gunner in the open is hit through his hull
                 Prof.End(Prof.S.FireRaycast, partT);
                 partT = Prof.Begin(Prof.S.FireMissCheck);
-                if (WeaponsSmoke && hit == null && HitMath.Raycast(N(from), N(along), len, float.PositiveInfinity, targets, c.Id) != null) _wallBlocked++; // only the weapons smoke reads the count: a second ray over every target on each miss otherwise
+                if (WeaponsSmoke && hit == null && HitMath.Raycast(N(from), N(along), len, float.PositiveInfinity, targets, c.Id) != null) _smoke.WallBlocked++; // only the weapons smoke reads the count: a second ray over every target on each miss otherwise
                 Prof.End(Prof.S.FireMissCheck, partT);
                 if (!drops || hit != null || wall <= len || before + BulletDrop.SegmentM >= range) break;
                 var passed = before;
@@ -1064,7 +1077,7 @@ public partial class NetServer : Node
             _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
             rocket.ViewBack = back; rocket.ViewLife = c.LifeStart; // a rocket rewinds vehicles by the shooter's lag at each step (B-02)
             _rockets.Add(rocket);
-            _rocketsFired++;
+            _smoke.RocketsFired++;
             BroadcastEvent(EventKind.Launch, WeaponCodec.Encode(new LaunchMsg(rocket.Id, c.Id, rocket.Weapon, N(eye), dir * w.ProjectileSpeed)));
         }
         else if (w.Kind == WeaponKind.Melee)
@@ -1076,7 +1089,7 @@ public partial class NetServer : Node
                 // a wall between the attacker and the victim's chest blocks the stab (the chest where the victim was seen, ADR 0013)
                 var chest = victimFeet + Vector3.Up * 1.0f;
                 var to = chest - eye;
-                if (WorldHit(eye, to.Normalized(), to.Length(), out _, seatCar) < to.Length() - 0.05f) { _wallBlocked++; hit = null; }
+                if (WorldHit(eye, to.Normalized(), to.Length(), out _, seatCar) < to.Length() - 0.05f) { _smoke.WallBlocked++; hit = null; }
             }
             BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(c.Id, (byte)shot.WeaponIndex, N(eye), N(eye) + fwd * w.Reach)));
             if (hit is { } m) Deal(c.Id, (byte)shot.WeaponIndex, m.Id, HitMath.MeleeDamage(w, m.Backstab), false, m.Backstab);
@@ -1106,10 +1119,10 @@ public partial class NetServer : Node
         else if (r == DamageResult.Damaged) CurseOnHit(attackerId, weaponIdx, victim);
         if (r == DamageResult.Damaged && Scores(attackerId) && Scores(victim)) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
         BotHit(victim, attackerId);
-        _hitsLanded++;
+        _smoke.HitsLanded++;
         LossHit(attackerId, victim, r == DamageResult.Killed);
-        if (head) _headshots++;
-        if (backstab) _backstabs++;
+        if (head) _smoke.Headshots++;
+        if (backstab) _smoke.Backstabs++;
         var kill = r == DamageResult.Killed;
         if (kill && shotDistance is { } far) RecordPlayerKill(attackerId, victim, weaponIdx, far); // the longest player kill of a hitscan shot (#430)
         var msg = new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attackerId, weaponIdx, (ushort)damage, head, backstab, kill)));
@@ -1117,7 +1130,7 @@ public partial class NetServer : Node
         if (attackerId == _gunFxOwner) _gunFx.Hit(attackerId, head, kill); // a gunner's hit marker rides the tick's gunship blasts (#159)
         else if (attacker != null) Send(attacker, msg);
         if (_byId.TryGetValue(victim, out var v) && v != attacker) Send(v, msg);
-        if (kill && victim != attackerId && attacker != null) { attacker.W.RefillReserves(); _refills++; }
+        if (kill && victim != attackerId && attacker != null) { attacker.W.RefillReserves(); _smoke.Refills++; }
         return r;
     }
 
@@ -1151,14 +1164,14 @@ public partial class NetServer : Node
                     continue;
                 case RocketOutcome.World:
                     _rockets.RemoveAt(k);
-                    _worldExplosions++;
+                    _smoke.WorldExplosions++;
                     // pulled back a hair so the blast centre is in front of the surface, not inside it
                     Explode(r, w, r.Pos + r.Dir * MathF.Max(0, step.Distance - 0.02f), null, hitCar);
                     continue;
             }
             r.Pos += r.Dir * len;
             r.Age += dt;
-            if (step.Outcome == RocketOutcome.Expired) { _rockets.RemoveAt(k); _expiredRockets++; Explode(r, w, r.Pos, null); }
+            if (step.Outcome == RocketOutcome.Expired) { _rockets.RemoveAt(k); _smoke.ExpiredRockets++; Explode(r, w, r.Pos, null); }
         }
     }
 
@@ -1196,7 +1209,7 @@ public partial class NetServer : Node
     void Explode(Rocket r, WeaponDef weapon, Vector3 pos, ushort? direct, ServerCar? directCar = null)
     {
         var w = ProjectileMath.WithBlast(weapon, r.Blast); // a gunship's rocket has its own blast (killstreaks.json); the rpg keeps weapons.json's
-        _explosions++;
+        _smoke.Explosions++;
         if (Vehicles != null) RocketVsVehicles(pos, w, r.Owner, r.Weapon, directCar);
         BlastGlass(pos, w.Splash?.Radius ?? 0);
         BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(r.Id, r.Owner, r.Weapon, N(pos), w.Splash?.Radius ?? 0, w.Splash?.WaveSpeed ?? 0)));
@@ -1220,8 +1233,8 @@ public partial class NetServer : Node
             var res = Deal(r.Owner, r.Weapon, t.Id, dmg, false, false);
             ClearPush(t.Id, res);
             if (res == DamageResult.Ignored) continue; // spawn protected: neither damage nor knockback
-            if (isDirect) _directHits++; else if (self) _selfHits++; else _splashHits++;
-            if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) { v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z)); _knocked++; }
+            if (isDirect) _smoke.DirectHits++; else if (self) _smoke.SelfHits++; else _smoke.SplashHits++;
+            if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) { v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z)); _smoke.Knocked++; }
         }
         ReturnTargets(targets);
     }

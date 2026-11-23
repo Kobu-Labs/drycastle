@@ -417,7 +417,7 @@ public partial class NetServer
             if (car.Retired) continue; // taken out of the world for good (RemoveRocketCarts)
             if (car.Destroyed)
             {
-                if (car.Life.ReturnDue(_elapsed)) { car.Reset(); RestoreVehicleGlass(car); _destroyedReturns++; if (BlastSmoke && _destroyedReturns >= 2 && _finishAt == 0) _finishAt = _elapsed + 1.5; GD.Print($"server: {def.Id} {car.Id} returned after its destruction"); }
+                if (car.Life.ReturnDue(_elapsed)) { car.Reset(); RestoreVehicleGlass(car); _destroyedReturns++; if (BlastSmoke && _destroyedReturns >= 2 && _smoke.FinishAt == 0) _smoke.FinishAt = _elapsed + 1.5; GD.Print($"server: {def.Id} {car.Id} returned after its destruction"); }
                 continue;
             }
             if (car.IsTrailer) { StepTrailerCar(car, dt); continue; } // no seats, no driver: it follows its tractor, or rolls free
@@ -679,7 +679,7 @@ public partial class NetServer
     void FinishBlast()
     {
         var ok = _vehicleHits >= 20 && _vehicleBlasts >= 2 && _blastHits >= 2 && _chainHits >= 1 && _destroyedReturns >= 2 && _cars.Count == 3;
-        GD.Print($"server: blast smoke vehicleHits={_vehicleHits} blasts={_vehicleBlasts} blastHits(players)={_blastHits} chainHits={_chainHits} returns={_destroyedReturns} kills={_kills}");
+        GD.Print($"server: blast smoke vehicleHits={_vehicleHits} blasts={_vehicleBlasts} blastHits(players)={_blastHits} chainHits={_chainHits} returns={_destroyedReturns} kills={_smoke.Kills}");
         GD.Print(ok ? "SHOOTER_BLAST_SERVER_OK" : "SHOOTER_BLAST_SERVER_FAIL");
         GetTree().Quit(ok ? 0 : 2);
         SetPhysicsProcess(false);
@@ -689,8 +689,8 @@ public partial class NetServer
     {
         var maxHit = RunOver.Damage(Vehicles!, Vehicles!.Vehicles.First(v => v.Id == SmokeKind).TopSpeed);
         var needKill = maxHit >= Vehicles.RunOverMaxDamage; // a slow vehicle cannot kill a full-health player in one pass
-        var ok = _carEnters >= 1 && _carExits >= 1 && _runOvers >= 1 && (_runOverKills >= 1 || !needKill) && _shotsFired == 0 && _cars.Count >= 3;
-        GD.Print($"server: car smoke kind={SmokeKind} cars={_cars.Count} enters={_carEnters} exits={_carExits} runOvers={_runOvers} runOverKills={_runOverKills} shotsWhileDriving={_shotsFired}");
+        var ok = _carEnters >= 1 && _carExits >= 1 && _runOvers >= 1 && (_runOverKills >= 1 || !needKill) && _smoke.ShotsFired == 0 && _cars.Count >= 3;
+        GD.Print($"server: car smoke kind={SmokeKind} cars={_cars.Count} enters={_carEnters} exits={_carExits} runOvers={_runOvers} runOverKills={_runOverKills} shotsWhileDriving={_smoke.ShotsFired}");
         GD.Print(ok ? "SHOOTER_CAR_SERVER_OK" : "SHOOTER_CAR_SERVER_FAIL");
         GetTree().Quit(ok ? 0 : 2);
         SetPhysicsProcess(false);

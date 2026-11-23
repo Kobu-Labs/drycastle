@@ -126,7 +126,7 @@ public partial class NetServer
             };
             _nextRocket = _nextRocket == ushort.MaxValue ? (ushort)0x8000 : (ushort)(_nextRocket + 1);
             _rockets.Add(rocket);
-            _rocketsFired++;
+            _smoke.RocketsFired++;
             BroadcastEvent(EventKind.Launch, WeaponCodec.Encode(new LaunchMsg(rocket.Id, owner, rocket.Weapon, shot.Origin, shot.Direction * rocket.Speed)));
             return;
         }
