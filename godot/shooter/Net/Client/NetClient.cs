@@ -133,6 +133,7 @@ public partial class NetClient : Node
     VehicleHulls _hulls = null!;
     VehicleGunsClient _guns = null!;
     MissileClient _missile = null!;
+    TurretsClient _turrets = null!;
     AircraftClient _aircraftClient = null!;
     readonly EnemyMarkers _markers;
     readonly WaterClient _water;
@@ -230,7 +231,7 @@ public partial class NetClient : Node
         InitGroundItems();
         InitCarePackages();
         _missile = new MissileClient(Ctx, _blastDust, _markers);
-        InitTurrets();
+        _turrets = new TurretsClient(Ctx);
         InitAnimals();
         InitCompanions();
         InitFlocks();
@@ -385,7 +386,7 @@ public partial class NetClient : Node
         RenderGroundItems();
         RenderCarePackages();
         _minerals.Render();
-        RenderTurrets();
+        _turrets.Render();
     }
 
     void RenderCreatures(double delta)
