@@ -16,13 +16,13 @@ public sealed class EditStore
 
     readonly IEditorHost _host;
     readonly Action _prepareValidation;
-    readonly Action<EditorMode.SketchDoc> _restoreSketch;
+    readonly Action<SketchDoc> _restoreSketch;
     Obj? _disk;
     (DateTime, long) _seen;
 
     /// <param name="prepareValidation">Runs before every write: tells the validator what the map's catalogs hold.</param>
     /// <param name="restoreSketch">Replays a sketch step of the history (it has no file changes).</param>
-    public EditStore(IEditorHost host, Action prepareValidation, Action<EditorMode.SketchDoc> restoreSketch)
+    public EditStore(IEditorHost host, Action prepareValidation, Action<SketchDoc> restoreSketch)
         => (_host, _prepareValidation, _restoreSketch) = (host, prepareValidation, restoreSketch);
 
     public UndoHistory History { get; } = new();

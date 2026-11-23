@@ -26,15 +26,17 @@ public partial class EditorMode : Node, IEditorHost
     public EditStore Edits { get; }
     public OrthoLayer Ortho { get; }
     public FloorPlanLayer FloorPlan { get; }
+    public SketchTool Sketches { get; }
     readonly List<EditorPart> _parts;
 
     public EditorMode()
     {
         Ortho = new OrthoLayer(this);
         FloorPlan = new FloorPlanLayer(this);
-        Edits = new EditStore(this, SyncCatalogs, doc => { SkDraftEnd(); ApplySketch(doc); });
+        Sketches = new SketchTool(this);
+        Edits = new EditStore(this, SyncCatalogs, doc => Sketches.Replay(doc));
         Commands = new CommandPalette(PaletteAll);
-        _parts = new() { Ortho, FloorPlan };
+        _parts = new() { Ortho, FloorPlan, Sketches };
     }
 
     public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
@@ -83,6 +85,7 @@ public partial class EditorMode : Node, IEditorHost
 
     float _yaw, _pitch;
     bool _looking, _rmbMoved;
+    public bool Looking => _looking;
     (Vector3 pos, float yaw, float pitch)? _savedCam;
     (Vector3 pos, Vector3 euler, float pitch, bool input)? _savedPlayer;
     Vector3? _hoverPoint;
@@ -104,8 +107,8 @@ public partial class EditorMode : Node, IEditorHost
         AddChild(OutlineRoot);
         BuildUi();
         BuildShapeWorld();
-        BuildSketchWorld();
-        LoadSketchState();
+        Sketches.BuildWorld();
+        Sketches.Restore();
         GetTree().AutoAcceptQuit = false; // window close asks first when fence or tree edits are unapplied (_Notification)
         if (Watcher != null)
         {
@@ -167,7 +170,6 @@ public partial class EditorMode : Node, IEditorHost
             Input.MouseMode = Input.MouseModeEnum.Captured;
             CancelDrag();
             CancelShapeGesture();
-            CancelSketchGesture();
             DisarmPlacement(false);
             StopConnecting(false);
             StopPlanning(false);
@@ -286,7 +288,7 @@ public partial class EditorMode : Node, IEditorHost
     public ParcelInfo? PickScreen(Vector2 screen, out Vector3 point)
         => PickRay(FlyCam.ProjectRayOrigin(screen), FlyCam.ProjectRayNormal(screen), out point);
 
-    bool OverUi(Vector2 mouse)
+    public bool OverUi(Vector2 mouse)
         => _ui.Visible && ((_panel.Visible && _panel.GetGlobalRect().HasPoint(mouse)) || _rail.GetGlobalRect().HasPoint(mouse)
             || _statusBar.GetGlobalRect().HasPoint(mouse) || (_cheat.Visible && _cheat.GetGlobalRect().HasPoint(mouse))
             || Confirm.Contains(mouse) || Commands.Contains(mouse));
@@ -487,7 +489,7 @@ public partial class EditorMode : Node, IEditorHost
                 ShapeLeftPress(mb.Position, mb.CtrlPressed);
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Tool == EditorTool.Sketch:
-                SketchLeftPress(mb.Position, mb.CtrlPressed);
+                Sketches.LeftPress(mb.Position, mb.CtrlPressed);
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } when !_looking && Modal:
                 break;
@@ -514,7 +516,7 @@ public partial class EditorMode : Node, IEditorHost
                 if (HandleShapeKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleGroundKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleZoneKey(k)) { GetViewport().SetInputAsHandled(); break; }
-                if (HandleSketchKey(k)) { GetViewport().SetInputAsHandled(); break; }
+                if (Sketches.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandlePolesKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleObjectKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (!k.CtrlPressed && !k.AltPressed && HandleToolKey(k.Keycode)) { GetViewport().SetInputAsHandled(); break; }
@@ -582,8 +584,6 @@ public partial class EditorMode : Node, IEditorHost
         UpdateShapeTool();
         UpdateGroundMap();
         UpdateZoneOverlay();
-        UpdateSketchTool();
-        PollSketchFile(delta);
         UpdateYouDot();
         _pollT += delta;
         if (_pollT > 0.5)
@@ -843,7 +843,7 @@ public partial class EditorMode : Node, IEditorHost
         RefreshPolesPanel();
         RefreshGroundPanel();
         RefreshZonesPanel();
-        RefreshSketchPanel();
+        Sketches.RefreshPanel();
     }
 }
 

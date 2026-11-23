@@ -13,6 +13,15 @@ public static class Ui
         return b;
     }
 
+    /// <summary>A button that gives the focus back when pressed: Enter and Space belong to the viewport again.</summary>
+    public static Button FocusBtn(string text, Action onPress, string? variation = null)
+    {
+        var b = new Button { Text = text, FocusMode = Control.FocusModeEnum.All };
+        if (variation != null) b.ThemeTypeVariation = variation;
+        b.Pressed += () => { onPress(); b.ReleaseFocus(); };
+        return b;
+    }
+
     /// <summary>A dim, word-wrapped line of help text.</summary>
     public static Label Note(string text = "", string variation = "Dim")
         => new() { Text = text, ThemeTypeVariation = variation, AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };

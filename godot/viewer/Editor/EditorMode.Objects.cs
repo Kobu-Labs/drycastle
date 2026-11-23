@@ -721,7 +721,7 @@ public partial class EditorMode
         _objCount.Text = parcels.Count == 0
             ? $"{ObjectEdits.All(Edits.Disk()).Count()} placed objects in the file"
             : $"{AllObjects().Count(o => parcels.Contains(o.Parcel))} placed objects on {(parcels.Count == 1 ? parcels[0] : "the selection")}, {ObjectEdits.All(Edits.Disk()).Count()} in the file";
-        _hintLabel.Text = Tool == EditorTool.Ground ? GroundHintText() : Tool == EditorTool.Zones ? ZonesHintText() : Tool == EditorTool.Sketch ? SketchHintText() : Tool == EditorTool.Poles && PlacementAsset == null ? PolesHintText() : Tool == EditorTool.Group && PlacementAsset == null
+        _hintLabel.Text = Tool == EditorTool.Ground ? GroundHintText() : Tool == EditorTool.Zones ? ZonesHintText() : Tool == EditorTool.Sketch ? Sketches.HintText() : Tool == EditorTool.Poles && PlacementAsset == null ? PolesHintText() : Tool == EditorTool.Group && PlacementAsset == null
             ? "marking parcels: click a parcel to mark or unmark it, Enter groups the marked ones, Esc clears the marks"
             : PlacementAsset != null
             ? "placing: LMB place, R / Shift+R rotate, Ctrl free position, Esc or RMB stop, Ctrl+Z undo"

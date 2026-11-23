@@ -14,7 +14,7 @@ namespace Drycastle.Viewer.Editor;
 public sealed record EntryChange(string Kind, string Id, Obj? Before, Obj? After, string? Key = null);
 
 /// <summary>A step that changed the sketch (the Sketch tool) carries its two states and no file changes: nothing is written.</summary>
-public sealed record UndoRecord(string Description, List<EntryChange> Changes, EditorMode.SketchDoc? SketchBefore = null, EditorMode.SketchDoc? SketchAfter = null);
+public sealed record UndoRecord(string Description, List<EntryChange> Changes, SketchDoc? SketchBefore = null, SketchDoc? SketchAfter = null);
 
 /// <summary>
 /// Session undo/redo of every save the editor made since it opened (objects, group operations, Apply of fence). Each save records the before and after content of what it touched: `groups.&lt;ID&gt;`, `ground_patches.&lt;ID&gt;`, `zones.&lt;ID&gt;`, `zone_cuts.&lt;ID&gt;`, `cables.&lt;ID&gt;`

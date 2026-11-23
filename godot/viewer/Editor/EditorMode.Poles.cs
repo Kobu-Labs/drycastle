@@ -420,9 +420,9 @@ public partial class EditorMode
         page.AddChild(_plNoOrigin);
 
         var modes = new HBoxContainer();
-        _plPlan = FocusBtn("Plan  (P)", TogglePlanning, "PrimaryButton");
+        _plPlan = Ui.FocusBtn("Plan  (P)", TogglePlanning, "PrimaryButton");
         _plPlan.TooltipText = "Plan a line: left click where poles go, right click a house wall or roof to connect it, then Build poles places and connects everything along the roads";
-        _plConnect = FocusBtn("Connect  (C)", ToggleConnecting);
+        _plConnect = Ui.FocusBtn("Connect  (C)", ToggleConnecting);
         _plConnect.TooltipText = "By hand: click a pole, then the next pole or a house; each click strings a cable from the last pole";
         foreach (var b in new[] { _plPlan, _plConnect }) { b.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; modes.AddChild(b); }
         page.AddChild(modes);
@@ -432,9 +432,9 @@ public partial class EditorMode
         _plPlanBox = new VBoxContainer { Visible = false };
         _plPlanInfo = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
         _plPlanBox.AddChild(_plPlanInfo);
-        _plBuild = FocusBtn("Build poles  (Enter)", () => BuildPlan(), "PrimaryButton");
+        _plBuild = Ui.FocusBtn("Build poles  (Enter)", () => BuildPlan(), "PrimaryButton");
         _plBuild.TooltipText = "Place a pole at every planned point, string the cables along the roads and connect the houses. One Ctrl+Z undoes all of it.";
-        _plClear = FocusBtn("Clear plan", ClearPlan);
+        _plClear = Ui.FocusBtn("Clear plan", ClearPlan);
         _plPlanBox.AddChild(_plBuild);
         _plPlanBox.AddChild(_plClear);
         page.AddChild(_plPlanBox);
@@ -465,10 +465,10 @@ public partial class EditorMode
         _plSelBox.AddChild(_plSelInfo);
         _plSelCables = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _plSelBox.AddChild(_plSelCables);
-        _plCycle = FocusBtn("Another kind of connector", () => CycleConnector());
+        _plCycle = Ui.FocusBtn("Another kind of connector", () => CycleConnector());
         _plCycle.TooltipText = "Swap this house connector for the next kind made for the same surface";
         _plSelBox.AddChild(_plCycle);
-        _plDeletePole = FocusBtn("Delete  (Del)", () => DeleteSelected(), "DangerButton");
+        _plDeletePole = Ui.FocusBtn("Delete  (Del)", () => DeleteSelected(), "DangerButton");
         _plDeletePole.TooltipText = "Delete it and its cables (Ctrl+Z brings them back)";
         _plSelBox.AddChild(_plDeletePole);
         page.AddChild(_plSelBox);
@@ -477,7 +477,7 @@ public partial class EditorMode
         _plCableBox.AddChild(new HSeparator());
         _plCableInfo = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
         _plCableBox.AddChild(_plCableInfo);
-        _plDeleteCable = FocusBtn("Remove the cable  (Del)", () => DeleteSelectedCable(), "DangerButton");
+        _plDeleteCable = Ui.FocusBtn("Remove the cable  (Del)", () => DeleteSelectedCable(), "DangerButton");
         _plCableBox.AddChild(_plDeleteCable);
         page.AddChild(_plCableBox);
         BuildPolesWorld();
@@ -536,7 +536,7 @@ public partial class EditorMode
                 Text = $"{c.Id} to {(c.From == pole.Id ? c.To : c.From)}" + (c.LengthM >= 0 ? $"  {c.LengthM:0.0} m" : "  (missing)"), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
                 MouseFilter = Control.MouseFilterEnum.Ignore, ClipText = true,
             });
-            var rm = FocusBtn("Remove", () => DisconnectCable(id));
+            var rm = Ui.FocusBtn("Remove", () => DisconnectCable(id));
             rm.TooltipText = $"Remove {c.Id} (Ctrl+Z brings it back)";
             row.AddChild(rm);
             _plSelCables.AddChild(row);

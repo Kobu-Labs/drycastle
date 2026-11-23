@@ -80,6 +80,8 @@ public partial class EditorMode
     StandardMaterial3D _handleMat = null!, _handleHot = null!;
     // one sphere for every corner handle (the handles differ only by transform and material)
     readonly SphereMesh _handleMesh = new() { Radius = 1f, Height = 2f, RadialSegments = 12, Rings = 6 };
+    public SphereMesh HandleMesh => _handleMesh;
+    public StandardMaterial3D HandleHot => _handleHot;
 
     // Editor.Shape (docs/state-machines.md): the stored state. Drawing is entered by N or the first corner, Level by closing a water patch, Dragging by grabbing a
     // corner; Idle and Selected follow the selection, so every selection change goes through the setters below.
@@ -217,7 +219,7 @@ public partial class EditorMode
 
     static EditsFile.Num N3(double v) => new(EditsFile.PyFloat(Math.Round(v, 3, MidpointRounding.AwayFromZero)));
 
-    static string RingMessage(int code) => code switch
+    internal static string RingMessage(int code) => code switch
     {
         ObjectEdits.RingTooFew => "needs at least 3 corners",
         ObjectEdits.RingRepeated => "has two identical neighbouring corners",
@@ -441,7 +443,7 @@ public partial class EditorMode
     // ---- corners ----
 
     /// <summary>Screen position (px) to the nearest corner of a ring; -1 when none is within reach.</summary>
-    int PickCorner(Vector2 screen, IReadOnlyList<(double x, double y)> ring)
+    public int PickCorner(Vector2 screen, IReadOnlyList<(double x, double y)> ring)
     {
         var best = -1; var bestD = CornerPickPx * (float)Math.Max(1.0, GetViewport().GetVisibleRect().Size.X / 1280.0);
         for (var i = 0; i < ring.Count; i++)
@@ -454,7 +456,7 @@ public partial class EditorMode
         return best;
     }
 
-    Vector3 GroundPoint((double x, double y) p)
+    public Vector3 GroundPoint((double x, double y) p)
     {
         var l = Map.FromAbsolute(p.x, p.y);
         return new Vector3(l.X, Map.GroundHeightOrMean(l.X, l.Y) + 0.3f, l.Y);
@@ -651,7 +653,7 @@ public partial class EditorMode
         foreach (var h in _handles) h.Visible = false;
     }
 
-    List<(Vector2, Vector2)> RingSegs(IReadOnlyList<(double x, double y)> pts, bool closed)
+    public List<(Vector2, Vector2)> RingSegs(IReadOnlyList<(double x, double y)> pts, bool closed)
     {
         var s = new List<(Vector2, Vector2)>();
         var n = closed ? pts.Count : pts.Count - 1;
@@ -760,18 +762,7 @@ public partial class EditorMode
         };
     }
 
-    // ---- shared widgets ----
-
-    Button FocusBtn(string text, Action onPress, string? variation = null)
-    {
-        var b = new Button { Text = text, FocusMode = Control.FocusModeEnum.All };
-        if (variation != null) b.ThemeTypeVariation = variation;
-        b.Pressed += () => { onPress(); b.ReleaseFocus(); }; // Enter and Space belong to the viewport again
-        return b;
-    }
-
-
-
+    // ---- the sidebar page ----
 
     /// <summary>The controls of one shape tool's page that the gesture drives (the same in both).</summary>
     sealed class ShapeUi
@@ -796,7 +787,7 @@ public partial class EditorMode
         var noun = NounOf(k);
         u.NoOrigin = Ui.Note("This map has no origin_epsg5514, so patches and zones cannot be placed. Export it again (map 0.4.0+).", "Danger");
         page.AddChild(u.NoOrigin);
-        u.New = FocusBtn("", StartShape, "PrimaryButton");
+        u.New = Ui.FocusBtn("", StartShape, "PrimaryButton");
         page.AddChild(u.New);
         u.State = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, ThemeTypeVariation = "Header" };
         u.Valid = Ui.Note("");
@@ -812,10 +803,10 @@ public partial class EditorMode
             u.LevelRow.AddChild(u.Level);
             page.AddChild(u.LevelRow);
         }
-        u.Finish = FocusBtn("", () => CloseShape(), "PrimaryButton");
-        u.Create = FocusBtn($"Create the {noun}  (Enter)", () => CommitShape(), "PrimaryButton");
-        u.Back = FocusBtn("Remove the last corner  (Backspace)", () => RemoveLastShapePoint());
-        u.Cancel = FocusBtn("Cancel drawing  (Esc)", () => ShapeEscape());
+        u.Finish = Ui.FocusBtn("", () => CloseShape(), "PrimaryButton");
+        u.Create = Ui.FocusBtn($"Create the {noun}  (Enter)", () => CommitShape(), "PrimaryButton");
+        u.Back = Ui.FocusBtn("Remove the last corner  (Backspace)", () => RemoveLastShapePoint());
+        u.Cancel = Ui.FocusBtn("Cancel drawing  (Esc)", () => ShapeEscape());
         foreach (var b in new[] { u.Finish, u.Create, u.Back, u.Cancel }) page.AddChild(b);
     }
 
@@ -837,7 +828,7 @@ public partial class EditorMode
     void BuildShapeDelete(VBoxContainer page, ShapeKind k)
     {
         var u = _su[k];
-        u.Delete = FocusBtn("", () => RequestDeleteShape(), "DangerButton");
+        u.Delete = Ui.FocusBtn("", () => RequestDeleteShape(), "DangerButton");
         page.AddChild(u.Delete);
     }
 

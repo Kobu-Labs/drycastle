@@ -660,14 +660,14 @@ public partial class EditorMode
         page.AddChild(_zMarkHead);
         page.AddChild(Ui.Note("Delete many zones at once: tick them in the list below, Ctrl+click them on the map, or press X for the selected one. Marked zones are outlined in red on the map."));
         var row = new HBoxContainer();
-        _zMarkAll = FocusBtn("", MarkListedZones);
+        _zMarkAll = Ui.FocusBtn("", MarkListedZones);
         _zMarkAll.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _zMarkAll.ClipText = true;
-        _zMarkNone = FocusBtn("Unmark all", ClearZoneMarks);
+        _zMarkNone = Ui.FocusBtn("Unmark all", ClearZoneMarks);
         _zMarkNone.TooltipText = "Take every mark back. Nothing is deleted.";
         row.AddChild(_zMarkAll); row.AddChild(_zMarkNone);
         page.AddChild(row);
-        _zMarkDelete = FocusBtn("", () => RequestDeleteMarkedZones(), "DangerButton");
+        _zMarkDelete = Ui.FocusBtn("", () => RequestDeleteMarkedZones(), "DangerButton");
         page.AddChild(_zMarkDelete);
     }
 

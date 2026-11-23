@@ -48,7 +48,7 @@ public partial class EditorMode
         root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _ui.AddChild(root);
 
-        BuildSketchTags(root);
+        Sketches.BuildTags(root);
         BuildRail(root);
         BuildHud(root);
         BuildSidebar(root);
@@ -194,7 +194,7 @@ public partial class EditorMode
         BuildZonesPage(Page(EditorTool.Zones));
         BuildPolesPage(Page(EditorTool.Poles));
         BuildViewPage(Page(EditorTool.View));
-        BuildSketchPage(Page(EditorTool.Sketch));
+        Sketches.BuildPage(Page(EditorTool.Sketch));
     }
 
     void BuildViewPage(VBoxContainer page)
@@ -312,7 +312,7 @@ public partial class EditorMode
     public void SelectTool(EditorTool tool, bool save = true)
     {
         if (ShapeTool && (tool != Tool)) CancelShapeGesture();
-        if (Tool == EditorTool.Sketch && tool != EditorTool.Sketch) CancelSketchGesture();
+        if (Tool == EditorTool.Sketch && tool != EditorTool.Sketch) Sketches.CancelGesture();
         if (Dragging && tool != Tool) CancelDrag(); // an object drag must not outlive its tool (the release would still save it)
         if (tool is EditorTool.Ground or EditorTool.Zones or EditorTool.Sketch) { DisarmPlacement(false); if (GateArmed) CancelGate(); }
         if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { StopConnecting(false); StopPlanning(false); SelectCable(null); }
@@ -370,7 +370,6 @@ public partial class EditorMode
             if (zsel != "") _restoreZone = zsel;
             var zk = (string)cfg.GetValue("ui", "zone_kind", "");
             if (zk != "") _restoreZoneKind = zk;
-            if (Enum.TryParse<SketchKind>((string)cfg.GetValue("ui", "sketch_mode", _skMode.ToString()), true, out var sk)) _skMode = sk;
             foreach (var part in _parts) part.LoadConfig(cfg);
         }
         catch (Exception e) { GD.PushWarning($"editor ui settings not loaded: {e.Message}"); }
@@ -389,7 +388,6 @@ public partial class EditorMode
             cfg.SetValue("ui", "zone", SelectedZoneId ?? "");
             cfg.SetValue("ui", "zone_kind", SelectedZoneKind ?? "");
             cfg.SetValue("ui", "ground_type", SelectedGroundType ?? "");
-            cfg.SetValue("ui", "sketch_mode", _skMode.ToString());
             foreach (var part in _parts) part.SaveConfig(cfg);
             cfg.Save(CfgPath);
         }

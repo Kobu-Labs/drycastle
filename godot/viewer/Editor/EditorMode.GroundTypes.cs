@@ -474,9 +474,9 @@ public partial class EditorMode
         _gtNameValid = Ui.Note("");
         page.AddChild(_gtNameValid);
         var newRow = new HFlowContainer();
-        _gtCreate = FocusBtn("Create", () => CreateGroundType(_gtName.Text.Trim()), "PrimaryButton");
+        _gtCreate = Ui.FocusBtn("Create", () => CreateGroundType(_gtName.Text.Trim()), "PrimaryButton");
         _gtCreate.TooltipText = "Make a new ground type with one green shade and the field recipe (Enter in the name field does the same). Untick the recipe for plain paint";
-        _gtDuplicate = FocusBtn("Duplicate selected", () => { if (SelectedGroundType != null) CreateGroundType(_gtName.Text.Trim(), SelectedGroundType); });
+        _gtDuplicate = Ui.FocusBtn("Duplicate selected", () => { if (SelectedGroundType != null) CreateGroundType(_gtName.Text.Trim(), SelectedGroundType); });
         newRow.AddChild(_gtCreate);
         newRow.AddChild(_gtDuplicate);
         page.AddChild(newRow);
@@ -524,7 +524,7 @@ public partial class EditorMode
         _gtColoursBox.AddChild(_gtColours);
         _gtColourNote = Ui.Note("");
         _gtColoursBox.AddChild(_gtColourNote);
-        _gtAddColour = FocusBtn("Add a colour", () => { if (SelectedGroundType != null) AddGroundColour(SelectedGroundType); });
+        _gtAddColour = Ui.FocusBtn("Add a colour", () => { if (SelectedGroundType != null) AddGroundColour(SelectedGroundType); });
         _gtAddColour.TooltipText = "Add another terrain shade (a type has 1 to 6; one is picked per area)";
         _gtColoursBox.AddChild(_gtAddColour);
 
@@ -575,8 +575,8 @@ public partial class EditorMode
         _gtOsmBox.AddChild(_gtOsmValid);
 
         form.AddChild(new HSeparator());
-        _gtReset = FocusBtn("Reset to rules", () => { if (SelectedGroundType != null) ResetGroundType(SelectedGroundType); });
-        _gtDelete = FocusBtn("Delete  (Del)", () => RequestDeleteGroundType(), "DangerButton");
+        _gtReset = Ui.FocusBtn("Reset to rules", () => { if (SelectedGroundType != null) ResetGroundType(SelectedGroundType); });
+        _gtDelete = Ui.FocusBtn("Delete  (Del)", () => RequestDeleteGroundType(), "DangerButton");
         form.AddChild(_gtReset);
         form.AddChild(_gtDelete);
         _gtActionNote = Ui.Note("");
@@ -628,7 +628,7 @@ public partial class EditorMode
             };
             edit.TextSubmitted += t => { if (SelectedGroundType != null && SetGroundColour(SelectedGroundType, idx, t)) edit.ReleaseFocus(); };
             edit.GuiInput += e => { if (e is InputEventKey { Pressed: true, Keycode: Key.Escape }) { edit.ReleaseFocus(); edit.AcceptEvent(); _gtColourNote.Text = ""; edit.Text = hex; } };
-            var remove = FocusBtn("Remove", () => { if (SelectedGroundType != null) RemoveGroundColour(SelectedGroundType, idx); });
+            var remove = Ui.FocusBtn("Remove", () => { if (SelectedGroundType != null) RemoveGroundColour(SelectedGroundType, idx); });
             remove.Disabled = !canEdit || n <= 1;
             remove.TooltipText = n <= 1 ? "A type keeps at least one colour (untick Terrain colours to carry none)" : $"Remove colour {i + 1}";
             row.AddChild(picker);

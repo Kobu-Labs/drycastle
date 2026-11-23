@@ -11,7 +11,7 @@ public partial class EditorMode
     public ConfirmDialog Confirm { get; } = new();
     public CommandPalette Commands { get; }
 
-    bool Modal => Confirm.Visible || Commands.Visible;
+    public bool Modal => Confirm.Visible || Commands.Visible;
 
     /// <summary>Ctrl+P and the keys of an open confirm dialog or palette. True when used.</summary>
     bool HandleModalKey(InputEventKey k)
@@ -41,9 +41,9 @@ public partial class EditorMode
         yield return (SelectedZoneKind != null ? $"Zones: mark all {ZoneLabel(SelectedZoneKind)} zones for deletion" : "Zones: mark all zones for deletion", () => { SelectTool(EditorTool.Zones); MarkListedZones(); });
         yield return (_zoOn ? "Zones: hide the zone overlay  (M)" : "Zones: show the zone overlay  (M)", () => { SelectTool(EditorTool.Zones); ToggleZoneOverlay(); });
         yield return (FloorPlan.FloorPlanParcel != null ? $"View: floor plan off, show the building of {FloorPlan.FloorPlanParcel}  (B)" : "View: floor plan of the selected parcel  (B)", FloorPlan.ToggleFloorPlan);
-        yield return ("Sketch: mark points  (P)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Point); });
-        yield return ("Sketch: draw a line  (L)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Line); });
-        if (_sketch.Count > 0) yield return ("Sketch: clear the active sketch", () => { SelectTool(EditorTool.Sketch); RequestClearSketch(); });
+        yield return ("Sketch: mark points  (P)", () => { SelectTool(EditorTool.Sketch); Sketches.SetMode(SketchKind.Point); });
+        yield return ("Sketch: draw a line  (L)", () => { SelectTool(EditorTool.Sketch); Sketches.SetMode(SketchKind.Line); });
+        if (Sketches.Doc.Count > 0) yield return ("Sketch: clear the active sketch", () => { SelectTool(EditorTool.Sketch); Sketches.RequestClear(); });
         yield return ("Poles: plan a line  (P)", () => { SelectTool(EditorTool.Poles); StartPlanning(); });
         yield return ("Poles: connect  (C)", () => { SelectTool(EditorTool.Poles); StartConnecting(); });
         yield return ("Edit: undo  (Ctrl+Z)", () => Edits.Undo());
@@ -54,8 +54,8 @@ public partial class EditorMode
         foreach (var r in Patches()) { var id = r.Id; yield return ($"{r.Id}  ground patch  {r.Type}  {r.Points.Count} corners", () => { SelectTool(EditorTool.Ground); SelectShape(ShapeKind.Patch, id); }); }
         foreach (var z in Zones()) { var id = z.Id; yield return ($"{z.Label}  zone  {ZoneLabel(z.Kind)}  {z.Points.Count} corners", () => { SelectTool(EditorTool.Zones); SelectShape(ShapeKind.Zone, id); }); }
         foreach (var k in Map.ZoneKinds) { var n = k.Name; yield return ($"{k.Label}  zone kind", () => { SelectTool(EditorTool.Zones); SelectZoneKind(n); }); }
-        foreach (var p in _sketch.Points) { var id = p.Id; yield return ($"{p.Id}  sketch point", () => { SelectTool(EditorTool.Sketch); SelectSketchItem(id); }); }
-        foreach (var l in _sketch.Lines) { var id = l.Id; yield return ($"{l.Id}  sketch {(l.Closed ? "closed line" : "line")}  {l.Points.Count} corners", () => { SelectTool(EditorTool.Sketch); SelectSketchItem(id); }); }
+        foreach (var p in Sketches.Doc.Points) { var id = p.Id; yield return ($"{p.Id}  sketch point", () => { SelectTool(EditorTool.Sketch); Sketches.SelectItem(id); }); }
+        foreach (var l in Sketches.Doc.Lines) { var id = l.Id; yield return ($"{l.Id}  sketch {(l.Closed ? "closed line" : "line")}  {l.Points.Count} corners", () => { SelectTool(EditorTool.Sketch); Sketches.SelectItem(id); }); }
         if (filter.Length >= 2)
             foreach (var p in Map.Parcels.Values.OrderBy(p => p.Id, StringComparer.Ordinal)) { var id = p.Id; yield return ($"{p.Id}  parcel  {p.Kind}", () => { SelectTool(EditorTool.Select); Click(id, false); }); }
     }
