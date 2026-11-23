@@ -65,15 +65,15 @@ public partial class NetClient : IBotHost
     double IBotHost.Seconds => BotSeconds;
     bool IBotHost.LinkEnded => LinkEnded;
     bool IBotHost.OwnSpawned => OwnSpawned;
-    EntityState IBotHost.MyState => _myState;
+    EntityState IBotHost.MyState => Ctx.View.MyState;
     bool IBotHost.Driving => Ctx.Driving;
     int IBotHost.WantSlot { set => Ctx.Hotbar.Want = value; }
-    IReadOnlyDictionary<ushort, EntityRecord> IBotHost.States => _dec.States;
+    IReadOnlyDictionary<ushort, EntityRecord> IBotHost.States => Ctx.Snapshots.States;
     EventLogs IBotHost.Logs => _logs;
     IEnumerable<BotCar> IBotHost.Cars => Ctx.Cars.All.Select(AsBotCar);
     BotCar? IBotHost.Car(ushort id) => Ctx.Cars.TryGet(id, out var v) ? AsBotCar(v) : null;
     IEnumerable<BotRemote> IBotHost.Remotes => Ctx.Remotes.Values.Select(r => new BotRemote(r.State, r.LastPos));
-    int IBotHost.RocketCount => _rockets.Count;
+    int IBotHost.RocketCount => Ctx.Rockets.Count;
     VehiclesFile? IBotHost.Vehicles => Vehicles;
     int IBotHost.Snaps => _snaps;
     int IBotHost.Recon => Ctx.Reconciles;
@@ -83,9 +83,9 @@ public partial class NetClient : IBotHost
     ushort IBotHost.Seq => _seq;
     float IBotHost.OwnTravel => new Vector2(_meMax.X - _meMin.X, _meMax.Z - _meMin.Z).Length();
     float IBotHost.BestRemoteTravel => Ctx.Remotes.Values.Select(r => new Vector2(r.Max.X - r.Min.X, r.Max.Z - r.Min.Z).Length()).DefaultIfEmpty(0f).Max();
-    RubberStats IBotHost.Rubber { get => _rub; set => _rub = value; }
+    RubberStats IBotHost.Rubber { get => Ctx.Rub; set => Ctx.Rub = value; }
     NetSim? IBotHost.Sim => Sim;
-    int IBotHost.DriveCorrections => _driveCorrections;
+    int IBotHost.DriveCorrections => _driveClient.Corrections;
 
     (double Received, double Sent) IBotHost.PopTraffic() =>
         (_conn.PopStatistic(ENetConnection.HostStatistic.ReceivedData), _conn.PopStatistic(ENetConnection.HostStatistic.SentData));
@@ -102,5 +102,5 @@ public partial class NetClient : IBotHost
         if (_peer != null) Tx(_peer, Wire.ChanRozhlasFeed, packet, 0);
     }
 
-    BotCar AsBotCar(CarView v) => new(v.Id, v.Kind, v.Driver, v.Pos, v.Kmh, v.Stage, v.Destroyed, v.Exploded, v.Node, DriveDef(v) != null);
+    BotCar AsBotCar(CarView v) => new(v.Id, v.Kind, v.Driver, v.Pos, v.Kmh, v.Stage, v.Destroyed, v.Exploded, v.Node, _driveClient.DefOf(v) != null);
 }

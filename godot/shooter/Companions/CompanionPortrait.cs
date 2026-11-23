@@ -36,7 +36,7 @@ public sealed partial class CompanionPortrait : SubViewport
         var box = def.HitBoxOf(variant);
         if (box.Count < 3) return null;
         var root = new Node3D();
-        var (model, anim, clips) = NetClient.AddAnimalModel(root, def, variant, 1f, box);
+        var (model, anim, clips) = AnimalsClient.AddModel(root, def, variant, 1f, box);
         if (model == null) { root.Free(); return null; }
 
         var view = new CompanionPortrait

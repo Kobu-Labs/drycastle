@@ -6,7 +6,7 @@ using Drycastle.ShooterCore.Scud;
 namespace Drycastle.Shooter.Scud;
 
 /// <summary>
-/// What the Scud screen draws this frame, filled by the client (<c>NetClient.Scud.cs</c>) and read by <see cref="ScudOverlay"/>: plain values, reused every frame, so the screen allocates nothing
+/// What the Scud screen draws this frame, filled by the client (<c>ScudClient.cs</c>) and read by <see cref="ScudOverlay"/>: plain values, reused every frame, so the screen allocates nothing
 /// while it is up. Strings are rebuilt by the client only when what they say changes.
 /// </summary>
 public sealed class ScudScreenState

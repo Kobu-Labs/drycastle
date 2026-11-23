@@ -1,10 +1,12 @@
 using Godot;
 using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.Net.Bots;
 using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Waters;
 using Drycastle.ShooterCore.Weapons;
 
 namespace Drycastle.Shooter.Net.Client;
@@ -23,6 +25,18 @@ public sealed class ClientContext
     /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
     public ClientMatchState Match { get; } = new();
     public CameraShake Shake { get; }
+    /// <summary>Who has the own view and body (on foot, a vehicle, a turret, the missile, a hold): <see cref="ClientView.Mode"/>.</summary>
+    public ClientView View { get; }
+    /// <summary>The first-person weapon of the local player.</summary>
+    internal OwnViewmodel Viewmodel { get; }
+    /// <summary>The own weapon and movement sounds, and the other players' steps.</summary>
+    internal ClientSound Sound { get; }
+    /// <summary>The newest decoded snapshot: the records by entity id, the ones that left.</summary>
+    public SnapshotDecoder Snapshots { get; } = new();
+    /// <summary>How often and how far the own body and vehicles are corrected (the loss test reads it through the bot host and may replace it).</summary>
+    public RubberStats Rub = new();
+    /// <summary>The map's water (water.json), shared with the prediction so swimming matches the server.</summary>
+    public Water Water = Water.Empty;
     /// <summary>The vehicles of the world as drawn, and the seat the local player sits in.</summary>
     internal ClientCars Cars { get; }
     /// <summary>Replicated world entities (turrets, missiles, citizens, ...). Subscribe to Spawned/Despawned for visuals.</summary>
@@ -31,6 +45,8 @@ public sealed class ClientContext
     public RenderClock Clock { get; } = new();
     /// <summary>The tick of the newest snapshot; 0 before the first one.</summary>
     public uint LastTick;
+    /// <summary>The rockets and thrown grenades in the air, by entity id.</summary>
+    internal Dictionary<ushort, RocketView> Rockets { get; } = new();
     /// <summary>The other players and target dummies being drawn, by entity id.</summary>
     public Dictionary<ushort, RemotePlayer> Remotes { get; } = new();
     public Node3D World = null!;
@@ -43,6 +59,12 @@ public sealed class ClientContext
     public ushort MyId;
     /// <summary>How many times the prediction was corrected by a server position (the telemetry, the report and the bots count them).</summary>
     public int Reconciles;
+    /// <summary>The newest owner ammo state from the server (null before the first one).</summary>
+    public AmmoMsg? Ammo;
+    /// <summary>The weapon of the slot the newest ammo state names; null before it or when weapons.json has no such slot.</summary>
+    public WeaponDef? CurrentWeapon => Ammo is { } a && Weapons != null && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1] : null;
+    /// <summary>The events kept for the smoke bots to check (null unless a bot that reads them runs).</summary>
+    public EventLogs? Logs;
     /// <summary>The weapon slots of the spawn hotbar and the one in hand.</summary>
     public Hotbar Hotbar { get; } = new();
     public bool Dead;
@@ -57,7 +79,7 @@ public sealed class ClientContext
     /// <summary>killstreaks.json (set by the host): streak names, thresholds and the aircraft's defs.</summary>
     public KillstreakFile? Killstreaks;
     /// <summary>The local player sits in a vehicle (driving, or in a seat).</summary>
-    public Func<bool> InVehicle = () => false;
+    public bool InVehicle() => View.InVehicle;
     /// <summary>True while a menu screen is open (set by the host).</summary>
     public Func<bool>? MenuOpen;
     /// <summary>Sends one reliable event to the server (nothing when not connected).</summary>
@@ -75,6 +97,9 @@ public sealed class ClientContext
     {
         Root = root;
         Shake = new CameraShake(this);
+        View = new ClientView(this);
+        Viewmodel = new OwnViewmodel(this);
+        Sound = new ClientSound(this);
         Cars = new ClientCars(this);
     }
 

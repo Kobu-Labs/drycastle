@@ -26,26 +26,25 @@ public partial class NetClient
     /// </summary>
     void InitMatchEdges()
     {
-        Match.PhaseChanged += SfxPhase;
+        Match.PhaseChanged += OnPhaseChanged;
         Match.RoundRestarted += () => { Ctx.Hud?.ClearKills(); HarvesterRoundRestart(); };
     }
 
-    WeaponDef? CurrentWeapon => Ammo is { } a && Weapons != null && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1] : null;
 
     /// <summary>Spread the next shot would get, for the crosshair gap: the same rule as the server's shot (stance, aim, movement).</summary>
     float CrosshairSpread()
     {
-        if (CurrentWeapon is not { } w) return 0f;
+        if (Ctx.CurrentWeapon is not { } w) return 0f;
         var own = HitMath.OwnSpread(w, _spread.Degrees(w, Ctx.Now));
         // in an armed seat the vehicle's speed is what widens it (the server's rule for a shot from the seat)
-        if (InArmedSeat && Ctx.Cars.MySeat() is { } m) return SeatAimRules.ShotSpread(own, w, _aimHeld, RideSpeed(m.Car, DriveOf(m.Car)), m.Seat);
+        if (Ctx.View.InArmedSeat && Ctx.Cars.MySeat() is { } m) return SeatAimRules.ShotSpread(own, w, _aimHeld, SeatsClient.RideSpeed(m.Car, _driveClient.StateOf(m.Car)), m.Seat);
         return Ctx.Me is { } me ? HitMath.ShotSpread(own, w, me.State, _aimHeld) : own;
     }
 
     void HudWelcome()
     {
         if (!ShotFx.Enabled || Ctx.Hud != null) return; // headless runs have no HUD
-        Ctx.Hud = new Hud { MyId = Ctx.MyId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? ClientText.WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => Ctx.Me is { ZoomFov: > 0 } && !_binoculars, Binoculars = BinocularsView, Aim = () => _viewmodel?.AimAmount ?? 0f, Breath = BreathView, Scope = ScopeView, Spread = CrosshairSpread };
+        Ctx.Hud = new Hud { MyId = Ctx.MyId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? ClientText.WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => Ctx.Me is { ZoomFov: > 0 } && !_binoculars, Binoculars = BinocularsView, Aim = () => _viewmodel.AimAmount, Breath = BreathView, Scope = ScopeView, Spread = CrosshairSpread };
         AddChild(Ctx.Hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
         Ctx.Hud.TacticalMapTeleport = _screens.OnMapTeleport;
         Sandbox.ShowOnHud(); // the SANDBOX badge (#156)
@@ -80,7 +79,7 @@ public partial class NetClient
     void HudHit(HitMsg h)
     {
         // a gunner's hit marker is the turret overlay's while the HUD is hidden (ticket #152); the hit event reaches it either way
-        if (h.Attacker == Ctx.MyId && h.Victim != Ctx.MyId && _gunship != null) _gunOverlay.Hit(h.Headshot, h.Kill);
+        if (h.Attacker == Ctx.MyId && h.Victim != Ctx.MyId) _aircraftClient.HitMarker(h.Headshot, h.Kill);
         if (Ctx.Hud == null) return;
         if (h.Attacker == Ctx.MyId && h.Victim != Ctx.MyId) Ctx.Hud.Hit(h.Headshot, h.Kill);
         if (h.Victim != Ctx.MyId || Ctx.Me == null) return;
@@ -112,7 +111,7 @@ public partial class NetClient
         Ctx.Hud?.SetHealth(Mathf.CeilToInt(Ctx.Me?.Health ?? 100));
         Ctx.Hud?.SetSnapshotCount(_snaps); // the FPS card's TPS line (Hud.Fps.cs)
         Ctx.Hud?.CoverCrosshair(_chooser.IsOpen);
-        Ctx.Hud?.SetUnarmedSeat(InUnarmedSeat); // no crosshair, no ammo readout where nothing can be fired (#373)
+        Ctx.Hud?.SetUnarmedSeat(Ctx.View.InUnarmedSeat); // no crosshair, no ammo readout where nothing can be fired (#373)
         _screens.Update();
         _uav.Tick();
         if (Ctx.Me != null) RozhlasFeedPlayer.Current?.SetListener(Ctx.Me.GlobalPosition);
@@ -120,8 +119,8 @@ public partial class NetClient
         if (Ctx.Me != null && Ctx.Hud != null)
         {
             var g = Ctx.Me.GlobalPosition;
-            var src = MinimapView.Select(missilePov: _povCam is { Current: true }, turret: _gunship != null, driving: Ctx.Driving);
-            Ctx.Hud.Minimap.SetPlayer(new Vector2(g.X, g.Z), MinimapView.YawFor(src, Ctx.Me.Yaw, _carYaw, _turretViewYaw, _missileViewYaw));
+            var src = MinimapView.Select(missilePov: _missile.PovOn, turret: _aircraftClient.AtTurret, driving: Ctx.Driving);
+            Ctx.Hud.Minimap.SetPlayer(new Vector2(g.X, g.Z), MinimapView.YawFor(src, Ctx.Me.Yaw, _carYaw, _aircraftClient.TurretViewYaw, _missile.ViewYaw));
             _carDots.Clear();
             foreach (var c in Ctx.Cars.All)
             {

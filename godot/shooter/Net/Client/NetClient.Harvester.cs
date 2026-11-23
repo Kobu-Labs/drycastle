@@ -65,12 +65,6 @@ public partial class NetClient
         ? new List<CropField>()
         : CropFields.From(Map.PatchPaints.Select(p => (p.Id, p.Type, (IReadOnlyList<NVec2>)p.Ring.Select(v => new NVec2(v.X, v.Y)).ToList())));
 
-    /// <summary>The fields vehicles leave tracks on, the same list the server builds (the wire index is its index).</summary>
-    List<CropField> CrushFields => _crushFields ??= Map == null
-        ? new List<CropField>()
-        : CropFields.From(Map.PatchPaints.Select(p => (p.Id, p.Type, (IReadOnlyList<NVec2>)p.Ring.Select(v => new NVec2(v.X, v.Y)).ToList())), includeBare: true);
-    List<CropField>? _crushFields;
-
     void OnHarvesterEvent(EventKind kind, byte[] payload)
     {
         switch (kind)
@@ -78,7 +72,7 @@ public partial class NetClient
             case EventKind.HarvesterState when HarvesterCodec.DecodeState(payload) is { } s: OnHarvesterState(s); break;
             case EventKind.HarvesterFx when HarvesterCodec.DecodeFx(payload) is { } f: OnHarvesterFx(f); break;
             case EventKind.HarvesterCut when SwathCodec.Decode(payload) is { } c: OnHarvesterCut(c); break;
-            case EventKind.CropCrush when CrushCodec.Decode(payload) is { } cr: OnCropCrush(cr); break;
+            case EventKind.CropCrush when CrushCodec.Decode(payload) is { } cr: _crush.OnMessage(cr); break;
         }
     }
 
@@ -117,8 +111,8 @@ public partial class NetClient
         if (!ShotFx.Enabled || Vehicles == null) return;
         FadeDroppedBales();
         Ctx.Cars.Sounds.Step();
-        StampCrush(); // after RenderCars: from the drawn poses
-        FlushCrush();
+        _crush.Stamp(); // after RenderCars: from the drawn poses
+        _crush.Flush();
         foreach (var v in Ctx.Cars.All)
         {
             if (v.Kind >= Vehicles.Vehicles.Count || Vehicles.Vehicles[v.Kind].Id != HarvesterRules.VehicleId || v.Destroyed) continue;
@@ -488,7 +482,7 @@ public partial class NetClient
     void HarvesterRoundRestart()
     {
         _harvHidden.Clear(); _baleBody.Clear(); _drawIn.Clear(); _baleEmerge.Clear();
-        CropCrushRestart(); // the masks and every vehicle's path start afresh
+        _crush.Restart(); // the masks and every vehicle's path start afresh
         Map?.CropReset(); // plants stand again, the ground marks go
         foreach (var sw in _swathsC.Values) ClearDroppedBales(sw, false);
         _swathsC.Clear();

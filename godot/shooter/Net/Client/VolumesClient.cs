@@ -15,8 +15,24 @@ namespace Drycastle.Shooter.Net.Client;
 /// boxes, the animal shapes, the physics shapes of the static world), at the pose this client draws: other players and animals are interpolated, so a shot may differ by
 /// the interpolation delay.
 /// </summary>
-public partial class NetClient
+internal sealed class VolumesClient
 {
+    readonly ClientContext _ctx;
+    readonly AnimalsClient _animals;
+    readonly AnimalShapes _shapes;
+    readonly CitizensClient _citizens;
+    readonly ThievesClient _thieves;
+    readonly DemonClient _demon;
+    readonly VehicleHulls _hulls;
+
+    public VolumesClient(ClientContext ctx, AnimalsClient animals, AnimalShapes shapes, CitizensClient citizens, ThievesClient thieves, DemonClient demon, VehicleHulls hulls)
+    {
+        _ctx = ctx; _animals = animals; _shapes = shapes; _citizens = citizens; _thieves = thieves; _demon = demon; _hulls = hulls;
+    }
+
+    /// <summary>The overlay is on.</summary>
+    public bool On => _volumes != null;
+
     /// <summary>How far from the camera volumes are drawn (m), and how often the static colliders are looked up again (s).</summary>
     const float VolumeRange = 40f, StaticRefresh = 0.25f;
     /// <summary>A static collider with a side longer than this (m) is the ground or a hall, not a prop: not drawn.</summary>
@@ -29,34 +45,34 @@ public partial class NetClient
     readonly PhysicsShapeQueryParameters3D _staticQuery = new();
 
     /// <summary>F3 toggles the overlay; [ and ] step the mode while it is on. Not under a menu. True when the key was used.</summary>
-    bool HandleVolumeInput(InputEvent e)
+    public bool HandleInput(InputEvent e)
     {
         if (e is not InputEventKey { Echo: false, Pressed: true }) return false;
         var toggle = e.IsActionPressed("debug_volumes");
         var step = _volumes == null ? 0 : e.IsActionPressed("debug_volumes_next") ? 1 : e.IsActionPressed("debug_volumes_prev") ? -1 : 0;
         if (!toggle && step == 0) return false;
-        if (MenuOpen?.Invoke() == true || Ctx.Hud == null) return false;
+        if (_ctx.MenuIsOpen || _ctx.Hud == null) return false;
         if (toggle)
         {
             if (_volumes == null)
             {
                 _volumes = new VolumeOverlay { Name = "VolumeOverlay" };
-                Ctx.Owned.AddChild(_volumes);
+                _ctx.Owned.AddChild(_volumes);
                 _staticAt = 0;
             }
-            else { _volumes.QueueFree(); _volumes = null; _staticShapes.Clear(); Ctx.Hud.SetVolumeMode(null); return true; }
+            else { _volumes.QueueFree(); _volumes = null; _staticShapes.Clear(); _ctx.Hud.SetVolumeMode(null); return true; }
         }
         else _volumes!.Step(step);
-        Ctx.Hud.SetVolumeMode(_volumes!.ModeText());
+        _ctx.Hud.SetVolumeMode(_volumes!.ModeText());
         return true;
     }
 
     /// <summary>Once a frame while the overlay is on (not called when off).</summary>
-    void UpdateVolumes()
+    public void Update()
     {
         var o = _volumes;
-        if (o == null || !GodotObject.IsInstanceValid(o) || Ctx.Me == null) return;
-        var cam = GetViewport()?.GetCamera3D()?.GlobalPosition ?? Ctx.Me.GlobalPosition;
+        if (o == null || !GodotObject.IsInstanceValid(o) || _ctx.Me == null) return;
+        var cam = _ctx.Root.GetViewport()?.GetCamera3D()?.GlobalPosition ?? _ctx.Me.GlobalPosition;
         o.Begin(cam);
         var wantsPeople = o.Wants(VolumeKind.Hit) || o.Wants(VolumeKind.Body);
         if (wantsPeople) VolumePeople(o, cam);
@@ -83,16 +99,16 @@ public partial class NetClient
 
     void VolumePeople(VolumeOverlay o, Vector3 cam)
     {
-        if (Ctx.Me!.GlobalPosition is var me && Near(me, cam) && !Dead) VolumePerson(o, me, Ctx.Me.State.Stance, Ctx.Me.Yaw, 1f, "you");
-        foreach (var (id, r) in Ctx.Remotes)
+        if (_ctx.Me!.GlobalPosition is var me && Near(me, cam) && !_ctx.Dead) VolumePerson(o, me, _ctx.Me.State.Stance, _ctx.Me.Yaw, 1f, "you");
+        foreach (var (id, r) in _ctx.Remotes)
         {
             if (r.Node == null || !GodotObject.IsInstanceValid(r.Node) || !r.Node.Visible || r.State == EntityState.Dead) continue;
             var at = r.Node.GlobalPosition;
-            if (Near(at, cam)) VolumePerson(o, at, r.Stance, r.Node.GlobalRotation.Y, 1f, Ctx.Names.TryGetValue(id, out var n) ? n : $"player {id}");
+            if (Near(at, cam)) VolumePerson(o, at, r.Stance, r.Node.GlobalRotation.Y, 1f, _ctx.Names.TryGetValue(id, out var n) ? n : $"player {id}");
         }
         foreach (var c in _citizens.Views) VolumeNpc(o, c, cam, "citizen");
         foreach (var g in _thieves.GangViews) VolumeNpc(o, g, cam, "gang");
-        foreach (var d in _demons.Values) VolumeNpc(o, d.View, cam, "demon");
+        foreach (var view in _demon.Views) VolumeNpc(o, view, cam, "demon");
     }
 
     static void VolumeNpc(VolumeOverlay o, Node3D? view, Vector3 cam, string name)
@@ -104,9 +120,9 @@ public partial class NetClient
 
     void VolumeAnimals(VolumeOverlay o, Vector3 cam)
     {
-        foreach (var (id, v) in _animals)
+        foreach (var (id, v) in _animals.ById)
         {
-            if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant || !v.Node.Visible) continue;
+            if (!_ctx.WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant || !v.Node.Visible) continue;
             var feet = v.Node.GlobalPosition;
             if (!Near(feet, cam)) continue;
             var yaw = v.Node.GlobalRotation.Y;
@@ -118,7 +134,7 @@ public partial class NetClient
             var fwd = new Vector3(-MathF.Sin(yaw), 0, -MathF.Cos(yaw));
             o.Box(VolumeKind.Body, new Transform3D(new Basis(Vector3.Up, yaw), feet + fwd * bodyAhead + Vector3.Up * (box[1] / 2)), new Vector3(box[0], box[1], box[2]), v.Def.Id);
             // Hit shape: the outline in the pose it is drawn in (the first frame of eating: the clip time is the server's), else the hit box
-            var shape = WildlifeKeeper.PoseOf(state) is { } pose ? AnimalShapes.At(v.Def.ShapeKey(v.Variant), pose, 0) : null;
+            var shape = WildlifeKeeper.PoseOf(state) is { } pose ? _shapes.At(v.Def.ShapeKey(v.Variant), pose, 0) : null;
             if (shape is { } s) o.Outline(VolumeKind.Hit, s.Shape, feet, yaw, v.Size, v.Def.Id);
             else
             {
@@ -130,13 +146,13 @@ public partial class NetClient
 
     void VolumeVehicles(VolumeOverlay o, Vector3 cam)
     {
-        if (Vehicles == null) return;
-        foreach (var v in Ctx.Cars.All)
+        if (_ctx.Vehicles == null) return;
+        foreach (var v in _ctx.Cars.All)
         {
             var feet = new Vector3(v.Pos.X, v.Pos.Y, v.Pos.Z);
             if (!Near(feet, cam)) continue;
-            var def = Vehicles.Vehicles[v.Kind];
-            var (pitch, roll) = def.Tilts ? HullTiltOf(v, def) : (0f, 0f);
+            var def = _ctx.Vehicles.Vehicles[v.Kind];
+            var (pitch, roll) = def.Tilts ? _hulls.TiltOf(v, def) : (0f, 0f);
             var frame = new Transform3D(Basis.FromEuler(new Vector3(pitch, v.Yaw, roll)), feet);
             foreach (var b in def.HullBoxes)
             {
@@ -153,15 +169,15 @@ public partial class NetClient
     /// <summary>Static colliders within range: props, tree trunks and crowns, buildings that are boxes. Looked up four times a second from the physics space.</summary>
     void VolumeStatic(VolumeOverlay o, Vector3 cam)
     {
-        if (Ctx.Now - _staticAt > StaticRefresh)
+        if (_ctx.Now - _staticAt > StaticRefresh)
         {
-            _staticAt = Ctx.Now;
+            _staticAt = _ctx.Now;
             _staticShapes.Clear();
             _staticProbe.Radius = VolumeRange;
             _staticQuery.Shape = _staticProbe;
             _staticQuery.Transform = new Transform3D(Basis.Identity, cam);
             _staticQuery.CollisionMask = CollisionLayers.World | CollisionLayers.ShotOnly;
-            var hits = World.GetWorld3D().DirectSpaceState.IntersectShape(_staticQuery, 400);
+            var hits = _ctx.World.GetWorld3D().DirectSpaceState.IntersectShape(_staticQuery, 400);
             var seen = new HashSet<(ulong, int)>();
             foreach (var h in hits)
             {

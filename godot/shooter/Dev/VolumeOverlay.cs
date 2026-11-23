@@ -13,7 +13,7 @@ public enum VolumeKind { Hit = 0, Body = 1, Static = 2 }
 /// <summary>
 /// The F3 debug overlay (#479): wireframes of what a shot, a step or a bump is tested against, one colour and one text tag per kind (never colour alone).
 /// Built when F3 turns it on and freed when it turns off; nothing exists while off. While on, <see cref="Begin"/> / the draw calls / <see cref="End"/> rebuild
-/// one line mesh and a small pool of tags each frame. The caller (NetClient.Volumes.cs) says what to draw; this class only draws.
+/// one line mesh and a small pool of tags each frame. The caller (VolumesClient.cs) says what to draw; this class only draws.
 /// </summary>
 public partial class VolumeOverlay : Node3D
 {

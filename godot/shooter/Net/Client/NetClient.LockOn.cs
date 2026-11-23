@@ -74,7 +74,7 @@ public partial class NetClient
 
     /// <summary>The Lock of the weapon in the local player's hand, when its sight should be up.</summary>
     LockDef? LauncherHeld() =>
-        !Dead && Ctx.Me != null && _gunship == null && !InUnarmedSeat && Weapons != null && Ammo is { } a && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1].Lock : null;
+        !Dead && Ctx.Me != null && !_aircraftClient.AtTurret && !Ctx.View.InUnarmedSeat && Weapons != null && Ammo is { } a && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1].Lock : null;
 
     /// <summary>Every frame: the shooter's sight and beeps, the owner's warning and beeps.</summary>
     void RenderLockOn()
@@ -120,7 +120,7 @@ public partial class NetClient
 
     /// <summary>Where a lock target is drawn: an Aircraft's model, or a flown helicopter's vehicle node. Null when it is not in view.</summary>
     Vector3? LockTargetPosition(ushort id) =>
-        _aircraft.TryGetValue(id, out var view) ? view.Model.GlobalPosition
+        _aircraftClient.PositionOf(id) is { } aircraftAt ? aircraftAt
         : Ctx.Cars.TryGet(id, out var car) && car.Node != null ? car.Node.GlobalPosition : null;
 
     string AircraftKindId(ushort id)
@@ -137,17 +137,17 @@ public partial class NetClient
         if (Ctx.Remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Ctx.Now + 0.45;
         if (!EchoOfPredicted(l.Owner))
         {
-            if (Sfx.Enabled) { var snd = SoundRules.Event("launch", WeaponId(l.Weapon)); if (l.Owner == Ctx.MyId) Sfx.Play2D(snd); else Sfx.Play3D(snd, G(l.Origin)); }
-            if (l.Owner == Ctx.MyId) _viewmodel?.Flash(0.5f); else if (Ctx.Remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
+            if (Sfx.Enabled) { var snd = SoundRules.Event("launch", Ctx.Sound.WeaponId(l.Weapon)); if (l.Owner == Ctx.MyId) Sfx.Play2D(snd); else Sfx.Play3D(snd, G(l.Origin)); }
+            if (l.Owner == Ctx.MyId) _viewmodel.Flash(0.5f); else if (Ctx.Remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
         }
-        if (_deadRockets.Contains(l.Id) || !ShotFx.Enabled || Weapons == null || _rockets.ContainsKey(l.Id)) return;
+        if (_deadRockets.Contains(l.Id) || !ShotFx.Enabled || Weapons == null || Ctx.Rockets.ContainsKey(l.Id)) return;
         var speed = l.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[l.Weapon].ProjectileSpeed : 160f;
         var to = LockTargetPosition(l.Target) is { } tp ? new NVec3(tp.X, tp.Y, tp.Z) - l.Origin : NVec3.UnitY;
-        _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Ctx.Owned), Born = Ctx.Now, Pos = l.Origin, Dir = NVec3.Normalize(to), At = Ctx.Now, Speed = speed, Homing = true, Target = l.Target, Arrive = l.Seconds > 0 ? Ctx.Now + l.Seconds : 0 };
+        Ctx.Rockets[l.Id] = new RocketView { Node = RocketFx.Make(Ctx.Owned), Born = Ctx.Now, Pos = l.Origin, Dir = NVec3.Normalize(to), At = Ctx.Now, Speed = speed, Homing = true, Target = l.Target, Arrive = l.Seconds > 0 ? Ctx.Now + l.Seconds : 0 };
     }
 
     /// <summary>One frame of a homing missile: it closes on where its Aircraft is drawn at the rate that lands it there on time; with the Aircraft gone it flies straight on.</summary>
-    void StepHoming(Rocket r)
+    void StepHoming(RocketView r)
     {
         var dt = (float)(Ctx.Now - r.At);
         r.At = Ctx.Now;

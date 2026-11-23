@@ -10,6 +10,9 @@ namespace Drycastle.Shooter.Net.Client;
 /// <summary>A vehicle as this client draws it: the model node, the interpolation buffer, what the latest record says and the parts of its type (rotors, wheels, lamps, sound, trailer).</summary>
 internal sealed class CarView
 {
+    /// <summary>The node riders stand on: the body of a driven vehicle (it leans over its wheels), else the vehicle itself.</summary>
+    public Node3D SeatAnchor => Drive?.Hull is { } hull && GodotObject.IsInstanceValid(hull) ? hull : Node;
+
     public Node3D Node = null!;
     public ushort Id;
     /// <summary>A flak truck's moving nodes (null for every other type, or a model without them).</summary>

@@ -172,7 +172,7 @@ public partial class NetClient
     {
         _wornBy[player] = slots;
         if (Ctx.Remotes.TryGetValue(player, out var r) && r.View != null) Dress(r.View, slots);
-        if (player == Ctx.MyId && _selfView != null) Dress(_selfView, slots);
+        if (player == Ctx.MyId && _rider.SelfView != null) Dress(_rider.SelfView, slots);
     }
 
     /// <summary>Forgets a player who left.</summary>
@@ -184,6 +184,9 @@ public partial class NetClient
         for (var s = 0; s < Equipment.SlotCount; s++)
             view.SetWorn((EquipSlot)s, slots != null && s < slots.Length && slots[s] is { } i ? ItemData.At(i) : null);
     }
+
+    /// <summary>Dresses the own figure seated in a vehicle: the camouflage, and the headgear (#266).</summary>
+    void DressSelf(CharacterView view) { Camo.Dress(view, Ctx.MyId); DressPlayer(view, Ctx.MyId); }
 
     /// <summary>Dresses a new character of a player with what they wear.</summary>
     void DressPlayer(CharacterView view, ushort player) => Dress(view, _wornBy.GetValueOrDefault(player));

@@ -3,9 +3,9 @@ using Drycastle.Shooter.Scenery;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Flight;
 using Drycastle.ShooterCore.Glass;
+using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Killstreaks.Helicopter;
 using Drycastle.ShooterCore.Killstreaks.Moab;
-using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Scenery;
 using Drycastle.ShooterCore.Vehicles;
@@ -20,7 +20,6 @@ public partial class NetClient
     /// <summary>Shows the held weapon of the current hotbar slot (the server-confirmed one once known) low on the right; hidden while dead or driving.</summary>
     void UpdateViewmodel()
     {
-        if (_viewmodel == null) return;
         var slot = Ammo?.Slot ?? Ctx.Hotbar.Want;
         var id = ThrowHeldId() ?? (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : ""); // the throw key held: the grenade, whatever was selected
         _viewmodel.Show(id);
@@ -36,26 +35,25 @@ public partial class NetClient
     /// <summary>Holding zoom with a scoped weapon (sniper) narrows the camera; never while dead or with the mouse released.</summary>
     void ApplyScope()
     {
-        if (Ctx.Me == null || _gunship != null || ScudScreenOn) return; // at a turret the zoom is the gunship's; on a Scud screen it is the screen's
+        if (Ctx.Me == null || _aircraftClient.AtTurret || _scud.ScreenOn) return; // at a turret the zoom is the gunship's; on a Scud screen it is the screen's
         if (Mode.ScopeSuppressed)
         {
             // seated (roof/door gun, turret, any seat) or steering a missile: the held weapon's scope and iron-sight zoom stay off (#241)
             Ctx.Me.ZoomFov = 0f; Ctx.Me.IronSightZoom = false;
-            if (_viewmodel != null) _viewmodel.Aiming = false;
+            _viewmodel.Aiming = false;
             LowerBinoculars();
             return;
         }
         if (TickBinoculars()) return; // raised binoculars are the zoom: no scope, no iron sights
         var slot = Ammo?.Slot ?? Ctx.Hotbar.Want;
         var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
-        var on = zoom > 0 && !Dead && !_pinned && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
+        var on = zoom > 0 && !Dead && !_pounce.Pinned && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
         Ctx.Me.ZoomFov = on ? zoom : 0f;
         // iron sights: any non-scoped, non-melee weapon while zoom is held
         var kind = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Kind : WeaponKind.Melee;
-        if (_viewmodel != null)
-            _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && (!Ctx.Driving && _myState != EntityState.InVehicle || InArmedSeat)
+        _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && (!Ctx.Driving && Ctx.View.MyState != EntityState.InVehicle || Ctx.View.InArmedSeat)
                 && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
-        Ctx.Me.IronSightZoom = _viewmodel is { Aiming: true };
+        Ctx.Me.IronSightZoom = _viewmodel.Aiming;
     }
 
     /// <summary>At a turret the slot sent is the key held (1-5, 0 none), not the body's hotbar weapon: the turret reads it as its weapon number (the AC-130's 1-3).</summary>
@@ -74,19 +72,27 @@ public partial class NetClient
             if (Input.IsActionPressed($"slot_{k + 1}")) Ctx.Hotbar.Want = Ctx.Hotbar.Slots[k] + 1;
     }
 
+    /// <summary>One reliable event, to the weapon features: the fire and its answers first, then the blasts and the other effects (a kind is only one of them).</summary>
     void OnWeaponEvent(EventKind kind, byte[] payload)
+    {
+        OnFireEvent(kind, payload);
+        OnBlastEvent(kind, payload);
+    }
+
+    /// <summary>The ammo, the shots, the launches and the hits: the sounds, the HUD and the fire's own effects.</summary>
+    void OnFireEvent(EventKind kind, byte[] payload)
     {
         switch (kind)
         {
             case EventKind.Ammo when WeaponCodec.DecodeAmmo(payload) is { } a:
-                Ammo = a; _ammoAt = Ctx.Now;
+                Ctx.Ammo = a;
                 PredictOnAmmo(a);
-                SfxAmmo(a);
+                Ctx.Sound.Ammo(a, _pReloadUntil);
                 HudAmmo();
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
                 _blips.Add(sh.Shooter, sh.Weapon, sh.Origin);
-                if (!OnDoorGunShot(sh)) OnShot(sh); // a door gun's round leaves its muzzle on the model
+                if (!_guns.OnDoorGunShot(sh)) OnShot(sh); // a door gun's round leaves its muzzle on the model
                 break;
             case EventKind.PelletFan when WeaponCodec.DecodePelletFan(payload) is { } pf:
                 _blips.Add(pf.Shooter, pf.Weapon, pf.Origin);
@@ -95,6 +101,23 @@ public partial class NetClient
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
                 OnLaunch(l);
                 break;
+            case EventKind.HuntShot when HuntShot.Decode(payload) is { } hs:
+                _hunts.OnShot(hs);
+                break;
+            case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
+                Ctx.Logs?.Hits.Add((Ctx.Now, h));
+                Ctx.Sound.Hit(h);
+                HudHit(h);
+                break;
+        }
+    }
+
+
+    /// <summary>The blasts, the gunship's coalesced effects and the vehicles' and the world's reaction.</summary>
+    void OnBlastEvent(EventKind kind, byte[] payload)
+    {
+        switch (kind)
+        {
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
                 OnExplosion(ex);
                 break;
@@ -105,7 +128,7 @@ public partial class NetClient
                 _moab.OnMoab(mo);
                 break;
             case EventKind.MissileBlast when MissileCodec.DecodeBlast(payload) is { } mb:
-                OnMissileBlast(mb);
+                _missile.OnBlast(mb);
                 break;
             case EventKind.GunshipShots when GunshipFxCodec.DecodeShots(payload) is { } gs:
                 OnGunshipShots(gs);
@@ -120,7 +143,7 @@ public partial class NetClient
                 _impacts.OnImpact(imp);
                 break;
             case EventKind.HelperWarning when HelperWarningCodec.Decode(payload) is { } hw:
-                OnHelperWarning(hw);
+                _aircraftClient.OnHelperWarning(hw);
                 break;
             case EventKind.PlayerFlung when PlayerFlungCodec.Decode(payload) is { } flung:
                 OnPlayerFlung(flung);
@@ -134,16 +157,9 @@ public partial class NetClient
             case EventKind.GlassSync when GlassCodec.DecodeSync(payload) is { } gsync:
                 _glass.OnSync(gsync);
                 break;
-            case EventKind.HuntShot when HuntShot.Decode(payload) is { } hs:
-                _hunts.OnShot(hs);
-                break;
-            case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
-                if (KeepEventLogs) _logs.Hits.Add((Ctx.Now, h));
-                SfxHit(h);
-                HudHit(h);
-                break;
         }
     }
+
 
     /// <summary>The street lamps and the sign plates the server switches (their full state at join, then each change).</summary>
     void OnStreetEvent(EventKind kind, byte[] payload)

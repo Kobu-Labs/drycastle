@@ -81,7 +81,7 @@ public partial class NetClient
     /// </summary>
     Transform3D? ComposedCamera(Transform3D eye)
     {
-        var pounce = PounceCamera(eye);
+        var pounce = _pounce.Camera(eye);
         return _death.OwnsCamera ? DeathCamera(pounce ?? eye) : pounce;
     }
 
