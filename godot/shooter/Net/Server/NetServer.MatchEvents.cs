@@ -61,7 +61,7 @@ public partial class NetServer
                     sc.Body.Health = MoveConsts.MaxHealth;
                     sc.Inputs.Clear(); sc.Start = sc.Body.GlobalPosition; sc.MaxMoved = 0;
                     sc.HeldUntilTick = 0; sc.LaunchGraceUntil = 0; sc.LaunchedAt = 0; // a new life: no Bigfoot hold or launch grace left over from the last one
-                    ApplyLoadout(sc); // a loadout changed while alive applies from this spawn on
+                    _progress.ApplyLoadout(sc); // a loadout changed while alive applies from this spawn on
                     sc.W.Reset(_elapsed);
                     sc.Recoil.Reset();
                     sc.Breath.Reset();
@@ -78,18 +78,18 @@ public partial class NetServer
                 HarvesterOnKill(k); // before the corpse: a body the harvester killed is not thrown
                 if (_byId.TryGetValue(k.Victim, out var kv) && kv.Car != null) RiderDies(kv); // frees the seat; the corpse (PlayerDied) stays in a pilot's or driver's seat, else falls (ADR 0026)
                 _smoke.Kills += k.Killer != k.Victim ? 1 : 0;
-                BotKillLog(k);
+                _bots.LogKill(k);
                 if (WeaponsSmoke && _smoke.Kills >= 2 && _smoke.FinishAt == 0) _smoke.FinishAt = _elapsed + 1.5;
                 if (RpgSmoke && _smoke.Kills >= 1 && _smoke.FinishAt == 0) _smoke.FinishAt = _elapsed + 1.5;
                 LossKill(k.Killer, k.Victim);
-                RecordKill(k);
-                var fromStreak = _streaks.Kill(k, WeaponKey(k.Weapon));
-                if (Scores(k.Killer) && Scores(k.Victim)) AwardXp(_xp.OnKill(new KillFacts(k.Killer, k.Victim, k.Cause, fromStreak), _elapsed)); // the death of a bot (#214) or of a sandbox player grants no XP
+                _progress.RecordKill(k);
+                var fromStreak = _streaks.Kill(k, _progress.WeaponKey(k.Weapon));
+                if (_progress.Scores(k.Killer) && _progress.Scores(k.Victim)) _progress.Kill(new KillFacts(k.Killer, k.Victim, k.Cause, fromStreak)); // the death of a bot (#214) or of a sandbox player grants no XP
                 BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(k.Killer, k.Victim, k.Weapon, k.Cause)));
                 break;
             case PlayerTeamChanged tc: OnTeamChanged(tc); break;
             case TargetKilled tk: OnTargetKilled(tk); break;
-            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) _gear.SetHeadLamp(dead, false); _status.OnDeath(d.Victim); _rozhlas.OnPlayerDied(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); _streaks.Death(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay, _deathPush.TakeFlight(d.Victim)))); break;
+            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) _gear.SetHeadLamp(dead, false); _status.OnDeath(d.Victim); _rozhlas.OnPlayerDied(d.Victim); LossDeath(d.Victim); _progress.RecordDeath(d.Victim); _streaks.Death(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay, _deathPush.TakeFlight(d.Victim)))); break;
         }
     }
 

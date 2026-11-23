@@ -59,7 +59,7 @@ public partial class NetServer
         if (c.Car == null && _tick <= c.HeldUntilTick) return; // in the Bigfoot's hand: the input is acked, the body is where the Bigfoot puts it (issue #264)
         if (c.Car == null && _sitters.Input(c, i, useEdge)) return; // seated in the church: no walking, no weapon
         if (c.Car == null && _pounce.TryYaw(c.Id, out var pinYaw)) { c.Body.Yaw = pinYaw; c.Body.Pitch = 0; return; } // pinned by the demon: held on the floor, no walking, no weapon, no use
-        if (streakEdge && !controlled && !SandboxStreakKey(c)) _streaks.Activate(c);
+        if (streakEdge && !controlled && !_sandbox.StreakKey(c)) _streaks.Activate(c);
         if (c.Car == null && _streaks.Rules.ControlOf(c.Id) is { FreezesBody: true }) return; // controlling a streak entity that holds the body (the missile, a gunship): the body stands still
         if (c.Car is { Thrown: not null }) return; // the Bigfoot threw it: nobody steers, fires or gets out until it lands (issue #264)
         if (c.Car != null) { RideInput(c, i, dt, controlled, useDown, useEdge, lightsEdge); return; }

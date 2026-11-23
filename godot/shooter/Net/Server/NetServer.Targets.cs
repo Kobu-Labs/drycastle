@@ -89,8 +89,8 @@ public partial class NetServer
     {
         if (_deathPush.Take(tk.Target.Id, out var push)) tk.Target.Body.Launch(push); // thrown by the blast or the car (the ragdoll)
         var killed = new PlayerKilled(tk.Killer, tk.Target.Id, tk.Weapon, tk.Cause);
-        var fromStreak = _streaks.Kill(killed, WeaponKey(killed.Weapon));
-        if (MatchConfig.TargetsAwardXp && Scores(tk.Killer)) AwardXp(_xp.OnKill(new KillFacts(tk.Killer, tk.Target.Id, tk.Cause, fromStreak), _elapsed));
+        var fromStreak = _streaks.Kill(killed, _progress.WeaponKey(killed.Weapon));
+        if (MatchConfig.TargetsAwardXp && _progress.Scores(tk.Killer)) _progress.Kill(new KillFacts(tk.Killer, tk.Target.Id, tk.Cause, fromStreak));
         BroadcastEvent(EventKind.Kill, MatchCodec.Encode(new KillMsg(tk.Killer, tk.Target.Id, tk.Weapon, tk.Cause)));
         GD.Print($"server: #{tk.Killer} killed {tk.Target.Name} (weapon {tk.Weapon}, {tk.Cause})");
     }

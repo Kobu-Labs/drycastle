@@ -1,8 +1,10 @@
 using Godot;
 using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
 using NVec3 = System.Numerics.Vector3;
 
@@ -52,6 +54,27 @@ internal sealed class ItemsServer
     public void SendEquipmentIfChanged(ServerClient c)
     {
         if (c.Worn.Changed || c.Bag.Changed) SendEquipment(c);
+    }
+
+    /// <summary>"/give item [player]": a new item, with no pickups counted, goes on the player (the admin without a name) if its slot is empty, else into their bag. Both full refuses it. A living player only.</summary>
+    public void ChatGive(ServerClient c, IReadOnlyList<string> args)
+    {
+        var index = _items.IndexOf(args[0]);
+        if (index < 0) { _ctx.ChatTo(c, ChatLineKind.Error, $"Unknown item '{args[0]}'."); return; }
+        var target = args.Count > 1 ? _ctx.FindHuman(args[1]) : c;
+        if (target == null) { _ctx.ChatTo(c, ChatLineKind.Error, $"No player '{args[1]}'. Use the name without spaces, or #id."); return; }
+        if (_ctx.Match.Get(target.Id)?.Life != PlayerLife.Alive) { _ctx.ChatTo(c, ChatLineKind.Error, $"{target.Name} is not alive."); return; }
+        var def = _items.Items[index];
+        var placed = ItemRules.Place(_items, new ItemStack(index), target.Worn, target.Bag, swap: false, out _);
+        if (placed == ItemPlace.NoRoom)
+        {
+            _ctx.ChatTo(c, ChatLineKind.Error, target == c ? $"The {def.Name} does not fit: your slot and bag are full." : $"The {def.Name} does not fit: {target.Name}'s slot and bag are full.");
+            return;
+        }
+        SendEquipment(target);
+        var worn = placed == ItemPlace.Worn;
+        _ctx.ChatTo(c, ChatLineKind.Info, target == c ? $"You {(worn ? "wear" : "carry")} the {def.Name} now." : $"{target.Name} {(worn ? "wears" : "carries")} the {def.Name} now.");
+        if (target != c) _ctx.ChatTo(target, ChatLineKind.Info, $"{c.Name} gave you the {def.Name}.");
     }
 
     /// <summary>A joiner learns what everyone already in the match wears (nobody else needs to be told: the joiner wears nothing).</summary>
