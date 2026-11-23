@@ -24,7 +24,7 @@ public partial class NetClient
     {
         if (Ctx.Me == null) return default;
         var look = Ctx.Me.TakeLook(); // always taken, so a turn made while the gun was away does not play when it returns
-        if (_viewmodel is not { Visible: true } || Ctx.Driving || _myState == EntityState.InVehicle) return default;
+        if (_viewmodel is not { Visible: true } || Ctx.Driving || Ctx.View.MyState == EntityState.InVehicle) return default;
         var s = Ctx.Me.State;
         var (sin, cos) = MathF.SinCos(Ctx.Me.Yaw);
         var swimming = MovementStep.IsSwimming(s);

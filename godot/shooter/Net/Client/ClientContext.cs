@@ -5,6 +5,7 @@ using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Waters;
 using Drycastle.ShooterCore.Weapons;
 
 namespace Drycastle.Shooter.Net.Client;
@@ -23,6 +24,14 @@ public sealed class ClientContext
     /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
     public ClientMatchState Match { get; } = new();
     public CameraShake Shake { get; }
+    /// <summary>Who has the own view and body (on foot, a vehicle, a turret, the missile, a hold): <see cref="ClientView.Mode"/>.</summary>
+    public ClientView View { get; }
+    /// <summary>The newest decoded snapshot: the records by entity id, the ones that left.</summary>
+    public SnapshotDecoder Snapshots { get; } = new();
+    /// <summary>How often and how far the own body and vehicles are corrected (the loss test reads it through the bot host and may replace it).</summary>
+    public RubberStats Rub = new();
+    /// <summary>The map's water (water.json), shared with the prediction so swimming matches the server.</summary>
+    public Water Water = Water.Empty;
     /// <summary>The vehicles of the world as drawn, and the seat the local player sits in.</summary>
     internal ClientCars Cars { get; }
     /// <summary>Replicated world entities (turrets, missiles, citizens, ...). Subscribe to Spawned/Despawned for visuals.</summary>
@@ -57,7 +66,7 @@ public sealed class ClientContext
     /// <summary>killstreaks.json (set by the host): streak names, thresholds and the aircraft's defs.</summary>
     public KillstreakFile? Killstreaks;
     /// <summary>The local player sits in a vehicle (driving, or in a seat).</summary>
-    public Func<bool> InVehicle = () => false;
+    public bool InVehicle() => View.InVehicle;
     /// <summary>True while a menu screen is open (set by the host).</summary>
     public Func<bool>? MenuOpen;
     /// <summary>Sends one reliable event to the server (nothing when not connected).</summary>
@@ -75,6 +84,7 @@ public sealed class ClientContext
     {
         Root = root;
         Shake = new CameraShake(this);
+        View = new ClientView(this);
         Cars = new ClientCars(this);
     }
 

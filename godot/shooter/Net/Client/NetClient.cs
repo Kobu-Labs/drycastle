@@ -60,16 +60,13 @@ public partial class NetClient : Node
     public bool Headless;
     public float KillY = float.NegativeInfinity;
     /// <summary>The map's water (water.json), shared with the prediction so swimming matches the server.</summary>
-    public Drycastle.ShooterCore.Waters.Water Water = Drycastle.ShooterCore.Waters.Water.Empty;
+    public Drycastle.ShooterCore.Waters.Water Water { get => Ctx.Water; set => Ctx.Water = value; }
     /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
     public ClientMatchState Match => Ctx.Match;
     public bool Dead => Ctx.Dead;
 
-    /// <summary>
-    /// The mode flags (dead, in a vehicle, at a turret, steering the missile, held by the Mass, the demon or the Bigfoot) as one value to ask named questions of
-    /// (<see cref="ClientModeInputs"/>); build it where it is used, it is a few bools. <c>InArmedSeat</c> is only ever true while driving (<see cref="MySeat"/> needs it).
-    /// </summary>
-    ClientModeInputs Mode => new(Dead, Ctx.Driving, _gunship != null || ScudScreenOn, _controlling, _mass.Seated, _pinned, _heldByBigfoot, _pRising, _myState == EntityState.InVehicle, Ctx.Driving && InArmedSeat);
+    /// <summary>The mode flags as one value to ask named questions of (<see cref="ClientView.Mode"/>).</summary>
+    ClientModeInputs Mode => Ctx.View.Mode;
     /// <summary>holy_mass.json (set by the host): the bodies of the citizens and the Mass's chant.</summary>
     public HolyMassFile HolyMassData = new();
     /// <summary>thieves.json (set by the host): the looks and clips of the Gang members, the vans and the Loot.</summary>
@@ -95,18 +92,13 @@ public partial class NetClient : Node
     bool LinkEnded => _link.Current.IsEnded();
     ushort _seq;
     readonly List<Pending> _pending = new();
-    readonly SnapshotDecoder _dec = new();
     /// <summary>Replicated world entities (turrets, missiles, ...). Subscribe to Spawned/Despawned for visuals.</summary>
     public WorldReplica WorldEntities => Ctx.WorldEntities;
     double _lastArrival;
-    /// <summary>The render clock of the remote entities (A-06): a filtered estimate of the server's tick, which never runs backwards.</summary>
     double _elapsed;
     int _snaps;
-    /// <summary>How often and how far the own body and vehicles are corrected (the loss test and the car loop read it through the bot host).</summary>
-    RubberStats _rub = new();
     float _maxErr;
     NVec3 _meMin = new(float.MaxValue), _meMax = new(float.MinValue);
-    EntityState _myState;
     int _deaths;
 
     // the features that need only the context; the ones that take the host's data are made in _Ready
@@ -163,7 +155,11 @@ public partial class NetClient : Node
     public NetClient()
     {
         Ctx = new ClientContext(this) { Send = SendEvent, Connected = () => _peer != null, SendJoined = SendNow };
-        Ctx.InVehicle = () => Ctx.Driving || _myState == EntityState.InVehicle;
+        Ctx.View.OnTurret = () => _gunship != null;
+        Ctx.View.ScudScreen = () => ScudScreenOn;
+        Ctx.View.Controlling = () => _controlling;
+        Ctx.View.Pinned = () => _pinned;
+        Ctx.View.Rising = () => _pRising;
         Sandbox = new SandboxClient(Ctx);
         Report = new ReportClient(Ctx, _conn, () => !Bot && !LinkEnded && _welcomed, () => _peer, () => _elapsed);
         _moab = new MoabClient(Ctx);
@@ -182,6 +178,7 @@ public partial class NetClient : Node
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
         _blips = new BlipsClient(Ctx, BlipConfig);
         _mass = new MassClient(Ctx, HolyMassData, DropPrediction);
+        Ctx.View.MassSeated = () => _mass.Seated;
         _citizens = new CitizensClient(Ctx, HolyMassData, _mass);
         _status = new StatusClient(Ctx, Plantation);
         High = new HighClient(Ctx, _status, Plantation, () => Mode, () => OwnSpawned);
@@ -196,7 +193,7 @@ public partial class NetClient : Node
         _streaks.OwnerDied += ClearStreakViewsOnDeath;
         _streaks.Gunner.HintsChanged += () => _gunDirty = true;
         _session = new SessionLog(Ctx, Host, Port, () => !Bot && !LinkEnded && _welcomed, () => _peer);
-        _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _peer, _dec);
+        _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _peer, Ctx.Snapshots);
         _glass = new GlassClient(Ctx, GlassData);
         Camo = new CamoClient(Ctx, CamoData, DressCorpses);
         _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
@@ -491,7 +488,7 @@ public partial class NetClient : Node
     /// <summary>A player left: everything the client keeps per player goes.</summary>
     void OnLeave(LeaveMsg l)
     {
-        Ctx.Names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
+        Ctx.Names.Remove(l.PlayerId); Match.Remove(l.PlayerId); Ctx.Snapshots.Forget(l.PlayerId);
         if (Ctx.Remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
         ForgetWorn(l.PlayerId); _binocularsBy.Remove(l.PlayerId); _headLamps.Forget(l.PlayerId);
         _status.Forget(l.PlayerId);
@@ -574,7 +571,7 @@ public partial class NetClient : Node
 
     void OnSnapshot(byte[] d)
     {
-        if (Ctx.Me == null || !_dec.Apply(d, out var h)) return;
+        if (Ctx.Me == null || !Ctx.Snapshots.Apply(d, out var h)) return;
         if (Ctx.LastTick != 0 && h.Tick < Ctx.LastTick) return;
         _bot?.OnSnapshot(h);
         _perf.Snapshot();
@@ -583,8 +580,8 @@ public partial class NetClient : Node
         Ctx.LastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         Ctx.Clock.OnSnapshot(h.Tick, _lastArrival);
         DayNightCycle.Current?.SetServerTick(h.Tick);
-        foreach (var id in _dec.Removed) { if (Ctx.Remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (Ctx.Cars.Remove(id)) { _flights.Remove(id); _drives.Remove(id); } }
-        foreach (var (id, rec) in _dec.States)
+        foreach (var id in Ctx.Snapshots.Removed) { if (Ctx.Remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (Ctx.Cars.Remove(id)) { _flights.Remove(id); _drives.Remove(id); } }
+        foreach (var (id, rec) in Ctx.Snapshots.States)
         {
             if (id == Ctx.MyId) { OnSelf(rec, h.Ack); continue; }
             if (rec.Type == EntityType.Projectile) { OnRocketState(id, rec); continue; }
@@ -659,7 +656,7 @@ public partial class NetClient : Node
     {
         var recent = new NetInput[Math.Min(3, _pending.Count)];
         for (var i = 0; i < recent.Length; i++) recent[i] = _pending[_pending.Count - recent.Length + i].Input;
-        Tx(_peer!, Wire.ChanData, Wire.EncodeInputs(recent, _dec.AckTick, WorldEntities.AckTick), 0);
+        Tx(_peer!, Wire.ChanData, Wire.EncodeInputs(recent, Ctx.Snapshots.AckTick, WorldEntities.AckTick), 0);
         _conn.Flush();
     }
 

@@ -65,10 +65,10 @@ public partial class NetClient : IBotHost
     double IBotHost.Seconds => BotSeconds;
     bool IBotHost.LinkEnded => LinkEnded;
     bool IBotHost.OwnSpawned => OwnSpawned;
-    EntityState IBotHost.MyState => _myState;
+    EntityState IBotHost.MyState => Ctx.View.MyState;
     bool IBotHost.Driving => Ctx.Driving;
     int IBotHost.WantSlot { set => Ctx.Hotbar.Want = value; }
-    IReadOnlyDictionary<ushort, EntityRecord> IBotHost.States => _dec.States;
+    IReadOnlyDictionary<ushort, EntityRecord> IBotHost.States => Ctx.Snapshots.States;
     EventLogs IBotHost.Logs => _logs;
     IEnumerable<BotCar> IBotHost.Cars => Ctx.Cars.All.Select(AsBotCar);
     BotCar? IBotHost.Car(ushort id) => Ctx.Cars.TryGet(id, out var v) ? AsBotCar(v) : null;
@@ -83,7 +83,7 @@ public partial class NetClient : IBotHost
     ushort IBotHost.Seq => _seq;
     float IBotHost.OwnTravel => new Vector2(_meMax.X - _meMin.X, _meMax.Z - _meMin.Z).Length();
     float IBotHost.BestRemoteTravel => Ctx.Remotes.Values.Select(r => new Vector2(r.Max.X - r.Min.X, r.Max.Z - r.Min.Z).Length()).DefaultIfEmpty(0f).Max();
-    RubberStats IBotHost.Rubber { get => _rub; set => _rub = value; }
+    RubberStats IBotHost.Rubber { get => Ctx.Rub; set => Ctx.Rub = value; }
     NetSim? IBotHost.Sim => Sim;
     int IBotHost.DriveCorrections => _driveCorrections;
 

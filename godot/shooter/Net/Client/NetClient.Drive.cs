@@ -84,7 +84,7 @@ public partial class NetClient
         if (Ctx.Driving && !Dead)
             foreach (var v in Ctx.Cars.All)
                 if (v.Driver == Ctx.MyId && !v.Destroyed && DriveDef(v) != null) { mine = v; break; }
-        if (mine == null || !_drives.TryGetValue(mine.Id, out var dv) || !_dec.States.TryGetValue(mine.Id, out var vehicle)) { StopDriving(); return; }
+        if (mine == null || !_drives.TryGetValue(mine.Id, out var dv) || !Ctx.Snapshots.States.TryGetValue(mine.Id, out var vehicle)) { StopDriving(); return; }
         if (CarThrown(mine.Id)) { StopDriving(); return; } // the Bigfoot threw it: the server flies it and ignores the driver's input, so it is drawn from the snapshots until it lands (#264)
         var server = DriveRecord.State(vehicle, dv.Rec);
         if (_drive == null || _drive.CarId != mine.Id)
@@ -111,7 +111,7 @@ public partial class NetClient
     float SyncPredictedTrailer(CarView mine, DriveState server, EntityRecord vehicle)
     {
         var trailer = TrailerOf(mine.Id);
-        if (trailer == null || Vehicles == null || Vehicles.Vehicles[mine.Kind].Tow == null || !_dec.States.TryGetValue(trailer.Id, out var rec))
+        if (trailer == null || Vehicles == null || Vehicles.Vehicles[mine.Kind].Tow == null || !Ctx.Snapshots.States.TryGetValue(trailer.Id, out var rec))
         {
             if (_drive!.TrailerId != 0 || _drive.Predict.HasTrailer) { _drive.Predict.DetachTrailer(); _drive.TrailerId = 0; _drive.TrailerWorld?.QueueFree(); _drive.TrailerWorld = null; }
             return 0f;
@@ -149,7 +149,7 @@ public partial class NetClient
         _driveCorrections++;
         Ctx.Reconciles++;
         var moved = before - _drive.Predict.State.Position;
-        _rub.AddVehicle(moved.Length(), FlightMath.Wrap(_drive.Predict.State.Yaw - yawBefore));
+        Ctx.Rub.AddVehicle(moved.Length(), FlightMath.Wrap(_drive.Predict.State.Yaw - yawBefore));
         _drive.Smooth += new Vector3(moved.X, moved.Y, moved.Z);
         _drive.AngleFix += AngleDelta(attBefore, _drive.Predict.State.Yaw, _drive.Predict.State.Pitch, _drive.Predict.State.Roll);
     }

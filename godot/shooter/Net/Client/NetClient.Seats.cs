@@ -52,18 +52,6 @@ public partial class NetClient
         return _view.FirstPerson;
     }
 
-    /// <summary>
-    /// The local player sits in an armed seat (ADR 0011): they keep their own weapons there, so the weapon in the view, its fire and reload
-    /// prediction, the crosshair and the aim are on as they are on foot. The number keys stay the seats'; the mouse wheel changes the weapon.
-    /// </summary>
-    bool InArmedSeat => _gunship == null && !_controlling && Ctx.Cars.MySeat() is { Seat.Armed: true };
-
-    /// <summary>
-    /// The local player sits in a driver's or an unarmed passenger's seat (#373): nothing can be fired from it, so the crosshair, the ammo readout and the Lock-on
-    /// launcher's sight and seeker beeps stay off. A gunner's seat is not meant: the turret and the door gun have their own sight and readout.
-    /// </summary>
-    bool InUnarmedSeat => _gunship == null && !_controlling && Ctx.Cars.MySeat() is { Seat: { Role: "driver" or "passenger" } s } && !LockRules.SeatAllows(true, s.Armed);
-
     /// <summary>The speed of the vehicle the local player rides, m/s: what widens an armed rider's spread.</summary>
     static float RideSpeed(CarView v, DriveState? drawn) => drawn is { } d ? MathF.Abs(d.Speed) : v.Kmh / 3.6f;
 

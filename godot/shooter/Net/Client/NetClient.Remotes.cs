@@ -61,7 +61,7 @@ public partial class NetClient
                 AnimateRemote(r, s.Pos);
                 UpdateNameTag(id, r);
             }
-        _rub.AddRender(rt, Ctx.LastTick, drawn);
+        Ctx.Rub.AddRender(rt, Ctx.LastTick, drawn);
     }
 
     /// <summary>

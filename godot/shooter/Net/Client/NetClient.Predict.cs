@@ -137,7 +137,7 @@ public partial class NetClient
         if (w.Kind == WeaponKind.Hitscan && Ctx.Me != null)
         {
             // same offset step as the server's shot; the viewmodel kicks by the same (ADS / crouch scaled) climb
-            var mult = RecoilState.Multiplier(w.Recoil, mi.Has(MoveButtons.Aim), InArmedSeat ? Stance.Stand : Ctx.Me.State.Stance); // a seat steadies it no more than standing does, as on the server
+            var mult = RecoilState.Multiplier(w.Recoil, mi.Has(MoveButtons.Aim), Ctx.View.InArmedSeat ? Stance.Stand : Ctx.Me.State.Stance); // a seat steadies it no more than standing does, as on the server
             _recoil.Shot(w.Recoil, mult);
             _breath.AimError(_breath.SwayDegrees(w)); // the server's per-shot aim error; kept in step (the tracer follows the camera, like recoil)
             _viewmodel?.Kick(w.Recoil.VerticalPerShot * mult);

@@ -219,7 +219,7 @@ public partial class NetClient
         else if (flown is { } fr) Ctx.Hud?.SetVehicleReadout(FlightReadout(fr));
         else Ctx.Hud?.SetVehicleSpeed(Ctx.Driving ? kmh ?? 0f : null);
         string? prompt = null;
-        if (Ctx.Driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : Ctx.Cars.MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        if (Ctx.Driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : Ctx.View.InArmedSeat ? ArmedSeatPrompt() : Ctx.Cars.MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         if (driven != null && prompt != null && TowHint(driven) is { } towHint) prompt += "     " + towHint; // a trailer on the hook: the key that unhitches it
         if (Ctx.Driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
         if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);

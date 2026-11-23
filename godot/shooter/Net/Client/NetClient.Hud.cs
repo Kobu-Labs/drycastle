@@ -38,7 +38,7 @@ public partial class NetClient
         if (CurrentWeapon is not { } w) return 0f;
         var own = HitMath.OwnSpread(w, _spread.Degrees(w, Ctx.Now));
         // in an armed seat the vehicle's speed is what widens it (the server's rule for a shot from the seat)
-        if (InArmedSeat && Ctx.Cars.MySeat() is { } m) return SeatAimRules.ShotSpread(own, w, _aimHeld, RideSpeed(m.Car, DriveOf(m.Car)), m.Seat);
+        if (Ctx.View.InArmedSeat && Ctx.Cars.MySeat() is { } m) return SeatAimRules.ShotSpread(own, w, _aimHeld, RideSpeed(m.Car, DriveOf(m.Car)), m.Seat);
         return Ctx.Me is { } me ? HitMath.ShotSpread(own, w, me.State, _aimHeld) : own;
     }
 
@@ -112,7 +112,7 @@ public partial class NetClient
         Ctx.Hud?.SetHealth(Mathf.CeilToInt(Ctx.Me?.Health ?? 100));
         Ctx.Hud?.SetSnapshotCount(_snaps); // the FPS card's TPS line (Hud.Fps.cs)
         Ctx.Hud?.CoverCrosshair(_chooser.IsOpen);
-        Ctx.Hud?.SetUnarmedSeat(InUnarmedSeat); // no crosshair, no ammo readout where nothing can be fired (#373)
+        Ctx.Hud?.SetUnarmedSeat(Ctx.View.InUnarmedSeat); // no crosshair, no ammo readout where nothing can be fired (#373)
         _screens.Update();
         _uav.Tick();
         if (Ctx.Me != null) RozhlasFeedPlayer.Current?.SetListener(Ctx.Me.GlobalPosition);

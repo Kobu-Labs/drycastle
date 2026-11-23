@@ -94,7 +94,7 @@ public partial class NetClient
     {
         if (KeepEventLogs) _logs.Explosions.Add((Ctx.Now, ex));
         if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(Ctx.Owned, rk.Node); if (rk.Homing) NoteHomingBlast(new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z), ex.Radius); }
-        _dec.Forget(ex.Id);
+        Ctx.Snapshots.Forget(ex.Id);
         _deadRockets.Add(ex.Id);
         if (_deadRockets.Count > 256) _deadRockets.Clear();
         var exR = ex.Radius > 0 ? ex.Radius : 6f; // the blast the server used (a gunship rocket's is 8 m)

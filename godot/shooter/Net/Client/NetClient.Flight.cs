@@ -68,7 +68,7 @@ public partial class NetClient
         if (Ctx.Driving && !Dead)
             foreach (var v in Ctx.Cars.All)
                 if (v.Driver == Ctx.MyId && !v.Destroyed && FlightDef(v) != null) { mine = v; break; }
-        if (mine == null || !_flights.TryGetValue(mine.Id, out var fv) || !_dec.States.TryGetValue(mine.Id, out var vehicle)) { StopPiloting(); return; }
+        if (mine == null || !_flights.TryGetValue(mine.Id, out var fv) || !Ctx.Snapshots.States.TryGetValue(mine.Id, out var vehicle)) { StopPiloting(); return; }
         if (CarThrown(mine.Id)) { StopPiloting(); return; } // in the Bigfoot's hands or thrown: the server places it and ignores the pilot, so it is drawn from the snapshots
         var server = FlightRecord.State(vehicle, fv.Rec);
         if (_pilot == null || _pilot.CarId != mine.Id)
@@ -88,7 +88,7 @@ public partial class NetClient
         if (!_pilot.Predict.Reconcile(ack, server, 1f / Wire.TickRate)) return;
         _flightCorrections++;
         var moved = before - _pilot.Predict.State.Position;
-        _rub.AddVehicle(moved.Length(), FlightMath.Wrap(_pilot.Predict.State.Yaw - yawBefore));
+        Ctx.Rub.AddVehicle(moved.Length(), FlightMath.Wrap(_pilot.Predict.State.Yaw - yawBefore));
         _pilot.Smooth += new Vector3(moved.X, moved.Y, moved.Z);
         _pilot.AngleFix += AngleDelta(attBefore, _pilot.Predict.State.Yaw, _pilot.Predict.State.Pitch, _pilot.Predict.State.Roll);
         _session.FlightCorrection(new Vector3(moved.X, moved.Y, moved.Z).Length());
@@ -184,6 +184,6 @@ public partial class NetClient
     FlightState? FlightOf(CarView v)
     {
         if (_pilot != null && _pilot.CarId == v.Id) return _pilot.Shown;
-        return _flights.TryGetValue(v.Id, out var f) && _dec.States.TryGetValue(v.Id, out var vehicle) ? FlightRecord.State(vehicle, f.Rec) : null;
+        return _flights.TryGetValue(v.Id, out var f) && Ctx.Snapshots.States.TryGetValue(v.Id, out var vehicle) ? FlightRecord.State(vehicle, f.Rec) : null;
     }
 }

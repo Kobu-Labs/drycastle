@@ -19,7 +19,7 @@ public partial class NetClient
             return;
         }
         Ctx.Me!.Health = rec.Health;
-        _myState = rec.State;
+        Ctx.View.MyState = rec.State;
         var inCar = rec.State == EntityState.InVehicle;
         if (inCar != Ctx.Driving)
         {
@@ -40,7 +40,7 @@ public partial class NetClient
         _perf.PredictionError(err, predicted.Position - sp);
         LastNearRemote = NearRemotePlayer(sp);
         LastVertical = MathF.Abs(predicted.Position.Y - sp.Y) > 0.5f * err; // the error is mostly up or down (steps, slopes, jumps, landings)
-        if (err > ReconcileEpsilon) _rub.AddOnFoot(err, LastNearRemote, LastVertical);
+        if (err > ReconcileEpsilon) Ctx.Rub.AddOnFoot(err, LastNearRemote, LastVertical);
         _bot?.OnPredictionError(err);
         _session.PredictionError(err);
         Report.PredictionError(err);
@@ -89,7 +89,7 @@ public partial class NetClient
         if (_reconcile is not { } s) return;
         _reconcile = null;
         var before = Ctx.Me!.State.Position; // where the eye was drawn: the predicted present
-        if (Ctx.Me.IsOnFloor() != s.OnFloor) _rub.FloorFlagMismatch++; // measurement: a replay that would start with the wrong floor flag without SetStateForReplay
+        if (Ctx.Me.IsOnFloor() != s.OnFloor) Ctx.Rub.FloorFlagMismatch++; // measurement: a replay that would start with the wrong floor flag without SetStateForReplay
         Ctx.Me.SetStateForReplay(s); // the body's floor flag must match the state's before the first replayed step (I-rubber-banding round 2)
         for (var i = 0; i < _pending.Count; i++)
         {

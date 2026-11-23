@@ -16,7 +16,7 @@ namespace Drycastle.Shooter.Net.Client;
 /// footprints that lead to its corpse (<see cref="EventKind.BigfootTrail"/>) and the giant's corpse itself (a corpse owned by <see cref="BigfootRules.TargetId"/>).
 /// The model (scripts/models/make_bigfoot_model.py) has a clip per act, a flinch and a roar (<see cref="BigfootRules.Clips"/>): <see cref="ClipFor"/> picks one and
 /// stretches a wind-up over its act's time, Walk and Run play at the speed the giant moves (<see cref="PaceGait"/>).
-/// The server owns everything: a client only shows it, and stops predicting its own body while the Bigfoot holds it (<see cref="_heldByBigfoot"/>) or its
+/// The server owns everything: a client only shows it, and stops predicting its own body while the Bigfoot holds it (<see cref="ClientView.HeldByBigfoot"/>) or its
 /// vehicle while the Bigfoot throws it (<see cref="_thrownCars"/>).
 /// </summary>
 public partial class NetClient
@@ -77,8 +77,6 @@ public partial class NetClient
     readonly List<Node3D> _prints = new();
     /// <summary>Vehicles the Bigfoot threw: the client time until which the driver's prediction waits (the server flies the vehicle, the driver's input is ignored).</summary>
     readonly Dictionary<ushort, double> _thrownCars = new();
-    /// <summary>The Bigfoot holds this client's player: no prediction, the body is where the server puts it.</summary>
-    bool _heldByBigfoot;
     /// <summary>What the flailing hand adds to the held player's own eye: an offset (metres, world) and a roll (radians). Zero when not held.</summary>
     Vector3 _heldSwing;
     float _heldRoll;
@@ -234,7 +232,7 @@ public partial class NetClient
                 _trunkLast[id] = at;
             }
         }
-        _heldByBigfoot = held;
+        Ctx.View.HeldByBigfoot = held;
         TickOwnFling();
         Ctx.Hud?.SetFlungHidesCrosshair(OwnBodyFlung);
         // the server holds the body at a fixed point in front of the giant; the flailing is drawn here, so the eye rides the same swing as the figure
