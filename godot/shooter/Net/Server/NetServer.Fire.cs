@@ -220,8 +220,8 @@ public partial class NetServer
         }
         if (r == DamageResult.Saved) BroadcastEvent(EventKind.BlessingSaved, StatusCodec.EncodeSaved(victim)); // the blessing is used up; the mask follows with the flush
         else if (r == DamageResult.Damaged) _status.OnHit(attackerId, weaponIdx, victim);
-        if (r == DamageResult.Damaged && Scores(attackerId) && Scores(victim)) _xp.NoteDamage(victim, attackerId, _elapsed); // an assist if the victim dies within the window
-        BotHit(victim, attackerId);
+        if (r == DamageResult.Damaged) _progress.NoteDamage(victim, attackerId); // an assist if the victim dies within the window
+        _bots.OnHit(victim, attackerId);
         _smoke.HitsLanded++;
         LossHit(attackerId, victim, r == DamageResult.Killed);
         if (head) _smoke.Headshots++;

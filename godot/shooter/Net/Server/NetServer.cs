@@ -1,7 +1,9 @@
 using Godot;
 using Drycastle.Shooter.Characters;
+using Drycastle.Shooter.Net.Server.BotRoster;
 using Drycastle.Shooter.Net.Server.BusGarage;
 using Drycastle.Shooter.Net.Server.CarPool;
+using Drycastle.Shooter.Net.Server.Careers;
 using Drycastle.Shooter.Net.Server.ChatRoom;
 using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Net.Server.Crates;
@@ -10,11 +12,14 @@ using Drycastle.Shooter.Net.Server.Gear;
 using Drycastle.Shooter.Net.Server.HuntLog;
 using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
+using Drycastle.Shooter.Net.Server.Navigation;
 using Drycastle.Shooter.Net.Server.Parish;
+using Drycastle.Shooter.Net.Server.Playground;
 using Drycastle.Shooter.Net.Server.Profiles;
 using Drycastle.Shooter.Net.Server.Scenery;
 using Drycastle.Shooter.Net.Server.Seating;
 using Drycastle.Shooter.Net.Server.Sentries;
+using Drycastle.Shooter.Net.Server.Squads;
 using Drycastle.Shooter.Net.Server.Statuses;
 using Drycastle.Shooter.Net.Server.Streaks;
 using Drycastle.Shooter.Net.Server.Thieves;
@@ -24,6 +29,7 @@ using Drycastle.ShooterCore.CarePackages;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
 using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Demon;
@@ -90,7 +96,29 @@ public partial class NetServer : Node
     public PerksFile Perks = null!;
     /// <summary>levels.json: the XP curve and awards.</summary>
     public LevelsFile Levels = null!;
-    MatchXp _xp = null!;
+    /// <summary>companions.json: the Companions of the game (set by the host).</summary>
+    public CompanionsFile CompanionData = new();
+    /// <summary>items.json: the equippable items. Empty when the data directory has none.</summary>
+    public ItemsFile Items = new();
+    /// <summary>animals.json: the species table (set by the host).</summary>
+    public AnimalsFile AnimalData = new();
+    /// <summary>The hit shapes of the wild species (set by the host): what a bullet is tested against.</summary>
+    public AnimalShapes AnimalShapes = new();
+    /// <summary>pets.json: which groups keep pets and the poop rules (set by the host).</summary>
+    public PetsFile PetsData = new();
+    /// <summary>wildlife.json: which wild species the map holds and how many (set by the host).</summary>
+    public WildlifeFile WildlifeData = new();
+    /// <summary>Player tokens (lower case compare) of the admins, from --admin-token. A guest (no token) is never an admin.</summary>
+    public HashSet<string> AdminTokens = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>--admin-all (dev servers only): every human is an admin, so nobody has to look up a token. Release servers never pass it.</summary>
+    public bool AdminAll;
+    /// <summary>--bots N: how many bots join while at least one human is in the match. 0 = none. Read once at start; an admin changes the number in <see cref="BotServer"/>.</summary>
+    public int Bots;
+    /// <summary>Most bots a server takes (they need no peer slot, so this is apart from <see cref="MaxPeers"/>).</summary>
+    public const int MaxBots = ChatCommands.MaxBots;
+    /// <summary>The map folder (for the navigation bake: its manifest lists the chunks) and where baked tiles are kept. Set by the host.</summary>
+    public string MapDir = "";
+    public string NavCacheDir = "";
     /// <summary>environment.json "lamp" and "sign_plate"; the defaults when the host sets none.</summary>
     public LampLook LampData = new();
     public SignPlateLook SignPlateData = new();
@@ -107,6 +135,12 @@ public partial class NetServer : Node
     ServerContext _ctx = null!;
     ImpactFx _impacts = null!;
     Splash _splash = null!;
+    ProgressionServer _progress = null!;
+    NavService _navMesh = null!;
+    BotServer _bots = null!;
+    AdminSpawner _spawner = null!;
+    SandboxServer _sandbox = null!;
+    TeamServer _teams = null!;
     SceneryServer _scenery = null!;
     MineralsServer _minerals = null!;
     RozhlasServer _rozhlas = null!;
@@ -182,10 +216,10 @@ public partial class NetServer : Node
     /// <summary>The match and the context every feature takes, and the blast kit. The first things made: the rest asks for them.</summary>
     void BuildMatch()
     {
-        _xp = new MatchXp(Levels.Awards);
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
         _ctx = new ServerContext(_match, _byId, _clients.Values, () => _elapsed, () => _tick, BroadcastEvent, Send, (c, chan, packet) => { if (c.Peer is { } peer) Tx(peer, chan, packet, 0); });
+        _progress = new ProgressionServer(_ctx, Progression, Levels, Weapons, Perks, ArenaMode || DebugCommands, (c, l) => _streaks.Arm(c, l));
         _impacts = new ImpactFx(_ctx, Map, Water);
         _splash = new Splash(_ctx, () => MapShelters, () => Query, PoseOf);
         RegisterTargetSources();
@@ -194,19 +228,23 @@ public partial class NetServer : Node
     /// <summary>What the features share (animals, seats, targets) and the features of the village: the church, the radio, the chat, the profiles, the hunts, the statuses and the demon.</summary>
     void BuildServices()
     {
+        _navMesh = new NavService(_ctx, World, MapDir, NavCacheDir, ArenaMode, () => _host.Flush(), (ticket, route) => _thieves.DeliverRoute(ticket, route));
         _animals = new AnimalWorld(_ctx, _fleet, Map, Water, () => Query, () => MapFlightBounds);
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
         _sitters = new Sitters(_ctx, OnStood);
         _church = new ChurchServer(_ctx, ArenaMode, MapDir);
-        _citizens = new CitizenServer(_ctx, HolyMass, ArenaMode, MapDir, Map, () => _nav, () => WalkerWorld, EnsureNavMesh);
+        _citizens = new CitizenServer(_ctx, HolyMass, ArenaMode, MapDir, Map, () => _navMesh.Mesh, () => WalkerWorld, _navMesh.Ensure);
         _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, _citizens.Hits, new TableSeating(_sitters.IsSeated, _sitters.StandUpAtTableExcept, _sitters.SitAtTable));
         _intel = new IntelServer(_ctx);
         _chat = new ChatServer(_ctx, admin => new ChatContext(admin, Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList(), CompanionData.Companions.Select(i => i.Id).ToList()), AdminTokens, AdminAll);
         _profiles = new ProfileServer(_ctx, Progression, UnlockAll, Weapons, Perks, CamoData, Killstreaks, Join, OnProfileAttached, AllowSave);
-        RegisterChatCommands();
+        _bots = new BotServer(_ctx, _navMesh, _profiles, _progress, _sitters, Weapons, _rng, Bots, NewPlayerId, Join, Leave, WorldDistance);
+        _spawner = new AdminSpawner(_ctx, () => Vehicles, _fleet, World, Water, () => MapFlightBounds, _rng);
+        _sandbox = new SandboxServer(_ctx, AllowSandbox, () => _streaks, _spawner, () => Spawns, () => Query, SendAmmo, LeaveSeat, _rng);
+        _teams = new TeamServer(_ctx, _chat, _sandbox);
         _garage = new GarageServer(_ctx, ArenaMode, MapDir, _fleet.Cars, () => Vehicles);
         _minerals = new MineralsServer(_ctx, Progression, () => _wildlife.Keeper.Drops);
-        _hunts = new HuntLogServer(_ctx, Progression, AnimalData, Weapons, Items, CompanionData, Scores, WeaponKey,
+        _hunts = new HuntLogServer(_ctx, Progression, AnimalData, Weapons, Items, CompanionData, _progress.Scores, _progress.WeaponKey,
             c => { _profiles.Send(c); _companions.FromProfile(c); if (c.Joined) _companions.SendRoster(c); });
         _sentries = new SentryWorld(_ctx, _targets, Deal, () => Query);
         _status = new StatusServer(_ctx, Deal, Weapons, GetHigh);
@@ -236,7 +274,7 @@ public partial class NetServer : Node
         _wildlife = new WildlifeServer(_ctx, WildlifeData, AnimalData, AnimalShapes, _animals, () => MapZonePoints, () => Clock.HourAt(_tick / (double)Wire.TickRate), () => Query,
             ArenaMode, MapDir, Map, (a, by) => _hunts.OnWildKilled(a, by), _minerals.OnDropped);
         _companions = new CompanionServer(_ctx, CompanionData, AnimalData, _animals.Companions, Progression, UnlockAll);
-        _mass = new MassServer(_ctx, HolyMass, _citizens, _church, _demon, _sitters, _status, _events, EnsureNavMesh);
+        _mass = new MassServer(_ctx, HolyMass, _citizens, _church, _demon, _sitters, _status, _events, _navMesh.Ensure);
         _thieves = BuildThieves();
         InitHarvester();
         InitScud();
@@ -246,6 +284,7 @@ public partial class NetServer : Node
         _crates = new CrateServer(_ctx, Killstreaks.Rewards, () => Query, () => _streaks.Rules);
         _streaks = BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), SeatPos, WorldHit, _rocketIds, _smoke, DamageVehicle, () => Vehicles, _simClients);
+        RegisterChatCommands(); // after the features it names exist
     }
 
     /// <summary>What the server needs once everything exists: the warmed indexes, the default vehicle table, the checks that fail at start and the two lines the smoke scripts wait for.</summary>
@@ -277,12 +316,12 @@ public partial class NetServer : Node
     ThievesServer BuildThieves()
     {
         var phase = new ThievesEvent();
-        var gangs = new GangServer(_ctx, ThievesData, Weapons, Items, _corpses, Deal, () => _nav, NextNavTicket, () => WalkerWorld, Scores, AwardXp);
-        var raids = new RaidServer(_ctx, ThievesData, phase, gangs, Map, World, _fleet, () => Vehicles, () => _nav, () => MapFlightBounds,
+        var gangs = new GangServer(_ctx, ThievesData, Weapons, Items, _corpses, Deal, () => _navMesh.Mesh, _navMesh.NextTicket, () => WalkerWorld, _progress.Scores, _progress.Award);
+        var raids = new RaidServer(_ctx, ThievesData, phase, gangs, Map, World, _fleet, () => Vehicles, () => _navMesh.Mesh, () => MapFlightBounds,
             () => _church.Shell is { } church ? new System.Numerics.Vector2(church.DoorwayPos.X, church.DoorwayPos.Z) : null, _rng, (sweep, spare) => RunOverTargets(sweep, spare), Crash);
-        var loot = new LootServer(_ctx, ThievesData, raids.Roster, gangs.Roster, _fleet, _pets.Keeper, Map, () => _nav, ArenaMode, MapDir);
-        var payout = new ThievesPayout(_ctx, ThievesData, Levels.Awards.EventWin, Items, Weapons, _corpses, _gear.BroadcastCorpseItems, _rng, Scores, AwardXp, gangs.Roster, raids.Roster);
-        return new ThievesServer(_ctx, ThievesData, _events, _intel, _rng, () => _nav, gangs, raids, loot, payout, phase);
+        var loot = new LootServer(_ctx, ThievesData, raids.Roster, gangs.Roster, _fleet, _pets.Keeper, Map, () => _navMesh.Mesh, ArenaMode, MapDir);
+        var payout = new ThievesPayout(_ctx, ThievesData, Levels.Awards.EventWin, Items, Weapons, _corpses, _gear.BroadcastCorpseItems, _rng, _progress.Scores, _progress.Award, gangs.Roster, raids.Roster);
+        return new ThievesServer(_ctx, ThievesData, _events, _intel, _rng, () => _navMesh.Mesh, gangs, raids, loot, payout, phase);
     }
 
     /// <summary>A sitter stood up: the dictation table lets go of the set, the Mass forgets the seat.</summary>
@@ -292,19 +331,7 @@ public partial class NetServer : Node
         _mass?.Stood(id);
     }
 
-    /// <summary>The navigation mesh, built when first needed (the server pauses for a few seconds); false when it is not there (no map, or the build failed).</summary>
-    bool EnsureNavMesh(ServerClient c)
-    {
-        if (_nav == null && !_navTried)
-        {
-            ChatTo(c, ChatLineKind.Info, "Building the navigation for the first time. The server pauses for a few seconds.");
-            _host.Flush();
-            BuildBotNav(force: true);
-        }
-        return _nav != null;
-    }
-
-    public override void _ExitTree() { _rozhlas?.Dispose(); _perf?.Flush(); _host.Destroy(); _nav?.Free(); }
+    public override void _ExitTree() { _rozhlas?.Dispose(); _perf?.Flush(); _host.Destroy(); _navMesh?.Free(); }
 
     public override void _Process(double delta)
     {
@@ -324,7 +351,7 @@ public partial class NetServer : Node
         _tick++;
         if (!_spawnsChecked)
         {
-            if (_tick >= 3) { CheckSpawnGround(); SpawnCars(); PlanTargets(); BuildBotNav(force: true); } // always: citizens and events need it too, and a bake during play times the clients out
+            if (_tick >= 3) { CheckSpawnGround(); SpawnCars(); PlanTargets(); _navMesh.Build(); } // always: citizens and events need it too, and a bake during play times the clients out
             return; // not accepting connections until the spawn list is validated
         }
         var dt = (float)delta;
@@ -336,7 +363,7 @@ public partial class NetServer : Node
         TickWorld(dt);
         _streaks.Tick(dt);
         PerfLap(ServerPerf.Ph.Streaks);
-        BotsTick(dt); // fills the roster and queues each bot's input for this tick (#214)
+        _bots.Tick(dt); // fills the roster and queues each bot's input for this tick (#214)
         HarvesterTick(dt); // the harvester event: its spawn, its driver's pedals
         ScudEventTick(dt); // the Scud event: who boarded the truck, the search time, the bunkers' carts
         PerfLap(ServerPerf.Ph.Bots);
@@ -382,7 +409,7 @@ public partial class NetServer : Node
         _audit?.Begin();
         var pt = Prof.Begin();
         _match.Update();
-        NavDrain(); // the routes the worker finished since the last tick, applied here and nowhere else
+        _navMesh.Drain(); // the routes the worker finished since the last tick, applied here and nowhere else
         _audit?.Lap(0);
         pt = Prof.Lap(Prof.S.MatchUpdate, pt);
         BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
@@ -524,13 +551,13 @@ public partial class NetServer : Node
         else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) _crates.OnOpen(c, oc.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.MineralPick } mp && c.Joined) _minerals.OnPick(c, mp.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.CompanionPick } cp && c.Joined) _companions.OnPick(c, cp.Payload);
-        else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
-        else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
-        else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) OnSandboxTeleportTo(c, st.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) _sandbox.OnGrant(c, sg.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) _sandbox.OnAction(c, sa.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) _sandbox.OnTeleportTo(c, st.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SeatSwitch } sw && c.Joined) OnSeatSwitch(c, sw.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.ScudCommand } sc && c.Joined) OnScudCommand(c, sc.Payload);
-        else if (m is EventMsg { Kind: (byte)EventKind.TeamAssign } ta && c.Joined) OnTeamAssign(c, ta.Payload);
-        else if (m is EventMsg { Kind: (byte)EventKind.SquadAssign } sq && c.Joined) OnSquadAssign(c, sq.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.TeamAssign } ta && c.Joined) _teams.OnTeamAssign(c, ta.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.SquadAssign } sq && c.Joined) _teams.OnSquadAssign(c, sq.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) _hunts.OnRequest(c, hq);
         else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) _chat.OnSend(c, cs.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.ClientReport } cr) { if (c.Joined) OnClientReport(c, cr.Payload); }
@@ -583,22 +610,25 @@ public partial class NetServer : Node
             Reject(c, $"Map mismatch: this server runs map {Map.MapVersion} (build {Map.BuildHash:x16}), and your game has a different map build. Install the server's map folder, then start again.");
             return;
         }
-        c.Id = _ids.Allocate(id => _clients.Values.Any(o => o.Id == id) || _byId.ContainsKey(id));
+        c.Id = NewPlayerId();
         if (c.Id == 0) { Reject(c, "The server is full."); return; }
         var name = LoadoutRules.SanitizePlayerName(h.Name);
         c.Name = name.Length == 0 ? $"player{c.Id}" : name;
-        SandboxOnHello(c, h.Flags);
+        _sandbox.OnHello(c, h.Flags);
         c.Token = h.Token;
         DropSessionsWithToken(c); // a quick reconnect wins over its ghost, which would otherwise run on the same profile until its peer times out
         _profiles.StartLoad(c, h.Token); // joins once the profile is in (or the wait times out)
         GD.Print($"server: {c.Name} #{c.Id} hello, loading profile");
     }
 
+    /// <summary>A free player id for a connection or a bot (0 when there is none).</summary>
+    ushort NewPlayerId() => _ids.Allocate(id => _clients.Values.Any(o => o.Id == id) || _byId.ContainsKey(id));
+
     /// <summary>Joins a client: body, welcome, profile, the join broadcast and the spawn. Called once the client has a profile.</summary>
     void Join(ServerClient c)
     {
         // health, death and respawn belong to the match state machine, not the body
-        ApplyLoadout(c);
+        _progress.ApplyLoadout(c);
         c.Recoil = new RecoilState(c.Id);
         c.Breath = new BreathState(c.Id);
         c.Worn = new Equipment(Items);
@@ -613,7 +643,7 @@ public partial class NetServer : Node
         c.WEnc = new WorldSnapshotEncoder(history: _sentWorld);
         _profiles.Send(c);
         _companions.SendRoster(c); // the Companions they can pick and the one that is out (the Equipment screen's picker)
-        SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
+        _sandbox.SendStatus(c); // the answer to a sandbox request (#156), before the spawn
         _chat.SendStatus(c); // admin or not, and the vehicles /spawn takes
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick,
             (ushort)(Clock.StartMinute), (uint)Math.Round(Clock.DayLengthSeconds * 1000), Clock.Frozen));
@@ -643,7 +673,7 @@ public partial class NetServer : Node
         _gear.SendHeadLampsOnJoin(c); // and whose head lamp is on
         _status.SendOnJoin(c); // who is blessed, cursed or burning
         _match.AddPlayer(c.Id, c.Name, c.Sandbox, c.IsBot); // spawns the player (event) and broadcasts the scoreboard
-        SandboxAnnounce(c); // sandbox name tags both ways, and the held streak (#156)
+        _sandbox.Announce(c); // sandbox name tags both ways, and the held streak (#156)
         _host.Flush();
         GD.Print($"server: {c.Name} joined as #{c.Id} ({_byId.Count} players)");
     }
@@ -751,4 +781,51 @@ public partial class NetServer : Node
         GD.Print($"server: debug kill {c.Name} -> #{target}: {r}");
     }
 
+    /// <summary>A new round: what the round's end left in the killstreaks, the shells, the XP book and the events starts over.</summary>
+    void RoundStarted()
+    {
+        _streaks.RoundReset();
+        _gunships.RoundReset(); // a round reset takes the shells in the air with it
+        _flak.RoundReset();
+        _progress.ResetXp();
+        BigfootRoundReset();
+        _thieves.RoundReset(); // the Thieves event does not outlive the round either, and what it stole is back
+        _progress.ClearSummaries();
+    }
+
+    /// <summary>End of round: the killstreaks and shells go, then the awards and each player's XP summary.</summary>
+    void RoundEnded()
+    {
+        _streaks.RoundReset();
+        _gunships.RoundReset();
+        _flak.RoundReset();
+        _progress.RoundEnded();
+    }
+
+    void ChatTo(ServerClient c, ChatLineKind kind, string text) => _ctx.ChatTo(c, kind, text);
+
+    void ChatToAll(ChatLineKind kind, string sender, string text) => _ctx.ChatToAll(kind, sender, text);
+
+    /// <summary>Hands each admin command to the chat; the commands of a feature with a class of its own are that class's methods.</summary>
+    void RegisterChatCommands()
+    {
+        var admin = new AdminCommands(_ctx, () => Clock, clock => Clock = clock, () => Query, Weapons, _rocketIds, _rozhlas, _intel, _demon, (kind, c) => _eventHandlers.Start(kind, c), ChatCurrentEvent);
+        _chat.Register("bots", _bots.ChatCommand);
+        _chat.Register("spawn", _spawner.ChatCommand);
+        _chat.Register("unicorn", _wildlife.ChatUnicorn);
+        _chat.Register("phoenix", _wildlife.ChatPhoenix);
+        _chat.Register("sandbox", _sandbox.ChatCommand);
+        _chat.Register("give", _gear.ChatGive);
+        _chat.Register("companion", _companions.ChatCommand);
+        _chat.Register("time", admin.Time);
+        _chat.Register("explode", admin.Explode);
+        _chat.Register("restart", admin.Restart);
+        _chat.Register("event", admin.Event);
+        _chat.Register("citizens", _citizens.Chat);
+        _chat.Register("church", _church.Chat);
+        _chat.Register("rozhlas", _rozhlas.ChatCommand);
+        _chat.Register("status", _status.ChatCommand);
+        _chat.Register("scud", ChatScud);
+        _chat.Register("squad", _teams.ChatSquad);
+    }
 }

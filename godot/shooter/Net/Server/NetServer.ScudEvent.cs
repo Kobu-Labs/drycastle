@@ -264,7 +264,7 @@ public partial class NetServer
         _events.End(EventBook.Scud, EventPhase.Won, _elapsed);
         _intel.Withdraw(ScudEventRun.IntelId);
         var xp = (int)Scud.Event.XpReward;
-        if (finder != 0 && _byId.ContainsKey(finder) && Scores(finder) && xp > 0) AwardXp(new List<XpGrant> { new(finder, xp, XpReason.EventWin) });
+        if (finder != 0 && _byId.ContainsKey(finder) && _progress.Scores(finder) && xp > 0) _progress.Award(new List<XpGrant> { new(finder, xp, XpReason.EventWin) });
         ChatToAll(ChatLineKind.System, "", $"Event won: {name} found the Scud truck! It stays out until it is destroyed, and so do the rocket carts at the bunkers.");
         if (_byId.TryGetValue(finder, out var c)) Send(c, new EventMsg((byte)EventKind.ScudNotice, ScudCodec.Encode(ScudNoticeCode.EventFound)));
         GD.Print($"server: Scud event won by #{finder} {name}: +{xp} XP");
