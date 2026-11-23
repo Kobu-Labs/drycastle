@@ -1,6 +1,9 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Turrets;
 
 /// <summary>Turret world entity rules: wire type id and the state byte the clients read.</summary>
 public static class TurretRules

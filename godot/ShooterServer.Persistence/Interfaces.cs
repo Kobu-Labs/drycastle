@@ -1,3 +1,8 @@
+using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Mining;
+using Drycastle.ShooterCore.Progression;
+
 namespace Drycastle.ShooterServer.Persistence;
 
 // Repository interfaces (ADR 0003). Callers are never on the game tick: reads are awaited on a worker,

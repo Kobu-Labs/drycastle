@@ -1,8 +1,8 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Thieves;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The pet target of the Thieves event on the server (docs/events/thieves/05): the world the pure <see cref="PetSource"/> asks (the ground, the navigation mesh), the fences of the map (<c>fences.json</c> in the map

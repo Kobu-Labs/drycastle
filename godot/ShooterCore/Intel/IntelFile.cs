@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Bunkers;
+using Drycastle.ShooterCore.Data;
+
+namespace Drycastle.ShooterCore.Intel;
 
 /// <summary>
 /// intel.json: where the intel room is and how its screen behaves. The room is on a placed object of one asset (<see cref="BaseAsset"/>,

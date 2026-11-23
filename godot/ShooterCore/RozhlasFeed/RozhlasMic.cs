@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
+
+namespace Drycastle.ShooterCore.RozhlasFeed;
 
 /// <summary>
 /// One upstream mic frame (the set holder's voice, client to server, unreliable, <see cref="Wire.ChanRozhlasFeed"/>): u8 <see cref="Wire.TRozhlasMic"/>, u16 sequence (little endian,

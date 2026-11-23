@@ -16,11 +16,11 @@ BR=$(git branch -r --list 'origin/release-*v' --sort=-version:refname | tr -d ' 
 RCV=rc-${BR#release-}                                                                   # rc-0.10v
 ```
 
-**Project board** (https://github.com/orgs/Kobu-Labs/projects/7). Fields: `RC` = rc-0.10v / rc-0.11v / rc-0.12v (which RC the ticket is in); `Tested` = No/Yes/Failed. Helpers, run for an issue N; each adds the issue to the project if missing (idempotent), then sets the field:
+**Project board** (https://github.com/orgs/Kobu-Labs/projects/7). Fields: `RC` = rc-0.10v … rc-0.14v (which RC the ticket is in); `Tested` = No/Yes/Failed. Helpers, run for an issue N; each adds the issue to the project if missing (idempotent), then sets the field:
 ```bash
 PJ=PVT_kwDOBbn3Qs4BsAfd; FD=PVTSSF_lADOBbn3Qs4BsAfdzhqQmVg; FRC=PVTSSF_lADOBbn3Qs4BsAfdzhqseas
 declare -A OPT=([No]=693d3fcb [Yes]=aa5fbb44 [Failed]=229d2260)
-declare -A RCOPT=([rc-0.10v]=cca7b354 [rc-0.11v]=691eea66 [rc-0.12v]=4ecbcfe4)
+declare -A RCOPT=([rc-0.10v]=cca7b354 [rc-0.11v]=691eea66 [rc-0.12v]=4ecbcfe4 [rc-0.13v]=de8c77d7 [rc-0.14v]=75affacb)
 rc_set() { # rc_set N RCV  (sets the RC field)
   local item=$(gh project item-add 7 --owner Kobu-Labs --url "$(gh issue view $1 --json url -q .url)" --format json -q .id)
   gh project item-edit --project-id $PJ --id "$item" --field-id $FRC --single-select-option-id ${RCOPT[$2]}

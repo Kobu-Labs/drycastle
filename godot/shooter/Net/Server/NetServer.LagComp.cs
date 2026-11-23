@@ -1,9 +1,15 @@
 using System.Diagnostics;
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Lag compensation for players (ADR 0013, B-01). Each tick, at the moment the snapshots take the state, every joined player's feet, stance and yaw

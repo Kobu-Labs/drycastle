@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Wildlife;
+
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>
 /// Where a bullet entered a hunted animal, as the hit diagram draws it (GLOSSARY "Hit diagram"), in the units of <see cref="HuntShot"/>'s wire:

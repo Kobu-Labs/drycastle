@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Items;
 
 /// <summary>
 /// What a player carries without wearing: <see cref="Cells"/> cells, each empty or one <see cref="ItemStack"/>. Match state next to

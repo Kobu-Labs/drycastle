@@ -1,7 +1,10 @@
-using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Status;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Player statuses on the server (Holy Mass reward, GLOSSARY "Status" and "Burn"): the divine blessing and the devil's curse in

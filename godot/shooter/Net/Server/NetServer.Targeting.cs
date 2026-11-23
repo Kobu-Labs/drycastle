@@ -1,9 +1,12 @@
 using Godot;
-using Drycastle.ShooterCore;
-using Drycastle.ShooterServer.Persistence;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>What a shot can hit and what stops it: the live targets of the tick, the hit target of a player, and the world queries (<see cref="WorldQuery"/>) that a ray asks, vehicle hulls included (ADR 0028).</summary>
 public partial class NetServer

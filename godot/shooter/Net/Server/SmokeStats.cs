@@ -1,7 +1,9 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Match;
 
-namespace Drycastle.Shooter;
+
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// What the smoke tests (net, match, weapons, rpg: the <c>run_*_smoke.py</c> scripts) count on the server, and the verdict each one prints when it is over. A production server fills the counters and never asks for a verdict.

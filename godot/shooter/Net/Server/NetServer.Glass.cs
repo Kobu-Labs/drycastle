@@ -1,8 +1,15 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Buildings;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Buildings;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Glass;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Server side of glass panes (ADR 0007, docs/glass.md). The server owns every pane's hit points (<see cref="GlassPanes"/>): the windows

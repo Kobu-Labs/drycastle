@@ -1,5 +1,7 @@
 using Godot;
 
+namespace Drycastle.Netspike;
+
 /// <summary>Node with 160 exported float properties, used to probe the MultiplayerSynchronizer
 /// watched-property limit (godotengine/godot#103938). Generated; names P0..P159.</summary>
 public partial class PropProbe : Node

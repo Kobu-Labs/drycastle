@@ -1,9 +1,7 @@
-using Godot;
-using Drycastle.ShooterCore;
-using Drycastle.ShooterServer.Persistence;
-using NVec3 = System.Numerics.Vector3;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>The snapshots of the tick: every player, vehicle, dummy and rocket as entity records, and the world entities, delta-encoded against what each client last acknowledged.</summary>
 public partial class NetServer

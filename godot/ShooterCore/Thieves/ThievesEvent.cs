@@ -1,4 +1,8 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Intel;
+
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>Where the Thieves event is: not started, its wave of vans is in the village, or it is over (won or cancelled; what was stolen stays stolen until the round resets).</summary>
 public enum ThievesPhase : byte { Idle, Raiding, Over }

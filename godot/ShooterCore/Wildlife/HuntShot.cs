@@ -1,7 +1,9 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>
 /// The shot that killed a wild animal with a sniper rifle, for the hunter's hit diagram (GLOSSARY "Hit diagram"): the species, where the bullet

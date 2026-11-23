@@ -1,8 +1,15 @@
 using Godot;
-using Drycastle.ShooterCore;
-using NVec3 = System.Numerics.Vector3;
+using Drycastle.Shooter.Net.Server.VillageRadio;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.Shooter;
+
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The Holy Mass on the server (docs/events/README.md, "Holy Mass"): <see cref="HolyMassEvent"/> runs the timeline, the pastor and the monks and the

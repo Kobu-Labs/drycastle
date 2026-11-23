@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.RozhlasFeed;
 
 /// <summary>
 /// The input timeline of the live feed: 16 kHz mono 16-bit, pulled in fixed blocks at a steady rate by whoever owns the clock (the feed's writer thread). Two kinds of input,

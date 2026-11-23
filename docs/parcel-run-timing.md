@@ -25,7 +25,7 @@ Not done (gate met by a wide margin); if the editor ever wants under 0.3 s, in t
 
 ## Equivalence
 
-`pipeline/tests/test_parcel_run.py` checks that the fragment's fences, trees and objects equal the targets' share of a full `run_props` (every parcel kind, groups, edits, chunk cap off and on). On the real village the fragment matched the full props stage for all 1165 parcels, and the refactored `props.py` output is byte-identical to the earlier `props.json`.
+`pipeline/tests/edits/test_parcel_run.py` checks that the fragment's fences, trees and objects equal the targets' share of a full `run_props` (every parcel kind, groups, edits, chunk cap off and on). On the real village the fragment matched the full props stage for all 1165 parcels, and the refactored `props/props.py` output is byte-identical to the earlier `props.json`.
 
 ## `--glb`
 

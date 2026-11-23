@@ -1,6 +1,11 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>A player as the Bigfoot sees them: where their feet are and whether they stand on the ground or ride a vehicle. Only living players are listed.</summary>
 public readonly record struct BigfootPlayer(ushort Id, Vector3 Feet, bool OnFloor, bool InVehicle);

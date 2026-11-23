@@ -1,7 +1,8 @@
 using System.Numerics;
 using System.Text;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Intel;
 
 /// <summary>
 /// One announced event as the intel screen shows it: what it is, when it begins, its risks and, when it has one, where.

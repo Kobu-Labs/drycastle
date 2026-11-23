@@ -1,9 +1,15 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 using NVec2 = System.Numerics.Vector2;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The Raids (the vans of the Thieves event's convoy) on the server (GLOSSARY "Raid", "Raid van"; ADR 0021; docs/events/thieves/03). A Raid is a <see cref="RaidVan"/> (world entity 55) and its

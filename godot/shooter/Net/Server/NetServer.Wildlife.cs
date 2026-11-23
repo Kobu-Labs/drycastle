@@ -1,8 +1,12 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
+using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Wildlife on the server (GLOSSARY "Wildlife"): wild animals (wire type 50, like pets) that stand in the zones of their species' kind

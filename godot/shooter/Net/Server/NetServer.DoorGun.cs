@@ -1,8 +1,12 @@
 using Godot;
-using Drycastle.ShooterCore;
-using NVec3 = System.Numerics.Vector3;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The utility helicopter's door gun on the server (<see cref="DoorGunRules"/>). The gunner's view is what the gun is asked to point at; the gun

@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Minimap;
 
 /// <summary>
 /// Godot-free geometry of the tactical map (the full-screen map sheet, opened with M). The sheet is north-up and fixed. Its

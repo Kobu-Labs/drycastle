@@ -1,7 +1,10 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Icons;
+using Drycastle.ShooterCore.Sandbox;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>
 /// The sandbox panel (F4, #156): the eight killstreaks as icon buttons (pick one to hold it), "Use now" for the held one,

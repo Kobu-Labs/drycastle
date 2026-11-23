@@ -1,4 +1,8 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// thieves.json, schema version 1: every number of the Thieves event (GLOSSARY "Thieves event"). Lengths are metres, speeds metres per second, times seconds.

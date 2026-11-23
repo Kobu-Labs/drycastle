@@ -1,7 +1,8 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Scud;
 
 /// <summary>What a crew member asks of the launcher (client to server, <see cref="EventKind.ScudCommand"/>).</summary>
 public enum ScudCmd : byte

@@ -1,7 +1,10 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The Thieves' audio on the server (docs/events/thieves/09): who says what is decided here (<see cref="GangAudio"/>: a member with a human near rolls a line now and then, one

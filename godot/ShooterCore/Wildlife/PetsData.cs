@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Net;
+
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>One species a pet can be (pets.json): an id of animals.json and its weight among the species.</summary>
 public sealed class PetSpecies

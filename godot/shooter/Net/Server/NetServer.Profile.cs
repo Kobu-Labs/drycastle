@@ -1,8 +1,10 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
 using Drycastle.ShooterServer.Persistence;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Profile handshake (ADR 0003, ticket #107). A hello carries the player token; the server loads the profile through the

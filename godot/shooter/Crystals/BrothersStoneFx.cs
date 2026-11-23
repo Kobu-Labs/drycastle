@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Brother's stone (crystals.md): a quiet replica of a memorial boulder. Grey granite with moss on its top, dull grey crystals (<c>shaders/crystal_veined.gdshader</c>), a small bronze plaque on its side.

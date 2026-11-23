@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// The kinds of Loot the world has (<see cref="IStealSource"/>) and which targets Thieves have claimed. One source per kind; one Thief per target (a claim is exclusive until released).

@@ -1,8 +1,14 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The Gang members of the Thieves event on the server (GLOSSARY "Gang member", "Raid"; docs/events/thieves/02): world entities (type 54) with a pure brain

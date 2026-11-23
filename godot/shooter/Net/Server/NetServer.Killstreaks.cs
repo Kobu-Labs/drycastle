@@ -1,7 +1,15 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.CarePackages;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Killstreaks.Uav;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Turrets;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Killstreaks on the server (ticket #118): the streak counter and loadout streaks per life, activation on the Killstreak

@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Always-on server health (perf audit T2-05, T2-06, T2-07): tick timing with overrun and catch-up handling, a receive

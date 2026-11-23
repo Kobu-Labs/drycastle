@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Text;
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Diagnostics;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The "server: prof" log lines, printed with the stats line every <see cref="ReportSeconds"/> seconds (always on; docs/shooter-server.md, "Performance log"):

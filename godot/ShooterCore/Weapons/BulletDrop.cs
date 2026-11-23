@@ -1,7 +1,8 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>
 /// Bullet drop of the sniper rifles (a weapon with <c>muzzle_velocity</c>), shared by server and client. The shot is still resolved at once (no

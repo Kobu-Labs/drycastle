@@ -1,4 +1,8 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Plantation;
+
+namespace Drycastle.ShooterCore.Status;
 
 /// <summary>
 /// A status a player carries (High is one that also ends when its clock does, see <see cref="PlayerHigh"/>): not an Item (no slot, no drop, no corpse). Append only, the value is a bit of <see cref="PlayerStatuses.Mask"/>.

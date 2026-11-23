@@ -1,4 +1,8 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Demon;
+using Drycastle.ShooterCore.Wildlife;
+
+namespace Drycastle.ShooterCore.Match;
 
 /// <summary>Which hit target ids are scenery-like beings and never an enemy for an automatic gun. The Gang members of the Thieves event are not in it: turrets and killstreak weapons shoot them.</summary>
 public static class NonEnemyTargets

@@ -1,6 +1,7 @@
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Events;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The Events (GLOSSARY "Event") a server can run, as one table of handlers per kind: <see cref="_eventHandlers"/>. <c>/event &lt;kind&gt;</c> starts a kind through

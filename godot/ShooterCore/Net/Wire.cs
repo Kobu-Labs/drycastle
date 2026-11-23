@@ -1,7 +1,38 @@
 using System.Buffers.Binary;
 using System.Text;
+using Drycastle.ShooterCore.Buildings;
+using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.CarePackages;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Churches;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Demon;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Flight;
+using Drycastle.ShooterCore.Glass;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Intel;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Killstreaks.Uav;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Mining;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.RozhlasFeed;
+using Drycastle.ShooterCore.Sandbox;
+using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Scud;
+using Drycastle.ShooterCore.Status;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Net;
 
 /// <summary>Event kinds carried in the reliable event envelope. Payload codecs are added by the issues that use them.</summary>
 public enum EventKind : byte
@@ -230,7 +261,7 @@ public enum EventKind : byte
     CropCrush = 238,
     /// <summary>Server to the shooter only: their own Lock (Lock-on launcher, ADR 0031): phase, Aircraft, tracking, progress and lock seconds (<see cref="LockCodec"/>).</summary>
     LockState = 246,
-    /// <summary>Server to an Aircraft's owner only: the worst of the launchers on their Aircraft (a <see cref="Drycastle.ShooterCore.LockAlert"/> level) and the Aircraft.</summary>
+    /// <summary>Server to an Aircraft's owner only: the worst of the launchers on their Aircraft (a <see cref="Drycastle.ShooterCore.Weapons.LockAlert"/> level) and the Aircraft.</summary>
     LockAlert = 247,
     /// <summary>Server to everyone: a homing missile left a Lock-on launcher, the Aircraft it homes on and its flight seconds; the Explosion with its id ends it.</summary>
     HomingLaunch = 248,

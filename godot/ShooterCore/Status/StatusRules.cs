@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Status;
 
 /// <summary>The divine blessing (<see cref="StatusKind.Blessing"/>): one lethal hit is negated. The host asks <see cref="TryConsume"/> from <see cref="MatchSim.SaveFromDeath"/>.</summary>
 public static class BlessingRules

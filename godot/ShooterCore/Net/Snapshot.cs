@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
+using Drycastle.ShooterCore.Movement;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Net;
 
 /// <summary>
 /// The complete entity states of recent ticks. The server keeps what it sent and the client what it committed, so a

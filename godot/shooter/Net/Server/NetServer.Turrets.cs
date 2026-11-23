@@ -1,8 +1,12 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Bots;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Sentry turrets on the server (killstreak ticket "turret"): the bridge between the pure turret rules in ShooterCore and

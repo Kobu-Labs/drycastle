@@ -1,8 +1,9 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The dish target on the server (docs/events/thieves/06): the dishes are the placed objects of the map with the generated dish model (<see cref="DishSource.AssetId"/>), found once from the

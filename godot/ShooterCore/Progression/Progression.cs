@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Progression;
 
 /// <summary>
 /// A player's persistent profile (ADR 0003). Identity is the client-generated token; <see cref="Id"/> is the

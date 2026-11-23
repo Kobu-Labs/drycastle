@@ -1,8 +1,13 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.CarePackages;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Care packages on the server (ticket #124, reward reworked in #151): the crates the care package killstreak drops and the

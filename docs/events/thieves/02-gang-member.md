@@ -4,7 +4,7 @@ The person of a Raid: entity, Hit count, three kinds, walking, melee. No stealin
 
 ## Reuse
 - Pattern of `Citizen` / `CitizenCrowd` (`godot/ShooterCore/Citizens/`): `IWorldEntity`, world interface, hit-id maps, `AddTargets`, `Follow(route, dt, speed)`.
-- Routes: `BotNav.Route` (`godot/shooter/BotNav.cs`), a few ms each, tick thread. Bots are rationed to one per tick (`ServeBotRoute`, `NetServer.Bots.cs`): put gang members on the same ration (a shared queue).
+- Routes: `BotNav.Route` (`godot/shooter/Net/Bots/BotNav.cs`), a few ms each, tick thread. Bots are rationed to one per tick (`ServeBotRoute`, `NetServer.Bots.cs`): put gang members on the same ration (a shared queue).
 - Hit count rules: the Bigfoot's (`godot/ShooterCore/Events/Bigfoot*.cs`), here with headshot = 2.
 - Player damage from an entity: as the Bigfoot does through `Deal` with a `SpecialWeapons` id.
 

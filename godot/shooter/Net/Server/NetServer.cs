@@ -1,9 +1,28 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Characters;
+using Drycastle.Shooter.Net.Server.BusGarage;
+using Drycastle.Shooter.Net.Server.Intel;
+using Drycastle.Shooter.Net.Server.MineralLog;
+using Drycastle.Shooter.Net.Server.Scenery;
+using Drycastle.Shooter.Net.Server.VillageRadio;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
+using Drycastle.ShooterCore.Wildlife;
 using Drycastle.ShooterServer.Persistence;
-using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Authoritative 30 Hz server over raw ENet (see ADR 0002): ch0 reliable messages, ch1 unreliable-sequenced input and snapshots.
@@ -31,7 +50,7 @@ public partial class NetServer : Node
     public bool WeaponsSmoke;
     public float KillY = float.NegativeInfinity;
     /// <summary>The map's water (water.json); players swim at the surface in it, and boats float on it.</summary>
-    public Drycastle.ShooterCore.Water Water = Drycastle.ShooterCore.Water.Empty;
+    public Drycastle.ShooterCore.Waters.Water Water = Drycastle.ShooterCore.Waters.Water.Empty;
     public int Port = 27015;
     /// <summary>Network impairment for the loss and latency test (--net-sim); null = none.</summary>
     public NetSim? Sim;

@@ -1,8 +1,14 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Flight;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Aircraft on the server (ticket #125): the aircraft world entity, and the gunship turret of its owner. The streak tickets

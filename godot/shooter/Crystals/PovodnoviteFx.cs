@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Povodnovite (crystals.md): the flood stone, a raging river caught in a thin skin of glass. Churned blue-green water tears through the crystals, white with crests and swells (<c>shaders/crystal_water.gdshader</c>), a faint

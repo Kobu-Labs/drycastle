@@ -1,9 +1,22 @@
 using Godot;
-using Drycastle.ShooterCore;
-using Drycastle.ShooterServer.Persistence;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Demon;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Status;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
+using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Shots and blasts: one shot or swing resolved against the targets and walls (<see cref="FireWeapon"/>: hitscan, projectile, melee), the damage it deals (<see cref="Deal"/>), and the server-owned rockets and grenades

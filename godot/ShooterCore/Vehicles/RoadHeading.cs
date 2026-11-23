@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Minimap;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// Which way a vehicle parked at a point should face: along the nearest road (<see cref="VehicleSpotDef"/> without a yaw). Godot-free. Roads are the

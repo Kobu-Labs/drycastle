@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Fsm;
 
 /// <summary>What the catalog and the docs need from any <see cref="StateMachineSpec{TState}"/>, whatever its state type.</summary>
 public interface IStateMachineSpec

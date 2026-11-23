@@ -2,8 +2,9 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Diagnostics;
 
 /// <summary>
 /// Scoped timers of the client's own work in a frame (the "client: perf scopes" log line and the client dashboard): how long the named parts

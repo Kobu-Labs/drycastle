@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Vehicles;
+
+namespace Drycastle.ShooterCore.Glass;
 
 /// <summary>
 /// glass.json: the tuning of glass panes (ADR 0007). Optional: a data directory without the file gets these defaults.

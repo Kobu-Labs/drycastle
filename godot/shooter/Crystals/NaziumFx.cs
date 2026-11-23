@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Nazium (crystals.md): the bunker stone. Olive-drab and concrete-grey crystals (<c>shaders/crystal_veined.gdshader</c>) on a concrete base; the tallest crystal wears a red band with a plain white disc

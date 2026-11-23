@@ -1,4 +1,8 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Demon;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Match;
+
+namespace Drycastle.ShooterCore.Status;
 
 /// <summary>Burn tuning (<c>burn</c> of holy_mass_demon.json). Seconds and hit points.</summary>
 public sealed class BurnDef

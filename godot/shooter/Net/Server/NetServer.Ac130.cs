@@ -1,8 +1,9 @@
-using Godot;
-using Drycastle.ShooterCore;
-using NVec3 = System.Numerics.Vector3;
+using Drycastle.ShooterCore.Flight;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The AC-130 on the server (killstreak "ac130"): the streak's adapter (the match's entities, the clock and the turret's

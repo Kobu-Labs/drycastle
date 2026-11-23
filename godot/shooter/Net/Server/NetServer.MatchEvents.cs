@@ -1,9 +1,11 @@
 using Godot;
-using Drycastle.ShooterCore;
-using Drycastle.ShooterServer.Persistence;
-using NVec3 = System.Numerics.Vector3;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>The match's events on the server: what a round leaves behind and clears (<see cref="ResetRoundWorld"/>), what each match event does to the rest of the server (<see cref="OnMatchEvent"/>), and the scoreboard.</summary>
 public partial class NetServer

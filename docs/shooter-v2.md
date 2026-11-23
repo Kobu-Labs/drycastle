@@ -61,14 +61,14 @@ Mechanics added in v2:
 - Snipers have a scope (`scope_fov`) and breath hold (`breath_hold_seconds`, `breath_recover_seconds`). Zoom levels
   beyond one are not implemented (#113).
 - The breath hold has no meter: an inhale, a heartbeat under 40 % of the breath (faster and louder to the end) and a loud
-  exhale when it is forced out (`BreathCues`; sounds by `scripts/make_breath_sounds.py`).
+  exhale when it is forced out (`BreathCues`; sounds by `scripts/sounds/make_breath_sounds.py`).
 - Sniper bullets drop (`muzzle_velocity`, `zero_distance`; `BulletDrop`): the server resolves the shot at once along a
   curve of 25 m pieces, each against the rewound targets (ADR 0013 holds). The mouse wheel while scoped dials the zero in
   10 m steps (event 24, `SetZero`); the scope shows the zero and mil-dots at true angles. A bot's shots do not drop.
 - Hit diagram: a sniper kill of a wild animal sends the shooter event 25 (`HuntShot`: species, where the bullet entered the
-  body box, distance, weapon); the HUD shows the species' side view (`scripts/make_animal_silhouettes.py`) with the entry
+  body box, distance, weapon); the HUD shows the species' side view (`scripts/art/make_animal_silhouettes.py`) with the entry
   marked. A bullet tests a wild animal against its hit shape (`AnimalShapes`, `animal_shapes.json` baked by
-  `scripts/make_animal_shapes.py`: the outline per pose in 5 cm cells, the eating pose by time), else its body box
+  `scripts/art/make_animal_shapes.py`: the outline per pose in 5 cm cells, the eating pose by time), else its body box
   (`hit_box`, `hit_box_ahead`); no longer the scaled capsule. The diagram draws that same shape.
 - Binoculars: a bag item (`binoculars` in items.json, `/give binoculars`), key B. Zoom and a distance readout measured on
   the client (`NetClient.Binoculars.cs`). Only up/down travels (events 26 `RaiseBinoculars`, 27 `BinocularsRaised`), so
@@ -304,7 +304,7 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 - Seat switch: while seated in any vehicle the number keys (the `slot_1` to `slot_5` actions, rebindable) take that seat, and a seat
   schematic shows the seats (bottom right). Client request: event kind 161 (u8 seat index); the server answers the riders with kind 162 (who
   sits in each seat) whenever that changes; protocol 20. `VehicleSeat.TrySwitch` is the rule, `SeatSchematic` the layout.
-- Bus (`bus`): a 12 m land vehicle with a generated model (`scripts/make_bus_model.py`), one on the map and in the sandbox vehicle list. It is data
+- Bus (`bus`): a 12 m land vehicle with a generated model (`scripts/models/make_bus_model.py`), one on the map and in the sandbox vehicle list. It is data
   only: a driver seat and three passenger seats (the seat limit is five since protocol 66), the usual driving model with a wide turn circle (`turn_radius` 9.5), smoke
   from the rear where its engine is. It is boarded like a car, within 3 m of its centre, so along the middle of either side (the middle door is there),
   not at the front door. Its doors are separate model nodes that nothing moves yet.
@@ -330,7 +330,7 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 ### Utility helicopter
 
 One spawns on the map (`spawn_count` 1, on flat ground with room for the rotor) and it is in the sandbox vehicle list. The model is generated
-(`scripts/make_utility_helicopter_model.py`). The pilot's client predicts it and the server corrects it (ADR 0006); everyone else sees it
+(`scripts/models/make_utility_helicopter_model.py`). The pilot's client predicts it and the server corrects it (ADR 0006); everyone else sees it
 interpolated, pitching and rolling from the flight record of the snapshot.
 
 **Controls** (the rebindable movement actions; nothing new to bind):
@@ -400,7 +400,7 @@ as the driver of every other vehicle is: to stop the pilot, destroy the helicopt
 ### Amphibious transport
 
 Two spawn on the map (`spawn_count` 2, near a shore where there is one) and it is in the sandbox vehicle list. The model is generated
-(`scripts/make_amphibious_model.py`): a boat-shaped hull on four wheels, no roof, no doors, low sides, a propeller under the stern. Three seats
+(`scripts/models/make_amphibious_model.py`): a boat-shaped hull on four wheels, no roof, no doors, low sides, a propeller under the stern. Three seats
 (it had four): the driver front left, an armed seat beside them, and a gunner standing in a ring over the rear. The driver's client predicts it
 and the server corrects it (ADR 0010); everyone else, its riders included, sees it interpolated.
 
@@ -585,7 +585,7 @@ items, ADR 0018 (#267, protocol 31).
   the origin is the middle of the head). `CharacterView.SetWorn(slot, item)` (`CharacterView.Worn.cs`) hangs it on the head bone, so it follows every
   clip, stance, the prone roll and the ragdoll, and hides what it replaces: the helmet and the hair, the head's foliage and the face paint. The same call
   dresses remote players (from event 194), the local player's seat view, a corpse that carries the item (from event 191: gone again once taken or crumbled)
-  and the menu figure (`CamoPreview.ShowWorn(slot, item)`). The Bigfoot head is the giant's own head from `scripts/make_bigfoot_model.py` (732
+  and the menu figure (`CamoPreview.ShowWorn(slot, item)`). The Bigfoot head is the giant's own head from `scripts/models/make_bigfoot_model.py` (732
   triangles, about twice the width of the head it covers). An item without a model is worn but not drawn.
 - **Icons.** `IconRegistry` has `IconKind.Item`: `ui/icons/items/<id>.png` (128x128, a render of `model` from `tools/render_icons.gd`); an item without a
   file shows `item_fallback.png` (a plain box glyph from `make_icons.py`), not the crossed placeholder.
@@ -612,7 +612,7 @@ despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: 
   it does not use the intel board (`IntelServer.Announce` is the one call that would).
 - **A world entity, not a bot** (wire type 60). The state byte is the act (`BigfootAct`, bits 0-3), a bit that flips on every hit that did not kill, the phase (bits 5-6) and
   the enrage (bit 7); the owner field is the player it holds; the hp byte is the hit count left in percent. The client draws the generated giant
-  (`drycastle-generated-models/bigfoot.glb`, `scripts/make_bigfoot_model.py`: a skinned mesh, 26 bones, 14 clips) and picks the clip from the act (`ClipFor`): every act
+  (`drycastle-generated-models/bigfoot.glb`, `scripts/models/make_bigfoot_model.py`: a skinned mesh, 26 bones, 14 clips) and picks the clip from the act (`ClipFor`): every act
   has its own, and a wind-up is stretched over its act's time so the blow lands with the server's. Walk and Run play at the speed it moves (`PaceGait`: ground speed over
   the clip's stride, `movement.walk_stride_m` / `run_stride_m`). A hit makes it flinch only while it stands. When a phase begins or it enrages it owes a roar: the first tick it has no
   attack to make it stops, faces its target and roars for `BigfootRules.RoarSeconds` (the act `Roar`); its arrival plays the same clip on the client. A launch out of a
@@ -698,7 +698,7 @@ the game at all, so the gamepad part of the standard cannot be met yet.
 Tests and checks that fail or are known to fail:
 - `VehicleTests.ShippedFileHasCarMotorcycleAndBicycleWithTheAgreedSpawnCounts` expects 8 cars, the data has 12. It was
   failing on the integration branch before #133 and is left alone.
-- `pipeline/tests/test_edits.py` fails on the shipped `edits.json` (reported on #138; unrelated to shooter).
+- `pipeline/tests/edits/test_edits.py` fails on the shipped `edits.json` (reported on #138; unrelated to shooter).
 - The smoke and bot scripts were reviewed statically in #133, not run (section 9).
 
 Server and persistence:

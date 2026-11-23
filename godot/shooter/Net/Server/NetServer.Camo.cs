@@ -1,7 +1,8 @@
-using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Camouflage on the server (ticket #140). The join sends every joined player's appearance to the joiner and the joiner's

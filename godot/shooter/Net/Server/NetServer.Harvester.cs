@@ -1,9 +1,19 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Bots;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Status;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 using NVec2 = System.Numerics.Vector2;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The harvester event on the server (#331, GLOSSARY "Event"). Now and then, or on <c>/event harvester</c>, a harvester (vehicles.json <c>harvester</c>, an ordinary <see cref="ServerCar"/> with an

@@ -2,9 +2,9 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Network audit for the perf harness (<c>--perf-out DIR</c> only; null and free otherwise). Every 10 s one block is appended to

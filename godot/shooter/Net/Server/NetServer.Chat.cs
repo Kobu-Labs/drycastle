@@ -1,7 +1,15 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The chat and the admin's commands. A line from a player goes to everyone; a line starting with "/" is a command, which only
@@ -290,13 +298,13 @@ public partial class NetServer
     void ChatTimeCommand(ServerClient c, IReadOnlyList<string> args)
     {
         var now = _tick / (double)Wire.TickRate;
-        string Shown() => Drycastle.ShooterCore.ChatTime.Format((int)(Clock.HourAt(now) * 60));
+        string Shown() => Drycastle.ShooterCore.Chat.ChatTime.Format((int)(Clock.HourAt(now) * 60));
         if (args.Count == 0)
         {
             ChatTo(c, ChatLineKind.Info, $"It is {Shown()}{(Clock.Frozen ? ", the clock is frozen" : "")}. A day lasts {Clock.DayLengthSeconds / 60:0.#} minutes.");
             return;
         }
-        var set = Drycastle.ShooterCore.ChatTime.Parse(args[0])!.Value;
+        var set = Drycastle.ShooterCore.Chat.ChatTime.Parse(args[0])!.Value;
         string said;
         if (set.Minute is { } m)
         {

@@ -1,8 +1,25 @@
 using Godot;
-using Drycastle.ShooterCore;
-using Drycastle.ShooterServer.Persistence;
+using Drycastle.Shooter.Characters;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Bots;
+using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Plantation;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Sandbox;
+using Drycastle.ShooterCore.Scud;
+using Drycastle.ShooterCore.Status;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.Shooter;
+
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>One connection of the server: a human at a peer, or a bot (no peer). Plain state; the rules that read and write it live in the feature that owns the field.</summary>
 internal sealed class ServerClient

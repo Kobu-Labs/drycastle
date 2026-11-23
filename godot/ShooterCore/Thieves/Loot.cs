@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>What a Thief can steal (GLOSSARY "Loot"). The value + 1 is what a Gang member's hp byte says it carries (<see cref="GangMember.Carried"/>: 0 nothing).</summary>
 public enum LootKind : byte { Tire = 0, Pet = 1, Dish = 2, Connector = 3 }

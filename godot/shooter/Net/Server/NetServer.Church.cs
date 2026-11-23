@@ -1,8 +1,16 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Churches;
+using Drycastle.ShooterCore.Bunkers;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Churches;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The church on the server (ADR 0019): the doors and the shelter. The doors are a two-state door in the doorway, closed by default; their box lives

@@ -1,5 +1,8 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Characters;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Vehicles;
 
 namespace Drycastle.Shooter;
 
@@ -181,7 +184,7 @@ public partial class GroundCheck : Node3D
         }
         if (_cars.Count > 0 && !_walkReady)
         {
-            foreach (var (c, _) in _cars) c.Step(c.Def, 0, 0, false, 1f / 30, Drycastle.ShooterCore.Water.Empty);
+            foreach (var (c, _) in _cars) c.Step(c.Def, 0, 0, false, 1f / 30, Drycastle.ShooterCore.Waters.Water.Empty);
             if (_frame - _carStart == 150) { ReportCars(); if (!_noWalk) SetupWalk(); else Finish(); }
             return;
         }

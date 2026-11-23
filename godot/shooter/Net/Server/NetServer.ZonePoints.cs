@@ -1,8 +1,8 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Scenery;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Server side of the zones (ADR 0022): the candidate points the pipeline baked inside every ground area and drawn zone of each

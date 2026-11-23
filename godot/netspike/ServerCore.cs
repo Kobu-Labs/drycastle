@@ -1,5 +1,7 @@
-using System.Diagnostics;
 using Godot;
+using System.Diagnostics;
+
+namespace Drycastle.Netspike;
 
 /// <summary>
 /// Approach-independent server part: loads the real map, owns the simulated players, runs the

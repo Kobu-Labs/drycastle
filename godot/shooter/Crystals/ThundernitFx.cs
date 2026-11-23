@@ -1,6 +1,8 @@
 using Godot;
+using Drycastle.Shooter.Demon;
+using Drycastle.Shooter.Effects;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Thundernite (crystals.md): pale storm-glass that glows only faintly until a mini lightning strike zips between its tips; the strike itself is the light (arc ribbons + a short pulse of the OmniLight and of the

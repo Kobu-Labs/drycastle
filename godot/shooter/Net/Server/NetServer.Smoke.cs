@@ -1,9 +1,15 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Status;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Waters;
+using Drycastle.ShooterCore.Weapons;
+using Drycastle.ShooterCore.Wildlife;
 using Drycastle.ShooterServer.Persistence;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>The smoke tests' side of the server: the flat test arena the weapon, rocket and vehicle smokes play in, and the verdict that ends a run.</summary>
 public partial class NetServer

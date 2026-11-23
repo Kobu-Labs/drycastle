@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Killstreaks;
 
 /// <summary>Where one loadout streak stands in one life (server). Progress: kills to go. Earned: held until used. Used: spent for this life (it may still be running; see <see cref="KillstreakUse.UseState"/>).</summary>
 public enum StreakHold { Progress, Earned, Used }

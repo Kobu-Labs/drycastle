@@ -1,8 +1,13 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The attack missile on the server (killstreak "attack_missile"): the adapter the streak flies in (world sweeps, live

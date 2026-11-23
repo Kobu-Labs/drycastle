@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Corpses;
 
 /// <summary>Where a killed body is in its fall to the ground (ticket #357): turning over, bouncing to rest, lying still.</summary>
 public enum CollapsePhase : byte { Falling, Settling, AtRest }

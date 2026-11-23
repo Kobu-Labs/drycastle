@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Glass;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>Where a pane stopped a bullet on its way through a vehicle (<see cref="PaneRules.StoppedBy"/>).</summary>
 public enum PaneStopAt { None, Entry, Exit }

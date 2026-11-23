@@ -1,8 +1,13 @@
 using Godot;
-using Drycastle.ShooterCore;
-using NVec3 = System.Numerics.Vector3;
+using Drycastle.Shooter.Buildings;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Plantation;
+using Drycastle.ShooterCore.RozhlasFeed;
+using Drycastle.ShooterCore.Status;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The marijuana plantation on the server (GLOSSARY "Plantation", "High"; plantation.json). A human player on foot and alive inside a <c>plantation</c> zone (the polygons of zone_polygons.json,

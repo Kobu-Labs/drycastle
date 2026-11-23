@@ -1,8 +1,10 @@
-using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Waters;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Impact particles on the server (EventKind.ImpactFx, tickets #152 and #154). The server decides the surface of a hit (body,

@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Menu;
 
 /// <summary>The three faces of the connect screen.</summary>
 public enum ConnectState

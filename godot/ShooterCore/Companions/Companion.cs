@@ -1,6 +1,11 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Companions;
 
 /// <summary>
 /// What a client draws a Companion doing: the state byte of its replicated state. A kind picks one each tick (<see cref="Companion.Pose"/>); the client plays the clip of it and

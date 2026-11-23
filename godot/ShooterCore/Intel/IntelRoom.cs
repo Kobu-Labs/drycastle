@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Bunkers;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Intel;
 
 /// <summary>
 /// The anchor maths of the intel room on a placed object (ADR 0017, amended): where the screen of <see cref="IntelRoomFile"/>

@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Net;
 
 /// <summary>
 /// What the server knows about one filtered world entity for one client (<see cref="WorldInterest"/>). It decides which record the entity

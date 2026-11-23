@@ -1,8 +1,15 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Bots;
+using Drycastle.ShooterCore.Flight;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The Lock-on launcher on the server (ADR 0031, glossary "Lock-on launcher", "Lock", "Homing missile"). The server alone decides the Lock: once a

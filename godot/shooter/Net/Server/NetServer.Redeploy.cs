@@ -1,6 +1,8 @@
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>The player's own Respawn (ticket #284): selects the named loadout slot, then kills the player as a suicide; the normal respawn applies the loadout.</summary>
 public partial class NetServer

@@ -1,6 +1,9 @@
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.Shooter;
+
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// What a server feature (<c>LampsServer</c>, <c>MineralsServer</c>, ...) takes from the rest of the server: who is playing, the match, the clock and the two

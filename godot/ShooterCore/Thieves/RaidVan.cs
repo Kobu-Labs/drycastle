@@ -1,6 +1,11 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>What a Raid van is doing: the replicated state byte (GLOSSARY "Raid van").</summary>
 public enum RaidVanState : byte { Arriving = 0, Opening = 1, Parked = 2, Boarding = 3, Closing = 4, Leaving = 5, Destroyed = 6 }

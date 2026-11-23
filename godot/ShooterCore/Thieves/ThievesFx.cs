@@ -1,7 +1,8 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>A one-shot effect of the Thieves event (event kind <see cref="EventKind.ThievesFx"/>). Honk: a Raid van sounds its horn (the id is the van's world entity id). Shock: a Thief is electrocuted at the top of a pole (the id is the member's world entity id, the point where it hangs).</summary>
 public enum ThievesFxKind : byte { Honk = 0, Shock = 1 }

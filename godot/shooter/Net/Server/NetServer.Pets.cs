@@ -1,8 +1,11 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
+using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Pets on the server (GLOSSARY "Pet", "Pen"): animals (wire type 50) that live in one property group and never leave it, run by a

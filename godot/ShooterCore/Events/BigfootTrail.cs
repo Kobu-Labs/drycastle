@@ -1,7 +1,8 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>One footprint of the trail: where it lies (Godot ground axes, y the terrain height) and which way the foot points.</summary>
 public readonly record struct Footprint(Vector3 Position, float Yaw);

@@ -1,6 +1,9 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Colliders;
 
 /// <summary>
 /// What a navmesh walker (a citizen, a Gang member, a bot's route) asks of the world as it walks (ADR 0028, the Walker row of <see cref="CollisionRules"/>): what is ahead of it that its row

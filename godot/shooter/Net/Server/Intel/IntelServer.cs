@@ -1,7 +1,10 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Intel;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.Shooter;
+
+namespace Drycastle.Shooter.Net.Server.Intel;
 
 /// <summary>
 /// The announced events on the server: the <see cref="IntelBoard"/> every client's intel screen draws, and the announcement

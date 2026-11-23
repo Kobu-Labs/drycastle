@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Scud;
 
 /// <summary>
 /// Where a Scud truck's launcher is (GLOSSARY "Launcher"). The values are the wire byte of <see cref="ScudStateMsg"/>; do not renumber.

@@ -1,6 +1,10 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>What a weapon hit on a pet (the match calls it for a victim id in the pets' range).</summary>
 public interface IAnimalHits

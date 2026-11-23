@@ -1,12 +1,11 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Text;
 using Godot;
-using FileAccess = Godot.FileAccess;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>Counters bumped from hot paths while <see cref="NetServer.PerfOut"/> is set (perf-harness only; plain static adds, no allocation).</summary>
 public static class PerfCounters

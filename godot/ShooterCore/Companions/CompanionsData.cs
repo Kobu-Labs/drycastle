@@ -1,6 +1,9 @@
 using System.Text.Json;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Companions;
 
 /// <summary>
 /// One Companion a player can own (companions.json): which animal it looks like and which kind runs it. What it does is the kind's own (<see cref="CompanionKinds"/>): the

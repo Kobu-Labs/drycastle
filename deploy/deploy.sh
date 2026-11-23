@@ -13,7 +13,7 @@ export_dir="$here/../out/shooter/linux-server"
 [ -x "$export_dir/drycastle-server.x86_64" ] || { echo "no server export: run 'make shooter-export' first"; exit 1; }
 [ -d "$export_dir/map" ] || { echo "export has no map/: run 'make map' and export again"; exit 1; }
 
-# pack/ and assets-private/ belong to scripts/publish-private-pack.sh; they only have to exist for the compose mounts
+# pack/ and assets-private/ belong to scripts/release/publish-private-pack.sh; they only have to exist for the compose mounts
 $SSH "$host" "mkdir -p '$dir/out/shooter/linux-server' '$dir/deploy' '$dir/pack' '$dir/assets-private'"
 rsync -az -e "$SSH" --delete "$export_dir/" "$host:$dir/out/shooter/linux-server/"
 rsync -az -e "$SSH" "$here/Dockerfile" "$here/docker-compose.yml" "$here/.env.example" "$host:$dir/deploy/"

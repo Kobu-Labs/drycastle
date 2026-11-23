@@ -1,7 +1,8 @@
 using System.Buffers.Binary;
 using System.Text;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Killstreaks;
 
 /// <summary>What the owner learns when a streak is earned (<see cref="EventKind.StreakEarned"/>).</summary>
 public sealed record StreakEarnedInfo(string StreakId, int Kills);

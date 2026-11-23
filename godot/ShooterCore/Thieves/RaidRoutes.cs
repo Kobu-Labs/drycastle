@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// A fixed route (<see cref="RaidRouteConfig"/>) resolved on a road graph: the waypoints snapped to the nearest road point, the roads driven through them in order

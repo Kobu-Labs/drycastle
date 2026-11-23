@@ -1,5 +1,7 @@
 using Godot;
 
+namespace Drycastle.Viewer;
+
 /// <summary>First-person character: WASD, mouse look, jump, gravity, sprint. Origin is at the feet.</summary>
 public partial class Player : CharacterBody3D
 {

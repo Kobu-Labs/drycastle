@@ -1,9 +1,20 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Churches;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Minimap;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Scud;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Wildlife;
 using NVec2 = System.Numerics.Vector2;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The Scud event on the server (docs/events/scud.md, GLOSSARY "Scud event"): <c>/event scud</c> hides a Scud truck at a baked point of a <c>scud</c> zone (or, on a map with none, on open ground away from

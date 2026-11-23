@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Zombite (crystals.md): crystals of rotting flesh, grey-green with dark veins and chips of bone (<c>shaders/crystal_veined.gdshader</c>), blood stains, no glow. Flies circle a tip. Patches of dirt on the

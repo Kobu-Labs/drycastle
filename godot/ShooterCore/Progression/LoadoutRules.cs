@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Progression;
 
 /// <summary>
 /// Server-side rules for a player's loadouts (ADR 0003: the server validates every submitted loadout against the data

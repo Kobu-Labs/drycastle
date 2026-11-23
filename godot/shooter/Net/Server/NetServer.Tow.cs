@@ -1,8 +1,11 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Scud;
+using Drycastle.ShooterCore.Vehicles;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Towing and the rocket cart on the server (docs/shooter-v2.md "Towing and the rocket cart"; the model is ShooterCore's <see cref="TowLink"/>, <see cref="TowModel"/>, <see cref="TowRules"/>).

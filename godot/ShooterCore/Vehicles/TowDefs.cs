@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// A vehicle that can pull a trailer (vehicles.json "tow"). Only data decides who tows: a type with this block can, a type without cannot. All offsets are in the

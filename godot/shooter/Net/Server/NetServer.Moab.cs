@@ -1,7 +1,12 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The MOAB on the server (ticket #129). <see cref="MoabStreak"/> decides when it goes off; this file applies it: a

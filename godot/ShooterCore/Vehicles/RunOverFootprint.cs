@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// The footprint a vehicle runs a body over by (ADR 0028, GLOSSARY "Body shape"): the victim's Body footprint scaled to <see cref="Scale"/> (95%) about its centre, so a

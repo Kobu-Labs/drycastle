@@ -17,16 +17,16 @@ What to give it: the building. Its pictures come from one of two places.
 **Captures (the cheap, reliable way).** Walk the village in Street View with the follower running:
 
     cd pipeline
-    uv run python -m drycastle_pipeline.streetview_follow --launch --capture
+    uv run python -m drycastle_pipeline.photos.streetview_follow --launch --capture
 
 Aim the middle of the view at a house and press **C** in the Street View tab. The picture of the tab is saved with the
 camera it was taken with (place, heading, tilt, zoom, all from the tab's address) under the building the middle of the
 view hits: `data/village/photos/<building>/<n>.png` and `.json`. The follower prints which building and walls it took
 it for. Take two per house, from opposite corners, each with the ground line and the eave of the near corner in view.
 
-    uv run python -m drycastle_pipeline.photo_capture list                  # what there is
-    uv run python -m drycastle_pipeline.photo_capture todo                  # buildings with captures and no detail yet
-    uv run python -m drycastle_pipeline.photo_capture set w123/0 w456       # a capture filed under the wrong building
+    uv run python -m drycastle_pipeline.photos.photo_capture list                  # what there is
+    uv run python -m drycastle_pipeline.photos.photo_capture todo                  # buildings with captures and no detail yet
+    uv run python -m drycastle_pipeline.photos.photo_capture set w123/0 w456       # a capture filed under the wrong building
 
 Then: "run photo-to-building on w378920410", or on everything `todo` lists.
 
@@ -52,7 +52,7 @@ window holes and breakable panes. Built to be cheap: two commands, two pictures 
 
 After a batch: `make rules && make export` once. Nothing is committed unless you ask.
 
-The sheet's format is in the docstring of `landmark_photo.py`; `--dry` fits and draws without writing.
+The sheet's format is in the docstring of `photos/landmark_photo.py`; `--dry` fits and draws without writing.
 
 The single commands still exist (`grid`, `fit`, `measure`, `sample`, `overlay`; `landmark_tools footprint`, `render`,
 `near`) for looking closer.
@@ -82,7 +82,7 @@ to 11 px and eaves 0.6 m apart between two captures; on the grids cut to the bui
 ## Special buildings
 
 Lean-to or split roofs, two buildings sharing a wall, a hollow part, an L-shape: `LANDMARK.md` in the skill folder, the
-long way. It writes a Python module on `landmark_kit` (reference: `garage.py`, ADR 0027) and costs several times more.
+long way. It writes a Python module on `landmark_kit` (reference: `buildings/landmarks/garage.py`, ADR 0027) and costs several times more.
 Interiors, doors that open and parked vehicles are separate work on top of that.
 
 ## Limits
@@ -95,7 +95,7 @@ Interiors, doors that open and parked vehicles are separate work on top of that.
 ## Files
 
 - `.claude/skills/photo-to-building/`: `SKILL.md` (the short flow), `LANDMARK.md` and the two templates (the long way).
-- `pipeline/src/drycastle_pipeline/photo_capture.py`: the capture key, the picture and camera of the tab, list/todo/set.
-- `landmark_photo.py`: prep, apply; grid, fit, measure, sample, overlay.
-- `landmark_tools.py`: footprint, render, near. `landmark_kit.py`: walls, windows, roofs for landmarks.
+- `pipeline/src/drycastle_pipeline/photos/photo_capture.py`: the capture key, the picture and camera of the tab, list/todo/set.
+- `photos/landmark_photo.py`: prep, apply; grid, fit, measure, sample, overlay.
+- `photos/landmark_tools.py`: footprint, render, near. `buildings/landmarks/kit.py`: walls, windows, roofs for landmarks.
 - Done with it so far: `config/buildings/w378920410.yaml` (G-0377, one Street View photo).

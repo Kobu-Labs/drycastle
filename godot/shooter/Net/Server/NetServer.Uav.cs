@@ -1,7 +1,9 @@
-using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Flight;
+using Drycastle.ShooterCore.Killstreaks.Uav;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The UAV on the server (issue #121). <see cref="UavStreak"/> decides when pulses go out; this file supplies the living

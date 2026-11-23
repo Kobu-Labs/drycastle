@@ -1,0 +1,199 @@
+using System.Globalization;
+using System.Text;
+using Godot;
+using Drycastle.Shooter.Characters;
+using Drycastle.Shooter.Weapons;
+
+namespace Drycastle.Shooter.Dev;
+
+/// <summary>
+/// Client frame measurement on the real map (perf investigation R1-R6): <c>--role client --offline --perf-route --perf-out DIR</c>. After a warm-up
+/// (first-use hitches are logged apart) the camera visits <c>--perf-views</c> viewpoints (spawn points spread over the map, four headings each, standing
+/// eye height) for <c>--perf-dwell</c> seconds each, and every frame records its time, draw calls, primitives, objects, CPU and GPU render time.
+/// Variants: <c>--perf-msaa 0|2|4|8</c>, <c>--perf-noshadow</c>, <c>--perf-shadow-dist M</c>, <c>--perf-vsync</c> (off by default for measurement).
+/// Bench: <c>--perf-blasts N</c> spawns N rocket explosions a second at 20-250 m around the camera during the measured views (a gunship gunner is about 7 a second).
+/// Writes DIR/route-frames.csv and DIR/route-summary.json, then quits. Measurement only.
+/// </summary>
+public partial class PerfRoute : Node
+{
+    public Player Player = null!;
+    public Drycastle.MapLoader.MapLoader Map = null!;
+    public string OutDir = "";
+    public int Views = 96, Msaa = -1;
+    public double Dwell = 2.0, Settle = 0.6;
+    public bool NoShadow, Vsync;
+    public float ShadowDist = -1;
+    public float BlastRate;
+    public string Tag = "";
+    /// <summary>--perf-hide a,b: parts of the picture not drawn, to price them by what the frame costs without: trees (the tree packs), meadow, clutter, crops, objects, terrain (the chunks' own meshes: ground, buildings).</summary>
+    public string Hide = "";
+    /// <summary>--perf-noglow, --perf-nofog, --perf-scale F (the 3D picture drawn at F of the resolution: what the pixels cost against what the geometry costs).</summary>
+    public bool NoGlow, NoFog;
+    public float Scale = -1;
+    public List<Vector3> Anchors = new(); // --perf-anchors "x,y,z;x,y,z" (Godot axes): the viewpoints, e.g. deep in a forest, where no spawn point is
+    double _blastAcc;
+    readonly Random _rng = new(7);
+
+    record struct Sample(int View, double T, double Ms, double Draws, double Prims, double Objects, double CpuMs, double GpuMs, double Nodes, double PackTiles, double PackDraws, double PackInstances, double PackTris, double PackObjects, double PackUnder);
+
+    readonly List<Sample> _warm = new(), _s = new();
+    readonly List<Vector3> _anchors = new();
+    int _frame, _view = -1;
+    double _viewT;
+    ulong _startMs;
+    Rid _vp;
+    bool _applied;
+    double _warmSecs = 6;
+    double _tWarm;
+
+    public override void _Ready()
+    {
+        _startMs = Time.GetTicksMsec();
+        var sp = Map.SpawnPoints.Select(s => s.Position).OrderBy(p => p.X + p.Z * 0.37f).ToList();
+        var n = Math.Max(1, Views / 4);
+        if (Anchors.Count > 0) _anchors.AddRange(Anchors); // given viewpoints (--perf-anchors) instead of the spawn points
+        else for (var i = 0; i < n; i++) _anchors.Add(sp[Math.Min(sp.Count - 1, (int)((i + 0.5) * sp.Count / n))]);
+        _vp = GetViewport().GetViewportRid();
+        RenderingServer.ViewportSetMeasureRenderTime(_vp, true);
+    }
+
+    void Apply()
+    {
+        _applied = true;
+        DisplayServer.WindowSetVsyncMode(Vsync ? DisplayServer.VSyncMode.Enabled : DisplayServer.VSyncMode.Disabled);
+        Engine.MaxFps = 0;
+        if (Msaa >= 0) GetTree().Root.Msaa3D = Msaa switch { 2 => Viewport.Msaa.Msaa2X, 4 => Viewport.Msaa.Msaa4X, 8 => Viewport.Msaa.Msaa8X, _ => Viewport.Msaa.Disabled };
+        if (Scale > 0) GetTree().Root.Scaling3DScale = Scale;
+        foreach (var we in GetTree().Root.FindChildren("*", "WorldEnvironment", true, false).OfType<WorldEnvironment>())
+        {
+            if (NoGlow && we.Environment != null) we.Environment.GlowEnabled = false;
+            if (NoFog && we.Environment != null) we.Environment.FogEnabled = false;
+        }
+        HideParts();
+        foreach (var l in GetTree().Root.FindChildren("*", "DirectionalLight3D", true, false).OfType<DirectionalLight3D>())
+        {
+            if (NoShadow) l.ShadowEnabled = false;
+            if (ShadowDist > 0) l.DirectionalShadowMaxDistance = ShadowDist;
+        }
+    }
+
+    int _hidden;
+    /// <summary>Hides the parts named by <see cref="Hide"/>. Again at every view: tiles and cells are streamed in as the camera moves.</summary>
+    void HideParts()
+    {
+        if (Hide.Length == 0) return;
+        var parts = Hide.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        var n = 0;
+        void Off(Node? node) { if (node is Node3D v && v.Visible) { v.Visible = false; n++; } }
+        foreach (var part in parts)
+            switch (part)
+            {
+                case "trees": Off(Map.Root.FindChild("PackTrees", true, false)); break;
+                case "meadow": Off(Map.Root.FindChild("MeadowClutter", true, false)); break;
+                case "objects": Off(Map.Root.FindChild("Objects", true, false)); break;
+                case "clutter": foreach (var c in Map.Root.FindChildren("clutter_*", "MultiMeshInstance3D", true, false)) Off(c); break;
+                case "crops": foreach (var c in Map.Root.FindChildren("crop_*", "MultiMeshInstance3D", true, false)) Off(c); break;
+                case "terrain": foreach (var c in Map.Root.GetChildren()) if (c.Name.ToString().StartsWith("chunk_") && c.GetChildCount() > 0) Off(c.GetChild(0)); break;
+                default: GD.PrintErr($"perf route: unknown part to hide: {part}"); break;
+            }
+        _hidden += n;
+    }
+
+    Sample Take(int view, double dt)
+    {
+        double M(Performance.Monitor m) => Performance.GetMonitor(m);
+        var pack = Map.PackTreeDrawn; // pack tree counters (all 0 without pack trees), next to the draw calls they cost
+        return new Sample(view, Time.GetTicksMsec() / 1000.0, dt * 1000, M(Performance.Monitor.RenderTotalDrawCallsInFrame), M(Performance.Monitor.RenderTotalPrimitivesInFrame),
+            M(Performance.Monitor.RenderTotalObjectsInFrame), RenderingServer.ViewportGetMeasuredRenderTimeCpu(_vp), RenderingServer.ViewportGetMeasuredRenderTimeGpu(_vp), M(Performance.Monitor.ObjectNodeCount),
+            pack.Tiles, pack.Draws, pack.Instances, pack.Triangles, pack.Objects, pack.Undergrowth);
+    }
+
+    public override void _Process(double delta)
+    {
+        _frame++;
+        if (!_applied && _frame > 2) Apply();
+        if (_view < 0)
+        {
+            _tWarm += delta;
+            _warm.Add(Take(-1, delta));
+            if (_tWarm < _warmSecs) return;
+            _view = 0; _viewT = 0; Goto(0);
+            return;
+        }
+        _viewT += delta;
+        if (_viewT >= Settle) _s.Add(Take(_view, delta));
+        SpawnBlasts(delta);
+        if (_viewT < Settle + Dwell) return;
+        _view++; _viewT = 0;
+        if (_view >= _anchors.Count * 4) { Finish(); return; }
+        Goto(_view);
+    }
+
+    void SpawnBlasts(double dt)
+    {
+        if (BlastRate <= 0) return;
+        _blastAcc += dt * BlastRate;
+        var world = Player.GetParent<Node3D>();
+        while (_blastAcc >= 1)
+        {
+            _blastAcc -= 1;
+            var ang = _rng.NextDouble() * Math.PI * 2;
+            var d = 20 + _rng.NextDouble() * 230;
+            var at = Player.GlobalPosition + new Vector3((float)(Math.Cos(ang) * d), 0, (float)(Math.Sin(ang) * d));
+            RocketFx.Explode(world, at, 3.5f);
+        }
+    }
+
+    void Goto(int v)
+    {
+        var a = _anchors[v / 4];
+        HideParts();
+        Player.Teleport(a + Vector3.Up * 0.1f);
+        Player.Yaw = (v % 4) * Mathf.Pi / 2;
+        Player.Pitch = 0;
+    }
+
+    static double P(List<double> xs, double p)
+    {
+        if (xs.Count == 0) return 0;
+        xs.Sort();
+        return xs[Math.Min(xs.Count - 1, Math.Max(0, (int)Math.Ceiling(p / 100 * xs.Count) - 1))];
+    }
+
+    static Dictionary<string, double> Stats(List<double> xs) => new()
+    {
+        ["n"] = xs.Count, ["mean"] = xs.Count == 0 ? 0 : xs.Average(), ["p50"] = P(xs.ToList(), 50), ["p90"] = P(xs.ToList(), 90), ["p95"] = P(xs.ToList(), 95), ["p99"] = P(xs.ToList(), 99), ["max"] = xs.Count == 0 ? 0 : xs.Max(),
+    };
+
+    void Finish()
+    {
+        Directory.CreateDirectory(OutDir);
+        var sb = new StringBuilder("view,t,frame_ms,draws,prims,objects,render_cpu_ms,render_gpu_ms,nodes,pack_tiles,pack_draws,pack_instances,pack_triangles,pack_objects,pack_undergrowth\n");
+        foreach (var s in _warm.Concat(_s))
+            sb.Append(s.View).Append(',').Append(s.T.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.Ms.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.Draws).Append(',').Append(s.Prims)
+              .Append(',').Append(s.Objects).Append(',').Append(s.CpuMs.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.GpuMs.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(s.Nodes).Append(',').Append(s.PackTiles).Append(',').Append(s.PackDraws).Append(',').Append(s.PackInstances).Append(',').Append(s.PackTris).Append(',').Append(s.PackObjects).Append(',').Append(s.PackUnder).Append('\n');
+        File.WriteAllText(Path.Combine(OutDir, "route-frames.csv"), sb.ToString());
+        var perView = _s.GroupBy(x => x.View).Select(g => new { v = g.Key, draws = g.Average(x => x.Draws), ms = g.Average(x => x.Ms), prims = g.Average(x => x.Prims), p99 = P(g.Select(x => x.Ms).ToList(), 99) }).ToList();
+        var warmMs = _warm.Select(x => x.Ms).ToList();
+        var res = new Dictionary<string, object>
+        {
+            ["tag"] = Tag, ["hide"] = Hide, ["hidden_nodes"] = _hidden, ["scale_3d"] = GetTree().Root.Scaling3DScale, ["views"] = _anchors.Count * 4, ["frames_measured"] = _s.Count, ["renderer"] = ProjectSettings.GetSetting("rendering/renderer/rendering_method").ToString(),
+            ["adapter"] = RenderingServer.GetVideoAdapterName(), ["resolution"] = $"{DisplayServer.WindowGetSize().X}x{DisplayServer.WindowGetSize().Y}",
+            ["msaa"] = GetTree().Root.Msaa3D.ToString(), ["vsync"] = DisplayServer.WindowGetVsyncMode().ToString(),
+            ["ms_to_route_ready"] = _startMs, ["frame_ms"] = Stats(_s.Select(x => x.Ms).ToList()), ["fps_mean"] = 1000.0 / Math.Max(0.001, _s.Count == 0 ? 1 : _s.Average(x => x.Ms)),
+            ["draws"] = Stats(_s.Select(x => x.Draws).ToList()), ["prims"] = Stats(_s.Select(x => x.Prims).ToList()), ["objects"] = Stats(_s.Select(x => x.Objects).ToList()),
+            ["render_cpu_ms"] = Stats(_s.Select(x => x.CpuMs).ToList()), ["render_gpu_ms"] = Stats(_s.Select(x => x.GpuMs).ToList()),
+            ["per_view_mean_draws"] = Stats(perView.Select(x => x.draws).ToList()), ["per_view_mean_frame_ms"] = Stats(perView.Select(x => x.ms).ToList()),
+            ["worst_views_by_draws"] = perView.OrderByDescending(x => x.draws).Take(5).Select(x => new { view = x.v, draws = x.draws, frame_ms = x.ms }).ToList(),
+            ["warmup_frame_ms"] = Stats(warmMs), ["warmup_frames_over_33ms"] = warmMs.Count(x => x > 33.3), ["warmup_frames_over_100ms"] = warmMs.Count(x => x > 100), ["warmup_first_frames_ms"] = warmMs.Take(8).ToList(),
+            ["frames_over_16_7ms"] = _s.Count(x => x.Ms > 16.7), ["frames_over_33ms"] = _s.Count(x => x.Ms > 33.3), ["frames_over_50ms"] = _s.Count(x => x.Ms > 50),
+            ["pack_trees"] = new { active = Map.PackTreesActive, tiles = Stats(_s.Select(x => x.PackTiles).ToList()), draws = Stats(_s.Select(x => x.PackDraws).ToList()), instances = Stats(_s.Select(x => x.PackInstances).ToList()), triangles = Stats(_s.Select(x => x.PackTris).ToList()), objects = Stats(_s.Select(x => x.PackObjects).ToList()), undergrowth = Stats(_s.Select(x => x.PackUnder).ToList()) },
+            ["nodes"] = _s.Count == 0 ? 0 : _s[^1].Nodes, ["mem_static_mb"] = Performance.GetMonitor(Performance.Monitor.MemoryStatic) / 1048576.0, ["video_mem_mb"] = Performance.GetMonitor(Performance.Monitor.RenderVideoMemUsed) / 1048576.0,
+            ["textures_mb"] = Performance.GetMonitor(Performance.Monitor.RenderTextureMemUsed) / 1048576.0, ["buffers_mb"] = Performance.GetMonitor(Performance.Monitor.RenderBufferMemUsed) / 1048576.0,
+            ["gc_heap_mb"] = GC.GetTotalMemory(false) / 1048576.0, ["gc_allocated_mb"] = GC.GetTotalAllocatedBytes() / 1048576.0, ["gc_live_mb"] = GC.GetTotalMemory(true) / 1048576.0, ["gc_gen0"] = GC.CollectionCount(0), ["gc_gen1"] = GC.CollectionCount(1), ["gc_gen2"] = GC.CollectionCount(2),
+        };
+        File.WriteAllText(Path.Combine(OutDir, "route-summary.json"), System.Text.Json.JsonSerializer.Serialize(res, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        GD.Print("PERF_ROUTE_DONE");
+        GetTree().Quit(0);
+    }
+}

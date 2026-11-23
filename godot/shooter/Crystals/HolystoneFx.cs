@@ -1,6 +1,7 @@
 using Godot;
+using Drycastle.Shooter.Demon;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Holystone (crystals.md): white-gold translucent crystals (<c>shaders/crystal_quartz.gdshader</c>) with a slow warm glow and light, a thin golden halo over the tallest tip, a faint shaft of light from

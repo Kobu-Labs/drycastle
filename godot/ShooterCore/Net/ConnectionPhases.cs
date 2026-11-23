@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Net;
 
 /// <summary>A connection's life on the server, from the first packet to the join. A bot starts at Joined.</summary>
 public enum SessionPhase

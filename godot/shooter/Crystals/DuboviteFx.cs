@@ -1,6 +1,7 @@
 using Godot;
+using Drycastle.Shooter.Demon;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Dubovite (crystals.md): the stone of the old oaks. Bark-brown crystals with a wood grain (<c>shaders/crystal_veined.gdshader</c>, <c>grain</c>) on a mossy rock, a dappled light that wanders between

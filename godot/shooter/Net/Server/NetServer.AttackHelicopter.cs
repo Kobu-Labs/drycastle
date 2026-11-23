@@ -1,8 +1,10 @@
-using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Flight;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The attack helicopter on the server (killstreak "attack_helicopter", ticket #126): the streak's adapter to the server. It

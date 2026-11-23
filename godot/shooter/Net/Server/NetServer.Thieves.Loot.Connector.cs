@@ -1,8 +1,9 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The connector kind of Loot on the server (docs/events/thieves/07): the poles of the map that carry wires as the pure <see cref="ConnectorSource"/> sees them (<see cref="ServerPoles"/>), and the

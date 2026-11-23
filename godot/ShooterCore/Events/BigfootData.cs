@@ -1,4 +1,10 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>
 /// bigfoot.json, schema version 1 (issue #264): every number of the Bigfoot event. Lengths are metres, speeds metres per second, angles degrees,
@@ -8,7 +14,7 @@ public sealed class BigfootFile : IVersioned
 {
     public int Version { get; set; }
 
-    /// <summary>The model (scripts/make_bigfoot_model.py: skinned, its own clips, see <see cref="BigfootRules.Clips"/>), relative to the asset library (assets/).</summary>
+    /// <summary>The model (scripts/models/make_bigfoot_model.py: skinned, its own clips, see <see cref="BigfootRules.Clips"/>), relative to the asset library (assets/).</summary>
     public string Model { get; set; } = "drycastle-generated-models/bigfoot.glb";
     /// <summary>Uniform scale that brings the model, as it imports, to <see cref="HeightM"/>. The generated one is built at that height.</summary>
     public float ModelScale { get; set; } = 1f;
@@ -150,7 +156,7 @@ public sealed class BigfootMovement
     public float WalkSpeed { get; set; } = 3.4f;
     public float RunSpeed { get; set; } = 6.8f;
     /// <summary>
-    /// The ground one loop of the model's Walk and Run clips covers (scripts/make_bigfoot_model.py prints them). The client plays the clip at
+    /// The ground one loop of the model's Walk and Run clips covers (scripts/models/make_bigfoot_model.py prints them). The client plays the clip at
     /// ground speed / (stride / clip length), so the feet do not slide whatever the speed is tuned to.
     /// </summary>
     public float WalkStrideM { get; set; } = 2.8f;
@@ -280,7 +286,7 @@ public sealed class BigfootReward
     /// <summary>The body lies where it fell (the death clip) this long, then it is gone and the footsteps begin.</summary>
     public float DeathSeconds { get; set; } = 8;
     /// <summary>
-    /// Where the head lies on the dead body, in the model's frame (x to its right, y up, z behind it; scripts/make_bigfoot_model.py prints it). The corpse
+    /// Where the head lies on the dead body, in the model's frame (x to its right, y up, z behind it; scripts/models/make_bigfoot_model.py prints it). The corpse
     /// is over five metres long and is looted for its head, so the reach is measured from here (<see cref="CorpseRules.ReachPoint"/>), not from its feet.
     /// </summary>
     public float[] CorpseHeadM { get; set; } = { -0.22f, 1.03f, 2.88f };
@@ -344,7 +350,7 @@ public static class BigfootRules
         (byte)((byte)act | (hitToggle ? HitToggle : 0) | (Math.Clamp(phase, 0, 2) << PhaseShift) | (enraged ? Enraged : 0));
 
     /// <summary>
-    /// The clips the model has (scripts/make_bigfoot_model.py CLIPS): one per act, a flinch and a roar. The wind-ups end on their blow (the log leaves, the
+    /// The clips the model has (scripts/models/make_bigfoot_model.py CLIPS): one per act, a flinch and a roar. The wind-ups end on their blow (the log leaves, the
     /// foot lands, the vehicle is overhead at three quarters), so a client stretches each over its act's time.
     /// </summary>
     public const string ClipIdle = "Idle", ClipWalk = "Walk", ClipRun = "Run", ClipHit = "Hit", ClipRoar = "Roar", ClipDeath = "Death",

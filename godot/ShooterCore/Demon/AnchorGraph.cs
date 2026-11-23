@@ -1,7 +1,9 @@
 using System.Numerics;
 using System.Text.Json;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Data;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Demon;
 
 /// <summary>A place the demon can hold on to: on a wall or the ceiling, with the surface normal (pointing into the room) and the anchors it can crawl to. Godot axes (x east, y up, z = -north).</summary>
 public sealed record Anchor(int Id, Vector3 Pos, Vector3 Normal, int[] Links);

@@ -1,9 +1,14 @@
 using Godot;
-using Drycastle.ShooterCore;
-using Drycastle.ShooterServer.Persistence;
-using NVec3 = System.Numerics.Vector3;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// A player's input on the server: each tick every joined player (bots included) takes the inputs queued for it. <see cref="ApplyInput"/> decides what an input is for (dead, held, seated, driving, walking),

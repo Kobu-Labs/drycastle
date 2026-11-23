@@ -1,7 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Diagnostics;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The numbers of the "server: stats" and "server: prof" lines, sent every report period to a metrics store when <c>DRYCASTLE_METRICS_URL</c> is set

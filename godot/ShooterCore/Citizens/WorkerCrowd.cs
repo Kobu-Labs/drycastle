@@ -1,6 +1,11 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Buildings;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.RozhlasFeed;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Citizens;
 
 /// <summary>Tries each citizen hit handler in turn (the Mass crowd, the Urad workers): the hit goes to the one that knows the id.</summary>
 public sealed class CitizenHitRouter : ICitizenHits

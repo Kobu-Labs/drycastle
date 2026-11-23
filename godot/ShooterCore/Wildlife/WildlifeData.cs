@@ -1,4 +1,9 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Mining;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Scenery;
+
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>How a species gathers into herds (wildlife.json): its animals are split into groups of <see cref="Min"/> to <see cref="Max"/> that stay together (<see cref="Herd"/>).</summary>
 public sealed class HerdRules

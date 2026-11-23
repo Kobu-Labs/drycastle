@@ -1,8 +1,14 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Bots;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The Hunter's Log on the server (#336, docs/hunters-log.md). A player's kill of a weighed wild animal, and each credited player of a won Bigfoot

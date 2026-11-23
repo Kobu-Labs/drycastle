@@ -1,7 +1,15 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Progression on the server (ticket #117): the active loadout applied at each spawn (perk and hotbar), XP from match

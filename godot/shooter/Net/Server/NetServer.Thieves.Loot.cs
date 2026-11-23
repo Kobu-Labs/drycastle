@@ -1,8 +1,11 @@
 using Godot;
-using Drycastle.ShooterCore;
-using NVec3 = System.Numerics.Vector3;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The Loot of the Thieves event on the server (GLOSSARY "Loot"; docs/events/thieves/04): the kinds of Loot, the Loot that lies on the ground and the player's hold to send it back.

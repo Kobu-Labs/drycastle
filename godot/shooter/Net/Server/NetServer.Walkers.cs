@@ -1,8 +1,10 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Net.Bots;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Vehicles;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// What a navmesh walker meets on its way (ADR 0028, the Walker row of <see cref="CollisionRules"/>: citizens, the Gang, a Raid's crew; bots are bodies and the physics stops them). The mesh holds terrain, buildings,

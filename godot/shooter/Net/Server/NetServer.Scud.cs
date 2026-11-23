@@ -1,8 +1,18 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Scud;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
+using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The Scud truck on the server (GLOSSARY "Scud truck", "Launcher", "Scud missile", "Scud blast"). Each truck (a vehicle whose type has a vehicles.json <c>launcher</c> block) has a

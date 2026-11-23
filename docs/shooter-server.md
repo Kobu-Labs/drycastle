@@ -96,7 +96,7 @@ The Makefile dev targets turn it on: `shooter-server` passes `--unlock-all`, and
 set it, and nothing in the export does.
 
 The clock flags are read in `Shooter.ServerClock` (`godot/shooter/Shooter.cs`) and resolved by `EnvironmentConfig.ToClock`
-(`godot/ShooterCore/Environment/EnvironmentConfig.cs`). The clock is owned by the server and sent to each client in the
+(`godot/ShooterCore/Scenery/EnvironmentConfig.cs`). The clock is owned by the server and sent to each client in the
 welcome message (protocol 3 and later), so clients never need the flags.
 Example: `./drycastle-server.x86_64 --headless -- --role server --port 27015 --map /srv/drycastle/map --db /srv/drycastle/shooter.db --time 22:00 --freeze-time`.
 
@@ -157,7 +157,7 @@ files below is missing.
 | `glass.json` | glass panes: hit points, crack stages, blast damage, whether a shattered vehicle pane exposes the riders, the shatter animation (see `docs/glass.md`) | `GlassConfig.cs` |
 | `match.json` | round rules (see the match options table above) | `MatchData.cs` |
 | `sounds.json` | sound ids and file names (validated against `assets/` by the server) | `SoundData.cs` |
-| `rozhlas_voice.json` | the announcement's voice chain (ffmpeg filters in order, their values, the echo tap ranges); read by the bake (`scripts/make_rozhlas.py`) and by the live feed, so they cannot drift | `RozhlasVoice.cs`, `RozhlasFeed.cs` |
+| `rozhlas_voice.json` | the announcement's voice chain (ffmpeg filters in order, their values, the echo tap ranges); read by the bake (`scripts/sounds/make_rozhlas.py`) and by the live feed, so they cannot drift | `RozhlasVoice.cs`, `RozhlasFeed.cs` |
 
 Sounds, models and textures are not in the `.pck`; they are read from `assets/` on disk (section 2).
 Shaders (`godot/shooter/shaders/*.gdshader`) are compiled by Godot from the project resources, so they are in the export
@@ -195,10 +195,12 @@ each hook in the tick, never a new partial of `NetServer`.
 | Class | Folder | What |
 |---|---|---|
 | `SceneryServer` | `Scenery/` | shootable pole lamps and road sign plates (ADR 0037, 0039) |
-| `MineralsServer` | `Minerals/` | mineral nodes and finds (#401) |
+| `MineralsServer` | `MineralLog/` | mineral nodes and finds (#401) |
 | `IntelServer` | `Intel/` | the intel board and its announcements |
-| `GarageServer` | `Garage/` | the bus garage's doors and parked vehicle |
-| `RozhlasServer`, `UradServer`, `RozhlasFeedServer`, `RozhlasSetServer` | `Rozhlas/` | the village loudspeaker, the Obecny Urad (workers, door), the live feed with the combat mix, the dictation set |
+| `GarageServer` | `BusGarage/` | the bus garage's doors and parked vehicle |
+| `RozhlasServer`, `UradServer`, `RozhlasFeedServer`, `RozhlasSetServer` | `VillageRadio/` | the village loudspeaker, the Obecny Urad (workers, door), the live feed with the combat mix, the dictation set |
+
+Namespaces follow folders (`Drycastle.Shooter.Net.Server.BusGarage`, ...); a folder is named so that it does not equal a type name (`Garage`, `Minerals`, `Rozhlas` are types).
 
 `ServerClient` (one connection: human or bot) and `PlayerProfile` are plain state in `ServerClient.cs`; `SmokeStats` holds what the smoke tests count and their verdicts.
 

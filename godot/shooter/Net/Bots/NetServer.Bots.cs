@@ -1,8 +1,16 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Net.Bots;
+using Drycastle.ShooterCore.Bots;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Bots on the server (#214): players without a connection. A bot is a <see cref="ServerClient"/> with no peer and a

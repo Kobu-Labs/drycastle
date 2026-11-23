@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Minimap;
 
 /// <summary>
 /// Godot-free zoom and pan of the tactical map. The view is a window onto the square sheet: <c>zoom</c> (1 = the whole sheet) and the

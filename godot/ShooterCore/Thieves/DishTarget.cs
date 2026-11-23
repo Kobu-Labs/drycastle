@@ -1,7 +1,9 @@
 using System.Numerics;
 using System.Text;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// The <c>loot.dish</c> sub-section of thieves.json. A dish is a placed object (<see cref="DishSource.AssetId"/>) on a house wall; the Thief climbs to it from a base on the ground in front of
@@ -61,7 +63,7 @@ public interface IDishWorld
 /// </summary>
 public sealed class DishSource : IStealSource
 {
-    /// <summary>The asset of a dish: the generated model (scripts/make_satellite_dish_model.py).</summary>
+    /// <summary>The asset of a dish: the generated model (scripts/models/make_satellite_dish_model.py).</summary>
     public const string AssetId = "pack:drycastle-generated-models/satellite_dish";
 
     readonly DishLootConfig _cfg;

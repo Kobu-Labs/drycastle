@@ -1,6 +1,7 @@
 using Godot;
+using Drycastle.Shooter.Demon;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Pheonixite (crystals.md): left behind when a pheonix dies. The crystal is a thin skin of glass with fire burning inside (<c>shaders/crystal_fire.gdshader</c>), on scorched rock; a flickering red

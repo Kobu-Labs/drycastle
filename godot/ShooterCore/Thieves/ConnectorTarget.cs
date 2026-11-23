@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Data;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// The <c>loot.connector</c> sub-section of thieves.json (docs/events/thieves/07). A pole is robbed again after <see cref="PoleCooldownS"/>; at the top of the climb a Thief is electrocuted with

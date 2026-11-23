@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Match;
 
 /// <summary>Why a squad request did nothing (<see cref="MatchSim.CreateSquad"/>, <see cref="MatchSim.JoinSquad"/>, <see cref="MatchSim.LeaveSquad"/>).</summary>
 public enum SquadResult : byte

@@ -1,7 +1,10 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Thieves;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The Thieves event on the server (GLOSSARY "Thieves event", "Raid"; the design is in docs/events/README.md, the tickets in docs/events/thieves/). An admin starts it

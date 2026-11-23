@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Match;
+
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// Who took part in the Thieves event (GLOSSARY "Thieves event"; docs/events/thieves/10), pure. A player is credited for landing a hit on a Gang member

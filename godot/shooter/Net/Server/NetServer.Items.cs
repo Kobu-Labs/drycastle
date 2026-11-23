@@ -1,8 +1,12 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Items on the server (issues #261, #267, ADR 0016 and 0018): what a player wears (<see cref="ServerClient.Worn"/>) and carries in the bag

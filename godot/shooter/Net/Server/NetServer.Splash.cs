@@ -1,8 +1,10 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The splash rule of ADR 0028 (the Splash row of <see cref="CollisionRules"/>): a blast hurts a target only along a clear line of sight, and a

@@ -1,6 +1,9 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Status;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Demon;
 
 /// <summary>What a hit counts as: the weapon kind decides the weight (<see cref="DemonHitWeights"/>). There is no headshot kind: no bonus.</summary>
 public enum DemonHitKind : byte { Bullet, Explosive, Vehicle }

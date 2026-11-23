@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// thieves.json section <c>audio</c> (docs/events/thieves/09): the numbers of the voice lines, the speaker and the songs. Lengths are metres, times seconds.

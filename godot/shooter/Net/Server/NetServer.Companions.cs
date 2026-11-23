@@ -1,8 +1,12 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Companions on the server (GLOSSARY "Companion", #488): one animal per player that stays with them (wire type 58), kept by a <see cref="CompanionKeeper"/>. The server only

@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Match;
+
+namespace Drycastle.ShooterCore.Progression;
 
 /// <summary>Why a player got XP (one per award line, so the post-match summary can list them).</summary>
 public enum XpReason { Kill, Headshot, Roadkill, Assist, StreakKill, MatchWin, MatchTop3, EventWin, GangKill }

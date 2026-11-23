@@ -1,7 +1,9 @@
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Scenery;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server.Scenery;
 
 /// <summary>
 /// Server side of the shootable street furniture: pole lamps (ADR 0037) and road sign plates (ADR 0039). The server owns the state of each (<see cref="BreakableLamps"/>,

@@ -1,8 +1,12 @@
 using Godot;
-using Drycastle.ShooterCore;
-using NVec3 = System.Numerics.Vector3;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// The Thieves event's reward on the server (docs/events/thieves/10, design "Reward"): the XP of everyone who took part, and the Gold chain a killed Gang boss leaves.

@@ -1,8 +1,13 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Net.Bots;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Match;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Citizens of the Holy Mass on the server: world entities (type 51) with a pure brain (<see cref="Citizen"/>), run by a

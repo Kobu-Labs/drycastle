@@ -1,8 +1,19 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Flight;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Minimap;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Waters;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>Server side of vehicles (#91, #92: car and motorcycle share it): spawning, enter/exit, driving from the driver's inputs, run-over, resets. A vehicle never despawns while abandoned (#294): it returns to its origin only when destroyed, or out of the world.</summary>
 public partial class NetServer

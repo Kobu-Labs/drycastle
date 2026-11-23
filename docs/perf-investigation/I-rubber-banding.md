@@ -90,7 +90,7 @@ Effect on the picture (arithmetic, not a pixel measurement): at 60 fps a correct
 
 The server tick estimate is a filtered offset: each snapshot gives a sample `tick / 30 - arrival`, and the offset moves by 1/8 of the difference (`RenderClock.Gain`). The drawn tick is `max(previous, (now + offset) * 30 - delay)`: when the estimate moves back (a late packet), the drawn tick holds and does not snap back. All four render sites (players, cars, aircraft, animals) call `RenderTickNow()`.
 
-Consequence: the entity holds still for the lateness beyond the buffer instead of moving back. Measured: backsteps 0 in every scenario; freeze draws 0 / 0 / 120 (clean / rtt100 / rtt200) in the 3-scenario run and 0 / 15 (clean / rtt100) in the final gate run, so the freeze count rises at rtt200 (75 before) while the backward jump disappears. That is the trade: a short freeze instead of a 2-tick snap. Unit tests in `godot/ShooterCore.Tests/RenderClockTests.cs` (4 tests: steady jittered arrivals advance at 30/s and never backwards; a 200 ms late packet holds and does not snap; the drawn tick re-joins the schedule; the first sample syncs).
+Consequence: the entity holds still for the lateness beyond the buffer instead of moving back. Measured: backsteps 0 in every scenario; freeze draws 0 / 0 / 120 (clean / rtt100 / rtt200) in the 3-scenario run and 0 / 15 (clean / rtt100) in the final gate run, so the freeze count rises at rtt200 (75 before) while the backward jump disappears. That is the trade: a short freeze instead of a 2-tick snap. Unit tests in `godot/ShooterCore.Tests/Net/RenderClockTests.cs` (4 tests: steady jittered arrivals advance at 30/s and never backwards; a 200 ms late packet holds and does not snap; the drawn tick re-joins the schedule; the first sample syncs).
 
 ### 3.3 Predicted vehicles fade yaw, pitch and roll (`NetClient.Drive.cs`, `NetClient.Flight.cs`)
 
@@ -188,7 +188,7 @@ Round 2 was asked for two things: fix the vertical corrections (the stale floor 
 
 **Mechanism.** A movement step reads two floor states. The step's own flag (`MoveState.OnFloor`, carried in the state and exact on replay) drives gravity and acceleration. Godot's internal `IsOnFloor()` (the body's last `MoveAndSlide`) drives the floor snap and the floor-aware slide inside `MoveAndSlide`. After `SetState` the body is put back at the acknowledged state, but its internal flag is still the one from its last move: the newest predicted step, one to three steps ahead. The first replayed step therefore runs `MoveAndSlide` with the newest step's flag, and the error propagates. Only the first replayed step differs; after it, the internal flag is the replay's own.
 
-**Parity probe (the gate).** `--move-parity` (`godot/shooter/MoveParity.cs`, headless, real village map, no server). A seeded walk with jumps (900 or 2400 steps) runs once from a settled spawn: that is the server model, every step following the one before it. Then 794 trials each rewind to the state after step k (`SetState`, as a reconcile does), replay steps k+1..k+20, and compare with the sequential state after k+20. The probe counts trials where the body's floor flag before the rewind differs from the step's flag.
+**Parity probe (the gate).** `--move-parity` (`godot/shooter/Dev/MoveParity.cs`, headless, real village map, no server). A seeded walk with jumps (900 or 2400 steps) runs once from a settled spawn: that is the server model, every step following the one before it. Then 794 trials each rewind to the state after step k (`SetState`, as a reconcile does), replay steps k+1..k+20, and compare with the sequential state after k+20. The probe counts trials where the body's floor flag before the rewind differs from the step's flag.
 
 | run (2400 steps, 794 trials) | floor flag mismatch | replays over 1 mm | over 5 mm | largest error |
 |---|---|---|---|---|
@@ -201,13 +201,13 @@ Plain-`SetState` counts vary between engine runs of the same seed (34 to 63 over
 
 Two ways of setting the flag were tried in the probe. A zero-velocity move did not set it in about 8 % of cases (279 of 303). A vertical move (down onto a grounded step's floor, up off an airborne one's) set it in every case (300 of 300 and 210 of 210), and the restored place and velocity are set again exactly after it.
 
-**The fix.** `Player.SetStateForReplay(MoveState)` (`godot/shooter/Player.cs`): `SetState`, and if the body's floor flag differs from the state's, the vertical probe move followed by `SetState` again. `NetClient.ReplayReconcile` calls it. Nothing else changes; the replayed steps are the same `Simulate` the server runs.
+**The fix.** `Player.SetStateForReplay(MoveState)` (`godot/shooter/Characters/Player.cs`): `SetState`, and if the body's floor flag differs from the state's, the vertical probe move followed by `SetState` again. `NetClient.ReplayReconcile` calls it. Nothing else changes; the replayed steps are the same `Simulate` the server runs.
 
 **Why not a pure unit test.** The parity gate has to run the engine: the floor flag that matters is Godot's internal state inside `MoveAndSlide`, and a pure model cannot reproduce it. The pure part of the question (does a replay reproduce the sequential run when the flags agree) is the same code path the probe exercises. The probe is therefore the gate, and it is kept in the repo as a tool.
 
 ### 8.2 Input starvation: measured, not a correction source, no fix
 
-**Test (pure, `godot/ShooterCore.Tests/StarvationTests.cs`, 4 tests, all pass).** A model of the server's queue (one input per tick, `CatchUpBudget`, the 8-input cap, the highest sequence received, three inputs per packet, every 25th packet dropped, so the server runs empty on that tick) runs the shared movement step against a client predicting every input at once. The check is the state after each acknowledged sequence on the server against the prediction for the same sequence.
+**Test (pure, `godot/ShooterCore.Tests/Movement/StarvationTests.cs`, 4 tests, all pass).** A model of the server's queue (one input per tick, `CatchUpBudget`, the 8-input cap, the highest sequence received, three inputs per packet, every 25th packet dropped, so the server runs empty on that tick) runs the shared movement step against a client predicting every input at once. The check is the state after each acknowledged sequence on the server against the prediction for the same sequence.
 
 - A starved server (empty queue on every 25th tick): the largest divergence at any acknowledged sequence is below 0.1 mm. Starvation does not create a correction.
 - No starvation: exact.

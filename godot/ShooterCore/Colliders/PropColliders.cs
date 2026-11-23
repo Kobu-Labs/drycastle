@@ -1,7 +1,8 @@
 using System.Numerics;
 using System.Text.Json;
+using Drycastle.ShooterCore.Thieves;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Colliders;
 
 /// <summary>
 /// Physics layers of the world. Solid world (players, vehicles and bullets stop on it) is layer 1; vehicles are layer 2 (as

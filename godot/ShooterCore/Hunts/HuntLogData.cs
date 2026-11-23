@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
+
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>
 /// The client's side of the Hunter's Log queries (docs/hunters-log.md "Queries"), Godot-free: the three requests, each with its <see cref="HuntLoader{T}"/>

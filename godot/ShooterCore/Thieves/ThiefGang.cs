@@ -1,6 +1,10 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>Hands out the hit ids of the Gang members (<see cref="GangRules.FirstHitId"/> up) so no two living members share one, whichever Raid they belong to.</summary>
 public sealed class GangHitIds

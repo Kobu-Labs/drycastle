@@ -9,7 +9,7 @@ Decisions were not grilled with the user; these are conservative defaults, easy 
   Cars, trucks and smaller keep the old 6.5 / 1.5 (flak truck about 8.1 / 2.0); the bus (half length 6.03) gets about 11.1 / 3.0.
   Helicopters keep their own `camera` block.
 - A ray from the focus point (vehicle origin lifted by `height`) to the wanted camera spot, world mask only (vehicles are a separate layer, the player body is excluded). On a hit the camera stops 0.4 m short of the hit, never closer than 1 m.
-- Smoothing: pulling in is instant (never show the inside of a wall); going back out eases at 8 m/s, so brushing past a tree does not jitter. Logic lives in `ShooterCore/ChaseCamera.cs` (unit tested).
+- Smoothing: pulling in is instant (never show the inside of a wall); going back out eases at 8 m/s, so brushing past a tree does not jitter. Logic lives in `ShooterCore/Vehicles/ChaseCamera.cs` (unit tested).
 
 ## Follow-ups
 - Speed-dependent distance or FOV for cars (helicopters already widen the FOV).

@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Minimap;
 
 /// <summary>
 /// The tracks vehicles leave in crop fields, as the two maps draw them (thin lines over the terrain): one polyline per stretch a vehicle crushed (the vehicle's centre line, a point every

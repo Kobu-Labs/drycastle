@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
+
+namespace Drycastle.ShooterCore.Demon;
 
 /// <summary>Where a client is in the demon's pounce as it sees it (the view of the server's marked / pinned / released). None: no one is marked or held.</summary>
 public enum PounceViewStage : byte { None, Wind, Pinned, Rising }
