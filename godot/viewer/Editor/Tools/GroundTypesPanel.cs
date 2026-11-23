@@ -402,7 +402,7 @@ public sealed class GroundTypesPanel
         if (_scrolledFor != sel.Name)
         {
             _scrolledFor = sel.Name;
-            if (!_tool.FocusPatch) _host.RevealInPanel(_title);
+            if (!_tool.FocusPatch) _host.Chrome.RevealInPanel(_title);
         }
     }
 

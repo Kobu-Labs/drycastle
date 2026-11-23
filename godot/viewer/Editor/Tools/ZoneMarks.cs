@@ -122,15 +122,15 @@ public sealed class ZoneMarks
     {
         if (_host.Tool != EditorTool.Zones || _marked.Count == 0 || _host.Map.OriginEpsg5514 == null)
         {
-            if (_outlineFor != null) { _outlineFor = null; _host.SetOutline(Outline, new(), EditorTheme.Danger, 0, 0); }
+            if (_outlineFor != null) { _outlineFor = null; _host.Outlines.Set(Outline, new(), EditorTheme.Danger, 0, 0); }
             return;
         }
         var key = (_host.Edits.Disk(), _version);
         if (_outlineFor is ValueTuple<Obj, int> was && ReferenceEquals(was.Item1, key.Item1) && was.Item2 == key.Item2) return;
         _outlineFor = key;
         var segs = new List<(Vector2, Vector2)>();
-        foreach (var z in Marked()) segs.AddRange(_host.RingSegs(z.Points, true));
-        _host.SetOutline(Outline, segs, EditorTheme.Danger, AreaSurfaces.Lift + 0.3f, 0.9f);
-        if (_host.OutlineNode(Outline)?.MaterialOverride is StandardMaterial3D m) { m.NoDepthTest = true; m.RenderPriority = 9; } // seen through obstacles, over the zone fill
+        foreach (var z in Marked()) segs.AddRange(_host.Picker.RingSegs(z.Points, true));
+        _host.Outlines.Set(Outline, segs, EditorTheme.Danger, AreaSurfaces.Lift + 0.3f, 0.9f);
+        if (_host.Outlines.Node(Outline)?.MaterialOverride is StandardMaterial3D m) { m.NoDepthTest = true; m.RenderPriority = 9; } // seen through obstacles, over the zone fill
     }
 }

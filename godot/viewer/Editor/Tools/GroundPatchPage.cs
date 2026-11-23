@@ -107,7 +107,7 @@ public sealed class GroundPatchPage
         if (sel != null && _scrolledFor != sel.Id)
         {
             _scrolledFor = sel.Id;
-            if (_tool.FocusPatch) _host.RevealInPanel(u.State);
+            if (_tool.FocusPatch) _host.Chrome.RevealInPanel(u.State);
         }
         else if (sel == null) _scrolledFor = "";
     }

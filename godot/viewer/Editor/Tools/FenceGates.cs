@@ -96,7 +96,7 @@ public sealed class FenceGates
     /// <summary>A left click while armed: the point on the ground under it picks the gate's place.</summary>
     public void LeftPress(Vector2 screen)
     {
-        if (_host.RayToGround(_host.FlyCam.ProjectRayOrigin(screen), _host.FlyCam.ProjectRayNormal(screen), out var gp)) Begin(gp);
+        if (_host.Picker.RayToGround(_host.FlyCam.ProjectRayOrigin(screen), _host.FlyCam.ProjectRayNormal(screen), out var gp)) Begin(gp);
         else _host.Say("click on the ground near the fence", true);
     }
 
@@ -144,7 +144,7 @@ public sealed class FenceGates
     {
         if (_start == null) return;
         var mouse = _host.GetViewport().GetMousePosition();
-        if (_host.RayToGround(_host.FlyCam.ProjectRayOrigin(mouse), _host.FlyCam.ProjectRayNormal(mouse), out var g)) Drag(g);
+        if (_host.Picker.RayToGround(_host.FlyCam.ProjectRayOrigin(mouse), _host.FlyCam.ProjectRayNormal(mouse), out var g)) Drag(g);
     }
 
     // ---- the fence boundary ----

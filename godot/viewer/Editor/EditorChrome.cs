@@ -5,26 +5,20 @@ using System.Linq;
 
 namespace Drycastle.Viewer.Editor;
 
-/// <summary>
-/// The editor's chrome, Blender/Photoshop style: a left rail of icon buttons (one per tool), and a sidebar that shows
-/// only the page of the active tool. Clicking the active tool again hides the sidebar. Built from the shared theme
-/// (EditorTheme); no per-control colours or font sizes.
-/// </summary>
 public enum EditorTool { None, Select, Group, Fence, Ground, Objects, Zones, Poles, View, Sketch }
 
-public partial class EditorMode
+/// <summary>
+/// The editor's chrome, Blender/Photoshop style: a left rail of icon buttons (one per tool), and a sidebar that shows
+/// only the page of the active tool. Clicking the active tool again hides the sidebar. Also the HUD line, the label beside the mouse,
+/// the status bar (the last message, the hint of the tool in use), the controls sheet and the place of the confirm dialog and palette.
+/// Built from the shared theme (EditorTheme); no per-control colours or font sizes. <see cref="EditorMode"/> owns what the controls do.
+/// </summary>
+public sealed class EditorChrome
 {
-    public EditorTool Tool { get; private set; } = EditorTool.None;
+    const float PanelWidth = 360f;
+    const float StatusHeight = 58f;
 
-    PanelContainer _rail = null!, _cheat = null!;
-    ScrollContainer _scroll = null!;
-    Label _panelTitle = null!;
-    VBoxContainer _editHead = null!, _editFoot = null!;
-    Label _groupCount = null!;
-    readonly Dictionary<EditorTool, VBoxContainer> _pages = new();
-    readonly Dictionary<EditorTool, Button> _railButtons = new();
-
-    static readonly (EditorTool tool, string icon, string name, Key key)[] Tools =
+    internal static readonly (EditorTool tool, string icon, string name, Key key)[] Tools =
     {
         (EditorTool.Select, "select", "Select", Key.Key1),
         (EditorTool.Group, "group", "Group", Key.Key2),
@@ -37,26 +31,41 @@ public partial class EditorMode
         (EditorTool.Sketch, "sketch", "Sketch", Key.Key9),
     };
 
-    const string CfgPath = "user://editor_ui.cfg";
+    readonly EditorMode _ed;
+    CanvasLayer _ui = null!;
+    PanelContainer _rail = null!, _panel = null!, _statusBar = null!, _cheat = null!;
+    ScrollContainer _scroll = null!;
+    Label _panelTitle = null!, _unsavedLabel = null!, _hudLabel = null!, _hoverLabel = null!, _statusLabel = null!, _hintLabel = null!;
+    VBoxContainer _editHead = null!, _editFoot = null!;
+    Button _btnUndo = null!, _btnRedo = null!; // the rail buttons
+    Label _undoInfo = null!;                   // top of the Objects page
+    readonly Dictionary<EditorTool, VBoxContainer> _pages = new();
+    readonly Dictionary<EditorTool, Button> _railButtons = new();
+    double _statusUntil;
 
-    void BuildUi()
+    public EditorChrome(EditorMode ed) => _ed = ed;
+
+    /// <summary>The whole editor UI is shown (the editor is open).</summary>
+    public bool Visible { get => _ui.Visible; set => _ui.Visible = value; }
+
+    public string StatusMessage { get; private set; } = "";
+
+    public void Build()
     {
         _ui = new CanvasLayer { Name = "EditorUi", Layer = 10, Visible = false };
-        AddChild(_ui);
+        _ed.AddChild(_ui);
         var root = new Control { Name = "Root", MouseFilter = Control.MouseFilterEnum.Ignore, Theme = EditorTheme.Build() };
         root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         _ui.AddChild(root);
 
-        Sketches.BuildTags(root);
+        _ed.Sketches.BuildTags(root);
         BuildRail(root);
         BuildHud(root);
         BuildSidebar(root);
         BuildStatusBar(root);
         BuildCheatSheet(root);
-        Confirm.Build(root);
-        Commands.Build(root);
-        LoadUiConfig();
-        SelectTool(Tool, save: false);
+        _ed.Confirm.Build(root);
+        _ed.Commands.Build(root);
     }
 
     // ---- rail ----
@@ -75,16 +84,16 @@ public partial class EditorMode
         {
             if (tool == EditorTool.View) col.AddChild(new HSeparator());
             var t = tool;
-            var b = Ui.IconBtn(icon, $"{name}  ({OS.GetKeycodeString(key)})", () => SelectTool(Tool == t ? EditorTool.None : t), toggle: true);
+            var b = Ui.IconBtn(icon, $"{name}  ({OS.GetKeycodeString(key)})", () => _ed.SelectTool(_ed.Tool == t ? EditorTool.None : t), toggle: true);
             _railButtons[tool] = b;
             col.AddChild(b);
         }
         col.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
-        _btnUndo = Ui.IconBtn("undo", "Undo  (Ctrl+Z)", () => Edits.Undo());
-        _btnRedo = Ui.IconBtn("redo", "Redo  (Ctrl+Y)", () => Edits.Redo());
+        _btnUndo = Ui.IconBtn("undo", "Undo  (Ctrl+Z)", () => _ed.Edits.Undo());
+        _btnRedo = Ui.IconBtn("redo", "Redo  (Ctrl+Y)", () => _ed.Edits.Redo());
         col.AddChild(_btnUndo);
         col.AddChild(_btnRedo);
-        col.AddChild(Ui.IconBtn("walk", "Drop to the ground here and walk  (F3)", WalkFromHere));
+        col.AddChild(Ui.IconBtn("walk", "Drop to the ground here and walk  (F3)", _ed.WalkFromHere));
         col.AddChild(Ui.IconBtn("help", "Controls  (F1)", ToggleCheatSheet));
     }
 
@@ -103,6 +112,16 @@ public partial class EditorMode
         root.AddChild(_hoverLabel);
     }
 
+    /// <summary>The label beside the mouse (a parcel, a zone, a cable target) shows this text.</summary>
+    public void ShowHoverText(string text, Vector2 mouse)
+    {
+        _hoverLabel.Text = text;
+        _hoverLabel.Position = mouse + new Vector2(16, 20);
+        _hoverLabel.Visible = true;
+    }
+
+    public void HideHoverText() => _hoverLabel.Visible = false;
+
     // ---- sidebar ----
 
     void BuildSidebar(Control root)
@@ -117,12 +136,12 @@ public partial class EditorMode
         var top = new HBoxContainer();
         _panelTitle = new Label { ThemeTypeVariation = "Header", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore };
         top.AddChild(_panelTitle);
-        top.AddChild(Ui.IconBtn("close", "Close the sidebar  (Esc)", () => SelectTool(EditorTool.None)));
+        top.AddChild(Ui.IconBtn("close", "Close the sidebar  (Esc)", () => _ed.SelectTool(EditorTool.None)));
         outer.AddChild(top);
         outer.AddChild(new HSeparator());
 
         _editHead = new VBoxContainer();
-        Fence.BuildHeader(_editHead);
+        _ed.Fence.BuildHeader(_editHead);
         _editHead.AddChild(new HSeparator());
         outer.AddChild(_editHead);
 
@@ -132,9 +151,7 @@ public partial class EditorMode
         _scroll.AddChild(box);
 
         _editFoot = new VBoxContainer();
-        MarkerRoot = new Node3D { Name = "EditorMarkers", Visible = false };
-        AddChild(MarkerRoot);
-        Fence.BuildFooter(_editFoot);
+        _ed.Fence.BuildFooter(_editFoot);
         var footSep = new HSeparator();
         _editFoot.AddChild(footSep);
         _editFoot.MoveChild(footSep, 0);
@@ -148,69 +165,64 @@ public partial class EditorMode
             return p;
         }
 
-        var sel = Page(EditorTool.Select);
-        _selLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
-        sel.AddChild(_selLabel);
-
-        var grp = Page(EditorTool.Group);
-        grp.AddChild(new Label { Text = "Marking parcels", ThemeTypeVariation = "Header" });
-        grp.AddChild(new Label
-        {
-            Text = "Click parcels in the 3D view to mark them (click a marked parcel again to unmark). Then group them: a group is one property with one fence around its outer edge.",
-            ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart,
-        });
-        _groupCount = new Label { ThemeTypeVariation = "Header" };
-        grp.AddChild(_groupCount);
-        _groupLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
-        grp.AddChild(_groupLabel);
-        _btnGroup = Ui.Btn("Group the marked parcels  (Enter)", GroupSelected);
-        _btnGroup.ThemeTypeVariation = "PrimaryButton";
-        grp.AddChild(_btnGroup);
-        grp.AddChild(new HSeparator());
-        grp.AddChild(new Label { Text = "Existing groups", ThemeTypeVariation = "Header" });
-        _btnMerge = Ui.Btn("Merge marked groups and parcels into one group", MergeGroups);
-        _btnMerge.TooltipText = "Mark parcels from two or more groups, or a group and loose parcels (also G). Everything goes into one new group; the fence they share is kept, else the first group's. Ctrl+Z undoes it.";
-        _btnAdd = Ui.Btn("Add the marked parcels to the group", AddSelectedToGroup);
-        _btnRemove = Ui.Btn("Take the marked parcels out of their group", RemoveSelectedFromGroup);
-        _btnDissolve = Ui.Btn("Dissolve the group", DissolveGroup);
-        foreach (var b in new[] { _btnMerge, _btnAdd, _btnRemove, _btnDissolve }) grp.AddChild(b);
-        grp.AddChild(new Label { Text = "Clear the marks with Esc.", ThemeTypeVariation = "Dim" });
-
-        Fence.BuildPage(Page(EditorTool.Fence));
+        _ed.Parcels.BuildSelect(Page(EditorTool.Select));
+        _ed.Parcels.BuildGroup(Page(EditorTool.Group));
+        _ed.Fence.BuildPage(Page(EditorTool.Fence));
         var objects = Page(EditorTool.Objects);
         _undoInfo = Ui.Note();
         objects.AddChild(_undoInfo);
-        Objects.BuildPage(objects);
-        Ground.BuildPage(Page(EditorTool.Ground));
-        Zones.BuildPage(Page(EditorTool.Zones));
-        Poles.BuildPage(Page(EditorTool.Poles));
+        _ed.Objects.BuildPage(objects);
+        _ed.Ground.BuildPage(Page(EditorTool.Ground));
+        _ed.Zones.BuildPage(Page(EditorTool.Zones));
+        _ed.Poles.BuildPage(Page(EditorTool.Poles));
         BuildViewPage(Page(EditorTool.View));
-        Sketches.BuildPage(Page(EditorTool.Sketch));
+        _ed.Sketches.BuildPage(Page(EditorTool.Sketch));
     }
 
     void BuildViewPage(VBoxContainer page)
     {
-        Camera.BuildSpeedSection(page);
+        _ed.Camera.BuildSpeedSection(page);
 
         page.AddChild(new HSeparator());
         page.AddChild(new Label { Text = "Camera", ThemeTypeVariation = "Header" });
-        page.AddChild(Ui.Btn("Top-down view (T)", ToggleTopDown));
+        page.AddChild(Ui.Btn("Top-down view (T)", _ed.ToggleTopDown));
 
         page.AddChild(new HSeparator());
         page.AddChild(new Label { Text = "Walk", ThemeTypeVariation = "Header" });
-        page.AddChild(Ui.Btn("Drop to the ground here and walk  (F3)", WalkFromHere));
-        page.AddChild(Ui.Btn("Walk from where I was  (F2)", () => SetActive(false)));
+        page.AddChild(Ui.Btn("Drop to the ground here and walk  (F3)", _ed.WalkFromHere));
+        page.AddChild(Ui.Btn("Walk from where I was  (F2)", () => _ed.SetActive(false)));
         page.AddChild(new Label { Text = "Dropping puts you on the ground below the camera, facing the way you look.", ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
         page.AddChild(new Label { Text = "WASD fly, Space up, Shift down, hold the right mouse button to look.", ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
 
         page.AddChild(new HSeparator());
         page.AddChild(new Label { Text = "Layers", ThemeTypeVariation = "Header" });
-        FloorPlan.BuildToggle(page);
-        Ortho.BuildSection(page);
+        _ed.FloorPlan.BuildToggle(page);
+        _ed.Ortho.BuildSection(page);
     }
 
+    /// <summary>The sidebar shows the page of this tool (none: no sidebar).</summary>
+    public void ShowTool(EditorTool tool)
+    {
+        _panel.Visible = tool != EditorTool.None;
+        foreach (var (t, p) in _pages) p.Visible = t == tool;
+        foreach (var (t, b) in _railButtons) b.SetPressedNoSignal(t == tool);
+        var edit = tool is EditorTool.Fence;
+        _editHead.Visible = _editFoot.Visible = edit;
+        _panelTitle.Text = Tools.FirstOrDefault(x => x.tool == tool).name ?? "";
+        _scroll.ScrollVertical = 0;
+        _statusBar.OffsetRight = tool == EditorTool.None ? 0 : -PanelWidth;
+    }
 
-    // ---- status bar and cheat sheet ----
+    /// <summary>The sidebar scrolls (on the next frame) until the control is in view.</summary>
+    public void RevealInPanel(Control control) => Callable.From(() => _scroll.EnsureControlVisible(control)).CallDeferred();
+
+    /// <summary>The mouse is over the sidebar, the rail, the status bar or a dialog.</summary>
+    public bool OverUi(Vector2 mouse)
+        => _ui.Visible && ((_panel.Visible && _panel.GetGlobalRect().HasPoint(mouse)) || _rail.GetGlobalRect().HasPoint(mouse)
+            || _statusBar.GetGlobalRect().HasPoint(mouse) || (_cheat.Visible && _cheat.GetGlobalRect().HasPoint(mouse))
+            || _ed.Confirm.Contains(mouse) || _ed.Commands.Contains(mouse));
+
+    // ---- status bar and hint ----
 
     void BuildStatusBar(Control root)
     {
@@ -235,7 +247,50 @@ public partial class EditorMode
         sbox.AddChild(_hintLabel);
     }
 
+    /// <summary>One line in the status bar (and the log); errors stay longer and are red.</summary>
+    public void Say(string message, bool error = false)
+    {
+        StatusMessage = message;
+        _statusUntil = Time.GetTicksMsec() / 1000.0 + (error ? 10 : 6);
+        _statusLabel.Text = message;
+        _statusLabel.Modulate = error ? new Color(1f, 0.55f, 0.45f) : Colors.White;
+        GD.Print($"editor: {message}");
+    }
+
     const string DefaultHint = "WASD fly, RMB look, LMB select, Shift+LMB add, 1-9 tools, G group, T top-down, Enter apply, Ctrl+Z undo, Ctrl+P commands, Esc back, F1 controls, F2 walk";
+
+    /// <summary>The undo and redo buttons, the undo line of the Objects page and the hint bar (it names what the tool in use does).</summary>
+    public void RefreshUndoAndHint()
+    {
+        var h = _ed.Edits.History;
+        _btnUndo.Disabled = h.UndoDepth == 0;
+        _btnRedo.Disabled = h.RedoDepth == 0;
+        _undoInfo.Text = (h.UndoDepth == 0 ? "nothing to undo" : $"undo: {h.NextUndoDescription} ({h.UndoDepth})") + (h.RedoDepth == 0 ? "" : $"; redo: {h.NextRedoDescription} ({h.RedoDepth})");
+        var tool = _ed.Tool;
+        var placing = _ed.Objects.PlacementAsset != null;
+        _hintLabel.Text = tool == EditorTool.Ground ? _ed.Ground.HintText() : tool == EditorTool.Zones ? _ed.Zones.HintText() : tool == EditorTool.Sketch ? _ed.Sketches.HintText() : tool == EditorTool.Poles && !placing ? _ed.Poles.HintText() : tool == EditorTool.Group && !placing
+            ? "marking parcels: click a parcel to mark or unmark it, Enter groups the marked ones, Esc clears the marks"
+            : placing
+            ? "placing: LMB place, R / Shift+R rotate, Ctrl free position, Esc or RMB stop, Ctrl+Z undo"
+            : _ed.Objects.SelectedObjectId != null
+                ? "object: drag moves, drag the ring rotates, arrows nudge, Del delete, Ctrl+D duplicate, R rotate, Ctrl+Z undo, Esc deselect"
+                : "WASD fly, RMB look, LMB select, Shift+LMB add, G group, T top-down, Enter apply, Ctrl+Z undo, Esc back, F1 controls, F2 walk";
+    }
+
+    /// <summary>Per frame: the unsaved count, the HUD line, and the status line fades out.</summary>
+    public void Update()
+    {
+        var fence = _ed.Fence;
+        var shapes = _ed.Shapes;
+        var tool = _ed.Tool;
+        _unsavedLabel.Text = fence.PendingCount == 0 ? "" : $"* {fence.PendingCount} unsaved (Enter applies)";
+        var c = _ed.FlyCam.GlobalPosition;
+        _hudLabel.Text = $"EDITOR  |  {(tool == EditorTool.None ? "no tool" : tool.ToString())}  |  {_ed.Selection.Count} selected  |  {_ed.Camera.Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (shapes.SelectedShapeId != null && shapes.ShapeTool ? $"  |  {(tool == EditorTool.Zones ? "zone" : "patch")} {shapes.SelectedShape(shapes.CurrentKind)?.Label}{(shapes.SelectedShape(shapes.CurrentKind) is PatchInfo sp ? "  " + sp.Type : "")}" : "") + (tool == EditorTool.Zones && _ed.Zones.Marks.Count > 0 ? $"  |  {_ed.Zones.Marks.Count} marked for deletion" : "") + (fence.PendingCount > 0 || shapes.ShapeDraftPending ? $"  |  * {(fence.PendingCount > 0 ? $"{fence.PendingCount} UNSAVED" : "UNSAVED")}" : "");
+        if (Time.GetTicksMsec() / 1000.0 > _statusUntil && _statusLabel.Text != "")
+            _statusLabel.Text = "";
+    }
+
+    // ---- cheat sheet ----
 
     const string CheatText =
         "Fly\tWASD, Space up, Shift down, Alt x3, hold RMB to look, wheel changes speed\n" +
@@ -282,79 +337,6 @@ public partial class EditorMode
         box.AddChild(new Label { Text = "F1 or Esc closes this.", ThemeTypeVariation = "Dim" });
     }
 
-    public bool CheatSheetShown => _cheat.Visible;
+    public bool CheatSheetShown { get => _cheat.Visible; set => _cheat.Visible = value; }
     public void ToggleCheatSheet() => _cheat.Visible = !_cheat.Visible;
-
-    public void RevealInPanel(Control control) => Callable.From(() => _scroll.EnsureControlVisible(control)).CallDeferred();
-
-    // ---- tool switching ----
-
-    public void SelectTool(EditorTool tool, bool save = true)
-    {
-        if (Shapes.ShapeTool && (tool != Tool)) Shapes.CancelShapeGesture();
-        if (Tool == EditorTool.Sketch && tool != EditorTool.Sketch) Sketches.CancelGesture();
-        if (Objects.Dragging && tool != Tool) Objects.CancelDrag(); // an object drag must not outlive its tool (the release would still save it)
-        if (tool is EditorTool.Ground or EditorTool.Zones or EditorTool.Sketch) { Objects.DisarmPlacement(false); if (Fence.Gates.Armed) Fence.Gates.Cancel(); }
-        if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { Poles.StopConnecting(false); Poles.Plan.Stop(false); Poles.SelectCable(null); }
-        if (tool == EditorTool.Poles && Fence.Gates.Armed) Fence.Gates.Cancel();
-        Tool = tool;
-        Shapes.ShapeRest(); // Selected or Idle depends on which kind of shape the tool selects
-        _panel.Visible = tool != EditorTool.None;
-        foreach (var (t, p) in _pages) p.Visible = t == tool;
-        foreach (var (t, b) in _railButtons) b.SetPressedNoSignal(t == tool);
-        var edit = tool is EditorTool.Fence;
-        _editHead.Visible = _editFoot.Visible = edit;
-        _panelTitle.Text = Tools.FirstOrDefault(x => x.tool == tool).name ?? "";
-        _scroll.ScrollVertical = 0;
-        _statusBar.OffsetRight = tool == EditorTool.None ? 0 : -PanelWidth;
-        _panelDirty = true;
-        if (save) SaveUiConfig();
-    }
-
-    /// <summary>Open a tool by name (screenshots, smoke tests); an unknown name closes the sidebar.</summary>
-    public void SetTool(string name)
-        => SelectTool(Enum.TryParse<EditorTool>(name, true, out var t) ? t : EditorTool.None);
-
-    /// <summary>Compatibility with the old collapsible sections: opening a title opens its tool.</summary>
-    public void SetSectionOpen(string title, bool open)
-    {
-        if (!Enum.TryParse<EditorTool>(title, true, out var t)) return;
-        if (open) SelectTool(t);
-        else if (Tool == t) SelectTool(EditorTool.None);
-    }
-
-    bool HandleToolKey(Key key)
-    {
-        foreach (var (t, _, _, k) in Tools)
-            if (k == key) { SelectTool(Tool == t ? EditorTool.None : t); return true; }
-        return false;
-    }
-
-    // ---- persistence ----
-
-    void LoadUiConfig()
-    {
-        try
-        {
-            var cfg = new ConfigFile();
-            if (cfg.Load(CfgPath) != Error.Ok) return;
-            if (Enum.TryParse<EditorTool>((string)cfg.GetValue("ui", "tool", "None"), true, out var t)) { Tool = t; Shapes.ShapeRest(); }
-            Camera.LoadConfig(cfg);
-            foreach (var part in _parts) part.LoadConfig(cfg);
-        }
-        catch (Exception e) { GD.PushWarning($"editor ui settings not loaded: {e.Message}"); }
-    }
-
-    public void SaveUiConfig()
-    {
-        try
-        {
-            var cfg = new ConfigFile();
-            cfg.SetValue("ui", "tool", Tool.ToString());
-            Camera.SaveConfig(cfg);
-            foreach (var part in _parts) part.SaveConfig(cfg);
-            cfg.Save(CfgPath);
-        }
-        catch (Exception e) { GD.PushWarning($"editor ui settings not saved: {e.Message}"); }
-    }
 }

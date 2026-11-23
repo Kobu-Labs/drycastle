@@ -67,13 +67,13 @@ public sealed class ShapeEditor : EditorPart
         if (!ShapeTool) { World.Off(); return; }
         var mouse = Host.GetViewport().GetMousePosition();
         var free = Input.IsKeyPressed(Key.Ctrl);
-        var over = Host.OverUi(mouse) || Host.Looking || Host.Modal;
+        var over = Host.Chrome.OverUi(mouse) || Host.Looking || Host.Modal;
         Cursor = null;
-        if (!over && Host.Map.OriginEpsg5514 != null && Host.RayToGround(Host.FlyCam.ProjectRayOrigin(mouse), Host.FlyCam.ProjectRayNormal(mouse), out var g)) Cursor = Host.Map.SnapAbs(g, free);
+        if (!over && Host.Map.OriginEpsg5514 != null && Host.Picker.RayToGround(Host.FlyCam.ProjectRayOrigin(mouse), Host.FlyCam.ProjectRayNormal(mouse), out var g)) Cursor = Host.Map.SnapAbs(g, free);
         HoverCorner = -1;
         var mode = Mode;
-        if (!over && mode is ShapeState.Selected && SelectedShape(CurrentKind) is { } sr) HoverCorner = Host.PickCorner(mouse, sr.Points);
-        if (!over && mode is ShapeState.Drawing && _draft.Count >= 3 && Host.PickCorner(mouse, new[] { _draft[0] }) == 0) HoverCorner = 0;
+        if (!over && mode is ShapeState.Selected && SelectedShape(CurrentKind) is { } sr) HoverCorner = Host.Picker.PickCorner(mouse, sr.Points);
+        if (!over && mode is ShapeState.Drawing && _draft.Count >= 3 && Host.Picker.PickCorner(mouse, new[] { _draft[0] }) == 0) HoverCorner = 0;
         if (_dragCorner >= 0 && Cursor is { } c) DragCornerToAbs(c.x, c.y);
         World.Draw();
     }
@@ -504,7 +504,7 @@ public sealed class ShapeEditor : EditorPart
     /// <summary>Keys of the shape tools (Ground and Zones): drawing, corners, delete. True when used.</summary>
     public bool HandleShapeKey(InputEventKey k)
     {
-        if (!ShapeTool || Host.CheatSheetShown) return false;
+        if (!ShapeTool || Host.Chrome.CheatSheetShown) return false;
         var mode = Mode;
         if (k.CtrlPressed)
             return k.Keycode == Key.Z && !k.ShiftPressed && (_draft.Count > 0 || InLevel) && RemoveLastShapePoint();
@@ -536,8 +536,8 @@ public sealed class ShapeEditor : EditorPart
     void AddCornerAtCursor()
     {
         var mouse = Host.GetViewport().GetMousePosition();
-        var at = Host.OverUi(mouse) ? Host.GetViewport().GetVisibleRect().Size / 2 : mouse;
-        if (ShapesReady() && Host.RayToGround(Host.FlyCam.ProjectRayOrigin(at), Host.FlyCam.ProjectRayNormal(at), out var g))
+        var at = Host.Chrome.OverUi(mouse) ? Host.GetViewport().GetVisibleRect().Size / 2 : mouse;
+        if (ShapesReady() && Host.Picker.RayToGround(Host.FlyCam.ProjectRayOrigin(at), Host.FlyCam.ProjectRayNormal(at), out var g))
         {
             var (x, y) = Host.Map.SnapAbs(g, Input.IsKeyPressed(Key.Ctrl));
             AddShapePoint(x, y);
@@ -567,11 +567,11 @@ public sealed class ShapeEditor : EditorPart
         var drafting = _shape.Is(ShapeState.Drawing);
         if (!drafting && SelectedShape(k) is { } sr)
         {
-            var c = Host.PickCorner(screen, sr.Points);
+            var c = Host.Picker.PickCorner(screen, sr.Points);
             if (c >= 0) { StartCornerDrag(c); return; }
         }
-        if (drafting && _draft.Count >= 3 && Host.PickCorner(screen, new[] { _draft[0] }) == 0) { CloseShape(); return; }
-        if (!Host.RayToGround(Host.FlyCam.ProjectRayOrigin(screen), Host.FlyCam.ProjectRayNormal(screen), out var g)) { Host.Say("click on the ground", true); return; }
+        if (drafting && _draft.Count >= 3 && Host.Picker.PickCorner(screen, new[] { _draft[0] }) == 0) { CloseShape(); return; }
+        if (!Host.Picker.RayToGround(Host.FlyCam.ProjectRayOrigin(screen), Host.FlyCam.ProjectRayNormal(screen), out var g)) { Host.Say("click on the ground", true); return; }
         if (drafting) { var (x, y) = Host.Map.SnapAbs(g, free); AddShapePoint(x, y); return; }
         var (rx, ry) = Host.Map.RawAbs(g);
         if (ShapeAt(k, rx, ry) is { } hit)

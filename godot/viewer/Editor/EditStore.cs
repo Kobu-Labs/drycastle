@@ -84,9 +84,9 @@ public sealed class EditStore
             var root = EditsFile.Load(_host.EditsPath);
             var before = ObjectEdits.CloneObj(root);
             var (ok, msg) = op(root);
-            if (!ok) { _host.Say(msg, true); _host.ReloadGroups(); return false; }
+            if (!ok) { _host.Say(msg, true); _host.Groups.Reload(); return false; }
             var errors = ObjectEdits.ValidateDocument(root);
-            if (errors.Count > 0) { _host.Say("not saved: " + ObjectEdits.Summarise(errors), true); _host.ReloadGroups(); return false; }
+            if (errors.Count > 0) { _host.Say("not saved: " + ObjectEdits.Summarise(errors), true); _host.Groups.Reload(); return false; }
             if (EditsFile.Dump(before) == EditsFile.Dump(root)) { _host.Say("no changes to save"); return true; } // the file already says this
             var changes = UndoHistory.Diff(before, root);
             EditsFile.Save(_host.EditsPath, root);
@@ -147,7 +147,7 @@ public sealed class EditStore
     void AfterSave(System.Diagnostics.Stopwatch sw)
     {
         Remember();
-        _host.ReloadGroups();
+        _host.Groups.Reload();
         var instant0 = _host.Watcher?.InstantCount ?? 0;
         _host.Watcher?.NotifySaved();
         LastSaveInstant = (_host.Watcher?.InstantCount ?? 0) > instant0;

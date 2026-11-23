@@ -157,7 +157,7 @@ public sealed class GroundTool : EditorPart
     /// <summary>Ground tool keys besides the shape keys (not reached while a text field has the focus). True when used.</summary>
     public bool HandleKey(InputEventKey k)
     {
-        if (Host.Tool != EditorTool.Ground || Host.CheatSheetShown || k.CtrlPressed || k.AltPressed) return false;
+        if (Host.Tool != EditorTool.Ground || Host.Chrome.CheatSheetShown || k.CtrlPressed || k.AltPressed) return false;
         switch (k.Keycode)
         {
             case Key.N when k.ShiftPressed: Panel.FocusName(); return true;
@@ -216,6 +216,6 @@ public sealed class GroundTool : EditorPart
         if (ReferenceEquals(hot, _hoverPatch)) return;
         _hoverPatch = hot;
         var colour = hot != null && EditorTheme.CropColour(hot.Type) is { } c ? c : EditorTheme.Text;
-        Host.SetOutline(OutlineHover, hot == null ? new() : Host.RingSegs(hot.Points, true), new Color(colour, HoverAlpha), 0.27f, HoverWidth);
+        Host.Outlines.Set(OutlineHover, hot == null ? new() : Host.Picker.RingSegs(hot.Points, true), new Color(colour, HoverAlpha), 0.27f, HoverWidth);
     }
 }

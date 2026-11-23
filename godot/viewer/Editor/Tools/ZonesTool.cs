@@ -141,7 +141,7 @@ public sealed class ZonesTool : EditorPart
     /// <summary>Zones tool keys besides the shape keys (not reached while a text field has the focus). True when used.</summary>
     public bool HandleKey(InputEventKey k)
     {
-        if (Host.Tool != EditorTool.Zones || Host.CheatSheetShown || k.CtrlPressed || k.AltPressed) return false;
+        if (Host.Tool != EditorTool.Zones || Host.Chrome.CheatSheetShown || k.CtrlPressed || k.AltPressed) return false;
         switch (k.Keycode)
         {
             case Key.M: Overlay.Toggle(); return true;

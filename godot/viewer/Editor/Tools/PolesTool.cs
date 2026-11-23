@@ -176,7 +176,7 @@ public sealed class PolesTool : EditorPart
     internal BuildingHit? BuildingUnder(Vector3 origin, Vector3 dir)
     {
         if (Host.Map.RayBuildings(origin, dir) is not { } hit) return null;
-        if (Host.RayToGround(origin, dir, out var ground) && origin.DistanceTo(ground) < hit.Distance - 0.05f) return null;
+        if (Host.Picker.RayToGround(origin, dir, out var ground) && origin.DistanceTo(ground) < hit.Distance - 0.05f) return null;
         return hit;
     }
 
@@ -318,7 +318,7 @@ public sealed class PolesTool : EditorPart
             else ConnectClick(null);
             return;
         }
-        var onRing = Objects.SelectedObjectId != null && Host.RayToGround(o, d, out var gp) && Objects.Gizmo.OnRing(gp);
+        var onRing = Objects.SelectedObjectId != null && Host.Picker.RayToGround(o, d, out var gp) && Objects.Gizmo.OnRing(gp);
         if (!onRing && Objects.PickObject(o, d) == null && PickCable(screen) is { } cable) { SelectCable(cable); return; }
         SelectCable(null);
         Objects.LeftPress(screen, shift);
@@ -424,7 +424,7 @@ public sealed class PolesTool : EditorPart
         if (Connecting && Host.Tool == EditorTool.Poles && ConnectFrom != null && Host.Map.ObjectNodes.ContainsKey(ConnectFrom))
         {
             var mouse = Host.GetViewport().GetMousePosition();
-            if (!Host.Looking && !Host.OverUi(mouse) && !Host.Modal)
+            if (!Host.Looking && !Host.Chrome.OverUi(mouse) && !Host.Modal)
             {
                 var o = Host.FlyCam.ProjectRayOrigin(mouse); var d = Host.FlyCam.ProjectRayNormal(mouse);
                 var under = Objects.PickObject(o, d);
@@ -433,7 +433,7 @@ public sealed class PolesTool : EditorPart
                 var mount = house is { } hh ? MountOf(hh.Normal) : null;
                 if (mount != null) valid = true;
                 Vector3? end = under != null && valid ? PoleTop(under) : mount != null ? house!.Value.Point
-                    : Host.RayToGround(o, d, out var g) ? g + Vector3.Up * 0.3f : null;
+                    : Host.Picker.RayToGround(o, d, out var g) ? g + Vector3.Up * 0.3f : null;
                 if (end is { } e)
                 {
                     show = true;
@@ -445,7 +445,7 @@ public sealed class PolesTool : EditorPart
                     }
                     _line.MaterialOverride = valid ? _lineOk : _lineIdle;
                     if (under != null || mount != null)
-                        Host.ShowHoverText(mount != null ? $"house on {house!.Value.ParcelId}: click to fix a {mount} connector here and string a cable from {ConnectFrom}"
+                        Host.Chrome.ShowHoverText(mount != null ? $"house on {house!.Value.ParcelId}: click to fix a {mount} connector here and string a cable from {ConnectFrom}"
                             : valid ? $"{under}: click to string a cable from {ConnectFrom}"
                             : under == ConnectFrom ? $"{under}: the cable starts here" : $"{under} is not a pole or a house connector", mouse);
                 }

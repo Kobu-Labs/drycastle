@@ -12,7 +12,6 @@ public interface IEditorHost
     Drycastle.MapLoader.MapLoader Map { get; }
     EditsWatcher? Watcher { get; }
     SortedSet<string> Selection { get; }
-    Node3D OutlineRoot { get; }
     ConfirmDialog Confirm { get; }
     string EditsPath { get; }
     EditStore Edits { get; }
@@ -25,6 +24,10 @@ public interface IEditorHost
     ShapeEditor Shapes { get; }
     GroundTool Ground { get; }
     ZonesTool Zones { get; }
+    EditorChrome Chrome { get; }
+    OutlineLayer Outlines { get; }
+    ParcelGroups Groups { get; }
+    GroundPicker Picker { get; }
     /// <summary>The walk-mode player (frozen and hidden while the editor is open).</summary>
     Player Player { get; }
     /// <summary>The editor is open.</summary>
@@ -35,59 +38,16 @@ public interface IEditorHost
     bool Modal { get; }
     /// <summary>The right mouse button is held: the camera is looking around.</summary>
     bool Looking { get; }
-    bool CheatSheetShown { get; }
-    /// <summary>One sphere for every corner handle, and the material of the hot one.</summary>
-    SphereMesh HandleMesh { get; }
-    StandardMaterial3D HandleHot { get; }
     Viewport GetViewport();
     void AddChild(Node node, bool forceReadableName = false, Node.InternalMode @internal = Node.InternalMode.Disabled);
 
     /// <summary>One line in the status bar (and the log); errors stay longer and are red.</summary>
     void Say(string message, bool error = false);
 
-    /// <summary>Draw a named set of ground segments draped on the terrain; an empty list clears it.</summary>
-    void SetOutline(string name, List<(Vector2 a, Vector2 b)> segs, Color colour, float lift, float width);
-
-    /// <summary>The mesh of a named outline (null: not drawn yet).</summary>
-    MeshInstance3D? OutlineNode(string kind);
-
-    /// <summary>The label beside the mouse shows this text.</summary>
-    void ShowHoverText(string text, Vector2 mouse);
-
-    /// <summary>The mouse is over the sidebar, the rail, the status bar or a dialog.</summary>
-    bool OverUi(Vector2 mouse);
-
-    /// <summary>Ground point under a ray (the terrain, not buildings); false when the ray hits none.</summary>
-    bool RayToGround(Vector3 origin, Vector3 dir, out Vector3 point);
-
-    /// <summary>The nearest corner of a ring (absolute metres) within reach of a screen position; -1 when none.</summary>
-    int PickCorner(Vector2 screen, IReadOnlyList<(double x, double y)> ring);
-
-    /// <summary>An absolute-metres point on the terrain, a little above it.</summary>
-    Vector3 GroundPoint((double x, double y) p);
-
-    /// <summary>The ground segments of a ring or a line (absolute metres).</summary>
-    List<(Vector2, Vector2)> RingSegs(IReadOnlyList<(double x, double y)> pts, bool closed);
-
     void SelectTool(EditorTool tool, bool save = true);
-
-    /// <summary>Parcel under a screen position of the main viewport (null: none); point is the ground point found.</summary>
-    ParcelInfo? PickScreen(Vector2 screen, out Vector3 point);
 
     /// <summary>Click semantics of the Select tool: plain click replaces the selection, shift toggles one parcel.</summary>
     void Click(string? parcelId, bool shift);
-
-    /// <summary>The property group of a parcel (null: none).</summary>
-    string? Group(string parcel);
-
-    /// <summary>The sidebar scrolls (on the next frame) until the control is in view.</summary>
-    void RevealInPanel(Control control);
-
-    /// <summary>The outlines of the selection and of the hovered parcel are redrawn on the next frame.</summary>
-    void MarkAllOutlines();
-
-    /// <summary>Read the groups again from the file on disk (after every save, and when another writer changed it).</summary>
-    void ReloadGroups();
 
     /// <summary>The sidebar is rebuilt on the next frame.</summary>
     void MarkPanelDirty();

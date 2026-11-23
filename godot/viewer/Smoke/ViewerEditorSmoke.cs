@@ -130,10 +130,10 @@ public partial class Viewer
         Check(perLookup < 50, $"point lookup is fast: {perLookup:F2} us per lookup over {_map.Parcels.Count} parcels");
         ed.Camera.LookFrom(pa + Vector3.Up * 60f, pa);
         var size = GetViewport().GetVisibleRect().Size;
-        var picked = ed.PickScreen(size / 2, out var pt);
+        var picked = ed.Picker.PickScreen(size / 2, out var pt);
         Check(picked?.Id == A, $"camera ray through the screen centre picks {A} (hit {pt})");
         ed.Camera.LookFrom(new Vector3(1e5f, 400f, 1e5f), new Vector3(1e5f, 0, 1e5f - 1));
-        Check(ed.PickScreen(size / 2, out _) == null, "ray into empty space picks nothing");
+        Check(ed.Picker.PickScreen(size / 2, out _) == null, "ray into empty space picks nothing");
 
         // ---- selection ----
         var selEvents = 0;
@@ -154,14 +154,14 @@ public partial class Viewer
         ed.Click(A, false); ed.Click(B, true);
         await Physics(3);
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        Check(selEvents > 0 && ed.PanelSelectionText.Contains(A) && ed.PanelSelectionText.Contains(B) && ed.GroupButtonEnabled,
+        Check(selEvents > 0 && ed.Parcels.SelectionText.Contains(A) && ed.Parcels.SelectionText.Contains(B) && ed.Parcels.CanGroup,
             "panel lists the selection and enables [Group selected]");
 
         // ---- outlines before grouping ----
-        var selNode = ed.OutlineNode(EditorMode.OutlineSelected);
-        var noCollision = ed.OutlineRoot.GetChildren().All(n => n is MeshInstance3D m && m.GetChildCount() == 0);
-        Check(selNode?.Mesh != null && ed.SegmentCount(EditorMode.OutlineSelected) == plan.GetProperty("sel_segments").GetInt32() && noCollision,
-            $"selected parcels have an outline mesh ({ed.SegmentCount(EditorMode.OutlineSelected)} segments) without collision");
+        var selNode = ed.Outlines.Node(OutlineLayer.Selected);
+        var noCollision = ed.Outlines.Root.GetChildren().All(n => n is MeshInstance3D m && m.GetChildCount() == 0);
+        Check(selNode?.Mesh != null && ed.Outlines.SegmentCount(OutlineLayer.Selected) == plan.GetProperty("sel_segments").GetInt32() && noCollision,
+            $"selected parcels have an outline mesh ({ed.Outlines.SegmentCount(OutlineLayer.Selected)} segments) without collision");
         if (selNode?.Mesh is { } sm)
         {
             var v = sm.SurfaceGetArrays(0)[(int)Mesh.ArrayType.Vertex].AsVector3Array();
@@ -169,30 +169,30 @@ public partial class Viewer
             Check(lift >= 0.2f && lift <= 0.6f, $"outline hangs {lift:F2} m above the ground");
         }
         ed.SetHover(C);
-        ed.RebuildOutlines();
-        Check(ed.OutlineNode(EditorMode.OutlineHover)?.Mesh != null && ed.SegmentCount(EditorMode.OutlineHover) == plan.GetProperty("c_segments").GetInt32(),
+        ed.Outlines.Rebuild();
+        Check(ed.Outlines.Node(OutlineLayer.Hover)?.Mesh != null && ed.Outlines.SegmentCount(OutlineLayer.Hover) == plan.GetProperty("c_segments").GetInt32(),
             "hovered parcel has a (subtle) outline");
         ed.SetHover(null);
-        Check(ed.OutlineRoot.GetChildren().All(n => n.Name != "outline_group"), "no always-on group outline (groups show like parcel borders: on hover/selection only)");
+        Check(ed.Outlines.Root.GetChildren().All(n => n.Name != "outline_group"), "no always-on group outline (groups show like parcel borders: on hover/selection only)");
 
         // ---- refusals ----
         var fileBefore = File.ReadAllText(editsPath);
         ed.Click(C, false); ed.Click(A, true);
-        ed.GroupSelected();
-        Check(File.ReadAllText(editsPath) == fileBefore && ed.StatusMessage.Contains("already in"),
-            $"G refused when a selected parcel is in a group, file untouched ('{ed.StatusMessage}')");
+        ed.Groups.GroupSelected();
+        Check(File.ReadAllText(editsPath) == fileBefore && ed.Chrome.StatusMessage.Contains("already in"),
+            $"G refused when a selected parcel is in a group, file untouched ('{ed.Chrome.StatusMessage}')");
         ed.Click(A, false);
-        ed.GroupSelected();
-        Check(File.ReadAllText(editsPath) == fileBefore && ed.StatusMessage.Contains("2 or more"), "G refused with fewer than 2 parcels");
+        ed.Groups.GroupSelected();
+        Check(File.ReadAllText(editsPath) == fileBefore && ed.Chrome.StatusMessage.Contains("2 or more"), "G refused with fewer than 2 parcels");
 
         // ---- create a group ----
         ed.Click(A, false); ed.Click(B, true);
         var applied0 = _watcher!.AppliedCount;
-        ed.GroupSelected();
+        ed.Groups.GroupSelected();
         var after = File.ReadAllText(editsPath);
         var gid = _map.Parcels[A].Group;
-        Check(gid == plan.GetProperty("next_group").GetString() && _map.Parcels[B].Group == gid && ed.StatusMessage.StartsWith("saved"),
-            $"G creates {gid} (next free number) for {A} and {B}, status '{ed.StatusMessage}'");
+        Check(gid == plan.GetProperty("next_group").GetString() && _map.Parcels[B].Group == gid && ed.Chrome.StatusMessage.StartsWith("saved"),
+            $"G creates {gid} (next free number) for {A} and {B}, status '{ed.Chrome.StatusMessage}'");
         File.WriteAllText(S("after_group"), after);
         var doc = EditsFile.Parse(after);
         var members = EditsFile.Members(EditsFile.Groups(doc).GetValueOrDefault(gid ?? ""));
@@ -203,15 +203,15 @@ public partial class Viewer
         Check(keptStale, "unknown parcel entries and other groups preserved");
         await Physics(2);
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        ed.RebuildOutlines();
-        var gseg = ed.SegmentCount(EditorMode.OutlineSelected);
+        ed.Outlines.Rebuild();
+        var gseg = ed.Outlines.SegmentCount(OutlineLayer.Selected);
         Check(gseg == plan.GetProperty("group_ab_segments").GetInt32() && gseg < plan.GetProperty("sel_segments").GetInt32() && plan.GetProperty("shared_edges").GetInt32() > 0,
             $"selected group outlined as one shape without shared edges: {gseg} segments (members alone would give {plan.GetProperty("sel_segments").GetInt32()}, shared edges {plan.GetProperty("shared_edges").GetInt32()})");
 
         // watcher regenerates the new group's parcels by itself
         var ok = await WaitUntil(() => _watcher.AppliedCount > applied0 || _watcher.FailedCount > 0, 40);
-        Check(ok && _watcher.AppliedCount > applied0 && ed.StatusMessage.StartsWith("applied in"),
-            $"watcher regenerated the group parcels: status '{ed.StatusMessage}'");
+        Check(ok && _watcher.AppliedCount > applied0 && ed.Chrome.StatusMessage.StartsWith("applied in"),
+            $"watcher regenerated the group parcels: status '{ed.Chrome.StatusMessage}'");
 
         // ---- editor-state.json carries the selection ----
         await WaitUntil(() => StateSelected(statePath).SequenceEqual(new[] { A, B }.OrderBy(x => x, StringComparer.Ordinal)), 4);
@@ -224,7 +224,7 @@ public partial class Viewer
         File.WriteAllText(editsPath + ".ext", ext.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         File.Move(editsPath + ".ext", editsPath, true);
         ed.Click(A, false);
-        ed.DissolveGroup();
+        ed.Groups.Dissolve();
         var final = File.ReadAllText(editsPath);
         File.WriteAllText(S("final"), final);
         var fd = EditsFile.Parse(final);
@@ -293,7 +293,7 @@ public partial class Viewer
         {
             PutEdits(ed.EditsPath, shotEdits);
             await WaitIdle(90);
-            ed.ReloadGroups();
+            ed.Groups.Reload();
         }
         ed.RefreshNow();
         foreach (var title in (_opts.GetValueOrDefault("shot-collapse") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
@@ -348,28 +348,28 @@ public partial class Viewer
                 var xy = pt.Split(',').Select(v => double.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
                 ed.Shapes.AddShapePoint(xy[0], xy[1]); cx += xy[0]; cy += xy[1]; n++;
             }
-            ed.LookAtAbs(cx / n, cy / n, 70);
+            ed.Camera.LookAtAbs(cx / n, cy / n, 70);
         }
         else if (_opts.GetValueOrDefault("shot-patch") is { } spatch)
         {
             ed.SelectTool(EditorTool.Ground);
             Check(ed.Shapes.SelectShape(ShapeKind.Patch, spatch), $"shot patch {spatch} selected");
             var r = ed.Shapes.Patch(spatch)!;
-            ed.LookAtAbs(r.Points.Average(p => p.x), r.Points.Average(p => p.y), 70);
+            ed.Camera.LookAtAbs(r.Points.Average(p => p.x), r.Points.Average(p => p.y), 70);
         }
         else if (_opts.GetValueOrDefault("shot-zone") is { } szone)
         {
             ed.SelectTool(EditorTool.Zones);
             Check(ed.Shapes.SelectShape(ShapeKind.Zone, szone), $"shot zone {szone} selected");
             var r = ed.Zones.Find(szone)!;
-            ed.LookAtAbs(r.Points.Average(p => p.x), r.Points.Average(p => p.y), 70);
+            ed.Camera.LookAtAbs(r.Points.Average(p => p.x), r.Points.Average(p => p.y), 70);
         }
         ed.RefreshNow();
         ed.Shapes.World.Redraw();
         var frames = _opts.TryGetValue("frames", out var f) && int.TryParse(f, out var fi) ? fi : 60;
         for (var i = 0; i < frames; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
-        GD.Print($"outline segments: selected={ed.SegmentCount(EditorMode.OutlineSelected)} hover={ed.SegmentCount(EditorMode.OutlineHover)}");
+        GD.Print($"outline segments: selected={ed.Outlines.SegmentCount(OutlineLayer.Selected)} hover={ed.Outlines.SegmentCount(OutlineLayer.Hover)}");
         var path = _opts["editor-shot"];
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         var err = GetViewport().GetTexture().GetImage().SavePng(path);

@@ -400,7 +400,7 @@ public sealed class SketchTool : EditorPart
     /// <summary>Sketch tool keys. True when used.</summary>
     public bool HandleKey(InputEventKey k)
     {
-        if (Host.Tool != EditorTool.Sketch || Host.CheatSheetShown) return false;
+        if (Host.Tool != EditorTool.Sketch || Host.Chrome.CheatSheetShown) return false;
         if (k.CtrlPressed) return k.Keycode == Key.Z && !k.ShiftPressed && RemoveLastCorner();
         if (k.AltPressed) return false;
         switch (k.Keycode)
@@ -410,8 +410,8 @@ public sealed class SketchTool : EditorPart
             case Key.C:
                 // a mark at the cursor, or at the screen centre when the cursor is over the panel (keyboard-only drawing)
                 var mouse = Host.GetViewport().GetMousePosition();
-                var at = Host.OverUi(mouse) ? Host.GetViewport().GetVisibleRect().Size / 2 : mouse;
-                if (RequireOrigin() && Host.RayToGround(Host.FlyCam.ProjectRayOrigin(at), Host.FlyCam.ProjectRayNormal(at), out var g))
+                var at = Host.Chrome.OverUi(mouse) ? Host.GetViewport().GetVisibleRect().Size / 2 : mouse;
+                if (RequireOrigin() && Host.Picker.RayToGround(Host.FlyCam.ProjectRayOrigin(at), Host.FlyCam.ProjectRayNormal(at), out var g))
                 {
                     var (x, y) = Host.Map.SnapAbs(g, Input.IsKeyPressed(Key.Ctrl));
                     if (_mode == SketchKind.Point) AddPoint(x, y); else AddCorner(x, y);
@@ -445,7 +445,7 @@ public sealed class SketchTool : EditorPart
     /// <summary>The mark whose point or corner is under a screen position; null when none is within reach.</summary>
     string? ItemAt(Vector2 screen)
     {
-        var i = Host.PickCorner(screen, _pickPts);
+        var i = Host.Picker.PickCorner(screen, _pickPts);
         return i < 0 ? null : _pickIds[i];
     }
 
@@ -456,11 +456,11 @@ public sealed class SketchTool : EditorPart
         if (_draft.Count > 0)
         {
             // the first corner closes the line, the last corner again finishes it open
-            if (_draft.Count >= 3 && Host.PickCorner(screen, new[] { _draft[0] }) == 0) { FinishLine(true); return; }
-            if (Host.PickCorner(screen, new[] { _draft[^1] }) == 0) { FinishLine(); return; }
+            if (_draft.Count >= 3 && Host.Picker.PickCorner(screen, new[] { _draft[0] }) == 0) { FinishLine(true); return; }
+            if (Host.Picker.PickCorner(screen, new[] { _draft[^1] }) == 0) { FinishLine(); return; }
         }
         else if (ItemAt(screen) is { } hit) { SelectItem(hit); return; }
-        if (!Host.RayToGround(Host.FlyCam.ProjectRayOrigin(screen), Host.FlyCam.ProjectRayNormal(screen), out var g)) { Host.Say("click on the ground", true); return; }
+        if (!Host.Picker.RayToGround(Host.FlyCam.ProjectRayOrigin(screen), Host.FlyCam.ProjectRayNormal(screen), out var g)) { Host.Say("click on the ground", true); return; }
         var (x, y) = Host.Map.SnapAbs(g, free);
         if (_mode == SketchKind.Point) AddPoint(x, y); else AddCorner(x, y);
     }
@@ -477,12 +477,12 @@ public sealed class SketchTool : EditorPart
         if (active && Host.Map.OriginEpsg5514 != null)
         {
             var mouse = Host.GetViewport().GetMousePosition();
-            if (!(Host.OverUi(mouse) || Host.Looking || Host.Modal))
+            if (!(Host.Chrome.OverUi(mouse) || Host.Looking || Host.Modal))
             {
-                if (Host.RayToGround(Host.FlyCam.ProjectRayOrigin(mouse), Host.FlyCam.ProjectRayNormal(mouse), out var g)) cursor = Host.Map.SnapAbs(g, Input.IsKeyPressed(Key.Ctrl));
+                if (Host.Picker.RayToGround(Host.FlyCam.ProjectRayOrigin(mouse), Host.FlyCam.ProjectRayNormal(mouse), out var g)) cursor = Host.Map.SnapAbs(g, Input.IsKeyPressed(Key.Ctrl));
                 if (_draft.Count == 0) hover = ItemAt(mouse);
-                else if (_draft.Count >= 3 && Host.PickCorner(mouse, new[] { _draft[0] }) == 0) hoverDraft = 0;
-                else if (Host.PickCorner(mouse, new[] { _draft[^1] }) == 0) hoverDraft = _draft.Count - 1;
+                else if (_draft.Count >= 3 && Host.Picker.PickCorner(mouse, new[] { _draft[0] }) == 0) hoverDraft = 0;
+                else if (Host.Picker.PickCorner(mouse, new[] { _draft[^1] }) == 0) hoverDraft = _draft.Count - 1;
             }
         }
         _marks.Show(new SketchView(_sketch, _version, Selected, hover, _draft, cursor, _mode), active, hoverDraft);

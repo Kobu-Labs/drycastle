@@ -60,7 +60,7 @@ public sealed class FloorPlanLayer : EditorPart
         _floorVersion = -1; // UpdateFloorPlan builds it
         if (parcelId == null)
         {
-            foreach (var n in new[] { FloorWalls, FloorGrid, FloorGridMajor }) Host.SetOutline(n, new(), EditorTheme.Text, 0f, 0.1f);
+            foreach (var n in new[] { FloorWalls, FloorGrid, FloorGridMajor }) Host.Outlines.Set(n, new(), EditorTheme.Text, 0f, 0.1f);
             Host.Say("floor plan off: the building is back");
         }
         else Host.Say($"floor plan of {parcelId}: the building is hidden, draw on it with the Sketch tool (9); B brings it back");
@@ -109,7 +109,7 @@ public sealed class FloorPlanLayer : EditorPart
         if (!Host.Map.Parcels.TryGetValue(id, out var info) || Host.Map.ParcelVisual(id) is not { } vis || !GodotObject.IsInstanceValid(vis))
         {
             _floorParcel = null;
-            foreach (var n in new[] { FloorWalls, FloorGrid, FloorGridMajor }) Host.SetOutline(n, new(), EditorTheme.Text, 0f, 0.1f);
+            foreach (var n in new[] { FloorWalls, FloorGrid, FloorGridMajor }) Host.Outlines.Set(n, new(), EditorTheme.Text, 0f, 0.1f);
             Host.Say($"floor plan off: {id} has no building any more", true);
             SyncFloorPlanUi();
             return;
@@ -138,10 +138,10 @@ public sealed class FloorPlanLayer : EditorPart
             foreach (var c in chunk.GetChildren())
                 if (c is Node3D n && n.Visible && info.BuildingIds.Any(bid => n.Name.ToString().StartsWith($"window_{bid}_"))) { n.Visible = false; _floorHidden.Add(n); }
 
-        Host.SetOutline(FloorWalls, walls, EditorTheme.Text, FloorWallLift, 0.14f);
+        Host.Outlines.Set(FloorWalls, walls, EditorTheme.Text, FloorWallLift, 0.14f);
         var (minor, major) = first || Host.Map.OriginEpsg5514 == null ? (new List<(Vector2, Vector2)>(), new List<(Vector2, Vector2)>()) : FloorGridLines(box);
-        Host.SetOutline(FloorGrid, minor, EditorTheme.Dim with { A = 0.35f }, FloorGridLift, 0.03f);
-        Host.SetOutline(FloorGridMajor, major, EditorTheme.Dim with { A = 0.7f }, FloorGridLift, 0.07f);
+        Host.Outlines.Set(FloorGrid, minor, EditorTheme.Dim with { A = 0.35f }, FloorGridLift, 0.03f);
+        Host.Outlines.Set(FloorGridMajor, major, EditorTheme.Dim with { A = 0.7f }, FloorGridLift, 0.07f);
     }
 
     static IEnumerable<MeshInstance3D> MeshesOf(Node n)

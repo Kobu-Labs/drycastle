@@ -46,7 +46,7 @@ public sealed class FenceTool : EditorPart
         UpdateTarget();
         Panel.Refresh();
         Gates.RebuildMarkers();
-        Host.MarkAllOutlines();
+        Host.Outlines.MarkAll();
     }
 
     // ---- target and pending state ----
@@ -63,7 +63,7 @@ public sealed class FenceTool : EditorPart
     {
         var sel = Host.Selection.Where(Host.Map.Parcels.ContainsKey).ToList();
         if (sel.Count == 0) return null;
-        var groups = sel.Select(Host.Group).Distinct().ToList();
+        var groups = sel.Select(Host.Groups.GroupOf).Distinct().ToList();
         if (groups.Count == 1 && groups[0] != null)
         {
             var gid = groups[0]!;
@@ -101,7 +101,7 @@ public sealed class FenceTool : EditorPart
     void AfterEdit()
     {
         Host.MarkPanelDirty();
-        Host.MarkAllOutlines();
+        Host.Outlines.MarkAll();
     }
 
     internal bool Edit(Action<FenceDraft> change, bool needCustom = false)

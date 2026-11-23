@@ -63,7 +63,7 @@ public sealed class ShapeWorld
     {
         if (_signature == "off") return;
         _signature = "off";
-        foreach (var n in Outlines) _host.SetOutline(n, new(), Colors.White, 0, 0);
+        foreach (var n in Outlines) _host.Outlines.Set(n, new(), Colors.White, 0, 0);
         foreach (var h in _handles) h.Visible = false;
     }
 
@@ -74,7 +74,7 @@ public sealed class ShapeWorld
 
     void ClearOutlines()
     {
-        foreach (var n in Outlines) _host.SetOutline(n, new(), Colors.White, 0, 0);
+        foreach (var n in Outlines) _host.Outlines.Set(n, new(), Colors.White, 0, 0);
     }
 
     public void Draw()
@@ -111,7 +111,7 @@ public sealed class ShapeWorld
         var s = _shapes;
         var draft = s.ShapeDraft;
         var map = _host.Map;
-        var chain = _host.RingSegs(draft, s.InLevel);
+        var chain = _host.Picker.RingSegs(draft, s.InLevel);
         var ghost = new List<(Vector2, Vector2)>(); var bad = new List<(Vector2, Vector2)>();
         if (!s.InLevel && s.Cursor is { } cur && draft.Count > 0)
         {
@@ -121,22 +121,22 @@ public sealed class ShapeWorld
             if (draft.Count >= 2 && ok) { var f = map.FromAbsolute(draft[0].x, draft[0].y); if (b.DistanceSquaredTo(f) > 1e-8f) ghost.Add((b, f)); }
         }
         var closedBad = s.InLevel && ShapeEditor.RingBad(draft);
-        _host.SetOutline(OutlineDraft, closedBad ? new() : chain, EditorTheme.Accent, 0.31f, 0.45f);
-        _host.SetOutline(OutlineGhost, ghost, new Color(EditorTheme.Accent, 0.5f), 0.30f, 0.35f);
-        _host.SetOutline(OutlineBad, bad.Concat(closedBad ? chain : new()).ToList(), EditorTheme.Danger, 0.33f, 0.45f);
-        _host.SetOutline(OutlineSel, new(), Colors.White, 0, 0);
-        _host.SetOutline(OutlineDrag, new(), Colors.White, 0, 0);
+        _host.Outlines.Set(OutlineDraft, closedBad ? new() : chain, EditorTheme.Accent, 0.31f, 0.45f);
+        _host.Outlines.Set(OutlineGhost, ghost, new Color(EditorTheme.Accent, 0.5f), 0.30f, 0.35f);
+        _host.Outlines.Set(OutlineBad, bad.Concat(closedBad ? chain : new()).ToList(), EditorTheme.Danger, 0.33f, 0.45f);
+        _host.Outlines.Set(OutlineSel, new(), Colors.White, 0, 0);
+        _host.Outlines.Set(OutlineDrag, new(), Colors.White, 0, 0);
     }
 
     /// <summary>The selected shape's outline, or while a corner is dragged the outline it would have (red when it would be refused).</summary>
     void DrawSelected(ShapeInfo sel, List<(double x, double y)>? dragRing)
     {
         var bad = dragRing != null && ShapeEditor.RingBad(dragRing);
-        _host.SetOutline(OutlineSel, dragRing == null ? _host.RingSegs(sel.Points, true) : new(), OutlineColour(sel), 0.31f, 0.45f);
-        _host.SetOutline(OutlineDrag, dragRing != null && !bad ? _host.RingSegs(dragRing, true) : new(), OutlineColour(sel), 0.32f, 0.45f);
-        _host.SetOutline(OutlineBad, bad ? _host.RingSegs(dragRing!, true) : new(), EditorTheme.Danger, 0.33f, 0.45f);
-        _host.SetOutline(OutlineDraft, new(), Colors.White, 0, 0);
-        _host.SetOutline(OutlineGhost, new(), Colors.White, 0, 0);
+        _host.Outlines.Set(OutlineSel, dragRing == null ? _host.Picker.RingSegs(sel.Points, true) : new(), OutlineColour(sel), 0.31f, 0.45f);
+        _host.Outlines.Set(OutlineDrag, dragRing != null && !bad ? _host.Picker.RingSegs(dragRing, true) : new(), OutlineColour(sel), 0.32f, 0.45f);
+        _host.Outlines.Set(OutlineBad, bad ? _host.Picker.RingSegs(dragRing!, true) : new(), EditorTheme.Danger, 0.33f, 0.45f);
+        _host.Outlines.Set(OutlineDraft, new(), Colors.White, 0, 0);
+        _host.Outlines.Set(OutlineGhost, new(), Colors.White, 0, 0);
     }
 
     /// <summary>Corner handles: sized by distance so they stay grabbable from any height.</summary>
@@ -153,7 +153,7 @@ public sealed class ShapeWorld
             var h = _handles[i];
             h.Visible = i < show.Count;
             if (i >= show.Count) continue;
-            var p = _host.GroundPoint(show[i]);
+            var p = _host.Picker.GroundPoint(show[i]);
             h.Position = p;
             var s = Mathf.Clamp(p.DistanceTo(_host.FlyCam.GlobalPosition) * 0.011f, 0.35f, 8f) * (i == hot ? 1.5f : 1f);
             h.Scale = new Vector3(s, s, s);

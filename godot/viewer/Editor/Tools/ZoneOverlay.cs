@@ -138,7 +138,7 @@ public sealed class ZoneOverlay
         if (_mesh == null)
         {
             _mesh = new MeshInstance3D { Name = "ZoneOverlay", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-            _host.OutlineRoot.AddChild(_mesh); // follows the editor's visibility: gone in walk mode
+            _host.Outlines.Root.AddChild(_mesh); // follows the editor's visibility: gone in walk mode
         }
         if (_step < _order.Count)
         {
@@ -231,7 +231,7 @@ public sealed class ZoneOverlay
             if (_selMesh == null)
             {
                 _selMesh = new MeshInstance3D { Name = "ZoneOverlaySelected", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-                _host.OutlineRoot.AddChild(_selMesh);
+                _host.Outlines.Root.AddChild(_selMesh);
             }
             var mesh = new ArrayMesh();
             if (_kinds.GetValueOrDefault(kind) is { } all)

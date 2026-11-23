@@ -28,7 +28,7 @@ public partial class EditorMode
 
     IEnumerable<(string label, Action run)> PaletteAll(string filter)
     {
-        foreach (var (tool, _, name, key) in Tools) { var t = tool; yield return ($"Tool: {name}  ({OS.GetKeycodeString(key)})", () => SelectTool(t)); }
+        foreach (var (tool, _, name, key) in EditorChrome.Tools) { var t = tool; yield return ($"Tool: {name}  ({OS.GetKeycodeString(key)})", () => SelectTool(t)); }
         foreach (var g in Ground.Rows()) { var gn = g.Name; yield return ($"{g.Name}  ground type  {GroundTypeRows.RecipeWord(g)}  {GroundTypeRows.StateWord(g.State)}", () => { SelectTool(EditorTool.Ground); Ground.SelectType(gn); }); }
         yield return ("Ground: draw a patch of the selected type  (N)", () => { SelectTool(EditorTool.Ground); Shapes.StartShape(); });
         yield return (Ground.Overlay.On ? "Ground: hide the ground map  (M)" : "Ground: show the ground map  (M)", () => { SelectTool(EditorTool.Ground); Ground.Overlay.Toggle(); });
@@ -50,7 +50,7 @@ public partial class EditorMode
         yield return ("Edit: redo  (Ctrl+Y)", () => Edits.Redo());
         yield return ("View: top-down  (T)", ToggleTopDown);
         yield return ("Walk: drop to the ground here  (F3)", WalkFromHere);
-        yield return ("Help: controls  (F1)", ToggleCheatSheet);
+        yield return ("Help: controls  (F1)", Chrome.ToggleCheatSheet);
         foreach (var r in Shapes.Patches()) { var id = r.Id; yield return ($"{r.Id}  ground patch  {r.Type}  {r.Points.Count} corners", () => { SelectTool(EditorTool.Ground); Shapes.SelectShape(ShapeKind.Patch, id); }); }
         foreach (var z in Zones.List()) { var id = z.Id; yield return ($"{z.Label}  zone  {Zones.KindLabel(z.Kind)}  {z.Points.Count} corners", () => { SelectTool(EditorTool.Zones); Shapes.SelectShape(ShapeKind.Zone, id); }); }
         foreach (var k in Map.ZoneKinds) { var n = k.Name; yield return ($"{k.Label}  zone kind", () => { SelectTool(EditorTool.Zones); Zones.SelectKind(n); }); }

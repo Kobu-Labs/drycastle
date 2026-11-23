@@ -94,23 +94,23 @@ public sealed class SketchMarks
                 _tags.Add(l);
             }
             _tags[tag++].Text = text;
-            _tagAt.Add(_host.GroundPoint(at));
+            _tagAt.Add(_host.Picker.GroundPoint(at));
         }
         foreach (var p in v.Doc.Points)
         {
-            _fixed.Add((_host.GroundPoint((p.X, p.Y)), 1.4f, p.Id == v.Selected || p.Id == v.Hover ? HandleHot : HandlePlain));
+            _fixed.Add((_host.Picker.GroundPoint((p.X, p.Y)), 1.4f, p.Id == v.Selected || p.Id == v.Hover ? HandleHot : HandlePlain));
             Tag((p.X, p.Y), MarkTag(v.Doc, p.Sketch, p.Id));
         }
         foreach (var l in v.Doc.Lines)
         {
-            (l.Id == v.Selected ? sel : plain).AddRange(_host.RingSegs(l.Points, l.Closed));
+            (l.Id == v.Selected ? sel : plain).AddRange(_host.Picker.RingSegs(l.Points, l.Closed));
             var look = l.Id == v.Selected || l.Id == v.Hover ? HandleHot : HandlePlain;
-            foreach (var c in l.Points) _fixed.Add((_host.GroundPoint(c), 0.7f, look));
+            foreach (var c in l.Points) _fixed.Add((_host.Picker.GroundPoint(c), 0.7f, look));
             Tag(TagAnchor(l), MarkTag(v.Doc, l.Sketch, l.Id));
         }
         for (var i = tag; i < _tags.Count; i++) _tags[i].Visible = false;
-        _host.SetOutline(OutlineSketch, plain, EditorTheme.Sketch, 0.36f, 0.4f);
-        _host.SetOutline(OutlineSketchSel, sel, EditorTheme.Text, 0.37f, 0.55f);
+        _host.Outlines.Set(OutlineSketch, plain, EditorTheme.Sketch, 0.36f, 0.4f);
+        _host.Outlines.Set(OutlineSketchSel, sel, EditorTheme.Text, 0.37f, 0.55f);
     }
 
     // the line being drawn and the ghost of the next click
@@ -121,7 +121,7 @@ public sealed class SketchMarks
         _liveSig = liveSig;
         _live.Clear();
         var ghost = new List<(Vector2, Vector2)>();
-        for (var i = 0; i < v.Draft.Count; i++) _live.Add((_host.GroundPoint(v.Draft[i]), 1f, i == hoverDraft ? HandleHot : HandlePlain));
+        for (var i = 0; i < v.Draft.Count; i++) _live.Add((_host.Picker.GroundPoint(v.Draft[i]), 1f, i == hoverDraft ? HandleHot : HandlePlain));
         if (active && v.Cursor is { } cur)
         {
             // the mark the next click makes: a ghost point, and the edge to it (to the first corner when the click would close the line)
@@ -131,10 +131,10 @@ public sealed class SketchMarks
                 var a = _host.Map.FromAbsolute(v.Draft[^1].x, v.Draft[^1].y); var b = _host.Map.FromAbsolute(to.x, to.y);
                 if (a.DistanceSquaredTo(b) > 1e-8f) ghost.Add((a, b));
             }
-            if (hoverDraft < 0 && v.Hover == null) _live.Add((_host.GroundPoint(cur), v.Mode == SketchKind.Point ? 1.4f : 1f, HandleGhost));
+            if (hoverDraft < 0 && v.Hover == null) _live.Add((_host.Picker.GroundPoint(cur), v.Mode == SketchKind.Point ? 1.4f : 1f, HandleGhost));
         }
-        _host.SetOutline(OutlineSketchDraft, _host.RingSegs(v.Draft, false), EditorTheme.Sketch, 0.38f, 0.4f);
-        _host.SetOutline(OutlineSketchGhost, ghost, new Color(EditorTheme.Sketch, 0.5f), 0.35f, 0.35f);
+        _host.Outlines.Set(OutlineSketchDraft, _host.Picker.RingSegs(v.Draft, false), EditorTheme.Sketch, 0.38f, 0.4f);
+        _host.Outlines.Set(OutlineSketchGhost, ghost, new Color(EditorTheme.Sketch, 0.5f), 0.35f, 0.35f);
     }
 
     // handles: sized by distance so they stay clickable from any height
@@ -143,7 +143,7 @@ public sealed class SketchMarks
         var n = _fixed.Count + _live.Count;
         while (_handles.Count < n)
         {
-            var mi = new MeshInstance3D { Mesh = _host.HandleMesh, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+            var mi = new MeshInstance3D { Mesh = _host.Shapes.World.HandleMesh, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
             _root.AddChild(mi);
             _handles.Add(mi);
         }
@@ -157,7 +157,7 @@ public sealed class SketchMarks
             h.Position = pos;
             var s = Mathf.Clamp(pos.DistanceTo(cam) * 0.011f, 0.35f, 8f) * size * (look == HandleHot ? 1.3f : 1f);
             h.Scale = new Vector3(s, s, s);
-            h.MaterialOverride = look == HandleHot ? _host.HandleHot : look == HandleGhost ? _ghostMat : _mat;
+            h.MaterialOverride = look == HandleHot ? _host.Shapes.World.HandleHot : look == HandleGhost ? _ghostMat : _mat;
         }
     }
 

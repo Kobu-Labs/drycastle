@@ -80,13 +80,13 @@ public partial class Viewer
         {
             var n0 = _watcher!.AppliedCount;
             var saved = ed.Fence.Apply();
-            var status = ed.StatusMessage;
+            var status = ed.Chrome.StatusMessage;
             Check(saved && status.StartsWith("saved"), $"[{name}] Apply saves: status '{status}'");
             File.Copy(editsPath, Path.Combine(stepsDir, name + ".json"), true);
             if (!expectRun) return saved;
             var ok = await WaitUntil(() => _watcher.AppliedCount > n0 || _watcher.FailedCount > 0, 40);
-            Check(ok && _watcher.AppliedCount > n0 && ed.StatusMessage.StartsWith("applied in"),
-                $"[{name}] watcher regenerated: status '{ed.StatusMessage}'");
+            Check(ok && _watcher.AppliedCount > n0 && ed.Chrome.StatusMessage.StartsWith("applied in"),
+                $"[{name}] watcher regenerated: status '{ed.Chrome.StatusMessage}'");
             await Physics(4);
             ed.RefreshNow();
             return saved;
@@ -138,8 +138,8 @@ public partial class Viewer
         // ---- 2. gates ----
         ed.RefreshNow();
         Check(ed.Fence.Panel.GateButtonEnabled && ed.Fence.Gates.Arm() && ed.Fence.Gates.Armed, "[Add gate] arms the tool");
-        Check(!ed.Fence.Gates.Begin(Ground("far_point")) && ed.Fence.Gates.Armed && ed.StatusMessage.Contains("no fence boundary"),
-            $"a click more than 6 m from the boundary picks nothing ('{ed.StatusMessage}')");
+        Check(!ed.Fence.Gates.Begin(Ground("far_point")) && ed.Fence.Gates.Armed && ed.Chrome.StatusMessage.Contains("no fence boundary"),
+            $"a click more than 6 m from the boundary picks nothing ('{ed.Chrome.StatusMessage}')");
         var tangent = plan.GetProperty("probe1_tangent"); var normal = plan.GetProperty("probe1_normal");
         var onP1 = Ground("probe1_pt");
         var offP1 = Ground("probe1_pt", normal[0].GetDouble() * 2.0, normal[1].GetDouble() * 2.0);

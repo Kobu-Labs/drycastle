@@ -69,7 +69,7 @@ public partial class Viewer
             var s0 = ed.Edits.SaveCount; var u0 = ed.Edits.History.UndoDepth; var a0 = _watcher!.AppliedCount;
             if (driver != null) await driver(); // key events arrive a frame later
             var ok = act();
-            Check(ok && ed.Edits.SaveCount == s0 + 1 && ed.Edits.History.UndoDepth == u0 + 1, $"[{name}] one save, one undo step (saves {ed.Edits.SaveCount - s0}, undo depth {ed.Edits.History.UndoDepth - u0}), status '{ed.StatusMessage}'");
+            Check(ok && ed.Edits.SaveCount == s0 + 1 && ed.Edits.History.UndoDepth == u0 + 1, $"[{name}] one save, one undo step (saves {ed.Edits.SaveCount - s0}, undo depth {ed.Edits.History.UndoDepth - u0}), status '{ed.Chrome.StatusMessage}'");
             FileIs(step, name);
             if (patchRun) await WaitUntil(() => _watcher.AppliedCount > a0 || _watcher.FailedCount > 0, 90);
             await Settle(patchRun);
@@ -80,7 +80,7 @@ public partial class Viewer
             var s0 = ed.Edits.SaveCount; var u0 = ed.Edits.History.UndoDepth;
             var before = Disk();
             var ok = act();
-            Check(!ok && ed.Edits.SaveCount == s0 && ed.Edits.History.UndoDepth == u0 && Disk() == before && Disk() == Expect(step), $"[{name}] refused: nothing saved, file unchanged, status '{ed.StatusMessage}'");
+            Check(!ok && ed.Edits.SaveCount == s0 && ed.Edits.History.UndoDepth == u0 && Disk() == before && Disk() == Expect(step), $"[{name}] refused: nothing saved, file unchanged, status '{ed.Chrome.StatusMessage}'");
             return !ok;
         }
 
@@ -98,7 +98,7 @@ public partial class Viewer
         Check(ed.Shapes.Panel.RowCount == 1 && !ed.Shapes.Panel.EmptyShown && !ed.Shapes.Panel.RowSelected("GP-0001"), "panel lists the seeded GP-0001");
         Check(ed.ShapeHint.Contains("draws a patch") && ed.Shapes.Panel.State == "No patch selected", $"idle hint and state: '{ed.ShapeHint}'");
         await Key_(Key.N);
-        Check(ed.Shapes.Mode == ShapeState.Idle && ed.StatusMessage.Contains("pick a ground type"), $"N without a selected type is refused with the way out: '{ed.StatusMessage}'");
+        Check(ed.Shapes.Mode == ShapeState.Idle && ed.Chrome.StatusMessage.Contains("pick a ground type"), $"N without a selected type is refused with the way out: '{ed.Chrome.StatusMessage}'");
         Check(ed.Ground.SelectType("paint_336699"), "a type is selected in the list");
 
         // ---- drawing: refusals before any save ----
@@ -114,9 +114,9 @@ public partial class Viewer
         var bow = Pt("bow");
         // bow tie: the 4th corner's edge would cross the first edge
         Check(ed.Shapes.AddShapePoint(bow[0], bow[1]) && ed.Shapes.AddShapePoint(bow[0] + 10, bow[1] + 10) && ed.Shapes.AddShapePoint(bow[0] + 10, bow[1]), "bow tie: 3 corners placed");
-        Check(!ed.Shapes.AddShapePoint(bow[0], bow[1] + 10) && ed.Shapes.ShapeDraft.Count == 3, $"self-crossing corner refused: '{ed.StatusMessage}'");
+        Check(!ed.Shapes.AddShapePoint(bow[0], bow[1] + 10) && ed.Shapes.ShapeDraft.Count == 3, $"self-crossing corner refused: '{ed.Chrome.StatusMessage}'");
         ed.Shapes.ShapeEscape(); // Esc cancels drawing
-        Check(ed.Shapes.Mode == ShapeState.Idle && ed.Shapes.ShapeDraft.Count == 0 && ed.StatusMessage.Contains("nothing was saved"), "Esc cancels drawing, nothing saved");
+        Check(ed.Shapes.Mode == ShapeState.Idle && ed.Shapes.ShapeDraft.Count == 0 && ed.Chrome.StatusMessage.Contains("nothing was saved"), "Esc cancels drawing, nothing saved");
         // collinear: closes to a shape with no area
         await Key_(Key.N);
         foreach (var dx in new[] { 0.0, 5.0, 10.0 }) ed.Shapes.AddShapePoint(bow[0] + dx, bow[1]);
@@ -133,7 +133,7 @@ public partial class Viewer
         Check(ed.Shapes.Panel.Validation.StartsWith("Shape is valid") && ed.Shapes.Panel.Validation.Contains("Not saved"), $"panel says valid and unsaved: '{ed.Shapes.Panel.Validation}'");
         Check(ed.Shapes.ShapeDraftPending, "unsaved marker while drawing");
         ed.Shapes.World.Redraw();
-        Check(ed.SegmentCount(ShapeWorld.OutlineDraft) == 3 && ed.Shapes.World.HandleCount == 4, $"live preview: {ed.SegmentCount(ShapeWorld.OutlineDraft)} edges, {ed.Shapes.World.HandleCount} corner handles");
+        Check(ed.Outlines.SegmentCount(ShapeWorld.OutlineDraft) == 3 && ed.Shapes.World.HandleCount == 4, $"live preview: {ed.Outlines.SegmentCount(ShapeWorld.OutlineDraft)} edges, {ed.Shapes.World.HandleCount} corner handles");
         Check(Disk() == Expect("seed"), "nothing saved while drawing");
         var saves0 = ed.Edits.SaveCount;
         await Gesture("create GP-0002 (Enter)", () => ed.Shapes.Mode == ShapeState.Selected, "p_created", true, () => Key_(Key.Enter));
@@ -154,13 +154,13 @@ public partial class Viewer
         Check(ed.Shapes.StartCornerDrag(2) && ed.Shapes.Mode == ShapeState.Dragging && ed.ShapeHint.Contains("moving a corner"), "drag starts on corner 3");
         ed.Shapes.DragCornerToAbs(inv[0], inv[1]);
         ed.Shapes.World.Redraw();
-        Check(ed.SegmentCount(ShapeWorld.OutlineBad) > 0 && ed.SegmentCount(ShapeWorld.OutlineDrag) == 0, "crossing drag previews in the refused colour");
+        Check(ed.Outlines.SegmentCount(ShapeWorld.OutlineBad) > 0 && ed.Outlines.SegmentCount(ShapeWorld.OutlineDrag) == 0, "crossing drag previews in the refused colour");
         Check(Disk() == Expect("p_retyped"), "file untouched during the drag");
         await Refused("drag corner into a crossing", () => ed.Shapes.EndCornerDrag(), "p_retyped");
         ed.Shapes.StartCornerDrag(1);
         ed.Shapes.DragCornerToAbs(mv[0], mv[1]);
         ed.Shapes.World.Redraw();
-        Check(ed.SegmentCount(ShapeWorld.OutlineDrag) == 4 && ed.SegmentCount(ShapeWorld.OutlineBad) == 0, "valid drag previews live");
+        Check(ed.Outlines.SegmentCount(ShapeWorld.OutlineDrag) == 4 && ed.Outlines.SegmentCount(ShapeWorld.OutlineBad) == 0, "valid drag previews live");
         await Key_(Key.Escape);
         Check(ed.Shapes.Mode == ShapeState.Selected && Disk() == Expect("p_retyped"), "Esc cancels the drag, nothing saved");
         ed.Shapes.StartCornerDrag(1);
@@ -176,7 +176,7 @@ public partial class Viewer
         Check(ed.Shapes.Mode == ShapeState.Level && ed.Ground.PatchPage.WaterRowShown && ed.Shapes.Panel.CreateButtonShown, "Enter on a water patch asks for the water level: nothing is created yet");
         Check(Disk() == Expect("p_moved"), "nothing saved while the water level is asked for");
         ed.Shapes.World.Redraw();
-        Check(ed.SegmentCount(ShapeWorld.OutlineDraft) == 4, "closing edge is part of the preview");
+        Check(ed.Outlines.SegmentCount(ShapeWorld.OutlineDraft) == 4, "closing edge is part of the preview");
         await Key_(Key.Escape);
         Check(ed.Shapes.Mode == ShapeState.Drawing && ed.Shapes.ShapeDraft.Count == 4, "Esc in the water level step goes back to the corners");
         await Key_(Key.Enter);
@@ -184,9 +184,9 @@ public partial class Viewer
         await Gesture("create the water patch GP-0003 (Enter)", () => ed.Shapes.Mode == ShapeState.Selected, "p_water", true, () => Key_(Key.Enter));
         Check(ed.Shapes.SelectedPatchId == "GP-0003" && ed.Shapes.Patch("GP-0003")!.WaterY == 1.5, "the water patch carries its water level");
         Check(!ed.Shapes.SetPatchWater("GP-0002", 2.0), "a land patch has no water level");
-        Check(!ed.Ground.Ops.SetCarried("pond", "water", false) && ed.Edits.History.UndoDepth == 4, $"unticking water on a type a patch uses is refused: '{ed.StatusMessage}'");
+        Check(!ed.Ground.Ops.SetCarried("pond", "water", false) && ed.Edits.History.UndoDepth == 4, $"unticking water on a type a patch uses is refused: '{ed.Chrome.StatusMessage}'");
         ed.Ground.Ops.RequestDelete();
-        Check(!ed.Confirm.Visible && ed.StatusMessage.Contains("patch"), $"a type a patch uses is not offered for deletion (blocked with the reason, no confirm): '{ed.StatusMessage}'");
+        Check(!ed.Confirm.Visible && ed.Chrome.StatusMessage.Contains("patch"), $"a type a patch uses is not offered for deletion (blocked with the reason, no confirm): '{ed.Chrome.StatusMessage}'");
 
         // ---- delete: confirm names the patch; cancel keeps it ----
         await Key_(Key.Delete);
@@ -207,7 +207,7 @@ public partial class Viewer
         Check(!deerRow.Contains("drawn") && !deerRow.Contains("rule"), $"a kind row has one number, no drawn/rule wording: '{deerRow}'");
         Check(ed.ShapeHint.Contains("zones:"), $"zones idle hint: '{ed.ShapeHint}'");
         await Key_(Key.N);
-        Check(ed.Shapes.Mode == ShapeState.Idle && ed.StatusMessage.Contains("pick a zone kind"), $"N without a kind is refused with the way out: '{ed.StatusMessage}'");
+        Check(ed.Shapes.Mode == ShapeState.Idle && ed.Chrome.StatusMessage.Contains("pick a zone kind"), $"N without a kind is refused with the way out: '{ed.Chrome.StatusMessage}'");
         ed.Zones.Panel.PressKindRow("bigfoot"); ed.RefreshNow();
         Check(ed.Zones.SelectedKind == "bigfoot", "clicking a kind row selects it");
         var zq = new[] { Pt("z0"), Pt("z1"), Pt("z2"), Pt("z3") };
@@ -240,7 +240,7 @@ public partial class Viewer
             {
                 var a0 = _watcher!.AppliedCount;
                 var ok = undo ? ed.Edits.Undo() : ed.Edits.Redo();
-                Check(ok, $"{what} -> {st}: status '{ed.StatusMessage}'");
+                Check(ok, $"{what} -> {st}: status '{ed.Chrome.StatusMessage}'");
                 FileIs(st, $"{what} {st}");
                 if (patchRun) await WaitUntil(() => _watcher.AppliedCount > a0 || _watcher.FailedCount > 0, 90);
                 await Settle(patchRun);
@@ -268,7 +268,7 @@ public partial class Viewer
         Check(ed.Shapes.ShapeDraft.Count == 0, "Backspace takes the last corner back");
         ed.Shapes.AddShapePoint(q[0][0], q[0][1]);
         ed.SelectTool(EditorTool.View);
-        Check(ed.Shapes.ShapeDraft.Count == 0 && ed.StatusMessage.Contains("never saved"), $"switching tool names the discarded shape: '{ed.StatusMessage}'");
+        Check(ed.Shapes.ShapeDraft.Count == 0 && ed.Chrome.StatusMessage.Contains("never saved"), $"switching tool names the discarded shape: '{ed.Chrome.StatusMessage}'");
         ed.SelectTool(EditorTool.Ground);
         Check(ed.Shapes.ShapeAt(ShapeKind.Patch, plan.GetProperty("inside_p1")[0].GetDouble(), plan.GetProperty("inside_p1")[1].GetDouble()) == "GP-0001", "hit test finds GP-0001");
         ed.Shapes.Panel.PressRow("GP-0001"); ed.RefreshNow();
@@ -308,7 +308,7 @@ public partial class Viewer
             Check(ed.Edits.Undo() && Disk() == before && ed.Zones.Count(kind) == n0, "one undo brings it back exactly");
             var c = rule.Points; var mid = (c.Average(p => p.x), c.Average(p => p.y));
             var to = (c[0].x + (mid.Item1 - c[0].x) * 0.1, c[0].y + (mid.Item2 - c[0].y) * 0.1);
-            Check(ed.Shapes.MoveShapeCorner(ShapeKind.Zone, rule.Id, 0, to.Item1, to.Item2) && ed.Edits.SaveCount == s0 + 5 && ed.Edits.History.UndoDepth == u0 + 1, $"moving a corner is one save, one undo step: '{ed.StatusMessage}'");
+            Check(ed.Shapes.MoveShapeCorner(ShapeKind.Zone, rule.Id, 0, to.Item1, to.Item2) && ed.Edits.SaveCount == s0 + 5 && ed.Edits.History.UndoDepth == u0 + 1, $"moving a corner is one save, one undo step: '{ed.Chrome.StatusMessage}'");
             Check(ed.Shapes.SelectedZoneId == "Z-0001" && ed.Zones.Find("Z-0001")!.Points.Count == c.Count && ed.Zones.Count(kind) == n0, "the moved copy replaces it: same count, selected");
             Check(ed.Edits.Undo() && Disk() == before && ed.Zones.Count(kind) == n0, "one undo brings it back exactly");
 
@@ -322,7 +322,7 @@ public partial class Viewer
             Check(!ed.Zones.Panel.MarkDeleteEnabled && ed.Zones.Marks.Count == 0, "nothing marked: the mass delete is disabled");
             ed.Shapes.Panel.TickRow(two[0], true); if (two.Count > 1) ed.Zones.Marks.Toggle(two[1]); ed.RefreshNow(); ed.Zones.Overlay.Now();
             Check(ed.Zones.Marks.Count == two.Count && two.All(ed.Shapes.Panel.RowMarked) && ed.Zones.Panel.MarkDeleteEnabled && ed.Zones.Panel.MarkDeleteText.Contains($"{two.Count} marked"), $"a row tick and a map mark both count: '{ed.Zones.Panel.MarkDeleteText}'");
-            Check(ed.SegmentCount(ZoneMarks.Outline) > 0, "marked zones are outlined on the map");
+            Check(ed.Outlines.SegmentCount(ZoneMarks.Outline) > 0, "marked zones are outlined on the map");
             s0 = ed.Edits.SaveCount; u0 = ed.Edits.History.UndoDepth;
             await Key_(Key.Delete, shift: true);
             Check(ed.Confirm.Visible && ed.Confirm.Text.Contains($"{two.Count} marked") && ed.Edits.SaveCount == s0, $"Shift+Del asks first and names what goes: '{ed.Confirm.Text.Replace('\n', '|')}'");

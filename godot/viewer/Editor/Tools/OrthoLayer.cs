@@ -113,7 +113,7 @@ public sealed class OrthoLayer : EditorPart
                 Mesh = BuildOrthoMesh(minX, minY, maxX, maxY),
                 Visible = false,
             };
-            Host.OutlineRoot.AddChild(_orthoMesh); // follows the editor's visibility: gone in walk mode
+            Host.Outlines.Root.AddChild(_orthoMesh); // follows the editor's visibility: gone in walk mode
             _orthoNote.Text = $"{image.GetWidth()} x {image.GetHeight()} px, {root.GetProperty("pixel_m").GetDouble():F2} m per pixel. {root.GetProperty("attribution").GetString()}. Reference only.";
             return true;
         }

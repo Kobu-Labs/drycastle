@@ -99,7 +99,7 @@ public sealed class PolePlan
 
     public void LeftPress(Vector2 screen)
     {
-        if (_host.RayToGround(_host.FlyCam.ProjectRayOrigin(screen), _host.FlyCam.ProjectRayNormal(screen), out var g)) PoleAt(g);
+        if (_host.Picker.RayToGround(_host.FlyCam.ProjectRayOrigin(screen), _host.FlyCam.ProjectRayNormal(screen), out var g)) PoleAt(g);
         else _host.Say("click on the ground", true);
     }
 

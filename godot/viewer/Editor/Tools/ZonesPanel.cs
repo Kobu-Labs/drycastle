@@ -127,7 +127,7 @@ public sealed class ZonesPanel
         if (sel != null && _scrolledFor != sel.Id)
         {
             _scrolledFor = sel.Id;
-            _host.RevealInPanel(shapes.Panel.Of(ShapeKind.Zone).State);
+            _host.Chrome.RevealInPanel(shapes.Panel.Of(ShapeKind.Zone).State);
         }
         else if (sel == null) _scrolledFor = "";
     }

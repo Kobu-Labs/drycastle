@@ -144,7 +144,7 @@ public sealed class GroundMap
         if (_mesh == null)
         {
             _mesh = new MeshInstance3D { Name = "GroundMap", CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
-            _host.OutlineRoot.AddChild(_mesh);
+            _host.Outlines.Root.AddChild(_mesh);
         }
         if (_buildStep < _order.Count)
         {

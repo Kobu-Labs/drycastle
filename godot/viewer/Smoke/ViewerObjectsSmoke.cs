@@ -75,7 +75,7 @@ public partial class Viewer
             var ok = act();
             if (frames > 0) await Frame(frames);
             var saved = ed.Edits.SaveCount == s0 + 1;
-            Check(ok && saved, $"[{name}] one save ({ed.Edits.SaveCount - s0}), status '{ed.StatusMessage}'");
+            Check(ok && saved, $"[{name}] one save ({ed.Edits.SaveCount - s0}), status '{ed.Chrome.StatusMessage}'");
             if (!run)
             {
                 Check(_watcher.RunCount == runs0 && _watcher.InstantCount == inst0 + 1 && ed.Edits.LastSaveInstant,
@@ -304,7 +304,7 @@ public partial class Viewer
         ed.Click(null, false); ed.Click(A, false); ed.Click(B, true);
         await Frame();
         var runsG = _watcher!.RunCount;
-        await Op("t22", () => { ed.GroupSelected(); return ed.StatusMessage.StartsWith("saved"); }, run: true);
+        await Op("t22", () => { ed.Groups.GroupSelected(); return ed.Chrome.StatusMessage.StartsWith("saved"); }, run: true);
         SceneMatches("after the group's parcel-run swapped the fragment in");
         ed.Objects.SelectObject("o-0002");
         await Op("t23", () => ed.Objects.NudgeObject(0.5, 0));
@@ -333,7 +333,7 @@ public partial class Viewer
             var s0 = ed.Edits.SaveCount;
             var ok = undo ? ed.Edits.Undo() : ed.Edits.Redo();
             var label = $"{(undo ? "undo" : "redo")} {saves[k].Name}";
-            Check(ok && ed.StatusMessage == $"{(undo ? "undo" : "redo")}: {desc}" && ed.Edits.SaveCount == s0 + 1, $"[{label}] status '{ed.StatusMessage}'");
+            Check(ok && ed.Chrome.StatusMessage == $"{(undo ? "undo" : "redo")}: {desc}" && ed.Edits.SaveCount == s0 + 1, $"[{label}] status '{ed.Chrome.StatusMessage}'");
             if (run)
             {
                 var done = await WaitUntil(() => _watcher.AppliedCount > app0 && !_watcher.Busy || _watcher.FailedCount > 0, 90);
@@ -349,17 +349,17 @@ public partial class Viewer
         }
         for (var k = n; k >= 1; k--) await StepUndoRedo(true, k);
         Check(ed.Edits.History.UndoDepth == 0 && ed.Edits.History.RedoDepth == n && Disk() == saves[0].Text, $"everything undone: the file is the seed again, redo stack {ed.Edits.History.RedoDepth}");
-        Check(!ed.Edits.Undo() && ed.StatusMessage.StartsWith("nothing to undo"), "undo on an empty stack says so");
+        Check(!ed.Edits.Undo() && ed.Chrome.StatusMessage.StartsWith("nothing to undo"), "undo on an empty stack says so");
         for (var k = 1; k <= n; k++) await StepUndoRedo(false, k);
         Check(ed.Edits.History.RedoDepth == 0 && ed.Edits.History.UndoDepth == n && Disk() == saves[n].Text, "everything redone: the file is the final state again");
 
         // the key bindings: Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z
         var depth = ed.Edits.History.UndoDepth;
         Key_(Key.Z, ctrl: true); await Frame(3);
-        Check(ed.Edits.History.UndoDepth == depth - 1 && ed.StatusMessage.StartsWith("undo: ") && Disk() == saves[n - 1].Text, $"Ctrl+Z undoes: '{ed.StatusMessage}'");
+        Check(ed.Edits.History.UndoDepth == depth - 1 && ed.Chrome.StatusMessage.StartsWith("undo: ") && Disk() == saves[n - 1].Text, $"Ctrl+Z undoes: '{ed.Chrome.StatusMessage}'");
         await WaitUntil(() => !_watcher.Busy, 5);
         Key_(Key.Y, ctrl: true); await Frame(3);
-        Check(ed.Edits.History.UndoDepth == depth && ed.StatusMessage.StartsWith("redo: ") && Disk() == saves[n].Text, $"Ctrl+Y redoes: '{ed.StatusMessage}'");
+        Check(ed.Edits.History.UndoDepth == depth && ed.Chrome.StatusMessage.StartsWith("redo: ") && Disk() == saves[n].Text, $"Ctrl+Y redoes: '{ed.Chrome.StatusMessage}'");
         Key_(Key.Z, ctrl: true); await Frame(3);
         Key_(Key.Z, ctrl: true, shift: true); await Frame(3);
         Check(ed.Edits.History.UndoDepth == depth && Disk() == saves[n].Text, "Ctrl+Shift+Z redoes too");
@@ -369,7 +369,7 @@ public partial class Viewer
         ed.Objects.ArmPlacement(SLAB);
         await Op("t26", () => ed.Objects.PlaceAt(Gp("a_base", 2.1, -1.55)));
         ed.Objects.DisarmPlacement();
-        Check(ed.Edits.History.RedoDepth == 0 && !ed.Edits.Redo() && ed.StatusMessage.StartsWith("nothing to redo"), "a new edit clears the redo stack");
+        Check(ed.Edits.History.RedoDepth == 0 && !ed.Edits.Redo() && ed.Chrome.StatusMessage.StartsWith("nothing to redo"), "a new edit clears the redo stack");
 
         // ---- 11. undo only touches the entries its operation touched ----
         {
@@ -420,7 +420,7 @@ public partial class Viewer
             var idsBefore = ObjectEdits.All(EditsFile.Load(editsPath)).Select(t => (string)t.obj["id"]!).ToHashSet();
             var runsOut = _watcher.RunCount;
             ed.Objects.ArmPlacement(SLAB);
-            Check(ed.Objects.PlaceAt(Gp("outside")), $"placing outside every parcel works ('{ed.StatusMessage}')");
+            Check(ed.Objects.PlaceAt(Gp("outside")), $"placing outside every parcel works ('{ed.Chrome.StatusMessage}')");
             ed.Objects.DisarmPlacement();
             var after = EditsFile.Load(editsPath);
             var outId = ObjectEdits.All(after).Select(t => (string)t.obj["id"]!).FirstOrDefault(id => !idsBefore.Contains(id)) ?? "";

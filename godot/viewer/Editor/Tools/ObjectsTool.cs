@@ -46,10 +46,10 @@ public sealed class ObjectsTool : EditorPart
         var free = Input.IsKeyPressed(Key.Ctrl);
         if (_ghost != null && !GhostPinned)
         {
-            if (!Host.Looking && !Host.OverUi(mouse) && Host.RayToGround(Host.FlyCam.ProjectRayOrigin(mouse), Host.FlyCam.ProjectRayNormal(mouse), out var g)) UpdateGhost(g, free);
+            if (!Host.Looking && !Host.Chrome.OverUi(mouse) && Host.Picker.RayToGround(Host.FlyCam.ProjectRayOrigin(mouse), Host.FlyCam.ProjectRayNormal(mouse), out var g)) UpdateGhost(g, free);
             else _ghost.Visible = false;
         }
-        if (_drag != DragKind.None && Host.RayToGround(Host.FlyCam.ProjectRayOrigin(mouse), Host.FlyCam.ProjectRayNormal(mouse), out var dg)) DragTo(dg, free);
+        if (_drag != DragKind.None && Host.Picker.RayToGround(Host.FlyCam.ProjectRayOrigin(mouse), Host.FlyCam.ProjectRayNormal(mouse), out var dg)) DragTo(dg, free);
         Gizmo.Update();
     }
 
@@ -77,7 +77,7 @@ public sealed class ObjectsTool : EditorPart
     /// <summary>Editor shortcuts for objects; true when the key was used. Not reached while a text field has the focus.</summary>
     public bool HandleKey(InputEventKey k)
     {
-        var overViewport = !Host.OverUi(Host.GetViewport().GetMousePosition());
+        var overViewport = !Host.Chrome.OverUi(Host.GetViewport().GetMousePosition());
         if (k.CtrlPressed)
         {
             if (k.Keycode != Key.D) return false;
@@ -196,7 +196,7 @@ public sealed class ObjectsTool : EditorPart
     public void PlaceClick(Vector2 screen, bool free)
     {
         Host.GetViewport().GuiReleaseFocus();
-        if (Host.RayToGround(Host.FlyCam.ProjectRayOrigin(screen), Host.FlyCam.ProjectRayNormal(screen), out var pp)) PlaceAt(pp, free);
+        if (Host.Picker.RayToGround(Host.FlyCam.ProjectRayOrigin(screen), Host.FlyCam.ProjectRayNormal(screen), out var pp)) PlaceAt(pp, free);
         else Host.Say("click on the ground", true);
     }
 
@@ -479,7 +479,7 @@ public sealed class ObjectsTool : EditorPart
     public void LeftPress(Vector2 screen, bool shift)
     {
         var o = Host.FlyCam.ProjectRayOrigin(screen); var d = Host.FlyCam.ProjectRayNormal(screen);
-        var hasGround = Host.RayToGround(o, d, out var gp);
+        var hasGround = Host.Picker.RayToGround(o, d, out var gp);
         if (SelectedObjectId != null && hasGround && Gizmo.OnRing(gp) && StartRotate(SelectedObjectId)) return;
         if (PickObject(o, d) is { } id)
         {
@@ -488,7 +488,7 @@ public sealed class ObjectsTool : EditorPart
             return;
         }
         SelectObject(null);
-        var hit = Host.PickScreen(screen, out _)?.Id;
+        var hit = Host.Picker.PickScreen(screen, out _)?.Id;
         if (Host.Tool == EditorTool.Group) { if (hit != null) Host.Click(hit, true); return; } // marking: every click toggles a parcel
         Host.Click(hit, shift);
     }

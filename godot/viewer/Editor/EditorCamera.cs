@@ -104,7 +104,7 @@ public sealed class EditorCamera
     public void DropPlayer()
     {
         var from = Node.GlobalPosition;
-        var ground = _host.RayToGround(from + Vector3.Up * 2f, Vector3.Down, out var hit) ? hit : new Vector3(from.X, from.Y, from.Z);
+        var ground = _host.Picker.RayToGround(from + Vector3.Up * 2f, Vector3.Down, out var hit) ? hit : new Vector3(from.X, from.Y, from.Z);
         ParkPlayer(ground + Vector3.Up * 1.0f, Mathf.RadToDeg(_yaw));
     }
 
@@ -155,6 +155,16 @@ public sealed class EditorCamera
         ApplyRotation();
     }
 
+    /// <summary>Look at an absolute point from above and south-east, a little left of centre so the sidebar does not cover it (screenshots).</summary>
+    public void LookAtAbs(double x, double y, float dist)
+    {
+        var map = _host.Map;
+        var t = map.FromAbsolute(x, y);
+        var target = new Vector3(t.X, map.GroundHeightOrMean(t.X, t.Y), t.Y);
+        var right = Node.GlobalBasis.X;
+        LookFrom(target + new Vector3(0, dist * 0.8f, dist * 0.6f) + right * dist * 0.15f, target + right * dist * 0.15f);
+    }
+
     /// <summary>T: snap to a top-down view above <paramref name="hoverPoint"/> (or the screen centre); again restores the camera.</summary>
     public void ToggleTopDown(Vector3? hoverPoint)
     {
@@ -170,7 +180,7 @@ public sealed class EditorCamera
         else
         {
             var size = _host.GetViewport().GetVisibleRect().Size;
-            if (!_host.RayToGround(Node.ProjectRayOrigin(size / 2), Node.ProjectRayNormal(size / 2), out ground))
+            if (!_host.Picker.RayToGround(Node.ProjectRayOrigin(size / 2), Node.ProjectRayNormal(size / 2), out ground))
                 ground = Node.GlobalPosition;
         }
         _savedCam = (Node.GlobalPosition, _yaw, _pitch);
