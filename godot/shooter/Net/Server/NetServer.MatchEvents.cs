@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.Profiles;
 using Drycastle.ShooterCore.Items;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Movement;
@@ -67,7 +68,7 @@ public partial class NetServer
                     sc.Zero.Reset();
                     _gear.SetBinoculars(sc, false); // a new life starts with them down
                     _gear.SetHeadLamp(sc, false); // and with the head lamp off
-                    ItemRules.IssueStandard(Items, sc.Bag, OwnedItems(sc)); // and with the standard items (the binoculars) in the bag
+                    ItemRules.IssueStandard(Items, sc.Bag, ProfileServer.OwnedItems(sc)); // and with the standard items (the binoculars) in the bag
                     _gear.SendEquipmentIfChanged(sc); // also what was issued at the join, before the first life
                     SendAmmo(sc);
                 }

@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.HuntLog;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Corpses;
@@ -188,16 +189,16 @@ public partial class NetServer
     }
 
     /// <summary>Applies damage through the match and sends the hit event; returns the result (Ignored when absorbed).</summary>
-    /// <param name="shot">Where the bullet entered a wild animal it hit (the hit diagram), and <paramref name="shotDistance"/> how far it flew: for the hunter's log (<see cref="OnWildKilled"/>).</param>
+    /// <param name="shot">Where the bullet entered a wild animal it hit (the hit diagram), and <paramref name="shotDistance"/> how far it flew: for the hunter's log (<see cref="HuntLogServer.OnWildKilled"/>).</param>
     DamageResult Deal(ushort attackerId, byte weaponIdx, ushort victim, float damage, bool head, bool backstab, KillCause cause = KillCause.Standard, HuntShotMsg? shot = null, float? shotDistance = null)
     {
         _animals.PlayerHurt(); // a life may end here: the animals' list of players is asked anew
         if (victim == BigfootRules.TargetId) return DealBigfoot(attackerId, weaponIdx); // a hit count, not hit points (issue #264)
         if (_streaks.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
         if (DemonRules.IsHitId(victim)) return DemonHit(attackerId, weaponIdx, damage); // the demon: a hit count, no hit points
-        if (WildlifeRules.IsHitId(victim)) _wildHit = new WildHit(weaponIdx, cause, shotDistance, shot); // read by the keeper's Killed event, inside this call
+        if (WildlifeRules.IsHitId(victim)) _hunts.Pending = new WildHit(weaponIdx, cause, shotDistance, shot); // read by the keeper's Killed event, inside this call
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
-        _wildHit = null;
+        _hunts.Pending = null;
         if (r == DamageResult.Ignored) return r; // dead, spawn protected or round not running: the shot is absorbed
         if (CitizenRules.IsHitId(victim) || PetRules.IsHitId(victim) || WildlifeRules.IsHitId(victim) || GangRules.IsHitId(victim) || RaidVanRules.IsHitId(victim)) // a citizen, a pet, a wild animal, a Gang member or a Raid van: the hit marker, but no assist, streak, refill or kill feed
         {
@@ -213,7 +214,7 @@ public partial class NetServer
         if (head) _smoke.Headshots++;
         if (backstab) _smoke.Backstabs++;
         var kill = r == DamageResult.Killed;
-        if (kill && shotDistance is { } far) RecordPlayerKill(attackerId, victim, weaponIdx, far); // the longest player kill of a hitscan shot (#430)
+        if (kill && shotDistance is { } far) _hunts.RecordPlayerKill(attackerId, victim, weaponIdx, far); // the longest player kill of a hitscan shot (#430)
         var msg = new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(victim, attackerId, weaponIdx, (ushort)damage, head, backstab, kill)));
         _byId.TryGetValue(attackerId, out var attacker);
         if (attackerId == _gunFxOwner) _gunFx.Hit(attackerId, head, kill); // a gunner's hit marker rides the tick's gunship blasts (#159)

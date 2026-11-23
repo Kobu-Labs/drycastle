@@ -62,6 +62,10 @@ internal sealed class ProfileServer
 
     string? Invalid(Loadout l, PlayerProfile p) => LoadoutRules.ValidateLoadout(l, _weapons, p.Level, ReportedUnlocks(p), PerkLevels, _killstreaks.UnlockLevels);
 
+    /// <summary>The ids of the reward items a player owns (unlock rows of kind "item", #473), so a spawn issues the upgrade in place of the standard item.</summary>
+    public static IReadOnlySet<string> OwnedItems(ServerClient c) =>
+        c.Profile is { } p ? p.Unlocks.Where(u => u.Kind == "item").Select(u => u.ItemId).ToHashSet() : new HashSet<string>();
+
     /// <summary>The hello's token starts the load; a guest (no store or no token) joins at once.</summary>
     public void StartLoad(ServerClient c, string token)
     {

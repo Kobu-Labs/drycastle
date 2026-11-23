@@ -5,6 +5,7 @@ using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.ChatRoom;
 using Drycastle.Shooter.Net.Server.Fauna;
 using Drycastle.Shooter.Net.Server.Gear;
+using Drycastle.Shooter.Net.Server.HuntLog;
 using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
 using Drycastle.Shooter.Net.Server.Profiles;
@@ -89,6 +90,7 @@ public partial class NetServer : Node
     IntelServer _intel = null!;
     ChatServer _chat = null!;
     ProfileServer _profiles = null!;
+    HuntLogServer _hunts = null!;
     StatusServer _status = null!;
     ItemsServer _gear = null!;
     Sitters _sitters = null!;
@@ -142,6 +144,8 @@ public partial class NetServer : Node
         RegisterChatCommands();
         _garage = new GarageServer(_ctx, ArenaMode, MapDir, _fleet.Cars, () => Vehicles);
         _minerals = new MineralsServer(_ctx, Progression, () => _wildlife.Keeper.Drops);
+        _hunts = new HuntLogServer(_ctx, Progression, AnimalData, Weapons, Items, CompanionData, Scores, WeaponKey,
+            c => { _profiles.Send(c); _companions.FromProfile(c); if (c.Joined) _companions.SendRoster(c); });
         _status = new StatusServer(_ctx, Deal, Weapons, GetHigh);
         DemonInit();
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");
@@ -156,7 +160,7 @@ public partial class NetServer : Node
         InitBigfoot(); // after the corpse book, which follows the same despawns
         _pets = new PetServer(_ctx, PetsData, AnimalData, _animals, ArenaMode, MapDir, Map);
         _wildlife = new WildlifeServer(_ctx, WildlifeData, AnimalData, AnimalShapes, _animals, () => MapZonePoints, () => Clock.HourAt(_tick / (double)Wire.TickRate), () => Query,
-            ArenaMode, MapDir, Map, (a, by) => OnWildKilled(a, by), _minerals.OnDropped);
+            ArenaMode, MapDir, Map, (a, by) => _hunts.OnWildKilled(a, by), _minerals.OnDropped);
         _companions = new CompanionServer(_ctx, CompanionData, AnimalData, _animals.Companions, Progression, UnlockAll);
         InitThieves();
         InitHarvester();
@@ -237,7 +241,7 @@ public partial class NetServer : Node
         Poll();
         PerfLap(ServerPerf.Ph.Poll);
         _profiles.Tick();
-        HuntTick();
+        _hunts.Tick();
         _minerals.Tick(Spawns.Count > 0);
         DropSilentPeers();
         _intel.Tick(); // a made-up event whose time is up leaves the intel screen
@@ -399,7 +403,7 @@ public partial class NetServer : Node
         else if (m is EventMsg { Kind: (byte)EventKind.ScudCommand } sc && c.Joined) OnScudCommand(c, sc.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.TeamAssign } ta && c.Joined) OnTeamAssign(c, ta.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SquadAssign } sq && c.Joined) OnSquadAssign(c, sq.Payload);
-        else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) OnHuntRequest(c, hq);
+        else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) _hunts.OnRequest(c, hq);
         else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) _chat.OnSend(c, cs.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.ClientReport } cr) { if (c.Joined) OnClientReport(c, cr.Payload); }
         else if (c.Joined) _profiles.OnMessage(c, m);
@@ -434,9 +438,7 @@ public partial class NetServer : Node
     /// <summary>The client has its profile: the hunter's log learns its name, a collection tier reached while the rule or the weapon was not there yet is rewarded, the companions follow.</summary>
     void OnProfileAttached(ServerClient c)
     {
-        var p = c.Profile!;
-        if (p.Persist) SetLogName(p.DbId, c.Name); // the log's hunter names (a name read before the book is set when the book loads)
-        if (p.Persist && _huntBook is { } book) GrantCollectionRewards(book, p.DbId);
+        _hunts.OnProfile(c);
         _companions.FromProfile(c);
     }
 
@@ -473,7 +475,7 @@ public partial class NetServer : Node
         c.Breath = new BreathState(c.Id);
         c.Worn = new Equipment(Items);
         c.Bag = new Bag();
-        ItemRules.IssueStandard(Items, c.Bag, OwnedItems(c)); // every player has the standard items (the binoculars) from the start
+        ItemRules.IssueStandard(Items, c.Bag, ProfileServer.OwnedItems(c)); // every player has the standard items (the binoculars) from the start
         c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = MapLadders, Bodies = _animals.Crowd };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);

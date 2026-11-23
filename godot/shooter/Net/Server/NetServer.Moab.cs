@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.HuntLog;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Killstreaks.Moab;
@@ -46,9 +47,9 @@ public partial class NetServer
             if (id == BigfootRules.TargetId) DealBigfoot(owner, MoabWeapon); // the Bigfoot takes it as an explosive hit, not as a kill (issue #264)
             else
             {
-                _wildHit = new WildHit(MoabWeapon, KillCause.Standard, null, null); // a wild animal in the blast is a hunt with the MOAB
+                _hunts.Pending = new WildHit(MoabWeapon, KillCause.Standard, null, null); // a wild animal in the blast is a hunt with the MOAB
                 _match.ApplyDamage(id, owner, MoabWeapon, 9999, ignoreProtection: true);
-                _wildHit = null;
+                _hunts.Pending = null;
             }
         }
         foreach (var car in _fleet.Cars.Where(c => !c.Destroyed).ToList()) DamageVehicle(car, car.Hp + 1, owner, MoabWeapon, 0);

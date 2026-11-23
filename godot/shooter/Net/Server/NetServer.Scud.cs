@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.HuntLog;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Colliders;
@@ -383,9 +384,9 @@ public partial class NetServer
                 if (t.Id == BigfootRules.TargetId) DealBigfoot(attackerId, ScudWeapon); // the Bigfoot takes it as an explosive hit, not as a kill (issue #264)
                 else
                 {
-                    _wildHit = new WildHit(ScudWeapon, KillCause.Standard, null, null); // a wild animal in the blast is a hunt with the Scud
+                    _hunts.Pending = new WildHit(ScudWeapon, KillCause.Standard, null, null); // a wild animal in the blast is a hunt with the Scud
                     var res = _match.ApplyDamage(t.Id, attackerId, ScudWeapon, hit.Damage, ignoreProtection: true);
-                    _wildHit = null;
+                    _hunts.Pending = null;
                     ClearPush(t.Id, res);
                     if (res == DamageResult.Killed) killed++;
                 }

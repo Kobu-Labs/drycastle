@@ -1,14 +1,21 @@
 using Godot;
+using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Bots;
 using Drycastle.ShooterCore.Companions;
 using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Items;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Weapons;
 using Drycastle.ShooterCore.Wildlife;
+using Drycastle.ShooterServer.Persistence;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter.Net.Server;
+namespace Drycastle.Shooter.Net.Server.HuntLog;
+
+/// <summary>Why a wild animal is dying, set around the one damage call (<see cref="HuntLogServer.Pending"/>) so the keeper's Killed event can tell the weapon, how far the shot flew and where it entered.</summary>
+internal readonly record struct WildHit(byte Weapon, KillCause Cause, float? Distance, HuntShotMsg? Shot);
 
 /// <summary>
 /// The Hunter's Log on the server (#336, docs/hunters-log.md). A player's kill of a weighed wild animal, and each credited player of a won Bigfoot
@@ -17,12 +24,20 @@ namespace Drycastle.Shooter.Net.Server;
 /// for it. Guests, bots and sandbox players are not logged. A killer's longest kill of another player (#430, <see cref="PlayerKillBook"/>) is kept beside, loaded and queried with the hunts. The three queries are answered redacted for the asker (<see cref="HuntRedaction"/>); only
 /// the table page reads the store, off the tick, and is answered on a later tick. Announcements are sent to everyone, redacted per recipient.
 /// </summary>
-public partial class NetServer
+internal sealed class HuntLogServer
 {
-    /// <summary>Why a wild animal is dying, set by <see cref="Deal"/> (and the MOAB) around the one damage call so the keeper's Killed event can tell the weapon, how far the shot flew and where it entered.</summary>
-    readonly record struct WildHit(byte Weapon, KillCause Cause, float? Distance, HuntShotMsg? Shot);
+    const int MaxPagesPerClient = 4;
+    const double LoadRetrySeconds = 5;
 
-    WildHit? _wildHit;
+    readonly ServerContext _ctx;
+    readonly IProgressionStore? _store;
+    readonly AnimalsFile _animals;
+    readonly WeaponsFile _weapons;
+    readonly ItemsFile _items;
+    readonly CompanionsFile _companions;
+    readonly Func<ushort, bool> _scores;
+    readonly Func<byte, string> _weaponKey;
+    readonly Action<ServerClient> _rewarded;
 
     /// <summary>null until the store has been read (or at once with no store). A hunt that happens before waits in <see cref="_huntsEarly"/>.</summary>
     HuntBook? _huntBook;
@@ -31,25 +46,34 @@ public partial class NetServer
     /// <summary>Set with <see cref="_huntBook"/>; a kill that happens before waits in <see cref="_killsEarly"/>.</summary>
     PlayerKillBook? _killBook;
     readonly List<PlayerKillRecord> _killsEarly = new();
-    double _huntRetryAt;
+    double _retryAt;
     readonly List<HuntRecord> _huntsEarly = new();
 
     /// <summary>A table page whose read is still running. Only the task crosses threads; the answer is built on the tick.</summary>
-    readonly List<(Task<HuntPage> Work, ServerClient C, HuntsRequest Req)> _huntPages = new();
+    readonly List<(Task<HuntPage> Work, ServerClient C, HuntsRequest Req)> _pages = new();
 
-    const int MaxHuntPagesPerClient = 4;
-    const double HuntLoadRetrySeconds = 5;
+    /// <param name="scores">Whether a player's kills and XP count (not a bot, not a sandbox player).</param>
+    /// <param name="weaponKey">The stats key of a weapon byte.</param>
+    /// <param name="rewarded">A collection reward was granted to the player: their profile and Companions are sent again.</param>
+    public HuntLogServer(ServerContext ctx, IProgressionStore? store, AnimalsFile animals, WeaponsFile weapons, ItemsFile items, CompanionsFile companions,
+        Func<ushort, bool> scores, Func<byte, string> weaponKey, Action<ServerClient> rewarded)
+    {
+        _ctx = ctx; _store = store; _animals = animals; _weapons = weapons; _items = items; _companions = companions; _scores = scores; _weaponKey = weaponKey; _rewarded = rewarded;
+    }
+
+    /// <summary>The wild animal about to die of the damage call under way, read by <see cref="OnWildKilled"/>.</summary>
+    public WildHit? Pending { get; set; }
 
     /// <summary>Once a tick: loads the book, and answers the table pages whose read finished.</summary>
-    void HuntTick()
+    public void Tick()
     {
-        if (_huntBook == null) LoadHuntBook();
-        for (var i = _huntPages.Count - 1; i >= 0; i--)
+        if (_huntBook == null) LoadBook();
+        for (var i = _pages.Count - 1; i >= 0; i--)
         {
-            var (work, c, req) = _huntPages[i];
+            var (work, c, req) = _pages[i];
             if (!work.IsCompleted) continue;
-            _huntPages.RemoveAt(i);
-            if (c.Peer is not { } peer || !_clients.ContainsKey(peer) || _huntBook is not { } book) continue;
+            _pages.RemoveAt(i);
+            if (c.Peer == null || !_ctx.Connections.Contains(c) || _huntBook is not { } book) continue;
             var viewer = book.CaughtBy(ViewerId(c));
             HuntsAnswer answer;
             if (work.IsCompletedSuccessfully)
@@ -62,18 +86,18 @@ public partial class NetServer
                 GD.PrintErr($"server: hunt page for {c.Name} failed: {work.Exception?.GetBaseException().Message}");
                 answer = new HuntsAnswer(req.Req, HuntStatus.Error, ViewerId(c), req.Page, 0, Array.Empty<HuntView>());
             }
-            Send(c, new EventMsg((byte)EventKind.HuntsPage, HuntEvents.EncodePage(answer)));
+            _ctx.SendEvent(c, EventKind.HuntsPage, HuntEvents.EncodePage(answer));
         }
     }
 
-    void LoadHuntBook()
+    void LoadBook()
     {
         if (_huntLoad == null)
         {
-            if (_elapsed < _huntRetryAt) return;
-            if (Progression == null) { _huntBook = new HuntBook(HuntTierOf); _killBook = new PlayerKillBook(); return; } // no store: every player is a guest, nothing is logged
-            _huntLoad = Progression.Hunts.GetAllAsync();
-            _killLoad = Progression.Hunts.GetPlayerKillsAsync();
+            if (_ctx.Now < _retryAt) return;
+            if (_store == null) { _huntBook = new HuntBook(HuntTierOf); _killBook = new PlayerKillBook(); return; } // no store: every player is a guest, nothing is logged
+            _huntLoad = _store.Hunts.GetAllAsync();
+            _killLoad = _store.Hunts.GetPlayerKillsAsync();
             return;
         }
         if (!_huntLoad.IsCompleted || !_killLoad!.IsCompleted) return;
@@ -82,7 +106,7 @@ public partial class NetServer
             GD.PrintErr($"server: the hunter's log could not be read, retrying: {(_huntLoad.Exception ?? _killLoad.Exception)?.GetBaseException().Message}");
             _huntLoad = null;
             _killLoad = null;
-            _huntRetryAt = _elapsed + HuntLoadRetrySeconds;
+            _retryAt = _ctx.Now + LoadRetrySeconds;
             return;
         }
         var rows = _huntLoad.Result;
@@ -94,8 +118,8 @@ public partial class NetServer
         _huntBook = book;
         _killBook = kills;
         foreach (var r in killRows) { book.SetName(r.Kill.KillerId, r.Killer); book.SetName(r.Kill.VictimId, r.Victim); } // a killer with no hunt still has a log to open
-        foreach (var c in _clients.Values)
-            if (c.Profile is { Persist: true } p) SetLogName(p.DbId, c.Name);
+        foreach (var c in _ctx.Connections)
+            if (c.Profile is { Persist: true } p) SetName(p.DbId, c.Name);
         foreach (var h in _huntsEarly) CommitHunt(book, h, announce: false);
         _huntsEarly.Clear();
         foreach (var k in _killsEarly) CommitPlayerKill(kills, k, announce: false);
@@ -104,26 +128,34 @@ public partial class NetServer
     }
 
     /// <summary>A stored player's name for the log's hunters, killers and victims (a name read before the books are set when they load).</summary>
-    void SetLogName(long playerId, string name)
+    void SetName(long playerId, string name)
     {
         _huntBook?.SetName(playerId, name);
         _killBook?.SetName(playerId, name);
     }
 
+    /// <summary>The client has its profile: the log learns its name, and a collection tier reached while the rule or the weapon was not there yet is rewarded.</summary>
+    public void OnProfile(ServerClient c)
+    {
+        if (c.Profile is not { Persist: true } p) return;
+        SetName(p.DbId, c.Name); // the log's hunter names (a name read before the book is set when the book loads)
+        if (_huntBook is { } book) GrantCollectionRewards(book, p.DbId);
+    }
+
     /// <summary>The rarity of a hunt's weight by the ranges of animals.json as they are now (a changed range re-tiers the old hunts at the next start).</summary>
-    HuntTier HuntTierOf(HuntRecord h) => HuntRarity.Of(AnimalData, h);
+    HuntTier HuntTierOf(HuntRecord h) => HuntRarity.Of(_animals, h);
 
     /// <summary>The player id a viewer is known by in the log: their stored profile's, 0 for a guest.</summary>
     static long ViewerId(ServerClient c) => c.Profile is { Persist: true } p ? p.DbId : 0;
 
     // ---- recording ----
 
-    /// <summary>The Killed event of the wild animal keeper: a player killed a weighed animal (or the Unicorn, or burned the Phoenix with the second hit), with the weapon <see cref="Deal"/> noted.</summary>
-    void OnWildKilled(Animal a, ushort by)
+    /// <summary>The Killed event of the wild animal keeper: a player killed a weighed animal (or the Unicorn, or burned the Phoenix with the second hit), with the weapon <see cref="Pending"/> noted.</summary>
+    public void OnWildKilled(Animal a, ushort by)
     {
-        if (_wildHit is not { } hit || !_byId.TryGetValue(by, out var c) || c.IsBot || !Scores(by) || c.Profile is not { Persist: true } p) return;
-        var weapon = hit.Weapon == SpecialWeapons.Vehicle && hit.Cause == KillCause.Roadkill ? HuntWeapons.RunOver : WeaponKey(hit.Weapon);
-        var distance = hit.Distance ?? NVec3.Distance(N(c.Body.GlobalPosition), a.Position);
+        if (Pending is not { } hit || !_ctx.Players.TryGetValue(by, out var c) || c.IsBot || !_scores(by) || c.Profile is not { Persist: true } p) return;
+        var weapon = hit.Weapon == SpecialWeapons.Vehicle && hit.Cause == KillCause.Roadkill ? HuntWeapons.RunOver : _weaponKey(hit.Weapon);
+        var distance = hit.Distance ?? NVec3.Distance(c.Body.GlobalPosition.ToNumerics(), a.Position);
         var variant = a.Variant >= 1 && a.Variant <= a.Def.Variants.Count ? a.Def.Variants[a.Variant - 1].Id : "";
         var diagram = hit.Shot is { } shot ? HitDiagram.From(shot) : (HitDiagram?)null;
         var h = HuntRecord.ForAnimal(p.DbId, a.Def.Id, variant, a.WeightKg, distance, weapon, diagram, a.Position.X, a.Position.Y, a.Position.Z, DateTime.UtcNow)
@@ -132,16 +164,16 @@ public partial class NetServer
     }
 
     /// <summary>A mystery creature's Event was won: every credited player who has a stored profile has caught it.</summary>
-    void RecordMystery(IEnumerable<ushort> credited, string mystery, NVec3 at)
+    public void RecordMystery(IEnumerable<ushort> credited, string mystery, NVec3 at)
     {
         foreach (var id in credited)
-            if (_byId.TryGetValue(id, out var c) && !c.IsBot && Scores(id) && c.Profile is { Persist: true } p)
+            if (_ctx.Players.TryGetValue(id, out var c) && !c.IsBot && _scores(id) && c.Profile is { Persist: true } p)
                 RecordHunt(HuntRecord.ForMystery(p.DbId, mystery, at.X, at.Y, at.Z, DateTime.UtcNow));
     }
 
     void RecordHunt(HuntRecord h)
     {
-        if (Progression == null) return;
+        if (_store == null) return;
         if (_huntBook is not { } book) { _huntsEarly.Add(h); return; }
         CommitHunt(book, h, announce: true);
     }
@@ -149,15 +181,11 @@ public partial class NetServer
     void CommitHunt(HuntBook book, HuntRecord h, bool announce)
     {
         var outcome = book.Add(h);
-        _ = Progression!.Hunts.AppendAsync(h); // queued behind the tick: never waited for
+        _ = _store!.Hunts.AppendAsync(h); // queued behind the tick: never waited for
         GD.Print($"server: hunt: #{h.PlayerId} {h.Exact} {h.Kg?.ToString("F1") ?? "-"} kg, {h.DistanceM?.ToString("F1") ?? "-"} m, {h.Weapon}{(outcome.Announce ? $" (first {outcome.FirstTime}, heaviest {outcome.Heaviest}, longest {outcome.Longest})" : "")}");
         if (announce && outcome.Announce) AnnounceHunt(book, h, outcome);
         if (announce) GrantCollectionRewards(book, h.PlayerId);
     }
-
-    /// <summary>The ids of the reward items a player owns (unlock rows of kind "item", #473), so a spawn issues the upgrade in place of the standard item.</summary>
-    IReadOnlySet<string> OwnedItems(ServerClient c) =>
-        c.Profile is { } p ? p.Unlocks.Where(u => u.Kind == "item").Select(u => u.ItemId).ToHashSet() : new HashSet<string>();
 
     /// <summary>
     /// The reward weapons (weapons.json <c>reward_tier</c>, #473) of the player's collection tier (<see cref="HuntBook.CollectionTier"/>) become unlock rows, once: stored, kept
@@ -165,41 +193,41 @@ public partial class NetServer
     /// </summary>
     void GrantCollectionRewards(HuntBook book, long dbId)
     {
-        if (Progression == null || dbId == 0) return;
+        if (_store == null || dbId == 0) return;
         var tier = book.CollectionTier(dbId);
         if (tier == HuntTier.Common) return;
-        foreach (var c in _clients.Values)
+        foreach (var c in _ctx.Connections)
         {
             if (c.Profile is not { Persist: true } p || p.DbId != dbId) continue;
             var granted = false;
-            foreach (var w in Weapons.Weapons)
+            foreach (var w in _weapons.Weapons)
             {
                 if (!w.IsReward || w.RewardTier > tier || p.Unlocks.Any(u => u.Kind == "weapon" && u.ItemId == w.Id)) continue;
                 var u = new Unlock("weapon", w.Id);
                 p.Unlocks.Add(u);
-                _ = Progression.Unlocks.GrantAsync(dbId, u);
+                _ = _store.Unlocks.GrantAsync(dbId, u);
                 GD.Print($"server: collection reward: #{dbId} {tier} tier, unlocked {w.Id}");
                 granted = true;
             }
-            foreach (var it in Items.Items)
+            foreach (var it in _items.Items)
             {
                 if (it.Replaces == "" || it.RewardTierOf > tier || p.Unlocks.Any(u => u.Kind == "item" && u.ItemId == it.Id)) continue;
                 var u = new Unlock("item", it.Id);
                 p.Unlocks.Add(u);
-                _ = Progression.Unlocks.GrantAsync(dbId, u);
+                _ = _store.Unlocks.GrantAsync(dbId, u);
                 GD.Print($"server: collection reward: #{dbId} {tier} tier, unlocked {it.Id}"); // issued at the next spawn
                 granted = true;
             }
-            foreach (var cd in CompanionData.Companions)
+            foreach (var cd in _companions.Companions)
             {
                 if (cd.RewardTierOf == HuntTier.Common || cd.RewardTierOf > tier || p.Unlocks.Any(u => u.Kind == CompanionRules.UnlockKind && u.ItemId == cd.Id)) continue;
                 var u = new Unlock(CompanionRules.UnlockKind, cd.Id);
                 p.Unlocks.Add(u);
-                _ = Progression.Unlocks.GrantAsync(dbId, u);
+                _ = _store.Unlocks.GrantAsync(dbId, u);
                 GD.Print($"server: collection reward: #{dbId} {tier} tier, unlocked the Companion {cd.Id}");
                 granted = true;
             }
-            if (granted) { _profiles.Send(c); _companions.FromProfile(c); if (c.Joined) _companions.SendRoster(c); }
+            if (granted) _rewarded(c);
         }
     }
 
@@ -207,27 +235,27 @@ public partial class NetServer
     void AnnounceHunt(HuntBook book, HuntRecord h, HuntOutcome o)
     {
         var flags = (o.FirstTime ? HuntAnnounceFlags.First : 0) | (o.Heaviest ? HuntAnnounceFlags.Heaviest : 0) | (o.Longest ? HuntAnnounceFlags.Longest : 0);
-        foreach (var c in _clients.Values)
+        foreach (var c in _ctx.Connections)
         {
             if (!c.Joined || c.IsBot) continue;
             var view = book.View(h, book.CaughtBy(ViewerId(c)))!;
-            Send(c, new EventMsg((byte)EventKind.HuntAnnounce, HuntEvents.EncodeAnnounce(new HuntAnnounceMsg(flags, view))));
+            _ctx.SendEvent(c, EventKind.HuntAnnounce, HuntEvents.EncodeAnnounce(new HuntAnnounceMsg(flags, view)));
         }
     }
 
     /// <summary>
-    /// A hit that killed a player (called by <see cref="Deal"/>): a stored player's enemy shot with a hitscan weapon, from <paramref name="distance"/> (the damage calls of grenades, vehicles and
+    /// A hit that killed a player (called by the damage call): a stored player's enemy shot with a hitscan weapon, from <paramref name="distance"/> (the damage calls of grenades, vehicles and
     /// melee pass none), kept when it is the killer's longest and announced when it is the server's. Guests, bots, sandbox players and teammates count for nothing.
     /// </summary>
-    void RecordPlayerKill(ushort killerId, ushort victimId, byte weapon, float distance)
+    public void RecordPlayerKill(ushort killerId, ushort victimId, byte weapon, float distance)
     {
-        if (!_byId.TryGetValue(killerId, out var killer) || !_byId.TryGetValue(victimId, out var victim) || killer.IsBot || victim.IsBot || !Scores(killerId) || !Scores(victimId)
-            || !BotEnemies.IsEnemy(_match, killerId, victimId) || killer.Profile is not { Persist: true } kp || victim.Profile is not { Persist: true } vp) return;
-        var at = N(victim.Body.GlobalPosition);
-        if (PlayerKillRecord.For(kp.DbId, vp.DbId, distance, WeaponKey(weapon), at.X, at.Y, at.Z, DateTime.UtcNow) is not { } kill) return;
-        SetLogName(kp.DbId, killer.Name);
-        SetLogName(vp.DbId, victim.Name);
-        if (Progression == null) return;
+        if (!_ctx.Players.TryGetValue(killerId, out var killer) || !_ctx.Players.TryGetValue(victimId, out var victim) || killer.IsBot || victim.IsBot || !_scores(killerId) || !_scores(victimId)
+            || !BotEnemies.IsEnemy(_ctx.Match, killerId, victimId) || killer.Profile is not { Persist: true } kp || victim.Profile is not { Persist: true } vp) return;
+        var at = victim.Body.GlobalPosition.ToNumerics();
+        if (PlayerKillRecord.For(kp.DbId, vp.DbId, distance, _weaponKey(weapon), at.X, at.Y, at.Z, DateTime.UtcNow) is not { } kill) return;
+        SetName(kp.DbId, killer.Name);
+        SetName(vp.DbId, victim.Name);
+        if (_store == null) return;
         if (_killBook is not { } book) { _killsEarly.Add(kill); return; }
         CommitPlayerKill(book, kill, announce: true);
     }
@@ -236,18 +264,18 @@ public partial class NetServer
     {
         var outcome = book.Add(kill);
         if (!outcome.Own) return;
-        _ = Progression!.Hunts.SavePlayerKillAsync(kill); // queued behind the tick: never waited for
+        _ = _store!.Hunts.SavePlayerKillAsync(kill); // queued behind the tick: never waited for
         GD.Print($"server: player kill: #{kill.KillerId} -> #{kill.VictimId} {kill.DistanceM:F1} m, {kill.Weapon}{(outcome.Server ? " (server record)" : "")}");
         if (!announce || !outcome.Server) return;
         var view = book.View(kill)!;
         var hunt = new HuntView(view.KillerId, view.Killer, "", "", "", null, view.DistanceM, view.Weapon, null, view.AtUnix, false); // the announcement's shape: who, how far
-        foreach (var c in _clients.Values)
-            if (c.Joined && !c.IsBot) Send(c, new EventMsg((byte)EventKind.HuntAnnounce, HuntEvents.EncodeAnnounce(new HuntAnnounceMsg(HuntAnnounceFlags.PlayerKill, hunt))));
+        foreach (var c in _ctx.Connections)
+            if (c.Joined && !c.IsBot) _ctx.SendEvent(c, EventKind.HuntAnnounce, HuntEvents.EncodeAnnounce(new HuntAnnounceMsg(HuntAnnounceFlags.PlayerKill, hunt)));
     }
 
     // ---- queries ----
 
-    void OnHuntRequest(ServerClient c, EventMsg m)
+    public void OnRequest(ServerClient c, EventMsg m)
     {
         switch ((EventKind)m.Kind)
         {
@@ -266,12 +294,12 @@ public partial class NetServer
     void OnHuntsRequest(ServerClient c, HuntsRequest r)
     {
         void Answer(HuntStatus status, uint total = 0) =>
-            Send(c, new EventMsg((byte)EventKind.HuntsPage, HuntEvents.EncodePage(new HuntsAnswer(r.Req, status, ViewerId(c), r.Page, total, Array.Empty<HuntView>()))));
-        if (_huntBook is not { } book || _huntPages.Count(p => p.C == c) >= MaxHuntPagesPerClient) { Answer(HuntStatus.Error); return; }
-        if (Progression == null) { Answer(HuntStatus.Ok); return; }
+            _ctx.SendEvent(c, EventKind.HuntsPage, HuntEvents.EncodePage(new HuntsAnswer(r.Req, status, ViewerId(c), r.Page, total, Array.Empty<HuntView>())));
+        if (_huntBook is not { } book || _pages.Count(p => p.C == c) >= MaxPagesPerClient) { Answer(HuntStatus.Error); return; }
+        if (_store == null) { Answer(HuntStatus.Ok); return; }
         var viewer = book.CaughtBy(ViewerId(c));
         var query = new HuntQuery(r.Page, HuntRedaction.FilterFor(r.Species, viewer), r.Weapon, r.PlayerId, r.Sort, r.Descending, HuntRedaction.HiddenFor(viewer));
-        _huntPages.Add((Progression.Hunts.PageAsync(query), c, r));
+        _pages.Add((_store.Hunts.PageAsync(query), c, r));
     }
 
     void OnRecordsRequest(ServerClient c, ushort req)
@@ -279,7 +307,7 @@ public partial class NetServer
         var answer = _huntBook is { } book
             ? new RecordsAnswer(req, HuntStatus.Ok, ViewerId(c), book.Records(book.CaughtBy(ViewerId(c))), _killBook?.Server)
             : new RecordsAnswer(req, HuntStatus.Error, ViewerId(c), Array.Empty<SpeciesRecordView>());
-        Send(c, new EventMsg((byte)EventKind.Records, HuntEvents.EncodeRecords(answer)));
+        _ctx.SendEvent(c, EventKind.Records, HuntEvents.EncodeRecords(answer));
     }
 
     void OnPlayerLogRequest(ServerClient c, PlayerLogRequest q)
@@ -289,6 +317,6 @@ public partial class NetServer
         if (_huntBook is not { } book) answer = new PlayerLogAnswer(q.Req, HuntStatus.Error, me, null);
         else if (book.PlayerLog(q.PlayerId == 0 ? me : q.PlayerId, book.CaughtBy(me)) is { } log) answer = new PlayerLogAnswer(q.Req, HuntStatus.Ok, me, log with { Kill = _killBook?.Of(log.PlayerId) });
         else answer = new PlayerLogAnswer(q.Req, HuntStatus.Unknown, me, null);
-        Send(c, new EventMsg((byte)EventKind.PlayerLog, HuntEvents.EncodePlayerLog(answer)));
+        _ctx.SendEvent(c, EventKind.PlayerLog, HuntEvents.EncodePlayerLog(answer));
     }
 }

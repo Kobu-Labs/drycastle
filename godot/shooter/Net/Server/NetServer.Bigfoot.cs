@@ -205,7 +205,7 @@ public partial class NetServer
         var credited = bf.Credited.Where(id => _byId.ContainsKey(id)).ToList();
         var names = credited.Count == 0 ? "" : " " + string.Join(", ", credited.Select(id => _byId[id].Name).Take(8)) + (credited.Count > 8 ? " and others" : "") + " took part.";
         ChatToAll(ChatLineKind.System, "", $"Event won: the Bigfoot is down!{names} Loot its body for what it left behind.");
-        RecordMystery(credited, Mysteries.Bigfoot, bf.Position); // the log: everyone credited has caught it
+        _hunts.RecordMystery(credited, Mysteries.Bigfoot, bf.Position); // the log: everyone credited has caught it
         AwardXp(credited.Where(Scores).Select(id => new XpGrant(id, Levels.Awards.EventWin, XpReason.EventWin)).ToList());
         GD.Print($"server: Bigfoot died (last hit by #{bf.Killer}), credited {string.Join(",", credited)}");
     }
