@@ -149,6 +149,8 @@ public partial class NetServer : Node
     MapAreas _areas = null!;
     PlantationServer _plantation = null!;
     BigfootServer _bigfoot = null!;
+    ScoreboardServer _scoreboard = null!;
+    MatchEventsServer _matchEvents = null!;
     EventServer _eventServer = null!;
     WalkerGround _walkers = null!;
     readonly ParkedHulls _parked;
@@ -206,8 +208,9 @@ public partial class NetServer : Node
     {
         _xp = new MatchXp(Levels.Awards);
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
-        _match.Event += OnMatchEvent;
+        _match.Event += e => _matchEvents.OnEvent(e);
         _ctx = new ServerContext(_match, _byId, _clients.Values, () => _elapsed, () => _tick, BroadcastEvent, Send, (c, chan, packet) => { if (c.Peer is { } peer) Tx(peer, chan, packet, 0); });
+        _scoreboard = new ScoreboardServer(_ctx);
         _areas = new MapAreas(Map, () => _church.Shell, _rng);
         _walkers = new WalkerGround(Map, () => Query);
         _impacts = new ImpactFx(_ctx, Map, Water);
@@ -278,6 +281,22 @@ public partial class NetServer : Node
         var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _mass, _rozhlas, _thieves, at => EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => ScudReloadOffer(c) != null);
         _plantation = new PlantationServer(_ctx, Plantation, _areas, keys, _sitters, _pounce, _streaks);
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), SeatPos, WorldHit, _rocketIds, _smoke, DamageVehicle, () => Vehicles, _simClients);
+        var roundReset = new RoundReset(
+            _mass.RoundEnd, // the Holy Mass does not outlive the round
+            () => _citizens.Crowd?.Clear(), // the match cleared the entities; those still waiting to leave go too
+            _pets.RoundStart, _companions.RoundStart, _wildlife.Clear, _minerals.RoundStart,
+            _wildlife.Populate, // the match cleared the pets' entities too; a new round moves new ones into the property groups
+            _rozhlas.RoundReset, // the Urad workers of a detour still open sit down again
+            ResetCars,
+            HarvesterRoundReset, // the car reset brought the harvester back to its old field: hidden again
+            ScudRoundReset, // the launchers start over; a Scud truck, which never returns, is retired
+            _status.RoundStart, _plantation.RoundStart, _lockOn.RoundReset, RoundStarted);
+        var life = new LifeEvents(_ctx, _smoke, _xp, Items, _gear, _status, _rozhlas, _streaks, _deathPush, WeaponsSmoke, RpgSmoke, new LifeEvents.Hooks
+        {
+            ApplyLoadout = ApplyLoadout, SendAmmo = SendAmmo, HarvesterKill = HarvesterOnKill, RiderDies = RiderDies, BotKillLog = BotKillLog, LossKill = LossKill, LossDeath = LossDeath,
+            RecordKill = RecordKill, RecordDeath = RecordDeath, WeaponKey = WeaponKey, Scores = Scores, AwardXp = AwardXp, SpawnCorpse = SpawnCorpse, LeaveSeat = LeaveSeat,
+        });
+        _matchEvents = new MatchEventsServer(_ctx, _smoke, _scoreboard, roundReset, life, RoundEnded, LossRoundStart, OnTargetKilled);
     }
 
     /// <summary>What the server needs once everything exists: the warmed indexes, the default vehicle table, the checks that fail at start and the two lines the smoke scripts wait for.</summary>
@@ -480,7 +499,7 @@ public partial class NetServer : Node
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
         _scenery.Tick(dt); // the pole lamps and road sign plates: clocks of the broken ones and the changes of this tick (ADR 0037, 0039)
         _status.Flush(); // statuses and burning that changed this tick
-        FlushScoreboard(); // once a tick at most, and about once a second (the ping), however many kills the tick had (A-04)
+        _scoreboard.Flush(); // once a tick at most, and about once a second (the ping), however many kills the tick had (A-04)
         PerfLap(ServerPerf.Ph.Detonate);
     }
 
