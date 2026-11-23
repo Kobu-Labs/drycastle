@@ -17,7 +17,7 @@ namespace Drycastle.Viewer.Editor;
 /// polygon}}), and a kind with `where_ground` (parcels.json `zone_kinds`) also has one zone per ground area of those types
 /// (parcels.json `ground_areas`). Editing a rule-derived zone detaches it lazily (<see cref="EditRuleZone"/>): a drawn zone with its
 /// polygon (nothing for a delete) plus a cut (edits.json `zone_cuts`, {ZC-NNNN: {kind, polygon}}) that the export subtracts from the
-/// kind's rule zone, all in one save = one undo step. The polygon gestures are the shared machinery of EditorMode.Shapes.cs. The page
+/// kind's rule zone, all in one save = one undo step. The polygon gestures are the shared shape editor (Tools/ShapeEditor.cs). The page
 /// lists the kinds (swatch = tint, label, how many zones), the zone form (change kind, delete) and the zones.
 ///
 /// The overlay (M toggles it, remembered in editor_ui.cfg) draws every zone translucent in its kind's tint with a thin edge. A
@@ -78,7 +78,7 @@ public partial class EditorMode
 
     ZoneKindInfo? ZoneKindOf(string name) => Map.ZoneKinds.FirstOrDefault(k => k.Name == name);
     public string ZoneLabel(string name) => ZoneKindOf(name)?.Label ?? name;
-    Color ZoneTint(string name) => ZoneKindOf(name) is { } k && ParseColour(k.Tint) is { } c ? Color.FromHtml(c) : new Color(0.5f, 0.5f, 0.5f);
+    Color ZoneTint(string name) => ZoneKindOf(name) is { } k && EditSchema.ParseColour(k.Tint) is { } c ? Color.FromHtml(c) : new Color(0.5f, 0.5f, 0.5f);
 
     /// <summary>Tell the validator which kinds exist (it checks a zone's kind against the map's catalog; no catalog: no check).</summary>
     void SyncCatalogs()
@@ -97,7 +97,7 @@ public partial class EditorMode
         return true;
     }
 
-    string? CannotDrawZone()
+    public string? CannotDrawZone()
     {
         if (Map.ZoneKinds.Count == 0) return "this map lists no zone kinds: build it again (make map), then reopen the editor";
         if (SelectedZoneKind is not { } k) return "pick a zone kind in the list first: a zone is drawn of the selected kind";
@@ -114,11 +114,11 @@ public partial class EditorMode
         if (z.FromRule) return EditRuleZone(z, kind, z.Points.ToList(), $"{z.Label} is now {ZoneLabel(kind)}");
         var ok = Edits.Mutate(root =>
         {
-            if (ShapesOf(root, ShapeKind.Zone)?.GetValueOrDefault(id) is not Obj e) return (false, $"zone {id} no longer exists");
+            if (ShapeDoc.ShapesOf(root, ShapeKind.Zone)?.GetValueOrDefault(id) is not Obj e) return (false, $"zone {id} no longer exists");
             e["kind"] = kind;
             return (true, $"{id} is now {ZoneLabel(kind)}");
         });
-        if (ok && SelectedZoneId == id) SelectZoneKind(kind);
+        if (ok && Shapes.SelectedZoneId == id) SelectZoneKind(kind);
         return ok;
     }
 
@@ -131,7 +131,7 @@ public partial class EditorMode
         switch (k.Keycode)
         {
             case Key.M: ToggleZoneOverlay(); return true;
-            case Key.X when SelectedZoneId != null && ShapeMode == ShapeState.Selected: ToggleZoneMark(SelectedZoneId); return true;
+            case Key.X when Shapes.SelectedZoneId != null && Shapes.Mode == ShapeState.Selected: ToggleZoneMark(Shapes.SelectedZoneId); return true;
             case Key.Tab when GetViewport().GuiGetFocusOwner() == null: FocusZoneList(); return true;
         }
         return false;
@@ -150,7 +150,7 @@ public partial class EditorMode
         return true;
     }
 
-    public string ZonesHintText() => ShapeHintText()
+    public string ZonesHintText() => Shapes.ShapeHintText()
         ?? (SelectedZoneKind == null
             ? "zones: Tab or click a kind to show its zones alone, click a zone to select it, Ctrl+click marks it for deletion, M overlay, N draws a zone of the selected kind, Ctrl+P commands, Esc leaves the tool"
             : $"{ZoneLabel(SelectedZoneKind)} shown alone: click a zone to select it, Ctrl+click marks it for deletion{(_zMarked.Count > 0 ? $", Shift+Del deletes the {_zMarked.Count} marked" : "")}, N draws one, Esc shows all kinds");
@@ -182,14 +182,14 @@ public partial class EditorMode
         _zKindOpt = new OptionButton { FocusMode = Control.FocusModeEnum.All, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _zKindOpt.ItemSelected += i =>
         {
-            if (!_zSync && SelectedZoneId != null && i >= 0 && i < Map.ZoneKinds.Count) SetZoneKind(SelectedZoneId, Map.ZoneKinds[(int)i].Name);
+            if (!_zSync && Shapes.SelectedZoneId != null && i >= 0 && i < Map.ZoneKinds.Count) SetZoneKind(Shapes.SelectedZoneId, Map.ZoneKinds[(int)i].Name);
             _zKindOpt.ReleaseFocus();
         };
         _zKindRow = FieldRow("Kind", _zKindOpt, "The zone kind of the selected zone");
-        BuildShapeActions(page, ShapeKind.Zone, _zKindRow);
-        BuildShapeDelete(page, ShapeKind.Zone);
+        Shapes.Panel.BuildActions(page, ShapeKind.Zone, _zKindRow);
+        Shapes.Panel.BuildDelete(page, ShapeKind.Zone);
         BuildZoneMarks(page);
-        BuildShapeList(page, ShapeKind.Zone, "All zones", "No zones to list. Pick a kind, press N, click corners on the ground, Enter creates the zone.");
+        Shapes.Panel.BuildList(page, ShapeKind.Zone, "All zones", "No zones to list. Pick a kind, press N, click corners on the ground, Enter creates the zone.");
         page.AddChild(Ui.Note("Zones overlap freely and add up. Esc steps back: cancel drawing, deselect the zone, deselect the kind (all kinds show again), leave the tool."));
     }
 
@@ -198,11 +198,11 @@ public partial class EditorMode
         if (Tool != EditorTool.Zones) return;
         var zones = ZoneList();
         if (_restoreZoneKind != null) { if (ZoneKindOf(_restoreZoneKind) != null) SelectedZoneKind = _restoreZoneKind; _restoreZoneKind = null; }
-        if (_restoreZone != null) { if (zones.Any(z => z.Id == _restoreZone)) SelectedZoneId = _restoreZone; _restoreZone = null; }
-        if (SelectedZoneId != null && zones.All(z => z.Id != SelectedZoneId)) { SelectedZoneId = null; EndCornerGesture(); }
+        if (Shapes.RestoreZone != null) { if (zones.Any(z => z.Id == Shapes.RestoreZone)) Shapes.SelectedZoneId = Shapes.RestoreZone; Shapes.RestoreZone = null; }
+        if (Shapes.SelectedZoneId != null && zones.All(z => z.Id != Shapes.SelectedZoneId)) { Shapes.SelectedZoneId = null; Shapes.EndCornerGesture(); }
         if (SelectedZoneKind != null && ZoneKindOf(SelectedZoneKind) == null) SelectedZoneKind = null;
         if (_zMarked.RemoveWhere(id => !_zoneById.ContainsKey(id)) > 0) _zMarkVer++;
-        var sel = SelectedZoneId == null ? null : Zone(SelectedZoneId);
+        var sel = Shapes.SelectedZoneId == null ? null : Zone(Shapes.SelectedZoneId);
         var kinds = Map.ZoneKinds;
 
         _zError.Visible = kinds.Count == 0;
@@ -238,8 +238,8 @@ public partial class EditorMode
         }
 
         var drawText = SelectedZoneKind != null ? $"Draw zone of {ZoneLabel(SelectedZoneKind)}  (N)" : "Draw zone of the selected kind  (N)";
-        RefreshShapeActions(ShapeKind.Zone, drawText, s => ZoneLabel(((ZoneInfo)s).Kind));
-        var mode = ShapeMode;
+        Shapes.Panel.RefreshActions(ShapeKind.Zone, drawText, s => ZoneLabel(((ZoneInfo)s).Kind));
+        var mode = Shapes.Mode;
         var showForm = mode == ShapeState.Selected && sel != null;
         _zKindRow.Visible = showForm;
         if (showForm)
@@ -258,7 +258,7 @@ public partial class EditorMode
             _zKindOpt.Disabled = kinds.Count == 0;
         }
 
-        RefreshShapeList(ShapeKind.Zone, "zone", s =>
+        Shapes.Panel.RefreshList(ShapeKind.Zone, "zone", s =>
         {
             var z = (ZoneInfo)s;
             var tint = ZoneKindOf(z.Kind)?.Tint ?? "#808080";
@@ -272,7 +272,7 @@ public partial class EditorMode
         if (sel != null && _zScrolledFor != sel.Id)
         {
             _zScrolledFor = sel.Id;
-            Callable.From(() => _scroll.EnsureControlVisible(_su[ShapeKind.Zone].State)).CallDeferred();
+            Callable.From(() => _scroll.EnsureControlVisible(Shapes.Panel.Of(ShapeKind.Zone).State)).CallDeferred();
         }
         else if (sel == null) _zScrolledFor = "";
     }
@@ -300,7 +300,7 @@ public partial class EditorMode
     /// Every zone of the map: the drawn ones (edits.json `zones`) and those the rules give (a ground area of a kind's where_ground
     /// types, one outline each), without the cut ones. One concept to the user. Cached per file read and map.
     /// </summary>
-    List<ZoneInfo> ZoneList()
+    public List<ZoneInfo> ZoneList()
     {
         var disk = Edits.Disk();
         var kinds = Map.ZoneKinds;
@@ -309,9 +309,9 @@ public partial class EditorMode
         var sig = new StringBuilder();
         _zonesFor = disk; _zoneKindsFor = kinds; _zoneCache = list;
         _zoneById.Clear();
-        if (ShapesOf(disk, ShapeKind.Zone) is { } zo)
+        if (ShapeDoc.ShapesOf(disk, ShapeKind.Zone) is { } zo)
             foreach (var (id, e) in zo)
-                if (e is Obj r && r.GetValueOrDefault("kind") is string kind && ParsePolygon(r.GetValueOrDefault("polygon")) is { } ring)
+                if (e is Obj r && r.GetValueOrDefault("kind") is string kind && ShapeDoc.ParsePolygon(r.GetValueOrDefault("polygon")) is { } ring)
                 {
                     list.Add(new ZoneInfo(id, kind, ring));
                     sig.Append(id).Append(':').Append(kind).Append(':').AppendJoin(',', ring.Select(c => $"{c.x:F1},{c.y:F1}")).Append(';');
@@ -335,6 +335,9 @@ public partial class EditorMode
         foreach (var z in list) _zoneById[z.Id] = z;
         return list;
     }
+
+    public List<ZoneInfo> Zones() => new(ZoneList());
+    public ZoneInfo? Zone(string id) { ZoneList(); return _zoneById.GetValueOrDefault(id); }
 
     /// <summary>The outlines of the last build's ground areas (parcels.json `ground_areas`), absolute; a multi-part area is `A-0012.1`, `A-0012.2`, ... (as the MCP server names them).</summary>
     List<RulePart> RuleParts()
@@ -376,7 +379,7 @@ public partial class EditorMode
         var list = new List<ZoneCut>();
         if (disk.GetValueOrDefault("zone_cuts") is Obj co)
             foreach (var (id, e) in co)
-                if (e is Obj r && r.GetValueOrDefault("kind") is string kind && ParsePolygon(r.GetValueOrDefault("polygon")) is { Count: >= 3 } ring)
+                if (e is Obj r && r.GetValueOrDefault("kind") is string kind && ShapeDoc.ParsePolygon(r.GetValueOrDefault("polygon")) is { Count: >= 3 } ring)
                     list.Add(new ZoneCut(id, kind, ring));
         return list;
     }
@@ -385,7 +388,7 @@ public partial class EditorMode
     {
         foreach (var v in ObjectEdits.Despiked(p.Abs)) // cuts are recorded despiked: the spike tips of the outline stick out of them
         {
-            if (PointInRing(c.Ring, v.x, v.y)) continue;
+            if (ShapeDoc.PointInRing(c.Ring, v.x, v.y)) continue;
             var near = false;
             for (var i = 0; i < c.Ring.Count && !near; i++) near = SegmentDistance(c.Ring[i], c.Ring[(i + 1) % c.Ring.Count], v) <= CutTolM;
             if (!near) return false;
@@ -405,10 +408,10 @@ public partial class EditorMode
     /// outline is recorded in its kind (edits.json `zone_cuts`) and, unless it is a delete (<paramref name="ring"/> null), a drawn zone
     /// of <paramref name="kind"/> (default: its own) with <paramref name="ring"/> is written. The new zone is selected.
     /// </summary>
-    bool EditRuleZone(ZoneInfo z, string? kind, List<(double x, double y)>? ring, string message)
+    public bool EditRuleZone(ZoneInfo z, string? kind, List<(double x, double y)>? ring, string message)
     {
         var outline = ObjectEdits.Despiked(z.Points); // zero-width spikes of the rule outline would fail the ring check
-        if (ObjectEdits.RingProblemCode(outline) is var code && code != ObjectEdits.RingOk) { Say($"{z.Label} cannot be edited: its outline {RingMessage(code)}", true); return false; }
+        if (ObjectEdits.RingProblemCode(outline) is var code && code != ObjectEdits.RingOk) { Say($"{z.Label} cannot be edited: its outline {ShapeDoc.RingMessage(code)}", true); return false; }
         if (ring != null && ring.Count == z.Points.Count && ring.SequenceEqual(z.Points)) ring = outline;
         string? newId = null;
         var ok = Edits.Mutate(root =>
@@ -416,20 +419,20 @@ public partial class EditorMode
             if (root.GetValueOrDefault("zone_cuts") is not Obj cuts) root["zone_cuts"] = cuts = EditsFile.NewObject();
             var cut = EditsFile.NewObject();
             cut["kind"] = z.Kind;
-            cut["polygon"] = PolygonValue(outline);
-            cuts[NextId(root, "zone_cuts", "ZC-")] = cut;
+            cut["polygon"] = ShapeDoc.PolygonValue(outline);
+            cuts[ShapeDoc.NextId(root, "zone_cuts", "ZC-")] = cut;
             if (ring != null)
             {
-                if (ShapesOf(root, ShapeKind.Zone) is not { } zones) root[KeyOf(ShapeKind.Zone)] = zones = EditsFile.NewObject();
-                newId = NextShapeId(root, ShapeKind.Zone);
+                if (ShapeDoc.ShapesOf(root, ShapeKind.Zone) is not { } zones) root[ShapeDoc.KeyOf(ShapeKind.Zone)] = zones = EditsFile.NewObject();
+                newId = ShapeDoc.NextShapeId(root, ShapeKind.Zone);
                 var e = EditsFile.NewObject();
                 e["kind"] = kind ?? z.Kind;
-                e["polygon"] = PolygonValue(ring);
+                e["polygon"] = ShapeDoc.PolygonValue(ring);
                 zones[newId] = e;
             }
             return (true, message);
         });
-        if (ok && newId != null) { var corner = _activeCorner; SelectShape(ShapeKind.Zone, newId); _activeCorner = corner; }
+        if (ok && newId != null) { var corner = Shapes.ActiveCorner; Shapes.SelectShape(ShapeKind.Zone, newId); Shapes.ActiveCorner = corner; }
         return ok;
     }
 
@@ -739,7 +742,7 @@ public partial class EditorMode
         if (todo.Count == 0) { Say(kept.Count > 0 ? $"nothing deleted: the outline of {kept[0].Label}{(kept.Count > 1 ? $" and {kept.Count - 1} more" : "")} cannot be cut" : "nothing to delete: those zones no longer exist", true); return false; }
         var ok = Edits.Mutate(root =>
         {
-            var drawn = ShapesOf(root, ShapeKind.Zone);
+            var drawn = ShapeDoc.ShapesOf(root, ShapeKind.Zone);
             var n = 0;
             foreach (var z in todo)
             {
@@ -747,17 +750,17 @@ public partial class EditorMode
                 if (root.GetValueOrDefault("zone_cuts") is not Obj cuts) root["zone_cuts"] = cuts = EditsFile.NewObject();
                 var cut = EditsFile.NewObject();
                 cut["kind"] = z.Kind;
-                cut["polygon"] = PolygonValue(ObjectEdits.Despiked(z.Points));
-                cuts[NextId(root, "zone_cuts", "ZC-")] = cut;
+                cut["polygon"] = ShapeDoc.PolygonValue(ObjectEdits.Despiked(z.Points));
+                cuts[ShapeDoc.NextId(root, "zone_cuts", "ZC-")] = cut;
                 n++;
             }
-            if (drawn is { Count: 0 }) root.Remove(KeyOf(ShapeKind.Zone));
+            if (drawn is { Count: 0 }) root.Remove(ShapeDoc.KeyOf(ShapeKind.Zone));
             if (n == 0) return (false, "nothing deleted: those zones no longer exist");
             return (true, $"deleted {n} zone{(n == 1 ? "" : "s")} (Ctrl+Z undoes)" + (kept.Count > 0 ? $"; {kept.Count} kept, their outline cannot be cut" : ""));
         });
         if (!ok) return false;
         MarkZones(todo.Select(z => z.Id).ToList(), false, false);
-        if (SelectedZoneId != null && todo.Any(z => z.Id == SelectedZoneId)) SelectShape(ShapeKind.Zone, null);
+        if (Shapes.SelectedZoneId != null && todo.Any(z => z.Id == Shapes.SelectedZoneId)) Shapes.SelectShape(ShapeKind.Zone, null);
         return true;
     }
 
@@ -785,7 +788,7 @@ public partial class EditorMode
     string? ZoneHoverText(Vector3 point)
     {
         var (x, y) = Map.RawAbs(point);
-        var hits = ZoneList().Where(z => ZonePickable(z) && z.Contains(x, y)).OrderByDescending(z => ShapeNumber(z.Id)).ThenBy(z => KindOrder(z.Kind)).ToList();
+        var hits = ZoneList().Where(z => ZonePickable(z) && z.Contains(x, y)).OrderByDescending(z => ShapeDoc.ShapeNumber(z.Id)).ThenBy(z => KindOrder(z.Kind)).ToList();
         if (hits.Count == 0) return SelectedZoneKind is { } k ? $"no {ZoneLabel(k)} zone here" : "no zone here";
         var lines = hits.Take(5).Select(z => $"{z.Label}  {ZoneLabel(z.Kind)} zone{(_zMarked.Contains(z.Id) ? "  (marked for deletion)" : "")}").ToList();
         if (hits.Count > 5) lines.Add($"+{hits.Count - 5} more");
@@ -795,11 +798,11 @@ public partial class EditorMode
     int KindOrder(string kind) { var i = Map.ZoneKinds.ToList().FindIndex(k => k.Name == kind); return i < 0 ? int.MaxValue : i; }
 
     /// <summary>The zone to select at a point (of the selected kind only, when one is: the others are not drawn): where zones overlap a drawn one wins over the others, then the higher ID, the kind earlier in the catalog.</summary>
-    string? ZoneAtPoint(double x, double y)
+    public string? ZoneAtPoint(double x, double y)
     {
         var hits = ZoneList().Where(z => ZonePickable(z) && z.Contains(x, y)).ToList();
         if (hits.Count == 0) return null;
-        return hits.OrderBy(z => z.Kind == SelectedZoneKind ? 1 : 0).ThenBy(z => ShapeNumber(z.Id)).ThenByDescending(z => KindOrder(z.Kind)).ThenBy(z => z.Id, StringComparer.Ordinal).Last().Id;
+        return hits.OrderBy(z => z.Kind == SelectedZoneKind ? 1 : 0).ThenBy(z => ShapeDoc.ShapeNumber(z.Id)).ThenByDescending(z => KindOrder(z.Kind)).ThenBy(z => z.Id, StringComparer.Ordinal).Last().Id;
     }
 
     // test hooks

@@ -1,7 +1,7 @@
 # Ground patch and Zones tools: UI notes (issue #275, ADR 0022)
 
-Standard: `docs/standards/ui-ux.md`. Code: `godot/viewer/Editor/EditorMode.Shapes.cs` (the polygon machinery both tools share: drawing, closing,
-corners, delete, hints, the draw/state/list widgets), `EditorMode.Patches.cs` (patch type, water level, form, list), `EditorMode.Zones.cs`
+Standard: `docs/standards/ui-ux.md`. Code: `godot/viewer/Editor/Tools/ShapeEditor.cs` (the polygon machinery both tools share: drawing, closing,
+corners, delete, hints, patch type and water level; `ShapePanel`: the draw/state/list widgets; `ShapeWorld`: the 3D preview; `ShapeDoc`: data and file format), `EditorMode.Patches.cs` (patch form, list), `EditorMode.Zones.cs`
 (zone kinds, form, list, the zone overlay), `EditorMode.GroundMap.cs` (the ground map and the area meshes the zone overlay reuses),
 `EditorMode.Dialogs.cs` (confirm dialog, Ctrl+P palette), rail icons in `IconGlyph.cs` ("ground", "zone"), theme variations `Danger` and
 `DangerButton` in `EditorTheme.cs`. Smoke tests: `make viewer-shape-editor-smoke` (gestures), `make viewer-patches-smoke` (patch hot reload).

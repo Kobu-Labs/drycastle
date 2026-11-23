@@ -10,8 +10,8 @@ namespace Drycastle.Viewer.Editor;
 /// <summary>
 /// The ground patches half of the Ground tool (GLOSSARY "Ground patch", ADR 0022): a hand-drawn polygon of exactly one ground type,
 /// plus a water level when the type is water. Stored in edits.json `ground_patches` ({GP-NNNN: {type, polygon, water_y?}}); where
-/// patches overlap the higher ID wins. The polygon gestures (draw, close, corners, delete) are the shared machinery of
-/// EditorMode.Shapes.cs; this file is what is specific to a patch: the type it is of, its water level, its form and list. Until the
+/// patches overlap the higher ID wins. The polygon gestures (draw, close, corners, delete) and the patch type and water level are the
+/// shape editor (Tools/ShapeEditor.cs, shared with Zones); this file is what is specific to a patch page: the form and the list. Until the
 /// next full map build a patch shows as paint in its type's first terrain colour (patch-run through the EditsWatcher); the ground
 /// map (EditorMode.GroundMap.cs) shows it as an area of its type at once.
 /// </summary>
@@ -31,7 +31,7 @@ public partial class EditorMode
     // ---- what a patch needs ----
 
     /// <summary>Why a patch cannot be drawn now (null: it can): it is of the selected ground type, which must be there and usable.</summary>
-    string? CannotDrawPatch()
+    public string? CannotDrawPatch()
     {
         if (SelectedGroundType is not { } t) return "pick a ground type in the list first: a patch is drawn of the selected type";
         if (GroundRow(t) is not { } r) return $"{t} is not a ground type of this map any more";
@@ -40,62 +40,13 @@ public partial class EditorMode
         return null;
     }
 
-    bool PatchTypeIsWater(string? type) => type != null && GroundRow(type)?.Effective.Water == true;
-
-    /// <summary>A starting water level for a patch: the terrain height at the middle of its corners, to one decimal; the form then asks for the real one.</summary>
-    double DefaultWaterLevel(IReadOnlyList<(double x, double y)> ring)
-    {
-        if (ring.Count == 0) return 0;
-        var l = Map.FromAbsolute(ring.Average(p => p.x), ring.Average(p => p.y));
-        return Math.Round(Map.GroundHeightOrMean(l.X, l.Y), 1);
-    }
-
-    // ---- the edits (each is one Mutate: one save, one undo step) ----
-
-    /// <summary>Give a patch another ground type (one save). A water type needs a water level: the patch gets the terrain height at its middle to start from (edit it in the form); a land type takes the level away.</summary>
-    public bool SetPatchType(string id, string type)
-    {
-        if (Patch(id) is not { } p) { Say($"patch {id} does not exist", true); return false; }
-        if (p.Type == type) return true;
-        if (PatchTypeChoices().All(c => c.Name != type)) { Say($"{type} is not a ground type a patch can be of (deleted, a rule's, or not in this map)", true); return false; }
-        var water = PatchTypeIsWater(type);
-        var level = DefaultWaterLevel(p.Points);
-        return Edits.Mutate(root =>
-        {
-            if (ShapesOf(root, ShapeKind.Patch)?.GetValueOrDefault(id) is not Obj e) return (false, $"patch {id} no longer exists");
-            e["type"] = type;
-            if (water) { if (!e.ContainsKey("water_y")) e["water_y"] = N3(level); }
-            else { e.Remove("water_y"); e.Remove("max_depth"); }
-            return (true, $"{id} is now {type}" + (water && p.WaterY == null ? $", water level {level:0.0} m to start from" : ""));
-        });
-    }
-
-    /// <summary>Set the water level of a patch of a water type (one save).</summary>
-    public bool SetPatchWater(string id, double level)
-    {
-        if (Patch(id) is not { } p) { Say($"patch {id} does not exist", true); return false; }
-        if (!PatchTypeIsWater(p.Type)) { Say($"{id} is of {p.Type}, which is not water: it has no water level", true); return false; }
-        var v = Math.Round(level, 3, MidpointRounding.AwayFromZero);
-        if (p.WaterY == v) return true;
-        return Edits.Mutate(root =>
-        {
-            if (ShapesOf(root, ShapeKind.Patch)?.GetValueOrDefault(id) is not Obj e) return (false, $"patch {id} no longer exists");
-            e["water_y"] = N3(v);
-            return (true, $"{id} water level {v:0.0###} m");
-        });
-    }
-
-    void OnWaterLevelChanged(double v)
-    {
-        if (ShapeMode == ShapeState.Level) { _newWaterY = v; return; }
-        if (CurrentKind == ShapeKind.Patch && ShapeMode == ShapeState.Selected && SelectedPatchId is { } id) SetPatchWater(id, v);
-    }
+    public bool PatchTypeIsWater(string? type) => type != null && GroundRow(type)?.Effective.Water == true;
 
     /// <summary>The patch under the cursor of the Ground tool, for the hover label.</summary>
     string? PatchHoverText(Vector3 point)
     {
         var (x, y) = Map.RawAbs(point);
-        if (ShapeAt(ShapeKind.Patch, x, y) is not { } id || Patch(id) is not { } p) return null;
+        if (Shapes.ShapeAt(ShapeKind.Patch, x, y) is not { } id || Shapes.Patch(id) is not { } p) return null;
         return $"{p.Id}  patch of {p.Type}{(EditorTheme.CropName(p.Type) is { } crop ? $" (crop: {crop})" : "")}{(p.WaterY is { } w ? $", water {w:0.0} m" : "")}  click to select";
     }
 
@@ -110,7 +61,7 @@ public partial class EditorMode
         if (point is { } pt)
         {
             var (x, y) = Map.RawAbs(pt);
-            if (ShapeAt(ShapeKind.Patch, x, y) is { } id && id != SelectedPatchId) hot = Patch(id);
+            if (Shapes.ShapeAt(ShapeKind.Patch, x, y) is { } id && id != Shapes.SelectedPatchId) hot = Shapes.Patch(id);
         }
         if (ReferenceEquals(hot, _gHoverPatch)) return;
         _gHoverPatch = hot;
@@ -128,7 +79,7 @@ public partial class EditorMode
         _pType = new OptionButton { FocusMode = Control.FocusModeEnum.All, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _pType.ItemSelected += i =>
         {
-            if (!_pSync && SelectedPatchId != null && i >= 0 && i < _pChoices.Count) SetPatchType(SelectedPatchId, _pChoices[(int)i].Name);
+            if (!_pSync && Shapes.SelectedPatchId != null && i >= 0 && i < _pChoices.Count) Shapes.SetPatchType(Shapes.SelectedPatchId, _pChoices[(int)i].Name);
             _pType.ReleaseFocus();
         };
         _pTypeRow = FieldRow("Type", _pType, "The ground type of the selected patch. A water type needs a water level.");
@@ -142,25 +93,25 @@ public partial class EditorMode
         var form = new VBoxContainer();
         form.AddChild(_pTypeRow);
         form.AddChild(_pCropRow);
-        BuildShapeActions(page, ShapeKind.Patch, form);
+        Shapes.Panel.BuildActions(page, ShapeKind.Patch, form);
         _pNote = Ui.Note("");
         page.AddChild(_pNote);
-        BuildShapeDelete(page, ShapeKind.Patch);
-        BuildShapeList(page, ShapeKind.Patch, "All patches", "No patches yet. Select a ground type, press N, click corners on the ground, Enter creates the patch.");
+        Shapes.Panel.BuildDelete(page, ShapeKind.Patch);
+        Shapes.Panel.BuildList(page, ShapeKind.Patch, "All patches", "No patches yet. Select a ground type, press N, click corners on the ground, Enter creates the patch.");
         page.AddChild(Ui.Note("Where patches overlap the higher ID wins. Esc steps back: cancel drawing, deselect the patch, deselect the type, leave the tool."));
     }
 
     void RefreshPatches()
     {
-        var patches = PatchList();
-        if (_restorePatch != null) { if (patches.Any(p => p.Id == _restorePatch)) SelectedPatchId = _restorePatch; _restorePatch = null; _groundFocusPatch = SelectedPatchId != null; }
-        if (SelectedPatchId != null && patches.All(p => p.Id != SelectedPatchId)) { SelectedPatchId = null; EndCornerGesture(); _groundFocusPatch = false; }
-        var sel = SelectedPatchId == null ? null : Patch(SelectedPatchId);
-        var mode = ShapeMode;
+        var patches = Shapes.PatchList();
+        if (Shapes.RestorePatch != null) { if (patches.Any(p => p.Id == Shapes.RestorePatch)) Shapes.SelectedPatchId = Shapes.RestorePatch; Shapes.RestorePatch = null; GroundFocusPatch = Shapes.SelectedPatchId != null; }
+        if (Shapes.SelectedPatchId != null && patches.All(p => p.Id != Shapes.SelectedPatchId)) { Shapes.SelectedPatchId = null; Shapes.EndCornerGesture(); GroundFocusPatch = false; }
+        var sel = Shapes.SelectedPatchId == null ? null : Shapes.Patch(Shapes.SelectedPatchId);
+        var mode = Shapes.Mode;
         var typeText = SelectedGroundType ?? "the selected type";
 
-        RefreshShapeActions(ShapeKind.Patch, $"Draw patch of {typeText}  (N)", s => ((PatchInfo)s).Type + (EditorTheme.CropName(((PatchInfo)s).Type) is { } cn ? $", crop {cn}" : "") + (((PatchInfo)s).WaterY is { } w ? $", water {w:0.0} m" : ""));
-        var u = _su[ShapeKind.Patch];
+        Shapes.Panel.RefreshActions(ShapeKind.Patch, $"Draw patch of {typeText}  (N)", s => ((PatchInfo)s).Type + (EditorTheme.CropName(((PatchInfo)s).Type) is { } cn ? $", crop {cn}" : "") + (((PatchInfo)s).WaterY is { } w ? $", water {w:0.0} m" : ""));
+        var u = Shapes.Panel.Of(ShapeKind.Patch);
         var showForm = mode == ShapeState.Selected && sel != null;
         _pTypeRow.Visible = showForm;
         var crop = showForm ? EditorTheme.CropName(sel!.Type) : null;
@@ -182,7 +133,7 @@ public partial class EditorMode
                 ? $"A body of water at {sel.WaterY:0.0###} m. The preview is paint; the water and its detail come with the next full map build (make map)."
                 : $"Shown as paint in {sel.Type}'s colour for now. Its grass, trees and detail come with the next full map build (make map).";
 
-        RefreshShapeList(ShapeKind.Patch, "patch", s =>
+        Shapes.Panel.RefreshList(ShapeKind.Patch, "patch", s =>
         {
             var p = (PatchInfo)s;
             var colour = GroundRow(p.Type)?.Effective.Colour ?? "#808080";
@@ -193,7 +144,7 @@ public partial class EditorMode
         if (sel != null && _pScrolledFor != sel.Id)
         {
             _pScrolledFor = sel.Id;
-            if (_groundFocusPatch) Callable.From(() => _scroll.EnsureControlVisible(u.State)).CallDeferred();
+            if (GroundFocusPatch) Callable.From(() => _scroll.EnsureControlVisible(u.State)).CallDeferred();
         }
         else if (sel == null) _pScrolledFor = "";
     }
@@ -223,7 +174,5 @@ public partial class EditorMode
 
     // test hooks
     public string PatchTypeShown => _pType.Selected >= 0 && _pType.Selected < _pChoices.Count ? _pChoices[_pType.Selected].Name : "";
-    public bool PatchWaterRowShown => _su[ShapeKind.Patch].LevelRow.Visible;
-    public void ChoosePatchType(string type) { if (SelectedPatchId != null) SetPatchType(SelectedPatchId, type); }
-    public void SetDrawWaterLevel(double v) { _newWaterY = v; var u = _su[ShapeKind.Patch]; u.Sync = true; u.Level.SetValueNoSignal(v); u.Sync = false; }
+    public bool PatchWaterRowShown => Shapes.Panel.Of(ShapeKind.Patch).LevelRow.Visible;
 }

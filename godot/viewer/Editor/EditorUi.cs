@@ -289,14 +289,14 @@ public partial class EditorMode
 
     public void SelectTool(EditorTool tool, bool save = true)
     {
-        if (ShapeTool && (tool != Tool)) CancelShapeGesture();
+        if (Shapes.ShapeTool && (tool != Tool)) Shapes.CancelShapeGesture();
         if (Tool == EditorTool.Sketch && tool != EditorTool.Sketch) Sketches.CancelGesture();
         if (Objects.Dragging && tool != Tool) Objects.CancelDrag(); // an object drag must not outlive its tool (the release would still save it)
         if (tool is EditorTool.Ground or EditorTool.Zones or EditorTool.Sketch) { Objects.DisarmPlacement(false); if (Fence.Gates.Armed) Fence.Gates.Cancel(); }
         if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { Poles.StopConnecting(false); Poles.Plan.Stop(false); Poles.SelectCable(null); }
         if (tool == EditorTool.Poles && Fence.Gates.Armed) Fence.Gates.Cancel();
         Tool = tool;
-        ShapeRest(); // Selected or Idle depends on which kind of shape the tool selects
+        Shapes.ShapeRest(); // Selected or Idle depends on which kind of shape the tool selects
         _panel.Visible = tool != EditorTool.None;
         foreach (var (t, p) in _pages) p.Visible = t == tool;
         foreach (var (t, b) in _railButtons) b.SetPressedNoSignal(t == tool);
@@ -336,16 +336,16 @@ public partial class EditorMode
         {
             var cfg = new ConfigFile();
             if (cfg.Load(CfgPath) != Error.Ok) return;
-            if (Enum.TryParse<EditorTool>((string)cfg.GetValue("ui", "tool", "None"), true, out var t)) { Tool = t; ShapeRest(); }
+            if (Enum.TryParse<EditorTool>((string)cfg.GetValue("ui", "tool", "None"), true, out var t)) { Tool = t; Shapes.ShapeRest(); }
             Camera.LoadConfig(cfg);
             _gmOn = (bool)cfg.GetValue("ui", "ground_map_on", true);
             _zoOn = (bool)cfg.GetValue("ui", "zone_overlay_on", true);
             var gsel = (string)cfg.GetValue("ui", "ground_type", "");
             if (gsel != "") _restoreGround = gsel;
             var psel = (string)cfg.GetValue("ui", "patch", "");
-            if (psel != "") _restorePatch = psel;
+            if (psel != "") Shapes.RestorePatch = psel;
             var zsel = (string)cfg.GetValue("ui", "zone", "");
-            if (zsel != "") _restoreZone = zsel;
+            if (zsel != "") Shapes.RestoreZone = zsel;
             var zk = (string)cfg.GetValue("ui", "zone_kind", "");
             if (zk != "") _restoreZoneKind = zk;
             foreach (var part in _parts) part.LoadConfig(cfg);
@@ -362,8 +362,8 @@ public partial class EditorMode
             Camera.SaveConfig(cfg);
             cfg.SetValue("ui", "ground_map_on", _gmOn);
             cfg.SetValue("ui", "zone_overlay_on", _zoOn);
-            cfg.SetValue("ui", "patch", SelectedPatchId ?? "");
-            cfg.SetValue("ui", "zone", SelectedZoneId ?? "");
+            cfg.SetValue("ui", "patch", Shapes.SelectedPatchId ?? "");
+            cfg.SetValue("ui", "zone", Shapes.SelectedZoneId ?? "");
             cfg.SetValue("ui", "zone_kind", SelectedZoneKind ?? "");
             cfg.SetValue("ui", "ground_type", SelectedGroundType ?? "");
             foreach (var part in _parts) part.SaveConfig(cfg);

@@ -38,6 +38,14 @@ public static class EditSchema
 
     public static readonly Regex ColourRx = new("^#[0-9a-fA-F]{6}$", RegexOptions.Compiled);
 
+    /// <summary>"#rrggbb" or "rrggbb" as lower-case "#rrggbb"; null when it is not a colour.</summary>
+    public static string? ParseColour(string text)
+    {
+        var t = text.Trim();
+        if (!t.StartsWith('#')) t = "#" + t;
+        return ColourRx.IsMatch(t) ? t.ToLowerInvariant() : null;
+    }
+
     public const double GateMin = 1.0, GateSnap = 0.5, GateDefault = 3.0, GatePickRadius = 6.0;
 }
 

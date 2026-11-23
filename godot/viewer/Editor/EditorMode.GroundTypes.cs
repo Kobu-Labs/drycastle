@@ -23,7 +23,7 @@ public partial class EditorMode
 {
     public string? SelectedGroundType { get; private set; }
     /// <summary>True while the last thing selected was a patch (Del, Esc and the hints then mean the patch), false while it was a type.</summary>
-    bool _groundFocusPatch;
+    public bool GroundFocusPatch { get; set; }
 
     string? _restoreGround;
     Obj? _gtFor;
@@ -109,7 +109,7 @@ public partial class EditorMode
     {
         if (r.Deleted) return "Already deleted";
         if (r.InRules && GroundTypeEdits.ProtectedReason(r.Name, r.BaseRaw, Map.GroundDefault) is { } why) return $"Cannot be deleted: {why}";
-        var used = PatchList().Where(p => p.Type == r.Name).Select(p => p.Id).ToList();
+        var used = Shapes.PatchList().Where(p => p.Type == r.Name).Select(p => p.Id).ToList();
         return used.Count > 0 ? $"Cannot be deleted: {used.Count} patch{(used.Count == 1 ? "" : "es")} use it ({string.Join(", ", used.Take(4))}{(used.Count > 4 ? ", ..." : "")}); delete them or give them another type first" : null;
     }
 
@@ -129,7 +129,7 @@ public partial class EditorMode
     public bool SelectGroundType(string? name)
     {
         if (name != null && GroundRow(name) == null) { Say($"ground type {name} does not exist", true); return false; }
-        if (name != null) _groundFocusPatch = false;
+        if (name != null) GroundFocusPatch = false;
         if (name == SelectedGroundType) return true;
         SelectedGroundType = name;
         _panelDirty = true;
@@ -190,7 +190,7 @@ public partial class EditorMode
 
     public bool SetGroundColours(string name, IReadOnlyList<string> colours)
     {
-        var parsed = colours.Select(c => ParseColour(c)).ToList();
+        var parsed = colours.Select(c => EditSchema.ParseColour(c)).ToList();
         if (parsed.Count is < 1 or > GroundTypeEdits.ColoursMax || parsed.Any(c => c == null)) { Say($"a type has 1 to {GroundTypeEdits.ColoursMax} colours, each #rrggbb", true); return false; }
         return MutateGroundAttrs(name, $"{name}: {parsed.Count} colour{(parsed.Count == 1 ? "" : "s")}", (a, _) => a["colours"] = parsed.Cast<object?>().ToList());
     }
@@ -198,7 +198,7 @@ public partial class EditorMode
     public bool SetGroundColour(string name, int index, string colour)
     {
         if (GroundRow(name) is not { } r || index < 0 || index >= r.Effective.Colours.Count) return false;
-        if (ParseColour(colour) is not { } hex) { Say($"colour must look like #rrggbb, got {colour}", true); return false; }
+        if (EditSchema.ParseColour(colour) is not { } hex) { Say($"colour must look like #rrggbb, got {colour}", true); return false; }
         if (r.Effective.Colours[index] == hex) return true;
         var list = r.Effective.Colours.ToList();
         list[index] = hex;
@@ -227,7 +227,7 @@ public partial class EditorMode
         if (GroundRow(name) is not { } row) { Say($"ground type {name} does not exist", true); return false; }
         if (key is not ("colours" or "recipe" or "water")) { Say($"{key} is not an attribute that is ticked on its own", true); return false; }
         if (row.Effective.Carries(key) == carried) return true;
-        if (key == "water" && PatchList().Where(p => p.Type == name).Select(p => p.Id).ToList() is { Count: > 0 } usedBy)
+        if (key == "water" && Shapes.PatchList().Where(p => p.Type == name).Select(p => p.Id).ToList() is { Count: > 0 } usedBy)
         {
             Say($"{name}: {usedBy.Count} patch{(usedBy.Count == 1 ? "" : "es")} use it ({string.Join(", ", usedBy.Take(4))}); a water type needs a water level on each patch, a land type refuses one. Delete them or give them another type first", true);
             return false;
@@ -402,7 +402,7 @@ public partial class EditorMode
         (SelectedGroundType != null && _gtRowButtons.TryGetValue(SelectedGroundType, out var b) ? b : _gtRowButtons.Values.First()).GrabFocus();
     }
 
-    public string GroundHintText() => ShapeHintText()
+    public string GroundHintText() => Shapes.ShapeHintText()
         ?? (SelectedGroundType == null
             ? "ground: Tab or click the list, click the ground to pick its type or a patch, N draws a patch of the selected type, M shows or hides the map, Shift+N a new type, Ctrl+P commands, Esc leaves the tool"
             : $"{SelectedGroundType}: N draws a patch of it, Tab moves between the fields, Space ticks an attribute, Enter applies a typed value, Del deletes the type, Ctrl+Z undoes, Esc deselects");
@@ -411,13 +411,13 @@ public partial class EditorMode
     bool GroundEscape()
     {
         if (SelectedGroundType != null) { SelectGroundType(null); return true; }
-        if (SelectedPatchId != null) { SelectShape(ShapeKind.Patch, null); return true; } // a patch left selected while the type had the focus
+        if (Shapes.SelectedPatchId != null) { Shapes.SelectShape(ShapeKind.Patch, null); return true; } // a patch left selected while the type had the focus
         return false;
     }
 
     // ---- sidebar page ----
 
-    SpinBox NumberField(double min, double max, double step, string tip)
+    public SpinBox NumberField(double min, double max, double step, string tip)
     {
         var s = new SpinBox { MinValue = min, MaxValue = max, Step = step, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, TooltipText = tip, Rounded = false, Alignment = HorizontalAlignment.Right };
         s.GetLineEdit().GuiInput += e => { if (e is InputEventKey { Pressed: true, Keycode: Key.Escape }) { s.GetLineEdit().ReleaseFocus(); s.GetLineEdit().AcceptEvent(); _panelDirty = true; } };
@@ -622,7 +622,7 @@ public partial class EditorMode
             picker.PopupClosed += () => { if (SelectedGroundType != null) SetGroundColour(SelectedGroundType, idx, "#" + picker.Color.ToHtml(false)); };
             edit.TextChanged += t =>
             {
-                var ok = ParseColour(t) != null;
+                var ok = EditSchema.ParseColour(t) != null;
                 _gtColourNote.Text = ok ? "" : "Colour must look like #rrggbb, for example #7aa860";
                 _gtColourNote.ThemeTypeVariation = ok ? "Dim" : "Danger";
             };
@@ -787,7 +787,7 @@ public partial class EditorMode
         if (_gtScrolledFor != sel.Name)
         {
             _gtScrolledFor = sel.Name;
-            if (!_groundFocusPatch) Callable.From(() => _scroll.EnsureControlVisible(_gtTitle)).CallDeferred();
+            if (!GroundFocusPatch) Callable.From(() => _scroll.EnsureControlVisible(_gtTitle)).CallDeferred();
         }
     }
 

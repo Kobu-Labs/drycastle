@@ -214,7 +214,7 @@ public sealed class SketchTool : EditorPart
     {
         if (_draft.Count < 3) return $"a closed line needs at least 3 corners ({_draft.Count} placed)";
         var code = ObjectEdits.RingProblemCode(_draft);
-        return code == ObjectEdits.RingOk ? null : "the outline " + EditorMode.RingMessage(code);
+        return code == ObjectEdits.RingOk ? null : "the outline " + ShapeDoc.RingMessage(code);
     }
 
     /// <summary>

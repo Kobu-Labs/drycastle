@@ -74,6 +74,29 @@ public interface IEditorHost
     /// <summary>The property group of a parcel (null: none).</summary>
     string? Group(string parcel);
 
+    // the Ground and Zones tools, until they are parts of their own (the shape editor needs them)
+    string? SelectedGroundType { get; }
+    bool SelectGroundType(string? name);
+    /// <summary>The Ground tool's focus is on a selected patch (not on the ground type): Del deletes the patch, Esc deselects it.</summary>
+    bool GroundFocusPatch { get; set; }
+    /// <summary>A click on bare ground in the Ground tool: selects the ground type there.</summary>
+    void GroundPick(Vector3 ground);
+    string? CannotDrawPatch();
+    bool PatchTypeIsWater(string? type);
+    List<(string Name, string Colour, bool Water)> PatchTypeChoices();
+    string? SelectedZoneKind { get; }
+    bool SelectZoneKind(string? name);
+    string ZoneLabel(string name);
+    string? CannotDrawZone();
+    List<ZoneInfo> ZoneList();
+    ZoneInfo? Zone(string id);
+    string? ZoneAtPoint(double x, double y);
+    /// <summary>Edit a zone that a rule gives (it becomes a drawn zone plus a cut): a new kind, a new outline, or neither (deleted).</summary>
+    bool EditRuleZone(ZoneInfo z, string? kind, List<(double x, double y)>? ring, string message);
+    bool ToggleZoneMark(string id);
+    bool RequestDeleteMarkedZones();
+    SpinBox NumberField(double min, double max, double step, string tip);
+
     /// <summary>The outlines of the selection and of the hovered parcel are redrawn on the next frame.</summary>
     void MarkAllOutlines();
 

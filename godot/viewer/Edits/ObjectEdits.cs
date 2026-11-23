@@ -31,7 +31,7 @@ public static class ObjectEdits
 
     public static Obj Parcels(Obj root) => (Obj)root["parcels"]!;
 
-    static EditsFile.Num N3(double v) => new(EditsFile.PyFloat(Math.Round(v, 3, MidpointRounding.AwayFromZero)));
+    internal static EditsFile.Num N3(double v) => new(EditsFile.PyFloat(Math.Round(v, 3, MidpointRounding.AwayFromZero)));
 
     public static double? Number(object? v) => FenceDraft.Number(v);
 

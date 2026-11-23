@@ -32,6 +32,7 @@ public partial class EditorMode : Node, IEditorHost
     public ObjectsTool Objects { get; }
     public PolesTool Poles { get; }
     public FenceTool Fence { get; }
+    public ShapeEditor Shapes { get; }
     readonly List<EditorPart> _parts;
 
     public EditorMode()
@@ -43,10 +44,11 @@ public partial class EditorMode : Node, IEditorHost
         Objects = new ObjectsTool(this);
         Poles = new PolesTool(this);
         Fence = new FenceTool(this);
+        Shapes = new ShapeEditor(this);
         Camera = new EditorCamera(this);
         Edits = new EditStore(this, SyncCatalogs, doc => Sketches.Replay(doc));
         Commands = new CommandPalette(PaletteAll);
-        _parts = new() { Fence, Ortho, FloorPlan, Sketches, You, Objects, Poles };
+        _parts = new() { Fence, Ortho, FloorPlan, Sketches, You, Objects, Poles, Shapes };
     }
 
     public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
@@ -100,7 +102,7 @@ public partial class EditorMode : Node, IEditorHost
         OutlineRoot = new Node3D { Name = "EditorOutlines", Visible = false };
         AddChild(OutlineRoot);
         BuildUi();
-        BuildShapeWorld();
+        Shapes.BuildWorld();
         Sketches.BuildWorld();
         Sketches.Restore();
         GetTree().AutoAcceptQuit = false; // window close asks first when fence or tree edits are unapplied (_Notification)
@@ -143,7 +145,7 @@ public partial class EditorMode : Node, IEditorHost
         {
             Camera.LeaveEditor();
             Input.MouseMode = Input.MouseModeEnum.Captured;
-            CancelShapeGesture();
+            Shapes.CancelShapeGesture();
             if (Fence.Gates.Armed) Fence.Gates.Cancel();
             HoverId = null;
             _hoverLabel.Visible = false;
@@ -422,8 +424,8 @@ public partial class EditorMode : Node, IEditorHost
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown } wd when !OverUi(wd.Position):
                 Camera.SetSpeed(Camera.Speed / 1.25f);
                 break;
-            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && ShapeTool && !OverUi(mb.Position):
-                ShapeLeftPress(mb.Position, mb.CtrlPressed);
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Shapes.ShapeTool && !OverUi(mb.Position):
+                Shapes.ShapeLeftPress(mb.Position, mb.CtrlPressed);
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Tool == EditorTool.Sketch:
                 Sketches.LeftPress(mb.Position, mb.CtrlPressed);
@@ -447,7 +449,7 @@ public partial class EditorMode : Node, IEditorHost
             case InputEventKey { Pressed: true, Echo: false } k:
                 if (HandleModalKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Modal) break;
-                if (HandleShapeKey(k)) { GetViewport().SetInputAsHandled(); break; }
+                if (Shapes.HandleShapeKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleGroundKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleZoneKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Sketches.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
@@ -498,8 +500,8 @@ public partial class EditorMode : Node, IEditorHost
         }
         if (Active && Objects.Dragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
             Objects.EndDrag();
-        if (Active && ShapeDragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
-            EndCornerDrag();
+        if (Active && Shapes.ShapeDragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
+            Shapes.EndCornerDrag();
         if (Active && Fence.Gates.Dragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
             Fence.Gates.End();
     }
@@ -512,7 +514,6 @@ public partial class EditorMode : Node, IEditorHost
         Camera.Fly((float)delta);
         UpdateHover();
         foreach (var part in _parts) part.Update(delta);
-        UpdateShapeTool();
         UpdateGroundMap();
         UpdateZoneOverlay();
         _pollT += delta;
@@ -525,7 +526,7 @@ public partial class EditorMode : Node, IEditorHost
         if (_panelDirty) RefreshPanel();
         _unsavedLabel.Text = Fence.PendingCount == 0 ? "" : $"* {Fence.PendingCount} unsaved (Enter applies)";
         var c = FlyCam.GlobalPosition;
-        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Camera.Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedShapeId != null && ShapeTool ? $"  |  {(Tool == EditorTool.Zones ? "zone" : "patch")} {SelectedShape(CurrentKind)?.Label}{(SelectedShape(CurrentKind) is PatchInfo sp ? "  " + sp.Type : "")}" : "") + (Tool == EditorTool.Zones && MarkedZoneCount > 0 ? $"  |  {MarkedZoneCount} marked for deletion" : "") + (Fence.PendingCount > 0 || ShapeDraftPending ? $"  |  * {(Fence.PendingCount > 0 ? $"{Fence.PendingCount} UNSAVED" : "UNSAVED")}" : "");
+        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Camera.Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (Shapes.SelectedShapeId != null && Shapes.ShapeTool ? $"  |  {(Tool == EditorTool.Zones ? "zone" : "patch")} {Shapes.SelectedShape(Shapes.CurrentKind)?.Label}{(Shapes.SelectedShape(Shapes.CurrentKind) is PatchInfo sp ? "  " + sp.Type : "")}" : "") + (Tool == EditorTool.Zones && MarkedZoneCount > 0 ? $"  |  {MarkedZoneCount} marked for deletion" : "") + (Fence.PendingCount > 0 || Shapes.ShapeDraftPending ? $"  |  * {(Fence.PendingCount > 0 ? $"{Fence.PendingCount} UNSAVED" : "UNSAVED")}" : "");
         if (Time.GetTicksMsec() / 1000.0 > _statusUntil && _statusLabel.Text != "")
             _statusLabel.Text = "";
     }
@@ -562,7 +563,7 @@ public partial class EditorMode : Node, IEditorHost
         }
         if (Tool is EditorTool.Ground or EditorTool.Zones)
         {
-            var calm = _hoverPoint != null && !_looking && !OverUi(mouse) && !Modal && ShapeMode is ShapeState.Idle or ShapeState.Selected;
+            var calm = _hoverPoint != null && !_looking && !OverUi(mouse) && !Modal && Shapes.Mode is ShapeState.Idle or ShapeState.Selected;
             var text = !calm ? null
                 : Tool == EditorTool.Zones ? (ZonesDrawn ? ZoneHoverText(_hoverPoint!.Value) : null)
                 : _gmOn ? GroundHoverText(_hoverPoint!.Value) : null;
@@ -585,6 +586,53 @@ public partial class EditorMode : Node, IEditorHost
         _hoverLabel.Text = text;
         _hoverLabel.Position = mouse + new Vector2(16, 20);
         _hoverLabel.Visible = true;
+    }
+
+    // ---- points of the ground on the screen ----
+
+    public SphereMesh HandleMesh => Shapes.World.HandleMesh;
+    public StandardMaterial3D HandleHot => Shapes.World.HandleHot;
+    const float CornerPickPx = EditorTheme.Space * 2.5f;
+
+    /// <summary>Screen position (px) to the nearest corner of a ring; -1 when none is within reach.</summary>
+    public int PickCorner(Vector2 screen, IReadOnlyList<(double x, double y)> ring)
+    {
+        var best = -1; var bestD = CornerPickPx * (float)Math.Max(1.0, GetViewport().GetVisibleRect().Size.X / 1280.0);
+        for (var i = 0; i < ring.Count; i++)
+        {
+            var w = GroundPoint(ring[i]);
+            if (FlyCam.IsPositionBehind(w)) continue;
+            var d = FlyCam.UnprojectPosition(w).DistanceTo(screen);
+            if (d < bestD) { bestD = d; best = i; }
+        }
+        return best;
+    }
+
+    public Vector3 GroundPoint((double x, double y) p)
+    {
+        var l = Map.FromAbsolute(p.x, p.y);
+        return new Vector3(l.X, Map.GroundHeightOrMean(l.X, l.Y) + 0.3f, l.Y);
+    }
+
+    public List<(Vector2, Vector2)> RingSegs(IReadOnlyList<(double x, double y)> pts, bool closed)
+    {
+        var s = new List<(Vector2, Vector2)>();
+        var n = closed ? pts.Count : pts.Count - 1;
+        for (var i = 0; i < n; i++)
+        {
+            var a = Map.FromAbsolute(pts[i].x, pts[i].y); var b = Map.FromAbsolute(pts[(i + 1) % pts.Count].x, pts[(i + 1) % pts.Count].y);
+            if (a.DistanceSquaredTo(b) > 1e-8f) s.Add((a, b));
+        }
+        return s;
+    }
+
+    /// <summary>Look at an absolute point from above and south-east, a little left of centre so the sidebar does not cover it (screenshots).</summary>
+    public void LookAtAbs(double x, double y, float dist)
+    {
+        var t = Map.FromAbsolute(x, y);
+        var target = new Vector3(t.X, Map.GroundHeightOrMean(t.X, t.Y), t.Y);
+        var right = FlyCam.GlobalBasis.X;
+        Camera.LookFrom(target + new Vector3(0, dist * 0.8f, dist * 0.6f) + right * dist * 0.15f, target + right * dist * 0.15f);
     }
 
     // ---- outlines ----
@@ -708,6 +756,9 @@ public partial class EditorMode
 {
     Button _btnUndo = null!, _btnRedo = null!; // the rail buttons (EditorUi.cs)
     Label _undoInfo = null!;                   // top of the Objects page
+
+    /// <summary>The hint line of the open shape tool (smoke tests).</summary>
+    public string ShapeHint => Shapes.CurrentKind == ShapeKind.Zone ? ZonesHintText() : GroundHintText();
 
     /// <summary>Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z; true when the key was used. Not reached while a text field has the focus.</summary>
     bool HandleUndoKey(InputEventKey k)

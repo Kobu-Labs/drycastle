@@ -1,3 +1,4 @@
+using Drycastle.Viewer.Edits;
 using Drycastle.MapLoader;
 using Godot;
 using System;
@@ -90,7 +91,7 @@ public partial class EditorMode
     // ---- the index: which areas there are (baked + drawn), per type ----
 
     /// <summary>The effective colour of a type for the overlay (grey if the type is unknown).</summary>
-    Color GroundMapColour(string type) => GroundRow(type) is { } r && ParseColour(r.Effective.Colour) is { } c ? Color.FromHtml(c) : new Color(0.5f, 0.5f, 0.5f);
+    Color GroundMapColour(string type) => GroundRow(type) is { } r && EditSchema.ParseColour(r.Effective.Colour) is { } c ? Color.FromHtml(c) : new Color(0.5f, 0.5f, 0.5f);
 
     void EnsureGroundMapIndex()
     {
@@ -102,7 +103,7 @@ public partial class EditorMode
         var entries = new List<(string, List<Vector2[]>, bool)>();
         foreach (var a in Map.GroundAreas) entries.Add((a.Kind, a.Rings.ToList(), false));
         if (Map.OriginEpsg5514 != null)
-            foreach (var p in PatchList())
+            foreach (var p in Shapes.PatchList())
                 entries.Add((p.Type, new List<Vector2[]> { p.Points.Select(c => Map.FromAbsolute(c.x, c.y)).ToArray() }, true));
         // geometry only changes with a patch (its type or corners) or a new map; colours and selection only touch the materials
         var sig = Map.GroundAreas.Count + "#" + string.Join(";", entries.Where(e => e.Item3).Select(e => e.Item1 + ":" + string.Join(",", e.Item2[0].Select(v => $"{v.X:F1},{v.Y:F1}"))));
@@ -349,7 +350,7 @@ public partial class EditorMode
     }
 
     /// <summary>Click on the ground in the Ground tool (no patch there): select the type under the cursor (click the same one again, or empty ground, to deselect).</summary>
-    void GroundPick(Vector3 hit)
+    public void GroundPick(Vector3 hit)
     {
         var type = GroundTypeAtPoint(new Vector2(hit.X, hit.Z));
         if (type == null) { SelectGroundType(null); Say("no ground area there (a property, or the road)"); return; }

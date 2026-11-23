@@ -341,31 +341,31 @@ public partial class Viewer
             ed.SelectTool(zones ? EditorTool.Zones : EditorTool.Ground);
             if (zones) { if (_opts.GetValueOrDefault("shot-kind") is { } sk) ed.SelectZoneKind(sk); }
             else if (_opts.GetValueOrDefault("shot-type") is { } st) ed.SelectGroundType(st);
-            ed.StartShape();
+            ed.Shapes.StartShape();
             double cx = 0, cy = 0; var n = 0;
             foreach (var pt in draft.Split(';', StringSplitOptions.RemoveEmptyEntries))
             {
                 var xy = pt.Split(',').Select(v => double.Parse(v, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
-                ed.AddShapePoint(xy[0], xy[1]); cx += xy[0]; cy += xy[1]; n++;
+                ed.Shapes.AddShapePoint(xy[0], xy[1]); cx += xy[0]; cy += xy[1]; n++;
             }
             ed.LookAtAbs(cx / n, cy / n, 70);
         }
         else if (_opts.GetValueOrDefault("shot-patch") is { } spatch)
         {
             ed.SelectTool(EditorTool.Ground);
-            Check(ed.SelectShape(ShapeKind.Patch, spatch), $"shot patch {spatch} selected");
-            var r = ed.Patch(spatch)!;
+            Check(ed.Shapes.SelectShape(ShapeKind.Patch, spatch), $"shot patch {spatch} selected");
+            var r = ed.Shapes.Patch(spatch)!;
             ed.LookAtAbs(r.Points.Average(p => p.x), r.Points.Average(p => p.y), 70);
         }
         else if (_opts.GetValueOrDefault("shot-zone") is { } szone)
         {
             ed.SelectTool(EditorTool.Zones);
-            Check(ed.SelectShape(ShapeKind.Zone, szone), $"shot zone {szone} selected");
+            Check(ed.Shapes.SelectShape(ShapeKind.Zone, szone), $"shot zone {szone} selected");
             var r = ed.Zone(szone)!;
             ed.LookAtAbs(r.Points.Average(p => p.x), r.Points.Average(p => p.y), 70);
         }
         ed.RefreshNow();
-        ed.ShapeWorldNow();
+        ed.Shapes.World.Redraw();
         var frames = _opts.TryGetValue("frames", out var f) && int.TryParse(f, out var fi) ? fi : 60;
         for (var i = 0; i < frames; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
