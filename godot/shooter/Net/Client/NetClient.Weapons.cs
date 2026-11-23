@@ -43,7 +43,7 @@ public partial class NetClient
     void UpdateViewmodel()
     {
         if (_viewmodel == null) return;
-        var slot = Ammo?.Slot ?? _wantSlot;
+        var slot = Ammo?.Slot ?? Ctx.Hotbar.Want;
         var id = ThrowHeldId() ?? (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : ""); // the throw key held: the grenade, whatever was selected
         _viewmodel.Show(id);
         _viewmodel.Visible = Mode.ShowsViewmodel && !OwnBodyFlung && _me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
@@ -51,10 +51,9 @@ public partial class NetClient
 
     /// <summary>Movement speed multiplier of the weapon in <paramref name="slot"/> (0: none, 1.0), times the run speed of <see cref="Perks"/>. The server applies the same value.</summary>
     float SpeedFor(byte slot) =>
-        (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].MoveSpeedMultiplier : 1f) * Perks.RunSpeed;
+        (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].MoveSpeedMultiplier : 1f) * Loadouts.Perks.RunSpeed;
 
     /// <summary>This player's perk values, mirroring the server's copy for prediction. Neutral until the loadout ticket sets them.</summary>
-    public PerkModifiers Perks = PerkModifiers.None;
 
     /// <summary>Holding zoom with a scoped weapon (sniper) narrows the camera; never while dead or with the mouse released.</summary>
     void ApplyScope()
@@ -69,7 +68,7 @@ public partial class NetClient
             return;
         }
         if (TickBinoculars()) return; // raised binoculars are the zoom: no scope, no iron sights
-        var slot = Ammo?.Slot ?? _wantSlot;
+        var slot = Ammo?.Slot ?? Ctx.Hotbar.Want;
         var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
         var on = zoom > 0 && !Dead && !_pinned && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
         _me.ZoomFov = on ? zoom : 0f;
@@ -93,8 +92,8 @@ public partial class NetClient
     void ReadSlotKeys()
     {
         if (!Mode.HotbarKeysLive || Input.MouseMode != Input.MouseModeEnum.Captured || ChooserOpen) return; // seated, the number keys are the seats' (HandleSeatInput)
-        for (var k = 0; k < Math.Min(5, _hotbar.Length); k++)
-            if (Input.IsActionPressed($"slot_{k + 1}")) _wantSlot = _hotbar[k] + 1;
+        for (var k = 0; k < Math.Min(5, Ctx.Hotbar.Slots.Length); k++)
+            if (Input.IsActionPressed($"slot_{k + 1}")) Ctx.Hotbar.Want = Ctx.Hotbar.Slots[k] + 1;
     }
 
     void OnWeaponEvent(EventKind kind, byte[] payload)

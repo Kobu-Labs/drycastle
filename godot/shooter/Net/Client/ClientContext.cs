@@ -47,6 +47,8 @@ public sealed class ClientContext
     /// <summary>The predicted local player; null before the welcome.</summary>
     public Player? Me;
     public ushort MyId;
+    /// <summary>The weapon slots of the spawn hotbar and the one in hand.</summary>
+    public Hotbar Hotbar { get; } = new();
     public bool Dead;
     /// <summary>The local player drives a vehicle (set by the reconcile: a seat or a driver's place).</summary>
     public bool Driving;

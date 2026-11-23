@@ -61,8 +61,6 @@ public partial class NetClient : Node
     public string PlayerName { get => Ctx.PlayerName; set => Ctx.PlayerName = value; }
     /// <summary>Player token sent in the hello (ADR 0003). Empty = a fresh one is generated (bots and CLI clients).</summary>
     public string Token = "";
-    /// <summary>The server's profile for this player (level, XP, loadouts, active slot); null until it arrives.</summary>
-    public ProfileMsg? Profile { get; private set; }
     /// <summary>Raised for an error the server sends after the join (for example an invalid loadout).</summary>
     public event Action<string>? ServerError;
     string? _rejectReason;
@@ -87,12 +85,13 @@ public partial class NetClient : Node
     /// <summary>thieves.json (set by the host): the looks and clips of the Gang members, the vans and the Loot.</summary>
     public ThievesFile ThievesData = new();
     /// <summary>weapons.json: hotbar order and the per-weapon movement speed multiplier used by prediction.</summary>
+    /// <summary>killstreaks.json: streak names, thresholds and the tracker rules.</summary>
+    public KillstreakFile Killstreaks { get => Ctx.Killstreaks!; set => Ctx.Killstreaks = value; }
     public WeaponsFile Weapons { get => Ctx.Weapons!; set => Ctx.Weapons = value; }
     /// <summary>match.json as the client shipped it: the gunfire blips' radius, lifetime and rate limit (null: no blips, e.g. headless bots).</summary>
     public MatchConfig? BlipConfig;
     /// <summary>Latest owner ammo state from the server (null before the first one).</summary>
     public AmmoMsg? Ammo { get; private set; }
-    int _wantSlot = 1;
     WeaponViewmodel? _viewmodel;
     double _ammoAt;
 
@@ -147,6 +146,13 @@ public partial class NetClient : Node
     public ScreensClient Screens => _screens;
     /// <summary>The chat box, the Squads screen's and the Teams screen's requests (the menus reach them here).</summary>
     public ChatClient Chat { get; private set; } = null!;
+    /// <summary>The player's profile and loadouts (the menus read and change them here).</summary>
+    public LoadoutClient Loadouts { get; private set; } = null!;
+    KillstreaksClient _streaks = null!;
+    /// <summary>perks.json (set by the host): the loadout's perk id to its modifiers (prediction).</summary>
+    public PerksFile PerkData = null!;
+    /// <summary>True while a menu screen is open; the respawn number keys then leave the menu alone.</summary>
+    public Func<bool>? MenuOpen { get => Ctx.MenuOpen; set => Ctx.MenuOpen = value; }
     /// <summary>The players' camouflage looks (the Equipment and Customization screens read and save them here).</summary>
     public CamoClient Camo { get; private set; } = null!;
     /// <summary>camo.json (set by the host).</summary>
@@ -180,6 +186,12 @@ public partial class NetClient : Node
         Chat = new ChatClient(Ctx, ItemData, CompanionData, Squads);
         TeamAdmin = new TeamsClient(Ctx, Chat);
         _minerals = new MineralsClient(Ctx);
+        Loadouts = new LoadoutClient(Ctx, PerkData, Chat);
+        _streaks = new KillstreaksClient(Ctx, Loadouts);
+        _streaks.Used += OnStreakUsed;
+        _streaks.Ended += OnStreakEnded;
+        _streaks.OwnerDied += ClearStreakViewsOnDeath;
+        _streaks.Gunner.HintsChanged += () => _gunDirty = true;
         Camo = new CamoClient(Ctx, CamoData, DressCorpses);
         _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
         _bot = MakeBot();
@@ -274,12 +286,6 @@ public partial class NetClient : Node
         if (Sim != null) Sim.Send(peer, chan, data, flags); else peer.Send(chan, data, flags);
     }
 
-    /// <summary>Asks the server to replace a loadout slot. The server answers with a <see cref="LoadoutAckInfo"/> (matched by seq) and the new profile. False when not connected.</summary>
-    public bool SaveLoadout(Loadout loadout, uint seq) => SendNow(new SaveLoadoutMsg(loadout, seq));
-
-    /// <summary>Asks the server to make a loadout slot the active one. Answered like <see cref="SaveLoadout"/>.</summary>
-    public void SelectSlot(int slot) => SendNow(new SelectSlotMsg(slot));
-
     /// <summary>Sends a reliable message at once, flushed; false when not connected or no welcome has come.</summary>
     bool SendNow(ReliableMsg m)
     {
@@ -296,7 +302,7 @@ public partial class NetClient : Node
     public void Redeploy(int? slot)
     {
         if (_peer == null || !_welcomed || Dead) return;
-        FlushAutosave();
+        Loadouts.FlushAutosave();
         Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Redeploy, Drycastle.ShooterCore.Match.Redeploy.Encode(slot))), (int)ENetPacketPeer.FlagReliable);
         _conn.Flush();
     }
@@ -319,7 +325,7 @@ public partial class NetClient : Node
             if (_link.Elapsed > ConnectionPhases.ConnectTimeoutSeconds) Fail("connect timeout");
             return;
         }
-        PumpAutosave(); // loadout saves whose debounce ran out go out here, whichever screen is open (#145)
+        Loadouts.PumpAutosave(); // loadout saves whose debounce ran out go out here, whichever screen is open (#145)
         RenderPlayersAndProps();
         t = ClientProf.Lap(ClientProf.S.Players, t);
         RenderCreatures(delta);
@@ -441,8 +447,7 @@ public partial class NetClient : Node
                 OnWelcome(w);
                 break;
             case ProfileMsg p:
-                Profile = p;
-                OnProfileReceived(p);
+                Loadouts.OnProfile(p);
                 GD.Print($"client: profile {p.Name}, level {p.Level}, xp {p.Xp}, active slot {p.ActiveSlot}");
                 break;
             case ErrorMsg er:
@@ -511,7 +516,8 @@ public partial class NetClient : Node
         OnWeaponEvent(kind, payload);
         OnStreetEvent(kind, payload); // the street lamps and sign plates
         OnMatchEvent(kind, payload);
-        OnProgressionEvent(kind, payload);
+        Loadouts.OnEvent(kind, payload);
+        _streaks.OnEvent(kind, payload);
         _uav.OnEvent(kind, payload);
         Camo.OnEvent(kind, payload);
         WorldEntities.OnEvent(kind, payload);
@@ -534,7 +540,7 @@ public partial class NetClient : Node
             case EventKind.Kill:
                 var k = Match.KillFeed[^1];
                 _hud?.AddKill(k, Match.NameOf(k.Killer), Match.NameOf(k.Victim));
-                OnStreakKill(k);
+                _streaks.OnKill(k);
                 GD.Print($"client {PlayerName}: kill feed: {Match.NameOf(k.Killer)} -> {Match.NameOf(k.Victim)} (weapon {k.Weapon})");
                 break;
             case EventKind.Spawn:
@@ -542,8 +548,8 @@ public partial class NetClient : Node
                 GD.Print($"client {PlayerName}: spawn #{sp.Id} protected {sp.Protection:F1}s");
                 if (sp.Id == _myId && _me != null)
                 {
-                    ApplySpawnLoadout(); // the hotbar and perk the server applied at this spawn
-                    _wantSlot = StartSlot();
+                    Loadouts.ApplySpawn(); _streaks.Arm(); // the hotbar and perk the server applied at this spawn
+                    Ctx.Hotbar.Want = Ctx.Hotbar.Start;
                     Ctx.Dead = false; _blastDust.ClearRinging(); if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
                     _bot?.OnSpawn(sp.Protection);
                     EndDeathView(); _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId); _breathCues.Reset(); _zero.Reset(); ClearPredictedReload(); _pNextFire = 0;
@@ -554,7 +560,7 @@ public partial class NetClient : Node
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 SfxDeath(d);
                 NoteDeath(d);
-                if (d.Victim == _myId) { _deaths++; _bot?.OnOwnDeath(); BeginDeathView(d.RespawnDelay, d.Flight); Ctx.Dead = true; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); _hud?.SetProtection(0); OnStreakDeath(); }
+                if (d.Victim == _myId) { _deaths++; _bot?.OnOwnDeath(); BeginDeathView(d.RespawnDelay, d.Flight); Ctx.Dead = true; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); _hud?.SetProtection(0); _streaks.OnDeath(); }
                 break;
         }
     }
@@ -635,7 +641,7 @@ public partial class NetClient : Node
         if (_gunship == null) PredictFire(mi); // rounds from a turret are the server's alone
         var sentPitch = GunnerLook(ref mi); // at the turret the aim is sent (ground-stabilised, #160), and the player's own look is left alone
         if (_gunship == null) _me!.Yaw = mi.Yaw;
-        var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? _wantSlot : 0), GunnerAim);
+        var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? Ctx.Hotbar.Want : 0), GunnerAim);
         // C-03: a dead body does not move on the server (its input is zero and it is skipped), so it is not predicted either; else each snapshot snapped it back
         if (Mode.BodyIsPredicted) { if (!Dead) _me!.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         PredictFlight(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
@@ -669,7 +675,7 @@ public partial class NetClient : Node
         if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {
             if (DialZero(b.ButtonIndex == MouseButton.WheelUp ? 1 : -1)) return; // a scope with bullet drop is up: the wheel is its zero dial
-            _wantSlot = CycleSlot(_wantSlot, b.ButtonIndex == MouseButton.WheelDown ? 1 : -1);
+            Ctx.Hotbar.Want = Ctx.Hotbar.Cycle(Ctx.Hotbar.Want, b.ButtonIndex == MouseButton.WheelDown ? 1 : -1);
         }
     }
 

@@ -289,8 +289,8 @@ public partial class NetClient
         var options = new List<(int Pos, string Text)>();
         foreach (var pos in new[] { CorpseRules.PrimaryPos, CorpseRules.SecondaryPos })
         {
-            if (weapon == null || !CorpseRules.CanReplace(weapon, pos) || pos >= _hotbar.Length) continue;
-            var current = ClientText.WeaponName(Weapons!.Weapons[_hotbar[pos]].Id);
+            if (weapon == null || !CorpseRules.CanReplace(weapon, pos) || pos >= Ctx.Hotbar.Slots.Length) continue;
+            var current = ClientText.WeaponName(Weapons!.Weapons[Ctx.Hotbar.Slots[pos]].Id);
             options.Add((pos, Strings.F(pos == CorpseRules.PrimaryPos ? "corpse.primary" : "corpse.secondary", current)));
         }
         var items = ChooserItems(corpse);
@@ -304,14 +304,4 @@ public partial class NetClient
 
     void SendPickUp(ushort corpse, int pos) =>
         Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.PickUpCorpse, CorpseCodec.EncodePickUp(corpse, (byte)pos))), (int)ENetPacketPeer.FlagReliable);
-
-    /// <summary>The server's hotbar after a pickup. A selected weapon that was replaced hands the selection to its new weapon.</summary>
-    void ApplyHotbar(int[] hot)
-    {
-        if (Weapons == null || hot.Length == 0) return;
-        for (var i = 0; i < Math.Min(hot.Length, _hotbar.Length); i++)
-            if (hot[i] != _hotbar[i] && _wantSlot == _hotbar[i] + 1) _wantSlot = hot[i] + 1;
-        _hotbar = hot;
-        _hud?.SetWeapons(_hotbar.Select(i => ClientText.WeaponName(Weapons.Weapons[i].Id)).ToList());
-    }
 }

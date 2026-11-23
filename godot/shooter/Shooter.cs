@@ -219,7 +219,7 @@ public partial class Shooter : Node3D
     {
         _shell = new UiShell
         {
-            PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks),
+            PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Loadouts.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks),
                 _client is { TeamAdmin.CanManage: true } tc ? () => _shell.Push(new TeamsScreen(tc)) : null, () => _client?.Redeploy(null), () => _client is { Dead: false }, () => _client?.Screens.OpenHuntersLog(),
                 _client is { Squads.CanUse: true } sc ? () => _shell.Push(new SquadsScreen(sc)) : null, () => _client?.Screens.OpenMineralLog()),
             WantsFreeMouse = () => _client is { Screens.WantsFreeMouse: true }, // MouseOwners: the respawn screen, the chat box, the Equipment screen, the tactical map (click to set the waypoint) and the corpse chooser's item list release the mouse (buttons to click, keys to type, cells to drag or click)
@@ -332,9 +332,9 @@ public partial class Shooter : Node3D
                 if (!joined) done.TrySetResult(JoinResult.Failed(Strings.F("connect.err.join", $"{host}:{port}", why)));
                 else if (_client == client) LeaveMatch(Strings.F("connect.err.lost", $"{host}:{port}", why));
             };
-            client.OpenLoadouts = () => _shell.Push(NewLoadouts());
+            client.Loadouts.OpenEditor = () => _shell.Push(NewLoadouts());
             client.MenuOpen = () => _shell.Top != null;
-            client.LevelUpReceived += lu => _shell.Toast(Strings.F("progress.levelup", lu.Level));
+            client.Loadouts.LevelUpReceived += lu => _shell.Toast(Strings.F("progress.levelup", lu.Level));
             client.Sandbox.Answered += a => _shell.Toast(a.Reason, a.Granted ? ToastKind.Info : ToastKind.Warn);
             client.Sandbox.Noticed += text => _shell.Toast(text, ToastKind.Warn);
             client.Sandbox.OpenPanel = () => _shell.Push(new SandboxScreen(client, () => _data ??= LoadData()));
@@ -374,7 +374,7 @@ public partial class Shooter : Node3D
     /// <summary>Back to the main menu; with a message when the server dropped us (what happened and what to do).</summary>
     void LeaveMatch(string? error)
     {
-        var lostEdits = _client is { } c && Enumerable.Range(0, Loadout.SlotCount).Any(c.Autosave.HasUnconfirmed);
+        var lostEdits = _client is { } c && Enumerable.Range(0, Loadout.SlotCount).Any(c.Loadouts.Autosave.HasUnconfirmed);
         DropClient();
         EnterPhase(AppPhase.Menu);
         _shell.SetGameActive(false);

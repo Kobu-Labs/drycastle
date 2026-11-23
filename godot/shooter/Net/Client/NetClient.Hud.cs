@@ -53,7 +53,7 @@ public partial class NetClient
         AddChild(_hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
         _hud.TacticalMapTeleport = _screens.OnMapTeleport;
         Sandbox.ShowOnHud(); // the SANDBOX badge (#156)
-        WireLoadoutHud(_hud);
+        Loadouts.WireHud(_hud);
         _hud.AttachEquipment(this); // F (#268)
         _hud.AttachHuntersLog(_hunts.Environment()); // J (#336)
         _hud.AttachMineralLog(); // N
@@ -72,10 +72,10 @@ public partial class NetClient
         if (_hud == null || Ammo is not { } a || Weapons == null || a.Slot < 1 || a.Slot > Weapons.Weapons.Count) return;
         var w = Weapons.Weapons[a.Slot - 1];
         var all = new List<(int, int, bool)>();
-        foreach (var gi in _hotbar)
+        foreach (var gi in Ctx.Hotbar.Slots)
             if (gi < a.Slots.Count) all.Add((a.Slots[gi].Mag, a.Slots[gi].Reserve, Weapons.Weapons[gi].MagazineSize == 0));
         var (mag, reserve) = a.Slots[a.Slot - 1];
-        _hud.SetAmmo(Math.Max(1, HotbarPos(a.Slot) + 1), w.MagazineSize == 0 ? -1 : mag, reserve, all, a.ReloadRemaining, w.ReloadTime);
+        _hud.SetAmmo(Math.Max(1, Ctx.Hotbar.PosOf(a.Slot) + 1), w.MagazineSize == 0 ? -1 : mag, reserve, all, a.ReloadRemaining, w.ReloadTime);
     }
 
 

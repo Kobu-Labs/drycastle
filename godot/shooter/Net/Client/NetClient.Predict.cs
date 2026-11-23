@@ -76,7 +76,7 @@ public partial class NetClient
     {
         if (_me == null || CurrentWeapon is not { } w) return;
         var scoped = mi.Has(MoveButtons.Aim) && w.ZoomFov > 0 && Mode.CanScope;
-        _breath.Tick(Now, scoped, mi.Has(MoveButtons.Sprint), w, Perks.HoldBreathTime);
+        _breath.Tick(Now, scoped, mi.Has(MoveButtons.Sprint), w, Loadouts.Perks.HoldBreathTime);
         var cue = _breathCues.Tick(Now, _breath.Phase, _breath.Meter);
         if (Sfx.Enabled)
         {
@@ -93,7 +93,7 @@ public partial class NetClient
     /// <summary>The breath while scoped with a breath hold (the HUD reads it each frame for the key hint).</summary>
     (bool Show, float Meter, BreathState.BreathPhase Phase) BreathView()
     {
-        if (_me is not { ZoomFov: > 0 } || _binoculars || CurrentWeapon is not { } w || BreathState.BudgetSeconds(w, Perks.HoldBreathTime) <= 0)
+        if (_me is not { ZoomFov: > 0 } || _binoculars || CurrentWeapon is not { } w || BreathState.BudgetSeconds(w, Loadouts.Perks.HoldBreathTime) <= 0)
             return (false, 0f, BreathState.BreathPhase.Ready);
         return (true, _breath.Meter, _breath.Phase);
     }
@@ -101,7 +101,7 @@ public partial class NetClient
     /// <summary>Predicts this tick's trigger pull / reload key; plays sounds and own-shot effects at once.</summary>
     void PredictFire(MoveInput mi)
     {
-        if (!PredictionOn || !Mode.CanPredictFire || OwnBodyFlung || Ammo is not { } a || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count || a.Slot != _wantSlot) return;
+        if (!PredictionOn || !Mode.CanPredictFire || OwnBodyFlung || Ammo is not { } a || a.Slot < 1 || a.Slot > Weapons!.Weapons.Count || a.Slot != Ctx.Hotbar.Want) return;
         var w = Weapons.Weapons[a.Slot - 1];
         var now = Now;
         if (_pReloadUntil > 0 && now >= _pReloadUntil) { _pMag = _pMagAfter; _pReloadUntil = 0; }
@@ -319,7 +319,7 @@ public partial class NetClient
             _demoTp = true; // open ground, away from the cars that some spawns sit in
             Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(_myId, new NVec3(-78f, 191.2f, 52.9f)))), (int)ENetPacketPeer.FlagReliable);
         }
-        _wantSlot = t < 6 ? 3 : 2;
+        Ctx.Hotbar.Want = t < 6 ? 3 : 2;
         _me.Pitch = t < 6 ? -0.2f : -0.05f;
         if (t > 7) { mi.MoveX = t < 7.2 ? 1 : -1; mi.Yaw += (float)(t - 7) * 0.8f; } // strafe + turn: the flash must stay on the barrel
         if ((t is > 3 and < 3.1) || (t is > 7 and < 8)) mi.Buttons |= MoveButtons.Fire;

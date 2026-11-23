@@ -79,7 +79,7 @@ public partial class NetClient : IBotHost
     bool IBotHost.OwnSpawned => OwnSpawned;
     EntityState IBotHost.MyState => _myState;
     bool IBotHost.Driving => Ctx.Driving;
-    int IBotHost.WantSlot { set => _wantSlot = value; }
+    int IBotHost.WantSlot { set => Ctx.Hotbar.Want = value; }
     IReadOnlyDictionary<ushort, EntityRecord> IBotHost.States => _dec.States;
     EventLogs IBotHost.Logs => _logs;
     IEnumerable<BotCar> IBotHost.Cars => _cars.Values.Select(AsBotCar);

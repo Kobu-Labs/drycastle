@@ -80,14 +80,14 @@ public partial class CustomizationScreen : MenuScreen
     {
         base._Ready();
         _net = _client();
-        if (_net != null) { _net.ProfileChanged += OnProfile; _net.ServerError += OnServerError; }
-        if (_net?.Profile is { } p) OnProfile(p);
+        if (_net != null) { _net.Loadouts.ProfileChanged += OnProfile; _net.ServerError += OnServerError; }
+        if (_net?.Loadouts.Profile is { } p) OnProfile(p);
         else Refresh();
     }
 
     public override void _ExitTree()
     {
-        if (_net != null) { _net.ProfileChanged -= OnProfile; _net.ServerError -= OnServerError; }
+        if (_net != null) { _net.Loadouts.ProfileChanged -= OnProfile; _net.ServerError -= OnServerError; }
         base._ExitTree();
     }
 
@@ -486,7 +486,7 @@ public partial class CustomizationScreen : MenuScreen
     {
         _slot = slot;
         _slotTabs[slot].ButtonPressed = true;
-        _saved = _net?.Profile is { } p ? ServerCopy(p, slot) : CamoSpec.Default;
+        _saved = _net?.Loadouts.Profile is { } p ? ServerCopy(p, slot) : CamoSpec.Default;
         _draft = _saved;
         ClearHistory();
         _wait.Cancel();

@@ -21,7 +21,7 @@ public partial class NetClient
     int GrenadeWeapon()
     {
         if (Weapons == null) return -1;
-        foreach (var i in _hotbar) if (i >= 0 && i < Weapons.Weapons.Count && Weapons.Weapons[i].Grenade != null) return i;
+        foreach (var i in Ctx.Hotbar.Slots) if (i >= 0 && i < Weapons.Weapons.Count && Weapons.Weapons[i].Grenade != null) return i;
         return -1;
     }
 
