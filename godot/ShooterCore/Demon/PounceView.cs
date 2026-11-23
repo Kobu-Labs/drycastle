@@ -22,7 +22,7 @@ public enum PounceViewEffect : byte
 
 /// <summary>
 /// The client's view of the demon's pounce (<see cref="EventKind.DemonPounce"/>) as an explicit machine: the stage, who is marked or pinned, the yaw they lie at, and
-/// who lay down last (for the others' bodies). Godot-free; NetClient.Pounce keeps the clocks, the camera and the screen and asks this what happened. Replaces a
+/// who lay down last (for the others' bodies). Godot-free; PounceClient keeps the clocks, the camera and the screen and asks this what happened. Replaces a
 /// nullable stage, two booleans and a victim id that were kept in step by hand.
 /// <para>
 /// The server's story for one victim is <c>Wind, Pinned, (Released | Aborted)</c>, or <c>Wind, Aborted</c>; a client that joins mid-pounce is told only the current stage.
