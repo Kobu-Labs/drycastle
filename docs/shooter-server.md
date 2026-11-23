@@ -186,7 +186,7 @@ The client needs the same `--map`/`DRYCASTLE_MAP` and `DRYCASTLE_ASSETS` as desc
 
 `NetServer` (a Godot `Node`) is the composition root: the connection and tick loop, message dispatch (`OnReliable`, `OnInputs`), the order of one tick (`_PhysicsProcess`: `ReceiveAndHousekeep`, `TickWorld`, `SimulatePlayers`,
 `StepVehiclesAndRiders`, `ResolveBlastsAndFlush`, snapshots, report; the order decides the simulation) and the creation of the features in `_Ready` (the order there matters too: a feature that registers an entity type or a
-handler comes before the ones that name it). It is still a `partial class` over the files named `NetServer.*.cs`: the core (`Input`, `Fire`, `Targeting`, `Snapshots`, `MatchEvents`, `Smoke`, `LagComp`, `Vehicles`) and the
+handler comes before the ones that name it). It is still a `partial class` over the files named `NetServer.*.cs`: the core (`Input`, `Fire`, `Pellets`, `Targeting`, `Snapshots`, `MatchEvents`, `Smoke`, `LagComp`, `Corpses`, `Glass`, `Vehicles`) and the
 features not yet converted (below). Bots: `Net/Bots/NetServer.Bots.cs`.
 
 A converted feature is a plain class in a folder of its own, owns its state privately and takes only a `ServerContext` (`ServerContext.cs`: the match, the joined players, the clock, `Broadcast` / `Send` / `SendEvent`, chat lines,
@@ -205,6 +205,11 @@ Services (what several features share, each owning its state):
 | `AnimalWorld` | `Fauna/` | the animals' view of the world: the crowd, the per-tick player list, `Wild` / `Pets` / `Companions` (`IAnimalWorld`): `Prepare`, `Done`, `PlayerHurt` |
 | `Sitters` | `Seating/` | who sits in a pew or at the dictation table and what each was told: `IsSeated`, `StandUp`, `Input`, `StanceOf` |
 | `WalkerGround`, `GroundHug` | `Terrain/` | what a navmesh walker meets; the ray that follows the ground |
+| `DeathPush` | `Combat/` | the throw a killing blow gives its victim, recorded before the damage: `Record`, `Clear`, `Has`, `Take`, `Forget`, `TakeFlight` |
+| `ImpactFx`, `Splash`, `RocketIds` | `Combat/` | impact particles and their surface (`At`, `Broadcast`, `BulletPuff`, `Warm`); the splash rule of ADR 0028 (`Share`); the ids of rockets and blasts (`Next`) |
+| `StreakServer` | `Streaks/` | the killstreak rules (`Rules`: the `KillstreakService`) and the server's hooks on them: `Arm`, `Activate`, `Kill`, `Death`, `Wipe`, `Tick`, `Leave`; owns the UAV and `SpawnOverMap` |
+| `GunshipServer` | `Streaks/` | aircraft entities and the gunship's rounds: `Spawn`, `ControlFor`, `Detonate`, `DamageAircraft`, `RoutedVehicles`, the tick's FX batch (`Fx`, `FlushFx`), `NoteHit` |
+| `PounceServer` | `Parish/` | who the demon holds down and who is immune to its fire: `IsPinned`, `TryYaw`, `Immune`, `Stage`, `LetGo`, `Sweep` |
 
 Features:
 
@@ -220,13 +225,15 @@ Features:
 | `StatusServer` | `Statuses/` | blessing, curse, burn (`Burns` is shared with the demon and the harvester) |
 | `HuntLogServer` | `HuntLog/` | the Hunter's Log: books, records, the three queries, collection rewards |
 | `SentryWorld` | `Sentries/` | the sentry turrets' bridge to the match |
+| `ThievesServer` (+ `GangServer`, `RaidServer`, `RaidLauncher`, `LootServer`, `ThievesPayout`, the Loot worlds `TireCars`, `PoleSites`, `DishLoot`, `PetLoot`) | `Thieves/` | the Thieves event: its phase, the Gang members, the Raid vans and where they park, what they steal, the reward |
+| `FlakServer`, `LockOnServer`, `MoabServer`, `MissileServer`, `HelperServer`, `Ac130Server`, `AttackHelicopterServer` | `Streaks/` | the flak truck's shells, the Lock-on launcher and its homing missiles, and the adapters of the killstreaks (each makes its `IKillstreak`; the table-to-adapter mapping is `NetServer.BuildStreaks`) |
+| `ChurchServer`, `CitizenServer`, `MassServer`, `DemonServer` | `Parish/` | the church doors and shelter (`ChurchDoorPolicy` decides), the citizens' crowd and houses, the Holy Mass, the demon's fight and fireballs |
 
-Not converted yet, and what blocks each group: the church group (`Church`, `Citizens`, `Mass`, `Demon`: one event chain that shares the church doors, the crowd and `_pins`, and `Mass` is also the Demon's start), `Thieves.*`
-(Gang, Raid vans, Loot, Reward: nested adapters over `NetServer` itself, and `Loot` reaches the vehicles and the Gang), the aircraft group (`Aircraft`, `Flak`, `Helicopter`, `Ac130`, `AttackHelicopter`, `Missile`, `LockOn`, `Uav`,
-`Killstreaks`: the gunship routing reads `Fleet` by index and `_streaks`), `Vehicles` / `Tow` / `Harvester` / `Scud*` / `RunOver` (the vehicle step, seats and damage are one loop that every one of them hooks into), `Bigfoot`,
-`Plantation` (its key-competition list asks eight features), and the diagnostics (`Telemetry`, `Perf*`, `Prof`, `Metrics`, `LossTest`: counters written from the whole tick).
+Not converted yet, and what blocks each group: `Vehicles` / `Tow` / `Harvester` / `Scud*` / `RunOver` (the vehicle step, seats and damage are one loop that every one of them hooks into; `Crash`, `DamageVehicle` and `RunOverTargets` reach the other
+converted features as delegates meanwhile), `Bigfoot`, the core (`Fire`, `Pellets`, `LagComp`, `Targeting`, `Input`: the shot path, the rocket sim and the lag-compensation poses that the features above ask through delegates), `Plantation` (its key-competition list asks
+features that are still partials), and the diagnostics (`Telemetry`, `Perf*`, `Prof`, `Metrics`, `LossTest`: counters written from the whole tick).
 
-Namespaces follow folders (`Drycastle.Shooter.Net.Server.BusGarage`, ...); a folder is named so that it does not equal a type name (`Garage`, `Minerals`, `Rozhlas`, `Equipment`, `Status` are types or ShooterCore namespaces: hence `BusGarage`, `MineralLog`, `VillageRadio`, `Gear`, `Statuses`).
+Namespaces follow folders (`Drycastle.Shooter.Net.Server.BusGarage`, ...); a folder is named so that it does not equal a type name (`Garage`, `Minerals`, `Rozhlas`, `Equipment`, `Status`, `Aircraft`, `Church`, `Killstreaks` are types or namespaces in scope: hence `BusGarage`, `MineralLog`, `VillageRadio`, `Gear`, `Statuses`, `Streaks`, `Parish`).
 
 `ServerClient` (one connection: human or bot) and `PlayerProfile` are plain state in `ServerClient.cs`; `SmokeStats` holds what the smoke tests count and their verdicts.
 
