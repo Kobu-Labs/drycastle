@@ -1,5 +1,6 @@
 using Drycastle.MapLoader;
 using Drycastle.Viewer.Edits;
+using Drycastle.Viewer.Editor.Tools;
 using Godot;
 using System;
 using System.Collections.Generic;
@@ -15,11 +16,23 @@ namespace Drycastle.Viewer.Editor;
 /// operations written to edits.json (see EditsFile). The walk-mode Player is frozen and hidden meanwhile.
 /// F2 toggles. The EditsWatcher regenerates whatever the saved file changes; its events show in the status line.
 /// </summary>
-public partial class EditorMode : Node
+public partial class EditorMode : Node, IEditorHost
 {
     public const float PanelWidth = 360f;
     const float StatusHeight = 58f;
     const float TopDownHeight = 120f;
+
+    // the parts of the editor that own their state; Update and ActiveChanged run in this order
+    public OrthoLayer Ortho { get; }
+    public FloorPlanLayer FloorPlan { get; }
+    readonly List<EditorPart> _parts;
+
+    public EditorMode()
+    {
+        Ortho = new OrthoLayer(this);
+        FloorPlan = new FloorPlanLayer(this);
+        _parts = new() { Ortho, FloorPlan };
+    }
 
     public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
     public Player Player { get; init; } = null!;
@@ -117,13 +130,11 @@ public partial class EditorMode : Node
         Active = on;
         OutlineRoot.Visible = on;
         MarkerRoot.Visible = on;
-        FloorPlanActive(on);
+        foreach (var part in _parts) part.ActiveChanged(on);
         _ui.Visible = on;
         _looking = false;
         if (on)
         {
-            RestoreOrtho();
-            RestoreFloorPlan();
             _savedPlayer = (Player.GlobalPosition, Player.RotationDegrees, 0f, Player.InputEnabled);
             Player.InputEnabled = false;
             Player.Visible = false;
@@ -575,8 +586,8 @@ public partial class EditorMode : Node
                     case Key.F3: GuardUnsaved(WalkFromHere); break;
                     case Key.G: GroupSelected(); break;
                     case Key.T: ToggleTopDown(); break;
-                    case Key.O: ToggleOrtho(); break;
-                    case Key.B: ToggleFloorPlan(); break;
+                    case Key.O: Ortho.ToggleOrtho(); break;
+                    case Key.B: FloorPlan.ToggleFloorPlan(); break;
                     case Key.Enter or Key.KpEnter:
                         if (GetViewport().GuiGetFocusOwner() is (LineEdit or TextEdit)) break;
                         if (Tool == EditorTool.Group) { if (!_btnGroup.Disabled) GroupSelected(); }
@@ -627,12 +638,12 @@ public partial class EditorMode : Node
         Fly((float)delta);
         UpdateHover();
         UpdateGateDrag();
+        foreach (var part in _parts) part.Update(delta);
         UpdateObjectTools();
         UpdatePolesTool();
         UpdateShapeTool();
         UpdateGroundMap();
         UpdateZoneOverlay();
-        UpdateFloorPlan();
         UpdateSketchTool();
         PollSketchFile(delta);
         UpdateYouDot();
@@ -795,7 +806,7 @@ public partial class EditorMode : Node
         return edges.Where(e => count[(e.Item1, e.Item2)] == 1).Select(e => e.Item3).ToList();
     }
 
-    void SetOutline(string name, List<(Vector2 a, Vector2 b)> segs, Color colour, float lift, float width)
+    public void SetOutline(string name, List<(Vector2 a, Vector2 b)> segs, Color colour, float lift, float width)
     {
         _segmentCounts[name] = segs.Count;
         if (!_outlines.TryGetValue(name, out var mi))

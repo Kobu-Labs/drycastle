@@ -224,7 +224,10 @@ public partial class EditorMode
         page.AddChild(new Label { Text = "Dropping puts you on the ground below the camera, facing the way you look.", ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
         page.AddChild(new Label { Text = "WASD fly, Space up, Shift down, hold the right mouse button to look.", ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
 
-        BuildOrthoSection(page);
+        page.AddChild(new HSeparator());
+        page.AddChild(new Label { Text = "Layers", ThemeTypeVariation = "Header" });
+        FloorPlan.BuildToggle(page);
+        Ortho.BuildSection(page);
     }
 
     static Button Btn(string text, Action onPress)
@@ -362,12 +365,8 @@ public partial class EditorMode
             if (cfg.Load(CfgPath) != Error.Ok) return;
             if (Enum.TryParse<EditorTool>((string)cfg.GetValue("ui", "tool", "None"), true, out var t)) { Tool = t; ShapeRest(); }
             SetSpeed((float)(double)cfg.GetValue("ui", "speed", (double)Speed));
-            SetOrthoOpacity((float)(double)cfg.GetValue("ui", "ortho_opacity", (double)_orthoOpacity), save: false);
-            _orthoRestore = (bool)cfg.GetValue("ui", "ortho_on", false); // applied when the editor first opens, the map is not up yet
             _gmOn = (bool)cfg.GetValue("ui", "ground_map_on", true);
             _zoOn = (bool)cfg.GetValue("ui", "zone_overlay_on", true);
-            var fp = (string)cfg.GetValue("ui", "floor_plan", "");
-            if (fp != "") _floorRestore = fp; // applied when the editor first opens, the map is not up yet
             var gsel = (string)cfg.GetValue("ui", "ground_type", "");
             if (gsel != "") _restoreGround = gsel;
             var psel = (string)cfg.GetValue("ui", "patch", "");
@@ -377,27 +376,26 @@ public partial class EditorMode
             var zk = (string)cfg.GetValue("ui", "zone_kind", "");
             if (zk != "") _restoreZoneKind = zk;
             if (Enum.TryParse<SketchKind>((string)cfg.GetValue("ui", "sketch_mode", _skMode.ToString()), true, out var sk)) _skMode = sk;
+            foreach (var part in _parts) part.LoadConfig(cfg);
         }
         catch (Exception e) { GD.PushWarning($"editor ui settings not loaded: {e.Message}"); }
     }
 
-    void SaveUiConfig()
+    public void SaveUiConfig()
     {
         try
         {
             var cfg = new ConfigFile();
             cfg.SetValue("ui", "tool", Tool.ToString());
             cfg.SetValue("ui", "speed", (double)Speed);
-            cfg.SetValue("ui", "ortho_on", _orthoOn || _orthoRestore);
-            cfg.SetValue("ui", "ortho_opacity", (double)_orthoOpacity);
             cfg.SetValue("ui", "ground_map_on", _gmOn);
             cfg.SetValue("ui", "zone_overlay_on", _zoOn);
-            cfg.SetValue("ui", "floor_plan", _floorParcel ?? _floorRestore ?? "");
             cfg.SetValue("ui", "patch", SelectedPatchId ?? "");
             cfg.SetValue("ui", "zone", SelectedZoneId ?? "");
             cfg.SetValue("ui", "zone_kind", SelectedZoneKind ?? "");
             cfg.SetValue("ui", "ground_type", SelectedGroundType ?? "");
             cfg.SetValue("ui", "sketch_mode", _skMode.ToString());
+            foreach (var part in _parts) part.SaveConfig(cfg);
             cfg.Save(CfgPath);
         }
         catch (Exception e) { GD.PushWarning($"editor ui settings not saved: {e.Message}"); }

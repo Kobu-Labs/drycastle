@@ -136,7 +136,7 @@ public partial class EditorMode
         }
         yield return (SelectedZoneKind != null ? $"Zones: mark all {ZoneLabel(SelectedZoneKind)} zones for deletion" : "Zones: mark all zones for deletion", () => { SelectTool(EditorTool.Zones); MarkListedZones(); });
         yield return (_zoOn ? "Zones: hide the zone overlay  (M)" : "Zones: show the zone overlay  (M)", () => { SelectTool(EditorTool.Zones); ToggleZoneOverlay(); });
-        yield return (_floorParcel != null ? $"View: floor plan off, show the building of {_floorParcel}  (B)" : "View: floor plan of the selected parcel  (B)", ToggleFloorPlan);
+        yield return (FloorPlan.FloorPlanParcel != null ? $"View: floor plan off, show the building of {FloorPlan.FloorPlanParcel}  (B)" : "View: floor plan of the selected parcel  (B)", FloorPlan.ToggleFloorPlan);
         yield return ("Sketch: mark points  (P)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Point); });
         yield return ("Sketch: draw a line  (L)", () => { SelectTool(EditorTool.Sketch); SetSketchMode(SketchKind.Line); });
         if (_sketch.Count > 0) yield return ("Sketch: clear the active sketch", () => { SelectTool(EditorTool.Sketch); RequestClearSketch(); });
