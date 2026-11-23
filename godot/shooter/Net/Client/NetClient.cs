@@ -20,6 +20,7 @@ using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Plantation;
 using Drycastle.ShooterCore.RozhlasFeed;
 using Drycastle.ShooterCore.Scenery;
 using Drycastle.ShooterCore.Thieves;
@@ -101,6 +102,8 @@ public partial class NetClient : Node
     /// <summary>The render clock of the remote entities (A-06): a filtered estimate of the server's tick, which never runs backwards.</summary>
     double _elapsed;
     int _snaps;
+    /// <summary>How often and how far the own body and vehicles are corrected (the loss test and the car loop read it through the bot host).</summary>
+    RubberStats _rub = new();
     float _maxErr;
     NVec3 _meMin = new(float.MaxValue), _meMax = new(float.MinValue);
     EntityState _myState;
@@ -121,6 +124,10 @@ public partial class NetClient : Node
     CitizensClient _citizens = null!;
     StatusClient _status = null!;
     ThievesClient _thieves = null!;
+    /// <summary>The own high's nausea and cigarette (the Equipment screen asks whether the player is high).</summary>
+    public HighClient High { get; private set; } = null!;
+    /// <summary>plantation.json (the host sets it from the data directory; the shipped defaults otherwise).</summary>
+    public PlantationFile Plantation = PlantationFile.Default;
     SessionLog _session = null!;
     PerfLog _perf = null!;
     /// <summary>The perf harness' client log directory (--perf-out); empty = no log.</summary>
@@ -177,6 +184,7 @@ public partial class NetClient : Node
         _mass = new MassClient(Ctx, HolyMassData, DropPrediction);
         _citizens = new CitizensClient(Ctx, HolyMassData, _mass);
         _status = new StatusClient(Ctx, Plantation);
+        High = new HighClient(Ctx, _status, Plantation, () => Mode, () => OwnSpawned);
         Squads = new SquadsClient(Ctx);
         Chat = new ChatClient(Ctx, ItemData, CompanionData, Squads);
         TeamAdmin = new TeamsClient(Ctx, Chat);
@@ -393,7 +401,7 @@ public partial class NetClient : Node
         UpdateDemonQuake(delta);
         _blastDust.Update(); // before the shake: a blast wave that arrives this frame shakes this frame
         Ctx.Shake.Update(delta);
-        UpdateNausea(delta); // a high player's sway (NetClient.High.cs), before the roll is composed
+        High.Update(delta); // a high player's sway (NetClient.High.cs), before the roll is composed
         FadeOwnCorrection(delta);
     }
 

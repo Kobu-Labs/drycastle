@@ -78,8 +78,3 @@ public sealed class RubberStats
         ["remote_draws"] = RemoteDraws, ["remote_draws_clamped"] = RemoteClamped, ["render_backsteps"] = RenderBacksteps, ["render_max_backstep_ticks"] = MaxBackstep,
     };
 }
-
-public partial class NetClient
-{
-    RubberStats _rub = new();
-}
