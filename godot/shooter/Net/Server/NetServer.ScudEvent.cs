@@ -95,7 +95,7 @@ public partial class NetServer
         var minD = (float)Scud.Event.MinPlayerDistanceM;
         for (var tries = 0; tries < 80; tries++)
         {
-            var zone = tries < 40 ? PickEventSpawn(EventBook.Scud) : null;
+            var zone = tries < 40 ? _areas.PickEventSpawn(EventBook.Scud) : null;
             NVec3 p;
             if (zone is { } z) p = z;
             else if (Spawns.Count > 0) p = Spawns[_rng.Next(Spawns.Count)];
@@ -115,7 +115,7 @@ public partial class NetServer
     List<ScudBunkerSlot> ScudBunkers()
     {
         var list = new List<ScudBunkerSlot>();
-        foreach (var room in MapShelters.Rooms.Where(r => r.Level == 0 && r.BunkerId != "" && r.BunkerId != ChurchShell.RoomId && r.Ring.Length >= 3))
+        foreach (var room in _areas.Shelters.Rooms.Where(r => r.Level == 0 && r.BunkerId != "" && r.BunkerId != ChurchShell.RoomId && r.Ring.Length >= 3))
         {
             if (list.Any(b => b.BunkerId == room.BunkerId)) continue;
             var centre = NVec2.Zero;

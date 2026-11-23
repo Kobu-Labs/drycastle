@@ -41,7 +41,7 @@ public enum BigfootFxKind : byte
 
 /// <summary>
 /// What the Bigfoot needs from the server: the ground and the solid world under it, the players and the vehicles, and the hands to hurt, hold, throw and
-/// show. The server implements it (<c>NetServer.Bigfoot.cs</c>); a test fakes it. Everything about the fight that needs the physics engine or a
+/// show. The server implements it (<c>Net/Server/BigfootEvent/BigfootServer.cs</c>); a test fakes it. Everything about the fight that needs the physics engine or a
 /// connection is behind it, so the brain itself is plain code.
 /// </summary>
 public interface IBigfootWorld

@@ -53,7 +53,7 @@ POLYGONS_FILE_NAME = "zone_polygons.json"
 
 #: The kind that is read by ``props.make_spawns`` instead of being exported as points.
 PLAYER_SPAWN = "player_spawn"
-#: Players hold the interact key inside one to get high (``NetServer.Plantation.cs``); exported as polygons, not points.
+#: Players hold the interact key inside one to get high (``Net/Server/Highs/PlantationServer.cs``); exported as polygons, not points.
 PLANTATION = "plantation"
 #: The kinds with no density rule (no ``zone_points.json`` entry): ``player_spawn`` is read by the props stage, the others are
 #: exported as polygons.

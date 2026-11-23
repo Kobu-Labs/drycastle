@@ -4,7 +4,7 @@ Make a third event kind possible without special cases, and add the empty `thiev
 
 ## Today
 - `EventBook` (`godot/ShooterCore/Events/EventRun.cs`): kind constants, hard-coded `Startable`, `WhyNotStart` text names the Bigfoot.
-- `/event current end|cancel`: `ChatCurrentEvent` (`NetServer.Bigfoot.cs`) knows the Bigfoot, falls through to `ChatCurrentEnd` (`NetServer.Mass.cs`) which knows the Mass. Any other kind: "No event is running."
+- `/event current end|cancel`: `EventServer.Current` (`Net/Server/RoundFlow/EventServer.cs`) picks the handler of the running kind from the table. Nothing running: "No event is running."
 - No real event calls `IntelServer.Announce` / `Withdraw` (`Net/Server/Intel/IntelServer.cs`).
 
 ## Do
@@ -20,7 +20,7 @@ Make a third event kind possible without special cases, and add the empty `thiev
 - Tests: handler dispatch per kind, `ThievesEvent` phases.
 
 ## Done: notes
-- Handler table: `NetServer.Events.cs` `InitEvents()`, `_eventHandlers.Register(kind, name, start, end, cancel?)`; pure part `EventHandlers<TWho>` (`ShooterCore/Events/EventHandlers.cs`).
+- Handler table: `Net/Server/RoundFlow/EventServer.cs`, wired in `NetServer.BuildFeatures`: `_eventServer.Register(kind, name, start, end, cancel?)`; pure part `EventHandlers<TWho>` (`ShooterCore/Events/EventHandlers.cs`).
 - Hooks marked HOOK in `NetServer.Thieves.cs`: `InitThieves`, `ThievesTick`, `ThievesFinish(won, by)`, `SendThievesOnJoin`, `ThievesRoundReset`.
 - Placeholder: the event wins itself after `PlaceholderSeconds` (60, in code): remove with the first Raid (03).
 - No wire change, protocol still 42. Intel text is a placeholder.

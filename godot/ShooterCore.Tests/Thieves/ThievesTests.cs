@@ -12,7 +12,7 @@ public class ThievesTests
 {
     // ---- the handler table: /event <kind>, /event current end|cancel ----
 
-    /// <summary>The three kinds as the server registers them (InitEvents); each handler books its own end in the book, as the real ones do.</summary>
+    /// <summary>The three kinds as the server registers them (NetServer.BuildFeatures); each handler books its own end in the book, as the real ones do.</summary>
     static (EventHandlers<string> Handlers, EventBook Book, List<string> Log) Table()
     {
         var book = new EventBook();

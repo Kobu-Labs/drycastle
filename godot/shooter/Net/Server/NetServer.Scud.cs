@@ -354,7 +354,7 @@ public partial class NetServer
     /// <summary>
     /// THE Scud blast: the whole of what a Scud missile's impact does, at <paramref name="position"/> (the ground), credited to <paramref name="attackerId"/> (the player who placed the lock;
     /// the rocket cart's shooter when a loaded cart is shot). Everything inside the lethal radius dies, in a vehicle or not and spawn protected or not, except what a blast shelter covers
-    /// (<see cref="MapShelters"/>, the same rule as every blast); beyond it the damage falls off to the damage radius and then walls, a hull and shelters work as for any blast
+    /// (<see cref="MapAreas.Shelters"/>, the same rule as every blast); beyond it the damage falls off to the damage radius and then walls, a hull and shelters work as for any blast
     /// (<see cref="Splash.Share"/>). Vehicles whose hull is in the destroy radius go up, those beyond it take hit points. Every glass pane within the glass radius shatters, the clients draw the
     /// biggest blast wave and dust the game has, shake the camera map-wide and leave a scorch. Kills are ordinary kills (friendly fire as the match mode has it). Aircraft are not touched.
     /// </summary>
@@ -374,14 +374,14 @@ public partial class NetServer
             var centre = HitMath.Centre(t);
             var dist = HitMath.DistanceToBody(position, t);
             var hit = ScudBlastRules.PlayerHit(b, dist);
-            if (!hit.Hurts || !MapShelters.Reaches(position, centre)) continue; // a bunker room or the church shelters those inside
+            if (!hit.Hurts || !_areas.Shelters.Reaches(position, centre)) continue; // a bunker room or the church shelters those inside
             var away = centre - position; away.Y = MathF.Max(away.Y, 2f);
             var push = away == NVec3.Zero ? NVec3.UnitY : NVec3.Normalize(away);
             var k = push * (ScudKnockMps * Math.Clamp(1f - dist / (float)b.DamageRadiusM, 0.1f, 1f));
             if (hit.Lethal)
             {
                 _deathPush.Record(t.Id, CorpseRules.ThrowFromBlast(k)); // the body is thrown
-                if (t.Id == BigfootRules.TargetId) DealBigfoot(attackerId, ScudWeapon); // the Bigfoot takes it as an explosive hit, not as a kill (issue #264)
+                if (t.Id == BigfootRules.TargetId) _bigfoot.Hit(attackerId, ScudWeapon); // the Bigfoot takes it as an explosive hit, not as a kill (issue #264)
                 else
                 {
                     _hunts.Pending = new WildHit(ScudWeapon, KillCause.Standard, null, null); // a wild animal in the blast is a hunt with the Scud

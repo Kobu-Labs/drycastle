@@ -22,7 +22,7 @@ public readonly record struct ShotStop(float Distance, ServerCar? Car, VehiclePo
 /// <summary>The nearest vehicle hull a ray enters (the server's <c>NearestHull</c>): the vehicle, its distance and the pose the hull was tested at.</summary>
 public delegate ServerCar? HullRay(Vector3 from, Vector3 dir, float max, ServerCar? skipA, ServerCar? skipB, List<ServerCar>? passed, out float distance, out VehiclePose pose);
 
-/// <summary>The distance along a ray (unit <c>dir</c>) to the nearest hull of a vehicle that stands parked, or infinity (the server's <c>ParkedHullDistance</c>).</summary>
+/// <summary>The distance along a ray (unit <c>dir</c>) to the nearest hull of a vehicle that stands parked, or infinity (<c>ParkedHulls.Distance</c>).</summary>
 public delegate float ParkedRay(Vector3 from, Vector3 dir, float max);
 
 /// <summary>

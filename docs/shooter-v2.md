@@ -315,7 +315,7 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 - Water bodies (#138, #142): the pipeline writes `water.json` into the map artifact; the server and clients float and swim at
   the surface in deep water (ADR 0023: no diving, no breath, no drowning), wade in shallow water and splash on entry.
   Surfaces and splashes are client-side and not yet compiled by Godot.
-- Zone points: `zone_points.json` holds baked candidate points inside the zones of each kind the server needs (Bigfoot, the wild species). The server asks `NetServer.PickEventSpawn("bigfoot")` for a random one, or gets
+- Zone points: `zone_points.json` holds baked candidate points inside the zones of each kind the server needs (Bigfoot, the wild species). The server asks `MapAreas.PickEventSpawn("bigfoot")` for a random one, or gets
   `null` when none exists (`docs/pipeline.md`, "Zones"). No client use.
 - Day/night (#135): one server clock, `environment.json` (start time 08:00, day length 24 minutes by default). The sun,
   moon, sky shader and ambient light follow it. Street lamps (#136) light up at night from `lamps.json`.
@@ -603,7 +603,7 @@ items, ADR 0018 (#267, protocol 31).
 ## 7c. Events and the Bigfoot (#264)
 
 An **Event** (GLOSSARY) is a short happening with a challenge and a reward. The lifecycle is `EventRun` / `EventBook` (`ShooterCore/Events/EventRun.cs`): active, then won or
-despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: `NetServer.Bigfoot.cs`; client: `NetClient.Bigfoot.cs`; the fight itself is
+despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: `Net/Server/BigfootEvent/` (`BigfootServer.cs`); client: `NetClient.Bigfoot.cs`; the fight itself is
 `ShooterCore/Events/Bigfoot.cs` (a plain class, tested with a fake world in `BigfootTests`). Every number is in `data/bigfoot.json` (`BigfootFile`).
 
 - **Starting and ending.** An admin's `/event bigfoot` spawns it at a random baked point of an area with `event spawn: bigfoot` (`PickEventSpawn`, #263). A map with no such
