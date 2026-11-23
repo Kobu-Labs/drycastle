@@ -100,7 +100,7 @@ public partial class NetClient : Node
     double _lastArrival;
     /// <summary>The render clock of the remote entities (A-06): a filtered estimate of the server's tick, which never runs backwards.</summary>
     double _elapsed;
-    int _recon, _snaps;
+    int _snaps;
     float _maxErr;
     NVec3 _meMin = new(float.MaxValue), _meMax = new(float.MinValue);
     EntityState _myState;
@@ -121,6 +121,10 @@ public partial class NetClient : Node
     CitizensClient _citizens = null!;
     StatusClient _status = null!;
     ThievesClient _thieves = null!;
+    SessionLog _session = null!;
+    PerfLog _perf = null!;
+    /// <summary>The perf harness' client log directory (--perf-out); empty = no log.</summary>
+    public string PerfOut = "";
     GlassClient _glass = null!;
     /// <summary>glass.json (set by the host); the defaults when it sets none.</summary>
     public GlassConfig GlassData = new();
@@ -179,6 +183,8 @@ public partial class NetClient : Node
         _streaks.Ended += OnStreakEnded;
         _streaks.OwnerDied += ClearStreakViewsOnDeath;
         _streaks.Gunner.HintsChanged += () => _gunDirty = true;
+        _session = new SessionLog(Ctx, Host, Port, () => !Bot && !LinkEnded && _welcomed, () => _peer);
+        _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _peer, _dec);
         _glass = new GlassClient(Ctx, GlassData);
         Camo = new CamoClient(Ctx, CamoData, DressCorpses);
         _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
@@ -210,7 +216,7 @@ public partial class NetClient : Node
 
     public override void _ExitTree()
     {
-        TelemetryClose();
+        _session.Close();
         _conn.Destroy();
         FreeOwned(); // also when the client leaves without Teardown
     }
@@ -224,7 +230,7 @@ public partial class NetClient : Node
     public void Teardown()
     {
         _link.Enter(LinkPhase.Left);
-        TelemetryClose();
+        _session.Close();
         SfxTeardown();
         _rozhlas.Reset(); // the mic is shut
         if (_peer != null) { _peer.PeerDisconnect(); _conn.Flush(); _peer = null; }
@@ -296,8 +302,8 @@ public partial class NetClient : Node
 
     public override void _Process(double delta)
     {
-        TelemetryFrame(delta);
-        PerfClientFrame(delta);
+        _session.Frame(delta);
+        _perf.Frame(delta);
         ReportFrame(delta);
         if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
         if (LinkEnded) return;
@@ -508,7 +514,7 @@ public partial class NetClient : Node
         _uav.OnEvent(kind, payload);
         Camo.OnEvent(kind, payload);
         WorldEntities.OnEvent(kind, payload);
-        PerfClientEvent(kind, payload);
+        _perf.OnEvent(kind, payload);
         _bot?.OnEvent(kind, payload);
         EventReceived?.Invoke(kind, payload);
     }
@@ -559,8 +565,8 @@ public partial class NetClient : Node
         if (Ctx.Me == null || !_dec.Apply(d, out var h)) return;
         if (Ctx.LastTick != 0 && h.Tick < Ctx.LastTick) return;
         _bot?.OnSnapshot(h);
-        PerfClientSnapshot();
-        TelemetrySnapshot(h.Tick);
+        _perf.Snapshot();
+        _session.Snapshot(h.Tick);
         ReportSnapshot(h.Tick);
         Ctx.LastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         Ctx.Clock.OnSnapshot(h.Tick, _lastArrival);

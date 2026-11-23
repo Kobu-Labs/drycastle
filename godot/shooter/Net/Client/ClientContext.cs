@@ -41,6 +41,8 @@ public sealed class ClientContext
     /// <summary>The predicted local player; null before the welcome.</summary>
     public Player? Me;
     public ushort MyId;
+    /// <summary>How many times the prediction was corrected by a server position (the telemetry, the report and the bots count them).</summary>
+    public int Reconciles;
     /// <summary>The weapon slots of the spawn hotbar and the one in hand.</summary>
     public Hotbar Hotbar { get; } = new();
     public bool Dead;

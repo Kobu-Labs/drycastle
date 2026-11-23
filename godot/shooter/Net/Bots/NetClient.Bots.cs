@@ -76,7 +76,7 @@ public partial class NetClient : IBotHost
     int IBotHost.RocketCount => _rockets.Count;
     VehiclesFile? IBotHost.Vehicles => Vehicles;
     int IBotHost.Snaps => _snaps;
-    int IBotHost.Recon => _recon;
+    int IBotHost.Recon => Ctx.Reconciles;
     float IBotHost.MaxErr => _maxErr;
     uint IBotHost.LastTick => Ctx.LastTick;
     double IBotHost.LastArrival => _lastArrival;

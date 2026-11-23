@@ -45,12 +45,12 @@ public partial class NetClient
         var predicted = _pending[idx].After;
         var err = (predicted.Position - sp).Length();
         _maxErr = MathF.Max(_maxErr, err);
-        PerfPredErr(err, predicted.Position - sp);
+        _perf.PredictionError(err, predicted.Position - sp);
         LastNearRemote = NearRemotePlayer(sp);
         LastVertical = MathF.Abs(predicted.Position.Y - sp.Y) > 0.5f * err; // the error is mostly up or down (steps, slopes, jumps, landings)
         if (err > ReconcileEpsilon) _rub.AddOnFoot(err, LastNearRemote, LastVertical);
         _bot?.OnPredictionError(err);
-        TelemetryPredictionError(err);
+        _session.PredictionError(err);
         ReportPredictionError(err);
         _pending.RemoveRange(0, idx + 1);
         if (err <= ReconcileEpsilon)
@@ -60,7 +60,7 @@ public partial class NetClient
             _reconcile = null;
             return;
         }
-        _recon++;
+        Ctx.Reconciles++;
         // server position wins; our own velocity/floor state for that tick is the best available guess for the rest
         var s = predicted;
         s.Position = sp;

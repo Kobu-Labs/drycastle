@@ -91,7 +91,7 @@ public partial class NetClient
         _rub.AddVehicle(moved.Length(), FlightMath.Wrap(_pilot.Predict.State.Yaw - yawBefore));
         _pilot.Smooth += new Vector3(moved.X, moved.Y, moved.Z);
         _pilot.AngleFix += AngleDelta(attBefore, _pilot.Predict.State.Yaw, _pilot.Predict.State.Pitch, _pilot.Predict.State.Roll);
-        TelemetryFlightCorrection(new Vector3(moved.X, moved.Y, moved.Z).Length());
+        _session.FlightCorrection(new Vector3(moved.X, moved.Y, moved.Z).Length());
     }
 
     void StopPiloting()

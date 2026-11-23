@@ -101,7 +101,7 @@ public partial class NetClient
         _rpStart = now;
         _rpFrames.Reset();
         _rpSamples = 0; _rpProcess = _rpPhysics = _rpCpu = _rpGpu = _rpDraws = _rpPrims = _rpObjects = 0;
-        _rpGapMax = 0; _rpSnaps = _rpTickSkips = 0; _rpErrMax = 0; _rpRecon0 = _recon;
+        _rpGapMax = 0; _rpSnaps = _rpTickSkips = 0; _rpErrMax = 0; _rpRecon0 = Ctx.Reconciles;
         _rpAlloc = GC.GetTotalAllocatedBytes();
         _rpGen0 = GC.CollectionCount(0); _rpGen1 = GC.CollectionCount(1); _rpGen2 = GC.CollectionCount(2);
         _rpPauseMs = GC.GetTotalPauseDuration().TotalMilliseconds;
@@ -132,7 +132,7 @@ public partial class NetClient
         Set("rtt_var_ms", _peer.GetStatistic(ENetPacketPeer.PeerStatistic.RoundTripTimeVariance));
         Set("loss_pct", _peer.GetStatistic(ENetPacketPeer.PeerStatistic.PacketLoss) / 65536.0 * 100); // ENet's scale is 1 << 16
         Set("snaps_per_s", _rpSnaps / secs); Set("snap_gap_max_ms", _rpGapMax); Set("tick_skips", _rpTickSkips);
-        Set("reconciles", _recon - _rpRecon0); Set("pred_err_max_m", _rpErrMax);
+        Set("reconciles", Ctx.Reconciles - _rpRecon0); Set("pred_err_max_m", _rpErrMax);
         Set("in_kb_s", _conn.PopStatistic(ENetConnection.HostStatistic.ReceivedData) / secs / 1000);
         Set("out_kb_s", _conn.PopStatistic(ENetConnection.HostStatistic.SentData) / secs / 1000);
         Set("remotes", Ctx.Remotes.Count); Set("world_entities", WorldEntities.Entities.Count);
