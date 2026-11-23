@@ -204,7 +204,6 @@ public partial class NetClient : Node
         _fxDemo = new FxDemoClient(Ctx);
         _water = new WaterClient(Ctx);
         _markers = new EnemyMarkers(Ctx);
-        _targets = new TargetsClient(Ctx, Sandbox, _blastDust);
         Sandbox = new SandboxClient(Ctx);
         Report = new ReportClient(Ctx, _conn, () => !Bot && !LinkEnded && _welcomed, () => _peer, () => _elapsed);
         _moab = new MoabClient(Ctx);
@@ -216,6 +215,7 @@ public partial class NetClient : Node
         _rozhlas = new RozhlasClient(Ctx, SendMic);
         _blastDust = new BlastDustClient(Ctx);
         _impacts = new ImpactsClient(Ctx);
+        _targets = new TargetsClient(Ctx, Sandbox, _blastDust);
     }
 
     public override void _Ready()
