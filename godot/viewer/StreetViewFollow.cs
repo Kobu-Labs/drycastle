@@ -5,7 +5,7 @@ using Godot;
 
 /// <summary>
 /// Puts the character where a Street View tab says you are. A small program outside the game
-/// (<c>python -m drycastle_pipeline.streetview_follow</c>) watches the address of a Chrome tab and writes
+/// (<c>python -m drycastle_pipeline.photos.streetview_follow</c>) watches the address of a Chrome tab and writes
 /// <c>streetview-position.json</c> next to editor-state.json; this node polls that file four times a second and, when it
 /// has a position newer than the viewer's start, moves the character there (S-JTSK metres to the map's frame, onto the
 /// terrain) and turns it the way the camera looks. What the file held when the viewer started is ignored, so an old

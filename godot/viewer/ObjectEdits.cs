@@ -8,7 +8,7 @@ using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 /// <summary>
 /// Placed objects in an edits.json tree (see EditsFile): the top-level `objects` list (an object belongs to no parcel, it
 /// is only a position), ids, entries, adding, removing, and a C# mirror of the
-/// Python validator (edits.py `validate`) over the whole document, so the editor never writes a file the pipeline
+/// Python validator (edits/schema.py `validate`) over the whole document, so the editor never writes a file the pipeline
 /// would reject. Entries are written as `id`, `asset`, `position` [x, y] in absolute S-JTSK metres (3 decimals),
 /// `rotation_deg` (always), and `scale` / `colour` only when they differ from the defaults (1 / none); `z` is
 /// never written (the terrain height is used).
@@ -188,7 +188,7 @@ public static class ObjectEdits
                 if (!exists) errs.Add($"{path}.ground_type: {gt} is not a ground type (or it is deleted)");
                 else if (water is true) errs.Add($"{path}.ground_type: {gt} is a water type, a parcel cannot be water");
             }
-            // mirror of edits.py: a parcel's outline is a simple ring like a patch's polygon (that two edited outlines must not overlap is checked by the Python validator only)
+            // mirror of edits/schema.py: a parcel's outline is a simple ring like a patch's polygon (that two edited outlines must not overlap is checked by the Python validator only)
             if (e.ContainsKey("outline")) errs.AddRange(CheckPolygon(e, path, "outline"));
             if (e.TryGetValue("objects", out var ob)) errs.AddRange(CheckObjects(ob, $"{path}.objects", seen));
         }
@@ -259,7 +259,7 @@ public static class ObjectEdits
             else
                 foreach (var (pid, entry) in pao)
                 {
-                    // mirror of edits.py `_check_paths`: a worn footpath is a line of at least 2 [x, y] points, an optional width and "closed"
+                    // mirror of edits/schema.py `_check_paths`: a worn footpath is a line of at least 2 [x, y] points, an optional width and "closed"
                     var path = $"paths.{pid}";
                     if (!PathRx.IsMatch(pid)) errs.Add($"{path}: path IDs look like PA-0001");
                     if (entry is not Obj pe) { errs.Add($"{path}: must be an object"); continue; }
@@ -278,7 +278,7 @@ public static class ObjectEdits
     static readonly Regex CableRx = new("^C-\\d{4,}$", RegexOptions.Compiled);
     static readonly Regex PathRx = new("^PA-\\d{4,}$", RegexOptions.Compiled);
 
-    /// <summary>Mirror of edits.py `_check_cables`: two different object ids per cable, and no pair of poles joined twice.</summary>
+    /// <summary>Mirror of edits/schema.py `_check_cables`: two different object ids per cable, and no pair of poles joined twice.</summary>
     static List<string> CheckCables(Obj cables)
     {
         var errs = new List<string>();
@@ -306,7 +306,7 @@ public static class ObjectEdits
     }
 
     /// <summary>
-    /// Mirror of edits.py `_check_ground_patch`: a `type` that exists (rules.yaml or ground_types, not deleted), a `water_y` that is there exactly
+    /// Mirror of edits/schema.py `_check_ground_patch`: a `type` that exists (rules.yaml or ground_types, not deleted), a `water_y` that is there exactly
     /// when the type carries water, an optional `max_depth` (0 to 20 m, only with `water_y`), and a simple ring of at least 3 [x, y] points (closing point optional).
     /// </summary>
     static List<string> CheckPatch(object? entry, string path, Obj? types)
@@ -333,7 +333,7 @@ public static class ObjectEdits
         return errs;
     }
 
-    /// <summary>Mirror of edits.py `_check_zone`: a `kind` of the catalog and a simple ring of at least 3 [x, y] points.</summary>
+    /// <summary>Mirror of edits/schema.py `_check_zone`: a `kind` of the catalog and a simple ring of at least 3 [x, y] points.</summary>
     static List<string> CheckZone(object? entry, string path)
     {
         var errs = new List<string>();

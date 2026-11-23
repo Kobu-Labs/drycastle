@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>Whether a trailer with a load (the rocket cart, <see cref="VehicleTrailerDef.LoadedHp"/>) has it. The machine is <see cref="CartCargo.Spec"/>.</summary>
 public enum CartLoad : byte { Loaded, Empty }

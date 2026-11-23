@@ -1,5 +1,6 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Buildings;
+using Drycastle.ShooterCore.Colliders;
 
 namespace Drycastle.Shooter;
 

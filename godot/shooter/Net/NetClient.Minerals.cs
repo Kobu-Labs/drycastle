@@ -1,5 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Mining;
+using Drycastle.ShooterCore.Net;
 
 namespace Drycastle.Shooter;
 

@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Citizens;
 
 /// <summary>
 /// Where the Holy Mass is. Idle: nothing runs. Gather: the citizens walk in and sit. Mass: the chant runs and the Mass progresses while the pastor

@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Hud;
 
 /// <summary>
 /// The HUD's state colours as plain sRGB triples (0..1), so the colour-blind set can be unit tested without Godot.

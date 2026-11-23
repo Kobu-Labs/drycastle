@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Items;
 
 /// <summary>Why the server sends an <see cref="EventKind.ItemNotice"/>. The client words it (translation key), so the wire carries only the reason.</summary>
 public enum ItemNoticeKind : byte

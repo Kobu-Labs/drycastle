@@ -1,5 +1,8 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Progression;
 
 namespace Drycastle.Shooter;
 

@@ -1,5 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.RozhlasFeed;
 using Num = System.Numerics;
 
 namespace Drycastle.Shooter;
@@ -54,7 +56,7 @@ public partial class Rozhlas : Node
         _cfg = RozhlasFile.Parse(json); // a broken table fails a smoke run even headless
         if (!Sfx.Enabled || Speakers.Count == 0) { SetProcess(false); return; }
         _streams = _cfg.Files.Select(LoadStream).ToArray();
-        if (_streams.All(s => s == null)) { GD.Print("rozhlas: no audio yet (run scripts/make_rozhlas.py); staying silent"); SetProcess(false); return; }
+        if (_streams.All(s => s == null)) { GD.Print("rozhlas: no audio yet (run scripts/sounds/make_rozhlas.py); staying silent"); SetProcess(false); return; }
         Current = this;
         _spk = Speakers.Select(s => new Num.Vector3(s.X, s.Y, s.Z)).ToArray();
         // its own bus so the low-pass can follow the distance; it feeds the SFX bus (so the effects volume still applies)

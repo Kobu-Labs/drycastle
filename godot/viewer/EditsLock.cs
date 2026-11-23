@@ -5,7 +5,7 @@ using System.Threading;
 
 /// <summary>
 /// The writer lock on edits.json: an exclusive advisory flock(2) on <c>&lt;edits&gt;.lock</c>, the same file and the same call the MCP server
-/// (pipeline mcp_server.edits_lock, Python fcntl.flock) takes around its load..save window, so the editor and the MCP server never lose each other's
+/// (pipeline edits/store.py edits_lock, Python fcntl.flock) takes around its load..save window, so the editor and the MCP server never lose each other's
 /// write. flock is called directly (not through FileStream's own FileShare locking, which a runtime switch can turn off) so it is flock-compatible
 /// by construction. Not Unix (Windows): FileShare.None on the lock file, which is the same mutual exclusion between processes that use this class.
 /// Waits a bounded time: a caller that gets null reports and does not write.

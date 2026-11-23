@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// How a trailer lies on the ground (#482): its pitch and roll and the place of its origin, from the ground heights under it. One function for the server's hull (bullets, blast, the on-foot solid box)

@@ -1,6 +1,10 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>
 /// Scripted arcs (issue #264): the logs the Bigfoot throws, the vehicles it throws and the player it launches fly under the same gravity as the players

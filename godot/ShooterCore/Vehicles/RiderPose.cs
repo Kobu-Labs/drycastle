@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
+
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>How a rider's figure is posed on a fixed seat, relative to the hull (radians).</summary>
 /// <param name="BodyYaw">The whole figure turned on its seat: only a rider who works a gun, with the aim.</param>

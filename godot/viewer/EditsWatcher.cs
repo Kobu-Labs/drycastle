@@ -257,7 +257,7 @@ public partial class EditsWatcher : Node
 
     /// <summary>
     /// Every placed object of an edits document: the top-level <c>objects</c> list, then (a file in the old shape) the
-    /// lists under <c>parcels.&lt;ID&gt;.objects</c>. An object belongs to no parcel (edits.py).
+    /// lists under <c>parcels.&lt;ID&gt;.objects</c>. An object belongs to no parcel (edits/schema.py).
     /// </summary>
     static IEnumerable<JsonElement> EnumerateObjects(JsonElement root)
     {

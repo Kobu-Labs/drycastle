@@ -1,5 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Icons;
+using Drycastle.ShooterCore.Wildlife;
 
 namespace Drycastle.Shooter;
 

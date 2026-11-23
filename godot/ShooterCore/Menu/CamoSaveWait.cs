@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Menu;
 
 /// <summary>
 /// The camouflage screen's "Apply sent, waiting for the server" state with a correlation and a deadline. The server answers a save with the new profile

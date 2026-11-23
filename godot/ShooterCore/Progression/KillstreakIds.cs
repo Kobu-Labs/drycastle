@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Killstreaks;
+
+namespace Drycastle.ShooterCore.Progression;
 
 /// <summary>
 /// Killstreak ids the code names. The full table is killstreaks.json (<see cref="KillstreakFile"/>); only the starter

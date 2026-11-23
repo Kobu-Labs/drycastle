@@ -1,5 +1,6 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Buildings;
+using Drycastle.ShooterCore.Colliders;
 
 namespace Drycastle.Shooter;
 
@@ -9,7 +10,7 @@ namespace Drycastle.Shooter;
 /// a map glass pane (<see cref="MechanicGarageSite.AddPane"/>: the server owns its hit points, shots and blasts damage it, ADR 0007): while it stands the wall is solid and nothing
 /// of the room can be seen; once it shatters its collider and its mesh go (<see cref="SetPlate"/>) and the opening is wide enough for the Golf to drive out. The room is lit by
 /// <see cref="MechanicGarageLights"/>: dark when the plate has just gone, the roof lights flicker (the tubes only, nothing is lit), then they come on. Interior props are Synty
-/// Construction models (<see cref="SyntyLib"/>, the private pack: glb/construction/, built by scripts/construction_pack_glb.py); without the pack the solid ones are boxes.
+/// Construction models (<see cref="SyntyLib"/>, the private pack: glb/construction/, built by scripts/packs/construction_pack_glb.py); without the pack the solid ones are boxes.
 /// The look of every part is made here: OSB is a generated texture, the roof a corrugated mesh. Only on the map that has the garage.json of the bus garage (the village).
 /// </summary>
 public partial class MechanicGarage : Node3D

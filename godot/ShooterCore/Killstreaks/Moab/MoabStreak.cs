@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Killstreaks.Moab;
 
 /// <summary>Where a MOAB is in its life, as seen by the server and (through <see cref="MoabEvents"/>) by every client.</summary>
 public enum MoabPhase : byte

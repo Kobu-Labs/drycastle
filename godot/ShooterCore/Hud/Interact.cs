@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Plantation;
+
+namespace Drycastle.ShooterCore.Hud;
 
 /// <summary>Who has the interact key (E) on foot when several things are in reach.</summary>
 public enum InteractOwner

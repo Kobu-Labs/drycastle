@@ -5,7 +5,7 @@ using System.Text;
 using Godot;
 using Drycastle.MapLoader;
 using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
-using ShapeState = Drycastle.ShooterCore.EditorShapeState;
+using ShapeState = Drycastle.ShooterCore.Editor.EditorShapeState;
 
 /// <summary>
 /// The Zones tool (GLOSSARY "Zone", "Zone kind", ADR 0022): what an area means in play, drawn over the ground without changing it.

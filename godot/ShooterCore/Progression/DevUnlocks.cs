@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Progression;
 
 /// <summary>
 /// Dev mode "everything unlocked" (issue #149, <c>--unlock-all</c> or <c>DRYCASTLE_UNLOCK_ALL=1</c>). Off by default, so an

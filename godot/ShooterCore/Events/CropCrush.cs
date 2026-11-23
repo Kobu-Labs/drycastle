@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>Every number of the vehicles' crop damage (#328): a ground vehicle driving through a crop field crushes the plants in its path. Cosmetic: no collision, no slowdown.</summary>
 public sealed class CropCrushConfig

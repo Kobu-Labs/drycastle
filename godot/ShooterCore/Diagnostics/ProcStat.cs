@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Diagnostics;
 
 /// <summary>Reads a line of Linux's /proc/&lt;pid&gt;/task/&lt;tid&gt;/stat: the thread's name and the CPU time it has used.</summary>
 public static class ProcStat

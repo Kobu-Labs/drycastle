@@ -1,5 +1,8 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Casings;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Vehicles;
 
 namespace Drycastle.Shooter;
 
@@ -27,7 +30,7 @@ public partial class NetClient
         public byte LastState = 255;
     }
 
-    /// <summary>The sentry's model (scripts/make_sentry_turret_model.py): nodes `stand`, `gun` (yaws), `muzzle`, `eject`.</summary>
+    /// <summary>The sentry's model (scripts/military_kit/make_sentry_turret_model.py): nodes `stand`, `gun` (yaws), `muzzle`, `eject`.</summary>
     const string ModelId = "pack:synty-simple-military/sentry_turret";
     static readonly Vector3 TurretSmokeAt = new(0, 1.05f, 0);
     static readonly float[] TurretDamageStages = { 0.66f, 0.33f, 0f };

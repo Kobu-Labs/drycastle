@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
-using ShapeState = Drycastle.ShooterCore.EditorShapeState;
+using ShapeState = Drycastle.ShooterCore.Editor.EditorShapeState;
 
 /// <summary>
 /// `--shape-editor-smoke --shape-editor-smoke-plan plan.json` (run by shape_editor_smoke.py, `make viewer-shape-editor-smoke`):

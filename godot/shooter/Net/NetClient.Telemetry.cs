@@ -1,7 +1,7 @@
 using System.Globalization;
 using Godot;
 using FileAccess = Godot.FileAccess;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
 
 namespace Drycastle.Shooter;
 

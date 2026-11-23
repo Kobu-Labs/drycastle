@@ -101,7 +101,7 @@ public partial class Viewer
               && types.All(t => { var i = EditSchema.TypeInfo(t.name); return i.Height == t.h && i.Thickness == t.t && i.Colour == t.c; })
               && EditSchema.DefaultFenceType == S("default_type")
               && plan.GetProperty("fence_modes").EnumerateArray().Select(m => m.GetString()).SequenceEqual(EditSchema.FenceModes),
-            $"EditSchema equals edits.py: types [{string.Join(", ", types.Select(t => t.name))}], modes [{string.Join(", ", EditSchema.FenceModes)}]");
+            $"EditSchema equals edits/schema.py: types [{string.Join(", ", types.Select(t => t.name))}], modes [{string.Join(", ", EditSchema.FenceModes)}]");
 
         await Physics(3);
         Input.ParseInputEvent(new InputEventKey { Keycode = Key.F2, Pressed = true });

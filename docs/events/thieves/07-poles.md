@@ -11,7 +11,7 @@ Stealing connectors off utility poles, with the electrocution.
 - Pole targets: every pole with wires near the van's stop. Nothing goes missing on the pole; a pole can be robbed again after `pole_cooldown_s`.
 - The Thief uses the climb of 06 on the pole column to the top wire seat, Steal there, climbs down with a connector (small prop in one hand), Haul. The connector is Loot like the rest (lying, returnable: return just removes it).
 - Electrocution: on each Steal at a pole top, `electrocute_chance` (0.05). States added: Shocked (`shock_seconds`, at the top: beams and sound), Falling (an arc to the ground, tumble), Down (`down_seconds`, knockdown loop), GetUp, then Seek the same pole again. Costs no hits. Shot while Down: normal hits.
-- Fx event: electric beams between the Thief and the wire seats, sparks, a whizz/crackle sound (generate one, as `scripts/make_church_bells.py` does, into `assets/drycastle-generated-sounds/` and `sounds.json`), heard to ~40 m.
+- Fx event: electric beams between the Thief and the wire seats, sparks, a whizz/crackle sound (generate one, as `scripts/sounds/make_church_bells.py` does, into `assets/drycastle-generated-sounds/` and `sounds.json`), heard to ~40 m.
 - A member killed while climbing falls the same way, then lies dead.
 
 ## Accept
@@ -19,7 +19,7 @@ Stealing connectors off utility poles, with the electrocution.
 - State machine docs regenerated.
 
 ## Done: notes
-Code: pure `godot/ShooterCore/Thieves/` (`ConnectorTarget.cs` config + `IPoles` + `ConnectorSource`, `AloftShock.cs`, `GangMember.Shock.cs` the four states; small edits in `GangMember.cs`, `GangMember.Stealing.cs`, `Loot.cs`, `LootBook.cs`, `ThiefWork.cs`, `ThievesData.cs`, `ThievesFx.cs`), map `godot/MapLoader/MapLoader.Poles.cs`, server `NetServer.Thieves.Loot.Connector.cs`, client `ShockFx.cs`, `NetClient.Thieves.Shock.cs`, `GangMemberView.Hazard.cs`, `LootProp.Connector.cs`, sound `scripts/make_shock_crackle.py` -> `assets/drycastle-generated-sounds/shock_crackle.ogg` (`sounds.json` `shock.crackle`, 40 m; manifest entry, assets README). Tests `PolesTests.cs`. Protocol 48 (merge renumbers).
+Code: pure `godot/ShooterCore/Thieves/` (`ConnectorTarget.cs` config + `IPoles` + `ConnectorSource`, `AloftShock.cs`, `GangMember.Shock.cs` the four states; small edits in `GangMember.cs`, `GangMember.Stealing.cs`, `Loot.cs`, `LootBook.cs`, `ThiefWork.cs`, `ThievesData.cs`, `ThievesFx.cs`), map `godot/MapLoader/MapLoader.Poles.cs`, server `NetServer.Thieves.Loot.Connector.cs`, client `ShockFx.cs`, `NetClient.Thieves.Shock.cs`, `GangMemberView.Hazard.cs`, `LootProp.Connector.cs`, sound `scripts/sounds/make_shock_crackle.py` -> `assets/drycastle-generated-sounds/shock_crackle.ogg` (`sounds.json` `shock.crackle`, 40 m; manifest entry, assets README). Tests `PolesTests.cs`. Protocol 48 (merge renumbers).
 
 ### Decisions
 - **Poles**: `MapLoader.PoleSites()` = both ends of every cable between two placed `prim:pole_*` objects (the server draws no wires but keeps `_cables` and the object nodes), height = asset `size_m` Y times the object's scale, top seat = highest `SeatsOf` seat. Server adapter `ServerPoles` builds the list on first use (needs map + nav mesh): base = of eight points `base_offset_m` (0.9) around the column the one the mesh has closest (within 1.5 m, not inside the column), top = straight above the base at the top seat's height (or `top_fraction` 0.9 of the height without a seat). A pole with no mesh point near is no target. The Thief climbs a vertical line beside the column, feet at seat height.

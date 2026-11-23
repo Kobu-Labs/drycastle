@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Colliders;
 
 namespace Drycastle.Shooter;
 

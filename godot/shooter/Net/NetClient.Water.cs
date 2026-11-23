@@ -1,5 +1,8 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Waters;
 using WaterPalettes = Drycastle.MapLoader.WaterPalettes;
 using WaterSurfaces = Drycastle.MapLoader.WaterSurfaces;
 using NVec3 = System.Numerics.Vector3;

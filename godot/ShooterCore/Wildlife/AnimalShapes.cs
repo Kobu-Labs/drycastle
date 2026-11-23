@@ -1,7 +1,8 @@
 using System.Numerics;
 using System.Text.Json;
+using Drycastle.ShooterCore.Data;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>What an animal is doing, as far as its hit shape goes (the clip a client plays for it).</summary>
 public enum AnimalPose : byte { Idle = 0, Eat = 1, Walk = 2, Run = 3 }
@@ -165,7 +166,7 @@ public sealed class AnimalPoseShapes
 }
 
 /// <summary>
-/// The hit shapes of the species (animal_shapes.json, baked by <c>scripts/make_animal_shapes.py</c> from the models and their clips), by species
+/// The hit shapes of the species (animal_shapes.json, baked by <c>scripts/art/make_animal_shapes.py</c> from the models and their clips), by species
 /// id. The free packs' species are in the repository's data folder, the paid packs' in the private asset folder: <see cref="Merge"/> adds
 /// them. A species with no shape is tested against its plain body box.
 /// </summary>

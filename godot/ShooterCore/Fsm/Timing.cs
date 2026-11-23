@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Fsm;
 
 /// <summary>
 /// A countdown in seconds, for the "x -= dt; if (x &lt;= 0) fire" fields that sit beside a state (a cooldown, a delay, a grace). A value type: copy it and it is

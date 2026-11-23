@@ -1,5 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.RozhlasFeed;
 using Num = System.Numerics;
 
 namespace Drycastle.Shooter;

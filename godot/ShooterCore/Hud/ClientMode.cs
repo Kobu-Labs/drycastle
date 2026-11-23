@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Hud;
 
 /// <summary>
 /// What the local player is doing, as far as the camera, the body and the viewmodel are concerned. The client keeps these as separate flags that other

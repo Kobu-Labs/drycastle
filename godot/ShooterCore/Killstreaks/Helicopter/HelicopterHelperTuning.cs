@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Movement;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Killstreaks.Helicopter;
 
 /// <summary>
 /// Tunables of the helicopter helper (killstreaks.json, the "helper" block of "helicopter_helper"). The helper circles the

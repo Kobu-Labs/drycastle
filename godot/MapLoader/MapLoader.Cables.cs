@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Scenery;
 using Num = System.Numerics;
 
 namespace Drycastle.MapLoader;

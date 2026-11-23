@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// What a Thief needs of the world to steal (GLOSSARY "Loot"): a target to go for, whether it is still there, the thing in its hands, the van's door to carry it to, and what happens to it when the

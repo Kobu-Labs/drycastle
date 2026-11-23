@@ -1,6 +1,11 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// One Raid (GLOSSARY "Raid"): a <see cref="RaidVan"/> and the <see cref="ThiefGang"/> that rides in it, pure. The van drives the path of its <see cref="RaidPlan"/>; the Raid lets the crew out

@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Effects;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Wildlife;
 using NVec2 = System.Numerics.Vector2;
 using NVec3 = System.Numerics.Vector3;
 using NVec4 = System.Numerics.Vector4;

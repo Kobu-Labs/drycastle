@@ -1,7 +1,10 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.RozhlasFeed;
 
 /// <summary>Whether somebody holds the rozhlas set (the microphone at the dictation table).</summary>
 public enum RozhlasSetState : byte { Free = 0, Held = 1 }

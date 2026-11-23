@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// A steering wheel measured from the model's own <c>steering_wheel_rim</c> mesh (docs/standards/car-design.md 5), in the hull frame (x right, y up,

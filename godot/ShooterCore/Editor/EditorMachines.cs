@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Editor;
 
 /// <summary>The polygon tools of the map editor (Ground patches, Zones): what the pointer and the keys do next. See <see cref="EditorMachines.ShapeSpec"/>.</summary>
 public enum EditorShapeState { Idle, Drawing, Level, Selected, Dragging }

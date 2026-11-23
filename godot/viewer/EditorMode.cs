@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using Godot;
 using Drycastle.MapLoader;
-using ShapeState = Drycastle.ShooterCore.EditorShapeState;
+using ShapeState = Drycastle.ShooterCore.Editor.EditorShapeState;
 
 /// <summary>
 /// Editor mode shell: a free-fly camera, parcel hover and selection, outlines (selection, hovered parcel,

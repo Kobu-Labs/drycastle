@@ -1,5 +1,8 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 
 namespace Drycastle.Shooter;
 

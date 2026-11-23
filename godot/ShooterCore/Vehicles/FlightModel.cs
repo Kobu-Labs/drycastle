@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// Everything <see cref="FlightModel"/> carries from tick to tick for one flying vehicle. The server owns the true one; the pilot's client

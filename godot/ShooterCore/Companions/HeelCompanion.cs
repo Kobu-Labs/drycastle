@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Fsm;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Companions;
 
 /// <summary>What a <see cref="HeelCompanion"/> is doing.</summary>
 public enum HeelState : byte { Stay, Follow, Run, Sit }

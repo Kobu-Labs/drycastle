@@ -1,6 +1,10 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Intel;
+using Drycastle.ShooterCore.Minimap;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>Where the Scud event is: nothing out, the truck hidden in its search area, found (somebody boarded it), or the truck is gone.</summary>
 public enum ScudEventPhase : byte { Idle, Searching, Found, Over }

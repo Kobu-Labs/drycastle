@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.ShooterCore.Vehicles;
 
 namespace Drycastle.Shooter;
 
@@ -20,14 +21,14 @@ public sealed partial class CockpitRig : Node3D
     static readonly Dictionary<string, Spec> Specs = new()
     {
         ["golf_mk2"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildGolf),
-        // the Humvee: eye = seat_driver [-0.62, 0.6, -0.22] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/make_humvee_model.py): inside the cab (roof 1.83 inside, windscreen top 1.79), behind the wheel.
+        // the Humvee: eye = seat_driver [-0.62, 0.6, -0.22] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/military_kit/make_humvee_model.py): inside the cab (roof 1.83 inside, windscreen top 1.79), behind the wheel.
         ["humvee"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildHumvee),
         ["bus"] = new Spec(System.Array.Empty<string>(), BuildBus),
         ["flak"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildFlak),
-        // the harvester (#331): the combine's cab, after SM_Veh_Harvester_01, standardized (scripts/vehicles/harvester.json: the model is in the game frame, its wheel is at x -0.787, y 2.741, z -1.21, the standardizer's steering_wheel_rim/_spokes).
+        // the harvester (#331): the combine's cab, after SM_Veh_Harvester_01, standardized (scripts/vehicles/specs/harvester.json: the model is in the game frame, its wheel is at x -0.787, y 2.741, z -1.21, the standardizer's steering_wheel_rim/_spokes).
         // The eye sits 1 m over the seat (y 2.0, vehicles.json seats) just behind the wheel, inside the cab; the model's own wheel and glass are not drawn for the driver, the reel is in front below the sill.
         ["harvester"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes", "SM_Veh_Harvester_Glass" }, BuildHarvester),
-        // the Scud truck: eye = seat_driver [-0.892, 1.15, -4.328] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/make_scud_model.py): inside the left half cab (roof inside 2.66, windscreen 1.99-2.42), behind the
+        // the Scud truck: eye = seat_driver [-0.892, 1.15, -4.328] + [0, 1.05, 0.09] (docs/research/scud-models-facts.md, scripts/military_kit/make_scud_model.py): inside the left half cab (roof inside 2.66, windscreen 1.99-2.42), behind the
         // wheel. The operator's seat has the same eye over its own seat (+0.892) but no cockpit rig: its view is the seat's (vehicles.json eye_height 1.05).
         ["scud"] = new Spec(new[] { "steering_wheel_rim", "steering_wheel_spokes" }, BuildScud),
         ["utility_helicopter"] = new Spec(new[] { "hull" }, BuildHelicopter), // the model's own body mesh (the rig draws its own interior over it): the node was called fuselage until #325
@@ -62,7 +63,7 @@ public sealed partial class CockpitRig : Node3D
             var q = toHost * p;
             points.Add(new System.Numerics.Vector3(q.X, q.Y, q.Z));
         }
-        if (Drycastle.ShooterCore.SteeringWheelFit.From(points) is not { } fit) return null;
+        if (Drycastle.ShooterCore.Vehicles.SteeringWheelFit.From(points) is not { } fit) return null;
         var (centre, elbows) = (new Vector3(fit.Centre.X, fit.Centre.Y, fit.Centre.Z), fit.Elbows(eye));
         var hide = vehicle.FindChild("steering_wheel_spokes", true, false) is GeometryInstance3D
             ? new[] { "steering_wheel_rim", "steering_wheel_spokes" } : new[] { "steering_wheel_rim" };
@@ -85,8 +86,8 @@ public sealed partial class CockpitRig : Node3D
             foreach (var c in n.GetChildren()) Collect(c);
         }
         Collect(bars);
-        if (Drycastle.ShooterCore.HandlebarFit.From(points) is not { } fit) return null;
-        var e = Drycastle.ShooterCore.HandlebarFit.Elbows(eye);
+        if (Drycastle.ShooterCore.Vehicles.HandlebarFit.From(points) is not { } fit) return null;
+        var e = Drycastle.ShooterCore.Vehicles.HandlebarFit.Elbows(eye);
         var elbows = new Vector3(e.X, e.Y, e.Z);
         var (left, right) = (new Vector3(fit.Left.X, fit.Left.Y, fit.Left.Z), new Vector3(fit.Right.X, fit.Right.Y, fit.Right.Z));
         var spread = Mathf.Max(0.26f, (right.X - left.X) * 0.42f);
@@ -286,7 +287,7 @@ public sealed partial class CockpitRig : Node3D
     }
 
     // ------------------------------------------------------------------ the bus
-    // The bus's model has its interior (scripts/make_bus_model.py: the cab with its dashboard, the saloon, the glass partition behind the
+    // The bus's model has its interior (scripts/models/make_bus_model.py: the cab with its dashboard, the saloon, the glass partition behind the
     // driver), so nothing is hidden and nothing is rebuilt: the driver looks round the real bus and sees the riders. The model's steering
     // wheel is a plain disc on its column, its face 0.045 m along the column from (-0.70, 1.22, -5.095) and 0.235 m in radius; the rig lays
     // spokes on that face and puts the hands on its rim. The eye is lower than a seated driver's, so the wheel and the hands are in the view.
@@ -299,7 +300,7 @@ public sealed partial class CockpitRig : Node3D
     }
 
     // ------------------------------------------------------------------ the Golf Mk2
-    // The model has its interior (scripts/make_golf_mk2_model.py at SCALE 1.25: dashboard, binnacle, seats, the headliner): nothing is built round
+    // The model has its interior (scripts/models/make_golf_mk2_model.py at SCALE 1.25: dashboard, binnacle, seats, the headliner): nothing is built round
     // the driver but the steering wheel, which the model draws as a static ring with spokes (two nodes, hidden here) so the rig's own can turn,
     // and the hands. The wheel stands upright (face to the seat) at x -0.4875, y 1.175, z -0.225, 0.206 m in radius.
 
@@ -307,7 +308,7 @@ public sealed partial class CockpitRig : Node3D
         r.SteeringWheel(new Vector3(-0.4875f, 1.175f, -0.225f), 0.206f, 90f, new Vector3(-0.4875f, 0.95f, 0.55f), 0.30f);
 
     // ------------------------------------------------------------------ the Humvee
-    // The model has its interior (scripts/make_humvee_model.py: dash, tunnel, four seats, door cards, rear partition): nothing is built round the driver but
+    // The model has its interior (scripts/military_kit/make_humvee_model.py: dash, tunnel, four seats, door cards, rear partition): nothing is built round the driver but
     // the steering wheel, which the model draws as a rim and spokes (two nodes, hidden here) so the rig's own can turn, and the hands. The wheel's face is
     // tilted 25 degrees from upright towards the driver (a lean of 65 from level), centre x -0.62, y 1.10, z -0.60, 0.185 m to the rim's middle.
 
@@ -318,14 +319,14 @@ public sealed partial class CockpitRig : Node3D
         r.SteeringWheel(new Vector3(-0.787f, 2.741f, -1.21f), 0.22f, 45f, new Vector3(-0.79f, 2.486f, -0.45f), 0.30f);
 
     // ------------------------------------------------------------------ the flak truck
-    // After scripts/make_flak_model.py: the cab is hollow (floor, dash with its gauges, the driver's seat, doors, pillars and roof round the window openings of the panes), so nothing is built round
+    // After scripts/models/make_flak_model.py: the cab is hollow (floor, dash with its gauges, the driver's seat, doors, pillars and roof round the window openings of the panes), so nothing is built round
     // the driver but the steering wheel, which the model draws as a rim and spokes (two nodes, hidden here) so the rig's own can turn, and the hands. Centre x -0.50, y 1.66, z -1.72, 45 degrees from level.
 
     static void BuildFlak(CockpitRig r) =>
         r.SteeringWheel(new Vector3(-0.50f, 1.66f, -1.72f), 0.20f, 45f, new Vector3(-0.50f, 1.50f, -1.30f), 0.28f);
 
     // ------------------------------------------------------------------ the Scud truck
-    // The model has its cab (scripts/make_scud_model.py: floor, dash, seats, door cards, the left half cab's steering wheel as a rim and spokes, two nodes hidden here): nothing is built round the driver but
+    // The model has its cab (scripts/military_kit/make_scud_model.py: floor, dash, seats, door cards, the left half cab's steering wheel as a rim and spokes, two nodes hidden here): nothing is built round the driver but
     // the steering wheel, so the rig's own turns, and the hands. The wheel's centre is x -0.892, y 1.88, z -4.962, its face tilted 20 degrees from upright towards the driver (a lean of 70 from level),
     // 0.21 m to the rim's outer edge.
 
@@ -333,7 +334,7 @@ public sealed partial class CockpitRig : Node3D
         r.SteeringWheel(new Vector3(-0.892f, 1.88f, -4.962f), 0.2f, 70f, new Vector3(-0.892f, 1.66f, -4.25f), 0.30f);
 
     // ------------------------------------------------------------------ the utility helicopter
-    // After scripts/make_utility_helicopter_model.py: floor 0.72, instrument panel at z -2.75, the cabin from z -1.20 to 1.30, half width 1.2,
+    // After scripts/models/make_utility_helicopter_model.py: floor 0.72, instrument panel at z -2.75, the cabin from z -1.20 to 1.30, half width 1.2,
     // roof slab 2.12 .. 2.25, the windscreen from the sill (y 1.52 at z -2.75) back to the roof at z -2.00. The pilot sits front right. The
     // cyclic is taller and further forward than the model's, so the hand on it shows under the panel.
 

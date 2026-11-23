@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// The <c>loot</c> section of thieves.json (GLOSSARY "Loot"): how the Thieves go about stealing and how Loot is sent back, then one sub-section per kind. A kind's sub-section is its own: the ticket

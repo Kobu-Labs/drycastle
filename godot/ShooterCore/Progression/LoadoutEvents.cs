@@ -1,7 +1,8 @@
 using System.Buffers.Binary;
 using System.Text;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Progression;
 
 /// <summary>The server's answer to one <see cref="SaveLoadoutMsg"/>: the slot, the client's seq, and ok or the reason.</summary>
 public sealed record LoadoutAckInfo(int Slot, uint Seq, bool Ok, string Reason);

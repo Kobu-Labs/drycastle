@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>
 /// The pixel work behind the Hunter's Log pictures, Godot-free: the outline of a baked silhouette (a species not hunted yet is drawn as its outline), an alpha

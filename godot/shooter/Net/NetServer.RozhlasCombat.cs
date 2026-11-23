@@ -1,6 +1,11 @@
 using System.Diagnostics;
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.RozhlasFeed;
+using Drycastle.ShooterCore.Weapons;
 
 namespace Drycastle.Shooter;
 

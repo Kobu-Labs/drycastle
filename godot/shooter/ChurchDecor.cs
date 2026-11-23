@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Godot;
-using Drycastle.ShooterCore;
 
 namespace Drycastle.Shooter;
 

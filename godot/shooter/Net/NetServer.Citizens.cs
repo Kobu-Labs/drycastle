@@ -1,5 +1,9 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Match;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;

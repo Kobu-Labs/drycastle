@@ -1,5 +1,6 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Minimap;
 using Vector2 = Godot.Vector2;
 
 namespace Drycastle.Shooter;

@@ -1,5 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Menu;
+using Drycastle.ShooterCore.Minimap;
 
 namespace Drycastle.Shooter;
 

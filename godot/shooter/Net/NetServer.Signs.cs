@@ -1,4 +1,5 @@
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Scenery;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;

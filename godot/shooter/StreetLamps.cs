@@ -1,6 +1,6 @@
 using Godot;
 using Num = System.Numerics;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Scenery;
 
 namespace Drycastle.Shooter;
 

@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using System.Text.Json;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Scenery;
 using Godot;
 using NVector3 = System.Numerics.Vector3;
 using NVector2 = System.Numerics.Vector2;
@@ -848,7 +851,7 @@ public sealed partial class MapLoader
                 {
                     var mix = m.Zone(gx, gy) >> 4;
                     if (!wanted.Contains(mix)) continue;
-                    var on = false; // on the raster at all: free ground (no building, road, water), see meadow.py
+                    var on = false; // on the raster at all: free ground (no building, road, water), see detail/meadow.py
                     for (var li = 0; li < m.Layers.Count && !on; li++) on = m.Density(li, gx, gy) > 0;
                     if (!on) continue;
                     if (!cellsOf.TryGetValue(mix, out var cells)) cellsOf[mix] = cells = new bool[w * h];

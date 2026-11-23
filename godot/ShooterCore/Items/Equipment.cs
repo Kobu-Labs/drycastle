@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Hunts;
+
+namespace Drycastle.ShooterCore.Items;
 
 /// <summary>
 /// One item as it exists in the match: which item (<see cref="ItemsFile.Items"/> position) and how many times it has been taken from a corpse.

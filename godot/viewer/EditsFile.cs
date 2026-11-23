@@ -43,7 +43,7 @@ public static class EditsFile
     /// <summary>
     /// Make sure version, parcels and groups exist, as dump_text always writes them, and take the objects of a file in the
     /// old shape (listed under <c>parcels.&lt;ID&gt;.objects</c>) up to the top-level <c>objects</c> list, sorted by id like
-    /// edits.py `parse` does. An object belongs to no parcel; a parcel entry that held only objects goes.
+    /// edits/schema.py `parse` does. An object belongs to no parcel; a parcel entry that held only objects goes.
     /// </summary>
     public static void Normalise(SortedDictionary<string, object?> root)
     {
@@ -334,7 +334,7 @@ public static class EditsFile
 
     // ---- cables (wires between two placed utility poles; same rules as the MCP server's connect_poles) ----
 
-    /// <summary>The asset ids of utility poles and of house connectors start with these (edits.py WIRE_ASSET_PREFIXES): what a cable can end on.</summary>
+    /// <summary>The asset ids of utility poles and of house connectors start with these (edits/schema.py WIRE_ASSET_PREFIXES): what a cable can end on.</summary>
     public const string PoleAssetPrefix = "prim:pole_", ConnectorAssetPrefix = "prim:connector_";
 
     public static bool IsPoleAsset(string asset) => asset.StartsWith(PoleAssetPrefix, StringComparison.Ordinal);

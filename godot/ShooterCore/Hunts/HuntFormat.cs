@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>How long ago, in the unit the screen words it: just now, minutes, hours, days, or (past <see cref="HuntFormat.DaysMax"/> days) a date.</summary>
 public enum AgoUnit { Now, Minutes, Hours, Days, Date }

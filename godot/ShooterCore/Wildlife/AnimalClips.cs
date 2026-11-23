@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>The clips a client plays on an animal, by what they show (not by the model's own name for them).</summary>
 public enum AnimalClip { Idle, IdleAlt, Eat, Walk, Run, Death, HitLeft, HitRight, SitStart, SitIdle, SitUp, Bark, Cruise, Fall, Perched }

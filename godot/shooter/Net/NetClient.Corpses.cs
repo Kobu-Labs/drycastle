@@ -1,5 +1,13 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Waters;
+using Drycastle.ShooterCore.Weapons;
 using WaterPalettes = Drycastle.MapLoader.WaterPalettes;
 using WaterSurfaces = Drycastle.MapLoader.WaterSurfaces;
 

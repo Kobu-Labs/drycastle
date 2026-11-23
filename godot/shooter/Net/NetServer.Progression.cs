@@ -1,5 +1,13 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Weapons;
 
 namespace Drycastle.Shooter;
 

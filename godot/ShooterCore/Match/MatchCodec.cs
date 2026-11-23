@@ -1,8 +1,11 @@
 using System.Buffers.Binary;
 using System.Numerics;
 using System.Text;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Match;
 
 /// <param name="Sandbox">A sandbox player (no team, but playing: not "unassigned"). Bit 2 of the row's team byte (#312).</param>
 /// <param name="Bot">The player is a bot. Bit 3 of the team byte.</param>

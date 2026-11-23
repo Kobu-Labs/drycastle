@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Wildlife;
+
+namespace Drycastle.ShooterCore.Companions;
 
 /// <summary>
 /// The Companions of a match (GLOSSARY "Companion"): which Companion each player has out (<see cref="Assign"/>) and the world entity of it. A player has at most one. It is in

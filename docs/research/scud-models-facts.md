@@ -1,7 +1,7 @@
 # Scud, Humvee and rocket cart: model facts
 
-Written by `scripts/make_scud_models_facts.py` from the numbers the three model scripts print (`docs/research/scud-models-facts.d/*.json`). For the `vehicles.json` entries.
-The GLBs are PRIVATE (Synty SIMPLE Military geometry): `assets-private/synty/glb/simple-military/`, manifest ids `pack:synty-simple-military/<name>`, built by `scripts/build_simple_military.sh`.
+Written by `scripts/military_kit/make_scud_models_facts.py` from the numbers the three model scripts print (`docs/research/scud-models-facts.d/*.json`). For the `vehicles.json` entries.
+The GLBs are PRIVATE (Synty SIMPLE Military geometry): `assets-private/synty/glb/simple-military/`, manifest ids `pack:synty-simple-military/<name>`, built by `scripts/military_kit/build_simple_military.sh`.
 All numbers are in the vehicle frame: metres, x right, y up, forward is -Z, origin on the ground at the footprint centre. `model_scale` 1, `model_yaw_deg` 0, `model_offset` [0, 0, 0] for all of them.
 The models are loaded as pack prefabs (`MapLoader.LoadPrefab`): the pack's palette texture comes from `glb/simple-military/materials.json`; every other material (glass, lamps, olive paint) is in the GLB. `paint_material`/`paints` are not offered for the Humvee and the Scud (their body wears the pack's palette texture, not a flat colour; a tint would multiply the whole atlas). The cart's paint is the flat material `Olive` (`paint_material: "Olive"` works).
 

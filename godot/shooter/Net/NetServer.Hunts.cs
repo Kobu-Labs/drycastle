@@ -1,5 +1,11 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Bots;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;

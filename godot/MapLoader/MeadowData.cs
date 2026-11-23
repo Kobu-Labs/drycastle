@@ -3,7 +3,7 @@ using System.IO.Compression;
 namespace Drycastle.MapLoader;
 
 // Pure (no Godot types): compiled into ShooterCore.Tests by a link. The format and the generator are specified in
-// pipeline/src/drycastle_pipeline/meadow.py, which has the same hash and the same instance rules (a test pins both).
+// pipeline/src/drycastle_pipeline/detail/meadow.py, which has the same hash and the same instance rules (a test pins both).
 
 /// <summary>One generated piece of meadow clutter. Map metres, x east, y north (no height: the loader reads the ground); Rot is counter-clockwise seen from above.</summary>
 public readonly record struct MeadowInstance(string Kind, float X, float Y, float Rot, float Scale, byte Tint = ClutterTint.Neutral);
@@ -167,7 +167,7 @@ public static class MeadowGen
         }
     }
 
-    // The tone field of the tint (pipeline meadow.py: TONE_*): a value noise over the ground in 2 m cells plus a small per-instance jitter.
+    // The tone field of the tint (pipeline detail/meadow.py: TONE_*): a value noise over the ground in 2 m cells plus a small per-instance jitter.
     const double ToneLattice = 12.0, ToneAmp = 100.0, ToneJitter = 14.0;
     const int ToneSalt = 2000;
 

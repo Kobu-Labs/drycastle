@@ -1,7 +1,10 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>What <see cref="PhoenixSchedule.Advance"/> found on one tick: a Phoenix is due now (the spawn hour of every 5th night was crossed), or the dawn hour was crossed (a Phoenix still Flying leaves).</summary>
 public readonly record struct PhoenixTick(bool Due, bool Dawn);

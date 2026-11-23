@@ -40,7 +40,7 @@ under it when `z` is null), `rotation_deg` counter-clockwise seen from above, un
 `colour` (material override). Unknown or missing assets give a warning and a magenta placeholder box.
 Objects have no collision in v1.
 
-Ground patches (`ground_patches` in `edits.json`: `{GP-NNNN: {type, polygon, water_y?}}`, schema in `pipeline/src/drycastle_pipeline/edits.py`,
+Ground patches (`ground_patches` in `edits.json`: `{GP-NNNN: {type, polygon, water_y?}}`, schema in `pipeline/src/drycastle_pipeline/edits/schema.py`,
 ADR 0022) are baked into the chunk files as `patch_<ID>` nodes (flat colour = the type's first terrain colour, no collision; patches of a
 water type have none) and rebuilt for hot reload by `patch-run --patch ID --glb PATH`, whose JSON summary has `replaces` (the baked
 `patch_<ID>` nodes to hide) and a GLB with one `patch_<ID>` node per patch in the chunk frame (`MapLoader.ApplyPatches`; `patches.json`
@@ -126,7 +126,7 @@ distances (`0.5` = half); `MapLoader.ClutterScale` is the same setting in code (
 **Tint (map 0.10.0).** An instance entry may carry a sixth number, a tint byte (128 = the mesh's own colours, lower = fresher, higher = drier); the meadow's generated instances of a
 layer with the tint flag carry one too. The loader sets it as the MultiMesh instance colour (`UseColors`), which multiplies the vertex colours of the shared flat material, so
 variety costs no extra nodes: `ClutterTint.Rgb` (fresh 0.80/0.97/0.78 at 0, white at 128, dry 1.0/0.80/0.55 at 255). A product cannot add yellow to a green, so "dry" reads
-as olive; real straw is its own kind. The pipeline lays the tint out as a smooth noise over the ground plus a small jitter (`meadow.py` `tone_noise`, `tint_byte`; `MeadowGen.Tint` mirrors it).
+as olive; real straw is its own kind. The pipeline lays the tint out as a smooth noise over the ground plus a small jitter (`detail/meadow.py` `tone_noise`, `tint_byte`; `MeadowGen.Tint` mirrors it).
 
 **Draw calls (map 0.10.0).** One node per kind and cell would mean a node for every rare species (the village has 23 kinds). A group with at least `ClutterSettings.MultiMeshMin` (16) instances in a 48 m cell
 is a `MultiMeshInstance3D`; the cell's smaller groups are merged into one `MeshInstance3D` (`clutter_merged`: the kinds' triangles transformed into place, the tint multiplied into the vertex colours, the
@@ -152,14 +152,14 @@ flattened once (every visible mesh of the prefab, so a tractor comes with its wh
 material; the materials are the pack's own shared ones (`materials.json`, atlas), so an instance costs a transform and nothing else. **Without the pack** (no
 `assets-private/synty/glb/farm`, the kind's ids are not in the private `manifest.json`) the kind is a flat-coloured cone (plants, hay pile, scarecrow) or box
 (`CropPlaceholder`, a colour per kind), with one warning per kind; rapeseed keeps its own glb. The pack's layout and how its GLBs are built: `assets-private/synty/README.md`
-(Farm section), `scripts/private_pack_glb.gd`.
+(Farm section), `scripts/packs/private_pack_glb.gd`.
 
 Crops react at run time, still cosmetic: a harvester's reel cuts them to stubble along its real path and vehicles flatten them (`MapLoader.Harvest.cs`: `CropCut`, `CropCrush`, `CropMarkGround`, `CropReset`; events `HarvesterCut`, `CropCrush`). See `docs/events/harvester.md` and `docs/crops-destruction.md`.
 
 ### Meadow clutter (generated near the player)
 
 Fields, meadows and forests are about 400 ha, too much to store clutter instances for. Maps with `files.meadow` (`meadow.bin`, map 0.9.0) carry a density raster instead
-(layers tuft, flower, fern, pebble, litter, floor; one byte per 2 m cell per layer plus a zone byte per cell, format 3 in `pipeline/src/drycastle_pipeline/meadow.py`; the zone byte's high nibble picks the species
+(layers tuft, flower, fern, pebble, litter, floor; one byte per 2 m cell per layer plus a zone byte per cell, format 3 in `pipeline/src/drycastle_pipeline/detail/meadow.py`; the zone byte's high nibble picks the species
 mix, which says per layer which kinds a cell makes and in what shares, its low nibble is a dryness that biases the tint). `MapLoader.Meadow.cs` turns the cells
 near the focus into instances with `MeadowGen` (a hash of the cell and layer, the same on every client, nothing is sent; `MeadowData.cs`, pure, mirrors `meadow.generate`
 and a test pins both). The ground is cut into 24 m tiles, each tile and layer is one `MultiMeshInstance3D` per kind (pooled), built nearest first at most 6 tiles or 2 ms per
@@ -187,7 +187,7 @@ Packs: every model entry may name its `pack` (a folder of `assets-private/synty/
 Draws a stand adds, per tile that holds the model (the white PolygonNature atlas, with all trunks, is the one draw every tile has): pine 0 (Leaves_Pine), birch 0 (Birch trunk, birch leaves), thicket 0 (Plants tint), swamp up to +4 (dead-branch leaf card, willow leaves, swamp-pack atlas, swamp-pack leaf), edge 0. Expected triangles of a tile with 65 trees (the village maximum), by stand: pine 23.5k, mixed 24k (cone) to 36k (box), thicket 21k, birch 38k, swamp 44k, edge 43k.
 Colour (#287): the pack's atlas gives every tree of a model the same greens, the baked trees had several. The mesher writes a tint per tree into the vertex colour (`PackColourMath.Tint`: a hash of the position, a multiplier on the foliage stored halved in rgb; `hue_shift` toward yellow-green or blue-green, `value` lighter or darker, and `accent_share` of the trees one of the `accents`: spring green, olive, teal, golden), and `pack_tree.gdshader` applies it only to texels that are green (`leaf_lo`..`leaf_hi` on `(g - max(r, b)) / g`: trunks, bark and rocks keep the atlas) with `saturation` and `gain` on top. The undergrowth gets `undergrowth_scale` of the variation (0.5); ground objects none. All of it is the `colour` section of `pack_trees.json` (`enabled: false` = the atlas as it was). The vertex colour costs 4 bytes a vertex.
 Fallen trees (#287; `GroundObjectMath.PlaceLog`, `FallenConfig`, `ground_objects.fallen`): a log record lies along `u`, 4-9 m long, 0.3-0.6 m thick (`scale` x 0.45), thick end at -u, a size box as long as the log, as wide as 0.7 of the thickness and 0.65 of it high (`GroundObjectColliders.LogBox`, which `PackGroundData.BoxOf` asks; not solid, #359). A `log` model entry with `lay: true` is an upright model (a dead tree) laid down: tipped a quarter turn about a horizontal axis before the yaw (`PackPlacement.Pitch`), turned about its own axis by a hash (`Roll`), its base at the thick end and the middle of its height on the record's point, scaled uniformly so its height is `len` (inside `scale_min`..`scale_max`), thinned across by at most `stretch_max` (1.25) when its trunk (`PackModelMesh.TrunkRadiusM`, the 30th percentile of the vertices' distance from the axis between 10% and 50% of the height) would stand out of the box, and raised so the trunk rests on the ground with `sink` of its diameter buried. A model whose trunk still does not fit, or whose scale is outside the span, is skipped for that record; branches may stick out of the box. Models without `lay` (`SM_Tree_Log_01/02`, 2.3-3 m) are used as they are, stretched at most `stretch_max`, or on a longer record the fewest end to end that stay within it (`max_pieces`, weight x `piece_weight` for two or more); when nothing fits the nearest is stretched anyway (a baked log must not vanish). The models that fit share the choice by weight and a position hash. Chosen: `SM_Tree_Dead_01/02` (436 and 296 triangles; 3.5 and 2.7 m with trunks 0.1-0.24 m: logs of 4-7 m), `SM_Tree_Pine_Dead_01` (310; 6.7 m, trunk 0.4 m: the nicest, fits 4-9 m logs in part by thickness) and the swamp pack's `SM_Env_Tree_Dead_01` (342; 9.1 m, trunk 0.4 m: 5-9 m logs). Left out: `SM_Tree_Dead_03` (1.2 m), `SM_Tree_Birch_Dead_01` and `SM_Tree_Generic_Dead_01` (trunks 0.5 and 0.7 m, wide crowns), the swamp-pack logs and trunks (`SM_Prop_Swamp_Log_*`, `SM_Env_Swamp_Log_*`, `SM_Prop_Swamp_Trunk_01`: 1.8-15 m thick, chunks of the swamp scale that a 0.3-0.6 m collider cannot hold) and `SM_Env_Tree_Dead_02` (1 m trunk).
-Hot swap: `Load` runs `PlanPackTrees`, which frees every tile (in-flight jobs are dropped with their tile), the packs, models, tags and undergrowth sets, and `InitPackTrees` builds them again, so a map reload cannot leave a stale tile. A parcel swap (`ApplyFragment`, `RevertParcel`) and a patch swap never touch trees.json, ground_objects.json, the meadow raster or the terrain heights the tiles were built from (the parcel run's `trees` is empty by design: trees come from the orthophoto, `parcel_run.py`), so no tile goes stale and none is rebuilt: rebuilding would only make the baked trees reappear for a moment (the cut radius shrinks to the nearest unbuilt tile).
+Hot swap: `Load` runs `PlanPackTrees`, which frees every tile (in-flight jobs are dropped with their tile), the packs, models, tags and undergrowth sets, and `InitPackTrees` builds them again, so a map reload cannot leave a stale tile. A parcel swap (`ApplyFragment`, `RevertParcel`) and a patch swap never touch trees.json, ground_objects.json, the meadow raster or the terrain heights the tiles were built from (the parcel run's `trees` is empty by design: trees come from the orthophoto, `edits/parcel_run.py`), so no tile goes stale and none is rebuilt: rebuilding would only make the baked trees reappear for a moment (the cut radius shrinks to the nearest unbuilt tile).
 Without `base_uv2` (old map), without the pack or with `DRYCASTLE_PACK_TREES=0` nothing changes (one warning for the old map). Collision is unchanged. Counters: `MapLoader.PackTreeDrawn` (tiles, draws, trees, triangles of everything, ground objects, undergrowth pieces); `--perf-route` writes them to `route-frames.csv` (`pack_objects`, `pack_undergrowth`) and `route-summary.json`.
 
 Forest ground (same tiles, same draws; `PackGroundData.cs`, sections `ground_objects` and `undergrowth` of `pack_trees.json`):
@@ -222,7 +222,7 @@ plus the usual `--map`, `--seed`, `--assets`.
 | G | create a property group (`G-NNNN`) from 2+ selected parcels |
 | T | snap to a top-down view above the cursor; again restores the previous camera |
 | B | floor plan of the selected parcel: its buildings hidden, wall lines and a 1 m grid shown; again restores them |
-| (Street View) | `streetview_follow.py` moves the character to where a Chrome Street View tab is; in the top-down view (T) a red point marks the spot below it, see `docs/streetview.md` |
+| (Street View) | `photos/streetview_follow.py` moves the character to where a Chrome Street View tab is; in the top-down view (T) a red point marks the spot below it, see `docs/streetview.md` |
 | Esc | stop placing / deselect the object / clear the parcel selection (in that order) |
 | Ctrl+Z, Ctrl+Y (Ctrl+Shift+Z) | undo / redo the saves made in this session (see Objects and undo) |
 
@@ -239,7 +239,7 @@ Merge groups (button, or `G` when the marked parcels touch any group) puts all p
 Group operations rewrite `edits.json` atomically (temp file, then rename). The file is reloaded from disk
 right before every save, so a change by another writer (e.g. the MCP server) is kept, and everything not
 related to groups (fences, trees, objects, unknown parcels) is written back unchanged. The text is exactly what
-`drycastle_pipeline.edits.dump_edits` writes (sorted keys, indent 1, Python float formatting, trailing
+`drycastle_pipeline.edits.schema.dump_edits` writes (sorted keys, indent 1, Python float formatting, trailing
 newline), so both writers give byte-identical files; `pipeline/tests/fixtures/edits_roundtrip.json` is the fixture
 for that. A parcel is in at most one group; `G` refuses (status line) when a selected parcel is already in one.
 The watcher then regenerates the affected parcels (the fence runs along a group's outer edge) by itself.
@@ -254,7 +254,7 @@ parcel's own fence override, which wins field by field over the group's.
 
 * **Fence**: `mode` auto | none | custom; `type` picket | wire | brick_red | brick_white | stone_wall | concrete
   (textured styles, see `docs/pipeline.md`; brick_wall is the old name of brick_red; the table lives in `EditSchema`,
-  `EditModel.cs`, and `make viewer-panel-smoke` compares it with `edits.py`); the `column` key (other posts or
+  `EditModel.cs`, and `make viewer-panel-smoke` compares it with `edits/schema.py`); the `column` key (other posts or
   piers than the type's own) has no control in the panel yet: set it through MCP or by hand, the panel keeps it
   when it writes; `height`, `thickness` and `colour` (a tint: the paint of picket, wire and concrete)
   each have a `set` box: unset means the type's default, which is shown greyed. These fields and the gate list are
@@ -357,7 +357,7 @@ GPU): `godot --path godot/viewer -- --map DIR --edits FILE --state FILE --editor
 
 ### MCP server for parcel edits
 
-`pipeline/src/drycastle_pipeline/mcp_server.py` is a stdio MCP server (`make mcp`, normally started by Claude Code via
+`pipeline/src/drycastle_pipeline/edits/mcp/server.py` is a stdio MCP server (`make mcp`, normally started by Claude Code via
 `uv run`) that edits `pipeline/config/edits.json` in plain language: "park a car in front of the house on the selected
 parcel". It uses the pipeline's own validator, reads the viewer's `editor-state.json` for the selection, and the
 viewer's `--watch` applies the change. Registration, tool reference and workflow: [mcp.md](mcp.md).
@@ -398,7 +398,7 @@ renders (the name is the tooltip), and adds the cables.
   cable selects it (yellow), `Del` removes it; the selected pole lists its cables with a Remove button each. Deleting a
   pole removes its cables in the same save. Each of these is one save and one undo step.
 * **Nothing is turned for you**: a pole keeps the rotation you gave it. The wires are matched left to right across each
-  span (`ShooterCore/Environment/CableWires.cs`), so they keep their spacing and never cross, whichever way a pole
+  span (`ShooterCore/Scenery/CableWires.cs`), so they keep their spacing and never cross, whichever way a pole
   faces; turn the pole so that its crossarm stands across the line.
 * **Instant**: cables need no pipeline run. `MapLoader` strings them between the poles as they stand (`SetCables`,
   `RebuildCables`), the watcher hands it the file's cables on every change, and the cables of a pole follow it while it

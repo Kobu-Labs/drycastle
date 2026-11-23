@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Fsm;
 
 /// <summary>Where a <see cref="LazyInit{T}"/> is: not tried, tried without a result, or holding one.</summary>
 public enum LazyState { Untried, Failed, Ready }

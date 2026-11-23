@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
-using ShapeState = Drycastle.ShooterCore.EditorShapeState;
+using ShapeState = Drycastle.ShooterCore.Editor.EditorShapeState;
 
 /// <summary>
 /// The polygon machinery the two shape tools share: ground PATCHES in the Ground tool (edits.json `ground_patches`,
@@ -80,7 +80,7 @@ public partial class EditorMode
 
     // Editor.Shape (docs/state-machines.md): the stored state. Drawing is entered by N or the first corner, Level by closing a water patch, Dragging by grabbing a
     // corner; Idle and Selected follow the selection, so every selection change goes through the setters below.
-    readonly Drycastle.ShooterCore.StateMachine<ShapeState> _shape = new(Drycastle.ShooterCore.EditorMachines.ShapeSpec);
+    readonly Drycastle.ShooterCore.Fsm.StateMachine<ShapeState> _shape = new(Drycastle.ShooterCore.Editor.EditorMachines.ShapeSpec);
     string? _selectedPatchId, _selectedZoneId;
     public string? SelectedPatchId { get => _selectedPatchId; private set { _selectedPatchId = value; ShapeRest(); } }
     public string? SelectedZoneId { get => _selectedZoneId; private set { _selectedZoneId = value; ShapeRest(); } }
@@ -168,7 +168,7 @@ public partial class EditorMode
     ShapeInfo? SelectedShape(ShapeKind k) => SelectedOf(k) is { } id ? ShapeById(k, id) : null;
     string? SelectedOf(ShapeKind k) => k == ShapeKind.Patch ? SelectedPatchId : SelectedZoneId;
 
-    /// <summary>Next free ID: one above the highest in use (mcp_server._next_id).</summary>
+    /// <summary>Next free ID: one above the highest in use (edits/mcp/ids.py next_id).</summary>
     public static string NextShapeId(Obj root, ShapeKind k) => NextId(root, KeyOf(k), PrefixOf(k));
 
     static string NextId(Obj root, string key, string prefix)

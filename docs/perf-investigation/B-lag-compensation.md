@@ -28,7 +28,7 @@ Let the shooter's input be sent at server-time `S`, and the server resolve it on
 
 plus input queueing on the server (0 to one tick normally, `NetServer.cs:590-594`). The table uses `L = RTT + 100 ms` (CONFIRMED arithmetic on `NetClient.cs:20`, `:536`; RTT from `NetServer.cs:585`).
 
-Lateral error of a hitscan against a target moving at speed `v` perpendicular to the ray is `v·L`, independent of distance. The hit tolerance is the body capsule radius `PlayerHitBox.Radius = 0.56 m` (`godot/ShooterCore/Weapons/PlayerHitBox.cs:28`) and the head radius `0.25 m` (`:31`). Speeds: walk 5, sprint 8 (`godot/ShooterCore/Movement.cs:8-9`), car 44.4, jeep 30, utility helicopter 40 (`godot/shooter/data/vehicles.json:19`, `:40`, `:150`), killstreak helicopter 38 (`godot/shooter/data/killstreaks.json:29`).
+Lateral error of a hitscan against a target moving at speed `v` perpendicular to the ray is `v·L`, independent of distance. The hit tolerance is the body capsule radius `PlayerHitBox.Radius = 0.56 m` (`godot/ShooterCore/Weapons/PlayerHitBox.cs:28`) and the head radius `0.25 m` (`:31`). Speeds: walk 5, sprint 8 (`godot/ShooterCore/Movement/Movement.cs:8-9`), car 44.4, jeep 30, utility helicopter 40 (`godot/shooter/data/vehicles.json:19`, `:40`, `:150`), killstreak helicopter 38 (`godot/shooter/data/killstreaks.json:29`).
 
 | target, speed | RTT 0 (L 100 ms) | RTT 50 (L 150 ms) | RTT 100 (L 200 ms) | RTT 200 (L 300 ms) |
 |---|---|---|---|---|

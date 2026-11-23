@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Diagnostics;
 
 namespace Drycastle.Shooter;
 

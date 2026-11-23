@@ -1,4 +1,12 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Demon;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Wildlife;
+
+namespace Drycastle.ShooterCore.Colliders;
 
 /// <summary>What moves (ADR 0028). Bigfoot is not one: its rules stay in its own code.</summary>
 public enum MoverKind : byte

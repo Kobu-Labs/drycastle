@@ -1,5 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Killstreaks.Uav;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Net;
 using Vector2 = Godot.Vector2;
 
 namespace Drycastle.Shooter;

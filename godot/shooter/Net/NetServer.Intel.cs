@@ -1,5 +1,8 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Intel;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
 
 namespace Drycastle.Shooter;
 

@@ -1,5 +1,8 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Bunkers;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Intel;
+using Drycastle.ShooterCore.Minimap;
 
 namespace Drycastle.Shooter;
 

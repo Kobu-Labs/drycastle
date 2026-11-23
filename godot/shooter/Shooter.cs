@@ -1,5 +1,12 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Buildings;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Menu;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Wildlife;
 using WaterSurfaces = Drycastle.MapLoader.WaterSurfaces;
 
 namespace Drycastle.Shooter;
@@ -60,7 +67,7 @@ public partial class Shooter : Node3D
     /// <summary>Vehicle models of the paid packs (the harvester, #331) come from the map's asset library.</summary>
     void HookPackModels() => CarFx.PackLoader = id => _map.InstantiateAsset(id);
     /// <summary>The map's water (water.json), parsed when the map loads; Water.Empty on a dry map.</summary>
-    Drycastle.ShooterCore.Water _water = Drycastle.ShooterCore.Water.Empty;
+    Drycastle.ShooterCore.Waters.Water _water = Drycastle.ShooterCore.Waters.Water.Empty;
     Drycastle.ShooterServer.Persistence.IProgressionStore? _progression;
     bool _smoke;
     bool _smokeMove;
@@ -387,7 +394,7 @@ public partial class Shooter : Node3D
             _map.SpawnFilter = (x, z) => MechanicGarageSite.Covers(x, z, 1.5f);
         }
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
-        _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Water.Empty : Drycastle.ShooterCore.Water.Parse(_map.WaterJson);
+        _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Waters.Water.Empty : Drycastle.ShooterCore.Waters.Water.Parse(_map.WaterJson);
         WaterSurfaces.ReduceMotion = () => GameSettings.Current.ReduceMotion;
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
         IntelScreen.OpenEntrance(_map); // the hangar's small door, so the intel room can be entered (client and server alike)
@@ -402,7 +409,7 @@ public partial class Shooter : Node3D
         if (MechanicGarage.Create(_map, Path.GetFullPath(dir), !_map.CollisionOnly) is { } mechanicGarage) AddChild(mechanicGarage); // the mechanic's garage (#320): solid on the server too, its plate a glass pane
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {
-            var bunkers = Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));
+            var bunkers = Drycastle.ShooterCore.Bunkers.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));
             if (bunkers.Rooms.Count > 0) AddChild(new BunkerLights { Shelters = bunkers });
             if (IntelScreen.Create(bunkers, _map) is { } intel) AddChild(intel); // the base's wall screen, on the hangar floor (or in the command post of the fallback bunker)
         }
@@ -599,7 +606,7 @@ public partial class Shooter : Node3D
     {
         AddLightAndSky();
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
-        var player = new Player { Name = "Player", KillY = killY, Water = _water, Ladders = ObjectLadders.WithObjects(Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; no ladders")).Ladders, _map), PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
+        var player = new Player { Name = "Player", KillY = killY, Water = _water, Ladders = ObjectLadders.WithObjects(Drycastle.ShooterCore.Bunkers.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; no ladders")).Ladders, _map), PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
         AddChild(player);
         var spawn = RandomSpawn();
         player.Teleport(spawn + Vector3.Up * 0.1f);

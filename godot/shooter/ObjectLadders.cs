@@ -1,5 +1,6 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Bunkers;
+using Drycastle.ShooterCore.Data;
 
 namespace Drycastle.Shooter;
 

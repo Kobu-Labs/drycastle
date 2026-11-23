@@ -1,6 +1,11 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Turrets;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Citizens;
 
 /// <summary>What a citizen is doing: the replicated state byte. Walking is the way to the church door on the navigation mesh, Entering the scripted walk inside to the seat.</summary>
 /// <remarks>Standing is the pastor and monks at their spot, or a citizen on its feet after the Mass; Clapping is the Mass done and the body cheering (the pastor flexes). Fleeing is the sprint back to the spawn point (the demon appeared); it ends in removal there.</remarks>

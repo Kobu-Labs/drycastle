@@ -1,7 +1,8 @@
 using Concentus;
 using Concentus.Enums;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.RozhlasFeed;
 
 /// <summary>
 /// One live-feed frame on <see cref="Wire.ChanRozhlasFeed"/> (server to every client, unreliable): u8 <see cref="Wire.TRozhlasFeed"/>, u16 sequence (little endian,

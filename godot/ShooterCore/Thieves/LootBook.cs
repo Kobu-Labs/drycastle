@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// Where the event's Loot is (GLOSSARY "Loot"), pure: the kinds and their claims (<see cref="Registry"/>), the Loot that lies on the ground (<see cref="Lying"/>, world entities with a cap), and the

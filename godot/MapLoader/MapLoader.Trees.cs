@@ -1,5 +1,6 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Data;
 using GVector3 = Godot.Vector3;
 
 namespace Drycastle.MapLoader;

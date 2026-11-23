@@ -1,6 +1,9 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Turrets;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Companions;
 
 /// <summary>What a <see cref="WingCompanion"/> is doing.</summary>
 public enum WingState : byte { Hover, Trail, Circle }

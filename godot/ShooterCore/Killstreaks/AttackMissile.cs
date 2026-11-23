@@ -1,7 +1,11 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Killstreaks;
 
 /// <summary>Wire type and registration of the attack missile's world entity (killstreak "attack_missile").</summary>
 public static class AttackMissileRules

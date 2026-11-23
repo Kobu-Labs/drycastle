@@ -1,5 +1,8 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Waters;
+using Drycastle.ShooterCore.Weapons;
 
 namespace Drycastle.Shooter;
 

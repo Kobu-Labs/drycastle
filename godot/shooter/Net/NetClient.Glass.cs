@@ -1,5 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Buildings;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Glass;
 
 namespace Drycastle.Shooter;
 

@@ -1,4 +1,9 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Status;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Demon;
 
 /// <summary>How many hits the demon takes: <c>round(Base + PerExtraPlayer * (players - 1))</c>, at least <c>Min</c>, capped at <c>Max</c> when set (no cap when absent).</summary>
 public sealed class DemonHitsDef

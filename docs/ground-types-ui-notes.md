@@ -50,7 +50,7 @@ set back to what `rules.yaml` says drops the override. A banner on the page says
 - That a two-way round trip (editor writes, Python validates and the Python writer reproduces the bytes) holds; the C# canonical writer
   skips an empty `ground_types` like Python and writes `null` for an attribute removed from a type of the rules.
 - The editor's validator (`ObjectEdits.CheckPatch`, `GroundTypeEdits.Validate`) mirrors the Python rules of ADR 0022 (terrain-only attributes,
-  `ground_patches`, `zones`, `regions` unknown); it was written against the contract, not compared with the finished `edits.py`.
+  `ground_patches`, `zones`, `regions` unknown); it was written against the contract, not compared with the finished `edits/schema.py`.
 - Ground map (`EditorMode.GroundMap.cs`): not run, no screenshots. Unverified: the overlay on the real map (12 m triangles float 1 m over the
   terrain), the slit cut of polygons with holes (the dike), the one-type-per-frame build, hover label and click-to-select, `M`, focus order of the
   checkbox. Needs `make map` first: the exported `parcels.json` of an older build has no `ground_areas` (the page then says to build it again).

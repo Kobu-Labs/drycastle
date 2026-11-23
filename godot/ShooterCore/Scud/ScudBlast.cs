@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Scud;
 
 /// <summary>What a Scud blast does to a player: killed outright, hurt by so much, or untouched. See <see cref="ScudBlastRules.PlayerHit"/>.</summary>
 public readonly record struct ScudPlayerHit(bool Lethal, float Damage)

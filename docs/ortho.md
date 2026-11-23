@@ -15,7 +15,7 @@ Source: GKU Bratislava's ZBGIS orthophoto mosaic, WMTS in EPSG:5514 (`zbgisws.sk
 NLC". The tiles are in S-JTSK already, so there is no reprojection: the pixel grid is the service's tile matrix
 `default028mm` (256 px tiles, pixel size = scale denominator x 0.00028 m, level 11 = 0.595 m, level 12 = 0.298 m).
 
-`drycastle_pipeline.ortho` reads `area.json` (the polygon, else the fetched box, plus 25 m), downloads the tiles that cover
+`drycastle_pipeline.sources.ortho` reads `area.json` (the polygon, else the fetched box, plus 25 m), downloads the tiles that cover
 it politely (sequential, 0.2 s apart, retries) into `data/village/ortho/tiles/LEVEL/ROW_COL.jpg`, and joins them into
 `ortho.jpg` cropped to the map outline. `ortho.json` holds the absolute S-JTSK bounds, the pixel size, the attribution and the
 "reference only" notice. Tiles already on disk are not fetched again (`--force` does), a 404 tile stays blank, and more than
@@ -32,7 +32,7 @@ level 11), so it costs some video memory; the lower level is plenty to place thi
 
 ## Trees read from the photo
 
-`make ortho-trees` (the `ortho-trees` stage of `run-all`, after `ortho`; module `drycastle_pipeline.ortho_trees`) reads where the trees are and writes
+`make ortho-trees` (the `ortho-trees` stage of `run-all`, after `ortho`; module `drycastle_pipeline.sources.ortho_trees`) reads where the trees are and writes
 `data/village/ortho/trees.json` and `canopy.png`. It is a local, derived result: only facts read from the photo (positions,
 a mask), never its pixels, and into the gitignored `data/`. Whether the map may use them is the licence judgement made in
 `docs/research/slovak-open-data.md`; the props stage plants trees from them (below), and nothing here reaches `out/` itself.
@@ -60,7 +60,7 @@ and `--tau-wooded` move the two thresholds.
 
 Speed. The strips are detected by the Rust engine (`pipeline/rust/detail/src/trees.rs`, entry `detect_trees`, all cores:
 about 4 s for the village) when it is installed (`make detail-rust-build`; `make map` and `make ortho-trees` build it),
-else by the Python reference in `ortho_trees.py` (about 80 s). Both give the same trees and the same mask
+else by the Python reference in `sources/ortho_trees.py` (about 80 s). Both give the same trees and the same mask
 (`test_the_rust_engine_detects_what_the_python_reference_detects`); Python keeps the photo decoding, the building masks,
 the training and the files. A change to the detection goes into both.
 

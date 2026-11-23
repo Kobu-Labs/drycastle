@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>
 /// What a body a vehicle threw does once it touches the ground: it does not stop where it comes down, it keeps part of the speed it was given and rolls on along the

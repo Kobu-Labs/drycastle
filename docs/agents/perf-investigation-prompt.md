@@ -50,7 +50,7 @@ Questions:
 - Remote player representation: interpolation, ragdoll/corpse flail, character animation cost.
 
 ### D. Vehicle models and collisions
-Scope: `godot/ShooterCore/Vehicles/*`, `godot/ShooterCore/Aircraft/*`, `ServerCar.cs`, `VehicleCollider.cs`, `NetServer.Vehicles.cs`, `NetServer.ResolveVehicleContacts`, `data/vehicles.json`, glass ADR 0008.
+Scope: `godot/ShooterCore/Vehicles/*`, `godot/ShooterCore/Flight/*`, `ServerCar.cs`, `VehicleCollider.cs`, `NetServer.Vehicles.cs`, `NetServer.ResolveVehicleContacts`, `data/vehicles.json`, glass ADR 0008.
 Questions:
 - Kinematic arcade drive/flight models with box colliders on a dedicated layer: right for 29 vehicles and the intended gameplay (ramming, run-over, riding, boats, amphibious, helicopters)? What does it fundamentally not support (stacking, towing, riding on a roof, slopes, ramps, terrain damage), and is that acceptable?
 - Per-tick cost: 29 vehicles stepped, parked ones (T2-04), pairwise contacts (O(n²)?), run-over footprint tests against all players, per-pane glass nodes.
@@ -58,7 +58,7 @@ Questions:
 - Determinism and prediction cost for the driver; bytes per vehicle per snapshot, parked and driven.
 
 ### E. World representation and physics world
-Scope: `godot/MapLoader/*`, chunk GLBs and collision meshes, `godot/ShooterCore/Colliders`, `Environment`, `Water.cs`, `BotNav.cs`, ADR 0004, `docs/pipeline.md` for the *artifact* shape (not the pipeline's own speed).
+Scope: `godot/MapLoader/*`, chunk GLBs and collision meshes, `godot/ShooterCore/Colliders`, `godot/ShooterCore/Scenery`, `godot/ShooterCore/Waters/Water.cs`, `BotNav.cs`, ADR 0004, `docs/pipeline.md` for the *artifact* shape (not the pipeline's own speed).
 Questions:
 - Is "chunk GLBs with trimesh colliders, trees as bodies, one shared lamp body" the right world representation for the server (collision only) and the client (rendering)? Alternatives: heightfield terrain plus instanced props, merged static collision, a separate lightweight collision-only artifact for the server, a spatial grid for gameplay queries.
 - Server memory and startup: it builds visual meshes and materials it never draws (T2-26). What is the minimum representation the server needs, and what does a dedicated collision artifact cost in pipeline work?

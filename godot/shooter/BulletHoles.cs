@@ -129,7 +129,7 @@ public partial class BulletHoles : Node3D
         if (!ShotFx.Enabled || !GodotObject.IsInstanceValid(world) || !world.IsInsideTree()) return;
         var dir = end - from;
         if (dir.LengthSquared() < 0.01f) return;
-        var q = PhysicsRayQueryParameters3D.Create(from, end + dir.Normalized() * 0.1f, Drycastle.ShooterCore.CollisionLayers.WorldShots);
+        var q = PhysicsRayQueryParameters3D.Create(from, end + dir.Normalized() * 0.1f, Drycastle.ShooterCore.Colliders.CollisionLayers.WorldShots);
         var hit = world.GetWorld3D().DirectSpaceState.IntersectRay(q);
         if (hit.Count == 0) return;
         var p = hit["position"].AsVector3();

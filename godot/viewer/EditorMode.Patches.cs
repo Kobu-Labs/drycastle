@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
-using ShapeState = Drycastle.ShooterCore.EditorShapeState;
+using ShapeState = Drycastle.ShooterCore.Editor.EditorShapeState;
 
 /// <summary>
 /// The ground patches half of the Ground tool (GLOSSARY "Ground patch", ADR 0022): a hand-drawn polygon of exactly one ground type,

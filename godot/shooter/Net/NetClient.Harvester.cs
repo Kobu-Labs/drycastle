@@ -1,5 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Net;
 using NVec2 = System.Numerics.Vector2;
 
 namespace Drycastle.Shooter;

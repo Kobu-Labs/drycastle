@@ -1,5 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Intel;
+using Drycastle.ShooterCore.Minimap;
 using Vector2 = Godot.Vector2;
 using NVec2 = System.Numerics.Vector2;
 

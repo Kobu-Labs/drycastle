@@ -1,5 +1,27 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Bunkers;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Flight;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Glass;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.RozhlasFeed;
+using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
+using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;
@@ -57,7 +79,7 @@ public partial class NetClient : Node
     public bool Headless;
     public float KillY = float.NegativeInfinity;
     /// <summary>The map's water (water.json), shared with the prediction so swimming matches the server.</summary>
-    public Drycastle.ShooterCore.Water Water = Drycastle.ShooterCore.Water.Empty;
+    public Drycastle.ShooterCore.Waters.Water Water = Drycastle.ShooterCore.Waters.Water.Empty;
     /// <summary>Match smoke role: "alice" (kills bob with the debug command) or "bob" (fires after each spawn); empty = normal bot/player.</summary>
     public string MatchBot = "";
     /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
@@ -243,7 +265,7 @@ public partial class NetClient : Node
     {
         if (_peer == null || !_welcomed || Dead) return;
         FlushAutosave();
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Redeploy, ShooterCore.Redeploy.Encode(slot))), (int)ENetPacketPeer.FlagReliable);
+        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Redeploy, Drycastle.ShooterCore.Match.Redeploy.Encode(slot))), (int)ENetPacketPeer.FlagReliable);
         _conn.Flush();
     }
 

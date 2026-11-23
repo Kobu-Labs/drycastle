@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
 
 namespace Drycastle.Shooter;
 

@@ -35,7 +35,7 @@ One map is built: the village inside its outline (`polygon`, see below). Its pat
 | export, previews | `out/village/map/`, `out/village/preview/` |
 
 `make map-update` re-runs only `props`, `detail` and `export` (after `edits.json` changed: placed objects, zones, fences; ground patches and parcel outlines also need `make parcels` first). It needs one full `make map` first, does not fetch, run the orthophoto stages or rebuild terrain/roads, and plants the trees again from the cached `ortho/trees.json`. Same output folder as `make map`. Only zones changed: `make export` is enough.
-| `map_version` | `<MAP_VERSION_BASE>-village` (`export.py`) |
+| `map_version` | `<MAP_VERSION_BASE>-village` (`export/export.py`) |
 
 The committed registry `registry/parcels.registry.json` is the one
 source of IDs. Fetching is polite: Overpass in one request (a box over about 1.5 km a side in pieces of that size, each cached in
@@ -70,7 +70,7 @@ measured in Godot yet; terrain (4 m grid, 7.7k triangles per chunk) is now the b
 
 Only a property is a parcel: a cadastral parcel that holds a building (kind `building_plot`), or one that is in a property
 group (`config/edits.json`) with a parcel that does (kind `garden`). The land of every other cadastral parcel (fields,
-forest, water, the land the roads lie on, gardens of no property) is not kept as parcels. The parcels stage (`ground.py`,
+forest, water, the land the roads lie on, gardens of no property) is not kept as parcels. The parcels stage (`ground/areas.py`,
 `ground` in `rules.yaml`) cuts it into **ground areas** by type instead, written to `parcels.json` under `ground` in the
 shape of a parcel (`id` `A-0001`..., `kind` = the type, polygon, area, anchor, chunk):
 
@@ -102,7 +102,7 @@ any other. Today P-0073 (the dike strip, with a hut) and P-0754 (a 13 ha field w
 ### Ground attributes (ADR 0015, 0022)
 
 A ground type ticks the attributes it carries, under `attributes` of its entry. The attributes are a fixed catalog in
-code (`ground_attributes.py`, mirrored in `godot/viewer/GroundTypeEdits.cs`); the editor groups them by relation:
+code (`ground/attributes.py`, mirrored in `godot/viewer/GroundTypeEdits.cs`); the editor groups them by relation:
 
 | Group | Attribute | Value |
 |---|---|---|
@@ -229,7 +229,7 @@ that no type has is drawn.
   for the OSM sources and `drawn_ground`, scene for the terrain colours, detail for the recipe and its `detail`
   settings, export for `water`). A patch names a type that no longer exists: the validator refuses the file, so a type
   cannot be deleted while a patch is of it (the MCP tool names the patches).
-* **Validation** (`edits.py`, mirrored by the editor): names are lower_snake (`^[a-z][a-z0-9_]{0,23}$`); `attributes`
+* **Validation** (`edits/schema.py`, mirrored by the editor): names are lower_snake (`^[a-z][a-z0-9_]{0,23}$`); `attributes`
   holds only catalog keys: `colours` 1 to 6 `#rrggbb`; `recipe` one of `field`, `forest`, `village`, `dike`; `detail` an
   object whose top-level keys exist in the shipped `detail.<recipe>` section (the recipe is the entry's own or the rules
   type's, one is needed); `water` `true`; `null` only to
@@ -333,7 +333,7 @@ ground height, scale, rotation, broadleaf or conifer, chunk) and the game builds
 The forest floor also gets **ground objects** (fallen logs (not solid), stumps, boulders, root plates, anthills and burrows; `ground_objects.json`, map 0.13.0; see below).
 
 **Fence types and the texture library.** A fence section with a `type` is drawn in that type's style
-(`fencestyles.py`) instead of the plain box: `picket` and `wire` are one thin two-sided quad with a
+(`props/fencestyles.py`) instead of the plain box: `picket` and `wire` are one thin two-sided quad with a
 cut-out texture that follows the ground, with wood or metal posts; `brick_red`, `brick_white`,
 `stone_wall` and `concrete` are level-topped walls (they step on a slope) with a repeating texture, a
 flat coping and matching piers. Columns stand at every section joint and run end; `column` swaps them
@@ -345,9 +345,9 @@ set in `rules.yaml`. The collision box of a section is unchanged.
 
 The textures are a library, not part of the fences: `assets/manifest.json` `textures` lists each one (id,
 PNG under `assets/`, `tile_m` = the size of one repeat in metres, `alpha`, `tintable`, mean colour), and
-`textures.py` gives any mesh builder `texture(id).uv(...)` and a `TexturedBuilder`. The PNGs are built by
-`python3 -I scripts/make_textures.py` (standard library only, deterministic; `--sheet FILE` writes a contact
-sheet). `uv run python -m drycastle_pipeline.fence_preview` (in `pipeline/`) draws every fence type from its
+`core/textures.py` gives any mesh builder `texture(id).uv(...)` and a `TexturedBuilder`. The PNGs are built by
+`python3 -I scripts/art/make_textures.py` (standard library only, deterministic; `--sheet FILE` writes a contact
+sheet). `uv run python -m drycastle_pipeline.preview.fences` (in `pipeline/`) draws every fence type from its
 real meshes, UVs and textures into `out/textures/fences.png`, so the look can be checked without the game.
 
 **Hand edits** (`pipeline/config/edits.json`, read by the props stage; `--edits PATH` overrides the
@@ -358,14 +358,14 @@ placed utility poles) whose poles are both placed; an object may carry `z` (abso
 least 3 `[x, y]` absolute S-JTSK points, no self-intersection, `water_y` for a water type) are hand-drawn ground (see "Parcels and ground areas"); the props stage reads
 only their water ones (no trees in a lake). `zones` (`Z-NNNN`: `kind`, `polygon`) are what an area means in play (see "Zones"); the props
 stage reads the `player_spawn` ones. The format and validator are documented in
-`pipeline/src/drycastle_pipeline/edits.py`. Entries for parcels that no longer exist are skipped
+`pipeline/src/drycastle_pipeline/edits/schema.py`. Entries for parcels that no longer exist are skipped
 with a warning; schema errors fail the stage.
 
 **Spawns**: `out/village/map/spawns.json` has seeded points inside the `player_spawn` zones only (see "Zones"),
 inside the terrain and clear of buildings, trees and water, with elevation, `kind` (`zone`, or `random` on a map without a
 spawn zone), `zone` (the id of the zone) and chunk index. No road points.
 
-**Street lamps** (`lamps.py`, run by the props stage, `make props`): `data/village/work/lamps.json` holds
+**Street lamps** (`roads/lamps.py`, run by the props stage, `make props`): `data/village/work/lamps.json` holds
 one point per lamp (`id` `L-NNNN`, `x`, `y`, `z` elevation, `source` `osm` or `rule`, `osm_id`,
 `highway`, `parcel`, `chunk`). OSM `highway=street_lamp` and `man_made=street_lamp` nodes are in the
 Overpass query and in `normalised/street_lamps.geojson`; each one is kept if it is inside the terrain
@@ -394,14 +394,14 @@ file is deleted; a loader that does not know it, or a map without it, means "no 
 One entry per section (a straight piece of at most `props.fences.section_m`, in parcel ID order, along each fence line in order):
 `a` and `b` its two end points (`[x, y]`, local metres as `parcels.json`), `za` and `zb` the ground elevation under them (as
 `terrain.json`), `height_m` the effective fence height (the section's own for a custom fence, else `props.fences.height_m`),
-`type` the effective fence type (`picket`, `wire`, `brick_red`, ... as `edits.py` `FENCE_TYPES`) or `null` for the plain box,
+`type` the effective fence type (`picket`, `wire`, `brick_red`, ... as `edits/schema.py` `FENCE_TYPES`) or `null` for the plain box,
 `parcel` the owning parcel and `group` the property group of that parcel (`G-NNNN`, as in `groups.json`) or `null`. A group's fence
 is one line round the members' outer edge, each piece owned by its member parcel. The gate gap and the stretches
 cleared of buildings and roads are simply missing: the sections are the fence that stands. `make parcel-run` (the editor's live
 regeneration) does not rewrite it; run `make map-update` (or `make props export`) after changing fences.
 
-**Satellite dishes** (`dishes.py`, `scripts/make_satellite_dish_model.py`; the Thieves event steals them, `docs/events/thieves/06-dishes.md`).
-The model is a generated household dish, 0.7 m across, on a short wall arm (`python3 -I scripts/make_satellite_dish_model.py`
+**Satellite dishes** (`edits/dishes.py`, `scripts/models/make_satellite_dish_model.py`; the Thieves event steals them, `docs/events/thieves/06-dishes.md`).
+The model is a generated household dish, 0.7 m across, on a short wall arm (`python3 -I scripts/models/make_satellite_dish_model.py`
 rebuilds `assets/drycastle-generated-models/satellite_dish.glb`, byte for byte; the asset `pack:drycastle-generated-models/satellite_dish`
 is in `assets/manifest.json`, category `other` so the editor's palette offers it, CC0 like the pack's other models). Its origin is the
 point of the wall where the arm leaves it, glTF y up and **+X out of the wall**, so a placed dish's `rotation_deg` is the way its wall
@@ -413,8 +413,8 @@ placed object the editor can see, move and delete, and `objects.json` gets it wi
 
 ```
 cd pipeline
-uv run python -m drycastle_pipeline.dishes --dry-run      # what it would do (--chance P overrides dish_chance)
-uv run python -m drycastle_pipeline.dishes                # appends the dishes to config/edits.json
+uv run python -m drycastle_pipeline.edits.dishes --dry-run      # what it would do (--chance P overrides dish_chance)
+uv run python -m drycastle_pipeline.edits.dishes                # appends the dishes to config/edits.json
 ```
 
 Each dwelling (`area:house`, `area:large`, `type:commercial`; not hand-modelled landmarks) has a chance `dishes.dish_chance` (rules.yaml,
@@ -456,7 +456,7 @@ no UV2. It is written by `export.to_trimesh` from `Mesh.bases` (set by `propmesh
 `_UV2` by `export.export_glb`, which every GLB that may hold trees (chunks, `parcel-run --glb`) goes through.
 
 **Ground objects (`ground_objects.json`, map 0.13.0, `files.ground_objects`; `props.ground_objects` in `rules.yaml`).** Objects
-on the forest floor (all solid but the fallen logs, #359), placed by the props stage (`groundobjects.py`, seeded per 25 m cell of the canopy mask, so reruns are identical;
+on the forest floor (all solid but the fallen logs, #359), placed by the props stage (`props/groundobjects.py`, seeded per 25 m cell of the canopy mask, so reruns are identical;
 `props.json` carries them under `ground_objects`). Only on the canopy of the orthophoto that lies on ground of a `ground_kinds` type
 (forest), never on a property (building plot or garden), nor within the clearances of a building, road or path, placed object or
 water, never within `trunk_clearance_m` of a tree trunk, and never on another ground object. Densities are per hectare of canopy and
@@ -487,15 +487,15 @@ mesh, the file and the solids alike. Collision (`ShooterCore/Colliders/GroundObj
 one static body per chunk and surface (wood: logs, stumps, plates; rock: boulders; ground: anthills and burrows, a square frustum inside the cone, 0.55 and 0.7 of the height). Walking into a ledge up to `MoveConsts.StepHeight`
 (0.3 m) lifts the player onto it, so a log thinner than about 0.35 m is stepped over; thicker logs, stumps and boulders are jumped onto
 (jump peak about 1.1 m) and stood on (flat tops). The collider and the mesh are checked against each other by
-`tests/test_ground_objects.py` and `GroundObjectColliderTests` through `fixtures/ground_object_parity.json`
-(`UPDATE_GROUND_PARITY=1 uv run pytest tests/test_ground_objects.py` rewrites it).
+`tests/props/test_ground_objects.py` and `GroundObjectColliderTests` through `fixtures/ground_object_parity.json`
+(`UPDATE_GROUND_PARITY=1 uv run pytest tests/props/test_ground_objects.py` rewrites it).
 
 ## Ground patches (preview and water)
 
 A ground patch (`ground_patches` in `edits.json`, see "Ground patches" under "Parcels and ground areas") is ground of one type in
 the baked map: the parcels stage makes a ground area of it, so the terrain colour, the detail and the trees follow on the next
 full run and the chunk files hold no node for it. Two things come from the patch outside of that, both built by
-`patches.py` with the same code (so what is hot-reloaded equals what is baked):
+`ground/patches.py` with the same code (so what is hot-reloaded equals what is baked):
 
 * **Preview** (hot reload). Before the full run the editor shows a patch as one flat mesh in the first colour of its type: the polygon is cut along the terrain mesh
   triangles and, where it covers a road ribbon, along the ribbon outline, so the edges are exact and
@@ -529,7 +529,7 @@ every patch overlapping a named one, whose visible area changes with it), `trian
 ground something to look at. It reads `parcels`, `buildings`, `roads`, `terrain`, `props` (fences, trees), `objects`
 and `edits.json` (water patches), and writes `data/village/work/detail.json` (clutter), `detail_patches.npy` and
 `detail_patches.json` (patch triangles). `python -m drycastle_pipeline detail --work DIR` reads and writes another work
-directory (experiments). The module is `detail.py`; every number is in the `detail` section of `rules.yaml`.
+directory (experiments). The module is `detail/detail.py`; every number is in the `detail` section of `rules.yaml`.
 
 **Area types and recipes.** `detail.area_type(parcel)` says what kind of ground a parcel is and so which recipe runs:
 `garden` (parcel kinds `garden` and `building_plot`), `field` (`other`), `forest`, `road`, or nothing (`water`). It is
@@ -567,7 +567,7 @@ objects (a circle of half the footprint diagonal plus 0.3 m), water patches and 
   before, 399k after (+56k: mud and puddles of the plain forest +17k, the swamp floor +39k; of the 399k the swamp base is 42k, mud 26k, puddle 6k).
 * **village** (village ground: street sides, greens): grass on all of it beside the OSM carriageway, tufts along the asphalt edge,
   pebbles on the gravel.
-* **dike** (`dike.py`, `detail.dike` in `rules.yaml`; the parcels P-0073, P-0821 and P-0805 are the earth dike north of the village, whatever
+* **dike** (`detail/dike.py`, `detail.dike` in `rules.yaml`; the parcels P-0073, P-0821 and P-0805 are the earth dike north of the village, whatever
   their kind, and `clips` names parcels of which only a part is: the ground of P-1057 and of P-1021 within 12 m of the dike's road, of P-1059 within 12 m of its track, and of P-0847 and
   P-0089 within 12 m of the service road that continues it north through H to G, the rest keeps its recipe): the parcel is the dike and the terrain already holds the hill, so nothing is shaped here. The road edges inside it get a
   gravel track (patch layer `dike_track`, texture `dike_gravel`: fine light pebbles with hard-edged grass patches, 8 m x 4 m tile)
@@ -578,7 +578,7 @@ objects (a circle of half the footprint diagonal plus 0.3 m), water patches and 
   on the track's grass patches (found by reading the texture). Only the part of a parcel inside the terrain coverage gets detail (of
   P-0821's 73,000 m2 about 7,700 m2). About 30k patch triangles and 14k instances for the three parcels; `tall_grass` reaches its
   per-chunk cap in the busiest chunk of P-0073.
-* **crop** (`crop.py`, `detail.crop` in `rules.yaml`; ground types `crop_grain`, `crop_corn`, `crop_potato`, `crop_rapeseed`,
+* **crop** (`detail/crop.py`, `detail.crop` in `rules.yaml`; ground types `crop_grain`, `crop_corn`, `crop_potato`, `crop_rapeseed`,
   `crop_bare`, drawn only: a ground patch of one of them is a crop field, painted in the Ground tool; an unpainted field keeps
   `field`; the five types hold their own numbers as `detail` over `detail.crop`). Cosmetic: nothing collides or blocks a bullet.
   Ground: flat tones, or a texture turned along the rows (potato `soil_rows`, bare `dirt`). **Border zone**: `edge.feather_m`
@@ -605,9 +605,9 @@ objects (a circle of half the footprint diagonal plus 0.3 m), water patches and 
   the row direction (or a jittered grid), ~4 to 10 per 100 m2; artifacts are 2 to 10 per patch (`per_ha` 4, none under 400 m2),
   clustered at a corner, on the edge or alone inside, plants keep `radius_m` clear. No new instance kinds.
   The Rust engine runs the recipe too (`rust/detail/src/crop.rs`, in parallel with the others, written after them in
-  `detail_patches.npy`, and writes `detail_crops.json`): a line-by-line port of `crop.py` that reproduces Python's
+  `detail_patches.npy`, and writes `detail_crops.json`): a line-by-line port of `detail/crop.py` that reproduces Python's
   `random.Random`, numpy's generator (PCG64) and `round` bit for bit, so for the same inputs it gives the same instances as
-  the Python twin (`tests/test_crop_rust.py`). The patches are draped in 24-cell tiles on all cores. `crop.py` stays as the twin
+  the Python twin (`tests/detail/test_crop_rust.py`). The patches are draped in 24-cell tiles on all cores. `detail/crop.py` stays as the twin
   of the tools (`parcel-run`, `patch-run`, previews) and the reference of the tests: change one, change the other.
   **`crops.json`** (map `files.crops`, copied from `detail_crops.json`; only maps with a crop patch): `{format_version: 1, axes,
   chunk_size_m, kinds: {kind: {role: plant|artifact, asset | synty: [Farm pack prefab names, full `SM_...`]}}, chunks: {"ix_iy": {kind: [[x, y, z, rot,
@@ -645,7 +645,7 @@ Coordinates have two decimals; `rot` turns about the vertical axis counter-clock
 a chunk with no instance is absent. `clutter_meshes.glb` (`files.clutter_meshes`) has one node per kind named as the kind
 (`mesh`), flat vertex colours (a few shades of the kind's palette across its faces; an instance varies only in turn and
 scale), glTF axes (Y up), at scale 1 in metres, standing on y = 0 with its middle on the origin, 4 to 27 triangles
-(`detail_meshes.py`: tuft 15, flower 27, pebble 8, rock 18, leaf 4, stick 12, fern 18). The game draws them as one
+(`detail/meshes.py`: tuft 15, flower 27, pebble 8, rock 18, leaf 4, stick 12, fern 18). The game draws them as one
 instanced mesh per chunk and kind, near the player only; the headless server ignores them. Nothing in the clutter is solid.
 
 Budgets: `detail.caps_per_chunk` caps each kind per chunk (surplus instances go by a hash of the position, so the result is
@@ -655,10 +655,10 @@ purpose: a stored instance costs about 33 bytes, so the open land (150 ha) canno
 wanted, generate it near the player at run time from a per-chunk density instead.
 
 All random choices are seeded with `sha256("<parcel id>:detail:<purpose>")` (verges with the road edge ID), so reruns give
-identical files. `uv run python -m drycastle_pipeline.detail_preview --parcel P-0637 ` draws the detail of
+identical files. `uv run python -m drycastle_pipeline.preview.detail --parcel P-0637 ` draws the detail of
 one parcel top-down from the real patches, textures and clutter meshes into `out/detail/`.
 
-**Rust engine** (`pipeline/rust/detail`, `detail_rust.py`). The Python stage takes about 250 s on the full village map (the big
+**Rust engine** (`pipeline/rust/detail`, `detail/rust.py`). The Python stage takes about 250 s on the full village map (the big
 ground areas and the dike are most of it: shapely calls on 100 ha polygons, a Poisson-disc sweep and point-in-polygon tests per
 point); the Rust engine does the same work on all cores in 7 to 8 s (26 s on one core) and writes the same four files
 (`detail.json`, `detail_patches.npy`, `detail_patches.json`, `detail_meadow.bin`, formats unchanged, so the export and the game read
@@ -714,7 +714,7 @@ implemented.
 a density raster, `work/detail_meadow.bin`, copied by the export as `meadow.bin` (`files.meadow`): 2 m cells, one byte per cell per layer (tuft, flower, fern, pebble,
 litter, floor), zlib per chunk, about 0.7 MB for the village. A cell is on it only where its whole jitter window is free ground (no buildings, fences, roads, objects, water patches)
 and the density comes from the recipe's zones (edge band, tone and litter patches, bare soil, near a trunk) times smooth noise; see `detail.meadow` in `rules.yaml` and
-`meadow.py`. The game generates the instances at run time (`docs/viewer-and-editor.md`, "Meadow clutter"). `detail_preview --meadow` draws what the game would generate for a parcel.
+`detail/meadow.py`. The game generates the instances at run time (`docs/viewer-and-editor.md`, "Meadow clutter"). `detail_preview --meadow` draws what the game would generate for a parcel.
 
 **Clumps and species zones (map 0.10.0, `meadow.bin` format 3).** Growth is patchy, not even: the meadow density is multiplied by a smoothed noise per layer
 (`detail.meadow.layers.<name>.clump`, patches of `clump_m`), and the stored garden tufts likewise (`detail.clutter.tuft.clump`); where nobody mows (within `unmown_m` of a fence, a wall or a
@@ -722,9 +722,9 @@ building edge) tufts are thicker (`unmown`). The raster has a *zone byte* per ce
 Voronoi patch of `patch_m` ≈ 3 to 8 m, picked from the shares in `zones.<type>.mixes`; the wet mix beside water, the unmown mix where nobody mows, the dry mix in half of a field's edge band, the swamp mix (9) on swamp ground, over all the others), the low
 nibble the dryness (8 = neutral, 10 tint units a step: drier at a field's edge, fresher beside water, fences and in swamp). Mix 9, `swamp` (`zones.<type>.swamp_mix`): `tuft` is reed and tall grass,
 `flower` buttercups, `litter` leaves and sticks, `floor` moss mounds and branches (the fern and pebble layers keep their kinds). A puddle patch gets nothing at all. A layer lists per mix which kinds it makes and in what shares (a mix names only the
-layers it changes), so a patch of one mix grows one set of species with strays. `meadow.bin` has a kind table (with the tint flag), the mixes per layer, and the zone plane after the layers (format in `meadow.py`).
+layers it changes), so a patch of one mix grows one set of species with strays. `meadow.bin` has a kind table (with the tint flag), the mixes per layer, and the zone plane after the layers (format in `detail/meadow.py`).
 
-**Kinds (map 0.10.0).** `clutter_meshes.glb` has 28 tiny meshes (3 to 30 triangles, `detail_meshes.py`; `detail_preview --kinds` draws a contact sheet to `out/detail/kinds.png`):
+**Kinds (map 0.10.0).** `clutter_meshes.glb` has 28 tiny meshes (3 to 30 triangles, `detail/meshes.py`; `detail_preview --kinds` draws a contact sheet to `out/detail/kinds.png`):
 the grasses `tuft`, `tall_grass` (seed heads), `straw` (dry), `clover` (a flat mat), `reed` (by water) and `weed` (broad leaves), `fern`; the wild flowers `dandelion` (with a puffball), `daisy`,
 `red_clover`, `buttercup`, `poppy`, `cornflower`, `yarrow` (umbels); the garden flowers `tulip`, `sunflower`, `spike` (hollyhock or lupin) and `rose` (a bush); and `pebble`, `rock`, `leaf`, `stick`
 (and `flower`, the first mixed-flower mesh, which no recipe uses any more); and the forest floor (`detail_meshes.FOREST_FLOOR`, meadow only): `mushroom` (three caps), `branch` (1.3 m, lying, 30 triangles), `moss_mound` (0.7 m dome), `fern_big` (0.7 m, tintable) and `stump_small` (0.27 m, rotten). Wild and garden flowers are kept apart: a yard (garden and plot recipes) grows garden flowers only, in one-species clusters
@@ -765,7 +765,7 @@ attribution, input hashes including the work files). The output has no timestamp
 byte-identical for identical input.
 
 **Bunkers (`bunkers.json`).** The three bunkers are buildings with `model: bunker` in `config/overrides.yaml`
-(`pipeline/src/drycastle_pipeline/bunker.py`, ADR 0009): one room behind 0.5 m walls, an open doorway on the wall facing
+(`pipeline/src/drycastle_pipeline/buildings/landmarks/bunker.py`, ADR 0009): one room behind 0.5 m walls, an open doorway on the wall facing
 `model_axis`, firing slits that are real openings, and three more rooms under it (2.4 m floor to floor), one per floor on the
 same footprint. A 1 m square hatch in each floor, in a different place on each, leads down; a ladder hangs on one edge of
 it. The ground floor has no collision (a player stands on the flattened terrain, so the terrain collision round a bunker is
@@ -796,7 +796,7 @@ The surface is the median terrain height along the parcel outline (the shoreline
 centimetres as base64 of little-endian uint16, rows from the south, 0 outside the outline. `flow` is reserved (an empty
 list until flow is added). A water parcel or ground area with no terrain under its outline gets no body (a warning is printed).
 
-*The natural bed (`bed.py`).* Each body's depth comes from its outline alone (seeded, so the same map gives the same
+*The natural bed (`terrain/bed.py`).* Each body's depth comes from its outline alone (seeded, so the same map gives the same
 bed): depth grows from the bank over a shelf (banks shelve), a river (`water.river_ids` in `rules.yaml`, or any body at least
 `river_min_length_m` (400 m) long, since a water ground area's ID `A-NNNN` moves with the
 inputs and cannot name the Morava) gets pools and riffles from a seeded value-noise pattern along its main axis (mid-channel 2.5 m, pools to

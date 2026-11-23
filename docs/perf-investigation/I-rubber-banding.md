@@ -90,7 +90,7 @@ Effect on the picture (arithmetic, not a pixel measurement): at 60 fps a correct
 
 The server tick estimate is a filtered offset: each snapshot gives a sample `tick / 30 - arrival`, and the offset moves by 1/8 of the difference (`RenderClock.Gain`). The drawn tick is `max(previous, (now + offset) * 30 - delay)`: when the estimate moves back (a late packet), the drawn tick holds and does not snap back. All four render sites (players, cars, aircraft, animals) call `RenderTickNow()`.
 
-Consequence: the entity holds still for the lateness beyond the buffer instead of moving back. Measured: backsteps 0 in every scenario; freeze draws 0 / 0 / 120 (clean / rtt100 / rtt200) in the 3-scenario run and 0 / 15 (clean / rtt100) in the final gate run, so the freeze count rises at rtt200 (75 before) while the backward jump disappears. That is the trade: a short freeze instead of a 2-tick snap. Unit tests in `godot/ShooterCore.Tests/RenderClockTests.cs` (4 tests: steady jittered arrivals advance at 30/s and never backwards; a 200 ms late packet holds and does not snap; the drawn tick re-joins the schedule; the first sample syncs).
+Consequence: the entity holds still for the lateness beyond the buffer instead of moving back. Measured: backsteps 0 in every scenario; freeze draws 0 / 0 / 120 (clean / rtt100 / rtt200) in the 3-scenario run and 0 / 15 (clean / rtt100) in the final gate run, so the freeze count rises at rtt200 (75 before) while the backward jump disappears. That is the trade: a short freeze instead of a 2-tick snap. Unit tests in `godot/ShooterCore.Tests/Net/RenderClockTests.cs` (4 tests: steady jittered arrivals advance at 30/s and never backwards; a 200 ms late packet holds and does not snap; the drawn tick re-joins the schedule; the first sample syncs).
 
 ### 3.3 Predicted vehicles fade yaw, pitch and roll (`NetClient.Drive.cs`, `NetClient.Flight.cs`)
 
@@ -207,7 +207,7 @@ Two ways of setting the flag were tried in the probe. A zero-velocity move did n
 
 ### 8.2 Input starvation: measured, not a correction source, no fix
 
-**Test (pure, `godot/ShooterCore.Tests/StarvationTests.cs`, 4 tests, all pass).** A model of the server's queue (one input per tick, `CatchUpBudget`, the 8-input cap, the highest sequence received, three inputs per packet, every 25th packet dropped, so the server runs empty on that tick) runs the shared movement step against a client predicting every input at once. The check is the state after each acknowledged sequence on the server against the prediction for the same sequence.
+**Test (pure, `godot/ShooterCore.Tests/Movement/StarvationTests.cs`, 4 tests, all pass).** A model of the server's queue (one input per tick, `CatchUpBudget`, the 8-input cap, the highest sequence received, three inputs per packet, every 25th packet dropped, so the server runs empty on that tick) runs the shared movement step against a client predicting every input at once. The check is the state after each acknowledged sequence on the server against the prediction for the same sequence.
 
 - A starved server (empty queue on every 25th tick): the largest divergence at any acknowledged sequence is below 0.1 mm. Starvation does not create a correction.
 - No starvation: exact.

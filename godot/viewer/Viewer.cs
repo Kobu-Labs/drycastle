@@ -160,7 +160,7 @@ public partial class Viewer : Node3D
         if (string.IsNullOrEmpty(_map.WaterJson)) return;
         try
         {
-            WaterSurfaces.Attach(this, Drycastle.ShooterCore.Water.Parse(_map.WaterJson));
+            WaterSurfaces.Attach(this, Drycastle.ShooterCore.Waters.Water.Parse(_map.WaterJson));
         }
         catch (Exception e)
         {

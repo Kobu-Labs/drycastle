@@ -1,7 +1,10 @@
 using System.Diagnostics;
 using System.Text;
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Waters;
 
 namespace Drycastle.Shooter;
 

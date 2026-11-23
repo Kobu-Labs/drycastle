@@ -8,7 +8,7 @@
 #   note    free text
 # An entry that matches no tree is reported as a warning by the props stage.
 remove:
-  # The mechanic garage (ticket #320, godot/ShooterCore/MechanicGarage.cs): two detected trees stand on its footprint.
+  # The mechanic garage (ticket #320, godot/ShooterCore/Buildings/MechanicGarage.cs): two detected trees stand on its footprint.
   - at: [-589023.306, -1250160.726]
     radius: 0.5
     note: mechanic garage, south of its middle

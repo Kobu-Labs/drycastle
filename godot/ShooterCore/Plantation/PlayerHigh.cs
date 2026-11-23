@@ -1,4 +1,8 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Status;
+
+namespace Drycastle.ShooterCore.Plantation;
 
 /// <summary>Whether a player is high (GLOSSARY "High"): the plantation's effect, server-owned.</summary>
 public enum HighState : byte { Sober, High }

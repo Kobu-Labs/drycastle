@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Minimap;
 
 /// <summary>
 /// Where the map's top-down render (<c>tactical-map.png</c>, made by the viewer's <c>--topdown</c>) sits on the ground, from its

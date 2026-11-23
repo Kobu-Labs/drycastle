@@ -1,4 +1,9 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+
+namespace Drycastle.ShooterCore.Turrets;
 
 /// <summary>
 /// The turret killstreak (killstreaks.json id "turret", 6 kills). Using it spawns a placing ghost that follows the owner's

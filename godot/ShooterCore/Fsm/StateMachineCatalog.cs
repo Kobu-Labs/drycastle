@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Fsm;
 
 /// <summary>
 /// Every state machine in the game that has a <see cref="StateMachineSpec{TState}"/>. Nothing to register: any <c>static</c> field of a type in this assembly

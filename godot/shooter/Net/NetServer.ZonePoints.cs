@@ -1,5 +1,5 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Scenery;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;

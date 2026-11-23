@@ -1,4 +1,5 @@
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Events;
 
 namespace Drycastle.Shooter;
 

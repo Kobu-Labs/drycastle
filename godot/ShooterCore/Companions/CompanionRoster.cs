@@ -1,6 +1,9 @@
 using System.Buffers.Binary;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Companions;
 
 /// <summary>
 /// The Companions one player can have out and the one that is out (GLOSSARY "Companion"): what the picker on the Equipment screen shows. The server builds it

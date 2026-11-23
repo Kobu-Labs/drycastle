@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>
 /// One player's hit target as it stood at the end of a tick. <see cref="Valid"/> is false when the player was not a target then (dead, in a seat,

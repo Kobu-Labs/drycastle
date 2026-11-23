@@ -3,7 +3,8 @@ using System.Globalization;
 using System.Text;
 using Godot;
 using FileAccess = Godot.FileAccess;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;

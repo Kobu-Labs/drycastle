@@ -1,5 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
 
 namespace Drycastle.Shooter;
 
@@ -7,7 +9,7 @@ namespace Drycastle.Shooter;
 /// The Bigfoot on the client (issue #264): the world entity of type <see cref="BigfootRules.TypeId"/> drawn as the giant (bigfoot.json), the logs it
 /// throws (type <see cref="BigfootRules.TrunkTypeId"/>), its one-shot effects (<see cref="EventKind.BigfootFx"/>: the shockwave ring, the sounds, the shake), the
 /// footprints that lead to its corpse (<see cref="EventKind.BigfootTrail"/>) and the giant's corpse itself (a corpse owned by <see cref="BigfootRules.TargetId"/>).
-/// The model (scripts/make_bigfoot_model.py) has a clip per act, a flinch and a roar (<see cref="BigfootRules.Clips"/>): <see cref="ClipFor"/> picks one and
+/// The model (scripts/models/make_bigfoot_model.py) has a clip per act, a flinch and a roar (<see cref="BigfootRules.Clips"/>): <see cref="ClipFor"/> picks one and
 /// stretches a wind-up over its act's time, Walk and Run play at the speed the giant moves (<see cref="PaceGait"/>).
 /// The server owns everything: a client only shows it, and stops predicting its own body while the Bigfoot holds it (<see cref="_heldByBigfoot"/>) or its
 /// vehicle while the Bigfoot throws it (<see cref="_thrownCars"/>).

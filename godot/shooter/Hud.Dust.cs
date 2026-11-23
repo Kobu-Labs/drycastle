@@ -5,7 +5,7 @@ namespace Drycastle.Shooter;
 /// <summary>
 /// Dust in the eyes (#345): one full-screen procedural layer (<c>shaders/dust_veil.gdshader</c>) under every other HUD element, so the HUD stays readable
 /// while the world behind it is hidden; mouse filter ignore. One knob: <see cref="SetDust"/> with how much of the view is lost, 0..1
-/// (<see cref="Drycastle.ShooterCore.DustField.Veil"/>). It is the world's dust seen from inside, not a UI cue: the blast's sound and shake come with it.
+/// (<see cref="Drycastle.ShooterCore.Effects.DustField.Veil"/>). It is the world's dust seen from inside, not a UI cue: the blast's sound and shake come with it.
 /// The dust holds still under reduce motion. Written when a value changes; nothing is built or allocated per frame.
 /// </summary>
 public partial class Hud

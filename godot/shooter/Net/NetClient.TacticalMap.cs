@@ -1,5 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Sandbox;
 
 namespace Drycastle.Shooter;
 

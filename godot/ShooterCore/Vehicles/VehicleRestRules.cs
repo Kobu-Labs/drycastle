@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// When a driverless flying vehicle can stop being stepped (perf, the same rest-and-wake rule as <see cref="ParkedRules"/> for the ground cars).

@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>The reel as a box in machine space (#331): <see cref="CentreForwardM"/> ahead of the origin, <see cref="HalfWidthM"/> to each side, <see cref="HalfDepthM"/> fore and aft, from <see cref="BottomM"/> to <see cref="TopM"/> above the origin. Only it cuts crops and catches players; the body does neither.</summary>
 public readonly record struct ReelBox(float CentreForwardM, float HalfWidthM, float HalfDepthM, float BottomM, float TopM)

@@ -1,5 +1,6 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Buildings;
+using Drycastle.ShooterCore.Net;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;

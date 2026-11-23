@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>Where a server-side vehicle is between full health and its return after a blast. The machine is <see cref="VehicleLifecycle.Spec"/>.</summary>
 public enum VehicleLife : byte

@@ -101,7 +101,7 @@ public sealed partial class MapLoader
         if (!Directory.Exists(mapDir)) throw new DirectoryNotFoundException(mapDir);
 
         var manifestBytes = File.ReadAllBytes(Path.Combine(mapDir, "manifest.json"));
-        BuildHash = Drycastle.ShooterCore.Wire.Fnv1a64(manifestBytes);
+        BuildHash = Drycastle.ShooterCore.Net.Wire.Fnv1a64(manifestBytes);
         using var manifest = JsonDocument.Parse(manifestBytes);
         MapVersion = manifest.RootElement.GetProperty("map_version").GetString() ?? "";
         if (manifest.RootElement.TryGetProperty("edit_defaults", out var ed)) EditDefaults = EditDefaults.Read(ed);

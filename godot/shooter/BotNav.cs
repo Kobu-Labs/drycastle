@@ -4,7 +4,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Movement;
 
 namespace Drycastle.Shooter;
 

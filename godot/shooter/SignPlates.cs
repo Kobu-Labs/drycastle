@@ -1,12 +1,12 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Scenery;
 
 namespace Drycastle.Shooter;
 
 /// <summary>
 /// The shootable plates of the placed road signs on a client (ADR 0039, GLOSSARY "Road sign"). The server owns each plate's state
 /// (<see cref="BreakableSigns"/>) and tells the changes; this bends and straightens the "Plate" node of the sign's model (the placed object's own node, found
-/// by object id). A plate hangs from its upper clamp, which is the node's origin (scripts/make_road_sign_models.py): bent is a roll about it (the side from
+/// by object id). A plate hangs from its upper clamp, which is the node's origin (scripts/models/make_road_sign_models.py): bent is a roll about it (the side from
 /// <see cref="SignBend.Side"/>), a tip out at the bottom and a small sag, the same on every client; whole puts the node back as the model has it. Visual only.
 /// The plate list is the map's (MapLoader.ObjectSignPlates()), the server's list, and its index is the wire's.
 /// </summary>

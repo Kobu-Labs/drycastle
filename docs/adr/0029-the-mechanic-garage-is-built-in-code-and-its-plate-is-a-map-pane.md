@@ -8,7 +8,7 @@ Ticket #320. A sealed OSB shed on the garden plots by road E-0101 (sketch L1) wi
 
 **3. Dark, flicker, on.** `MechanicGarageLights` (machine `MechanicGarage.Lights`: Sealed, Dark, Flicker, On) is client only and started by the client when it sees the plate shatter; a joiner that arrives after sees the lights on. The room is dark because the ambient light is global: a black film over the opening (seen from the road, back-face culled from inside) and `DayNightCycle.IndoorExtra` (inside, the bunkers' mechanism) turn it down. In the flicker only the tubes' emission flashes, the real lights stay off, so the Golf is not lit; then two unshadowed omni lights ramp up (dark 0.5 s, flicker 1.3 s, ramp 0.5 s). Walls do not overlap and end inside the roof slab, so no faces share a plane.
 
-**4. Look.** OSB is a seeded generated texture (a few hundred ms once), the roof a corrugated mesh in sheets of three rubber colours; no model files. Interior props are Synty Construction models from the private pack (`scripts/construction_pack_glb.py`, 26 models, `SyntyLib` with the atlas); without it the solid props are boxes.
+**4. Look.** OSB is a seeded generated texture (a few hundred ms once), the roof a corrugated mesh in sheets of three rubber colours; no model files. Interior props are Synty Construction models from the private pack (`scripts/packs/construction_pack_glb.py`, 26 models, `SyntyLib` with the atlas); without it the solid props are boxes.
 
 **5. The Golf.** Its one fixed spot moved into the garage (nose out of the plate, `vehicles.json`, held to the site by a test), and it is built 1.25 times a real Golf (#292), so the garage is sized for 5.35 x 2.25 m.
 

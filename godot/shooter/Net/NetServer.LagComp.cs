@@ -1,6 +1,10 @@
 using System.Diagnostics;
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;

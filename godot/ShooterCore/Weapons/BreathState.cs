@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>
 /// Sniper breath hold (shooter v2 #113), shared by server and client. While scoped, holding the breath key (the sprint

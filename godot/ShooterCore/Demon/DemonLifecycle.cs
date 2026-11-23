@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Demon;
 
 /// <summary>
 /// Where the demon of the Holy Mass is in its life, as the server runs it. Three enums describe one lifecycle: this one (the server's stages, the scripted

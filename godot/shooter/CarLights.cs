@@ -1,5 +1,5 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Vehicles;
 
 namespace Drycastle.Shooter;
 
@@ -28,7 +28,7 @@ public sealed class CarLights
     const float HeadOnEnergy = 6f, HeadOffEnergy = 0.3f, TailEnergy = 0.5f, TailOnEnergy = 4f, BrakeEnergy = DayNightCycle.GlowCap;
     /// <summary>Model lamp materials: tail and reverse lamps get one colour here (the glTF emissive factors differ per model: tail 0.17 Synty, 0.5 Golf), so one set of energies fits every vehicle; tails use the fallback lens energies and are off with the lights off; reverse lamps bloom only while reversing.</summary>
     const float ModelReverseOn = 6f;
-    /// <summary>Material names of the lamps a model may carry (assets/README.md, scripts/make_golf_mk2_model.py).</summary>
+    /// <summary>Material names of the lamps a model may carry (assets/README.md, scripts/models/make_golf_mk2_model.py).</summary>
     public const string HeadLensMaterial = "Emissive warm headlight lens", TailLampMaterial = "Emissive red tail lamps",
         ReverseLampMaterial = "Emissive reverse lamps", IndicatorMaterial = "Emissive amber indicators";
     static readonly Color HeadColour = new(1f, 0.95f, 0.8f), TailColour = new(1f, 0.08f, 0.04f), ReverseColour = new(0.95f, 1f, 0.9f);

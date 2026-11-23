@@ -1,5 +1,5 @@
 using System.Numerics;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
 
 namespace Drycastle.MapLoader;
 

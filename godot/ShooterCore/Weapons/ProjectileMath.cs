@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Weapons;
 
 public enum ImpactKind { None, World, Player }
 

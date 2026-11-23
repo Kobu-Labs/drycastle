@@ -1,5 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
 using Drycastle.ShooterServer.Persistence;
 
 namespace Drycastle.Shooter;

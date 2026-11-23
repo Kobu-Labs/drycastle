@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+
+namespace Drycastle.ShooterCore.Citizens;
 
 /// <summary>
 /// One look of a citizen's body (holy_mass.json, citizens.models): the model and how it is fitted and recoloured. This is the swap

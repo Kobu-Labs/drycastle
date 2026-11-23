@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// The electrocution of a Thief aloft (docs/events/thieves/07): when it reaches the top of a climb the target's kind may strike it (<see cref="IStealSource.AloftHazard"/>, rolled once, through

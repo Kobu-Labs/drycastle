@@ -1,5 +1,10 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Plantation;
+using Drycastle.ShooterCore.RozhlasFeed;
+using Drycastle.ShooterCore.Status;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;

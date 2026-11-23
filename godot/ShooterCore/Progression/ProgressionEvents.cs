@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Progression;
 
 /// <summary>One line of the post-match XP summary: why, and how much.</summary>
 public readonly record struct XpLine(XpReason Reason, int Amount);

@@ -1,4 +1,5 @@
-namespace Drycastle.ShooterCore;
+
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>The weapon ids a hunt carries that are not in weapons.json.</summary>
 public static class HuntWeapons

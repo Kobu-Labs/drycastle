@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Net;
 
 /// <summary>Where the render clock is: waiting for its first snapshot, following the estimate, or holding the drawn tick through a late arrival.</summary>
 public enum RenderClockState : byte { Unsynced, Tracking, Holding }

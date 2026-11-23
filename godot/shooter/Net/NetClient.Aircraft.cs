@@ -1,5 +1,7 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Flight;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
 
 namespace Drycastle.Shooter;
 

@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Camo;
 
 /// <summary>An RGB colour, one byte per channel.</summary>
 public readonly record struct Rgb(byte R, byte G, byte B);

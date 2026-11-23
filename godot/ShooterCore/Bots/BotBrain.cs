@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Movement;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Bots;
 
 /// <summary>The numbers that make a bot easier or harder. Starting values, to be playtested; a data file comes with the fill rules.</summary>
 public sealed record BotTuning

@@ -7,11 +7,11 @@ using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 /// <summary>
 /// Ground types of the user (edits.json `ground_types`; GLOSSARY "Ground type", ADR 0022): the model without any UI. A
 /// type is terrain only: its `attributes` (colours, recipe, detail, water; the fixed catalog below, mirror of pipeline
-/// `ground_attributes.py`) say how the ground looks; `osm` says which OSM land it takes. What a place means in play is a zone, not a type. The type table is the rules.yaml entries as the last
+/// `ground/attributes.py`) say how the ground looks; `osm` says which OSM land it takes. What a place means in play is a zone, not a type. The type table is the rules.yaml entries as the last
 /// build wrote them (parcels.json `ground_types[].rules`) with the overrides and additions of the edits laid over them, by
 /// the same merge rule as pipeline `ground.merge_ground_types`: a key of the edits entry overrides that key (dicts merge
 /// key by key, lists and values replace), an attribute set to null is dropped (the type stops carrying it), a new name is a
-/// new type after the others, `deleted: true` removes a type of the rules. The validation mirrors pipeline `edits.py`
+/// new type after the others, `deleted: true` removes a type of the rules. The validation mirrors pipeline `edits/schema.py`
 /// (`_check_ground_type`); what needs rules.yaml (the shipped detail sections) is checked by Python only.
 /// </summary>
 public static class GroundTypeEdits
@@ -24,7 +24,7 @@ public static class GroundTypeEdits
     public static readonly Regex OsmValueRx = new("^[A-Za-z0-9_:\\-]+$", RegexOptions.Compiled);
     public const string NewTypeColour = "#7aa860";
 
-    // ---- the attribute catalog (mirror of pipeline ground_attributes.py) ----
+    // ---- the attribute catalog (mirror of pipeline ground/attributes.py) ----
 
     public sealed record AttributeGroup(string Key, string Label, string Note);
 
@@ -258,9 +258,9 @@ public static class GroundTypeEdits
         _ => v.ToString() ?? "",
     };
 
-    // ---- validation (mirror of edits.py _check_ground_type) ----
+    // ---- validation (mirror of edits/schema.py _check_ground_type) ----
 
-    /// <summary>The attributes a type has once its entry is laid over the rules' (a null removes one): mirror of edits.py `_effective_attributes`.</summary>
+    /// <summary>The attributes a type has once its entry is laid over the rules' (a null removes one): mirror of edits/schema.py `_effective_attributes`.</summary>
     public static Obj EffectiveAttributes(string name, Obj entry)
     {
         var o = ObjectEdits.CloneObj(AttributesOf(RulesTypes.GetValueOrDefault(name)));
@@ -358,7 +358,7 @@ public static class GroundTypeEdits
 
     /// <summary>
     /// Whether the type of a ground patch exists and carries water (null: unknown, the editor has not been told the rules' types): mirror of the
-    /// patch check in edits.py. The rules' types come from the map (<see cref="RulesTypes"/>), the user's from <paramref name="edits"/> (`ground_types`);
+    /// patch check in edits/schema.py. The rules' types come from the map (<see cref="RulesTypes"/>), the user's from <paramref name="edits"/> (`ground_types`);
     /// a deleted type does not exist.
     /// </summary>
     public static (bool Exists, bool? Water) PatchType(string name, Obj? edits)

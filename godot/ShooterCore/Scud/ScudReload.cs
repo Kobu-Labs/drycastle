@@ -1,4 +1,8 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Wildlife;
+
+namespace Drycastle.ShooterCore.Scud;
 
 /// <summary>A rocket cart as the reload rules see it.</summary>
 public readonly record struct ScudCartCandidate(ushort Id, BodyBox Box, bool Loaded, bool Alive);

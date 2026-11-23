@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Godot;
-using SketchState = Drycastle.ShooterCore.EditorSketchState;
+using SketchState = Drycastle.ShooterCore.Editor.EditorSketchState;
 
 /// <summary>
 /// The Sketch tool: temporary marks on the ground that a prompt can name ("plant trees inside L1", "a lamp at A").
@@ -71,7 +71,7 @@ public partial class EditorMode
     string? _skHover;
     // Editor.Sketch (docs/state-machines.md): Drawing is entered with the first corner of a line and left when the draft ends; Idle and Selected follow the
     // selection (every change goes through the _skSelected setter) while no line is being drawn. Draft changes go through SkDraftAdd/SkDraftEnd only.
-    readonly Drycastle.ShooterCore.StateMachine<SketchState> _skFsm = new(Drycastle.ShooterCore.EditorMachines.SketchSpec);
+    readonly Drycastle.ShooterCore.Fsm.StateMachine<SketchState> _skFsm = new(Drycastle.ShooterCore.Editor.EditorMachines.SketchSpec);
     string? _skSel;
     string? _skSelected { get => _skSel; set { _skSel = value; SkRest(); } }
 
@@ -133,7 +133,7 @@ public partial class EditorMode
 
     static string Num(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
 
-    /// <summary>sketch.json: format_version 1, a version that goes up on every write, the sketch names and the marks (see pipeline/src/drycastle_pipeline/sketchfile.py).</summary>
+    /// <summary>sketch.json: format_version 1, a version that goes up on every write, the sketch names and the marks (see pipeline/src/drycastle_pipeline/edits/sketchfile.py).</summary>
     public static string BuildSketchJson(SketchDoc d, int version = 0)
     {
         var sb = new StringBuilder("{\"format_version\":1,\"lines\":[");

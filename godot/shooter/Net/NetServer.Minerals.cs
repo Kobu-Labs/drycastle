@@ -1,5 +1,8 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Mining;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Wildlife;
 using Drycastle.ShooterServer.Persistence;
 using NVec3 = System.Numerics.Vector3;
 

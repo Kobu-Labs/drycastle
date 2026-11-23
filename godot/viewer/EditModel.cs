@@ -7,7 +7,7 @@ using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
 
 /// <summary>
 /// The schema constants of edits.json that the editor needs, kept in this one place. They mirror
-/// pipeline/src/drycastle_pipeline/edits.py (FENCE_MODES, FENCE_TYPES, DEFAULT_FENCE_TYPE); the panel smoke
+/// pipeline/src/drycastle_pipeline/edits/schema.py (FENCE_MODES, FENCE_TYPES, DEFAULT_FENCE_TYPE); the panel smoke
 /// compares them with what Python prints, so a drift fails `make viewer-panel-smoke`. The colour of a type is a
 /// tint over its texture (picket, wire and concrete are near-white, so the colour is their paint).
 /// </summary>
@@ -29,7 +29,7 @@ public static class EditSchema
         new("brick_wall", 1.8, 0.3, "#ffffff"),  // the old name of brick_red
     };
 
-    /// <summary>Values of the fence `column` key (edits.py COLUMN_TYPES): the posts or piers, instead of the type's own.</summary>
+    /// <summary>Values of the fence `column` key (edits/schema.py COLUMN_TYPES): the posts or piers, instead of the type's own.</summary>
     public static readonly string[] ColumnTypes = { "none", "wood_post", "metal_post", "brick_red", "brick_white", "stone", "concrete" };
 
     public static IEnumerable<string> FenceTypeNames => FenceTypes.Select(t => t.Name);
@@ -48,7 +48,7 @@ public readonly record struct Gap(double X, double Y, double Width);
 /// <summary>
 /// The editable state of one fence entry (a parcel's or a group's). Null fields are "not set": the pipeline
 /// default applies. Custom-only fields are cleared when the mode is auto or none, so what ToEntry writes
-/// always passes the Python validator (edits.py `_check_fence`).
+/// always passes the Python validator (edits/schema.py `_check_fence`).
 /// </summary>
 public sealed class FenceDraft
 {
@@ -259,7 +259,7 @@ public static class EditModel
         entry[key] = value;
     }
 
-    // ---- the Python validator's rules for the piece the panel writes (edits.py _check_fence) ----
+    // ---- the Python validator's rules for the piece the panel writes (edits/schema.py _check_fence) ----
 
     static bool Positive(object? v) => FenceDraft.Number(v) is { } d && d > 0;
 

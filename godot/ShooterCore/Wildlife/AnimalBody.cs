@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Turrets;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>
 /// An animal's Body shape on the ground plane (ADR 0028, GLOSSARY "Body shape"): a box centred <c>ahead</c> of its position, its length along the heading, its

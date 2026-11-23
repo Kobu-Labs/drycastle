@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>Another look of a species (animals.json, "variants"): its own model, with the species' numbers; its hit box may differ (a Chihuahua is not a Saint Bernard).</summary>
 public sealed class AnimalVariant
@@ -77,7 +79,7 @@ public sealed class AnimalDef
     /// <summary>Weight range of a wild adult, [min, max] kg. Set: every animal of the species rolls a size and a weight in it (<see cref="AnimalRules.SizeOfStep"/>), and a hunter is told the weight of one a sniper rifle killed. Null: no size roll (a pet, livestock).</summary>
     public List<float>? WeightKg { get; set; }
     /// <summary>
-    /// Metres the Body box's centre lies ahead of the position (<c>body_ahead</c>), measured from the model's own bounds (<c>scripts/make_animal_silhouettes.py</c>
+    /// Metres the Body box's centre lies ahead of the position (<c>body_ahead</c>), measured from the model's own bounds (<c>scripts/art/make_animal_silhouettes.py</c>
     /// prints it). The Body box (what contact is tested against, ADR 0028) is <see cref="HitBox"/>'s width and length, which are the model's measured size head and
     /// antlers included, centred this far ahead: the origin of most models sits under the hind half, so a cow's head lies 1.5 m ahead and its tail 0.9 m behind.
     /// Not <see cref="HitBoxAhead"/>, which a bullet's box test and the hit diagram already use and which is left as it was.

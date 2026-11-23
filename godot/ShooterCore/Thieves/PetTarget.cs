@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// The <c>loot.pet</c> sub-section of thieves.json (docs/events/thieves/05). A pet in a fenced garden is reached by a hop: the Thief walks to a point <see cref="HopOutM"/> outside the nearest fence section, jumps

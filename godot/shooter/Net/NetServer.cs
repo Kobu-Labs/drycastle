@@ -1,5 +1,31 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Bots;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Demon;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Plantation;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Sandbox;
+using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Scud;
+using Drycastle.ShooterCore.Status;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
+using Drycastle.ShooterCore.Wildlife;
 using Drycastle.ShooterServer.Persistence;
 using NVec3 = System.Numerics.Vector3;
 
@@ -155,7 +181,7 @@ public partial class NetServer : Node
     public bool WeaponsSmoke;
     public float KillY = float.NegativeInfinity;
     /// <summary>The map's water (water.json); players swim at the surface in it, and boats float on it.</summary>
-    public Drycastle.ShooterCore.Water Water = Drycastle.ShooterCore.Water.Empty;
+    public Drycastle.ShooterCore.Waters.Water Water = Drycastle.ShooterCore.Waters.Water.Empty;
     public int Port = 27015;
     /// <summary>Network impairment for the loss and latency test (--net-sim); null = none.</summary>
     public NetSim? Sim;

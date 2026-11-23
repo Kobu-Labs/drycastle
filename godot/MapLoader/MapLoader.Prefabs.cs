@@ -3,7 +3,7 @@ using Godot;
 
 namespace Drycastle.MapLoader;
 
-// Prefabs of the private (paid) packs: loose GLBs under assets-private/ (scripts/private_pack_glb.gd), never res:// resources, so a
+// Prefabs of the private (paid) packs: loose GLBs under assets-private/ (scripts/packs/private_pack_glb.gd), never res:// resources, so a
 // build holds nothing of a pack and the files arrive in the private asset pack. A prefab GLB has the prefab's own collision bodies and
 // NO textures: each surface wears an empty material that carries a name, looked up in materials.json beside the GLB. The materials
 // are shared by every model of the pack, and each is built (its textures decoded and uploaded) when the first model that wears it is
@@ -52,7 +52,7 @@ public sealed partial class MapLoader
         }
         foreach (var body in Descendants(scene).OfType<CollisionObject3D>())
         {
-            body.CollisionLayer = Drycastle.ShooterCore.CollisionLayers.World;
+            body.CollisionLayer = Drycastle.ShooterCore.Colliders.CollisionLayers.World;
             body.SetMeta("surface", "metal");
         }
         if (CollisionOnly) return scene;

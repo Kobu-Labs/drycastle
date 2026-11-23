@@ -1,4 +1,6 @@
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
 
 namespace Drycastle.Shooter;
 

@@ -54,7 +54,7 @@ public sealed partial class MapLoader
     /// <summary><c>Root</c> is the folder <c>File</c> is relative to (null = the asset library). <c>Prefab</c>: a model of a private pack that brings its own
     /// collision bodies and wears the pack's materials (see MapLoader.Prefabs.cs).</summary>
     sealed record AssetEntry(string File, string? Root, bool Prefab, Vector3 Size, string Category, string Name, List<(string kind, int tier, Vector3 local)> Seats, List<Vector3> Lights,
-        List<Drycastle.ShooterCore.AssetSolid> Solids, List<Vector3> Plates);
+        List<Drycastle.ShooterCore.Colliders.AssetSolid> Solids, List<Vector3> Plates);
 
     string _mapDir = "";
     Node3D? _objectsRoot;
@@ -408,7 +408,7 @@ public sealed partial class MapLoader
             return;
         }
         ReadAssetEntries(path, null);
-        // private (paid) packs: a folder beside assets/ with its own manifest, written by scripts/private_pack_glb.gd; absent on a machine without them
+        // private (paid) packs: a folder beside assets/ with its own manifest, written by scripts/packs/private_pack_glb.gd; absent on a machine without them
         var privDir = PrivateAssetsDir()!;
         var priv = Path.Combine(privDir, "manifest.json");
         if (File.Exists(priv)) ReadAssetEntries(priv, privDir);
@@ -428,7 +428,7 @@ public sealed partial class MapLoader
             var cat = a.TryGetProperty("category", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString()! : "other";
             var name = a.TryGetProperty("name", out var nm) && nm.ValueKind == JsonValueKind.String ? nm.GetString()! : id;
             _assetManifest[id] = new AssetEntry(file, root, prefab, new Vector3(sz[0].GetSingle(), sz[1].GetSingle(), sz[2].GetSingle()), cat, name, ParseSeats(a), ParseLights(a),
-                Drycastle.ShooterCore.ObjectColliders.ParseSolids(a), ParsePoints(a, "plates"));
+                Drycastle.ShooterCore.Colliders.ObjectColliders.ParseSolids(a), ParsePoints(a, "plates"));
         }
     }
 

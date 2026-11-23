@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Text.Json;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Data;
 
 namespace Drycastle.MapLoader;
 

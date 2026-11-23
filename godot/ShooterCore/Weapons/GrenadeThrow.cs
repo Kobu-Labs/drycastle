@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>Where the throw key stands: up, or held to aim (the hand has the grenade, the weapon is out of sight, the arc is shown).</summary>
 public enum GrenadeThrowPhase : byte { Idle, Aiming }

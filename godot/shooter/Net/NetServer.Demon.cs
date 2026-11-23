@@ -1,5 +1,14 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Churches;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Demon;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Status;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;

@@ -77,7 +77,7 @@ public sealed class CropDoc
 /// <summary>Distances and per-instance choices of crop drawing; one place for the numbers.</summary>
 public static class CropSettings
 {
-    /// <summary>The asset id of a Farm pack model (the private manifest written by scripts/private_pack_glb.gd).</summary>
+    /// <summary>The asset id of a Farm pack model (the private manifest written by scripts/packs/private_pack_glb.gd).</summary>
     public static string SyntyAsset(string model) => "pack:synty-farm/" + model;
 
     /// <summary>Distance (metres) at which a plant is gone, before the cell allowance and the clutter scale: a field is read from further than a tuft.</summary>

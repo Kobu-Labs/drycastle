@@ -1,7 +1,10 @@
 using System.Numerics;
 using System.Text.Json;
+using Drycastle.ShooterCore.Churches;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Intel;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Bunkers;
 
 /// <summary>
 /// One room of a bunker: a ring in Godot ground axes (x east, y = -north) between two heights. The pipeline grows it a

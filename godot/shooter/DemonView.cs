@@ -1,5 +1,6 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Demon;
 
 namespace Drycastle.Shooter;
 

@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Icons;
 
 /// <summary>What an icon is for. Each kind has its own folder under ui/icons.</summary>
 public enum IconKind { Weapon, Category, Perk, Streak, Item }

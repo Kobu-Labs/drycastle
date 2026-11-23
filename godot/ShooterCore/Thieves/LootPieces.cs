@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>Where one piece of Loot is in its life (GLOSSARY "Loot"): at its place, claimed by a Thief, carried, lying on the ground, claimed there, or loaded in a van.</summary>
 public enum LootPieceState : byte { AtPlace, Claimed, Carried, Lying, LyingClaimed, Loaded }

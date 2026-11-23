@@ -1,5 +1,6 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Plantation;
+using Drycastle.ShooterCore.Scenery;
 
 namespace Drycastle.Shooter;
 

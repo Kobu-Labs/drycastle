@@ -1,5 +1,10 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter;

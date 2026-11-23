@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>What an admin's <c>/event current end|cancel</c> came to (<see cref="EventHandlers{TWho}.End"/>, <see cref="EventHandlers{TWho}.Cancel"/>).</summary>
 public enum EventHandled : byte

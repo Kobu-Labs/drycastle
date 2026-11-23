@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>
 /// The Phoenix half of <see cref="Animal"/> (GLOSSARY "Phoenix", <see cref="PhoenixRules"/>): an animal built with a <see cref="PhoenixSpawn"/> does not wander, flee or get thrown. Its phases are states of

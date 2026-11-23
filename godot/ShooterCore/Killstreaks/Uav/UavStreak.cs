@@ -1,7 +1,9 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Killstreaks.Uav;
 
 /// <summary>A living player the UAV could show: their ground position (x, z) and their perk's <c>uav_visibility</c> (0 = hidden).</summary>
 public readonly record struct UavContact(ushort Id, float X, float Z, float Visibility, byte Team = Teams.None);
