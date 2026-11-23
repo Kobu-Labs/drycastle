@@ -31,24 +31,12 @@ public partial class NetServer
     IReadOnlyDictionary<string, Pen>? _pens;
     bool _pensTried;
 
-    /// <summary>The deepest water a pet wades in.</summary>
-    const float PetWadeM = 0.3f;
-
-    sealed class PetGround : AnimalGroundBase
-    {
-        public PetGround(NetServer server) : base(server) { }
-
-        protected override float WadeM => PetWadeM;
-
-        public override NVec3? NearestThreat(NVec3 from, float radius) => null; // a pet fears nothing
-    }
-
     /// <summary>Registers the animal and poop types and starts the keeper. Called once from <c>_Ready</c>, after the match exists.</summary>
     void InitPets()
     {
         AnimalRules.Register(WorldEntityRegistry.Shared);
         PoopRules.Register(WorldEntityRegistry.Shared);
-        _pets = new PetKeeper(PetsData, AnimalData, _match.Entities, System.Environment.TickCount) { Log = s => GD.PrintErr($"server: {s}"), Crowd = _animalCrowd };
+        _pets = new PetKeeper(PetsData, AnimalData, _match.Entities, System.Environment.TickCount) { Log = s => GD.PrintErr($"server: {s}"), Crowd = _animals.Crowd };
         _match.Pets = _pets;
         _pets.Killed += (pet, by) => GD.Print($"server: #{by} killed a pet ({pet.Def.Id})");
     }
@@ -61,7 +49,7 @@ public partial class NetServer
         if (_match.Phase != MatchPhase.Running || ArenaMode || MapDir == "" || Map == null || !(PetsData.GroupChance > 0)) return;
         _pens ??= BuildPens();
         if (_pens.Count == 0) return;
-        var n = _pets.Populate(_pens, new PetGround(this));
+        var n = _pets.Populate(_pens, _animals.Pets);
         GD.Print($"server: {n} pets in {_pens.Count} property groups");
     }
 

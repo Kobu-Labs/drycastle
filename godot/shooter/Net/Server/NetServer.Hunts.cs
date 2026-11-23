@@ -199,7 +199,7 @@ public partial class NetServer
                 GD.Print($"server: collection reward: #{dbId} {tier} tier, unlocked the Companion {cd.Id}");
                 granted = true;
             }
-            if (granted) { _profiles.Send(c); CompanionFromProfile(c); if (c.Joined) SendCompanions(c); }
+            if (granted) { _profiles.Send(c); _companions.FromProfile(c); if (c.Joined) _companions.SendRoster(c); }
         }
     }
 

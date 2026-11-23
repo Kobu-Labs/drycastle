@@ -19,7 +19,7 @@ public partial class NetServer
         _mass?.End(); // the Holy Mass does not outlive the round
         _crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
         PetsRoundStart();
-        CompanionsRoundStart();
+        _companions.RoundStart();
         WildlifeRoundStart(); // the match cleared the pets' entities too; a new round moves new ones into the property groups
         _rozhlas.RoundReset(); // the Urad workers of a detour still open sit down again
         ResetCars();

@@ -32,7 +32,7 @@ public partial class NetServer
         _chat.Register("phoenix", (c, _) => ChatPhoenix(c));
         _chat.Register("sandbox", ChatSandbox);
         _chat.Register("give", ChatGive);
-        _chat.Register("companion", ChatCompanion);
+        _chat.Register("companion", _companions.ChatCommand);
         _chat.Register("time", ChatTimeCommand);
         _chat.Register("explode", ChatExplode);
         _chat.Register("restart", ChatRestart);
@@ -84,7 +84,7 @@ public partial class NetServer
     void ChatPhoenix(ServerClient c)
     {
         if (_wildlife == null || !_wildlife.Active) { ChatTo(c, ChatLineKind.Error, "There is no wildlife in this round."); return; }
-        if (_wildlife.SpawnPhoenix(_wildlifeGround ??= new WildlifeGround(this))) ChatTo(c, ChatLineKind.Info, "A Phoenix flies over the map.");
+        if (_wildlife.SpawnPhoenix(_animals.Wild)) ChatTo(c, ChatLineKind.Info, "A Phoenix flies over the map.");
         else ChatTo(c, ChatLineKind.Error, "No Phoenix: wildlife.json has none, or the map is full.");
     }
 
@@ -96,7 +96,7 @@ public partial class NetServer
         var yaw = c.Body.Yaw;
         var at = c.Body.GlobalPosition + new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw)) * 50f;
         if (Query.Ground(MoverKind.Player, at, 60f, 200f) is { } ground) at = ground.Position;
-        if (_wildlife.SpawnExtra(Mysteries.Unicorn, N(at), _wildlifeGround ??= new WildlifeGround(this)))
+        if (_wildlife.SpawnExtra(Mysteries.Unicorn, N(at), _animals.Wild))
             ChatTo(c, ChatLineKind.Info, "A Unicorn stands in front of you.");
         else ChatTo(c, ChatLineKind.Error, "No room for a Unicorn here (no ground, or the map is full).");
     }

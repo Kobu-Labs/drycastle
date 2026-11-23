@@ -3,6 +3,7 @@ using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Net.Server.BusGarage;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.ChatRoom;
+using Drycastle.Shooter.Net.Server.Fauna;
 using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
 using Drycastle.Shooter.Net.Server.Profiles;
@@ -85,6 +86,8 @@ public partial class NetServer : Node
     IntelServer _intel = null!;
     ChatServer _chat = null!;
     ProfileServer _profiles = null!;
+    AnimalWorld _animals = null!;
+    CompanionServer _companions = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -121,6 +124,7 @@ public partial class NetServer : Node
         _match.Event += OnMatchEvent;
         _ctx = new ServerContext(_match, _byId, _clients.Values, () => _elapsed, () => _tick, BroadcastEvent, Send, (c, chan, packet) => { if (c.Peer is { } peer) Tx(peer, chan, packet, 0); });
         RegisterTargetSources();
+        _animals = new AnimalWorld(_ctx, _fleet, Map, Water, () => Query, () => MapFlightBounds);
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
         _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, CitizenHits, TableSeating());
         _intel = new IntelServer(_ctx);
@@ -142,7 +146,7 @@ public partial class NetServer : Node
         InitBigfoot(); // after the corpse book, which follows the same despawns
         InitPets();
         InitWildlife();
-        InitCompanions();
+        _companions = new CompanionServer(_ctx, CompanionData, AnimalData, _animals.Companions, Progression, UnlockAll);
         InitThieves();
         InitHarvester();
         InitScud();
@@ -240,7 +244,7 @@ public partial class NetServer : Node
         pt = Prof.Lap(Prof.S.MatchUpdate, pt);
         BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
         GangsPrepare(); // the players the Gang members fight, and who each fights
-        AnimalsPrepare(); // the players and moving vehicles the animals look at, read once for all of them
+        _animals.Prepare(); // the players and moving vehicles the animals look at, read once for all of them
         _audit?.Lap(1);
         pt = Prof.Lap(Prof.S.Prepare, pt);
         _match.Entities.Tick(dt);
@@ -253,8 +257,8 @@ public partial class NetServer : Node
         _audit?.Lap(4);
         pt = Prof.Lap(Prof.S.Pets, pt);
         WildlifeTick(dt);
-        CompanionsTick();
-        AnimalsDone(); // the animals have ticked: the players move from here on
+        _companions.Tick();
+        _animals.Done(); // the animals have ticked: the players move from here on
         _audit?.Lap(5);
         pt = Prof.Lap(Prof.S.Wildlife, pt);
         MassTick(dt); // the Holy Mass: its clock, the pastor, the seats
@@ -376,7 +380,7 @@ public partial class NetServer : Node
         else if (m is EventMsg { Kind: (byte)EventKind.Redeploy } rd && c.Joined) _profiles.OnRedeploy(c, rd.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.MineralPick } mp && c.Joined) _minerals.OnPick(c, mp.Payload);
-        else if (m is EventMsg { Kind: (byte)EventKind.CompanionPick } cp && c.Joined) OnCompanionPick(c, cp.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.CompanionPick } cp && c.Joined) _companions.OnPick(c, cp.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) OnSandboxTeleportTo(c, st.Payload);
@@ -422,7 +426,7 @@ public partial class NetServer : Node
         var p = c.Profile!;
         if (p.Persist) SetLogName(p.DbId, c.Name); // the log's hunter names (a name read before the book is set when the book loads)
         if (p.Persist && _huntBook is { } book) GrantCollectionRewards(book, p.DbId);
-        CompanionFromProfile(c);
+        _companions.FromProfile(c);
     }
 
     void OnHello(ServerClient c, HelloMsg h)
@@ -459,7 +463,7 @@ public partial class NetServer : Node
         c.Worn = new Equipment(Items);
         c.Bag = new Bag();
         ItemRules.IssueStandard(Items, c.Bag, OwnedItems(c)); // every player has the standard items (the binoculars) from the start
-        c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = MapLadders, Bodies = _animalCrowd };
+        c.Body = new Player { UseCamera = false, AutoSim = false, CaptureMouse = false, Authoritative = false, Name = $"P{c.Id}", Water = Water, Ladders = MapLadders, Bodies = _animals.Crowd };
         World.AddChild(c.Body);
         c.Body.Teleport(Vector3.Zero);
         c.Session.Enter(SessionPhase.Joined);
@@ -467,7 +471,7 @@ public partial class NetServer : Node
         c.Enc = new SnapshotEncoder(_sentStates);
         c.WEnc = new WorldSnapshotEncoder(history: _sentWorld);
         _profiles.Send(c);
-        SendCompanions(c); // the Companions they can pick and the one that is out (the Equipment screen's picker)
+        _companions.SendRoster(c); // the Companions they can pick and the one that is out (the Equipment screen's picker)
         SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
         _chat.SendStatus(c); // admin or not, and the vehicles /spawn takes
         Send(c, new WelcomeMsg(Wire.ProtocolVersion, c.Id, Wire.TickRate, _tick,
@@ -516,7 +520,7 @@ public partial class NetServer : Node
     void Leave(ServerClient c)
     {
         StreakLeave(c.Id);
-        CompanionLeave(c.Id);
+        _companions.Leave(c.Id);
         StatusLeave(c.Id);
         _rozhlas.OnPlayerLeft(c.Id);
         MassStandUp(c.Id); _seatHint.Remove(c.Id);
