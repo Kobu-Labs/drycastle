@@ -160,7 +160,7 @@ public partial class NetClient : Node
     /// <summary>scud.json, replaced by the host with the file's.</summary>
     public ScudFile Scud = ScudFile.Default;
     AircraftClient _aircraftClient = null!;
-    readonly EnemyMarkers _markers;
+    readonly EnemyChestPoints _markers;
     readonly WaterClient _water;
     RiderCamera _rider = null!;
     CropCrushClient _crush = null!;
@@ -203,7 +203,7 @@ public partial class NetClient : Node
         _prediction = new OwnPrediction(Ctx, SpeedFor);
         _fxDemo = new FxDemoClient(Ctx);
         _water = new WaterClient(Ctx);
-        _markers = new EnemyMarkers(Ctx);
+        _markers = new EnemyChestPoints(Ctx);
         Sandbox = new SandboxClient(Ctx);
         Report = new ReportClient(Ctx, _conn, () => !Bot && !LinkEnded && _welcomed, () => _peer, () => _elapsed);
         _moab = new MoabClient(Ctx);

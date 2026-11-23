@@ -18,9 +18,9 @@ internal sealed class MissileClient
 {
     readonly ClientContext _ctx;
     readonly BlastDustClient _blastDust;
-    readonly EnemyMarkers _markers;
+    readonly EnemyChestPoints _markers;
 
-    public MissileClient(ClientContext ctx, BlastDustClient blastDust, EnemyMarkers markers)
+    public MissileClient(ClientContext ctx, BlastDustClient blastDust, EnemyChestPoints markers)
     {
         _ctx = ctx; _blastDust = blastDust; _markers = markers;
         // registers the type, follows the missile entities and builds the POV overlay

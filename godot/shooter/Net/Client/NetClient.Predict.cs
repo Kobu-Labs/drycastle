@@ -1,15 +1,12 @@
 using Godot;
 using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.Menu;
-using Drycastle.Shooter.Net.Server;
 using Drycastle.Shooter.Weapons;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
-using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
-using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter.Net.Client;
 

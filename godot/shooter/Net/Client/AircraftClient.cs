@@ -24,11 +24,11 @@ internal sealed class AircraftClient
     readonly ClientContext _ctx;
     readonly KillstreaksClient _streaks;
     readonly BlastDustClient _blastDust;
-    readonly EnemyMarkers _markers;
+    readonly EnemyChestPoints _markers;
     readonly Func<Vector3, bool> _homingKillShown;
 
     /// <param name="homingKillShown">A homing missile's kill blast is already drawn at this place.</param>
-    public AircraftClient(ClientContext ctx, KillstreaksClient streaks, BlastDustClient blastDust, EnemyMarkers markers, Func<Vector3, bool> homingKillShown)
+    public AircraftClient(ClientContext ctx, KillstreaksClient streaks, BlastDustClient blastDust, EnemyChestPoints markers, Func<Vector3, bool> homingKillShown)
     {
         _ctx = ctx; _streaks = streaks; _blastDust = blastDust; _markers = markers; _homingKillShown = homingKillShown;
         // follows aircraft entities and the owner's status events, builds the overlay

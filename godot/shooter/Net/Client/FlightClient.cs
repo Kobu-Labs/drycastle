@@ -5,7 +5,6 @@ using Drycastle.Shooter.Menu;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
-using Drycastle.ShooterCore.Waters;
 
 namespace Drycastle.Shooter.Net.Client;
 

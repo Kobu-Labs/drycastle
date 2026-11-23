@@ -1,7 +1,7 @@
 using Godot;
 using Drycastle.Shooter.Characters;
-using Drycastle.Shooter.Net.Bots;
 using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.Net.Bots;
 using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;

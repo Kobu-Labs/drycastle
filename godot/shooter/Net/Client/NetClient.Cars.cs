@@ -1,10 +1,8 @@
 using Godot;
 using Drycastle.Shooter.Audio;
-using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Menu;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.Shooter.Weapons;
-using Drycastle.ShooterCore.Glass;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
@@ -16,7 +14,7 @@ namespace Drycastle.Shooter.Net.Client;
 /// <summary>
 /// Client side of vehicles (#91): car entities are drawn interpolated about 100 ms in the past like remote players, including the
 /// driver's own car (no prediction in v1; the one exception is the utility helicopter, which its pilot's client predicts, ADR 0006 and
-/// NetClient.Flight.cs). While driving the body follows the car, a chase camera replaces the first-person one,
+/// FlightClient.cs). While driving the body follows the car, a chase camera replaces the first-person one,
 /// and the HUD shows the speed and the exit prompt; near a free car it shows the enter prompt.
 /// </summary>
 public partial class NetClient
