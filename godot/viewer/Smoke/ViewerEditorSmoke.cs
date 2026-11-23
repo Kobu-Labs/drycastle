@@ -20,17 +20,7 @@ public partial class Viewer
 {
     static float Ground(Drycastle.MapLoader.MapLoader map, Vector3 p) => map.GroundHeightOrMean(p.X, p.Z);
 
-    async Task RunEditorSmoke()
-    {
-        try { await EditorSmokeBody(); }
-        catch (Exception e)
-        {
-            GD.Print($"FAIL editor smoke threw: {e}");
-            _editOk = false;
-        }
-        GD.Print(_editOk ? "EDITOR SMOKE PASS" : "EDITOR SMOKE FAIL");
-        GetTree().Quit(_editOk ? 0 : 1);
-    }
+    Task RunEditorSmoke() => RunSmoke("editor", EditorSmokeBody);
 
     List<string> StateSelected(string statePath)
     {
@@ -42,55 +32,97 @@ public partial class Viewer
         catch (Exception) { return new List<string> { "<unreadable>" }; }
     }
 
+    sealed class EditorCtx : SmokeCtx
+    {
+        public readonly string A, B, C, StatePath;
+        public Vector3 WalkPos, WalkCamPos;
+        public float WalkYaw;
+        public bool InputBefore;
+        public Input.MouseModeEnum MouseAtStart;
+        public int Applied0;
+        public string? Gid;
+
+        public EditorCtx(string planPath, string editsPath, string statePath) : base(planPath, editsPath)
+        {
+            A = S("parcel_a"); B = S("parcel_b"); C = S("parcel_c");
+            StatePath = statePath;
+        }
+
+        /// <summary>A and B in the order the editor-state.json and the group's member list use.</summary>
+        public string[] AB => new[] { A, B }.OrderBy(x => x, StringComparer.Ordinal).ToArray();
+    }
+
+    // a plan point (x east, y north in map metres) on the terrain
+    Vector3 PlanPoint(SmokeCtx c, string k)
+    {
+        var a = c.Plan.GetProperty(k);
+        var x = a[0].GetSingle(); var z = -a[1].GetSingle();
+        return new Vector3(x, _map.GroundHeightOrMean(x, z), z);
+    }
+
     async Task EditorSmokeBody()
     {
-        var ed = _editor!;
-        using var planDoc = JsonDocument.Parse(File.ReadAllText(_opts["editor-smoke-plan"]));
-        var plan = planDoc.RootElement;
-        string S(string k) => plan.GetProperty(k).GetString()!;
-        Vector3 World(string k)
-        {
-            var a = plan.GetProperty(k);
-            var x = a[0].GetSingle(); var z = -a[1].GetSingle();
-            return new Vector3(x, _map.GroundHeightOrMean(x, z), z);
-        }
-        string A = S("parcel_a"), B = S("parcel_b"), C = S("parcel_c");
-        var editsPath = ed.EditsPath;
-        var statePath = _opts["state"];
+        using var c = new EditorCtx(_opts["editor-smoke-plan"], _editor!.EditsPath, _opts["state"]);
 
-        // ---- canonical writer: Python-written fixture round-trips byte for byte, floats match repr ----
-        var fixture = File.ReadAllText(S("fixture"));
+        CanonicalWriter(c);
+        await WalkModeThenF2(c);
+        await TopDownAndFlySpeed();
+        Picking(c);
+        await Selection(c);
+        OutlinesBeforeGrouping(c);
+        Refusals(c);
+        await CreateGroup(c);
+        await WatcherRegeneratesGroup(c);
+        await StateCarriesSelection(c);
+        await OtherWriterThenDissolve(c);
+        MergeGroupsDocument();
+        await StateAfterClearedSelection(c);
+        await BackToWalkMode(c);
+    }
+
+    // ---- canonical writer: Python-written fixture round-trips byte for byte, floats match repr ----
+    void CanonicalWriter(EditorCtx c)
+    {
+        var fixture = File.ReadAllText(c.S("fixture"));
         Check(EditsFile.Dump(EditsFile.Parse(fixture)) == fixture, "C# writer round-trips the dump_edits fixture byte for byte");
-        var badFloat = plan.GetProperty("floats").EnumerateArray()
+        var badFloat = c.Plan.GetProperty("floats").EnumerateArray()
             .Select(f => (raw: f[0].GetString()!, want: f[1].GetString()!))
             .Where(f => EditsFile.PyNumber(f.raw) != f.want).Take(3).ToList();
-        Check(badFloat.Count == 0, $"number formatting matches Python for {plan.GetProperty("floats").GetArrayLength()} samples"
+        Check(badFloat.Count == 0, $"number formatting matches Python for {c.Plan.GetProperty("floats").GetArrayLength()} samples"
               + (badFloat.Count > 0 ? $" (first miss {badFloat[0].raw} -> {EditsFile.PyNumber(badFloat[0].raw)} want {badFloat[0].want})" : ""));
-        var seedText = File.ReadAllText(editsPath);
+        var seedText = File.ReadAllText(c.EditsPath);
         Check(EditsFile.Dump(EditsFile.Parse(seedText)) == seedText, "seed edits file is canonical and round-trips");
+    }
 
-        // ---- walk mode, then F2 ----
+    // ---- walk mode, then F2 ----
+    async Task WalkModeThenF2(EditorCtx c)
+    {
+        var ed = _editor!;
         await Physics(3);
         _player.Velocity = Vector3.Zero;
         _player.GlobalPosition = _map.SpawnPoints.First(sp => !float.IsNaN(_map.GroundHeight(sp.Position.X, sp.Position.Z))).Position + Vector3.Up * 2f; // as in the plain smoke: land on the real ground
         for (var i = 0; i < 600 && !(i > 10 && _player.IsOnFloor()); i++) await Physics(1);
         await Physics(10);
-        var mouseAtStart = Input.MouseMode;
-        var walkPos = _player.GlobalPosition;
-        var walkYaw = _player.RotationDegrees.Y;
-        var walkCamPos = _player.Camera.GlobalPosition;
-        var inputBefore = _player.InputEnabled;
+        c.MouseAtStart = Input.MouseMode;
+        c.WalkPos = _player.GlobalPosition;
+        c.WalkYaw = _player.RotationDegrees.Y;
+        c.WalkCamPos = _player.Camera.GlobalPosition;
+        c.InputBefore = _player.InputEnabled;
         Check(!ed.Active && _player.Camera.Current, "starts in walk mode with the player camera");
-        Input.ParseInputEvent(new InputEventKey { Keycode = Key.F2, Pressed = true });
+        Press(Key.F2);
         await Physics(3);
         Check(ed.Active && ed.FlyCam.Current && !_player.Visible && !_player.InputEnabled
-              && ed.FlyCam.GlobalPosition.DistanceTo(walkCamPos) < 0.01f,
+              && ed.FlyCam.GlobalPosition.DistanceTo(c.WalkCamPos) < 0.01f,
             $"F2: editor mode, fly camera current at the player camera, player hidden and frozen (cam {ed.FlyCam.GlobalPosition})");
         Check(Input.MouseMode == Input.MouseModeEnum.Visible, $"mouse visible in editor mode (mode {Input.MouseMode})");
         await Physics(30);
-        Check(_player.GlobalPosition.DistanceTo(walkPos) < 0.01f, "player stays frozen while in editor mode");
+        Check(_player.GlobalPosition.DistanceTo(c.WalkPos) < 0.01f, "player stays frozen while in editor mode");
+    }
 
-        // ---- top-down snap and restore ----
+    // ---- top-down snap and restore ----
+    async Task TopDownAndFlySpeed()
+    {
+        var ed = _editor!;
         var camBefore = ed.FlyCam.GlobalPosition;
         var basisBefore = ed.FlyCam.GlobalBasis;
         ed.ToggleTopDown();
@@ -103,9 +135,14 @@ public partial class Viewer
         Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp, Pressed = true });
         await Physics(2);
         Check(ed.Camera.Speed > speed0, $"wheel changes fly speed ({speed0:F0} -> {ed.Camera.Speed:F0} m/s)");
+    }
 
-        // ---- picking ----
-        var pa = World("point_a"); var pb = World("point_b"); var pc = World("point_c");
+    // ---- picking ----
+    void Picking(EditorCtx c)
+    {
+        var ed = _editor!;
+        string A = c.A, B = c.B, C = c.C;
+        var pa = PlanPoint(c, "point_a"); var pb = PlanPoint(c, "point_b"); var pc = PlanPoint(c, "point_c");
         Check(_map.ParcelAt(pa.X, pa.Z)?.Id == A && _map.ParcelAt(pb.X, pb.Z)?.Id == B && _map.ParcelAt(pc.X, pc.Z)?.Id == C,
             $"point-in-polygon lookup finds {A}, {B}, {C}");
         Check(_map.ParcelAt(1e6f, 1e6f) == null, "far away point is in no parcel");
@@ -120,8 +157,13 @@ public partial class Viewer
         Check(picked?.Id == A, $"camera ray through the screen centre picks {A} (hit {pt})");
         ed.Camera.LookFrom(new Vector3(1e5f, 400f, 1e5f), new Vector3(1e5f, 0, 1e5f - 1));
         Check(ed.Picker.PickScreen(size / 2, out _) == null, "ray into empty space picks nothing");
+    }
 
-        // ---- selection ----
+    // ---- selection ----
+    async Task Selection(EditorCtx c)
+    {
+        var ed = _editor!;
+        string A = c.A, B = c.B, C = c.C;
         var selEvents = 0;
         ed.SelectionChanged += () => selEvents++;
         ed.Click(A, false);
@@ -139,14 +181,18 @@ public partial class Viewer
         Check(ed.Selection.Count == 0, "click on empty space clears the selection");
         ed.Click(A, false); ed.Click(B, true);
         await Physics(3);
-        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await Frame(1);
         Check(selEvents > 0 && ed.Parcels.SelectionText.Contains(A) && ed.Parcels.SelectionText.Contains(B) && ed.Parcels.CanGroup,
             "panel lists the selection and enables [Group selected]");
+    }
 
-        // ---- outlines before grouping ----
+    // ---- outlines before grouping ----
+    void OutlinesBeforeGrouping(EditorCtx c)
+    {
+        var ed = _editor!;
         var selNode = ed.Outlines.Node(OutlineLayer.Selected);
         var noCollision = ed.Outlines.Root.GetChildren().All(n => n is MeshInstance3D m && m.GetChildCount() == 0);
-        Check(selNode?.Mesh != null && ed.Outlines.SegmentCount(OutlineLayer.Selected) == plan.GetProperty("sel_segments").GetInt32() && noCollision,
+        Check(selNode?.Mesh != null && ed.Outlines.SegmentCount(OutlineLayer.Selected) == c.Plan.GetProperty("sel_segments").GetInt32() && noCollision,
             $"selected parcels have an outline mesh ({ed.Outlines.SegmentCount(OutlineLayer.Selected)} segments) without collision");
         if (selNode?.Mesh is { } sm)
         {
@@ -154,104 +200,132 @@ public partial class Viewer
             var lift = v.Take(40).Select(p => p.Y - _map.GroundHeightOrMean(p.X, p.Z)).Min();
             Check(lift >= 0.2f && lift <= 0.6f, $"outline hangs {lift:F2} m above the ground");
         }
-        ed.SetHover(C);
+        ed.SetHover(c.C);
         ed.Outlines.Rebuild();
-        Check(ed.Outlines.Node(OutlineLayer.Hover)?.Mesh != null && ed.Outlines.SegmentCount(OutlineLayer.Hover) == plan.GetProperty("c_segments").GetInt32(),
+        Check(ed.Outlines.Node(OutlineLayer.Hover)?.Mesh != null && ed.Outlines.SegmentCount(OutlineLayer.Hover) == c.Plan.GetProperty("c_segments").GetInt32(),
             "hovered parcel has a (subtle) outline");
         ed.SetHover(null);
         Check(ed.Outlines.Root.GetChildren().All(n => n.Name != "outline_group"), "no always-on group outline (groups show like parcel borders: on hover/selection only)");
+    }
 
-        // ---- refusals ----
-        var fileBefore = File.ReadAllText(editsPath);
-        ed.Click(C, false); ed.Click(A, true);
+    // ---- refusals ----
+    void Refusals(EditorCtx c)
+    {
+        var ed = _editor!;
+        var fileBefore = File.ReadAllText(c.EditsPath);
+        ed.Click(c.C, false); ed.Click(c.A, true);
         ed.Groups.GroupSelected();
-        Check(File.ReadAllText(editsPath) == fileBefore && ed.Chrome.StatusMessage.Contains("already in"),
+        Check(File.ReadAllText(c.EditsPath) == fileBefore && ed.Chrome.StatusMessage.Contains("already in"),
             $"G refused when a selected parcel is in a group, file untouched ('{ed.Chrome.StatusMessage}')");
-        ed.Click(A, false);
+        ed.Click(c.A, false);
         ed.Groups.GroupSelected();
-        Check(File.ReadAllText(editsPath) == fileBefore && ed.Chrome.StatusMessage.Contains("2 or more"), "G refused with fewer than 2 parcels");
+        Check(File.ReadAllText(c.EditsPath) == fileBefore && ed.Chrome.StatusMessage.Contains("2 or more"), "G refused with fewer than 2 parcels");
+    }
 
-        // ---- create a group ----
+    // ---- create a group ----
+    async Task CreateGroup(EditorCtx c)
+    {
+        var ed = _editor!;
+        string A = c.A, B = c.B;
         ed.Click(A, false); ed.Click(B, true);
-        var applied0 = _watcher!.AppliedCount;
+        c.Applied0 = _watcher!.AppliedCount;
         ed.Groups.GroupSelected();
-        var after = File.ReadAllText(editsPath);
-        var gid = _map.Parcels[A].Group;
-        Check(gid == plan.GetProperty("next_group").GetString() && _map.Parcels[B].Group == gid && ed.Chrome.StatusMessage.StartsWith("saved"),
+        var after = File.ReadAllText(c.EditsPath);
+        var gid = c.Gid = _map.Parcels[A].Group;
+        Check(gid == c.Plan.GetProperty("next_group").GetString() && _map.Parcels[B].Group == gid && ed.Chrome.StatusMessage.StartsWith("saved"),
             $"G creates {gid} (next free number) for {A} and {B}, status '{ed.Chrome.StatusMessage}'");
-        File.WriteAllText(S("after_group"), after);
+        File.WriteAllText(c.S("after_group"), after);
         var doc = EditsFile.Parse(after);
         var members = EditsFile.Members(EditsFile.Groups(doc).GetValueOrDefault(gid ?? ""));
-        Check(members.SequenceEqual(new[] { A, B }.OrderBy(x => x, StringComparer.Ordinal)) && EditsFile.Dump(doc) == after,
+        Check(members.SequenceEqual(c.AB) && EditsFile.Dump(doc) == after,
             "edits.json holds the group, canonical text (also checked against dump_edits by the driver)");
         var keptStale = ((System.Collections.Generic.SortedDictionary<string, object?>)doc["parcels"]!).ContainsKey("P-9999")
-                        && EditsFile.Groups(doc).ContainsKey(plan.GetProperty("existing_group").GetString()!);
+                        && EditsFile.Groups(doc).ContainsKey(c.Plan.GetProperty("existing_group").GetString()!);
         Check(keptStale, "unknown parcel entries and other groups preserved");
         await Physics(2);
-        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await Frame(1);
         ed.Outlines.Rebuild();
         var gseg = ed.Outlines.SegmentCount(OutlineLayer.Selected);
-        Check(gseg == plan.GetProperty("group_ab_segments").GetInt32() && gseg < plan.GetProperty("sel_segments").GetInt32() && plan.GetProperty("shared_edges").GetInt32() > 0,
-            $"selected group outlined as one shape without shared edges: {gseg} segments (members alone would give {plan.GetProperty("sel_segments").GetInt32()}, shared edges {plan.GetProperty("shared_edges").GetInt32()})");
+        Check(gseg == c.Plan.GetProperty("group_ab_segments").GetInt32() && gseg < c.Plan.GetProperty("sel_segments").GetInt32() && c.Plan.GetProperty("shared_edges").GetInt32() > 0,
+            $"selected group outlined as one shape without shared edges: {gseg} segments (members alone would give {c.Plan.GetProperty("sel_segments").GetInt32()}, shared edges {c.Plan.GetProperty("shared_edges").GetInt32()})");
+    }
 
-        // watcher regenerates the new group's parcels by itself
-        var ok = await WaitUntil(() => _watcher.AppliedCount > applied0 || _watcher.FailedCount > 0, 40);
-        Check(ok && _watcher.AppliedCount > applied0 && ed.Chrome.StatusMessage.StartsWith("applied in"),
-            $"watcher regenerated the group parcels: status '{ed.Chrome.StatusMessage}'");
+    // watcher regenerates the new group's parcels by itself
+    async Task WatcherRegeneratesGroup(EditorCtx c)
+    {
+        var ok = await WaitUntil(() => _watcher!.AppliedCount > c.Applied0 || _watcher.FailedCount > 0, 40);
+        Check(ok && _watcher!.AppliedCount > c.Applied0 && _editor!.Chrome.StatusMessage.StartsWith("applied in"),
+            $"watcher regenerated the group parcels: status '{_editor!.Chrome.StatusMessage}'");
+    }
 
-        // ---- editor-state.json carries the selection ----
-        await WaitUntil(() => StateSelected(statePath).SequenceEqual(new[] { A, B }.OrderBy(x => x, StringComparer.Ordinal)), 4);
-        var st = StateSelected(statePath);
-        Check(st.SequenceEqual(new[] { A, B }.OrderBy(x => x, StringComparer.Ordinal)), $"editor-state.json selected = [{string.Join(", ", st)}]");
+    // ---- editor-state.json carries the selection ----
+    async Task StateCarriesSelection(EditorCtx c)
+    {
+        await WaitUntil(() => StateSelected(c.StatePath).SequenceEqual(c.AB), 4);
+        var st = StateSelected(c.StatePath);
+        Check(st.SequenceEqual(c.AB), $"editor-state.json selected = [{string.Join(", ", st)}]");
+    }
 
-        // ---- another writer changes the file; our next save keeps its change ----
+    // ---- another writer changes the file; our next save keeps its change ----
+    async Task OtherWriterThenDissolve(EditorCtx c)
+    {
+        var ed = _editor!;
+        var editsPath = c.EditsPath;
         var ext = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(editsPath))!;
         ext["parcels"]!["P-8888"] = System.Text.Json.Nodes.JsonNode.Parse("{\"fence\": {\"mode\": \"none\"}}");
         File.WriteAllText(editsPath + ".ext", ext.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         File.Move(editsPath + ".ext", editsPath, true);
-        ed.Click(A, false);
+        ed.Click(c.A, false);
         ed.Groups.Dissolve();
         var final = File.ReadAllText(editsPath);
-        File.WriteAllText(S("final"), final);
+        File.WriteAllText(c.S("final"), final);
         var fd = EditsFile.Parse(final);
-        Check(!EditsFile.Groups(fd).ContainsKey(gid!) && ((SortedDictionary<string, object?>)fd["parcels"]!).ContainsKey("P-8888")
-              && _map.Parcels[A].Group == null && _map.Parcels[B].Group == null && EditsFile.Dump(fd) == final,
+        Check(!EditsFile.Groups(fd).ContainsKey(c.Gid!) && ((SortedDictionary<string, object?>)fd["parcels"]!).ContainsKey("P-8888")
+              && _map.Parcels[c.A].Group == null && _map.Parcels[c.B].Group == null && EditsFile.Dump(fd) == final,
             "dissolve reloaded the file first (other writer's P-8888 kept), group gone, canonical");
         await Physics(2);
-        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        await Frame(1);
+    }
 
-        {
-            // merging groups (pure document logic): union of members, shared or first fence, old groups gone
-            var md = EditsFile.Parse("{\"version\":1,\"parcels\":{},\"groups\":{"
-                + "\"G-0001\":{\"parcels\":[\"P-0001\",\"P-0002\"],\"fence\":{\"mode\":\"custom\",\"type\":\"wire\"}},"
-                + "\"G-0002\":{\"parcels\":[\"P-0003\",\"P-0004\"],\"fence\":{\"mode\":\"custom\",\"height_m\":2.0}},"
-                + "\"G-0003\":{\"parcels\":[\"P-0006\",\"P-0007\"]}}}");
-            var (mok, mmsg, mgid) = EditsFile.MergeGroups(md, new[] { "G-0002", "G-0001" }, new[] { "P-0005" });
-            var mg = mok ? (SortedDictionary<string, object?>)EditsFile.Groups(md)[mgid!]! : null;
-            Check(mok && mgid == "G-0002" && !EditsFile.Groups(md).ContainsKey("G-0001") && EditsFile.Groups(md).ContainsKey("G-0003")
-                  && mg != null && string.Join(",", EditsFile.Members(mg)) == "P-0001,P-0002,P-0003,P-0004,P-0005"
-                  && EditsFile.Dump(new SortedDictionary<string, object?> { ["f"] = mg["fence"] }).Contains("wire") && mmsg.Contains("different fences")
-                  && ObjectEdits.ValidateDocument(md).Count == 0,
-                $"merge groups: members united, first fence kept with a note, validates ({mmsg})");
-            Check(!EditsFile.MergeGroups(md, new[] { "G-0002" }).ok && !EditsFile.MergeGroups(md, new[] { "G-0002", "G-0099" }).ok
-                  && !EditsFile.MergeGroups(md, new[] { "G-0002", "G-0003" }, new[] { "P-0005" }).ok,
-                "merge groups refuses one group, an unknown group and a parcel that is in another group");
-        }
+    // merging groups (pure document logic): union of members, shared or first fence, old groups gone
+    void MergeGroupsDocument()
+    {
+        var md = EditsFile.Parse("{\"version\":1,\"parcels\":{},\"groups\":{"
+            + "\"G-0001\":{\"parcels\":[\"P-0001\",\"P-0002\"],\"fence\":{\"mode\":\"custom\",\"type\":\"wire\"}},"
+            + "\"G-0002\":{\"parcels\":[\"P-0003\",\"P-0004\"],\"fence\":{\"mode\":\"custom\",\"height_m\":2.0}},"
+            + "\"G-0003\":{\"parcels\":[\"P-0006\",\"P-0007\"]}}}");
+        var (mok, mmsg, mgid) = EditsFile.MergeGroups(md, new[] { "G-0002", "G-0001" }, new[] { "P-0005" });
+        var mg = mok ? (SortedDictionary<string, object?>)EditsFile.Groups(md)[mgid!]! : null;
+        Check(mok && mgid == "G-0002" && !EditsFile.Groups(md).ContainsKey("G-0001") && EditsFile.Groups(md).ContainsKey("G-0003")
+              && mg != null && string.Join(",", EditsFile.Members(mg)) == "P-0001,P-0002,P-0003,P-0004,P-0005"
+              && EditsFile.Dump(new SortedDictionary<string, object?> { ["f"] = mg["fence"] }).Contains("wire") && mmsg.Contains("different fences")
+              && ObjectEdits.ValidateDocument(md).Count == 0,
+            $"merge groups: members united, first fence kept with a note, validates ({mmsg})");
+        Check(!EditsFile.MergeGroups(md, new[] { "G-0002" }).ok && !EditsFile.MergeGroups(md, new[] { "G-0002", "G-0099" }).ok
+              && !EditsFile.MergeGroups(md, new[] { "G-0002", "G-0003" }, new[] { "P-0005" }).ok,
+            "merge groups refuses one group, an unknown group and a parcel that is in another group");
+    }
 
-        // ---- state with a cleared selection, then wait for the watcher to settle ----
-        ed.Click(null, false);
-        await WaitUntil(() => StateSelected(statePath).Count == 0, 4);
-        Check(StateSelected(statePath).Count == 0, "editor-state.json selected is empty after clearing");
+    // ---- state with a cleared selection, then wait for the watcher to settle ----
+    async Task StateAfterClearedSelection(EditorCtx c)
+    {
+        _editor!.Click(null, false);
+        await WaitUntil(() => StateSelected(c.StatePath).Count == 0, 4);
+        Check(StateSelected(c.StatePath).Count == 0, "editor-state.json selected is empty after clearing");
         Check(await WaitIdle(60), "watcher settled after the edits");
-        Check(_watcher.FailedCount == 0, $"no failed parcel-run (failed={_watcher.FailedCount})");
+        Check(_watcher!.FailedCount == 0, $"no failed parcel-run (failed={_watcher.FailedCount})");
+    }
 
-        // ---- back to walk mode ----
-        Input.ParseInputEvent(new InputEventKey { Keycode = Key.F2, Pressed = true });
+    // ---- back to walk mode ----
+    async Task BackToWalkMode(EditorCtx c)
+    {
+        var ed = _editor!;
+        Press(Key.F2);
         await Physics(3);
-        Check(!ed.Active && _player.Camera.Current && _player.Visible && _player.InputEnabled == inputBefore
-              && _player.GlobalPosition.DistanceTo(walkPos) < 0.01f && Mathf.Abs(_player.RotationDegrees.Y - walkYaw) < 0.01f,
+        Check(!ed.Active && _player.Camera.Current && _player.Visible && _player.InputEnabled == c.InputBefore
+              && _player.GlobalPosition.DistanceTo(c.WalkPos) < 0.01f && Mathf.Abs(_player.RotationDegrees.Y - c.WalkYaw) < 0.01f,
             $"F2 back: player restored at {_player.GlobalPosition} yaw {_player.RotationDegrees.Y:F1}, visible, input on");
-        Check(Input.MouseMode == mouseAtStart, $"mouse mode back to what walk mode had (headless may ignore capture) ({mouseAtStart}), now {Input.MouseMode}");
+        Check(Input.MouseMode == c.MouseAtStart, $"mouse mode back to what walk mode had (headless may ignore capture) ({c.MouseAtStart}), now {Input.MouseMode}");
     }
 
     // ---- screenshots of the editor mode (windowed run) ----
