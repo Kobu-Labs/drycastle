@@ -373,7 +373,7 @@ public partial class EditorMode
     {
         if (SelectedGroundType is not { } name || GroundRow(name) is not { } r) { Say("no ground type selected", true); return false; }
         if (DeleteBlocked(r) is { } why) { Say($"{name}: {why}", true); return false; }
-        ShowConfirm($"Delete ground type {name}?",
+        Confirm.Show($"Delete ground type {name}?",
             (r.InRules ? $"{name} is removed from the map at the next build (Reset to rules brings it back)." : $"{name} is removed.")
             + " Undo (Ctrl+Z) brings it back.", "Delete", () => DeleteGroundType(name));
         return true;

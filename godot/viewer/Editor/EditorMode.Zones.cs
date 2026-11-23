@@ -721,7 +721,7 @@ public partial class EditorMode
         var kinds = string.Join(", ", zones.GroupBy(z => z.Kind).OrderBy(g => KindOrder(g.Key)).Select(g => $"{g.Count()} {ZoneLabel(g.Key)}"));
         var names = string.Join(", ", zones.OrderBy(z => z.Label, StringComparer.Ordinal).Take(8).Select(z => z.Label)) + (zones.Count > 8 ? $" and {zones.Count - 8} more" : "");
         var s = zones.Count == 1 ? "" : "s";
-        ShowConfirm($"Delete {zones.Count} marked zone{s}?", $"{kinds} ({zones.Sum(z => z.AreaM2):F0} m2 in all): {names}. They are removed; the ground is not changed. One undo (Ctrl+Z) brings them all back.",
+        Confirm.Show($"Delete {zones.Count} marked zone{s}?", $"{kinds} ({zones.Sum(z => z.AreaM2):F0} m2 in all): {names}. They are removed; the ground is not changed. One undo (Ctrl+Z) brings them all back.",
             $"Delete {zones.Count} zone{s}", () => DeleteZones(ids));
         return true;
     }

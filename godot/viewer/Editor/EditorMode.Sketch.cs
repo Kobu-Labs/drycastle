@@ -461,7 +461,7 @@ public partial class EditorMode
     {
         if (_sketch.CountIn(_skActive) == 0 && _skDraft.Count == 0) { Say($"sketch {_skActive} is already empty"); return false; }
         var n = _sketch.CountIn(_skActive);
-        ShowConfirm($"Clear sketch {_skActive}?", $"{SketchSummary(_skActive)} {(n == 1 ? "is" : "are")} removed from the ground; the sketch itself stays. Undo (Ctrl+Z) brings {(n == 1 ? "it" : "them")} back.", "Clear", ClearSketch);
+        Confirm.Show($"Clear sketch {_skActive}?", $"{SketchSummary(_skActive)} {(n == 1 ? "is" : "are")} removed from the ground; the sketch itself stays. Undo (Ctrl+Z) brings {(n == 1 ? "it" : "them")} back.", "Clear", ClearSketch);
         return true;
     }
 
@@ -529,7 +529,7 @@ public partial class EditorMode
     {
         if (!_sketch.Names.Contains(name)) { Say($"there is no sketch {name}", true); return false; }
         var n = _sketch.CountIn(name);
-        ShowConfirm($"Delete sketch {name}?", $"{name} and its {SketchSummary(name)} are removed from the ground. Undo (Ctrl+Z) brings {(n == 1 ? "it" : "them")} back.", "Delete", () => DeleteSketch(name));
+        Confirm.Show($"Delete sketch {name}?", $"{name} and its {SketchSummary(name)} are removed from the ground. Undo (Ctrl+Z) brings {(n == 1 ? "it" : "them")} back.", "Delete", () => DeleteSketch(name));
         return true;
     }
 

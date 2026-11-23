@@ -185,14 +185,14 @@ public partial class Viewer
         Check(!ed.SetPatchWater("GP-0002", 2.0), "a land patch has no water level");
         Check(!ed.SetGroundCarried("pond", "water", false) && ed.UndoDepth == 4, $"unticking water on a type a patch uses is refused: '{ed.StatusMessage}'");
         ed.RequestDeleteGroundType();
-        Check(!ed.ConfirmVisible && ed.StatusMessage.Contains("patch"), $"a type a patch uses is not offered for deletion (blocked with the reason, no confirm): '{ed.StatusMessage}'");
+        Check(!ed.Confirm.Visible && ed.StatusMessage.Contains("patch"), $"a type a patch uses is not offered for deletion (blocked with the reason, no confirm): '{ed.StatusMessage}'");
 
         // ---- delete: confirm names the patch; cancel keeps it ----
         await Key_(Key.Delete);
-        Check(ed.ConfirmVisible && ed.ConfirmText.Contains("GP-0003"), $"Del asks first and names the patch: '{ed.ConfirmText.Replace('\n', '|')}'");
+        Check(ed.Confirm.Visible && ed.Confirm.Text.Contains("GP-0003"), $"Del asks first and names the patch: '{ed.Confirm.Text.Replace('\n', '|')}'");
         await Key_(Key.Escape);
-        Check(!ed.ConfirmVisible && ed.Patch("GP-0003") != null && Disk() == Expect("p_water"), "Esc on the confirm cancels: patch kept");
-        await Gesture("delete GP-0003", () => { ed.ConfirmAccept(); return !ed.ConfirmVisible && ed.Patch("GP-0003") == null; }, "p_moved", true, () => Key_(Key.Delete));
+        Check(!ed.Confirm.Visible && ed.Patch("GP-0003") != null && Disk() == Expect("p_water"), "Esc on the confirm cancels: patch kept");
+        await Gesture("delete GP-0003", () => { ed.Confirm.Accept(); return !ed.Confirm.Visible && ed.Patch("GP-0003") == null; }, "p_moved", true, () => Key_(Key.Delete));
         Check(ed.SelectedPatchId == null && ed.ShapeRowCount == 2, "deleted patch leaves the selection and the list");
 
         // ---- zones tool ----
@@ -226,8 +226,8 @@ public partial class Viewer
         await Key_(Key.M);
         Check(ed.ZoneOverlayShown, "M shows it again");
         await Key_(Key.Delete);
-        Check(ed.ConfirmVisible && ed.ConfirmText.Contains("Z-0001"), $"Del asks first and names the zone: '{ed.ConfirmText.Replace('\n', '|')}'");
-        await Gesture("delete Z-0001", () => { ed.ConfirmAccept(); return ed.Zone("Z-0001") == null; }, "p_moved", false);
+        Check(ed.Confirm.Visible && ed.Confirm.Text.Contains("Z-0001"), $"Del asks first and names the zone: '{ed.Confirm.Text.Replace('\n', '|')}'");
+        await Gesture("delete Z-0001", () => { ed.Confirm.Accept(); return ed.Zone("Z-0001") == null; }, "p_moved", false);
         Check(ed.SelectedZoneId == null && ed.Zone("Z-0001") == null, "deleted zone leaves the selection (and the zones key is gone, as dump_text)");
 
         // ---- undo / redo of every step, byte for byte ----
@@ -275,15 +275,15 @@ public partial class Viewer
 
         // ---- palette ----
         await Key_(Key.P, ctrl: true);
-        Check(ed.PaletteVisible, "Ctrl+P opens the palette");
-        ed.PaletteSetFilter("patch");
-        Check(ed.PaletteLabels.Any(l => l.StartsWith("Ground: draw a patch")) && ed.PaletteLabels.Any(l => l.StartsWith("GP-0001")), $"palette finds the patch command and GP-0001: {string.Join(" / ", ed.PaletteLabels)}");
-        ed.PaletteSetFilter("zone");
-        Check(ed.PaletteLabels.Any(l => l.StartsWith("Zones: draw a zone")), $"palette finds the zone command: {string.Join(" / ", ed.PaletteLabels)}");
+        Check(ed.Commands.Visible, "Ctrl+P opens the palette");
+        ed.Commands.SetFilter("patch");
+        Check(ed.Commands.Labels.Any(l => l.StartsWith("Ground: draw a patch")) && ed.Commands.Labels.Any(l => l.StartsWith("GP-0001")), $"palette finds the patch command and GP-0001: {string.Join(" / ", ed.Commands.Labels)}");
+        ed.Commands.SetFilter("zone");
+        Check(ed.Commands.Labels.Any(l => l.StartsWith("Zones: draw a zone")), $"palette finds the zone command: {string.Join(" / ", ed.Commands.Labels)}");
         await Key_(Key.Escape);
-        Check(!ed.PaletteVisible, "Esc closes the palette");
-        ed.OpenPalette(); ed.PaletteSetFilter("Ground: draw a patch");
-        Check(ed.PaletteRun(0) && ed.ShapeMode == ShapeState.Drawing, "palette runs 'Ground: draw a patch'");
+        Check(!ed.Commands.Visible, "Esc closes the palette");
+        ed.Commands.Open(); ed.Commands.SetFilter("Ground: draw a patch");
+        Check(ed.Commands.Run(0) && ed.ShapeMode == ShapeState.Drawing, "palette runs 'Ground: draw a patch'");
         ed.ShapeEscape();
 
         // ---- a zone that comes from a rule is edited like any other: one save, one undo step ----
@@ -324,8 +324,8 @@ public partial class Viewer
             Check(ed.SegmentCount(EditorMode.OutlineZoneMarked) > 0, "marked zones are outlined on the map");
             s0 = ed.SaveCount; u0 = ed.UndoDepth;
             await Key_(Key.Delete, shift: true);
-            Check(ed.ConfirmVisible && ed.ConfirmText.Contains($"{two.Count} marked") && ed.SaveCount == s0, $"Shift+Del asks first and names what goes: '{ed.ConfirmText.Replace('\n', '|')}'");
-            ed.ConfirmAccept(); ed.RefreshNow();
+            Check(ed.Confirm.Visible && ed.Confirm.Text.Contains($"{two.Count} marked") && ed.SaveCount == s0, $"Shift+Del asks first and names what goes: '{ed.Confirm.Text.Replace('\n', '|')}'");
+            ed.Confirm.Accept(); ed.RefreshNow();
             Check(ed.SaveCount == s0 + 1 && ed.UndoDepth == u0 + 1 && ed.ZoneCount(kind) == n0 - two.Count && ed.MarkedZoneCount == 0, "the marked zones go in one save, one undo step; the marks are gone");
             Check(ed.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings them all back exactly");
             ed.MarkListedZones(); ed.RefreshNow();

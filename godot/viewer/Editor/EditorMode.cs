@@ -31,6 +31,7 @@ public partial class EditorMode : Node, IEditorHost
     {
         Ortho = new OrthoLayer(this);
         FloorPlan = new FloorPlanLayer(this);
+        Commands = new CommandPalette(PaletteAll);
         _parts = new() { Ortho, FloorPlan };
     }
 
@@ -288,7 +289,7 @@ public partial class EditorMode : Node, IEditorHost
     bool OverUi(Vector2 mouse)
         => _ui.Visible && ((_panel.Visible && _panel.GetGlobalRect().HasPoint(mouse)) || _rail.GetGlobalRect().HasPoint(mouse)
             || _statusBar.GetGlobalRect().HasPoint(mouse) || (_cheat.Visible && _cheat.GetGlobalRect().HasPoint(mouse))
-            || (_confirm.Visible && _confirm.GetGlobalRect().HasPoint(mouse)) || (_palette.Visible && _palette.GetGlobalRect().HasPoint(mouse)));
+            || Confirm.Contains(mouse) || Commands.Contains(mouse));
 
     // ---- selection ----
 
@@ -490,7 +491,7 @@ public partial class EditorMode : Node, IEditorHost
     {
         if (_pending.Count == 0) { proceed(); return; }
         var n = _pending.Count;
-        ShowConfirm($"Discard {n} unsaved edit{(n == 1 ? "" : "s")}?",
+        Confirm.Show($"Discard {n} unsaved edit{(n == 1 ? "" : "s")}?",
             $"Fence and tree edits for {string.Join(", ", _pending.Keys.Take(4))}{(n > 4 ? ", ..." : "")} are not applied yet and exist only in memory. Cancel, then press Enter to apply them.",
             okText, () => { _pending.Clear(); AfterEdit(); proceed(); });
     }

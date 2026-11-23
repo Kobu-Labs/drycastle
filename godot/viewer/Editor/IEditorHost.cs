@@ -12,6 +12,7 @@ public interface IEditorHost
     EditsWatcher? Watcher { get; }
     SortedSet<string> Selection { get; }
     Node3D OutlineRoot { get; }
+    ConfirmDialog Confirm { get; }
 
     /// <summary>One line in the status bar (and the log); errors stay longer and are red.</summary>
     void Say(string message, bool error = false);

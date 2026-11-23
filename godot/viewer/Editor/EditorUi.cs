@@ -54,7 +54,8 @@ public partial class EditorMode
         BuildSidebar(root);
         BuildStatusBar(root);
         BuildCheatSheet(root);
-        BuildDialogs(root);
+        Confirm.Build(root);
+        Commands.Build(root);
         LoadUiConfig();
         SelectTool(Tool, save: false);
     }

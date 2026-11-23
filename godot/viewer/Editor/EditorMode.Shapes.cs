@@ -434,7 +434,7 @@ public partial class EditorMode
         var id = s.Id; var name = s.Label;
         var what = s is PatchInfo p ? $"{name} ({p.Type}, {p.Points.Count} corners, {p.AreaM2:F0} m2) is removed from the ground; the land under it goes back to what is below."
             : s is ZoneInfo z ? $"{name} ({ZoneLabel(z.Kind)}, {z.Points.Count} corners, {z.AreaM2:F0} m2) is removed; the ground is not changed." : name;
-        ShowConfirm($"Delete {NounOf(k)} {name}?", what + " Undo (Ctrl+Z) brings it back.", "Delete", () => DeleteShape(k, id));
+        Confirm.Show($"Delete {NounOf(k)} {name}?", what + " Undo (Ctrl+Z) brings it back.", "Delete", () => DeleteShape(k, id));
         return true;
     }
 
@@ -528,19 +528,6 @@ public partial class EditorMode
     }
 
     // ---- keys and mouse ----
-
-    /// <summary>Ctrl+P and the keys of an open confirm dialog or palette. True when used.</summary>
-    bool HandleModalKey(InputEventKey k)
-    {
-        if (k.CtrlPressed && k.Keycode == Key.P) { if (_palette.Visible) ClosePalette(); else OpenPalette(); return true; }
-        if (_confirm.Visible)
-        {
-            if (k.Keycode == Key.Escape) ConfirmCancel();
-            return k.Keycode == Key.Escape; // Enter and Tab go to the focused button
-        }
-        if (_palette.Visible) { if (k.Keycode == Key.Escape) ClosePalette(); return k.Keycode == Key.Escape; }
-        return false;
-    }
 
     /// <summary>Keys of the shape tools (Ground and Zones): drawing, corners, delete. True when used.</summary>
     bool HandleShapeKey(InputEventKey k)
