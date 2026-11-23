@@ -133,6 +133,8 @@ public partial class NetClient : Node
     ScreensClient _screens = null!;
     /// <summary>The sandbox mode's state and requests (the panel and the host reach them here).</summary>
     public SandboxClient Sandbox { get; }
+    /// <summary>The performance report sent to the server and the scripted player of the client load test (--perf-play; the host sets it).</summary>
+    public ReportClient Report { get; }
     /// <summary>The HUD screens a key opens (Equipment, the map, the logs): Esc, the mouse, the pause menu's entries.</summary>
     public ScreensClient Screens => _screens;
     /// <summary>The chat box, the Squads screen's and the Teams screen's requests (the menus reach them here).</summary>
@@ -153,8 +155,10 @@ public partial class NetClient : Node
 
     public NetClient()
     {
-        Ctx = new ClientContext(this) { Send = SendEvent, Connected = () => _peer != null, SendJoined = SendNow, InVehicle = () => Ctx.Driving || _myState == EntityState.InVehicle };
+        Ctx = new ClientContext(this) { Send = SendEvent, Connected = () => _peer != null, SendJoined = SendNow };
+        Ctx.InVehicle = () => Ctx.Driving || _myState == EntityState.InVehicle;
         Sandbox = new SandboxClient(Ctx);
+        Report = new ReportClient(Ctx, _conn, () => !Bot && !LinkEnded && _welcomed, () => _peer, () => _elapsed);
         _moab = new MoabClient(Ctx);
         _doors = new DoorsClient(Ctx);
         _uav = new UavClient(Ctx);
@@ -304,7 +308,7 @@ public partial class NetClient : Node
     {
         _session.Frame(delta);
         _perf.Frame(delta);
-        ReportFrame(delta);
+        Report.Frame(delta);
         if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
         if (LinkEnded) return;
         _screens.UpdateMapCursor();
@@ -425,7 +429,7 @@ public partial class NetClient : Node
         {
             var m = Wire.DecodeReliable(d);
             OnReliable(m);
-            ReportEvent(m is EventMsg e ? e.Kind : (byte)0, ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetEvents, t));
+            Report.Event(m is EventMsg e ? e.Kind : (byte)0, ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetEvents, t));
         }
         else if (d[0] == Wire.TSnapshot) { OnSnapshot(d); ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetSnapshot, t); }
         else if (d[0] == Wire.TWorldSnapshot) { WorldEntities.Apply(d); ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetWorld, t); }
@@ -465,7 +469,7 @@ public partial class NetClient : Node
         _rozhlas.Reset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
         DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
         CasingFx.Water = Water;
-        Ctx.Me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = ObjectLadders.WithObjects(Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Map), Bodies = this };
+        Ctx.Me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !Report.PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = ObjectLadders.WithObjects(Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Map), Bodies = this };
         World.AddChild(Ctx.Me);
         if (!Bot && ShotFx.Enabled) { _viewmodel = MakeViewmodel(); Ctx.Me.Camera.AddChild(_viewmodel); }
         if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(Ctx.Me.Camera); // the glass shaders compile now, not at the first crack
@@ -567,7 +571,7 @@ public partial class NetClient : Node
         _bot?.OnSnapshot(h);
         _perf.Snapshot();
         _session.Snapshot(h.Tick);
-        ReportSnapshot(h.Tick);
+        Report.Snapshot(h.Tick);
         Ctx.LastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         Ctx.Clock.OnSnapshot(h.Tick, _lastArrival);
         DayNightCycle.Current?.SetServerTick(h.Tick);
@@ -615,7 +619,7 @@ public partial class NetClient : Node
     /// <summary>What the player (or the bot) presses this tick, after the on-foot keys, the Scud screen and the throw key had their say, and the weapon's recoil and breath followed it.</summary>
     MoveInput SampleInput(float dt)
     {
-        var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = Ctx.Me!.Yaw } : PerfPlay ? PerfPlayStep() : Ctx.Me!.Sample();
+        var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = Ctx.Me!.Yaw } : Report.PerfPlay ? Report.PlayStep() : Ctx.Me!.Sample();
         if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); }
         FxDemoInput(ref mi);
         ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon

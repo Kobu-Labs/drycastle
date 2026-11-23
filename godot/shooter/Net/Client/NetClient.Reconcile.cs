@@ -51,7 +51,7 @@ public partial class NetClient
         if (err > ReconcileEpsilon) _rub.AddOnFoot(err, LastNearRemote, LastVertical);
         _bot?.OnPredictionError(err);
         _session.PredictionError(err);
-        ReportPredictionError(err);
+        Report.PredictionError(err);
         _pending.RemoveRange(0, idx + 1);
         if (err <= ReconcileEpsilon)
         {
