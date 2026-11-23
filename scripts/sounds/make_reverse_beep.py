@@ -7,18 +7,18 @@
 
 Deterministic. Needs numpy and ffmpeg:
 
-    python3 scripts/make_reverse_beep.py [--out DIR] [--preview FILE.wav]   # preview: four beeps on the game's cycle
+    python3 scripts/sounds/make_reverse_beep.py [--out DIR] [--preview FILE.wav]   # preview: four beeps on the game's cycle
 """
 import argparse
-import subprocess
-import tempfile
-import wave
+import sys
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-RATE = 44100
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from audio import RATE, encode_ogg, write_wav
+
+ROOT = Path(__file__).resolve().parents[2]
 FREQ = 780.0
 LENGTH = 0.55
 CYCLE = 1.4
@@ -38,14 +38,6 @@ def pcm16(mix: np.ndarray, peak_db: float) -> np.ndarray:
     return (mix * 10 ** (peak_db / 20) / np.max(np.abs(mix)) * 32767).astype("<i2")
 
 
-def write_wav(path: Path, pcm: np.ndarray) -> None:
-    with wave.open(str(path), "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(RATE)
-        w.writeframes(pcm.tobytes())
-
-
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(ROOT / "assets/drycastle-generated-sounds"))
@@ -60,11 +52,7 @@ def main() -> None:
         print(f"wrote {args.preview}")
         return
     out = Path(args.out) / "reverse_beep.ogg"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as d:
-        wav = Path(d) / "b.wav"
-        write_wav(wav, pcm)
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-c:a", "libvorbis", "-q:a", "5", str(out)], check=True)
+    encode_ogg(pcm, out)
     print(f"wrote {out} ({len(pcm) / RATE:.2f} s)")
 
 

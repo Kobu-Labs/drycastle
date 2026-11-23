@@ -3,9 +3,9 @@
 transport with an open cabin, skids and a pintle-mounted door gun on the right side.
 
 Original geometry written by hand as code (no third-party model, no texture); standard library only. The mesh helpers
-(box, loft, lathe, ...) are the flak script's, loaded from the file next to this one:
+(box, loft, lathe, ...) are scripts/lib/meshkit.py's:
 
-    python3 -I scripts/make_utility_helicopter_model.py [out.glb]
+    python3 -I scripts/models/make_utility_helicopter_model.py [out.glb]
 
 Frame: the game's vehicle frame, metres. x right, y up, z back (forward is -Z), origin on the ground under the rotor mast.
 So vehicles.json uses model_scale 1, model_yaw_deg 0, model_offset [0, 0, 0].
@@ -31,19 +31,13 @@ Node tree (every moving part is its own node, its origin is its pivot):
                                  `glass` list of vehicles.json (the script rewrites that list, outline polygons included)
         smoke_engine             empty: the smoke point at the engine exhaust
 """
-import importlib.util
-import json
-import math
-import struct
 import sys
 from pathlib import Path
 
-_spec = importlib.util.spec_from_file_location("make_flak_model", Path(__file__).resolve().with_name("make_flak_model.py"))
-kit = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(kit)
-
-add, sub, mul, dot, cross, unit = kit.add, kit.sub, kit.mul, kit.dot, kit.cross, kit.unit
-loft, extrude, box, lathe, cyl, move, rot, mirror, both = kit.loft, kit.extrude, kit.box, kit.lathe, kit.cyl, kit.move, kit.rot, kit.mirror, kit.both
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from glass import GlassSet, vehicles_json_path
+from glb import materials_from, write_glb
+from meshkit import Node, add, both, box, cyl, extrude, lathe, loft, panel, report, rot, slab, tube
 
 # ----------------------------------------------------------------------------- materials (sRGB)
 
@@ -63,28 +57,6 @@ MATERIALS = {
     "Lamp": (0.98, 0.94, 0.75, 0.4, 0.0, 0.6, 1),        # landing light, position light
     "White": (0.86, 0.86, 0.82, 0.8, 0.0, 0, 1),         # tail band
 }
-
-
-class Node:
-    """A node of the model. Geometry is given in model space; yaw (degrees about Y, Godot's sense) turns the node's own frame."""
-
-    def __init__(self, name, origin=(0.0, 0.0, 0.0), yaw=0.0):
-        self.name, self.origin, self.yaw, self.tris, self.children = name, origin, yaw, [], []
-
-    def add(self, *parts):
-        for p in parts:
-            self.tris += p
-        return self
-
-    def child(self, name, origin=None, yaw=None):
-        n = Node(name, self.origin if origin is None else origin, self.yaw if yaw is None else yaw)
-        self.children.append(n)
-        return n
-
-    def walk(self):
-        yield self
-        for c in self.children:
-            yield from c.walk()
 
 
 # ----------------------------------------------------------------------------- dimensions
@@ -109,22 +81,7 @@ def octagon(z, w, y0, y1, cb, ct):
     return [(-w + cb, y0, z), (w - cb, y0, z), (w, y0 + cb, z), (w, y1 - ct, z), (w - ct, y1, z), (-w + ct, y1, z), (-w, y1 - ct, z), (-w, y0 + cb, z)]
 
 
-def slab(mat, a, b, c, d, t=0.02):
-    """A thin plate on the quad a-b-c-d, t thick (a window pane, a door skin)."""
-    n = unit(cross(sub(b, a), sub(d, a)))
-    q = [a, b, c, d]
-    return loft(mat, [[add(p, mul(n, -t / 2)) for p in q], [add(p, mul(n, t / 2)) for p in q]])
-
-
-def tube(mat, pts, r, n=6):
-    """A bent tube through the points."""
-    t = []
-    for p, q in zip(pts, pts[1:]):
-        t += cyl(mat, p, q, r, n)
-    return t
-
-
-GLASS = kit.GlassSet("utility_helicopter")
+GLASS = GlassSet("utility_helicopter")
 
 
 def build():
@@ -143,7 +100,7 @@ def build():
     hull.add(loft("Olive", nose))
     hull.add(lathe((0, 1.10, NOSE), (0, 0, -1), [(0, 0.20, "OliveDark"), (0.05, 0.17), (0.09, 0.08), (0.10, 0.0)], 8))   # nose cap
     for i0, i1 in ((1, 2), (0, 7)):   # chin windows, on the lower corner faces of the nose
-        hull.add(kit.panel("Glass", nose[1][i0], nose[1][i1], nose[2][i1], nose[2][i0], 0.12, 0.88, 0.12, 0.88, 0.012, (0, 1.05, -3.25)))
+        hull.add(panel("Glass", nose[1][i0], nose[1][i1], nose[2][i1], nose[2][i0], 0.12, 0.88, 0.12, 0.88, 0.012, (0, 1.05, -3.25)))
     hull.add(box("DarkMetal", -0.62, 0.62, 1.10, 1.56, COCKPIT - 0.02, COCKPIT + 0.10, c=0.04, axis='z', e=0))   # instrument panel
     hull.add(box("DarkMetal", -0.16, 0.16, FLOOR, 1.10, COCKPIT + 0.05, -2.15, c=0.03, axis='x', e=0))           # centre console
 
@@ -160,7 +117,7 @@ def build():
     for sx in (1, -1):   # windscreen, two panes either side of a centre post
         screen = ((sx * 0.05, 1.52, COCKPIT), (sx * 1.09, 1.52, COCKPIT), (sx * 1.11, ROOF0 + 0.04, -2.00), (sx * 0.05, ROOF0 + 0.04, -2.00))
         screen_panes.append(("windscreen_right" if sx > 0 else "windscreen_left", [slab("Glass", *screen, 0.012)], screen))
-    # the breakable panes are nodes of their own (glass_N, see kit.GlassSet): the two windscreen halves first, then the cockpit doors
+    # the breakable panes are nodes of their own (glass_N, see GlassSet): the two windscreen halves first, then the cockpit doors
     for pid, slabs, outline in sorted(screen_panes, key=lambda q: q[0] != "windscreen_left") + sorted(door_panes, key=lambda q: q[0] != "door_left"):
         GLASS.pane(hull, pid, slabs, outline)
     hull.add(tube("OliveDark", [(0, 1.50, COCKPIT), (0, ROOF0 + 0.05, -2.00)], 0.04, 6))
@@ -294,113 +251,14 @@ def build():
 
 # ----------------------------------------------------------------------------- GLB
 
-def turn(p, deg):
-    """Rotates a vector about Y by deg (Godot's sense: + turns -Z towards -X)."""
-    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
-    return (p[0] * c + p[2] * s, p[1], -p[0] * s + p[2] * c)
-
-
-def write_glb(root, path):
-    buf = bytearray()
-    views, accessors, meshes, nodes = [], [], [], []
-    mat_names = list(MATERIALS)
-    materials = []
-    for name in mat_names:
-        r, g, b, rough, metal, emis, alpha = MATERIALS[name]
-        lin = [round(kit.srgb_to_linear(v), 4) for v in (r, g, b)]
-        m = {"name": name, "pbrMetallicRoughness": {"baseColorFactor": lin + [alpha], "metallicFactor": metal, "roughnessFactor": rough}}
-        if emis:
-            m["emissiveFactor"] = [round(v * emis, 4) for v in lin]
-        if alpha < 1:
-            m["alphaMode"] = "BLEND"
-            m["doubleSided"] = True
-        materials.append(m)
-
-    def view(data, target):
-        while len(buf) % 4:
-            buf.append(0)
-        views.append({"buffer": 0, "byteOffset": len(buf), "byteLength": len(data), "target": target})
-        buf.extend(data)
-        return len(views) - 1
-
-    def emit(node, parent):
-        entry = {"name": node.name}
-        t = sub(node.origin, parent.origin) if parent else node.origin
-        if parent:
-            t = turn(t, -parent.yaw)
-        if any(abs(v) > 1e-9 for v in t):
-            entry["translation"] = [round(v, 5) + 0.0 for v in t]   # + 0.0: no "-0.0" in the file
-        rel = node.yaw - (parent.yaw if parent else 0.0)
-        if abs(rel) > 1e-9:
-            entry["rotation"] = [0.0, round(math.sin(math.radians(rel) / 2), 6), 0.0, round(math.cos(math.radians(rel) / 2), 6)]
-        index = len(nodes)
-        nodes.append(entry)
-        if node.tris:
-            prims = []
-            for mi, mname in enumerate(mat_names):
-                verts, lookup, idx = [], {}, []
-                for m, ps, nr in node.tris:
-                    if m != mname:
-                        continue
-                    fn = unit(cross(sub(ps[1], ps[0]), sub(ps[2], ps[0])))
-                    for k in range(3):
-                        p = turn(sub(ps[k], node.origin), -node.yaw)
-                        n = turn(nr[k] if nr else fn, -node.yaw)
-                        key = tuple(round(v, 5) for v in p) + tuple(round(v, 3) for v in n)
-                        if key not in lookup:
-                            lookup[key] = len(verts)
-                            verts.append((p, n))
-                        idx.append(lookup[key])
-                if not idx:
-                    continue
-                assert len(verts) < 65536
-                pos = b"".join(struct.pack("<3f", *p) for p, _ in verts)
-                nor = b"".join(struct.pack("<3f", *n) for _, n in verts)
-                lo = [struct.unpack("<f", struct.pack("<f", min(p[i] for p, _ in verts)))[0] for i in range(3)]
-                hi = [struct.unpack("<f", struct.pack("<f", max(p[i] for p, _ in verts)))[0] for i in range(3)]
-                accessors.append({"bufferView": view(pos, 34962), "componentType": 5126, "count": len(verts), "type": "VEC3", "min": lo, "max": hi})
-                accessors.append({"bufferView": view(nor, 34962), "componentType": 5126, "count": len(verts), "type": "VEC3"})
-                accessors.append({"bufferView": view(struct.pack(f"<{len(idx)}H", *idx), 34963), "componentType": 5123, "count": len(idx), "type": "SCALAR"})
-                a = len(accessors)
-                prims.append({"attributes": {"POSITION": a - 3, "NORMAL": a - 2}, "indices": a - 1, "material": mi})
-            entry["mesh"] = len(meshes)
-            meshes.append({"name": node.name, "primitives": prims})
-        kids = [emit(c, node) for c in node.children]
-        if kids:
-            entry["children"] = kids
-        return index
-
-    top = emit(root, None)
-    while len(buf) % 4:
-        buf.append(0)
-    gltf = {"asset": {"version": "2.0", "generator": "scripts/make_utility_helicopter_model.py (Drycastle)", "copyright": "CC0 1.0, generated by the project's own script"},
-            "scene": 0, "scenes": [{"name": root.name, "nodes": [top]}], "nodes": nodes, "meshes": meshes, "materials": materials,
-            "accessors": accessors, "bufferViews": views, "buffers": [{"byteLength": len(buf)}]}
-    js = json.dumps(gltf, separators=(",", ":")).encode()
-    js += b" " * (-len(js) % 4)
-    out = struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(js) + 8 + len(buf)) + struct.pack("<I4s", len(js), b"JSON") + js + struct.pack("<I4s", len(buf), b"BIN\0") + bytes(buf)
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_bytes(out)
-
-
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).resolve().parent.parent / "assets" / "drycastle-generated-models" / "utility_helicopter.glb")
+    out = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).resolve().parents[2] / "assets" / "drycastle-generated-models" / "utility_helicopter.glb")
     root = build()
-    write_glb(root, out)
-    total = 0
-    lo, hi = [1e9] * 3, [-1e9] * 3
-    for n in root.walk():
-        total += len(n.tris)
-        for _, ps, _ in n.tris:
-            for p in ps:
-                for i in range(3):
-                    lo[i], hi[i] = min(lo[i], p[i]), max(hi[i], p[i])
-        print(f"{n.name:16s} pivot=({n.origin[0]:.3f}, {n.origin[1]:.3f}, {n.origin[2]:.3f}) yaw={n.yaw:.0f} tris={len(n.tris)}")
-    print(f"triangles: {total}")
-    print("bounds: x %.2f..%.2f  y %.2f..%.2f  z %.2f..%.2f" % (lo[0], hi[0], lo[1], hi[1], lo[2], hi[2]))
+    write_glb(root, out, materials_from(MATERIALS), "scripts/make_utility_helicopter_model.py (Drycastle)")
+    report(root, 16, lambda n: f" yaw={n.yaw:.0f}")
     GLASS.report()
     if len(sys.argv) <= 1:
-        GLASS.write_vehicles_json(kit.vehicles_json_path())
+        GLASS.write_vehicles_json(vehicles_json_path())
         print("wrote the glass list of vehicles.json")
     print(f"wrote {out}")
 

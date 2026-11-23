@@ -2,9 +2,9 @@
 """Builds assets/drycastle-generated-models/golf_mk2.glb: a low-poly three-door Golf Mk2 (vehicles.json id golf_mk2), black.
 
 Original geometry written as code (no third-party model, no texture); flat shading, explicit normals. Needs numpy (the other model
-scripts are standard library only); it loads the flak script's GlassSet from the file next to this one:
+scripts are standard library only); it uses scripts/lib/glass.py's GlassSet:
 
-    python3 scripts/make_golf_mk2_model.py [out.glb]       (no -I: numpy may live in the user site)
+    python3 scripts/models/make_golf_mk2_model.py [out.glb]       (no -I: numpy may live in the user site)
 
 Without an output path it also rewrites the `glass` list of golf_mk2 in godot/shooter/data/vehicles.json (ADR 0008).
 
@@ -28,16 +28,16 @@ Node tree (the names the client looks for, NetClient.DriveFx.cs DriveNodes and N
         wheel_fl, wheel_fr         front wheels (l = -x), origin at the wheel centre, roll about X
       wheel_rl, wheel_rr           rear wheels, siblings of the hull
 """
-import importlib.util
 import json, math, struct, sys
 from pathlib import Path
 import numpy as np
-ROOT=Path(__file__).resolve().parent.parent
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'lib'))
+from glass import GlassSet, vehicles_json_path
+from meshkit import Node
+ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'assets'/'drycastle-generated-models'/'golf_mk2.glb'
-_spec=importlib.util.spec_from_file_location('make_flak_model',Path(__file__).resolve().with_name('make_flak_model.py'))
-kit=importlib.util.module_from_spec(_spec); _spec.loader.exec_module(kit)
-GLASS=kit.GlassSet('golf_mk2')
-_PANES=kit.Node('panes')    # GlassSet hangs its (empty) pane nodes here; the real ones are made by export()
+GLASS=GlassSet('golf_mk2')
+_PANES=Node('panes')    # GlassSet hangs its (empty) pane nodes here; the real ones are made by export()
 # The whole model is built at 1:1 Golf size below and scaled by SCALE on the way out (vertices, pivots, seats, lamps, glass): the game's
 # characters are 1.2 m tall seated, taller than a real Golf's cabin, so the car is made bigger until a seated rider's head is inside the roof.
 # vehicles.json carries the same factor in its vehicle-frame numbers (hood, half_*, height, wheelbase, track, seats, lights, camera).
@@ -344,5 +344,5 @@ def main():
     print('bounds: x %.3f..%.3f  y %.3f..%.3f  z %.3f..%.3f'%(lo[0],hi[0],lo[1],hi[1],lo[2],hi[2]))
     GLASS.report()
     if len(sys.argv)<=1:
-        GLASS.write_vehicles_json(kit.vehicles_json_path());print('wrote the glass list of vehicles.json')
+        GLASS.write_vehicles_json(vehicles_json_path());print('wrote the glass list of vehicles.json')
 if __name__=='__main__':main()

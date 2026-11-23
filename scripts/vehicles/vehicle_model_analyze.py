@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Numpy analysis of the vehicle dumps (scripts/vehicle_model_dump.gd) for docs/research/vehicle-models-facts.md.
-    python3 scripts/vehicle_model_analyze.py <dump.json> [glass-node-substring]
+"""Numpy analysis of the vehicle dumps (scripts/vehicles/vehicle_model_dump.gd) for docs/research/vehicle-models-facts.md.
+    python3 scripts/vehicles/vehicle_model_analyze.py <dump.json> [glass-node-substring]
 Prints per mesh node: welded components (vertices merged at 1 mm) with bbox, tris, open-edge count (0 = closed solid; >0 = open or
 zero-thickness skin); for the glass node the panes (components) with centre, outward normal (Godot front face = clockwise, so the
 outward normal is minus the winding cross product; in the ray lists 'v' = front face seen from above, '^' = back face), size in the pane plane; and rays through the cabin (hits of the body meshes along x

@@ -1,29 +1,24 @@
 #!/usr/bin/env python3
 """Draws a skinned .glb as the file itself says (its skin, its clips), without the game: a turnaround of the rest pose and a contact sheet per clip.
 
-    python3 scripts/preview_glb_clips.py model.glb out_dir [--frames 8] [--size 300] [--clips Idle,Walk]
+    python3 scripts/models/preview_glb_clips.py model.glb out_dir [--frames 8] [--size 300] [--clips Idle,Walk]
 
 Writes out_dir/turnaround.png and out_dir/clip_<name>.png (each frame seen from the side and, under it, from the front quarter; time runs left to right, then down).
-A dev aid for generated models (scripts/make_bigfoot_model.py). Flat shading, no perspective. Needs numpy and Pillow.
+A dev aid for generated models (scripts/models/make_bigfoot_model.py). Flat shading, no perspective. Needs numpy and Pillow.
 """
 import argparse
-import json
 import math
-import struct
+import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from glb import read_glb
+
 CTYPE = {5120: "i1", 5121: "u1", 5122: "<i2", 5123: "<u2", 5125: "<u4", 5126: "<f4"}
 WIDTH = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
-
-
-def read_glb(path):
-    data = Path(path).read_bytes()
-    n = struct.unpack_from("<I", data, 12)[0]
-    doc = json.loads(data[20:20 + n])
-    return doc, data[20 + n + 8:]
 
 
 def accessor(doc, blob, i):

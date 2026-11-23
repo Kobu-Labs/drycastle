@@ -5,11 +5,10 @@ each post topped by a cap and a ball.
 
 The board's artwork is NOT drawn here: assets/welcome-sign/board.png is the board cut out of the reference picture of the sign
 (arch top, blue rim, gold line, lettering and coat of arms exactly as shown) and is embedded in the GLB. The structure around it
-is original geometry written as code (standard library only; the mesh helpers are the flak script's, loaded from the file next to
-this one):
+is original geometry written as code (standard library only; the mesh helpers are scripts/lib/meshkit.py):
 
-    python3 -I scripts/make_welcome_sign_model.py [out.glb]                 # rebuild the GLB from board.png, byte for byte
-    python3 -I scripts/make_welcome_sign_model.py --photo picture.png       # first re-cut board.png from the reference picture (needs Pillow)
+    python3 -I scripts/models/make_welcome_sign_model.py [out.glb]                 # rebuild the GLB from board.png, byte for byte
+    python3 -I scripts/models/make_welcome_sign_model.py --photo picture.png       # first re-cut board.png from the reference picture (needs Pillow)
 
 Frame: glTF/Godot, metres, y up, origin on the ground at the centre between the legs. The sign FACES +Z (read the board from +Z);
 the board shows the same artwork on both faces, so it also reads from behind. The legs run 0.15 m below the origin so the sign
@@ -24,21 +23,17 @@ Dimensions are measured on the reference picture (one pixel = PX_M metres, taken
 
 Node tree: welcome_sign > board, post_l, post_r, rail_lower, rail_upper, finial_l, finial_r (all origins at the sign origin).
 """
-import importlib.util
 import json
 import math
 import struct
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent
-OUT_DIR = ROOT / "assets" / "welcome-sign"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from glb import srgb_to_linear
+from meshkit import Node, box, cross, extrude, lathe, sub, unit
 
-_spec = importlib.util.spec_from_file_location("make_flak_model", HERE / "make_flak_model.py")
-kit = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(kit)
-sub, cross, unit, extrude, box, lathe, mirror, Node = kit.sub, kit.cross, kit.unit, kit.extrude, kit.box, kit.lathe, kit.mirror, kit.Node
+OUT_DIR = Path(__file__).resolve().parents[2] / "assets" / "welcome-sign"
 
 # ----------------------------------------------------------------------------- reference picture measurements (pixels)
 
@@ -114,9 +109,6 @@ def build():
 
 
 # ----------------------------------------------------------------------------- GLB
-
-def srgb_to_linear(c): return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
-
 
 def write_glb(root, board, png, path):
     bx0, bx1, by0, by1 = board

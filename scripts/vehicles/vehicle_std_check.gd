@@ -1,7 +1,7 @@
-# Reloads the standardized vehicle GLBs (scripts/standardize_vehicle.py) the way the game does and checks the contract of docs/standards/car-design.md part A:
+# Reloads the standardized vehicle GLBs (scripts/vehicles/standardize_vehicle.py) the way the game does and checks the contract of docs/standards/car-design.md part A:
 # hull is a direct child of the root, wheels are its siblings (Position.Y = radius, a _steer parent on the steered ones), glass_N / seat_* / steering_wheel_* / light_*
 # nodes are under the hull, no collision bodies, every material name is in the pack's materials.json, the bounds are the facts file's.
-#   godot --headless --script scripts/vehicle_std_check.gd -- <assets-private dir> <facts.json> [<facts.json> ...]     (docs/research/vehicle-facts.d/<id>.json)
+#   godot --headless --script scripts/vehicles/vehicle_std_check.gd -- <assets-private dir> <facts.json> [<facts.json> ...]     (docs/research/vehicle-facts.d/<id>.json)
 # Exit code 1 on any problem.
 extends SceneTree
 

@@ -1,6 +1,6 @@
-# Step 2 of the SIMPLE Military vehicle batch (scripts/build_simple_military.sh): re-exports each imported pack FBX as a plain GLB
+# Step 2 of the SIMPLE Military vehicle batch (scripts/military_kit/build_simple_military.sh): re-exports each imported pack FBX as a plain GLB
 # (Godot's own FBX importer does the units and axes), so the model scripts can read the pack's meshes with a small glTF reader.
-#   godot --headless --path assets-private/synty/simple-military --script <repo>/scripts/simple_military_parts.gd -- [dump]
+#   godot --headless --path assets-private/synty/simple-military --script <repo>/scripts/military_kit/simple_military_parts.gd -- [dump]
 # Writes parts/<Name>.glb for every fbx/*.fbx (name-only materials: the pack's texture is NOT in them). With "dump" it only prints the node
 # tree: local transform, mesh bounds, surfaces, vertices.
 extends SceneTree

@@ -2,8 +2,8 @@
 # Builds, encrypts and (with a host) uploads the private asset pack, and writes private-pack.json, which the next release puts in manifest.json
 # so launchers with the pack password fetch it. Run it BEFORE releasing, whenever assets-private/ changed; then commit private-pack.json.
 #
-#   scripts/publish-private-pack.sh                      build + encrypt only (out/private-pack/), nothing leaves this machine
-#   [SSH_OPTS="-i ~/.ssh/key -o IdentitiesOnly=yes"] scripts/publish-private-pack.sh user@host [remote_dir]      (default remote_dir: /opt/drycastle)
+#   scripts/release/publish-private-pack.sh                      build + encrypt only (out/private-pack/), nothing leaves this machine
+#   [SSH_OPTS="-i ~/.ssh/key -o IdentitiesOnly=yes"] scripts/release/publish-private-pack.sh user@host [remote_dir]      (default remote_dir: /opt/drycastle)
 #
 # Uploads two things to the VPS (never to GitHub):
 #   <remote_dir>/pack/assets-private-<id>.zip.enc   the encrypted pack, served over plain HTTP by the `pack` service of deploy/docker-compose.yml
@@ -15,14 +15,14 @@
 # A new password: run this again with it and release; installs that already have this pack keep it, everyone else needs the new password.
 # PACK_URL_BASE overrides http://<host>:<PACK_PORT>.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 host="${1:-}"
 dir="${2:-/opt/drycastle}"
 port="${PACK_PORT:-27080}"
 iter=600000
 out=out/private-pack
 
-python3 -I scripts/make_private_pack.py
+python3 -I scripts/release/make_private_pack.py
 zip="$out/assets-private.zip"
 plain_sha=$(sha256sum "$zip" | cut -d' ' -f1)
 id="${plain_sha:0:12}"

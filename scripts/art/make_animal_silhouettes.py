@@ -5,7 +5,7 @@ For every species of godot/shooter/data/wildlife.json it reads the model named i
 transforms), projects every triangle on the side plane (the model's length left to right with the head on the right, its height up) and fills
 them: a white shape on a transparent ground, cropped to the model's bounds, so the image is the species' hit box seen from its right flank.
 
-    python3 scripts/make_animal_silhouettes.py [--width 384]
+    python3 scripts/art/make_animal_silhouettes.py [--width 384]
 
 A model of the free packs (assets/) is written to godot/shooter/ui/icons/animals/<id>.png, in the repository. A model of the paid packs
 (assets-private/) is written to assets-private/animal-silhouettes/<id>.png, outside it: the game reads both, and draws a plain body shape for a
@@ -14,13 +14,16 @@ species with neither. Deterministic. Needs numpy and Pillow.
 import argparse
 import json
 import re
-import struct
+import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from glb import read_glb
+
+ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "godot/shooter/data"
 SS = 4  # supersampling of the fill
 
@@ -31,21 +34,6 @@ WIDTHS = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 def load_jsonc(path: Path) -> dict:
     text = re.sub(r"^\s*//.*$", "", path.read_text(), flags=re.M)
     return json.loads(re.sub(r",(\s*[\]}])", r"\1", text))
-
-
-def read_glb(path: Path) -> tuple[dict, bytes]:
-    raw = path.read_bytes()
-    assert raw[:4] == b"glTF", path
-    at, doc, blob = 12, None, b""
-    while at < len(raw):
-        size, kind = struct.unpack_from("<II", raw, at)
-        chunk = raw[at + 8:at + 8 + size]
-        if kind == 0x4E4F534A:
-            doc = json.loads(chunk)
-        elif kind == 0x004E4942:
-            blob = chunk
-        at += 8 + size
-    return doc, blob
 
 
 def accessor(doc: dict, blob: bytes, index: int) -> np.ndarray:

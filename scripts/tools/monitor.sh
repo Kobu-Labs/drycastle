@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Opens a Grafana dashboard of the VPS, the server's by default (docs/monitoring.md): an ssh tunnel to the VPS's loopback port and the browser on it. Ctrl+C closes the tunnel.
-#   make monitor            (or scripts/monitor.sh; VPS, VPS_KEY, PORT to override)
-#   make monitor-clients    (scripts/monitor.sh clients): the players' dashboard
+#   make monitor            (or scripts/tools/monitor.sh; VPS, VPS_KEY, PORT to override)
+#   make monitor-clients    (scripts/tools/monitor.sh clients): the players' dashboard
 set -euo pipefail
 VPS=${VPS:-root@159.195.244.164}
 VPS_KEY=${VPS_KEY:-$HOME/.ssh/drycastle-vps}

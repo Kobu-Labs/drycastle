@@ -4,18 +4,18 @@
 An electric arc: a mains hum (50 Hz and harmonics, buzzing), a rising and falling whizz (a fast filtered sweep), and a crackle (random sharp clicks of
 band-limited noise, dense in the middle and thinning out at the end), with a loud snap at the start. Deterministic. Needs numpy and ffmpeg:
 
-    python3 scripts/make_shock_crackle.py [--out PATH] [--seconds 2.2] [--seed 11]
+    python3 scripts/sounds/make_shock_crackle.py [--out PATH] [--seconds 2.2] [--seed 11]
 """
 import argparse
-import subprocess
-import tempfile
-import wave
+import sys
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-RATE = 44100
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from audio import RATE, encode_ogg
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def bandpass_noise(n: int, lo: float, hi: float, rng: np.random.Generator) -> np.ndarray:
@@ -77,15 +77,8 @@ def main() -> None:
     mix = (hum * 0.55 + sweep * 0.6 + crackle * 0.9) * body + snap * 1.2
     mix *= 10 ** (-3 / 20) / np.max(np.abs(mix))  # peak -3 dBFS
 
-    pcm = (mix * 32767).astype("<i2")
     out = Path(a.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as tmp:
-        wav = Path(tmp) / "shock.wav"
-        with wave.open(str(wav), "wb") as w:
-            w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE)
-            w.writeframes(pcm.tobytes())
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-ac", "1", "-c:a", "libvorbis", "-q:a", "5", str(out)], check=True)
+    encode_ogg((mix * 32767).astype("<i2"), out)
     print(f"{out}: {a.seconds:.1f} s, peak {20 * np.log10(np.max(np.abs(mix))):.1f} dBFS")
 
 

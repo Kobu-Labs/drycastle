@@ -3,7 +3,7 @@
 
 make_manifest.py --repo R --tag T --channel stable|dev --commit SHA --protocol N --windows-zip W.zip --linux-zip L.zip --macos-zip M.zip --map-tag map-X --map-json map.json [--pack-json private-pack.json] --out manifest.json
 
---pack-json: the private asset pack entry written by scripts/publish-private-pack.sh (its URL is the game host, never GitHub; the file is
+--pack-json: the private asset pack entry written by scripts/release/publish-private-pack.sh (its URL is the game host, never GitHub; the file is
 encrypted, so the manifest carries nothing secret). Left out, or the file missing: the release has no pack.
 """
 import argparse, hashlib, json, os

@@ -133,7 +133,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--idle", required=True)
     ap.add_argument("--drive", required=True)
-    ap.add_argument("--out", default=str(Path(__file__).resolve().parent.parent / "assets/golf-mk2-sounds"))
+    ap.add_argument("--out", default=str(Path(__file__).resolve().parents[2] / "assets/golf-mk2-sounds"))
     a = ap.parse_args()
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     idle, drive = load(a.idle), load(a.drive)

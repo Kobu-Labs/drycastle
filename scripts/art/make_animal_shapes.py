@@ -14,7 +14,7 @@ smooth. The diagram always shows that picture and moves the hit onto it (AnimalS
     walk   one shape: everything the Walk clip covers
     run    one shape: everything the Gallop / Run clip covers (the stride's phase on a client is not known to the server)
 
-    python3 scripts/make_animal_shapes.py
+    python3 scripts/art/make_animal_shapes.py
 
 A species with other looks (variants in animals.json) gets a shape set per look, under "<species>/<variant>".
 
@@ -23,20 +23,19 @@ A model of the free packs (assets/) goes to godot/shooter/data/animal_shapes.jso
 body box. Deterministic. Needs numpy and Pillow.
 """
 import base64
-import importlib.util
 import io
 import json
 import re
+import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-_spec = importlib.util.spec_from_file_location("make_animal_silhouettes", Path(__file__).resolve().with_name("make_animal_silhouettes.py"))
-glb = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(glb)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import make_animal_silhouettes as sil
 
-ROOT = glb.ROOT
+ROOT = sil.ROOT
 CELL = 0.05          # metres
 SUB = 6              # pixels per cell when the model is drawn
 COVER = 0.25         # a cell counts when the animal covers this much of it
@@ -51,7 +50,7 @@ class Model:
     """A skinned model that can be posed by one of its clips at a time."""
 
     def __init__(self, path: Path, scale: float):
-        self.doc, self.blob = glb.read_glb(path)
+        self.doc, self.blob = sil.read_glb(path)
         self.scale = scale
         self.nodes = self.doc["nodes"]
         self.clips = {}
@@ -68,17 +67,17 @@ class Model:
                     continue
                 at = prim["attributes"]
                 n = self.doc["accessors"][at["POSITION"]]["count"]
-                pos = np.c_[glb.accessor(self.doc, self.blob, at["POSITION"]), np.ones(n)]
-                idx = glb.accessor(self.doc, self.blob, prim["indices"]).astype(int).reshape(-1) if "indices" in prim else np.arange(n)
+                pos = np.c_[sil.accessor(self.doc, self.blob, at["POSITION"]), np.ones(n)]
+                idx = sil.accessor(self.doc, self.blob, prim["indices"]).astype(int).reshape(-1) if "indices" in prim else np.arange(n)
                 skinned = "skin" in node and "JOINTS_0" in at
                 joints = weights = inverse = bones = None
                 head = np.zeros(n)
                 if skinned:
                     skin = self.doc["skins"][node["skin"]]
                     bones = skin["joints"]
-                    inverse = glb.accessor(self.doc, self.blob, skin["inverseBindMatrices"]).reshape(-1, 4, 4).transpose(0, 2, 1)
-                    joints = glb.accessor(self.doc, self.blob, at["JOINTS_0"]).astype(int)
-                    weights = glb.accessor(self.doc, self.blob, at["WEIGHTS_0"])
+                    inverse = sil.accessor(self.doc, self.blob, skin["inverseBindMatrices"]).reshape(-1, 4, 4).transpose(0, 2, 1)
+                    joints = sil.accessor(self.doc, self.blob, at["JOINTS_0"]).astype(int)
+                    weights = sil.accessor(self.doc, self.blob, at["WEIGHTS_0"])
                     weights = weights / np.maximum(weights.sum(axis=1, keepdims=True), 1e-9)
                     is_head = np.array([bool(HEAD_BONE.search(self.nodes[j].get("name", ""))) for j in bones])
                     head = (weights * is_head[joints]).sum(axis=1)
@@ -95,8 +94,8 @@ class Model:
         anim = self.clips[clip]
         for ch in anim["channels"]:
             sm = anim["samplers"][ch["sampler"]]
-            ts = glb.accessor(self.doc, self.blob, sm["input"]).reshape(-1)
-            vs = glb.accessor(self.doc, self.blob, sm["output"])
+            ts = sil.accessor(self.doc, self.blob, sm["input"]).reshape(-1)
+            vs = sil.accessor(self.doc, self.blob, sm["output"])
             if sm.get("interpolation") == "CUBICSPLINE":
                 vs = vs.reshape(len(ts), 3, -1)[:, 1]
             i = int(np.clip(np.searchsorted(ts, time, side="right") - 1, 0, len(ts) - 1))
@@ -116,9 +115,9 @@ class Model:
         def local(i: int) -> np.ndarray:
             n = self.nodes[i]
             if i not in over or "matrix" in n:
-                return glb.local_matrix(n)
+                return sil.local_matrix(n)
             o = over[i]
-            return glb.local_matrix({"translation": list(o.get("translation", n.get("translation", [0, 0, 0]))),
+            return sil.local_matrix({"translation": list(o.get("translation", n.get("translation", [0, 0, 0]))),
                                      "rotation": list(o.get("rotation", n.get("rotation", [0, 0, 0, 1]))),
                                      "scale": list(o.get("scale", n.get("scale", [1, 1, 1])))})
 
@@ -218,10 +217,10 @@ def bake(model: Model) -> dict | None:
 
 
 def main() -> None:
-    animals = {x["id"]: x for x in glb.load_jsonc(glb.DATA / "animals.json")["animals"]}
+    animals = {x["id"]: x for x in sil.load_jsonc(sil.DATA / "animals.json")["animals"]}
     free, paid = {}, {}
     # every species of animals.json (the wild ones, the farm animals and the pets): the wild ones first, in wildlife.json's order
-    wild = [s["id"] for s in glb.load_jsonc(glb.DATA / "wildlife.json")["species"]]
+    wild = [s["id"] for s in sil.load_jsonc(sil.DATA / "wildlife.json")["species"]]
     for species_id in wild + [i for i in animals if i not in wild]:
         a = animals[species_id]
         # the species' own model, then each other look of it (a variant) under "<species>/<variant>"
@@ -240,8 +239,8 @@ def main() -> None:
                 break
             else:
                 print(f"{key}: model not found ({rel}), skipped")
-    note = "Generated by scripts/make_animal_shapes.py from the models and clips named in animals.json. Do not edit."
-    for shapes, out in ((free, glb.DATA / "animal_shapes.json"), (paid, ROOT / "assets-private/animal-shapes.json")):
+    note = "Generated by scripts/art/make_animal_shapes.py from the models and clips named in animals.json. Do not edit."
+    for shapes, out in ((free, sil.DATA / "animal_shapes.json"), (paid, ROOT / "assets-private/animal-shapes.json")):
         if not shapes and not out.exists():
             continue
         out.write_text(json.dumps({"version": 1, "_note": note, "cell": CELL, "species": shapes}, separators=(",", ":")) + "\n")

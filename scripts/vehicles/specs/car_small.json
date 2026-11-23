@@ -1,5 +1,5 @@
 {
-  "_comment": "Facts + choices for scripts/standardize_vehicle.py: POLYGON Military SM_Veh_Car_Small_01 -> vehicles.json `car`. All positions are in the SOURCE frame (as imported: faces +Z, origin on the ground, x = the pack's left; measured, docs/research/vehicle-models-facts.md); the script turns them into the game frame.",
+  "_comment": "Facts + choices for scripts/vehicles/standardize_vehicle.py: POLYGON Military SM_Veh_Car_Small_01 -> vehicles.json `car`. All positions are in the SOURCE frame (as imported: faces +Z, origin on the ground, x = the pack's left; measured, docs/research/vehicle-models-facts.md); the script turns them into the game frame.",
   "id": "car_small",
   "vehicle": "car",
   "source": "synty/glb/military/SM_Veh_Car_Small_01.glb",

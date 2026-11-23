@@ -3,9 +3,9 @@
 
 Original pixels computed by this script (no third-party image, no photo); standard library only:
 
-    python3 -I scripts/make_textures.py                 # rebuild every PNG, byte for byte
-    python3 -I scripts/make_textures.py --meta          # also print the manifest entries (JSON)
-    python3 -I scripts/make_textures.py --sheet out/textures/sheet.png   # contact sheet, each tiled 2x2
+    python3 -I scripts/art/make_textures.py                 # rebuild every PNG, byte for byte
+    python3 -I scripts/art/make_textures.py --meta          # also print the manifest entries (JSON)
+    python3 -I scripts/art/make_textures.py --sheet out/textures/sheet.png   # contact sheet, each tiled 2x2
 
 Every texture repeats seamlessly in both directions. The style is flat: a few tones, hard edges, very
 little noise, so the textures sit next to the flat-colour map. Two kinds:
@@ -24,7 +24,7 @@ import sys
 import zlib
 from pathlib import Path
 
-OUT_DIR = Path(__file__).resolve().parent.parent / "assets" / "drycastle-generated-textures"
+OUT_DIR = Path(__file__).resolve().parents[2] / "assets" / "drycastle-generated-textures"
 
 # ----------------------------------------------------------------------------- helpers
 
@@ -488,7 +488,7 @@ def meta(tid, size, tile, tintable, pixels):
         "tintable": tintable,
         "mean_colour": "#%02x%02x%02x" % tuple(mean),
         "licence": "CC0",
-        "source": "scripts/make_textures.py",
+        "source": "scripts/art/make_textures.py",
         "pack": OUT_DIR.name,
     }
 

@@ -1,6 +1,6 @@
 # Dumps every mesh of a vehicle GLB (world space, as the game loads it) to JSON for the numpy analysis of docs/research/vehicle-models-facts.md
 # (glass panes, interior, skins): {"nodes":[{"name","path","origin":[x,y,z],"mats":[...],"v":[x,y,z,...],"i":[...],"uv":[u,v,...],"n":[...]}]}.
-#   godot --headless --script scripts/vehicle_model_dump.gd -- <in.glb> <out.json>
+#   godot --headless --script scripts/vehicles/vehicle_model_dump.gd -- <in.glb> <out.json>
 extends SceneTree
 
 

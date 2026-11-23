@@ -9,7 +9,7 @@ yaw 0 and 90, top view) and measures, over 8 view directions:
   phantom  share of the crown collider's silhouette where no part of the model is drawn (a shot there stops in empty air)
   leak     share of the model's foliage silhouette outside every collider (a shot there passes through leaves)
 
-    pipeline/.venv/bin/python scripts/tree_collider_audit.py [--private DIR] [--out DIR] [--map DIR] [--only NAME,NAME]
+    pipeline/.venv/bin/python scripts/tools/tree_collider_audit.py [--private DIR] [--out DIR] [--map DIR] [--only NAME,NAME]
 
 Writes <out>/sheet-NN.png (--per-page trees each, worst phantom first) and <out>/table.md. Needs numpy, trimesh, pillow, pyyaml and the private nature pack.
 --map DIR (a built map with trees.json) takes the tree numbers and the scales from the map instead of rules.yaml.
@@ -29,7 +29,7 @@ import trimesh
 import yaml
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 PX_H = 420            # raster rows a tree of collider height takes
 HALF_W = 1.0          # raster half-width, in tree heights (metrics)
 VIEW_HALF_W = 0.6     # drawn half-width, in tree heights
@@ -408,7 +408,7 @@ def write_limbs(cfg, private, share, top_ratio, leaf_lo):
         entries.append({"pack": pack, "name": name, "height_m": round(float(m.height), 4), "limbs": limbs})
     if missing:
         sys.exit(f"not written: no model for {', '.join(missing)} (every tree model of pack_trees.json must be in the table)")
-    note = ("Where the wood of every pack tree model is (#375): a tree is solid there and its leaves stop nothing. Written by scripts/tree_collider_audit.py --write; "
+    note = ("Where the wood of every pack tree model is (#375): a tree is solid there and its leaves stop nothing. Written by scripts/tools/tree_collider_audit.py --write; "
             "regenerate when pack_trees.json names a new tree model or a model changes. limbs: [z0, z1, half0, half1, u0, v0, u1, v1] in the model's own metres "
             f"(ShooterCore Limb). A limb is followed until it has run inside foliage for {share:g} of the crown's height.")
     body = ",\n".join("  " + json.dumps(e, separators=(", ", ": ")) for e in entries)

@@ -194,7 +194,7 @@ edges, little noise. The manifest's top-level `textures` array lists them: `id` 
 it becomes part of a node name), `file`, `size_px`, `tile_m` (one repeat in metres, `[w, h]`; `h` = 0 means the image
 is stretched once over the surface height), `alpha` (has cut-outs), `tintable` (near-white: the mesh's vertex colour is
 the paint) and `mean_colour` (previews). A map node named `<node>_tex_<id>` is drawn with texture `<id>`
-(`godot/MapLoader/MapLoader.Textures.cs`); the first user is typed fences (`docs/pipeline.md`). To add a texture: draw it
+(`godot/MapLoader/Core/MapLoader.Textures.cs`); the first user is typed fences (`docs/pipeline.md`). To add a texture: draw it
 in the script (or drop in a CC0 PNG with power-of-two sides), add its entry to `textures`, and use it from a mesh builder
 through `drycastle_pipeline.core.textures`.
 

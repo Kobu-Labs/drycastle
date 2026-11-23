@@ -4,9 +4,9 @@ wall arm: a wall plate, a pipe with a diagonal brace, a shallow light-grey dish 
 the LNB at its focus. Low-poly, flat colours, like the other generated models.
 
 Original geometry written by hand as code (no third-party model, no texture); standard library only. The mesh helpers
-(box, lathe, cyl, ...) are the flak script's, loaded from the file next to this one:
+(box, lathe, cyl, ...) are scripts/lib/meshkit.py:
 
-    python3 -I scripts/make_satellite_dish_model.py [out.glb]
+    python3 -I scripts/models/make_satellite_dish_model.py [out.glb]
 
 Frame: glTF/Godot, metres, y up. The origin is the point on the wall where the arm leaves it (the middle of the wall plate)
 and +X points OUT of the wall. A placed object turned by `rotation_deg` (compass degrees, counter-clockwise from +x on
@@ -17,21 +17,15 @@ written here; the manifest entry decides.
 
 Node tree: satellite_dish > mount (plate, pipe, brace, collar), dish (shell), lnb (feed arm, head).
 """
-import importlib.util
-import json
 import math
-import struct
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-OUT = HERE.parent / "assets" / "drycastle-generated-models" / "satellite_dish.glb"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from glb import materials_from, write_glb
+from meshkit import Node, add, box, cyl, lathe, mul, report, sub
 
-_spec = importlib.util.spec_from_file_location("make_flak_model", HERE / "make_flak_model.py")
-kit = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(kit)
-add, sub, mul, unit = kit.add, kit.sub, kit.mul, kit.unit
-box, lathe, cyl, Node = kit.box, kit.lathe, kit.cyl, kit.Node
+OUT = Path(__file__).resolve().parents[2] / "assets" / "drycastle-generated-models" / "satellite_dish.glb"
 
 # ----------------------------------------------------------------------------- materials (sRGB)
 
@@ -89,92 +83,11 @@ def build():
 
 # ----------------------------------------------------------------------------- GLB
 
-def write_glb(root, path):
-    buf = bytearray()
-    views, accessors, meshes, nodes = [], [], [], []
-    mat_names = list(MATERIALS)
-    materials = []
-    for name in mat_names:
-        r, g, b, rough, metal = MATERIALS[name]
-        lin = [round(kit.srgb_to_linear(v), 4) for v in (r, g, b)]
-        materials.append({"name": name, "pbrMetallicRoughness": {"baseColorFactor": lin + [1.0], "metallicFactor": metal, "roughnessFactor": rough},
-                          "doubleSided": True})
-
-    def view(data, target):
-        while len(buf) % 4:
-            buf.append(0)
-        views.append({"buffer": 0, "byteOffset": len(buf), "byteLength": len(data), "target": target})
-        buf.extend(data)
-        return len(views) - 1
-
-    def emit(node, parent_origin):
-        entry = {"name": node.name}
-        tr = sub(node.origin, parent_origin)
-        if any(abs(v) > 1e-9 for v in tr):
-            entry["translation"] = [round(v, 5) + 0.0 for v in tr]
-        index = len(nodes)
-        nodes.append(entry)
-        if node.tris:
-            prims = []
-            for mi, mname in enumerate(mat_names):
-                verts, lookup, idx = [], {}, []
-                for m, ps, nr in node.tris:
-                    if m != mname:
-                        continue
-                    fn = unit(kit.cross(sub(ps[1], ps[0]), sub(ps[2], ps[0])))
-                    for k in range(3):
-                        p = sub(ps[k], node.origin)
-                        n = nr[k] if nr else fn
-                        key = tuple(round(v, 5) for v in p) + tuple(round(v, 3) for v in n)
-                        if key not in lookup:
-                            lookup[key] = len(verts)
-                            verts.append((p, n))
-                        idx.append(lookup[key])
-                if not idx:
-                    continue
-                pos = b"".join(struct.pack("<3f", *p) for p, _ in verts)
-                nor = b"".join(struct.pack("<3f", *n) for _, n in verts)
-                lo = [struct.unpack("<f", struct.pack("<f", min(p[i] for p, _ in verts)))[0] for i in range(3)]
-                hi = [struct.unpack("<f", struct.pack("<f", max(p[i] for p, _ in verts)))[0] for i in range(3)]
-                accessors.append({"bufferView": view(pos, 34962), "componentType": 5126, "count": len(verts), "type": "VEC3", "min": lo, "max": hi})
-                accessors.append({"bufferView": view(nor, 34962), "componentType": 5126, "count": len(verts), "type": "VEC3"})
-                accessors.append({"bufferView": view(struct.pack(f"<{len(idx)}H", *idx), 34963), "componentType": 5123, "count": len(idx), "type": "SCALAR"})
-                a = len(accessors)
-                prims.append({"attributes": {"POSITION": a - 3, "NORMAL": a - 2}, "indices": a - 1, "material": mi})
-            entry["mesh"] = len(meshes)
-            meshes.append({"name": node.name, "primitives": prims})
-        kids = [emit(c, node.origin) for c in node.children]
-        if kids:
-            entry["children"] = kids
-        return index
-
-    top = emit(root, (0.0, 0.0, 0.0))
-    while len(buf) % 4:
-        buf.append(0)
-    gltf = {"asset": {"version": "2.0", "generator": "scripts/make_satellite_dish_model.py (Drycastle)", "copyright": "CC0 1.0, generated by the project's own script"},
-            "scene": 0, "scenes": [{"name": root.name, "nodes": [top]}], "nodes": nodes, "meshes": meshes, "materials": materials,
-            "accessors": accessors, "bufferViews": views, "buffers": [{"byteLength": len(buf)}]}
-    js = json.dumps(gltf, separators=(",", ":")).encode()
-    js += b" " * (-len(js) % 4)
-    out = struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(js) + 8 + len(buf)) + struct.pack("<I4s", len(js), b"JSON") + js + struct.pack("<I4s", len(buf), b"BIN\0") + bytes(buf)
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_bytes(out)
-
-
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else str(OUT)
     root = build()
-    write_glb(root, out)
-    total = 0
-    lo, hi = [1e9] * 3, [-1e9] * 3
-    for n in root.walk():
-        total += len(n.tris)
-        for _, ps, _ in n.tris:
-            for p in ps:
-                for i in range(3):
-                    lo[i], hi[i] = min(lo[i], p[i]), max(hi[i], p[i])
-    print(f"triangles: {total}")
-    print("bounds: x %.2f..%.2f  y %.2f..%.2f  z %.2f..%.2f" % (lo[0], hi[0], lo[1], hi[1], lo[2], hi[2]))
+    write_glb(root, out, materials_from(MATERIALS, double_sided=True), "scripts/make_satellite_dish_model.py (Drycastle)")
+    lo, hi = report(root)
     print("size_m: [%.2f, %.2f, %.2f]" % (hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]))
     print(f"wrote {out}")
 

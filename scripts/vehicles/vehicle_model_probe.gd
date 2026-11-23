@@ -1,6 +1,6 @@
 # Measures vehicle GLBs the way the game loads them (GLTFDocument) for docs/research/vehicle-models-facts.md: node tree with local and world
 # position of each node, per-mesh world bounds / centre / surfaces / tris / material names, total bounds and tris.
-#   godot --headless --script scripts/vehicle_model_probe.gd -- [--tris] <a.glb> [<b.glb> ...]
+#   godot --headless --script scripts/vehicles/vehicle_model_probe.gd -- [--tris] <a.glb> [<b.glb> ...]
 extends SceneTree
 
 var _dump_small := false

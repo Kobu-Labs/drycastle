@@ -5,9 +5,9 @@ The pack has no such cart: the frame, wheels, drawbar and cradle are generated h
 generated military vehicles). The missile on it is a copy of the Synty SIMPLE Military Scud missile mesh, so the model is PRIVATE and is written under
 assets-private/ (never committed):
     assets-private/synty/glb/simple-military/rocket_cart.glb     model id  pack:synty-simple-military/rocket_cart
-Needs numpy (no -I) and the extracted pack (scripts/build_simple_military.sh); it reads the pack itself, make_scud_model.py need not run first:
+Needs numpy (no -I) and the extracted pack (scripts/military_kit/build_simple_military.sh); it reads the pack itself, make_scud_model.py need not run first:
 
-    python3 scripts/make_rocket_cart_model.py [out.glb]
+    python3 scripts/military_kit/make_rocket_cart_model.py [out.glb]
 
 The missile (11.1 m, the same scale as the truck's) lies on two saddles with its centre of mass over the axle; the drawbar runs forward under its nose to a
 towing eye at the height of the Humvee's pintle hook. Coupling (the integration's job): put the cart so that its `tow_eye` meets the tower's `tow_hitch`.
@@ -25,7 +25,6 @@ Node tree (names are API, docs/standards/car-design.md):
       wheel_l, wheel_r              origin at the wheel centre (l = -x), roll about X
 """
 import json
-import math
 import sys
 from pathlib import Path
 
@@ -33,7 +32,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import simple_military_kit as K
-from simple_military_kit import box, beam, ring, cylinder, poly, rot_y
+from simple_military_kit import beam, box, cylinder, r, volume_centroid
 
 OUT = K.OUT_DIR / "rocket_cart.glb"
 FACTS = K.ROOT / "docs" / "research" / "scud-models-facts.d" / "rocket_cart.json"
@@ -46,15 +45,6 @@ AXIS_Y = 1.45                                       # missile axis height
 EYE = (0.0, 0.62, -6.20)                            # towing eye
 RAIL_Y = 0.80                                       # frame rail centre height (the rails are 0.17 high)
 BODY_HALF = 0.44                                    # the missile body's half height (a square section, 0.88 m)
-
-
-def volume_centroid(m):
-    a, b, c = m.v[m.f[:, 0]], m.v[m.f[:, 1]], m.v[m.f[:, 2]]
-    o = m.v.mean(axis=0)
-    vol = np.einsum("ij,ij->i", a - o, np.cross(b - o, c - o)) / 6.0
-    if abs(vol.sum()) < 1e-6:
-        return (m.v.min(axis=0) + m.v.max(axis=0)) / 2
-    return o + (((a + b + c + o) / 4.0 - o) * vol[:, None]).sum(axis=0) / vol.sum()
 
 
 def build():
@@ -157,10 +147,6 @@ def build():
     mdl.node("tow_eye", hull, EYE)
     mdl.node("axle", hull, (0.0, WHEEL_R, AXLE_Z))
     return mdl, dict(wheel_pos=wheel_pos, lamps=LAMPS, nose=nose_z, tail=tail_z, com=(0.0, AXIS_Y, AXLE_Z), ms=ms, half_h=half_h, z_front=z_front, z_rear=z_rear, lamp_z=lamp_z)
-
-
-def r(x, n=3):
-    return [round(float(v), n) + 0.0 for v in x]
 
 
 def main():

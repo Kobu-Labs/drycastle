@@ -3,9 +3,9 @@
 one that serves the village (two doors on the right, low floor between them, raised floor behind the middle door).
 
 Original geometry written by hand as code (no third-party model, no texture, no operator branding); standard library
-only. The mesh helpers (box, loft, lathe, ...) are the flak script's, loaded from the file next to this one:
+only. The mesh helpers (box, loft, lathe, ...) are scripts/lib/meshkit.py's:
 
-    python3 -I scripts/make_bus_model.py [out.glb]
+    python3 -I scripts/models/make_bus_model.py [out.glb]
 
 Frame: the game's vehicle frame, metres. x right, y up, z back (forward is -Z), origin on the ground at the centre.
 So vehicles.json uses model_scale 1, model_yaw_deg 0, model_offset [0, 0, 0]. Positions along the bus are written as
@@ -38,20 +38,14 @@ Node tree (every moving part is its own node, its origin is its pivot):
         wheel_fl, wheel_fr         front wheels (l = -x), origin at the wheel centre, spin about X
       wheel_rl, wheel_rr           rear wheels (twin tyres), siblings of the hull
 """
-import importlib.util
-import json
 import math
-import struct
 import sys
 from pathlib import Path
 
-_spec = importlib.util.spec_from_file_location("make_flak_model", Path(__file__).resolve().with_name("make_flak_model.py"))
-kit = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(kit)
-
-add, sub, mul, dot, cross, unit = kit.add, kit.sub, kit.mul, kit.dot, kit.cross, kit.unit
-loft, extrude, box, lathe, cyl, move, rot, mirror, both = kit.loft, kit.extrude, kit.box, kit.lathe, kit.cyl, kit.move, kit.rot, kit.mirror, kit.both
-Node = kit.Node
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from glass import GlassSet, vehicles_json_path
+from glb import materials_from, write_glb
+from meshkit import Node, both, box, cyl, extrude, lathe, loft, mirror, move, report, rot, slab, sub, tube
 
 # ----------------------------------------------------------------------------- materials (sRGB)
 
@@ -121,14 +115,7 @@ def sweep(s):
     return 0.75 + (s - 0.525) * 0.65 / (3.73 - 0.525)
 
 
-def slab(mat, a, b, c, d, t=0.02):
-    """A thin plate on the quad a-b-c-d, t thick (a window pane)."""
-    n = unit(cross(sub(b, a), sub(d, a)))
-    q = [a, b, c, d]
-    return loft(mat, [[add(p, mul(n, -t / 2)) for p in q], [add(p, mul(n, t / 2)) for p in q]])
-
-
-GLASS = kit.GlassSet("bus")
+GLASS = GlassSet("bus")
 GX = W2 - 0.012                    # x of the outer face of the side glazing
 
 
@@ -138,13 +125,6 @@ def side_pane(parent, pane_id, side, profile):
     if side < 0:
         tris = mirror(tris)
     GLASS.pane(parent, pane_id, [tris], [(side * GX, y, z) for z, y in profile])
-
-
-def tube(mat, pts, r, n=6):
-    t = []
-    for p, q in zip(pts, pts[1:]):
-        t += cyl(mat, p, q, r, n)
-    return t
 
 
 def wall(mat, profile, x0=XI, x1=W2):
@@ -465,102 +445,14 @@ def build():
 
 # ----------------------------------------------------------------------------- GLB
 
-def write_glb(root, path):
-    buf = bytearray()
-    views, accessors, meshes, nodes = [], [], [], []
-    mat_names = list(MATERIALS)
-    materials = []
-    for name in mat_names:
-        r, g, b, rough, metal, emis, alpha = MATERIALS[name]
-        lin = [round(kit.srgb_to_linear(v), 4) for v in (r, g, b)]
-        m = {"name": name, "pbrMetallicRoughness": {"baseColorFactor": lin + [alpha], "metallicFactor": metal, "roughnessFactor": rough}}
-        if emis:
-            m["emissiveFactor"] = [round(v * emis, 4) for v in lin]
-        if alpha < 1:
-            m["alphaMode"] = "BLEND"
-            m["doubleSided"] = True
-        materials.append(m)
-
-    def view(data, target):
-        while len(buf) % 4:
-            buf.append(0)
-        views.append({"buffer": 0, "byteOffset": len(buf), "byteLength": len(data), "target": target})
-        buf.extend(data)
-        return len(views) - 1
-
-    def emit(node, parent_origin):
-        entry = {"name": node.name}
-        t = sub(node.origin, parent_origin)
-        if any(abs(v) > 1e-9 for v in t):
-            entry["translation"] = [round(v, 5) + 0.0 for v in t]   # + 0.0: no "-0.0" in the file
-        index = len(nodes)
-        nodes.append(entry)
-        if node.tris:
-            prims = []
-            for mi, mname in enumerate(mat_names):
-                verts, lookup, idx = [], {}, []
-                for m, ps, nr in node.tris:
-                    if m != mname:
-                        continue
-                    fn = unit(cross(sub(ps[1], ps[0]), sub(ps[2], ps[0])))
-                    for k in range(3):
-                        p = sub(ps[k], node.origin)
-                        n = nr[k] if nr else fn
-                        key = tuple(round(v, 5) for v in p) + tuple(round(v, 3) for v in n)
-                        if key not in lookup:
-                            lookup[key] = len(verts)
-                            verts.append((p, n))
-                        idx.append(lookup[key])
-                if not idx:
-                    continue
-                assert len(verts) < 65536
-                pos = b"".join(struct.pack("<3f", *p) for p, _ in verts)
-                nor = b"".join(struct.pack("<3f", *n) for _, n in verts)
-                lo = [struct.unpack("<f", struct.pack("<f", min(p[i] for p, _ in verts)))[0] for i in range(3)]
-                hi = [struct.unpack("<f", struct.pack("<f", max(p[i] for p, _ in verts)))[0] for i in range(3)]
-                accessors.append({"bufferView": view(pos, 34962), "componentType": 5126, "count": len(verts), "type": "VEC3", "min": lo, "max": hi})
-                accessors.append({"bufferView": view(nor, 34962), "componentType": 5126, "count": len(verts), "type": "VEC3"})
-                accessors.append({"bufferView": view(struct.pack(f"<{len(idx)}H", *idx), 34963), "componentType": 5123, "count": len(idx), "type": "SCALAR"})
-                a = len(accessors)
-                prims.append({"attributes": {"POSITION": a - 3, "NORMAL": a - 2}, "indices": a - 1, "material": mi})
-            entry["mesh"] = len(meshes)
-            meshes.append({"name": node.name, "primitives": prims})
-        kids = [emit(c, node.origin) for c in node.children]
-        if kids:
-            entry["children"] = kids
-        return index
-
-    top = emit(root, (0.0, 0.0, 0.0))
-    while len(buf) % 4:
-        buf.append(0)
-    gltf = {"asset": {"version": "2.0", "generator": "scripts/make_bus_model.py (Drycastle)", "copyright": "CC0 1.0, generated by the project's own script"},
-            "scene": 0, "scenes": [{"name": root.name, "nodes": [top]}], "nodes": nodes, "meshes": meshes, "materials": materials,
-            "accessors": accessors, "bufferViews": views, "buffers": [{"byteLength": len(buf)}]}
-    js = json.dumps(gltf, separators=(",", ":")).encode()
-    js += b" " * (-len(js) % 4)
-    out = struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(js) + 8 + len(buf)) + struct.pack("<I4s", len(js), b"JSON") + js + struct.pack("<I4s", len(buf), b"BIN\0") + bytes(buf)
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_bytes(out)
-
-
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).resolve().parent.parent / "assets" / "drycastle-generated-models" / "bus.glb")
+    out = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).resolve().parents[2] / "assets" / "drycastle-generated-models" / "bus.glb")
     root = build()
-    write_glb(root, out)
-    total = 0
-    lo, hi = [1e9] * 3, [-1e9] * 3
-    for n in root.walk():
-        total += len(n.tris)
-        for _, ps, _ in n.tris:
-            for p in ps:
-                for i in range(3):
-                    lo[i], hi[i] = min(lo[i], p[i]), max(hi[i], p[i])
-        print(f"{n.name:18s} pivot=({n.origin[0]:.3f}, {n.origin[1]:.3f}, {n.origin[2]:.3f}) tris={len(n.tris)}")
-    print(f"triangles: {total}")
-    print("bounds: x %.2f..%.2f  y %.2f..%.2f  z %.2f..%.2f" % (lo[0], hi[0], lo[1], hi[1], lo[2], hi[2]))
+    write_glb(root, out, materials_from(MATERIALS), "scripts/make_bus_model.py (Drycastle)")
+    report(root, 18)
     GLASS.report()
     if len(sys.argv) <= 1:
-        GLASS.write_vehicles_json(kit.vehicles_json_path())
+        GLASS.write_vehicles_json(vehicles_json_path())
         print("wrote the glass list of vehicles.json")
     print(f"wrote {out}")
 

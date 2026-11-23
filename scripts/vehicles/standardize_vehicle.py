@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """The one standardization step of docs/standards/car-design.md part B (issue #325): a Synty pack prefab GLB -> a GLB that meets the vehicle contract,
-driven by a committed per-vehicle facts file (scripts/vehicles/<id>.json). Needs numpy (no -I) and the private pack in assets-private/.
+driven by a committed per-vehicle facts file (scripts/vehicles/specs/<id>.json). Needs numpy (no -I) and the private pack in assets-private/.
 
-    python3 scripts/standardize_vehicle.py scripts/vehicles/car_small.json [--private DIR] [--vehicles-json godot/shooter/data/vehicles.json]
+    python3 scripts/vehicles/standardize_vehicle.py scripts/vehicles/specs/car_small.json [--private DIR] [--vehicles-json godot/shooter/data/vehicles.json]
 
 What is generic (this file; no vehicle's numbers in it):
   - reads the prefab (any node tree: parts may be children of the body mesh), strips collision bodies, takes every mesh in the prefab frame
@@ -38,11 +38,11 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "military_kit"))
 import simple_military_kit as K  # noqa: E402
 from simple_military_kit import Mesh, Model, box  # noqa: E402
 
-ROOT = HERE.parent
+ROOT = HERE.parent.parent
 FACTS_DIR = ROOT / "docs" / "research" / "vehicle-facts.d"
 GLASS_MAT = "Transparent blue glass"
 HEAD_MAT, TAIL_MAT = "Emissive warm headlight lens", "Emissive red tail lamps"
@@ -290,7 +290,7 @@ def build(cfg, parts, skin_mat, info=None):
     rank = {"windscreen": 0, "rear": 1}
     found.sort(key=lambda t: (rank.get(t[0], 2), t[0], t[1][2], t[1][0]))
     counted = {}
-    kit_node = K.flak.Node("panes")
+    kit_node = K.Node("panes")
     for pid, c0, sub, outline in found:
         k = counted.get(pid, 0)
         counted[pid] = k + 1

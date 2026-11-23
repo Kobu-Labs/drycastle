@@ -8,7 +8,7 @@
 INCLUDE is the whole definition of the pack: a new private folder the game reads must be added here, or players will not get it.
 The zip is reproducible (sorted, fixed timestamps): unchanged files give the same sha256. Never upload it to the public GitHub releases.
 
-    python3 -I scripts/make_private_pack.py [--src DIR] [--out DIR] [--list]
+    python3 -I scripts/release/make_private_pack.py [--src DIR] [--out DIR] [--list]
 """
 import argparse
 import fnmatch
@@ -18,11 +18,11 @@ import sys
 import zipfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 
 # Globs relative to assets-private/ ("**" = any depth). Who reads each is named so a dead entry can be found and dropped.
 INCLUDE = [
-    "manifest.json",                      # MapLoader.Objects: ids, files and sizes of pack: objects (scripts/private_pack_glb.gd)
+    "manifest.json",                      # MapLoader.Objects: ids, files and sizes of pack: objects (scripts/packs/private_pack_glb.gd)
     "animal-shapes.json",                 # Shooter.cs: hit shapes of the private animal models (the SERVER needs this one too)
     "animal-silhouettes/*.png",           # NetClient.Hud: hunt silhouettes
     "animal-kit/*",                       # wildlife.json: crow model (+ NOTICE)

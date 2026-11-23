@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Step 4 of scripts/build_vehicle_packs.sh: makes the colour-variant atlases of the vehicles readable from the private pack (glb/** is shipped).
+"""Step 4 of scripts/vehicles/build_vehicle_packs.sh: makes the colour-variant atlases of the vehicles readable from the private pack (glb/** is shipped).
 
-    python3 -I scripts/vehicle_pack_variants.py <assets-private dir>
+    python3 -I scripts/vehicles/vehicle_pack_variants.py <assets-private dir>
 
 - Battle Royale: the pack's six vehicle atlases PolygonBattleRoyale_Vehicles_01..06 (+ the emission map) are copied into glb/battle-royale/tex/ (the
   prefabs only reference _01 and _Damaged) and glb/battle-royale/materials.json gets PolygonBattleRoyale_Veh_02..06_mat next to Veh_01_mat (same

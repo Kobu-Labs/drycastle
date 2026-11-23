@@ -4,9 +4,9 @@
 PRIVATE: both carry the pack's geometry, so they are written under assets-private/ (never committed):
     assets-private/synty/glb/simple-military/scud.glb            model id  pack:synty-simple-military/scud
     assets-private/synty/glb/simple-military/scud_missile.glb    model id  pack:synty-simple-military/scud_missile   (the flying missile entity)
-Needs numpy (no -I) and the extracted pack (scripts/build_simple_military.sh):
+Needs numpy (no -I) and the extracted pack (scripts/military_kit/build_simple_military.sh):
 
-    python3 scripts/make_scud_model.py [out dir]
+    python3 scripts/military_kit/make_scud_model.py [out dir]
 
 The pack truck is 14.8 m long; the model is scaled by 0.8 (11.9 m long, 3.1 m wide, the missile 11.1 m by 0.88 m: a real Scud-B and a MAZ-543),
 turned half a circle about Y (the pack faces +Z) and its eight wheels get their own radius so they stand on the ground. The cab is two half cabs with the
@@ -41,7 +41,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import simple_military_kit as K
-from simple_military_kit import Mesh, box, beam, poly, rot_x, move_m
+from simple_military_kit import beam, box, poly, r, rot_x, volume_centroid
 
 OUT_DIR = K.OUT_DIR
 FACTS = K.ROOT / "docs" / "research" / "scud-models-facts.d" / "scud.json"
@@ -54,16 +54,6 @@ WHEEL_FIT = 0.975                                  # pack wheels sink 2.4 cm int
 def gp(p):
     """A pack point in game space."""
     return np.array([-p[0] * S, p[1] * S, -p[2] * S])
-
-
-def volume_centroid(m):
-    a, b, c = m.v[m.f[:, 0]], m.v[m.f[:, 1]], m.v[m.f[:, 2]]
-    o = m.v.mean(axis=0)
-    vol = np.einsum("ij,ij->i", a - o, np.cross(b - o, c - o)) / 6.0
-    cen = ((a + b + c + o) / 4.0 - o) * vol[:, None]
-    if abs(vol.sum()) < 1e-6:
-        return (m.v.min(axis=0) + m.v.max(axis=0)) / 2
-    return o + cen.sum(axis=0) / vol.sum()
 
 
 def build():
@@ -111,7 +101,7 @@ def build():
             key = "door_rear_" + side
         groups.setdefault(key, []).extend(cut.v[cut.f[i]])
     order = ["windscreen_l", "windscreen_r", "door_front_l", "door_rear_l", "door_front_r", "door_rear_r", "corner_l", "corner_r"]
-    kit_node = K.flak.Node("panes")
+    kit_node = K.Node("panes")
     gl = K.GlassSet("scud")
     for pid in order:
         outline = K.outline_of(groups[pid])
@@ -213,10 +203,6 @@ def build_missile_only(ms_game, com):
     m.node("missile", "scud_missile", (0, 0, 0))
     m.add("missile", mm)
     return m, mm
-
-
-def r(x, n=3):
-    return [round(float(v), n) + 0.0 for v in x]
 
 
 def main():

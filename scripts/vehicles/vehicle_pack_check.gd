@@ -1,7 +1,7 @@
-# Step 6 of scripts/build_vehicle_packs.sh: reloads the imported vehicle GLBs the way the game does (GLTFDocument), checks that the parts the
+# Step 6 of scripts/vehicles/build_vehicle_packs.sh: reloads the imported vehicle GLBs the way the game does (GLTFDocument), checks that the parts the
 # standardization step needs are separate nodes, that every material name is in materials.json, and prints size, tris and the node tree depth.
-#   godot --headless --script scripts/vehicle_pack_check.gd -- <assets-private dir>
-# Exit code 1 when a required node or material is missing. Facts per model: scripts/vehicle_model_probe.gd, docs/research/vehicle-models-facts.md.
+#   godot --headless --script scripts/vehicles/vehicle_pack_check.gd -- <assets-private dir>
+# Exit code 1 when a required node or material is missing. Facts per model: scripts/vehicles/vehicle_model_probe.gd, docs/research/vehicle-models-facts.md.
 extends SceneTree
 
 const REQUIRED := {

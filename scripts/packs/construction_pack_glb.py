@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Makes the runtime models of the mechanic garage's props (godot/shooter/MechanicGarage.cs) out of the Synty POLYGON Construction Unity package.
 
-    python3 -I scripts/construction_pack_glb.py <POLYGON_Construction_Unity_*.unitypackage> [--private DIR]
+    python3 -I scripts/packs/construction_pack_glb.py <POLYGON_Construction_Unity_*.unitypackage> [--private DIR]
 
 The models are the `SM_...` names in MechanicGarage.cs (a new prop there is picked up by running this again). The package's FBX files and its atlas go into a scratch Godot
-project, Godot imports them, scripts/construction_pack_glb.gd writes `synty/glb/construction/<Model>.glb` and `synty/glb/atlas/construction_01_A.png` under the private assets
+project, Godot imports them, scripts/packs/construction_pack_glb.gd writes `synty/glb/construction/<Model>.glb` and `synty/glb/atlas/construction_01_A.png` under the private assets
 folder (default: assets-private/ of the repository, gitignored). The pack is paid: nothing it contains is committed, and the files travel with the private asset pack
-(scripts/make_private_pack.py takes `synty/glb/**`; publishing a new pack is a separate step). Without them the garage's solid props are drawn as boxes.
+(scripts/release/make_private_pack.py takes `synty/glb/**`; publishing a new pack is a separate step). Without them the garage's solid props are drawn as boxes.
 Needs `godot` (4.x) on the PATH.
 """
 import argparse
@@ -18,7 +18,7 @@ import tarfile
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "godot" / "shooter" / "MechanicGarage.cs"
 PACK = "Assets/Synty/PolygonConstruction"
 
@@ -56,7 +56,7 @@ def main() -> int:
             return 1
         shutil.copy(atlas / "asset", proj / PACK / "Textures" / "PolygonConstruction_Texture_01_A.png")
         subprocess.run(["godot", "--headless", "--import", "--path", str(proj)], check=True, capture_output=True)
-        subprocess.run(["godot", "--headless", "--path", str(proj), "--script", str(ROOT / "scripts" / "construction_pack_glb.gd"), "--", str(args.private)], check=True)
+        subprocess.run(["godot", "--headless", "--path", str(proj), "--script", str(ROOT / "scripts" / "packs" / "construction_pack_glb.gd"), "--", str(args.private)], check=True)
     print(f"{len(wanted)} models -> {args.private}/synty/glb/construction/")
     return 0
 

@@ -1,7 +1,7 @@
-# Step 4 of the SIMPLE Military vehicle batch (scripts/build_simple_military.sh): reloads the built GLBs the way the game does (GLTFDocument),
+# Step 4 of the SIMPLE Military vehicle batch (scripts/military_kit/build_simple_military.sh): reloads the built GLBs the way the game does (GLTFDocument),
 # checks the node names the standard (docs/standards/car-design.md) and the game look for, measures them and checks the pack material names
 # against glb/simple-military/materials.json.
-#   godot --headless --path assets-private/synty/simple-military --script <repo>/scripts/simple_military_check.gd -- <glb dir>
+#   godot --headless --path assets-private/synty/simple-military --script <repo>/scripts/military_kit/simple_military_check.gd -- <glb dir>
 # Exit code 1 when a required node or material is missing.
 extends SceneTree
 

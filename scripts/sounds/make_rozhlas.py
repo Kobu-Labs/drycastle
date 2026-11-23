@@ -12,7 +12,7 @@ Inputs are clean, dry recordings in assets/drycastle-rozhlas/source/ (mono or st
 Every badness comes from here (band limit, low sample rate, bit crushing, clipping, echo, hiss, hum, wobble),
 so it can be tuned without re-recording. Needs ffmpeg and ffprobe; standard library only:
 
-    python3 -I scripts/make_rozhlas.py [--src DIR] [--out DIR] [--seed N] [--variants N] [--song-start S] [--song-seconds S] [--keep-wavs]
+    python3 -I scripts/sounds/make_rozhlas.py [--src DIR] [--out DIR] [--seed N] [--variants N] [--song-start S] [--song-seconds S] [--keep-wavs]
 
 Each variant uses a different seed (different hiss and echo taps), so one recording gives several broadcasts;
 list them all in godot/shooter/data/rozhlas.json. The baked lengths are written to its "lengths_s" (the server, which has no audio engine, schedules
@@ -28,8 +28,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-RATE = 44100
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from audio import RATE, duration, load_voice, run
+
+ROOT = Path(__file__).resolve().parents[2]
 
 # Song: tinny and a little distorted, but the beat and the tune carry.
 SONG = dict(low=300, high=4000, rate=11025, bits=10, crush_mix=0.4, wobble_hz=4.0, wobble_depth=0.04,
@@ -41,17 +43,6 @@ SONG_START_S, SONG_SECONDS, SONG_FADE_S = 0.0, 60.0, 3.0  # the part of the song
 PEAK_DB = -1.0  # the baked file's loudest peak: the sounds of the game peak near 0 dBFS, and the distance in rozhlas.json does the quieting
 FADE_S, BED_NOISE = 0.5, 0.0  # every part fades in and out; BED_NOISE is a faint hiss under the whole broadcast (0 = none)
 GAP_SONG_S, GAP_VOICE_S, GAP_CLEAR_S = 0.6, 1.0, 0.0  # silence after the song, after the first announcement (before OPAKUJEM), after OPAKUJEM
-
-
-def run(cmd):
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.returncode != 0:
-        sys.exit(f"{' '.join(cmd[:3])} failed:\n{r.stderr[-1500:]}")
-    return r.stdout
-
-
-def duration(path):
-    return float(run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)]))
 
 
 def find(src, stem):
@@ -71,16 +62,6 @@ def degrade(inp, out, chain, noise, seed):
 def song_chain(p):
     return (f"highpass=f={p['low']},lowpass=f={p['high']},aresample={p['rate']},acrusher=bits={p['bits']}:mix={p['crush_mix']},"
             f"vibrato=f={p['wobble_hz']}:d={p['wobble_depth']},aecho={p['echo']},alimiter=limit=0.9:level=0,volume={p['level_db']}dB")
-
-
-def load_voice(path=VOICE_FILE):
-    """The shared voice-chain file: params keep the literal text written in it (floats as str), so both builders spell every value alike."""
-    text = Path(path).read_text()
-    v = json.loads(text)
-    if v.get("version") != 1:
-        sys.exit(f"{path}: unsupported version {v.get('version')}")
-    v["params"] = json.loads(text, parse_float=str, parse_int=str)["params"]
-    return v
 
 
 def voice_chain(v, rng):
@@ -107,7 +88,7 @@ def trim(inp, out, start, seconds, fade):
 
 def bake(src, out, seed, tmp, song_start=SONG_START_S, song_seconds=SONG_SECONDS):
     rng = random.Random(seed)
-    VOICE = load_voice()
+    VOICE = load_voice(VOICE_FILE)
     VOICE_NOISE = float(VOICE["params"]["noise"])
     song, ann, opa = find(src, "song"), find(src, "announcement"), find(src, "opakujem")
     trim(song, tmp / "song_cut.wav", song_start, song_seconds, SONG_FADE_S)

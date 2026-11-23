@@ -5,18 +5,18 @@ Additive synthesis of inharmonic bell partials (hum, prime, tierce, quint, nomin
 beat from a detuned twin; a few strokes about 2 s apart on two bells (a lower and a higher), a short strike click, a little echo. Deterministic.
 Needs numpy and ffmpeg:
 
-    python3 scripts/make_church_bells.py [--out PATH] [--seconds 12] [--stroke-gap 2.0]
+    python3 scripts/sounds/make_church_bells.py [--out PATH] [--seconds 12] [--stroke-gap 2.0]
 """
 import argparse
-import subprocess
-import tempfile
-import wave
+import sys
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-RATE = 44100
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from audio import RATE, encode_ogg
+
+ROOT = Path(__file__).resolve().parents[2]
 
 # (frequency ratio to the strike note, level, decay time constant in seconds): the classic church bell, minor-third tierce included.
 PARTIALS = [
@@ -78,15 +78,8 @@ def main() -> None:
     mix[-fade:] *= np.linspace(1, 0, fade) ** 2
     mix *= 10 ** (-3 / 20) / np.max(np.abs(mix))  # peak -3 dBFS
 
-    pcm = (mix * 32767).astype("<i2")
     out = Path(a.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as tmp:
-        wav = Path(tmp) / "bells.wav"
-        with wave.open(str(wav), "wb") as w:
-            w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE)
-            w.writeframes(pcm.tobytes())
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-ac", "1", "-c:a", "libvorbis", "-q:a", "5", str(out)], check=True)
+    encode_ogg((mix * 32767).astype("<i2"), out)
     print(f"{out}: {a.seconds:.1f} s, peak {20 * np.log10(np.max(np.abs(mix))):.1f} dBFS")
 
 

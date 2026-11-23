@@ -7,18 +7,18 @@
 
 Deterministic. Needs numpy and ffmpeg:
 
-    python3 scripts/make_lock_sounds.py [--out DIR]
+    python3 scripts/sounds/make_lock_sounds.py [--out DIR]
 """
 import argparse
-import subprocess
-import tempfile
-import wave
+import sys
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-RATE = 44100
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from audio import RATE, encode_ogg
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def tone(freq: float, seconds: float, attack: float, release: float, square: float = 0.0) -> np.ndarray:
@@ -35,16 +35,7 @@ def tone(freq: float, seconds: float, attack: float, release: float, square: flo
 def write(path: Path, mix: np.ndarray, peak_db: float) -> None:
     mix = mix * 10 ** (peak_db / 20) / np.max(np.abs(mix))
     pcm = (mix * 32767).astype("<i2")
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-        wav = Path(tmp.name)
-    with wave.open(str(wav), "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(RATE)
-        w.writeframes(pcm.tobytes())
-    path.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-c:a", "libvorbis", "-q:a", "5", str(path)], check=True)
-    wav.unlink()
+    encode_ogg(pcm, path)
     print(f"wrote {path} ({len(pcm) / RATE:.2f} s)")
 
 

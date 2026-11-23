@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Step 5 of the SIMPLE Military vehicle batch (scripts/build_simple_military.sh): adds the pack "synty-simple-military" to assets-private/manifest.json
+"""Step 5 of the SIMPLE Military vehicle batch (scripts/military_kit/build_simple_military.sh): adds the pack "synty-simple-military" to assets-private/manifest.json
 (the shared manifest of the private packs; the entries of the other packs are kept, this pack's are replaced), so `pack:synty-simple-military/<name>` ids
 resolve (MapLoader.ReadAssetEntries; vehicles.json `model`). The sizes are measured on the built GLBs by the model scripts (docs/research/scud-models-facts.d).
 
-    python3 -I scripts/simple_military_manifest.py [assets-private dir]
+    python3 -I scripts/military_kit/simple_military_manifest.py [assets-private dir]
 """
 import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 PACK = "synty-simple-military"
 DIR = "synty/glb/simple-military"
 MODELS = [  # (file stem, facts file, display name, tags)

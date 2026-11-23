@@ -4,18 +4,18 @@
 A bright metal tink (#307): three inharmonic sine modes (about 6.0, 10.4 and 15.2 kHz) with fast exponential decays and a 0.4 ms attack. Each variant detunes the modes a
 little, so a burst does not repeat one sample. One landing is one file (the game plays one per bounce, pitch-varied). Deterministic. Needs numpy and ffmpeg:
 
-    python3 scripts/make_casing_clinks.py [--out-dir DIR] [--variants 4] [--seed 307]
+    python3 scripts/sounds/make_casing_clinks.py [--out-dir DIR] [--variants 4] [--seed 307]
 """
 import argparse
-import subprocess
-import tempfile
-import wave
+import sys
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-RATE = 44100
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from audio import RATE, encode_ogg
+
+ROOT = Path(__file__).resolve().parents[2]
 MODES = [(6000.0, 0.030, 1.0), (10400.0, 0.018, 0.6), (15200.0, 0.009, 0.4)]  # Hz, decay time constant in s, level
 
 
@@ -41,14 +41,8 @@ def main() -> None:
     out_dir = Path(a.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     for i in range(1, a.variants + 1):
-        pcm = (tink(rng) * 32767).astype("<i2")
         out = out_dir / f"casing_tink_{i}.ogg"
-        with tempfile.TemporaryDirectory() as tmp:
-            wav = Path(tmp) / "tink.wav"
-            with wave.open(str(wav), "wb") as w:
-                w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE)
-                w.writeframes(pcm.tobytes())
-            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-ac", "1", "-c:a", "libvorbis", "-q:a", "5", str(out)], check=True)
+        encode_ogg((tink(rng) * 32767).astype("<i2"), out)
         print(out)
 
 

@@ -8,18 +8,18 @@
 
 Deterministic. Needs numpy and ffmpeg:
 
-    python3 scripts/make_harvester_sounds.py [--out-dir DIR] [--seed 7]
+    python3 scripts/sounds/make_harvester_sounds.py [--out-dir DIR] [--seed 7]
 """
 import argparse
-import subprocess
-import tempfile
-import wave
+import sys
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-RATE = 44100
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from audio import RATE, encode_ogg
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def noise(n: int, lo: float, hi: float, rng: np.random.Generator) -> np.ndarray:
@@ -52,14 +52,7 @@ def thud(n: int, at: float, f0: float, decay: float, amp: float) -> np.ndarray:
 
 def save(mix: np.ndarray, out: Path) -> None:
     mix = mix * 10 ** (-3 / 20) / (np.max(np.abs(mix)) + 1e-9)  # peak -3 dBFS
-    pcm = (mix * 32767).astype("<i2")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as tmp:
-        wav = Path(tmp) / "s.wav"
-        with wave.open(str(wav), "wb") as w:
-            w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE)
-            w.writeframes(pcm.tobytes())
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-ac", "1", "-c:a", "libvorbis", "-q:a", "5", str(out)], check=True)
+    encode_ogg((mix * 32767).astype("<i2"), out)
     print(f"{out}: {len(mix) / RATE:.1f} s")
 
 

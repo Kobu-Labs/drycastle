@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Run locally before a release: says which separately published pieces are stale and must be published again first.
 
-    python3 -I scripts/check_release_assets.py        (make release-check)
+    python3 -I scripts/release/check_release_assets.py        (make release-check)
 
 Checks, each printed as ok / REPUBLISH / warn:
   private pack  the pack built now from assets-private/ against private-pack.json (the one players would get), and that the
-                encrypted file is still served at its URL with the right size        -> scripts/publish-private-pack.sh user@host
+                encrypted file is still served at its URL with the right size        -> scripts/release/publish-private-pack.sh user@host
   vehicle models  every `pack:` model vehicles.json names (`model` and each of `skins`) is a row of assets-private/manifest.json with its file there, and the
                 file is in the pack zip built above (a skin that was never standardized, or left out of the pack, would draw a box)
   map           the files of out/village/map against the map named in map-version.txt (tactical-map.png is ignored: it is
-                rendered at publish time)                                             -> scripts/publish-map.sh
+                rendered at publish time)                                             -> scripts/release/publish-map.sh
   launcher      godot/launcher, godot/LauncherCore and the launcher readme against the newest launcher-v* tag
                                                                                       -> git tag launcher-vX.Y.Z && git push origin launcher-vX.Y.Z
   committed     map-version.txt and private-pack.json have no uncommitted change (the release reads them from git)
@@ -26,7 +26,7 @@ import zipfile
 import zlib
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 MAP_DIR = ROOT / "out/village/map"
 IGNORED_MAP_FILES = ("tactical-map.png", "tactical-map.png.json")
 LAUNCHER_PATHS = ["godot/launcher", "godot/LauncherCore", "docs/launcher-readme.txt"]
@@ -57,18 +57,18 @@ def check_pack() -> None:
     if not (ROOT / "assets-private").is_dir():
         report("warn", name, "no assets-private/ on this machine: cannot tell whether the pack is current")
         return
-    built = run(sys.executable, "-I", "scripts/make_private_pack.py")
+    built = run(sys.executable, "-I", "scripts/release/make_private_pack.py")
     if built.returncode != 0:
         report("REPUBLISH", name, "the pack does not build: " + (built.stderr.strip().splitlines() or ["?"])[-1])
         return
     now = json.loads((ROOT / "out/private-pack/assets-private.json").read_text())["sha256"]
     desc = ROOT / "private-pack.json"
     if not desc.is_file():
-        report("REPUBLISH", name, "never published (no private-pack.json): scripts/publish-private-pack.sh user@host")
+        report("REPUBLISH", name, "never published (no private-pack.json): scripts/release/publish-private-pack.sh user@host")
         return
     pub = json.loads(desc.read_text())
     if pub["plain_sha256"] != now:
-        report("REPUBLISH", name, f"assets-private/ changed since pack {pub['id']} (now {now[:12]}): scripts/publish-private-pack.sh user@host")
+        report("REPUBLISH", name, f"assets-private/ changed since pack {pub['id']} (now {now[:12]}): scripts/release/publish-private-pack.sh user@host")
         return
     try:
         with urllib.request.urlopen(urllib.request.Request(pub["file"]["url"], method="HEAD"), timeout=15) as r:
@@ -114,7 +114,7 @@ def check_vehicle_models() -> None:
             missing.append(f"{ref} (not in the pack zip)")
     if missing:
         shown = "; ".join(missing[:4]) + (f" and {len(missing) - 4} more" if len(missing) > 4 else "")
-        report("REPUBLISH", name, f"{len(missing)} of {len(refs)} vehicle models are not in the private pack: {shown}. Run scripts/build_vehicle_packs.sh, then publish the pack")
+        report("REPUBLISH", name, f"{len(missing)} of {len(refs)} vehicle models are not in the private pack: {shown}. Run scripts/vehicles/build_vehicle_packs.sh, then publish the pack")
     else:
         report("ok", name, f"all {len(refs)} vehicle models (skins included) are in the pack" + ("" if packed is not None else " tree (no zip to check)"))
 
@@ -143,7 +143,7 @@ def check_map() -> None:
         return
     zip_path = published_map_zip(tag)
     if zip_path is None:
-        report("REPUBLISH", name, f"release {tag} (map-version.txt) has no readable map.zip: scripts/publish-map.sh")
+        report("REPUBLISH", name, f"release {tag} (map-version.txt) has no readable map.zip: scripts/release/publish-map.sh")
         return
     with zipfile.ZipFile(zip_path) as z:
         published = {i.filename: (i.file_size, i.CRC) for i in z.infolist() if not i.is_dir() and i.filename not in IGNORED_MAP_FILES}
@@ -160,7 +160,7 @@ def check_map() -> None:
     changed = sorted(k for k in local.keys() | published.keys() if local.get(k) != published.get(k))
     if changed:
         shown = ", ".join(changed[:4]) + (f" and {len(changed) - 4} more" if len(changed) > 4 else "")
-        report("REPUBLISH", name, f"out/village/map differs from {tag} in {len(changed)} files ({shown}): scripts/publish-map.sh, commit map-version.txt")
+        report("REPUBLISH", name, f"out/village/map differs from {tag} in {len(changed)} files ({shown}): scripts/release/publish-map.sh, commit map-version.txt")
     else:
         report("ok", name, f"{tag} is the local map ({len(local)} files)")
 

@@ -2,7 +2,7 @@
 #   cp .env.example .env && edit .env      # set POSTGRES_PASSWORD
 #   docker compose up -d --build
 # The game port is UDP 27015; PostgreSQL is only reachable from the server container, never from the internet.
-# The private asset pack (scripts/publish-private-pack.sh) is served encrypted over plain HTTP on TCP 27080 (PACK_PORT).
+# The private asset pack (scripts/release/publish-private-pack.sh) is served encrypted over plain HTTP on TCP 27080 (PACK_PORT).
 name: drycastle
 
 # Container logs are capped per service: the server prints a status line every 2 s (#177).
@@ -59,7 +59,7 @@ services:
       start_period: 20s
     ports:
       - "${GAME_PORT:-27015}:27015/udp"
-    # The private asset pack, unencrypted, uploaded by scripts/publish-private-pack.sh (never by CI): collision of the pack's map objects and
+    # The private asset pack, unencrypted, uploaded by scripts/release/publish-private-pack.sh (never by CI): collision of the pack's map objects and
     # the animal hit shapes. An empty folder is fine: the server then uses boxes, as a client without the pack does.
     volumes:
       - ../assets-private:/app/assets-private:ro

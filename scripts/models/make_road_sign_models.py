@@ -6,10 +6,10 @@ ticket #425 (dopravne znacky), each a galvanised pole with a metal plate on two 
     sign_give_way      Daj prednost v jazde (P6): inverted triangle, red border, white field
     sign_main_road     Hlavna cesta (P3 style): yellow diamond, thin black line, white border
 
-Original geometry written as code (no third-party model, no texture, no photo); standard library only. The mesh helpers are the
-flak script's, loaded from the file next to this one:
+Original geometry written as code (no third-party model, no texture, no photo); standard library only. The mesh helpers are
+scripts/lib/meshkit.py:
 
-    python3 -I scripts/make_road_sign_models.py [out_dir]      # rebuild the three GLBs, byte for byte
+    python3 -I scripts/models/make_road_sign_models.py [out_dir]      # rebuild the three GLBs, byte for byte
 
 Frame: glTF/Godot, metres, y up, origin on the ground at the foot of the pole. The plate FACES +Z (read it from +Z; its back is plain
 galvanised metal). Pole 2.5 m (60 mm round, cap on top), plate centre 2.15 m, plate 0.5 to 0.75 m across.
@@ -22,19 +22,14 @@ The manifest entry (assets/manifest.json "plates") gives the plate's centre as t
 Materials are PBR metal, no emissive: the pole is galvanised steel (metallic 0.75, rough 0.4) and the plate is painted sheet metal
 (metallic 0.6, rough 0.3, so it shines in the sun like a glossy plate).
 """
-import importlib.util
-import json
-import struct
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-OUT_DIR = HERE.parent / "assets" / "drycastle-generated-models"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from glb import materials_from, write_glb
+from meshkit import Node, box, cyl, extrude, inset
 
-_spec = importlib.util.spec_from_file_location("make_flak_model", HERE / "make_flak_model.py")
-kit = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(kit)
-sub, cross, unit, extrude, box, cyl, inset, Node = kit.sub, kit.cross, kit.unit, kit.extrude, kit.box, kit.cyl, kit.inset, kit.Node
+OUT_DIR = Path(__file__).resolve().parents[2] / "assets" / "drycastle-generated-models"
 
 # ----------------------------------------------------------------------------- materials (sRGB)
 
@@ -166,81 +161,6 @@ def build(kind):
     return root
 
 
-# ----------------------------------------------------------------------------- GLB
-
-
-def write_glb(root, path):
-    buf = bytearray()
-    views, accessors, meshes, nodes = [], [], [], []
-    mat_names = list(MATERIALS)
-    materials = []
-    for name in mat_names:
-        r, g, b, rough, metal = MATERIALS[name]
-        lin = [round(kit.srgb_to_linear(v), 4) for v in (r, g, b)]
-        materials.append({"name": name, "pbrMetallicRoughness": {"baseColorFactor": lin + [1.0], "metallicFactor": metal, "roughnessFactor": rough}})
-
-    def view(data, target):
-        while len(buf) % 4:
-            buf.append(0)
-        views.append({"buffer": 0, "byteOffset": len(buf), "byteLength": len(data), "target": target})
-        buf.extend(data)
-        return len(views) - 1
-
-    def emit(node, parent_origin):
-        entry = {"name": node.name}
-        tr = sub(node.origin, parent_origin)
-        if any(abs(v) > 1e-9 for v in tr):
-            entry["translation"] = [round(v, 5) + 0.0 for v in tr]
-        index = len(nodes)
-        nodes.append(entry)
-        if node.tris:
-            prims = []
-            for mi, mname in enumerate(mat_names):
-                verts, lookup, idx = [], {}, []
-                for m, ps, nr in node.tris:
-                    if m != mname:
-                        continue
-                    fn = unit(cross(sub(ps[1], ps[0]), sub(ps[2], ps[0])))
-                    for k in range(3):
-                        p = sub(ps[k], node.origin)
-                        n = nr[k] if nr else fn
-                        key = tuple(round(v, 5) for v in p) + tuple(round(v, 3) for v in n)
-                        if key not in lookup:
-                            lookup[key] = len(verts)
-                            verts.append((p, n))
-                        idx.append(lookup[key])
-                if not idx:
-                    continue
-                assert len(verts) < 65536
-                pos = b"".join(struct.pack("<3f", *p) for p, _ in verts)
-                nor = b"".join(struct.pack("<3f", *n) for _, n in verts)
-                lo = [struct.unpack("<f", struct.pack("<f", min(p[i] for p, _ in verts)))[0] for i in range(3)]
-                hi = [struct.unpack("<f", struct.pack("<f", max(p[i] for p, _ in verts)))[0] for i in range(3)]
-                accessors.append({"bufferView": view(pos, 34962), "componentType": 5126, "count": len(verts), "type": "VEC3", "min": lo, "max": hi})
-                accessors.append({"bufferView": view(nor, 34962), "componentType": 5126, "count": len(verts), "type": "VEC3"})
-                accessors.append({"bufferView": view(struct.pack(f"<{len(idx)}H", *idx), 34963), "componentType": 5123, "count": len(idx), "type": "SCALAR"})
-                a = len(accessors)
-                prims.append({"attributes": {"POSITION": a - 3, "NORMAL": a - 2}, "indices": a - 1, "material": mi})
-            entry["mesh"] = len(meshes)
-            meshes.append({"name": node.name, "primitives": prims})
-        kids = [emit(c, node.origin) for c in node.children]
-        if kids:
-            entry["children"] = kids
-        return index
-
-    top = emit(root, (0.0, 0.0, 0.0))
-    while len(buf) % 4:
-        buf.append(0)
-    gltf = {"asset": {"version": "2.0", "generator": "scripts/make_road_sign_models.py (Drycastle)", "copyright": "CC0 1.0, generated by the project's own script"},
-            "scene": 0, "scenes": [{"name": root.name, "nodes": [top]}], "nodes": nodes, "meshes": meshes, "materials": materials,
-            "accessors": accessors, "bufferViews": views, "buffers": [{"byteLength": len(buf)}]}
-    js = json.dumps(gltf, separators=(",", ":")).encode()
-    js += b" " * (-len(js) % 4)
-    out = struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(js) + 8 + len(buf)) + struct.pack("<I4s", len(js), b"JSON") + js + struct.pack("<I4s", len(buf), b"BIN\0") + bytes(buf)
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_bytes(out)
-
-
 FILES = {"stop": "sign_stop.glb", "give_way": "sign_give_way.glb", "main_road": "sign_main_road.glb"}
 
 
@@ -248,7 +168,7 @@ def main():
     out_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else OUT_DIR
     for kind, name in FILES.items():
         root = build(kind)
-        write_glb(root, out_dir / name)
+        write_glb(root, out_dir / name, materials_from(MATERIALS), "scripts/make_road_sign_models.py (Drycastle)")
         lo, hi = [1e9] * 3, [-1e9] * 3
         total = 0
         for n in root.walk():

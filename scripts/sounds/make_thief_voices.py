@@ -8,35 +8,24 @@ Each recording: trimmed of silence at both ends, peak-normalised, run through ON
 The chain is data in godot/shooter/data/thief_voice.json (ffmpeg filter list + parameters), tuned by ear without touching this file.
 Needs ffmpeg and ffprobe (ffmpeg with rubberband); standard library only:
 
-    python3 -I scripts/make_thief_voices.py [--src DIR] [--out DIR] [--only N] [--keep-wavs]
+    python3 -I scripts/sounds/make_thief_voices.py [--src DIR] [--out DIR] [--only N] [--keep-wavs]
 
 --only N bakes just line N (the Nth recording) for quick listening; --keep-wavs keeps the dry and the processed wavs in OUT/parts/.
 A README with the provenance table is written next to the output. The output is private (assets-private/ is gitignored).
 """
 import argparse
-import json
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-RATE = 44100
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from audio import RATE, duration, load_voice, run
+
+ROOT = Path(__file__).resolve().parents[2]
 VOICE_FILE = ROOT / "godot/shooter/data/thief_voice.json"
 OGG_Q = "4"  # libvorbis quality, as the rozhlas bake
-
-
-def run(cmd):
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.returncode != 0:
-        sys.exit(f"{' '.join(cmd[:3])} failed:\n{r.stderr[-1500:]}")
-    return r
-
-
-def duration(path):
-    return float(run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)]).stdout)
 
 
 def peak_db(path):
@@ -59,16 +48,6 @@ def recordings(src):
     if not files:
         sys.exit(f"no 'New Recording*.mov' in {src}")
     return files
-
-
-def load_voice(path=VOICE_FILE):
-    """The voice-chain file: params keep the literal text written in it (floats as str), so every value is spelled as written."""
-    text = Path(path).read_text()
-    v = json.loads(text)
-    if v.get("version") != 1:
-        sys.exit(f"{path}: unsupported version {v.get('version')}")
-    v["params"] = json.loads(text, parse_float=str, parse_int=str)["params"]
-    return v
 
 
 def fill(templates, params, where):
@@ -125,7 +104,7 @@ def bake(src_file, out, seed, tmp, v, keep=None):
 
 
 def write_readme(out, rows):
-    table = "\n".join(f"| `{name}` | `{src}` | {dur:.2f} s | {pk:.1f} dB | recorded by the project owners, processed by `scripts/make_thief_voices.py` |" for name, src, dur, pk in rows)
+    table = "\n".join(f"| `{name}` | `{src}` | {dur:.2f} s | {pk:.1f} dB | recorded by the project owners, processed by `scripts/sounds/make_thief_voices.py` |" for name, src, dur, pk in rows)
     (out / "README.md").write_text(f"""# Thieves' voice lines
 
 `line_NN.ogg` are the lines the thieves say to a player who walks near them (docs/events/thieves/09-audio.md).

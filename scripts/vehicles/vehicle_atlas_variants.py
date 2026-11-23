@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Which atlases give a Synty vehicle valid colour variants (docs/research/vehicle-models-facts.md).
-    python3 scripts/vehicle_atlas_variants.py <dump.json> <base atlas.png> <candidate atlas.png> [<candidate> ...]
-For every mesh node of the dump (scripts/vehicle_model_dump.gd), samples each triangle's centroid UV in the base atlas and in each candidate and
+    python3 scripts/vehicles/vehicle_atlas_variants.py <dump.json> <base atlas.png> <candidate atlas.png> [<candidate> ...]
+For every mesh node of the dump (scripts/vehicles/vehicle_model_dump.gd), samples each triangle's centroid UV in the base atlas and in each candidate and
 reports the share of triangles (and of area) whose colour changes by more than 12/255 (per channel max), plus the base colours that change and what they become. A candidate that changes some triangles and leaves the rest (tyres, glass, lamps) alone is a valid paint variant.
 """
 import json, sys

@@ -8,18 +8,18 @@
 A thump is a sine that falls in pitch (70 to 40 Hz) under a fast decay, with a little low noise for the body. A breath is band-limited noise
 whose band moves (an inhale rises, an exhale falls) under a smooth swell. Deterministic. Needs numpy and ffmpeg:
 
-    python3 scripts/make_breath_sounds.py [--out-dir DIR] [--seed 5]
+    python3 scripts/sounds/make_breath_sounds.py [--out-dir DIR] [--seed 5]
 """
 import argparse
-import subprocess
-import tempfile
-import wave
+import sys
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-RATE = 44100
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from audio import RATE, encode_ogg
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def band_noise(n: int, lo: float, hi: float, rng: np.random.Generator) -> np.ndarray:
@@ -64,14 +64,7 @@ def breath(seconds: float, rise: float, f_from: tuple, f_to: tuple, rng: np.rand
 
 def write(out: Path, mix: np.ndarray, peak_db: float) -> None:
     mix = mix * 10 ** (peak_db / 20) / np.max(np.abs(mix))
-    pcm = (mix * 32767).astype("<i2")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as tmp:
-        wav = Path(tmp) / "s.wav"
-        with wave.open(str(wav), "wb") as w:
-            w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE)
-            w.writeframes(pcm.tobytes())
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-ac", "1", "-c:a", "libvorbis", "-q:a", "5", str(out)], check=True)
+    encode_ogg((mix * 32767).astype("<i2"), out)
     print(f"{out}: {len(mix) / RATE:.2f} s, peak {peak_db:.1f} dBFS")
 
 

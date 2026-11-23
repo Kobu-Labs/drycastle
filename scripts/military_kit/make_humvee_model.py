@@ -4,9 +4,9 @@ interior, a roof ring gun and a tow hitch.
 
 PRIVATE: the model carries the pack's geometry, so it is written under assets-private/ (never committed):
     assets-private/synty/glb/simple-military/humvee.glb          model id  pack:synty-simple-military/humvee
-Needs numpy (no -I) and the extracted pack (scripts/build_simple_military.sh runs extract, parts export and the three model scripts):
+Needs numpy (no -I) and the extracted pack (scripts/military_kit/build_simple_military.sh runs extract, parts export and the three model scripts):
 
-    python3 scripts/make_humvee_model.py [out.glb]
+    python3 scripts/military_kit/make_humvee_model.py [out.glb]
 
 The pack model has no windows (glass is paint on a palette swatch) and no interior. This script removes the faces that wear the glass swatch
 (two windscreen halves, four door windows, the roof hatch), puts a `glass_N` pane in each opening, and builds floor, tunnel, dash, steering wheel,
@@ -44,7 +44,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import simple_military_kit as K
-from simple_military_kit import Mesh, box, beam, ring, cylinder, poly, merge, rot_x, rot_y, move_m
+from simple_military_kit import beam, box, r, rot_x
 
 OUT = K.OUT_DIR / "humvee.glb"
 FACTS = K.ROOT / "docs" / "research" / "scud-models-facts.d" / "humvee.json"
@@ -108,7 +108,7 @@ def build():
             key = ("door_front_" if c[2] < 0.0 else "door_rear_") + side
         groups.setdefault(key, []).extend(cut_t.v[cut_t.f[i]])
     order = ["windscreen_l", "windscreen_r", "door_front_l", "door_rear_l", "door_front_r", "door_rear_r"]
-    kit_node = K.flak.Node("panes")
+    kit_node = K.Node("panes")
     gl = K.GlassSet("humvee")
     for pid in order:
         outline = K.outline_of(groups[pid])
@@ -262,10 +262,6 @@ def build():
         mdl.node(k, hull, p)
     mdl.node("tow_hitch", hull, HITCH)
     return mdl, dict(seats=SEATS, lamps=LAMPS, hitch=HITCH, ring=RING_C, trunnion=TR, wheel_pos=wheel_pos, floor_y=floor_y, cushion_top=cushion_top, gl=gl, sight=TR + np.array([0.0, 0.22, 0.55]), muzzle=(np.array([0.0, 0.346, 1.332]) - T_L) * np.array([-GX, GY, -GX]) + TR, broot=broot)
-
-
-def r(x, n=3):
-    return [round(float(v), n) + 0.0 for v in x]
 
 
 def main():

@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: 8.0.x }
       - name: No paid asset is tracked
-        run: scripts/check-no-private-assets.sh
+        run: scripts/release/check-no-private-assets.sh
       - name: Tests
         run: dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj
       - name: Install Godot mono and export templates
@@ -54,7 +54,7 @@ jobs:
         run: make shooter-export-server
       - name: Manifest
         run: |
-          python3 scripts/make_manifest.py --repo "$GITHUB_REPOSITORY" --tag "${{ steps.v.outputs.tag }}" --channel "${{ steps.v.outputs.channel }}" \
+          python3 scripts/release/make_manifest.py --repo "$GITHUB_REPOSITORY" --tag "${{ steps.v.outputs.tag }}" --channel "${{ steps.v.outputs.channel }}" \
             --commit "$GITHUB_SHA" --protocol "${{ steps.v.outputs.protocol }}" \
             --windows-zip out/shooter/drycastle-game-windows.zip --linux-zip out/shooter/drycastle-game-linux.zip --macos-zip out/shooter/drycastle-game-macos.zip \
             --map-tag "${{ steps.v.outputs.map }}" --map-json "$RUNNER_TEMP/map/map.json" --pack-json private-pack.json --out out/shooter/manifest.json

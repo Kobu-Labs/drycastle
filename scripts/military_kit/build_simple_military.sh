@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One re-runnable batch: Synty SIMPLE Military (paid, private) -> humvee, scud, scud_missile, rocket_cart GLBs under assets-private/synty/glb/simple-military/.
-#   scripts/build_simple_military.sh [package.unitypackage] [assets-private dir]
+#   scripts/military_kit/build_simple_military.sh [package.unitypackage] [assets-private dir]
 # Defaults: ~/downloads/SIMPLE_Military_Unity_2021_3_v1_3_8.unitypackage and the main checkout's assets-private/ (it lives only there, never in a worktree).
 # Needs: python3 + numpy + Pillow, godot (4.7+) on PATH. Nothing of the pack is committed; only these scripts are.
 #   1 simple_military_extract.py   unitypackage -> assets-private/synty/simple-military/{fbx,textures,sources.json,project.godot}

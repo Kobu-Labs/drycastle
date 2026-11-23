@@ -1,50 +1,38 @@
 """Shared helpers of the three SIMPLE Military vehicle scripts (make_humvee_model.py, make_scud_model.py, make_rocket_cart_model.py).
 
-Needs numpy (no -I: it may live in the user site) and the extracted pack: scripts/build_simple_military.sh makes it.
+Needs numpy (no -I: it may live in the user site) and the extracted pack: scripts/military_kit/build_simple_military.sh makes it.
 
 What is here
 - Pack          reads parts/<Name>.glb (re-exported pack FBX, simple_military_parts.gd): every mesh with its world matrix
 - Mesh          triangles with normals and uv, in the vehicle frame of the model being built; transform / split / clip helpers
 - Model         the node tree + materials + GLB writer (translation-only nodes, vertices stored in the vehicle frame and moved into the
-                node's pivot on the way out); the glass list comes from the flak script's GlassSet (ADR 0008)
+                node's pivot on the way out); the glass list comes from scripts/lib/glass.py's GlassSet (ADR 0008)
 - Draw          small primitives for the generated parts (box, beam, ring, disk, prism, loft) with flat shading
 
 Pack frame: the Synty/Unity models face +Z and use pack units (the troop car is 7 m long, the Scud truck 14.8 m). Godot's FBX import keeps that.
 The model scripts turn them into the game frame (forward -Z) and scale them to real sizes: Pack.world(name, scale) does both.
 """
-import importlib.util
 import json
 import math
 import struct
+import sys
 from pathlib import Path
 
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent
+ROOT = HERE.parent.parent
+sys.path.insert(0, str(HERE.parent / "lib"))
+from glass import GlassSet  # noqa: E402,F401  (the model scripts use K.GlassSet and K.Node)
+from glb import read_glb  # noqa: E402
+from meshkit import Node  # noqa: E402,F401  (a model script's glass panes hang on one)
 PRIVATE = Path("/home/jjakubec/coding/drycastle/assets-private") if not (ROOT / "assets-private").exists() else ROOT / "assets-private"
 PROJECT = PRIVATE / "synty" / "simple-military"
 OUT_DIR = PRIVATE / "synty" / "glb" / "simple-military"
 PACK_ID = "synty-simple-military"
 
-_spec = importlib.util.spec_from_file_location("make_flak_model", HERE / "make_flak_model.py")
-flak = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(flak)
-GlassSet = flak.GlassSet
-vehicles_json_path = flak.vehicles_json_path
-
 
 # ----------------------------------------------------------------------------- glTF reader (what Godot's exporter writes)
-
-def read_glb(path):
-    data = Path(path).read_bytes()
-    jlen, = struct.unpack_from("<I", data, 12)
-    doc = json.loads(data[20:20 + jlen])
-    off = 20 + jlen
-    blen, = struct.unpack_from("<I", data, off)
-    blob = data[off + 8:off + 8 + blen]
-    return doc, blob
-
 
 def _acc(doc, blob, i):
     a = doc["accessors"][i]
@@ -565,3 +553,20 @@ def rotate_about(mesh, m, center):
     """Mesh rotated by the 4x4 (rotation) matrix m about a point."""
     c = np.array(center, float)
     return mesh.apply(move_m(c) @ m @ move_m(-c))
+
+
+# ----------------------------------------------------------------------------- helpers of the model scripts' facts files
+
+def r(x, n=3):
+    """A vector as a list of floats rounded to n places (no "-0.0")."""
+    return [round(float(v), n) + 0.0 for v in x]
+
+
+def volume_centroid(m):
+    """The centre of mass of a closed Mesh (the middle of its bounding box when it has no volume)."""
+    a, b, c = m.v[m.f[:, 0]], m.v[m.f[:, 1]], m.v[m.f[:, 2]]
+    o = m.v.mean(axis=0)
+    vol = np.einsum("ij,ij->i", a - o, np.cross(b - o, c - o)) / 6.0
+    if abs(vol.sum()) < 1e-6:
+        return (m.v.min(axis=0) + m.v.max(axis=0)) / 2
+    return o + (((a + b + c + o) / 4.0 - o) * vol[:, None]).sum(axis=0) / vol.sum()

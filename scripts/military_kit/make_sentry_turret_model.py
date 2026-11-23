@@ -2,9 +2,9 @@
 """Builds the sentry turret model (#306): the pack's SM_Prop_Mg_stand_01 (a tripod machine gun, ONE mesh in the pack) split into a fixed `stand` and a
 yawing `gun`. Synty SIMPLE Military geometry, so the model is PRIVATE and is written under assets-private/ (never committed):
     assets-private/synty/glb/simple-military/sentry_turret.glb     model id  pack:synty-simple-military/sentry_turret
-Needs numpy (no -I) and the extracted pack (scripts/build_simple_military.sh):
+Needs numpy (no -I) and the extracted pack (scripts/military_kit/build_simple_military.sh):
 
-    python3 scripts/make_sentry_turret_model.py [out.glb]
+    python3 scripts/military_kit/make_sentry_turret_model.py [out.glb]
 
 Split: the mesh is eight separate pieces. The three tripod legs (top at the head's foot) are the `stand`; the head, cradle, receiver and barrel are the `gun`.
 Frame: the game's vehicle frame, metres, x right, y up, forward is -Z, origin on the ground under the yaw axis (the pack's own barrel already points to -Z).

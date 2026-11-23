@@ -4,7 +4,7 @@
     assets/drycastle-generated-models/bigfoot.glb        the giant: one skinned mesh, 26 bones, its clips
     assets/drycastle-generated-models/bigfoot_head.glb   its head as the headgear Item (items.json id `bigfoot_head`), unskinned
 
-    python3 scripts/make_bigfoot_model.py [out_dir]      (needs numpy; deterministic)
+    python3 scripts/models/make_bigfoot_model.py [out_dir]      (needs numpy; deterministic)
 
 Original geometry and animation written as code: no third-party model, no texture. Flat-coloured and faceted like the other generated models.
 
@@ -30,6 +30,9 @@ import sys
 from pathlib import Path
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+from glb import srgb_to_linear
 
 # ----------------------------------------------------------------------------- materials (sRGB)
 
@@ -906,10 +909,6 @@ def sample(fn, seconds, looped):
 
 # ----------------------------------------------------------------------------- GLB
 
-def srgb_to_linear(c):
-    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
-
-
 def write_glb(mesh, path, name, skinned):
     buf = bytearray()
     views, accessors = [], []
@@ -1020,7 +1019,7 @@ def report(label, mesh, path):
 
 
 def main():
-    out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent / "assets" / "drycastle-generated-models"
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[2] / "assets" / "drycastle-generated-models"
     body = build_body()
     for _, tri in body.tris:
         for _, w in tri:

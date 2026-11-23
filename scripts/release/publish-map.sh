@@ -2,7 +2,7 @@
 # Publishes the current village map as its own release (map-YYYYMMDD-<hash>) and points the game at it (map-version.txt).
 # Run after `make map`. Commit map-version.txt afterwards; the next push to main ships it to players.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 make map-package
 hash=$(sha256sum out/village/map.zip | cut -c1-8)
 tag="map-$(date +%Y%m%d)-$hash"
