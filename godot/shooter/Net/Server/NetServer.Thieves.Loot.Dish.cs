@@ -60,7 +60,7 @@ public partial class NetServer
     }
 
     /// <summary>Join: the dishes taken so far, when there are any (an empty set is what a client starts with).</summary>
-    void SendDishesOnJoin(Client c)
+    void SendDishesOnJoin(ServerClient c)
     {
         if (_dishes is { TakenCount: > 0 } d) Send(c, new EventMsg((byte)EventKind.DishTaken, DishCodec.Encode(d.TakenObjectIds)));
     }

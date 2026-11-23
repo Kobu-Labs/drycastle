@@ -27,6 +27,15 @@ public partial class NetServer
     /// <summary>holy_mass.json (set by the host); the citizens section.</summary>
     public HolyMassFile HolyMass = new();
 
+    CitizenHitRouter? _citizenHits;
+
+    /// <summary>The router the match asks about citizen hit ids: the Mass crowd and the Urad workers are each added when they exist.</summary>
+    CitizenHitRouter CitizenHits()
+    {
+        if (_citizenHits == null) _match.Citizens = _citizenHits = new CitizenHitRouter();
+        return _citizenHits;
+    }
+
     /// <summary>The Mass event's entry point: spawn citizens for given seats, clear them. Null until the church is loaded (<see cref="EnsureCitizens"/>).</summary>
     public CitizenCrowd? Citizens => _crowd;
 
@@ -101,7 +110,7 @@ public partial class NetServer
     }
 
     /// <summary>"/citizens n" sends n citizens to free seats; "/citizens clear" removes them all.</summary>
-    void ChatCitizens(Client c, IReadOnlyList<string> args)
+    void ChatCitizens(ServerClient c, IReadOnlyList<string> args)
     {
         if (args[0] == "clear")
         {

@@ -15,7 +15,7 @@ public partial class NetServer
     public CamoFile CamoData = null!;
 
     /// <summary>Sends each joined player's look to the joiner, and the joiner's look to every other player.</summary>
-    void SendAppearancesOnJoin(Client c)
+    void SendAppearancesOnJoin(ServerClient c)
     {
         foreach (var o in _byId.Values)
         {
@@ -25,7 +25,7 @@ public partial class NetServer
     }
 
     /// <summary>Saves one loadout slot's look (#141). Only the active slot is broadcast: it is the look others see.</summary>
-    void OnSaveCamo(Client c, int slot, CamoSpec spec)
+    void OnSaveCamo(ServerClient c, int slot, CamoSpec spec)
     {
         var p = c.Profile!;
         if (LoadoutRules.ValidateSlot(slot) is { } slotErr)
@@ -44,11 +44,11 @@ public partial class NetServer
         if (slot == p.Active) BroadcastAppearance(c);
     }
 
-    void BroadcastAppearance(Client c)
+    void BroadcastAppearance(ServerClient c)
     {
         var ev = AppearanceEvent(c);
         foreach (var o in _byId.Values) Send(o, ev);
     }
 
-    EventMsg AppearanceEvent(Client c) => new((byte)EventKind.Appearance, AppearanceCodec.Encode(c.Id, c.Profile!.Camo));
+    EventMsg AppearanceEvent(ServerClient c) => new((byte)EventKind.Appearance, AppearanceCodec.Encode(c.Id, c.Profile!.Camo));
 }

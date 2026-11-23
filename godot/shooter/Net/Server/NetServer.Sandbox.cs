@@ -18,14 +18,14 @@ namespace Drycastle.Shooter.Net.Server;
 public partial class NetServer
 {
     /// <summary>The hello's flags: the sandbox request is kept on the client until the join sends the answer.</summary>
-    void SandboxOnHello(Client c, byte flags)
+    void SandboxOnHello(ServerClient c, byte flags)
     {
         c.SandboxRequested = (flags & HelloFlags.Sandbox) != 0;
         c.Sandbox = AllowSandbox && c.SandboxRequested;
     }
 
     /// <summary>Sends the answer to a sandbox request (no message when the client did not ask).</summary>
-    void SendSandboxStatus(Client c)
+    void SendSandboxStatus(ServerClient c)
     {
         if (SandboxRules.Decide(c.SandboxRequested, AllowSandbox) is not { } answer) return;
         Send(c, new EventMsg((byte)EventKind.SandboxStatus, SandboxEvents.EncodeStatus(answer)));
@@ -36,7 +36,7 @@ public partial class NetServer
     /// An admin turns sandbox mode on or off for a joined player (#156). The player gets the status notice, everyone the name tag
     /// change; unlimited ammo is live at once, the whole hotbar from the next spawn (the loadout is applied at every spawn).
     /// </summary>
-    void SetSandbox(Client c, bool on)
+    void SetSandbox(ServerClient c, bool on)
     {
         c.Sandbox = on;
         _match.SetSandbox(c.Id, on);
@@ -53,7 +53,7 @@ public partial class NetServer
     bool Scores(ushort id) => _match.Get(id) is not { Sandbox: true } && !IsBot(id); // a bot earns no XP and has no stats (#214)
 
     /// <summary>Join: the sandbox name tags of everyone already in sandbox mode go to the joiner, and the joiner's to everyone.</summary>
-    void SandboxAnnounce(Client c)
+    void SandboxAnnounce(ServerClient c)
     {
         var joined = _byId.Values.ToList();
         if (c.Sandbox) foreach (var o in joined) Send(o, new EventMsg((byte)EventKind.SandboxState, SandboxEvents.EncodeState(c.Id, true)));
@@ -61,17 +61,17 @@ public partial class NetServer
         if (c.Sandbox) SendSandboxHeld(c);
     }
 
-    void SendSandboxHeld(Client c) =>
+    void SendSandboxHeld(ServerClient c) =>
         Send(c, new EventMsg((byte)EventKind.SandboxHeld, SandboxEvents.EncodeText(_streaks.SandboxHeldOf(c.Id) ?? "")));
 
     /// <summary>A short line for the owner's toast (a refused action, or the reason the panel did nothing).</summary>
-    void SandboxNote(Client c, string text) => Send(c, new EventMsg((byte)EventKind.SandboxNotice, SandboxEvents.EncodeText(text)));
+    void SandboxNote(ServerClient c, string text) => Send(c, new EventMsg((byte)EventKind.SandboxNotice, SandboxEvents.EncodeText(text)));
 
     /// <summary>
     /// The panel picks a killstreak: it goes into the held slot (replacing the held one). It is not used yet: the activation
     /// key or the panel's "Use now" button uses it, and it stays held, so repeat uses are unlimited.
     /// </summary>
-    void OnSandboxGrant(Client c, byte[] payload)
+    void OnSandboxGrant(ServerClient c, byte[] payload)
     {
         if (!c.Sandbox || SandboxEvents.DecodeGrant(payload) is not { } streakId) return;
         if (!_streaks.SandboxHold(c.Id, streakId)) { SandboxNote(c, "Unknown killstreak."); return; }
@@ -79,7 +79,7 @@ public partial class NetServer
     }
 
     /// <summary>The panel's one-shot actions. Each one checks the player is alive (a dead player gets a notice).</summary>
-    void OnSandboxAction(Client c, byte[] payload)
+    void OnSandboxAction(ServerClient c, byte[] payload)
     {
         if (!c.Sandbox || SandboxEvents.DecodeAction(payload) is not { } a) return;
         if (a.Action == SandboxAction.TakeDamage)
@@ -118,7 +118,7 @@ public partial class NetServer
     }
 
     /// <summary>The activation key for a sandbox player with a held streak: use the held one (returns true when it did).</summary>
-    bool SandboxStreakKey(Client c)
+    bool SandboxStreakKey(ServerClient c)
     {
         if (!c.Sandbox || _streaks.SandboxHeldOf(c.Id) is null) return false;
         SandboxUseHeld(c);
@@ -126,7 +126,7 @@ public partial class NetServer
     }
 
     /// <summary>Uses the held streak from the player's position. False when nothing is held or the player is dead.</summary>
-    bool SandboxUseHeld(Client c)
+    bool SandboxUseHeld(ServerClient c)
     {
         if (!c.Sandbox || _match.Get(c.Id) is not { Life: PlayerLife.Alive }) return false;
         var p = c.Body.GlobalPosition;
@@ -134,7 +134,7 @@ public partial class NetServer
     }
 
     /// <summary>Teleport to a random player spawn point, out of any vehicle. Same wire event as a spawn (no protection).</summary>
-    void SandboxTeleport(Client c)
+    void SandboxTeleport(ServerClient c)
     {
         if (Spawns.Count == 0) { SandboxNote(c, "No spawn points on this map."); return; }
         if (c.Car != null) LeaveSeat(c, false);
@@ -149,7 +149,7 @@ public partial class NetServer
     /// Teleport to a point picked on the tactical map (middle click): onto the highest surface there (a roof when the point is on a building),
     /// out of any vehicle. Same wire event as a spawn. Refused outside the map or where there is nothing to stand on.
     /// </summary>
-    void OnSandboxTeleportTo(Client c, byte[] payload)
+    void OnSandboxTeleportTo(ServerClient c, byte[] payload)
     {
         if (!c.Sandbox || SandboxEvents.DecodeTeleportTo(payload) is not { } at) return;
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { SandboxNote(c, "Sandbox actions work while alive."); return; }
@@ -171,7 +171,7 @@ public partial class NetServer
     /// Spawns a vehicle a few metres in front of the player, facing the way they look (the same construction as the
     /// map's cars). <paramref name="kind"/> indexes vehicles.json.
     /// </summary>
-    void SandboxSpawnVehicle(Client c, byte kind)
+    void SandboxSpawnVehicle(ServerClient c, byte kind)
     {
         if (TrySpawnVehicle(c, kind, null) is { } why) SandboxNote(c, why);
     }
@@ -180,7 +180,7 @@ public partial class NetServer
     /// Spawns a vehicle in front of the player (the sandbox panel and the admin's /spawn). Returns why it did not, or null.
     /// <paramref name="cap"/> (null = none) bounds the vehicles spawned this run.
     /// </summary>
-    string? TrySpawnVehicle(Client c, byte kind, int? cap)
+    string? TrySpawnVehicle(ServerClient c, byte kind, int? cap)
     {
         if (Vehicles == null || kind >= Vehicles.Vehicles.Count) return "Unknown vehicle.";
         if (c.Car != null) return "Leave the vehicle first.";

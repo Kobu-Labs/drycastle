@@ -9,8 +9,8 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
-/// Items on the server (issues #261, #267, ADR 0016 and 0018): what a player wears (<see cref="Client.Worn"/>) and carries in the bag
-/// (<see cref="Client.Bag"/>), the items a corpse carries, the items on the ground, and the requests that move them. The rules and the data are
+/// Items on the server (issues #261, #267, ADR 0016 and 0018): what a player wears (<see cref="ServerClient.Worn"/>) and carries in the bag
+/// (<see cref="ServerClient.Bag"/>), the items a corpse carries, the items on the ground, and the requests that move them. The rules and the data are
 /// in <c>ShooterCore/Items</c> and <see cref="CorpseBook"/>; this file checks who may ask, sends the state and answers. What lasts: a death puts
 /// everything worn and bagged on the corpse (<see cref="SpawnCorpse"/>), a new round keeps it, leaving the match loses it, and none of it is
 /// stored in the profile (ADR 0003 stays the profile's only store). The client sends wishes only; every one is checked here.
@@ -27,7 +27,7 @@ public partial class NetServer
     /// Tells a player what they wear and carry now (the Equipment screen) and tells everyone else what they wear, so their clients draw it on
     /// that player's character (<see cref="EventKind.WornItems"/>, issue #266). The pickup counts and the bag stay between the server and the owner.
     /// </summary>
-    void SendEquipment(Client c)
+    void SendEquipment(ServerClient c)
     {
         c.Worn.Changed = false;
         c.Bag.Changed = false;
@@ -37,19 +37,19 @@ public partial class NetServer
             if (o != c) Send(o, worn);
     }
 
-    EventMsg WornEvent(Client c) => new((byte)EventKind.WornItems, ItemEvents.EncodeWorn(c.Id, c.Worn));
+    EventMsg WornEvent(ServerClient c) => new((byte)EventKind.WornItems, ItemEvents.EncodeWorn(c.Id, c.Worn));
 
     /// <summary>A joiner learns what everyone already in the match wears (nobody else needs to be told: the joiner wears nothing).</summary>
-    void SendWornOnJoin(Client c)
+    void SendWornOnJoin(ServerClient c)
     {
         foreach (var o in _byId.Values)
             if (o != c && o.Worn.Slots.Any(s => s != null)) Send(c, WornEvent(o));
     }
 
-    bool CarriesBinoculars(Client c) => HeldBinoculars(c) >= 0;
+    bool CarriesBinoculars(ServerClient c) => HeldBinoculars(c) >= 0;
 
     /// <summary>The item index of the pair the player raises (<see cref="Binoculars.Held"/>), -1 with none in the bag.</summary>
-    int HeldBinoculars(Client c)
+    int HeldBinoculars(ServerClient c)
     {
         var carried = new List<int>();
         for (var cell = 0; cell < Bag.Cells; cell++)
@@ -58,7 +58,7 @@ public partial class NetServer
     }
 
     /// <summary>The player's binoculars are up or down now: everyone else is told when it changed, so their clients pose that player's character.</summary>
-    void SetBinoculars(Client c, bool up)
+    void SetBinoculars(ServerClient c, bool up)
     {
         if (c.BinocularsUp == up) return;
         c.BinocularsUp = up;
@@ -68,14 +68,14 @@ public partial class NetServer
     }
 
     /// <summary>A joiner learns who holds the binoculars up.</summary>
-    void SendBinocularsOnJoin(Client c)
+    void SendBinocularsOnJoin(ServerClient c)
     {
         foreach (var o in _byId.Values)
             if (o != c && o.BinocularsUp) Send(c, new EventMsg((byte)EventKind.BinocularsRaised, Binoculars.EncodeRaised(o.Id, true, HeldBinoculars(o))));
     }
 
     /// <summary>The player's head lamp is on or off now (<see cref="HeadLamp"/>): everyone, the owner too, is told when it changed.</summary>
-    void SetHeadLamp(Client c, bool on)
+    void SetHeadLamp(ServerClient c, bool on)
     {
         if (c.HeadLampOn == on) return;
         c.HeadLampOn = on;
@@ -83,40 +83,40 @@ public partial class NetServer
     }
 
     /// <summary>A joiner learns whose head lamp is on.</summary>
-    void SendHeadLampsOnJoin(Client c)
+    void SendHeadLampsOnJoin(ServerClient c)
     {
         foreach (var o in _byId.Values)
             if (o != c && o.HeadLampOn) Send(c, new EventMsg((byte)EventKind.HeadLampState, HeadLamp.Encode(o.Id, true)));
     }
 
     /// <summary>Sends a player their equipment and bag when either changed since the last send.</summary>
-    void SendEquipmentIfChanged(Client c)
+    void SendEquipmentIfChanged(ServerClient c)
     {
         if (c.Worn.Changed || c.Bag.Changed) SendEquipment(c);
     }
 
-    void SendItemNotice(Client c, ItemNoticeKind kind) => Send(c, new EventMsg((byte)EventKind.ItemNotice, ItemEvents.EncodeNotice(kind)));
+    void SendItemNotice(ServerClient c, ItemNoticeKind kind) => Send(c, new EventMsg((byte)EventKind.ItemNotice, ItemEvents.EncodeNotice(kind)));
 
     /// <summary>Tells everyone what a corpse carries now (an empty list after a pickup that emptied it or an item that crumbled).</summary>
     void BroadcastCorpseItems(ushort corpse) =>
         BroadcastEvent(EventKind.CorpseItems, ItemEvents.EncodeCorpseItems(corpse, _corpses.Get(corpse)?.Items ?? Array.Empty<ItemStack>()));
 
     /// <summary>A joiner learns which corpses carry items (the corpses themselves arrive as world entities, and so do the items on the ground).</summary>
-    void SendCorpseItemsOnJoin(Client c)
+    void SendCorpseItemsOnJoin(ServerClient c)
     {
         foreach (var (id, body) in _corpses.WithIds)
             if (body.Items.Count > 0) Send(c, new EventMsg((byte)EventKind.CorpseItems, ItemEvents.EncodeCorpseItems(id, body.Items)));
     }
 
     /// <summary>The player is alive and on foot or seated: the state in which they may handle their items. A dead or unjoined one may not.</summary>
-    bool MayHandleItems(Client c) => c.Joined && c.W != null && _match.Get(c.Id)?.Life == PlayerLife.Alive;
+    bool MayHandleItems(ServerClient c) => c.Joined && c.W != null && _match.Get(c.Id)?.Life == PlayerLife.Alive;
 
     /// <summary>
     /// A client asks to take the item at a position of a corpse's list. Same conditions as taking its weapon (alive, on foot, in reach). What
     /// <see cref="CorpseBook.TryPickUpItem"/> decides is sent: the taker's equipment and bag and everyone's view of the corpse, and a notice
     /// when the item crumbled. A refused attempt (gone, too far, nothing to take) is only logged, as for the weapon.
     /// </summary>
-    void OnPickUpCorpseItem(Client c, byte[] payload)
+    void OnPickUpCorpseItem(ServerClient c, byte[] payload)
     {
         if (!ItemEvents.TryDecodePickUp(payload, out var corpse, out var index)) return;
         if (!MayHandleItems(c) || c.Car != null) return;
@@ -134,7 +134,7 @@ public partial class NetServer
     }
 
     /// <summary>The item requests of the bag and the ground (<see cref="EventKind.EquipItem"/> to <see cref="EventKind.TakeGroundItem"/>).</summary>
-    void OnItemRequest(Client c, EventKind kind, byte[] payload)
+    void OnItemRequest(ServerClient c, EventKind kind, byte[] payload)
     {
         if (!MayHandleItems(c)) return;
         switch (kind)
@@ -160,7 +160,7 @@ public partial class NetServer
     /// Puts a worn or bagged item on the ground at the dropper's feet, or under their vehicle (<see cref="DropPoint"/>): no throw. If the world refuses
     /// the entity (its cap) the item goes back where it was.
     /// </summary>
-    void DropItem(Client c, ItemHome home, int index)
+    void DropItem(ServerClient c, ItemHome home, int index)
     {
         var slot = (EquipSlot)index;
         ItemStack stack;
@@ -182,7 +182,7 @@ public partial class NetServer
     }
 
     /// <summary>A client asks to take the item lying on the ground. Alive, on foot and in reach; both the slot and the bag full refuses it with a notice.</summary>
-    void TakeGroundItem(Client c, ushort id)
+    void TakeGroundItem(ServerClient c, ushort id)
     {
         if (c.Car != null) return;
         var result = _corpses.TryTakeGround(id, N(c.Body.GlobalPosition), c.Worn, c.Bag, Items, out var placed);
@@ -202,7 +202,7 @@ public partial class NetServer
     /// vehicle on the ground (a car, the transport afloat) is where its feet are; a player on foot and a helicopter look down for the ground, and
     /// keep the height they started from when nothing is below.
     /// </summary>
-    NVec3 DropPoint(Client c)
+    NVec3 DropPoint(ServerClient c)
     {
         var from = c.Car != null ? PresentPose(c.Car).Feet : N(c.Body.GlobalPosition);
         if (c.Car is { Flies: false }) return from;

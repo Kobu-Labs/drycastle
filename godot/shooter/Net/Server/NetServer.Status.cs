@@ -8,7 +8,7 @@ namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Player statuses on the server (Holy Mass reward, GLOSSARY "Status" and "Burn"): the divine blessing and the devil's curse in
-/// <see cref="Client.Status"/>, and the burn the curse causes (<see cref="BurnSet"/>). The rules are in <c>ShooterCore/Status</c>; this file
+/// <see cref="ServerClient.Status"/>, and the burn the curse causes (<see cref="BurnSet"/>). The rules are in <c>ShooterCore/Status</c>; this file
 /// hooks them in. Blessing: <see cref="MatchSim.SaveFromDeath"/> negates one lethal hit (full health, <see cref="BlessingRules.InvulnerableS"/>
 /// of invulnerability, no kill for the attacker, the streak is kept as no death happens). Curse: <see cref="Deal"/> ignites the victim of a hit by
 /// the cursed player's own weapon; burn kills are credited to the curse owner. Statuses survive a round change and end at death
@@ -115,14 +115,14 @@ public partial class NetServer
     }
 
     /// <summary>A joiner learns the statuses of everyone who has any (the joiner has none).</summary>
-    void SendStatusOnJoin(Client c)
+    void SendStatusOnJoin(ServerClient c)
     {
         foreach (var o in _byId.Values)
             if (o != c && (o.Status.Any || o.BurningSent)) Send(c, new EventMsg((byte)EventKind.StatusState, StatusCodec.EncodeState(o.Id, o.Status.Mask, o.BurningSent)));
     }
 
     /// <summary>"/status bless|curse|clear [player]": for the named human, or the admin.</summary>
-    void ChatStatus(Client c, IReadOnlyList<string> args)
+    void ChatStatus(ServerClient c, IReadOnlyList<string> args)
     {
         var target = args.Count > 1 ? FindHuman(args[1]) : c;
         if (target == null) { ChatTo(c, ChatLineKind.Error, $"No player '{args[1]}'. Use the name without spaces, or #id."); return; }

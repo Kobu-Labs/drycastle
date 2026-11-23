@@ -58,7 +58,7 @@ public partial class NetServer
     }
 
     /// <summary>The names of the dummies, sent once on join (their ids and spots never change for the server's life).</summary>
-    void SendTargetRoster(Client c)
+    void SendTargetRoster(ServerClient c)
     {
         if (_match.Targets.All.Count == 0) return;
         var roster = _match.Targets.All.Select(d => (d.Id, d.Name)).ToList();

@@ -340,7 +340,7 @@ public partial class NetServer
     bool PounceImmune(ushort id) => _pounceImmune.TryGetValue(id, out var until) && _elapsed < until;
 
     /// <summary>Join: the pounce as it is, for a client that arrives during one (the victim's mark or the pin).</summary>
-    void SendPounceOnJoin(Client c)
+    void SendPounceOnJoin(ServerClient c)
     {
         if (_brain is not { PounceVictim: { } v } || !Life.Is(DemonStage.Fighting)) return;
         var pinned = _pins.TryGetValue(v, out var yaw);
@@ -455,7 +455,7 @@ public partial class NetServer
     }
 
     /// <summary>"/event demon": the pastor turns now, without the three kills (admin test). Open doors and an empty church: it waits for the first player.</summary>
-    void ChatDemon(Client c)
+    void ChatDemon(ServerClient c)
     {
         if (Demon.Hits.Base <= 0) { ChatTo(c, ChatLineKind.Error, "holy_mass_demon.json is not loaded."); return; }
         if (_events.Current is { Kind: not EventBook.Mass } && _events.WhyNotStart(EventBook.Demon) is { } busy) { ChatTo(c, ChatLineKind.Error, busy); return; }

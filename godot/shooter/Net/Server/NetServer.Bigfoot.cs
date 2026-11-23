@@ -75,7 +75,7 @@ public partial class NetServer
         var weight = BigfootRules.Weight(BigfootData.Hits, source);
         if (!(weight > 0)) return DamageResult.Ignored;
         var killed = bf.Hit(attackerId, weight);
-        _hitsLanded++;
+        _smoke.HitsLanded++;
         var msg = new EventMsg((byte)EventKind.Hit, WeaponCodec.Encode(new HitMsg(BigfootRules.TargetId, attackerId, weaponIdx, (ushort)Math.Clamp(weight, 1f, 255f), false, false, killed)));
         _byId.TryGetValue(attackerId, out var attacker);
         if (attackerId == _gunFxOwner) _gunFx.Hit(attackerId, false, killed);
@@ -124,7 +124,7 @@ public partial class NetServer
     // ---- the lifecycle ----
 
     /// <summary>"/event bigfoot": spawns it at a baked point of a <c>bigfoot</c> zone, or, with none on the map, near a random living player (a dev fallback, said to the admin and in the log).</summary>
-    void StartBigfoot(Client admin)
+    void StartBigfoot(ServerClient admin)
     {
         if (_bigfootLife.WhyNotStart(_events) is { } why) { ChatTo(admin, ChatLineKind.Error, why); return; } // an event runs, or the last Bigfoot still lies where it fell
         if (_match.Phase != MatchPhase.Running) { ChatTo(admin, ChatLineKind.Error, "No round is running."); return; }
@@ -180,7 +180,7 @@ public partial class NetServer
     }
 
     /// <summary>"/event current end" while the Bigfoot runs (the handler table, <see cref="InitEvents"/>): a win, for testing; it dies by the same path as a kill (<see cref="OnBigfootDied"/>).</summary>
-    void EndBigfoot(Client c)
+    void EndBigfoot(ServerClient c)
     {
         if (_bigfoot is not { } bf) { ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
         ChatToAll(ChatLineKind.System, "", $"{c.Name} ended the Bigfoot event as a win.");
@@ -188,7 +188,7 @@ public partial class NetServer
     }
 
     /// <summary>"/event current cancel" while the Bigfoot runs: gone, no reward.</summary>
-    void CancelBigfoot(Client c)
+    void CancelBigfoot(ServerClient c)
     {
         if (_bigfoot is not { } bf) { ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
         ChatToAll(ChatLineKind.System, "", $"{c.Name} cancelled the Bigfoot event.");

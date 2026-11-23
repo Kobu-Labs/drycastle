@@ -138,7 +138,7 @@ public partial class NetServer
     }
 
     /// <summary>Spends one save token; false when the peer saves too fast.</summary>
-    bool AllowSave(Client c)
+    bool AllowSave(ServerClient c)
     {
         if (c.SaveTokens >= 1) { c.SaveTokens -= 1; return true; }
         _rejectedSaves++;

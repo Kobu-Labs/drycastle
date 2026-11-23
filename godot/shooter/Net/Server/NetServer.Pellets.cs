@@ -18,7 +18,7 @@ public partial class NetServer
 {
     /// <param name="aimed">The targets the fan can hit (null: every live one). A rider firing from an armed seat passes everyone not aboard their vehicle.</param>
     /// <param name="seatCar">The vehicle the shooter rides, whose hull is not in the pellets' way (null on foot).</param>
-    void FirePellets(Client c, Vector3 eye, float yaw, float pitch, WeaponDef w, byte weaponIdx, float cone, List<HitTarget>? aimed = null, ServerCar? seatCar = null)
+    void FirePellets(ServerClient c, Vector3 eye, float yaw, float pitch, WeaponDef w, byte weaponIdx, float cone, List<HitTarget>? aimed = null, ServerCar? seatCar = null)
     {
         var aim = HitMath.Forward(yaw, pitch);
         var seed = (uint)_rng.Next();
@@ -61,7 +61,7 @@ public partial class NetServer
         {
             var pelletHit = GunnerCover.Raycast(N(eye), dirs[i], range, walls[i], targets, c.Id, exposed[i], pastHull[i]);
             DamageCrossed(crossedBy[i], pelletHit?.Distance ?? float.PositiveInfinity, d => HitMath.PelletDamage(w, d, false));
-            ShotScenery(N(eye), dirs[i], pelletHit?.Distance ?? Math.Min(walls[i], range)); // a pole lamp the pellet passed breaks (ADR 0037)
+            _scenery.Shot(N(eye), dirs[i], pelletHit?.Distance ?? Math.Min(walls[i], range)); // a pole lamp the pellet passed breaks (ADR 0037)
             if (walls[i] > range || pelletHit != null) continue;
             ShotGlass(cars[i], eye, dirsG[i], walls[i], HitMath.PelletDamage(w, walls[i], false));
         }

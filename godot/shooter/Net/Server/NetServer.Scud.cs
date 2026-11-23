@@ -185,7 +185,7 @@ public partial class NetServer
     }
 
     /// <summary>A joiner learns every launcher that is not stowed and idle (the rack, the proposal) and the operator's camera while a screen is open.</summary>
-    void SendScudOnJoin(Client c)
+    void SendScudOnJoin(ServerClient c)
     {
         foreach (var (id, rig) in _scudRigs)
         {
@@ -243,7 +243,7 @@ public partial class NetServer
     /// The truck a player may load from a cart now, and the cart: the truck they ride (any seat), else the nearest launcher truck within <see cref="ScudReloadData.PlayerReachM"/> of the player on foot (not while loot lies in
     /// reach: that key is the loot's); the rack must be empty and a loaded, live cart within <see cref="ScudReloadData.CartReachM"/> of the truck. Null when nothing is on offer.
     /// </summary>
-    (ServerCar Truck, ServerCar Cart)? ScudReloadOffer(Client c)
+    (ServerCar Truck, ServerCar Cart)? ScudReloadOffer(ServerClient c)
     {
         if (_scudRigs.Count == 0) return null;
         var p = c.Body.GlobalPosition;
@@ -265,7 +265,7 @@ public partial class NetServer
     /// The interact key of a player who may be beside a loading offer (<see cref="ScudReloadOffer"/>): with one standing, a press waits to be a tap (true here: the key does what it always does, get in or out of the
     /// truck) or a hold (the loading starts, false here); with none the key is the plain press. Returns whether the key's usual action runs now.
     /// </summary>
-    bool ScudUseKey(Client c, bool useDown, bool useEdge, float dt)
+    bool ScudUseKey(ServerClient c, bool useDown, bool useEdge, float dt)
     {
         var offer = ScudReloadOffer(c);
         if (offer is not { } o) { c.ReloadKey.Disarm(useDown); return useEdge; }
@@ -277,7 +277,7 @@ public partial class NetServer
         }
     }
 
-    void StartLoad(Client c, ServerCar truck, ServerCar cart)
+    void StartLoad(ServerClient c, ServerCar truck, ServerCar cart)
     {
         if (ScudRigOf(truck) is not { } rig || !rig.Launcher.BeginLoad(cart.Id, N(truck.GlobalPosition), N(cart.GlobalPosition))) return;
         rig.Starter = c.Id;
@@ -295,7 +295,7 @@ public partial class NetServer
     // ---- the crew's commands ----
 
     /// <summary>A crew member's command (<see cref="EventKind.ScudCommand"/>). Anything invalid is ignored; a refused one answers with a notice.</summary>
-    void OnScudCommand(Client c, byte[] payload)
+    void OnScudCommand(ServerClient c, byte[] payload)
     {
         if (ScudCodec.DecodeCommand(payload) is not { } m) return;
         if (c.Car is not { Destroyed: false } car || ScudRigOf(car) is not { } rig || _match.Get(c.Id)?.Life != PlayerLife.Alive) return;
@@ -424,7 +424,7 @@ public partial class NetServer
     // ---- the admin's command ----
 
     /// <summary>"/scud spawn | reload | blast | state": the test commands (admins only, see <see cref="ChatCommands"/>).</summary>
-    void ChatScud(Client c, IReadOnlyList<string> args)
+    void ChatScud(ServerClient c, IReadOnlyList<string> args)
     {
         switch (args[0])
         {
@@ -468,7 +468,7 @@ public partial class NetServer
     }
 
     /// <summary>The Scud truck the player rides, else the nearest within 40 m.</summary>
-    ServerCar? ScudTruckNear(Client c)
+    ServerCar? ScudTruckNear(ServerClient c)
     {
         if (c.Car is { Destroyed: false } ridden && ridden.Def.Launcher != null) return ridden;
         ServerCar? best = null; var bd = 40f;

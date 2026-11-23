@@ -13,7 +13,7 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
-/// Bots on the server (#214): players without a connection. A bot is a <see cref="Client"/> with no peer and a
+/// Bots on the server (#214): players without a connection. A bot is a <see cref="ServerClient"/> with no peer and a
 /// <see cref="BotBrain"/>; each tick the brain's command is queued as the bot's input, and from there it is a player like
 /// any other: the same movement step, weapons, damage, corpses, kill feed and snapshots, and clients need no change to see
 /// it. This file is the bridge between the pure brain in ShooterCore and the match: it keeps the roster filled, answers
@@ -135,7 +135,7 @@ public partial class NetServer
     NVec3? BotGoal(ushort self) => _botEnemies.Goal(_match, self);
 
     /// <summary>Sends the waiting route requests to the worker (a bot with one out sends no second; the bots in turn, at most <see cref="MaxBotRoutesInFlight"/> out), and logs the cost of the routes every ten seconds.</summary>
-    void ServeBotRoute(List<Client> bots)
+    void ServeBotRoute(List<ServerClient> bots)
     {
         if (_nav == null) return;
         var sent = 0;
@@ -234,7 +234,7 @@ public partial class NetServer
         if (id == 0) return;
         var taken = _byId.Values.Select(c => c.Name).ToHashSet();
         var name = BotNames.Select(n => "Bot " + n).FirstOrDefault(n => !taken.Contains(n)) ?? $"Bot {id}";
-        var c = new Client { Id = id, Name = name, ConnectedAt = _elapsed, Brain = new BotBrain(BotTuning.Default, id) };
+        var c = new ServerClient { Id = id, Name = name, ConnectedAt = _elapsed, Brain = new BotBrain(BotTuning.Default, id) };
         var profile = GuestProfile();
         profile.Active = _rng.Next(Loadout.SlotCount);
         // a share of the bots carries the RPG instead of a pistol, whatever level gates it for players (#348)

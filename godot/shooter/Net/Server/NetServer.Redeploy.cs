@@ -7,7 +7,7 @@ namespace Drycastle.Shooter.Net.Server;
 /// <summary>The player's own Respawn (ticket #284): selects the named loadout slot, then kills the player as a suicide; the normal respawn applies the loadout.</summary>
 public partial class NetServer
 {
-    void OnRedeploy(Client c, byte[] payload)
+    void OnRedeploy(ServerClient c, byte[] payload)
     {
         if (!Redeploy.TryDecode(payload, out var slot)) return;
         if (c.Car == null && _tick <= c.HeldUntilTick) return; // in the Bigfoot's hand (the demon's pounce is the match's Held)

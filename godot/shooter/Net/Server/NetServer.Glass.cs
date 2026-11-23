@@ -211,7 +211,7 @@ public partial class NetServer
     }
 
     /// <summary>The joiner's catch-up: every pane that is not whole.</summary>
-    void SendGlassOnJoin(Client c)
+    void SendGlassOnJoin(ServerClient c)
     {
         var damaged = _glass.Damaged();
         if (damaged.Count > 0) Send(c, new EventMsg((byte)EventKind.GlassSync, GlassCodec.EncodeSync(GlassCodec.Everything, damaged)));

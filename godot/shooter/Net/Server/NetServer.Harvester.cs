@@ -18,7 +18,7 @@ namespace Drycastle.Shooter.Net.Server;
 /// <summary>
 /// The harvester event on the server (#331, GLOSSARY "Event"). Now and then, or on <c>/event harvester</c>, a harvester (vehicles.json <c>harvester</c>, an ordinary <see cref="ServerCar"/> with an
 /// open cab) appears on a crop field near the players (<see cref="CropFields"/>, from the ground patches of patches.json) and drives it in passes (<see cref="FieldPlanner"/>, <see cref="HarvesterBrain"/>),
-/// then leaves along the edge. Its driver is a seated bot (<see cref="Client.HarvesterDriver"/>): shot dead it stays seated and rides (ADR 0026) and anyone may take the seat once it rests.
+/// then leaves along the edge. Its driver is a seated bot (<see cref="ServerClient.HarvesterDriver"/>): shot dead it stays seated and rides (ADR 0026) and anyone may take the seat once it rests.
 /// Players the machine runs over or the reel draws in die (credited to the driver: the kill feed and the score); the corpse is drawn in at the front and a bale leaves the unloader with its Items
 /// (<see cref="MachineCorpse"/>, a corpse owned by <see cref="HarvesterRules.BaleOwner"/>). A shot sets any bale alight, the field's own too (<see cref="HayBale"/>); a burning bale ignites players beside it,
 /// credited to nobody (<see cref="BurnSet.HazardSource"/>). The cut itself is cosmetic and drawn by each client from the compact job state (<see cref="HarvesterCodec.StateMsg"/>), never per plant.
@@ -36,13 +36,13 @@ public partial class NetServer
     List<CropField>? _cropFields;
 
     ServerCar? _harvCar;
-    Client? _harvDriver;
+    ServerClient? _harvDriver;
     HarvesterBrain? _harvBrain;
     CropField? _harvField;
     int _harvFieldIndex;
     double _harvSendAt;
     /// <summary>Drivers that lost the job (dead, or the job ended): taken out of the match once their corpse exists.</summary>
-    readonly List<Client> _harvOldDrivers = new();
+    readonly List<ServerClient> _harvOldDrivers = new();
     /// <summary>Players the harvester killed this tick, from the kill event to the corpse: their bodies go into the machine instead of being thrown.</summary>
     readonly Dictionary<ushort, ServerCar> _harvVictims = new();
     readonly List<(MachineCorpse Machine, NVec3 From, ServerCar Car)> _machineCorpses = new();
@@ -93,7 +93,7 @@ public partial class NetServer
     // ---- the lifecycle ----
 
     /// <summary>"/event harvester": one now, ignoring the cooldown; refuses while one is out. The answer says where it appeared.</summary>
-    void StartHarvester(Client admin)
+    void StartHarvester(ServerClient admin)
     {
         if (!TryStartHarvester(forced: true, out var said)) { ChatTo(admin, ChatLineKind.Error, said); return; }
         ChatTo(admin, ChatLineKind.Info, said);
@@ -170,12 +170,12 @@ public partial class NetServer
         return car;
     }
 
-    /// <summary>The AI driver: a bot-like player with no brain's say (<see cref="Client.HarvesterDriver"/>), so it can be shot, scores kills and leaves a corpse like any seated player. Null when no id is free.</summary>
-    Client? AddHarvesterDriver()
+    /// <summary>The AI driver: a bot-like player with no brain's say (<see cref="ServerClient.HarvesterDriver"/>), so it can be shot, scores kills and leaves a corpse like any seated player. Null when no id is free.</summary>
+    ServerClient? AddHarvesterDriver()
     {
         var id = _ids.Allocate(i => _clients.Values.Any(o => o.Id == i) || _byId.ContainsKey(i));
         if (id == 0) return null;
-        var c = new Client { Id = id, Name = "Bot Harvester", ConnectedAt = _elapsed, Brain = new BotBrain(BotTuning.Default, id), HarvesterDriver = true };
+        var c = new ServerClient { Id = id, Name = "Bot Harvester", ConnectedAt = _elapsed, Brain = new BotBrain(BotTuning.Default, id), HarvesterDriver = true };
         var profile = GuestProfile();
         profile.Active = 0;
         AttachProfile(c, profile);
@@ -207,7 +207,7 @@ public partial class NetServer
     }
 
     /// <summary>"/event current end": the harvester leaves at once, as a win.</summary>
-    void EndHarvester(Client c)
+    void EndHarvester(ServerClient c)
     {
         if (!HarvesterRunning) { ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
         ChatToAll(ChatLineKind.System, "", $"{c.Name} ended the harvester event.");
@@ -215,7 +215,7 @@ public partial class NetServer
     }
 
     /// <summary>"/event current cancel": the harvester is removed, no win.</summary>
-    void CancelHarvester(Client c)
+    void CancelHarvester(ServerClient c)
     {
         if (!HarvesterRunning) { ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
         ChatToAll(ChatLineKind.System, "", $"{c.Name} cancelled the harvester event.");
@@ -237,7 +237,7 @@ public partial class NetServer
     }
 
     /// <summary>A joiner learns the job that runs and the static bales that burn or burnt (the made bales are corpses: world entities).</summary>
-    void SendHarvesterOnJoin(Client c)
+    void SendHarvesterOnJoin(ServerClient c)
     {
         if (_harvBrain != null && _harvField != null) Send(c, new EventMsg((byte)EventKind.HarvesterState, HarvesterCodec.EncodeState(HarvesterStateOf(_harvBrain.Phase))));
         foreach (var (field, sf) in _swaths) // the cut so far, field by field (bounded: SwathCodec, HarvesterConfig.MaxSwathPoints)
@@ -256,7 +256,7 @@ public partial class NetServer
             for (var i = 0; i < sf.Bales.Count; i++) SendBaleFxOnJoin(c, sf.Bales[i], HarvesterCodec.DroppedBaleId(i));
     }
 
-    void SendBaleFxOnJoin(Client c, HayBale b, ushort id)
+    void SendBaleFxOnJoin(ServerClient c, HayBale b, ushort id)
     {
         if (b.State == BaleState.Intact) return;
         Send(c, new EventMsg((byte)EventKind.HarvesterFx, HarvesterCodec.EncodeFx(new HarvesterCodec.FxMsg(b.State == BaleState.Burning ? HarvesterCodec.FxKind.BaleLit : HarvesterCodec.FxKind.BaleAsh, b.Position, id))));

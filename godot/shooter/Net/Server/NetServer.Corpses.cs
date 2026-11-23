@@ -52,7 +52,7 @@ public partial class NetServer
     /// push recorded, leaves a corpse that stays in the seat; anyone else (a gunner, a passenger, the rider of a destroyed vehicle, a victim of a blast)
     /// leaves one thrown with the vehicle's velocity, so it falls from a hovering or parked vehicle too (ADR 0026).
     /// </summary>
-    void RiderDies(Client c)
+    void RiderDies(ServerClient c)
     {
         var car = c.Car!; var seat = c.CarSeat;
         var attach = !car.Destroyed && car.Def.Seats[seat].Role == "driver" && !_deathPush.ContainsKey(c.Id);
@@ -149,7 +149,7 @@ public partial class NetServer
         foreach (var d in _match.Targets.All) if (!d.Alive) d.Body.Fly(dt, Cast); // a thrown dummy flies like a corpse
     }
 
-    void OnPickUpCorpse(Client c, byte[] payload)
+    void OnPickUpCorpse(ServerClient c, byte[] payload)
     {
         if (!CorpseCodec.TryDecodePickUp(payload, out var corpse, out var pos)) return;
         if (!c.Joined || c.W == null || c.Car != null || _match.Get(c.Id)?.Life != PlayerLife.Alive) return;

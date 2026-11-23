@@ -44,13 +44,13 @@ public partial class NetServer
     public ChurchDoors ChurchDoors => _churchDoors ??= new ChurchDoors(this);
 
     /// <summary>The joiner's catch-up: the doors are closed by default, so only open doors are told.</summary>
-    void SendChurchOnJoin(Client c)
+    void SendChurchOnJoin(ServerClient c)
     {
         if (_doorPolicy.IsOpen) Send(c, new EventMsg((byte)EventKind.ChurchDoor, ChurchDoorCodec.Encode(true)));
     }
 
     /// <summary>"/church [open|close]": opens or closes the doors, or says which they are.</summary>
-    void ChatChurch(Client c, IReadOnlyList<string> args)
+    void ChatChurch(ServerClient c, IReadOnlyList<string> args)
     {
         if (!ChurchDoors.Exists) { ChatTo(c, ChatLineKind.Error, "This map has no church doors (no church.json with a doorway yet)."); return; }
         if (args.Count == 0) { ChatTo(c, ChatLineKind.Info, $"The church doors are {(ChurchDoors.IsOpen ? "open" : "closed")}; {ChurchDoors.PlayersInside().Count} inside."); return; }

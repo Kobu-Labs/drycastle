@@ -34,7 +34,7 @@ public partial class NetServer
     }
 
     /// <summary>The gunner's input: the view aims the gun inside its arc, Reload reloads, Fire fires a round per interval while the magazine lasts.</summary>
-    void DoorGunnerInput(Client c, ServerCar car, VehicleDoorGunDef def, NetInput i)
+    void DoorGunnerInput(ServerClient c, ServerCar car, VehicleDoorGunDef def, NetInput i)
     {
         var (yaw, pitch, roll) = AttitudeOf(car);
         var aim = DoorGunRules.Aim(def, yaw, pitch, roll, Quant.Yaw(i.Yaw), Quant.Pitch(i.Pitch));
@@ -56,7 +56,7 @@ public partial class NetServer
     /// the airframe; the hit box is a plain box around it) and its riders are not targets. Everything else is a rifle's shot: a body takes the
     /// damage, a vehicle the damage times the bullet multiplier, and a gunner sitting in the open on another vehicle is hit through its hull.
     /// </summary>
-    void FireDoorGun(Client c, ServerCar car, VehicleDoorGunDef def, VehicleGunDef gun, DoorGunAim aim)
+    void FireDoorGun(ServerClient c, ServerCar car, VehicleDoorGunDef def, VehicleGunDef gun, DoorGunAim aim)
     {
         _vehicleView = ViewOf(VehicleBackOf(c), c.LifeStart); // the other vehicles, where the gunner's screen showed them (B-02)
         var (yaw, pitch, roll) = AttitudeOf(car);
@@ -79,7 +79,7 @@ public partial class NetServer
         else if (shotCar == null && wall <= gun.Range) BulletPuff(N(end)); // dust where the round meets the ground or a wall
         if (hit == null && wall <= gun.Range) ShotGlass(shotCar, from, dir, wall, gun.Damage);
         DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, _ => gun.Damage);
-        ShotScenery(N(from), N(dir), hit?.Distance ?? Math.Min(wall, gun.Range)); // a pole lamp the round passed breaks (ADR 0037)
+        _scenery.Shot(N(from), N(dir), hit?.Distance ?? Math.Min(wall, gun.Range)); // a pole lamp the round passed breaks (ADR 0037)
         _vehicleView = null;
     }
 }

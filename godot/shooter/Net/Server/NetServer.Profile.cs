@@ -17,29 +17,6 @@ public partial class NetServer
     /// <summary>How long a join waits for the profile before it falls back to a guest profile.</summary>
     public const double ProfileTimeoutMs = 3000;
 
-    /// <summary>What the server keeps for a joined player. Persist is false for guests: their changes live only in memory.</summary>
-    sealed class PlayerProfile
-    {
-        public long DbId;
-        public bool Persist;
-        public string Name = "";
-        public int Xp, Level = 1, Active;
-        public Loadout[] Loadouts = new Loadout[Loadout.SlotCount];
-        public List<Unlock> Unlocks = new();
-        /// <summary>One look per loadout slot (#141). The look other players see is the active slot's.</summary>
-        public CamoSpec[] Camos = Enumerable.Repeat(CamoSpec.Default, Loadout.SlotCount).ToArray();
-        public CamoSpec Camo => Camos[Math.Clamp(Active, 0, Loadout.MaxSlot)];
-        /// <summary>The Companion chosen on the Equipment screen (an id of companions.json, #488); empty: none chosen, the first one owned is out.</summary>
-        public string Companion = "";
-    }
-
-    /// <summary>A profile still being read on the database thread. Only the task is shared; the result is applied on the tick.</summary>
-    sealed class ProfileLoad
-    {
-        public Task<PlayerProfile> Work = null!;
-        public ulong StartedMs;
-    }
-
     /// <summary>Dev mode (issue #149, <c>--unlock-all</c>): every item unlocked, showcase starter loadouts, nothing of it saved. Set by the host.</summary>
     public bool UnlockAll;
 
@@ -50,7 +27,7 @@ public partial class NetServer
     IReadOnlyList<Unlock> ReportedUnlocks(PlayerProfile p) =>
         UnlockAll ? DevUnlocks.Expand(p.Unlocks, Weapons, Perks, Killstreaks.UnlockLevels) : p.Unlocks;
 
-    void StartProfileLoad(Client c, string token)
+    void StartProfileLoad(ServerClient c, string token)
     {
         if (Progression == null || token.Length == 0)
         {
@@ -126,7 +103,7 @@ public partial class NetServer
     }
 
     /// <summary>Makes <paramref name="p"/> the client's profile and stores a changed display name (the name the player typed).</summary>
-    void AttachProfile(Client c, PlayerProfile p)
+    void AttachProfile(ServerClient c, PlayerProfile p)
     {
         if (p.Persist && p.Name != c.Name) _ = Progression!.Profiles.SetNameAsync(p.DbId, c.Name);
         p.Name = c.Name;
@@ -138,13 +115,13 @@ public partial class NetServer
         CompanionFromProfile(c);
     }
 
-    void SendProfile(Client c)
+    void SendProfile(ServerClient c)
     {
         var p = c.Profile!;
         Send(c, new ProfileMsg(p.Name, p.Xp, p.Level, p.Active, p.Loadouts, ReportedUnlocks(p), p.Camos));
     }
 
-    void Reject(Client c, string reason)
+    void Reject(ServerClient c, string reason)
     {
         c.Session.Enter(SessionPhase.Rejected);
         GD.Print($"server: rejecting {(c.Name == "" ? "a client" : c.Name)}: {reason}");
@@ -153,7 +130,7 @@ public partial class NetServer
         c.Peer!.PeerDisconnectLater(0); // after the error has gone out
     }
 
-    void OnProfileMessage(Client c, ReliableMsg? m)
+    void OnProfileMessage(ServerClient c, ReliableMsg? m)
     {
         if (m is SaveLoadoutMsg or SelectSlotMsg or SaveCamoMsg or EventMsg { Kind: (byte)EventKind.CopyLoadout or (byte)EventKind.ResetLoadout } && !AllowSave(c))
         {
@@ -173,10 +150,10 @@ public partial class NetServer
     const string SaveFailed = "Could not save, try again in a moment.";
 
     /// <summary>A save whose answer waits for the database write (#195). Only the task crosses threads; <see cref="Done"/> runs on the tick.</summary>
-    readonly List<(Task Write, Client C, Action<bool> Done)> _pendingSaves = new();
+    readonly List<(Task Write, ServerClient C, Action<bool> Done)> _pendingSaves = new();
 
     /// <summary>Runs <paramref name="done"/> on a later tick with whether the write succeeded (a dropped or failed write is false).</summary>
-    void AfterWrite(Task write, Action<bool> done, Client c) => _pendingSaves.Add((write, c, done));
+    void AfterWrite(Task write, Action<bool> done, ServerClient c) => _pendingSaves.Add((write, c, done));
 
     /// <summary>Answers every save whose write has finished. A client that left in the meantime is not answered. Runs on the tick.</summary>
     void CompleteSaves()
@@ -191,7 +168,7 @@ public partial class NetServer
     }
 
     /// <summary>Answers one save (ticket #145): the client matches it by seq. Failures change nothing on the server.</summary>
-    void AckSave(Client c, int slot, uint seq, string? error)
+    void AckSave(ServerClient c, int slot, uint seq, string? error)
     {
         var ack = new LoadoutAckInfo(slot, seq, error == null, error ?? "");
         Send(c, new EventMsg((byte)EventKind.LoadoutAck, LoadoutEvents.EncodeAck(ack)));
@@ -201,7 +178,7 @@ public partial class NetServer
     /// Saves one slot from the editor (autosave sends these). The name is trimmed and checked (ValidateName), then the loadout
     /// is checked against the data files and the player's unlocks. Ack ok on success, otherwise the reason.
     /// </summary>
-    void OnSaveLoadout(Client c, SaveLoadoutMsg m)
+    void OnSaveLoadout(ServerClient c, SaveLoadoutMsg m)
     {
         var p = c.Profile!;
         var l = m.Loadout;
@@ -225,7 +202,7 @@ public partial class NetServer
     /// Copies one slot's loadout and camouflage into another (ticket #145). The destination keeps its own name, and the active
     /// slot does not change. The copied loadout is validated like a save. Invalid copies get an <see cref="ErrorMsg"/>.
     /// </summary>
-    void OnCopyLoadout(Client c, byte[] payload)
+    void OnCopyLoadout(ServerClient c, byte[] payload)
     {
         var p = c.Profile!;
         if (LoadoutEvents.DecodeCopy(payload) is not { } pair) { Send(c, new ErrorMsg("malformed copy request")); return; }
@@ -254,7 +231,7 @@ public partial class NetServer
     /// Restores one slot's loadout to the starter kit and its default name (ticket #145). The slot's camouflage is kept:
     /// the reset covers the loadout items, not the look.
     /// </summary>
-    void OnResetLoadout(Client c, byte[] payload)
+    void OnResetLoadout(ServerClient c, byte[] payload)
     {
         var p = c.Profile!;
         if (LoadoutEvents.DecodeReset(payload) is not { } slot) { Send(c, new ErrorMsg("malformed reset request")); return; }
@@ -265,7 +242,7 @@ public partial class NetServer
         SendProfile(c);
     }
 
-    void OnSelectSlot(Client c, int slot)
+    void OnSelectSlot(ServerClient c, int slot)
     {
         var p = c.Profile!;
         if (LoadoutRules.ValidateSlot(slot) is { } err)

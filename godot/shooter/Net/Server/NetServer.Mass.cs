@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.VillageRadio;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Events;
@@ -6,6 +7,7 @@ using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
+
 
 namespace Drycastle.Shooter.Net.Server;
 
@@ -28,13 +30,19 @@ public partial class NetServer
 
     sealed class Sitter
     {
-        /// <summary>The pew; null for the one who sits at the rozhlas dictation table (NetServer.RozhlasSet.cs), who is not part of the Mass.</summary>
+        /// <summary>The pew; null for the one who sits at the rozhlas dictation table (RozhlasSetServer.cs), who is not part of the Mass.</summary>
         public ChurchSeat? Seat;
         public Edge Jump = new(startHeld: true); // the jump that may still be held as they sit is not a stand-up
     }
 
     readonly Dictionary<ushort, Sitter> _sitters = new();
     readonly Dictionary<ushort, StateMachine<MassSeatState>> _seatHint = new(); // what each player was last told (a player never told is None)
+
+    /// <summary>What the rozhlas set takes from the Mass: the holder sits at the dictation table as a churchgoer sits in a pew.</summary>
+    TableSeating TableSeating() => new(
+        id => _sitters.ContainsKey(id),
+        holder => { foreach (var (id, s) in _sitters.ToList()) if (s.Seat == null && id != holder) MassStandUp(id); },
+        (c, yaw) => { _sitters[c.Id] = new Sitter(); if (c.Peer != null) SendSeat(c, MassSeatState.Seated, yaw); });
 
     MassSeatState SeatTold(ushort id) => _seatHint.TryGetValue(id, out var m) ? m.Current : MassSeatState.None;
 
@@ -51,7 +59,7 @@ public partial class NetServer
     public event Action? PastorTurns;
 
     /// <summary>Why the Mass cannot be set up (no church, no navigation), or null; builds the navigation the first time.</summary>
-    string? EnsureMass(Client c)
+    string? EnsureMass(ServerClient c)
     {
         if (EnsureCitizens() is { } why) return why;
         if (_nav == null && !_navTried)
@@ -82,7 +90,7 @@ public partial class NetServer
     }
 
     /// <summary>"/event mass": the gather starts, the bells ring.</summary>
-    void ChatMass(Client c)
+    void ChatMass(ServerClient c)
     {
         if (_events.Current is { Kind: not EventBook.Mass } && _events.WhyNotStart(EventBook.Mass) is { } busy) { ChatTo(c, ChatLineKind.Error, busy); return; }
         if (EnsureMass(c) is { } why) { ChatTo(c, ChatLineKind.Error, why); return; }
@@ -96,7 +104,7 @@ public partial class NetServer
     }
 
     /// <summary>"/event current end" while the Mass runs (the handler table, <see cref="InitEvents"/>): concludes it as if it was completed. Done once more, it removes what is left.</summary>
-    void EndMass(Client c)
+    void EndMass(ServerClient c)
     {
         if (_mass is not { Running: true }) { ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
         var was = _mass.Phase;
@@ -114,7 +122,7 @@ public partial class NetServer
     void SendMassState(bool bells = false) => BroadcastEvent(EventKind.MassState, MassCodec.EncodeState(MassStateNow(bells)));
 
     /// <summary>Join: the Mass as it is, when one runs.</summary>
-    void SendMassOnJoin(Client c)
+    void SendMassOnJoin(ServerClient c)
     {
         if (_mass is { Running: true }) Send(c, new EventMsg((byte)EventKind.MassState, MassCodec.EncodeState(MassStateNow(false))));
     }
@@ -142,7 +150,7 @@ public partial class NetServer
         }
     }
 
-    void SendSeat(Client c, MassSeatState state, float yaw)
+    void SendSeat(ServerClient c, MassSeatState state, float yaw)
     {
         if (!_seatHint.TryGetValue(c.Id, out var told)) _seatHint[c.Id] = told = new StateMachine<MassSeatState>(MassSeatRules.Spec);
         told.Enter(state); // checked against the spec; what is told is sent either way
@@ -150,7 +158,7 @@ public partial class NetServer
     }
 
     /// <summary>A press of interact: sits the player in a free seat in reach. False when there is none (the press is for something else).</summary>
-    bool MassSit(Client c)
+    bool MassSit(ServerClient c)
     {
         if (_mass is not { Running: true }) return false;
         var seat = _mass.TrySit(c.Id, N(c.Body.GlobalPosition));
@@ -170,13 +178,13 @@ public partial class NetServer
     void MassStandUp(ushort id)
     {
         if (!_sitters.Remove(id, out var was)) return;
-        if (was.Seat == null) RozhlasSetStood(id); // standing up from the dictation table lets go of the set
+        if (was.Seat == null) _rozhlas.TableStood(id); // standing up from the dictation table lets go of the set
         _mass?.Stand(id);
         if (_byId.TryGetValue(id, out var c) && c.Peer != null) SendSeat(c, MassSeatState.None, 0);
     }
 
     /// <summary>A seated player's input: they look around; interact or jump stands them up. No movement, no weapon.</summary>
-    void SitterInput(Client c, Sitter s, NetInput i, bool useEdge)
+    void SitterInput(ServerClient c, Sitter s, NetInput i, bool useEdge)
     {
         c.Body.Yaw = Quant.Yaw(i.Yaw);
         c.Body.Pitch = Quant.Pitch(i.Pitch);
@@ -186,7 +194,7 @@ public partial class NetServer
     }
 
     /// <summary>The body stance everyone sees and every shot hits: a sitter crouches on the floor under the seat.</summary>
-    Stance BodyStanceOf(Client c) => _sitters.ContainsKey(c.Id) ? Stance.Crouch : c.Body.State.Stance;
+    Stance BodyStanceOf(ServerClient c) => _sitters.ContainsKey(c.Id) ? Stance.Crouch : c.Body.State.Stance;
 
     /// <summary>The Mass completed: each blessed player is put at the church door, facing it, told, and handed to <see cref="GrantBlessing"/>.</summary>
     void OnMassCompleted(IReadOnlyList<ushort> blessed)

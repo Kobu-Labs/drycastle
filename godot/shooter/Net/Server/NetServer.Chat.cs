@@ -26,25 +26,23 @@ public partial class NetServer
     /// <summary>--admin-all (dev servers only): every human is an admin, so nobody has to look up a token. Release servers never pass it.</summary>
     public bool AdminAll;
 
-    bool IsAdmin(Client c) => !c.IsBot && (AdminAll || (c.Token.Length > 0 && AdminTokens.Contains(c.Token)));
+    bool IsAdmin(ServerClient c) => !c.IsBot && (AdminAll || (c.Token.Length > 0 && AdminTokens.Contains(c.Token)));
 
-    ChatContext ChatCtx(Client c) => new(IsAdmin(c), Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList(), CompanionData.Companions.Select(i => i.Id).ToList());
+    ChatContext ChatCtx(ServerClient c) => new(IsAdmin(c), Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList(), CompanionData.Companions.Select(i => i.Id).ToList());
 
     /// <summary>Join: tells the client if it is an admin and which vehicles it may name.</summary>
-    void SendChatStatus(Client c)
+    void SendChatStatus(ServerClient c)
     {
         var ctx = ChatCtx(c);
         Send(c, new EventMsg((byte)EventKind.ChatStatus, ChatEvents.EncodeStatus(new ChatStatus(ctx.IsAdmin, ctx.Vehicles))));
         if (ctx.IsAdmin) GD.Print($"server: {c.Name} #{c.Id} is an admin");
     }
 
-    void ChatTo(Client c, ChatLineKind kind, string text) =>
-        Send(c, new EventMsg((byte)EventKind.ChatLine, ChatEvents.EncodeLine(new ChatLine(kind, "", text))));
+    void ChatTo(ServerClient c, ChatLineKind kind, string text) => _ctx.ChatTo(c, kind, text);
 
-    void ChatToAll(ChatLineKind kind, string sender, string text) =>
-        BroadcastEvent(EventKind.ChatLine, ChatEvents.EncodeLine(new ChatLine(kind, sender, text)));
+    void ChatToAll(ChatLineKind kind, string sender, string text) => _ctx.ChatToAll(kind, sender, text);
 
-    void OnChatSend(Client c, byte[] payload)
+    void OnChatSend(ServerClient c, byte[] payload)
     {
         if (!c.Joined || ChatEvents.DecodeSend(payload) is not { } text) return;
         if (!c.Chat.TryTake(_elapsed)) { ChatTo(c, ChatLineKind.Error, "You are sending messages too fast."); return; }
@@ -53,7 +51,7 @@ public partial class NetServer
         ChatToAll(ChatLineKind.Player, c.Name, text);
     }
 
-    void RunChatCommand(Client c, string text)
+    void RunChatCommand(ServerClient c, string text)
     {
         var parsed = ChatCommands.Parse(text, ChatCtx(c));
         if (!parsed.Ok)
@@ -80,7 +78,7 @@ public partial class NetServer
             case "event": ChatEvent(c, args); break;
             case "citizens": ChatCitizens(c, args); break;
             case "church": ChatChurch(c, args); break;
-            case "rozhlas": ChatRozhlas(c, args); break;
+            case "rozhlas": _rozhlas.ChatCommand(c, args); break;
             case "status": ChatStatus(c, args); break;
             case "scud": ChatScud(c, args); break;
             case "squad": ChatSquad(c, args); break;
@@ -88,7 +86,7 @@ public partial class NetServer
         GD.Print($"server: {c.Name} #{c.Id} ran {text}");
     }
 
-    void ChatHelp(Client c, IReadOnlyList<string> args)
+    void ChatHelp(ServerClient c, IReadOnlyList<string> args)
     {
         var ctx = ChatCtx(c);
         if (args.Count == 1 && ChatCommands.Find(args[0]) is { } one)
@@ -100,7 +98,7 @@ public partial class NetServer
         foreach (var cmd in ChatCommands.Visible(ctx)) ChatTo(c, ChatLineKind.Info, $"{cmd.Usage}: {cmd.Summary}.");
     }
 
-    void ChatBots(Client c, IReadOnlyList<string> args)
+    void ChatBots(ServerClient c, IReadOnlyList<string> args)
     {
         var live = _byId.Values.Count(o => o.IsBot);
         if (args.Count == 0)
@@ -122,7 +120,7 @@ public partial class NetServer
         GD.Print($"server: bots set to {n} by {c.Name} #{c.Id}");
     }
 
-    void ChatSpawn(Client c, string id)
+    void ChatSpawn(ServerClient c, string id)
     {
         var kind = Vehicles?.Vehicles.FindIndex(v => v.Id == id) ?? -1;
         if (kind < 0) { ChatTo(c, ChatLineKind.Error, $"Unknown vehicle '{id}'."); return; }
@@ -132,7 +130,7 @@ public partial class NetServer
     }
 
     /// <summary>"/phoenix" (admins, a test): a Phoenix now, whatever the hour (<see cref="WildlifeKeeper.SpawnPhoenix"/>); the night counter is not touched, so the scheduled one still comes.</summary>
-    void ChatPhoenix(Client c)
+    void ChatPhoenix(ServerClient c)
     {
         if (_wildlife == null || !_wildlife.Active) { ChatTo(c, ChatLineKind.Error, "There is no wildlife in this round."); return; }
         if (_wildlife.SpawnPhoenix(_wildlifeGround ??= new WildlifeGround(this))) ChatTo(c, ChatLineKind.Info, "A Phoenix flies over the map.");
@@ -140,7 +138,7 @@ public partial class NetServer
     }
 
     /// <summary>"/unicorn" (admins, a test): an extra Unicorn on the ground 50 m in front of the player, past its flee_radius (40 m, animals.json) so it is not startled (see <see cref="WildlifeKeeper.SpawnExtra"/>).</summary>
-    void ChatUnicorn(Client c)
+    void ChatUnicorn(ServerClient c)
     {
         if (_wildlife == null) { ChatTo(c, ChatLineKind.Error, "There is no wildlife on this map."); return; }
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { ChatTo(c, ChatLineKind.Error, "You must be alive to spawn a Unicorn."); return; }
@@ -157,7 +155,7 @@ public partial class NetServer
     /// that far ahead of the player (their own height when there is none). Clients show the blast, its sound and its dust; no damage, glass or knockback is worked out.
     /// The speed is the one its Blast wave leaves at (the dust's own without it).
     /// </summary>
-    void ChatExplode(Client c, IReadOnlyList<string> args)
+    void ChatExplode(ServerClient c, IReadOnlyList<string> args)
     {
         var size = int.Parse(args[0], System.Globalization.CultureInfo.InvariantCulture);
         var distance = int.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture);
@@ -173,7 +171,7 @@ public partial class NetServer
     }
 
     /// <summary>A human player by name (spaces ignored) or "#id", or null.</summary>
-    Client? FindHuman(string who)
+    ServerClient? FindHuman(string who)
     {
         var humans = _byId.Values.Where(o => !o.IsBot && o.Joined).ToList();
         return who.StartsWith('#') && ushort.TryParse(who.AsSpan(1), out var id)
@@ -182,7 +180,7 @@ public partial class NetServer
     }
 
     /// <summary>"/give item [player]": a new item, with no pickups counted, goes on the player (the admin without a name) if its slot is empty, else into their bag. Both full refuses it. A living player only.</summary>
-    void ChatGive(Client c, IReadOnlyList<string> args)
+    void ChatGive(ServerClient c, IReadOnlyList<string> args)
     {
         var index = Items.IndexOf(args[0]);
         if (index < 0) { ChatTo(c, ChatLineKind.Error, $"Unknown item '{args[0]}'."); return; }
@@ -203,7 +201,7 @@ public partial class NetServer
     }
 
     /// <summary>"/sandbox player [on|off]": a human by name (spaces ignored) or "#id". Without a state it flips.</summary>
-    void ChatSandbox(Client c, IReadOnlyList<string> args)
+    void ChatSandbox(ServerClient c, IReadOnlyList<string> args)
     {
         if (!AllowSandbox) { ChatTo(c, ChatLineKind.Error, "Sandbox mode is not allowed on this server (--allow-sandbox is off)."); return; }
         var who = args[0];
@@ -216,7 +214,7 @@ public partial class NetServer
     }
 
     /// <summary>An admin's change from the Teams screen (#312, <see cref="TeamAssign"/>). Anyone else is ignored (and logged). Everyone is told what was done.</summary>
-    void OnTeamAssign(Client c, byte[] payload)
+    void OnTeamAssign(ServerClient c, byte[] payload)
     {
         if (TeamAssignCodec.Decode(payload) is not { } a) return;
         if (!IsAdmin(c)) { GD.Print($"server: {c.Name} #{c.Id} sent a team change without being an admin"); return; }
@@ -228,7 +226,7 @@ public partial class NetServer
     }
 
     /// <summary>A player's squad request from the Squads screen (#379, <see cref="SquadAssign"/>). The scoreboard carries the result; a refusal comes back as a chat line.</summary>
-    void OnSquadAssign(Client c, byte[] payload)
+    void OnSquadAssign(ServerClient c, byte[] payload)
     {
         if (SquadAssignCodec.Decode(payload) is not { } a) return;
         RunSquad(c, a);
@@ -236,7 +234,7 @@ public partial class NetServer
     }
 
     /// <summary>"/squad create [name] | join name-or-number | leave | list" (#379): the same requests as the Squads screen.</summary>
-    void ChatSquad(Client c, IReadOnlyList<string> args)
+    void ChatSquad(ServerClient c, IReadOnlyList<string> args)
     {
         var name = args.Count > 1 ? args[1] : "";
         switch (args[0])
@@ -252,7 +250,7 @@ public partial class NetServer
         }
     }
 
-    void RunSquad(Client c, SquadAssign a)
+    void RunSquad(ServerClient c, SquadAssign a)
     {
         if (!c.Joined || c.IsBot) return;
         var reply = SquadRules.Apply(_match, c.Id, a);
@@ -261,7 +259,7 @@ public partial class NetServer
     }
 
     /// <summary>"/restart [ffa|tdm]": a new round now, in the current mode or the named one. Everyone is told which.</summary>
-    void ChatRestart(Client c, IReadOnlyList<string> args)
+    void ChatRestart(ServerClient c, IReadOnlyList<string> args)
     {
         var mode = args.Count > 0 ? (args[0] == "tdm" ? MatchMode.TeamDeathmatch : MatchMode.FreeForAll) : _match.Mode;
         var changed = mode != _match.Mode;
@@ -272,11 +270,11 @@ public partial class NetServer
     }
 
     /// <summary>
-    /// "/event rozhlas": starts a detour broadcast of the village loudspeaker now (<see cref="ChatEventRozhlas"/>). "/event intel [clear]": the test announcement (<see cref="ChatIntel"/>).
+    /// "/event rozhlas": starts a detour broadcast of the village loudspeaker now (<see cref="RozhlasServer.ChatEvent"/>). "/event intel [clear]": the test announcement (<see cref="IntelServer.Chat"/>).
     /// "/event bigfoot", "mass" and "thieves" start that kind through the handler table (<see cref="InitEvents"/>); "/event current end" concludes the running
     /// event as a win (for testing) and "/event current cancel" removes it with no reward, by its kind (<see cref="ChatCurrentEvent"/>). Everyone is told who did.
     /// </summary>
-    void ChatEvent(Client c, IReadOnlyList<string> args)
+    void ChatEvent(ServerClient c, IReadOnlyList<string> args)
     {
         var action = args.Count > 1 ? args[1] : "";
         var allowed = args[0] switch { "intel" => "clear", "current" => "end or cancel", _ => "" }; // the parser only lets known events and actions through; whether they belong together is checked here
@@ -289,15 +287,15 @@ public partial class NetServer
         switch (args[0])
         {
             case "rozhlas":
-                ChatEventRozhlas(c);
+                _rozhlas.ChatEvent(c);
                 break;
-            case "intel": ChatIntel(c, action == "clear"); break;
+            case "intel": _intel.Chat(c, action == "clear"); break;
             case "demon": ChatDemon(c); break;
             default: _eventHandlers.Start(args[0], c); break; // bigfoot, mass, thieves: the kinds of the handler table
         }
     }
 
-    void ChatTimeCommand(Client c, IReadOnlyList<string> args)
+    void ChatTimeCommand(ServerClient c, IReadOnlyList<string> args)
     {
         var now = _tick / (double)Wire.TickRate;
         string Shown() => Drycastle.ShooterCore.Chat.ChatTime.Format((int)(Clock.HourAt(now) * 60));

@@ -175,8 +175,8 @@ public partial class NetServer
         _stateLog?.Flush(); _stateLog?.Dispose();
         var d = new Dictionary<string, object?>
         {
-            ["complete"] = complete, ["expected_players"] = LossTest, ["peak_players"] = _peakPlayers, ["net_sim"] = Sim?.ToString() ?? "none",
-            ["window"] = _winStats, ["final"] = _final, ["late"] = _late, ["rounds_ended"] = _roundsEnded,
+            ["complete"] = complete, ["expected_players"] = LossTest, ["peak_players"] = _smoke.PeakPlayers, ["net_sim"] = Sim?.ToString() ?? "none",
+            ["window"] = _winStats, ["final"] = _final, ["late"] = _late, ["rounds_ended"] = _smoke.RoundsEnded,
         };
         GD.Print($"LOSSTEST_SERVER {JsonSerializer.Serialize(d)}");
         GD.Print(complete ? "SHOOTER_LOSS_SERVER_DONE" : "SHOOTER_LOSS_SERVER_INCOMPLETE");

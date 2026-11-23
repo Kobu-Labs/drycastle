@@ -98,18 +98,18 @@ public partial class NetServer
     readonly Dictionary<ushort, string> _companionGiven = new();
 
     /// <summary>What the player can pick and what is out (<see cref="CompanionRoster"/>): the Profile's unlock rows, the one given for the session, all of them in dev mode.</summary>
-    CompanionRoster CompanionRosterOf(Client c) => CompanionRoster.Of(CompanionData, c.Profile?.Unlocks ?? (IEnumerable<Unlock>)Array.Empty<Unlock>(), UnlockAll,
+    CompanionRoster CompanionRosterOf(ServerClient c) => CompanionRoster.Of(CompanionData, c.Profile?.Unlocks ?? (IEnumerable<Unlock>)Array.Empty<Unlock>(), UnlockAll,
         _companionGiven.GetValueOrDefault(c.Id), _companions?.Assigned(c.Id));
 
     /// <summary>Tells the player their roster: at join and whenever what they own or what is out changes.</summary>
-    void SendCompanions(Client c)
+    void SendCompanions(ServerClient c)
     {
         if (_companions == null || c.IsBot) return;
         Send(c, new EventMsg((byte)EventKind.Companions, CompanionRosterOf(c).Encode()));
     }
 
     /// <summary>The Companion the Profile chose is out, or the first it owns (a player who owns none has none; one given by <c>/companion</c> stays).</summary>
-    void CompanionFromProfile(Client c)
+    void CompanionFromProfile(ServerClient c)
     {
         if (_companions == null || c.Profile is not { } p || _companions.Assigned(c.Id) != null) return;
         var def = CompanionRosterOf(c).Default(CompanionData, p.Companion);
@@ -120,7 +120,7 @@ public partial class NetServer
     /// The player picked a Companion on the Equipment screen: it is out from now on (the old one goes in a puff, the new one appears beside them) and the choice is stored
     /// with the Profile. One they cannot pick is not answered (the screen never offers it).
     /// </summary>
-    void OnCompanionPick(Client c, byte[] payload)
+    void OnCompanionPick(ServerClient c, byte[] payload)
     {
         if (_companions == null || c.Profile is not { } p || !CompanionRoster.TryDecodePick(payload, out var def)) return;
         if (!CompanionRosterOf(c).Owns(def)) return;
@@ -135,7 +135,7 @@ public partial class NetServer
     }
 
     /// <summary>"/companion id|off [player]": the player (the admin without a name) has that Companion out for this session, or none. Nothing is stored.</summary>
-    void ChatCompanion(Client c, IReadOnlyList<string> args)
+    void ChatCompanion(ServerClient c, IReadOnlyList<string> args)
     {
         if (_companions == null) return;
         var target = args.Count > 1 ? FindHuman(args[1]) : c;

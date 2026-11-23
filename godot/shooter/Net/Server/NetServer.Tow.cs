@@ -75,7 +75,7 @@ public partial class NetServer
     /// The driver's interact key (the input's <paramref name="useDown"/>, for <paramref name="dt"/>) with a trailer on the hook: a hold unhitches it, a tap leaves the vehicle (on release) — so the same key does
     /// both and neither is lost (<see cref="UnhitchKey"/>). True when the driver leaves now. Only the driver's seat unhitches; any other seat leaves on the press as always.
     /// </summary>
-    bool TowUseKey(Client c, ServerCar car, bool useDown, bool useEdge, float dt)
+    bool TowUseKey(ServerClient c, ServerCar car, bool useDown, bool useEdge, float dt)
     {
         if (c.CarSeat != 0 || car.Towing == null) return useEdge;
         switch (car.UnhitchKey.Tick(useDown, dt))

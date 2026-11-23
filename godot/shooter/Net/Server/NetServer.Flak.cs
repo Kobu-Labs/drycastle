@@ -78,7 +78,7 @@ public partial class NetServer
     /// The gunner's input: the view is the aim (the pitch limited to the barrels' elevation, the turret's yaw kept against the chassis so it turns
     /// with the truck once the gunner has left), Reload reloads, and Fire fires a round per interval while the magazine lasts.
     /// </summary>
-    void FlakGunnerInput(Client c, ServerCar car, VehicleFlakDef def, NetInput i)
+    void FlakGunnerInput(ServerClient c, ServerCar car, VehicleFlakDef def, NetInput i)
     {
         var yaw = Quant.Yaw(i.Yaw);
         var pitch = FlakRules.ClampPitch(def, Quant.Pitch(i.Pitch));
@@ -96,7 +96,7 @@ public partial class NetServer
     }
 
     /// <summary>One round: leave the next barrel, plan the whole flight, send the tracer, and land the damage now or when the shell arrives.</summary>
-    void FireFlak(Client c, ServerCar car, VehicleFlakDef def, float yaw, float pitch)
+    void FireFlak(ServerClient c, ServerCar car, VehicleFlakDef def, float yaw, float pitch)
     {
         var aim = HitMath.Forward(yaw, pitch);
         var origin = FlakRules.Muzzle(def, N(car.GlobalPosition), car.State.Yaw, yaw, aim, car.FlakBarrel++);

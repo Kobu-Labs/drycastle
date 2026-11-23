@@ -35,7 +35,7 @@ public partial class NetServer
     readonly List<HuntRecord> _huntsEarly = new();
 
     /// <summary>A table page whose read is still running. Only the task crosses threads; the answer is built on the tick.</summary>
-    readonly List<(Task<HuntPage> Work, Client C, HuntsRequest Req)> _huntPages = new();
+    readonly List<(Task<HuntPage> Work, ServerClient C, HuntsRequest Req)> _huntPages = new();
 
     const int MaxHuntPagesPerClient = 4;
     const double HuntLoadRetrySeconds = 5;
@@ -114,7 +114,7 @@ public partial class NetServer
     HuntTier HuntTierOf(HuntRecord h) => HuntRarity.Of(AnimalData, h);
 
     /// <summary>The player id a viewer is known by in the log: their stored profile's, 0 for a guest.</summary>
-    static long ViewerId(Client c) => c.Profile is { Persist: true } p ? p.DbId : 0;
+    static long ViewerId(ServerClient c) => c.Profile is { Persist: true } p ? p.DbId : 0;
 
     // ---- recording ----
 
@@ -156,7 +156,7 @@ public partial class NetServer
     }
 
     /// <summary>The ids of the reward items a player owns (unlock rows of kind "item", #473), so a spawn issues the upgrade in place of the standard item.</summary>
-    IReadOnlySet<string> OwnedItems(Client c) =>
+    IReadOnlySet<string> OwnedItems(ServerClient c) =>
         c.Profile is { } p ? p.Unlocks.Where(u => u.Kind == "item").Select(u => u.ItemId).ToHashSet() : new HashSet<string>();
 
     /// <summary>
@@ -247,7 +247,7 @@ public partial class NetServer
 
     // ---- queries ----
 
-    void OnHuntRequest(Client c, EventMsg m)
+    void OnHuntRequest(ServerClient c, EventMsg m)
     {
         switch ((EventKind)m.Kind)
         {
@@ -263,7 +263,7 @@ public partial class NetServer
         }
     }
 
-    void OnHuntsRequest(Client c, HuntsRequest r)
+    void OnHuntsRequest(ServerClient c, HuntsRequest r)
     {
         void Answer(HuntStatus status, uint total = 0) =>
             Send(c, new EventMsg((byte)EventKind.HuntsPage, HuntEvents.EncodePage(new HuntsAnswer(r.Req, status, ViewerId(c), r.Page, total, Array.Empty<HuntView>()))));
@@ -274,7 +274,7 @@ public partial class NetServer
         _huntPages.Add((Progression.Hunts.PageAsync(query), c, r));
     }
 
-    void OnRecordsRequest(Client c, ushort req)
+    void OnRecordsRequest(ServerClient c, ushort req)
     {
         var answer = _huntBook is { } book
             ? new RecordsAnswer(req, HuntStatus.Ok, ViewerId(c), book.Records(book.CaughtBy(ViewerId(c))), _killBook?.Server)
@@ -282,7 +282,7 @@ public partial class NetServer
         Send(c, new EventMsg((byte)EventKind.Records, HuntEvents.EncodeRecords(answer)));
     }
 
-    void OnPlayerLogRequest(Client c, PlayerLogRequest q)
+    void OnPlayerLogRequest(ServerClient c, PlayerLogRequest q)
     {
         var me = ViewerId(c);
         PlayerLogAnswer answer;

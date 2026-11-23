@@ -40,7 +40,7 @@ public partial class NetServer
     /// the player and their graphics adapter, and <c>drycastle_client_scope_ms_per_s</c> per client scope. One per client per half period; a report that does
     /// not decode is dropped. Nothing in the game reads them.
     /// </summary>
-    void OnClientReport(Client c, byte[] payload)
+    void OnClientReport(ServerClient c, byte[] payload)
     {
         if (_elapsed - c.ClientReportAt < ClientReport.PeriodSeconds / 2) return;
         if (!ClientReport.TryDecode(payload, out var values, out var scopes, out var adapter, out _)) return;

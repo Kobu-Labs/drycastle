@@ -12,7 +12,7 @@ namespace Drycastle.Shooter.Net.Server;
 /// </summary>
 public partial class NetServer
 {
-    readonly EventHandlers<Client> _eventHandlers = new();
+    readonly EventHandlers<ServerClient> _eventHandlers = new();
 
     /// <summary>Fills the handler table. Called once from <c>_Ready</c>, after every kind's own Init.</summary>
     void InitEvents()
@@ -26,7 +26,7 @@ public partial class NetServer
     }
 
     /// <summary>"/event current end" (a win, for testing) or "/event current cancel" (gone, no reward): the handler of the running kind.</summary>
-    void ChatCurrentEvent(Client c, string action)
+    void ChatCurrentEvent(ServerClient c, string action)
     {
         if (action is not ("end" or "cancel")) { ChatTo(c, ChatLineKind.Error, "Usage: /event current end (conclude it as a win) or /event current cancel (remove it, no reward)."); return; }
         var name = "";

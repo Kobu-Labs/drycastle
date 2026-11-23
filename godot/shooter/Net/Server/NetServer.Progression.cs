@@ -22,7 +22,7 @@ public partial class NetServer
     IReadOnlyDictionary<string, int> PerkLevels => _perkLevels ??= Perks.Perks.ToDictionary(p => p.Id, p => p.UnlockLevel);
 
     /// <summary>The active loadout becomes the player's perk and hotbar. Runs at join and at every spawn, so a change made while alive applies from the next spawn.</summary>
-    void ApplyLoadout(Client c)
+    void ApplyLoadout(ServerClient c)
     {
         var p = c.Profile!;
         var l = p.Loadouts[p.Active];

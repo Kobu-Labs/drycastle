@@ -609,7 +609,7 @@ despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: 
 - **Starting and ending.** An admin's `/event bigfoot` spawns it at a random baked point of an area with `event spawn: bigfoot` (`PickEventSpawn`, #263). A map with no such
   area (the village has none until one is drawn) gets the dev fallback: `fallback_spawn` metres from a random living player, said to the admin and in the log as a FALLBACK.
   `/event current end` kills it (a win, for testing), `/event current cancel` removes it with no reward. The first version announces nothing but a system chat line:
-  it does not use the intel board (`AnnounceIntel` is the one call that would).
+  it does not use the intel board (`IntelServer.Announce` is the one call that would).
 - **A world entity, not a bot** (wire type 60). The state byte is the act (`BigfootAct`, bits 0-3), a bit that flips on every hit that did not kill, the phase (bits 5-6) and
   the enrage (bit 7); the owner field is the player it holds; the hp byte is the hit count left in percent. The client draws the generated giant
   (`drycastle-generated-models/bigfoot.glb`, `scripts/models/make_bigfoot_model.py`: a skinned mesh, 26 bones, 14 clips) and picks the clip from the act (`ClipFor`): every act

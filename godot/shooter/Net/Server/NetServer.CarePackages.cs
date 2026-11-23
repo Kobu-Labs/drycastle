@@ -50,7 +50,7 @@ public partial class NetServer
     }
 
     /// <summary>A client asked to open a crate (after holding the key). The server checks the player, the crate and the reach.</summary>
-    void OnOpenCarePackage(Client c, byte[] payload)
+    void OnOpenCarePackage(ServerClient c, byte[] payload)
     {
         if (!CarePackageCodec.TryDecodeOpen(payload, out var crate)) return;
         if (!c.Joined || c.W == null || c.Car != null || _match.Get(c.Id)?.Life != PlayerLife.Alive) return;

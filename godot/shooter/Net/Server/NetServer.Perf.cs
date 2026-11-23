@@ -135,7 +135,7 @@ public partial class NetServer
     public bool PerfLagComp;
     System.IO.StreamWriter? _lcLog;
 
-    void PerfShot(Client c, Vector3 eye, Vector3 dir, float range, ushort? hitUsed)
+    void PerfShot(ServerClient c, Vector3 eye, Vector3 dir, float range, ushort? hitUsed)
     {
         if (!PerfLagComp || PerfOut.Length == 0) return;
         if (_lcLog == null)

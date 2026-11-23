@@ -44,10 +44,10 @@ public partial class NetServer
     }
 
     /// <summary>A life starts at spawn (join and every spawn, like the perk): the loadout's streaks and the perk's cost reduction.</summary>
-    void StreakArm(Client c, Loadout l) => _streaks.Arm(c.Id, new[] { l.Streak1, l.Streak2, l.Streak3 }, c.Perks.StreakCostReduction);
+    void StreakArm(ServerClient c, Loadout l) => _streaks.Arm(c.Id, new[] { l.Streak1, l.Streak2, l.Streak3 }, c.Perks.StreakCostReduction);
 
     /// <summary>The Killstreak key was pressed (its press edge): use the next held streak while the owner is alive.</summary>
-    void StreakActivate(Client c)
+    void StreakActivate(ServerClient c)
     {
         if (SandboxStreakKey(c)) return; // a sandbox player's held streak goes first (#156)
         var p = c.Body.GlobalPosition;
