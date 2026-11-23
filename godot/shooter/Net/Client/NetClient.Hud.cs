@@ -26,7 +26,7 @@ public partial class NetClient
     /// </summary>
     void InitMatchEdges()
     {
-        Match.PhaseChanged += SfxPhase;
+        Match.PhaseChanged += OnPhaseChanged;
         Match.RoundRestarted += () => { Ctx.Hud?.ClearKills(); HarvesterRoundRestart(); };
     }
 

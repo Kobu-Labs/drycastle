@@ -182,7 +182,7 @@ public partial class NetClient
             if (flakMine) flakGunner = true;
             v.Smoke?.Near(Sfx.ListenerDistance(p) < 90f); // far vehicles do not smoke: particle budget
             if (flies) _flight.StepFx(v, _flight.DefOf(v)!, p, rot, dt); // rotors, their sound, the downwash
-            else SfxCar(v, p, dt);
+            else Ctx.Cars.Sounds.Engine(v, p, dt, _driveClient.StateOf(v)?.Speed);
             if (drive != null) _driveClient.StepFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
             else v.Roller?.Step(p, rot.Y, dt); // wheels of a vehicle that is not predicted: from its drawn motion
             var seat = Ctx.Driving && Ctx.Me != null ? OwnSeatIn(v) : -1; // the seat the local player has in this vehicle

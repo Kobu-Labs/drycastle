@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.Bunkers;
 using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Glass;
@@ -165,7 +166,7 @@ public partial class NetClient : Node
         Ctx.View.Controlling = () => _controlling;
         Ctx.View.Pinned = () => _pinned;
         Ctx.View.Rising = () => _pRising;
-        Ctx.Viewmodel.StepAcc = () => _sfxStepAcc;
+        Ctx.Viewmodel.StepAcc = () => Ctx.Sound.StepAcc;
         _prediction = new OwnPrediction(Ctx, SpeedFor);
         _fxDemo = new FxDemoClient(Ctx);
         Sandbox = new SandboxClient(Ctx);
@@ -252,7 +253,8 @@ public partial class NetClient : Node
     {
         _link.Enter(LinkPhase.Left);
         _session.Close();
-        SfxTeardown();
+        foreach (var r in _rockets.Values) r.Snd?.Release();
+        Ctx.Cars.ReleaseSounds();
         _rozhlas.Reset(); // the mic is shut
         if (_peer != null) { _peer.PeerDisconnect(); _conn.Flush(); _peer = null; }
         foreach (var r in Ctx.Remotes.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
@@ -541,6 +543,18 @@ public partial class NetClient : Node
     }
 
 
+    /// <summary>The round start and end sounds, on a phase change (<see cref="ClientMatchState.PhaseChanged"/>; the first state of a connection is no round start).</summary>
+    void OnPhaseChanged(MatchPhase? prev, MatchPhase p)
+    {
+        if (p is MatchPhase.Running or MatchPhase.Ending) _streaks.Reset(); // a round reset drops earned streaks too, as on the server
+        if (p == MatchPhase.Running) ScudRoundStart(); // the burnt ground and the missiles in the air of the last round
+        if (prev == null || !Sfx.Enabled) return;
+        if (p == MatchPhase.Running) Sfx.Play2D("round.start");
+        else if (p == MatchPhase.Ending) Sfx.Play2D("round.end");
+    }
+
+    static Vector3 G(NVec3 v) => new(v.X, v.Y, v.Z);
+
     void OnMatchEvent(EventKind kind, byte[] payload)
     {
         if (!Match.Apply(kind, payload, Ctx.Now)) return;
@@ -571,7 +585,7 @@ public partial class NetClient : Node
             case EventKind.Death:
                 var d = Match.LatestDeath!;
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
-                SfxDeath(d);
+                Ctx.Sound.Death(d);
                 NoteDeath(d);
                 if (d.Victim == Ctx.MyId) { _deaths++; _bot?.OnOwnDeath(); BeginDeathView(d.RespawnDelay, d.Flight); Ctx.Dead = true; ClearPredictedReload(); Ctx.Hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); Ctx.Hud?.SetProtection(0); _streaks.OnDeath(); }
                 break;
@@ -656,7 +670,7 @@ public partial class NetClient : Node
         if (_gunship == null) Ctx.Me!.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? Ctx.Hotbar.Want : 0), GunnerAim);
         // C-03: a dead body does not move on the server (its input is zero and it is skipped), so it is not predicted either; else each snapshot snapped it back
-        if (Mode.BodyIsPredicted) { if (!Dead) Ctx.Me!.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
+        if (Mode.BodyIsPredicted) { if (!Dead) Ctx.Me!.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); Ctx.Sound.OwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         _flight.Predict(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
         _driveClient.Predict(ni, dt);  // and so does the driver of an amphibious transport
         _prediction.Add(ni, Ctx.Me!.State);

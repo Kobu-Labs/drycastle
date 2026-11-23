@@ -1,5 +1,7 @@
 using Godot;
 using Drycastle.Shooter.Audio;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Vehicles;
 
 namespace Drycastle.Shooter.Net.Client;
@@ -69,5 +71,36 @@ internal sealed class CarSounds
     {
         foreach (var cv in _voices) cv.Loop.Release();
         _voices.Clear();
+    }
+
+    /// <summary>
+    /// The engine of one vehicle and its reverse beep: a car engine runs while a driver sits in it, pitched by speed, and is only kept while the car is within its range. The vehicle this player rides
+    /// (any seat) is heard from the inside: placed at the listener, so the chase camera's distance and the car's turning never pan or fade it.
+    /// <paramref name="drawnSpeed"/> is the signed speed the vehicle is drawn at (negative reversing), null when it is not predicted or interpolated as a drive.
+    /// </summary>
+    public void Engine(CarView v, Vector3 at, float dt, float? drawnSpeed)
+    {
+        if (!Sfx.Enabled) return;
+        var def = _ctx.Vehicles != null && v.Kind < _ctx.Vehicles.Vehicles.Count ? _ctx.Vehicles.Vehicles[v.Kind] : null;
+        var mine = _cars.Rides(v);
+        var world = at;
+        if (mine) at = Sfx.ListenerPosition(at);
+        if (def is { ReverseBeep: true })
+        {
+            // the backup alarm: from the drawn signed speed, for any driver (a bot's too); the rider hears it as loud as the engine (PlayOnce puts it at the listener)
+            var active = v.Driver != 0 && !v.Destroyed && (mine || Sfx.ListenerDistance(at) <= 60f);
+            if (v.Beep.Step(drawnSpeed ?? 0f, dt, active)) PlayOnce("vehicle.reverse_beep", world, v);
+        }
+        if (def?.Sounds is { } set)
+        {
+            // a type with its own set: layered engine sounds, kept only while it is occupied and near
+            if (v.Driver == 0 || v.Destroyed || (!mine && Sfx.ListenerDistance(at) > 160f)) { v.Engine?.Release(); return; }
+            var kmh = drawnSpeed is { } speed ? speed * 3.6f : v.Kmh; // the drawn speed, signed (negative reversing): smooth every frame, not once a snapshot
+            (v.Engine ??= new VehicleEngineSound($"{def.Id}#{v.Id}")).Update(set, kmh, def.TopSpeed * 3.6f, at, dt);
+            return;
+        }
+        if (v.Driver == 0 || (!mine && Sfx.ListenerDistance(at) > 80f)) { v.Snd?.Release(); v.Snd = null; return; }
+        v.Snd ??= Sfx.Loop("vehicle.engine", at);
+        v.Snd?.Update(at, SoundRules.EnginePitch(v.Kmh), 0f, exact: true);
     }
 }

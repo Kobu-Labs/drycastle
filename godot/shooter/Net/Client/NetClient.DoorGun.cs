@@ -74,7 +74,7 @@ public partial class NetClient
         var car = sh.Weapon == SpecialWeapons.VehicleGun ? DoorGunCarOf(sh.Shooter) : null;
         if (car?.DoorGun is not { } nodes) return false;
         if (KeepEventLogs) _logs.Shots.Add((Ctx.Now, sh));
-        SfxShot(sh, false);
+        Ctx.Sound.Shot(sh, false);
         var origin = G(sh.Origin); var end = G(sh.End);
         ShotFx.Spawn(Ctx.Owned, nodes.Muzzle?.GlobalPosition ?? origin, end, false);
         ShotHole(origin, end);

@@ -53,7 +53,7 @@ public partial class NetClient
         var end = first ?? from + G(aim) * range;
         if (!echo)
         {
-            SfxShot(new ShotMsg(pf.Shooter, pf.Weapon, pf.Origin, new NVec3(end.X, end.Y, end.Z)), false);
+            Ctx.Sound.Shot(new ShotMsg(pf.Shooter, pf.Weapon, pf.Origin, new NVec3(end.X, end.Y, end.Z)), false);
             if (pf.Shooter == Ctx.MyId) _viewmodel.Flash(0.4f); else if (Ctx.Remotes.TryGetValue(pf.Shooter, out var flasher)) flasher.View?.Flash();
         }
         var muzzle = MuzzleOf(pf.Shooter, from, end);

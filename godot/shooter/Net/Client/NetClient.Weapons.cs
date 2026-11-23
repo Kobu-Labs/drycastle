@@ -79,7 +79,7 @@ public partial class NetClient
             case EventKind.Ammo when WeaponCodec.DecodeAmmo(payload) is { } a:
                 Ammo = a; _ammoAt = Ctx.Now;
                 PredictOnAmmo(a);
-                SfxAmmo(a);
+                Ctx.Sound.Ammo(a, _pReloadUntil);
                 HudAmmo();
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
@@ -137,7 +137,7 @@ public partial class NetClient
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 if (KeepEventLogs) _logs.Hits.Add((Ctx.Now, h));
-                SfxHit(h);
+                Ctx.Sound.Hit(h);
                 HudHit(h);
                 break;
         }

@@ -27,11 +27,19 @@ public partial class NetClient
         if (!_rockets.TryGetValue(id, out var r))
         {
             var speed = Weapons != null && rec.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[rec.Weapon].ProjectileSpeed : 40f;
-            r = new Rocket { Node = RocketFx.Make(Ctx.Owned, WeaponId(rec.Weapon)), Born = Ctx.Now, Speed = speed }; _rockets[id] = r;
+            r = new Rocket { Node = RocketFx.Make(Ctx.Owned, Ctx.Sound.WeaponId(rec.Weapon)), Born = Ctx.Now, Speed = speed }; _rockets[id] = r;
             r.Gravity = GrenadeGravity(rec.Weapon); r.Grenade = r.Gravity > 0;
         }
         if (r.Grenade) r.Speed = rec.Health / NetServer.GrenadeSpeedScale; // a grenade's speed rides the health byte
         r.Pos = rec.Position; r.Dir = dir; r.At = Ctx.Now;
+    }
+
+    /// <summary>The flight loop of a rocket follows the drawn rocket.</summary>
+    static void SfxRocket(Rocket r, Vector3 at)
+    {
+        if (!Sfx.Enabled) return;
+        r.Snd ??= Sfx.Loop("rocket.flight", at);
+        r.Snd?.Update(at);
     }
 
     /// <summary>The fall of a thrown weapon (weapons.json grenade.gravity, m/s²); 0 for a rocket.</summary>
@@ -77,11 +85,11 @@ public partial class NetClient
         {
             // show the rocket at once from the launch event; snapshots take over
             var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);
-            _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Ctx.Owned, WeaponId(l.Weapon)), Born = Ctx.Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Ctx.Now, Speed = v.Length(), Gravity = GrenadeGravity(l.Weapon), Grenade = GrenadeGravity(l.Weapon) > 0 };
+            _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Ctx.Owned, Ctx.Sound.WeaponId(l.Weapon)), Born = Ctx.Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Ctx.Now, Speed = v.Length(), Gravity = GrenadeGravity(l.Weapon), Grenade = GrenadeGravity(l.Weapon) > 0 };
         }
         if (!EchoOfPredicted(l.Owner))
         {
-            SfxLaunch(l);
+            Ctx.Sound.Launch(l);
             if (GrenadeGravity(l.Weapon) > 0) { if (Ctx.Remotes.TryGetValue(l.Owner, out var thrower)) thrower.FireUntil = Ctx.Now + 0.45; return; } // a throw: no flash, no backblast
             if (l.Owner == Ctx.MyId) _viewmodel.Flash(0.5f); else if (Ctx.Remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
             // a held launcher's backblast, behind the shooter's shoulder (a gunship's rocket has no owner on foot: its owner is not a remote here)
@@ -100,6 +108,6 @@ public partial class NetClient
         var exR = ex.Radius > 0 ? ex.Radius : 6f; // the blast the server used (a gunship rocket's is 8 m)
         var exAt = new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z);
         RocketFx.Explode(Ctx.Owned, exAt, exR, ex.WaveSpeed);
-        _blastDust.BlastFelt(exAt, exR, SoundRules.Event("explosion", WeaponId(ex.Weapon)), ex.WaveSpeed);
+        _blastDust.BlastFelt(exAt, exR, SoundRules.Event("explosion", Ctx.Sound.WeaponId(ex.Weapon)), ex.WaveSpeed);
     }
 }

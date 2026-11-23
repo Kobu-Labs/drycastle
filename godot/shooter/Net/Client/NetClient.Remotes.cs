@@ -146,7 +146,7 @@ public partial class NetClient
             // a rider sits: the seat moving (the car driving, a flak turret turning the gunner about its ring) is not the body walking
             if (r.State == EntityState.InVehicle) sp = 0;
             r.Speed = Mathf.Lerp(r.Speed, sp, 0.3f);
-            if (r.State != EntityState.InVehicle) SfxRemoteStep(r, p, (float)(now - r.LastT));
+            if (r.State != EntityState.InVehicle) Ctx.Sound.RemoteStep(r, p, (float)(now - r.LastT));
         }
         r.LastPos = p; r.LastT = now;
         var weaponId = Weapons != null && r.Slot >= 1 && r.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[r.Slot - 1].Id : "";
