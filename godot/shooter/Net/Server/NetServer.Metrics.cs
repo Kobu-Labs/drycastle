@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.Rewind;
 using Drycastle.ShooterCore.Diagnostics;
 
 namespace Drycastle.Shooter.Net.Server;
@@ -49,7 +50,7 @@ public partial class NetServer
         var gpu = ClientReport.AdapterLabel(adapter);
         m.Begin("drycastle_client", "player", c.Name, "gpu", gpu);
         for (var i = 0; i < values.Length && i < ClientReport.Fields.Length; i++) m.Field(ClientReport.Fields[i], values[i]);
-        m.Field("server_rtt_ms", RttOf(c)).End();
+        m.Field("server_rtt_ms", PoseRewind.RttOf(c)).End();
         for (var i = 0; i < scopes.Length && i < ClientProf.ScopeCount; i++)
             m.Begin("drycastle_client_scope", "player", c.Name, "scope", ClientProf.Name(i)).Field("ms_per_s", scopes[i]).End();
     }

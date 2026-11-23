@@ -2,6 +2,7 @@ using Godot;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Net.Server.HuntLog;
+using Drycastle.Shooter.Net.Server.Panes;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Corpses;
@@ -55,8 +56,8 @@ public partial class NetServer
     void FireWeaponWith(ServerClient c, in NetInput i, FireOutcome shot, ServerCar? seatCar, ref List<HitTarget>? pooled)
     {
         var w = shot.Weapon;
-        var back = VehicleBackOf(c); // the vehicles this shot rewinds (B-02): the same view tick as the players (ADR 0013)
-        _vehicleView = ViewOf(back, c.LifeStart);
+        var back = _rewind.BackOf(c); // the vehicles this shot rewinds (B-02): the same view tick as the players (ADR 0013)
+        _rewind.Look(back, c.LifeStart);
         var seat = seatCar?.Def.Seats[c.CarSeat];
         var feet = seatCar != null ? SeatPos(seatCar, c.CarSeat) : c.Body.GlobalPosition;
         var eye = feet + Vector3.Up * (seat != null ? SeatAimRules.EyeHeight(seat) : MovementStep.EyeHeight(c.Body.State.Stance));
@@ -82,7 +83,7 @@ public partial class NetServer
         else if (w.Kind == WeaponKind.Hitscan) FireHitscan(c, shot, aim);
         else if (w.Kind == WeaponKind.Projectile) FireProjectile(c, shot, aim, back);
         else if (w.Kind == WeaponKind.Melee) FireMelee(c, shot, aim);
-        _vehicleView = null; // the blast and everything after the shot see the vehicles where they stand
+        _rewind.LookNow(); // the blast and everything after the shot see the vehicles where they stand
     }
 
     /// <summary>What a shot is resolved from: the seat's car (null on foot), where the eye and the feet are, the view's yaw and pitch (held inside a seat's arc), the targets as the shooter saw them, and the spread in degrees.</summary>
@@ -250,14 +251,14 @@ public partial class NetServer
             // a rocket fired from an armed seat passes its own vehicle's hull and riders for as long as its owner still rides it
             var own = RocketCar(r);
             // the vehicles a rocket meets are where its shooter's screen showed them, this step (B-02); the players are where they stand (ADR 0013)
-            _vehicleView = ViewOf(r.ViewBack, r.ViewLife);
+            _rewind.Look(r.ViewBack, r.ViewLife);
             var wall = WorldHit(r.Pos, r.Dir, len, out var hitCar, own);
             var all = _targets.Live();
             var targets = own != null ? RiderRules.NotAboard(all, own.Seat) : all;
             var (exposedGunner, pastHull) = ExposedGunnerBehind(hitCar, r.Pos, r.Dir, len, targets, skip: own);
             var step = RocketFlight.Step(N(r.Pos), N(r.Dir), r.Age, speed, life, dt, wall, targets, r.Owner, exposedGunner, pastHull);
             _targets.Return(all); // the step is done with the targets (NotAboard copied its own)
-            _vehicleView = null;
+            _rewind.LookNow();
             switch (step.Outcome)
             {
                 case RocketOutcome.Player:
@@ -284,13 +285,13 @@ public partial class NetServer
     bool StepGrenade(Rocket r, WeaponDef w, float dt)
     {
         var own = RocketCar(r);
-        _vehicleView = ViewOf(r.ViewBack, r.ViewLife);
+        _rewind.Look(r.ViewBack, r.ViewLife);
         var step = GrenadeFlight.Step(r.Grenade!, N(r.Pos), N(r.Vel), dt, (from, dir, len) =>
         {
             var stop = Query.Shot(new Vector3(from.X, from.Y, from.Z), new Vector3(dir.X, dir.Y, dir.Z), len, own);
             return new GrenadeStop(stop.Distance, new NVec3(stop.Normal.X, stop.Normal.Y, stop.Normal.Z));
         });
-        _vehicleView = null;
+        _rewind.LookNow();
         r.Pos = new Vector3(step.Pos.X, step.Pos.Y, step.Pos.Z);
         r.Vel = new Vector3(step.Vel.X, step.Vel.Y, step.Vel.Z);
         if (r.Vel.LengthSquared() > 1e-4f) r.Dir = r.Vel.Normalized();

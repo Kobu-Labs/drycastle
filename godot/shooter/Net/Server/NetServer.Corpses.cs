@@ -30,9 +30,6 @@ public partial class NetServer
     /// <summary>A pilot's or driver's corpse riding its vehicle: it follows the seat until the vehicle has rested or been destroyed.</summary>
     readonly List<(ushort Id, Corpse Body, ServerCar Car, int Seat)> _riding = new();
 
-    /// <summary>A vehicle's velocity: what a corpse leaving it carries on (a helicopter's flight velocity, a car's, zero for one asleep).</summary>
-    static NVec3 CarVelocity(ServerCar car) => car.Flies ? car.Flight.Velocity : car.Asleep ? NVec3.Zero : new NVec3(car.Velocity.X, car.Velocity.Y, car.Velocity.Z);
-
     /// <summary>At rest: slow, and a helicopter also on the ground (hovering is not rest).</summary>
     static bool CarAtRest(ServerCar car) => (!car.Flies || car.Flight.Grounded) && CarVelocity(car).Length() <= CorpseRules.RestSpeed;
 

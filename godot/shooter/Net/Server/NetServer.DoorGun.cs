@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Net.Server.CarPool;
+using Drycastle.Shooter.Net.Server.Panes;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Movement;
@@ -52,7 +53,7 @@ public partial class NetServer
     /// </summary>
     void FireDoorGun(ServerClient c, ServerCar car, VehicleDoorGunDef def, VehicleGunDef gun, DoorGunAim aim)
     {
-        _vehicleView = ViewOf(VehicleBackOf(c), c.LifeStart); // the other vehicles, where the gunner's screen showed them (B-02)
+        _rewind.Look(c); // the other vehicles, where the gunner's screen showed them (B-02)
         var (yaw, pitch, roll) = Fleet.AttitudeOf(car);
         var muzzle = DoorGunRules.Muzzle(def, DoorGunRules.GunPivot(def, N(car.GlobalPosition), yaw, pitch, roll, aim), aim);
         var d = HitMath.SpreadDirection(aim.ViewYaw, aim.ViewPitch, gun.SpreadDegrees, _rng);
@@ -74,6 +75,6 @@ public partial class NetServer
         if (hit == null && wall <= gun.Range) ShotGlass(shotCar, from, dir, wall, gun.Damage);
         DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, _ => gun.Damage);
         _scenery.Shot(N(from), N(dir), hit?.Distance ?? Math.Min(wall, gun.Range)); // a pole lamp the round passed breaks (ADR 0037)
-        _vehicleView = null;
+        _rewind.LookNow();
     }
 }

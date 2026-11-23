@@ -1,8 +1,9 @@
-using System.Diagnostics;
-using System.Text;
 using Godot;
+using Drycastle.Shooter.Net.Server.Rewind;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Weapons;
+using System.Diagnostics;
+using System.Text;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter.Net.Server;
@@ -143,11 +144,11 @@ public partial class NetServer
             _lcLog = new System.IO.StreamWriter(System.IO.Path.Combine(PerfOut, "lagcomp.csv")) { AutoFlush = true };
             _lcLog.WriteLine("tick,shooter,rtt_ms,back_ticks,hit_used,hit_now,hit_rewound,same,n_targets,speeds_mps,aimed_id,aimed_dist_m,lateral_rewound_m,lateral_now_m,resolve_us");
         }
-        var rtt = RttOf(c);
-        var back = BackTicksOf(c);
-        var resolveUs = _lagResolveUs;
+        var rtt = PoseRewind.RttOf(c);
+        var back = _rewind.BackTicksOf(c);
+        var resolveUs = _shot.ResolveUs;
         var cur = _targets.Live();
-        var rewoundAll = RewoundTargets(c);
+        var rewoundAll = _rewind.TargetsSeenBy(c);
         var rewound = new List<HitTarget>(rewoundAll.Count);
         foreach (var t in rewoundAll) if (t.Id != c.Id) rewound.Add(t);
         var speeds = new List<string>();

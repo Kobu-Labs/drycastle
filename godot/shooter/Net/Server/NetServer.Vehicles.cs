@@ -1,6 +1,7 @@
 using Godot;
 using Drycastle.Shooter.Flight;
 using Drycastle.Shooter.Net.Server.CarPool;
+using Drycastle.Shooter.Net.Server.Panes;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Corpses;
@@ -325,23 +326,6 @@ public partial class NetServer
         foreach (var o in _fleet.Occupants(car)) Send(o, msg);
     }
 
-    /// <summary>World position of a seat of the car (its offset in the car's frame). A flak truck's gunner sits on the turret, so the seat turns with it.</summary>
-    static Vector3 SeatPos(ServerCar car, int seat) => SeatPosAt(car, seat, PresentPose(car));
-
-    /// <summary>
-    /// A seat's world position with the car at pose <paramref name="pose"/> (the rewound pose of a shot, B-02, or the present one): the offset in the
-    /// car's frame turned by the yaw, and by the attitude for a helicopter or a driven vehicle.
-    /// </summary>
-    static Vector3 SeatPosAt(ServerCar car, int seat, VehiclePose pose)
-    {
-        var offset = car.Def.Seats[seat].Offset;
-        if (car.Def.Flak is { } flak && car.Def.Seats[seat].Role == "gunner") offset = FlakRules.TurretSeatOffset(flak, offset, pose.TurretYaw);
-        var p = car.Flies || car.Drives // a helicopter's seats tilt with it; a driven vehicle's lie on the slope it stands on
-            ? pose.Feet + FlightMath.Rotate(new System.Numerics.Vector3(offset[0], offset[1], offset[2]), pose.Yaw, pose.Pitch, pose.Roll)
-            : VehicleSeat.SeatPosition(pose.Feet, pose.Yaw, offset);
-        return new Vector3(p.X, p.Y, p.Z);
-    }
-
     /// <summary>A gunner's inputs: reload when asked, then one round when the trigger is held and the gun is ready.</summary>
     void GunnerInput(ServerClient c, NetInput i)
     {
@@ -358,7 +342,7 @@ public partial class NetServer
     /// </summary>
     void FireGun(ServerClient c, ServerCar car, NetInput i, VehicleGunDef def)
     {
-        _vehicleView = ViewOf(VehicleBackOf(c), c.LifeStart); // the other vehicles, where the gunner's screen showed them (B-02)
+        _rewind.Look(c); // the other vehicles, where the gunner's screen showed them (B-02)
         var eye = SeatPos(car, c.CarSeat) + Vector3.Up * 1.4f;
         var yaw = Quant.Yaw(i.Yaw); var pitch = Quant.Pitch(i.Pitch);
         var d = HitMath.SpreadDirection(yaw, RecoilState.ClampPitch(pitch), def.SpreadDegrees, _rng);
@@ -377,7 +361,7 @@ public partial class NetServer
         if (hit == null && shotCar != car && wall <= def.Range) ShotGlass(shotCar, eye, dir, wall, def.Damage);
         DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, _ => def.Damage);
         _scenery.Shot(N(eye), N(dir), hit?.Distance ?? Math.Min(wall, def.Range)); // a pole lamp the round passed breaks (ADR 0037)
-        _vehicleView = null;
+        _rewind.LookNow();
     }
 
     /// <summary>Exit position: right, left, behind, in front of the car (first with ground and room for the capsule), else above the roof.</summary>

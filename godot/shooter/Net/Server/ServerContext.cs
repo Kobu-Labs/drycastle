@@ -11,22 +11,26 @@ namespace Drycastle.Shooter.Net.Server;
 /// </summary>
 internal sealed class ServerContext
 {
+    readonly Dictionary<ushort, ServerClient> _players;
     readonly Func<double> _now;
     readonly Func<uint> _tick;
     readonly Action<EventKind, byte[]> _broadcast;
     readonly Action<ServerClient, ReliableMsg> _send;
     readonly Action<ServerClient, int, byte[]> _sendUnreliable;
 
-    public ServerContext(MatchSim match, IReadOnlyDictionary<ushort, ServerClient> players, IEnumerable<ServerClient> connections,
+    public ServerContext(MatchSim match, Dictionary<ushort, ServerClient> players, IEnumerable<ServerClient> connections,
         Func<double> now, Func<uint> tick, Action<EventKind, byte[]> broadcast, Action<ServerClient, ReliableMsg> send, Action<ServerClient, int, byte[]> sendUnreliable)
     {
-        Match = match; Players = players; Connections = connections; _now = now; _tick = tick; _broadcast = broadcast; _send = send; _sendUnreliable = sendUnreliable;
+        Match = match; _players = players; Connections = connections; _now = now; _tick = tick; _broadcast = broadcast; _send = send; _sendUnreliable = sendUnreliable;
     }
 
     public MatchSim Match { get; }
 
     /// <summary>The joined players by id, bots included.</summary>
-    public IReadOnlyDictionary<ushort, ServerClient> Players { get; }
+    public IReadOnlyDictionary<ushort, ServerClient> Players => _players;
+
+    /// <summary>The joined players, bots included, in the order they joined: the same as <see cref="Players"/>.Values, for the per-tick loops (no enumerator is allocated).</summary>
+    public Dictionary<ushort, ServerClient>.ValueCollection Roster => _players.Values;
 
     /// <summary>Every connection, joined or not (the values of the server's peer table).</summary>
     public IEnumerable<ServerClient> Connections { get; }

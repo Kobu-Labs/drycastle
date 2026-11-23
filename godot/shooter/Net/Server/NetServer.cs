@@ -10,11 +10,14 @@ using Drycastle.Shooter.Net.Server.Gear;
 using Drycastle.Shooter.Net.Server.HuntLog;
 using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
+using Drycastle.Shooter.Net.Server.Panes;
 using Drycastle.Shooter.Net.Server.Parish;
 using Drycastle.Shooter.Net.Server.Profiles;
+using Drycastle.Shooter.Net.Server.Rewind;
 using Drycastle.Shooter.Net.Server.Scenery;
 using Drycastle.Shooter.Net.Server.Seating;
 using Drycastle.Shooter.Net.Server.Sentries;
+using Drycastle.Shooter.Net.Server.Shooting;
 using Drycastle.Shooter.Net.Server.Statuses;
 using Drycastle.Shooter.Net.Server.Streaks;
 using Drycastle.Shooter.Net.Server.Thieves;
@@ -28,10 +31,11 @@ using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Demon;
 using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Glass;
 using Drycastle.ShooterCore.Items;
-using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Killstreaks.Helicopter;
 using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Perks;
@@ -66,6 +70,10 @@ public partial class NetServer : Node
     public bool AllowSandbox;
     /// <summary>Match smoke mode: QuitAfter is a failure deadline; the server finishes itself after one full round and restart.</summary>
     public bool MatchSmoke;
+    /// <summary><c>--no-lagcomp</c>: shots resolve against present positions (the A/B baseline for the perf harness).</summary>
+    public bool NoLagComp;
+    /// <summary>glass.json; the defaults when the host sets none.</summary>
+    public GlassConfig GlassData = new();
     /// <summary>weapons.json (hotbar, ammo, damage numbers).</summary>
     public WeaponsFile Weapons = null!;
     /// <summary>Weapons smoke mode: builds a flat test arena with a wall far from the map and judges the scenario (implies debug commands).</summary>
@@ -105,6 +113,11 @@ public partial class NetServer : Node
 
     // The features that are classes of their own (<c>Net/Server/&lt;Feature&gt;/</c>), made in _Ready once the match exists; each takes only the context.
     ServerContext _ctx = null!;
+    PoseRewind _rewind = null!;
+    GlassServer _glass = null!;
+    ShotWorld _shot = null!;
+    /// <summary>What a shot, a blast or a turret can hit, kind by kind in the order the list has them; made in <see cref="BuildMatch"/>, its sources named in <see cref="RegisterTargetSources"/>.</summary>
+    TargetBook _targets = null!;
     ImpactFx _impacts = null!;
     Splash _splash = null!;
     SceneryServer _scenery = null!;
@@ -187,7 +200,7 @@ public partial class NetServer : Node
         _match.Event += OnMatchEvent;
         _ctx = new ServerContext(_match, _byId, _clients.Values, () => _elapsed, () => _tick, BroadcastEvent, Send, (c, chan, packet) => { if (c.Peer is { } peer) Tx(peer, chan, packet, 0); });
         _impacts = new ImpactFx(_ctx, Map, Water);
-        _splash = new Splash(_ctx, () => MapShelters, () => Query, PoseOf);
+        _splash = new Splash(_ctx, () => MapShelters, () => Query, car => _rewind.PoseOf(car));
         RegisterTargetSources();
     }
 
@@ -211,7 +224,25 @@ public partial class NetServer : Node
         _sentries = new SentryWorld(_ctx, _targets, Deal, () => Query);
         _status = new StatusServer(_ctx, Deal, Weapons, GetHigh);
         _pounce = new PounceServer(_ctx, () => Demon, _status);
-        _demon = new DemonServer(_ctx, () => Demon, () => _mass, _church, _citizens, _sitters, _status, _pounce, _targets, Deal, () => Query, (at, radius) => BlastGlass(at, radius), () => MapShelters, Weapons, MapDir, World, _events);
+        _demon = new DemonServer(_ctx, () => Demon, () => _mass, _church, _citizens, _sitters, _status, _pounce, _targets, Deal, () => Query, (at, radius) => _glass.Blast(at, radius), () => MapShelters, Weapons, MapDir, World, _events);
+        _rewind = new PoseRewind(_ctx, _fleet, _targets, _sitters, _pounce, NoLagComp);
+        _glass = new GlassServer(_ctx, _fleet, _rewind, Map, GlassData);
+        _shot = new ShotWorld(_ctx, _fleet, _rewind, _sitters, _pounce, _targets, _glass, World, _perf != null);
+    }
+
+    /// <summary>What a shot can hit, kind by kind; the order of the sources is the order of every target list. A kind that stood elsewhere on the shooter's screen says where.</summary>
+    void RegisterTargetSources()
+    {
+        _targets = new TargetBook(() => _byId.Count);
+        _targets.AddSource(list => _shot.AddPlayers(list), (List<HitTarget> list, in ShotView view) => _shot.AddPlayersSeen(list, view));
+        _targets.AddSource(AddDummyTargets);
+        _targets.AddSource(list => { if (BigfootTarget() is { } bigfoot) list.Add(bigfoot); }, // the Bigfoot is a hit target like a player (issue #264), rewound like one
+            (List<HitTarget> list, in ShotView view) => { if (BigfootTarget() is { } bigfoot) list.Add(BigfootRewound(bigfoot, view.Tick)); });
+        _targets.AddSource(list => _citizens.Crowd?.AddTargets(list)); // the citizens of the Holy Mass walk slowly: not rewound
+        _targets.AddSource(list => _thieves.AddTargets(list), (List<HitTarget> list, in ShotView view) => _thieves.AddTargets(list, view.Tick)); // the Gang members and their Raid vans
+        _targets.AddSource(AddAnimalTargets, (List<HitTarget> list, in ShotView view) => { _pets.AddTargets(list); _wildlife.AddTargets(list, view.BackTicks / (float)Wire.TickRate); }); // wild animals in the pose the shooter saw
+        _targets.AddSource(list => _rozhlas.AddTargets(list)); // the workers of the Urad
+        _targets.AddSource(list => _demon.AddTarget(list));
     }
 
     /// <summary>The world entities' end of life and their types, in the order they register, and what follows the same despawns (the corpse book, the Bigfoot).</summary>
@@ -348,8 +379,10 @@ public partial class NetServer : Node
         StepVehiclesAndRiders(dt);
         ResolveBlastsAndFlush(dt);
         if (CarSmoke && _carExits >= 1 && _smoke.FinishAt == 0) _smoke.FinishAt = _elapsed + 5.0; // after the bot's check that the empty car stays put
-        CaptureLagPoses(); // the poses this tick ends with, the state the snapshots carry (ADR 0013)
-        CaptureVehiclePoses(); // and the vehicles' (B-02)
+        _rewind.CapturePlayers(); // the poses this tick ends with, the state the snapshots carry (ADR 0013)
+        CaptureBigfootPose();
+        _thieves.RecordPoses(_tick); // Gang members and Raid vans
+        _rewind.CaptureVehicles(); // and the vehicles' (B-02)
         PerfLap(ServerPerf.Ph.LagCapture);
         if (catchUp && LossTest == 0) _skippedSnapshots++; // the next regular tick sends the current state
         else SendSnapshots();

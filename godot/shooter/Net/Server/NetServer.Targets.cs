@@ -1,10 +1,12 @@
 using Godot;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Killstreaks.Uav;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Weapons;
 using Drycastle.ShooterCore.Progression;
 using NVec3 = System.Numerics.Vector3;
 
@@ -41,6 +43,24 @@ public partial class NetServer
         var spots = TargetPlacement.Plan(centre, n, GroundY);
         _match.SetTargets(spots);
         GD.Print($"server: planted {spots.Count}/{n} target dummies (rings {string.Join("/", TargetPlacement.RingsMetres)} m; cover and wall spots not generated)");
+    }
+
+    void AddDummyTargets(List<HitTarget> list)
+    {
+        var dummies = _match.Targets.All; // living target dummies: an index loop, no enumerator object
+        for (var i = 0; i < dummies.Count; i++)
+        {
+            var d = dummies[i];
+            if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
+        }
+    }
+
+    void AddAnimalTargets(List<HitTarget> list)
+    {
+        var partT = Prof.Begin(Prof.S.TargetsAnimals);
+        _pets.AddTargets(list);
+        _wildlife.AddTargets(list);
+        Prof.End(Prof.S.TargetsAnimals, partT);
     }
 
     /// <summary>Snapshot entries for every dummy: standing, or down (the Defeat pose) until it respawns.</summary>
