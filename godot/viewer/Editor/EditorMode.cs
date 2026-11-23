@@ -20,13 +20,15 @@ public partial class EditorMode : Node, IEditorHost
 {
     public const float PanelWidth = 360f;
     const float StatusHeight = 58f;
-    const float TopDownHeight = 120f;
+
+    public EditStore Edits { get; }
+    public EditorCamera Camera { get; }
 
     // the parts of the editor that own their state; Update and ActiveChanged run in this order
-    public EditStore Edits { get; }
     public OrthoLayer Ortho { get; }
     public FloorPlanLayer FloorPlan { get; }
     public SketchTool Sketches { get; }
+    public YouDot You { get; }
     readonly List<EditorPart> _parts;
 
     public EditorMode()
@@ -34,9 +36,11 @@ public partial class EditorMode : Node, IEditorHost
         Ortho = new OrthoLayer(this);
         FloorPlan = new FloorPlanLayer(this);
         Sketches = new SketchTool(this);
+        You = new YouDot(this);
+        Camera = new EditorCamera(this);
         Edits = new EditStore(this, SyncCatalogs, doc => Sketches.Replay(doc));
         Commands = new CommandPalette(PaletteAll);
-        _parts = new() { Ortho, FloorPlan, Sketches };
+        _parts = new() { Ortho, FloorPlan, Sketches, You };
     }
 
     public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
@@ -45,25 +49,12 @@ public partial class EditorMode : Node, IEditorHost
     public string EditsPath { get; init; } = "";
 
     public bool Active { get; private set; }
-    public Camera3D FlyCam { get; private set; } = null!;
+    public Camera3D FlyCam => Camera.Node;
     public Camera3D CurrentCamera => Active ? FlyCam : Player.Camera;
     public SortedSet<string> Selection { get; } = new(StringComparer.Ordinal);
     public string? HoverId { get; private set; }
-    public float Speed { get; private set; } = 40f;
-    const float MinSpeed = 1f, MaxSpeed = 800f;
-    static double SliderToSpeed(double v) => MinSpeed * Math.Pow(MaxSpeed / MinSpeed, v / 100.0);
-    static double SpeedToSlider(double s) => 100.0 * Math.Log(s / MinSpeed) / Math.Log(MaxSpeed / MinSpeed);
-
-    /// <summary>Set the fly speed in m/s (clamped); keeps the slider in sync.</summary>
-    public void SetSpeed(float speed, bool fromSlider = false)
-    {
-        Speed = Mathf.Clamp(speed, MinSpeed, MaxSpeed);
-        if (!fromSlider && _speedSlider != null) _speedSlider.SetValueNoSignal(SpeedToSlider(Speed));
-        if (_speedLabel != null) _speedLabel.Text = $"{Speed:F0} m/s";
-    }
     public string StatusMessage { get; private set; } = "";
     public Node3D OutlineRoot { get; private set; } = null!;
-    public bool TopDown => _savedCam != null;
     public event Action? SelectionChanged;
 
     // outline kinds: node name -> segments last built (ground xz pairs)
@@ -83,16 +74,12 @@ public partial class EditorMode : Node, IEditorHost
     Vector3 _rayOrigin, _rayDir, _rayPoint;
     bool _rayHit;
 
-    float _yaw, _pitch;
     bool _looking, _rmbMoved;
     public bool Looking => _looking;
-    (Vector3 pos, float yaw, float pitch)? _savedCam;
-    (Vector3 pos, Vector3 euler, float pitch, bool input)? _savedPlayer;
     Vector3? _hoverPoint;
 
     CanvasLayer _ui = null!;
     PanelContainer _panel = null!, _statusBar = null!;
-    HSlider _speedSlider = null!;
     Label _unsavedLabel = null!, _hudLabel = null!, _hoverLabel = null!, _statusLabel = null!, _hintLabel = null!;
     Label _selLabel = null!, _groupLabel = null!;
     Button _btnGroup = null!, _btnMerge = null!, _btnAdd = null!, _btnRemove = null!, _btnDissolve = null!;
@@ -101,8 +88,7 @@ public partial class EditorMode : Node, IEditorHost
 
     public override void _Ready()
     {
-        FlyCam = new Camera3D { Name = "EditorCamera", Far = 3000f, Near = 0.1f, Fov = 70f };
-        AddChild(FlyCam);
+        Camera.Build(this);
         OutlineRoot = new Node3D { Name = "EditorOutlines", Visible = false };
         AddChild(OutlineRoot);
         BuildUi();
@@ -139,17 +125,7 @@ public partial class EditorMode : Node, IEditorHost
         _looking = false;
         if (on)
         {
-            _savedPlayer = (Player.GlobalPosition, Player.RotationDegrees, 0f, Player.InputEnabled);
-            Player.InputEnabled = false;
-            Player.Visible = false;
-            Player.Velocity = Vector3.Zero;
-            Player.SetPhysicsProcess(false);
-            var e = Player.Camera.GlobalBasis.GetEuler();
-            _pitch = e.X; _yaw = e.Y;
-            FlyCam.GlobalPosition = Player.Camera.GlobalPosition;
-            ApplyCamRotation();
-            _savedCam = null;
-            FlyCam.MakeCurrent();
+            Camera.EnterEditor();
             Input.MouseMode = Input.MouseModeEnum.Visible;
             MarkAllOutlines();
             _panelDirty = true;
@@ -157,16 +133,7 @@ public partial class EditorMode : Node, IEditorHost
         }
         else
         {
-            if (_savedPlayer is { } sp)
-            {
-                Player.GlobalPosition = sp.pos;
-                Player.RotationDegrees = sp.euler;
-                Player.InputEnabled = sp.input;
-            }
-            Player.Visible = true;
-            Player.Velocity = Vector3.Zero;
-            Player.SetPhysicsProcess(true);
-            Player.Camera.MakeCurrent();
+            Camera.LeaveEditor();
             Input.MouseMode = Input.MouseModeEnum.Captured;
             CancelDrag();
             CancelShapeGesture();
@@ -183,48 +150,13 @@ public partial class EditorMode : Node, IEditorHost
     public void WalkFromHere()
     {
         if (!Active) return;
-        var from = FlyCam.GlobalPosition;
-        var ground = RayToGround(from + Vector3.Up * 2f, Vector3.Down, out var hit) ? hit : new Vector3(from.X, from.Y, from.Z);
-        _savedPlayer = (ground + Vector3.Up * 1.0f, new Vector3(0, Mathf.RadToDeg(_yaw), 0), 0f, _savedPlayer?.input ?? true);
+        Camera.DropPlayer();
         SetActive(false);
         Say("dropped to the ground; F2 returns to the editor");
     }
 
-    void ApplyCamRotation() => FlyCam.Basis = Basis.FromEuler(new Vector3(_pitch, _yaw, 0));
-
-    /// <summary>Place the fly camera at pos looking at target (smoke tests, screenshots).</summary>
-    public void LookFrom(Vector3 pos, Vector3 target)
-    {
-        FlyCam.GlobalPosition = pos;
-        var d = (target - pos).Normalized();
-        _yaw = Mathf.Atan2(-d.X, -d.Z);
-        _pitch = Mathf.Asin(Mathf.Clamp(d.Y, -1f, 1f));
-        ApplyCamRotation();
-    }
-
     /// <summary>T: snap to a top-down view above the cursor (or the screen centre); again restores the camera.</summary>
-    public void ToggleTopDown()
-    {
-        if (_savedCam is { } s)
-        {
-            FlyCam.GlobalPosition = s.pos; _yaw = s.yaw; _pitch = s.pitch;
-            ApplyCamRotation();
-            _savedCam = null;
-            return;
-        }
-        Vector3 ground;
-        if (_hoverPoint is { } hp) ground = hp;
-        else
-        {
-            var size = GetViewport().GetVisibleRect().Size;
-            if (!RayToGround(FlyCam.ProjectRayOrigin(size / 2), FlyCam.ProjectRayNormal(size / 2), out ground))
-                ground = FlyCam.GlobalPosition;
-        }
-        _savedCam = (FlyCam.GlobalPosition, _yaw, _pitch);
-        _pitch = -Mathf.Pi / 2;
-        FlyCam.GlobalPosition = new Vector3(ground.X, Map.GroundHeightOrMean(ground.X, ground.Z) + TopDownHeight, ground.Z);
-        ApplyCamRotation();
-    }
+    public void ToggleTopDown() => Camera.ToggleTopDown(_hoverPoint);
 
     // ---- picking ----
 
@@ -469,9 +401,7 @@ public partial class EditorMode : Node, IEditorHost
         {
             case InputEventMouseMotion mm when _looking:
                 _rmbMoved = true;
-                _yaw -= mm.Relative.X * 0.0025f;
-                _pitch = Mathf.Clamp(_pitch - mm.Relative.Y * 0.0025f, -1.5698f, 1.5698f);
-                ApplyCamRotation();
+                Camera.Look(mm.Relative);
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right } rb:
                 _rmbPressPos = rb.Position;
@@ -480,10 +410,10 @@ public partial class EditorMode : Node, IEditorHost
                 Input.MouseMode = Input.MouseModeEnum.Captured;
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelUp } wu when !OverUi(wu.Position):
-                SetSpeed(Speed * 1.25f);
+                Camera.SetSpeed(Camera.Speed * 1.25f);
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.WheelDown } wd when !OverUi(wd.Position):
-                SetSpeed(Speed / 1.25f);
+                Camera.SetSpeed(Camera.Speed / 1.25f);
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && ShapeTool && !OverUi(mb.Position):
                 ShapeLeftPress(mb.Position, mb.CtrlPressed);
@@ -575,7 +505,7 @@ public partial class EditorMode : Node, IEditorHost
     public override void _Process(double delta)
     {
         if (!Active) return;
-        Fly((float)delta);
+        Camera.Fly((float)delta);
         UpdateHover();
         UpdateGateDrag();
         foreach (var part in _parts) part.Update(delta);
@@ -584,7 +514,6 @@ public partial class EditorMode : Node, IEditorHost
         UpdateShapeTool();
         UpdateGroundMap();
         UpdateZoneOverlay();
-        UpdateYouDot();
         _pollT += delta;
         if (_pollT > 0.5)
         {
@@ -595,30 +524,9 @@ public partial class EditorMode : Node, IEditorHost
         if (_panelDirty) RefreshPanel();
         _unsavedLabel.Text = PendingCount == 0 ? "" : $"* {PendingCount} unsaved (Enter applies)";
         var c = FlyCam.GlobalPosition;
-        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedShapeId != null && ShapeTool ? $"  |  {(Tool == EditorTool.Zones ? "zone" : "patch")} {SelectedShape(CurrentKind)?.Label}{(SelectedShape(CurrentKind) is PatchInfo sp ? "  " + sp.Type : "")}" : "") + (Tool == EditorTool.Zones && MarkedZoneCount > 0 ? $"  |  {MarkedZoneCount} marked for deletion" : "") + (PendingCount > 0 || ShapeDraftPending ? $"  |  * {(PendingCount > 0 ? $"{PendingCount} UNSAVED" : "UNSAVED")}" : "");
+        _hudLabel.Text = $"EDITOR  |  {(Tool == EditorTool.None ? "no tool" : Tool.ToString())}  |  {Selection.Count} selected  |  {Camera.Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (SelectedShapeId != null && ShapeTool ? $"  |  {(Tool == EditorTool.Zones ? "zone" : "patch")} {SelectedShape(CurrentKind)?.Label}{(SelectedShape(CurrentKind) is PatchInfo sp ? "  " + sp.Type : "")}" : "") + (Tool == EditorTool.Zones && MarkedZoneCount > 0 ? $"  |  {MarkedZoneCount} marked for deletion" : "") + (PendingCount > 0 || ShapeDraftPending ? $"  |  * {(PendingCount > 0 ? $"{PendingCount} UNSAVED" : "UNSAVED")}" : "");
         if (Time.GetTicksMsec() / 1000.0 > _statusUntil && _statusLabel.Text != "")
             _statusLabel.Text = "";
-    }
-
-    void Fly(float dt)
-    {
-        if (Modal || GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit) return; // typing is not flying
-        if (Input.IsKeyPressed(Key.Ctrl)) return; // Ctrl+D, Ctrl+Z ... are editor commands, not flying
-        var dir = Vector3.Zero;
-        var fwd = -FlyCam.GlobalBasis.Z;
-        if (Mathf.Abs(fwd.Y) > 0.98f) fwd = FlyCam.GlobalBasis.Y; // looking straight down: W goes screen-up
-        var right = FlyCam.GlobalBasis.X;
-        if (Input.IsKeyPressed(Key.W)) dir += fwd;
-        if (Input.IsKeyPressed(Key.S)) dir -= fwd;
-        if (Input.IsKeyPressed(Key.D)) dir += right;
-        if (Input.IsKeyPressed(Key.A)) dir -= right;
-        if (Input.IsKeyPressed(Key.E)) dir += Vector3.Up;
-        if (Input.IsKeyPressed(Key.Q)) dir += Vector3.Down;
-        if (Input.IsKeyPressed(Key.Space)) dir += Vector3.Up;
-        if (Input.IsKeyPressed(Key.Shift)) dir += Vector3.Down;
-        if (dir == Vector3.Zero) return;
-        var speed = Speed * (Input.IsKeyPressed(Key.Alt) ? 3f : 1f);
-        FlyCam.GlobalPosition += dir.Normalized() * speed * dt;
     }
 
     bool _hoverForced;

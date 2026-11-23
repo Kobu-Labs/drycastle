@@ -107,15 +107,15 @@ public partial class Viewer
         var camBefore = ed.FlyCam.GlobalPosition;
         var basisBefore = ed.FlyCam.GlobalBasis;
         ed.ToggleTopDown();
-        var down = ed.TopDown && ed.FlyCam.GlobalBasis.Z.Y > 0.999f;
+        var down = ed.Camera.TopDown && ed.FlyCam.GlobalBasis.Z.Y > 0.999f;
         Check(down, $"T snaps to top-down (camera z {ed.FlyCam.GlobalPosition.Y:F1})");
         ed.ToggleTopDown();
-        Check(!ed.TopDown && ed.FlyCam.GlobalPosition.DistanceTo(camBefore) < 1e-3f
+        Check(!ed.Camera.TopDown && ed.FlyCam.GlobalPosition.DistanceTo(camBefore) < 1e-3f
               && ed.FlyCam.GlobalBasis.Z.DistanceTo(basisBefore.Z) < 1e-3f, "T again restores the previous camera");
-        var speed0 = ed.Speed;
+        var speed0 = ed.Camera.Speed;
         Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp, Pressed = true });
         await Physics(2);
-        Check(ed.Speed > speed0, $"wheel changes fly speed ({speed0:F0} -> {ed.Speed:F0} m/s)");
+        Check(ed.Camera.Speed > speed0, $"wheel changes fly speed ({speed0:F0} -> {ed.Camera.Speed:F0} m/s)");
 
         // ---- picking ----
         var pa = World("point_a"); var pb = World("point_b"); var pc = World("point_c");
@@ -127,11 +127,11 @@ public partial class Viewer
         for (var i = 0; i < 20000; i++) if (_map.ParcelAt(pa.X + (i % 200) * 0.5f, pa.Z + (i / 200) * 0.5f) != null) found++;
         var perLookup = (Time.GetTicksUsec() - t0) / 20000.0;
         Check(perLookup < 50, $"point lookup is fast: {perLookup:F2} us per lookup over {_map.Parcels.Count} parcels");
-        ed.LookFrom(pa + Vector3.Up * 60f, pa);
+        ed.Camera.LookFrom(pa + Vector3.Up * 60f, pa);
         var size = GetViewport().GetVisibleRect().Size;
         var picked = ed.PickScreen(size / 2, out var pt);
         Check(picked?.Id == A, $"camera ray through the screen centre picks {A} (hit {pt})");
-        ed.LookFrom(new Vector3(1e5f, 400f, 1e5f), new Vector3(1e5f, 0, 1e5f - 1));
+        ed.Camera.LookFrom(new Vector3(1e5f, 400f, 1e5f), new Vector3(1e5f, 0, 1e5f - 1));
         Check(ed.PickScreen(size / 2, out _) == null, "ray into empty space picks nothing");
 
         // ---- selection ----
@@ -330,7 +330,7 @@ public partial class Viewer
             var off = new Vector3(-0.15f, 1f, 0.55f).Normalized() * dist;
             var right = (-off).Cross(Vector3.Up).Normalized(); // camera right
             // the 300 px panel covers the right of the window: shift the view so the parcel sits in the left part
-            ed.LookFrom(target + off + right * dist * 0.3f, target + right * dist * 0.3f);
+            ed.Camera.LookFrom(target + off + right * dist * 0.3f, target + right * dist * 0.3f);
             ed.SetHover(_opts.GetValueOrDefault("hover"));
         }
         // Patch and zone tool shots: --shot-patch GP-0001 / --shot-zone Z-0001 (select it), --shot-draft "x,y;x,y;..." (absolute metres, drawing; --shot-zones draws a zone, else a patch of --shot-type)

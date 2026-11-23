@@ -55,7 +55,7 @@ public partial class StreetViewFollow : Node
         var lz = (float)-(y - o.Y);
         var feet = new Vector3(lx, Map.GroundHeightOrMean(lx, lz) + 1.0f, lz); // above the ground like a spawn: physics settles it
         // heading_grid is clockwise from the map's north (-z); a turn about +Y is counter-clockwise seen from above
-        Editor.PlacePlayer(feet, heading is { } h ? -(float)h : null);
+        Editor.You.PlacePlayer(feet, heading is { } h ? -(float)h : null);
         Editor.Say($"Street View: character at x {x:F0}  y {y:F0}" + (heading is { } hh ? $"  facing {hh:F0} deg" : ""));
     }
 

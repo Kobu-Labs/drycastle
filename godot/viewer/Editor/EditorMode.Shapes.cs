@@ -208,7 +208,7 @@ public partial class EditorMode
         var t = Map.FromAbsolute(x, y);
         var target = new Vector3(t.X, Map.GroundHeightOrMean(t.X, t.Y), t.Y);
         var right = FlyCam.GlobalBasis.X;
-        LookFrom(target + new Vector3(0, dist * 0.8f, dist * 0.6f) + right * dist * 0.15f, target + right * dist * 0.15f);
+        Camera.LookFrom(target + new Vector3(0, dist * 0.8f, dist * 0.6f) + right * dist * 0.15f, target + right * dist * 0.15f);
     }
 
     /// <summary>Rebuild the outline meshes now (smoke tests).</summary>

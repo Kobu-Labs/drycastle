@@ -17,6 +17,11 @@ public interface IEditorHost
     EditStore Edits { get; }
     EditorTool Tool { get; }
     Camera3D FlyCam { get; }
+    EditorCamera Camera { get; }
+    /// <summary>The walk-mode player (frozen and hidden while the editor is open).</summary>
+    Player Player { get; }
+    /// <summary>The editor is open.</summary>
+    bool Active { get; }
     /// <summary>Parent of the editor's markers in the 3D view (visible only while the editor is).</summary>
     Node3D MarkerRoot { get; }
     /// <summary>A confirm or the command palette is open: the keys and the mouse belong to it.</summary>

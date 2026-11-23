@@ -134,7 +134,7 @@ public partial class Viewer
         Check(ed.Active && _map.OriginEpsg5514 is { } o0 && Math.Abs(o0.X - ox) < 1e-9 && Math.Abs(o0.Y - oy) < 1e-9, "editor mode on, the loader knows the map origin");
         // the camera looks north (arrow keys nudge in screen directions)
         var cam = Gp("a_base");
-        ed.LookFrom(cam + new Vector3(0, 40, 30), cam + new Vector3(0, 0, -5));
+        ed.Camera.LookFrom(cam + new Vector3(0, 40, 30), cam + new Vector3(0, 0, -5));
         await Frame();
 
         // ---- 1. the palette lists every manifest asset in its category ----

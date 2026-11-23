@@ -18,9 +18,8 @@ public partial class EditorMode
 
     PanelContainer _rail = null!, _cheat = null!;
     ScrollContainer _scroll = null!;
-    Label _panelTitle = null!, _speedLabel = null!;
+    Label _panelTitle = null!;
     VBoxContainer _editHead = null!, _editFoot = null!;
-    Button _btnTopDown = null!;
     Label _groupCount = null!;
     readonly Dictionary<EditorTool, VBoxContainer> _pages = new();
     readonly Dictionary<EditorTool, Button> _railButtons = new();
@@ -199,24 +198,11 @@ public partial class EditorMode
 
     void BuildViewPage(VBoxContainer page)
     {
-        page.AddChild(new Label { Text = "Fly speed", ThemeTypeVariation = "Header" });
-        _speedSlider = new HSlider
-        {
-            MinValue = 0, MaxValue = 100, Step = 0.5, Value = SpeedToSlider(Speed), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            Scrollable = false, // the mouse wheel must scroll the sidebar, never move the slider
-            TooltipText = "Fly speed (m/s, logarithmic). The mouse wheel over the 3D view changes it too.",
-        };
-        _speedSlider.ValueChanged += v => SetSpeed((float)SliderToSpeed(v), fromSlider: true);
-        _speedSlider.DragEnded += _ => SaveUiConfig();
-        page.AddChild(_speedSlider);
-        _speedLabel = new Label { Text = $"{Speed:F0} m/s" };
-        page.AddChild(_speedLabel);
-        page.AddChild(new Label { Text = "Mouse wheel over the 3D view changes it too. Hold Alt for x3.", ThemeTypeVariation = "Dim", AutowrapMode = TextServer.AutowrapMode.WordSmart });
+        Camera.BuildSpeedSection(page);
 
         page.AddChild(new HSeparator());
         page.AddChild(new Label { Text = "Camera", ThemeTypeVariation = "Header" });
-        _btnTopDown = Ui.Btn("Top-down view (T)", ToggleTopDown);
-        page.AddChild(_btnTopDown);
+        page.AddChild(Ui.Btn("Top-down view (T)", ToggleTopDown));
 
         page.AddChild(new HSeparator());
         page.AddChild(new Label { Text = "Walk", ThemeTypeVariation = "Header" });
@@ -359,7 +345,7 @@ public partial class EditorMode
             var cfg = new ConfigFile();
             if (cfg.Load(CfgPath) != Error.Ok) return;
             if (Enum.TryParse<EditorTool>((string)cfg.GetValue("ui", "tool", "None"), true, out var t)) { Tool = t; ShapeRest(); }
-            SetSpeed((float)(double)cfg.GetValue("ui", "speed", (double)Speed));
+            Camera.LoadConfig(cfg);
             _gmOn = (bool)cfg.GetValue("ui", "ground_map_on", true);
             _zoOn = (bool)cfg.GetValue("ui", "zone_overlay_on", true);
             var gsel = (string)cfg.GetValue("ui", "ground_type", "");
@@ -381,7 +367,7 @@ public partial class EditorMode
         {
             var cfg = new ConfigFile();
             cfg.SetValue("ui", "tool", Tool.ToString());
-            cfg.SetValue("ui", "speed", (double)Speed);
+            Camera.SaveConfig(cfg);
             cfg.SetValue("ui", "ground_map_on", _gmOn);
             cfg.SetValue("ui", "zone_overlay_on", _zoOn);
             cfg.SetValue("ui", "patch", SelectedPatchId ?? "");
