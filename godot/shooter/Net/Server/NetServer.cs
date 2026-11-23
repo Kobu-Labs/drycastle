@@ -11,6 +11,7 @@ using Drycastle.Shooter.Net.Server.Crates;
 using Drycastle.Shooter.Net.Server.Fauna;
 using Drycastle.Shooter.Net.Server.Gear;
 using Drycastle.Shooter.Net.Server.Highs;
+using Drycastle.Shooter.Net.Server.Harvest;
 using Drycastle.Shooter.Net.Server.HuntLog;
 using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
@@ -22,6 +23,7 @@ using Drycastle.Shooter.Net.Server.Profiles;
 using Drycastle.Shooter.Net.Server.Remains;
 using Drycastle.Shooter.Net.Server.Rewind;
 using Drycastle.Shooter.Net.Server.RoundFlow;
+using Drycastle.Shooter.Net.Server.Scuds;
 using Drycastle.Shooter.Net.Server.Scenery;
 using Drycastle.Shooter.Net.Server.Seating;
 using Drycastle.Shooter.Net.Server.Sentries;
@@ -54,6 +56,7 @@ using Drycastle.ShooterCore.Perks;
 using Drycastle.ShooterCore.Plantation;
 using Drycastle.ShooterCore.Progression;
 using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Scud;
 using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Turrets;
 using Drycastle.ShooterCore.Vehicles;
@@ -157,6 +160,12 @@ public partial class NetServer : Node
     public PlantationFile Plantation = PlantationFile.Default;
     /// <summary>bigfoot.json: every number of the fight.</summary>
     public BigfootFile BigfootData = new();
+    /// <summary>Every number of the harvester event; the host may replace it.</summary>
+    public HarvesterConfig Harvester = new();
+    /// <summary>The numbers of the vehicles' crop damage (#328): what a ground vehicle crushes driving through a crop field.</summary>
+    public CropCrushConfig CropCrush = new();
+    /// <summary>scud.json: the launcher's timings, the targeting screen, the missile's flight and the blast. The host replaces the defaults with the file.</summary>
+    public ScudFile Scud = ScudFile.Default;
 
     // The features that are classes of their own (<c>Net/Server/&lt;Feature&gt;/</c>), made in _Ready once the match exists; each takes only the context.
     ServerContext _ctx = null!;
@@ -221,6 +230,9 @@ public partial class NetServer : Node
     MatchEventsServer _matchEvents = null!;
     EventServer _eventServer = null!;
     WalkerGround _walkers = null!;
+    HarvesterServer _harvester = null!;
+    ScudServer _scud = null!;
+    ScudEventServer _scudEvent = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -310,6 +322,7 @@ public partial class NetServer : Node
         _glass = new GlassServer(_ctx, _fleet, _rewind, Map, GlassData);
         _shot = new ShotWorld(_ctx, _fleet, _rewind, _sitters, _pounce, _targets, _glass, World, _perf != null);
         _carDamage = new CarDamage(_ctx, _fleet, _glass, _smoke, Vehicles);
+        _rocketCarts = new RocketCarts(_fleet, () => Query, Vehicles);
     }
 
     /// <summary>What a shot can hit, kind by kind; the order of the sources is the order of every target list. A kind that stood elsewhere on the shooter's screen says where.</summary>
@@ -341,8 +354,8 @@ public partial class NetServer : Node
         _gear = new ItemsServer(_ctx, Items, _corpses, () => Query, car => CarPose.Present(car).Feet);
         _riding = new RidingCorpses(_corpses);
         _seats = new CarSeats(_ctx, _fleet, _riding, _shot, _smoke, () => Vehicles, () => Clock.HourAt(_elapsed), id => _streaks.Rules.ControlOf(id) != null);
-        _carBlast = new CarBlast(_ctx, _fleet, _carDamage, _seats, _riding, _glass, _impacts, _splash, _deathPush, _targets, Deal, (at, attacker) => ScudBlast(at, attacker), _smoke, Vehicles);
-        _remains = new CorpseServer(_ctx, _corpses, _riding, _seats, _deathPush, _gear, _shot.Query, Water, Weapons, Items, HarvesterOnCorpse);
+        _carBlast = new CarBlast(_ctx, _fleet, _carDamage, _seats, _riding, _glass, _impacts, _splash, _deathPush, _targets, Deal, (at, attacker) => _scud.Blast(at, attacker), _smoke, Vehicles);
+        _remains = new CorpseServer(_ctx, _corpses, _riding, _seats, _deathPush, _gear, _shot.Query, Water, Weapons, Items, (victim, id, corpse) => _harvester.OnCorpse(victim, id, corpse));
         _bigfoot = new BigfootServer(_ctx, BigfootData, _events, new BigfootTerrain(World, Water), _fleet, Deal, _deathPush, _rng, Weapons, new BigfootLoot(BigfootData, Items, Weapons, _corpses, _gear), _areas,
             _hunts, () => _gunships, _smoke, CarPose.SeatPos, _progress.Scores, _progress.Award, Levels.Awards.EventWin); // after the corpse book, which follows the same despawns
     }
@@ -357,19 +370,19 @@ public partial class NetServer : Node
         _runOver = new RunOverServer(_ctx, _fleet, _targets, Deal, _deathPush, _wildlife.Keeper, _pets.Keeper, AnimalData, Vehicles, _smoke, id => _thieves.RoadkillCrew(id));
         _mass = new MassServer(_ctx, HolyMass, _citizens, _church, _demon, _sitters, _status, _events, _navMesh.Ensure);
         _thieves = BuildThieves();
-        InitHarvester();
-        InitScud();
+        _harvester = BuildHarvester();
+        BuildScud();
         _eventServer = new EventServer(_ctx, _events); // after the kinds above: the handler table names their start, end and cancel
         _eventServer.Register(EventBook.Bigfoot, "Bigfoot event", _bigfoot.Start, _bigfoot.End, _bigfoot.Cancel);
         _eventServer.Register(EventBook.Mass, "Holy Mass", _mass.Chat, _mass.End); // the Holy Mass can only end (its handler answers a cancel with a refusal)
-        _eventServer.Register(EventBook.Harvester, "harvester event", StartHarvester, EndHarvester, CancelHarvester);
+        _eventServer.Register(EventBook.Harvester, "harvester event", _harvester.Start, _harvester.End, _harvester.Cancel);
         _eventServer.Register(EventBook.Thieves, "Thieves event", _thieves.Start, _thieves.End, _thieves.Cancel);
-        _eventServer.Register(EventBook.Scud, "Scud event", StartScudEvent, EndScudEvent, CancelScudEvent);
+        _eventServer.Register(EventBook.Scud, "Scud event", _scudEvent.Start, _scudEvent.End, _scudEvent.Cancel);
         _gunships = new GunshipServer(_ctx, Killstreaks, Weapons, _targets, _fleet, () => Query, () => Vehicles, Deal, _carDamage.Damage, LaunchGunshipRocket, _impacts, _splash, _deathPush, () => _streaks.Rules);
         _flak = new FlakServer(_ctx, Weapons, _gunships, _targets, _fleet, () => Vehicles, _rng);
         _crates = new CrateServer(_ctx, Killstreaks.Rewards, () => Query, () => _streaks.Rules);
         _streaks = BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
-        var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _mass, _rozhlas, _thieves, at => EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => ScudReloadOffer(c) != null);
+        var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _mass, _rozhlas, _thieves, at => EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c));
         _plantation = new PlantationServer(_ctx, Plantation, _areas, keys, _sitters, _pounce, _streaks);
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), CarPose.SeatPos, _shot.WorldHit, _rocketIds, _smoke, _carDamage.Damage, () => Vehicles, _simClients);
         BuildVehicles();
@@ -380,10 +393,11 @@ public partial class NetServer : Node
             _wildlife.Populate, // the match cleared the pets' entities too; a new round moves new ones into the property groups
             _rozhlas.RoundReset, // the Urad workers of a detour still open sit down again
             ResetCars,
-            HarvesterRoundReset, // the car reset brought the harvester back to its old field: hidden again
-            ScudRoundReset, // the launchers start over; a Scud truck, which never returns, is retired
+            _harvester.RoundReset, // the car reset brought the harvester back to its old field: hidden again
+            _scudEvent.RoundReset, // the Scud event is over with the round (no reward); the loop below retires its truck and carts
+            _scud.RoundReset, // the launchers start over; a Scud truck, which never returns, is retired
             _status.RoundStart, _plantation.RoundStart, _lockOn.RoundReset, RoundStarted);
-        var life = new LifeEvents(_ctx, _smoke, _progress, _bots, Items, _gear, _status, _rozhlas, _streaks, _deathPush, _remains, _seats, WeaponsSmoke, RpgSmoke, HarvesterOnKill, LossKill, LossDeath);
+        var life = new LifeEvents(_ctx, _smoke, _progress, _bots, Items, _gear, _status, _rozhlas, _streaks, _deathPush, _remains, _seats, WeaponsSmoke, RpgSmoke, _harvester.OnKill, LossKill, LossDeath);
         _matchEvents = new MatchEventsServer(_ctx, _smoke, _scoreboard, roundReset, life, RoundEnded, LossRoundStart, OnTargetKilled);
         RegisterChatCommands(); // after the features it names exist
     }
@@ -391,9 +405,8 @@ public partial class NetServer : Node
     /// <summary>The vehicle step and what hangs on it, after the features it asks (the Thieves' vans, the harvester's driver, the Bigfoot's throw).</summary>
     void BuildVehicles()
     {
-        _rocketCarts = new RocketCarts(_fleet, () => Query, Vehicles);
         _tow = new TowServer(_ctx, _fleet, _carBlast, _runOver, _bigfoot.StepThrownVehicle, KillY);
-        _loop = new VehicleLoop(_ctx, _fleet, _seats, _carDamage, _carBlast, _tow, _runOver, _glass, _smoke, Vehicles, Water, KillY, BlastSmoke, () => _thieves.ShoveCarsByVans(), _bigfoot.StepThrownVehicle, driver => driver == _harvDriver);
+        _loop = new VehicleLoop(_ctx, _fleet, _seats, _carDamage, _carBlast, _tow, _runOver, _glass, _smoke, Vehicles, Water, KillY, BlastSmoke, () => _thieves.ShoveCarsByVans(), _bigfoot.StepThrownVehicle, _harvester.IsDriver);
         _guns = new VehicleGuns(_ctx, _rewind, _shot, _glass, _scenery, _flak, _targets, _impacts, Deal, _carDamage, Vehicles, _rng);
         _dealer = new CarDealer(_fleet, Vehicles, World, Map, Water, Spawns, _rng, _garage, BlastSmoke, CarSmoke, SmokeKind);
     }
@@ -432,6 +445,26 @@ public partial class NetServer : Node
         var loot = new LootServer(_ctx, ThievesData, raids.Roster, gangs.Roster, _fleet, _pets.Keeper, Map, () => _navMesh.Mesh, ArenaMode, MapDir);
         var payout = new ThievesPayout(_ctx, ThievesData, Levels.Awards.EventWin, Items, Weapons, _corpses, _gear.BroadcastCorpseItems, _rng, _progress.Scores, _progress.Award, gangs.Roster, raids.Roster);
         return new ThievesServer(_ctx, ThievesData, _events, _intel, _rng, () => _navMesh.Mesh, gangs, raids, loot, payout, phase);
+    }
+
+    /// <summary>The harvester event's parts: the cut and the crushed crops, the bales' fire, what the reel does to people, and the job that drives them.</summary>
+    HarvesterServer BuildHarvester()
+    {
+        var cut = new CropCut(_ctx, Harvester, CropCrush, Map, _fleet);
+        var bales = new BaleFire(_ctx, Harvester, Map, _corpses, _status, cut);
+        var reel = new ReelServer(_ctx, Harvester, _fleet, _targets, Deal, _deathPush, _corpses, _gear, Weapons, Map, bales, CarPose.Velocity, RunOverServer.Cooldown);
+        return new HarvesterServer(_ctx, Harvester, () => Vehicles, Map, World, Water, () => _fleet.FlightBounds, _rng, _events, _fleet, _profiles, _ids, Join, Leave, CarPose.SeatPos, _seats.Leave, cut, bales, reel);
+    }
+
+    /// <summary>The Scud truck's parts: the launchers, the loading from a cart, the blast, the trucks' own tick, and the event that hides one (<c>_scud</c>, <c>_scudEvent</c>). The truck registers the missile's entity type.</summary>
+    void BuildScud()
+    {
+        var rigs = new ScudRigs(_ctx, Scud, _fleet);
+        var loading = new ScudLoading(_ctx, Scud, _fleet, rigs, _thieves, RocketCarts.SetLoaded);
+        var blast = new ScudBlastServer(_ctx, Scud.Blast, _targets, _splash, _deathPush, Deal, _hunts, _fleet, () => _areas.Shelters, _bigfoot.Hit, _glass.Blast, _carDamage.Damage, CarPose.HullDistanceNow);
+        _scud = new ScudServer(_ctx, Scud, () => Vehicles, Map, World, Water, () => _fleet.FlightBounds, _fleet, rigs, loading, blast, () => Query);
+        var places = new ScudPlaces(_ctx, Scud, Map, World, _fleet, _rng, Spawns, () => _areas.Shelters, _areas.PickEventSpawn);
+        _scudEvent = new ScudEventServer(_ctx, Scud, () => Vehicles, _events, _intel, _rng, _fleet, places, _scud, _rocketCarts.Spawn, _rocketCarts.RemoveAll, _seats.Leave, _progress.Scores, _progress.Award);
     }
 
     /// <summary>A sitter stood up: the dictation table lets go of the set, the Mass forgets the seat.</summary>
@@ -474,8 +507,8 @@ public partial class NetServer : Node
         _streaks.Tick(dt);
         PerfLap(ServerPerf.Ph.Streaks);
         _bots.Tick(dt); // fills the roster and queues each bot's input for this tick (#214)
-        HarvesterTick(dt); // the harvester event: its spawn, its driver's pedals
-        ScudEventTick(dt); // the Scud event: who boarded the truck, the search time, the bunkers' carts
+        _harvester.Tick(dt); // the harvester event: its spawn, its driver's pedals
+        _scudEvent.Tick(dt); // the Scud event: who boarded the truck, the search time, the bunkers' carts
         PerfLap(ServerPerf.Ph.Bots);
         SimulatePlayers(dt);
         StepRockets(dt);
@@ -567,10 +600,10 @@ public partial class NetServer : Node
 
     void StepVehiclesAndRiders(float dt)
     {
-        StepScud(dt); // the Scud trucks' launchers: the crew's lock, the rack, the brakes (before the vehicles step)
+        _scud.Tick(dt); // the Scud trucks' launchers: the crew's lock, the rack, the brakes (before the vehicles step)
         _loop.Step(dt);
         _riding.Step(dt); // the dead pilots and drivers move with the vehicles that just moved
-        HarvesterAfterVehicles(dt); // what the harvester ran over, the corpses it draws in, the bales' fire
+        _harvester.AfterVehicles(dt); // what the harvester ran over, the corpses it draws in, the bales' fire
         PerfLap(ServerPerf.Ph.Vehicles);
     }
 
@@ -667,7 +700,7 @@ public partial class NetServer : Node
         else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) _sandbox.OnAction(c, sa.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) _sandbox.OnTeleportTo(c, st.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SeatSwitch } sw && c.Joined) _seats.OnSwitch(c, sw.Payload);
-        else if (m is EventMsg { Kind: (byte)EventKind.ScudCommand } sc && c.Joined) OnScudCommand(c, sc.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.ScudCommand } sc && c.Joined) _scud.OnCommand(c, sc.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.TeamAssign } ta && c.Joined) _teams.OnTeamAssign(c, ta.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SquadAssign } sq && c.Joined) _teams.OnSquadAssign(c, sq.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) _hunts.OnRequest(c, hq);
@@ -775,8 +808,8 @@ public partial class NetServer : Node
         _minerals.SendOnJoin(c); // the mineral nodes
         _rozhlas.SendOnJoin(c); // the village loudspeaker, when a detour broadcast is on, who is on the mic, and the Urad door when it is open
         _garage.SendOnJoin(c); // and the garage doors, when they are open
-        SendHarvesterOnJoin(c); // the harvester's job and the bales that burn
-        SendScudOnJoin(c); // the Scud trucks' racks and proposals
+        _harvester.SendOnJoin(c); // the harvester's job and the bales that burn
+        _scud.SendOnJoin(c); // the Scud trucks' racks and proposals
         _demon.SendOnJoin(c); // and the demon's pounce, when one is on
         SendTargetRoster(c); // target dummies' names (#148)
         _profiles.SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
@@ -937,7 +970,7 @@ public partial class NetServer : Node
         _chat.Register("church", _church.Chat);
         _chat.Register("rozhlas", _rozhlas.ChatCommand);
         _chat.Register("status", _status.ChatCommand);
-        _chat.Register("scud", ChatScud);
+        _chat.Register("scud", _scud.Chat);
         _chat.Register("squad", _teams.ChatSquad);
     }
 }

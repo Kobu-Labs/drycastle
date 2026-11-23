@@ -19,7 +19,7 @@ public static class ScudMissileRules
 /// <summary>
 /// One Scud missile in the air: a world entity that only follows its <see cref="ScudFlightPlan"/>. It is not an Aircraft and not a rocket: it has no hit points, cannot be shot
 /// down, locked on to or hit, and sweeps nothing. When its time is up it ends (<see cref="WorldDespawnReason.Destroyed"/>) and calls <c>onImpact</c> once, which is where the
-/// server works out the blast (<c>NetServer.ScudBlast</c>). The state byte is its <see cref="ScudPhase"/>; position, heading and the placer ride the generic record.
+/// server works out the blast (<c>ScudBlastServer.Blast</c>). The state byte is its <see cref="ScudPhase"/>; position, heading and the placer ride the generic record.
 /// </summary>
 public sealed class ScudMissileEntity : IWorldEntity
 {
