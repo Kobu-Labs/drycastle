@@ -67,7 +67,7 @@ public partial class NetServer
         if (_carePackages.AnyInReach(at)) k |= KeyCompetitor.Crate;
         if (c.Body.State.OnLadder || MapLadders.Reach(at, c.Body.Yaw) >= 0) k |= KeyCompetitor.Ladder;
         if (EnterableCar(p) != null) k |= KeyCompetitor.Vehicle;
-        if (EnsureGarage() is { } garage && GarageDoorNode.Current != null && garage.InReach(at)) k |= KeyCompetitor.Doors;
+        if (_garage.InReach(at)) k |= KeyCompetitor.Doors;
         if (_mass is { Running: true } mass && mass.SeatNear(at) != null) k |= KeyCompetitor.MassSeat;
         if (_rozhlas.CanTakeSetAt(at, c.Car != null)) k |= KeyCompetitor.RozhlasSet;
         if (LootInReach(c) != null) k |= KeyCompetitor.Loot;

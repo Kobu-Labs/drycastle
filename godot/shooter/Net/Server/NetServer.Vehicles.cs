@@ -74,7 +74,7 @@ public partial class NetServer
                 if (def.Flight != null) WarnIfAircraftDoesNotFit(def, new Vector3(spot.X, gy, spot.Z), yaw);
             }
         }
-        if (GarageParking() is { } park) // the bus garage's own vehicle, nose to the doors (garage.json)
+        if (_garage.Parking() is { } park) // the bus garage's own vehicle, nose to the doors (garage.json)
         {
             var def = Vehicles.Vehicles[park.Kind];
             var gy = ServerCar.RestHeight(space, new Vector3(park.Pos.X, park.Pos.Y, park.Pos.Z), park.Yaw, def.HalfWidth, def.HalfLength, park.Pos.Y) ?? park.Pos.Y;
@@ -121,7 +121,7 @@ public partial class NetServer
             // the vehicles of vehicles.json (cars first) are dealt round-robin over the clusters and each takes a free candidate within 40 m of its
             // cluster anchor (a random one), at least 12 m from every other vehicle, on real ground under the whole footprint
             var kinds = new List<int>();
-            var garaged = GarageParking()?.Kind ?? -1; // one of that type stands in the garage instead of being dealt
+            var garaged = _garage.Parking()?.Kind ?? -1; // one of that type stands in the garage instead of being dealt
             for (var kind = 0; kind < Vehicles!.Vehicles.Count; kind++)
                 for (var n = kind == garaged ? 1 : 0; n < Vehicles.Vehicles[kind].SpawnCount; n++) kinds.Add(kind);
             var anchors = ClusterAnchors(Spawns, Math.Max(1, Math.Min(6, (kinds.Count + 2) / 3)), ClusterRadius);

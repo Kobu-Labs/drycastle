@@ -53,6 +53,7 @@ public partial class NetServer : Node
     SceneryServer _scenery = null!;
     MineralsServer _minerals = null!;
     RozhlasServer _rozhlas = null!;
+    GarageServer _garage = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -88,6 +89,7 @@ public partial class NetServer : Node
         _ctx = new ServerContext(_match, _byId, _clients.Values, () => _elapsed, () => _tick, BroadcastEvent, Send, (c, chan, packet) => { if (c.Peer is { } peer) Tx(peer, chan, packet, 0); });
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
         _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, CitizenHits, TableSeating());
+        _garage = new GarageServer(_ctx, ArenaMode, MapDir, _cars, () => Vehicles);
         _minerals = new MineralsServer(_ctx, Progression, () => _wildlife?.Drops ?? Array.Empty<MineralDrop>());
         StatusInit();
         DemonInit();
@@ -430,7 +432,7 @@ public partial class NetServer : Node
         SendThievesOnJoin(c); // the Thieves event, when one runs
         _minerals.SendOnJoin(c); // the mineral nodes
         _rozhlas.SendOnJoin(c); // the village loudspeaker, when a detour broadcast is on, who is on the mic, and the Urad door when it is open
-        SendGarageDoorOnJoin(c); // and the garage doors, when they are open
+        _garage.SendOnJoin(c); // and the garage doors, when they are open
         SendHarvesterOnJoin(c); // the harvester's job and the bales that burn
         SendScudOnJoin(c); // the Scud trucks' racks and proposals
         SendPounceOnJoin(c); // and the demon's pounce, when one is on
