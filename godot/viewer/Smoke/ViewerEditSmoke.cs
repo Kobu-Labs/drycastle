@@ -76,8 +76,6 @@ public partial class Viewer
             ObjNode = $"object_{ObjId}";
             BakedIds = Plan.GetProperty("baked_object_ids").EnumerateArray().Select(e => e.GetString()!).ToList();
         }
-
-        public string Step(string name) => Plan.GetProperty("steps").GetProperty(name).GetString()!;
     }
 
     Task RunEditSmoke() => RunSmoke("edit", EditSmokeBody);

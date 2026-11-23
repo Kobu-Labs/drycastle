@@ -117,6 +117,7 @@ class SmokeCtx : IDisposable
     public double[] D(string key) => Plan.GetProperty(key).EnumerateArray().Select(x => x.GetDouble()).ToArray();
     public string Expect(string step) => File.ReadAllText(Plan.GetProperty("expect").GetProperty(step).GetString()!);
     public string Disk() => File.ReadAllText(EditsPath);
+    public string Step(string name) => Plan.GetProperty("steps").GetProperty(name).GetString()!;
 
     public void MakeStepsDir()
     {
