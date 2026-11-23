@@ -37,8 +37,6 @@ namespace Drycastle.Shooter.Net.Client;
 /// </summary>
 public partial class NetClient : Node
 {
-    sealed class Pending { public NetInput Input; public MoveState After; }
-
     public const double InterpDelayTicks = 3.0;
     public const float SnapDistance = 2f;
     const float ReconcileEpsilon = 0.03f;
@@ -79,7 +77,7 @@ public partial class NetClient : Node
     public MatchConfig? BlipConfig;
     /// <summary>Latest owner ammo state from the server (null before the first one).</summary>
     public AmmoMsg? Ammo { get; private set; }
-    WeaponViewmodel? _viewmodel;
+    OwnViewmodel _viewmodel => Ctx.Viewmodel;
     double _ammoAt;
 
     readonly ENetConnection _conn = new();
@@ -91,7 +89,7 @@ public partial class NetClient : Node
     bool OwnSpawned => _link.Is(LinkPhase.Spawned);
     bool LinkEnded => _link.Current.IsEnded();
     ushort _seq;
-    readonly List<Pending> _pending = new();
+    readonly OwnPrediction _prediction;
     /// <summary>Replicated world entities (turrets, missiles, ...). Subscribe to Spawned/Despawned for visuals.</summary>
     public WorldReplica WorldEntities => Ctx.WorldEntities;
     double _lastArrival;
@@ -164,6 +162,8 @@ public partial class NetClient : Node
         Ctx.View.Controlling = () => _controlling;
         Ctx.View.Pinned = () => _pinned;
         Ctx.View.Rising = () => _pRising;
+        Ctx.Viewmodel.StepAcc = () => _sfxStepAcc;
+        _prediction = new OwnPrediction(Ctx, SpeedFor);
         Sandbox = new SandboxClient(Ctx);
         Report = new ReportClient(Ctx, _conn, () => !Bot && !LinkEnded && _welcomed, () => _peer, () => _elapsed);
         _moab = new MoabClient(Ctx);
@@ -181,7 +181,7 @@ public partial class NetClient : Node
     {
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
         _blips = new BlipsClient(Ctx, BlipConfig);
-        _mass = new MassClient(Ctx, HolyMassData, DropPrediction);
+        _mass = new MassClient(Ctx, HolyMassData, _prediction.Drop);
         Ctx.View.MassSeated = () => _mass.Seated;
         _citizens = new CitizensClient(Ctx, HolyMassData, _mass);
         _status = new StatusClient(Ctx, Plantation);
@@ -484,7 +484,7 @@ public partial class NetClient : Node
         CasingFx.Water = Water;
         Ctx.Me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !Report.PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = ObjectLadders.WithObjects(Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Map), Bodies = this };
         World.AddChild(Ctx.Me);
-        if (!Bot && ShotFx.Enabled) { _viewmodel = MakeViewmodel(); Ctx.Me.Camera.AddChild(_viewmodel); }
+        _viewmodel.Create();
         if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(Ctx.Me.Camera); // the glass shaders compile now, not at the first crack
         if (WeaponsBot != "" || CarBot != "" || FxDemo.StartsWith("vehicle:")) NetServer.AddArenaColliders(World);
         if (Bot) Ctx.Me.InputOverride = new MoveInput { SpeedScale = 1 };
@@ -559,7 +559,7 @@ public partial class NetClient : Node
                 {
                     Loadouts.ApplySpawn(); _streaks.Arm(); // the hotbar and perk the server applied at this spawn
                     Ctx.Hotbar.Want = Ctx.Hotbar.Start;
-                    Ctx.Dead = false; _blastDust.ClearRinging(); if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
+                    Ctx.Dead = false; _blastDust.ClearRinging(); if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _prediction.ClearInputs(); _prediction.ClearViewFix(); // the next snapshot carries the spawn position
                     _bot?.OnSpawn(sp.Protection);
                     EndDeathView(); Ctx.Hud?.ClearTransients(); Ctx.Hud?.SetDead(false); Ctx.Hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)Ctx.MyId); _breath = new BreathState((ulong)Ctx.MyId); _breathCues.Reset(); _zero.Reset(); ClearPredictedReload(); _pNextFire = 0;
                 }
@@ -618,7 +618,7 @@ public partial class NetClient : Node
         if (!OwnSpawned) return; // wait for our spawn position
         DemonBodyTick(); // the demon's Body capsule is where the server last put it, before the body is predicted
         var pt = ClientProf.Begin();
-        ReplayReconcile(); // C-02: a snapshot's reconcile replays here, with the physics step (see OnSelf)
+        _prediction.Replay(); // C-02: a snapshot's reconcile replays here, with the physics step (see OnSelf)
         _driveClient.ReplayReconcile(); // and so does a predicted vehicle's (ADR 0010, ADR 0014)
         pt = ClientProf.Lap(ClientProf.S.Reconcile, pt);
         var dt = (float)delta;
@@ -644,7 +644,7 @@ public partial class NetClient : Node
         return mi;
     }
 
-    /// <summary>Numbers the input and predicts it: the own body, and the helicopter or the amphibious transport the player steers. The input waits in <see cref="_pending"/> for the server's ack.</summary>
+    /// <summary>Numbers the input and predicts it: the own body, and the helicopter or the amphibious transport the player steers. The input waits in <see cref="OwnPrediction"/> for the server's ack.</summary>
     void PredictTick(MoveInput mi, float dt)
     {
         if (_gunship == null) PredictFire(mi); // rounds from a turret are the server's alone
@@ -655,16 +655,13 @@ public partial class NetClient : Node
         if (Mode.BodyIsPredicted) { if (!Dead) Ctx.Me!.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         _flight.Predict(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
         _driveClient.Predict(ni, dt);  // and so does the driver of an amphibious transport
-        _pending.Add(new Pending { Input = ni, After = Ctx.Me!.State });
-        if (_pending.Count > 120) _pending.RemoveAt(0);
+        _prediction.Add(ni, Ctx.Me!.State);
     }
 
     /// <summary>Sends the newest three inputs (loss cover); they name the entity and world ticks they follow (the server's delta baselines).</summary>
     void SendInputs()
     {
-        var recent = new NetInput[Math.Min(3, _pending.Count)];
-        for (var i = 0; i < recent.Length; i++) recent[i] = _pending[_pending.Count - recent.Length + i].Input;
-        Tx(_peer!, Wire.ChanData, Wire.EncodeInputs(recent, Ctx.Snapshots.AckTick, WorldEntities.AckTick), 0);
+        Tx(_peer!, Wire.ChanData, Wire.EncodeInputs(_prediction.Recent(3), Ctx.Snapshots.AckTick, WorldEntities.AckTick), 0);
         _conn.Flush();
     }
 

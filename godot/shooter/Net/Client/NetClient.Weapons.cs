@@ -20,7 +20,6 @@ public partial class NetClient
     /// <summary>Shows the held weapon of the current hotbar slot (the server-confirmed one once known) low on the right; hidden while dead or driving.</summary>
     void UpdateViewmodel()
     {
-        if (_viewmodel == null) return;
         var slot = Ammo?.Slot ?? Ctx.Hotbar.Want;
         var id = ThrowHeldId() ?? (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : ""); // the throw key held: the grenade, whatever was selected
         _viewmodel.Show(id);
@@ -41,7 +40,7 @@ public partial class NetClient
         {
             // seated (roof/door gun, turret, any seat) or steering a missile: the held weapon's scope and iron-sight zoom stay off (#241)
             Ctx.Me.ZoomFov = 0f; Ctx.Me.IronSightZoom = false;
-            if (_viewmodel != null) _viewmodel.Aiming = false;
+            _viewmodel.Aiming = false;
             LowerBinoculars();
             return;
         }
@@ -52,10 +51,9 @@ public partial class NetClient
         Ctx.Me.ZoomFov = on ? zoom : 0f;
         // iron sights: any non-scoped, non-melee weapon while zoom is held
         var kind = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Kind : WeaponKind.Melee;
-        if (_viewmodel != null)
-            _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && (!Ctx.Driving && Ctx.View.MyState != EntityState.InVehicle || Ctx.View.InArmedSeat)
+        _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && (!Ctx.Driving && Ctx.View.MyState != EntityState.InVehicle || Ctx.View.InArmedSeat)
                 && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
-        Ctx.Me.IronSightZoom = _viewmodel is { Aiming: true };
+        Ctx.Me.IronSightZoom = _viewmodel.Aiming;
     }
 
     /// <summary>At a turret the slot sent is the key held (1-5, 0 none), not the body's hotbar weapon: the turret reads it as its weapon number (the AC-130's 1-3).</summary>

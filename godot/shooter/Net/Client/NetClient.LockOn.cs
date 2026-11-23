@@ -138,7 +138,7 @@ public partial class NetClient
         if (!EchoOfPredicted(l.Owner))
         {
             if (Sfx.Enabled) { var snd = SoundRules.Event("launch", WeaponId(l.Weapon)); if (l.Owner == Ctx.MyId) Sfx.Play2D(snd); else Sfx.Play3D(snd, G(l.Origin)); }
-            if (l.Owner == Ctx.MyId) _viewmodel?.Flash(0.5f); else if (Ctx.Remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
+            if (l.Owner == Ctx.MyId) _viewmodel.Flash(0.5f); else if (Ctx.Remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
         }
         if (_deadRockets.Contains(l.Id) || !ShotFx.Enabled || Weapons == null || _rockets.ContainsKey(l.Id)) return;
         var speed = l.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[l.Weapon].ProjectileSpeed : 160f;

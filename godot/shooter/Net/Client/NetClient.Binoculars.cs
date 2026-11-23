@@ -88,7 +88,7 @@ public partial class NetClient
         if (Dead || _pinned || Input.MouseMode != Input.MouseModeEnum.Captured || !CarriesBinoculars) { LowerBinoculars(); return false; }
         Ctx.Me.HandsBusy = true;
         Ctx.Me.ZoomFov = CarriedBinoculars is { } pair ? Binoculars.FovOf(pair) : Binoculars.FovDeg; Ctx.Me.IronSightZoom = false;
-        if (_viewmodel != null) _viewmodel.Aiming = false;
+        _viewmodel.Aiming = false;
         if (Ctx.Now - _binocularsMeasuredAt >= Binoculars.MeasureSeconds)
         {
             _binocularsMeasuredAt = Ctx.Now;

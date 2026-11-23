@@ -149,7 +149,7 @@ public partial class NetClient
         }
         else if (_gunship != null) EndGunship();
 
-        if (_viewmodel != null) _viewmodel.Visible = _gunship == null;
+        _viewmodel.Visible = _gunship == null;
     }
 
     /// <summary>The enemy markers' points (ticket #157): the chest of every live enemy player and target dummy. Reused each frame, no allocation.</summary>

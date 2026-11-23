@@ -26,6 +26,8 @@ public sealed class ClientContext
     public CameraShake Shake { get; }
     /// <summary>Who has the own view and body (on foot, a vehicle, a turret, the missile, a hold): <see cref="ClientView.Mode"/>.</summary>
     public ClientView View { get; }
+    /// <summary>The first-person weapon of the local player.</summary>
+    internal OwnViewmodel Viewmodel { get; }
     /// <summary>The newest decoded snapshot: the records by entity id, the ones that left.</summary>
     public SnapshotDecoder Snapshots { get; } = new();
     /// <summary>How often and how far the own body and vehicles are corrected (the loss test reads it through the bot host and may replace it).</summary>
@@ -85,6 +87,7 @@ public sealed class ClientContext
         Root = root;
         Shake = new CameraShake(this);
         View = new ClientView(this);
+        Viewmodel = new OwnViewmodel(this);
         Cars = new ClientCars(this);
     }
 

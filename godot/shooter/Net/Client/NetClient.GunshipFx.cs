@@ -29,7 +29,7 @@ public partial class NetClient
         if (EchoOfPredicted(sh.Shooter)) return; // already played and drawn by prediction
         var endV = new Vector3(sh.End.X, sh.End.Y, sh.End.Z);
         SfxShot(sh, melee);
-        if (!melee && !exactMuzzle) { if (sh.Shooter == Ctx.MyId) _viewmodel?.Flash(0.4f); else if (Ctx.Remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
+        if (!melee && !exactMuzzle) { if (sh.Shooter == Ctx.MyId) _viewmodel.Flash(0.4f); else if (Ctx.Remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
         var originV = new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z);
         // a gunship's impact is its own message (OnGunshipImpacts), so its tracer does not draw one too: no 300 m cut-off for a long round
         var muzzle = exactMuzzle ? originV : MuzzleOf(sh.Shooter, originV, endV);

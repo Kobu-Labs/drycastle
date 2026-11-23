@@ -56,7 +56,7 @@ public partial class NetClient
     void BeginPinMine()
     {
         if (Ctx.Me == null) return;
-        _pending.Clear(); _reconcile = null;
+        _prediction.Drop();
         _pFrom = Ctx.Me.Camera.GlobalTransform;
         _pRise = 0;
         _pLookSet = false;

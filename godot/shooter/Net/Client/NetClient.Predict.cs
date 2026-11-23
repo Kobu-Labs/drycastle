@@ -140,7 +140,7 @@ public partial class NetClient
             var mult = RecoilState.Multiplier(w.Recoil, mi.Has(MoveButtons.Aim), Ctx.View.InArmedSeat ? Stance.Stand : Ctx.Me.State.Stance); // a seat steadies it no more than standing does, as on the server
             _recoil.Shot(w.Recoil, mult);
             _breath.AimError(_breath.SwayDegrees(w)); // the server's per-shot aim error; kept in step (the tracer follows the camera, like recoil)
-            _viewmodel?.Kick(w.Recoil.VerticalPerShot * mult);
+            _viewmodel.Kick(w.Recoil.VerticalPerShot * mult);
         }
         if (FxDemo != "") GD.Print($"fx-demo: predicted {w.Id} shot, mag {_pMag}");
         OwnShotFx(w);
@@ -151,7 +151,7 @@ public partial class NetClient
     /// <summary>Every frame: the rocket head sits in the held RPG's tube only while a rocket is loaded (the predicted magazine, else the server's).</summary>
     void RenderLauncherLoaded()
     {
-        if (_viewmodel?.Current is not { } held) return;
+        if (_viewmodel.Held is not { } held) return;
         var mag = _pMag >= 0 ? _pMag : Ammo is { } a && a.Slot >= 1 && a.Slot <= a.Slots.Count ? a.Slots[a.Slot - 1].Mag : 1;
         WeaponFx.SetLoaded(held, mag > 0);
     }
@@ -183,14 +183,14 @@ public partial class NetClient
         var cam = Ctx.Me.Camera;
         var from = cam.GlobalPosition;
         var dir = -cam.GlobalTransform.Basis.Z;
-        var muzzle = Ctx.Me.ZoomFov > 0 ? from + dir * 0.6f : _viewmodel?.MuzzlePosition ?? from + dir * 0.8f; // scoped: the streak leaves the crosshair, the gun is hidden
-        if (w.Grenade == null) _viewmodel?.Flash(projectile ? 0.5f : 0.4f);
-        if (w.Grenade != null) { _viewmodel?.Kick(6f); return; } // a throw: the hand jumps, nothing blows back
+        var muzzle = Ctx.Me.ZoomFov > 0 ? from + dir * 0.6f : _viewmodel.MuzzlePosition ?? from + dir * 0.8f; // scoped: the streak leaves the crosshair, the gun is hidden
+        if (w.Grenade == null) _viewmodel.Flash(projectile ? 0.5f : 0.4f);
+        if (w.Grenade != null) { _viewmodel.Kick(6f); return; } // a throw: the hand jumps, nothing blows back
         if (projectile)
         {
             // a launcher: the tube jumps (weapons.json recoil, the viewmodel only: a rocket has no spread to climb) and throws its backblast out of the rear
-            _viewmodel?.Kick(w.Recoil.VerticalPerShot);
-            RocketFx.Backblast(Ctx.Owned, (_viewmodel?.MuzzlePosition ?? from) - dir * (WeaponFx.LauncherRear + 0.2f), dir);
+            _viewmodel.Kick(w.Recoil.VerticalPerShot);
+            RocketFx.Backblast(Ctx.Owned, (_viewmodel.MuzzlePosition ?? from) - dir * (WeaponFx.LauncherRear + 0.2f), dir);
             return;
         }
         if (CasingFx.KindOf(w) is { } ck) CasingFx.Eject(Ctx.Owned, muzzle, dir, ck); // the rocket itself comes from the server
@@ -226,7 +226,7 @@ public partial class NetClient
     /// <summary>Where a shot of <paramref name="id"/> visibly leaves the weapon; <paramref name="fallback"/> (the eye) when nothing better is known.</summary>
     Vector3 MuzzleOf(ushort id, Vector3 fallback, Vector3 end)
     {
-        if (id == Ctx.MyId) return Ctx.Me is { ZoomFov: > 0 } ? fallback + (end - fallback).Normalized() * 0.6f : _viewmodel?.MuzzlePosition ?? fallback;
+        if (id == Ctx.MyId) return Ctx.Me is { ZoomFov: > 0 } ? fallback + (end - fallback).Normalized() * 0.6f : _viewmodel.MuzzlePosition ?? fallback;
         if (!Ctx.Remotes.TryGetValue(id, out var r)) return fallback;
         var chest = r.Node.GlobalPosition + Vector3.Up * 1.3f;
         var dir = (end - fallback).Normalized();

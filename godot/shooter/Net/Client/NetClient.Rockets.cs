@@ -83,7 +83,7 @@ public partial class NetClient
         {
             SfxLaunch(l);
             if (GrenadeGravity(l.Weapon) > 0) { if (Ctx.Remotes.TryGetValue(l.Owner, out var thrower)) thrower.FireUntil = Ctx.Now + 0.45; return; } // a throw: no flash, no backblast
-            if (l.Owner == Ctx.MyId) _viewmodel?.Flash(0.5f); else if (Ctx.Remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
+            if (l.Owner == Ctx.MyId) _viewmodel.Flash(0.5f); else if (Ctx.Remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
             // a held launcher's backblast, behind the shooter's shoulder (a gunship's rocket has no owner on foot: its owner is not a remote here)
             if (Ctx.Remotes.ContainsKey(l.Owner) && l.Velocity.LengthSquared() > 1e-4f) { var ld = G(NVec3.Normalize(l.Velocity)); RocketFx.Backblast(Ctx.Owned, G(l.Origin) - ld * WeaponFx.LauncherRear + Vector3.Down * 0.15f, ld); }
         }
