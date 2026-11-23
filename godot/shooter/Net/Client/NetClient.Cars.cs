@@ -185,22 +185,22 @@ public partial class NetClient
             else Ctx.Cars.Sounds.Engine(v, p, dt, _driveClient.StateOf(v)?.Speed);
             if (drive != null) _driveClient.StepFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
             else v.Roller?.Step(p, rot.Y, dt); // wheels of a vehicle that is not predicted: from its drawn motion
-            var seat = Ctx.Driving && Ctx.Me != null ? OwnSeatIn(v) : -1; // the seat the local player has in this vehicle
-            if (seat >= 0) TrackView(v, seat);
+            var seat = Ctx.Driving && Ctx.Me != null ? _rider.OwnSeatIn(v) : -1; // the seat the local player has in this vehicle
+            if (seat >= 0) _rider.Track(v, seat);
             if (seat == 0 || seat > 0 && !flakMine)
             {
                 if (seat == 0) { _carYaw = rot.Y; driven = v; }
-                if (_view.Current == RiderView.Sight) RideSeat(v, seat); // a gun's or a screen's seat: its own first-person view
+                if (_rider.SightView) _rider.RideSeat(v, seat); // a gun's or a screen's seat: its own first-person view
                 else
                 {
                     hasCockpit = true; // the prompt names the view key
-                    if (CockpitFrame(v, seat, p, rot, dt)) cockpit = true; // the view from the seat's eye, in the place of the chase camera
+                    if (_rider.CockpitFrame(v, seat, p, rot, dt)) cockpit = true; // the view from the seat's eye, in the place of the chase camera
                     else
                     {
                         if (flies) _flight.Chase(v, p, rot, dt);
                         else if (drive != null) _driveClient.Chase(v, drive, p, rot, dt);
                         else Ctx.Me!.Chase(p, s.Yaw, Vehicles != null && v.Kind < Vehicles.Vehicles.Count ? Vehicles.Vehicles[v.Kind] : null, dt);
-                        ShowSelfInCar(v, seat, viewerHides: false);
+                        _rider.ShowSelf(v, seat, viewerHides: false);
                     }
                     if (seat == 0 && flies) { flown = _flight.StateOf(v); chased = true; }
                     else if (drive != null && !cockpit) chased = true;
@@ -209,9 +209,9 @@ public partial class NetClient
             }
         }
         _tow.Render(rt, dt); // every trailer, from its tractor as drawn just now (the hitch, the articulation, the ground fit, the wheels)
-        SeatRiders(); // the riders of every vehicle, on their seats as the vehicles are drawn this frame (ADR 0026)
-        if (!Ctx.Driving) { HideSelfInCar(); LeaveView(); }
-        if (!cockpit) EndCockpit();
+        _seats.PlaceRiders(); // the riders of every vehicle, on their seats as the vehicles are drawn this frame (ADR 0026)
+        if (!Ctx.Driving) { _rider.HideSelf(); _rider.Leave(); }
+        if (!cockpit) _rider.EndCockpit();
         if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) Ctx.Me?.EndChase(Ctx.Me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
         if (!Ctx.Driving && _gunship == null) Ctx.Me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
         Ctx.Hud?.SetSeats(Ctx.Cars.SeatPanel());
@@ -219,10 +219,10 @@ public partial class NetClient
         else if (flown is { } fr) Ctx.Hud?.SetVehicleReadout(_flight.Readout(fr));
         else Ctx.Hud?.SetVehicleSpeed(Ctx.Driving ? kmh ?? 0f : null);
         string? prompt = null;
-        if (Ctx.Driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? _flight.Prompt(fp) : Ctx.View.InArmedSeat ? ArmedSeatPrompt() : Ctx.Cars.MySeat() is { Def.Drive: not null } ride ? _driveClient.Prompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        if (Ctx.Driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? _flight.Prompt(fp) : Ctx.View.InArmedSeat ? _seats.ArmedPrompt() : Ctx.Cars.MySeat() is { Def.Drive: not null } ride ? _driveClient.Prompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         if (driven != null && prompt != null && _tow.TowHint(driven) is { } towHint) prompt += "     " + towHint; // a trailer on the hook: the key that unhitches it
         if (Ctx.Driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
-        if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);
+        if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = _rider.WithViewHint(prompt);
         else if (Ctx.Me != null && !Dead && NearestFreeCar(Ctx.Me.GlobalPosition) is { } free) prompt = Strings.F(_flight.DefOf(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
         Ctx.Hud?.SetPrompt(LadderPrompt() ?? TurretPrompt() ?? _thieves.Loot.Prompt() ?? _doors.GarageDoorPrompt(Ctx.Driving) ?? ScudLoadPrompt(prompt) ?? prompt ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? _minerals.Prompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt() ?? LadderReachPrompt()); // a placing turret owns the prompt
     }
@@ -236,47 +236,6 @@ public partial class NetClient
     string? LadderReachPrompt() => Ctx.Me != null && !Dead && !Ctx.Driving && Ctx.Me.Ladders.Count > 0 && Ctx.Me.Ladders.Reach(Ctx.Me.State.Position, Ctx.Me.Yaw) >= 0
         ? Strings.F("hud.ladder.climb", InputBindings.Name("interact"))
         : null;
-
-    CharacterView? _selfView;
-    bool _selfViewerHides;
-
-    /// <summary>
-    /// The own character seated at <paramref name="seat"/> as a body view, a child of the vehicle's body so it moves with it. The chase camera sees it. In the
-    /// cockpit view (<paramref name="viewerHides"/>) it is not drawn for the camera but still casts its shadow, so the rider is still on the ground in the sun.
-    /// </summary>
-    void ShowSelfInCar(CarView car, int seat, bool viewerHides)
-    {
-        if (Vehicles == null) return;
-        var seats = Vehicles.Vehicles[car.Kind].Seats;
-        var o = seat < seats.Count && seats[seat].Offset.Length == 3 ? seats[seat].Offset : new float[3];
-        var anchor = SeatAnchor(car); // the body of a driven vehicle: the figure leans with it
-        if (_selfView == null || _selfView.GetParent() != anchor || _selfViewerHides != viewerHides)
-        {
-            _selfView?.QueueFree();
-            _selfView = CharacterView.Make();
-            Camo.Dress(_selfView, Ctx.MyId);
-            DressPlayer(_selfView, Ctx.MyId); // the headgear shows in the seat too (#266)
-            _selfView.SetStance(Stance.Crouch); // seated: there is no sitting animation, the crouch squash is the closest pose
-            anchor.AddChild(_selfView);
-            _selfViewerHides = viewerHides;
-            if (viewerHides) ShadowsOnly(_selfView);
-        }
-        _selfView.Position = new Vector3(o[0], o[1], o[2]);
-    }
-
-    /// <summary>Every mesh under <paramref name="n"/> that casts a shadow keeps only that: the camera does not draw it.</summary>
-    static void ShadowsOnly(Node n)
-    {
-        if (n is GeometryInstance3D g && g.CastShadow != GeometryInstance3D.ShadowCastingSetting.Off) g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
-        foreach (var c in n.GetChildren()) ShadowsOnly(c);
-    }
-
-    void HideSelfInCar()
-    {
-        if (_selfView == null) return;
-        _selfView.QueueFree();
-        _selfView = null;
-    }
 
     static NVec3 NV(Vector3 v) => new(v.X, v.Y, v.Z);
 

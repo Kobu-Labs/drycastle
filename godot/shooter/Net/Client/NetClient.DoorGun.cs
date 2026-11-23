@@ -55,7 +55,7 @@ public partial class NetClient
             var p = v.Node.GlobalPosition;
             var eye = nodes.Sight?.GlobalPosition ?? G(DoorGunRules.Eye(def, DoorGunRules.GunPivot(def, new NVec3(p.X, p.Y, p.Z), rot.Y, rot.X, rot.Z, aim), rot.Y, rot.X, rot.Z, aim));
             Ctx.Me.Turret(eye, aim.ViewYaw, aim.ViewPitch);
-            HideSelfInCar(); // the pilot's body view, if this player has just come from that seat
+            _rider.HideSelf(); // the pilot's body view, if this player has just come from that seat
             _flakCamera = true;
             return true;
         }

@@ -56,6 +56,10 @@ public sealed class ClientContext
     public ushort MyId;
     /// <summary>How many times the prediction was corrected by a server position (the telemetry, the report and the bots count them).</summary>
     public int Reconciles;
+    /// <summary>The newest owner ammo state from the server (null before the first one).</summary>
+    public AmmoMsg? Ammo;
+    /// <summary>The weapon of the slot the newest ammo state names; null before it or when weapons.json has no such slot.</summary>
+    public WeaponDef? CurrentWeapon => Ammo is { } a && Weapons != null && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1] : null;
     /// <summary>The weapon slots of the spawn hotbar and the one in hand.</summary>
     public Hotbar Hotbar { get; } = new();
     public bool Dead;

@@ -30,15 +30,14 @@ public partial class NetClient
         Match.RoundRestarted += () => { Ctx.Hud?.ClearKills(); HarvesterRoundRestart(); };
     }
 
-    WeaponDef? CurrentWeapon => Ammo is { } a && Weapons != null && a.Slot >= 1 && a.Slot <= Weapons.Weapons.Count ? Weapons.Weapons[a.Slot - 1] : null;
 
     /// <summary>Spread the next shot would get, for the crosshair gap: the same rule as the server's shot (stance, aim, movement).</summary>
     float CrosshairSpread()
     {
-        if (CurrentWeapon is not { } w) return 0f;
+        if (Ctx.CurrentWeapon is not { } w) return 0f;
         var own = HitMath.OwnSpread(w, _spread.Degrees(w, Ctx.Now));
         // in an armed seat the vehicle's speed is what widens it (the server's rule for a shot from the seat)
-        if (Ctx.View.InArmedSeat && Ctx.Cars.MySeat() is { } m) return SeatAimRules.ShotSpread(own, w, _aimHeld, RideSpeed(m.Car, _driveClient.StateOf(m.Car)), m.Seat);
+        if (Ctx.View.InArmedSeat && Ctx.Cars.MySeat() is { } m) return SeatAimRules.ShotSpread(own, w, _aimHeld, SeatsClient.RideSpeed(m.Car, _driveClient.StateOf(m.Car)), m.Seat);
         return Ctx.Me is { } me ? HitMath.ShotSpread(own, w, me.State, _aimHeld) : own;
     }
 

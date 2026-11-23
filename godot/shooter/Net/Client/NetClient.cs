@@ -77,12 +77,11 @@ public partial class NetClient : Node
     /// <summary>match.json as the client shipped it: the gunfire blips' radius, lifetime and rate limit (null: no blips, e.g. headless bots).</summary>
     public MatchConfig? BlipConfig;
     /// <summary>Latest owner ammo state from the server (null before the first one).</summary>
-    public AmmoMsg? Ammo { get; private set; }
+    public AmmoMsg? Ammo => Ctx.Ammo;
     OwnViewmodel _viewmodel => Ctx.Viewmodel;
     readonly FxDemoClient _fxDemo;
     /// <summary>Dev aid (<c>--fx-demo</c>, set by the host): see <see cref="FxDemoClient"/>.</summary>
     public string FxDemo { get => _fxDemo.Mode; set => _fxDemo.Mode = value; }
-    double _ammoAt;
 
     readonly ENetConnection _conn = new();
     ENetPacketPeer? _peer;
@@ -130,6 +129,8 @@ public partial class NetClient : Node
     FlightClient _flight = null!;
     DriveClient _driveClient = null!;
     TowClient _tow = null!;
+    SeatsClient _seats = null!;
+    RiderCamera _rider = null!;
     CropCrushClient _crush = null!;
     /// <summary>glass.json (set by the host); the defaults when it sets none.</summary>
     public GlassConfig GlassData = new();
@@ -208,6 +209,8 @@ public partial class NetClient : Node
         _tow = new TowClient(Ctx, _driveClient);
         _crush = new CropCrushClient(Ctx, _driveClient);
         _flight = new FlightClient(Ctx, CarThrown, PlaceCarSolid, _session.FlightCorrection);
+        _seats = new SeatsClient(Ctx);
+        _rider = new RiderCamera(Ctx, _flight, DressSelf);
         Camo = new CamoClient(Ctx, CamoData, DressCorpses);
         _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
         _bot = MakeBot();
@@ -226,7 +229,7 @@ public partial class NetClient : Node
         InitAircraft();
         InitLockOn();
         InitFlak();
-        InitSeats();
+        EventReceived += _seats.OnEvent;
         InitScud();
         InitMatchEdges();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
@@ -612,7 +615,7 @@ public partial class NetClient : Node
             if (id == Ctx.MyId) { OnSelf(rec, h.Ack); continue; }
             if (rec.Type == EntityType.Projectile) { OnRocketState(id, rec); continue; }
             if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
-            if (rec.Type == EntityType.Seats) { OnSeatsState(rec); continue; }
+            if (rec.Type == EntityType.Seats) { _seats.OnRecord(rec); continue; }
             if (rec.Type == EntityType.Turret) { OnTurretState(rec, h.Tick); continue; }
             if (rec.Type == EntityType.Flight) { _flight.OnState(rec, h.Tick); continue; }
             if (rec.Type == EntityType.Drive) { _driveClient.OnState(rec, h.Tick); continue; }
@@ -656,7 +659,7 @@ public partial class NetClient : Node
         ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         ThrowFilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
         _aimHeld = mi.Has(MoveButtons.Aim);
-        if (HeadLookWanted()) mi.Buttons |= MoveButtons.HeadLook; // seated and looking out of their own eyes: the view is the head's, shown to everyone (ADR 0026)
+        if (_rider.HeadLookWanted()) mi.Buttons |= MoveButtons.HeadLook; // seated and looking out of their own eyes: the view is the head's, shown to everyone (ADR 0026)
         TickRecoil(mi);
         TickBreath(mi);
         return mi;
@@ -692,8 +695,8 @@ public partial class NetClient : Node
         if (Sandbox.HandleInput(e)) return; // F4, the sandbox panel (#156)
         if (HandleVolumeInput(e)) return; // F3, the bounding-volume overlay; [ ] step its mode (#479)
         if (HandleScudInput(e)) return; // the Scud screen's keys (open, confirm, abort, lock, the wheel's zoom)
-        if (HandleSeatInput(e)) return; // a number key while seated takes that seat
-        if (HandleViewInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
+        if (_seats.HandleInput(e)) return; // a number key while seated takes that seat
+        if (_rider.HandleInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
         if (HandleBinocularsInput(e)) return; // B: the binoculars from the bag
         if (Bot || Weapons == null || Dead || ChooserOpen || Input.MouseMode != Input.MouseModeEnum.Captured) return;
         if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)

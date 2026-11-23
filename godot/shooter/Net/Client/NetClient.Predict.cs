@@ -33,7 +33,7 @@ public partial class NetClient
 
     /// <summary>The scope that is up, for the HUD's mil-dots and zero: its FOV and the zero dialled on the weapon (0: no bullet drop).</summary>
     (float FovDeg, float ZeroM) ScopeView() =>
-        Ctx.Me is { ZoomFov: > 0 } me && !_binoculars && Ammo is { } a && CurrentWeapon is { } w && BulletDrop.HasDrop(w) ? (me.ZoomFov, _zero.Of(a.Slot - 1, w)) : (0f, 0f);
+        Ctx.Me is { ZoomFov: > 0 } me && !_binoculars && Ammo is { } a && Ctx.CurrentWeapon is { } w && BulletDrop.HasDrop(w) ? (me.ZoomFov, _zero.Of(a.Slot - 1, w)) : (0f, 0f);
 
     /// <summary>
     /// The mouse wheel while a scope with bullet drop is up: one click of the zero dial (up: farther). The server is told the new zero and resolves the
@@ -41,7 +41,7 @@ public partial class NetClient
     /// </summary>
     bool DialZero(int clicks)
     {
-        if (Ctx.Me is not { ZoomFov: > 0 } || _binoculars || Ammo is not { } a || CurrentWeapon is not { } w || !BulletDrop.HasDrop(w)) return false;
+        if (Ctx.Me is not { ZoomFov: > 0 } || _binoculars || Ammo is not { } a || Ctx.CurrentWeapon is not { } w || !BulletDrop.HasDrop(w)) return false;
         var was = _zero.Of(a.Slot - 1, w);
         var now = BulletDrop.Dial(w, was, clicks);
         if (now == was) return true; // at the end of the dial
@@ -66,7 +66,7 @@ public partial class NetClient
     /// <summary>Recovers the recoil offset for this tick and shows it on the camera (the server fires with the same offset).</summary>
     void TickRecoil(MoveInput mi)
     {
-        if (Ctx.Me == null || CurrentWeapon is not { } w) return;
+        if (Ctx.Me == null || Ctx.CurrentWeapon is not { } w) return;
         _recoil.Tick(Ctx.Now, mi.Has(MoveButtons.Fire), w.Recoil);
         Ctx.Me.AimKick = new Vector2(_recoil.PitchRad, _recoil.YawRad);
     }
@@ -74,7 +74,7 @@ public partial class NetClient
     /// <summary>Advances the sniper breath (the server runs the same state from the same input), plays its sounds (inhale, heartbeat, exhale) and shows the cosmetic sway on the camera.</summary>
     void TickBreath(MoveInput mi)
     {
-        if (Ctx.Me == null || CurrentWeapon is not { } w) return;
+        if (Ctx.Me == null || Ctx.CurrentWeapon is not { } w) return;
         var scoped = mi.Has(MoveButtons.Aim) && w.ZoomFov > 0 && Mode.CanScope;
         _breath.Tick(Ctx.Now, scoped, mi.Has(MoveButtons.Sprint), w, Loadouts.Perks.HoldBreathTime);
         var cue = _breathCues.Tick(Ctx.Now, _breath.Phase, _breath.Meter);
@@ -93,7 +93,7 @@ public partial class NetClient
     /// <summary>The breath while scoped with a breath hold (the HUD reads it each frame for the key hint).</summary>
     (bool Show, float Meter, BreathState.BreathPhase Phase) BreathView()
     {
-        if (Ctx.Me is not { ZoomFov: > 0 } || _binoculars || CurrentWeapon is not { } w || BreathState.BudgetSeconds(w, Loadouts.Perks.HoldBreathTime) <= 0)
+        if (Ctx.Me is not { ZoomFov: > 0 } || _binoculars || Ctx.CurrentWeapon is not { } w || BreathState.BudgetSeconds(w, Loadouts.Perks.HoldBreathTime) <= 0)
             return (false, 0f, BreathState.BreathPhase.Ready);
         return (true, _breath.Meter, _breath.Phase);
     }
