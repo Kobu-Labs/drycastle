@@ -33,7 +33,7 @@ public partial class NetServer
                 s.Id == MoabStreak.StreakId ? (IKillstreak)new MoabStreak(OnMoabPhase) :
                 s.Id == CarePackageRules.StreakId ? CarePackageImpl() :
                 s.Id == AttackMissileStreak.StreakId ? MakeMissileStreak() :
-                s.Id == TurretStreak.StreakId ? new TurretStreak(Turret.Def, _match.Entities, new TurretWorld(this)) :
+                s.Id == TurretStreak.StreakId ? new TurretStreak(Turret.Def, _match.Entities, _sentries) :
                 s.Id == UavStreak.StreakId ? _uav :
                 s.Id == AttackHelicopterStreak.StreakId ? MakeAttackHelicopter() :
                 s.Id == Ac130Streak.StreakId ? MakeAc130() :

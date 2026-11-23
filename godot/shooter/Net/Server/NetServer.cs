@@ -10,6 +10,7 @@ using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
 using Drycastle.Shooter.Net.Server.Profiles;
 using Drycastle.Shooter.Net.Server.Seating;
+using Drycastle.Shooter.Net.Server.Sentries;
 using Drycastle.Shooter.Net.Server.Statuses;
 using Drycastle.Shooter.Net.Server.Scenery;
 using Drycastle.Shooter.Net.Server.VillageRadio;
@@ -90,6 +91,7 @@ public partial class NetServer : Node
     IntelServer _intel = null!;
     ChatServer _chat = null!;
     ProfileServer _profiles = null!;
+    SentryWorld _sentries = null!;
     HuntLogServer _hunts = null!;
     StatusServer _status = null!;
     ItemsServer _gear = null!;
@@ -146,6 +148,7 @@ public partial class NetServer : Node
         _minerals = new MineralsServer(_ctx, Progression, () => _wildlife.Keeper.Drops);
         _hunts = new HuntLogServer(_ctx, Progression, AnimalData, Weapons, Items, CompanionData, Scores, WeaponKey,
             c => { _profiles.Send(c); _companions.FromProfile(c); if (c.Joined) _companions.SendRoster(c); });
+        _sentries = new SentryWorld(_ctx, _targets, Deal, () => Query);
         _status = new StatusServer(_ctx, Deal, Weapons, GetHigh);
         DemonInit();
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");

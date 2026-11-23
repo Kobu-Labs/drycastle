@@ -1,3 +1,4 @@
+using Drycastle.Shooter.Net.Server.Sentries;
 using Drycastle.ShooterCore.Bots;
 using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Killstreaks.Helicopter;
@@ -73,7 +74,7 @@ public partial class NetServer
         _helperEnemies.Clear();
         var targets = _targets.Live();
         foreach (var t in targets)
-            if (BotEnemies.IsEnemy(_match, owner, t.Id) && !NonEnemyTargets.IsNonEnemy(t.Id)) _helperEnemies.Add(new HelperCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM, t.Stance));
+            if (BotEnemies.IsEnemy(_match, owner, t.Id) && !NonEnemyTargets.IsNonEnemy(t.Id)) _helperEnemies.Add(new HelperCandidate(t.Id, t.Feet + NVec3.UnitY * SentryWorld.AimHeightM, t.Stance));
         _targets.Return(targets);
         return _helperEnemies;
     }
@@ -85,7 +86,7 @@ public partial class NetServer
     {
         var d = NVec3.Distance(from, to);
         if (d <= 0) return true;
-        var hit = TurretRay(from, (to - from) / d, d);
+        var hit = _sentries.WorldRay(from, (to - from) / d, d);
         return hit is not { } h || NVec3.Distance(from, h.Point) >= d - 0.05f;
     }
 
