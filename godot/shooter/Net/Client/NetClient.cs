@@ -133,10 +133,14 @@ public partial class NetClient : Node
     MassClient _mass = null!;
     CitizensClient _citizens = null!;
     StatusClient _status = null!;
+    /// <summary>The chat box, the Squads screen's and the Teams screen's requests (the menus reach them here).</summary>
+    public ChatClient Chat { get; private set; } = null!;
+    public SquadsClient Squads { get; private set; } = null!;
+    public TeamsClient TeamAdmin { get; private set; } = null!;
 
     public NetClient()
     {
-        Ctx = new ClientContext(this) { Send = SendEvent, InVehicle = () => _driving || _myState == EntityState.InVehicle };
+        Ctx = new ClientContext(this) { Send = SendEvent, Connected = () => _peer != null, InVehicle = () => _driving || _myState == EntityState.InVehicle };
         _moab = new MoabClient(Ctx);
         _doors = new DoorsClient(Ctx);
         _uav = new UavClient(Ctx);
@@ -154,6 +158,9 @@ public partial class NetClient : Node
         _mass = new MassClient(Ctx, HolyMassData, DropPrediction);
         _citizens = new CitizensClient(Ctx, HolyMassData, _mass);
         _status = new StatusClient(Ctx, Plantation);
+        Squads = new SquadsClient(Ctx);
+        Chat = new ChatClient(Ctx, ItemData, CompanionData, Squads);
+        TeamAdmin = new TeamsClient(Ctx, Chat);
         _bot = MakeBot();
         InitCorpses();
         InitGroundItems();
@@ -460,7 +467,7 @@ public partial class NetClient : Node
     {
         if (kind == EventKind.TargetRoster) OnTargetRoster(payload); // target dummies' names (#148)
         OnSandboxEvent(kind, payload); // sandbox answer (#156)
-        OnChatEvent(kind, payload); // chat lines, the admin flag, the day clock
+        Chat.OnEvent(kind, payload); // chat lines, the admin flag, the day clock
         _status.OnEvent(kind, payload); // statuses: blessing, curse, burning
         OnItemEvent(kind, payload); // what the player wears, what a corpse carries, an item crumbling
         OnCompanionEvent(kind, payload); // the Companions the player can pick and the one that is out
@@ -625,7 +632,7 @@ public partial class NetClient : Node
 
     public override void _UnhandledInput(InputEvent e)
     {
-        if (HandleChatInput(e)) return; // T or "/": the chat box
+        if (Chat.HandleInput(e)) return; // T or "/": the chat box
         if (HandleMapInput(e)) return; // M: the tactical map
         if (HandleEquipmentInput(e)) return; // F: the Equipment screen (#268)
         if (HandleHuntersLogInput(e)) return; // J: the Hunter's Log (#336)

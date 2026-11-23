@@ -60,6 +60,8 @@ public sealed class ClientContext
     public Func<bool>? MenuOpen;
     /// <summary>Sends one reliable event to the server (nothing when not connected).</summary>
     public Action<EventKind, byte[]> Send = (_, _) => { };
+    /// <summary>True while there is a link to the server to send on.</summary>
+    public Func<bool> Connected = () => false;
 
     public ClientContext(Node root)
     {

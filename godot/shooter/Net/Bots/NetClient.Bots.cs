@@ -106,6 +106,7 @@ public partial class NetClient : IBotHost
     void IBotHost.Quit(bool ok) => GetTree().Quit(ok ? 0 : 2);
 
     void IBotHost.SendMic(byte[] packet) => SendMic(packet);
+    void IBotHost.SendChat(string text) => Chat.Send(text);
 
     void SendMic(byte[] packet)
     {

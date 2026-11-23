@@ -115,7 +115,7 @@ public partial class NetClient
         hud.PickSlot = SelectSlot;
         hud.EditLoadouts = () => OpenLoadouts?.Invoke();
         hud.KeysFree = () => !(MenuOpen?.Invoke() ?? false) && !hud.ChatOpen; // the number keys are typing while the chat box is open
-        WireChatHud(hud);
+        Chat.WireHud(hud);
         if (Profile is { } p) hud.SetLoadoutRows(LoadoutRows(p));
     }
 
