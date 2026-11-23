@@ -198,10 +198,10 @@ public partial class NetClient
         q.Exclude = new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
         var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         var worldDist = hit.Count == 0 ? 300f : from.DistanceTo(hit["position"].AsVector3());
-        if (VehicleAlong(from, dir, MathF.Min(300f, worldDist), out var car, out var vh, Ctx.Cars.MySeat()?.Car))
+        if (_hulls.Along(from, dir, MathF.Min(300f, worldDist), out var car, out var vh, Ctx.Cars.MySeat()?.Car))
         {
             // the predicted shot stops on a car: the tracer ends on its hit box, the hole rides the car's node
-            var vat = ToWorld(car, G(vh.Local));
+            var vat = VehicleHulls.ToWorld(car, G(vh.Local));
             var vnormal = car.Node.GlobalTransform.Basis * G(vh.LocalNormal);
             ShotFx.Spawn(Ctx.Owned, muzzle, vat, false, true, vnormal);
             Sfx.Play3D("impact", vat);

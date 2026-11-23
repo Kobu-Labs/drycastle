@@ -36,7 +36,7 @@ public partial class NetClient
         ShotFx.Spawn(Ctx.Owned, muzzle, endV, melee, impact: impact, speed: speed, length: length, width: width);
         if (!melee && !exactMuzzle && CasingKindOf(sh.Weapon) is { } ck) CasingFx.Eject(Ctx.Owned, muzzle, endV - muzzle, ck);
         var marks = !melee && (holes ?? !exactMuzzle);
-        if (marks) ShotHole(originV, endV);
+        if (marks) _hulls.ShotHole(originV, endV);
         if (marks) BulletSurfaceHit(originV, endV);
     }
 

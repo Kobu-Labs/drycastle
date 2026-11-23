@@ -108,7 +108,7 @@ public partial class NetClient
         q.Exclude = new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
         var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         if (hit.Count > 0) best = from.DistanceTo(hit["position"].AsVector3());
-        if (VehicleAlong(from, dir, MathF.Min(Binoculars.MaxRangeM, best), out _, out var vh, Ctx.Cars.MySeat()?.Car)) best = MathF.Min(best, vh.Distance);
+        if (_hulls.Along(from, dir, MathF.Min(Binoculars.MaxRangeM, best), out _, out var vh, Ctx.Cars.MySeat()?.Car)) best = MathF.Min(best, vh.Distance);
         var o = new NVec3(from.X, from.Y, from.Z); var d = new NVec3(dir.X, dir.Y, dir.Z);
         foreach (var a in _animals.Values)
         {

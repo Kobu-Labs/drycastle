@@ -136,7 +136,7 @@ public partial class NetClient
             var feet = new Vector3(v.Pos.X, v.Pos.Y, v.Pos.Z);
             if (!Near(feet, cam)) continue;
             var def = Vehicles.Vehicles[v.Kind];
-            var (pitch, roll) = def.Tilts ? HullTiltOf(v, def) : (0f, 0f);
+            var (pitch, roll) = def.Tilts ? _hulls.TiltOf(v, def) : (0f, 0f);
             var frame = new Transform3D(Basis.FromEuler(new Vector3(pitch, v.Yaw, roll)), feet);
             foreach (var b in def.HullBoxes)
             {

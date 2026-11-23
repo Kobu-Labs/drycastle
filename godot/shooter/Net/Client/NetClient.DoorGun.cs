@@ -77,7 +77,7 @@ public partial class NetClient
         Ctx.Sound.Shot(sh, false);
         var origin = G(sh.Origin); var end = G(sh.End);
         ShotFx.Spawn(Ctx.Owned, nodes.Muzzle?.GlobalPosition ?? origin, end, false);
-        ShotHole(origin, end);
+        _hulls.ShotHole(origin, end);
         BulletSurfaceHit(origin, end);
         nodes.Kick();
         CasingFx.Eject(Ctx.Owned, nodes.Muzzle?.GlobalPosition ?? origin, end - origin, CasingKind.Heavy, CarVelocity(car));

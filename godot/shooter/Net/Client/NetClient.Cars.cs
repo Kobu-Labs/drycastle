@@ -59,29 +59,7 @@ public partial class NetClient
         v.LastTick = tick; v.Pos = rec.Position; v.Yaw = rec.YawRad;
         v.Buf.Push(tick, rec.Position, rec.YawRad, v.Trailer != null ? VehicleRecord.Tractor(rec) : 0); // a trailer's pitch slot carries its tractor's id, so it is drawn hitched exactly while the sample at the render tick says so (RenderTrailers)
         _tow.RefreshHull(v);
-        PlaceCarSolid(v);
-    }
-
-    /// <summary>The pitch and roll a vehicle's hull is turned by on this client: the latest flight record's, the trailer's ground fit, or the latest drive record's slope; else none.</summary>
-    (float Pitch, float Roll) HullTiltOf(CarView v, VehicleDef def) =>
-        !def.Tilts ? (0f, 0f)
-        : v.Trailer is { Hull: { } h } ? (h.Pitch, h.Roll) // a trailer's own ground fit (RefreshHull), the server's number
-        : _flight.RecordTilt(v.Id) is { } tilt ? tilt
-        : !CarThrown(v.Id) && _driveClient.RecordTilt(v.Id) is { } slope ? slope // a driven vehicle's slope, the latest drive record's (the server's Drive.Pitch/Roll); not the springs' lean
-        : (0f, 0f); // (a thrown one is level, as on the server)
-
-    /// <summary>Where a vehicle's hull frame has its origin: the record's place, or a trailer's origin turned about its axle (<see cref="HullTiltOf"/>).</summary>
-    static NVec3 HullFeetOf(CarView v) => v.Trailer is { Hull: { } h } ? h.Origin : v.Pos;
-
-    /// <summary>Puts a vehicle's solid box where its latest records say: the server builds its own from the same numbers (<c>ServerCar.PlaceSolid</c>).</summary>
-    void PlaceCarSolid(CarView v)
-    {
-        if (v.Solid == null) return;
-        var f = HullFeetOf(v);
-        var p = new Vector3(f.X, f.Y, f.Z);
-        var def = Vehicles!.Vehicles[v.Kind];
-        if (def.Tilts) { var (pitch, roll) = HullTiltOf(v, def); VehicleCollider.Place(v.Solid, p, v.Yaw, pitch, roll, !v.Destroyed); }
-        else VehicleCollider.Place(v.Solid, p, v.Yaw, !v.Destroyed);
+        _hulls.PlaceSolid(v);
     }
 
     /// <summary>Applies the stage and destroyed flag of a record: smoke stage emitters; a destroyed vehicle disappears (its blast is drawn here if the event has not arrived), a returned one shows again.</summary>
@@ -236,64 +214,6 @@ public partial class NetClient
     string? LadderReachPrompt() => Ctx.Me != null && !Dead && !Ctx.Driving && Ctx.Me.Ladders.Count > 0 && Ctx.Me.Ladders.Reach(Ctx.Me.State.Position, Ctx.Me.Yaw) >= 0
         ? Strings.F("hud.ladder.climb", InputBindings.Name("interact"))
         : null;
-
-    static NVec3 NV(Vector3 v) => new(v.X, v.Y, v.Z);
-
-    /// <summary>
-    /// The nearest vehicle the ray (<paramref name="from"/>, <paramref name="dir"/>) enters within <paramref name="maxDistance"/>, on the
-    /// vehicle's hit box (<see cref="VehicleBox"/>, the server's own collider) at its latest snapshot: the position the server resolved the shot against.
-    /// As on the server (NetServer.BulletHit, docs/glass.md) a ray that goes in by a glass pane or an open side and out by another is not stopped
-    /// by that vehicle, and one that goes in and finds no way out is stopped on the far side of the hit box, not where it met it.
-    /// <paramref name="dir"/> is a unit vector.
-    /// </summary>
-    /// <param name="skip">A vehicle the ray passes through: the one the local player fires from, in an armed seat (the server leaves that hull out too).</param>
-    bool VehicleAlong(Vector3 from, Vector3 dir, float maxDistance, out CarView car, out VehicleBoxHit hit, CarView? skip = null)
-    {
-        car = null!; hit = default;
-        if (Vehicles == null) return false;
-        var best = float.MaxValue;
-        foreach (var v in Ctx.Cars.All)
-        {
-            if (v.Destroyed || v == skip || v.Kind >= Vehicles.Vehicles.Count) continue;
-            var def = Vehicles.Vehicles[v.Kind];
-            var (pitch, roll) = HullTiltOf(v, def);
-            if (VehicleBox.Ray(NV(from), NV(dir), maxDistance, HullFeetOf(v), v.Yaw, pitch, roll, def) is not { } h || h.Distance >= best) continue;
-            if (def.GlassRects.Count > 0 || def.OpenSideRects.Count > 0)
-            {
-                var lo = GlassRules.ToVehicle(NV(from), HullFeetOf(v), v.Yaw, pitch, roll); var ld = GlassRules.DirToVehicle(NV(dir), v.Yaw, pitch, roll);
-                var way = GlassRules.Through(def.GlassRects, def.OpenSideRects, lo, ld, h.Distance, _glass.Data.VehicleReach);
-                if (way.Enters)
-                {
-                    if (way.Leaves) continue; // through the glass and out again
-                    var far = MathF.Max(VehicleBox.ExitDistance(lo, ld, def), way.EntryT);
-                    if (far > maxDistance || far >= best) continue;
-                    h = new VehicleBoxHit(far, lo + ld * far, -ld); // inside, on the far side, facing back along the ray
-                }
-            }
-            best = h.Distance; hit = h; car = v;
-        }
-        return car != null;
-    }
-
-    /// <summary>A point in a vehicle's node frame (as <see cref="VehicleBoxHit"/>) in world space, where the car is drawn now.</summary>
-    static Vector3 ToWorld(CarView v, Vector3 local) => v.Node.GlobalTransform * local;
-
-    /// <summary>
-    /// Bullet hole for a hitscan shot that the server stopped at <paramref name="end"/>: on the vehicle the ray enters at the end (a car
-    /// is hit at its hit box, and the hole rides its node), otherwise on the world.
-    /// </summary>
-    void ShotHole(Vector3 from, Vector3 end)
-    {
-        var d = end - from;
-        var len = d.Length();
-        if (len < 0.05f) return;
-        if (VehicleAlong(from, d / len, len + 0.5f, out var car, out var hit) && hit.Distance >= len - 0.5f)
-        {
-            BulletHoles.PlaceOn(Ctx.Owned, GlassClient.HostOf(car.Node), G(hit.Local), G(hit.LocalNormal));
-            return;
-        }
-        BulletHoles.PlaceFromShot(Ctx.Owned, from, end);
-    }
 
     CarView? NearestFreeCar(Vector3 p)
     {

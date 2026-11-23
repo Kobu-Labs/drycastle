@@ -130,6 +130,7 @@ public partial class NetClient : Node
     DriveClient _driveClient = null!;
     TowClient _tow = null!;
     SeatsClient _seats = null!;
+    VehicleHulls _hulls = null!;
     RiderCamera _rider = null!;
     CropCrushClient _crush = null!;
     /// <summary>glass.json (set by the host); the defaults when it sets none.</summary>
@@ -205,10 +206,11 @@ public partial class NetClient : Node
         _session = new SessionLog(Ctx, Host, Port, () => !Bot && !LinkEnded && _welcomed, () => _peer);
         _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _peer, Ctx.Snapshots);
         _glass = new GlassClient(Ctx, GlassData);
-        _driveClient = new DriveClient(Ctx, CarThrown, PlaceCarSolid, ScudImmobilises);
+        _driveClient = new DriveClient(Ctx, CarThrown, v => _hulls.PlaceSolid(v), ScudImmobilises);
         _tow = new TowClient(Ctx, _driveClient);
         _crush = new CropCrushClient(Ctx, _driveClient);
-        _flight = new FlightClient(Ctx, CarThrown, PlaceCarSolid, _session.FlightCorrection);
+        _flight = new FlightClient(Ctx, CarThrown, v => _hulls.PlaceSolid(v), _session.FlightCorrection);
+        _hulls = new VehicleHulls(Ctx, _flight, _driveClient, CarThrown, GlassData);
         _seats = new SeatsClient(Ctx);
         _rider = new RiderCamera(Ctx, _flight, DressSelf);
         Camo = new CamoClient(Ctx, CamoData, DressCorpses);
