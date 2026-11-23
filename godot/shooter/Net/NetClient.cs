@@ -252,6 +252,27 @@ public partial class NetClient : Node
             return;
         }
         PumpAutosave(); // loadout saves whose debounce ran out go out here, whichever screen is open (#145)
+        RenderPlayersAndProps();
+        t = ClientProf.Lap(ClientProf.S.Players, t);
+        RenderCreatures(delta);
+        t = ClientProf.Lap(ClientProf.S.Creatures, t);
+        UpdateDeath(delta);
+        UpdatePounce(delta);
+        t = ClientProf.Lap(ClientProf.S.View, t);
+        RenderVehicles(delta);
+        t = ClientProf.Lap(ClientProf.S.Vehicles, t);
+        RenderProjectiles(delta);
+        t = ClientProf.Lap(ClientProf.S.Projectiles, t);
+        UpdateView(delta);
+        t = ClientProf.Lap(ClientProf.S.View, t);
+        UpdateHud();
+        RozhlasMicFrame(); // the set holder's mic and the ON AIR cue
+        ClientProf.End(ClientProf.S.Hud, t);
+    }
+
+    /// <summary>The players, their head lamps, the corpses, crates, items, minerals and turrets.</summary>
+    void RenderPlayersAndProps()
+    {
         RenderRemotes();
         RenderHeadLamps();
         if (PoseDemo && !_poseDemoDone && _me != null) SpawnPoseDemo();
@@ -260,7 +281,10 @@ public partial class NetClient : Node
         RenderCarePackages();
         RenderMinerals();
         RenderTurrets();
-        t = ClientProf.Lap(ClientProf.S.Players, t);
+    }
+
+    void RenderCreatures(double delta)
+    {
         RenderAnimals();
         RenderCompanions();
         TickCompanionMarks();
@@ -269,21 +293,28 @@ public partial class NetClient : Node
         RenderCitizens();
         RenderGang(delta);
         RenderDemon();
-        t = ClientProf.Lap(ClientProf.S.Creatures, t);
-        UpdateDeath(delta);
-        UpdatePounce(delta);
-        t = ClientProf.Lap(ClientProf.S.View, t);
+    }
+
+    void RenderVehicles(double delta)
+    {
         RenderCars();
         RenderHarvester((float)delta);
         RenderAircraft(delta);
-        t = ClientProf.Lap(ClientProf.S.Vehicles, t);
+    }
+
+    void RenderProjectiles(double delta)
+    {
         RenderRockets();
         RenderLockOn();
         RenderLauncherLoaded();
         RenderMissiles();
         RenderMissilePov();
         RenderScud(delta);
-        t = ClientProf.Lap(ClientProf.S.Projectiles, t);
+    }
+
+    /// <summary>The own view: water, the viewmodel, the camera's shakes and sways, in the order that composes the camera.</summary>
+    void UpdateView(double delta)
+    {
         RenderWater();
         UpdateViewmodel();
         UpdateThrowArc();
@@ -292,10 +323,6 @@ public partial class NetClient : Node
         Ctx.Shake.Update(delta);
         UpdateNausea(delta); // a high player's sway (NetClient.High.cs), before the roll is composed
         FadeOwnCorrection(delta);
-        t = ClientProf.Lap(ClientProf.S.View, t);
-        UpdateHud();
-        RozhlasMicFrame(); // the set holder's mic and the ON AIR cue
-        ClientProf.End(ClientProf.S.Hud, t);
     }
 
     void Poll()
@@ -342,19 +369,7 @@ public partial class NetClient : Node
         switch (m)
         {
             case WelcomeMsg w:
-                _myId = w.PlayerId; _welcomed = true; _link.Enter(LinkPhase.Welcomed);
-                RozhlasSetReset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
-                DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
-                CasingFx.Water = Water;
-                _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = ObjectLadders.WithObjects(Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Map), Bodies = this };
-                World.AddChild(_me);
-                if (!Bot && ShotFx.Enabled) { _viewmodel = MakeViewmodel(); _me.Camera.AddChild(_viewmodel); }
-                if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(_me.Camera); // the glass shaders compile now, not at the first crack
-                if (WeaponsBot != "" || CarBot != "" || FxDemo.StartsWith("vehicle:")) NetServer.AddArenaColliders(World);
-                if (Bot) _me.InputOverride = new MoveInput { SpeedScale = 1 };
-                HudWelcome();
-                OnWelcomed?.Invoke();
-                GD.Print($"client: welcome, id {_myId}, server tick {w.ServerTick}");
+                OnWelcome(w);
                 break;
             case ProfileMsg p:
                 Profile = p;
@@ -368,41 +383,71 @@ public partial class NetClient : Node
                 break;
             case JoinMsg j: _names[j.PlayerId] = j.Name; GD.Print($"client: {j.Name} #{j.PlayerId} joined"); break;
             case LeaveMsg l:
-                _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
-                if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
-                ForgetWorn(l.PlayerId); _binocularsBy.Remove(l.PlayerId); _headLampBy.Remove(l.PlayerId);
-                ForgetStatus(l.PlayerId);
+                OnLeave(l);
                 break;
             case EventMsg e:
-                if ((EventKind)e.Kind == EventKind.TargetRoster) OnTargetRoster(e.Payload); // target dummies' names (#148)
-                OnSandboxEvent((EventKind)e.Kind, e.Payload); // sandbox answer (#156)
-                OnChatEvent((EventKind)e.Kind, e.Payload); // chat lines, the admin flag, the day clock
-                OnStatusEvent((EventKind)e.Kind, e.Payload); // statuses: blessing, curse, burning
-                OnItemEvent((EventKind)e.Kind, e.Payload); // what the player wears, what a corpse carries, an item crumbling
-                OnCompanionEvent((EventKind)e.Kind, e.Payload); // the Companions the player can pick and the one that is out
-                _intel.OnEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
-                OnThiefAudioEvent((EventKind)e.Kind, e.Payload); // a Gang member says a line (ticket 09)
-                OnBigfootEvent((EventKind)e.Kind, e.Payload); // the Bigfoot's effects and the footprints to its corpse (#264)
-                OnHarvesterEvent((EventKind)e.Kind, e.Payload); // the harvester's cut, its bales' fire (#331)
-                OnThievesEvent((EventKind)e.Kind, e.Payload); // the Raid vans' honk
-                _doors.OnEvent((EventKind)e.Kind, e.Payload); // the church doors, the Obecny Urad's door and the bus garage's doors
-                OnRozhlasEvent((EventKind)e.Kind, e.Payload); // the village loudspeaker's phase, broadcast and offset
-                OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
-                OnDemonEvent((EventKind)e.Kind, e.Payload); // the demon: fireballs, the curse
-                OnHuntEvent((EventKind)e.Kind, e.Payload); // the Hunter's Log: answers and announcements (#336)
-                OnPhoenixEvent((EventKind)e.Kind, e.Payload); // the Phoenix's fall: a flash and the crash site's warning light
-                OnMineralEvent((EventKind)e.Kind, e.Payload); // the mineral nodes and the player's finds (#401)
-                OnWeaponEvent((EventKind)e.Kind, e.Payload);
-                OnMatchEvent((EventKind)e.Kind, e.Payload);
-                OnProgressionEvent((EventKind)e.Kind, e.Payload);
-                _uav.OnEvent((EventKind)e.Kind, e.Payload);
-                OnAppearanceEvent((EventKind)e.Kind, e.Payload);
-                WorldEntities.OnEvent((EventKind)e.Kind, e.Payload);
-                PerfClientEvent((EventKind)e.Kind, e.Payload);
-                _bot?.OnEvent((EventKind)e.Kind, e.Payload);
-                EventReceived?.Invoke((EventKind)e.Kind, e.Payload);
+                DispatchEvent((EventKind)e.Kind, e.Payload);
                 break;
         }
+    }
+
+    /// <summary>The server's welcome: the player's id, the day clock, the predicted body with its camera and viewmodel, the HUD.</summary>
+    void OnWelcome(WelcomeMsg w)
+    {
+        _myId = w.PlayerId; _welcomed = true; _link.Enter(LinkPhase.Welcomed);
+        RozhlasSetReset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
+        DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
+        CasingFx.Water = Water;
+        _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = ObjectLadders.WithObjects(Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Map), Bodies = this };
+        World.AddChild(_me);
+        if (!Bot && ShotFx.Enabled) { _viewmodel = MakeViewmodel(); _me.Camera.AddChild(_viewmodel); }
+        if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(_me.Camera); // the glass shaders compile now, not at the first crack
+        if (WeaponsBot != "" || CarBot != "" || FxDemo.StartsWith("vehicle:")) NetServer.AddArenaColliders(World);
+        if (Bot) _me.InputOverride = new MoveInput { SpeedScale = 1 };
+        HudWelcome();
+        OnWelcomed?.Invoke();
+        GD.Print($"client: welcome, id {_myId}, server tick {w.ServerTick}");
+    }
+
+    /// <summary>A player left: everything the client keeps per player goes.</summary>
+    void OnLeave(LeaveMsg l)
+    {
+        _names.Remove(l.PlayerId); Match.Remove(l.PlayerId); _dec.Forget(l.PlayerId);
+        if (_remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
+        ForgetWorn(l.PlayerId); _binocularsBy.Remove(l.PlayerId); _headLampBy.Remove(l.PlayerId);
+        ForgetStatus(l.PlayerId);
+    }
+
+    /// <summary>One reliable event, to every feature that listens, in this order (some ignore the kinds that are not theirs).</summary>
+    void DispatchEvent(EventKind kind, byte[] payload)
+    {
+        if (kind == EventKind.TargetRoster) OnTargetRoster(payload); // target dummies' names (#148)
+        OnSandboxEvent(kind, payload); // sandbox answer (#156)
+        OnChatEvent(kind, payload); // chat lines, the admin flag, the day clock
+        OnStatusEvent(kind, payload); // statuses: blessing, curse, burning
+        OnItemEvent(kind, payload); // what the player wears, what a corpse carries, an item crumbling
+        OnCompanionEvent(kind, payload); // the Companions the player can pick and the one that is out
+        _intel.OnEvent(kind, payload); // the announced events: the intel screen, the announcement
+        OnThiefAudioEvent(kind, payload); // a Gang member says a line (ticket 09)
+        OnBigfootEvent(kind, payload); // the Bigfoot's effects and the footprints to its corpse (#264)
+        OnHarvesterEvent(kind, payload); // the harvester's cut, its bales' fire (#331)
+        OnThievesEvent(kind, payload); // the Raid vans' honk
+        _doors.OnEvent(kind, payload); // the church doors, the Obecny Urad's door and the bus garage's doors
+        OnRozhlasEvent(kind, payload); // the village loudspeaker's phase, broadcast and offset
+        OnMassEvent(kind, payload); // the Holy Mass: chant, bells, the player's seat, the blessing
+        OnDemonEvent(kind, payload); // the demon: fireballs, the curse
+        OnHuntEvent(kind, payload); // the Hunter's Log: answers and announcements (#336)
+        OnPhoenixEvent(kind, payload); // the Phoenix's fall: a flash and the crash site's warning light
+        OnMineralEvent(kind, payload); // the mineral nodes and the player's finds (#401)
+        OnWeaponEvent(kind, payload);
+        OnMatchEvent(kind, payload);
+        OnProgressionEvent(kind, payload);
+        _uav.OnEvent(kind, payload);
+        OnAppearanceEvent(kind, payload);
+        WorldEntities.OnEvent(kind, payload);
+        PerfClientEvent(kind, payload);
+        _bot?.OnEvent(kind, payload);
+        EventReceived?.Invoke(kind, payload);
     }
 
     double Now => Time.GetTicksMsec() / 1000.0;
@@ -665,7 +710,17 @@ public partial class NetClient : Node
         ReplayDriveReconcile(); // and so does a predicted vehicle's (ADR 0010, ADR 0014)
         pt = ClientProf.Lap(ClientProf.S.Reconcile, pt);
         var dt = (float)delta;
-        var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = _me.Yaw } : PerfPlay ? PerfPlayStep() : _me.Sample();
+        PredictTick(SampleInput(dt), dt);
+        SendInputs();
+        var p = _me.State.Position;
+        _meMin = NVec3.Min(_meMin, p); _meMax = NVec3.Max(_meMax, p);
+        ClientProf.End(ClientProf.S.Predict, pt);
+    }
+
+    /// <summary>What the player (or the bot) presses this tick, after the on-foot keys, the Scud screen and the throw key had their say, and the weapon's recoil and breath followed it.</summary>
+    MoveInput SampleInput(float dt)
+    {
+        var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = _me!.Yaw } : PerfPlay ? PerfPlayStep() : _me!.Sample();
         if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); TickLootReturn(dt); TickMinerals(dt); }
         FxDemoInput(ref mi);
         ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
@@ -674,23 +729,31 @@ public partial class NetClient : Node
         if (HeadLookWanted()) mi.Buttons |= MoveButtons.HeadLook; // seated and looking out of their own eyes: the view is the head's, shown to everyone (ADR 0026)
         TickRecoil(mi);
         TickBreath(mi);
+        return mi;
+    }
+
+    /// <summary>Numbers the input and predicts it: the own body, and the helicopter or the amphibious transport the player steers. The input waits in <see cref="_pending"/> for the server's ack.</summary>
+    void PredictTick(MoveInput mi, float dt)
+    {
         if (_gunship == null) PredictFire(mi); // rounds from a turret are the server's alone
         var sentPitch = GunnerLook(ref mi); // at the turret the aim is sent (ground-stabilised, #160), and the player's own look is left alone
-        if (_gunship == null) _me.Yaw = mi.Yaw;
+        if (_gunship == null) _me!.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_gunship != null ? TurretKey() : Weapons != null ? _wantSlot : 0), GunnerAim);
         // C-03: a dead body does not move on the server (its input is zero and it is skipped), so it is not predicted either; else each snapshot snapped it back
-        if (Mode.BodyIsPredicted) { if (!Dead) _me.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
+        if (Mode.BodyIsPredicted) { if (!Dead) _me!.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); SfxOwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         PredictFlight(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
         PredictDrive(ni, dt);  // and so does the driver of an amphibious transport
-        _pending.Add(new Pending { Input = ni, After = _me.State });
+        _pending.Add(new Pending { Input = ni, After = _me!.State });
         if (_pending.Count > 120) _pending.RemoveAt(0);
+    }
+
+    /// <summary>Sends the newest three inputs (loss cover); they name the entity and world ticks they follow (the server's delta baselines).</summary>
+    void SendInputs()
+    {
         var recent = new NetInput[Math.Min(3, _pending.Count)];
         for (var i = 0; i < recent.Length; i++) recent[i] = _pending[_pending.Count - recent.Length + i].Input;
-        Tx(_peer, Wire.ChanData, Wire.EncodeInputs(recent, _dec.AckTick, WorldEntities.AckTick), 0); // the inputs name the entity and world ticks they follow (the server's delta baselines)
+        Tx(_peer!, Wire.ChanData, Wire.EncodeInputs(recent, _dec.AckTick, WorldEntities.AckTick), 0);
         _conn.Flush();
-        var p = _me.State.Position;
-        _meMin = NVec3.Min(_meMin, p); _meMax = NVec3.Max(_meMax, p);
-        ClientProf.End(ClientProf.S.Predict, pt);
     }
 
     /// <summary>The fractional server tick the remote entities are drawn at this frame (see <see cref="RenderClock"/>).</summary>
@@ -915,35 +978,10 @@ public partial class NetClient : Node
                 OnPelletFan(pf);
                 break;
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
-                if (KeepEventLogs) _logs.Launches.Add((Now, l));
-                if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
-                // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the rpg's)
-                if (_rockets.TryGetValue(l.Id, out var known)) { known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length(); known.Gravity = GrenadeGravity(l.Weapon); known.Grenade = known.Gravity > 0; }
-                else if (!_deadRockets.Contains(l.Id) && ShotFx.Enabled && Weapons != null)
-                {
-                    // show the rocket at once from the launch event; snapshots take over
-                    var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);
-                    _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned, WeaponId(l.Weapon)), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length(), Gravity = GrenadeGravity(l.Weapon), Grenade = GrenadeGravity(l.Weapon) > 0 };
-                }
-                if (!EchoOfPredicted(l.Owner))
-                {
-                    SfxLaunch(l);
-                    if (GrenadeGravity(l.Weapon) > 0) { if (_remotes.TryGetValue(l.Owner, out var thrower)) thrower.FireUntil = Now + 0.45; break; } // a throw: no flash, no backblast
-                    if (l.Owner == _myId) _viewmodel?.Flash(0.5f); else if (_remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
-                    // a held launcher's backblast, behind the shooter's shoulder (a gunship's rocket has no owner on foot: its owner is not a remote here)
-                    if (_remotes.ContainsKey(l.Owner) && l.Velocity.LengthSquared() > 1e-4f) { var ld = G(NVec3.Normalize(l.Velocity)); RocketFx.Backblast(Owned, G(l.Origin) - ld * WeaponFx.LauncherRear + Vector3.Down * 0.15f, ld); }
-                }
+                OnLaunch(l);
                 break;
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
-                if (KeepEventLogs) _logs.Explosions.Add((Now, ex));
-                if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(Owned, rk.Node); if (rk.Homing) NoteHomingBlast(new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z), ex.Radius); }
-                _dec.Forget(ex.Id);
-                _deadRockets.Add(ex.Id);
-                if (_deadRockets.Count > 256) _deadRockets.Clear();
-                var exR = ex.Radius > 0 ? ex.Radius : 6f; // the blast the server used (a gunship rocket's is 8 m)
-                var exAt = new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z);
-                RocketFx.Explode(Owned, exAt, exR, ex.WaveSpeed);
-                BlastFelt(exAt, exR, SoundRules.Event("explosion", WeaponId(ex.Weapon)), ex.WaveSpeed);
+                OnExplosion(ex);
                 break;
             case EventKind.VehicleExplosion when WeaponCodec.DecodeVehicleExplosion(payload) is { } vx:
                 OnVehicleExplosion(vx);
@@ -1004,4 +1042,40 @@ public partial class NetClient : Node
         }
     }
 
+    /// <summary>A rocket or a thrown grenade left its owner: drawn at once from the event (snapshots take over), the sound, the flash and the backblast.</summary>
+    void OnLaunch(LaunchMsg l)
+    {
+        if (KeepEventLogs) _logs.Launches.Add((Now, l));
+        if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
+        // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the rpg's)
+        if (_rockets.TryGetValue(l.Id, out var known)) { known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length(); known.Gravity = GrenadeGravity(l.Weapon); known.Grenade = known.Gravity > 0; }
+        else if (!_deadRockets.Contains(l.Id) && ShotFx.Enabled && Weapons != null)
+        {
+            // show the rocket at once from the launch event; snapshots take over
+            var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);
+            _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned, WeaponId(l.Weapon)), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length(), Gravity = GrenadeGravity(l.Weapon), Grenade = GrenadeGravity(l.Weapon) > 0 };
+        }
+        if (!EchoOfPredicted(l.Owner))
+        {
+            SfxLaunch(l);
+            if (GrenadeGravity(l.Weapon) > 0) { if (_remotes.TryGetValue(l.Owner, out var thrower)) thrower.FireUntil = Now + 0.45; return; } // a throw: no flash, no backblast
+            if (l.Owner == _myId) _viewmodel?.Flash(0.5f); else if (_remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
+            // a held launcher's backblast, behind the shooter's shoulder (a gunship's rocket has no owner on foot: its owner is not a remote here)
+            if (_remotes.ContainsKey(l.Owner) && l.Velocity.LengthSquared() > 1e-4f) { var ld = G(NVec3.Normalize(l.Velocity)); RocketFx.Backblast(Owned, G(l.Origin) - ld * WeaponFx.LauncherRear + Vector3.Down * 0.15f, ld); }
+        }
+    }
+
+    /// <summary>A rocket blew up: its model retires, the blast is drawn and felt.</summary>
+    void OnExplosion(ExplosionMsg ex)
+    {
+        if (KeepEventLogs) _logs.Explosions.Add((Now, ex));
+        if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(Owned, rk.Node); if (rk.Homing) NoteHomingBlast(new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z), ex.Radius); }
+        _dec.Forget(ex.Id);
+        _deadRockets.Add(ex.Id);
+        if (_deadRockets.Count > 256) _deadRockets.Clear();
+        var exR = ex.Radius > 0 ? ex.Radius : 6f; // the blast the server used (a gunship rocket's is 8 m)
+        var exAt = new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z);
+        RocketFx.Explode(Owned, exAt, exR, ex.WaveSpeed);
+        BlastFelt(exAt, exR, SoundRules.Event("explosion", WeaponId(ex.Weapon)), ex.WaveSpeed);
+    }
 }
