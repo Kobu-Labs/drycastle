@@ -76,7 +76,7 @@ public partial class NetClient
     {
         var g = r.Guess;
         var feet = new NVec3(at.X, at.Y, at.Z);
-        if (g.Ready && r.State == EntityState.Alive && Vehicles != null && ThrowGuessCar() is { } c
+        if (g.Ready && r.State == EntityState.Alive && Vehicles != null && _animals.GuessCar() is { } c
             && RunOverFootprint.OfCapsule(feet).Hits(c.State.Position, c.State.Position, c.State.Yaw, c.Def.HalfWidth, c.Def.HalfLength))
         {
             var launch = CorpseRules.ThrowFromCar(new NVec3(-MathF.Sin(c.State.Yaw), 0, -MathF.Cos(c.State.Yaw)), c.State.Speed);
@@ -91,7 +91,7 @@ public partial class NetClient
         var moved = at - r.GuessServerLast; moved.Y = 0; r.GuessServerLast = at;
         var flies = !dead && r.GuessConfirmed && dt > 0 && ThrowGuess.ServerStillFlies(moved.Length() / dt, r.GuessLaunch);
         var was = g.Phase;
-        var p = g.Step(dt, feet, dead || r.GuessConfirmed, flies, g.Active ? GroundUnder(g.Position) : null);
+        var p = g.Step(dt, feet, dead || r.GuessConfirmed, flies, g.Active ? _animals.GroundUnder(g.Position) : null);
         if (was == ThrowGuessPhase.Flying && g.Phase == ThrowGuessPhase.Settling && r.GuessFlung && !dead) EndFling(id); // the server saw no hit: the tumble is taken back with the arc
         if (!g.Active) r.GuessFlung = false;
         return new Vector3(p.X, p.Y, p.Z);

@@ -56,7 +56,7 @@ public partial class NetClient
     bool HandleBinocularsInput(InputEvent e)
     {
         if (Bot || e.IsEcho()) return false;
-        if (_binoculars && e.IsActionPressed("binoculars_mark")) { MarkAnimal(); GetViewport().SetInputAsHandled(); return true; }
+        if (_binoculars && e.IsActionPressed("binoculars_mark")) { _animals.Mark(CarriedBinoculars); GetViewport().SetInputAsHandled(); return true; }
         if (!e.IsActionPressed("binoculars")) return false;
         if (_binoculars) LowerBinoculars();
         else
@@ -110,7 +110,7 @@ public partial class NetClient
         if (hit.Count > 0) best = from.DistanceTo(hit["position"].AsVector3());
         if (_hulls.Along(from, dir, MathF.Min(Binoculars.MaxRangeM, best), out _, out var vh, Ctx.Cars.MySeat()?.Car)) best = MathF.Min(best, vh.Distance);
         var o = new NVec3(from.X, from.Y, from.Z); var d = new NVec3(dir.X, dir.Y, dir.Z);
-        foreach (var a in _animals.Values)
+        foreach (var a in _animals.ById.Values)
         {
             if (!GodotObject.IsInstanceValid(a.Node) || a.HitBox.Count < 3) continue;
             var p = a.Node.GlobalPosition;

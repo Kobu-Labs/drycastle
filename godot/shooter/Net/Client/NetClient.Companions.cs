@@ -164,7 +164,7 @@ public partial class NetClient
         var variant = Math.Max(0, entry.VariantIn(def));
         var box = def.HitBoxOf(variant).Select(x => x * entry.Scale).ToArray();
         var node = new Node3D { Name = $"Companion{e.Id}" };
-        var (_, anim, clips) = AddAnimalModel(node, def, variant, entry.Scale, box);
+        var (_, anim, clips) = AnimalsClient.AddModel(node, def, variant, entry.Scale, box);
         Ctx.Owned.AddChild(node);
         var at = e.State.Position;
         node.GlobalPosition = new Vector3(at.X, at.Y, at.Z);

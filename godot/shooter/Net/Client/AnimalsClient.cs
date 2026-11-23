@@ -1,13 +1,18 @@
 using Godot;
 using Drycastle.Shooter.Assets;
+using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.Characters;
+using Drycastle.Shooter.Menu;
 using Drycastle.Shooter.Wildlife;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Items;
 using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
 
@@ -21,14 +26,35 @@ namespace Drycastle.Shooter.Net.Client;
 /// them differently). A one-hit pet is simply despawned by the server (<see cref="WorldDespawnReason.Destroyed"/>) and leaves a puff. Without a model
 /// (headless, or the file is missing) a box of the model's hit box stands in. The server owns the animal; the client only shows it.
 /// </summary>
-public partial class NetClient : IStandingBodies
+internal sealed class AnimalsClient : IStandingBodies
 {
-    /// <summary>animals.json: set by the host (the species table; the species index of a state is a position in it).</summary>
-    public AnimalsFile AnimalData = new();
-    /// <summary>The hit shapes of the species: set by the host. The client only draws them (the hit diagram); the server tests bullets against them.</summary>
-    public AnimalShapes AnimalShapes = new();
+    readonly ClientContext _ctx;
+    readonly AnimalsFile _data;
+    readonly AnimalShapes _shapes;
+    readonly WildlifeFile _wildlife;
+    readonly DriveClient _drive;
 
-    sealed class AnimalView
+    /// <param name="data">animals.json (the species table; the species index of a state is a position in it).</param>
+    /// <param name="shapes">The hit shapes of the species: the client only draws them (the hit diagram); the server tests bullets against them.</param>
+    /// <param name="wildlife">wildlife.json (the Phoenix's burn time).</param>
+    public AnimalsClient(ClientContext ctx, AnimalsFile data, AnimalShapes shapes, WildlifeFile wildlife, DriveClient drive)
+    {
+        _ctx = ctx; _data = data; _shapes = shapes; _wildlife = wildlife; _drive = drive;
+        // registers the animal type and follows its entities
+        AnimalRules.Register(WorldEntityRegistry.Shared);
+        ctx.WorldEntities.Spawned += OnSpawned;
+        ctx.WorldEntities.DespawnedFor += OnDespawnedFor;
+        ctx.WorldEntities.Despawned += OnDespawned;
+        ctx.WorldEntities.DormancyChanged += OnDormancy;
+    }
+
+    /// <summary>The animals drawn, by entity id.</summary>
+    public IReadOnlyDictionary<ushort, AnimalView> ById => _animals;
+
+    /// <summary>Leaving: the animals go with the owned node.</summary>
+    public void Clear() => _animals.Clear();
+
+    internal sealed class AnimalView
     {
         public Node3D Node = null!;
         public AnimationPlayer? Anim;
@@ -69,7 +95,7 @@ public partial class NetClient : IStandingBodies
         /// <summary>A gliding flyer hovers now and then: the hover clip (<see cref="AnimalClip.Idle"/>) instead of the glide, and the seconds until it swaps.</summary>
         public bool Hover;
         public Countdown GlideLeft;
-        /// <summary>Client clock time until which the animal is highlighted for its watcher (<see cref="MarkAnimal"/>, #473); 0 = not marked.</summary>
+        /// <summary>Client clock time until which the animal is highlighted for its watcher (<see cref="Mark"/>, #473); 0 = not marked.</summary>
         public double MarkedUntil;
         public bool MarkShown;
     }
@@ -98,7 +124,7 @@ public partial class NetClient : IStandingBodies
     {
         foreach (var (id, v) in _animals)
         {
-            if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant || !AnimalRules.Stands(AnimalRules.StateOf(e.State.State))) continue;
+            if (!_ctx.WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant || !AnimalRules.Stands(AnimalRules.StateOf(e.State.State))) continue;
             if (e.Buf.At(double.MaxValue) is not { } s) continue;
             var box = v.HitBox; // the look's box times its size, as the server's Animal.Body
             if (box.Count < 3) continue;
@@ -111,18 +137,8 @@ public partial class NetClient : IStandingBodies
         }
     }
 
-    /// <summary>Called once from <see cref="_Ready"/>: registers the animal type and follows its entities.</summary>
-    void InitAnimals()
-    {
-        AnimalRules.Register(WorldEntityRegistry.Shared);
-        WorldEntities.Spawned += OnAnimalSpawned;
-        WorldEntities.DespawnedFor += OnAnimalDespawnedFor;
-        WorldEntities.Despawned += OnAnimalDespawned;
-        WorldEntities.DormancyChanged += OnAnimalDormancy;
-    }
-
     /// <summary>An animal outside the interest range (ADR 0025) is hidden and its animation stops; one that comes back starts its clip afresh (its pose is from a keyframe, not from the last time we saw it).</summary>
-    void OnAnimalDormancy(WorldReplica.Entity e)
+    void OnDormancy(WorldReplica.Entity e)
     {
         if (e.Type == AnimalRules.TypeId && _animals.TryGetValue(e.Id, out var v)) SetAnimalDormant(v, e);
     }
@@ -136,30 +152,30 @@ public partial class NetClient : IStandingBodies
         v.SeenFly = false;
     }
 
-    void OnAnimalSpawned(WorldReplica.Entity e)
+    void OnSpawned(WorldReplica.Entity e)
     {
         if (e.Type != AnimalRules.TypeId) return;
         var species = AnimalRules.SpeciesOf(e.State.Owner);
-        if (species >= AnimalData.Animals.Count)
+        if (species >= _data.Animals.Count)
         {
-            GD.PrintErr($"client: animal {e.Id} has species {species}, animals.json has {AnimalData.Animals.Count}; not drawn (data files differ from the server's?)");
+            GD.PrintErr($"client: animal {e.Id} has species {species}, animals.json has {_data.Animals.Count}; not drawn (data files differ from the server's?)");
             return;
         }
-        var def = AnimalData.Animals[species];
+        var def = _data.Animals[species];
         var variant = AnimalRules.VariantOf(e.State.Owner);
         // a species with a weight rolls a size at spawn (the state byte's bits 5-7); the model and every box of it are scaled by it
         var size = def.WeightKgOf(variant) != null ? AnimalRules.SizeOfStep(AnimalRules.SizeStepOf(e.State.State)) : 1f;
         var box = def.HitBoxOf(variant).Select(x => x * size).ToArray();
         var node = new Node3D { Name = $"Animal{e.Id}" };
         var flail = new List<AnimalFlail>();
-        var (modelRoot, anim, clips) = AddAnimalModel(node, def, variant, size, box);
+        var (modelRoot, anim, clips) = AddModel(node, def, variant, size, box);
         if (modelRoot != null)
             foreach (var sk in modelRoot.FindChildren("*", "Skeleton3D", true, false).OfType<Skeleton3D>())
                 if (AnimalFlail.Create(sk) is { } f) { sk.AddChild(f); flail.Add(f); }
-        Ctx.Owned.AddChild(node);
+        _ctx.Owned.AddChild(node);
         var view = new AnimalView { Node = node, Anim = anim, Def = def, Clips = clips, HitBox = box, Size = size, Variant = variant, Flail = flail, Toggle = AnimalRules.HitToggled(e.State.State) };
         if (def.Fx == UnicornFx.Id) view.Fx = UnicornFx.Attach(node, modelRoot, def.VanishSeconds);
-        if (def.Fx == PhoenixFx.Id) view.Phoenix = PhoenixFx.Attach(node, modelRoot, WildlifeData.Phoenix?.BurnSeconds ?? 6f);
+        if (def.Fx == PhoenixFx.Id) view.Phoenix = PhoenixFx.Attach(node, modelRoot, _wildlife.Phoenix?.BurnSeconds ?? 6f);
         _animals[e.Id] = view;
         if (e.Dormant) SetAnimalDormant(view, e); // spawned outside the interest range: hidden until a keyframe shows it
     }
@@ -168,7 +184,7 @@ public partial class NetClient : IStandingBodies
     /// Puts the model of a species' look under <paramref name="node"/>, scaled and turned as animals.json says, and finds its clips (<see cref="AnimalClips"/>; the looping ones are set
     /// to loop). Without a model (headless, or the file is missing) a box of <paramref name="box"/> stands in and there is no model, player or clip. Animals and Companions are both drawn with it.
     /// </summary>
-    internal static (Node3D? Model, AnimationPlayer? Anim, string?[] Clips) AddAnimalModel(Node3D node, AnimalDef def, int variant, float size, IReadOnlyList<float> box)
+    internal static (Node3D? Model, AnimationPlayer? Anim, string?[] Clips) AddModel(Node3D node, AnimalDef def, int variant, float size, IReadOnlyList<float> box)
     {
         if (ModelLib.Instance(def.ModelOf(variant)) is not { } model)
         {
@@ -190,32 +206,32 @@ public partial class NetClient : IStandingBodies
         return (model, anim, clips);
     }
 
-    /// <summary>A pet that died of a hit (it has no corpse) goes in a puff where it stood; an animal that expired or was removed just leaves. Runs before <see cref="OnAnimalDespawned"/> frees the node.</summary>
-    void OnAnimalDespawnedFor(ushort id, WorldDespawnReason reason)
+    /// <summary>A pet that died of a hit (it has no corpse) goes in a puff where it stood; an animal that expired or was removed just leaves. Runs before <see cref="OnDespawned"/> frees the node.</summary>
+    void OnDespawnedFor(ushort id, WorldDespawnReason reason)
     {
         if (reason != WorldDespawnReason.Destroyed || !_animals.TryGetValue(id, out var v)) return;
         var height = v.HitBox.Count == 3 ? v.HitBox[1] : 0.5f;
-        PetFx.Puff(Ctx.Owned, v.Node.GlobalPosition + Vector3.Up * (height / 2), height);
+        PetFx.Puff(_ctx.Owned, v.Node.GlobalPosition + Vector3.Up * (height / 2), height);
     }
 
-    void OnAnimalDespawned(ushort id)
+    void OnDespawned(ushort id)
     {
         if (!_animals.Remove(id, out var v)) return;
         v.Node.QueueFree();
     }
 
     /// <summary>Places the animals (interpolated, a little in the past like every remote body) and plays the clip of their state.</summary>
-    void RenderAnimals()
+    public void Render()
     {
-        if (_animals.Count == 0 || Ctx.LastTick == 0) return;
-        TickAnimalMarks();
-        var rt = RenderTickNow();
+        if (_animals.Count == 0 || _ctx.LastTick == 0) return;
+        TickMarks();
+        var rt = _ctx.RenderTick;
         var now = Time.GetTicksMsec() / 1000.0;
-        var dt = (float)GetProcessDeltaTime();
-        var car = ThrowGuessCar();
+        var dt = (float)_ctx.Root.GetProcessDeltaTime();
+        var car = GuessCar();
         foreach (var (id, v) in _animals)
         {
-            if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant) continue;
+            if (!_ctx.WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant) continue;
             var raw = e.State.State;
             var state = AnimalRules.StateOf(raw);
             if (e.Buf.At(rt) is { } s)
@@ -283,28 +299,28 @@ public partial class NetClient : IStandingBodies
     }
 
     /// <summary>The Phoenix's fall begins (event <see cref="EventKind.PhoenixFall"/>): a flash on the bird and a warning light at the crash site.</summary>
-    void OnPhoenixEvent(EventKind kind, byte[] payload)
+    public void OnPhoenixEvent(EventKind kind, byte[] payload)
     {
         if (kind != EventKind.PhoenixFall || !PhoenixFallCodec.TryDecode(payload, out var id, out _, out var site, out var seconds)) return;
         if (_animals.TryGetValue(id, out var v)) v.Phoenix?.Hit();
-        PhoenixFx.CrashWarning(Ctx.Owned, new Vector3(site.X, site.Y, site.Z), seconds);
+        PhoenixFx.CrashWarning(_ctx.Owned, new Vector3(site.X, site.Y, site.Z), seconds);
     }
 
     /// <summary>
     /// The vehicle whose run-overs this client shows ahead of the server (<see cref="ThrowGuess"/>): the predicted one the local player drives, while it runs bodies over
     /// (on land, moving fast enough to move one: the server's conditions in RunOverCheck).
     /// </summary>
-    (DriveState State, VehicleDef Def)? ThrowGuessCar()
+    public (DriveState State, VehicleDef Def)? GuessCar()
     {
-        if (_driveClient.Predicted is not { Def.RunOver: true } p || Dead || Match.Phase != MatchPhase.Running) return null; // the server throws no animal outside the round
+        if (_drive.Predicted is not { Def.RunOver: true } p || _ctx.Dead || _ctx.Match.Phase != MatchPhase.Running) return null; // the server throws no animal outside the round
         return p.State.Afloat || !RunOver.Contacts(p.State.Speed) ? null : p;
     }
 
     /// <summary>The ground's height under a guessed throw (one ray down through the static world), or null where there is none: the guess lands and rolls on the ground it is over, not at the height it left.</summary>
-    float? GroundUnder(NVec3 at)
+    public float? GroundUnder(NVec3 at)
     {
         var from = new Vector3(at.X, at.Y + 3f, at.Z);
-        var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(from, from + Vector3.Down * 40f, CollisionRules.StaticMask(MoverKind.Animal)));
+        var hit = _ctx.World.GetWorld3D().DirectSpaceState.IntersectRay(PhysicsRayQueryParameters3D.Create(from, from + Vector3.Down * 40f, CollisionRules.StaticMask(MoverKind.Animal)));
         return hit.Count > 0 ? hit["position"].AsVector3().Y : null;
     }
 
@@ -384,7 +400,7 @@ public partial class NetClient : IStandingBodies
         string? Clip(AnimalClip c) => v.Clips[(int)c];
         if (v.Def.Flies)
         {
-            // a flyer's clips by its phase (Flying glides or hovers, Falling tumbles, Crashed, Burning and Dead sit); no hit reactions, no death clip
+            // a flyer's clips by its phase (Flying glides or hovers, Falling tumbles, Crashed, Burning and _ctx.Dead sit); no hit reactions, no death clip
             if (FlyerLook.ClipOf(state, v.Hover) is { } fc && Clip(fc) is { } flyClip) v.Anim.Play(flyClip, 0.3);
             return;
         }
@@ -422,5 +438,65 @@ public partial class NetClient : IStandingBodies
         v.Anim.Play(clip, state == AnimalState.Dead ? 0.1 : 0.2);
         // an animal that was already dead when we saw it lies in its final pose; one that dies in front of us falls
         if (state == AnimalState.Dead && first) v.Anim.Seek(v.Anim.GetAnimation(clip).Length, true);
+    }
+
+
+    static readonly StandardMaterial3D MarkMaterial = new()
+    {
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, Transparency = BaseMaterial3D.TransparencyEnum.Alpha, NoDepthTest = true,
+        AlbedoColor = new Color(1f, 0.82f, 0.18f, 0.5f), RenderPriority = 20,
+    };
+
+    /// <summary>The mark key: the nearest animal under the middle of the view, not behind the world, within the binoculars' range, is marked (a repeat renews the time).</summary>
+    public void Mark(ItemDef? carried)
+    {
+        if (carried is not { MarkSeconds: > 0 } pair || _ctx.Me == null) return;
+        if (AnimalUnderCentre() is not { } v)
+        {
+            UiShell.Instance?.Toast(Strings.T("toast.mark.none"), ToastKind.Warn);
+            Sfx.Ui("ui.error");
+            return;
+        }
+        v.MarkedUntil = _ctx.Now + pair.MarkSeconds;
+        Sfx.Ui("ui.accept");
+        UiShell.Instance?.Toast(Strings.F("toast.mark.set", (int)pair.MarkSeconds), ToastKind.Info);
+    }
+
+    AnimalView? AnimalUnderCentre()
+    {
+        var cam = _ctx.Me!.Camera;
+        var from = cam.GlobalPosition;
+        var dir = -cam.GlobalTransform.Basis.Z;
+        var wall = Binoculars.MaxRangeM;
+        var q = PhysicsRayQueryParameters3D.Create(from, from + dir * Binoculars.MaxRangeM, CollisionLayers.WorldShots);
+        q.Exclude = new Godot.Collections.Array<Rid> { _ctx.Me.GetRid() };
+        var hit = _ctx.World.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        if (hit.Count > 0) wall = from.DistanceTo(hit["position"].AsVector3());
+        var o = new NVec3(from.X, from.Y, from.Z); var d = new NVec3(dir.X, dir.Y, dir.Z);
+        AnimalView? best = null;
+        var bestAt = wall;
+        foreach (var a in _animals.Values)
+        {
+            if (!GodotObject.IsInstanceValid(a.Node) || !a.Node.Visible || a.HitBox.Count < 3) continue;
+            var p = a.Node.GlobalPosition;
+            var target = new HitTarget(0, new NVec3(p.X, p.Y, p.Z), Stance.Stand, a.Node.Rotation.Y, Box: new NVec3(a.HitBox[0], a.HitBox[1], a.HitBox[2]), BoxAhead: a.Def.HitBoxAhead * a.Size);
+            if (HitMath.RayBox(o, d, target) is { } at && at < bestAt) { best = a; bestAt = at; }
+        }
+        return best;
+    }
+
+    /// <summary>Once a frame: puts the highlight on the animals that are marked and takes it off those whose time ran out; it pulses.</summary>
+    void TickMarks()
+    {
+        var pulse = 0.38f + 0.14f * MathF.Sin((float)_ctx.Now * 5f);
+        MarkMaterial.AlbedoColor = new Color(1f, 0.82f, 0.18f, pulse);
+        foreach (var v in _animals.Values)
+        {
+            var on = v.MarkedUntil > _ctx.Now;
+            if (on == v.MarkShown || !GodotObject.IsInstanceValid(v.Node)) continue;
+            v.MarkShown = on;
+            foreach (var mi in v.Node.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>())
+                mi.MaterialOverlay = on ? MarkMaterial : null;
+        }
     }
 }

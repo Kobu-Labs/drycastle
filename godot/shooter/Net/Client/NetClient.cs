@@ -28,6 +28,7 @@ using Drycastle.ShooterCore.Scenery;
 using Drycastle.ShooterCore.Scud;
 using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Weapons;
+using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter.Net.Client;
@@ -137,6 +138,11 @@ public partial class NetClient : Node
     MissileClient _missile = null!;
     TurretsClient _turrets = null!;
     ScudClient _scud = null!;
+    AnimalsClient _animals = null!;
+    /// <summary>animals.json: set by the host (the species table; the species index of a state is a position in it).</summary>
+    public AnimalsFile AnimalData = new();
+    /// <summary>The hit shapes of the species: set by the host. The client only draws them (the hit diagram); the server tests bullets against them.</summary>
+    public AnimalShapes AnimalShapes = new();
     PounceClient _pounce = null!;
     DemonClient _demon = null!;
     /// <summary>holy_mass_demon.json: set by the host (gravity of the fireballs, the turning's timeline).</summary>
@@ -241,7 +247,7 @@ public partial class NetClient : Node
         InitCarePackages();
         _missile = new MissileClient(Ctx, _blastDust, _markers);
         _turrets = new TurretsClient(Ctx);
-        InitAnimals();
+        _animals = new AnimalsClient(Ctx, AnimalData, AnimalShapes, WildlifeData, _driveClient);
         InitCompanions();
         InitFlocks();
         InitBigfoot();
@@ -402,7 +408,7 @@ public partial class NetClient : Node
 
     void RenderCreatures(double delta)
     {
-        RenderAnimals();
+        _animals.Render();
         RenderCompanions();
         TickCompanionMarks();
         RenderFlocks(delta);
@@ -514,7 +520,7 @@ public partial class NetClient : Node
         _rozhlas.Reset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
         DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
         CasingFx.Water = Water;
-        Ctx.Me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !Report.PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = ObjectLadders.WithObjects(Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Map), Bodies = this };
+        Ctx.Me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !Report.PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = ObjectLadders.WithObjects(Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Map), Bodies = _animals };
         World.AddChild(Ctx.Me);
         _viewmodel.Create();
         if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(Ctx.Me.Camera); // the glass shaders compile now, not at the first crack
@@ -553,7 +559,7 @@ public partial class NetClient : Node
         _mass.OnEvent(kind, payload); // the Holy Mass: chant, bells, the player's seat, the blessing
         _demon.OnEvent(kind, payload); // the demon: fireballs, the curse
         _hunts.OnEvent(kind, payload); // the Hunter's Log: answers and announcements (#336)
-        OnPhoenixEvent(kind, payload); // the Phoenix's fall: a flash and the crash site's warning light
+        _animals.OnPhoenixEvent(kind, payload); // the Phoenix's fall: a flash and the crash site's warning light
         _minerals.OnEvent(kind, payload); // the mineral nodes and the player's finds (#401)
         OnWeaponEvent(kind, payload);
         OnStreetEvent(kind, payload); // the street lamps and sign plates

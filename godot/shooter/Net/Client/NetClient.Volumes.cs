@@ -104,7 +104,7 @@ public partial class NetClient
 
     void VolumeAnimals(VolumeOverlay o, Vector3 cam)
     {
-        foreach (var (id, v) in _animals)
+        foreach (var (id, v) in _animals.ById)
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant || !v.Node.Visible) continue;
             var feet = v.Node.GlobalPosition;
