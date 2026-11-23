@@ -167,7 +167,7 @@ public partial class NetClient
         var at = new Vector3(b.Position.X, b.Position.Y, b.Position.Z);
         if (_missiles.Remove(b.Id, out var r)) { r.Snd?.Release(); RocketFx.Retire(Owned, r.Node); }
         RocketFx.Explode(Owned, at, b.Radius);
-        BlastFelt(at, b.Radius, SoundRules.Event("explosion", "rpg")); // the rpg's blast sound until the missile has its own
+        _blastDust.BlastFelt(at, b.Radius, SoundRules.Event("explosion", "rpg")); // the rpg's blast sound until the missile has its own
         if (b.Owner == _myId) _pov?.Impact();
     }
 }

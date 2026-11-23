@@ -200,7 +200,7 @@ public partial class NetClient
     void FeelScud(Vector3 at)
     {
         if (Sfx.Enabled) Sfx.Play3D("scud.explosion", at);
-        RingFrom(at, (float)Scud.Blast.DamageRadiusM);
+        _blastDust.RingFrom(at, (float)Scud.Blast.DamageRadiusM);
         if (_me == null || !ShotFx.Enabled || GameSettings.Current.ReduceMotion) return;
         var dist = new Vector2(_me.GlobalPosition.X - at.X, _me.GlobalPosition.Z - at.Z).Length();
         var amp = ScudBlastRules.Shake(Scud.Blast, dist);

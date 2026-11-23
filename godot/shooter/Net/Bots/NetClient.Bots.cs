@@ -59,6 +59,7 @@ public partial class NetClient : IBotHost
     }
 
     ClientContext IBotHost.Ctx => Ctx;
+    bool IBotHost.HoldsRozhlasSet => _rozhlas.HoldsSet;
     double IBotHost.Elapsed => _elapsed;
     double IBotHost.Seconds => BotSeconds;
     bool IBotHost.LinkEnded => LinkEnded;
@@ -91,7 +92,9 @@ public partial class NetClient : IBotHost
     void IBotHost.Leave() => _link.Enter(LinkPhase.Left);
     void IBotHost.Quit(bool ok) => GetTree().Quit(ok ? 0 : 2);
 
-    void IBotHost.SendMic(byte[] packet)
+    void IBotHost.SendMic(byte[] packet) => SendMic(packet);
+
+    void SendMic(byte[] packet)
     {
         if (_peer != null) Tx(_peer, Wire.ChanRozhlasFeed, packet, 0);
     }

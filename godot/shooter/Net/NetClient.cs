@@ -99,19 +99,23 @@ public partial class NetClient : Node
     BlipsClient _blips = null!;
     readonly PoopClient _poop;
     readonly HeadLampClient _headLamps;
+    readonly RozhlasClient _rozhlas;
+    readonly BlastDustClient _blastDust;
     MassClient _mass = null!;
     CitizensClient _citizens = null!;
     StatusClient _status = null!;
 
     public NetClient()
     {
-        Ctx = new ClientContext(this) { Send = SendEvent };
+        Ctx = new ClientContext(this) { Send = SendEvent, InVehicle = () => _driving || _myState == EntityState.InVehicle };
         _moab = new MoabClient(Ctx);
         _doors = new DoorsClient(Ctx);
         _uav = new UavClient(Ctx);
         _intel = new IntelClient(Ctx);
         _poop = new PoopClient(Ctx);
         _headLamps = new HeadLampClient(Ctx);
+        _rozhlas = new RozhlasClient(Ctx, SendMic);
+        _blastDust = new BlastDustClient(Ctx);
     }
 
     public override void _Ready()
@@ -164,7 +168,7 @@ public partial class NetClient : Node
         _link.Enter(LinkPhase.Left);
         TelemetryClose();
         SfxTeardown();
-        RozhlasSetReset(); // the mic is shut
+        _rozhlas.Reset(); // the mic is shut
         if (_peer != null) { _peer.PeerDisconnect(); _conn.Flush(); _peer = null; }
         foreach (var r in _remotes.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         _remotes.Clear();
@@ -269,7 +273,8 @@ public partial class NetClient : Node
         UpdateView(delta);
         t = ClientProf.Lap(ClientProf.S.View, t);
         UpdateHud();
-        RozhlasMicFrame(); // the set holder's mic and the ON AIR cue
+        _rozhlas.MicFrame(); // the set holder's mic and the ON AIR cue
+        _rozhlasTest?.MicTick(_rozhlas.HoldsSet);
         ClientProf.End(ClientProf.S.Hud, t);
     }
 
@@ -277,7 +282,7 @@ public partial class NetClient : Node
     void RenderPlayersAndProps()
     {
         RenderRemotes();
-        _headLamps.Render(_driving || _myState == EntityState.InVehicle);
+        _headLamps.Render();
         if (PoseDemo && !_poseDemoDone && _me != null) SpawnPoseDemo();
         RenderCorpses();
         RenderGroundItems();
@@ -322,7 +327,7 @@ public partial class NetClient : Node
         UpdateViewmodel();
         UpdateThrowArc();
         UpdateDemonQuake(delta);
-        UpdateDust(); // before the shake: a blast wave that arrives this frame shakes this frame
+        _blastDust.Update(); // before the shake: a blast wave that arrives this frame shakes this frame
         Ctx.Shake.Update(delta);
         UpdateNausea(delta); // a high player's sway (NetClient.High.cs), before the roll is composed
         FadeOwnCorrection(delta);
@@ -398,7 +403,7 @@ public partial class NetClient : Node
     void OnWelcome(WelcomeMsg w)
     {
         _myId = w.PlayerId; _welcomed = true; _link.Enter(LinkPhase.Welcomed);
-        RozhlasSetReset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
+        _rozhlas.Reset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
         DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
         CasingFx.Water = Water;
         _me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = ObjectLadders.WithObjects(Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Map), Bodies = this };
@@ -436,7 +441,7 @@ public partial class NetClient : Node
         OnHarvesterEvent(kind, payload); // the harvester's cut, its bales' fire (#331)
         OnThievesEvent(kind, payload); // the Raid vans' honk
         _doors.OnEvent(kind, payload); // the church doors, the Obecny Urad's door and the bus garage's doors
-        OnRozhlasEvent(kind, payload); // the village loudspeaker's phase, broadcast and offset
+        _rozhlas.OnEvent(kind, payload); // the village loudspeaker's phase, broadcast and offset
         _mass.OnEvent(kind, payload); // the Holy Mass: chant, bells, the player's seat, the blessing
         OnDemonEvent(kind, payload); // the demon: fireballs, the curse
         OnHuntEvent(kind, payload); // the Hunter's Log: answers and announcements (#336)
@@ -477,7 +482,7 @@ public partial class NetClient : Node
                 {
                     ApplySpawnLoadout(); // the hotbar and perk the server applied at this spawn
                     _wantSlot = StartSlot();
-                    Ctx.Dead = false; _earRing?.Clear(); if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
+                    Ctx.Dead = false; _blastDust.ClearRinging(); if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
                     _bot?.OnSpawn(sp.Protection);
                     EndDeathView(); _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId); _breathCues.Reset(); _zero.Reset(); ClearPredictedReload(); _pNextFire = 0;
                 }
@@ -1082,6 +1087,6 @@ public partial class NetClient : Node
         var exR = ex.Radius > 0 ? ex.Radius : 6f; // the blast the server used (a gunship rocket's is 8 m)
         var exAt = new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z);
         RocketFx.Explode(Owned, exAt, exR, ex.WaveSpeed);
-        BlastFelt(exAt, exR, SoundRules.Event("explosion", WeaponId(ex.Weapon)), ex.WaveSpeed);
+        _blastDust.BlastFelt(exAt, exR, SoundRules.Event("explosion", WeaponId(ex.Weapon)), ex.WaveSpeed);
     }
 }

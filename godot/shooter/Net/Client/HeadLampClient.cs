@@ -35,8 +35,7 @@ public sealed class HeadLampClient
         return _beams[i] = beam;
     }
 
-    /// <param name="ownInVehicle">The local player sits in a vehicle: no lamp of their own then.</param>
-    public void Render(bool ownInVehicle)
+    public void Render()
     {
         if (!ShotFx.Enabled) return;
         if (_lit.Count == 0)
@@ -45,7 +44,7 @@ public sealed class HeadLampClient
             return;
         }
         _candidates.Clear();
-        if (_lit.Contains(_ctx.MyId) && _ctx.Me != null && !_ctx.Dead && !ownInVehicle)
+        if (_lit.Contains(_ctx.MyId) && _ctx.Me != null && !_ctx.Dead && !_ctx.InVehicle())
         {
             var cam = _ctx.Me.Camera.GlobalTransform;
             _candidates.Add((0f, cam.Origin, -cam.Basis.Z));

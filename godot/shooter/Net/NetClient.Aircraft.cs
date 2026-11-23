@@ -81,7 +81,7 @@ public partial class NetClient
         var at = v.Model.GlobalPosition;
         if (HomingKillShown(at)) return; // a homing missile's kill blast (the Explosion event, with its Blast wave) is already there
         RocketFx.Explode(Owned, at, AircraftCrashRadius);
-        BlastFelt(at, AircraftCrashRadius, "explosion.vehicle");
+        _blastDust.BlastFelt(at, AircraftCrashRadius, "explosion.vehicle");
     }
 
     /// <summary>The size of the blast of a shot-down aircraft (the vehicle blast is 9 m).</summary>

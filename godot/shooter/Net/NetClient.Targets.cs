@@ -15,7 +15,7 @@ public partial class NetClient
     void UpdateNameTag(ushort id, RemotePlayer r)
     {
         var dummy = TargetDummies.IsDummyId(id);
-        var show = (dummy || (Match.IsTeamMode && Match.AreFriends(_myId, id))) && !DustHides(r.Node.GlobalPosition + Vector3.Up * 1.6f); // not through dust (#345)
+        var show = (dummy || (Match.IsTeamMode && Match.AreFriends(_myId, id))) && !_blastDust.Hides(r.Node.GlobalPosition + Vector3.Up * 1.6f); // not through dust (#345)
         var squad = !dummy && Match.AreSquadMates(_myId, id) ? Match.SquadOf(id) : (byte)0;
         var retag = !dummy && r.TagSquad != squad && _names.ContainsKey(id); // only a change rebuilds the text
         if (retag) r.TagSquad = squad;

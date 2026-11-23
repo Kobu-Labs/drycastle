@@ -40,6 +40,8 @@ public sealed class ClientContext
     public WeaponsFile? Weapons;
     /// <summary>killstreaks.json (set by the host): streak names, thresholds and the aircraft's defs.</summary>
     public KillstreakFile? Killstreaks;
+    /// <summary>The local player sits in a vehicle (driving, or in a seat).</summary>
+    public Func<bool> InVehicle = () => false;
     /// <summary>True while a menu screen is open (set by the host).</summary>
     public Func<bool>? MenuOpen;
     /// <summary>Sends one reliable event to the server (nothing when not connected).</summary>

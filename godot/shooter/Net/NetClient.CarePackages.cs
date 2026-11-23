@@ -173,7 +173,7 @@ public partial class NetClient
             _crateOpening = (id, Time.GetTicksMsec() / 1000.0 + CrateOpeningWaitSeconds); // gone for the player now; the despawn confirms
             _crateNear = null;
         }
-        TickRozhlasSetHold(use, dt); // the other hold of the same key (NetClient.Rozhlas.cs); the ring shows whichever is on
+        _rozhlas.TickHold(use, dt); // the other hold of the same key (NetClient.Rozhlas.cs); the ring shows whichever is on
         ShowHoldRing(dt);
     }
 
@@ -181,7 +181,7 @@ public partial class NetClient
     void ShowHoldRing(double dt)
     {
         var target = _crateHold.Held > 0 && _crateNear != null && !_crateHold.Sent ? (float)Math.Min(1.0, _crateHold.Held / CarePackageRules.OpenHoldSeconds) : 0f;
-        target = Math.Max(target, Math.Max(RozhlasSetHoldFraction, Math.Max(LootHoldFraction, MineralHoldFraction)));
+        target = Math.Max(target, Math.Max(_rozhlas.HoldFraction, Math.Max(LootHoldFraction, MineralHoldFraction)));
         if (target >= _ringShown || GameSettings.Current.ReduceMotion) _ringShown = target;
         else _ringShown = Mathf.MoveToward(_ringShown, target, (float)dt / RingDrainSeconds);
         _hud?.SetRadial(_ringShown > 0 ? _ringShown : null);
