@@ -44,8 +44,8 @@ public partial class EditorMode
         yield return ("Sketch: mark points  (P)", () => { SelectTool(EditorTool.Sketch); Sketches.SetMode(SketchKind.Point); });
         yield return ("Sketch: draw a line  (L)", () => { SelectTool(EditorTool.Sketch); Sketches.SetMode(SketchKind.Line); });
         if (Sketches.Doc.Count > 0) yield return ("Sketch: clear the active sketch", () => { SelectTool(EditorTool.Sketch); Sketches.RequestClear(); });
-        yield return ("Poles: plan a line  (P)", () => { SelectTool(EditorTool.Poles); StartPlanning(); });
-        yield return ("Poles: connect  (C)", () => { SelectTool(EditorTool.Poles); StartConnecting(); });
+        yield return ("Poles: plan a line  (P)", () => { SelectTool(EditorTool.Poles); Poles.Plan.Start(); });
+        yield return ("Poles: connect  (C)", () => { SelectTool(EditorTool.Poles); Poles.StartConnecting(); });
         yield return ("Edit: undo  (Ctrl+Z)", () => Edits.Undo());
         yield return ("Edit: redo  (Ctrl+Y)", () => Edits.Redo());
         yield return ("View: top-down  (T)", ToggleTopDown);

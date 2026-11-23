@@ -1,5 +1,6 @@
 using Drycastle.MapLoader;
 using Drycastle.Viewer.Edits;
+using Drycastle.Viewer.Editor.Tools;
 using Godot;
 using System.Collections.Generic;
 
@@ -18,6 +19,8 @@ public interface IEditorHost
     EditorTool Tool { get; }
     Camera3D FlyCam { get; }
     EditorCamera Camera { get; }
+    ObjectsTool Objects { get; }
+    PolesTool Poles { get; }
     /// <summary>The walk-mode player (frozen and hidden while the editor is open).</summary>
     Player Player { get; }
     /// <summary>The editor is open.</summary>
@@ -40,6 +43,9 @@ public interface IEditorHost
 
     /// <summary>Draw a named set of ground segments draped on the terrain; an empty list clears it.</summary>
     void SetOutline(string name, List<(Vector2 a, Vector2 b)> segs, Color colour, float lift, float width);
+
+    /// <summary>The label beside the mouse shows this text.</summary>
+    void ShowHoverText(string text, Vector2 mouse);
 
     /// <summary>The mouse is over the sidebar, the rail, the status bar or a dialog.</summary>
     bool OverUi(Vector2 mouse);
@@ -64,11 +70,9 @@ public interface IEditorHost
     /// <summary>Click semantics of the Select tool: plain click replaces the selection, shift toggles one parcel.</summary>
     void Click(string? parcelId, bool shift);
 
-    // the fence gate and the pole tool, until they are parts of their own
+    // the fence gate, until it is a part of its own
     bool GateArmed { get; }
     void CancelGate();
-    void StopConnecting(bool say = true);
-    void StopPlanning(bool say = true);
 
     /// <summary>Read the groups again from the file on disk (after every save, and when another writer changed it).</summary>
     void ReloadGroups();

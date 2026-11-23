@@ -143,8 +143,8 @@ public sealed class ObjectsTool : EditorPart
         if (Host.Map.OriginEpsg5514 == null) { Host.Say("this map has no origin_epsg5514 (export it again, map 0.4.0+)", true); return false; }
         if (Host.GateArmed) Host.CancelGate();
         DisarmPlacement(false);
-        Host.StopConnecting(false);
-        Host.StopPlanning(false);
+        Host.Poles.StopConnecting(false);
+        Host.Poles.Plan.Stop(false);
         PlacementAsset = asset;
         _ghost = new Node3D { Name = "Ghost", Visible = false };
         var model = Host.Map.CreateObjectModel(asset, null, out _);

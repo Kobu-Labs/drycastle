@@ -183,7 +183,7 @@ public partial class EditorMode
         Objects.BuildPage(objects);
         BuildGroundPage(Page(EditorTool.Ground));
         BuildZonesPage(Page(EditorTool.Zones));
-        BuildPolesPage(Page(EditorTool.Poles));
+        Poles.BuildPage(Page(EditorTool.Poles));
         BuildViewPage(Page(EditorTool.View));
         Sketches.BuildPage(Page(EditorTool.Sketch));
     }
@@ -293,7 +293,7 @@ public partial class EditorMode
         if (Tool == EditorTool.Sketch && tool != EditorTool.Sketch) Sketches.CancelGesture();
         if (Objects.Dragging && tool != Tool) Objects.CancelDrag(); // an object drag must not outlive its tool (the release would still save it)
         if (tool is EditorTool.Ground or EditorTool.Zones or EditorTool.Sketch) { Objects.DisarmPlacement(false); if (GateArmed) CancelGate(); }
-        if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { StopConnecting(false); StopPlanning(false); SelectCable(null); }
+        if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { Poles.StopConnecting(false); Poles.Plan.Stop(false); Poles.SelectCable(null); }
         if (tool == EditorTool.Poles && GateArmed) CancelGate();
         Tool = tool;
         ShapeRest(); // Selected or Idle depends on which kind of shape the tool selects

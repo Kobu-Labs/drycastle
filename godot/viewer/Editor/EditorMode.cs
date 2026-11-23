@@ -30,6 +30,7 @@ public partial class EditorMode : Node, IEditorHost
     public SketchTool Sketches { get; }
     public YouDot You { get; }
     public ObjectsTool Objects { get; }
+    public PolesTool Poles { get; }
     readonly List<EditorPart> _parts;
 
     public EditorMode()
@@ -39,10 +40,11 @@ public partial class EditorMode : Node, IEditorHost
         Sketches = new SketchTool(this);
         You = new YouDot(this);
         Objects = new ObjectsTool(this);
+        Poles = new PolesTool(this);
         Camera = new EditorCamera(this);
         Edits = new EditStore(this, SyncCatalogs, doc => Sketches.Replay(doc));
         Commands = new CommandPalette(PaletteAll);
-        _parts = new() { Ortho, FloorPlan, Sketches, You, Objects };
+        _parts = new() { Ortho, FloorPlan, Sketches, You, Objects, Poles };
     }
 
     public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
@@ -77,6 +79,7 @@ public partial class EditorMode : Node, IEditorHost
     bool _rayHit;
 
     bool _looking, _rmbMoved;
+    Vector2 _rmbPressPos;
     public bool Looking => _looking;
     Vector3? _hoverPoint;
 
@@ -138,8 +141,6 @@ public partial class EditorMode : Node, IEditorHost
             Camera.LeaveEditor();
             Input.MouseMode = Input.MouseModeEnum.Captured;
             CancelShapeGesture();
-            StopConnecting(false);
-            StopPlanning(false);
             if (GateArmed) CancelGate();
             HoverId = null;
             _hoverLabel.Visible = false;
@@ -432,7 +433,7 @@ public partial class EditorMode : Node, IEditorHost
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Tool == EditorTool.Poles:
                 GetViewport().GuiReleaseFocus();
-                PolesLeftPress(mb.Position, mb.ShiftPressed);
+                Poles.LeftPress(mb.Position, mb.ShiftPressed);
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking:
                 GetViewport().GuiReleaseFocus();
@@ -445,7 +446,7 @@ public partial class EditorMode : Node, IEditorHost
                 if (HandleGroundKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleZoneKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Sketches.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
-                if (HandlePolesKey(k)) { GetViewport().SetInputAsHandled(); break; }
+                if (Poles.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleUndoKey(k) || Objects.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (!k.CtrlPressed && !k.AltPressed && HandleToolKey(k.Keycode)) { GetViewport().SetInputAsHandled(); break; }
                 switch (k.Keycode)
@@ -464,10 +465,10 @@ public partial class EditorMode : Node, IEditorHost
                     case Key.Escape:
                         if (_cheat.Visible) _cheat.Visible = false;
                         else if (Objects.PlacementAsset != null) Objects.DisarmPlacement();
-                        else if (Planning) StopPlanning();
-                        else if (Connecting) StopConnecting();
+                        else if (Poles.Plan.Planning) Poles.Plan.Stop();
+                        else if (Poles.Connecting) Poles.StopConnecting();
                         else if (GateArmed) CancelGate();
-                        else if (SelectedCableId != null) SelectCable(null);
+                        else if (Poles.SelectedCableId != null) Poles.SelectCable(null);
                         else if (Objects.SelectedObjectId != null) Objects.SelectObject(null);
                         else if (Tool == EditorTool.Ground && GroundEscape()) { }
                         else if (Tool == EditorTool.Zones && ZoneEscape()) { }
@@ -486,9 +487,9 @@ public partial class EditorMode : Node, IEditorHost
         {
             _looking = false;
             Input.MouseMode = Input.MouseModeEnum.Visible;
-            if (!_rmbMoved && Planning && Tool == EditorTool.Poles) PlanRightClick(_rmbPressPos); // plan mode: a right click marks a house
+            if (!_rmbMoved && Poles.Plan.Planning && Tool == EditorTool.Poles) Poles.Plan.RightClick(_rmbPressPos); // plan mode: a right click marks a house
             else if (!_rmbMoved && Objects.PlacementAsset != null) Objects.DisarmPlacement(); // a right click (no look drag) leaves placement mode
-            else if (!_rmbMoved && Connecting) StopConnecting(); // and connect mode
+            else if (!_rmbMoved && Poles.Connecting) Poles.StopConnecting(); // and connect mode
         }
         if (Active && Objects.Dragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
             Objects.EndDrag();
@@ -507,7 +508,6 @@ public partial class EditorMode : Node, IEditorHost
         UpdateHover();
         UpdateGateDrag();
         foreach (var part in _parts) part.Update(delta);
-        UpdatePolesTool();
         UpdateShapeTool();
         UpdateGroundMap();
         UpdateZoneOverlay();
@@ -570,9 +570,15 @@ public partial class EditorMode : Node, IEditorHost
         UpdateGroundHoverOutline(null);
         if (id == null) { _hoverLabel.Visible = false; return; }
         var info = Map.Parcels[id];
-        _hoverLabel.Text = info.Group != null
+        ShowHoverText(info.Group != null
             ? $"{info.Group} ({GroupUnit(id).Count} parcels)"
-            : $"{id} {info.Kind}";
+            : $"{id} {info.Kind}", mouse);
+    }
+
+    /// <summary>The label beside the mouse (a parcel, a zone, a cable target) shows this text.</summary>
+    public void ShowHoverText(string text, Vector2 mouse)
+    {
+        _hoverLabel.Text = text;
         _hoverLabel.Position = mouse + new Vector2(16, 20);
         _hoverLabel.Visible = true;
     }
@@ -746,7 +752,7 @@ public partial class EditorMode : Node, IEditorHost
         RefreshEditPanel();
         Objects.RefreshPanel();
         RefreshUndoAndHint();
-        RefreshPolesPanel();
+        Poles.RefreshPanel();
         RefreshGroundPanel();
         RefreshZonesPanel();
         Sketches.RefreshPanel();
@@ -778,7 +784,7 @@ public partial class EditorMode
         _btnRedo.Disabled = h.RedoDepth == 0;
         _undoInfo.Text = (h.UndoDepth == 0 ? "nothing to undo" : $"undo: {h.NextUndoDescription} ({h.UndoDepth})") + (h.RedoDepth == 0 ? "" : $"; redo: {h.NextRedoDescription} ({h.RedoDepth})");
         var placing = Objects.PlacementAsset != null;
-        _hintLabel.Text = Tool == EditorTool.Ground ? GroundHintText() : Tool == EditorTool.Zones ? ZonesHintText() : Tool == EditorTool.Sketch ? Sketches.HintText() : Tool == EditorTool.Poles && !placing ? PolesHintText() : Tool == EditorTool.Group && !placing
+        _hintLabel.Text = Tool == EditorTool.Ground ? GroundHintText() : Tool == EditorTool.Zones ? ZonesHintText() : Tool == EditorTool.Sketch ? Sketches.HintText() : Tool == EditorTool.Poles && !placing ? Poles.HintText() : Tool == EditorTool.Group && !placing
             ? "marking parcels: click a parcel to mark or unmark it, Enter groups the marked ones, Esc clears the marks"
             : placing
             ? "placing: LMB place, R / Shift+R rotate, Ctrl free position, Esc or RMB stop, Ctrl+Z undo"
