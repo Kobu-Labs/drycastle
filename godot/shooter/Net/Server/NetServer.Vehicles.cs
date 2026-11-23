@@ -471,8 +471,8 @@ public partial class NetServer
         // each origin is read once here (a native call per read, and every pair asks): only a bump moves a vehicle inside this pass, so only those are read again
         if (_contactAt.Length < _fleet.Count) _contactAt = new Vector3[_fleet.Count];
         for (var i = 0; i < _fleet.Count; i++) _contactAt[i] = _fleet.Cars[i].GlobalPosition;
-        ShoveCarsByVans(); // the Raid vans push through: a vehicle in a van's box is shoved out
-        const float range2 = ContactBroadRange * ContactBroadRange;
+        _thieves.ShoveCarsByVans(); // the Raid vans push through: a vehicle in a van's box is shoved out
+        const float range2 = Fleet.ContactBroadRange * Fleet.ContactBroadRange;
         for (var i = 0; i < _fleet.Count; i++)
         {
             var a = _fleet.Cars[i];
@@ -497,9 +497,6 @@ public partial class NetServer
 
     /// <summary>Each live vehicle's origin for the broad test of <see cref="ResolveVehicleContacts"/> (reused every tick).</summary>
     Vector3[] _contactAt = Array.Empty<Vector3>();
-
-    /// <summary>Beyond this distance between two origins no pair of vehicles can touch (the bus is 12 m long, a rotor disc 9 m across).</summary>
-    const float ContactBroadRange = 20f;
 
     void BumpDamage(ServerCar car, float speedLoss, ServerCar other) => Crash(car, speedLoss, _fleet.OccupantAt(other, 0)?.Id ?? 0);
 

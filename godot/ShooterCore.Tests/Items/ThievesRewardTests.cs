@@ -105,7 +105,7 @@ public class ThievesRewardTests
             Roster = new GangRoster(cfg, World, Entities, 7);
             Hits = new CreditedGangHits(Roster, Credit);
             Roster.Killed += Kills.Add;
-            Roster.Killed += k => { if (ThievesReward.LeavesChain(k.Kind)) Chains++; }; // what the server does (NetServer.Thieves.Reward.cs)
+            Roster.Killed += k => { if (ThievesReward.LeavesChain(k.Kind)) Chains++; }; // what the server does (Thieves/ThievesPayout.cs)
         }
 
         public void Run(float seconds)

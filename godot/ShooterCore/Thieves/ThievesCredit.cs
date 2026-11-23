@@ -21,7 +21,7 @@ public sealed class ThievesCredit
     /// <summary>A player landed a hit on a Raid van that counted (<see cref="CreditedVanHits"/> calls it).</summary>
     public void NoteVanHit(ushort player) => Add(player);
 
-    /// <summary>A player sent a piece of Loot back to its place: called when the hold-to-send-back completes (<c>NetServer.Thieves.Loot.cs</c>), while the event runs.</summary>
+    /// <summary>A player sent a piece of Loot back to its place: called when the hold-to-send-back completes (<c>Thieves/ThievesServer.cs</c>), while the event runs.</summary>
     public void NoteLootReturned(ushort player) => Add(player);
 
     void Add(ushort player)

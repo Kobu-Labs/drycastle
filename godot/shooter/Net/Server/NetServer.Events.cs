@@ -21,7 +21,7 @@ public partial class NetServer
         _eventHandlers.Register(EventBook.Bigfoot, "Bigfoot event", StartBigfoot, EndBigfoot, CancelBigfoot);
         _eventHandlers.Register(EventBook.Mass, "Holy Mass", ChatMass, EndMass);
         _eventHandlers.Register(EventBook.Harvester, "harvester event", StartHarvester, EndHarvester, CancelHarvester);
-        _eventHandlers.Register(EventBook.Thieves, "Thieves event", StartThieves, EndThieves, CancelThieves);
+        _eventHandlers.Register(EventBook.Thieves, "Thieves event", _thieves.Start, _thieves.End, _thieves.Cancel);
         _eventHandlers.Register(EventBook.Scud, "Scud event", StartScudEvent, EndScudEvent, CancelScudEvent);
     }
 

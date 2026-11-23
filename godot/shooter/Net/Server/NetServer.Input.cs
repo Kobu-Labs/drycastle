@@ -43,7 +43,7 @@ public partial class NetServer
         var useDown = (i.Buttons & (ushort)MoveButtons.Use) != 0;
         var useEdge = c.UseKey.Pressed(useDown);
         _rozhlas.OnInput(c, useDown);
-        LootUse(c, useDown);
+        _thieves.OnUse(c, useDown);
         PlantationUse(c, useDown);
         var lightsEdge = Headlights.Edge((i.Buttons & (ushort)MoveButtons.Headlights) != 0, ref c.LightsHeld);
         _gear.SetHeadLamp(c, HeadLamp.Next(c.HeadLampOn, lightsEdge, c.Car == null, _match.Get(c.Id)?.Life == PlayerLife.Alive)); // H on foot: the head lamp (in a vehicle: the car's lights, below)
@@ -62,7 +62,7 @@ public partial class NetServer
         if (c.Car is { Thrown: not null }) return; // the Bigfoot threw it: nobody steers, fires or gets out until it lands (issue #264)
         if (c.Car != null) { RideInput(c, i, dt, controlled, useDown, useEdge, lightsEdge); return; }
         var useAct = ScudUseKey(c, useDown, useEdge, dt); // beside a truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket)
-        if (useAct && LootInReach(c) == null && (MassSit(c) || _garage.Use(c) || TryEnterCar(c))) return; // the use key on lying Loot sends it back, it does not take a seat
+        if (useAct && _thieves.LootInReach(c) == null && (MassSit(c) || _garage.Use(c) || TryEnterCar(c))) return; // the use key on lying Loot sends it back, it does not take a seat
         WalkAndFire(c, i, dt, throwStep);
     }
 

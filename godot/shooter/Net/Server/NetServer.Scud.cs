@@ -250,7 +250,7 @@ public partial class NetServer
         var p = c.Body.GlobalPosition;
         IEnumerable<ServerCar> trucks;
         if (c.Car != null) trucks = c.Car.Def.Launcher != null ? new[] { c.Car } : Array.Empty<ServerCar>();
-        else if (LootInReach(c) != null) return null;
+        else if (_thieves.LootInReach(c) != null) return null;
         else trucks = _fleet.Cars.Where(t => t.Def.Launcher != null);
         foreach (var truck in trucks)
         {

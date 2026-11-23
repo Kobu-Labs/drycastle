@@ -14,6 +14,7 @@ using Drycastle.Shooter.Net.Server.Scenery;
 using Drycastle.Shooter.Net.Server.Seating;
 using Drycastle.Shooter.Net.Server.Sentries;
 using Drycastle.Shooter.Net.Server.Statuses;
+using Drycastle.Shooter.Net.Server.Thieves;
 using Drycastle.Shooter.Net.Server.VillageRadio;
 using Drycastle.ShooterCore.Camo;
 using Drycastle.ShooterCore.Chat;
@@ -28,6 +29,7 @@ using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Perks;
 using Drycastle.ShooterCore.Progression;
 using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Turrets;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
@@ -82,6 +84,8 @@ public partial class NetServer : Node
     /// <summary>environment.json "lamp" and "sign_plate"; the defaults when the host sets none.</summary>
     public LampLook LampData = new();
     public SignPlateLook SignPlateData = new();
+    /// <summary>thieves.json: every number of the Thieves event (set by the host).</summary>
+    public ThievesFile ThievesData = new();
 
     // The features that are classes of their own (<c>Net/Server/&lt;Feature&gt;/</c>), made in _Ready once the match exists; each takes only the context.
     ServerContext _ctx = null!;
@@ -102,6 +106,7 @@ public partial class NetServer : Node
     CompanionServer _companions = null!;
     PetServer _pets = null!;
     WildlifeServer _wildlife = null!;
+    ThievesServer _thieves = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -167,7 +172,7 @@ public partial class NetServer : Node
         _wildlife = new WildlifeServer(_ctx, WildlifeData, AnimalData, AnimalShapes, _animals, () => MapZonePoints, () => Clock.HourAt(_tick / (double)Wire.TickRate), () => Query,
             ArenaMode, MapDir, Map, (a, by) => _hunts.OnWildKilled(a, by), _minerals.OnDropped);
         _companions = new CompanionServer(_ctx, CompanionData, AnimalData, _animals.Companions, Progression, UnlockAll);
-        InitThieves();
+        _thieves = BuildThieves();
         InitHarvester();
         InitScud();
         InitEvents(); // after the kinds above: the handler table names their start, end and cancel
@@ -179,6 +184,20 @@ public partial class NetServer : Node
         if (Weapons != null) foreach (var v in Vehicles.Vehicles) if (v.Flak is { } fk) FlakWeapon(fk); // a flak naming an unknown weapon fails here, not on the first shot
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");
+    }
+
+    /// <summary>
+    /// The Thieves event's parts, made in the order they register their world entity types: the Gang members, the Raid vans, the Loot, then the reward, which wraps the hit routing of the first two.
+    /// </summary>
+    ThievesServer BuildThieves()
+    {
+        var phase = new ThievesEvent();
+        var gangs = new GangServer(_ctx, ThievesData, Weapons, Items, _corpses, Deal, () => _nav, NextNavTicket, () => WalkerWorld, Scores, AwardXp);
+        var raids = new RaidServer(_ctx, ThievesData, phase, gangs, Map, World, _fleet, () => Vehicles, () => _nav, () => MapFlightBounds,
+            () => MapChurch is { } church ? new System.Numerics.Vector2(church.DoorwayPos.X, church.DoorwayPos.Z) : null, _rng, (sweep, spare) => RunOverTargets(sweep, spare), Crash);
+        var loot = new LootServer(_ctx, ThievesData, raids.Roster, gangs.Roster, _fleet, _pets.Keeper, Map, () => _nav, ArenaMode, MapDir);
+        var payout = new ThievesPayout(_ctx, ThievesData, Levels.Awards.EventWin, Items, Weapons, _corpses, _gear.BroadcastCorpseItems, _rng, Scores, AwardXp, gangs.Roster, raids.Roster);
+        return new ThievesServer(_ctx, ThievesData, _events, _intel, _rng, () => _nav, gangs, raids, loot, payout, phase);
     }
 
     public override void _ExitTree() { _rozhlas?.Dispose(); _perf?.Flush(); _host.Destroy(); _nav?.Free(); }
@@ -263,7 +282,7 @@ public partial class NetServer : Node
         _audit?.Lap(0);
         pt = Prof.Lap(Prof.S.MatchUpdate, pt);
         BigfootPrepare(); // the players and vehicles the Bigfoot's brain looks at this tick
-        GangsPrepare(); // the players the Gang members fight, and who each fights
+        _thieves.Prepare(); // the players the Gang members fight, and who each fights
         _animals.Prepare(); // the players and moving vehicles the animals look at, read once for all of them
         _audit?.Lap(1);
         pt = Prof.Lap(Prof.S.Prepare, pt);
@@ -283,7 +302,7 @@ public partial class NetServer : Node
         pt = Prof.Lap(Prof.S.Wildlife, pt);
         MassTick(dt); // the Holy Mass: its clock, the pastor, the seats
         _audit?.Lap(6);
-        ThievesTick(dt); // the Thieves event: its phase clock
+        _thieves.Tick(dt); // the Thieves event: its phase clock
         _audit?.Lap(7);
         _rozhlas.Tick(dt); // the village loudspeaker: the schedule and the hijack clock
         _audit?.Lap(8);
@@ -295,7 +314,7 @@ public partial class NetServer : Node
     void SimulatePlayers(float dt)
     {
         foreach (var car in _fleet.Cars) car.PlaceSolid(); // the boxes on-foot players are stopped by, where the vehicles stand after the last tick (#217)
-        PlaceVanSolids(); // and the Raid vans' (a van that stands is solid)
+        _thieves.PlaceVanSolids(); // and the Raid vans' (a van that stands is solid)
         PerfLap(ServerPerf.Ph.PlaceSolids);
         _simClients.Clear(); _simClients.AddRange(_byId.Values); // a copy: a client may leave while the others are simulated
         foreach (var c in _simClients) SimulateClient(c, dt); // every joined player, bots included
@@ -506,7 +525,7 @@ public partial class NetServer : Node
         SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
         _intel.SendOnJoin(c); // the events on the intel screen
         SendMassOnJoin(c); // the Holy Mass, when one runs
-        SendThievesOnJoin(c); // the Thieves event, when one runs
+        _thieves.SendOnJoin(c); // the Thieves event, when one runs
         _minerals.SendOnJoin(c); // the mineral nodes
         _rozhlas.SendOnJoin(c); // the village loudspeaker, when a detour broadcast is on, who is on the mic, and the Urad door when it is open
         _garage.SendOnJoin(c); // and the garage doors, when they are open

@@ -15,6 +15,9 @@ internal sealed class Fleet
 
     public Fleet(IReadOnlyDictionary<ushort, ServerClient> players) => _players = players;
 
+    /// <summary>Beyond this distance between two origins no pair of vehicles can touch (the bus is 12 m long, a rotor disc 9 m across).</summary>
+    public const float ContactBroadRange = 20f;
+
     public int Count => _cars.Count;
 
     public IReadOnlyList<ServerCar> Cars => _cars;

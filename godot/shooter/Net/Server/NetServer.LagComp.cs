@@ -41,8 +41,7 @@ public partial class NetServer
             o.Poses.Record(_tick, valid, new HitTarget(o.Id, N(o.Body.GlobalPosition), _sitters.StanceOf(o), o.Body.Yaw));
         }
         CaptureBigfootPose();
-        CaptureGangPoses();
-        CaptureVanPoses();
+        _thieves.RecordPoses(_tick); // Gang members and Raid vans
     }
 
     /// <summary>
@@ -157,8 +156,7 @@ public partial class NetServer
         }
         if (BigfootTarget() is { } bigfoot) list.Add(BigfootRewound(bigfoot, view)); // the Bigfoot is rewound like a player (issue #264)
         _crowd?.AddTargets(list); // citizens walk slowly: not rewound
-        AddGangTargets(list, view); // Gang members run: rewound like the Bigfoot (a pose ring each)
-        AddVanTargets(list, view); // so do the Raid vans (they drive)
+        _thieves.AddTargets(list, view); // Gang members run and the Raid vans drive: rewound like the Bigfoot (a pose ring each)
         _pets.AddTargets(list); // so do pets
         _wildlife.AddTargets(list, BackTicksOf(c) / (float)Wire.TickRate); // and wild animals, where they stand now but in the pose the shooter saw (a grazing head goes down and up)
         _rozhlas.AddTargets(list); // the Urad workers sit still

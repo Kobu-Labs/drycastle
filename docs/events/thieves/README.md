@@ -18,7 +18,7 @@ Throwaway. Delete this folder when the event is done. Design: `docs/events/READM
 ## Rules for every ticket
 
 - Read first: `CLAUDE.md`, `GLOSSARY.md`, `docs/state-machines.md`, the design section, ADR 0021.
-- Pure logic in `godot/ShooterCore/Thieves/` (Godot-free, tested in `godot/ShooterCore.Tests`); server in `godot/shooter/Net/Server/NetServer.Thieves*.cs`; client in `NetClient.Thieves*.cs`.
+- Pure logic in `godot/ShooterCore/Thieves/` (Godot-free, tested in `godot/ShooterCore.Tests`); server in `godot/shooter/Net/Server/Thieves/`; client in `NetClient.Thieves*.cs`.
 - Every state machine: enum + `StateMachineSpec<T>` + `StateMachine<T>`, then regenerate `docs/state-machines.md`. No bool/timer flag clusters.
 - Every number in `godot/shooter/data/thieves.json` (`ThievesFile : IVersioned`, registered in `GameData.cs`, handed over in `Shooter.cs`).
 - Wire change: bump `Wire.ProtocolVersion` (`godot/ShooterCore/Net/Wire.cs`) and add the comment line. Free: world entity wire types 57+ (54 Gang member, 55 Raid van, 56 lying Loot), `EventKind` 233-235 and 237-239 (232 and 236 are used).

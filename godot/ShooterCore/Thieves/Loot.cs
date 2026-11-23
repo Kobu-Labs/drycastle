@@ -37,7 +37,7 @@ public readonly record struct StealTarget(LootKind Kind, int Id, Vector3 Positio
 
 /// <summary>
 /// One kind of Loot as the world has it: the things of that kind, which of them a Thief may take now, what taking one does and what putting it back does. A new kind of Loot is one class that
-/// implements this (in its own file) and one line that registers it (<c>NetServer.Thieves.Loot.cs</c>, <see cref="LootRegistry.Register"/>); the Thief states, lying Loot, the van's count, the
+/// implements this (in its own file) and one line that registers it (<c>Net/Server/Thieves/LootServer.cs</c>, <see cref="LootRegistry.Register"/>); the Thief states, lying Loot, the van's count, the
 /// return and the reset are all generic and need no change. Ids are the source's own and stable while the thing exists. Godot-free: the server's adapter gives the source the world it needs.
 /// <para>
 /// Claiming (one Thief per target) is the registry's, not the source's: <see cref="TryFind"/> and <see cref="FreeNear"/> only say what is free in the world.
