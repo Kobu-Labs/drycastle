@@ -30,7 +30,7 @@ public partial class NetClient
     {
         if (Vehicles == null || v.Kind >= Vehicles.Vehicles.Count) return null;
         var def = Vehicles.Vehicles[v.Kind];
-        return CockpitRig.For(def.Id, v.Node, GlassHost(v.Node), SeatEye.For(def, 0));
+        return CockpitRig.For(def.Id, v.Node, GlassClient.HostOf(v.Node), SeatEye.For(def, 0));
     }
 
     /// <summary>The seat of <paramref name="v"/> the local player sits in (the driver is the vehicle's record, the rest the seat state), or -1.</summary>
@@ -75,7 +75,7 @@ public partial class NetClient
         {
             EndCockpit();
             _rig = CockpitRig.Make(spec);
-            GlassHost(v.Node).AddChild(_rig); // on the body, in the vehicle's frame (docs/standards/car-design.md 0): the rig and the eye lean with the hull
+            GlassClient.HostOf(v.Node).AddChild(_rig); // on the body, in the vehicle's frame (docs/standards/car-design.md 0): the rig and the eye lean with the hull
             _rig.HideModel(v.Node, spec.Hide);
             spec.OnModel?.Invoke(_rig, v.Node);
             _rigCar = v;
@@ -90,7 +90,7 @@ public partial class NetClient
         // a helicopter's view tilts with the airframe; with reduce motion it stays level and the rig tilts round it (a ground vehicle's is always level)
         var frame = flies && !GameSettings.Current.ReduceMotion ? v.Node.GlobalBasis : Basis.FromEuler(new Vector3(0, rot.Y, 0));
         var e = SeatEye.For(def, seat);
-        _me.Cockpit(p, GlassHost(v.Node).GlobalTransform * new Vector3(e.X, e.Y, e.Z), frame, rot.Y, lookTurnsWithVehicle: !flies);
+        _me.Cockpit(p, GlassClient.HostOf(v.Node).GlobalTransform * new Vector3(e.X, e.Y, e.Z), frame, rot.Y, lookTurnsWithVehicle: !flies);
         ShowSelfInCar(v, seat, viewerHides: true); // the own figure is not drawn for the viewer (the rig has the hands), its shadow stays
         return true;
     }

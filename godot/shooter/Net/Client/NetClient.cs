@@ -137,6 +137,9 @@ public partial class NetClient : Node
     CitizensClient _citizens = null!;
     StatusClient _status = null!;
     ThievesClient _thieves = null!;
+    GlassClient _glass = null!;
+    /// <summary>glass.json (set by the host); the defaults when it sets none.</summary>
+    public GlassConfig GlassData = new();
     MineralsClient _minerals = null!;
     HuntsClient _hunts = null!;
     ScreensClient _screens = null!;
@@ -192,6 +195,7 @@ public partial class NetClient : Node
         _streaks.Ended += OnStreakEnded;
         _streaks.OwnerDied += ClearStreakViewsOnDeath;
         _streaks.Gunner.HintsChanged += () => _gunDirty = true;
+        _glass = new GlassClient(Ctx, GlassData);
         Camo = new CamoClient(Ctx, CamoData, DressCorpses);
         _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
         _bot = MakeBot();
@@ -245,7 +249,7 @@ public partial class NetClient : Node
         foreach (var r in _rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         _rockets.Clear();
         Ctx.Cars.Clear(); _flights.Clear(); _pilot = null; _drives.Clear(); _drive = null; // the probes are under Owned and go with them
-        GlassTeardown();
+        _glass.Teardown();
         if (_me != null && GodotObject.IsInstanceValid(_me)) _me.QueueFree();
         _me = null;
         FreeOwned();

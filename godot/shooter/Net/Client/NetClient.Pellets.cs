@@ -36,7 +36,7 @@ public partial class NetClient
             if (VehicleAlong(from, ray, MathF.Min(range, worldDist), out var car, out var vh))
             {
                 // a pellet that stops on a car: the hole rides the car's node, the spark is where the car is drawn
-                BulletHoles.PlaceOn(Owned, GlassHost(car.Node), G(vh.Local), G(vh.LocalNormal));
+                BulletHoles.PlaceOn(Owned, GlassClient.HostOf(car.Node), G(vh.Local), G(vh.LocalNormal));
                 var vat = ToWorld(car, G(vh.Local));
                 ShotFx.Spark(Owned, vat, car.Node.GlobalTransform.Basis * G(vh.LocalNormal));
                 first ??= vat;

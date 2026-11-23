@@ -41,7 +41,7 @@ public partial class NetClient
             if (ShotFx.Enabled && GenericWheels(Vehicles.Vehicles[v.Kind])) v.Roller = VehicleWheels.Find(v.Node);
             if (Vehicles.Vehicles[v.Kind].Trailer != null) v.Trailer = MakeTrailerView(v);
             Ctx.Cars.Add(v);
-            ShowGlassOf(id); // panes whose state arrived before the vehicle was drawn (ADR 0007)
+            _glass.ShowOf(id); // panes whose state arrived before the vehicle was drawn (ADR 0007)
         }
         v.Solid ??= VehicleCollider.Make(Owned, Vehicles.Vehicles[v.Kind]);
         v.Lamps ??= ShotFx.Enabled ? CarLights.Attach(v.Node, Vehicles!.Vehicles[v.Kind]) : null;
@@ -99,7 +99,7 @@ public partial class NetClient
         // a live record after the blast means the server returned it (30 s later): it is shown again, and only then
         if (v.Destroyed) { v.Destroyed = false; v.Exploded = false; v.Node.Visible = true; }
         if (!ShotFx.Enabled) return;
-        if (stage > 0 && v.Smoke == null && Vehicles != null) v.Smoke = VehicleFx.Damage.Make(GlassHost(v.Node), Vehicles.Vehicles[v.Kind]); // under the hull (in its rest frame): the smoke sways with the body
+        if (stage > 0 && v.Smoke == null && Vehicles != null) v.Smoke = VehicleFx.Damage.Make(GlassClient.HostOf(v.Node), Vehicles.Vehicles[v.Kind]); // under the hull (in its rest frame): the smoke sways with the body
         v.Smoke?.Set(stage);
     }
 
@@ -302,7 +302,7 @@ public partial class NetClient
             if (def.GlassRects.Count > 0 || def.OpenSideRects.Count > 0)
             {
                 var lo = GlassRules.ToVehicle(NV(from), HullFeetOf(v), v.Yaw, pitch, roll); var ld = GlassRules.DirToVehicle(NV(dir), v.Yaw, pitch, roll);
-                var way = GlassRules.Through(def.GlassRects, def.OpenSideRects, lo, ld, h.Distance, GlassData.VehicleReach);
+                var way = GlassRules.Through(def.GlassRects, def.OpenSideRects, lo, ld, h.Distance, _glass.Data.VehicleReach);
                 if (way.Enters)
                 {
                     if (way.Leaves) continue; // through the glass and out again
@@ -330,7 +330,7 @@ public partial class NetClient
         if (len < 0.05f) return;
         if (VehicleAlong(from, d / len, len + 0.5f, out var car, out var hit) && hit.Distance >= len - 0.5f)
         {
-            BulletHoles.PlaceOn(Owned, GlassHost(car.Node), G(hit.Local), G(hit.LocalNormal));
+            BulletHoles.PlaceOn(Owned, GlassClient.HostOf(car.Node), G(hit.Local), G(hit.LocalNormal));
             return;
         }
         BulletHoles.PlaceFromShot(Owned, from, end);

@@ -151,10 +151,10 @@ public partial class NetClient
                 Ctx.Cars.Sounds.OnCrash(crash.Car, crash.Sound);
                 break;
             case EventKind.GlassPane when GlassCodec.DecodePane(payload) is { } gp:
-                OnGlassPane(gp);
+                _glass.OnPane(gp);
                 break;
             case EventKind.GlassSync when GlassCodec.DecodeSync(payload) is { } gsync:
-                OnGlassSync(gsync);
+                _glass.OnSync(gsync);
                 break;
             case EventKind.HuntShot when HuntShot.Decode(payload) is { } hs:
                 _hunts.OnShot(hs);
