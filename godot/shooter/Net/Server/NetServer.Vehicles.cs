@@ -365,7 +365,7 @@ public partial class NetServer
         var dir = new Vector3(d.X, d.Y, d.Z);
         List<GlassCross>? crossed = null;
         var wall = BulletHit(eye, dir, def.Range, out var shotCar, ref crossed, solid: car); // the gunner's own car stops the round as before: its glass is not shot out from the roof
-        var targets = LiveTargets().Where(t => car.Seat.SeatOf(t.Id) < 0 && !IsArmouredRider(t)).ToList();
+        var targets = _targets.Live().Where(t => car.Seat.SeatOf(t.Id) < 0 && !IsArmouredRider(t)).ToList();
         // riders whose seat is in the open (an amphibious transport's) are reached through their hull, as by every weapon
         var (riders, pastHull) = ExposedGunnerBehind(shotCar == car ? null : shotCar, eye, dir, def.Range, targets, seatsOnly: true);
         var hit = GunnerCover.Raycast(N(eye), d, def.Range, wall, targets, c.Id, riders, pastHull);
@@ -623,7 +623,7 @@ public partial class NetServer
             ClearPush(o.Id, dealt);
             if (o.Car == car) LeaveSeat(o, true); // survived (spawn protection): thrown out, the seat is gone
         }
-        foreach (var t in LiveTargets())
+        foreach (var t in _targets.Live())
         {
             if (car.Seat.SeatOf(t.Id) >= 0) continue;
             var dist = HitMath.DistanceToBody(N(at), t);

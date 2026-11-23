@@ -378,10 +378,10 @@ public partial class NetServer
     void StepFireballs(float dt)
     {
         if (_balls.Count == 0) return;
-        var all = LiveTargets();
+        var all = _targets.Live();
         var players = all.Where(t => _byId.ContainsKey(t.Id)).ToList();
         var npcs = all.Where(t => !_byId.ContainsKey(t.Id) && !DemonRules.IsHitId(t.Id) && t.Id != BigfootRules.TargetId).ToList(); // citizens, the Gang, workers, animals, dummies: a fireball hits them as a shot does
-        ReturnTargets(all);
+        _targets.Return(all);
         var struck = new List<HitTarget>(players.Count + npcs.Count);
         struck.AddRange(players); struck.AddRange(npcs);
         for (var i = _balls.Count - 1; i >= 0; i--)

@@ -33,7 +33,7 @@ public partial class NetServer
     /// </summary>
     void RunOverTargets(in RunOverSweep m, Func<ushort, bool>? spare = null)
     {
-        var targets = LiveTargets();
+        var targets = _targets.Live();
         try
         {
             foreach (var t in targets)
@@ -50,7 +50,7 @@ public partial class NetServer
                 RunOverOne(m, cls, t, animal);
             }
         }
-        finally { ReturnTargets(targets); }
+        finally { _targets.Return(targets); }
     }
 
     /// <summary>The class of a live target's hit id, null for the Bigfoot and what has no row (<see cref="CollisionRules.ClassOfHitId"/>).</summary>

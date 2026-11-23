@@ -146,7 +146,7 @@ public partial class NetServer
         var rtt = RttOf(c);
         var back = BackTicksOf(c);
         var resolveUs = _lagResolveUs;
-        var cur = LiveTargets();
+        var cur = _targets.Live();
         var rewoundAll = RewoundTargets(c);
         var rewound = new List<HitTarget>(rewoundAll.Count);
         foreach (var t in rewoundAll) if (t.Id != c.Id) rewound.Add(t);

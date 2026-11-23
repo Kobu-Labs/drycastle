@@ -26,7 +26,7 @@ public partial class NetServer
         var range = w.Range > 0 ? w.Range : MaxShotRange;
 
         // world and vehicle stops per pellet (one physics ray each; player bodies are excluded)
-        var targets = aimed ?? LiveTargets();
+        var targets = aimed ?? _targets.Live();
         var walls = new List<float>(dirs.Length);
         var cars = new List<ServerCar?>(dirs.Length);
         var dirsG = new List<Vector3>(dirs.Length);

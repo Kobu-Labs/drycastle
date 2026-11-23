@@ -124,7 +124,7 @@ public partial class NetServer
     List<HitTarget> ShotTargets(ServerClient c)
     {
         var t0 = _perf != null ? Stopwatch.GetTimestamp() : 0L;
-        var list = NoLagComp || c.Peer == null ? LiveTargets() : RewoundTargets(c);
+        var list = NoLagComp || c.Peer == null ? _targets.Live() : RewoundTargets(c);
         var armT = Prof.Begin(Prof.S.TargetsArmoured);
         DropArmoured(list); // no bullet or pellet reaches an armoured seat (ADR 0035)
         Prof.End(Prof.S.TargetsArmoured, armT);
@@ -140,7 +140,7 @@ public partial class NetServer
     {
         SyncLife(c);
         var view = LagComp.ViewTick(_tick, BackTicksOf(c), c.LifeStart);
-        var list = _targetLists.Count > 0 ? _targetLists.Pop() : new List<HitTarget>(_byId.Count + 4); // the caller's until ReturnTargets, as LiveTargets'
+        var list = _targets.Rent(); // the caller's until it gives it back, as with Live
         foreach (var o in _byId.Values)
         {
             if (_match.Get(o.Id)?.Life != PlayerLife.Alive) continue;
@@ -149,7 +149,7 @@ public partial class NetServer
             SyncLife(o);
             list.Add(o.Car == null && LagComp.TryTargetAt(o.Poses, view, o.LifeStart, out var past) ? past with { HeadGuarded = now.HeadGuarded } : now); // what a player wears is not rewound, only where they stood
         }
-        var dummies = _match.Targets.All; // living target dummies stand where they stand (not rewound); an index loop, as in LiveTargets
+        var dummies = _match.Targets.All; // living target dummies stand where they stand (not rewound); an index loop, as in the other sources
         for (var i = 0; i < dummies.Count; i++)
         {
             var d = dummies[i];

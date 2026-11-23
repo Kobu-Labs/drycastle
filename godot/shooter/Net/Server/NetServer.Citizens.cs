@@ -12,7 +12,7 @@ namespace Drycastle.Shooter.Net.Server;
 /// <summary>
 /// Citizens of the Holy Mass on the server: world entities (type 51) with a pure brain (<see cref="Citizen"/>), run by a
 /// <see cref="CitizenCrowd"/>. They are not bots: they are not in the match roster, and the bots never see them (<see cref="_botContacts"/>
-/// holds players only). They are hit targets: <see cref="LiveTargets"/> lists the living ones under ids of their own
+/// holds players only). They are hit targets: <see cref="TargetBook.Live"/> lists the living ones under ids of their own
 /// (<see cref="CitizenRules.FirstHitId"/> up), so every weapon path reaches them, and <see cref="MatchSim.ApplyDamage"/> hands those ids to the crowd.
 /// A kill scores nothing and is not in the kill feed; <see cref="CitizenKilled"/> reports it to the event.
 /// <para>

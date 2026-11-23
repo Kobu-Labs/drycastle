@@ -40,7 +40,7 @@ public partial class NetServer
         BroadcastEvent(EventKind.Moab, MoabEvents.Encode(new MoabInfo(phase, owner, at, seed, (float)_elapsed)));
         BroadcastImpact(at, ImpactSize.Plume); // the blast's plume on the ground (ticket #154)
 
-        var victims = MoabStreak.Victims(LiveTargets().Select(t => t.Id), owner).ToList();
+        var victims = MoabStreak.Victims(_targets.Live().Select(t => t.Id), owner).ToList();
         foreach (var id in victims)
         {
             if (id == BigfootRules.TargetId) DealBigfoot(owner, MoabWeapon); // the Bigfoot takes it as an explosive hit, not as a kill (issue #264)

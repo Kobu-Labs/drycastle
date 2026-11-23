@@ -71,10 +71,10 @@ public partial class NetServer
     {
         // one buffer for every helper: its gunner reads the enemies inside its own tick and keeps none (HelicopterGunner)
         _helperEnemies.Clear();
-        var targets = LiveTargets();
+        var targets = _targets.Live();
         foreach (var t in targets)
             if (BotEnemies.IsEnemy(_match, owner, t.Id) && !NonEnemyTargets.IsNonEnemy(t.Id)) _helperEnemies.Add(new HelperCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM, t.Stance));
-        ReturnTargets(targets);
+        _targets.Return(targets);
         return _helperEnemies;
     }
 

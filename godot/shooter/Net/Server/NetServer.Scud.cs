@@ -367,7 +367,7 @@ public partial class NetServer
         BlastGlass(at + Vector3.Up * 1f, (float)b.GlassRadiusM, 1_000_000f); // every pane in reach shatters: the centre damage is far above any pane's hit points
 
         var killed = 0; var hurt = 0;
-        var targets = LiveTargets();
+        var targets = _targets.Live();
         foreach (var t in targets)
         {
             var centre = HitMath.Centre(t);
@@ -402,7 +402,7 @@ public partial class NetServer
             if (dealt == DamageResult.Killed) killed++; else hurt++;
             if (dealt != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v)) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z) * 0.3f);
         }
-        ReturnTargets(targets);
+        _targets.Return(targets);
 
         var destroyed = 0;
         foreach (var car in _fleet.Cars.ToList())

@@ -113,6 +113,7 @@ public partial class NetServer : Node
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
         _ctx = new ServerContext(_match, _byId, _clients.Values, () => _elapsed, () => _tick, BroadcastEvent, Send, (c, chan, packet) => { if (c.Peer is { } peer) Tx(peer, chan, packet, 0); });
+        RegisterTargetSources();
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
         _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, CitizenHits, TableSeating());
         _intel = new IntelServer(_ctx);

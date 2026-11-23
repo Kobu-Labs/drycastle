@@ -67,7 +67,7 @@ public partial class NetServer
         // the world without the gunner's own vehicle
         List<GlassCross>? crossed = null;
         var wall = BulletHit(from, dir, gun.Range, out var shotCar, ref crossed, car);
-        var targets = LiveTargets().Where(t => car.Seat.SeatOf(t.Id) < 0 && !IsArmouredRider(t)).ToList();
+        var targets = _targets.Live().Where(t => car.Seat.SeatOf(t.Id) < 0 && !IsArmouredRider(t)).ToList();
         var (exposedGunner, pastHull) = ExposedGunnerBehind(shotCar, from, dir, gun.Range, targets);
         var hit = GunnerCover.Raycast(muzzle, d, gun.Range, wall, targets, c.Id, exposedGunner, pastHull);
         var end = from + dir * (hit?.Distance ?? Math.Min(wall, gun.Range));

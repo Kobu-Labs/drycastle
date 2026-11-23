@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Match;
@@ -17,48 +18,47 @@ public partial class NetServer
 
     static NVec3 N(Vector3 v) => new(v.X, v.Y, v.Z);
 
-    /// <summary>Lists that <see cref="LiveTargets"/> handed out and their callers gave back (<see cref="ReturnTargets"/>), for the next call to reuse.</summary>
-    readonly Stack<List<HitTarget>> _targetLists = new();
+    /// <summary>What a shot can hit, kind by kind in the order the list has them (<see cref="TargetBook"/>); built once in <c>_Ready</c>.</summary>
+    TargetBook _targets = null!;
 
-    /// <summary>
-    /// The live targets now, in a list the caller owns until it gives it back with <see cref="ReturnTargets"/>. Each call gets its own list on purpose:
-    /// callers nest (an explosion can detonate a car, which explodes again) and each holds its list while it iterates, so one shared buffer would be
-    /// cleared under them. A list that is not given back only costs an allocation.
-    /// </summary>
-    List<HitTarget> LiveTargets()
+    void RegisterTargetSources()
     {
-        var profT = Prof.Begin(Prof.S.LiveTargets);
-        var list = _targetLists.Count > 0 ? _targetLists.Pop() : new List<HitTarget>(_byId.Count + 4);
+        _targets = new TargetBook(() => _byId.Count);
+        _targets.AddSource(AddPlayerTargets);
+        _targets.AddSource(AddDummyTargets);
+        _targets.AddSource(list => { if (BigfootTarget() is { } bigfoot) list.Add(bigfoot); }); // the Bigfoot is a hit target like a player (issue #264)
+        _targets.AddSource(list => _crowd?.AddTargets(list)); // the citizens of the Holy Mass
+        _targets.AddSource(list => AddGangTargets(list)); // the Gang members of the Thieves event
+        _targets.AddSource(list => AddVanTargets(list)); // and their Raid vans
+        _targets.AddSource(AddAnimalTargets);
+        _targets.AddSource(list => _rozhlas.AddTargets(list)); // the workers of the Urad
+        _targets.AddSource(AddDemonTarget);
+    }
+
+    void AddPlayerTargets(List<HitTarget> list)
+    {
         var partT = Prof.Begin(Prof.S.TargetsPlayers);
         foreach (var o in _byId.Values)
             if (_match.Get(o.Id)?.Life == PlayerLife.Alive && !_pins.ContainsKey(o.Id)) list.Add(HitTargetOf(o)); // a pinned player is under the demon and untouchable: not a target, so no shot stops on them
         Prof.End(Prof.S.TargetsPlayers, partT);
+    }
+
+    void AddDummyTargets(List<HitTarget> list)
+    {
         var dummies = _match.Targets.All; // living target dummies: an index loop, no enumerator object
         for (var i = 0; i < dummies.Count; i++)
         {
             var d = dummies[i];
             if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
         }
-        if (BigfootTarget() is { } bigfoot) list.Add(bigfoot); // the Bigfoot is a hit target like a player (issue #264)
-        _crowd?.AddTargets(list); // the citizens of the Holy Mass
-        AddGangTargets(list); // the Gang members of the Thieves event
-        AddVanTargets(list); // and their Raid vans
-        partT = Prof.Begin(Prof.S.TargetsAnimals);
+    }
+
+    void AddAnimalTargets(List<HitTarget> list)
+    {
+        var partT = Prof.Begin(Prof.S.TargetsAnimals);
         AddPetTargets(list);
         AddWildlifeTargets(list);
         Prof.End(Prof.S.TargetsAnimals, partT);
-        _rozhlas.AddTargets(list); // the workers of the Urad
-        AddDemonTarget(list);
-        PerfCounters.LiveTargetsCalls++; PerfCounters.LiveTargetsElems += list.Count;
-        Prof.End(Prof.S.LiveTargets, profT);
-        return list;
-    }
-
-    /// <summary>Gives a list from <see cref="LiveTargets"/> back, once nothing iterates it any more.</summary>
-    void ReturnTargets(List<HitTarget> list)
-    {
-        list.Clear();
-        _targetLists.Push(list);
     }
 
     /// <summary>

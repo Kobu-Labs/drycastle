@@ -46,7 +46,7 @@ public partial class NetServer
     {
         List<HitTarget>? pooled = null;
         try { FireWeaponWith(c, i, shot, seatCar, ref pooled); }
-        finally { if (pooled != null) ReturnTargets(pooled); } // the shot is resolved: its target list goes back for the next one (it was a new list of every target per shot)
+        finally { if (pooled != null) _targets.Return(pooled); } // the shot is resolved: its target list goes back for the next one (it was a new list of every target per shot)
     }
 
     void FireWeaponWith(ServerClient c, in NetInput i, FireOutcome shot, ServerCar? seatCar, ref List<HitTarget>? pooled)
@@ -239,11 +239,11 @@ public partial class NetServer
             // the vehicles a rocket meets are where its shooter's screen showed them, this step (B-02); the players are where they stand (ADR 0013)
             _vehicleView = ViewOf(r.ViewBack, r.ViewLife);
             var wall = WorldHit(r.Pos, r.Dir, len, out var hitCar, own);
-            var all = LiveTargets();
+            var all = _targets.Live();
             var targets = own != null ? RiderRules.NotAboard(all, own.Seat) : all;
             var (exposedGunner, pastHull) = ExposedGunnerBehind(hitCar, r.Pos, r.Dir, len, targets, skip: own);
             var step = RocketFlight.Step(N(r.Pos), N(r.Dir), r.Age, speed, life, dt, wall, targets, r.Owner, exposedGunner, pastHull);
-            ReturnTargets(all); // the step is done with the targets (NotAboard copied its own)
+            _targets.Return(all); // the step is done with the targets (NotAboard copied its own)
             _vehicleView = null;
             switch (step.Outcome)
             {
@@ -304,7 +304,7 @@ public partial class NetServer
         BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(r.Id, r.Owner, r.Weapon, N(pos), w.Splash?.Radius ?? 0, w.Splash?.WaveSpeed ?? 0)));
         BroadcastImpact(N(pos), ImpactSize.Plume, body: direct != null && directCar == null, vehicle: directCar != null); // rockets throw up a plume (ticket #154)
         var own = RocketCar(r);
-        var targets = LiveTargets();
+        var targets = _targets.Live();
         foreach (var t in targets)
         {
             var isDirect = direct == t.Id;
@@ -325,6 +325,6 @@ public partial class NetServer
             if (isDirect) _smoke.DirectHits++; else if (self) _smoke.SelfHits++; else _smoke.SplashHits++;
             if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) { v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z)); _smoke.Knocked++; }
         }
-        ReturnTargets(targets);
+        _targets.Return(targets);
     }
 }

@@ -138,7 +138,7 @@ public partial class NetServer
         }
 
         var wall = WorldWall(new Vector3(shot.Origin.X, shot.Origin.Y, shot.Origin.Z), new Vector3(shot.Direction.X, shot.Direction.Y, shot.Direction.Z), def.RangeM);
-        var targets = LiveTargets();
+        var targets = _targets.Live();
         var route = GunshipRouting.Route(def, shot.Origin, shot.Direction, wall, targets, owner, GunshipVehicles(targets), Vehicles?.BulletDamageMultiplier ?? 0f);
         var end = shot.Origin + shot.Direction * route.Distance;
         var isShell = def.Kind == GunshipWeaponKind.Shell;
@@ -164,7 +164,7 @@ public partial class NetServer
     /// </summary>
     void DetonateRound(ushort owner, GunshipWeaponDef def, byte credit, GunshipRoute route, NVec3 end)
     {
-        var targets = LiveTargets();
+        var targets = _targets.Live();
         var kill = false;
         _gunFxOwner = owner;
         if (def.Splash != null && (def.Kind == GunshipWeaponKind.Shell || route.Impact != GunshipImpact.None))

@@ -38,7 +38,7 @@ public partial class NetServer
         BlastGlass(pos, radius);
         BroadcastEvent(EventKind.MissileBlast, MissileCodec.EncodeBlast(i.Id, i.Owner, i.Position, radius));
         BroadcastImpact(N(pos), ImpactSize.Plume, vehicle: i.Car != null); // ticket #154: the missile's plume
-        var targets = LiveTargets();
+        var targets = _targets.Live();
         foreach (var t in targets)
         {
             var isDirect = i.Victim == t.Id;
@@ -57,7 +57,7 @@ public partial class NetServer
             if (res == DamageResult.Ignored) continue; // spawn protected: neither damage nor knockback
             if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
         }
-        ReturnTargets(targets);
+        _targets.Return(targets);
     }
 
     /// <summary>The streak's view of the server: the match's entities, the sweeps and the blast.</summary>
@@ -75,7 +75,7 @@ public partial class NetServer
             return d;
         }
 
-        public IEnumerable<HitTarget> Targets() => _s.LiveTargets();
+        public IEnumerable<HitTarget> Targets() => _s._targets.Live();
 
         public float OwnerYaw(ushort owner) => _s._byId.TryGetValue(owner, out var c) ? c.Body.Yaw : 0f;
 

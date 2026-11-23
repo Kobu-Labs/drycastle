@@ -15,7 +15,7 @@ namespace Drycastle.Shooter.Net.Server;
 /// (<see cref="GangMember"/>), owned by <see cref="ThiefGang"/>s that a <see cref="GangRoster"/> keeps. Like the citizens they are not bots, not in the roster and
 /// not seen by the bots; unlike them they are enemies: turrets and killstreak weapons shoot them (they are not in <see cref="NonEnemyTargets"/>).
 /// <para>
-/// They are hit targets: <see cref="LiveTargets"/> lists the living ones under ids of their own (<see cref="GangRules.FirstHitId"/> up), <see cref="RewoundTargets"/> lists them
+/// They are hit targets: <see cref="TargetBook.Live"/> lists the living ones under ids of their own (<see cref="GangRules.FirstHitId"/> up), <see cref="RewoundTargets"/> lists them
 /// where the shooter's screen showed them (they run, so they have a pose ring each, like the Bigfoot: ADR 0013), and <see cref="MatchSim.ApplyDamage"/> hands those ids to
 /// the roster, which counts the hit (a Hit count, not hit points). A kill pays a little XP and is not in the kill feed. A vehicle runs one over = dead
 /// (<see cref="RunOverTargets"/>). A member's blow reaches a player through <see cref="Deal"/> under <see cref="SpecialWeapons.Gang"/>.

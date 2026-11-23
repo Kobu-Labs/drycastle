@@ -10,7 +10,7 @@ namespace Drycastle.Shooter.Net.Server;
 /// <summary>
 /// Pets on the server (GLOSSARY "Pet", "Pen"): animals (wire type 50) that live in one property group and never leave it, run by a
 /// <see cref="PetKeeper"/>. Each round, at its start, the keeper gives the property groups of the map their pets by <c>pets.json</c>; no map or an
-/// arena mode means no pets. A pet is a hit target like a citizen: <see cref="LiveTargets"/> lists the living ones under ids of their own
+/// arena mode means no pets. A pet is a hit target like a citizen: <see cref="TargetBook.Live"/> lists the living ones under ids of their own
 /// (<see cref="PetRules.FirstHitId"/> up) and <see cref="MatchSim.ApplyDamage"/> hands those ids to the keeper. A kill scores nothing and is not in the
 /// kill feed. Pets leave poop (wire type 53) at times; it is cosmetic.
 /// <para>

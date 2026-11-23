@@ -54,11 +54,11 @@ public partial class NetServer
     {
         // one buffer for every turret: a turret reads its enemies inside its own tick and keeps none (TurretEntity)
         _turretEnemies.Clear();
-        var targets = LiveTargets();
+        var targets = _targets.Live();
         foreach (var t in targets)
             if (BotEnemies.IsEnemy(_match, owner, t.Id) && !NonEnemyTargets.IsNonEnemy(t.Id)) _turretEnemies.Add( // citizens are no enemy: automatic guns leave them alone
                 new TurretCandidate(t.Id, t.Feet + NVec3.UnitY * TurretAimHeightM));
-        ReturnTargets(targets);
+        _targets.Return(targets);
         return _turretEnemies;
     }
 

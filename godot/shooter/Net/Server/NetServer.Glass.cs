@@ -122,7 +122,7 @@ public partial class NetServer
 
     /// <summary>
     /// Takes out of <paramref name="targets"/> the riders of armoured seats (ADR 0035): no bullet, pellet or mounted-gun round reaches them. Their hit
-    /// targets stay in the lists blasts read (<see cref="LiveTargets"/>), which hurt them as every body in range.
+    /// targets stay in the lists blasts read (<see cref="TargetBook.Live"/>), which hurt them as every body in range.
     /// </summary>
     void DropArmoured(List<HitTarget> targets) => targets.RemoveAll(IsArmouredRider);
 

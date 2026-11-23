@@ -344,7 +344,7 @@ public partial class NetServer
         if (car.State.Speed < Harvester.CutMinSpeedMps) return;
         var attacker = HarvesterAttacker(car);
         var pos = N(car.GlobalPosition);
-        var targets = LiveTargets();
+        var targets = _targets.Live();
         try
         {
             foreach (var t in targets)
@@ -359,7 +359,7 @@ public partial class NetServer
                 else _harvVictims.Remove(t.Id);
             }
         }
-        finally { ReturnTargets(targets); }
+        finally { _targets.Return(targets); }
     }
 
     // ---- the corpse in the machine ----
