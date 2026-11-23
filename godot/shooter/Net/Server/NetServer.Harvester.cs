@@ -176,9 +176,9 @@ public partial class NetServer
         var id = _ids.Allocate(i => _clients.Values.Any(o => o.Id == i) || _byId.ContainsKey(i));
         if (id == 0) return null;
         var c = new ServerClient { Id = id, Name = "Bot Harvester", ConnectedAt = _elapsed, Brain = new BotBrain(BotTuning.Default, id), HarvesterDriver = true };
-        var profile = GuestProfile();
+        var profile = _profiles.NewGuest();
         profile.Active = 0;
-        AttachProfile(c, profile);
+        _profiles.Attach(c, profile);
         Join(c);
         return c;
     }

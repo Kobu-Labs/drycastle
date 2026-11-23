@@ -18,9 +18,6 @@ namespace Drycastle.Shooter.Net.Server;
 /// </summary>
 public partial class NetServer
 {
-    Dictionary<string, int>? _perkLevels;
-    IReadOnlyDictionary<string, int> PerkLevels => _perkLevels ??= Perks.Perks.ToDictionary(p => p.Id, p => p.UnlockLevel);
-
     /// <summary>The active loadout becomes the player's perk and hotbar. Runs at join and at every spawn, so a change made while alive applies from the next spawn.</summary>
     void ApplyLoadout(ServerClient c)
     {

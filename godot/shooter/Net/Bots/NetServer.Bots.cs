@@ -235,7 +235,7 @@ public partial class NetServer
         var taken = _byId.Values.Select(c => c.Name).ToHashSet();
         var name = BotNames.Select(n => "Bot " + n).FirstOrDefault(n => !taken.Contains(n)) ?? $"Bot {id}";
         var c = new ServerClient { Id = id, Name = name, ConnectedAt = _elapsed, Brain = new BotBrain(BotTuning.Default, id) };
-        var profile = GuestProfile();
+        var profile = _profiles.NewGuest();
         profile.Active = _rng.Next(Loadout.SlotCount);
         // a share of the bots carries the RPG instead of a pistol, whatever level gates it for players (#348)
         if (RpgSlot is > 0 and var rpg && _rng.NextDouble() < BotTuning.Default.LauncherShare)
@@ -243,7 +243,7 @@ public partial class NetServer
             c.BotLauncher = true;
             for (var i = 0; i < profile.Loadouts.Length; i++) profile.Loadouts[i] = profile.Loadouts[i] with { SecondaryWeapon = Weapons.Weapons[rpg - 1].Id };
         }
-        AttachProfile(c, profile);
+        _profiles.Attach(c, profile);
         Join(c);
     }
 

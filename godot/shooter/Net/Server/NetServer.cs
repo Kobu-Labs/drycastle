@@ -5,9 +5,11 @@ using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.ChatRoom;
 using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
+using Drycastle.Shooter.Net.Server.Profiles;
 using Drycastle.Shooter.Net.Server.Scenery;
 using Drycastle.Shooter.Net.Server.VillageRadio;
 using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Camo;
 using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Corpses;
@@ -59,6 +61,10 @@ public partial class NetServer : Node
     public NetSim? Sim;
     /// <summary>Quit after this many seconds and report whether two players were seen moving (smoke test); 0 = run forever.</summary>
     public double QuitAfter;
+    /// <summary>Dev mode (issue #149, <c>--unlock-all</c>): every item unlocked, showcase starter loadouts, nothing of it saved. Set by the host.</summary>
+    public bool UnlockAll;
+    /// <summary>camo.json as loaded by the host (set in <c>Shooter.BuildServer</c>).</summary>
+    public CamoFile CamoData = null!;
     /// <summary>Progression store (ADR 0003); null = every player is a guest. Set by the host, which owns and disposes it.</summary>
     public IProgressionStore? Progression;
     /// <summary>perks.json: the perk of each loadout and its modifiers.</summary>
@@ -78,6 +84,7 @@ public partial class NetServer : Node
     GarageServer _garage = null!;
     IntelServer _intel = null!;
     ChatServer _chat = null!;
+    ProfileServer _profiles = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -118,6 +125,7 @@ public partial class NetServer : Node
         _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, CitizenHits, TableSeating());
         _intel = new IntelServer(_ctx);
         _chat = new ChatServer(_ctx, admin => new ChatContext(admin, Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList(), CompanionData.Companions.Select(i => i.Id).ToList()), AdminTokens, AdminAll);
+        _profiles = new ProfileServer(_ctx, Progression, UnlockAll, Weapons, Perks, CamoData, Killstreaks, Join, OnProfileAttached, AllowSave);
         RegisterChatCommands();
         _garage = new GarageServer(_ctx, ArenaMode, MapDir, _fleet.Cars, () => Vehicles);
         _minerals = new MineralsServer(_ctx, Progression, () => _wildlife?.Drops ?? Array.Empty<MineralDrop>());
@@ -213,8 +221,7 @@ public partial class NetServer : Node
         foreach (var cl in _clients.Values) cl.PacketsThisTick = 0;
         Poll();
         PerfLap(ServerPerf.Ph.Poll);
-        CompleteProfileLoads();
-        CompleteSaves();
+        _profiles.Tick();
         HuntTick();
         _minerals.Tick(Spawns.Count > 0);
         DropSilentPeers();
@@ -366,7 +373,7 @@ public partial class NetServer : Node
         else if (m is EventMsg { Kind: >= (byte)EventKind.EquipItem and <= (byte)EventKind.TakeGroundItem } ir) OnItemRequest(c, (EventKind)ir.Kind, ir.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SetZero } sz) { if (c.Joined && BulletDrop.TryDecodeZero(sz.Payload, out var zi, out var zm) && zi < Weapons.Weapons.Count && BulletDrop.HasDrop(Weapons.Weapons[zi])) c.Zero.Set(zi, Weapons.Weapons[zi], zm); }
         else if (m is EventMsg { Kind: (byte)EventKind.RaiseBinoculars } rb) { if (c.Joined && Binoculars.TryDecodeRaise(rb.Payload, out var up)) SetBinoculars(c, up && CarriesBinoculars(c)); }
-        else if (m is EventMsg { Kind: (byte)EventKind.Redeploy } rd && c.Joined) OnRedeploy(c, rd.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.Redeploy } rd && c.Joined) _profiles.OnRedeploy(c, rd.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.MineralPick } mp && c.Joined) _minerals.OnPick(c, mp.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.CompanionPick } cp && c.Joined) OnCompanionPick(c, cp.Payload);
@@ -380,7 +387,7 @@ public partial class NetServer : Node
         else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) OnHuntRequest(c, hq);
         else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) _chat.OnSend(c, cs.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.ClientReport } cr) { if (c.Joined) OnClientReport(c, cr.Payload); }
-        else if (c.Joined) OnProfileMessage(c, m);
+        else if (c.Joined) _profiles.OnMessage(c, m);
     }
 
     /// <summary>A packet of inputs: the snapshot and world acks it carries, and the inputs the player has not sent before, queued for the ticks (at most 8).</summary>
@@ -398,6 +405,24 @@ public partial class NetServer : Node
             c.Inputs.Enqueue(i);
         }
         while (c.Inputs.Count > 8) c.Inputs.Dequeue(); // a stalled sim never builds unbounded lag
+    }
+
+    void Reject(ServerClient c, string reason)
+    {
+        c.Session.Enter(SessionPhase.Rejected);
+        GD.Print($"server: rejecting {(c.Name == "" ? "a client" : c.Name)}: {reason}");
+        Send(c, new ErrorMsg(reason));
+        _host.Flush();
+        c.Peer!.PeerDisconnectLater(0); // after the error has gone out
+    }
+
+    /// <summary>The client has its profile: the hunter's log learns its name, a collection tier reached while the rule or the weapon was not there yet is rewarded, the companions follow.</summary>
+    void OnProfileAttached(ServerClient c)
+    {
+        var p = c.Profile!;
+        if (p.Persist) SetLogName(p.DbId, c.Name); // the log's hunter names (a name read before the book is set when the book loads)
+        if (p.Persist && _huntBook is { } book) GrantCollectionRewards(book, p.DbId);
+        CompanionFromProfile(c);
     }
 
     void OnHello(ServerClient c, HelloMsg h)
@@ -420,7 +445,7 @@ public partial class NetServer : Node
         SandboxOnHello(c, h.Flags);
         c.Token = h.Token;
         DropSessionsWithToken(c); // a quick reconnect wins over its ghost, which would otherwise run on the same profile until its peer times out
-        StartProfileLoad(c, h.Token); // joins once the profile is in (or the wait times out)
+        _profiles.StartLoad(c, h.Token); // joins once the profile is in (or the wait times out)
         GD.Print($"server: {c.Name} #{c.Id} hello, loading profile");
     }
 
@@ -441,7 +466,7 @@ public partial class NetServer : Node
         _byId[c.Id] = c;
         c.Enc = new SnapshotEncoder(_sentStates);
         c.WEnc = new WorldSnapshotEncoder(history: _sentWorld);
-        SendProfile(c);
+        _profiles.Send(c);
         SendCompanions(c); // the Companions they can pick and the one that is out (the Equipment screen's picker)
         SendSandboxStatus(c); // the answer to a sandbox request (#156), before the spawn
         _chat.SendStatus(c); // admin or not, and the vehicles /spawn takes
@@ -467,7 +492,7 @@ public partial class NetServer : Node
         SendScudOnJoin(c); // the Scud trucks' racks and proposals
         SendPounceOnJoin(c); // and the demon's pounce, when one is on
         SendTargetRoster(c); // target dummies' names (#148)
-        SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
+        _profiles.SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
         SendWornOnJoin(c); // what the others wear (#266), to draw on their characters
         SendBinocularsOnJoin(c); // and who holds the binoculars up
         SendHeadLampsOnJoin(c); // and whose head lamp is on
