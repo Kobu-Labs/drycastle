@@ -1,7 +1,7 @@
 # 10 Reward
 
 ## Facts
-- Bigfoot pattern: `OnBigfootDied` / `SpawnBigfootReward` (`NetServer.Bigfoot.cs`): XP `event_win` (`levels.json`), a `Corpse` carrying an `ItemStack`.
+- Bigfoot pattern: `BigfootServer.OnDied` / `BigfootLoot.SpawnBody` (`Net/Server/BigfootEvent/BigfootServer.cs`): XP `event_win` (`levels.json`), a `Corpse` carrying an `ItemStack`.
 - `items.json` is append-only (the wire sends the list position). `EquipSlot` has only `Headgear` (`Items/ItemData.cs`). Worn Items: ADR 0016; Bag and corpses: ADR 0018. Worn Item drawing: `CharacterView.Worn.cs`. Equipment screen (F) shows the slots.
 - Corpses are capped (`MaxCorpses` 16).
 

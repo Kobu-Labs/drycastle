@@ -880,14 +880,14 @@ ground is listed with `points: []` and the export warns. `player_spawn` has no e
 `{"version": 1, "axes": "...", "zones": [{"kind": "plantation", "areas": ["Z-0001"], "rings": [[[x, z], ...], ...]}]}`, one entry per kind that has a zone.
 Listed under `files.zone_polygons` of `manifest.json` and written **only when such a zone exists** (a stale file is deleted, no terrain needed); the map version
 is not bumped. A kind of `NO_POINT_KINDS` (`player_spawn`, `plantation`) has no entry in `zone_points.json`, and its `rules.yaml` `zones` section has no keys
-(`plantation: {}`). The server reads it as `ShooterCore.ZonePolygons` (`MapLoader.ZonePolygonsJson`, `NetServer.Plantation.cs`): `Contains(kind, x, z)`,
+(`plantation: {}`). The server reads it as `ShooterCore.ZonePolygons` (`MapLoader.ZonePolygonsJson`, `Net/Server/Highs/PlantationServer.cs`): `Contains(kind, x, z)`,
 2D even-odd point-in-polygon; no file or no zone: the feature is off, no error.
 
 `parcels.json` also carries `zone_kinds`, `[{"name", "label", "group", "tint", "where_ground": [types] | null}]` in catalog
 order, for the editor's Zones tool; the drawn zones are not in it (the editor reads them from `edits.json`).
 
 The server reads the points as `ShooterCore.ZonePoints` (`Points(kind)`, `Count(kind)`, `Pick(kind, rng)`; the map loader
-keeps the text as `MapLoader.ZonePointsJson`, empty without the file): `NetServer.PickEventSpawn("bigfoot")` (or `"scud"`) returns a random
+keeps the text as `MapLoader.ZonePointsJson`, empty without the file): `MapAreas.PickEventSpawn("bigfoot")` (or `"scud"`) returns a random
 point in Godot ground axes (x east, y the terrain height, z = -north), or `null` when there is none (the map has no file, no
 zone of the kind, or nothing usable was left): the caller must handle it, and the wildlife keeper takes the points of each
 species. A broken or newer file is logged and counts as no points.

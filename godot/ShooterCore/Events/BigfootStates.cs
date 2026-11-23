@@ -10,7 +10,7 @@ namespace Drycastle.ShooterCore.Events;
 public enum BigfootLife : byte { Fighting, Waiting, Dead }
 
 /// <summary>
-/// How far the server's Bigfoot event has come (NetServer.Bigfoot.cs): none, a living Bigfoot, or the one that fell and lies out its death clip. After
+/// How far the server's Bigfoot event has come (Net/Server/BigfootEvent/BigfootServer.cs): none, a living Bigfoot, or the one that fell and lies out its death clip. After
 /// <see cref="Dying"/> the body becomes the reward corpse (a separate thing the server does not track) and the stage is <see cref="None"/> again.
 /// </summary>
 public enum BigfootStage : byte { None, Alive, Dying }

@@ -1,11 +1,9 @@
 using Godot;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.Combat;
-using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
-using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter.Net.Server.BigfootEvent;
