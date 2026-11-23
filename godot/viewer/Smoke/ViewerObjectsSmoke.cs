@@ -70,16 +70,16 @@ public partial class Viewer
         // one gesture = exactly one save; objects-only saves must not run parcel-run and show at once
         async Task<bool> Op(string name, Func<bool> act, bool run = false, int frames = 0)
         {
-            var runs0 = _watcher!.RunCount; var s0 = ed.SaveCount; var inst0 = _watcher.InstantCount; var app0 = _watcher.AppliedCount;
+            var runs0 = _watcher!.RunCount; var s0 = ed.Edits.SaveCount; var inst0 = _watcher.InstantCount; var app0 = _watcher.AppliedCount;
             var ok = act();
             if (frames > 0) await Frame(frames);
-            var saved = ed.SaveCount == s0 + 1;
-            Check(ok && saved, $"[{name}] one save ({ed.SaveCount - s0}), status '{ed.StatusMessage}'");
+            var saved = ed.Edits.SaveCount == s0 + 1;
+            Check(ok && saved, $"[{name}] one save ({ed.Edits.SaveCount - s0}), status '{ed.StatusMessage}'");
             if (!run)
             {
-                Check(_watcher.RunCount == runs0 && _watcher.InstantCount == inst0 + 1 && ed.LastSaveInstant,
-                    $"[{name}] objects-only: applied in process, no parcel-run (runs {_watcher.RunCount - runs0}, save-to-visible {ed.LastSaveMs:F1} ms)");
-                latencies.Add(ed.LastSaveMs);
+                Check(_watcher.RunCount == runs0 && _watcher.InstantCount == inst0 + 1 && ed.Edits.LastSaveInstant,
+                    $"[{name}] objects-only: applied in process, no parcel-run (runs {_watcher.RunCount - runs0}, save-to-visible {ed.Edits.LastSaveMs:F1} ms)");
+                latencies.Add(ed.Edits.LastSaveMs);
             }
             else
             {
@@ -226,7 +226,7 @@ public partial class Viewer
         Check(ed.StartMove("o-0001", car) && ed.Dragging, "press on the object starts a move");
         ed.DragTo(Gp("a_base", 2.3, 1.2), false);
         var preview = _map.ObjectNodes["o-0001"].GlobalPosition;
-        Check(Disk() == before && Math.Abs(preview.X - (gabs[0] - ox + 2.5)) < 0.01 && Math.Abs(preview.Z + (gabs[1] - oy + 1.0)) < 0.01 && ed.SaveCount == 3,
+        Check(Disk() == before && Math.Abs(preview.X - (gabs[0] - ox + 2.5)) < 0.01 && Math.Abs(preview.Z + (gabs[1] - oy + 1.0)) < 0.01 && ed.Edits.SaveCount == 3,
             "while dragging only the view moves (snapped), the file is untouched");
         await Op("t4", () => ed.EndDrag());
         SceneMatches("after the drag");
@@ -237,9 +237,9 @@ public partial class Viewer
         ed.StartMove("o-0001", GOf("o-0001"));
         ed.DragTo(GOf("o-0001") + new Vector3(0.125f, 0, 0.25f), true);
         await Op("t6", () => ed.EndDrag());
-        var s1 = ed.SaveCount;
+        var s1 = ed.Edits.SaveCount;
         ed.StartMove("o-0001", GOf("o-0001"));
-        Check(!ed.EndDrag() && ed.SaveCount == s1, "a click without dragging saves nothing");
+        Check(!ed.EndDrag() && ed.Edits.SaveCount == s1, "a click without dragging saves nothing");
 
         // ---- 5. rotate with the ring (15 degrees, Ctrl = free) ----
         ed.StartRotate("o-0001");
@@ -267,8 +267,8 @@ public partial class Viewer
         await Op("t11", () => { ed.ObjectRotationSpin.Value = 100; return true; }); // the real SpinBox signal path
         await Op("t12", () => ed.SetObjectScale(1.5));
         Check(Math.Abs(_map.ObjectNodes["o-0001"].Scale.X - 1.5) < 1e-4, "scale 1.5 shows at once");
-        var sf0 = ed.SaveCount;
-        Check(!ed.SetObjectScale(0) && !ed.SetObjectScale(-1) && !ed.SetObjectColour("red") && !ed.SetObjectColour("#12345") && ed.SaveCount == sf0, "scale <= 0 and bad colours are refused, nothing saved");
+        var sf0 = ed.Edits.SaveCount;
+        Check(!ed.SetObjectScale(0) && !ed.SetObjectScale(-1) && !ed.SetObjectColour("red") && !ed.SetObjectColour("#12345") && ed.Edits.SaveCount == sf0, "scale <= 0 and bad colours are refused, nothing saved");
         await Op("t13", () => ed.SetObjectColour("#AABBCC"));
         ed.RefreshNow();
         var tinted = _map.ObjectNodes["o-0001"].FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>().Any(m => m.MaterialOverride is StandardMaterial3D { AlbedoColor: var c } && c.ToHtml(false) == "aabbcc");
@@ -322,17 +322,17 @@ public partial class Viewer
         // ---- 10. session undo / redo across the whole sequence ----
         var kinds = saves.Select(s => s.Run).ToList(); // index 0 is the seed
         var n = saves.Count - 1;
-        Check(ed.UndoDepth == n && ed.RedoDepth == 0, $"every save is on the undo stack ({ed.UndoDepth} of {n})");
+        Check(ed.Edits.History.UndoDepth == n && ed.Edits.History.RedoDepth == 0, $"every save is on the undo stack ({ed.Edits.History.UndoDepth} of {n})");
         async Task StepUndoRedo(bool undo, int k)
         {
             // k = index in saves of the save being undone (undo) or redone (redo)
             var run = saves[k].Run;
             var runs0 = _watcher.RunCount; var app0 = _watcher.AppliedCount; var inst0 = _watcher.InstantCount;
-            var desc = undo ? ed.NextUndoDescription : ed.NextRedoDescription;
-            var s0 = ed.SaveCount;
-            var ok = undo ? ed.Undo() : ed.Redo();
+            var desc = undo ? ed.Edits.History.NextUndoDescription : ed.Edits.History.NextRedoDescription;
+            var s0 = ed.Edits.SaveCount;
+            var ok = undo ? ed.Edits.Undo() : ed.Edits.Redo();
             var label = $"{(undo ? "undo" : "redo")} {saves[k].Name}";
-            Check(ok && ed.StatusMessage == $"{(undo ? "undo" : "redo")}: {desc}" && ed.SaveCount == s0 + 1, $"[{label}] status '{ed.StatusMessage}'");
+            Check(ok && ed.StatusMessage == $"{(undo ? "undo" : "redo")}: {desc}" && ed.Edits.SaveCount == s0 + 1, $"[{label}] status '{ed.StatusMessage}'");
             if (run)
             {
                 var done = await WaitUntil(() => _watcher.AppliedCount > app0 && !_watcher.Busy || _watcher.FailedCount > 0, 90);
@@ -347,28 +347,28 @@ public partial class Viewer
             SceneMatches($"[{label}]");
         }
         for (var k = n; k >= 1; k--) await StepUndoRedo(true, k);
-        Check(ed.UndoDepth == 0 && ed.RedoDepth == n && Disk() == saves[0].Text, $"everything undone: the file is the seed again, redo stack {ed.RedoDepth}");
-        Check(!ed.Undo() && ed.StatusMessage.StartsWith("nothing to undo"), "undo on an empty stack says so");
+        Check(ed.Edits.History.UndoDepth == 0 && ed.Edits.History.RedoDepth == n && Disk() == saves[0].Text, $"everything undone: the file is the seed again, redo stack {ed.Edits.History.RedoDepth}");
+        Check(!ed.Edits.Undo() && ed.StatusMessage.StartsWith("nothing to undo"), "undo on an empty stack says so");
         for (var k = 1; k <= n; k++) await StepUndoRedo(false, k);
-        Check(ed.RedoDepth == 0 && ed.UndoDepth == n && Disk() == saves[n].Text, "everything redone: the file is the final state again");
+        Check(ed.Edits.History.RedoDepth == 0 && ed.Edits.History.UndoDepth == n && Disk() == saves[n].Text, "everything redone: the file is the final state again");
 
         // the key bindings: Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z
-        var depth = ed.UndoDepth;
+        var depth = ed.Edits.History.UndoDepth;
         Key_(Key.Z, ctrl: true); await Frame(3);
-        Check(ed.UndoDepth == depth - 1 && ed.StatusMessage.StartsWith("undo: ") && Disk() == saves[n - 1].Text, $"Ctrl+Z undoes: '{ed.StatusMessage}'");
+        Check(ed.Edits.History.UndoDepth == depth - 1 && ed.StatusMessage.StartsWith("undo: ") && Disk() == saves[n - 1].Text, $"Ctrl+Z undoes: '{ed.StatusMessage}'");
         await WaitUntil(() => !_watcher.Busy, 5);
         Key_(Key.Y, ctrl: true); await Frame(3);
-        Check(ed.UndoDepth == depth && ed.StatusMessage.StartsWith("redo: ") && Disk() == saves[n].Text, $"Ctrl+Y redoes: '{ed.StatusMessage}'");
+        Check(ed.Edits.History.UndoDepth == depth && ed.StatusMessage.StartsWith("redo: ") && Disk() == saves[n].Text, $"Ctrl+Y redoes: '{ed.StatusMessage}'");
         Key_(Key.Z, ctrl: true); await Frame(3);
         Key_(Key.Z, ctrl: true, shift: true); await Frame(3);
-        Check(ed.UndoDepth == depth && Disk() == saves[n].Text, "Ctrl+Shift+Z redoes too");
+        Check(ed.Edits.History.UndoDepth == depth && Disk() == saves[n].Text, "Ctrl+Shift+Z redoes too");
         // a new edit clears the redo stack
         Key_(Key.Z, ctrl: true); await Frame(3);
-        Check(ed.RedoDepth == 1, "one redo step available");
+        Check(ed.Edits.History.RedoDepth == 1, "one redo step available");
         ed.ArmPlacement(SLAB);
         await Op("t26", () => ed.PlaceAt(Gp("a_base", 2.1, -1.55)));
         ed.DisarmPlacement();
-        Check(ed.RedoDepth == 0 && !ed.Redo() && ed.StatusMessage.StartsWith("nothing to redo"), "a new edit clears the redo stack");
+        Check(ed.Edits.History.RedoDepth == 0 && !ed.Edits.Redo() && ed.StatusMessage.StartsWith("nothing to redo"), "a new edit clears the redo stack");
 
         // ---- 11. undo only touches the entries its operation touched ----
         {
@@ -379,8 +379,8 @@ public partial class Viewer
             File.WriteAllText(editsPath + ".tmp", other); File.Move(editsPath + ".tmp", editsPath, true);
             await WaitUntil(() => _watcher.InstantCount >= 0 && !_watcher.Busy, 5);
             await Frame(40);
-            var d0 = ed.UndoDepth;
-            Check(ed.Undo() && ed.UndoDepth == d0 - 1, "undo after an external change");
+            var d0 = ed.Edits.History.UndoDepth;
+            Check(ed.Edits.Undo() && ed.Edits.History.UndoDepth == d0 - 1, "undo after an external change");
             var rootAfter = EditsFile.Load(editsPath);
             var staleAfter = ObjectEdits.Parcels(rootAfter)["P-9999"] as SortedDictionary<string, object?>;
             Check(staleAfter?["fence"] is SortedDictionary<string, object?> sfe && sfe["mode"] as string == "auto" && ObjectEdits.All(rootAfter).All(t => (string)t.obj["id"]! != "o-0004"),
@@ -394,7 +394,7 @@ public partial class Viewer
         var sw = System.Diagnostics.Stopwatch.StartNew();
         for (var i = 0; i < 205; i++) ed.NudgeObject(i % 2 == 0 ? 0.5 : -0.5, 0);
         GD.Print($"205 nudges in {sw.ElapsedMilliseconds} ms");
-        Check(ed.UndoDepth == EditorMode.UndoCap && ed.RedoDepth == 0, $"the undo stack holds at most {EditorMode.UndoCap} ({ed.UndoDepth})");
+        Check(ed.Edits.History.UndoDepth == UndoHistory.Cap && ed.Edits.History.RedoDepth == 0, $"the undo stack holds at most {UndoHistory.Cap} ({ed.Edits.History.UndoDepth})");
 
         // ---- 13. latency of an object edit ----
         GD.Print($"latency: {latencies.Count} editor saves, save-to-visible min {latencies.Min():F1} ms, mean {latencies.Average():F1} ms, max {latencies.Max():F1} ms (instant path, includes reading, validating and writing the file)");

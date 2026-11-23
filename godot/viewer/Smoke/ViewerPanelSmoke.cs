@@ -218,9 +218,9 @@ public partial class Viewer
         ed.Revert();
         Check(ed.PendingCount == 1 && !ed.TargetDirty, "Revert discards only the current target's changes");
         ed.SetFenceMode("custom");
-        var saves0 = ed.SaveCount;
+        var saves0 = ed.Edits.SaveCount;
         await ApplyAndWait("t6");
-        Check(ed.SaveCount == saves0 + 1 && ed.PendingCount == 0, "Apply wrote both targets in one save");
+        Check(ed.Edits.SaveCount == saves0 + 1 && ed.PendingCount == 0, "Apply wrote both targets in one save");
         FileIs("t6", "two targets");
         await Sel(C); ed.ResetFence();
         await Sel(F); ed.ResetFence();
@@ -253,7 +253,7 @@ public partial class Viewer
         ed.GateDrag(gp + new Vector3((float)(gt[0].GetDouble() * 1.5), 0, (float)(-gt[1].GetDouble() * 1.5)));
         Check(ed.GateEnd() && Math.Abs(ed.CurrentFence.Gaps[0].Width - 3.0) < 1e-9, "group gate, width 3.0");
         await ApplyAndWait("t8");
-        Check(ed.SaveCount > 0, "group saved");
+        Check(ed.Edits.SaveCount > 0, "group saved");
         // member parcels' fence entries must not exist; the group entry holds the fence
         var fd = EditsFile.Load(editsPath);
         Check(EditModel.ParcelEntry(fd, A)?.ContainsKey("fence") != true && EditModel.ParcelEntry(fd, B)?.ContainsKey("fence") != true
@@ -281,10 +281,10 @@ public partial class Viewer
         // ---- Enter applies when no text field has focus ----
         await Sel(F);
         ed.SetFenceMode("none");
-        var n1 = ed.SaveCount;
+        var n1 = ed.Edits.SaveCount;
         Input.ParseInputEvent(new InputEventKey { Keycode = Key.Enter, Pressed = true });
         await Frame(3);
-        Check(ed.SaveCount == n1 + 1 && ed.PendingCount == 0, "Enter applies the pending changes");
+        Check(ed.Edits.SaveCount == n1 + 1 && ed.PendingCount == 0, "Enter applies the pending changes");
         await WaitIdle(30);
         ed.ResetFence();
         await ApplyAndWait("t9");

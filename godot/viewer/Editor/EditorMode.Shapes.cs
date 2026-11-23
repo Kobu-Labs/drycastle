@@ -146,7 +146,7 @@ public partial class EditorMode
     /// <summary>The cached lists of the file on disk (shared: callers must not keep them across a reload).</summary>
     List<PatchInfo> PatchList()
     {
-        var disk = Disk(); // _disk is replaced on every reload, so its identity keys the cache
+        var disk = Edits.Disk(); // _disk is replaced on every reload, so its identity keys the cache
         if (ReferenceEquals(disk, _patchesFor) && _patchCache != null) return _patchCache;
         var list = new List<PatchInfo>();
         _patchesFor = disk;
@@ -325,7 +325,7 @@ public partial class EditorMode
         if (k == ShapeKind.Patch && type == null) { Say("no ground type to draw: pick one in the list", true); return false; }
         if (k == ShapeKind.Zone && kind == null) { Say("no zone kind to draw: pick one in the list", true); return false; }
         string? id = null;
-        var ok = Mutate(root =>
+        var ok = Edits.Mutate(root =>
         {
             if (ShapesOf(root, k) is not { } so) root[KeyOf(k)] = so = EditsFile.NewObject();
             id = NextShapeId(root, k);
@@ -398,7 +398,7 @@ public partial class EditorMode
         var code = ObjectEdits.RingProblemCode(ring);
         if (code != ObjectEdits.RingOk) { Say($"corner not moved: the outline would {RingMessage(code)}", true); return false; }
         if (r is ZoneInfo { FromRule: true } rz) return EditRuleZone(rz, null, ring, $"moved corner {corner + 1} of {rz.Label}");
-        return Mutate(root =>
+        return Edits.Mutate(root =>
         {
             if (ShapesOf(root, k)?.GetValueOrDefault(id) is not Obj e) return (false, $"{noun} {id} no longer exists");
             e["polygon"] = PolygonValue(ring);
@@ -415,7 +415,7 @@ public partial class EditorMode
             if (gone && SelectedOf(k) == id) SelectShape(k, null);
             return gone;
         }
-        var ok = Mutate(root =>
+        var ok = Edits.Mutate(root =>
         {
             var so = ShapesOf(root, k);
             if (so == null || !so.Remove(id)) return (false, $"{noun} {id} no longer exists");

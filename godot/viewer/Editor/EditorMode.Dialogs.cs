@@ -46,8 +46,8 @@ public partial class EditorMode
         if (_sketch.Count > 0) yield return ("Sketch: clear the active sketch", () => { SelectTool(EditorTool.Sketch); RequestClearSketch(); });
         yield return ("Poles: plan a line  (P)", () => { SelectTool(EditorTool.Poles); StartPlanning(); });
         yield return ("Poles: connect  (C)", () => { SelectTool(EditorTool.Poles); StartConnecting(); });
-        yield return ("Edit: undo  (Ctrl+Z)", () => Undo());
-        yield return ("Edit: redo  (Ctrl+Y)", () => Redo());
+        yield return ("Edit: undo  (Ctrl+Z)", () => Edits.Undo());
+        yield return ("Edit: redo  (Ctrl+Y)", () => Edits.Redo());
         yield return ("View: top-down  (T)", ToggleTopDown);
         yield return ("Walk: drop to the ground here  (F3)", WalkFromHere);
         yield return ("Help: controls  (F1)", ToggleCheatSheet);

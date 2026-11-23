@@ -60,7 +60,7 @@ public partial class EditorMode
         if (PatchTypeChoices().All(c => c.Name != type)) { Say($"{type} is not a ground type a patch can be of (deleted, a rule's, or not in this map)", true); return false; }
         var water = PatchTypeIsWater(type);
         var level = DefaultWaterLevel(p.Points);
-        return Mutate(root =>
+        return Edits.Mutate(root =>
         {
             if (ShapesOf(root, ShapeKind.Patch)?.GetValueOrDefault(id) is not Obj e) return (false, $"patch {id} no longer exists");
             e["type"] = type;
@@ -77,7 +77,7 @@ public partial class EditorMode
         if (!PatchTypeIsWater(p.Type)) { Say($"{id} is of {p.Type}, which is not water: it has no water level", true); return false; }
         var v = Math.Round(level, 3, MidpointRounding.AwayFromZero);
         if (p.WaterY == v) return true;
-        return Mutate(root =>
+        return Edits.Mutate(root =>
         {
             if (ShapesOf(root, ShapeKind.Patch)?.GetValueOrDefault(id) is not Obj e) return (false, $"patch {id} no longer exists");
             e["water_y"] = N3(v);

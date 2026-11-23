@@ -94,7 +94,7 @@ public partial class EditorMode
 
     void EnsureGroundMapIndex()
     {
-        var disk = Disk();
+        var disk = Edits.Disk();
         var rows = GroundRows();
         if (_gmIndexed && ReferenceEquals(disk, _gmDisk) && ReferenceEquals(rows, _gmRows)) return;
         _gmIndexed = true; _gmDisk = disk; _gmRows = rows;

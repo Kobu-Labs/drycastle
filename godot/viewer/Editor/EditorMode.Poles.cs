@@ -46,7 +46,7 @@ public partial class EditorMode
     public IReadOnlyList<CableInfo> AllCables()
     {
         var pos = AllObjects().ToDictionary(o => o.Id, o => (o.X, o.Y));
-        return EditsFile.Cables(Disk()).Select(c =>
+        return EditsFile.Cables(Edits.Disk()).Select(c =>
         {
             var len = pos.TryGetValue(c.from, out var a) && pos.TryGetValue(c.to, out var b) ? Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y)) : -1;
             return new CableInfo(c.id, c.from, c.to, len);
@@ -170,7 +170,7 @@ public partial class EditorMode
         rot = Math.Round(MapFrame.Mod360(rot), 1);
         var name = AssetName(asset);
         string? newId = null;
-        var ok = Mutate(root =>
+        var ok = Edits.Mutate(root =>
         {
             var id = ObjectEdits.NextId(root);
             var o = ObjectEdits.Make(id, asset, x, y, rot);
@@ -194,7 +194,7 @@ public partial class EditorMode
         var all = ConnectorAssets(mount);
         if (all.Count < 2) { Say($"there is no other {mount} connector", true); return false; }
         var next = all[(all.ToList().IndexOf(o.Asset) + 1) % all.Count]; // an unknown asset (index -1) starts at the first
-        return Mutate(root =>
+        return Edits.Mutate(root =>
         {
             if (ObjectEdits.Find(root, o.Id) is not { } f) return (false, $"object {o.Id} no longer exists");
             f.obj["asset"] = next;
@@ -204,7 +204,7 @@ public partial class EditorMode
 
     /// <summary>String a cable between two placed poles (one save, one undo step).</summary>
     public bool ConnectPoles(string from, string to)
-        => Mutate(root =>
+        => Edits.Mutate(root =>
         {
             var (ok, msg, _) = EditsFile.Connect(root, from, to);
             return (ok, msg);
@@ -212,7 +212,7 @@ public partial class EditorMode
 
     public bool DisconnectCable(string id)
     {
-        var ok = Mutate(root => EditsFile.Disconnect(root, id), $"remove cable {id}");
+        var ok = Edits.Mutate(root => EditsFile.Disconnect(root, id), $"remove cable {id}");
         if (ok && SelectedCableId == id) SelectCable(null);
         return ok;
     }

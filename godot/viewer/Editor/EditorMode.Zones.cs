@@ -112,7 +112,7 @@ public partial class EditorMode
         if (ZoneKindOf(kind) == null) { Say($"zone kind {kind} is not in this map's catalog", true); return false; }
         if (z.Kind == kind) return true;
         if (z.FromRule) return EditRuleZone(z, kind, z.Points.ToList(), $"{z.Label} is now {ZoneLabel(kind)}");
-        var ok = Mutate(root =>
+        var ok = Edits.Mutate(root =>
         {
             if (ShapesOf(root, ShapeKind.Zone)?.GetValueOrDefault(id) is not Obj e) return (false, $"zone {id} no longer exists");
             e["kind"] = kind;
@@ -302,7 +302,7 @@ public partial class EditorMode
     /// </summary>
     List<ZoneInfo> ZoneList()
     {
-        var disk = Disk();
+        var disk = Edits.Disk();
         var kinds = Map.ZoneKinds;
         if (ReferenceEquals(disk, _zonesFor) && ReferenceEquals(kinds, _zoneKindsFor) && _zoneCache != null) return _zoneCache;
         var list = new List<ZoneInfo>();
@@ -411,7 +411,7 @@ public partial class EditorMode
         if (ObjectEdits.RingProblemCode(outline) is var code && code != ObjectEdits.RingOk) { Say($"{z.Label} cannot be edited: its outline {RingMessage(code)}", true); return false; }
         if (ring != null && ring.Count == z.Points.Count && ring.SequenceEqual(z.Points)) ring = outline;
         string? newId = null;
-        var ok = Mutate(root =>
+        var ok = Edits.Mutate(root =>
         {
             if (root.GetValueOrDefault("zone_cuts") is not Obj cuts) root["zone_cuts"] = cuts = EditsFile.NewObject();
             var cut = EditsFile.NewObject();
@@ -451,7 +451,7 @@ public partial class EditorMode
     /// <summary>Index the zones per kind for the overlay. Geometry changes only with a zone, a cut or a new map; tints and selection only touch the materials.</summary>
     void EnsureZoneIndex()
     {
-        var disk = Disk();
+        var disk = Edits.Disk();
         var kinds = Map.ZoneKinds;
         if (_zoIndexed && ReferenceEquals(disk, _zoDisk) && ReferenceEquals(kinds, _zoKindsFor)) return;
         _zoIndexed = true; _zoDisk = disk; _zoKindsFor = kinds;
@@ -737,7 +737,7 @@ public partial class EditorMode
         var kept = zones.Where(z => z.FromRule && ObjectEdits.RingProblemCode(ObjectEdits.Despiked(z.Points)) != ObjectEdits.RingOk).ToList();
         var todo = zones.Except(kept).ToList();
         if (todo.Count == 0) { Say(kept.Count > 0 ? $"nothing deleted: the outline of {kept[0].Label}{(kept.Count > 1 ? $" and {kept.Count - 1} more" : "")} cannot be cut" : "nothing to delete: those zones no longer exist", true); return false; }
-        var ok = Mutate(root =>
+        var ok = Edits.Mutate(root =>
         {
             var drawn = ShapesOf(root, ShapeKind.Zone);
             var n = 0;
@@ -769,7 +769,7 @@ public partial class EditorMode
             if (_zMarkOutlineFor != null) { _zMarkOutlineFor = null; SetOutline(OutlineZoneMarked, new(), EditorTheme.Danger, 0, 0); }
             return;
         }
-        var key = (Disk(), _zMarkVer);
+        var key = (Edits.Disk(), _zMarkVer);
         if (_zMarkOutlineFor is ValueTuple<Obj, int> was && ReferenceEquals(was.Item1, key.Item1) && was.Item2 == key.Item2) return;
         _zMarkOutlineFor = key;
         ZoneList();
@@ -810,7 +810,7 @@ public partial class EditorMode
     public void PressZoneKindRow(string kind) { if (_zKindRows.TryGetValue(kind, out var b)) b.EmitSignal(BaseButton.SignalName.Pressed); }
     public string ZoneKindShown => _zKindOpt.Selected >= 0 && _zKindOpt.Selected < Map.ZoneKinds.Count ? Map.ZoneKinds[_zKindOpt.Selected].Name : "";
     public int ZoneCount(string kind) => ZoneList().Count(z => z.Kind == kind);
-    public int ZoneCutCount => CutList(Disk()).Count;
+    public int ZoneCutCount => CutList(Edits.Disk()).Count;
     public string ZoneMarkDeleteText => _zMarkDelete.Text;
     public bool ZoneMarkDeleteEnabled => !_zMarkDelete.Disabled;
     /// <summary>Alpha of a kind's fill in the overlay (0: not drawn, a kind other than the selected one); -1 when it has no surface.</summary>

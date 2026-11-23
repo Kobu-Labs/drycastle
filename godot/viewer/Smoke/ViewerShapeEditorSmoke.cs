@@ -65,10 +65,10 @@ public partial class Viewer
         // one gesture = exactly one save and one undo step; a patch change also waits for the patch-run, a zone change has none
         async Task<bool> Gesture(string name, Func<bool> act, string step, bool patchRun, Func<Task>? driver = null)
         {
-            var s0 = ed.SaveCount; var u0 = ed.UndoDepth; var a0 = _watcher!.AppliedCount;
+            var s0 = ed.Edits.SaveCount; var u0 = ed.Edits.History.UndoDepth; var a0 = _watcher!.AppliedCount;
             if (driver != null) await driver(); // key events arrive a frame later
             var ok = act();
-            Check(ok && ed.SaveCount == s0 + 1 && ed.UndoDepth == u0 + 1, $"[{name}] one save, one undo step (saves {ed.SaveCount - s0}, undo depth {ed.UndoDepth - u0}), status '{ed.StatusMessage}'");
+            Check(ok && ed.Edits.SaveCount == s0 + 1 && ed.Edits.History.UndoDepth == u0 + 1, $"[{name}] one save, one undo step (saves {ed.Edits.SaveCount - s0}, undo depth {ed.Edits.History.UndoDepth - u0}), status '{ed.StatusMessage}'");
             FileIs(step, name);
             if (patchRun) await WaitUntil(() => _watcher.AppliedCount > a0 || _watcher.FailedCount > 0, 90);
             await Settle(patchRun);
@@ -76,10 +76,10 @@ public partial class Viewer
         }
         async Task<bool> Refused(string name, Func<bool> act, string step)
         {
-            var s0 = ed.SaveCount; var u0 = ed.UndoDepth;
+            var s0 = ed.Edits.SaveCount; var u0 = ed.Edits.History.UndoDepth;
             var before = Disk();
             var ok = act();
-            Check(!ok && ed.SaveCount == s0 && ed.UndoDepth == u0 && Disk() == before && Disk() == Expect(step), $"[{name}] refused: nothing saved, file unchanged, status '{ed.StatusMessage}'");
+            Check(!ok && ed.Edits.SaveCount == s0 && ed.Edits.History.UndoDepth == u0 && Disk() == before && Disk() == Expect(step), $"[{name}] refused: nothing saved, file unchanged, status '{ed.StatusMessage}'");
             return !ok;
         }
 
@@ -134,10 +134,10 @@ public partial class Viewer
         ed.OutlineSegmentsNow();
         Check(ed.SegmentCount(EditorMode.OutlineShapeDraft) == 3 && ed.ShapeHandleCount == 4, $"live preview: {ed.SegmentCount(EditorMode.OutlineShapeDraft)} edges, {ed.ShapeHandleCount} corner handles");
         Check(Disk() == Expect("seed"), "nothing saved while drawing");
-        var saves0 = ed.SaveCount;
+        var saves0 = ed.Edits.SaveCount;
         await Gesture("create GP-0002 (Enter)", () => ed.ShapeMode == ShapeState.Selected, "p_created", true, () => Key_(Key.Enter));
         Check(ed.SelectedPatchId == "GP-0002" && ed.SelectedGroundType == "paint_336699" && ed.ShapeDraft.Count == 0, "new patch is selected (and its type), draft cleared");
-        Check(ed.SaveCount == saves0 + 1, "creating saved exactly once");
+        Check(ed.Edits.SaveCount == saves0 + 1, "creating saved exactly once");
         Check(_map.DynamicPatches.ContainsKey("GP-0002"), "GP-0002 reached the map through the watcher (patch-run)");
         Check(ed.ShapeRowCount == 2 && ed.ShapeRowSelected("GP-0002"), "list shows both patches, GP-0002 selected");
         Check(ed.PatchTypeShown == "paint_336699", "the form shows the patch's type");
@@ -145,8 +145,8 @@ public partial class Viewer
         // ---- retype (one gesture) ----
         await Gesture("retype GP-0002", () => ed.SetPatchType("GP-0002", "paint_99cc33"), "p_retyped", true);
         Check(DynamicColour("GP-0002") is { } dc && SameColour(dc, "#99cc33"), "retyped patch is regenerated in the new type's colour");
-        Check(ed.SetPatchType("GP-0002", "paint_99cc33") && ed.UndoDepth == 2, "the same type again saves nothing");
-        Check(!ed.SetPatchType("GP-0002", "no_such_type") && ed.UndoDepth == 2, "an unknown type is refused");
+        Check(ed.SetPatchType("GP-0002", "paint_99cc33") && ed.Edits.History.UndoDepth == 2, "the same type again saves nothing");
+        Check(!ed.SetPatchType("GP-0002", "no_such_type") && ed.Edits.History.UndoDepth == 2, "an unknown type is refused");
 
         // ---- corner drag: preview, refused crossing, valid move ----
         var inv = Pt("invalid_to"); var mv = Pt("move_to");
@@ -183,7 +183,7 @@ public partial class Viewer
         await Gesture("create the water patch GP-0003 (Enter)", () => ed.ShapeMode == ShapeState.Selected, "p_water", true, () => Key_(Key.Enter));
         Check(ed.SelectedPatchId == "GP-0003" && ed.Patch("GP-0003")!.WaterY == 1.5, "the water patch carries its water level");
         Check(!ed.SetPatchWater("GP-0002", 2.0), "a land patch has no water level");
-        Check(!ed.SetGroundCarried("pond", "water", false) && ed.UndoDepth == 4, $"unticking water on a type a patch uses is refused: '{ed.StatusMessage}'");
+        Check(!ed.SetGroundCarried("pond", "water", false) && ed.Edits.History.UndoDepth == 4, $"unticking water on a type a patch uses is refused: '{ed.StatusMessage}'");
         ed.RequestDeleteGroundType();
         Check(!ed.Confirm.Visible && ed.StatusMessage.Contains("patch"), $"a type a patch uses is not offered for deletion (blocked with the reason, no confirm): '{ed.StatusMessage}'");
 
@@ -217,7 +217,7 @@ public partial class Viewer
         Check(ed.ShapeRowCount == 1 && ed.ShapeRowSelected("Z-0001") && ed.ZoneKindShown == "bigfoot", "the zone is listed, selected, and its form shows its kind");
         await Gesture("change Z-0001 to deer", () => ed.SetZoneKind("Z-0001", "deer"), "z_rekinded", false);
         Check(ed.SelectedZoneKind == "deer", "the kind selection follows the zone");
-        Check(!ed.SetZoneKind("Z-0001", "no_such_kind") && ed.UndoDepth == 7, "an unknown kind is refused");
+        Check(!ed.SetZoneKind("Z-0001", "no_such_kind") && ed.Edits.History.UndoDepth == 7, "an unknown kind is refused");
         Check(ed.ShapeAt(ShapeKind.Zone, plan.GetProperty("inside_z")[0].GetDouble(), plan.GetProperty("inside_z")[1].GetDouble()) == "Z-0001", "hit test finds Z-0001");
         ed.ZoneOverlayNow();
         Check(ed.ZoneOverlayShown, "the overlay is on by default");
@@ -232,13 +232,13 @@ public partial class Viewer
 
         // ---- undo / redo of every step, byte for byte ----
         var chain = new[] { ("z_rekinded", false), ("z_created", false), ("p_moved", false), ("p_water", true), ("p_moved", true), ("p_retyped", true), ("p_created", true), ("seed", true) };
-        Check(ed.UndoDepth == 8 && ed.NextUndoDescription!.Contains("deleted Z-0001"), $"undo stack: {ed.UndoDepth} steps, next '{ed.NextUndoDescription}'");
+        Check(ed.Edits.History.UndoDepth == 8 && ed.Edits.History.NextUndoDescription!.Contains("deleted Z-0001"), $"undo stack: {ed.Edits.History.UndoDepth} steps, next '{ed.Edits.History.NextUndoDescription}'");
         async Task Walk(string what, bool undo, (string state, bool patchRun)[] states)
         {
             foreach (var (st, patchRun) in states)
             {
                 var a0 = _watcher!.AppliedCount;
-                var ok = undo ? ed.Undo() : ed.Redo();
+                var ok = undo ? ed.Edits.Undo() : ed.Edits.Redo();
                 Check(ok, $"{what} -> {st}: status '{ed.StatusMessage}'");
                 FileIs(st, $"{what} {st}");
                 if (patchRun) await WaitUntil(() => _watcher.AppliedCount > a0 || _watcher.FailedCount > 0, 90);
@@ -246,9 +246,9 @@ public partial class Viewer
             }
         }
         await Walk("undo", true, chain);
-        Check(ed.UndoDepth == 0 && ed.RedoDepth == 8 && !_map.DynamicPatches.ContainsKey("GP-0002"), "everything undone: GP-0002 gone from the map");
+        Check(ed.Edits.History.UndoDepth == 0 && ed.Edits.History.RedoDepth == 8 && !_map.DynamicPatches.ContainsKey("GP-0002"), "everything undone: GP-0002 gone from the map");
         await Walk("redo", false, new[] { ("p_created", true), ("p_retyped", true), ("p_moved", true), ("p_water", true), ("p_moved", true), ("z_created", false), ("z_rekinded", false), ("p_moved", false) });
-        Check(ed.RedoDepth == 0 && ed.UndoDepth == 8, "everything redone");
+        Check(ed.Edits.History.RedoDepth == 0 && ed.Edits.History.UndoDepth == 8, "everything redone");
 
         // ---- Esc, one level at a time ----
         ed.SelectTool(EditorTool.Ground);
@@ -295,21 +295,21 @@ public partial class Viewer
         else
         {
             var kind = rule.Kind; var other = kind == "bigfoot" ? "deer" : "bigfoot";
-            var n0 = ed.ZoneCount(kind); var u0 = ed.UndoDepth; var s0 = ed.SaveCount; var before = Disk();
+            var n0 = ed.ZoneCount(kind); var u0 = ed.Edits.History.UndoDepth; var s0 = ed.Edits.SaveCount; var before = Disk();
             Check(ed.ZoneKindRowText(kind) == $"{ed.ZoneLabel(kind)}   {n0}", $"the row of {kind} shows every zone of it as one number: '{ed.ZoneKindRowText(kind)}' ({n0})");
             ed.SelectShape(ShapeKind.Zone, rule.Id); ed.RefreshNow();
             Check(ed.SelectedZoneId == rule.Id && ed.SelectedZoneKind == kind && ed.ShapeRowSelected(rule.Id), $"a zone from a rule ({rule.Label}) is selectable and listed");
-            Check(ed.DeleteShape(ShapeKind.Zone, rule.Id) && ed.SaveCount == s0 + 1 && ed.UndoDepth == u0 + 1, "deleting it is one save, one undo step");
+            Check(ed.DeleteShape(ShapeKind.Zone, rule.Id) && ed.Edits.SaveCount == s0 + 1 && ed.Edits.History.UndoDepth == u0 + 1, "deleting it is one save, one undo step");
             Check(ed.ZoneCount(kind) == n0 - 1 && ed.ZoneCutCount == 1 && !Disk().Contains("\"zones\"") && Disk().Contains("zone_cuts"), "the count drops by one; a cut is recorded, no zone is drawn");
-            Check(ed.Undo() && Disk() == before && ed.ZoneCount(kind) == n0 && ed.ZoneCutCount == 0, "one undo brings it back exactly");
-            Check(ed.SetZoneKind(rule.Id, other) && ed.SaveCount == s0 + 3 && ed.UndoDepth == u0 + 1, "changing its kind is one save, one undo step");
+            Check(ed.Edits.Undo() && Disk() == before && ed.ZoneCount(kind) == n0 && ed.ZoneCutCount == 0, "one undo brings it back exactly");
+            Check(ed.SetZoneKind(rule.Id, other) && ed.Edits.SaveCount == s0 + 3 && ed.Edits.History.UndoDepth == u0 + 1, "changing its kind is one save, one undo step");
             Check(ed.SelectedZoneId == "Z-0001" && ed.Zone("Z-0001")!.Kind == other && ed.ZoneCount(kind) == n0 - 1 && ed.ZoneCutCount == 1, "it is now an ordinary zone of the new kind, selected; the old kind lost it");
-            Check(ed.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings it back exactly");
+            Check(ed.Edits.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings it back exactly");
             var c = rule.Points; var mid = (c.Average(p => p.x), c.Average(p => p.y));
             var to = (c[0].x + (mid.Item1 - c[0].x) * 0.1, c[0].y + (mid.Item2 - c[0].y) * 0.1);
-            Check(ed.MoveShapeCorner(ShapeKind.Zone, rule.Id, 0, to.Item1, to.Item2) && ed.SaveCount == s0 + 5 && ed.UndoDepth == u0 + 1, $"moving a corner is one save, one undo step: '{ed.StatusMessage}'");
+            Check(ed.MoveShapeCorner(ShapeKind.Zone, rule.Id, 0, to.Item1, to.Item2) && ed.Edits.SaveCount == s0 + 5 && ed.Edits.History.UndoDepth == u0 + 1, $"moving a corner is one save, one undo step: '{ed.StatusMessage}'");
             Check(ed.SelectedZoneId == "Z-0001" && ed.Zone("Z-0001")!.Points.Count == c.Count && ed.ZoneCount(kind) == n0, "the moved copy replaces it: same count, selected");
-            Check(ed.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings it back exactly");
+            Check(ed.Edits.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings it back exactly");
 
             // ---- a selected kind is shown alone; marked zones are deleted together: one confirm, one save, one undo step ----
             ed.SelectShape(ShapeKind.Zone, null); ed.SelectZoneKind(kind); ed.RefreshNow(); ed.ZoneOverlayNow();
@@ -322,12 +322,12 @@ public partial class Viewer
             ed.TickShapeRow(two[0], true); if (two.Count > 1) ed.ToggleZoneMark(two[1]); ed.RefreshNow(); ed.ZoneOverlayNow();
             Check(ed.MarkedZoneCount == two.Count && two.All(ed.ShapeRowMarked) && ed.ZoneMarkDeleteEnabled && ed.ZoneMarkDeleteText.Contains($"{two.Count} marked"), $"a row tick and a map mark both count: '{ed.ZoneMarkDeleteText}'");
             Check(ed.SegmentCount(EditorMode.OutlineZoneMarked) > 0, "marked zones are outlined on the map");
-            s0 = ed.SaveCount; u0 = ed.UndoDepth;
+            s0 = ed.Edits.SaveCount; u0 = ed.Edits.History.UndoDepth;
             await Key_(Key.Delete, shift: true);
-            Check(ed.Confirm.Visible && ed.Confirm.Text.Contains($"{two.Count} marked") && ed.SaveCount == s0, $"Shift+Del asks first and names what goes: '{ed.Confirm.Text.Replace('\n', '|')}'");
+            Check(ed.Confirm.Visible && ed.Confirm.Text.Contains($"{two.Count} marked") && ed.Edits.SaveCount == s0, $"Shift+Del asks first and names what goes: '{ed.Confirm.Text.Replace('\n', '|')}'");
             ed.Confirm.Accept(); ed.RefreshNow();
-            Check(ed.SaveCount == s0 + 1 && ed.UndoDepth == u0 + 1 && ed.ZoneCount(kind) == n0 - two.Count && ed.MarkedZoneCount == 0, "the marked zones go in one save, one undo step; the marks are gone");
-            Check(ed.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings them all back exactly");
+            Check(ed.Edits.SaveCount == s0 + 1 && ed.Edits.History.UndoDepth == u0 + 1 && ed.ZoneCount(kind) == n0 - two.Count && ed.MarkedZoneCount == 0, "the marked zones go in one save, one undo step; the marks are gone");
+            Check(ed.Edits.Undo() && Disk() == before && ed.ZoneCount(kind) == n0, "one undo brings them all back exactly");
             ed.MarkListedZones(); ed.RefreshNow();
             Check(ed.MarkedZoneCount == n0, $"Mark all marks every zone of the selected kind ({ed.MarkedZoneCount}/{n0})");
             ed.ClearZoneMarks(); ed.RefreshNow();
@@ -335,6 +335,6 @@ public partial class Viewer
         }
 
         Check(_watcher!.FailedCount == 0, "no failed run during the whole smoke");
-        GD.Print($"info: undo depth {ed.UndoDepth}, saves {ed.SaveCount}, selected {ed.SelectedPatchId}");
+        GD.Print($"info: undo depth {ed.Edits.History.UndoDepth}, saves {ed.Edits.SaveCount}, selected {ed.SelectedPatchId}");
     }
 }

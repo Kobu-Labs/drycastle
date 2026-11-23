@@ -94,8 +94,8 @@ public partial class EditorMode
             col.AddChild(b);
         }
         col.AddChild(new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore });
-        _btnUndo = IconBtn("undo", "Undo  (Ctrl+Z)", () => Undo());
-        _btnRedo = IconBtn("redo", "Redo  (Ctrl+Y)", () => Redo());
+        _btnUndo = IconBtn("undo", "Undo  (Ctrl+Z)", () => Edits.Undo());
+        _btnRedo = IconBtn("redo", "Redo  (Ctrl+Y)", () => Edits.Redo());
         col.AddChild(_btnUndo);
         col.AddChild(_btnRedo);
         col.AddChild(IconBtn("walk", "Drop to the ground here and walk  (F3)", WalkFromHere));

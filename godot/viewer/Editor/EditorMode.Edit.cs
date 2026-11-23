@@ -28,16 +28,6 @@ public partial class EditorMode
     public bool TargetDirty => _target != null && _pending.ContainsKey(_target.Key);
     public bool GroupScope => _scopeGroup;
     public int SelectedGate => _selectedGate;
-    /// <summary>Number of times edits.json was written by this editor (group operations and Apply).</summary>
-    public int SaveCount { get; private set; }
-
-    SortedDictionary<string, object?> Disk()
-    {
-        if (_disk != null) return _disk;
-        try { _disk = EditsFile.Load(EditsPath); } catch (Exception) { _disk = EditsFile.Load("/nonexistent"); }
-        return _disk;
-    }
-
     /// <summary>The target for the current selection (see the panel header), or null when nothing is selected.</summary>
     EditTarget? ComputeTarget()
     {
@@ -73,10 +63,10 @@ public partial class EditorMode
     /// <summary>The fence as the panel shows it: the pending draft, else what is on disk.</summary>
     public FenceDraft CurrentFence
         => _target == null ? new FenceDraft()
-            : _pending.GetValueOrDefault(_target.Key)?.Fence ?? EditModel.FenceFromDisk(Disk(), _target);
+            : _pending.GetValueOrDefault(_target.Key)?.Fence ?? EditModel.FenceFromDisk(Edits.Disk(), _target);
 
     FenceDraft? InheritedGroupFence()
-        => _target == null || _target.IsGroup ? null : EditModel.GroupFenceOf(Disk(), _target.Parcels[0]);
+        => _target == null || _target.IsGroup ? null : EditModel.GroupFenceOf(Edits.Disk(), _target.Parcels[0]);
 
     void AfterEdit() { _panelDirty = true; MarkAllOutlines(); }
 
@@ -84,7 +74,7 @@ public partial class EditorMode
     {
         if (_target == null) { Say("select a parcel first", true); return false; }
         var p = PendingFor();
-        var d = p.Fence ??= EditModel.FenceFromDisk(Disk(), _target);
+        var d = p.Fence ??= EditModel.FenceFromDisk(Edits.Disk(), _target);
         if (needCustom && d.EffectiveMode != "custom") { d.SetMode("custom"); Say("fence set to custom so your change shows"); }
         change(d);
         AfterEdit();
@@ -156,7 +146,7 @@ public partial class EditorMode
     {
         if (_pending.Count == 0) { Say("nothing to apply"); return false; }
         var items = _pending.Values.ToList();
-        var ok = Mutate(root =>
+        var ok = Edits.Mutate(root =>
         {
             var errors = EditModel.Apply(root, items);
             return errors.Count > 0 ? (false, "not saved: " + ObjectEdits.Summarise(errors)) : (true, items.Count == 1 ? items[0].Target.Header : $"{items.Count} targets");
@@ -507,7 +497,7 @@ public partial class EditorMode
         var single = Selection.Count == 1 && has && Map.Parcels.TryGetValue(Selection.First(), out var sp) && sp.Group != null;
         _scopeRow.Visible = single;
         _scopeOpt.Select(_scopeGroup ? 0 : 1);
-        _mixedLabel.Text = has && EditModel.Mixed(Disk(), t!) ? $"(the selected parcels differ on disk; showing {t!.Parcels[0]})" : "";
+        _mixedLabel.Text = has && EditModel.Mixed(Edits.Disk(), t!) ? $"(the selected parcels differ on disk; showing {t!.Parcels[0]})" : "";
         _footLabel.Text = _pending.Count == 0 ? "no unsaved changes" : $"{_pending.Count} unsaved target{(_pending.Count == 1 ? "" : "s")}: {string.Join(", ", _pending.Keys.Take(4))}";
         _btnApply.Disabled = _pending.Count == 0;
         _btnRevert.Disabled = !TargetDirty;

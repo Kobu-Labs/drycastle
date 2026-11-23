@@ -236,7 +236,7 @@ public partial class EditorMode
             _skFileVersion = version;
             if (BuildSketchJson(next) == BuildSketchJson(_sketch)) return;
             if (_skDraft.Count > 0) { SkDraftEnd(); SketchChanged(); }
-            PushUndo(new UndoRecord("sketch changed by the MCP server", new List<EntryChange>(), _sketch, next));
+            Edits.History.Push(new UndoRecord("sketch changed by the MCP server", new List<EntryChange>(), _sketch, next));
             ApplySketch(next, write: false);
             Say($"sketch updated from sketch.json: {SketchSummary()} (Ctrl+Z undoes it)");
         }
@@ -311,7 +311,7 @@ public partial class EditorMode
     /// <summary>One sketch edit: one undo step (sketch.json is written, edits.json never).</summary>
     void CommitSketch(SketchDoc next, string undoText, string message)
     {
-        PushUndo(new UndoRecord(undoText, new List<EntryChange>(), _sketch, next));
+        Edits.History.Push(new UndoRecord(undoText, new List<EntryChange>(), _sketch, next));
         ApplySketch(next);
         Say(message);
     }

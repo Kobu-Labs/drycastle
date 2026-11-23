@@ -117,7 +117,7 @@ public partial class EditorMode
         if (poles.Count == 0) { Say("the plan has no poles: left click where they should stand", true); return false; }
         var res = PlanSolve();
         int built = 0, cables = 0, connected = 0, skipped = 0;
-        var ok = Mutate(root =>
+        var ok = Edits.Mutate(root =>
         {
             built = cables = connected = skipped = 0;
             var ids = new string?[poles.Count];

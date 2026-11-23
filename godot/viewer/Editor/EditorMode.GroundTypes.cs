@@ -49,7 +49,7 @@ public partial class EditorMode
     /// <summary>The ground types as they stand: rules.yaml's (as of the last build) with the edits on disk laid over them, then the user's own.</summary>
     public IReadOnlyList<GtRow> GroundRows()
     {
-        var disk = Disk();
+        var disk = Edits.Disk();
         if (ReferenceEquals(disk, _gtFor) && ReferenceEquals(Map.GroundTypeTable, _gtTableFor)) return _gtRows;
         _gtFor = disk;
         _gtTableFor = Map.GroundTypeTable;
@@ -155,7 +155,7 @@ public partial class EditorMode
     {
         if (GroundRow(name) is not { } row) { Say($"ground type {name} does not exist", true); return false; }
         if (row.Deleted) { Say($"{name} is deleted: Reset to rules brings it back first", true); return false; }
-        return Mutate(root =>
+        return Edits.Mutate(root =>
         {
             var types = GroundTypesOf(root);
             var entry = types.GetValueOrDefault(name) as Obj ?? EditsFile.NewObject();
@@ -311,7 +311,7 @@ public partial class EditorMode
         if (GroundTypeEdits.NameProblem(name, rows.Select(r => r.Name)) is { } problem) { Say($"not created: {problem}", true); return false; }
         GtRow? src = from == null ? null : rows.FirstOrDefault(r => r.Name == from);
         if (from != null && (src == null || src.Deleted || src.Effective.Rule != null)) { Say($"{from} cannot be duplicated", true); return false; }
-        var ok = Mutate(root =>
+        var ok = Edits.Mutate(root =>
         {
             var types = GroundTypesOf(root);
             if (types.ContainsKey(name)) return (false, $"{name} already exists");
@@ -344,7 +344,7 @@ public partial class EditorMode
         if (GroundRow(name) is not { } r) return false;
         if (!r.InRules) { Say($"{name} is your own type: there are no rules to reset to (Delete removes it)", true); return false; }
         if (r.State == "rules") { Say($"{name} is already as in rules.yaml"); return true; }
-        return Mutate(root =>
+        return Edits.Mutate(root =>
         {
             GroundTypesOf(root).Remove(name);
             TidyGround(root);
@@ -357,7 +357,7 @@ public partial class EditorMode
     {
         if (GroundRow(name) is not { } r) { Say($"ground type {name} does not exist", true); return false; }
         if (DeleteBlocked(r) is { } why) { Say($"{name}: {why}", true); return false; }
-        var ok = Mutate(root =>
+        var ok = Edits.Mutate(root =>
         {
             var types = GroundTypesOf(root);
             if (r.InRules) { var gone = EditsFile.NewObject(); gone["deleted"] = true; types[name] = gone; } else types.Remove(name);

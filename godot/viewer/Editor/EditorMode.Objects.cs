@@ -36,7 +36,7 @@ public partial class EditorMode
 
     /// <summary>Objects of the file (the editor's view of the disk).</summary>
     public IReadOnlyList<ObjectInfo> AllObjects()
-        => ObjectEdits.All(Disk()).Select(t => ToInfo(t.obj)).OrderBy(o => o.Id, StringComparer.Ordinal).ToList();
+        => ObjectEdits.All(Edits.Disk()).Select(t => ToInfo(t.obj)).OrderBy(o => o.Id, StringComparer.Ordinal).ToList();
 
     ObjectInfo ToInfo(Obj o)
     {
@@ -46,7 +46,7 @@ public partial class EditorMode
     }
 
     public ObjectInfo? ObjectData(string id)
-        => ObjectEdits.Find(Disk(), id) is { } f ? ToInfo(f.obj) : null;
+        => ObjectEdits.Find(Edits.Disk(), id) is { } f ? ToInfo(f.obj) : null;
 
     public ObjectInfo? SelectedObject => SelectedObjectId == null ? null : ObjectData(SelectedObjectId);
 
@@ -128,7 +128,7 @@ public partial class EditorMode
         var asset = PlacementAsset;
         var rot = GhostRotation;
         var name = AssetName(asset);
-        return Mutate(root =>
+        return Edits.Mutate(root =>
         {
             var id = ObjectEdits.NextId(root);
             ObjectEdits.Add(root, ObjectEdits.Make(id, asset, x, y, rot));
@@ -342,7 +342,7 @@ public partial class EditorMode
         if (!Map.ObjectNodes.TryGetValue(id, out var node) || !GodotObject.IsInstanceValid(node)) return;
         var l = Map.FromAbsolute(x, y);
         // an object fixed at an elevation (a house connector on a wall or roof) keeps it; the others stand on the ground
-        var fixedZ = ObjectEdits.Find(Disk(), id) is { } f ? ObjectEdits.Number(f.obj.GetValueOrDefault("z")) : null;
+        var fixedZ = ObjectEdits.Find(Edits.Disk(), id) is { } f ? ObjectEdits.Number(f.obj.GetValueOrDefault("z")) : null;
         node.Position = new Vector3(l.X, fixedZ is double z ? (float)z : Map.GroundHeightOrMean(l.X, l.Y), l.Y);
         node.RotationDegrees = new Vector3(0, (float)rot, 0);
     }
@@ -372,7 +372,7 @@ public partial class EditorMode
     public bool MoveObject(string id, double x, double y)
     {
         if (Map.OriginEpsg5514 == null) { Say("this map has no origin_epsg5514", true); return false; }
-        return Mutate(root =>
+        return Edits.Mutate(root =>
         {
             if (ObjectEdits.Find(root, id) is not { } f) return (false, $"object {id} no longer exists");
             ObjectEdits.SetPosition(f.obj, x, y);
@@ -381,7 +381,7 @@ public partial class EditorMode
     }
 
     bool EditObject(string id, string what, Func<Obj, bool> change)
-        => Mutate(root =>
+        => Edits.Mutate(root =>
         {
             if (ObjectEdits.Find(root, id) is not { } f) return (false, $"object {id} no longer exists");
             return change(f.obj) ? (true, $"{what} {id}") : (false, $"cannot {what} {id}");
@@ -427,7 +427,7 @@ public partial class EditorMode
     {
         if (SelectedObjectId == null) { Say("no object selected", true); return false; }
         var id = SelectedObjectId;
-        var ok = Mutate(root =>
+        var ok = Edits.Mutate(root =>
         {
             if (!ObjectEdits.Remove(root, id)) return (false, $"object {id} no longer exists");
             var gone = EditsFile.RemoveCablesOf(root, id); // a pole takes its cables with it
@@ -444,7 +444,7 @@ public partial class EditorMode
         if (o == null) { Say("no object selected", true); return false; }
         var x = o.X + DuplicateOffset;
         string? newId = null;
-        var ok = Mutate(root =>
+        var ok = Edits.Mutate(root =>
         {
             if (ObjectEdits.Find(root, o.Id) is not { } f) return (false, $"object {o.Id} no longer exists");
             var copy = ObjectEdits.CloneObj(f.obj);
@@ -714,13 +714,13 @@ public partial class EditorMode
             ? $"placing {AssetName(PlacementAsset)}, rotation {GhostRotation:0} deg. Click to place, R / Shift+R rotate, Esc stops."
             : "Choose an asset to place it; click an object to select it.";
         foreach (var (a, b) in _palButtons) b.SetPressedNoSignal(a.Id == PlacementAsset);
-        _btnUndo.Disabled = _undo.Count == 0;
-        _btnRedo.Disabled = _redo.Count == 0;
-        _undoInfo.Text = (_undo.Count == 0 ? "nothing to undo" : $"undo: {NextUndoDescription} ({_undo.Count})") + (_redo.Count == 0 ? "" : $"; redo: {NextRedoDescription} ({_redo.Count})");
+        _btnUndo.Disabled = Edits.History.UndoDepth == 0;
+        _btnRedo.Disabled = Edits.History.RedoDepth == 0;
+        _undoInfo.Text = (Edits.History.UndoDepth == 0 ? "nothing to undo" : $"undo: {Edits.History.NextUndoDescription} ({Edits.History.UndoDepth})") + (Edits.History.RedoDepth == 0 ? "" : $"; redo: {Edits.History.NextRedoDescription} ({Edits.History.RedoDepth})");
         var parcels = Selection.ToList();
         _objCount.Text = parcels.Count == 0
-            ? $"{ObjectEdits.All(Disk()).Count()} placed objects in the file"
-            : $"{AllObjects().Count(o => parcels.Contains(o.Parcel))} placed objects on {(parcels.Count == 1 ? parcels[0] : "the selection")}, {ObjectEdits.All(Disk()).Count()} in the file";
+            ? $"{ObjectEdits.All(Edits.Disk()).Count()} placed objects in the file"
+            : $"{AllObjects().Count(o => parcels.Contains(o.Parcel))} placed objects on {(parcels.Count == 1 ? parcels[0] : "the selection")}, {ObjectEdits.All(Edits.Disk()).Count()} in the file";
         _hintLabel.Text = Tool == EditorTool.Ground ? GroundHintText() : Tool == EditorTool.Zones ? ZonesHintText() : Tool == EditorTool.Sketch ? SketchHintText() : Tool == EditorTool.Poles && PlacementAsset == null ? PolesHintText() : Tool == EditorTool.Group && PlacementAsset == null
             ? "marking parcels: click a parcel to mark or unmark it, Enter groups the marked ones, Esc clears the marks"
             : PlacementAsset != null

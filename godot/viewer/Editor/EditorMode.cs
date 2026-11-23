@@ -23,6 +23,7 @@ public partial class EditorMode : Node, IEditorHost
     const float TopDownHeight = 120f;
 
     // the parts of the editor that own their state; Update and ActiveChanged run in this order
+    public EditStore Edits { get; }
     public OrthoLayer Ortho { get; }
     public FloorPlanLayer FloorPlan { get; }
     readonly List<EditorPart> _parts;
@@ -31,6 +32,7 @@ public partial class EditorMode : Node, IEditorHost
     {
         Ortho = new OrthoLayer(this);
         FloorPlan = new FloorPlanLayer(this);
+        Edits = new EditStore(this, SyncCatalogs, doc => { SkDraftEnd(); ApplySketch(doc); });
         Commands = new CommandPalette(PaletteAll);
         _parts = new() { Ortho, FloorPlan };
     }
@@ -78,7 +80,6 @@ public partial class EditorMode : Node, IEditorHost
     int _rayVersion = -1;
     Vector3 _rayOrigin, _rayDir, _rayPoint;
     bool _rayHit;
-    SortedDictionary<string, object?>? _disk;
 
     float _yaw, _pitch;
     bool _looking, _rmbMoved;
@@ -93,7 +94,6 @@ public partial class EditorMode : Node, IEditorHost
     Label _selLabel = null!, _groupLabel = null!;
     Button _btnGroup = null!, _btnMerge = null!, _btnAdd = null!, _btnRemove = null!, _btnDissolve = null!;
     double _statusUntil;
-    (DateTime, long) _seenEdits;
     double _pollT;
 
     public override void _Ready()
@@ -118,7 +118,7 @@ public partial class EditorMode : Node, IEditorHost
             Watcher.MapReloaded += (n, _, ms) => Say($"map reloaded: buildings of {n} chunk{(n == 1 ? "" : "s")} in {ms:F0} ms");
             Watcher.MapReloadFailed += m => Say("map not reloaded: " + m, true);
         }
-        _seenEdits = Stat();
+        Edits.Remember();
         ReloadGroups();
         SetActive(false);
     }
@@ -348,7 +348,7 @@ public partial class EditorMode : Node, IEditorHost
         }
         if (groups.Count >= 1) { MergeGroups(); return; } // marked parcels touch a group: grouping them makes one new group of everything
         var sel = Selection.ToList();
-        Mutate(root =>
+        Edits.Mutate(root =>
         {
             var (ok, msg, gid) = EditsFile.CreateGroup(root, sel);
             return (ok, ok ? $"created {gid}" : msg);
@@ -361,7 +361,7 @@ public partial class EditorMode : Node, IEditorHost
         var gids = Selection.Select(Group).Where(g => g != null).Select(g => g!).Distinct().ToList();
         var extra = Selection.Where(p => Group(p) == null).ToList();
         if (gids.Count < 2 && !(gids.Count == 1 && extra.Count > 0)) { Say("mark parcels from 2 or more groups, or a group and a loose parcel, to merge", true); return; }
-        Mutate(root =>
+        Edits.Mutate(root =>
         {
             var (ok, msg, _) = EditsFile.MergeGroups(root, gids, extra);
             return (ok, msg);
@@ -375,7 +375,7 @@ public partial class EditorMode : Node, IEditorHost
         var add = Selection.Where(p => Group(p) == null).ToList();
         if (add.Count == 0) { Say("nothing to add: every selected parcel is already in a group", true); return; }
         var gid = groups[0]!;
-        Mutate(root =>
+        Edits.Mutate(root =>
         {
             var (ok, msg) = EditsFile.AddToGroup(root, gid, add);
             return (ok, msg);
@@ -386,7 +386,7 @@ public partial class EditorMode : Node, IEditorHost
     {
         var sel = Selection.Where(p => Group(p) != null).ToList();
         if (sel.Count == 0) { Say("none of the selected parcels is in a group", true); return; }
-        Mutate(root => EditsFile.RemoveFromGroups(root, sel));
+        Edits.Mutate(root => EditsFile.RemoveFromGroups(root, sel));
     }
 
     public void DissolveGroup()
@@ -394,81 +394,16 @@ public partial class EditorMode : Node, IEditorHost
         var groups = Selection.Select(Group).Where(g => g != null).Distinct().ToList();
         if (groups.Count != 1) { Say(groups.Count == 0 ? "no group in the selection" : "selection spans several groups", true); return; }
         var gid = groups[0]!;
-        Mutate(root => EditsFile.Dissolve(root, gid));
+        Edits.Mutate(root => EditsFile.Dissolve(root, gid));
     }
 
     string? Group(string parcel) => Map.Parcels.TryGetValue(parcel, out var p) ? p.Group : null;
-
-    /// <summary>
-    /// Reload the file from disk, apply the operation to that fresh content (another writer may have
-    /// changed it), validate the result (the Python validator's rules), write it back atomically and refresh
-    /// the group data. The touched `parcels.&lt;ID&gt;` / `groups.&lt;ID&gt;` entries (before and after) go on the undo
-    /// stack under <paramref name="description"/> (default: the operation's message). Returns whether it was saved.
-    /// </summary>
-    const string EditsLockedMessage = "not saved: edits.json is being written by another program (the MCP server?), try again in a moment";
-
-    bool Mutate(Func<SortedDictionary<string, object?>, (bool ok, string message)> op, string? description = null)
-    {
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        try
-        {
-            SyncCatalogs();
-            using var wlock = EditsLock.TryAcquire(EditsPath); // same flock as the MCP server's writes, held from the load to the save
-            if (wlock == null) { Say(EditsLockedMessage, true); return false; }
-            var root = EditsFile.Load(EditsPath);
-            var before = ObjectEdits.CloneObj(root);
-            var (ok, msg) = op(root);
-            if (!ok) { Say(msg, true); ReloadGroups(); return false; }
-            var errors = ObjectEdits.ValidateDocument(root);
-            if (errors.Count > 0) { Say("not saved: " + ObjectEdits.Summarise(errors), true); ReloadGroups(); return false; }
-            if (EditsFile.Dump(before) == EditsFile.Dump(root)) { Say("no changes to save"); return true; } // the file already says this
-            var changes = DiffEntries(before, root);
-            EditsFile.Save(EditsPath, root);
-            SaveCount++;
-            if (changes.Count > 0) PushUndo(new UndoRecord(description ?? msg, changes));
-            AfterSave(sw);
-            Say($"saved ({msg})");
-            return true;
-        }
-        catch (Exception e)
-        {
-            Say($"not saved: {e.Message}", true);
-            return false;
-        }
-    }
-
-    /// <summary>Everything that follows a write: remember the file state, refresh groups, let the watcher do objects instantly.</summary>
-    void AfterSave(System.Diagnostics.Stopwatch sw)
-    {
-        _seenEdits = Stat();
-        ReloadGroups();
-        var instant0 = Watcher?.InstantCount ?? 0;
-        Watcher?.NotifySaved();
-        LastSaveInstant = (Watcher?.InstantCount ?? 0) > instant0;
-        LastSaveMs = sw.Elapsed.TotalMilliseconds;
-        _panelDirty = true;
-    }
-
-    /// <summary>Wall time of the last save from reading the file to the objects being instanced (when instant), milliseconds.</summary>
-    public double LastSaveMs { get; private set; }
-    /// <summary>True when the last save was applied in process (objects only, no parcel-run).</summary>
-    public bool LastSaveInstant { get; private set; }
-
-    (DateTime, long) Stat()
-    {
-        try
-        {
-            var fi = new FileInfo(EditsPath);
-            return fi.Exists ? (fi.LastWriteTimeUtc, fi.Length) : (DateTime.MinValue, -1);
-        }
-        catch (IOException) { return (DateTime.MinValue, -1); }
-    }
 
     /// <summary>Fill ParcelInfo.Group from the edits file on disk.</summary>
     public void ReloadGroups()
     {
         Dictionary<string, string> member;
-        try { _disk = EditsFile.Load(EditsPath); member = EditsFile.MembershipOf(_disk); }
+        try { member = EditsFile.MembershipOf(Edits.Reload()); }
         catch (Exception) { return; } // half-written or invalid: keep what we have
         foreach (var p in Map.Parcels.Values) p.Group = member.GetValueOrDefault(p.Id);
         _groupMembers.Clear();
@@ -495,6 +430,8 @@ public partial class EditorMode : Node, IEditorHost
             $"Fence and tree edits for {string.Join(", ", _pending.Keys.Take(4))}{(n > 4 ? ", ..." : "")} are not applied yet and exist only in memory. Cancel, then press Enter to apply them.",
             okText, () => { _pending.Clear(); AfterEdit(); proceed(); });
     }
+
+    public void MarkPanelDirty() => _panelDirty = true;
 
     public override void _Notification(int what)
     {
@@ -652,8 +589,7 @@ public partial class EditorMode : Node, IEditorHost
         if (_pollT > 0.5)
         {
             _pollT = 0;
-            var st = Stat();
-            if (st != _seenEdits) { _seenEdits = st; ReloadGroups(); }
+            if (Edits.ChangedOnDisk()) ReloadGroups();
         }
         if (_outlinesDirty) RebuildOutlines();
         if (_panelDirty) RefreshPanel();
@@ -922,8 +858,8 @@ public partial class EditorMode
         {
             switch (k.Keycode)
             {
-                case Key.Z: if (k.ShiftPressed) Redo(); else Undo(); return true;
-                case Key.Y: Redo(); return true;
+                case Key.Z: if (k.ShiftPressed) Edits.Redo(); else Edits.Undo(); return true;
+                case Key.Y: Edits.Redo(); return true;
                 case Key.D: DuplicateSelected(); return true;
             }
             return false;
