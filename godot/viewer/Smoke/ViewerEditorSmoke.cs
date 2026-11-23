@@ -62,7 +62,7 @@ public partial class Viewer
 
     async Task EditorSmokeBody()
     {
-        using var c = new EditorCtx(_opts["editor-smoke-plan"], _editor!.EditsPath, _opts["state"]);
+        using var c = new EditorCtx(_opts["editor-smoke-plan"], Ed.EditsPath, _opts["state"]);
 
         CanonicalWriter(c);
         await WalkModeThenF2(c);
@@ -97,7 +97,6 @@ public partial class Viewer
     // ---- walk mode, then F2 ----
     async Task WalkModeThenF2(EditorCtx c)
     {
-        var ed = _editor!;
         await Physics(3);
         _player.Velocity = Vector3.Zero;
         _player.GlobalPosition = _map.SpawnPoints.First(sp => !float.IsNaN(_map.GroundHeight(sp.Position.X, sp.Position.Z))).Position + Vector3.Up * 2f; // as in the plain smoke: land on the real ground
@@ -108,12 +107,12 @@ public partial class Viewer
         c.WalkYaw = _player.RotationDegrees.Y;
         c.WalkCamPos = _player.Camera.GlobalPosition;
         c.InputBefore = _player.InputEnabled;
-        Check(!ed.Active && _player.Camera.Current, "starts in walk mode with the player camera");
+        Check(!Ed.Active && _player.Camera.Current, "starts in walk mode with the player camera");
         Press(Key.F2);
         await Physics(3);
-        Check(ed.Active && ed.FlyCam.Current && !_player.Visible && !_player.InputEnabled
-              && ed.FlyCam.GlobalPosition.DistanceTo(c.WalkCamPos) < 0.01f,
-            $"F2: editor mode, fly camera current at the player camera, player hidden and frozen (cam {ed.FlyCam.GlobalPosition})");
+        Check(Ed.Active && Ed.FlyCam.Current && !_player.Visible && !_player.InputEnabled
+              && Ed.FlyCam.GlobalPosition.DistanceTo(c.WalkCamPos) < 0.01f,
+            $"F2: editor mode, fly camera current at the player camera, player hidden and frozen (cam {Ed.FlyCam.GlobalPosition})");
         Check(Input.MouseMode == Input.MouseModeEnum.Visible, $"mouse visible in editor mode (mode {Input.MouseMode})");
         await Physics(30);
         Check(_player.GlobalPosition.DistanceTo(c.WalkPos) < 0.01f, "player stays frozen while in editor mode");
@@ -122,25 +121,23 @@ public partial class Viewer
     // ---- top-down snap and restore ----
     async Task TopDownAndFlySpeed()
     {
-        var ed = _editor!;
-        var camBefore = ed.FlyCam.GlobalPosition;
-        var basisBefore = ed.FlyCam.GlobalBasis;
-        ed.ToggleTopDown();
-        var down = ed.Camera.TopDown && ed.FlyCam.GlobalBasis.Z.Y > 0.999f;
-        Check(down, $"T snaps to top-down (camera z {ed.FlyCam.GlobalPosition.Y:F1})");
-        ed.ToggleTopDown();
-        Check(!ed.Camera.TopDown && ed.FlyCam.GlobalPosition.DistanceTo(camBefore) < 1e-3f
-              && ed.FlyCam.GlobalBasis.Z.DistanceTo(basisBefore.Z) < 1e-3f, "T again restores the previous camera");
-        var speed0 = ed.Camera.Speed;
+        var camBefore = Ed.FlyCam.GlobalPosition;
+        var basisBefore = Ed.FlyCam.GlobalBasis;
+        Ed.ToggleTopDown();
+        var down = Ed.Camera.TopDown && Ed.FlyCam.GlobalBasis.Z.Y > 0.999f;
+        Check(down, $"T snaps to top-down (camera z {Ed.FlyCam.GlobalPosition.Y:F1})");
+        Ed.ToggleTopDown();
+        Check(!Ed.Camera.TopDown && Ed.FlyCam.GlobalPosition.DistanceTo(camBefore) < 1e-3f
+              && Ed.FlyCam.GlobalBasis.Z.DistanceTo(basisBefore.Z) < 1e-3f, "T again restores the previous camera");
+        var speed0 = Ed.Camera.Speed;
         Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp, Pressed = true });
         await Physics(2);
-        Check(ed.Camera.Speed > speed0, $"wheel changes fly speed ({speed0:F0} -> {ed.Camera.Speed:F0} m/s)");
+        Check(Ed.Camera.Speed > speed0, $"wheel changes fly speed ({speed0:F0} -> {Ed.Camera.Speed:F0} m/s)");
     }
 
     // ---- picking ----
     void Picking(EditorCtx c)
     {
-        var ed = _editor!;
         string A = c.A, B = c.B, C = c.C;
         var pa = PlanPoint(c, "point_a"); var pb = PlanPoint(c, "point_b"); var pc = PlanPoint(c, "point_c");
         Check(_map.ParcelAt(pa.X, pa.Z)?.Id == A && _map.ParcelAt(pb.X, pb.Z)?.Id == B && _map.ParcelAt(pc.X, pc.Z)?.Id == C,
@@ -151,89 +148,85 @@ public partial class Viewer
         for (var i = 0; i < 20000; i++) if (_map.ParcelAt(pa.X + (i % 200) * 0.5f, pa.Z + (i / 200) * 0.5f) != null) found++;
         var perLookup = (Time.GetTicksUsec() - t0) / 20000.0;
         Check(perLookup < 50, $"point lookup is fast: {perLookup:F2} us per lookup over {_map.Parcels.Count} parcels");
-        ed.Camera.LookFrom(pa + Vector3.Up * 60f, pa);
+        Ed.Camera.LookFrom(pa + Vector3.Up * 60f, pa);
         var size = GetViewport().GetVisibleRect().Size;
-        var picked = ed.Picker.PickScreen(size / 2, out var pt);
+        var picked = Ed.Picker.PickScreen(size / 2, out var pt);
         Check(picked?.Id == A, $"camera ray through the screen centre picks {A} (hit {pt})");
-        ed.Camera.LookFrom(new Vector3(1e5f, 400f, 1e5f), new Vector3(1e5f, 0, 1e5f - 1));
-        Check(ed.Picker.PickScreen(size / 2, out _) == null, "ray into empty space picks nothing");
+        Ed.Camera.LookFrom(new Vector3(1e5f, 400f, 1e5f), new Vector3(1e5f, 0, 1e5f - 1));
+        Check(Ed.Picker.PickScreen(size / 2, out _) == null, "ray into empty space picks nothing");
     }
 
     // ---- selection ----
     async Task Selection(EditorCtx c)
     {
-        var ed = _editor!;
         string A = c.A, B = c.B, C = c.C;
         var selEvents = 0;
-        ed.SelectionChanged += () => selEvents++;
-        ed.Click(A, false);
-        Check(ed.Selection.SetEquals(new[] { A }), $"click selects {A}");
-        ed.Click(B, true);
-        Check(ed.Selection.SetEquals(new[] { A, B }), $"shift+click adds {B}");
-        ed.Click(B, true);
-        Check(ed.Selection.SetEquals(new[] { A }), $"shift+click again removes {B}");
-        ed.Click(B, true);
-        ed.Click(null, true);
-        Check(ed.Selection.SetEquals(new[] { A, B }), "shift+click on empty space keeps the selection");
-        ed.Click(C, false);
-        Check(ed.Selection.SetEquals(new[] { C }), "plain click replaces the selection");
-        ed.Click(null, false);
-        Check(ed.Selection.Count == 0, "click on empty space clears the selection");
-        ed.Click(A, false); ed.Click(B, true);
+        Ed.SelectionChanged += () => selEvents++;
+        Ed.Click(A, false);
+        Check(Ed.Selection.SetEquals(new[] { A }), $"click selects {A}");
+        Ed.Click(B, true);
+        Check(Ed.Selection.SetEquals(new[] { A, B }), $"shift+click adds {B}");
+        Ed.Click(B, true);
+        Check(Ed.Selection.SetEquals(new[] { A }), $"shift+click again removes {B}");
+        Ed.Click(B, true);
+        Ed.Click(null, true);
+        Check(Ed.Selection.SetEquals(new[] { A, B }), "shift+click on empty space keeps the selection");
+        Ed.Click(C, false);
+        Check(Ed.Selection.SetEquals(new[] { C }), "plain click replaces the selection");
+        Ed.Click(null, false);
+        Check(Ed.Selection.Count == 0, "click on empty space clears the selection");
+        Ed.Click(A, false); Ed.Click(B, true);
         await Physics(3);
         await Frame(1);
-        Check(selEvents > 0 && ed.Parcels.SelectionText.Contains(A) && ed.Parcels.SelectionText.Contains(B) && ed.Parcels.CanGroup,
+        Check(selEvents > 0 && Ed.Parcels.SelectionText.Contains(A) && Ed.Parcels.SelectionText.Contains(B) && Ed.Parcels.CanGroup,
             "panel lists the selection and enables [Group selected]");
     }
 
     // ---- outlines before grouping ----
     void OutlinesBeforeGrouping(EditorCtx c)
     {
-        var ed = _editor!;
-        var selNode = ed.Outlines.Node(OutlineLayer.Selected);
-        var noCollision = ed.Outlines.Root.GetChildren().All(n => n is MeshInstance3D m && m.GetChildCount() == 0);
-        Check(selNode?.Mesh != null && ed.Outlines.SegmentCount(OutlineLayer.Selected) == c.Plan.GetProperty("sel_segments").GetInt32() && noCollision,
-            $"selected parcels have an outline mesh ({ed.Outlines.SegmentCount(OutlineLayer.Selected)} segments) without collision");
+        var selNode = Ed.Outlines.Node(OutlineLayer.Selected);
+        var noCollision = Ed.Outlines.Root.GetChildren().All(n => n is MeshInstance3D m && m.GetChildCount() == 0);
+        Check(selNode?.Mesh != null && Ed.Outlines.SegmentCount(OutlineLayer.Selected) == c.Plan.GetProperty("sel_segments").GetInt32() && noCollision,
+            $"selected parcels have an outline mesh ({Ed.Outlines.SegmentCount(OutlineLayer.Selected)} segments) without collision");
         if (selNode?.Mesh is { } sm)
         {
             var v = sm.SurfaceGetArrays(0)[(int)Mesh.ArrayType.Vertex].AsVector3Array();
             var lift = v.Take(40).Select(p => p.Y - _map.GroundHeightOrMean(p.X, p.Z)).Min();
             Check(lift >= 0.2f && lift <= 0.6f, $"outline hangs {lift:F2} m above the ground");
         }
-        ed.SetHover(c.C);
-        ed.Outlines.Rebuild();
-        Check(ed.Outlines.Node(OutlineLayer.Hover)?.Mesh != null && ed.Outlines.SegmentCount(OutlineLayer.Hover) == c.Plan.GetProperty("c_segments").GetInt32(),
+        Ed.SetHover(c.C);
+        Ed.Outlines.Rebuild();
+        Check(Ed.Outlines.Node(OutlineLayer.Hover)?.Mesh != null && Ed.Outlines.SegmentCount(OutlineLayer.Hover) == c.Plan.GetProperty("c_segments").GetInt32(),
             "hovered parcel has a (subtle) outline");
-        ed.SetHover(null);
-        Check(ed.Outlines.Root.GetChildren().All(n => n.Name != "outline_group"), "no always-on group outline (groups show like parcel borders: on hover/selection only)");
+        Ed.SetHover(null);
+        Check(Ed.Outlines.Root.GetChildren().All(n => n.Name != "outline_group"), "no always-on group outline (groups show like parcel borders: on hover/selection only)");
     }
 
     // ---- refusals ----
     void Refusals(EditorCtx c)
     {
-        var ed = _editor!;
         var fileBefore = File.ReadAllText(c.EditsPath);
-        ed.Click(c.C, false); ed.Click(c.A, true);
-        ed.Groups.GroupSelected();
-        Check(File.ReadAllText(c.EditsPath) == fileBefore && ed.Chrome.StatusMessage.Contains("already in"),
-            $"G refused when a selected parcel is in a group, file untouched ('{ed.Chrome.StatusMessage}')");
-        ed.Click(c.A, false);
-        ed.Groups.GroupSelected();
-        Check(File.ReadAllText(c.EditsPath) == fileBefore && ed.Chrome.StatusMessage.Contains("2 or more"), "G refused with fewer than 2 parcels");
+        Ed.Click(c.C, false); Ed.Click(c.A, true);
+        Ed.Groups.GroupSelected();
+        Check(File.ReadAllText(c.EditsPath) == fileBefore && Ed.Chrome.StatusMessage.Contains("already in"),
+            $"G refused when a selected parcel is in a group, file untouched ('{Ed.Chrome.StatusMessage}')");
+        Ed.Click(c.A, false);
+        Ed.Groups.GroupSelected();
+        Check(File.ReadAllText(c.EditsPath) == fileBefore && Ed.Chrome.StatusMessage.Contains("2 or more"), "G refused with fewer than 2 parcels");
     }
 
     // ---- create a group ----
     async Task CreateGroup(EditorCtx c)
     {
-        var ed = _editor!;
         string A = c.A, B = c.B;
-        ed.Click(A, false); ed.Click(B, true);
+        Ed.Click(A, false); Ed.Click(B, true);
         c.Applied0 = _watcher!.AppliedCount;
-        ed.Groups.GroupSelected();
+        Ed.Groups.GroupSelected();
         var after = File.ReadAllText(c.EditsPath);
         var gid = c.Gid = _map.Parcels[A].Group;
-        Check(gid == c.Plan.GetProperty("next_group").GetString() && _map.Parcels[B].Group == gid && ed.Chrome.StatusMessage.StartsWith("saved"),
-            $"G creates {gid} (next free number) for {A} and {B}, status '{ed.Chrome.StatusMessage}'");
+        Check(gid == c.Plan.GetProperty("next_group").GetString() && _map.Parcels[B].Group == gid && Ed.Chrome.StatusMessage.StartsWith("saved"),
+            $"G creates {gid} (next free number) for {A} and {B}, status '{Ed.Chrome.StatusMessage}'");
         File.WriteAllText(c.S("after_group"), after);
         var doc = EditsFile.Parse(after);
         var members = EditsFile.Members(EditsFile.Groups(doc).GetValueOrDefault(gid ?? ""));
@@ -244,8 +237,8 @@ public partial class Viewer
         Check(keptStale, "unknown parcel entries and other groups preserved");
         await Physics(2);
         await Frame(1);
-        ed.Outlines.Rebuild();
-        var gseg = ed.Outlines.SegmentCount(OutlineLayer.Selected);
+        Ed.Outlines.Rebuild();
+        var gseg = Ed.Outlines.SegmentCount(OutlineLayer.Selected);
         Check(gseg == c.Plan.GetProperty("group_ab_segments").GetInt32() && gseg < c.Plan.GetProperty("sel_segments").GetInt32() && c.Plan.GetProperty("shared_edges").GetInt32() > 0,
             $"selected group outlined as one shape without shared edges: {gseg} segments (members alone would give {c.Plan.GetProperty("sel_segments").GetInt32()}, shared edges {c.Plan.GetProperty("shared_edges").GetInt32()})");
     }
@@ -254,8 +247,8 @@ public partial class Viewer
     async Task WatcherRegeneratesGroup(EditorCtx c)
     {
         var ok = await WaitUntil(() => _watcher!.AppliedCount > c.Applied0 || _watcher.FailedCount > 0, 40);
-        Check(ok && _watcher!.AppliedCount > c.Applied0 && _editor!.Chrome.StatusMessage.StartsWith("applied in"),
-            $"watcher regenerated the group parcels: status '{_editor!.Chrome.StatusMessage}'");
+        Check(ok && _watcher!.AppliedCount > c.Applied0 && Ed.Chrome.StatusMessage.StartsWith("applied in"),
+            $"watcher regenerated the group parcels: status '{Ed.Chrome.StatusMessage}'");
     }
 
     // ---- editor-state.json carries the selection ----
@@ -269,14 +262,13 @@ public partial class Viewer
     // ---- another writer changes the file; our next save keeps its change ----
     async Task OtherWriterThenDissolve(EditorCtx c)
     {
-        var ed = _editor!;
         var editsPath = c.EditsPath;
         var ext = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(editsPath))!;
         ext["parcels"]!["P-8888"] = System.Text.Json.Nodes.JsonNode.Parse("{\"fence\": {\"mode\": \"none\"}}");
         File.WriteAllText(editsPath + ".ext", ext.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         File.Move(editsPath + ".ext", editsPath, true);
-        ed.Click(c.A, false);
-        ed.Groups.Dissolve();
+        Ed.Click(c.A, false);
+        Ed.Groups.Dissolve();
         var final = File.ReadAllText(editsPath);
         File.WriteAllText(c.S("final"), final);
         var fd = EditsFile.Parse(final);
@@ -309,7 +301,7 @@ public partial class Viewer
     // ---- state with a cleared selection, then wait for the watcher to settle ----
     async Task StateAfterClearedSelection(EditorCtx c)
     {
-        _editor!.Click(null, false);
+        Ed.Click(null, false);
         await WaitUntil(() => StateSelected(c.StatePath).Count == 0, 4);
         Check(StateSelected(c.StatePath).Count == 0, "editor-state.json selected is empty after clearing");
         Check(await WaitIdle(60), "watcher settled after the edits");
@@ -319,10 +311,9 @@ public partial class Viewer
     // ---- back to walk mode ----
     async Task BackToWalkMode(EditorCtx c)
     {
-        var ed = _editor!;
         Press(Key.F2);
         await Physics(3);
-        Check(!ed.Active && _player.Camera.Current && _player.Visible && _player.InputEnabled == c.InputBefore
+        Check(!Ed.Active && _player.Camera.Current && _player.Visible && _player.InputEnabled == c.InputBefore
               && _player.GlobalPosition.DistanceTo(c.WalkPos) < 0.01f && Mathf.Abs(_player.RotationDegrees.Y - c.WalkYaw) < 0.01f,
             $"F2 back: player restored at {_player.GlobalPosition} yaw {_player.RotationDegrees.Y:F1}, visible, input on");
         Check(Input.MouseMode == c.MouseAtStart, $"mouse mode back to what walk mode had (headless may ignore capture) ({c.MouseAtStart}), now {Input.MouseMode}");

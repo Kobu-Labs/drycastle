@@ -15,6 +15,9 @@ namespace Drycastle.Viewer;
 /// </summary>
 public partial class Viewer
 {
+    // the editor the editor-driving smokes (editor, panel, shape editor, objects) work on
+    Editor.EditorMode Ed => _editor!;
+
     bool _editOk = true;
     readonly List<(string step, double ms)> _latencies = new();
 
@@ -85,6 +88,14 @@ public partial class Viewer
         var tmp = editsPath + ".tmp";
         File.Copy(source, tmp, true);
         File.Move(tmp, editsPath, true);
+    }
+
+    // a plan point (x east, y north in map metres, plus an offset) on the terrain
+    Vector3 PlanGround(SmokeCtx c, string k, double dx = 0, double dy = 0)
+    {
+        var a = c.Plan.GetProperty(k);
+        var x = (float)(a[0].GetDouble() + dx); var z = (float)-(a[1].GetDouble() + dy);
+        return new Vector3(x, _map.GroundHeightOrMean(x, z), z);
     }
 
     void CheckSeed(SmokeCtx c) => Check(c.Disk() == c.Expect("seed"), "scratch edits file is the planned seed");
