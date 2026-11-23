@@ -24,23 +24,13 @@ public partial class NetClient : Node
     public const double InterpDelayTicks = 3.0;
     const float SnapDistance = 2f, ReconcileEpsilon = 0.03f;
 
-    public Node3D World = null!;
-    Node3D? _owned;
-    /// <summary>
-    /// The node under <see cref="World"/> that holds everything this client adds to the persistent world (effects, pools,
-    /// corpses, crates, turrets, aircraft, missiles, the POV camera). <see cref="FreeOwned"/> frees it all on leave (#169, T2-17).
-    /// </summary>
-    Node3D Owned
-    {
-        get
-        {
-            if (_owned == null || !GodotObject.IsInstanceValid(_owned)) { _owned = new Node3D { Name = "ClientOwned" }; World.AddChild(_owned); }
-            return _owned;
-        }
-    }
+    /// <summary>What the features of this client may use of the rest of it (see <see cref="ClientContext"/>); the plain members below forward to it.</summary>
+    public ClientContext Ctx { get; }
+    public Node3D World { get => Ctx.World; set => Ctx.World = value; }
+    Node3D Owned => Ctx.Owned;
     public string Host = "127.0.0.1";
     public int Port = 27015;
-    public string PlayerName = "player";
+    public string PlayerName { get => Ctx.PlayerName; set => Ctx.PlayerName = value; }
     /// <summary>Player token sent in the hello (ADR 0003). Empty = a fresh one is generated (bots and CLI clients).</summary>
     public string Token = "";
     /// <summary>The server's profile for this player (level, XP, loadouts, active slot); null until it arrives.</summary>
@@ -48,7 +38,7 @@ public partial class NetClient : Node
     /// <summary>Raised for an error the server sends after the join (for example an invalid loadout).</summary>
     public event Action<string>? ServerError;
     string? _rejectReason;
-    public bool Bot;
+    public bool Bot { get => Ctx.Bot; set => Ctx.Bot = value; }
     /// <summary>Network impairment for the loss and latency test (--net-sim); null = none.</summary>
     public NetSim? Sim;
     /// <summary>Loss test role ("walker" or "shooter"); empty = off. See NetClient.LossBot.cs.</summary>
@@ -61,8 +51,8 @@ public partial class NetClient : Node
     /// <summary>Match smoke role: "alice" (kills bob with the debug command) or "bob" (fires after each spawn); empty = normal bot/player.</summary>
     public string MatchBot = "";
     /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
-    public readonly ClientMatchState Match = new();
-    public bool Dead { get; private set; }
+    public ClientMatchState Match => Ctx.Match;
+    public bool Dead => Ctx.Dead;
 
     /// <summary>
     /// The mode flags (dead, in a vehicle, at a turret, steering the missile, held by the Mass, the demon or the Bigfoot) as one value to ask named questions of
@@ -70,7 +60,7 @@ public partial class NetClient : Node
     /// </summary>
     ClientModeInputs Mode => new(Dead, _driving, _gunship != null || ScudScreenOn, _controlling, _massSeated, _pinned, _heldByBigfoot, _pRising, _myState == EntityState.InVehicle, _driving && InArmedSeat);
     /// <summary>weapons.json: hotbar order and the per-weapon movement speed multiplier used by prediction.</summary>
-    public WeaponsFile Weapons = null!;
+    public WeaponsFile Weapons { get => Ctx.Weapons!; set => Ctx.Weapons = value; }
     /// <summary>match.json as the client shipped it: the gunfire blips' radius, lifetime and rate limit (null: no blips, e.g. headless bots).</summary>
     public MatchConfig? BlipConfig;
     /// <summary>Weapons smoke role: "a" (shoots) or "b" (stands still and counts hits); empty = none.</summary>
@@ -97,8 +87,8 @@ public partial class NetClient : Node
 
     readonly ENetConnection _conn = new();
     ENetPacketPeer? _peer;
-    Player? _me;
-    ushort _myId;
+    Player? _me { get => Ctx.Me; set => Ctx.Me = value; }
+    ushort _myId { get => Ctx.MyId; set => Ctx.MyId = value; }
     /// <summary>The link to the server (Client.Link): connecting, welcomed, spawned (own snapshot applied), failed, left. Replaces the old welcomed/gotSelf/done flags.</summary>
     readonly StateMachine<LinkPhase> _link = new(ConnectionPhases.Link);
     /// <summary>A welcome was received at some point (it stays true after a failure or a leave: the perf and telemetry output still flush, and Fail tells the menu whether the match was joined).</summary>
@@ -127,9 +117,26 @@ public partial class NetClient : Node
     int _deaths, _earlyEnds;
     readonly MatchBotAlice _alice = new();
 
+    // the features that need only the context; the ones that take the host's data are made in _Ready
+    readonly MoabClient _moab;
+    readonly DoorsClient _doors;
+    readonly UavClient _uav;
+    readonly IntelClient _intel;
+    BlipsClient _blips = null!;
+
+    public NetClient()
+    {
+        Ctx = new ClientContext(this) { Send = SendEvent };
+        _moab = new MoabClient(Ctx);
+        _doors = new DoorsClient(Ctx);
+        _uav = new UavClient(Ctx);
+        _intel = new IntelClient(Ctx);
+    }
+
     public override void _Ready()
     {
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
+        _blips = new BlipsClient(Ctx, BlipConfig);
         InitCorpses();
         InitGroundItems();
         InitCarePackages();
@@ -191,8 +198,7 @@ public partial class NetClient : Node
     /// <summary>Frees everything this client put under <see cref="Owned"/> (effects, pools, props, missiles), so a leave and a rejoin leave no nodes behind (#169, T2-17).</summary>
     void FreeOwned()
     {
-        if (_owned != null && GodotObject.IsInstanceValid(_owned)) _owned.QueueFree();
-        _owned = null;
+        Ctx.FreeOwned();
         _missiles.Clear();
         _animals.Clear(); // the nodes are under Owned
         _poops.Clear();
@@ -303,7 +309,7 @@ public partial class NetClient : Node
         UpdateThrowArc();
         UpdateDemonQuake(delta);
         UpdateDust(); // before the shake: a blast wave that arrives this frame shakes this frame
-        UpdateShake(delta);
+        Ctx.Shake.Update(delta);
         UpdateNausea(delta); // a high player's sway (NetClient.High.cs), before the roll is composed
         FadeOwnCorrection(delta);
         t = ClientProf.Lap(ClientProf.S.View, t);
@@ -394,15 +400,13 @@ public partial class NetClient : Node
                 OnStatusEvent((EventKind)e.Kind, e.Payload); // statuses: blessing, curse, burning
                 OnItemEvent((EventKind)e.Kind, e.Payload); // what the player wears, what a corpse carries, an item crumbling
                 OnCompanionEvent((EventKind)e.Kind, e.Payload); // the Companions the player can pick and the one that is out
-                OnIntelEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
+                _intel.OnEvent((EventKind)e.Kind, e.Payload); // the announced events: the intel screen, the announcement
                 OnThiefAudioEvent((EventKind)e.Kind, e.Payload); // a Gang member says a line (ticket 09)
                 OnBigfootEvent((EventKind)e.Kind, e.Payload); // the Bigfoot's effects and the footprints to its corpse (#264)
                 OnHarvesterEvent((EventKind)e.Kind, e.Payload); // the harvester's cut, its bales' fire (#331)
                 OnThievesEvent((EventKind)e.Kind, e.Payload); // the Raid vans' honk
-                OnChurchEvent((EventKind)e.Kind, e.Payload); // the church doors
+                _doors.OnEvent((EventKind)e.Kind, e.Payload); // the church doors, the Obecny Urad's door and the bus garage's doors
                 OnRozhlasEvent((EventKind)e.Kind, e.Payload); // the village loudspeaker's phase, broadcast and offset
-                OnUradDoorEvent((EventKind)e.Kind, e.Payload); // the Obecny Urad's door
-                OnGarageDoorEvent((EventKind)e.Kind, e.Payload); // the bus garage's doors
                 OnMassEvent((EventKind)e.Kind, e.Payload); // the Holy Mass: chant, bells, the player's seat, the blessing
                 OnDemonEvent((EventKind)e.Kind, e.Payload); // the demon: fireballs, the curse
                 OnHuntEvent((EventKind)e.Kind, e.Payload); // the Hunter's Log: answers and announcements (#336)
@@ -411,7 +415,7 @@ public partial class NetClient : Node
                 OnWeaponEvent((EventKind)e.Kind, e.Payload);
                 OnMatchEvent((EventKind)e.Kind, e.Payload);
                 OnProgressionEvent((EventKind)e.Kind, e.Payload);
-                UavEvent((EventKind)e.Kind, e.Payload);
+                _uav.OnEvent((EventKind)e.Kind, e.Payload);
                 OnAppearanceEvent((EventKind)e.Kind, e.Payload);
                 WorldEntities.OnEvent((EventKind)e.Kind, e.Payload);
                 PerfClientEvent((EventKind)e.Kind, e.Payload);
@@ -444,7 +448,7 @@ public partial class NetClient : Node
                 {
                     ApplySpawnLoadout(); // the hotbar and perk the server applied at this spawn
                     _wantSlot = StartSlot();
-                    Dead = false; _earRing?.Clear(); if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
+                    Ctx.Dead = false; _earRing?.Clear(); if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _pending.Clear(); _viewFix = Vector3.Zero; // the next snapshot carries the spawn position
                     _spawnAt = Now; _fireStart = 0; _earlyCounted = false; _spawnProtection = sp.Protection;
                     EndDeathView(); _hud?.ClearTransients(); _hud?.SetDead(false); _hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)_myId); _breath = new BreathState((ulong)_myId); _breathCues.Reset(); _zero.Reset(); ClearPredictedReload(); _pNextFire = 0;
                 }
@@ -454,7 +458,7 @@ public partial class NetClient : Node
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 SfxDeath(d);
                 NoteDeath(d);
-                if (d.Victim == _myId) { _deaths++; BeginDeathView(d.RespawnDelay, d.Flight); Dead = true; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); _hud?.SetProtection(0); OnStreakDeath(); }
+                if (d.Victim == _myId) { _deaths++; BeginDeathView(d.RespawnDelay, d.Flight); Ctx.Dead = true; ClearPredictedReload(); _hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); _hud?.SetProtection(0); OnStreakDeath(); }
                 break;
         }
     }
@@ -1056,11 +1060,11 @@ public partial class NetClient : Node
                 HudAmmo();
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
-                GunfireBlip(sh.Shooter, sh.Weapon, sh.Origin);
+                _blips.Add(sh.Shooter, sh.Weapon, sh.Origin);
                 if (!OnDoorGunShot(sh)) OnShot(sh); // a door gun's round leaves its muzzle on the model
                 break;
             case EventKind.PelletFan when WeaponCodec.DecodePelletFan(payload) is { } pf:
-                GunfireBlip(pf.Shooter, pf.Weapon, pf.Origin);
+                _blips.Add(pf.Shooter, pf.Weapon, pf.Origin);
                 OnPelletFan(pf);
                 break;
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
@@ -1098,7 +1102,7 @@ public partial class NetClient : Node
                 OnVehicleExplosion(vx);
                 break;
             case EventKind.Moab when MoabEvents.Decode(payload) is { } mo:
-                OnMoab(mo);
+                _moab.OnMoab(mo);
                 break;
             case EventKind.MissileBlast when MissileCodec.DecodeBlast(payload) is { } mb:
                 OnMissileBlast(mb);

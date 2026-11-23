@@ -12,7 +12,7 @@ namespace Drycastle.Shooter;
 public partial class NetClient
 {
     /// <summary>killstreaks.json (set by the host): streak names, thresholds and the tracker rules.</summary>
-    public KillstreakFile Killstreaks = null!;
+    public KillstreakFile Killstreaks { get => Ctx.Killstreaks!; set => Ctx.Killstreaks = value; }
 
     KillstreakTracker? _streaks;
 

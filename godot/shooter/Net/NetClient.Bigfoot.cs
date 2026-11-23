@@ -479,13 +479,13 @@ public partial class NetClient
         var at = new Vector3(m.Position.X, m.Position.Y, m.Position.Z);
         switch (m.Kind)
         {
-            case BigfootFxKind.Appear: Sfx.Play3D(BigfootSounds.Roar, at, 4f); ShakeFor(at, 25); RoarAt(at); break;
-            case BigfootFxKind.Roar: Sfx.Play3D(BigfootSounds.Roar, at, 6f); ShakeFor(at, 30); RoarAt(at); break;
-            case BigfootFxKind.Death: Sfx.Play3D(BigfootSounds.Roar, at, 6f); ShakeFor(at, 30); break;
+            case BigfootFxKind.Appear: Sfx.Play3D(BigfootSounds.Roar, at, 4f); Ctx.Shake.At(at, 25); RoarAt(at); break;
+            case BigfootFxKind.Roar: Sfx.Play3D(BigfootSounds.Roar, at, 6f); Ctx.Shake.At(at, 30); RoarAt(at); break;
+            case BigfootFxKind.Death: Sfx.Play3D(BigfootSounds.Roar, at, 6f); Ctx.Shake.At(at, 30); break;
             case BigfootFxKind.StompWindup: Sfx.Play3D(BigfootSounds.StompWindup, at, 6f); break; // the telegraph: a sound, and the pose
             case BigfootFxKind.Shockwave:
                 Sfx.Play3D(BigfootSounds.Shockwave, at, 2f);
-                ShakeFor(at, BigfootData.Stomp.WaveMaxRadiusM);
+                Ctx.Shake.At(at, BigfootData.Stomp.WaveMaxRadiusM);
                 AddRing(at);
                 break;
             case BigfootFxKind.TrunkThrow: Sfx.Play3D(BigfootSounds.Throw, at); break;
@@ -496,7 +496,7 @@ public partial class NetClient
             case BigfootFxKind.VehicleLand:
                 _thrownCars[m.Id] = Now + 0.3;
                 Sfx.Play3D(BigfootSounds.Land, at, -2f);
-                ShakeFor(at, 18);
+                Ctx.Shake.At(at, 18);
                 break;
             case BigfootFxKind.Grab: Sfx.Play3D(BigfootSounds.Grab, at); break;
             case BigfootFxKind.Launch: Sfx.Play3D(BigfootSounds.Throw, at, 4f); break;

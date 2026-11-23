@@ -17,13 +17,6 @@ public partial class NetClient
     /// <summary>This player holds the set.</summary>
     public bool HoldsRozhlasSet => RozhlasHolder != RozhlasSet.None && RozhlasHolder == _myId;
 
-    /// <summary>The Obecny Urad's door (<see cref="EventKind.UradDoor"/>): the server's state sets the box and swings the leaves; a joiner sees an open door swing open once.</summary>
-    void OnUradDoorEvent(EventKind kind, byte[] payload)
-    {
-        if (kind != EventKind.UradDoor || UradDoorCodec.Decode(payload) is not { } open) return;
-        UradDoorNode.Current?.SetOpen(open, animate: true);
-    }
-
     RozhlasMicInput? _mic;
     bool _talking;
     /// <summary>The loudspeaker's phase as the server last said it, and the dictation table (world metres) once a hijack named it.</summary>

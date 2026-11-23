@@ -8,37 +8,40 @@ namespace Drycastle.Shooter;
 /// (<see cref="RocketFx.Explode"/>, the same blast as a rocket, larger), the vehicle blast sound and the flash and
 /// shake (both dropped under reduce motion). Its kills and vehicle deaths arrive as the normal kill and death events.
 /// </summary>
-public partial class NetClient
+public sealed class MoabClient
 {
     /// <summary>Shockwave radius in metres: a rocket's splash is a few metres, the MOAB is a city block.</summary>
-    const float MoabBlastRadius = 40f;
+    const float BlastRadius = 40f;
 
-    MoabBanner? _moabBanner;
+    readonly ClientContext _ctx;
+    MoabBanner? _banner;
 
-    void OnMoab(MoabInfo m)
+    public MoabClient(ClientContext ctx) { _ctx = ctx; }
+
+    public void OnMoab(MoabInfo m)
     {
-        if (_moabBanner == null)
+        if (_banner == null)
         {
-            _moabBanner = new MoabBanner();
-            AddChild(_moabBanner);
+            _banner = new MoabBanner();
+            _ctx.Root.AddChild(_banner);
         }
-        var owner = Match.NameOf(m.Owner);
+        var owner = _ctx.Match.NameOf(m.Owner);
         var at = new Vector3(m.At.X, m.At.Y, m.At.Z);
         switch (m.Phase)
         {
             case MoabPhase.Armed:
-                _moabBanner.Armed(m.Seconds);
-                GD.Print($"client {PlayerName}: MOAB armed by {owner}, {m.Seconds:F0} s");
+                _banner.Armed(m.Seconds);
+                GD.Print($"client {_ctx.PlayerName}: MOAB armed by {owner}, {m.Seconds:F0} s");
                 break;
             case MoabPhase.Detonated:
-                RocketFx.Explode(Owned, at, MoabBlastRadius);
+                RocketFx.Explode(_ctx.Owned, at, BlastRadius);
                 if (Sfx.Enabled) Sfx.Play3D("explosion.vehicle", at);
-                if (!GameSettings.Current.ReduceMotion) ShakeFor(at, MoabBlastRadius);
-                _moabBanner.Blast(owner);
-                GD.Print($"client {PlayerName}: MOAB detonated (seed {m.Seed})");
+                _ctx.Shake.At(at, BlastRadius); // dropped under reduce motion by the shake itself
+                _banner.Blast(owner);
+                GD.Print($"client {_ctx.PlayerName}: MOAB detonated (seed {m.Seed})");
                 break;
             case MoabPhase.Cancelled:
-                _moabBanner.Cancelled();
+                _banner.Cancelled();
                 break;
         }
     }

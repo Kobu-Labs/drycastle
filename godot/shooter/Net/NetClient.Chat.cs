@@ -44,7 +44,7 @@ public partial class NetClient
     /// <summary>Sends a chat line, or a command when it starts with "/". The server answers with chat lines.</summary>
     public void SendChat(string text)
     {
-        if (ChatEvents.Clean(text).Length > 0) SendSandboxEvent(EventKind.ChatSend, ChatEvents.EncodeSend(text));
+        if (ChatEvents.Clean(text).Length > 0) SendEvent(EventKind.ChatSend, ChatEvents.EncodeSend(text));
     }
 
     /// <summary>

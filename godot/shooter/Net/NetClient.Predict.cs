@@ -16,7 +16,6 @@ public partial class NetClient
     readonly Queue<double> _predShots = new();
     double _pNextFire, _pReloadUntil, _pDryAt;
     int _pMag = -1, _pMagAfter, _pSlot;
-    double _shakeAmp;
     RecoilState _recoil = new(0);
     BreathState _breath = new(0);
     readonly BreathCues _breathCues = new();
@@ -226,26 +225,6 @@ public partial class NetClient
         var side = fwd.Cross(Vector3.Up);
         var guess = chest + fwd * 0.7f + side * 0.2f;
         return r.View?.MuzzlePosition is { } m && m.DistanceTo(chest) < 1.3f ? m : guess;
-    }
-
-    /// <summary>Camera shake for the local player: stronger the closer the blast, scaled by its radius.</summary>
-    void ShakeFor(Vector3 at, float radius)
-    {
-        if (_me == null || !ShotFx.Enabled || GameSettings.Current.ReduceMotion) return;
-        var d = _me.Camera.GlobalPosition.DistanceTo(at);
-        var k = Mathf.Clamp(1f - d / (radius * 5f), 0f, 1f);
-        if (k <= 0) return;
-        _shakeAmp = Math.Max(_shakeAmp, 0.02 + 0.2 * k * k);
-    }
-
-    void UpdateShake(double delta)
-    {
-        if (_me == null || !GodotObject.IsInstanceValid(_me)) return;
-        var cam = _me.Camera;
-        if (_shakeAmp <= 0.0005) { if (cam.HOffset != 0 || cam.VOffset != 0) { cam.HOffset = 0; cam.VOffset = 0; } _shakeAmp = 0; return; }
-        cam.HOffset = (float)((GD.Randf() * 2 - 1) * _shakeAmp);
-        cam.VOffset = (float)((GD.Randf() * 2 - 1) * _shakeAmp);
-        _shakeAmp *= Math.Exp(-8.0 * delta); // decays over ~0.4 s at any frame rate (0.88 per frame at 60 fps)
     }
 }
 

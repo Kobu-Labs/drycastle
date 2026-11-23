@@ -69,7 +69,7 @@ public partial class NetClient
         _controlling = false;
         Ac130Ended();
         HeliStreakEnded(AttackHelicopterStreak.StreakId); // the gunner's clock and kill count (also marks the overlay dirty)
-        UavEnded();
+        _uav.Ended();
     }
 
     /// <summary>Places the missiles from the replicated state (dead-reckoning is not needed: the state is the full pose), with their flight sound.</summary>

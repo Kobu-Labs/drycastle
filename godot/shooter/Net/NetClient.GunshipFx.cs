@@ -67,7 +67,7 @@ public partial class NetClient
             if (i == 0 && Sfx.Enabled) Sfx.Play3D(SoundRules.Event("explosion", "rpg"), at);
             if (Mathf.Abs(b.Radius - FlakPuffRadius) < 0.05f) FlakFx.Burst(Owned, at, b.Radius); // an airburst: black flak smoke, not a fireball
             else RocketFx.Explode(Owned, at, b.Radius);
-            ShakeFor(at, b.Radius);
+            Ctx.Shake.At(at, b.Radius);
         }
         if (m.Owner == _myId && m.Hits != GunshipHitFlags.None) OnGunnerHits(m.Hits);
     }

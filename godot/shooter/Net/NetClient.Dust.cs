@@ -33,7 +33,7 @@ public partial class NetClient
     void FeelBlast(Vector3 at, float radius, string? sound)
     {
         if (sound != null && Sfx.Enabled) Sfx.Play3D(sound, at);
-        ShakeFor(at, radius);
+        Ctx.Shake.At(at, radius);
         RingFrom(at, radius);
     }
 

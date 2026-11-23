@@ -151,7 +151,7 @@ public partial class NetClient
         at.Y += 1.0f;
         VehicleFx.Explode(Owned, at, radius);
         if (Sfx.Enabled) Sfx.Play3D("explosion.vehicle", at);
-        ShakeFor(at, radius);
+        Ctx.Shake.At(at, radius);
     }
 
     /// <summary>The box a van that stands is solid with, built from its last state as the server builds it (rounded as the record is), so the predicted move meets what the server's does.</summary>

@@ -24,7 +24,7 @@ public partial class NetClient
     /// <summary>Opens the loadout editor from the respawn screen (the owner pushes it on the menu shell).</summary>
     public Action? OpenLoadouts { get; set; }
     /// <summary>True while a menu screen is open; the respawn number keys then leave the menu alone.</summary>
-    public Func<bool>? MenuOpen { get; set; }
+    public Func<bool>? MenuOpen { get => Ctx.MenuOpen; set => Ctx.MenuOpen = value; }
 
     /// <summary>weapons.json indexes of the spawn hotbar: primary, secondary, knife (keys 1-3 and the cycle).</summary>
     int[] _hotbar = Array.Empty<int>();

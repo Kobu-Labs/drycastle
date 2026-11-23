@@ -5,7 +5,7 @@ namespace Drycastle.Shooter;
 
 /// <summary>
 /// The pastor turning into the demon (<see cref="DemonState.Transforming"/>) shakes the scene for everyone in or near the church: the camera shake of the roars
-/// (<c>_shakeAmp</c>, see <c>ShakeFor</c>) is fed every frame, building up to the swap (<see cref="DemonFightDef.TransformSwapS"/>), then dying down to a rumble by the end of the turning;
+/// (<see cref="CameraShake"/>) is fed every frame, building up to the swap (<see cref="DemonFightDef.TransformSwapS"/>), then dying down to a rumble by the end of the turning;
 /// the nearer to the pastor, the stronger. The church's lights follow the same clock (<see cref="ChurchDecor.SetTransform"/>). The clock starts when the state is first seen, as the demon view's does.
 /// </summary>
 public partial class NetClient
@@ -41,7 +41,7 @@ public partial class NetClient
             var f = Mathf.Clamp((dist - QuakeFullM) / (QuakeGoneM - QuakeFullM), 0f, 1f);
             var near = 1f - f * f * (3f - 2f * f);
             if (near <= 0) continue;
-            _shakeAmp = Math.Max(_shakeAmp, (QuakeBase + QuakePeak * build) * near);
+            Ctx.Shake.Raise((QuakeBase + QuakePeak * build) * near);
         }
         if (_quakeT.Count > _demons.Count) foreach (var id in _quakeT.Keys.Where(k => !_demons.ContainsKey(k)).ToList()) EndQuake(id);
     }

@@ -32,7 +32,7 @@ public partial class NetClient
     void OnMapTeleport(Vector2 g)
     {
         if (!SandboxGranted) return;
-        SendSandboxEvent(EventKind.SandboxTeleportTo, SandboxEvents.EncodeTeleportTo(g.X, g.Y));
+        SendEvent(EventKind.SandboxTeleportTo, SandboxEvents.EncodeTeleportTo(g.X, g.Y));
         _hud?.CloseTacticalMap();
     }
 

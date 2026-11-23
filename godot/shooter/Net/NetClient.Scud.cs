@@ -179,7 +179,7 @@ public partial class NetClient
             at = car.Node.GlobalTransform * new Vector3(l.Exhaust[0], l.Exhaust[1], l.Exhaust[2]);
         ScudFx.LaunchBurst(Owned, at);
         if (Sfx.Enabled) Sfx.Play3D("scud.launch", at);
-        ShakeFor(at, 25f);
+        Ctx.Shake.At(at, 25f);
     }
 
     /// <summary>The blast: the biggest the game has (the blast look and its Blast wave at the scud.json size), then, when the wave reaches the player, its sound and a long shake scaled by the distance; the scorch stays.</summary>
@@ -621,6 +621,6 @@ public partial class NetClient
         }
         var age = Now - _scudShakeStart;
         if (age < _scudShakeSeconds && _scudShakeAmp > 0)
-            _shakeAmp = Math.Max(_shakeAmp, _scudShakeAmp * (1.0 - age / _scudShakeSeconds)); // UpdateShake applies it this frame
+            Ctx.Shake.Raise(_scudShakeAmp * (1.0 - age / _scudShakeSeconds)); // the shake applies it this frame
     }
 }

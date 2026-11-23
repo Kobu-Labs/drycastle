@@ -6,7 +6,7 @@ namespace Drycastle.Shooter;
 /// <summary>Feeds the in-match <see cref="Hud"/> from client state: events push changes, the per-frame hook only forwards health.</summary>
 public partial class NetClient
 {
-    Hud? _hud;
+    Hud? _hud { get => Ctx.Hud; set => Ctx.Hud = value; }
     readonly SpreadEstimator _spread = new();
     /// <summary>The aim button of the last input tick; the crosshair spread uses it as the server uses the input's Aim bit.</summary>
     bool _aimHeld;
@@ -50,7 +50,7 @@ public partial class NetClient
     }
 
     /// <summary>The loaded map (set by the host): the minimap's texture source.</summary>
-    public Drycastle.MapLoader.MapLoader? Map;
+    public Drycastle.MapLoader.MapLoader? Map { get => Ctx.Map; set => Ctx.Map = value; }
     readonly List<Vector2> _carDots = new();
 
     static string WeaponName(string id)
@@ -143,7 +143,7 @@ public partial class NetClient
             if (_hud.HuntersLogOpen && OverlayArbiter.YieldsToMenu(Overlay.HuntersLog, overlays)) _hud.CloseHuntersLog();
             if (_hud.MineralLogOpen && OverlayArbiter.YieldsToMenu(Overlay.MineralLog, overlays)) _hud.CloseMineralLog();
         }
-        UavTick();
+        _uav.Tick();
         if (_me != null) RozhlasFeedPlayer.Current?.SetListener(_me.GlobalPosition);
         if (_me != null) Rozhlas.Current?.SetListener(_me.GlobalPosition); // the loudspeaker is heard where the player is, not where a vehicle's orbiting camera is
         if (_me != null && _hud != null)
@@ -157,7 +157,7 @@ public partial class NetClient
                 if (c.Destroyed) continue;
                 _seatOccupants.TryGetValue(c.Id, out var others); // an enemy on any seat: not on the map (#313)
                 if (HudLogic.HideEnemyOccupiedVehicle(c.Driver, others, _myId, IsMapEnemy)) continue;
-                if (Vehicles != null && c.Kind < Vehicles.Vehicles.Count && ScudTruckHidden(Vehicles.Vehicles[c.Kind])) continue; // the Scud event's truck is not on any map until it is found
+                if (Vehicles != null && c.Kind < Vehicles.Vehicles.Count && _intel.ScudTruckHidden(Vehicles.Vehicles[c.Kind])) continue; // the Scud event's truck is not on any map until it is found
                 _carDots.Add(new Vector2(c.Node.GlobalPosition.X, c.Node.GlobalPosition.Z));
             }
             _hud.Minimap.SetVehicleDots(_carDots);

@@ -47,7 +47,7 @@ public partial class NetClient
             return;
         }
         var view = DemonView.Make(DemonData, HolyMassData.Mass);
-        view.RoarCue = at => ShakeFor(at, Math.Max(1f, DemonData.Roar.ShakeRadiusM) / 5f);
+        view.RoarCue = at => Ctx.Shake.At(at, Math.Max(1f, DemonData.Roar.ShakeRadiusM) / 5f);
         view.Bitten = OnPounceBite;
         Owned.AddChild(view);
         ChurchDecor.Current?.SetDemon(true, snap: DemonRules.StateOf(e.State.State) != DemonState.Transforming); // a joiner finds the cross turned and the lights out

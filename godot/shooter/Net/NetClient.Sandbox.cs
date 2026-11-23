@@ -82,16 +82,17 @@ public partial class NetClient
     /// <summary>Sandbox only: put a killstreak into the held slot (the server ignores it for anyone else).</summary>
     public void SendSandboxGrant(string streakId)
     {
-        if (SandboxGranted) SendSandboxEvent(EventKind.SandboxGrant, SandboxEvents.EncodeGrant(streakId));
+        if (SandboxGranted) SendEvent(EventKind.SandboxGrant, SandboxEvents.EncodeGrant(streakId));
     }
 
     /// <summary>Sandbox only: one of the panel's actions (heal, teleport, a vehicle, the target respawn switch, use the held streak).</summary>
     public void SendSandboxAction(SandboxAction action, byte arg = 0)
     {
-        if (SandboxGranted) SendSandboxEvent(EventKind.SandboxAction, SandboxEvents.EncodeAction(action, arg));
+        if (SandboxGranted) SendEvent(EventKind.SandboxAction, SandboxEvents.EncodeAction(action, arg));
     }
 
-    void SendSandboxEvent(EventKind kind, byte[] payload)
+    /// <summary>Sends one reliable event to the server (<see cref="ClientContext.Send"/>).</summary>
+    void SendEvent(EventKind kind, byte[] payload)
     {
         if (_peer == null) return;
         Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)kind, payload)), (int)ENetPacketPeer.FlagReliable);

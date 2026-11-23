@@ -72,7 +72,7 @@ public partial class NetClient
     void PounceShake(double amp)
     {
         if (!ShotFx.Enabled || GameSettings.Current.ReduceMotion) return;
-        _shakeAmp = Math.Max(_shakeAmp, amp);
+        Ctx.Shake.Raise(amp);
     }
 
     /// <summary>A bite snapped shut (the demon's view tells): red pulse and a shake spike on the victim's screen. Nobody else's screen changes.</summary>

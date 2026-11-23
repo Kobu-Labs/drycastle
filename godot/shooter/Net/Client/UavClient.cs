@@ -1,6 +1,5 @@
 using Godot;
 using Drycastle.ShooterCore;
-using Vector2 = Godot.Vector2;
 
 namespace Drycastle.Shooter;
 
@@ -9,44 +8,47 @@ namespace Drycastle.Shooter;
 /// positions the server allows (the Ghost perk is left out there) and the seconds left. Pings go on the minimap and the
 /// countdown on the HUD. The StreakEnded event for the UAV clears both.
 /// </summary>
-public partial class NetClient
+public sealed class UavClient
 {
-    /// <summary>When the owner's UAV ends, on the Time.GetTicksMsec()/1000 clock; 0 when none is up.</summary>
-    double _uavEndsAt;
+    readonly ClientContext _ctx;
+    /// <summary>When the owner's UAV ends, on the <see cref="ClientContext.Now"/> clock; 0 when none is up.</summary>
+    double _endsAt;
 
-    void UavEvent(EventKind kind, byte[] payload)
+    public UavClient(ClientContext ctx) { _ctx = ctx; }
+
+    public void OnEvent(EventKind kind, byte[] payload)
     {
-        if (_hud == null) return;
-        var now = Time.GetTicksMsec() / 1000.0;
+        if (_ctx.Hud is not { } hud) return;
         switch (kind)
         {
             case EventKind.UavPing when UavEvents.Decode(payload) is { } p:
-                _uavEndsAt = now + p.SecondsLeft;
+                var now = _ctx.Now;
+                _endsAt = now + p.SecondsLeft;
                 var dots = new Vector2[p.Contacts.Count];
                 for (var i = 0; i < dots.Length; i++) dots[i] = new Vector2(p.Contacts[i].X, p.Contacts[i].Y);
                 // the pings outlive one pulse by a little, so a late pulse does not blink them off
-                _hud.Minimap.SetEnemyPings(dots, now + UavRules.PulseSeconds + 0.5);
+                hud.Minimap.SetEnemyPings(dots, now + UavRules.PulseSeconds + 0.5);
                 if (Sfx.Enabled) Sfx.Ui("uav.ping");
-                _hud.SetUavSeconds(p.SecondsLeft);
+                hud.SetUavSeconds(p.SecondsLeft);
                 break;
             case EventKind.StreakEnded when KillstreakEvents.DecodeEnded(payload) is { } e && e.StreakId == UavStreak.StreakId:
-                UavEnded();
+                Ended();
                 break;
         }
     }
 
     /// <summary>The owner's UAV is over (StreakEnded, or the owner died): no countdown, no pings.</summary>
-    void UavEnded()
+    public void Ended()
     {
-        _uavEndsAt = 0;
-        _hud?.Minimap.ClearEnemyPings();
-        _hud?.SetUavSeconds(0);
+        _endsAt = 0;
+        _ctx.Hud?.Minimap.ClearEnemyPings();
+        _ctx.Hud?.SetUavSeconds(0);
     }
 
     /// <summary>Per frame: counts the HUD's UAV countdown down between pulses (the label changes once a second at most).</summary>
-    void UavTick()
+    public void Tick()
     {
-        if (_hud == null || _uavEndsAt == 0) return;
-        _hud.SetUavSeconds((float)(_uavEndsAt - Time.GetTicksMsec() / 1000.0));
+        if (_ctx.Hud == null || _endsAt == 0) return;
+        _ctx.Hud.SetUavSeconds((float)(_endsAt - _ctx.Now));
     }
 }

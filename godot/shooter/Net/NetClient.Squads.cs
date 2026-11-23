@@ -19,7 +19,7 @@ public partial class NetClient
     {
         if (_peer == null || !CanUseSquads) return;
         _squadAskedAt = Now;
-        SendSandboxEvent(EventKind.SquadAssign, SquadAssignCodec.Encode(a));
+        SendEvent(EventKind.SquadAssign, SquadAssignCodec.Encode(a));
     }
 
     /// <summary>An error chat line that answers a squad request is also shown on the Squads screen.</summary>
