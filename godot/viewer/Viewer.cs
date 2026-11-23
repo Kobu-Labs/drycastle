@@ -1,10 +1,15 @@
+using Drycastle.MapLoader;
+using Drycastle.Viewer.Editor;
+using Drycastle.Viewer.Edits;
+using Drycastle.Viewer.StreetView;
+using Godot;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Godot;
-using Drycastle.MapLoader;
+
+namespace Drycastle.Viewer;
 
 /// <summary>
 /// Map viewer root. Loads the map, adds light and sky, spawns the player.

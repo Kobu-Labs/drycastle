@@ -1,4 +1,8 @@
+using Drycastle.Netspike.Builtin;
+using Drycastle.Netspike.Custom;
 using Godot;
+
+namespace Drycastle.Netspike;
 
 /// <summary>
 /// Netcode spike entry point. Args after "--":
