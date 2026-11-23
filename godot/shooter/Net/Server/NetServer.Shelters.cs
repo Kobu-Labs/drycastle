@@ -6,7 +6,7 @@ namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// Server side of the shelter rule (#224, ADR 0009): a bunker room shelters the players inside from a blast outside it, and a
-/// blast inside a room stays in it. Asked by every blast that splashes players, through <see cref="SplashShare"/> (rockets and flak shells, the attack missile, the
+/// blast inside a room stays in it. Asked by every blast that splashes players, through <see cref="Splash.Share"/> (rockets and flak shells, the attack missile, the
 /// gunship, a vehicle blowing up). The MOAB does not ask: it kills everyone. A direct hit does not ask either.
 /// </summary>
 public partial class NetServer

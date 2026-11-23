@@ -606,7 +606,7 @@ public partial class NetServer
     {
         var e = Vehicles!.Explosion;
         BroadcastEvent(EventKind.VehicleExplosion, WeaponCodec.Encode(new VehicleExplosionMsg(car.Id, attacker, N(at), e.Splash.Radius)));
-        BroadcastImpact(N(car.GlobalPosition), ImpactSize.Plume); // the blast throws up dirt or road where the car sits (ticket #154)
+        _impacts.Broadcast(N(car.GlobalPosition), ImpactSize.Plume); // the blast throws up dirt or road where the car sits (ticket #154)
         BlastGlass(at, e.Splash.Radius);
         GD.Print($"server: {car.Def.Id} {car.Id} exploded at ({at.X:F1},{at.Y:F1},{at.Z:F1}), credited to #{attacker}");
 
@@ -615,9 +615,9 @@ public partial class NetServer
         {
             // a rider who dies is thrown with the vehicle's velocity plus the blast's knockback from its centre (no corpse stays seated in a wreck)
             var k = ProjectileMath.Knockback(e.Splash.KnockbackSpeed, N(at), N(o.Body.GlobalPosition) + NVec3.UnitY * 0.9f, 1f);
-            PushOnDeath(o.Id, (k == NVec3.Zero ? NVec3.Zero : CorpseRules.ThrowFromBlast(k)) + carVelocity);
+            _deathPush.Record(o.Id, (k == NVec3.Zero ? NVec3.Zero : CorpseRules.ThrowFromBlast(k)) + carVelocity);
             var dealt = Deal(attacker, weapon, o.Id, e.DriverDamage, false, false); // everyone still aboard (a gunner too)
-            ClearPush(o.Id, dealt);
+            _deathPush.Clear(o.Id, dealt);
             if (o.Car == car) LeaveSeat(o, true); // survived (spawn protection): thrown out, the seat is gone
         }
         foreach (var t in _targets.Live())
@@ -626,16 +626,16 @@ public partial class NetServer
             var dist = HitMath.DistanceToBody(N(at), t);
             var dmg = VehicleDamage.BlastDamage(e, dist);
             if (dmg <= 0) continue;
-            var share = SplashShare(N(at), t); // walls, a bunker room's too, and a covered seat's hull
+            var share = _splash.Share(N(at), t); // walls, a bunker room's too, and a covered seat's hull
             if (share <= 0) continue;
             dmg *= share;
             var self = t.Id == attacker;
             if (self) dmg = MathF.Max(1f, MathF.Round(dmg * e.Splash.SelfDamageMultiplier));
             if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
             var k = ProjectileMath.Knockback(e.Splash.KnockbackSpeed, N(at), HitMath.Centre(t), dmg / e.Damage);
-            PushOnDeath(t.Id, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
+            _deathPush.Record(t.Id, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
             var res = Deal(attacker, weapon, t.Id, dmg, false, false);
-            ClearPush(t.Id, res);
+            _deathPush.Clear(t.Id, res);
             if (res == DamageResult.Ignored) continue;
             _blastHits++;
             if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));

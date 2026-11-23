@@ -76,7 +76,7 @@ public partial class NetServer
         if (hit is { } h) Deal(c.Id, SpecialWeapons.VehicleGun, h.Id, gun.Damage, false, false);
         else if (shotCar != null && Vehicles != null && wall <= gun.Range)
             DamageVehicle(shotCar, gun.Damage * Vehicles.BulletDamageMultiplier, c.Id, SpecialWeapons.VehicleGun, 0);
-        else if (shotCar == null && wall <= gun.Range) BulletPuff(N(end)); // dust where the round meets the ground or a wall
+        else if (shotCar == null && wall <= gun.Range) _impacts.BulletPuff(N(end)); // dust where the round meets the ground or a wall
         if (hit == null && wall <= gun.Range) ShotGlass(shotCar, from, dir, wall, gun.Damage);
         DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, _ => gun.Damage);
         _scenery.Shot(N(from), N(dir), hit?.Distance ?? Math.Min(wall, gun.Range)); // a pole lamp the round passed breaks (ADR 0037)

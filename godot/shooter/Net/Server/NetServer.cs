@@ -3,6 +3,7 @@ using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Net.Server.BusGarage;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.ChatRoom;
+using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Net.Server.Crates;
 using Drycastle.Shooter.Net.Server.Fauna;
 using Drycastle.Shooter.Net.Server.Gear;
@@ -65,6 +66,8 @@ public partial class NetServer : Node
     public float KillY = float.NegativeInfinity;
     /// <summary>The map's water (water.json); players swim at the surface in it, and boats float on it.</summary>
     public Drycastle.ShooterCore.Waters.Water Water = Drycastle.ShooterCore.Waters.Water.Empty;
+    /// <summary>The map this server runs on (the parcels, the ground height and roads.json); null in tests.</summary>
+    public Drycastle.MapLoader.MapLoader? Map;
     public int Port = 27015;
     /// <summary>Network impairment for the loss and latency test (--net-sim); null = none.</summary>
     public NetSim? Sim;
@@ -89,6 +92,8 @@ public partial class NetServer : Node
 
     // The features that are classes of their own (<c>Net/Server/&lt;Feature&gt;/</c>), made in _Ready once the match exists; each takes only the context.
     ServerContext _ctx = null!;
+    ImpactFx _impacts = null!;
+    Splash _splash = null!;
     SceneryServer _scenery = null!;
     MineralsServer _minerals = null!;
     RozhlasServer _rozhlas = null!;
@@ -142,6 +147,8 @@ public partial class NetServer : Node
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
         _ctx = new ServerContext(_match, _byId, _clients.Values, () => _elapsed, () => _tick, BroadcastEvent, Send, (c, chan, packet) => { if (c.Peer is { } peer) Tx(peer, chan, packet, 0); });
+        _impacts = new ImpactFx(_ctx, Map, Water);
+        _splash = new Splash(_ctx, () => MapShelters, () => Query, PoseOf);
         RegisterTargetSources();
         _animals = new AnimalWorld(_ctx, _fleet, Map, Water, () => Query, () => MapFlightBounds);
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
@@ -179,7 +186,7 @@ public partial class NetServer : Node
         InitAircraft();
         _crates = new CrateServer(_ctx, Killstreaks.Rewards, () => Query, () => _streaks);
         BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
-        WarmSurfaceIndexes(); // roads.json and the tree grid, so no impact pays for them on a tick (T3-003, T3-004)
+        _impacts.Warm(); // roads.json and the tree grid, so no impact pays for them on a tick (T3-003, T3-004)
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
         if (Weapons != null) foreach (var v in Vehicles.Vehicles) if (v.Flak is { } fk) FlakWeapon(fk); // a flak naming an unknown weapon fails here, not on the first shot
         GD.Print($"server: {Spawns.Count} spawns, y {(Spawns.Count > 0 ? Spawns.Min(v => v.Y) : 0)}..{(Spawns.Count > 0 ? Spawns.Max(v => v.Y) : 0)}, killY {KillY}");

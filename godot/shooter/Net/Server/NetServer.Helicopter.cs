@@ -103,7 +103,7 @@ public partial class NetServer
         BroadcastEvent(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(0, (byte)_helperWeaponIndex, from, end)));
         if (hit)
         {
-            BroadcastImpact(end, ImpactSize.Puff, body: true); // a round that lands: a small burst at the body (ticket #154)
+            _impacts.Broadcast(end, ImpactSize.Puff, body: true); // a round that lands: a small burst at the body (ticket #154)
             Deal(owner, SpecialWeapons.Helper, target, damage, false, false);
         }
     }

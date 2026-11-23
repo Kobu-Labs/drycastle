@@ -73,9 +73,9 @@ public partial class NetServer
             case ObstacleClass.Player:
             case ObstacleClass.TargetDummy:
                 var thrown = CorpseRules.ThrowFromCar(m.Forward, m.Speed);
-                PushOnDeath(id, thrown, DeathFlight.RunOver); // a roadkill is thrown ahead of the vehicle (the ragdoll)
+                _deathPush.Record(id, thrown, DeathFlight.RunOver); // a roadkill is thrown ahead of the vehicle (the ragdoll)
                 var r = Deal(m.Attacker, SpecialWeapons.Vehicle, id, m.Damage, false, false, KillCause.Roadkill);
-                ClearPush(id, r);
+                _deathPush.Clear(id, r);
                 // one who lives through it (hurt, or spared: a teammate) leaves the bumper the same way, as the slow push does: no vehicle drives through a standing body (#411)
                 if (cls == ObstacleClass.Player && r != DamageResult.Killed && _byId.TryGetValue(id, out var hurt) && _match.Get(id)?.Life == PlayerLife.Alive)
                 {

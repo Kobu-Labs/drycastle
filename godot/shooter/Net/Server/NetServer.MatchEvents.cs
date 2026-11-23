@@ -89,7 +89,7 @@ public partial class NetServer
                 break;
             case PlayerTeamChanged tc: OnTeamChanged(tc); break;
             case TargetKilled tk: OnTargetKilled(tk); break;
-            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) _gear.SetHeadLamp(dead, false); _status.OnDeath(d.Victim); _rozhlas.OnPlayerDied(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay, _deathFlight.Remove(d.Victim, out var flight) ? flight : DeathFlight.None))); break;
+            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) _gear.SetHeadLamp(dead, false); _status.OnDeath(d.Victim); _rozhlas.OnPlayerDied(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay, _deathPush.TakeFlight(d.Victim)))); break;
         }
     }
 

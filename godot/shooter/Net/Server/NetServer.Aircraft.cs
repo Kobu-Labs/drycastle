@@ -181,7 +181,7 @@ public partial class NetServer
 
         if (route.Impact != GunshipImpact.None)
             _gunFx.Impact(new GunshipImpactFx(
-                ImpactAt(end, SurfaceClassifier.SizeFor(def.Kind, def.Damage, def.Splash?.Radius ?? 0), route.Impact == GunshipImpact.Body, route.Impact == GunshipImpact.Vehicle),
+                _impacts.At(end, SurfaceClassifier.SizeFor(def.Kind, def.Damage, def.Splash?.Radius ?? 0), route.Impact == GunshipImpact.Body, route.Impact == GunshipImpact.Vehicle),
                 kill));
     }
 
@@ -219,12 +219,12 @@ public partial class NetServer
                 continue;
             }
             var t = targets.FirstOrDefault(x => x.Id == h.TargetId);
-            var share = h.Direct ? 1f : SplashShare(at, t); // walls, a bunker room's too, and a covered seat's hull
+            var share = h.Direct ? 1f : _splash.Share(at, t); // walls, a bunker room's too, and a covered seat's hull
             if (share <= 0) continue;
             var k = ProjectileMath.Knockback(splash.KnockbackSpeed, at, HitMath.Centre(t), h.Fraction * share);
-            PushOnDeath(h.TargetId, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
+            _deathPush.Record(h.TargetId, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
             var res = Deal(owner, credit, h.TargetId, h.Damage * share, false, false);
-            ClearPush(h.TargetId, res);
+            _deathPush.Clear(h.TargetId, res);
             if (res == DamageResult.Ignored) continue; // spawn protected or a pilot at the gun: neither damage nor knockback
             if (h.Direct && res == DamageResult.Killed) kill = true;
             if (res == DamageResult.Killed || !_byId.TryGetValue(h.TargetId, out var v)) continue;

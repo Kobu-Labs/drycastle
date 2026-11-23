@@ -37,7 +37,7 @@ public partial class NetServer
         if (Vehicles != null) RocketVsVehicles(pos, w, i.Owner, SpecialWeapons.Missile, i.Car as ServerCar);
         BlastGlass(pos, radius);
         BroadcastEvent(EventKind.MissileBlast, MissileCodec.EncodeBlast(i.Id, i.Owner, i.Position, radius));
-        BroadcastImpact(N(pos), ImpactSize.Plume, vehicle: i.Car != null); // ticket #154: the missile's plume
+        _impacts.Broadcast(N(pos), ImpactSize.Plume, vehicle: i.Car != null); // ticket #154: the missile's plume
         var targets = _targets.Live();
         foreach (var t in targets)
         {
@@ -46,14 +46,14 @@ public partial class NetServer
             var self = t.Id == i.Owner;
             var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, self);
             if (dmg <= 0) continue;
-            var share = isDirect ? 1f : SplashShare(N(pos), t); // walls, a bunker room's too, and a covered seat's hull
+            var share = isDirect ? 1f : _splash.Share(N(pos), t); // walls, a bunker room's too, and a covered seat's hull
             if (share <= 0) continue;
             dmg *= share;
             if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
             var k = ProjectileMath.Knockback(w, N(pos), HitMath.Centre(t), isDirect ? 1f : share * ProjectileMath.SplashFraction(w, dist));
-            PushOnDeath(t.Id, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
+            _deathPush.Record(t.Id, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
             var res = Deal(i.Owner, SpecialWeapons.Missile, t.Id, dmg, false, false);
-            ClearPush(t.Id, res);
+            _deathPush.Clear(t.Id, res);
             if (res == DamageResult.Ignored) continue; // spawn protected: neither damage nor knockback
             if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z));
         }

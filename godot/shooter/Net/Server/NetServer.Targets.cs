@@ -71,7 +71,7 @@ public partial class NetServer
     /// </summary>
     void OnTargetKilled(TargetKilled tk)
     {
-        if (_deathPush.Remove(tk.Target.Id, out var push)) tk.Target.Body.Launch(push); // thrown by the blast or the car (the ragdoll)
+        if (_deathPush.Take(tk.Target.Id, out var push)) tk.Target.Body.Launch(push); // thrown by the blast or the car (the ragdoll)
         var killed = new PlayerKilled(tk.Killer, tk.Target.Id, tk.Weapon, tk.Cause);
         var fromStreak = StreakKill(killed);
         if (MatchConfig.TargetsAwardXp && Scores(tk.Killer)) AwardXp(_xp.OnKill(new KillFacts(tk.Killer, tk.Target.Id, tk.Cause, fromStreak), _elapsed));

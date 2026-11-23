@@ -69,7 +69,7 @@ public partial class NetServer
     /// </summary>
     DamageResult DealBigfoot(ushort attackerId, byte weaponIdx)
     {
-        _deathPush.Remove(BigfootRules.TargetId);
+        _deathPush.Forget(BigfootRules.TargetId);
         if (_bigfoot is not { Alive: true } bf || _match.Phase != MatchPhase.Running) return DamageResult.Ignored;
         var source = BigfootRules.SourceOf(weaponIdx, Weapons.Weapons.Count, i => Weapons.Weapons[i].Kind == WeaponKind.Projectile);
         var weight = BigfootRules.Weight(BigfootData.Hits, source);

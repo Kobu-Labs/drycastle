@@ -145,7 +145,7 @@ public partial class NetServer
         }
         else if (shotCar != null && Vehicles != null && wall <= len)
             DamageVehicle(shotCar, HitMath.HitscanDamage(w, before + wall, false) * Vehicles.BulletDamageMultiplier, c.Id, (byte)shot.WeaponIndex, 0);
-        else if (shotCar == null && wall <= len) BulletPuff(N(from + along * wall)); // dust where a bullet meets the ground or a wall (ticket #154)
+        else if (shotCar == null && wall <= len) _impacts.BulletPuff(N(from + along * wall)); // dust where a bullet meets the ground or a wall (ticket #154)
         if (hit == null && wall <= len) ShotGlass(shotCar, from, along, wall, HitMath.HitscanDamage(w, before + wall, false)); // the pane the bullet crossed where it stopped (ADR 0007)
         DamageCrossed(crossed, hit?.Distance ?? float.PositiveInfinity, at => HitMath.HitscanDamage(w, before + at, false));
     
@@ -293,7 +293,7 @@ public partial class NetServer
 
     /// <summary>
     /// Explosion: the direct-hit victim takes the full damage (and no splash on top); everyone else alive within the splash
-    /// radius takes the linear falloff damage, the owner scaled by the self multiplier. A wall between the blast and a target stops it, and a covered seat's rider takes half through the hull (<see cref="SplashShare"/>). Affected players get knockback. A rocket fired from an armed seat spares the shooter's fellow riders (riders
+    /// radius takes the linear falloff damage, the owner scaled by the self multiplier. A wall between the blast and a target stops it, and a covered seat's rider takes half through the hull (<see cref="Splash.Share"/>). Affected players get knockback. A rocket fired from an armed seat spares the shooter's fellow riders (riders
     /// of one vehicle never hit each other); the shooter takes their own blast as on foot, and so does the vehicle.
     /// </summary>
     void Explode(Rocket r, WeaponDef weapon, Vector3 pos, ushort? direct, ServerCar? directCar = null)
@@ -303,7 +303,7 @@ public partial class NetServer
         if (Vehicles != null) RocketVsVehicles(pos, w, r.Owner, r.Weapon, directCar);
         BlastGlass(pos, w.Splash?.Radius ?? 0);
         BroadcastEvent(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(r.Id, r.Owner, r.Weapon, N(pos), w.Splash?.Radius ?? 0, w.Splash?.WaveSpeed ?? 0)));
-        BroadcastImpact(N(pos), ImpactSize.Plume, body: direct != null && directCar == null, vehicle: directCar != null); // rockets throw up a plume (ticket #154)
+        _impacts.Broadcast(N(pos), ImpactSize.Plume, body: direct != null && directCar == null, vehicle: directCar != null); // rockets throw up a plume (ticket #154)
         var own = RocketCar(r);
         var targets = _targets.Live();
         foreach (var t in targets)
@@ -314,14 +314,14 @@ public partial class NetServer
             if (!self && own != null && own.Seat.SeatOf(t.Id) >= 0) continue; // a fellow rider of the shooter's vehicle
             var dmg = isDirect ? w.Damage : ProjectileMath.SplashDamage(w, dist, self);
             if (dmg <= 0) continue;
-            var share = isDirect ? 1f : SplashShare(N(pos), t); // walls, a bunker room's too, and a covered seat's hull
+            var share = isDirect ? 1f : _splash.Share(N(pos), t); // walls, a bunker room's too, and a covered seat's hull
             if (share <= 0) continue;
             dmg *= share;
             if (_byId.TryGetValue(t.Id, out var victimClient)) dmg = MathF.Max(1f, MathF.Round(dmg * victimClient.Perks.ExplosiveDamageTaken)); // Flak Jacket
             var k = ProjectileMath.Knockback(w, N(pos), HitMath.Centre(t), isDirect ? 1f : share * ProjectileMath.SplashFraction(w, dist));
-            PushOnDeath(t.Id, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
+            _deathPush.Record(t.Id, CorpseRules.ThrowFromBlast(k)); // a kill throws the body (the ragdoll)
             var res = Deal(r.Owner, r.Weapon, t.Id, dmg, false, false);
-            ClearPush(t.Id, res);
+            _deathPush.Clear(t.Id, res);
             if (res == DamageResult.Ignored) continue; // spawn protected: neither damage nor knockback
             if (isDirect) _smoke.DirectHits++; else if (self) _smoke.SelfHits++; else _smoke.SplashHits++;
             if (res != DamageResult.Killed && _byId.TryGetValue(t.Id, out var v) && k != NVec3.Zero) { v.Body.AddImpulse(new Vector3(k.X, k.Y, k.Z)); _smoke.Knocked++; }
