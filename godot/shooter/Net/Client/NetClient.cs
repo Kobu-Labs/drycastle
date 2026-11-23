@@ -78,6 +78,9 @@ public partial class NetClient : Node
     /// <summary>Latest owner ammo state from the server (null before the first one).</summary>
     public AmmoMsg? Ammo { get; private set; }
     OwnViewmodel _viewmodel => Ctx.Viewmodel;
+    readonly FxDemoClient _fxDemo;
+    /// <summary>Dev aid (<c>--fx-demo</c>, set by the host): see <see cref="FxDemoClient"/>.</summary>
+    public string FxDemo { get => _fxDemo.Mode; set => _fxDemo.Mode = value; }
     double _ammoAt;
 
     readonly ENetConnection _conn = new();
@@ -164,6 +167,7 @@ public partial class NetClient : Node
         Ctx.View.Rising = () => _pRising;
         Ctx.Viewmodel.StepAcc = () => _sfxStepAcc;
         _prediction = new OwnPrediction(Ctx, SpeedFor);
+        _fxDemo = new FxDemoClient(Ctx);
         Sandbox = new SandboxClient(Ctx);
         Report = new ReportClient(Ctx, _conn, () => !Bot && !LinkEnded && _welcomed, () => _peer, () => _elapsed);
         _moab = new MoabClient(Ctx);
@@ -486,7 +490,7 @@ public partial class NetClient : Node
         World.AddChild(Ctx.Me);
         _viewmodel.Create();
         if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(Ctx.Me.Camera); // the glass shaders compile now, not at the first crack
-        if (WeaponsBot != "" || CarBot != "" || FxDemo.StartsWith("vehicle:")) NetServer.AddArenaColliders(World);
+        if (WeaponsBot != "" || CarBot != "" || _fxDemo.Mode.StartsWith("vehicle:")) NetServer.AddArenaColliders(World);
         if (Bot) Ctx.Me.InputOverride = new MoveInput { SpeedScale = 1 };
         HudWelcome();
         OnWelcomed?.Invoke();
@@ -634,7 +638,7 @@ public partial class NetClient : Node
     {
         var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = Ctx.Me!.Yaw } : Report.PerfPlay ? Report.PlayStep() : Ctx.Me!.Sample();
         if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); }
-        FxDemoInput(ref mi);
+        _fxDemo.Input(ref mi);
         ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         ThrowFilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
         _aimHeld = mi.Has(MoveButtons.Aim);
