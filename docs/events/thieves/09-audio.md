@@ -25,7 +25,7 @@ Voice lines, van music, the speaker.
 ## Done: notes
 Member-side half only (voice lines, speaker, private-folder loader). Not done here: the voice bake (done earlier, `make thief-voices`), the van's song (03 calls the API below). Protocol 44, event kind 236 `ThiefVoice` (237 stays free).
 
-Code: pure `ShooterCore/Thieves/GangVoice.cs` (`ThievesAudioConfig`, `GangVoiceCodec`, `GangAudio`), server `NetServer.Thieves.Audio.cs`, client `ThiefAudio.cs` + `NetClient.Thieves.Audio.cs`, tests `GangAudioTests.cs`. Numbers: new last section `audio` in `thieves.json`.
+Code: pure `ShooterCore/Thieves/GangVoice.cs` (`ThievesAudioConfig`, `GangVoiceCodec`, `GangAudio`), server `NetServer.Thieves.Audio.cs`, client `ThiefAudio.cs` + `ThievesClient.cs`, tests `GangAudioTests.cs`. Numbers: new last section `audio` in `thieves.json`.
 
 ### Van song API (client, for 03)
 `NetClient.ThiefSounds` (made on first use) -> `ThiefAudio`:

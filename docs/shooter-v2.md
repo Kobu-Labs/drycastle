@@ -518,7 +518,7 @@ the model's numbers (12.6 m with the drawbar because it carries the whole 11.1 m
   under the wheels; smoothed), rolls `wheel_l`/`wheel_r` with the drawn speed and shows `missile` while loaded. Loose, it is drawn at its record on the ground. A tractor's driver sees the tractor as that type is
   seen: the truck and the flak truck are `CarModel` types, interpolated for everyone, so their trailer's articulation is the interpolated snapshot's (it cannot lag its tractor, both come from the same
   render tick); a `DriveModel` type with a `tow` block (none yet) is predicted by its driver, who also steps a copy of the trailer's body with `TowModel` after it (`DrivePrediction.AttachTrailer`, the effect
-  and the blocked-trailer hold as the server's) and reconciles it from the articulation the snapshot gives. A coupling or an uncoupling (the record's tractor id changes) plays `tow.clunk` through `PlayCarSound`
+  and the blocked-trailer hold as the server's) and reconciles it from the articulation the snapshot gives. A coupling or an uncoupling (the record's tractor id changes) plays `tow.clunk` through `CarSounds.PlayOnce`
   (car-design section 9) and toasts the driver ("Trailer hitched" / "Trailer unhitched"); while towing the driver's prompt adds "Hold E  Unhitch trailer".
 
 Approximations and open points: the trailer's mass is its loaded one whether or not the missile is on; the tractor's crash damage from a blocked trailer is the wall's rule on the pair's speed; a hitched

@@ -55,7 +55,7 @@ public class OverlayTests
         var blocked = c.Dead || c.Ending || c.ControlMode;
         foreach (var open in new[] { false, true })
         {
-            // NetClient.Equipment.cs: menu or chooser: false. Hud.ToggleEquipment: chat: false; open: close; blocked: false; else open
+            // ScreensClient.cs: menu or chooser: false. Hud.ToggleEquipment: chat: false; open: close; blocked: false; else open
             var old = c.MenuOpen || c.ChooserOpen ? OverlayKeyVerdict.Ignore : c.ChatOpen ? OverlayKeyVerdict.Ignore : open ? OverlayKeyVerdict.Close : blocked ? OverlayKeyVerdict.Ignore : OverlayKeyVerdict.Open;
             Assert.Equal(old, OverlayArbiter.Key(Overlay.Equipment, open, c));
         }
@@ -71,7 +71,7 @@ public class OverlayTests
         var blocked = c.Dead || c.Ending || c.ControlMode;
         foreach (var open in new[] { false, true })
         {
-            // NetClient.TacticalMap.cs: menu: false (the chooser was not checked). Hud.ToggleTacticalMap: chat: false; open: close; blocked: false; else open
+            // ScreensClient.cs: menu: false (the chooser was not checked). Hud.ToggleTacticalMap: chat: false; open: close; blocked: false; else open
             var old = c.MenuOpen ? OverlayKeyVerdict.Ignore : c.ChatOpen ? OverlayKeyVerdict.Ignore : open ? OverlayKeyVerdict.Close : blocked ? OverlayKeyVerdict.Ignore : OverlayKeyVerdict.Open;
             Assert.Equal(old, OverlayArbiter.Key(Overlay.TacticalMap, open, c));
         }

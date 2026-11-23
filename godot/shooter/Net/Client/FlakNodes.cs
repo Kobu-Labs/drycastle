@@ -1,9 +1,4 @@
 using Godot;
-using Drycastle.Shooter.Characters;
-using Drycastle.Shooter.Menu;
-using Drycastle.ShooterCore.Net;
-using Drycastle.ShooterCore.Vehicles;
-using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter.Net.Client;
 

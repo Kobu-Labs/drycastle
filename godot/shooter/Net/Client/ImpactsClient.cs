@@ -1,7 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Effects;
 using Drycastle.Shooter.Waters;
-using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Weapons;
 
 namespace Drycastle.Shooter.Net.Client;

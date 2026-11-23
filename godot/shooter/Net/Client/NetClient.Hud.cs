@@ -1,8 +1,6 @@
 using Godot;
 using Drycastle.Shooter.HeadsUp;
-using Drycastle.Shooter.Hunts;
 using Drycastle.Shooter.Loudspeaker;
-using Drycastle.Shooter.Menu;
 using Drycastle.Shooter.Weapons;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Hud;
@@ -12,7 +10,6 @@ using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
-using Drycastle.ShooterCore.Wildlife;
 
 namespace Drycastle.Shooter.Net.Client;
 

@@ -1,6 +1,6 @@
-using System.Globalization;
 using Godot;
 using Drycastle.ShooterCore.Net;
+using System.Globalization;
 using FileAccess = Godot.FileAccess;
 
 namespace Drycastle.Shooter.Net.Client;

@@ -32,7 +32,7 @@ Game half. Protocol 48 (merge renumbers); event kind 233 `DishTaken`.
 ### Code
 - Pure, `godot/ShooterCore/Thieves/DishTarget.cs`: `DishLootConfig` (`loot.dish`: `base_out_m` 0.9, `snap_max_m` 1.2, `snap_max_dy_m` 1.0, `reach_below_m` 1.3, `min_climb_m` 0.4), `DishSite` (object id, origin, yaw), `IDishWorld` (sites, ground, mesh snap), `DishSource : IStealSource`, `DishCodec`, `DishSource.AssetId`.
 - Server, `NetServer.Thieves.Loot.Dish.cs`: `ServerDishes` (sites from `Map.ObjectNodes` with that asset, sorted by object id; cached once the nodes are in the tree), `MakeDishSource()`, `SendDishesOnJoin`.
-- Client: `NetClient.Thieves.Dish.cs` (`OnDishEvent` -> hides/shows the object nodes), `LootProp.Dish.cs` (generated model, box fallback).
+- Client: `ThievesClient.cs` (`OnDishEvent` -> hides/shows the object nodes), `LootProp.Dish.cs` (generated model, box fallback).
 - Collision: `ObjectColliders.IsPassThrough(asset)` (the dish asset), checked first in `MapLoader.AddObjectColliders`: no body on server or client. Category stays `other` (editor palette).
 - Tests `DishTests.cs`.
 
@@ -46,7 +46,7 @@ Game half. Protocol 48 (merge renumbers); event kind 233 `DishTaken`.
 - `Wire.cs`: `DishTaken = 233`, `ProtocolVersion` 47 -> 48, one changelog line.
 - `NetServer.Thieves.Loot.cs`: the marked dish line -> `registry.Register(MakeDishSource());`.
 - `NetServer.Thieves.cs`: `SendThievesOnJoin` body: `SendDishesOnJoin(c);`.
-- `NetClient.Thieves.cs`: `OnThievesEvent`: `OnDishEvent(kind, payload);`.
+- `ThievesClient.cs`: `OnEvent`: `OnDishEvent(kind, payload);`.
 - `thieves.json`: `loot.dish` only. `PropColliders.cs` (`IsPassThrough`), `MapLoader.Trees.cs` (one line).
 
 ### Open

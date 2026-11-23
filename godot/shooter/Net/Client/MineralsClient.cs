@@ -1,7 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.Crystals;
-using Drycastle.Shooter.HeadsUp;
 using Drycastle.Shooter.Menu;
 using Drycastle.Shooter.Wildlife;
 using Drycastle.ShooterCore.Hud;

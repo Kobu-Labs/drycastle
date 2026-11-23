@@ -2,7 +2,6 @@ using Godot;
 using Drycastle.Shooter.HeadsUp;
 using Drycastle.Shooter.Hunts;
 using Drycastle.Shooter.Menu;
-using Drycastle.Shooter.Wildlife;
 using Drycastle.ShooterCore.Companions;
 using Drycastle.ShooterCore.Hunts;
 using Drycastle.ShooterCore.Icons;
