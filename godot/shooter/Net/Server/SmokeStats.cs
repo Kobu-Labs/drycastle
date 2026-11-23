@@ -1,13 +1,14 @@
 using Godot;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Vehicles;
 
 
 namespace Drycastle.Shooter.Net.Server;
 
 /// <summary>
 /// What the smoke tests (net, match, weapons, rpg: the <c>run_*_smoke.py</c> scripts) count on the server, and the verdict each one prints when it is over. A production server fills the counters and never asks for a verdict.
-/// The vehicle smokes keep their own counters with the vehicles (<c>NetServer.Vehicles.cs</c>) and share <see cref="FinishAt"/> and <see cref="ShotsFired"/>.
+/// The vehicle smokes count what the vehicles do (<see cref="CarEnters"/> ... ) and share <see cref="FinishAt"/> and <see cref="ShotsFired"/>.
 /// </summary>
 internal sealed class SmokeStats
 {
@@ -15,6 +16,8 @@ internal sealed class SmokeStats
     public int ShotsFired, HitsLanded, Headshots, WallBlocked, Backstabs, Refills;
     public int RocketsFired, Explosions, DirectHits, SplashHits, SelfHits, WorldExplosions, ExpiredRockets, Knocked;
     public int PeakPlayers;
+    public int VehicleHits, VehicleBlasts, BlastHits, ChainHits, DestroyedReturns;
+    public int CarEnters, CarExits, RunOvers, RunOverKills;
 
     /// <summary>Server time at which the running smoke test ends (0: not set yet).</summary>
     public double FinishAt;
@@ -44,6 +47,26 @@ internal sealed class SmokeStats
                  && match.Phase == MatchPhase.Running && match.Players.All(p => p.Kills == 0 && p.Deaths == 0);
         GD.Print($"server: match smoke kills={Kills} roundsEnded={RoundsEnded} restarts={Restarts} ignoredHits(protection)={IgnoredHits} earlyProtectionEnds={EarlyProtectionEnds} phase={match.Phase}");
         GD.Print(ok ? "SHOOTER_MATCH_SERVER_OK" : "SHOOTER_MATCH_SERVER_FAIL");
+        return ok;
+    }
+
+    /// <summary>The blast smoke (ticket #103): the vehicles were hurt, blew up, threw their blast, chained to the one beside them and came back.</summary>
+    public bool Blast(int cars)
+    {
+        var ok = VehicleHits >= 20 && VehicleBlasts >= 2 && BlastHits >= 2 && ChainHits >= 1 && DestroyedReturns >= 2 && cars == 3;
+        GD.Print($"server: blast smoke vehicleHits={VehicleHits} blasts={VehicleBlasts} blastHits(players)={BlastHits} chainHits={ChainHits} returns={DestroyedReturns} kills={Kills}");
+        GD.Print(ok ? "SHOOTER_BLAST_SERVER_OK" : "SHOOTER_BLAST_SERVER_FAIL");
+        return ok;
+    }
+
+    /// <summary>The car smoke: the bot got in and out of a car and ran a body over (a slow vehicle cannot kill a full-health player in one pass) without firing.</summary>
+    public bool Car(VehiclesFile vehicles, string kind, int cars)
+    {
+        var maxHit = RunOver.Damage(vehicles, vehicles.Vehicles.First(v => v.Id == kind).TopSpeed);
+        var needKill = maxHit >= vehicles.RunOverMaxDamage;
+        var ok = CarEnters >= 1 && CarExits >= 1 && RunOvers >= 1 && (RunOverKills >= 1 || !needKill) && ShotsFired == 0 && cars >= 3;
+        GD.Print($"server: car smoke kind={kind} cars={cars} enters={CarEnters} exits={CarExits} runOvers={RunOvers} runOverKills={RunOverKills} shotsWhileDriving={ShotsFired}");
+        GD.Print(ok ? "SHOOTER_CAR_SERVER_OK" : "SHOOTER_CAR_SERVER_FAIL");
         return ok;
     }
 

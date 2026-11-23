@@ -1,6 +1,7 @@
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
 
 namespace Drycastle.Shooter.Net.Server;
@@ -51,6 +52,13 @@ internal sealed class ServerContext
 
     /// <summary>A packet on one of the unreliable channels (<see cref="Wire.ChanRozhlasFeed"/>, ...) to one player.</summary>
     public void SendUnreliable(ServerClient c, int channel, byte[] packet) => _sendUnreliable(c, channel, packet);
+
+    /// <summary>The player's ammunition and magazines, after what changed them.</summary>
+    public void SendAmmo(ServerClient c)
+    {
+        c.W.Changed = false;
+        SendEvent(c, EventKind.Ammo, WeaponCodec.Encode(WeaponCodec.BuildAmmo(c.W, Now)));
+    }
 
     /// <summary>A chat line to one player.</summary>
     public void ChatTo(ServerClient c, ChatLineKind kind, string text) => SendEvent(c, EventKind.ChatLine, ChatEvents.EncodeLine(new ChatLine(kind, "", text)));

@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Colliders;
@@ -147,9 +148,9 @@ public partial class NetServer
         _bigfootEnv = new BigfootEnv(this);
         _bigfootEnv.Refresh();
         var yaw = 0f;
-        var nearest = living.OrderBy(o => Dist2D(N(o.Body.GlobalPosition), at)).FirstOrDefault();
+        var nearest = living.OrderBy(o => CarPose.Flat(N(o.Body.GlobalPosition), at)).FirstOrDefault();
         if (nearest != null) yaw = TurretMath.YawTo(at, N(nearest.Body.GlobalPosition));
-        var participants = living.Count(o => Dist2D(N(o.Body.GlobalPosition), at) <= BigfootData.Hits.ParticipantRadiusM);
+        var participants = living.Count(o => CarPose.Flat(N(o.Body.GlobalPosition), at) <= BigfootData.Hits.ParticipantRadiusM);
         var bf = new Bigfoot(BigfootData, _bigfootEnv, at, yaw, _rng.Next(), participants);
         bf.Died += OnBigfootDied;
         var id = _match.Entities.Spawn(bf);
@@ -160,7 +161,7 @@ public partial class NetServer
         _events.Start(EventBook.Bigfoot, _elapsed);
         BigfootFxEvent(BigfootFxKind.Appear, bf.Position);
         ChatToAll(ChatLineKind.System, "", $"{admin.Name} started the Bigfoot event. Something huge is moving through the village.");
-        if (fallback) ChatTo(admin, ChatLineKind.Info, $"The map has no bigfoot zone, so this is the dev fallback: it appeared {Dist2D(bf.Position, nearPos):0} m from {nearName}.");
+        if (fallback) ChatTo(admin, ChatLineKind.Info, $"The map has no bigfoot zone, so this is the dev fallback: it appeared {CarPose.Flat(bf.Position, nearPos):0} m from {nearName}.");
         GD.Print($"server: Bigfoot started by {admin.Name} #{admin.Id} at ({bf.Position.X:F1},{bf.Position.Y:F1},{bf.Position.Z:F1}), {(fallback ? $"FALLBACK spawn near {nearName} (the map has no bigfoot zone)" : "a baked bigfoot zone point")}, hits needed {bf.HitsNeeded}, {participants} participants");
     }
 

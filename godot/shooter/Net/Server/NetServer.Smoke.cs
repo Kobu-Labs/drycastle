@@ -28,8 +28,8 @@ public partial class NetServer
         var quit = QuitAfter > 0 && _elapsed >= QuitAfter;
         var due = _smoke.FinishAt > 0 && _elapsed >= _smoke.FinishAt || quit;
         if (RpgSmoke) { if (due) EndSmoke(_smoke.Rpg()); }
-        else if (BlastSmoke) { if (due) FinishBlast(); }
-        else if (CarSmoke) { if (due) FinishCar(); }
+        else if (BlastSmoke) { if (due) EndSmoke(_smoke.Blast(_fleet.Count)); }
+        else if (CarSmoke) { if (due) EndSmoke(_smoke.Car(Vehicles, SmokeKind, _fleet.Count)); }
         else if (WeaponsSmoke) { if (due) EndSmoke(_smoke.Weapons()); }
         else if (MatchSmoke) { if (due) EndSmoke(_smoke.Match(_match, MatchConfig)); }
         else if (LossTest > 0) { if (quit) LossEnd(false); }

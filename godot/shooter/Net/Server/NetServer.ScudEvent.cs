@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Churches;
@@ -99,7 +100,7 @@ public partial class NetServer
             if (zone is { } z) p = z;
             else if (Spawns.Count > 0) p = Spawns[_rng.Next(Spawns.Count)];
             else break;
-            if (players.Any(q => Dist2D(q, p) < minD)) continue;
+            if (players.Any(q => CarPose.Flat(q, p) < minD)) continue;
             _scudRoads ??= Map != null ? RoadNetwork.Parse(Map.RoadsJson) : new List<RoadLine>();
             var yaw = RoadHeading.YawAt(_scudRoads, p.X, p.Z) ?? (float)(_rng.NextDouble() * MathF.Tau - MathF.PI);
             if (ScudStandingHeight(p.X, p.Z, yaw, def.HalfWidth, def.HalfLength) is not { } y) continue;

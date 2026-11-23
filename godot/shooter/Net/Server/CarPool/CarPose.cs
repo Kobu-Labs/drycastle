@@ -17,6 +17,9 @@ internal static class CarPose
         return new VehiclePose(car.HullFeet, car.State.Yaw, pitch, roll, car.TurretLocalYaw);
     }
 
+    /// <summary>The distance between two points seen from above.</summary>
+    public static float Flat(NVec3 a, NVec3 b) => MathF.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Z - b.Z) * (a.Z - b.Z));
+
     /// <summary>Distance from a point to a vehicle's hull where it stands now (its upright box, or its type's tilted boxes).</summary>
     public static float HullDistanceNow(ServerCar car, NVec3 at)
     {

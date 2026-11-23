@@ -1,5 +1,8 @@
+using Godot;
+using Drycastle.Shooter.Flight;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Waters;
 
 namespace Drycastle.Shooter.Net.Server.CarPool;
 
@@ -12,8 +15,18 @@ internal sealed class Fleet
 {
     readonly List<ServerCar> _cars = new();
     readonly IReadOnlyDictionary<ushort, ServerClient> _players;
+    readonly Node3D _world;
+    readonly Water _water;
+    readonly Drycastle.MapLoader.MapLoader? _map;
+    FlightBounds? _bounds;
 
-    public Fleet(IReadOnlyDictionary<ushort, ServerClient> players) => _players = players;
+    public Fleet(IReadOnlyDictionary<ushort, ServerClient> players, Node3D world, Water water, Drycastle.MapLoader.MapLoader? map)
+    {
+        _players = players; _world = world; _water = water; _map = map;
+    }
+
+    /// <summary>The flyable rectangle of the map (the box around its terrain, <see cref="FlightProbe.MapBounds"/>); a smoke arena has none.</summary>
+    public FlightBounds FlightBounds => _bounds ??= FlightProbe.MapBounds(_map);
 
     /// <summary>Beyond this distance between two origins no pair of vehicles can touch (the bus is 12 m long, a rotor disc 9 m across).</summary>
     public const float ContactBroadRange = 20f;
@@ -26,6 +39,20 @@ internal sealed class Fleet
     public ushort NextId => (ushort)(VehicleRecord.FirstId + _cars.Count);
 
     public void Add(ServerCar car) => _cars.Add(car);
+
+    /// <summary>A new vehicle of type <paramref name="kind"/> standing at <paramref name="origin"/> facing <paramref name="yaw"/> (where it returns to), in the world and at the end of the list: its id is the next one.</summary>
+    public ServerCar Make(int kind, VehicleDef def, byte colour, Vector3 origin, float yaw)
+    {
+        var car = new ServerCar
+        {
+            Name = $"{def.Id}{Count}", Id = NextId, Kind = kind, Def = def, Colour = VehicleRecord.Pack(kind, colour),
+            HalfWidth = def.HalfWidth, HalfLength = def.HalfLength, OriginPos = origin, OriginYaw = yaw,
+            FlightWater = _water, FlightBounds = FlightBounds,
+        };
+        _world.AddChild(car);
+        _cars.Add(car);
+        return car;
+    }
 
     /// <summary>The vehicle with this id, or null.</summary>
     public ServerCar? Find(int id) => id - VehicleRecord.FirstId is var i && i >= 0 && i < _cars.Count && _cars[i].Id == id ? _cars[i] : null;
