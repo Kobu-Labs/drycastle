@@ -128,6 +128,7 @@ public partial class NetClient : Node
     FlightClient _flight = null!;
     DriveClient _driveClient = null!;
     TowClient _tow = null!;
+    CropCrushClient _crush = null!;
     /// <summary>glass.json (set by the host); the defaults when it sets none.</summary>
     public GlassConfig GlassData = new();
     MineralsClient _minerals = null!;
@@ -200,6 +201,7 @@ public partial class NetClient : Node
         _glass = new GlassClient(Ctx, GlassData);
         _driveClient = new DriveClient(Ctx, CarThrown, PlaceCarSolid, ScudImmobilises);
         _tow = new TowClient(Ctx, _driveClient);
+        _crush = new CropCrushClient(Ctx, _driveClient);
         _flight = new FlightClient(Ctx, CarThrown, PlaceCarSolid, _session.FlightCorrection);
         Camo = new CamoClient(Ctx, CamoData, DressCorpses);
         _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
