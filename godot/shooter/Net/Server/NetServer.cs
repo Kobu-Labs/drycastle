@@ -156,15 +156,32 @@ public partial class NetServer : Node
     public override void _Ready()
     {
         PerfInit();
+        if (!Listen()) return;
+        if (ArenaMode) BuildArena();
+        BuildMatch();
+        BuildServices();
+        BuildWorldEntities();
+        BuildFeatures();
+        FinishStart();
+    }
+
+    /// <summary>Binds the port. False (and the server quits) when it cannot.</summary>
+    bool Listen()
+    {
         // one peer slot more than the players allowed: the connection past the limit is seen and told the server is full (T3-020)
         var err = _host.CreateHostBound("*", Port, MaxPeers + 1, Wire.Channels, 0, 0);
         if (err != Error.Ok)
         {
             GD.PrintErr($"server: cannot listen on port {Port}: {err}");
             GetTree().Quit(2);
-            return;
+            return false;
         }
-        if (ArenaMode) BuildArena();
+        return true;
+    }
+
+    /// <summary>The match and the context every feature takes, and the blast kit. The first things made: the rest asks for them.</summary>
+    void BuildMatch()
+    {
         _xp = new MatchXp(Levels.Awards);
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
@@ -172,6 +189,11 @@ public partial class NetServer : Node
         _impacts = new ImpactFx(_ctx, Map, Water);
         _splash = new Splash(_ctx, () => MapShelters, () => Query, PoseOf);
         RegisterTargetSources();
+    }
+
+    /// <summary>What the features share (animals, seats, targets) and the features of the village: the church, the radio, the chat, the profiles, the hunts, the statuses and the demon.</summary>
+    void BuildServices()
+    {
         _animals = new AnimalWorld(_ctx, _fleet, Map, Water, () => Query, () => MapFlightBounds);
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
         _sitters = new Sitters(_ctx, OnStood);
@@ -190,6 +212,11 @@ public partial class NetServer : Node
         _status = new StatusServer(_ctx, Deal, Weapons, GetHigh);
         _pounce = new PounceServer(_ctx, () => Demon, _status);
         _demon = new DemonServer(_ctx, () => Demon, () => _mass, _church, _citizens, _sitters, _status, _pounce, _targets, Deal, () => Query, (at, radius) => BlastGlass(at, radius), () => MapShelters, Weapons, MapDir, World, _events);
+    }
+
+    /// <summary>The world entities' end of life and their types, in the order they register, and what follows the same despawns (the corpse book, the Bigfoot).</summary>
+    void BuildWorldEntities()
+    {
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");
         _match.Entities.Spawned += w => BroadcastEvent(EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State));
         _match.Entities.Despawned += w => BroadcastEvent(EventKind.WorldDespawn, WorldCodec.EncodeDespawn(w.Id, w.Reason));
@@ -200,6 +227,11 @@ public partial class NetServer : Node
         _corpses = new CorpseBook(_match.Entities);
         _gear = new ItemsServer(_ctx, Items, _corpses, () => Query, car => PresentPose(car).Feet);
         InitBigfoot(); // after the corpse book, which follows the same despawns
+    }
+
+    /// <summary>The remaining features, after the kinds above: a feature that registers an entity type or a handler comes before the ones that name it.</summary>
+    void BuildFeatures()
+    {
         _pets = new PetServer(_ctx, PetsData, AnimalData, _animals, ArenaMode, MapDir, Map);
         _wildlife = new WildlifeServer(_ctx, WildlifeData, AnimalData, AnimalShapes, _animals, () => MapZonePoints, () => Clock.HourAt(_tick / (double)Wire.TickRate), () => Query,
             ArenaMode, MapDir, Map, (a, by) => _hunts.OnWildKilled(a, by), _minerals.OnDropped);
@@ -214,6 +246,11 @@ public partial class NetServer : Node
         _crates = new CrateServer(_ctx, Killstreaks.Rewards, () => Query, () => _streaks.Rules);
         _streaks = BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), SeatPos, WorldHit, _rocketIds, _smoke, DamageVehicle, () => Vehicles, _simClients);
+    }
+
+    /// <summary>What the server needs once everything exists: the warmed indexes, the default vehicle table, the checks that fail at start and the two lines the smoke scripts wait for.</summary>
+    void FinishStart()
+    {
         _impacts.Warm(); // roads.json and the tree grid, so no impact pays for them on a tick (T3-003, T3-004)
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
         _flak.CheckWeapons(Vehicles);
