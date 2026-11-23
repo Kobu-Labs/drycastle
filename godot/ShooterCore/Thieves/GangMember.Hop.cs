@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// The fence hop of a Thief (docs/events/thieves/05): a scripted move, off the navigation mesh, for a target behind a fence (<see cref="StealTarget.Hop"/>). Approach brings it to the point outside the fence; then

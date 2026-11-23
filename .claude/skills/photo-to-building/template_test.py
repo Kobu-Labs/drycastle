@@ -2,8 +2,8 @@
 
 import pytest
 
-from drycastle_pipeline import MODULE as m
-from drycastle_pipeline.landmarks import build_landmark
+from drycastle_pipeline.buildings.landmarks import MODULE as m
+from drycastle_pipeline.buildings.landmarks.catalog import build_landmark
 
 
 def _building():

@@ -67,7 +67,7 @@ Flags (after `--`):
 | `--day-length MIN` | real minutes for one 24-hour day; overrides `day_length_minutes` in `environment.json` (default `24`) |
 | `--freeze-time` | hold the clock at its start time (or at `--time`), so the sky does not move |
 | `--match-set k=v,k=v` | override match options, see below |
-| `--targets N` | plant N stationary target dummies ("Target 01" ...) around the spawn area, 0-64; default 0 from `match.json`. The dummies are not players: they are outside the roster, the player cap, the score goal and the round end, and they respawn 3 s after a kill on the same spot. Planned at start on the ground under the map colliders (rays from above, steep faces rejected; a roof counts as ground where a ray meets one first); no cover or wall spots yet. Wire: entity type 3 in snapshots, event kind 140 (`TargetRoster`) on join. Code: `godot/shooter/Net/NetServer.Targets.cs`. `make shooter-server` passes `TARGETS` (default 24; `make shooter-server TARGETS=0` for none) |
+| `--targets N` | plant N stationary target dummies ("Target 01" ...) around the spawn area, 0-64; default 0 from `match.json`. The dummies are not players: they are outside the roster, the player cap, the score goal and the round end, and they respawn 3 s after a kill on the same spot. Planned at start on the ground under the map colliders (rays from above, steep faces rejected; a roof counts as ground where a ray meets one first); no cover or wall spots yet. Wire: entity type 3 in snapshots, event kind 140 (`TargetRoster`) on join. Code: `godot/shooter/Net/Server/NetServer.Targets.cs`. `make shooter-server` passes `TARGETS` (default 24; `make shooter-server TARGETS=0` for none) |
 | `--debug-cmds` | honour the client debug kill command and give every player the full weapon list on the hotbar (dev aid); leave off on a public server |
 | `--unlock-all` | dev mode: every item unlocked, see the next section. Also on when `DRYCASTLE_UNLOCK_ALL` is `1` or `true`. Leave off on a public server |
 | `--allow-sandbox` | grant sandbox mode to clients that ask for it (#156): godmode, unlimited ammo, the whole hotbar, every killstreak on demand (no kill requirement, no cap). A sandbox player's kills and XP are not scored, nothing is written to the database, the round never ends on their kills and they rank last with a `[SANDBOX]` tag. The panel's "Take damage" checkbox turns the godmode off for that player (off by default): they are hurt, die and respawn like anyone, the rest of sandbox mode stays, their death writes no stat and grants no XP, and the HUD badge reads "SANDBOX - TAKING DAMAGE". A server without the flag refuses the request with a notice. `make shooter-server` passes it (`SANDBOX=1` is the default; `SANDBOX=0` for none). Leave off on a public server |
@@ -96,7 +96,7 @@ The Makefile dev targets turn it on: `shooter-server` passes `--unlock-all`, and
 set it, and nothing in the export does.
 
 The clock flags are read in `Shooter.ServerClock` (`godot/shooter/Shooter.cs`) and resolved by `EnvironmentConfig.ToClock`
-(`godot/ShooterCore/Environment/EnvironmentConfig.cs`). The clock is owned by the server and sent to each client in the
+(`godot/ShooterCore/Scenery/EnvironmentConfig.cs`). The clock is owned by the server and sent to each client in the
 welcome message (protocol 3 and later), so clients never need the flags.
 Example: `./drycastle-server.x86_64 --headless -- --role server --port 27015 --map /srv/drycastle/map --db /srv/drycastle/shooter.db --time 22:00 --freeze-time`.
 
@@ -157,7 +157,7 @@ files below is missing.
 | `glass.json` | glass panes: hit points, crack stages, blast damage, whether a shattered vehicle pane exposes the riders, the shatter animation (see `docs/glass.md`) | `GlassConfig.cs` |
 | `match.json` | round rules (see the match options table above) | `MatchData.cs` |
 | `sounds.json` | sound ids and file names (validated against `assets/` by the server) | `SoundData.cs` |
-| `rozhlas_voice.json` | the announcement's voice chain (ffmpeg filters in order, their values, the echo tap ranges); read by the bake (`scripts/make_rozhlas.py`) and by the live feed, so they cannot drift | `RozhlasVoice.cs`, `RozhlasFeed.cs` |
+| `rozhlas_voice.json` | the announcement's voice chain (ffmpeg filters in order, their values, the echo tap ranges); read by the bake (`scripts/sounds/make_rozhlas.py`) and by the live feed, so they cannot drift | `RozhlasVoice.cs`, `RozhlasFeed.cs` |
 
 Sounds, models and textures are not in the `.pck`; they are read from `assets/` on disk (section 2).
 Shaders (`godot/shooter/shaders/*.gdshader`) are compiled by Godot from the project resources, so they are in the export

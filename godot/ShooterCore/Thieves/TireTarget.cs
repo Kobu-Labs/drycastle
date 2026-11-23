@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// The <c>loot.tire</c> sub-section of thieves.json. Tires are taken off the cars listed in <see cref="VehicleIds"/> (the ones whose model has the wheel nodes

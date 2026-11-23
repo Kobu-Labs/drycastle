@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Scud;
 
 /// <summary>Where a Scud missile is in its flight: the vertical boost, then the arc over and down onto the target.</summary>
 public enum ScudPhase : byte { Boost = 0, Arc = 1, Dive = 2 }

@@ -1,7 +1,10 @@
 using System.Numerics;
 using System.Text.Json;
+using Drycastle.ShooterCore.Buildings;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Glass;
 
 /// <summary>
 /// The flat rectangle of a glass pane in some frame (the world for a building's pane, the vehicle's node frame for a vehicle's):

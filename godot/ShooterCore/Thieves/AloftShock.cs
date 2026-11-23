@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// What strikes a Thief at the top of a climb when its target's kind says so (<see cref="IStealSource.AloftHazard"/>): the member goes Shocked for <see cref="ShockSeconds"/> at the top, falls to the

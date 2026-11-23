@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Hovnovite (crystals.md): the manure stone. Wet, shiny brown-green crystals (<c>shaders/crystal_veined.gdshader</c>) in a fresh dark pile with straw sticking out of it. No glow. Steam rises from it,

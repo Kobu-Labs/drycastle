@@ -1,9 +1,25 @@
 using System.Text.Json;
 using Godot;
-using Drycastle.ShooterCore;
-using NVec3 = System.Numerics.Vector3;
+using Drycastle.Shooter.Dev;
+using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Server;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Intel;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Sandbox;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Bots;
 
 /// <summary>
 /// Loss and latency test bot (issue #93). Round-relative timeline (see <see cref="LossTimeline"/>): warm-up, a measured window with scripted walking

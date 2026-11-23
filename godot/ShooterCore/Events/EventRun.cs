@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>Where an event is: running, concluded as a win (its reward is given), or gone with no reward (it timed out or an admin cancelled it).</summary>
 public enum EventPhase : byte { Active, Won, Despawned }

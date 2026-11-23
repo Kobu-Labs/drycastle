@@ -1,6 +1,14 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Status;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Match;
 
 /// <summary>Where the match is. The machine is <see cref="MatchSim.PhaseSpec"/>; the values travel in the MatchState event, so they never change.</summary>
 public enum MatchPhase : byte { Waiting = 0, Running = 1, Ending = 2 }

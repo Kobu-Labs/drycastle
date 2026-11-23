@@ -30,7 +30,7 @@ public sealed record PlatformBuild(
     [property: JsonPropertyName("exe")] string Exe,
     [property: JsonPropertyName("game")] FileRef Game);
 
-/// <summary>manifest.json attached to every game release by CI (scripts/make_manifest.py).</summary>
+/// <summary>manifest.json attached to every game release by CI (scripts/release/make_manifest.py).</summary>
 public sealed record Manifest(
     [property: JsonPropertyName("schema")] int Schema,
     [property: JsonPropertyName("version")] string Version,

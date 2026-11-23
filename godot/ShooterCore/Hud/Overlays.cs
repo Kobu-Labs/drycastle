@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Hud;
 
 /// <summary>
 /// Who wants the mouse released (a cursor to click with) instead of captured (looking around). The shell asks it every frame and writes

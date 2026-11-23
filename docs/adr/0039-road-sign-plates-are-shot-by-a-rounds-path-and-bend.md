@@ -8,7 +8,7 @@ Decided for #425 (Road signs). A **Road sign** (GLOSSARY) is a placed object of 
 - **Wire.** Events 252 `SignPlateState` (u16 plate, u8 state), 253 `SignPlateSync` (every plate not listed is whole: the join catch-up and a new round), protocol 77.
 - **The bend is the client's drawing.** The model's `Plate` node has its origin at the plate's upper clamp; the client (`SignPlates`) rolls it 35 degrees about that point, tips it 12 degrees out at the bottom and drops it 4 cm. The side (left or right) is a hash of the plate's index, so every client draws the same lean and a row of signs does not all lean one way. Whole puts the node back as the model has it. Nothing is sent per frame.
 - **The pole is solid, the plate is not.** The asset lists its own `solids` (one thin metal box up to the pole's height), so the default one-box-per-category collider, which would span the plate, does not apply. Players and cars stop at the pole; they and rounds pass through the plate.
-- **Models are generated** (`scripts/make_road_sign_models.py`, CC0): metal PBR (galvanised pole, glossy painted plate), no emissive, the STOP letters a block font of boxes.
+- **Models are generated** (`scripts/models/make_road_sign_models.py`, CC0): metal PBR (galvanised pole, glossy painted plate), no emissive, the STOP letters a block font of boxes.
 
 **Not done.** No sound: the game has no metal ping to reuse (the shot already plays the generic bullet impact). Blasts do not bend plates. The plate's hit shape is a sphere at its centre, not its outline: a round passing 30 cm in front of or behind it also counts.
 

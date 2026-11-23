@@ -1,7 +1,17 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Status;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Plantation;
+using Drycastle.ShooterCore.Status;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>
 /// Player statuses on the client (Holy Mass reward): what the server last said about everyone (<see cref="EventKind.StatusState"/>: the

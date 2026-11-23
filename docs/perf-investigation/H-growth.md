@@ -4,7 +4,7 @@ Read-only. Nothing built, run, measured or changed. Terms follow `GLOSSARY.md` (
 
 ## 1. Verdict
 
-**Fit with changes.** The stack (one headless Godot server process per mod, C# simulation kept free of Godot in `ShooterCore`, custom ENet snapshot layer, versioned base map artifact) fits the 16-player shooter that is built and planned: measured tick p50/p95 1.6/2.6 ms against a 33.3 ms budget, 4.24 kB/s per client at 16 bots, and a 2-vCore VPS target (`docs/release.md:88`). It stops fitting for the shooter at roughly 48 to 64 humans per server, and the first thing to break there is the main-thread send path, not bandwidth: the spike's custom layer at 64 clients (no game logic) already spends 28.6 ms of the 33.3 ms frame at p95 (86 %), with no interest management (H-01, H-02). For the planned survival mod it stops fitting at about 50 to 75 continuously moving entities visible to one client, because nothing filters by distance (H-09), and a persistent world has no storage at all (H-07). For an MMO it is a **wrong fit** as a single-process-per-mod design: one server caps at 32 peers by constant (`godot/shooter/Net/NetServer.cs:437`), and no directory, zoning or handoff exists. Nothing in the stack forbids zoning later; it is simply absent (H-05, alternative E). The shared architecture is the asset; the single-process, no-interest-filter, full-broadcast assumptions are the constraint.
+**Fit with changes.** The stack (one headless Godot server process per mod, C# simulation kept free of Godot in `ShooterCore`, custom ENet snapshot layer, versioned base map artifact) fits the 16-player shooter that is built and planned: measured tick p50/p95 1.6/2.6 ms against a 33.3 ms budget, 4.24 kB/s per client at 16 bots, and a 2-vCore VPS target (`docs/release.md:88`). It stops fitting for the shooter at roughly 48 to 64 humans per server, and the first thing to break there is the main-thread send path, not bandwidth: the spike's custom layer at 64 clients (no game logic) already spends 28.6 ms of the 33.3 ms frame at p95 (86 %), with no interest management (H-01, H-02). For the planned survival mod it stops fitting at about 50 to 75 continuously moving entities visible to one client, because nothing filters by distance (H-09), and a persistent world has no storage at all (H-07). For an MMO it is a **wrong fit** as a single-process-per-mod design: one server caps at 32 peers by constant (`godot/shooter/Net/Server/NetServer.cs:437`), and no directory, zoning or handoff exists. Nothing in the stack forbids zoning later; it is simply absent (H-05, alternative E). The shared architecture is the asset; the single-process, no-interest-filter, full-broadcast assumptions are the constraint.
 
 ## 2. What is healthy
 
@@ -23,7 +23,7 @@ Status and "in audit" column: "new" means not in `docs/perf-audit.md`; otherwise
 
 ### H-01 No interest management: full broadcast sets the bandwidth and send-loop growth
 
-- **Mechanism.** `SendSnapshots` puts every joined player, every vehicle and every extra record into every client's packet, and `BroadcastEvent` sends to every client (`godot/shooter/Net/NetServer.cs:905-917`, `:394-398`). No distance filter exists in `godot/shooter/Net` or `godot/ShooterCore/Net` (grep for "interest" and "radius": no hits, CONFIRMED). ADR 0002 names "optional radius interest management" as part of the layer (`docs/adr/0002-...`); the code does not have it, so the ADR overstates readiness rather than contradicting the code.
+- **Mechanism.** `SendSnapshots` puts every joined player, every vehicle and every extra record into every client's packet, and `BroadcastEvent` sends to every client (`godot/shooter/Net/Server/NetServer.cs:905-917`, `:394-398`). No distance filter exists in `godot/shooter/Net` or `godot/ShooterCore/Net` (grep for "interest" and "radius": no hits, CONFIRMED). ADR 0002 names "optional radius interest management" as part of the layer (`docs/adr/0002-...`); the code does not have it, so the ADR overstates readiness rather than contradicting the code.
 - **Numbers.** Calibrated per client: 4.24 kB/s at 16 bots (loss test). Spike, custom layer, movement only, no interest: 3.65 kB/s per client at 16, 12.79 at 64 (roughly linear per client, total quadratic); with a 50 m interest radius 2.83 kB/s at 64, a 78 % cut (`docs/spikes/netcode-spike.md`, N = 64 table). Linear projection for the shooter (UNVERIFIED beyond the measured point): 32 humans 8.5 kB/s per client, 272 kB/s total; 64 humans 17 kB/s, 1.1 MB/s total; 100 players 26.5 kB/s, 2.65 MB/s. Bandwidth alone is not the break at these numbers (a 500 Mbit/s netcup VPS is not the limit); the send loop is (H-02).
 - **Cost.** Per client: O(N x E) bytes, O(N x E) encode work on the main thread; total O(N^2) for players.
 - **Fix.** Per-client interest set by distance with hysteresis; always include the client's own vehicle and streak entities; far entities at 10 Hz; distance-cull Shot, impact and gunship effects (audit T2-08, issue #165).
@@ -33,7 +33,7 @@ Status and "in audit" column: "new" means not in `docs/perf-audit.md`; otherwise
 
 ### H-02 The main-thread send path, not the tick, sets the per-server budget
 
-- **Mechanism.** The spike's frame busy time (all main-thread work per frame) grows with clients, while tick work does not. Custom layer, no game logic: frame busy p95 9.7 ms at 16 clients, 28.6 ms at 64; tick work p50/p99 3.87/6.40 ms at 64 (`docs/spikes/netcode-spike.md`, N = 64 table). The difference is per-client encode, poll and send work on the same thread (`godot/shooter/Net/NetServer.cs:716-723` per client, allocations per encoder per client per tick, audit T2-03, T2-10).
+- **Mechanism.** The spike's frame busy time (all main-thread work per frame) grows with clients, while tick work does not. Custom layer, no game logic: frame busy p95 9.7 ms at 16 clients, 28.6 ms at 64; tick work p50/p99 3.87/6.40 ms at 64 (`docs/spikes/netcode-spike.md`, N = 64 table). The difference is per-client encode, poll and send work on the same thread (`godot/shooter/Net/Server/NetServer.cs:716-723` per client, allocations per encoder per client per tick, audit T2-03, T2-10).
 - **Numbers.** 28.6 / 33.3 = 86 % of the frame budget at p95 at 64 clients, before any game logic (CONFIRMED, localhost, laptop). The spike also reports about one hitch per second of 22 to 60 ms at N >= 32, not explained (spike, "Notes"). Server-side frame timing does not exist on a live server (audit T2-07).
 - **Cost.** O(N x E) per frame on one thread; the 64-client case uses most of one frame.
 - **Fix.** Reusable buffers and single broadcast encode (audit T2-03, T2-10, both S); then H-01. Explain the hitches before tuning.
@@ -56,7 +56,7 @@ Status and "in audit" column: "new" means not in `docs/perf-audit.md`; otherwise
 
 ### H-04 Vehicles are the largest growth in entities and per-tick physics; the spawn count is 32, not 29
 
-- **Mechanism.** Each vehicle is a `ServerCar` that runs `MoveAndSlide` every tick unless destroyed (audit T2-04; `godot/shooter/ServerCar.cs:121-145`). Each adds a vehicle record and, for flak, flight, drive and door-gun vehicles, one more record (`godot/shooter/Net/NetServer.cs:912-916`). Admin `/spawn vehicle` adds up to 32 per run and spawned vehicles are not removed (`docs/shooter-v2.md:512`).
+- **Mechanism.** Each vehicle is a `ServerCar` that runs `MoveAndSlide` every tick unless destroyed (audit T2-04; `godot/shooter/Vehicles/ServerCar.cs:121-145`). Each adds a vehicle record and, for flak, flight, drive and door-gun vehicles, one more record (`godot/shooter/Net/Server/NetServer.cs:912-916`). Admin `/spawn vehicle` adds up to 32 per run and spawned vehicles are not removed (`docs/shooter-v2.md:512`).
 - **Numbers.** `godot/shooter/data/vehicles.json` `spawn_count` sums to 32: car 12, motorcycle 3, bicycle 3, jeep 3, quad 4, amphibious 2, boat 2, flak 1, bus 1, utility helicopter 1 (computed from the file). The audit's 29 (`docs/perf-audit.md` section 1) is out of date. At 14 B per moving record and 30 Hz, 32 vehicles moving cost 13.4 kB/s per client, about twice the 16 players' 6.7 kB/s (arithmetic; vehicle record size UNVERIFIED).
 - **Cost.** Per tick: one `MoveAndSlide` per vehicle (cost per move UNVERIFIED); per client: about 13 kB/s if all move.
 - **Fix.** Park driverless cars at rest (audit T2-04, M). For new vehicle kinds, follow ADR 0010's pure model when the physics is new, so the cost is data-defined.
@@ -66,7 +66,7 @@ Status and "in audit" column: "new" means not in `docs/perf-audit.md`; otherwise
 
 ### H-05 One process, a hard 32-peer constant, and bots counted as entities but not as peers
 
-- **Mechanism.** `MaxPeers = 32` is a `const` (`godot/shooter/Net/NetServer.cs:437`) and sets the ENet host (`:146`, `MaxPeers + 1`) and the full check (`:335`). Bots need no peer (`godot/shooter/Net/NetServer.Bots.cs:30-31`, `:178`) but are players in `SendSnapshots` (`NetServer.cs:908`), and `MaxBots = 64` (`godot/ShooterCore/Chat/ChatCommands.cs:74`).
+- **Mechanism.** `MaxPeers = 32` is a `const` (`godot/shooter/Net/Server/NetServer.cs:437`) and sets the ENet host (`:146`, `MaxPeers + 1`) and the full check (`:335`). Bots need no peer (`godot/shooter/Net/Bots/NetServer.Bots.cs:30-31`, `:178`) but are players in `SendSnapshots` (`NetServer.cs:908`), and `MaxBots = 64` (`godot/ShooterCore/Chat/ChatCommands.cs:74`).
 - **Numbers.** 32 humans + 64 bots = 96 player entities per tick, plus about 36 vehicle and extra records: about 132 entities, four packets per client per tick (H-03).
 - **Cost.** A configuration that is one `const` away from a 16-player target.
 - **Fix.** Make `MaxPeers` a server option (CLI flag, default 32) and count bots separately in telemetry. The real MMO fix is zoning (alternative E).
@@ -76,7 +76,7 @@ Status and "in audit" column: "new" means not in `docs/perf-audit.md`; otherwise
 
 ### H-06 Map scale is linear in area and the server holds all of it; memory is unmeasured on the 4 GB target
 
-- **Mechanism.** Village extent about 4 km x 7 km (`docs/research/slovak-open-data.md:5`, `:57`, "KU is about 4 x 7 km"). The map is 48 chunk GLBs at 44 MB, with 998 visual mesh nodes and 399 collision nodes (perf-audit section 1, measured). The headless server builds the visual meshes too (audit T2-26), and collision is 72,078 triangles. The bot navigation mesh is baked on the server and cached per map version (`godot/shooter/BotNav.cs:14-15`, "a few seconds for the village").
+- **Mechanism.** Village extent about 4 km x 7 km (`docs/research/slovak-open-data.md:5`, `:57`, "KU is about 4 x 7 km"). The map is 48 chunk GLBs at 44 MB, with 998 visual mesh nodes and 399 collision nodes (perf-audit section 1, measured). The headless server builds the visual meshes too (audit T2-26), and collision is 72,078 triangles. The bot navigation mesh is baked on the server and cached per map version (`godot/shooter/Net/Bots/BotNav.cs:14-15`, "a few seconds for the village").
 - **Numbers.** Doubling the area roughly doubles every one of these (chunks, triangles, bake time before cache). Server memory: UNVERIFIED. The production VPS is 2 vCores and 4 GB shared with PostgreSQL (`docs/release.md:88`, `deploy/docker-compose.yml`).
 - **Cost.** Linear in area, per server process; a mod on a larger base map pays it in every process.
 - **Fix.** Collision-only load on the headless server (issue #172, audit T2-26); chunk streaming is not needed for the shooter.
@@ -96,7 +96,7 @@ Status and "in audit" column: "new" means not in `docs/perf-audit.md`; otherwise
 
 ### H-08 Each player and each AI is a Godot node with a physics body; the per-entity cost of hundreds is unmeasured
 
-- **Mechanism.** A player is a `CharacterBody3D` added to the scene tree at join (`godot/shooter/Player.cs:11`, `godot/shooter/Net/NetServer.cs:405-413`). Vehicles are `ServerCar` nodes. Bots are `Client` objects with a `Player` body too (`NetServer.Bots.cs:178`). The pure-model alternative exists (ADR 0006/0010; `FlightModel`, `DriveModel`, `Animal`).
+- **Mechanism.** A player is a `CharacterBody3D` added to the scene tree at join (`godot/shooter/Characters/Player.cs:11`, `godot/shooter/Net/Server/NetServer.cs:405-413`). Vehicles are `ServerCar` nodes. Bots are `Client` objects with a `Player` body too (`NetServer.Bots.cs:178`). The pure-model alternative exists (ADR 0006/0010; `FlightModel`, `DriveModel`, `Animal`).
 - **Numbers.** Node and body costs per entity are UNVERIFIED. A survival mod with 200 to 300 zombies as bodies would be 200 to 300 Jolt bodies and nodes on the same main thread as the send loop (H-02).
 - **Cost.** Per AI: one node, one body, one brain; plus a snapshot record and bandwidth (H-01).
 - **Fix.** Pure models for AI (the `Animal` pattern: a `ShooterCore` class with a world interface), with a server batch and a per-AI record only inside interest.
@@ -106,7 +106,7 @@ Status and "in audit" column: "new" means not in `docs/perf-audit.md`; otherwise
 
 ### H-09 Planned wildlife (#254) and survival AI break bandwidth first; a 20 kB/s budget is spent at about 50 to 75 moving entities
 
-- **Mechanism.** Without interest management (H-01), every moving entity is sent to every client. Animals are world entities of type 50 (glossary "Animal"); the client draws them (`godot/shooter/Net/NetClient.Animals.cs:6-10`). The server-side spawner was not found: `new Animal(` has one hit, its definition (`godot/ShooterCore/Wildlife/Animal.cs:68`). Whether the server owns animals yet is UNVERIFIED. Issue #254 asks for habitat-based spawning and a cap on total animals, and leaves server-authoritative versus client ambience open.
+- **Mechanism.** Without interest management (H-01), every moving entity is sent to every client. Animals are world entities of type 50 (glossary "Animal"); the client draws them (`godot/shooter/Net/Client/NetClient.Animals.cs:6-10`). The server-side spawner was not found: `new Animal(` has one hit, its definition (`godot/ShooterCore/Wildlife/Animal.cs:68`). Whether the server owns animals yet is UNVERIFIED. Issue #254 asks for habitat-based spawning and a cap on total animals, and leaves server-authoritative versus client ambience open.
 - **Numbers.** Theoretical 0.42 kB/s per moving entity per client (14 B x 30 Hz); calibrated 0.27 kB/s (4.24 kB/s / 16 players). The 20 kB/s per-client budget is my assumption, not a repo value. At 0.42 kB/s, 48 moving entities exhaust it; at 0.27 kB/s, 75.
 - **Cost.** Linear in entities times clients.
 - **Fix.** Interest management (H-01), a species cap per area, and 10 Hz for far animals. Or client-side ambience with no snapshot cost (the issue's own alternative).
@@ -145,7 +145,7 @@ Status and "in audit" column: "new" means not in `docs/perf-audit.md`; otherwise
 
 ### H-13 No server telemetry, so none of the growth numbers can be watched on a live server
 
-- **Mechanism.** Tick timing exists only in loss-test mode; bytes are not counted (audit T2-07, citing `godot/shooter/Net/NetServer.LossTest.cs:77-86` and `NetServer.cs:386-389`).
+- **Mechanism.** Tick timing exists only in loss-test mode; bytes are not counted (audit T2-07, citing `godot/shooter/Net/Server/NetServer.LossTest.cs:77-86` and `NetServer.cs:386-389`).
 - **Cost.** Every scale claim in this report is either a loss-test number on a laptop or UNVERIFIED on the VPS.
 - **Fix.** One line every 10 s: tick p50/p99, bytes per client, entity count, queue depth (audit T2-07).
 - **Effort.** S. It is the first item of the week list.

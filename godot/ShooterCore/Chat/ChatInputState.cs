@@ -1,6 +1,7 @@
 using System.Text;
+using Drycastle.ShooterCore.Scenery;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Chat;
 
 /// <summary>
 /// What the player has sent from the chat box, for the up and down arrows. Older steps back (the first step keeps what was

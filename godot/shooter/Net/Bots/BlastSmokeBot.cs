@@ -1,8 +1,23 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Server;
+using Drycastle.ShooterCore.Casings;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Bots;
 
 /// <summary>
 /// Vehicle blast smoke scripts (ticket #103; headless, flat arena, three cars: car 0 and car 1 side by side, car 2 far away). Alice empties an AK-47 into car 0 from 6.5 m

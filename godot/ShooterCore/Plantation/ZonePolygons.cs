@@ -1,7 +1,9 @@
 using System.Numerics;
 using System.Text.Json;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Scenery;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Plantation;
 
 /// <summary>
 /// The outlines of the zones of the kinds the server asks "is a player inside?" of (zone_polygons.json, ADR 0022): today the plantation. The pipeline writes them because a pool of candidate

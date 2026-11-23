@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Items;
 
 /// <summary>
 /// Where a cell of the Equipment screen holds what it shows: a worn slot (index = <see cref="EquipSlot"/>), a bag cell, or a cell of the Companion picker (index = its

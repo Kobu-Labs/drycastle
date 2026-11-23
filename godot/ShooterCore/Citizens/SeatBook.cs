@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Citizens;
 
 /// <summary>Who holds a church seat on the crowd's side of the books.</summary>
 public enum SeatHolder : byte

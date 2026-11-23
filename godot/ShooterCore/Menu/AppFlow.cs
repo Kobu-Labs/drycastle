@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Menu;
 
 /// <summary>Where the shooter application is, as one value (it used to be implied by <c>_client</c> null or not, <c>_mapLoaded</c>, <c>_worldLit</c> and the menu shell's <c>GameActive</c>).</summary>
 public enum AppPhase

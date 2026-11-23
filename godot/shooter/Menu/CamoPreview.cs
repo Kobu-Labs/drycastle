@@ -1,7 +1,11 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Characters;
+using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>
 /// The customiser's live preview (ticket #141): the character alone in its own SubViewport, lit by a key and a fill light over the
@@ -103,7 +107,7 @@ public sealed partial class CamoPreview
     }
 
     /// <summary>The figure is drawn high (the cigarette and the red eyes of plantation.json), or sober with null.</summary>
-    public void SetHigh(Drycastle.ShooterCore.PlantationFile? data) => _view?.SetHigh(data);
+    public void SetHigh(Drycastle.ShooterCore.Plantation.PlantationFile? data) => _view?.SetHigh(data);
 
     /// <summary>Shows a look. A look that camo.json rejects leaves the previous one on screen.</summary>
     public void Show(CamoSpec spec, CamoFile data) => _view?.SetCamo(spec, data);

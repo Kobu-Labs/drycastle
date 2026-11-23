@@ -1,7 +1,9 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Citizens;
 
 /// <summary>What a player sees of their seat: nothing near, a free seat in reach (the prompt), or sitting in one.</summary>
 public enum MassSeatState : byte { None = 0, CanSit = 1, Seated = 2 }

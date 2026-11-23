@@ -69,31 +69,31 @@ preview:
 ORTHO_LEVEL ?= 11
 
 ortho:
-	cd pipeline && uv run python -m drycastle_pipeline.ortho --level $(ORTHO_LEVEL)
+	cd pipeline && uv run python -m drycastle_pipeline.sources.ortho --level $(ORTHO_LEVEL)
 
 # Where the trees are, read from the photo (data/village/ortho/trees.json + canopy.png). Needs `make ortho` (and normalise) first.
 # The first run trains the canopy model (a minute or two), later runs reuse it; RETRAIN=1 trains it again.
 # Unchanged inputs (photo, model, buildings, outline, parameters, detector code): nothing runs, the files are kept; FORCE=1 detects again.
 ortho-trees: detail-rust-build
-	cd pipeline && uv run python -m drycastle_pipeline.ortho_trees $(if $(RETRAIN),--retrain,) $(if $(FORCE),--force,)
+	cd pipeline && uv run python -m drycastle_pipeline.sources.ortho_trees $(if $(RETRAIN),--retrain,) $(if $(FORCE),--force,)
 
 # Pictures of the generated utility poles in out/poles (variants, random seeds, a wired row, the parts kit); GLB=1 also
 # writes each placeable pole as a GLB. No map data needed. See docs/utility-poles.md.
 poles-preview:
-	cd pipeline && uv run python -m drycastle_pipeline.poles_preview $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb,)
+	cd pipeline && uv run python -m drycastle_pipeline.preview.poles $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb,)
 
 # Rewrites the prim:pole_* and prim:connector_* entries of assets/manifest.json after the poles or connectors changed.
 poles-manifest:
-	cd pipeline && uv run python -m drycastle_pipeline.poles_preview --sync-manifest
+	cd pipeline && uv run python -m drycastle_pipeline.preview.poles --sync-manifest
 
 # Pictures of the flood wall kit in out/floodwall (the pieces from both sides, a laid run, the access point); GLB=1 also
 # writes each piece as a GLB. No map data needed. See docs/flood-wall.md.
 floodwall-preview:
-	cd pipeline && uv run python -m drycastle_pipeline.floodwall_preview $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb,)
+	cd pipeline && uv run python -m drycastle_pipeline.preview.floodwall $(if $(OUT),--out $(abspath $(OUT)),) $(if $(GLB),--glb,)
 
 # Rewrites the prim:floodwall_* entries of assets/manifest.json after the kit changed.
 floodwall-manifest:
-	cd pipeline && uv run python -m drycastle_pipeline.floodwall_preview --sync-manifest
+	cd pipeline && uv run python -m drycastle_pipeline.preview.floodwall --sync-manifest
 
 map: detail-rust-build
 	cd pipeline && uv run python -m drycastle_pipeline run-all
@@ -171,7 +171,7 @@ viewer-objects-smoke:
 MCP_ARGS = $(if $(EDITS),--edits $(abspath $(EDITS)),) $(if $(STATE),--state $(abspath $(STATE)),) $(if $(ASSETS),--assets $(abspath $(ASSETS)),)
 
 mcp:
-	cd pipeline && uv run python -m drycastle_pipeline.mcp_server $(MCP_ARGS)
+	cd pipeline && uv run python -m drycastle_pipeline.edits.mcp $(MCP_ARGS)
 
 # Loads every glTF in assets/manifest.json with GLTFDocument (headless); exits nonzero on failure.
 assets-check:
@@ -294,31 +294,31 @@ shooter-nav-spike:
 	dotnet build godot/shooter/shooter.csproj
 	godot --headless --path godot/shooter -- --role server --nav-spike --nav-out $(abspath out/navspike) $(NAV) $(SHOOTER_MAP)
 
-# Bake the rozhlas broadcast from assets/drycastle-rozhlas/source/{song,announcement,opakujem}.* (scripts/make_rozhlas.py).
+# Bake the rozhlas broadcast from assets/drycastle-rozhlas/source/{song,announcement,opakujem}.* (scripts/sounds/make_rozhlas.py).
 rozhlas:
-	python3 -I scripts/make_rozhlas.py
+	python3 -I scripts/sounds/make_rozhlas.py
 
-# Bake the thieves' voice lines from ~/downloads/New Recording*.mov into assets-private/audio/thieves/voice/ (scripts/make_thief_voices.py, chain: godot/shooter/data/thief_voice.json).
+# Bake the thieves' voice lines from ~/downloads/New Recording*.mov into assets-private/audio/thieves/voice/ (scripts/sounds/make_thief_voices.py, chain: godot/shooter/data/thief_voice.json).
 thief-voices:
-	python3 -I scripts/make_thief_voices.py
+	python3 -I scripts/sounds/make_thief_voices.py
 
-# The private asset pack for players: the runtime subset of assets-private/ -> out/private-pack/assets-private.zip + .json (scripts/make_private_pack.py; never publish it on GitHub).
+# The private asset pack for players: the runtime subset of assets-private/ -> out/private-pack/assets-private.zip + .json (scripts/release/make_private_pack.py; never publish it on GitHub).
 private-pack:
-	python3 -I scripts/make_private_pack.py
+	python3 -I scripts/release/make_private_pack.py
 
-# Before a release: is the published map, private pack and launcher still what this machine would publish? Exit 1 = republish first (scripts/check_release_assets.py).
+# Before a release: is the published map, private pack and launcher still what this machine would publish? Exit 1 = republish first (scripts/release/check_release_assets.py).
 # The live server's Grafana dashboard, through an ssh tunnel (docs/monitoring.md). Ctrl+C closes it.
 .PHONY: monitor
 monitor:
-	scripts/monitor.sh
+	scripts/tools/monitor.sh
 
 # The players' dashboard: what each client reports through the server (docs/monitoring.md, "Clients").
 .PHONY: monitor-clients
 monitor-clients:
-	scripts/monitor.sh clients
+	scripts/tools/monitor.sh clients
 
 release-check:
-	python3 -I scripts/check_release_assets.py
+	python3 -I scripts/release/check_release_assets.py
 
 shooter-test:
 	dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj
@@ -403,14 +403,14 @@ shooter-export-server: shooter-export-check
 	cp -r assets/. out/shooter/linux-server/assets/
 	cp -r $(SHOOTER_PKG_MAP)/. out/shooter/linux-server/map/
 
-# Map archive for the launcher: out/village/map.zip + out/village/map.json (name, size, sha256). Publish with scripts/publish-map.sh.
+# Map archive for the launcher: out/village/map.zip + out/village/map.json (name, size, sha256). Publish with scripts/release/publish-map.sh.
 # It carries the top-down render (tactical-map.png + .json) the tactical map draws; set TACTICAL_MAP_SKIP=1 to leave it out (the game then shows the terrain colours).
 map-package:
 	@test -f $(SHOOTER_PKG_MAP)/manifest.json || { echo "map not built: run 'make map'"; exit 1; }
 	@[ -n "$(TACTICAL_MAP_SKIP)" ] || $(MAKE) tactical-map MAP=$(SHOOTER_PKG_MAP) TOPDOWN_MPP=2 TOPDOWN_OUT=$(SHOOTER_PKG_MAP)/tactical-map.png
 	rm -f out/village/map.zip
 	cd $(SHOOTER_PKG_MAP) && zip -qr $(abspath out/village/map.zip) .
-	python3 scripts/map_json.py out/village/map.zip out/village/map.json
+	python3 scripts/release/map_json.py out/village/map.zip out/village/map.json
 
 launcher-build:
 	dotnet build godot/launcher/launcher.csproj

@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Hud;
 
 /// <summary>
 /// The FPS counter's text (#340) and the TPS line under it: the server ticks received per second (snapshots, <c>Wire.TickRate</c>

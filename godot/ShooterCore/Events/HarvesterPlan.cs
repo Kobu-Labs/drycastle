@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Status;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>Every number of the harvester event (#331). Metres, seconds, m/s. A host may replace the instance (<c>NetServer.Harvester</c>) to tune.</summary>
 public sealed class HarvesterConfig

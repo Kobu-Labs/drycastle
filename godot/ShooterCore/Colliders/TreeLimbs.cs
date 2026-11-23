@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Data;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Colliders;
 
 /// <summary>
 /// One stretch of a pack model's wood (a trunk or a branch), in the model's own metres: a square ring of half-size <c>Half0</c> centred (U0, V0) at
@@ -19,7 +20,7 @@ public sealed record LimbModel(string Pack, string Name, float HeightM, IReadOnl
 }
 
 /// <summary>
-/// tree_limbs.json: where the wood of every pack tree model is (#375). Written by scripts/tree_collider_audit.py --write from the models of the private
+/// tree_limbs.json: where the wood of every pack tree model is (#375). Written by scripts/tools/tree_collider_audit.py --write from the models of the private
 /// pack, so the server and a client without the pack build the same solids; regenerate when pack_trees.json names a new tree model.
 /// </summary>
 public sealed class TreeLimbsFile : IVersioned

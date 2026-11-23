@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>Where an armed seat's rider aims: the view held inside the seat's arc, as a world yaw and pitch (Godot's sense) and a direction.</summary>
 public readonly record struct SeatAim(float ViewYaw, float ViewPitch, Vector3 Direction);

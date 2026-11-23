@@ -1,8 +1,22 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Server;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Vehicles;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Bots;
 
 /// <summary>
 /// --car-loop (perf, ADR 0014): a headless driver on the normal map. It enters the nearest free car that has a drive block, weaves through the

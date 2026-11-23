@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
+
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>
 /// Where a player is in the Bigfoot's grab, or after a vehicle threw them alive (#411), as a client draws the body: held in the fist, flying after the throw,

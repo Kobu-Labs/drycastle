@@ -1,7 +1,20 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Audio;
+using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.Net.Server;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.Shooter.Weapons;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>
 /// The MOAB on the client (ticket #129): the countdown banner from the armed event, and at detonation the shockwave

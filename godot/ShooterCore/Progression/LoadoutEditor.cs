@@ -1,4 +1,8 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Progression;
 
 /// <summary>The six pickers of one loadout, in the order the editor shows them.</summary>
 public enum LoadoutPicker { Primary, Secondary, Perk, Streak1, Streak2, Streak3 }

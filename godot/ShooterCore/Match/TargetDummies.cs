@@ -1,6 +1,9 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Movement;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Match;
 
 /// <summary>One planned target position: feet on the ground, facing the centre, in a pose.</summary>
 public readonly record struct TargetSpot(Vector3 Feet, float Yaw, Stance Pose, float RingMetres);

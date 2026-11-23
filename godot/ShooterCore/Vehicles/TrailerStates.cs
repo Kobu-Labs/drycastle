@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>The state of one trailer. The machine is <see cref="TowLink.Spec"/>.</summary>
 public enum TrailerState : byte { Loose, Hitched, Released }

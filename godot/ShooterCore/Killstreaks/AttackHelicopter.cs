@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Killstreaks;
 
 /// <summary>
 /// The attack helicopter killstreak (killstreaks.json "attack_helicopter", ticket #126): a helicopter circles the map and its

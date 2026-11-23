@@ -1,5 +1,7 @@
 using Godot;
 
+namespace Drycastle.Netspike;
+
 /// <summary>
 /// Player body: a CharacterBody3D (capsule, origin at the feet). The server steps it from the
 /// latest client input; clients never move it, they only receive position/rotation/velocity.

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>Flies circling a point of a crystal (zombite, hovnovite): small dark dots on wobbling orbits, a pure function of time.</summary>
 public sealed class FlySwarm

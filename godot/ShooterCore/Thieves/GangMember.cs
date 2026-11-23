@@ -1,6 +1,14 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>The three kinds of Gang member (GLOSSARY "Gang member"). Travels in bits 1-2 of the hit-point byte of the entity state.</summary>
 public enum GangMemberKind : byte { Thief = 0, Enforcer = 1, GangBoss = 2 }

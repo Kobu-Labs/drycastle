@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Colliders;
 
 /// <summary>The kinds of ground object in ground_objects.json (fallen log, stump, boulder, upturned root disc, ant mound, burrow mound).</summary>
 public enum GroundKind : byte { Log = 0, Stump = 1, Boulder = 2, RootPlate = 3, Anthill = 4, Burrow = 5 }

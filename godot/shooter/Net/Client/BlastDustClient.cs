@@ -1,8 +1,24 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Audio;
+using Drycastle.Shooter.Dev;
+using Drycastle.Shooter.Effects;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Bots;
+using Drycastle.Shooter.Net.Server;
+using Drycastle.Shooter.Scenery;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Effects;
+using Drycastle.ShooterCore.Intel;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>
 /// The dust of a blast as this player meets it (#345). <see cref="BlastFelt"/> is the sound and the shake of every blast: at once for a small one, and for a

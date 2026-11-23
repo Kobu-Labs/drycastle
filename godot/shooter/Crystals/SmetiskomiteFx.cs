@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Smetiskomite (crystals.md): the stone of the illegal dump (smetisko). Quartz-like, a little translucent and spoiled: every crystal of the rock has its own tint (rust, sickly green, mustard) with grimy

@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Diagnostics;
 
 /// <summary>
 /// Always-on scoped timers of the server tick (the "server: prof" log lines): how long the named parts of a tick took and how often they ran,

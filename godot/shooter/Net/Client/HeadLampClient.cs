@@ -1,7 +1,22 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Audio;
+using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Server;
+using Drycastle.Shooter.Scenery;
+using Drycastle.Shooter.Weapons;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>
 /// The head lamp on the client (GLOSSARY "Head lamp"): the server tells whose lamp is on (<see cref="EventKind.HeadLampState"/>); each frame the nearest

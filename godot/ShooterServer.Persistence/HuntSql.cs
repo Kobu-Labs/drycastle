@@ -1,4 +1,5 @@
 using System.Text;
+using Drycastle.ShooterCore.Hunts;
 
 namespace Drycastle.ShooterServer.Persistence;
 

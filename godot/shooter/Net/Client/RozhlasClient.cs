@@ -1,7 +1,23 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Audio;
+using Drycastle.Shooter.Dev;
+using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Loudspeaker;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.RozhlasFeed;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>
 /// The village loudspeaker on the client: the server's phase (<see cref="EventKind.RozhlasState"/>) goes to <see cref="Rozhlas.Apply"/>, which plays the broadcast from the offset it names.

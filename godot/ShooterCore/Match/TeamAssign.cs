@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Match;
 
 /// <summary>What an admin can ask of the teams from the Teams screen (#312).</summary>
 public enum TeamAction : byte

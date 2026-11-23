@@ -1,6 +1,6 @@
 # Vehicle conformance audit (#325 step 7)
 
-Each vehicle that was not swapped to a Synty standardized model, against part A of `docs/standards/car-design.md`. Source: the model scripts (`scripts/make_*_model.py`), `vehicles.json`, `SeatEye`, the GLB node trees (read headlessly: every .glb parsed, node names, parents, translations) and `VehicleContractTests`. P = pass, F = fail, n.a. = does not apply. "Before" is the state at the start of the conform work, "After" the state of this branch.
+Each vehicle that was not swapped to a Synty standardized model, against part A of `docs/standards/car-design.md`. Source: the model scripts (`scripts/models/make_*_model.py`), `vehicles.json`, `SeatEye`, the GLB node trees (read headlessly: every .glb parsed, node names, parents, translations) and `VehicleContractTests`. P = pass, F = fail, n.a. = does not apply. "Before" is the state at the start of the conform work, "After" the state of this branch.
 
 Not machine-checked anywhere (no test reads the model): "eye in the cabin and sees a pane" (only `HumveeTests`) and "interior reads as a room from every seat". Those cells say what the model script and the hand-set eye imply, and are marked `(m)` (a manual judgement).
 

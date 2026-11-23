@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>Where a grenade's tick ended: its new position and velocity, and whether it struck a surface (a bounce, or coming to rest).</summary>
 public readonly record struct GrenadeStep(Vector3 Pos, Vector3 Vel, bool Bounced, bool AtRest);

@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Items;
 
 /// <summary>
 /// The binoculars (GLOSSARY "Binoculars"): an item carried in the Bag (items.json <c>binoculars</c>), raised and lowered with one key. Raised, the

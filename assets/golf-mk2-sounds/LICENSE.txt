@@ -1,2 +1,2 @@
-Golf Mk2 engine sounds. Recorded and made by the project owner (idle, accel, lift and top are cut from the owner's own recordings; background is a deterministic synthesis by scripts/make_golf_mk2_sounds.py).
+Golf Mk2 engine sounds. Recorded and made by the project owner (idle, accel, lift and top are cut from the owner's own recordings; background is a deterministic synthesis by scripts/sounds/make_golf_mk2_sounds.py).
 Dedicated to the public domain under CC0 1.0 (http://creativecommons.org/publicdomain/zero/1.0/) by the project owner.

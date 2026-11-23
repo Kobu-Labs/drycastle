@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Net;
 
 /// <summary>Buffer of timestamped samples of one remote entity, sampled at a render tick slightly in the past.</summary>
 public sealed class Interpolator

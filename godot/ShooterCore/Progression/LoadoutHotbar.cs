@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Progression;
 
 /// <summary>
 /// The hotbar a loadout gives a player: primary, secondary, knife and grenade, in that order (keys 1-4 and the next-weapon cycle).

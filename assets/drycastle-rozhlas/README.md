@@ -8,7 +8,7 @@
 | `announcement.*` | the spoken announcement, dry and close to the microphone | own recording |
 | `opakujem.*` | the word OPAKUJEM | own recording |
 
-Bake with `make rozhlas` (or `python3 -I scripts/make_rozhlas.py --help`). `--keep-wavs` keeps the degraded parts to listen to one by one.
+Bake with `make rozhlas` (or `python3 -I scripts/sounds/make_rozhlas.py --help`). `--keep-wavs` keeps the degraded parts to listen to one by one.
 The tuning (band limit, bit crushing, clipping, echo, hiss, dropouts) is at the top of the script.
 
-The bake also writes each file's length to `lengths_s` in `rozhlas.json` (the server owns the schedule and has no audio engine); after hand-editing the `files` list run `python3 -I scripts/make_rozhlas.py --lengths-only`.
+The bake also writes each file's length to `lengths_s` in `rozhlas.json` (the server owns the schedule and has no audio engine); after hand-editing the `files` list run `python3 -I scripts/sounds/make_rozhlas.py --lengths-only`.

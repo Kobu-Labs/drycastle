@@ -1,6 +1,9 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Turrets;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>What a flock of birds is doing; the replicated state byte.</summary>
 public enum FlockState : byte { Cruise = 0, Scatter = 1 }

@@ -1,7 +1,10 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Companions;
 
 /// <summary>The numbers of the "scout" kind: those of the wing kind it flies as, and its marking. Lengths in metres, times in seconds.</summary>
 public sealed class ScoutRules : WingRules

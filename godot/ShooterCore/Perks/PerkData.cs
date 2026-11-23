@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+
+namespace Drycastle.ShooterCore.Perks;
 
 /// <summary>
 /// The typed stats a perk can change (perks.json "modifiers" keys, snake_case). Every modifier has a neutral value

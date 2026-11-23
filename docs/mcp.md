@@ -1,13 +1,20 @@
 # MCP server for parcel edits
 
-A small stdio MCP server (`pipeline/src/drycastle_pipeline/mcp_server.py`) that lets Claude Code edit parcels in
+A small stdio MCP server (`pipeline/src/drycastle_pipeline/edits/mcp/server.py`) that lets Claude Code edit parcels in
 plain language: fences, placed objects (trees among them: cars, slabs, pots, bushes, ...), property groups, ground patches (hand-drawn ground of one ground type) and zones (what an area means in play). It writes
 `pipeline/config/edits.json`, the same file the viewer's editor panel writes. It never talks to the viewer: a
 viewer started with `--editor --watch` notices the file change within about a second and regenerates just the
 affected parcels.
 
-It imports the pipeline's own schema and validator (`edits.py`, `assets.py`), so there is one validator for the
+It imports the pipeline's own schema and validator (`edits/schema.py`, `core/assets.py`), so there is one validator for the
 pipeline, the Godot editor, this server and the tests.
+
+Code layout (`pipeline/src/drycastle_pipeline/edits/mcp/`): `server.py` builds the server and registers the tool
+groups; one module per tool group (`assets`, `parcels`, `sketches`, `fences`, `objects`, `cables`, `groups`,
+`ground_patches`, `ground_types`, `zones`, `paths`), each with its tool methods and a `register(server, tools)` that
+holds the tool descriptions; `shapes.py` is what patches and zones share; `base.py`, `mapdata.py`, `settings.py` and
+`ids.py` are the plumbing; `tools.py` joins the groups into `ParcelEditTools`. The edits.json lock is
+`edits/store.py`.
 
 ## Register it in Claude Code
 
@@ -15,7 +22,7 @@ Nothing registers it for you. Pick one (replace `/path/to/drycastle` with your c
 
 ```sh
 # user-local, just for this checkout
-claude mcp add drycastle-edits-village -- uv run --directory /path/to/drycastle/pipeline python -m drycastle_pipeline.mcp_server
+claude mcp add drycastle-edits-village -- uv run --directory /path/to/drycastle/pipeline python -m drycastle_pipeline.edits.mcp
 ```
 
 or check a `.mcp.json` into your own working copy (project scope):
@@ -27,7 +34,7 @@ or check a `.mcp.json` into your own working copy (project scope):
       "command": "uv",
       "args": [
         "run", "--directory", "/path/to/drycastle/pipeline",
-        "python", "-m", "drycastle_pipeline.mcp_server"
+        "python", "-m", "drycastle_pipeline.edits.mcp"
       ]
     }
   }
@@ -38,7 +45,7 @@ Then `/mcp` in Claude Code should list `drycastle-edits-village` with 23 tools. 
 terminal (it waits for JSON-RPC on stdin, so it is only useful for debugging); the repo does not ship a
 `.mcp.json`.
 
-Options (`python -m drycastle_pipeline.mcp_server --help`):
+Options (`python -m drycastle_pipeline.edits.mcp --help`):
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -216,7 +223,7 @@ drawing free-form fence polylines, and inserting or removing patch or zone corne
 
 ## Tests
 
-`cd pipeline && uv run pytest tests/test_mcp_server.py` runs every tool on the synthetic workspace (no real
+`cd pipeline && uv run pytest tests/edits/mcp/test_mcp_server.py` runs every tool on the synthetic workspace (no real
 data), checks the canonical bytes (`dump_text(load_edits(file)) == file`), anchors against a parcel next to a road,
 warnings, the selection through a fake `editor-state.json`, the sketch tools through `sketch.json`, two writer threads on one file, and a session through the
 MCP SDK's in-memory client.

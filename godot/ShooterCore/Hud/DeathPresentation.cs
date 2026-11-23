@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Match;
+
+namespace Drycastle.ShooterCore.Hud;
 
 /// <summary>Where the local player's death screen is: the legs give way, the body goes over, then the hold until the respawn.</summary>
 public enum DeathPhase

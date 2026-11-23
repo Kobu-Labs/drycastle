@@ -1,4 +1,10 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.CarePackages;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Flight;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
+using Drycastle.ShooterCore.Progression;
+
+namespace Drycastle.ShooterCore.Killstreaks;
 
 /// <summary>How a used killstreak is controlled: nothing (it acts on its own) or a point-of-view takeover (the owner steers an entity).</summary>
 public enum KillstreakControl { None, Pov }

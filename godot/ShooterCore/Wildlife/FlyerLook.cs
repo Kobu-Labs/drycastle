@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>How a client draws a flying animal (the Phoenix): which clip a state plays and how far it banks in a turn. Pure, so it is tested without a model.</summary>
 public static class FlyerLook

@@ -1,7 +1,21 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Dev;
+using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Intel;
+using Drycastle.Shooter.Loudspeaker;
+using Drycastle.Shooter.Maps;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Intel;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>
 /// The announced events on the client. The server sends the whole board (at join and at every change); it goes to the intel

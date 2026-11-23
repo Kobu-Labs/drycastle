@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>
 /// Where the Bigfoot is in its own life: fighting, healed and waiting after a wipe, or dead. Orthogonal to <see cref="BigfootAct"/> (what it does this

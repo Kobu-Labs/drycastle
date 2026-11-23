@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_note": "The announcement's voice chain (the loudspeaker's badness), shared by the offline bake (scripts/make_rozhlas.py) and the server's live feed (RozhlasFeed, ffmpeg subprocess), so a hijacker's voice is degraded exactly like the announcement. Both build the ffmpeg filter chain from THIS file only: each 'chain' entry is one filter, in order, with {name} replaced by the literal text of params[name] (numbers keep the spelling written here) and {taps} by three echo delays in ms, each picked at random inside its echo_taps_ms range (once per baked variant, once per live phase). Edit the values or the order here, nowhere else. noise (hiss under the voice) is baked only: the live feed requires it to be 0.",
+  "_note": "The announcement's voice chain (the loudspeaker's badness), shared by the offline bake (scripts/sounds/make_rozhlas.py) and the server's live feed (RozhlasFeed, ffmpeg subprocess), so a hijacker's voice is degraded exactly like the announcement. Both build the ffmpeg filter chain from THIS file only: each 'chain' entry is one filter, in order, with {name} replaced by the literal text of params[name] (numbers keep the spelling written here) and {taps} by three echo delays in ms, each picked at random inside its echo_taps_ms range (once per baked variant, once per live phase). Edit the values or the order here, nowhere else. noise (hiss under the voice) is baked only: the live feed requires it to be 0.",
   "params": {
     "low": 500,
     "high": 2200,

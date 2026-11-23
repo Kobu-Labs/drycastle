@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>
 /// A crop field (#328/#331): a ground patch (<c>GP-NNNN</c>) of a <c>crop_*</c> ground type. <see cref="Ring"/> is its outline in game metres

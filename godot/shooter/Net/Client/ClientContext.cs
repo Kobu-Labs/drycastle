@@ -1,7 +1,21 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Characters;
+using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.Net.Server;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>
 /// What the client's feature classes (<c>MoabClient</c>, <c>ScudClient</c>, ...) may read and call of the rest of the client: the match, the local player, the node they

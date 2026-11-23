@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Net.Http;
 using System.Text;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Diagnostics;
 
 /// <summary>
 /// The numbers of one report period as Influx line protocol (<c>measurement,tag=value field=number,field=number</c>, one line each), the text a

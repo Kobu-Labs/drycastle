@@ -1,5 +1,7 @@
 using Godot;
 
+namespace Drycastle.Netspike;
+
 /// <summary>
 /// Test for godotengine/godot#103938 (MultiplayerSynchronizer stops syncing beyond 64 watched
 /// properties). A server and a client share a PropProbe node; K of its properties are watched by

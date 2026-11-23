@@ -1,6 +1,19 @@
 using Godot;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.Shooter.Weapons;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>The camera shake of the local player: blasts and roars raise the amplitude, <see cref="Update"/> applies it to the camera once a frame and lets it decay.</summary>
 public sealed class CameraShake

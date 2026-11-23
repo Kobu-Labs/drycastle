@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Intel;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Bunkers;
 
 /// <summary>
 /// object_ladders.json (#372): a ladder that hangs on every placed object of an asset (the hunter outposts' guard tower), laid out in the

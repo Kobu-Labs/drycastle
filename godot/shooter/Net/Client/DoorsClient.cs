@@ -1,8 +1,18 @@
-using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Buildings;
+using Drycastle.Shooter.Churches;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Buildings;
+using Drycastle.ShooterCore.Churches;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>
 /// The village doors the server opens and closes: the church doors (ADR 0019), the Obecny Urad's door and the bus garage's doors. The server's state sets the box and swings

@@ -1,11 +1,12 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Drycastle.ShooterCore.Data;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.RozhlasFeed;
 
 /// <summary>
 /// rozhlas_voice.json: the announcement's voice chain (band limit, clipping, bit crush, wobble, echo ...), as DATA that both the offline bake
-/// (scripts/make_rozhlas.py, <c>voice_chain</c>) and the live feed (<see cref="RozhlasFeedMixer"/> output piped through ffmpeg) build their ffmpeg filter chain from, so they cannot drift:
+/// (scripts/sounds/make_rozhlas.py, <c>voice_chain</c>) and the live feed (<see cref="RozhlasFeedMixer"/> output piped through ffmpeg) build their ffmpeg filter chain from, so they cannot drift:
 /// the file lists the filters in order with <c>{name}</c> placeholders; a placeholder becomes the literal text of <c>params[name]</c> (as written in the file), <c>{taps}</c> three
 /// echo delays in ms, each random inside its <c>echo_taps_ms</c> range. The builder below and <c>voice_chain</c> in the script are the same algorithm; change both or neither.
 /// Pure (no Godot, no process): the tests build the chain from the real file.
@@ -58,7 +59,7 @@ public sealed partial class RozhlasVoice
     /// <summary>Echo delays for one variant: one per range, picked uniformly (inclusive). The bake and each live phase pick once.</summary>
     public int[] PickTaps(Random rng) => TapRangesMs.Select(r => rng.Next(r.Lo, r.Hi + 1)).ToArray();
 
-    /// <summary>The comma-joined filter chain with the given echo taps. Same text as <c>voice_chain</c> in scripts/make_rozhlas.py for the same taps.</summary>
+    /// <summary>The comma-joined filter chain with the given echo taps. Same text as <c>voice_chain</c> in scripts/sounds/make_rozhlas.py for the same taps.</summary>
     public string BuildChain(IReadOnlyList<int> tapsMs)
     {
         var taps = string.Join("|", tapsMs.Select(t => t.ToString(System.Globalization.CultureInfo.InvariantCulture)));

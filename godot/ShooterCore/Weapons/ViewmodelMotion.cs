@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Movement;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>
 /// One frame of what the first-person weapon needs to know about the body (#259). Filled by the client from the predicted

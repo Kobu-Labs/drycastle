@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Match;
+
+namespace Drycastle.ShooterCore.Killstreaks;
 
 /// <summary>
 /// The kill-feed weapon ids of killstreak weapons (ticket #143). A kill made with one of them does not advance the Streak

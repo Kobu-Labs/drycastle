@@ -4,7 +4,7 @@
   // These are first guesses made by reading, not by playing: the fight is meant to take about 15 s of rifle fire alone (80 hits, #376) and has never been tuned by play.
   // `/event bigfoot` starts it (admin), `/event current end` wins it, `/event current cancel` removes it with no reward.
 
-  // The model: built by scripts/make_bigfoot_model.py (skinned, a clip per act, a flinch, a roar, the death), at height_m (twice a
+  // The model: built by scripts/models/make_bigfoot_model.py (skinned, a clip per act, a flinch, a roar, the death), at height_m (twice a
   // player, 1.8 m), standing on y 0 and facing -Z: no scale, no yaw.
   "model": "drycastle-generated-models/bigfoot.glb",
   "model_scale": 1,

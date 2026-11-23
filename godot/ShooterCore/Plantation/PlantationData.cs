@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+
+namespace Drycastle.ShooterCore.Plantation;
 
 /// <summary>
 /// plantation.json: every number of the marijuana plantation (GLOSSARY "Plantation", "High"): how long the interact key is held inside one, how long the high lasts, the nausea of the

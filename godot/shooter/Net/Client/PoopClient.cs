@@ -1,7 +1,23 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Assets;
+using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Bots;
+using Drycastle.Shooter.Net.Server;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>
 /// Poop on the client: the world entities of type <see cref="PoopRules.TypeId"/> a pet leaves behind. One of the poop models of the private pack

@@ -1,8 +1,21 @@
 using Godot;
-using Drycastle.ShooterCore;
-using NVec3 = System.Numerics.Vector3;
+using Drycastle.Shooter.Dev;
+using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Bots;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>
 /// The headless bot roles of this client (set by the host from the command line) and what the scripted bots (<see cref="ClientBot"/>) may see of it: <see cref="IBotHost"/>, implemented

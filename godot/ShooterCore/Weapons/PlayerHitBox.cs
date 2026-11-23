@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Movement;
+
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>
 /// The hit volume of a player body and of a target dummy, derived from the drawn character model. One place for the numbers, so the server

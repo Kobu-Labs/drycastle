@@ -1,6 +1,7 @@
 using Godot;
+using Drycastle.Shooter.Demon;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Magmorite (crystals.md): black basalt crystals with glowing orange cracks that creep and pulse, ember specks (<c>shaders/crystal_veined.gdshader</c>), an orange light. Lava oozes from the tips, a small

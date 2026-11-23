@@ -1,8 +1,25 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Dev;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Server;
+using Drycastle.ShooterCore.Casings;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Bots;
 
 /// <summary>
 /// Weapons smoke scripts (headless). Bot "a" walks through the scenario on the server's flat test arena (teleported with the

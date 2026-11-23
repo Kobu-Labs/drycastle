@@ -1,4 +1,9 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Progression;
 
 /// <summary>What a level unlocks: a loadout item kind (levels.json "kind": weapon, perk, streak, loadout_slot).</summary>
 public enum UnlockKind { Weapon, Perk, Streak, LoadoutSlot }

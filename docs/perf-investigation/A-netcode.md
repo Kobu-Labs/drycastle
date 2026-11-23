@@ -1,6 +1,6 @@
 # A. Netcode and replication (specialist report)
 
-Scope: `godot/ShooterCore/Net/*`, `godot/shooter/Net/NetServer*.cs`, `NetClient*.cs`, `NetSim.cs`, ADR 0002, `docs/spikes/shooter-loss-test.md`. Read-only. No build, run or test was done; every number below is either derived from code (CONFIRMED), a path that is certain with size or engine behaviour unmeasured (UNVERIFIED), or judgment (OPINION). Budgets used for "fits" are my assumptions and are labelled as such.
+Scope: `godot/ShooterCore/Net/*`, `godot/shooter/Net/Server/NetServer*.cs`, `NetClient*.cs`, `NetSim.cs`, ADR 0002, `docs/spikes/shooter-loss-test.md`. Read-only. No build, run or test was done; every number below is either derived from code (CONFIRMED), a path that is certain with size or engine behaviour unmeasured (UNVERIFIED), or judgment (OPINION). Budgets used for "fits" are my assumptions and are labelled as such.
 
 ## 1. Verdict
 
@@ -8,7 +8,7 @@ Scope: `godot/ShooterCore/Net/*`, `godot/shooter/Net/NetServer*.cs`, `NetClient*
 
 ## 2. What is healthy
 
-- **Acked-baseline entity deltas.** Client sends its committed tick with every input (`godot/ShooterCore/Net/Wire.cs:162-164`, `godot/shooter/Net/NetClient.cs:527`); server records it only if it still holds that tick (`godot/shooter/Net/NetServer.cs:371`); encoder deltas against it (`godot/ShooterCore/Net/Snapshot.cs:68-72`, `:84-95`). Protocol history confirms it: `Wire.cs:180` v17 entry.
+- **Acked-baseline entity deltas.** Client sends its committed tick with every input (`godot/ShooterCore/Net/Wire.cs:162-164`, `godot/shooter/Net/Client/NetClient.cs:527`); server records it only if it still holds that tick (`godot/shooter/Net/Server/NetServer.cs:371`); encoder deltas against it (`godot/ShooterCore/Net/Snapshot.cs:68-72`, `:84-95`). Protocol history confirms it: `Wire.cs:180` v17 entry.
 - **Unchanged entities are omitted; idle entity stream is zero** (`Snapshot.cs:87`), so parked vehicles and dummies cost only their share of the empty-packet floor (A-05).
 - **New-to-baseline entities are keyframed, no age timer** (`Snapshot.cs:90-95`). The audit's T2-11 age keyframe is gone for this channel.
 - **Multi-packet ticks commit atomically** (`Snapshot.cs:182-186`, `:277-285`). A lost packet costs one tick, and the next tick is computed against the same acked baseline and repairs it (`Snapshot.cs:40-45`).

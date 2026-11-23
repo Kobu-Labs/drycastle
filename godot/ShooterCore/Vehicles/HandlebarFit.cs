@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// The two grips of a handlebar, measured from the model's own <c>steer_bars</c> mesh in that node's frame (docs/standards/car-design.md 5): where the

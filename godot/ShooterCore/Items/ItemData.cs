@@ -1,4 +1,8 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Items;
 
 /// <summary>Where an item is worn. The wire sends the slots in this order (see <see cref="Equipment"/>), so append new ones and never reorder.</summary>
 public enum EquipSlot : byte { Headgear = 0, Neck = 1 }

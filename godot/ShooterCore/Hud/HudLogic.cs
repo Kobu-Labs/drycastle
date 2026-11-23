@@ -1,4 +1,8 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Hud;
 
 /// <summary>Score line data for the top-centre readout: own kills against the leader.</summary>
 public readonly record struct ScoreLine(int MyKills, string LeaderName, int LeaderKills, bool IAmLeader);

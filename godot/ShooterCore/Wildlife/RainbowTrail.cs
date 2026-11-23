@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>
 /// The maths of the Unicorn's rainbow trail (client-only looks, <see cref="AnimalDef.Fx"/> "unicorn"): the history of the points the body passed, and the tube built from it.

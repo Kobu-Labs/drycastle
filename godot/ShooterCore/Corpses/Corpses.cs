@@ -1,7 +1,13 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Corpses;
 
 /// <summary>Corpse rules (ticket #130): what a killed player leaves behind and who may take it.</summary>
 public static class CorpseRules

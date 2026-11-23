@@ -1,7 +1,8 @@
 using System.Buffers.Binary;
 using System.Text;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>How a query ended: the answer, a failure to read it (the client offers Retry), or no such player.</summary>
 public enum HuntStatus : byte { Ok = 0, Error = 1, Unknown = 2 }

@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Micin (crystals.md): in memory of a childhood dog. Crystals in a white furry coat (<c>shaders/crystal_fur.gdshader</c>) with a light white glow and a soft white light. Quiet: no props, no particles,

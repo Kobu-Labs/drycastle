@@ -1,8 +1,25 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Characters;
+using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Bots;
+using Drycastle.Shooter.Net.Server;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.Shooter.Waters;
+using Drycastle.ShooterCore.Casings;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Vehicles;
 using NVec3 = System.Numerics.Vector3;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>Another player (or a target dummy) as this client draws them: the node and character view, the interpolation buffer, the animation and tumble state.</summary>
 public sealed class RemotePlayer

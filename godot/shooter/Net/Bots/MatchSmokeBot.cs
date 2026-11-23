@@ -1,7 +1,22 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Server;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Bots;
 
 /// <summary>
 /// Match smoke (<c>--match-bot alice|bob</c>): alice kills bob with the debug command, first while he is spawn-protected (must not land) and then unprotected, and checks that a respawn takes the

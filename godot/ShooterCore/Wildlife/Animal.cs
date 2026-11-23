@@ -1,6 +1,13 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>
 /// What an animal is doing; the low four bits of its replicated state byte (the clients pick the clip from it). 11-14 are the phases of a Phoenix (<see cref="PhoenixRules"/>, protocol 80): Flying (clip Cruise,

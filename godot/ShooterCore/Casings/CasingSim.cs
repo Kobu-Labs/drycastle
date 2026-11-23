@@ -1,6 +1,9 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Waters;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Casings;
 
 /// <summary>What a spent casing looks like: the kind of gun it came from (#307). Size, colour and loudness live in <see cref="CasingProfiles"/>.</summary>
 public enum CasingKind : byte { Pistol, Rifle, Shotgun, Heavy, Shell }

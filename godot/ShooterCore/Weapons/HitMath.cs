@@ -1,6 +1,10 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>
 /// A player as a hit target: feet position, stance (sets the capsule height) and the yaw they face. <paramref name="HeadGuarded"/>: the target wears

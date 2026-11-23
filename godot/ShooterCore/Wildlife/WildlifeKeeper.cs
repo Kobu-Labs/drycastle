@@ -1,6 +1,11 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>Wildlife rules shared by the server and the match: the hit ids a wild animal has as a shot target. A species stands in the zones of its own kind (the zone kind is the animals.json id, ADR 0022).</summary>
 public static class WildlifeRules

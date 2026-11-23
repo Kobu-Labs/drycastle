@@ -1,7 +1,8 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.ShooterCore.Match;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>English strings of the Teams screen (#312).</summary>
 public static class TeamsStrings

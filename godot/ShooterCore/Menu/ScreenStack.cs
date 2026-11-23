@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Menu;
 
 /// <summary>
 /// The menu shell's screen stack, Godot-free. A screen closes itself by identity (<see cref="Pop"/>), never "whatever is on top": two closes in one frame

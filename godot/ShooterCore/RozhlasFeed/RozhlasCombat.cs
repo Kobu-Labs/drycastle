@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+
+namespace Drycastle.ShooterCore.RozhlasFeed;
 
 /// <summary>What happened in the world that the live feed may rebroadcast.</summary>
 public enum CombatKind { Shot, Launch, Explosion, VehicleExplosion, Death }

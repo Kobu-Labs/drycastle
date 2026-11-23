@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// What of a vehicle touches another (#253): its hit box (<see cref="VehicleBox"/>: an upright box over the footprint, centre on the ground under

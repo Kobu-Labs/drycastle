@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Scenery;
+
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// Vehicle headlights (ticket: vehicle headlights). One bit per vehicle, replicated in the record (see <see cref="VehicleRecord.Lights"/>).

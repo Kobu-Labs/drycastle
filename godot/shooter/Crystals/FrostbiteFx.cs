@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Frostbite (crystals.md): the frozen stone. Icy blue-white translucent crystals rimed with frost on the faces that look up (<c>shaders/crystal_quartz.gdshader</c>, <c>frost</c>), a soft cyan glow and light,

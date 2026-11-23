@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// The client's generic wheel animation (#295): which nodes are wheels, and the angles they take from the DRAWN motion of the vehicle (its speed

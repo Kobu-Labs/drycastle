@@ -1,8 +1,10 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// vehicle_outlines.json (issue #334): the top-view silhouette of each vehicle for the seat panel, a closed polygon of [x, z] points in vehicle-frame metres
-/// (x right, z backward, so forward is -z), generated from the models by scripts/make_vehicle_outlines.py. A vehicle without an entry is drawn as its hit box.
+/// (x right, z backward, so forward is -z), generated from the models by scripts/vehicles/make_vehicle_outlines.py. A vehicle without an entry is drawn as its hit box.
 /// </summary>
 public class VehicleOutlinesFile : IVersioned
 {

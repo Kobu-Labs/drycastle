@@ -1,6 +1,8 @@
+using Godot;
 using System.Globalization;
 using System.Text.Json;
-using Godot;
+
+namespace Drycastle.Netspike;
 
 /// <summary>Parsed "--key value" / "--flag" user args.</summary>
 public class Config

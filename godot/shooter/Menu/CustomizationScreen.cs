@@ -1,7 +1,12 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Menu;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>
 /// The camouflage customiser (ticket #141; docs/standards/ui-ux.md sections 1 to 5). One look per loadout slot.

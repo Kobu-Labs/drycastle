@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Scud;
 
 /// <summary>Wire type and registration of the Scud missile's world entity (GLOSSARY "Scud missile").</summary>
 public static class ScudMissileRules

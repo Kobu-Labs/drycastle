@@ -17,7 +17,7 @@
 - Protocol bumped (new slot on the wire).
 
 ## Done: notes
-Code: pure `godot/ShooterCore/Thieves/ThievesCredit.cs` (`ThievesCredit`, `CreditedGangHits`, `ThievesReward`), server `godot/shooter/Net/NetServer.Thieves.Reward.cs`, data `thieves.json` section `reward` (last), `EquipSlot.Neck`, `items.json` `gold_chain`. Tests `ThievesRewardTests.cs` (+ the item, bag, wire and Equipment screen tests moved to two slots). Protocol 44 (the merge renumbers).
+Code: pure `godot/ShooterCore/Thieves/ThievesCredit.cs` (`ThievesCredit`, `CreditedGangHits`, `ThievesReward`), server `godot/shooter/Net/Server/NetServer.Thieves.Reward.cs`, data `thieves.json` section `reward` (last), `EquipSlot.Neck`, `items.json` `gold_chain`. Tests `ThievesRewardTests.cs` (+ the item, bag, wire and Equipment screen tests moved to two slots). Protocol 44 (the merge renumbers).
 
 ### API for later tickets
 - `NetServer.Credit` (`ThievesCredit`): `NoteVanHit(player)` (03: call where the van takes a counted hit), `NoteLootReturned(player)` (04: when the hold-to-send-back completes), `NoteGangHit(player)` (wired), `Credited`, `Settle(won, eligible)`, `Clear()`.
@@ -30,7 +30,7 @@ Code: pure `godot/ShooterCore/Thieves/ThievesCredit.cs` (`ThievesCredit`, `Credi
 - Client: a corpse of owner 60001 is drawn as an ordinary body (default look, a knife) and offers only its Item (`IsItemOnlyCorpse`: the Bigfoot's chooser path, "Tap E put on Gold chain"). `item.gold_chain` string.
 - Neck slot: `EquipSlot.Neck = 1`, all item rules unchanged (they are per slot). `MaxCarried` is 8. Cosmetic: not `headshot_immune`, nothing hidden. Drawn by `CharacterView.Worn.cs` on the Neck bone (`BoneAttachment3D`, origin at the bone's bind origin, `NeckOffset` zero).
 - Equipment screen: the slot cells are a column right of the figure (headgear, neck), the arrows walk it in slot order (`EquipmentNav` unchanged), Left from the bag's second row reaches the neck. Ghost = `Glyph.Kind.Neck` (a drawn necklace). Neck focus frames the head like headgear. No new text, no new colours (theme tokens only).
-- Model: generated `gold_chain.glb` by `scripts/make_gold_chain_model.py` (the "simple generated fallback"; a private Gang Warfare model can replace it through `items.json` `model`). Icon `ui/icons/items/gold_chain.png` rendered offline by a throwaway software rasteriser (no Godot window); `tools/render_icons.gd` has the entry, so `make shooter-icons` re-renders it.
+- Model: generated `gold_chain.glb` by `scripts/models/make_gold_chain_model.py` (the "simple generated fallback"; a private Gang Warfare model can replace it through `items.json` `model`). Icon `ui/icons/items/gold_chain.png` rendered offline by a throwaway software rasteriser (no Godot window); `tools/render_icons.gd` has the entry, so `make shooter-icons` re-renders it.
 
 ### Open
 - UI standard DoD not complete: no screenshots at 1280x720 / 3840x2160 and no keyboard walkthrough (brief: nothing run). The new column is build-verified only. Check that the panel still fits at 1280x720 and that the avatar's drop target still reads well beside the column.

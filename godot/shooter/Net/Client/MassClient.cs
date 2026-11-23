@@ -1,7 +1,22 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Audio;
+using Drycastle.Shooter.Churches;
+using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.Hunts;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>
 /// The Holy Mass on the client: the state the server broadcasts (phase, chant, the pastor's kills) drives the chant sound and the pastor's and monks' views;

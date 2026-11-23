@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Events;
+
+namespace Drycastle.ShooterCore.Scud;
 
 /// <summary>
 /// scud.json: every number of the Scud truck (GLOSSARY "Scud truck"): the launcher's timings, the targeting screen, the missile's flight and the blast. The defaults here are the

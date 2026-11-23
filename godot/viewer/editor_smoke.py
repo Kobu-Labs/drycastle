@@ -172,7 +172,7 @@ def main() -> int:
     check = (
         "import sys, json\n"
         "from pathlib import Path\n"
-        "from drycastle_pipeline.edits import load_edits, dump_text\n"
+        "from drycastle_pipeline.edits.schema import load_edits, dump_text\n"
         "bad = 0\n"
         "for f in sys.argv[1:]:\n"
         "    t = Path(f).read_text(encoding='utf-8')\n"

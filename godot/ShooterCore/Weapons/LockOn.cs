@@ -1,7 +1,10 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>Where a Lock is: nothing in the lock circle, building on one Aircraft, or complete (the launcher may fire).</summary>
 public enum LockPhase : byte { Idle, Locking, Locked }
