@@ -22,7 +22,7 @@ public partial class NetServer
         _eventHandlers.Register(EventBook.Mass, "Holy Mass", _mass.Chat, _mass.End);
         _eventHandlers.Register(EventBook.Harvester, "harvester event", _harvester.Start, _harvester.End, _harvester.Cancel);
         _eventHandlers.Register(EventBook.Thieves, "Thieves event", _thieves.Start, _thieves.End, _thieves.Cancel);
-        _eventHandlers.Register(EventBook.Scud, "Scud event", StartScudEvent, EndScudEvent, CancelScudEvent);
+        _eventHandlers.Register(EventBook.Scud, "Scud event", _scudEvent.Start, _scudEvent.End, _scudEvent.Cancel);
     }
 
     /// <summary>"/event current end" (a win, for testing) or "/event current cancel" (gone, no reward): the handler of the running kind.</summary>

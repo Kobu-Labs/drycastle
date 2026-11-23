@@ -13,6 +13,7 @@ using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
 using Drycastle.Shooter.Net.Server.Parish;
 using Drycastle.Shooter.Net.Server.Profiles;
+using Drycastle.Shooter.Net.Server.Scuds;
 using Drycastle.Shooter.Net.Server.Scenery;
 using Drycastle.Shooter.Net.Server.Seating;
 using Drycastle.Shooter.Net.Server.Sentries;
@@ -39,6 +40,7 @@ using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Perks;
 using Drycastle.ShooterCore.Progression;
 using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Scud;
 using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Turrets;
 using Drycastle.ShooterCore.Vehicles;
@@ -108,6 +110,8 @@ public partial class NetServer : Node
     public HarvesterConfig Harvester = new();
     /// <summary>The numbers of the vehicles' crop damage (#328): what a ground vehicle crushes driving through a crop field.</summary>
     public CropCrushConfig CropCrush = new();
+    /// <summary>scud.json: the launcher's timings, the targeting screen, the missile's flight and the blast. The host replaces the defaults with the file.</summary>
+    public ScudFile Scud = ScudFile.Default;
 
     // The features that are classes of their own (<c>Net/Server/&lt;Feature&gt;/</c>), made in _Ready once the match exists; each takes only the context.
     ServerContext _ctx = null!;
@@ -141,6 +145,8 @@ public partial class NetServer : Node
     StreakServer _streaks = null!;
     LockOnServer _lockOn = null!;
     HarvesterServer _harvester = null!;
+    ScudServer _scud = null!;
+    ScudEventServer _scudEvent = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -246,7 +252,7 @@ public partial class NetServer : Node
         _mass = new MassServer(_ctx, HolyMass, _citizens, _church, _demon, _sitters, _status, _events, EnsureNavMesh);
         _thieves = BuildThieves();
         _harvester = BuildHarvester();
-        InitScud();
+        BuildScud();
         InitEvents(); // after the kinds above: the handler table names their start, end and cancel
         _gunships = new GunshipServer(_ctx, Killstreaks, Weapons, _targets, _fleet, () => Query, () => Vehicles, Deal, DamageVehicle, LaunchGunshipRocket, _impacts, _splash, _deathPush, () => _streaks.Rules);
         _flak = new FlakServer(_ctx, Weapons, _gunships, _targets, _fleet, () => Vehicles, _rng);
@@ -299,6 +305,17 @@ public partial class NetServer : Node
         var bales = new BaleFire(_ctx, Harvester, Map, _corpses, _status, cut);
         var reel = new ReelServer(_ctx, Harvester, _fleet, _targets, Deal, _deathPush, _corpses, _gear, Weapons, Map, bales, CarVelocity, RunOverCooldown);
         return new HarvesterServer(_ctx, Harvester, () => Vehicles, Map, World, Water, () => MapFlightBounds, _rng, _events, _fleet, _profiles, _ids, Join, Leave, SeatPos, LeaveSeat, cut, bales, reel);
+    }
+
+    /// <summary>The Scud truck's parts: the launchers, the loading from a cart, the blast, the trucks' own tick, and the event that hides one (<c>_scud</c>, <c>_scudEvent</c>). The truck registers the missile's entity type.</summary>
+    void BuildScud()
+    {
+        var rigs = new ScudRigs(_ctx, Scud, _fleet);
+        var loading = new ScudLoading(_ctx, Scud, _fleet, rigs, _thieves, SetRocketCartLoaded);
+        var blast = new ScudBlastServer(_ctx, Scud.Blast, _targets, _splash, _deathPush, Deal, _hunts, _fleet, () => MapShelters, DealBigfoot, BlastGlass, DamageVehicle, HullDistanceNow);
+        _scud = new ScudServer(_ctx, Scud, () => Vehicles, Map, World, Water, () => MapFlightBounds, _fleet, rigs, loading, blast, () => Query);
+        var places = new ScudPlaces(_ctx, Scud, Map, World, _fleet, _rng, Spawns, () => MapShelters, PickEventSpawn);
+        _scudEvent = new ScudEventServer(_ctx, Scud, () => Vehicles, _events, _intel, _rng, _fleet, places, _scud, SpawnRocketCart, RemoveRocketCarts, LeaveSeat, Scores, AwardXp);
     }
 
     /// <summary>A sitter stood up: the dictation table lets go of the set, the Mass forgets the seat.</summary>
@@ -354,7 +371,7 @@ public partial class NetServer : Node
         PerfLap(ServerPerf.Ph.Streaks);
         BotsTick(dt); // fills the roster and queues each bot's input for this tick (#214)
         _harvester.Tick(dt); // the harvester event: its spawn, its driver's pedals
-        ScudEventTick(dt); // the Scud event: who boarded the truck, the search time, the bunkers' carts
+        _scudEvent.Tick(dt); // the Scud event: who boarded the truck, the search time, the bunkers' carts
         PerfLap(ServerPerf.Ph.Bots);
         SimulatePlayers(dt);
         StepRockets(dt);
@@ -444,7 +461,7 @@ public partial class NetServer : Node
 
     void StepVehiclesAndRiders(float dt)
     {
-        StepScud(dt); // the Scud trucks' launchers: the crew's lock, the rack, the brakes (before the vehicles step)
+        _scud.Tick(dt); // the Scud trucks' launchers: the crew's lock, the rack, the brakes (before the vehicles step)
         StepVehicles(dt);
         StepRidingCorpses(dt); // the dead pilots and drivers move with the vehicles that just moved
         _harvester.AfterVehicles(dt); // what the harvester ran over, the corpses it draws in, the bales' fire
@@ -544,7 +561,7 @@ public partial class NetServer : Node
         else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) OnSandboxTeleportTo(c, st.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SeatSwitch } sw && c.Joined) OnSeatSwitch(c, sw.Payload);
-        else if (m is EventMsg { Kind: (byte)EventKind.ScudCommand } sc && c.Joined) OnScudCommand(c, sc.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.ScudCommand } sc && c.Joined) _scud.OnCommand(c, sc.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.TeamAssign } ta && c.Joined) OnTeamAssign(c, ta.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SquadAssign } sq && c.Joined) OnSquadAssign(c, sq.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) _hunts.OnRequest(c, hq);
@@ -650,7 +667,7 @@ public partial class NetServer : Node
         _rozhlas.SendOnJoin(c); // the village loudspeaker, when a detour broadcast is on, who is on the mic, and the Urad door when it is open
         _garage.SendOnJoin(c); // and the garage doors, when they are open
         _harvester.SendOnJoin(c); // the harvester's job and the bales that burn
-        SendScudOnJoin(c); // the Scud trucks' racks and proposals
+        _scud.SendOnJoin(c); // the Scud trucks' racks and proposals
         _demon.SendOnJoin(c); // and the demon's pounce, when one is on
         SendTargetRoster(c); // target dummies' names (#148)
         _profiles.SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone

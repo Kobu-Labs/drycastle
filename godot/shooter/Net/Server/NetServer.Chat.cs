@@ -40,7 +40,7 @@ public partial class NetServer
         _chat.Register("church", _church.Chat);
         _chat.Register("rozhlas", _rozhlas.ChatCommand);
         _chat.Register("status", _status.ChatCommand);
-        _chat.Register("scud", ChatScud);
+        _chat.Register("scud", _scud.Chat);
         _chat.Register("squad", ChatSquad);
     }
 

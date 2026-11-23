@@ -76,7 +76,7 @@ public partial class NetServer
         if (_mass.SeatNear(at)) k |= KeyCompetitor.MassSeat;
         if (_rozhlas.CanTakeSetAt(at, c.Car != null)) k |= KeyCompetitor.RozhlasSet;
         if (_thieves.LootInReach(c) != null) k |= KeyCompetitor.Loot;
-        if (ScudReloadOffer(c) != null) k |= KeyCompetitor.ScudCart;
+        if (_scud.HasLoadingOffer(c)) k |= KeyCompetitor.ScudCart;
         return k;
     }
 

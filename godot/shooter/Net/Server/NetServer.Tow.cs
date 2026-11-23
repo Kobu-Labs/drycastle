@@ -99,7 +99,7 @@ public partial class NetServer
     void OnRocketCartDetonated(ServerCar cart, NVec3 position, ushort attackerId)
     {
         GD.Print($"server: rocket cart {cart.Id} detonated at ({position.X:F1},{position.Y:F1},{position.Z:F1}), credited to #{attackerId}");
-        ScudBlast(position, attackerId);
+        _scud.Blast(position, attackerId);
     }
 
     // ---- what the Scud event calls ----

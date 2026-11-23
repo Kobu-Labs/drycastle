@@ -27,7 +27,8 @@ public partial class NetServer
         _rozhlas.RoundReset(); // the Urad workers of a detour still open sit down again
         ResetCars();
         _harvester.RoundReset(); // the car reset brought the harvester back to its old field: hidden again
-        ScudRoundReset(); // the launchers start over; a Scud truck, which never returns, is retired
+        _scudEvent.RoundReset(); // the Scud event is over with the round (no reward); the next line retires its truck and carts
+        _scud.RoundReset(); // the launchers start over; a Scud truck, which never returns, is retired
         _status.RoundStart();
         PlantationRoundStart();
         _lockOn.RoundReset();

@@ -63,7 +63,7 @@ public partial class NetServer
         if (c.Car == null && _streaks.Rules.ControlOf(c.Id) is { FreezesBody: true }) return; // controlling a streak entity that holds the body (the missile, a gunship): the body stands still
         if (c.Car is { Thrown: not null }) return; // the Bigfoot threw it: nobody steers, fires or gets out until it lands (issue #264)
         if (c.Car != null) { RideInput(c, i, dt, controlled, useDown, useEdge, lightsEdge); return; }
-        var useAct = ScudUseKey(c, useDown, useEdge, dt); // beside a truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket)
+        var useAct = _scud.UseKey(c, useDown, useEdge, dt); // beside a truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket)
         if (useAct && _thieves.LootInReach(c) == null && (_mass.Sit(c) || _garage.Use(c) || TryEnterCar(c))) return; // the use key on lying Loot sends it back, it does not take a seat
         WalkAndFire(c, i, dt, throwStep);
     }
@@ -87,7 +87,7 @@ public partial class NetServer
         else if (!controlled && RiderRules.Weapons(c.Car.Def, c.CarSeat, i) is { } seated) SeatWeapons(c, c.Car, i, seated); // an armed seat: the rider's own weapons (ADR 0011)
         if (!RiderPose.FollowsAim(c.Car.Def.Seats[c.CarSeat])) SeatLook(c, c.Car, i); // every other seat: the body is the vehicle's and the head looks where the rider's first-person view does (ADR 0026)
         if (lightsEdge) c.Car.Lights = Headlights.Toggle(c.Car.Lights);
-        if (c.Car.Def.Launcher != null ? ScudUseKey(c, useDown, useEdge, dt) : TowUseKey(c, c.Car, useDown, useEdge, dt)) ExitCar(c); // a Scud truck: a tap leaves, a hold loads a cart's rocket (a truck does not tow); with a trailer on the hook a tap leaves and a hold unhitches (UnhitchKey); otherwise the press leaves
+        if (c.Car.Def.Launcher != null ? _scud.UseKey(c, useDown, useEdge, dt) : TowUseKey(c, c.Car, useDown, useEdge, dt)) ExitCar(c); // a Scud truck: a tap leaves, a hold loads a cart's rocket (a truck does not tow); with a trailer on the hook a tap leaves and a hold unhitches (UnhitchKey); otherwise the press leaves
     }
 
     /// <summary>An input of a living player on foot: the look, the move step, recoil and breath, the weapon (and the grenade), the fall and the void.</summary>
