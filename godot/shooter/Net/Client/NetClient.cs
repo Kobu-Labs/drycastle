@@ -12,6 +12,7 @@ using Drycastle.ShooterCore.Bunkers;
 using Drycastle.ShooterCore.Camo;
 using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Demon;
 using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Glass;
@@ -136,6 +137,10 @@ public partial class NetClient : Node
     MissileClient _missile = null!;
     TurretsClient _turrets = null!;
     ScudClient _scud = null!;
+    PounceClient _pounce = null!;
+    DemonClient _demon = null!;
+    /// <summary>holy_mass_demon.json: set by the host (gravity of the fireballs, the turning's timeline).</summary>
+    public DemonFile DemonData = new();
     /// <summary>scud.json, replaced by the host with the file's.</summary>
     public ScudFile Scud = ScudFile.Default;
     AircraftClient _aircraftClient = null!;
@@ -176,8 +181,8 @@ public partial class NetClient : Node
         Ctx.View.OnTurret = () => _aircraftClient.AtTurret;
         Ctx.View.ScudScreen = () => _scud.ScreenOn;
         Ctx.View.Controlling = () => _missile.Controlling;
-        Ctx.View.Pinned = () => _pinned;
-        Ctx.View.Rising = () => _pRising;
+        Ctx.View.Pinned = () => _pounce.Pinned;
+        Ctx.View.Rising = () => _pounce.Rising;
         Ctx.Viewmodel.StepAcc = () => Ctx.Sound.StepAcc;
         _prediction = new OwnPrediction(Ctx, SpeedFor);
         _fxDemo = new FxDemoClient(Ctx);
@@ -241,7 +246,8 @@ public partial class NetClient : Node
         InitFlocks();
         InitBigfoot();
         _thieves = new ThievesClient(Ctx, ThievesData, ItemData);
-        InitDemon();
+        _pounce = new PounceClient(Ctx, _prediction, DemonData, () => _demon.FirstView());
+        _demon = new DemonClient(Ctx, DemonData, HolyMassData, _mass, _blastDust, _pounce);
         _aircraftClient = new AircraftClient(Ctx, _streaks, _blastDust, _markers, HomingKillShown);
         EventReceived += _aircraftClient.OnEvent;
         InitLockOn();
@@ -367,7 +373,7 @@ public partial class NetClient : Node
         RenderCreatures(delta);
         t = ClientProf.Lap(ClientProf.S.Creatures, t);
         UpdateDeath(delta);
-        UpdatePounce(delta);
+        _pounce.Update(delta);
         t = ClientProf.Lap(ClientProf.S.View, t);
         RenderVehicles(delta);
         t = ClientProf.Lap(ClientProf.S.Vehicles, t);
@@ -403,7 +409,7 @@ public partial class NetClient : Node
         RenderBigfoot();
         _citizens.Render();
         _thieves.Render(delta);
-        RenderDemon();
+        _demon.Render();
     }
 
     void RenderVehicles(double delta)
@@ -429,7 +435,7 @@ public partial class NetClient : Node
         _water.Render();
         UpdateViewmodel();
         UpdateThrowArc();
-        UpdateDemonQuake(delta);
+        _demon.UpdateQuake(delta);
         _blastDust.Update(); // before the shake: a blast wave that arrives this frame shakes this frame
         Ctx.Shake.Update(delta);
         High.Update(delta); // a high player's sway (NetClient.High.cs), before the roll is composed
@@ -545,7 +551,7 @@ public partial class NetClient : Node
         _doors.OnEvent(kind, payload); // the church doors, the Obecny Urad's door and the bus garage's doors
         _rozhlas.OnEvent(kind, payload); // the village loudspeaker's phase, broadcast and offset
         _mass.OnEvent(kind, payload); // the Holy Mass: chant, bells, the player's seat, the blessing
-        OnDemonEvent(kind, payload); // the demon: fireballs, the curse
+        _demon.OnEvent(kind, payload); // the demon: fireballs, the curse
         _hunts.OnEvent(kind, payload); // the Hunter's Log: answers and announcements (#336)
         OnPhoenixEvent(kind, payload); // the Phoenix's fall: a flash and the crash site's warning light
         _minerals.OnEvent(kind, payload); // the mineral nodes and the player's finds (#401)
@@ -654,7 +660,7 @@ public partial class NetClient : Node
         _rozhlasTest?.Tick();
         if (_bot != null && _elapsed >= BotSeconds && _bot.TimedOut()) return;
         if (!OwnSpawned) return; // wait for our spawn position
-        DemonBodyTick(); // the demon's Body capsule is where the server last put it, before the body is predicted
+        _demon.BodyTick(); // the demon's Body capsule is where the server last put it, before the body is predicted
         var pt = ClientProf.Begin();
         _prediction.Replay(); // C-02: a snapshot's reconcile replays here, with the physics step (see OnSelf)
         _driveClient.ReplayReconcile(); // and so does a predicted vehicle's (ADR 0010, ADR 0014)

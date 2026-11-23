@@ -61,7 +61,7 @@ public partial class NetClient
         if (_binoculars) LowerBinoculars();
         else
         {
-            if (Ctx.Me == null || Dead || _pinned || Mode.ScopeSuppressed || Input.MouseMode != Input.MouseModeEnum.Captured || !CarriesBinoculars) return false;
+            if (Ctx.Me == null || Dead || _pounce.Pinned || Mode.ScopeSuppressed || Input.MouseMode != Input.MouseModeEnum.Captured || !CarriesBinoculars) return false;
             _binoculars = true;
             _binocularsMeasuredAt = 0; _binocularsRange = null;
             SendBinoculars(true);
@@ -85,7 +85,7 @@ public partial class NetClient
     bool TickBinoculars()
     {
         if (!_binoculars || Ctx.Me == null) return false;
-        if (Dead || _pinned || Input.MouseMode != Input.MouseModeEnum.Captured || !CarriesBinoculars) { LowerBinoculars(); return false; }
+        if (Dead || _pounce.Pinned || Input.MouseMode != Input.MouseModeEnum.Captured || !CarriesBinoculars) { LowerBinoculars(); return false; }
         Ctx.Me.HandsBusy = true;
         Ctx.Me.ZoomFov = CarriedBinoculars is { } pair ? Binoculars.FovOf(pair) : Binoculars.FovDeg; Ctx.Me.IronSightZoom = false;
         _viewmodel.Aiming = false;

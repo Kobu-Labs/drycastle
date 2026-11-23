@@ -47,7 +47,7 @@ public partial class NetClient
         if (TickBinoculars()) return; // raised binoculars are the zoom: no scope, no iron sights
         var slot = Ammo?.Slot ?? Ctx.Hotbar.Want;
         var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
-        var on = zoom > 0 && !Dead && !_pinned && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
+        var on = zoom > 0 && !Dead && !_pounce.Pinned && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
         Ctx.Me.ZoomFov = on ? zoom : 0f;
         // iron sights: any non-scoped, non-melee weapon while zoom is held
         var kind = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Kind : WeaponKind.Melee;

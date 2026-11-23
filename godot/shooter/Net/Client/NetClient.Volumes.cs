@@ -92,7 +92,7 @@ public partial class NetClient
         }
         foreach (var c in _citizens.Views) VolumeNpc(o, c, cam, "citizen");
         foreach (var g in _thieves.GangViews) VolumeNpc(o, g, cam, "gang");
-        foreach (var d in _demons.Values) VolumeNpc(o, d.View, cam, "demon");
+        foreach (var view in _demon.Views) VolumeNpc(o, view, cam, "demon");
     }
 
     static void VolumeNpc(VolumeOverlay o, Node3D? view, Vector3 cam, string name)

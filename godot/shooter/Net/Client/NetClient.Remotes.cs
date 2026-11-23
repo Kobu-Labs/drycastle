@@ -53,7 +53,7 @@ public partial class NetClient
                 r.ShownYaw = s.Yaw; r.ShownPitch = s.Pitch;
                 if (dead) EndFling(id);
                 TumbleRemote(id, r, at, s.Yaw, dead && TargetDummies.IsDummyId(id) || r.GuessRagdoll, dt);
-                PounceLieRemote(id, r, at); // the one the demon has pinned lies on its back
+                _pounce.LieRemote(id, r, at); // the one the demon has pinned lies on its back
                 // a killed player's thrown corpse is its own entity: the body standing at the death spot would be a ghost behind it
                 r.Node.Visible = guessed || !(dead && !TargetDummies.IsDummyId(id) && (CorpseOf(id) || HarvestVictimHidden(id, dead))); // the harvester's victim is in the machine, then inside its bale: no body at the spot where it died // riders are drawn in their seat (the server puts the body there), seated rather than standing
                 r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
