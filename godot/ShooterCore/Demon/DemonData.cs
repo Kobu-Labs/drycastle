@@ -247,19 +247,36 @@ public sealed class DemonFile : IVersioned
         _ => HitWeights.Bullet,
     };
 
+    const string F = "holy_mass_demon.json";
+    static void Pos(float v, string field) { if (!float.IsFinite(v) || v <= 0) throw new DataFileException($"{F}: \"{field}\" is required and must be above 0"); }
+    static void NonNeg(float v, string field) { if (!float.IsFinite(v) || v < 0) throw new DataFileException($"{F}: \"{field}\" must be 0 or more"); }
+
     public static DemonFile Validate(DemonFile f)
     {
-        const string F = "holy_mass_demon.json";
-        static void Pos(float v, string field) { if (!float.IsFinite(v) || v <= 0) throw new DataFileException($"{F}: \"{field}\" is required and must be above 0"); }
-        static void NonNeg(float v, string field) { if (!float.IsFinite(v) || v < 0) throw new DataFileException($"{F}: \"{field}\" must be 0 or more"); }
-
         Pos(f.Scale, "scale");
+        ValidateHits(f);
+        ValidateCrawl(f);
+        ValidateFight(f);
+        ValidateFireball(f);
+        ValidateRoar(f);
+        ValidateLeap(f);
+        ValidateFlame(f);
+        ValidatePounce(f);
+        ValidateBurn(f);
+        return f;
+    }
+
+    static void ValidateHits(DemonFile f)
+    {
         var h = f.Hits;
         Pos(h.Base, "hits.base"); NonNeg(h.PerExtraPlayer, "hits.per_extra_player");
         if (h.Min < 1 || h.Max < h.Min) throw new DataFileException($"{F}: \"hits.min\" must be 1 or more and \"hits.max\", when given, at least \"hits.min\"");
         var w = f.HitWeights;
         if (w.Bullet < 1 || w.Explosive < 1 || w.Vehicle < 1) throw new DataFileException($"{F}: every \"hit_weights\" entry is required and must be 1 or more");
+    }
 
+    static void ValidateCrawl(DemonFile f)
+    {
         var c = f.Crawl;
         Pos(c.SpeedMps, "crawl.speed_mps"); Pos(c.PreferredRangeM, "crawl.preferred_range_m"); Pos(c.RetargetS, "crawl.retarget_s");
         NonNeg(c.LosBonus, "crawl.los_bonus"); NonNeg(c.HopCost, "crawl.hop_cost"); NonNeg(c.RevisitPenalty, "crawl.revisit_penalty");
@@ -270,13 +287,19 @@ public sealed class DemonFile : IVersioned
         if (c.MinHops < 1 || c.MinHops > c.MaxHops) throw new DataFileException($"{F}: \"crawl.min_hops\" must be between 1 and \"crawl.max_hops\"");
         if (c.DwellS is not { Length: 2 } d || !(d[0] > 0) || d[1] < d[0] || !float.IsFinite(d[1]))
             throw new DataFileException($"{F}: \"crawl.dwell_s\" must be [min, max] with 0 < min <= max");
+    }
 
+    static void ValidateFight(DemonFile f)
+    {
         var ft = f.Fight;
         Pos(ft.TransformS, "fight.transform_s"); Pos(ft.TransformSwapS, "fight.transform_swap_s"); Pos(ft.TransformDropS, "fight.transform_drop_s");
         Pos(ft.ClimbS, "fight.climb_s"); Pos(ft.CorpseS, "fight.corpse_s"); Pos(ft.BodyHeightM, "fight.body_height_m");
         NonNeg(ft.TransformDelayS, "fight.transform_delay_s"); NonNeg(ft.DoorGraceS, "fight.door_grace_s");
         if (ft.TransformSwapS + ft.TransformDropS >= ft.TransformS) throw new DataFileException($"{F}: \"fight.transform_swap_s\" and \"transform_drop_s\" must fit inside \"transform_s\"");
+    }
 
+    static void ValidateFireball(DemonFile f)
+    {
         var b = f.Fireball;
         Pos(b.SpeedMps, "fireball.speed_mps"); Pos(b.GravityMps2, "fireball.gravity_mps2"); Pos(b.LifeS, "fireball.life_s");
         Pos(b.CooldownS, "fireball.cooldown_s"); Pos(b.TelegraphS, "fireball.telegraph_s"); Pos(b.MaxRangeM, "fireball.max_range_m");
@@ -288,7 +311,10 @@ public sealed class DemonFile : IVersioned
         Pos(s.RadiusM, "fireball.splash.radius_m"); NonNeg(s.FullDamageRadiusM, "fireball.splash.full_damage_radius_m");
         NonNeg(s.EdgeDamage, "fireball.splash.edge_damage"); NonNeg(s.KnockbackSpeed, "fireball.splash.knockback_speed");
         if (s.FullDamageRadiusM > s.RadiusM) throw new DataFileException($"{F}: \"fireball.splash.full_damage_radius_m\" must not exceed \"radius_m\"");
+    }
 
+    static void ValidateRoar(DemonFile f)
+    {
         var r = f.Roar;
         if (r.DurationS > 0)
         {
@@ -297,6 +323,10 @@ public sealed class DemonFile : IVersioned
             foreach (var share in r.HealthShares) if (!(share > 0 && share < 1)) throw new DataFileException($"{F}: every \"roar.health_shares\" entry must be between 0 and 1");
             NonNeg(r.ShakeRadiusM, "roar.shake_radius_m");
         }
+    }
+
+    static void ValidateLeap(DemonFile f)
+    {
         var lp = f.Leap;
         if (lp.Chance > 0)
         {
@@ -307,6 +337,10 @@ public sealed class DemonFile : IVersioned
             NonNeg(lp.DueS, "leap.due_s"); NonNeg(lp.AcrossBonus, "leap.across_bonus");
             if (!(lp.MaxNormalDot >= -1 && lp.MaxNormalDot < 1)) throw new DataFileException($"{F}: \"leap.max_normal_dot\" must be from -1 up to (not including) 1");
         }
+    }
+
+    static void ValidateFlame(DemonFile f)
+    {
         var fl = f.Flame;
         if (fl.DurationS > 0)
         {
@@ -314,7 +348,10 @@ public sealed class DemonFile : IVersioned
             Pos(fl.DamagePerTick, "flame.damage_per_tick"); NonNeg(fl.CooldownS, "flame.cooldown_s"); NonNeg(fl.HeadUpM, "flame.head_up_m"); NonNeg(fl.HeadForwardM, "flame.head_forward_m");
             if (!(fl.ConeHalfAngleDeg > 0 && fl.ConeHalfAngleDeg < 90)) throw new DataFileException($"{F}: \"flame.cone_half_angle_deg\" must be between 0 and 90");
         }
+    }
 
+    static void ValidatePounce(DemonFile f)
+    {
         var pn = f.Pounce;
         if (pn.PinS > 0)
         {
@@ -325,9 +362,11 @@ public sealed class DemonFile : IVersioned
             Pos(pn.LockS, "pounce.lock_s"); Pos(pn.DropS, "pounce.drop_s"); Pos(pn.RiseS, "pounce.rise_s"); Pos(pn.CameraHeightM, "pounce.camera_height_m");
             Pos(pn.FaceDistanceM, "pounce.face_distance_m"); Pos(pn.BitesPerS, "pounce.bites_per_s"); NonNeg(pn.LungeM, "pounce.lunge_m");
         }
+    }
 
+    static void ValidateBurn(DemonFile f)
+    {
         Pos(f.Burn.Dps, "burn.dps"); Pos(f.Burn.DurationS, "burn.duration_s"); Pos(f.Burn.TickIntervalS, "burn.tick_interval_s");
         if (f.Burn.TickIntervalS > f.Burn.DurationS) throw new DataFileException($"{F}: \"burn.tick_interval_s\" must not exceed \"burn.duration_s\"");
-        return f;
     }
 }

@@ -114,10 +114,7 @@ public sealed class Shelters
     /// </summary>
     public static Shelters Parse(string json, string name = "bunkers.json")
     {
-        JsonDocument doc;
-        try { doc = JsonDocument.Parse(json); }
-        catch (JsonException e) { throw new DataFileException($"{name}: not JSON: {e.Message}", e); }
-        using (doc)
+        using (var doc = DataFile.Document(json, name))
         {
             var root = doc.RootElement;
             if (!root.TryGetProperty("version", out var v) || v.ValueKind != JsonValueKind.Number || v.GetInt32() != 1)

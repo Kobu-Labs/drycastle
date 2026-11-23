@@ -2,6 +2,7 @@ using System.Numerics;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Turrets;
 using Drycastle.ShooterCore.Wildlife;
+using static Drycastle.ShooterCore.Movement.Planar;
 
 namespace Drycastle.ShooterCore.Colliders;
 
@@ -90,6 +91,4 @@ public struct WalkGuard
         _clear.Reset();
         return null;
     }
-
-    static float Flat(Vector3 a, Vector3 b) { var dx = a.X - b.X; var dz = a.Z - b.Z; return MathF.Sqrt(dx * dx + dz * dz); }
 }

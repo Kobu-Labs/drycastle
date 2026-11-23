@@ -45,6 +45,13 @@ public static class DataFile
         catch (JsonException e) { throw new DataFileException($"{what}: {e.Message}", e); }
     }
 
+    /// <summary>A JSON text as a document, for the files that are read by hand (geometry, not settings). Invalid JSON is a <see cref="DataFileException"/>.</summary>
+    public static JsonDocument Document(string json, string name)
+    {
+        try { return JsonDocument.Parse(json); }
+        catch (JsonException e) { throw new DataFileException($"{name}: not JSON: {e.Message}", e); }
+    }
+
     public static T Load<T>(string path, int supported = SupportedVersion) where T : IVersioned
     {
         if (!File.Exists(path)) throw new DataFileException($"{path}: file not found");

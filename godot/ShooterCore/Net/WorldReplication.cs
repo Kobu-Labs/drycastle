@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using Drycastle.ShooterCore.Companions;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Wildlife;
+using static Drycastle.ShooterCore.Net.Bytes;
 
 namespace Drycastle.ShooterCore.Net;
 
@@ -196,6 +197,35 @@ public sealed class WorldSnapshotEncoder
     public List<byte[]> Encode(uint tick, uint baseTick, IReadOnlyList<WorldEntry> entities, Vector3? viewer = null)
     {
         _history.Record(tick, entities);
+        var b = Baseline(tick, baseTick);
+        var headerBase = b != null ? baseTick : Wire.NoTick;
+
+        _ends.Clear();
+        _present.Clear();
+        _touched = 0;
+        var o = WriteRecords(entities, b, baseTick, tick, viewer);
+        if (_touched < _rel.Count) PruneGone(tick); // a filtered entity that is no longer in the world: its despawn is the removal below
+        if (b != null) WriteRemovals(b, ref o);
+
+        var n = _ends.Count;
+        // nothing changed against the baseline: no packet. A full set always sends one, even when empty, because it is what empties the client's state
+        if (n == 0 && b != null) return new List<byte[]>(0);
+        var total = Math.Max(1, (n + MaxEntitiesPerPacket - 1) / MaxEntitiesPerPacket);
+        var packets = new List<byte[]>(total);
+        for (var p = 0; p < total; p++)
+        {
+            var first = p * MaxEntitiesPerPacket;
+            var last = Math.Min(n, first + MaxEntitiesPerPacket);
+            var from = first == 0 ? 0 : _ends[first - 1];
+            var to = last == 0 ? 0 : _ends[last - 1];
+            packets.Add(Finish(_rec, from, to, tick, headerBase, p, total, last - first));
+        }
+        return packets;
+    }
+
+    /// <summary>The states the client diffs against: the acknowledged tick's, kept (see <c>_kept</c>); null when the client has none usable (it gets a full set).</summary>
+    IReadOnlyDictionary<ushort, WorldEntry>? Baseline(uint tick, uint baseTick)
+    {
         IReadOnlyDictionary<ushort, WorldEntry>? b = null;
         if (baseTick != Wire.NoTick && baseTick < tick)
         {
@@ -207,14 +237,15 @@ public sealed class WorldSnapshotEncoder
             }
             if (b != null) { _keptTick = baseTick; _kept = b; }
         }
-        var headerBase = b != null ? baseTick : Wire.NoTick;
+        return b;
+    }
+
+    /// <summary>Writes this tick's record of every entity that changed (or all of them against no baseline) into the scratch buffer. Returns where the records end.</summary>
+    int WriteRecords(IReadOnlyList<WorldEntry> entities, IReadOnlyDictionary<ushort, WorldEntry>? b, uint baseTick, uint tick, Vector3? viewer)
+    {
         var filter = viewer.HasValue;
         long vx = 0, vz = 0;
         if (viewer is { } v) { vx = Quant.Pos(v.X); vz = Quant.Pos(v.Z); }
-
-        _ends.Clear();
-        _present.Clear();
-        _touched = 0;
         var o = 0;
         foreach (var q in entities)
         {
@@ -255,34 +286,22 @@ public sealed class WorldSnapshotEncoder
             _rec[at + 3] = flags;
             _ends.Add(o);
         }
-        if (_touched < _rel.Count) PruneGone(tick); // a filtered entity that is no longer in the world: its despawn is the removal below
-        // entities the baseline had and this tick does not: removals
-        if (b != null)
-            foreach (var kv in b)
-            {
-                if (_present.Contains(kv.Key)) continue;
-                Reserve(ref o, 4);
-                BinaryPrimitives.WriteUInt16LittleEndian(_rec.AsSpan(o), kv.Key);
-                _rec[o + 2] = kv.Value.Type;
-                _rec[o + 3] = Wire.FRemove;
-                o += 4;
-                _ends.Add(o);
-            }
+        return o;
+    }
 
-        var n = _ends.Count;
-        // nothing changed against the baseline: no packet. A full set always sends one, even when empty, because it is what empties the client's state
-        if (n == 0 && b != null) return new List<byte[]>(0);
-        var total = Math.Max(1, (n + MaxEntitiesPerPacket - 1) / MaxEntitiesPerPacket);
-        var packets = new List<byte[]>(total);
-        for (var p = 0; p < total; p++)
+    /// <summary>Entities the baseline had and this tick does not: removals.</summary>
+    void WriteRemovals(IReadOnlyDictionary<ushort, WorldEntry> b, ref int o)
+    {
+        foreach (var kv in b)
         {
-            var first = p * MaxEntitiesPerPacket;
-            var last = Math.Min(n, first + MaxEntitiesPerPacket);
-            var from = first == 0 ? 0 : _ends[first - 1];
-            var to = last == 0 ? 0 : _ends[last - 1];
-            packets.Add(Finish(_rec, from, to, tick, headerBase, p, total, last - first));
+            if (_present.Contains(kv.Key)) continue;
+            Reserve(ref o, 4);
+            BinaryPrimitives.WriteUInt16LittleEndian(_rec.AsSpan(o), kv.Key);
+            _rec[o + 2] = kv.Value.Type;
+            _rec[o + 3] = Wire.FRemove;
+            o += 4;
+            _ends.Add(o);
         }
-        return packets;
     }
 
     enum Emit : byte { Skip, Delta, Key, Dormant }
@@ -385,8 +404,6 @@ public sealed class WorldSnapshotEncoder
         return pkt;
     }
 
-    static void W16(byte[] b, ref int o, short v) { BinaryPrimitives.WriteInt16LittleEndian(b.AsSpan(o), v); o += 2; }
-    static void W32(byte[] b, ref int o, int v) { BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(o), v); o += 4; }
     static void WritePos(byte[] b, ref int o, WorldState s) { W32(b, ref o, s.X); W32(b, ref o, s.Y); W32(b, ref o, s.Z); }
     static void WriteRot(byte[] b, ref int o, WorldState s) { W16(b, ref o, (short)s.Yaw); W16(b, ref o, s.Pitch); }
     static void WriteStatus(byte[] b, ref int o, WorldState s)
@@ -509,7 +526,25 @@ public sealed class WorldReplica
         int index = d[9], total = d[10], count = d[11];
         if (HasState && tick <= LastTick) return false;
         if (total < 1 || total > 64 || index >= total) return false;
+        if (!JoinTick(tick, baseTick, total, index)) return false;
 
+        // parse first: a malformed packet changes nothing
+        if (!TryStage(d, count, out var staged)) return false;
+        foreach (var x in staged)
+        {
+            if (x.Remove) _asm!.Remove(x.Id);
+            else { _asm![x.Id] = x.Entry; _changed.Add(x.Id); }
+        }
+        _asmGot |= 1UL << index;
+        if (_asmGot != (ulong.MaxValue >> (64 - _asmTotal))) return false;
+        Commit(tick);
+        TicksCompleted++;
+        return true;
+    }
+
+    /// <summary>Starts assembling <paramref name="tick"/> (from a copy of its baseline) or joins the tick being assembled. False for a baseline that is gone, an older tick, or a packet already seen.</summary>
+    bool JoinTick(uint tick, uint baseTick, int total, int index)
+    {
         if (!_assembling || tick > _asmTick)
         {
             Dictionary<ushort, WorldEntry> start;
@@ -519,10 +554,13 @@ public sealed class WorldReplica
             _asm = start; _asmTick = tick; _asmTotal = total; _asmGot = 0; _assembling = true; _changed.Clear(); TicksStarted++;
         }
         else if (tick < _asmTick) return false; // older than the tick being assembled
-        if (total != _asmTotal || (_asmGot & (1UL << index)) != 0) return false;
+        return total == _asmTotal && (_asmGot & (1UL << index)) == 0;
+    }
 
-        // parse first: a malformed packet changes nothing
-        var staged = new List<Staged>(count);
+    /// <summary>Reads the packet's records against the tick being assembled, without changing it. False for a malformed packet or a delta its baseline cannot take.</summary>
+    bool TryStage(ReadOnlySpan<byte> d, int count, out List<Staged> staged)
+    {
+        staged = new List<Staged>(count);
         var o = WorldSnapshotEncoder.HeaderBytes;
         for (var i = 0; i < count; i++)
         {
@@ -535,47 +573,45 @@ public sealed class WorldReplica
             // a delta for an entity the baseline does not have (or only as dormant) is meaningless: the packet is not usable
             if ((!known || prev.Dormant) && (flags & Wire.FKey) != Wire.FKey) return false;
             var s = known ? prev.State : default;
-            if ((flags & Wire.FPosAbs) != 0)
-            {
-                if (o + 12 > d.Length) return false;
-                s = s with { X = BinaryPrimitives.ReadInt32LittleEndian(d[o..]), Y = BinaryPrimitives.ReadInt32LittleEndian(d[(o + 4)..]), Z = BinaryPrimitives.ReadInt32LittleEndian(d[(o + 8)..]) };
-                o += 12;
-            }
-            if ((flags & Wire.FPosDelta) != 0)
-            {
-                if (o + 6 > d.Length) return false;
-                s = s with { X = s.X + BinaryPrimitives.ReadInt16LittleEndian(d[o..]), Y = s.Y + BinaryPrimitives.ReadInt16LittleEndian(d[(o + 2)..]), Z = s.Z + BinaryPrimitives.ReadInt16LittleEndian(d[(o + 4)..]) };
-                o += 6;
-            }
-            if ((flags & Wire.FRot) != 0)
-            {
-                if (o + 4 > d.Length) return false;
-                s = s with { Yaw = BinaryPrimitives.ReadUInt16LittleEndian(d[o..]), Pitch = BinaryPrimitives.ReadInt16LittleEndian(d[(o + 2)..]) };
-                o += 4;
-            }
-            if ((flags & Wire.FStatus) != 0)
-            {
-                if (o + 3 > d.Length) return false;
-                s = s with { Owner = BinaryPrimitives.ReadUInt16LittleEndian(d[o..]), State = d[o + 2] };
-                o += 3;
-            }
-            if ((flags & Wire.FHp) != 0)
-            {
-                if (o + 1 > d.Length) return false;
-                s = s with { Hp = d[o] };
-                o++;
-            }
+            if (!TryReadFields(d, ref o, flags, ref s)) return false;
             staged.Add(new Staged(id, false, new WorldEntry(id, type, s)));
         }
-        foreach (var x in staged)
+        return true;
+    }
+
+    /// <summary>Applies the fields the record's flags name to <paramref name="s"/>, in the order the encoder wrote them.</summary>
+    static bool TryReadFields(ReadOnlySpan<byte> d, ref int o, int flags, ref WorldState s)
+    {
+        if ((flags & Wire.FPosAbs) != 0)
         {
-            if (x.Remove) _asm!.Remove(x.Id);
-            else { _asm![x.Id] = x.Entry; _changed.Add(x.Id); }
+            if (o + 12 > d.Length) return false;
+            s = s with { X = BinaryPrimitives.ReadInt32LittleEndian(d[o..]), Y = BinaryPrimitives.ReadInt32LittleEndian(d[(o + 4)..]), Z = BinaryPrimitives.ReadInt32LittleEndian(d[(o + 8)..]) };
+            o += 12;
         }
-        _asmGot |= 1UL << index;
-        if (_asmGot != (ulong.MaxValue >> (64 - _asmTotal))) return false;
-        Commit(tick);
-        TicksCompleted++;
+        if ((flags & Wire.FPosDelta) != 0)
+        {
+            if (o + 6 > d.Length) return false;
+            s = s with { X = s.X + BinaryPrimitives.ReadInt16LittleEndian(d[o..]), Y = s.Y + BinaryPrimitives.ReadInt16LittleEndian(d[(o + 2)..]), Z = s.Z + BinaryPrimitives.ReadInt16LittleEndian(d[(o + 4)..]) };
+            o += 6;
+        }
+        if ((flags & Wire.FRot) != 0)
+        {
+            if (o + 4 > d.Length) return false;
+            s = s with { Yaw = BinaryPrimitives.ReadUInt16LittleEndian(d[o..]), Pitch = BinaryPrimitives.ReadInt16LittleEndian(d[(o + 2)..]) };
+            o += 4;
+        }
+        if ((flags & Wire.FStatus) != 0)
+        {
+            if (o + 3 > d.Length) return false;
+            s = s with { Owner = BinaryPrimitives.ReadUInt16LittleEndian(d[o..]), State = d[o + 2] };
+            o += 3;
+        }
+        if ((flags & Wire.FHp) != 0)
+        {
+            if (o + 1 > d.Length) return false;
+            s = s with { Hp = d[o] };
+            o++;
+        }
         return true;
     }
 

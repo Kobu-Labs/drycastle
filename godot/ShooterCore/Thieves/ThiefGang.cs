@@ -3,6 +3,7 @@ using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Weapons;
+using static Drycastle.ShooterCore.Movement.Planar;
 
 namespace Drycastle.ShooterCore.Thieves;
 
@@ -364,11 +365,6 @@ public sealed class ThiefGang : IGangHits, IDisposable
         _ids.Release(hit);
     }
 
-    static float Flat(Vector3 a, Vector3 b)
-    {
-        var dx = a.X - b.X; var dz = a.Z - b.Z;
-        return MathF.Sqrt(dx * dx + dz * dz);
-    }
 }
 
 /// <summary>

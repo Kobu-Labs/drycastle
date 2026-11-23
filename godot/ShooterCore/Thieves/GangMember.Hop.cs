@@ -1,4 +1,5 @@
 using System.Numerics;
+using static Drycastle.ShooterCore.Movement.Planar;
 
 namespace Drycastle.ShooterCore.Thieves;
 

@@ -60,10 +60,7 @@ public sealed class AnchorGraph
     /// <summary>The graph of a church.json text (an object with an <c>anchors</c> array) or of a bare anchors array.</summary>
     public static AnchorGraph FromJson(string json, string name = "church.json")
     {
-        JsonDocument doc;
-        try { doc = JsonDocument.Parse(json); }
-        catch (JsonException e) { throw new DataFileException($"{name}: not JSON: {e.Message}", e); }
-        using (doc)
+        using (var doc = DataFile.Document(json, name))
         {
             var arr = doc.RootElement;
             if (arr.ValueKind == JsonValueKind.Object && !arr.TryGetProperty("anchors", out arr))

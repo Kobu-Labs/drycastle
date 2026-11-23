@@ -144,7 +144,6 @@ public static class DriveModel
     public static void Step(ref DriveState s, VehicleDef def, in DriveInput input, float dt, IDriveWorld world, in TowEffect tow = default)
     {
         var d = def.Drive!;
-        var land = d.Land; var wet = d.Water;
         s.Impact = 0; s.EnteredWater = false; s.LeftWater = false; s.Braking = false;
         var key = Math.Clamp(input.Throttle, -1f, 1f);
         var wheel = Math.Clamp(input.Steer, -1f, 1f);
@@ -154,7 +153,24 @@ public static class DriveModel
         var calm = 1f - (1f - d.SteerCalm) * Math.Clamp(MathF.Abs(s.Speed) / def.TopSpeed, 0f, 1f);
         s.Steer = Ramp(s.Steer, wheel, d.SteerRise * calm, d.SteerFall, dt);
 
-        // ---- land or water: it floats inside a water body where the water over the ground is deep enough
+        var water = FindWater(ref s, def, world);
+
+        var u = s.Speed; var w = s.Slip;
+        var (wantYaw, yawResponse) = s.Afloat ? Boat(ref s, def, ref u, dt)
+            : s.Airborne ? (0f, 1f) // in the air nothing drives or steers it; the turn it had dies away
+            : OnWheels(ref s, def, input, key, ref u, tow, dt);
+
+        var pivot = PivotBehind(s, def);
+        Turn(ref s, def, input.Handbrake, wantYaw, yawResponse, pivot, tow, ref u, ref w, dt);
+        var (pos, travel) = Sweep(ref s, def, world, pivot, ref u, ref w, dt);
+        Lie(ref s, def, world, water, travel, ref pos, ref u, ref w, dt);
+        s.Position = pos; s.Speed = u; s.Slip = w;
+    }
+
+    /// <summary>Land or water: it floats inside a water body where the water over the ground is deep enough. Sets <see cref="DriveState.Afloat"/> and the entry and exit marks; returns the surface height (negative infinity: no water, or a vehicle that cannot float).</summary>
+    static float FindWater(ref DriveState s, VehicleDef def, IDriveWorld world)
+    {
+        var wet = def.Drive!.Water;
         var wasAfloat = s.Afloat;
         var water = def.CanFloat ? world.WaterY(s.Position.X, s.Position.Z) : float.NegativeInfinity;
         if (float.IsNegativeInfinity(water)) s.Afloat = false;
@@ -166,69 +182,73 @@ public static class DriveModel
         }
         if (s.Afloat && !wasAfloat) { s.EnteredWater = true; s.Airborne = false; s.Sink = 0; }
         if (!s.Afloat && wasAfloat) { s.LeftWater = true; s.VerticalSpeed = 0; }
+        return water;
+    }
 
-        var u = s.Speed; var w = s.Slip;
-        float wantYaw, yawResponse;
-        if (s.Afloat)
-        {
-            // ---- the boat: thrust against the hull's drag; astern there is only a weaker thrust, no brake
-            var thrust = def.WaterAcceleration * (s.Throttle >= 0 ? s.Throttle : s.Throttle * wet.ReverseThrust);
-            u += (thrust - WaterDrag(def) * u * MathF.Abs(u) - wet.CoastDrag * u) * dt;
-            if (MathF.Abs(s.Throttle) < Dead && MathF.Abs(u) < StillSpeed) u = 0;
-            wantYaw = -s.Steer * (u / wet.TurnRadius + s.Throttle * wet.PropSteer);
-            yawResponse = wet.YawResponse;
-        }
-        else if (s.Airborne)
-        {
-            wantYaw = 0; yawResponse = 1f; // in the air nothing drives or steers it; the turn it had dies away
-        }
-        else
-        {
-            // ---- on its wheels
-            var braking = key > Dead && u < -StillSpeed || key < -Dead && u > StillSpeed;
-            s.Braking = (input.Handbrake || braking) && MathF.Abs(u) > StillSpeed;
-            if (input.Handbrake) u = FlightMath.Approach(u, 0, land.HandbrakeDecel * dt);
-            else if (braking)
-            {
-                // the key against the travel: part of the brake bites at once, the rest comes in with the ramp
-                var bite = land.BrakeBite + (1f - land.BrakeBite) * Math.Clamp(-MathF.Sign(u) * s.Throttle, 0f, 1f);
-                u = FlightMath.Approach(u, 0, def.Brake * tow.Load.BrakeScale * bite * dt);
-            }
-            else if (MathF.Abs(s.Throttle) > Dead && key * s.Throttle >= 0)
-            {
-                // driven (a released key's ramp still pushes while it runs out, so lifting off is not a step)
-                var limit = s.Throttle > 0 ? def.TopSpeed * tow.Load.TopSpeedScale : def.TopSpeed * tow.Load.TopSpeedScale * land.ReverseTopFraction;
-                var along = u * MathF.Sign(s.Throttle); // the speed in the direction it is driven
-                var launch = 1f + (land.LaunchBoost - 1f) * MathF.Max(0f, 1f - MathF.Abs(u) / land.LaunchSpeed);
-                var fade = 1f - MathF.Pow(Math.Clamp(along / limit, 0f, 1f), land.PowerCurve);
-                if (along <= limit) u += def.Acceleration * tow.Load.AccelScale * launch * fade * s.Throttle * dt;
-                else u = FlightMath.Approach(u, limit * MathF.Sign(s.Throttle), (land.CoastDecel + land.CoastDrag * MathF.Abs(u)) * dt); // faster than it can drive (out of a drop): it rolls down to it
-            }
-            else u = FlightMath.Approach(u, 0, (land.CoastDecel + land.CoastDrag * MathF.Abs(u)) * dt);
+    /// <summary>The boat: thrust against the hull's drag; astern there is only a weaker thrust, no brake. Returns the yaw rate it wants and how fast the rate follows.</summary>
+    static (float WantYaw, float YawResponse) Boat(ref DriveState s, VehicleDef def, ref float u, float dt)
+    {
+        var wet = def.Drive!.Water;
+        var thrust = def.WaterAcceleration * (s.Throttle >= 0 ? s.Throttle : s.Throttle * wet.ReverseThrust);
+        u += (thrust - WaterDrag(def) * u * MathF.Abs(u) - wet.CoastDrag * u) * dt;
+        if (MathF.Abs(s.Throttle) < Dead && MathF.Abs(u) < StillSpeed) u = 0;
+        return (-s.Steer * (u / wet.TurnRadius + s.Throttle * wet.PropSteer), wet.YawResponse);
+    }
 
-            // the wheel sets a circle; the tyres hold only so much sideways, which caps the yaw rate at speed
-            wantYaw = -s.Steer * u / TurnRadiusAt(def, u);
-            var hold = MathF.Abs(u) > 0.5f ? land.Grip / MathF.Abs(u) : float.PositiveInfinity;
-            if (tow.Hitched && MathF.Abs(u) > 0.5f) hold = MathF.Min(hold, def.MaxLateralAccel * tow.Load.LateralScale / MathF.Abs(u)); // the trailer's weight: the bend must be wider
-            wantYaw = Math.Clamp(wantYaw, -hold, hold) * (input.Handbrake ? land.HandbrakeSteer : 1f);
-            yawResponse = land.YawResponse;
+    /// <summary>On its wheels: the brake, the drive or the coast along the heading, and the circle the wheel sets, held to what the tyres grip. Returns the yaw rate it wants and how fast the rate follows.</summary>
+    static (float WantYaw, float YawResponse) OnWheels(ref DriveState s, VehicleDef def, in DriveInput input, float key, ref float u, in TowEffect tow, float dt)
+    {
+        var land = def.Drive!.Land;
+        var braking = key > Dead && u < -StillSpeed || key < -Dead && u > StillSpeed;
+        s.Braking = (input.Handbrake || braking) && MathF.Abs(u) > StillSpeed;
+        if (input.Handbrake) u = FlightMath.Approach(u, 0, land.HandbrakeDecel * dt);
+        else if (braking)
+        {
+            // the key against the travel: part of the brake bites at once, the rest comes in with the ramp
+            var bite = land.BrakeBite + (1f - land.BrakeBite) * Math.Clamp(-MathF.Sign(u) * s.Throttle, 0f, 1f);
+            u = FlightMath.Approach(u, 0, def.Brake * tow.Load.BrakeScale * bite * dt);
         }
+        else if (MathF.Abs(s.Throttle) > Dead && key * s.Throttle >= 0)
+        {
+            // driven (a released key's ramp still pushes while it runs out, so lifting off is not a step)
+            var limit = s.Throttle > 0 ? def.TopSpeed * tow.Load.TopSpeedScale : def.TopSpeed * tow.Load.TopSpeedScale * land.ReverseTopFraction;
+            var along = u * MathF.Sign(s.Throttle); // the speed in the direction it is driven
+            var launch = 1f + (land.LaunchBoost - 1f) * MathF.Max(0f, 1f - MathF.Abs(u) / land.LaunchSpeed);
+            var fade = 1f - MathF.Pow(Math.Clamp(along / limit, 0f, 1f), land.PowerCurve);
+            if (along <= limit) u += def.Acceleration * tow.Load.AccelScale * launch * fade * s.Throttle * dt;
+            else u = FlightMath.Approach(u, limit * MathF.Sign(s.Throttle), (land.CoastDecel + land.CoastDrag * MathF.Abs(u)) * dt); // faster than it can drive (out of a drop): it rolls down to it
+        }
+        else u = FlightMath.Approach(u, 0, (land.CoastDecel + land.CoastDrag * MathF.Abs(u)) * dt);
 
-        // ---- yaw: the rate follows what the wheel or the helm asks for; the heading turns, the motion keeps its own way
+        // the wheel sets a circle; the tyres hold only so much sideways, which caps the yaw rate at speed
+        var wantYaw = -s.Steer * u / TurnRadiusAt(def, u);
+        var hold = MathF.Abs(u) > 0.5f ? land.Grip / MathF.Abs(u) : float.PositiveInfinity;
+        if (tow.Hitched && MathF.Abs(u) > 0.5f) hold = MathF.Min(hold, def.MaxLateralAccel * tow.Load.LateralScale / MathF.Abs(u)); // the trailer's weight: the bend must be wider
+        wantYaw = Math.Clamp(wantYaw, -hold, hold) * (input.Handbrake ? land.HandbrakeSteer : 1f);
+        return (wantYaw, land.YawResponse);
+    }
+
+    /// <summary>Yaw: the rate follows what the wheel or the helm asks for; the heading turns, the motion keeps its own way (the speeds turn with the body, then the sideways one is checked).</summary>
+    static void Turn(ref DriveState s, VehicleDef def, bool handbrake, float wantYaw, float yawResponse, float pivot, in TowEffect tow, ref float u, ref float w, float dt)
+    {
+        var d = def.Drive!;
         s.YawRate += (wantYaw - s.YawRate) * (1f - MathF.Exp(-yawResponse * dt));
         if (MathF.Abs(wantYaw) < StillRate && MathF.Abs(s.YawRate) < StillRate) s.YawRate = 0;
-        var pivot = PivotBehind(s, def);
         if (tow.Block.Active) tow.Block.Clamp(ref u, ref w, ref s.YawRate, pivot); // the trailer is at its limit: what would fold it further is taken
         var turn = s.YawRate * dt;
         s.Yaw = FlightMath.Wrap(s.Yaw + turn);
         var (st, ct) = MathF.SinCos(turn);
         (u, w) = (u * ct - w * st, w * ct + u * st);
         // sideways: the tyres stop it (a slide only past their grip, or on the handbrake); the water takes it away slowly, so it slides wide
-        if (s.Afloat) w *= MathF.Exp(-wet.SideDrag * dt);
-        else if (!s.Airborne) w = FlightMath.Approach(w, 0, land.Grip * (input.Handbrake ? land.HandbrakeGrip : 1f) * dt);
+        if (s.Afloat) w *= MathF.Exp(-d.Water.SideDrag * dt);
+        else if (!s.Airborne) w = FlightMath.Approach(w, 0, d.Land.Grip * (handbrake ? d.Land.HandbrakeGrip : 1f) * dt);
         if (MathF.Abs(w) < StillSpeed) w = 0;
+    }
 
-        // ---- move: what a wall takes from the speed is the impact; then slide along it once
+    /// <summary>The move: what a wall takes from the speed is the impact; then it slides along it once. Returns where it ended (height still the old one) and how far it went on the plane.</summary>
+    static (Vector3 Pos, float Travel) Sweep(ref DriveState s, VehicleDef def, IDriveWorld world, float pivot, ref float u, ref float w, float dt)
+    {
+        var wet = def.Drive!.Water;
         var (sy, cy) = MathF.SinCos(s.Yaw);
         var fwd = new Vector3(-sy, 0, -cy); var right = new Vector3(cy, 0, -sy);
         // the turn is about a point that is not the origin, so the origin goes sideways with it: afloat the pivot is ahead (the stern swings out),
@@ -253,13 +273,18 @@ public static class DriveModel
         var travel = MathF.Sqrt((move.Position.X - s.Position.X) * (move.Position.X - s.Position.X) + (move.Position.Z - s.Position.Z) * (move.Position.Z - s.Position.Z));
         var pos = new Vector3(move.Position.X, s.Position.Y, move.Position.Z);
         if (struck) { u = Vector3.Dot(vel, fwd); w = Vector3.Dot(vel, right) - swing; } // what the wall left of the speed
+        return (pos, travel);
+    }
 
-        // ---- height and the lie of the body
+    /// <summary>Height and the lie of the body: the hull on its waterline, falling, or on the ground under the wheels.</summary>
+    static void Lie(ref DriveState s, VehicleDef def, IDriveWorld world, float water, float travel, ref Vector3 pos, ref float u, ref float w, float dt)
+    {
+        var d = def.Drive!;
         if (s.Afloat)
         {
             // buoyancy: the hull rises and sinks to its waterline on a spring, so it plunges going in, comes up and settles
-            var k = wet.BuoyancyResponse;
-            s.VerticalSpeed += (k * k * (water - wet.Draft - pos.Y) - 2f * wet.BuoyancyDamping * k * s.VerticalSpeed) * dt;
+            var k = d.Water.BuoyancyResponse;
+            s.VerticalSpeed += (k * k * (water - d.Water.Draft - pos.Y) - 2f * d.Water.BuoyancyDamping * k * s.VerticalSpeed) * dt;
             pos.Y += s.VerticalSpeed * dt;
             s.Pitch = FlightMath.Approach(s.Pitch, 0, SettleRate * dt);
             s.Roll = FlightMath.Approach(s.Roll, 0, SettleRate * dt);
@@ -270,7 +295,6 @@ public static class DriveModel
             if (FitFromAbove(world, d, pos, s.Yaw, out var lifted))
             {
                 pos.Y = lifted.Y; s.Airborne = false; s.Sink = 0; s.VerticalSpeed = 0; s.Pitch = lifted.Pitch; s.Roll = lifted.Roll;
-                s.Position = pos; s.Speed = u; s.Slip = w;
                 return;
             }
             // nothing there at all: it falls
@@ -278,38 +302,42 @@ public static class DriveModel
             s.VerticalSpeed -= MoveConsts.Gravity * dt;
             pos.Y += s.VerticalSpeed * dt;
         }
+        else OnGround(ref s, def, wheels, travel, ref pos, ref u, ref w, dt);
+    }
+
+    /// <summary>The wheels have found the ground: a ledge too high is a wall, a drop is a fall, otherwise it stands on it.</summary>
+    static void OnGround(ref DriveState s, VehicleDef def, in Wheels wheels, float travel, ref Vector3 pos, ref float u, ref float w, float dt)
+    {
+        var d = def.Drive!;
+        var land = d.Land;
+        var groundY = wheels.Y;
+        // out of the water this tick: the wheels have found the bank, and it stands that far under where they will put it
+        if (s.LeftWater) s.Sink = MathF.Max(0f, groundY - s.Position.Y);
+        var stood = s.Position.Y + s.Sink; // the ground it stood on before this move
+        var rise = groundY - stood;
+        var climb = travel * MathF.Tan(land.MaxClimbDeg * FlightMath.Deg2Rad);
+        if (!s.Airborne && !s.LeftWater && wheels.Step(d, stood, s.Pitch, s.Roll) > land.StepHeight + climb)
+        {
+            // a ledge too high for a wheel to climb: a wall. It stops where it was
+            s.Impact = MathF.Max(s.Impact, MathF.Sqrt(u * u + w * w));
+            pos = s.Position; u = 0; w = 0;
+        }
+        else if (s.Airborne || rise < -(land.SnapDown + climb))
+        {
+            // off the ground: it falls until the wheels meet it
+            s.Airborne = true; s.Sink = 0;
+            s.VerticalSpeed -= MoveConsts.Gravity * dt;
+            pos.Y = s.Position.Y + s.VerticalSpeed * dt;
+            if (pos.Y <= groundY) { pos.Y = groundY; s.Airborne = false; s.VerticalSpeed = 0; s.Pitch = wheels.Pitch; s.Roll = wheels.Roll; }
+        }
         else
         {
-            var groundY = wheels.Y;
-            // out of the water this tick: the wheels have found the bank, and it stands that far under where they will put it
-            if (s.LeftWater) s.Sink = MathF.Max(0f, groundY - s.Position.Y);
-            var stood = s.Position.Y + s.Sink; // the ground it stood on before this move
-            var rise = groundY - stood;
-            var climb = travel * MathF.Tan(land.MaxClimbDeg * FlightMath.Deg2Rad);
-            if (!s.Airborne && !s.LeftWater && wheels.Step(d, stood, s.Pitch, s.Roll) > land.StepHeight + climb)
-            {
-                // a ledge too high for a wheel to climb: a wall. It stops where it was
-                s.Impact = MathF.Max(s.Impact, MathF.Sqrt(u * u + w * w));
-                pos = s.Position; u = 0; w = 0;
-            }
-            else if (s.Airborne || rise < -(land.SnapDown + climb))
-            {
-                // off the ground: it falls until the wheels meet it
-                s.Airborne = true; s.Sink = 0;
-                s.VerticalSpeed -= MoveConsts.Gravity * dt;
-                pos.Y = s.Position.Y + s.VerticalSpeed * dt;
-                if (pos.Y <= groundY) { pos.Y = groundY; s.Airborne = false; s.VerticalSpeed = 0; s.Pitch = wheels.Pitch; s.Roll = wheels.Roll; }
-            }
-            else
-            {
-                // on the ground. Out of the water the wheels haul it up the bank at their own rate (the heave), faster the faster it drives
-                s.Sink = MathF.Max(0f, s.Sink - wet.ClimbOutRate * (1f + MathF.Abs(u) / def.WaterTopSpeed) * dt);
-                pos.Y = groundY - s.Sink;
-                s.VerticalSpeed = 0;
-                s.Pitch = wheels.Pitch; s.Roll = wheels.Roll;
-            }
+            // on the ground. Out of the water the wheels haul it up the bank at their own rate (the heave), faster the faster it drives
+            s.Sink = MathF.Max(0f, s.Sink - d.Water.ClimbOutRate * (1f + MathF.Abs(u) / def.WaterTopSpeed) * dt);
+            pos.Y = groundY - s.Sink;
+            s.VerticalSpeed = 0;
+            s.Pitch = wheels.Pitch; s.Roll = wheels.Roll;
         }
-        s.Position = pos; s.Speed = u; s.Slip = w;
     }
 
     /// <summary>

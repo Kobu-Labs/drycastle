@@ -121,7 +121,22 @@ public sealed class ViewmodelMotion
         dt = Math.Clamp(dt, 0f, 0.1f);
         var rm = i.ReduceMotion;
         _t += dt;
+        StepLanding(dt, i, rm);
+        var (bobX, bobY) = StepBob(dt, i, rm);
+        var (idleX, idleY) = StepIdle(dt, i, rm);
+        StepLean(dt, i, rm);
+        StepLook(dt, i, rm);
+        var sp = StepSprint(dt, i);
 
+        // all of it fades out as the gun comes up to the sight (the kick is the viewmodel's own)
+        var g = 1f - Math.Clamp(i.Aim, 0f, 1f);
+        Position = (new Vector3(bobX + idleX + _lookX - _lean * LeanShift, bobY + idleY + _lookY - _landPos, 0f) + SprintOffset * sp) * g;
+        Rotation = new Vector3(0f, SprintYaw * sp, SprintRoll * sp + _lookRoll + _lean * LeanRoll) * g;
+        CameraDrop = rm ? 0f : Math.Max(0f, _landPos * CameraShare);
+    }
+
+    void StepLanding(float dt, in ViewmodelInput i, bool rm)
+    {
         // landing: the fastest fall of the airborne stretch, taken when the body is next on the ground (not on water or a ladder)
         if (i.Falling) { _airMin = Math.Min(_airMin, i.VerticalSpeed); _wasFalling = true; }
         else
@@ -132,7 +147,11 @@ public sealed class ViewmodelMotion
         var e = MathF.Exp(-LandOmega * dt);
         var x = _landPos; var v = _landVel; var k = v + LandOmega * x; // exact step of a critically damped spring: no ringing at any frame time
         _landPos = e * (x + k * dt); _landVel = e * (v - LandOmega * k * dt);
+    }
 
+    /// <summary>Returns the bob's sideways and vertical offset.</summary>
+    (float X, float Y) StepBob(float dt, in ViewmodelInput i, bool rm)
+    {
         // walk and sprint bob: a figure eight, one dip per step, two steps to a swing. The phase advances with the distance walked, one step (pi) per
         // stride, and is anchored so the dip (y lowest, phi = pi/4 mod pi) falls where the footstep sound does: set outright when the bob starts from nothing,
         // then pulled gently, because the sound's accumulator is clamped on every stop and in the air, which this one is not.
@@ -155,19 +174,30 @@ public sealed class ViewmodelMotion
         var amp = BobAmplitude(i.Speed) * Smooth(_bob);
         var bobX = amp * MathF.Sin(phi);
         var bobY = -amp * VerticalBobRatio * MathF.Sin(2f * phi);
+        return (bobX, bobY);
+    }
 
-        // idle breath, when standing
+    /// <summary>Idle breath, when standing; returns its offset.</summary>
+    (float X, float Y) StepIdle(float dt, in ViewmodelInput i, bool rm)
+    {
         var idling = !rm && i.Grounded && i.Speed < MoveSpeed;
         _idle = MoveToward(_idle, idling ? 1f : 0f, dt / Ease);
         var idleAmt = Smooth(_idle);
         var idleX = IdleX * MathF.Sin(IdleRateX * _t) * idleAmt;
         var idleY = IdleY * MathF.Sin(IdleRateY * _t) * idleAmt;
+        return (idleX, idleY);
+    }
 
-        // strafe lean
+    /// <summary>Strafe lean.</summary>
+    void StepLean(float dt, in ViewmodelInput i, bool rm)
+    {
         var lean = rm || !i.Grounded ? 0f : Math.Clamp(i.StrafeSpeed / MoveConsts.WalkSpeed, -1f, 1f);
         _lean += (lean - _lean) * (1f - MathF.Exp(-LeanRate * dt));
+    }
 
-        // look lag: the gun trails the view, so a left turn (yaw up) shifts it right, and looking up (pitch up) shifts it down
+    /// <summary>Look lag: the gun trails the view, so a left turn (yaw up) shifts it right, and looking up (pitch up) shifts it down.</summary>
+    void StepLook(float dt, in ViewmodelInput i, bool rm)
+    {
         var drain = MathF.Exp(-LookRate * dt);
         var half = MathF.Sqrt(drain); // a turn made mid-frame has drained for half of it: the same total lag at any frame rate
         _lookX *= drain; _lookY *= drain; _lookRoll *= drain;
@@ -180,17 +210,14 @@ public sealed class ViewmodelMotion
         _lookX = Math.Clamp(_lookX, -LookMax, LookMax);
         _lookY = Math.Clamp(_lookY, -LookMax, LookMax);
         _lookRoll = Math.Clamp(_lookRoll, -LookRollMax, LookRollMax);
+    }
 
-        // sprint pose (a state cue: kept under Reduce Motion)
+    /// <summary>The sprint pose (a state cue: kept under Reduce Motion), eased in and out; returns how far in it is.</summary>
+    float StepSprint(float dt, in ViewmodelInput i)
+    {
         var pose = i.Sprinting && i.Grounded && i.Stance == Stance.Stand && i.Speed >= SprintMinSpeed;
         _sprint = MoveToward(_sprint, pose ? 1f : 0f, dt / (pose ? SprintIn : SprintOut));
-        var sp = Smooth(_sprint);
-
-        // all of it fades out as the gun comes up to the sight (the kick is the viewmodel's own)
-        var g = 1f - Math.Clamp(i.Aim, 0f, 1f);
-        Position = (new Vector3(bobX + idleX + _lookX - _lean * LeanShift, bobY + idleY + _lookY - _landPos, 0f) + SprintOffset * sp) * g;
-        Rotation = new Vector3(0f, SprintYaw * sp, SprintRoll * sp + _lookRoll + _lean * LeanRoll) * g;
-        CameraDrop = rm ? 0f : Math.Max(0f, _landPos * CameraShare);
+        return Smooth(_sprint);
     }
 
     /// <summary>A landing at <paramref name="fall"/> m/s: an impulse that makes the gun sink to its depth (peaking after about 1 / <see cref="LandOmega"/> s) and come back.</summary>

@@ -4,6 +4,7 @@ using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
+using static Drycastle.ShooterCore.Movement.Planar;
 
 namespace Drycastle.ShooterCore.Thieves;
 
@@ -414,12 +415,6 @@ public sealed class RaidVan : IWorldEntity
         while (a > MathF.PI) a -= MathF.Tau;
         while (a < -MathF.PI) a += MathF.Tau;
         return a;
-    }
-
-    static float Flat(Vector3 a, Vector3 b)
-    {
-        var dx = a.X - b.X; var dz = a.Z - b.Z;
-        return MathF.Sqrt(dx * dx + dz * dz);
     }
 
     // ---- hit volume ----

@@ -87,10 +87,7 @@ public sealed class ZonePolygons
     /// </summary>
     public static ZonePolygons Parse(string json, string name = "zone_polygons.json")
     {
-        JsonDocument doc;
-        try { doc = JsonDocument.Parse(json); }
-        catch (JsonException e) { throw new DataFileException($"{name}: not JSON: {e.Message}", e); }
-        using (doc)
+        using (var doc = DataFile.Document(json, name))
         {
             var root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Object) throw new DataFileException($"{name}: not an object");

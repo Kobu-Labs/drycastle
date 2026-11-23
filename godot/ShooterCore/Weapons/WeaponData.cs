@@ -73,86 +73,13 @@ public class WeaponsFile
 
     static WeaponDef ResolveWeapon(WeaponRaw r, string where, Dictionary<WeaponCategory, TuningRaw> categoryDefaults)
     {
-        if (!TryEnum(r.Kind, out WeaponKind kind)) throw Invalid(where, "kind", "must be hitscan, projectile or melee");
-        if (!TryEnum(r.Category, out WeaponCategory category))
-            throw Invalid(where, "category", "is required and must be one of the category names in the schema");
-        if (!TryEnum(r.Slot, out WeaponSlot slot)) throw Invalid(where, "slot", "is required and must be primary, secondary or special");
-
-        var expected = category switch
-        {
-            WeaponCategory.Melee => WeaponKind.Melee,
-            WeaponCategory.Launcher => WeaponKind.Projectile,
-            WeaponCategory.Grenade => WeaponKind.Projectile,
-            _ => WeaponKind.Hitscan,
-        };
-        if (kind != expected) throw Invalid(where, "kind", $"must be {expected.ToString().ToLowerInvariant()} for category {Snake(category)}");
-
+        var (kind, category, slot) = ParseIdentity(r, where);
         CheckTuning(r, where);
-        NonNegative(r.Damage, where, "damage");
-        NonNegative(r.BackstabDamage, where, "backstab_damage");
-        NonNegative(r.HeadshotMultiplier, where, "headshot_multiplier");
-        NonNegative(r.FireInterval, where, "fire_interval");
-        NonNegative(r.MagazineSize, where, "magazine_size");
-        NonNegative(r.ReserveAmmo, where, "reserve_ammo");
-        NonNegative(r.ReloadTime, where, "reload_time");
-        NonNegative(r.FalloffStart, where, "falloff_start");
-        NonNegative(r.FalloffEnd, where, "falloff_end");
-        NonNegative(r.FalloffMultiplier, where, "falloff_multiplier");
-        NonNegative(r.Range, where, "range");
-        NonNegative(r.ZoomFov, where, "zoom_fov");
-        NonNegative(r.ScopeFov, where, "scope_fov");
-        NonNegative(r.Reach, where, "reach");
-        NonNegative(r.ProjectileSpeed, where, "projectile_speed");
-        NonNegative(r.ProjectileLife, where, "projectile_life");
-        NonNegative(r.UnlockLevel, where, "unlock_level");
-        var reward = r.RewardTier switch
-        {
-            null => HuntTier.Common,
-            "bronze" => HuntTier.Bronze,
-            "silver" => HuntTier.Silver,
-            "gold" => HuntTier.Gold,
-            _ => throw new DataFileException($"weapons.json: {where}: field \"reward_tier\" must be bronze, silver or gold"),
-        };
-        if (reward != HuntTier.Common && r.UnlockLevel is > 0)
-            throw new DataFileException($"weapons.json: {where}: a reward_tier weapon has no unlock_level");
-        NonNegative(r.PelletSpread, where, "pellet_spread");
-        NonNegative(r.DamagePerPellet, where, "damage_per_pellet");
-        NonNegative(r.SwayAmount, where, "sway_amount");
-        NonNegative(r.BreathHoldSeconds, where, "breath_hold_seconds");
-        NonNegative(r.BreathRecoverSeconds, where, "breath_recover_seconds");
-        NonNegative(r.QuickscopePenalty, where, "quickscope_penalty");
-        NonNegative(r.MuzzleVelocity, where, "muzzle_velocity");
-        NonNegative(r.ZeroDistance, where, "zero_distance");
-        if (r.Pellets is { } pellets && pellets < 1) throw Invalid(where, "pellets", "must be at least 1");
-        if (r.PumpAction == true && r.FullAuto == true) throw Invalid(where, "pump_action", "cannot be combined with full_auto");
-        if (r.ShellReload == true && (r.MagazineSize is not > 0 || r.ReloadTime is not > 0))
-            throw Invalid(where, "shell_reload", "needs magazine_size and reload_time > 0 (reload_time is then per shell)");
-        if (r.ZoomLevels is { } levels && levels < 1) throw Invalid(where, "zoom_levels", "must be at least 1");
-        if (category == WeaponCategory.Shotgun && r.Pellets is null) throw Invalid(where, "pellets", "is required for a shotgun");
-        if (r.Lock is { } lk)
-        {
-            if (kind != WeaponKind.Projectile) throw Invalid(where, "lock", "is only for a projectile weapon");
-            if (lk.Seconds <= 0) throw Invalid(where, "lock.seconds", "must be > 0");
-            if (lk.RangeM <= 0) throw Invalid(where, "lock.range_m", "must be > 0");
-            if (lk.ConeDeg is <= 0 or >= 90) throw Invalid(where, "lock.cone_deg", "must be between 0 and 90");
-            if (lk.AlertAtFraction is < 0 or > 1) throw Invalid(where, "lock.alert_at_fraction", "must be between 0 and 1");
-            if (lk.GraceSeconds < 0) throw Invalid(where, "lock.grace_seconds", "must be >= 0");
-            if (lk.HitBlastRadius < 0 || lk.KillBlastRadius < 0) throw Invalid(where, "lock", "blast radii must be >= 0");
-            if (r.ProjectileSpeed is not > 0 || r.ProjectileLife is not > 0) throw Invalid(where, "lock", "needs projectile_speed and projectile_life > 0");
-        }
-
-        if (category == WeaponCategory.Grenade)
-        {
-            if (r.Grenade is not { } g) throw Invalid(where, "grenade", "is required for the grenade category");
-            if (g.FuseSeconds <= 0) throw Invalid(where, "grenade.fuse_seconds", "must be > 0");
-            if (g.Gravity <= 0) throw Invalid(where, "grenade.gravity", "must be > 0");
-            if (g.Bounce is < 0 or >= 1) throw Invalid(where, "grenade.bounce", "must be between 0 and 1");
-            if (g.GroundFriction is < 0 or > 1) throw Invalid(where, "grenade.ground_friction", "must be between 0 and 1");
-            if (r.ProjectileSpeed is not > 0) throw Invalid(where, "projectile_speed", "is the throw speed and must be > 0");
-            if (r.Splash == null) throw Invalid(where, "splash", "is required for the grenade category");
-            if (r.Lock != null) throw Invalid(where, "lock", "is not for a grenade");
-        }
-        else if (r.Grenade != null) throw Invalid(where, "grenade", "is only for the grenade category");
+        CheckNonNegative(r, where);
+        var reward = ParseReward(r, where);
+        CheckHandling(r, where, category);
+        CheckLock(r, where, kind);
+        CheckGrenade(r, where, category);
 
         var c = categoryDefaults.GetValueOrDefault(category) ?? new TuningRaw();
         var move = Pick(r.MoveSpeedMultiplier, c.MoveSpeedMultiplier, 1);
@@ -211,6 +138,112 @@ public class WeaponsFile
             Lock = r.Lock,
             Grenade = r.Grenade,
         };
+    }
+
+    /// <summary>The kind, category and slot, and that the kind is the one the category needs.</summary>
+    static (WeaponKind Kind, WeaponCategory Category, WeaponSlot Slot) ParseIdentity(WeaponRaw r, string where)
+    {
+        if (!TryEnum(r.Kind, out WeaponKind kind)) throw Invalid(where, "kind", "must be hitscan, projectile or melee");
+        if (!TryEnum(r.Category, out WeaponCategory category))
+            throw Invalid(where, "category", "is required and must be one of the category names in the schema");
+        if (!TryEnum(r.Slot, out WeaponSlot slot)) throw Invalid(where, "slot", "is required and must be primary, secondary or special");
+
+        var expected = category switch
+        {
+            WeaponCategory.Melee => WeaponKind.Melee,
+            WeaponCategory.Launcher => WeaponKind.Projectile,
+            WeaponCategory.Grenade => WeaponKind.Projectile,
+            _ => WeaponKind.Hitscan,
+        };
+        if (kind != expected) throw Invalid(where, "kind", $"must be {expected.ToString().ToLowerInvariant()} for category {Snake(category)}");
+        return (kind, category, slot);
+    }
+
+    static void CheckNonNegative(WeaponRaw r, string where)
+    {
+        NonNegative(r.Damage, where, "damage");
+        NonNegative(r.BackstabDamage, where, "backstab_damage");
+        NonNegative(r.HeadshotMultiplier, where, "headshot_multiplier");
+        NonNegative(r.FireInterval, where, "fire_interval");
+        NonNegative(r.MagazineSize, where, "magazine_size");
+        NonNegative(r.ReserveAmmo, where, "reserve_ammo");
+        NonNegative(r.ReloadTime, where, "reload_time");
+        NonNegative(r.FalloffStart, where, "falloff_start");
+        NonNegative(r.FalloffEnd, where, "falloff_end");
+        NonNegative(r.FalloffMultiplier, where, "falloff_multiplier");
+        NonNegative(r.Range, where, "range");
+        NonNegative(r.ZoomFov, where, "zoom_fov");
+        NonNegative(r.ScopeFov, where, "scope_fov");
+        NonNegative(r.Reach, where, "reach");
+        NonNegative(r.ProjectileSpeed, where, "projectile_speed");
+        NonNegative(r.ProjectileLife, where, "projectile_life");
+        NonNegative(r.UnlockLevel, where, "unlock_level");
+    }
+
+    /// <summary>The reward tier; a reward weapon is unlocked by hunting, not by level.</summary>
+    static HuntTier ParseReward(WeaponRaw r, string where)
+    {
+        var reward = r.RewardTier switch
+        {
+            null => HuntTier.Common,
+            "bronze" => HuntTier.Bronze,
+            "silver" => HuntTier.Silver,
+            "gold" => HuntTier.Gold,
+            _ => throw new DataFileException($"weapons.json: {where}: field \"reward_tier\" must be bronze, silver or gold"),
+        };
+        if (reward != HuntTier.Common && r.UnlockLevel is > 0)
+            throw new DataFileException($"weapons.json: {where}: a reward_tier weapon has no unlock_level");
+        return reward;
+    }
+
+    /// <summary>The numbers of the handling blocks (sway, breath, pellets, scope) and the flags that exclude each other.</summary>
+    static void CheckHandling(WeaponRaw r, string where, WeaponCategory category)
+    {
+        NonNegative(r.PelletSpread, where, "pellet_spread");
+        NonNegative(r.DamagePerPellet, where, "damage_per_pellet");
+        NonNegative(r.SwayAmount, where, "sway_amount");
+        NonNegative(r.BreathHoldSeconds, where, "breath_hold_seconds");
+        NonNegative(r.BreathRecoverSeconds, where, "breath_recover_seconds");
+        NonNegative(r.QuickscopePenalty, where, "quickscope_penalty");
+        NonNegative(r.MuzzleVelocity, where, "muzzle_velocity");
+        NonNegative(r.ZeroDistance, where, "zero_distance");
+        if (r.Pellets is { } pellets && pellets < 1) throw Invalid(where, "pellets", "must be at least 1");
+        if (r.PumpAction == true && r.FullAuto == true) throw Invalid(where, "pump_action", "cannot be combined with full_auto");
+        if (r.ShellReload == true && (r.MagazineSize is not > 0 || r.ReloadTime is not > 0))
+            throw Invalid(where, "shell_reload", "needs magazine_size and reload_time > 0 (reload_time is then per shell)");
+        if (r.ZoomLevels is { } levels && levels < 1) throw Invalid(where, "zoom_levels", "must be at least 1");
+        if (category == WeaponCategory.Shotgun && r.Pellets is null) throw Invalid(where, "pellets", "is required for a shotgun");
+    }
+
+    static void CheckLock(WeaponRaw r, string where, WeaponKind kind)
+    {
+        if (r.Lock is { } lk)
+        {
+            if (kind != WeaponKind.Projectile) throw Invalid(where, "lock", "is only for a projectile weapon");
+            if (lk.Seconds <= 0) throw Invalid(where, "lock.seconds", "must be > 0");
+            if (lk.RangeM <= 0) throw Invalid(where, "lock.range_m", "must be > 0");
+            if (lk.ConeDeg is <= 0 or >= 90) throw Invalid(where, "lock.cone_deg", "must be between 0 and 90");
+            if (lk.AlertAtFraction is < 0 or > 1) throw Invalid(where, "lock.alert_at_fraction", "must be between 0 and 1");
+            if (lk.GraceSeconds < 0) throw Invalid(where, "lock.grace_seconds", "must be >= 0");
+            if (lk.HitBlastRadius < 0 || lk.KillBlastRadius < 0) throw Invalid(where, "lock", "blast radii must be >= 0");
+            if (r.ProjectileSpeed is not > 0 || r.ProjectileLife is not > 0) throw Invalid(where, "lock", "needs projectile_speed and projectile_life > 0");
+        }
+    }
+
+    static void CheckGrenade(WeaponRaw r, string where, WeaponCategory category)
+    {
+        if (category == WeaponCategory.Grenade)
+        {
+            if (r.Grenade is not { } g) throw Invalid(where, "grenade", "is required for the grenade category");
+            if (g.FuseSeconds <= 0) throw Invalid(where, "grenade.fuse_seconds", "must be > 0");
+            if (g.Gravity <= 0) throw Invalid(where, "grenade.gravity", "must be > 0");
+            if (g.Bounce is < 0 or >= 1) throw Invalid(where, "grenade.bounce", "must be between 0 and 1");
+            if (g.GroundFriction is < 0 or > 1) throw Invalid(where, "grenade.ground_friction", "must be between 0 and 1");
+            if (r.ProjectileSpeed is not > 0) throw Invalid(where, "projectile_speed", "is the throw speed and must be > 0");
+            if (r.Splash == null) throw Invalid(where, "splash", "is required for the grenade category");
+            if (r.Lock != null) throw Invalid(where, "lock", "is not for a grenade");
+        }
+        else if (r.Grenade != null) throw Invalid(where, "grenade", "is only for the grenade category");
     }
 
     static RecoilDef MergeRecoil(RecoilRaw? own, RecoilRaw? category) => new()

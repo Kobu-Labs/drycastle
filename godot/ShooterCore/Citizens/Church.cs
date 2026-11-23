@@ -61,10 +61,7 @@ public sealed class Church
     /// <summary>Parse church.json: <c>{"door": {"x","y","z","yaw"}, "aisle": [[x,y,z]...], "seats": [{"id","pos":[x,y,z],"yaw","path":[[x,y,z]...],"floor","stand"}], "exit"|"pastor"|"sacristy_door": {"pos","yaw"}, "monks": [{"pos","yaw"}], "props": [{"kind","pos","yaw"}, {"kind":"painting","pos","yaw","w","h"}]}</c> (everything but door and seats optional; props other than paintings are the game's furniture and not read here).</summary>
     public static Church Parse(string json, string name = "church.json")
     {
-        JsonDocument doc;
-        try { doc = JsonDocument.Parse(json); }
-        catch (JsonException e) { throw new DataFileException($"{name}: not JSON: {e.Message}", e); }
-        using (doc)
+        using (var doc = DataFile.Document(json, name))
         {
             var root = doc.RootElement;
             if (!root.TryGetProperty("door", out var door) || door.ValueKind != JsonValueKind.Object) throw new DataFileException($"{name}: missing door");

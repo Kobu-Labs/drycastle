@@ -63,22 +63,49 @@ public sealed class LevelsFile
     /// <summary><paramref name="unlockAll"/> is the dev-mode gate override (<see cref="DevUnlocks"/>): every known item counts as unlocked.</summary>
     public bool IsUnlocked(Profile profile, UnlockKind kind, string id, bool unlockAll) => Table.IsUnlocked(profile.Level, kind, id, unlockAll);
 
+    const string F = "levels.json";
+
     /// <param name="streakLevels">Killstreak id to its unlock level, from killstreaks.json (<see cref="KillstreakFile.UnlockLevels"/>). A streak line must name a listed id at the same level.</param>
     static LevelsFile Resolve(LevelsRaw raw, WeaponsFile weapons, PerksFile perks, IReadOnlyDictionary<string, int>? streakLevels)
     {
-        const string F = "levels.json";
         streakLevels ??= new Dictionary<string, int>();
+        var curve = ResolveCurve(raw);
+        var awards = ResolveAwards(raw);
+
+        // Items that the table can gate: every primary/secondary weapon and every perk. Specials (the knife) are not loadout items.
+        var itemLevels = new Dictionary<(UnlockKind, string), int>();
+        foreach (var gun in weapons.Weapons.Where(x => x.Slot != WeaponSlot.Special && !x.IsReward)) itemLevels[(UnlockKind.Weapon, gun.Id)] = gun.UnlockLevel;
+        foreach (var p in perks.Perks) itemLevels[(UnlockKind.Perk, p.Id)] = p.UnlockLevel;
+        foreach (var (id, level) in streakLevels) itemLevels[(UnlockKind.Streak, id)] = level;
+
+        var table = new Dictionary<(UnlockKind, string), int>();
+        var unlocks = ReadUnlocks(raw, curve, weapons, perks, streakLevels, itemLevels, table);
+        RequireEveryItem(itemLevels, table);
+        RequireStartingKit(table, weapons);
+
+        return new LevelsFile
+        {
+            Version = raw.Version, Curve = curve, Awards = awards, Unlocks = unlocks,
+            Table = new UnlockTable(table),
+        };
+    }
+
+    static LevelCurve ResolveCurve(LevelsRaw raw)
+    {
         if (raw.XpToReach is not { Count: LevelCount })
             throw new DataFileException($"{F}: field \"xp_to_reach\" must list exactly {LevelCount} thresholds (levels 1-{LevelCount})");
         if (raw.XpToReach[0] != 0) throw new DataFileException($"{F}: field \"xp_to_reach\" must start at 0 (level 1)");
         for (var i = 1; i < raw.XpToReach.Count; i++)
             if (raw.XpToReach[i] <= raw.XpToReach[i - 1])
                 throw new DataFileException($"{F}: field \"xp_to_reach\" must strictly increase (level {i + 1} is not above level {i})");
-        var curve = new LevelCurve(raw.XpToReach);
+        return new LevelCurve(raw.XpToReach);
+    }
 
+    static XpAwards ResolveAwards(LevelsRaw raw)
+    {
         if (raw.Awards is null) throw new DataFileException($"{F}: field \"awards\" is required");
         var a = raw.Awards;
-        var awards = new XpAwards
+        return new XpAwards
         {
             Kill = Award(a.Kill, "kill"), Headshot = Award(a.Headshot, "headshot"), Assist = Award(a.Assist, "assist"),
             StreakKill = Award(a.StreakKill, "streak_kill"), Roadkill = Award(a.Roadkill, "roadkill"),
@@ -87,15 +114,13 @@ public sealed class LevelsFile
             AssistWindowSeconds = a.AssistWindowSeconds is { } w && double.IsFinite(w) && w >= 0 ? w
                 : throw new DataFileException($"{F}: awards \"assist_window_seconds\" is required and must be >= 0"),
         };
+    }
 
-        // Items that the table can gate: every primary/secondary weapon and every perk. Specials (the knife) are not loadout items.
-        var itemLevels = new Dictionary<(UnlockKind, string), int>();
-        foreach (var gun in weapons.Weapons.Where(x => x.Slot != WeaponSlot.Special && !x.IsReward)) itemLevels[(UnlockKind.Weapon, gun.Id)] = gun.UnlockLevel;
-        foreach (var p in perks.Perks) itemLevels[(UnlockKind.Perk, p.Id)] = p.UnlockLevel;
-        foreach (var (id, level) in streakLevels) itemLevels[(UnlockKind.Streak, id)] = level;
-
+    /// <summary>The unlock lines: each names a known item at a level that agrees with the item's own file. Fills <paramref name="table"/>; returns the lines.</summary>
+    static List<UnlockEntry> ReadUnlocks(LevelsRaw raw, LevelCurve curve, WeaponsFile weapons, PerksFile perks, IReadOnlyDictionary<string, int> streakLevels,
+        Dictionary<(UnlockKind, string), int> itemLevels, Dictionary<(UnlockKind, string), int> table)
+    {
         var unlocks = new List<UnlockEntry>();
-        var table = new Dictionary<(UnlockKind, string), int>();
         for (var i = 0; i < (raw.Unlocks?.Count ?? 0); i++)
         {
             var r = raw.Unlocks![i];
@@ -130,8 +155,12 @@ public sealed class LevelsFile
             table[key] = level;
             unlocks.Add(new UnlockEntry(level, kind, r.Id));
         }
+        return unlocks;
+    }
 
-        // every gated item must be in the table; an item left out is available from level 0, so it must say so
+    /// <summary>Every gated item must be in the table; an item left out is available from level 0, so it must say so.</summary>
+    static void RequireEveryItem(Dictionary<(UnlockKind, string), int> itemLevels, Dictionary<(UnlockKind, string), int> table)
+    {
         foreach (var ((kind, id), own) in itemLevels)
         {
             if (table.ContainsKey((kind, id))) continue;
@@ -139,19 +168,16 @@ public sealed class LevelsFile
                 throw new DataFileException($"levels.json: {ItemLabel(kind)} \"{id}\" has unlock_level {own} but no entry in levels.json \"unlocks\"");
             table[(kind, id)] = 0;
         }
+    }
 
+    static void RequireStartingKit(Dictionary<(UnlockKind, string), int> table, WeaponsFile weapons)
+    {
         if (!table.Any(e => e.Value == 0 && e.Key.Item1 == UnlockKind.Weapon && weapons.Find(e.Key.Item2) is { Slot: WeaponSlot.Primary }))
             throw new DataFileException("levels.json: no primary weapon is unlocked at level 0 (the starting kit needs one)");
         if (!table.Any(e => e.Value == 0 && e.Key.Item1 == UnlockKind.Weapon && weapons.Find(e.Key.Item2) is { Slot: WeaponSlot.Secondary }))
             throw new DataFileException("levels.json: no secondary weapon is unlocked at level 0 (the starting kit needs one)");
         if (!table.Any(e => e.Value == 0 && e.Key.Item1 == UnlockKind.Perk))
             throw new DataFileException("levels.json: no perk is unlocked at level 0 (the starting kit needs one)");
-
-        return new LevelsFile
-        {
-            Version = raw.Version, Curve = curve, Awards = awards, Unlocks = unlocks,
-            Table = new UnlockTable(table),
-        };
     }
 
     static string ItemLabel(UnlockKind kind) => kind switch { UnlockKind.Weapon => "weapon", UnlockKind.Perk => "perk", UnlockKind.Streak => "killstreak", _ => "item" };

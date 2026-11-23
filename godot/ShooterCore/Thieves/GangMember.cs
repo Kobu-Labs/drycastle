@@ -7,6 +7,7 @@ using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Turrets;
 using Drycastle.ShooterCore.Weapons;
+using static Drycastle.ShooterCore.Movement.Planar;
 
 namespace Drycastle.ShooterCore.Thieves;
 
@@ -576,11 +577,5 @@ public sealed partial class GangMember : IWorldEntity
     {
         if (Flat(Position, to) < 0.05f) return;
         Yaw = TurretMath.StepAngle(Yaw, TurretMath.YawTo(Position, to), _d.TurnRateDegPerS * MathF.PI / 180f * dt);
-    }
-
-    static float Flat(Vector3 a, Vector3 b)
-    {
-        var dx = a.X - b.X; var dz = a.Z - b.Z;
-        return MathF.Sqrt(dx * dx + dz * dz);
     }
 }

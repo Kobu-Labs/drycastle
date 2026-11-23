@@ -70,10 +70,7 @@ public sealed class ChurchShell
     /// </summary>
     public static ChurchShell? Parse(string json, string name = "church.json")
     {
-        JsonDocument doc;
-        try { doc = JsonDocument.Parse(json); }
-        catch (JsonException e) { throw new DataFileException($"{name}: not JSON: {e.Message}", e); }
-        using (doc)
+        using (var doc = DataFile.Document(json, name))
         {
             var root = doc.RootElement;
             if (!root.TryGetProperty("doorway", out var dw) || dw.ValueKind != JsonValueKind.Object) return null;

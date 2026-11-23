@@ -1,4 +1,5 @@
 using System.Numerics;
+using static Drycastle.ShooterCore.Movement.Planar;
 
 namespace Drycastle.ShooterCore.Effects;
 
@@ -140,8 +141,6 @@ public static class DustRules
     // ---- what a point sees ----
 
     static float Smooth(float x) { x = Math.Clamp(x, 0f, 1f); return x * x * (3f - 2f * x); }
-
-    static float Flat(Vector3 a, Vector3 b) { var dx = a.X - b.X; var dz = a.Z - b.Z; return MathF.Sqrt(dx * dx + dz * dz); }
 
     /// <summary>The cloud's density at <paramref name="p"/>, 0..1: full in its middle, falling off towards its edge and top. Under the blast there is little (it sits on the ground).</summary>
     public static float CloudDensity(in DustBlast b, Vector3 p, double now)

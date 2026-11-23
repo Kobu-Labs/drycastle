@@ -455,21 +455,19 @@ public static class CarModel
         // the launch boost: more thrust near a standstill, fading to the plain acceleration at h.LaunchSpeed (either direction of travel)
         accel *= 1f + (h.LaunchBoost - 1f) * MathF.Max(0f, 1f - MathF.Abs(v) / MathF.Max(0.1f, h.LaunchSpeed));
         s.Braking = MathF.Abs(v) > 1e-3f && (handbrake || throttle > 0.05f && v < 0 || throttle < -0.05f && v > 0);
-        if (handbrake) v = Approach(v, 0, h.HandbrakeDecel * dt);
+        if (handbrake) v = FlightMath.Approach(v, 0, h.HandbrakeDecel * dt);
         else if (throttle > 0.05f)
-            v = v < 0 ? Approach(v, 0, brake * dt) : tow.Hitched && v > top ? Approach(v, top, brake * dt) : MathF.Min(top, v + accel * throttle * dt);
+            v = v < 0 ? FlightMath.Approach(v, 0, brake * dt) : tow.Hitched && v > top ? FlightMath.Approach(v, top, brake * dt) : MathF.Min(top, v + accel * throttle * dt);
         else if (throttle < -0.05f)
-            v = v > 0 ? Approach(v, 0, brake * dt) : MathF.Max(-top * h.ReverseTopFraction, v + accel * throttle * dt);
-        else v = Approach(v, 0, coast * dt);
+            v = v > 0 ? FlightMath.Approach(v, 0, brake * dt) : MathF.Max(-top * h.ReverseTopFraction, v + accel * throttle * dt);
+        else v = FlightMath.Approach(v, 0, coast * dt);
         s.Speed = v;
 
         // steering: the wheel input sets the curvature; the handbrake sharpens it for a slide
         var target = -steer * v / TurnRadiusAt(def, v) * (handbrake ? h.HandbrakeSteerBoost : 1f);
         if (tow.Hitched && MathF.Abs(v) > 0.5f) { var hold = def.MaxLateralAccel * tow.Load.LateralScale / MathF.Abs(v); target = Math.Clamp(target, -hold, hold); } // the trailer's weight: the bend must be wider
-        s.YawRate = Approach(s.YawRate, target, h.YawSlew * dt);
+        s.YawRate = FlightMath.Approach(s.YawRate, target, h.YawSlew * dt);
         if (tow.Block.Active) { var slip = 0f; tow.Block.Clamp(ref s.Speed, ref slip, ref s.YawRate); } // the trailer is at its limit: what would fold it further is taken
         s.Yaw += s.YawRate * dt;
     }
-
-    static float Approach(float v, float target, float step) => v < target ? MathF.Min(target, v + step) : MathF.Max(target, v - step);
 }

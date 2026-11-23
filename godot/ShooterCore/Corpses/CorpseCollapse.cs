@@ -46,7 +46,7 @@ public sealed class CorpseCollapse
             case CollapsePhase.Falling:
                 _rate += Accel * dt;
                 Spin += _rate * dt;
-                Amount = MoveToward(Amount, FallAmount, dt * 6f);
+                Amount = Ramp.MoveToward(Amount, FallAmount, dt * 6f);
                 if (Spin >= Lying)
                 {
                     Spin = Lying;
@@ -58,11 +58,9 @@ public sealed class CorpseCollapse
                 _rate += (-Spring * (Spin - Lying) - Damping * _rate) * dt;
                 Spin += _rate * dt;
                 if (Spin > Lying) { Spin = Lying; _rate = 0f; } // not through the ground
-                Amount = MoveToward(Amount, RestAmount, dt * 2f);
+                Amount = Ramp.MoveToward(Amount, RestAmount, dt * 2f);
                 if (_fsm.Expired) { Spin = Lying; Amount = RestAmount; _fsm.Enter(CollapsePhase.AtRest); }
                 break;
         }
     }
-
-    static float MoveToward(float v, float to, float d) => MathF.Abs(to - v) <= d ? to : v + MathF.Sign(to - v) * d;
 }
