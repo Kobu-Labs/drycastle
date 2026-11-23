@@ -29,7 +29,7 @@ public partial class NetServer
         HarvesterRoundReset(); // the car reset brought the harvester back to its old field: hidden again
         ScudRoundReset(); // the launchers start over; a Scud truck, which never returns, is retired
         _status.RoundStart();
-        PlantationRoundStart();
+        _plantation.RoundStart();
         _lockOn.RoundReset();
         RoundStarted();
     }

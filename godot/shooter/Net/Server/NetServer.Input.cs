@@ -46,7 +46,7 @@ public partial class NetServer
         var useEdge = c.UseKey.Pressed(useDown);
         _rozhlas.OnInput(c, useDown);
         _thieves.OnUse(c, useDown);
-        PlantationUse(c, useDown);
+        _plantation.Use(c, useDown);
         var lightsEdge = Headlights.Edge((i.Buttons & (ushort)MoveButtons.Headlights) != 0, ref c.LightsHeld);
         _gear.SetHeadLamp(c, HeadLamp.Next(c.HeadLampOn, lightsEdge, c.Car == null, _match.Get(c.Id)?.Life == PlayerLife.Alive)); // H on foot: the head lamp (in a vehicle: the car's lights, below)
         var streakDown = (i.Buttons & (ushort)MoveButtons.Killstreak) != 0;

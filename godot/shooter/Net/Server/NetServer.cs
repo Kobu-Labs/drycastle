@@ -7,6 +7,7 @@ using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Net.Server.Crates;
 using Drycastle.Shooter.Net.Server.Fauna;
 using Drycastle.Shooter.Net.Server.Gear;
+using Drycastle.Shooter.Net.Server.Highs;
 using Drycastle.Shooter.Net.Server.HuntLog;
 using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
@@ -36,6 +37,7 @@ using Drycastle.ShooterCore.Killstreaks.Moab;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Plantation;
 using Drycastle.ShooterCore.Progression;
 using Drycastle.ShooterCore.Scenery;
 using Drycastle.ShooterCore.Thieves;
@@ -103,6 +105,8 @@ public partial class NetServer : Node
     public KillstreakFile Killstreaks = null!;
     /// <summary>thieves.json: every number of the Thieves event (set by the host).</summary>
     public ThievesFile ThievesData = new();
+    /// <summary>plantation.json (the host sets it from the data directory; the shipped defaults otherwise).</summary>
+    public PlantationFile Plantation = PlantationFile.Default;
 
     // The features that are classes of their own (<c>Net/Server/&lt;Feature&gt;/</c>), made in _Ready once the match exists; each takes only the context.
     ServerContext _ctx = null!;
@@ -136,6 +140,7 @@ public partial class NetServer : Node
     StreakServer _streaks = null!;
     LockOnServer _lockOn = null!;
     MapAreas _areas = null!;
+    PlantationServer _plantation = null!;
     WalkerGround _walkers = null!;
     readonly ParkedHulls _parked;
 
@@ -219,7 +224,7 @@ public partial class NetServer : Node
         _hunts = new HuntLogServer(_ctx, Progression, AnimalData, Weapons, Items, CompanionData, Scores, WeaponKey,
             c => { _profiles.Send(c); _companions.FromProfile(c); if (c.Joined) _companions.SendRoster(c); });
         _sentries = new SentryWorld(_ctx, _targets, Deal, () => Query);
-        _status = new StatusServer(_ctx, Deal, Weapons, GetHigh);
+        _status = new StatusServer(_ctx, Deal, Weapons, c => _plantation.GetHigh(c));
         _pounce = new PounceServer(_ctx, () => Demon, _status);
         _demon = new DemonServer(_ctx, () => Demon, () => _mass, _church, _citizens, _sitters, _status, _pounce, _targets, Deal, () => Query, (at, radius) => BlastGlass(at, radius), () => _areas.Shelters, Weapons, MapDir, World, _events);
     }
@@ -255,6 +260,8 @@ public partial class NetServer : Node
         _flak = new FlakServer(_ctx, Weapons, _gunships, _targets, _fleet, () => Vehicles, _rng);
         _crates = new CrateServer(_ctx, Killstreaks.Rewards, () => Query, () => _streaks.Rules);
         _streaks = BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
+        var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _mass, _rozhlas, _thieves, at => EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => ScudReloadOffer(c) != null);
+        _plantation = new PlantationServer(_ctx, Plantation, _areas, keys, _sitters, _pounce, _streaks);
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), SeatPos, WorldHit, _rocketIds, _smoke, DamageVehicle, () => Vehicles, _simClients);
     }
 
@@ -449,7 +456,7 @@ public partial class NetServer : Node
     void ResolveBlastsAndFlush(float dt)
     {
         _status.Tick(dt); // burns tick
-        PlantationTick(dt); // highs run out
+        _plantation.Tick(dt); // highs run out
         _gunships.TickShells();  // shells whose tracer has arrived burst now (#162)
         _flak.Tick();    // flak shells that have arrived burst now
         _lockOn.StepVehicleHoming(dt); // missiles homing on flown helicopters fly and hit now
