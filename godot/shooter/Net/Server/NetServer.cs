@@ -54,6 +54,7 @@ public partial class NetServer : Node
     MineralsServer _minerals = null!;
     RozhlasServer _rozhlas = null!;
     GarageServer _garage = null!;
+    IntelServer _intel = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -89,6 +90,7 @@ public partial class NetServer : Node
         _ctx = new ServerContext(_match, _byId, _clients.Values, () => _elapsed, () => _tick, BroadcastEvent, Send, (c, chan, packet) => { if (c.Peer is { } peer) Tx(peer, chan, packet, 0); });
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
         _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, CitizenHits, TableSeating());
+        _intel = new IntelServer(_ctx);
         _garage = new GarageServer(_ctx, ArenaMode, MapDir, _cars, () => Vehicles);
         _minerals = new MineralsServer(_ctx, Progression, () => _wildlife?.Drops ?? Array.Empty<MineralDrop>());
         StatusInit();
@@ -188,7 +190,7 @@ public partial class NetServer : Node
         HuntTick();
         _minerals.Tick(Spawns.Count > 0);
         DropSilentPeers();
-        IntelTick(); // a made-up event whose time is up leaves the intel screen
+        _intel.Tick(); // a made-up event whose time is up leaves the intel screen
         PerfLap(ServerPerf.Ph.Housekeeping);
     }
 
@@ -427,7 +429,7 @@ public partial class NetServer : Node
         SendGlassOnJoin(c); // the glass panes that are not whole (ADR 0007)
         _scenery.SendOnJoin(c); // the pole lamps and sign plates that are not whole (ADR 0037, 0039)
         SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
-        SendIntelOnJoin(c); // the events on the intel screen
+        _intel.SendOnJoin(c); // the events on the intel screen
         SendMassOnJoin(c); // the Holy Mass, when one runs
         SendThievesOnJoin(c); // the Thieves event, when one runs
         _minerals.SendOnJoin(c); // the mineral nodes

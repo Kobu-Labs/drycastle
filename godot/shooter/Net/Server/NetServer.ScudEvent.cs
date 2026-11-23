@@ -187,7 +187,7 @@ public partial class NetServer
         _scudTruck = truck;
         _scudRun.Begin(area, (float)(Scud.Event.DespawnMinutes * 60.0));
         _events.Start(EventBook.Scud, _elapsed);
-        AnnounceIntel(ScudEventRun.Intel(_elapsed, area));
+        _intel.Announce(ScudEventRun.Intel(_elapsed, area));
         ChatToAll(ChatLineKind.System, "", $"{admin.Name} started the Scud event. A top secret weapon has been located: read the intel board at the base.");
 
         _scudSlots.Clear();
@@ -251,7 +251,7 @@ public partial class NetServer
     void OnScudFound(ushort finder, string name)
     {
         _events.End(EventBook.Scud, EventPhase.Won, _elapsed);
-        WithdrawIntel(ScudEventRun.IntelId);
+        _intel.Withdraw(ScudEventRun.IntelId);
         var xp = (int)Scud.Event.XpReward;
         if (finder != 0 && _byId.ContainsKey(finder) && Scores(finder) && xp > 0) AwardXp(new List<XpGrant> { new(finder, xp, XpReason.EventWin) });
         ChatToAll(ChatLineKind.System, "", $"Event won: {name} found the Scud truck! It stays out until it is destroyed, and so do the rocket carts at the bunkers.");
@@ -263,7 +263,7 @@ public partial class NetServer
     void FinishScud(string why, bool retireTruck)
     {
         _events.End(EventBook.Scud, EventPhase.Despawned, _elapsed);
-        WithdrawIntel(ScudEventRun.IntelId);
+        _intel.Withdraw(ScudEventRun.IntelId);
         foreach (var b in _scudSlots) b.Slot.Close();
         RemoveRocketCarts();
         if (retireTruck && _scudTruck is { Destroyed: false } t)
@@ -292,7 +292,7 @@ public partial class NetServer
         if (!_scudRun.TruckOut) return;
         var searching = _scudRun.Searching;
         _scudRun.Despawn();
-        if (searching) { _events.End(EventBook.Scud, EventPhase.Despawned, _elapsed); WithdrawIntel(ScudEventRun.IntelId); }
+        if (searching) { _events.End(EventBook.Scud, EventPhase.Despawned, _elapsed); _intel.Withdraw(ScudEventRun.IntelId); }
         foreach (var b in _scudSlots) b.Slot.Close();
         _scudSlots.Clear();
         _scudTruck = null;

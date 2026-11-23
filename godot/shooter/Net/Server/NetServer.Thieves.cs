@@ -41,7 +41,7 @@ public partial class NetServer
         _events.Start(EventBook.Thieves, _elapsed);
         _thievesAdmin = admin.Id;
         _thieves!.Begin(ThievesData.Raids, _rng); // the first van of the convoy is due on the next tick
-        AnnounceIntel(ThievesEvent.Intel(_elapsed));
+        _intel.Announce(ThievesEvent.Intel(_elapsed));
         ChatToAll(ChatLineKind.System, "", $"{admin.Name} started the Thieves event. Thieves are coming to the village.");
         GD.Print($"server: Thieves event started by {admin.Name} #{admin.Id}");
     }
@@ -86,7 +86,7 @@ public partial class NetServer
         _thieves!.Finish();
         if (by != null || !won) ClearGangs(); // an admin's end or cancel removes every van and crew; a win by itself leaves what is still fleeing to run off
         if (!won) ResetLoot(); // a cancelled event never happened: everything taken goes back (a win keeps what was stolen, and lying Loot stays returnable)
-        WithdrawIntel(ThievesEvent.IntelId);
+        _intel.Withdraw(ThievesEvent.IntelId);
         _events.End(EventBook.Thieves, won ? EventPhase.Won : EventPhase.Despawned, _elapsed);
         ChatToAll(ChatLineKind.System, "", won
             ? (by == null ? "Event won: the Thieves are gone from the village." : $"{by} ended the Thieves event as a win.")
@@ -111,7 +111,7 @@ public partial class NetServer
         ResetLoot();
         ResetThievesReward();
         if (!wasRunning) return;
-        WithdrawIntel(ThievesEvent.IntelId);
+        _intel.Withdraw(ThievesEvent.IntelId);
         _events.End(EventBook.Thieves, EventPhase.Despawned, _elapsed);
         ChatToAll(ChatLineKind.System, "", "The Thieves event is over.");
     }
