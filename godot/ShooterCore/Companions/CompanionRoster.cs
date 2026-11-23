@@ -21,7 +21,7 @@ public sealed record CompanionRoster(IReadOnlyList<int> Owned, int Out)
 
     /// <summary>
     /// The roster of one player: every Companion with an unlock row of kind <see cref="CompanionRules.UnlockKind"/>, the one given for the session (<c>/companion</c>),
-    /// the one that is out, or all of them in dev mode (<paramref name="all"/>).
+    /// the one that is out, or in dev mode (<paramref name="all"/>) every one that is no collection tier reward.
     /// </summary>
     public static CompanionRoster Of(CompanionsFile cfg, IEnumerable<Unlock> unlocks, bool all, string? given, string? @out)
     {
@@ -31,7 +31,7 @@ public sealed record CompanionRoster(IReadOnlyList<int> Owned, int Out)
         if (!string.IsNullOrEmpty(@out)) ids.Add(@out);
         var owned = new List<int>();
         for (var i = 0; i < cfg.Companions.Count && owned.Count < Max; i++)
-            if (all || ids.Contains(cfg.Companions[i].Id)) owned.Add(i);
+            if (ids.Contains(cfg.Companions[i].Id) || (all && cfg.Companions[i].RewardTierOf == HuntTier.Common)) owned.Add(i);
         var index = string.IsNullOrEmpty(@out) ? -1 : cfg.IndexOf(@out);
         return new CompanionRoster(owned, owned.Contains(index) ? index : -1);
     }

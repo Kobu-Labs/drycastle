@@ -56,6 +56,7 @@ public class DevUnlocksTests
         Assert.Equal(all.Count, all.Distinct().Count());
         Assert.Contains(new Unlock("weapon", "rpg"), all); // a secondary since #348
         Assert.DoesNotContain(new Unlock("weapon", "knife"), all);
+        Assert.DoesNotContain(new Unlock("weapon", "hunting_rifle"), all); // a Hunter's Log reward stays earned (#473)
         Assert.True(DevUnlocks.IsMarked(all));
         Assert.False(DevUnlocks.IsMarked(owned));
     }

@@ -24,14 +24,14 @@ public static class DevUnlocks
     public static bool IsMarked(IEnumerable<Unlock> unlocks) => unlocks.Any(u => u.Kind == MarkerKind && u.ItemId == MarkerId);
 
     /// <summary>
-    /// The unlock rows a dev-mode profile reports: the owned rows, then every non-special weapon, every perk, every killstreak
+    /// The unlock rows a dev-mode profile reports: the owned rows, then every non-special, non-reward weapon (Hunter's Log reward weapons stay earned, #473), every perk, every killstreak
     /// and the marker, without duplicates. <paramref name="owned"/> is not changed.
     /// </summary>
     public static IReadOnlyList<Unlock> Expand(IEnumerable<Unlock> owned, WeaponsFile weapons, PerksFile perks,
         IReadOnlyDictionary<string, int> streakLevels)
     {
         var all = owned.ToList();
-        all.AddRange(weapons.Weapons.Where(w => w.Slot != WeaponSlot.Special).Select(w => new Unlock("weapon", w.Id)));
+        all.AddRange(weapons.Weapons.Where(w => w.Slot != WeaponSlot.Special && !w.IsReward).Select(w => new Unlock("weapon", w.Id)));
         all.AddRange(perks.Perks.Select(p => new Unlock("perk", p.Id)));
         all.AddRange(streakLevels.Keys.Select(id => new Unlock("streak", id)));
         all.Add(Marker);
