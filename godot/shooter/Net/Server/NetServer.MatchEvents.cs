@@ -17,8 +17,8 @@ public partial class NetServer
     /// </summary>
     void ResetRoundWorld()
     {
-        _mass?.End(); // the Holy Mass does not outlive the round
-        _crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
+        _mass.RoundEnd(); // the Holy Mass does not outlive the round
+        _citizens.Crowd?.Clear(); // the match cleared the entities; those still waiting to leave go too
         _pets.RoundStart();
         _companions.RoundStart();
         _wildlife.Clear();

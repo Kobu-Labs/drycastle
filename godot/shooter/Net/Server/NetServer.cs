@@ -10,6 +10,7 @@ using Drycastle.Shooter.Net.Server.Gear;
 using Drycastle.Shooter.Net.Server.HuntLog;
 using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
+using Drycastle.Shooter.Net.Server.Parish;
 using Drycastle.Shooter.Net.Server.Profiles;
 using Drycastle.Shooter.Net.Server.Scenery;
 using Drycastle.Shooter.Net.Server.Seating;
@@ -25,6 +26,7 @@ using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Demon;
 using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Items;
 using Drycastle.ShooterCore.Killstreaks;
@@ -92,6 +94,10 @@ public partial class NetServer : Node
     /// <summary>environment.json "lamp" and "sign_plate"; the defaults when the host sets none.</summary>
     public LampLook LampData = new();
     public SignPlateLook SignPlateData = new();
+    /// <summary>holy_mass.json (set by the host): the citizens, the Mass.</summary>
+    public HolyMassFile HolyMass = new();
+    /// <summary>holy_mass_demon.json (set by the host). Without it (zero hits) the demon does not appear.</summary>
+    public DemonFile Demon = new();
     /// <summary>killstreaks.json: the streak table. Set by the host before the server starts.</summary>
     public KillstreakFile Killstreaks = null!;
     /// <summary>thieves.json: every number of the Thieves event (set by the host).</summary>
@@ -119,6 +125,11 @@ public partial class NetServer : Node
     PetServer _pets = null!;
     WildlifeServer _wildlife = null!;
     ThievesServer _thieves = null!;
+    ChurchServer _church = null!;
+    CitizenServer _citizens = null!;
+    PounceServer _pounce = null!;
+    DemonServer _demon = null!;
+    MassServer _mass = null!;
     GunshipServer _gunships = null!;
     FlakServer _flak = null!;
     StreakServer _streaks = null!;
@@ -164,7 +175,9 @@ public partial class NetServer : Node
         _animals = new AnimalWorld(_ctx, _fleet, Map, Water, () => Query, () => MapFlightBounds);
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
         _sitters = new Sitters(_ctx, OnStood);
-        _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, CitizenHits, new TableSeating(_sitters.IsSeated, _sitters.StandUpAtTableExcept, _sitters.SitAtTable));
+        _church = new ChurchServer(_ctx, ArenaMode, MapDir);
+        _citizens = new CitizenServer(_ctx, HolyMass, ArenaMode, MapDir, Map, () => _nav, () => WalkerWorld, EnsureNavMesh);
+        _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, _citizens.Hits, new TableSeating(_sitters.IsSeated, _sitters.StandUpAtTableExcept, _sitters.SitAtTable));
         _intel = new IntelServer(_ctx);
         _chat = new ChatServer(_ctx, admin => new ChatContext(admin, Vehicles?.Vehicles.Select(v => v.Id).ToList() ?? new List<string>(), Items.Items.Select(i => i.Id).ToList(), CompanionData.Companions.Select(i => i.Id).ToList()), AdminTokens, AdminAll);
         _profiles = new ProfileServer(_ctx, Progression, UnlockAll, Weapons, Perks, CamoData, Killstreaks, Join, OnProfileAttached, AllowSave);
@@ -175,7 +188,8 @@ public partial class NetServer : Node
             c => { _profiles.Send(c); _companions.FromProfile(c); if (c.Joined) _companions.SendRoster(c); });
         _sentries = new SentryWorld(_ctx, _targets, Deal, () => Query);
         _status = new StatusServer(_ctx, Deal, Weapons, GetHigh);
-        DemonInit();
+        _pounce = new PounceServer(_ctx, () => Demon, _status);
+        _demon = new DemonServer(_ctx, () => Demon, () => _mass, _church, _citizens, _sitters, _status, _pounce, _targets, Deal, () => Query, (at, radius) => BlastGlass(at, radius), () => MapShelters, Weapons, MapDir, World, _events);
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");
         _match.Entities.Spawned += w => BroadcastEvent(EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State));
         _match.Entities.Despawned += w => BroadcastEvent(EventKind.WorldDespawn, WorldCodec.EncodeDespawn(w.Id, w.Reason));
@@ -190,6 +204,7 @@ public partial class NetServer : Node
         _wildlife = new WildlifeServer(_ctx, WildlifeData, AnimalData, AnimalShapes, _animals, () => MapZonePoints, () => Clock.HourAt(_tick / (double)Wire.TickRate), () => Query,
             ArenaMode, MapDir, Map, (a, by) => _hunts.OnWildKilled(a, by), _minerals.OnDropped);
         _companions = new CompanionServer(_ctx, CompanionData, AnimalData, _animals.Companions, Progression, UnlockAll);
+        _mass = new MassServer(_ctx, HolyMass, _citizens, _church, _demon, _sitters, _status, _events, EnsureNavMesh);
         _thieves = BuildThieves();
         InitHarvester();
         InitScud();
@@ -198,7 +213,7 @@ public partial class NetServer : Node
         _flak = new FlakServer(_ctx, Weapons, _gunships, _targets, _fleet, () => Vehicles, _rng);
         _crates = new CrateServer(_ctx, Killstreaks.Rewards, () => Query, () => _streaks.Rules);
         _streaks = BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
-        _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pins.ContainsKey(id), SeatPos, WorldHit, _rocketIds, _smoke, DamageVehicle, () => Vehicles, _simClients);
+        _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), SeatPos, WorldHit, _rocketIds, _smoke, DamageVehicle, () => Vehicles, _simClients);
         _impacts.Warm(); // roads.json and the tree grid, so no impact pays for them on a tick (T3-003, T3-004)
         if (Vehicles == null) Vehicles = new VehiclesFile { Vehicles = { new VehicleDef { Id = "car", TopSpeed = 44.4f, Acceleration = 3.5f, Brake = 9.5f, TurnRadius = 5.5f, MaxLateralAccel = 8, Mass = 1200 } } };
         _flak.CheckWeapons(Vehicles);
@@ -227,10 +242,29 @@ public partial class NetServer : Node
         var phase = new ThievesEvent();
         var gangs = new GangServer(_ctx, ThievesData, Weapons, Items, _corpses, Deal, () => _nav, NextNavTicket, () => WalkerWorld, Scores, AwardXp);
         var raids = new RaidServer(_ctx, ThievesData, phase, gangs, Map, World, _fleet, () => Vehicles, () => _nav, () => MapFlightBounds,
-            () => MapChurch is { } church ? new System.Numerics.Vector2(church.DoorwayPos.X, church.DoorwayPos.Z) : null, _rng, (sweep, spare) => RunOverTargets(sweep, spare), Crash);
+            () => _church.Shell is { } church ? new System.Numerics.Vector2(church.DoorwayPos.X, church.DoorwayPos.Z) : null, _rng, (sweep, spare) => RunOverTargets(sweep, spare), Crash);
         var loot = new LootServer(_ctx, ThievesData, raids.Roster, gangs.Roster, _fleet, _pets.Keeper, Map, () => _nav, ArenaMode, MapDir);
         var payout = new ThievesPayout(_ctx, ThievesData, Levels.Awards.EventWin, Items, Weapons, _corpses, _gear.BroadcastCorpseItems, _rng, Scores, AwardXp, gangs.Roster, raids.Roster);
         return new ThievesServer(_ctx, ThievesData, _events, _intel, _rng, () => _nav, gangs, raids, loot, payout, phase);
+    }
+
+    /// <summary>A sitter stood up: the dictation table lets go of the set, the Mass forgets the seat.</summary>
+    void OnStood(ushort id, bool atTable)
+    {
+        if (atTable) _rozhlas.TableStood(id); // standing up from the dictation table lets go of the set
+        _mass?.Stood(id);
+    }
+
+    /// <summary>The navigation mesh, built when first needed (the server pauses for a few seconds); false when it is not there (no map, or the build failed).</summary>
+    bool EnsureNavMesh(ServerClient c)
+    {
+        if (_nav == null && !_navTried)
+        {
+            ChatTo(c, ChatLineKind.Info, "Building the navigation for the first time. The server pauses for a few seconds.");
+            _host.Flush();
+            BuildBotNav(force: true);
+        }
+        return _nav != null;
     }
 
     public override void _ExitTree() { _rozhlas?.Dispose(); _perf?.Flush(); _host.Destroy(); _nav?.Free(); }
@@ -322,7 +356,7 @@ public partial class NetServer : Node
         _match.Entities.Tick(dt);
         _audit?.Lap(2);
         pt = Prof.Lap(Prof.S.Entities, pt);
-        CitizensTick(dt);
+        _citizens.Tick(dt);
         _audit?.Lap(3);
         pt = Prof.Lap(Prof.S.Citizens, pt);
         _pets.Tick(dt);
@@ -333,7 +367,7 @@ public partial class NetServer : Node
         _animals.Done(); // the animals have ticked: the players move from here on
         _audit?.Lap(5);
         pt = Prof.Lap(Prof.S.Wildlife, pt);
-        MassTick(dt); // the Holy Mass: its clock, the pastor, the seats
+        _mass.Tick(dt); // the Holy Mass: its clock, the pastor, the seats
         _audit?.Lap(6);
         _thieves.Tick(dt); // the Thieves event: its phase clock
         _audit?.Lap(7);
@@ -555,16 +589,16 @@ public partial class NetServer : Node
         _gear.SendCorpseItemsOnJoin(c); // the items the corpses carry, after the corpses themselves
         SendGlassOnJoin(c); // the glass panes that are not whole (ADR 0007)
         _scenery.SendOnJoin(c); // the pole lamps and sign plates that are not whole (ADR 0037, 0039)
-        SendChurchOnJoin(c); // the church doors, when open (ADR 0019)
+        _church.SendOnJoin(c); // the church doors, when open (ADR 0019)
         _intel.SendOnJoin(c); // the events on the intel screen
-        SendMassOnJoin(c); // the Holy Mass, when one runs
+        _mass.SendOnJoin(c); // the Holy Mass, when one runs
         _thieves.SendOnJoin(c); // the Thieves event, when one runs
         _minerals.SendOnJoin(c); // the mineral nodes
         _rozhlas.SendOnJoin(c); // the village loudspeaker, when a detour broadcast is on, who is on the mic, and the Urad door when it is open
         _garage.SendOnJoin(c); // and the garage doors, when they are open
         SendHarvesterOnJoin(c); // the harvester's job and the bales that burn
         SendScudOnJoin(c); // the Scud trucks' racks and proposals
-        SendPounceOnJoin(c); // and the demon's pounce, when one is on
+        _demon.SendOnJoin(c); // and the demon's pounce, when one is on
         SendTargetRoster(c); // target dummies' names (#148)
         _profiles.SendAppearancesOnJoin(c); // camouflage (#140): every player's look reaches the joiner, the joiner's reaches everyone
         _gear.SendWornOnJoin(c); // what the others wear (#266), to draw on their characters

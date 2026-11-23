@@ -36,8 +36,8 @@ public partial class NetServer
         _chat.Register("explode", ChatExplode);
         _chat.Register("restart", ChatRestart);
         _chat.Register("event", ChatEvent);
-        _chat.Register("citizens", ChatCitizens);
-        _chat.Register("church", ChatChurch);
+        _chat.Register("citizens", _citizens.Chat);
+        _chat.Register("church", _church.Chat);
         _chat.Register("rozhlas", _rozhlas.ChatCommand);
         _chat.Register("status", _status.ChatCommand);
         _chat.Register("scud", ChatScud);
@@ -209,7 +209,7 @@ public partial class NetServer
                 _rozhlas.ChatEvent(c);
                 break;
             case "intel": _intel.Chat(c, action == "clear"); break;
-            case "demon": ChatDemon(c); break;
+            case "demon": _demon.Chat(c); break;
             default: _eventHandlers.Start(args[0], c); break; // bigfoot, mass, thieves: the kinds of the handler table
         }
     }

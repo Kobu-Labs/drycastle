@@ -52,19 +52,19 @@ public partial class NetServer
         var streakDown = (i.Buttons & (ushort)MoveButtons.Killstreak) != 0;
         var streakEdge = c.StreakKey.Pressed(streakDown);
         // the throw key is fed every input; it is the grenade's only on foot and free-handed (a held key, a vehicle, death or a pin put the grenade away)
-        var canThrow = c.Car == null && !controlled && _match.Get(c.Id)?.Life == PlayerLife.Alive && _tick > c.HeldUntilTick && !_sitters.IsSeated(c.Id) && !_pins.ContainsKey(c.Id)
+        var canThrow = c.Car == null && !controlled && _match.Get(c.Id)?.Life == PlayerLife.Alive && _tick > c.HeldUntilTick && !_sitters.IsSeated(c.Id) && !_pounce.IsPinned(c.Id)
             && !c.Body.State.OnLadder && _elapsed >= c.LaunchGraceUntil;
         var throwStep = c.Throw.Tick((i.Buttons & (ushort)MoveButtons.Throw) != 0, (i.Buttons & (ushort)MoveButtons.Aim) != 0, canThrow);
         if (_match.Get(c.Id)?.Life != PlayerLife.Alive) return; // dead or waiting: inputs are acked but ignored
         if (c.Car == null && _tick <= c.HeldUntilTick) return; // in the Bigfoot's hand: the input is acked, the body is where the Bigfoot puts it (issue #264)
         if (c.Car == null && _sitters.Input(c, i, useEdge)) return; // seated in the church: no walking, no weapon
-        if (c.Car == null && _pins.TryGetValue(c.Id, out var pinYaw)) { c.Body.Yaw = pinYaw; c.Body.Pitch = 0; return; } // pinned by the demon: held on the floor, no walking, no weapon, no use
+        if (c.Car == null && _pounce.TryYaw(c.Id, out var pinYaw)) { c.Body.Yaw = pinYaw; c.Body.Pitch = 0; return; } // pinned by the demon: held on the floor, no walking, no weapon, no use
         if (streakEdge && !controlled && !SandboxStreakKey(c)) _streaks.Activate(c);
         if (c.Car == null && _streaks.Rules.ControlOf(c.Id) is { FreezesBody: true }) return; // controlling a streak entity that holds the body (the missile, a gunship): the body stands still
         if (c.Car is { Thrown: not null }) return; // the Bigfoot threw it: nobody steers, fires or gets out until it lands (issue #264)
         if (c.Car != null) { RideInput(c, i, dt, controlled, useDown, useEdge, lightsEdge); return; }
         var useAct = ScudUseKey(c, useDown, useEdge, dt); // beside a truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket)
-        if (useAct && _thieves.LootInReach(c) == null && (MassSit(c) || _garage.Use(c) || TryEnterCar(c))) return; // the use key on lying Loot sends it back, it does not take a seat
+        if (useAct && _thieves.LootInReach(c) == null && (_mass.Sit(c) || _garage.Use(c) || TryEnterCar(c))) return; // the use key on lying Loot sends it back, it does not take a seat
         WalkAndFire(c, i, dt, throwStep);
     }
 

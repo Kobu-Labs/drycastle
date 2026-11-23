@@ -122,7 +122,7 @@ public sealed class DemonEntity : IWorldEntity
     public WorldDespawnReason? Ended { get; set; }
 
     public void Tick(float dt) { }
-    public void OnDamage(float amount, ushort attacker) { } // hits go to the brain (NetServer.Demon), not through the entity manager
+    public void OnDamage(float amount, ushort attacker) { } // hits go to the brain (Net/Server/Parish/DemonServer.cs), not through the entity manager
 
     public WorldState Serialize()
     {

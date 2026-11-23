@@ -27,18 +27,18 @@ public partial class NetServer
         _targets.AddSource(AddPlayerTargets);
         _targets.AddSource(AddDummyTargets);
         _targets.AddSource(list => { if (BigfootTarget() is { } bigfoot) list.Add(bigfoot); }); // the Bigfoot is a hit target like a player (issue #264)
-        _targets.AddSource(list => _crowd?.AddTargets(list)); // the citizens of the Holy Mass
+        _targets.AddSource(list => _citizens.Crowd?.AddTargets(list)); // the citizens of the Holy Mass
         _targets.AddSource(list => _thieves.AddTargets(list)); // the Gang members of the Thieves event and their Raid vans
         _targets.AddSource(AddAnimalTargets);
         _targets.AddSource(list => _rozhlas.AddTargets(list)); // the workers of the Urad
-        _targets.AddSource(AddDemonTarget);
+        _targets.AddSource(list => _demon.AddTarget(list));
     }
 
     void AddPlayerTargets(List<HitTarget> list)
     {
         var partT = Prof.Begin(Prof.S.TargetsPlayers);
         foreach (var o in _byId.Values)
-            if (_match.Get(o.Id)?.Life == PlayerLife.Alive && !_pins.ContainsKey(o.Id)) list.Add(HitTargetOf(o)); // a pinned player is under the demon and untouchable: not a target, so no shot stops on them
+            if (_match.Get(o.Id)?.Life == PlayerLife.Alive && !_pounce.IsPinned(o.Id)) list.Add(HitTargetOf(o)); // a pinned player is under the demon and untouchable: not a target, so no shot stops on them
         Prof.End(Prof.S.TargetsPlayers, partT);
     }
 

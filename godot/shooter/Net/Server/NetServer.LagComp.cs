@@ -38,7 +38,7 @@ public partial class NetServer
         foreach (var o in _byId.Values)
         {
             SyncLife(o);
-            var valid = o.Car == null && _match.Get(o.Id)?.Life == PlayerLife.Alive && !_pins.ContainsKey(o.Id);
+            var valid = o.Car == null && _match.Get(o.Id)?.Life == PlayerLife.Alive && !_pounce.IsPinned(o.Id);
             o.Poses.Record(_tick, valid, new HitTarget(o.Id, N(o.Body.GlobalPosition), _sitters.StanceOf(o), o.Body.Yaw));
         }
         CaptureBigfootPose();
@@ -156,12 +156,12 @@ public partial class NetServer
             if (d.Alive) list.Add(new HitTarget(d.Id, d.Spot.Feet, d.Spot.Pose, d.Spot.Yaw));
         }
         if (BigfootTarget() is { } bigfoot) list.Add(BigfootRewound(bigfoot, view)); // the Bigfoot is rewound like a player (issue #264)
-        _crowd?.AddTargets(list); // citizens walk slowly: not rewound
+        _citizens.Crowd?.AddTargets(list); // citizens walk slowly: not rewound
         _thieves.AddTargets(list, view); // Gang members run and the Raid vans drive: rewound like the Bigfoot (a pose ring each)
         _pets.AddTargets(list); // so do pets
         _wildlife.AddTargets(list, BackTicksOf(c) / (float)Wire.TickRate); // and wild animals, where they stand now but in the pose the shooter saw (a grazing head goes down and up)
         _rozhlas.AddTargets(list); // the Urad workers sit still
-        AddDemonTarget(list); // so does the demon on its wall
+        _demon.AddTarget(list); // so does the demon on its wall
         return list;
     }
 

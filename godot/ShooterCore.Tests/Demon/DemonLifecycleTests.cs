@@ -103,7 +103,7 @@ public class DemonLifecycleTests
     [Fact]
     public void A_failed_spawn_clears_from_Delay_and_the_stage_is_known_to_the_caller()
     {
-        // NetServer.DemonTransform: the entity cap is reached while Delay -> Clear. The caller must still open the doors (ChurchDoorPolicyTests).
+        // DemonServer.Transform: the entity cap is reached while Delay -> Clear. The caller must still open the doors (ChurchDoorPolicyTests).
         var l = new DemonLifecycle(Fight);
         l.Begin();
         Assert.True(l.Tick(1f));

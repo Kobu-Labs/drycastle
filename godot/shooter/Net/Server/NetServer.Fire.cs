@@ -208,7 +208,7 @@ public partial class NetServer
         _animals.PlayerHurt(); // a life may end here: the animals' list of players is asked anew
         if (victim == BigfootRules.TargetId) return DealBigfoot(attackerId, weaponIdx); // a hit count, not hit points (issue #264)
         if (_streaks.Rules.ControlOf(victim) is { ShieldsBody: true }) return DamageResult.Ignored; // a pilot at the gun is not a sitting target (attack helicopter)
-        if (DemonRules.IsHitId(victim)) return DemonHit(attackerId, weaponIdx, damage); // the demon: a hit count, no hit points
+        if (DemonRules.IsHitId(victim)) return _demon.Hit(attackerId, weaponIdx, damage); // the demon: a hit count, no hit points
         if (WildlifeRules.IsHitId(victim)) _hunts.Pending = new WildHit(weaponIdx, cause, shotDistance, shot); // read by the keeper's Killed event, inside this call
         var r = _match.ApplyDamage(victim, attackerId, weaponIdx, damage, cause: head ? KillCause.Headshot : cause);
         _hunts.Pending = null;
