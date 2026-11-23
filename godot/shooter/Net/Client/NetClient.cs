@@ -140,6 +140,9 @@ public partial class NetClient : Node
     TurretsClient _turrets = null!;
     ScudClient _scud = null!;
     AnimalsClient _animals = null!;
+    FlocksClient _flocks = null!;
+    /// <summary>wildlife.json: set by the host (the flock kinds; the kind index of a state is a position in <c>Flocks</c>).</summary>
+    public WildlifeFile WildlifeData = new();
     /// <summary>The Companions the player can pick and the one that is out (the Equipment screen's picker).</summary>
     public CompanionsClient Companions { get; private set; } = null!;
     /// <summary>companions.json: set by the host (the index of a Companion in it is what the wire carries).</summary>
@@ -254,13 +257,13 @@ public partial class NetClient : Node
         _turrets = new TurretsClient(Ctx);
         _animals = new AnimalsClient(Ctx, AnimalData, AnimalShapes, WildlifeData, _driveClient);
         Companions = new CompanionsClient(Ctx, CompanionData, AnimalData);
-        InitFlocks();
         InitBigfoot();
         _thieves = new ThievesClient(Ctx, ThievesData, ItemData);
         _pounce = new PounceClient(Ctx, _prediction, DemonData, () => _demon.FirstView());
         _demon = new DemonClient(Ctx, DemonData, HolyMassData, _mass, _blastDust, _pounce);
         _aircraftClient = new AircraftClient(Ctx, _streaks, _blastDust, _markers, HomingKillShown);
         EventReceived += _aircraftClient.OnEvent;
+        _flocks = new FlocksClient(Ctx, WildlifeData, _aircraftClient);
         InitLockOn();
         EventReceived += _guns.OnEvent;
         EventReceived += _seats.OnEvent;
@@ -416,7 +419,7 @@ public partial class NetClient : Node
         _animals.Render();
         Companions.Render();
         Companions.TickMarks();
-        RenderFlocks(delta);
+        _flocks.Render(delta);
         RenderBigfoot();
         _citizens.Render();
         _thieves.Render(delta);
