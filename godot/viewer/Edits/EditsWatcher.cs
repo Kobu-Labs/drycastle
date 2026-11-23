@@ -42,9 +42,6 @@ public partial class EditsWatcher : Node
     /// <summary>Selected parcel ids for editor-state.json (the editor mode); null writes an empty selection.</summary>
     public Func<IReadOnlyCollection<string>>? SelectionProvider { get; init; }
 
-    /// <summary>Write editor-state.json on the next frame instead of waiting for the once-a-second tick.</summary>
-    public void StateSoon() => _stateT = StateSeconds;
-
     /// <summary>Raised on the main thread when a parcel-run starts: the parcel ids.</summary>
     public event Action<IReadOnlyList<string>>? Launched;
     /// <summary>Raised on the main thread after a swap: parcel ids, edit-to-applied milliseconds.</summary>
@@ -72,7 +69,6 @@ public partial class EditsWatcher : Node
     public int FailedCount { get; private set; }
     public int ParseFailedCount { get; private set; }
     public bool Busy => _run != null;
-    public double LastLatencyMs { get; private set; }
 
     sealed record Snapshot(
         string Text, Dictionary<string, string> Parcels, Dictionary<string, string> Groups,
@@ -282,11 +278,7 @@ public partial class EditsWatcher : Node
     {
         if (snap.CablesText == _applied.CablesText) return;
         Map.SetCables(snap.Cables);
-        CablesAppliedCount++;
     }
-
-    /// <summary>Number of times the cable list changed and was drawn again.</summary>
-    public int CablesAppliedCount { get; private set; }
 
     static (double, double, double, double)? PatchBox(JsonElement entry)
     {
@@ -627,7 +619,6 @@ public partial class EditsWatcher : Node
             ApplyCables(run.Snap);
             _applied = run.Snap;
             var ms = Time.GetTicksMsec() - (ulong)run.DetectedMs;
-            LastLatencyMs = ms;
             AppliedCount++;
             GD.Print($"edits applied: {string.Join(", ", result.Replaced)} in {ms} ms " +
                      $"(objects={result.Objects} props_nodes={result.PropsNodes}, parcel-run {Time.GetTicksMsec() - (ulong)run.StartedMs} ms)");

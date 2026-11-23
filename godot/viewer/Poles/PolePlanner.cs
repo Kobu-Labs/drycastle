@@ -86,7 +86,46 @@ public static class PolePlanner
         return $"prim:pole_{kind}_{h % (uint)count + 1}";
     }
 
+    /// <summary>Where each pole stands against the roads: its road, the place along it, and the streams that follow.</summary>
+    sealed record Snapped(Graph G, IReadOnlyList<(double x, double y)> P, int[] Road, double[] S, (double x, double y)[] Foot, (double x, double y)[] Dir,
+        bool[] OnRoad, Dictionary<(int road, int side), List<int>> Streams, Dictionary<int, List<List<int>>> ByRoad);
+
+    /// <summary>The kept links (pairs of pole indexes, smaller first), which of them cross a road, and the length of each.</summary>
+    sealed class Wires
+    {
+        public readonly List<(int a, int b)> Links = new(), Crossings = new();
+        public readonly Dictionary<(int, int), double> Length = new();
+        public readonly HashSet<(int, int)> Have = new();
+
+        public void Link((int a, int b) key, double len, bool crossing)
+        {
+            Have.Add(key);
+            Links.Add(key);
+            if (crossing) Crossings.Add(key);
+            Length[key] = len;
+        }
+    }
+
+    static (int, int) Key(int a, int b) => a < b ? (a, b) : (b, a);
+
     public static Result Solve(Graph g, IReadOnlyList<(double x, double y)> poles, IReadOnlyList<(double x, double y)> houses)
+    {
+        var n = poles.Count;
+        var sn = Snap(g, poles);
+        var w = Join(sn, Candidates(sn));
+        AddFacingCrossings(sn, w);
+        AddDeadEndCrossings(sn, w);
+
+        var next = Enumerable.Range(0, n).Select(_ => new List<int>()).ToArray();
+        foreach (var (a, b) in w.Links) { next[a].Add(b); next[b].Add(a); }
+        var megaphone = Megaphones(sn, next, w.Length);
+        var built = Enumerable.Range(0, n).Select(i => BuildPole(sn, next, megaphone, i)).ToList();
+
+        var houseTo = houses.Select(h => n == 0 ? -1 : Enumerable.Range(0, n).MinBy(i => Dist(poles[i], h))).ToArray();
+        return new Result(built, w.Links, w.Crossings, houseTo);
+    }
+
+    static Snapped Snap(Graph g, IReadOnlyList<(double x, double y)> poles)
     {
         var n = poles.Count;
         // each pole's road, and the side of it the pole stands on (+1 left of the road's direction, -1 right)
@@ -108,13 +147,18 @@ public static class PolePlanner
         var streams = Enumerable.Range(0, n).Where(i => onRoad[i]).GroupBy(i => (road: road[i], side: side[i]))
             .ToDictionary(x => x.Key, x => x.OrderBy(i => s[i]).ToList());
         var byRoad = streams.GroupBy(kv => kv.Key.road).ToDictionary(x => x.Key, x => x.Select(kv => kv.Value).ToList());
+        return new Snapped(g, poles, road, s, foot, dir, onRoad, streams, byRoad);
+    }
 
-        // neighbour pairs: an ordering cost (the length along the road, plus a penalty for a crossing) and the length
+    /// <summary>Neighbour pairs, each with an ordering cost (the length along the road, plus a penalty for a crossing) and the length.</summary>
+    static Dictionary<(int, int), (double cost, double len)> Candidates(Snapped sn)
+    {
+        var (g, poles, n) = (sn.G, sn.P, sn.P.Count);
         var cand = new Dictionary<(int, int), (double cost, double len)>();
         void Add(int a, int b, double len, double penalty = 0)
         {
             if (a == b) return;
-            var key = a < b ? (a, b) : (b, a);
+            var key = Key(a, b);
             if (!cand.TryGetValue(key, out var old) || len + penalty < old.cost) cand[key] = (len + penalty, len);
         }
         // from the end of a stream through the junctions, over roads without poles, to the nearest stream of the next road with some
@@ -126,23 +170,23 @@ public static class PolePlanner
                 if (e == came) continue;
                 var r = g.Roads[e];
                 if (r.From == r.To) continue;
-                if (byRoad.TryGetValue(e, out var lists))
+                if (sn.ByRoad.TryGetValue(e, out var lists))
                     foreach (var pts in lists)
                     {
                         var j = r.From == node ? pts[0] : pts[^1];
-                        Add(from, j, dist + (r.From == node ? s[j] : r.Length - s[j]));
+                        Add(from, j, dist + (r.From == node ? sn.S[j] : r.Length - sn.S[j]));
                     }
                 else Walk(from, r.From == node ? r.To : r.From, e, dist + r.Length, seen);
             }
         }
-        foreach (var (key, pts) in streams)
+        foreach (var (key, pts) in sn.Streams)
         {
-            for (var k = 1; k < pts.Count; k++) Add(pts[k - 1], pts[k], s[pts[k]] - s[pts[k - 1]]);
-            Walk(pts[0], g.Roads[key.road].From, key.road, s[pts[0]], new HashSet<string>());
-            Walk(pts[^1], g.Roads[key.road].To, key.road, g.Roads[key.road].Length - s[pts[^1]], new HashSet<string>());
+            for (var k = 1; k < pts.Count; k++) Add(pts[k - 1], pts[k], sn.S[pts[k]] - sn.S[pts[k - 1]]);
+            Walk(pts[0], g.Roads[key.road].From, key.road, sn.S[pts[0]], new HashSet<string>());
+            Walk(pts[^1], g.Roads[key.road].To, key.road, g.Roads[key.road].Length - sn.S[pts[^1]], new HashSet<string>());
         }
         // the two streams of one road: each pole's nearest across the road, a candidate of last resort
-        foreach (var lists in byRoad.Values.Where(l => l.Count > 1))
+        foreach (var lists in sn.ByRoad.Values.Where(l => l.Count > 1))
             foreach (var mine in lists)
                 foreach (var a in mine)
                     foreach (var other in lists.Where(o => o != mine))
@@ -151,29 +195,34 @@ public static class PolePlanner
                         Add(a, b, Dist(poles[a], poles[b]), CrossPenalty);
                     }
         for (var i = 0; i < n; i++)
-            if (!onRoad[i])
+            if (!sn.OnRoad[i])
                 foreach (var j in Enumerable.Range(0, n).Where(j => j != i).OrderBy(j => Dist(poles[i], poles[j])).Take(2))
                     Add(i, j, Dist(poles[i], poles[j]));
+        return cand;
+    }
 
-        // the shortest pairs that close no loop, however far apart
-        var set = Enumerable.Range(0, n).ToArray();
+    /// <summary>The shortest pairs that close no loop, however far apart.</summary>
+    static Wires Join(Snapped sn, Dictionary<(int, int), (double cost, double len)> cand)
+    {
+        var set = Enumerable.Range(0, sn.P.Count).ToArray();
         int Find(int x) { while (set[x] != x) x = set[x] = set[set[x]]; return x; }
-        var links = new List<(int a, int b)>();
-        var crossings = new List<(int a, int b)>();
-        var length = new Dictionary<(int, int), double>();
+        var w = new Wires();
         foreach (var (pair, c) in cand.OrderBy(c => c.Value.cost).ThenBy(c => c.Key))
         {
             var (a, b) = pair;
             if (Find(a) == Find(b)) continue;
             set[Find(a)] = Find(b);
-            links.Add(pair);
-            if (c.cost >= CrossPenalty) crossings.Add(pair);
-            length[pair] = c.len;
+            w.Link(pair, c.len, c.cost >= CrossPenalty);
         }
-        // where the two streams of a road face each other, a wire now and then crosses it: mutually nearest poles that
-        // stand across from each other (not further along the road than across it), at most one per CrossEveryM of road
-        var have = new HashSet<(int, int)>(links);
-        foreach (var lists in byRoad.Values.Where(l => l.Count == 2))
+        return w;
+    }
+
+    /// <summary>Where the two streams of a road face each other, a wire now and then crosses it: mutually nearest poles that
+    /// stand across from each other (not further along the road than across it), at most one per CrossEveryM of road.</summary>
+    static void AddFacingCrossings(Snapped sn, Wires w)
+    {
+        var (poles, s) = (sn.P, sn.S);
+        foreach (var lists in sn.ByRoad.Values.Where(l => l.Count == 2))
         {
             var (plus, minus) = (lists[0], lists[1]);
             var facing = new List<(int a, int b, double d)>();
@@ -188,18 +237,20 @@ public static class PolePlanner
             {
                 var here = (s[a] + s[b]) / 2;
                 if (at.Any(x => Math.Abs(x - here) < CrossEveryM)) continue;
-                var key = a < b ? (a, b) : (b, a);
-                if (!have.Add(key)) { at.Add(here); continue; } // joined already (by the last-resort crossing above)
                 at.Add(here);
-                links.Add(key);
-                crossings.Add(key);
-                length[key] = d;
+                var key = Key(a, b);
+                if (!w.Have.Contains(key)) w.Link(key, d, true); // else joined already (by the last-resort crossing)
             }
         }
-        // the end of a stream that stops dead (one wire at most) goes on across the road, to the nearest pole of the other stream
-        var wires = new int[n];
-        foreach (var (a, b) in links) { wires[a]++; wires[b]++; }
-        foreach (var lists in byRoad.Values.Where(l => l.Count == 2))
+    }
+
+    /// <summary>The end of a stream that stops dead (one wire at most) goes on across the road, to the nearest pole of the other stream.</summary>
+    static void AddDeadEndCrossings(Snapped sn, Wires w)
+    {
+        var poles = sn.P;
+        var wires = new int[poles.Count];
+        foreach (var (a, b) in w.Links) { wires[a]++; wires[b]++; }
+        foreach (var lists in sn.ByRoad.Values.Where(l => l.Count == 2))
             for (var k = 0; k < 2; k++)
             {
                 var (mine, other) = (lists[k], lists[1 - k]);
@@ -207,49 +258,52 @@ public static class PolePlanner
                 {
                     if (wires[a] > 1) continue;
                     var b = other.MinBy(j => Dist(poles[a], poles[j]));
-                    var key = a < b ? (a, b) : (b, a);
-                    if (!have.Add(key)) continue;
-                    links.Add(key);
-                    crossings.Add(key);
-                    length[key] = Dist(poles[a], poles[b]);
+                    var key = Key(a, b);
+                    if (w.Have.Contains(key)) continue;
+                    w.Link(key, Dist(poles[a], poles[b]), true);
                     wires[a]++; wires[b]++;
                 }
             }
+    }
 
-        var next = Enumerable.Range(0, n).Select(_ => new List<int>()).ToArray();
-        foreach (var (a, b) in links) { next[a].Add(b); next[b].Add(a); }
-        (double x, double y) To(int i, int j)
-        {
-            var d = Dist(poles[i], poles[j]);
-            return d < 1e-9 ? (1, 0) : ((poles[j].x - poles[i].x) / d, (poles[j].y - poles[i].y) / d);
-        }
-        // the line through a pole: towards its only neighbour, else across the two neighbours that are most opposite
-        (double x, double y) Line(int i)
-        {
-            if (next[i].Count == 0) return onRoad[i] ? dir[i] : (1, 0);
-            if (next[i].Count == 1) return To(i, next[i][0]);
-            var best = (a: next[i][0], b: next[i][1], dot: double.MaxValue);
-            foreach (var a in next[i])
-                foreach (var b in next[i])
-                {
-                    var (ua, ub) = (To(i, a), To(i, b));
-                    var dot = ua.x * ub.x + ua.y * ub.y;
-                    if (a < b && dot < best.dot) best = (a, b, dot);
-                }
-            var (u, v) = (To(i, best.a), To(i, best.b));
-            var (tx, ty) = (u.x - v.x, u.y - v.y);
-            var l = Math.Sqrt(tx * tx + ty * ty);
-            return l < 1e-6 ? u : (tx / l, ty / l);
-        }
-        bool Corner(int i)
-        {
-            if (next[i].Count != 2) return false;
-            var (u, v) = (To(i, next[i][0]), To(i, next[i][1]));
-            return Math.Acos(Math.Clamp(-(u.x * v.x + u.y * v.y), -1, 1)) * 180 / Math.PI > CornerDeg;
-        }
-        bool Street(int i) => onRoad[i] && g.Roads[road[i]].Highway is not ("track" or "path");
+    static (double x, double y) Toward(Snapped sn, int i, int j)
+    {
+        var d = Dist(sn.P[i], sn.P[j]);
+        return d < 1e-9 ? (1, 0) : ((sn.P[j].x - sn.P[i].x) / d, (sn.P[j].y - sn.P[i].y) / d);
+    }
 
-        // a megaphone wherever the last one is far enough back along the line, on plain stretches of a street only
+    /// <summary>The line through a pole: towards its only neighbour, else across the two neighbours that are most opposite.</summary>
+    static (double x, double y) LineAt(Snapped sn, List<int>[] next, int i)
+    {
+        if (next[i].Count == 0) return sn.OnRoad[i] ? sn.Dir[i] : (1, 0);
+        if (next[i].Count == 1) return Toward(sn, i, next[i][0]);
+        var best = (a: next[i][0], b: next[i][1], dot: double.MaxValue);
+        foreach (var a in next[i])
+            foreach (var b in next[i])
+            {
+                var (ua, ub) = (Toward(sn, i, a), Toward(sn, i, b));
+                var dot = ua.x * ub.x + ua.y * ub.y;
+                if (a < b && dot < best.dot) best = (a, b, dot);
+            }
+        var (u, v) = (Toward(sn, i, best.a), Toward(sn, i, best.b));
+        var (tx, ty) = (u.x - v.x, u.y - v.y);
+        var l = Math.Sqrt(tx * tx + ty * ty);
+        return l < 1e-6 ? u : (tx / l, ty / l);
+    }
+
+    static bool IsCorner(Snapped sn, List<int>[] next, int i)
+    {
+        if (next[i].Count != 2) return false;
+        var (u, v) = (Toward(sn, i, next[i][0]), Toward(sn, i, next[i][1]));
+        return Math.Acos(Math.Clamp(-(u.x * v.x + u.y * v.y), -1, 1)) * 180 / Math.PI > CornerDeg;
+    }
+
+    static bool IsStreet(Snapped sn, int i) => sn.OnRoad[i] && sn.G.Roads[sn.Road[i]].Highway is not ("track" or "path");
+
+    /// <summary>A megaphone wherever the last one is far enough back along the line, on plain stretches of a street only.</summary>
+    static bool[] Megaphones(Snapped sn, List<int>[] next, Dictionary<(int, int), double> length)
+    {
+        var n = sn.P.Count;
         var megaphone = new bool[n];
         var visited = new bool[n];
         foreach (var start in Enumerable.Range(0, n).OrderBy(i => next[i].Count == 1 ? 0 : 1).ThenBy(i => i))
@@ -262,36 +316,31 @@ public static class PolePlanner
                 var (v, since) = stack.Pop();
                 if (visited[v]) continue;
                 visited[v] = true;
-                if (since >= MegaphoneEveryM && Street(v) && next[v].Count == 2 && !Corner(v)) { megaphone[v] = true; since = 0; }
+                if (since >= MegaphoneEveryM && IsStreet(sn, v) && next[v].Count == 2 && !IsCorner(sn, next, v)) { megaphone[v] = true; since = 0; }
                 foreach (var w in next[v])
-                    if (!visited[w]) stack.Push((w, since + length[v < w ? (v, w) : (w, v)]));
+                    if (!visited[w]) stack.Push((w, since + length[Key(v, w)]));
             }
         }
+        return megaphone;
+    }
 
-        var built = new List<Pole>();
-        for (var i = 0; i < n; i++)
+    static Pole BuildPole(Snapped sn, List<int>[] next, bool[] megaphone, int i)
+    {
+        var p = sn.P[i];
+        var deg = next[i].Count;
+        var asset = !IsStreet(sn, i) ? Pick("field", 2, p)
+            : deg >= 3 ? Pick("junction", 3, p)
+            : deg <= 1 || IsCorner(sn, next, i) ? (Pick("x", 3, p).EndsWith("3") ? "prim:pole_twin_riser_1" : Pick("twin_lamp", 2, p))
+            : megaphone[i] ? Pick("megaphone", 2, p)
+            : Pick("x", 5, p).EndsWith("1") || Pick("x", 5, p).EndsWith("2") ? Pick("plain", 2, p) : Pick("lamp", 3, p);
+        var (lx, ly) = LineAt(sn, next, i);
+        var rot = Math.Atan2(ly, lx) * 180 / Math.PI;
+        // the lamp is on the pole's right (its -y): turn the pole round when its road is on the left
+        if (sn.OnRoad[i])
         {
-            var deg = next[i].Count;
-            var asset = !Street(i) ? Pick("field", 2, poles[i])
-                : deg >= 3 ? Pick("junction", 3, poles[i])
-                : deg <= 1 || Corner(i) ? (Pick("x", 3, poles[i]).EndsWith("3") ? "prim:pole_twin_riser_1" : Pick("twin_lamp", 2, poles[i]))
-                : megaphone[i] ? Pick("megaphone", 2, poles[i])
-                : Pick("x", 5, poles[i]).EndsWith("1") || Pick("x", 5, poles[i]).EndsWith("2") ? Pick("plain", 2, poles[i]) : Pick("lamp", 3, poles[i]);
-            var (lx, ly) = Line(i);
-            var rot = Math.Atan2(ly, lx) * 180 / Math.PI;
-            // the lamp is on the pole's right (its -y): turn the pole round when its road is on the left
-            if (onRoad[i])
-            {
-                var (rx, ry) = (foot[i].x - poles[i].x, foot[i].y - poles[i].y);
-                if (ly * rx - lx * ry < 0) rot += 180;
-            }
-            built.Add(new Pole(poles[i].x, poles[i].y, asset, Math.Round(((rot % 360) + 360) % 360, 1), deg));
+            var (rx, ry) = (sn.Foot[i].x - p.x, sn.Foot[i].y - p.y);
+            if (ly * rx - lx * ry < 0) rot += 180;
         }
-
-        var houseTo = houses.Select(h =>
-        {
-            return n == 0 ? -1 : Enumerable.Range(0, n).MinBy(i => Dist(poles[i], h));
-        }).ToArray();
-        return new Result(built, links, crossings, houseTo);
+        return new Pole(p.x, p.y, asset, Math.Round(((rot % 360) + 360) % 360, 1), deg);
     }
 }

@@ -24,8 +24,6 @@ public partial class EditsWatcher
     public event Action<int, int, double>? MapReloaded;
     /// <summary>Raised on the main thread when the new map cannot be swapped in: what happened and what to do.</summary>
     public event Action<string>? MapReloadFailed;
-    /// <summary>Number of completed map reloads.</summary>
-    public int MapReloadCount { get; private set; }
 
     sealed record ChunkEntry(string File, Vector2I Index, string Sha);
 
@@ -122,7 +120,6 @@ public partial class EditsWatcher
             }
             _reload = null;
             var ms = Time.GetTicksMsec() - _reloadStartMs;
-            MapReloadCount++;
             GD.Print($"map reloaded: buildings of {_reloadChunks} chunk(s), {_reloadBuildings} parcels, in {ms} ms");
             MapReloaded?.Invoke(_reloadChunks, _reloadBuildings, ms);
             return;

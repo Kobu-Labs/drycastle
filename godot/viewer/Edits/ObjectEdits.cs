@@ -31,7 +31,7 @@ public static class ObjectEdits
 
     public static Obj Parcels(Obj root) => (Obj)root["parcels"]!;
 
-    static EditsFile.Num N3(double v) => new(EditsFile.PyFloat(Math.Round(v, 3, MidpointRounding.AwayFromZero)));
+    internal static EditsFile.Num N3(double v) => new(EditsFile.PyFloat(Math.Round(v, 3, MidpointRounding.AwayFromZero)));
 
     public static double? Number(object? v) => FenceDraft.Number(v);
 
@@ -176,6 +176,43 @@ public static class ObjectEdits
         foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "objects" or "groups" or "ground_patches" or "zones" or "zone_cuts" or "cables" or "ground_types" or "paths")) errs.Add($"{k}: unknown key");
         var seen = new Dictionary<string, string>(); // object id -> where it first appears, unique across the whole file
         if (root.TryGetValue("objects", out var top)) errs.AddRange(CheckObjects(top, "objects", seen));
+        errs.AddRange(CheckParcels(root, seen));
+        errs.AddRange(CheckGroups(root));
+        var editsTypes = root.GetValueOrDefault("ground_types") as Obj;
+        errs.AddRange(CheckEntries(root, "ground_patches", PatchRx, "ground patch IDs look like GP-0001", (e, path) => CheckPatch(e, path, editsTypes)));
+        errs.AddRange(CheckEntries(root, "zones", ZoneRx, "zone IDs look like Z-0001", CheckZone));
+        errs.AddRange(CheckEntries(root, "zone_cuts", ZoneCutRx, "zone cut IDs look like ZC-0001", CheckZone));
+        errs.AddRange(CheckObjectOf(root, "cables", CheckCables));
+        errs.AddRange(CheckObjectOf(root, "ground_types", GroundTypeEdits.Validate));
+        errs.AddRange(CheckEntries(root, "paths", PathRx, "path IDs look like PA-0001", CheckPath));
+        return errs;
+    }
+
+    /// <summary>A top-level section that, when present, must be an object; <paramref name="check"/> sees the object.</summary>
+    static IEnumerable<string> CheckObjectOf(Obj root, string key, Func<Obj, IEnumerable<string>> check)
+    {
+        if (root.GetValueOrDefault(key) is not { } section) return Array.Empty<string>();
+        return section is Obj o ? check(o) : new[] { $"{key}: must be an object" };
+    }
+
+    /// <summary>A top-level section of id -> entry: each id must match <paramref name="idRx"/>, each entry passes <paramref name="check"/> (entry, path).</summary>
+    static IEnumerable<string> CheckEntries(Obj root, string key, Regex idRx, string idHint, Func<object?, string, IEnumerable<string>> check)
+    {
+        IEnumerable<string> Entries(Obj map)
+        {
+            foreach (var (id, entry) in map)
+            {
+                var path = $"{key}.{id}";
+                if (!idRx.IsMatch(id)) yield return $"{path}: {idHint}";
+                foreach (var e in check(entry, path)) yield return e;
+            }
+        }
+        return CheckObjectOf(root, key, Entries);
+    }
+
+    static List<string> CheckParcels(Obj root, Dictionary<string, string> seen)
+    {
+        var errs = new List<string>();
         foreach (var (pid, entry) in Parcels(root))
         {
             var path = $"parcels.{pid}";
@@ -183,7 +220,7 @@ public static class ObjectEdits
             if (entry is not Obj e) { errs.Add($"{path}: must be an object"); continue; }
             if (e.ContainsKey("trees")) errs.Add($"{path}.trees: per-parcel tree settings were removed; delete this entry");
             foreach (var k in e.Keys) if (k is not ("fence" or "ground_type" or "outline" or "trees" or "objects")) errs.Add($"{path}.{k}: unknown key");
-            if (e.TryGetValue("fence", out var f)) errs.AddRange(f is Obj fo ? EditModel.CheckFence(fo, $"{path}.fence") : new List<string> { $"{path}.fence: must be an object" });
+            if (e.TryGetValue("fence", out var f)) errs.AddRange(CheckFenceObject(f, $"{path}.fence"));
             if (e.TryGetValue("ground_type", out var gt))
             {
                 var (exists, water) = gt is string gs && gs != "" ? GroundTypeEdits.PatchType(gs, root.GetValueOrDefault("ground_types") as Obj) : (false, null);
@@ -194,6 +231,12 @@ public static class ObjectEdits
             if (e.ContainsKey("outline")) errs.AddRange(CheckPolygon(e, path, "outline"));
             if (e.TryGetValue("objects", out var ob)) errs.AddRange(CheckObjects(ob, $"{path}.objects", seen));
         }
+        return errs;
+    }
+
+    static List<string> CheckGroups(Obj root)
+    {
+        var errs = new List<string>();
         var owner = new Dictionary<string, string>();
         foreach (var (gid, entry) in EditsFile.Groups(root))
         {
@@ -209,71 +252,26 @@ public static class ObjectEdits
                     else if (owner.TryGetValue(pid, out var og)) errs.Add($"{path}.parcels: parcel {pid} is already in group {og}");
                     else owner[pid] = gid;
                 }
-            if (g.TryGetValue("fence", out var gf)) errs.AddRange(gf is Obj gfo ? EditModel.CheckFence(gfo, $"{path}.fence") : new List<string> { $"{path}.fence: must be an object" });
+            if (g.TryGetValue("fence", out var gf)) errs.AddRange(CheckFenceObject(gf, $"{path}.fence"));
         }
-        var editsTypes = root.GetValueOrDefault("ground_types") as Obj;
-        if (root.GetValueOrDefault("ground_patches") is { } patches)
-        {
-            if (patches is not Obj po) errs.Add("ground_patches: must be an object");
-            else
-                foreach (var (pid, entry) in po)
-                {
-                    var path = $"ground_patches.{pid}";
-                    if (!PatchRx.IsMatch(pid)) errs.Add($"{path}: ground patch IDs look like GP-0001");
-                    errs.AddRange(CheckPatch(entry, path, editsTypes));
-                }
-        }
-        if (root.GetValueOrDefault("zones") is { } zones)
-        {
-            if (zones is not Obj zo) errs.Add("zones: must be an object");
-            else
-                foreach (var (zid, entry) in zo)
-                {
-                    var path = $"zones.{zid}";
-                    if (!ZoneRx.IsMatch(zid)) errs.Add($"{path}: zone IDs look like Z-0001");
-                    errs.AddRange(CheckZone(entry, path));
-                }
-        }
-        if (root.GetValueOrDefault("zone_cuts") is { } cuts)
-        {
-            if (cuts is not Obj cuo) errs.Add("zone_cuts: must be an object");
-            else
-                foreach (var (cid, entry) in cuo)
-                {
-                    var path = $"zone_cuts.{cid}";
-                    if (!ZoneCutRx.IsMatch(cid)) errs.Add($"{path}: zone cut IDs look like ZC-0001");
-                    errs.AddRange(CheckZone(entry, path));
-                }
-        }
-        if (root.GetValueOrDefault("cables") is { } cables)
-        {
-            if (cables is not Obj co) errs.Add("cables: must be an object");
-            else errs.AddRange(CheckCables(co));
-        }
-        if (root.GetValueOrDefault("ground_types") is { } gtypes)
-        {
-            if (gtypes is not Obj go) errs.Add("ground_types: must be an object");
-            else errs.AddRange(GroundTypeEdits.Validate(go));
-        }
-        if (root.GetValueOrDefault("paths") is { } paths)
-        {
-            if (paths is not Obj pao) errs.Add("paths: must be an object");
-            else
-                foreach (var (pid, entry) in pao)
-                {
-                    // mirror of edits/schema.py `_check_paths`: a worn footpath is a line of at least 2 [x, y] points, an optional width and "closed"
-                    var path = $"paths.{pid}";
-                    if (!PathRx.IsMatch(pid)) errs.Add($"{path}: path IDs look like PA-0001");
-                    if (entry is not Obj pe) { errs.Add($"{path}: must be an object"); continue; }
-                    foreach (var k in pe.Keys) if (k is not ("points" or "width_m" or "closed")) errs.Add($"{path}.{k}: unknown key");
-                    var pts = pe.GetValueOrDefault("points") as List<object?>;
-                    if (pts == null || pts.Count < 2 || !pts.All(p => p is List<object?> { Count: 2 } xy && xy.All(v => Number(v) is double n && double.IsFinite(n))))
-                        errs.Add($"{path}.points: must be a list of at least 2 [x, y] points");
-                    if (pe.TryGetValue("width_m", out var w) && !(Number(w) is double wm && wm >= 0.3 && wm <= 4.0))
-                        errs.Add($"{path}.width_m: must be a number of metres from 0.3 to 4");
-                    if (pe.TryGetValue("closed", out var cl) && cl is not bool) errs.Add($"{path}.closed: must be true or false");
-                }
-        }
+        return errs;
+    }
+
+    static IEnumerable<string> CheckFenceObject(object? fence, string path)
+        => fence is Obj o ? EditModel.CheckFence(o, path) : new[] { $"{path}: must be an object" };
+
+    /// <summary>Mirror of edits/schema.py `_check_paths`: a worn footpath is a line of at least 2 [x, y] points, an optional width and "closed".</summary>
+    static List<string> CheckPath(object? entry, string path)
+    {
+        var errs = new List<string>();
+        if (entry is not Obj pe) { errs.Add($"{path}: must be an object"); return errs; }
+        foreach (var k in pe.Keys) if (k is not ("points" or "width_m" or "closed")) errs.Add($"{path}.{k}: unknown key");
+        var pts = pe.GetValueOrDefault("points") as List<object?>;
+        if (pts == null || pts.Count < 2 || !pts.All(p => p is List<object?> { Count: 2 } xy && xy.All(v => Number(v) is double n && double.IsFinite(n))))
+            errs.Add($"{path}.points: must be a list of at least 2 [x, y] points");
+        if (pe.TryGetValue("width_m", out var w) && !(Number(w) is double wm && wm >= 0.3 && wm <= 4.0))
+            errs.Add($"{path}.width_m: must be a number of metres from 0.3 to 4");
+        if (pe.TryGetValue("closed", out var cl) && cl is not bool) errs.Add($"{path}.closed: must be true or false");
         return errs;
     }
 

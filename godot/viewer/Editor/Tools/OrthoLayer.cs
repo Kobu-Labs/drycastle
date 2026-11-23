@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
-namespace Drycastle.Viewer.Editor;
+namespace Drycastle.Viewer.Editor.Tools;
 
 /// <summary>
 /// The aerial photo layer: the orthophoto the pipeline downloads (`make ortho`, data/village/ortho) draped on the terrain
@@ -12,7 +12,7 @@ namespace Drycastle.Viewer.Editor;
 /// gitignored data folder, never written to the map or exported, and its licence forbids redistributing or altering it.
 /// O toggles it, the View page has the switch and an opacity slider; both are remembered (editor_ui.cfg).
 /// </summary>
-public partial class EditorMode
+public sealed class OrthoLayer : EditorPart
 {
     const float OrthoStep = 8f;          // metres between the vertices of the draped mesh (the terrain's own cells are 4 m)
     const float OrthoLift = 0.25f;       // above the terrain, so the 4 m terrain triangles never cut through it
@@ -25,12 +25,14 @@ public partial class EditorMode
     HSlider _orthoSlider = null!;
     Label _orthoNote = null!;
 
+    public OrthoLayer(IEditorHost host) : base(host) { }
+
     public bool OrthoShown => _orthoOn;
 
     /// <summary>The folder `make ortho` writes, or null when the editor does not know the pipeline (no watcher).</summary>
-    string? OrthoDir => Watcher == null || Watcher.PipelineDir == ""
+    string? OrthoDir => Host.Watcher == null || Host.Watcher.PipelineDir == ""
         ? null
-        : Path.GetFullPath(Path.Combine(Watcher.PipelineDir, "..", "data", "village", "ortho"));
+        : Path.GetFullPath(Path.Combine(Host.Watcher.PipelineDir, "..", "data", "village", "ortho"));
 
     public void ToggleOrtho() => SetOrtho(!_orthoOn);
 
@@ -42,8 +44,8 @@ public partial class EditorMode
         _orthoOn = on;
         if (_orthoMesh != null) _orthoMesh.Visible = on;
         if (_orthoCheck != null) _orthoCheck.SetPressedNoSignal(on);
-        if (on) Say("aerial photo on (reference only, O hides it)");
-        if (save) SaveUiConfig();
+        if (on) Host.Say("aerial photo on (reference only, O hides it)");
+        if (save) Host.SaveUiConfig();
     }
 
     void SetOrthoOpacity(float opacity, bool save)
@@ -52,15 +54,27 @@ public partial class EditorMode
         if (_orthoMesh?.MaterialOverride is StandardMaterial3D m) m.AlbedoColor = new Color(1, 1, 1, _orthoOpacity);
         if (_orthoSlider != null && !Mathf.IsEqualApprox((float)_orthoSlider.Value, _orthoOpacity * 100f))
             _orthoSlider.SetValueNoSignal(_orthoOpacity * 100f);
-        if (save) SaveUiConfig();
+        if (save) Host.SaveUiConfig();
     }
 
-    /// <summary>Restore the remembered state once the map is up (called when the editor first opens).</summary>
-    void RestoreOrtho()
+    /// <summary>Restore the remembered state once the map is up (when the editor first opens).</summary>
+    public override void ActiveChanged(bool on)
     {
-        if (!_orthoRestore) return;
+        if (!on || !_orthoRestore) return;
         _orthoRestore = false;
         SetOrtho(true, save: false);
+    }
+
+    public override void LoadConfig(ConfigFile cfg)
+    {
+        SetOrthoOpacity((float)(double)cfg.GetValue("ui", "ortho_opacity", (double)_orthoOpacity), save: false);
+        _orthoRestore = (bool)cfg.GetValue("ui", "ortho_on", false); // applied when the editor first opens, the map is not up yet
+    }
+
+    public override void SaveConfig(ConfigFile cfg)
+    {
+        cfg.SetValue("ui", "ortho_on", _orthoOn || _orthoRestore);
+        cfg.SetValue("ui", "ortho_opacity", (double)_orthoOpacity);
     }
 
     bool LoadOrtho()
@@ -72,7 +86,7 @@ public partial class EditorMode
             OrthoFail($"no aerial photo yet: run  make ortho  and open the editor again");
             return false;
         }
-        if (Map.OriginEpsg5514 == null) { OrthoFail("this map has no origin_epsg5514 (export it again, map 0.4.0+); the photo cannot be placed"); return false; }
+        if (Host.Map.OriginEpsg5514 == null) { OrthoFail("this map has no origin_epsg5514 (export it again, map 0.4.0+); the photo cannot be placed"); return false; }
         try
         {
             using var doc = JsonDocument.Parse(File.ReadAllText(info));
@@ -99,7 +113,7 @@ public partial class EditorMode
                 Mesh = BuildOrthoMesh(minX, minY, maxX, maxY),
                 Visible = false,
             };
-            OutlineRoot.AddChild(_orthoMesh); // follows the editor's visibility: gone in walk mode
+            Host.Outlines.Root.AddChild(_orthoMesh); // follows the editor's visibility: gone in walk mode
             _orthoNote.Text = $"{image.GetWidth()} x {image.GetHeight()} px, {root.GetProperty("pixel_m").GetDouble():F2} m per pixel. {root.GetProperty("attribution").GetString()}. Reference only.";
             return true;
         }
@@ -113,13 +127,13 @@ public partial class EditorMode
     void OrthoFail(string message)
     {
         _orthoNote.Text = message;
-        Say(message, true);
+        Host.Say(message, true);
     }
 
     /// <summary>A grid over the photo's S-JTSK bounds, each vertex on the terrain (or the mean height where it has none).</summary>
     ArrayMesh BuildOrthoMesh(double minX, double minY, double maxX, double maxY)
     {
-        var o = Map.OriginEpsg5514!.Value;
+        var o = Host.Map.OriginEpsg5514!.Value;
         int cols = Math.Max(1, (int)Math.Ceiling((maxX - minX) / OrthoStep)), rows = Math.Max(1, (int)Math.Ceiling((maxY - minY) / OrthoStep));
         var verts = new Vector3[(cols + 1) * (rows + 1)];
         var uvs = new Vector2[verts.Length];
@@ -132,7 +146,7 @@ public partial class EditorMode
                 var u = (float)c / cols;
                 var x = (float)(minX + u * (maxX - minX) - o.X);
                 var z = (float)-(north - o.Y);
-                verts[r * (cols + 1) + c] = new Vector3(x, Map.GroundHeightOrMean(x, z) + OrthoLift, z);
+                verts[r * (cols + 1) + c] = new Vector3(x, Host.Map.GroundHeightOrMean(x, z) + OrthoLift, z);
                 uvs[r * (cols + 1) + c] = new Vector2(u, v);
             }
         }
@@ -157,11 +171,8 @@ public partial class EditorMode
 
     // ---- the View page section ----
 
-    void BuildOrthoSection(VBoxContainer page)
+    public void BuildSection(VBoxContainer page)
     {
-        page.AddChild(new HSeparator());
-        page.AddChild(new Label { Text = "Layers", ThemeTypeVariation = "Header" });
-        BuildFloorPlanToggle(page);
         _orthoCheck = new CheckBox
         {
             Text = "Aerial photo  (O)", FocusMode = Control.FocusModeEnum.None,
@@ -177,7 +188,7 @@ public partial class EditorMode
             TooltipText = "How much of the map shows through the photo.",
         };
         _orthoSlider.ValueChanged += v => SetOrthoOpacity((float)v / 100f, save: false);
-        _orthoSlider.DragEnded += _ => SaveUiConfig();
+        _orthoSlider.DragEnded += _ => Host.SaveUiConfig();
         page.AddChild(_orthoSlider);
         _orthoNote = new Label
         {
