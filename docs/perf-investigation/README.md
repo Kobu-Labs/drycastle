@@ -147,7 +147,7 @@ Cheapest first. Nothing here was executed.
 8. **`IntersectRay` cost** is G's key unknown and affects D, E (bot sight rays, E-07) and G's all-streak estimate.
 9. **Whether the server spawns animals** (H asked G): not answered in either report.
 10. **NET-03 and H-03** (all-or-nothing snapshot tick across packets): H asked A whether one fix covers both. Not answered.
-11. **Loss-test bot aim** reads the newest decoded snapshot (`NetClient.LossBot.cs:172-190`, B), so it under-represents human lag by about 100 ms. Not independently re-read.
+11. **Loss-test bot aim** reads the newest decoded snapshot (`Net/Bots/LossTestBot.cs` (`AimerStep`), B), so it under-represents human lag by about 100 ms. Not independently re-read.
 12. **ADR drift.** ADR 0004 says one body per water parcel; the code builds water from ground areas and regions (E-11). B says a rewind amends sentences in ADRs 0006, 0010, 0011 and 0012 ("from its own state") rather than contradicting a decision. No agent found a recommendation that contradicts an ADR.
 13. **Per-agent limits.** C's report was transcribed by the lead, so nothing in it was independently re-read here except the layer claim. The reviewers' "ten highest-ranked" pass and the 25% random sample were not run as briefed (header). The sample you declined is the biggest gap in this review.
 

@@ -177,7 +177,7 @@ public partial class NetClient
             _crateOpening = (id, Time.GetTicksMsec() / 1000.0 + CrateOpeningWaitSeconds); // gone for the player now; the despawn confirms
             _crateNear = null;
         }
-        _rozhlas.TickHold(use, dt); // the other hold of the same key (NetClient.Rozhlas.cs); the ring shows whichever is on
+        _rozhlas.TickHold(use, dt); // the other hold of the same key (RozhlasClient.cs); the ring shows whichever is on
         ShowHoldRing(dt);
     }
 

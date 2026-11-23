@@ -1,0 +1,132 @@
+using Godot;
+using Drycastle.Shooter.Audio;
+using Drycastle.Shooter.Bunkers;
+using Drycastle.Shooter.Characters;
+using Drycastle.Shooter.Glass;
+using Drycastle.Shooter.Loudspeaker;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Server;
+using Drycastle.Shooter.Scenery;
+using Drycastle.Shooter.Weapons;
+using Drycastle.ShooterCore.Bunkers;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Flight;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Glass;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Killstreaks;
+using Drycastle.ShooterCore.Killstreaks.Helicopter;
+using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.RozhlasFeed;
+using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
+using Drycastle.ShooterCore.Wildlife;
+using NVec3 = System.Numerics.Vector3;
+
+namespace Drycastle.Shooter.Net.Client;
+
+/// <summary>Rockets and thrown grenades: drawn from the launch event and the snapshots, dead-reckoned between them, retired by the explosion event.</summary>
+public partial class NetClient
+{
+    sealed class Rocket { public double Born; public Node3D Node = null!; public float Tumble; public NVec3 Pos, Dir; public double At; public float Speed; public LoopVoice? Snd; /* a homing missile (NetClient.LockOn.cs): the Aircraft it closes on and when it gets there */ public bool Homing; public ushort Target; public double Arrive; /* a thrown grenade: drawn falling along its arc from the last snapshot */ public bool Grenade; public float Gravity; }
+
+    readonly Dictionary<ushort, Rocket> _rockets = new();
+
+    readonly HashSet<ushort> _deadRockets = new();
+
+    /// <summary>Rockets are drawn at the newest snapshot position and dead-reckoned along their direction (a 100 ms interpolation delay would make them vanish 4 m short of the blast).</summary>
+    void OnRocketState(ushort id, EntityRecord rec)
+    {
+        if (_deadRockets.Contains(id)) return;
+        var dir = HitMath.Forward(rec.YawRad, rec.PitchRad);
+        // the speed is the launch's (set there); a snapshot before the launch falls back to the weapon's, and the launch corrects it
+        if (!_rockets.TryGetValue(id, out var r))
+        {
+            var speed = Weapons != null && rec.Weapon < Weapons.Weapons.Count ? Weapons.Weapons[rec.Weapon].ProjectileSpeed : 40f;
+            r = new Rocket { Node = RocketFx.Make(Owned, WeaponId(rec.Weapon)), Born = Now, Speed = speed }; _rockets[id] = r;
+            r.Gravity = GrenadeGravity(rec.Weapon); r.Grenade = r.Gravity > 0;
+        }
+        if (r.Grenade) r.Speed = rec.Health / NetServer.GrenadeSpeedScale; // a grenade's speed rides the health byte
+        r.Pos = rec.Position; r.Dir = dir; r.At = Now;
+    }
+
+    /// <summary>The fall of a thrown weapon (weapons.json grenade.gravity, m/s²); 0 for a rocket.</summary>
+    float GrenadeGravity(int weapon) => Weapons != null && weapon >= 0 && weapon < Weapons.Weapons.Count ? Weapons.Weapons[weapon].Grenade?.Gravity ?? 0f : 0f;
+
+    void RenderRockets()
+    {
+        var camAt = GetViewport()?.GetCamera3D()?.GlobalPosition;
+        foreach (var r in _rockets.Values)
+        {
+            if (r.Node == null) continue;
+            if (r.Homing) StepHoming(r);
+            var dtp = (float)Math.Min(0.1, Now - r.At);
+            var falls = r.Speed > GrenadeFlight.RestSpeed; // a grenade lying still does not keep falling between snapshots (it sank up to 10 cm into the road, #421)
+            var p = r.Homing ? r.Pos : r.Pos + r.Dir * (r.Speed * dtp) - NVec3.UnitY * (falls ? 0.5f * r.Gravity * dtp * dtp : 0f); // a grenade falls between snapshots
+            // visual only: the server rocket starts at the eye; draw it leaving the muzzle (0.8 m ahead, right and down) and blend onto the true path
+            var k = Mathf.Max(0f, 1f - (float)(Now - r.Born) / 0.35f);
+            var d = new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z);
+            var side = d.Cross(Vector3.Up).Normalized();
+            r.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z) + (d * 0.8f + side * 0.25f + Vector3.Down * 0.2f) * k;
+            if (r.Grenade)
+            {
+                // it tumbles while it moves, and lies on its side when it stops (upright, its lower half would sink into the road ribbons floating 2-8 cm over the ground)
+                var spin = (float)GetProcessDeltaTime();
+                r.Tumble = r.Speed > GrenadeFlight.RestSpeed ? r.Tumble + 9f * spin : Mathf.MoveToward(r.Tumble, MathF.Round((r.Tumble - Mathf.Pi / 2) / Mathf.Pi) * Mathf.Pi + Mathf.Pi / 2, 8f * spin);
+                r.Node.Rotation = new Vector3(r.Tumble, 0, 0);
+                continue; // no trail, no flight loop
+            }
+            SfxRocket(r, r.Node.GlobalPosition);
+            if (camAt is { } eye) RocketFx.GateTrail(r.Node, eye);
+            if (Mathf.Abs(r.Dir.Y) < 0.99f) r.Node.LookAt(r.Node.GlobalPosition + new Vector3(r.Dir.X, r.Dir.Y, r.Dir.Z));
+        }
+    }
+
+    /// <summary>A rocket or a thrown grenade left its owner: drawn at once from the event (snapshots take over), the sound, the flash and the backblast.</summary>
+    void OnLaunch(LaunchMsg l)
+    {
+        if (KeepEventLogs) _logs.Launches.Add((Now, l));
+        if (_remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Now + 0.45;
+        // the launch's velocity is the flight's speed and direction (a gunship's rocket is faster than the rpg's)
+        if (_rockets.TryGetValue(l.Id, out var known)) { known.Speed = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z).Length(); known.Gravity = GrenadeGravity(l.Weapon); known.Grenade = known.Gravity > 0; }
+        else if (!_deadRockets.Contains(l.Id) && ShotFx.Enabled && Weapons != null)
+        {
+            // show the rocket at once from the launch event; snapshots take over
+            var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);
+            _rockets[l.Id] = new Rocket { Node = RocketFx.Make(Owned, WeaponId(l.Weapon)), Born = Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Now, Speed = v.Length(), Gravity = GrenadeGravity(l.Weapon), Grenade = GrenadeGravity(l.Weapon) > 0 };
+        }
+        if (!EchoOfPredicted(l.Owner))
+        {
+            SfxLaunch(l);
+            if (GrenadeGravity(l.Weapon) > 0) { if (_remotes.TryGetValue(l.Owner, out var thrower)) thrower.FireUntil = Now + 0.45; return; } // a throw: no flash, no backblast
+            if (l.Owner == _myId) _viewmodel?.Flash(0.5f); else if (_remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);
+            // a held launcher's backblast, behind the shooter's shoulder (a gunship's rocket has no owner on foot: its owner is not a remote here)
+            if (_remotes.ContainsKey(l.Owner) && l.Velocity.LengthSquared() > 1e-4f) { var ld = G(NVec3.Normalize(l.Velocity)); RocketFx.Backblast(Owned, G(l.Origin) - ld * WeaponFx.LauncherRear + Vector3.Down * 0.15f, ld); }
+        }
+    }
+
+    /// <summary>A rocket blew up: its model retires, the blast is drawn and felt.</summary>
+    void OnExplosion(ExplosionMsg ex)
+    {
+        if (KeepEventLogs) _logs.Explosions.Add((Now, ex));
+        if (_rockets.Remove(ex.Id, out var rk)) { rk.Snd?.Release(); RocketFx.Retire(Owned, rk.Node); if (rk.Homing) NoteHomingBlast(new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z), ex.Radius); }
+        _dec.Forget(ex.Id);
+        _deadRockets.Add(ex.Id);
+        if (_deadRockets.Count > 256) _deadRockets.Clear();
+        var exR = ex.Radius > 0 ? ex.Radius : 6f; // the blast the server used (a gunship rocket's is 8 m)
+        var exAt = new Vector3(ex.Position.X, ex.Position.Y, ex.Position.Z);
+        RocketFx.Explode(Owned, exAt, exR, ex.WaveSpeed);
+        _blastDust.BlastFelt(exAt, exR, SoundRules.Event("explosion", WeaponId(ex.Weapon)), ex.WaveSpeed);
+    }
+}

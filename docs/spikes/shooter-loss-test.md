@@ -2,7 +2,7 @@
 
 Status: **gate FAILS on one point, everything else holds.** Under 100 ms RTT and 3 % loss nothing gets stuck, reliable events and the match state stay exact, and the final state converges. But a lost snapshot delta leaves a remote player (and your own server position) wrong until the next keyframe, and that is slower and bigger than acceptable (details and proposed fix below). Gate for ADR 0002's caveat ("test loss recovery before the PoC ships").
 
-Run it: `make shooter-loss-test` (about 2 minutes per scenario; `SCENARIOS=clean,rtt100,rtt200,loss10`, `BOTS=16`, `MEASURE=30`). Code: `godot/shooter/Net/NetSim.cs` (the impairment), `NetServer.LossTest.cs`, `NetClient.LossBot.cs`, runner `godot/shooter/run_loss_test.py`. Raw output goes to `out/shooter-loss/<timestamp>/` (gitignored).
+Run it: `make shooter-loss-test` (about 2 minutes per scenario; `SCENARIOS=clean,rtt100,rtt200,loss10`, `BOTS=16`, `MEASURE=30`). Code: `godot/shooter/Net/NetSim.cs` (the impairment), `NetServer.LossTest.cs`, `Net/Bots/LossTestBot.cs`, runner `godot/shooter/run_loss_test.py`. Raw output goes to `out/shooter-loss/<timestamp>/` (gitignored).
 
 ## Method
 
